@@ -1,0 +1,26 @@
+@import "tailwindcss";
+
+/* Class-based dark mode: `dark:` applies when <html> has the `dark` class. */
+@custom-variant dark (&:where(.dark, .dark *));
+
+/* Brand palette taken from the Allie logo — the maroon dot. */
+@theme {
+  --color-brand: #9b2c38;
+  --color-brand-light: #c2434f;
+  --color-grass: #1f9e54;
+  --color-grass-light: #27b863;
+}
+
+:root {
+  color-scheme: light;
+}
+
+body {
+  background: #fafafa;
+  color: #111827;
+}
+
+.dark body {
+  background: #000000;
+  color: #e5e7eb;
+}
