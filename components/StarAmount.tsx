@@ -16,9 +16,10 @@ export default function StarAmount({
 }) {
   const { currency, rate } = useCurrency();
   const money = fmtMoney(starsToMoneyRate(stars, currency, rate), currency);
+  // Money rule: the whole figure (stars + its $ value) renders in the green `good` token.
   return (
-    <span className={className}>
-      {stars}⭐ <span className={moneyClassName ?? "text-gray-400 dark:text-neutral-500"}>({money})</span>
+    <span className={className ?? "text-good"}>
+      {stars}⭐ <span className={moneyClassName ?? "text-good/70"}>({money})</span>
     </span>
   );
 }

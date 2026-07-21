@@ -13,5 +13,6 @@ export default function MoneyAmount({
   className?: string;
 }) {
   const { currency, rate } = useCurrency();
-  return <span className={className}>{fmtMoney(starsToMoneyRate(stars, currency, rate), currency)}</span>;
+  // Money rule: every dollar figure renders in the green `good` token, never accent blue.
+  return <span className={className ?? "text-good"}>{fmtMoney(starsToMoneyRate(stars, currency, rate), currency)}</span>;
 }

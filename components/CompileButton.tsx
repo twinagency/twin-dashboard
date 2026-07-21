@@ -16,7 +16,7 @@ export default function CompileButton({ cloneId }: { cloneId: string }) {
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "compile failed");
       setState("done");
-      setMsg("Prompts compiled — reloading…");
+      setMsg("Prompts compiled, reloading…");
       setTimeout(() => router.refresh(), 800);
     } catch (e) {
       setState("error");
@@ -29,12 +29,12 @@ export default function CompileButton({ cloneId }: { cloneId: string }) {
       <button
         onClick={run}
         disabled={state === "running"}
-        className="rounded-md bg-brand px-4 py-2 text-sm font-medium transition hover:bg-brand-light disabled:opacity-50"
+        className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-ink transition hover:bg-accent-deep disabled:opacity-50"
       >
         {state === "running" ? "Compiling…" : "Compile prompts"}
       </button>
       {msg && (
-        <span className={`text-sm ${state === "error" ? "text-red-400" : "text-green-400"}`}>
+        <span className={`text-sm ${state === "error" ? "text-crit" : "text-good"}`}>
           {msg}
         </span>
       )}

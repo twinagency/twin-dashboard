@@ -6,7 +6,6 @@ type Theme = "light" | "dark";
 
 const ICONS: Record<Theme, React.ReactNode> = {
   light: (
-    // Sun
     <svg
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
@@ -22,7 +21,6 @@ const ICONS: Record<Theme, React.ReactNode> = {
     </svg>
   ),
   dark: (
-    // Moon
     <svg
       xmlns="http://www.w3.org/2000/svg"
       viewBox="0 0 24 24"
@@ -41,7 +39,7 @@ const ICONS: Record<Theme, React.ReactNode> = {
 export default function ThemeToggle() {
   const { theme, setTheme } = useTheme();
   return (
-    <div className="inline-flex gap-1 rounded-lg bg-gray-100 p-1 dark:bg-neutral-800">
+    <div className="inline-flex gap-1 rounded-lg bg-muted/10 p-1">
       {(["light", "dark"] as Theme[]).map((t) => (
         <button
           key={t}
@@ -51,9 +49,7 @@ export default function ThemeToggle() {
           aria-pressed={theme === t}
           className={
             "rounded-md p-1.5 transition " +
-            (theme === t
-              ? "bg-gray-900 text-white shadow-sm dark:bg-white dark:text-neutral-900"
-              : "text-gray-500 hover:text-gray-900 dark:text-neutral-400 dark:hover:text-white")
+            (theme === t ? "bg-muted/15 text-ink shadow-sm" : "text-muted hover:text-ink")
           }
         >
           {ICONS[t]}

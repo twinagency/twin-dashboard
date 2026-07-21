@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 import type { Clone } from "@/lib/types";
 import ClonesGrid, { type CloneCard } from "@/components/ClonesGrid";
 import { colorForIndex } from "@/lib/colors";
+import { Button } from "@/components/ui/button";
 
 export const dynamic = "force-dynamic";
 
@@ -14,7 +15,7 @@ export default async function ClonesPage() {
 
   if (error) {
     return (
-      <div className="rounded-lg border border-red-200 bg-red-50 p-4 text-sm text-red-700">
+      <div className="rounded-lg border border-crit/30 bg-crit/10 p-4 text-sm text-crit">
         Failed to load clones: {error.message}
       </div>
     );
@@ -72,16 +73,14 @@ export default async function ClonesPage() {
   return (
     <div>
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-neutral-100">Clones</h1>
-        <span className="text-sm font-medium text-gray-500 dark:text-neutral-400">{clones.length} total</span>
+        <h1 className="text-2xl font-bold text-ink">Clones</h1>
+        <span className="text-sm font-medium text-muted">{clones.length} total</span>
       </div>
 
       {clones.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-gray-300 dark:border-neutral-800 bg-white dark:bg-neutral-900 p-12 text-center">
-          <p className="mb-4 text-gray-500 dark:text-neutral-400">No clones yet.</p>
-          <Link href="/clones/new" className="inline-block rounded-lg bg-gray-900 dark:bg-neutral-100 dark:text-neutral-900 dark:hover:bg-white px-5 py-2 font-medium text-white hover:bg-gray-700 transition">
-            Create the first one
-          </Link>
+        <div className="rounded-xl border border-dashed border-line bg-panel p-12 text-center">
+          <p className="mb-4 text-muted">No clones yet.</p>
+          <Button nativeButton={false} render={<Link href="/clones/new" />}>Create the first one</Button>
         </div>
       ) : (
         <ClonesGrid clones={cards} />

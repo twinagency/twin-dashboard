@@ -1,16 +1,29 @@
 import "./globals.css";
 import type { Metadata } from "next";
 import Link from "next/link";
+import { headers } from "next/headers";
 import CurrencyProvider from "@/components/CurrencyProvider";
-import CurrencyToggle from "@/components/CurrencyToggle";
 import ThemeProvider from "@/components/ThemeProvider";
-import ThemeToggle from "@/components/ThemeToggle";
-import MainNav from "@/components/MainNav";
+import Sidebar from "@/components/Sidebar";
 import MobileMenu from "@/components/MobileMenu";
+import TopBar from "@/components/TopBar";
+import MainShell from "@/components/MainShell";
 import { supabaseAdmin } from "@/lib/supabase";
 import { colorForIndex } from "@/lib/colors";
 import { isAuthed } from "@/lib/auth";
-import { logout } from "@/app/login/actions";
+import { getCloneScope } from "@/lib/clone-scope";
+import { Inter, Space_Grotesk } from "next/font/google";
+import { cn } from "@/lib/utils";
+
+const inter = Inter({subsets:['latin'],variable:'--font-sans'});
+// Money figures use Inter + tabular-nums instead of a coding monospace font —
+// every mono font tried (Roboto Mono, Source Code Pro, Inconsolata) rendered
+// a slashed/dotted zero in at least one real browser. Stripe/Whop-style
+// fintech UIs don't use a code font for numbers either — same UI typeface,
+// just tabular-aligned. Loading Inter again under the --font-mono variable
+// means every `font-mono tabular-nums` usage in the app renders in Inter.
+const plexMono = Inter({subsets:['latin'],variable:'--font-mono'});
+const spaceGrotesk = Space_Grotesk({subsets:['latin'],variable:'--font-heading'});
 
 export const metadata: Metadata = {
   title: "Allie Admin",
@@ -18,19 +31,21 @@ export const metadata: Metadata = {
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
-  const authed = await isAuthed();
+  // Mirrors middleware.ts's dev bypass — otherwise the app shell (sidebar, nav)
+  // never renders in development even though middleware already lets the
+  // request through, since this check runs independently of the cookie. /login
+  // itself is excluded — it must always render standalone (no sidebar), the
+  // same as it would once real auth is re-enabled.
+  const pathname = (await headers()).get("x-pathname");
+  const devBypass =
+    pathname !== "/login" &&
+    (process.env.NODE_ENV !== "production" || process.env.DASHBOARD_NO_AUTH === "true");
+  const authed = devBypass || (await isAuthed());
 
   if (!authed) {
     return (
-      <html lang="en" suppressHydrationWarning>
-        <head>
-          <script
-            dangerouslySetInnerHTML={{
-              __html: `(function(){try{var t=localStorage.getItem('theme');if(t!=='light'){document.documentElement.classList.add('dark');document.documentElement.style.colorScheme='dark';}}catch(e){document.documentElement.classList.add('dark');}})();`,
-            }}
-          />
-        </head>
-        <body className="min-h-screen">
+      <html lang="en" className={cn("font-sans", inter.variable, plexMono.variable, spaceGrotesk.variable)} style={{ colorScheme: "light" }} suppressHydrationWarning>
+        <body className="min-h-screen bg-bg">
           <ThemeProvider>{children}</ThemeProvider>
         </body>
       </html>
@@ -79,84 +94,53 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     // header nav still renders with an empty clone list if the DB is unreachable
   }
 
+  const activeCloneId = await getCloneScope();
+
+  // All-time cash + stars for the small header readout — scoped by the same
+  // clone switcher as everything else, never time-windowed.
+  let allTimeStars = 0;
+  try {
+    let txQuery = supabaseAdmin.from("star_transactions").select("amount_stars");
+    if (activeCloneId) txQuery = txQuery.eq("clone_id", activeCloneId);
+    const { data } = await txQuery;
+    allTimeStars = ((data ?? []) as { amount_stars: number }[]).reduce((s, r) => s + (r.amount_stars || 0), 0);
+  } catch {
+    // header still renders with zero if the DB is unreachable
+  }
+
+  // NOTE: nothing below may depend on `pathname` — this layout does NOT
+  // re-render on client-side navigation, so any path-derived value computed
+  // here freezes on the first full page load (that bug shipped twice today:
+  // stale breadcrumb + Fans full-bleed leaking across pages). Path-dependent
+  // rendering lives in the TopBar/MainShell CLIENT components (usePathname).
+
   return (
-    <html lang="en">
-      <head>
-        {/* Apply saved theme before paint to avoid a flash of the wrong theme. */}
-        <script
-          dangerouslySetInnerHTML={{
-            __html: `(function(){try{var t=localStorage.getItem('theme');if(t!=='light'){document.documentElement.classList.add('dark');document.documentElement.style.colorScheme='dark';}}catch(e){document.documentElement.classList.add('dark');}})();`,
-          }}
-        />
-      </head>
-      <body className="min-h-screen">
+    <html lang="en" className={cn("font-sans", inter.variable, plexMono.variable, spaceGrotesk.variable)} style={{ colorScheme: "light" }} suppressHydrationWarning>
+      <body className="min-h-screen bg-bg">
         <ThemeProvider>
         <CurrencyProvider>
-          <header className="border-b border-gray-200 bg-white px-4 py-3 sm:px-6 sm:py-4 dark:border-neutral-900 dark:bg-black">
-            <div className="flex items-center justify-between gap-3">
-              <div className="flex items-center gap-3 sm:gap-6">
-                <Link href="/revenue" className="text-2xl font-bold tracking-tight sm:text-3xl text-gray-900 dark:text-white">
-                  Allie<span className="text-brand">.</span>
+          <div className="flex h-screen">
+            <Sidebar clones={clones} activeCloneId={activeCloneId} />
+            {/* Every page (Fans/inbox included) is a fixed-height shell: the
+                sidebar and TopBar never move, only this column's own <main>
+                scrolls internally. No page-level (document) scroll anywhere. */}
+            <div className="flex h-screen min-w-0 flex-1 flex-col overflow-hidden">
+              {/* Mobile-only top bar — the Sidebar above only renders at lg+ */}
+              <header className="flex shrink-0 items-center justify-between border-b border-line bg-panel px-4 py-3 lg:hidden">
+                <Link href="/revenue" className="text-2xl font-extrabold tracking-tight text-ink">
+                  Twin<span className="text-ink">.</span>
                 </Link>
-                <CurrencyToggle />
-              </div>
-              <div className="hidden flex-1 justify-center lg:flex">
-                <MainNav clones={clones} />
-              </div>
-              <div className="flex items-center gap-3">
-                <Link
-                  href="/clones/new"
-                  className="hidden rounded-lg bg-amber-400 px-4 py-2 text-xs font-medium text-gray-900 border-b-4 border-amber-600 shadow-md hover:bg-amber-500 hover:shadow-lg hover:-translate-y-0.5 active:translate-y-0.5 active:border-b-2 active:shadow-sm transition-all lg:inline-block sm:px-5 sm:text-sm"
-                >
-                  + Create New Clone
-                </Link>
-                <ThemeToggle />
-                <MobileMenu clones={clones} />
-                <Link
-                  href="/settings"
-                  aria-label="Settings"
-                  className="hidden rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition lg:block dark:text-neutral-400 dark:hover:bg-white/[0.06] dark:hover:text-white"
-                >
-                  <svg
-                    xmlns="http://www.w3.org/2000/svg"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth={1.8}
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    className="h-5 w-5"
-                  >
-                    <circle cx="12" cy="12" r="3" />
-                    <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
-                  </svg>
-                </Link>
-                <form action={logout}>
-                  <button
-                    type="submit"
-                    aria-label="Sign out"
-                    className="hidden rounded-lg p-2 text-gray-500 hover:bg-gray-100 hover:text-gray-900 transition lg:block dark:text-neutral-400 dark:hover:bg-white/[0.06] dark:hover:text-white"
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      strokeWidth={1.8}
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      className="h-5 w-5"
-                    >
-                      <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-                      <polyline points="16 17 21 12 16 7" />
-                      <line x1="21" y1="12" x2="9" y2="12" />
-                    </svg>
-                  </button>
-                </form>
-              </div>
+                <div className="flex items-center gap-1">
+                  <MobileMenu clones={clones} />
+                </div>
+              </header>
+              {/* Straight, full-width divider bar — clone/page breadcrumb +
+                  account controls in one row. Not floating, not rounded; see
+                  components/TopBar.tsx. */}
+              <TopBar clones={clones} activeCloneId={activeCloneId} allTimeStars={allTimeStars} />
+              <MainShell>{children}</MainShell>
             </div>
-          </header>
-          <main className="mx-auto max-w-5xl px-4 py-6 sm:px-6 sm:py-8">{children}</main>
+          </div>
         </CurrencyProvider>
         </ThemeProvider>
       </body>

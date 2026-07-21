@@ -1,7 +1,7 @@
 import { supabaseAdmin } from "./supabase";
 import { colorForIndex } from "./colors";
 
-export type Period = "ALL" | "6M" | "3M" | "1M" | "2W" | "1W" | "1D";
+export type Period = "ALL" | "1Y" | "6M" | "3M" | "1M" | "2W" | "1W" | "1D" | "CUSTOM";
 type Gran = "hour" | "day" | "week" | "month";
 
 const SPEC: Record<Period, { days: number | null; gran: Gran }> = {
@@ -11,10 +11,26 @@ const SPEC: Record<Period, { days: number | null; gran: Gran }> = {
   "1M": { days: 30, gran: "day" },
   "3M": { days: 90, gran: "week" },
   "6M": { days: 180, gran: "week" },
+  "1Y": { days: 365, gran: "month" },
   ALL: { days: null, gran: "month" },
+  // Unused — CUSTOM always comes with an explicit {startMs, endMs} range, which
+  // picks its own granularity (see granForSpan) instead of reading this table.
+  CUSTOM: { days: null, gran: "day" },
 };
 
+export type DateRange = { startMs: number; endMs: number };
+
 const MS_DAY = 86_400_000;
+
+// Custom ranges pick bucket width from the span so a 3-day pick doesn't render
+// as monthly bars and a 2-year pick doesn't render one bar per hour.
+function granForSpan(ms: number): Gran {
+  const days = ms / MS_DAY;
+  if (days <= 2) return "hour";
+  if (days <= 45) return "day";
+  if (days <= 270) return "week";
+  return "month";
+}
 
 export type CloneSummary = {
   id: string;
@@ -29,12 +45,24 @@ export type CloneStats = {
   stars: number;
   sales: number;
   users: number;
-  active7d: number;
+  active24h: number;
   messages: number;
   buyers: number;
   costUsd: number;  // AI + voice spend in the window (from usage_events)
   aiCalls: number;
   aiErrors: number;
+};
+
+export type RecentTransaction = {
+  cloneId: string;
+  cloneName: string;
+  cloneColor: string;
+  buyerName: string;
+  username: string | null;
+  telegramId: number | null;
+  stars: number;
+  kind: string; // feature if set (credits/photo/video/bundle/media/tip/subscription), else the coarse `kind`
+  paidAt: string;
 };
 
 export type DashboardData = {
@@ -43,7 +71,18 @@ export type DashboardData = {
   bucketLabels: string[];
   // one row per bucket: { bucket: label, [cloneId]: stars }
   series: Record<string, number | string>[];
-  totals: { stars: number; sales: number; costUsd: number; aiErrors: number };
+  recent: RecentTransaction[];
+  totals: {
+    stars: number;
+    sales: number;
+    costUsd: number;
+    aiErrors: number;
+    // Fleet-wide (all-time, not period-scoped — same semantics as perClone below).
+    users: number;
+    active24h: number;
+    messages: number;
+    buyers: number;
+  };
   perClone: Record<string, CloneStats>;
 };
 
@@ -88,9 +127,11 @@ function buildBuckets(startMs: number, endMs: number, gran: Gran) {
   return { keys, labels, keyFor };
 }
 
-export async function getDashboard(period: Period): Promise<DashboardData> {
+export async function getDashboard(period: Period, range?: DateRange): Promise<DashboardData> {
   const spec = SPEC[period];
   const now = Date.now();
+  const windowEnd = range ? range.endMs : now;
+  const gran: Gran = range ? granForSpan(range.endMs - range.startMs) : spec.gran;
 
   // ── clones ──────────────────────────────────────────────────────────────
   const { data: cloneRows } = await supabaseAdmin
@@ -127,7 +168,9 @@ export async function getDashboard(period: Period): Promise<DashboardData> {
 
   // ── window start ──────────────────────────────────────────────────────────
   let startMs: number;
-  if (spec.days !== null) {
+  if (range) {
+    startMs = range.startMs;
+  } else if (spec.days !== null) {
     startMs = now - spec.days * MS_DAY;
   } else {
     const { data: earliest } = await supabaseAdmin
@@ -141,19 +184,38 @@ export async function getDashboard(period: Period): Promise<DashboardData> {
       : now - 180 * MS_DAY;
   }
 
-  const { keys, labels, keyFor } = buildBuckets(startMs, now, spec.gran);
+  const { keys, labels, keyFor } = buildBuckets(startMs, windowEnd, gran);
 
   // ── purchases in window ────────────────────────────────────────────────────
-  // Revenue ledger: every incoming Star (credit packs + paid media).
-  const { data: purchaseRows } = await supabaseAdmin
-    .from("star_transactions")
-    .select("clone_id,amount_stars,paid_at")
-    .gte("paid_at", new Date(startMs).toISOString());
-  const purchases = (purchaseRows ?? []) as {
+  // Revenue ledger: every incoming Star (credit packs + paid media). `feature`
+  // is an additive column (migration 024) — fall back without it if that
+  // migration hasn't landed yet, same defensive pattern as analytics-data.ts.
+  type PurchaseRow = {
     clone_id: string;
     amount_stars: number;
     paid_at: string;
-  }[];
+    telegram_id: number | null;
+    kind: string | null;
+    feature: string | null;
+  };
+  let purchases: PurchaseRow[];
+  {
+    const withFeature = await supabaseAdmin
+      .from("star_transactions")
+      .select("clone_id,amount_stars,paid_at,telegram_id,kind,feature")
+      .gte("paid_at", new Date(startMs).toISOString())
+      .lte("paid_at", new Date(windowEnd).toISOString());
+    if (withFeature.error) {
+      const legacy = await supabaseAdmin
+        .from("star_transactions")
+        .select("clone_id,amount_stars,paid_at,telegram_id,kind")
+        .gte("paid_at", new Date(startMs).toISOString())
+        .lte("paid_at", new Date(windowEnd).toISOString());
+      purchases = ((legacy.data ?? []) as Omit<PurchaseRow, "feature">[]).map((r) => ({ ...r, feature: null }));
+    } else {
+      purchases = (withFeature.data ?? []) as PurchaseRow[];
+    }
+  }
 
   // bucketKey -> cloneId -> stars
   const grid = new Map<string, Map<string, number>>();
@@ -184,7 +246,8 @@ export async function getDashboard(period: Period): Promise<DashboardData> {
   const { data: usageRows } = await supabaseAdmin
     .from("usage_events")
     .select("clone_id,cost_usd,ok,created_at")
-    .gte("created_at", new Date(startMs).toISOString());
+    .gte("created_at", new Date(startMs).toISOString())
+    .lte("created_at", new Date(windowEnd).toISOString());
   const usage = (usageRows ?? []) as {
     clone_id: string | null;
     cost_usd: number | null;
@@ -197,10 +260,13 @@ export async function getDashboard(period: Period): Promise<DashboardData> {
   let totalCost = 0;
   let totalErrors = 0;
   for (const u of usage) {
+    // Always count the cost in the grand total, even if we can't attribute it to a
+    // clone (unattributed rows still cost real money — don't let them vanish).
+    totalCost += Number(u.cost_usd) || 0;
+    // Per-clone stats need a clone to attribute to; skip null-clone rows there only.
     if (!u.clone_id) continue;
     cloneCost.set(u.clone_id, (cloneCost.get(u.clone_id) ?? 0) + (Number(u.cost_usd) || 0));
     cloneCalls.set(u.clone_id, (cloneCalls.get(u.clone_id) ?? 0) + 1);
-    totalCost += Number(u.cost_usd) || 0;
     if (!u.ok) {
       cloneErrors.set(u.clone_id, (cloneErrors.get(u.clone_id) ?? 0) + 1);
       totalErrors += 1;
@@ -210,22 +276,37 @@ export async function getDashboard(period: Period): Promise<DashboardData> {
   // ── per-clone user stats ────────────────────────────────────────────────────
   const { data: userRows } = await supabaseAdmin
     .from("users")
-    .select("clone_id,last_message_received,total_messages_sent,total_messages_purchased");
+    .select("clone_id,telegram_id,name,stated_name,username,last_message_received,total_messages_sent,purchase_count,total_spent_stars");
   const users = (userRows ?? []) as {
     clone_id: string;
+    telegram_id: number;
+    name: string | null;
+    stated_name: string | null;
+    username: string | null;
     last_message_received: string | null;
     total_messages_sent: number;
-    total_messages_purchased: number;
+    purchase_count: number | null;
+    total_spent_stars: number | null;
   }[];
 
-  const sevenDaysAgo = now - 7 * MS_DAY;
+  // Fan's self-stated name is the source of truth over the Telegram display
+  // name (see memory: allieai2-fan-name-truth).
+  const nameByKey = new Map<string, string>();
+  const usernameByKey = new Map<string, string | null>();
+  for (const u of users) {
+    const key = `${u.clone_id}:${u.telegram_id}`;
+    nameByKey.set(key, u.stated_name || u.name || `Fan ${u.telegram_id}`);
+    usernameByKey.set(key, u.username);
+  }
+
+  const dayAgo = now - MS_DAY; // "active" = messaged in the last 24h (matches the Telegram messaging window)
   const perClone: Record<string, CloneStats> = {};
   for (const c of clones) {
     perClone[c.id] = {
       stars: cloneStars.get(c.id) ?? 0,
       sales: cloneSales.get(c.id) ?? 0,
       users: 0,
-      active7d: 0,
+      active24h: 0,
       messages: 0,
       buyers: 0,
       costUsd: cloneCost.get(c.id) ?? 0,
@@ -238,10 +319,31 @@ export async function getDashboard(period: Period): Promise<DashboardData> {
     if (!s) continue;
     s.users += 1;
     s.messages += u.total_messages_sent ?? 0;
-    if (u.total_messages_purchased > 0) s.buyers += 1;
-    if (u.last_message_received && new Date(u.last_message_received).getTime() >= sevenDaysAgo)
-      s.active7d += 1;
+    // "Buyer" = ever paid us anything (credits, media, tips) — matches the
+    // definition used in lib/analytics-data.ts so the two tabs agree.
+    if ((u.purchase_count ?? 0) > 0 || (u.total_spent_stars ?? 0) > 0) s.buyers += 1;
+    if (u.last_message_received && new Date(u.last_message_received).getTime() >= dayAgo)
+      s.active24h += 1;
   }
+
+  // ── recent transactions — most recent first. Capped generously (not to 30)
+  // so scoping to one clone client-side still has enough rows to show; the
+  // frontend takes the top 30 AFTER filtering by clone. ─────────────────────
+  const cloneNameById = new Map(clones.map((c) => [c.id, c.name]));
+  const recent: RecentTransaction[] = [...purchases]
+    .sort((a, b) => new Date(b.paid_at).getTime() - new Date(a.paid_at).getTime())
+    .slice(0, 300)
+    .map((p) => ({
+      cloneId: p.clone_id,
+      cloneName: cloneNameById.get(p.clone_id) ?? "—",
+      cloneColor: colorById.get(p.clone_id) ?? "#888",
+      buyerName: p.telegram_id != null ? nameByKey.get(`${p.clone_id}:${p.telegram_id}`) ?? `Fan ${p.telegram_id}` : "Unknown",
+      username: p.telegram_id != null ? usernameByKey.get(`${p.clone_id}:${p.telegram_id}`) ?? null : null,
+      telegramId: p.telegram_id,
+      stars: p.amount_stars,
+      kind: p.feature || p.kind || "other",
+      paidAt: p.paid_at,
+    }));
 
   const summaries: CloneSummary[] = clones
     .map((c) => ({
@@ -254,12 +356,36 @@ export async function getDashboard(period: Period): Promise<DashboardData> {
     }))
     .sort((a, b) => b.stars - a.stars);
 
+  // Fleet-wide rollup of the same all-time fields perClone tracks, so the
+  // Revenue page's headline tiles have an "All clones" total to show.
+  let totalUsers = 0;
+  let totalActive24h = 0;
+  let totalMessages = 0;
+  let totalBuyers = 0;
+  for (const c of clones) {
+    const s = perClone[c.id];
+    totalUsers += s.users;
+    totalActive24h += s.active24h;
+    totalMessages += s.messages;
+    totalBuyers += s.buyers;
+  }
+
   return {
     period,
     clones: summaries,
     bucketLabels: labels,
     series,
-    totals: { stars: totalStars, sales: totalSales, costUsd: totalCost, aiErrors: totalErrors },
+    recent,
+    totals: {
+      stars: totalStars,
+      sales: totalSales,
+      costUsd: totalCost,
+      aiErrors: totalErrors,
+      users: totalUsers,
+      active24h: totalActive24h,
+      messages: totalMessages,
+      buyers: totalBuyers,
+    },
     perClone,
   };
 }

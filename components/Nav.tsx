@@ -21,8 +21,8 @@ export default function Nav() {
             className={
               "rounded-md border px-3 py-1.5 font-medium transition " +
               (active
-                ? "border-gray-900 bg-gray-900 text-white dark:border-neutral-100 dark:bg-neutral-100 dark:text-neutral-900"
-                : "border-gray-300 text-gray-500 hover:bg-gray-100 dark:border-neutral-800 dark:text-neutral-400 dark:hover:bg-neutral-900")
+                ? "border-ink bg-ink text-white"
+                : "border-line text-muted hover:bg-muted/10")
             }
           >
             {l.label}

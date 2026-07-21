@@ -3,6 +3,7 @@ import { notFound } from "next/navigation";
 import { supabaseAdmin } from "@/lib/supabase";
 import { fmtNum } from "@/lib/money";
 import StarAmount from "@/components/StarAmount";
+import SpendTierBadge from "@/components/SpendTierBadge";
 import ConfirmSubmit from "@/components/ConfirmSubmit";
 import { setCredits, resetCounters, toggleActive, deleteUser } from "./actions";
 
@@ -48,7 +49,7 @@ export default async function FanDetailPage({
   const clone = cloneRes.data as { id: string; name: string };
   const u = userRes.data as any;
 
-  const [purchasesRes, historyRes] = await Promise.all([
+  const [purchasesRes, historyRes, profileRes] = await Promise.all([
     supabaseAdmin
       .from("star_transactions")
       .select("*")
@@ -61,20 +62,22 @@ export default async function FanDetailPage({
       .eq("telegram_id", u.telegram_id)
       .order("created_at", { ascending: false })
       .limit(60),
+    supabaseAdmin.from("fan_profiles").select("*").eq("user_id", userId).maybeSingle(),
   ]);
 
   const purchases = (purchasesRes.data ?? []) as any[];
   const history = ((historyRes.data ?? []) as any[]).slice().reverse(); // oldest → newest
+  const profile = (profileRes.data ?? null) as any;
   const totalStars = purchases.reduce((s, p) => s + (p.amount_stars ?? 0), 0);
   const isPaying = purchases.length > 0 || (u.total_messages_purchased ?? 0) > 0;
 
-  const cardCls = "rounded-lg border border-gray-200 dark:border-neutral-800 bg-white dark:bg-neutral-900";
+  const cardCls = "rounded-lg border border-line bg-panel";
 
   const stats: { label: string; value: React.ReactNode }[] = [
     {
       label: "Credits left",
       value: (
-        <span className={u.message_credits <= 0 ? "text-red-500" : u.message_credits <= 5 ? "text-yellow-500" : ""}>
+        <span className={u.message_credits <= 0 ? "text-crit" : u.message_credits <= 5 ? "text-warn" : ""}>
           {fmtNum(u.message_credits)}
         </span>
       ),
@@ -91,35 +94,41 @@ export default async function FanDetailPage({
   return (
     <div>
       {/* Breadcrumb */}
-      <div className="mb-2 flex flex-wrap items-center gap-2 text-sm text-gray-400 dark:text-neutral-500">
-        <Link href="/clones" className="hover:text-gray-900 dark:hover:text-neutral-100">Clones</Link>
+      <div className="mb-2 flex flex-wrap items-center gap-2 text-sm text-muted">
+        <Link href="/clones" className="hover:text-ink">Clones</Link>
         <span>/</span>
-        <Link href={`/clones/${id}`} className="hover:text-gray-900 dark:hover:text-neutral-100">{clone.name}</Link>
+        <Link href={`/clones/${id}`} className="hover:text-ink">{clone.name}</Link>
         <span>/</span>
-        <Link href={`/clones/${id}/fans`} className="hover:text-gray-900 dark:hover:text-neutral-100">Fans</Link>
+        <Link href="/users" className="hover:text-ink">Fans</Link>
         <span>/</span>
-        <span className="text-gray-900 dark:text-neutral-100">{u.name ?? "Unknown"}</span>
+        <span className="text-ink">{u.name ?? "Unknown"}</span>
       </div>
 
       {/* Header */}
       <div className="mb-6 flex flex-wrap items-center gap-3">
-        <h1 className="text-2xl font-semibold">{u.name ?? <span className="text-gray-400 dark:text-neutral-500">Unknown</span>}</h1>
+        <h1 className="text-2xl font-semibold">{u.name ?? <span className="text-muted">Unknown</span>}</h1>
         <span
           className={
             "rounded-full px-2.5 py-0.5 text-xs font-medium " +
             (isPaying
-              ? "bg-green-100 text-green-700 dark:bg-green-400/15 dark:text-green-300"
-              : "bg-gray-100 text-gray-500 dark:bg-neutral-800 dark:text-neutral-400")
+              ? "bg-good/15 text-good"
+              : "bg-muted/10 text-muted")
           }
         >
           {isPaying ? "Paying fan" : "Free user"}
         </span>
+        <SpendTierBadge tier={u.spend_tier} />
+        {u.is_high_spender && (
+          <span className="rounded-full bg-warn/15 px-2.5 py-0.5 text-xs font-medium text-warn">
+            ⚡ Power spender
+          </span>
+        )}
         <span
           className={
             "rounded-full px-2.5 py-0.5 text-xs " +
             (u.is_active
-              ? "bg-green-100 text-green-700 dark:bg-green-400/15 dark:text-green-300"
-              : "bg-gray-100 text-gray-400 dark:bg-neutral-800 dark:text-neutral-500")
+              ? "bg-good/15 text-good"
+              : "bg-muted/10 text-muted")
           }
         >
           {u.is_active ? "active" : "inactive"}
@@ -130,36 +139,116 @@ export default async function FanDetailPage({
       <div className="mb-6 grid grid-cols-2 gap-3 sm:grid-cols-4">
         {stats.map((s) => (
           <div key={s.label} className={`${cardCls} p-4`}>
-            <div className="text-xs text-gray-400 dark:text-neutral-500">{s.label}</div>
-            <div className="mt-1 text-lg font-semibold">{s.value}</div>
+            <div className="text-xs text-muted">{s.label}</div>
+            <div className="mt-1 text-2xl font-semibold">{s.value}</div>
           </div>
         ))}
       </div>
 
+      {/* Knowledge / profile — what the bot has learned about this fan */}
+      {(() => {
+        const interests: string[] = Array.isArray(profile?.interests) ? profile.interests : [];
+        const details: [string, any][] = profile?.details && typeof profile.details === "object"
+          ? Object.entries(profile.details).filter(([, v]) => v != null && String(v).trim() !== "")
+          : [];
+        const hasAnything =
+          profile && (profile.summary?.trim() || interests.length > 0 || details.length > 0 || profile.preferences?.trim());
+        const prettyKey = (k: string) =>
+          k.replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
+        return (
+          <div className={`${cardCls} mb-6 p-5`}>
+            <div className="mb-4 flex items-center justify-between gap-2">
+              <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">
+                Knowledge / profile
+              </h2>
+              {profile?.extracted_msg_count != null && (
+                <span className="text-xs text-muted">
+                  from {fmtNum(profile.extracted_msg_count)} message{profile.extracted_msg_count === 1 ? "" : "s"}
+                </span>
+              )}
+            </div>
+
+            {!hasAnything ? (
+              <div className="py-6 text-center text-sm text-muted">
+                Nothing collected yet. The bot builds this dossier automatically as this fan chats.
+              </div>
+            ) : (
+              <div className="flex flex-col gap-5">
+                {profile.summary?.trim() && (
+                  <div>
+                    <div className="mb-1 text-xs text-muted">Summary</div>
+                    <p className="text-sm leading-relaxed text-ink">{profile.summary}</p>
+                  </div>
+                )}
+
+                {interests.length > 0 && (
+                  <div>
+                    <div className="mb-2 text-xs text-muted">Interests</div>
+                    <div className="flex flex-wrap gap-1.5">
+                      {interests.map((it, i) => (
+                        <span
+                          key={i}
+                          className="rounded-full bg-muted/10 px-2.5 py-0.5 text-xs text-ink"
+                        >
+                          {it}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+                )}
+
+                {details.length > 0 && (
+                  <div>
+                    <div className="mb-2 text-xs text-muted">Details</div>
+                    <dl className="grid grid-cols-1 gap-x-6 gap-y-2 sm:grid-cols-2">
+                      {details.map(([k, v]) => (
+                        <div key={k} className="flex justify-between gap-3 border-b border-line pb-1.5 text-sm">
+                          <dt className="text-muted">{prettyKey(k)}</dt>
+                          <dd className="text-right font-medium text-ink">
+                            {Array.isArray(v) ? v.join(", ") : String(v)}
+                          </dd>
+                        </div>
+                      ))}
+                    </dl>
+                  </div>
+                )}
+
+                {profile.preferences?.trim() && (
+                  <div>
+                    <div className="mb-1 text-xs text-muted">Preferences</div>
+                    <p className="text-sm leading-relaxed text-ink">{profile.preferences}</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        );
+      })()}
+
       {/* Controls */}
       <div className={`${cardCls} mb-6 p-5`}>
-        <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-neutral-400">Controls</h2>
+        <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-muted">Controls</h2>
         <div className="flex flex-col gap-4">
           {/* Set / reset credits */}
           <form action={setCredits} className="flex flex-wrap items-end gap-2">
             <input type="hidden" name="userId" value={userId} />
             <input type="hidden" name="cloneId" value={id} />
             <label className="text-sm">
-              <span className="mb-1 block text-xs text-gray-400 dark:text-neutral-500">Message credits</span>
+              <span className="mb-1 block text-xs text-muted">Message credits</span>
               <input
                 name="credits"
                 type="number"
                 min={0}
                 defaultValue={u.message_credits}
-                className="w-32 rounded-md border border-gray-300 bg-gray-50 px-3 py-2 text-sm outline-none focus:border-brand-light dark:border-neutral-700 dark:bg-neutral-950 dark:text-neutral-100"
+                className="w-32 rounded-md border border-line bg-bg px-3 py-2 text-sm outline-none focus:border-accent"
               />
             </label>
-            <button type="submit" className="rounded-md bg-brand px-4 py-2 text-sm font-medium text-white hover:bg-brand-light transition">
+            <button type="submit" className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-ink hover:bg-accent-deep transition">
               Save credits
             </button>
           </form>
 
-          <div className="flex flex-wrap gap-2 border-t border-gray-100 pt-4 dark:border-neutral-800">
+          <div className="flex flex-wrap gap-2 border-t border-line pt-4">
             {/* Reset credits to 0 */}
             <form action={setCredits}>
               <input type="hidden" name="userId" value={userId} />
@@ -167,7 +256,7 @@ export default async function FanDetailPage({
               <input type="hidden" name="credits" value="0" />
               <ConfirmSubmit
                 message="Set this fan's message credits to 0?"
-                className="rounded-md border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50 dark:border-neutral-700 dark:hover:bg-neutral-800 transition"
+                className="rounded-md border border-line px-3 py-2 text-sm hover:bg-bg transition"
               >
                 Reset credits to 0
               </ConfirmSubmit>
@@ -179,7 +268,7 @@ export default async function FanDetailPage({
               <input type="hidden" name="cloneId" value={id} />
               <ConfirmSubmit
                 message="Reset lifetime counters (messages sent + bought) to 0? This does not change credits or purchase history."
-                className="rounded-md border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50 dark:border-neutral-700 dark:hover:bg-neutral-800 transition"
+                className="rounded-md border border-line px-3 py-2 text-sm hover:bg-bg transition"
               >
                 Reset counters
               </ConfirmSubmit>
@@ -190,7 +279,7 @@ export default async function FanDetailPage({
               <input type="hidden" name="userId" value={userId} />
               <input type="hidden" name="cloneId" value={id} />
               <input type="hidden" name="active" value={u.is_active ? "false" : "true"} />
-              <button type="submit" className="rounded-md border border-gray-300 px-3 py-2 text-sm hover:bg-gray-50 dark:border-neutral-700 dark:hover:bg-neutral-800 transition">
+              <button type="submit" className="rounded-md border border-line px-3 py-2 text-sm hover:bg-bg transition">
                 {u.is_active ? "Mark inactive" : "Mark active"}
               </button>
             </form>
@@ -202,7 +291,7 @@ export default async function FanDetailPage({
               <input type="hidden" name="telegramId" value={u.telegram_id} />
               <ConfirmSubmit
                 message={`Permanently delete ${u.name ?? "this fan"}? This removes the user, their purchase records and entire chat history. This cannot be undone.`}
-                className="rounded-md border border-red-300 bg-red-50 px-3 py-2 text-sm font-medium text-red-600 hover:bg-red-100 dark:border-red-500/30 dark:bg-red-500/10 dark:text-red-400 dark:hover:bg-red-500/20 transition"
+                className="rounded-md border border-crit/30 bg-crit/10 px-3 py-2 text-sm font-medium text-crit hover:bg-crit/20 transition"
               >
                 Delete user
               </ConfirmSubmit>
@@ -214,27 +303,27 @@ export default async function FanDetailPage({
       <div className="grid gap-6 lg:grid-cols-2">
         {/* Purchases */}
         <div className={`${cardCls} p-5`}>
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-neutral-400">
-            Purchases {purchases.length > 0 && <span className="text-gray-400 dark:text-neutral-500">({purchases.length})</span>}
+          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-muted">
+            Purchases {purchases.length > 0 && <span className="text-muted">({purchases.length})</span>}
           </h2>
           {purchases.length === 0 ? (
-            <div className="py-6 text-center text-sm text-gray-400 dark:text-neutral-500">No purchases yet.</div>
+            <div className="py-6 text-center text-sm text-muted">No purchases yet.</div>
           ) : (
-            <div className="flex flex-col divide-y divide-gray-100 dark:divide-neutral-800">
+            <div className="flex flex-col divide-y divide-line">
               {purchases.map((p) => (
                 <div key={p.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
                   <div>
                     <div className="font-medium"><StarAmount stars={p.amount_stars} /></div>
-                    <div className="text-xs text-gray-400 dark:text-neutral-500">{dateTime(p.paid_at)}</div>
+                    <div className="text-xs text-muted">{dateTime(p.paid_at)}</div>
                   </div>
                   <span
                     className={
                       "rounded-full px-2 py-0.5 text-xs " +
                       (p.kind === "credits"
-                        ? "bg-blue-100 text-blue-700 dark:bg-blue-400/15 dark:text-blue-300"
+                        ? "bg-accent/15 text-accent"
                         : p.kind === "media"
-                          ? "bg-purple-100 text-purple-700 dark:bg-purple-400/15 dark:text-purple-300"
-                          : "bg-gray-100 text-gray-500 dark:bg-neutral-800 dark:text-neutral-400")
+                          ? "bg-info/15 text-info"
+                          : "bg-muted/10 text-muted")
                     }
                   >
                     {p.kind === "credits" ? "messages" : p.kind}
@@ -247,27 +336,28 @@ export default async function FanDetailPage({
 
         {/* Conversation */}
         <div className={`${cardCls} p-5`}>
-          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-gray-500 dark:text-neutral-400">
+          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-muted">
             Recent conversation
           </h2>
           {history.length === 0 ? (
-            <div className="py-6 text-center text-sm text-gray-400 dark:text-neutral-500">No messages yet.</div>
+            <div className="py-6 text-center text-sm text-muted">No messages yet.</div>
           ) : (
             <div className="flex max-h-[28rem] flex-col gap-2 overflow-y-auto pr-1">
               {history.map((m, i) => {
+                // Bot (her) = blue, RIGHT. Fan = grey, left. Same as /users inbox.
                 const fan = m.role === "human";
                 return (
-                  <div key={i} className={"flex " + (fan ? "justify-end" : "justify-start")}>
+                  <div key={i} className={"flex " + (fan ? "justify-start" : "justify-end")}>
                     <div
                       className={
                         "max-w-[80%] rounded-2xl px-3 py-2 text-sm " +
                         (fan
-                          ? "bg-brand text-white rounded-br-sm"
-                          : "bg-gray-100 text-gray-900 rounded-bl-sm dark:bg-neutral-800 dark:text-neutral-100")
+                          ? "bg-muted/10 text-ink rounded-bl-sm"
+                          : "bg-accent text-white rounded-br-sm")
                       }
                     >
                       <div className="whitespace-pre-wrap break-words">{m.content}</div>
-                      <div className={"mt-0.5 text-[10px] " + (fan ? "text-white/60" : "text-gray-400 dark:text-neutral-500")}>
+                      <div className={"mt-0.5 text-[10px] " + (fan ? "text-muted" : "text-white/60")}>
                         {dateTime(m.created_at)}
                       </div>
                     </div>

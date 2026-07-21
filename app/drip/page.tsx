@@ -1,5 +1,203 @@
-import ComingSoon from "@/components/ComingSoon";
+import { supabaseAdmin } from "@/lib/supabase";
+import { getCloneScope } from "@/lib/clone-scope";
+import { setCloneScope } from "@/app/actions/clone-scope";
+import DripForm from "./DripForm";
+import { Card } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
-export default function AllDripPage() {
-  return <ComingSoon title="Drip" note="Re-engagement drip schedule and messages across the fleet." />;
+export const dynamic = "force-dynamic";
+
+// Campaigns: win quiet fans back on autopilot. The automated campaign is a list
+// of timed steps that fire while a fan goes quiet, always inside Telegram's
+// hard 24h messaging window (a business bot can only message a fan within 24h
+// of his last activity). "All clones" is a read-only summary with a link into
+// each bot's editor; scoped to one clone it's the full step builder.
+export default async function CampaignsPage() {
+  const cloneId = await getCloneScope();
+  if (cloneId) return <CloneCampaigns cloneId={cloneId} />;
+  return <FleetCampaigns />;
 }
+
+// Valid timed steps only (new shape [{type, after_hours}], migration 031's
+// model on the drip_steps column). Old-shape rows without a valid hour offset
+// don't count; the runtime drops them too.
+const STEP_TYPES = ["text", "voice", "photo", "video", "bundle"];
+function validSteps(
+  raw: unknown,
+): { type: "text" | "voice" | "photo" | "video" | "bundle"; after_hours: number; media_id?: string }[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((s: any) => {
+    if (!s || typeof s !== "object" || !STEP_TYPES.includes(s.type)) return false;
+    const h = Number(s.after_hours);
+    return Number.isFinite(h) && h >= 1 && h <= 23;
+  });
+}
+
+type FleetRow = {
+  id: string;
+  name: string;
+  slug: string;
+  drip_enabled: boolean | null;
+  winback_lapse_days: number | null;
+  // absent pre-migration-029, so read defensively
+  drip_steps?: unknown[] | null;
+};
+
+async function FleetCampaigns() {
+  const { data } = await supabaseAdmin
+    .from("clones")
+    .select("*")
+    .order("created_at", { ascending: true });
+  const rows = (data ?? []) as FleetRow[];
+  const enabledCount = rows.filter((r) => r.drip_enabled).length;
+
+  return (
+    <div className="text-ink">
+      <div className="mb-5 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
+        <Card className="p-4">
+          <div className="text-xs text-muted">Clones</div>
+          <div className="mt-1 font-mono text-2xl font-semibold tabular-nums">{rows.length}</div>
+        </Card>
+        <Card className="p-4">
+          <div className="text-xs text-muted">Campaign on</div>
+          <div className={`mt-1 font-mono text-2xl font-semibold tabular-nums ${enabledCount > 0 ? "text-good" : ""}`}>{enabledCount}</div>
+        </Card>
+        <Card className="p-4">
+          <div className="text-xs text-muted">Campaign off</div>
+          <div className="mt-1 font-mono text-2xl font-semibold tabular-nums">{rows.length - enabledCount}</div>
+        </Card>
+      </div>
+
+      <Card className="overflow-hidden p-0">
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Bot</TableHead>
+              <TableHead>Campaign</TableHead>
+              <TableHead className="text-right">Steps</TableHead>
+              <TableHead />
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {rows.map((c) => {
+              const steps = validSteps(c.drip_steps);
+              return (
+                <TableRow key={c.id}>
+                  <TableCell className="font-medium">{c.name} <span className="text-muted">/ {c.slug}</span></TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className={c.drip_enabled ? "border-good/30 text-good" : "text-muted"}>{c.drip_enabled ? "on" : "off"}</Badge>
+                  </TableCell>
+                  <TableCell className="text-right tabular-nums">{steps.length}</TableCell>
+                  <TableCell className="text-right">
+                    <form action={setCloneScope.bind(null, c.id)}>
+                      <Button type="submit" variant="link" size="sm" className="h-auto p-0 text-accent">Manage →</Button>
+                    </form>
+                  </TableCell>
+                </TableRow>
+              );
+            })}
+            {rows.length === 0 && (
+              <TableRow><TableCell colSpan={4} className="py-8 text-center text-muted">No clones yet.</TableCell></TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </Card>
+    </div>
+  );
+}
+
+async function CloneCampaigns({ cloneId }: { cloneId: string }) {
+  const [cloneRes, photosRes, videosRes, bundlesRes] = await Promise.all([
+    supabaseAdmin.from("clones").select("*").eq("id", cloneId).maybeSingle(),
+    supabaseAdmin
+      .from("photos")
+      .select("id,storage_path,caption,teaser_caption,star_value,is_free")
+      .eq("clone_id", cloneId)
+      .order("created_at", { ascending: false }),
+    supabaseAdmin
+      .from("videos")
+      .select("id,storage_path,caption,teaser_caption,star_value,is_free")
+      .eq("clone_id", cloneId)
+      .order("created_at", { ascending: false }),
+    supabaseAdmin
+      .from("photo_bundles")
+      .select("id,name,caption,star_price,photo_bundle_items(id,storage_path,sort_order)")
+      .eq("clone_id", cloneId)
+      .order("created_at", { ascending: true }),
+  ]);
+
+  if (cloneRes.error) throw new Error(cloneRes.error.message);
+  if (!cloneRes.data) return <div className="text-muted">Clone not found.</div>;
+
+  const clone = cloneRes.data as {
+    id: string;
+    name: string;
+    photos_enabled: boolean;
+    videos_enabled: boolean;
+    bundles_enabled: boolean;
+    drip_enabled: boolean;
+    winback_lapse_days: number;
+    drip_media_ids: { type: "photo" | "video" | "bundle"; id: string }[] | null;
+    // absent pre-migration-029, so read defensively
+    drip_steps?: unknown[] | null;
+    // Onboarding + follow-up, moved off Configure's Engagement tab.
+    welcome_instruction: string | null;
+    welcome_bundle_after: number | null;
+    welcome_bundle_after_minutes: number | null;
+    onboarding_voice_after: number | null;
+    onboarding_voice_instruction: string | null;
+    onboarding_collect_fields: unknown;
+    followup_after_minutes: number | null;
+  };
+
+  return (
+    <div>
+      <div className="mb-4 flex items-center justify-end">
+        <form action={setCloneScope.bind(null, null)}>
+          <Button type="submit" variant="ghost" size="sm">← All bots</Button>
+        </form>
+      </div>
+
+      <DripForm
+        cloneId={cloneId}
+        photosEnabled={!!clone.photos_enabled}
+        videosEnabled={!!clone.videos_enabled}
+        bundlesEnabled={!!clone.bundles_enabled}
+        photos={(photosRes.data ?? []) as MediaRow[]}
+        videos={(videosRes.data ?? []) as MediaRow[]}
+        bundles={(bundlesRes.data ?? []) as BundleRow[]}
+        initial={{
+          enabled: clone.drip_enabled ?? true,
+          steps: validSteps(clone.drip_steps).map((s) => ({
+            type: s.type,
+            afterHours: s.after_hours,
+            mediaId: typeof s.media_id === "string" && s.media_id.trim() ? s.media_id.trim() : null,
+          })),
+          // Onboarding (trimmed to two triggers) + follow-up.
+          welcomeBundleAfter: clone.welcome_bundle_after ?? 10,
+          onboardingVoiceAfter: clone.onboarding_voice_after ?? null,
+          followupAfterMinutes: clone.followup_after_minutes ?? 0,
+        }}
+      />
+    </div>
+  );
+}
+
+type MediaRow = {
+  id: string;
+  storage_path: string;
+  caption: string | null;
+  teaser_caption: string | null;
+  star_value: number;
+  is_free: boolean | null;
+};
+
+type BundleRow = {
+  id: string;
+  name: string;
+  caption: string | null;
+  star_price: number;
+  photo_bundle_items: { id: string; storage_path: string; sort_order: number }[];
+};

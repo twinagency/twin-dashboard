@@ -3,10 +3,24 @@
 import { useCurrency } from "./CurrencyProvider";
 import type { Currency } from "@/lib/money";
 
-export default function CurrencyToggle() {
+// compact: one button showing the active currency; click flips to the other.
+export default function CurrencyToggle({ compact = false }: { compact?: boolean }) {
   const { currency, setCurrency } = useCurrency();
+  if (compact) {
+    const next = currency === "AUD" ? "USD" : "AUD";
+    return (
+      <button
+        type="button"
+        onClick={() => setCurrency(next as Currency)}
+        title={`Showing ${currency} — click for ${next}`}
+        className="rounded-full bg-muted/10 px-3 py-1.5 text-xs font-semibold text-ink transition hover:bg-muted/15"
+      >
+        ${currency}
+      </button>
+    );
+  }
   return (
-    <div className="inline-flex gap-1 rounded-lg bg-gray-100 p-1 text-xs dark:bg-neutral-800">
+    <div className="inline-flex gap-1 rounded-lg bg-muted/10 p-1 text-xs">
       {(["AUD", "USD"] as Currency[]).map((c) => (
         <button
           key={c}
@@ -15,9 +29,7 @@ export default function CurrencyToggle() {
           aria-pressed={currency === c}
           className={
             "rounded-md px-3 py-1 font-semibold transition " +
-            (currency === c
-              ? "bg-gray-900 text-white shadow-sm dark:bg-white dark:text-neutral-900"
-              : "text-gray-500 hover:text-gray-900 dark:text-neutral-400 dark:hover:text-white")
+            (currency === c ? "bg-muted/15 text-ink shadow-sm" : "text-muted hover:text-ink")
           }
         >
           ${c}

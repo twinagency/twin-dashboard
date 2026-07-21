@@ -1,0 +1,788 @@
+"use client";
+
+import { useEffect, useState } from "react";
+
+// ── Shared styling tokens ─────────────────────────────────────────────────────
+// One source of truth for input/select look, so Configure + Create match exactly
+// and light/dark both stay consistent.
+// Deliberately compact: Configure is a dense control panel, not a signup form.
+// Each tab should fit one screen, so inputs stay short and tight.
+export const inputCls =
+  "w-full rounded-md border border-line bg-panel px-2.5 py-1.5 text-sm text-ink outline-none transition focus:border-accent focus:ring-1 focus:ring-accent/30";
+
+export const selectCls = inputCls;
+
+// ── Card / section shell ──────────────────────────────────────────────────────
+// Sections get a visual identity: an emoji `icon` chip + an `accent` color used
+// on the left border and chip background, so each card is recognizable at a
+// glance. Defaults keep untouched call sites rendering exactly as before.
+export type SectionAccent =
+  | "blue"
+  | "green"
+  | "pink"
+  | "purple"
+  | "amber"
+  | "red"
+  | "cyan"
+  | "neutral";
+const SECTION_ACCENTS: Record<SectionAccent, { bar: string; chip: string }> = {
+  blue: { bar: "border-l-accent/70", chip: "bg-accent/15" },
+  green: { bar: "border-l-good/70", chip: "bg-good/15" },
+  pink: { bar: "border-l-pink-500/70", chip: "bg-pink-500/15" },
+  purple: { bar: "border-l-purple-500/70", chip: "bg-purple-500/15" },
+  amber: { bar: "border-l-warn/70", chip: "bg-warn/15" },
+  red: { bar: "border-l-crit/70", chip: "bg-crit/15" },
+  cyan: { bar: "border-l-cyan-400/70", chip: "bg-cyan-400/15" },
+  neutral: { bar: "border-l-line", chip: "bg-muted/15" },
+};
+
+export function Section({
+  title,
+  hint,
+  tip,
+  icon,
+  accent = "neutral",
+  children,
+  className = "",
+  cols = 1,
+}: {
+  title?: React.ReactNode;
+  hint?: string;
+  // Longer explainer moved out of the visible hint; shows on hover of the header.
+  tip?: string;
+  // Emoji rendered in a small colored chip next to the title.
+  icon?: string;
+  accent?: SectionAccent;
+  children: React.ReactNode;
+  // e.g. "xl:col-span-2" — lets wide sections span both columns of the
+  // condensed 2-col Configure layout.
+  className?: string;
+  // How many columns the card's own fields flow into. Short controls (a name,
+  // a number, a select) waste a whole row each at cols=1, which is what made
+  // every tab scroll — set 2/3 so they sit side by side.
+  cols?: 1 | 2 | 3;
+}) {
+  const a = SECTION_ACCENTS[accent];
+  const colCls = cols === 3 ? "sm:grid-cols-3" : cols === 2 ? "sm:grid-cols-2" : "";
+  // Hint + tip both live in the header tooltip now — the visible explanatory
+  // sentence was costing a line on every card. The ⓘ marks that there's more.
+  const tipText = [hint, tip].filter(Boolean).join(" — ");
+  return (
+    <section
+      className={`flex h-full flex-col rounded-xl border border-line border-l-[3px] ${a.bar} bg-panel p-3 text-ink ` + className}
+    >
+      {title && (
+        <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-ink">
+          {icon && (
+            <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-[11px] ${a.chip}`}>
+              {icon}
+            </span>
+          )}
+          {title}
+          {tipText && <Info text={tipText} />}
+        </h3>
+      )}
+      <div className={`grid items-start gap-2 ${colCls}` + (title ? " mt-2" : "")}>{children}</div>
+    </section>
+  );
+}
+
+// ── Sub-heading inside a Section card (small emoji + label divider) ───────────
+export function SubHead({
+  emoji,
+  label,
+  tip,
+  children,
+}: {
+  emoji: string;
+  label: string;
+  tip?: string;
+  children?: React.ReactNode;
+}) {
+  return (
+    <p title={tip} className="flex items-center gap-1.5 text-xs font-semibold text-ink">
+      <span>{emoji}</span>
+      {label}
+      {tip && <span className="cursor-help text-[10px] font-normal text-muted">ⓘ</span>}
+      {children}
+    </p>
+  );
+}
+
+// A group heading that separates the form into scannable bands.
+export function GroupHeader({ label, hint }: { label: string; hint?: string }) {
+  return (
+    <div className="mb-1 mt-2 first:mt-0">
+      <h2 className="text-xs font-semibold uppercase tracking-widest text-muted">{label}</h2>
+      {hint && <p className="mt-0.5 text-xs text-muted">{hint}</p>}
+    </div>
+  );
+}
+
+// ── Collapsible block ─────────────────────────────────────────────────────────
+// A summary row you click to expand. For settings that are long but rarely
+// touched (hard limits) — the closed state shows a live summary so you can tell
+// at a glance whether anything is set, without the full grid on screen.
+// Children stay MOUNTED when closed (hidden via CSS) so their inputs keep
+// submitting with the form — collapsing must never drop a value.
+export function Collapse({
+  label,
+  summary,
+  emoji,
+  defaultOpen = false,
+  children,
+}: {
+  label: string;
+  summary?: string;
+  emoji?: string;
+  defaultOpen?: boolean;
+  children: React.ReactNode;
+}) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="h-full rounded-xl border border-line border-l-[3px] border-l-crit/70 bg-panel">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className="flex w-full items-center gap-2 px-3 py-3 text-left"
+      >
+        {emoji && (
+          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-crit/15 text-[11px]">
+            {emoji}
+          </span>
+        )}
+        <span className="text-xs font-semibold uppercase tracking-wide text-ink">{label}</span>
+        {summary && <span className="truncate text-[11px] text-muted">{summary}</span>}
+        <span className="ml-auto shrink-0 text-[11px] font-medium text-accent">
+          {open ? "Close ▲" : "Edit ▼"}
+        </span>
+      </button>
+      <div className={open ? "border-t border-line p-3" : "hidden"}>{children}</div>
+    </div>
+  );
+}
+
+// ── Modal overlay ─────────────────────────────────────────────────────────────
+// For big editors that shouldn't cost permanent page height (the onboarding
+// questionnaire). Same rule as Collapse: children stay mounted when closed, so
+// the form still submits every field whether or not the overlay is open.
+export function Modal({
+  open,
+  onClose,
+  title,
+  hint,
+  children,
+}: {
+  open: boolean;
+  onClose: () => void;
+  title: string;
+  hint?: string;
+  children: React.ReactNode;
+}) {
+  // Escape closes; body scroll locks while open.
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e: KeyboardEvent) => e.key === "Escape" && onClose();
+    document.addEventListener("keydown", onKey);
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.removeEventListener("keydown", onKey);
+      document.body.style.overflow = prev;
+    };
+  }, [open, onClose]);
+
+  return (
+    <div className={open ? "fixed inset-0 z-50 flex items-start justify-center p-4 sm:p-8" : "hidden"}>
+      <div className="absolute inset-0 bg-black/60" onClick={onClose} />
+      <div className="relative flex max-h-full w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-line bg-panel shadow-2xl">
+        <div className="flex items-start gap-3 border-b border-line px-4 py-2.5">
+          <div className="min-w-0">
+            <h2 className="text-sm font-semibold text-ink">{title}</h2>
+            {hint && <p className="mt-0.5 text-[11px] text-muted">{hint}</p>}
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="ml-auto shrink-0 rounded-md border border-line px-2 py-1 text-xs text-muted transition hover:text-ink"
+          >
+            Done
+          </button>
+        </div>
+        <div className="overflow-y-auto p-4">{children}</div>
+      </div>
+    </div>
+  );
+}
+
+// A soft inner card, for nested blocks inside a Section.
+export function SubCard({ children, className = "" }: { children: React.ReactNode; className?: string }) {
+  return (
+    <div className={"rounded-lg border border-line bg-bg/60 p-3 " + className}>
+      {children}
+    </div>
+  );
+}
+
+// ── Info tooltip ──────────────────────────────────────────────────────────────
+// A real hover bubble, not the native `title` attribute — native tooltips take
+// ~1s to appear, can't be styled, and simply never show on touch devices, which
+// made the ⓘ look broken.
+export function Info({ text, className = "" }: { text: string; className?: string }) {
+  return (
+    <span className={"group/info relative inline-flex shrink-0 " + className}>
+      <span className="cursor-help text-[10px] leading-none text-muted/80 transition group-hover/info:text-accent">
+        ⓘ
+      </span>
+      <span
+        role="tooltip"
+        className="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 hidden w-64 max-w-[70vw] -translate-x-1/2 rounded-lg border border-line bg-panel p-2 text-[11px] font-normal normal-case leading-relaxed tracking-normal text-ink shadow-xl group-hover/info:block"
+      >
+        {text}
+      </span>
+    </span>
+  );
+}
+
+// ── Field label ───────────────────────────────────────────────────────────────
+// One label row for every control. A `hint` becomes a hoverable ⓘ rather than a
+// grey sentence under the input — those explanation lines were costing a line
+// per field and turned every card into a wall of small print.
+export function FieldLabel({
+  label,
+  hint,
+  required,
+}: {
+  label: React.ReactNode;
+  hint?: string;
+  required?: boolean;
+}) {
+  return (
+    <span className="mb-0.5 flex items-center gap-1 text-xs text-muted">
+      <span>{label}</span>
+      {required && <span className="text-accent">*</span>}
+      {hint && <Info text={hint} />}
+    </span>
+  );
+}
+
+// ── Text / number field (uncontrolled — submits via name) ─────────────────────
+export function Field({
+  label,
+  name,
+  defaultValue,
+  type = "text",
+  placeholder,
+  required,
+  hint,
+}: {
+  label: string;
+  name: string;
+  defaultValue?: string | number | null;
+  type?: string;
+  placeholder?: string;
+  required?: boolean;
+  hint?: string;
+}) {
+  return (
+    <label className="block">
+      <FieldLabel label={label} hint={hint} required={required} />
+      <input
+        name={name}
+        type={type}
+        required={required}
+        placeholder={placeholder}
+        defaultValue={defaultValue ?? undefined}
+        className={inputCls}
+      />
+    </label>
+  );
+}
+
+export function Area({
+  label,
+  name,
+  defaultValue,
+  placeholder,
+  rows = 2,
+  hint,
+}: {
+  label: string;
+  name: string;
+  defaultValue?: string | null;
+  placeholder?: string;
+  rows?: number;
+  hint?: string;
+}) {
+  return (
+    <label className="block">
+      <FieldLabel label={label} hint={hint} />
+      <textarea
+        name={name}
+        rows={rows}
+        placeholder={placeholder}
+        defaultValue={defaultValue ?? undefined}
+        className={inputCls}
+      />
+    </label>
+  );
+}
+
+// ── Controlled select ─────────────────────────────────────────────────────────
+export function Select<T extends string>({
+  label,
+  name,
+  value,
+  onChange,
+  options,
+  hint,
+}: {
+  label: string;
+  name: string;
+  value: T;
+  onChange: (v: T) => void;
+  options: { value: T; label: string }[];
+  hint?: string;
+}) {
+  return (
+    <label className="block">
+      <FieldLabel label={label} hint={hint} />
+      <select name={name} value={value} onChange={(e) => onChange(e.target.value as T)} className={selectCls}>
+        {options.map((o) => (
+          <option key={o.value} value={o.value}>
+            {o.label}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+
+// ── Segmented pill control (one-line replacement for a 3-option Select) ───────
+// Identical submit semantics to Select: one hidden input carrying name + value.
+// `title` on each option holds the longer description (hover tooltip).
+export type SegAccent = "accent" | "pink" | "red" | "green" | "amber" | "purple";
+const SEG_ACTIVE: Record<SegAccent, string> = {
+  accent: "bg-accent/20 text-accent",
+  pink: "bg-pink-500/20 text-pink-400",
+  red: "bg-crit/20 text-crit",
+  green: "bg-good/20 text-good",
+  amber: "bg-warn/20 text-warn",
+  purple: "bg-purple-500/20 text-purple-400",
+};
+export function Segmented<T extends string>({
+  label,
+  name,
+  value,
+  onChange,
+  options,
+  hint,
+  accent = "accent",
+}: {
+  label: string;
+  name: string;
+  value: T;
+  onChange: (v: T) => void;
+  options: { value: T; label: string; title?: string }[];
+  hint?: string;
+  accent?: SegAccent;
+}) {
+  return (
+    <div className="block">
+      <FieldLabel label={label} hint={hint} />
+      <input type="hidden" name={name} value={value} />
+      <div className="grid auto-cols-fr grid-flow-col gap-0.5 rounded-lg border border-line bg-bg/60 p-0.5">
+        {options.map((o) => (
+          <button
+            key={o.value}
+            type="button"
+            title={o.title}
+            aria-pressed={value === o.value}
+            onClick={() => onChange(o.value)}
+            className={
+              "rounded-md px-2 py-1.5 text-xs font-semibold transition " +
+              (value === o.value ? SEG_ACTIVE[accent] : "text-muted hover:text-ink")
+            }
+          >
+            {o.label}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── Mini toggle card (emoji + short label + switch, for toggle grids) ─────────
+// Same submit semantics as Toggle: hidden input carrying "true"/"false".
+export function ToggleCard({
+  emoji,
+  label,
+  name,
+  checked,
+  onChange,
+  badge,
+  title,
+}: {
+  emoji: string;
+  label: string;
+  name: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  badge?: React.ReactNode;
+  title?: string;
+}) {
+  return (
+    <div className="grid">
+      <input type="hidden" name={name} value={String(checked)} />
+      <button
+        type="button"
+        title={title}
+        aria-pressed={checked}
+        onClick={() => onChange(!checked)}
+        className={
+          "flex items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-left transition " +
+          (checked
+            ? "border-accent/40 bg-accent/10"
+            : "border-line bg-bg/40 opacity-75 hover:opacity-100")
+        }
+      >
+        <span className="flex min-w-0 flex-wrap items-center gap-1.5 text-xs font-medium text-ink">
+          <span className="text-sm">{emoji}</span>
+          <span>{label}</span>
+          {badge}
+        </span>
+        <span
+          className={`relative h-5 w-9 shrink-0 rounded-full transition ${checked ? "bg-accent" : "bg-muted/30"}`}
+        >
+          <span
+            className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-md transition-all ${checked ? "left-[18px]" : "left-0.5"}`}
+          />
+        </span>
+      </button>
+    </div>
+  );
+}
+
+// ── Range slider (submits a hidden input so it works in a plain form) ─────────
+export function Slider({
+  label,
+  name,
+  value,
+  onChange,
+  min = 0,
+  max = 1,
+  step = 0.01,
+  format,
+}: {
+  label: string;
+  name: string;
+  value: number;
+  onChange: (v: number) => void;
+  min?: number;
+  max?: number;
+  step?: number;
+  format?: (v: number) => string;
+}) {
+  return (
+    <label className="block">
+      <span className="mb-0.5 flex items-center justify-between text-xs text-muted">
+        <span>{label}</span>
+        <span className="rounded-md bg-accent/10 px-1.5 py-0.5 text-sm font-bold tabular-nums text-accent">
+          {format ? format(value) : value.toFixed(2)}
+        </span>
+      </span>
+      <input type="hidden" name={name} value={value} />
+      <input
+        type="range"
+        min={min}
+        max={max}
+        step={step}
+        value={value}
+        onChange={(e) => onChange(Number(e.target.value))}
+        className="w-full accent-accent"
+      />
+    </label>
+  );
+}
+
+// ── Toggle (submits "true"/"false" via hidden input) ──────────────────────────
+// default: green on / red off (used for status).  soft: emerald on / grey off.
+export function Toggle({
+  label,
+  name,
+  checked,
+  onChange,
+  accent = "default",
+  hint,
+}: {
+  label: string;
+  name: string;
+  checked: boolean;
+  onChange: (v: boolean) => void;
+  accent?: "default" | "soft";
+  hint?: string;
+}) {
+  const trackColor = checked
+    ? accent === "soft"
+      ? "bg-accent"
+      : "bg-good"
+    : accent === "soft"
+      ? "bg-muted/30"
+      : "bg-crit";
+  return (
+    <label className="flex cursor-pointer items-center gap-2 text-sm">
+      <input type="hidden" name={name} value={String(checked)} />
+      <button
+        type="button"
+        onClick={() => onChange(!checked)}
+        className={`relative h-5 w-9 shrink-0 rounded-full transition ${trackColor}`}
+      >
+        <span
+          className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-md transition-all ${checked ? "left-[18px]" : "left-0.5"}`}
+        />
+      </button>
+      <span className="text-ink">{label}</span>
+      {hint && <Info text={hint} />}
+    </label>
+  );
+}
+
+// ── Collapsible "Advanced" wrapper ────────────────────────────────────────────
+export function Advanced({ children, defaultOpen = false }: { children: React.ReactNode; defaultOpen?: boolean }) {
+  const [open, setOpen] = useState(defaultOpen);
+  return (
+    <div className="grid gap-6">
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        className="flex items-center gap-2 text-xs font-semibold uppercase tracking-widest text-muted transition hover:text-ink"
+      >
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2.5}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className={"h-3.5 w-3.5 transition-transform " + (open ? "rotate-90" : "")}
+        >
+          <path d="M9 18l6-6-6-6" />
+        </svg>
+        Advanced
+        <span className="font-normal normal-case tracking-normal text-muted">
+          {open ? "" : "· models, memory, timing, voice tuning"}
+        </span>
+      </button>
+      {/* Keep children mounted (just hidden) so their form fields always submit —
+          collapsing must never drop a saved value on Save. */}
+      <div className={open ? "grid gap-6" : "hidden"}>{children}</div>
+    </div>
+  );
+}
+
+// ── Prompt textarea — locked by default, hover to reveal Edit ─────────────────
+export function PromptField({ name, label, defaultValue }: { name: string; label: string; defaultValue: string }) {
+  const [editing, setEditing] = useState(false);
+  return (
+    <div className="group relative block">
+      <span className="mb-0.5 block text-xs text-muted">{label}</span>
+      <textarea
+        name={name}
+        rows={6}
+        defaultValue={defaultValue}
+        readOnly={!editing}
+        placeholder="(empty, hit Re-compile to generate)"
+        className={
+          "w-full rounded-xl border px-3 py-2.5 font-mono text-xs leading-relaxed outline-none transition " +
+          (editing
+            ? "border-accent bg-panel focus:ring-2 focus:ring-accent/20"
+            : "cursor-not-allowed border-line bg-bg text-muted")
+        }
+      />
+      {!editing ? (
+        <button
+          type="button"
+          onClick={() => setEditing(true)}
+          className="absolute right-2 top-7 flex items-center gap-1 rounded-md border border-line bg-panel/90 px-2 py-1 text-xs font-medium text-ink opacity-0 shadow-sm backdrop-blur transition group-hover:opacity-100 hover:bg-bg"
+        >
+          Edit
+        </button>
+      ) : (
+        <span className="absolute right-2 top-7 rounded-md bg-warn/15 px-2 py-1 text-xs font-medium text-warn">
+          Editing
+        </span>
+      )}
+    </div>
+  );
+}
+
+// ── Timezone options ──────────────────────────────────────────────────────────
+// Curated common IANA zones (value is the real IANA id the runtime feeds to Intl).
+// Not exhaustive by design — covers the zones an operator is realistically in.
+export const TIMEZONE_OPTIONS: { value: string; label: string }[] = [
+  { value: "UTC", label: "UTC (default)" },
+  { value: "America/Los_Angeles", label: "US Pacific (Los Angeles)" },
+  { value: "America/Denver", label: "US Mountain (Denver)" },
+  { value: "America/Chicago", label: "US Central (Chicago)" },
+  { value: "America/New_York", label: "US Eastern (New York)" },
+  { value: "America/Sao_Paulo", label: "Brazil (São Paulo)" },
+  { value: "Europe/London", label: "UK (London)" },
+  { value: "Europe/Paris", label: "Central Europe (Paris/Berlin)" },
+  { value: "Europe/Athens", label: "Eastern Europe (Athens)" },
+  { value: "Europe/Moscow", label: "Moscow" },
+  { value: "Asia/Dubai", label: "Gulf (Dubai)" },
+  { value: "Asia/Kolkata", label: "India (Kolkata)" },
+  { value: "Asia/Bangkok", label: "Southeast Asia (Bangkok)" },
+  { value: "Asia/Manila", label: "Philippines (Manila)" },
+  { value: "Asia/Singapore", label: "Singapore" },
+  { value: "Asia/Tokyo", label: "Japan (Tokyo)" },
+  { value: "Australia/Sydney", label: "Australia East (Sydney)" },
+  { value: "Pacific/Auckland", label: "New Zealand (Auckland)" },
+];
+
+// ── Onboarding detail-collection options ──────────────────────────────────────
+// The details an operator can ask her to naturally collect from a new fan. `value`
+// is the stable key stored in clones.onboarding_collect_fields and mirrored by the
+// runtime greeting/profile nudges (src/flows/human.ts COLLECT_FIELD_PHRASE).
+export const COLLECT_FIELD_OPTIONS: { value: string; label: string }[] = [
+  { value: "name", label: "His name" },
+  { value: "age", label: "His age" },
+  { value: "country", label: "Country" },
+  { value: "city", label: "City" },
+  { value: "timezone", label: "Timezone / hours around" },
+  { value: "job", label: "Job / work" },
+  { value: "relationship_status", label: "Relationship status" },
+  { value: "interests", label: "Hobbies & interests" },
+  { value: "likes", label: "What he likes in a girl" },
+  { value: "birthday", label: "Birthday" },
+  { value: "language", label: "Language" },
+  { value: "how_found", label: "How he found her" },
+];
+
+// ── Language-lock options ─────────────────────────────────────────────────────
+// The languages an operator can force a clone into (stored in clones.languages,
+// enforced by src/services/language.ts — keep this list in sync with the
+// LANGUAGE_OPTIONS there). Latin-script languages first (the common case), then
+// the non-Latin ones. `foreign` flags a non-Latin script for the small caption.
+export const LANGUAGE_OPTIONS: { value: string; foreign?: boolean }[] = [
+  { value: "English" },
+  { value: "Spanish" },
+  { value: "French" },
+  { value: "German" },
+  { value: "Portuguese" },
+  { value: "Italian" },
+  { value: "Dutch" },
+  { value: "Polish" },
+  { value: "Turkish" },
+  { value: "Indonesian" },
+  { value: "Vietnamese" },
+  { value: "Tagalog" },
+  { value: "Russian", foreign: true },
+  { value: "Ukrainian", foreign: true },
+  { value: "Greek", foreign: true },
+  { value: "Arabic", foreign: true },
+  { value: "Hebrew", foreign: true },
+  { value: "Hindi", foreign: true },
+  { value: "Thai", foreign: true },
+  { value: "Chinese", foreign: true },
+  { value: "Japanese", foreign: true },
+  { value: "Korean", foreign: true },
+];
+
+// ── Shared constants ──────────────────────────────────────────────────────────
+export const DEFAULT_PAYWALL_MESSAGE =
+  "you're out of messages baby, grab some more to keep chatting with me 💕";
+export const DEFAULT_PAYWALL_BUTTON = "Continue 💕";
+
+import type { SubscriptionTier } from "@/lib/types";
+
+// A sensible starter ladder for VIP subscriptions (operator edits freely).
+export const DEFAULT_SUBSCRIPTION_TIERS: SubscriptionTier[] = [
+  { name: "VIP", price_stars: 500, monthly_credits: 200, priority: true, exclusive: true, unlimited: false, discount_boost: 50 },
+  { name: "VVIP", price_stars: 1500, monthly_credits: 1000, priority: true, exclusive: true, unlimited: true, discount_boost: 100 },
+];
+
+export const DEFAULT_SPOIL_OPTIONS: { stars: number; label: string }[] = [
+  { stars: 1000, label: "" },
+  { stars: 2500, label: "" },
+  { stars: 5000, label: "" },
+  { stars: 10000, label: "" },
+  { stars: 25000, label: "" },
+  { stars: 50000, label: "" },
+  { stars: 100000, label: "" },
+];
+
+export const MODEL_FIELDS: { name: string; label: string; def: string }[] = [
+  { name: "text_model", label: "Text", def: "x-ai/grok-4.20" },
+  { name: "voice_model", label: "Voice", def: "deepseek/deepseek-v4-pro" },
+  { name: "media_model", label: "Media match", def: "mistralai/mistral-small-3.2-24b-instruct" },
+  { name: "routing_model", label: "Routing / Smart decider", def: "qwen/qwen3-30b-a3b-instruct-2507" },
+  { name: "voice_enhance_model", label: "Voice enhance", def: "google/gemini-2.5-flash-lite" },
+  { name: "photo_reply_model", label: "Photo reply", def: "qwen/qwen3-vl-32b-instruct" },
+  { name: "vision_model", label: "Vision", def: "qwen/qwen3-vl-32b-instruct" },
+];
+
+// ── Recommended models per job ────────────────────────────────────────────────
+// Surfaced as a pinned group at the top of each model picker, with a tier badge
+// + short note, so a non-technical operator can pick a good model at a glance.
+export type RecTier = "best" | "value" | "cheap";
+export type Rec = { id: string; tier: RecTier; note: string };
+export const RECOMMENDED: Record<string, Rec[]> = {
+  text_model: [
+    { id: "x-ai/grok-4.20", tier: "best", note: "Filthy + reliable tool-calling" },
+    { id: "deepseek/deepseek-v3.2", tier: "value", note: "~7x cheaper, still strong" },
+    { id: "thedrummer/cydonia-24b-v4.1", tier: "cheap", note: "Cheapest uncensored writer" },
+  ],
+  routing_model: [
+    { id: "qwen/qwen3-30b-a3b-instruct-2507", tier: "best", note: "10/10 tools, fastest" },
+    { id: "qwen/qwen3-30b-a3b-instruct-2507", tier: "value", note: "Same pick, best value too" },
+    { id: "google/gemini-2.5-flash-lite", tier: "cheap", note: "Cheapest solid decider" },
+  ],
+  vision_model: [
+    { id: "qwen/qwen3-vl-32b-instruct", tier: "best", note: "Uncensored, half the price of 235b" },
+    { id: "qwen/qwen3-vl-8b-instruct", tier: "value", note: "Cheaper, still uncensored" },
+    { id: "mistralai/mistral-small-3.2-24b-instruct", tier: "cheap", note: "Cheapest that sees well" },
+  ],
+  photo_reply_model: [
+    { id: "qwen/qwen3-vl-32b-instruct", tier: "best", note: "Uncensored, half the price of 235b" },
+    { id: "qwen/qwen3-vl-8b-instruct", tier: "value", note: "Cheaper, still uncensored" },
+    { id: "mistralai/mistral-small-3.2-24b-instruct", tier: "cheap", note: "Cheapest that sees well" },
+  ],
+  voice_model: [
+    { id: "x-ai/grok-4.20", tier: "best", note: "Most natural spoken lines" },
+    { id: "deepseek/deepseek-v3.2", tier: "value", note: "Much cheaper, still good" },
+    { id: "deepseek/deepseek-v4-pro", tier: "cheap", note: "Cheap + capable" },
+  ],
+  voice_enhance_model: [
+    { id: "google/gemini-2.5-flash-lite", tier: "best", note: "Only model that adds <break> tags" },
+    { id: "inclusionai/ling-2.6-flash", tier: "cheap", note: "Cheapest that still helps" },
+  ],
+  media_model: [
+    { id: "mistralai/mistral-small-3.2-24b-instruct", tier: "best", note: "5/5 match accuracy, fast" },
+    { id: "qwen/qwen3-30b-a3b-instruct-2507", tier: "value", note: "Great value alternative" },
+  ],
+};
+
+// Models known to underperform for a given job — flagged with a subtle warning
+// chip so an operator who picked one sees there are better options.
+export const WEAK: Record<string, { id: string; why: string }[]> = {
+  voice_enhance_model: [{ id: "openai/gpt-4.1-nano", why: "No-op, doesn't add break tags" }],
+};
+
+// Tier → badge label + theme-aware Tailwind classes. Kept here so the picker and
+// any future summary view render tiers identically.
+export const REC_TIER_BADGE: Record<RecTier, { label: string; cls: string }> = {
+  best: {
+    label: "⭐ Best",
+    cls: "bg-good/15 text-good",
+  },
+  value: {
+    label: "💰 Value",
+    cls: "bg-warn/15 text-warn",
+  },
+  cheap: {
+    label: "🪙 Cheapest",
+    cls: "bg-accent/15 text-accent",
+  },
+};

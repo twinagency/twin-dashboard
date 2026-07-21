@@ -60,6 +60,6 @@ export async function deleteUser(fd: FormData) {
   const { error } = await supabaseAdmin.from("users").delete().eq("id", userId);
   if (error) throw new Error(error.message);
 
-  revalidatePath(`/clones/${cloneId}/fans`);
-  redirect(`/clones/${cloneId}/fans`);
+  revalidatePath("/users");
+  redirect("/users");
 }

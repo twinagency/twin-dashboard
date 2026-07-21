@@ -1,26 +1,230 @@
 @import "tailwindcss";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
 
-/* Class-based dark mode: `dark:` applies when <html> has the `dark` class. */
+/* Class-based dark mode: `dark:` applies when <html> has the `dark` class,
+   toggled at runtime by ThemeProvider/ThemeToggle. */
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* Brand palette taken from the Allie logo — the maroon dot. */
+/* ── "Telegram Blue" design tokens ──────────────────────────────────────────
+   Single source of truth for the whole admin. Light values are the defaults;
+   the `.dark` block below overrides the same custom properties, so every
+   Tailwind utility that reads them (bg-panel, text-ink, border-line, ...)
+   automatically swaps with the theme — no per-component dark: needed for
+   these semantic colors. --color-good/warn/crit/info stay identical in both
+   modes (Telegram brand colors, not theme-dependent).
+
+   HARD RULE: money figures (revenue, prices, tips, $/⭐ amounts, VIP prices,
+   revenue charts) always render in --color-good (green). --color-accent
+   (blue) is reserved for primary buttons, active nav, links, focus rings and
+   the brand mark — never for a money figure. */
 @theme {
-  --color-brand: #9b2c38;
-  --color-brand-light: #c2434f;
+  --color-bg: #f5f9fc;
+  --color-panel: #ffffff;
+  --color-elev: #eaf3fa;
+  --color-ink: #132330;
+  --color-muted: #6c8394;
+  --color-line: #dbe7ee;
+  --color-accent: #229ed9;
+  --color-accent-2: #54b6e6;
+  --color-accent-deep: #166a94;
+  --color-accent-ink: #ffffff;
+  --color-good: #1f9e54;
+  --color-warn: #b5760f;
+  --color-crit: #c23b3b;
+  --color-info: #6a5acd;
+
+  /* Legacy brand tokens — kept so nothing that still refers to them 404s,
+     but nothing new should use these; use --color-accent instead. */
+  --color-brand: #229ed9;
+  --color-brand-light: #54b6e6;
   --color-grass: #1f9e54;
   --color-grass-light: #27b863;
 }
 
+/* Real near-black dark mode, not navy — same accent blue as light mode so
+   the brand still reads consistent, but the surfaces read as dark, not blue. */
+.dark {
+  --color-bg: #0a0a0d;
+  --color-panel: #101013;
+  --color-elev: #17171b;
+  --color-ink: #e8e8ec;
+  --color-muted: #85858f;
+  --color-line: #232328;
+  --color-accent: #48b8ee;
+  --color-accent-2: #74c8f2;
+  --color-accent-deep: #2789b8;
+  --color-accent-ink: #071019;
+  color-scheme: dark;
+}
+
 :root {
   color-scheme: light;
+
+  /* Shared depth tokens so cards/buttons/nav read as intentional, not flat.
+     Referenced via Tailwind arbitrary values, e.g. shadow-[var(--shadow-card)]. */
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.06), 0 1px 3px rgb(0 0 0 / 0.08);
+  --glow-accent: 0 0 0 1px var(--color-accent),
+    0 4px 14px color-mix(in srgb, var(--color-accent) 22%, transparent);
+  --ring-accent: inset 0 0 0 1px
+    color-mix(in srgb, var(--color-accent) 30%, transparent);
+
+  /* ── shadcn semantic bridge — DARK ONLY ────────────────────────────────
+     shadcn/ui components (Card, Table, Dialog, Badge, Button, Select, ...)
+     read these CSS custom properties, not the Telegram-Blue tokens above,
+     directly. Every one of them is mapped onto the existing --color-* tokens
+     so there is exactly one palette in this app, not two. Nothing here
+     introduces a new color — it only renames existing ones for shadcn's API.
+     shadcn's own "--accent" (the hover/selected surface inside Select and
+     DropdownMenu popups) is deliberately NOT defined here — see the
+     `@theme inline` block below, which routes shadcn's `bg-accent` /
+     `text-accent-foreground` classes straight at the real brand blue instead
+     of shadowing it. (That shadowing is exactly what happened before this
+     fix: a duplicate `--color-accent` in that block pointed at an undefined
+     gray, silently turning every accent-blue button/link/active-nav gray.) */
+  --background: var(--color-bg);
+  --foreground: var(--color-ink);
+  --card: var(--color-panel);
+  --card-foreground: var(--color-ink);
+  --popover: var(--color-elev);
+  --popover-foreground: var(--color-ink);
+  --primary: var(--color-accent);
+  --primary-foreground: var(--color-accent-ink);
+  --secondary: var(--color-elev);
+  --secondary-foreground: var(--color-ink);
+  --muted: var(--color-elev);
+  --muted-foreground: var(--color-muted);
+  --destructive: var(--color-crit);
+  --destructive-foreground: var(--color-ink);
+  --border: var(--color-line);
+  --input: var(--color-line);
+  --ring: var(--color-accent);
+  --chart-1: var(--color-accent);
+  --chart-2: var(--color-good);
+  --chart-3: var(--color-info);
+  --chart-4: var(--color-warn);
+  --chart-5: var(--color-crit);
+  --radius: 0.625rem;
+  --sidebar: var(--color-panel);
+  --sidebar-foreground: var(--color-ink);
+  --sidebar-primary: var(--color-accent);
+  --sidebar-primary-foreground: var(--color-accent-ink);
+  --sidebar-accent: var(--color-elev);
+  --sidebar-accent-foreground: var(--color-ink);
+  --sidebar-border: var(--color-line);
+  --sidebar-ring: var(--color-accent);
 }
 
+html,
 body {
-  background: #fafafa;
-  color: #111827;
+  background: var(--color-bg);
+  color: var(--color-ink);
 }
 
-.dark body {
-  background: #000000;
-  color: #e5e7eb;
+* {
+  border-color: var(--color-line);
+}
+
+::selection {
+  background: color-mix(in srgb, var(--color-accent) 30%, transparent);
+}
+
+/* Thin, theme-aware scrollbars so dense tables/panels don't look dated. */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-line) transparent;
+}
+*::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+*::-webkit-scrollbar-thumb {
+  background: var(--color-line);
+  border-radius: 8px;
+}
+
+@theme inline {
+  --font-heading: var(--font-heading);
+  --font-sans: var(--font-sans);
+  --font-mono: var(--font-mono);
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-destructive-foreground: var(--destructive-foreground);
+  /* --color-accent is intentionally NOT redefined here — it's already set once,
+     directly, in the Telegram-Blue @theme block above (#2aabee, brand blue).
+     Redefining it here to shadcn's own `--accent` var used to silently shadow
+     the brand color everywhere (Tailwind merges repeated @theme keys,
+     last-wins) — buttons, active nav and links were all rendering as flat
+     gray instead of blue. Now there's one accent, used deliberately for both
+     roles: brand chrome AND the hover/selected highlight inside shadcn's
+     Select/DropdownMenu popups (bg-accent + text-accent-foreground), matching
+     how a primary button already looks. --color-accent-foreground below uses
+     accent-ink (near-black), the same readable-on-blue foreground buttons use. */
+  --color-accent-foreground: var(--color-accent-ink);
+  /* --color-muted has the exact same landmine as --color-accent above, and it
+     was still live: shadcn's `--muted` here is a SURFACE color (elev, for
+     bg-muted panels), but our own top-level `--color-muted` (#8a8a99) is a
+     TEXT color used everywhere as `text-muted` (secondary/caption text — and,
+     at low opacity like `bg-muted/10`, our own subtle-surface convention
+     too). Redefining `--color-muted` here made every `text-muted` in the app
+     render as near-black elev text — invisible on elev/panel surfaces (this
+     is how it was caught: the mobile nav menu's popover background IS elev,
+     so its unselected links were rendering literally the same color as their
+     own background). Left undefined here, `--color-muted` falls back to the
+     single real definition above (#8a8a99), restoring every `text-muted` /
+     `bg-muted/NN` in the app in one fix. `--color-muted-foreground` (a
+     different, non-colliding key) still separately gives shadcn components
+     the same #8a8a99 for their own `text-muted-foreground` usage. */
+  --color-muted-foreground: var(--muted-foreground);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+  --radius-3xl: calc(var(--radius) * 2.2);
+  --radius-4xl: calc(var(--radius) * 2.6);
+}
+
+/* No `.dark { }` override block — this admin is dark-only by design, so the
+   dark-mode values above already live directly in `:root`. (A separate `.dark`
+   block here would actually be harmful: `.dark` and `:root` have equal CSS
+   specificity when both match <html>, so whichever is declared later in the
+   file wins for any property both define — a stale duplicate block would
+   silently re-shadow the tokens above, the same class of bug fixed above.) */
+
+@layer base {
+  * {
+    @apply border-border outline-ring/50;
+  }
+  body {
+    @apply bg-background text-foreground;
+  }
+  html {
+    @apply font-sans;
+  }
 }

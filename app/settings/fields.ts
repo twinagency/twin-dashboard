@@ -5,3 +5,6 @@ export const API_KEY_FIELDS = [
   { key: "elevenlabs_api_key", label: "ElevenLabs API key" },
   { key: "deepgram_api_key", label: "Deepgram API key" },
 ] as const;
+
+// app_settings key holding the JSON template new clones inherit.
+export const CLONE_DEFAULTS_KEY = "clone_defaults";

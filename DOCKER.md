@@ -77,6 +77,22 @@ unsure whether they've leaked.
   production builds only (`npm run build` + `node server.js`), not hot
   reload.
 
+## Connection pooling (Supavisor)
+
+The app only talks to Supabase over the REST API (`supabase-js` in
+`lib/supabase.ts`), which Supabase already pools for you server-side — there's
+nothing to configure for that path today, even when you run multiple container
+replicas.
+
+If some future code needs a *direct* Postgres connection (a migration runner,
+an ORM, a one-off script), set `DATABASE_URL` (see `.env.example`) to the
+**Supavisor pooler** connection string from the Supabase dashboard (Project
+Settings → Database → Connection pooling) — not the direct connection string.
+Each container replica making its own direct connection to Postgres is how you
+exhaust its (small) connection limit; the pooler is what avoids that. Use
+transaction mode (port `6543`) for short-lived queries, session mode (`5432`)
+only if you need session-level features like prepared statements.
+
 ## Deploying alongside the bot
 
 This dashboard and the Telegram bot are split into separate apps/repos but

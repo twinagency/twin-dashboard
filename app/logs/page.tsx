@@ -1,8 +1,28 @@
 import { supabaseAdmin } from "@/lib/supabase";
+import { getCloneScope } from "@/lib/clone-scope";
+import { Card } from "@/components/ui/card";
+import { AutoRefresh } from "./AutoRefresh";
+import { LogFilters } from "./LogFilters";
+import { LogsTable, type LogRow } from "./LogsTable";
+import { CLAIMED_SOURCES, SYSTEM_SOURCE_BUCKETS, techForSystemSource, techForUsageKind, type Tech } from "./tech";
 
 export const dynamic = "force-dynamic";
 
-type Row = {
+// Unified stream: newest 500 across both tables after merge.
+const CAP = 500;
+
+type SystemDbRow = {
+  id: number;
+  ts: string;
+  level: "info" | "warn" | "error";
+  source: string;
+  telegram_id: number | null;
+  message: string;
+  detail: Record<string, unknown> | null;
+  clones: { name: string; slug: string } | null;
+};
+
+type UsageDbRow = {
   id: string;
   created_at: string;
   kind: string;
@@ -12,87 +32,165 @@ type Row = {
   cost_usd: number | null;
   ok: boolean;
   error: string | null;
-  clones: { slug: string } | null;
+  clones: { name: string; slug: string } | null;
+  users: { name: string | null; stated_name: string | null; telegram_id: number | null } | null;
 };
+
+const TECHS: Tech[] = ["elevenlabs", "llm", "telegram", "supabase", "code"];
+
+function fetchSystemRows(tech: string, level: string, q: string, cloneId: string | null) {
+  let query = supabaseAdmin
+    .from("system_logs")
+    .select("id,ts,level,source,telegram_id,message,detail,clones(name,slug)")
+    .order("ts", { ascending: false })
+    .limit(CAP);
+  if (level === "info" || level === "warn" || level === "error") query = query.eq("level", level);
+  if (tech === "code") {
+    query = query.not("source", "in", `(${CLAIMED_SOURCES.map((s) => `"${s}"`).join(",")})`);
+  } else if (TECHS.includes(tech as Tech)) {
+    query = query.in("source", SYSTEM_SOURCE_BUCKETS[tech as Exclude<Tech, "code">]);
+  }
+  if (q.trim()) query = query.ilike("message", `%${q.trim().replace(/[%_]/g, "\\$&")}%`);
+  if (cloneId) query = query.eq("clone_id", cloneId);
+  return query;
+}
+
+function fetchUsageRows(tech: string, level: string, cloneId: string | null) {
+  let query = supabaseAdmin
+    .from("usage_events")
+    .select("id,created_at,kind,model,prompt_tokens,completion_tokens,cost_usd,ok,error,clones(name,slug),users(name,stated_name,telegram_id)")
+    .order("created_at", { ascending: false })
+    .limit(CAP);
+  if (tech === "elevenlabs") query = query.eq("kind", "tts");
+  if (tech === "llm") query = query.neq("kind", "tts");
+  // Successful calls surface as info, failed ones as error (see usageToRow).
+  if (level === "info") query = query.eq("ok", true);
+  if (level === "error") query = query.eq("ok", false);
+  if (cloneId) query = query.eq("clone_id", cloneId);
+  return query;
+}
+
+function systemToRow(r: SystemDbRow): LogRow {
+  return {
+    key: `s-${r.id}`,
+    ts: r.ts,
+    level: r.level,
+    tech: techForSystemSource(r.source),
+    source: r.source,
+    cloneName: r.clones?.name ?? null,
+    fan: r.telegram_id != null ? String(r.telegram_id) : null,
+    message: r.message,
+    detail: r.detail,
+  };
+}
+
+function usageToRow(r: UsageDbRow): LogRow {
+  const cost = r.cost_usd != null ? ` ($${Number(r.cost_usd).toFixed(4)})` : "";
+  const message = r.ok
+    ? `${r.kind} call ok: ${r.model ?? "unknown model"}${cost}`
+    : `${r.kind} call failed: ${r.model ?? "unknown model"}${cost}${r.error ? ` ${r.error.slice(0, 200)}` : ""}`;
+  return {
+    key: `u-${r.id}`,
+    ts: r.created_at,
+    level: r.ok ? "info" : "error",
+    tech: techForUsageKind(r.kind),
+    source: r.kind,
+    cloneName: r.clones?.name ?? null,
+    fan: r.users?.stated_name ?? r.users?.name ?? (r.users?.telegram_id != null ? String(r.users.telegram_id) : null),
+    message,
+    detail: {
+      model: r.model,
+      prompt_tokens: r.prompt_tokens,
+      completion_tokens: r.completion_tokens,
+      cost_usd: r.cost_usd,
+      ...(r.error ? { error: r.error } : {}),
+    },
+  };
+}
 
 export default async function LogsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ errors?: string }>;
+  searchParams: Promise<{ tech?: string; level?: string; q?: string }>;
 }) {
-  const { errors } = await searchParams;
-  const onlyErrors = errors === "1";
+  const sp = await searchParams;
+  const tech = sp.tech && (TECHS as string[]).includes(sp.tech) ? sp.tech : "all";
+  const level = sp.level === "info" || sp.level === "warn" || sp.level === "error" ? sp.level : "all";
+  const q = sp.q ?? "";
+  const cloneId = await getCloneScope();
 
-  let q = supabaseAdmin
-    .from("usage_events")
-    .select("id,created_at,kind,model,prompt_tokens,completion_tokens,cost_usd,ok,error,clones(slug)")
-    .order("created_at", { ascending: false })
-    .limit(300);
-  if (onlyErrors) q = q.eq("ok", false);
-  const { data } = await q;
-  const rows = (data ?? []) as unknown as Row[];
+  // usage_events only feeds the ElevenLabs and LLM buckets, and has no warn level.
+  const wantUsage = (tech === "all" || tech === "elevenlabs" || tech === "llm") && level !== "warn";
 
-  const spend = rows.reduce((s, r) => s + (Number(r.cost_usd) || 0), 0);
-  const errCount = rows.filter((r) => !r.ok).length;
+  const [systemRes, usageRes] = await Promise.all([
+    fetchSystemRows(tech, level, q, cloneId),
+    wantUsage ? fetchUsageRows(tech, level, cloneId) : Promise.resolve({ data: [], error: null }),
+  ]);
+
+  const systemMissing =
+    !!systemRes.error && /system_logs|does not exist|schema cache|relation/i.test(systemRes.error.message);
+
+  const systemRows = ((systemRes.data ?? []) as unknown as SystemDbRow[]).map(systemToRow);
+  let usageRows = ((usageRes.data ?? []) as unknown as UsageDbRow[]).map(usageToRow);
+  if (q.trim()) {
+    const needle = q.trim().toLowerCase();
+    usageRows = usageRows.filter((r) => r.message.toLowerCase().includes(needle));
+  }
+
+  const rows = [...systemRows, ...usageRows]
+    .sort((a, b) => new Date(b.ts).getTime() - new Date(a.ts).getTime())
+    .slice(0, CAP);
+
+  const errCount = rows.filter((r) => r.level === "error").length;
+  const warnCount = rows.filter((r) => r.level === "warn").length;
+  const spend = usageRows.reduce((s, r) => s + (Number((r.detail as { cost_usd?: number | null })?.cost_usd) || 0), 0);
 
   return (
-    <div className="mx-auto max-w-6xl p-6 text-gray-900 dark:text-zinc-100">
-      <div className="mb-4 flex items-center justify-between">
-        <h1 className="text-lg font-semibold">Logs — AI &amp; voice calls</h1>
-        <div className="flex gap-2 text-xs">
-          <a href="/logs" className={`rounded-md border px-3 py-1.5 ${!onlyErrors ? "border-gray-900 dark:border-white" : "border-gray-300 dark:border-white/20"}`}>All</a>
-          <a href="/logs?errors=1" className={`rounded-md border px-3 py-1.5 ${onlyErrors ? "border-red-500 text-red-600" : "border-gray-300 dark:border-white/20"}`}>Errors only</a>
-        </div>
+    <div className="text-ink">
+      <AutoRefresh />
+      <div className="mb-1 flex items-start justify-between gap-3">
+        <LogFilters tech={tech} level={level} q={q} />
+        <span className="mt-1.5 shrink-0 text-xs text-muted">auto-refreshes every 30s</span>
       </div>
 
-      <div className="mb-4 grid grid-cols-3 gap-3 text-sm">
-        <Stat label="Calls (last 300)" value={String(rows.length)} />
-        <Stat label="Spend shown" value={`$${spend.toFixed(4)}`} />
-        <Stat label="Errors" value={String(errCount)} accent={errCount > 0} />
+      {systemMissing && (
+        <Card className="mb-4 border-warn/40 p-4">
+          <div className="text-sm font-medium text-warn">System logs table not set up</div>
+          <p className="mt-1 text-sm text-muted">
+            Apply migration <span className="font-mono text-ink">db/migrations/032_system_logs.sql</span> to Supabase,
+            then restart the bot. Until then only AI call rows are shown.
+          </p>
+        </Card>
+      )}
+      {!systemMissing && systemRes.error && (
+        <Card className="mb-4 border-crit/40 p-4">
+          <div className="text-sm font-medium text-crit">Could not load system logs</div>
+          <p className="mt-1 text-sm text-muted">{systemRes.error.message}</p>
+        </Card>
+      )}
+
+      <div className="mb-4 grid grid-cols-3 gap-3">
+        <Card className="p-4">
+          <div className="text-xs text-muted">Events shown{rows.length >= CAP ? ` (newest ${CAP})` : ""}</div>
+          <div className="mt-1 font-mono text-2xl font-semibold tabular-nums">{rows.length.toLocaleString()}</div>
+        </Card>
+        <Card className="p-4">
+          <div className="text-xs text-muted">Warnings / Errors</div>
+          <div className="mt-1 font-mono text-2xl font-semibold tabular-nums">
+            <span className={warnCount > 0 ? "text-warn" : ""}>{warnCount}</span>
+            <span className="text-muted"> / </span>
+            <span className={errCount > 0 ? "text-crit" : ""}>{errCount}</span>
+          </div>
+        </Card>
+        <Card className="p-4">
+          <div className="text-xs text-muted">AI spend (shown rows)</div>
+          <div className="mt-1 font-mono text-2xl font-semibold tabular-nums text-good">${spend.toFixed(4)}</div>
+        </Card>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-gray-200 dark:border-white/10">
-        <table className="w-full text-left text-xs">
-          <thead className="bg-gray-50 dark:bg-white/5 text-gray-500 dark:text-white/50">
-            <tr>
-              <th className="px-3 py-2">Time</th>
-              <th className="px-3 py-2">Clone</th>
-              <th className="px-3 py-2">Kind</th>
-              <th className="px-3 py-2">Model</th>
-              <th className="px-3 py-2 text-right">Tokens</th>
-              <th className="px-3 py-2 text-right">Cost</th>
-              <th className="px-3 py-2">Result</th>
-            </tr>
-          </thead>
-          <tbody>
-            {rows.map((r) => (
-              <tr key={r.id} className={`border-t border-gray-100 dark:border-white/5 ${!r.ok ? "bg-red-50 dark:bg-red-950/20" : ""}`}>
-                <td className="px-3 py-2 whitespace-nowrap text-gray-500 dark:text-white/50">{new Date(r.created_at).toLocaleString()}</td>
-                <td className="px-3 py-2">{r.clones?.slug ?? "—"}</td>
-                <td className="px-3 py-2 uppercase">{r.kind}</td>
-                <td className="px-3 py-2">{r.model ?? "—"}</td>
-                <td className="px-3 py-2 text-right">{r.prompt_tokens != null ? `${r.prompt_tokens}/${r.completion_tokens ?? 0}` : "—"}</td>
-                <td className="px-3 py-2 text-right">{r.cost_usd != null ? `$${Number(r.cost_usd).toFixed(4)}` : "—"}</td>
-                <td className="px-3 py-2">
-                  {r.ok ? <span className="text-green-600">ok</span> : <span className="text-red-600" title={r.error ?? ""}>{(r.error ?? "error").slice(0, 60)}</span>}
-                </td>
-              </tr>
-            ))}
-            {rows.length === 0 && (
-              <tr><td colSpan={7} className="px-3 py-8 text-center text-gray-400">No calls logged yet.</td></tr>
-            )}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  );
-}
-
-function Stat({ label, value, accent }: { label: string; value: string; accent?: boolean }) {
-  return (
-    <div className="rounded-md border border-gray-200 bg-gray-50 p-3 dark:border-white/10 dark:bg-white/5">
-      <div className="text-xs text-gray-500 dark:text-white/50">{label}</div>
-      <div className={`mt-1 text-xl font-semibold ${accent ? "text-red-600" : ""}`}>{value}</div>
+      <Card className="overflow-hidden p-0">
+        <LogsTable rows={rows} showClone={!cloneId} />
+      </Card>
     </div>
   );
 }
