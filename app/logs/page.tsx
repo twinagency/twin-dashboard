@@ -38,7 +38,7 @@ type UsageDbRow = {
 
 const TECHS: Tech[] = ["elevenlabs", "llm", "telegram", "supabase", "code"];
 
-function fetchSystemRows(tech: string, level: string, q: string, cloneId: string | null) {
+function fetchSystemRows(tech: string, level: string, q: string, cloneId: string | null, fanTelegramId: number | null) {
   let query = supabaseAdmin
     .from("system_logs")
     .select("id,ts,level,source,telegram_id,message,detail,clones(name,slug)")
@@ -52,10 +52,11 @@ function fetchSystemRows(tech: string, level: string, q: string, cloneId: string
   }
   if (q.trim()) query = query.ilike("message", `%${q.trim().replace(/[%_]/g, "\\$&")}%`);
   if (cloneId) query = query.eq("clone_id", cloneId);
+  if (fanTelegramId != null) query = query.eq("telegram_id", fanTelegramId);
   return query;
 }
 
-function fetchUsageRows(tech: string, level: string, cloneId: string | null) {
+function fetchUsageRows(tech: string, level: string, cloneId: string | null, fanUserId: string | null) {
   let query = supabaseAdmin
     .from("usage_events")
     .select("id,created_at,kind,model,prompt_tokens,completion_tokens,cost_usd,ok,error,clones(name,slug),users(name,stated_name,telegram_id)")
@@ -67,6 +68,7 @@ function fetchUsageRows(tech: string, level: string, cloneId: string | null) {
   if (level === "info") query = query.eq("ok", true);
   if (level === "error") query = query.eq("ok", false);
   if (cloneId) query = query.eq("clone_id", cloneId);
+  if (fanUserId) query = query.eq("user_id", fanUserId);
   return query;
 }
 
@@ -114,20 +116,40 @@ function usageToRow(r: UsageDbRow): LogRow {
 export default async function LogsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ tech?: string; level?: string; q?: string }>;
+  searchParams: Promise<{
+    tech?: string;
+    level?: string;
+    q?: string;
+    // Per-fan filter (item 8: "agent logs" for a single fan). Reuses this
+    // page's existing tech/level/search machinery rather than a parallel
+    // view - set from the "View logs for this fan" link on the Fans page.
+    // `clone` overrides the header clone-switcher scope for THIS request
+    // only (no cookie write) since a fan always belongs to exactly one
+    // clone and the header switcher may be sitting on "All clones".
+    clone?: string;
+    fan?: string;
+    fanUser?: string;
+    fanLabel?: string;
+  }>;
 }) {
   const sp = await searchParams;
   const tech = sp.tech && (TECHS as string[]).includes(sp.tech) ? sp.tech : "all";
   const level = sp.level === "info" || sp.level === "warn" || sp.level === "error" ? sp.level : "all";
   const q = sp.q ?? "";
-  const cloneId = await getCloneScope();
+  const scopeCloneId = await getCloneScope();
+  const cloneId = sp.clone?.trim() || scopeCloneId;
+  const fanTelegramId = sp.fan?.trim() ? Number(sp.fan.trim()) : null;
+  const fanUserId = sp.fanUser?.trim() || null;
+  const fanLabel = sp.fanLabel?.trim() || (fanTelegramId != null ? String(fanTelegramId) : null);
 
   // usage_events only feeds the ElevenLabs and LLM buckets, and has no warn level.
   const wantUsage = (tech === "all" || tech === "elevenlabs" || tech === "llm") && level !== "warn";
 
   const [systemRes, usageRes] = await Promise.all([
-    fetchSystemRows(tech, level, q, cloneId),
-    wantUsage ? fetchUsageRows(tech, level, cloneId) : Promise.resolve({ data: [], error: null }),
+    fetchSystemRows(tech, level, q, cloneId, Number.isFinite(fanTelegramId) ? fanTelegramId : null),
+    wantUsage
+      ? fetchUsageRows(tech, level, cloneId, fanUserId)
+      : Promise.resolve({ data: [], error: null }),
   ]);
 
   const systemMissing =
@@ -152,9 +174,21 @@ export default async function LogsPage({
     <div className="text-ink">
       <AutoRefresh />
       <div className="mb-1 flex items-start justify-between gap-3">
-        <LogFilters tech={tech} level={level} q={q} />
+        <LogFilters tech={tech} level={level} q={q} clone={sp.clone} fan={sp.fan} fanUser={sp.fanUser} fanLabel={sp.fanLabel} />
         <span className="mt-1.5 shrink-0 text-xs text-muted">auto-refreshes every 30s</span>
       </div>
+
+      {fanTelegramId != null && (
+        <Card className="mb-4 flex items-center justify-between gap-3 border-accent/30 bg-accent/5 p-3">
+          <span className="text-sm text-ink">
+            Filtered to fan <span className="font-medium">{fanLabel}</span> - errors/warnings and AI calls for this
+            fan only.
+          </span>
+          <a href="/logs" className="shrink-0 text-xs font-medium text-accent hover:underline">
+            Clear fan filter
+          </a>
+        </Card>
+      )}
 
       {systemMissing && (
         <Card className="mb-4 border-warn/40 p-4">

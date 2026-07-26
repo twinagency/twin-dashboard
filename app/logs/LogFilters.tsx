@@ -6,27 +6,57 @@ import { TECH_CHIPS } from "./tech";
 
 const LEVELS = ["all", "info", "warn", "error"] as const;
 
-function buildHref(tech: string, level: string, q: string): string {
+// Per-fan filter params (clone/fan/fanUser/fanLabel, see page.tsx) ride along
+// with every tech/level/search change instead of getting silently dropped -
+// otherwise touching any filter chip while looking at one fan's logs would
+// snap back to the whole fleet.
+function buildHref(
+  tech: string,
+  level: string,
+  q: string,
+  fanParams: { clone?: string; fan?: string; fanUser?: string; fanLabel?: string },
+): string {
   const p = new URLSearchParams();
   if (tech !== "all") p.set("tech", tech);
   if (level !== "all") p.set("level", level);
   if (q.trim()) p.set("q", q.trim());
+  if (fanParams.clone) p.set("clone", fanParams.clone);
+  if (fanParams.fan) p.set("fan", fanParams.fan);
+  if (fanParams.fanUser) p.set("fanUser", fanParams.fanUser);
+  if (fanParams.fanLabel) p.set("fanLabel", fanParams.fanLabel);
   const qs = p.toString();
   return qs ? `/logs?${qs}` : "/logs";
 }
 
 // Unified filter bar: tech chips (fans-page style), level chips, search.
 // All state lives in the URL so filters survive refresh and are shareable.
-export function LogFilters({ tech, level, q }: { tech: string; level: string; q: string }) {
+export function LogFilters({
+  tech,
+  level,
+  q,
+  clone,
+  fan,
+  fanUser,
+  fanLabel,
+}: {
+  tech: string;
+  level: string;
+  q: string;
+  clone?: string;
+  fan?: string;
+  fanUser?: string;
+  fanLabel?: string;
+}) {
   const router = useRouter();
   const [search, setSearch] = useState(q);
   const debounce = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const fanParams = { clone, fan, fanUser, fanLabel };
 
   // Keep local input in sync if the URL changes underneath us.
   useEffect(() => setSearch(q), [q]);
 
   function apply(nextTech: string, nextLevel: string, nextQ: string) {
-    router.replace(buildHref(nextTech, nextLevel, nextQ));
+    router.replace(buildHref(nextTech, nextLevel, nextQ, fanParams));
   }
 
   function onSearch(value: string) {

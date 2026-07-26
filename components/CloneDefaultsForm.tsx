@@ -214,9 +214,16 @@ export default function CloneDefaultsForm({ defaults }: { defaults: Partial<Clon
       <div className="grid gap-3">
         <Group label="Campaigns / re-engagement" />
         <Toggle label={cfg.dripEnabled ? "Campaign is on" : "Campaign is off"} name="drip_enabled" checked={cfg.dripEnabled} onChange={(v) => set("dripEnabled", v)} accent="soft" />
+        {/* Win-back lapse threshold used to be editable here (winback_lapse_days),
+            but the runtime hardcodes a fixed 7-day threshold and deliberately does
+            not read this column (see isReturningLapsedSpender in bot/src/campaign.ts
+            and the matching comment in dashboard/app/drip/actions.ts). The field was
+            removed 2026-07-27 because it saved into app_settings and nothing ever
+            read it back, an operator "setting" something that silently did nothing.
+            The clones.winback_lapse_days column and its Clone type field are kept
+            (never dropped from a live DB) but are otherwise legacy/unused. */}
         {cfg.dripEnabled && (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label="Win-back after (days quiet)" name="winback_lapse_days" type="number" defaultValue={defaults.winback_lapse_days ?? 7} placeholder="7" />
+          <div className="grid grid-cols-1 gap-4 sm:max-w-xs">
             <Field label="Follow-up if quiet mid-chat (minutes, 0 = off)" name="followup_after_minutes" type="number" defaultValue={defaults.followup_after_minutes ?? 0} placeholder="0" />
           </div>
         )}

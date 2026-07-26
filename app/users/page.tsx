@@ -641,6 +641,17 @@ export default async function FansPage({
                     </span>
                   )}
                 </div>
+                {/* Agent logs (item 8): a per-fan filtered view of the existing
+                    /logs page (system_logs errors/warnings + usage_events AI
+                    calls), scoped to exactly this fan's clone + telegram id.
+                    Not a new logging system - reuses the same infrastructure
+                    every other "why did X happen" question already goes through. */}
+                <Link
+                  href={`/logs?clone=${selected.clone_id}&fan=${selected.telegram_id}&fanUser=${selected.id}&fanLabel=${encodeURIComponent(displayName(selected))}`}
+                  className="mt-2 inline-flex items-center gap-1 text-[11px] font-medium text-accent hover:underline"
+                >
+                  🧾 View logs for this fan →
+                </Link>
               </div>
 
               <div className="grid grid-cols-2 gap-2">

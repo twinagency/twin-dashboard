@@ -3,6 +3,7 @@ import { orChatWithToolsStream } from "@/lib/openrouter";
 import { TOOL_DEFS, executeTool } from "./tools";
 import { WRITE_TOOL_DEFS, WRITE_TOOL_NAMES, executeWriteTool } from "./write-tools";
 import { createConversation, appendMessage, getConversationMessages } from "./db";
+import { CLONE_TOGGLE_FIELDS } from "@/app/clones/toggle-fields";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -36,7 +37,23 @@ const SYSTEM_PROMPT =
   "calls, real ElevenLabs calls if voice is on), small but real per call, and it is not reversible once " +
   "started. Before calling startTestRun, tell the user plainly that it costs real money, unless they've " +
   "already said to just go ahead and start one. Do not call it speculatively or 'just to check something' - " +
-  "only when the user has clearly asked for a test run.";
+  "only when the user has clearly asked for a test run.\n\n" +
+  "SETTINGS REVIEW: when asked to review, audit, or recommend settings for a clone, call queryTable on " +
+  "clones for that one clone (every allowed column) so you see its full toggle and dial configuration in " +
+  "one shot. Look for the same kind of contradiction the dashboard's own proactive suggestions already " +
+  "flag (a voice_id set but voice_enabled off, discount caps set but discounts_enabled off, " +
+  "subscription_tiers configured but subscriptions_enabled off, spoil_options set but tips_enabled off) " +
+  "plus anything else your own judgment turns up across the rest of the toggle and dial columns " +
+  "(sexual_level/nsfw_level/push_level, emoji settings, ai_mode/smart_split, models, welcome/paywall " +
+  "instructions, etc). State each recommendation with a one-line reason, never just 'you should change X'. " +
+  `Exactly these fields are ones you can actually flip yourself, with setCloneFeature, and only after the ` +
+  `user confirms: ${CLONE_TOGGLE_FIELDS.join(", ")}. For every other column (dials like sexual_level/` +
+  "nsfw_level/push_level/emoji_amount, ai_mode/smart_split, any *_model, any money field like " +
+  "starting_credits/credit_pack_price_stars/discount_max_*, campaign or onboarding text, persona facts) " +
+  "you have no write tool - recommend it in plain words and say specifically where in the dashboard to " +
+  "change it (e.g. 'Configure > Personality & style', 'Configure > Credits & paywall', the Campaigns page), " +
+  "never claim to have applied it. Never invent, recommend a specific number for, or apply any money value " +
+  "- amounts are always the operator's call.";
 
 const TOOL_LABELS: Record<string, string> = {
   queryTable: "Looking that up",

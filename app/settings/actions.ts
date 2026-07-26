@@ -52,11 +52,18 @@ const DEFAULT_SELECTS = [
   "paywall_default_message", "paywall_button_label", "eleven_model",
 ] as const;
 // Numeric dials/fields — stored as numbers (ints and floats both fine via Number()).
+// NOTE: drip_per_day / drip_active_window_minutes stay listed for harmless
+// backward-compat parsing, but CloneDefaultsForm never renders inputs named
+// this, so fd.get() is always null and these never actually get written. Both
+// columns are dead: superseded by drip_steps (migration 029/030), see the
+// comment in app/drip/actions.ts. winback_lapse_days was removed 2026-07-27
+// (CloneDefaultsForm no longer renders it either) — the runtime hardcodes a
+// fixed 7-day win-back lapse, see isReturningLapsedSpender in bot/src/campaign.ts.
 const DEFAULT_NUMBERS = [
   "starting_credits", "credit_pack_size", "credit_pack_price_stars",
   "discount_max_photo", "discount_max_video", "discount_max_bundle", "discount_max_credits",
   "welcome_bundle_after", "welcome_bundle_after_minutes", "onboarding_voice_after",
-  "drip_per_day", "drip_active_window_minutes", "winback_lapse_days", "followup_after_minutes",
+  "drip_per_day", "drip_active_window_minutes", "followup_after_minutes",
   "response_wait_min", "response_wait_max", "memory_window",
   "voice_stability", "voice_similarity", "voice_style", "voice_speed",
 ] as const;

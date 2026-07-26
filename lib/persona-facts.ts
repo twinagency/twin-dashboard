@@ -23,6 +23,8 @@ export type PersonaFactCols = {
   occupation?: string | null;
   socials?: SocialRow[] | null;
   fan_nicknames?: string[] | null;
+  turn_ons?: string[] | null;
+  turn_offs?: string[] | null;
   hard_limits?: string[] | null;
   hard_limits_extra?: string | null;
   spoil_options?: { stars: number; label: string }[] | null;
@@ -301,6 +303,14 @@ export function personaFactsBlock(c: PersonaFactCols, now: Date = new Date()): s
   if (favoriteThings.length) lines.push(`Things she genuinely loves: ${favoriteThings.join(", ")}.`);
   const dislikesList = (c.dislikes ?? []).map((s) => s.trim()).filter(Boolean);
   if (dislikesList.length) lines.push(`Things she hates: ${dislikesList.join(", ")}.`);
+
+  // Turn-ons/turn-offs (migration 034) — her real flirting preferences, not just
+  // general likes/dislikes above. MIRRORED from ../../bot/src/prompt.ts.
+  const turnOns = (c.turn_ons ?? []).map((s) => s.trim()).filter(Boolean);
+  if (turnOns.length) lines.push(`What turns her on: ${turnOns.join(", ")}.`);
+  const turnOffs = (c.turn_offs ?? []).map((s) => s.trim()).filter(Boolean);
+  if (turnOffs.length) lines.push(`What turns her off: ${turnOffs.join(", ")}.`);
+
   if (c.saving_goal?.trim()) lines.push(`What she's currently saving up for: ${c.saving_goal.trim()}.`);
   const catchphrases = (c.catchphrases ?? []).map((s) => s.trim()).filter(Boolean);
   if (catchphrases.length) lines.push(`Slang/catchphrases only she uses, drop these in naturally sometimes: ${catchphrases.join(", ")}.`);
