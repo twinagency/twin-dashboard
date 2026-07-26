@@ -5,6 +5,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { compileClone } from "@/lib/compiler";
 import { INTAKE_FIELD_KEYS, assembleAnswers } from "@/lib/intake";
 import { vibePresetFor } from "@/lib/vibes";
+import { CLONE_TOGGLE_FIELDS, type CloneToggleField } from "./toggle-fields";
 
 // Gather the structured intake_<key> fields into { fields, answers } where
 // `answers` is the labelled blob the AI compiler reads (prose + a structured-
@@ -79,6 +80,10 @@ function structuredFactsFromForm(fd: FormData): Record<string, string> {
     "Content hard nos": parseJsonStringArray(fd, "content_hard_nos").join(", "),
     "Hard limits (checklist)": parseJsonStringArray(fd, "hard_limits").join(", "),
     "Hard limits (extra)": str(fd, "hard_limits_extra") ?? "",
+    Catchphrases: parseJsonStringArray(fd, "catchphrases").join(", "),
+    "Favorite things": parseJsonStringArray(fd, "favorite_things").join(", "),
+    Dislikes: parseJsonStringArray(fd, "dislikes").join(", "),
+    "Saving up for": str(fd, "saving_goal") ?? "",
   };
 }
 
@@ -297,6 +302,13 @@ function rowFromForm(fd: FormData) {
     read_receipts_enabled: fd.get("read_receipts_enabled") === "true",
     message_effects_enabled: fd.get("message_effects_enabled") === "true",
     ai_disclosure: fd.get("ai_disclosure") === "true",
+    // Per-category auto-block (migration 061), supersedes the single
+    // auto_block_enabled switch. That column is left untouched here so its
+    // old value survives as a legacy fallback (see ConfigSections.tsx).
+    auto_block_minor: fd.get("auto_block_minor") === "true",
+    auto_block_hate: fd.get("auto_block_hate") === "true",
+    auto_block_illegal: fd.get("auto_block_illegal") === "true",
+    auto_block_jailbreak: fd.get("auto_block_jailbreak") === "true",
     emojis_enabled: fd.get("emojis_enabled") === "true",
     emoji_amount: str(fd, "emoji_amount") ?? "medium",
     emoji_allowlist: str(fd, "emoji_allowlist"),
@@ -377,6 +389,18 @@ function rowFromForm(fd: FormData) {
           sleep_time: str(fd, "sleep_time"),
           daily_blocks: parseDailyBlocks(fd),
 
+          // Life canon (migration 060)
+          hobbies: parseJsonStringArray(fd, "hobbies"),
+          has_pets: fd.has("has_pets") ? fd.get("has_pets") === "true" : null,
+          pet_details: parseJsonStringArray(fd, "pet_details"),
+          living_situation: str(fd, "living_situation"),
+
+          // Favorites/catchphrases canon (migration 063)
+          catchphrases: parseJsonStringArray(fd, "catchphrases"),
+          favorite_things: parseJsonStringArray(fd, "favorite_things"),
+          dislikes: parseJsonStringArray(fd, "dislikes"),
+          saving_goal: str(fd, "saving_goal"),
+
           content_hard_nos: parseJsonStringArray(fd, "content_hard_nos"),
           content_done: parseJsonStringArray(fd, "content_done"),
 
@@ -441,6 +465,35 @@ function rowFromForm(fd: FormData) {
     paywall_instruction: str(fd, "paywall_instruction"),
     paywall_default_message: str(fd, "paywall_default_message"),
     paywall_button_label: str(fd, "paywall_button_label"),
+
+    // Monetization sequence (migration 056). Every value is a code-enforced
+    // threshold/switch (see components/clone/MonetizationSequenceFields.tsx
+    // for what each one drives) — never write a value the field itself didn't
+    // submit into, and always clamp to a sane, non-negative range so a stray
+    // negative or non-numeric string can never reach the DB. Falls back to the
+    // exact DB column default (bot/db/migrations/056_monetization_sequence.sql)
+    // when a field is missing, so an untouched clone never silently changes.
+    resell_cooldown_minutes: Math.max(0, num(fd, "resell_cooldown_minutes", 30)),
+    bundle_reengage_seconds: Math.max(0, num(fd, "bundle_reengage_seconds", 60)),
+    reengage_photo_enabled: fd.has("reengage_photo_enabled") ? fd.get("reengage_photo_enabled") === "true" : true,
+    offer_pending_minutes: Math.max(0, num(fd, "offer_pending_minutes", 15)),
+    offer_redirect_cap: Math.max(1, num(fd, "offer_redirect_cap", 3)),
+    ppv_min_engaged_messages: Math.max(1, num(fd, "ppv_min_engaged_messages", 4)),
+    ppv_cadence_seconds: Math.max(0, num(fd, "ppv_cadence_seconds", 60)),
+    ppv_cooldown_minutes: Math.max(0, num(fd, "ppv_cooldown_minutes", 45)),
+    discount_slowdown_minutes: Math.max(0, num(fd, "discount_slowdown_minutes", 15)),
+    paywall_warmup_messages: Math.max(0, num(fd, "paywall_warmup_messages", 5)),
+    paywall_unlock_bonus_photo: fd.has("paywall_unlock_bonus_photo") ? fd.get("paywall_unlock_bonus_photo") === "true" : true,
+    prelock_tease_before: Math.max(0, num(fd, "prelock_tease_before", 3)),
+    postlock_reengage_enabled: fd.has("postlock_reengage_enabled") ? fd.get("postlock_reengage_enabled") === "true" : true,
+    postlock_curiosity1_minutes: Math.max(0, num(fd, "postlock_curiosity1_minutes", 20)),
+    // Clamped to never sit below the first check-in — a lower value here would
+    // make the graceful-goodbye stage fire on the very next poll after the
+    // first check-in instead of acting as a separate, later stage.
+    postlock_curiosity2_minutes: Math.max(
+      Math.max(0, num(fd, "postlock_curiosity1_minutes", 20)),
+      num(fd, "postlock_curiosity2_minutes", 90),
+    ),
 
     response_wait_min: num(fd, "response_wait_min", 0),
     response_wait_max: num(fd, "response_wait_max", 0),
@@ -524,6 +577,34 @@ const RESPONSE_PACING_COLUMNS = [
 const IMPERFECTION_LEVEL_COLUMNS = [
   "lowercase_level", "punctuation_drop_level", "typo_level", "double_text_level",
 ] as const;
+// Migration 060: life canon (hobbies, pets, living situation). See bot/db/migrations/060_life_canon.sql.
+const LIFE_CANON_COLUMNS = ["hobbies", "has_pets", "pet_details", "living_situation"] as const;
+// Migration 063: favorites/catchphrases/saving-goal canon. See bot/db/migrations/063_favorites_canon.sql.
+const FAVORITES_COLUMNS = ["catchphrases", "favorite_things", "dislikes", "saving_goal"] as const;
+// Migration 061: per-category safety auto-block toggles. See bot/db/migrations/061_safety_category_toggles.sql.
+// These are top-level rowFromForm fields (not gated behind the persona_facts
+// marker), but withoutPersonaFactColumns strips every name in OPTIONAL_COLUMNS
+// unconditionally, so listing them here is enough to cover the retry path.
+const SAFETY_CATEGORY_COLUMNS = [
+  "auto_block_minor", "auto_block_hate", "auto_block_illegal", "auto_block_jailbreak",
+] as const;
+// Migration 056: monetization sequence. See bot/db/migrations/056_monetization_sequence.sql
+// and components/clone/MonetizationSequenceFields.tsx for what each one drives.
+const MONETIZATION_SEQUENCE_COLUMNS = [
+  "resell_cooldown_minutes", "bundle_reengage_seconds", "offer_pending_minutes",
+  "ppv_min_engaged_messages", "ppv_cadence_seconds", "ppv_cooldown_minutes",
+  "discount_slowdown_minutes", "paywall_warmup_messages", "paywall_unlock_bonus_photo",
+  "prelock_tease_before", "postlock_reengage_enabled",
+  "postlock_curiosity1_minutes", "postlock_curiosity2_minutes",
+] as const;
+// Migration 062: independent toggle for the ignored-offer re-warm photo
+// (previously gated only on photos_enabled, no dedicated switch). See
+// bot/db/migrations/062_reengage_photo_toggle.sql.
+const REENGAGE_PHOTO_COLUMNS = ["reengage_photo_enabled"] as const;
+// Migration 064: cap on how many times guardedMedia()/guardedPitch() (bot
+// flows/actions.ts) redirect a fan back to a single open offer before backing
+// off. See bot/db/migrations/064_offer_redirect_cap.sql.
+const OFFER_REDIRECT_COLUMNS = ["offer_redirect_cap"] as const;
 const OPTIONAL_COLUMNS = [
   ...PERSONA_FACT_COLUMNS,
   ...RESPONSE_LENGTH_COLUMNS,
@@ -531,6 +612,12 @@ const OPTIONAL_COLUMNS = [
   ...PHOTO_VISION_COLUMNS,
   ...RESPONSE_PACING_COLUMNS,
   ...IMPERFECTION_LEVEL_COLUMNS,
+  ...LIFE_CANON_COLUMNS,
+  ...FAVORITES_COLUMNS,
+  ...SAFETY_CATEGORY_COLUMNS,
+  ...MONETIZATION_SEQUENCE_COLUMNS,
+  ...REENGAGE_PHOTO_COLUMNS,
+  ...OFFER_REDIRECT_COLUMNS,
 ] as const;
 
 function withoutPersonaFactColumns(row: Record<string, unknown>): Record<string, unknown> {
@@ -636,6 +723,29 @@ export async function setStatus(id: string, status: "active" | "paused") {
   const { error } = await supabaseAdmin
     .from("clones")
     .update({ status, updated_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+  revalidatePath("/");
+  revalidatePath(`/clones/${id}`);
+}
+
+// One-click feature toggle, same shape as toggleClonePause above (single
+// boolean column, single row) — used by the /ai assistant's write tools
+// (app/api/ai-assistant/write-tools.ts) so it can flip an independent feature
+// flag WITHOUT going through the full Configure form (updateClone), which
+// would require reconstructing every other field and risks clobbering them.
+// CLONE_TOGGLE_FIELDS (./toggle-fields.ts) is a hardcoded allowlist —
+// deliberately the exact same independent, non-money boolean columns already
+// cleared for the assistant to READ (see ALLOWLIST.clones in
+// app/api/ai-assistant/tools.ts). This is not a generic "update any column"
+// action: the field must be one of these named columns, never an arbitrary
+// string, and it can only ever set true/false.
+export async function setCloneToggle(id: string, field: CloneToggleField, value: boolean) {
+  if (!CLONE_TOGGLE_FIELDS.includes(field)) throw new Error(`field not allowed: ${String(field)}`);
+  if (typeof value !== "boolean") throw new Error("value must be a boolean");
+  const { error } = await supabaseAdmin
+    .from("clones")
+    .update({ [field]: value, updated_at: new Date().toISOString() })
     .eq("id", id);
   if (error) throw new Error(error.message);
   revalidatePath("/");

@@ -92,7 +92,10 @@ export async function uploadPhoto(cloneId: string, fd: FormData) {
     tags: cap.tags,
     auto_desc: cap.auto_desc || null,
     star_value: starValue,
-    is_free: fd.get("is_free") === "true",
+    // 0 stars is always free. The bot only ever treats an item as unlocked via
+    // is_free (flows/media.ts), never by price, so a 0-priced item must carry
+    // it too or the runtime would try to invoice a 0-star payment.
+    is_free: fd.get("is_free") === "true" || starValue <= 0,
     image_name: imageName,
   });
   if (dbErr) throw new Error(dbErr.message);
@@ -132,7 +135,8 @@ export async function uploadVideo(cloneId: string, fd: FormData) {
     tags: cap.tags,
     auto_desc: cap.auto_desc || null,
     star_value: starValue,
-    is_free: fd.get("is_free") === "true",
+    // 0 stars is always free, see the matching comment in uploadPhoto.
+    is_free: fd.get("is_free") === "true" || starValue <= 0,
   });
   if (dbErr) throw new Error(dbErr.message);
 
@@ -145,13 +149,16 @@ export async function updatePhoto(
   photoId: string,
   fd: FormData,
 ) {
+  const starValue = Number(fd.get("star_value") ?? 25);
   const update: Record<string, unknown> = {
     caption: String(fd.get("caption") ?? "").trim() || null,
     teaser_caption: String(fd.get("teaser_caption") ?? "").trim() || null,
-    star_value: Number(fd.get("star_value") ?? 25),
+    star_value: starValue,
     image_name: String(fd.get("image_name") ?? "").trim() || null,
   };
-  if (fd.has("is_free")) update.is_free = fd.get("is_free") === "true";
+  // 0 stars is always free, see the matching comment in uploadPhoto.
+  if (fd.has("is_free")) update.is_free = fd.get("is_free") === "true" || starValue <= 0;
+  else if (starValue <= 0) update.is_free = true;
   if (fd.has("is_nude")) update.is_nude = fd.get("is_nude") === "true";
   if (fd.has("explicitness")) update.explicitness = String(fd.get("explicitness"));
   // Manual tag edits overwrite the AI auto-tags (empty string clears them).
@@ -172,12 +179,15 @@ export async function updateVideo(
   videoId: string,
   fd: FormData,
 ) {
+  const starValue = Number(fd.get("star_value") ?? 50);
   const update: Record<string, unknown> = {
     caption: String(fd.get("caption") ?? "").trim() || null,
     teaser_caption: String(fd.get("teaser_caption") ?? "").trim() || null,
-    star_value: Number(fd.get("star_value") ?? 50),
+    star_value: starValue,
   };
-  if (fd.has("is_free")) update.is_free = fd.get("is_free") === "true";
+  // 0 stars is always free, see the matching comment in uploadPhoto.
+  if (fd.has("is_free")) update.is_free = fd.get("is_free") === "true" || starValue <= 0;
+  else if (starValue <= 0) update.is_free = true;
   if (fd.has("is_nude")) update.is_nude = fd.get("is_nude") === "true";
   if (fd.has("explicitness")) update.explicitness = String(fd.get("explicitness"));
   // Manual tag edits overwrite the AI auto-tags (empty string clears them).

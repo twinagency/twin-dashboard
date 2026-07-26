@@ -67,6 +67,18 @@ export type PersonaFactCols = {
   sleep_time?: string | null;
   daily_blocks?: { time: string; activity: string }[] | null;
 
+  // ── life canon (migration 060) ──────────────────────────────────────────────
+  hobbies?: string[] | null;
+  has_pets?: boolean | null;
+  pet_details?: string[] | null;
+  living_situation?: string | null;
+
+  // ── favorites/catchphrases canon (migration 063) ────────────────────────────
+  catchphrases?: string[] | null;
+  favorite_things?: string[] | null;
+  dislikes?: string[] | null;
+  saving_goal?: string | null;
+
   content_hard_nos?: string[] | null;
   content_done?: string[] | null;
 
@@ -168,13 +180,27 @@ const BURST_STYLE_TEXT: Record<string, string> = {
   short_bursts: "sends a few short messages in a row",
 };
 
+// Life canon (migration 060) label map. KEEP IN SYNC with ../../bot/src/prompt.ts.
+const LIVING_SITUATION_TEXT: Record<string, string> = {
+  alone: "You live alone.",
+  with_roommates: "You live with roommates.",
+  with_family: "You live with family.",
+  with_partner: "You live with a partner.",
+  prefers_not_to_say: "You keep details about your living situation vague if it comes up.",
+};
+
 // Imperfection profile as an intensity (migration 042). Each level is
 // genuinely different wording, not a label swap: "never" writes nothing,
 // "sometimes" is soft, "always" is a strong instruction. KEEP IN SYNC with
 // ../../bot/src/prompt.ts.
+// NOTE: the text and voice templates carry a fixed "Mostly lowercase" baseline
+// in their style rules, kept for backward compat. So "never" and "sometimes"
+// cannot just say less than "often", they have to actively COUNTERMAND that
+// baseline, otherwise "never" does nothing and "sometimes" contradicts it.
+// MIRRORED from bot/src/prompt.ts, change both together.
 const LOWERCASE_LEVEL_TEXT: Record<ImperfectionLevel, string> = {
-  never: "",
-  sometimes: "she occasionally drops into all-lowercase texting, but usually still capitalizes normally",
+  never: "she does not do the all-lowercase texting thing at all, she capitalizes normally like standard texting, so ignore any general style guidance about texting mostly in lowercase",
+  sometimes: "she only occasionally drops into all-lowercase, her default is normal capitalization, so ignore any general style guidance about texting mostly in lowercase",
   often: "she mostly texts in lowercase, capitals are rare for her",
   always: "she always texts in full lowercase, never capitalizing anything, not even the start of a sentence or the word I",
 };
@@ -255,6 +281,29 @@ export function personaFactsBlock(c: PersonaFactCols, now: Date = new Date()): s
   if (from && city) lines.push(`You're from ${from} and currently live in ${city}.`);
   else if (from) lines.push(`You're from ${from}.`);
   else if (city) lines.push(`You currently live in ${city}.`);
+
+  // Life canon (migration 060): living situation, pets, hobbies.
+  if (c.living_situation && LIVING_SITUATION_TEXT[c.living_situation]) {
+    lines.push(LIVING_SITUATION_TEXT[c.living_situation]);
+  }
+  if (c.has_pets === true) {
+    const details = (c.pet_details ?? []).map((s) => s.trim()).filter(Boolean);
+    lines.push(`Pets: ${details.length ? details.join("; ") : "yes, unspecified"}.`);
+  } else if (c.has_pets === false) {
+    lines.push(`You have no pets.`);
+  }
+  const hobbies = (c.hobbies ?? []).map((s) => s.trim()).filter(Boolean);
+  if (hobbies.length) lines.push(`Hobbies/interests: ${hobbies.join(", ")}.`);
+
+  // Favorites/catchphrases canon (migration 063), pulled out of the free-text
+  // `life_tastes` and `quirks` intake questions.
+  const favoriteThings = (c.favorite_things ?? []).map((s) => s.trim()).filter(Boolean);
+  if (favoriteThings.length) lines.push(`Things she genuinely loves: ${favoriteThings.join(", ")}.`);
+  const dislikesList = (c.dislikes ?? []).map((s) => s.trim()).filter(Boolean);
+  if (dislikesList.length) lines.push(`Things she hates: ${dislikesList.join(", ")}.`);
+  if (c.saving_goal?.trim()) lines.push(`What she's currently saving up for: ${c.saving_goal.trim()}.`);
+  const catchphrases = (c.catchphrases ?? []).map((s) => s.trim()).filter(Boolean);
+  if (catchphrases.length) lines.push(`Slang/catchphrases only she uses, drop these in naturally sometimes: ${catchphrases.join(", ")}.`);
 
   // Creator identity (migration 039) — supersedes the legacy `occupation` line.
   const coverStory = c.cover_story?.trim();

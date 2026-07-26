@@ -100,3 +100,40 @@ share one Supabase project. They can be deployed as independent containers
 (e.g. two services in the same `docker-compose.yml`, or two separate
 deployments) — the dashboard doesn't need the bot's process to be running,
 it only needs network access to the same Supabase instance.
+
+**Exception: the Test page.** `app/test`, via `lib/test-runs.ts`, spawns
+`npx tsx src/dev/test-run.ts` inside the bot repo's checkout on the SAME
+filesystem (`repoRoot()` looks for a sibling `../bot` directory, or the bot
+repo itself if Next was somehow started from there). That's real bot source
+code, not an API call, so "network access to the same Supabase instance" is
+not enough for this one feature. It works in local dev (both repos checked
+out side by side) but not in this image, which is a self-contained `next
+build --standalone` build that never includes the bot repo.
+
+This is handled honestly, not silently: `testRunsAvailable()` checks whether
+`src/dev/test-run.ts` actually exists under `repoRoot()` before spawning
+anything. When it doesn't, `POST /api/test-run` returns a clear 501 with an
+explanatory message instead of a confusing spawn/ENOENT error, and the Test
+page shows a banner and disables the run controls (history still loads,
+since that's a plain DB read). No other page or feature depends on the bot's
+source being present, only this one.
+
+If you want Test runs to actually work in a container deployment, you have
+two honest options, neither of which this Dockerfile does for you by
+default:
+
+1. **Build a combined image.** Extend this Dockerfile (or write a new one) to
+   `COPY` the bot repo's source into the image too (e.g. build with the
+   parent directory as context: `docker build -f dashboard/Dockerfile ..`,
+   or a multi-repo CI checkout step) and `npm ci` its dependencies as well.
+   This roughly doubles the image's dependency footprint and couples the two
+   repos' versions together at build time, so only do this if the Test page
+   genuinely matters in that environment.
+2. **Mount the bot repo at runtime** as a volume at a path `repoRoot()`
+   resolves to (a sibling `../bot` relative to the container's `/app`
+   workdir), with its own `node_modules` already installed inside that
+   mount (the container's `npx tsx` needs `tsx` resolvable from there).
+
+Neither is wired up today. Pick one only if an operator actually needs Test
+runs available from a containerized dashboard; otherwise the graceful
+"unavailable" message above is the intended behavior.

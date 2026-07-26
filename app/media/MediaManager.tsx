@@ -192,6 +192,7 @@ type QueueItem = {
   teaserCaption: string;
   starValue: string;
   imageName: string;
+  isFree: boolean;
   status: "pending" | "uploading" | "done" | "error";
   captioning?: boolean;
   error?: string;
@@ -216,6 +217,7 @@ function PhotoUploadQueue({
         teaserCaption: "",
         starValue: "", // blank = auto-price from the category pricing guide
         imageName: f.name.replace(/\.[^.]+$/, ""),
+        isFree: false,
         status: "pending" as const,
         captioning: true,
       })),
@@ -262,6 +264,7 @@ function PhotoUploadQueue({
         fd.append("teaser_caption", queue[i].teaserCaption);
         fd.append("star_value", queue[i].starValue);
         fd.append("image_name", queue[i].imageName);
+        fd.append("is_free", String(queue[i].isFree));
         await uploadPhoto(cloneId, fd);
         update(i, { status: "done" });
       } catch (e) {
@@ -310,8 +313,20 @@ function PhotoUploadQueue({
                       value={item.starValue}
                       onChange={(e) => update(i, { starValue: e.target.value })}
                       placeholder="Auto (pricing guide)"
-                      className="w-full rounded border border-line bg-bg px-2 py-1.5 outline-none focus:border-accent"
+                      disabled={item.isFree}
+                      className="w-full rounded border border-line bg-bg px-2 py-1.5 outline-none focus:border-accent disabled:opacity-40"
                     />
+                  </label>
+                  <label className="flex items-end justify-between gap-2 pb-1.5">
+                    <span className="text-muted">Send free (unlocked)?</span>
+                    <select
+                      value={item.isFree ? "true" : "false"}
+                      onChange={(e) => update(i, { isFree: e.target.value === "true" })}
+                      className="rounded border border-line bg-bg px-2 py-1.5 outline-none focus:border-accent"
+                    >
+                      <option value="false">Paid</option>
+                      <option value="true">Free</option>
+                    </select>
                   </label>
                   <label className="block col-span-2">
                     <span className="mb-1 flex items-center gap-2 text-muted">
@@ -375,6 +390,7 @@ function VideoUploadQueue({
         teaserCaption: "",
         starValue: "", // blank = auto-price from the category pricing guide
         imageName: "",
+        isFree: false,
         status: "pending" as const,
       })),
     ]);
@@ -394,6 +410,7 @@ function VideoUploadQueue({
         fd.append("caption", queue[i].caption);
         fd.append("teaser_caption", queue[i].teaserCaption);
         fd.append("star_value", queue[i].starValue);
+        fd.append("is_free", String(queue[i].isFree));
         await uploadVideo(cloneId, fd);
         update(i, { status: "done" });
       } catch (e) {
@@ -434,10 +451,21 @@ function VideoUploadQueue({
                       value={item.starValue}
                       onChange={(e) => update(i, { starValue: e.target.value })}
                       placeholder="Auto (pricing guide)"
-                      className="w-full rounded border border-line bg-bg px-2 py-1.5 outline-none focus:border-accent"
+                      disabled={item.isFree}
+                      className="w-full rounded border border-line bg-bg px-2 py-1.5 outline-none focus:border-accent disabled:opacity-40"
                     />
                   </label>
-                  <div />
+                  <label className="flex items-end justify-between gap-2 pb-1.5">
+                    <span className="text-muted">Send free (unlocked)?</span>
+                    <select
+                      value={item.isFree ? "true" : "false"}
+                      onChange={(e) => update(i, { isFree: e.target.value === "true" })}
+                      className="rounded border border-line bg-bg px-2 py-1.5 outline-none focus:border-accent"
+                    >
+                      <option value="false">Paid</option>
+                      <option value="true">Free</option>
+                    </select>
+                  </label>
                   <label className="block col-span-2">
                     <span className="mb-1 block text-muted">Caption (for AI matching)</span>
                     <input
@@ -598,7 +626,7 @@ function PhotoCard({ photo, cloneId }: { photo: Photo; cloneId: string }) {
     <div className="rounded-lg border border-line bg-panel p-4">
       {viewing && (
         <Lightbox path={photo.storage_path} type="photo" title={photo.image_name ?? "Untitled"}
-          starValue={photo.star_value} caption={photo.caption} teaserCaption={photo.teaser_caption}
+          starValue={photo.is_free ? 0 : photo.star_value} caption={photo.caption} teaserCaption={photo.teaser_caption}
           isNude={photo.is_nude} explicitness={photo.explicitness} onClose={() => setViewing(false)} />
       )}
       <button type="button" onClick={() => setViewing(true)} className="mb-3 block w-full" title="Click to view full size + caption">
@@ -607,7 +635,7 @@ function PhotoCard({ photo, cloneId }: { photo: Photo; cloneId: string }) {
       <div className="mb-3">
         <div className="font-medium text-sm truncate">{photo.image_name ?? "Untitled"}</div>
         <div className="mt-0.5 flex items-center gap-2 text-xs text-muted">
-          <StarAmount stars={photo.star_value} />
+          <StarAmount stars={photo.is_free ? 0 : photo.star_value} />
           <ExplicitBadge isNude={photo.is_nude} explicitness={photo.explicitness} />
         </div>
         {photo.teaser_caption && (
@@ -626,7 +654,9 @@ function PhotoCard({ photo, cloneId }: { photo: Photo; cloneId: string }) {
             className="w-full rounded border border-line bg-bg px-2 py-1.5 outline-none focus:border-accent" />
           <label className="flex items-center justify-between gap-2">
             <span className="text-muted">Send free (unlocked)?</span>
-            <select name="is_free" defaultValue={photo.is_free ? "true" : "false"}
+            {/* 0★ is always free at runtime (flows/media.ts), so a 0-priced item
+                must default to Free here even if is_free wasn't set yet. */}
+            <select name="is_free" defaultValue={photo.is_free || photo.star_value === 0 ? "true" : "false"}
               className="rounded border border-line bg-bg px-2 py-1.5 outline-none focus:border-accent">
               <option value="false">Paid</option>
               <option value="true">Free</option>
@@ -694,7 +724,7 @@ function VideoCard({ video, cloneId }: { video: Video; cloneId: string }) {
     <div className="rounded-lg border border-line bg-panel p-4">
       {viewing && (
         <Lightbox path={video.storage_path} type="video" title="Video"
-          starValue={video.star_value} caption={video.caption} teaserCaption={video.teaser_caption}
+          starValue={video.is_free ? 0 : video.star_value} caption={video.caption} teaserCaption={video.teaser_caption}
           isNude={video.is_nude} explicitness={video.explicitness} onClose={() => setViewing(false)} />
       )}
       <button type="button" onClick={() => setViewing(true)} className="mb-3 block w-full" title="Click to view full size + caption">
@@ -703,7 +733,7 @@ function VideoCard({ video, cloneId }: { video: Video; cloneId: string }) {
       <div className="mb-3">
         <div className="font-medium text-sm">Video</div>
         <div className="mt-0.5 flex items-center gap-2 text-xs text-muted">
-          <StarAmount stars={video.star_value} />
+          <StarAmount stars={video.is_free ? 0 : video.star_value} />
           <ExplicitBadge isNude={video.is_nude} explicitness={video.explicitness} />
         </div>
         {video.teaser_caption && (
@@ -720,7 +750,9 @@ function VideoCard({ video, cloneId }: { video: Video; cloneId: string }) {
             className="w-full rounded border border-line bg-bg px-2 py-1.5 outline-none focus:border-accent" />
           <label className="flex items-center justify-between gap-2">
             <span className="text-muted">Send free (unlocked)?</span>
-            <select name="is_free" defaultValue={video.is_free ? "true" : "false"}
+            {/* 0★ is always free at runtime (flows/media.ts), so a 0-priced item
+                must default to Free here even if is_free wasn't set yet. */}
+            <select name="is_free" defaultValue={video.is_free || video.star_value === 0 ? "true" : "false"}
               className="rounded border border-line bg-bg px-2 py-1.5 outline-none focus:border-accent">
               <option value="false">Paid</option>
               <option value="true">Free</option>

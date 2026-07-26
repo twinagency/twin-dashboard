@@ -17,10 +17,12 @@ import {
 const LINKS: { label: string; href: string }[] = [
   { label: "Revenue", href: "/revenue" },
   { label: "Fans", href: "/users" },
+  { label: "Notifications", href: "/notifications" },
   { label: "Info", href: "/info" },
   { label: "Campaigns", href: "/drip" },
   { label: "Media", href: "/media" },
   { label: "Logs", href: "/logs" },
+  { label: "Changelog", href: "/changelog" },
   { label: "Feedback", href: "/feedback" },
 ];
 

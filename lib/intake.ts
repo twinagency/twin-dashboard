@@ -17,7 +17,9 @@
 // IDENTITY CANON audit (migration 039) retires two more prose keys the same
 // way, superseded by typed columns/selects in PersonaFactsFields.tsx:
 //   relationship_status → relationship_canon/meeting_policy/love_policy selects
-//                         (Behaviour policy card). Old value merges into notes.
+//                         (Relationship stance card, renamed from "Behaviour
+//                         policy" in the 2026-07-27 clarity pass). Old value
+//                         merges into notes.
 //   voice_sound         → mostly superseded by the voice_accent/pace/texture
 //                         selects (Physical canon card); replaced here by
 //                         `voice_notes`, a small free-text remainder for
@@ -30,6 +32,43 @@
 //                         into a second artificial box was the wrong call. Any
 //                         value already saved under lazy_texts folds back into
 //                         example_texts via the legacy merge below.
+//
+// LIFE CANON addendum (migration 060, 2026-07-27): hobbies, pets and living
+// situation are now typed fields on the Life & pets card (they were
+// previously only answerable, if at all, inside the life_tastes prose blob
+// below). NOT retired the way the keys above were: `hobbies` and
+// `living_situation` still fold into life_tastes via LEGACY_MERGE (they
+// always did, since the 07-17 audit), and life_tastes keeps holding the
+// narrative version too. Reason: unlike a clean select-vs-select swap, there
+// is no reliable way to auto-parse "lives alone with her cat Mango" prose
+// into a living_situation enum or a pet_details chip, so nothing here was
+// safe to retire outright. hobbies gets a best-effort chip prefill from its
+// old legacy key when the typed field is empty (see PersonaFactsFields.tsx);
+// pets and living situation just start blank for the operator to fill once.
+//
+// FAVORITES CANON addendum (migration 063, 2026-07-27): a second pass over the
+// remaining life_tastes/quirks scope, judged fact-by-fact per the identity
+// data principle. Promoted to typed columns (Vibe card / Life & pets card):
+//   catchphrases    - slang/catchphrases only she uses (was inside `quirks`)
+//   favorite_things - specific named shows/music/food she loves (was inside
+//                     `life_tastes`); the OLD retired `likes` key still folds
+//                     forward as a best-effort chip prefill, same pattern as
+//                     hobbies above
+//   dislikes        - specific things she hates, not chat behaviour (turn_offs
+//                     already covers that); the OLD retired `dislikes` key
+//                     folds forward the same way
+//   saving_goal     - a single concrete fact ("what are you saving for"), same
+//                     free-text-but-deterministic shape as cover_story/known_for
+//                     on the Creator identity card, not a fixed-vocabulary field
+// life_tastes and quirks are NOT retired, only narrowed: "her look" and "real
+// schedule" were removed from the life_tastes prompt entirely rather than
+// promoted, since they're already fully covered by existing typed columns
+// (Physical canon; Daily rhythm's wake_time/sleep_time/daily_blocks) and
+// leaving them as an open prose question risked prose contradicting a typed
+// fact, the same bug class fixed for tattoos/piercings in the identity canon
+// audit. Named friends, specific running jokes/stories and "what makes her
+// laugh" stay prose in life_tastes/quirks: genuinely narrative, not a single
+// enumerable fact.
 
 export type IntakeField = {
   key: string;
@@ -69,25 +108,26 @@ export const INTAKE_SECTIONS: IntakeSection[] = [
   },
   {
     title: "Her life & tastes",
-    hint: "Specific, real details, not categories. This is what separates a clone that feels like an actual person from one that reads generic. Hard facts (age, cities, job, socials) are the typed fields above, not here.",
+    hint: "Specific, real details, not categories. This is what separates a clone that feels like an actual person from one that reads generic. Hard facts (age, cities, job, socials) are the typed fields above, not here. Hobbies, pets, living situation, favorite things, dislikes and her saving goal are now typed too, on the Life & pets card.",
     fields: [
       {
         key: "life_tastes",
-        label: "Her actual day-to-day: real schedule (incl. content/shoot days), her look, named hobbies/pets/friends, specific shows/music/food she likes and hates, what she's currently saving up for",
-        placeholder: "up at 8 for the gym, shoots Tue/Thu afternoons, beach most Sundays; tan, fit, long dark hair; surfs, binges true-crime podcasts, hates cardio; lives alone with her cat Mango; saving for a down payment on a house",
-        hint: "Name real things: the actual show she's watching this month, not \"likes TV\". Specifics are what fans latch onto and what stops replies from sounding like anyone else's clone.",
+        label: "A normal day beyond her set schedule, named friends, and any other color that doesn't fit a chip: what she's currently into, current life context",
+        placeholder: "her friend Jess keeps dragging her to spin class, been on a real pasta kick lately, low-key stressed about an upcoming trip",
+        hint: "Named friends, current context, anything that doesn't reduce to a single fact. Schedule, look, favorite/hated things and her saving goal all moved to typed fields (Physical canon, Daily rhythm, Life & pets), this is for everything genuinely narrative left over.",
         multiline: true,
       },
     ],
   },
   {
     title: "Personality quirks",
-    hint: "Her vibe preset (typed field above) covers the baseline archetype. Her reactions to rudeness/compliments and message-burst style are typed selects on the Vibe card, this is just the humor and texting color that makes her HER, not generic \"bubbly\" or \"sassy\".",
+    hint: "Her vibe preset (typed field above) covers the baseline archetype. Her reactions to rudeness/compliments, message-burst style and catchphrases are typed on the Vibe card, this is just the humor that makes her HER, not generic \"bubbly\" or \"sassy\".",
     fields: [
       {
         key: "quirks",
-        label: "What makes her texting voice recognizably hers: specific jokes she repeats, slang or catchphrases only she uses, what makes her laugh, things that annoy her in chat",
-        placeholder: "calls everyone \"babe\" even strangers, has a running joke about her ex's dog, cackles at bad puns, hates being asked \"wyd\"",
+        label: "What makes her texting voice recognizably hers: specific jokes she repeats, what makes her laugh, running bits",
+        placeholder: "has a running joke about her ex's dog, cackles at bad puns, always turns things into an inside joke",
+        hint: "Catchphrases and slang moved to a typed chip list on the Vibe card, this is for the stories and running jokes behind them, which can't be reduced to a single phrase.",
         multiline: true,
       },
     ],

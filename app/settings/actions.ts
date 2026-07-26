@@ -67,14 +67,60 @@ const DEFAULT_MODELS = [
   "photo_reply_model", "vision_model", "voice_enhance_model",
 ] as const;
 
+// Built-in fallback for anything the owner hasn't set a template value for yet.
+// Every entry here exists because useCloneConfig's `initial()` falls back to a
+// plain `?? 0` / `?? false` for that field, which DISAGREES with the `clones`
+// column's own DB default (set by a later migration, after useCloneConfig was
+// first written). Without an entry here, a fresh Create form with no saved
+// template silently starts these at the OLD broken value instead of the DB's
+// real default, so a new clone is written with that broken value baked in
+// forever (rowFromForm always sends these fields, so the DB column default
+// never gets a chance to apply on insert). Confirmed against the migration
+// that introduced each default:
+//   videos_enabled                    -> true   (clones table default)
+//   discount_max_photo/video/bundle/credits -> 15/20/25/10 (migration 043:
+//     discounts_enabled defaults false and is untouched, but if an operator
+//     later flips it on for a clone that inherited 0 caps, haggling silently
+//     never moves the price at all - see 043_discount_cap_defaults.sql)
+//   response_wait_min/max             -> 8/45  (migration 055)
+//   read_delay_min/max                -> 2/9   (migration 055)
+//   typing_stutter_enabled            -> true  (migration 055)
+//   pacing_ramp_messages              -> 25    (migration 055)
+//   pacing_new_wait_min/max           -> 20/75 (migration 055)
+//   pacing_established_wait_min/max   -> 6/30  (migration 055)
+// Migration 055's own comment: "the whole response-pacing feature" was
+// launched fully inert because every column defaulted to 0/null/false - the
+// same failure mode this object exists to stop from happening again in the
+// dashboard's own create-flow default. A saved template value (including an
+// explicit "off"/0) always wins over anything here.
+const BUILTIN_CLONE_DEFAULTS: CloneDefaults = {
+  videos_enabled: true,
+  discount_max_photo: 15,
+  discount_max_video: 20,
+  discount_max_bundle: 25,
+  discount_max_credits: 10,
+  response_wait_min: 8,
+  response_wait_max: 45,
+  read_delay_min: 2,
+  read_delay_max: 9,
+  typing_stutter_enabled: true,
+  pacing_ramp_messages: 25,
+  pacing_new_wait_min: 20,
+  pacing_new_wait_max: 75,
+  pacing_established_wait_min: 6,
+  pacing_established_wait_max: 30,
+};
+
 export async function getCloneDefaults(): Promise<CloneDefaults> {
   const { data } = await supabaseAdmin.from("app_settings").select("value").eq("key", CLONE_DEFAULTS_KEY).maybeSingle();
-  if (!data?.value) return {};
+  if (!data?.value) return { ...BUILTIN_CLONE_DEFAULTS };
   try {
     const parsed = JSON.parse(String(data.value));
-    return parsed && typeof parsed === "object" ? (parsed as CloneDefaults) : {};
+    return parsed && typeof parsed === "object"
+      ? { ...BUILTIN_CLONE_DEFAULTS, ...(parsed as CloneDefaults) }
+      : { ...BUILTIN_CLONE_DEFAULTS };
   } catch {
-    return {};
+    return { ...BUILTIN_CLONE_DEFAULTS };
   }
 }
 

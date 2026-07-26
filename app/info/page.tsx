@@ -3,7 +3,9 @@ import net from "node:net";
 import { supabaseAdmin } from "@/lib/supabase";
 import { getCloneScope } from "@/lib/clone-scope";
 import { setCloneScope } from "@/app/actions/clone-scope";
+import { getStarBalance } from "@/lib/star-balance";
 import FanAvatar from "@/components/FanAvatar";
+import { Info } from "@/components/clone/fields";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,16 +28,6 @@ async function getMe(token: string): Promise<{ ok: boolean; username?: string; i
     return { ok: false };
   } finally {
     clearTimeout(to);
-  }
-}
-
-async function getStarBalance(token: string): Promise<number | null> {
-  try {
-    const r = await fetch(`https://api.telegram.org/bot${token}/getMyStarBalance`, { method: "POST" });
-    const j = await r.json();
-    return j.ok ? (j.result?.amount ?? null) : null;
-  } catch {
-    return null;
   }
 }
 
@@ -111,7 +103,12 @@ async function FleetInfo() {
         <Stat label="Bots" value={String(rows.length)} />
         <Stat label="Active" value={String(activeCount)} accent={activeCount > 0} />
         <Stat label="Fans (all)" value={String(totalFans)} />
-        <Stat label="Stars earned" value={`${totalStars} ⭐`} money />
+        <Stat
+          label="Lifetime proceeds"
+          value={`${totalStars} ⭐`}
+          money
+          hint="Every Star ever paid to the fleet, gross, forever. Not a spendable balance and not what's available to withdraw right now, see a bot's own Info page for that."
+        />
       </div>
 
       <Card className="overflow-hidden p-0">
@@ -161,29 +158,16 @@ async function CloneInfo({ cloneId }: { cloneId: string }) {
     .maybeSingle();
   if (!clone) return <div className="text-muted">Clone not found.</div>;
 
-  const [me, balance, { data: users }, { data: tx }] = await Promise.all([
+  const [me, starBalance, { data: users }] = await Promise.all([
     getMe(clone.bot_token),
-    getStarBalance(clone.bot_token),
+    getStarBalance(cloneId, clone.bot_token),
     supabaseAdmin.from("users").select("business_connection_id,total_messages_purchased,last_message_received").eq("clone_id", cloneId),
-    supabaseAdmin.from("star_transactions").select("amount_stars,paid_at").eq("clone_id", cloneId),
   ]);
 
   const userList = (users ?? []) as { business_connection_id: string | null; total_messages_purchased: number; last_message_received: string | null }[];
-  const txList = (tx ?? []) as { amount_stars: number; paid_at: string }[];
-  const starsEarned = txList.reduce((s, r) => s + (Number(r.amount_stars) || 0), 0);
-
-  // Telegram's API only exposes TOTAL balance (getMyStarBalance) — the app-side
-  // "available" number (21-day hold after each Star is earned) isn't served. So
-  // we compute it: matured = earned 21+ days ago, minus anything already gone
-  // from the total (withdrawn/spent), clamped into [0, total].
-  const MS_21D = 21 * 86400_000;
-  const matured = txList.reduce(
-    (s, r) => s + (Date.now() - new Date(r.paid_at).getTime() >= MS_21D ? Number(r.amount_stars) || 0 : 0),
-    0,
-  );
-  const alreadyGone = balance != null ? Math.max(0, starsEarned - balance) : 0;
-  const available = balance != null ? Math.max(0, Math.min(matured - alreadyGone, balance)) : null;
-  const pending = balance != null && available != null ? balance - available : null;
+  // Three genuinely different figures, see lib/star-balance.ts for how each is
+  // derived — never collapse them into one "revenue" number:
+  const { lifetimeStars, totalBalanceStars, availableStars, pendingStars } = starBalance;
   const buyers = userList.filter((u) => (u.total_messages_purchased ?? 0) > 0).length;
 
   // Most recently active fan's connection id is the freshest handle to the biz account.
@@ -193,14 +177,33 @@ async function CloneInfo({ cloneId }: { cloneId: string }) {
     ?.business_connection_id;
   const biz = bcid ? await getBusinessAccount(clone.bot_token, bcid) : null;
 
-  const rows: { label: string; value: string; accent?: "good" | "bad" | "money" }[] = [
+  const rows: { label: string; value: string; accent?: "good" | "bad" | "money"; hint?: string }[] = [
     { label: "Bot", value: me.username ? `@${me.username}` : "-" },
     { label: "Reachable", value: me.ok ? "yes" : "no, check token/network", accent: me.ok ? "good" : "bad" },
     { label: "Status", value: clone.status, accent: clone.status === "active" ? "good" : undefined },
-    { label: "Available to withdraw", value: available != null ? `${available} ⭐` : "unavailable", accent: available != null ? "money" : undefined },
-    { label: "Pending (21-day hold)", value: pending != null ? `${pending} ⭐` : "unavailable" },
-    { label: "Total balance", value: balance != null ? `${balance} ⭐` : "unavailable", accent: balance != null ? "money" : undefined },
-    { label: "Lifetime earned", value: `${starsEarned} ⭐`, accent: "money" },
+    {
+      label: "Available to withdraw",
+      value: availableStars != null ? `${availableStars} ⭐` : "unavailable",
+      accent: availableStars != null ? "money" : undefined,
+      hint: "Stars that have cleared Telegram's 21-day maturation hold and can be withdrawn right now. Always less than or equal to total balance.",
+    },
+    {
+      label: "Pending (21-day hold)",
+      value: pendingStars != null ? `${pendingStars} ⭐` : "unavailable",
+      hint: "Stars paid to this bot in the last 21 days. Telegram holds every Star for 21 days after it's earned before it can be withdrawn, so this is real money that simply isn't liquid yet.",
+    },
+    {
+      label: "Total balance",
+      value: totalBalanceStars != null ? `${totalBalanceStars} ⭐` : "unavailable",
+      accent: totalBalanceStars != null ? "money" : undefined,
+      hint: "Every Star currently sitting in this bot's Telegram wallet, matured and pending combined, minus anything already withdrawn or spent. Read directly from Telegram (getMyStarBalance).",
+    },
+    {
+      label: "Lifetime proceeds",
+      value: `${lifetimeStars} ⭐`,
+      accent: "money",
+      hint: "Every Star this bot has ever been paid, gross, forever. This number never goes down, it is not a balance and not what can be withdrawn today.",
+    },
     { label: "Fans", value: String(userList.length) },
     { label: "Buyers", value: String(buyers) },
     { label: "Bot token", value: `••••${(clone.bot_token ?? "").slice(-6)}` },
@@ -243,7 +246,10 @@ async function CloneInfo({ cloneId }: { cloneId: string }) {
       <div className="grid gap-2 sm:grid-cols-2">
         {rows.map((r) => (
           <Card key={r.label} className="flex-row items-center justify-between px-4 py-3">
-            <span className="text-sm text-muted">{r.label}</span>
+            <span className="flex items-center gap-1.5 text-sm text-muted">
+              {r.label}
+              {r.hint && <Info text={r.hint} />}
+            </span>
             <span className={"text-sm font-semibold tabular-nums " + (r.accent === "good" ? "text-good" : r.accent === "bad" ? "text-crit" : r.accent === "money" ? "font-mono text-good" : "")}>{r.value}</span>
           </Card>
         ))}
@@ -271,10 +277,13 @@ async function CloneInfo({ cloneId }: { cloneId: string }) {
   );
 }
 
-function Stat({ label, value, accent, money }: { label: string; value: string; accent?: boolean; money?: boolean }) {
+function Stat({ label, value, accent, money, hint }: { label: string; value: string; accent?: boolean; money?: boolean; hint?: string }) {
   return (
     <Card className="p-4">
-      <div className="text-xs text-muted">{label}</div>
+      <div className="flex items-center gap-1.5 text-xs text-muted">
+        {label}
+        {hint && <Info text={hint} />}
+      </div>
       <div className={`mt-1 font-mono text-2xl font-semibold tabular-nums ${money ? "text-good" : accent ? "text-good" : "text-ink"}`}>{value}</div>
     </Card>
   );

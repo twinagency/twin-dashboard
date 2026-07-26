@@ -9,7 +9,7 @@ import FanAvatar from "@/components/FanAvatar";
 import { Input } from "@/components/ui/input";
 import ConfirmSubmit from "@/components/ConfirmSubmit";
 import FanComposer from "@/components/fans/FanComposer";
-import { setCredits, resetCounters, toggleActive, setBlocked, deleteUser } from "./actions";
+import { setCredits, resetCounters, toggleActive, setBlocked, setPaused, deleteUser } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -375,7 +375,7 @@ export default async function FansPage({
                   />
                   <span className="min-w-0 flex-1">
                     <span className="flex items-center gap-1.5">
-                      <span className={"truncate text-sm font-medium " + (u.blocked ? "text-crit" : "text-ink")}>
+                      <span className={"min-w-0 flex-1 truncate text-sm font-medium " + (u.blocked ? "text-crit" : "text-ink")}>
                         {displayName(u)}
                       </span>
                       {/* Lifetime spend right after the name - the number that matters. */}
@@ -387,6 +387,13 @@ export default async function FansPage({
                       {u.blocked && (
                         <span className="shrink-0 rounded-full bg-crit/15 px-1.5 text-[9px] font-semibold uppercase text-crit">
                           flag
+                        </span>
+                      )}
+                      {/* users.paused - one fan paused, distinct from a safety block
+                          and from the whole-clone Active/Paused status. */}
+                      {u.paused && (
+                        <span className="shrink-0 rounded-full bg-warn/15 px-1.5 text-[9px] font-semibold uppercase text-warn">
+                          paused
                         </span>
                       )}
                     </span>
@@ -590,7 +597,7 @@ export default async function FansPage({
                     name={displayName(selected)}
                     className="h-9 w-9 text-xs"
                   />
-                  <div className="min-w-0">
+                  <div className="min-w-0 flex-1">
                     <div className="truncate text-sm font-semibold text-ink">{displayName(selected)}</div>
                     {selected.username && <div className="truncate text-[11px] text-muted">@{selected.username}</div>}
                   </div>
@@ -621,6 +628,11 @@ export default async function FansPage({
                   {selected.blocked && (
                     <span className="rounded-full bg-crit/15 px-2 py-0.5 text-[10px] font-medium text-crit">
                       Blocked (safety)
+                    </span>
+                  )}
+                  {selected.paused && (
+                    <span className="rounded-full bg-warn/15 px-2 py-0.5 text-[10px] font-medium text-warn">
+                      Paused (this fan)
                     </span>
                   )}
                   {selected.subscription_status === "active" && (
@@ -703,13 +715,25 @@ export default async function FansPage({
                 </form>
               </div>
 
-              {/* Knowledge / profile dossier - what the bot has learned */}
+              {/* Knowledge / profile dossier - what the bot has learned. Built by
+                  services/profile-extractor.ts from the fan's own messages;
+                  read only here, she updates it herself as the conversation
+                  grows. */}
               <div>
                 <div className="mb-2 flex items-center justify-between gap-2">
-                  <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">Knowledge / profile</div>
-                  {profile?.extracted_msg_count != null && (
-                    <span className="text-[10px] text-muted">from {fmtNum(profile.extracted_msg_count)} msgs</span>
-                  )}
+                  <span
+                    className="flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-muted"
+                    title="What she's picked up about him from the conversation so far: a running summary, interests, remembered details and preferences. Updates automatically as he talks; nothing here is editable."
+                  >
+                    Knowledge / profile
+                    <span className="cursor-help text-[10px] normal-case text-muted/70">ⓘ</span>
+                  </span>
+                  <span className="flex items-center gap-1.5 text-[10px] text-muted">
+                    {profile?.extracted_msg_count != null && <span>from {fmtNum(profile.extracted_msg_count)} msgs</span>}
+                    {profile?.updated_at && (
+                      <span title={`Last updated ${dateTime(profile.updated_at)}`}>· updated {ago(profile.updated_at)}</span>
+                    )}
+                  </span>
                 </div>
                 {!hasProfile ? (
                   <div className="text-xs text-muted">Nothing collected yet.</div>
@@ -817,6 +841,24 @@ export default async function FansPage({
                       className="w-full rounded-md border border-line px-3 py-1.5 text-left text-xs text-ink transition hover:bg-elev"
                     >
                       {selected.blocked ? "Unblock (safety)" : "Block (safety)"}
+                    </ConfirmSubmit>
+                  </form>
+
+                  {/* users.paused - pauses just this one fan (no replies, no drip)
+                      without blocking him and without touching the clone's own
+                      Active/Paused status. */}
+                  <form action={setPaused}>
+                    <input type="hidden" name="userId" value={selected.id} />
+                    <input type="hidden" name="paused" value={selected.paused ? "false" : "true"} />
+                    <ConfirmSubmit
+                      message={
+                        selected.paused
+                          ? "Resume this fan? The bot will reply to him and resume drip again."
+                          : "Pause this fan? He gets no replies and no drip messages until resumed. He is not blocked, and no other fan is affected."
+                      }
+                      className="w-full rounded-md border border-line px-3 py-1.5 text-left text-xs text-ink transition hover:bg-elev"
+                    >
+                      {selected.paused ? "Resume this fan" : "Pause this fan"}
                     </ConfirmSubmit>
                   </form>
 

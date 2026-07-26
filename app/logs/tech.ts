@@ -9,7 +9,7 @@ export type Tech = "elevenlabs" | "llm" | "telegram" | "supabase" | "code";
 export const SYSTEM_SOURCE_BUCKETS: Record<Exclude<Tech, "code">, string[]> = {
   elevenlabs: ["tts", "elevenlabs"],
   llm: ["llm", "openrouter"],
-  telegram: ["telegram", "star-reconcile"],
+  telegram: ["telegram", "star-reconcile", "operator-send", "business-account"],
   supabase: ["store", "supabase", "db"],
 };
 
@@ -45,3 +45,92 @@ export const TECH_LABEL: Record<Tech, string> = {
   supabase: "🗄 Supabase",
   code: "⚙️ Our code",
 };
+
+// Friendly names for system_logs.source (the "Our code" bucket's sub-category,
+// shown next to the tech chip), these are internal module names picked by
+// whoever wrote the log line (src/services/syslog.ts callers), not something
+// an operator should have to decode. Anything unmapped falls back to a
+// title-cased version of the raw string (see sourceLabel below) rather than
+// hiding it.
+const SOURCE_LABEL: Record<string, string> = {
+  runtime: "Bot startup",
+  handler: "Message handling",
+  safety: "Safety check",
+  watchdog: "Stuck message watchdog",
+  campaign: "Campaign send",
+  followup: "Follow-up nudge",
+  subscriptions: "Subscription renewal",
+  profile: "Fan profile update",
+  test: "Simulation run",
+  tts: "Voice generation",
+  llm: "AI reply",
+  openrouter: "AI reply",
+  telegram: "Telegram delivery",
+  "star-reconcile": "Stars reconciliation",
+  "operator-send": "Operator manual send",
+  "business-account": "Business account change",
+  store: "Database",
+  supabase: "Database",
+  db: "Database",
+};
+
+export function sourceLabel(source: string): string {
+  if (SOURCE_LABEL[source]) return SOURCE_LABEL[source];
+  return source
+    .split(/[-_]/)
+    .filter(Boolean)
+    .map((w) => w[0].toUpperCase() + w.slice(1))
+    .join(" ");
+}
+
+// Friendly names for usage_events.kind, used to build a plain-English headline
+// for AI/voice calls instead of showing the raw model slug up front. The raw
+// kind + model + token counts stay in the row's detail payload either way.
+export const KIND_LABEL: Record<string, string> = {
+  llm: "AI reply",
+  tts: "Voice message",
+  stt: "Voice transcription",
+  vision: "Photo/video description",
+};
+
+// Readable absolute timestamp, e.g. "Jul 27, 3:04:12 PM". Kept in the user's
+// local timezone (same as the old toLocaleString() call) but with a fixed,
+// compact format instead of the locale's often-cryptic short-date default.
+export function fmtLogTime(iso: string): string {
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return iso;
+  return d.toLocaleString(undefined, {
+    month: "short",
+    day: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+  });
+}
+
+// "3m ago" / "2h ago" / "5d ago" - a quick-glance secondary line under the
+// absolute time. Falls back to the absolute date once it's more than a week
+// old (a relative count stops being useful at that point).
+export function fmtRelativeTime(iso: string): string {
+  const d = new Date(iso).getTime();
+  if (Number.isNaN(d)) return "";
+  const diffSec = Math.max(0, Math.round((Date.now() - d) / 1000));
+  if (diffSec < 5) return "just now";
+  if (diffSec < 60) return `${diffSec}s ago`;
+  const diffMin = Math.round(diffSec / 60);
+  if (diffMin < 60) return `${diffMin}m ago`;
+  const diffHr = Math.round(diffMin / 60);
+  if (diffHr < 24) return `${diffHr}h ago`;
+  const diffDay = Math.round(diffHr / 24);
+  if (diffDay <= 7) return `${diffDay}d ago`;
+  return "";
+}
+
+// Turns a friendly key like "cost_usd" into "Cost usd" for the detail-payload
+// key/value view, not perfect English but far more scannable than a raw
+// JSON dump for a non-developer, while every key/value stays fully visible.
+export function friendlyKey(key: string): string {
+  const words = key.split(/[_.]/).filter(Boolean);
+  if (words.length === 0) return key;
+  return words[0][0].toUpperCase() + words[0].slice(1) + (words.length > 1 ? " " + words.slice(1).join(" ") : "");
+}

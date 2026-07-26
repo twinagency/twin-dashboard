@@ -198,6 +198,7 @@ export default function CloneForm({
           identityVibeSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="vibe" cfg={cfg} set={set} />}
           identityBehaviourSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="behaviour" cfg={cfg} set={set} />}
           identityRhythmSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="rhythm" cfg={cfg} set={set} />}
+          identityLifeSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="life" cfg={cfg} set={set} />}
           identityContentSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="content" cfg={cfg} set={set} />}
           identityImperfectionSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="imperfection" cfg={cfg} set={set} />}
           identityLimitsSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="limits" cfg={cfg} set={set} />}

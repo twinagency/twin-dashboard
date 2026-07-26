@@ -1,4 +1,13 @@
 # syntax=docker/dockerfile:1
+#
+# KNOWN LIMITATION: the /test page (app/test, lib/test-runs.ts) spawns
+# `npx tsx src/dev/test-run.ts` in a SIBLING "../bot" checkout — that only
+# works in local dev where both repos share a filesystem. This is a
+# self-contained `next build --standalone` image with NO bot source at all,
+# so Test runs are unavailable here by design, not by bug: the app detects
+# this (lib/test-runs.ts testRunsAvailable()) and fails with a clear message
+# instead of a broken spawn. See dashboard/DOCKER.md, "Test page limitation",
+# for what it would take to support it in a container deployment.
 
 # ── 1. deps: install dependencies with a cached layer ────────────────────────
 FROM node:22-alpine AS deps

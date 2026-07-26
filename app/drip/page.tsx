@@ -55,6 +55,12 @@ async function FleetCampaigns() {
 
   return (
     <div className="text-ink">
+      <h1 className="mb-1 text-2xl font-semibold">Campaigns</h1>
+      <p className="mb-5 max-w-2xl text-sm text-muted">
+        Automated re-engagement for fans who've gone quiet: a list of timed steps that fires on
+        each clone's own schedule, always inside Telegram's 24h messaging window.
+      </p>
+
       <div className="mb-5 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
         <Card className="p-4">
           <div className="text-xs text-muted">Clones</div>
@@ -156,8 +162,15 @@ async function CloneCampaigns({ cloneId }: { cloneId: string }) {
 
   return (
     <div>
-      <div className="mb-4 flex items-center justify-end">
-        <form action={setCloneScope.bind(null, null)}>
+      <div className="mb-5 flex items-start justify-between gap-4">
+        <div className="min-w-0">
+          <h1 className="mb-1 text-2xl font-semibold">Campaigns · {clone.name}</h1>
+          <p className="max-w-2xl text-sm text-muted">
+            Automated re-engagement steps that fire while {clone.name} goes quiet, always timed
+            inside Telegram's 24h messaging window.
+          </p>
+        </div>
+        <form action={setCloneScope.bind(null, null)} className="shrink-0">
           <Button type="submit" variant="ghost" size="sm">← All bots</Button>
         </form>
       </div>

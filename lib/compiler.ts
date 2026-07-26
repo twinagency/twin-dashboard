@@ -45,12 +45,24 @@ export async function assembleClonePrompts(
     subscriptions_enabled?: boolean;
     persona: Record<string, string> | null;
   } & PersonaFactCols,
+  // Optional draft text keyed by agent_type, substituted in place of the
+  // stored DB row for that agent type only. Lets the prompt template editor
+  // (app/prompts) preview an UNSAVED edit against a real clone without
+  // writing it to prompt_templates first — every other agent type still
+  // reads the live saved row. undefined (the default) preserves the exact
+  // prior behaviour for every existing caller.
+  templateOverrides?: Partial<Record<"text" | "voice" | "vision" | "routing", string>>,
 ): Promise<Record<"text" | "voice" | "vision" | "routing", string>> {
   const { data: tplRows } = await supabaseAdmin
     .from("prompt_templates")
     .select("agent_type,template")
     .in("agent_type", ["text", "voice", "vision", "routing"]);
   const tpl = new Map((tplRows ?? []).map((r: any) => [r.agent_type, r.template as string]));
+  if (templateOverrides) {
+    for (const [agent, text] of Object.entries(templateOverrides)) {
+      if (text !== undefined) tpl.set(agent, text);
+    }
+  }
   const flags = {
     CHARGE: clone.charge_messages,
     PHOTOS: clone.photos_enabled,
@@ -188,9 +200,13 @@ function smartDeciderSystem(c: PreviewClone): string {
   );
 }
 
-// Build the flow-aware, toggle-aware prompt preview for a clone.
-export async function assemblePromptPreview(clone: PreviewClone): Promise<PromptPreview> {
-  const base = await assembleClonePrompts(clone);
+// Build the flow-aware, toggle-aware prompt preview for a clone. `templateOverrides`
+// (see assembleClonePrompts) lets the prompt editor preview an unsaved draft.
+export async function assemblePromptPreview(
+  clone: PreviewClone,
+  templateOverrides?: Partial<Record<"text" | "voice" | "vision" | "routing", string>>,
+): Promise<PromptPreview> {
+  const base = await assembleClonePrompts(clone, templateOverrides);
   const nudge = formatNudgeP(clone);
   const mode = clone.ai_mode;
   const smartSplit = clone.smart_split;

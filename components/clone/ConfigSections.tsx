@@ -31,6 +31,9 @@ import {
 import type { CloneConfigState, SetConfig } from "./useCloneConfig";
 import { CategoryPricingEditor, SpoilMenuEditor } from "./editors";
 import { BetaBadge } from "../ui/primitives";
+// New dedicated file (migration 056 monetization sequence) — kept out of this
+// file's own card definitions so it doesn't collide with concurrent edits here.
+import MonetizationSequenceFields from "./MonetizationSequenceFields";
 
 // ── Configure page IA ─────────────────────────────────────────────────────────
 // Re-sorted 2026-07-26 by one rule: Identity is anything a fan could ask her
@@ -164,6 +167,7 @@ export default function ConfigSections({
   identityContentSlot,
   identityImperfectionSlot,
   identityLimitsSlot,
+  identityLifeSlot,
   identityQuestionnaireSlot,
 }: {
   cfg: CloneConfigState;
@@ -202,11 +206,25 @@ export default function ConfigSections({
   identitySocialsSlot?: React.ReactNode;
   identityVibeSlot?: React.ReactNode;
   identityLimitsSlot?: React.ReactNode;
+  // Life canon (migration 060): living situation, pets, hobbies. Same reason
+  // as the slots above, needs the clone's saved columns/intake blob.
+  identityLifeSlot?: React.ReactNode;
   identityQuestionnaireSlot?: React.ReactNode;
 }) {
   const [tabState, setTabState] = useState<Tab>("identity");
   const tab = tabProp ?? tabState;
   const setTab = onTabChange ?? setTabState;
+  // Not part of `cfg` (useCloneConfig), standalone toggles, same submit
+  // pattern as everything else here (hidden input, saved with the rest of the
+  // form by rowFromForm in app/clones/actions.ts). Split into one per safety
+  // category (migration 061) instead of one blanket switch, so an operator
+  // can e.g. always auto-block MINOR while leaving JAILBREAK as log-only.
+  // Each falls back to the old single auto_block_enabled value so a clone
+  // saved before this split still shows its real prior behavior.
+  const [autoBlockMinor, setAutoBlockMinor] = useState(clone?.auto_block_minor ?? clone?.auto_block_enabled ?? false);
+  const [autoBlockHate, setAutoBlockHate] = useState(clone?.auto_block_hate ?? clone?.auto_block_enabled ?? false);
+  const [autoBlockIllegal, setAutoBlockIllegal] = useState(clone?.auto_block_illegal ?? clone?.auto_block_enabled ?? false);
+  const [autoBlockJailbreak, setAutoBlockJailbreak] = useState(clone?.auto_block_jailbreak ?? clone?.auto_block_enabled ?? false);
   const visibleTabs = [
     ...leadingTabs,
     ...TABS.filter((t) => showMoney || t.key !== "money"),
@@ -261,6 +279,7 @@ export default function ConfigSections({
           {identityCreatorSlot}
           {identityBehaviourSlot}
           {identityRhythmSlot}
+          {identityLifeSlot}
           {identityContentSlot}
           {identityVibeSlot}
           {identityLimitsSlot}
@@ -408,6 +427,57 @@ export default function ConfigSections({
               accent="soft"
             />
           </div>
+        </div>
+      </Section>
+
+      {/* Safety (migration 047, split per-category by migration 061). The
+          hard-limit guard in src/safety.ts always runs and always flags a
+          breach internally regardless of these toggles; each one only
+          controls what happens NEXT for that specific category. Off
+          (default) = log only, the conversation carries on untouched. On =
+          a fan flagged for that category is blocked automatically, the same
+          users.blocked switch as a manual block. Previously one blanket
+          switch covered all four categories; split so e.g. minors can always
+          auto-block while a jailbreak attempt stays log-only for review. */}
+      <Section
+        icon="🛡"
+        accent="red"
+        title="Safety"
+        hint="What happens after the built-in safety guard flags a fan, per category. The guard itself always runs and always logs every breach for review, on top of whatever these are set to."
+      >
+        <div className="grid grid-cols-2 gap-1.5">
+          <ToggleCard
+            emoji="🔞"
+            label="Minors / underage"
+            title="The most serious category. On: a flagged minor-content breach blocks the fan automatically. Off: only logged for review."
+            name="auto_block_minor"
+            checked={autoBlockMinor}
+            onChange={setAutoBlockMinor}
+          />
+          <ToggleCard
+            emoji="🗯"
+            label="Hate speech"
+            title="Racism, slurs, or hate targeting a group. On: auto-blocks. Off: only logged for review."
+            name="auto_block_hate"
+            checked={autoBlockHate}
+            onChange={setAutoBlockHate}
+          />
+          <ToggleCard
+            emoji="⚠️"
+            label="Illegal content"
+            title="Weapon/drug how-to, hiring violence, non-consent. On: auto-blocks. Off: only logged for review."
+            name="auto_block_illegal"
+            checked={autoBlockIllegal}
+            onChange={setAutoBlockIllegal}
+          />
+          <ToggleCard
+            emoji="🔓"
+            label="Jailbreak attempts"
+            title="Trying to override her rules to make her say something banned. On: auto-blocks. Off: only logged for review."
+            name="auto_block_jailbreak"
+            checked={autoBlockJailbreak}
+            onChange={setAutoBlockJailbreak}
+          />
         </div>
       </Section>
 
@@ -786,6 +856,9 @@ export default function ConfigSections({
       {showMoney && (
         <div className={show("money")}>
           <MonetizationSections cfg={cfg} set={set} clone={clone} />
+          {/* Monetization sequence (migration 056) — its own file, see
+              components/clone/MonetizationSequenceFields.tsx. */}
+          <MonetizationSequenceFields clone={clone} />
         </div>
       )}
     </div>
@@ -869,16 +942,19 @@ export function MonetizationSections({
           </div>
           <div>
             <Toggle label="Smart first message" hint="Only the very first time a fan runs out, she writes a personal line referencing the chat. Off = the default message is used every time." name="smart_paywall_enabled" checked={cfg.smartPaywall} onChange={(v) => set("smartPaywall", v)} accent="soft" />
+            {/* Real submitted field is this unconditional hidden input, same pattern
+                as smart_split / voice_speaker_boost / subscriptions_enabled below.
+                It always carries the true value regardless of whether the visible
+                toggle is mounted, so hiding it when smartPaywall is off can never
+                drop the stored value on Save. The visible Toggle below uses a
+                differently-named field (never read by the server) purely for its
+                checked/onChange UI. */}
+            <input type="hidden" name="paywall_as_voice" value={String(cfg.paywallVoice)} />
             {cfg.smartPaywall && (
               <div className="mt-1.5">
-                <Toggle label="As voice note" hint="Sends that first personal out-of-credits line as a voice note instead of text." name="paywall_as_voice" checked={cfg.paywallVoice} onChange={(v) => set("paywallVoice", v)} accent="soft" />
+                <Toggle label="As voice note" hint="Sends that first personal out-of-credits line as a voice note instead of text." name="_paywall_as_voice_toggle" checked={cfg.paywallVoice} onChange={(v) => set("paywallVoice", v)} accent="soft" />
               </div>
             )}
-            {/* Toggle above unmounts (and its hidden input with it) when smartPaywall
-                is off, so paywall_as_voice would be missing from the form entirely and
-                get saved as false — silently discarding the real value. Keep it in the
-                submitted form either way. */}
-            {!cfg.smartPaywall && <input type="hidden" name="paywall_as_voice" value={String(cfg.paywallVoice)} />}
             <div className="mt-3">
               <Area
                 label="Paywall steer"

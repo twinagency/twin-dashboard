@@ -15,6 +15,11 @@ export default function StarAmount({
   moneyClassName?: string;
 }) {
   const { currency, rate } = useCurrency();
+  // 0 stars is always free, everywhere this renders. Matches the bot runtime,
+  // which only ever sends a media item unlocked at a price of 0 (flows/media.ts).
+  if (stars <= 0) {
+    return <span className={className ?? "text-good"}>Free</span>;
+  }
   const money = fmtMoney(starsToMoneyRate(stars, currency, rate), currency);
   // Money rule: the whole figure (stars + its $ value) renders in the green `good` token.
   return (

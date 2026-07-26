@@ -307,6 +307,9 @@ export function Field({
   required,
   hint,
   secret,
+  min,
+  max,
+  step,
 }: {
   label: string;
   name: string;
@@ -320,6 +323,12 @@ export function Field({
   // value stays in the input the whole time (defaultValue/form submit are
   // unaffected), this is a visual mask only, not access control.
   secret?: boolean;
+  // HTML5 bounds for type="number" fields (e.g. a cooldown can't go negative).
+  // Browser-level guardrail only — the real clamp always happens server-side
+  // too (rowFromForm), since a client control is never the source of truth.
+  min?: number;
+  max?: number;
+  step?: number;
 }) {
   return (
     <label className="block">
@@ -330,6 +339,9 @@ export function Field({
         required={required}
         placeholder={placeholder}
         defaultValue={defaultValue ?? undefined}
+        min={type === "number" ? min : undefined}
+        max={type === "number" ? max : undefined}
+        step={type === "number" ? step : undefined}
         className={inputCls + (secret ? " blur-[3px] transition-[filter] duration-150 focus:blur-none" : "")}
       />
     </label>

@@ -21,6 +21,8 @@ const PAGE_LABELS: Record<string, string> = {
   "/settings": "Settings",
   "/feedback": "Feedback",
   "/feedback/new": "Feedback",
+  "/notifications": "Notifications",
+  "/changelog": "What's new",
   "/admin/submissions": "New Form Submissions",
   "/admin/clients": "Client Database",
   "/admin/todo": "Team To Do",

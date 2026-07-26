@@ -4,7 +4,7 @@ import { Card } from "@/components/ui/card";
 import { AutoRefresh } from "./AutoRefresh";
 import { LogFilters } from "./LogFilters";
 import { LogsTable, type LogRow } from "./LogsTable";
-import { CLAIMED_SOURCES, SYSTEM_SOURCE_BUCKETS, techForSystemSource, techForUsageKind, type Tech } from "./tech";
+import { CLAIMED_SOURCES, KIND_LABEL, SYSTEM_SOURCE_BUCKETS, techForSystemSource, techForUsageKind, type Tech } from "./tech";
 
 export const dynamic = "force-dynamic";
 
@@ -85,10 +85,13 @@ function systemToRow(r: SystemDbRow): LogRow {
 }
 
 function usageToRow(r: UsageDbRow): LogRow {
-  const cost = r.cost_usd != null ? ` ($${Number(r.cost_usd).toFixed(4)})` : "";
+  // Human headline first ("Voice message generated"), raw kind/model/cost/
+  // tokens stay in `detail` below so nothing is lost, just moved out of the
+  // main line a non-developer has to read every time.
+  const friendly = KIND_LABEL[r.kind] ?? r.kind;
   const message = r.ok
-    ? `${r.kind} call ok: ${r.model ?? "unknown model"}${cost}`
-    : `${r.kind} call failed: ${r.model ?? "unknown model"}${cost}${r.error ? ` ${r.error.slice(0, 200)}` : ""}`;
+    ? `${friendly} generated`
+    : `${friendly} failed${r.error ? `: ${r.error.slice(0, 200)}` : ""}`;
   return {
     key: `u-${r.id}`,
     ts: r.created_at,

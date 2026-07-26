@@ -198,10 +198,14 @@ export default function CloneDefaultsForm({ defaults }: { defaults: Partial<Clon
         </SubCard>
         <div className="flex flex-wrap gap-x-6 gap-y-3">
           <Toggle label="Smart first-time message (she writes it once)" name="smart_paywall_enabled" checked={cfg.smartPaywall} onChange={(v) => set("smartPaywall", v)} accent="soft" />
+          {/* Unconditional hidden input carries the real value, same pattern as
+              smart_split / speaker boost below. The visible toggle uses a
+              differently-named field so mounting/unmounting it can never drop
+              the stored value from the submitted form. */}
+          <input type="hidden" name="paywall_as_voice" value={String(cfg.paywallVoice)} />
           {cfg.smartPaywall && (
-            <Toggle label="Send that first one as a voice note" name="paywall_as_voice" checked={cfg.paywallVoice} onChange={(v) => set("paywallVoice", v)} accent="soft" />
+            <Toggle label="Send that first one as a voice note" name="_paywall_as_voice_toggle" checked={cfg.paywallVoice} onChange={(v) => set("paywallVoice", v)} accent="soft" />
           )}
-          {!cfg.smartPaywall && <input type="hidden" name="paywall_as_voice" value={String(cfg.paywallVoice)} />}
         </div>
         <Area label="Paywall instruction (optional)" name="paywall_instruction" rows={2} placeholder="e.g. be sweet, remind him what he's missing, nudge him to grab more messages" defaultValue={defaults.paywall_instruction} />
       </div>

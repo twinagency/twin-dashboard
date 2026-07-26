@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { Clone, SocialRow } from "@/lib/types";
-import { Area, Collapse, Field, FieldLabel, Segmented, SubHead, TagInput, Toggle, MultiSelect, inputCls, selectCls } from "./fields";
+import { Area, Collapse, Field, FieldLabel, Segmented, SubHead, TagInput, MultiSelect, inputCls, selectCls } from "./fields";
 import { VIBE_PRESETS } from "@/lib/vibes";
 import type { CloneConfigState, SetConfig } from "./useCloneConfig";
 
@@ -153,6 +153,33 @@ const BURST_STYLE_OPTIONS = [
   { value: "short_bursts", label: "A few short bursts" },
 ];
 
+// ── Life canon (migration 060) option lists ───────────────────────────────────
+const LIVING_SITUATION_OPTIONS = [
+  { value: "alone", label: "Lives alone" },
+  { value: "with_roommates", label: "With roommates" },
+  { value: "with_family", label: "With family" },
+  { value: "with_partner", label: "With a partner" },
+  { value: "prefers_not_to_say", label: "Prefers not to say" },
+];
+const HOBBY_SUGGESTIONS: string[] = [
+  "gym", "yoga", "hiking", "gaming", "reading", "cooking", "travel", "photography", "dancing", "movies",
+];
+
+// ── Fleet-wide hard limits (always on, not per-clone) ──────────────────────────
+// Read-only mirror of the NON-NEGOTIABLE LIMITS every clone gets, hardcoded in
+// UNIVERSAL_LIMITS (bot/src/prompt-templates.ts). Never editable here, never
+// gated by a toggle - shown so an operator can see what's always enforced
+// regardless of their own settings. Short phrases, not the verbatim prompt
+// text. KEEP IN SYNC with bot/src/prompt-templates.ts UNIVERSAL_LIMITS.
+const FLEET_HARD_LIMITS: string[] = [
+  "Minors, underage, age-play, or any \"teen\" / \"barely legal\" framing",
+  "Incest, non-consent, rape, drugging, or bestiality",
+  "Extreme or harmful content: real violence, gore, snuff, self-harm or suicide encouragement",
+  "Racism, slurs, hate, or dehumanizing any race, religion, or group",
+  "Sourcing, selling, or glorifying illegal drugs",
+  "Meeting in real life, or sharing her real address, location, finances, or identifying info",
+];
+
 export const CONTENT_DONE_OPTIONS: string[] = [
   "solo",
   "toys",
@@ -183,10 +210,59 @@ function splitLegacyList(v: string | undefined): string[] {
     .filter(Boolean);
 }
 
-// ── Controlled boolean toggle (Toggle needs local state to be uncontrolled-form-friendly) ──
-function Bool({ name, label, initial, hint }: { name: string; label: string; initial: boolean; hint?: string }) {
-  const [checked, setChecked] = useState(initial);
-  return <Toggle label={label} name={name} checked={checked} onChange={setChecked} hint={hint} />;
+// ── Tri-state canon toggle (Yes / No / Not set) ────────────────────────────
+// For nullable identity-canon booleans where null is a real, distinct state
+// (never answered, the bot says nothing about it) and false is a hard
+// negative fact the bot asserts (e.g. "you have no tattoos"). Collapsing
+// null into false in the UI made the bot state facts nobody ever set, see
+// personaFactsBlock() in ../../lib/persona-facts.ts and ../../../bot/src/prompt.ts.
+// Renders NO hidden input at all in the "Not set" state, so the field is
+// simply absent from the submitted form data, matching the
+// `fd.has(name) ? fd.get(name) === "true" : null` pattern in
+// app/clones/actions.ts, which then writes SQL NULL.
+function Tri({
+  name,
+  label,
+  initial,
+  hint,
+}: {
+  name: string;
+  label: string;
+  initial: boolean | null | undefined;
+  hint?: string;
+}) {
+  const [value, setValue] = useState<"yes" | "no" | "unset">(
+    initial === true ? "yes" : initial === false ? "no" : "unset",
+  );
+  const options: { value: "unset" | "yes" | "no"; label: string }[] = [
+    { value: "unset", label: "Not set" },
+    { value: "yes", label: "Yes" },
+    { value: "no", label: "No" },
+  ];
+  return (
+    <div className="block">
+      <FieldLabel label={label} hint={hint} />
+      {value !== "unset" && <input type="hidden" name={name} value={value === "yes" ? "true" : "false"} />}
+      <div className="grid auto-cols-fr grid-flow-col gap-0.5 rounded-lg border border-line bg-bg/60 p-0.5">
+        {options.map((o) => {
+          const active = value === o.value;
+          const activeCls =
+            o.value === "yes" ? "bg-good/20 text-good" : o.value === "no" ? "bg-crit/20 text-crit" : "bg-muted/25 text-ink";
+          return (
+            <button
+              key={o.value}
+              type="button"
+              aria-pressed={active}
+              onClick={() => setValue(o.value)}
+              className={"rounded-md px-2 py-1.5 text-xs font-semibold transition " + (active ? activeCls : "text-muted hover:text-ink")}
+            >
+              {o.label}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
 }
 
 // ── Daily-blocks editor (time + activity rows, hidden JSON) ───────────────────
@@ -293,6 +369,34 @@ function SocialsEditor({ initial }: { initial: SocialRow[] }) {
   );
 }
 
+// ── Fleet-wide hard limits (read-only) ─────────────────────────────────────────
+// Item 4: hard limits were previously invisible in the UI - only the per-clone
+// checklist below showed, while these fleet-wide ones were hardcoded and
+// enforced in every clone's prompt with no way for an operator to even see
+// them. Read-only: no name attribute on anything here, nothing submitted,
+// nothing editable - these are the same for every clone and can only be
+// changed by editing UNIVERSAL_LIMITS in bot/src/prompt-templates.ts.
+function FleetHardLimits() {
+  return (
+    <Collapse
+      emoji="🔒"
+      label="Platform-wide limits (always on)"
+      accent="neutral"
+      filled
+      hint="Same for every clone in the fleet, hardcoded in the shared prompt templates, not editable per clone and not affected by any toggle here. Separate from her personal hard limits below, which are per-clone and editable."
+    >
+      <ul className="grid gap-1.5">
+        {FLEET_HARD_LIMITS.map((l) => (
+          <li key={l} className="flex items-start gap-1.5 text-xs text-muted">
+            <span className="mt-0.5 shrink-0 text-crit">⛔</span>
+            <span>{l}</span>
+          </li>
+        ))}
+      </ul>
+    </Collapse>
+  );
+}
+
 // ── Hard-limits checklist ──────────────────────────────────────────────────────
 function HardLimits({ initial, extraInitial }: { initial: string[]; extraInitial: string }) {
   const [checked, setChecked] = useState<string[]>(initial);
@@ -381,9 +485,10 @@ export default function PersonaFactsFields({
   //   "vibe"         = Vibe & nicknames (+ reaction/texting-rhythm selects)
   //   "behaviour"    = Behaviour policy (migration 039)
   //   "rhythm"       = Daily rhythm (migration 039)
+  //   "life"         = Life & pets: living situation, pets, hobbies (migration 060)
   //   "content"      = Content canon (migration 039)
   //   "imperfection" = Imperfection profile intensity dials (migrations 039 + 042)
-  //   "limits"       = the hard-limits collapse
+  //   "limits"       = fleet-wide hard limits (read-only) + the per-clone hard-limits collapse
   part?:
     | "who"
     | "creator"
@@ -392,6 +497,7 @@ export default function PersonaFactsFields({
     | "vibe"
     | "behaviour"
     | "rhythm"
+    | "life"
     | "content"
     | "imperfection"
     | "limits"
@@ -413,6 +519,23 @@ export default function PersonaFactsFields({
   // value prefills ethnicity_other until the operator saves the new fields.
   const ethnicityOtherInitial = clone?.ethnicity_other ?? clone?.ethnicity ?? "";
   const ethnicityTagsInitial = clone?.ethnicity_tags?.length ? clone.ethnicity_tags : [];
+  // Life canon (migration 060): hobbies was folded into the life_tastes prose
+  // box by the 07-17 audit (LEGACY_MERGE in lib/intake.ts) and is still folded
+  // there today - old free text is never lost. There's no reliable way to
+  // auto-parse a prose blob into structured pet/living-situation facts, so
+  // hobbies alone gets a best-effort legacy prefill here (same pattern as
+  // nicknames/turn_ons above); pets and living situation just start empty.
+  const hobbiesInitial = clone?.hobbies?.length ? clone.hobbies : splitLegacyList(legacy.hobbies);
+  const petDetailsInitial = clone?.pet_details ?? [];
+  // Favorites/catchphrases canon (migration 063). `likes`/`dislikes` were their
+  // own retired intake keys before the life_tastes consolidation (see
+  // LEGACY_MERGE in lib/intake.ts), so they get the same best-effort legacy
+  // chip-split prefill as hobbies above. Catchphrases never had a distinct
+  // legacy key of its own (it only ever lived inside the quirks prose blob,
+  // which can't be reliably auto-split), so it just starts empty.
+  const catchphrasesInitial = clone?.catchphrases ?? [];
+  const favoriteThingsInitial = clone?.favorite_things?.length ? clone.favorite_things : splitLegacyList(legacy.likes);
+  const dislikesInitial = clone?.dislikes?.length ? clone.dislikes : splitLegacyList(legacy.dislikes);
 
   const showWho = part === "who" || part === "all";
   const showCreator = part === "creator" || part === "all";
@@ -421,6 +544,7 @@ export default function PersonaFactsFields({
   const showVibe = part === "vibe" || part === "all";
   const showBehaviour = part === "behaviour" || part === "all";
   const showRhythm = part === "rhythm" || part === "all";
+  const showLife = part === "life" || part === "all";
   const showContent = part === "content" || part === "all";
   const showImperfection = part === "imperfection" || part === "all";
   const showLimits = part === "limits" || part === "all";
@@ -435,17 +559,29 @@ export default function PersonaFactsFields({
     clone?.known_for || clone?.career_history || clone?.platforms?.length,
   );
   const physicalFilled = Boolean(
+    // tattoos/piercings use != null, not truthy-or: an explicit "No" (false)
+    // is a real, set answer just as much as "Yes", and must count as filled
+    // the same way a set select or text field does. Falsy-or would wrongly
+    // treat that explicit false the same as never-answered (null).
     clone?.hair_length || clone?.hair_color || clone?.eye_color || clone?.body_type ||
-    clone?.cup_size || clone?.measurements || clone?.tattoos || clone?.piercings ||
+    clone?.cup_size || clone?.measurements || clone?.tattoos != null || clone?.piercings != null ||
     clone?.enhancements || clone?.voice_accent || clone?.voice_pace || clone?.voice_texture,
   );
+  // Nested-collapse filled dots inside Physical canon (item 2 condense pass).
+  const tattooPiercingDetailsFilled = Boolean(clone?.tattoo_details?.length || clone?.piercing_details?.length);
+  const voiceFilled = Boolean(clone?.voice_accent || clone?.voice_pace || clone?.voice_texture);
   const socialsFilled = Boolean(clone?.socials?.length);
   const vibeFilled = Boolean(
     vibeInitial || nicknamesInitial.length || turnOnsInitial.length || turnOffsInitial.length ||
+    catchphrasesInitial.length ||
     clone?.reaction_to_rudeness || clone?.reaction_to_compliments || clone?.burst_style,
   );
   const behaviourFilled = Boolean(clone?.relationship_canon || clone?.meeting_policy || clone?.love_policy);
   const rhythmFilled = Boolean(clone?.wake_time || clone?.sleep_time || clone?.daily_blocks?.length);
+  const lifeFilled = Boolean(
+    hobbiesInitial.length || clone?.has_pets != null || petDetailsInitial.length || clone?.living_situation ||
+    favoriteThingsInitial.length || dislikesInitial.length || clone?.saving_goal,
+  );
   const contentFilled = Boolean(clone?.content_done?.length || clone?.content_hard_nos?.length);
   const imperfectionFilled =
     cfg.lowercaseLevel !== "never" ||
@@ -608,11 +744,11 @@ export default function PersonaFactsFields({
           placeholder="how she got into it, milestones"
           rows={2}
         />
-        <Bool
+        <Tri
           name="admits_platforms"
           label="Admits her platforms"
-          initial={clone?.admits_platforms ?? false}
-          hint="Off means she deflects if asked which platforms she's on, instead of confirming any"
+          initial={clone?.admits_platforms}
+          hint="Yes means she confirms her platforms if a fan asks. No means she deflects instead of naming any. Not set means she has no fixed policy yet and stays quiet on it."
         />
         <TagInput
           label="Platforms"
@@ -631,9 +767,9 @@ export default function PersonaFactsFields({
         accent="cyan"
         defaultOpen
         filled={physicalFilled}
-        hint="Highest-priority facts on the page. Without these she improvises and contradicts herself between sessions."
+        hint="Highest-priority facts on the page. Without these she improvises and contradicts herself between sessions. Condensed 2026-07-27: tattoo/piercing locations and voice moved into their own nested Collapses below since they're touched far less often than the rest."
       >
-        <div className="grid gap-2 sm:grid-cols-2">
+        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           <label className="block">
             <span className="mb-1 block text-xs text-muted">Hair length</span>
             <select name="hair_length" defaultValue={clone?.hair_length ?? ""} className={selectCls}>
@@ -662,6 +798,8 @@ export default function PersonaFactsFields({
               {BODY_TYPE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
             </select>
           </label>
+        </div>
+        <div className="grid gap-2 sm:grid-cols-3">
           <label className="block">
             <span className="mb-1 block text-xs text-muted">Cup size</span>
             <select name="cup_size" defaultValue={clone?.cup_size ?? ""} className={selectCls}>
@@ -670,10 +808,43 @@ export default function PersonaFactsFields({
             </select>
           </label>
           <Field label="Measurements" name="measurements" defaultValue={clone?.measurements ?? ""} placeholder="34C-26-36" />
+          <label className="block">
+            <span className="mb-1 block text-xs text-muted">Enhancements</span>
+            <select name="enhancements" defaultValue={clone?.enhancements ?? ""} className={selectCls}>
+              <option value="">(not set)</option>
+              {ENHANCEMENTS_OPTIONS.map((o) => (
+                <option key={o.value} value={o.value}>{o.label}</option>
+              ))}
+            </select>
+          </label>
         </div>
+        {/* Tri controls stay always-visible (the fact itself, e.g. "has tattoos:
+            yes/no/not set") - only the free-text location DETAILS, which are
+            filled far less often, move into the nested Collapse below. This is
+            a genuine tri-state (Not set / Yes / No, round-trips SQL NULL), not
+            a two-state toggle - do not regress it. */}
         <div className="grid gap-2 sm:grid-cols-2">
-          <div className="grid gap-1.5">
-            <Bool name="tattoos" label="Has tattoos" initial={clone?.tattoos ?? false} />
+          <Tri
+            name="tattoos"
+            label="Has tattoos"
+            initial={clone?.tattoos}
+            hint="No is a hard fact she'll state (you have no tattoos). Not set means she's never answered, so she says nothing about it either way."
+          />
+          <Tri
+            name="piercings"
+            label="Has piercings"
+            initial={clone?.piercings}
+            hint="No is a hard fact she'll state (you have no piercings). Not set means she's never answered, so she says nothing about it either way."
+          />
+        </div>
+        <Collapse
+          emoji="📍"
+          label="Tattoo / piercing locations"
+          accent="cyan"
+          filled={tattooPiercingDetailsFilled}
+          hint="Optional detail on top of the Yes/No above, e.g. exactly where and what."
+        >
+          <div className="grid gap-2 sm:grid-cols-2">
             <TagInput
               label="Tattoos"
               name="tattoo_details"
@@ -681,9 +852,6 @@ export default function PersonaFactsFields({
               placeholder="small rose, left ankle (Enter to add)"
               hint="Include location, e.g. small rose - left ankle"
             />
-          </div>
-          <div className="grid gap-1.5">
-            <Bool name="piercings" label="Has piercings" initial={clone?.piercings ?? false} />
             <TagInput
               label="Piercings"
               name="piercing_details"
@@ -692,40 +860,38 @@ export default function PersonaFactsFields({
               hint="Include location"
             />
           </div>
-        </div>
-        <label className="block">
-          <span className="mb-1 block text-xs text-muted">Enhancements</span>
-          <select name="enhancements" defaultValue={clone?.enhancements ?? ""} className={selectCls}>
-            <option value="">(not set)</option>
-            {ENHANCEMENTS_OPTIONS.map((o) => (
-              <option key={o.value} value={o.value}>{o.label}</option>
-            ))}
-          </select>
-        </label>
-        <SubHead emoji="🎙️" label="Voice" tip="Mostly supersedes the old free-text 'how she sounds' question. A small remainder for nuance still lives in the questionnaire." />
-        <div className="grid gap-2 sm:grid-cols-3">
-          <label className="block">
-            <span className="mb-1 block text-xs text-muted">Accent</span>
-            <select name="voice_accent" defaultValue={clone?.voice_accent ?? ""} className={selectCls}>
-              <option value="">(not set)</option>
-              {VOICE_ACCENT_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
-            </select>
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-xs text-muted">Pace</span>
-            <select name="voice_pace" defaultValue={clone?.voice_pace ?? ""} className={selectCls}>
-              <option value="">(not set)</option>
-              {VOICE_PACE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
-            </select>
-          </label>
-          <label className="block">
-            <span className="mb-1 block text-xs text-muted">Texture</span>
-            <select name="voice_texture" defaultValue={clone?.voice_texture ?? ""} className={selectCls}>
-              <option value="">(not set)</option>
-              {VOICE_TEXTURE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
-            </select>
-          </label>
-        </div>
+        </Collapse>
+        <Collapse
+          emoji="🎙️"
+          label="Voice"
+          accent="cyan"
+          filled={voiceFilled}
+          hint="Mostly supersedes the old free-text 'how she sounds' question. A small remainder for nuance still lives in the questionnaire."
+        >
+          <div className="grid gap-2 sm:grid-cols-3">
+            <label className="block">
+              <span className="mb-1 block text-xs text-muted">Accent</span>
+              <select name="voice_accent" defaultValue={clone?.voice_accent ?? ""} className={selectCls}>
+                <option value="">(not set)</option>
+                {VOICE_ACCENT_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs text-muted">Pace</span>
+              <select name="voice_pace" defaultValue={clone?.voice_pace ?? ""} className={selectCls}>
+                <option value="">(not set)</option>
+                {VOICE_PACE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </label>
+            <label className="block">
+              <span className="mb-1 block text-xs text-muted">Texture</span>
+              <select name="voice_texture" defaultValue={clone?.voice_texture ?? ""} className={selectCls}>
+                <option value="">(not set)</option>
+                {VOICE_TEXTURE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
+              </select>
+            </label>
+          </div>
+        </Collapse>
       </Collapse>
       )}
 
@@ -781,6 +947,13 @@ export default function PersonaFactsFields({
             placeholder="clinginess, bragging (Enter to add)"
           />
         </div>
+        <TagInput
+          label="Catchphrases"
+          name="catchphrases"
+          initial={catchphrasesInitial}
+          placeholder="omg babe, say less (Enter to add)"
+          hint="Slang or catchphrases only she uses. Pulled out of the free-text quirks question so a fan asking her to 'say her thing' gets a real answer, not an improvisation."
+        />
         <SubHead emoji="🪞" label="Reactions & rhythm" tip="Pulled out of the free-text quirks question so they're deterministic, not LLM-interpreted." />
         <div className="grid gap-2 sm:grid-cols-3">
           <label className="block">
@@ -810,40 +983,40 @@ export default function PersonaFactsFields({
 
       {showBehaviour && (
       <Collapse
-        emoji="🧭"
-        label="Behaviour policy"
+        emoji="💬"
+        label="Relationship stance"
         accent="amber"
         filled={behaviourFilled}
-        hint="Drives actual behaviour, so it's a select, not a prose paragraph the AI has to interpret."
+        hint="Not a general behaviour setting - exactly four specific moments: what she says about her relationship status, what she does if he asks to meet up, what she does if he says he loves you, and whether she admits to chatting with other fans. Each option below changes her actual reply in that moment, not just flavor text. Renamed from 'Behaviour policy' 2026-07-27, that label didn't say what it does."
       >
         <div className="grid gap-2 sm:grid-cols-3">
           <label className="block">
-            <span className="mb-1 block text-xs text-muted">Relationship</span>
+            <FieldLabel label="Relationship status" hint="What she says if he asks whether she's single." />
             <select name="relationship_canon" defaultValue={clone?.relationship_canon ?? ""} className={selectCls}>
               <option value="">(not set)</option>
               {RELATIONSHIP_CANON_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </label>
           <label className="block">
-            <FieldLabel label="If asked to meet" />
+            <FieldLabel label="If asked to meet up" hint="What she does the moment a fan asks to meet in person." />
             <select name="meeting_policy" defaultValue={clone?.meeting_policy ?? ""} className={selectCls}>
               <option value="">(not set)</option>
               {MEETING_POLICY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </label>
           <label className="block">
-            <FieldLabel label="If he says 'love you'" />
+            <FieldLabel label="If he says 'love you'" hint="What she says back the moment a fan says he loves her." />
             <select name="love_policy" defaultValue={clone?.love_policy ?? ""} className={selectCls}>
               <option value="">(not set)</option>
               {LOVE_POLICY_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </label>
         </div>
-        <Bool
+        <Tri
           name="acknowledges_other_fans"
-          label="Chats with other fans"
-          initial={clone?.acknowledges_other_fans ?? false}
-          hint="Off keeps the chat feeling exclusive to him; she never mentions other fans"
+          label="Admits she chats with other fans"
+          initial={clone?.acknowledges_other_fans}
+          hint="Yes means she's open that she chats with lots of fans if it comes up. No means she never mentions other fans, keeping the chat feeling exclusive. Not set means no fixed policy yet."
         />
       </Collapse>
       )}
@@ -862,6 +1035,66 @@ export default function PersonaFactsFields({
         </div>
         <FieldLabel label="Daily blocks" hint="Optional. A rough schedule she can reference naturally (gym, shoots, dinner)." />
         <DailyBlocksEditor initial={clone?.daily_blocks?.length ? clone.daily_blocks : []} />
+      </Collapse>
+      )}
+
+      {showLife && (
+      <Collapse
+        emoji="🏠"
+        label="Life & pets"
+        accent="blue"
+        filled={lifeFilled}
+        hint="Does she live alone, does she have pets - two of the most commonly asked factual questions, pulled out of the life & tastes questionnaire box so they're deterministic, not LLM-interpreted."
+      >
+        <label className="block">
+          <span className="mb-1 block text-xs text-muted">Living situation</span>
+          <select name="living_situation" defaultValue={clone?.living_situation ?? ""} className={selectCls}>
+            <option value="">(not set)</option>
+            {LIVING_SITUATION_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+        </label>
+        <Tri
+          name="has_pets"
+          label="Has pets"
+          initial={clone?.has_pets}
+          hint="No is a hard fact she'll state (you have no pets). Not set means she's never answered, so she says nothing about it either way."
+        />
+        <TagInput
+          label="Pets"
+          name="pet_details"
+          initial={petDetailsInitial}
+          placeholder="cat - Mango (Enter to add)"
+          hint="Species and name, e.g. cat - Mango"
+        />
+        <TagInput
+          label="Hobbies / interests"
+          name="hobbies"
+          initial={hobbiesInitial}
+          placeholder="surfing, true-crime podcasts (Enter to add)"
+          suggestions={HOBBY_SUGGESTIONS}
+        />
+        <div className="grid gap-3 sm:grid-cols-2">
+          <TagInput
+            label="Favorite things"
+            name="favorite_things"
+            initial={favoriteThingsInitial}
+            placeholder="that true-crime show, tacos (Enter to add)"
+            hint="Specific named shows, music, food she loves. 'What's your favorite show' is one of the most common fan questions there is, name real things."
+          />
+          <TagInput
+            label="Dislikes"
+            name="dislikes"
+            initial={dislikesInitial}
+            placeholder="cardio, cilantro (Enter to add)"
+            hint="Specific things she hates, not chat behaviour (that's Turn-offs above)."
+          />
+        </div>
+        <Field
+          label="Currently saving up for"
+          name="saving_goal"
+          defaultValue={clone?.saving_goal ?? ""}
+          placeholder="a down payment on a house"
+        />
       </Collapse>
       )}
 
@@ -947,7 +1180,10 @@ export default function PersonaFactsFields({
       )}
 
       {showLimits && (
-        <HardLimits initial={clone?.hard_limits ?? []} extraInitial={hardLimitsExtraInitial} />
+        <>
+          <FleetHardLimits />
+          <HardLimits initial={clone?.hard_limits ?? []} extraInitial={hardLimitsExtraInitial} />
+        </>
       )}
     </>
   );

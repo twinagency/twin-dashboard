@@ -43,6 +43,18 @@ export type Clone = {
   read_receipts_enabled: boolean;
   message_effects_enabled: boolean;
   ai_disclosure: boolean;
+  // Opt-in per-clone auto-block on a safety-guard breach (migration 047),
+  // consumed by src/safety.ts. Superseded by the four per-category columns
+  // below (migration 061); no longer written by the UI, kept read-only so an
+  // old row's value can still seed the new toggles' initial state.
+  auto_block_enabled: boolean;
+  // Per-category auto-block (migration 061): lets an operator always
+  // auto-block MINOR (the most serious category) while leaving a softer one
+  // like JAILBREAK as log-only for manual review.
+  auto_block_minor?: boolean;
+  auto_block_hate?: boolean;
+  auto_block_illegal?: boolean;
+  auto_block_jailbreak?: boolean;
   emojis_enabled: boolean;
   emoji_amount: "low" | "medium" | "high";
   emoji_allowlist: string | null;
@@ -127,6 +139,18 @@ export type Clone = {
   wake_time?: string | null;
   sleep_time?: string | null;
   daily_blocks?: { time: string; activity: string }[] | null;
+
+  // ── life canon (migration 060) ──────────────────────────────────────────────
+  hobbies?: string[] | null;
+  has_pets?: boolean | null;
+  pet_details?: string[] | null;
+  living_situation?: "alone" | "with_roommates" | "with_family" | "with_partner" | "prefers_not_to_say" | null;
+
+  // ── favorites/catchphrases canon (migration 063) ──────────────────────────────
+  catchphrases?: string[] | null;
+  favorite_things?: string[] | null;
+  dislikes?: string[] | null;
+  saving_goal?: string | null;
 
   content_hard_nos?: string[] | null;
   content_done?: string[] | null;
@@ -245,6 +269,25 @@ export type Clone = {
   // message instead of a fixed style (off by default).
   max_response_words: number | null;
   match_user_length: boolean;
+
+  // Monetization sequence (migration 056). Optional: absent pre-migration,
+  // same read-defensively convention as the pacing fields above. See
+  // components/clone/MonetizationSequenceFields.tsx for what each one drives.
+  resell_cooldown_minutes?: number;
+  bundle_reengage_seconds?: number;
+  reengage_photo_enabled?: boolean;
+  offer_pending_minutes?: number;
+  offer_redirect_cap?: number;
+  ppv_min_engaged_messages?: number;
+  ppv_cadence_seconds?: number;
+  ppv_cooldown_minutes?: number;
+  discount_slowdown_minutes?: number;
+  paywall_warmup_messages?: number;
+  paywall_unlock_bonus_photo?: boolean;
+  prelock_tease_before?: number;
+  postlock_reengage_enabled?: boolean;
+  postlock_curiosity1_minutes?: number;
+  postlock_curiosity2_minutes?: number;
 
   intake: { answers?: string; fields?: Record<string, string> } | null;
   persona: Record<string, string> | null;

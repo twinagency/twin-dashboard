@@ -143,6 +143,144 @@ export async function orChatWithTools(opts: {
   throw new Error("OpenRouter: tool-call loop exceeded max iterations");
 }
 
+// ── Streaming tool-calling chat ───────────────────────────────────────────────
+// Same wire format and tool-call loop as orChatWithTools above, but streams
+// text tokens back as they arrive instead of blocking for the whole answer,
+// and surfaces tool-call activity as it happens (so a UI can show "checking
+// top spenders..." instead of a static "thinking" spinner). Used by the /ai
+// assistant's streaming route (app/api/ai-assistant/route.ts).
+export type OrStreamEvent =
+  | { type: "token"; text: string }
+  | { type: "tool_call"; name: string }
+  | { type: "tool_result"; name: string; result: unknown }
+  | { type: "done" }
+  | { type: "error"; message: string };
+
+type StreamToolCallAcc = { id: string; name: string; arguments: string };
+
+export async function* orChatWithToolsStream(opts: {
+  model: string;
+  system?: string;
+  messages: { role: "user" | "assistant"; content: string }[];
+  tools: OrToolDef[];
+  executeTool: (name: string, args: Record<string, unknown>) => Promise<unknown>;
+  maxIterations?: number;
+  temperature?: number;
+}): AsyncGenerator<OrStreamEvent, void, unknown> {
+  const key = process.env.OPENROUTER_API_KEY;
+  if (!key) {
+    yield { type: "error", message: "OPENROUTER_API_KEY missing" };
+    return;
+  }
+
+  const history: OrMessage[] = [
+    ...(opts.system ? [{ role: "system" as const, content: opts.system }] : []),
+    ...opts.messages,
+  ];
+
+  const maxIterations = opts.maxIterations ?? 6;
+  for (let i = 0; i < maxIterations; i++) {
+    let res: Response;
+    try {
+      res = await fetch(URL, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
+        body: JSON.stringify({
+          model: opts.model,
+          messages: history,
+          tools: opts.tools,
+          temperature: opts.temperature ?? 0.3,
+          stream: true,
+        }),
+      });
+    } catch (e) {
+      yield { type: "error", message: e instanceof Error ? e.message : "network error" };
+      return;
+    }
+
+    if (!res.ok || !res.body) {
+      yield { type: "error", message: `OpenRouter ${res.status}: ${await res.text().catch(() => "")}` };
+      return;
+    }
+
+    let content = "";
+    const toolCallAcc = new Map<number, StreamToolCallAcc>();
+    let finishReason: string | null = null;
+
+    const reader = res.body.getReader();
+    const decoder = new TextDecoder();
+    let buf = "";
+    for (;;) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buf += decoder.decode(value, { stream: true });
+      const events = buf.split("\n\n");
+      buf = events.pop() ?? "";
+      for (const evt of events) {
+        const line = evt.split("\n").find((l) => l.startsWith("data:"));
+        if (!line) continue;
+        const payload = line.slice(5).trim();
+        if (payload === "[DONE]") continue;
+        let parsed: any;
+        try {
+          parsed = JSON.parse(payload);
+        } catch {
+          continue;
+        }
+        const delta = parsed?.choices?.[0]?.delta;
+        const fr = parsed?.choices?.[0]?.finish_reason;
+        if (fr) finishReason = fr;
+        if (typeof delta?.content === "string" && delta.content) {
+          content += delta.content;
+          yield { type: "token", text: delta.content };
+        }
+        if (Array.isArray(delta?.tool_calls)) {
+          for (const tc of delta.tool_calls) {
+            const idx = tc.index ?? 0;
+            const cur = toolCallAcc.get(idx) ?? { id: "", name: "", arguments: "" };
+            if (tc.id) cur.id = tc.id;
+            if (tc.function?.name) cur.name = tc.function.name;
+            if (typeof tc.function?.arguments === "string") cur.arguments += tc.function.arguments;
+            toolCallAcc.set(idx, cur);
+          }
+        }
+      }
+    }
+
+    if (toolCallAcc.size === 0) {
+      yield { type: "done" };
+      return;
+    }
+
+    const toolCalls: OrToolCall[] = [...toolCallAcc.values()]
+      .filter((t) => t.id && t.name)
+      .map((t) => ({ id: t.id, type: "function", function: { name: t.name, arguments: t.arguments } }));
+
+    history.push({ role: "assistant", content: content || null, tool_calls: toolCalls });
+
+    for (const call of toolCalls) {
+      yield { type: "tool_call", name: call.function.name };
+      let args: Record<string, unknown> = {};
+      try {
+        args = JSON.parse(call.function.arguments || "{}");
+      } catch {
+        // malformed args → let the tool see an empty object rather than throwing
+      }
+      let result: unknown;
+      try {
+        result = await opts.executeTool(call.function.name, args);
+      } catch (e) {
+        result = { error: e instanceof Error ? e.message : "tool failed" };
+      }
+      yield { type: "tool_result", name: call.function.name, result };
+      history.push({ role: "tool", tool_call_id: call.id, content: JSON.stringify(result) });
+    }
+    void finishReason; // only used implicitly via tool_calls presence above
+  }
+
+  yield { type: "error", message: "OpenRouter: tool-call loop exceeded max iterations" };
+}
+
 export async function orChat(opts: {
   model: string;
   system?: string;

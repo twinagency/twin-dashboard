@@ -121,7 +121,7 @@ function initial(clone?: Partial<Clone>): CloneConfigState {
     smartSplit: clone?.smart_split ?? true,
 
     photosEnabled: clone?.photos_enabled ?? true,
-    videosEnabled: clone?.videos_enabled ?? false,
+    videosEnabled: clone?.videos_enabled ?? true,
     videoVision: clone?.video_vision_enabled ?? true,
     photoVision: clone?.photo_vision_enabled ?? true,
     bundlesEnabled: clone?.bundles_enabled ?? true,
