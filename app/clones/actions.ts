@@ -31,20 +31,52 @@ function structuredFactsFromForm(fd: FormData): Record<string, string> {
     .map((s) => `${s.platform} ${s.handle}${s.followers ? ` (${s.followers} followers)` : ""}`)
     .join(", ");
   const vibe = vibePresetFor(str(fd, "vibe_preset"));
+  const heritage = [...parseJsonStringArray(fd, "ethnicity_tags"), str(fd, "ethnicity_other") ?? ""]
+    .filter(Boolean)
+    .join(", ");
+  const dailyBlocks = parseDailyBlocks(fd)
+    .map((b) => `${b.time ? `${b.time} ` : ""}${b.activity}`)
+    .join("; ");
   return {
     "Date of birth": str(fd, "date_of_birth") ?? "",
     Gender: str(fd, "gender") ?? "",
     Height: str(fd, "height") ?? "",
-    "Ethnicity / heritage": str(fd, "ethnicity") ?? "",
+    "Ethnicity / heritage": heritage,
     Sexuality: str(fd, "sexuality") ?? "",
     Hometown: str(fd, "hometown") ?? "",
     "Current city": str(fd, "current_city") ?? "",
-    "Job (what she tells fans)": str(fd, "occupation") ?? "",
+    "Stage name": str(fd, "stage_name") ?? "",
+    "Real name": str(fd, "real_name") ?? "",
+    "Name shared with fans": str(fd, "name_shared_with_fans") ?? "",
+    "Creator type": str(fd, "creator_type") ?? "",
+    "Known for": str(fd, "known_for") ?? "",
+    "Career start year": str(fd, "career_start_year") ?? "",
+    "Career history": str(fd, "career_history") ?? "",
+    "Cover story": str(fd, "cover_story") ?? "",
+    "Platforms she admits": fd.get("admits_platforms") === "true" ? parseJsonStringArray(fd, "platforms").join(", ") : "",
+    Hair: [str(fd, "hair_length"), str(fd, "hair_color")].filter(Boolean).join(" "),
+    Eyes: str(fd, "eye_color") ?? "",
+    "Body type": str(fd, "body_type") ?? "",
+    Figure: [str(fd, "cup_size"), str(fd, "measurements")].filter(Boolean).join(", "),
+    Tattoos: fd.get("tattoos") === "true" ? parseJsonStringArray(fd, "tattoo_details").join("; ") || "yes" : "none",
+    Piercings: fd.get("piercings") === "true" ? parseJsonStringArray(fd, "piercing_details").join("; ") || "yes" : "none",
+    Enhancements: str(fd, "enhancements") ?? "",
+    Voice: [str(fd, "voice_accent"), str(fd, "voice_pace"), str(fd, "voice_texture")].filter(Boolean).join(", "),
+    "Relationship status": str(fd, "relationship_canon") ?? "",
+    "If he asks to meet up": str(fd, "meeting_policy") ?? "",
+    "If he says I love you": str(fd, "love_policy") ?? "",
     "Social handles": socials,
     "Pet names she calls fans": parseJsonStringArray(fd, "fan_nicknames").join(", "),
     "Vibe / archetype": vibe && vibe.value !== "custom" ? `${vibe.label} (${vibe.blurb})` : "",
     "Turn-ons": parseJsonStringArray(fd, "turn_ons").join(", "),
     "Turn-offs": parseJsonStringArray(fd, "turn_offs").join(", "),
+    "Reaction to rudeness": str(fd, "reaction_to_rudeness") ?? "",
+    "Reaction to compliments": str(fd, "reaction_to_compliments") ?? "",
+    "Message burst style": str(fd, "burst_style") ?? "",
+    "Wake / sleep time": [str(fd, "wake_time"), str(fd, "sleep_time")].filter(Boolean).join(" - "),
+    "Daily blocks": dailyBlocks,
+    "Content she's done": parseJsonStringArray(fd, "content_done").join(", "),
+    "Content hard nos": parseJsonStringArray(fd, "content_hard_nos").join(", "),
     "Hard limits (checklist)": parseJsonStringArray(fd, "hard_limits").join(", "),
     "Hard limits (extra)": str(fd, "hard_limits_extra") ?? "",
   };
@@ -114,6 +146,23 @@ function parseSocials(fd: FormData): { platform: string; handle: string; followe
         };
       })
       .filter((s) => s.handle !== "");
+  } catch {
+    return [];
+  }
+}
+
+// Daily-rhythm blocks (migration 039) arrive as a JSON string in a hidden
+// field. Coerce + clean (drop rows without an activity).
+function parseDailyBlocks(fd: FormData): { time: string; activity: string }[] {
+  const raw = fd.get("daily_blocks");
+  if (!raw) return [];
+  try {
+    const arr = JSON.parse(String(raw));
+    if (!Array.isArray(arr)) return [];
+    return arr
+      .filter((b) => b && typeof b === "object")
+      .map((b) => ({ time: String(b.time ?? "").trim(), activity: String(b.activity ?? "").trim() }))
+      .filter((b) => b.activity !== "");
   } catch {
     return [];
   }
@@ -234,6 +283,7 @@ function rowFromForm(fd: FormData) {
     photos_enabled: fd.get("photos_enabled") === "true",
     videos_enabled: fd.get("videos_enabled") === "true",
     video_vision_enabled: fd.get("video_vision_enabled") === "true",
+    photo_vision_enabled: fd.get("photo_vision_enabled") === "true",
     bundles_enabled: fd.get("bundles_enabled") === "true",
     voice_enabled: fd.get("voice_enabled") === "true",
     charge_messages: fd.get("charge_messages") === "true",
@@ -267,16 +317,19 @@ function rowFromForm(fd: FormData) {
     // Structured persona facts (migration 033) — only when the widgets were on
     // the form (PersonaFactsFields renders the persona_facts marker). If the DB
     // columns don't exist yet, the save retries without them (see writeClone).
+    // NOTE: `ethnicity` and `occupation` (migration 033) are deliberately NOT
+    // written here anymore — they're retired legacy read-only sources (see
+    // PersonaFactsFields.tsx prefills), so omitting them from the payload
+    // leaves whatever value is already in the DB untouched instead of nulling
+    // it out on every save.
     ...(fd.has("persona_facts")
       ? {
           date_of_birth: str(fd, "date_of_birth"),
           gender: str(fd, "gender"),
           height: str(fd, "height"),
-          ethnicity: str(fd, "ethnicity"),
           sexuality: str(fd, "sexuality"),
           hometown: str(fd, "hometown"),
           current_city: str(fd, "current_city"),
-          occupation: str(fd, "occupation"),
           socials: parseSocials(fd),
           fan_nicknames: parseJsonStringArray(fd, "fan_nicknames"),
           vibe_preset: str(fd, "vibe_preset"),
@@ -284,6 +337,64 @@ function rowFromForm(fd: FormData) {
           turn_offs: parseJsonStringArray(fd, "turn_offs"),
           hard_limits: parseJsonStringArray(fd, "hard_limits"),
           hard_limits_extra: str(fd, "hard_limits_extra"),
+
+          // ── identity canon (migration 039) ──────────────────────────────
+          stage_name: str(fd, "stage_name"),
+          real_name: str(fd, "real_name"),
+          name_shared_with_fans: str(fd, "name_shared_with_fans"),
+
+          creator_type: str(fd, "creator_type"),
+          known_for: str(fd, "known_for"),
+          career_start_year: numOrNull(fd, "career_start_year"),
+          career_history: str(fd, "career_history"),
+          cover_story: str(fd, "cover_story"),
+          admits_platforms: fd.has("admits_platforms") ? fd.get("admits_platforms") === "true" : null,
+          platforms: parseJsonStringArray(fd, "platforms"),
+
+          hair_color: str(fd, "hair_color"),
+          hair_length: str(fd, "hair_length"),
+          eye_color: str(fd, "eye_color"),
+          body_type: str(fd, "body_type"),
+          cup_size: str(fd, "cup_size"),
+          measurements: str(fd, "measurements"),
+          tattoos: fd.has("tattoos") ? fd.get("tattoos") === "true" : null,
+          tattoo_details: parseJsonStringArray(fd, "tattoo_details"),
+          piercings: fd.has("piercings") ? fd.get("piercings") === "true" : null,
+          piercing_details: parseJsonStringArray(fd, "piercing_details"),
+          enhancements: str(fd, "enhancements"),
+          ethnicity_tags: parseJsonStringArray(fd, "ethnicity_tags"),
+          ethnicity_other: str(fd, "ethnicity_other"),
+          voice_accent: str(fd, "voice_accent"),
+          voice_pace: str(fd, "voice_pace"),
+          voice_texture: str(fd, "voice_texture"),
+
+          meeting_policy: str(fd, "meeting_policy"),
+          love_policy: str(fd, "love_policy"),
+          relationship_canon: str(fd, "relationship_canon"),
+          acknowledges_other_fans: fd.has("acknowledges_other_fans") ? fd.get("acknowledges_other_fans") === "true" : null,
+
+          wake_time: str(fd, "wake_time"),
+          sleep_time: str(fd, "sleep_time"),
+          daily_blocks: parseDailyBlocks(fd),
+
+          content_hard_nos: parseJsonStringArray(fd, "content_hard_nos"),
+          content_done: parseJsonStringArray(fd, "content_done"),
+
+          reaction_to_rudeness: str(fd, "reaction_to_rudeness"),
+          reaction_to_compliments: str(fd, "reaction_to_compliments"),
+          burst_style: str(fd, "burst_style"),
+
+          uses_lowercase: fd.has("uses_lowercase") ? fd.get("uses_lowercase") === "true" : null,
+          drops_punctuation: fd.has("drops_punctuation") ? fd.get("drops_punctuation") === "true" : null,
+          makes_typos: fd.has("makes_typos") ? fd.get("makes_typos") === "true" : null,
+          double_texts: fd.has("double_texts") ? fd.get("double_texts") === "true" : null,
+
+          // Imperfection profile as an intensity (migration 042) — supersedes
+          // the booleans above once set.
+          lowercase_level: str(fd, "lowercase_level"),
+          punctuation_drop_level: str(fd, "punctuation_drop_level"),
+          typo_level: str(fd, "typo_level"),
+          double_text_level: str(fd, "double_text_level"),
         }
       : {}),
 
@@ -335,6 +446,34 @@ function rowFromForm(fd: FormData) {
     response_wait_max: num(fd, "response_wait_max", 0),
     memory_window: Math.min(100, Math.max(1, num(fd, "memory_window", 24))),
 
+    // Response pacing (migration 041) — every value defaults to whatever
+    // reproduces today's exact behavior (instant read, continuous typing,
+    // flat wait, ~3s batch window) so an untouched clone never changes.
+    read_delay_min: num(fd, "read_delay_min", 0),
+    read_delay_max: num(fd, "read_delay_max", 0),
+    typing_stutter_enabled: fd.get("typing_stutter_enabled") === "true",
+    typing_stutter_min_pause: num(fd, "typing_stutter_min_pause", 1),
+    typing_stutter_max_pause: num(fd, "typing_stutter_max_pause", 3),
+    // 0 → null: pacing_ramp_messages null/0 means the ramp feature is OFF.
+    pacing_ramp_messages: (() => {
+      const n = num(fd, "pacing_ramp_messages", 0);
+      return n > 0 ? n : null;
+    })(),
+    pacing_new_wait_min: num(fd, "pacing_new_wait_min", 0),
+    pacing_new_wait_max: num(fd, "pacing_new_wait_max", 0),
+    pacing_established_wait_min: num(fd, "pacing_established_wait_min", 0),
+    pacing_established_wait_max: num(fd, "pacing_established_wait_max", 0),
+    batch_wait_min: num(fd, "batch_wait_min", 3),
+    batch_wait_max: num(fd, "batch_wait_max", 3),
+
+    // response length (migrations 037/038). Blank or 0 → null (unlimited); the DB
+    // column has a `> 0` check constraint, so 0 must never be written literally.
+    max_response_words: (() => {
+      const n = numOrNull(fd, "max_response_words");
+      return n && n > 0 ? n : null;
+    })(),
+    match_user_length: fd.get("match_user_length") === "true",
+
     // Prompts: only included when the form actually sends them (the review/edit
     // form does; the create form doesn't — there the compile step fills them).
     ...(fd.has("text_prompt") ? { text_prompt: str(fd, "text_prompt") } : {}),
@@ -344,19 +483,59 @@ function rowFromForm(fd: FormData) {
   };
 }
 
-// The migration-033 columns. Pre-migration (columns absent) a write including
-// them fails with PostgREST's missing-column error — writeClone retries without
-// them so a save never crashes; the typed facts just aren't persisted until
-// migration 033 is applied.
+// Columns from migrations that may not be applied to this Supabase project yet.
+// Pre-migration (columns absent) a write including them fails with PostgREST's
+// missing-column error — writeClone retries without them so a save never
+// crashes; those fields just aren't persisted until the migration is applied.
+// (`ethnicity`/`occupation` aren't in `rowFromForm`'s payload anymore, but are
+// harmless to keep listed here in case anything still references them.)
 const PERSONA_FACT_COLUMNS = [
   "date_of_birth", "gender", "height", "ethnicity", "sexuality", "hometown",
   "current_city", "occupation", "socials", "fan_nicknames", "vibe_preset",
   "turn_ons", "turn_offs", "hard_limits", "hard_limits_extra",
 ] as const;
+// Migrations 037/038 — response length. See db/migrations in the bot repo.
+const RESPONSE_LENGTH_COLUMNS = ["max_response_words", "match_user_length"] as const;
+// Migration 039 — identity canon. See bot/db/migrations/039_identity_canon.sql.
+const IDENTITY_CANON_COLUMNS = [
+  "stage_name", "real_name", "name_shared_with_fans",
+  "creator_type", "known_for", "career_start_year", "career_history", "cover_story",
+  "admits_platforms", "platforms",
+  "hair_color", "hair_length", "eye_color", "body_type", "cup_size", "measurements",
+  "tattoos", "tattoo_details", "piercings", "piercing_details", "enhancements",
+  "ethnicity_tags", "ethnicity_other", "voice_accent", "voice_pace", "voice_texture",
+  "meeting_policy", "love_policy", "relationship_canon", "acknowledges_other_fans",
+  "wake_time", "sleep_time", "daily_blocks",
+  "content_hard_nos", "content_done",
+  "reaction_to_rudeness", "reaction_to_compliments", "burst_style",
+  "uses_lowercase", "drops_punctuation", "makes_typos", "double_texts",
+] as const;
+// Migration 040 — photo vision toggle. See bot/db/migrations/040_photo_vision_toggle.sql.
+const PHOTO_VISION_COLUMNS = ["photo_vision_enabled"] as const;
+// Migration 041 — response pacing. See bot/db/migrations/041_response_pacing.sql.
+const RESPONSE_PACING_COLUMNS = [
+  "read_delay_min", "read_delay_max",
+  "typing_stutter_enabled", "typing_stutter_min_pause", "typing_stutter_max_pause",
+  "pacing_new_wait_min", "pacing_new_wait_max",
+  "pacing_established_wait_min", "pacing_established_wait_max", "pacing_ramp_messages",
+  "batch_wait_min", "batch_wait_max",
+] as const;
+// Migration 042 — imperfection profile levels. See bot/db/migrations/042_imperfection_levels.sql.
+const IMPERFECTION_LEVEL_COLUMNS = [
+  "lowercase_level", "punctuation_drop_level", "typo_level", "double_text_level",
+] as const;
+const OPTIONAL_COLUMNS = [
+  ...PERSONA_FACT_COLUMNS,
+  ...RESPONSE_LENGTH_COLUMNS,
+  ...IDENTITY_CANON_COLUMNS,
+  ...PHOTO_VISION_COLUMNS,
+  ...RESPONSE_PACING_COLUMNS,
+  ...IMPERFECTION_LEVEL_COLUMNS,
+] as const;
 
 function withoutPersonaFactColumns(row: Record<string, unknown>): Record<string, unknown> {
   const copy = { ...row };
-  for (const c of PERSONA_FACT_COLUMNS) delete copy[c];
+  for (const c of OPTIONAL_COLUMNS) delete copy[c];
   return copy;
 }
 

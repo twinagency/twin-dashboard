@@ -31,6 +31,7 @@ export type Clone = {
   photos_enabled: boolean;
   videos_enabled: boolean;
   video_vision_enabled: boolean;
+  photo_vision_enabled: boolean;
   bundles_enabled: boolean;
   voice_enabled: boolean;
   charge_messages: boolean;
@@ -66,10 +67,17 @@ export type Clone = {
   date_of_birth?: string | null;
   gender?: string | null;
   height?: string | null;
+  // `ethnicity` (migration 033) is now a LEGACY read-only source only, kept
+  // for the ethnicity_other prefill (see PersonaFactsFields.tsx); never
+  // written by the current UI. ethnicity_tags/ethnicity_other (migration 039)
+  // are the live columns.
   ethnicity?: string | null;
   sexuality?: string | null;
   hometown?: string | null;
   current_city?: string | null;
+  // `occupation` (migration 033) is now a LEGACY read-only source only, kept
+  // for the cover_story prefill (see PersonaFactsFields.tsx); never written
+  // by the current UI. creator_type/cover_story (migration 039) supersede it.
   occupation?: string | null;
   socials?: SocialRow[] | null;
   fan_nicknames?: string[] | null;
@@ -78,6 +86,66 @@ export type Clone = {
   turn_offs?: string[] | null;
   hard_limits?: string[] | null;
   hard_limits_extra?: string | null;
+
+  // ── identity canon (migration 039) ──────────────────────────────────────────
+  // Same rule as migration 033: optional, typed, injected deterministically in
+  // code, never through the AI compiler. See dashboard/lib/persona-facts.ts.
+  stage_name?: string | null;
+  real_name?: string | null;
+  name_shared_with_fans?: "stage" | "real" | "both" | null;
+
+  creator_type?: string | null;
+  known_for?: string | null;
+  career_start_year?: number | null;
+  career_history?: string | null;
+  cover_story?: string | null;
+  admits_platforms?: boolean | null;
+  platforms?: string[] | null;
+
+  hair_color?: string | null;
+  hair_length?: string | null;
+  eye_color?: string | null;
+  body_type?: string | null;
+  cup_size?: string | null;
+  measurements?: string | null;
+  tattoos?: boolean | null;
+  tattoo_details?: string[] | null;
+  piercings?: boolean | null;
+  piercing_details?: string[] | null;
+  enhancements?: "natural" | "augmented" | "prefers_not_to_say" | null;
+  ethnicity_tags?: string[] | null;
+  ethnicity_other?: string | null;
+  voice_accent?: string | null;
+  voice_pace?: string | null;
+  voice_texture?: string | null;
+
+  meeting_policy?: "hard_no" | "soft_deflect" | "playful_maybe" | null;
+  love_policy?: "says_it_back" | "deflects_warmly" | "playful_dodge" | null;
+  relationship_canon?: "single" | "taken" | "complicated" | "wont_say" | null;
+  acknowledges_other_fans?: boolean | null;
+
+  wake_time?: string | null;
+  sleep_time?: string | null;
+  daily_blocks?: { time: string; activity: string }[] | null;
+
+  content_hard_nos?: string[] | null;
+  content_done?: string[] | null;
+
+  reaction_to_rudeness?: "goes_quiet" | "claps_back" | "playful_scold" | null;
+  reaction_to_compliments?: "deflects" | "teases" | "accepts_warmly" | null;
+  burst_style?: "one_long" | "short_bursts" | null;
+
+  uses_lowercase?: boolean | null;
+  drops_punctuation?: boolean | null;
+  makes_typos?: boolean | null;
+  double_texts?: boolean | null;
+
+  // Imperfection profile as an intensity (migration 042) — supersedes the
+  // booleans above once set; unset falls back to the boolean's old behavior.
+  lowercase_level?: "never" | "sometimes" | "often" | "always" | null;
+  punctuation_drop_level?: "never" | "sometimes" | "often" | "always" | null;
+  typo_level?: "never" | "sometimes" | "often" | "always" | null;
+  double_text_level?: "never" | "sometimes" | "often" | "always" | null;
 
   text_prompt: string | null;
   voice_prompt: string | null;
@@ -154,6 +222,29 @@ export type Clone = {
   response_wait_min: number;
   response_wait_max: number;
   memory_window: number;
+
+  // Response pacing (migration 041). Optional: absent pre-migration (read
+  // defensively with the same fallbacks the bot's mapClone uses, so an
+  // unmigrated project shows "off/flat/instant", exactly today's behavior).
+  read_delay_min?: number;
+  read_delay_max?: number;
+  typing_stutter_enabled?: boolean;
+  typing_stutter_min_pause?: number;
+  typing_stutter_max_pause?: number;
+  pacing_new_wait_min?: number;
+  pacing_new_wait_max?: number;
+  pacing_established_wait_min?: number;
+  pacing_established_wait_max?: number;
+  pacing_ramp_messages?: number | null;
+  batch_wait_min?: number;
+  batch_wait_max?: number;
+
+  // response length (migration 037/038). max_response_words: hard ceiling on
+  // reply length (null/0 = unlimited, always enforced as a last-resort safety
+  // net). match_user_length: scale reply length toward the fan's incoming
+  // message instead of a fixed style (off by default).
+  max_response_words: number | null;
+  match_user_length: boolean;
 
   intake: { answers?: string; fields?: Record<string, string> } | null;
   persona: Record<string, string> | null;
