@@ -197,7 +197,7 @@ export default function CloneForm({
           identityLimitsSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="limits" />}
           identityQuestionnaireSlot={
             <>
-              {/* This is the highest-leverage writing on the page — her voice
+              {/* This is the highest-leverage writing on the page - her voice
                   comes from these answers — so it gets a full card that shows
                   what's inside and how much is filled, not a thin row. The
                   fields live in an overlay to keep the tab short, but they stay
@@ -260,7 +260,7 @@ export default function CloneForm({
           <FlowGraph cfg={flowCfg} />
           <Section
             title={`Live prompt: ${promptPreview.mode === "smart" ? (promptPreview.smartSplit ? "Smart (writer + decider)" : "Smart (one model)") : "Classic"} flow`}
-            hint="Exactly what the bot feeds the model for THIS clone's live flow + toggles. Read-only — change it via Identity or Config, then Save."
+            hint="Exactly what the bot feeds the model for THIS clone's live flow + toggles. Read-only - change it via Identity or Config, then Save."
           >
             {promptPreview.blocks.map((b) => (
               <label key={b.key} className="block">
@@ -282,7 +282,7 @@ export default function CloneForm({
           </Section>
         </div>
 
-        {/* Save bar — shared by Edit (except read-only Flow) + Monetization */}
+        {/* Save bar - shared by Edit (except read-only Flow) + Monetization */}
         <div
           className={
             "flex items-center justify-between gap-4 " +
@@ -312,7 +312,7 @@ export default function CloneForm({
         </div>
       </form>
 
-      {/* ── PPVs (its own page — own top bar, own upload actions) ─── */}
+      {/* ── PPVs (its own page - own top bar, own upload actions) ─── */}
       <div className={tab === "ppvs" ? "grid gap-4" : "hidden"}>
 
         <MediaManager cloneId={clone.id} photos={photos} videos={videos} bundles={bundles} />

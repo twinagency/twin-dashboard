@@ -15,17 +15,13 @@ import { usePathname, useSearchParams } from "next/navigation";
 
 type CloneLite = { id: string; name: string; color: string; photoUrl?: string };
 
-// Configure's own sub-sections, surfaced as quick-jump tiles under the main
-// Configure button — icon big, centered, label below, matching the tab bar
-// on the Configure page itself. Advanced (Prompts/Flow) is deliberately left
-// off the sidebar — still reachable from the tab bar on the page itself.
-// Keys match the Configure page's flat tab bar. Monetize is deliberately NOT a
-// tile any more — money is just one tab inside Edit now, so a separate sidebar
-// entry pointed at a tab that no longer exists as its own section.
-const CONFIGURE_TILES: { key: string; label: string; icon: string; color: LinkColor }[] = [
-  { key: "ppvs", label: "PPVs", icon: "Media", color: "red" },
-  { key: "identity", label: "Edit", icon: "Dials", color: "blue" },
-];
+// One flat nav list, 7 rows total, all in the same row format (icon + label,
+// full width, consistent size). PPVs/Edit are "tab" links into the current
+// clone's Configure page (inert until a clone is picked in the header
+// switcher); everything else is a plain route link.
+type NavLink =
+  | { kind: "route"; label: string; href: string; icon: string; color: LinkColor }
+  | { kind: "tab"; label: string; tab: string; icon: string; color: LinkColor };
 
 function Icon({ d, className = "h-5 w-5" }: { d: string; className?: string }) {
   return (
@@ -68,6 +64,7 @@ const PATHS: Record<string, string> = {
   Inbox:
     '<polyline points="22 12 16 12 14 15 10 15 8 12 2 12"/><path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z"/>',
   Database: '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/>',
+  Bot: '<path d="M12 8V4H8"/><rect x="4" y="8" width="16" height="12" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/>',
   ListChecks: '<path d="M13 5h8"/><path d="M13 12h8"/><path d="M13 19h8"/><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/>',
 };
 
@@ -87,24 +84,14 @@ const LINK_COLOR_CLASSES: Record<LinkColor, { icon: string; active: string; idle
 
 // Each page type appears exactly once — scoped by the header clone switcher,
 // not by a route param.
-const GLOBAL_LINKS: { label: string; href: string; icon: string; color: LinkColor }[] = [
-  { label: "Earnings", href: "/revenue", icon: "EarningsCombo", color: "good" },
-  { label: "Fans", href: "/users", icon: "FansCombo", color: "purple" },
-  { label: "Campaigns", href: "/drip", icon: "Campaigns", color: "pink" },
-];
-
-// Lower-priority pages — smaller, side by side, at the foot of the nav list.
-const MINOR_LINKS: { label: string; href: string; icon: string }[] = [
-  { label: "Info", href: "/info", icon: "Info" },
-  { label: "Logs", href: "/logs", icon: "Logs" },
-];
-
-// Faint left stripe per row — just a quiet visual grouping cue, not tied to
-// the icon/active color system the rest of the nav uses.
-const ADMIN_LINKS: { label: string; href: string; icon: string; stripe: string }[] = [
-  { label: "New Form Submissions", href: "/admin/submissions", icon: "Inbox", stripe: "bg-blue-500/25" },
-  { label: "Client Database", href: "/admin/clients", icon: "Database", stripe: "bg-green-500/25" },
-  { label: "Team To Do", href: "/admin/todo", icon: "ListChecks", stripe: "bg-yellow-500/25" },
+const NAV_LINKS: NavLink[] = [
+  { kind: "route", label: "Earnings", href: "/revenue", icon: "EarningsCombo", color: "good" },
+  { kind: "route", label: "Fans", href: "/users", icon: "FansCombo", color: "purple" },
+  { kind: "route", label: "Campaigns", href: "/drip", icon: "Campaigns", color: "pink" },
+  { kind: "tab", label: "PPVs", tab: "ppvs", icon: "Media", color: "red" },
+  { kind: "tab", label: "Edit", tab: "identity", icon: "Dials", color: "blue" },
+  { kind: "route", label: "Info", href: "/info", icon: "Info", color: "neutral" },
+  { kind: "route", label: "Logs", href: "/logs", icon: "Logs", color: "neutral" },
 ];
 
 export default function Sidebar({
@@ -128,62 +115,51 @@ export default function Sidebar({
         <Link href="/revenue" className="text-2xl font-extrabold tracking-tight text-ink">
           Twin<span className="text-ink">.</span>
         </Link>
-        {/* Static tag only — no popup built yet. Will later open a versioned
+        {/* Static tag only - no popup built yet. Will later open a versioned
             "what's new" panel (see changelog UI idea in memory). */}
         <span className="rounded-full bg-muted/10 px-2 py-1 text-[10px] font-medium text-muted">
           v1.0 beta
         </span>
       </div>
 
-      <nav className="flex flex-1 flex-col overflow-y-auto px-3 py-4">
-        {/* Developer — tiles + regular page nav. Grows to take up most of the
-            sidebar's height; Admin below gets a smaller share, and the
-            footer (outside nav) stays fixed to its own content height.
-            flex + justify-between spreads the 3 content groups down to fill
-            that height instead of leaving them top-packed with dead space
-            below Minor pages. */}
-        <div className="flex flex-[4] flex-col justify-between">
-        {/* Configure — the clone-editing surface. Only meaningful once a
-            single clone is picked in the header switcher; greyed out and
-            inert on "All clones" instead of hidden, so it's discoverable. */}
-        <div className="mb-3 mt-1">
-          <div className="mb-3 text-[11px] font-semibold tracking-wide text-muted">Developer</div>
-          {/* Quick-jump tiles into Configure's own sections — icon big,
-              centered, label below. Each tile has its own icon color; label +
-              tile background pick up that color only once it's active. */}
-          <div className="grid grid-cols-2 divide-x divide-line">
-            {CONFIGURE_TILES.map((t) => {
-              const active = onConfigurePage && activeTab === t.key;
-              const colors = LINK_COLOR_CLASSES[t.color];
-              return activeCloneId ? (
+      <nav className="flex flex-1 flex-col overflow-y-auto px-3 pb-4 pt-6">
+        {/* One flat list, 7 rows, all the same size/format - icon left,
+            label, full-width row, divider between each. PPVs/Edit are tab
+            links into the currently-picked clone's Configure page; greyed
+            out and inert on "All clones" instead of hidden, so they're
+            still discoverable. */}
+        <div className="divide-y divide-line">
+          {NAV_LINKS.map((l) => {
+            const colors = LINK_COLOR_CLASSES[l.color];
+
+            if (l.kind === "tab") {
+              const active = onConfigurePage && activeTab === l.tab;
+              if (!activeCloneId) {
+                return (
+                  <span
+                    key={l.label}
+                    className="flex cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2.5 text-base font-medium text-muted opacity-40"
+                  >
+                    <Icon d={PATHS[l.icon]} className="h-5 w-5" />
+                    {l.label}
+                  </span>
+                );
+              }
+              return (
                 <Link
-                  key={t.key}
-                  href={`/clones/${activeCloneId}?tab=${t.key}`}
+                  key={l.label}
+                  href={`/clones/${activeCloneId}?tab=${l.tab}`}
                   className={
-                    "flex flex-col items-center gap-1.5 rounded-lg px-2 py-4 text-sm font-medium transition " +
+                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-base font-medium transition " +
                     (active ? colors.active : colors.idle)
                   }
                 >
-                  <Icon d={PATHS[t.icon]} className={"h-7 w-7 " + colors.icon} />
-                  {t.label}
+                  <Icon d={PATHS[l.icon]} className={"h-5 w-5 " + colors.icon} />
+                  {l.label}
                 </Link>
-              ) : (
-                <span
-                  key={t.key}
-                  className="flex cursor-not-allowed flex-col items-center gap-1.5 rounded-lg px-2 py-4 text-sm font-medium text-muted opacity-40"
-                >
-                  <Icon d={PATHS[t.icon]} className="h-7 w-7" />
-                  {t.label}
-                </span>
               );
-            })}
-          </div>
-        </div>
+            }
 
-        {/* Global links */}
-        <div className="mb-3 divide-y divide-line">
-          {GLOBAL_LINKS.map((l) => {
-            const colors = LINK_COLOR_CLASSES[l.color];
             const active = isGlobalActive(l.href);
             return (
               <Link
@@ -215,58 +191,9 @@ export default function Sidebar({
             );
           })}
         </div>
-
-        {/* Minor pages — smaller, side by side, out of the main flow. */}
-        <div className="grid grid-cols-2 gap-1.5">
-          {MINOR_LINKS.map((l) => {
-            const active = isGlobalActive(l.href);
-            return (
-              <Link
-                key={l.href}
-                href={l.href}
-                className={
-                  "flex items-center justify-center gap-1.5 rounded-lg px-2 py-1.5 text-xs font-medium transition " +
-                  (active ? LINK_COLOR_CLASSES.neutral.active : LINK_COLOR_CLASSES.neutral.idle)
-                }
-              >
-                <Icon d={PATHS[l.icon]} className="h-3.5 w-3.5 text-muted" />
-                {l.label}
-              </Link>
-            );
-          })}
-        </div>
-        </div>
-
-        {/* Admin — its own section, kept grey/neutral like Info+Logs. Smaller
-            growth share than Developer above (flex-[4] vs flex-[2]).
-            -mx-3 cancels nav's own px-3 so the line runs edge-to-edge, same
-            as the border under the brand header up top. */}
-        <div className="flex-[2] mt-5 -mx-3 border-t border-line">
-          <div className="flex items-center gap-1.5 px-3 pt-6 text-[11px] font-semibold tracking-wide text-muted">
-            Admin
-            <span className="rounded-full bg-muted/10 px-1.5 py-0.5 text-[9px] font-medium normal-case tracking-normal">
-              coming soon
-            </span>
-          </div>
-          {/* Greyed out — not wired up yet, so every row stays inert/muted
-              regardless of route, instead of picking up the active-link color. */}
-          <div className="mt-2 space-y-0.5 px-3 opacity-50">
-            {ADMIN_LINKS.map((l) => (
-              <Link
-                key={l.href}
-                href={l.href}
-                className="flex items-center gap-2.5 rounded-lg py-2.5 pl-2.5 pr-2.5 text-xs font-medium text-muted transition hover:bg-muted/10"
-              >
-                <span className={"h-5 w-1 shrink-0 rounded-full " + l.stripe} />
-                <Icon d={PATHS[l.icon]} className="h-4 w-4 text-muted" />
-                <span className="flex-1">{l.label}</span>
-              </Link>
-            ))}
-          </div>
-        </div>
       </nav>
 
-      {/* Footer — kept compact so Admin above has room to breathe without
+      {/* Footer - kept compact so Admin above has room to breathe without
           forcing the sidebar to scroll. */}
       <div className="space-y-0.5 border-t border-line p-2">
         <Link
@@ -278,6 +205,16 @@ export default function Sidebar({
         >
           <Icon d={PATHS.Settings} className="h-4 w-4" />
           Settings
+        </Link>
+        <Link
+          href="/ai"
+          className={
+            "flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium transition " +
+            (isGlobalActive("/ai") ? LINK_COLOR_CLASSES.neutral.active : "text-muted hover:bg-muted/10 hover:text-ink")
+          }
+        >
+          <Icon d={PATHS.Bot} className="h-4 w-4" />
+          AI
         </Link>
         <span
           className="flex cursor-not-allowed items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium text-muted opacity-50"

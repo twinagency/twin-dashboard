@@ -181,7 +181,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
 
   return (
     <div>
-      {/* ── Period toggle — a segmented control, not tabs: it re-windows the
+      {/* ── Period toggle - a segmented control, not tabs: it re-windows the
           same ledger, it doesn't switch views. Custom range + chart type sit
           alongside it, on the same row. ─────────────────────────────────── */}
       <div className="mb-4 flex flex-wrap items-center gap-2">
@@ -228,7 +228,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
           </button>
         </div>
 
-        {/* Bar / line toggle — same series, different mark. */}
+        {/* Bar / line toggle - same series, different mark. */}
         <div className="inline-flex gap-0.5 rounded-full bg-elev p-0.5">
           <button
             onClick={() => setChartType("bar")}
@@ -304,10 +304,10 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
               <div className="mt-0.5 flex flex-wrap items-start gap-3">
                 <span className="flex items-baseline gap-1.5">
                   <span className="font-mono text-2xl font-bold tabular-nums tracking-tight text-ink sm:text-3xl">
-                    {data ? money(displayStars) : "—"}
+                    {data ? money(displayStars) : "-"}
                   </span>
                   {!customRange && period === "1D" && (
-                    <span className="relative flex h-2 w-2" title="Live — refreshes automatically">
+                    <span className="relative flex h-2 w-2" title="Live - refreshes automatically">
                       <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-good opacity-75" />
                       <span className="relative inline-flex h-2 w-2 rounded-full bg-good" />
                     </span>
@@ -319,7 +319,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
                   <span className="mt-0.5 flex items-baseline gap-1">
                     <span className="text-xs">⭐</span>
                     <span className="font-mono text-sm font-semibold tabular-nums text-ink">
-                      {data ? fmtNum(displayStars) : "—"}
+                      {data ? fmtNum(displayStars) : "-"}
                     </span>
                   </span>
                 </span>
@@ -529,7 +529,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
         )}
       </div>
 
-      {/* ── Fleet/clone stats — same window as the chart above it. A tile
+      {/* ── Fleet/clone stats - same window as the chart above it. A tile
           grid: each stat gets its own card so the row reads at a glance. */}
       {data && (
         <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-6">
@@ -553,10 +553,10 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
               { label: "Rev/user", value: money(revPerUser) },
               { label: "Rev/buyer", value: money(revPerBuyer) },
               { label: "Avg order", value: money(avgOrder) },
-              { label: "Conversion", value: conversion !== null ? pct(conversion) : "—" },
+              { label: "Conversion", value: conversion !== null ? pct(conversion) : "-" },
               { label: "Repeat rate", value: pct(repeatRate) },
               // Short label so the tile never truncates the number away.
-              { label: "Top source", value: topKind && topKind.share > 0 ? `${topKind.label.replace(" (untagged)", "")} ${pct(topKind.share)}` : "—" },
+              { label: "Top source", value: topKind && topKind.share > 0 ? `${topKind.label.replace(" (untagged)", "")} ${pct(topKind.share)}` : "-" },
             ];
             return (
               <>
@@ -566,7 +566,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
                     <div className="mt-1 truncate font-mono text-base font-semibold tabular-nums text-ink">{t.value}</div>
                   </div>
                 ))}
-                {/* Report tile — toggles the full revenue report below the grid. */}
+                {/* Report tile - toggles the full revenue report below the grid. */}
                 <button
                   type="button"
                   onClick={() => setReportOpen((v) => !v)}
@@ -591,7 +591,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
         </div>
       )}
 
-      {/* ── Full revenue report — every useful cut of the same window/scope as
+      {/* ── Full revenue report - every useful cut of the same window/scope as
           the tiles above (data.analytics is fetched with identical period +
           clone params). Toggled by the dashed tile in the stats grid. ─────── */}
       {data && reportOpen && (
@@ -610,7 +610,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
         </div>
       )}
 
-      {/* ── Recent transactions — same scope/window as everything above it.
+      {/* ── Recent transactions - same scope/window as everything above it.
           Server sends up to 300 (fleet-wide, most recent first); scoping to
           one clone filters client-side. Shows 10, "Show more" → 50 → 100. ── */}
       {data && (
@@ -930,7 +930,7 @@ function RevenueReport({
           </ReportPanel>
         </div>
 
-        {/* Which clone / which flow — fleet view only (scoped = one clone already) */}
+        {/* Which clone / which flow - fleet view only (scoped = one clone already) */}
         {!scoped && (
           <div className="grid gap-3 lg:grid-cols-[1fr_280px]">
             <ReportPanel title="By clone" hint="Ranked by revenue. Profit = revenue minus real AI/voice cost.">
@@ -959,7 +959,7 @@ function RevenueReport({
                         </TableCell>
                         <TableCell className="text-right font-mono tabular-nums text-ink">{money(c.revenueStars)}</TableCell>
                         <TableCell className="text-right font-mono tabular-nums text-muted">
-                          {totalStars > 0 ? pct(c.revenueStars / totalStars) : "—"}
+                          {totalStars > 0 ? pct(c.revenueStars / totalStars) : "-"}
                         </TableCell>
                         <TableCell
                           className={"text-right font-mono tabular-nums " + (c.profitUsd < 0 ? "text-crit" : "text-ink")}
@@ -967,7 +967,7 @@ function RevenueReport({
                           {usd(c.profitUsd)}
                         </TableCell>
                         <TableCell className="text-right font-mono tabular-nums text-muted">
-                          {c.revenueStars > 0 ? pct(c.margin) : "—"}
+                          {c.revenueStars > 0 ? pct(c.margin) : "-"}
                         </TableCell>
                         <TableCell className="text-right font-mono tabular-nums text-muted">{fmtNum(c.sales)}</TableCell>
                       </TableRow>
@@ -1179,7 +1179,7 @@ function FunnelRow({
         <span className="text-muted">{label}</span>
         <span className="font-mono font-semibold tabular-nums text-ink">{fmtNum(value)}</span>
       </div>
-      {/* Clamp to 100% — distinct-fan stages can exceed the base (e.g. more
+      {/* Clamp to 100% - distinct-fan stages can exceed the base (e.g. more
           paywall hits than chatters when the window edges split a session). */}
       <div className="h-5 w-full overflow-hidden rounded-md bg-muted/10">
         <div

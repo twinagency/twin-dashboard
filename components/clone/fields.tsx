@@ -66,7 +66,7 @@ export function Section({
   const colCls = cols === 3 ? "sm:grid-cols-3" : cols === 2 ? "sm:grid-cols-2" : "";
   // Hint + tip both live in the header tooltip now — the visible explanatory
   // sentence was costing a line on every card. The ⓘ marks that there's more.
-  const tipText = [hint, tip].filter(Boolean).join(" — ");
+  const tipText = [hint, tip].filter(Boolean).join(" - ");
   return (
     <section
       className={`flex h-full flex-col rounded-xl border border-line border-l-[3px] ${a.bar} bg-panel p-3 text-ink ` + className}
@@ -109,12 +109,15 @@ export function SubHead({
   );
 }
 
-// A group heading that separates the form into scannable bands.
+// A group heading that separates the form into scannable bands. Hint becomes
+// a hoverable ⓘ next to the label, same convention as Section/FieldLabel —
+// it used to render as a permanent grey sentence under the label, which is
+// exactly the "wall of small print" that convention was introduced to kill.
 export function GroupHeader({ label, hint }: { label: string; hint?: string }) {
   return (
-    <div className="mb-1 mt-2 first:mt-0">
+    <div className="mb-1 mt-2 flex items-center gap-1.5 first:mt-0">
       <h2 className="text-xs font-semibold uppercase tracking-widest text-muted">{label}</h2>
-      {hint && <p className="mt-0.5 text-xs text-muted">{hint}</p>}
+      {hint && <Info text={hint} />}
     </div>
   );
 }
@@ -276,6 +279,7 @@ export function Field({
   placeholder,
   required,
   hint,
+  secret,
 }: {
   label: string;
   name: string;
@@ -284,6 +288,11 @@ export function Field({
   placeholder?: string;
   required?: boolean;
   hint?: string;
+  // Blurs the value at rest (bot tokens, voice IDs, anything shoulder-surf
+  // sensitive) — sharpens only while actually focused/editing. The real
+  // value stays in the input the whole time (defaultValue/form submit are
+  // unaffected), this is a visual mask only, not access control.
+  secret?: boolean;
 }) {
   return (
     <label className="block">
@@ -294,7 +303,7 @@ export function Field({
         required={required}
         placeholder={placeholder}
         defaultValue={defaultValue ?? undefined}
-        className={inputCls}
+        className={inputCls + (secret ? " blur-[3px] transition-[filter] duration-150 focus:blur-none" : "")}
       />
     </label>
   );
@@ -574,7 +583,7 @@ export function Advanced({ children, defaultOpen = false }: { children: React.Re
           {open ? "" : "· models, memory, timing, voice tuning"}
         </span>
       </button>
-      {/* Keep children mounted (just hidden) so their form fields always submit —
+      {/* Keep children mounted (just hidden) so their form fields always submit - 
           collapsing must never drop a saved value on Save. */}
       <div className={open ? "grid gap-6" : "hidden"}>{children}</div>
     </div>

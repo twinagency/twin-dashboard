@@ -2,7 +2,7 @@
 
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Field, GroupHeader, Section, Toggle, inputCls } from "@/components/clone/fields";
+import { Area, Field, FieldLabel, GroupHeader, Section, Toggle, inputCls } from "@/components/clone/fields";
 import { saveCampaign } from "./actions";
 
 type MediaRow = {
@@ -42,13 +42,123 @@ const STEP_EMOJI: Record<StepType, string> = Object.fromEntries(
 type Initial = {
   enabled: boolean;
   steps: Step[];
-  // New-fan onboarding, trimmed to the two triggers that matter: a voice note
-  // on message N, and the welcome bundle on message N. (Greeting/voice scripts
-  // and detail-collection are gone — she handles those naturally in chat.)
+  // New-fan onboarding: free-text steer for her first message, a voice note on
+  // message N, the welcome bundle on message N (optionally teased first), the
+  // details she should naturally try to collect, and how long that collection
+  // steer keeps getting nudged before she just chats normally.
+  welcomeInstruction: string | null;
   welcomeBundleAfter: number;
+  welcomeBundleTeased: boolean;
   onboardingVoiceAfter: number | null;
+  onboardingCollectFields: string[];
+  onboardingLength: number;
   followupAfterMinutes: number;
 };
+
+// Predefined onboarding detail keys, in the exact order + keys that
+// bot/src/flows/human.ts's COLLECT_FIELD_PHRASE map uses, so the AI's steer
+// reads naturally ("naturally work out his name, age, ..."). A fan operator can
+// also type a custom key (slugified below) — human.ts falls back to
+// `his ${key.replace(/_/g,' ')}` for anything not in that map.
+const COLLECT_FIELD_CHIPS: { key: string; label: string }[] = [
+  { key: "name", label: "Name" },
+  { key: "age", label: "Age" },
+  { key: "country", label: "Country" },
+  { key: "city", label: "City" },
+  { key: "timezone", label: "Timezone" },
+  { key: "job", label: "Job" },
+  { key: "relationship_status", label: "Relationship status" },
+  { key: "interests", label: "Interests" },
+  { key: "likes", label: "Likes / turn-ons" },
+  { key: "birthday", label: "Birthday" },
+  { key: "language", label: "Language" },
+  { key: "how_found", label: "How he found her" },
+];
+
+// lowercase, spaces/punctuation → underscores, so a typed "shoe size" becomes
+// the key "shoe_size" (reads as "his shoe size" via human.ts's fallback phrasing).
+function slugifyCollectKey(raw: string): string {
+  return raw
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+}
+
+// Chip picker for onboarding_collect_fields: predefined chips toggle on/off,
+// plus a text box to add a custom key. Same chip visual language as STEP_TYPES
+// below. Uncontrolled-by-name isn't possible here (it's an array), so the parent
+// keeps the array in state and JSON-stringifies it into a hidden field on submit
+// (drip_steps in this same file does the identical thing).
+function CollectFieldsPicker({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
+  const [customInput, setCustomInput] = useState("");
+  const toggle = (key: string) =>
+    onChange(value.includes(key) ? value.filter((k) => k !== key) : [...value, key]);
+  const addCustom = () => {
+    const key = slugifyCollectKey(customInput);
+    if (key && !value.includes(key)) onChange([...value, key]);
+    setCustomInput("");
+  };
+  // Any selected key not in the predefined list is a custom one — show it as its
+  // own removable chip so it's visible after being added.
+  const customChips = value.filter((k) => !COLLECT_FIELD_CHIPS.some((c) => c.key === k));
+
+  return (
+    <div className="grid gap-2">
+      <div className="flex flex-wrap gap-1.5">
+        {COLLECT_FIELD_CHIPS.map((c) => {
+          const on = value.includes(c.key);
+          return (
+            <button
+              key={c.key}
+              type="button"
+              onClick={() => toggle(c.key)}
+              className={
+                "rounded-full border px-2.5 py-1 text-xs font-medium transition " +
+                (on ? "border-accent/50 bg-accent/15 text-accent" : "border-line text-ink/70 hover:border-accent/40")
+              }
+            >
+              {c.label}
+            </button>
+          );
+        })}
+        {customChips.map((k) => (
+          <button
+            key={k}
+            type="button"
+            onClick={() => toggle(k)}
+            title="Custom - click to remove"
+            className="rounded-full border border-accent/50 bg-accent/15 px-2.5 py-1 text-xs font-medium text-accent"
+          >
+            {k.replace(/_/g, " ")} ✕
+          </button>
+        ))}
+      </div>
+      <div className="flex gap-1.5">
+        <input
+          type="text"
+          value={customInput}
+          onChange={(e) => setCustomInput(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              addCustom();
+            }
+          }}
+          placeholder="Add a custom detail (e.g. shoe size)"
+          className={inputCls + " flex-1"}
+        />
+        <button
+          type="button"
+          onClick={addCustom}
+          className="shrink-0 rounded-md border border-line px-3 py-1.5 text-xs font-medium text-ink transition hover:bg-bg"
+        >
+          + Add
+        </button>
+      </div>
+    </div>
+  );
+}
 
 // Signed-url thumbnail (private bucket), same pattern as the Media manager.
 function Thumb({ path, type }: { path: string; type: "photo" | "video" }) {
@@ -93,7 +203,7 @@ function StepMediaPicker({
   if (!enabled) {
     return (
       <p className="mt-1 w-full text-[11px] text-warn">
-        {type[0].toUpperCase() + type.slice(1)}s are off for this clone — turn them on in Configure, or this step falls
+        {type[0].toUpperCase() + type.slice(1)}s are off for this clone - turn them on in Configure, or this step falls
         back to an AI text line.
       </p>
     );
@@ -118,7 +228,7 @@ function StepMediaPicker({
         {value ? "Sends this exact item:" : "AI picks a fresh unseen item for this step."}
       </div>
       {items.length === 0 ? (
-        <p className="text-[11px] text-muted">No {type}s uploaded yet — add some in the Media tab.</p>
+        <p className="text-[11px] text-muted">No {type}s uploaded yet - add some in the Media tab.</p>
       ) : (
         <div className="flex gap-1.5 overflow-x-auto pb-1">
           <button
@@ -226,6 +336,8 @@ export default function DripForm({
 
   const [enabled, setEnabled] = useState(initial.enabled);
   const [steps, setSteps] = useState<Step[]>(initial.steps);
+  const [welcomeBundleTeased, setWelcomeBundleTeased] = useState(initial.welcomeBundleTeased);
+  const [collectFields, setCollectFields] = useState<string[]>(initial.onboardingCollectFields);
 
   // Switching a step's type clears any picked media (ids don't carry across
   // types, and text/voice steps have no media).
@@ -269,6 +381,8 @@ export default function DripForm({
         })),
       ),
     );
+    // Onboarding collect-fields: same hidden-field JSON pattern as drip_steps above.
+    fd.set("onboarding_collect_fields", JSON.stringify(collectFields));
     startTransition(async () => {
       await saveCampaign(cloneId, fd);
       setSteps(sortedSteps);
@@ -280,13 +394,13 @@ export default function DripForm({
 
   return (
     <form action={onSubmit} className="grid max-w-3xl gap-6">
-      {/* ── New fan onboarding — trimmed to the two triggers that matter.
+      {/* ── New fan onboarding - trimmed to the two triggers that matter.
           Greeting/voice scripts and detail-collection were removed: she greets
           and gets to know a new fan naturally in chat. Bundle timing lives in
           the automated campaign, not here. ─────────────────────────────── */}
       <GroupHeader
         label="New fan"
-        hint="Two optional triggers for a brand-new fan. Leave a field blank to skip it — she still greets and gets to know him naturally in chat."
+        hint="Configurable triggers and instructions for a brand-new fan. Leave a field blank to skip it - she still greets and gets to know him naturally in chat."
       />
       <Section icon="🚀" accent="cyan" title="Onboarding" cols={2}>
         <Field
@@ -305,6 +419,40 @@ export default function DripForm({
           placeholder="blank = off"
           hint="Sends the welcome bundle on this message."
         />
+        <div className="sm:col-span-2">
+          <Toggle
+            label={welcomeBundleTeased ? "She sends a short tease line first" : "Bundle sends with no lead-in"}
+            name="welcome_bundle_teased"
+            checked={welcomeBundleTeased}
+            onChange={setWelcomeBundleTeased}
+            accent="soft"
+            hint="A short AI-written flirty tease message ('I've got something for you...') goes out as its own text right before the paid bundle."
+          />
+        </div>
+        <Field
+          label="Onboarding runs for (messages)"
+          name="onboarding_length"
+          type="number"
+          defaultValue={initial.onboardingLength}
+          hint="After this many messages she stops steering to collect the info below and just chats normally, regardless of what's still missing."
+        />
+        <div className="sm:col-span-2">
+          <Area
+            label="First message instructions"
+            name="welcome_instruction"
+            defaultValue={initial.welcomeInstruction}
+            rows={2}
+            placeholder='blank = "greet him warmly, introduce yourself by name, be flirty, and ask his name"'
+            hint="How she should open the very FIRST message to a brand-new fan - a free-text steer, written into her own AI-generated line."
+          />
+        </div>
+        <div className="sm:col-span-2">
+          <FieldLabel
+            label="Info to collect"
+            hint="Details she'll naturally, gently try to work into the first several messages (never an interview). Toggle the ones you want, or add your own below."
+          />
+          <CollectFieldsPicker value={collectFields} onChange={setCollectFields} />
+        </div>
       </Section>
 
       {/* ── Mid-chat follow-up (moved off Configure) ─────────────── */}
@@ -331,6 +479,7 @@ export default function DripForm({
       <Section
         title="Steps"
         hint="Each step is WHEN (hours after his last message) plus WHAT (text, voice, photo, video, or bundle). Content is never canned: text and voice lines are AI-written fresh in her voice, media is always something he hasn't seen. The moment he replies, the timer resets to 0."
+        tip="Steps fire in hour order (they re-sort on save). Voice, photo, video and bundle steps only fire when that feature is on for this clone; a step with nothing fresh to send falls back to an AI text line."
       >
         <Toggle
           label={enabled ? "Campaign is on: she re-engages quiet fans" : "Campaign is off: she never messages first"}
@@ -414,11 +563,6 @@ export default function DripForm({
             </button>
 
             <Timeline steps={sortedSteps} />
-
-            <p className="text-[11px] text-muted">
-              Steps fire in hour order (they re-sort on save). Voice, photo, video and bundle steps only fire
-              when that feature is on for this clone; a step with nothing fresh to send falls back to an AI text line.
-            </p>
           </>
         )}
 

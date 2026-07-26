@@ -75,9 +75,9 @@ export async function assembleClonePrompts(
 // Mirrors the runtime's per-flow assembly (src/flows/text.ts + smart.ts + human.ts)
 // so the dashboard shows what the bot ACTUALLY feeds the model for this clone's
 // live flow + toggles — not a static template. Kept in sync with:
-//   - formatNudge()      → src/flows/human.ts (emoji + personality + texting style)
-//   - the smart tool instruction / decider system prompt → src/flows/smart.ts
-//   - availableActions() → src/flows/actions.ts
+// - formatNudge()      → src/flows/human.ts (emoji + personality + texting style)
+// - the smart tool instruction / decider system prompt → src/flows/smart.ts
+// - availableActions() → src/flows/actions.ts
 
 type PreviewClone = {
   ai_mode: "classic" | "smart";
@@ -165,11 +165,11 @@ function smartCombinedInstruction(c: PreviewClone): string {
   const choosable = choosableActions(c);
   const toolList = choosable.map((a) => `- ${a.label}: ${a.description}`).join("\n");
   return (
-    `\n\nYou're texting him. Reply in your own voice as you normally would — your reply text is sent to him as a message.\n` +
+    `\n\nYou're texting him. Reply in your own voice as you normally would - your reply text is sent to him as a message.\n` +
     (choosable.length
       ? `You can ALSO do any of these this turn by using the matching tool (you may use more than one, e.g. tease him in your reply AND send a photo):\n${toolList}\n` +
         `Only use a tool when it genuinely fits the moment. If you just want to talk, use no tool. ` +
-        `Prices and tip amounts are handled automatically — never state a price, a number of Stars, or payment steps. `
+        `Prices and tip amounts are handled automatically - never state a price, a number of Stars, or payment steps. `
       : "") +
     `Never mention tools, modes, or that you're an AI.`
   );
@@ -181,10 +181,10 @@ function smartDeciderSystem(c: PreviewClone): string {
   return (
     `You decide which extra actions an adult chat companion takes THIS turn, alongside her text reply.\n` +
     `Available actions:\n${toolList}\n\n` +
-    `Call an action ONLY when the conversation clearly calls for it — he asks to see a photo/video, ` +
+    `Call an action ONLY when the conversation clearly calls for it - he asks to see a photo/video, ` +
     `wants to hear her voice, asks for a bundle/set, or offers to tip/spoil her. You may call more than ` +
     `one. If it's just ordinary talk, call nothing. You never write messages and never choose any price ` +
-    `or amount — you only pick which actions happen.`
+    `or amount - you only pick which actions happen.`
   );
 }
 
@@ -194,18 +194,18 @@ export async function assemblePromptPreview(clone: PreviewClone): Promise<Prompt
   const nudge = formatNudgeP(clone);
   const mode = clone.ai_mode;
   const smartSplit = clone.smart_split;
-  const empty = "(empty — add her answers and Save to generate)";
+  const empty = "(empty - add her answers and Save to generate)";
   const withNudge = (s: string) => (s ? s + nudge : empty);
 
   const blocks: PromptBlock[] = [];
 
   if (mode === "classic") {
-    blocks.push({ key: "text", label: "Text reply", hint: "Persona + toggles + texting/emoji rules — her plain chat reply.", content: withNudge(base.text) });
-    if (clone.voice_enabled) blocks.push({ key: "voice", label: "Voice note", hint: "Spoken reply persona (no emoji rules — it's spoken).", content: base.voice || empty });
+    blocks.push({ key: "text", label: "Text reply", hint: "Persona + toggles + texting/emoji rules - her plain chat reply.", content: withNudge(base.text) });
+    if (clone.voice_enabled) blocks.push({ key: "voice", label: "Voice note", hint: "Spoken reply persona (no emoji rules - it's spoken).", content: base.voice || empty });
     blocks.push({ key: "routing", label: "Routing (sorter)", hint: "Classic only: picks ONE lane per fan message.", content: base.routing || empty });
-    if (clone.photos_enabled) blocks.push({ key: "vision", label: "Photo reply", hint: "When the fan sends a photo — persona + texting/emoji rules.", content: withNudge(base.vision) });
+    if (clone.photos_enabled) blocks.push({ key: "vision", label: "Photo reply", hint: "When the fan sends a photo - persona + texting/emoji rules.", content: withNudge(base.vision) });
   } else if (smartSplit) {
-    blocks.push({ key: "writer", label: "Writer (her reply)", hint: "Your Text model writes her reply — same persona + rules as chat. No tools.", content: withNudge(base.text) });
+    blocks.push({ key: "writer", label: "Writer (her reply)", hint: "Your Text model writes her reply - same persona + rules as chat. No tools.", content: withNudge(base.text) });
     blocks.push({ key: "decider", label: "Decider (tool picker)", hint: "Your Routing model reads the chat and fires 0+ enabled actions. Fixed system prompt below.", content: smartDeciderSystem(clone) });
     if (clone.voice_enabled) blocks.push({ key: "voice", label: "Voice note", hint: "Persona used when the voice action fires.", content: base.voice || empty });
     if (clone.photos_enabled) blocks.push({ key: "vision", label: "Photo reply", hint: "When the fan sends a photo.", content: withNudge(base.vision) });
@@ -237,13 +237,13 @@ async function extractPersona(answers: string, vibe?: { persona: string; flirt: 
     "FLIRT_NSFW = her flirting style + what she's sexually open to + her hard nos FROM THE PROSE ANSWERS ONLY. " +
     "RELATIONSHIP = her status + how she answers 'are you single' / 'do you love me'. " +
     "KNOWLEDGE_BASE = her life color she can mention naturally: daily routine, look, tastes (music/food/shows), hobbies, pets, stories, goals. " +
-    "IMPORTANT: any answers listed under 'Structured facts' (age/birthday, gender, height, heritage, sexuality, cities, job, social handles, nicknames, turn-ons/offs, hard-limit checklist) are injected into her prompt AUTOMATICALLY by the system — use them as context for tone, but do NOT restate them in KNOWLEDGE_BASE or any other field. A fact that appears ONLY in her prose answers should still be kept. " +
+    "IMPORTANT: any answers listed under 'Structured facts' (age/birthday, gender, height, heritage, sexuality, cities, job, social handles, nicknames, turn-ons/offs, hard-limit checklist) are injected into her prompt AUTOMATICALLY by the system - use them as context for tone, but do NOT restate them in KNOWLEDGE_BASE or any other field. A fact that appears ONLY in her prose answers should still be kept. " +
     (vibe && (vibe.persona || vibe.flirt)
-      ? "A vibe-preset BASELINE for PERSONA and FLIRT_NSFW is provided in the answers — build on it: keep its energy and archetype, and refine it with her specific answers (especially the example texts) rather than replacing it. "
+      ? "A vibe-preset BASELINE for PERSONA and FLIRT_NSFW is provided in the answers - build on it: keep its energy and archetype, and refine it with her specific answers (especially the example texts) rather than replacing it. "
       : "") +
-    "If example texts are provided, study them and make PERSONA + her texting voice match them exactly — punctuation, casing, slang, message length, pet names, energy. The example texts are the strongest signal for how she writes. " +
+    "If example texts are provided, study them and make PERSONA + her texting voice match them exactly - punctuation, casing, slang, message length, pet names, energy. The example texts are the strongest signal for how she writes. " +
     "CRITICAL: describe WHO SHE IS, never WHAT SHE SELLS. Do NOT mention selling, sending, " +
-    "unlocking, pricing, or 'doing content'/photos/videos/paid media in ANY field — those are " +
+    "unlocking, pricing, or 'doing content'/photos/videos/paid media in ANY field - those are " +
     "capabilities toggled separately at runtime, not part of her identity. If her answers describe " +
     "a content/OF business, capture only the persona behind it (her vibe, confidence, sexual openness) " +
     "and keep her job generic (e.g. 'model', 'influencer'). The persona must read identically whether " +

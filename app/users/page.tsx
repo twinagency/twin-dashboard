@@ -19,7 +19,7 @@ export const dynamic = "force-dynamic";
 // one inbox now, like real Telegram.
 
 function ago(ts: string | null): string {
-  if (!ts) return "—";
+  if (!ts) return "-";
   const secs = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
   if (secs < 60) return `${secs}s`;
   if (secs < 3600) return `${Math.floor(secs / 60)}m`;
@@ -29,7 +29,7 @@ function ago(ts: string | null): string {
 }
 
 function dateTime(ts: string | null): string {
-  if (!ts) return "—";
+  if (!ts) return "-";
   return new Date(ts).toLocaleString(undefined, {
     month: "short",
     day: "numeric",
@@ -258,7 +258,7 @@ export default async function FansPage({
 
   return (
     <div className="lg:h-full">
-      {/* Middle column capped narrow (~400px, iPhone-width) instead of 1fr —
+      {/* Middle column capped narrow (~400px, iPhone-width) instead of 1fr - 
           reads like a phone thread, not a stretched-out desktop panel. Left
           gets the extra room for data/filters, right takes whatever's left. */}
       <div className="grid gap-3 lg:h-full lg:grid-cols-3">
@@ -378,7 +378,7 @@ export default async function FansPage({
                       <span className={"truncate text-sm font-medium " + (u.blocked ? "text-crit" : "text-ink")}>
                         {displayName(u)}
                       </span>
-                      {/* Lifetime spend right after the name — the number that matters. */}
+                      {/* Lifetime spend right after the name - the number that matters. */}
                       {(u.total_spent_stars ?? 0) > 0 && (
                         <span className="shrink-0 font-mono text-[11px] font-semibold tabular-nums text-good">
                           {fmtNum(u.total_spent_stars)}★
@@ -391,7 +391,7 @@ export default async function FansPage({
                       )}
                     </span>
                     <span className="block truncate text-[11px] text-muted">
-                      {u.username ? `@${u.username}` : cloneById.get(u.clone_id)?.name ?? "—"}
+                      {u.username ? `@${u.username}` : cloneById.get(u.clone_id)?.name ?? "-"}
                     </span>
                   </span>
                   <span className="shrink-0 text-[10px] text-muted">{ago(u.last_message_received)}</span>
@@ -418,7 +418,7 @@ export default async function FansPage({
                   <div className="truncate text-sm font-medium text-ink">{displayName(selected)}</div>
                   <div className="text-[11px] text-muted">
                     {selected.username ? `@${selected.username} · ` : ""}
-                    via {cloneById.get(selected.clone_id)?.name ?? "—"}
+                    via {cloneById.get(selected.clone_id)?.name ?? "-"}
                   </div>
                 </div>
                 {/* Telegram paper-plane, Telegram blue */}
@@ -562,7 +562,7 @@ export default async function FansPage({
                 )}
               </div>
 
-              {/* Compose — sends through the clone's bot via /api/send
+              {/* Compose - sends through the clone's bot via /api/send
                   (text, ElevenLabs voice note, or free media from her library). */}
               <FanComposer
                 cloneId={selected.clone_id}
@@ -582,7 +582,7 @@ export default async function FansPage({
           ) : (
             <div className="flex flex-col gap-5">
               <div>
-                {/* Who this panel is about — name up top, same as the chat header. */}
+                {/* Who this panel is about - name up top, same as the chat header. */}
                 <div className="mb-2.5 flex items-center gap-2.5">
                   <FanAvatar
                     cloneId={selected.clone_id}
@@ -645,7 +645,7 @@ export default async function FansPage({
                       </span>
                     ),
                   },
-                  { label: "Total spent", value: totalSpent > 0 ? <StarAmount stars={totalSpent} /> : "—" },
+                  { label: "Total spent", value: totalSpent > 0 ? <StarAmount stars={totalSpent} /> : "-" },
                   { label: "Purchases", value: fmtNum(purchases.length) },
                   { label: "Msgs sent", value: fmtNum(selected.total_messages_sent ?? 0) },
                   { label: "Msgs bought", value: fmtNum(selected.total_messages_purchased ?? 0) },
@@ -660,7 +660,7 @@ export default async function FansPage({
                 ))}
               </div>
 
-              {/* Identity — Telegram vs stated, language etc. */}
+              {/* Identity - Telegram vs stated, language etc. */}
               <div>
                 <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted">Identity</div>
                 <dl className="flex flex-col gap-1">
@@ -676,13 +676,13 @@ export default async function FansPage({
                   ).map(([k, v]) => (
                     <div key={k} className="flex justify-between gap-3 border-b border-line pb-1 text-xs">
                       <dt className="text-muted">{k}</dt>
-                      <dd className="text-right font-medium text-ink">{v ?? "—"}</dd>
+                      <dd className="text-right font-medium text-ink">{v ?? "-"}</dd>
                     </div>
                   ))}
                 </dl>
               </div>
 
-              {/* Credits — live adjust */}
+              {/* Credits - live adjust */}
               <div>
                 <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted">Credits</div>
                 <form action={setCredits} className="flex items-center gap-2">
@@ -703,7 +703,7 @@ export default async function FansPage({
                 </form>
               </div>
 
-              {/* Knowledge / profile dossier — what the bot has learned */}
+              {/* Knowledge / profile dossier - what the bot has learned */}
               <div>
                 <div className="mb-2 flex items-center justify-between gap-2">
                   <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">Knowledge / profile</div>
@@ -767,7 +767,7 @@ export default async function FansPage({
                 )}
               </div>
 
-              {/* Controls — the destructive/rare ops, tucked away but all here */}
+              {/* Controls - the destructive/rare ops, tucked away but all here */}
               <details className="mt-auto rounded-md border border-line bg-bg">
                 <summary className="cursor-pointer select-none px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted hover:text-ink">
                   Controls

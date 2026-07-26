@@ -262,7 +262,7 @@ export default function PersonaFactsFields({
         hint="Typed facts, injected into her prompt exactly as written (never through the AI), so they can't drift or go stale."
       >
         <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
-          {/* Name lives here rather than in its own card — one input never
+          {/* Name lives here rather than in its own card - one input never
               justified a whole section at the top of the tab. */}
           <Field label="Display name" name="name" defaultValue={clone?.name ?? ""} required placeholder="e.g. Sophie" />
           <Field

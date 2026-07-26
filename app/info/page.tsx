@@ -194,7 +194,7 @@ async function CloneInfo({ cloneId }: { cloneId: string }) {
   const biz = bcid ? await getBusinessAccount(clone.bot_token, bcid) : null;
 
   const rows: { label: string; value: string; accent?: "good" | "bad" | "money" }[] = [
-    { label: "Bot", value: me.username ? `@${me.username}` : "—" },
+    { label: "Bot", value: me.username ? `@${me.username}` : "-" },
     { label: "Reachable", value: me.ok ? "yes" : "no, check token/network", accent: me.ok ? "good" : "bad" },
     { label: "Status", value: clone.status, accent: clone.status === "active" ? "good" : undefined },
     { label: "Available to withdraw", value: available != null ? `${available} ⭐` : "unavailable", accent: available != null ? "money" : undefined },
@@ -215,7 +215,7 @@ async function CloneInfo({ cloneId }: { cloneId: string }) {
       </div>
       <p className="mb-5 text-sm text-muted">Connection, business account, and Stars.</p>
 
-      {/* The Business account this bot lives inside — face, name, live state. */}
+      {/* The Business account this bot lives inside - face, name, live state. */}
       <Card className="mb-3 flex-row items-center gap-3 px-4 py-3">
         {biz ? (
           <>

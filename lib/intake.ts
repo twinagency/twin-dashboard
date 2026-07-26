@@ -160,7 +160,7 @@ export function assembleAnswers(
   if (facts.length) {
     lines.push(
       "",
-      "## Structured facts (typed fields — the system injects these into her prompt automatically; use them as context, do NOT restate them)",
+      "## Structured facts (typed fields - the system injects these into her prompt automatically; use them as context, do NOT restate them)",
     );
     for (const [label, v] of facts) lines.push(`${label}: ${v.trim()}`);
   }

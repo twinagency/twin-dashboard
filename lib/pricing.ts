@@ -115,12 +115,12 @@ export function normalizeGuide(raw: unknown): CategoryPricing | null {
 }
 
 // Derive the Star price for an item from the guide, its tags, and its nsfw flag.
-//   - Pick the HIGHEST-priced matching category among the item's tags
+// - Pick the HIGHEST-priced matching category among the item's tags
 //     (so a full_nude+bikini item prices at the full_nude price).
-//   - If it's explicit (nsfw) the top matching category wins outright.
-//   - If it's not explicit but still tagged, the matching category is used but
+// - If it's explicit (nsfw) the top matching category wins outright.
+// - If it's not explicit but still tagged, the matching category is used but
 //     never dips below the sfw/default price.
-//   - No matching category (or no tags, e.g. a plain sfw item) → the sfw price.
+// - No matching category (or no tags, e.g. a plain sfw item) → the sfw price.
 // Returns null when the guide is unusable, so the caller keeps its own default
 // (never overrides existing behavior with a made-up number).
 export function priceFromGuide(raw: unknown, tags: string[], nsfw: boolean): number | null {

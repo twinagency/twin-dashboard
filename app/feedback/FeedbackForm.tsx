@@ -32,7 +32,7 @@ export default function FeedbackForm({ clones }: { clones: CloneLite[] }) {
   return (
     <form onSubmit={onSubmit} className="grid gap-5">
       <Section>
-        {/* Type toggle — bug vs suggestion */}
+        {/* Type toggle - bug vs suggestion */}
         <div>
           <span className="mb-1.5 block text-xs text-muted">What is this?</span>
           <div className="inline-flex rounded-lg border border-line bg-muted/10 p-1">

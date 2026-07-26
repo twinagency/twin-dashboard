@@ -24,7 +24,7 @@ export function CategoryPricingEditor({ cfg, set }: { cfg: CloneConfigState; set
         )}
       />
       <SubCard>
-        {/* Label stacked over a narrow input, 4 across — as two wide rows this
+        {/* Label stacked over a narrow input, 4 across - as two wide rows this
             was 6 rows tall and the single biggest thing on the money tab. */}
         <div className="grid grid-cols-3 gap-x-2 gap-y-1.5 sm:grid-cols-4">
           {PRICING_CATEGORIES.map((k) => (

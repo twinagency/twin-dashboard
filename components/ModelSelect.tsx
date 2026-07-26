@@ -97,7 +97,7 @@ export default function ModelSelect({
             className="w-full rounded-t-md border-b border-line bg-transparent px-3 py-2 text-sm outline-none"
           />
           <div className="max-h-64 overflow-y-auto py-1">
-            {/* Pinned recommendations — always shown at the top, ignore the query. */}
+            {/* Pinned recommendations - always shown at the top, ignore the query. */}
             {recommended && recommended.length > 0 && (
               <>
                 <div className="px-3 pb-1 pt-1.5 text-[10px] font-semibold uppercase tracking-widest text-muted">
@@ -121,7 +121,7 @@ export default function ModelSelect({
                         <span className="block truncate text-xs text-muted">{r.note}</span>
                       </span>
                       <span className="shrink-0 text-right text-xs text-muted">
-                        {m ? priceLine(m) : "—"}
+                        {m ? priceLine(m) : "-"}
                       </span>
                     </button>
                   );

@@ -18,7 +18,7 @@ export const dynamic = "force-dynamic";
 // Same as the runtime's stripDashes: em dashes read as AI-written; never send one.
 function stripDashes(text: string): string {
   return text
-    .replace(/\s*[—–]\s*/g, ", ")
+    .replace(/\s*[ - –]\s*/g, ", ")
     .replace(/ ,/g, ",")
     .replace(/,\s*,/g, ",")
     .replace(/\s{2,}/g, " ")

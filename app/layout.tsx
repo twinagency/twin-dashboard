@@ -4,6 +4,7 @@ import Link from "next/link";
 import { headers } from "next/headers";
 import CurrencyProvider from "@/components/CurrencyProvider";
 import ThemeProvider from "@/components/ThemeProvider";
+import BlurProvider from "@/components/BlurProvider";
 import Sidebar from "@/components/Sidebar";
 import MobileMenu from "@/components/MobileMenu";
 import TopBar from "@/components/TopBar";
@@ -119,13 +120,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <body className="min-h-screen bg-bg">
         <ThemeProvider>
         <CurrencyProvider>
+        <BlurProvider>
           <div className="flex h-screen">
             <Sidebar clones={clones} activeCloneId={activeCloneId} />
             {/* Every page (Fans/inbox included) is a fixed-height shell: the
                 sidebar and TopBar never move, only this column's own <main>
                 scrolls internally. No page-level (document) scroll anywhere. */}
             <div className="flex h-screen min-w-0 flex-1 flex-col overflow-hidden">
-              {/* Mobile-only top bar — the Sidebar above only renders at lg+ */}
+              {/* Mobile-only top bar - the Sidebar above only renders at lg+ */}
               <header className="flex shrink-0 items-center justify-between border-b border-line bg-panel px-4 py-3 lg:hidden">
                 <Link href="/revenue" className="text-2xl font-extrabold tracking-tight text-ink">
                   Twin<span className="text-ink">.</span>
@@ -134,13 +136,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                   <MobileMenu clones={clones} />
                 </div>
               </header>
-              {/* Straight, full-width divider bar — clone/page breadcrumb +
+              {/* Straight, full-width divider bar - clone/page breadcrumb +
                   account controls in one row. Not floating, not rounded; see
                   components/TopBar.tsx. */}
               <TopBar clones={clones} activeCloneId={activeCloneId} allTimeStars={allTimeStars} />
               <MainShell>{children}</MainShell>
             </div>
           </div>
+        </BlurProvider>
         </CurrencyProvider>
         </ThemeProvider>
       </body>

@@ -3,6 +3,7 @@
 import { usePathname } from "next/navigation";
 import CloneSwitcher from "@/components/CloneSwitcher";
 import CurrencyToggle from "@/components/CurrencyToggle";
+import BlurToggle from "@/components/BlurToggle";
 import DisplayPrefs from "@/components/DisplayPrefs";
 import { logout } from "@/app/login/actions";
 import { fmtMoney, starsToMoney } from "@/lib/money";
@@ -41,7 +42,7 @@ export default function TopBar({
       <div className="flex shrink-0 items-center gap-1.5">
         <CloneSwitcher clones={clones} activeCloneId={activeCloneId} />
         <div className="h-5 w-px shrink-0 bg-line" />
-        {/* All-time cash made, scoped to the clone switcher above — not
+        {/* All-time cash made, scoped to the clone switcher above - not
             time-windowed like the Revenue page's period toggle. */}
         <span className="hidden items-baseline gap-1 px-1.5 sm:flex">
           <span className="text-xs">💵</span>
@@ -50,11 +51,12 @@ export default function TopBar({
           </span>
         </span>
         <div className="hidden h-5 w-px shrink-0 bg-line sm:block" />
-        {/* Inline currency toggle — was buried in the DisplayPrefs dropdown,
+        {/* Inline currency toggle - was buried in the DisplayPrefs dropdown,
             owner wants it visible in the bar. Still also in the dropdown. */}
         <CurrencyToggle compact />
+        <BlurToggle />
         <div className="hidden h-5 w-px shrink-0 bg-line sm:block" />
-        {/* Mock — not wired up yet, just holding the spot. */}
+        {/* Mock - not wired up yet, just holding the spot. */}
         <button
           type="button"
           title="Search (coming soon)"
@@ -98,7 +100,7 @@ export default function TopBar({
           </button>
         </form>
       </div>
-      {/* Empty right column — balances the breadcrumb so the controls stay
+      {/* Empty right column - balances the breadcrumb so the controls stay
           truly centered. */}
       <div />
     </div>

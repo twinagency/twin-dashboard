@@ -335,7 +335,7 @@ export async function getDashboard(period: Period, range?: DateRange): Promise<D
     .slice(0, 300)
     .map((p) => ({
       cloneId: p.clone_id,
-      cloneName: cloneNameById.get(p.clone_id) ?? "—",
+      cloneName: cloneNameById.get(p.clone_id) ?? "-",
       cloneColor: colorById.get(p.clone_id) ?? "#888",
       buyerName: p.telegram_id != null ? nameByKey.get(`${p.clone_id}:${p.telegram_id}`) ?? `Fan ${p.telegram_id}` : "Unknown",
       username: p.telegram_id != null ? usernameByKey.get(`${p.clone_id}:${p.telegram_id}`) ?? null : null,

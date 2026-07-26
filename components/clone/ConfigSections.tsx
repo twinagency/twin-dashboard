@@ -220,7 +220,7 @@ export default function ConfigSections({
             />
           </div>
 
-          {/* Emoji settings and realism toggles sit side by side — stacked, they
+          {/* Emoji settings and realism toggles sit side by side - stacked, they
               pushed this card well past a screen on their own. */}
           <div className="grid gap-3 border-t border-line pt-2 lg:grid-cols-2">
           <div className="grid content-start gap-1.5">
@@ -265,7 +265,7 @@ export default function ConfigSections({
           </div>
           </div>
 
-          {/* Language lock — off = she mirrors whatever the fan writes. On = she
+          {/* Language lock - off = she mirrors whatever the fan writes. On = she
               only ever writes in the picked languages, and the runtime retries a
               reply that drifts into a foreign script (a model randomly emitting
               Chinese, etc.). Pick none = English is assumed. */}
@@ -333,6 +333,7 @@ export default function ConfigSections({
           defaultValue={clone && clone.bot_token !== "PLACEHOLDER" ? clone.bot_token : ""}
           required
           placeholder="1234:ABC..."
+          secret
         />
         {mode === "edit" ? (
           <div className="block">
@@ -352,7 +353,7 @@ export default function ConfigSections({
           hint="She always knows the live date and time in this zone. Default UTC."
         />
 
-        {/* AI mode — used to be its own card, but it's one control; it belongs
+        {/* AI mode - used to be its own card, but it's one control; it belongs
             with the rest of "what this clone fundamentally is". */}
         <div
           className="grid gap-1.5 border-t border-line pt-2 sm:col-span-2"
@@ -443,6 +444,7 @@ export default function ConfigSections({
             name="voice_id"
             defaultValue={clone?.voice_id}
             placeholder="Paste voice ID"
+            secret
           />
           <div
             className="block"
@@ -518,7 +520,7 @@ export default function ConfigSections({
         </Section>
       </div>
 
-      {/* ── MONETIZATION — sections live in MonetizationSections (end of
+      {/* ── MONETIZATION - sections live in MonetizationSections (end of
           file) so edit mode can host them under the page-level Monetization
           tab instead, inside the same <form>. Create mode keeps them here. */}
       {showMoney && (
@@ -576,7 +578,7 @@ export function MonetizationSections({
             tip="What a fan sees when he runs out of message credits. The buy-more button is attached automatically."
           />
         </div>
-        {/* Plain 2-col split, not two nested sub-cards — the card border around
+        {/* Plain 2-col split, not two nested sub-cards - the card border around
             each one added a third layer of chrome for no grouping benefit. */}
         <div className="grid items-start gap-3 xl:grid-cols-2">
           <div>
@@ -660,7 +662,7 @@ export function MonetizationSections({
         {cfg.tips && <SpoilMenuEditor cfg={cfg} set={set} />}
       </Section>
 
-      {/* Extras is one toggle — stacked with Discounts in a shared column
+      {/* Extras is one toggle - stacked with Discounts in a shared column
           so it stops padding out to a full row height. */}
       <div className="grid content-start gap-3">
         {/* ── 💌 Extras (own box) ──────────────────────────────────── */}

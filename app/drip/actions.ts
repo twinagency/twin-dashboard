@@ -118,9 +118,11 @@ export async function saveCampaign(id: string, fd: FormData) {
     welcome_instruction: str(fd, "welcome_instruction"),
     welcome_bundle_after: num(fd, "welcome_bundle_after", 10),
     welcome_bundle_after_minutes: numOrNull(fd, "welcome_bundle_after_minutes"),
+    welcome_bundle_teased: fd.get("welcome_bundle_teased") === "true",
     onboarding_voice_after: numOrNull(fd, "onboarding_voice_after"),
     onboarding_voice_instruction: str(fd, "onboarding_voice_instruction"),
     onboarding_collect_fields: parseCollectFields(fd),
+    onboarding_length: Math.max(1, num(fd, "onboarding_length", 8)),
     // Mid-chat follow-up
     followup_after_minutes: Math.max(0, num(fd, "followup_after_minutes", 0)),
     // Campaign. (Win-back's lapse threshold is no longer operator-facing; the

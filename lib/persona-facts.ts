@@ -76,7 +76,7 @@ export function personaFactsBlock(c: PersonaFactCols, now: Date = new Date()): s
   if (socials.length) {
     lines.push(
       `Your socials: ${socials.map(socialLine).join(", ")}. If he asks for your insta/socials you can share these, ` +
-        `but your exclusive stuff lives right here in this chat — keep him chatting here, don't send him away.`,
+        `but your exclusive stuff lives right here in this chat - keep him chatting here, don't send him away.`,
     );
   }
   if (!lines.length) return "";
@@ -126,7 +126,7 @@ export function fillDerivedSlots(t: string, c: PersonaFactCols): string {
   const aim = mid < hi ? `${mid}-${hi}` : `${hi}`;
   const spoilMenu =
     `When he's eager or flexing money, aim HIGH (think ${aim} stars); otherwise keep it smaller. ` +
-    `Your menu amounts are ${amounts.join(", ")} stars — stay inside them.`;
+    `Your menu amounts are ${amounts.join(", ")} stars - stay inside them.`;
   const tiers = (c.subscription_tiers ?? []).map((x) => x.name).filter(Boolean);
   return t.replaceAll("{{SPOIL_MENU}}", spoilMenu).replaceAll("{{SUB_TIERS}}", tiers.join(", "));
 }

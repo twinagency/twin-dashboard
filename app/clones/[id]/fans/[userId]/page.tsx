@@ -10,7 +10,7 @@ import { setCredits, resetCounters, toggleActive, deleteUser } from "./actions";
 export const dynamic = "force-dynamic";
 
 function ago(ts: string | null): string {
-  if (!ts) return "—";
+  if (!ts) return "-";
   const secs = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
   if (secs < 60) return `${secs}s ago`;
   if (secs < 3600) return `${Math.floor(secs / 60)}m ago`;
@@ -20,7 +20,7 @@ function ago(ts: string | null): string {
 }
 
 function dateTime(ts: string | null): string {
-  if (!ts) return "—";
+  if (!ts) return "-";
   return new Date(ts).toLocaleString(undefined, {
     month: "short",
     day: "numeric",
@@ -82,7 +82,7 @@ export default async function FanDetailPage({
         </span>
       ),
     },
-    { label: "Total spent", value: totalStars > 0 ? <StarAmount stars={totalStars} /> : "—" },
+    { label: "Total spent", value: totalStars > 0 ? <StarAmount stars={totalStars} /> : "-" },
     { label: "Purchases", value: fmtNum(purchases.length) },
     { label: "Messages sent", value: fmtNum(u.total_messages_sent ?? 0) },
     { label: "Messages bought", value: fmtNum(u.total_messages_purchased ?? 0) },
@@ -145,7 +145,7 @@ export default async function FanDetailPage({
         ))}
       </div>
 
-      {/* Knowledge / profile — what the bot has learned about this fan */}
+      {/* Knowledge / profile - what the bot has learned about this fan */}
       {(() => {
         const interests: string[] = Array.isArray(profile?.interests) ? profile.interests : [];
         const details: [string, any][] = profile?.details && typeof profile.details === "object"

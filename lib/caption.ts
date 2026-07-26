@@ -26,7 +26,7 @@ const TAG_SET = new Set<string>(MEDIA_TAGS);
 const PROMPT = `You are tagging a photo for an AI girlfriend content bot. Return JSON only:
 {
   "caption": "Factual description for AI matching, max 18 words. Note clothing/nudity/pose plainly. E.g. 'topless brunette kneeling on bed, hand in hair, looking at camera'",
-  "teaser_caption": "A flirty first-person message she'd send WITH this photo, max 12 words. End with ONE emoji that FITS this specific photo's mood — vary it (a heart 💕, a flirt 😏😈, a fire 🔥, a kiss 😘, etc). Do NOT default to the same emoji every time.",
+  "teaser_caption": "A flirty first-person message she'd send WITH this photo, max 12 words. End with ONE emoji that FITS this specific photo's mood - vary it (a heart 💕, a flirt 😏😈, a fire 🔥, a kiss 😘, etc). Do NOT default to the same emoji every time.",
   "is_nude": true or false (true if breasts/genitals/buttocks are exposed),
   "explicitness": "none" | "suggestive" | "explicit"  (none = fully clothed/safe, suggestive = lingerie/implied/teasing, explicit = nudity or sexual),
   "nsfw": true or false (true if it is sexually explicit content),

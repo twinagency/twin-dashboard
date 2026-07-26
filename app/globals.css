@@ -228,3 +228,12 @@ body {
     @apply font-sans;
   }
 }
+
+/* Global "blur all media" privacy toggle (BlurProvider/BlurToggle) — one
+   rule covers every img/video anywhere in the dashboard, no per-component
+   opt-in needed. */
+html.blur-media img,
+html.blur-media video {
+  filter: blur(20px);
+  transition: filter 0.15s ease;
+}

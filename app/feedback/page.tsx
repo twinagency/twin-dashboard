@@ -95,7 +95,7 @@ function Queue({ title, rows, disabled }: { title: string; rows: Row[]; disabled
 
       {rows.length === 0 ? (
         <div className="px-4 py-8 text-center text-sm text-muted">
-          {disabled ? "—" : "Nothing here yet."}
+          {disabled ? "-" : "Nothing here yet."}
         </div>
       ) : (
         <Table>
@@ -124,13 +124,13 @@ function Queue({ title, rows, disabled }: { title: string; rows: Row[]; disabled
                   )}
                 </TableCell>
                 <TableCell className="whitespace-nowrap text-muted">
-                  {r.clones?.name ?? "—"}
+                  {r.clones?.name ?? "-"}
                 </TableCell>
                 <TableCell>
                   {r.severity ? (
                     <Badge className={SEVERITY_BADGE[r.severity] ?? SEVERITY_BADGE.low}>{r.severity}</Badge>
                   ) : (
-                    <span className="text-muted/60">—</span>
+                    <span className="text-muted/60"> - </span>
                   )}
                 </TableCell>
                 <TableCell>

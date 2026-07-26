@@ -12,7 +12,7 @@ export default function CurrencyToggle({ compact = false }: { compact?: boolean 
       <button
         type="button"
         onClick={() => setCurrency(next as Currency)}
-        title={`Showing ${currency} — click for ${next}`}
+        title={`Showing ${currency} - click for ${next}`}
         className="rounded-full bg-muted/10 px-3 py-1.5 text-xs font-semibold text-ink transition hover:bg-muted/15"
       >
         ${currency}

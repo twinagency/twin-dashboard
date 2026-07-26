@@ -111,10 +111,14 @@ export type Clone = {
   welcome_instruction: string | null;
   welcome_bundle_after: number;
   welcome_bundle_after_minutes: number | null;
+  // Short AI-composed tease line sent before the welcome bundle (default false).
+  welcome_bundle_teased: boolean;
   onboarding_voice_after: number | null;
   onboarding_voice_instruction: string | null;
   // Detail keys she should naturally collect from a new fan (["name","age",...]).
   onboarding_collect_fields: string[] | null;
+  // How many messages she keeps steering to collect the fields above (default 8).
+  onboarding_length: number;
 
   // follow-up nudge: one short in-persona follow-up if the fan goes quiet
   // mid-chat for this many minutes after her reply (0 = off).

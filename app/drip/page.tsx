@@ -146,9 +146,11 @@ async function CloneCampaigns({ cloneId }: { cloneId: string }) {
     welcome_instruction: string | null;
     welcome_bundle_after: number | null;
     welcome_bundle_after_minutes: number | null;
+    welcome_bundle_teased: boolean | null;
     onboarding_voice_after: number | null;
     onboarding_voice_instruction: string | null;
     onboarding_collect_fields: unknown;
+    onboarding_length: number | null;
     followup_after_minutes: number | null;
   };
 
@@ -176,8 +178,14 @@ async function CloneCampaigns({ cloneId }: { cloneId: string }) {
             mediaId: typeof s.media_id === "string" && s.media_id.trim() ? s.media_id.trim() : null,
           })),
           // Onboarding (trimmed to two triggers) + follow-up.
+          welcomeInstruction: clone.welcome_instruction ?? null,
           welcomeBundleAfter: clone.welcome_bundle_after ?? 10,
+          welcomeBundleTeased: clone.welcome_bundle_teased ?? false,
           onboardingVoiceAfter: clone.onboarding_voice_after ?? null,
+          onboardingCollectFields: Array.isArray(clone.onboarding_collect_fields)
+            ? (clone.onboarding_collect_fields as unknown[]).filter((s): s is string => typeof s === "string")
+            : [],
+          onboardingLength: clone.onboarding_length ?? 8,
           followupAfterMinutes: clone.followup_after_minutes ?? 0,
         }}
       />

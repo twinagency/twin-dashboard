@@ -53,7 +53,7 @@ export default function SpendTierBadge({
 // column only lights up for fans who actually spend.
 export function SpendTierChip({ tier }: { tier: string | null | undefined }) {
   const t = toTier(tier);
-  if (t === "none") return <span className="text-muted/60">—</span>;
+  if (t === "none") return <span className="text-muted/60"> - </span>;
   const b = SPEND_TIER_BADGE[t];
   return <span className={"rounded-full px-2 py-0.5 text-xs font-medium " + b.cls}>{b.label}</span>;
 }
