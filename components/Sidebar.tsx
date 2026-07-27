@@ -22,7 +22,7 @@ type CloneLite = { id: string; name: string; color: string; photoUrl?: string };
 // clone's Configure page (inert until a clone is picked in the header
 // switcher); everything else is a plain route link.
 type NavLink =
-  | { kind: "route"; label: string; href: string; icon: string; color: LinkColor }
+  | { kind: "route"; label: string; href: string; icon: string; color: LinkColor; gateOnClone?: boolean }
   | { kind: "tab"; label: string; tab: string; icon: string; color: LinkColor };
 
 function Icon({ d, className = "h-5 w-5" }: { d: string; className?: string }) {
@@ -99,7 +99,7 @@ const LINK_COLOR_CLASSES: Record<LinkColor, { icon: string; active: string; idle
 const NAV_LINKS: NavLink[] = [
   { kind: "route", label: "Earnings", href: "/revenue", icon: "EarningsCombo", color: "good" },
   { kind: "route", label: "Fans", href: "/users", icon: "FansCombo", color: "purple" },
-  { kind: "route", label: "Campaigns", href: "/drip", icon: "Campaigns", color: "pink" },
+  { kind: "route", label: "Campaigns", href: "/drip", icon: "Campaigns", color: "pink", gateOnClone: true },
   { kind: "tab", label: "PPVs", tab: "ppvs", icon: "Media", color: "red" },
   { kind: "tab", label: "Edit", tab: "identity", icon: "Dials", color: "blue" },
   { kind: "route", label: "Info", href: "/info", icon: "Info", color: "neutral" },
@@ -151,11 +151,13 @@ export default function Sidebar({
       <nav className="flex flex-1 flex-col overflow-y-auto px-3 py-3">
         {/* One flat list, icon left, label, full-width row. Rows are spaced
             apart (not divided by hairlines) so each rounded, hoverable row
-            reads as its own control instead of a table. PPVs/Edit are tab
-            links into the currently-picked clone's Configure page; on "All
-            clones" they're still visible but tapping one opens the clone
-            picker instead of navigating anywhere - editing a single girl's
-            config always requires picking her first. */}
+            reads as its own control instead of a table. PPVs/Edit/Campaigns
+            are girl-specific: on "All clones" they render exactly like any
+            other idle row (no dimming - a plain nav row that happens to open
+            the clone picker instead of navigating reads as broken, not as
+            "pick someone first"), and tapping one opens the clone picker
+            instead of navigating anywhere - editing a single girl's config
+            always requires picking her first. */}
         <div className="space-y-1">
           {NAV_LINKS.map((l) => {
             const colors = LINK_COLOR_CLASSES[l.color];
@@ -169,9 +171,12 @@ export default function Sidebar({
                     type="button"
                     onClick={() => openCloneSwitcher()}
                     title="Pick a clone first"
-                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-base font-medium text-white/50 opacity-80 transition hover:bg-white/10 hover:opacity-100"
+                    className={
+                      "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-base font-medium transition " +
+                      colors.idle
+                    }
                   >
-                    <Icon d={PATHS[l.icon]} className="h-5 w-5" />
+                    <Icon d={PATHS[l.icon]} className={"h-5 w-5 " + colors.icon} />
                     {l.label}
                   </button>
                 );
@@ -188,6 +193,24 @@ export default function Sidebar({
                   <Icon d={PATHS[l.icon]} className={"h-5 w-5 " + colors.icon} />
                   {l.label}
                 </Link>
+              );
+            }
+
+            if (l.kind === "route" && l.gateOnClone && !activeCloneId) {
+              return (
+                <button
+                  key={l.href}
+                  type="button"
+                  onClick={() => openCloneSwitcher()}
+                  title="Pick a clone first"
+                  className={
+                    "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-base font-medium transition " +
+                    colors.idle
+                  }
+                >
+                  <Icon d={PATHS[l.icon]} className={"h-5 w-5 " + colors.icon} />
+                  {l.label}
+                </button>
               );
             }
 
