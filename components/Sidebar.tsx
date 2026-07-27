@@ -92,6 +92,7 @@ const NAV_LINKS: NavLink[] = [
   { kind: "tab", label: "Edit", tab: "identity", icon: "Dials", color: "blue" },
   { kind: "route", label: "Info", href: "/info", icon: "Info", color: "neutral" },
   { kind: "route", label: "Logs", href: "/logs", icon: "Logs", color: "neutral" },
+  { kind: "route", label: "Create new clone", href: "/clones/new", icon: "Plus", color: "neutral" },
 ];
 
 export default function Sidebar({
