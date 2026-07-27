@@ -33,7 +33,6 @@ import { CategoryPricingEditor, SpoilMenuEditor } from "./editors";
 import { BetaBadge } from "../ui/primitives";
 // New dedicated file (migration 056 monetization sequence) — kept out of this
 // file's own card definitions so it doesn't collide with concurrent edits here.
-import MonetizationSequenceFields from "./MonetizationSequenceFields";
 
 // ── Configure page IA ─────────────────────────────────────────────────────────
 // Re-sorted 2026-07-26 by one rule: Identity is anything a fan could ask her
@@ -74,17 +73,17 @@ const TABS: { key: Tab; label: string; hint: string }[] = [
 const SEG = {
   sexual: [
     { value: "low" as const, label: "😊 Low", title: "Mostly cute" },
-    { value: "medium" as const, label: "😘 Medium", title: "Naturally flirty" },
+    { value: "medium" as const, label: "😘 Med", title: "Naturally flirty" },
     { value: "high" as const, label: "🔥 High", title: "Openly forward" },
   ],
   nsfw: [
     { value: "low" as const, label: "🙈 Low", title: "Keeps it PG-13" },
-    { value: "medium" as const, label: "😏 Medium", title: "Dirty when led" },
+    { value: "medium" as const, label: "😏 Med", title: "Dirty when led" },
     { value: "high" as const, label: "🔞 High", title: "Fully explicit" },
   ],
   push: [
     { value: "low" as const, label: "🍃 Low", title: "Rarely brings it up" },
-    { value: "medium" as const, label: "💵 Medium", title: "Offers at good moments" },
+    { value: "medium" as const, label: "💵 Med", title: "Offers at good moments" },
     { value: "high" as const, label: "🤑 High", title: "Proactively upsells" },
   ],
   emoji: [
@@ -214,17 +213,13 @@ export default function ConfigSections({
   const [tabState, setTabState] = useState<Tab>("identity");
   const tab = tabProp ?? tabState;
   const setTab = onTabChange ?? setTabState;
-  // Not part of `cfg` (useCloneConfig), standalone toggles, same submit
-  // pattern as everything else here (hidden input, saved with the rest of the
-  // form by rowFromForm in app/clones/actions.ts). Split into one per safety
-  // category (migration 061) instead of one blanket switch, so an operator
-  // can e.g. always auto-block MINOR while leaving JAILBREAK as log-only.
-  // Each falls back to the old single auto_block_enabled value so a clone
-  // saved before this split still shows its real prior behavior.
-  const [autoBlockMinor, setAutoBlockMinor] = useState(clone?.auto_block_minor ?? clone?.auto_block_enabled ?? false);
-  const [autoBlockHate, setAutoBlockHate] = useState(clone?.auto_block_hate ?? clone?.auto_block_enabled ?? false);
-  const [autoBlockIllegal, setAutoBlockIllegal] = useState(clone?.auto_block_illegal ?? clone?.auto_block_enabled ?? false);
-  const [autoBlockJailbreak, setAutoBlockJailbreak] = useState(clone?.auto_block_jailbreak ?? clone?.auto_block_enabled ?? false);
+  // The per-category auto-block toggles that used to live here are gone
+  // (2026-07-27, operator decision). The AI never blocks a fan, it only ever
+  // flags. Blocking stays a purely manual operator action. The safety guard in
+  // bot/src/safety.ts still runs on every message and still logs every breach,
+  // so nothing is unmonitored, there is just no longer a setting that turns a
+  // flag into an automatic block. The auto_block_* columns are left in the DB
+  // unread rather than dropped, matching the additive-only migration rule.
   const visibleTabs = [
     ...leadingTabs,
     ...TABS.filter((t) => showMoney || t.key !== "money"),
@@ -430,56 +425,14 @@ export default function ConfigSections({
         </div>
       </Section>
 
-      {/* Safety (migration 047, split per-category by migration 061). The
-          hard-limit guard in src/safety.ts always runs and always flags a
-          breach internally regardless of these toggles; each one only
-          controls what happens NEXT for that specific category. Off
-          (default) = log only, the conversation carries on untouched. On =
-          a fan flagged for that category is blocked automatically, the same
-          users.blocked switch as a manual block. Previously one blanket
-          switch covered all four categories; split so e.g. minors can always
-          auto-block while a jailbreak attempt stays log-only for review. */}
-      <Section
-        icon="🛡"
-        accent="red"
-        title="Safety"
-        hint="What happens after the built-in safety guard flags a fan, per category. The guard itself always runs and always logs every breach for review, on top of whatever these are set to."
-      >
-        <div className="grid grid-cols-2 gap-1.5">
-          <ToggleCard
-            emoji="🔞"
-            label="Minors / underage"
-            title="The most serious category. On: a flagged minor-content breach blocks the fan automatically. Off: only logged for review."
-            name="auto_block_minor"
-            checked={autoBlockMinor}
-            onChange={setAutoBlockMinor}
-          />
-          <ToggleCard
-            emoji="🗯"
-            label="Hate speech"
-            title="Racism, slurs, or hate targeting a group. On: auto-blocks. Off: only logged for review."
-            name="auto_block_hate"
-            checked={autoBlockHate}
-            onChange={setAutoBlockHate}
-          />
-          <ToggleCard
-            emoji="⚠️"
-            label="Illegal content"
-            title="Weapon/drug how-to, hiring violence, non-consent. On: auto-blocks. Off: only logged for review."
-            name="auto_block_illegal"
-            checked={autoBlockIllegal}
-            onChange={setAutoBlockIllegal}
-          />
-          <ToggleCard
-            emoji="🔓"
-            label="Jailbreak attempts"
-            title="Trying to override her rules to make her say something banned. On: auto-blocks. Off: only logged for review."
-            name="auto_block_jailbreak"
-            checked={autoBlockJailbreak}
-            onChange={setAutoBlockJailbreak}
-          />
-        </div>
-      </Section>
+      {/* The Safety section was removed (2026-07-27). It only ever held the
+          four auto-block toggles, and the AI no longer blocks anyone, so there
+          was nothing left to configure. The guard in bot/src/safety.ts still
+          runs on every message and still logs every breach (MINOR at error
+          level) for operator review on /logs. What she will and will not do
+          in character lives in the identity section's hard limits, which is a
+          different thing entirely: that shapes HER replies, this watched what
+          the FAN sends. */}
 
       {/* Personality, emoji style and realism touches were three separate cards
           for what is really one question — how she comes across. One card.
@@ -621,107 +574,12 @@ export default function ConfigSections({
           </div>
         </Collapse>
 
-        {/* Response pacing (migration 041) - operator/machinery dials that
-            replace the flat wait with something richer: read delay, typing
-            stutter, a conversation-stage speed ramp, and the per-clone
-            double-text batching window. Sits right beside Timing & memory,
-            same placement pattern as the imperfection-profile slot below. */}
-        <Collapse
-          emoji="⏳"
-          label="Response pacing"
-          accent="cyan"
-          hint="Read delay, typing stutter, a slower-to-faster ramp across the conversation, and how long she waits for a fan to finish double-texting. Every range defaults to today's behavior until you touch it."
-        >
-          <div>
-            <SubHead
-              emoji="👀"
-              label="Read delay"
-              tip="How long she waits before marking his message as read, instead of instantly. 0/0 = instant, today's behavior."
-            />
-            <div className="mt-1.5 grid gap-2 sm:grid-cols-2">
-              <Slider label="Min" name="read_delay_min" value={cfg.readDelayMin} onChange={(v) => set("readDelayMin", v)} min={0} max={30} step={1} format={(v) => `${v}s`} />
-              <Slider label="Max" name="read_delay_max" value={cfg.readDelayMax} onChange={(v) => set("readDelayMax", v)} min={0} max={60} step={1} format={(v) => `${v}s`} />
-            </div>
-          </div>
+        {/* Response pacing was removed on 2026-07-27 by operator decision.
+            The runtime is back to the pre-migration-041 behaviour: instant
+            read receipt, flat response wait, continuous typing indicator and a
+            fixed 3s batching window. The read_delay_*, typing_stutter_*,
+            pacing_* and batch_wait_* columns remain in the DB, unread. */}
 
-          <div className="mt-2 border-t border-line pt-2">
-            <SubHead
-              emoji="⌨️"
-              label="Typing stutter"
-              tip="Stops and restarts the typing indicator once or twice mid-reply instead of showing it continuously. Off by default."
-            />
-            <input type="hidden" name="typing_stutter_enabled" value={String(cfg.typingStutterEnabled)} />
-            <Toggle
-              label={cfg.typingStutterEnabled ? "Stutters" : "Continuous"}
-              name="_typing_stutter_toggle"
-              checked={cfg.typingStutterEnabled}
-              onChange={(v) => set("typingStutterEnabled", v)}
-              accent="soft"
-            />
-            {cfg.typingStutterEnabled ? (
-              <div className="mt-1.5 grid gap-2 sm:grid-cols-2">
-                <Slider label="Min pause" name="typing_stutter_min_pause" value={cfg.typingStutterMinPause} onChange={(v) => set("typingStutterMinPause", v)} min={1} max={10} step={1} format={(v) => `${v}s`} />
-                <Slider label="Max pause" name="typing_stutter_max_pause" value={cfg.typingStutterMaxPause} onChange={(v) => set("typingStutterMaxPause", v)} min={1} max={15} step={1} format={(v) => `${v}s`} />
-              </div>
-            ) : (
-              <>
-                <input type="hidden" name="typing_stutter_min_pause" value={String(cfg.typingStutterMinPause)} />
-                <input type="hidden" name="typing_stutter_max_pause" value={String(cfg.typingStutterMaxPause)} />
-              </>
-            )}
-          </div>
-
-          <div className="mt-2 border-t border-line pt-2">
-            <SubHead
-              emoji="📈"
-              label="Conversation pacing ramp"
-              tip="Slower with a brand new fan, faster once she's warmed up. Interpolates from the new-conversation range to the established range across this many messages. 0 = off, uses the flat wait above instead."
-            />
-            <Slider
-              label="Ramp length"
-              name="pacing_ramp_messages"
-              value={cfg.pacingRampMessages}
-              onChange={(v) => set("pacingRampMessages", v)}
-              min={0}
-              max={50}
-              step={1}
-              format={(v) => (v === 0 ? "off" : `${v} msgs`)}
-            />
-            {cfg.pacingRampMessages > 0 ? (
-              <div className="mt-1.5 grid gap-2">
-                <p className="text-[11px] text-muted">New conversation</p>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <Slider label="Min" name="pacing_new_wait_min" value={cfg.pacingNewWaitMin} onChange={(v) => set("pacingNewWaitMin", v)} min={0} max={120} step={1} format={(v) => `${v}s`} />
-                  <Slider label="Max" name="pacing_new_wait_max" value={cfg.pacingNewWaitMax} onChange={(v) => set("pacingNewWaitMax", v)} min={0} max={180} step={1} format={(v) => `${v}s`} />
-                </div>
-                <p className="text-[11px] text-muted">Established</p>
-                <div className="grid gap-2 sm:grid-cols-2">
-                  <Slider label="Min" name="pacing_established_wait_min" value={cfg.pacingEstablishedWaitMin} onChange={(v) => set("pacingEstablishedWaitMin", v)} min={0} max={60} step={1} format={(v) => `${v}s`} />
-                  <Slider label="Max" name="pacing_established_wait_max" value={cfg.pacingEstablishedWaitMax} onChange={(v) => set("pacingEstablishedWaitMax", v)} min={0} max={120} step={1} format={(v) => `${v}s`} />
-                </div>
-              </div>
-            ) : (
-              <>
-                <input type="hidden" name="pacing_new_wait_min" value={String(cfg.pacingNewWaitMin)} />
-                <input type="hidden" name="pacing_new_wait_max" value={String(cfg.pacingNewWaitMax)} />
-                <input type="hidden" name="pacing_established_wait_min" value={String(cfg.pacingEstablishedWaitMin)} />
-                <input type="hidden" name="pacing_established_wait_max" value={String(cfg.pacingEstablishedWaitMax)} />
-              </>
-            )}
-          </div>
-
-          <div className="mt-2 border-t border-line pt-2">
-            <SubHead
-              emoji="💬"
-              label="Double-text batching"
-              tip="How long she waits for a fan to finish a burst of quick messages before replying to all of them at once. Defaults match today's fleet-wide 3s window."
-            />
-            <div className="mt-1.5 grid gap-2 sm:grid-cols-2">
-              <Slider label="Min" name="batch_wait_min" value={cfg.batchWaitMin} onChange={(v) => set("batchWaitMin", v)} min={1} max={15} step={1} format={(v) => `${v}s`} />
-              <Slider label="Max" name="batch_wait_max" value={cfg.batchWaitMax} onChange={(v) => set("batchWaitMax", v)} min={1} max={30} step={1} format={(v) => `${v}s`} />
-            </div>
-          </div>
-        </Collapse>
 
         {/* Imperfection profile (migrations 039 + 042) is texting MECHANICS -
             how she types, not a fact a fan could ask about - so it lives in
@@ -845,7 +703,7 @@ export default function ConfigSections({
           label={<>Discounts <BetaBadge /></>}
           accent="green"
           filled={cfg.discountsEnabled}
-          hint="She picks when and how hard, % capped here. She only decides WHEN and how hard (light/medium/max); the price is always computed in code. 0 = never discount that type. Beta: ships inert until you set caps above zero."
+          hint="She picks when and how hard, % capped here. She only decides WHEN and how hard (light/medium/max); the price is always computed in code. 0 = never discount that type. Caps already default to 15/20/25/10, so the switch that actually gates this is Discounts enabled above, which is off by default."
         >
           <Toggle label={cfg.discountsEnabled ? "She can offer discounts" : "No discounts"} name="discounts_enabled" checked={cfg.discountsEnabled} onChange={(v) => set("discountsEnabled", v)} accent="soft" />
           {cfg.discountsEnabled && (
@@ -865,9 +723,10 @@ export default function ConfigSections({
       {showMoney && (
         <div className={show("money")}>
           <MonetizationSections cfg={cfg} set={set} clone={clone} />
-          {/* Monetization sequence (migration 056) — its own file, see
-              components/clone/MonetizationSequenceFields.tsx. */}
-          <MonetizationSequenceFields clone={clone} />
+          {/* The monetization-sequence cards (tease/locked bundle & re-warm,
+              proactive PPV, discount trigger gating, paywall warmup & unlock
+              bonus, pre-lock tease, post-lock re-engagement) were removed on
+              2026-07-27 by operator decision, along with their file. */}
         </div>
       )}
     </div>

@@ -4,7 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { getCloneScope } from "@/lib/clone-scope";
 import { setCloneScope } from "@/app/actions/clone-scope";
 import { getStarBalance } from "@/lib/star-balance";
-import FanAvatar from "@/components/FanAvatar";
+import BusinessConnectionCard from "./BusinessConnectionCard";
 import { Info } from "@/components/clone/fields";
 import { Card } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -31,30 +31,6 @@ async function getMe(token: string): Promise<{ ok: boolean; username?: string; i
   }
 }
 
-// The human Business account this bot is wired into (name/username/id + whether
-// the connection is live), via getBusinessConnection with any fan's stored
-// business_connection_id. Null when the clone runs as a plain bot (no biz link).
-type BizAccount = { id: number; name: string; username: string | null; enabled: boolean };
-async function getBusinessAccount(token: string, bcid: string): Promise<BizAccount | null> {
-  try {
-    const r = await fetch(`https://api.telegram.org/bot${token}/getBusinessConnection`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ business_connection_id: bcid }),
-    });
-    const j = await r.json();
-    if (!j.ok || !j.result?.user) return null;
-    const u = j.result.user;
-    return {
-      id: u.id,
-      name: [u.first_name, u.last_name].filter(Boolean).join(" "),
-      username: u.username ?? null,
-      enabled: j.result.is_enabled !== false,
-    };
-  } catch {
-    return null;
-  }
-}
 
 // Fleet-info page. "All clones" (no scope) shows one row per bot with a link
 // that switches the global clone scope into it; scoped to one clone it shows
@@ -170,12 +146,6 @@ async function CloneInfo({ cloneId }: { cloneId: string }) {
   const { lifetimeStars, totalBalanceStars, availableStars, pendingStars } = starBalance;
   const buyers = userList.filter((u) => (u.total_messages_purchased ?? 0) > 0).length;
 
-  // Most recently active fan's connection id is the freshest handle to the biz account.
-  const bcid = userList
-    .filter((u) => u.business_connection_id)
-    .sort((a, b) => (b.last_message_received ?? "").localeCompare(a.last_message_received ?? ""))[0]
-    ?.business_connection_id;
-  const biz = bcid ? await getBusinessAccount(clone.bot_token, bcid) : null;
 
   const rows: { label: string; value: string; accent?: "good" | "bad" | "money"; hint?: string }[] = [
     { label: "Bot", value: me.username ? `@${me.username}` : "-" },
@@ -190,6 +160,7 @@ async function CloneInfo({ cloneId }: { cloneId: string }) {
     {
       label: "Pending (21-day hold)",
       value: pendingStars != null ? `${pendingStars} ⭐` : "unavailable",
+      accent: pendingStars != null ? "money" : undefined,
       hint: "Stars paid to this bot in the last 21 days. Telegram holds every Star for 21 days after it's earned before it can be withdrawn, so this is real money that simply isn't liquid yet.",
     },
     {
@@ -218,30 +189,11 @@ async function CloneInfo({ cloneId }: { cloneId: string }) {
       </div>
       <p className="mb-5 text-sm text-muted">Connection, business account, and Stars.</p>
 
-      {/* The Business account this bot lives inside - face, name, live state. */}
-      <Card className="mb-3 flex-row items-center gap-3 px-4 py-3">
-        {biz ? (
-          <>
-            <FanAvatar cloneId={clone.id} telegramId={biz.id} name={biz.name} className="h-11 w-11 text-sm" />
-            <div className="min-w-0 flex-1">
-              <div className="truncate text-sm font-semibold">{biz.name}</div>
-              <div className="truncate text-xs text-muted">
-                {biz.username ? `@${biz.username} · ` : ""}Telegram Business account
-              </div>
-            </div>
-            <span
-              className={
-                "rounded-full px-2 py-0.5 text-[10px] font-semibold " +
-                (biz.enabled ? "bg-good/15 text-good" : "bg-crit/15 text-crit")
-              }
-            >
-              {biz.enabled ? "Connected" : "Disconnected"}
-            </span>
-          </>
-        ) : (
-          <div className="text-sm text-muted">No Business account detected yet. It shows up after the first fan message arrives through one.</div>
-        )}
-      </Card>
+      {/* The Business account this bot lives inside: face, name, live state and
+          the rights it was granted. Read-only on purpose, the owner asked for
+          the edit controls (set name/username/photo, post story) to come out
+          for now, so this panel only ever reports, it never mutates. */}
+      <BusinessConnectionCard cloneId={clone.id} />
 
       <div className="grid gap-2 sm:grid-cols-2">
         {rows.map((r) => (
@@ -255,24 +207,6 @@ async function CloneInfo({ cloneId }: { cloneId: string }) {
         ))}
       </div>
 
-      {/* Manage-the-business-account controls: the Bot API supports these
-          (setBusinessAccountName/Username/ProfilePhoto, postStory) but none are
-          wired yet. Placeholder so the roadmap is visible where it will live. */}
-      <Card className="mt-3 border-dashed p-4">
-        <div className="mb-2 flex items-center gap-2">
-          <span className="text-sm font-semibold">Manage business account</span>
-          <span className="rounded-full border border-yellow-500/30 bg-yellow-500/10 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-yellow-500">
-            Coming soon
-          </span>
-        </div>
-        <div className="flex flex-wrap gap-1.5">
-          {["Change profile photo", "Change name", "Change username", "Post story", "Edit bio"].map((f) => (
-            <span key={f} className="cursor-not-allowed rounded-full border border-line px-2.5 py-1 text-xs text-muted/60">
-              {f}
-            </span>
-          ))}
-        </div>
-      </Card>
     </div>
   );
 }

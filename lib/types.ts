@@ -43,18 +43,9 @@ export type Clone = {
   read_receipts_enabled: boolean;
   message_effects_enabled: boolean;
   ai_disclosure: boolean;
-  // Opt-in per-clone auto-block on a safety-guard breach (migration 047),
-  // consumed by src/safety.ts. Superseded by the four per-category columns
-  // below (migration 061); no longer written by the UI, kept read-only so an
-  // old row's value can still seed the new toggles' initial state.
-  auto_block_enabled: boolean;
-  // Per-category auto-block (migration 061): lets an operator always
-  // auto-block MINOR (the most serious category) while leaving a softer one
-  // like JAILBREAK as log-only for manual review.
-  auto_block_minor?: boolean;
-  auto_block_hate?: boolean;
-  auto_block_illegal?: boolean;
-  auto_block_jailbreak?: boolean;
+  // The auto_block_* fields (migrations 047/061) were removed on 2026-07-27.
+  // The AI never blocks a fan, it only flags for operator review, so nothing
+  // reads or writes them. The columns remain in the DB, deliberately unread.
   emojis_enabled: boolean;
   emoji_amount: "low" | "medium" | "high";
   emoji_allowlist: string | null;
@@ -231,6 +222,18 @@ export type Clone = {
   // Optional: absent pre-migration-029 (read defensively).
   drip_step_mode?: "random" | "ordered" | null;
   drip_steps?: { type: "text" | "voice" | "photo" | "video" | "bundle"; after_hours?: number; text?: string }[] | null;
+  // Ordered onboarding step list (migration 068, bot/db/migrations/068_onboarding_steps.sql).
+  // Same picker as drip_steps, but fires on the fan's MESSAGE COUNT, never hours
+  // quiet — see the migration for why. Optional: absent pre-migration-068.
+  onboarding_steps?:
+    | {
+        type: "text" | "voice" | "photo" | "video" | "bundle" | "collect" | "tease";
+        after_messages?: number;
+        media_id?: string;
+        free?: boolean;
+        collect_field?: string;
+      }[]
+    | null;
 
   // recurring Star SUBSCRIPTIONS / VIP tier (money code-locked)
   subscriptions_enabled: boolean;
@@ -247,21 +250,10 @@ export type Clone = {
   response_wait_max: number;
   memory_window: number;
 
-  // Response pacing (migration 041). Optional: absent pre-migration (read
-  // defensively with the same fallbacks the bot's mapClone uses, so an
-  // unmigrated project shows "off/flat/instant", exactly today's behavior).
-  read_delay_min?: number;
-  read_delay_max?: number;
-  typing_stutter_enabled?: boolean;
-  typing_stutter_min_pause?: number;
-  typing_stutter_max_pause?: number;
-  pacing_new_wait_min?: number;
-  pacing_new_wait_max?: number;
-  pacing_established_wait_min?: number;
-  pacing_established_wait_max?: number;
-  pacing_ramp_messages?: number | null;
-  batch_wait_min?: number;
-  batch_wait_max?: number;
+  // Response pacing and the monetization-sequence dials were removed on
+  // 2026-07-27 (operator decision). Their columns remain in the DB, unread.
+  // offer_pending_minutes, offer_redirect_cap, discount_slowdown_minutes and
+  // voice_cooldown_turns below are STILL read by the bot, so they stay.
 
   // response length (migration 037/038). max_response_words: hard ceiling on
   // reply length (null/0 = unlimited, always enforced as a last-resort safety
@@ -270,25 +262,10 @@ export type Clone = {
   max_response_words: number | null;
   match_user_length: boolean;
 
-  // Monetization sequence (migration 056). Optional: absent pre-migration,
-  // same read-defensively convention as the pacing fields above. See
-  // components/clone/MonetizationSequenceFields.tsx for what each one drives.
-  resell_cooldown_minutes?: number;
-  bundle_reengage_seconds?: number;
-  reengage_photo_enabled?: boolean;
   offer_pending_minutes?: number;
   offer_redirect_cap?: number;
   voice_cooldown_turns?: number;
-  ppv_min_engaged_messages?: number;
-  ppv_cadence_seconds?: number;
-  ppv_cooldown_minutes?: number;
   discount_slowdown_minutes?: number;
-  paywall_warmup_messages?: number;
-  paywall_unlock_bonus_photo?: boolean;
-  prelock_tease_before?: number;
-  postlock_reengage_enabled?: boolean;
-  postlock_curiosity1_minutes?: number;
-  postlock_curiosity2_minutes?: number;
 
   intake: { answers?: string; fields?: Record<string, string> } | null;
   persona: Record<string, string> | null;

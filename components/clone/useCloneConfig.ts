@@ -76,18 +76,6 @@ export type CloneConfigState = {
   // Response pacing (migration 041). Controlled because Slider/Toggle need
   // live values for conditional rendering (stutter pause sliders, ramp range
   // sliders). Defaults reproduce today's exact behavior when unset.
-  readDelayMin: number;
-  readDelayMax: number;
-  typingStutterEnabled: boolean;
-  typingStutterMinPause: number;
-  typingStutterMaxPause: number;
-  pacingRampMessages: number;
-  pacingNewWaitMin: number;
-  pacingNewWaitMax: number;
-  pacingEstablishedWaitMin: number;
-  pacingEstablishedWaitMax: number;
-  batchWaitMin: number;
-  batchWaitMax: number;
 
   // response length (migrations 037/038). max_response_words is a plain
   // uncontrolled number field (like followup_after_minutes) so it isn't
@@ -180,18 +168,6 @@ function initial(clone?: Partial<Clone>): CloneConfigState {
     waitMax: clone?.response_wait_max ?? 0,
     memoryWindow: clone?.memory_window ?? 24,
 
-    readDelayMin: clone?.read_delay_min ?? 0,
-    readDelayMax: clone?.read_delay_max ?? 0,
-    typingStutterEnabled: clone?.typing_stutter_enabled ?? false,
-    typingStutterMinPause: clone?.typing_stutter_min_pause ?? 1,
-    typingStutterMaxPause: clone?.typing_stutter_max_pause ?? 3,
-    pacingRampMessages: clone?.pacing_ramp_messages ?? 0,
-    pacingNewWaitMin: clone?.pacing_new_wait_min ?? 0,
-    pacingNewWaitMax: clone?.pacing_new_wait_max ?? 0,
-    pacingEstablishedWaitMin: clone?.pacing_established_wait_min ?? 0,
-    pacingEstablishedWaitMax: clone?.pacing_established_wait_max ?? 0,
-    batchWaitMin: clone?.batch_wait_min ?? 3,
-    batchWaitMax: clone?.batch_wait_max ?? 3,
 
     matchUserLength: clone?.match_user_length ?? false,
 

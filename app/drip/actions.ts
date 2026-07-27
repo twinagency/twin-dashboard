@@ -66,6 +66,54 @@ function parseSteps(fd: FormData): StepOut[] {
   }
 }
 
+// Onboarding steps arrive as a JSON string in a hidden field (same pattern as
+// drip_steps above). Coerce to the shape the runtime reads (bot/src/onboarding.ts):
+// known types only, after_messages clamped to 1-50, media_id/free for photo/
+// video/bundle steps only, collect_field for collect steps only. Unlike
+// drip_steps, this is NOT re-sorted — onboarding fires sequentially through the
+// array in the operator's saved order (see migration 068's writeup on why the
+// fire-once tracking is an array of indexes, not a counter: reordering must stay
+// safe, which only holds if the runtime respects the order actually saved).
+const ONBOARDING_STEP_TYPES = ["text", "voice", "photo", "video", "bundle", "collect", "tease"] as const;
+type OnboardingStepType = (typeof ONBOARDING_STEP_TYPES)[number];
+type OnboardingStepOut = {
+  type: OnboardingStepType;
+  after_messages: number;
+  media_id?: string;
+  free?: boolean;
+  collect_field?: string;
+};
+function parseOnboardingSteps(fd: FormData): OnboardingStepOut[] {
+  const raw = fd.get("onboarding_steps");
+  if (!raw) return [];
+  try {
+    const arr = JSON.parse(String(raw));
+    if (!Array.isArray(arr)) return [];
+    const out: OnboardingStepOut[] = [];
+    for (const s of arr) {
+      const type = ONBOARDING_STEP_TYPES.includes(s?.type) ? (s.type as OnboardingStepType) : null;
+      if (!type) continue;
+      const afterRaw = Math.round(Number(s?.after_messages));
+      if (!Number.isFinite(afterRaw)) continue;
+      const step: OnboardingStepOut = { type, after_messages: Math.min(50, Math.max(1, afterRaw)) };
+      const isMedia = type === "photo" || type === "video" || type === "bundle";
+      if (isMedia) {
+        const mediaId = String(s?.media_id ?? "").trim();
+        if (mediaId) step.media_id = mediaId;
+        if (s?.free === true) step.free = true;
+      }
+      if (type === "collect") {
+        const collectField = String(s?.collect_field ?? "").trim();
+        if (collectField) step.collect_field = collectField;
+      }
+      out.push(step);
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
 function str(fd: FormData, key: string): string | null {
   const v = fd.get(key);
   const s = v === null ? "" : String(v).trim();
@@ -123,6 +171,12 @@ export async function saveCampaign(id: string, fd: FormData) {
     onboarding_voice_instruction: str(fd, "onboarding_voice_instruction"),
     onboarding_collect_fields: parseCollectFields(fd),
     onboarding_length: Math.max(1, num(fd, "onboarding_length", 8)),
+    // Ordered onboarding step list (migration 068) — additive, see
+    // parseOnboardingSteps above. Legacy onboarding_voice_after/
+    // welcome_bundle_after/welcome_bundle_teased/onboarding_collect_fields
+    // above are still written unconditionally (never touched by this column)
+    // so an unmigrated clone's config is untouched by saving this page.
+    onboarding_steps: parseOnboardingSteps(fd),
     // Mid-chat follow-up
     followup_after_minutes: Math.max(0, num(fd, "followup_after_minutes", 0)),
     // Campaign. (Win-back's lapse threshold is no longer operator-facing; the
@@ -137,6 +191,11 @@ export async function saveCampaign(id: string, fd: FormData) {
   if (error && /drip_steps/i.test(error.message)) {
     // Migration 029 not applied yet: save everything else so the page still works.
     const { drip_steps: _s, ...rest } = row;
+    ({ error } = await supabaseAdmin.from("clones").update(rest).eq("id", id));
+  }
+  if (error && /onboarding_steps/i.test(error.message)) {
+    // Migration 068 not applied yet: save everything else so the page still works.
+    const { onboarding_steps: _o, ...rest } = row;
     ({ error } = await supabaseAdmin.from("clones").update(rest).eq("id", id));
   }
   if (error) throw new Error(error.message);

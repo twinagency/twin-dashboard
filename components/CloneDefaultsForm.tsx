@@ -35,7 +35,7 @@ export default function CloneDefaultsForm({ defaults }: { defaults: Partial<Clon
 
   const levelOpts = [
     { value: "low" as const, label: "Low" },
-    { value: "medium" as const, label: "Medium" },
+    { value: "medium" as const, label: "Med" },
     { value: "high" as const, label: "High" },
   ];
 

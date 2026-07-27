@@ -77,7 +77,6 @@ export default function CloneForm({
   const tabParam = searchParams.get("tab");
   const subParam = searchParams.get("sub");
   const [tab, setTab] = useState<Tab>(resolveTab(tabParam, subParam));
-  const [questionnaireOpen, setQuestionnaireOpen] = useState(false);
   const [models, setModels] = useState<OrModel[]>([]);
   const [step, setStep] = useState<Step>("idle");
   const [errorMsg, setErrorMsg] = useState("");
@@ -140,11 +139,6 @@ export default function CloneForm({
     router.push("/clones");
   }
 
-  const intakeFilled = useMemo(
-    () => INTAKE_FIELD_KEYS.filter((k) => (proseValue(k, clone.intake?.fields) ?? "").trim() !== "").length,
-    [clone.intake?.fields],
-  );
-
   const busy = step === "saving" || step === "compiling";
   const isPaused = clone.status !== "active";
   const show = (t: Tab) => (tab === t ? "grid gap-4" : "hidden");
@@ -203,60 +197,12 @@ export default function CloneForm({
           identityImperfectionSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="imperfection" cfg={cfg} set={set} />}
           identityLimitsSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="limits" cfg={cfg} set={set} />}
           identityQuestionnaireSlot={
-            <>
-              {/* This is the highest-leverage writing on the page - her voice
-                  comes from these answers — so it gets a full card that shows
-                  what's inside and how much is filled, not a thin row. The
-                  fields live in an overlay to keep the tab short, but they stay
-                  mounted inside the form so Save always submits them. */}
-              <button
-                type="button"
-                onClick={() => setQuestionnaireOpen(true)}
-                className="flex h-full w-full flex-col rounded-xl border border-line border-l-[3px] border-l-cyan-400/70 bg-panel p-3 text-left transition hover:border-accent/60"
-              >
-                <div className="flex items-center gap-2">
-                  <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-cyan-400/15 text-[11px]">
-                    📝
-                  </span>
-                  <span className="text-xs font-semibold uppercase tracking-wide text-ink">
-                    Onboarding questionnaire
-                  </span>
-                  <span className="ml-auto flex shrink-0 items-center gap-2">
-                    <span
-                      className={
-                        "rounded-full px-2 py-0.5 text-[10px] font-semibold " +
-                        (intakeFilled === 0
-                          ? "bg-warn/15 text-warn"
-                          : intakeFilled === INTAKE_FIELD_KEYS.length
-                            ? "bg-good/15 text-good"
-                            : "bg-accent/15 text-accent")
-                      }
-                    >
-                      {intakeFilled}/{INTAKE_FIELD_KEYS.length} answered
-                    </span>
-                    <span className="text-[11px] font-medium text-accent">Open ↗</span>
-                  </span>
-                </div>
-                <div className="mt-2 flex flex-wrap gap-1.5">
-                  {INTAKE_SECTIONS.map((sec) => (
-                    <span
-                      key={sec.title}
-                      className="rounded-full border border-line px-2 py-0.5 text-[10px] text-muted"
-                    >
-                      {sec.title}
-                    </span>
-                  ))}
-                </div>
-              </button>
-              <Modal
-                open={questionnaireOpen}
-                onClose={() => setQuestionnaireOpen(false)}
-                title="Onboarding questionnaire"
-                hint="The writing only you can do. Saving auto-recompiles her personality whenever these (or the typed facts) change."
-              >
-                <IntakeFields fields={clone.intake?.fields} legacyAnswers={clone.intake?.answers} />
-              </Modal>
-            </>
+            <Section
+              title="Her own words"
+              hint="Goes into her prompt exactly as you type it. Nothing here is rewritten. One entry per row, use Add another for more."
+            >
+              <IntakeFields fields={clone.intake?.fields} legacyAnswers={clone.intake?.answers} />
+            </Section>
           }
         />
 
@@ -283,7 +229,7 @@ export default function CloneForm({
             ))}
             <div>
               <Button type="button" variant="outline" onClick={recompile} disabled={busy}>
-                {step === "compiling" ? "Re-compiling…" : "Re-compile her personality from answers"}
+                {step === "compiling" ? "Rebuilding…" : "Rebuild her prompt from her answers"}
               </Button>
             </div>
           </Section>

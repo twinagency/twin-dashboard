@@ -19,7 +19,6 @@ import type { AnalyticsData } from "@/lib/analytics-data";
 import type { StarBalance } from "@/lib/star-balance";
 import { fmtMoney, fmtNum, starsToMoneyRate } from "@/lib/money";
 import { useCurrency } from "@/components/CurrencyProvider";
-import { useTheme } from "@/components/ThemeProvider";
 import { initials } from "@/lib/colors";
 import FanAvatar from "@/components/FanAvatar";
 import { Info } from "@/components/clone/fields";
@@ -74,8 +73,6 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
   const [draftEnd, setDraftEnd] = useState("");
   const [chartType, setChartType] = useState<"bar" | "line">("bar");
   const { currency, rate } = useCurrency();
-  const { theme } = useTheme();
-  const dark = theme === "dark";
   const [data, setData] = useState<FullData | null>(null);
   const [loading, setLoading] = useState(true);
   const [hidden, setHidden] = useState<Set<string>>(new Set());
@@ -89,14 +86,14 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
   const reportRef = useRef<HTMLDivElement | null>(null);
 
   // Recharts colors are inline JS (not CSS classes) so they don't pick up the
-  // `dark:` variant — switch them on the active theme.
-  const axisColor = dark ? "rgba(255,255,255,0.4)" : "rgba(0,0,0,0.45)";
-  const gridColor = dark ? "rgba(255,255,255,0.06)" : "rgba(0,0,0,0.08)";
-  const cursorColor = dark ? "rgba(255,255,255,0.04)" : "rgba(0,0,0,0.04)";
+  // light-mode constants rather than theme-conditional.
+  const axisColor = "rgba(0,0,0,0.45)";
+  const gridColor = "rgba(0,0,0,0.08)";
+  const cursorColor = "rgba(0,0,0,0.04)";
   // Last bar in the window is always today/this-bucket — still accumulating,
   // so it renders greyed out (not a clone color) with a "Live" x-axis label
   // instead of the date, no matter which period width is selected.
-  const liveBarColor = dark ? "rgba(255,255,255,0.16)" : "rgba(0,0,0,0.14)";
+  const liveBarColor = "rgba(0,0,0,0.14)";
 
   const fetchData = useCallback(
     async (p: Period, cid?: string | null, range?: { start: string; end: string } | null) => {
@@ -343,6 +340,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
                     hint="Every Star sitting in this bot's Telegram wallet right now, matured and pending combined, minus anything already withdrawn or spent."
                     value={data.balance.totalBalanceStars}
                     money={money}
+                    accent="good"
                   />
                   <BalanceStat
                     label="Available now"
@@ -356,6 +354,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
                     hint="Stars paid in the last 21 days. Real money, just not liquid yet - Telegram holds every Star for 21 days after it's earned."
                     value={data.balance.pendingStars}
                     money={money}
+                    accent="good"
                   />
                 </div>
               ) : (
@@ -638,7 +637,6 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
             money={money}
             usd={usd}
             pct={pct}
-            dark={dark}
             axisColor={axisColor}
             cursorColor={cursorColor}
             onClose={() => setReportOpen(false)}
@@ -867,7 +865,6 @@ function RevenueReport({
   money,
   usd,
   pct,
-  dark,
   axisColor,
   cursorColor,
   onClose,
@@ -877,16 +874,13 @@ function RevenueReport({
   money: (stars: number) => string;
   usd: (n: number) => string;
   pct: (n: number) => string;
-  dark: boolean;
   axisColor: string;
   cursorColor: string;
   onClose: () => void;
 }) {
-  // Categorical hues validated against both surfaces (dataviz six-checks);
+  // Categorical hues validated against the light surface (dataviz six-checks);
   // gray is reserved for "Other/untagged" buckets, never a real series.
-  const CAT = dark
-    ? { blue: "#3987e5", aqua: "#199e70", yellow: "#c98500", violet: "#9085e9", red: "#e66767", gray: "#8a8a93" }
-    : { blue: "#2a78d6", aqua: "#1baf7a", yellow: "#eda100", violet: "#4a3aa7", red: "#e34948", gray: "#9ca3af" };
+  const CAT = { blue: "#2a78d6", aqua: "#1baf7a", yellow: "#eda100", violet: "#4a3aa7", red: "#e34948", gray: "#9ca3af" };
 
   const featureColor = (k: string) =>
     k === "credits"

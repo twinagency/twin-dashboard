@@ -1,7 +1,7 @@
 import { supabaseAdmin } from "./supabase";
-import { orChat } from "./openrouter";
 import { applyStructuredPersona, fillDerivedSlots, type PersonaFactCols } from "./persona-facts";
 import { vibePresetFor } from "./vibes";
+import { buildPersona } from "./persona-build";
 
 // Persona slots the compiler fills from her free-form answers.
 const SLOT_KEYS = [
@@ -15,7 +15,6 @@ const SLOT_KEYS = [
 ] as const;
 type Persona = Record<(typeof SLOT_KEYS)[number], string>;
 
-const COMPILER_MODEL = process.env.COMPILER_MODEL ?? "openai/gpt-4.1";
 
 // Strip {{#IF_X}}…{{/IF_X}} blocks: keep inner text when the flag is on, remove
 // the whole block when off. Then tidy the blank lines that stripping leaves.
@@ -47,7 +46,7 @@ export async function assembleClonePrompts(
   } & PersonaFactCols,
   // Optional draft text keyed by agent_type, substituted in place of the
   // stored DB row for that agent type only. Lets the prompt template editor
-  // (app/prompts) preview an UNSAVED edit against a real clone without
+  // (components/prompts) preview an UNSAVED edit against a real clone without
   // writing it to prompt_templates first — every other agent type still
   // reads the live saved row. undefined (the default) preserves the exact
   // prior behaviour for every existing caller.
@@ -294,66 +293,10 @@ export async function assemblePromptPreview(
   return { mode, smartSplit, blocks };
 }
 
-// One LLM call: read her answers, return values for every persona slot as JSON.
-// Since the 2026-07-17 persona audit the compiler writes PROSE ONLY: the hard
-// facts (age, height, cities, job, socials), her fan nicknames and her hard-limit
-// checklist come from typed columns and are injected into the prompt by the
-// SYSTEM at runtime — the compiler must not reconstruct or restate them.
-async function extractPersona(answers: string, vibe?: { persona: string; flirt: string } | null): Promise<Persona> {
-  const system =
-    "You compile an AI-girlfriend persona from a creator's intake answers. " +
-    "Output ONLY a JSON object with these exact keys: " +
-    SLOT_KEYS.join(", ") +
-    ". Each value is plain text that will be dropped verbatim into a prompt template. " +
-    "Write in third/second person describing HER (not as her). Be concrete and faithful to the answers; " +
-    "do not invent facts that contradict them, but flesh out tone/style richly. " +
-    "NAME = what she goes by. PERSONA = 2-4 sentences on who she is + her texting energy/quirks. " +
-    "VOICE_TRAITS = how she sounds out loud (accent, pace, softness). " +
-    "NICKNAMES = comma list of pet names she uses for fans (a typed list may override this at runtime; still give your best fallback). " +
-    "FLIRT_NSFW = her flirting style + what she's sexually open to + her hard nos FROM THE PROSE ANSWERS ONLY. " +
-    "RELATIONSHIP = her status + how she answers 'are you single' / 'do you love me'. " +
-    "KNOWLEDGE_BASE = her life color she can mention naturally: daily routine, look, tastes (music/food/shows), hobbies, pets, stories, goals. " +
-    "IMPORTANT: any answers listed under 'Structured facts' (age/birthday, gender, height, heritage, sexuality, cities, job, social handles, nicknames, turn-ons/offs, hard-limit checklist) are injected into her prompt AUTOMATICALLY by the system - use them as context for tone, but do NOT restate them in KNOWLEDGE_BASE or any other field. A fact that appears ONLY in her prose answers should still be kept. " +
-    (vibe && (vibe.persona || vibe.flirt)
-      ? "A vibe-preset BASELINE for PERSONA and FLIRT_NSFW is provided in the answers - build on it: keep its energy and archetype, and refine it with her specific answers (especially the example texts) rather than replacing it. "
-      : "") +
-    "If example texts are provided, study them and make PERSONA + her texting voice match them exactly - punctuation, casing, slang, message length, pet names, energy. The example texts are the strongest signal for how she writes. " +
-    "CRITICAL: describe WHO SHE IS, never WHAT SHE SELLS. Do NOT mention selling, sending, " +
-    "unlocking, pricing, or 'doing content'/photos/videos/paid media in ANY field - those are " +
-    "capabilities toggled separately at runtime, not part of her identity. If her answers describe " +
-    "a content/OF business, capture only the persona behind it (her vibe, confidence, sexual openness) " +
-    "and keep her job generic (e.g. 'model', 'influencer'). The persona must read identically whether " +
-    "or not photo/video selling is enabled.";
-
-  const vibeBlock =
-    vibe && (vibe.persona || vibe.flirt)
-      ? `\n\n## Vibe preset baseline (build on this)\nPERSONA baseline: ${vibe.persona}\nFLIRT_NSFW baseline: ${vibe.flirt}`
-      : "";
-
-  const raw = await orChat({
-    model: COMPILER_MODEL,
-    system,
-    user: `INTAKE ANSWERS:\n${answers}${vibeBlock}`,
-    temperature: 0.5,
-    json: true,
-  });
-
-  let obj: Record<string, unknown>;
-  try {
-    obj = JSON.parse(raw);
-  } catch {
-    const m = raw.match(/\{[\s\S]*\}/);
-    obj = m ? JSON.parse(m[0]) : {};
-  }
-  const persona = {} as Persona;
-  for (const k of SLOT_KEYS) persona[k] = String(obj[k] ?? "").trim();
-  return persona;
-}
-
 type CloneRow = {
   id: string;
   name: string;
-  intake: { answers?: string } | null;
+  intake: { answers?: string; fields?: Record<string, string> } | null;
   charge_messages: boolean;
   photos_enabled: boolean;
   videos_enabled: boolean;
@@ -378,9 +321,6 @@ export async function compileClone(cloneId: string) {
   if (!clone) throw new Error("clone not found");
   const c = clone as CloneRow;
 
-  const answers = c.intake?.answers?.trim();
-  if (!answers) throw new Error("no intake answers to compile from");
-
   const { data: tplRows, error: te } = await supabaseAdmin
     .from("prompt_templates")
     .select("agent_type,template")
@@ -398,9 +338,9 @@ export async function compileClone(cloneId: string) {
     SUBS: (c.subscriptions_enabled ?? false) && (c.subscription_tiers ?? []).length > 0,
   };
 
-  // Vibe preset baseline (typed column) grounds the PERSONA/FLIRT compile.
-  const vibe = vibePresetFor(c.vibe_preset);
-  const persona = await extractPersona(answers, vibe);
+  // Deterministic assembly from the operator's own entries. No model call: her
+  // words reach the prompt exactly as written. See lib/persona-build.ts.
+  const persona = buildPersona(c.intake?.fields, c.name, c.vibe_preset ?? null) as Persona;
 
   // The stored *_prompt snapshots are cosmetic (dashboard only) but should still
   // look like the runtime output: structured facts layered in + derived slots filled.

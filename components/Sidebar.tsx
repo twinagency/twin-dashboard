@@ -72,43 +72,39 @@ const PATHS: Record<string, string> = {
   Sparkle: '<path d="M12 3l1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2z"/>',
 };
 
-// Icons always show their own color. Labels stay plain ink until selected,
+// Icons always show their own color. Labels stay off-white until selected,
 // at which point the label + row background switch to that same icon color.
+// Sidebar is a fixed navy surface (not theme-driven), so idle/hover states
+// here are hand-tuned for a dark bg rather than reusing the light-canvas
+// muted/ink tokens. Colors are drawn from the Aurora ramp, not generic
+// Tailwind hues, so section color-coding still reads as "on brand":
+// purple->accent-soft (violet stop), pink->love, blue->accent-2 (brighter
+// indigo stop, for contrast against navy). Matches allieai2's sidebar.
 type LinkColor = "neutral" | "good" | "purple" | "orange" | "blue" | "red" | "pink" | "gray";
 const LINK_COLOR_CLASSES: Record<LinkColor, { icon: string; active: string; idle: string }> = {
-  neutral: { icon: "text-muted", active: "bg-muted/15 text-ink", idle: "text-ink hover:bg-muted/10" },
-  good: { icon: "text-good", active: "bg-good/15 text-good", idle: "text-ink hover:bg-good/10" },
-  purple: { icon: "text-purple-400", active: "bg-purple-500/15 text-purple-400", idle: "text-ink hover:bg-purple-500/10" },
-  orange: { icon: "text-orange-400", active: "bg-orange-500/15 text-orange-400", idle: "text-ink hover:bg-orange-500/10" },
-  blue: { icon: "text-accent", active: "bg-accent/15 text-accent", idle: "text-ink hover:bg-accent/10" },
-  pink: { icon: "text-pink-400", active: "bg-pink-500/15 text-pink-400", idle: "text-ink hover:bg-pink-500/10" },
-  red: { icon: "text-red-400", active: "bg-red-500/15 text-red-400", idle: "text-ink hover:bg-red-500/10" },
-  gray: { icon: "text-slate-400", active: "bg-slate-500/15 text-slate-300", idle: "text-ink hover:bg-slate-500/10" },
+  neutral: { icon: "text-white/60", active: "bg-white/15 text-white", idle: "text-white/80 hover:bg-white/10" },
+  good: { icon: "text-good", active: "bg-good/20 text-good", idle: "text-white/80 hover:bg-good/10" },
+  purple: { icon: "text-accent-soft", active: "bg-accent-soft/20 text-accent-soft", idle: "text-white/80 hover:bg-accent-soft/10" },
+  orange: { icon: "text-warn", active: "bg-warn/20 text-warn", idle: "text-white/80 hover:bg-warn/10" },
+  blue: { icon: "text-accent-2", active: "bg-accent-2/20 text-accent-2", idle: "text-white/80 hover:bg-accent-2/10" },
+  pink: { icon: "text-love", active: "bg-love/20 text-love", idle: "text-white/80 hover:bg-love/10" },
+  red: { icon: "text-crit", active: "bg-crit/20 text-crit", idle: "text-white/80 hover:bg-crit/10" },
+  gray: { icon: "text-white/40", active: "bg-white/10 text-white/70", idle: "text-white/80 hover:bg-white/10" },
 };
 
 // Each page type appears exactly once, scoped by the header clone switcher,
 // not by a route param. Ordered by importance: day-to-day fleet views first,
-// girl-only editors next, then reference/meta pages last. Settings/AI/Feedback
-// used to live in a separate footer block, folded in here instead so there's
-// one list, one visual language, ordered instead of split by "importance" vs
-// "everything else".
+// girl-only editors next, then reference/meta pages last. One list, one visual
+// language, rather than a main block plus a separate footer block.
 const NAV_LINKS: NavLink[] = [
   { kind: "route", label: "Earnings", href: "/revenue", icon: "EarningsCombo", color: "good" },
   { kind: "route", label: "Fans", href: "/users", icon: "FansCombo", color: "purple" },
-  { kind: "route", label: "Notifications", href: "/notifications", icon: "Bell", color: "orange" },
   { kind: "route", label: "Campaigns", href: "/drip", icon: "Campaigns", color: "pink" },
   { kind: "tab", label: "PPVs", tab: "ppvs", icon: "Media", color: "red" },
   { kind: "tab", label: "Edit", tab: "identity", icon: "Dials", color: "blue" },
-  { kind: "route", label: "Business", href: "/business", icon: "Dials", color: "neutral" },
   { kind: "route", label: "Info", href: "/info", icon: "Info", color: "neutral" },
-  { kind: "route", label: "Performance", href: "/performance", icon: "Dials", color: "neutral" },
   { kind: "route", label: "Logs", href: "/logs", icon: "Logs", color: "neutral" },
-  { kind: "route", label: "Changelog", href: "/changelog", icon: "Sparkle", color: "gray" },
-  { kind: "route", label: "Feedback", href: "/feedback", icon: "Feedback", color: "gray" },
-  { kind: "route", label: "Prompts", href: "/prompts", icon: "Edit", color: "gray" },
-  { kind: "route", label: "Test", href: "/test", icon: "Bot", color: "gray" },
   { kind: "route", label: "Settings", href: "/settings", icon: "Settings", color: "gray" },
-  { kind: "route", label: "AI", href: "/ai", icon: "Bot", color: "gray" },
 ];
 
 export default function Sidebar({
@@ -126,21 +122,23 @@ export default function Sidebar({
   const onConfigurePage = activeCloneId ? pathname === `/clones/${activeCloneId}` : false;
 
   return (
-    <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-line bg-panel lg:flex">
+    <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col bg-gradient-to-b from-[#0A2540] to-[#1D2B5B] lg:flex">
       {/* Brand - fixed height so its bottom border lines up exactly with the
           TopBar's border in the column next to it (both h-16). */}
-      <div className="flex h-16 shrink-0 items-center justify-between gap-2 border-b border-line px-4">
-        <Link href="/revenue" className="text-2xl font-extrabold tracking-tight text-ink">
-          Twin<span className="text-ink">.</span>
+      <div className="flex h-16 shrink-0 items-center justify-between gap-2 border-b border-white/10 px-4">
+        <Link href="/revenue" className="text-2xl font-extrabold tracking-tight text-white">
+          Twin<span className="text-love">.</span>
         </Link>
-        <span className="rounded-full bg-muted/10 px-2 py-1 text-[10px] font-medium text-muted">
+        <span className="rounded-full bg-white/10 px-2 py-1 text-[10px] font-medium text-white/70">
           v1.0 beta
         </span>
       </div>
 
       {/* Create new clone - always the first thing in the sidebar, its own
-          row so it reads as an action, not just another nav destination. */}
-      <div className="shrink-0 border-b border-line p-3">
+          row so it reads as an action, not just another nav destination.
+          No bottom border: the generous space above it already separates it
+          from the brand header, so a hairline as well just reads as clutter. */}
+      <div className="shrink-0 px-3 pb-3 pt-10">
         <Link
           href="/clones/new"
           className="flex items-center justify-center gap-2 rounded-lg bg-accent px-3 py-2.5 text-sm font-semibold text-accent-ink shadow-sm transition hover:bg-accent-deep"
@@ -171,7 +169,7 @@ export default function Sidebar({
                     type="button"
                     onClick={() => openCloneSwitcher()}
                     title="Pick a clone first"
-                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-base font-medium text-muted opacity-60 transition hover:bg-muted/10 hover:opacity-100"
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-base font-medium text-white/50 opacity-80 transition hover:bg-white/10 hover:opacity-100"
                   >
                     <Icon d={PATHS[l.icon]} className="h-5 w-5" />
                     {l.label}
@@ -207,7 +205,7 @@ export default function Sidebar({
                   <>
                     <Icon d={PATHS.Users} className={"h-5 w-5 " + colors.icon} />
                     <span className="flex-1">{l.label}</span>
-                    <Icon d={PATHS.Messages} className="h-4 w-4 text-ink" />
+                    <Icon d={PATHS.Messages} className="h-4 w-4 text-white/50" />
                   </>
                 ) : l.icon === "EarningsCombo" ? (
                   <>
@@ -226,11 +224,11 @@ export default function Sidebar({
         </div>
 
         {/* Still not built - kept separate from the real nav list above. */}
-        <div className="mt-1 border-t border-line pt-1">
-          <span className="flex cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2.5 text-base font-medium text-muted opacity-50">
+        <div className="mt-1 border-t border-white/10 pt-1">
+          <span className="flex cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2.5 text-base font-medium text-white/40 opacity-70">
             <Icon d={PATHS.Code} className="h-5 w-5" />
             <span className="flex-1">API</span>
-            <span className="rounded-full bg-muted/10 px-1.5 py-0.5 text-[9px] font-medium normal-case tracking-normal text-muted">
+            <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[9px] font-medium normal-case tracking-normal text-white/50">
               coming soon
             </span>
           </span>

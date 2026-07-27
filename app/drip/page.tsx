@@ -35,6 +35,24 @@ function validSteps(
   });
 }
 
+// Valid onboarding steps (migration 068 model [{type, after_messages, ...}]).
+// Same defensive-read pattern as validSteps above, message-count bound 1-50.
+const ONBOARDING_STEP_TYPES = ["text", "voice", "photo", "video", "bundle", "collect", "tease"];
+function validOnboardingSteps(raw: unknown): {
+  type: "text" | "voice" | "photo" | "video" | "bundle" | "collect" | "tease";
+  after_messages: number;
+  media_id?: string;
+  free?: boolean;
+  collect_field?: string;
+}[] {
+  if (!Array.isArray(raw)) return [];
+  return raw.filter((s: any) => {
+    if (!s || typeof s !== "object" || !ONBOARDING_STEP_TYPES.includes(s.type)) return false;
+    const n = Number(s.after_messages);
+    return Number.isFinite(n) && n >= 1 && n <= 50;
+  });
+}
+
 type FleetRow = {
   id: string;
   name: string;
@@ -148,6 +166,8 @@ async function CloneCampaigns({ cloneId }: { cloneId: string }) {
     drip_media_ids: { type: "photo" | "video" | "bundle"; id: string }[] | null;
     // absent pre-migration-029, so read defensively
     drip_steps?: unknown[] | null;
+    // absent pre-migration-068, so read defensively
+    onboarding_steps?: unknown[] | null;
     // Onboarding + follow-up, moved off Configure's Engagement tab.
     welcome_instruction: string | null;
     welcome_bundle_after: number | null;
@@ -200,6 +220,14 @@ async function CloneCampaigns({ cloneId }: { cloneId: string }) {
             : [],
           onboardingLength: clone.onboarding_length ?? 8,
           followupAfterMinutes: clone.followup_after_minutes ?? 0,
+          // Ordered onboarding step list (migration 068) — see validOnboardingSteps above.
+          onboardingSteps: validOnboardingSteps(clone.onboarding_steps).map((s) => ({
+            type: s.type,
+            afterMessages: s.after_messages,
+            mediaId: typeof s.media_id === "string" && s.media_id.trim() ? s.media_id.trim() : null,
+            free: s.free === true,
+            collectField: typeof s.collect_field === "string" && s.collect_field.trim() ? s.collect_field.trim() : null,
+          })),
         }}
       />
     </div>

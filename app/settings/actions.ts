@@ -108,14 +108,9 @@ const BUILTIN_CLONE_DEFAULTS: CloneDefaults = {
   discount_max_credits: 10,
   response_wait_min: 8,
   response_wait_max: 45,
-  read_delay_min: 2,
-  read_delay_max: 9,
-  typing_stutter_enabled: true,
-  pacing_ramp_messages: 25,
-  pacing_new_wait_min: 20,
-  pacing_new_wait_max: 75,
-  pacing_established_wait_min: 6,
-  pacing_established_wait_max: 30,
+  // The response-pacing defaults (read delay, typing stutter, the ramp) were
+  // removed on 2026-07-27 along with the feature itself. The flat
+  // response_wait_min/max above is the whole pacing story now.
 };
 
 export async function getCloneDefaults(): Promise<CloneDefaults> {
