@@ -278,6 +278,7 @@ export type Clone = {
   reengage_photo_enabled?: boolean;
   offer_pending_minutes?: number;
   offer_redirect_cap?: number;
+  voice_cooldown_turns?: number;
   ppv_min_engaged_messages?: number;
   ppv_cadence_seconds?: number;
   ppv_cooldown_minutes?: number;

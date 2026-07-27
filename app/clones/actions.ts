@@ -478,6 +478,7 @@ function rowFromForm(fd: FormData) {
     reengage_photo_enabled: fd.has("reengage_photo_enabled") ? fd.get("reengage_photo_enabled") === "true" : true,
     offer_pending_minutes: Math.max(0, num(fd, "offer_pending_minutes", 15)),
     offer_redirect_cap: Math.max(1, num(fd, "offer_redirect_cap", 3)),
+    voice_cooldown_turns: Math.max(0, num(fd, "voice_cooldown_turns", 2)),
     ppv_min_engaged_messages: Math.max(1, num(fd, "ppv_min_engaged_messages", 4)),
     ppv_cadence_seconds: Math.max(0, num(fd, "ppv_cadence_seconds", 60)),
     ppv_cooldown_minutes: Math.max(0, num(fd, "ppv_cooldown_minutes", 45)),
@@ -605,6 +606,10 @@ const REENGAGE_PHOTO_COLUMNS = ["reengage_photo_enabled"] as const;
 // flows/actions.ts) redirect a fan back to a single open offer before backing
 // off. See bot/db/migrations/064_offer_redirect_cap.sql.
 const OFFER_REDIRECT_COLUMNS = ["offer_redirect_cap"] as const;
+// Migration 065: how many of her own most recent outbound turns must NOT have
+// been a voice note before Smart mode's decider will let "voice" fire again.
+// See bot/db/migrations/065_voice_cooldown.sql and bot/src/flows/smart.ts.
+const VOICE_COOLDOWN_COLUMNS = ["voice_cooldown_turns"] as const;
 const OPTIONAL_COLUMNS = [
   ...PERSONA_FACT_COLUMNS,
   ...RESPONSE_LENGTH_COLUMNS,
@@ -618,6 +623,7 @@ const OPTIONAL_COLUMNS = [
   ...MONETIZATION_SEQUENCE_COLUMNS,
   ...REENGAGE_PHOTO_COLUMNS,
   ...OFFER_REDIRECT_COLUMNS,
+  ...VOICE_COOLDOWN_COLUMNS,
 ] as const;
 
 function withoutPersonaFactColumns(row: Record<string, unknown>): Record<string, unknown> {

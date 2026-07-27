@@ -785,6 +785,15 @@ export default function ConfigSections({
                 ? "On: your Text model writes her replies, your Routing model fires photo/voice/tip actions (must support tool-calling). Set both under AI Models in Config."
                 : "Off: one model (your Text model) both writes her replies and fires actions in a single call. Cheaper, but it must support tool-calling."}
             </p>
+            <Field
+              label="Voice cooldown (turns)"
+              name="voice_cooldown_turns"
+              type="number"
+              min={0}
+              step={1}
+              defaultValue={clone?.voice_cooldown_turns ?? 2}
+              hint="How many of her own most recent replies must NOT have been a voice note before Smart mode will pick voice again, unless he freshly and explicitly asks for another one, that always overrides this. Without a cooldown the decider can pattern-match its own recent voice sends and get stuck replying with only voice notes for several turns straight. 0 turns it off entirely for a clone that should send voice often."
+            />
           </Section>
         )}
 
