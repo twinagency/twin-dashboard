@@ -162,11 +162,15 @@ export async function saveCampaign(id: string, fd: FormData) {
     onboarding_free_preview_after_minutes: numOrNull(fd, "onboarding_free_preview_after_minutes"),
     onboarding_free_preview_after_messages: numOrNull(fd, "onboarding_free_preview_after_messages"),
     onboarding_free_preview_media_id: str(fd, "onboarding_free_preview_media_id"),
+    // Per-flow caption kill switch (migration 071) — overrides media_caption_mode
+    // outright for that flow's photo/video/bundle sends.
+    onboarding_captions_off: fd.get("onboarding_captions_off") === "true",
     // Mid-chat follow-up
     followup_after_minutes: Math.max(0, num(fd, "followup_after_minutes", 0)),
     // Campaign. (Win-back's lapse threshold is no longer operator-facing; the
     // runtime uses a fixed default — see isReturningLapsedSpender in campaign.ts.)
     drip_enabled: fd.get("drip_enabled") === "true",
+    campaign_captions_off: fd.get("campaign_captions_off") === "true",
     drip_media_ids: parseMediaIds(fd),
     drip_steps: parseSteps(fd),
     updated_at: new Date().toISOString(),
@@ -193,6 +197,11 @@ export async function saveCampaign(id: string, fd: FormData) {
       onboarding_free_preview_media_id: _fi,
       ...rest
     } = row;
+    ({ error } = await supabaseAdmin.from("clones").update(rest).eq("id", id));
+  }
+  if (error && /captions_off/i.test(error.message)) {
+    // Migration 071 not applied yet: strip the caption kill switches and retry.
+    const { onboarding_captions_off: _oc, campaign_captions_off: _cc, ...rest } = row;
     ({ error } = await supabaseAdmin.from("clones").update(rest).eq("id", id));
   }
   if (error) throw new Error(error.message);

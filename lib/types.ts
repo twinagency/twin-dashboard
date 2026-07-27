@@ -185,6 +185,11 @@ export type Clone = {
   random_voice_enabled: boolean;
   random_voice_chance: number;
   gap_awareness_enabled: boolean;
+  // Per-flow caption kill switch (migration 071) — overrides media_caption_mode
+  // outright for that flow's photo/video/bundle sends. Optional (`?`) so
+  // pre-migration rows type-check.
+  onboarding_captions_off?: boolean;
+  campaign_captions_off?: boolean;
 
   starting_credits: number;
   credit_pack_size: number;

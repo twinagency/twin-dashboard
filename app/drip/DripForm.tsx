@@ -70,6 +70,11 @@ const ONBOARDING_STEP_TYPES: { key: OnboardingStepType; label: string; emoji: st
 
 type Initial = {
   enabled: boolean;
+  // Per-flow caption kill switch (migration 071): true = every photo/video/
+  // bundle THIS flow sends goes out captionless, overriding media_caption_mode
+  // outright. Two independent toggles — one per flow.
+  campaignCaptionsOff: boolean;
+  onboardingCaptionsOff: boolean;
   steps: Step[];
   // New-fan onboarding: free-text steer for her first message. The rest of the
   // onboarding flow (voice note, welcome bundle, detail collection) is now built
@@ -262,6 +267,8 @@ export default function DripForm({
   const [saved, setSaved] = useState(false);
 
   const [enabled, setEnabled] = useState(initial.enabled);
+  const [campaignCaptionsOff, setCampaignCaptionsOff] = useState(initial.campaignCaptionsOff);
+  const [onboardingCaptionsOff, setOnboardingCaptionsOff] = useState(initial.onboardingCaptionsOff);
   const [steps, setSteps] = useState<Step[]>(initial.steps);
   const [onboardingSteps, setOnboardingSteps] = useState<OnboardingStepData[]>(initial.onboardingSteps);
   const [freePreviewEnabled, setFreePreviewEnabled] = useState(initial.freePreviewEnabled);
@@ -524,6 +531,18 @@ export default function DripForm({
           </button>
         </div>
 
+        {/* ── Caption kill switch (migration 071) ───────────────────────── */}
+        <div className="border-t border-line pt-3">
+          <Toggle
+            label={onboardingCaptionsOff ? "Captions off: no caption on anything onboarding sends" : "Captions follow the normal rules (Configure)"}
+            name="onboarding_captions_off"
+            checked={onboardingCaptionsOff}
+            onChange={setOnboardingCaptionsOff}
+            accent="soft"
+            hint="Overrides the caption placement set in Configure just for onboarding: every photo, video and bundle the steps above (and the free-preview fallback below) send goes out with NO caption at all, no matter what."
+          />
+        </div>
+
         {/* ── Free-preview fallback (migration 069) ─────────────────────── */}
         <div className="border-t border-line pt-3">
           <Toggle
@@ -607,6 +626,17 @@ export default function DripForm({
           onChange={setEnabled}
           accent="soft"
         />
+
+        {enabled && (
+          <Toggle
+            label={campaignCaptionsOff ? "Captions off: no caption on anything the campaign sends" : "Captions follow the normal rules (Configure)"}
+            name="campaign_captions_off"
+            checked={campaignCaptionsOff}
+            onChange={setCampaignCaptionsOff}
+            accent="soft"
+            hint="Overrides the caption placement set in Configure just for the automated campaign: every photo, video and bundle a step below sends goes out with NO caption at all, no matter what."
+          />
+        )}
 
         {enabled && (
           <>

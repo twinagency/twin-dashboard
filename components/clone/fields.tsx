@@ -1003,8 +1003,10 @@ export const MODEL_FIELDS: { name: string; label: string; def: string }[] = [
   { name: "media_model", label: "Media match", def: "mistralai/mistral-small-3.2-24b-instruct" },
   { name: "routing_model", label: "Routing / Smart decider", def: "qwen/qwen3-30b-a3b-instruct-2507" },
   { name: "voice_enhance_model", label: "Voice enhance", def: "google/gemini-2.5-flash-lite" },
-  { name: "photo_reply_model", label: "Photo reply", def: "qwen/qwen3-vl-32b-instruct" },
-  { name: "vision_model", label: "Vision", def: "qwen/qwen3-vl-32b-instruct" },
+  // Also fires when the fan sends a VIDEO (she reacts to a grabbed frame) —
+  // there is no separate video model, this one covers both (see flows/vision.ts).
+  { name: "photo_reply_model", label: "Photo & video reply", def: "qwen/qwen3-vl-32b-instruct" },
+  { name: "vision_model", label: "Vision (media library tagging)", def: "qwen/qwen3-vl-32b-instruct" },
 ];
 
 // ── Recommended models per job ────────────────────────────────────────────────

@@ -18,7 +18,7 @@ import { updateClone, deleteClone } from "@/app/clones/actions";
 import { Button } from "./ui/button";
 import { Badge } from "./ui/badge";
 
-type Step = "idle" | "saving" | "compiling" | "done" | "save-error" | "compile-error";
+type Step = "idle" | "saving" | "done" | "save-error";
 
 // ONE flat tab bar for the whole page — PPVs, Identity, Config, Money, View.
 // There used to be two stacked strips (an outer PPVs/Edit/Monetization row plus
@@ -115,31 +115,13 @@ export default function CloneForm({
     }
   }
 
-  // Regenerate prompts from the personality answers — overwrites manual edits.
-  async function recompile() {
-    if (!confirm("Re-generate all prompts from the personality answers? This overwrites any manual edits to the prompts.")) return;
-    setStep("compiling");
-    setErrorMsg("");
-    try {
-      await updateClone(clone.id, new FormData(formRef.current!));
-      const res = await fetch(`/api/compile?id=${clone.id}`);
-      const json = await res.json();
-      if (!res.ok) throw new Error(json.error ?? "Compile failed");
-      setStep("done");
-      router.refresh();
-    } catch (err) {
-      setStep("compile-error");
-      setErrorMsg(err instanceof Error ? err.message : "Compile failed");
-    }
-  }
-
   async function handleDelete() {
     if (!confirm("Delete this clone permanently? This cannot be undone.")) return;
     await deleteClone(clone.id);
     router.push("/clones");
   }
 
-  const busy = step === "saving" || step === "compiling";
+  const busy = step === "saving";
   const isPaused = clone.status !== "active";
   const show = (t: Tab) => (tab === t ? "grid gap-4" : "hidden");
 
@@ -227,11 +209,6 @@ export default function CloneForm({
                 />
               </label>
             ))}
-            <div>
-              <Button type="button" variant="outline" onClick={recompile} disabled={busy}>
-                {step === "compiling" ? "Rebuilding…" : "Rebuild her prompt from her answers"}
-              </Button>
-            </div>
           </Section>
         </div>
 
@@ -248,10 +225,8 @@ export default function CloneForm({
 
           <div className="flex items-center gap-3">
             {step === "saving" && <span className="text-sm text-muted">Saving…</span>}
-            {step === "compiling" && <span className="text-sm text-muted">Compiling…</span>}
             {step === "done" && <Badge className="bg-good/15 text-good">Saved ✓</Badge>}
             {step === "save-error" && <span className="text-sm text-crit">Save failed: {errorMsg}</span>}
-            {step === "compile-error" && <span className="text-sm text-crit">Compile failed: {errorMsg}</span>}
 
             <Button type="submit" disabled={busy}>
               {isPaused ? "Save (stay paused)" : "Save changes"}

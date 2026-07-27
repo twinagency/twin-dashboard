@@ -95,6 +95,11 @@ type PreviewClone = {
   smart_split: boolean;
   photos_enabled: boolean;
   videos_enabled: boolean;
+  // Gate the vision/"photo reply" block below: bot/src/handler.ts fires
+  // visionFlow off these two, NOT photos_enabled/videos_enabled (those only
+  // control what SHE sends). Optional so a pre-migration-033 row still types.
+  photo_vision_enabled?: boolean;
+  video_vision_enabled?: boolean;
   voice_enabled: boolean;
   bundles_enabled: boolean;
   charge_messages: boolean;
@@ -274,20 +279,27 @@ export async function assemblePromptPreview(
 
   const blocks: PromptBlock[] = [];
 
+  // Fires whenever the fan sends US a photo OR a video (a frame grabbed from
+  // it) — same prompt template either way (bot/src/flows/vision.ts), only the
+  // lead-in line differs. Gated on the vision toggles themselves, not
+  // photos_enabled/videos_enabled (those control what SHE sends, unrelated).
+  const seesIncomingMedia = (clone.photo_vision_enabled ?? false) || (clone.video_vision_enabled ?? false);
+  const visionBlock = (hint: string) => ({ key: "vision", label: "Photo & video reply", hint, content: withNudge(base.vision) });
+
   if (mode === "classic") {
     blocks.push({ key: "text", label: "Text reply", hint: "Persona + toggles + texting/emoji rules - her plain chat reply.", content: withNudge(base.text) });
     if (clone.voice_enabled) blocks.push({ key: "voice", label: "Voice note", hint: "Spoken reply persona (no emoji rules - it's spoken).", content: base.voice || empty });
     blocks.push({ key: "routing", label: "Routing (sorter)", hint: "Classic only: picks ONE lane per fan message.", content: base.routing || empty });
-    if (clone.photos_enabled) blocks.push({ key: "vision", label: "Photo reply", hint: "When the fan sends a photo - persona + texting/emoji rules.", content: withNudge(base.vision) });
+    if (seesIncomingMedia) blocks.push(visionBlock("When the fan sends a photo OR a video (she reacts to a grabbed frame) - persona + texting/emoji rules."));
   } else if (smartSplit) {
     blocks.push({ key: "writer", label: "Writer (her reply)", hint: "Your Text model writes her reply - same persona + rules as chat. No tools.", content: withNudge(base.text) });
     blocks.push({ key: "decider", label: "Decider (tool picker)", hint: "Your Routing model reads the chat and fires 0+ enabled actions. Fixed system prompt below.", content: smartDeciderSystem(clone) });
     if (clone.voice_enabled) blocks.push({ key: "voice", label: "Voice note", hint: "Persona used when the voice action fires.", content: base.voice || empty });
-    if (clone.photos_enabled) blocks.push({ key: "vision", label: "Photo reply", hint: "When the fan sends a photo.", content: withNudge(base.vision) });
+    if (seesIncomingMedia) blocks.push(visionBlock("When the fan sends a photo OR a video (she reacts to a grabbed frame)."));
   } else {
     blocks.push({ key: "writer", label: "Writer + Decider (one call)", hint: "One model writes her reply AND fires tools. Persona + rules + the tool instruction below.", content: withNudge(base.text) + smartCombinedInstruction(clone) });
     if (clone.voice_enabled) blocks.push({ key: "voice", label: "Voice note", hint: "Persona used when the voice action fires.", content: base.voice || empty });
-    if (clone.photos_enabled) blocks.push({ key: "vision", label: "Photo reply", hint: "When the fan sends a photo.", content: withNudge(base.vision) });
+    if (seesIncomingMedia) blocks.push(visionBlock("When the fan sends a photo OR a video (she reacts to a grabbed frame)."));
   }
 
   return { mode, smartSplit, blocks };

@@ -177,6 +177,9 @@ async function CloneCampaigns({ cloneId }: { cloneId: string }) {
     onboarding_free_preview_after_messages?: number | null;
     onboarding_free_preview_media_id?: string | null;
     followup_after_minutes: number | null;
+    // Per-flow caption kill switch (migration 071) — absent pre-migration, so read defensively.
+    onboarding_captions_off?: boolean | null;
+    campaign_captions_off?: boolean | null;
   };
 
   return (
@@ -204,6 +207,8 @@ async function CloneCampaigns({ cloneId }: { cloneId: string }) {
         bundles={(bundlesRes.data ?? []) as BundleRow[]}
         initial={{
           enabled: clone.drip_enabled ?? true,
+          campaignCaptionsOff: clone.campaign_captions_off ?? false,
+          onboardingCaptionsOff: clone.onboarding_captions_off ?? false,
           steps: validSteps(clone.drip_steps).map((s) => ({
             type: s.type,
             afterHours: s.after_hours,
