@@ -95,6 +95,15 @@ export type CloneConfigState = {
   paywallDefault: string;
   paywallButton: string;
 
+  // Pre-lock prime + post-lock resume (migration 069). Instructions/media id are
+  // uncontrolled (submit by name); only the toggles + the prime count are
+  // controlled here, since their visible controls mount conditionally.
+  paywallPrimeEnabled: boolean;
+  paywallPrimeBefore: number;
+  paywallPrimeVoice: boolean;
+  paywallResumeEnabled: boolean;
+  paywallResumeFree: boolean;
+
   active: boolean;
 };
 
@@ -184,6 +193,12 @@ function initial(clone?: Partial<Clone>): CloneConfigState {
     paywallVoice: clone?.paywall_as_voice ?? false,
     paywallDefault: clone?.paywall_default_message ?? DEFAULT_PAYWALL_MESSAGE,
     paywallButton: clone?.paywall_button_label ?? DEFAULT_PAYWALL_BUTTON,
+
+    paywallPrimeEnabled: clone?.paywall_prime_enabled ?? false,
+    paywallPrimeBefore: clone?.paywall_prime_before ?? 3,
+    paywallPrimeVoice: clone?.paywall_prime_as_voice ?? false,
+    paywallResumeEnabled: clone?.paywall_resume_enabled ?? false,
+    paywallResumeFree: clone?.paywall_resume_free ?? true,
 
     active: clone?.status === "active",
   };

@@ -44,12 +44,16 @@ const DEFAULT_TOGGLES = [
   "discounts_enabled", "drip_enabled", "emojis_enabled",
   "reactions_enabled", "read_receipts_enabled", "message_effects_enabled", "ai_disclosure",
   "subscriptions_enabled", "smart_paywall_enabled", "paywall_as_voice", "voice_speaker_boost",
+  // Migration 069 — pre-lock prime + post-lock resume toggles.
+  "paywall_prime_enabled", "paywall_prime_as_voice", "paywall_resume_enabled", "paywall_resume_free",
 ] as const;
 // Enum selects + free-text strings — stored verbatim when non-empty.
 const DEFAULT_SELECTS = [
   "ai_mode", "sexual_level", "nsfw_level", "push_level", "emoji_amount", "media_caption_mode",
   "emoji_allowlist", "welcome_instruction", "onboarding_voice_instruction", "paywall_instruction",
   "paywall_default_message", "paywall_button_label", "eleven_model",
+  // Migration 069 — prime/resume steer text + the resume promised-image id.
+  "paywall_prime_instruction", "paywall_resume_instruction", "paywall_resume_media_id",
 ] as const;
 // Numeric dials/fields — stored as numbers (ints and floats both fine via Number()).
 // NOTE: drip_per_day / drip_active_window_minutes stay listed for harmless
@@ -66,6 +70,8 @@ const DEFAULT_NUMBERS = [
   "drip_per_day", "drip_active_window_minutes", "followup_after_minutes",
   "response_wait_min", "response_wait_max", "memory_window",
   "voice_stability", "voice_similarity", "voice_style", "voice_speed",
+  // Migration 069 — messages-before-lock count for the pre-lock warmup.
+  "paywall_prime_before",
 ] as const;
 // JSON blobs (hidden inputs carry a stringified object/array) — parsed + stored.
 const DEFAULT_JSON = ["category_pricing", "spoil_options", "subscription_tiers"] as const;

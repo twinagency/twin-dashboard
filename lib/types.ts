@@ -203,6 +203,15 @@ export type Clone = {
   // How many messages she keeps steering to collect the fields above (default 8).
   onboarding_length: number;
 
+  // ── free-preview fallback (migration 069) ───────────────────────────────────
+  // A safety net for the onboarding flow: if he hasn't bought the welcome bundle
+  // within a time or message-count window, she offers a single free taste. Either
+  // trigger can fire (null = that trigger off); media id null = she auto-picks.
+  onboarding_free_preview_enabled?: boolean;
+  onboarding_free_preview_after_minutes?: number | null;
+  onboarding_free_preview_after_messages?: number | null;
+  onboarding_free_preview_media_id?: string | null;
+
   // follow-up nudge: one short in-persona follow-up if the fan goes quiet
   // mid-chat for this many minutes after her reply (0 = off).
   followup_after_minutes: number | null;
@@ -232,6 +241,9 @@ export type Clone = {
         media_id?: string;
         free?: boolean;
         collect_field?: string;
+        // Optional per-step steer for text/voice/tease lines (migration 069,
+        // stored inside the jsonb, not a column). Blank = she decides.
+        instruction?: string | null;
       }[]
     | null;
 
@@ -245,6 +257,19 @@ export type Clone = {
   paywall_as_voice: boolean;
   paywall_default_message: string | null;
   paywall_button_label: string | null;
+
+  // ── pre-lock prime + post-lock resume (migration 069) ───────────────────────
+  // Optional (`?`) so pre-migration rows type-check. paywall_prime_* is a warmup
+  // she sends a few messages BEFORE he runs out; paywall_resume_* is the pick-up
+  // she sends AFTER he pays. media/instruction null = she auto-picks/decides.
+  paywall_prime_enabled?: boolean;
+  paywall_prime_before?: number;
+  paywall_prime_instruction?: string | null;
+  paywall_prime_as_voice?: boolean;
+  paywall_resume_enabled?: boolean;
+  paywall_resume_instruction?: string | null;
+  paywall_resume_media_id?: string | null;
+  paywall_resume_free?: boolean;
 
   response_wait_min: number;
   response_wait_max: number;

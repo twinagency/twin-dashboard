@@ -835,6 +835,104 @@ export function MonetizationSections({
             </div>
           </div>
         </div>
+
+        {/* ── Warmup before the wall (pre-lock prime, migration 069) ──────── */}
+        <div className="border-t border-line pt-2">
+          <SubHead
+            emoji="🔥"
+            label="Warmup before the wall"
+            tip="A gentle heads-up she works in a few messages BEFORE he runs out, so the paywall never lands cold."
+          />
+          <Toggle
+            label={cfg.paywallPrimeEnabled ? "Warm him up before he runs out" : "No pre-lock warmup"}
+            name="paywall_prime_enabled"
+            checked={cfg.paywallPrimeEnabled}
+            onChange={(v) => set("paywallPrimeEnabled", v)}
+            accent="soft"
+          />
+          {/* Unconditional hidden input carries the real voice-note value, same
+              pattern as paywall_as_voice above, so hiding the visible toggle when
+              warmup is off never drops the stored value on Save. */}
+          <input type="hidden" name="paywall_prime_as_voice" value={String(cfg.paywallPrimeVoice)} />
+          {cfg.paywallPrimeEnabled && (
+            <div className="mt-2 grid items-start gap-2 xl:grid-cols-2">
+              <Field
+                label="Messages before running out"
+                name="paywall_prime_before"
+                type="number"
+                min={1}
+                defaultValue={cfg.paywallPrimeBefore}
+                hint="How many messages before his credits run out she starts the warmup."
+              />
+              <Toggle
+                label="As voice note"
+                hint="Sends the warmup line as a voice note instead of text."
+                name="_paywall_prime_as_voice_toggle"
+                checked={cfg.paywallPrimeVoice}
+                onChange={(v) => set("paywallPrimeVoice", v)}
+                accent="soft"
+              />
+              <div className="xl:col-span-2">
+                <Area
+                  label="Warmup steer"
+                  name="paywall_prime_instruction"
+                  rows={2}
+                  placeholder="e.g. hint she's got more coming, build the anticipation"
+                  defaultValue={clone?.paywall_prime_instruction}
+                  hint="Steers the warmup line. Blank = default."
+                />
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* ── Pick up after they pay (post-lock resume, migration 069) ────── */}
+        <div className="border-t border-line pt-2">
+          <SubHead
+            emoji="💝"
+            label="Pick up after they pay"
+            tip="The line (and optional promised image) she sends right after he buys more messages, so paying feels rewarded."
+          />
+          <Toggle
+            label={cfg.paywallResumeEnabled ? "Pick up warmly after he pays" : "No post-pay pickup"}
+            name="paywall_resume_enabled"
+            checked={cfg.paywallResumeEnabled}
+            onChange={(v) => set("paywallResumeEnabled", v)}
+            accent="soft"
+          />
+          {/* Unconditional hidden input for the free/paid choice, same pattern as
+              the prime voice toggle above. */}
+          <input type="hidden" name="paywall_resume_free" value={String(cfg.paywallResumeFree)} />
+          {cfg.paywallResumeEnabled && (
+            <div className="mt-2 grid items-start gap-2 xl:grid-cols-2">
+              <div className="xl:col-span-2">
+                <Area
+                  label="Pickup steer"
+                  name="paywall_resume_instruction"
+                  rows={2}
+                  placeholder="e.g. thank him, pick the mood back up right where it left off"
+                  defaultValue={clone?.paywall_resume_instruction}
+                  hint="Steers the pickup line. Blank = she decides freely."
+                />
+              </div>
+              <Field
+                label="Promised image (media id)"
+                name="paywall_resume_media_id"
+                defaultValue={clone?.paywall_resume_media_id}
+                placeholder="blank = she auto-picks"
+                hint="The exact item to send after he pays. Blank = she auto-picks a fresh unseen one."
+              />
+              <Toggle
+                label={cfg.paywallResumeFree ? "Send it free" : "Send it paid"}
+                hint="Free = the pickup image is unlocked with no charge. Paid = it follows its normal price."
+                name="_paywall_resume_free_toggle"
+                checked={cfg.paywallResumeFree}
+                onChange={(v) => set("paywallResumeFree", v)}
+                accent="soft"
+              />
+            </div>
+          )}
+        </div>
       </Section>
 
       {/* Category pricing moved to the Advanced tab 2026-07-26 — sensible

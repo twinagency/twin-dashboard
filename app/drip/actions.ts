@@ -82,7 +82,10 @@ type OnboardingStepOut = {
   media_id?: string;
   free?: boolean;
   collect_field?: string;
+  instruction?: string;
 };
+// Step types that carry an optional per-step steer (AI-written line types).
+const CAN_STEER_ONBOARDING = new Set<OnboardingStepType>(["text", "voice", "tease"]);
 function parseOnboardingSteps(fd: FormData): OnboardingStepOut[] {
   const raw = fd.get("onboarding_steps");
   if (!raw) return [];
@@ -106,6 +109,12 @@ function parseOnboardingSteps(fd: FormData): OnboardingStepOut[] {
         const collectField = String(s?.collect_field ?? "").trim();
         if (collectField) step.collect_field = collectField;
       }
+      // Per-step steer (migration 069), stored inside the jsonb, for AI-written
+      // line types only, and only when non-empty.
+      if (CAN_STEER_ONBOARDING.has(type)) {
+        const instruction = String(s?.instruction ?? "").trim();
+        if (instruction) step.instruction = instruction;
+      }
       out.push(step);
     }
     return out;
@@ -127,29 +136,6 @@ function numOrNull(fd: FormData, key: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-// Onboarding collect-fields arrive as a JSON string array in a hidden field.
-// Coerce to a clean, de-duped string[] of non-empty keys (order preserved).
-function parseCollectFields(fd: FormData): string[] {
-  const raw = fd.get("onboarding_collect_fields");
-  if (!raw) return [];
-  try {
-    const arr = JSON.parse(String(raw));
-    if (!Array.isArray(arr)) return [];
-    const seen = new Set<string>();
-    const out: string[] = [];
-    for (const v of arr) {
-      const s = String(v).trim();
-      if (s && !seen.has(s)) {
-        seen.add(s);
-        out.push(s);
-      }
-    }
-    return out;
-  } catch {
-    return [];
-  }
-}
-
 // Save the Campaigns page: every outbound-engagement setting for the clone —
 // the new-fan onboarding flow, the mid-chat follow-up, the automated campaign's
 // step list, the win-back lapse, and the hand-picked media pool.
@@ -162,21 +148,20 @@ function parseCollectFields(fd: FormData): string[] {
 // no longer read by the runtime and are never written here.
 export async function saveCampaign(id: string, fd: FormData) {
   const row: Record<string, unknown> = {
-    // New-fan onboarding
+    // New-fan onboarding. The legacy loose fields (welcome_bundle_after[_minutes]
+    // / welcome_bundle_teased / onboarding_voice_after / onboarding_voice_instruction
+    // / onboarding_collect_fields / onboarding_length) were retired 2026-07-28:
+    // the whole flow is now the greeting steer + the ordered step list. Those
+    // columns are left untouched in the DB (additive rule), never written here.
     welcome_instruction: str(fd, "welcome_instruction"),
-    welcome_bundle_after: num(fd, "welcome_bundle_after", 10),
-    welcome_bundle_after_minutes: numOrNull(fd, "welcome_bundle_after_minutes"),
-    welcome_bundle_teased: fd.get("welcome_bundle_teased") === "true",
-    onboarding_voice_after: numOrNull(fd, "onboarding_voice_after"),
-    onboarding_voice_instruction: str(fd, "onboarding_voice_instruction"),
-    onboarding_collect_fields: parseCollectFields(fd),
-    onboarding_length: Math.max(1, num(fd, "onboarding_length", 8)),
-    // Ordered onboarding step list (migration 068) — additive, see
-    // parseOnboardingSteps above. Legacy onboarding_voice_after/
-    // welcome_bundle_after/welcome_bundle_teased/onboarding_collect_fields
-    // above are still written unconditionally (never touched by this column)
-    // so an unmigrated clone's config is untouched by saving this page.
+    // Ordered onboarding step list (migration 068). Per-step steer added in 069.
     onboarding_steps: parseOnboardingSteps(fd),
+    // Free-preview fallback (migration 069). Either trigger fires (null = off);
+    // media id null = she auto-picks. Written here (Campaigns owns onboarding).
+    onboarding_free_preview_enabled: fd.get("onboarding_free_preview_enabled") === "true",
+    onboarding_free_preview_after_minutes: numOrNull(fd, "onboarding_free_preview_after_minutes"),
+    onboarding_free_preview_after_messages: numOrNull(fd, "onboarding_free_preview_after_messages"),
+    onboarding_free_preview_media_id: str(fd, "onboarding_free_preview_media_id"),
     // Mid-chat follow-up
     followup_after_minutes: Math.max(0, num(fd, "followup_after_minutes", 0)),
     // Campaign. (Win-back's lapse threshold is no longer operator-facing; the
@@ -196,6 +181,18 @@ export async function saveCampaign(id: string, fd: FormData) {
   if (error && /onboarding_steps/i.test(error.message)) {
     // Migration 068 not applied yet: save everything else so the page still works.
     const { onboarding_steps: _o, ...rest } = row;
+    ({ error } = await supabaseAdmin.from("clones").update(rest).eq("id", id));
+  }
+  if (error && /onboarding_free_preview_/i.test(error.message)) {
+    // Migration 069 not applied yet: strip the free-preview columns and retry so
+    // the rest of the page still saves (same additive-retry pattern as above).
+    const {
+      onboarding_free_preview_enabled: _fe,
+      onboarding_free_preview_after_minutes: _fm,
+      onboarding_free_preview_after_messages: _fc,
+      onboarding_free_preview_media_id: _fi,
+      ...rest
+    } = row;
     ({ error } = await supabaseAdmin.from("clones").update(rest).eq("id", id));
   }
   if (error) throw new Error(error.message);

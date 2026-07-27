@@ -463,6 +463,18 @@ function rowFromForm(fd: FormData) {
     paywall_default_message: str(fd, "paywall_default_message"),
     paywall_button_label: str(fd, "paywall_button_label"),
 
+    // pre-lock prime + post-lock resume (migration 069). Toggles use the
+    // "true"/"false" hidden-input convention; media/instruction null = auto.
+    // (The onboarding_free_preview_* columns are owned by saveCampaign, not here.)
+    paywall_prime_enabled: fd.get("paywall_prime_enabled") === "true",
+    paywall_prime_before: Math.max(1, num(fd, "paywall_prime_before", 3)),
+    paywall_prime_instruction: str(fd, "paywall_prime_instruction"),
+    paywall_prime_as_voice: fd.get("paywall_prime_as_voice") === "true",
+    paywall_resume_enabled: fd.get("paywall_resume_enabled") === "true",
+    paywall_resume_instruction: str(fd, "paywall_resume_instruction"),
+    paywall_resume_media_id: str(fd, "paywall_resume_media_id"),
+    paywall_resume_free: fd.get("paywall_resume_free") === "true",
+
     // The monetization-sequence cards were removed on 2026-07-27 (operator
     // decision), so these columns are no longer written here. voice_cooldown_turns
     // is kept, its control lives elsewhere and is still on the form.
@@ -544,6 +556,19 @@ const FAVORITES_COLUMNS = ["catchphrases", "favorite_things", "dislikes", "savin
 // been a voice note before Smart mode's decider will let "voice" fire again.
 // See bot/db/migrations/065_voice_cooldown.sql and bot/src/flows/smart.ts.
 const VOICE_COOLDOWN_COLUMNS = ["voice_cooldown_turns"] as const;
+// Migration 069: onboarding free-preview fallback + pre-lock prime + post-lock
+// resume. The onboarding_free_preview_* columns are written by saveCampaign
+// (app/drip/actions.ts), the paywall_prime_*/paywall_resume_* columns by
+// rowFromForm above; all listed here so the missing-column retry strips whichever
+// ones this row happens to carry when the migration is not applied yet.
+// See bot/db/migrations/069_*.sql.
+const FLOW_069_COLUMNS = [
+  "onboarding_free_preview_enabled", "onboarding_free_preview_after_minutes",
+  "onboarding_free_preview_after_messages", "onboarding_free_preview_media_id",
+  "paywall_prime_enabled", "paywall_prime_before", "paywall_prime_instruction",
+  "paywall_prime_as_voice", "paywall_resume_enabled", "paywall_resume_instruction",
+  "paywall_resume_media_id", "paywall_resume_free",
+] as const;
 // The response-pacing, monetization-sequence, re-warm-photo and
 // offer-redirect column lists were removed on 2026-07-27: those columns are no
 // longer written by this form at all, so they cannot appear in the row that
@@ -557,6 +582,7 @@ const OPTIONAL_COLUMNS = [
   ...LIFE_CANON_COLUMNS,
   ...FAVORITES_COLUMNS,
   ...VOICE_COOLDOWN_COLUMNS,
+  ...FLOW_069_COLUMNS,
 ] as const;
 
 function withoutPersonaFactColumns(row: Record<string, unknown>): Record<string, unknown> {

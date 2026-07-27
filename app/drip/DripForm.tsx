@@ -52,7 +52,11 @@ type OnboardingStepData = {
   mediaId: string | null;
   free: boolean;
   collectField: string | null;
+  // Optional per-step steer for text/voice/tease lines. Blank = she decides.
+  instruction: string | null;
 };
+// Step types where a custom-line steer makes sense (AI-written lines only).
+const canSteerOnboarding = (t: OnboardingStepType) => t === "text" || t === "voice" || t === "tease";
 const isOnboardingMediaType = (t: OnboardingStepType) => t === "photo" || t === "video" || t === "bundle";
 const ONBOARDING_STEP_TYPES: { key: OnboardingStepType; label: string; emoji: string; hint: string }[] = [
   { key: "text", label: "Text", emoji: "💬", hint: "AI writes a fresh extra line in her voice." },
@@ -67,125 +71,21 @@ const ONBOARDING_STEP_TYPES: { key: OnboardingStepType; label: string; emoji: st
 type Initial = {
   enabled: boolean;
   steps: Step[];
-  // New-fan onboarding: free-text steer for her first message, a voice note on
-  // message N, the welcome bundle on message N (optionally teased first), the
-  // details she should naturally try to collect, and how long that collection
-  // steer keeps getting nudged before she just chats normally.
+  // New-fan onboarding: free-text steer for her first message. The rest of the
+  // onboarding flow (voice note, welcome bundle, detail collection) is now built
+  // entirely from the ordered onboarding step list below.
   welcomeInstruction: string | null;
-  welcomeBundleAfter: number;
-  welcomeBundleTeased: boolean;
-  onboardingVoiceAfter: number | null;
-  onboardingCollectFields: string[];
-  onboardingLength: number;
+  // Free-preview fallback (migration 069): a free taste if he hasn't bought the
+  // welcome bundle within the window. Either trigger fires (null = that trigger
+  // off); media id null = she auto-picks.
+  freePreviewEnabled: boolean;
+  freePreviewAfterMinutes: number | null;
+  freePreviewAfterMessages: number | null;
+  freePreviewMediaId: string | null;
   followupAfterMinutes: number;
   // Ordered onboarding step list (migration 068) — see the DripForm section below.
   onboardingSteps: OnboardingStepData[];
 };
-
-// Predefined onboarding detail keys, in the exact order + keys that
-// bot/src/flows/human.ts's COLLECT_FIELD_PHRASE map uses, so the AI's steer
-// reads naturally ("naturally work out his name, age, ..."). A fan operator can
-// also type a custom key (slugified below) — human.ts falls back to
-// `his ${key.replace(/_/g,' ')}` for anything not in that map.
-const COLLECT_FIELD_CHIPS: { key: string; label: string }[] = [
-  { key: "name", label: "Name" },
-  { key: "age", label: "Age" },
-  { key: "country", label: "Country" },
-  { key: "city", label: "City" },
-  { key: "timezone", label: "Timezone" },
-  { key: "job", label: "Job" },
-  { key: "relationship_status", label: "Relationship status" },
-  { key: "interests", label: "Interests" },
-  { key: "likes", label: "Likes / turn-ons" },
-  { key: "birthday", label: "Birthday" },
-  { key: "language", label: "Language" },
-  { key: "how_found", label: "How he found her" },
-];
-
-// lowercase, spaces/punctuation → underscores, so a typed "shoe size" becomes
-// the key "shoe_size" (reads as "his shoe size" via human.ts's fallback phrasing).
-function slugifyCollectKey(raw: string): string {
-  return raw
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
-}
-
-// Chip picker for onboarding_collect_fields: predefined chips toggle on/off,
-// plus a text box to add a custom key. Same chip visual language as STEP_TYPES
-// below. Uncontrolled-by-name isn't possible here (it's an array), so the parent
-// keeps the array in state and JSON-stringifies it into a hidden field on submit
-// (drip_steps in this same file does the identical thing).
-function CollectFieldsPicker({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
-  const [customInput, setCustomInput] = useState("");
-  const toggle = (key: string) =>
-    onChange(value.includes(key) ? value.filter((k) => k !== key) : [...value, key]);
-  const addCustom = () => {
-    const key = slugifyCollectKey(customInput);
-    if (key && !value.includes(key)) onChange([...value, key]);
-    setCustomInput("");
-  };
-  // Any selected key not in the predefined list is a custom one — show it as its
-  // own removable chip so it's visible after being added.
-  const customChips = value.filter((k) => !COLLECT_FIELD_CHIPS.some((c) => c.key === k));
-
-  return (
-    <div className="grid gap-2">
-      <div className="flex flex-wrap gap-1.5">
-        {COLLECT_FIELD_CHIPS.map((c) => {
-          const on = value.includes(c.key);
-          return (
-            <button
-              key={c.key}
-              type="button"
-              onClick={() => toggle(c.key)}
-              className={
-                "rounded-full border px-2.5 py-1 text-xs font-medium transition " +
-                (on ? "border-accent/50 bg-accent/15 text-accent" : "border-line text-ink/70 hover:border-accent/40")
-              }
-            >
-              {c.label}
-            </button>
-          );
-        })}
-        {customChips.map((k) => (
-          <button
-            key={k}
-            type="button"
-            onClick={() => toggle(k)}
-            title="Custom - click to remove"
-            className="rounded-full border border-accent/50 bg-accent/15 px-2.5 py-1 text-xs font-medium text-accent"
-          >
-            {k.replace(/_/g, " ")} ✕
-          </button>
-        ))}
-      </div>
-      <div className="flex gap-1.5">
-        <input
-          type="text"
-          value={customInput}
-          onChange={(e) => setCustomInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              addCustom();
-            }
-          }}
-          placeholder="Add a custom detail (e.g. shoe size)"
-          className={inputCls + " flex-1"}
-        />
-        <button
-          type="button"
-          onClick={addCustom}
-          className="shrink-0 rounded-md border border-line px-3 py-1.5 text-xs font-medium text-ink transition hover:bg-bg"
-        >
-          + Add
-        </button>
-      </div>
-    </div>
-  );
-}
 
 // Signed-url thumbnail (private bucket), same pattern as the Media manager.
 function Thumb({ path, type }: { path: string; type: "photo" | "video" }) {
@@ -363,9 +263,9 @@ export default function DripForm({
 
   const [enabled, setEnabled] = useState(initial.enabled);
   const [steps, setSteps] = useState<Step[]>(initial.steps);
-  const [welcomeBundleTeased, setWelcomeBundleTeased] = useState(initial.welcomeBundleTeased);
-  const [collectFields, setCollectFields] = useState<string[]>(initial.onboardingCollectFields);
   const [onboardingSteps, setOnboardingSteps] = useState<OnboardingStepData[]>(initial.onboardingSteps);
+  const [freePreviewEnabled, setFreePreviewEnabled] = useState(initial.freePreviewEnabled);
+  const [freePreviewMediaId, setFreePreviewMediaId] = useState<string | null>(initial.freePreviewMediaId);
 
   // Switching a step's type clears any picked media (ids don't carry across
   // types, and text/voice steps have no media).
@@ -412,6 +312,8 @@ export default function DripForm({
     setOnboardingSteps((prev) => prev.map((s, idx) => (idx === i ? { ...s, free } : s)));
   const setOnboardingStepCollectField = (i: number, collectField: string) =>
     setOnboardingSteps((prev) => prev.map((s, idx) => (idx === i ? { ...s, collectField } : s)));
+  const setOnboardingStepInstruction = (i: number, instruction: string) =>
+    setOnboardingSteps((prev) => prev.map((s, idx) => (idx === i ? { ...s, instruction } : s)));
   const setOnboardingStepAfter = (i: number, raw: string) => {
     const n = Math.round(Number(raw));
     if (!Number.isFinite(n)) return;
@@ -421,7 +323,7 @@ export default function DripForm({
   const addOnboardingStep = () =>
     setOnboardingSteps((prev) => {
       const last = prev.reduce((m, s) => Math.max(m, s.afterMessages), 0);
-      return [...prev, { type: "text", afterMessages: Math.min(50, last + 1), mediaId: null, free: false, collectField: null }];
+      return [...prev, { type: "text", afterMessages: Math.min(50, last + 1), mediaId: null, free: false, collectField: null, instruction: null }];
     });
   const removeOnboardingStep = (i: number) => setOnboardingSteps((prev) => prev.filter((_, idx) => idx !== i));
   const moveOnboardingStep = (i: number, dir: -1 | 1) =>
@@ -445,8 +347,6 @@ export default function DripForm({
         })),
       ),
     );
-    // Onboarding collect-fields: same hidden-field JSON pattern as drip_steps above.
-    fd.set("onboarding_collect_fields", JSON.stringify(collectFields));
     // Onboarding steps: same hidden-field JSON pattern, saved in EXACTLY the
     // order shown (not re-sorted like drip's steps above) — see migration 068
     // for why firing order must match the saved array order.
@@ -459,9 +359,17 @@ export default function DripForm({
           ...(isOnboardingMediaType(s.type) && s.mediaId ? { media_id: s.mediaId } : {}),
           ...(isOnboardingMediaType(s.type) && s.free ? { free: true } : {}),
           ...(s.type === "collect" && s.collectField ? { collect_field: s.collectField } : {}),
+          // Per-step steer (migration 069) — only for AI-written line types, and
+          // only when actually filled in, so a blank never overrides her freedom.
+          ...(canSteerOnboarding(s.type) && s.instruction && s.instruction.trim()
+            ? { instruction: s.instruction.trim() }
+            : {}),
         })),
       ),
     );
+    // Free-preview media id: controlled, carried as a hidden field (null → blank
+    // → she auto-picks). The enabled toggle + the two number fields submit by name.
+    fd.set("onboarding_free_preview_media_id", freePreviewMediaId ?? "");
     startTransition(async () => {
       await saveCampaign(cloneId, fd);
       setSteps(sortedSteps);
@@ -473,84 +381,41 @@ export default function DripForm({
 
   return (
     <form action={onSubmit} className="grid max-w-3xl gap-6">
-      {/* ── New fan onboarding - trimmed to the two triggers that matter.
-          Greeting/voice scripts and detail-collection were removed: she greets
-          and gets to know a new fan naturally in chat. Bundle timing lives in
-          the automated campaign, not here. ─────────────────────────────── */}
+      {/* ── New fan onboarding. The whole flow (greeting steer + the ordered
+          step list) lives here now; the legacy loose fields (voice-on-msg-N,
+          bundle-on-msg-N, teased, collect-fields, onboarding length) were
+          retired in favour of the step list below. ──────────────────────── */}
       <GroupHeader
         label="New fan"
-        hint="Configurable triggers and instructions for a brand-new fan. Leave a field blank to skip it - she still greets and gets to know him naturally in chat."
+        hint="How she opens a brand-new fan, plus the free-preview safety net. The rest of the onboarding flow is the ordered step list below."
       />
-      <Section icon="🚀" accent="cyan" title="Onboarding" cols={2}>
-        <Field
-          label="Voice note on msg #"
-          name="onboarding_voice_after"
-          type="number"
-          defaultValue={initial.onboardingVoiceAfter}
-          placeholder="blank = off"
-          hint="That turn's reply comes as a voice note instead of text."
-        />
-        <Field
-          label="Bundle on msg #"
-          name="welcome_bundle_after"
-          type="number"
-          defaultValue={initial.welcomeBundleAfter}
-          placeholder="blank = off"
-          hint="Sends the welcome bundle on this message."
-        />
-        <div className="sm:col-span-2">
-          <Toggle
-            label={welcomeBundleTeased ? "She sends a short tease line first" : "Bundle sends with no lead-in"}
-            name="welcome_bundle_teased"
-            checked={welcomeBundleTeased}
-            onChange={setWelcomeBundleTeased}
-            accent="soft"
-            hint="A short AI-written flirty tease message ('I've got something for you...') goes out as its own text right before the paid bundle."
-          />
-        </div>
-        <Field
-          label="Onboarding runs for (messages)"
-          name="onboarding_length"
-          type="number"
-          defaultValue={initial.onboardingLength}
-          hint="After this many messages she stops steering to collect the info below and just chats normally, regardless of what's still missing."
-        />
-        <div className="sm:col-span-2">
-          <Area
-            label="First message instructions"
-            name="welcome_instruction"
-            defaultValue={initial.welcomeInstruction}
-            rows={2}
-            placeholder='blank = "greet him warmly, introduce yourself by name, be flirty, and ask his name"'
-            hint="How she should open the very FIRST message to a brand-new fan - a free-text steer, written into her own AI-generated line."
-          />
-        </div>
-        <div className="sm:col-span-2">
-          <FieldLabel
-            label="Info to collect"
-            hint="Details she'll naturally, gently try to work into the first several messages (never an interview). Toggle the ones you want, or add your own below."
-          />
-          <CollectFieldsPicker value={collectFields} onChange={setCollectFields} />
-        </div>
-      </Section>
-
-      {/* ── Onboarding step list (migration 068) - same picker as the automated
-          campaign below, but WHEN is his MESSAGE COUNT, not hours quiet. Saving
-          any step here takes over from the loose fields in the card above for
-          this clone; an empty list here leaves that legacy behavior exactly as
-          configured, so nothing changes until you build a list. ───────────── */}
       <Section
-        icon="🧩"
-        accent="purple"
-        title="Onboarding steps"
-        hint="An ordered step list for a brand-new fan, timed off HIS MESSAGE COUNT (not hours quiet like the campaign below). Add at least one step to switch this clone over from the loose fields above - leave it empty to keep using those exactly as configured."
-        tip="Steps fire in the order shown here (drag with ↑/↓, not re-sorted on save). Text/voice/tease lines are always AI-written fresh in her voice; photo/video/bundle steps tease a fresh unseen item unless you pick one, and can be toggled Free (unlocked, no charge) - handy for a tease step followed by a free photo. Collect steps gently work one detail into that reply, once."
+        icon="🚀"
+        accent="cyan"
+        title="Onboarding"
+        hint="The whole new-fan flow in one place: her opening line, the ordered step sequence, and a free-preview safety net. Everything here is timed off HIS message count."
       >
-        {onboardingSteps.length === 0 && (
-          <p className="text-[11px] text-muted">No steps yet - this clone uses the loose onboarding fields above.</p>
-        )}
+        <Area
+          label="First message instructions"
+          name="welcome_instruction"
+          defaultValue={initial.welcomeInstruction}
+          rows={2}
+          placeholder='blank = "greet him warmly, introduce yourself by name, be flirty, and ask his name"'
+          hint="How she opens the very FIRST message to a brand-new fan - a free-text steer, written into her own AI-generated line."
+        />
 
-        <div className="grid gap-2">
+        {/* ── The ordered step sequence (migration 068) ─────────────────── */}
+        <div className="border-t border-line pt-3">
+          <p className="text-xs font-semibold text-ink">Steps</p>
+          <p className="mb-2 mt-0.5 text-[11px] text-muted">
+            Ordered steps timed off HIS message count (not hours quiet like the campaign below). They fire in the order shown, use ↑/↓ to reorder. Text, voice and tease lines are AI-written fresh in her voice with an optional per-step steer; photo, video and bundle steps tease a fresh unseen item unless you pick one, and can be toggled Free. Collect steps gently work one detail into that reply, once. Empty = she just greets and chats naturally.
+          </p>
+
+          {onboardingSteps.length === 0 && (
+            <p className="text-[11px] text-muted">No steps yet - she greets and chats naturally with no scripted onboarding steps.</p>
+          )}
+
+          <div className="grid gap-2">
           {onboardingSteps.map((s, i) => (
             <div key={i} className="flex flex-wrap items-center gap-2 rounded-lg border border-line p-2.5">
               <span className="w-5 shrink-0 text-right text-xs font-medium text-muted">{i + 1}</span>
@@ -631,17 +496,82 @@ export default function DripForm({
                   </select>
                 </div>
               )}
+              {canSteerOnboarding(s.type) && (
+                <div className="w-full">
+                  <FieldLabel
+                    label="Custom line / steer"
+                    hint="Optional steer for this AI-written line (e.g. 'ask what he's into'). Blank = she decides what to say."
+                  />
+                  <input
+                    type="text"
+                    value={s.instruction ?? ""}
+                    onChange={(e) => setOnboardingStepInstruction(i, e.target.value)}
+                    placeholder="blank = she decides"
+                    className={inputCls}
+                  />
+                </div>
+              )}
             </div>
           ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={addOnboardingStep}
+            className="mt-2 justify-self-start rounded-md border border-line px-3 py-1.5 text-xs font-medium text-ink transition hover:bg-bg"
+          >
+            + Add step
+          </button>
         </div>
 
-        <button
-          type="button"
-          onClick={addOnboardingStep}
-          className="justify-self-start rounded-md border border-line px-3 py-1.5 text-xs font-medium text-ink transition hover:bg-bg"
-        >
-          + Add step
-        </button>
+        {/* ── Free-preview fallback (migration 069) ─────────────────────── */}
+        <div className="border-t border-line pt-3">
+          <Toggle
+            label={freePreviewEnabled ? "Free preview if he hasn't bought" : "No free-preview fallback"}
+            name="onboarding_free_preview_enabled"
+            checked={freePreviewEnabled}
+            onChange={setFreePreviewEnabled}
+            accent="soft"
+            hint="A safety net: if he hasn't bought the welcome bundle within the window below, she sends one free taste. Either trigger can fire; leave both blank to turn the triggers off."
+          />
+          {freePreviewEnabled && (
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              <Field
+                label="After (minutes)"
+                name="onboarding_free_preview_after_minutes"
+                type="number"
+                defaultValue={initial.freePreviewAfterMinutes}
+                placeholder="blank = off"
+                hint="Fires this many minutes after onboarding starts if he still hasn't bought. Blank = this trigger off."
+              />
+              <Field
+                label="After (messages)"
+                name="onboarding_free_preview_after_messages"
+                type="number"
+                defaultValue={initial.freePreviewAfterMessages}
+                placeholder="blank = off"
+                hint="Fires after this many of his messages if he still hasn't bought. Blank = this trigger off."
+              />
+              <div className="sm:col-span-2">
+                <FieldLabel
+                  label="Free-preview media"
+                  hint="The item she sends as the free taste. Leave on AI picks and she chooses a fresh unseen one."
+                />
+                <StepMediaPicker
+                  type="photo"
+                  photos={photos}
+                  videos={videos}
+                  bundles={bundles}
+                  photosEnabled={photosEnabled}
+                  videosEnabled={videosEnabled}
+                  bundlesEnabled={bundlesEnabled}
+                  value={freePreviewMediaId}
+                  onPick={setFreePreviewMediaId}
+                />
+              </div>
+            </div>
+          )}
+        </div>
       </Section>
 
       {/* ── Mid-chat follow-up (moved off Configure) ─────────────── */}

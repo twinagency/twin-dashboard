@@ -44,6 +44,7 @@ function validOnboardingSteps(raw: unknown): {
   media_id?: string;
   free?: boolean;
   collect_field?: string;
+  instruction?: string;
 }[] {
   if (!Array.isArray(raw)) return [];
   return raw.filter((s: any) => {
@@ -168,15 +169,13 @@ async function CloneCampaigns({ cloneId }: { cloneId: string }) {
     drip_steps?: unknown[] | null;
     // absent pre-migration-068, so read defensively
     onboarding_steps?: unknown[] | null;
-    // Onboarding + follow-up, moved off Configure's Engagement tab.
+    // Onboarding greeting steer + free-preview fallback (migration 069). The
+    // legacy loose onboarding fields were retired 2026-07-28.
     welcome_instruction: string | null;
-    welcome_bundle_after: number | null;
-    welcome_bundle_after_minutes: number | null;
-    welcome_bundle_teased: boolean | null;
-    onboarding_voice_after: number | null;
-    onboarding_voice_instruction: string | null;
-    onboarding_collect_fields: unknown;
-    onboarding_length: number | null;
+    onboarding_free_preview_enabled?: boolean | null;
+    onboarding_free_preview_after_minutes?: number | null;
+    onboarding_free_preview_after_messages?: number | null;
+    onboarding_free_preview_media_id?: string | null;
     followup_after_minutes: number | null;
   };
 
@@ -210,15 +209,15 @@ async function CloneCampaigns({ cloneId }: { cloneId: string }) {
             afterHours: s.after_hours,
             mediaId: typeof s.media_id === "string" && s.media_id.trim() ? s.media_id.trim() : null,
           })),
-          // Onboarding (trimmed to two triggers) + follow-up.
+          // Onboarding greeting steer + free-preview fallback + follow-up.
           welcomeInstruction: clone.welcome_instruction ?? null,
-          welcomeBundleAfter: clone.welcome_bundle_after ?? 10,
-          welcomeBundleTeased: clone.welcome_bundle_teased ?? false,
-          onboardingVoiceAfter: clone.onboarding_voice_after ?? null,
-          onboardingCollectFields: Array.isArray(clone.onboarding_collect_fields)
-            ? (clone.onboarding_collect_fields as unknown[]).filter((s): s is string => typeof s === "string")
-            : [],
-          onboardingLength: clone.onboarding_length ?? 8,
+          freePreviewEnabled: clone.onboarding_free_preview_enabled ?? false,
+          freePreviewAfterMinutes: clone.onboarding_free_preview_after_minutes ?? null,
+          freePreviewAfterMessages: clone.onboarding_free_preview_after_messages ?? null,
+          freePreviewMediaId:
+            typeof clone.onboarding_free_preview_media_id === "string" && clone.onboarding_free_preview_media_id.trim()
+              ? clone.onboarding_free_preview_media_id.trim()
+              : null,
           followupAfterMinutes: clone.followup_after_minutes ?? 0,
           // Ordered onboarding step list (migration 068) — see validOnboardingSteps above.
           onboardingSteps: validOnboardingSteps(clone.onboarding_steps).map((s) => ({
@@ -227,6 +226,7 @@ async function CloneCampaigns({ cloneId }: { cloneId: string }) {
             mediaId: typeof s.media_id === "string" && s.media_id.trim() ? s.media_id.trim() : null,
             free: s.free === true,
             collectField: typeof s.collect_field === "string" && s.collect_field.trim() ? s.collect_field.trim() : null,
+            instruction: typeof s.instruction === "string" && s.instruction.trim() ? s.instruction.trim() : null,
           })),
         }}
       />
