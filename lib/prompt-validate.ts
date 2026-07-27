@@ -77,7 +77,7 @@ export function validateTemplate(template: string): ValidationIssue[] {
     if (content.startsWith("#")) {
       const flagMatch = /^#IF_([A-Z0-9_]+)$/.exec(content);
       if (!flagMatch) {
-        issues.push({ code: "malformed_marker", message: `Malformed conditional opener "${full}" — expected exactly {{#IF_X}}, no extra spaces or lowercase.`, line });
+        issues.push({ code: "malformed_marker", message: `Malformed conditional opener "${full}", expected exactly {{#IF_X}}, no extra spaces or lowercase.`, line });
         continue;
       }
       const flag = flagMatch[1];
@@ -85,14 +85,14 @@ export function validateTemplate(template: string): ValidationIssue[] {
       if (!KNOWN_FLAGS.has(flag)) {
         issues.push({
           code: "orphan_conditional",
-          message: `{{#IF_${flag}}} has no matching flag in flagsForClone() — real flags are ${REAL_FLAGS.join(", ")}. This block will render UNCONDITIONALLY for every clone, silently. Known live footgun, do not ship.`,
+          message: `{{#IF_${flag}}} has no matching flag in flagsForClone(). Real flags are ${REAL_FLAGS.join(", ")}. This block will render UNCONDITIONALLY for every clone, silently. Known live footgun, do not ship.`,
           line,
         });
       }
     } else if (content.startsWith("/")) {
       const flagMatch = /^\/IF_([A-Z0-9_]+)$/.exec(content);
       if (!flagMatch) {
-        issues.push({ code: "malformed_marker", message: `Malformed conditional closer "${full}" — expected exactly {{/IF_X}}, no extra spaces or lowercase.`, line });
+        issues.push({ code: "malformed_marker", message: `Malformed conditional closer "${full}", expected exactly {{/IF_X}}, no extra spaces or lowercase.`, line });
         continue;
       }
       const flag = flagMatch[1];
@@ -102,7 +102,7 @@ export function validateTemplate(template: string): ValidationIssue[] {
       } else if (top.name !== flag) {
         issues.push({
           code: "unbalanced_conditional",
-          message: `{{/IF_${flag}}} does not match the currently open {{#IF_${top.name}}} — conditional blocks must close in the order they opened.`,
+          message: `{{/IF_${flag}}} does not match the currently open {{#IF_${top.name}}}. Conditional blocks must close in the order they opened.`,
           line,
         });
         stack.pop();
@@ -111,7 +111,7 @@ export function validateTemplate(template: string): ValidationIssue[] {
       }
     } else {
       if (!/^[A-Z][A-Z0-9_]*$/.test(content)) {
-        issues.push({ code: "malformed_marker", message: `Malformed marker "${full}" — slot names are UPPER_SNAKE_CASE with no extra spaces (e.g. {{PERSONA}}).`, line });
+        issues.push({ code: "malformed_marker", message: `Malformed marker "${full}", slot names are UPPER_SNAKE_CASE with no extra spaces (e.g. {{PERSONA}}).`, line });
         continue;
       }
       if (!KNOWN_SLOTS.has(content)) {
@@ -138,7 +138,7 @@ export function validateTemplate(template: string): ValidationIssue[] {
   const dashRe = /[—―]/g;
   let dm: RegExpExecArray | null;
   while ((dm = dashRe.exec(template))) {
-    issues.push({ code: "em_dash", message: `Em dash character found. The owner's rule is no em dashes anywhere in bot output, ever — use a comma or period instead.`, line: lineOf(template, dm.index) });
+    issues.push({ code: "em_dash", message: `Em dash character found. The owner's rule is no em dashes anywhere in bot output, ever, use a comma or period instead.`, line: lineOf(template, dm.index) });
   }
 
   return issues;

@@ -317,7 +317,7 @@ export default function PromptEditor({
               {issues.length > 0 && (
                 <div className="rounded-lg border border-crit/40 bg-crit/10 p-3">
                   <p className="mb-1.5 text-xs font-semibold text-crit">
-                    {issues.length} validation {issues.length === 1 ? "issue" : "issues"} — must be fixed before saving
+                    {issues.length} validation {issues.length === 1 ? "issue" : "issues"}, must be fixed before saving
                   </p>
                   <ul className="space-y-1 text-xs text-ink">
                     {issues.map((iss, i) => (
@@ -351,7 +351,7 @@ export default function PromptEditor({
               ) : (
                 <div className="space-y-3 rounded-lg border border-warn/40 bg-warn/10 p-3">
                   <p className="text-xs font-semibold text-ink">
-                    Review before saving fleet-wide{isLiveWired ? " — this WILL change what every clone sends within ~60s." : "."}
+                    Review before saving fleet-wide{isLiveWired ? ", this WILL change what every clone sends within ~60s." : "."}
                   </p>
                   <DiffView oldText={current?.template ?? ""} newText={draft} oldLabel={`Current (live)`} newLabel="Your draft" />
                   {serverIssues && serverIssues.length > 0 && (
@@ -412,7 +412,7 @@ export default function PromptEditor({
 
               {preview.status === "notWired" && (
                 <div>
-                  <p className="mb-1 text-xs text-muted">Not wired into the runtime — this raw text is the entire preview:</p>
+                  <p className="mb-1 text-xs text-muted">Not wired into the runtime, this raw text is the entire preview:</p>
                   <textarea readOnly rows={10} value={preview.raw} className="w-full cursor-default rounded-lg border border-line bg-bg px-2.5 py-2 font-mono text-[11px] leading-relaxed text-muted outline-none" />
                 </div>
               )}

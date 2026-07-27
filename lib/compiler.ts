@@ -249,7 +249,7 @@ function smartDeciderSystem(c: PreviewClone): string {
     `- bundle: he asks for a set/bundle/album/collection.\n` +
     `- voice: he asks to hear your voice or for a voice note. Voice is an occasional, deliberate treat, ` +
     `not a default reply mode: if you already sent one recently, do NOT fire it again just because he's ` +
-    `reacting to it ("that voice is illegal", "i'm not okay") — that's a reaction, not a request. Only fire ` +
+    `reacting to it ("that voice is illegal", "i'm not okay"), that's a reaction, not a request. Only fire ` +
     `it again once he freshly and explicitly asks to hear you again.\n` +
     `- tip: he offers to tip/spoil you or send money.\n` +
     `- vip: he asks about subscribing / VIP / membership.\n` +

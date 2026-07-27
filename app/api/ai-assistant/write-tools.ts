@@ -192,8 +192,8 @@ async function execSetFanBlocked(args: Record<string, unknown>): Promise<unknown
   fd.set("blocked", String(blocked));
   await setFanBlockedAction(fd);
   const summary = blocked
-    ? `Blocked fan ${label} — she will no longer reply to them.`
-    : `Unblocked fan ${label} — she will reply to them again.`;
+    ? `Blocked fan ${label}, she will no longer reply to them.`
+    : `Unblocked fan ${label}, she will reply to them again.`;
   await logWrite({ tool: "setFanBlocked", summary, cloneId: data?.clone_id ?? null, args });
   return { ok: true, summary };
 }
