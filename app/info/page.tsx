@@ -141,9 +141,9 @@ async function CloneInfo({ cloneId }: { cloneId: string }) {
   ]);
 
   const userList = (users ?? []) as { business_connection_id: string | null; total_messages_purchased: number; last_message_received: string | null }[];
-  // Three genuinely different figures, see lib/star-balance.ts for how each is
+  // Two genuinely different figures, see lib/star-balance.ts for how each is
   // derived — never collapse them into one "revenue" number:
-  const { lifetimeStars, totalBalanceStars, availableStars, pendingStars } = starBalance;
+  const { lifetimeStars, totalBalanceStars } = starBalance;
   const buyers = userList.filter((u) => (u.total_messages_purchased ?? 0) > 0).length;
 
 
@@ -152,22 +152,10 @@ async function CloneInfo({ cloneId }: { cloneId: string }) {
     { label: "Reachable", value: me.ok ? "yes" : "no, check token/network", accent: me.ok ? "good" : "bad" },
     { label: "Status", value: clone.status, accent: clone.status === "active" ? "good" : undefined },
     {
-      label: "Available to withdraw",
-      value: availableStars != null ? `${availableStars} ⭐` : "unavailable",
-      accent: availableStars != null ? "money" : undefined,
-      hint: "Stars that have cleared Telegram's 21-day maturation hold and can be withdrawn right now. Always less than or equal to total balance.",
-    },
-    {
-      label: "Pending (21-day hold)",
-      value: pendingStars != null ? `${pendingStars} ⭐` : "unavailable",
-      accent: pendingStars != null ? "money" : undefined,
-      hint: "Stars paid to this bot in the last 21 days. Telegram holds every Star for 21 days after it's earned before it can be withdrawn, so this is real money that simply isn't liquid yet.",
-    },
-    {
       label: "Total balance",
       value: totalBalanceStars != null ? `${totalBalanceStars} ⭐` : "unavailable",
       accent: totalBalanceStars != null ? "money" : undefined,
-      hint: "Every Star currently sitting in this bot's Telegram wallet, matured and pending combined, minus anything already withdrawn or spent. Read directly from Telegram (getMyStarBalance).",
+      hint: "Every Star currently sitting in this bot's Telegram wallet, minus anything already withdrawn or spent. Read directly from Telegram (getMyStarBalance).",
     },
     {
       label: "Lifetime proceeds",

@@ -302,7 +302,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
             <div className="pl-4 pt-3">
               <div className="flex items-center gap-1.5 text-xs text-muted">
                 {focusName ?? "Fleet"} · {proceedsLabel}
-                <Info text="Every Star earned in this window, gross, before Telegram's 21-day payout hold. This is proceeds, not your current wallet balance and not what you can withdraw today - see Balance below for those." />
+                <Info text="Every Star earned in this window, gross. This is proceeds, not your current wallet balance - see Balance below for that." />
                 {trendPct !== null && (
                   <span className={"font-mono font-semibold tabular-nums " + (trendPct >= 0 ? "text-good" : "text-crit")}>
                     {trendPct >= 0 ? "+" : ""}
@@ -337,29 +337,15 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
                 <div className="mt-3 flex flex-wrap gap-4">
                   <BalanceStat
                     label="Total balance"
-                    hint="Every Star sitting in this bot's Telegram wallet right now, matured and pending combined, minus anything already withdrawn or spent."
+                    hint="Every Star sitting in this bot's Telegram wallet right now, minus anything already withdrawn or spent. Read directly from Telegram (getMyStarBalance)."
                     value={data.balance.totalBalanceStars}
-                    money={money}
-                    accent="good"
-                  />
-                  <BalanceStat
-                    label="Available now"
-                    hint="Stars that have cleared Telegram's 21-day maturation hold and can be withdrawn today."
-                    value={data.balance.availableStars}
-                    money={money}
-                    accent="good"
-                  />
-                  <BalanceStat
-                    label="Pending (21-day hold)"
-                    hint="Stars paid in the last 21 days. Real money, just not liquid yet - Telegram holds every Star for 21 days after it's earned."
-                    value={data.balance.pendingStars}
                     money={money}
                     accent="good"
                   />
                 </div>
               ) : (
                 <Link href="/info" className="mt-2 inline-block text-xs text-[#f5f5f0]/50 underline underline-offset-2 hover:text-[#f5f5f0]/80">
-                  {scoped ? "Balance unavailable right now" : "See Total / Available balance per bot"}
+                  {scoped ? "Balance unavailable right now" : "See Total balance per bot"}
                 </Link>
               )}
             </div>

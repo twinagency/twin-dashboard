@@ -4,7 +4,6 @@ import { usePathname } from "next/navigation";
 import CloneSwitcher from "@/components/CloneSwitcher";
 import CurrencyToggle from "@/components/CurrencyToggle";
 import BlurToggle from "@/components/BlurToggle";
-import DisplayPrefs from "@/components/DisplayPrefs";
 import { logout } from "@/app/login/actions";
 import { fmtMoney, starsToMoney } from "@/lib/money";
 import { getPageMeta } from "@/lib/page-meta";
@@ -54,8 +53,6 @@ export default function TopBar({
           </span>
         </span>
         <div className="hidden h-5 w-px shrink-0 bg-line sm:block" />
-        {/* Inline currency toggle - was buried in the DisplayPrefs dropdown,
-            owner wants it visible in the bar. Still also in the dropdown. */}
         <CurrencyToggle compact />
         <BlurToggle />
         <div className="hidden h-5 w-px shrink-0 bg-line sm:block" />
@@ -79,7 +76,6 @@ export default function TopBar({
             <line x1="21" y1="21" x2="16.65" y2="16.65" />
           </svg>
         </button>
-        <DisplayPrefs />
         <form action={logout}>
           <button
             type="submit"

@@ -1,4 +1,3 @@
-import CurrencyToggle from "@/components/CurrencyToggle";
 import CloneDefaultsForm from "@/components/CloneDefaultsForm";
 import { saveApiKeys, getApiKeyStatus, getCloneDefaults } from "./actions";
 import { API_KEY_FIELDS } from "./fields";
@@ -62,18 +61,6 @@ export default async function SettingsPage() {
         </CardHeader>
         <CardContent>
           <CloneDefaultsForm defaults={cloneDefaults} />
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardContent className="flex items-center justify-between gap-4">
-          <div>
-            <CardTitle>Currency</CardTitle>
-            <p className="mt-1 text-sm text-muted">
-              Display amounts in AUD or USD.
-            </p>
-          </div>
-          <CurrencyToggle />
         </CardContent>
       </Card>
     </div>
