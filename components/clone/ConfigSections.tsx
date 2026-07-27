@@ -571,6 +571,17 @@ export default function ConfigSections({
                 hint="When on, she writes shorter replies to short messages and longer ones to long messages, instead of her usual fixed length. The max reply length above still applies as a ceiling."
               />
             </div>
+            <div className="block">
+              <FieldLabel label="Time gaps" />
+              <Toggle
+                label={cfg.gapAwarenessEnabled ? "Reacts to time gaps" : "Ignores time gaps"}
+                name="gap_awareness_enabled"
+                checked={cfg.gapAwarenessEnabled}
+                onChange={(v) => set("gapAwarenessEnabled", v)}
+                accent="soft"
+                hint="When on, if he goes quiet for a while then messages again she reacts to the gap naturally (like a 'hey stranger') instead of carrying on mid-conversation as if no time passed. Kicks in after about 6 hours of silence."
+              />
+            </div>
           </div>
         </Collapse>
 
@@ -675,6 +686,24 @@ export default function ConfigSections({
           </div>
           <input type="hidden" name="voice_speaker_boost" value={String(cfg.speakerBoost)} />
           <Toggle label="Speaker boost" name="_sb_toggle" checked={cfg.speakerBoost} onChange={(v) => set("speakerBoost", v)} accent="soft" />
+
+          <div className="border-t border-line pt-2">
+            <Toggle
+              label={cfg.randomVoiceEnabled ? "Randomized voice replies" : "No randomized voice"}
+              name="random_voice_enabled"
+              checked={cfg.randomVoiceEnabled}
+              onChange={(v) => set("randomVoiceEnabled", v)}
+              accent="soft"
+              hint="Randomly send a normal chat reply as a voice note instead of text, so she feels less scripted. Only applies to plain replies (never media or tips), and only when voice is on."
+            />
+            {/* Always-submit the value so toggling the slider off never drops it. */}
+            <input type="hidden" name="random_voice_chance" value={String(cfg.randomVoiceChance)} />
+            {cfg.randomVoiceEnabled && (
+              <div className="mt-1.5">
+                <Slider label="Voice chance" name="_random_voice_chance_ui" value={cfg.randomVoiceChance} onChange={(v) => set("randomVoiceChance", v)} min={0} max={100} step={5} format={(v) => `${v}%`} />
+              </div>
+            )}
+          </div>
         </Collapse>
 
         <Collapse

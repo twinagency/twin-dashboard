@@ -505,6 +505,9 @@ function rowFromForm(fd: FormData) {
       return n && n > 0 ? n : null;
     })(),
     match_user_length: fd.get("match_user_length") === "true",
+    gap_awareness_enabled: fd.get("gap_awareness_enabled") === "true",
+    random_voice_enabled: fd.get("random_voice_enabled") === "true",
+    random_voice_chance: num(fd, "random_voice_chance", 15),
 
     // Prompts: only included when the form actually sends them (the review/edit
     // form does; the create form doesn't — there the compile step fills them).
@@ -569,6 +572,10 @@ const FLOW_069_COLUMNS = [
   "paywall_prime_as_voice", "paywall_resume_enabled", "paywall_resume_instruction",
   "paywall_resume_media_id", "paywall_resume_free",
 ] as const;
+// Migration 070: randomized voice + gap awareness. See bot/db/migrations/070_*.sql.
+const FLOW_070_COLUMNS = [
+  "random_voice_enabled", "random_voice_chance", "gap_awareness_enabled",
+] as const;
 // The response-pacing, monetization-sequence, re-warm-photo and
 // offer-redirect column lists were removed on 2026-07-27: those columns are no
 // longer written by this form at all, so they cannot appear in the row that
@@ -583,6 +590,7 @@ const OPTIONAL_COLUMNS = [
   ...FAVORITES_COLUMNS,
   ...VOICE_COOLDOWN_COLUMNS,
   ...FLOW_069_COLUMNS,
+  ...FLOW_070_COLUMNS,
 ] as const;
 
 function withoutPersonaFactColumns(row: Record<string, unknown>): Record<string, unknown> {

@@ -81,6 +81,9 @@ export type CloneConfigState = {
   // uncontrolled number field (like followup_after_minutes) so it isn't
   // duplicated in this state; only the toggle needs controlled state.
   matchUserLength: boolean;
+  gapAwarenessEnabled: boolean;
+  randomVoiceEnabled: boolean;
+  randomVoiceChance: number;
 
   timezone: string;
   onboardingCollect: string[];
@@ -179,6 +182,9 @@ function initial(clone?: Partial<Clone>): CloneConfigState {
 
 
     matchUserLength: clone?.match_user_length ?? false,
+    gapAwarenessEnabled: clone?.gap_awareness_enabled ?? true,
+    randomVoiceEnabled: clone?.random_voice_enabled ?? false,
+    randomVoiceChance: clone?.random_voice_chance ?? 15,
 
     timezone: clone?.timezone ?? "UTC",
     onboardingCollect: Array.isArray(clone?.onboarding_collect_fields) ? clone!.onboarding_collect_fields! : [],

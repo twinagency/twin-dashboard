@@ -182,6 +182,9 @@ export type Clone = {
   voice_style: number;
   voice_speaker_boost: boolean;
   voice_speed: number;
+  random_voice_enabled: boolean;
+  random_voice_chance: number;
+  gap_awareness_enabled: boolean;
 
   starting_credits: number;
   credit_pack_size: number;
