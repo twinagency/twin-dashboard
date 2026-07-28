@@ -103,12 +103,7 @@ const NAV_LINKS: NavLink[] = [
   { kind: "route", label: "Info", href: "/info", icon: "Info", color: "neutral" },
   { kind: "route", label: "Performance", href: "/performance", icon: "Dials", color: "neutral" },
   { kind: "route", label: "Logs", href: "/logs", icon: "Logs", color: "neutral" },
-  { kind: "route", label: "Changelog", href: "/changelog", icon: "Sparkle", color: "gray" },
-  { kind: "route", label: "Feedback", href: "/feedback", icon: "Feedback", color: "gray" },
-  { kind: "route", label: "Prompts", href: "/prompts", icon: "Edit", color: "gray" },
-  { kind: "route", label: "Test", href: "/test", icon: "Bot", color: "gray" },
-  { kind: "route", label: "Settings", href: "/settings", icon: "Settings", color: "gray" },
-  { kind: "route", label: "AI", href: "/ai", icon: "Bot", color: "gray" },
+  { kind: "route", label: "Create new clone", href: "/clones/new", icon: "Plus", color: "neutral" },
 ];
 
 export default function Sidebar({
