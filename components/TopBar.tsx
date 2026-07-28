@@ -33,7 +33,10 @@ export default function TopBar({
   return (
     // 3-col grid so the controls sit dead-center of the bar regardless of
     // how wide the breadcrumb text is; right column is an empty balancer.
-    <div className="sticky top-0 z-40 grid shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-3 border-b border-line bg-panel px-4 py-2.5">
+    // Fixed h-16 (not padding-driven height) so this bar's bottom border lines
+    // up exactly with the Sidebar's brand-row border next to it - the two were
+    // drifting apart whenever content pushed either row's natural height.
+    <div className="sticky top-0 z-40 grid h-16 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-3 border-b border-line bg-panel px-4">
       <h1 className="min-w-0 truncate text-base font-semibold text-ink">
         {scopeLabel}
         {pageLabel != null && <span className="text-muted"> / {pageLabel}</span>}

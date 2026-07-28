@@ -198,10 +198,14 @@ export default function CloneDefaultsForm({ defaults }: { defaults: Partial<Clon
         </SubCard>
         <div className="flex flex-wrap gap-x-6 gap-y-3">
           <Toggle label="Smart first-time message (she writes it once)" name="smart_paywall_enabled" checked={cfg.smartPaywall} onChange={(v) => set("smartPaywall", v)} accent="soft" />
+          {/* Unconditional hidden input carries the real value, same pattern as
+              smart_split / speaker boost below. The visible toggle uses a
+              differently-named field so mounting/unmounting it can never drop
+              the stored value from the submitted form. */}
+          <input type="hidden" name="paywall_as_voice" value={String(cfg.paywallVoice)} />
           {cfg.smartPaywall && (
-            <Toggle label="Send that first one as a voice note" name="paywall_as_voice" checked={cfg.paywallVoice} onChange={(v) => set("paywallVoice", v)} accent="soft" />
+            <Toggle label="Send that first one as a voice note" name="_paywall_as_voice_toggle" checked={cfg.paywallVoice} onChange={(v) => set("paywallVoice", v)} accent="soft" />
           )}
-          {!cfg.smartPaywall && <input type="hidden" name="paywall_as_voice" value={String(cfg.paywallVoice)} />}
         </div>
         <Area label="Paywall instruction (optional)" name="paywall_instruction" rows={2} placeholder="e.g. be sweet, remind him what he's missing, nudge him to grab more messages" defaultValue={defaults.paywall_instruction} />
       </div>
@@ -210,9 +214,16 @@ export default function CloneDefaultsForm({ defaults }: { defaults: Partial<Clon
       <div className="grid gap-3">
         <Group label="Campaigns / re-engagement" />
         <Toggle label={cfg.dripEnabled ? "Campaign is on" : "Campaign is off"} name="drip_enabled" checked={cfg.dripEnabled} onChange={(v) => set("dripEnabled", v)} accent="soft" />
+        {/* Win-back lapse threshold used to be editable here (winback_lapse_days),
+            but the runtime hardcodes a fixed 7-day threshold and deliberately does
+            not read this column (see isReturningLapsedSpender in bot/src/campaign.ts
+            and the matching comment in dashboard/app/drip/actions.ts). The field was
+            removed 2026-07-27 because it saved into app_settings and nothing ever
+            read it back, an operator "setting" something that silently did nothing.
+            The clones.winback_lapse_days column and its Clone type field are kept
+            (never dropped from a live DB) but are otherwise legacy/unused. */}
         {cfg.dripEnabled && (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Field label="Win-back after (days quiet)" name="winback_lapse_days" type="number" defaultValue={defaults.winback_lapse_days ?? 7} placeholder="7" />
+          <div className="grid grid-cols-1 gap-4 sm:max-w-xs">
             <Field label="Follow-up if quiet mid-chat (minutes, 0 = off)" name="followup_after_minutes" type="number" defaultValue={defaults.followup_after_minutes ?? 0} placeholder="0" />
           </div>
         )}

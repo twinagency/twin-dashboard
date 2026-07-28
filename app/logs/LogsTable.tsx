@@ -2,7 +2,7 @@
 
 import { Fragment, useState } from "react";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
-import { TECH_LABEL, type Tech } from "./tech";
+import { TECH_LABEL, fmtLogTime, fmtRelativeTime, friendlyKey, sourceLabel, type Tech } from "./tech";
 
 export type LogRow = {
   key: string;
@@ -68,13 +68,18 @@ export function LogsTable({ rows, showClone }: { rows: LogRow[]; showClone: bool
                 className={`${r.level === "error" ? "bg-crit/5 hover:bg-crit/10" : ""} ${expandable ? "cursor-pointer" : ""}`}
                 onClick={expandable ? () => toggle(r.key) : undefined}
               >
-                <TableCell className="whitespace-nowrap text-muted">{new Date(r.ts).toLocaleString()}</TableCell>
+                <TableCell className="whitespace-nowrap text-muted">
+                  <div>{fmtLogTime(r.ts)}</div>
+                  {fmtRelativeTime(r.ts) && <div className="text-[11px] text-muted/70">{fmtRelativeTime(r.ts)}</div>}
+                </TableCell>
                 <TableCell>
                   <LevelChip level={r.level} />
                 </TableCell>
                 <TableCell className="whitespace-nowrap">
-                  <span title={r.source}>{TECH_LABEL[r.tech]}</span>
-                  <span className="ml-1.5 text-[11px] text-muted">{r.source}</span>
+                  <div>{TECH_LABEL[r.tech]}</div>
+                  <div className="text-[11px] text-muted" title={`raw source: ${r.source}`}>
+                    {sourceLabel(r.source)}
+                  </div>
                 </TableCell>
                 {showClone && <TableCell className="whitespace-nowrap">{r.cloneName ?? "-"}</TableCell>}
                 <TableCell className="max-w-[480px]">
@@ -92,9 +97,7 @@ export function LogsTable({ rows, showClone }: { rows: LogRow[]; showClone: bool
               {expandable && expanded && (
                 <TableRow className="hover:bg-transparent">
                   <TableCell colSpan={colCount} className="bg-elev/50 py-2">
-                    <pre className="max-h-64 overflow-auto whitespace-pre-wrap break-all font-mono text-xs text-muted">
-                      {JSON.stringify(r.detail, null, 2)}
-                    </pre>
+                    <DetailView detail={r.detail!} />
                   </TableCell>
                 </TableRow>
               )}
@@ -111,4 +114,30 @@ export function LogsTable({ rows, showClone }: { rows: LogRow[]; showClone: bool
       </TableBody>
     </Table>
   );
+}
+
+// Detail payload as a scannable key/value list instead of a raw JSON dump -
+// same information (nothing dropped, nothing renamed in the underlying data),
+// just formatted for someone who isn't reading it as code. Nested
+// objects/arrays still fall back to a compact JSON string since there's no
+// generic way to flatten them further; everything else prints as plain text.
+function DetailView({ detail }: { detail: Record<string, unknown> }) {
+  const entries = Object.entries(detail);
+  if (entries.length === 0) return null;
+  return (
+    <dl className="grid max-h-64 gap-x-4 gap-y-1 overflow-auto text-xs sm:grid-cols-[max-content_1fr]">
+      {entries.map(([key, value]) => (
+        <Fragment key={key}>
+          <dt className="whitespace-nowrap font-medium text-muted">{friendlyKey(key)}</dt>
+          <dd className="whitespace-pre-wrap break-all text-ink/90">{formatDetailValue(value)}</dd>
+        </Fragment>
+      ))}
+    </dl>
+  );
+}
+
+function formatDetailValue(value: unknown): string {
+  if (value === null || value === undefined || value === "") return "-";
+  if (typeof value === "object") return JSON.stringify(value);
+  return String(value);
 }

@@ -6,6 +6,9 @@ import { DEFAULT_PAYWALL_BUTTON, DEFAULT_PAYWALL_MESSAGE, DEFAULT_SPOIL_OPTIONS,
 import { DEFAULT_CATEGORY_PRICING, type CategoryPricing } from "@/lib/pricing";
 
 type Level = "low" | "medium" | "high";
+// Imperfection profile intensity (migration 042). A frequency scale reads
+// more natural for these traits than low/medium/high.
+type ImperfectionLevel = "never" | "sometimes" | "often" | "always";
 
 // All the CONTROLLED config state, shared by Configure (edit) and Create so both
 // forms render the exact same settings. Uncontrolled fields (name, token, credits,
@@ -17,6 +20,7 @@ export type CloneConfigState = {
   photosEnabled: boolean;
   videosEnabled: boolean;
   videoVision: boolean;
+  photoVision: boolean;
   bundlesEnabled: boolean;
   voice: boolean;
   charge: boolean;
@@ -50,6 +54,15 @@ export type CloneConfigState = {
   messageEffects: boolean;
   aiDisclosure: boolean;
 
+  // Imperfection profile, as an intensity (migration 042). Controlled the
+  // same way the other Level dials (sexual/nsfw/push/emoji) are, so the
+  // Segmented control in PersonaFactsFields' imperfection card follows the
+  // exact same pattern as the rest of Config.
+  lowercaseLevel: ImperfectionLevel;
+  punctuationDropLevel: ImperfectionLevel;
+  typoLevel: ImperfectionLevel;
+  doubleTextLevel: ImperfectionLevel;
+
   stability: number;
   similarity: number;
   style: number;
@@ -59,6 +72,27 @@ export type CloneConfigState = {
   waitMin: number;
   waitMax: number;
   memoryWindow: number;
+
+  // Response pacing (migration 041). Controlled because Slider/Toggle need
+  // live values for conditional rendering (stutter pause sliders, ramp range
+  // sliders). Defaults reproduce today's exact behavior when unset.
+  readDelayMin: number;
+  readDelayMax: number;
+  typingStutterEnabled: boolean;
+  typingStutterMinPause: number;
+  typingStutterMaxPause: number;
+  pacingRampMessages: number;
+  pacingNewWaitMin: number;
+  pacingNewWaitMax: number;
+  pacingEstablishedWaitMin: number;
+  pacingEstablishedWaitMax: number;
+  batchWaitMin: number;
+  batchWaitMax: number;
+
+  // response length (migrations 037/038). max_response_words is a plain
+  // uncontrolled number field (like followup_after_minutes) so it isn't
+  // duplicated in this state; only the toggle needs controlled state.
+  matchUserLength: boolean;
 
   timezone: string;
   onboardingCollect: string[];
@@ -87,8 +121,9 @@ function initial(clone?: Partial<Clone>): CloneConfigState {
     smartSplit: clone?.smart_split ?? true,
 
     photosEnabled: clone?.photos_enabled ?? true,
-    videosEnabled: clone?.videos_enabled ?? false,
+    videosEnabled: clone?.videos_enabled ?? true,
     videoVision: clone?.video_vision_enabled ?? true,
+    photoVision: clone?.photo_vision_enabled ?? true,
     bundlesEnabled: clone?.bundles_enabled ?? true,
     voice: clone?.voice_enabled ?? true,
     charge: clone?.charge_messages ?? true,
@@ -125,6 +160,16 @@ function initial(clone?: Partial<Clone>): CloneConfigState {
     messageEffects: clone?.message_effects_enabled ?? true,
     aiDisclosure: clone?.ai_disclosure ?? false,
 
+    // Imperfection profile levels (migration 042). A clone saved before this
+    // shipped has no level column yet, only the old boolean — start the UI at
+    // "often" rather than "never" so switching to the new control doesn't
+    // read as silently turning the trait off; saving then persists the level
+    // and the prompt builder stops reading the boolean for that trait.
+    lowercaseLevel: clone?.lowercase_level ?? (clone?.uses_lowercase ? "often" : "never"),
+    punctuationDropLevel: clone?.punctuation_drop_level ?? (clone?.drops_punctuation ? "often" : "never"),
+    typoLevel: clone?.typo_level ?? (clone?.makes_typos ? "sometimes" : "never"),
+    doubleTextLevel: clone?.double_text_level ?? (clone?.double_texts ? "sometimes" : "never"),
+
     stability: clone?.voice_stability ?? 0.4,
     similarity: clone?.voice_similarity ?? 0.75,
     style: clone?.voice_style ?? 0.25,
@@ -134,6 +179,21 @@ function initial(clone?: Partial<Clone>): CloneConfigState {
     waitMin: clone?.response_wait_min ?? 0,
     waitMax: clone?.response_wait_max ?? 0,
     memoryWindow: clone?.memory_window ?? 24,
+
+    readDelayMin: clone?.read_delay_min ?? 0,
+    readDelayMax: clone?.read_delay_max ?? 0,
+    typingStutterEnabled: clone?.typing_stutter_enabled ?? false,
+    typingStutterMinPause: clone?.typing_stutter_min_pause ?? 1,
+    typingStutterMaxPause: clone?.typing_stutter_max_pause ?? 3,
+    pacingRampMessages: clone?.pacing_ramp_messages ?? 0,
+    pacingNewWaitMin: clone?.pacing_new_wait_min ?? 0,
+    pacingNewWaitMax: clone?.pacing_new_wait_max ?? 0,
+    pacingEstablishedWaitMin: clone?.pacing_established_wait_min ?? 0,
+    pacingEstablishedWaitMax: clone?.pacing_established_wait_max ?? 0,
+    batchWaitMin: clone?.batch_wait_min ?? 3,
+    batchWaitMax: clone?.batch_wait_max ?? 3,
+
+    matchUserLength: clone?.match_user_length ?? false,
 
     timezone: clone?.timezone ?? "UTC",
     onboardingCollect: Array.isArray(clone?.onboarding_collect_fields) ? clone!.onboarding_collect_fields! : [],

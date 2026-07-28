@@ -53,6 +53,22 @@ export async function setBlocked(fd: FormData) {
   revalidatePath("/users");
 }
 
+// Per-fan pause. users.paused, gated in handler.ts/campaign.ts/followup.ts
+// so this ONE fan gets no replies and no drip while it's on. Distinct from
+// both the whole-clone Active/Paused status (clones.status) and the safety
+// block above (users.blocked): this is just "leave him on read for a while",
+// not a ban and not a clone-wide pause.
+export async function setPaused(fd: FormData) {
+  const userId = String(fd.get("userId"));
+  const paused = fd.get("paused") === "true";
+  const { error } = await supabaseAdmin
+    .from("users")
+    .update({ paused })
+    .eq("id", userId);
+  if (error) throw new Error(error.message);
+  revalidatePath("/users");
+}
+
 // Full wipe: the user row (cascades purchases + received-media via FK) plus
 // chat_history, which is keyed by (clone_id, telegram_id) and won't cascade.
 export async function deleteUser(fd: FormData) {

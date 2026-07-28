@@ -45,12 +45,24 @@ export async function assembleClonePrompts(
     subscriptions_enabled?: boolean;
     persona: Record<string, string> | null;
   } & PersonaFactCols,
+  // Optional draft text keyed by agent_type, substituted in place of the
+  // stored DB row for that agent type only. Lets the prompt template editor
+  // (app/prompts) preview an UNSAVED edit against a real clone without
+  // writing it to prompt_templates first — every other agent type still
+  // reads the live saved row. undefined (the default) preserves the exact
+  // prior behaviour for every existing caller.
+  templateOverrides?: Partial<Record<"text" | "voice" | "vision" | "routing", string>>,
 ): Promise<Record<"text" | "voice" | "vision" | "routing", string>> {
   const { data: tplRows } = await supabaseAdmin
     .from("prompt_templates")
     .select("agent_type,template")
     .in("agent_type", ["text", "voice", "vision", "routing"]);
   const tpl = new Map((tplRows ?? []).map((r: any) => [r.agent_type, r.template as string]));
+  if (templateOverrides) {
+    for (const [agent, text] of Object.entries(templateOverrides)) {
+      if (text !== undefined) tpl.set(agent, text);
+    }
+  }
   const flags = {
     CHARGE: clone.charge_messages,
     PHOTOS: clone.photos_enabled,
@@ -148,7 +160,12 @@ function formatNudgeP(c: PreviewClone): string {
   );
 }
 
-// Mirror of src/flows/actions.ts availableActions minus text/vision (never a tool).
+// Mirror of src/flows/actions.ts ACTIONS/availableActions minus text/vision
+// (never a tool). "vip" was missing here until the 2026-07-27 prompt-viewer
+// accuracy pass - a clone with subscriptions on and tiers set never showed
+// the vip tool in either smart preview block, a real (now fixed) divergence
+// from what the bot actually sent. Gate matches services/subscriptions.ts
+// subscriptionsAvailable() exactly (also mirrored as flags.SUBS above).
 function choosableActions(c: PreviewClone): { name: string; label: string; description: string }[] {
   const all = [
     { name: "voice", label: "Voice note", description: "Reply with a spoken voice note instead of text.", on: c.voice_enabled },
@@ -156,41 +173,100 @@ function choosableActions(c: PreviewClone): { name: string; label: string; descr
     { name: "video", label: "Send a video", description: "Send a locked paid video. Price is set by the video, not by you.", on: c.videos_enabled },
     { name: "bundle", label: "Send a bundle", description: "Send the next locked paid photo bundle (a set sold together).", on: c.photos_enabled && c.bundles_enabled },
     { name: "tip", label: "Ask for a tip", description: "Fire the tip/spoil pay button. Amounts come from the fixed menu, never from you.", on: c.tips_enabled },
+    {
+      name: "vip",
+      label: "Offer VIP subscription",
+      description:
+        "Offer him a recurring monthly VIP membership. Use when he wants more of you or asks about VIP/subscribing. The price and perks are fixed by the tier, never by you.",
+      on: (c.subscriptions_enabled ?? false) && (c.subscription_tiers ?? []).length > 0,
+    },
   ];
   return all.filter((a) => a.on).map(({ name, label, description }) => ({ name, label, description }));
 }
 
-// Mirror of the smart single-model (split-off) instruction in src/flows/smart.ts.
+// Mirror of the DECIDER's push-discipline clause in src/flows/smart.ts
+// (pushDiscipline()) - drives how hard the decider reaches for a paid action,
+// same push_level dial as personalityRuleP() above but a separate clause: that
+// one is the WRITER's tone, this is the decider's firing threshold. Was
+// missing entirely from both smart preview blocks before the 2026-07-27 pass.
+function pushDisciplineP(c: PreviewClone): string {
+  return {
+    low:
+      "This companion upsells RARELY. Fire a paid action (photo/video/bundle/tip/vip) ONLY when he " +
+      "directly and explicitly asks for that exact thing this message. Never suggest or offer one on your own.",
+    medium:
+      "Upsell in moderation: fire a paid action when he asks for it or clearly signals he wants it right now. " +
+      "On ordinary conversation, fire nothing.",
+    high:
+      "Upsell readily: as well as when he asks outright, you may fire a paid action when there's a genuine " +
+      "opening (he's flirty, curious about your pics/body, clearly heating up). Even so, fire NOTHING on plain, " +
+      "non-sexual small talk.",
+  }[c.push_level];
+}
+
+// Mirror of the smart single-model (split-off) instruction, decideAndWrite()
+// in src/flows/smart.ts. Rewritten byte-for-byte to match the 2026-07-27
+// smart.ts pass (DEFAULT TO NO TOOL framing, per-action criteria, the voice
+// reaction-vs-request distinction from the voice-cooldown defect fix, and
+// pushDisciplineP) - the previous version here was stale and did not match
+// what the bot actually sent. KEEP IN SYNC with src/flows/smart.ts decideAndWrite().
 function smartCombinedInstruction(c: PreviewClone): string {
   const choosable = choosableActions(c);
   const toolList = choosable.map((a) => `- ${a.label}: ${a.description}`).join("\n");
   return (
-    `\n\nYou're texting him. Reply in your own voice as you normally would - your reply text is sent to him as a message.\n` +
+    `\n\nYou're texting him. Reply in your own voice as you normally would, your reply text is sent to him as a message.\n` +
     (choosable.length
-      ? `You can ALSO do any of these this turn by using the matching tool (you may use more than one, e.g. tease him in your reply AND send a photo):\n${toolList}\n` +
-        `Only use a tool when it genuinely fits the moment. If you just want to talk, use no tool. ` +
-        `Prices and tip amounts are handled automatically - never state a price, a number of Stars, or payment steps. `
+      ? `You can ALSO do any of these this turn by using the matching tool:\n${toolList}\n` +
+        `DEFAULT TO NO TOOL. Most turns are just ordinary conversation, so reply in words and use no tool. ` +
+        `Only use a tool when he clearly and specifically asks for that exact thing THIS message: he asks to ` +
+        `see a pic/video, asks for a bundle/set, asks to hear your voice, offers to tip/spoil you, or asks ` +
+        `about VIP. Never fire a photo/voice/tip on plain small talk (like "what's your favorite band"), ` +
+        `it's spammy and makes you feel like a bot. Voice especially: it's an occasional treat, not your ` +
+        `default reply mode, so never fire it again right after you already sent one just because he's ` +
+        `reacting to it, only when he freshly and explicitly asks to hear you again. If in doubt, use no tool. ` +
+        `Prices and tip amounts are handled automatically, never state a price, a number of Stars, or payment steps. ` +
+        `${pushDisciplineP(c)} `
       : "") +
     `Never mention tools, modes, or that you're an AI.`
   );
 }
 
-// Mirror of the smart decider system prompt (split-on) in src/flows/smart.ts.
+// Mirror of the smart decider system prompt (split-on), decideActions() in
+// src/flows/smart.ts. Rewritten byte-for-byte for the same reason as
+// smartCombinedInstruction() above. KEEP IN SYNC with src/flows/smart.ts decideActions().
 function smartDeciderSystem(c: PreviewClone): string {
   const toolList = choosableActions(c).map((a) => `- ${a.name}: ${a.description}`).join("\n");
   return (
-    `You decide which extra actions an adult chat companion takes THIS turn, alongside her text reply.\n` +
+    `You decide which extra actions an adult chat companion takes THIS turn. Her words are already ` +
+    `written by someone else; you ONLY pick actions (tools), never text.\n\n` +
     `Available actions:\n${toolList}\n\n` +
-    `Call an action ONLY when the conversation clearly calls for it - he asks to see a photo/video, ` +
-    `wants to hear her voice, asks for a bundle/set, or offers to tip/spoil her. You may call more than ` +
-    `one. If it's just ordinary talk, call nothing. You never write messages and never choose any price ` +
-    `or amount - you only pick which actions happen.`
+    `DEFAULT TO NOTHING. Most turns are ordinary conversation and need NO action: plain chat, small talk, ` +
+    `getting-to-know-you questions ("what's your favorite band", "how was your day"), greetings, a new ` +
+    `fan's early messages. Firing a photo/voice/tip on ordinary talk is spammy and wrong, it makes her ` +
+    `feel like a vending machine, not a person.\n\n` +
+    `Fire an action ONLY when the fan's LATEST message clearly and specifically calls for it:\n` +
+    `- photo/video: he explicitly asks to see one ("send a pic", "show me", "what do you look like").\n` +
+    `- bundle: he asks for a set/bundle/album/collection.\n` +
+    `- voice: he asks to hear your voice or for a voice note. Voice is an occasional, deliberate treat, ` +
+    `not a default reply mode: if you already sent one recently, do NOT fire it again just because he's ` +
+    `reacting to it ("that voice is illegal", "i'm not okay"), that's a reaction, not a request. Only fire ` +
+    `it again once he freshly and explicitly asks to hear you again.\n` +
+    `- tip: he offers to tip/spoil you or send money.\n` +
+    `- vip: he asks about subscribing / VIP / membership.\n` +
+    `If in doubt, fire NOTHING. Only fire more than one action when he clearly asks for more than one. ` +
+    `Use her written reply below only to stay consistent (if she explicitly promised to send something, ` +
+    `honor it), it is NOT permission to upsell on its own. You never choose any price or amount.\n\n` +
+    pushDisciplineP(c)
   );
 }
 
-// Build the flow-aware, toggle-aware prompt preview for a clone.
-export async function assemblePromptPreview(clone: PreviewClone): Promise<PromptPreview> {
-  const base = await assembleClonePrompts(clone);
+// Build the flow-aware, toggle-aware prompt preview for a clone. `templateOverrides`
+// (see assembleClonePrompts) lets the prompt editor preview an unsaved draft.
+export async function assemblePromptPreview(
+  clone: PreviewClone,
+  templateOverrides?: Partial<Record<"text" | "voice" | "vision" | "routing", string>>,
+): Promise<PromptPreview> {
+  const base = await assembleClonePrompts(clone, templateOverrides);
   const nudge = formatNudgeP(clone);
   const mode = clone.ai_mode;
   const smartSplit = clone.smart_split;

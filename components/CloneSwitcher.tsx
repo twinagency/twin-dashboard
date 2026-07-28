@@ -2,9 +2,10 @@
 
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useMemo, useRef, useState, useTransition } from "react";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { setCloneScope } from "@/app/actions/clone-scope";
 import { initials } from "@/lib/colors";
+import { onOpenCloneSwitcher } from "@/lib/clone-switcher-bus";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 
@@ -39,6 +40,10 @@ export default function CloneSwitcher({
   const inputRef = useRef<HTMLInputElement>(null);
 
   const active = activeCloneId ? clones.find((c) => c.id === activeCloneId) : null;
+
+  // Girl-only nav rows (Sidebar's PPVs/Edit) dispatch this instead of
+  // navigating when no clone is picked yet.
+  useEffect(() => onOpenCloneSwitcher(() => setOpen(true)), []);
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();

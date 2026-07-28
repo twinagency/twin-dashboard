@@ -130,20 +130,33 @@ export function GroupHeader({ label, hint }: { label: string; hint?: string }) {
 // submitting with the form — collapsing must never drop a value.
 export function Collapse({
   label,
+  hint,
   summary,
   emoji,
+  accent = "neutral",
+  filled,
   defaultOpen = false,
+  className = "",
   children,
 }: {
-  label: string;
+  label: React.ReactNode;
+  // Longer explainer, shown as a hoverable ⓘ next to the title (same
+  // convention as Section/FieldLabel — never a grey paragraph).
+  hint?: string;
   summary?: string;
   emoji?: string;
+  accent?: SectionAccent;
+  // Shows a small filled/empty dot next to the title so a wall of collapsed
+  // cards can be scanned at a glance for which ones have data.
+  filled?: boolean;
   defaultOpen?: boolean;
+  className?: string;
   children: React.ReactNode;
 }) {
   const [open, setOpen] = useState(defaultOpen);
+  const a = SECTION_ACCENTS[accent];
   return (
-    <div className="h-full rounded-xl border border-line border-l-[3px] border-l-crit/70 bg-panel">
+    <div className={`h-full rounded-xl border border-line border-l-[3px] ${a.bar} bg-panel ` + className}>
       <button
         type="button"
         onClick={() => setOpen((v) => !v)}
@@ -151,12 +164,26 @@ export function Collapse({
         className="flex w-full items-center gap-2 px-3 py-3 text-left"
       >
         {emoji && (
-          <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-md bg-crit/15 text-[11px]">
+          <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-[11px] ${a.chip}`}>
             {emoji}
           </span>
         )}
-        <span className="text-xs font-semibold uppercase tracking-wide text-ink">{label}</span>
-        {summary && <span className="truncate text-[11px] text-muted">{summary}</span>}
+        <span className="flex shrink-0 items-center gap-1 text-xs font-semibold uppercase tracking-wide text-ink">
+          {label}
+          {hint && <Info text={hint} />}
+        </span>
+        {filled !== undefined && (
+          <span
+            className={"h-1.5 w-1.5 shrink-0 rounded-full " + (filled ? "bg-good" : "bg-muted/40")}
+            title={filled ? "has data" : "empty"}
+          />
+        )}
+        {/* min-w-0 is load-bearing: a flex child's default min-width is its own
+            content width, so `truncate` alone never actually engaged here — a
+            long summary (several hard limits, a legacy custom entry) just
+            overflowed past the card's edge instead of ellipsizing, shoving the
+            Close/Edit label off to the side where it wasn't fully visible. */}
+        {summary && <span className="min-w-0 flex-1 truncate text-[11px] text-muted" title={summary}>{summary}</span>}
         <span className="ml-auto shrink-0 text-[11px] font-medium text-accent">
           {open ? "Close ▲" : "Edit ▼"}
         </span>
@@ -280,6 +307,9 @@ export function Field({
   required,
   hint,
   secret,
+  min,
+  max,
+  step,
 }: {
   label: string;
   name: string;
@@ -293,6 +323,12 @@ export function Field({
   // value stays in the input the whole time (defaultValue/form submit are
   // unaffected), this is a visual mask only, not access control.
   secret?: boolean;
+  // HTML5 bounds for type="number" fields (e.g. a cooldown can't go negative).
+  // Browser-level guardrail only — the real clamp always happens server-side
+  // too (rowFromForm), since a client control is never the source of truth.
+  min?: number;
+  max?: number;
+  step?: number;
 }) {
   return (
     <label className="block">
@@ -303,6 +339,9 @@ export function Field({
         required={required}
         placeholder={placeholder}
         defaultValue={defaultValue ?? undefined}
+        min={type === "number" ? min : undefined}
+        max={type === "number" ? max : undefined}
+        step={type === "number" ? step : undefined}
         className={inputCls + (secret ? " blur-[3px] transition-[filter] duration-150 focus:blur-none" : "")}
       />
     </label>
@@ -365,6 +404,180 @@ export function Select<T extends string>({
         ))}
       </select>
     </label>
+  );
+}
+
+// ── Tag input (open-ended list, Enter/comma to add a removable chip) ──────────
+// For fields where the real-world values can't be fully enumerated (tattoo
+// spots, content categories a creator invents, nicknames...). Submits as a
+// JSON array in a hidden input, same wire format as the old per-file ChipList.
+// `suggestions` optionally renders common values as one-click "+ add" chips
+// underneath, so an enumerable common set stays discoverable without forcing
+// every value through a fixed grid.
+export function TagInput({
+  label,
+  name,
+  initial,
+  placeholder,
+  hint,
+  suggestions,
+}: {
+  label?: string;
+  name: string;
+  initial: string[];
+  placeholder?: string;
+  hint?: string;
+  suggestions?: string[];
+}) {
+  const [chips, setChips] = useState<string[]>(initial);
+  const [draft, setDraft] = useState("");
+
+  const add = (raw?: string) => {
+    const parts = (raw ?? draft)
+      .split(",")
+      .map((s) => s.trim())
+      .filter(Boolean);
+    if (!parts.length) return;
+    setChips((prev) => [...prev, ...parts.filter((p) => !prev.includes(p))]);
+    if (raw === undefined) setDraft("");
+  };
+  const remove = (c: string) => setChips((prev) => prev.filter((x) => x !== c));
+  const remaining = (suggestions ?? []).filter((s) => !chips.includes(s));
+
+  return (
+    <div className="block">
+      {label && <FieldLabel label={label} hint={hint} />}
+      <input type="hidden" name={name} value={JSON.stringify(chips)} />
+      <div className={inputCls + " flex flex-wrap items-center gap-1.5"}>
+        {chips.map((c) => (
+          <span key={c} className="flex items-center gap-1 rounded-full bg-accent/15 px-2 py-0.5 text-xs text-accent">
+            {c}
+            <button
+              type="button"
+              aria-label={`remove ${c}`}
+              onClick={() => remove(c)}
+              className="text-accent/70 transition hover:text-accent"
+            >
+              ✕
+            </button>
+          </span>
+        ))}
+        <input
+          value={draft}
+          onChange={(e) => setDraft(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === ",") {
+              e.preventDefault();
+              add();
+            } else if (e.key === "Backspace" && draft === "" && chips.length) {
+              setChips((prev) => prev.slice(0, -1));
+            }
+          }}
+          onBlur={() => add()}
+          placeholder={chips.length ? "" : placeholder}
+          className="min-w-24 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-muted/60"
+        />
+      </div>
+      {remaining.length > 0 && (
+        <div className="mt-1 flex flex-wrap gap-1">
+          {remaining.map((s) => (
+            <button
+              key={s}
+              type="button"
+              onClick={() => add(s)}
+              className="rounded-full border border-line px-2 py-0.5 text-[11px] text-muted transition hover:border-accent/50 hover:text-accent"
+            >
+              + {s}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── Collapsed multi-select (fixed option set, pick several) ───────────────────
+// Closed shut behind a one-line summary ("English, Spanish +1") so a 10-22
+// option set doesn't cost a permanent grid's worth of height. Expands to a
+// toggle grid on click; legacy/custom values not in `options` still round-trip
+// as removable chips underneath, same as the old always-open ToggleChipGrid.
+export function MultiSelect({
+  label,
+  name,
+  options,
+  initial,
+  hint,
+  cols = 3,
+}: {
+  label?: string;
+  name: string;
+  options: string[];
+  initial: string[];
+  hint?: string;
+  cols?: 2 | 3 | 4;
+}) {
+  const [checked, setChecked] = useState<string[]>(initial);
+  const [open, setOpen] = useState(false);
+  const toggle = (v: string) =>
+    setChecked((prev) => (prev.includes(v) ? prev.filter((x) => x !== v) : [...prev, v]));
+  const custom = checked.filter((c) => !options.includes(c));
+  const summary =
+    checked.length === 0
+      ? "none set"
+      : checked.length <= 2
+        ? checked.join(", ")
+        : `${checked.slice(0, 2).join(", ")} +${checked.length - 2}`;
+  const gridCls = cols === 4 ? "sm:grid-cols-4" : cols === 2 ? "sm:grid-cols-2" : "sm:grid-cols-3";
+
+  return (
+    <div className="block">
+      {label && <FieldLabel label={label} hint={hint} />}
+      <input type="hidden" name={name} value={JSON.stringify(checked)} />
+      <button
+        type="button"
+        onClick={() => setOpen((v) => !v)}
+        aria-expanded={open}
+        className={inputCls + " flex items-center justify-between gap-2 text-left"}
+      >
+        <span className={"min-w-0 flex-1 truncate " + (checked.length ? "text-ink" : "text-muted")} title={summary}>{summary}</span>
+        <span className="shrink-0 text-[11px] text-muted">{open ? "▲" : "▼"}</span>
+      </button>
+      {open && (
+        <div className="mt-1.5 grid gap-1.5 rounded-lg border border-line bg-bg/40 p-2">
+          <div className={`grid grid-cols-2 gap-1.5 ${gridCls}`}>
+            {options.map((o) => {
+              const on = checked.includes(o);
+              return (
+                <button
+                  key={o}
+                  type="button"
+                  aria-pressed={on}
+                  onClick={() => toggle(o)}
+                  className={
+                    "rounded-lg border px-2.5 py-1.5 text-left text-xs font-medium transition " +
+                    (on ? "border-accent/50 bg-accent/10 text-accent" : "border-line bg-bg/40 text-muted hover:text-ink")
+                  }
+                >
+                  {o}
+                </button>
+              );
+            })}
+          </div>
+          {custom.length > 0 && (
+            <div className="flex flex-wrap gap-1.5 border-t border-line pt-1.5">
+              {custom.map((c) => (
+                <span key={c} className="flex items-center gap-1 rounded-full bg-muted/15 px-2 py-0.5 text-xs text-ink">
+                  {c}
+                  <button type="button" onClick={() => toggle(c)} className="text-muted/70 hover:text-ink">
+                    ✕
+                  </button>
+                </span>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
   );
 }
 
@@ -625,6 +838,19 @@ export function PromptField({ name, label, defaultValue }: { name: string; label
     </div>
   );
 }
+
+// ── ElevenLabs model options ──────────────────────────────────────────────────
+// A genuinely closed set (ElevenLabs ships a fixed handful of TTS models), so
+// this is a dropdown rather than a free-text field an operator has to
+// remember the exact id for.
+export const ELEVEN_MODEL_OPTIONS: { value: string; label: string }[] = [
+  { value: "eleven_multilingual_v2", label: "Multilingual v2 (best quality, default)" },
+  { value: "eleven_turbo_v2_5", label: "Turbo v2.5 (faster, cheaper)" },
+  { value: "eleven_turbo_v2", label: "Turbo v2 (English only)" },
+  { value: "eleven_flash_v2_5", label: "Flash v2.5 (fastest, lowest latency)" },
+  { value: "eleven_flash_v2", label: "Flash v2 (English only)" },
+  { value: "eleven_monolingual_v1", label: "Monolingual v1 (legacy, English only)" },
+];
 
 // ── Timezone options ──────────────────────────────────────────────────────────
 // Curated common IANA zones (value is the real IANA id the runtime feeds to Intl).

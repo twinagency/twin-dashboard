@@ -16,11 +16,13 @@ import {
 } from "recharts";
 import type { DashboardData, Period } from "@/lib/dashboard-data";
 import type { AnalyticsData } from "@/lib/analytics-data";
+import type { StarBalance } from "@/lib/star-balance";
 import { fmtMoney, fmtNum, starsToMoneyRate } from "@/lib/money";
 import { useCurrency } from "@/components/CurrencyProvider";
 import { useTheme } from "@/components/ThemeProvider";
 import { initials } from "@/lib/colors";
 import FanAvatar from "@/components/FanAvatar";
+import { Info } from "@/components/clone/fields";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -34,7 +36,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 // read by app/revenue/page.tsx) — when set, every number here scopes to that one
 // clone; when absent ("All clones"), everything aggregates across the fleet.
 
-type FullData = DashboardData & { analytics: AnalyticsData };
+type FullData = DashboardData & { analytics: AnalyticsData; balance: StarBalance | null };
 
 const TX_KIND_LABEL: Record<string, string> = {
   credits: "Message credits",
@@ -154,6 +156,15 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
   const focusStats = cloneId && data ? data.perClone[cloneId] : null;
   const displayStars = focusStats ? focusStats.stars : data?.totals.stars ?? 0;
   const focusName = cloneId ? data?.clones.find((c) => c.id === cloneId)?.name : null;
+
+  // Unambiguous label for the headline figure - it is gross Stars EARNED in the
+  // selected window (proceeds), never the wallet balance or what's withdrawable.
+  // Only equals "lifetime" when the window is genuinely all-time.
+  const proceedsLabel = customRange
+    ? "Proceeds, custom range"
+    : period === "ALL"
+      ? "Lifetime proceeds"
+      : `Proceeds, ${PERIODS.find((p) => p.key === period)?.label ?? period}`;
 
   const toggleHidden = (id: string) =>
     setHidden((prev) => {
@@ -293,7 +304,8 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
           <CardHeader className="flex-row items-start gap-4 space-y-0">
             <div className="pl-4 pt-3">
               <div className="flex items-center gap-1.5 text-xs text-muted">
-                {focusName ?? "Earnings"}
+                {focusName ?? "Fleet"} · {proceedsLabel}
+                <Info text="Every Star earned in this window, gross, before Telegram's 21-day payout hold. This is proceeds, not your current wallet balance and not what you can withdraw today - see Balance below for those." />
                 {trendPct !== null && (
                   <span className={"font-mono font-semibold tabular-nums " + (trendPct >= 0 ? "text-good" : "text-crit")}>
                     {trendPct >= 0 ? "+" : ""}
@@ -324,9 +336,33 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
                   </span>
                 </span>
               </div>
-              <Link href="/info" className="mt-2 text-xs text-[#f5f5f0]/50 underline underline-offset-2 hover:text-[#f5f5f0]/80">
-                View Available Balance
-              </Link>
+              {scoped && data?.balance ? (
+                <div className="mt-3 flex flex-wrap gap-4">
+                  <BalanceStat
+                    label="Total balance"
+                    hint="Every Star sitting in this bot's Telegram wallet right now, matured and pending combined, minus anything already withdrawn or spent."
+                    value={data.balance.totalBalanceStars}
+                    money={money}
+                  />
+                  <BalanceStat
+                    label="Available now"
+                    hint="Stars that have cleared Telegram's 21-day maturation hold and can be withdrawn today."
+                    value={data.balance.availableStars}
+                    money={money}
+                    accent="good"
+                  />
+                  <BalanceStat
+                    label="Pending (21-day hold)"
+                    hint="Stars paid in the last 21 days. Real money, just not liquid yet - Telegram holds every Star for 21 days after it's earned."
+                    value={data.balance.pendingStars}
+                    money={money}
+                  />
+                </div>
+              ) : (
+                <Link href="/info" className="mt-2 inline-block text-xs text-[#f5f5f0]/50 underline underline-offset-2 hover:text-[#f5f5f0]/80">
+                  {scoped ? "Balance unavailable right now" : "See Total / Available balance per bot"}
+                </Link>
+              )}
             </div>
           </CardHeader>
           <CardContent>
@@ -740,6 +776,35 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
   );
 }
 
+
+// One of the three balance figures shown under the headline when scoped to a
+// single clone: value + unambiguous label + ⓘ hint, never bare numbers that
+// could be mistaken for one another.
+function BalanceStat({
+  label,
+  hint,
+  value,
+  money,
+  accent,
+}: {
+  label: string;
+  hint: string;
+  value: number | null;
+  money: (stars: number) => string;
+  accent?: "good";
+}) {
+  return (
+    <div>
+      <div className="flex items-center gap-1.5 text-[11px] text-muted">
+        {label}
+        <Info text={hint} />
+      </div>
+      <div className={"mt-0.5 font-mono text-sm font-semibold tabular-nums " + (accent === "good" ? "text-good" : "text-ink")}>
+        {value != null ? `${money(value)} · ⭐${fmtNum(value)}` : "unavailable"}
+      </div>
+    </div>
+  );
+}
 
 function EmptyState() {
   return (

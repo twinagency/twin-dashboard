@@ -209,7 +209,7 @@ export default function CreateCloneForm({ defaults = {} }: { defaults?: Partial<
       <ConfigSections cfg={cfg} set={set} clone={defaults} models={models} mode="create" />
 
       {/* Typed persona facts - injected deterministically, never AI-compiled. */}
-      <PersonaFactsFields />
+      <PersonaFactsFields cfg={cfg} set={set} />
 
       {/* Onboarding questionnaire - compiled into her personality on Create. */}
       <Section title="Onboarding questionnaire" hint="The writing only you can do: how she texts, her life, her quirks. On Create, the AI compiles these (grounded by the typed facts above) into her personality.">

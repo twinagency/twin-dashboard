@@ -44,7 +44,7 @@ export default function IntakeFields({
                 ) : f.multiline ? (
                   <textarea
                     name={`intake_${f.key}`}
-                    rows={f.key === "example_texts" ? 6 : 3}
+                    rows={f.key === "example_texts" ? 8 : 3}
                     defaultValue={value(f.key)}
                     placeholder={f.placeholder}
                     className={inputCls}

@@ -316,6 +316,26 @@ export async function POST(req: NextRequest) {
       await supabaseAdmin.from("chat_history").insert(row);
     }
 
+    // Operator manual override — a human took over and sent this, not the AI.
+    // Logged to system_logs (source "operator-send") so it shows up in /logs,
+    // distinct from every AI-generated reply, which never logs a line per
+    // message. Fire-and-forget, mirrors src/services/syslog.ts's logSystem:
+    // a logging hiccup must never fail or roll back a send that already went
+    // out over Telegram.
+    void supabaseAdmin
+      .from("system_logs")
+      .insert({
+        level: "info",
+        source: "operator-send",
+        clone_id: cloneId,
+        telegram_id: user.telegram_id,
+        message: `Operator sent a manual ${type} message to fan ${user.telegram_id}`,
+        detail: { type, userId, historyLine },
+      })
+      .then(({ error }) => {
+        if (error) console.error("send: system_logs insert failed (non-fatal):", error.message);
+      });
+
     return NextResponse.json({ ok: true });
   } catch (e) {
     return NextResponse.json({ error: e instanceof Error ? e.message : String(e) }, { status: 500 });

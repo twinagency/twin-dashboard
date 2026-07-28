@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import type { OrToolDef } from "@/lib/openrouter";
+import { listTestRuns, getTestRun } from "@/lib/test-runs";
 
 // ── Read-only tool surface for the internal AI assistant ─────────────────────
 // HARD RULE (see CLAUDE.md / project memory): this DB holds live payment and
@@ -42,11 +43,11 @@ export const ALLOWLIST: Record<string, string[]> = {
     "message_effects_enabled", "ai_disclosure", "emojis_enabled", "emoji_amount",
     "sexual_level", "nsfw_level", "push_level",
     "text_model", "voice_model", "media_model", "routing_model",
-    "voice_enhance_model", "photo_reply_model", "vision_model",
+    "voice_enhance_model", "photo_reply_model", "vision_model", "voice_id",
     "starting_credits", "credit_pack_size", "credit_pack_price_stars",
     "discounts_enabled", "discount_max_photo", "discount_max_video",
-    "discount_max_bundle", "discount_max_credits",
-    "subscriptions_enabled", "welcome_instruction", "welcome_bundle_after",
+    "discount_max_bundle", "discount_max_credits", "spoil_options",
+    "subscriptions_enabled", "subscription_tiers", "welcome_instruction", "welcome_bundle_after",
     "onboarding_voice_after", "smart_paywall_enabled", "paywall_instruction",
     "paywall_default_message", "drip_enabled", "drip_per_day",
     "drip_active_window_minutes", "winback_lapse_days", "followup_after_minutes",
@@ -194,6 +195,73 @@ async function execGetRecentErrors(args: Record<string, unknown>): Promise<unkno
   return { rows: data ?? [] };
 }
 
+// Loose clone lookup shared by the test-run read tools below: try UUID, then
+// slug, then exact-ish name, same three-step pattern write-tools.ts's
+// resolveCloneId uses. A non-UUID string passed to .eq("id", ...) just comes
+// back as {data: null} from supabase-js (never throws), so this is safe to
+// try unconditionally.
+async function resolveCloneIdLoose(idOrName: string): Promise<string | null> {
+  const byId = await supabaseAdmin.from("clones").select("id").eq("id", idOrName).maybeSingle();
+  if (byId.data) return byId.data.id;
+  const bySlug = await supabaseAdmin.from("clones").select("id").eq("slug", idOrName).maybeSingle();
+  if (bySlug.data) return bySlug.data.id;
+  const byName = await supabaseAdmin.from("clones").select("id").ilike("name", idOrName).limit(1).maybeSingle();
+  if (byName.data) return byName.data.id;
+  return null;
+}
+
+// ── listTestRuns / getTestRun: read-only history for the Test section ────────
+// Thin wrappers over lib/test-runs.ts's own exported functions (the same ones
+// the Test page's API routes call) — no new Supabase query is written here,
+// this file just exposes them to the model with clone-name resolution and a
+// row cap, matching the read-only, no-raw-SQL rule the rest of this file
+// follows. test_runs rows never contain bot_token or any real fan/payment
+// data: the simulated fan is in-memory only and never becomes a real user.
+async function execListTestRuns(args: Record<string, unknown>): Promise<unknown> {
+  const limit = clampLimit(args.limit ?? 20);
+  let cloneId: string | undefined;
+  if (typeof args.clone === "string" && args.clone) {
+    const resolved = await resolveCloneIdLoose(args.clone);
+    if (!resolved) return { error: `no clone found matching "${args.clone}"` };
+    cloneId = resolved;
+  }
+  const runs = await listTestRuns({ cloneId, limit });
+  return {
+    rows: runs.map((r) => ({
+      id: r.id,
+      cloneSlug: r.clone_slug,
+      persona: r.persona,
+      turnsRequested: r.turns_requested,
+      status: r.status,
+      startedAt: r.started_at,
+      finishedAt: r.finished_at,
+      summary: r.summary,
+      errorMessage: r.error_message,
+    })),
+  };
+}
+
+async function execGetTestRun(args: Record<string, unknown>): Promise<unknown> {
+  const runId = String(args.runId ?? "");
+  if (!runId) return { error: "missing runId" };
+  const run = await getTestRun(runId);
+  if (!run) return { error: `no test run found with id "${runId}"` };
+  return {
+    id: run.id,
+    cloneSlug: run.clone_slug,
+    persona: run.persona,
+    turnsRequested: run.turns_requested,
+    status: run.status,
+    startedAt: run.started_at,
+    finishedAt: run.finished_at,
+    summary: run.summary,
+    errorMessage: run.error_message,
+    // Full turn-by-turn transcript (bot sends, fan replies, errors). Bounded
+    // by turns_requested (max 20), never large enough to need trimming.
+    events: run.events ?? [],
+  };
+}
+
 export async function executeTool(name: string, args: Record<string, unknown>): Promise<unknown> {
   switch (name) {
     case "queryTable":
@@ -202,6 +270,10 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
       return execGetTopSpenders(args);
     case "getRecentErrors":
       return execGetRecentErrors(args);
+    case "listTestRuns":
+      return execListTestRuns(args);
+    case "getTestRun":
+      return execGetTestRun(args);
     default:
       return { error: `unknown tool: ${name}` };
   }
@@ -273,6 +345,39 @@ export const TOOL_DEFS: OrToolDef[] = [
           limit: { type: "integer", description: `How many to return, capped at ${MAX_LIMIT}. Default 20.` },
           cloneId: { type: "string", description: "Optional clone UUID to restrict to one bot." },
         },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "listTestRuns",
+      description:
+        "List past Test-section sim run history (test_runs table), newest first: which clone, which fan " +
+        "persona, status, and summary. Use this before startTestRun to check if a similar run already exists " +
+        "instead of starting a new one.",
+      parameters: {
+        type: "object",
+        properties: {
+          clone: { type: "string", description: "Optional clone UUID, slug, or exact name to restrict to one bot." },
+          limit: { type: "integer", description: `How many to return, capped at ${MAX_LIMIT}. Default 20.` },
+        },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "getTestRun",
+      description:
+        "Read one Test-section sim run in full: status, summary, and the complete turn-by-turn transcript " +
+        "(what the simulated fan said, what the clone replied). Use the runId returned by startTestRun or listTestRuns.",
+      parameters: {
+        type: "object",
+        properties: {
+          runId: { type: "string", description: "The test_runs.id to read." },
+        },
+        required: ["runId"],
       },
     },
   },

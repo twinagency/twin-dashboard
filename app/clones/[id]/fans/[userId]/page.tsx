@@ -225,6 +225,45 @@ export default async function FanDetailPage({
         );
       })()}
 
+      {/* Monetization sequence state (migration 056) — read only. Debugging aid:
+          is there an open offer sitting unpaid right now, and where is this fan
+          in the post-lock proactive re-engagement sequence. The other two new
+          columns (offer_reengaged, pre_lock_tease_sent) are one-shot internal
+          fire-once guards whose state is already implied by comparing the
+          timestamps below against the clone's own configured windows, so they
+          were left out rather than adding two bare, easily-misread booleans. */}
+      {(u.last_offer_at || u.last_reveal_at || u.postlock_locked_at || (u.postlock_stage ?? 0) > 0) && (
+        <div className={`${cardCls} mb-6 p-5`}>
+          <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-muted">
+            Monetization sequence state
+          </h2>
+          <dl className="grid grid-cols-2 gap-x-6 gap-y-3 sm:grid-cols-4">
+            <div>
+              <dt className="text-xs text-muted">Last locked offer sent</dt>
+              <dd className="mt-0.5 text-sm font-medium" title={dateTime(u.last_offer_at)}>{ago(u.last_offer_at)}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted">Last paid reveal</dt>
+              <dd className="mt-0.5 text-sm font-medium" title={dateTime(u.last_reveal_at)}>{ago(u.last_reveal_at)}</dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted">Post-lock stage</dt>
+              <dd className="mt-0.5 text-sm font-medium">
+                {u.postlock_stage === 2
+                  ? "2 · graceful goodbye sent"
+                  : u.postlock_stage === 1
+                    ? "1 · first check-in sent"
+                    : "0 · nothing sent"}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-xs text-muted">Wall hit at (this episode)</dt>
+              <dd className="mt-0.5 text-sm font-medium" title={dateTime(u.postlock_locked_at)}>{ago(u.postlock_locked_at)}</dd>
+            </div>
+          </dl>
+        </div>
+      )}
+
       {/* Controls */}
       <div className={`${cardCls} mb-6 p-5`}>
         <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-muted">Controls</h2>

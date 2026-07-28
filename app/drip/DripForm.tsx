@@ -218,7 +218,7 @@ function StepMediaPicker({
       : (type === "photo" ? photos : videos).map((m) => ({
           id: m.id,
           path: m.storage_path,
-          label: m.is_free ? "free" : `${m.star_value}⭐`,
+          label: m.is_free || m.star_value === 0 ? "free" : `${m.star_value}⭐`,
           isVideo: type === "video",
         }));
 
@@ -497,7 +497,6 @@ export default function DripForm({
 
             <div className="grid gap-2">
               {steps.map((s, i) => {
-                const meta = STEP_TYPES.find((t) => t.key === s.type)!;
                 return (
                   <div key={i} className="flex flex-wrap items-center gap-2 rounded-lg border border-line p-2.5">
                     <span className="w-5 shrink-0 text-right text-xs font-medium text-muted">{i + 1}</span>
@@ -519,6 +518,7 @@ export default function DripForm({
                           key={t.key}
                           type="button"
                           onClick={() => setStepType(i, t.key)}
+                          title={t.hint}
                           className={
                             "rounded-full border px-2.5 py-1 text-xs font-medium transition " +
                             (s.type === t.key
@@ -530,7 +530,6 @@ export default function DripForm({
                         </button>
                       ))}
                     </div>
-                    <span className="min-w-40 flex-1 text-xs text-muted">{meta.hint}</span>
                     <div className="ml-auto flex shrink-0 gap-1">
                       <button type="button" onClick={() => moveStep(i, -1)} disabled={i === 0} className="rounded border border-line px-1.5 text-xs text-muted disabled:opacity-30" title="Move up">↑</button>
                       <button type="button" onClick={() => moveStep(i, 1)} disabled={i === steps.length - 1} className="rounded border border-line px-1.5 text-xs text-muted disabled:opacity-30" title="Move down">↓</button>

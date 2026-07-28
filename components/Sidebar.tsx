@@ -1,17 +1,19 @@
 "use client";
 
-// Left sidebar app shell (desktop). Global nav only — each page type appears
-// ONCE: Revenue, Fans, Info, Drip, Media, Logs, Feedback. All 7 are scoped by
-// the clone switcher in the header (components/CloneSwitcher.tsx, "All
+// Left sidebar app shell (desktop). "Create new clone" is always the first
+// thing in it, then one flat nav list, each page type appears ONCE, scoped
+// by the clone switcher in the header (components/CloneSwitcher.tsx, "All
 // clones" by default). Picking/managing a clone lives in the header switcher
-// popup + the /clones page, not here — no duplicate clone list in the
-// sidebar.
+// popup + the /clones page, not here, no duplicate clone list in the
+// sidebar. Settings/AI/Feedback/Changelog used to live in a separate footer
+// section; they're folded into the one list now, ordered by importance.
 //
-// Mobile keeps the existing hamburger (MobileMenu) — this component only
+// Mobile keeps the existing hamburger (MobileMenu), this component only
 // renders at lg+ (see layout.tsx).
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
+import { openCloneSwitcher } from "@/lib/clone-switcher-bus";
 
 type CloneLite = { id: string; name: string; color: string; photoUrl?: string };
 
@@ -66,6 +68,8 @@ const PATHS: Record<string, string> = {
   Database: '<ellipse cx="12" cy="5" rx="9" ry="3"/><path d="M3 5V19A9 3 0 0 0 21 19V5"/><path d="M3 12A9 3 0 0 0 21 12"/>',
   Bot: '<path d="M12 8V4H8"/><rect x="4" y="8" width="16" height="12" rx="2"/><path d="M2 14h2"/><path d="M20 14h2"/><path d="M15 13v2"/><path d="M9 13v2"/>',
   ListChecks: '<path d="M13 5h8"/><path d="M13 12h8"/><path d="M13 19h8"/><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/>',
+  Bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
+  Sparkle: '<path d="M12 3l1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2z"/>',
 };
 
 // Icons always show their own color. Labels stay plain ink until selected,
@@ -82,15 +86,22 @@ const LINK_COLOR_CLASSES: Record<LinkColor, { icon: string; active: string; idle
   gray: { icon: "text-slate-400", active: "bg-slate-500/15 text-slate-300", idle: "text-ink hover:bg-slate-500/10" },
 };
 
-// Each page type appears exactly once — scoped by the header clone switcher,
-// not by a route param.
+// Each page type appears exactly once, scoped by the header clone switcher,
+// not by a route param. Ordered by importance: day-to-day fleet views first,
+// girl-only editors next, then reference/meta pages last. Settings/AI/Feedback
+// used to live in a separate footer block, folded in here instead so there's
+// one list, one visual language, ordered instead of split by "importance" vs
+// "everything else".
 const NAV_LINKS: NavLink[] = [
   { kind: "route", label: "Earnings", href: "/revenue", icon: "EarningsCombo", color: "good" },
   { kind: "route", label: "Fans", href: "/users", icon: "FansCombo", color: "purple" },
+  { kind: "route", label: "Notifications", href: "/notifications", icon: "Bell", color: "orange" },
   { kind: "route", label: "Campaigns", href: "/drip", icon: "Campaigns", color: "pink" },
   { kind: "tab", label: "PPVs", tab: "ppvs", icon: "Media", color: "red" },
   { kind: "tab", label: "Edit", tab: "identity", icon: "Dials", color: "blue" },
+  { kind: "route", label: "Business", href: "/business", icon: "Dials", color: "neutral" },
   { kind: "route", label: "Info", href: "/info", icon: "Info", color: "neutral" },
+  { kind: "route", label: "Performance", href: "/performance", icon: "Dials", color: "neutral" },
   { kind: "route", label: "Logs", href: "/logs", icon: "Logs", color: "neutral" },
   { kind: "route", label: "Create new clone", href: "/clones/new", icon: "Plus", color: "neutral" },
 ];
@@ -111,25 +122,38 @@ export default function Sidebar({
 
   return (
     <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col border-r border-line bg-panel lg:flex">
-      {/* Brand */}
-      <div className="flex items-center justify-between gap-2 border-b border-line px-4 py-4">
+      {/* Brand - fixed height so its bottom border lines up exactly with the
+          TopBar's border in the column next to it (both h-16). */}
+      <div className="flex h-16 shrink-0 items-center justify-between gap-2 border-b border-line px-4">
         <Link href="/revenue" className="text-2xl font-extrabold tracking-tight text-ink">
           Twin<span className="text-ink">.</span>
         </Link>
-        {/* Static tag only - no popup built yet. Will later open a versioned
-            "what's new" panel (see changelog UI idea in memory). */}
         <span className="rounded-full bg-muted/10 px-2 py-1 text-[10px] font-medium text-muted">
           v1.0 beta
         </span>
       </div>
 
-      <nav className="flex flex-1 flex-col overflow-y-auto px-3 pb-4 pt-6">
-        {/* One flat list, 7 rows, all the same size/format - icon left,
-            label, full-width row, divider between each. PPVs/Edit are tab
-            links into the currently-picked clone's Configure page; greyed
-            out and inert on "All clones" instead of hidden, so they're
-            still discoverable. */}
-        <div className="divide-y divide-line">
+      {/* Create new clone - always the first thing in the sidebar, its own
+          row so it reads as an action, not just another nav destination. */}
+      <div className="shrink-0 border-b border-line p-3">
+        <Link
+          href="/clones/new"
+          className="flex items-center justify-center gap-2 rounded-lg bg-accent px-3 py-2.5 text-sm font-semibold text-accent-ink shadow-sm transition hover:bg-accent-deep"
+        >
+          <Icon d={PATHS.Plus} className="h-4 w-4" />
+          Create new clone
+        </Link>
+      </div>
+
+      <nav className="flex flex-1 flex-col overflow-y-auto px-3 py-3">
+        {/* One flat list, icon left, label, full-width row. Rows are spaced
+            apart (not divided by hairlines) so each rounded, hoverable row
+            reads as its own control instead of a table. PPVs/Edit are tab
+            links into the currently-picked clone's Configure page; on "All
+            clones" they're still visible but tapping one opens the clone
+            picker instead of navigating anywhere - editing a single girl's
+            config always requires picking her first. */}
+        <div className="space-y-1">
           {NAV_LINKS.map((l) => {
             const colors = LINK_COLOR_CLASSES[l.color];
 
@@ -137,13 +161,16 @@ export default function Sidebar({
               const active = onConfigurePage && activeTab === l.tab;
               if (!activeCloneId) {
                 return (
-                  <span
+                  <button
                     key={l.label}
-                    className="flex cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2.5 text-base font-medium text-muted opacity-40"
+                    type="button"
+                    onClick={() => openCloneSwitcher()}
+                    title="Pick a clone first"
+                    className="flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-base font-medium text-muted opacity-60 transition hover:bg-muted/10 hover:opacity-100"
                   >
                     <Icon d={PATHS[l.icon]} className="h-5 w-5" />
                     {l.label}
-                  </span>
+                  </button>
                 );
               }
               return (
@@ -192,50 +219,18 @@ export default function Sidebar({
             );
           })}
         </div>
-      </nav>
 
-      {/* Footer - kept compact so Admin above has room to breathe without
-          forcing the sidebar to scroll. */}
-      <div className="space-y-0.5 border-t border-line p-2">
-        <Link
-          href="/settings"
-          className={
-            "flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium transition " +
-            (isGlobalActive("/settings") ? LINK_COLOR_CLASSES.neutral.active : "text-muted hover:bg-muted/10 hover:text-ink")
-          }
-        >
-          <Icon d={PATHS.Settings} className="h-4 w-4" />
-          Settings
-        </Link>
-        <Link
-          href="/ai"
-          className={
-            "flex items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium transition " +
-            (isGlobalActive("/ai") ? LINK_COLOR_CLASSES.neutral.active : "text-muted hover:bg-muted/10 hover:text-ink")
-          }
-        >
-          <Icon d={PATHS.Bot} className="h-4 w-4" />
-          AI
-        </Link>
-        <span
-          className="flex cursor-not-allowed items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium text-muted opacity-50"
-        >
-          <Icon d={PATHS.Feedback} className="h-4 w-4" />
-          <span className="flex-1">Feedback</span>
-          <span className="rounded-full bg-muted/10 px-1.5 py-0.5 text-[9px] font-medium normal-case tracking-normal text-muted">
-            coming soon
+        {/* Still not built - kept separate from the real nav list above. */}
+        <div className="mt-1 border-t border-line pt-1">
+          <span className="flex cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2.5 text-base font-medium text-muted opacity-50">
+            <Icon d={PATHS.Code} className="h-5 w-5" />
+            <span className="flex-1">API</span>
+            <span className="rounded-full bg-muted/10 px-1.5 py-0.5 text-[9px] font-medium normal-case tracking-normal text-muted">
+              coming soon
+            </span>
           </span>
-        </span>
-        <span
-          className="flex cursor-not-allowed items-center gap-2 rounded-lg px-2 py-1.5 text-sm font-medium text-muted opacity-50"
-        >
-          <Icon d={PATHS.Code} className="h-4 w-4" />
-          <span className="flex-1">API</span>
-          <span className="rounded-full bg-muted/10 px-1.5 py-0.5 text-[9px] font-medium normal-case tracking-normal text-muted">
-            coming soon
-          </span>
-        </span>
-      </div>
+        </div>
+      </nav>
     </aside>
   );
 }

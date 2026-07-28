@@ -1,8 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getDashboard, type Period } from "@/lib/dashboard-data";
 import { getAnalytics } from "@/lib/analytics-data";
+import { getStarBalance, type StarBalance } from "@/lib/star-balance";
+import { supabaseAdmin } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
+
+// Total/available/pending balance requires a live call to Telegram
+// (getMyStarBalance) against ONE bot's token, so it's only computed when the
+// page is scoped to a single clone — not summed across the fleet on every
+// load. Best-effort: a Telegram hiccup must never break the rest of the page.
+async function getScopedBalance(cloneId: string | null): Promise<StarBalance | null> {
+  if (!cloneId) return null;
+  try {
+    const { data: clone } = await supabaseAdmin.from("clones").select("bot_token").eq("id", cloneId).maybeSingle();
+    if (!clone?.bot_token) return null;
+    return await getStarBalance(cloneId, clone.bot_token);
+  } catch {
+    return null;
+  }
+}
 
 const VALID: Period[] = ["ALL", "1Y", "6M", "3M", "1M", "2W", "1W", "1D", "CUSTOM"];
 
@@ -26,11 +43,12 @@ export async function GET(req: NextRequest) {
 
   const period: Period = range ? "CUSTOM" : VALID.includes(p as Period) ? (p as Period) : "1M";
   try {
-    const [dashboard, analytics] = await Promise.all([
+    const [dashboard, analytics, balance] = await Promise.all([
       getDashboard(period, range),
       getAnalytics(period, clone, range),
+      getScopedBalance(clone),
     ]);
-    return NextResponse.json({ ...dashboard, analytics });
+    return NextResponse.json({ ...dashboard, analytics, balance });
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "failed" },
