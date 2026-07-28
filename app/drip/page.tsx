@@ -176,6 +176,7 @@ async function CloneCampaigns({ cloneId }: { cloneId: string }) {
     onboarding_free_preview_after_minutes?: number | null;
     onboarding_free_preview_after_messages?: number | null;
     onboarding_free_preview_media_id?: string | null;
+    onboarding_free_preview_instruction?: string | null;
     followup_after_minutes: number | null;
     // Per-flow caption kill switch (migration 071) — absent pre-migration, so read defensively.
     onboarding_captions_off?: boolean | null;
@@ -223,6 +224,7 @@ async function CloneCampaigns({ cloneId }: { cloneId: string }) {
             typeof clone.onboarding_free_preview_media_id === "string" && clone.onboarding_free_preview_media_id.trim()
               ? clone.onboarding_free_preview_media_id.trim()
               : null,
+          freePreviewInstruction: clone.onboarding_free_preview_instruction ?? null,
           followupAfterMinutes: clone.followup_after_minutes ?? 0,
           // Ordered onboarding step list (migration 068) — see validOnboardingSteps above.
           onboardingSteps: validOnboardingSteps(clone.onboarding_steps).map((s) => ({

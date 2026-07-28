@@ -31,6 +31,7 @@ import {
 import type { CloneConfigState, SetConfig } from "./useCloneConfig";
 import { CategoryPricingEditor, SpoilMenuEditor } from "./editors";
 import { BetaBadge } from "../ui/primitives";
+import { MediaPicker, type MediaRow, type BundleRow } from "./MediaPicker";
 // New dedicated file (migration 056 monetization sequence) — kept out of this
 // file's own card definitions so it doesn't collide with concurrent edits here.
 
@@ -168,6 +169,9 @@ export default function ConfigSections({
   identityLimitsSlot,
   identityLifeSlot,
   identityQuestionnaireSlot,
+  photos = [],
+  videos = [],
+  bundles = [],
 }: {
   cfg: CloneConfigState;
   set: SetConfig;
@@ -209,6 +213,12 @@ export default function ConfigSections({
   // as the slots above, needs the clone's saved columns/intake blob.
   identityLifeSlot?: React.ReactNode;
   identityQuestionnaireSlot?: React.ReactNode;
+  // Only used by the Money tab's "promised image" picker (post-lock resume,
+  // migration 069). Create mode has no saved media yet, so it's fine to omit
+  // these there - the picker just shows "no photos uploaded yet".
+  photos?: MediaRow[];
+  videos?: MediaRow[];
+  bundles?: BundleRow[];
 }) {
   const [tabState, setTabState] = useState<Tab>("identity");
   const tab = tabProp ?? tabState;
@@ -547,6 +557,24 @@ export default function ConfigSections({
           accent="cyan"
           hint="Silent wait before typing (random between min and max, 0s = instant) and reply length."
         >
+          <div className="border-b border-line pb-3">
+            <Slider
+              label="Message-catch wait"
+              name="message_catch_wait_seconds"
+              value={cfg.catchWaitSeconds}
+              onChange={(v) => set("catchWaitSeconds", v)}
+              min={0}
+              max={14}
+              step={1}
+              format={(v) => `${v}s`}
+            />
+            <p className="mt-1 text-[11px] text-muted">
+              How long she holds a double/triple text (rapid back-to-back messages) before replying to all of them as
+              one turn, instead of replying to the first one alone. Fires BEFORE the wait below - this is "does she
+              notice you sent 3 texts", the wait below is "how long she takes to reply once she has". 0s = reacts to
+              every message instantly.
+            </p>
+          </div>
           <div className="grid gap-2 sm:grid-cols-2">
             <Slider label="Min wait" name="response_wait_min" value={cfg.waitMin} onChange={(v) => set("waitMin", v)} min={0} max={60} step={1} format={(v) => `${v}s`} />
             <Slider label="Max wait" name="response_wait_max" value={cfg.waitMax} onChange={(v) => set("waitMax", v)} min={0} max={120} step={1} format={(v) => `${v}s`} />
@@ -751,7 +779,7 @@ export default function ConfigSections({
           tab instead, inside the same <form>. Create mode keeps them here. */}
       {showMoney && (
         <div className={show("money")}>
-          <MonetizationSections cfg={cfg} set={set} clone={clone} />
+          <MonetizationSections cfg={cfg} set={set} clone={clone} photos={photos} videos={videos} bundles={bundles} />
           {/* The monetization-sequence cards (tease/locked bundle & re-warm,
               proactive PPV, discount trigger gating, paywall warmup & unlock
               bonus, pre-lock tease, post-lock re-engagement) were removed on
@@ -774,10 +802,19 @@ export function MonetizationSections({
   cfg,
   set,
   clone,
+  photos = [],
+  videos = [],
+  bundles = [],
 }: {
   cfg: CloneConfigState;
   set: SetConfig;
   clone?: Partial<Clone>;
+  // Only used by the "promised image" picker (post-lock resume, migration
+  // 069). Create mode has no saved media yet, so it's fine to omit these
+  // there - the picker just shows "no photos uploaded yet".
+  photos?: MediaRow[];
+  videos?: MediaRow[];
+  bundles?: BundleRow[];
 }) {
   return (
     <>
@@ -944,13 +981,26 @@ export function MonetizationSections({
                   hint="Steers the pickup line. Blank = she decides freely."
                 />
               </div>
-              <Field
-                label="Promised image (media id)"
-                name="paywall_resume_media_id"
-                defaultValue={clone?.paywall_resume_media_id}
-                placeholder="blank = she auto-picks"
-                hint="The exact item to send after he pays. Blank = she auto-picks a fresh unseen one."
-              />
+              <div className="xl:col-span-2">
+                <FieldLabel
+                  label="Promised image"
+                  hint="The exact photo to send after he pays. Leave on AI picks and she chooses a fresh unseen one."
+                />
+                {/* Real submitted field - MediaPicker is buttons, not a native
+                    input, same pattern as the hidden inputs above. */}
+                <input type="hidden" name="paywall_resume_media_id" value={cfg.paywallResumeMediaId ?? ""} />
+                <MediaPicker
+                  type="photo"
+                  photos={photos}
+                  videos={videos}
+                  bundles={bundles}
+                  photosEnabled={cfg.photosEnabled}
+                  videosEnabled={cfg.videosEnabled}
+                  bundlesEnabled={cfg.bundlesEnabled}
+                  value={cfg.paywallResumeMediaId}
+                  onPick={(id) => set("paywallResumeMediaId", id)}
+                />
+              </div>
               <Toggle
                 label={cfg.paywallResumeFree ? "Send it free" : "Send it paid"}
                 hint="Free = the pickup image is unlocked with no charge. Paid = it follows its normal price."

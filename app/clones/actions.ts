@@ -490,13 +490,15 @@ function rowFromForm(fd: FormData) {
 
     response_wait_min: num(fd, "response_wait_min", 0),
     response_wait_max: num(fd, "response_wait_max", 0),
+    // Message-catch wait (migration 072) — standalone dial, reintroduced
+    // separately from the rest of the removed "response pacing" bundle below.
+    message_catch_wait_seconds: Math.min(14, Math.max(0, num(fd, "message_catch_wait_seconds", 3))),
     memory_window: Math.min(100, Math.max(1, num(fd, "memory_window", 24))),
 
     // Response pacing was removed on 2026-07-27 (operator decision), so the
     // read_delay_*, typing_stutter_*, pacing_* and batch_wait_* columns are no
     // longer written. They keep their existing DB values, deliberately unread
-    // by the bot, which is back to instant read, flat wait, continuous typing
-    // and a fixed 3s batch window.
+    // by the bot, which is back to instant read, flat wait, continuous typing.
 
     // response length (migrations 037/038). Blank or 0 → null (unlimited); the DB
     // column has a `> 0` check constraint, so 0 must never be written literally.
@@ -576,6 +578,8 @@ const FLOW_069_COLUMNS = [
 const FLOW_070_COLUMNS = [
   "random_voice_enabled", "random_voice_chance", "gap_awareness_enabled",
 ] as const;
+// Migration 072: message-catch wait. See bot/db/migrations/072_*.sql.
+const FLOW_072_COLUMNS = ["message_catch_wait_seconds"] as const;
 // The response-pacing, monetization-sequence, re-warm-photo and
 // offer-redirect column lists were removed on 2026-07-27: those columns are no
 // longer written by this form at all, so they cannot appear in the row that
@@ -591,6 +595,7 @@ const OPTIONAL_COLUMNS = [
   ...VOICE_COOLDOWN_COLUMNS,
   ...FLOW_069_COLUMNS,
   ...FLOW_070_COLUMNS,
+  ...FLOW_072_COLUMNS,
 ] as const;
 
 function withoutPersonaFactColumns(row: Record<string, unknown>): Record<string, unknown> {

@@ -162,6 +162,8 @@ export async function saveCampaign(id: string, fd: FormData) {
     onboarding_free_preview_after_minutes: numOrNull(fd, "onboarding_free_preview_after_minutes"),
     onboarding_free_preview_after_messages: numOrNull(fd, "onboarding_free_preview_after_messages"),
     onboarding_free_preview_media_id: str(fd, "onboarding_free_preview_media_id"),
+    // Steer for the spoken lead-in line before the free photo (migration 073).
+    onboarding_free_preview_instruction: str(fd, "onboarding_free_preview_instruction"),
     // Per-flow caption kill switch (migration 071) — overrides media_caption_mode
     // outright for that flow's photo/video/bundle sends.
     onboarding_captions_off: fd.get("onboarding_captions_off") === "true",
@@ -195,6 +197,7 @@ export async function saveCampaign(id: string, fd: FormData) {
       onboarding_free_preview_after_minutes: _fm,
       onboarding_free_preview_after_messages: _fc,
       onboarding_free_preview_media_id: _fi,
+      onboarding_free_preview_instruction: _fii,
       ...rest
     } = row;
     ({ error } = await supabaseAdmin.from("clones").update(rest).eq("id", id));

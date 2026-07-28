@@ -219,6 +219,10 @@ export type Clone = {
   onboarding_free_preview_after_minutes?: number | null;
   onboarding_free_preview_after_messages?: number | null;
   onboarding_free_preview_media_id?: string | null;
+  // Steer for the spoken lead-in line before the free photo (migration 073).
+  // Blank/null = the bot's default lead-in. Independent of the caption
+  // kill switch, which only strips the photo's own caption.
+  onboarding_free_preview_instruction?: string | null;
 
   // follow-up nudge: one short in-persona follow-up if the fan goes quiet
   // mid-chat for this many minutes after her reply (0 = off).
@@ -281,6 +285,10 @@ export type Clone = {
 
   response_wait_min: number;
   response_wait_max: number;
+  // Message-catch wait (migration 072): how long the batcher holds a fan's
+  // rapid-fire double/triple text before treating it as one turn. Fires
+  // BEFORE response_wait_min/max above. Optional so a pre-migration row types.
+  message_catch_wait_seconds?: number;
   memory_window: number;
 
   // Response pacing and the monetization-sequence dials were removed on

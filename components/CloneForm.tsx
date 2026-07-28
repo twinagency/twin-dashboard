@@ -167,6 +167,9 @@ export default function CloneForm({
           tab={tab}
           onTabChange={(t) => setTab(t as Tab)}
           extraTabs={EXTRA_TABS}
+          photos={photos}
+          videos={videos}
+          bundles={bundles}
           identityWhoSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="who" cfg={cfg} set={set} />}
           identityCreatorSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="creator" cfg={cfg} set={set} />}
           identityPhysicalSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="physical" cfg={cfg} set={set} />}

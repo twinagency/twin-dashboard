@@ -71,6 +71,9 @@ export type CloneConfigState = {
 
   waitMin: number;
   waitMax: number;
+  // Message-catch wait (migration 072) — controlled for the same reason
+  // waitMin/waitMax are: the Slider needs a live value.
+  catchWaitSeconds: number;
   memoryWindow: number;
 
   // Response pacing (migration 041). Controlled because Slider/Toggle need
@@ -98,14 +101,17 @@ export type CloneConfigState = {
   paywallDefault: string;
   paywallButton: string;
 
-  // Pre-lock prime + post-lock resume (migration 069). Instructions/media id are
-  // uncontrolled (submit by name); only the toggles + the prime count are
-  // controlled here, since their visible controls mount conditionally.
+  // Pre-lock prime + post-lock resume (migration 069). Instructions are
+  // uncontrolled (submit by name); the toggles + the prime count are
+  // controlled here since their visible controls mount conditionally. The
+  // promised-image id is controlled too - MediaPicker is buttons, not a
+  // native input, so it needs a live value/setter like the other pickers.
   paywallPrimeEnabled: boolean;
   paywallPrimeBefore: number;
   paywallPrimeVoice: boolean;
   paywallResumeEnabled: boolean;
   paywallResumeFree: boolean;
+  paywallResumeMediaId: string | null;
 
   active: boolean;
 };
@@ -178,6 +184,7 @@ function initial(clone?: Partial<Clone>): CloneConfigState {
 
     waitMin: clone?.response_wait_min ?? 0,
     waitMax: clone?.response_wait_max ?? 0,
+    catchWaitSeconds: clone?.message_catch_wait_seconds ?? 3,
     memoryWindow: clone?.memory_window ?? 24,
 
 
@@ -205,6 +212,10 @@ function initial(clone?: Partial<Clone>): CloneConfigState {
     paywallPrimeVoice: clone?.paywall_prime_as_voice ?? false,
     paywallResumeEnabled: clone?.paywall_resume_enabled ?? false,
     paywallResumeFree: clone?.paywall_resume_free ?? true,
+    paywallResumeMediaId:
+      typeof clone?.paywall_resume_media_id === "string" && clone.paywall_resume_media_id.trim()
+        ? clone.paywall_resume_media_id.trim()
+        : null,
 
     active: clone?.status === "active",
   };
