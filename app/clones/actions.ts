@@ -302,13 +302,10 @@ function rowFromForm(fd: FormData) {
     read_receipts_enabled: fd.get("read_receipts_enabled") === "true",
     message_effects_enabled: fd.get("message_effects_enabled") === "true",
     ai_disclosure: fd.get("ai_disclosure") === "true",
-    // Per-category auto-block (migration 061), supersedes the single
-    // auto_block_enabled switch. That column is left untouched here so its
-    // old value survives as a legacy fallback (see ConfigSections.tsx).
-    auto_block_minor: fd.get("auto_block_minor") === "true",
-    auto_block_hate: fd.get("auto_block_hate") === "true",
-    auto_block_illegal: fd.get("auto_block_illegal") === "true",
-    auto_block_jailbreak: fd.get("auto_block_jailbreak") === "true",
+    // The auto_block_* columns are deliberately no longer written (2026-07-27).
+    // The AI never blocks a fan, it only flags for operator review, so there is
+    // no UI for these and nothing to save. The columns stay in the DB unread
+    // rather than being dropped, per the additive-only migration rule.
     emojis_enabled: fd.get("emojis_enabled") === "true",
     emoji_amount: str(fd, "emoji_amount") ?? "medium",
     emoji_allowlist: str(fd, "emoji_allowlist"),
@@ -466,59 +463,42 @@ function rowFromForm(fd: FormData) {
     paywall_default_message: str(fd, "paywall_default_message"),
     paywall_button_label: str(fd, "paywall_button_label"),
 
-    // Monetization sequence (migration 056). Every value is a code-enforced
-    // threshold/switch (see components/clone/MonetizationSequenceFields.tsx
-    // for what each one drives) — never write a value the field itself didn't
-    // submit into, and always clamp to a sane, non-negative range so a stray
-    // negative or non-numeric string can never reach the DB. Falls back to the
-    // exact DB column default (bot/db/migrations/056_monetization_sequence.sql)
-    // when a field is missing, so an untouched clone never silently changes.
-    resell_cooldown_minutes: Math.max(0, num(fd, "resell_cooldown_minutes", 30)),
-    bundle_reengage_seconds: Math.max(0, num(fd, "bundle_reengage_seconds", 60)),
-    reengage_photo_enabled: fd.has("reengage_photo_enabled") ? fd.get("reengage_photo_enabled") === "true" : true,
-    offer_pending_minutes: Math.max(0, num(fd, "offer_pending_minutes", 15)),
-    offer_redirect_cap: Math.max(1, num(fd, "offer_redirect_cap", 3)),
+    // pre-lock prime + post-lock resume (migration 069). Toggles use the
+    // "true"/"false" hidden-input convention; media/instruction null = auto.
+    // (The onboarding_free_preview_* columns are owned by saveCampaign, not here.)
+    paywall_prime_enabled: fd.get("paywall_prime_enabled") === "true",
+    paywall_prime_before: Math.max(1, num(fd, "paywall_prime_before", 3)),
+    paywall_prime_instruction: str(fd, "paywall_prime_instruction"),
+    paywall_prime_as_voice: fd.get("paywall_prime_as_voice") === "true",
+    paywall_resume_enabled: fd.get("paywall_resume_enabled") === "true",
+    paywall_resume_instruction: str(fd, "paywall_resume_instruction"),
+    paywall_resume_media_id: str(fd, "paywall_resume_media_id"),
+    paywall_resume_free: fd.get("paywall_resume_free") === "true",
+
+    // The monetization-sequence cards were removed on 2026-07-27 (operator
+    // decision), so these columns are no longer written here. voice_cooldown_turns
+    // is kept, its control lives elsewhere and is still on the form.
+    //
+    // IMPORTANT: offer_pending_minutes, offer_redirect_cap and
+    // discount_slowdown_minutes are STILL READ BY THE BOT (the open-offer
+    // window, the redirect cap, and the discount slowdown trigger). Their
+    // dashboard controls are gone, so writing them here would reset a clone's
+    // real values to these defaults on every save. Omitting them leaves
+    // whatever is already in the DB untouched, the same approach used for
+    // auto_block_enabled.
     voice_cooldown_turns: Math.max(0, num(fd, "voice_cooldown_turns", 2)),
-    ppv_min_engaged_messages: Math.max(1, num(fd, "ppv_min_engaged_messages", 4)),
-    ppv_cadence_seconds: Math.max(0, num(fd, "ppv_cadence_seconds", 60)),
-    ppv_cooldown_minutes: Math.max(0, num(fd, "ppv_cooldown_minutes", 45)),
-    discount_slowdown_minutes: Math.max(0, num(fd, "discount_slowdown_minutes", 15)),
-    paywall_warmup_messages: Math.max(0, num(fd, "paywall_warmup_messages", 5)),
-    paywall_unlock_bonus_photo: fd.has("paywall_unlock_bonus_photo") ? fd.get("paywall_unlock_bonus_photo") === "true" : true,
-    prelock_tease_before: Math.max(0, num(fd, "prelock_tease_before", 3)),
-    postlock_reengage_enabled: fd.has("postlock_reengage_enabled") ? fd.get("postlock_reengage_enabled") === "true" : true,
-    postlock_curiosity1_minutes: Math.max(0, num(fd, "postlock_curiosity1_minutes", 20)),
-    // Clamped to never sit below the first check-in — a lower value here would
-    // make the graceful-goodbye stage fire on the very next poll after the
-    // first check-in instead of acting as a separate, later stage.
-    postlock_curiosity2_minutes: Math.max(
-      Math.max(0, num(fd, "postlock_curiosity1_minutes", 20)),
-      num(fd, "postlock_curiosity2_minutes", 90),
-    ),
 
     response_wait_min: num(fd, "response_wait_min", 0),
     response_wait_max: num(fd, "response_wait_max", 0),
+    // Message-catch wait (migration 072) — standalone dial, reintroduced
+    // separately from the rest of the removed "response pacing" bundle below.
+    message_catch_wait_seconds: Math.min(14, Math.max(0, num(fd, "message_catch_wait_seconds", 3))),
     memory_window: Math.min(100, Math.max(1, num(fd, "memory_window", 24))),
 
-    // Response pacing (migration 041) — every value defaults to whatever
-    // reproduces today's exact behavior (instant read, continuous typing,
-    // flat wait, ~3s batch window) so an untouched clone never changes.
-    read_delay_min: num(fd, "read_delay_min", 0),
-    read_delay_max: num(fd, "read_delay_max", 0),
-    typing_stutter_enabled: fd.get("typing_stutter_enabled") === "true",
-    typing_stutter_min_pause: num(fd, "typing_stutter_min_pause", 1),
-    typing_stutter_max_pause: num(fd, "typing_stutter_max_pause", 3),
-    // 0 → null: pacing_ramp_messages null/0 means the ramp feature is OFF.
-    pacing_ramp_messages: (() => {
-      const n = num(fd, "pacing_ramp_messages", 0);
-      return n > 0 ? n : null;
-    })(),
-    pacing_new_wait_min: num(fd, "pacing_new_wait_min", 0),
-    pacing_new_wait_max: num(fd, "pacing_new_wait_max", 0),
-    pacing_established_wait_min: num(fd, "pacing_established_wait_min", 0),
-    pacing_established_wait_max: num(fd, "pacing_established_wait_max", 0),
-    batch_wait_min: num(fd, "batch_wait_min", 3),
-    batch_wait_max: num(fd, "batch_wait_max", 3),
+    // Response pacing was removed on 2026-07-27 (operator decision), so the
+    // read_delay_*, typing_stutter_*, pacing_* and batch_wait_* columns are no
+    // longer written. They keep their existing DB values, deliberately unread
+    // by the bot, which is back to instant read, flat wait, continuous typing.
 
     // response length (migrations 037/038). Blank or 0 → null (unlimited); the DB
     // column has a `> 0` check constraint, so 0 must never be written literally.
@@ -527,6 +507,9 @@ function rowFromForm(fd: FormData) {
       return n && n > 0 ? n : null;
     })(),
     match_user_length: fd.get("match_user_length") === "true",
+    gap_awareness_enabled: fd.get("gap_awareness_enabled") === "true",
+    random_voice_enabled: fd.get("random_voice_enabled") === "true",
+    random_voice_chance: num(fd, "random_voice_chance", 15),
 
     // Prompts: only included when the form actually sends them (the review/edit
     // form does; the create form doesn't — there the compile step fills them).
@@ -566,14 +549,6 @@ const IDENTITY_CANON_COLUMNS = [
 ] as const;
 // Migration 040 — photo vision toggle. See bot/db/migrations/040_photo_vision_toggle.sql.
 const PHOTO_VISION_COLUMNS = ["photo_vision_enabled"] as const;
-// Migration 041 — response pacing. See bot/db/migrations/041_response_pacing.sql.
-const RESPONSE_PACING_COLUMNS = [
-  "read_delay_min", "read_delay_max",
-  "typing_stutter_enabled", "typing_stutter_min_pause", "typing_stutter_max_pause",
-  "pacing_new_wait_min", "pacing_new_wait_max",
-  "pacing_established_wait_min", "pacing_established_wait_max", "pacing_ramp_messages",
-  "batch_wait_min", "batch_wait_max",
-] as const;
 // Migration 042 — imperfection profile levels. See bot/db/migrations/042_imperfection_levels.sql.
 const IMPERFECTION_LEVEL_COLUMNS = [
   "lowercase_level", "punctuation_drop_level", "typo_level", "double_text_level",
@@ -582,48 +557,45 @@ const IMPERFECTION_LEVEL_COLUMNS = [
 const LIFE_CANON_COLUMNS = ["hobbies", "has_pets", "pet_details", "living_situation"] as const;
 // Migration 063: favorites/catchphrases/saving-goal canon. See bot/db/migrations/063_favorites_canon.sql.
 const FAVORITES_COLUMNS = ["catchphrases", "favorite_things", "dislikes", "saving_goal"] as const;
-// Migration 061: per-category safety auto-block toggles. See bot/db/migrations/061_safety_category_toggles.sql.
-// These are top-level rowFromForm fields (not gated behind the persona_facts
-// marker), but withoutPersonaFactColumns strips every name in OPTIONAL_COLUMNS
-// unconditionally, so listing them here is enough to cover the retry path.
-const SAFETY_CATEGORY_COLUMNS = [
-  "auto_block_minor", "auto_block_hate", "auto_block_illegal", "auto_block_jailbreak",
-] as const;
-// Migration 056: monetization sequence. See bot/db/migrations/056_monetization_sequence.sql
-// and components/clone/MonetizationSequenceFields.tsx for what each one drives.
-const MONETIZATION_SEQUENCE_COLUMNS = [
-  "resell_cooldown_minutes", "bundle_reengage_seconds", "offer_pending_minutes",
-  "ppv_min_engaged_messages", "ppv_cadence_seconds", "ppv_cooldown_minutes",
-  "discount_slowdown_minutes", "paywall_warmup_messages", "paywall_unlock_bonus_photo",
-  "prelock_tease_before", "postlock_reengage_enabled",
-  "postlock_curiosity1_minutes", "postlock_curiosity2_minutes",
-] as const;
-// Migration 062: independent toggle for the ignored-offer re-warm photo
-// (previously gated only on photos_enabled, no dedicated switch). See
-// bot/db/migrations/062_reengage_photo_toggle.sql.
-const REENGAGE_PHOTO_COLUMNS = ["reengage_photo_enabled"] as const;
-// Migration 064: cap on how many times guardedMedia()/guardedPitch() (bot
-// flows/actions.ts) redirect a fan back to a single open offer before backing
-// off. See bot/db/migrations/064_offer_redirect_cap.sql.
-const OFFER_REDIRECT_COLUMNS = ["offer_redirect_cap"] as const;
 // Migration 065: how many of her own most recent outbound turns must NOT have
 // been a voice note before Smart mode's decider will let "voice" fire again.
 // See bot/db/migrations/065_voice_cooldown.sql and bot/src/flows/smart.ts.
 const VOICE_COOLDOWN_COLUMNS = ["voice_cooldown_turns"] as const;
+// Migration 069: onboarding free-preview fallback + pre-lock prime + post-lock
+// resume. The onboarding_free_preview_* columns are written by saveCampaign
+// (app/drip/actions.ts), the paywall_prime_*/paywall_resume_* columns by
+// rowFromForm above; all listed here so the missing-column retry strips whichever
+// ones this row happens to carry when the migration is not applied yet.
+// See bot/db/migrations/069_*.sql.
+const FLOW_069_COLUMNS = [
+  "onboarding_free_preview_enabled", "onboarding_free_preview_after_minutes",
+  "onboarding_free_preview_after_messages", "onboarding_free_preview_media_id",
+  "paywall_prime_enabled", "paywall_prime_before", "paywall_prime_instruction",
+  "paywall_prime_as_voice", "paywall_resume_enabled", "paywall_resume_instruction",
+  "paywall_resume_media_id", "paywall_resume_free",
+] as const;
+// Migration 070: randomized voice + gap awareness. See bot/db/migrations/070_*.sql.
+const FLOW_070_COLUMNS = [
+  "random_voice_enabled", "random_voice_chance", "gap_awareness_enabled",
+] as const;
+// Migration 072: message-catch wait. See bot/db/migrations/072_*.sql.
+const FLOW_072_COLUMNS = ["message_catch_wait_seconds"] as const;
+// The response-pacing, monetization-sequence, re-warm-photo and
+// offer-redirect column lists were removed on 2026-07-27: those columns are no
+// longer written by this form at all, so they cannot appear in the row that
+// the missing-column retry path strips.
 const OPTIONAL_COLUMNS = [
   ...PERSONA_FACT_COLUMNS,
   ...RESPONSE_LENGTH_COLUMNS,
   ...IDENTITY_CANON_COLUMNS,
   ...PHOTO_VISION_COLUMNS,
-  ...RESPONSE_PACING_COLUMNS,
   ...IMPERFECTION_LEVEL_COLUMNS,
   ...LIFE_CANON_COLUMNS,
   ...FAVORITES_COLUMNS,
-  ...SAFETY_CATEGORY_COLUMNS,
-  ...MONETIZATION_SEQUENCE_COLUMNS,
-  ...REENGAGE_PHOTO_COLUMNS,
-  ...OFFER_REDIRECT_COLUMNS,
   ...VOICE_COOLDOWN_COLUMNS,
+  ...FLOW_069_COLUMNS,
+  ...FLOW_070_COLUMNS,
+  ...FLOW_072_COLUMNS,
 ] as const;
 
 function withoutPersonaFactColumns(row: Record<string, unknown>): Record<string, unknown> {
@@ -670,12 +642,6 @@ export async function createCloneRow(fd: FormData): Promise<string> {
 export async function updateClone(id: string, fd: FormData) {
   const row = rowFromForm(fd);
 
-  // Was her questionnaire changed? (Toggles/models/name don't need a recompile —
-  // those are live at runtime — so we only pay the AI compile when answers move.)
-  const { data: prev } = await supabaseAdmin.from("clones").select("intake").eq("id", id).maybeSingle();
-  const prevAnswers = ((prev?.intake as { answers?: string } | null)?.answers ?? "").trim();
-  const newAnswers = (row.intake.answers ?? "").trim();
-
   let { error } = await supabaseAdmin
     .from("clones")
     .update({ ...row, updated_at: new Date().toISOString() })
@@ -689,10 +655,11 @@ export async function updateClone(id: string, fd: FormData) {
   }
   if (error) throw new Error(error.message);
 
-  // Auto-recompile her personality when (and only when) her answers changed.
-  if (newAnswers && newAnswers !== prevAnswers) {
-    await compileClone(id);
-  }
+  // Rebuild her persona slots on EVERY save. This used to be gated on "her
+  // answers changed" because each rebuild cost an LLM call; it is now a pure
+  // function (lib/persona-build.ts), so gating it only creates the bug where a
+  // changed vibe preset or a cleared entry leaves stale persona text live.
+  await compileClone(id);
 
   revalidatePath("/");
   revalidatePath(`/clones/${id}`);

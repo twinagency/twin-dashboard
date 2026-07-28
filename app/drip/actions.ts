@@ -66,6 +66,63 @@ function parseSteps(fd: FormData): StepOut[] {
   }
 }
 
+// Onboarding steps arrive as a JSON string in a hidden field (same pattern as
+// drip_steps above). Coerce to the shape the runtime reads (bot/src/onboarding.ts):
+// known types only, after_messages clamped to 1-50, media_id/free for photo/
+// video/bundle steps only, collect_field for collect steps only. Unlike
+// drip_steps, this is NOT re-sorted — onboarding fires sequentially through the
+// array in the operator's saved order (see migration 068's writeup on why the
+// fire-once tracking is an array of indexes, not a counter: reordering must stay
+// safe, which only holds if the runtime respects the order actually saved).
+const ONBOARDING_STEP_TYPES = ["text", "voice", "photo", "video", "bundle", "collect", "tease"] as const;
+type OnboardingStepType = (typeof ONBOARDING_STEP_TYPES)[number];
+type OnboardingStepOut = {
+  type: OnboardingStepType;
+  after_messages: number;
+  media_id?: string;
+  free?: boolean;
+  collect_field?: string;
+  instruction?: string;
+};
+// Step types that carry an optional per-step steer (AI-written line types).
+const CAN_STEER_ONBOARDING = new Set<OnboardingStepType>(["text", "voice", "tease"]);
+function parseOnboardingSteps(fd: FormData): OnboardingStepOut[] {
+  const raw = fd.get("onboarding_steps");
+  if (!raw) return [];
+  try {
+    const arr = JSON.parse(String(raw));
+    if (!Array.isArray(arr)) return [];
+    const out: OnboardingStepOut[] = [];
+    for (const s of arr) {
+      const type = ONBOARDING_STEP_TYPES.includes(s?.type) ? (s.type as OnboardingStepType) : null;
+      if (!type) continue;
+      const afterRaw = Math.round(Number(s?.after_messages));
+      if (!Number.isFinite(afterRaw)) continue;
+      const step: OnboardingStepOut = { type, after_messages: Math.min(50, Math.max(1, afterRaw)) };
+      const isMedia = type === "photo" || type === "video" || type === "bundle";
+      if (isMedia) {
+        const mediaId = String(s?.media_id ?? "").trim();
+        if (mediaId) step.media_id = mediaId;
+        if (s?.free === true) step.free = true;
+      }
+      if (type === "collect") {
+        const collectField = String(s?.collect_field ?? "").trim();
+        if (collectField) step.collect_field = collectField;
+      }
+      // Per-step steer (migration 069), stored inside the jsonb, for AI-written
+      // line types only, and only when non-empty.
+      if (CAN_STEER_ONBOARDING.has(type)) {
+        const instruction = String(s?.instruction ?? "").trim();
+        if (instruction) step.instruction = instruction;
+      }
+      out.push(step);
+    }
+    return out;
+  } catch {
+    return [];
+  }
+}
+
 function str(fd: FormData, key: string): string | null {
   const v = fd.get(key);
   const s = v === null ? "" : String(v).trim();
@@ -77,29 +134,6 @@ function numOrNull(fd: FormData, key: string): number | null {
   if (v === null || String(v).trim() === "") return null;
   const n = Number(v);
   return Number.isFinite(n) ? n : null;
-}
-
-// Onboarding collect-fields arrive as a JSON string array in a hidden field.
-// Coerce to a clean, de-duped string[] of non-empty keys (order preserved).
-function parseCollectFields(fd: FormData): string[] {
-  const raw = fd.get("onboarding_collect_fields");
-  if (!raw) return [];
-  try {
-    const arr = JSON.parse(String(raw));
-    if (!Array.isArray(arr)) return [];
-    const seen = new Set<string>();
-    const out: string[] = [];
-    for (const v of arr) {
-      const s = String(v).trim();
-      if (s && !seen.has(s)) {
-        seen.add(s);
-        out.push(s);
-      }
-    }
-    return out;
-  } catch {
-    return [];
-  }
 }
 
 // Save the Campaigns page: every outbound-engagement setting for the clone —
@@ -114,20 +148,31 @@ function parseCollectFields(fd: FormData): string[] {
 // no longer read by the runtime and are never written here.
 export async function saveCampaign(id: string, fd: FormData) {
   const row: Record<string, unknown> = {
-    // New-fan onboarding
+    // New-fan onboarding. The legacy loose fields (welcome_bundle_after[_minutes]
+    // / welcome_bundle_teased / onboarding_voice_after / onboarding_voice_instruction
+    // / onboarding_collect_fields / onboarding_length) were retired 2026-07-28:
+    // the whole flow is now the greeting steer + the ordered step list. Those
+    // columns are left untouched in the DB (additive rule), never written here.
     welcome_instruction: str(fd, "welcome_instruction"),
-    welcome_bundle_after: num(fd, "welcome_bundle_after", 10),
-    welcome_bundle_after_minutes: numOrNull(fd, "welcome_bundle_after_minutes"),
-    welcome_bundle_teased: fd.get("welcome_bundle_teased") === "true",
-    onboarding_voice_after: numOrNull(fd, "onboarding_voice_after"),
-    onboarding_voice_instruction: str(fd, "onboarding_voice_instruction"),
-    onboarding_collect_fields: parseCollectFields(fd),
-    onboarding_length: Math.max(1, num(fd, "onboarding_length", 8)),
+    // Ordered onboarding step list (migration 068). Per-step steer added in 069.
+    onboarding_steps: parseOnboardingSteps(fd),
+    // Free-preview fallback (migration 069). Either trigger fires (null = off);
+    // media id null = she auto-picks. Written here (Campaigns owns onboarding).
+    onboarding_free_preview_enabled: fd.get("onboarding_free_preview_enabled") === "true",
+    onboarding_free_preview_after_minutes: numOrNull(fd, "onboarding_free_preview_after_minutes"),
+    onboarding_free_preview_after_messages: numOrNull(fd, "onboarding_free_preview_after_messages"),
+    onboarding_free_preview_media_id: str(fd, "onboarding_free_preview_media_id"),
+    // Steer for the spoken lead-in line before the free photo (migration 073).
+    onboarding_free_preview_instruction: str(fd, "onboarding_free_preview_instruction"),
+    // Per-flow caption kill switch (migration 071) — overrides media_caption_mode
+    // outright for that flow's photo/video/bundle sends.
+    onboarding_captions_off: fd.get("onboarding_captions_off") === "true",
     // Mid-chat follow-up
     followup_after_minutes: Math.max(0, num(fd, "followup_after_minutes", 0)),
     // Campaign. (Win-back's lapse threshold is no longer operator-facing; the
     // runtime uses a fixed default — see isReturningLapsedSpender in campaign.ts.)
     drip_enabled: fd.get("drip_enabled") === "true",
+    campaign_captions_off: fd.get("campaign_captions_off") === "true",
     drip_media_ids: parseMediaIds(fd),
     drip_steps: parseSteps(fd),
     updated_at: new Date().toISOString(),
@@ -137,6 +182,29 @@ export async function saveCampaign(id: string, fd: FormData) {
   if (error && /drip_steps/i.test(error.message)) {
     // Migration 029 not applied yet: save everything else so the page still works.
     const { drip_steps: _s, ...rest } = row;
+    ({ error } = await supabaseAdmin.from("clones").update(rest).eq("id", id));
+  }
+  if (error && /onboarding_steps/i.test(error.message)) {
+    // Migration 068 not applied yet: save everything else so the page still works.
+    const { onboarding_steps: _o, ...rest } = row;
+    ({ error } = await supabaseAdmin.from("clones").update(rest).eq("id", id));
+  }
+  if (error && /onboarding_free_preview_/i.test(error.message)) {
+    // Migration 069 not applied yet: strip the free-preview columns and retry so
+    // the rest of the page still saves (same additive-retry pattern as above).
+    const {
+      onboarding_free_preview_enabled: _fe,
+      onboarding_free_preview_after_minutes: _fm,
+      onboarding_free_preview_after_messages: _fc,
+      onboarding_free_preview_media_id: _fi,
+      onboarding_free_preview_instruction: _fii,
+      ...rest
+    } = row;
+    ({ error } = await supabaseAdmin.from("clones").update(rest).eq("id", id));
+  }
+  if (error && /captions_off/i.test(error.message)) {
+    // Migration 071 not applied yet: strip the caption kill switches and retry.
+    const { onboarding_captions_off: _oc, campaign_captions_off: _cc, ...rest } = row;
     ({ error } = await supabaseAdmin.from("clones").update(rest).eq("id", id));
   }
   if (error) throw new Error(error.message);

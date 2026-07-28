@@ -122,12 +122,15 @@ export function GroupHeader({ label, hint }: { label: string; hint?: string }) {
   );
 }
 
-// ── Collapsible block ─────────────────────────────────────────────────────────
-// A summary row you click to expand. For settings that are long but rarely
-// touched (hard limits) — the closed state shows a live summary so you can tell
-// at a glance whether anything is set, without the full grid on screen.
-// Children stay MOUNTED when closed (hidden via CSS) so their inputs keep
-// submitting with the form — collapsing must never drop a value.
+// ── Titled block ──────────────────────────────────────────────────────────────
+// Was a click-to-expand card. The operator wants every setting in the edit
+// section visible at once rather than hidden behind 22 separate "Edit ▼"
+// buttons, so this now renders a plain titled card with its children always on
+// screen.
+//
+// The props that drove the closed state (defaultOpen, summary, filled) are
+// still accepted and ignored, so all existing call sites keep compiling and
+// nothing needs a sweep. Drop them from the call sites if this sticks.
 export function Collapse({
   label,
   hint,
@@ -153,16 +156,10 @@ export function Collapse({
   className?: string;
   children: React.ReactNode;
 }) {
-  const [open, setOpen] = useState(defaultOpen);
   const a = SECTION_ACCENTS[accent];
   return (
     <div className={`h-full rounded-xl border border-line border-l-[3px] ${a.bar} bg-panel ` + className}>
-      <button
-        type="button"
-        onClick={() => setOpen((v) => !v)}
-        aria-expanded={open}
-        className="flex w-full items-center gap-2 px-3 py-3 text-left"
-      >
+      <div className="flex w-full items-center gap-2 px-3 py-3 text-left">
         {emoji && (
           <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-[11px] ${a.chip}`}>
             {emoji}
@@ -172,23 +169,8 @@ export function Collapse({
           {label}
           {hint && <Info text={hint} />}
         </span>
-        {filled !== undefined && (
-          <span
-            className={"h-1.5 w-1.5 shrink-0 rounded-full " + (filled ? "bg-good" : "bg-muted/40")}
-            title={filled ? "has data" : "empty"}
-          />
-        )}
-        {/* min-w-0 is load-bearing: a flex child's default min-width is its own
-            content width, so `truncate` alone never actually engaged here — a
-            long summary (several hard limits, a legacy custom entry) just
-            overflowed past the card's edge instead of ellipsizing, shoving the
-            Close/Edit label off to the side where it wasn't fully visible. */}
-        {summary && <span className="min-w-0 flex-1 truncate text-[11px] text-muted" title={summary}>{summary}</span>}
-        <span className="ml-auto shrink-0 text-[11px] font-medium text-accent">
-          {open ? "Close ▲" : "Edit ▼"}
-        </span>
-      </button>
-      <div className={open ? "border-t border-line p-3" : "hidden"}>{children}</div>
+      </div>
+      <div className="border-t border-line p-3">{children}</div>
     </div>
   );
 }
@@ -374,6 +356,73 @@ export function Area({
         className={inputCls}
       />
     </label>
+  );
+}
+
+// ── Line list ─────────────────────────────────────────────────────────────────
+// One entry per row, for content that is a LIST of sentence-length items rather
+// than a paragraph: her example texts, her running bits, her backstory beats.
+// TagInput can't hold these because it splits on commas, and a plain textarea
+// turns them into one blob nobody can edit a single line of.
+//
+// Submits the entries newline-joined under `name`, which is exactly the shape
+// lib/persona-build.ts listEntries() reads back. Storage is unchanged, so prose
+// written before the list editors existed still loads, one entry per line.
+export function LineList({
+  label,
+  name,
+  initial,
+  placeholder,
+  hint,
+  rows = 2,
+}: {
+  label: string;
+  name: string;
+  initial: string[];
+  placeholder?: string;
+  hint?: string;
+  rows?: number;
+}) {
+  const [entries, setEntries] = useState<string[]>(initial.length ? initial : [""]);
+
+  const update = (i: number, v: string) =>
+    setEntries((prev) => prev.map((e, n) => (n === i ? v : e)));
+  const remove = (i: number) =>
+    setEntries((prev) => (prev.length === 1 ? [""] : prev.filter((_, n) => n !== i)));
+
+  return (
+    <div className="block">
+      <FieldLabel label={label} hint={hint} />
+      <input type="hidden" name={name} value={entries.map((e) => e.trim()).filter(Boolean).join("\n")} />
+      <div className="grid gap-1.5">
+        {entries.map((e, i) => (
+          <div key={i} className="flex items-start gap-1.5">
+            <textarea
+              rows={rows}
+              value={e}
+              placeholder={placeholder}
+              onChange={(ev) => update(i, ev.target.value)}
+              className={inputCls}
+            />
+            <button
+              type="button"
+              onClick={() => remove(i)}
+              aria-label="Remove this entry"
+              className="mt-1 shrink-0 rounded-md border border-line px-2 py-1 text-xs text-muted hover:text-ink"
+            >
+              ✕
+            </button>
+          </div>
+        ))}
+      </div>
+      <button
+        type="button"
+        onClick={() => setEntries((prev) => [...prev, ""])}
+        className="mt-1.5 rounded-md border border-line px-2 py-1 text-xs text-muted hover:text-ink"
+      >
+        + Add another
+      </button>
+    </div>
   );
 }
 
@@ -954,8 +1003,10 @@ export const MODEL_FIELDS: { name: string; label: string; def: string }[] = [
   { name: "media_model", label: "Media match", def: "mistralai/mistral-small-3.2-24b-instruct" },
   { name: "routing_model", label: "Routing / Smart decider", def: "qwen/qwen3-30b-a3b-instruct-2507" },
   { name: "voice_enhance_model", label: "Voice enhance", def: "google/gemini-2.5-flash-lite" },
-  { name: "photo_reply_model", label: "Photo reply", def: "qwen/qwen3-vl-32b-instruct" },
-  { name: "vision_model", label: "Vision", def: "qwen/qwen3-vl-32b-instruct" },
+  // Also fires when the fan sends a VIDEO (she reacts to a grabbed frame) —
+  // there is no separate video model, this one covers both (see flows/vision.ts).
+  { name: "photo_reply_model", label: "Photo & video reply", def: "qwen/qwen3-vl-32b-instruct" },
+  { name: "vision_model", label: "Vision (media library tagging)", def: "qwen/qwen3-vl-32b-instruct" },
 ];
 
 // ── Recommended models per job ────────────────────────────────────────────────

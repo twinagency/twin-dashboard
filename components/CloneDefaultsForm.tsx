@@ -35,7 +35,7 @@ export default function CloneDefaultsForm({ defaults }: { defaults: Partial<Clon
 
   const levelOpts = [
     { value: "low" as const, label: "Low" },
-    { value: "medium" as const, label: "Medium" },
+    { value: "medium" as const, label: "Med" },
     { value: "high" as const, label: "High" },
   ];
 
@@ -208,6 +208,38 @@ export default function CloneDefaultsForm({ defaults }: { defaults: Partial<Clon
           )}
         </div>
         <Area label="Paywall instruction (optional)" name="paywall_instruction" rows={2} placeholder="e.g. be sweet, remind him what he's missing, nudge him to grab more messages" defaultValue={defaults.paywall_instruction} />
+
+        {/* Warmup before the wall (pre-lock prime, migration 069) */}
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+          <Toggle label={cfg.paywallPrimeEnabled ? "Warm him up before the wall" : "No pre-lock warmup"} name="paywall_prime_enabled" checked={cfg.paywallPrimeEnabled} onChange={(v) => set("paywallPrimeEnabled", v)} accent="soft" />
+          {/* Unconditional hidden input, same pattern as paywall_as_voice above. */}
+          <input type="hidden" name="paywall_prime_as_voice" value={String(cfg.paywallPrimeVoice)} />
+          {cfg.paywallPrimeEnabled && (
+            <>
+              <div className="w-40"><Field label="Messages before he runs out" name="paywall_prime_before" type="number" min={1} defaultValue={cfg.paywallPrimeBefore} /></div>
+              <Toggle label="Send warmup as a voice note" name="_paywall_prime_as_voice_toggle" checked={cfg.paywallPrimeVoice} onChange={(v) => set("paywallPrimeVoice", v)} accent="soft" />
+            </>
+          )}
+        </div>
+        {cfg.paywallPrimeEnabled && (
+          <Area label="Warmup steer (optional)" name="paywall_prime_instruction" rows={2} placeholder="e.g. hint she's got more coming, build the anticipation" defaultValue={defaults.paywall_prime_instruction} />
+        )}
+
+        {/* Pick up after they pay (post-lock resume, migration 069) */}
+        <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
+          <Toggle label={cfg.paywallResumeEnabled ? "Pick up warmly after he pays" : "No post-pay pickup"} name="paywall_resume_enabled" checked={cfg.paywallResumeEnabled} onChange={(v) => set("paywallResumeEnabled", v)} accent="soft" />
+          {/* Unconditional hidden input for the free/paid choice. */}
+          <input type="hidden" name="paywall_resume_free" value={String(cfg.paywallResumeFree)} />
+          {cfg.paywallResumeEnabled && (
+            <Toggle label={cfg.paywallResumeFree ? "Send the pickup image free" : "Send the pickup image paid"} name="_paywall_resume_free_toggle" checked={cfg.paywallResumeFree} onChange={(v) => set("paywallResumeFree", v)} accent="soft" />
+          )}
+        </div>
+        {cfg.paywallResumeEnabled && (
+          <>
+            <Area label="Pickup steer (optional)" name="paywall_resume_instruction" rows={2} placeholder="e.g. thank him, pick the mood back up right where it left off" defaultValue={defaults.paywall_resume_instruction} />
+            <Field label="Promised image (media id, blank = auto)" name="paywall_resume_media_id" defaultValue={defaults.paywall_resume_media_id} placeholder="blank = she auto-picks" />
+          </>
+        )}
       </div>
 
       {/* ── CAMPAIGNS ── */}

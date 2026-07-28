@@ -8,7 +8,6 @@ import { Card } from "@/components/ui/card";
 import FanAvatar from "@/components/FanAvatar";
 import { Input } from "@/components/ui/input";
 import ConfirmSubmit from "@/components/ConfirmSubmit";
-import FanComposer from "@/components/fans/FanComposer";
 import { setCredits, resetCounters, toggleActive, setBlocked, setPaused, deleteUser } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -569,13 +568,6 @@ export default async function FansPage({
                 )}
               </div>
 
-              {/* Compose - sends through the clone's bot via /api/send
-                  (text, ElevenLabs voice note, or free media from her library). */}
-              <FanComposer
-                cloneId={selected.clone_id}
-                userId={selected.id}
-                lastActive={selected.last_message_received ?? null}
-              />
             </>
           )}
         </Card>

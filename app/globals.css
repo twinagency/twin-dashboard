@@ -2,61 +2,80 @@
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
 
-/* Class-based dark mode: `dark:` applies when <html> has the `dark` class,
-   toggled at runtime by ThemeProvider/ThemeToggle. */
+/* Day mode only — there is no theme toggle and no `.dark` class is ever
+   applied. `@custom-variant dark` is kept class-scoped (not the default
+   prefers-color-scheme media query) purely as a safety net: any leftover
+   `dark:` utility elsewhere in the app is guaranteed inert, even if the
+   user's OS is set to dark mode, rather than silently reappearing. */
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* ── "Telegram Blue" design tokens ──────────────────────────────────────────
-   Single source of truth for the whole admin. Light values are the defaults;
-   the `.dark` block below overrides the same custom properties, so every
-   Tailwind utility that reads them (bg-panel, text-ink, border-line, ...)
-   automatically swaps with the theme — no per-component dark: needed for
-   these semantic colors. --color-good/warn/crit/info stay identical in both
-   modes (Telegram brand colors, not theme-dependent).
+/* ── "Aurora" design tokens ──────────────────────────────────────────────────
+   Copied verbatim from the allieai2 admin (dashboard/app/globals.css, the
+   palette Jesse is working against) so both dashboards read as one product.
+   Light values are the defaults; the `.dark` block below overrides the same
+   custom properties, so every Tailwind utility that reads them (bg-panel,
+   text-ink, border-line, ...) swaps with the theme automatically.
+
+   Palette source: deep navy (#0A2540/#1D2B5B) through indigo/violet
+   (#4338F2 → #A58BFF) into soft pink/peach (#F7C7F3 → #FFD9C8), landing on
+   near-white (#F8FAFC/#EEF2FF/#FFFFFF). Indigo/violet carries all brand
+   chrome (accent); the warm pinks are deliberately NOT wired into these
+   tokens — see --color-love below, kept separate from accent on purpose.
+
+   allieai2 is day-mode only, so it has no dark values to copy. The `.dark`
+   block below is ours: same near-black surfaces as before, with the accent
+   moved onto this ramp's lighter violet so the brand stays consistent across
+   both themes rather than reverting to the old Telegram blue.
 
    HARD RULE: money figures (revenue, prices, tips, $/⭐ amounts, VIP prices,
    revenue charts) always render in --color-good (green). --color-accent
-   (blue) is reserved for primary buttons, active nav, links, focus rings and
+   (indigo) is reserved for primary buttons, active nav, links, focus rings and
    the brand mark — never for a money figure. */
 @theme {
-  --color-bg: #f5f9fc;
+  --color-bg: #f8fafc;
   --color-panel: #ffffff;
-  --color-elev: #eaf3fa;
-  --color-ink: #132330;
-  --color-muted: #6c8394;
-  --color-line: #dbe7ee;
-  --color-accent: #229ed9;
-  --color-accent-2: #54b6e6;
-  --color-accent-deep: #166a94;
+  --color-elev: #eef2ff;
+  --color-ink: #0a2540;
+  --color-muted: #64729a;
+  --color-line: #e2d8ff;
+  --color-accent: #4338f2;
+  --color-accent-2: #5e4dff;
+  --color-accent-deep: #1d2b5b;
   --color-accent-ink: #ffffff;
   --color-good: #1f9e54;
   --color-warn: #b5760f;
   --color-crit: #c23b3b;
-  --color-info: #6a5acd;
+  --color-info: #7c6cff;
+
+  /* Lighter violet stops from the same ramp as --color-accent, for subtle
+     hover/selected surfaces (e.g. a chip or nav-item background) that need
+     to read as "accent, but quiet" rather than a full-strength button. */
+  --color-accent-soft: #a58bff;
+  --color-accent-tint: #c6b7ff;
+
+  /* Warm accent reserved for romance-flavored moments (tips/spoil prompts,
+     welcome-bundle callouts, "favorite" badges) — never used for buttons,
+     nav, links or money, so it can't collide with --color-accent/--color-good. */
+  --color-love: #f9b6e6;
+  --color-love-ink: #6a1257;
+  --color-love-tint: #f7c7f3;
+  --color-love-bg: #fff2f5;
+  --color-love-hover: #ffd5d6;
+  --color-love-peach: #ffd9c8;
 
   /* Legacy brand tokens — kept so nothing that still refers to them 404s,
      but nothing new should use these; use --color-accent instead. */
-  --color-brand: #229ed9;
-  --color-brand-light: #54b6e6;
+  --color-brand: #4338f2;
+  --color-brand-light: #5e4dff;
   --color-grass: #1f9e54;
   --color-grass-light: #27b863;
 }
 
-/* Real near-black dark mode, not navy — same accent blue as light mode so
-   the brand still reads consistent, but the surfaces read as dark, not blue. */
-.dark {
-  --color-bg: #0a0a0d;
-  --color-panel: #101013;
-  --color-elev: #17171b;
-  --color-ink: #e8e8ec;
-  --color-muted: #85858f;
-  --color-line: #232328;
-  --color-accent: #48b8ee;
-  --color-accent-2: #74c8f2;
-  --color-accent-deep: #2789b8;
-  --color-accent-ink: #071019;
-  color-scheme: dark;
-}
+/* No `.dark` block: this admin is DAY MODE ONLY, matching allieai2 and
+   docs/PALETTE.md ("no dark variants, no theme toggle"). ThemeProvider and
+   ThemeToggle are deleted, so nothing can ever put `dark` on <html> anyway,
+   and a leftover block here would just be dead weight that drifts out of sync
+   with the light tokens above. */
 
 :root {
   color-scheme: light;
@@ -121,6 +140,21 @@ body {
   color: var(--color-ink);
 }
 
+/* Ambient wash for the main canvas — two soft radial glows (indigo top-left,
+   pink top-right) fading into the base bg. This is the one place the wider
+   Aurora ramp (accent-tint, love-tint) shows up as atmosphere rather than a
+   UI element; cards on top stay solid --color-panel so content legibility
+   is unaffected. Fixed attachment so it reads as one wash behind scrolling
+   content instead of tiling/repeating per screen height. Applied in
+   components/MainShell.tsx, matching allieai2. */
+.canvas-glow {
+  background-image:
+    radial-gradient(ellipse 1000px 520px at 6% 0%, color-mix(in srgb, var(--color-accent-tint) 55%, transparent), transparent 62%),
+    radial-gradient(ellipse 900px 480px at 100% 0%, color-mix(in srgb, var(--color-love-tint) 48%, transparent), transparent 60%);
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+}
+
 * {
   border-color: var(--color-line);
 }
@@ -166,7 +200,7 @@ body {
   --color-destructive: var(--destructive);
   --color-destructive-foreground: var(--destructive-foreground);
   /* --color-accent is intentionally NOT redefined here — it's already set once,
-     directly, in the Telegram-Blue @theme block above (#2aabee, brand blue).
+     directly, in the Aurora @theme block above (#4338f2, brand indigo).
      Redefining it here to shadcn's own `--accent` var used to silently shadow
      the brand color everywhere (Tailwind merges repeated @theme keys,
      last-wins) — buttons, active nav and links were all rendering as flat

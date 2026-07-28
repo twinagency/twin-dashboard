@@ -43,18 +43,9 @@ export type Clone = {
   read_receipts_enabled: boolean;
   message_effects_enabled: boolean;
   ai_disclosure: boolean;
-  // Opt-in per-clone auto-block on a safety-guard breach (migration 047),
-  // consumed by src/safety.ts. Superseded by the four per-category columns
-  // below (migration 061); no longer written by the UI, kept read-only so an
-  // old row's value can still seed the new toggles' initial state.
-  auto_block_enabled: boolean;
-  // Per-category auto-block (migration 061): lets an operator always
-  // auto-block MINOR (the most serious category) while leaving a softer one
-  // like JAILBREAK as log-only for manual review.
-  auto_block_minor?: boolean;
-  auto_block_hate?: boolean;
-  auto_block_illegal?: boolean;
-  auto_block_jailbreak?: boolean;
+  // The auto_block_* fields (migrations 047/061) were removed on 2026-07-27.
+  // The AI never blocks a fan, it only flags for operator review, so nothing
+  // reads or writes them. The columns remain in the DB, deliberately unread.
   emojis_enabled: boolean;
   emoji_amount: "low" | "medium" | "high";
   emoji_allowlist: string | null;
@@ -191,6 +182,14 @@ export type Clone = {
   voice_style: number;
   voice_speaker_boost: boolean;
   voice_speed: number;
+  random_voice_enabled: boolean;
+  random_voice_chance: number;
+  gap_awareness_enabled: boolean;
+  // Per-flow caption kill switch (migration 071) — overrides media_caption_mode
+  // outright for that flow's photo/video/bundle sends. Optional (`?`) so
+  // pre-migration rows type-check.
+  onboarding_captions_off?: boolean;
+  campaign_captions_off?: boolean;
 
   starting_credits: number;
   credit_pack_size: number;
@@ -212,6 +211,19 @@ export type Clone = {
   // How many messages she keeps steering to collect the fields above (default 8).
   onboarding_length: number;
 
+  // ── free-preview fallback (migration 069) ───────────────────────────────────
+  // A safety net for the onboarding flow: if he hasn't bought the welcome bundle
+  // within a time or message-count window, she offers a single free taste. Either
+  // trigger can fire (null = that trigger off); media id null = she auto-picks.
+  onboarding_free_preview_enabled?: boolean;
+  onboarding_free_preview_after_minutes?: number | null;
+  onboarding_free_preview_after_messages?: number | null;
+  onboarding_free_preview_media_id?: string | null;
+  // Steer for the spoken lead-in line before the free photo (migration 073).
+  // Blank/null = the bot's default lead-in. Independent of the caption
+  // kill switch, which only strips the photo's own caption.
+  onboarding_free_preview_instruction?: string | null;
+
   // follow-up nudge: one short in-persona follow-up if the fan goes quiet
   // mid-chat for this many minutes after her reply (0 = off).
   followup_after_minutes: number | null;
@@ -231,6 +243,21 @@ export type Clone = {
   // Optional: absent pre-migration-029 (read defensively).
   drip_step_mode?: "random" | "ordered" | null;
   drip_steps?: { type: "text" | "voice" | "photo" | "video" | "bundle"; after_hours?: number; text?: string }[] | null;
+  // Ordered onboarding step list (migration 068, bot/db/migrations/068_onboarding_steps.sql).
+  // Same picker as drip_steps, but fires on the fan's MESSAGE COUNT, never hours
+  // quiet — see the migration for why. Optional: absent pre-migration-068.
+  onboarding_steps?:
+    | {
+        type: "text" | "voice" | "photo" | "video" | "bundle" | "collect" | "tease";
+        after_messages?: number;
+        media_id?: string;
+        free?: boolean;
+        collect_field?: string;
+        // Optional per-step steer for text/voice/tease lines (migration 069,
+        // stored inside the jsonb, not a column). Blank = she decides.
+        instruction?: string | null;
+      }[]
+    | null;
 
   // recurring Star SUBSCRIPTIONS / VIP tier (money code-locked)
   subscriptions_enabled: boolean;
@@ -243,25 +270,31 @@ export type Clone = {
   paywall_default_message: string | null;
   paywall_button_label: string | null;
 
+  // ── pre-lock prime + post-lock resume (migration 069) ───────────────────────
+  // Optional (`?`) so pre-migration rows type-check. paywall_prime_* is a warmup
+  // she sends a few messages BEFORE he runs out; paywall_resume_* is the pick-up
+  // she sends AFTER he pays. media/instruction null = she auto-picks/decides.
+  paywall_prime_enabled?: boolean;
+  paywall_prime_before?: number;
+  paywall_prime_instruction?: string | null;
+  paywall_prime_as_voice?: boolean;
+  paywall_resume_enabled?: boolean;
+  paywall_resume_instruction?: string | null;
+  paywall_resume_media_id?: string | null;
+  paywall_resume_free?: boolean;
+
   response_wait_min: number;
   response_wait_max: number;
+  // Message-catch wait (migration 072): how long the batcher holds a fan's
+  // rapid-fire double/triple text before treating it as one turn. Fires
+  // BEFORE response_wait_min/max above. Optional so a pre-migration row types.
+  message_catch_wait_seconds?: number;
   memory_window: number;
 
-  // Response pacing (migration 041). Optional: absent pre-migration (read
-  // defensively with the same fallbacks the bot's mapClone uses, so an
-  // unmigrated project shows "off/flat/instant", exactly today's behavior).
-  read_delay_min?: number;
-  read_delay_max?: number;
-  typing_stutter_enabled?: boolean;
-  typing_stutter_min_pause?: number;
-  typing_stutter_max_pause?: number;
-  pacing_new_wait_min?: number;
-  pacing_new_wait_max?: number;
-  pacing_established_wait_min?: number;
-  pacing_established_wait_max?: number;
-  pacing_ramp_messages?: number | null;
-  batch_wait_min?: number;
-  batch_wait_max?: number;
+  // Response pacing and the monetization-sequence dials were removed on
+  // 2026-07-27 (operator decision). Their columns remain in the DB, unread.
+  // offer_pending_minutes, offer_redirect_cap, discount_slowdown_minutes and
+  // voice_cooldown_turns below are STILL read by the bot, so they stay.
 
   // response length (migration 037/038). max_response_words: hard ceiling on
   // reply length (null/0 = unlimited, always enforced as a last-resort safety
@@ -270,25 +303,10 @@ export type Clone = {
   max_response_words: number | null;
   match_user_length: boolean;
 
-  // Monetization sequence (migration 056). Optional: absent pre-migration,
-  // same read-defensively convention as the pacing fields above. See
-  // components/clone/MonetizationSequenceFields.tsx for what each one drives.
-  resell_cooldown_minutes?: number;
-  bundle_reengage_seconds?: number;
-  reengage_photo_enabled?: boolean;
   offer_pending_minutes?: number;
   offer_redirect_cap?: number;
   voice_cooldown_turns?: number;
-  ppv_min_engaged_messages?: number;
-  ppv_cadence_seconds?: number;
-  ppv_cooldown_minutes?: number;
   discount_slowdown_minutes?: number;
-  paywall_warmup_messages?: number;
-  paywall_unlock_bonus_photo?: boolean;
-  prelock_tease_before?: number;
-  postlock_reengage_enabled?: boolean;
-  postlock_curiosity1_minutes?: number;
-  postlock_curiosity2_minutes?: number;
 
   intake: { answers?: string; fields?: Record<string, string> } | null;
   persona: Record<string, string> | null;

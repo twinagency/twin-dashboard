@@ -1,26 +1,10 @@
 "use client";
 
-import { useEffect, useState, useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Area, Field, FieldLabel, GroupHeader, Section, Toggle, inputCls } from "@/components/clone/fields";
+import { Area, Field, FieldLabel, GroupHeader, Section, Toggle, inputCls, selectCls, COLLECT_FIELD_OPTIONS } from "@/components/clone/fields";
+import { MediaPicker as StepMediaPicker, type MediaRow, type BundleRow } from "@/components/clone/MediaPicker";
 import { saveCampaign } from "./actions";
-
-type MediaRow = {
-  id: string;
-  storage_path: string;
-  caption: string | null;
-  teaser_caption: string | null;
-  star_value: number;
-  is_free: boolean | null;
-};
-
-type BundleRow = {
-  id: string;
-  name: string;
-  caption: string | null;
-  star_price: number;
-  photo_bundle_items: { id: string; storage_path: string; sort_order: number }[];
-};
 
 type StepType = "text" | "voice" | "photo" | "video" | "bundle";
 // mediaId: for photo/video/bundle steps, the specific item to send; null = AI picks.
@@ -39,246 +23,61 @@ const STEP_EMOJI: Record<StepType, string> = Object.fromEntries(
   STEP_TYPES.map((t) => [t.key, t.emoji]),
 ) as Record<StepType, string>;
 
-type Initial = {
-  enabled: boolean;
-  steps: Step[];
-  // New-fan onboarding: free-text steer for her first message, a voice note on
-  // message N, the welcome bundle on message N (optionally teased first), the
-  // details she should naturally try to collect, and how long that collection
-  // steer keeps getting nudged before she just chats normally.
-  welcomeInstruction: string | null;
-  welcomeBundleAfter: number;
-  welcomeBundleTeased: boolean;
-  onboardingVoiceAfter: number | null;
-  onboardingCollectFields: string[];
-  onboardingLength: number;
-  followupAfterMinutes: number;
+// ── Onboarding step list (migration 068) ─────────────────────────────────────
+// Same picker as the automated campaign above, but fires on the fan's MESSAGE
+// COUNT rather than hours quiet (a new fan chatting away is never quiet — see
+// bot/db/migrations/068_onboarding_steps.sql). Two extra types beyond the
+// campaign's five: collect (ask for one detail, fire-once) and tease (a short
+// flirty lead-in line — pairs with a free photo step for "tease then a free pic").
+type OnboardingStepType = "text" | "voice" | "photo" | "video" | "bundle" | "collect" | "tease";
+type OnboardingStepData = {
+  type: OnboardingStepType;
+  afterMessages: number;
+  mediaId: string | null;
+  free: boolean;
+  collectField: string | null;
+  // Optional per-step steer for text/voice/tease lines. Blank = she decides.
+  instruction: string | null;
 };
-
-// Predefined onboarding detail keys, in the exact order + keys that
-// bot/src/flows/human.ts's COLLECT_FIELD_PHRASE map uses, so the AI's steer
-// reads naturally ("naturally work out his name, age, ..."). A fan operator can
-// also type a custom key (slugified below) — human.ts falls back to
-// `his ${key.replace(/_/g,' ')}` for anything not in that map.
-const COLLECT_FIELD_CHIPS: { key: string; label: string }[] = [
-  { key: "name", label: "Name" },
-  { key: "age", label: "Age" },
-  { key: "country", label: "Country" },
-  { key: "city", label: "City" },
-  { key: "timezone", label: "Timezone" },
-  { key: "job", label: "Job" },
-  { key: "relationship_status", label: "Relationship status" },
-  { key: "interests", label: "Interests" },
-  { key: "likes", label: "Likes / turn-ons" },
-  { key: "birthday", label: "Birthday" },
-  { key: "language", label: "Language" },
-  { key: "how_found", label: "How he found her" },
+// Step types where a custom-line steer makes sense (AI-written lines only).
+const canSteerOnboarding = (t: OnboardingStepType) => t === "text" || t === "voice" || t === "tease";
+const isOnboardingMediaType = (t: OnboardingStepType) => t === "photo" || t === "video" || t === "bundle";
+const ONBOARDING_STEP_TYPES: { key: OnboardingStepType; label: string; emoji: string; hint: string }[] = [
+  { key: "text", label: "Text", emoji: "💬", hint: "AI writes a fresh extra line in her voice." },
+  { key: "voice", label: "Voice", emoji: "🎙️", hint: "AI writes the line, sent as a voice note." },
+  { key: "photo", label: "Photo", emoji: "📷", hint: "Sends a fresh pic he hasn't seen." },
+  { key: "video", label: "Video", emoji: "🎥", hint: "Sends a fresh video he hasn't seen." },
+  { key: "bundle", label: "Bundle", emoji: "🎁", hint: "Sends the next bundle he hasn't been sent." },
+  { key: "collect", label: "Collect", emoji: "❓", hint: "She naturally works one detail into this reply (name, age, etc)." },
+  { key: "tease", label: "Tease", emoji: "😏", hint: "A short flirty lead-in line, e.g. right before a free photo step." },
 ];
 
-// lowercase, spaces/punctuation → underscores, so a typed "shoe size" becomes
-// the key "shoe_size" (reads as "his shoe size" via human.ts's fallback phrasing).
-function slugifyCollectKey(raw: string): string {
-  return raw
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, "_")
-    .replace(/^_+|_+$/g, "");
-}
-
-// Chip picker for onboarding_collect_fields: predefined chips toggle on/off,
-// plus a text box to add a custom key. Same chip visual language as STEP_TYPES
-// below. Uncontrolled-by-name isn't possible here (it's an array), so the parent
-// keeps the array in state and JSON-stringifies it into a hidden field on submit
-// (drip_steps in this same file does the identical thing).
-function CollectFieldsPicker({ value, onChange }: { value: string[]; onChange: (v: string[]) => void }) {
-  const [customInput, setCustomInput] = useState("");
-  const toggle = (key: string) =>
-    onChange(value.includes(key) ? value.filter((k) => k !== key) : [...value, key]);
-  const addCustom = () => {
-    const key = slugifyCollectKey(customInput);
-    if (key && !value.includes(key)) onChange([...value, key]);
-    setCustomInput("");
-  };
-  // Any selected key not in the predefined list is a custom one — show it as its
-  // own removable chip so it's visible after being added.
-  const customChips = value.filter((k) => !COLLECT_FIELD_CHIPS.some((c) => c.key === k));
-
-  return (
-    <div className="grid gap-2">
-      <div className="flex flex-wrap gap-1.5">
-        {COLLECT_FIELD_CHIPS.map((c) => {
-          const on = value.includes(c.key);
-          return (
-            <button
-              key={c.key}
-              type="button"
-              onClick={() => toggle(c.key)}
-              className={
-                "rounded-full border px-2.5 py-1 text-xs font-medium transition " +
-                (on ? "border-accent/50 bg-accent/15 text-accent" : "border-line text-ink/70 hover:border-accent/40")
-              }
-            >
-              {c.label}
-            </button>
-          );
-        })}
-        {customChips.map((k) => (
-          <button
-            key={k}
-            type="button"
-            onClick={() => toggle(k)}
-            title="Custom - click to remove"
-            className="rounded-full border border-accent/50 bg-accent/15 px-2.5 py-1 text-xs font-medium text-accent"
-          >
-            {k.replace(/_/g, " ")} ✕
-          </button>
-        ))}
-      </div>
-      <div className="flex gap-1.5">
-        <input
-          type="text"
-          value={customInput}
-          onChange={(e) => setCustomInput(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") {
-              e.preventDefault();
-              addCustom();
-            }
-          }}
-          placeholder="Add a custom detail (e.g. shoe size)"
-          className={inputCls + " flex-1"}
-        />
-        <button
-          type="button"
-          onClick={addCustom}
-          className="shrink-0 rounded-md border border-line px-3 py-1.5 text-xs font-medium text-ink transition hover:bg-bg"
-        >
-          + Add
-        </button>
-      </div>
-    </div>
-  );
-}
-
-// Signed-url thumbnail (private bucket), same pattern as the Media manager.
-function Thumb({ path, type }: { path: string; type: "photo" | "video" }) {
-  const [url, setUrl] = useState<string | null>(null);
-  useEffect(() => {
-    fetch(`/api/media-sign?path=${encodeURIComponent(path)}`)
-      .then((r) => r.json())
-      .then((d) => d.url && setUrl(d.url))
-      .catch(() => {});
-  }, [path]);
-  const cls = "h-full w-full object-cover";
-  if (!url) return <div className="h-full w-full animate-pulse bg-muted/10" />;
-  if (type === "video") return <video src={url} className={cls} muted preload="metadata" />;
-  return <img src={url} alt="" className={cls} />;
-}
-
-// Per-step media picker: a compact horizontal strip shown under a photo/video/
-// bundle step. First chip is "AI picks" (auto, the default); the rest are the
-// clone's items of that type — tap one to lock this step to that exact item.
-function StepMediaPicker({
-  type,
-  photos,
-  videos,
-  bundles,
-  photosEnabled,
-  videosEnabled,
-  bundlesEnabled,
-  value,
-  onPick,
-}: {
-  type: "photo" | "video" | "bundle";
-  photos: MediaRow[];
-  videos: MediaRow[];
-  bundles: BundleRow[];
-  photosEnabled: boolean;
-  videosEnabled: boolean;
-  bundlesEnabled: boolean;
-  value: string | null;
-  onPick: (id: string | null) => void;
-}) {
-  const enabled = type === "photo" ? photosEnabled : type === "video" ? videosEnabled : bundlesEnabled;
-  if (!enabled) {
-    return (
-      <p className="mt-1 w-full text-[11px] text-warn">
-        {type[0].toUpperCase() + type.slice(1)}s are off for this clone - turn them on in Configure, or this step falls
-        back to an AI text line.
-      </p>
-    );
-  }
-
-  const cover = (b: BundleRow) =>
-    [...b.photo_bundle_items].sort((a, c) => a.sort_order - c.sort_order)[0]?.storage_path ?? null;
-
-  const items: { id: string; path: string | null; label: string; isVideo: boolean }[] =
-    type === "bundle"
-      ? bundles.map((b) => ({ id: b.id, path: cover(b), label: b.name, isVideo: false }))
-      : (type === "photo" ? photos : videos).map((m) => ({
-          id: m.id,
-          path: m.storage_path,
-          label: m.is_free || m.star_value === 0 ? "free" : `${m.star_value}⭐`,
-          isVideo: type === "video",
-        }));
-
-  return (
-    <div className="mt-1 w-full">
-      <div className="mb-1 text-[11px] text-muted">
-        {value ? "Sends this exact item:" : "AI picks a fresh unseen item for this step."}
-      </div>
-      {items.length === 0 ? (
-        <p className="text-[11px] text-muted">No {type}s uploaded yet - add some in the Media tab.</p>
-      ) : (
-        <div className="flex gap-1.5 overflow-x-auto pb-1">
-          <button
-            type="button"
-            onClick={() => onPick(null)}
-            className={
-              "flex h-14 w-14 shrink-0 flex-col items-center justify-center gap-0.5 rounded-lg border-2 text-[10px] font-medium leading-tight transition " +
-              (value === null
-                ? "border-accent bg-accent/15 text-accent"
-                : "border-line text-muted hover:border-accent/60")
-            }
-          >
-            <span className="text-base">🤖</span>
-            AI picks
-          </button>
-          {items.map((it) => {
-            const on = value === it.id;
-            return (
-              <button
-                key={it.id}
-                type="button"
-                onClick={() => onPick(it.id)}
-                title={it.label}
-                className={
-                  "relative h-14 w-14 shrink-0 overflow-hidden rounded-lg border-2 transition " +
-                  (on ? "border-good ring-2 ring-good/30" : "border-line hover:border-accent/60")
-                }
-              >
-                {it.path ? (
-                  <Thumb path={it.path} type={it.isVideo ? "video" : "photo"} />
-                ) : (
-                  <div className="h-full w-full bg-muted/10" />
-                )}
-                <span className="absolute inset-x-0 bottom-0 truncate bg-black/60 px-1 py-0.5 text-[9px] font-medium text-white">
-                  {type === "bundle" ? "🎁 " : ""}
-                  {it.label}
-                </span>
-                {on && (
-                  <span className="absolute right-0.5 top-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-good text-[10px] font-bold text-white">
-                    ✓
-                  </span>
-                )}
-              </button>
-            );
-          })}
-        </div>
-      )}
-    </div>
-  );
-}
+type Initial = {
+  enabled: boolean;
+  // Per-flow caption kill switch (migration 071): true = every photo/video/
+  // bundle THIS flow sends goes out captionless, overriding media_caption_mode
+  // outright. Two independent toggles — one per flow.
+  campaignCaptionsOff: boolean;
+  onboardingCaptionsOff: boolean;
+  steps: Step[];
+  // New-fan onboarding: free-text steer for her first message. The rest of the
+  // onboarding flow (voice note, welcome bundle, detail collection) is now built
+  // entirely from the ordered onboarding step list below.
+  welcomeInstruction: string | null;
+  // Free-preview fallback (migration 069): a free taste if he hasn't bought the
+  // welcome bundle within the window. Either trigger fires (null = that trigger
+  // off); media id null = she auto-picks.
+  freePreviewEnabled: boolean;
+  freePreviewAfterMinutes: number | null;
+  freePreviewAfterMessages: number | null;
+  freePreviewMediaId: string | null;
+  // Steer for the spoken lead-in line before the free photo (migration 073).
+  // Blank/null = the bot's default lead-in.
+  freePreviewInstruction: string | null;
+  followupAfterMinutes: number;
+  // Ordered onboarding step list (migration 068) — see the DripForm section below.
+  onboardingSteps: OnboardingStepData[];
+};
 
 // Small 0h to 24h strip with a dot per step, so the day's rhythm reads at a glance.
 function Timeline({ steps }: { steps: Step[] }) {
@@ -335,9 +134,12 @@ export default function DripForm({
   const [saved, setSaved] = useState(false);
 
   const [enabled, setEnabled] = useState(initial.enabled);
+  const [campaignCaptionsOff, setCampaignCaptionsOff] = useState(initial.campaignCaptionsOff);
+  const [onboardingCaptionsOff, setOnboardingCaptionsOff] = useState(initial.onboardingCaptionsOff);
   const [steps, setSteps] = useState<Step[]>(initial.steps);
-  const [welcomeBundleTeased, setWelcomeBundleTeased] = useState(initial.welcomeBundleTeased);
-  const [collectFields, setCollectFields] = useState<string[]>(initial.onboardingCollectFields);
+  const [onboardingSteps, setOnboardingSteps] = useState<OnboardingStepData[]>(initial.onboardingSteps);
+  const [freePreviewEnabled, setFreePreviewEnabled] = useState(initial.freePreviewEnabled);
+  const [freePreviewMediaId, setFreePreviewMediaId] = useState<string | null>(initial.freePreviewMediaId);
 
   // Switching a step's type clears any picked media (ids don't carry across
   // types, and text/voice steps have no media).
@@ -369,6 +171,44 @@ export default function DripForm({
 
   const sortedSteps = [...steps].sort((a, b) => a.afterHours - b.afterHours);
 
+  // Onboarding steps: unlike drip's sortedSteps above, this list is NOT
+  // re-sorted anywhere (save or render) — it fires sequentially through the
+  // array in exactly the order saved here, so reordering with the ↑/↓ buttons
+  // is the only thing that changes firing order (see migration 068 for why
+  // the fire-once tracking needs the saved order to stay stable).
+  const setOnboardingStepType = (i: number, type: OnboardingStepType) =>
+    setOnboardingSteps((prev) =>
+      prev.map((s, idx) => (idx === i ? { ...s, type, mediaId: null, free: false, collectField: null } : s)),
+    );
+  const setOnboardingStepMedia = (i: number, mediaId: string | null) =>
+    setOnboardingSteps((prev) => prev.map((s, idx) => (idx === i ? { ...s, mediaId } : s)));
+  const setOnboardingStepFree = (i: number, free: boolean) =>
+    setOnboardingSteps((prev) => prev.map((s, idx) => (idx === i ? { ...s, free } : s)));
+  const setOnboardingStepCollectField = (i: number, collectField: string) =>
+    setOnboardingSteps((prev) => prev.map((s, idx) => (idx === i ? { ...s, collectField } : s)));
+  const setOnboardingStepInstruction = (i: number, instruction: string) =>
+    setOnboardingSteps((prev) => prev.map((s, idx) => (idx === i ? { ...s, instruction } : s)));
+  const setOnboardingStepAfter = (i: number, raw: string) => {
+    const n = Math.round(Number(raw));
+    if (!Number.isFinite(n)) return;
+    const afterMessages = Math.min(50, Math.max(1, n));
+    setOnboardingSteps((prev) => prev.map((s, idx) => (idx === i ? { ...s, afterMessages } : s)));
+  };
+  const addOnboardingStep = () =>
+    setOnboardingSteps((prev) => {
+      const last = prev.reduce((m, s) => Math.max(m, s.afterMessages), 0);
+      return [...prev, { type: "text", afterMessages: Math.min(50, last + 1), mediaId: null, free: false, collectField: null, instruction: null }];
+    });
+  const removeOnboardingStep = (i: number) => setOnboardingSteps((prev) => prev.filter((_, idx) => idx !== i));
+  const moveOnboardingStep = (i: number, dir: -1 | 1) =>
+    setOnboardingSteps((prev) => {
+      const j = i + dir;
+      if (j < 0 || j >= prev.length) return prev;
+      const next = [...prev];
+      [next[i], next[j]] = [next[j], next[i]];
+      return next;
+    });
+
   async function onSubmit(fd: FormData) {
     // Steps save sorted by hour: the stored list is the firing order.
     fd.set(
@@ -381,8 +221,29 @@ export default function DripForm({
         })),
       ),
     );
-    // Onboarding collect-fields: same hidden-field JSON pattern as drip_steps above.
-    fd.set("onboarding_collect_fields", JSON.stringify(collectFields));
+    // Onboarding steps: same hidden-field JSON pattern, saved in EXACTLY the
+    // order shown (not re-sorted like drip's steps above) — see migration 068
+    // for why firing order must match the saved array order.
+    fd.set(
+      "onboarding_steps",
+      JSON.stringify(
+        onboardingSteps.map((s) => ({
+          type: s.type,
+          after_messages: s.afterMessages,
+          ...(isOnboardingMediaType(s.type) && s.mediaId ? { media_id: s.mediaId } : {}),
+          ...(isOnboardingMediaType(s.type) && s.free ? { free: true } : {}),
+          ...(s.type === "collect" && s.collectField ? { collect_field: s.collectField } : {}),
+          // Per-step steer (migration 069) — only for AI-written line types, and
+          // only when actually filled in, so a blank never overrides her freedom.
+          ...(canSteerOnboarding(s.type) && s.instruction && s.instruction.trim()
+            ? { instruction: s.instruction.trim() }
+            : {}),
+        })),
+      ),
+    );
+    // Free-preview media id: controlled, carried as a hidden field (null → blank
+    // → she auto-picks). The enabled toggle + the two number fields submit by name.
+    fd.set("onboarding_free_preview_media_id", freePreviewMediaId ?? "");
     startTransition(async () => {
       await saveCampaign(cloneId, fd);
       setSteps(sortedSteps);
@@ -394,64 +255,218 @@ export default function DripForm({
 
   return (
     <form action={onSubmit} className="grid max-w-3xl gap-6">
-      {/* ── New fan onboarding - trimmed to the two triggers that matter.
-          Greeting/voice scripts and detail-collection were removed: she greets
-          and gets to know a new fan naturally in chat. Bundle timing lives in
-          the automated campaign, not here. ─────────────────────────────── */}
+      {/* ── New fan onboarding. The whole flow (greeting steer + the ordered
+          step list) lives here now; the legacy loose fields (voice-on-msg-N,
+          bundle-on-msg-N, teased, collect-fields, onboarding length) were
+          retired in favour of the step list below. ──────────────────────── */}
       <GroupHeader
         label="New fan"
-        hint="Configurable triggers and instructions for a brand-new fan. Leave a field blank to skip it - she still greets and gets to know him naturally in chat."
+        hint="How she opens a brand-new fan, plus the free-preview safety net. The rest of the onboarding flow is the ordered step list below."
       />
-      <Section icon="🚀" accent="cyan" title="Onboarding" cols={2}>
-        <Field
-          label="Voice note on msg #"
-          name="onboarding_voice_after"
-          type="number"
-          defaultValue={initial.onboardingVoiceAfter}
-          placeholder="blank = off"
-          hint="That turn's reply comes as a voice note instead of text."
+      <Section
+        icon="🚀"
+        accent="cyan"
+        title="Onboarding"
+        hint="The whole new-fan flow in one place: her opening line, the ordered step sequence, and a free-preview safety net. Everything here is timed off HIS message count."
+      >
+        <Area
+          label="First message instructions"
+          name="welcome_instruction"
+          defaultValue={initial.welcomeInstruction}
+          rows={2}
+          placeholder='blank = "greet him warmly, introduce yourself by name, be flirty, and ask his name"'
+          hint="How she opens the very FIRST message to a brand-new fan - a free-text steer, written into her own AI-generated line."
         />
-        <Field
-          label="Bundle on msg #"
-          name="welcome_bundle_after"
-          type="number"
-          defaultValue={initial.welcomeBundleAfter}
-          placeholder="blank = off"
-          hint="Sends the welcome bundle on this message."
-        />
-        <div className="sm:col-span-2">
+
+        {/* ── The ordered step sequence (migration 068) ─────────────────── */}
+        <div className="border-t border-line pt-3">
+          <p className="text-xs font-semibold text-ink">Steps</p>
+          <p className="mb-2 mt-0.5 text-[11px] text-muted">
+            Ordered steps timed off HIS message count (not hours quiet like the campaign below). They fire in the order shown, use ↑/↓ to reorder. Text, voice and tease lines are AI-written fresh in her voice with an optional per-step steer; photo, video and bundle steps tease a fresh unseen item unless you pick one, and can be toggled Free. Collect steps gently work one detail into that reply, once. Empty = she just greets and chats naturally.
+          </p>
+
+          {onboardingSteps.length === 0 && (
+            <p className="text-[11px] text-muted">No steps yet - she greets and chats naturally with no scripted onboarding steps.</p>
+          )}
+
+          <div className="grid gap-2">
+          {onboardingSteps.map((s, i) => (
+            <div key={i} className="flex flex-wrap items-center gap-2 rounded-lg border border-line p-2.5">
+              <span className="w-5 shrink-0 text-right text-xs font-medium text-muted">{i + 1}</span>
+              <label className="flex shrink-0 items-center gap-1.5 text-sm text-ink">
+                after
+                <input
+                  type="number"
+                  min={1}
+                  max={50}
+                  value={s.afterMessages}
+                  onChange={(e) => setOnboardingStepAfter(i, e.target.value)}
+                  className={inputCls + " w-16 text-center"}
+                />
+                msgs
+              </label>
+              <div className="flex flex-wrap gap-1.5">
+                {ONBOARDING_STEP_TYPES.map((t) => (
+                  <button
+                    key={t.key}
+                    type="button"
+                    onClick={() => setOnboardingStepType(i, t.key)}
+                    title={t.hint}
+                    className={
+                      "rounded-full border px-2.5 py-1 text-xs font-medium transition " +
+                      (s.type === t.key
+                        ? "border-accent/50 bg-accent/15 text-accent"
+                        : "border-line text-ink/70 hover:border-accent/40")
+                    }
+                  >
+                    {t.emoji} {t.label}
+                  </button>
+                ))}
+              </div>
+              <div className="ml-auto flex shrink-0 gap-1">
+                <button type="button" onClick={() => moveOnboardingStep(i, -1)} disabled={i === 0} className="rounded border border-line px-1.5 text-xs text-muted disabled:opacity-30" title="Move up">↑</button>
+                <button type="button" onClick={() => moveOnboardingStep(i, 1)} disabled={i === onboardingSteps.length - 1} className="rounded border border-line px-1.5 text-xs text-muted disabled:opacity-30" title="Move down">↓</button>
+                <button type="button" onClick={() => removeOnboardingStep(i)} className="rounded border border-line px-1.5 text-xs text-crit" title="Remove">✕</button>
+              </div>
+              {isOnboardingMediaType(s.type) && (
+                <div className="w-full">
+                  <StepMediaPicker
+                    type={s.type as "photo" | "video" | "bundle"}
+                    photos={photos}
+                    videos={videos}
+                    bundles={bundles}
+                    photosEnabled={photosEnabled}
+                    videosEnabled={videosEnabled}
+                    bundlesEnabled={bundlesEnabled}
+                    value={s.mediaId}
+                    onPick={(id) => setOnboardingStepMedia(i, id)}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setOnboardingStepFree(i, !s.free)}
+                    title="Free = sent unlocked with no charge and no paywall, regardless of how this item is priced elsewhere."
+                    className={
+                      "mt-1.5 rounded-full border px-2.5 py-1 text-xs font-medium transition " +
+                      (s.free ? "border-good/50 bg-good/15 text-good" : "border-line text-ink/70 hover:border-accent/40")
+                    }
+                  >
+                    {s.free ? "🆓 Free (no charge)" : "🔒 Paid (normal price)"}
+                  </button>
+                </div>
+              )}
+              {s.type === "collect" && (
+                <div className="w-full sm:w-64">
+                  <select
+                    value={s.collectField ?? ""}
+                    onChange={(e) => setOnboardingStepCollectField(i, e.target.value)}
+                    className={selectCls}
+                  >
+                    <option value="">Pick a detail…</option>
+                    {COLLECT_FIELD_OPTIONS.map((o) => (
+                      <option key={o.value} value={o.value}>
+                        {o.label}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              {canSteerOnboarding(s.type) && (
+                <div className="w-full">
+                  <FieldLabel
+                    label="Custom line / steer"
+                    hint="Optional steer for this AI-written line (e.g. 'ask what he's into'). Blank = she decides what to say."
+                  />
+                  <input
+                    type="text"
+                    value={s.instruction ?? ""}
+                    onChange={(e) => setOnboardingStepInstruction(i, e.target.value)}
+                    placeholder="blank = she decides"
+                    className={inputCls}
+                  />
+                </div>
+              )}
+            </div>
+          ))}
+          </div>
+
+          <button
+            type="button"
+            onClick={addOnboardingStep}
+            className="mt-2 justify-self-start rounded-md border border-line px-3 py-1.5 text-xs font-medium text-ink transition hover:bg-bg"
+          >
+            + Add step
+          </button>
+        </div>
+
+        {/* ── Caption kill switch (migration 071) ───────────────────────── */}
+        <div className="border-t border-line pt-3">
           <Toggle
-            label={welcomeBundleTeased ? "She sends a short tease line first" : "Bundle sends with no lead-in"}
-            name="welcome_bundle_teased"
-            checked={welcomeBundleTeased}
-            onChange={setWelcomeBundleTeased}
+            label={onboardingCaptionsOff ? "Captions off: no caption on anything onboarding sends" : "Captions follow the normal rules (Configure)"}
+            name="onboarding_captions_off"
+            checked={onboardingCaptionsOff}
+            onChange={setOnboardingCaptionsOff}
             accent="soft"
-            hint="A short AI-written flirty tease message ('I've got something for you...') goes out as its own text right before the paid bundle."
+            hint="Overrides the caption placement set in Configure just for onboarding: every photo, video and bundle the steps above (and the free-preview fallback below) send goes out with NO caption at all, no matter what."
           />
         </div>
-        <Field
-          label="Onboarding runs for (messages)"
-          name="onboarding_length"
-          type="number"
-          defaultValue={initial.onboardingLength}
-          hint="After this many messages she stops steering to collect the info below and just chats normally, regardless of what's still missing."
-        />
-        <div className="sm:col-span-2">
-          <Area
-            label="First message instructions"
-            name="welcome_instruction"
-            defaultValue={initial.welcomeInstruction}
-            rows={2}
-            placeholder='blank = "greet him warmly, introduce yourself by name, be flirty, and ask his name"'
-            hint="How she should open the very FIRST message to a brand-new fan - a free-text steer, written into her own AI-generated line."
+
+        {/* ── Free-preview fallback (migration 069) ─────────────────────── */}
+        <div className="border-t border-line pt-3">
+          <Toggle
+            label={freePreviewEnabled ? "Free preview if he hasn't bought" : "No free-preview fallback"}
+            name="onboarding_free_preview_enabled"
+            checked={freePreviewEnabled}
+            onChange={setFreePreviewEnabled}
+            accent="soft"
+            hint="A safety net: if he hasn't bought the welcome bundle within the window below, she sends one free taste. Either trigger can fire; leave both blank to turn the triggers off."
           />
-        </div>
-        <div className="sm:col-span-2">
-          <FieldLabel
-            label="Info to collect"
-            hint="Details she'll naturally, gently try to work into the first several messages (never an interview). Toggle the ones you want, or add your own below."
-          />
-          <CollectFieldsPicker value={collectFields} onChange={setCollectFields} />
+          {freePreviewEnabled && (
+            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+              <Field
+                label="After (minutes)"
+                name="onboarding_free_preview_after_minutes"
+                type="number"
+                defaultValue={initial.freePreviewAfterMinutes}
+                placeholder="blank = off"
+                hint="Fires this many minutes after onboarding starts if he still hasn't bought. Blank = this trigger off."
+              />
+              <Field
+                label="After (messages)"
+                name="onboarding_free_preview_after_messages"
+                type="number"
+                defaultValue={initial.freePreviewAfterMessages}
+                placeholder="blank = off"
+                hint="Fires after this many of his messages if he still hasn't bought. Blank = this trigger off."
+              />
+              <div className="sm:col-span-2">
+                <FieldLabel
+                  label="Free-preview media"
+                  hint="The item she sends as the free taste. Leave on AI picks and she chooses a fresh unseen one."
+                />
+                <StepMediaPicker
+                  type="photo"
+                  photos={photos}
+                  videos={videos}
+                  bundles={bundles}
+                  photosEnabled={photosEnabled}
+                  videosEnabled={videosEnabled}
+                  bundlesEnabled={bundlesEnabled}
+                  value={freePreviewMediaId}
+                  onPick={setFreePreviewMediaId}
+                />
+              </div>
+              <div className="sm:col-span-2">
+                <Area
+                  label="Lead-in line instructions"
+                  name="onboarding_free_preview_instruction"
+                  defaultValue={initial.freePreviewInstruction}
+                  rows={2}
+                  placeholder='blank = "tell him sweetly she will show him one for free first"'
+                  hint="Steers what she SAYS right before sending the free photo - a free-text steer, written into her own AI-generated line. Blank = the default sweet lead-in. Separate from the photo's own caption, which the Captions-off switch above controls either way."
+                />
+              </div>
+            </div>
+          )}
         </div>
       </Section>
 
@@ -488,6 +503,17 @@ export default function DripForm({
           onChange={setEnabled}
           accent="soft"
         />
+
+        {enabled && (
+          <Toggle
+            label={campaignCaptionsOff ? "Captions off: no caption on anything the campaign sends" : "Captions follow the normal rules (Configure)"}
+            name="campaign_captions_off"
+            checked={campaignCaptionsOff}
+            onChange={setCampaignCaptionsOff}
+            accent="soft"
+            hint="Overrides the caption placement set in Configure just for the automated campaign: every photo, video and bundle a step below sends goes out with NO caption at all, no matter what."
+          />
+        )}
 
         {enabled && (
           <>

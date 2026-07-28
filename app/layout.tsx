@@ -3,7 +3,6 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { headers } from "next/headers";
 import CurrencyProvider from "@/components/CurrencyProvider";
-import ThemeProvider from "@/components/ThemeProvider";
 import BlurProvider from "@/components/BlurProvider";
 import Sidebar from "@/components/Sidebar";
 import MobileMenu from "@/components/MobileMenu";
@@ -47,7 +46,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     return (
       <html lang="en" className={cn("font-sans", inter.variable, plexMono.variable, spaceGrotesk.variable)} style={{ colorScheme: "light" }} suppressHydrationWarning>
         <body className="min-h-screen bg-bg">
-          <ThemeProvider>{children}</ThemeProvider>
+          {children}
         </body>
       </html>
     );
@@ -118,7 +117,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="en" className={cn("font-sans", inter.variable, plexMono.variable, spaceGrotesk.variable)} style={{ colorScheme: "light" }} suppressHydrationWarning>
       <body className="min-h-screen bg-bg">
-        <ThemeProvider>
         <CurrencyProvider>
         <BlurProvider>
           <div className="flex h-screen">
@@ -145,7 +143,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           </div>
         </BlurProvider>
         </CurrencyProvider>
-        </ThemeProvider>
       </body>
     </html>
   );

@@ -32,21 +32,21 @@ export function techForUsageKind(kind: string): Tech {
 export const TECH_CHIPS: { key: Tech | "all"; label: string; on: string; off: string }[] = [
   { key: "all", label: "🧾 All", on: "border-line bg-muted/20 text-ink", off: "border-line text-ink/70" },
   { key: "elevenlabs", label: "🎙 ElevenLabs", on: "border-purple-500/50 bg-purple-500/15 text-purple-400", off: "border-purple-500/20 text-purple-400/70" },
-  { key: "llm", label: "🧠 LLM", on: "border-info/50 bg-info/15 text-info", off: "border-info/20 text-info/70" },
+  { key: "llm", label: "🧠 OpenRouter", on: "border-info/50 bg-info/15 text-info", off: "border-info/20 text-info/70" },
   { key: "telegram", label: "✈️ Telegram", on: "border-accent/50 bg-accent/15 text-accent", off: "border-accent/20 text-accent/70" },
   { key: "supabase", label: "🗄 Supabase", on: "border-good/50 bg-good/15 text-good", off: "border-good/20 text-good/70" },
-  { key: "code", label: "⚙️ Our code", on: "border-line bg-muted/20 text-muted", off: "border-line text-muted/70" },
+  { key: "code", label: "⚙️ System", on: "border-line bg-muted/20 text-muted", off: "border-line text-muted/70" },
 ];
 
 export const TECH_LABEL: Record<Tech, string> = {
   elevenlabs: "🎙 ElevenLabs",
-  llm: "🧠 LLM",
+  llm: "🧠 OpenRouter",
   telegram: "✈️ Telegram",
   supabase: "🗄 Supabase",
-  code: "⚙️ Our code",
+  code: "⚙️ System",
 };
 
-// Friendly names for system_logs.source (the "Our code" bucket's sub-category,
+// Friendly names for system_logs.source (the "System" bucket's sub-category,
 // shown next to the tech chip), these are internal module names picked by
 // whoever wrote the log line (src/services/syslog.ts callers), not something
 // an operator should have to decode. Anything unmapped falls back to a

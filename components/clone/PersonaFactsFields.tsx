@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import type { Clone, SocialRow } from "@/lib/types";
-import { Area, Collapse, Field, FieldLabel, Segmented, SubHead, TagInput, MultiSelect, inputCls, selectCls } from "./fields";
+import { Area, Collapse, Field, FieldLabel, Segmented, SubHead, TagInput, Toggle, MultiSelect, inputCls, selectCls } from "./fields";
 import { VIBE_PRESETS } from "@/lib/vibes";
 import type { CloneConfigState, SetConfig } from "./useCloneConfig";
 
@@ -583,6 +583,12 @@ export default function PersonaFactsFields({
     favoriteThingsInitial.length || dislikesInitial.length || clone?.saving_goal,
   );
   const contentFilled = Boolean(clone?.content_done?.length || clone?.content_hard_nos?.length);
+  // Master switch state: the profile is ON if any dial is above "never".
+  const imperfectionOn =
+    cfg.lowercaseLevel !== "never" ||
+    cfg.punctuationDropLevel !== "never" ||
+    cfg.typoLevel !== "never" ||
+    cfg.doubleTextLevel !== "never";
   const imperfectionFilled =
     cfg.lowercaseLevel !== "never" ||
     cfg.punctuationDropLevel !== "never" ||
@@ -1142,7 +1148,26 @@ export default function PersonaFactsFields({
         <input type="hidden" name="drops_punctuation" value={String(cfg.punctuationDropLevel !== "never")} />
         <input type="hidden" name="makes_typos" value={String(cfg.typoLevel !== "never")} />
         <input type="hidden" name="double_texts" value={String(cfg.doubleTextLevel !== "never")} />
-        <div className="grid gap-3 sm:grid-cols-2">
+        {/* Master off switch (2026-07-27). "Off" is expressed as all four
+            levels set to "never", the value that already means exactly this,
+            so no new column and no migration are needed. The dials below stay
+            MOUNTED when off (hidden via CSS, same rule as Collapse) so they
+            keep submitting "never" with the form. */}
+        <Toggle
+          label={imperfectionOn ? "Writes imperfectly" : "Writes cleanly (profile off)"}
+          name="_imperfection_toggle"
+          checked={imperfectionOn}
+          onChange={(v) => {
+            const level = v ? "sometimes" : "never";
+            set("lowercaseLevel", level);
+            set("punctuationDropLevel", level);
+            set("typoLevel", level);
+            set("doubleTextLevel", level);
+          }}
+          accent="soft"
+          hint="Off means no forced lowercase, no dropped punctuation, no typos and no double-texts. She writes clean, well-formed messages."
+        />
+        <div className={(imperfectionOn ? "mt-2 " : "hidden ") + "grid gap-3 sm:grid-cols-2"}>
           <Segmented
             label="Lowercase"
             name="lowercase_level"

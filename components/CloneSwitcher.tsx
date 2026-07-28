@@ -86,8 +86,8 @@ export default function CloneSwitcher({
           </>
         ) : (
           <>
-            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted/20 text-[10px] font-bold text-muted">
-              ∀
+            <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted/20 text-[8px] font-bold text-muted">
+              ALL
             </span>
             <span>All clones</span>
           </>
@@ -129,11 +129,10 @@ export default function CloneSwitcher({
                 : "border-line hover:bg-muted/10")
             }
           >
-            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted/20 text-[11px] font-bold text-muted">
-              ∀
+            <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted/20 text-[9px] font-bold text-muted">
+              ALL
             </span>
             All clones
-            <span className="ml-auto text-xs text-muted">aggregate</span>
           </button>
 
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
