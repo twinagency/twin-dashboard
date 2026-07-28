@@ -10,30 +10,13 @@ function num(fd: FormData, key: string, fallback: number): number {
   return Number.isFinite(n) ? n : fallback;
 }
 
-// Hand-picked media arrives as a JSON string in a hidden field. Coerce to a clean
-// [{type,id}] list (only photo/video, non-empty id) so the runtime is money/lookup safe.
-function parseMediaIds(fd: FormData): { type: "photo" | "video" | "bundle"; id: string }[] {
-  const raw = fd.get("drip_media_ids");
-  if (!raw) return [];
-  try {
-    const arr = JSON.parse(String(raw));
-    if (!Array.isArray(arr)) return [];
-    const seen = new Set<string>();
-    const out: { type: "photo" | "video" | "bundle"; id: string }[] = [];
-    for (const m of arr) {
-      const type = m?.type === "video" ? "video" : m?.type === "photo" ? "photo" : m?.type === "bundle" ? "bundle" : null;
-      const id = String(m?.id ?? "").trim();
-      if (!type || !id) continue;
-      const key = `${type}:${id}`;
-      if (seen.has(key)) continue;
-      seen.add(key);
-      out.push({ type, id });
-    }
-    return out;
-  } catch {
-    return [];
-  }
-}
+// drip_media_ids (legacy global campaign media pool) is DELIBERATELY no longer
+// written here (D9, 2026-07-29). Its picker UI was deleted but this action kept
+// writing the column unconditionally; since the field is never present in the
+// form anymore, every save silently wiped it to []. The per-step media picker
+// (parseSteps below) replaces it more precisely. The column stays in the DB
+// (additive rule) and campaign.ts's own read of it is being dropped by Track D
+// in the bot repo — this file just stops being the thing that wipes it.
 
 // Campaign steps arrive as a JSON string in a hidden field. Coerce to the clean
 // timed shape [{type, after_hours}] the runtime reads (campaign.ts): known types
@@ -173,7 +156,6 @@ export async function saveCampaign(id: string, fd: FormData) {
     // runtime uses a fixed default — see isReturningLapsedSpender in campaign.ts.)
     drip_enabled: fd.get("drip_enabled") === "true",
     campaign_captions_off: fd.get("campaign_captions_off") === "true",
-    drip_media_ids: parseMediaIds(fd),
     drip_steps: parseSteps(fd),
     updated_at: new Date().toISOString(),
   };

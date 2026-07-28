@@ -238,6 +238,25 @@ export default async function FansPage({
   };
   const qs = (id: string) => baseQs({ fan: id });
 
+  // ── Onboarding / paywall journey state (PART 3, 3a) ────────────────────────
+  // Display only, no writes. paywall_hits_since_credits drives the "first hit
+  // only" quirk (src/handler.ts: paywallExhausted() + sendPaywall()): the
+  // personalized line only ever fires on hit #0->#1, hit #1->#2 gets the fixed
+  // static line, and anything at #2+ is silently ignored (message deleted, no
+  // reply at all) until the fan tops up, which resets this back to 0.
+  const paywallHits: number = selected?.paywall_hits_since_credits ?? 0;
+  const paywallState =
+    paywallHits <= 0
+      ? { label: "Never hit", tone: "bg-muted/10 text-muted" }
+      : paywallHits === 1
+        ? { label: "First hit used", tone: "bg-accent/15 text-accent" }
+        : { label: "Exhausted (ignored)", tone: "bg-crit/15 text-crit" };
+  const paywallHint =
+    "By design, not a bug: only his FIRST hit of an out-of-credits episode gets the personalized/smart line. " +
+    "His 2nd hit gets the fixed static default message. Every hit after that (3rd+) is silently ignored entirely " +
+    "- message deleted, no reply, nothing sent. Resets to 0 the moment he tops up.";
+  const onboardingStepsSent: number[] = Array.isArray(selected?.onboarding_steps_sent) ? selected.onboarding_steps_sent : [];
+
   const interests: string[] = Array.isArray(profile?.interests) ? profile.interests : [];
   const details: [string, any][] =
     profile?.details && typeof profile.details === "object"
@@ -695,6 +714,60 @@ export default async function FansPage({
                     </div>
                   ))}
                 </dl>
+              </div>
+
+              {/* Onboarding / paywall journey (PART 3, 3a) - display only, driven
+                  entirely by columns app/users/page.tsx already fetched via
+                  select("*") but never rendered. */}
+              <div>
+                <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted">Journey</div>
+                <div className="flex flex-wrap items-center gap-1.5">
+                  <span
+                    className={
+                      "rounded-full px-2 py-0.5 text-[10px] font-medium " +
+                      (selected.onboarding_complete ? "bg-good/15 text-good" : "bg-warn/15 text-warn")
+                    }
+                  >
+                    {selected.onboarding_complete
+                      ? "✅ Onboarded"
+                      : `🚶 Onboarding${onboardingStepsSent.length ? ` (${onboardingStepsSent.length} step${onboardingStepsSent.length === 1 ? "" : "s"} sent)` : ""}`}
+                  </span>
+                  <span className={"flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium " + paywallState.tone}>
+                    💳 {paywallState.label}
+                    <span className="group/pw relative inline-flex cursor-help">
+                      <span className="text-[9px] opacity-70">ⓘ</span>
+                      <span
+                        role="tooltip"
+                        className="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 hidden w-60 max-w-[70vw] -translate-x-1/2 rounded-lg border border-line bg-panel p-2 text-[10px] font-normal normal-case leading-relaxed text-ink shadow-xl group-hover/pw:block"
+                      >
+                        {paywallHint}
+                      </span>
+                    </span>
+                  </span>
+                  {selected.paywall_primed && (
+                    <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-medium text-accent" title="Pre-lock warmup has already fired for this episode.">
+                      🔥 Primed
+                    </span>
+                  )}
+                  {selected.paywall_prime_sent && (
+                    <span className="rounded-full bg-muted/10 px-2 py-0.5 text-[10px] text-muted" title="Warmup line sent at least once, ever (fire-once flag).">
+                      prime sent
+                    </span>
+                  )}
+                  {selected.paywall_resume_sent && (
+                    <span className="rounded-full bg-muted/10 px-2 py-0.5 text-[10px] text-muted" title="Post-purchase resume line already sent, ever (fire-once flag).">
+                      resume sent
+                    </span>
+                  )}
+                  {(selected.postlock_stage ?? 0) > 0 && (
+                    <span
+                      className="rounded-full bg-muted/10 px-2 py-0.5 text-[10px] text-muted"
+                      title="Proactive re-engagement stage after locking (0 = just locked, stops trying once it reaches 2)."
+                    >
+                      postlock stage {selected.postlock_stage}
+                    </span>
+                  )}
+                </div>
               </div>
 
               {/* Credits - live adjust */}

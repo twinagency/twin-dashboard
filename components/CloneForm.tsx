@@ -26,7 +26,11 @@ type Step = "idle" | "saving" | "done" | "save-error";
 // ate ~140px before any content. ConfigSections renders the single bar (it owns
 // Identity/Config/Money); PPVs and View are passed in as extraTabs and rendered
 // here.
-type Tab = "ppvs" | "identity" | "config" | "money" | "view";
+// "advanced" isn't in ConfigSections' extraTabs/leadingTabs — it's one of its
+// own built-in TABS (identity/config/money/advanced) — but its clicks still
+// flow up through onTabChange into this state via an `as Tab` cast, so it
+// must be a real member here too or comparisons against it silently miss.
+type Tab = "ppvs" | "identity" | "config" | "money" | "view" | "advanced";
 type MediaProps = React.ComponentProps<typeof MediaManager>;
 
 const EXTRA_TABS: { key: Tab; label: string; hint: string }[] = [
@@ -219,7 +223,7 @@ export default function CloneForm({
         <div
           className={
             "flex items-center justify-between gap-4 " +
-            (tab === "identity" || tab === "config" || tab === "money" ? "" : "hidden")
+            (tab === "identity" || tab === "config" || tab === "money" || tab === "advanced" ? "" : "hidden")
           }
         >
           <Button type="button" variant="destructive" onClick={handleDelete}>
