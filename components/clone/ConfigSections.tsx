@@ -6,6 +6,7 @@ import type { OrModel } from "@/app/api/models/route";
 import ModelSelect from "../ModelSelect";
 import {
   Area,
+  COLLECT_FIELD_OPTIONS,
   Collapse,
   DEFAULT_PAYWALL_BUTTON,
   DEFAULT_PAYWALL_MESSAGE,
@@ -13,6 +14,7 @@ import {
   Field,
   LANGUAGE_OPTIONS,
   MODEL_FIELDS,
+  MultiSelect,
   RECOMMENDED,
   FieldLabel,
   Info,
@@ -376,6 +378,20 @@ export default function ConfigSections({
           <ToggleCard emoji="🎥" label="Videos" name="videos_enabled" checked={cfg.videosEnabled} onChange={(v) => set("videosEnabled", v)} />
           <ToggleCard emoji="🎁" label="Photo bundles" title="Fans can request them" name="bundles_enabled" checked={cfg.bundlesEnabled} onChange={(v) => set("bundlesEnabled", v)} />
           <ToggleCard emoji="🎙" label="Voice messages" name="voice_enabled" checked={cfg.voice} onChange={(v) => set("voice", v)} />
+        </div>
+        {/* Never-resend rule (clones.media_allow_resend). Default off = current
+            behaviour, an item a fan already received never repeats. On = she may
+            resend it. Separate row so it reads as a rule about repeats, not a
+            fifth "what she can send" media type. */}
+        <div className="border-t border-line pt-2">
+          <ToggleCard
+            emoji="🔁"
+            label={cfg.mediaAllowResend ? "Resends allowed" : "Never resend"}
+            title="Off (default): once a fan has received a photo/video, it's removed from her pool forever, she'll never send that exact item again. On: she may resend items he's already seen."
+            name="media_allow_resend"
+            checked={cfg.mediaAllowResend}
+            onChange={(v) => set("mediaAllowResend", v)}
+          />
         </div>
         {/* Vision lives in its own row: every toggle above controls what she SENDS,
             these control what she RECEIVES, and grouping them together read as
@@ -741,6 +757,16 @@ export default function ConfigSections({
           hint="How many past messages she recalls each reply. Higher costs more tokens per reply."
         >
           <Slider label="Memory window" name="memory_window" value={cfg.memoryWindow} onChange={(v) => set("memoryWindow", v)} min={1} max={100} step={1} format={(v) => `${v} msgs`} />
+          <div className="mt-2 border-t border-line pt-2">
+            <MultiSelect
+              label="Detail collection priority"
+              name="onboarding_collect_fields"
+              options={COLLECT_FIELD_OPTIONS.map((o) => o.value)}
+              initial={cfg.onboardingCollect}
+              hint="Details she prioritizes capturing into his profile dossier whenever he reveals them (name, age, job, ...). Doesn't change what she says, only what her fan-profile memory pays extra attention to. Blank = no priority list."
+              cols={3}
+            />
+          </div>
         </Collapse>
 
         {/* ── Category pricing (moved from Monetization) ────────────── */}
@@ -760,7 +786,7 @@ export default function ConfigSections({
           label={<>Discounts <BetaBadge /></>}
           accent="green"
           filled={cfg.discountsEnabled}
-          hint="She picks when and how hard, % capped here. She only decides WHEN and how hard (light/medium/max); the price is always computed in code. 0 = never discount that type. Caps already default to 15/20/25/10, so the switch that actually gates this is Discounts enabled above, which is off by default."
+          hint="She picks when and how hard, % capped here. She only decides WHEN and how hard (light/medium/max); the price is always computed in code. 0 = never discount that type. Caps already default to 15/20/25/10, so the switch that actually gates this is Discounts enabled above, which is off by default. She can ONLY reach for a discount at all once one of the two eligibility gates below is met: a locked offer sitting unpaid past the pending window, OR a quiet gap since his last message. A fan chatting enthusiastically never qualifies until one of those trips."
         >
           <Toggle label={cfg.discountsEnabled ? "She can offer discounts" : "No discounts"} name="discounts_enabled" checked={cfg.discountsEnabled} onChange={(v) => set("discountsEnabled", v)} accent="soft" />
           {cfg.discountsEnabled && (
@@ -771,6 +797,53 @@ export default function ConfigSections({
               <Slider label="Message packs" name="discount_max_credits" value={cfg.discMaxCredits} onChange={(v) => set("discMaxCredits", v)} min={0} max={90} step={5} format={(v) => `${v}%`} />
             </div>
           )}
+          <div className="mt-1 border-t border-line pt-2">
+            <FieldLabel
+              label="Eligibility gates"
+              hint="EITHER gate makes her eligible to offer a discount (not both). Pending window: minutes a locked, unpaid offer must sit before she may sweeten it. Slowdown gap: minutes of silence since his last message before she may proactively offer one. 0 on either = that gate is always open (always eligible)."
+            />
+            <div className="grid gap-2 sm:grid-cols-2">
+              <Slider
+                label="Pending offer window"
+                name="offer_pending_minutes"
+                value={cfg.offerPendingMinutes}
+                onChange={(v) => set("offerPendingMinutes", v)}
+                min={0}
+                max={60}
+                step={1}
+                format={(v) => (v === 0 ? "always eligible" : `${v} min`)}
+              />
+              <Slider
+                label="Chat slowdown gap"
+                name="discount_slowdown_minutes"
+                value={cfg.discountSlowdownMinutes}
+                onChange={(v) => set("discountSlowdownMinutes", v)}
+                min={0}
+                max={60}
+                step={1}
+                format={(v) => (v === 0 ? "always eligible" : `${v} min`)}
+              />
+            </div>
+          </div>
+        </Collapse>
+
+        {/* ── Open-offer redirects (restored 2026-07-29, D6) ──────────── */}
+        <Collapse
+          emoji="🎯"
+          label="Offer follow-up"
+          accent="amber"
+          hint="How many times she'll gently redirect a fan back to a locked, unpaid offer before she backs off and stops mentioning it. Bot-enforced (clones.offer_redirect_cap)."
+        >
+          <Slider
+            label="Redirect cap"
+            name="offer_redirect_cap"
+            value={cfg.offerRedirectCap}
+            onChange={(v) => set("offerRedirectCap", v)}
+            min={1}
+            max={10}
+            step={1}
+            format={(v) => `${v}×`}
+          />
         </Collapse>
       </div>
 
@@ -842,7 +915,7 @@ export function MonetizationSections({
           <SubHead
             emoji="🚧"
             label="Out of messages"
-            tip="What a fan sees when he runs out of message credits. The buy-more button is attached automatically."
+            tip="What a fan sees when he runs out of message credits. The buy-more button is attached automatically. By design, only his FIRST hit of an episode gets the Smart personal line below; his 2nd hit gets this static Default message; every hit after that is silently ignored (deleted, no reply) until he tops up. Resets on any top-up."
           />
         </div>
         {/* Plain 2-col split, not two nested sub-cards - the card border around
@@ -875,7 +948,7 @@ export function MonetizationSections({
             </div>
           </div>
           <div>
-            <Toggle label="Smart first message" hint="Only the very first time a fan runs out, she writes a personal line referencing the chat. Off = the default message is used every time." name="smart_paywall_enabled" checked={cfg.smartPaywall} onChange={(v) => set("smartPaywall", v)} accent="soft" />
+            <Toggle label="Smart first message" hint="Only the very first hit of an out-of-credits episode gets this personal line. His 2nd hit gets the static Default message instead, and every hit after that is silently ignored entirely (this is by design, not a bug). Off = the static Default message is used every time, from the first hit." name="smart_paywall_enabled" checked={cfg.smartPaywall} onChange={(v) => set("smartPaywall", v)} accent="soft" />
             {/* Real submitted field is this unconditional hidden input, same pattern
                 as smart_split / voice_speaker_boost / subscriptions_enabled below.
                 It always carries the true value regardless of whether the visible

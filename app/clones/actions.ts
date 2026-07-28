@@ -292,6 +292,10 @@ function rowFromForm(fd: FormData) {
     bundles_enabled: fd.get("bundles_enabled") === "true",
     voice_enabled: fd.get("voice_enabled") === "true",
     charge_messages: fd.get("charge_messages") === "true",
+    // Never-resend rule (D5(i), Track D's migration). false = current behaviour,
+    // never resend an already-received item. Listed in MEDIA_RESEND_COLUMNS
+    // below so a save before the migration lands still succeeds.
+    media_allow_resend: fd.get("media_allow_resend") === "true",
     tips_enabled: fd.get("tips_enabled") === "true",
     live_captions_enabled: fd.get("live_captions_enabled") === "true",
     media_caption_mode: ["none", "separate"].includes(str(fd, "media_caption_mode") ?? "")
@@ -476,17 +480,23 @@ function rowFromForm(fd: FormData) {
     paywall_resume_free: fd.get("paywall_resume_free") === "true",
 
     // The monetization-sequence cards were removed on 2026-07-27 (operator
-    // decision), so these columns are no longer written here. voice_cooldown_turns
+    // decision), so those columns are no longer written here. voice_cooldown_turns
     // is kept, its control lives elsewhere and is still on the form.
-    //
-    // IMPORTANT: offer_pending_minutes, offer_redirect_cap and
-    // discount_slowdown_minutes are STILL READ BY THE BOT (the open-offer
-    // window, the redirect cap, and the discount slowdown trigger). Their
-    // dashboard controls are gone, so writing them here would reset a clone's
-    // real values to these defaults on every save. Omitting them leaves
-    // whatever is already in the DB untouched, the same approach used for
-    // auto_block_enabled.
     voice_cooldown_turns: Math.max(0, num(fd, "voice_cooldown_turns", 2)),
+
+    // Restored 2026-07-29 (D6/D4): offer_pending_minutes, discount_slowdown_minutes
+    // and offer_redirect_cap are STILL READ BY THE BOT (the open-offer pending
+    // window, the discount quiet-gap trigger, and the redirect cap — see
+    // flows/offer-state.ts and flows/actions.ts) but had no dashboard control at
+    // all, so a clone's real value could never be tuned. Controls are back on the
+    // Advanced tab's Discounts / Offer follow-up cards; write them here again.
+    offer_pending_minutes: Math.max(0, num(fd, "offer_pending_minutes", 0)),
+    discount_slowdown_minutes: Math.max(0, num(fd, "discount_slowdown_minutes", 0)),
+    offer_redirect_cap: Math.max(1, num(fd, "offer_redirect_cap", 3)),
+    // Restored 2026-07-29 (D6): read by services/profile-extractor.ts to steer
+    // what it prioritizes capturing into the fan's profile dossier. Unrelated to
+    // the onboarding step engine (that reads onboarding_steps, not this).
+    onboarding_collect_fields: parseCollectFields(fd),
 
     response_wait_min: num(fd, "response_wait_min", 0),
     response_wait_max: num(fd, "response_wait_max", 0),
@@ -580,6 +590,10 @@ const FLOW_070_COLUMNS = [
 ] as const;
 // Migration 072: message-catch wait. See bot/db/migrations/072_*.sql.
 const FLOW_072_COLUMNS = ["message_catch_wait_seconds"] as const;
+// Never-resend toggle (D5(i), Track D migration applied 2026-07-29 in parallel
+// with this dashboard work). Listed so a save issued before that migration
+// lands strips the column and still succeeds, instead of failing the whole save.
+const MEDIA_RESEND_COLUMNS = ["media_allow_resend"] as const;
 // The response-pacing, monetization-sequence, re-warm-photo and
 // offer-redirect column lists were removed on 2026-07-27: those columns are no
 // longer written by this form at all, so they cannot appear in the row that
@@ -596,6 +610,7 @@ const OPTIONAL_COLUMNS = [
   ...FLOW_069_COLUMNS,
   ...FLOW_070_COLUMNS,
   ...FLOW_072_COLUMNS,
+  ...MEDIA_RESEND_COLUMNS,
 ] as const;
 
 function withoutPersonaFactColumns(row: Record<string, unknown>): Record<string, unknown> {
@@ -616,6 +631,25 @@ function slugify(name: string): string {
     .replace(/^-+|-+$/g, "");
 }
 
+// Two clones must never share one bot_token. There is no unique index on the
+// column, and the runtime's getCloneByBotToken() uses .maybeSingle(), so a
+// duplicate makes that lookup return an error plus a NULL clone: the bot goes
+// silently dead for BOTH clones while looking perfectly configured in here.
+// Guard at the only two places a token is written, with a message the operator
+// can act on. `excludeId` skips the row being edited.
+async function assertBotTokenFree(botToken: string, excludeId?: string): Promise<void> {
+  let q = supabaseAdmin.from("clones").select("slug").eq("bot_token", botToken);
+  if (excludeId) q = q.neq("id", excludeId);
+  const { data, error } = await q;
+  // A failed check must not block a legitimate save; the insert still runs.
+  if (error) return;
+  if (data && data.length > 0) {
+    throw new Error(
+      `That bot token is already used by the clone "${data[0].slug}". Each clone needs its own token from @BotFather, sharing one takes both bots offline.`,
+    );
+  }
+}
+
 // Step 1 of the one-page create flow: insert the clone row from settings only
 // (prompts compiled later, media uploaded later by the client). Returns the new id.
 export async function createCloneRow(fd: FormData): Promise<string> {
@@ -623,7 +657,19 @@ export async function createCloneRow(fd: FormData): Promise<string> {
   const bot_token = str(fd, "bot_token");
   if (!name || !bot_token) throw new Error("Name and bot token are required");
 
-  const row = { ...rowFromForm(fd), slug: slugify(name) };
+  const slug = slugify(name);
+  // `slug` is NOT NULL and UNIQUE. slugify() strips everything non-alphanumeric,
+  // so a name like "???" yields "" and a repeated name yields a collision; both
+  // surface as a raw Postgres unique-violation string. Check first and say what
+  // the operator actually has to change.
+  if (!slug) throw new Error("Name needs at least one letter or number.");
+  const { data: slugTaken } = await supabaseAdmin.from("clones").select("id").eq("slug", slug).limit(1);
+  if (slugTaken && slugTaken.length > 0) {
+    throw new Error(`A clone named "${name}" already exists. Pick a different name.`);
+  }
+  await assertBotTokenFree(bot_token);
+
+  const row = { ...rowFromForm(fd), slug };
   let { data, error } = await supabaseAdmin.from("clones").insert(row).select("id").single();
   if (error && isMissingColumnError(error.message)) {
     ({ data, error } = await supabaseAdmin
@@ -641,6 +687,7 @@ export async function createCloneRow(fd: FormData): Promise<string> {
 
 export async function updateClone(id: string, fd: FormData) {
   const row = rowFromForm(fd);
+  if (row.bot_token) await assertBotTokenFree(row.bot_token, id);
 
   let { error } = await supabaseAdmin
     .from("clones")

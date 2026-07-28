@@ -24,6 +24,8 @@ export type CloneConfigState = {
   bundlesEnabled: boolean;
   voice: boolean;
   charge: boolean;
+  // Never-resend toggle (clones.media_allow_resend, Track D migration).
+  mediaAllowResend: boolean;
 
   sexualLevel: Level;
   nsfwLevel: Level;
@@ -41,6 +43,13 @@ export type CloneConfigState = {
   discMaxVideo: number;
   discMaxBundle: number;
   discMaxCredits: number;
+  // Discount eligibility gates (clones.offer_pending_minutes / discount_slowdown_minutes),
+  // restored 2026-07-29 (D6/D4). Both bot-read; UI defaults 0 = always eligible.
+  offerPendingMinutes: number;
+  discountSlowdownMinutes: number;
+  // How many times she'll redirect back to an open offer before backing off
+  // (clones.offer_redirect_cap). Restored 2026-07-29 (D6).
+  offerRedirectCap: number;
 
   tips: boolean;
   spoilOptions: { stars: number; label: string }[];
@@ -133,6 +142,7 @@ function initial(clone?: Partial<Clone>): CloneConfigState {
     bundlesEnabled: clone?.bundles_enabled ?? true,
     voice: clone?.voice_enabled ?? true,
     charge: clone?.charge_messages ?? true,
+    mediaAllowResend: clone?.media_allow_resend ?? false,
 
     sexualLevel: clone?.sexual_level ?? "medium",
     nsfwLevel: clone?.nsfw_level ?? "medium",
@@ -150,6 +160,11 @@ function initial(clone?: Partial<Clone>): CloneConfigState {
     discMaxVideo: clone?.discount_max_video ?? 0,
     discMaxBundle: clone?.discount_max_bundle ?? 0,
     discMaxCredits: clone?.discount_max_credits ?? 0,
+    // D4: default 0 = always eligible (no pending-offer wait / no slowdown gap
+    // required). A clone that already has a real value keeps it.
+    offerPendingMinutes: clone?.offer_pending_minutes ?? 0,
+    discountSlowdownMinutes: clone?.discount_slowdown_minutes ?? 0,
+    offerRedirectCap: clone?.offer_redirect_cap ?? 3,
 
     tips: clone?.tips_enabled ?? false,
     spoilOptions: clone?.spoil_options && clone.spoil_options.length ? clone.spoil_options : DEFAULT_SPOIL_OPTIONS,

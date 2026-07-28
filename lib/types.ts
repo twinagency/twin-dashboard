@@ -36,6 +36,11 @@ export type Clone = {
   voice_enabled: boolean;
   charge_messages: boolean;
   tips_enabled: boolean;
+  // Never-resend rule for already-received media (migration TBD, Track D
+  // 2026-07-29). false (default) = current behaviour, never resend an item a
+  // fan already received. true = resends allowed. Optional so a row saved
+  // before the migration lands still type-checks.
+  media_allow_resend?: boolean;
   live_captions_enabled: boolean;
   media_caption_mode: "inline" | "none" | "separate";
   thank_you_enabled: boolean;
