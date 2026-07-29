@@ -217,6 +217,8 @@ export type Clone = {
   starting_credits: number;
   credit_pack_size: number;
   credit_pack_price_stars: number;
+  /** Migration 088. Message credits granted per 100 stars TIPPED. 0 = off. */
+  tip_credits_per_100_stars?: number;
 
   // IANA timezone (e.g. "America/New_York"); drives her in-prompt time awareness.
   timezone: string;

@@ -473,6 +473,10 @@ function rowFromForm(fd: FormData) {
     starting_credits: num(fd, "starting_credits", 50),
     credit_pack_size: num(fd, "credit_pack_size", 50),
     credit_pack_price_stars: num(fd, "credit_pack_price_stars", 199),
+    // Migration 088. Default 0 = tips grant no credits, which is exactly the
+    // pre-088 live behaviour, so a save from an untouched form changes nothing.
+    // Clamped at 0 because a negative rate would mean a tip DEDUCTS credits.
+    tip_credits_per_100_stars: Math.max(0, num(fd, "tip_credits_per_100_stars", 0)),
 
     // time awareness (IANA tz; runtime injects her current local date/time)
     timezone: str(fd, "timezone") ?? "UTC",
@@ -696,6 +700,12 @@ const FLOW_085_COLUMNS = ["offer_decline_cap"] as const;
 const DIAL_086_COLUMNS = [
   "warmth_level", "curiosity_level", "playfulness_level", "attentiveness_level",
 ] as const;
+// Migration 088: a tip grants message credits at this rate. Listed so a save
+// issued before 088 is applied strips it and still succeeds. Stripping is safe:
+// the column is absent, the bot's mapClone reads it as 0, and 0 is exactly the
+// pre-088 behaviour (a tip grants nothing). It degrades to today, never to a
+// silent money change. See bot/db/migrations/088_tip_credits.sql.
+const MONEY_088_COLUMNS = ["tip_credits_per_100_stars"] as const;
 // The response-pacing, monetization-sequence, re-warm-photo and
 // offer-redirect column lists were removed on 2026-07-27: those columns are no
 // longer written by this form at all, so they cannot appear in the row that
@@ -717,6 +727,7 @@ const OPTIONAL_COLUMNS = [
   ...FLOW_084_COLUMNS,
   ...FLOW_085_COLUMNS,
   ...DIAL_086_COLUMNS,
+  ...MONEY_088_COLUMNS,
 ] as const;
 
 function withoutPersonaFactColumns(row: Record<string, unknown>): Record<string, unknown> {

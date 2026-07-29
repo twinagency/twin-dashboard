@@ -166,6 +166,17 @@ export default function CloneDefaultsForm({ defaults }: { defaults: Partial<Clon
           <Field label="Pack size (msgs)" name="credit_pack_size" type="number" defaultValue={defaults.credit_pack_size ?? 50} />
           <Field label="Pack price (⭐)" name="credit_pack_price_stars" type="number" defaultValue={defaults.credit_pack_price_stars ?? 199} />
         </div>
+        {/* Migration 088. Fleet default for what a tip gives back. 0 = a tip
+            grants no credits, which is what every clone did before 088. */}
+        <Field
+          label="Credits per 100 ⭐ tipped"
+          name="tip_credits_per_100_stars"
+          type="number"
+          min={0}
+          step={1}
+          defaultValue={defaults.tip_credits_per_100_stars ?? 0}
+          hint="What a tip gives back in message credits, for new clones. 0 means tips give no credits. At 5, a 1000 star tip gives 50 messages. Rounded down, and set per clone on its own page."
+        />
       </div>
 
       <div className="grid gap-3">

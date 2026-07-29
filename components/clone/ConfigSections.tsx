@@ -1292,7 +1292,7 @@ export function MonetizationSections({
         label="Tips"
         accent="amber"
         filled={cfg.tips}
-        hint="She can ask to be spoiled with Stars. Recorded as tip revenue, never as message credits. The spoil menu is what he sees when he wants to tip but names no amount."
+        hint="She can ask to be spoiled with Stars. Always recorded as tip revenue. It can also give him message credits back, at the rate you set below, which is off until you set it. The spoil menu is what he sees when he wants to tip but names no amount."
       >
         <Toggle
           label={cfg.tips ? "She can ask for tips" : "No tips"}
@@ -1300,6 +1300,20 @@ export function MonetizationSections({
           checked={cfg.tips}
           onChange={(v) => set("tips", v)}
           accent="soft"
+        />
+        {/* Migration 088. Rendered unconditionally for the SAME reason as the
+            re-ask brakes below, and it matters more here because this one is
+            money: a Field hidden behind cfg.tips posts nothing, and
+            num(fd, ..., 0) would then silently reset a configured rate to 0 on
+            every save made with tips switched off. */}
+        <Field
+          label="Credits per 100 stars tipped"
+          name="tip_credits_per_100_stars"
+          type="number"
+          min={0}
+          step={1}
+          defaultValue={clone?.tip_credits_per_100_stars ?? 0}
+          hint="What a tip gives him back in message credits. 0 means a tip gives no credits, which is the default and what every clone did before this field existed. At 5, a 1000 star tip gives him 50 messages. The amount is always computed from this number, never decided by the AI, and it is rounded DOWN so a tip too small to earn a credit earns none. This is deliberately NOT tied to your pack price: it is a separate rate you control."
         />
         {/* Migration 084, the two tip re-ask brakes. Rendered unconditionally,
             NOT behind cfg.tips like the spoil menu below: a hidden Toggle posts
