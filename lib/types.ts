@@ -330,6 +330,11 @@ export type Clone = {
   offer_redirect_cap?: number;
   voice_cooldown_turns?: number;
   discount_slowdown_minutes?: number;
+  // Migration 085 decline brake: how many explicit paid-offer declines this
+  // clone tolerates before she stops INITIATING a fresh paid pitch at that
+  // fan. Bot-read (flows/actions.ts guardedMedia()/guardedPitch()); never
+  // blocks her answering, or a fan who explicitly asks to buy.
+  offer_decline_cap?: number;
 
   intake: { answers?: string; fields?: Record<string, string> } | null;
   persona: Record<string, string> | null;

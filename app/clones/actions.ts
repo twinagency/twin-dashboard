@@ -553,6 +553,12 @@ function rowFromForm(fd: FormData) {
     offer_pending_minutes: Math.max(1, num(fd, "offer_pending_minutes", 15)),
     discount_slowdown_minutes: Math.max(1, num(fd, "discount_slowdown_minutes", 15)),
     offer_redirect_cap: Math.max(1, num(fd, "offer_redirect_cap", 3)),
+    // Migration 085 (D7) decline brake. Same money-brake floor/default
+    // reasoning as offer_redirect_cap right above: a stored 0 would mean
+    // "she never speaks again after one refusal", which is never a
+    // legitimate operator choice, so this fails safe at a 1-decline floor
+    // instead, and defaults to the bot-side default (3) when absent.
+    offer_decline_cap: Math.max(1, num(fd, "offer_decline_cap", 3)),
     // Restored 2026-07-29 (D6): read by services/profile-extractor.ts to steer
     // what it prioritizes capturing into the fan's profile dossier. Unrelated to
     // the onboarding step engine (that reads onboarding_steps, not this).
@@ -667,6 +673,11 @@ const DIAL_080_COLUMNS = ["tip_push_level", "greeting_ask_age"] as const;
 const FLOW_084_COLUMNS = [
   "fan_time_mode", "tip_reask_cooldown_seconds", "tip_reask_after_paid",
 ] as const;
+// Migration 085 (D7): decline brake cap. Applied to aouaenqayfltoqrmpitg as
+// part of this same change; listed anyway so a save still succeeds against a
+// stack where 085 has not run yet, instead of failing wholesale.
+// See bot/db/migrations/085_decline_brake.sql.
+const FLOW_085_COLUMNS = ["offer_decline_cap"] as const;
 // The response-pacing, monetization-sequence, re-warm-photo and
 // offer-redirect column lists were removed on 2026-07-27: those columns are no
 // longer written by this form at all, so they cannot appear in the row that
@@ -686,6 +697,7 @@ const OPTIONAL_COLUMNS = [
   ...MEDIA_RESEND_COLUMNS,
   ...DIAL_080_COLUMNS,
   ...FLOW_084_COLUMNS,
+  ...FLOW_085_COLUMNS,
 ] as const;
 
 function withoutPersonaFactColumns(row: Record<string, unknown>): Record<string, unknown> {

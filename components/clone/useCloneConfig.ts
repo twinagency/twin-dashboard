@@ -89,6 +89,13 @@ export type CloneConfigState = {
   // How many times she'll redirect back to an open offer before backing off
   // (clones.offer_redirect_cap). Restored 2026-07-29 (D6).
   offerRedirectCap: number;
+  // Migration 085 (D7): how many explicit paid-offer declines she tolerates
+  // before guardedMedia()/guardedPitch() (bot/src/flows/actions.ts) stop
+  // INITIATING a fresh paid photo/video/bundle/tip/VIP pitch at that fan.
+  // Distinct from offerRedirectCap above (that one nags about a SINGLE open
+  // offer); this one reacts to the fan having plainly said, in words, he
+  // won't pay. Never brakes her answering, or a fan who asks to buy himself.
+  offerDeclineCap: number;
 
   tips: boolean;
   // Migration 084 (clones.tip_reask_after_paid). Money brake, opt-in only.
@@ -214,6 +221,7 @@ function initial(clone?: Partial<Clone>): CloneConfigState {
     offerPendingMinutes: clone?.offer_pending_minutes ?? 15,
     discountSlowdownMinutes: clone?.discount_slowdown_minutes ?? 15,
     offerRedirectCap: clone?.offer_redirect_cap ?? 3,
+    offerDeclineCap: clone?.offer_decline_cap ?? 3,
 
     tips: clone?.tips_enabled ?? false,
     tipReaskAfterPaid: clone?.tip_reask_after_paid ?? false,

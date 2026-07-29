@@ -930,6 +930,25 @@ export default function ConfigSections({
             format={(v) => `${v}×`}
           />
         </Collapse>
+
+        {/* ── Decline brake (D7, migration 085) ───────────────────────── */}
+        <Collapse
+          emoji="🧊"
+          label="Decline brake"
+          accent="amber"
+          hint="How many times a fan has to plainly refuse to pay (e.g. 'i'm not paying', 'too expensive', 'send it free') before she stops INITIATING a new paid photo/video/bundle/tip/VIP pitch at him. She keeps chatting warmly either way, and if he himself asks to buy after this trips, she still delivers. A real purchase always resets his count back to 0. Bot-enforced (clones.offer_decline_cap)."
+        >
+          <Slider
+            label="Decline cap"
+            name="offer_decline_cap"
+            value={cfg.offerDeclineCap}
+            onChange={(v) => set("offerDeclineCap", v)}
+            min={1}
+            max={10}
+            step={1}
+            format={(v) => `${v}×`}
+          />
+        </Collapse>
       </div>
 
       {/* ── MONETIZATION - sections live in MonetizationSections (end of
