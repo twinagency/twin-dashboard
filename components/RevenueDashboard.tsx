@@ -37,12 +37,22 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 
 type FullData = DashboardData & { analytics: AnalyticsData; balance: StarBalance | null };
 
+// T8: was `media: "Media"` — a bare, unexplained catch-all that read as broken
+// ("Rev why tf it say media it should be photo or video or message"). The API
+// already sends the finer star_transactions.feature value here when the row
+// has one (see lib/dashboard-data.ts: `kind: p.feature || p.kind || "other"`),
+// so most future sales already resolve to Paid photo/Paid video/Photo bundle/
+// etc. "Media (untagged)" is now reserved for what it actually means: a sale
+// whose specific item was never recorded — confirmed against Supabase, every
+// row like that today is `imported_from: "telegram"` backfilled history from
+// before star-reconcile.ts's photo/video/bundle split existed, not a live
+// dashboard bug. Real-time sales tag correctly going forward.
 const TX_KIND_LABEL: Record<string, string> = {
   credits: "Message credits",
   photo: "Paid photo",
   video: "Paid video",
   bundle: "Photo bundle",
-  media: "Media",
+  media: "Media (untagged)",
   tip: "Tip",
   subscription: "VIP subscription",
   other: "Other",
@@ -636,8 +646,9 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
       {data && (
         <Card size="sm" className="mt-4">
           <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
-            <CardTitle className="text-xs font-semibold uppercase tracking-wide text-ink">
+            <CardTitle className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-ink">
               Transactions
+              <Info text="Bought shows exactly what made the money when it's known: paid photo, paid video, photo bundle, message credits, tip, or VIP subscription. Media (untagged) is older Telegram-imported history recorded before the exact item was tracked, not a live bug." />
             </CardTitle>
             <div className="relative w-40 sm:w-56">
               <svg

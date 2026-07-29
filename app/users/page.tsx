@@ -8,6 +8,7 @@ import { Card } from "@/components/ui/card";
 import FanAvatar from "@/components/FanAvatar";
 import { Input } from "@/components/ui/input";
 import ConfirmSubmit from "@/components/ConfirmSubmit";
+import { Info } from "@/components/clone/fields";
 import { setCredits, resetCounters, toggleActive, setBlocked, setPaused, deleteUser } from "./actions";
 
 export const dynamic = "force-dynamic";
@@ -258,24 +259,66 @@ export default async function FansPage({
   };
   const qs = (id: string) => baseQs({ fan: id });
 
-  // ── Onboarding / paywall journey state (PART 3, 3a) ────────────────────────
+  // ── Onboarding / paywall journey state (PART 3, 3a; T8 rebuild 2026-07-29) ──
   // Display only, no writes. paywall_hits_since_credits drives the "first hit
-  // only" quirk (src/handler.ts: paywallExhausted() + sendPaywall()): the
-  // personalized line only ever fires on hit #0->#1, hit #1->#2 gets the fixed
-  // static line, and anything at #2+ is silently ignored (message deleted, no
-  // reply at all) until the fan tops up, which resets this back to 0.
+  // only" quirk (src/handler.ts: paywallExhausted() + sendPaywall()): hit 1
+  // gets the AI-composed personal line (only when smart_paywall_enabled), hit
+  // 2 gets the fixed static default message, and hit 3+ is silently ignored
+  // forever - his message is DELETED, no reply, nothing sent - until he tops
+  // up, which resets this back to 0.
   const paywallHits: number = selected?.paywall_hits_since_credits ?? 0;
   const paywallState =
     paywallHits <= 0
       ? { label: "Never hit", tone: "bg-muted/10 text-muted" }
       : paywallHits === 1
         ? { label: "First hit used", tone: "bg-accent/15 text-accent" }
-        : { label: "Exhausted (ignored)", tone: "bg-crit/15 text-crit" };
+        : paywallHits === 2
+          ? { label: "Static hit used", tone: "bg-warn/15 text-warn" }
+          : { label: "Exhausted, ignored", tone: "bg-crit/15 text-crit" };
   const paywallHint =
     "By design, not a bug: only his FIRST hit of an out-of-credits episode gets the personalized/smart line. " +
     "His 2nd hit gets the fixed static default message. Every hit after that (3rd+) is silently ignored entirely " +
-    "- message deleted, no reply, nothing sent. Resets to 0 the moment he tops up.";
+    "- his message is deleted, no reply, nothing sent at all. Resets to 0 the moment he tops up.";
+
+  // ── Onboarding position (T8): reconstruct exactly where this fan is in the
+  // clone's ordered onboarding_steps list, and whether credits are frozen for
+  // him right now. Mirrors dueOnboardingStep()/onboardingActive() in
+  // bot/src/onboarding.ts + onboarding-state.ts exactly (same convention as
+  // lib/persona-facts.ts mirroring prompt.ts) rather than approximating.
+  const ONBOARDING_STEP_LABEL: Record<string, { label: string; emoji: string }> = {
+    text: { label: "text", emoji: "💬" },
+    voice: { label: "voice", emoji: "🎙️" },
+    photo: { label: "photo", emoji: "📷" },
+    video: { label: "video", emoji: "🎥" },
+    bundle: { label: "bundle", emoji: "🎁" },
+    collect: { label: "collect", emoji: "❓" },
+    tease: { label: "tease", emoji: "😏" },
+  };
+  const selectedClone = selected ? cloneById.get(selected.clone_id) : undefined;
+  const onboardingSteps: OnboardingStepRow[] = selectedClone?.onboarding_steps ?? [];
   const onboardingStepsSent: number[] = Array.isArray(selected?.onboarding_steps_sent) ? selected.onboarding_steps_sent : [];
+  const sentStepSet = new Set(onboardingStepsSent);
+  // Sequential pointer, same as dueOnboardingStep(): first index not yet sent.
+  const nextStepIndex = onboardingSteps.findIndex((_, i) => !sentStepSet.has(i));
+  const nextStep = nextStepIndex !== -1 ? onboardingSteps[nextStepIndex] : null;
+  const firedSteps = onboardingStepsSent
+    .slice()
+    .sort((a, b) => a - b)
+    .map((i) => onboardingSteps[i])
+    .filter((s): s is OnboardingStepRow => !!s);
+  // onboardingActive() in bot/src/onboarding-state.ts: frozen while onboarding
+  // has something LEFT to do - an unsent step remains, or the free-preview
+  // fallback is still armed - never a bare "!onboarding_complete" (that would
+  // freeze forever on a clone with no onboarding configured at all).
+  const freePreviewArmed =
+    !!selectedClone?.onboarding_free_preview_enabled &&
+    !!selectedClone?.photos_enabled &&
+    !selected?.onboarding_free_preview_sent;
+  const creditsFrozen = !!selected && !selected.onboarding_complete && (nextStepIndex !== -1 || freePreviewArmed);
+  const creditsFrozenHint =
+    "Operator decision D3: a fan in onboarding NEVER runs out of messages. His credits are frozen (not " +
+    "decremented) and the paywall cannot fire for the whole of onboarding. Onboarding ends when he pays for " +
+    "something, or he receives the free preview pic, whichever comes first.";
 
   const interests: string[] = Array.isArray(profile?.interests) ? profile.interests : [];
   const details: [string, any][] =
@@ -736,9 +779,13 @@ export default async function FansPage({
                 </dl>
               </div>
 
-              {/* Onboarding / paywall journey (PART 3, 3a) - display only, driven
-                  entirely by columns app/users/page.tsx already fetched via
-                  select("*") but never rendered. */}
+              {/* Onboarding / paywall journey (PART 3, 3a; T8 rebuild) - display
+                  only, driven entirely by columns app/users/page.tsx already
+                  fetched via select("*") (plus clones.onboarding_steps, added
+                  above) but never fully rendered. Shows exact POSITION, not a
+                  bare count: which step is next, which already fired, and the
+                  credit freeze - the single most surprising behaviour in the
+                  product and previously invisible on this page. */}
               <div>
                 <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted">Journey</div>
                 <div className="flex flex-wrap items-center gap-1.5">
@@ -750,19 +797,29 @@ export default async function FansPage({
                   >
                     {selected.onboarding_complete
                       ? "✅ Onboarded"
-                      : `🚶 Onboarding${onboardingStepsSent.length ? ` (${onboardingStepsSent.length} step${onboardingStepsSent.length === 1 ? "" : "s"} sent)` : ""}`}
+                      : nextStep
+                        ? `🚶 Onboarding · next: ${ONBOARDING_STEP_LABEL[nextStep.type]?.emoji ?? ""} ${ONBOARDING_STEP_LABEL[nextStep.type]?.label ?? nextStep.type} at ${nextStep.after_messages ?? "?"} msgs`
+                        : onboardingSteps.length === 0
+                          ? "🚶 Onboarding (no steps configured)"
+                          : "🚶 Onboarding · all steps sent"}
                   </span>
+                  {!selected.onboarding_complete && creditsFrozen && (
+                    <span className="flex items-center gap-1 rounded-full bg-crit/15 px-2 py-0.5 text-[10px] font-semibold text-crit">
+                      🧊 CREDITS FROZEN
+                      <Info text={creditsFrozenHint} />
+                    </span>
+                  )}
+                  {!selected.onboarding_complete && firedSteps.length > 0 && (
+                    <span
+                      className="rounded-full bg-muted/10 px-2 py-0.5 text-[10px] text-muted"
+                      title={`Already sent, in order: ${firedSteps.map((s) => ONBOARDING_STEP_LABEL[s.type]?.label ?? s.type).join(", ")}`}
+                    >
+                      fired: {firedSteps.map((s) => ONBOARDING_STEP_LABEL[s.type]?.emoji ?? "").join(" ")} ({firedSteps.length}/{onboardingSteps.length})
+                    </span>
+                  )}
                   <span className={"flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium " + paywallState.tone}>
                     💳 {paywallState.label}
-                    <span className="group/pw relative inline-flex cursor-help">
-                      <span className="text-[9px] opacity-70">ⓘ</span>
-                      <span
-                        role="tooltip"
-                        className="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 hidden w-60 max-w-[70vw] -translate-x-1/2 rounded-lg border border-line bg-panel p-2 text-[10px] font-normal normal-case leading-relaxed text-ink shadow-xl group-hover/pw:block"
-                      >
-                        {paywallHint}
-                      </span>
-                    </span>
+                    <Info text={paywallHint} />
                   </span>
                   {selected.paywall_primed && (
                     <span className="rounded-full bg-accent/15 px-2 py-0.5 text-[10px] font-medium text-accent" title="Pre-lock warmup has already fired for this episode.">

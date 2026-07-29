@@ -1010,14 +1010,6 @@ export const DEFAULT_PAYWALL_MESSAGE =
   "you're out of messages baby, grab some more to keep chatting with me 💕";
 export const DEFAULT_PAYWALL_BUTTON = "Continue 💕";
 
-import type { SubscriptionTier } from "@/lib/types";
-
-// A sensible starter ladder for VIP subscriptions (operator edits freely).
-export const DEFAULT_SUBSCRIPTION_TIERS: SubscriptionTier[] = [
-  { name: "VIP", price_stars: 500, monthly_credits: 200, priority: true, exclusive: true, unlimited: false, discount_boost: 50 },
-  { name: "VVIP", price_stars: 1500, monthly_credits: 1000, priority: true, exclusive: true, unlimited: true, discount_boost: 100 },
-];
-
 export const DEFAULT_SPOIL_OPTIONS: { stars: number; label: string }[] = [
   { stars: 1000, label: "" },
   { stars: 2500, label: "" },

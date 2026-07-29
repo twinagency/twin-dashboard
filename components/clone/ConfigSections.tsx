@@ -50,7 +50,7 @@ import { MediaPicker, type MediaRow, type BundleRow } from "./MediaPicker";
 //   Config       — the machinery: connection, AI mode, what she can send,
 //                  models, timing, personality dials (flirt/nsfw/push, emoji,
 //                  realism, language), response pacing, imperfection profile
-//   Monetization — credits+paywall, tips, extras, VIP (create mode only; in
+//   Monetization — credits+paywall, tips, extras (create mode only; in
 //                  edit mode this is a page-level tab, see CloneForm)
 //   Advanced     — rarely-touched power settings: smart-split model routing,
 //                  voice tuning, memory window, category pricing, discounts
@@ -67,27 +67,49 @@ type Tab = string;
 const TABS: { key: Tab; label: string; hint: string }[] = [
   { key: "identity", label: "🪪 Identity", hint: "Who she is: facts, socials, vibe, canon, limits, questionnaire" },
   { key: "config", label: "⚙️ Config", hint: "Connection, AI mode, media, models, timing, personality dials" },
-  { key: "money", label: "💰 Monetization", hint: "Credits, pricing, tips, VIP" },
+  { key: "money", label: "💰 Monetization", hint: "Credits, pricing, tips, extras" },
   { key: "advanced", label: "🛠 Advanced", hint: "Power-user: smart-split, voice tuning, memory, category pricing, discounts" },
 ];
 
-// Segmented dial options — same low/medium/high values the Selects submitted;
-// the long descriptions moved into hover titles.
+// Segmented dial options. Five steps each as of migration 082, which widened
+// the DB CHECK constraints so the ends of the scale can finally be saved.
+// Every `title` below is a condensed but faithful read of the exact prompt
+// string the bot sends for that step: SEXUAL_TEXT / NSFW_TEXT / PUSH_TEXT in
+// bot/src/flows/human.ts:490-512 and TIP_PUSH_TEXT in bot/src/handler.ts:147.
+// A legacy low/high row is mapped onto its equivalent step on read (heatLevel()
+// in useCloneConfig.ts), so no existing clone changes behaviour.
 const SEG = {
   sexual: [
-    { value: "low" as const, label: "😊 Low", title: "Mostly cute" },
-    { value: "medium" as const, label: "😘 Med", title: "Naturally flirty" },
-    { value: "high" as const, label: "🔥 High", title: "Openly forward" },
+    { value: "off" as const, label: "🚫 Off", title: "Completely clean. Warm and friendly, but does not flirt and redirects if he steers it sexual." },
+    { value: "mild" as const, label: "😊 Mild", title: "Mostly cute and wholesome, light flirting. Never turns sexual on her own." },
+    { value: "medium" as const, label: "😘 Med", title: "Naturally flirty and a little suggestive, comfortable with innuendo." },
+    { value: "explicit" as const, label: "🔥 Hot", title: "Openly forward. She brings the sexual energy herself instead of waiting for him." },
+    { value: "max" as const, label: "💋 Max", title: "Unmistakably sexual from the start. Leads the tension almost every exchange, escalates, never coy." },
   ],
   nsfw: [
-    { value: "low" as const, label: "🙈 Low", title: "Keeps it PG-13" },
-    { value: "medium" as const, label: "😏 Med", title: "Dirty when led" },
-    { value: "high" as const, label: "🔞 High", title: "Fully explicit" },
+    { value: "off" as const, label: "🚫 Off", title: "Never explicit. Deflects sexual detail warmly and changes the subject every time." },
+    { value: "mild" as const, label: "🙈 Mild", title: "PG-13 when it heats up. Deflects explicit requests playfully, never graphic." },
+    { value: "medium" as const, label: "😏 Med", title: "Talks dirty when he leads there, but keeps it tasteful rather than graphic." },
+    { value: "explicit" as const, label: "🔞 Hard", title: "Goes fully explicit and graphic in the moment, leaning in rather than softening." },
+    { value: "max" as const, label: "💦 Max", title: "As filthy and graphic as he wants, blunt language, no hedging, no fade to black, never cuts a hot moment short." },
   ],
   push: [
-    { value: "low" as const, label: "🍃 Low", title: "Rarely brings it up" },
-    { value: "medium" as const, label: "💵 Med", title: "Offers at good moments" },
-    { value: "high" as const, label: "🤑 High", title: "Proactively upsells" },
+    { value: "none" as const, label: "🚫 None", title: "NEVER brings up paid content or tips on her own, not even a tease. If HE asks to buy, she sells fully and enthusiastically." },
+    { value: "low" as const, label: "🍃 Low", title: "Rarely brings it up, only when it comes up naturally, and keeps it soft. No proactive pitching." },
+    { value: "medium" as const, label: "💵 Med", title: "Offers photos, videos and tips at good moments, not on plain small talk." },
+    { value: "high" as const, label: "🤑 High", title: "Proactively steers toward paid content and tips, nudging him often, while staying warm." },
+    { value: "relentless" as const, label: "📣 Max", title: "Looks for a sell in almost every exchange, teases what he is missing, keeps circling back even when he changes the subject." },
+  ],
+  // Same five steps as `push`, plus the inherit option. "" is the UI spelling of
+  // NULL, and NULL means inherit push_level, NOT "none". Keep the empty value
+  // first so the default reads as the neutral choice.
+  tipPush: [
+    { value: "" as const, label: "= Push", title: "Inherit whatever Content pushing is set to. This is the default and it adds nothing at all to her prompt." },
+    { value: "none" as const, label: "🚫 None", title: "NEVER asks to be tipped or spoiled and never hints at it. If HE offers a tip, she accepts warmly." },
+    { value: "low" as const, label: "🍃 Low", title: "Rarely asks, only when he has clearly just made her happy, and keeps it easy to ignore." },
+    { value: "medium" as const, label: "💵 Med", title: "Asks him to tip or spoil her at good moments, without being pushy." },
+    { value: "high" as const, label: "🤑 High", title: "Actively invites tips and spoiling, nudging him toward it often, while staying warm." },
+    { value: "relentless" as const, label: "📣 Max", title: "Looks for a way to get tipped in almost every exchange and keeps circling back to being spoiled." },
   ],
   emoji: [
     { value: "low" as const, label: "A little", title: "Most messages have none" },
@@ -484,7 +506,7 @@ export default function ConfigSections({
             onChange={(v) => set("sexualLevel", v)}
             options={SEG.sexual}
             accent="pink"
-            hint="Does SHE start it: how boldly she flirts first."
+            hint="Does SHE start it: how boldly she flirts first. Off means she stays clean and redirects; Max means she leads the tension in almost every exchange. This is wording sent to the model, not a code lock, so treat the ends as strong steering rather than a guarantee. Hover a step to see exactly what she is told."
           />
           <Segmented
             label="NSFW"
@@ -493,7 +515,7 @@ export default function ConfigSections({
             onChange={(v) => set("nsfwLevel", v)}
             options={SEG.nsfw}
             accent="red"
-            hint="How graphic once things heat up."
+            hint="How graphic once things heat up. Off deflects every explicit request; Max is fully filthy, blunt language, no fade to black. Wording sent to the model, not a code lock, so it steers her hard but cannot guarantee. The built-in hard limits still apply at every step."
           />
           <Segmented
             label="Content pushing"
@@ -502,8 +524,43 @@ export default function ConfigSections({
             onChange={(v) => set("pushLevel", v)}
             options={SEG.push}
             accent="green"
-            hint="How eagerly she upsells. Never changes prices."
+            hint="How eagerly she upsells. None means she NEVER initiates a sell, not a hint or a tease, but she still sells fully and enthusiastically the moment HE asks, so it costs you nothing from fans who want to buy. Max hunts for an opening every exchange. None is an explicit prohibition rather than a vague steer, which a model follows far more reliably, but every step here is prompt wording, not a code lock. Prices never move."
           />
+        </div>
+
+        {/* Tips split out from the content dial (migration 080,
+            clones.tip_push_level). push_level's prompt string says "your paid
+            photos, videos and tips" in one breath, so a soft-sell-content but
+            happily-spoiled clone was previously unexpressible. Default "" =
+            NULL = inherit, which makes tipPushDirective() in
+            bot/src/handler.ts:161 return "" and leaves the prompt byte-for-byte
+            unchanged. Its own row: at six steps it does not fit the 3-up grid. */}
+        <div className="grid gap-3 border-t border-line pt-2 lg:grid-cols-2">
+          <Segmented
+            label="Tip pushing"
+            name="tip_push_level"
+            value={cfg.tipPushLevel}
+            onChange={(v) => set("tipPushLevel", v)}
+            options={SEG.tipPush}
+            accent="amber"
+            hint="How hard she asks to be TIPPED and spoiled, dialled separately from photos, videos and bundles. Leave on '= Push' and tips follow the Content pushing dial exactly, which adds nothing to her prompt. Move it and only tips change: a soft-sell clone that still loves being spoiled, or a heavy content seller who never begs for Stars. Amounts always come from the fixed spoil menu, she never names a number."
+          />
+          {/* greeting_ask_age (migration 080), read at
+              bot/src/flows/human.ts:383 in newFanGreetingNudge. Off is the
+              default and the recommendation, see the hint. */}
+          <div className="block">
+            <FieldLabel
+              label="🎂 Ask his age in message one"
+              hint="Leave this OFF, which is the default and the recommendation. When on, her very first message to a brand-new fan gently asks how old he is. That single question caused a live incident: a fan answered 19, that age was then re-injected into every later prompt forever, it kept brushing against the minors wording in her hard limits, and she went cold on him for the rest of the relationship. Off, she asks where he is from instead. It does not change any age or safety rule, only whether she opens by asking."
+            />
+            <Toggle
+              label={cfg.greetingAskAge ? "Asks his age in her first message" : "Does not ask his age (recommended)"}
+              name="greeting_ask_age"
+              checked={cfg.greetingAskAge}
+              onChange={(v) => set("greetingAskAge", v)}
+              accent="soft"
+            />
+          </div>
         </div>
 
         {/* Emoji settings and realism toggles sit side by side - stacked, they
@@ -806,7 +863,7 @@ export default function ConfigSections({
           <div className="mt-1 border-t border-line pt-2">
             <FieldLabel
               label="Eligibility gates"
-              hint="EITHER gate makes her eligible to offer a discount (not both). Pending window: minutes a locked, unpaid offer must sit before she may sweeten it. Slowdown gap: minutes of silence since his last message before she may proactively offer one. 0 on either = that gate is always open (always eligible)."
+              hint="EITHER gate makes her eligible to offer a discount, not both. Pending window: how long a locked, unpaid offer must sit before she may sweeten it. Slowdown gap: how long he must go quiet before she may proactively offer one. Minimum 1 minute on both, and the pending window is deliberately not zeroable, see its own hint."
             />
             <div className="grid gap-2 sm:grid-cols-2">
               <Slider
@@ -814,20 +871,22 @@ export default function ConfigSections({
                 name="offer_pending_minutes"
                 value={cfg.offerPendingMinutes}
                 onChange={(v) => set("offerPendingMinutes", v)}
-                min={0}
+                min={1}
                 max={60}
                 step={1}
-                format={(v) => (v === 0 ? "always eligible" : `${v} min`)}
+                format={(v) => `${v} min`}
+                hint="This does far more than discounts. For this many minutes after a locked offer goes out unpaid, she also stops handing out free media instead of the thing he has not paid for (the revenue-leak guard), stops claiming he already has it, and corrects him if he says he already paid. It also parks the tip/spoil ask so she is not selling two things at once. A 0 here used to switch ALL of that off silently, which is why the minimum is now 1."
               />
               <Slider
                 label="Chat slowdown gap"
                 name="discount_slowdown_minutes"
                 value={cfg.discountSlowdownMinutes}
                 onChange={(v) => set("discountSlowdownMinutes", v)}
-                min={0}
+                min={1}
                 max={60}
                 step={1}
-                format={(v) => (v === 0 ? "always eligible" : `${v} min`)}
+                format={(v) => `${v} min`}
+                hint="Minutes of silence since his last message before she is allowed to reach for a discount on her own. Discounts-only, unlike the pending window beside it. A 0 here meant she was always eligible, so a fan chatting happily could still be offered money off. Minimum 1."
               />
             </div>
           </div>
@@ -956,7 +1015,7 @@ export function MonetizationSections({
           <div>
             <Toggle label="Smart first message" hint="Only the very first hit of an out-of-credits episode gets this personal line. His 2nd hit gets the static Default message instead, and every hit after that is silently ignored entirely (this is by design, not a bug). Off = the static Default message is used every time, from the first hit." name="smart_paywall_enabled" checked={cfg.smartPaywall} onChange={(v) => set("smartPaywall", v)} accent="soft" />
             {/* Real submitted field is this unconditional hidden input, same pattern
-                as smart_split / voice_speaker_boost / subscriptions_enabled below.
+                as smart_split / voice_speaker_boost.
                 It always carries the true value regardless of whether the visible
                 toggle is mounted, so hiding it when smartPaywall is off can never
                 drop the stored value on Save. The visible Toggle below uses a
@@ -1137,28 +1196,6 @@ export function MonetizationSections({
         />
       </Collapse>
 
-      {/* VIP subscriptions removed from the UI (unverified beta). The columns
-          are still written by updateClone on every save, so the current values
-          ride along as hidden inputs — dropping them outright would silently
-          flip subscriptions off and wipe any tiers already configured. */}
-      <input type="hidden" name="subscriptions_enabled" value={String(cfg.subscriptionsEnabled)} />
-      <input
-        type="hidden"
-        name="subscription_tiers"
-        value={JSON.stringify(
-          cfg.subscriptionTiers
-            .map((t) => ({
-              name: (t.name ?? "").trim(),
-              price_stars: Math.max(0, Math.round(Number(t.price_stars) || 0)),
-              monthly_credits: Math.max(0, Math.round(Number(t.monthly_credits) || 0)),
-              priority: !!t.priority,
-              exclusive: !!t.exclusive,
-              unlimited: !!t.unlimited,
-              discount_boost: Math.min(100, Math.max(0, Math.round(Number(t.discount_boost) || 0))),
-            }))
-            .filter((t) => t.name && t.price_stars >= 1),
-        )}
-      />
     </>
   );
 }

@@ -56,9 +56,18 @@ export type Clone = {
   emoji_allowlist: string | null;
   language_lock: boolean;
   languages: string[] | null;
-  sexual_level: "low" | "medium" | "high";
-  nsfw_level: "low" | "medium" | "high";
-  push_level: "low" | "medium" | "high";
+  // 5-step as of migration 082 (DB CHECK widened). Legacy low/high stay valid
+  // for the two heat dials and are mapped onto the new scale in
+  // bot/src/flows/human.ts normalizeHeatLevel / normalizePushLevel.
+  sexual_level: "off" | "mild" | "medium" | "explicit" | "max" | "low" | "high";
+  nsfw_level: "off" | "mild" | "medium" | "explicit" | "max" | "low" | "high";
+  push_level: "none" | "low" | "medium" | "high" | "relentless";
+  // Migration 080. NULL means "inherit push_level" (bot/src/handler.ts
+  // tipPushDirective), never "none".
+  tip_push_level?: "none" | "low" | "medium" | "high" | "relentless" | null;
+  // Migration 080. Whether she may ask a brand-new fan his age in her very
+  // first message (bot/src/flows/human.ts:383). Default false on purpose.
+  greeting_ask_age?: boolean;
   discounts_enabled: boolean;
   discount_max_photo: number;
   discount_max_video: number;

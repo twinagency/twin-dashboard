@@ -16,7 +16,7 @@ import {
   Toggle,
   inputCls,
 } from "./clone/fields";
-import { CategoryPricingEditor, SpoilMenuEditor, SubscriptionTiersEditor } from "./clone/editors";
+import { CategoryPricingEditor, SpoilMenuEditor } from "./clone/editors";
 import { useCloneConfig } from "./clone/useCloneConfig";
 import { saveCloneDefaults } from "@/app/settings/actions";
 
@@ -38,6 +38,25 @@ export default function CloneDefaultsForm({ defaults }: { defaults: Partial<Clon
     { value: "medium" as const, label: "Med" },
     { value: "high" as const, label: "High" },
   ];
+  // The three personality dials went 5-step with migration 082. These are the
+  // NEW-CLONE DEFAULTS template (saved into app_settings, then seeded into a
+  // fresh clones row by CreateCloneForm), so they must offer the same steps the
+  // per-clone Configure page does or a default could never be set to an end
+  // stop. Same vocabulary as SEG in components/clone/ConfigSections.tsx.
+  const heatOpts = [
+    { value: "off" as const, label: "Off" },
+    { value: "mild" as const, label: "Mild" },
+    { value: "medium" as const, label: "Med" },
+    { value: "explicit" as const, label: "Explicit" },
+    { value: "max" as const, label: "Max" },
+  ];
+  const pushOpts = [
+    { value: "none" as const, label: "None" },
+    { value: "low" as const, label: "Low" },
+    { value: "medium" as const, label: "Med" },
+    { value: "high" as const, label: "High" },
+    { value: "relentless" as const, label: "Max" },
+  ];
 
   const Group = ({ label }: { label: string }) => (
     <span className="mt-2 text-xs font-semibold uppercase tracking-wide text-muted first:mt-0">{label}</span>
@@ -56,9 +75,9 @@ export default function CloneDefaultsForm({ defaults }: { defaults: Partial<Clon
           )}
         </div>
         <div className="grid gap-3 sm:grid-cols-3">
-          <Select label="Flirtiness" name="sexual_level" value={cfg.sexualLevel} onChange={(v) => set("sexualLevel", v)} options={levelOpts} />
-          <Select label="How explicit" name="nsfw_level" value={cfg.nsfwLevel} onChange={(v) => set("nsfwLevel", v)} options={levelOpts} />
-          <Select label="Upsell push" name="push_level" value={cfg.pushLevel} onChange={(v) => set("pushLevel", v)} options={levelOpts} />
+          <Select label="Flirtiness" name="sexual_level" value={cfg.sexualLevel} onChange={(v) => set("sexualLevel", v)} options={heatOpts} />
+          <Select label="How explicit" name="nsfw_level" value={cfg.nsfwLevel} onChange={(v) => set("nsfwLevel", v)} options={heatOpts} />
+          <Select label="Upsell push" name="push_level" value={cfg.pushLevel} onChange={(v) => set("pushLevel", v)} options={pushOpts} />
         </div>
         <div className="flex flex-wrap items-end gap-x-6 gap-y-3">
           <Toggle label="Emojis" name="emojis_enabled" checked={cfg.emojis} onChange={(v) => set("emojis", v)} accent="soft" />
@@ -153,13 +172,6 @@ export default function CloneDefaultsForm({ defaults }: { defaults: Partial<Clon
           <Toggle label="Auto thank-you" name="thank_you_enabled" checked={cfg.thankYou} onChange={(v) => set("thankYou", v)} accent="soft" />
         </div>
         {cfg.tips && <SpoilMenuEditor cfg={cfg} set={set} />}
-      </div>
-
-      <div className="grid gap-3">
-        <Group label="Subscriptions / VIP" />
-        <input type="hidden" name="subscriptions_enabled" value={String(cfg.subscriptionsEnabled)} />
-        <Toggle label={cfg.subscriptionsEnabled ? "She can offer VIP subscriptions" : "No subscriptions"} name="_subs_toggle" checked={cfg.subscriptionsEnabled} onChange={(v) => set("subscriptionsEnabled", v)} accent="soft" />
-        <SubscriptionTiersEditor cfg={cfg} set={set} />
       </div>
 
       {/* ── ENGAGEMENT / ONBOARDING ── */}

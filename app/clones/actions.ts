@@ -96,6 +96,22 @@ function str(fd: FormData, key: string): string | null {
 function bool(fd: FormData, key: string): boolean {
   return fd.get(key) === "on";
 }
+// The five-step dial vocabularies (migration 082 for the three heat/push dials,
+// migration 080 for tip_push_level). Legacy "low"/"high" stay in HEAT_LEVELS
+// because the widened sexual/nsfw CHECK constraints still accept them and every
+// pre-082 clone row is still carrying one.
+const HEAT_LEVELS = ["off", "mild", "medium", "explicit", "max", "low", "high"] as const;
+const PUSH_LEVELS = ["none", "low", "medium", "high", "relentless"] as const;
+
+function oneOf<T extends string>(v: string | null, allowed: readonly T[], fallback: T): T {
+  return (allowed as readonly string[]).includes(v ?? "") ? (v as T) : fallback;
+}
+// Same, but null stays null. Used only where null carries meaning of its own
+// (tip_push_level: null = inherit push_level).
+function oneOfOrNull<T extends string>(v: string | null, allowed: readonly T[]): T | null {
+  return (allowed as readonly string[]).includes(v ?? "") ? (v as T) : null;
+}
+
 function num(fd: FormData, key: string, fallback: number): number {
   const v = fd.get(key);
   if (v === null || String(v).trim() === "") return fallback;
@@ -253,30 +269,6 @@ function parseLanguages(fd: FormData): string[] {
   }
 }
 
-// VIP subscription tiers arrive as a JSON string in a hidden field. Coerce + clean
-// so the runtime always reads well-formed, money-safe rows (name + positive price).
-function parseSubscriptionTiers(fd: FormData) {
-  const raw = fd.get("subscription_tiers");
-  if (!raw) return [];
-  try {
-    const arr = JSON.parse(String(raw));
-    if (!Array.isArray(arr)) return [];
-    return arr
-      .map((t) => ({
-        name: String(t?.name ?? "").trim(),
-        price_stars: Math.max(0, Math.round(Number(t?.price_stars)) || 0),
-        monthly_credits: Math.max(0, Math.round(Number(t?.monthly_credits)) || 0),
-        priority: !!t?.priority,
-        exclusive: !!t?.exclusive,
-        unlimited: !!t?.unlimited,
-        discount_boost: Math.min(100, Math.max(0, Math.round(Number(t?.discount_boost)) || 0)),
-      }))
-      .filter((t) => t.name && t.price_stars >= 1);
-  } catch {
-    return [];
-  }
-}
-
 function rowFromForm(fd: FormData) {
   return {
     name: str(fd, "name"),
@@ -315,9 +307,22 @@ function rowFromForm(fd: FormData) {
     emoji_allowlist: str(fd, "emoji_allowlist"),
     language_lock: fd.get("language_lock") === "true",
     languages: parseLanguages(fd),
-    sexual_level: str(fd, "sexual_level") ?? "medium",
-    nsfw_level: str(fd, "nsfw_level") ?? "medium",
-    push_level: str(fd, "push_level") ?? "medium",
+    // The three personality dials are 5-step as of migration 082, which widened
+    // the DB CHECK constraints. Whitelisted here rather than passed through raw
+    // so a stale/garbage form value falls back to "medium" instead of getting
+    // rejected by the CHECK and failing the entire save. Legacy low/high are
+    // still accepted by the heat constraints and by normalizeHeatLevel in
+    // bot/src/flows/human.ts:474, so an untouched clone round-trips unchanged.
+    sexual_level: oneOf(str(fd, "sexual_level"), HEAT_LEVELS, "medium"),
+    nsfw_level: oneOf(str(fd, "nsfw_level"), HEAT_LEVELS, "medium"),
+    push_level: oneOf(str(fd, "push_level"), PUSH_LEVELS, "medium"),
+    // Migration 080. NULL IS MEANINGFUL: it means "inherit push_level", which is
+    // what bot/src/handler.ts:162 tipPushDirective() does. str() maps the empty
+    // string (the UI's "Same as push level" option) to null, so an unset dial
+    // stays a true no-op and tipPushDirective returns "" for that clone.
+    tip_push_level: oneOfOrNull(str(fd, "tip_push_level"), PUSH_LEVELS),
+    // Migration 080. Consumed at bot/src/flows/human.ts:383 (newFanGreetingNudge).
+    greeting_ask_age: fd.get("greeting_ask_age") === "true",
     discounts_enabled: fd.get("discounts_enabled") === "true",
     discount_max_photo: Math.min(90, Math.max(0, num(fd, "discount_max_photo", 0))),
     discount_max_video: Math.min(90, Math.max(0, num(fd, "discount_max_video", 0))),
@@ -456,9 +461,13 @@ function rowFromForm(fd: FormData) {
     // form would blank them on every save. The legacy drip_per_day /
     // drip_active_window_minutes columns are unread by the runtime and dropped.
 
-    // recurring Star SUBSCRIPTIONS / VIP tier (money code-locked)
-    subscriptions_enabled: fd.get("subscriptions_enabled") === "true",
-    subscription_tiers: parseSubscriptionTiers(fd),
+    // VIP / recurring Star subscriptions were removed from the dashboard on
+    // 2026-07-29. subscriptions_enabled and subscription_tiers are deliberately
+    // NOT written here any more: there is no UI for them, so writing them would
+    // send false / [] on every save and wipe whatever is stored. The columns
+    // stay in the DB (additive-only convention) and the bot keeps reading them,
+    // so existing values are frozen exactly as they were. Do not re-add these
+    // two keys without also re-adding real form inputs for them.
 
     // out-of-messages (paywall) flow
     smart_paywall_enabled: fd.get("smart_paywall_enabled") === "true",
@@ -622,6 +631,12 @@ const FLOW_072_COLUMNS = ["message_catch_wait_seconds"] as const;
 // with this dashboard work). Listed so a save issued before that migration
 // lands strips the column and still succeeds, instead of failing the whole save.
 const MEDIA_RESEND_COLUMNS = ["media_allow_resend"] as const;
+// Migration 080: tip_push_level + greeting_ask_age. Both verified applied on
+// aouaenqayfltoqrmpitg 2026-07-29; listed anyway so the same save still works
+// against a stack where 080 has not run yet.
+// NOTE: migration 082 (the widened push/sexual/nsfw CHECKs) needs no entry here
+// because it adds no column, it only relaxes a constraint on existing ones.
+const DIAL_080_COLUMNS = ["tip_push_level", "greeting_ask_age"] as const;
 // The response-pacing, monetization-sequence, re-warm-photo and
 // offer-redirect column lists were removed on 2026-07-27: those columns are no
 // longer written by this form at all, so they cannot appear in the row that
@@ -639,6 +654,7 @@ const OPTIONAL_COLUMNS = [
   ...FLOW_070_COLUMNS,
   ...FLOW_072_COLUMNS,
   ...MEDIA_RESEND_COLUMNS,
+  ...DIAL_080_COLUMNS,
 ] as const;
 
 function withoutPersonaFactColumns(row: Record<string, unknown>): Record<string, unknown> {

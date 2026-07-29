@@ -108,9 +108,11 @@ type PreviewClone = {
   emojis_enabled: boolean;
   emoji_amount: "low" | "medium" | "high";
   emoji_allowlist: string | null;
-  sexual_level: "low" | "medium" | "high";
-  nsfw_level: "low" | "medium" | "high";
-  push_level: "low" | "medium" | "high";
+  // 5-step (migration 082). Legacy low/high still occur on pre-082 rows and are
+  // normalised below, exactly as bot/src/flows/human.ts:474 does.
+  sexual_level: "off" | "mild" | "medium" | "explicit" | "max" | "low" | "high";
+  nsfw_level: "off" | "mild" | "medium" | "explicit" | "max" | "low" | "high";
+  push_level: "none" | "low" | "medium" | "high" | "relentless";
   persona: Record<string, string> | null;
 } & PersonaFactCols;
 
@@ -133,22 +135,51 @@ function emojiRuleP(c: PreviewClone): string {
   return `Emojis: ${freq} Prefer these: ❤️ 💕 😘 💗 🥹. Use 💦 🍆 🍑 🍒 only in genuinely heated moments.`;
 }
 
+// Mirrors of normalizeHeatLevel / normalizePushLevel in src/flows/human.ts
+// (:474 and :483). Without these a pre-082 "low"/"high" row would index the
+// 5-step maps below and render `undefined` in the preview.
+type HeatStep = "off" | "mild" | "medium" | "explicit" | "max";
+type PushStep = "none" | "low" | "medium" | "high" | "relentless";
+function heatStep(v: string): HeatStep {
+  switch (v) {
+    case "low": return "mild";
+    case "high": return "explicit";
+    case "off": case "mild": case "medium": case "explicit": case "max": return v;
+    default: return "medium";
+  }
+}
+function pushStep(v: string): PushStep {
+  switch (v) {
+    case "none": case "low": case "medium": case "high": case "relentless": return v;
+    default: return "medium";
+  }
+}
+
+// Byte-for-byte mirror of SEXUAL_TEXT / NSFW_TEXT / PUSH_TEXT and
+// personalityRule() in src/flows/human.ts:490-521. Any edit there must be made
+// here too or the prompt preview lies about what the bot actually sends.
 function personalityRuleP(c: PreviewClone): string {
   const sexual = {
-    low: "Keep the vibe mostly cute and wholesome. Flirt lightly, and rarely turn sexual on your own.",
+    off: "Keep this completely clean. Be warm and friendly, but do NOT flirt, do NOT be suggestive, and do NOT let the conversation turn sexual, no matter how he steers it. Redirect warmly if he tries.",
+    mild: "Keep the vibe mostly cute and wholesome. Flirt lightly. Do NOT turn sexual on your own initiative.",
     medium: "Be naturally flirty and a little suggestive, comfortable with innuendo when it fits.",
-    high: "Be openly flirty, forward, and suggestive. You bring the sexual energy yourself.",
-  }[c.sexual_level];
+    explicit: "Be openly flirty, forward, and suggestive. You bring the sexual energy yourself, don't wait for him to lead.",
+    max: "You are unmistakably sexual with him from the start. Be bold, direct and shameless about wanting him. Lead the sexual tension yourself in almost every exchange, escalate rather than soften, and never act coy or shy about what you want.",
+  }[heatStep(c.sexual_level)];
   const nsfw = {
-    low: "If things heat up, keep it PG-13. Deflect explicit requests playfully; no graphic detail.",
-    medium: "You'll talk dirty and get explicit when he leads there, but keep it tasteful.",
-    high: "When the moment is hot you go fully explicit and graphic, leaning right in.",
-  }[c.nsfw_level];
+    off: "Never go explicit at all. If he pushes for sexual detail, deflect warmly and change the subject every time.",
+    mild: "If things heat up, keep it PG-13. Deflect explicit requests playfully. NEVER go into graphic detail, no matter how directly he asks.",
+    medium: "You'll talk dirty and get explicit when he leads there, but keep it tasteful, not graphic.",
+    explicit: "When the moment is hot you go fully explicit and graphic, leaning right in rather than softening it.",
+    max: "Go as filthy and graphic as he wants, in full detail, with no hedging and no fading to black. Use blunt, explicit language rather than euphemisms. Do not tone yourself down, do not get shy mid-scene, and do not cut a hot moment short.",
+  }[heatStep(c.nsfw_level)];
   const push = {
-    low: "Rarely bring up paid content or tips; only when it comes up naturally, and keep it soft.",
-    medium: "Offer your paid photos, videos and tips at good moments, without being pushy.",
+    none: "NEVER bring up your paid photos, videos, bundles or tips on your own. Not a hint, not a tease, not a hint that something exists. You are here to talk to him, not to sell. If HE asks to buy something or asks what you have, answer him fully and enthusiastically, that is always fine. But you never initiate it.",
+    low: "Rarely bring up paid content or tips. Only when it comes up naturally, and keep it soft. Do NOT proactively pitch on your own.",
+    medium: "Offer your paid photos, videos and tips at good moments, without being pushy. Don't pitch on plain small talk.",
     high: "Proactively steer toward your paid content and tips, often nudging him to unlock or spoil you, while staying warm and never desperate.",
-  }[c.push_level];
+    relentless: "Look for a way to sell him something in almost every exchange. Steer the conversation toward your paid photos, videos, bundles and tips constantly, tease what he's missing, and keep circling back to it even when he changes the subject. Stay warm and playful about it rather than cold or robotic, but do not let a conversation go by without an opening.",
+  }[pushStep(c.push_level)];
   return `\n\nPersonality: ${sexual} ${nsfw} ${push} None of this ever overrides your hard limits, and you never state, negotiate, or make up prices; you only ask, the system handles the money.`;
 }
 
@@ -195,6 +226,11 @@ function choosableActions(c: PreviewClone): { name: string; label: string; descr
 // missing entirely from both smart preview blocks before the 2026-07-27 pass.
 function pushDisciplineP(c: PreviewClone): string {
   return {
+    none:
+      "This companion NEVER upsells on her own. Do NOT fire a paid action " +
+      "(photo/video/bundle/tip/vip) unless he has directly and explicitly asked to buy that exact thing " +
+      "this message. When he does ask, fire it happily. Otherwise fire nothing, no matter how strong the " +
+      "opening looks.",
     low:
       "This companion upsells RARELY. Fire a paid action (photo/video/bundle/tip/vip) ONLY when he " +
       "directly and explicitly asks for that exact thing this message. Never suggest or offer one on your own.",
@@ -205,7 +241,11 @@ function pushDisciplineP(c: PreviewClone): string {
       "Upsell readily: as well as when he asks outright, you may fire a paid action when there's a genuine " +
       "opening (he's flirty, curious about your pics/body, clearly heating up). Even so, fire NOTHING on plain, " +
       "non-sexual small talk.",
-  }[c.push_level];
+    relentless:
+      "Upsell aggressively: fire a paid action whenever there is any plausible opening at all, and treat mild " +
+      "interest or flirtation as an opening. Still fire nothing on a purely logistical exchange, and never fire " +
+      "twice in a row without him responding in between.",
+  }[pushStep(c.push_level)];
 }
 
 // Mirror of the smart single-model (split-off) instruction, decideAndWrite()
