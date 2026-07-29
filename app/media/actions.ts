@@ -211,7 +211,22 @@ export async function deletePhoto(cloneId: string, photoId: string, storagePath:
     .eq("id", photoId)
     .eq("clone_id", cloneId);
   if (error) throw new Error(error.message);
+  // BUG 5: never leave the onboarding free preview pointing at a deleted photo.
+  // The bot picks that one photo and only that one (runFreePreview in
+  // ../bot/src/onboarding.ts). A dangling reference means the preview can never
+  // land, which used to freeze every fan mid-onboarding forever: credits pinned,
+  // paywall suppressed, nothing in the logs. The bot now ends onboarding rather
+  // than freezing, so this is no longer a money bug, but leaving the reference
+  // dangling still silently switches the free preview off with no sign in the UI.
+  // Scoped to this clone AND this photo id, so it can only ever clear its own.
+  const { error: refErr } = await supabaseAdmin
+    .from("clones")
+    .update({ onboarding_free_preview_media_id: null })
+    .eq("id", cloneId)
+    .eq("onboarding_free_preview_media_id", photoId);
+  if (refErr) throw new Error(refErr.message);
   revalidatePath("/media");
+  revalidatePath("/flows");
 }
 
 // ── Delete video ─────────────────────────────────────────────────────────────
