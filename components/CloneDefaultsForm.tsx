@@ -173,7 +173,7 @@ export default function CloneDefaultsForm({ defaults }: { defaults: Partial<Clon
             onboarding became the ordered step list (see bot/src/onboarding.ts,
             "onboardingSteps is now the ONLY onboarding engine"), and the clone
             save action deliberately never wrote them either. Onboarding is
-            configured per clone on the Campaigns page now. Columns are left in
+            configured per clone on the Flows page now. Columns are left in
             place per the additive-only rule, they are simply never written or
             read. None of the four was a cap or gate on something still running,
             so nothing is left uncapped by removing them. */}
@@ -247,12 +247,12 @@ export default function CloneDefaultsForm({ defaults }: { defaults: Partial<Clon
         )}
       </div>
 
-      {/* ── CAMPAIGNS ── */}
+      {/* ── FLOWS ── */}
       <div className="grid gap-3">
-        <Group label="Campaigns / re-engagement" />
-        <Toggle label={cfg.dripEnabled ? "Campaign is on" : "Campaign is off"} name="drip_enabled" checked={cfg.dripEnabled} onChange={(v) => set("dripEnabled", v)} accent="soft" />
+        <Group label="Flows / re-engagement" />
+        <Toggle label={cfg.dripEnabled ? "Flow is on" : "Flow is off"} name="drip_enabled" checked={cfg.dripEnabled} onChange={(v) => set("dripEnabled", v)} accent="soft" />
         {/* Win-back lapse threshold (winback_lapse_days) is NOT edited here. It is
-            a per-clone campaign setting and lives on the Campaigns page, where
+            a per-clone flow setting and lives on the Flows page, where
             saveCampaign writes it to the clones row, which is the only place
             bot/src/campaign.ts reads it from (wired 2026-07-29). It was previously
             edited here and saved into app_settings, which nothing ever read back.

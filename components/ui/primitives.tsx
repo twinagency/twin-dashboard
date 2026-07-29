@@ -8,6 +8,9 @@
 // (text-good / MoneyStat accent="good"), never accent blue.
 
 import type { ReactNode } from "react";
+// The one real hover-bubble ⓘ in the app. Defined in a "use client" module;
+// importing it here just marks it as a client leaf, `text` is a plain string.
+import { Info } from "@/components/clone/fields";
 
 // ── Card ───────────────────────────────────────────────────────────────────
 export function Card({
@@ -43,8 +46,16 @@ export function PageHeader({
       {breadcrumb && <div className="mb-2 flex flex-wrap items-center gap-2 text-sm text-muted">{breadcrumb}</div>}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight text-ink">{title}</h1>
-          {subtitle && <p className="mt-1 max-w-2xl text-sm text-muted">{subtitle}</p>}
+          {/* Page subtitles are explanation, so a string subtitle becomes an ⓘ
+              hover on the h1. Every page carried one of these grey paragraphs
+              and together they were a big share of the "too much grey text"
+              complaint. ReactNode subtitles (ones with links/badges) still
+              render as a line, they are content rather than explanation. */}
+          <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight text-ink">
+            {title}
+            {typeof subtitle === "string" && subtitle && <Info text={subtitle} />}
+          </h1>
+          {subtitle && typeof subtitle !== "string" && <div className="mt-1 max-w-2xl text-sm text-muted">{subtitle}</div>}
         </div>
         {actions && <div className="flex shrink-0 items-center gap-2">{actions}</div>}
       </div>
@@ -71,8 +82,17 @@ export function SectionCard({
       {(title || hint || actions) && (
         <div className="mb-4 flex items-start justify-between gap-3">
           <div>
-            {title && <h2 className="text-sm font-semibold uppercase tracking-wide text-muted">{title}</h2>}
-            {hint && <p className="mt-0.5 text-xs text-muted/80">{hint}</p>}
+            {/* A SectionCard hint is explanatory prose, so it hangs off the
+                title as an ⓘ hover instead of adding a grey line to every
+                card. Non-string hints (rare, ReactNode) still render inline
+                since Info only takes text. */}
+            {title && (
+              <h2 className="flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-muted">
+                {title}
+                {typeof hint === "string" && hint && <Info text={hint} />}
+              </h2>
+            )}
+            {hint && (typeof hint !== "string" || !title) && <p className="mt-0.5 text-xs text-muted/80">{hint}</p>}
           </div>
           {actions}
         </div>

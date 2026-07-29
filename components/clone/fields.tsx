@@ -7,8 +7,17 @@ import { useEffect, useState } from "react";
 // and light/dark both stay consistent.
 // Deliberately compact: Configure is a dense control panel, not a signup form.
 // Each tab should fit one screen, so inputs stay short and tight.
+//
+// GREY RULE (2026-07-29). Three things used to render three different greys by
+// accident: the label (text-muted), the ⓘ hint (text-muted/80) and the
+// placeholder — which had NO class here at all, so it fell through to the
+// browser default (~54% opacity of text-ink, much lighter than either). The
+// explicit `placeholder:text-muted` below makes the placeholder deliberately
+// the SAME grey as the label, and a real typed/saved value stays `text-ink`
+// (solid). Never drop that placeholder class: without it a field's placeholder
+// and its saved value stop being clearly distinguishable.
 export const inputCls =
-  "w-full rounded-md border border-line bg-panel px-2.5 py-1.5 text-sm text-ink outline-none transition focus:border-accent focus:ring-1 focus:ring-accent/30";
+  "w-full rounded-md border border-line bg-panel px-2.5 py-1.5 text-sm text-ink placeholder:text-muted outline-none transition focus:border-accent focus:ring-1 focus:ring-accent/30";
 
 export const selectCls = inputCls;
 
@@ -99,11 +108,14 @@ export function SubHead({
   tip?: string;
   children?: React.ReactNode;
 }) {
+  // `tip` renders through Info (a real styled hover bubble). It used to be the
+  // native `title` attribute plus a decorative ⓘ glyph that did nothing on its
+  // own: native tooltips take ~1s, can't be styled, and never appear on touch.
   return (
-    <p title={tip} className="flex items-center gap-1.5 text-xs font-semibold text-ink">
+    <p className="flex items-center gap-1.5 text-xs font-semibold text-ink">
       <span>{emoji}</span>
       {label}
-      {tip && <span className="cursor-help text-[10px] font-normal text-muted">ⓘ</span>}
+      {tip && <Info text={tip} />}
       {children}
     </p>
   );
@@ -211,8 +223,12 @@ export function Modal({
       <div className="relative flex max-h-full w-full max-w-3xl flex-col overflow-hidden rounded-xl border border-line bg-panel shadow-2xl">
         <div className="flex items-start gap-3 border-b border-line px-4 py-2.5">
           <div className="min-w-0">
-            <h2 className="text-sm font-semibold text-ink">{title}</h2>
-            {hint && <p className="mt-0.5 text-[11px] text-muted">{hint}</p>}
+            {/* Hint is an ⓘ hover next to the title, never a grey sentence
+                under it, matching Section/Collapse/FieldLabel. */}
+            <h2 className="flex items-center gap-1.5 text-sm font-semibold text-ink">
+              {title}
+              {hint && <Info text={hint} />}
+            </h2>
           </div>
           <button
             type="button"
@@ -524,7 +540,7 @@ export function TagInput({
           }}
           onBlur={() => add()}
           placeholder={chips.length ? "" : placeholder}
-          className="min-w-24 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-muted/60"
+          className="min-w-24 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-muted"
         />
       </div>
       {remaining.length > 0 && (
@@ -708,7 +724,7 @@ export function ToggleCard({
       <input type="hidden" name={name} value={String(checked)} />
       <button
         type="button"
-        title={title}
+        aria-label={title ? `${label}. ${title}` : label}
         aria-pressed={checked}
         onClick={() => onChange(!checked)}
         className={
@@ -718,9 +734,12 @@ export function ToggleCard({
             : "border-line bg-bg/40 opacity-75 hover:opacity-100")
         }
       >
+        {/* `title` renders as a real ⓘ hover bubble, not the native title
+            attribute (~1s delay, unstyleable, invisible on touch). */}
         <span className="flex min-w-0 flex-wrap items-center gap-1.5 text-xs font-medium text-ink">
           <span className="text-sm">{emoji}</span>
           <span>{label}</span>
+          {title && <Info text={title} />}
           {badge}
         </span>
         <span
@@ -745,6 +764,7 @@ export function Slider({
   max = 1,
   step = 0.01,
   format,
+  hint,
 }: {
   label: string;
   name: string;
@@ -754,11 +774,18 @@ export function Slider({
   max?: number;
   step?: number;
   format?: (v: number) => string;
+  // Longer explainer, shown as a hoverable ⓘ next to the label. Sliders used to
+  // be the one control with no hint slot, which is why their explanations were
+  // still being written as grey paragraphs underneath them.
+  hint?: string;
 }) {
   return (
     <label className="block">
       <span className="mb-0.5 flex items-center justify-between text-xs text-muted">
-        <span>{label}</span>
+        <span className="flex items-center gap-1">
+          {label}
+          {hint && <Info text={hint} />}
+        </span>
         <span className="rounded-md bg-accent/10 px-1.5 py-0.5 text-sm font-bold tabular-nums text-accent">
           {format ? format(value) : value.toFixed(2)}
         </span>
@@ -857,7 +884,11 @@ export function PromptField({ name, label, defaultValue }: { name: string; label
   const [editing, setEditing] = useState(false);
   return (
     <div className="group relative block">
-      <span className="mb-0.5 block text-xs text-muted">{label}</span>
+      <FieldLabel label={label} />
+      {/* The locked state is still a REAL SAVED VALUE (the compiled prompt), so
+          it renders text-ink solid. Only the greyed border/background says
+          "read-only" — greying the text itself made saved content look unset.
+          The placeholder (empty prompt) is the only grey text here. */}
       <textarea
         name={name}
         rows={6}
@@ -865,10 +896,10 @@ export function PromptField({ name, label, defaultValue }: { name: string; label
         readOnly={!editing}
         placeholder="(empty, hit Re-compile to generate)"
         className={
-          "w-full rounded-xl border px-3 py-2.5 font-mono text-xs leading-relaxed outline-none transition " +
+          "w-full rounded-xl border px-3 py-2.5 font-mono text-xs leading-relaxed text-ink placeholder:text-muted outline-none transition " +
           (editing
             ? "border-accent bg-panel focus:ring-2 focus:ring-accent/20"
-            : "cursor-not-allowed border-line bg-bg text-muted")
+            : "cursor-not-allowed border-line bg-bg")
         }
       />
       {!editing ? (

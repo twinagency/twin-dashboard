@@ -312,7 +312,7 @@ export default function ConfigSections({
         />
         {mode === "edit" ? (
           <div className="block">
-            <span className="mb-0.5 block text-xs text-muted">Status</span>
+            <FieldLabel label="Status" hint="Paused means the bot ignores every incoming message for this clone. Nothing is deleted, she just stops replying until you set her active again." />
             <input type="hidden" name="status" value={cfg.active ? "active" : "paused"} />
             <Toggle label={cfg.active ? "Active" : "Paused"} name="_status_toggle" checked={cfg.active} onChange={(v) => set("active", v)} />
           </div>
@@ -330,11 +330,19 @@ export default function ConfigSections({
 
         {/* AI mode - used to be its own card, but it's one control; it belongs
             with the rest of "what this clone fundamentally is". */}
-        <div
-          className="grid gap-1.5 border-t border-line pt-2 sm:col-span-2"
-          title="How she decides what to do with each message. Classic follows fixed rules; Smart lets one AI figure it out. Money rules stay the same either way."
-        >
-          <span className="flex items-center gap-1 text-xs text-muted">🧠 AI mode<Info text="How she decides what to do with each message. Classic follows fixed rules; Smart lets one AI figure it out. Money rules stay the same either way." /></span>
+        <div className="grid gap-1.5 border-t border-line pt-2 sm:col-span-2">
+          {/* The Smart-mode pointer to the Advanced tab used to be a grey
+              paragraph under the pills. It's part of the same explanation, so
+              it belongs in this one ⓘ hover instead. */}
+          <FieldLabel
+            label="🧠 AI mode"
+            hint={
+              "How she decides what to do with each message. Classic follows fixed rules; Smart lets one AI figure it out. Money rules stay the same either way." +
+              (cfg.aiMode === "smart"
+                ? " The model split (one model vs. writer + decider) lives under the 🛠 Advanced tab."
+                : "")
+            }
+          />
         <input type="hidden" name="ai_mode" value={cfg.aiMode} />
         <input type="hidden" name="smart_split" value={cfg.smartSplit ? "true" : "false"} />
         <div className="inline-flex rounded-lg border border-line p-0.5">
@@ -356,12 +364,9 @@ export default function ConfigSections({
         {/* The two-model split toggle itself moved to Advanced (power-user
             routing decision, not something touched setting up a fresh clone).
             The hidden inputs above already always submit ai_mode/smart_split
-            regardless of which tab is open, so this is just a pointer. */}
-        {cfg.aiMode === "smart" && (
-          <p className="mt-1 text-xs text-muted">
-            Model split (one model vs. writer + decider) is under the 🛠 Advanced tab.
-          </p>
-        )}
+            regardless of which tab is open. The pointer to Advanced that used
+            to sit here as a grey paragraph is now part of the ⓘ hint on the
+            "AI mode" label above, shown only when Smart is selected. */}
         </div>
       </Section>
 
@@ -583,13 +588,11 @@ export default function ConfigSections({
               max={14}
               step={1}
               format={(v) => `${v}s`}
+              hint={
+                "How long she holds a double or triple text (rapid back-to-back messages) before replying to all of them as one turn, instead of replying to the first one alone. " +
+                "Fires BEFORE the reply wait below: this one is \"does she notice you sent 3 texts\", the wait below is \"how long she takes to reply once she has\". 0s reacts to every message instantly."
+              }
             />
-            <p className="mt-1 text-[11px] text-muted">
-              How long she holds a double/triple text (rapid back-to-back messages) before replying to all of them as
-              one turn, instead of replying to the first one alone. Fires BEFORE the wait below - this is "does she
-              notice you sent 3 texts", the wait below is "how long she takes to reply once she has". 0s = reacts to
-              every message instantly.
-            </p>
           </div>
           <div className="grid gap-2 sm:grid-cols-2">
             <Slider label="Min wait" name="response_wait_min" value={cfg.waitMin} onChange={(v) => set("waitMin", v)} min={0} max={60} step={1} format={(v) => `${v}s`} />
@@ -686,18 +689,21 @@ export default function ConfigSections({
             title="Smart mode: model split"
             hint="Whether one model both writes and fires actions, or two models split the job."
           >
+            {/* What each state of the split actually does was a grey paragraph
+                under the toggle. It explains the toggle, so it is now the
+                toggle's own ⓘ hover and still swaps with the state. */}
             <Toggle
               label="Two-model split (writer + decider)"
               name="_smart_split_toggle"
               checked={cfg.smartSplit}
               onChange={(v) => set("smartSplit", v)}
               accent="soft"
+              hint={
+                cfg.smartSplit
+                  ? "On: your Text model writes her replies, your Routing model fires photo/voice/tip actions (it must support tool-calling). Set both under AI Models in Config."
+                  : "Off: one model (your Text model) both writes her replies and fires actions in a single call. Cheaper, but it must support tool-calling."
+              }
             />
-            <p className="text-xs leading-relaxed text-muted">
-              {cfg.smartSplit
-                ? "On: your Text model writes her replies, your Routing model fires photo/voice/tip actions (must support tool-calling). Set both under AI Models in Config."
-                : "Off: one model (your Text model) both writes her replies and fires actions in a single call. Cheaper, but it must support tool-calling."}
-            </p>
             <Field
               label="Voice cooldown (turns)"
               name="voice_cooldown_turns"
@@ -927,11 +933,11 @@ export function MonetizationSections({
               {/* Message + button side by side rather than stacked. */}
               <div className="grid items-start gap-2 sm:grid-cols-2">
                 <label className="block">
-                  <span className="mb-0.5 block text-xs text-muted">Message text</span>
+                  <FieldLabel label="Message text" />
                   <textarea name="paywall_default_message" rows={2} value={cfg.paywallDefault} onChange={(e) => set("paywallDefault", e.target.value)} className={inputCls} />
                 </label>
                 <label className="block">
-                  <span className="mb-0.5 block text-xs text-muted">Button text</span>
+                  <FieldLabel label="Button text" />
                   <input name="paywall_button_label" value={cfg.paywallButton} onChange={(e) => set("paywallButton", e.target.value)} className={inputCls} />
                 </label>
               </div>

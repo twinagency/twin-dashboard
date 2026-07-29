@@ -490,8 +490,36 @@ function rowFromForm(fd: FormData) {
     // flows/offer-state.ts and flows/actions.ts) but had no dashboard control at
     // all, so a clone's real value could never be tuned. Controls are back on the
     // Advanced tab's Discounts / Offer follow-up cards; write them here again.
-    offer_pending_minutes: Math.max(0, num(fd, "offer_pending_minutes", 0)),
-    discount_slowdown_minutes: Math.max(0, num(fd, "discount_slowdown_minutes", 0)),
+    //
+    // MONEY-BRAKE FIX (2026-07-29): both minute windows used to fall back to 0
+    // and clamp at 0. Two separate ways that stored a literal 0, and mapClone's
+    // `?? 15` (bot/src/data/supabase-store.ts) only rescues NULL, never 0:
+    //   1. the field missing from the FormData (any save issued from a form that
+    //      does not render the Advanced tab) took the `0` fallback;
+    //   2. a clone row holding NULL renders the slider at 0 (useCloneConfig's
+    //      `clone?.offer_pending_minutes ?? 0`), so Create and the first Save on
+    //      any pre-migration clone posted a literal 0.
+    // A stored 0 is never a legitimate configuration for either field, so both
+    // now default to the bot-side default (15) when absent and clamp at a
+    // 1-minute floor:
+    //   offer_pending_minutes = 0  → hasPendingUnpaidOffer() is `mins < 0`, i.e.
+    //     permanently FALSE. That silently disables four live guards at once: the
+    //     free-media revenue leak guard in guardedMedia()/guardedPitch(), the
+    //     anti-hallucination openOfferDirective(), the paymentClaimCorrection()
+    //     backstop, and the spoil gate in flows/text.ts. It ALSO makes
+    //     offerWasIgnored() (`mins >= 0`) permanently TRUE, so the discount gate
+    //     opens the instant an offer goes out. Both directions are wrong.
+    //   discount_slowdown_minutes = 0 → conversationSlowed() is `mins >= 0`, i.e.
+    //     permanently TRUE, so discountEligible() is true for every fan on every
+    //     turn whenever discounts are on. The UI cannot tell a deliberate 0 from
+    //     an unset column, so accepting 0 means a silently zeroed brake is
+    //     indistinguishable from an operator choice. A 1-minute floor is
+    //     behaviourally identical to "always eligible" for any real conversation
+    //     while removing the permanently-true failure mode.
+    // Per bot/CLAUDE.md, these are brakes on money, not features. Removing a
+    // brake makes her pushier with money, so they fail safe, not open.
+    offer_pending_minutes: Math.max(1, num(fd, "offer_pending_minutes", 15)),
+    discount_slowdown_minutes: Math.max(1, num(fd, "discount_slowdown_minutes", 15)),
     offer_redirect_cap: Math.max(1, num(fd, "offer_redirect_cap", 3)),
     // Restored 2026-07-29 (D6): read by services/profile-extractor.ts to steer
     // what it prioritizes capturing into the fan's profile dossier. Unrelated to

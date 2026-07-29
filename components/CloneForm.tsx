@@ -12,7 +12,7 @@ import MediaManager from "@/app/media/MediaManager";
 import FlowGraph from "./flow/FlowGraph";
 import type { CloneCfg } from "./flow/graph";
 import ConfigSections from "./clone/ConfigSections";
-import { Modal, Section } from "./clone/fields";
+import { FieldLabel, Modal, Section } from "./clone/fields";
 import { useCloneConfig } from "./clone/useCloneConfig";
 import { updateClone, deleteClone } from "@/app/clones/actions";
 import { Button } from "./ui/button";
@@ -204,13 +204,15 @@ export default function CloneForm({
           >
             {promptPreview.blocks.map((b) => (
               <label key={b.key} className="block">
-                <span className="mb-1 block text-xs font-medium text-muted">{b.label}</span>
-                <span className="mb-1 block text-[11px] text-muted">{b.hint}</span>
+                <FieldLabel label={<span className="font-medium">{b.label}</span>} hint={b.hint} />
+                {/* This is the REAL compiled prompt the bot sends, so it renders
+                    text-ink solid. Read-only is signalled by the greyed bg +
+                    cursor, never by greying the content itself. */}
                 <textarea
                   readOnly
                   rows={8}
                   value={b.content}
-                  className="w-full cursor-default rounded-xl border border-line bg-bg px-3 py-2.5 font-mono text-xs leading-relaxed text-muted outline-none"
+                  className="w-full cursor-default rounded-xl border border-line bg-bg px-3 py-2.5 font-mono text-xs leading-relaxed text-ink outline-none"
                 />
               </label>
             ))}

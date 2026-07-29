@@ -57,7 +57,7 @@ const SOURCE_LABEL: Record<string, string> = {
   handler: "Message handling",
   safety: "Safety check",
   watchdog: "Stuck message watchdog",
-  campaign: "Campaign send",
+  campaign: "Flow send",
   followup: "Follow-up nudge",
   subscriptions: "Subscription renewal",
   profile: "Fan profile update",

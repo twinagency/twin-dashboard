@@ -2,7 +2,7 @@
 
 import { INTAKE_SECTIONS, proseValue } from "@/lib/intake";
 import { listEntries } from "@/lib/persona-build";
-import { Field, LineList, Select, inputCls } from "@/components/clone/fields";
+import { Field, FieldLabel, Info, LineList, Select, inputCls } from "@/components/clone/fields";
 
 // The prose half of the onboarding questionnaire (typed facts live in
 // PersonaFactsFields). Each field submits as `intake_<key>`; the server gathers
@@ -33,13 +33,18 @@ export default function IntakeFields({
     <div className="grid gap-6">
       {INTAKE_SECTIONS.map((section) => (
         <div key={section.title} className="rounded-lg border border-line bg-bg/50 p-4">
-          <h3 className="text-sm font-semibold text-ink">{section.title}</h3>
-          {section.hint && <p className="mt-0.5 text-xs text-muted">{section.hint}</p>}
+          {/* Section hint is an ⓘ hover on the heading, not a grey sentence
+              under it. Six of these stacked up was most of the small print on
+              the Identity tab. */}
+          <h3 className="flex items-center gap-1.5 text-sm font-semibold text-ink">
+            {section.title}
+            {section.hint && <Info text={section.hint} />}
+          </h3>
           <div className="mt-3 grid gap-3">
             {section.fields.map((f) =>
               f.options ? (
                 <label key={f.key} className="block">
-                  <span className="mb-1 block text-xs text-muted">{f.label}</span>
+                  <FieldLabel label={f.label} />
                   <select name={`intake_${f.key}`} defaultValue={value(f.key)} className={inputCls}>
                     {f.options.map((o) => (
                       <option key={o.value} value={o.value}>

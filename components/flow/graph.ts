@@ -148,7 +148,7 @@ export function buildClassic(c: CloneCfg): BuiltGraph {
 
   // Background jobs (separate cluster, dashed) — each gated.
   const bg: { id: string; label: string; emoji: string; sub: string; on: boolean }[] = [
-    { id: "bg-drip", label: "Drip re-engage", emoji: "🔁", sub: "quiet-fan nudges", on: c.drip_enabled },
+    { id: "bg-drip", label: "Flow re-engage", emoji: "🔁", sub: "quiet-fan nudges", on: c.drip_enabled },
     // The "Welcome bundle" and "Onboarding voice" background nodes were removed
     // 2026-07-29. They were drawn from welcome_bundle_after /
     // onboarding_voice_after, columns no runtime code reads any more (onboarding

@@ -70,7 +70,13 @@ export default async function FansPage({
   const asc = dir === "asc";
 
   const [clonesRes, usersRes] = await Promise.all([
-    supabaseAdmin.from("clones").select("id,name"),
+    // id/name for the fan-list "via X" line; the rest is only used to
+    // reconstruct the Journey row's exact onboarding position + credit-freeze
+    // state below (see onboardingActive() in bot/src/onboarding-state.ts,
+    // mirrored here the same way lib/persona-facts.ts mirrors prompt.ts).
+    supabaseAdmin
+      .from("clones")
+      .select("id,name,onboarding_steps,onboarding_free_preview_enabled,photos_enabled"),
     (() => {
       let query = supabaseAdmin
         .from("users")
@@ -81,7 +87,21 @@ export default async function FansPage({
     })(),
   ]);
 
-  const clones = (clonesRes.data ?? []) as { id: string; name: string }[];
+  type OnboardingStepRow = {
+    type: "text" | "voice" | "photo" | "video" | "bundle" | "collect" | "tease";
+    after_messages?: number;
+    media_id?: string | null;
+    free?: boolean;
+    collect_field?: string | null;
+    instruction?: string | null;
+  };
+  const clones = (clonesRes.data ?? []) as {
+    id: string;
+    name: string;
+    onboarding_steps: OnboardingStepRow[] | null;
+    onboarding_free_preview_enabled: boolean | null;
+    photos_enabled: boolean | null;
+  }[];
   const cloneById = new Map(clones.map((c) => [c.id, c]));
   const allUsers = (usersRes.data ?? []) as any[];
 

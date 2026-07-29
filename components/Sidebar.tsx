@@ -48,7 +48,7 @@ const PATHS: Record<string, string> = {
   Users: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
   Logs: '<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>',
   Info: '<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>',
-  Campaigns:
+  Flows:
     '<path d="M11 6a13 13 0 0 0 8.4-2.8A1 1 0 0 1 21 4v12a1 1 0 0 1-1.6.8A13 13 0 0 0 11 14H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z"/><path d="M6 14a12 12 0 0 0 2.4 7.2 2 2 0 0 0 3.2-2.4A8 8 0 0 1 10 14"/><path d="M8 6v8"/>',
   Media: '<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><path d="M21 15l-5-5L5 21"/>',
   Feedback: '<path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>',
@@ -99,7 +99,7 @@ const LINK_COLOR_CLASSES: Record<LinkColor, { icon: string; active: string; idle
 const NAV_LINKS: NavLink[] = [
   { kind: "route", label: "Earnings", href: "/revenue", icon: "EarningsCombo", color: "good" },
   { kind: "route", label: "Fans", href: "/users", icon: "FansCombo", color: "purple" },
-  { kind: "route", label: "Campaigns", href: "/drip", icon: "Campaigns", color: "pink", gateOnClone: true },
+  { kind: "route", label: "Flows", href: "/flows", icon: "Flows", color: "pink", gateOnClone: true },
   { kind: "tab", label: "PPVs", tab: "ppvs", icon: "Media", color: "red" },
   { kind: "tab", label: "Edit", tab: "identity", icon: "Dials", color: "blue" },
   { kind: "route", label: "Info", href: "/info", icon: "Info", color: "neutral" },
@@ -151,7 +151,7 @@ export default function Sidebar({
       <nav className="flex flex-1 flex-col overflow-y-auto px-3 py-3">
         {/* One flat list, icon left, label, full-width row. Rows are spaced
             apart (not divided by hairlines) so each rounded, hoverable row
-            reads as its own control instead of a table. PPVs/Edit/Campaigns
+            reads as its own control instead of a table. PPVs/Edit/Flows
             are girl-specific: on "All clones" they render exactly like any
             other idle row (no dimming - a plain nav row that happens to open
             the clone picker instead of navigating reads as broken, not as

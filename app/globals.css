@@ -36,7 +36,14 @@
   --color-panel: #ffffff;
   --color-elev: #eef2ff;
   --color-ink: #0a2540;
-  --color-muted: #64729a;
+  /* Secondary TEXT color (labels, hints, placeholders). Darkened 2026-07-29
+     from #64729a: the old value was a light, desaturated blue-grey that read as
+     washed out against --color-panel, and it is the single token behind every
+     `text-muted` label, `placeholder:text-muted` and ⓘ hint in the app. One
+     rule for this token, do not reintroduce a lighter value: a REAL SAVED VALUE
+     always renders --color-ink (solid); --color-muted is only ever for
+     placeholders, examples and explanatory hints. */
+  --color-muted: #4b5878;
   --color-line: #e2d8ff;
   --color-accent: #4338f2;
   --color-accent-2: #5e4dff;
@@ -212,18 +219,19 @@ body {
   --color-accent-foreground: var(--color-accent-ink);
   /* --color-muted has the exact same landmine as --color-accent above, and it
      was still live: shadcn's `--muted` here is a SURFACE color (elev, for
-     bg-muted panels), but our own top-level `--color-muted` (#8a8a99) is a
-     TEXT color used everywhere as `text-muted` (secondary/caption text — and,
-     at low opacity like `bg-muted/10`, our own subtle-surface convention
-     too). Redefining `--color-muted` here made every `text-muted` in the app
+     bg-muted panels), but our own top-level `--color-muted` (#4b5878, set in
+     the Aurora @theme block at the top of this file) is a TEXT color used
+     everywhere as `text-muted` (labels, hints, placeholders — and, at low
+     opacity like `bg-muted/10`, our own subtle-surface convention too).
+     Redefining `--color-muted` here made every `text-muted` in the app
      render as near-black elev text — invisible on elev/panel surfaces (this
      is how it was caught: the mobile nav menu's popover background IS elev,
      so its unselected links were rendering literally the same color as their
      own background). Left undefined here, `--color-muted` falls back to the
-     single real definition above (#8a8a99), restoring every `text-muted` /
+     single real definition above, restoring every `text-muted` /
      `bg-muted/NN` in the app in one fix. `--color-muted-foreground` (a
      different, non-colliding key) still separately gives shadcn components
-     the same #8a8a99 for their own `text-muted-foreground` usage. */
+     that same color for their own `text-muted-foreground` usage. */
   --color-muted-foreground: var(--muted-foreground);
   --color-secondary-foreground: var(--secondary-foreground);
   --color-secondary: var(--secondary);

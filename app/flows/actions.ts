@@ -119,9 +119,12 @@ function numOrNull(fd: FormData, key: string): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
-// Save the Campaigns page: every outbound-engagement setting for the clone —
-// the new-fan onboarding flow, the mid-chat follow-up, the automated campaign's
-// step list, the win-back lapse, and the hand-picked media pool.
+// Save the Flows page (renamed from Campaigns, route moved /drip -> /flows,
+// 2026-07-29): every outbound-engagement setting for the clone — the new-fan
+// onboarding flow, the mid-chat follow-up, the automated flow's step list,
+// the win-back lapse, and the hand-picked media pool. Function name kept as
+// saveCampaign (not user-visible, and matches bot/src/campaign.ts which owns
+// the runtime side of this).
 //
 // These onboarding/follow-up columns used to be written by updateClone (the
 // Configure page's Engagement tab). They are owned HERE now and deliberately
@@ -198,5 +201,5 @@ export async function saveCampaign(id: string, fd: FormData) {
 
   revalidatePath("/");
   revalidatePath(`/clones/${id}`);
-  revalidatePath("/drip");
+  revalidatePath("/flows");
 }

@@ -18,7 +18,7 @@ const LINKS: { label: string; href: string }[] = [
   { label: "Revenue", href: "/revenue" },
   { label: "Fans", href: "/users" },
   { label: "Info", href: "/info" },
-  { label: "Campaigns", href: "/drip" },
+  { label: "Flows", href: "/flows" },
   { label: "Media", href: "/media" },
   { label: "Logs", href: "/logs" },
 ];

@@ -622,7 +622,7 @@ export default function PersonaFactsFields({
             hint="Her age is derived live, plus birthday awareness"
           />
           <label className="block">
-            <span className="mb-1 block text-xs text-muted">Gender</span>
+            <FieldLabel label="Gender" />
             <select name="gender" defaultValue={clone?.gender ?? "female"} className={selectCls}>
               {GENDER_OPTIONS.map((g) => (
                 <option key={g} value={g}>
@@ -643,7 +643,7 @@ export default function PersonaFactsFields({
             </select>
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs text-muted">Sexuality</span>
+            <FieldLabel label="Sexuality" />
             <select name="sexuality" defaultValue={clone?.sexuality ?? ""} className={selectCls}>
               <option value="">(not set)</option>
               {SEXUALITY_OPTIONS.map((s) => (
@@ -777,28 +777,28 @@ export default function PersonaFactsFields({
       >
         <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
           <label className="block">
-            <span className="mb-1 block text-xs text-muted">Hair length</span>
+            <FieldLabel label="Hair length" />
             <select name="hair_length" defaultValue={clone?.hair_length ?? ""} className={selectCls}>
               <option value="">(not set)</option>
               {HAIR_LENGTH_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
             </select>
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs text-muted">Hair color</span>
+            <FieldLabel label="Hair color" />
             <select name="hair_color" defaultValue={clone?.hair_color ?? ""} className={selectCls}>
               <option value="">(not set)</option>
               {HAIR_COLOR_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
             </select>
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs text-muted">Eye color</span>
+            <FieldLabel label="Eye color" />
             <select name="eye_color" defaultValue={clone?.eye_color ?? ""} className={selectCls}>
               <option value="">(not set)</option>
               {EYE_COLOR_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
             </select>
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs text-muted">Body type</span>
+            <FieldLabel label="Body type" />
             <select name="body_type" defaultValue={clone?.body_type ?? ""} className={selectCls}>
               <option value="">(not set)</option>
               {BODY_TYPE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
@@ -807,7 +807,7 @@ export default function PersonaFactsFields({
         </div>
         <div className="grid gap-2 sm:grid-cols-3">
           <label className="block">
-            <span className="mb-1 block text-xs text-muted">Cup size</span>
+            <FieldLabel label="Cup size" />
             <select name="cup_size" defaultValue={clone?.cup_size ?? ""} className={selectCls}>
               <option value="">(not set)</option>
               {CUP_SIZE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
@@ -815,7 +815,7 @@ export default function PersonaFactsFields({
           </label>
           <Field label="Measurements" name="measurements" defaultValue={clone?.measurements ?? ""} placeholder="34C-26-36" />
           <label className="block">
-            <span className="mb-1 block text-xs text-muted">Enhancements</span>
+            <FieldLabel label="Enhancements" />
             <select name="enhancements" defaultValue={clone?.enhancements ?? ""} className={selectCls}>
               <option value="">(not set)</option>
               {ENHANCEMENTS_OPTIONS.map((o) => (
@@ -876,21 +876,21 @@ export default function PersonaFactsFields({
         >
           <div className="grid gap-2 sm:grid-cols-3">
             <label className="block">
-              <span className="mb-1 block text-xs text-muted">Accent</span>
+              <FieldLabel label="Accent" />
               <select name="voice_accent" defaultValue={clone?.voice_accent ?? ""} className={selectCls}>
                 <option value="">(not set)</option>
                 {VOICE_ACCENT_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
               </select>
             </label>
             <label className="block">
-              <span className="mb-1 block text-xs text-muted">Pace</span>
+              <FieldLabel label="Pace" />
               <select name="voice_pace" defaultValue={clone?.voice_pace ?? ""} className={selectCls}>
                 <option value="">(not set)</option>
                 {VOICE_PACE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
               </select>
             </label>
             <label className="block">
-              <span className="mb-1 block text-xs text-muted">Texture</span>
+              <FieldLabel label="Texture" />
               <select name="voice_texture" defaultValue={clone?.voice_texture ?? ""} className={selectCls}>
                 <option value="">(not set)</option>
                 {VOICE_TEXTURE_OPTIONS.map((o) => <option key={o} value={o}>{o}</option>)}
@@ -923,7 +923,7 @@ export default function PersonaFactsFields({
         hint="The preset ships a ready-made personality baseline the AI builds on. Nicknames go straight into her prompt, no compile."
       >
         <label className="block">
-          <span className="mb-1 block text-xs text-muted">Vibe / archetype</span>
+          <FieldLabel label="Vibe / archetype" />
           <select name="vibe_preset" defaultValue={vibeInitial} className={selectCls}>
             <option value="">Pick one…</option>
             {VIBE_PRESETS.map((p) => (
@@ -963,21 +963,21 @@ export default function PersonaFactsFields({
         <SubHead emoji="🪞" label="Reactions & rhythm" tip="Pulled out of the free-text quirks question so they're deterministic, not LLM-interpreted." />
         <div className="grid gap-2 sm:grid-cols-3">
           <label className="block">
-            <span className="mb-1 block text-xs text-muted">If he's rude</span>
+            <FieldLabel label="If he's rude" />
             <select name="reaction_to_rudeness" defaultValue={clone?.reaction_to_rudeness ?? ""} className={selectCls}>
               <option value="">(not set)</option>
               {REACTION_RUDE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs text-muted">If complimented</span>
+            <FieldLabel label="If complimented" />
             <select name="reaction_to_compliments" defaultValue={clone?.reaction_to_compliments ?? ""} className={selectCls}>
               <option value="">(not set)</option>
               {REACTION_COMPLIMENT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </label>
           <label className="block">
-            <span className="mb-1 block text-xs text-muted">Message bursts</span>
+            <FieldLabel label="Message bursts" />
             <select name="burst_style" defaultValue={clone?.burst_style ?? ""} className={selectCls}>
               <option value="">(not set)</option>
               {BURST_STYLE_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
@@ -1053,7 +1053,7 @@ export default function PersonaFactsFields({
         hint="Does she live alone, does she have pets - two of the most commonly asked factual questions, pulled out of the life & tastes questionnaire box so they're deterministic, not LLM-interpreted."
       >
         <label className="block">
-          <span className="mb-1 block text-xs text-muted">Living situation</span>
+          <FieldLabel label="Living situation" />
           <select name="living_situation" defaultValue={clone?.living_situation ?? ""} className={selectCls}>
             <option value="">(not set)</option>
             {LIVING_SITUATION_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}

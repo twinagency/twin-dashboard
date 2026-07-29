@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Area, Field, FieldLabel, GroupHeader, Section, Toggle, inputCls, selectCls, COLLECT_FIELD_OPTIONS } from "@/components/clone/fields";
+import { Area, Field, FieldLabel, GroupHeader, Info, Section, Toggle, inputCls, selectCls, COLLECT_FIELD_OPTIONS } from "@/components/clone/fields";
 import { MediaPicker as StepMediaPicker, type MediaRow, type BundleRow } from "@/components/clone/MediaPicker";
 import { saveCampaign } from "./actions";
 
@@ -24,7 +24,7 @@ const STEP_EMOJI: Record<StepType, string> = Object.fromEntries(
 ) as Record<StepType, string>;
 
 // ── Onboarding step list (migration 068) ─────────────────────────────────────
-// Same picker as the automated campaign above, but fires on the fan's MESSAGE
+// Same picker as the automated flow above, but fires on the fan's MESSAGE
 // COUNT rather than hours quiet (a new fan chatting away is never quiet — see
 // bot/db/migrations/068_onboarding_steps.sql). Two extra types beyond the
 // campaign's five: collect (ask for one detail, fire-once) and tease (a short
@@ -114,7 +114,7 @@ function Timeline({ steps }: { steps: Step[] }) {
   );
 }
 
-export default function DripForm({
+export default function FlowsForm({
   cloneId,
   photosEnabled,
   videosEnabled,
@@ -284,9 +284,9 @@ export default function DripForm({
 
         {/* ── The ordered step sequence (migration 068) ─────────────────── */}
         <div className="border-t border-line pt-3">
-          <p className="text-xs font-semibold text-ink">Steps</p>
-          <p className="mb-2 mt-0.5 text-[11px] text-muted">
-            Ordered steps timed off HIS message count (not hours quiet like the campaign below). They fire in the order shown, use ↑/↓ to reorder. Text, voice and tease lines are AI-written fresh in her voice with an optional per-step steer; photo, video and bundle steps tease a fresh unseen item unless you pick one, and can be toggled Free. Collect steps gently work one detail into that reply, once. Empty = she just greets and chats naturally.
+          <p className="mb-2 flex items-center gap-1.5 text-xs font-semibold text-ink">
+            Steps
+            <Info text="Ordered steps timed off HIS message count (not hours quiet like the flow below). They fire in the order shown, use ↑/↓ to reorder. Text, voice and tease lines are AI-written fresh in her voice with an optional per-step steer; photo, video and bundle steps tease a fresh unseen item unless you pick one, and can be toggled Free. Collect steps gently work one detail into that reply, once. Empty = she just greets and chats naturally." />
           </p>
 
           {onboardingSteps.length === 0 && (
@@ -490,9 +490,9 @@ export default function DripForm({
         />
       </Section>
 
-      {/* ── Automated campaign ───────────────────────────────────── */}
+      {/* ── Automated flow ───────────────────────────────────────── */}
       <GroupHeader
-        label="Automated campaign"
+        label="Automated flow"
         hint="Timed steps that fire while a fan goes quiet. Telegram only lets her message a fan within 24 hours of his last activity, so every step lands inside that window."
       />
       <Section
@@ -501,7 +501,7 @@ export default function DripForm({
         tip="Steps fire in hour order (they re-sort on save). Voice, photo, video and bundle steps only fire when that feature is on for this clone; a step with nothing fresh to send falls back to an AI text line."
       >
         <Toggle
-          label={enabled ? "Campaign is on: she re-engages quiet fans" : "Campaign is off: she never messages first"}
+          label={enabled ? "Flow is on: she re-engages quiet fans" : "Flow is off: she never messages first"}
           name="drip_enabled"
           checked={enabled}
           onChange={setEnabled}
@@ -520,18 +520,18 @@ export default function DripForm({
             type="number"
             min={1}
             defaultValue={initial.winbackLapseDays}
-            hint="A fan who has PAID before and then goes quiet this many days gets the warm win-back (a softer one-time discount plus a fresh teaser) on his next campaign step instead of a normal one. Fans who never paid are unaffected. Default 7. Lower means she chases returning payers sooner."
+            hint="A fan who has PAID before and then goes quiet this many days gets the warm win-back (a softer one-time discount plus a fresh teaser) on his next flow step instead of a normal one. Fans who never paid are unaffected. Default 7. Lower means she chases returning payers sooner."
           />
         </div>
 
         {enabled && (
           <Toggle
-            label={campaignCaptionsOff ? "Captions off: no caption on anything the campaign sends" : "Captions follow the normal rules (Configure)"}
+            label={campaignCaptionsOff ? "Captions off: no caption on anything the flow sends" : "Captions follow the normal rules (Configure)"}
             name="campaign_captions_off"
             checked={campaignCaptionsOff}
             onChange={setCampaignCaptionsOff}
             accent="soft"
-            hint="Overrides the caption placement set in Configure just for the automated campaign: every photo, video and bundle a step below sends goes out with NO caption at all, no matter what."
+            hint="Overrides the caption placement set in Configure just for the automated flow: every photo, video and bundle a step below sends goes out with NO caption at all, no matter what."
           />
         )}
 
@@ -620,7 +620,7 @@ export default function DripForm({
           disabled={pending}
           className="rounded-lg bg-accent px-5 py-2.5 text-sm font-medium text-accent-ink transition hover:bg-accent-deep disabled:opacity-50"
         >
-          {pending ? "Saving…" : "Save campaign"}
+          {pending ? "Saving…" : "Save flow"}
         </button>
         {saved && <span className="text-sm text-good">Saved ✓</span>}
       </div>

@@ -13,7 +13,7 @@ type CloneLite = { id: string; name: string };
 const PAGE_LABELS: Record<string, string> = {
   "/revenue": "Earnings",
   "/users": "Fans",
-  "/drip": "Campaigns",
+  "/flows": "Flows",
   "/info": "Info",
   "/logs": "Logs",
   "/media": "Media",
