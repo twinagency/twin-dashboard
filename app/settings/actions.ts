@@ -50,6 +50,9 @@ const DEFAULT_TOGGLES = [
 // Enum selects + free-text strings — stored verbatim when non-empty.
 const DEFAULT_SELECTS = [
   "ai_mode", "sexual_level", "nsfw_level", "push_level", "emoji_amount", "media_caption_mode",
+  // Migration 086 — the four warmth-side dials, so a new clone can be born
+  // friendly instead of having to be dialled up one at a time after creation.
+  "warmth_level", "curiosity_level", "playfulness_level", "attentiveness_level",
   "emoji_allowlist", "welcome_instruction", "paywall_instruction",
   "paywall_default_message", "paywall_button_label", "eleven_model",
   // Migration 069 — prime/resume steer text + the resume promised-image id.

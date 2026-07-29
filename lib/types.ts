@@ -62,6 +62,15 @@ export type Clone = {
   sexual_level: "off" | "mild" | "medium" | "explicit" | "max" | "low" | "high";
   nsfw_level: "off" | "mild" | "medium" | "explicit" | "max" | "low" | "high";
   push_level: "none" | "low" | "medium" | "high" | "relentless";
+  // Migration 086, the four warmth-side dials. Every dial above this line is
+  // about sex or selling, which is why "make her friendlier" never worked.
+  // Mapped to fixed prompt text by personalityRule() in bot/src/flows/human.ts,
+  // NOT through the persona compiler. "medium" is the default and deliberately
+  // emits no prompt text at all, so an untouched clone is unchanged.
+  warmth_level?: "off" | "low" | "medium" | "high" | "max";
+  curiosity_level?: "off" | "low" | "medium" | "high" | "max";
+  playfulness_level?: "off" | "low" | "medium" | "high" | "max";
+  attentiveness_level?: "off" | "low" | "medium" | "high" | "max";
   // Migration 080. NULL means "inherit push_level" (bot/src/handler.ts
   // tipPushDirective), never "none".
   tip_push_level?: "none" | "low" | "medium" | "high" | "relentless" | null;

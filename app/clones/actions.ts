@@ -102,6 +102,8 @@ function bool(fd: FormData, key: string): boolean {
 // pre-082 clone row is still carrying one.
 const HEAT_LEVELS = ["off", "mild", "medium", "explicit", "max", "low", "high"] as const;
 const PUSH_LEVELS = ["none", "low", "medium", "high", "relentless"] as const;
+// Migration 086, the four warmth-side dials. No legacy values to accept.
+const TONE_LEVELS = ["off", "low", "medium", "high", "max"] as const;
 // Migration 084 (clones.fan_time_mode). Must stay identical to the DB CHECK
 // constraint clones_fan_time_mode_check, or a save fails outright.
 const FAN_TIME_MODES = ["never_assume", "may_ask", "assume_same"] as const;
@@ -333,6 +335,13 @@ function rowFromForm(fd: FormData) {
     sexual_level: oneOf(str(fd, "sexual_level"), HEAT_LEVELS, "medium"),
     nsfw_level: oneOf(str(fd, "nsfw_level"), HEAT_LEVELS, "medium"),
     push_level: oneOf(str(fd, "push_level"), PUSH_LEVELS, "medium"),
+    // Migration 086, the four warmth-side dials. Consumed by personalityRule()
+    // in bot/src/flows/human.ts, which emits NOTHING for "medium" (medium is
+    // defined as current behaviour), so the fallback here is also a true no-op.
+    warmth_level: oneOf(str(fd, "warmth_level"), TONE_LEVELS, "medium"),
+    curiosity_level: oneOf(str(fd, "curiosity_level"), TONE_LEVELS, "medium"),
+    playfulness_level: oneOf(str(fd, "playfulness_level"), TONE_LEVELS, "medium"),
+    attentiveness_level: oneOf(str(fd, "attentiveness_level"), TONE_LEVELS, "medium"),
     // Migration 080. NULL IS MEANINGFUL: it means "inherit push_level", which is
     // what bot/src/handler.ts:162 tipPushDirective() does. str() maps the empty
     // string (the UI's "Same as push level" option) to null, so an unset dial
@@ -678,6 +687,15 @@ const FLOW_084_COLUMNS = [
 // stack where 085 has not run yet, instead of failing wholesale.
 // See bot/db/migrations/085_decline_brake.sql.
 const FLOW_085_COLUMNS = ["offer_decline_cap"] as const;
+// Migration 086: the four warmth-side dials. Listed so a save issued before 086
+// is applied strips them and still succeeds, instead of failing wholesale.
+// Stripping them is safe by construction: absent columns read back as "medium"
+// in both mappers, and "medium" emits no prompt text, so a pre-migration save
+// degrades to exactly today's behaviour rather than to a silent tone change.
+// See bot/db/migrations/086_warmth_dials.sql.
+const DIAL_086_COLUMNS = [
+  "warmth_level", "curiosity_level", "playfulness_level", "attentiveness_level",
+] as const;
 // The response-pacing, monetization-sequence, re-warm-photo and
 // offer-redirect column lists were removed on 2026-07-27: those columns are no
 // longer written by this form at all, so they cannot appear in the row that
@@ -698,6 +716,7 @@ const OPTIONAL_COLUMNS = [
   ...DIAL_080_COLUMNS,
   ...FLOW_084_COLUMNS,
   ...FLOW_085_COLUMNS,
+  ...DIAL_086_COLUMNS,
 ] as const;
 
 function withoutPersonaFactColumns(row: Record<string, unknown>): Record<string, unknown> {

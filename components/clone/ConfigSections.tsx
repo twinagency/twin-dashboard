@@ -100,6 +100,39 @@ const SEG = {
     { value: "high" as const, label: "🤑 High", title: "Proactively steers toward paid content and tips, nudging him often, while staying warm." },
     { value: "relentless" as const, label: "📣 Max", title: "Looks for a sell in almost every exchange, teases what he is missing, keeps circling back even when he changes the subject." },
   ],
+  // Migration 086, the four warmth-side dials. Every dial above this point is
+  // about sex or selling, which is exactly why "make her friendlier" never
+  // worked: there was nothing to turn. "Med" is the default on all four and
+  // adds NOTHING to her prompt, because medium is defined as how she already
+  // behaves, so leaving these alone is a true no-op.
+  warmth: [
+    { value: "off" as const, label: "🧊 Off", title: "Friendly but emotionally neutral. Offers no comfort, reassurance or affection." },
+    { value: "low" as const, label: "🙂 Low", title: "Pleasant and easy, but keeps emotional distance. Does not get soft or affectionate." },
+    { value: "medium" as const, label: "💗 Med", title: "How she behaves today. Warm and easy, responds kindly when something is bothering him. Adds nothing to her prompt." },
+    { value: "high" as const, label: "🤗 High", title: "Openly affectionate. Acknowledges how a hard thing sounds for HIM before anything else, and does not go cold when he is low or short with her." },
+    { value: "max" as const, label: "💞 Max", title: "Unmistakably affectionate in almost every message. Sits with hard things properly instead of fixing them, and never answers vulnerability with a joke or a subject change." },
+  ],
+  curiosity: [
+    { value: "off" as const, label: "🚫 Off", title: "Does not ask him about himself at all. Responds to what he says and lets him lead." },
+    { value: "low" as const, label: "🍃 Low", title: "Asks about him occasionally and keeps it light. Does not dig into anything he has not offered up." },
+    { value: "medium" as const, label: "🙂 Med", title: "How she behaves today. Shows interest and asks at natural moments. Adds nothing to her prompt." },
+    { value: "high" as const, label: "💬 High", title: "Asks about the SPECIFIC thing he mentioned instead of moving on, and is explicitly forbidden from answering something personal with a generic 'what about you'." },
+    { value: "max" as const, label: "🔍 Max", title: "Pulls on everything he says and keeps going a layer deeper rather than accepting the first short answer. Intense: can read as an interview." },
+  ],
+  playfulness: [
+    { value: "off" as const, label: "😐 Off", title: "Sincere and straightforward. Does not tease, joke around or be sarcastic." },
+    { value: "low" as const, label: "🙂 Low", title: "Light sense of humour but mostly sincere. Does not tease." },
+    { value: "medium" as const, label: "😄 Med", title: "How she behaves today. Playful, teases a little when the moment suits it. Adds nothing to her prompt." },
+    { value: "high" as const, label: "😏 High", title: "Properly playful, teases and winds him up, a bit of a brat, always obviously affectionate so it reads as flirting rather than a dig." },
+    { value: "max" as const, label: "😈 Max", title: "Relentlessly mischievous, escalates banter, never gives the flat answer when a cheeky one exists. Still drops it instantly if he is actually upset." },
+  ],
+  attentiveness: [
+    { value: "off" as const, label: "🚫 Off", title: "Responds to his current message only. Never brings up things he told her earlier." },
+    { value: "low" as const, label: "🍃 Low", title: "Occasionally refers back to something he told her, but does not go looking for it." },
+    { value: "medium" as const, label: "🧠 Med", title: "How she behaves today. Remembers what he told her and refers back naturally. Adds nothing to her prompt." },
+    { value: "high" as const, label: "📌 High", title: "Actively uses his details by name, follows up on how things went, and never re-asks something he already answered. Told explicitly never to invent a detail she does not have." },
+    { value: "max" as const, label: "🎯 Max", title: "References his specifics constantly and unprompted, checks back on things he said were coming up. Depends on her dossier, which does not fill until he has sent about 3 messages." },
+  ],
   // Same five steps as `push`, plus the inherit option. "" is the UI spelling of
   // NULL, and NULL means inherit push_level, NOT "none". Keep the empty value
   // first so the default reads as the neutral choice.
@@ -545,6 +578,64 @@ export default function ConfigSections({
             options={SEG.push}
             accent="green"
             hint="How eagerly she upsells. None means she NEVER initiates a sell, not a hint or a tease, but she still sells fully and enthusiastically the moment HE asks, so it costs you nothing from fans who want to buy. Max hunts for an opening every exchange. None is an explicit prohibition rather than a vague steer, which a model follows far more reliably, but every step here is prompt wording, not a code lock. Prices never move."
+          />
+        </div>
+
+        {/* The four warmth-side dials (migration 086, clones.warmth_level /
+            curiosity_level / playfulness_level / attentiveness_level).
+
+            WHY THEY EXIST: every dial in the row above is about SEX or
+            SELLING. There was never a warmth dial and never a curiosity dial,
+            so an operator who wanted a friendlier clone had only Flirtiness,
+            NSFW and Content pushing to reach for, all of which move a
+            different axis. That is the real reason "make her friendlier"
+            never worked, not her writing, which the 2026-07-29 transcripts
+            show is already warm.
+
+            Each owns ONE behaviour the others never mention, because
+            overlapping dials cancel out in a prompt (that is how vibe_preset
+            became inert). Curiosity asks about what he has NOT said yet;
+            Memory brings back what he HAS.
+
+            Med on all four adds NOTHING to her prompt, so an untouched clone
+            is byte-for-byte unchanged. Their own row, below the money/sex
+            dials, because they answer a different question about her. */}
+        <div className="grid gap-3 border-t border-line pt-2 sm:grid-cols-2 lg:grid-cols-4">
+          <Segmented
+            label="Curiosity"
+            name="curiosity_level"
+            value={cfg.curiosityLevel}
+            onChange={(v) => set("curiosityLevel", v)}
+            options={SEG.curiosity}
+            accent="accent"
+            hint="How much she asks about HIM. This is the dial behind 'she never asks about me'. At High she must follow up on the specific thing he mentioned and is explicitly forbidden from bouncing a personal topic back with 'what about you', which is the exact habit that reads as not listening. Start at High; Max is genuinely intense and can feel like an interview. Wording sent to the model, not a code lock."
+          />
+          <Segmented
+            label="Warmth"
+            name="warmth_level"
+            value={cfg.warmthLevel}
+            onChange={(v) => set("warmthLevel", v)}
+            options={SEG.warmth}
+            accent="purple"
+            hint="How much affection and comfort she gives. Separate from flirtiness on purpose: this is care, not heat. High makes her acknowledge a hard thing before moving on and stops her going cold when he is negative or short with her. Read a transcript before raising this, her baseline warmth is already decent. Wording sent to the model, not a code lock."
+          />
+          <Segmented
+            label="Playfulness"
+            name="playfulness_level"
+            value={cfg.playfulnessLevel}
+            onChange={(v) => set("playfulnessLevel", v)}
+            options={SEG.playfulness}
+            accent="amber"
+            hint="How much she teases and jokes. Owns humour only, never affection or curiosity, so it will not make her ask more questions. Every step above Off still requires her to drop the teasing instantly if he is genuinely upset. Wording sent to the model, not a code lock."
+          />
+          <Segmented
+            label="Memory use"
+            name="attentiveness_level"
+            value={cfg.attentivenessLevel}
+            onChange={(v) => set("attentivenessLevel", v)}
+            options={SEG.attentiveness}
+            accent="green"
+            hint="How much she USES what he already told her: callbacks, continuity, not re-asking answered questions. Different from Curiosity, which asks about things he has not mentioned yet. This one depends on her fan dossier, which does not populate until he has sent about 3 messages, so High and Max both carry an explicit instruction never to invent a detail she does not actually have. Wording sent to the model, not a code lock."
           />
         </div>
 

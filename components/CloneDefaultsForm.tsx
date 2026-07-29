@@ -57,6 +57,15 @@ export default function CloneDefaultsForm({ defaults }: { defaults: Partial<Clon
     { value: "high" as const, label: "High" },
     { value: "relentless" as const, label: "Max" },
   ];
+  // Migration 086, the four warmth-side dials. Med is the default and adds
+  // nothing to the prompt, so leaving these alone changes nothing fleet-wide.
+  const toneOpts = [
+    { value: "off" as const, label: "Off" },
+    { value: "low" as const, label: "Low" },
+    { value: "medium" as const, label: "Med" },
+    { value: "high" as const, label: "High" },
+    { value: "max" as const, label: "Max" },
+  ];
 
   const Group = ({ label }: { label: string }) => (
     <span className="mt-2 text-xs font-semibold uppercase tracking-wide text-muted first:mt-0">{label}</span>
@@ -78,6 +87,14 @@ export default function CloneDefaultsForm({ defaults }: { defaults: Partial<Clon
           <Select label="Flirtiness" name="sexual_level" value={cfg.sexualLevel} onChange={(v) => set("sexualLevel", v)} options={heatOpts} />
           <Select label="How explicit" name="nsfw_level" value={cfg.nsfwLevel} onChange={(v) => set("nsfwLevel", v)} options={heatOpts} />
           <Select label="Upsell push" name="push_level" value={cfg.pushLevel} onChange={(v) => set("pushLevel", v)} options={pushOpts} />
+        </div>
+        {/* Migration 086. Curiosity first: it is the dial behind "she never
+            asks about me", and it is the one most worth raising fleet-wide. */}
+        <div className="grid gap-3 sm:grid-cols-4">
+          <Select label="Curiosity" name="curiosity_level" value={cfg.curiosityLevel} onChange={(v) => set("curiosityLevel", v)} options={toneOpts} />
+          <Select label="Warmth" name="warmth_level" value={cfg.warmthLevel} onChange={(v) => set("warmthLevel", v)} options={toneOpts} />
+          <Select label="Playfulness" name="playfulness_level" value={cfg.playfulnessLevel} onChange={(v) => set("playfulnessLevel", v)} options={toneOpts} />
+          <Select label="Memory use" name="attentiveness_level" value={cfg.attentivenessLevel} onChange={(v) => set("attentivenessLevel", v)} options={toneOpts} />
         </div>
         <div className="flex flex-wrap items-end gap-x-6 gap-y-3">
           <Toggle label="Emojis" name="emojis_enabled" checked={cfg.emojis} onChange={(v) => set("emojis", v)} accent="soft" />
