@@ -75,6 +75,10 @@ type Initial = {
   // Blank/null = the bot's default lead-in.
   freePreviewInstruction: string | null;
   followupAfterMinutes: number;
+  // Days of silence after which a fan who HAS paid before gets the warm win-back
+  // instead of a normal campaign step. Read for real by isReturningLapsedSpender
+  // in bot/src/campaign.ts, saved to the clones row by saveCampaign.
+  winbackLapseDays: number;
   // Ordered onboarding step list (migration 068) — see the DripForm section below.
   onboardingSteps: OnboardingStepData[];
 };
@@ -503,6 +507,22 @@ export default function DripForm({
           onChange={setEnabled}
           accent="soft"
         />
+
+        {/* Win-back lapse threshold. Rendered UNCONDITIONALLY, never behind the
+            `enabled` gate: saveCampaign always writes this column, so a form that
+            did not carry the field would silently reset the operator's value to
+            the 7-day fallback on every save. Same hazard the offer_pending_minutes
+            / discount_slowdown_minutes defaults have. */}
+        <div className="sm:max-w-xs">
+          <Field
+            label="Win-back after (days quiet)"
+            name="winback_lapse_days"
+            type="number"
+            min={1}
+            defaultValue={initial.winbackLapseDays}
+            hint="A fan who has PAID before and then goes quiet this many days gets the warm win-back (a softer one-time discount plus a fresh teaser) on his next campaign step instead of a normal one. Fans who never paid are unaffected. Default 7. Lower means she chases returning payers sooner."
+          />
+        </div>
 
         {enabled && (
           <Toggle

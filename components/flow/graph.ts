@@ -24,8 +24,6 @@ export type CloneCfg = {
   live_captions_enabled: boolean;
   thank_you_enabled: boolean;
   drip_enabled: boolean;
-  welcome_bundle_after: number | null;
-  onboarding_voice_after: number | null;
   text_model: string;
   routing_model: string;
 };
@@ -151,8 +149,11 @@ export function buildClassic(c: CloneCfg): BuiltGraph {
   // Background jobs (separate cluster, dashed) — each gated.
   const bg: { id: string; label: string; emoji: string; sub: string; on: boolean }[] = [
     { id: "bg-drip", label: "Drip re-engage", emoji: "🔁", sub: "quiet-fan nudges", on: c.drip_enabled },
-    { id: "bg-welcome", label: "Welcome bundle", emoji: "🎁", sub: `after ${c.welcome_bundle_after ?? "?"} msgs`, on: c.photos_enabled && !!c.welcome_bundle_after },
-    { id: "bg-onboard", label: "Onboarding voice", emoji: "🎤", sub: `after ${c.onboarding_voice_after ?? "?"} msgs`, on: c.voice_enabled && !!c.onboarding_voice_after },
+    // The "Welcome bundle" and "Onboarding voice" background nodes were removed
+    // 2026-07-29. They were drawn from welcome_bundle_after /
+    // onboarding_voice_after, columns no runtime code reads any more (onboarding
+    // is the ordered step list now), so the diagram was showing two background
+    // jobs that cannot fire.
   ];
   const bgShown = bg.filter((b) => b.on);
   bgShown.forEach((b, i) => nodes.push(n(b.id, i * 1.4, 7, { label: b.label, sub: b.sub, emoji: b.emoji, kind: "background" })));

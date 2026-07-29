@@ -147,12 +147,10 @@ export default function CloneForm({
       live_captions_enabled: cfg.liveCaptions,
       thank_you_enabled: cfg.thankYou,
       drip_enabled: cfg.dripEnabled,
-      welcome_bundle_after: clone.welcome_bundle_after ?? null,
-      onboarding_voice_after: clone.onboarding_voice_after ?? null,
       text_model: clone.text_model,
       routing_model: clone.routing_model,
     }),
-    [cfg, clone.welcome_bundle_after, clone.onboarding_voice_after, clone.text_model, clone.routing_model],
+    [cfg, clone.text_model, clone.routing_model],
   );
 
   return (

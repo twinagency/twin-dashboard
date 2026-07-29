@@ -109,6 +109,30 @@ export function SpoilMenuEditor({ cfg, set }: { cfg: CloneConfigState; set: SetC
   );
 }
 
+// The three boolean perks, labelled by what the runtime actually does with them.
+// `priority` shortens the fan's human-feel reply wait (applyPriorityWait in
+// bot/src/services/subscriptions.ts) on top of a prompt line. `exclusive` is
+// prompt/tone only: nothing in the bot selects media on it, and no photo, video
+// or bundle carries an "exclusive" flag, so it must never be sold as content.
+// `unlimited` is enforced outright (hasUnlimitedChat).
+const TIER_PERKS = [
+  {
+    key: "priority" as const,
+    label: "Faster replies",
+    hint: "She waits a lot less before answering him than she does for everyone else on this clone. Real, not just tone.",
+  },
+  {
+    key: "exclusive" as const,
+    label: "Insider tone",
+    hint: "She talks to him like an insider who gets the behind-the-scenes side of her. Tone only. It does not unlock any separate or exclusive media.",
+  },
+  {
+    key: "unlimited" as const,
+    label: "Unlimited",
+    hint: "He is never metered and never hits the paywall while his subscription is active.",
+  },
+];
+
 // ── VIP subscription tiers ────────────────────────────────────────────────────
 // Renders the hidden `subscription_tiers` input (always, so it submits even when
 // disabled — matching prior Configure behavior) + the tier editor when enabled.
@@ -136,9 +160,9 @@ export function SubscriptionTiersEditor({ cfg, set }: { cfg: CloneConfigState; s
         <SubCard>
           <p
             className="mb-1.5 text-[11px] text-muted"
-            title="Perks: monthly credits (messages granted each period), priority (front of the line), exclusive (extra campaign content), unlimited (never runs out of messages), discount boost (unlocks a bigger share of your discount caps for him)."
+            title="Perks: monthly credits (messages granted each period), faster replies (she waits a lot less before answering him), insider tone (she treats him as an insider, tone only, it does not unlock any separate content), unlimited (never runs out of messages), discount boost (unlocks a bigger share of your discount caps for him)."
           >
-            Each tier = monthly ⭐ price + perks: <b>credits</b>, <b>priority</b>, <b>exclusive</b>, <b>unlimited</b>, <b>discount boost</b>. ⓘ
+            Each tier = monthly ⭐ price + perks: <b>credits</b>, <b>faster replies</b>, <b>insider tone</b>, <b>unlimited</b>, <b>discount boost</b>. ⓘ
           </p>
           <div className="grid items-start gap-2 lg:grid-cols-2">
             {cfg.subscriptionTiers.map((t, i) => (
@@ -188,15 +212,19 @@ export function SubscriptionTiersEditor({ cfg, set }: { cfg: CloneConfigState; s
                   </label>
                 </div>
                 <div className="mt-2 flex flex-wrap gap-x-5 gap-y-2">
-                  {(["priority", "exclusive", "unlimited"] as const).map((k) => (
-                    <label key={k} className="flex cursor-pointer items-center gap-2 text-xs text-ink">
+                  {/* Labels say what each perk ACTUALLY does. "priority" now
+                      genuinely shortens his reply wait in the bot; "exclusive"
+                      is tone only (there is no exclusive-media flag for any code
+                      to select on), so it is labelled as tone, not as content. */}
+                  {TIER_PERKS.map(({ key, label, hint }) => (
+                    <label key={key} title={hint} className="flex cursor-pointer items-center gap-2 text-xs text-ink">
                       <input
                         type="checkbox"
-                        checked={!!t[k]}
-                        onChange={(e) => set("subscriptionTiers", (prev) => prev.map((p, j) => (j === i ? { ...p, [k]: e.target.checked } : p)))}
+                        checked={!!t[key]}
+                        onChange={(e) => set("subscriptionTiers", (prev) => prev.map((p, j) => (j === i ? { ...p, [key]: e.target.checked } : p)))}
                         className="h-4 w-4 rounded border-line accent-good"
                       />
-                      <span className="capitalize">{k}</span>
+                      <span>{label}</span>
                     </label>
                   ))}
                 </div>

@@ -163,7 +163,7 @@ async function CloneCampaigns({ cloneId }: { cloneId: string }) {
     videos_enabled: boolean;
     bundles_enabled: boolean;
     drip_enabled: boolean;
-    winback_lapse_days: number;
+    winback_lapse_days: number | null;
     drip_media_ids: { type: "photo" | "video" | "bundle"; id: string }[] | null;
     // absent pre-migration-029, so read defensively
     drip_steps?: unknown[] | null;
@@ -226,6 +226,10 @@ async function CloneCampaigns({ cloneId }: { cloneId: string }) {
               : null,
           freePreviewInstruction: clone.onboarding_free_preview_instruction ?? null,
           followupAfterMinutes: clone.followup_after_minutes ?? 0,
+          // Win-back lapse threshold, read for real by the bot as of 2026-07-29.
+          // Falls back to 7 (the same fallback mapClone uses) so an unset clone
+          // shows exactly what the runtime will do.
+          winbackLapseDays: clone.winback_lapse_days ?? 7,
           // Ordered onboarding step list (migration 068) — see validOnboardingSteps above.
           onboardingSteps: validOnboardingSteps(clone.onboarding_steps).map((s) => ({
             type: s.type,

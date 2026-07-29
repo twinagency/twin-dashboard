@@ -650,6 +650,31 @@ async function assertBotTokenFree(botToken: string, excludeId?: string): Promise
   }
 }
 
+// ── DEFAULT CAMPAIGN: 4 STEPS ON A BRAND-NEW CLONE (2026-07-29) ──────────────
+// Operator ask: "default drip campaigns to 4 steps". There was no default of any
+// kind before this: clones.drip_steps has no DB default (migration 030 adds a
+// plain jsonb column), rowFromForm() never wrote the key, and the Campaigns page
+// renders whatever is stored, so every new clone started with an EMPTY campaign
+// and drip_enabled=true, i.e. a re-engagement feature switched on with nothing to
+// send. Seeded here, at insert, and ONLY here, on purpose: seeding it in the
+// Campaigns form instead would show 4 phantom steps to every EXISTING clone that
+// deliberately has none (the two states are indistinguishable once saved), and
+// the operator saving any unrelated field on that page would silently arm a
+// campaign on a live clone. This way an existing clone is never touched.
+//
+// All four are TEXT steps. Text is the one step type that always delivers (AI
+// composes the line fresh in her voice) and the one that sells nothing, so the
+// default is a safe re-engagement rhythm the operator then edits. Hours are
+// spread across Telegram's 24h messaging window, and every offset is inside the
+// 1-23 range the Campaigns form enforces. Shape must match what the runtime
+// reads: {type, after_hours} (see mapClone -> campaignSteps, bot/src/campaign.ts).
+const DEFAULT_DRIP_STEPS = [
+  { type: "text", after_hours: 2 },
+  { type: "text", after_hours: 6 },
+  { type: "text", after_hours: 12 },
+  { type: "text", after_hours: 20 },
+] as const;
+
 // Step 1 of the one-page create flow: insert the clone row from settings only
 // (prompts compiled later, media uploaded later by the client). Returns the new id.
 export async function createCloneRow(fd: FormData): Promise<string> {
@@ -669,7 +694,7 @@ export async function createCloneRow(fd: FormData): Promise<string> {
   }
   await assertBotTokenFree(bot_token);
 
-  const row = { ...rowFromForm(fd), slug };
+  const row = { ...rowFromForm(fd), slug, drip_steps: DEFAULT_DRIP_STEPS };
   let { data, error } = await supabaseAdmin.from("clones").insert(row).select("id").single();
   if (error && isMissingColumnError(error.message)) {
     ({ data, error } = await supabaseAdmin

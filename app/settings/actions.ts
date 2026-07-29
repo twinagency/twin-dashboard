@@ -50,7 +50,7 @@ const DEFAULT_TOGGLES = [
 // Enum selects + free-text strings — stored verbatim when non-empty.
 const DEFAULT_SELECTS = [
   "ai_mode", "sexual_level", "nsfw_level", "push_level", "emoji_amount", "media_caption_mode",
-  "emoji_allowlist", "welcome_instruction", "onboarding_voice_instruction", "paywall_instruction",
+  "emoji_allowlist", "welcome_instruction", "paywall_instruction",
   "paywall_default_message", "paywall_button_label", "eleven_model",
   // Migration 069 — prime/resume steer text + the resume promised-image id.
   "paywall_prime_instruction", "paywall_resume_instruction", "paywall_resume_media_id",
@@ -60,13 +60,20 @@ const DEFAULT_SELECTS = [
 // backward-compat parsing, but CloneDefaultsForm never renders inputs named
 // this, so fd.get() is always null and these never actually get written. Both
 // columns are dead: superseded by drip_steps (migration 029/030), see the
-// comment in app/drip/actions.ts. winback_lapse_days was removed 2026-07-27
-// (CloneDefaultsForm no longer renders it either) — the runtime hardcodes a
-// fixed 7-day win-back lapse, see isReturningLapsedSpender in bot/src/campaign.ts.
+// comment in app/drip/actions.ts.
+// winback_lapse_days is NOT listed here on purpose: it is a per-clone campaign
+// setting owned by the Campaigns page (saveCampaign in app/drip/actions.ts),
+// which writes it to the clones row where bot/src/campaign.ts actually reads it.
+// It was previously saved into this app_settings blob instead, which nothing
+// ever read back. Do not add it here.
+// The four legacy loose onboarding numbers (welcome_bundle_after,
+// welcome_bundle_after_minutes, onboarding_voice_after) plus
+// onboarding_voice_instruction above were removed 2026-07-29 along with their
+// controls: the runtime replaced that whole flow with the ordered onboarding
+// step list, so nothing read them.
 const DEFAULT_NUMBERS = [
   "starting_credits", "credit_pack_size", "credit_pack_price_stars",
   "discount_max_photo", "discount_max_video", "discount_max_bundle", "discount_max_credits",
-  "welcome_bundle_after", "welcome_bundle_after_minutes", "onboarding_voice_after",
   "drip_per_day", "drip_active_window_minutes", "followup_after_minutes",
   "response_wait_min", "response_wait_max", "memory_window",
   "voice_stability", "voice_similarity", "voice_style", "voice_speed",

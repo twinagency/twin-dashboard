@@ -166,12 +166,17 @@ export default function CloneDefaultsForm({ defaults }: { defaults: Partial<Clon
       <div className="grid gap-3">
         <Group label="New user flow" />
         <Area label="Welcome greeting instruction (optional)" name="welcome_instruction" rows={2} placeholder="e.g. greet him warmly, introduce yourself, ask his name" defaultValue={defaults.welcome_instruction} />
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-          <Field label="Voice-note reply on fan's Nth message (blank = off)" name="onboarding_voice_after" type="number" defaultValue={defaults.onboarding_voice_after} placeholder="e.g. 3" />
-          <Field label="Photo bundle after fan's Nth message" name="welcome_bundle_after" type="number" defaultValue={defaults.welcome_bundle_after ?? 10} />
-        </div>
-        <Area label="Onboarding voice instruction (optional)" name="onboarding_voice_instruction" rows={2} placeholder="e.g. say hi in her voice, keep it short and warm" defaultValue={defaults.onboarding_voice_instruction} />
-        <Field label="…or send the bundle on a timer if he goes quiet (minutes, blank = off)" name="welcome_bundle_after_minutes" type="number" defaultValue={defaults.welcome_bundle_after_minutes} placeholder="e.g. 30" />
+        {/* The four legacy loose onboarding controls (onboarding_voice_after,
+            welcome_bundle_after, onboarding_voice_instruction,
+            welcome_bundle_after_minutes) were removed 2026-07-29. They were dead
+            on both sides: the runtime stopped reading those columns when
+            onboarding became the ordered step list (see bot/src/onboarding.ts,
+            "onboardingSteps is now the ONLY onboarding engine"), and the clone
+            save action deliberately never wrote them either. Onboarding is
+            configured per clone on the Campaigns page now. Columns are left in
+            place per the additive-only rule, they are simply never written or
+            read. None of the four was a cap or gate on something still running,
+            so nothing is left uncapped by removing them. */}
       </div>
 
       {/* ── PAYWALL ── */}
@@ -246,14 +251,12 @@ export default function CloneDefaultsForm({ defaults }: { defaults: Partial<Clon
       <div className="grid gap-3">
         <Group label="Campaigns / re-engagement" />
         <Toggle label={cfg.dripEnabled ? "Campaign is on" : "Campaign is off"} name="drip_enabled" checked={cfg.dripEnabled} onChange={(v) => set("dripEnabled", v)} accent="soft" />
-        {/* Win-back lapse threshold used to be editable here (winback_lapse_days),
-            but the runtime hardcodes a fixed 7-day threshold and deliberately does
-            not read this column (see isReturningLapsedSpender in bot/src/campaign.ts
-            and the matching comment in dashboard/app/drip/actions.ts). The field was
-            removed 2026-07-27 because it saved into app_settings and nothing ever
-            read it back, an operator "setting" something that silently did nothing.
-            The clones.winback_lapse_days column and its Clone type field are kept
-            (never dropped from a live DB) but are otherwise legacy/unused. */}
+        {/* Win-back lapse threshold (winback_lapse_days) is NOT edited here. It is
+            a per-clone campaign setting and lives on the Campaigns page, where
+            saveCampaign writes it to the clones row, which is the only place
+            bot/src/campaign.ts reads it from (wired 2026-07-29). It was previously
+            edited here and saved into app_settings, which nothing ever read back.
+            Do not add it back to this fleet-defaults form. */}
         {cfg.dripEnabled && (
           <div className="grid grid-cols-1 gap-4 sm:max-w-xs">
             <Field label="Follow-up if quiet mid-chat (minutes, 0 = off)" name="followup_after_minutes" type="number" defaultValue={defaults.followup_after_minutes ?? 0} placeholder="0" />

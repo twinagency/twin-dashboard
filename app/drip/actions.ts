@@ -152,8 +152,13 @@ export async function saveCampaign(id: string, fd: FormData) {
     onboarding_captions_off: fd.get("onboarding_captions_off") === "true",
     // Mid-chat follow-up
     followup_after_minutes: Math.max(0, num(fd, "followup_after_minutes", 0)),
-    // Campaign. (Win-back's lapse threshold is no longer operator-facing; the
-    // runtime uses a fixed default — see isReturningLapsedSpender in campaign.ts.)
+    // Campaign. winback_lapse_days is read for real by isReturningLapsedSpender
+    // in bot/src/campaign.ts (wired 2026-07-29). It MUST be written to the clones
+    // row, which is the only place the bot reads it from. An earlier control for
+    // this saved into app_settings instead and nothing ever read it back, which
+    // is how the setting died the first time. Clamped to at least 1 day: 0 would
+    // mark every paying fan as lapsed immediately.
+    winback_lapse_days: Math.max(1, num(fd, "winback_lapse_days", 7)),
     drip_enabled: fd.get("drip_enabled") === "true",
     campaign_captions_off: fd.get("campaign_captions_off") === "true",
     drip_steps: parseSteps(fd),
