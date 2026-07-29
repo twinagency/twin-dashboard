@@ -91,6 +91,10 @@ export type CloneConfigState = {
   offerRedirectCap: number;
 
   tips: boolean;
+  // Migration 084 (clones.tip_reask_after_paid). Money brake, opt-in only.
+  // The cooldown that pairs with it is an uncontrolled number field, seeded
+  // straight from the clone row the way voice_cooldown_turns is.
+  tipReaskAfterPaid: boolean;
   spoilOptions: { stars: number; label: string }[];
   categoryPricing: CategoryPricing;
   liveCaptions: boolean;
@@ -137,6 +141,9 @@ export type CloneConfigState = {
   randomVoiceChance: number;
 
   timezone: string;
+  // Migration 084 (clones.fan_time_mode). The timezone above is HERS; this is
+  // what she does about HIS time of day when he has not told us his own.
+  fanTimeMode: "never_assume" | "may_ask" | "assume_same";
   onboardingCollect: string[];
 
   dripEnabled: boolean;
@@ -209,6 +216,7 @@ function initial(clone?: Partial<Clone>): CloneConfigState {
     offerRedirectCap: clone?.offer_redirect_cap ?? 3,
 
     tips: clone?.tips_enabled ?? false,
+    tipReaskAfterPaid: clone?.tip_reask_after_paid ?? false,
     spoilOptions: clone?.spoil_options && clone.spoil_options.length ? clone.spoil_options : DEFAULT_SPOIL_OPTIONS,
     categoryPricing:
       clone?.category_pricing && Object.keys(clone.category_pricing).length
@@ -251,6 +259,9 @@ function initial(clone?: Partial<Clone>): CloneConfigState {
     randomVoiceChance: clone?.random_voice_chance ?? 15,
 
     timezone: clone?.timezone ?? "UTC",
+    // Same fallback mapClone uses (bot/src/data/supabase-store.ts), so the
+    // control can never show a mode the bot is not actually running.
+    fanTimeMode: clone?.fan_time_mode ?? "never_assume",
     onboardingCollect: Array.isArray(clone?.onboarding_collect_fields) ? clone!.onboarding_collect_fields! : [],
 
     dripEnabled: clone?.drip_enabled ?? true,

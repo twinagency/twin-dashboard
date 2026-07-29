@@ -22,7 +22,13 @@ export const CLONE_TOGGLE_FIELDS = [
   "ai_disclosure",
   "emojis_enabled",
   "discounts_enabled",
-  "subscriptions_enabled",
+  // subscriptions_enabled deliberately NOT listed: VIP/recurring Star
+  // subscriptions and their UI were removed from the dashboard on 2026-07-29
+  // (see the note in app/clones/actions.ts's rowFromForm). The operator does
+  // not want subscriptions at all, so this toggle allowlist (used by both
+  // setCloneToggle and the /ai assistant's write tools) must not be able to
+  // flip it back on. The column stays in the DB and the bot still reads it;
+  // only the ability to write it through this generic toggle path is removed.
   "smart_paywall_enabled",
 ] as const;
 export type CloneToggleField = (typeof CLONE_TOGGLE_FIELDS)[number];

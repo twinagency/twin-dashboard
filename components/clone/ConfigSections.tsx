@@ -116,6 +116,13 @@ const SEG = {
     { value: "medium" as const, label: "Some", title: "About every other message" },
     { value: "high" as const, label: "A lot", title: "Most messages have one or two" },
   ],
+  // Migration 084 (clones.fan_time_mode). Keep never_assume first: it is the
+  // default and the fix, and assume_same is the legacy behaviour.
+  fanTime: [
+    { value: "never_assume" as const, label: "🚫 Never assume", title: "She never says or implies what time of day it is for HIM. No \"how's your night going\", no \"morning!\", no \"you're up late\", not even sideways. She can still talk about her own clock (\"it's so late here\"), because that part is true." },
+    { value: "may_ask" as const, label: "💬 May ask", title: "Everything Never assume does, plus she may naturally ask what time it is where he is. Once he tells her, she uses his real clock from then on." },
+    { value: "assume_same" as const, label: "🌍 Same as hers", title: "Legacy. She talks as though he is in roughly the same part of the day she is. Only pick this if every fan really is in her timezone. This is the behaviour that produced the live incident." },
+  ],
 };
 
 // ── Language picker (collapsed multi-select, controlled) ──────────────────────
@@ -348,6 +355,19 @@ export default function ConfigSections({
           onChange={(v) => set("timezone", v)}
           options={TIMEZONE_OPTIONS}
           hint="She always knows the live date and time in this zone. Default UTC."
+        />
+        {/* fan_time_mode (migration 084), read at bot/src/flows/human.ts:255 by
+            fanTimeMode() and used in nowNudge. Sits with Timezone because it is
+            the other half of the same question: that clock is hers, this is
+            what she may say about his. */}
+        <Segmented
+          label="His time of day"
+          name="fan_time_mode"
+          value={cfg.fanTimeMode}
+          onChange={(v) => set("fanTimeMode", v)}
+          options={SEG.fanTime}
+          accent="accent"
+          hint="The Timezone above is HERS, and it is the only clock she has. Leave this on Never assume, the default and the fix: a real fan was once greeted with 'how's your night going' when it was the middle of his afternoon. If he has actually told her his timezone she uses his real clock instead and this setting is skipped entirely. Hover a step to see exactly what she is told."
         />
 
         {/* AI mode - used to be its own card, but it's one control; it belongs
@@ -1171,6 +1191,33 @@ export function MonetizationSections({
           onChange={(v) => set("tips", v)}
           accent="soft"
         />
+        {/* Migration 084, the two tip re-ask brakes. Rendered unconditionally,
+            NOT behind cfg.tips like the spoil menu below: a hidden Toggle posts
+            nothing, and `=== "true"` would then quietly write false on every
+            save made with tips off. */}
+        <Field
+          label="Tip re-ask cooldown (seconds)"
+          name="tip_reask_cooldown_seconds"
+          type="number"
+          min={1}
+          step={1}
+          placeholder="180"
+          defaultValue={clone?.tip_reask_cooldown_seconds ?? undefined}
+          hint="After she has shown him a tip button or the spoil menu, how long she stays off the subject before she is allowed to show one again. Leave blank for the default of 180 seconds, which is what every clone ran on before this field existed. Lower means she circles back to being tipped sooner. A fresh, explicit offer from him always goes through immediately, whatever this says."
+        />
+        <div className="block">
+          <FieldLabel
+            label="🎁 May ask again right after a tip"
+            hint="Leave this OFF, which is the default and the recommendation. Off, her thank-you after a tip is warm and grateful and stops there. On, that same message may add that she would love another one, seconds after he has just paid you. Tips only, it never touches her reaction to credits, media or subscriptions. Prices and amounts are unaffected either way."
+          />
+          <Toggle
+            label={cfg.tipReaskAfterPaid ? "Can ask for another tip right after one" : "Never asks again right after a tip (recommended)"}
+            name="tip_reask_after_paid"
+            checked={cfg.tipReaskAfterPaid}
+            onChange={(v) => set("tipReaskAfterPaid", v)}
+            accent="soft"
+          />
+        </div>
         {cfg.tips && <SpoilMenuEditor cfg={cfg} set={set} />}
       </Collapse>
 

@@ -211,6 +211,15 @@ export type Clone = {
 
   // IANA timezone (e.g. "America/New_York"); drives her in-prompt time awareness.
   timezone: string;
+  // Migration 084. `timezone` above is HERS. This is what she does about the
+  // FAN's time of day when he has not told us his own timezone. Read by
+  // fanTimeMode() in bot/src/flows/human.ts:255 (used by nowNudge).
+  fan_time_mode?: "never_assume" | "may_ask" | "assume_same";
+  // Migration 084. Tip/spoil re-ask brakes. Read by spoilCooldownMs() in
+  // bot/src/flows/spoil.ts:136 and tipReaskAfterPaidEnabled() in
+  // bot/src/star-reconcile.ts:32. null cooldown = the bot's 180s default.
+  tip_reask_cooldown_seconds?: number | null;
+  tip_reask_after_paid?: boolean;
 
   // new-user (onboarding) flow
   welcome_instruction: string | null;

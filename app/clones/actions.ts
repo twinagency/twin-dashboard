@@ -102,6 +102,9 @@ function bool(fd: FormData, key: string): boolean {
 // pre-082 clone row is still carrying one.
 const HEAT_LEVELS = ["off", "mild", "medium", "explicit", "max", "low", "high"] as const;
 const PUSH_LEVELS = ["none", "low", "medium", "high", "relentless"] as const;
+// Migration 084 (clones.fan_time_mode). Must stay identical to the DB CHECK
+// constraint clones_fan_time_mode_check, or a save fails outright.
+const FAN_TIME_MODES = ["never_assume", "may_ask", "assume_same"] as const;
 
 function oneOf<T extends string>(v: string | null, allowed: readonly T[], fallback: T): T {
   return (allowed as readonly string[]).includes(v ?? "") ? (v as T) : fallback;
@@ -289,6 +292,20 @@ function rowFromForm(fd: FormData) {
     // below so a save before the migration lands still succeeds.
     media_allow_resend: fd.get("media_allow_resend") === "true",
     tips_enabled: fd.get("tips_enabled") === "true",
+    // Migration 084, the two tip re-ask brakes.
+    //
+    // NO numeric fallback and NO clamp on the cooldown, deliberately. null is a
+    // meaningful value here: spoilCooldownMs() (bot/src/flows/spoil.ts:136)
+    // reads null as "use the 180s code default", which is the exact behaviour
+    // that was hardcoded before this column existed. Writing a number in place
+    // of a blank field would freeze today's default into the row and break that
+    // contract. A 0 is rejected by the DB CHECK rather than silently stored,
+    // because a 0 cooldown is a removed money brake, not a configuration.
+    tip_reask_cooldown_seconds: numOrNull(fd, "tip_reask_cooldown_seconds"),
+    // Reads "true" (the Toggle primitive's hidden-input value), not bool()'s
+    // "on". Default false is load bearing: true lets her ask for another tip
+    // moments after a fan has paid, which must be an explicit operator choice.
+    tip_reask_after_paid: fd.get("tip_reask_after_paid") === "true",
     live_captions_enabled: fd.get("live_captions_enabled") === "true",
     media_caption_mode: ["none", "separate"].includes(str(fd, "media_caption_mode") ?? "")
       ? (str(fd, "media_caption_mode") as string)
@@ -450,6 +467,12 @@ function rowFromForm(fd: FormData) {
 
     // time awareness (IANA tz; runtime injects her current local date/time)
     timezone: str(fd, "timezone") ?? "UTC",
+    // Migration 084. The timezone above is HERS. fan_time_mode is what she does
+    // about HIS time of day when he has not told us his own timezone. Anything
+    // unrecognised falls back to 'never_assume', the safe mode: 'assume_same'
+    // is the legacy behaviour that made her greet a real fan with "how's your
+    // night going" off her own clock, so it is opt-in and never a fallback.
+    fan_time_mode: oneOf(str(fd, "fan_time_mode"), FAN_TIME_MODES, "never_assume"),
 
     // NOTE: every outbound-engagement column — the onboarding flow
     // (welcome_instruction / welcome_bundle_after[_minutes] /
@@ -637,6 +660,13 @@ const MEDIA_RESEND_COLUMNS = ["media_allow_resend"] as const;
 // NOTE: migration 082 (the widened push/sexual/nsfw CHECKs) needs no entry here
 // because it adds no column, it only relaxes a constraint on existing ones.
 const DIAL_080_COLUMNS = ["tip_push_level", "greeting_ask_age"] as const;
+// Migration 084: fan_time_mode + the two tip re-ask brakes. Verified applied on
+// aouaenqayfltoqrmpitg 2026-07-29; listed anyway so a save still succeeds
+// against a stack where 084 has not run yet, instead of failing wholesale.
+// See bot/db/migrations/084_fan_time_and_tip_reask.sql.
+const FLOW_084_COLUMNS = [
+  "fan_time_mode", "tip_reask_cooldown_seconds", "tip_reask_after_paid",
+] as const;
 // The response-pacing, monetization-sequence, re-warm-photo and
 // offer-redirect column lists were removed on 2026-07-27: those columns are no
 // longer written by this form at all, so they cannot appear in the row that
@@ -655,6 +685,7 @@ const OPTIONAL_COLUMNS = [
   ...FLOW_072_COLUMNS,
   ...MEDIA_RESEND_COLUMNS,
   ...DIAL_080_COLUMNS,
+  ...FLOW_084_COLUMNS,
 ] as const;
 
 function withoutPersonaFactColumns(row: Record<string, unknown>): Record<string, unknown> {
