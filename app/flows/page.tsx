@@ -44,12 +44,16 @@ function validSteps(
 // Same defensive-read pattern as validSteps above, message-count bound 1-50.
 const ONBOARDING_STEP_TYPES = ["text", "voice", "photo", "video", "bundle", "collect", "tease"];
 function validOnboardingSteps(raw: unknown): {
+  id?: string;
   type: "text" | "voice" | "photo" | "video" | "bundle" | "collect" | "tease";
   after_messages: number;
   media_id?: string;
   free?: boolean;
   collect_field?: string;
   instruction?: string;
+  condition?: "none" | "agreed";
+  condition_within_messages?: number;
+  condition_lapse?: "send" | "skip";
 }[] {
   if (!Array.isArray(raw)) return [];
   return raw.filter((s: any) => {
@@ -241,12 +245,22 @@ async function CloneFlows({ cloneId }: { cloneId: string }) {
           winbackLapseDays: clone.winback_lapse_days ?? 7,
           // Ordered onboarding step list (migration 068) — see validOnboardingSteps above.
           onboardingSteps: validOnboardingSteps(clone.onboarding_steps).map((s) => ({
+            // The stable id (migration 087) MUST round-trip through the form.
+            // If it is dropped here the save mints a fresh one, every live fan
+            // sees the step as brand new, and the desync bug is back.
+            id: typeof s.id === "string" && s.id.trim() ? s.id.trim() : null,
             type: s.type,
             afterMessages: s.after_messages,
             mediaId: typeof s.media_id === "string" && s.media_id.trim() ? s.media_id.trim() : null,
             free: s.free === true,
             collectField: typeof s.collect_field === "string" && s.collect_field.trim() ? s.collect_field.trim() : null,
             instruction: typeof s.instruction === "string" && s.instruction.trim() ? s.instruction.trim() : null,
+            condition: s.condition === "agreed" ? ("agreed" as const) : ("none" as const),
+            conditionWithinMessages:
+              Number.isFinite(Number(s.condition_within_messages)) && Number(s.condition_within_messages) >= 1
+                ? Math.round(Number(s.condition_within_messages))
+                : null,
+            conditionLapse: s.condition_lapse === "skip" ? ("skip" as const) : ("send" as const),
           })),
         }}
       />

@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { randomUUID } from "node:crypto";
 import { supabaseAdmin } from "@/lib/supabase";
 
 function num(fd: FormData, key: string, fallback: number): number {
@@ -60,12 +61,16 @@ function parseSteps(fd: FormData): StepOut[] {
 const ONBOARDING_STEP_TYPES = ["text", "voice", "photo", "video", "bundle", "collect", "tease"] as const;
 type OnboardingStepType = (typeof ONBOARDING_STEP_TYPES)[number];
 type OnboardingStepOut = {
+  id: string;
   type: OnboardingStepType;
   after_messages: number;
   media_id?: string;
   free?: boolean;
   collect_field?: string;
   instruction?: string;
+  condition?: "agreed";
+  condition_within_messages?: number;
+  condition_lapse?: "skip";
 };
 // Step types that carry an optional per-step steer (AI-written line types).
 const CAN_STEER_ONBOARDING = new Set<OnboardingStepType>(["text", "voice", "tease"]);
@@ -81,7 +86,17 @@ function parseOnboardingSteps(fd: FormData): OnboardingStepOut[] {
       if (!type) continue;
       const afterRaw = Math.round(Number(s?.after_messages));
       if (!Number.isFinite(afterRaw)) continue;
-      const step: OnboardingStepOut = { type, after_messages: Math.min(50, Math.max(1, afterRaw)) };
+      // STABLE ID (migration 087). Preserved when the form sends one back,
+      // minted here when it doesn't (a brand-new step, or a step saved by a
+      // pre-087 form). This is the whole fix for the desync bug: a step must
+      // carry the SAME id across every edit, or every live fan mid-onboarding
+      // sees it as new. Never re-issue an id for a step that already has one.
+      const existingId = String(s?.id ?? "").trim();
+      const step: OnboardingStepOut = {
+        id: existingId || randomUUID(),
+        type,
+        after_messages: Math.min(50, Math.max(1, afterRaw)),
+      };
       const isMedia = type === "photo" || type === "video" || type === "bundle";
       if (isMedia) {
         const mediaId = String(s?.media_id ?? "").trim();
@@ -97,6 +112,19 @@ function parseOnboardingSteps(fd: FormData): OnboardingStepOut[] {
       if (CAN_STEER_ONBOARDING.has(type)) {
         const instruction = String(s?.instruction ?? "").trim();
         if (instruction) step.instruction = instruction;
+      }
+      // The "if" half of the trigger (migration 087). Only written when the
+      // operator actually picked a condition, so an untouched step's jsonb is
+      // byte-identical to what it was before and the runtime treats it as
+      // "none" — today's behaviour exactly.
+      if (s?.condition === "agreed") {
+        step.condition = "agreed";
+        const withinRaw = Math.round(Number(s?.condition_within_messages));
+        if (Number.isFinite(withinRaw)) {
+          step.condition_within_messages = Math.min(50, Math.max(1, withinRaw));
+        }
+        // "send" is the default in the bot, so only the non-default is stored.
+        if (s?.condition_lapse === "skip") step.condition_lapse = "skip";
       }
       out.push(step);
     }

@@ -95,6 +95,8 @@ export default async function FansPage({
     free?: boolean;
     collect_field?: string | null;
     instruction?: string | null;
+    // Stable id (migration 087) — what onboarding_steps_done records.
+    id?: string | null;
   };
   const clones = (clonesRes.data ?? []) as {
     id: string;
@@ -296,16 +298,25 @@ export default async function FansPage({
   };
   const selectedClone = selected ? cloneById.get(selected.clone_id) : undefined;
   const onboardingSteps: OnboardingStepRow[] = selectedClone?.onboarding_steps ?? [];
+  // Delivery is tracked by STABLE STEP ID (migration 087), never by position:
+  // positions re-point at different steps the moment the list is edited, which
+  // desynced every live fan. Mirrors deliveredStepKeys()/stepKey() in
+  // bot/src/onboarding-state.ts, including the positional fallback for a row
+  // that only has pre-087 history.
+  const stepKeyOf = (s: OnboardingStepRow, i: number) => (s.id?.trim() ? s.id.trim() : `#${i}`);
   const onboardingStepsSent: number[] = Array.isArray(selected?.onboarding_steps_sent) ? selected.onboarding_steps_sent : [];
-  const sentStepSet = new Set(onboardingStepsSent);
-  // Sequential pointer, same as dueOnboardingStep(): first index not yet sent.
-  const nextStepIndex = onboardingSteps.findIndex((_, i) => !sentStepSet.has(i));
+  const onboardingStepsDone: string[] = Array.isArray(selected?.onboarding_steps_done) ? selected.onboarding_steps_done : [];
+  const sentStepSet = new Set<string>(onboardingStepsDone.filter((k) => typeof k === "string" && k.trim()));
+  if (sentStepSet.size === 0) {
+    for (const i of onboardingStepsSent) {
+      const step = onboardingSteps[i];
+      if (step) sentStepSet.add(stepKeyOf(step, i));
+    }
+  }
+  // Sequential pointer, same as dueOnboardingStep(): first step not yet sent.
+  const nextStepIndex = onboardingSteps.findIndex((s, i) => !sentStepSet.has(stepKeyOf(s, i)));
   const nextStep = nextStepIndex !== -1 ? onboardingSteps[nextStepIndex] : null;
-  const firedSteps = onboardingStepsSent
-    .slice()
-    .sort((a, b) => a - b)
-    .map((i) => onboardingSteps[i])
-    .filter((s): s is OnboardingStepRow => !!s);
+  const firedSteps = onboardingSteps.filter((s, i) => sentStepSet.has(stepKeyOf(s, i)));
   // onboardingActive() in bot/src/onboarding-state.ts: frozen while onboarding
   // has something LEFT to do - an unsent step remains, or the free-preview
   // fallback is still armed - never a bare "!onboarding_complete" (that would

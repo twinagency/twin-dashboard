@@ -280,6 +280,11 @@ export type Clone = {
   // quiet — see the migration for why. Optional: absent pre-migration-068.
   onboarding_steps?:
     | {
+        // Stable identity (migration 087). Delivery is recorded against this,
+        // never the step's position, so editing the list no longer desyncs live
+        // fans. MUST be preserved on every save — dropping it re-issues a new id
+        // and makes the step look brand new to every fan mid-onboarding.
+        id?: string;
         type: "text" | "voice" | "photo" | "video" | "bundle" | "collect" | "tease";
         after_messages?: number;
         media_id?: string;
@@ -288,6 +293,12 @@ export type Clone = {
         // Optional per-step steer for text/voice/tease lines (migration 069,
         // stored inside the jsonb, not a column). Blank = she decides.
         instruction?: string | null;
+        // The optional "if" half of the trigger (migration 087). after_messages
+        // is the "when". Absent/"none" = fires on the count alone, which is the
+        // behaviour every step had before 087.
+        condition?: "none" | "agreed" | null;
+        condition_within_messages?: number | null;
+        condition_lapse?: "send" | "skip" | null;
       }[]
     | null;
 
