@@ -128,16 +128,43 @@ function DetailView({ detail }: { detail: Record<string, unknown> }) {
     <dl className="grid max-h-64 gap-x-4 gap-y-1 overflow-auto text-xs sm:grid-cols-[max-content_1fr]">
       {entries.map(([key, value]) => (
         <Fragment key={key}>
-          <dt className="whitespace-nowrap font-medium text-muted">{friendlyKey(key)}</dt>
-          <dd className="whitespace-pre-wrap break-all text-ink/90">{formatDetailValue(value)}</dd>
+          <dt className="whitespace-nowrap font-medium text-muted" title={DETAIL_HINTS[key]}>
+            {friendlyKey(key)}
+            {DETAIL_HINTS[key] && <span className="ml-1 cursor-help text-muted/70">ⓘ</span>}
+          </dt>
+          <dd className="whitespace-pre-wrap break-all text-ink/90">{formatDetailValue(key, value)}</dd>
         </Fragment>
       ))}
     </dl>
   );
 }
 
-function formatDetailValue(value: unknown): string {
+// Hover hints for the two delivery keys, which are new and not self-evident.
+const DETAIL_HINTS: Record<string, string> = {
+  bubbles: "How many separate Telegram messages the fan actually received for this reply. Chat history stores it as one row.",
+  sends: "Every real outbound send this turn, in order: bubbles, media captions, pins, invoices.",
+};
+
+// A turn's `sends` array is the one detail value worth flattening: it is the
+// record of what the fan actually received, so it prints one line per send
+// instead of a single unreadable JSON blob.
+function formatSends(value: unknown[]): string {
+  if (value.length === 0) return "-";
+  return value
+    .map((s, i) => {
+      if (!s || typeof s !== "object") return `${i + 1}. ${String(s)}`;
+      const { kind, text, meta } = s as { kind?: string; text?: string; meta?: Record<string, unknown> };
+      const parts = [`${i + 1}. ${kind ?? "send"}`];
+      if (text) parts.push(text);
+      if (meta && Object.keys(meta).length) parts.push(JSON.stringify(meta));
+      return parts.join("  ");
+    })
+    .join("\n");
+}
+
+function formatDetailValue(key: string, value: unknown): string {
   if (value === null || value === undefined || value === "") return "-";
+  if (key === "sends" && Array.isArray(value)) return formatSends(value);
   if (typeof value === "object") return JSON.stringify(value);
   return String(value);
 }
