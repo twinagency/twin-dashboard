@@ -1,7 +1,7 @@
 "use client";
 
-import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
-import { AudioLines, Mic, MicOff, Send, Volume2, VolumeX } from "lucide-react";
+import { useCallback, useEffect, useRef, useState } from "react";
+import TwinPanel from "./TwinPanel";
 
 type CoreState = "idle" | "listening" | "processing" | "speaking" | "learning";
 
@@ -18,11 +18,6 @@ type NeuralLink = {
   a: number;
   b: number;
   phase: number;
-};
-
-type TranscriptLine = {
-  role: "You" | "Twin";
-  text: string;
 };
 
 const STATE_LABELS: Record<CoreState, string> = {
@@ -98,10 +93,14 @@ export default function TwinAssistant() {
   const timersRef = useRef<number[]>([]);
   const [state, setState] = useState<CoreState>("idle");
   const [hovered, setHovered] = useState(false);
-  const [voiceMode, setVoiceMode] = useState(true);
-  const [input, setInput] = useState("");
-  const [typingActive, setTypingActive] = useState(false);
-  const [transcript, setTranscript] = useState<TranscriptLine[]>([]);
+  // 2026-07-31: the orb used to carry its own input box, mic button, voice
+  // toggle and two-line transcript right here in the sidebar. None of it was
+  // connected to anything - `submit` replied with a hardcoded "I am here. Your
+  // message has reached the Twin intelligence core." and the mic only fed the
+  // particle animation. The real assistant now lives in TwinPanel, which the
+  // orb opens, so all of that came out rather than sitting next to a working
+  // one looking equally real.
+  const [panelOpen, setPanelOpen] = useState(false);
 
   useEffect(() => {
     stateRef.current = state;
@@ -381,87 +380,24 @@ export default function TwinAssistant() {
     };
   }, []);
 
-  const toggleListening = useCallback(async () => {
-    if (stateRef.current === "listening") {
-      stopListening();
-      setState("idle");
-      return;
-    }
-
-    clearTimers();
-    window.speechSynthesis?.cancel();
-    stopListening();
-
-    try {
-      if (!navigator.mediaDevices?.getUserMedia) throw new Error("Microphone unavailable");
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-      const AudioContextClass = window.AudioContext;
-      const audioContext = new AudioContextClass();
-      const analyser = audioContext.createAnalyser();
-      analyser.fftSize = 256;
-      analyser.smoothingTimeConstant = 0.72;
-      audioContext.createMediaStreamSource(stream).connect(analyser);
-      micStreamRef.current = stream;
-      audioContextRef.current = audioContext;
-      analyserRef.current = analyser;
-      analyserDataRef.current = new Uint8Array(analyser.frequencyBinCount);
-      setState("listening");
-    } catch {
-      setTranscript((lines) => [...lines.slice(-1), { role: "Twin", text: "Microphone access is needed for listening mode." }]);
-      setState("idle");
-    }
-  }, [clearTimers, stopListening]);
-
-  const speakResponse = useCallback((text: string) => {
-    setState("speaking");
-    if (voiceMode && "speechSynthesis" in window) {
-      const utterance = new SpeechSynthesisUtterance(text);
-      utterance.rate = 0.96;
-      utterance.pitch = 0.92;
-      utterance.volume = 0.82;
-      utterance.onend = () => setState("idle");
-      utterance.onerror = () => setState("idle");
-      window.speechSynthesis.cancel();
-      window.speechSynthesis.speak(utterance);
-      return;
-    }
-
-    const timer = window.setTimeout(() => setState("idle"), 1800);
-    timersRef.current.push(timer);
-  }, [voiceMode]);
-
-  const submit = (event: FormEvent) => {
-    event.preventDefault();
-    const message = input.trim();
-    if (!message) return;
-
-    clearTimers();
-    stopListening();
-    window.speechSynthesis?.cancel();
-    setTranscript((lines) => [...lines.slice(-2), { role: "You", text: message }]);
-    setInput("");
-    setTypingActive(false);
-    typingActiveUntilRef.current = 0;
-    setState("processing");
-
-    const response = "I am here. Your message has reached the Twin intelligence core.";
-    const timer = window.setTimeout(() => {
-      setTranscript((lines) => [...lines.slice(-2), { role: "Twin", text: response }]);
-      speakResponse(response);
-    }, 1350);
-    timersRef.current.push(timer);
-  };
-
-  const displayLabel = state !== "idle" ? STATE_LABELS[state] : typingActive ? "Receiving" : hovered ? "Aware" : STATE_LABELS.idle;
+  const displayLabel = state !== "idle" ? STATE_LABELS[state] : panelOpen ? "Open" : hovered ? "Aware" : STATE_LABELS.idle;
 
   return (
     <section className="w-full px-1 pb-1" aria-label="Twin AI assistant">
       <div className="relative">
         <canvas
           ref={canvasRef}
-          className="block h-[176px] w-full touch-none cursor-default drop-shadow-[0_0_18px_rgba(56,189,248,0.34)] [@media(max-height:850px)]:h-[148px]"
-          aria-label={`Twin intelligence core, ${displayLabel.toLowerCase()}`}
-          role="img"
+          className="block h-[176px] w-full touch-none cursor-pointer drop-shadow-[0_0_18px_rgba(56,189,248,0.34)] transition-transform duration-300 hover:scale-[1.03] [@media(max-height:850px)]:h-[148px]"
+          aria-label={`Open Twin assistant. Intelligence core, ${displayLabel.toLowerCase()}`}
+          role="button"
+          tabIndex={0}
+          onClick={() => setPanelOpen(true)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter" || event.key === " ") {
+              event.preventDefault();
+              setPanelOpen(true);
+            }
+          }}
           onPointerEnter={() => setHovered(true)}
           onPointerLeave={() => {
             setHovered(false);
@@ -497,85 +433,15 @@ export default function TwinAssistant() {
         </div>
       </div>
 
-      <form onSubmit={submit} className="mt-2">
-        <div className="flex items-center gap-1 rounded-xl border border-white/65 bg-white/45 p-1 shadow-[0_8px_24px_rgb(12_29_56/0.1)] backdrop-blur-md transition focus-within:border-cyan-300/80 focus-within:bg-white/60">
-          <input
-            value={input}
-            onChange={(event) => {
-              setInput(event.target.value);
-              const now = performance.now();
-              typingActiveUntilRef.current = now + 950;
-              typingEnergyRef.current = Math.max(typingEnergyRef.current, 0.42);
-              setTypingActive(true);
-              if (typingStatusTimerRef.current) window.clearTimeout(typingStatusTimerRef.current);
-              typingStatusTimerRef.current = window.setTimeout(() => setTypingActive(false), 1000);
-              const last = typingPulsesRef.current.at(-1) ?? 0;
-              if (now - last > 90) typingPulsesRef.current.push(now);
-            }}
-            placeholder="Ask Twin anything"
-            aria-label="Ask Twin anything"
-            className="min-w-0 flex-1 bg-transparent px-2 py-1.5 text-[11px] font-medium text-ink outline-none placeholder:text-ink/45"
-          />
-          <button
-            type="button"
-            onClick={toggleListening}
-            aria-label={state === "listening" ? "Stop listening" : "Start listening"}
-            aria-pressed={state === "listening"}
-            title={state === "listening" ? "Stop listening" : "Use microphone"}
-            className={
-              "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition " +
-              (state === "listening" ? "bg-cyan-500 text-white shadow-[0_0_12px_rgba(6,182,212,0.5)]" : "text-ink/55 hover:bg-white/70 hover:text-ink")
-            }
-          >
-            {state === "listening" ? <MicOff className="h-3.5 w-3.5" /> : <Mic className="h-3.5 w-3.5" />}
-          </button>
-          <button
-            type="submit"
-            aria-label="Send to Twin"
-            title="Send"
-            disabled={!input.trim()}
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#0b2444] text-white shadow-sm transition hover:bg-[#123a66] disabled:cursor-not-allowed disabled:opacity-35"
-          >
-            <Send className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      </form>
+      <button
+        type="button"
+        onClick={() => setPanelOpen(true)}
+        className="mt-1 w-full rounded-lg py-1 text-[9px] font-semibold uppercase tracking-[0.16em] text-ink/45 transition hover:text-ink/70"
+      >
+        {panelOpen ? "Twin is open" : "Tap to talk"}
+      </button>
 
-      <div className="mt-1.5 flex items-center justify-center gap-2">
-        <button
-          type="button"
-          onClick={() => {
-            setVoiceMode((enabled) => !enabled);
-            if (voiceMode) window.speechSynthesis?.cancel();
-          }}
-          aria-pressed={voiceMode}
-          className={
-            "inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[9px] font-semibold transition " +
-            (voiceMode
-              ? "border-cyan-300/60 bg-white/45 text-[#0b4966]"
-              : "border-white/50 bg-white/25 text-ink/45")
-          }
-        >
-          {voiceMode ? <Volume2 className="h-3 w-3" /> : <VolumeX className="h-3 w-3" />}
-          Voice {voiceMode ? "on" : "off"}
-        </button>
-        <span className="inline-flex items-center gap-1 text-[9px] font-medium text-ink/40">
-          <AudioLines className="h-3 w-3" />
-          Neural audio
-        </span>
-      </div>
-
-      <div aria-live="polite" className="mt-1.5 min-h-8 space-y-0.5 px-1 text-[9px] leading-relaxed text-ink/55 [@media(max-height:850px)]:min-h-5">
-        {transcript.length === 0 ? (
-          <p className="text-center">The intelligence core is online.</p>
-        ) : (
-          transcript.slice(-2).map((line, index) => (
-            <p key={`${line.role}-${index}`} className="line-clamp-2">
-              <span className="font-semibold text-ink/70">{line.role}:</span> {line.text}
-            </p>
-          ))
-        )}
-      </div>
+      <TwinPanel open={panelOpen} onClose={() => setPanelOpen(false)} />
     </section>
   );
 }

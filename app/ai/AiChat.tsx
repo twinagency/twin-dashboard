@@ -1,14 +1,23 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
-import { Plus, Trash2, CheckCircle2, Loader2, MessageSquare } from "lucide-react";
+import { Check, Plus, Trash2, CheckCircle2, Loader2, MessageSquare } from "lucide-react";
 
 type WriteEvent = { summary: string };
+// Writes stopped auto-executing on 2026-07-31 (see api/ai-assistant/proposals.ts).
+// This page is the phone/tablet way into the assistant - Sidebar's Twin orb is
+// `lg:` only - so it needs the same approval cards the orb's panel has. Without
+// them a proposal arrives here, renders nothing, and the operator is told a
+// change is waiting for a tap that does not exist anywhere on their screen.
+type Proposal = { id: string; tool: string; args: Record<string, unknown>; summary: string; heavy: boolean };
+type ProposalState = Proposal & { state: "pending" | "approving" | "approved" | "dismissed"; error?: string };
 type ChatTurn = {
   role: "user" | "assistant";
   content: string;
   writes?: WriteEvent[];
+  proposals?: ProposalState[];
 };
 type ConversationRow = { id: string; title: string; created_at: string; updated_at: string };
 type Suggestion = { id: string; cloneName: string; message: string; prompt: string };
@@ -31,6 +40,7 @@ function timeAgo(iso: string): string {
 }
 
 export default function AiChat() {
+  const router = useRouter();
   const [conversations, setConversations] = useState<ConversationRow[]>([]);
   const [conversationId, setConversationId] = useState<string | null>(null);
   const [turns, setTurns] = useState<ChatTurn[]>([]);
@@ -79,11 +89,17 @@ export default function AiChat() {
       const j = await res.json();
       if (!res.ok) throw new Error(j?.error ?? "failed to load conversation");
       setTurns(
-        (j.messages ?? []).map((m: { role: "user" | "assistant"; content: string; meta: { writes?: WriteEvent[] } | null }) => ({
-          role: m.role,
-          content: m.content,
-          writes: m.meta?.writes,
-        })),
+        (j.messages ?? []).map(
+          (m: { role: "user" | "assistant"; content: string; meta: { writes?: WriteEvent[]; proposals?: Proposal[] } | null }) => ({
+            role: m.role,
+            content: m.content,
+            writes: m.meta?.writes,
+            // A reloaded proposal comes back approvable. It was never applied,
+            // so the operator can still act on it - that is the whole reason
+            // proposals are persisted rather than living only in this state.
+            proposals: m.meta?.proposals?.map((p) => ({ ...p, state: "pending" as const })),
+          }),
+        ),
       );
     } catch (e) {
       setError(e instanceof Error ? e.message : "failed to load conversation");
@@ -168,6 +184,23 @@ export default function AiChat() {
               next[next.length - 1] = { ...last, writes: [...(last.writes ?? []), { summary: parsed.summary }] };
               return next;
             });
+          } else if (parsed.type === "proposal") {
+            setTurns((cur) => {
+              const next = [...cur];
+              const last = next[next.length - 1];
+              const p: ProposalState = {
+                id: parsed.id,
+                tool: parsed.tool,
+                args: parsed.args,
+                summary: parsed.summary,
+                heavy: parsed.heavy,
+                state: "pending",
+              };
+              next[next.length - 1] = { ...last, proposals: [...(last.proposals ?? []), p] };
+              return next;
+            });
+          } else if (parsed.type === "navigate") {
+            router.push(parsed.path);
           } else if (parsed.type === "error") {
             setError(parsed.message);
           } else if (parsed.type === "done") {
@@ -190,6 +223,49 @@ export default function AiChat() {
   function onSubmit(e: React.FormEvent) {
     e.preventDefault();
     void send(input);
+  }
+
+  /** Same contract as TwinPanel's: /approve is the only path that writes. */
+  async function approve(turnIndex: number, id: string) {
+    const target = turns[turnIndex]?.proposals?.find((p) => p.id === id);
+    if (!target || target.state !== "pending") return;
+
+    const setProposalState = (state: ProposalState["state"], errText?: string) =>
+      setTurns((cur) =>
+        cur.map((t, i) =>
+          i !== turnIndex
+            ? t
+            : { ...t, proposals: t.proposals?.map((p) => (p.id === id ? { ...p, state, error: errText } : p)) },
+        ),
+      );
+
+    setProposalState("approving");
+    try {
+      const res = await fetch("/api/ai-assistant/approve", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ conversationId, tool: target.tool, args: target.args }),
+      });
+      const j = await res.json();
+      if (!res.ok || !j.ok) throw new Error(j?.error ?? "the change did not go through");
+      setProposalState("approved");
+      setTurns((cur) =>
+        cur.map((t, i) => (i !== turnIndex ? t : { ...t, writes: [...(t.writes ?? []), { summary: j.summary }] })),
+      );
+      router.refresh();
+    } catch (e) {
+      setProposalState("pending", e instanceof Error ? e.message : "failed");
+    }
+  }
+
+  function dismissProposal(turnIndex: number, id: string) {
+    setTurns((cur) =>
+      cur.map((t, i) =>
+        i !== turnIndex
+          ? t
+          : { ...t, proposals: t.proposals?.map((p) => (p.id === id ? { ...p, state: "dismissed" as const } : p)) },
+      ),
+    );
   }
 
   return (
@@ -283,6 +359,50 @@ export default function AiChat() {
                         {t.content}
                       </div>
                     )}
+                    {t.proposals?.map((p) => {
+                      if (p.state === "approved") return null;
+                      if (p.state === "dismissed") {
+                        return (
+                          <div key={p.id} className="rounded-lg border border-line bg-panel px-3 py-1.5 text-xs text-muted line-through">
+                            {p.summary}
+                          </div>
+                        );
+                      }
+                      return (
+                        <div
+                          key={p.id}
+                          className={
+                            "space-y-2 rounded-lg border px-3 py-2 " +
+                            (p.heavy ? "border-warn/40 bg-warn/10" : "border-accent/40 bg-accent/5")
+                          }
+                        >
+                          <div>
+                            <p className="text-[10px] font-semibold uppercase tracking-wide text-muted">Needs your approval</p>
+                            <p className="mt-0.5 text-xs font-medium text-ink">{p.summary}</p>
+                          </div>
+                          {p.error && <p className="text-xs text-crit">{p.error}</p>}
+                          <div className="flex gap-1.5">
+                            <button
+                              type="button"
+                              disabled={p.state === "approving"}
+                              onClick={() => void approve(i, p.id)}
+                              className="inline-flex items-center gap-1 rounded-md bg-accent px-2.5 py-1 text-xs font-semibold text-accent-ink transition hover:bg-accent-deep disabled:opacity-50"
+                            >
+                              {p.state === "approving" ? <Loader2 className="size-3 animate-spin" /> : <Check className="size-3" />}
+                              Approve
+                            </button>
+                            <button
+                              type="button"
+                              disabled={p.state === "approving"}
+                              onClick={() => dismissProposal(i, p.id)}
+                              className="rounded-md border border-line bg-panel px-2.5 py-1 text-xs text-muted transition hover:text-ink disabled:opacity-50"
+                            >
+                              No
+                            </button>
+                          </div>
+                        </div>
+                      );
+                    })}
                     {t.writes?.map((w, wi) => (
                       <div
                         key={wi}

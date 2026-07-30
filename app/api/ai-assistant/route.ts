@@ -1,7 +1,9 @@
 import { NextRequest } from "next/server";
 import { orChatWithToolsStream } from "@/lib/openrouter";
 import { TOOL_DEFS, executeTool } from "./tools";
-import { WRITE_TOOL_DEFS, WRITE_TOOL_NAMES, executeWriteTool } from "./write-tools";
+import { WRITE_TOOL_DEFS, WRITE_TOOL_NAMES } from "./write-tools";
+import { NAV_TOOL_DEFS, NAV_TOOL_NAMES, resolveNavTool } from "./nav-tools";
+import { describeProposal, type Proposal } from "./proposals";
 import { createConversation, appendMessage, getConversationMessages } from "./db";
 import { CLONE_TOGGLE_FIELDS } from "@/app/clones/toggle-fields";
 
@@ -12,26 +14,46 @@ export const maxDuration = 120;
 const MODEL = process.env.COMPILER_MODEL ?? "openai/gpt-4.1";
 
 const SYSTEM_PROMPT =
-  "You are an internal assistant for the team running an AI companion bot platform " +
-  "(Telegram bots monetized with Telegram Stars). You can explain the data AND make certain " +
-  "changes for the team, so iterating on the product does not require a developer in a terminal.\n\n" +
+  "You are Twin, the assistant built into this dashboard for the team running an AI companion bot " +
+  "platform (Telegram bots monetized with Telegram Stars). You explain the data, open pages, and " +
+  "propose changes, so iterating on the product does not need a developer in a terminal.\n\n" +
+  // HOW YOU TALK comes first deliberately. It used to be one clause buried in a
+  // paragraph near the bottom ("keep answers concise and concrete") and the
+  // assistant wrote long, hedged, repetitive replies anyway. Same lesson as the
+  // bot's reply-length fix on 2026-07-31: a rule the model has to dig for is a
+  // rule it does not follow. This one is first, concrete, and has examples.
+  "HOW YOU TALK - THIS MATTERS AS MUCH AS BEING RIGHT:\n" +
+  "Short. Sharp. Like a smart colleague leaning over, not a report.\n" +
+  "- Default to ONE OR TWO SENTENCES. A number and the thing it means is a complete answer.\n" +
+  "- Lead with the answer. Never open with 'Great question', 'Sure!', 'Let me check', 'I'd be happy to', " +
+  "or by restating what was asked.\n" +
+  "- No preamble, no summary of what you just said, no 'let me know if you need anything else'.\n" +
+  "- Only go longer when genuinely asked to compare, audit, or list several rows, and then use a tight " +
+  "table or bullets, never prose paragraphs.\n" +
+  "- Say the uncomfortable thing plainly. 'Voice is off for Aria, that's why' beats a hedged paragraph.\n" +
+  "- If you don't know or a tool failed, say so in one line. Never pad around it.\n" +
+  "Good: 'Aria. 4,210 Stars this week, about 2x the next one.'\n" +
+  "Bad: 'Great question! I checked the data and it looks like Aria is currently the top performer, " +
+  "having earned approximately 4,210 Stars over the past week, which is roughly double...'\n\n" +
+  "NAVIGATION: you can open dashboard pages yourself with openPage / openClonePage. If the useful " +
+  "answer is 'go look at X', OPEN X instead of describing where it lives, then say one line about what " +
+  "they're looking at. Opening a page changes nothing and needs no confirmation.\n\n" +
   "READS: you have tools to query the live database. They are strictly read-only, allowlisted to " +
   "specific tables and columns, hard capped at 200 rows per query. Some columns (bot tokens, third-party " +
   "API keys) are excluded entirely and no tool can return them. If a tool errors or something is not " +
   "allowlisted, say so plainly instead of guessing.\n\n" +
-  "WRITES: you have a small, fixed set of write tools. Each one performs exactly ONE already-validated " +
-  "action a person could already do from this dashboard (turn a named feature on/off for a clone, pause/" +
-  "resume a clone, recompile a persona, move a feedback item, adjust or reset a fan's credits, activate/" +
-  "deactivate or block/unblock a fan). There is no generic 'change this column' tool. If what's being " +
-  "asked is not covered by one of your write tools, say plainly that you cannot do it from here and say " +
-  "where in the dashboard it can be done instead - never claim to have changed something you have no " +
-  "tool for. Never invent or compute a price, a Star amount, or a discount percentage - you may only " +
-  "flip a feature's ON/OFF switch, the underlying numbers are set elsewhere and stay code-locked. Only " +
-  "call a write tool when the user has clearly asked for a change; if it's ambiguous which clone or fan " +
-  "they mean, ask first. After a write succeeds, state plainly and specifically what changed.\n\n" +
+  "WRITES ARE PROPOSALS, NOT ACTIONS. You have a small fixed set of write tools (turn a named feature " +
+  "on/off for a clone, pause/resume a clone, recompile a persona, adjust or reset a fan's credits, " +
+  "activate/deactivate or block/unblock a fan). Calling one does NOT change anything: it puts an " +
+  "approval card in front of the operator and waits. Nothing is applied until they press Approve. So " +
+  "after calling a write tool, say in ONE line what you've queued and that it needs their tap - never " +
+  "say you have changed, turned on, or updated anything, because at that moment you have not. There is " +
+  "no generic 'change this column' tool; if a change isn't covered, say so in one line and open or name " +
+  "the page where it is done. Never invent or compute a price, a Star amount, or a discount percentage " +
+  "- you may only flip a feature's ON/OFF switch, the numbers are set elsewhere and stay code-locked. " +
+  "If it's ambiguous which clone or fan they mean, ask before proposing.\n\n" +
   "Money amounts in this system are Telegram Stars, not dollars, unless a row has an explicit *_usd " +
-  "field. Keep answers concise and concrete, use tables or bullet lists for multiple rows. Never use em " +
-  "dashes in your replies.\n\n" +
+  "field. Never use em dashes in your replies.\n\n" +
   // The TEST RUNS paragraph was removed on 2026-07-31 with the last of the
   // test-run tools. Leaving it in told the model that three tools it does not
   // have are available, which is how a model ends up promising the user a run
@@ -44,8 +66,8 @@ const SYSTEM_PROMPT =
   "plus anything else your own judgment turns up across the rest of the toggle and dial columns " +
   "(sexual_level/nsfw_level/push_level, emoji settings, ai_mode/smart_split, models, welcome/paywall " +
   "instructions, etc). State each recommendation with a one-line reason, never just 'you should change X'. " +
-  `Exactly these fields are ones you can actually flip yourself, with setCloneFeature, and only after the ` +
-  `user confirms: ${CLONE_TOGGLE_FIELDS.join(", ")}. For every other column (dials like sexual_level/` +
+  `Exactly these fields are ones you can propose flipping, with setCloneFeature: ` +
+  `${CLONE_TOGGLE_FIELDS.join(", ")}. For every other column (dials like sexual_level/` +
   "nsfw_level/push_level/emoji_amount, ai_mode/smart_split, any *_model, any money field like " +
   "starting_credits/credit_pack_price_stars/discount_max_*, campaign or onboarding text, persona facts) " +
   "you have no write tool - recommend it in plain words and say specifically where in the dashboard to " +
@@ -53,25 +75,25 @@ const SYSTEM_PROMPT =
   "never claim to have applied it. Never invent, recommend a specific number for, or apply any money value " +
   "- amounts are always the operator's call.";
 
+// Labels for write tools now describe PROPOSING, not doing. "Updating a
+// setting" while nothing is being updated is exactly the kind of small lie that
+// makes an operator trust an approval card less than they should.
 const TOOL_LABELS: Record<string, string> = {
   queryTable: "Looking that up",
   getTopSpenders: "Checking top spenders",
   getRecentErrors: "Checking recent errors",
-  setCloneFeature: "Updating a setting",
-  setCloneStatus: "Updating clone status",
-  recompileClonePersona: "Recompiling persona",
-  setFanCredits: "Updating fan credits",
-  setFanActive: "Updating fan status",
-  setFanBlocked: "Updating fan block state",
-  resetFanCounters: "Resetting fan counters",
+  openPage: "Opening it",
+  openClonePage: "Opening it",
+  setCloneFeature: "Preparing a setting change",
+  setCloneStatus: "Preparing a status change",
+  recompileClonePersona: "Preparing a persona recompile",
+  setFanCredits: "Preparing a credit change",
+  setFanActive: "Preparing a fan status change",
+  setFanBlocked: "Preparing a block change",
+  resetFanCounters: "Preparing a counter reset",
 };
 
-const ALL_TOOL_DEFS = [...TOOL_DEFS, ...WRITE_TOOL_DEFS];
-
-async function dispatchTool(name: string, args: Record<string, unknown>): Promise<unknown> {
-  if (WRITE_TOOL_NAMES.has(name)) return executeWriteTool(name, args);
-  return executeTool(name, args);
-}
+const ALL_TOOL_DEFS = [...TOOL_DEFS, ...WRITE_TOOL_DEFS, ...NAV_TOOL_DEFS];
 
 function sse(event: Record<string, unknown>): string {
   return `data: ${JSON.stringify(event)}\n\n`;
@@ -117,6 +139,38 @@ export async function POST(req: NextRequest) {
       let assistantText = "";
       const toolsUsed = new Set<string>();
       const writes: { summary: string }[] = [];
+      const proposals: Proposal[] = [];
+
+      // Per-request so it can push proposals and navigations onto THIS stream.
+      //
+      // The write branch is the approval gate: it never calls executeWriteTool.
+      // executeWriteTool is not even imported into this file any more, so the
+      // gate cannot be undone by an accidental edit here - you would have to
+      // add the import back on purpose.
+      const dispatchTool = async (name: string, args: Record<string, unknown>): Promise<unknown> => {
+        if (WRITE_TOOL_NAMES.has(name)) {
+          const { summary, heavy } = describeProposal(name, args);
+          const proposal: Proposal = { id: `p${proposals.length + 1}`, tool: name, args, summary, heavy };
+          proposals.push(proposal);
+          send({ type: "proposal", ...proposal });
+          // What the MODEL is told. Worded so it cannot reasonably narrate this
+          // as a completed change, and so it stops rather than trying again.
+          return {
+            status: "awaiting_approval",
+            applied: false,
+            note: `NOT APPLIED. An approval card for "${summary}" is now in front of the operator. Tell them in one line what is waiting and that it needs their tap. Do not call this tool again.`,
+          };
+        }
+
+        if (NAV_TOOL_NAMES.has(name)) {
+          const nav = resolveNavTool(name, args);
+          if (nav.error) return { ok: false, error: nav.error };
+          send({ type: "navigate", path: nav.path, label: nav.label });
+          return { ok: true, opened: nav.path };
+        }
+
+        return executeTool(name, args);
+      };
 
       try {
         for await (const evt of orChatWithToolsStream({
@@ -135,13 +189,9 @@ export async function POST(req: NextRequest) {
             toolsUsed.add(evt.name);
             send({ type: "tool_call", name: evt.name, label: TOOL_LABELS[evt.name] ?? "Working on it" });
           } else if (evt.type === "tool_result") {
-            if (WRITE_TOOL_NAMES.has(evt.name)) {
-              const result = evt.result as { ok?: boolean; summary?: string } | null;
-              if (result?.ok && result.summary) {
-                writes.push({ summary: result.summary });
-                send({ type: "write", summary: result.summary });
-              }
-            }
+            // Nothing to report here for writes any more: a write tool call
+            // produces a proposal (emitted above at dispatch time) and no
+            // change, so there is no "write" event until /approve runs one.
           } else if (evt.type === "error") {
             send({ type: "error", message: evt.message });
           }
@@ -151,6 +201,7 @@ export async function POST(req: NextRequest) {
           await appendMessage(finalConversationId, "assistant", assistantText, {
             tools: [...toolsUsed],
             writes,
+            proposals,
           });
         }
       } catch (e) {

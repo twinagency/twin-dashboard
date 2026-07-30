@@ -96,11 +96,11 @@ const LINK_COLOR_CLASSES: Record<LinkColor, { icon: string; active: string; idle
 const NAV_LINKS: NavLink[] = [
   { kind: "route", label: "Earnings", href: "/revenue", icon: "EarningsCombo", color: "good" },
   { kind: "route", label: "Fans", href: "/users", icon: "FansCombo", color: "purple" },
-  // Fleet-wide, not girl-specific, so no gateOnClone: it answers questions
-  // across every clone and is useful before you've picked one in the header
-  // switcher. Sits up here with the other day-to-day views rather than down
-  // with the reference pages, per the ordering note above.
-  { kind: "route", label: "AI", href: "/ai", icon: "Sparkle", color: "blue" },
+  // NO "AI" ENTRY HERE, deliberately, as of 2026-07-31. It was added on
+  // 2026-07-31 (9b60d83) because /ai existed with nothing linking to it. The
+  // assistant now opens from the Twin orb at the bottom of this same sidebar,
+  // so a nav row pointing at a second copy of it was two doors to one room.
+  // The /ai page still works if you type the URL; it is just not advertised.
   { kind: "route", label: "Flows", href: "/flows", icon: "Flows", color: "pink", gateOnClone: true },
   { kind: "tab", label: "PPVs", tab: "ppvs", icon: "Media", color: "red" },
   { kind: "tab", label: "Edit", tab: "identity", icon: "Dials", color: "blue" },

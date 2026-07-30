@@ -7,7 +7,14 @@ import { supabaseAdmin } from "@/lib/supabase";
 
 export type AiMessageMeta = {
   tools?: string[];
+  /** Writes that were actually APPLIED (i.e. approved). See proposals.ts. */
   writes?: { summary: string }[];
+  /**
+   * Writes the assistant asked for and did NOT perform, pending approval.
+   * Persisted so a pending card survives a reload instead of silently
+   * vanishing, which would look like the change had gone through.
+   */
+  proposals?: { id: string; tool: string; args: Record<string, unknown>; summary: string; heavy: boolean }[];
 };
 
 export type AiMessageRow = {
@@ -68,7 +75,7 @@ export async function appendMessage(
     conversation_id: conversationId,
     role,
     content,
-    meta: meta && (meta.tools?.length || meta.writes?.length) ? meta : null,
+    meta: meta && (meta.tools?.length || meta.writes?.length || meta.proposals?.length) ? meta : null,
   });
   if (error) throw new Error(error.message);
   await supabaseAdmin
