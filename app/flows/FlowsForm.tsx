@@ -258,7 +258,7 @@ export default function FlowsForm({
   }
 
   return (
-    <form action={onSubmit} className="grid max-w-3xl gap-6">
+    <form action={onSubmit} className="mx-auto grid w-full min-w-0 max-w-5xl grid-cols-1 gap-6">
       {/* ── New fan onboarding. The whole flow (greeting steer + the ordered
           step list) lives here now; the legacy loose fields (voice-on-msg-N,
           bundle-on-msg-N, teased, collect-fields, onboarding length) were
@@ -293,9 +293,9 @@ export default function FlowsForm({
             <p className="text-[11px] text-muted">No steps yet - she greets and chats naturally with no scripted onboarding steps.</p>
           )}
 
-          <div className="grid gap-2">
+          <div className="grid min-w-0 grid-cols-1 gap-2">
           {onboardingSteps.map((s, i) => (
-            <div key={i} className="flex flex-wrap items-center gap-2 rounded-lg border border-line p-2.5">
+            <div key={i} className="flex min-w-0 max-w-full flex-wrap items-center gap-2 rounded-lg border border-line p-2.5">
               <span className="w-5 shrink-0 text-right text-xs font-medium text-muted">{i + 1}</span>
               <label className="flex shrink-0 items-center gap-1.5 text-sm text-ink">
                 after
@@ -309,7 +309,7 @@ export default function FlowsForm({
                 />
                 msgs
               </label>
-              <div className="flex flex-wrap gap-1.5">
+              <div className="flex min-w-0 flex-wrap gap-1.5">
                 {ONBOARDING_STEP_TYPES.map((t) => (
                   <button
                     key={t.key}
@@ -333,7 +333,7 @@ export default function FlowsForm({
                 <button type="button" onClick={() => removeOnboardingStep(i)} className="rounded border border-line px-1.5 text-xs text-crit" title="Remove">✕</button>
               </div>
               {isOnboardingMediaType(s.type) && (
-                <div className="w-full">
+                <div className="w-full min-w-0 max-w-full">
                   <StepMediaPicker
                     type={s.type as "photo" | "video" | "bundle"}
                     photos={photos}
@@ -425,7 +425,7 @@ export default function FlowsForm({
             hint="A safety net: if he hasn't bought the welcome bundle within the window below, she sends one free taste. Either trigger can fire; leave both blank to turn the triggers off."
           />
           {freePreviewEnabled && (
-            <div className="mt-2 grid gap-2 sm:grid-cols-2">
+            <div className="mt-2 grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
               <Field
                 label="After (minutes)"
                 name="onboarding_free_preview_after_minutes"
@@ -442,7 +442,7 @@ export default function FlowsForm({
                 placeholder="blank = off"
                 hint="Fires after this many of his messages if he still hasn't bought. Blank = this trigger off."
               />
-              <div className="sm:col-span-2">
+              <div className="min-w-0 sm:col-span-2">
                 <FieldLabel
                   label="Free-preview media"
                   hint="The item she sends as the free taste. Leave on AI picks and she chooses a fresh unseen one."
@@ -459,7 +459,7 @@ export default function FlowsForm({
                   onPick={setFreePreviewMediaId}
                 />
               </div>
-              <div className="sm:col-span-2">
+              <div className="min-w-0 sm:col-span-2">
                 <Area
                   label="Lead-in line instructions"
                   name="onboarding_free_preview_instruction"
@@ -541,10 +541,10 @@ export default function FlowsForm({
               <p className="text-[11px] text-warn">No steps yet. She won't reach out until you add at least one.</p>
             )}
 
-            <div className="grid gap-2">
+            <div className="grid min-w-0 grid-cols-1 gap-2">
               {steps.map((s, i) => {
                 return (
-                  <div key={i} className="flex flex-wrap items-center gap-2 rounded-lg border border-line p-2.5">
+                  <div key={i} className="flex min-w-0 max-w-full flex-wrap items-center gap-2 rounded-lg border border-line p-2.5">
                     <span className="w-5 shrink-0 text-right text-xs font-medium text-muted">{i + 1}</span>
                     <label className="flex shrink-0 items-center gap-1.5 text-sm text-ink">
                       after
@@ -558,7 +558,7 @@ export default function FlowsForm({
                       />
                       h
                     </label>
-                    <div className="flex flex-wrap gap-1.5">
+                    <div className="flex min-w-0 flex-wrap gap-1.5">
                       {STEP_TYPES.map((t) => (
                         <button
                           key={t.key}

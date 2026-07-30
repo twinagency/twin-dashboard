@@ -69,11 +69,11 @@ async function FleetInfo() {
   const activeCount = rows.filter((r) => r.status === "active").length;
 
   return (
-    <div className="text-ink">
-      <h1 className="mb-1 text-2xl font-semibold">Fleet info</h1>
-      <p className="mb-5 text-sm text-muted">
-        Every bot at a glance. Pick one to see its live connection &amp; Stars balance.
-      </p>
+    <div className="dashboard-page text-ink">
+      <h1 className="mb-5 flex items-center gap-2 text-2xl font-semibold">
+        Fleet info
+        <Info text="Every bot at a glance. Pick one to see its live connection and Stars balance." />
+      </h1>
 
       <div className="mb-5 grid grid-cols-2 gap-3 text-sm sm:grid-cols-4">
         <Stat label="Bots" value={String(rows.length)} />
@@ -169,7 +169,7 @@ async function CloneInfo({ cloneId }: { cloneId: string }) {
   ];
 
   return (
-    <div className="mx-auto max-w-3xl text-ink">
+    <div className="dashboard-page mx-auto max-w-3xl text-ink">
       <div className="mb-2 flex items-center justify-end">
         <form action={setCloneScope.bind(null, null)}>
           <Button type="submit" variant="ghost" size="sm">← All bots</Button>

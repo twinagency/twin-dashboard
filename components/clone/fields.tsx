@@ -17,7 +17,7 @@ import { useEffect, useState } from "react";
 // (solid). Never drop that placeholder class: without it a field's placeholder
 // and its saved value stop being clearly distinguishable.
 export const inputCls =
-  "w-full rounded-md border border-line bg-panel px-2.5 py-1.5 text-sm text-ink placeholder:text-muted outline-none transition focus:border-accent focus:ring-1 focus:ring-accent/30";
+  "min-h-9 min-w-0 w-full rounded-lg border border-line bg-panel px-3 py-2 text-sm text-ink placeholder:text-muted outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20";
 
 export const selectCls = inputCls;
 
@@ -78,7 +78,7 @@ export function Section({
   const tipText = [hint, tip].filter(Boolean).join(" - ");
   return (
     <section
-      className={`flex h-full flex-col rounded-xl border border-line border-l-[3px] ${a.bar} bg-panel p-3 text-ink ` + className}
+      className={`flex h-full min-w-0 flex-col rounded-2xl border border-line border-l-[3px] ${a.bar} bg-panel p-4 text-ink shadow-[0_8px_28px_rgb(16_24_40/0.05)] ` + className}
     >
       {title && (
         <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-ink">
@@ -91,7 +91,7 @@ export function Section({
           {tipText && <Info text={tipText} />}
         </h3>
       )}
-      <div className={`grid items-start gap-2 ${colCls}` + (title ? " mt-2" : "")}>{children}</div>
+      <div className={`grid min-w-0 grid-cols-1 items-start gap-3 ${colCls}` + (title ? " mt-3" : "")}>{children}</div>
     </section>
   );
 }
@@ -329,7 +329,7 @@ export function Field({
   step?: number;
 }) {
   return (
-    <label className="block">
+    <label className="block min-w-0">
       <FieldLabel label={label} hint={hint} required={required} />
       <input
         name={name}
@@ -362,7 +362,7 @@ export function Area({
   hint?: string;
 }) {
   return (
-    <label className="block">
+    <label className="block min-w-0">
       <FieldLabel label={label} hint={hint} />
       <textarea
         name={name}
@@ -679,7 +679,7 @@ export function Segmented<T extends string>({
     <div className="block">
       <FieldLabel label={label} hint={hint} />
       <input type="hidden" name={name} value={value} />
-      <div className="grid auto-cols-fr grid-flow-col gap-0.5 rounded-lg border border-line bg-bg/60 p-0.5">
+      <div className="clone-segmented flex gap-1 overflow-x-auto rounded-xl border border-line bg-bg/60 p-1">
         {options.map((o) => (
           <button
             key={o.value}
@@ -688,7 +688,7 @@ export function Segmented<T extends string>({
             aria-pressed={value === o.value}
             onClick={() => onChange(o.value)}
             className={
-              "rounded-md px-2 py-1.5 text-xs font-semibold transition " +
+              "min-w-max flex-1 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-xs font-semibold transition " +
               (value === o.value ? SEG_ACTIVE[accent] : "text-muted hover:text-ink")
             }
           >
@@ -829,7 +829,7 @@ export function Toggle({
       ? "bg-muted/30"
       : "bg-crit";
   return (
-    <label className="flex cursor-pointer items-center gap-2 text-sm">
+    <label className="flex min-w-0 cursor-pointer items-center gap-2 text-sm">
       <input type="hidden" name={name} value={String(checked)} />
       <button
         type="button"

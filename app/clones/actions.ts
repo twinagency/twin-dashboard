@@ -18,10 +18,22 @@ function intakeFromForm(fd: FormData, name: string | null) {
     if (v) fields[key] = v;
   }
   const legacy = str(fd, "intake_answers");
+  const hasAppearance = fd.has("dashboard_chart_color") || fd.has("dashboard_profile_image_path");
+  const color = str(fd, "dashboard_chart_color");
+  const appearance = hasAppearance
+    ? {
+        chart_color: color && /^#[0-9a-f]{6}$/i.test(color) ? color.toLowerCase() : "#635bff",
+        profile_image_path: str(fd, "dashboard_profile_image_path"),
+      }
+    : undefined;
   if (Object.keys(fields).length === 0 && legacy) {
-    return { fields: {}, answers: legacy };
+    return { fields: {}, answers: legacy, ...(appearance ? { appearance } : {}) };
   }
-  return { fields, answers: assembleAnswers(fields, name ?? undefined, structuredFactsFromForm(fd)) };
+  return {
+    fields,
+    answers: assembleAnswers(fields, name ?? undefined, structuredFactsFromForm(fd)),
+    ...(appearance ? { appearance } : {}),
+  };
 }
 
 // Labelled lines describing the typed persona columns, appended to the compiler
@@ -786,6 +798,24 @@ export async function createCloneRow(fd: FormData): Promise<string> {
 }
 
 export async function updateClone(id: string, fd: FormData) {
+  const image = fd.get("dashboard_profile_image");
+  const previousImagePath = str(fd, "dashboard_profile_image_path");
+  let uploadedImagePath: string | null = null;
+
+  if (image instanceof File && image.size > 0) {
+    const allowed = new Set(["image/jpeg", "image/png", "image/webp", "image/gif"]);
+    if (!allowed.has(image.type)) throw new Error("Profile image must be JPG, PNG, WebP or GIF.");
+    if (image.size > 5 * 1024 * 1024) throw new Error("Profile image must be 5 MB or smaller.");
+
+    const ext = image.type === "image/png" ? "png" : image.type === "image/webp" ? "webp" : image.type === "image/gif" ? "gif" : "jpg";
+    uploadedImagePath = `${id}/profile/${crypto.randomUUID()}.${ext}`;
+    const { error: uploadError } = await supabaseAdmin.storage
+      .from("media")
+      .upload(uploadedImagePath, await image.arrayBuffer(), { contentType: image.type, upsert: false });
+    if (uploadError) throw new Error(uploadError.message);
+    fd.set("dashboard_profile_image_path", uploadedImagePath);
+  }
+
   const row = rowFromForm(fd);
   if (row.bot_token) await assertBotTokenFree(row.bot_token, id);
 
@@ -800,7 +830,14 @@ export async function updateClone(id: string, fd: FormData) {
       .update({ ...withoutPersonaFactColumns(row), updated_at: new Date().toISOString() })
       .eq("id", id));
   }
-  if (error) throw new Error(error.message);
+  if (error) {
+    if (uploadedImagePath) await supabaseAdmin.storage.from("media").remove([uploadedImagePath]);
+    throw new Error(error.message);
+  }
+
+  if (uploadedImagePath && previousImagePath && previousImagePath !== uploadedImagePath && previousImagePath.startsWith(`${id}/profile/`)) {
+    await supabaseAdmin.storage.from("media").remove([previousImagePath]);
+  }
 
   // Rebuild her persona slots on EVERY save. This used to be gated on "her
   // answers changed" because each rebuild cost an LLM call; it is now a pure
@@ -809,6 +846,8 @@ export async function updateClone(id: string, fd: FormData) {
   await compileClone(id);
 
   revalidatePath("/");
+  revalidatePath("/revenue");
+  revalidatePath("/clones");
   revalidatePath(`/clones/${id}`);
 }
 

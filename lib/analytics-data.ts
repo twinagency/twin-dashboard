@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "./supabase";
-import { colorForIndex } from "./colors";
+import { chartColorForClone } from "./colors";
 import { STAR_USD } from "./money";
 import type { DateRange, Period } from "./dashboard-data";
 
@@ -146,9 +146,9 @@ export async function getAnalytics(
   // scoped to "All" or narrowed to one clone (same clone always gets same color).
   const { data: cloneRows } = await supabaseAdmin
     .from("clones")
-    .select("id,name,created_at,ai_mode")
+    .select("id,name,created_at,ai_mode,intake")
     .order("created_at", { ascending: true });
-  const allClones = (cloneRows ?? []) as { id: string; name: string; ai_mode: string | null }[];
+  const allClones = (cloneRows ?? []) as { id: string; name: string; ai_mode: string | null; intake: unknown }[];
   const clones = cloneId ? allClones.filter((c) => c.id === cloneId) : allClones;
   const nameById = new Map<string, string>();
   const colorById = new Map<string, string>();
@@ -157,7 +157,7 @@ export async function getAnalytics(
   const flowById = new Map<string, "classic" | "smart">();
   allClones.forEach((c, i) => {
     nameById.set(c.id, c.name);
-    colorById.set(c.id, colorForIndex(i));
+    colorById.set(c.id, chartColorForClone(c.intake, i));
     flowById.set(c.id, c.ai_mode === "smart" ? "smart" : "classic");
   });
 

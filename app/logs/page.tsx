@@ -171,11 +171,11 @@ export default async function LogsPage({
   const spend = usageRows.reduce((s, r) => s + (Number((r.detail as { cost_usd?: number | null })?.cost_usd) || 0), 0);
 
   return (
-    <div className="text-ink">
+    <div className="dashboard-page text-ink">
       <AutoRefresh />
-      <div className="mb-1 flex items-start justify-between gap-3">
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-white/90 p-3 shadow-[var(--shadow-card)] backdrop-blur-xl">
         <LogFilters tech={tech} level={level} q={q} clone={sp.clone} fan={sp.fan} fanUser={sp.fanUser} fanLabel={sp.fanLabel} />
-        <span className="mt-1.5 shrink-0 text-xs text-muted">auto-refreshes every 30s</span>
+        <span className="shrink-0 rounded-full bg-elev px-2.5 py-1 text-[11px] font-medium text-muted">Refreshes every 30s</span>
       </div>
 
       {fanTelegramId != null && (
@@ -225,7 +225,7 @@ export default async function LogsPage({
         </Card>
       </div>
 
-      <Card className="overflow-hidden p-0">
+      <Card className="max-h-[calc(100vh-22rem)] min-h-80 overflow-y-auto p-0">
         <LogsTable rows={rows} showClone={!cloneId} />
       </Card>
     </div>

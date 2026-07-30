@@ -266,21 +266,22 @@ export default function ConfigSections({
     ...TABS.filter((t) => showMoney || t.key !== "money"),
     ...extraTabs,
   ];
-  // Condensed 2-col grid (wide screens): small sections pair up side by side,
-  // big ones span both via Section's className="xl:col-span-2".
+  // Identity and Config contain wide segmented controls and multi-field rows.
+  // They stay single-column so no control is compressed or overlaps a neighbour.
+  // Advanced uses two columns because its cards are intentionally self-contained.
   const show = (t: Tab) =>
     tab !== t
       ? "hidden"
       : t === "money"
-        ? "grid items-start gap-3 xl:grid-cols-3"
-        : t === "identity"
-          ? "grid items-start gap-3 sm:grid-cols-2"
-          : "grid gap-3 sm:grid-cols-2";
+        ? "grid min-w-0 grid-cols-1 items-start gap-3 xl:grid-cols-3"
+        : t === "identity" || t === "config"
+          ? "clone-editor-single grid min-w-0 grid-cols-1 items-start gap-4"
+          : "grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-2";
 
   return (
-    <div className="grid gap-4">
+    <div className="grid min-w-0 gap-4">
       {/* ── Tab bar ─────────────────────────────────────────────── */}
-      <div className="flex gap-1 rounded-xl bg-muted/10 p-1">
+      <div className="clone-editor-tabs sticky top-0 z-30 flex gap-1 overflow-x-auto rounded-2xl border border-white/55 bg-white/80 p-1.5 shadow-[0_10px_30px_rgb(16_24_40/0.08)] backdrop-blur-xl">
         {visibleTabs.map((t) => (
           <button
             key={t.key}
@@ -288,7 +289,7 @@ export default function ConfigSections({
             title={t.hint}
             onClick={() => setTab(t.key)}
             className={
-              "flex-1 rounded-lg px-3 py-2.5 text-center text-sm font-semibold transition " +
+              "min-w-[8rem] flex-none whitespace-nowrap rounded-xl px-4 py-2.5 text-center text-sm font-semibold transition sm:min-w-0 sm:flex-1 " +
               (tab === t.key
                 ? "bg-panel text-ink shadow-sm"
                 : "text-muted hover:bg-muted/10 hover:text-ink")
@@ -420,7 +421,7 @@ export default function ConfigSections({
         title="What she can send"
         hint="What she sends, what she sees, and the bot-question policy."
       >
-        <div className="grid gap-1.5 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-1.5 sm:grid-cols-2">
           <ToggleCard emoji="📷" label="Photos" name="photos_enabled" checked={cfg.photosEnabled} onChange={(v) => set("photosEnabled", v)} />
           <ToggleCard emoji="🎥" label="Videos" name="videos_enabled" checked={cfg.videosEnabled} onChange={(v) => set("videosEnabled", v)} />
           <ToggleCard emoji="🎁" label="Photo bundles" title="Fans can request them" name="bundles_enabled" checked={cfg.bundlesEnabled} onChange={(v) => set("bundlesEnabled", v)} />
@@ -450,12 +451,12 @@ export default function ConfigSections({
             label="What she can see"
             tip="Off means she ignores that media entirely and replies to the caption only. Video costs more than photos, the bot downloads the file and grabs a single frame."
           />
-          <div className="mt-1.5 grid gap-1.5 sm:grid-cols-2">
+          <div className="mt-1.5 grid grid-cols-1 gap-1.5 sm:grid-cols-2">
             <ToggleCard emoji="📸" label="Sees fan photos" title="She looks at photos fans send her" name="photo_vision_enabled" checked={cfg.photoVision} onChange={(v) => set("photoVision", v)} />
             <ToggleCard emoji="🎬" label="Sees fan videos" title="She can see videos fans send her" name="video_vision_enabled" checked={cfg.videoVision} onChange={(v) => set("videoVision", v)} />
           </div>
         </div>
-        <div className="grid gap-2 border-t border-line pt-2 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-2 border-t border-line pt-2 sm:grid-cols-2">
           <ToggleCard
             emoji="✍️"
             label="Live captions"
@@ -518,7 +519,7 @@ export default function ConfigSections({
         hint="Her tone, emoji use and human touches. Hard limits and prices stay locked in code."
         tip="These never override the built-in hard limits, and money stays locked in code (push only changes how eager she is, never prices)."
       >
-        <div className="grid gap-3 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <Segmented
             label="Flirtiness"
             name="sexual_level"
@@ -555,7 +556,7 @@ export default function ConfigSections({
             NULL = inherit, which makes tipPushDirective() in
             bot/src/handler.ts:161 return "" and leaves the prompt byte-for-byte
             unchanged. Its own row: at six steps it does not fit the 3-up grid. */}
-        <div className="grid gap-3 border-t border-line pt-2 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 border-t border-line pt-2 lg:grid-cols-2">
           <Segmented
             label="Tip pushing"
             name="tip_push_level"
@@ -585,7 +586,7 @@ export default function ConfigSections({
 
         {/* Emoji settings and realism toggles sit side by side - stacked, they
             pushed this card well past a screen on their own. */}
-        <div className="grid gap-3 border-t border-line pt-2 lg:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 border-t border-line pt-2 lg:grid-cols-2">
         <div className="grid content-start gap-1.5">
         <SubHead emoji="😊" label="Emojis" tip="Applies to text and photo replies, never voice notes." />
         <Toggle label={cfg.emojis ? "Uses emojis" : "No emojis at all"} name="emojis_enabled" checked={cfg.emojis} onChange={(v) => set("emojis", v)} accent="soft" />
@@ -671,11 +672,11 @@ export default function ConfigSections({
               }
             />
           </div>
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <Slider label="Min wait" name="response_wait_min" value={cfg.waitMin} onChange={(v) => set("waitMin", v)} min={0} max={60} step={1} format={(v) => `${v}s`} />
             <Slider label="Max wait" name="response_wait_max" value={cfg.waitMax} onChange={(v) => set("waitMax", v)} min={0} max={120} step={1} format={(v) => `${v}s`} />
           </div>
-          <div className="mt-1 grid gap-2 border-t border-line pt-3 sm:grid-cols-2">
+          <div className="mt-1 grid grid-cols-1 gap-2 border-t border-line pt-3 sm:grid-cols-2">
             <Field
               label="Max reply length"
               name="max_response_words"
@@ -731,7 +732,7 @@ export default function ConfigSections({
           className="xl:col-span-2"
           hint="Search by name. Price per 1M tokens (in / out). ⭐ Best, 💰 Value, 🪙 Cheapest pinned on top."
         >
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             {MODEL_FIELDS.map((m) => (
               <ModelSelect
                 key={m.name}
@@ -805,7 +806,7 @@ export default function ConfigSections({
               )}
             </select>
           </label>
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <Slider label="Stability" name="voice_stability" value={cfg.stability} onChange={(v) => set("stability", v)} />
             <Slider label="Similarity" name="voice_similarity" value={cfg.similarity} onChange={(v) => set("similarity", v)} />
             <Slider label="Style" name="voice_style" value={cfg.style} onChange={(v) => set("style", v)} />
@@ -885,7 +886,7 @@ export default function ConfigSections({
               label="Eligibility gates"
               hint="EITHER gate makes her eligible to offer a discount, not both. Pending window: how long a locked, unpaid offer must sit before she may sweeten it. Slowdown gap: how long he must go quiet before she may proactively offer one. Minimum 1 minute on both, and the pending window is deliberately not zeroable, see its own hint."
             />
-            <div className="grid gap-2 sm:grid-cols-2">
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
               <Slider
                 label="Pending offer window"
                 name="offer_pending_minutes"
@@ -986,7 +987,7 @@ export function MonetizationSections({
       >
         {/* Charge toggle and the three price fields on one row instead of four
             stacked rows. */}
-        <div className="grid gap-2 sm:grid-cols-4">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-4">
           <Toggle label={cfg.charge ? "Charge for messages" : "Messages are free"} name="charge_messages" checked={cfg.charge} onChange={(v) => set("charge", v)} accent="soft" />
           {cfg.charge && (
             <>
@@ -1005,12 +1006,12 @@ export function MonetizationSections({
         </div>
         {/* Plain 2-col split, not two nested sub-cards - the card border around
             each one added a third layer of chrome for no grouping benefit. */}
-        <div className="grid items-start gap-3 xl:grid-cols-2">
+        <div className="grid grid-cols-1 items-start gap-3 xl:grid-cols-2">
           <div>
             <p className="mb-1.5 text-xs font-medium text-ink">Default</p>
             <div className="grid gap-2">
               {/* Message + button side by side rather than stacked. */}
-              <div className="grid items-start gap-2 sm:grid-cols-2">
+              <div className="grid grid-cols-1 items-start gap-2 sm:grid-cols-2">
                 <label className="block">
                   <FieldLabel label="Message text" />
                   <textarea name="paywall_default_message" rows={2} value={cfg.paywallDefault} onChange={(e) => set("paywallDefault", e.target.value)} className={inputCls} />
@@ -1079,7 +1080,7 @@ export function MonetizationSections({
               warmup is off never drops the stored value on Save. */}
           <input type="hidden" name="paywall_prime_as_voice" value={String(cfg.paywallPrimeVoice)} />
           {cfg.paywallPrimeEnabled && (
-            <div className="mt-2 grid items-start gap-2 xl:grid-cols-2">
+            <div className="mt-2 grid grid-cols-1 items-start gap-2 xl:grid-cols-2">
               <Field
                 label="Messages before running out"
                 name="paywall_prime_before"
@@ -1128,7 +1129,7 @@ export function MonetizationSections({
               the prime voice toggle above. */}
           <input type="hidden" name="paywall_resume_free" value={String(cfg.paywallResumeFree)} />
           {cfg.paywallResumeEnabled && (
-            <div className="mt-2 grid items-start gap-2 xl:grid-cols-2">
+            <div className="mt-2 grid grid-cols-1 items-start gap-2 xl:grid-cols-2">
               <div className="xl:col-span-2">
                 <Area
                   label="Pickup steer"

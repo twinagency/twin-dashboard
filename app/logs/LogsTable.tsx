@@ -48,7 +48,7 @@ export function LogsTable({ rows, showClone }: { rows: LogRow[]; showClone: bool
 
   return (
     <Table>
-      <TableHeader>
+      <TableHeader className="sticky top-0 z-10 bg-panel/95 shadow-[0_1px_0_var(--color-line)] backdrop-blur-xl">
         <TableRow>
           <TableHead>Time</TableHead>
           <TableHead>Level</TableHead>

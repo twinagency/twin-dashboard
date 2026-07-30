@@ -9,33 +9,25 @@
    user's OS is set to dark mode, rather than silently reappearing. */
 @custom-variant dark (&:where(.dark, .dark *));
 
-/* ── "Aurora" design tokens ──────────────────────────────────────────────────
-   Copied verbatim from the allieai2 admin (dashboard/app/globals.css, the
-   palette Jesse is working against) so both dashboards read as one product.
-   Light values are the defaults; the `.dark` block below overrides the same
-   custom properties, so every Tailwind utility that reads them (bg-panel,
-   text-ink, border-line, ...) swaps with the theme automatically.
+/* ── "Twin Aurora" design tokens ─────────────────────────────────────────────
+   Stripe-inspired shared palette used across every dashboard route so the
+   product reads as one system while retaining its own Twin identity.
 
-   Palette source: deep navy (#0A2540/#1D2B5B) through indigo/violet
-   (#4338F2 → #A58BFF) into soft pink/peach (#F7C7F3 → #FFD9C8), landing on
-   near-white (#F8FAFC/#EEF2FF/#FFFFFF). Indigo/violet carries all brand
+   Palette source: deep navy (#0D1326/#1B2151) through indigo/violet
+   (#635BFF → #A855F7) into pink/peach (#EC4899 → #FFB4A8), landing on
+   near-white (#F6F8FC/#F1F3F9/#FFFFFF). Indigo/violet carries all brand
    chrome (accent); the warm pinks are deliberately NOT wired into these
    tokens — see --color-love below, kept separate from accent on purpose.
-
-   allieai2 is day-mode only, so it has no dark values to copy. The `.dark`
-   block below is ours: same near-black surfaces as before, with the accent
-   moved onto this ramp's lighter violet so the brand stays consistent across
-   both themes rather than reverting to the old Telegram blue.
 
    HARD RULE: money figures (revenue, prices, tips, $/⭐ amounts, VIP prices,
    revenue charts) always render in --color-good (green). --color-accent
    (indigo) is reserved for primary buttons, active nav, links, focus rings and
    the brand mark — never for a money figure. */
 @theme {
-  --color-bg: #f8fafc;
+  --color-bg: #f6f8fc;
   --color-panel: #ffffff;
-  --color-elev: #eef2ff;
-  --color-ink: #0a2540;
+  --color-elev: #f1f3f9;
+  --color-ink: #101828;
   /* Secondary TEXT color (labels, hints, placeholders). Darkened 2026-07-29
      from #64729a: the old value was a light, desaturated blue-grey that read as
      washed out against --color-panel, and it is the single token behind every
@@ -43,39 +35,39 @@
      rule for this token, do not reintroduce a lighter value: a REAL SAVED VALUE
      always renders --color-ink (solid); --color-muted is only ever for
      placeholders, examples and explanatory hints. */
-  --color-muted: #4b5878;
-  --color-line: #e2d8ff;
-  --color-accent: #4338f2;
-  --color-accent-2: #5e4dff;
-  --color-accent-deep: #1d2b5b;
+  --color-muted: #667085;
+  --color-line: #e5eaf2;
+  --color-accent: #635bff;
+  --color-accent-2: #3b82f6;
+  --color-accent-deep: #4c46d9;
   --color-accent-ink: #ffffff;
-  --color-good: #1f9e54;
-  --color-warn: #b5760f;
-  --color-crit: #c23b3b;
-  --color-info: #7c6cff;
+  --color-good: #087a55;
+  --color-warn: #c57919;
+  --color-crit: #d92d20;
+  --color-info: #20c5d8;
 
   /* Lighter violet stops from the same ramp as --color-accent, for subtle
      hover/selected surfaces (e.g. a chip or nav-item background) that need
      to read as "accent, but quiet" rather than a full-strength button. */
-  --color-accent-soft: #a58bff;
-  --color-accent-tint: #c6b7ff;
+  --color-accent-soft: #a855f7;
+  --color-accent-tint: #c4b5fd;
 
   /* Warm accent reserved for romance-flavored moments (tips/spoil prompts,
      welcome-bundle callouts, "favorite" badges) — never used for buttons,
      nav, links or money, so it can't collide with --color-accent/--color-good. */
-  --color-love: #f9b6e6;
-  --color-love-ink: #6a1257;
-  --color-love-tint: #f7c7f3;
-  --color-love-bg: #fff2f5;
-  --color-love-hover: #ffd5d6;
-  --color-love-peach: #ffd9c8;
+  --color-love: #ec4899;
+  --color-love-ink: #831843;
+  --color-love-tint: #f9a8d4;
+  --color-love-bg: #fff1f7;
+  --color-love-hover: #fbcfe8;
+  --color-love-peach: #ffb4a8;
 
   /* Legacy brand tokens — kept so nothing that still refers to them 404s,
      but nothing new should use these; use --color-accent instead. */
-  --color-brand: #4338f2;
-  --color-brand-light: #5e4dff;
-  --color-grass: #1f9e54;
-  --color-grass-light: #27b863;
+  --color-brand: #635bff;
+  --color-brand-light: #3b82f6;
+  --color-grass: #087a55;
+  --color-grass-light: #12a879;
 }
 
 /* No `.dark` block: this admin is DAY MODE ONLY, matching allieai2 and
@@ -89,7 +81,7 @@
 
   /* Shared depth tokens so cards/buttons/nav read as intentional, not flat.
      Referenced via Tailwind arbitrary values, e.g. shadow-[var(--shadow-card)]. */
-  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.06), 0 1px 3px rgb(0 0 0 / 0.08);
+  --shadow-card: 0 10px 34px rgb(16 24 40 / 0.07), 0 1px 2px rgb(16 24 40 / 0.05);
   --glow-accent: 0 0 0 1px var(--color-accent),
     0 4px 14px color-mix(in srgb, var(--color-accent) 22%, transparent);
   --ring-accent: inset 0 0 0 1px
@@ -147,19 +139,70 @@ body {
   color: var(--color-ink);
 }
 
-/* Ambient wash for the main canvas — two soft radial glows (indigo top-left,
-   pink top-right) fading into the base bg. This is the one place the wider
-   Aurora ramp (accent-tint, love-tint) shows up as atmosphere rather than a
-   UI element; cards on top stay solid --color-panel so content legibility
-   is unaffected. Fixed attachment so it reads as one wash behind scrolling
-   content instead of tiling/repeating per screen height. Applied in
-   components/MainShell.tsx, matching allieai2. */
+/* Atlas-style page canvas. The pale blue-grey upper atmosphere gives way to
+   white content space, while dashboard-main adds the diagonal colour ribbon. */
 .canvas-glow {
-  background-image:
-    radial-gradient(ellipse 1000px 520px at 6% 0%, color-mix(in srgb, var(--color-accent-tint) 55%, transparent), transparent 62%),
-    radial-gradient(ellipse 900px 480px at 100% 0%, color-mix(in srgb, var(--color-love-tint) 48%, transparent), transparent 60%);
+  background-color: #f8fafc;
+  background-image: linear-gradient(180deg, #e8eff4 0, #f1f5f8 20rem, #f8fafc 34rem, #f8fafc 100%);
   background-repeat: no-repeat;
-  background-attachment: fixed;
+}
+
+.dashboard-main {
+  position: relative;
+  isolation: isolate;
+}
+
+.dashboard-main::before {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 0;
+  height: 23rem;
+  content: "";
+  pointer-events: none;
+  background:
+    radial-gradient(circle at 2% 74%, rgb(255 190 85 / 0.95), transparent 31%),
+    radial-gradient(circle at 28% 62%, rgb(255 107 97 / 0.9), transparent 36%),
+    radial-gradient(circle at 59% 35%, rgb(168 85 247 / 0.88), transparent 40%),
+    radial-gradient(circle at 102% 34%, rgb(32 197 216 / 0.92), transparent 43%),
+    linear-gradient(110deg, #ffcf6c 0%, #ff7c7d 27%, #b85be7 62%, #46d4d6 100%);
+  opacity: 0.64;
+  clip-path: polygon(0 0, 100% 0, 100% 61%, 72% 69%, 42% 79%, 0 96%);
+}
+
+.dashboard-main::after {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 0;
+  height: 23rem;
+  content: "";
+  pointer-events: none;
+  background:
+    linear-gradient(150deg, transparent 0 42%, rgb(255 255 255 / 0.2) 42.2% 43%, transparent 43.2%),
+    linear-gradient(22deg, transparent 0 70%, rgb(255 255 255 / 0.18) 70.2% 71%, transparent 71.2%);
+  clip-path: polygon(0 0, 100% 0, 100% 61%, 72% 69%, 42% 79%, 0 96%);
+}
+
+.dashboard-main > * {
+  position: relative;
+  z-index: 1;
+}
+
+.clone-editor-tabs,
+.clone-segmented {
+  scrollbar-width: none;
+}
+
+.clone-editor-tabs::-webkit-scrollbar,
+.clone-segmented::-webkit-scrollbar {
+  display: none;
+}
+
+.clone-editor-single > * {
+  grid-column: 1 / -1 !important;
 }
 
 * {
@@ -182,6 +225,157 @@ body {
 *::-webkit-scrollbar-thumb {
   background: var(--color-line);
   border-radius: 8px;
+}
+
+/* Shared Stripe-inspired shell. The aurora lives in the chrome and page
+   atmosphere while content surfaces stay white and highly legible. */
+.dashboard-sidebar {
+  isolation: isolate;
+  background:
+    radial-gradient(circle at -8% 92%, rgb(255 190 85 / 0.72), transparent 34%),
+    radial-gradient(circle at 22% 68%, rgb(255 107 97 / 0.47), transparent 38%),
+    radial-gradient(circle at 78% 52%, rgb(168 85 247 / 0.42), transparent 39%),
+    radial-gradient(circle at 112% 28%, rgb(32 197 216 / 0.55), transparent 40%),
+    linear-gradient(180deg, #e8eff4 0%, #eef2f6 33%, #e9e5fa 100%);
+  border-right: 1px solid rgb(255 255 255 / 0.7);
+  box-shadow: 12px 0 40px rgb(16 24 40 / 0.08);
+}
+
+.dashboard-sidebar::before {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  background:
+    linear-gradient(154deg, transparent 0 46%, rgb(255 255 255 / 0.18) 46.2% 47%, transparent 47.2%),
+    linear-gradient(26deg, transparent 0 73%, rgb(255 255 255 / 0.2) 73.2% 74%, transparent 74.2%);
+  content: "";
+  pointer-events: none;
+}
+
+.twin-brand-dot {
+  color: var(--color-love);
+  text-shadow: 0 0 18px rgb(236 72 153 / 0.55);
+}
+
+.sidebar-create-button {
+  background: #0d2540;
+  box-shadow: 0 9px 24px rgb(13 37 64 / 0.22);
+}
+
+.sidebar-create-button:hover {
+  filter: brightness(1.08);
+  box-shadow: 0 12px 30px rgb(13 37 64 / 0.3);
+}
+
+.dashboard-topbar,
+.dashboard-mobile-header {
+  background: rgb(255 255 255 / 0.82);
+  box-shadow: 0 1px 0 rgb(16 24 40 / 0.03);
+  backdrop-filter: blur(18px) saturate(140%);
+}
+
+[data-slot="card"] {
+  border: 1px solid var(--color-line);
+}
+
+[data-slot="input"],
+[data-slot="select-trigger"],
+textarea {
+  background-color: rgb(255 255 255 / 0.82);
+}
+
+/* Stripe-style data surfaces shared by fleet tables and operational pages. */
+[data-slot="table-header"] {
+  background: linear-gradient(90deg, rgb(99 91 255 / 0.06), rgb(32 197 216 / 0.05));
+}
+
+[data-slot="table-head"] {
+  color: var(--color-muted);
+  font-size: 0.7rem;
+  font-weight: 650;
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+[data-slot="table-row"] {
+  transition: background-color 160ms ease;
+}
+
+[data-slot="table-body"] [data-slot="table-row"]:hover {
+  background: rgb(99 91 255 / 0.045);
+}
+
+/* Fans workspace uses three distinct product panels while sharing the same
+   pale Atlas canvas and multicolour accent language as the other pages. */
+.users-workspace {
+  min-height: 100%;
+  padding: 0.75rem;
+}
+
+.users-panel {
+  position: relative;
+  background: rgb(255 255 255 / 0.94);
+  backdrop-filter: blur(14px);
+}
+
+.users-panel::before {
+  position: absolute;
+  inset: 0 0 auto;
+  z-index: 2;
+  height: 3px;
+  content: "";
+}
+
+.users-panel-list::before {
+  background: linear-gradient(90deg, #ffbe55, #ff6b61, #ec4899);
+}
+
+.users-panel-chat::before {
+  background: linear-gradient(90deg, #635bff, #a855f7, #ec4899);
+}
+
+.users-panel-profile::before {
+  background: linear-gradient(90deg, #20c5d8, #3b82f6, #635bff);
+}
+
+.users-stat {
+  background: linear-gradient(145deg, rgb(255 255 255 / 0.96), rgb(246 248 252 / 0.9));
+  box-shadow: 0 4px 14px rgb(16 24 40 / 0.04);
+}
+
+.dashboard-page {
+  position: relative;
+  padding-top: 0.75rem;
+}
+
+.dashboard-page::before {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 4.5rem;
+  height: 3px;
+  border-radius: 999px;
+  content: "";
+  background: linear-gradient(90deg, #ffbe55, #ff6b61 32%, #ec4899 58%, #635bff 79%, #20c5d8);
+}
+
+.dashboard-page > h1,
+.dashboard-page > div:first-child h1 {
+  color: #0d2540;
+}
+
+.dashboard-page > [data-slot="card"],
+.dashboard-page > div > [data-slot="card"] {
+  background: rgb(255 255 255 / 0.96);
+  backdrop-filter: blur(12px);
+}
+
+@media (max-width: 640px) {
+  .dashboard-main::before,
+  .dashboard-main::after {
+    height: 18rem;
+    clip-path: polygon(0 0, 100% 0, 100% 72%, 55% 83%, 0 96%);
+  }
 }
 
 @theme inline {
@@ -274,6 +468,107 @@ body {
 /* Global "blur all media" privacy toggle (BlurProvider/BlurToggle) — one
    rule covers every img/video anywhere in the dashboard, no per-component
    opt-in needed. */
+/* Earnings preview: Twin Aurora. Page-scoped so other routes remain unchanged. */
+.earnings-aurora {
+  --earnings-green: #16b87a;
+  position: relative;
+  isolation: isolate;
+  padding-bottom: 1.5rem;
+}
+
+.earnings-aurora::before {
+  display: none;
+}
+
+.earnings-heading::after {
+  display: block;
+  width: 5.5rem;
+  height: 3px;
+  margin-top: 1rem;
+  border-radius: 999px;
+  content: "";
+  background: linear-gradient(90deg, #635bff 0%, #a855f7 35%, #ec4899 62%, #ffbe55 100%);
+}
+
+.earnings-toolbar {
+  width: fit-content;
+  max-width: 100%;
+  padding: 0.45rem;
+  border: 1px solid #e5eaf2;
+  border-radius: 1rem;
+  background: rgb(255 255 255 / 0.82);
+  box-shadow: 0 8px 28px rgb(16 24 40 / 0.06);
+  backdrop-filter: blur(14px);
+}
+
+.earnings-control-group {
+  border: 1px solid #e5eaf2;
+  background: #f1f3f9;
+}
+
+.earnings-control-active {
+  color: white;
+  background: #635bff;
+  box-shadow: 0 3px 10px rgb(99 91 255 / 0.25);
+}
+
+.earnings-aurora [data-slot="card"] {
+  border: 1px solid #e5eaf2;
+  background: rgb(255 255 255 / 0.94);
+  box-shadow: 0 10px 34px rgb(16 24 40 / 0.07), 0 1px 2px rgb(16 24 40 / 0.04);
+  backdrop-filter: blur(12px);
+}
+
+.earnings-feature-card {
+  position: relative;
+}
+
+.earnings-feature-card::before {
+  position: absolute;
+  inset: 0 0 auto;
+  height: 3px;
+  content: "";
+  background: linear-gradient(90deg, #635bff 0%, #20c5d8 36%, #ec4899 70%, #ffbe55 100%);
+}
+
+.earnings-stat-tile {
+  position: relative;
+  overflow: hidden;
+  border-color: #e5eaf2;
+  background: rgb(255 255 255 / 0.9);
+  box-shadow: 0 7px 22px rgb(16 24 40 / 0.055);
+}
+
+.earnings-stat-tile::before {
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  content: "";
+  background: linear-gradient(180deg, #635bff, #ec4899);
+}
+
+.earnings-stat-tile:nth-child(3n + 2)::before {
+  background: linear-gradient(180deg, #20c5d8, #3b82f6);
+}
+
+.earnings-stat-tile:nth-child(3n)::before {
+  background: linear-gradient(180deg, #ff6b61, #ffbe55);
+}
+
+.earnings-aurora .money-value {
+  color: #101828 !important;
+}
+
+.earnings-aurora .money-value-primary {
+  color: #087a55 !important;
+}
+
+@media (max-width: 640px) {
+  .earnings-toolbar {
+    width: 100%;
+  }
+}
+
 html.blur-media img,
 html.blur-media video {
   filter: blur(20px);

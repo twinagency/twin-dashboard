@@ -8,6 +8,7 @@ import type { OrModel } from "@/app/api/models/route";
 import IntakeFields from "./IntakeFields";
 import { INTAKE_FIELD_KEYS, INTAKE_SECTIONS, proseValue } from "@/lib/intake";
 import PersonaFactsFields from "./clone/PersonaFactsFields";
+import CloneAppearanceEditor from "./clone/CloneAppearanceEditor";
 import MediaManager from "@/app/media/MediaManager";
 import FlowGraph from "./flow/FlowGraph";
 import type { CloneCfg } from "./flow/graph";
@@ -68,12 +69,16 @@ export default function CloneForm({
   photos,
   videos,
   bundles,
+  appearanceImageUrl,
+  appearanceColor,
 }: {
   clone: Clone;
   promptPreview: PromptPreview;
   photos: MediaProps["photos"];
   videos: MediaProps["videos"];
   bundles: MediaProps["bundles"];
+  appearanceImageUrl?: string;
+  appearanceColor: string;
 }) {
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -154,12 +159,12 @@ export default function CloneForm({
   );
 
   return (
-    <div className="grid gap-4">
+    <div className="grid min-w-0 gap-4">
       {/* Identity + Config + Money live in one form so a single Save persists
           all of them, from any tab. The tab bar itself is rendered by
           ConfigSections (one flat strip, PPVs and View injected as extraTabs). */}
-      <form ref={formRef} onSubmit={(e) => { e.preventDefault(); save(false); }} className="grid gap-4">
-        <div className={tab === "ppvs" ? "hidden" : "grid gap-4"}>
+      <form ref={formRef} onSubmit={(e) => { e.preventDefault(); save(false); }} className="grid min-w-0 gap-4">
+        <div className={tab === "ppvs" ? "hidden" : "grid min-w-0 gap-4"}>
         <ConfigSections
           cfg={cfg}
           set={set}
@@ -172,7 +177,17 @@ export default function CloneForm({
           photos={photos}
           videos={videos}
           bundles={bundles}
-          identityWhoSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="who" cfg={cfg} set={set} />}
+          identityWhoSlot={
+            <>
+              <CloneAppearanceEditor
+                cloneName={clone.name}
+                initialColor={appearanceColor}
+                initialImagePath={clone.intake?.appearance?.profile_image_path ?? null}
+                initialImageUrl={appearanceImageUrl}
+              />
+              <PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="who" cfg={cfg} set={set} />
+            </>
+          }
           identityCreatorSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="creator" cfg={cfg} set={set} />}
           identityPhysicalSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="physical" cfg={cfg} set={set} />}
           identitySocialsSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="socials" cfg={cfg} set={set} />}

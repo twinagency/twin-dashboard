@@ -14,6 +14,8 @@
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
 import { openCloneSwitcher } from "@/lib/clone-switcher-bus";
+import TwinAssistant from "@/components/TwinAssistant";
+import TwinWordmark from "@/components/TwinWordmark";
 
 type CloneLite = { id: string; name: string; color: string; photoUrl?: string };
 
@@ -72,24 +74,19 @@ const PATHS: Record<string, string> = {
   Sparkle: '<path d="M12 3l1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2z"/>',
 };
 
-// Icons always show their own color. Labels stay off-white until selected,
-// at which point the label + row background switch to that same icon color.
-// Sidebar is a fixed navy surface (not theme-driven), so idle/hover states
-// here are hand-tuned for a dark bg rather than reusing the light-canvas
-// muted/ink tokens. Colors are drawn from the Aurora ramp, not generic
-// Tailwind hues, so section color-coding still reads as "on brand":
-// purple->accent-soft (violet stop), pink->love, blue->accent-2 (brighter
-// indigo stop, for contrast against navy). Matches allieai2's sidebar.
+// Icons keep their own Aurora color while labels use Stripe's dark navy ink.
+// The sidebar itself is a pale, multicolor Atlas-style field, so selected rows
+// use translucent white surfaces rather than dark-mode treatments.
 type LinkColor = "neutral" | "good" | "purple" | "orange" | "blue" | "red" | "pink" | "gray";
 const LINK_COLOR_CLASSES: Record<LinkColor, { icon: string; active: string; idle: string }> = {
-  neutral: { icon: "text-white/60", active: "bg-white/15 text-white", idle: "text-white/80 hover:bg-white/10" },
-  good: { icon: "text-good", active: "bg-good/20 text-good", idle: "text-white/80 hover:bg-good/10" },
-  purple: { icon: "text-accent-soft", active: "bg-accent-soft/20 text-accent-soft", idle: "text-white/80 hover:bg-accent-soft/10" },
-  orange: { icon: "text-warn", active: "bg-warn/20 text-warn", idle: "text-white/80 hover:bg-warn/10" },
-  blue: { icon: "text-accent-2", active: "bg-accent-2/20 text-accent-2", idle: "text-white/80 hover:bg-accent-2/10" },
-  pink: { icon: "text-love", active: "bg-love/20 text-love", idle: "text-white/80 hover:bg-love/10" },
-  red: { icon: "text-crit", active: "bg-crit/20 text-crit", idle: "text-white/80 hover:bg-crit/10" },
-  gray: { icon: "text-white/40", active: "bg-white/10 text-white/70", idle: "text-white/80 hover:bg-white/10" },
+  neutral: { icon: "text-ink/55", active: "bg-white/75 text-ink shadow-[0_6px_18px_rgb(16_24_40/0.07)] ring-1 ring-white/70", idle: "text-ink/80 hover:bg-white/50 hover:text-ink" },
+  good: { icon: "text-good", active: "bg-white/75 text-ink shadow-[0_6px_18px_rgb(16_24_40/0.07)] ring-1 ring-white/70", idle: "text-ink/80 hover:bg-white/50 hover:text-ink" },
+  purple: { icon: "text-accent", active: "bg-white/75 text-ink shadow-[0_6px_18px_rgb(16_24_40/0.07)] ring-1 ring-white/70", idle: "text-ink/80 hover:bg-white/50 hover:text-ink" },
+  orange: { icon: "text-warn", active: "bg-white/75 text-ink shadow-[0_6px_18px_rgb(16_24_40/0.07)] ring-1 ring-white/70", idle: "text-ink/80 hover:bg-white/50 hover:text-ink" },
+  blue: { icon: "text-accent-2", active: "bg-white/75 text-ink shadow-[0_6px_18px_rgb(16_24_40/0.07)] ring-1 ring-white/70", idle: "text-ink/80 hover:bg-white/50 hover:text-ink" },
+  pink: { icon: "text-love", active: "bg-white/75 text-ink shadow-[0_6px_18px_rgb(16_24_40/0.07)] ring-1 ring-white/70", idle: "text-ink/80 hover:bg-white/50 hover:text-ink" },
+  red: { icon: "text-crit", active: "bg-white/75 text-ink shadow-[0_6px_18px_rgb(16_24_40/0.07)] ring-1 ring-white/70", idle: "text-ink/80 hover:bg-white/50 hover:text-ink" },
+  gray: { icon: "text-muted", active: "bg-white/75 text-ink shadow-[0_6px_18px_rgb(16_24_40/0.07)] ring-1 ring-white/70", idle: "text-ink/80 hover:bg-white/50 hover:text-ink" },
 };
 
 // Each page type appears exactly once, scoped by the header clone switcher,
@@ -122,26 +119,23 @@ export default function Sidebar({
   const onConfigurePage = activeCloneId ? pathname === `/clones/${activeCloneId}` : false;
 
   return (
-    <aside className="sticky top-0 hidden h-screen w-64 shrink-0 flex-col bg-gradient-to-b from-[#0A2540] to-[#1D2B5B] lg:flex">
+    <aside className="dashboard-sidebar sticky top-0 hidden h-screen w-64 shrink-0 flex-col lg:flex">
       {/* Brand - fixed height so its bottom border lines up exactly with the
           TopBar's border in the column next to it (both h-16). */}
-      <div className="flex h-16 shrink-0 items-center justify-between gap-2 border-b border-white/10 px-4">
-        <Link href="/revenue" className="text-2xl font-extrabold tracking-tight text-white">
-          Twin<span className="text-love">.</span>
+      <div className="flex h-16 shrink-0 items-center border-b border-ink/10 px-4">
+        <Link href="/revenue" className="min-w-0" aria-label="Twin Technologies">
+          <TwinWordmark />
         </Link>
-        <span className="rounded-full bg-white/10 px-2 py-1 text-[10px] font-medium text-white/70">
-          v1.0 beta
-        </span>
       </div>
 
       {/* Create new clone - always the first thing in the sidebar, its own
           row so it reads as an action, not just another nav destination.
           No bottom border: the generous space above it already separates it
           from the brand header, so a hairline as well just reads as clutter. */}
-      <div className="shrink-0 px-3 pb-3 pt-10">
+      <div className="shrink-0 px-3 pb-3 pt-10 [@media(max-height:850px)]:pt-6">
         <Link
           href="/clones/new"
-          className="flex items-center justify-center gap-2 rounded-lg bg-accent px-3 py-2.5 text-sm font-semibold text-accent-ink shadow-sm transition hover:bg-accent-deep"
+          className="sidebar-create-button flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold text-white transition"
         >
           <Icon d={PATHS.Plus} className="h-4 w-4" />
           Create new clone
@@ -172,11 +166,11 @@ export default function Sidebar({
                     onClick={() => openCloneSwitcher()}
                     title="Pick a clone first"
                     className={
-                      "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-base font-medium transition " +
+                      "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold transition [@media(max-height:850px)]:py-2 " +
                       colors.idle
                     }
                   >
-                    <Icon d={PATHS[l.icon]} className={"h-5 w-5 " + colors.icon} />
+                    <Icon d={PATHS[l.icon]} className={"h-[18px] w-[18px] " + colors.icon} />
                     {l.label}
                   </button>
                 );
@@ -186,11 +180,11 @@ export default function Sidebar({
                   key={l.label}
                   href={`/clones/${activeCloneId}?tab=${l.tab}`}
                   className={
-                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-base font-medium transition " +
+                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold transition [@media(max-height:850px)]:py-2 " +
                     (active ? colors.active : colors.idle)
                   }
                 >
-                  <Icon d={PATHS[l.icon]} className={"h-5 w-5 " + colors.icon} />
+                  <Icon d={PATHS[l.icon]} className={"h-[18px] w-[18px] " + colors.icon} />
                   {l.label}
                 </Link>
               );
@@ -204,11 +198,11 @@ export default function Sidebar({
                   onClick={() => openCloneSwitcher()}
                   title="Pick a clone first"
                   className={
-                    "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-base font-medium transition " +
+                    "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold transition [@media(max-height:850px)]:py-2 " +
                     colors.idle
                   }
                 >
-                  <Icon d={PATHS[l.icon]} className={"h-5 w-5 " + colors.icon} />
+                  <Icon d={PATHS[l.icon]} className={"h-[18px] w-[18px] " + colors.icon} />
                   {l.label}
                 </button>
               );
@@ -220,24 +214,24 @@ export default function Sidebar({
                 key={l.href}
                 href={l.href}
                 className={
-                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-base font-medium transition " +
+                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold transition [@media(max-height:850px)]:py-2 " +
                   (active ? colors.active : colors.idle)
                 }
               >
                 {l.icon === "FansCombo" ? (
                   <>
-                    <Icon d={PATHS.Users} className={"h-5 w-5 " + colors.icon} />
+                    <Icon d={PATHS.Users} className={"h-[18px] w-[18px] " + colors.icon} />
                     <span className="flex-1">{l.label}</span>
-                    <Icon d={PATHS.Messages} className="h-4 w-4 text-white/50" />
+                    <Icon d={PATHS.Messages} className="h-4 w-4 text-ink/40" />
                   </>
                 ) : l.icon === "EarningsCombo" ? (
                   <>
-                    <Icon d={PATHS.Dollar} className={"h-5 w-5 " + colors.icon} />
+                    <Icon d={PATHS.Dollar} className={"h-[18px] w-[18px] " + colors.icon} />
                     <span className="flex-1">{l.label}</span>
                   </>
                 ) : (
                   <>
-                    <Icon d={PATHS[l.icon]} className={"h-5 w-5 " + colors.icon} />
+                    <Icon d={PATHS[l.icon]} className={"h-[18px] w-[18px] " + colors.icon} />
                     {l.label}
                   </>
                 )}
@@ -247,14 +241,18 @@ export default function Sidebar({
         </div>
 
         {/* Still not built - kept separate from the real nav list above. */}
-        <div className="mt-1 border-t border-white/10 pt-1">
-          <span className="flex cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2.5 text-base font-medium text-white/40 opacity-70">
-            <Icon d={PATHS.Code} className="h-5 w-5" />
+        <div className="mt-1 border-t border-ink/10 pt-1">
+          <span className="flex cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-ink/40 opacity-70 [@media(max-height:850px)]:py-2">
+            <Icon d={PATHS.Code} className="h-[18px] w-[18px]" />
             <span className="flex-1">API</span>
-            <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[9px] font-medium normal-case tracking-normal text-white/50">
+            <span className="rounded-full bg-white/45 px-1.5 py-0.5 text-[9px] font-medium normal-case tracking-normal text-ink/50">
               coming soon
             </span>
           </span>
+        </div>
+
+        <div className="mt-auto pt-4 [@media(max-height:850px)]:pt-2">
+          <TwinAssistant />
         </div>
       </nav>
     </aside>

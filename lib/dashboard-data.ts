@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "./supabase";
-import { colorForIndex } from "./colors";
+import { chartColorForClone, profileImagePathForClone } from "./colors";
 
 export type Period = "ALL" | "1Y" | "6M" | "3M" | "1M" | "2W" | "1W" | "1D" | "CUSTOM";
 type Gran = "hour" | "day" | "week" | "month";
@@ -62,6 +62,9 @@ export type RecentTransaction = {
   telegramId: number | null;
   stars: number;
   kind: string; // feature if set (credits/photo/video/bundle/media/tip/subscription), else the coarse `kind`
+  mediaType: "photo" | "video" | "bundle" | null;
+  mediaUrl: string | null;
+  mediaName: string | null;
   paidAt: string;
 };
 
@@ -136,11 +139,11 @@ export async function getDashboard(period: Period, range?: DateRange): Promise<D
   // ── clones ──────────────────────────────────────────────────────────────
   const { data: cloneRows } = await supabaseAdmin
     .from("clones")
-    .select("id,slug,name,created_at")
+    .select("id,slug,name,created_at,intake")
     .order("created_at", { ascending: true });
-  const clones = (cloneRows ?? []) as { id: string; slug: string; name: string }[];
+  const clones = (cloneRows ?? []) as { id: string; slug: string; name: string; intake: unknown }[];
   const colorById = new Map<string, string>();
-  clones.forEach((c, i) => colorById.set(c.id, colorForIndex(i)));
+  clones.forEach((c, i) => colorById.set(c.id, chartColorForClone(c.intake, i)));
 
   // Cover photo per clone (first uploaded), batch-signed — so avatars match
   // the nav and the clones grid everywhere.
@@ -152,6 +155,10 @@ export async function getDashboard(period: Period, range?: DateRange): Promise<D
       .in("clone_id", clones.map((c) => c.id))
       .order("created_at", { ascending: true });
     const firstPath = new Map<string, string>();
+    for (const clone of clones) {
+      const customPath = profileImagePathForClone(clone.intake);
+      if (customPath) firstPath.set(clone.id, customPath);
+    }
     for (const p of photoRows ?? []) {
       if (p.clone_id && !firstPath.has(p.clone_id)) firstPath.set(p.clone_id, p.storage_path);
     }
@@ -191,6 +198,7 @@ export async function getDashboard(period: Period, range?: DateRange): Promise<D
   // is an additive column (migration 024) — fall back without it if that
   // migration hasn't landed yet, same defensive pattern as analytics-data.ts.
   type PurchaseRow = {
+    id: string;
     clone_id: string;
     amount_stars: number;
     paid_at: string;
@@ -202,13 +210,13 @@ export async function getDashboard(period: Period, range?: DateRange): Promise<D
   {
     const withFeature = await supabaseAdmin
       .from("star_transactions")
-      .select("clone_id,amount_stars,paid_at,telegram_id,kind,feature")
+      .select("id,clone_id,amount_stars,paid_at,telegram_id,kind,feature")
       .gte("paid_at", new Date(startMs).toISOString())
       .lte("paid_at", new Date(windowEnd).toISOString());
     if (withFeature.error) {
       const legacy = await supabaseAdmin
         .from("star_transactions")
-        .select("clone_id,amount_stars,paid_at,telegram_id,kind")
+        .select("id,clone_id,amount_stars,paid_at,telegram_id,kind")
         .gte("paid_at", new Date(startMs).toISOString())
         .lte("paid_at", new Date(windowEnd).toISOString());
       purchases = ((legacy.data ?? []) as Omit<PurchaseRow, "feature">[]).map((r) => ({ ...r, feature: null }));
@@ -329,11 +337,127 @@ export async function getDashboard(period: Period, range?: DateRange): Promise<D
   // ── recent transactions — most recent first. Capped generously (not to 30)
   // so scoping to one clone client-side still has enough rows to show; the
   // frontend takes the top 30 AFTER filtering by clone. ─────────────────────
-  const cloneNameById = new Map(clones.map((c) => [c.id, c.name]));
-  const recent: RecentTransaction[] = [...purchases]
+  type MediaType = "photo" | "video" | "bundle";
+  const isMediaType = (value: unknown): value is MediaType =>
+    value === "photo" || value === "video" || value === "bundle";
+  const latestPurchases = [...purchases]
     .sort((a, b) => new Date(b.paid_at).getTime() - new Date(a.paid_at).getTime())
-    .slice(0, 300)
-    .map((p) => ({
+    .slice(0, 300);
+
+  // The Telegram ledger has the sale and the rich chat-history row has the
+  // catalogue id. Match a sale to the latest unused same-price locked offer
+  // made to that fan before payment, then resolve that exact item below.
+  const mediaRefByTransaction = new Map<string, { type: MediaType; id: string }>();
+  const mediaPurchases = latestPurchases.filter((p) => p.kind === "media" || isMediaType(p.feature));
+  const mediaCloneIds = [...new Set(mediaPurchases.map((p) => p.clone_id))];
+  const mediaTelegramIds = [
+    ...new Set(mediaPurchases.map((p) => p.telegram_id).filter((id): id is number => id != null)),
+  ];
+  if (mediaCloneIds.length && mediaTelegramIds.length) {
+    const { data: offerRows } = await supabaseAdmin
+      .from("chat_history")
+      .select("id,clone_id,telegram_id,created_at,meta")
+      .in("clone_id", mediaCloneIds)
+      .in("telegram_id", mediaTelegramIds)
+      .contains("meta", { paid: true })
+      .order("created_at", { ascending: false })
+      .limit(5000);
+    const offers: {
+      rowId: number;
+      cloneId: string;
+      telegramId: number;
+      createdAt: number;
+      stars: number;
+      type: MediaType;
+      mediaId: string;
+    }[] = [];
+    for (const row of (offerRows ?? []) as {
+      id: number;
+      clone_id: string;
+      telegram_id: number;
+      created_at: string;
+      meta: { type?: unknown; media_id?: unknown; stars?: unknown } | null;
+    }[]) {
+      if (!isMediaType(row.meta?.type) || typeof row.meta?.media_id !== "string") continue;
+      offers.push({
+        rowId: row.id,
+        cloneId: row.clone_id,
+        telegramId: Number(row.telegram_id),
+        createdAt: new Date(row.created_at).getTime(),
+        stars: Number(row.meta.stars),
+        type: row.meta.type,
+        mediaId: row.meta.media_id,
+      });
+    }
+    const usedOffers = new Set<number>();
+    for (const purchase of mediaPurchases) {
+      if (purchase.telegram_id == null) continue;
+      const paidAt = new Date(purchase.paid_at).getTime();
+      const recordedType = isMediaType(purchase.feature) ? purchase.feature : null;
+      const offer = offers.find(
+        (candidate) =>
+          !usedOffers.has(candidate.rowId) &&
+          candidate.cloneId === purchase.clone_id &&
+          candidate.telegramId === Number(purchase.telegram_id) &&
+          candidate.createdAt <= paidAt &&
+          candidate.stars === Number(purchase.amount_stars) &&
+          (!recordedType || candidate.type === recordedType),
+      );
+      if (offer) {
+        usedOffers.add(offer.rowId);
+        mediaRefByTransaction.set(purchase.id, { type: offer.type, id: offer.mediaId });
+      }
+    }
+  }
+
+  const mediaAssetByKey = new Map<string, { path: string | null; name: string | null }>();
+  const refs = [...mediaRefByTransaction.values()];
+  const photoIds = [...new Set(refs.filter((r) => r.type === "photo").map((r) => r.id))];
+  const videoIds = [...new Set(refs.filter((r) => r.type === "video").map((r) => r.id))];
+  const bundleIds = [...new Set(refs.filter((r) => r.type === "bundle").map((r) => r.id))];
+  if (photoIds.length) {
+    const { data } = await supabaseAdmin
+      .from("photos")
+      .select("id,storage_path,image_name,caption")
+      .in("id", photoIds);
+    for (const p of (data ?? []) as { id: string; storage_path: string; image_name: string | null; caption: string | null }[]) {
+      mediaAssetByKey.set(`photo:${p.id}`, { path: p.storage_path, name: p.image_name || p.caption || "Photo" });
+    }
+  }
+  if (videoIds.length) {
+    const { data } = await supabaseAdmin.from("videos").select("id,storage_path,caption").in("id", videoIds);
+    for (const v of (data ?? []) as { id: string; storage_path: string; caption: string | null }[]) {
+      mediaAssetByKey.set(`video:${v.id}`, { path: v.storage_path, name: v.caption || "Video" });
+    }
+  }
+  if (bundleIds.length) {
+    const { data } = await supabaseAdmin
+      .from("photo_bundles")
+      .select("id,name,photo_bundle_items(storage_path,sort_order)")
+      .in("id", bundleIds);
+    for (const b of (data ?? []) as {
+      id: string;
+      name: string | null;
+      photo_bundle_items: { storage_path: string; sort_order: number }[];
+    }[]) {
+      const cover = [...(b.photo_bundle_items ?? [])].sort((a, z) => a.sort_order - z.sort_order)[0];
+      mediaAssetByKey.set(`bundle:${b.id}`, { path: cover?.storage_path ?? null, name: b.name || "Bundle" });
+    }
+  }
+  const mediaPaths = [
+    ...new Set([...mediaAssetByKey.values()].map((asset) => asset.path).filter((path): path is string => !!path)),
+  ];
+  const { data: signedMedia } = mediaPaths.length
+    ? await supabaseAdmin.storage.from("media").createSignedUrls(mediaPaths, 3600)
+    : { data: [] as { signedUrl: string | null }[] };
+  const signedUrlByPath = new Map(mediaPaths.map((path, i) => [path, signedMedia?.[i]?.signedUrl ?? null]));
+
+  const cloneNameById = new Map(clones.map((c) => [c.id, c.name]));
+  const recent: RecentTransaction[] = latestPurchases.map((p) => {
+    const mediaRef = mediaRefByTransaction.get(p.id);
+    const mediaType = mediaRef?.type ?? (isMediaType(p.feature) ? p.feature : null);
+    const asset = mediaRef ? mediaAssetByKey.get(`${mediaRef.type}:${mediaRef.id}`) : null;
+    return {
       cloneId: p.clone_id,
       cloneName: cloneNameById.get(p.clone_id) ?? "-",
       cloneColor: colorById.get(p.clone_id) ?? "#888",
@@ -341,9 +465,13 @@ export async function getDashboard(period: Period, range?: DateRange): Promise<D
       username: p.telegram_id != null ? usernameByKey.get(`${p.clone_id}:${p.telegram_id}`) ?? null : null,
       telegramId: p.telegram_id,
       stars: p.amount_stars,
-      kind: p.feature || p.kind || "other",
+      kind: mediaType || p.feature || p.kind || "other",
+      mediaType,
+      mediaUrl: asset?.path ? signedUrlByPath.get(asset.path) ?? null : null,
+      mediaName: asset?.name ?? null,
       paidAt: p.paid_at,
-    }));
+    };
+  });
 
   const summaries: CloneSummary[] = clones
     .map((c) => ({

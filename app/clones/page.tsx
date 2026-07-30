@@ -2,7 +2,7 @@ import Link from "next/link";
 import { supabaseAdmin } from "@/lib/supabase";
 import type { Clone } from "@/lib/types";
 import ClonesGrid, { type CloneCard } from "@/components/ClonesGrid";
-import { colorForIndex } from "@/lib/colors";
+import { chartColorForClone, profileImagePathForClone } from "@/lib/colors";
 import { Button } from "@/components/ui/button";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export default async function ClonesPage() {
   const { data, error } = await supabaseAdmin
     .from("clones")
-    .select("id,slug,name,status,photos_enabled,videos_enabled,voice_enabled,voice_id,created_at")
+    .select("id,slug,name,status,photos_enabled,videos_enabled,voice_enabled,voice_id,created_at,intake")
     .order("created_at", { ascending: true });
 
   if (error) {
@@ -44,6 +44,11 @@ export default async function ClonesPage() {
     }
 
     const firstPath = new Map<string, string>();
+    for (const clone of clones) {
+      if (!clone.id) continue;
+      const customPath = profileImagePathForClone(clone.intake);
+      if (customPath) firstPath.set(clone.id, customPath);
+    }
     for (const p of photosRes.data ?? []) {
       if (p.clone_id && !firstPath.has(p.clone_id)) firstPath.set(p.clone_id, p.storage_path);
     }
@@ -59,7 +64,7 @@ export default async function ClonesPage() {
     slug: c.slug ?? "",
     status: c.status ?? "paused",
     active: c.status === "active",
-    color: colorForIndex(i),
+    color: chartColorForClone(c.intake, i),
     photoUrl: c.id ? avatarUrlByCloneId.get(c.id) : undefined,
     stars: c.id ? starsByClone.get(c.id) ?? 0 : 0,
     users: c.id ? usersByClone.get(c.id) ?? 0 : 0,
@@ -71,7 +76,7 @@ export default async function ClonesPage() {
   }));
 
   return (
-    <div>
+    <div className="dashboard-page">
       <div className="mb-6 flex items-center justify-between">
         <h1 className="text-2xl font-bold text-ink">Clones</h1>
         <span className="text-sm font-medium text-muted">{clones.length} total</span>

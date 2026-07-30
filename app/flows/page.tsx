@@ -78,7 +78,7 @@ async function FleetFlows() {
   const enabledCount = rows.filter((r) => r.drip_enabled).length;
 
   return (
-    <div className="text-ink">
+    <div className="dashboard-page text-ink">
       <h1 className="mb-1 flex items-center gap-1.5 text-2xl font-semibold">
         Flows
         <Info
@@ -191,7 +191,7 @@ async function CloneFlows({ cloneId }: { cloneId: string }) {
   };
 
   return (
-    <div>
+    <div className="dashboard-page">
       <div className="mb-5 flex items-start justify-between gap-4">
         <div className="min-w-0">
           <h1 className="mb-1 flex items-center gap-1.5 text-2xl font-semibold">

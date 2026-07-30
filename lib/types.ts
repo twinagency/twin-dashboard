@@ -331,7 +331,14 @@ export type Clone = {
   voice_cooldown_turns?: number;
   discount_slowdown_minutes?: number;
 
-  intake: { answers?: string; fields?: Record<string, string> } | null;
+  intake: {
+    answers?: string;
+    fields?: Record<string, string>;
+    appearance?: {
+      chart_color?: string | null;
+      profile_image_path?: string | null;
+    };
+  } | null;
   persona: Record<string, string> | null;
 
   deployed_at: string | null;

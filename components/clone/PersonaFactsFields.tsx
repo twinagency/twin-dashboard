@@ -610,7 +610,7 @@ export default function PersonaFactsFields({
         filled={whoFilled}
         hint="Typed facts, injected into her prompt exactly as written (never through the AI), so they can't drift or go stale."
       >
-        <div className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
           {/* Name lives here rather than in its own card - one input never
               justified a whole section at the top of the tab. */}
           <Field label="Name" name="name" required defaultValue={clone?.name ?? ""} placeholder="e.g. Sophie" />
@@ -681,7 +681,7 @@ export default function PersonaFactsFields({
             </select>
           </label>
         </div>
-        <div className="grid gap-2 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <MultiSelect
             label="Heritage"
             name="ethnicity_tags"
@@ -709,7 +709,7 @@ export default function PersonaFactsFields({
         filled={creatorFilled}
         hint="Replaces the old free-text Job field. Cover story is what she volunteers first if she doesn't lead with the creator identity."
       >
-        <div className="grid gap-2 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <label className="block">
             <FieldLabel label="Creator type" hint="What she actually is, injected as her fan-facing job unless a cover story is set" />
             <select name="creator_type" defaultValue={clone?.creator_type ?? ""} className={selectCls}>
@@ -775,7 +775,7 @@ export default function PersonaFactsFields({
         filled={physicalFilled}
         hint="Highest-priority facts on the page. Without these she improvises and contradicts herself between sessions. Condensed 2026-07-27: tattoo/piercing locations and voice moved into their own nested Collapses below since they're touched far less often than the rest."
       >
-        <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
           <label className="block">
             <FieldLabel label="Hair length" />
             <select name="hair_length" defaultValue={clone?.hair_length ?? ""} className={selectCls}>
@@ -805,7 +805,7 @@ export default function PersonaFactsFields({
             </select>
           </label>
         </div>
-        <div className="grid gap-2 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           <label className="block">
             <FieldLabel label="Cup size" />
             <select name="cup_size" defaultValue={clone?.cup_size ?? ""} className={selectCls}>
@@ -829,7 +829,7 @@ export default function PersonaFactsFields({
             filled far less often, move into the nested Collapse below. This is
             a genuine tri-state (Not set / Yes / No, round-trips SQL NULL), not
             a two-state toggle - do not regress it. */}
-        <div className="grid gap-2 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <Tri
             name="tattoos"
             label="Has tattoos"
@@ -850,7 +850,7 @@ export default function PersonaFactsFields({
           filled={tattooPiercingDetailsFilled}
           hint="Optional detail on top of the Yes/No above, e.g. exactly where and what."
         >
-          <div className="grid gap-2 sm:grid-cols-2">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
             <TagInput
               label="Tattoos"
               name="tattoo_details"
@@ -874,7 +874,7 @@ export default function PersonaFactsFields({
           filled={voiceFilled}
           hint="Mostly supersedes the old free-text 'how she sounds' question. A small remainder for nuance still lives in the questionnaire."
         >
-          <div className="grid gap-2 sm:grid-cols-3">
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
             <label className="block">
               <FieldLabel label="Accent" />
               <select name="voice_accent" defaultValue={clone?.voice_accent ?? ""} className={selectCls}>
@@ -939,7 +939,7 @@ export default function PersonaFactsFields({
           initial={nicknamesInitial}
           placeholder="babe, baby (Enter to add)"
         />
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <TagInput
             label="Turn-ons"
             name="turn_ons"
@@ -961,7 +961,7 @@ export default function PersonaFactsFields({
           hint="Slang or catchphrases only she uses. Pulled out of the free-text quirks question so a fan asking her to 'say her thing' gets a real answer, not an improvisation."
         />
         <SubHead emoji="🪞" label="Reactions & rhythm" tip="Pulled out of the free-text quirks question so they're deterministic, not LLM-interpreted." />
-        <div className="grid gap-2 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           <label className="block">
             <FieldLabel label="If he's rude" />
             <select name="reaction_to_rudeness" defaultValue={clone?.reaction_to_rudeness ?? ""} className={selectCls}>
@@ -995,7 +995,7 @@ export default function PersonaFactsFields({
         filled={behaviourFilled}
         hint="Not a general behaviour setting - exactly four specific moments: what she says about her relationship status, what she does if he asks to meet up, what she does if he says he loves you, and whether she admits to chatting with other fans. Each option below changes her actual reply in that moment, not just flavor text. Renamed from 'Behaviour policy' 2026-07-27, that label didn't say what it does."
       >
-        <div className="grid gap-2 sm:grid-cols-3">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
           <label className="block">
             <FieldLabel label="Relationship status" hint="What she says if he asks whether she's single." />
             <select name="relationship_canon" defaultValue={clone?.relationship_canon ?? ""} className={selectCls}>
@@ -1035,7 +1035,7 @@ export default function PersonaFactsFields({
         filled={rhythmFilled}
         hint="Pairs with her Timezone in Config. Without this she says 'just woke up' at 11pm her own time."
       >
-        <div className="grid gap-2 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
           <Field label="Wake time" name="wake_time" type="time" defaultValue={clone?.wake_time ?? ""} />
           <Field label="Sleep time" name="sleep_time" type="time" defaultValue={clone?.sleep_time ?? ""} />
         </div>
@@ -1079,7 +1079,7 @@ export default function PersonaFactsFields({
           placeholder="surfing, true-crime podcasts (Enter to add)"
           suggestions={HOBBY_SUGGESTIONS}
         />
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <TagInput
             label="Favorite things"
             name="favorite_things"
@@ -1112,7 +1112,7 @@ export default function PersonaFactsFields({
         filled={contentFilled}
         hint="Distinct from Hard limits, which governs chat topics only. This is what she's actually filmed, or will never film."
       >
-        <div className="grid gap-3 sm:grid-cols-2">
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
           <TagInput
             label="Publicly done"
             name="content_done"
@@ -1167,7 +1167,7 @@ export default function PersonaFactsFields({
           accent="soft"
           hint="Off means no forced lowercase, no dropped punctuation, no typos and no double-texts. She writes clean, well-formed messages."
         />
-        <div className={(imperfectionOn ? "mt-2 " : "hidden ") + "grid gap-3 sm:grid-cols-2"}>
+        <div className={(imperfectionOn ? "mt-2 " : "hidden ") + "grid grid-cols-1 gap-3 sm:grid-cols-2"}>
           <Segmented
             label="Lowercase"
             name="lowercase_level"

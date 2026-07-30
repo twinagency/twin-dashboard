@@ -338,13 +338,13 @@ export default async function FansPage({
   const colHeight = "lg:h-full";
 
   return (
-    <div className="lg:h-full">
+    <div className="users-workspace lg:h-full">
       {/* Middle column capped narrow (~400px, iPhone-width) instead of 1fr - 
           reads like a phone thread, not a stretched-out desktop panel. Left
           gets the extra room for data/filters, right takes whatever's left. */}
       <div className="grid gap-3 lg:h-full lg:grid-cols-3">
         {/* ── Left: fan list (data above, bigger search, filters) ───────── */}
-        <Card size="sm" className={`flex ${colHeight} flex-col overflow-hidden p-0`}>
+        <Card size="sm" className={`users-panel users-panel-list flex h-[34rem] ${colHeight} flex-col overflow-hidden p-0`}>
           <div className="border-b border-line p-3">
             {/* Data above the list */}
             <div className="mb-3 grid grid-cols-3 gap-2">
@@ -353,7 +353,7 @@ export default async function FansPage({
                 { label: "Active", value: fmtNum(activeFans) },
                 { label: "Paying", value: fmtNum(payingFans) },
               ].map((s) => (
-                <div key={s.label} className="rounded-md border border-line bg-bg px-2 py-1.5 text-center">
+                <div key={s.label} className="users-stat rounded-md border border-line bg-bg px-2 py-1.5 text-center">
                   <div className="text-sm font-semibold tabular-nums text-ink">{s.value}</div>
                   <div className="text-[10px] text-muted">{s.label}</div>
                 </div>
@@ -490,7 +490,7 @@ export default async function FansPage({
         </Card>
 
         {/* ── Middle: real chat thread ──────────────────────────────────── */}
-        <Card size="sm" className={`flex ${colHeight} flex-col overflow-hidden p-0`}>
+        <Card size="sm" className={`users-panel users-panel-chat flex h-[42rem] ${colHeight} flex-col overflow-hidden p-0`}>
           {!selected ? (
             <div className="flex flex-1 items-center justify-center text-sm text-muted">Pick a fan to view messages.</div>
           ) : (
@@ -655,7 +655,7 @@ export default async function FansPage({
         </Card>
 
         {/* ── Right: complete user data + profile ───────────────────────── */}
-        <Card size="sm" className={`${colHeight} overflow-y-auto p-4`}>
+        <Card size="sm" className={`users-panel users-panel-profile ${colHeight} overflow-y-auto p-4`}>
           {!selected ? (
             <div className="flex h-full items-center justify-center text-center text-xs text-muted">
               Pick a fan to see their data.
@@ -750,7 +750,7 @@ export default async function FansPage({
                   { label: "Last active", value: <span title={dateTime(selected.last_message_received)}>{ago(selected.last_message_received)}</span> },
                   { label: "Telegram ID", value: <span className="font-mono text-xs">{selected.telegram_id}</span> },
                 ].map((s) => (
-                  <div key={s.label} className="rounded-md border border-line bg-bg p-2">
+                  <div key={s.label} className="users-stat rounded-md border border-line bg-bg p-2">
                     <div className="text-[10px] text-muted">{s.label}</div>
                     <div className="mt-0.5 text-sm font-semibold text-ink">{s.value}</div>
                   </div>

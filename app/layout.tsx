@@ -8,11 +8,12 @@ import Sidebar from "@/components/Sidebar";
 import MobileMenu from "@/components/MobileMenu";
 import TopBar from "@/components/TopBar";
 import MainShell from "@/components/MainShell";
+import TwinWordmark from "@/components/TwinWordmark";
 import { supabaseAdmin } from "@/lib/supabase";
-import { colorForIndex } from "@/lib/colors";
+import { chartColorForClone, profileImagePathForClone } from "@/lib/colors";
 import { isAuthed } from "@/lib/auth";
 import { getCloneScope } from "@/lib/clone-scope";
-import { Inter, Space_Grotesk } from "next/font/google";
+import { Inter, Inter_Tight, Space_Grotesk } from "next/font/google";
 import { cn } from "@/lib/utils";
 
 const inter = Inter({subsets:['latin'],variable:'--font-sans'});
@@ -24,6 +25,7 @@ const inter = Inter({subsets:['latin'],variable:'--font-sans'});
 // means every `font-mono tabular-nums` usage in the app renders in Inter.
 const plexMono = Inter({subsets:['latin'],variable:'--font-mono'});
 const spaceGrotesk = Space_Grotesk({subsets:['latin'],variable:'--font-heading'});
+const interTight = Inter_Tight({subsets:['latin'],variable:'--font-display'});
 
 export const metadata: Metadata = {
   title: "Allie Admin",
@@ -44,7 +46,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   if (!authed) {
     return (
-      <html lang="en" className={cn("font-sans", inter.variable, plexMono.variable, spaceGrotesk.variable)} style={{ colorScheme: "light" }} suppressHydrationWarning>
+      <html lang="en" className={cn("font-sans", inter.variable, plexMono.variable, spaceGrotesk.variable, interTight.variable)} style={{ colorScheme: "light" }} suppressHydrationWarning>
         <body className="min-h-screen bg-bg">
           {children}
         </body>
@@ -56,9 +58,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   try {
     const { data } = await supabaseAdmin
       .from("clones")
-      .select("id,name")
+      .select("id,name,intake")
       .order("created_at", { ascending: true });
-    const rows = (data ?? []) as { id: string; name: string }[];
+    const rows = (data ?? []) as { id: string; name: string; intake: unknown }[];
 
     // Cover photo per clone (first uploaded), batch-signed for the avatars.
     const photoByClone = new Map<string, string>();
@@ -70,6 +72,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         .in("clone_id", ids)
         .order("created_at", { ascending: true });
       const firstPath = new Map<string, string>();
+      for (const clone of rows) {
+        const customPath = profileImagePathForClone(clone.intake);
+        if (customPath) firstPath.set(clone.id, customPath);
+      }
       for (const p of photos ?? []) {
         if (p.clone_id && !firstPath.has(p.clone_id)) firstPath.set(p.clone_id, p.storage_path);
       }
@@ -87,7 +93,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     clones = rows.map((c, i) => ({
       id: c.id,
       name: c.name,
-      color: colorForIndex(i),
+      color: chartColorForClone(c.intake, i),
       photoUrl: photoByClone.get(c.id),
     }));
   } catch {
@@ -115,7 +121,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // rendering lives in the TopBar/MainShell CLIENT components (usePathname).
 
   return (
-    <html lang="en" className={cn("font-sans", inter.variable, plexMono.variable, spaceGrotesk.variable)} style={{ colorScheme: "light" }} suppressHydrationWarning>
+    <html lang="en" className={cn("font-sans", inter.variable, plexMono.variable, spaceGrotesk.variable, interTight.variable)} style={{ colorScheme: "light" }} suppressHydrationWarning>
       <body className="min-h-screen bg-bg">
         <CurrencyProvider>
         <BlurProvider>
@@ -126,9 +132,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 scrolls internally. No page-level (document) scroll anywhere. */}
             <div className="flex h-screen min-w-0 flex-1 flex-col overflow-hidden">
               {/* Mobile-only top bar - the Sidebar above only renders at lg+ */}
-              <header className="flex shrink-0 items-center justify-between border-b border-line bg-panel px-4 py-3 lg:hidden">
-                <Link href="/revenue" className="text-2xl font-extrabold tracking-tight text-ink">
-                  Twin<span className="text-ink">.</span>
+              <header className="dashboard-mobile-header flex shrink-0 items-center justify-between border-b border-line px-4 py-3 lg:hidden">
+                <Link href="/revenue" aria-label="Twin Technologies">
+                  <TwinWordmark />
                 </Link>
                 <div className="flex items-center gap-1">
                   <MobileMenu clones={clones} />

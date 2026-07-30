@@ -83,14 +83,14 @@ export function MediaPicker({
         }));
 
   return (
-    <div className="mt-1 w-full">
+    <div className="mt-1 w-full min-w-0 max-w-full">
       <div className="mb-1 text-[11px] text-muted">
         {value ? "Sends this exact item:" : "AI picks a fresh unseen item."}
       </div>
       {items.length === 0 ? (
         <p className="text-[11px] text-muted">No {type}s uploaded yet - add some in the Media tab.</p>
       ) : (
-        <div className="flex gap-1.5 overflow-x-auto pb-1">
+        <div className="flex max-w-full gap-1.5 overflow-x-auto overscroll-contain pb-1">
           <button
             type="button"
             onClick={() => onPick(null)}

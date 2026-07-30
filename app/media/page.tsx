@@ -5,6 +5,7 @@ import MediaManager from "./MediaManager";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { Info } from "@/components/clone/fields";
 
 export const dynamic = "force-dynamic";
 
@@ -45,9 +46,11 @@ async function FleetMedia() {
   );
 
   return (
-    <div className="text-ink">
-      <h1 className="mb-1 text-2xl font-semibold">Media</h1>
-      <p className="mb-5 text-sm text-muted">Photo/video library. Pick a clone to upload, tag, and price her content.</p>
+    <div className="dashboard-page text-ink">
+      <h1 className="mb-5 flex items-center gap-2 text-2xl font-semibold">
+        Media
+        <Info text="Photo/video library. Pick a clone to upload, tag, and price her content." />
+      </h1>
 
       <div className="mb-5 grid grid-cols-3 gap-3 text-sm">
         <Card className="p-4">
@@ -120,7 +123,7 @@ async function CloneMedia({ cloneId }: { cloneId: string }) {
   const clone = cloneRes.data as { id: string; name: string; slug: string };
 
   return (
-    <div>
+    <div className="dashboard-page">
       <div className="mb-2 flex items-center justify-end">
         <form action={setCloneScope.bind(null, null)}>
           <Button type="submit" variant="ghost" size="sm">← All bots</Button>

@@ -1,20 +1,23 @@
 import Link from "next/link";
 import CreateCloneForm from "@/components/CreateCloneForm";
 import { getCloneDefaults } from "@/app/settings/actions";
+import { Info } from "@/components/clone/fields";
 
 export const dynamic = "force-dynamic";
 
 export default async function NewClonePage() {
   const defaults = await getCloneDefaults();
   return (
-    <div>
-      <Link href="/clones" className="text-sm text-muted hover:text-ink">
-        ← Back
-      </Link>
-      <p className="mb-6 mt-3 text-sm text-muted">
-        Fill everything in and hit Create. Nothing is saved until then, after creating you&apos;ll
-        land on the full page to upload photos, videos &amp; bundles.
-      </p>
+    <div className="dashboard-page">
+      <div className="mb-6 flex items-center justify-between gap-3">
+        <Link href="/clones" className="text-sm font-medium text-muted transition hover:text-ink">
+          ← Back to clones
+        </Link>
+        <span className="flex items-center gap-1.5 text-xs font-medium text-muted">
+          Before you start
+          <Info text="Fill everything in and hit Create. Nothing is saved until then. After creating, you will land on the full page to upload photos, videos and bundles." />
+        </span>
+      </div>
       <CreateCloneForm defaults={defaults} />
     </div>
   );

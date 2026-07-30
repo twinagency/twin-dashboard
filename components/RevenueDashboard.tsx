@@ -49,14 +49,67 @@ type FullData = DashboardData & { analytics: AnalyticsData; balance: StarBalance
 // dashboard bug. Real-time sales tag correctly going forward.
 const TX_KIND_LABEL: Record<string, string> = {
   credits: "Message credits",
-  photo: "Paid photo",
-  video: "Paid video",
-  bundle: "Photo bundle",
+  photo: "Photo",
+  video: "Video",
+  bundle: "Bundle",
   media: "Media (untagged)",
   tip: "Tip",
   subscription: "VIP subscription",
   other: "Other",
 };
+
+function TransactionMedia({
+  type,
+  url,
+  name,
+}: {
+  type: "photo" | "video" | "bundle";
+  url: string | null;
+  name: string | null;
+}) {
+  const label = TX_KIND_LABEL[type];
+  return (
+    <span className="flex min-w-[132px] items-center gap-2.5" title={name || label}>
+      <span className="relative grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-xl border border-line bg-surface text-accent shadow-sm">
+        {url && type === "video" ? (
+          <>
+            <video src={url} muted playsInline preload="metadata" className="h-full w-full object-cover" />
+            <span className="pointer-events-none absolute inset-0 grid place-items-center bg-black/10">
+              <span className="h-0 w-0 border-y-[5px] border-l-[8px] border-y-transparent border-l-white drop-shadow" />
+            </span>
+          </>
+        ) : url ? (
+          <img src={url} alt={name || `${label} purchased`} className="h-full w-full object-cover" />
+        ) : (
+          <svg viewBox="0 0 24 24" className="h-5 w-5" fill="none" stroke="currentColor" strokeWidth={1.7}>
+            {type === "video" ? (
+              <>
+                <rect x="3" y="5" width="13" height="14" rx="2" />
+                <path d="m16 10 5-3v10l-5-3z" />
+              </>
+            ) : type === "bundle" ? (
+              <>
+                <rect x="5" y="3" width="14" height="14" rx="2" />
+                <path d="M3 8v11a2 2 0 0 0 2 2h11" />
+                <path d="m8 13 2.5-2.5 2 2 1.5-1.5 2 2" />
+              </>
+            ) : (
+              <>
+                <rect x="3" y="4" width="18" height="16" rx="2" />
+                <circle cx="9" cy="10" r="1.5" />
+                <path d="m4 17 5-5 3 3 2-2 6 5" />
+              </>
+            )}
+          </svg>
+        )}
+      </span>
+      <span>
+        <span className="block font-medium text-ink">{label}</span>
+        {name && <span className="block max-w-40 truncate text-[11px] normal-case text-muted">{name}</span>}
+      </span>
+    </span>
+  );
+}
 
 const PERIODS: { key: Period; label: string; live?: boolean }[] = [
   { key: "ALL", label: "All" },
@@ -97,13 +150,12 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
 
   // Recharts colors are inline JS (not CSS classes) so they don't pick up the
   // light-mode constants rather than theme-conditional.
-  const axisColor = "rgba(0,0,0,0.45)";
-  const gridColor = "rgba(0,0,0,0.08)";
-  const cursorColor = "rgba(0,0,0,0.04)";
-  // Last bar in the window is always today/this-bucket — still accumulating,
-  // so it renders greyed out (not a clone color) with a "Live" x-axis label
-  // instead of the date, no matter which period width is selected.
-  const liveBarColor = "rgba(0,0,0,0.14)";
+  const axisColor = "#667085";
+  const gridColor = "#e5eaf2";
+  const cursorColor = "rgba(99,91,255,0.08)";
+  // Last bar in the window is always today/this-bucket and still accumulating.
+  // Keep its clone colour, but lower the opacity so "Live" is distinguishable
+  // without introducing an off-theme grey bar.
 
   const fetchData = useCallback(
     async (p: Period, cid?: string | null, range?: { start: string; end: string } | null) => {
@@ -198,12 +250,20 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
   }, [data, visibleClones]);
 
   return (
-    <div>
+    <div className="earnings-aurora">
+      <div className="earnings-heading mb-5 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
+        <div>
+          <h2 className="flex items-center gap-2 font-heading text-2xl font-semibold tracking-tight text-[#101828] sm:text-3xl">
+            Earnings overview
+            <Info text="Revenue, buyer activity and conversion performance across your active clones." />
+          </h2>
+        </div>
+      </div>
       {/* ── Period toggle - a segmented control, not tabs: it re-windows the
           same ledger, it doesn't switch views. Custom range + chart type sit
           alongside it, on the same row. ─────────────────────────────────── */}
-      <div className="mb-4 flex flex-wrap items-center gap-2">
-        <div className="inline-flex flex-wrap gap-0.5 rounded-full bg-elev p-0.5">
+      <div className="earnings-toolbar mb-5 flex flex-wrap items-center gap-2">
+        <div className="earnings-control-group inline-flex flex-wrap gap-0.5 rounded-full p-0.5">
           {PERIODS.map((p) => (
             <button
               key={p.key}
@@ -214,7 +274,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
               className={
                 "flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium tabular-nums transition " +
                 (!customRange && period === p.key
-                  ? "bg-muted/15 text-ink"
+                  ? "earnings-control-active"
                   : "text-muted hover:bg-muted/10 hover:text-ink")
               }
             >
@@ -235,7 +295,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
             }}
             className={
               "flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium tabular-nums transition " +
-              (customRange ? "bg-muted/15 text-ink" : "text-muted hover:bg-muted/10 hover:text-ink")
+              (customRange ? "earnings-control-active" : "text-muted hover:bg-muted/10 hover:text-ink")
             }
           >
             <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth={2}>
@@ -247,14 +307,14 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
         </div>
 
         {/* Bar / line toggle - same series, different mark. */}
-        <div className="inline-flex gap-0.5 rounded-full bg-elev p-0.5">
+        <div className="earnings-control-group inline-flex gap-0.5 rounded-full p-0.5">
           <button
             onClick={() => setChartType("bar")}
             aria-label="Bar chart"
             aria-pressed={chartType === "bar"}
             className={
               "rounded-full p-1.5 transition " +
-              (chartType === "bar" ? "bg-muted/15 text-ink" : "text-muted hover:bg-muted/10 hover:text-ink")
+              (chartType === "bar" ? "earnings-control-active" : "text-muted hover:bg-muted/10 hover:text-ink")
             }
           >
             <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2}>
@@ -267,7 +327,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
             aria-pressed={chartType === "line"}
             className={
               "rounded-full p-1.5 transition " +
-              (chartType === "line" ? "bg-muted/15 text-ink" : "text-muted hover:bg-muted/10 hover:text-ink")
+              (chartType === "line" ? "earnings-control-active" : "text-muted hover:bg-muted/10 hover:text-ink")
             }
           >
             <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2}>
@@ -307,14 +367,14 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
 
       <div className={scoped ? "" : "grid gap-4 lg:grid-cols-[1fr_260px]"}>
         {/* ── Chart card ───────────────────────────────────────────── */}
-        <Card size="sm">
-          <CardHeader className="flex-row items-start gap-4 space-y-0">
-            <div className="pl-4 pt-3">
+        <Card size="sm" className="earnings-feature-card">
+          <CardHeader className="flex-row items-start gap-4 space-y-0 pb-0">
+            <div>
               <div className="flex items-center gap-1.5 text-xs text-muted">
                 {focusName ?? "Fleet"} · {proceedsLabel}
                 <Info text="Every Star earned in this window, gross. This is proceeds, not your current wallet balance - see Balance below for that." />
                 {trendPct !== null && (
-                  <span className={"font-mono font-semibold tabular-nums " + (trendPct >= 0 ? "text-good" : "text-crit")}>
+                  <span className="font-mono font-semibold tabular-nums text-black">
                     {trendPct >= 0 ? "+" : ""}
                     {trendPct}%
                   </span>
@@ -322,7 +382,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
               </div>
               <div className="mt-0.5 flex flex-wrap items-start gap-3">
                 <span className="flex items-baseline gap-1.5">
-                  <span className="font-mono text-2xl font-bold tabular-nums tracking-tight text-ink sm:text-3xl">
+                  <span className="money-value-primary font-mono text-2xl font-bold tabular-nums tracking-tight sm:text-3xl">
                     {data ? money(displayStars) : "-"}
                   </span>
                   {!customRange && period === "1D" && (
@@ -337,7 +397,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
                   <span className="block text-[11px] text-muted">Telegram Stars</span>
                   <span className="mt-0.5 flex items-baseline gap-1">
                     <span className="text-xs">⭐</span>
-                    <span className="font-mono text-sm font-semibold tabular-nums text-ink">
+                    <span className="font-mono text-sm font-semibold tabular-nums text-black">
                       {data ? fmtNum(displayStars) : "-"}
                     </span>
                   </span>
@@ -354,7 +414,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
                   />
                 </div>
               ) : (
-                <Link href="/info" className="mt-2 inline-block text-xs text-[#f5f5f0]/50 underline underline-offset-2 hover:text-[#f5f5f0]/80">
+                <Link href="/info" className="mt-2 inline-block text-xs font-medium text-accent underline decoration-accent/30 underline-offset-2 hover:text-accent-deep">
                   {scoped ? "Balance unavailable right now" : "See Total balance per bot"}
                 </Link>
               )}
@@ -391,7 +451,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
                         }}
                       />
                       <YAxis
-                        tick={{ fill: axisColor, fontSize: 11 }}
+                        tick={{ fill: "#101828", fontSize: 11 }}
                         axisLine={false}
                         tickLine={false}
                         tickFormatter={(v: number) => money(v).replace(/\.00$/, "")}
@@ -412,7 +472,8 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
                           {data.series.map((_, idx) => (
                             <Cell
                               key={idx}
-                              fill={!customRange && idx === data.series.length - 1 ? liveBarColor : c.color}
+                              fill={c.color}
+                              fillOpacity={!customRange && idx === data.series.length - 1 ? 0.52 : 1}
                             />
                           ))}
                         </Bar>
@@ -443,7 +504,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
                         }}
                       />
                       <YAxis
-                        tick={{ fill: axisColor, fontSize: 11 }}
+                        tick={{ fill: "#101828", fontSize: 11 }}
                         axisLine={false}
                         tickLine={false}
                         tickFormatter={(v: number) => money(v).replace(/\.00$/, "")}
@@ -544,7 +605,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
                         )}
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-xs">{c.name}</span>
-                          <span className="block font-mono text-[11px] tabular-nums text-ink">{money(c.stars)}</span>
+                          <span className="money-value block font-mono text-[11px] tabular-nums">{money(c.stars)}</span>
                         </span>
                       </button>
                     </div>
@@ -575,15 +636,15 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
             // #1 single source — byFeature splits photos/videos/bundles/tips apart,
             // unlike byKind which lumps them into one "Photos & video" bucket.
             const topKind = [...data.analytics.byFeature].sort((a, b) => b.share - a.share)[0];
-            const tiles: { label: string; value: string }[] = [
+            const tiles: { label: string; value: string; money?: boolean }[] = [
               { label: "Users", value: fmtNum(s.users) },
               { label: "Transactions", value: fmtNum(s.sales) },
               { label: "Active (24h)", value: fmtNum(s.active24h) },
               { label: "Messages", value: fmtNum(s.messages) },
               { label: "Buyers", value: fmtNum(s.buyers) },
-              { label: "Rev/user", value: money(revPerUser) },
-              { label: "Rev/buyer", value: money(revPerBuyer) },
-              { label: "Avg order", value: money(avgOrder) },
+              { label: "Rev/user", value: money(revPerUser), money: true },
+              { label: "Rev/buyer", value: money(revPerBuyer), money: true },
+              { label: "Avg order", value: money(avgOrder), money: true },
               { label: "Conversion", value: conversion !== null ? pct(conversion) : "-" },
               { label: "Repeat rate", value: pct(repeatRate) },
               // Short label so the tile never truncates the number away.
@@ -592,9 +653,9 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
             return (
               <>
                 {tiles.map((t) => (
-                  <div key={t.label} className="rounded-lg border border-line bg-elev px-3 py-2.5 shadow-[var(--shadow-card)]">
+                  <div key={t.label} className="earnings-stat-tile rounded-xl border px-3 py-3">
                     <div className="text-[10px] uppercase tracking-wide text-muted">{t.label}</div>
-                    <div className="mt-1 truncate font-mono text-base font-semibold tabular-nums text-ink">{t.value}</div>
+                    <div className={"mt-1 truncate font-mono text-base font-semibold tabular-nums " + (t.money ? "money-value" : "text-ink")}>{t.value}</div>
                   </div>
                 ))}
                 {/* Report tile - toggles the full revenue report below the grid. */}
@@ -648,7 +709,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
           <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
             <CardTitle className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-ink">
               Transactions
-              <Info text="Bought shows exactly what made the money when it's known: paid photo, paid video, photo bundle, message credits, tip, or VIP subscription. Media (untagged) is older Telegram-imported history recorded before the exact item was tracked, not a live bug." />
+              <Info text="Media purchases show Photo, Video, or Bundle with the exact catalogue thumbnail when the original offer is available. Media (untagged) is older Telegram-imported history whose exact item was never recorded." />
             </CardTitle>
             <div className="relative w-40 sm:w-56">
               <svg
@@ -679,6 +740,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
                     t.buyerName.toLowerCase().includes(q) ||
                     (t.username?.toLowerCase().includes(q) ?? false) ||
                     t.cloneName.toLowerCase().includes(q) ||
+                    (t.mediaName?.toLowerCase().includes(q) ?? false) ||
                     (TX_KIND_LABEL[t.kind] ?? t.kind).toLowerCase().includes(q),
                 );
               const rows = matches.slice(0, txLimit);
@@ -727,9 +789,15 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
                             </span>
                           </TableCell>
                         )}
-                        <TableCell className="capitalize text-muted">{TX_KIND_LABEL[t.kind] ?? t.kind}</TableCell>
+                        <TableCell className="text-muted">
+                          {t.mediaType ? (
+                            <TransactionMedia type={t.mediaType} url={t.mediaUrl} name={t.mediaName} />
+                          ) : (
+                            <span className="capitalize">{TX_KIND_LABEL[t.kind] ?? t.kind}</span>
+                          )}
+                        </TableCell>
                         <TableCell className="text-right">
-                          <span className="block font-mono tabular-nums text-ink">{money(t.stars)}</span>
+                          <span className="money-value block font-mono tabular-nums">{money(t.stars)}</span>
                           <span className="block text-[11px] text-muted">⭐ {fmtNum(t.stars)}</span>
                         </TableCell>
                         <TableCell className="text-right text-xs text-muted">
@@ -794,7 +862,7 @@ function BalanceStat({
         {label}
         <Info text={hint} />
       </div>
-      <div className={"mt-0.5 font-mono text-sm font-semibold tabular-nums " + (accent === "good" ? "text-good" : "text-ink")}>
+      <div className={"mt-0.5 font-mono text-sm font-semibold tabular-nums " + (accent === "good" ? "money-value-primary" : "money-value")}>
         {value != null ? `${money(value)} · ⭐${fmtNum(value)}` : "unavailable"}
       </div>
     </div>
@@ -838,13 +906,13 @@ function ChartTooltip({
               <span className="h-2 w-2 rounded-full" style={{ background: c?.color }} />
               {c?.name ?? p.dataKey}
             </span>
-            <span className="font-mono tabular-nums text-ink">{money(p.value)}</span>
+            <span className="money-value font-mono tabular-nums">{money(p.value)}</span>
           </div>
         );
       })}
       <div className="mt-2 flex justify-between border-t border-line pt-2 font-medium">
         <span>Total</span>
-        <span className="font-mono tabular-nums text-ink">{money(total)}</span>
+        <span className="money-value font-mono tabular-nums">{money(total)}</span>
       </div>
     </div>
   );
@@ -875,9 +943,9 @@ function RevenueReport({
   cursorColor: string;
   onClose: () => void;
 }) {
-  // Categorical hues validated against the light surface (dataviz six-checks);
-  // gray is reserved for "Other/untagged" buckets, never a real series.
-  const CAT = { blue: "#2a78d6", aqua: "#1baf7a", yellow: "#eda100", violet: "#4a3aa7", red: "#e34948", gray: "#9ca3af" };
+  // The report uses the same Atlas palette as the rest of the dashboard.
+  // Pink handles Other/untagged buckets so no data bars fall back to grey.
+  const CAT = { blue: "#635bff", aqua: "#20c5d8", yellow: "#ffbe55", violet: "#a855f7", red: "#ff6b61", pink: "#ec4899" };
 
   const featureColor = (k: string) =>
     k === "credits"
@@ -892,9 +960,9 @@ function RevenueReport({
               ? CAT.yellow
               : k === "subscription"
                 ? CAT.aqua
-                : CAT.gray;
+                : CAT.pink;
   const tierColor = (k: string) =>
-    k === "whale" ? CAT.violet : k === "high" ? CAT.blue : k === "mid" ? CAT.aqua : k === "low" ? CAT.yellow : CAT.gray;
+    k === "whale" ? CAT.violet : k === "high" ? CAT.blue : k === "mid" ? CAT.aqua : k === "low" ? CAT.yellow : CAT.pink;
   const flowColor = (k: string) => (k === "smart" ? CAT.violet : CAT.blue);
 
   const totalStars = a.totals.revenueStars;
@@ -906,11 +974,11 @@ function RevenueReport({
   const whale = a.byTier.find((t) => t.key === "whale");
   const bestHour = hasRevenue ? a.byHour.reduce((m, h) => (h.stars > m.stars ? h : m)) : null;
   const bestDow = hasRevenue ? a.byDow.reduce((m, d) => (d.stars > m.stars ? d : m)) : null;
-  const facts: { label: string; value: string }[] = [];
+  const facts: { label: string; value: string; moneyValue?: string }[] = [];
   if (topFeature && topFeature.stars > 0)
     facts.push({ label: "Top earner", value: `${topFeature.label.replace(" (untagged)", "")} · ${pct(topFeature.share)}` });
   if (!scoped && topClone && topClone.revenueStars > 0)
-    facts.push({ label: "Top clone", value: `${topClone.name} · ${money(topClone.revenueStars)}` });
+    facts.push({ label: "Top clone", value: topClone.name, moneyValue: money(topClone.revenueStars) });
   if (whale && whale.stars > 0) facts.push({ label: "Whale share", value: `${pct(whale.share)} of lifetime spend` });
   if (bestHour && bestHour.stars > 0) facts.push({ label: "Peak hour", value: bestHour.label });
   if (bestDow && bestDow.stars > 0) facts.push({ label: "Peak day", value: bestDow.label });
@@ -938,6 +1006,7 @@ function RevenueReport({
               <span key={f.label} className="inline-flex items-baseline gap-1.5 rounded-full bg-elev px-2.5 py-1 text-[11px]">
                 <span className="text-muted">{f.label}</span>
                 <span className="font-medium text-ink">{f.value}</span>
+                {f.moneyValue && <span className="money-value font-mono font-semibold tabular-nums">· {f.moneyValue}</span>}
               </span>
             ))}
           </div>
@@ -958,7 +1027,8 @@ function RevenueReport({
                     share={f.share}
                     right={money(f.stars)}
                     rightHint={pct(f.share)}
-                    sub={`${fmtNum(f.sales)} sale${f.sales === 1 ? "" : "s"} · avg ${money(f.avgStars)} per sale`}
+                    sub={`${fmtNum(f.sales)} sale${f.sales === 1 ? "" : "s"}`}
+                    subMoney={`avg ${money(f.avgStars)} per sale`}
                   />
                 ))}
               </div>
@@ -1013,13 +1083,11 @@ function RevenueReport({
                             <span className="truncate text-ink">{c.name}</span>
                           </span>
                         </TableCell>
-                        <TableCell className="text-right font-mono tabular-nums text-ink">{money(c.revenueStars)}</TableCell>
+                        <TableCell className="money-value text-right font-mono tabular-nums">{money(c.revenueStars)}</TableCell>
                         <TableCell className="text-right font-mono tabular-nums text-muted">
                           {totalStars > 0 ? pct(c.revenueStars / totalStars) : "-"}
                         </TableCell>
-                        <TableCell
-                          className={"text-right font-mono tabular-nums " + (c.profitUsd < 0 ? "text-crit" : "text-ink")}
-                        >
+                        <TableCell className="money-value text-right font-mono tabular-nums">
                           {usd(c.profitUsd)}
                         </TableCell>
                         <TableCell className="text-right font-mono tabular-nums text-muted">
@@ -1046,7 +1114,8 @@ function RevenueReport({
                       share={f.share}
                       right={money(f.stars)}
                       rightHint={pct(f.share)}
-                      sub={`${fmtNum(f.clones)} clone${f.clones === 1 ? "" : "s"} · ${fmtNum(f.sales)} sales · profit ${usd(f.profitUsd)}`}
+                      sub={`${fmtNum(f.clones)} clone${f.clones === 1 ? "" : "s"} · ${fmtNum(f.sales)} sales`}
+                      subMoney={`profit ${usd(f.profitUsd)}`}
                     />
                   ))}
                 </div>
@@ -1066,14 +1135,14 @@ function RevenueReport({
                   <BarChart data={a.byHour} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
                     <XAxis dataKey="label" tick={{ fill: axisColor, fontSize: 10 }} axisLine={false} tickLine={false} interval={2} />
                     <YAxis
-                      tick={{ fill: axisColor, fontSize: 11 }}
+                      tick={{ fill: "#101828", fontSize: 11 }}
                       axisLine={false}
                       tickLine={false}
                       width={56}
                       tickFormatter={(v: number) => money(v).replace(/\.00$/, "")}
                     />
                     <Tooltip cursor={{ fill: cursorColor }} content={<SingleValueTip money={money} />} />
-                    <Bar dataKey="stars" radius={[3, 3, 0, 0]} fill={CAT.blue} />
+                    <Bar dataKey="stars" radius={[3, 3, 0, 0]} fill={CAT.violet} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -1089,14 +1158,14 @@ function RevenueReport({
                   <BarChart data={a.byDow} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
                     <XAxis dataKey="label" tick={{ fill: axisColor, fontSize: 11 }} axisLine={false} tickLine={false} />
                     <YAxis
-                      tick={{ fill: axisColor, fontSize: 11 }}
+                      tick={{ fill: "#101828", fontSize: 11 }}
                       axisLine={false}
                       tickLine={false}
                       width={56}
                       tickFormatter={(v: number) => money(v).replace(/\.00$/, "")}
                     />
                     <Tooltip cursor={{ fill: cursorColor }} content={<SingleValueTip money={money} />} />
-                    <Bar dataKey="stars" radius={[3, 3, 0, 0]} fill={CAT.blue} />
+                    <Bar dataKey="stars" radius={[3, 3, 0, 0]} fill={CAT.aqua} />
                   </BarChart>
                 </ResponsiveContainer>
               </div>
@@ -1189,6 +1258,7 @@ function ShareRow({
   right,
   rightHint,
   sub,
+  subMoney,
 }: {
   color: string;
   label: string;
@@ -1196,6 +1266,7 @@ function ShareRow({
   right: string;
   rightHint?: string;
   sub?: string;
+  subMoney?: string;
 }) {
   return (
     <div>
@@ -1203,7 +1274,7 @@ function ShareRow({
         <span className="h-2 w-2 shrink-0 self-center rounded-full" style={{ background: color }} />
         <span className="min-w-0 flex-1 truncate text-ink">{label}</span>
         {rightHint && <span className="font-mono tabular-nums text-muted">{rightHint}</span>}
-        <span className="font-mono font-semibold tabular-nums text-ink">{right}</span>
+        <span className="money-value font-mono font-semibold tabular-nums">{right}</span>
       </div>
       <div className="h-2 w-full overflow-hidden rounded-full bg-muted/10">
         <div
@@ -1211,7 +1282,12 @@ function ShareRow({
           style={{ width: `${share > 0 ? Math.min(100, Math.max(2, share * 100)) : 0}%`, background: color }}
         />
       </div>
-      {sub && <div className="mt-1 text-[11px] text-muted">{sub}</div>}
+      {(sub || subMoney) && (
+        <div className="mt-1 flex flex-wrap gap-x-1 text-[11px] text-muted">
+          {sub && <span>{sub}</span>}
+          {subMoney && <span className="money-value font-medium">· {subMoney}</span>}
+        </div>
+      )}
     </div>
   );
 }
@@ -1266,7 +1342,7 @@ function SingleValueTip({
       <div className="mb-1 font-medium text-ink">{label}</div>
       <div className="flex items-center justify-between gap-4">
         <span className="text-muted">Revenue</span>
-        <span className="font-mono tabular-nums text-ink">{money(payload[0].value)}</span>
+        <span className="money-value font-mono tabular-nums">{money(payload[0].value)}</span>
       </div>
     </div>
   );
@@ -1281,9 +1357,9 @@ function AiCostDrillIn({
   stats: import("@/lib/dashboard-data").CloneStats;
   onClose: () => void;
 }) {
-  const tiles: { label: string; value: string }[] = [
-    { label: "AI cost", value: `$${stats.costUsd.toFixed(2)}` },
-    { label: "Profit (USD)", value: `$${(stats.stars / 50 - stats.costUsd).toFixed(2)}` },
+  const tiles: { label: string; value: string; money?: boolean }[] = [
+    { label: "AI cost", value: `$${stats.costUsd.toFixed(2)}`, money: true },
+    { label: "Profit (USD)", value: `$${(stats.stars / 50 - stats.costUsd).toFixed(2)}`, money: true },
     { label: "AI calls", value: fmtNum(stats.aiCalls) },
     { label: "AI errors", value: fmtNum(stats.aiErrors) },
   ];
@@ -1300,7 +1376,7 @@ function AiCostDrillIn({
           {tiles.map((t) => (
             <div key={t.label} className="rounded-md border border-line bg-bg p-2.5">
               <div className="text-[11px] text-muted">{t.label}</div>
-              <div className="mt-0.5 font-mono text-lg font-semibold tabular-nums text-ink">{t.value}</div>
+              <div className={"mt-0.5 font-mono text-lg font-semibold tabular-nums " + (t.money ? "money-value" : "text-ink")}>{t.value}</div>
             </div>
           ))}
         </div>

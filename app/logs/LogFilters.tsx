@@ -92,7 +92,7 @@ export function LogFilters({
   };
 
   return (
-    <div className="mb-4 flex flex-wrap items-center gap-3">
+    <div className="flex min-w-0 flex-1 flex-wrap items-center gap-2.5">
       <div className="flex flex-wrap items-center gap-1.5">
         {TECH_CHIPS.map((c) => (
           <button
@@ -113,7 +113,7 @@ export function LogFilters({
         value={search}
         onChange={(e) => onSearch(e.target.value)}
         placeholder="Search messages"
-        className="w-56 rounded-md border border-line bg-panel px-3 py-1.5 text-xs text-ink outline-none placeholder:text-muted"
+        className="h-9 w-full rounded-lg border border-line bg-panel px-3 text-xs text-ink outline-none placeholder:text-muted focus:border-accent focus:ring-2 focus:ring-accent/20 sm:w-56"
       />
     </div>
   );

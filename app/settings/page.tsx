@@ -4,6 +4,7 @@ import { API_KEY_FIELDS } from "./fields";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { Info } from "@/components/clone/fields";
 
 export const metadata = {
   title: "Settings · Allie Admin",
@@ -14,17 +15,17 @@ export const dynamic = "force-dynamic";
 export default async function SettingsPage() {
   const [status, cloneDefaults] = await Promise.all([getApiKeyStatus(), getCloneDefaults()]);
   return (
-    <div className="space-y-6">
+    <div className="dashboard-page space-y-6">
       <h1 className="text-2xl font-bold tracking-tight text-ink">
         Settings
       </h1>
 
       <Card id="api-keys">
         <CardHeader>
-          <CardTitle>API keys</CardTitle>
-          <p className="text-sm text-muted">
-            Shared across all bots. Leave a field blank to keep the current key. Changes take effect within a minute, no redeploy. If unset here, the bot uses its .env key.
-          </p>
+          <CardTitle className="flex items-center gap-2">
+            API keys
+            <Info text="Shared across all bots. Leave a field blank to keep the current key. Changes take effect within a minute, no redeploy. If unset here, the bot uses its .env key." />
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <form action={saveApiKeys} className="grid gap-4">
@@ -44,7 +45,7 @@ export default async function SettingsPage() {
                 />
               </label>
             ))}
-            <div className="flex items-center gap-3">
+            <div className="flex flex-wrap items-center gap-3">
               <Button type="submit">Save keys</Button>
               <span className="text-xs text-muted">To clear a key back to .env, type <code>__CLEAR__</code>.</span>
             </div>
@@ -54,10 +55,10 @@ export default async function SettingsPage() {
 
       <Card>
         <CardHeader>
-          <CardTitle>New-clone defaults</CardTitle>
-          <p className="text-sm text-muted">
-            The template every new clone starts from. A fresh clone inherits these toggles, dials and models; you can still change anything per clone before going live. Unset fields fall back to the built-in defaults.
-          </p>
+          <CardTitle className="flex items-center gap-2">
+            New-clone defaults
+            <Info text="The template every new clone starts from. A fresh clone inherits these toggles, dials and models; you can still change anything per clone before going live. Unset fields fall back to the built-in defaults." />
+          </CardTitle>
         </CardHeader>
         <CardContent>
           <CloneDefaultsForm defaults={cloneDefaults} />
