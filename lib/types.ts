@@ -62,6 +62,15 @@ export type Clone = {
   sexual_level: "off" | "mild" | "medium" | "explicit" | "max" | "low" | "high";
   nsfw_level: "off" | "mild" | "medium" | "explicit" | "max" | "low" | "high";
   push_level: "none" | "low" | "medium" | "high" | "relentless";
+  // Migration 086, the four warmth-side dials. Every dial above this line is
+  // about sex or selling, which is why "make her friendlier" never worked.
+  // Mapped to fixed prompt text by personalityRule() in bot/src/flows/human.ts,
+  // NOT through the persona compiler. "medium" is the default and deliberately
+  // emits no prompt text at all, so an untouched clone is unchanged.
+  warmth_level?: "off" | "low" | "medium" | "high" | "max";
+  curiosity_level?: "off" | "low" | "medium" | "high" | "max";
+  playfulness_level?: "off" | "low" | "medium" | "high" | "max";
+  attentiveness_level?: "off" | "low" | "medium" | "high" | "max";
   // Migration 080. NULL means "inherit push_level" (bot/src/handler.ts
   // tipPushDirective), never "none".
   tip_push_level?: "none" | "low" | "medium" | "high" | "relentless" | null;
@@ -208,6 +217,8 @@ export type Clone = {
   starting_credits: number;
   credit_pack_size: number;
   credit_pack_price_stars: number;
+  /** Migration 088. Message credits granted per 100 stars TIPPED. 0 = off. */
+  tip_credits_per_100_stars?: number;
 
   // IANA timezone (e.g. "America/New_York"); drives her in-prompt time awareness.
   timezone: string;
@@ -271,6 +282,11 @@ export type Clone = {
   // quiet — see the migration for why. Optional: absent pre-migration-068.
   onboarding_steps?:
     | {
+        // Stable identity (migration 087). Delivery is recorded against this,
+        // never the step's position, so editing the list no longer desyncs live
+        // fans. MUST be preserved on every save — dropping it re-issues a new id
+        // and makes the step look brand new to every fan mid-onboarding.
+        id?: string;
         type: "text" | "voice" | "photo" | "video" | "bundle" | "collect" | "tease";
         after_messages?: number;
         media_id?: string;
@@ -279,6 +295,12 @@ export type Clone = {
         // Optional per-step steer for text/voice/tease lines (migration 069,
         // stored inside the jsonb, not a column). Blank = she decides.
         instruction?: string | null;
+        // The optional "if" half of the trigger (migration 087). after_messages
+        // is the "when". Absent/"none" = fires on the count alone, which is the
+        // behaviour every step had before 087.
+        condition?: "none" | "agreed" | null;
+        condition_within_messages?: number | null;
+        condition_lapse?: "send" | "skip" | null;
       }[]
     | null;
 
@@ -330,6 +352,11 @@ export type Clone = {
   offer_redirect_cap?: number;
   voice_cooldown_turns?: number;
   discount_slowdown_minutes?: number;
+  // Migration 085 decline brake: how many explicit paid-offer declines this
+  // clone tolerates before she stops INITIATING a fresh paid pitch at that
+  // fan. Bot-read (flows/actions.ts guardedMedia()/guardedPitch()); never
+  // blocks her answering, or a fan who explicitly asks to buy.
+  offer_decline_cap?: number;
 
   intake: {
     answers?: string;

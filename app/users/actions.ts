@@ -42,12 +42,49 @@ export async function toggleActive(fd: FormData) {
 
 // Lift (or re-apply) the safety block — users.blocked is the persisted
 // "she never replies to him again" switch set by src/safety.ts.
+//
+// NOTE: this does NOT lift the self-declared-minor gate. That is deliberate,
+// see clearMinorFlag below: unblocking is a routine action, and silently
+// un-gating a fan who stated he was underage is not.
 export async function setBlocked(fd: FormData) {
   const userId = String(fd.get("userId"));
   const blocked = fd.get("blocked") === "true";
   const { error } = await supabaseAdmin
     .from("users")
     .update({ blocked })
+    .eq("id", userId);
+  if (error) throw new Error(error.message);
+  revalidatePath("/users");
+}
+
+// CLEAR THE SELF-DECLARED-MINOR GATE (migration 083).
+//
+// THE BUG THIS FIXES: safety.ts documents the remedy for a wrongly flagged
+// adult as "an operator clears `blocked` from the dashboard exactly as they
+// already can". That remedy did not work. The bot's isMinorGated() is
+//
+//     !!user.minorFlaggedAt || user.blockedReason === "minor"
+//
+// and setBlocked above updates ONLY `blocked`. So an operator would unblock a
+// wrongly flagged adult, watch her start replying again, and reasonably believe
+// it was fixed, while he stayed permanently barred from every photo, video,
+// bundle, free preview, paid send, onboarding media step, campaign drip, voice
+// note and emoji reaction. Silently, with nothing in the UI saying why, and no
+// way to ever sell him anything again.
+//
+// Both fields must be cleared together or the gate survives on whichever one is
+// left. blocked/blocked_at go too, because safety.ts sets all four as one act
+// and leaving him blocked-but-un-gated is a state nothing else produces.
+//
+// Kept as its OWN action rather than folded into unblock: this is the one
+// safety verdict in the system with a real-world cost if reversed wrongly, so
+// it should take a deliberate second click and its own confirmation, not ride
+// along on a routine unblock.
+export async function clearMinorFlag(fd: FormData) {
+  const userId = String(fd.get("userId"));
+  const { error } = await supabaseAdmin
+    .from("users")
+    .update({ minor_flagged_at: null, blocked_reason: null, blocked: false, blocked_at: null })
     .eq("id", userId);
   if (error) throw new Error(error.message);
   revalidatePath("/users");

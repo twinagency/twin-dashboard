@@ -9,7 +9,7 @@ import FanAvatar from "@/components/FanAvatar";
 import { Input } from "@/components/ui/input";
 import ConfirmSubmit from "@/components/ConfirmSubmit";
 import { Info } from "@/components/clone/fields";
-import { setCredits, resetCounters, toggleActive, setBlocked, setPaused, deleteUser } from "./actions";
+import { setCredits, resetCounters, toggleActive, setBlocked, setPaused, deleteUser, clearMinorFlag } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -95,6 +95,8 @@ export default async function FansPage({
     free?: boolean;
     collect_field?: string | null;
     instruction?: string | null;
+    // Stable id (migration 087) — what onboarding_steps_done records.
+    id?: string | null;
   };
   const clones = (clonesRes.data ?? []) as {
     id: string;
@@ -296,16 +298,25 @@ export default async function FansPage({
   };
   const selectedClone = selected ? cloneById.get(selected.clone_id) : undefined;
   const onboardingSteps: OnboardingStepRow[] = selectedClone?.onboarding_steps ?? [];
+  // Delivery is tracked by STABLE STEP ID (migration 087), never by position:
+  // positions re-point at different steps the moment the list is edited, which
+  // desynced every live fan. Mirrors deliveredStepKeys()/stepKey() in
+  // bot/src/onboarding-state.ts, including the positional fallback for a row
+  // that only has pre-087 history.
+  const stepKeyOf = (s: OnboardingStepRow, i: number) => (s.id?.trim() ? s.id.trim() : `#${i}`);
   const onboardingStepsSent: number[] = Array.isArray(selected?.onboarding_steps_sent) ? selected.onboarding_steps_sent : [];
-  const sentStepSet = new Set(onboardingStepsSent);
-  // Sequential pointer, same as dueOnboardingStep(): first index not yet sent.
-  const nextStepIndex = onboardingSteps.findIndex((_, i) => !sentStepSet.has(i));
+  const onboardingStepsDone: string[] = Array.isArray(selected?.onboarding_steps_done) ? selected.onboarding_steps_done : [];
+  const sentStepSet = new Set<string>(onboardingStepsDone.filter((k) => typeof k === "string" && k.trim()));
+  if (sentStepSet.size === 0) {
+    for (const i of onboardingStepsSent) {
+      const step = onboardingSteps[i];
+      if (step) sentStepSet.add(stepKeyOf(step, i));
+    }
+  }
+  // Sequential pointer, same as dueOnboardingStep(): first step not yet sent.
+  const nextStepIndex = onboardingSteps.findIndex((s, i) => !sentStepSet.has(stepKeyOf(s, i)));
   const nextStep = nextStepIndex !== -1 ? onboardingSteps[nextStepIndex] : null;
-  const firedSteps = onboardingStepsSent
-    .slice()
-    .sort((a, b) => a - b)
-    .map((i) => onboardingSteps[i])
-    .filter((s): s is OnboardingStepRow => !!s);
+  const firedSteps = onboardingSteps.filter((s, i) => sentStepSet.has(stepKeyOf(s, i)));
   // onboardingActive() in bot/src/onboarding-state.ts: frozen while onboarding
   // has something LEFT to do - an unsent step remains, or the free-preview
   // fallback is still armed - never a bare "!onboarding_complete" (that would
@@ -704,6 +715,17 @@ export default async function FansPage({
                       Blocked (safety)
                     </span>
                   )}
+                  {/* The minor gate had NO indicator at all, which is half of why
+                      it was undiagnosable: a gated fan looked completely normal
+                      while silently receiving no media on any path. */}
+                  {(!!selected.minor_flagged_at || selected.blocked_reason === "minor") && (
+                    <span
+                      className="rounded-full bg-crit/15 px-2 py-0.5 text-[10px] font-medium text-crit"
+                      title="This fan stated an age under 18, so every photo, video, bundle, free preview, paid send, onboarding media step, drip and voice note is permanently blocked for him. Unblocking alone does NOT lift this."
+                    >
+                      Minor gate (no media, ever)
+                    </span>
+                  )}
                   {selected.paused && (
                     <span className="rounded-full bg-warn/15 px-2 py-0.5 text-[10px] font-medium text-warn">
                       Paused (this fan)
@@ -988,7 +1010,9 @@ export default async function FansPage({
                     <ConfirmSubmit
                       message={
                         selected.blocked
-                          ? "Unblock this fan? The bot will start replying to him again."
+                          ? !!selected.minor_flagged_at || selected.blocked_reason === "minor"
+                            ? "Unblock this fan? She will start replying to him again, BUT he stays under the minor gate, so he still gets no photos, videos, bundles or voice notes. Use 'Clear minor gate' below if that flag is wrong."
+                            : "Unblock this fan? The bot will start replying to him again."
                           : "Block this fan? The bot will never reply to him again (same switch the safety guard uses)."
                       }
                       className="w-full rounded-md border border-line px-3 py-1.5 text-left text-xs text-ink transition hover:bg-elev"
@@ -996,6 +1020,22 @@ export default async function FansPage({
                       {selected.blocked ? "Unblock (safety)" : "Block (safety)"}
                     </ConfirmSubmit>
                   </form>
+
+                  {/* Only rendered for an actually-gated fan. There is no reason
+                      to offer "clear the minor gate" on a fan who does not have
+                      one, and an always-visible button invites a misclick on the
+                      single safety verdict with a real-world cost if reversed. */}
+                  {(!!selected.minor_flagged_at || selected.blocked_reason === "minor") && (
+                    <form action={clearMinorFlag}>
+                      <input type="hidden" name="userId" value={selected.id} />
+                      <ConfirmSubmit
+                        message="Clear the minor gate for this fan? Only do this if you have READ THE CONVERSATION and are satisfied he is an adult who was flagged by mistake. This restores all photos, videos, bundles and voice notes for him permanently."
+                        className="w-full rounded-md border border-crit/40 px-3 py-1.5 text-left text-xs text-crit transition hover:bg-crit/10"
+                      >
+                        Clear minor gate
+                      </ConfirmSubmit>
+                    </form>
+                  )}
 
                   {/* users.paused - pauses just this one fan (no replies, no drip)
                       without blocking him and without touching the clone's own

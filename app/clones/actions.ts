@@ -114,6 +114,8 @@ function bool(fd: FormData, key: string): boolean {
 // pre-082 clone row is still carrying one.
 const HEAT_LEVELS = ["off", "mild", "medium", "explicit", "max", "low", "high"] as const;
 const PUSH_LEVELS = ["none", "low", "medium", "high", "relentless"] as const;
+// Migration 086, the four warmth-side dials. No legacy values to accept.
+const TONE_LEVELS = ["off", "low", "medium", "high", "max"] as const;
 // Migration 084 (clones.fan_time_mode). Must stay identical to the DB CHECK
 // constraint clones_fan_time_mode_check, or a save fails outright.
 const FAN_TIME_MODES = ["never_assume", "may_ask", "assume_same"] as const;
@@ -345,6 +347,13 @@ function rowFromForm(fd: FormData) {
     sexual_level: oneOf(str(fd, "sexual_level"), HEAT_LEVELS, "medium"),
     nsfw_level: oneOf(str(fd, "nsfw_level"), HEAT_LEVELS, "medium"),
     push_level: oneOf(str(fd, "push_level"), PUSH_LEVELS, "medium"),
+    // Migration 086, the four warmth-side dials. Consumed by personalityRule()
+    // in bot/src/flows/human.ts, which emits NOTHING for "medium" (medium is
+    // defined as current behaviour), so the fallback here is also a true no-op.
+    warmth_level: oneOf(str(fd, "warmth_level"), TONE_LEVELS, "medium"),
+    curiosity_level: oneOf(str(fd, "curiosity_level"), TONE_LEVELS, "medium"),
+    playfulness_level: oneOf(str(fd, "playfulness_level"), TONE_LEVELS, "medium"),
+    attentiveness_level: oneOf(str(fd, "attentiveness_level"), TONE_LEVELS, "medium"),
     // Migration 080. NULL IS MEANINGFUL: it means "inherit push_level", which is
     // what bot/src/handler.ts:162 tipPushDirective() does. str() maps the empty
     // string (the UI's "Same as push level" option) to null, so an unset dial
@@ -476,6 +485,10 @@ function rowFromForm(fd: FormData) {
     starting_credits: num(fd, "starting_credits", 50),
     credit_pack_size: num(fd, "credit_pack_size", 50),
     credit_pack_price_stars: num(fd, "credit_pack_price_stars", 199),
+    // Migration 088. Default 0 = tips grant no credits, which is exactly the
+    // pre-088 live behaviour, so a save from an untouched form changes nothing.
+    // Clamped at 0 because a negative rate would mean a tip DEDUCTS credits.
+    tip_credits_per_100_stars: Math.max(0, num(fd, "tip_credits_per_100_stars", 0)),
 
     // time awareness (IANA tz; runtime injects her current local date/time)
     timezone: str(fd, "timezone") ?? "UTC",
@@ -565,6 +578,12 @@ function rowFromForm(fd: FormData) {
     offer_pending_minutes: Math.max(1, num(fd, "offer_pending_minutes", 15)),
     discount_slowdown_minutes: Math.max(1, num(fd, "discount_slowdown_minutes", 15)),
     offer_redirect_cap: Math.max(1, num(fd, "offer_redirect_cap", 3)),
+    // Migration 085 (D7) decline brake. Same money-brake floor/default
+    // reasoning as offer_redirect_cap right above: a stored 0 would mean
+    // "she never speaks again after one refusal", which is never a
+    // legitimate operator choice, so this fails safe at a 1-decline floor
+    // instead, and defaults to the bot-side default (3) when absent.
+    offer_decline_cap: Math.max(1, num(fd, "offer_decline_cap", 3)),
     // Restored 2026-07-29 (D6): read by services/profile-extractor.ts to steer
     // what it prioritizes capturing into the fan's profile dossier. Unrelated to
     // the onboarding step engine (that reads onboarding_steps, not this).
@@ -679,6 +698,26 @@ const DIAL_080_COLUMNS = ["tip_push_level", "greeting_ask_age"] as const;
 const FLOW_084_COLUMNS = [
   "fan_time_mode", "tip_reask_cooldown_seconds", "tip_reask_after_paid",
 ] as const;
+// Migration 085 (D7): decline brake cap. Applied to aouaenqayfltoqrmpitg as
+// part of this same change; listed anyway so a save still succeeds against a
+// stack where 085 has not run yet, instead of failing wholesale.
+// See bot/db/migrations/085_decline_brake.sql.
+const FLOW_085_COLUMNS = ["offer_decline_cap"] as const;
+// Migration 086: the four warmth-side dials. Listed so a save issued before 086
+// is applied strips them and still succeeds, instead of failing wholesale.
+// Stripping them is safe by construction: absent columns read back as "medium"
+// in both mappers, and "medium" emits no prompt text, so a pre-migration save
+// degrades to exactly today's behaviour rather than to a silent tone change.
+// See bot/db/migrations/086_warmth_dials.sql.
+const DIAL_086_COLUMNS = [
+  "warmth_level", "curiosity_level", "playfulness_level", "attentiveness_level",
+] as const;
+// Migration 088: a tip grants message credits at this rate. Listed so a save
+// issued before 088 is applied strips it and still succeeds. Stripping is safe:
+// the column is absent, the bot's mapClone reads it as 0, and 0 is exactly the
+// pre-088 behaviour (a tip grants nothing). It degrades to today, never to a
+// silent money change. See bot/db/migrations/088_tip_credits.sql.
+const MONEY_088_COLUMNS = ["tip_credits_per_100_stars"] as const;
 // The response-pacing, monetization-sequence, re-warm-photo and
 // offer-redirect column lists were removed on 2026-07-27: those columns are no
 // longer written by this form at all, so they cannot appear in the row that
@@ -698,6 +737,9 @@ const OPTIONAL_COLUMNS = [
   ...MEDIA_RESEND_COLUMNS,
   ...DIAL_080_COLUMNS,
   ...FLOW_084_COLUMNS,
+  ...FLOW_085_COLUMNS,
+  ...DIAL_086_COLUMNS,
+  ...MONEY_088_COLUMNS,
 ] as const;
 
 function withoutPersonaFactColumns(row: Record<string, unknown>): Record<string, unknown> {

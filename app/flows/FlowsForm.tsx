@@ -31,6 +31,11 @@ const STEP_EMOJI: Record<StepType, string> = Object.fromEntries(
 // flirty lead-in line — pairs with a free photo step for "tease then a free pic").
 type OnboardingStepType = "text" | "voice" | "photo" | "video" | "bundle" | "collect" | "tease";
 type OnboardingStepData = {
+  // Stable id (migration 087). null on a step the operator just added; the
+  // server mints one on save. It MUST survive every edit round-trip: delivery
+  // is recorded against it, so a lost id makes the step look brand new to every
+  // fan mid-onboarding, which is the desync bug 087 exists to fix.
+  id: string | null;
   type: OnboardingStepType;
   afterMessages: number;
   mediaId: string | null;
@@ -38,6 +43,11 @@ type OnboardingStepData = {
   collectField: string | null;
   // Optional per-step steer for text/voice/tease lines. Blank = she decides.
   instruction: string | null;
+  // The "if" half of the trigger (migration 087). "none" = fires on the message
+  // count alone, exactly as every step did before.
+  condition: "none" | "agreed";
+  conditionWithinMessages: number | null;
+  conditionLapse: "send" | "skip";
 };
 // Step types where a custom-line steer makes sense (AI-written lines only).
 const canSteerOnboarding = (t: OnboardingStepType) => t === "text" || t === "voice" || t === "tease";
@@ -192,6 +202,15 @@ export default function FlowsForm({
     setOnboardingSteps((prev) => prev.map((s, idx) => (idx === i ? { ...s, collectField } : s)));
   const setOnboardingStepInstruction = (i: number, instruction: string) =>
     setOnboardingSteps((prev) => prev.map((s, idx) => (idx === i ? { ...s, instruction } : s)));
+  const setOnboardingStepCondition = (i: number, condition: "none" | "agreed") =>
+    setOnboardingSteps((prev) => prev.map((s, idx) => (idx === i ? { ...s, condition } : s)));
+  const setOnboardingStepConditionLapse = (i: number, conditionLapse: "send" | "skip") =>
+    setOnboardingSteps((prev) => prev.map((s, idx) => (idx === i ? { ...s, conditionLapse } : s)));
+  const setOnboardingStepConditionWithin = (i: number, raw: string) => {
+    const n = Math.round(Number(raw));
+    const conditionWithinMessages = Number.isFinite(n) ? Math.min(50, Math.max(1, n)) : null;
+    setOnboardingSteps((prev) => prev.map((s, idx) => (idx === i ? { ...s, conditionWithinMessages } : s)));
+  };
   const setOnboardingStepAfter = (i: number, raw: string) => {
     const n = Math.round(Number(raw));
     if (!Number.isFinite(n)) return;
@@ -201,7 +220,7 @@ export default function FlowsForm({
   const addOnboardingStep = () =>
     setOnboardingSteps((prev) => {
       const last = prev.reduce((m, s) => Math.max(m, s.afterMessages), 0);
-      return [...prev, { type: "text", afterMessages: Math.min(50, last + 1), mediaId: null, free: false, collectField: null, instruction: null }];
+      return [...prev, { id: null, type: "text", afterMessages: Math.min(50, last + 1), mediaId: null, free: false, collectField: null, instruction: null, condition: "none", conditionWithinMessages: null, conditionLapse: "send" }];
     });
   const removeOnboardingStep = (i: number) => setOnboardingSteps((prev) => prev.filter((_, idx) => idx !== i));
   const moveOnboardingStep = (i: number, dir: -1 | 1) =>
@@ -232,6 +251,9 @@ export default function FlowsForm({
       "onboarding_steps",
       JSON.stringify(
         onboardingSteps.map((s) => ({
+          // Round-trip the stable id untouched (migration 087). A step with no
+          // id is genuinely new and the server mints one.
+          ...(s.id ? { id: s.id } : {}),
           type: s.type,
           after_messages: s.afterMessages,
           ...(isOnboardingMediaType(s.type) && s.mediaId ? { media_id: s.mediaId } : {}),
@@ -241,6 +263,16 @@ export default function FlowsForm({
           // only when actually filled in, so a blank never overrides her freedom.
           ...(canSteerOnboarding(s.type) && s.instruction && s.instruction.trim()
             ? { instruction: s.instruction.trim() }
+            : {}),
+          // The "if" gate (migration 087). Only written when actually chosen, so
+          // an untouched step's saved shape is unchanged and the bot reads it as
+          // "none" = today's behaviour.
+          ...(s.condition === "agreed"
+            ? {
+                condition: "agreed",
+                ...(s.conditionWithinMessages ? { condition_within_messages: s.conditionWithinMessages } : {}),
+                ...(s.conditionLapse === "skip" ? { condition_lapse: "skip" } : {}),
+              }
             : {}),
         })),
       ),
@@ -389,6 +421,78 @@ export default function FlowsForm({
                   />
                 </div>
               )}
+              {/* ── The "if" gate (migration 087) ─────────────────────────────
+                  "after N msgs" is WHEN this step may fire. This is WHETHER it
+                  should. Before this existed, a step saying "send the bundle
+                  after they say yes" fired on the counter regardless of his
+                  answer. */}
+              <div className="w-full">
+                <FieldLabel
+                  label="Only if"
+                  hint="Extra gate on top of the message count. 'He says yes' holds the step until he actually agrees, so an ask like 'can I show you something?' is answered before the next step fires. Anything = fires on the count alone, which is the original behaviour."
+                />
+                <div className="flex flex-wrap items-center gap-2">
+                  <div className="flex flex-wrap gap-1.5">
+                    {([
+                      { key: "none", label: "Anything (fires on the count)" },
+                      { key: "agreed", label: "He says yes" },
+                    ] as const).map((c) => (
+                      <button
+                        key={c.key}
+                        type="button"
+                        onClick={() => setOnboardingStepCondition(i, c.key)}
+                        className={
+                          "rounded-full border px-2.5 py-1 text-xs font-medium transition " +
+                          (s.condition === c.key
+                            ? "border-accent/50 bg-accent/15 text-accent"
+                            : "border-line text-ink/70 hover:border-accent/40")
+                        }
+                      >
+                        {c.label}
+                      </button>
+                    ))}
+                  </div>
+                  {s.condition === "agreed" && (
+                    <>
+                      <label className="flex shrink-0 items-center gap-1.5 text-xs text-ink">
+                        wait
+                        <input
+                          type="number"
+                          min={1}
+                          max={50}
+                          value={s.conditionWithinMessages ?? ""}
+                          onChange={(e) => setOnboardingStepConditionWithin(i, e.target.value)}
+                          placeholder="10"
+                          className={inputCls + " w-16 text-center"}
+                        />
+                        msgs
+                        <Info text="How long to keep waiting for him to say yes. Blank uses the built-in 10. The wait is always capped: a step that could wait forever would freeze his credits and he would chat free forever with nothing in the logs." />
+                      </label>
+                      <div className="flex flex-wrap gap-1.5">
+                        {([
+                          { key: "send", label: "then send anyway" },
+                          { key: "skip", label: "then skip it" },
+                        ] as const).map((c) => (
+                          <button
+                            key={c.key}
+                            type="button"
+                            onClick={() => setOnboardingStepConditionLapse(i, c.key)}
+                            className={
+                              "rounded-full border px-2.5 py-1 text-xs font-medium transition " +
+                              (s.conditionLapse === c.key
+                                ? "border-accent/50 bg-accent/15 text-accent"
+                                : "border-line text-ink/70 hover:border-accent/40")
+                            }
+                          >
+                            {c.label}
+                          </button>
+                        ))}
+                        <Info text="What happens if he never says yes inside that window. 'Send anyway' is the default and keeps today's behaviour. 'Skip it' drops the step entirely, which on a paid step means giving up that sale." />
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
             </div>
           ))}
           </div>

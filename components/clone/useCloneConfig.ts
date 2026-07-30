@@ -14,6 +14,9 @@ type Level = "low" | "medium" | "high";
 // its current position.
 type HeatLevel = "off" | "mild" | "medium" | "explicit" | "max";
 type PushLevel = "none" | "low" | "medium" | "high" | "relentless";
+// Migration 086, the four warmth-side dials. New columns with no legacy values,
+// so unlike HeatLevel there is nothing to normalise position-for-position.
+type ToneLevel = "off" | "low" | "medium" | "high" | "max";
 
 // Mirror of normalizeHeatLevel in bot/src/flows/human.ts:474. A pre-082 row
 // still stores "low"/"high"; without this the 5-step Segmented would show NO
@@ -31,6 +34,13 @@ function heatLevel(v: string | null | undefined): HeatLevel {
 // Mirror of normalizePushLevel in bot/src/flows/human.ts:483. push_level has no
 // legacy remap (its five values are a superset of the old three), so this is
 // only a guard against a stale value.
+function toneLevel(v: string | null | undefined): ToneLevel {
+  switch (v) {
+    case "off": case "low": case "medium": case "high": case "max": return v;
+    default: return "medium"; // = no prompt text emitted = today's behaviour
+  }
+}
+
 function pushLevel(v: string | null | undefined): PushLevel {
   switch (v) {
     case "none": case "low": case "medium": case "high": case "relentless": return v;
@@ -61,6 +71,12 @@ export type CloneConfigState = {
   sexualLevel: HeatLevel;
   nsfwLevel: HeatLevel;
   pushLevel: PushLevel;
+  // The four warmth-side dials (migration 086). Curiosity is the one behind the
+  // standing "she doesn't ask about ME" complaint.
+  warmthLevel: ToneLevel;
+  curiosityLevel: ToneLevel;
+  playfulnessLevel: ToneLevel;
+  attentivenessLevel: ToneLevel;
   // clones.tip_push_level (migration 080). NULLABLE ON PURPOSE: "" here is the
   // UI's spelling of null, which MEANS "inherit push_level", not "none".
   // bot/src/handler.ts tipPushDirective() does `clone.tipPushLevel ?? clone.pushLevel`
@@ -89,6 +105,13 @@ export type CloneConfigState = {
   // How many times she'll redirect back to an open offer before backing off
   // (clones.offer_redirect_cap). Restored 2026-07-29 (D6).
   offerRedirectCap: number;
+  // Migration 085 (D7): how many explicit paid-offer declines she tolerates
+  // before guardedMedia()/guardedPitch() (bot/src/flows/actions.ts) stop
+  // INITIATING a fresh paid photo/video/bundle/tip/VIP pitch at that fan.
+  // Distinct from offerRedirectCap above (that one nags about a SINGLE open
+  // offer); this one reacts to the fan having plainly said, in words, he
+  // won't pay. Never brakes her answering, or a fan who asks to buy himself.
+  offerDeclineCap: number;
 
   tips: boolean;
   // Migration 084 (clones.tip_reask_after_paid). Money brake, opt-in only.
@@ -190,6 +213,10 @@ function initial(clone?: Partial<Clone>): CloneConfigState {
     sexualLevel: heatLevel(clone?.sexual_level),
     nsfwLevel: heatLevel(clone?.nsfw_level),
     pushLevel: pushLevel(clone?.push_level),
+    warmthLevel: toneLevel(clone?.warmth_level),
+    curiosityLevel: toneLevel(clone?.curiosity_level),
+    playfulnessLevel: toneLevel(clone?.playfulness_level),
+    attentivenessLevel: toneLevel(clone?.attentiveness_level),
     // null/undefined -> "" -> saved back as null = inherit push_level.
     tipPushLevel: clone?.tip_push_level ?? "",
     greetingAskAge: clone?.greeting_ask_age ?? false,
@@ -214,6 +241,7 @@ function initial(clone?: Partial<Clone>): CloneConfigState {
     offerPendingMinutes: clone?.offer_pending_minutes ?? 15,
     discountSlowdownMinutes: clone?.discount_slowdown_minutes ?? 15,
     offerRedirectCap: clone?.offer_redirect_cap ?? 3,
+    offerDeclineCap: clone?.offer_decline_cap ?? 3,
 
     tips: clone?.tips_enabled ?? false,
     tipReaskAfterPaid: clone?.tip_reask_after_paid ?? false,

@@ -50,6 +50,9 @@ const DEFAULT_TOGGLES = [
 // Enum selects + free-text strings — stored verbatim when non-empty.
 const DEFAULT_SELECTS = [
   "ai_mode", "sexual_level", "nsfw_level", "push_level", "emoji_amount", "media_caption_mode",
+  // Migration 086 — the four warmth-side dials, so a new clone can be born
+  // friendly instead of having to be dialled up one at a time after creation.
+  "warmth_level", "curiosity_level", "playfulness_level", "attentiveness_level",
   "emoji_allowlist", "welcome_instruction", "paywall_instruction",
   "paywall_default_message", "paywall_button_label", "eleven_model",
   // Migration 069 — prime/resume steer text + the resume promised-image id.
@@ -73,6 +76,8 @@ const DEFAULT_SELECTS = [
 // step list, so nothing read them.
 const DEFAULT_NUMBERS = [
   "starting_credits", "credit_pack_size", "credit_pack_price_stars",
+  // Migration 088 — what a tip gives back in message credits. 0 = off.
+  "tip_credits_per_100_stars",
   "discount_max_photo", "discount_max_video", "discount_max_bundle", "discount_max_credits",
   "drip_per_day", "drip_active_window_minutes", "followup_after_minutes",
   "response_wait_min", "response_wait_max", "memory_window",
