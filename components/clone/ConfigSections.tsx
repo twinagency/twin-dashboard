@@ -776,6 +776,17 @@ export default function ConfigSections({
               placeholder="0 = unlimited"
               hint="Hard ceiling on how many words she can send in one reply. Blank or 0 = unlimited. Applies to text, voice and photo replies."
             />
+            {/* Migration 091. Sits between the ceiling and the Match toggle
+                because that is the order they apply in: aim for this, scale it
+                by his message, then never exceed the cap. */}
+            <Field
+              label="Ideal reply length"
+              name="target_response_words"
+              type="number"
+              defaultValue={clone?.target_response_words ?? undefined}
+              placeholder="blank = no target"
+              hint="The average length you WANT her replies to be, in words. Unlike the max above this is a target, not a cap, so some replies land shorter and some longer. Leave blank and her length comes from her persona. If Match length is also on, this is the middle she scales around."
+            />
             <div className="block">
               <FieldLabel label="Match length" />
               <Toggle

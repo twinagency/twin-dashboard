@@ -608,6 +608,13 @@ function rowFromForm(fd: FormData) {
       return n && n > 0 ? n : null;
     })(),
     match_user_length: fd.get("match_user_length") === "true",
+    // Migration 091. Same blank/0 -> null handling as the ceiling above: the
+    // column's check constraint rejects anything outside 5..400, so a blank
+    // box must become null rather than 0.
+    target_response_words: (() => {
+      const n = numOrNull(fd, "target_response_words");
+      return n && n > 0 ? n : null;
+    })(),
     gap_awareness_enabled: fd.get("gap_awareness_enabled") === "true",
     random_voice_enabled: fd.get("random_voice_enabled") === "true",
     random_voice_chance: num(fd, "random_voice_chance", 15),
@@ -633,7 +640,10 @@ const PERSONA_FACT_COLUMNS = [
   "turn_ons", "turn_offs", "hard_limits", "hard_limits_extra",
 ] as const;
 // Migrations 037/038 — response length. See db/migrations in the bot repo.
-const RESPONSE_LENGTH_COLUMNS = ["max_response_words", "match_user_length"] as const;
+// target_response_words is migration 091, which is NOT applied yet — listing
+// it here is what stops a save from failing outright against a database that
+// does not have the column, exactly as 037/038 needed when they were new.
+const RESPONSE_LENGTH_COLUMNS = ["max_response_words", "match_user_length", "target_response_words"] as const;
 // Migration 039 — identity canon. See bot/db/migrations/039_identity_canon.sql.
 const IDENTITY_CANON_COLUMNS = [
   "stage_name", "real_name", "name_shared_with_fans",

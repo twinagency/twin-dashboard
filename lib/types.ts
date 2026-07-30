@@ -347,6 +347,11 @@ export type Clone = {
   // message instead of a fixed style (off by default).
   max_response_words: number | null;
   match_user_length: boolean;
+  // Migration 091 — the ideal AVERAGE reply length in words (null = no
+  // target). A steer, not a cap: max_response_words above is the ceiling and
+  // always wins. When match_user_length is on, this is the centre the
+  // scaling moves around.
+  target_response_words: number | null;
 
   offer_pending_minutes?: number;
   offer_redirect_cap?: number;
