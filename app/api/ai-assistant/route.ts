@@ -32,17 +32,15 @@ const SYSTEM_PROMPT =
   "Money amounts in this system are Telegram Stars, not dollars, unless a row has an explicit *_usd " +
   "field. Keep answers concise and concrete, use tables or bullet lists for multiple rows. Never use em " +
   "dashes in your replies.\n\n" +
-  "TEST RUNS: listTestRuns and getTestRun read past Test-section sim run history and transcripts, free to " +
-  "call any time. startTestRun is different from every other write tool: it costs real money (real AI model " +
-  "calls, real ElevenLabs calls if voice is on), small but real per call, and it is not reversible once " +
-  "started. Before calling startTestRun, tell the user plainly that it costs real money, unless they've " +
-  "already said to just go ahead and start one. Do not call it speculatively or 'just to check something' - " +
-  "only when the user has clearly asked for a test run.\n\n" +
+  // The TEST RUNS paragraph was removed on 2026-07-31 with the last of the
+  // test-run tools. Leaving it in told the model that three tools it does not
+  // have are available, which is how a model ends up promising the user a run
+  // it cannot start.
   "SETTINGS REVIEW: when asked to review, audit, or recommend settings for a clone, call queryTable on " +
   "clones for that one clone (every allowed column) so you see its full toggle and dial configuration in " +
   "one shot. Look for the same kind of contradiction the dashboard's own proactive suggestions already " +
   "flag (a voice_id set but voice_enabled off, discount caps set but discounts_enabled off, " +
-  "subscription_tiers configured but subscriptions_enabled off, spoil_options set but tips_enabled off) " +
+  "spoil_options set but tips_enabled off) " +
   "plus anything else your own judgment turns up across the rest of the toggle and dial columns " +
   "(sexual_level/nsfw_level/push_level, emoji settings, ai_mode/smart_split, models, welcome/paywall " +
   "instructions, etc). State each recommendation with a one-line reason, never just 'you should change X'. " +
@@ -62,14 +60,10 @@ const TOOL_LABELS: Record<string, string> = {
   setCloneFeature: "Updating a setting",
   setCloneStatus: "Updating clone status",
   recompileClonePersona: "Recompiling persona",
-  updateFeedbackStatus: "Updating feedback item",
   setFanCredits: "Updating fan credits",
   setFanActive: "Updating fan status",
   setFanBlocked: "Updating fan block state",
   resetFanCounters: "Resetting fan counters",
-  listTestRuns: "Checking test run history",
-  getTestRun: "Reading test run transcript",
-  startTestRun: "Starting a test run (real cost)",
 };
 
 const ALL_TOOL_DEFS = [...TOOL_DEFS, ...WRITE_TOOL_DEFS];

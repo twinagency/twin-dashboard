@@ -29,8 +29,6 @@ type CloneRow = {
   discount_max_video: number;
   discount_max_bundle: number;
   discount_max_credits: number;
-  subscriptions_enabled: boolean;
-  subscription_tiers: unknown;
   tips_enabled: boolean;
   spoil_options: unknown;
 };
@@ -40,7 +38,7 @@ export async function computeSuggestions(): Promise<Suggestion[]> {
     .from("clones")
     .select(
       "id,name,status,voice_enabled,voice_id,discounts_enabled,discount_max_photo,discount_max_video," +
-        "discount_max_bundle,discount_max_credits,subscriptions_enabled,subscription_tiers,tips_enabled,spoil_options",
+        "discount_max_bundle,discount_max_credits,tips_enabled,spoil_options",
     )
     .eq("status", "active")
     .limit(50);
@@ -73,17 +71,11 @@ export async function computeSuggestions(): Promise<Suggestion[]> {
         prompt: `Turn on discounts for ${c.name}`,
       });
     }
-    const tierCount = Array.isArray(c.subscription_tiers) ? c.subscription_tiers.length : 0;
-    if (!c.subscriptions_enabled && tierCount > 0) {
-      out.push({
-        id: `${c.id}:subs`,
-        cloneId: c.id,
-        cloneName: c.name,
-        field: "subscriptions_enabled",
-        message: `${c.name} has ${tierCount} subscription tier${tierCount === 1 ? "" : "s"} set up but Subscriptions are off.`,
-        prompt: `Turn on subscriptions for ${c.name}`,
-      });
-    }
+    // The subscriptions suggestion was removed on 2026-07-31. Every other
+    // suggestion here names a field setCloneFeature can actually flip; that one
+    // could not, because subscriptions_enabled is deliberately absent from
+    // CLONE_TOGGLE_FIELDS since the VIP/recurring UI was removed on 2026-07-29.
+    // It offered the operator a one-click fix that had nowhere to land.
     const spoilCount = Array.isArray(c.spoil_options) ? c.spoil_options.length : 0;
     if (!c.tips_enabled && spoilCount > 0) {
       out.push({

@@ -17,6 +17,7 @@ import {
 const LINKS: { label: string; href: string }[] = [
   { label: "Revenue", href: "/revenue" },
   { label: "Fans", href: "/users" },
+  { label: "AI", href: "/ai" },
   { label: "Info", href: "/info" },
   { label: "Flows", href: "/flows" },
   { label: "Media", href: "/media" },

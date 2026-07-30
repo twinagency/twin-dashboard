@@ -92,7 +92,6 @@ const FEATURE_LABELS: Record<CloneToggleField, string> = {
   ai_disclosure: "AI disclosure",
   emojis_enabled: "Emojis",
   discounts_enabled: "Discounts",
-  subscriptions_enabled: "Subscriptions",
   smart_paywall_enabled: "Smart paywall",
 };
 
@@ -284,21 +283,10 @@ export const WRITE_TOOL_DEFS: OrToolDef[] = [
       },
     },
   },
-  {
-    type: "function",
-    function: {
-      name: "updateFeedbackStatus",
-      description: "Move a feedback/bug queue item to a new status.",
-      parameters: {
-        type: "object",
-        properties: {
-          feedbackId: { type: "string" },
-          status: { type: "string", enum: FEEDBACK_STATUSES as unknown as string[] },
-        },
-        required: ["feedbackId", "status"],
-      },
-    },
-  },
+  // The updateFeedbackStatus DEFINITION was removed on 2026-07-31 along with
+  // its executor (see the note above execSetFanCredits). It had outlived the
+  // handler here: executeWriteTool and WRITE_TOOL_NAMES both dropped it, so it
+  // was advertised to the model but answered "unknown write tool" if called.
   {
     type: "function",
     function: {
@@ -350,30 +338,9 @@ export const WRITE_TOOL_DEFS: OrToolDef[] = [
       },
     },
   },
-  {
-    type: "function",
-    function: {
-      name: "startTestRun",
-      description:
-        "Start a Test-section sim run: a scripted AI fan persona has a full conversation against a clone's " +
-        "live config, through the real reply pipeline. COSTS REAL MONEY (real AI model calls, real ElevenLabs " +
-        "calls if voice is on) - small but real per run, not free. Tell the user this before starting one, or " +
-        "when you do, unless they've already said to just go ahead. Nothing is ever sent to Telegram and no " +
-        "real fan/user row is created - the simulated fan only exists in memory for the run. Takes several " +
-        "minutes to finish; check back with listTestRuns or getTestRun rather than waiting.",
-      parameters: {
-        type: "object",
-        properties: {
-          clone: { type: "string", description: "Clone UUID, slug, or exact name." },
-          persona: {
-            type: "string",
-            enum: TEST_PERSONAS.map((p) => p.key),
-            description: "Which scripted fan persona to run: " + TEST_PERSONAS.map((p) => `${p.key} (${p.hint})`).join("; "),
-          },
-          turns: { type: "integer", description: "Conversation turns, 3 to 20. Default 10." },
-        },
-        required: ["clone", "persona"],
-      },
-    },
-  },
+  // startTestRun was removed on 2026-07-31, for the same reason its read-side
+  // counterparts went from tools.ts: the Test console and lib/test-runs.ts were
+  // removed on 2026-07-28. It had no executor here either, so a model that
+  // reached for it got "unknown write tool" after being told the run costs
+  // real money.
 ];
