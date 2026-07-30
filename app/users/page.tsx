@@ -9,7 +9,7 @@ import FanAvatar from "@/components/FanAvatar";
 import { Input } from "@/components/ui/input";
 import ConfirmSubmit from "@/components/ConfirmSubmit";
 import { Info } from "@/components/clone/fields";
-import { setCredits, resetCounters, toggleActive, setBlocked, setPaused, deleteUser } from "./actions";
+import { setCredits, resetCounters, toggleActive, setBlocked, setPaused, deleteUser, clearMinorFlag } from "./actions";
 
 export const dynamic = "force-dynamic";
 
@@ -715,6 +715,17 @@ export default async function FansPage({
                       Blocked (safety)
                     </span>
                   )}
+                  {/* The minor gate had NO indicator at all, which is half of why
+                      it was undiagnosable: a gated fan looked completely normal
+                      while silently receiving no media on any path. */}
+                  {(!!selected.minor_flagged_at || selected.blocked_reason === "minor") && (
+                    <span
+                      className="rounded-full bg-crit/15 px-2 py-0.5 text-[10px] font-medium text-crit"
+                      title="This fan stated an age under 18, so every photo, video, bundle, free preview, paid send, onboarding media step, drip and voice note is permanently blocked for him. Unblocking alone does NOT lift this."
+                    >
+                      Minor gate (no media, ever)
+                    </span>
+                  )}
                   {selected.paused && (
                     <span className="rounded-full bg-warn/15 px-2 py-0.5 text-[10px] font-medium text-warn">
                       Paused (this fan)
@@ -999,7 +1010,9 @@ export default async function FansPage({
                     <ConfirmSubmit
                       message={
                         selected.blocked
-                          ? "Unblock this fan? The bot will start replying to him again."
+                          ? !!selected.minor_flagged_at || selected.blocked_reason === "minor"
+                            ? "Unblock this fan? She will start replying to him again, BUT he stays under the minor gate, so he still gets no photos, videos, bundles or voice notes. Use 'Clear minor gate' below if that flag is wrong."
+                            : "Unblock this fan? The bot will start replying to him again."
                           : "Block this fan? The bot will never reply to him again (same switch the safety guard uses)."
                       }
                       className="w-full rounded-md border border-line px-3 py-1.5 text-left text-xs text-ink transition hover:bg-elev"
@@ -1007,6 +1020,22 @@ export default async function FansPage({
                       {selected.blocked ? "Unblock (safety)" : "Block (safety)"}
                     </ConfirmSubmit>
                   </form>
+
+                  {/* Only rendered for an actually-gated fan. There is no reason
+                      to offer "clear the minor gate" on a fan who does not have
+                      one, and an always-visible button invites a misclick on the
+                      single safety verdict with a real-world cost if reversed. */}
+                  {(!!selected.minor_flagged_at || selected.blocked_reason === "minor") && (
+                    <form action={clearMinorFlag}>
+                      <input type="hidden" name="userId" value={selected.id} />
+                      <ConfirmSubmit
+                        message="Clear the minor gate for this fan? Only do this if you have READ THE CONVERSATION and are satisfied he is an adult who was flagged by mistake. This restores all photos, videos, bundles and voice notes for him permanently."
+                        className="w-full rounded-md border border-crit/40 px-3 py-1.5 text-left text-xs text-crit transition hover:bg-crit/10"
+                      >
+                        Clear minor gate
+                      </ConfirmSubmit>
+                    </form>
+                  )}
 
                   {/* users.paused - pauses just this one fan (no replies, no drip)
                       without blocking him and without touching the clone's own
