@@ -64,14 +64,22 @@ const SYSTEM_PROMPT =
   // test-run tools. Leaving it in told the model that three tools it does not
   // have are available, which is how a model ends up promising the user a run
   // it cannot start.
-  "SETTINGS REVIEW: when asked to review, audit, or recommend settings for a clone, call queryTable on " +
-  "clones for that one clone (every allowed column) so you see its full toggle and dial configuration in " +
-  "one shot. Look for the same kind of contradiction the dashboard's own proactive suggestions already " +
-  "flag (a voice_id set but voice_enabled off, discount caps set but discounts_enabled off, " +
-  "spoil_options set but tips_enabled off) " +
-  "plus anything else your own judgment turns up across the rest of the toggle and dial columns " +
+  "SETTINGS REVIEW: when asked to review, audit, or recommend settings for a clone, or asked directly " +
+  "whether anything conflicts or interacts badly, call checkDialConflicts for that clone FIRST. It runs the " +
+  "exact same dial-conflict rules the Configure page's own warning cards use (discounts enabled with every " +
+  "cap at 0%, bubble delay max below min, the recovery-line cooldown being a no-op while that line is off, " +
+  "the absolute discount ceiling undercutting a category cap, spend-tier thresholds out of order, max " +
+  "NSFW/flirtiness paired with silence on failure). Report back exactly what it returns, that rule's text " +
+  "and detail verbatim, nothing paraphrased or invented. An empty result means nothing conflicts right now, " +
+  "say so plainly rather than manufacturing a finding. Then also call queryTable on clones for that one " +
+  "clone (every allowed column) so you see its full toggle and dial configuration in one shot, and look for " +
+  "the same kind of contradiction the dashboard's own proactive suggestions already flag (a voice_id set " +
+  "but voice_enabled off, discount caps set but discounts_enabled off, spoil_options set but tips_enabled " +
+  "off) plus anything else your own judgment turns up across the rest of the toggle and dial columns " +
   "(sexual_level/nsfw_level/push_level, emoji settings, ai_mode/smart_split, models, welcome/paywall " +
-  "instructions, etc). State each recommendation with a one-line reason, never just 'you should change X'. " +
+  "instructions, etc), clearly separated from the checkDialConflicts findings so the operator can tell a " +
+  "known rule from your own read of the row. State each recommendation with a one-line reason, never just " +
+  "'you should change X'. " +
   `Exactly these fields are ones you can propose flipping, with setCloneFeature: ` +
   `${CLONE_TOGGLE_FIELDS.join(", ")}. Exactly these fields are ones you can propose moving to a new step, ` +
   `with setCloneDial (each has its own fixed allowed values, given in that tool's schema): ` +
@@ -89,6 +97,7 @@ const TOOL_LABELS: Record<string, string> = {
   queryTable: "Looking that up",
   getTopSpenders: "Checking top spenders",
   getRecentErrors: "Checking recent errors",
+  checkDialConflicts: "Checking for setting conflicts",
   openPage: "Opening it",
   openClonePage: "Opening it",
   setCloneFeature: "Preparing a setting change",

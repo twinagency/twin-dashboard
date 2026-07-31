@@ -33,6 +33,7 @@ import {
   selectCls,
 } from "./fields";
 import type { CloneConfigState, SetConfig } from "./useCloneConfig";
+import { DIAL_CONFLICT_RULES } from "@/lib/dial-conflicts";
 import { CategoryPricingEditor, SpoilMenuEditor } from "./editors";
 import { BetaBadge } from "../ui/primitives";
 import { MediaPicker, type MediaRow, type BundleRow } from "./MediaPicker";
@@ -328,67 +329,24 @@ export default function ConfigSections({
           : "grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-2";
 
   // ── Dial-conflict warnings (2026-07-31) ──────────────────────────────────
-  // Grounded in text already in this file, not invented: see the SEG.silenceFallback
-  // "off" option above (line ~165) and the Discounts collapse's own hint
-  // ("0 = never discount that type", ~line 1055) plus the money bug fixed in
-  // 65c287e that this file's history references. Both check LIVE cfg values,
-  // unlike the two static Warning banners already in this file (Advanced tab
-  // header, Discounts card) which render unconditionally.
-  const silenceGhostConflict = useDialConflict(cfg, [
-    {
-      when: (c) => c.silenceFallbackMode === "off" && (c.nsfwLevel === "max" || c.sexualLevel === "max"),
-      text: "She's dialled to Max NSFW/Flirtiness and set to say nothing on failure.",
-      detail: "A model refusal counts as a failed try, not just an outage, so this combination is the one most likely to leave a fan on read mid-conversation with zero message. Consider the recovery line (On) instead of silence for a clone running this hot.",
-    },
-  ]);
-  const discountCapsAllZeroConflict = useDialConflict(cfg, [
-    {
-      when: (c) =>
-        c.discountsEnabled &&
-        c.discMaxPhoto === 0 &&
-        c.discMaxVideo === 0 &&
-        c.discMaxBundle === 0 &&
-        c.discMaxCredits === 0,
-      text: "Discounts are enabled but every cap is 0%, so she can never actually discount anything.",
-      detail: "0 on a cap means 'never discount that type' (see the hint above). With all four at 0 the enabled switch is a no-op: raise at least one cap or turn discounts back off.",
-    },
-  ]);
+  // Rules themselves now live in lib/dial-conflicts.ts (shared with Twin's
+  // checkDialConflicts tool, see app/api/ai-assistant/tools.ts), looked up by
+  // id here so the UI and the assistant can never drift out of sync. Both
+  // check LIVE cfg values, unlike the two static Warning banners already in
+  // this file (Advanced tab header, Discounts card) which render
+  // unconditionally.
+  const byId = (id: string) => DIAL_CONFLICT_RULES.find((r) => r.id === id)!;
+  const silenceGhostConflict = useDialConflict(cfg, [byId("silence-nsfw-max")]);
+  const discountCapsAllZeroConflict = useDialConflict(cfg, [byId("discount-caps-zero")]);
   // Migration 097 conflict warnings. Same live-cfg pattern as the two above,
   // not static banners.
-  const bubbleDelayConflict = useDialConflict(cfg, [
-    {
-      when: (c) => c.bubbleDelayMaxMs < c.bubbleDelayMinMs,
-      text: "Bubble delay maximum is set lower than the minimum.",
-      detail: "The bot picks a random point between these two on every split reply, so a max below the min is not a valid range. Raise the maximum or lower the minimum.",
-    },
-  ]);
-  const silenceFallbackCooldownConflict = useDialConflict(cfg, [
-    {
-      when: (c) => c.silenceFallbackMode === "off",
-      text: "The recovery-line cooldown below does nothing while 'If she cannot generate a reply' is set to Say nothing.",
-      detail: "This cooldown only paces how often the recovery line itself can repeat. With the recovery line switched off there is no line to pace, so the cooldown is currently a no-op. Switch that dial back to 'Send a recovery line' for it to matter.",
-    },
-  ]);
-  const discountAbsoluteMaxConflict = useDialConflict(cfg, [
-    {
-      when: (c) =>
-        c.discountsEnabled &&
-        c.discountAbsoluteMaxPct <
-          Math.max(c.discMaxPhoto, c.discMaxVideo, c.discMaxBundle, c.discMaxCredits),
-      text: "The absolute discount ceiling is set lower than one of the per-category caps above.",
-      detail: "Every discount is clamped to this ceiling no matter what a category's own cap allows, so in this state the ceiling is silently overriding that category's cap. Raise the ceiling to match, or lower the category cap instead if the ceiling is the intended limit.",
-    },
-  ]);
+  const bubbleDelayConflict = useDialConflict(cfg, [byId("bubble-delay-range")]);
+  const silenceFallbackCooldownConflict = useDialConflict(cfg, [byId("silence-fallback-cooldown-inert")]);
+  const discountAbsoluteMaxConflict = useDialConflict(cfg, [byId("discount-absolute-max-below-cap")]);
   // Migration 099. The three spend-tier thresholds must stay strictly
   // descending (whale > high > mid) or a fan can land in more than one tier
   // (or none) at the same spend level, silently breaking the tiering.
-  const spendTierConflict = useDialConflict(cfg, [
-    {
-      when: (c) => c.spendTierWhaleStars <= c.spendTierHighStars || c.spendTierHighStars <= c.spendTierMidStars,
-      text: "Spend-tier thresholds must be strictly descending (whale > high > mid).",
-      detail: "A fan's spend tier is decided by comparing his total spend against these three in order. If whale isn't above high, or high isn't above mid, the tiering can put a fan in the wrong bucket, or no bucket at all. Raise the higher threshold or lower the lower one so whale > high > mid.",
-    },
-  ]);
+  const spendTierConflict = useDialConflict(cfg, [byId("spend-tier-order")]);
 
   return (
     <div className="grid min-w-0 gap-4">

@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import type { OrToolDef } from "@/lib/openrouter";
+import { activeDialConflicts, type DialConflictCfg } from "@/lib/dial-conflicts";
 
 // ── Read-only tool surface for the internal AI assistant ─────────────────────
 // HARD RULE (see CLAUDE.md / project memory): this DB holds live payment and
@@ -64,6 +65,9 @@ export const ALLOWLIST: Record<string, string[]> = {
     "spend_tier_mid_stars", "spoil_context_lookback_messages",
     // Migration 098.
     "strict_onboarding_steps",
+    // Migration 093. Needed by checkDialConflicts (silence-nsfw-max /
+    // silence-fallback-cooldown-inert rules in lib/dial-conflicts.ts).
+    "silence_fallback_mode",
   ],
   fan_profiles: ["user_id", "clone_id", "summary", "interests", "details", "preferences", "extracted_msg_count", "updated_at", "created_at"],
   feedback_items: ["id", "type", "title", "body", "status", "severity", "clone_id", "source", "created_at", "updated_at"],
@@ -221,6 +225,69 @@ async function resolveCloneIdLoose(idOrName: string): Promise<string | null> {
   return null;
 }
 
+// Mirror of heatLevel() in components/clone/useCloneConfig.ts, kept minimal:
+// only the legacy low/high remap that column can actually hold pre-migration-082.
+// Duplicated rather than imported because that file is "use client" and this
+// route is server-only; same reasoning as lib/persona-facts.ts mirroring the
+// bot's prompt.ts (see dashboard/CLAUDE.md).
+function heatLevelServer(v: unknown): "off" | "mild" | "medium" | "explicit" | "max" {
+  switch (v) {
+    case "low": return "mild";
+    case "high": return "explicit";
+    case "off": case "mild": case "medium": case "explicit": case "max": return v;
+    default: return "medium";
+  }
+}
+
+// ── checkDialConflicts: run the same dial-conflict rules the Configure page
+// shows (lib/dial-conflicts.ts) against one clone's live saved config ────────
+// Read-only: selects the allowlisted columns those rules need, maps them into
+// the DialConflictCfg shape the same way useCloneConfig.ts's fromClone() maps
+// a raw row for the client (same column names, same defaults), and reports
+// back exactly which rules are currently true. Empty array = nothing
+// conflicts right now, a valid and common answer, not an error.
+async function execCheckDialConflicts(args: Record<string, unknown>): Promise<unknown> {
+  const idOrSlug = String(args.cloneIdOrSlug ?? "");
+  if (!idOrSlug) return { error: "cloneIdOrSlug is required" };
+  const cloneId = await resolveCloneIdLoose(idOrSlug);
+  if (!cloneId) return { error: `no clone found matching "${idOrSlug}"` };
+
+  const { data, error } = await supabaseAdmin
+    .from("clones")
+    .select(
+      "id,name,slug,silence_fallback_mode,nsfw_level,sexual_level,discounts_enabled," +
+        "discount_max_photo,discount_max_video,discount_max_bundle,discount_max_credits," +
+        "bubble_delay_min_ms,bubble_delay_max_ms,discount_absolute_max_pct," +
+        "spend_tier_whale_stars,spend_tier_high_stars,spend_tier_mid_stars",
+    )
+    .eq("id", cloneId)
+    .maybeSingle();
+  if (error) return { error: error.message };
+  if (!data) return { error: `no clone found matching "${idOrSlug}"` };
+
+  // Same defaults fromClone() uses in components/clone/useCloneConfig.ts, so
+  // this never reports a conflict off a value the dashboard itself wouldn't show.
+  const cfg: DialConflictCfg = {
+    silenceFallbackMode: (data as any).silence_fallback_mode ?? "on",
+    nsfwLevel: heatLevelServer((data as any).nsfw_level),
+    sexualLevel: heatLevelServer((data as any).sexual_level),
+    discountsEnabled: (data as any).discounts_enabled ?? false,
+    discMaxPhoto: (data as any).discount_max_photo ?? 0,
+    discMaxVideo: (data as any).discount_max_video ?? 0,
+    discMaxBundle: (data as any).discount_max_bundle ?? 0,
+    discMaxCredits: (data as any).discount_max_credits ?? 0,
+    bubbleDelayMinMs: (data as any).bubble_delay_min_ms ?? 600,
+    bubbleDelayMaxMs: (data as any).bubble_delay_max_ms ?? 1400,
+    discountAbsoluteMaxPct: (data as any).discount_absolute_max_pct ?? 90,
+    spendTierWhaleStars: (data as any).spend_tier_whale_stars ?? 1000,
+    spendTierHighStars: (data as any).spend_tier_high_stars ?? 300,
+    spendTierMidStars: (data as any).spend_tier_mid_stars ?? 50,
+  };
+
+  const conflicts = activeDialConflicts(cfg).map((r) => ({ id: r.id, text: r.text, detail: r.detail }));
+  return { cloneId: (data as any).id, cloneName: (data as any).name, conflicts };
+}
+
 // NOTE: listTestRuns / getTestRun used to live here, wrapping lib/test-runs.ts.
 // The Test console was removed on 2026-07-28 and that module went with it, so
 // those two tools are gone. Nothing else referenced them.
@@ -233,6 +300,8 @@ export async function executeTool(name: string, args: Record<string, unknown>): 
       return execGetTopSpenders(args);
     case "getRecentErrors":
       return execGetRecentErrors(args);
+    case "checkDialConflicts":
+      return execCheckDialConflicts(args);
     default:
       return { error: `unknown tool: ${name}` };
   }
@@ -304,6 +373,26 @@ export const TOOL_DEFS: OrToolDef[] = [
           limit: { type: "integer", description: `How many to return, capped at ${MAX_LIMIT}. Default 20.` },
           cloneId: { type: "string", description: "Optional clone UUID to restrict to one bot." },
         },
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "checkDialConflicts",
+      description:
+        "Check one clone's live saved config for known dial-conflict rules, the same warnings the " +
+        "Configure page's own cards show (e.g. discounts enabled with every cap at 0%, bubble delay max " +
+        "below min, spend-tier thresholds out of order). Returns the array of currently-triggered rules " +
+        "({id, text, detail}); an empty array means nothing conflicts right now, which is a valid, common " +
+        "answer, not an error. Use this instead of guessing at contradictions when asked to review, audit, " +
+        "or check a clone's settings for conflicts.",
+      parameters: {
+        type: "object",
+        properties: {
+          cloneIdOrSlug: { type: "string", description: "Clone UUID, slug, or name to check." },
+        },
+        required: ["cloneIdOrSlug"],
       },
     },
   },
