@@ -524,6 +524,35 @@ function rowFromForm(fd: FormData) {
     // posting it back from this form would overwrite the real handle. The
     // dashboard shows it read-only and never submits it.
     silence_fallback_mode: oneOf(str(fd, "silence_fallback_mode"), SILENCE_FALLBACK_MODES, "on"),
+    // Migration 097. Same "null is meaningful" reasoning as
+    // tip_reask_cooldown_seconds right above it in the UI: null lets the bot's
+    // 300s default stand rather than freezing today's constant into the row.
+    silence_fallback_cooldown_seconds: numOrNull(fd, "silence_fallback_cooldown_seconds"),
+    // Migration 097. Bubble-send delay range (was a hardcoded constant in
+    // bot/src/flows/human.ts). Clamped to a sane floor; the max<min case is
+    // NOT corrected here on purpose, the dial-conflict warning in the UI is
+    // the signal, not a silent auto-swap that would hide the operator's typo.
+    bubble_delay_min_ms: Math.max(0, num(fd, "bubble_delay_min_ms", 600)),
+    bubble_delay_max_ms: Math.max(0, num(fd, "bubble_delay_max_ms", 1400)),
+    // Migration 097. Retry count before falling back to silence (was a
+    // hardcoded constant in bot/src/services/llm.ts).
+    llm_max_tries: Math.min(5, Math.max(1, num(fd, "llm_max_tries", 3))),
+    // Migration 097. Absolute discount ceiling, independent of the four
+    // per-category caps above (was a hardcoded constant in
+    // bot/src/services/star-pricing.ts).
+    discount_absolute_max_pct: Math.min(100, Math.max(1, num(fd, "discount_absolute_max_pct", 90))),
+    // Migration 097. Single-tip sanity ceiling in Stars (was a hardcoded
+    // constant in bot/src/services/star-pricing.ts).
+    tip_max_stars: Math.max(1, num(fd, "tip_max_stars", 100000)),
+    // Migration 097. One switch for BOTH emoji reactions and Telegram message
+    // effects (bot/src/flows/realism.ts). Not the same as the reactions_enabled/
+    // message_effects_enabled columns above, which stay as-is.
+    realism_effects_enabled: fd.get("realism_effects_enabled") !== "false",
+    // Migration 097. Router keyword lists (bot/src/flows/router.ts), plain
+    // comma-separated text, additive to a fixed remainder the bot keeps unedited.
+    media_keywords: str(fd, "media_keywords"),
+    voice_keywords: str(fd, "voice_keywords"),
+    tease_keywords: str(fd, "tease_keywords"),
 
     // time awareness (IANA tz; runtime injects her current local date/time)
     timezone: str(fd, "timezone") ?? "UTC",
@@ -794,6 +823,27 @@ const MONEY_095_COLUMNS = [
   "discount_tier_share_high_pct",
   "discount_tier_share_whale_pct",
 ] as const;
+// Migration 097: the 8 new-column advanced dials approved off
+// coord/ADVANCED-DIAL-CANDIDATES.txt (bubble-delay range, silence-fallback
+// cooldown, LLM retry count, absolute discount ceiling, tip sanity ceiling,
+// the combined realism-effects switch, and the 3 router keyword lists).
+// Listed so a save against a stack where 097 has not run yet strips them and
+// still succeeds, instead of failing wholesale. Stripping is safe: the bot's
+// own fallbacks for each of these are exactly the hardcoded constants they
+// replace, so a pre-097 save degrades to today's behaviour.
+// See bot/db/migrations/097_advanced_dials.sql.
+const ADVANCED_097_COLUMNS = [
+  "bubble_delay_min_ms",
+  "bubble_delay_max_ms",
+  "silence_fallback_cooldown_seconds",
+  "llm_max_tries",
+  "discount_absolute_max_pct",
+  "tip_max_stars",
+  "realism_effects_enabled",
+  "media_keywords",
+  "voice_keywords",
+  "tease_keywords",
+] as const;
 // The response-pacing, monetization-sequence, re-warm-photo and
 // offer-redirect column lists were removed on 2026-07-27: those columns are no
 // longer written by this form at all, so they cannot appear in the row that
@@ -819,6 +869,7 @@ const OPTIONAL_COLUMNS = [
   ...MONEY_090_COLUMNS,
   ...FLOW_093_COLUMNS,
   ...MONEY_095_COLUMNS,
+  ...ADVANCED_097_COLUMNS,
 ] as const;
 
 function withoutPersonaFactColumns(row: Record<string, unknown>): Record<string, unknown> {

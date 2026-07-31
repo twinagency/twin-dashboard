@@ -255,6 +255,39 @@ export type Clone = {
    *  is not only an API outage: looksLikeFailure() treats a model REFUSAL as a
    *  failed generation too. Read by bot/src/flows/silence-fallback.ts:64. */
   silence_fallback_mode?: "on" | "off";
+  /** Migration 097. Minimum gap before the "brain went blank" recovery line can
+   *  fire again for the SAME fan (distinct from tip_reask_cooldown_seconds,
+   *  which is money, not silence recovery). Meaningless while
+   *  silence_fallback_mode is "off". Default 300. */
+  silence_fallback_cooldown_seconds?: number | null;
+  /** Migration 097. How long the first of several split "typing" bubbles waits
+   *  before sending (bot/src/flows/human.ts, was a hardcoded range). Must stay
+   *  <= bubble_delay_max_ms. Defaults 600/1400. */
+  bubble_delay_min_ms?: number;
+  bubble_delay_max_ms?: number;
+  /** Migration 097. How many tries (primary, retry, fallback model) before the
+   *  bot gives up and falls back to the silence-fallback path. Was a hardcoded
+   *  constant in bot/src/services/llm.ts. Default 3, range 1-5. */
+  llm_max_tries?: number;
+  /** Migration 097. Hard ceiling on ANY discount regardless of the per-category
+   *  caps above (was a hardcoded constant in bot/src/services/star-pricing.ts).
+   *  If set lower than a category cap, it silently overrides that cap. Default 90. */
+  discount_absolute_max_pct?: number;
+  /** Migration 097. Sanity ceiling on a single tip invoice, in Stars (was a
+   *  hardcoded constant in bot/src/services/star-pricing.ts). Guards against an
+   *  absurd/typo tip amount. Default 100000. */
+  tip_max_stars?: number;
+  /** Migration 097. Single on/off for BOTH emoji reactions and Telegram message
+   *  effects (fire/heart) together. Not per-emoji: Telegram only accepts a
+   *  fixed allowed-reaction set, see bot/src/flows/realism.ts. Default true. */
+  realism_effects_enabled?: boolean;
+  /** Migration 097. Comma-separated keyword lists the router matches on to
+   *  decide a reply should route to photo/voice/tease
+   *  (bot/src/flows/router.ts, was hardcoded). These are IN ADDITION to a
+   *  fixed remainder of phrase patterns the bot session keeps unfixed. */
+  media_keywords?: string | null;
+  voice_keywords?: string | null;
+  tease_keywords?: string | null;
 
   // IANA timezone (e.g. "America/New_York"); drives her in-prompt time awareness.
   timezone: string;

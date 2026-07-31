@@ -353,6 +353,32 @@ export default function ConfigSections({
       detail: "0 on a cap means 'never discount that type' (see the hint above). With all four at 0 the enabled switch is a no-op: raise at least one cap or turn discounts back off.",
     },
   ]);
+  // Migration 097 conflict warnings. Same live-cfg pattern as the two above,
+  // not static banners.
+  const bubbleDelayConflict = useDialConflict(cfg, [
+    {
+      when: (c) => c.bubbleDelayMaxMs < c.bubbleDelayMinMs,
+      text: "Bubble delay maximum is set lower than the minimum.",
+      detail: "The bot picks a random point between these two on every split reply, so a max below the min is not a valid range. Raise the maximum or lower the minimum.",
+    },
+  ]);
+  const silenceFallbackCooldownConflict = useDialConflict(cfg, [
+    {
+      when: (c) => c.silenceFallbackMode === "off",
+      text: "The recovery-line cooldown below does nothing while 'If she cannot generate a reply' is set to Say nothing.",
+      detail: "This cooldown only paces how often the recovery line itself can repeat. With the recovery line switched off there is no line to pace, so the cooldown is currently a no-op. Switch that dial back to 'Send a recovery line' for it to matter.",
+    },
+  ]);
+  const discountAbsoluteMaxConflict = useDialConflict(cfg, [
+    {
+      when: (c) =>
+        c.discountsEnabled &&
+        c.discountAbsoluteMaxPct <
+          Math.max(c.discMaxPhoto, c.discMaxVideo, c.discMaxBundle, c.discMaxCredits),
+      text: "The absolute discount ceiling is set lower than one of the per-category caps above.",
+      detail: "Every discount is clamped to this ceiling no matter what a category's own cap allows, so in this state the ceiling is silently overriding that category's cap. Raise the ceiling to match, or lower the category cap instead if the ceiling is the intended limit.",
+    },
+  ]);
 
   return (
     <div className="grid min-w-0 gap-4">
@@ -993,6 +1019,80 @@ export default function ConfigSections({
             }
           />
         </Section>
+
+        {/* Migration 097. Bubble delay, silence-recovery cooldown and the LLM
+            retry count share one card because all three are "how the runtime
+            paces itself before/around a reply", distinct from the money
+            guardrails and the realism/router keywords below. Approved
+            2026-07-31 off coord/ADVANCED-DIAL-CANDIDATES.txt (all 8 items). */}
+        <Section
+          icon="⏳"
+          accent="cyan"
+          title="Pacing & retries"
+          hint="Bubble-send timing, the silence-recovery cooldown, and how many tries the model gets before giving up."
+          className="xl:col-span-2"
+        >
+          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+            <Slider
+              label="Bubble delay, minimum"
+              name="bubble_delay_min_ms"
+              value={cfg.bubbleDelayMinMs}
+              onChange={(v) => set("bubbleDelayMinMs", v)}
+              min={0}
+              max={5000}
+              step={100}
+              format={(v) => `${v}ms`}
+              hint="How long before the first of several split 'typing' bubbles sends, when a reply arrives as more than one message. Was a fixed range; default 600ms."
+            />
+            <Slider
+              label="Bubble delay, maximum"
+              name="bubble_delay_max_ms"
+              value={cfg.bubbleDelayMaxMs}
+              onChange={(v) => set("bubbleDelayMaxMs", v)}
+              min={0}
+              max={5000}
+              step={100}
+              format={(v) => `${v}ms`}
+              hint="The other end of the bubble-delay range above. Must stay at or above the minimum. Default 1400ms."
+              warning={
+                bubbleDelayConflict && (
+                  <Warning text={bubbleDelayConflict.text} detail={bubbleDelayConflict.detail} />
+                )
+              }
+            />
+          </div>
+          <div className="border-t border-line pt-2">
+            <Field
+              label="Silence-fallback recovery cooldown (seconds)"
+              name="silence_fallback_cooldown_seconds"
+              type="number"
+              min={1}
+              step={1}
+              placeholder="300"
+              defaultValue={clone?.silence_fallback_cooldown_seconds ?? undefined}
+              hint="Minimum gap before the 'my brain went blank' recovery line can fire again for the same fan. Leave blank for the default of 300 seconds."
+            />
+            {silenceFallbackCooldownConflict && (
+              <div className="mt-1.5">
+                <Warning text={silenceFallbackCooldownConflict.text} detail={silenceFallbackCooldownConflict.detail} />
+              </div>
+            )}
+          </div>
+          <div className="border-t border-line pt-2">
+            <Slider
+              label="Model retry attempts before giving up"
+              name="llm_max_tries"
+              value={cfg.llmMaxTries}
+              onChange={(v) => set("llmMaxTries", v)}
+              min={1}
+              max={5}
+              step={1}
+              format={(v) => `${v}×`}
+              hint="How many tries (primary model, retry, fallback model) before she falls back to the silence-fallback path above. Was a fixed constant; default 3."
+            />
+          </div>
+        </Section>
+
         {/* Two-model split: only relevant once AI mode (Config) is Smart. The
             ai_mode/smart_split hidden inputs in Config's Connection & mode
             card always submit the current value no matter which tab is open,
@@ -1099,6 +1199,46 @@ export default function ConfigSections({
           tip="When you upload a photo/video it's auto-tagged by AI (bikini, lingerie, full nude, ...) and priced from this guide: the highest-priced matching category wins. Leave a price blank on upload to auto-price; type one to override. Prices only ever come from here, she never invents a number."
         >
           <CategoryPricingEditor cfg={cfg} set={set} />
+        </Section>
+
+        {/* Migration 097. Two hard money ceilings that sit above everything
+            else on this tab: the absolute discount ceiling clamps EVERY
+            discount regardless of the per-category caps or the Discounts
+            card's own multipliers below, and the tip ceiling clamps a single
+            tip invoice. Their own card because neither depends on the other,
+            unlike the Discounts card's internal dials. Approved 2026-07-31 off
+            coord/ADVANCED-DIAL-CANDIDATES.txt. */}
+        <Section
+          icon="🛡"
+          accent="red"
+          title="Money guardrails"
+          hint="Hard ceilings that clamp what a fan can ever be charged, regardless of the dials elsewhere on this tab."
+        >
+          <Slider
+            label="Absolute discount ceiling"
+            name="discount_absolute_max_pct"
+            value={cfg.discountAbsoluteMaxPct}
+            onChange={(v) => set("discountAbsoluteMaxPct", v)}
+            min={1}
+            max={100}
+            step={1}
+            format={(v) => `${v}%`}
+            hint="Hard cap on ANY discount she offers, regardless of the per-category caps in the Discounts card below. Was a fixed 90% constant in code; this exposes it as a dial."
+            warning={
+              discountAbsoluteMaxConflict && (
+                <Warning text={discountAbsoluteMaxConflict.text} detail={discountAbsoluteMaxConflict.detail} />
+              )
+            }
+          />
+          <Field
+            label="Single-tip sanity ceiling (Stars)"
+            name="tip_max_stars"
+            type="number"
+            min={1}
+            step={1}
+            defaultValue={clone?.tip_max_stars ?? 100000}
+            hint="Max Stars a single tip invoice can ever be. Guards against an absurd or typo'd amount reaching a fan. Was a fixed 100000-star constant in code."
+          />
         </Section>
 
         {/* ── Discounts (moved from Monetization) ───────────────────── */}
@@ -1252,6 +1392,49 @@ export default function ConfigSections({
             format={(v) => `${v}×`}
           />
         </Collapse>
+
+        {/* Migration 097. The combined realism-effects switch plus the 3
+            router keyword lists share a card because both are "how she reads
+            and reacts mechanically", not money and not pacing. Approved
+            2026-07-31 off coord/ADVANCED-DIAL-CANDIDATES.txt. */}
+        <Section
+          icon="🎭"
+          accent="purple"
+          title="Realism & routing"
+          hint="Reactions/message effects on or off, and the keyword lists the router matches on for photo/voice/tease requests."
+        >
+          <ToggleCard
+            emoji="✨"
+            label={cfg.realismEffectsEnabled ? "Reactions & message effects on" : "Reactions & message effects off"}
+            title="One switch for BOTH emoji reactions and Telegram message effects (fire/heart) together, not a per-emoji picker: Telegram only accepts a fixed set of reaction emoji, so this is deliberately a single on/off."
+            name="realism_effects_enabled"
+            checked={cfg.realismEffectsEnabled}
+            onChange={(v) => set("realismEffectsEnabled", v)}
+          />
+          <div className="grid grid-cols-1 gap-2 border-t border-line pt-2 sm:grid-cols-3">
+            <Field
+              label="Photo/media request keywords"
+              name="media_keywords"
+              defaultValue={clone?.media_keywords ?? ""}
+              placeholder="e.g. pic, photo, selfie"
+              hint="Comma-separated. In addition to a fixed set of phrase patterns that aren't editable here, these are extra words the router matches to route a message to a photo/media reply."
+            />
+            <Field
+              label="Voice message request keywords"
+              name="voice_keywords"
+              defaultValue={clone?.voice_keywords ?? ""}
+              placeholder="e.g. voice note, hear you, say it"
+              hint="Comma-separated. Same rule as the photo list: additive to a fixed, non-editable remainder."
+            />
+            <Field
+              label="Tease/continuation keywords"
+              name="tease_keywords"
+              defaultValue={clone?.tease_keywords ?? ""}
+              placeholder="e.g. more, keep going, continue"
+              hint="Comma-separated. Same rule as the other two lists: additive to a fixed, non-editable remainder."
+            />
+          </div>
+        </Section>
       </div>
 
       {/* ── MONETIZATION - sections live in MonetizationSections (end of

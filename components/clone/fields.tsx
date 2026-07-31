@@ -823,6 +823,7 @@ export function Slider({
   step = 0.01,
   format,
   hint,
+  warning,
 }: {
   label: string;
   name: string;
@@ -836,6 +837,10 @@ export function Slider({
   // be the one control with no hint slot, which is why their explanations were
   // still being written as grey paragraphs underneath them.
   hint?: string;
+  // Optional inline conflict warning, rendered under the control. Same
+  // convention as Segmented's `warning` prop — pass the result of
+  // useDialConflict(...) through <Warning /> at the call site.
+  warning?: React.ReactNode;
 }) {
   return (
     <label className="block">
@@ -858,6 +863,7 @@ export function Slider({
         onChange={(e) => onChange(Number(e.target.value))}
         className="w-full accent-accent"
       />
+      {warning && <div className="mt-1.5">{warning}</div>}
     </label>
   );
 }

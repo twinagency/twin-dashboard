@@ -185,6 +185,18 @@ export type CloneConfigState = {
   silenceFallbackMode: "on" | "off";
   onboardingCollect: string[];
 
+  // Migration 097 advanced dials. bubbleDelayMin/Max and llmMaxTries are
+  // controlled (Sliders always are); discountAbsoluteMaxPct is controlled so
+  // its conflict warning against the live per-category caps updates before
+  // Save. realismEffectsEnabled is controlled (Toggle always is). The rest
+  // (silence_fallback_cooldown_seconds, tip_max_stars, the three keyword
+  // lists) are plain uncontrolled Fields, same pattern as tip_reask_cooldown_seconds.
+  bubbleDelayMinMs: number;
+  bubbleDelayMaxMs: number;
+  llmMaxTries: number;
+  discountAbsoluteMaxPct: number;
+  realismEffectsEnabled: boolean;
+
   dripEnabled: boolean;
 
   smartPaywall: boolean;
@@ -326,6 +338,15 @@ function initial(clone?: Partial<Clone>): CloneConfigState {
     // never show a state the bot is not actually running.
     silenceFallbackMode: clone?.silence_fallback_mode ?? "on",
     onboardingCollect: Array.isArray(clone?.onboarding_collect_fields) ? clone!.onboarding_collect_fields! : [],
+
+    // Migration 097 advanced dials. Defaults mirror the hardcoded constants
+    // they replace, so an untouched clone behaves exactly as it did before
+    // these became editable.
+    bubbleDelayMinMs: clone?.bubble_delay_min_ms ?? 600,
+    bubbleDelayMaxMs: clone?.bubble_delay_max_ms ?? 1400,
+    llmMaxTries: clone?.llm_max_tries ?? 3,
+    discountAbsoluteMaxPct: clone?.discount_absolute_max_pct ?? 90,
+    realismEffectsEnabled: clone?.realism_effects_enabled ?? true,
 
     dripEnabled: clone?.drip_enabled ?? true,
 
