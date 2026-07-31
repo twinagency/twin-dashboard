@@ -106,6 +106,94 @@ export async function setPaused(fd: FormData) {
   revalidatePath("/users");
 }
 
+// ── Manual fan takeover (migration 096) ──────────────────────────────────────
+//
+// These three actions do NOT talk to Telegram directly (see bot/src/manual-send.ts
+// for why: dashboard and bot share only Supabase, no in-process call and no HTTP
+// surface on the bot). They only INSERT a 'pending' row into `manual_sends`; the
+// bot polls that table on a 10s tick and does the real send through the existing
+// Messenger/TelegramMessenger, so business_connection_id and every send guard
+// stay exactly as they are for every other send path.
+//
+// Guarded here (not just by the UI only rendering the panel for a paused fan):
+// re-fetch `paused` server-side before inserting, so a stale page/tab or a
+// replayed request can never queue a manual send for a fan who isn't paused.
+async function assertPaused(userId: string): Promise<{ cloneId: string; telegramId: number }> {
+  const { data, error } = await supabaseAdmin
+    .from("users")
+    .select("clone_id,telegram_id,paused")
+    .eq("id", userId)
+    .maybeSingle();
+  if (error || !data) throw new Error(error?.message ?? "fan not found");
+  if (!data.paused) throw new Error("manual takeover requires this fan to be paused first");
+  return { cloneId: data.clone_id, telegramId: data.telegram_id };
+}
+
+export async function manualSendText(fd: FormData) {
+  const userId = String(fd.get("userId"));
+  const text = String(fd.get("text") ?? "").trim();
+  if (!text) throw new Error("message text is required");
+  const { cloneId, telegramId } = await assertPaused(userId);
+  const { error } = await supabaseAdmin.from("manual_sends").insert({
+    clone_id: cloneId,
+    user_id: userId,
+    telegram_id: telegramId,
+    kind: "text",
+    body: text,
+  });
+  if (error) throw new Error(error.message);
+  revalidatePath("/users");
+}
+
+// Operator types what she should SAY; the bot runs it through the same
+// speak() SSML+TTS pipeline every automated voice note uses, then sends it as
+// a voice note (services/telegram-messenger.ts sendVoice).
+export async function manualSendVoice(fd: FormData) {
+  const userId = String(fd.get("userId"));
+  const words = String(fd.get("words") ?? "").trim();
+  if (!words) throw new Error("voice script is required");
+  const { cloneId, telegramId } = await assertPaused(userId);
+  const { error } = await supabaseAdmin.from("manual_sends").insert({
+    clone_id: cloneId,
+    user_id: userId,
+    telegram_id: telegramId,
+    kind: "voice",
+    body: words,
+  });
+  if (error) throw new Error(error.message);
+  revalidatePath("/users");
+}
+
+// Picker is restricted to already-uploaded FREE photos only (see
+// bot/src/manual-send.ts safety-gate note): a paid/paywalled photo sent
+// through manual takeover would give away paid content with no purchase, so
+// the bot-side handler refuses it outright even if this ever got bypassed.
+export async function manualSendPhoto(fd: FormData) {
+  const userId = String(fd.get("userId"));
+  const photoId = String(fd.get("photoId") ?? "");
+  const caption = String(fd.get("caption") ?? "").trim() || null;
+  if (!photoId) throw new Error("a photo must be selected");
+  const { cloneId, telegramId } = await assertPaused(userId);
+  const { data: photo, error: photoErr } = await supabaseAdmin
+    .from("photos")
+    .select("id,is_free")
+    .eq("id", photoId)
+    .eq("clone_id", cloneId)
+    .maybeSingle();
+  if (photoErr || !photo) throw new Error(photoErr?.message ?? "photo not found");
+  if (!photo.is_free) throw new Error("manual takeover can only send free (non-paywalled) photos");
+  const { error } = await supabaseAdmin.from("manual_sends").insert({
+    clone_id: cloneId,
+    user_id: userId,
+    telegram_id: telegramId,
+    kind: "photo",
+    media_id: photoId,
+    body: caption,
+  });
+  if (error) throw new Error(error.message);
+  revalidatePath("/users");
+}
+
 // Full wipe: the user row (cascades purchases + received-media via FK) plus
 // chat_history, which is keyed by (clone_id, telegram_id) and won't cascade.
 export async function deleteUser(fd: FormData) {

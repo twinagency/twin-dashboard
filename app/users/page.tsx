@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import ConfirmSubmit from "@/components/ConfirmSubmit";
 import { Info } from "@/components/clone/fields";
 import { setCredits, resetCounters, toggleActive, setBlocked, setPaused, deleteUser, clearMinorFlag } from "./actions";
+import ManualTakeover from "@/components/ManualTakeover";
 
 export const dynamic = "force-dynamic";
 
@@ -147,8 +148,13 @@ export default async function FansPage({
   let history: any[] = [];
   let purchases: any[] = [];
   let profile: any = null;
+  // Manual takeover (migration 096) photo picker: restricted to this fan's
+  // clone's FREE photos only — see manualSendPhoto in ./actions.ts for why
+  // paid photos are never offered here. Only fetched when the panel can
+  // actually render (fan already paused), to avoid an extra query otherwise.
+  let freePhotos: { id: string; storage_path: string; caption: string | null; image_name: string | null }[] = [];
   if (selected) {
-    const [historyRes, purchasesRes, profileRes] = await Promise.all([
+    const [historyRes, purchasesRes, profileRes, freePhotosRes] = await Promise.all([
       supabaseAdmin
         .from("chat_history")
         // select * (not named columns) so the additive `meta` column (migration
@@ -164,10 +170,19 @@ export default async function FansPage({
         .eq("user_id", selected.id)
         .order("paid_at", { ascending: false }),
       supabaseAdmin.from("fan_profiles").select("*").eq("user_id", selected.id).maybeSingle(),
+      selected.paused
+        ? supabaseAdmin
+            .from("photos")
+            .select("id,storage_path,caption,image_name")
+            .eq("clone_id", selected.clone_id)
+            .eq("is_free", true)
+            .order("created_at", { ascending: false })
+        : Promise.resolve({ data: [] as any[] }),
     ]);
     history = ((historyRes.data ?? []) as any[]).slice().reverse();
     purchases = (purchasesRes.data ?? []) as any[];
     profile = (profileRes.data ?? null) as any;
+    freePhotos = (freePhotosRes.data ?? []) as any[];
   }
 
   // ── Rich bubbles (chat_history.meta, migration 030) ───────────────────────
@@ -965,6 +980,15 @@ export default async function FansPage({
                   </div>
                 )}
               </div>
+
+              {/* Manual fan takeover (migration 096) - only once this fan is
+                  paused (see the Pause/Resume control below), an operator can
+                  compose a text, a generated voice note, or an existing FREE
+                  photo and send it as her. See ManualTakeover.tsx +
+                  bot/src/manual-send.ts for the full mechanism. */}
+              {selected.paused && (
+                <ManualTakeover userId={selected.id} freePhotos={freePhotos} />
+              )}
 
               {/* Controls - the destructive/rare ops, tucked away but all here */}
               <details className="mt-auto rounded-md border border-line bg-bg">
