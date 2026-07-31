@@ -388,6 +388,30 @@ export default function ConfigSections({
           placeholder="1234:ABC..."
           secret
         />
+        {/* Migration 092 as CORRECTED by 094. This is the connected BUSINESS
+            ACCOUNT's handle - the identity a fan actually messages - not the
+            bot's own API handle. 092 originally captured the latter from
+            onStart and it was the wrong identity; do not "restore" that.
+            READ-ONLY and deliberately NOT a Field: it has no `name`, so it
+            posts nothing on save and is absent from rowFromForm. An editable
+            copy could overwrite what Telegram reported, which is the drift
+            this column exists to remove. NULL until a business connection has
+            been observed, so create mode never shows it. */}
+        {mode === "edit" && (
+          <div className="block">
+            <FieldLabel
+              label="Business account"
+              hint="The @handle fans actually message, read from the Telegram business connection itself. This is not the bot's own @username and it is not typed here, so it cannot drift from the real one. Blank means no business connection has been seen yet; it fills in on the next inbound fan message."
+            />
+            <div className="flex min-h-9 items-center text-sm">
+              {clone?.business_username ? (
+                <span className="truncate font-mono text-ink">@{clone.business_username}</span>
+              ) : (
+                <span className="text-muted">Not connected yet</span>
+              )}
+            </div>
+          </div>
+        )}
         {mode === "edit" ? (
           <div className="block">
             <FieldLabel label="Status" hint="Paused means the bot ignores every incoming message for this clone. Nothing is deleted, she just stops replying until you set her active again." />

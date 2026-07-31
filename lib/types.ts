@@ -24,6 +24,15 @@ export type Clone = {
   slug: string;
   name: string;
   bot_token: string;
+  /** Migration 092, CORRECTED by 094 (renamed from bot_username). The connected
+   *  Telegram BUSINESS ACCOUNT's @handle: the identity a fan actually messages.
+   *  NOT the bot's own API handle (@catpayments_bot) - every real conversation
+   *  runs over a business connection, see bot/CLAUDE.md rule 6. Captured from
+   *  the "business_connection" update or a getBusinessConnection() backfill in
+   *  bot/src/services/bot-identity.ts, and NEVER operator-typed: the dashboard
+   *  shows it read-only and must not post it back on save. NULL until a
+   *  business connection has been observed at least once. */
+  business_username?: string | null;
   status: "active" | "paused";
   ai_mode: "classic" | "smart";
   smart_split: boolean;

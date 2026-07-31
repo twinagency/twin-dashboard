@@ -503,7 +503,11 @@ function rowFromForm(fd: FormData) {
     price_guard_mode: oneOf(str(fd, "price_guard_mode"), PRICE_GUARD_MODES, "block"),
     // Migration 093. Falls back to 'on', which is both the column default and
     // mapClone's fallback (supabase-store.ts:1313), so a save can never quietly
-    // GHOST a fan: going silent has to be a deliberate pick.
+    // GHOST a fan: going silent has to be a deliberate pick. Note there is also
+    // no business_username here, on purpose: migration 092 as corrected by 094
+    // is written by the runtime from the Telegram business connection, so
+    // posting it back from this form would overwrite the real handle. The
+    // dashboard shows it read-only and never submits it.
     silence_fallback_mode: oneOf(str(fd, "silence_fallback_mode"), SILENCE_FALLBACK_MODES, "on"),
 
     // time awareness (IANA tz; runtime injects her current local date/time)
