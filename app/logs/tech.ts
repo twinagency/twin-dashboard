@@ -2,15 +2,21 @@
 // filter chip definitions (fans-page chip style). Used by the server page
 // (query filtering) and the client filter bar (rendering).
 
-export type Tech = "elevenlabs" | "llm" | "telegram" | "supabase" | "code";
+export type Tech = "elevenlabs" | "llm" | "telegram" | "supabase" | "payments" | "code";
 
 // system_logs.source values claimed by each bucket. Anything unclaimed falls
 // through to "code" (watchdog, safety, handler, campaign, followup, workers).
+//
+// "payments" is its own bucket, not folded into "telegram": rejected/duplicate
+// charges, credit grants, and tip records (payments.ts, star-reconcile.ts) are
+// a distinct operator concern from generic message delivery, and used to be
+// invisible here entirely (console.log/console.error only, never logSystem()).
 export const SYSTEM_SOURCE_BUCKETS: Record<Exclude<Tech, "code">, string[]> = {
   elevenlabs: ["tts", "elevenlabs"],
   llm: ["llm", "openrouter"],
   telegram: ["telegram", "star-reconcile", "operator-send", "business-account"],
   supabase: ["store", "supabase", "db"],
+  payments: ["payments"],
 };
 
 export const CLAIMED_SOURCES = Object.values(SYSTEM_SOURCE_BUCKETS).flat();
@@ -35,6 +41,7 @@ export const TECH_CHIPS: { key: Tech | "all"; label: string; on: string; off: st
   { key: "llm", label: "🧠 OpenRouter", on: "border-info/50 bg-info/15 text-info", off: "border-info/20 text-info/70" },
   { key: "telegram", label: "✈️ Telegram", on: "border-accent/50 bg-accent/15 text-accent", off: "border-accent/20 text-accent/70" },
   { key: "supabase", label: "🗄 Supabase", on: "border-good/50 bg-good/15 text-good", off: "border-good/20 text-good/70" },
+  { key: "payments", label: "💰 Payments", on: "border-warn/50 bg-warn/15 text-warn", off: "border-warn/20 text-warn/70" },
   { key: "code", label: "⚙️ System", on: "border-line bg-muted/20 text-muted", off: "border-line text-muted/70" },
 ];
 
@@ -43,6 +50,7 @@ export const TECH_LABEL: Record<Tech, string> = {
   llm: "🧠 OpenRouter",
   telegram: "✈️ Telegram",
   supabase: "🗄 Supabase",
+  payments: "💰 Payments",
   code: "⚙️ System",
 };
 
@@ -69,6 +77,7 @@ const SOURCE_LABEL: Record<string, string> = {
   "star-reconcile": "Stars reconciliation",
   "operator-send": "Operator manual send",
   "business-account": "Business account change",
+  payments: "Payment / credit grant",
   store: "Database",
   supabase: "Database",
   db: "Database",

@@ -36,7 +36,7 @@ type UsageDbRow = {
   users: { name: string | null; stated_name: string | null; telegram_id: number | null } | null;
 };
 
-const TECHS: Tech[] = ["elevenlabs", "llm", "telegram", "supabase", "code"];
+const TECHS: Tech[] = ["elevenlabs", "llm", "telegram", "supabase", "payments", "code"];
 
 function fetchSystemRows(tech: string, level: string, q: string, cloneId: string | null, fanTelegramId: number | null) {
   let query = supabaseAdmin
