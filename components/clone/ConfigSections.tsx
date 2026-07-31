@@ -736,6 +736,11 @@ export default function ConfigSections({
           </label>
         )}
         {!cfg.emojis && <input type="hidden" name="emoji_allowlist" value="" />}
+        {/* emoji_allowlist above is deliberately cleared when emojis are off.
+            emoji_amount is NOT - it had the same drop-on-save defect and would
+            silently revert to "medium", so the operator's chosen amount is
+            preserved and simply unused while emojis are off. */}
+        {!cfg.emojis && <input type="hidden" name="emoji_amount" value={cfg.emojiAmount} />}
         </div>
 
         <div className="grid content-start gap-1.5">
@@ -1050,13 +1055,28 @@ export default function ConfigSections({
           hint="She picks when and how hard, % capped here. She only decides WHEN and how hard (light/medium/max); the price is always computed in code. 0 = never discount that type. Caps already default to 15/20/25/10, so the switch that actually gates this is Discounts enabled above, which is off by default. She can ONLY reach for a discount at all once one of the two eligibility gates below is met: a locked offer sitting unpaid past the pending window, OR a quiet gap since his last message. A fan chatting enthusiastically never qualifies until one of those trips."
         >
           <Toggle label={cfg.discountsEnabled ? "She can offer discounts" : "No discounts"} name="discounts_enabled" checked={cfg.discountsEnabled} onChange={(v) => set("discountsEnabled", v)} accent="soft" />
-          {cfg.discountsEnabled && (
+          {cfg.discountsEnabled ? (
             <div className="grid gap-2">
               <Slider label="Photos" name="discount_max_photo" value={cfg.discMaxPhoto} onChange={(v) => set("discMaxPhoto", v)} min={0} max={90} step={5} format={(v) => `${v}%`} />
               <Slider label="Videos" name="discount_max_video" value={cfg.discMaxVideo} onChange={(v) => set("discMaxVideo", v)} min={0} max={90} step={5} format={(v) => `${v}%`} />
               <Slider label="Bundles" name="discount_max_bundle" value={cfg.discMaxBundle} onChange={(v) => set("discMaxBundle", v)} min={0} max={90} step={5} format={(v) => `${v}%`} />
               <Slider label="Message packs" name="discount_max_credits" value={cfg.discMaxCredits} onChange={(v) => set("discMaxCredits", v)} min={0} max={90} step={5} format={(v) => `${v}%`} />
             </div>
+          ) : (
+            /* Same defect as the credit fields above: with discounts off these
+               four did not render, posted nothing, and rowFromForm's num(...,0)
+               fallback zeroed all four caps on save. Discounts are OFF BY
+               DEFAULT on a fresh clone, so this fired on the common path - and
+               a zeroed cap means "never discount that type", so re-enabling
+               discounts later looked like discounts were simply broken.
+               Mirroring cfg (not `clone`) keeps any edit made before the toggle
+               was switched off. */
+            <>
+              <input type="hidden" name="discount_max_photo" value={cfg.discMaxPhoto} />
+              <input type="hidden" name="discount_max_video" value={cfg.discMaxVideo} />
+              <input type="hidden" name="discount_max_bundle" value={cfg.discMaxBundle} />
+              <input type="hidden" name="discount_max_credits" value={cfg.discMaxCredits} />
+            </>
           )}
           <div className="mt-1 border-t border-line pt-2">
             <FieldLabel
@@ -1185,11 +1205,25 @@ export function MonetizationSections({
             stacked rows. */}
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-4">
           <Toggle label={cfg.charge ? "Charge for messages" : "Messages are free"} name="charge_messages" checked={cfg.charge} onChange={(v) => set("charge", v)} accent="soft" />
-          {cfg.charge && (
+          {cfg.charge ? (
             <>
               <Field label="Starting credits" name="starting_credits" type="number" defaultValue={clone?.starting_credits ?? 50} />
               <Field label="Pack size" name="credit_pack_size" type="number" defaultValue={clone?.credit_pack_size ?? 50} />
               <Field label="Pack price" name="credit_pack_price_stars" type="number" defaultValue={clone?.credit_pack_price_stars ?? 199} />
+            </>
+          ) : (
+            /* MONEY. These three used to simply not render with charging off,
+               and a control that does not render POSTS NOTHING - so
+               rowFromForm's num() fallbacks (50 / 50 / 199) were written to the
+               row on every save made with charging off. cat-chase's pack really
+               costs 1 star, so that was a silent 1 -> 199 repricing of a live
+               clone, invisible in the UI because the field was hidden at the
+               moment it was rewritten. Mirror the STORED values instead. Same
+               fix as paywall_prime_as_voice and emoji_allowlist already use. */
+            <>
+              <input type="hidden" name="starting_credits" value={clone?.starting_credits ?? 50} />
+              <input type="hidden" name="credit_pack_size" value={clone?.credit_pack_size ?? 50} />
+              <input type="hidden" name="credit_pack_price_stars" value={clone?.credit_pack_price_stars ?? 199} />
             </>
           )}
         </div>
@@ -1291,6 +1325,16 @@ export function MonetizationSections({
               pattern as paywall_as_voice above, so hiding the visible toggle when
               warmup is off never drops the stored value on Save. */}
           <input type="hidden" name="paywall_prime_as_voice" value={String(cfg.paywallPrimeVoice)} />
+          {/* Same reason as paywall_prime_as_voice on the line above, which
+              already had this fix: with the warmup off these two did not render
+              and Save wrote num(...,3) and null over the stored values, quietly
+              discarding an operator-written steer. */}
+          {!cfg.paywallPrimeEnabled && (
+            <>
+              <input type="hidden" name="paywall_prime_before" value={cfg.paywallPrimeBefore} />
+              <input type="hidden" name="paywall_prime_instruction" value={clone?.paywall_prime_instruction ?? ""} />
+            </>
+          )}
           {cfg.paywallPrimeEnabled && (
             <div className="mt-2 grid grid-cols-1 items-start gap-2 xl:grid-cols-2">
               <Field
@@ -1340,6 +1384,15 @@ export function MonetizationSections({
           {/* Unconditional hidden input for the free/paid choice, same pattern as
               the prime voice toggle above. */}
           <input type="hidden" name="paywall_resume_free" value={String(cfg.paywallResumeFree)} />
+          {/* Same fix again. Note paywall_resume_media_id ALREADY had a hidden
+              input, but it lived INSIDE this conditional, so it was dropped
+              along with everything else when the pickup was switched off. */}
+          {!cfg.paywallResumeEnabled && (
+            <>
+              <input type="hidden" name="paywall_resume_instruction" value={clone?.paywall_resume_instruction ?? ""} />
+              <input type="hidden" name="paywall_resume_media_id" value={cfg.paywallResumeMediaId ?? ""} />
+            </>
+          )}
           {cfg.paywallResumeEnabled && (
             <div className="mt-2 grid grid-cols-1 items-start gap-2 xl:grid-cols-2">
               <div className="xl:col-span-2">
