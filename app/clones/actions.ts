@@ -122,6 +122,11 @@ const FAN_TIME_MODES = ["never_assume", "may_ask", "assume_same"] as const;
 // Migration 090 (clones.price_guard_mode). Must stay identical to the DB CHECK
 // constraint clones_price_guard_mode_check, or a save fails outright.
 const PRICE_GUARD_MODES = ["off", "log", "block"] as const;
+// Migration 093 (clones.silence_fallback_mode). Must stay identical to the DB
+// CHECK constraint clones_silence_fallback_mode_check, or a save fails
+// outright. Read off the live constraint, not off the .sql file:
+//   CHECK (silence_fallback_mode = ANY (ARRAY['on'::text, 'off'::text]))
+const SILENCE_FALLBACK_MODES = ["on", "off"] as const;
 
 function oneOf<T extends string>(v: string | null, allowed: readonly T[], fallback: T): T {
   return (allowed as readonly string[]).includes(v ?? "") ? (v as T) : fallback;
@@ -496,6 +501,10 @@ function rowFromForm(fd: FormData) {
     // the column default and mapClone's fallback, so a save can never quietly
     // DISARM the guard: switching it off has to be a deliberate pick.
     price_guard_mode: oneOf(str(fd, "price_guard_mode"), PRICE_GUARD_MODES, "block"),
+    // Migration 093. Falls back to 'on', which is both the column default and
+    // mapClone's fallback (supabase-store.ts:1313), so a save can never quietly
+    // GHOST a fan: going silent has to be a deliberate pick.
+    silence_fallback_mode: oneOf(str(fd, "silence_fallback_mode"), SILENCE_FALLBACK_MODES, "on"),
 
     // time awareness (IANA tz; runtime injects her current local date/time)
     timezone: str(fd, "timezone") ?? "UTC",
@@ -742,6 +751,15 @@ const MONEY_088_COLUMNS = ["tip_credits_per_100_stars"] as const;
 // so a pre-090 save leaves the guard armed rather than silently disarming it.
 // See bot/db/migrations/090_price_guard_mode.sql.
 const MONEY_090_COLUMNS = ["price_guard_mode"] as const;
+// Migration 093: the silence-fallback kill switch. Listed so a save issued
+// against a stack where 093 has not run yet strips it and still succeeds.
+// Stripping is safe and degrades to today: with the column absent the bot's
+// mapClone (supabase-store.ts:1313) reads it as "on", which is the behaviour
+// every clone has had since the module was written. As with 090, the stripped
+// state is the SAFE one - a pre-093 save leaves the recovery line switched on
+// rather than silently ghosting fans.
+// See bot/db/migrations/093_silence_fallback_mode.sql.
+const FLOW_093_COLUMNS = ["silence_fallback_mode"] as const;
 // The response-pacing, monetization-sequence, re-warm-photo and
 // offer-redirect column lists were removed on 2026-07-27: those columns are no
 // longer written by this form at all, so they cannot appear in the row that
@@ -765,6 +783,7 @@ const OPTIONAL_COLUMNS = [
   ...DIAL_086_COLUMNS,
   ...MONEY_088_COLUMNS,
   ...MONEY_090_COLUMNS,
+  ...FLOW_093_COLUMNS,
 ] as const;
 
 function withoutPersonaFactColumns(row: Record<string, unknown>): Record<string, unknown> {

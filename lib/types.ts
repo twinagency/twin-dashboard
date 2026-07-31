@@ -223,6 +223,11 @@ export type Clone = {
    *  this clone's configured prices. Enforced in code at the send choke point
    *  (bot/src/services/price-guard.ts), never by a prompt rule. */
   price_guard_mode?: "off" | "log" | "block";
+  /** Migration 093. Whether she sends the "brain went blank" recovery line when
+   *  the model gives up after 3 tries, or stays SILENT instead. Note the trigger
+   *  is not only an API outage: looksLikeFailure() treats a model REFUSAL as a
+   *  failed generation too. Read by bot/src/flows/silence-fallback.ts:64. */
+  silence_fallback_mode?: "on" | "off";
 
   // IANA timezone (e.g. "America/New_York"); drives her in-prompt time awareness.
   timezone: string;

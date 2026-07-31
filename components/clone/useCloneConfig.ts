@@ -170,6 +170,9 @@ export type CloneConfigState = {
   // Migration 090 (clones.price_guard_mode). What happens when she TYPES a Star
   // amount that is not in this clone's configured prices.
   priceGuardMode: "off" | "log" | "block";
+  // Migration 093 (clones.silence_fallback_mode). Whether she sends the
+  // "brain went blank" recovery line when the model gives up, or says nothing.
+  silenceFallbackMode: "on" | "off";
   onboardingCollect: string[];
 
   dripEnabled: boolean;
@@ -297,6 +300,10 @@ function initial(clone?: Partial<Clone>): CloneConfigState {
     // same one migration 090 wrote as the column default, so the control can
     // never show a mode the bot is not actually running.
     priceGuardMode: clone?.price_guard_mode ?? "block",
+    // Same fallback mapClone uses (bot/src/data/supabase-store.ts:1313) and the
+    // same one migration 093 wrote as the column default, so the control can
+    // never show a state the bot is not actually running.
+    silenceFallbackMode: clone?.silence_fallback_mode ?? "on",
     onboardingCollect: Array.isArray(clone?.onboarding_collect_fields) ? clone!.onboarding_collect_fields! : [],
 
     dripEnabled: clone?.drip_enabled ?? true,

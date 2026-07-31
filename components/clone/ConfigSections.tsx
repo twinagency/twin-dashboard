@@ -157,6 +157,13 @@ const SEG = {
     { value: "log" as const, label: "👀 Watch only", title: "The message goes out exactly as written, but every invented price is recorded in Logs. Use this for a day if you want to see how often it actually happens on this clone before you let it start blocking anything." },
     { value: "off" as const, label: "🚫 Off", title: "No checking at all. This is how the bot behaved before the guard existed, and it is what allowed her to quote 1000 stars for a 40 star photo. Only pick this if the guard is misfiring on a real message." },
   ],
+  // Migration 093 (clones.silence_fallback_mode). Keep On first: it is the
+  // default and the safe state. Off is an opt-in to silence, not a tidier
+  // setting, so its label says what actually happens to the fan.
+  silenceFallback: [
+    { value: "on" as const, label: "💬 Send a recovery line", title: "Default. If the model fails or refuses three times in a row, she sends one short line (\"ugh my brain just went completely blank there babe\") so he is not left on read. The wording is the same for every clone and is not editable here." },
+    { value: "off" as const, label: "🔇 Say nothing", title: "She sends NOTHING when the model gives up, so he is simply left on read. That is the exact ghosting the recovery line was written to prevent, which is why On is the default. Pick this only if you would rather she said nothing at all than said something that does not fit her. Worth knowing: this does not only fire during an outage, a refusal from the model counts as a failed try too, so it can fire on a message that was merely too explicit." },
+  ],
   // Migration 084 (clones.fan_time_mode). Keep never_assume first: it is the
   // default and the fix, and assume_same is the legacy behaviour.
   fanTime: [
@@ -878,6 +885,30 @@ export default function ConfigSections({
           text="Power settings. Several of these are brakes, and raising one makes her push harder for money."
           detail="Category pricing and the discount caps change what fans are actually charged. The decline brake, the redirect cap, the eligibility gates and the chat slowdown gap are limits that stop her re-offering too soon, so raising them makes her pushier. Change one thing at a time and watch the effect before changing another."
         />
+        {/* Migration 093. Rendered UNCONDITIONALLY and NOT inside the
+            smart-mode card below, which is behind cfg.aiMode === "smart": a
+            control that is not rendered posts nothing, and oneOf(...) in
+            actions.ts would then rewrite the mode to 'on' on every save made
+            from a classic-mode clone. Same trap the price guard documents.
+            It sits directly under the warning because "off" means she ghosts
+            the fan, which is the most consequential switch on this tab. */}
+        <Section
+          icon="🔇"
+          accent="amber"
+          title="When the model gives up"
+          hint="After three failed tries she either sends one short recovery line or says nothing at all."
+          tip="This fires when the model fails OR refuses three times in a row, not only during an API outage. To see which is happening on this clone, open Logs and filter OpenRouter for 'all 3 tries failed'."
+          className="xl:col-span-2"
+        >
+          <Segmented
+            label="If she cannot generate a reply"
+            name="silence_fallback_mode"
+            value={cfg.silenceFallbackMode}
+            onChange={(v) => set("silenceFallbackMode", v)}
+            options={SEG.silenceFallback}
+            accent="amber"
+          />
+        </Section>
         {/* Two-model split: only relevant once AI mode (Config) is Smart. The
             ai_mode/smart_split hidden inputs in Config's Connection & mode
             card always submit the current value no matter which tab is open,
