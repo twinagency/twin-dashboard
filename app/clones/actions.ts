@@ -119,6 +119,9 @@ const TONE_LEVELS = ["off", "low", "medium", "high", "max"] as const;
 // Migration 084 (clones.fan_time_mode). Must stay identical to the DB CHECK
 // constraint clones_fan_time_mode_check, or a save fails outright.
 const FAN_TIME_MODES = ["never_assume", "may_ask", "assume_same"] as const;
+// Migration 090 (clones.price_guard_mode). Must stay identical to the DB CHECK
+// constraint clones_price_guard_mode_check, or a save fails outright.
+const PRICE_GUARD_MODES = ["off", "log", "block"] as const;
 
 function oneOf<T extends string>(v: string | null, allowed: readonly T[], fallback: T): T {
   return (allowed as readonly string[]).includes(v ?? "") ? (v as T) : fallback;
@@ -489,6 +492,10 @@ function rowFromForm(fd: FormData) {
     // pre-088 live behaviour, so a save from an untouched form changes nothing.
     // Clamped at 0 because a negative rate would mean a tip DEDUCTS credits.
     tip_credits_per_100_stars: Math.max(0, num(fd, "tip_credits_per_100_stars", 0)),
+    // Migration 090. Anything unrecognised falls back to 'block', which is both
+    // the column default and mapClone's fallback, so a save can never quietly
+    // DISARM the guard: switching it off has to be a deliberate pick.
+    price_guard_mode: oneOf(str(fd, "price_guard_mode"), PRICE_GUARD_MODES, "block"),
 
     // time awareness (IANA tz; runtime injects her current local date/time)
     timezone: str(fd, "timezone") ?? "UTC",
@@ -728,6 +735,13 @@ const DIAL_086_COLUMNS = [
 // pre-088 behaviour (a tip grants nothing). It degrades to today, never to a
 // silent money change. See bot/db/migrations/088_tip_credits.sql.
 const MONEY_088_COLUMNS = ["tip_credits_per_100_stars"] as const;
+// Migration 090: the price guard's mode. Listed so a save issued against a
+// stack where 090 has not run yet strips it and still succeeds rather than
+// failing wholesale. Stripping is safe and, unusually, strictly SAFER than the
+// alternative: with the column absent the bot's mapClone falls back to "block",
+// so a pre-090 save leaves the guard armed rather than silently disarming it.
+// See bot/db/migrations/090_price_guard_mode.sql.
+const MONEY_090_COLUMNS = ["price_guard_mode"] as const;
 // The response-pacing, monetization-sequence, re-warm-photo and
 // offer-redirect column lists were removed on 2026-07-27: those columns are no
 // longer written by this form at all, so they cannot appear in the row that
@@ -750,6 +764,7 @@ const OPTIONAL_COLUMNS = [
   ...FLOW_085_COLUMNS,
   ...DIAL_086_COLUMNS,
   ...MONEY_088_COLUMNS,
+  ...MONEY_090_COLUMNS,
 ] as const;
 
 function withoutPersonaFactColumns(row: Record<string, unknown>): Record<string, unknown> {

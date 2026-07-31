@@ -167,6 +167,9 @@ export type CloneConfigState = {
   // Migration 084 (clones.fan_time_mode). The timezone above is HERS; this is
   // what she does about HIS time of day when he has not told us his own.
   fanTimeMode: "never_assume" | "may_ask" | "assume_same";
+  // Migration 090 (clones.price_guard_mode). What happens when she TYPES a Star
+  // amount that is not in this clone's configured prices.
+  priceGuardMode: "off" | "log" | "block";
   onboardingCollect: string[];
 
   dripEnabled: boolean;
@@ -290,6 +293,10 @@ function initial(clone?: Partial<Clone>): CloneConfigState {
     // Same fallback mapClone uses (bot/src/data/supabase-store.ts), so the
     // control can never show a mode the bot is not actually running.
     fanTimeMode: clone?.fan_time_mode ?? "never_assume",
+    // Same fallback mapClone uses (bot/src/data/supabase-store.ts:1302) and the
+    // same one migration 090 wrote as the column default, so the control can
+    // never show a mode the bot is not actually running.
+    priceGuardMode: clone?.price_guard_mode ?? "block",
     onboardingCollect: Array.isArray(clone?.onboarding_collect_fields) ? clone!.onboarding_collect_fields! : [],
 
     dripEnabled: clone?.drip_enabled ?? true,

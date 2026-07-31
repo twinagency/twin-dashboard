@@ -219,6 +219,10 @@ export type Clone = {
   credit_pack_price_stars: number;
   /** Migration 088. Message credits granted per 100 stars TIPPED. 0 = off. */
   tip_credits_per_100_stars?: number;
+  /** Migration 090. What happens when the AI TYPES a Star amount that is not in
+   *  this clone's configured prices. Enforced in code at the send choke point
+   *  (bot/src/services/price-guard.ts), never by a prompt rule. */
+  price_guard_mode?: "off" | "log" | "block";
 
   // IANA timezone (e.g. "America/New_York"); drives her in-prompt time awareness.
   timezone: string;

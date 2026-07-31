@@ -149,6 +149,13 @@ const SEG = {
     { value: "medium" as const, label: "Some", title: "About every other message" },
     { value: "high" as const, label: "A lot", title: "Most messages have one or two" },
   ],
+  // Migration 090 (clones.price_guard_mode). Keep Block first: it is the
+  // default, and Off is the legacy behaviour that let the bug happen.
+  priceGuard: [
+    { value: "block" as const, label: "🛑 Block", title: "If she types a Star price that is not one of yours, that message never reaches him. She sends a short neutral line instead and the attempt is recorded in Logs. This is the default. It cannot affect a real price: every amount on a Pay button is computed in code and never routes through this check." },
+    { value: "log" as const, label: "👀 Watch only", title: "The message goes out exactly as written, but every invented price is recorded in Logs. Use this for a day if you want to see how often it actually happens on this clone before you let it start blocking anything." },
+    { value: "off" as const, label: "🚫 Off", title: "No checking at all. This is how the bot behaved before the guard existed, and it is what allowed her to quote 1000 stars for a 40 star photo. Only pick this if the guard is misfiring on a real message." },
+  ],
   // Migration 084 (clones.fan_time_mode). Keep never_assume first: it is the
   // default and the fix, and assume_same is the legacy behaviour.
   fanTime: [
@@ -1117,6 +1124,22 @@ export function MonetizationSections({
               <Field label="Pack price" name="credit_pack_price_stars" type="number" defaultValue={clone?.credit_pack_price_stars ?? 199} />
             </>
           )}
+        </div>
+        {/* Migration 090. Rendered UNCONDITIONALLY, deliberately not behind
+            cfg.charge: this guards every price she can type, including tips and
+            VIP, which a clone sells whether or not it charges for messages. A
+            control hidden behind a toggle also posts nothing, and oneOf(...)
+            would then rewrite the mode on every save made with charging off. */}
+        <div className="border-t border-line pt-2">
+          <Segmented
+            label="If she invents a price"
+            name="price_guard_mode"
+            value={cfg.priceGuardMode}
+            onChange={(v) => set("priceGuardMode", v)}
+            options={SEG.priceGuard}
+            accent="accent"
+            hint="Every price on a Pay button is computed in code and is always correct. This is about the prices she TYPES in chat. On 2026-07-31 she was measured telling a fan photos 'start at 1000 stars' when they are 40 to 90, and quoting a video price on a clone with no videos. Telling her not to, in her prompt, did not work. This is the code check that does. Leave it on Block. Hover a step to see exactly what each one does."
+          />
         </div>
         <div className="border-t border-line pt-2">
           <SubHead
