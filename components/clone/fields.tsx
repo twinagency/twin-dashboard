@@ -699,6 +699,7 @@ export function Segmented<T extends string>({
   options,
   hint,
   accent = "accent",
+  warning,
 }: {
   label: string;
   name: string;
@@ -707,6 +708,9 @@ export function Segmented<T extends string>({
   options: { value: T; label: string; title?: string }[];
   hint?: string;
   accent?: SegAccent;
+  // Optional inline conflict warning, rendered under the control. Pass the
+  // result of useDialConflict(...) through <Warning /> — see that hook below.
+  warning?: React.ReactNode;
 }) {
   return (
     <div className="block">
@@ -729,8 +733,29 @@ export function Segmented<T extends string>({
           </button>
         ))}
       </div>
+      {warning && <div className="mt-1.5">{warning}</div>}
     </div>
   );
+}
+
+// ── Dial-conflict warning hook ────────────────────────────────────────────────
+// One place to express "these two live field values fight each other," instead
+// of a static banner that's true regardless of what's actually saved. `checks`
+// is evaluated top to bottom; the first match wins, so order real hazards
+// before softer ones. Returns null when nothing matches, so a call site can do
+// `{conflict && <Warning {...conflict} />}` right next to the control it's
+// about. Generic over the config shape so this file doesn't need to import
+// CloneConfigState from useCloneConfig.ts.
+export type DialConflictCheck<C> = {
+  when: (cfg: C) => boolean;
+  text: string;
+  detail?: string;
+};
+export function useDialConflict<C>(cfg: C, checks: DialConflictCheck<C>[]): { text: string; detail?: string } | null {
+  for (const c of checks) {
+    if (c.when(cfg)) return { text: c.text, detail: c.detail };
+  }
+  return null;
 }
 
 // ── Mini toggle card (emoji + short label + switch, for toggle grids) ─────────

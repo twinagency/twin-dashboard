@@ -28,6 +28,7 @@ import {
   ToggleCard,
   WEAK,
   Warning,
+  useDialConflict,
   inputCls,
   selectCls,
 } from "./fields";
@@ -326,6 +327,33 @@ export default function ConfigSections({
           ? "clone-editor-single grid min-w-0 grid-cols-1 items-start gap-4"
           : "grid min-w-0 grid-cols-1 gap-4 xl:grid-cols-2";
 
+  // ── Dial-conflict warnings (2026-07-31) ──────────────────────────────────
+  // Grounded in text already in this file, not invented: see the SEG.silenceFallback
+  // "off" option above (line ~165) and the Discounts collapse's own hint
+  // ("0 = never discount that type", ~line 1055) plus the money bug fixed in
+  // 65c287e that this file's history references. Both check LIVE cfg values,
+  // unlike the two static Warning banners already in this file (Advanced tab
+  // header, Discounts card) which render unconditionally.
+  const silenceGhostConflict = useDialConflict(cfg, [
+    {
+      when: (c) => c.silenceFallbackMode === "off" && (c.nsfwLevel === "max" || c.sexualLevel === "max"),
+      text: "She's dialled to Max NSFW/Flirtiness and set to say nothing on failure.",
+      detail: "A model refusal counts as a failed try, not just an outage, so this combination is the one most likely to leave a fan on read mid-conversation with zero message. Consider the recovery line (On) instead of silence for a clone running this hot.",
+    },
+  ]);
+  const discountCapsAllZeroConflict = useDialConflict(cfg, [
+    {
+      when: (c) =>
+        c.discountsEnabled &&
+        c.discMaxPhoto === 0 &&
+        c.discMaxVideo === 0 &&
+        c.discMaxBundle === 0 &&
+        c.discMaxCredits === 0,
+      text: "Discounts are enabled but every cap is 0%, so she can never actually discount anything.",
+      detail: "0 on a cap means 'never discount that type' (see the hint above). With all four at 0 the enabled switch is a no-op: raise at least one cap or turn discounts back off.",
+    },
+  ]);
+
   return (
     <div className="grid min-w-0 gap-4">
       {/* ── Tab bar ─────────────────────────────────────────────── */}
@@ -580,16 +608,23 @@ export default function ConfigSections({
           different thing entirely: that shapes HER replies, this watched what
           the FAN sends. */}
 
-      {/* Personality, emoji style and realism touches were three separate cards
-          for what is really one question — how she comes across. One card.
-          Moved here from Identity 2026-07-26: this is an operator dial for HOW
-          she behaves, not a fact a fan could ask about, so it's Config. */}
+      {/* Personality, emoji style and realism touches used to be crammed into
+          one "Personality & style" card (sexual/nsfw/push/warmth/curiosity/
+          playfulness/attentiveness dials, PLUS emoji, read receipts and
+          language lock — seven-plus unrelated dial families under one
+          header). Split 2026-07-31 to match the one-card-per-topic
+          convention the rest of this file follows (see "Connection & mode",
+          "What she can send", "Category pricing"): the five-step Segmented
+          dials are all one topic (tone), the rest is a second topic
+          (behavior/style toggles). Moved here from Identity 2026-07-26: this
+          is an operator dial for HOW she behaves, not a fact a fan could ask
+          about, so it's Config. */}
       <Section
-        icon="💋"
+        icon="🎚"
         accent="pink"
-        title="Personality & style"
-        hint="Her tone, emoji use and human touches. Hard limits and prices stay locked in code."
-        tip="These never override the built-in hard limits, and money stays locked in code (push only changes how eager she is, never prices)."
+        title="Tone dials"
+        hint="Five-step sliders that steer her voice: sex, selling, warmth. Hard limits and prices stay locked in code."
+        tip="These never override the built-in hard limits, and money stays locked in code (push only changes how eager she is, never prices). All are prompt wording sent to the model, not a code lock."
       >
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
           <Segmented
@@ -696,22 +731,37 @@ export default function ConfigSections({
             accent="amber"
             hint="How hard she asks to be TIPPED and spoiled, dialled separately from photos, videos and bundles. Leave on '= Push' and tips follow the Content pushing dial exactly, which adds nothing to her prompt. Move it and only tips change: a soft-sell clone that still loves being spoiled, or a heavy content seller who never begs for Stars. Amounts always come from the fixed spoil menu, she never names a number."
           />
-          {/* greeting_ask_age (migration 080), read at
-              bot/src/flows/human.ts:383 in newFanGreetingNudge. Off is the
-              default and the recommendation, see the hint. */}
-          <div className="block">
-            <FieldLabel
-              label="🎂 Ask his age in message one"
-              hint="Leave this OFF, which is the default and the recommendation. When on, her very first message to a brand-new fan gently asks how old he is. That single question caused a live incident: a fan answered 19, that age was then re-injected into every later prompt forever, it kept brushing against the minors wording in her hard limits, and she went cold on him for the rest of the relationship. Off, she asks where he is from instead. It does not change any age or safety rule, only whether she opens by asking."
-            />
-            <Toggle
-              label={cfg.greetingAskAge ? "Asks his age in her first message" : "Does not ask his age (recommended)"}
-              name="greeting_ask_age"
-              checked={cfg.greetingAskAge}
-              onChange={(v) => set("greetingAskAge", v)}
-              accent="soft"
-            />
-          </div>
+        </div>
+      </Section>
+
+      {/* Second half of the old "Personality & style" card: everything that
+          isn't a tone dial — a one-off greeting behavior, emoji use, realism
+          touches and the language lock. These don't share an axis with each
+          other either, but each is a single toggle/select rather than a
+          five-step dial, so grouping them as "behavior toggles" (as opposed
+          to "tone dials" above) matches this file's one-card-per-topic
+          convention without inventing a taxonomy per field. */}
+      <Section
+        icon="🎛"
+        accent="purple"
+        title="Behavior toggles"
+        hint="One-off behavior switches: greeting, emoji use, realism touches, language lock."
+      >
+        {/* greeting_ask_age (migration 080), read at
+            bot/src/flows/human.ts:383 in newFanGreetingNudge. Off is the
+            default and the recommendation, see the hint. */}
+        <div className="block">
+          <FieldLabel
+            label="🎂 Ask his age in message one"
+            hint="Leave this OFF, which is the default and the recommendation. When on, her very first message to a brand-new fan gently asks how old he is. That single question caused a live incident: a fan answered 19, that age was then re-injected into every later prompt forever, it kept brushing against the minors wording in her hard limits, and she went cold on him for the rest of the relationship. Off, she asks where he is from instead. It does not change any age or safety rule, only whether she opens by asking."
+          />
+          <Toggle
+            label={cfg.greetingAskAge ? "Asks his age in her first message" : "Does not ask his age (recommended)"}
+            name="greeting_ask_age"
+            checked={cfg.greetingAskAge}
+            onChange={(v) => set("greetingAskAge", v)}
+            accent="soft"
+          />
         </div>
 
         {/* Emoji settings and realism toggles sit side by side - stacked, they
@@ -936,6 +986,11 @@ export default function ConfigSections({
             onChange={(v) => set("silenceFallbackMode", v)}
             options={SEG.silenceFallback}
             accent="amber"
+            warning={
+              silenceGhostConflict && (
+                <Warning text={silenceGhostConflict.text} detail={silenceGhostConflict.detail} />
+              )
+            }
           />
         </Section>
         {/* Two-model split: only relevant once AI mode (Config) is Smart. The
@@ -1061,6 +1116,9 @@ export default function ConfigSections({
               <Slider label="Videos" name="discount_max_video" value={cfg.discMaxVideo} onChange={(v) => set("discMaxVideo", v)} min={0} max={90} step={5} format={(v) => `${v}%`} />
               <Slider label="Bundles" name="discount_max_bundle" value={cfg.discMaxBundle} onChange={(v) => set("discMaxBundle", v)} min={0} max={90} step={5} format={(v) => `${v}%`} />
               <Slider label="Message packs" name="discount_max_credits" value={cfg.discMaxCredits} onChange={(v) => set("discMaxCredits", v)} min={0} max={90} step={5} format={(v) => `${v}%`} />
+              {discountCapsAllZeroConflict && (
+                <Warning text={discountCapsAllZeroConflict.text} detail={discountCapsAllZeroConflict.detail} />
+              )}
 
               {/* Migration 095. These two groups were hardcoded constants in
                   star-pricing.ts until today and are the "advanced discount
