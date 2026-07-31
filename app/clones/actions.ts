@@ -374,6 +374,21 @@ function rowFromForm(fd: FormData) {
     discount_max_video: Math.min(90, Math.max(0, num(fd, "discount_max_video", 0))),
     discount_max_bundle: Math.min(90, Math.max(0, num(fd, "discount_max_bundle", 0))),
     discount_max_credits: Math.min(90, Math.max(0, num(fd, "discount_max_credits", 0))),
+    // Migration 095. Clamped to the DB CHECK ranges exactly, or the save fails
+    // outright: levels are 1-100 (0 is NOT allowed - star-pricing.ts treats a
+    // zero/absent level dial as "fall back to the built-in default", so a 0
+    // here would silently mean 34/67/100 rather than "no discount"), and tier
+    // shares are 0-100 (0 IS allowed and means that tier never gets a
+    // discount). Fallbacks are the migration defaults, which reproduce the old
+    // hardcoded constants, so an untouched form changes nothing.
+    discount_level_light_pct: Math.min(100, Math.max(1, num(fd, "discount_level_light_pct", 34))),
+    discount_level_medium_pct: Math.min(100, Math.max(1, num(fd, "discount_level_medium_pct", 67))),
+    discount_level_max_pct: Math.min(100, Math.max(1, num(fd, "discount_level_max_pct", 100))),
+    discount_tier_share_none_pct: Math.min(100, Math.max(0, num(fd, "discount_tier_share_none_pct", 50))),
+    discount_tier_share_low_pct: Math.min(100, Math.max(0, num(fd, "discount_tier_share_low_pct", 60))),
+    discount_tier_share_mid_pct: Math.min(100, Math.max(0, num(fd, "discount_tier_share_mid_pct", 75))),
+    discount_tier_share_high_pct: Math.min(100, Math.max(0, num(fd, "discount_tier_share_high_pct", 90))),
+    discount_tier_share_whale_pct: Math.min(100, Math.max(0, num(fd, "discount_tier_share_whale_pct", 100))),
     spoil_options: parseSpoilOptions(fd),
     category_pricing: parseCategoryPricing(fd),
     intake: intakeFromForm(fd, str(fd, "name")),
@@ -764,6 +779,21 @@ const MONEY_090_COLUMNS = ["price_guard_mode"] as const;
 // rather than silently ghosting fans.
 // See bot/db/migrations/093_silence_fallback_mode.sql.
 const FLOW_093_COLUMNS = ["silence_fallback_mode"] as const;
+// Migration 095: the discount tuning dials. Listed so a save against a stack
+// where 095 has not run strips them and still succeeds. Stripping degrades to
+// today: with the columns absent, star-pricing.ts's levelFractionsFor() and
+// tierCapSharesFor() fall back to the built-in constants, which are exactly
+// what these defaults reproduce. See bot/db/migrations/095_discount_tuning_dials.sql.
+const MONEY_095_COLUMNS = [
+  "discount_level_light_pct",
+  "discount_level_medium_pct",
+  "discount_level_max_pct",
+  "discount_tier_share_none_pct",
+  "discount_tier_share_low_pct",
+  "discount_tier_share_mid_pct",
+  "discount_tier_share_high_pct",
+  "discount_tier_share_whale_pct",
+] as const;
 // The response-pacing, monetization-sequence, re-warm-photo and
 // offer-redirect column lists were removed on 2026-07-27: those columns are no
 // longer written by this form at all, so they cannot appear in the row that
@@ -788,6 +818,7 @@ const OPTIONAL_COLUMNS = [
   ...MONEY_088_COLUMNS,
   ...MONEY_090_COLUMNS,
   ...FLOW_093_COLUMNS,
+  ...MONEY_095_COLUMNS,
 ] as const;
 
 function withoutPersonaFactColumns(row: Record<string, unknown>): Record<string, unknown> {

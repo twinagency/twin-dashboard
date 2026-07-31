@@ -98,6 +98,16 @@ export type CloneConfigState = {
   discMaxVideo: number;
   discMaxBundle: number;
   discMaxCredits: number;
+  // Migration 095. Both sets only ever scale the caps above DOWN:
+  // pct = cap x levelFraction x tierShare, then hard-capped at 90% in code.
+  discLevelLight: number;
+  discLevelMedium: number;
+  discLevelMax: number;
+  discTierNone: number;
+  discTierLow: number;
+  discTierMid: number;
+  discTierHigh: number;
+  discTierWhale: number;
   // Discount eligibility gates (clones.offer_pending_minutes / discount_slowdown_minutes),
   // restored 2026-07-29 (D6/D4). Both bot-read; UI defaults 0 = always eligible.
   offerPendingMinutes: number;
@@ -239,6 +249,17 @@ function initial(clone?: Partial<Clone>): CloneConfigState {
     discMaxVideo: clone?.discount_max_video ?? 0,
     discMaxBundle: clone?.discount_max_bundle ?? 0,
     discMaxCredits: clone?.discount_max_credits ?? 0,
+    // Migration 095 defaults, identical to the constants star-pricing.ts used
+    // before the migration, so a clone nobody has tuned behaves exactly as it
+    // did and the control never shows a number the bot is not running.
+    discLevelLight: clone?.discount_level_light_pct ?? 34,
+    discLevelMedium: clone?.discount_level_medium_pct ?? 67,
+    discLevelMax: clone?.discount_level_max_pct ?? 100,
+    discTierNone: clone?.discount_tier_share_none_pct ?? 50,
+    discTierLow: clone?.discount_tier_share_low_pct ?? 60,
+    discTierMid: clone?.discount_tier_share_mid_pct ?? 75,
+    discTierHigh: clone?.discount_tier_share_high_pct ?? 90,
+    discTierWhale: clone?.discount_tier_share_whale_pct ?? 100,
     // 15, NOT 0. The save path floors both at 1 and defaults them to 15
     // (rowFromForm in app/clones/actions.ts), and mapClone in
     // bot/src/data/supabase-store.ts:1120 also falls back to 15, so a 0 shown

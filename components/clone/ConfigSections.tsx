@@ -1061,6 +1061,41 @@ export default function ConfigSections({
               <Slider label="Videos" name="discount_max_video" value={cfg.discMaxVideo} onChange={(v) => set("discMaxVideo", v)} min={0} max={90} step={5} format={(v) => `${v}%`} />
               <Slider label="Bundles" name="discount_max_bundle" value={cfg.discMaxBundle} onChange={(v) => set("discMaxBundle", v)} min={0} max={90} step={5} format={(v) => `${v}%`} />
               <Slider label="Message packs" name="discount_max_credits" value={cfg.discMaxCredits} onChange={(v) => set("discMaxCredits", v)} min={0} max={90} step={5} format={(v) => `${v}%`} />
+
+              {/* Migration 095. These two groups were hardcoded constants in
+                  star-pricing.ts until today and are the "advanced discount
+                  dials" from Ronan's dump. They are DEPENDENT on the four caps
+                  above, which is why they sit inside this card rather than in
+                  a card of their own: on their own they mean nothing. */}
+              <Warning
+                className="mt-1"
+                text="The two groups below scale the caps above. They can only ever make a discount smaller, never bigger."
+                detail="The sum the bot actually runs is: cap x level x spend tier. So a 20% photo cap, Medium strength (67%) and a mid-spend fan (75%) gives 20 x 0.67 x 0.75 = 10% off. A discount can never exceed the cap you set above, and code hard-caps every discount at 90% and never sells anything below 1 star, whatever you type here."
+              />
+
+              <SubHead
+                emoji="🎚"
+                label="How hard each level bites"
+                tip="She only ever picks a LEVEL (light, medium or max), never a number. This is what each of those levels is worth, as a share of the cap above. Defaults 34 / 67 / 100 are exactly what every clone ran on before these became editable."
+              />
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                <Slider label="Light" name="discount_level_light_pct" value={cfg.discLevelLight} onChange={(v) => set("discLevelLight", v)} min={1} max={100} step={1} format={(v) => `${v}%`} />
+                <Slider label="Medium" name="discount_level_medium_pct" value={cfg.discLevelMedium} onChange={(v) => set("discLevelMedium", v)} min={1} max={100} step={1} format={(v) => `${v}%`} />
+                <Slider label="Max" name="discount_level_max_pct" value={cfg.discLevelMax} onChange={(v) => set("discLevelMax", v)} min={1} max={100} step={1} format={(v) => `${v}%`} />
+              </div>
+
+              <SubHead
+                emoji="🐋"
+                label="How much a fan reaches, by what he has spent"
+                tip="The whale ladder. A fan who has spent more gets closer to the full cap; a brand-new fan gets a smaller slice of it. 0 means that tier never gets a discount at all. Defaults 50 / 60 / 75 / 90 / 100 match the old hardcoded ladder."
+              />
+              <div className="grid grid-cols-1 gap-2 sm:grid-cols-5">
+                <Slider label="New" name="discount_tier_share_none_pct" value={cfg.discTierNone} onChange={(v) => set("discTierNone", v)} min={0} max={100} step={5} format={(v) => `${v}%`} />
+                <Slider label="Low" name="discount_tier_share_low_pct" value={cfg.discTierLow} onChange={(v) => set("discTierLow", v)} min={0} max={100} step={5} format={(v) => `${v}%`} />
+                <Slider label="Mid" name="discount_tier_share_mid_pct" value={cfg.discTierMid} onChange={(v) => set("discTierMid", v)} min={0} max={100} step={5} format={(v) => `${v}%`} />
+                <Slider label="High" name="discount_tier_share_high_pct" value={cfg.discTierHigh} onChange={(v) => set("discTierHigh", v)} min={0} max={100} step={5} format={(v) => `${v}%`} />
+                <Slider label="Whale" name="discount_tier_share_whale_pct" value={cfg.discTierWhale} onChange={(v) => set("discTierWhale", v)} min={0} max={100} step={5} format={(v) => `${v}%`} />
+              </div>
             </div>
           ) : (
             /* Same defect as the credit fields above: with discounts off these
@@ -1076,6 +1111,18 @@ export default function ConfigSections({
               <input type="hidden" name="discount_max_video" value={cfg.discMaxVideo} />
               <input type="hidden" name="discount_max_bundle" value={cfg.discMaxBundle} />
               <input type="hidden" name="discount_max_credits" value={cfg.discMaxCredits} />
+              {/* Migration 095's eight dials live in the branch above, so they
+                  need the same mirrors or they would reproduce the bug fixed
+                  in 65c287e - a save with discounts off would reset them to
+                  34/67/100 and 50/60/75/90/100. */}
+              <input type="hidden" name="discount_level_light_pct" value={cfg.discLevelLight} />
+              <input type="hidden" name="discount_level_medium_pct" value={cfg.discLevelMedium} />
+              <input type="hidden" name="discount_level_max_pct" value={cfg.discLevelMax} />
+              <input type="hidden" name="discount_tier_share_none_pct" value={cfg.discTierNone} />
+              <input type="hidden" name="discount_tier_share_low_pct" value={cfg.discTierLow} />
+              <input type="hidden" name="discount_tier_share_mid_pct" value={cfg.discTierMid} />
+              <input type="hidden" name="discount_tier_share_high_pct" value={cfg.discTierHigh} />
+              <input type="hidden" name="discount_tier_share_whale_pct" value={cfg.discTierWhale} />
             </>
           )}
           <div className="mt-1 border-t border-line pt-2">

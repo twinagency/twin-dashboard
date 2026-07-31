@@ -91,6 +91,24 @@ export type Clone = {
   discount_max_video: number;
   discount_max_bundle: number;
   discount_max_credits: number;
+  // Migration 095. The two multipliers that used to be hardcoded in
+  // bot/src/services/star-pricing.ts (LEVEL_FRACTION and TIER_CAP_SHARE).
+  // The real sum, in applyDiscount(): pct = cap x levelFraction x tierShare,
+  // then hard-capped at MAX_DISCOUNT_PERCENT (90) and floored at 1 star. So
+  // BOTH of these only ever SCALE DOWN the discount_max_* caps above, and
+  // neither can push a discount past the cap or past 90%.
+  // Level: how hard the level SHE picked bites. 1-100, defaults 34/67/100.
+  discount_level_light_pct?: number;
+  discount_level_medium_pct?: number;
+  discount_level_max_pct?: number;
+  // Whale ladder: how much of the cap a fan reaches based on what he has
+  // already spent. 0-100 (0 is a legitimate "never discount this tier"),
+  // defaults 50/60/75/90/100.
+  discount_tier_share_none_pct?: number;
+  discount_tier_share_low_pct?: number;
+  discount_tier_share_mid_pct?: number;
+  discount_tier_share_high_pct?: number;
+  discount_tier_share_whale_pct?: number;
   spoil_options: { stars: number; label: string }[] | null;
   // Category → suggested Star price. Auto-prices media on upload from its AI tags.
   category_pricing: Record<string, number> | null;
