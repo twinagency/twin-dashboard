@@ -379,6 +379,16 @@ export default function ConfigSections({
       detail: "Every discount is clamped to this ceiling no matter what a category's own cap allows, so in this state the ceiling is silently overriding that category's cap. Raise the ceiling to match, or lower the category cap instead if the ceiling is the intended limit.",
     },
   ]);
+  // Migration 099. The three spend-tier thresholds must stay strictly
+  // descending (whale > high > mid) or a fan can land in more than one tier
+  // (or none) at the same spend level, silently breaking the tiering.
+  const spendTierConflict = useDialConflict(cfg, [
+    {
+      when: (c) => c.spendTierWhaleStars <= c.spendTierHighStars || c.spendTierHighStars <= c.spendTierMidStars,
+      text: "Spend-tier thresholds must be strictly descending (whale > high > mid).",
+      detail: "A fan's spend tier is decided by comparing his total spend against these three in order. If whale isn't above high, or high isn't above mid, the tiering can put a fan in the wrong bucket, or no bucket at all. Raise the higher threshold or lower the lower one so whale > high > mid.",
+    },
+  ]);
 
   return (
     <div className="grid min-w-0 gap-4">
@@ -1433,6 +1443,204 @@ export default function ConfigSections({
               placeholder="e.g. more, keep going, continue"
               hint="Comma-separated. Same rule as the other two lists: additive to a fixed, non-editable remainder."
             />
+          </div>
+          {/* Migration 099. Frequency dials for the same two mechanics the
+              master switch above turns on/off entirely: how OFTEN, not
+              whether. */}
+          <div className="grid grid-cols-1 gap-2 border-t border-line pt-2 sm:grid-cols-2">
+            <Slider
+              label="Ambient reaction chance"
+              name="reaction_ambient_chance_pct"
+              value={cfg.reactionAmbientChancePct}
+              onChange={(v) => set("reactionAmbientChancePct", v)}
+              min={0}
+              max={100}
+              step={5}
+              format={(v) => `${v}%`}
+              hint="How often she drops a reaction emoji on an ordinary message, not just hot/flirty ones. Meaningless while reactions & message effects above is off. Default 10%."
+            />
+            <Slider
+              label="Message-effect chance"
+              name="message_effect_chance_pct"
+              value={cfg.messageEffectChancePct}
+              onChange={(v) => set("messageEffectChancePct", v)}
+              min={0}
+              max={100}
+              step={5}
+              format={(v) => `${v}%`}
+              hint="How often a hot/flirty line gets an animated Telegram message effect (fire/heart). Meaningless while reactions & message effects above is off. Default 25%."
+            />
+          </div>
+        </Section>
+
+        {/* Migration 099. Priority-fan reply speed, the gap-awareness fire
+            threshold, the spend-tier thresholds that decide who counts as a
+            whale, and the spoil-context lookback window all share one card:
+            each is a threshold that gates some OTHER piece of behavior,
+            distinct from the pacing/retry mechanics above and the money
+            ceilings in Money guardrails. */}
+        <Section
+          icon="🎯"
+          accent="blue"
+          title="Timing & thresholds"
+          hint="Priority-fan reply speed, the gap-awareness trigger, spend-tier cutoffs, and how far back the spoil-context window looks."
+        >
+          <Slider
+            label="Priority VIP speed (% of normal wait)"
+            name="priority_wait_factor_pct"
+            value={cfg.priorityWaitFactorPct}
+            onChange={(v) => set("priorityWaitFactorPct", v)}
+            min={1}
+            max={100}
+            step={5}
+            format={(v) => `${v}%`}
+            hint="Priority/VIP fans wait this percentage of the normal reply delay before she replies. Lower means faster replies for them. Default 35%."
+          />
+          <div className="border-t border-line pt-2">
+            <Field
+              label="Gap-awareness threshold (hours)"
+              name="gap_nudge_threshold_hours"
+              type="number"
+              min={1}
+              step={1}
+              defaultValue={clone?.gap_nudge_threshold_hours ?? 6}
+              hint="How long since the fan's last message before the 'it's been a while' gap-awareness line is allowed to fire. Default 6 hours."
+            />
+          </div>
+          <div className="border-t border-line pt-2">
+            <FieldLabel
+              label="Spend-tier thresholds (Stars)"
+              hint="Total lifetime Stars spent that bump a fan up to the next spend tier, used for discount-tier and pacing decisions elsewhere. Must stay strictly descending: whale > high > mid. Defaults 1000 / 300 / 50."
+            />
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <Slider
+                label="Whale"
+                name="spend_tier_whale_stars"
+                value={cfg.spendTierWhaleStars}
+                onChange={(v) => set("spendTierWhaleStars", v)}
+                min={1}
+                max={10000}
+                step={10}
+                format={(v) => `${v}⭐`}
+              />
+              <Slider
+                label="High"
+                name="spend_tier_high_stars"
+                value={cfg.spendTierHighStars}
+                onChange={(v) => set("spendTierHighStars", v)}
+                min={1}
+                max={10000}
+                step={10}
+                format={(v) => `${v}⭐`}
+              />
+              <Slider
+                label="Mid"
+                name="spend_tier_mid_stars"
+                value={cfg.spendTierMidStars}
+                onChange={(v) => set("spendTierMidStars", v)}
+                min={1}
+                max={10000}
+                step={5}
+                format={(v) => `${v}⭐`}
+              />
+            </div>
+            {spendTierConflict && (
+              <div className="mt-1.5">
+                <Warning text={spendTierConflict.text} detail={spendTierConflict.detail} />
+              </div>
+            )}
+          </div>
+          <div className="border-t border-line pt-2">
+            <Field
+              label="Spoil-context lookback (messages)"
+              name="spoil_context_lookback_messages"
+              type="number"
+              min={1}
+              step={1}
+              defaultValue={clone?.spoil_context_lookback_messages ?? 6}
+              hint="How many recent messages the spoil-context window looks back over when deciding what she can reference. Default 6."
+            />
+          </div>
+        </Section>
+
+        {/* Migration 098 + 099. The strict-onboarding gate and the numeric
+            onboarding tuning dials share a card: all four numbers only matter
+            while the fan is still inside the onboarding step engine, same as
+            the gate toggle above them. */}
+        <Section
+          icon="🎓"
+          accent="green"
+          title="Onboarding tuning"
+          hint="How strictly she stays on-script during onboarding, and the message/attempt caps the step engine runs on."
+        >
+          {/* No dial-conflict warning here on purpose: the one genuinely
+              surprising interaction (an early welcome_bundle_after /
+              onboarding_voice_after expecting photos fast, while this gate
+              blocks them until the step engine reaches a photo-appropriate
+              step) depends on fields owned by the Campaigns page, not this
+              tab's cfg state, so there is no live value here to check
+              against. photos_enabled being off is harmless redundancy, not
+              a surprise, so that case deliberately does not warn either. */}
+          <ToggleCard
+            emoji="📜"
+            label={cfg.strictOnboardingSteps ? "Strict onboarding steps on" : "Strict onboarding steps off"}
+            title="When on, blocks BOTH self-initiated and fan-requested photo/video/bundle/tip/vip actions while the fan's current onboarding step is a text/voice step, keeping her on-script until onboarding reaches a photo-appropriate step. Off (default) is today's unchanged behavior: a fan who asks for media himself always gets through."
+            name="strict_onboarding_steps"
+            checked={cfg.strictOnboardingSteps}
+            onChange={(v) => set("strictOnboardingSteps", v)}
+          />
+          <div className="grid grid-cols-1 gap-2 border-t border-line pt-2 sm:grid-cols-3">
+            <Field
+              label="Onboarding message cap"
+              name="onboarding_max_messages"
+              type="number"
+              min={1}
+              step={1}
+              defaultValue={clone?.onboarding_max_messages ?? 30}
+              hint="Hard ceiling on onboarding messages before the free onboarding phase force-ends. Default 30."
+            />
+            <Field
+              label="Step retry limit"
+              name="onboarding_step_max_attempts"
+              type="number"
+              min={1}
+              step={1}
+              defaultValue={clone?.onboarding_step_max_attempts ?? 3}
+              hint="How many times a single onboarding step may retry before the engine gives up on it and moves on. Default 3."
+            />
+            <Field
+              label="Condition window (messages)"
+              name="onboarding_condition_window_messages"
+              type="number"
+              min={1}
+              step={1}
+              defaultValue={clone?.onboarding_condition_window_messages ?? 10}
+              hint="Message window an onboarding step's 'if' condition is evaluated against. Default 10."
+            />
+          </div>
+          <div className="border-t border-line pt-2">
+            <FieldLabel
+              label="Fan-profile extraction cadence"
+              hint="When the profile extractor first runs on a new fan, then how often after that. Defaults 3 / 10 messages."
+            />
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+              <Field
+                label="First extraction at (messages)"
+                name="profile_extract_first_at_messages"
+                type="number"
+                min={1}
+                step={1}
+                defaultValue={clone?.profile_extract_first_at_messages ?? 3}
+              />
+              <Field
+                label="Then every N messages"
+                name="profile_extract_every_n_messages"
+                type="number"
+                min={1}
+                step={1}
+                defaultValue={clone?.profile_extract_every_n_messages ?? 10}
+              />
+            </div>
           </div>
         </Section>
       </div>

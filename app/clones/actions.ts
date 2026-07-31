@@ -554,6 +554,31 @@ function rowFromForm(fd: FormData) {
     voice_keywords: str(fd, "voice_keywords"),
     tease_keywords: str(fd, "tease_keywords"),
 
+    // Migration 099 (batch 2 advanced dials). Percent fields clamp 0-100;
+    // integer thresholds floor at 1 so a missing/blank field never stores a
+    // meaningless 0. Defaults mirror the hardcoded constants they replace.
+    reaction_ambient_chance_pct: Math.min(100, Math.max(0, num(fd, "reaction_ambient_chance_pct", 10))),
+    message_effect_chance_pct: Math.min(100, Math.max(0, num(fd, "message_effect_chance_pct", 25))),
+    priority_wait_factor_pct: Math.min(100, Math.max(1, num(fd, "priority_wait_factor_pct", 35))),
+    gap_nudge_threshold_hours: Math.max(1, num(fd, "gap_nudge_threshold_hours", 6)),
+    onboarding_max_messages: Math.max(1, num(fd, "onboarding_max_messages", 30)),
+    onboarding_step_max_attempts: Math.max(1, num(fd, "onboarding_step_max_attempts", 3)),
+    onboarding_condition_window_messages: Math.max(1, num(fd, "onboarding_condition_window_messages", 10)),
+    profile_extract_first_at_messages: Math.max(1, num(fd, "profile_extract_first_at_messages", 3)),
+    profile_extract_every_n_messages: Math.max(1, num(fd, "profile_extract_every_n_messages", 10)),
+    // Spend-tier thresholds in Stars. The dial-conflict warning in the UI is
+    // the signal for a non-descending set, same as bubble_delay_min/max above;
+    // this is NOT auto-corrected here on purpose.
+    spend_tier_whale_stars: Math.max(1, num(fd, "spend_tier_whale_stars", 1000)),
+    spend_tier_high_stars: Math.max(1, num(fd, "spend_tier_high_stars", 300)),
+    spend_tier_mid_stars: Math.max(1, num(fd, "spend_tier_mid_stars", 50)),
+    spoil_context_lookback_messages: Math.max(1, num(fd, "spoil_context_lookback_messages", 6)),
+
+    // Migration 098. Default false = today's unchanged onboarding behavior;
+    // fd.get(...) !== "true" would invert that on a form that doesn't render
+    // the field, so this reads the affirmative case explicitly instead.
+    strict_onboarding_steps: fd.get("strict_onboarding_steps") === "true",
+
     // time awareness (IANA tz; runtime injects her current local date/time)
     timezone: str(fd, "timezone") ?? "UTC",
     // Migration 084. The timezone above is HERS. fan_time_mode is what she does
@@ -844,6 +869,33 @@ const ADVANCED_097_COLUMNS = [
   "voice_keywords",
   "tease_keywords",
 ] as const;
+// Migration 098: the strict-onboarding-steps gate. Stripping degrades to
+// today: absent, the bot's mapClone falls back to false, which is exactly
+// this migration's default and today's unchanged behavior.
+// See bot/db/migrations/098_strict_onboarding_steps.sql.
+const STRICT_098_COLUMNS = ["strict_onboarding_steps"] as const;
+// Migration 099: 11 more advanced dials (reaction/effect frequency, priority
+// VIP wait factor, gap-nudge threshold, onboarding message/attempt/window
+// caps, fan-profile extraction cadence, spend-tier thresholds, spoil-context
+// lookback). Listed so a save against a stack where 099 has not run yet
+// strips them and still succeeds; stripping is safe because each of these
+// defaults reproduces the hardcoded constant it replaces.
+// See bot/db/migrations/099_advanced_dials_batch2.sql.
+const ADVANCED_099_COLUMNS = [
+  "reaction_ambient_chance_pct",
+  "message_effect_chance_pct",
+  "priority_wait_factor_pct",
+  "gap_nudge_threshold_hours",
+  "onboarding_max_messages",
+  "onboarding_step_max_attempts",
+  "onboarding_condition_window_messages",
+  "profile_extract_first_at_messages",
+  "profile_extract_every_n_messages",
+  "spend_tier_whale_stars",
+  "spend_tier_high_stars",
+  "spend_tier_mid_stars",
+  "spoil_context_lookback_messages",
+] as const;
 // The response-pacing, monetization-sequence, re-warm-photo and
 // offer-redirect column lists were removed on 2026-07-27: those columns are no
 // longer written by this form at all, so they cannot appear in the row that
@@ -870,6 +922,8 @@ const OPTIONAL_COLUMNS = [
   ...FLOW_093_COLUMNS,
   ...MONEY_095_COLUMNS,
   ...ADVANCED_097_COLUMNS,
+  ...STRICT_098_COLUMNS,
+  ...ADVANCED_099_COLUMNS,
 ] as const;
 
 function withoutPersonaFactColumns(row: Record<string, unknown>): Record<string, unknown> {

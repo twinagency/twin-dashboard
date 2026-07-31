@@ -197,6 +197,22 @@ export type CloneConfigState = {
   discountAbsoluteMaxPct: number;
   realismEffectsEnabled: boolean;
 
+  // Migration 099 (batch 2 advanced dials). Percent/frequency dials and the
+  // spend-tier thresholds are controlled the same way discountAbsoluteMaxPct
+  // is above: Sliders always are, and the spend tiers need a live value so
+  // their descending-order conflict warning updates before Save. The rest
+  // (gap/onboarding/profile-extraction/spoil-lookback counts) are plain
+  // uncontrolled Fields, same pattern as tip_max_stars.
+  reactionAmbientChancePct: number;
+  messageEffectChancePct: number;
+  priorityWaitFactorPct: number;
+  spendTierWhaleStars: number;
+  spendTierHighStars: number;
+  spendTierMidStars: number;
+
+  // Migration 098. Master on/off for the strict-onboarding-steps gate.
+  strictOnboardingSteps: boolean;
+
   dripEnabled: boolean;
 
   smartPaywall: boolean;
@@ -347,6 +363,18 @@ function initial(clone?: Partial<Clone>): CloneConfigState {
     llmMaxTries: clone?.llm_max_tries ?? 3,
     discountAbsoluteMaxPct: clone?.discount_absolute_max_pct ?? 90,
     realismEffectsEnabled: clone?.realism_effects_enabled ?? true,
+
+    // Migration 099 advanced dials. Defaults mirror the hardcoded constants
+    // they replace, same convention as the migration 097 block above.
+    reactionAmbientChancePct: clone?.reaction_ambient_chance_pct ?? 10,
+    messageEffectChancePct: clone?.message_effect_chance_pct ?? 25,
+    priorityWaitFactorPct: clone?.priority_wait_factor_pct ?? 35,
+    spendTierWhaleStars: clone?.spend_tier_whale_stars ?? 1000,
+    spendTierHighStars: clone?.spend_tier_high_stars ?? 300,
+    spendTierMidStars: clone?.spend_tier_mid_stars ?? 50,
+
+    // Migration 098. Default false = today's unchanged onboarding behavior.
+    strictOnboardingSteps: clone?.strict_onboarding_steps ?? false,
 
     dripEnabled: clone?.drip_enabled ?? true,
 

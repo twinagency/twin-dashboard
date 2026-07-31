@@ -94,6 +94,8 @@ const FEATURE_LABELS: Record<CloneToggleField, string> = {
   emojis_enabled: "Emojis",
   discounts_enabled: "Discounts",
   smart_paywall_enabled: "Smart paywall",
+  realism_effects_enabled: "Reactions & message effects",
+  strict_onboarding_steps: "Strict onboarding steps",
 };
 
 async function execSetCloneFeature(args: Record<string, unknown>): Promise<unknown> {

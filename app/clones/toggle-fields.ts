@@ -30,6 +30,12 @@ export const CLONE_TOGGLE_FIELDS = [
   // flip it back on. The column stays in the DB and the bot still reads it;
   // only the ability to write it through this generic toggle path is removed.
   "smart_paywall_enabled",
+  // Migration 097. Combined reactions/message-effects master switch, already
+  // live and now surfaced to the /ai assistant's write tools too.
+  "realism_effects_enabled",
+  // Migration 098. Strict-onboarding-steps gate. Plain boolean, same shape as
+  // every other entry here.
+  "strict_onboarding_steps",
 ] as const;
 export type CloneToggleField = (typeof CLONE_TOGGLE_FIELDS)[number];
 

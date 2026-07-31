@@ -289,6 +289,51 @@ export type Clone = {
   voice_keywords?: string | null;
   tease_keywords?: string | null;
 
+  /** Migration 099 (batch 2 advanced dials). How often she drops a reaction
+   *  emoji on an ordinary (non-hot) message. Independent of
+   *  realism_effects_enabled, which is the master on/off; this is frequency,
+   *  not availability. Default 10. Read by bot/src/flows/realism.ts. */
+  reaction_ambient_chance_pct?: number;
+  /** Migration 099. How often a hot/flirty line gets an animated Telegram
+   *  message effect (fire/heart). Default 25. Read by bot/src/flows/realism.ts. */
+  message_effect_chance_pct?: number;
+  /** Migration 099. Priority/VIP fans wait this % of the normal reply delay
+   *  before she replies (lower = faster). Default 35. */
+  priority_wait_factor_pct?: number;
+  /** Migration 099. Hours since the fan's last message before the
+   *  "it's been a while" gap-awareness line is allowed to fire. Default 6. */
+  gap_nudge_threshold_hours?: number;
+  /** Migration 099. Hard ceiling on onboarding messages before the free
+   *  onboarding phase force-ends. Default 30. */
+  onboarding_max_messages?: number;
+  /** Migration 099. How many times a single onboarding step may retry before
+   *  the engine gives up on it. Default 3. */
+  onboarding_step_max_attempts?: number;
+  /** Migration 099. Message window an onboarding step's "if" condition is
+   *  evaluated against. Default 10. */
+  onboarding_condition_window_messages?: number;
+  /** Migration 099. Fan-profile extraction cadence: first extraction at this
+   *  many messages, then every N after. Defaults 3 / 10. */
+  profile_extract_first_at_messages?: number;
+  profile_extract_every_n_messages?: number;
+  /** Migration 099. Spend-tier thresholds in Stars, used to bucket a fan into
+   *  none/low/mid/high/whale for discount-tier and pacing decisions. Must stay
+   *  strictly descending (whale > high > mid) or the tiering breaks; the
+   *  dashboard shows a conflict warning otherwise. Defaults 1000 / 300 / 50. */
+  spend_tier_whale_stars?: number;
+  spend_tier_high_stars?: number;
+  spend_tier_mid_stars?: number;
+  /** Migration 099. How many recent messages the spoil-context window looks
+   *  back over. Default 6. */
+  spoil_context_lookback_messages?: number;
+
+  /** Migration 098. When true, blocks self-initiated AND fan-requested
+   *  photo/video/bundle/tip/vip actions while the fan's current onboarding
+   *  step is a text/voice step, keeping her on-script. Default false = today's
+   *  unchanged behavior. Read by the STRICT ONBOARDING HOLD in
+   *  bot/src/handler.ts runSmartTurn. */
+  strict_onboarding_steps?: boolean;
+
   // IANA timezone (e.g. "America/New_York"); drives her in-prompt time awareness.
   timezone: string;
   // Migration 084. `timezone` above is HERS. This is what she does about the

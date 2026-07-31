@@ -52,6 +52,18 @@ export const ALLOWLIST: Record<string, string[]> = {
     "drip_active_window_minutes", "winback_lapse_days", "followup_after_minutes",
     "timezone", "gender", "hometown", "current_city", "occupation", "vibe_preset",
     "deployed_at", "created_at", "updated_at",
+    // Migration 097 advanced dials, already live.
+    "bubble_delay_min_ms", "bubble_delay_max_ms", "silence_fallback_cooldown_seconds",
+    "llm_max_tries", "discount_absolute_max_pct", "tip_max_stars", "realism_effects_enabled",
+    "media_keywords", "voice_keywords", "tease_keywords", "tip_reask_cooldown_seconds",
+    // Migration 099 advanced dials, batch 2.
+    "reaction_ambient_chance_pct", "message_effect_chance_pct", "priority_wait_factor_pct",
+    "gap_nudge_threshold_hours", "onboarding_max_messages", "onboarding_step_max_attempts",
+    "onboarding_condition_window_messages", "profile_extract_first_at_messages",
+    "profile_extract_every_n_messages", "spend_tier_whale_stars", "spend_tier_high_stars",
+    "spend_tier_mid_stars", "spoil_context_lookback_messages",
+    // Migration 098.
+    "strict_onboarding_steps",
   ],
   fan_profiles: ["user_id", "clone_id", "summary", "interests", "details", "preferences", "extracted_msg_count", "updated_at", "created_at"],
   feedback_items: ["id", "type", "title", "body", "status", "severity", "clone_id", "source", "created_at", "updated_at"],
