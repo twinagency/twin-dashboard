@@ -1507,6 +1507,12 @@ export default function ConfigSections({
                 <Warning text={spendTierConflict.text} detail={spendTierConflict.detail} />
               </div>
             )}
+            <div className="mt-1.5">
+              <Warning
+                text="This dial does not take effect yet. Every fan's actual spend tier is still computed by a fixed database rule (1000/300/50 Stars), which cannot read this clone's thresholds."
+                detail="users.spend_tier is a Postgres GENERATED column, and a generated column can only reference other fields on the same row, never another table like clones. Moving these sliders saves cleanly and looks live, but has no effect until that column is converted to a regular column set by application code or a trigger. Known gap, tracked as follow-up work, not deployed."
+              />
+            </div>
           </div>
           <div className="border-t border-line pt-2">
             <Field
