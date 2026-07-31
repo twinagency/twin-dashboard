@@ -106,6 +106,12 @@ export default function TwinPanel({ open, onClose }: { open: boolean; onClose: (
             } else if (e.type === "token") {
               setLabel(null);
               patchLast((t) => ({ ...t, content: t.content + (e.text as string) }));
+            } else if (e.type === "correction") {
+              // Code-enforced em-dash strip (route.ts) ran once over the whole
+              // completed message and found something to fix. Swap the
+              // displayed content for the cleaned version rather than
+              // trusting what already streamed in.
+              patchLast((t) => ({ ...t, content: e.text as string }));
             } else if (e.type === "tool_call") {
               setLabel((e.label as string) ?? "Working on it");
             } else if (e.type === "proposal") {
@@ -250,7 +256,7 @@ export default function TwinPanel({ open, onClose }: { open: boolean; onClose: (
           <span className="h-2 w-2 rounded-full bg-cyan-400 shadow-[0_0_10px_currentColor]" />
           <span className="font-heading text-sm font-semibold tracking-tight text-ink">Twin</span>
           <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-ink/40">
-            {pending ? (label ?? "Working") : "Ready"}
+            {pending ? "" : "Ready"}
           </span>
           <button
             type="button"
