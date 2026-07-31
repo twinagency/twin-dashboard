@@ -5,7 +5,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { compileClone } from "@/lib/compiler";
 import { INTAKE_FIELD_KEYS, assembleAnswers } from "@/lib/intake";
 import { vibePresetFor } from "@/lib/vibes";
-import { CLONE_TOGGLE_FIELDS, type CloneToggleField } from "./toggle-fields";
+import { CLONE_TOGGLE_FIELDS, type CloneToggleField, CLONE_DIAL_FIELDS, type CloneDialField } from "./toggle-fields";
 
 // Gather the structured intake_<key> fields into { fields, answers } where
 // `answers` is the labelled blob the AI compiler reads (prose + a structured-
@@ -1023,6 +1023,28 @@ export async function setStatus(id: string, status: "active" | "paused") {
 export async function setCloneToggle(id: string, field: CloneToggleField, value: boolean) {
   if (!CLONE_TOGGLE_FIELDS.includes(field)) throw new Error(`field not allowed: ${String(field)}`);
   if (typeof value !== "boolean") throw new Error("value must be a boolean");
+  const { error } = await supabaseAdmin
+    .from("clones")
+    .update({ [field]: value, updated_at: new Date().toISOString() })
+    .eq("id", id);
+  if (error) throw new Error(error.message);
+  revalidatePath("/");
+  revalidatePath(`/clones/${id}`);
+}
+
+// Same shape as setCloneToggle above, for the tone/behavior "dial" columns
+// (sexual_level, push_level, warmth_level, etc. — see CLONE_DIAL_FIELDS in
+// ./toggle-fields.ts) instead of booleans. Used by the /ai assistant's write
+// tools so it can move one dial without reconstructing the whole Configure
+// form. Not a generic "update any column, any value" action: field must be one
+// of the named CLONE_DIAL_FIELDS keys, and value must be one of THAT field's
+// exact allowed enum steps — an out-of-range value is rejected, never clamped.
+export async function setCloneDial(id: string, field: CloneDialField, value: string) {
+  const allowed = CLONE_DIAL_FIELDS[field];
+  if (!allowed) throw new Error(`field not allowed: ${String(field)}`);
+  if (!(allowed as readonly string[]).includes(value)) {
+    throw new Error(`value not allowed for "${field}": "${value}". Allowed: ${allowed.join(", ")}`);
+  }
   const { error } = await supabaseAdmin
     .from("clones")
     .update({ [field]: value, updated_at: new Date().toISOString() })

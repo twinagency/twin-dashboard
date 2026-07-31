@@ -53,6 +53,12 @@ export function describeProposal(tool: string, args: Record<string, unknown>): {
         heavy: false,
       };
     }
+    case "setCloneDial": {
+      return {
+        summary: `Set "${str(args.field)}" to "${str(args.value)}" for clone ${str(args.clone)}.`,
+        heavy: false,
+      };
+    }
     case "setCloneStatus": {
       const paused = args.status === "paused";
       return {

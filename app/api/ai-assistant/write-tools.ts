@@ -3,9 +3,10 @@ import type { OrToolDef } from "@/lib/openrouter";
 import {
   setStatus as setCloneStatusAction,
   setCloneToggle,
+  setCloneDial,
   compileCloneAction,
 } from "@/app/clones/actions";
-import { CLONE_TOGGLE_FIELDS, type CloneToggleField } from "@/app/clones/toggle-fields";
+import { CLONE_TOGGLE_FIELDS, type CloneToggleField, CLONE_DIAL_FIELDS, CLONE_DIAL_FIELD_NAMES, type CloneDialField } from "@/app/clones/toggle-fields";
 import {
   setCredits as setFanCreditsAction,
   toggleActive as toggleFanActiveAction,
@@ -110,6 +111,41 @@ async function execSetCloneFeature(args: Record<string, unknown>): Promise<unkno
   return { ok: true, summary };
 }
 
+const DIAL_LABELS: Record<CloneDialField, string> = {
+  sexual_level: "Flirtiness",
+  nsfw_level: "Explicitness",
+  push_level: "Content pushing",
+  warmth_level: "Warmth",
+  curiosity_level: "Curiosity",
+  playfulness_level: "Playfulness",
+  attentiveness_level: "Attentiveness",
+  emoji_amount: "Emoji amount",
+};
+
+// Tone/behavior dial, NOT a boolean and NOT money — see CLONE_DIAL_FIELDS
+// (app/clones/toggle-fields.ts) for the exact allowed value per field. Every
+// dial here is an enum-valued text column with a small fixed set of legal
+// steps, so out-of-range values are rejected by setCloneDial itself, not
+// clamped to the nearest one.
+async function execSetCloneDial(args: Record<string, unknown>): Promise<unknown> {
+  const idOrName = String(args.clone ?? "");
+  const field = String(args.field ?? "") as CloneDialField;
+  const value = String(args.value ?? "");
+  if (!idOrName) return { error: "missing clone" };
+  if (!(field in CLONE_DIAL_FIELDS)) {
+    return { error: `field not allowed: "${field}". Allowed: ${CLONE_DIAL_FIELD_NAMES.join(", ")}` };
+  }
+  const allowed = CLONE_DIAL_FIELDS[field];
+  if (!(allowed as readonly string[]).includes(value)) {
+    return { error: `value not allowed for "${field}": "${value}". Allowed: ${allowed.join(", ")}` };
+  }
+  const { id, name } = await resolveCloneId(idOrName);
+  await setCloneDial(id, field, value);
+  const summary = `Set ${name}'s ${DIAL_LABELS[field]} dial to "${value}".`;
+  await logWrite({ tool: "setCloneDial", summary, cloneId: id, args });
+  return { ok: true, summary };
+}
+
 async function execSetCloneStatus(args: Record<string, unknown>): Promise<unknown> {
   const idOrName = String(args.clone ?? "");
   const status = String(args.status ?? "");
@@ -209,6 +245,8 @@ export async function executeWriteTool(name: string, args: Record<string, unknow
   switch (name) {
     case "setCloneFeature":
       return execSetCloneFeature(args);
+    case "setCloneDial":
+      return execSetCloneDial(args);
     case "setCloneStatus":
       return execSetCloneStatus(args);
     case "recompileClonePersona":
@@ -228,6 +266,7 @@ export async function executeWriteTool(name: string, args: Record<string, unknow
 
 export const WRITE_TOOL_NAMES = new Set([
   "setCloneFeature",
+  "setCloneDial",
   "setCloneStatus",
   "recompileClonePersona",
   "setFanCredits",
@@ -253,6 +292,28 @@ export const WRITE_TOOL_DEFS: OrToolDef[] = [
           enabled: { type: "boolean" },
         },
         required: ["clone", "field", "enabled"],
+      },
+    },
+  },
+  {
+    type: "function",
+    function: {
+      name: "setCloneDial",
+      description:
+        "Move one tone/behavior dial for a clone to a specific step. This is a real write - it changes the live " +
+        "bot's prompt. Each field has its own small fixed set of legal values (an enum, not a free number); an " +
+        "out-of-range value is rejected, not clamped. Allowed fields and their exact allowed values: " +
+        Object.entries(CLONE_DIAL_FIELDS).map(([f, vals]) => `${f} (${vals.join("/")})`).join(", ") +
+        ". Never call this for anything money-related - prices, discount percentages and credit pack cost are " +
+        "never dials and are never in this list.",
+      parameters: {
+        type: "object",
+        properties: {
+          clone: { type: "string", description: "Clone UUID or exact name (e.g. \"Aria\")." },
+          field: { type: "string", enum: CLONE_DIAL_FIELD_NAMES as unknown as string[] },
+          value: { type: "string", description: "Must be one of that field's allowed values." },
+        },
+        required: ["clone", "field", "value"],
       },
     },
   },

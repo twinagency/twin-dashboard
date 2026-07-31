@@ -32,3 +32,32 @@ export const CLONE_TOGGLE_FIELDS = [
   "smart_paywall_enabled",
 ] as const;
 export type CloneToggleField = (typeof CLONE_TOGGLE_FIELDS)[number];
+
+// CLONE_DIAL_FIELDS is the hardcoded allowlist for the tone/behavior "dial"
+// columns (components/clone/ConfigSections.tsx's SEG-driven Segmented
+// controls) — used by setCloneDial (app/clones/actions.ts) and the /ai
+// assistant's write tools (app/api/ai-assistant/write-tools.ts). Every dial
+// here is a text/enum column with a small fixed set of legal values (there is
+// no numeric range on this schema — these are enum steps, not integers), so
+// each entry is the exact allowed-value list, taken straight from ConfigSections
+// SEG and actions.ts's HEAT_LEVELS/PUSH_LEVELS/TONE_LEVELS. A value outside its
+// list is rejected, never clamped to the nearest step.
+//
+// Deliberately EXCLUDES anything price/discount/tier-cap/money related, even
+// though it's numeric elsewhere in this schema (starting_credits,
+// credit_pack_price_stars, discount_max_*, subscription_tiers) — those never
+// belong in an AI-writable allowlist. Also excludes tip_push_level: unlike the
+// other dials it is nullable and "" means "inherit push_level", not a plain
+// enum step, and that extra null-handling isn't worth it for a first cut.
+export const CLONE_DIAL_FIELDS = {
+  sexual_level: ["off", "mild", "medium", "explicit", "max", "low", "high"],
+  nsfw_level: ["off", "mild", "medium", "explicit", "max", "low", "high"],
+  push_level: ["none", "low", "medium", "high", "relentless"],
+  warmth_level: ["off", "low", "medium", "high", "max"],
+  curiosity_level: ["off", "low", "medium", "high", "max"],
+  playfulness_level: ["off", "low", "medium", "high", "max"],
+  attentiveness_level: ["off", "low", "medium", "high", "max"],
+  emoji_amount: ["low", "medium", "high"],
+} as const satisfies Record<string, readonly string[]>;
+export type CloneDialField = keyof typeof CLONE_DIAL_FIELDS;
+export const CLONE_DIAL_FIELD_NAMES = Object.keys(CLONE_DIAL_FIELDS) as CloneDialField[];

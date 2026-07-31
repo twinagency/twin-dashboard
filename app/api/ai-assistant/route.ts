@@ -5,7 +5,7 @@ import { WRITE_TOOL_DEFS, WRITE_TOOL_NAMES } from "./write-tools";
 import { NAV_TOOL_DEFS, NAV_TOOL_NAMES, resolveNavTool } from "./nav-tools";
 import { describeProposal, type Proposal } from "./proposals";
 import { createConversation, appendMessage, getConversationMessages } from "./db";
-import { CLONE_TOGGLE_FIELDS } from "@/app/clones/toggle-fields";
+import { CLONE_TOGGLE_FIELDS, CLONE_DIAL_FIELDS } from "@/app/clones/toggle-fields";
 
 export const dynamic = "force-dynamic";
 export const maxDuration = 120;
@@ -43,17 +43,23 @@ const SYSTEM_PROMPT =
   "API keys) are excluded entirely and no tool can return them. If a tool errors or something is not " +
   "allowlisted, say so plainly instead of guessing.\n\n" +
   "WRITES ARE PROPOSALS, NOT ACTIONS. You have a small fixed set of write tools (turn a named feature " +
-  "on/off for a clone, pause/resume a clone, recompile a persona, adjust or reset a fan's credits, " +
-  "activate/deactivate or block/unblock a fan). Calling one does NOT change anything: it puts an " +
-  "approval card in front of the operator and waits. Nothing is applied until they press Approve. So " +
-  "after calling a write tool, say in ONE line what you've queued and that it needs their tap - never " +
-  "say you have changed, turned on, or updated anything, because at that moment you have not. There is " +
-  "no generic 'change this column' tool; if a change isn't covered, say so in one line and open or name " +
-  "the page where it is done. Never invent or compute a price, a Star amount, or a discount percentage " +
-  "- you may only flip a feature's ON/OFF switch, the numbers are set elsewhere and stay code-locked. " +
-  "If it's ambiguous which clone or fan they mean, ask before proposing.\n\n" +
+  "on/off for a clone, move one tone/behavior dial to a specific step, pause/resume a clone, recompile a " +
+  "persona, adjust or reset a fan's credits, activate/deactivate or block/unblock a fan). Calling one does " +
+  "NOT change anything: it puts an approval card in front of the operator and waits. Nothing is applied " +
+  "until they press Approve. So after calling a write tool, say in ONE line what you've queued and that it " +
+  "needs their tap - never say you have changed, turned on, or updated anything, because at that moment you " +
+  "have not. There is no generic 'change this column' tool; if a change isn't covered, say so in one line and " +
+  "open or name the page where it is done. Never invent or compute a price, a Star amount, or a discount " +
+  "percentage - you may only flip a feature's ON/OFF switch or move a tone/behavior dial to one of its named " +
+  "steps, the money numbers are set elsewhere and stay code-locked. If it's ambiguous which clone or fan they " +
+  "mean, ask before proposing.\n\n" +
   "Money amounts in this system are Telegram Stars, not dollars, unless a row has an explicit *_usd " +
   "field. Never use em dashes in your replies.\n\n" +
+  "MONEY AND INSIGHT QUESTIONS ARE ANSWERED ONLY WHEN ASKED. Diagnostic or recommendation answers (what's " +
+  "wrong, what dial to change, who's underperforming, what looks misconfigured) are Q&A only: use the read " +
+  "tools (queryTable, getTopSpenders, getRecentErrors, system_logs, usage_events) to answer an explicit " +
+  "question like that, but never volunteer a diagnosis, a recommendation, or a money observation unprompted " +
+  "in a reply about something else.\n\n" +
   // The TEST RUNS paragraph was removed on 2026-07-31 with the last of the
   // test-run tools. Leaving it in told the model that three tools it does not
   // have are available, which is how a model ends up promising the user a run
@@ -67,13 +73,14 @@ const SYSTEM_PROMPT =
   "(sexual_level/nsfw_level/push_level, emoji settings, ai_mode/smart_split, models, welcome/paywall " +
   "instructions, etc). State each recommendation with a one-line reason, never just 'you should change X'. " +
   `Exactly these fields are ones you can propose flipping, with setCloneFeature: ` +
-  `${CLONE_TOGGLE_FIELDS.join(", ")}. For every other column (dials like sexual_level/` +
-  "nsfw_level/push_level/emoji_amount, ai_mode/smart_split, any *_model, any money field like " +
-  "starting_credits/credit_pack_price_stars/discount_max_*, campaign or onboarding text, persona facts) " +
-  "you have no write tool - recommend it in plain words and say specifically where in the dashboard to " +
-  "change it (e.g. 'Configure > Personality & style', 'Configure > Credits & paywall', the Campaigns page), " +
-  "never claim to have applied it. Never invent, recommend a specific number for, or apply any money value " +
-  "- amounts are always the operator's call.";
+  `${CLONE_TOGGLE_FIELDS.join(", ")}. Exactly these fields are ones you can propose moving to a new step, ` +
+  `with setCloneDial (each has its own fixed allowed values, given in that tool's schema): ` +
+  `${Object.keys(CLONE_DIAL_FIELDS).join(", ")}. For every other column (ai_mode/smart_split, any *_model, ` +
+  "any money field like starting_credits/credit_pack_price_stars/discount_max_*, campaign or onboarding " +
+  "text, persona facts) you have no write tool - recommend it in plain words and say specifically where in " +
+  "the dashboard to change it (e.g. 'Configure > Personality & style', 'Configure > Credits & paywall', the " +
+  "Campaigns page), never claim to have applied it. Never invent, recommend a specific number for, or apply " +
+  "any money value - amounts are always the operator's call.";
 
 // Labels for write tools now describe PROPOSING, not doing. "Updating a
 // setting" while nothing is being updated is exactly the kind of small lie that
@@ -85,6 +92,7 @@ const TOOL_LABELS: Record<string, string> = {
   openPage: "Opening it",
   openClonePage: "Opening it",
   setCloneFeature: "Preparing a setting change",
+  setCloneDial: "Proposing a dial change",
   setCloneStatus: "Preparing a status change",
   recompileClonePersona: "Preparing a persona recompile",
   setFanCredits: "Preparing a credit change",
@@ -97,6 +105,19 @@ const ALL_TOOL_DEFS = [...TOOL_DEFS, ...WRITE_TOOL_DEFS, ...NAV_TOOL_DEFS];
 
 function sse(event: Record<string, unknown>): string {
   return `data: ${JSON.stringify(event)}\n\n`;
+}
+
+// Code-enforced backstop for the "never use em dashes" rule in SYSTEM_PROMPT
+// above. Prompt rules on this project have been measured to not hold on their
+// own (dials, anti-fabrication and the money rule are all ignored some of the
+// time), so this cannot depend on the model obeying it. Deliberately run ONCE
+// over the whole assembled message, never per-token: an em dash character
+// itself can't split across streamed chunks, but the surrounding whitespace
+// pattern (" — ") can, and a per-token replace could miss it or double-replace
+// a partial match. See the `correction` SSE event below, sent once per
+// completed assistant turn.
+function stripEmDashes(text: string): string {
+  return text.replace(/\s*—\s*/g, ", ").replace(/—/g, ", ");
 }
 
 export async function POST(req: NextRequest) {
@@ -195,6 +216,16 @@ export async function POST(req: NextRequest) {
           } else if (evt.type === "error") {
             send({ type: "error", message: evt.message });
           }
+        }
+
+        // One pass, once, over the whole completed message - see stripEmDashes
+        // above for why this isn't done per-token. If the model ignored the
+        // prompt's "never use em dashes" rule, the client is told to swap in
+        // the cleaned text instead of trusting what already streamed.
+        const cleaned = stripEmDashes(assistantText);
+        if (cleaned !== assistantText) {
+          assistantText = cleaned;
+          send({ type: "correction", text: cleaned });
         }
 
         if (assistantText.trim()) {
