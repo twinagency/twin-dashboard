@@ -30,6 +30,14 @@ Run locally: `npm run dev`. The `dev` script hardcodes `-p 3001`; pass `-- -p 30
 
 **`app/clones/actions.ts`** `rowFromForm()` maps form fields to DB columns. It has a missing-column retry path: on a PostgREST missing-column error it strips columns from unapplied migrations and retries, so the dashboard keeps working before the owner applies a migration. Extend this when adding columns.
 
+## The half-wired toggle
+
+This project's dominant defect is **"configured but inert"**: a setting saves, looks right in the UI, and the runtime never reads it. Ten confirmed cases. Adding or changing a toggle means walking the whole chain:
+
+`migration` → `mapClone` → **both repos'** types → `app/clones/actions.ts` (including `OPTIONAL_COLUMNS`, so a save before the migration lands strips the column instead of failing) → `useCloneConfig` → the control itself → **and the bot code that actually reads it**
+
+`mapClone` is the #1 silent failure point. A half-wired toggle is worse than no toggle, and a dead switch left in the UI after a feature is removed is the same bug in reverse. Before deleting a config section, check it is not a **brake** — deleting a brake makes the bot pushier, which has already happened once.
+
 ## Identity data principle
 
 Anything a fan can ask a factual question about must be a typed column, never intake prose. Prose passes through the AI compiler which can drop or mutate facts. If a field can be a toggle, switch, select, or chip set, make it one. Free text only where the content genuinely cannot be enumerated.
