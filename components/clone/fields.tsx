@@ -273,6 +273,39 @@ export function Info({ text, className = "" }: { text: string; className?: strin
   );
 }
 
+// ── Warning banner ────────────────────────────────────────────────────────────
+// A caution at the head of a group of settings that can cost money or loosen a
+// brake. Deliberately ONE visible sentence plus an ⓘ for the detail: a full
+// grey paragraph is the exact pattern the rest of this file exists to avoid, so
+// this is not a licence to reintroduce one under a yellow border.
+export function Warning({
+  text,
+  detail,
+  className = "",
+}: {
+  text: string;
+  detail?: string;
+  className?: string;
+}) {
+  return (
+    <div
+      role="note"
+      className={
+        "flex items-start gap-2 rounded-xl border border-warn/30 bg-warn/10 px-3 py-2 text-[12px] leading-relaxed text-ink " +
+        className
+      }
+    >
+      <span aria-hidden className="mt-px shrink-0 text-warn">
+        ⚠
+      </span>
+      <span className="min-w-0">
+        {text}
+        {detail && <Info text={detail} className="ml-1 align-middle" />}
+      </span>
+    </div>
+  );
+}
+
 // ── Field label ───────────────────────────────────────────────────────────────
 // One label row for every control. A `hint` becomes a hoverable ⓘ rather than a
 // grey sentence under the input — those explanation lines were costing a line

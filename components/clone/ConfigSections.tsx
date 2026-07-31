@@ -27,6 +27,7 @@ import {
   Toggle,
   ToggleCard,
   WEAK,
+  Warning,
   inputCls,
   selectCls,
 } from "./fields";
@@ -865,6 +866,18 @@ export default function ConfigSections({
           shared across tabs regardless of which one is visible, so nothing
           here needs its own hidden-input duplication. */}
       <div className={show("advanced")}>
+        {/* One caution for the whole tab, not one per card. Everything below
+            either changes what a fan is charged (category pricing, the four
+            discount caps) or relaxes a limit that exists to slow her down (the
+            decline brake, the redirect cap, the eligibility gates, the chat
+            slowdown gap). Raising a cap here makes her pushier, which is the
+            failure mode that has actually bitten this project before. Spans
+            both columns: this grid is xl:grid-cols-2. */}
+        <Warning
+          className="xl:col-span-2"
+          text="Power settings. Several of these are brakes, and raising one makes her push harder for money."
+          detail="Category pricing and the discount caps change what fans are actually charged. The decline brake, the redirect cap, the eligibility gates and the chat slowdown gap are limits that stop her re-offering too soon, so raising them makes her pushier. Change one thing at a time and watch the effect before changing another."
+        />
         {/* Two-model split: only relevant once AI mode (Config) is Smart. The
             ai_mode/smart_split hidden inputs in Config's Connection & mode
             card always submit the current value no matter which tab is open,
