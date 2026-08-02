@@ -17,12 +17,7 @@ import {
 const LINKS: { label: string; href: string }[] = [
   { label: "Revenue", href: "/revenue" },
   { label: "Fans", href: "/users" },
-  // KEPT after the sidebar's AI row was removed on 2026-07-31. The assistant
-  // now opens from the Twin orb, but that orb lives in Sidebar, which is
-  // `hidden ... lg:flex` - so on phone and tablet this link is the ONLY way to
-  // reach it. Removing it here too would have looked tidy and stranded every
-  // small screen. Points at the /ai page, which is why that page still exists.
-  { label: "AI", href: "/ai" },
+  { label: "AI", href: "/jarvis" },
   { label: "Info", href: "/info" },
   { label: "Flows", href: "/flows" },
   { label: "Media", href: "/media" },

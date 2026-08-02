@@ -1,7 +1,9 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
-import TwinPanel from "./TwinPanel";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
+import { AudioLines, Maximize2, Mic, MicOff, Send, Sparkles, Volume2, VolumeX, X } from "lucide-react";
+import { useRouter } from "next/navigation";
 
 type CoreState = "idle" | "listening" | "processing" | "speaking" | "learning";
 
@@ -18,6 +20,20 @@ type NeuralLink = {
   a: number;
   b: number;
   phase: number;
+};
+
+type Satellite = {
+  angle: number;
+  distance: number;
+  elevation: number;
+  phase: number;
+  size: number;
+  speed: number;
+};
+
+type TranscriptLine = {
+  role: "You" | "Twin";
+  text: string;
 };
 
 const STATE_LABELS: Record<CoreState, string> = {
@@ -76,7 +92,17 @@ function makeNeuralSphere(count: number) {
 
 const SPHERE = makeNeuralSphere(216);
 
+const SATELLITES: Satellite[] = Array.from({ length: 14 }, (_, index) => ({
+  angle: (index / 14) * Math.PI * 2 + ((index * 7) % 5) * 0.11,
+  distance: 1.38 + ((index * 13) % 7) * 0.12,
+  elevation: Math.sin(index * 2.17) * 0.72,
+  phase: ((index * 37) % 101) / 101,
+  size: 0.1 + ((index * 11) % 5) * 0.012,
+  speed: (index % 2 === 0 ? 1 : -1) * (0.000035 + (index % 4) * 0.000009),
+}));
+
 export default function TwinAssistant() {
+  const router = useRouter();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stateRef = useRef<CoreState>("idle");
   const hoverRef = useRef(false);
@@ -87,20 +113,19 @@ export default function TwinAssistant() {
   const audioContextRef = useRef<AudioContext | null>(null);
   const micStreamRef = useRef<MediaStream | null>(null);
   const typingPulsesRef = useRef<number[]>([]);
+  const interactionPulsesRef = useRef<number[]>([]);
   const typingEnergyRef = useRef(0);
   const typingActiveUntilRef = useRef(0);
   const typingStatusTimerRef = useRef<number | null>(null);
   const timersRef = useRef<number[]>([]);
   const [state, setState] = useState<CoreState>("idle");
   const [hovered, setHovered] = useState(false);
-  // 2026-07-31: the orb used to carry its own input box, mic button, voice
-  // toggle and two-line transcript right here in the sidebar. None of it was
-  // connected to anything - `submit` replied with a hardcoded "I am here. Your
-  // message has reached the Twin intelligence core." and the mic only fed the
-  // particle animation. The real assistant now lives in TwinPanel, which the
-  // orb opens, so all of that came out rather than sitting next to a working
-  // one looking equally real.
-  const [panelOpen, setPanelOpen] = useState(false);
+  const [voiceMode, setVoiceMode] = useState(true);
+  const [input, setInput] = useState("");
+  const [typingActive, setTypingActive] = useState(false);
+  const [expanded, setExpanded] = useState(false);
+  const [transcript, setTranscript] = useState<TranscriptLine[]>([]);
+  const expandedRef = useRef(false);
 
   useEffect(() => {
     stateRef.current = state;
@@ -109,6 +134,17 @@ export default function TwinAssistant() {
   useEffect(() => {
     hoverRef.current = hovered;
   }, [hovered]);
+
+  useEffect(() => {
+    expandedRef.current = expanded;
+    if (!expanded) return;
+
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setExpanded(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [expanded]);
 
   const clearTimers = useCallback(() => {
     timersRef.current.forEach((timer) => window.clearTimeout(timer));
@@ -173,6 +209,7 @@ export default function TwinAssistant() {
     let previous = performance.now();
     let rotation = 0;
     let smoothLevel = 0;
+    let expansion = 0;
     let width = 220;
     let height = 176;
     let dpr = 1;
@@ -214,6 +251,7 @@ export default function TwinAssistant() {
       const typingTarget = now < typingActiveUntilRef.current ? 1 : 0;
       typingEnergyRef.current += (typingTarget - typingEnergyRef.current) * (typingTarget ? 0.2 : 0.07);
       const typingEnergy = typingEnergyRef.current;
+      expansion += ((expandedRef.current ? 1 : 0) - expansion) * (reducedMotion ? 0.22 : 0.075);
 
       const speed = mode === "processing" ? 0.00062 : mode === "learning" ? 0.0004 : 0.00018;
       rotation += delta * speed * (reducedMotion ? 0.35 : 1);
@@ -222,10 +260,12 @@ export default function TwinAssistant() {
       ctx.clearRect(0, 0, width, height);
 
       const cx = width / 2;
-      const cy = height * 0.47;
-      const baseRadius = Math.min(width * 0.355, height * 0.42);
+      const cy = height * (0.47 + expansion * 0.015);
+      const compactRadius = Math.min(width * 0.345, height * 0.405);
+      const fieldRadius = Math.min(width * 0.205, height * 0.27);
+      const baseRadius = compactRadius + (fieldRadius - compactRadius) * expansion;
       const breathe = reducedMotion ? 1 : 1 + Math.sin(now * 0.0018) * 0.018;
-      const hoverScale = hoverRef.current ? 1.045 : 1;
+      const hoverScale = hoverRef.current ? 1.055 : 1;
       const listeningBreath = mode === "listening"
         ? 0.02 + Math.abs(Math.sin(now * 0.007)) * 0.045 + smoothLevel * 0.105
         : smoothLevel * 0.075;
@@ -233,8 +273,8 @@ export default function TwinAssistant() {
       const reactiveScale = 1 + listeningBreath + typingBreath;
       const processScale = mode === "processing" ? 1 + Math.sin(now * 0.008) * 0.018 : 1;
       const radius = baseRadius * breathe * hoverScale * reactiveScale * processScale;
-      const pointerYaw = pointerRef.current.x * (hoverRef.current ? 0.25 : 0.06);
-      const pointerPitch = pointerRef.current.y * (hoverRef.current ? 0.19 : 0.04);
+      const pointerYaw = pointerRef.current.x * (hoverRef.current ? 0.28 + expansion * 0.16 : 0.06);
+      const pointerPitch = pointerRef.current.y * (hoverRef.current ? 0.2 + expansion * 0.1 : 0.04);
       const tilt = -0.16 + pointerPitch;
 
       const glow = ctx.createRadialGradient(cx, cy, radius * 0.08, cx, cy, radius * 1.28);
@@ -247,28 +287,22 @@ export default function TwinAssistant() {
       ctx.arc(cx, cy, radius * 1.3, 0, Math.PI * 2);
       ctx.fill();
 
-      const core = ctx.createRadialGradient(
-        cx - radius * 0.24,
-        cy - radius * 0.3,
-        radius * 0.04,
-        cx,
-        cy,
-        radius * 1.04,
-      );
-      core.addColorStop(0, "rgba(18, 71, 116, 0.16)");
-      core.addColorStop(0.42, "rgba(7, 39, 82, 0.1)");
-      core.addColorStop(0.78, "rgba(3, 23, 55, 0.05)");
-      core.addColorStop(0.96, "rgba(2, 14, 38, 0.015)");
-      core.addColorStop(1, "rgba(2, 12, 34, 0)");
-      ctx.fillStyle = core;
+      // A slow scanning plane makes the core feel volumetric rather than like a flat spinner.
+      ctx.save();
+      ctx.globalCompositeOperation = "lighter";
+      const scanY = cy - radius + ((now * 0.035) % (radius * 2));
+      const scanWidth = Math.sqrt(Math.max(0, radius ** 2 - (scanY - cy) ** 2));
+      const scanGradient = ctx.createLinearGradient(cx - scanWidth, scanY, cx + scanWidth, scanY);
+      scanGradient.addColorStop(0, "rgba(56, 189, 248, 0)");
+      scanGradient.addColorStop(0.5, `rgba(224, 247, 255, ${0.14 + expansion * 0.13})`);
+      scanGradient.addColorStop(1, "rgba(56, 189, 248, 0)");
+      ctx.strokeStyle = scanGradient;
+      ctx.lineWidth = 0.7;
       ctx.beginPath();
-      ctx.arc(cx, cy, radius * 1.04, 0, Math.PI * 2);
-      ctx.fill();
-
-      ctx.fillStyle = "rgba(0, 0, 0, 0.05)";
-      ctx.beginPath();
-      ctx.arc(cx, cy, radius * 1.01, 0, Math.PI * 2);
-      ctx.fill();
+      ctx.moveTo(cx - scanWidth, scanY);
+      ctx.lineTo(cx + scanWidth, scanY);
+      ctx.stroke();
+      ctx.restore();
 
       ctx.save();
       ctx.globalCompositeOperation = "lighter";
@@ -349,6 +383,125 @@ export default function TwinAssistant() {
         ctx.fill();
       });
 
+      // White-hot glints and short electrical arcs keep the compact sidebar
+      // core alive even when it is resting. They deliberately hug the shell
+      // so the center remains clean and readable as a particle globe.
+      if (!expandedRef.current) {
+        ctx.save();
+        ctx.globalCompositeOperation = "lighter";
+        for (let glint = 0; glint < 5; glint += 1) {
+          const angle = rotation * (glint % 2 === 0 ? 1.4 : -1.1) + glint * 2.17;
+          const glintX = cx + Math.cos(angle) * radius * (0.72 + (glint % 3) * 0.08);
+          const glintY = cy + Math.sin(angle) * radius * (0.72 + (glint % 3) * 0.08);
+          const glintPulse = 0.32 + Math.abs(Math.sin(now * 0.0028 + glint * 1.9)) * 0.42;
+          const glintRadius = 2.4 + glintPulse * 3.4;
+          const whiteGlow = ctx.createRadialGradient(glintX, glintY, 0, glintX, glintY, glintRadius);
+          whiteGlow.addColorStop(0, `rgba(255, 255, 255, ${glintPulse * 0.82})`);
+          whiteGlow.addColorStop(0.2, `rgba(224, 247, 255, ${glintPulse * 0.62})`);
+          whiteGlow.addColorStop(1, "rgba(56, 189, 248, 0)");
+          ctx.fillStyle = whiteGlow;
+          ctx.beginPath();
+          ctx.arc(glintX, glintY, glintRadius, 0, Math.PI * 2);
+          ctx.fill();
+        }
+
+        for (let bolt = 0; bolt < 3; bolt += 1) {
+          const life = (now * 0.00042 + bolt * 0.31) % 1;
+          const boltAlpha = Math.sin(life * Math.PI) * (0.28 + (bolt % 2) * 0.14);
+          if (boltAlpha < 0.05) continue;
+          const startAngle = rotation * (bolt % 2 === 0 ? 1.6 : -1.25) + bolt * 2.11 + life * 0.42;
+          const arcSpan = 0.5 + bolt * 0.12;
+          const segments = 8;
+          const drawBolt = (lineWidth: number, alpha: number, rgb: string) => {
+            ctx.strokeStyle = `rgba(${rgb}, ${alpha * boltAlpha})`;
+            ctx.lineWidth = lineWidth;
+            ctx.beginPath();
+            for (let segment = 0; segment <= segments; segment += 1) {
+              const t = segment / segments;
+              const angle = startAngle + arcSpan * t;
+              const jitter = segment === 0 || segment === segments
+                ? 0
+                : Math.sin(now * 0.026 + bolt * 17 + segment * 9.4) * radius * 0.055;
+              const boltRadius = radius * (1.01 + Math.sin(t * Math.PI) * 0.08) + jitter;
+              const x = cx + Math.cos(angle) * boltRadius;
+              const y = cy + Math.sin(angle) * boltRadius;
+              if (segment === 0) ctx.moveTo(x, y);
+              else ctx.lineTo(x, y);
+            }
+            ctx.stroke();
+          };
+          drawBolt(3.2, 0.2, "56, 189, 248");
+          drawBolt(0.82, 0.94, "248, 254, 255");
+        }
+        ctx.restore();
+      }
+
+      // In field mode the single intelligence core unfolds into a constellation
+      // of smaller atomic systems, echoing a physical hologram being pulled apart.
+      const satelliteAlpha = Math.min(1, 0.08 + expansion * 0.9 + (hoverRef.current ? 0.08 : 0));
+      const spread = 0.28 + expansion * 0.94;
+      SATELLITES.forEach((satellite) => {
+        const angle = satellite.angle + now * satellite.speed + pointerYaw * 0.18;
+        const distance = radius * satellite.distance * spread;
+        const depth = (Math.sin(angle * 1.3 + satellite.phase * 8) + 1) / 2;
+        const sx = cx + Math.cos(angle) * distance;
+        const sy = cy + Math.sin(angle) * distance * 0.58 + satellite.elevation * radius * spread * 0.58;
+        const nodeRadius = Math.max(4, radius * satellite.size * (0.72 + depth * 0.38));
+        const pulse = 0.55 + Math.abs(Math.sin(now * 0.0032 + satellite.phase * 14)) * 0.45;
+
+        ctx.strokeStyle = `rgba(45, 190, 255, ${satelliteAlpha * (0.09 + depth * 0.16)})`;
+        ctx.lineWidth = 0.55;
+        ctx.beginPath();
+        ctx.moveTo(cx + Math.cos(angle) * radius * 0.84, cy + Math.sin(angle) * radius * 0.32);
+        ctx.quadraticCurveTo((cx + sx) / 2, cy + satellite.elevation * radius * 0.24, sx, sy);
+        ctx.stroke();
+
+        const nodeGlow = ctx.createRadialGradient(sx, sy, 0, sx, sy, nodeRadius * 2.7);
+        nodeGlow.addColorStop(0, `rgba(239, 254, 255, ${satelliteAlpha * 0.9})`);
+        nodeGlow.addColorStop(0.18, `rgba(34, 211, 238, ${satelliteAlpha * 0.5})`);
+        nodeGlow.addColorStop(1, "rgba(14, 116, 144, 0)");
+        ctx.fillStyle = nodeGlow;
+        ctx.beginPath();
+        ctx.arc(sx, sy, nodeRadius * 2.7, 0, Math.PI * 2);
+        ctx.fill();
+
+        ctx.save();
+        ctx.translate(sx, sy);
+        ctx.rotate(angle * 0.7);
+        ctx.strokeStyle = `rgba(165, 243, 252, ${satelliteAlpha * (0.34 + pulse * 0.3)})`;
+        ctx.lineWidth = 0.55;
+        ctx.beginPath();
+        ctx.ellipse(0, 0, nodeRadius * 1.85, nodeRadius * 0.62, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.rotate(1.04);
+        ctx.beginPath();
+        ctx.ellipse(0, 0, nodeRadius * 1.55, nodeRadius * 0.52, 0, 0, Math.PI * 2);
+        ctx.stroke();
+        ctx.fillStyle = `rgba(240, 253, 255, ${satelliteAlpha})`;
+        ctx.beginPath();
+        ctx.arc(0, 0, Math.max(1, nodeRadius * 0.16 * pulse), 0, Math.PI * 2);
+        ctx.fill();
+        ctx.restore();
+
+        const transfer = (now * 0.00022 + satellite.phase) % 1;
+        const tx = cx + (sx - cx) * transfer;
+        const ty = cy + (sy - cy) * transfer;
+        ctx.fillStyle = `rgba(224, 247, 255, ${satelliteAlpha * Math.sin(transfer * Math.PI) * 0.85})`;
+        ctx.beginPath();
+        ctx.arc(tx, ty, 0.8 + depth * 0.8, 0, Math.PI * 2);
+        ctx.fill();
+      });
+
+      interactionPulsesRef.current = interactionPulsesRef.current.filter((started) => now - started < 1250);
+      interactionPulsesRef.current.forEach((started) => {
+        const progress = Math.min(1, (now - started) / 1250);
+        ctx.strokeStyle = `rgba(103, 232, 249, ${(1 - progress) * 0.58})`;
+        ctx.lineWidth = 1.2 - progress * 0.7;
+        ctx.beginPath();
+        ctx.arc(cx, cy, radius * (0.52 + progress * (1.9 + expansion)), 0, Math.PI * 2);
+        ctx.stroke();
+      });
+
       typingPulsesRef.current = typingPulsesRef.current.filter((started) => now - started < 1000);
       typingPulsesRef.current.forEach((started, index) => {
         const progress = Math.min(1, (now - started) / 1000);
@@ -378,25 +531,147 @@ export default function TwinAssistant() {
       window.cancelAnimationFrame(frame);
       observer.disconnect();
     };
-  }, []);
+  }, [expanded]);
 
-  const displayLabel = state !== "idle" ? STATE_LABELS[state] : panelOpen ? "Open" : hovered ? "Aware" : STATE_LABELS.idle;
+  const toggleListening = useCallback(async () => {
+    if (stateRef.current === "listening") {
+      stopListening();
+      setState("idle");
+      return;
+    }
 
-  return (
-    <section className="w-full px-1 pb-1" aria-label="Twin AI assistant">
-      <div className="relative">
+    clearTimers();
+    window.speechSynthesis?.cancel();
+    stopListening();
+
+    try {
+      if (!navigator.mediaDevices?.getUserMedia) throw new Error("Microphone unavailable");
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const AudioContextClass = window.AudioContext;
+      const audioContext = new AudioContextClass();
+      const analyser = audioContext.createAnalyser();
+      analyser.fftSize = 256;
+      analyser.smoothingTimeConstant = 0.72;
+      audioContext.createMediaStreamSource(stream).connect(analyser);
+      micStreamRef.current = stream;
+      audioContextRef.current = audioContext;
+      analyserRef.current = analyser;
+      analyserDataRef.current = new Uint8Array(analyser.frequencyBinCount);
+      setState("listening");
+    } catch {
+      setTranscript((lines) => [...lines.slice(-1), { role: "Twin", text: "Microphone access is needed for listening mode." }]);
+      setState("idle");
+    }
+  }, [clearTimers, stopListening]);
+
+  const speakResponse = useCallback((text: string) => {
+    setState("speaking");
+    if (voiceMode && "speechSynthesis" in window) {
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.rate = 0.96;
+      utterance.pitch = 0.92;
+      utterance.volume = 0.82;
+      utterance.onend = () => setState("idle");
+      utterance.onerror = () => setState("idle");
+      window.speechSynthesis.cancel();
+      window.speechSynthesis.speak(utterance);
+      return;
+    }
+
+    const timer = window.setTimeout(() => setState("idle"), 1800);
+    timersRef.current.push(timer);
+  }, [voiceMode]);
+
+  const submit = (event: FormEvent) => {
+    event.preventDefault();
+    const message = input.trim();
+    if (!message) return;
+
+    clearTimers();
+    stopListening();
+    window.speechSynthesis?.cancel();
+    setTranscript((lines) => [...lines.slice(-2), { role: "You", text: message }]);
+    setInput("");
+    setTypingActive(false);
+    typingActiveUntilRef.current = 0;
+    setState("processing");
+
+    const response = "I am here. Your message has reached the Twin intelligence core.";
+    const timer = window.setTimeout(() => {
+      setTranscript((lines) => [...lines.slice(-2), { role: "Twin", text: response }]);
+      speakResponse(response);
+    }, 1350);
+    timersRef.current.push(timer);
+  };
+
+  const displayLabel = state !== "idle" ? STATE_LABELS[state] : typingActive ? "Receiving" : hovered ? "Aware" : STATE_LABELS.idle;
+
+  const assistant = (
+    <section
+      className={
+        expanded
+          ? "fixed inset-0 z-[100] flex items-center justify-center bg-[#020914]/78 p-4 backdrop-blur-md sm:p-8"
+          : "w-full px-1 pb-1"
+      }
+      aria-label="Twin AI assistant"
+      aria-modal={expanded || undefined}
+      role={expanded ? "dialog" : undefined}
+    >
+      <div
+        className={
+          expanded
+            ? "relative w-full max-w-[820px] overflow-hidden rounded-[30px] border border-cyan-300/25 bg-[#031324]/95 p-4 shadow-[0_0_100px_rgba(14,165,233,0.24),inset_0_0_80px_rgba(8,145,178,0.08)] sm:p-6"
+            : "w-full"
+        }
+      >
+        {expanded ? (
+          <div className="flex items-center justify-between px-1 pb-2 text-cyan-50">
+            <div>
+              <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.24em] text-cyan-300/70">
+                <Sparkles className="h-3.5 w-3.5" />
+                Twin neural field
+              </div>
+              <p className="mt-1 text-xs text-cyan-100/45">Move through the field · tap the core to send an impulse</p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setExpanded(false)}
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-cyan-200/20 bg-cyan-100/5 text-cyan-50/75 transition hover:border-cyan-200/45 hover:bg-cyan-100/10 hover:text-white"
+              aria-label="Close neural field"
+              title="Close (Esc)"
+            >
+              <X className="h-4 w-4" />
+            </button>
+          </div>
+        ) : null}
+
+        <div className="group relative">
         <canvas
           ref={canvasRef}
-          className="block h-[176px] w-full touch-none cursor-pointer drop-shadow-[0_0_18px_rgba(56,189,248,0.34)] transition-transform duration-300 hover:scale-[1.03] [@media(max-height:850px)]:h-[148px]"
-          aria-label={`Open Twin assistant. Intelligence core, ${displayLabel.toLowerCase()}`}
+          className={
+            expanded
+              ? "block h-[min(62vh,560px)] min-h-[390px] w-full touch-none cursor-crosshair rounded-2xl bg-[radial-gradient(circle_at_center,rgba(8,47,73,0.34),rgba(2,8,23,0.08)_54%,transparent_76%)] drop-shadow-[0_0_28px_rgba(34,211,238,0.38)]"
+              : "block h-[176px] w-full touch-none cursor-pointer transition [@media(max-height:850px)]:h-[148px]"
+          }
+          aria-label={`Twin intelligence core, ${displayLabel.toLowerCase()}`}
           role="button"
           tabIndex={0}
-          onClick={() => setPanelOpen(true)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter" || event.key === " ") {
-              event.preventDefault();
-              setPanelOpen(true);
+          title={expanded ? "Tap to send an energy impulse" : "Open Twin AI"}
+          onClick={() => {
+            if (!expanded) {
+              router.push("/jarvis");
+              return;
             }
+            interactionPulsesRef.current.push(performance.now());
+          }}
+          onKeyDown={(event) => {
+            if (event.key !== "Enter" && event.key !== " ") return;
+            event.preventDefault();
+            if (!expanded) {
+              router.push("/jarvis");
+              return;
+            }
+            interactionPulsesRef.current.push(performance.now());
           }}
           onPointerEnter={() => setHovered(true)}
           onPointerLeave={() => {
@@ -413,7 +688,7 @@ export default function TwinAssistant() {
         />
         <div
           aria-live="polite"
-          className="pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-center gap-1.5 text-[9px] font-semibold uppercase tracking-[0.16em] text-ink/60"
+          className={"pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-center gap-1.5 text-[9px] font-semibold uppercase tracking-[0.16em] " + (expanded ? "text-cyan-100/60" : "text-ink/60")}
         >
           <span
             className={
@@ -431,17 +706,95 @@ export default function TwinAssistant() {
           />
           {displayLabel}
         </div>
+        {!expanded ? (
+          <div className="pointer-events-none absolute right-1 top-1 flex items-center gap-1 rounded-full border border-cyan-200/35 bg-white/35 px-2 py-1 text-[8px] font-semibold uppercase tracking-[0.12em] text-[#0b4966]/65 opacity-0 shadow-sm backdrop-blur transition group-hover:opacity-100">
+            <Maximize2 className="h-2.5 w-2.5" /> Open AI
+          </div>
+        ) : null}
       </div>
 
-      <button
-        type="button"
-        onClick={() => setPanelOpen(true)}
-        className="mt-1 w-full rounded-lg py-1 text-[9px] font-semibold uppercase tracking-[0.16em] text-ink/45 transition hover:text-ink/70"
-      >
-        {panelOpen ? "Twin is open" : "Tap to talk"}
-      </button>
+      <form onSubmit={submit} className={expanded ? "mx-auto mt-3 max-w-xl" : "mt-2"}>
+        <div className={"flex items-center gap-1 rounded-xl border p-1 shadow-[0_8px_24px_rgb(12_29_56/0.1)] backdrop-blur-md transition focus-within:border-cyan-300/80 " + (expanded ? "border-cyan-200/20 bg-cyan-50/10 focus-within:bg-cyan-50/15" : "border-white/65 bg-white/45 focus-within:bg-white/60")}>
+          <input
+            value={input}
+            onChange={(event) => {
+              setInput(event.target.value);
+              const now = performance.now();
+              typingActiveUntilRef.current = now + 950;
+              typingEnergyRef.current = Math.max(typingEnergyRef.current, 0.42);
+              setTypingActive(true);
+              if (typingStatusTimerRef.current) window.clearTimeout(typingStatusTimerRef.current);
+              typingStatusTimerRef.current = window.setTimeout(() => setTypingActive(false), 1000);
+              const last = typingPulsesRef.current.at(-1) ?? 0;
+              if (now - last > 90) typingPulsesRef.current.push(now);
+            }}
+            placeholder="Ask Twin anything"
+            aria-label="Ask Twin anything"
+            className={"min-w-0 flex-1 bg-transparent px-2 py-1.5 text-[11px] font-medium outline-none " + (expanded ? "text-cyan-50 placeholder:text-cyan-100/35" : "text-ink placeholder:text-ink/45")}
+          />
+          <button
+            type="button"
+            onClick={toggleListening}
+            aria-label={state === "listening" ? "Stop listening" : "Start listening"}
+            aria-pressed={state === "listening"}
+            title={state === "listening" ? "Stop listening" : "Use microphone"}
+            className={
+              "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition " +
+              (state === "listening" ? "bg-cyan-500 text-white shadow-[0_0_12px_rgba(6,182,212,0.5)]" : expanded ? "text-cyan-100/55 hover:bg-cyan-50/10 hover:text-cyan-50" : "text-ink/55 hover:bg-white/70 hover:text-ink")
+            }
+          >
+            {state === "listening" ? <MicOff className="h-3.5 w-3.5" /> : <Mic className="h-3.5 w-3.5" />}
+          </button>
+          <button
+            type="submit"
+            aria-label="Send to Twin"
+            title="Send"
+            disabled={!input.trim()}
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#0b2444] text-white shadow-sm transition hover:bg-[#123a66] disabled:cursor-not-allowed disabled:opacity-35"
+          >
+            <Send className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </form>
 
-      <TwinPanel open={panelOpen} onClose={() => setPanelOpen(false)} />
+      <div className="mt-1.5 flex items-center justify-center gap-2">
+        <button
+          type="button"
+          onClick={() => {
+            setVoiceMode((enabled) => !enabled);
+            if (voiceMode) window.speechSynthesis?.cancel();
+          }}
+          aria-pressed={voiceMode}
+          className={
+            "inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[9px] font-semibold transition " +
+            (voiceMode
+              ? expanded ? "border-cyan-300/30 bg-cyan-100/10 text-cyan-100/75" : "border-cyan-300/60 bg-white/45 text-[#0b4966]"
+              : expanded ? "border-cyan-100/15 bg-white/5 text-cyan-100/40" : "border-white/50 bg-white/25 text-ink/45")
+          }
+        >
+          {voiceMode ? <Volume2 className="h-3 w-3" /> : <VolumeX className="h-3 w-3" />}
+          Voice {voiceMode ? "on" : "off"}
+        </button>
+        <span className={"inline-flex items-center gap-1 text-[9px] font-medium " + (expanded ? "text-cyan-100/40" : "text-ink/40")}>
+          <AudioLines className="h-3 w-3" />
+          Neural audio
+        </span>
+      </div>
+
+      <div aria-live="polite" className={"mt-1.5 min-h-8 space-y-0.5 px-1 text-[9px] leading-relaxed [@media(max-height:850px)]:min-h-5 " + (expanded ? "text-center text-cyan-100/45" : "text-ink/55")}>
+        {transcript.length === 0 ? (
+          <p className="text-center">The intelligence core is online.</p>
+        ) : (
+          transcript.slice(-2).map((line, index) => (
+            <p key={`${line.role}-${index}`} className="line-clamp-2">
+              <span className={"font-semibold " + (expanded ? "text-cyan-50/70" : "text-ink/70")}>{line.role}:</span> {line.text}
+            </p>
+          ))
+        )}
+      </div>
+      </div>
     </section>
   );
+
+  return expanded && typeof document !== "undefined" ? createPortal(assistant, document.body) : assistant;
 }

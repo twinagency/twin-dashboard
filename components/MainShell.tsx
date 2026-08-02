@@ -12,7 +12,7 @@ import { usePathname } from "next/navigation";
 // the bug behind "pages break when switching between them".
 export default function MainShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const fullBleed = pathname === "/users";
+  const fullBleed = pathname === "/users" || pathname === "/jarvis";
   return (
     <main
       className={

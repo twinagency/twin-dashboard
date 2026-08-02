@@ -19,7 +19,7 @@ import TwinWordmark from "@/components/TwinWordmark";
 
 type CloneLite = { id: string; name: string; color: string; photoUrl?: string };
 
-// One flat nav list, 7 rows total, all in the same row format (icon + label,
+// One flat nav list, all in the same row format (icon + label,
 // full width, consistent size). PPVs/Edit are "tab" links into the current
 // clone's Configure page (inert until a clone is picked in the header
 // switcher); everything else is a plain route link.
@@ -96,11 +96,7 @@ const LINK_COLOR_CLASSES: Record<LinkColor, { icon: string; active: string; idle
 const NAV_LINKS: NavLink[] = [
   { kind: "route", label: "Earnings", href: "/revenue", icon: "EarningsCombo", color: "good" },
   { kind: "route", label: "Fans", href: "/users", icon: "FansCombo", color: "purple" },
-  // NO "AI" ENTRY HERE, deliberately, as of 2026-07-31. It was added on
-  // 2026-07-31 (9b60d83) because /ai existed with nothing linking to it. The
-  // assistant now opens from the Twin orb at the bottom of this same sidebar,
-  // so a nav row pointing at a second copy of it was two doors to one room.
-  // The /ai page still works if you type the URL; it is just not advertised.
+  { kind: "route", label: "AI", href: "/jarvis", icon: "Sparkle", color: "blue" },
   { kind: "route", label: "Flows", href: "/flows", icon: "Flows", color: "pink", gateOnClone: true },
   { kind: "tab", label: "PPVs", tab: "ppvs", icon: "Media", color: "red" },
   { kind: "tab", label: "Edit", tab: "identity", icon: "Dials", color: "blue" },

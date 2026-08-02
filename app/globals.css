@@ -574,3 +574,116 @@ html.blur-media video {
   filter: blur(20px);
   transition: filter 0.15s ease;
 }
+
+/* Twin intelligence page: the same pale Aurora atmosphere and cyan neural
+   material as the compact sidebar core, scaled up into an interactive field. */
+.jarvis-page {
+  isolation: isolate;
+  background:
+    radial-gradient(circle at 3% 92%, rgb(152 69 29 / 0.4), transparent 31%),
+    radial-gradient(circle at 18% 24%, rgb(17 137 160 / 0.35), transparent 34%),
+    radial-gradient(circle at 92% 13%, rgb(17 45 116 / 0.38), transparent 35%),
+    radial-gradient(circle at 78% 84%, rgb(201 132 38 / 0.3), transparent 30%),
+    linear-gradient(145deg, #c5dce5, #d9d1df 52%, #e9cfb4);
+}
+
+.jarvis-page::before {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  content: "";
+  opacity: 0.42;
+  background-image:
+    linear-gradient(154deg, transparent 0 46%, rgb(255 255 255 / 0.34) 46.2% 47%, transparent 47.2%),
+    linear-gradient(26deg, transparent 0 73%, rgb(255 255 255 / 0.3) 73.2% 74%, transparent 74.2%);
+}
+
+.jarvis-stage::after {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  content: "";
+  background: linear-gradient(112deg, transparent 0 38%, rgb(255 255 255 / 0.2) 38.2% 38.8%, transparent 39%);
+  opacity: 0.7;
+}
+
+.jarvis-result-card {
+  animation: jarvis-result-present 520ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.jarvis-memory-card {
+  left: 50%;
+  top: 43%;
+  opacity: 0;
+  transform-origin: center;
+  animation: jarvis-memory-pass 2900ms cubic-bezier(0.16, 0.72, 0.2, 1) both;
+  will-change: transform, opacity, filter;
+}
+
+.jarvis-memory-card::before {
+  position: absolute;
+  top: 50%;
+  left: -13px;
+  width: 7px;
+  height: 7px;
+  border: 1px solid rgb(186 230 253 / 0.9);
+  border-radius: 999px;
+  background: rgb(224 247 255 / 0.95);
+  box-shadow: 0 0 8px rgb(14 165 233 / 0.85), 0 0 22px rgb(14 116 190 / 0.5);
+  content: "";
+}
+
+.jarvis-memory-card::after {
+  position: absolute;
+  top: 50%;
+  right: 100%;
+  width: 30px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgb(14 116 190 / 0.42));
+  content: "";
+}
+
+@keyframes jarvis-memory-pass {
+  0% {
+    opacity: 0;
+    transform: translate(-50%, -50%) scale(0.045) rotate(0deg);
+    filter: blur(12px);
+  }
+  14% {
+    opacity: 0.38;
+    transform: translate(-50%, -50%) scale(0.12) rotate(0deg);
+    filter: blur(7px);
+  }
+  38% {
+    opacity: 0.9;
+    transform: translate(calc(-50% + var(--journey-mid-x)), calc(-50% + var(--journey-mid-y))) scale(0.68) rotate(var(--journey-mid-tilt));
+    filter: blur(0);
+  }
+  58% {
+    opacity: 1;
+    transform: translate(calc(-50% + var(--journey-mid-x)), calc(-50% + var(--journey-mid-y))) scale(1) rotate(var(--journey-mid-tilt));
+    filter: blur(0);
+  }
+  72% {
+    opacity: 0.96;
+    transform: translate(calc(-50% + var(--journey-end-x)), calc(-50% + var(--journey-end-y))) scale(1.08) rotate(var(--journey-tilt));
+    filter: blur(0);
+  }
+  100% {
+    opacity: 0;
+    transform: translate(calc(-50% + var(--journey-far-x)), calc(-50% + var(--journey-far-y))) scale(1.52) rotate(var(--journey-tilt));
+    filter: blur(6px);
+  }
+}
+
+@keyframes jarvis-result-present {
+  from { opacity: 0; transform: translateY(18px) scale(0.94); filter: blur(4px); }
+  to { opacity: 1; transform: translateY(0) scale(1); filter: blur(0); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .jarvis-result-card { animation: none; }
+  .jarvis-memory-card { animation-duration: 1ms; }
+}
