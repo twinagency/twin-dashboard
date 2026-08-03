@@ -66,19 +66,26 @@ export function buildPersona(fields: Fields, cloneName: string, vibePreset: stri
   const life = listEntries(f.life_tastes);
   const notes = listEntries(f.notes);
 
+  // Her example texts belong in PERSONA, NOT VOICE_TRAITS. {{VOICE_TRAITS}} is
+  // referenced by the VOICE template only (see prompt_templates / bot's
+  // prompt-templates.ts) - the text template has no such slot - so while the
+  // examples lived there they reached her spoken voice notes and NOTHING else.
+  // Every text reply, the flow that carries essentially all her traffic, was
+  // written without them, and on a voice-off clone they reached nothing at all.
+  // That is this project's "configured but inert" defect landing on the single
+  // highest-value intake field (intake.ts stars it: "This matters most for
+  // sounding like her"). Both templates render {{PERSONA}}, so moving the block
+  // here is strictly additive: voice keeps the examples and text gains them.
+  // Asserted by bot/src/dev/check-example-texts-reach-text.ts.
   const persona = [
     vibe?.persona?.trim() ?? "",
     block("Things that make her texting voice hers:", quirks),
-  ]
-    .filter(Boolean)
-    .join("\n\n");
-
-  const voiceTraits = [
-    block("How she sounds and types:", voiceNotes),
     block("Real examples of how she texts, match this voice:", examples),
   ]
     .filter(Boolean)
     .join("\n\n");
+
+  const voiceTraits = block("How she sounds and types:", voiceNotes);
 
   const knowledge = [
     block("Her life and tastes:", life),
