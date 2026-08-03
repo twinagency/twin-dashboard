@@ -1,6 +1,7 @@
 "use client";
 
 import { usePathname } from "next/navigation";
+import TwinAssistant from "@/components/TwinAssistant";
 
 // The scrollable content area under the TopBar. CLIENT component for the same
 // reason TopBar is: which page is showing decides its width/padding (the Fans
@@ -17,11 +18,12 @@ export default function MainShell({ children }: { children: React.ReactNode }) {
     <main
       className={
         fullBleed
-          ? "dashboard-main min-h-0 flex-1 overflow-y-auto canvas-glow"
-          : "dashboard-main mx-auto min-h-0 w-full max-w-6xl flex-1 overflow-y-auto p-4 sm:p-5 lg:p-6 canvas-glow"
+          ? "dashboard-main min-h-0 flex-1 overflow-y-auto pb-28 canvas-glow lg:pb-0"
+          : "dashboard-main mx-auto min-h-0 w-full max-w-6xl flex-1 overflow-y-auto p-4 pb-32 sm:p-5 sm:pb-32 lg:p-6 canvas-glow"
       }
     >
       {children}
+      {pathname !== "/jarvis" ? <TwinAssistant variant="mobile-dock" /> : null}
     </main>
   );
 }

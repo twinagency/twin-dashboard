@@ -1,84 +1,89 @@
 "use client";
 
-import Link from "next/link";
+import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuItem,
-  DropdownMenuSeparator,
-  DropdownMenuTrigger,
-} from "@/components/ui/dropdown-menu";
+import { createPortal } from "react-dom";
+import { X } from "lucide-react";
+import { SidebarContent } from "@/components/Sidebar";
 
-// Mobile-only hamburger — mirrors the desktop Sidebar's global links (each page
-// type once). Clone scoping is handled by the CloneSwitcher bar in layout.tsx,
-// which renders on every breakpoint, so this menu doesn't need its own clone
-// picker or per-clone section links anymore.
-const LINKS: { label: string; href: string }[] = [
-  { label: "Revenue", href: "/revenue" },
-  { label: "Fans", href: "/users" },
-  { label: "AI", href: "/jarvis" },
-  { label: "Info", href: "/info" },
-  { label: "Flows", href: "/flows" },
-  { label: "Media", href: "/media" },
-  { label: "Logs", href: "/logs" },
-];
-
-export default function MobileMenu({ clones }: { clones: { id: string; name: string }[] }) {
+// The phone menu is the desktop sidebar's real content in a touch-friendly
+// drawer. Sharing SidebarContent keeps the links, icons, active states and
+// clone-gated behavior identical at every breakpoint.
+export default function MobileMenu({ activeCloneId }: { activeCloneId: string | null }) {
   const pathname = usePathname();
+  const [open, setOpen] = useState(false);
 
-  function isActive(href: string) {
-    return pathname === href || pathname.startsWith(href + "/");
-  }
+  useEffect(() => {
+    setOpen(false);
+  }, [pathname]);
 
-  const itemCls = (active: boolean) =>
-    "w-full rounded-lg px-3 py-2.5 text-sm font-medium " +
-    (active ? "bg-accent/10 text-accent" : "text-muted");
+  useEffect(() => {
+    if (!open) return;
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [open]);
 
   return (
     <div className="lg:hidden">
-      <DropdownMenu>
-        <DropdownMenuTrigger
-          render={
-            <button
-              type="button"
-              aria-label="Menu"
-              className="rounded-lg p-2 text-muted transition hover:bg-muted/10 hover:text-ink"
-            >
-              <svg
-                xmlns="http://www.w3.org/2000/svg"
-                viewBox="0 0 24 24"
-                fill="none"
-                stroke="currentColor"
-                strokeWidth={2}
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                className="h-5 w-5"
-              >
-                <path d="M3 12h18M3 6h18M3 18h18" />
-              </svg>
-            </button>
-          }
-        />
-        <DropdownMenuContent align="end" className="max-h-[80vh] w-64 overflow-auto p-1.5">
-          {LINKS.map((l) => (
-            <DropdownMenuItem key={l.href} className={itemCls(isActive(l.href))} render={<Link href={l.href} />}>
-              {l.label}
-            </DropdownMenuItem>
-          ))}
+      <button
+        type="button"
+        aria-label="Open navigation"
+        aria-expanded={open}
+        aria-controls="mobile-sidebar"
+        onClick={() => setOpen(true)}
+        className="rounded-lg p-2 text-muted transition hover:bg-muted/10 hover:text-ink"
+      >
+        <svg
+          xmlns="http://www.w3.org/2000/svg"
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          className="h-5 w-5"
+        >
+          <path d="M3 12h18M3 6h18M3 18h18" />
+        </svg>
+      </button>
 
-          <DropdownMenuSeparator />
-          <DropdownMenuItem className={itemCls(isActive("/clones"))} render={<Link href="/clones" />}>
-            Clones (manage)
-          </DropdownMenuItem>
-          <DropdownMenuItem className={itemCls(isActive("/clones/new"))} render={<Link href="/clones/new" />}>
-            + Create new clone
-          </DropdownMenuItem>
-          <DropdownMenuItem className={itemCls(isActive("/settings"))} render={<Link href="/settings" />}>
-            Settings
-          </DropdownMenuItem>
-        </DropdownMenuContent>
-      </DropdownMenu>
+      {open ? createPortal(
+        <div className="fixed inset-0 z-[90] lg:hidden">
+          <button
+            type="button"
+            aria-label="Close navigation"
+            onClick={() => setOpen(false)}
+            className="absolute inset-0 bg-[#071526]/24 backdrop-blur-[2px] animate-in fade-in-0 duration-200"
+          />
+          <aside
+            id="mobile-sidebar"
+            role="dialog"
+            aria-modal="true"
+            aria-label="Main navigation"
+            className="dashboard-sidebar absolute inset-y-0 left-0 flex h-dvh w-[min(88vw,20rem)] max-w-full flex-col overflow-hidden animate-in slide-in-from-left duration-200"
+          >
+            <SidebarContent
+              activeCloneId={activeCloneId}
+              onNavigate={() => setOpen(false)}
+              showAssistant={false}
+              headerAction={
+                <button
+                  type="button"
+                  aria-label="Close navigation"
+                  onClick={() => setOpen(false)}
+                  className="grid h-9 w-9 place-items-center rounded-lg border border-white/60 bg-white/42 text-ink/65 shadow-sm backdrop-blur transition hover:bg-white/70 hover:text-ink"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              }
+            />
+          </aside>
+        </div>,
+        document.body,
+      ) : null}
     </div>
   );
 }

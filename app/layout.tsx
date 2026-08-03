@@ -137,7 +137,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                   <TwinWordmark />
                 </Link>
                 <div className="flex items-center gap-1">
-                  <MobileMenu clones={clones} />
+                  <MobileMenu activeCloneId={activeCloneId} />
                 </div>
               </header>
               {/* Straight, full-width divider bar - clone/page breadcrumb +

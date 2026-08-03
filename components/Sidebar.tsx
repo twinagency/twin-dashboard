@@ -13,6 +13,7 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
+import type { ReactNode } from "react";
 import { openCloneSwitcher } from "@/lib/clone-switcher-bus";
 import TwinAssistant from "@/components/TwinAssistant";
 import TwinWordmark from "@/components/TwinWordmark";
@@ -105,12 +106,16 @@ const NAV_LINKS: NavLink[] = [
   { kind: "route", label: "Settings", href: "/settings", icon: "Settings", color: "gray" },
 ];
 
-export default function Sidebar({
-  clones,
+export function SidebarContent({
   activeCloneId,
+  onNavigate,
+  headerAction,
+  showAssistant = true,
 }: {
-  clones: CloneLite[];
   activeCloneId: string | null;
+  onNavigate?: () => void;
+  headerAction?: ReactNode;
+  showAssistant?: boolean;
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -118,15 +123,20 @@ export default function Sidebar({
 
   const isGlobalActive = (href: string) => pathname === href || (href !== "/" && pathname.startsWith(href + "/"));
   const onConfigurePage = activeCloneId ? pathname === `/clones/${activeCloneId}` : false;
+  const pickClone = () => {
+    onNavigate?.();
+    window.setTimeout(() => openCloneSwitcher(), 0);
+  };
 
   return (
-    <aside className="dashboard-sidebar sticky top-0 hidden h-screen w-64 shrink-0 flex-col lg:flex">
+    <>
       {/* Brand - fixed height so its bottom border lines up exactly with the
           TopBar's border in the column next to it (both h-16). */}
-      <div className="flex h-16 shrink-0 items-center border-b border-ink/10 px-4">
-        <Link href="/revenue" className="min-w-0" aria-label="Twin Technologies">
+      <div className="flex h-16 shrink-0 items-center justify-between border-b border-ink/10 px-4">
+        <Link href="/revenue" className="min-w-0" aria-label="Twin Technologies" onClick={onNavigate}>
           <TwinWordmark />
         </Link>
+        {headerAction}
       </div>
 
       {/* Create new clone - always the first thing in the sidebar, its own
@@ -136,6 +146,7 @@ export default function Sidebar({
       <div className="shrink-0 px-3 pb-3 pt-10 [@media(max-height:850px)]:pt-6">
         <Link
           href="/clones/new"
+          onClick={onNavigate}
           className="sidebar-create-button flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold text-white transition"
         >
           <Icon d={PATHS.Plus} className="h-4 w-4" />
@@ -164,7 +175,7 @@ export default function Sidebar({
                   <button
                     key={l.label}
                     type="button"
-                    onClick={() => openCloneSwitcher()}
+                    onClick={pickClone}
                     title="Pick a clone first"
                     className={
                       "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold transition [@media(max-height:850px)]:py-2 " +
@@ -180,6 +191,7 @@ export default function Sidebar({
                 <Link
                   key={l.label}
                   href={`/clones/${activeCloneId}?tab=${l.tab}`}
+                  onClick={onNavigate}
                   className={
                     "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold transition [@media(max-height:850px)]:py-2 " +
                     (active ? colors.active : colors.idle)
@@ -196,7 +208,7 @@ export default function Sidebar({
                 <button
                   key={l.href}
                   type="button"
-                  onClick={() => openCloneSwitcher()}
+                  onClick={pickClone}
                   title="Pick a clone first"
                   className={
                     "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold transition [@media(max-height:850px)]:py-2 " +
@@ -214,6 +226,7 @@ export default function Sidebar({
               <Link
                 key={l.href}
                 href={l.href}
+                onClick={onNavigate}
                 className={
                   "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold transition [@media(max-height:850px)]:py-2 " +
                   (active ? colors.active : colors.idle)
@@ -252,10 +265,28 @@ export default function Sidebar({
           </span>
         </div>
 
-        <div className="mt-auto pt-4 [@media(max-height:850px)]:pt-2">
-          <TwinAssistant />
-        </div>
+        {showAssistant ? (
+          <div className="mt-auto pt-4 [@media(max-height:850px)]:pt-2">
+            <TwinAssistant />
+          </div>
+        ) : (
+          <div className="mt-auto h-28 shrink-0" aria-hidden="true" />
+        )}
       </nav>
+    </>
+  );
+}
+
+export default function Sidebar({
+  clones: _clones,
+  activeCloneId,
+}: {
+  clones: CloneLite[];
+  activeCloneId: string | null;
+}) {
+  return (
+    <aside className="dashboard-sidebar sticky top-0 hidden h-screen w-64 shrink-0 flex-col lg:flex">
+      <SidebarContent activeCloneId={activeCloneId} />
     </aside>
   );
 }

@@ -101,8 +101,13 @@ const SATELLITES: Satellite[] = Array.from({ length: 14 }, (_, index) => ({
   speed: (index % 2 === 0 ? 1 : -1) * (0.000035 + (index % 4) * 0.000009),
 }));
 
-export default function TwinAssistant() {
+type TwinAssistantProps = {
+  variant?: "sidebar" | "mobile-dock";
+};
+
+export default function TwinAssistant({ variant = "sidebar" }: TwinAssistantProps) {
   const router = useRouter();
+  const mobileDock = variant === "mobile-dock";
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stateRef = useRef<CoreState>("idle");
   const hoverRef = useRef(false);
@@ -120,12 +125,17 @@ export default function TwinAssistant() {
   const timersRef = useRef<number[]>([]);
   const [state, setState] = useState<CoreState>("idle");
   const [hovered, setHovered] = useState(false);
-  const [voiceMode, setVoiceMode] = useState(true);
+  const [voiceMode, setVoiceMode] = useState(false);
   const [input, setInput] = useState("");
   const [typingActive, setTypingActive] = useState(false);
   const [expanded, setExpanded] = useState(false);
+  const [portalReady, setPortalReady] = useState(false);
   const [transcript, setTranscript] = useState<TranscriptLine[]>([]);
   const expandedRef = useRef(false);
+
+  useEffect(() => {
+    setPortalReady(true);
+  }, []);
 
   useEffect(() => {
     stateRef.current = state;
@@ -531,7 +541,7 @@ export default function TwinAssistant() {
       window.cancelAnimationFrame(frame);
       observer.disconnect();
     };
-  }, [expanded]);
+  }, [expanded, portalReady]);
 
   const toggleListening = useCallback(async () => {
     if (stateRef.current === "listening") {
@@ -609,17 +619,29 @@ export default function TwinAssistant() {
   const assistant = (
     <section
       className={
-        expanded
+        mobileDock
+          ? "fixed bottom-1 left-1/2 z-[100] flex -translate-x-1/2 flex-col items-center lg:hidden"
+          : expanded
           ? "fixed inset-0 z-[100] flex items-center justify-center bg-[#020914]/78 p-4 backdrop-blur-md sm:p-8"
           : "w-full px-1 pb-1"
       }
-      aria-label="Twin AI assistant"
-      aria-modal={expanded || undefined}
-      role={expanded ? "dialog" : undefined}
+      aria-label={mobileDock ? "Ask Twin" : "Twin AI assistant"}
+      aria-modal={!mobileDock && expanded ? true : undefined}
+      role={!mobileDock && expanded ? "dialog" : undefined}
     >
+      {mobileDock ? (
+        <div
+          className="pointer-events-none mb-[-7px] text-[15px] font-bold tracking-[-0.025em] text-[#0d2540] drop-shadow-[0_1px_8px_rgba(255,255,255,0.9)]"
+          style={{ fontFamily: "var(--font-display), var(--font-sans), sans-serif" }}
+        >
+          Ask Twin.
+        </div>
+      ) : null}
       <div
         className={
-          expanded
+          mobileDock
+            ? "w-[118px]"
+            : expanded
             ? "relative w-full max-w-[820px] overflow-hidden rounded-[30px] border border-cyan-300/25 bg-[#031324]/95 p-4 shadow-[0_0_100px_rgba(14,165,233,0.24),inset_0_0_80px_rgba(8,145,178,0.08)] sm:p-6"
             : "w-full"
         }
@@ -649,7 +671,9 @@ export default function TwinAssistant() {
         <canvas
           ref={canvasRef}
           className={
-            expanded
+            mobileDock
+              ? "block h-[86px] w-[118px] touch-none cursor-pointer transition-transform duration-300 active:scale-95"
+              : expanded
               ? "block h-[min(62vh,560px)] min-h-[390px] w-full touch-none cursor-crosshair rounded-2xl bg-[radial-gradient(circle_at_center,rgba(8,47,73,0.34),rgba(2,8,23,0.08)_54%,transparent_76%)] drop-shadow-[0_0_28px_rgba(34,211,238,0.38)]"
               : "block h-[176px] w-full touch-none cursor-pointer transition [@media(max-height:850px)]:h-[148px]"
           }
@@ -686,7 +710,7 @@ export default function TwinAssistant() {
             };
           }}
         />
-        <div
+        {!mobileDock ? <div
           aria-live="polite"
           className={"pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-center gap-1.5 text-[9px] font-semibold uppercase tracking-[0.16em] " + (expanded ? "text-cyan-100/60" : "text-ink/60")}
         >
@@ -705,14 +729,15 @@ export default function TwinAssistant() {
             }
           />
           {displayLabel}
-        </div>
-        {!expanded ? (
+        </div> : null}
+        {!mobileDock && !expanded ? (
           <div className="pointer-events-none absolute right-1 top-1 flex items-center gap-1 rounded-full border border-cyan-200/35 bg-white/35 px-2 py-1 text-[8px] font-semibold uppercase tracking-[0.12em] text-[#0b4966]/65 opacity-0 shadow-sm backdrop-blur transition group-hover:opacity-100">
             <Maximize2 className="h-2.5 w-2.5" /> Open AI
           </div>
         ) : null}
       </div>
 
+      {!mobileDock ? <>
       <form onSubmit={submit} className={expanded ? "mx-auto mt-3 max-w-xl" : "mt-2"}>
         <div className={"flex items-center gap-1 rounded-xl border p-1 shadow-[0_8px_24px_rgb(12_29_56/0.1)] backdrop-blur-md transition focus-within:border-cyan-300/80 " + (expanded ? "border-cyan-200/20 bg-cyan-50/10 focus-within:bg-cyan-50/15" : "border-white/65 bg-white/45 focus-within:bg-white/60")}>
           <input
@@ -792,9 +817,14 @@ export default function TwinAssistant() {
           ))
         )}
       </div>
+      </> : null}
       </div>
     </section>
   );
+
+  if (mobileDock) {
+    return portalReady && typeof document !== "undefined" ? createPortal(assistant, document.body) : null;
+  }
 
   return expanded && typeof document !== "undefined" ? createPortal(assistant, document.body) : assistant;
 }

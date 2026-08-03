@@ -226,20 +226,6 @@ function shuffled<T>(items: T[], random: () => number) {
   return next;
 }
 
-function pickAssistantVoice(voices: SpeechSynthesisVoice[]) {
-  const british = (voice: SpeechSynthesisVoice) => voice.lang.toLowerCase().startsWith("en-gb");
-  const english = (voice: SpeechSynthesisVoice) => voice.lang.toLowerCase().startsWith("en-");
-  const natural = (voice: SpeechSynthesisVoice) => /natural|neural|premium|enhanced|online/i.test(voice.name);
-  const calmBritish = (voice: SpeechSynthesisVoice) => /ryan|arthur|george|daniel|oliver|brian|alfie|thomas/i.test(voice.name);
-  return voices.find((voice) => british(voice) && natural(voice) && calmBritish(voice))
-    ?? voices.find((voice) => british(voice) && natural(voice))
-    ?? voices.find((voice) => british(voice) && calmBritish(voice))
-    ?? voices.find((voice) => english(voice) && natural(voice) && calmBritish(voice))
-    ?? voices.find(british)
-    ?? voices.find(english)
-    ?? null;
-}
-
 export default function JarvisWorkspace({ cloneId }: { cloneId: string | null }) {
   const router = useRouter();
   const { currency, rate } = useCurrency();
@@ -251,7 +237,6 @@ export default function JarvisWorkspace({ cloneId }: { cloneId: string | null })
   const timersRef = useRef<number[]>([]);
   const voiceRecognitionRef = useRef<VoiceRecognition | null>(null);
   const voiceTranscriptRef = useRef("");
-  const assistantVoiceRef = useRef<SpeechSynthesisVoice | null>(null);
 
   const [data, setData] = useState<FullData | null>(null);
   const [dataError, setDataError] = useState(false);
@@ -262,7 +247,6 @@ export default function JarvisWorkspace({ cloneId }: { cloneId: string | null })
   const [result, setResult] = useState<JarvisResult | null>(null);
   const [navigating, setNavigating] = useState(false);
   const [listening, setListening] = useState(false);
-  const [speaking, setSpeaking] = useState(false);
   const [voiceUnavailable, setVoiceUnavailable] = useState(false);
   const [journeySeed, setJourneySeed] = useState(1);
 
@@ -296,37 +280,9 @@ export default function JarvisWorkspace({ cloneId }: { cloneId: string | null })
     };
   }, [cloneId]);
 
-  useEffect(() => {
-    if (!("speechSynthesis" in window)) return;
-    const loadVoices = () => {
-      assistantVoiceRef.current = pickAssistantVoice(window.speechSynthesis.getVoices());
-    };
-    loadVoices();
-    window.speechSynthesis.addEventListener("voiceschanged", loadVoices);
-    return () => window.speechSynthesis.removeEventListener("voiceschanged", loadVoices);
-  }, []);
-
-  const speakAssistant = useCallback((text: string) => {
-    if (!("speechSynthesis" in window)) return;
-    const synth = window.speechSynthesis;
-    const utterance = new SpeechSynthesisUtterance(text);
-    const preferredVoice = assistantVoiceRef.current ?? pickAssistantVoice(synth.getVoices());
-    if (preferredVoice) utterance.voice = preferredVoice;
-    utterance.lang = preferredVoice?.lang ?? "en-GB";
-    utterance.rate = 0.86;
-    utterance.pitch = 0.94;
-    utterance.volume = 0.94;
-    utterance.onstart = () => setSpeaking(true);
-    utterance.onend = () => setSpeaking(false);
-    utterance.onerror = () => setSpeaking(false);
-    synth.cancel();
-    synth.speak(utterance);
-  }, []);
-
   useEffect(() => () => {
     timersRef.current.forEach((timer) => window.clearTimeout(timer));
     voiceRecognitionRef.current?.abort();
-    window.speechSynthesis?.cancel();
   }, []);
 
   useEffect(() => {
@@ -379,7 +335,7 @@ export default function JarvisWorkspace({ cloneId }: { cloneId: string | null })
       const cameraDriftY = Math.cos(now * 0.00067) * height * 0.09 * inside;
       const cx = width * (0.5 - smoothPresentation * 0.17) + cameraDriftX + pointerRef.current.x * (6 + dive * 18);
       const cy = height * 0.43 + cameraDriftY + pointerRef.current.y * (4 + dive * 14);
-      const baseRadius = Math.min(width, height) * (width < 640 ? 0.18 : 0.205);
+      const baseRadius = Math.min(width, height) * (width < 640 ? 0.27 : 0.205);
       // The core grows beyond the viewport during the middle of the search.
       // Its outside edge disappears and the same network becomes an interior
       // particle landscape, before the camera pulls back to extract the file.
@@ -1117,14 +1073,12 @@ export default function JarvisWorkspace({ cloneId }: { cloneId: string | null })
     setJourneySeed((Date.now() ^ Math.floor(performance.now() * 1000)) >>> 0);
     setSearchStep("Opening the neural field");
     searchStartedRef.current = performance.now();
-      speakAssistant("Checking that for you now.");
     timersRef.current.push(
       window.setTimeout(() => setSearchStep("Entering the data galaxy"), 1150),
       window.setTimeout(() => setSearchStep("Grabbing a nearby record"), 2500),
       window.setTimeout(() => setSearchStep("Not a match — searching deeper"), 4050),
       window.setTimeout(() => {
         setSearchStep("Crossing to another particle cluster");
-        speakAssistant("Searching the next cluster.");
       }, 5550),
       window.setTimeout(() => setSearchStep(`Comparing the ${DOMAIN_BY_ID[domain].label.toLowerCase()} signal`), 7050),
       window.setTimeout(() => setSearchStep("Locating the matching data shard"), 8500),
@@ -1133,10 +1087,9 @@ export default function JarvisWorkspace({ cloneId }: { cloneId: string | null })
         setResult(nextResult);
         setPhase("resolved");
         setSearchStep("Result ready");
-        speakAssistant("Here it is.");
       }, 10850),
     );
-  }, [buildResult, speakAssistant]);
+  }, [buildResult]);
 
   const toggleVoiceQuestion = useCallback(async () => {
     if (phase === "searching") return;
@@ -1172,8 +1125,6 @@ export default function JarvisWorkspace({ cloneId }: { cloneId: string | null })
     recognition.interimResults = true;
     recognition.lang = navigator.language || "en-AU";
     voiceTranscriptRef.current = "";
-    window.speechSynthesis?.cancel();
-    setSpeaking(false);
     setVoiceUnavailable(false);
     setListening(true);
     recognition.onresult = (event) => {
@@ -1224,7 +1175,6 @@ export default function JarvisWorkspace({ cloneId }: { cloneId: string | null })
     voiceTranscriptRef.current = "";
     voiceRecognitionRef.current?.abort();
     voiceRecognitionRef.current = null;
-    window.speechSynthesis?.cancel();
     timersRef.current.forEach((timer) => window.clearTimeout(timer));
     timersRef.current = [];
     setResult(null);
@@ -1233,7 +1183,6 @@ export default function JarvisWorkspace({ cloneId }: { cloneId: string | null })
     setSearchStep(dataError ? "Navigation intelligence online" : "Intelligence core online");
     setNavigating(false);
     setListening(false);
-    setSpeaking(false);
     setQuery("");
   };
 
@@ -1244,10 +1193,10 @@ export default function JarvisWorkspace({ cloneId }: { cloneId: string | null })
       <section className="jarvis-stage relative min-h-[720px] overflow-hidden rounded-[28px] border border-white/55 bg-[#c8dce5]/28 backdrop-blur-xl lg:min-h-[calc(100vh-7.5rem)]">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_42%,rgba(13,74,126,0.28),transparent_42%),radial-gradient(circle_at_17%_22%,rgba(20,160,184,0.28),transparent_35%),radial-gradient(circle_at_7%_88%,rgba(152,69,29,0.29),transparent_31%),radial-gradient(circle_at_94%_15%,rgba(15,45,108,0.26),transparent_34%),radial-gradient(circle_at_76%_82%,rgba(221,151,48,0.2),transparent_29%),linear-gradient(145deg,rgba(178,211,223,0.62),rgba(204,193,216,0.5)_52%,rgba(231,197,164,0.58))]" />
 
-        <div className="pointer-events-none absolute left-1/2 top-5 z-20 -translate-x-1/2 sm:top-6">
+        <div className="pointer-events-none absolute left-1/2 top-5 z-20 -translate-x-1/2 scale-[0.84] sm:top-6 sm:scale-100">
           <TwinWordmark descriptor="Intelligence Core" />
         </div>
-        <div className="absolute right-4 top-4 z-20 rounded-full border border-white/75 bg-white/50 px-3 py-1.5 text-[9px] font-semibold text-ink/45 shadow-sm backdrop-blur-md sm:right-6 sm:top-6">
+        <div className="absolute right-4 top-14 z-20 rounded-full border border-white/75 bg-white/50 px-3 py-1.5 text-[9px] font-semibold text-ink/45 shadow-sm backdrop-blur-md sm:right-6 sm:top-6">
           {activeClone?.name ?? "All clones"}
         </div>
 
@@ -1395,9 +1344,7 @@ export default function JarvisWorkspace({ cloneId }: { cloneId: string | null })
           <div aria-live="polite" className="mx-auto min-h-4 max-w-3xl px-2 pt-1 text-[9px] font-medium text-[#0b4966]/60">
             {listening
               ? "Listening — speak naturally, then tap the microphone to send."
-              : speaking
-                ? "Twin is responding…"
-                : voiceUnavailable
+              : voiceUnavailable
                   ? "Voice input needs microphone permission and browser speech support."
                   : ""}
           </div>
