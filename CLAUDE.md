@@ -42,6 +42,37 @@ This project's dominant defect is **"configured but inert"**: a setting saves, l
 
 Anything a fan can ask a factual question about must be a typed column, never intake prose. Prose passes through the AI compiler which can drop or mutate facts. If a field can be a toggle, switch, select, or chip set, make it one. Free text only where the content genuinely cannot be enumerated.
 
+## The Twin Admin API (`app/api/admin/v1/*`)
+
+Read-only internal API over the same data the dashboard renders: clone config, persona/intake blobs, prompt templates, verbatim fan chats, `system_logs`, revenue. Built for sim testing and for AI assistants that read data. Phase 2 of `../scope/SCOPE-TWIN-API.txt`; there is no public/tenant API and no write API, and **this one must not be exposed to an agency** because no tenant model exists in this database.
+
+Four rules, all asserted by `npm run test:api` (36 checks):
+
+1. **A route is authenticated by calling `withAdmin`, not by living under a path.** `middleware.ts` returns early (no auth at all) whenever `NODE_ENV !== "production"` or `DASHBOARD_NO_AUTH` is set, and its matcher covers `/api/*`. Nothing in `lib/api-auth.ts` may read either variable.
+2. **Two independent gates**: a bearer key (`TWIN_ADMIN_API_KEY`, min 32 chars) and the caller's network (loopback or Tailscale `100.64.0.0/10`). An unset key returns 503, never "skip the check". The network gate takes the **rightmost** `X-Forwarded-For` entry, the one Apache appended; the leftmost is client-controlled. This assumes exactly one trusted proxy.
+3. **One choke point.** Every read goes through `runQuery`/`resolveClone` in `lib/api-read.ts`. No route imports `supabaseAdmin` directly, so there is one place a column can be admitted.
+4. **The allowlist is shared with the AI assistant, not duplicated.** `lib/api-read.ts` imports `ALLOWLIST` from `app/api/ai-assistant/tools.ts` per rule 3 above, adds the blobs the assistant skips for context cost (`persona`, `intake`, the legacy `*_prompt` columns, `business_username`), and subtracts `clones.bot_token` and `app_settings.value` unconditionally, last.
+
+`npm run test:api` runs through `../bot/node_modules/.bin/tsx` — this repo has no TS runner of its own and adding one meant an install. It therefore needs `../bot` checked out beside this repo, which the working folder always has.
+
+## The Twin public API (`app/api/v1/*`)
+
+Read-only revenue + fan data for ONE model, called by that model's own dashboard. Internet-facing by design, so unlike the admin API it has no network gate and the key is the only thing standing there.
+
+**Tenancy is per clone and comes from the key, never from a parameter.** Ronan's call, 2026-08-08: one key sees one girl, no agency concept yet (migration 103 records why, and how agencies would layer on later without redoing it). `withModelKey` hands the handler a resolved `tenant` and **rejects** `?clone=` with a 400 rather than ignoring it. Every scoped query filters on `tenant.cloneId`.
+
+**Our cost and margin never leave the building.** `getAnalytics()` returns `costUsd`, `profitUsd`, `margin` and a fleet-wide per-clone breakdown. `projectRevenue()` in `lib/api-public.ts` is an **allowlist projection**, not a deletion pass: every outbound field is named, so a field added upstream is withheld by default instead of exposed by default. Do not replace it with a spread.
+
+Keys are sha256, never plaintext, revocable, rate limited to 60/min per key (the dashboard shares this process, so a model's refresh loop must not take the operator UI down). Mint with `npm run key:issue -- --clone <slug> --label "..."`; also `key:list`, `key:revoke`.
+
+## Sim data (`app/api/admin/v1/sim/*`)
+
+Synthetic revenue and fans, deterministic by `?seed=`, in exactly the shape of the `/api/v1/*` payloads so a dashboard can be built against sim and repointed with a URL change. **`lib/api-sim.ts` imports no database client at all** — that is the safety property, and it is what `test:public` asserts. Never solve "we need test data" by writing fake rows into the live tables; poisoned revenue is unrecoverable and the exclusion filter always gets forgotten.
+
 ## Verification
 
 `npx tsc --noEmit` for typecheck. Run it once when done, not after every file edit.
+
+`npm test` runs both suites (`test:api`, 43 checks; `test:public`, 30). Unlike a typecheck these have caught real bugs. Every guard was proven by planting the bug back; the record is in `../TWIN-API.txt`.
+
+`npm run test:api` for the admin API. Unlike a typecheck this one has caught real bugs: each of its guards was proven by planting the bug back and watching it go red (record in `../TWIN-API.txt`). Anything added to `app/api/admin/v1/` ships a check here.

@@ -103,6 +103,7 @@ const NAV_LINKS: NavLink[] = [
   { kind: "tab", label: "Edit", tab: "identity", icon: "Dials", color: "blue" },
   { kind: "route", label: "Info", href: "/info", icon: "Info", color: "neutral" },
   { kind: "route", label: "Logs", href: "/logs", icon: "Logs", color: "neutral" },
+  { kind: "route", label: "API access", href: "/api-access", icon: "Settings", color: "gray" },
   { kind: "route", label: "Settings", href: "/settings", icon: "Settings", color: "gray" },
 ];
 

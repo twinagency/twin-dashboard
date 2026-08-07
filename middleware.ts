@@ -11,7 +11,33 @@ function withPathname(req: NextRequest): NextResponse {
   return NextResponse.next({ request: { headers } });
 }
 
+// ─── Routes that authenticate THEMSELVES, per request ────────────────────────
+// These carry a bearer key, not a dashboard session cookie, so the session gate
+// below must not touch them: it would redirect an API caller to /login and the
+// caller would receive a 307 and an HTML page instead of its data.
+//
+// THIS IS NOT A HOLE. Every route under these prefixes calls its own gate
+// (withAdmin for /api/admin, withModelKey for /api/v1) and refuses anything
+// unauthenticated, in every environment, with no reference to NODE_ENV. Being
+// exempt from the COOKIE check is not being exempt from auth.
+//
+// FOUND THE HARD WAY: all API testing ran against a dev server, where the block
+// below returns early anyway, so this was invisible until someone asked whether
+// the creator API really works from the open internet. It did not, in
+// production, for either API. Trailing slashes are load-bearing — "/api/v1"
+// alone would also match a future "/api/v1x".
+const SELF_AUTHENTICATED_PREFIXES = ["/api/v1/", "/api/admin/"];
+
 export async function middleware(req: NextRequest) {
+  const { pathname } = req.nextUrl;
+
+  // Checked BEFORE the dev bypass so the rule is identical in every
+  // environment, which is the only way local testing says anything about
+  // production behaviour.
+  if (SELF_AUTHENTICATED_PREFIXES.some((p) => pathname.startsWith(p))) {
+    return withPathname(req);
+  }
+
   // ─── LOGIN DISABLED WHILE BUILDING ───────────────────────────────────────
   // Auth is bypassed in development (and whenever DASHBOARD_NO_AUTH is set) so we
   // + agents can view/screenshot the UI without the password. Production builds
@@ -21,7 +47,6 @@ export async function middleware(req: NextRequest) {
     return withPathname(req);
   }
 
-  const { pathname } = req.nextUrl;
   const token = req.cookies.get(SESSION_COOKIE)?.value;
   const authed = await verifySessionToken(token);
 

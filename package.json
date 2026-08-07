@@ -6,7 +6,13 @@
     "dev": "next dev -p 3001",
     "build": "next build",
     "start": "next start -p 3001",
-    "lint": "next lint"
+    "lint": "next lint",
+    "test:api": "../bot/node_modules/.bin/tsx scripts/check-admin-api.ts",
+    "test:public": "../bot/node_modules/.bin/tsx scripts/check-public-api.ts",
+    "test": "npm run test:api && npm run test:public",
+    "key:issue": "../bot/node_modules/.bin/tsx scripts/issue-api-key.ts issue",
+    "key:list": "../bot/node_modules/.bin/tsx scripts/issue-api-key.ts list",
+    "key:revoke": "../bot/node_modules/.bin/tsx scripts/issue-api-key.ts revoke"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
