@@ -71,16 +71,44 @@ export function isTailscale(ip: string): boolean {
   return ip.toLowerCase().startsWith("fd7a:115c:a1e0:");
 }
 
-// THE RIGHTMOST X-Forwarded-For ENTRY, not the leftmost. Apache APPENDS the
-// address it actually observed, so the last entry is the only one a remote
-// caller cannot forge; the leftmost is whatever the client typed. Getting this
-// backwards turns the network gate into a header the attacker sets.
-// ASSUMES EXACTLY ONE TRUSTED PROXY (Apache). Add a second and the rightmost
-// entry becomes the first proxy, not the client, and this must be revisited.
+// Addresses that are INFRASTRUCTURE, never a caller: the Docker bridge and the
+// ordinary private ranges. Deliberately does NOT include Tailscale's
+// 100.64.0.0/10, which is a real caller we want to admit.
+function isInfraHop(ip: string): boolean {
+  const v4 = /^(?:::ffff:)?(\d{1,3})\.(\d{1,3})\.\d{1,3}\.\d{1,3}$/.exec(ip);
+  if (!v4) return false;
+  const a = Number(v4[1]);
+  const b = Number(v4[2]);
+  if (a === 10) return true;                          // 10.0.0.0/8
+  if (a === 172 && b >= 16 && b <= 31) return true;   // 172.16.0.0/12, incl. docker0
+  if (a === 192 && b === 168) return true;            // 192.168.0.0/16
+  return false;
+}
+
+// THE RIGHTMOST MEANINGFUL X-Forwarded-For ENTRY, not the leftmost. Apache
+// APPENDS the address it actually observed, so the last entry is the only one a
+// remote caller cannot forge; the leftmost is whatever the client typed.
+// Getting this backwards turns the network gate into a header the attacker sets.
+//
+// WHY IT SKIPS TRAILING INFRA HOPS. This runs inside Docker, and Next.js
+// SYNTHESISES x-forwarded-for from the socket when the header is absent. For a
+// request made on the box itself that socket peer is the docker0 gateway,
+// 172.17.0.1 — so a local curl looked like a caller from a strange network and
+// got 403, while the "no XFF, check the Host instead" fallback below could
+// never fire because, as far as this code could tell, an XFF was present.
+// Verified on the live box: an explicit XFF is NOT overwritten by Next, so real
+// proxied traffic still resolves to the real client either way.
+//
+// This cannot admit a public caller: their address is a public one and stays in
+// the list, so it becomes the answer. Only private/bridge hops are skipped.
+// STILL ASSUMES ONE TRUSTED PUBLIC-FACING PROXY (Apache).
 export function clientIp(xff: string | null): string | null {
   if (!xff) return null;
   const parts = xff.split(",").map((s) => s.trim()).filter(Boolean);
-  return parts.length ? parts[parts.length - 1] : null;
+  for (let i = parts.length - 1; i >= 0; i--) {
+    if (!isInfraHop(parts[i])) return parts[i];
+  }
+  return null; // every hop was infrastructure: treat as "nothing proxied this"
 }
 
 // Host header only decides the "no proxy in front of us" case below. It is

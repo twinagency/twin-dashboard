@@ -208,6 +208,34 @@ check("C1 clientIp takes the RIGHTMOST X-Forwarded-For entry", () => {
   eq(clientIp(null), null, "absent");
 });
 
+// Found on the LIVE BOX, not in a unit test: Next.js synthesises
+// x-forwarded-for from the socket when the header is absent, and inside Docker
+// that socket peer is the docker0 gateway (172.17.0.1). A local curl therefore
+// looked like a caller from an unknown network and got 403, while the
+// "no XFF, fall back to Host" branch could never fire.
+check("C1b trailing infrastructure hops are skipped, not treated as the caller", () => {
+  eq(clientIp("172.17.0.1"), null, "a bare docker bridge hop means nothing proxied this");
+  eq(clientIp("100.90.241.56, 172.17.0.1"), "100.90.241.56", "real client behind the bridge");
+  eq(clientIp("203.0.113.9, 10.0.0.5, 172.17.0.1"), "203.0.113.9", "walks back past every infra hop");
+  eq(clientIp("192.168.1.1, 10.1.2.3"), null, "all-private chain means nothing proxied this");
+});
+
+check("C1c skipping infra hops can never admit a public caller", () => {
+  // The whole risk of the above: that walking backwards past hops lets someone
+  // hide behind a private-looking tail. It cannot — a public address is not an
+  // infra hop, so it stays and becomes the answer.
+  const r = checkNetwork({ xff: "203.0.113.9, 172.17.0.1", host: "twin.example.com", allowPublic: false });
+  assert(!r.ok && r.code === "network_denied", "a public client behind the bridge must still be denied");
+  assert(checkNetwork({ xff: "100.90.241.56, 172.17.0.1", host: "x", allowPublic: false }).ok, "tailscale admitted");
+});
+
+check("C1d a bare bridge hop falls through to the Host check", () => {
+  // This is the local-curl case: allowed from the box, denied from outside.
+  assert(checkNetwork({ xff: "172.17.0.1", host: "localhost:3001", allowPublic: false }).ok, "local curl on the box");
+  const r = checkNetwork({ xff: "172.17.0.1", host: "twin.example.com", allowPublic: false });
+  assert(!r.ok, "same bridge hop with a public Host must still be denied");
+});
+
 check("C2 a spoofed Tailscale address on the LEFT does not get in", () => {
   // The client typed 100.90.241.56; Apache appended the address it really saw.
   const r = net("100.90.241.56, 203.0.113.9");
