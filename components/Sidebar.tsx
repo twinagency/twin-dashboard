@@ -103,7 +103,10 @@ const NAV_LINKS: NavLink[] = [
   { kind: "tab", label: "Edit", tab: "identity", icon: "Dials", color: "blue" },
   { kind: "route", label: "Info", href: "/info", icon: "Info", color: "neutral" },
   { kind: "route", label: "Logs", href: "/logs", icon: "Logs", color: "neutral" },
-  { kind: "route", label: "API access", href: "/api-access", icon: "Settings", color: "gray" },
+  // This is the "API - coming soon" placeholder that used to sit greyed out
+  // below the divider, now that it is actually built. Same label and same Code
+  // icon on purpose, so it lands where anyone who saw the placeholder expects.
+  { kind: "route", label: "API", href: "/api-access", icon: "Code", color: "blue" },
   { kind: "route", label: "Settings", href: "/settings", icon: "Settings", color: "gray" },
 ];
 
@@ -255,16 +258,10 @@ export function SidebarContent({
           })}
         </div>
 
-        {/* Still not built - kept separate from the real nav list above. */}
-        <div className="mt-1 border-t border-ink/10 pt-1">
-          <span className="flex cursor-not-allowed items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold text-ink/40 opacity-70 [@media(max-height:850px)]:py-2">
-            <Icon d={PATHS.Code} className="h-[18px] w-[18px]" />
-            <span className="flex-1">API</span>
-            <span className="rounded-full bg-white/45 px-1.5 py-0.5 text-[9px] font-medium normal-case tracking-normal text-ink/50">
-              coming soon
-            </span>
-          </span>
-        </div>
+        {/* The "API - coming soon" placeholder that lived here is GONE: the API
+            is built, so it is a real entry in NAV_LINKS above. Leaving a dead
+            "coming soon" chip next to the working page is the same class of
+            problem as a half-wired toggle, one step further out. */}
 
         {showAssistant ? (
           <div className="mt-auto pt-4 [@media(max-height:850px)]:pt-2">
