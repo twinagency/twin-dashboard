@@ -2,7 +2,7 @@ import LoginForm from "./LoginForm";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 
 export const metadata = {
-  title: "Sign in · Allie Admin",
+  title: "Sign in · Twin Admin",
 };
 
 export default async function LoginPage({

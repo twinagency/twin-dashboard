@@ -28,7 +28,7 @@ const spaceGrotesk = Space_Grotesk({subsets:['latin'],variable:'--font-heading'}
 const interTight = Inter_Tight({subsets:['latin'],variable:'--font-display'});
 
 export const metadata: Metadata = {
-  title: "Allie Admin",
+  title: "Twin Admin",
   description: "Manage and build the bot fleet",
 };
 

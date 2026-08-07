@@ -7,7 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Info } from "@/components/clone/fields";
 
 export const metadata = {
-  title: "Settings · Allie Admin",
+  title: "Settings · Twin Admin",
 };
 
 export const dynamic = "force-dynamic";
