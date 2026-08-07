@@ -183,16 +183,75 @@ check("B4 no admin route reaches Supabase directly, bypassing the allowlist chok
   }
 });
 
-check("B5 the admin API is read-only: no route writes to Supabase", () => {
+// Writing is now allowed, but ONLY on two named routes, and even there only
+// through the dashboard's own validated server actions. Everything else stays
+// read-only, and no route may touch the database directly (B4 covers that).
+const WRITE_ROUTES = ["/clones/write/route.ts", "/clones/create/route.ts"];
+
+check("B5 only the two named write routes accept writes; the rest are read-only", () => {
   for (const p of adminRouteFiles()) {
     const src = sourceCode(p);
+    const isWriteRoute = WRITE_ROUTES.some((w) => p.endsWith(w));
     for (const verb of ["POST", "PUT", "PATCH", "DELETE"]) {
-      assert(!src.includes(`export const ${verb}`), `${p} exports ${verb} — this API is read-only (Phase 2)`);
+      if (isWriteRoute && verb === "POST") continue;
+      assert(
+        !src.includes(`export const ${verb}`),
+        `${p} exports ${verb} — only ${WRITE_ROUTES.join(" and ")} may write`,
+      );
     }
+    // No route writes to the database itself, write routes included: they call
+    // server actions. A raw .update() here would bypass every validation the
+    // dashboard applies and could reprice a clone in one line.
     for (const w of [".insert(", ".update(", ".upsert(", ".delete(", ".rpc("]) {
-      assert(!src.includes(w), `${p} calls ${w} — this API is read-only (Phase 2)`);
+      assert(!src.includes(w), `${p} calls ${w} directly — writes must go through the server actions`);
     }
   }
+});
+
+check("B6 writes go through the dashboard's validated server actions, not raw columns", () => {
+  const src = sourceCode(new URL("../app/api/admin/v1/clones/write/route.ts", import.meta.url));
+  for (const fn of ["setStatus", "setCloneToggle", "setCloneDial", "compileCloneAction"]) {
+    assert(src.includes(fn), `the write route must call ${fn}`);
+  }
+  assert(
+    src.includes('from "@/app/clones/actions"'),
+    "writes must come from app/clones/actions, the same module the operator UI uses",
+  );
+  // updateClone takes the WHOLE Configure form and default-fills anything
+  // absent; calling it with a partial API payload is the 65c287e money bug.
+  assert(!/\bupdateClone\b/.test(src), "updateClone must not be driven from a partial API payload");
+});
+
+check("B7 clone creation reuses createCloneRow, so an API clone equals a UI clone", () => {
+  const src = sourceCode(new URL("../app/api/admin/v1/clones/create/route.ts", import.meta.url));
+  assert(src.includes("createCloneRow"), "must call the same action the New clone form calls");
+  assert(!/\.from\(\s*["']clones["']\s*\)/.test(src), "must not insert into clones directly");
+});
+
+check("B8 money and fan-facing free text are not writable", () => {
+  const src = sourceCode(new URL("../app/api/admin/v1/clones/write/route.ts", import.meta.url));
+  // The guard is that writes are limited to the two named allowlists plus
+  // status/compile. If a money column name ever appears in this file, someone
+  // has widened it by hand.
+  for (const money of [
+    "credit_pack_price_stars", "credit_pack_size", "starting_credits",
+    "discount_max_photo", "discount_max_video", "discount_max_bundle", "discount_max_credits",
+    "spend_tier_whale_stars", "subscription_tiers", "tip_max_stars", "spoil_options",
+  ]) {
+    assert(!src.includes(money), `${money} became writable — money needs its own validated path`);
+  }
+  for (const text of ["welcome_instruction", "paywall_instruction", "hard_limits_extra"]) {
+    assert(!src.includes(text), `${text} reaches fans; it belongs behind propose-then-approve`);
+  }
+});
+
+check("B9 the write allowlists are the dashboard's, not a second copy", () => {
+  const src = sourceCode(new URL("../app/api/admin/v1/clones/write/route.ts", import.meta.url));
+  assert(
+    src.includes('from "@/app/clones/toggle-fields"'),
+    "the toggle/dial allowlists must be imported, not redefined",
+  );
+  assert(!/CLONE_TOGGLE_FIELDS\s*=/.test(src), "a second toggle allowlist would drift from the first");
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -33,6 +33,33 @@ function logDenied(f: AuthFailure, path: string, ip: string | null): void {
     );
 }
 
+// Audit trail for the WRITE endpoints. Unlike reads, every write is logged:
+// there are few of them, each one changes what a real fan experiences, and
+// "who turned her photos off at 3am" is a question that gets asked.
+// Lives here rather than in the route so no route file needs supabaseAdmin,
+// which keeps the one-choke-point rule (and its check) intact.
+// NEVER pass a credential in `detail` - bot tokens and API keys are not
+// audit data.
+export function logAdminWrite(
+  action: string,
+  cloneId: string | null,
+  detail: Record<string, unknown>,
+): void {
+  void supabaseAdmin
+    .from("system_logs")
+    .insert({
+      level: "warn",
+      source: "admin-api",
+      clone_id: cloneId,
+      message: `admin API write: ${action}`,
+      detail,
+    })
+    .then(
+      () => undefined,
+      () => undefined, // fire-and-forget: auditing must never fail the write
+    );
+}
+
 export function jsonError(error: string, status: number): NextResponse {
   return NextResponse.json({ ok: false, error }, { status });
 }
