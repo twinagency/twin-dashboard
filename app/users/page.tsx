@@ -41,6 +41,139 @@ function dateTime(ts: string | null): string {
 
 const prettyKey = (k: string) => k.replace(/[_-]+/g, " ").replace(/\b\w/g, (c) => c.toUpperCase());
 
+// ── Per-fan stage ───────────────────────────────────────────────────────────
+// Where a fan actually IS: his onboarding position, how far the campaign has
+// run at him this quiet episode, his paywall episode, and what the router last
+// picked for him. Rendered twice, as chips on every row of the fan list and
+// expanded in the Journey block on the right, but computed ONCE in journeyOf()
+// below so the two can never disagree and the mirror of
+// bot/src/onboarding-state.ts lives in a single place.
+type OnboardingStepRow = {
+  type: "text" | "voice" | "photo" | "video" | "bundle" | "collect" | "tease";
+  after_messages?: number;
+  media_id?: string | null;
+  free?: boolean;
+  collect_field?: string | null;
+  instruction?: string | null;
+  // Stable id (migration 087) — what onboarding_steps_done records.
+  id?: string | null;
+};
+type CampaignStepRow = { type: "text" | "voice" | "photo" | "video" | "bundle"; after_hours: number };
+type CloneRow = {
+  id: string;
+  name: string;
+  onboarding_steps: OnboardingStepRow[] | null;
+  onboarding_free_preview_enabled: boolean | null;
+  photos_enabled: boolean | null;
+  drip_steps: unknown[] | null;
+  drip_enabled: boolean | null;
+};
+
+const ONBOARDING_STEP_LABEL: Record<string, { label: string; emoji: string }> = {
+  text: { label: "text", emoji: "💬" },
+  voice: { label: "voice", emoji: "🎙️" },
+  photo: { label: "photo", emoji: "📷" },
+  video: { label: "video", emoji: "🎥" },
+  bundle: { label: "bundle", emoji: "🎁" },
+  collect: { label: "collect", emoji: "❓" },
+  tease: { label: "tease", emoji: "😏" },
+};
+
+// Mirrors mapClone's campaignSteps in bot/src/data/supabase-store.ts: a row
+// without a type the runtime knows, or an OLD-shape row ({type,text} with no
+// valid after_hours), is dropped exactly as the runtime drops it. Sorted by
+// after_hours because that is the order bot/src/campaign.ts walks, and
+// users.campaign_step indexes into THAT list, not into raw jsonb order.
+const CAMPAIGN_STEP_TYPES = ["text", "voice", "photo", "video", "bundle"];
+function campaignStepsOf(raw: unknown[] | null | undefined): CampaignStepRow[] {
+  return (Array.isArray(raw) ? raw : [])
+    .filter((s): s is { type: string; after_hours?: unknown } => !!s && typeof s === "object" && "type" in s)
+    .filter((s) => CAMPAIGN_STEP_TYPES.includes(s.type))
+    .map((s) => ({ type: s.type as CampaignStepRow["type"], after_hours: Number(s.after_hours) }))
+    .filter((s) => Number.isFinite(s.after_hours) && s.after_hours >= 1 && s.after_hours <= 23)
+    .sort((a, b) => a.after_hours - b.after_hours);
+}
+
+// Delivery is tracked by STABLE STEP ID (migration 087), never by position:
+// positions re-point at different steps the moment the list is edited, which
+// desynced every live fan. Mirrors deliveredStepKeys()/stepKey() in
+// bot/src/onboarding-state.ts, including the positional fallback for a row
+// that only has pre-087 history.
+const stepKeyOf = (s: OnboardingStepRow, i: number) => (s.id?.trim() ? s.id.trim() : `#${i}`);
+
+function journeyOf(u: any, clone: CloneRow | undefined) {
+  const onboardingSteps: OnboardingStepRow[] = clone?.onboarding_steps ?? [];
+  const done: unknown[] = Array.isArray(u?.onboarding_steps_done) ? u.onboarding_steps_done : [];
+  const sentIdx: number[] = Array.isArray(u?.onboarding_steps_sent) ? u.onboarding_steps_sent : [];
+  const sentStepSet = new Set<string>(done.filter((k): k is string => typeof k === "string" && !!k.trim()));
+  if (sentStepSet.size === 0) {
+    for (const i of sentIdx) {
+      const step = onboardingSteps[i];
+      if (step) sentStepSet.add(stepKeyOf(step, i));
+    }
+  }
+  // Sequential pointer, same as dueOnboardingStep(): first step not yet sent.
+  const nextStepIndex = onboardingSteps.findIndex((s, i) => !sentStepSet.has(stepKeyOf(s, i)));
+  const nextStep = nextStepIndex !== -1 ? onboardingSteps[nextStepIndex] : null;
+  const firedSteps = onboardingSteps.filter((s, i) => sentStepSet.has(stepKeyOf(s, i)));
+  // onboardingActive() in bot/src/onboarding-state.ts: frozen while onboarding
+  // has something LEFT to do - an unsent step remains, or the free-preview
+  // fallback is still armed - never a bare "!onboarding_complete" (that would
+  // freeze forever on a clone with no onboarding configured at all).
+  const freePreviewArmed =
+    !!clone?.onboarding_free_preview_enabled && !!clone?.photos_enabled && !u?.onboarding_free_preview_sent;
+  const creditsFrozen = !!u && !u.onboarding_complete && (nextStepIndex !== -1 || freePreviewArmed);
+  // Campaign ("drip"): campaign_step is how many steps have fired in the fan's
+  // CURRENT quiet episode. handler.ts resets it to 0 the moment he messages,
+  // so a live fan reads 0 and that is correct, not missing data.
+  const campaignSteps = campaignStepsOf(clone?.drip_steps);
+  const campaignStep: number = u?.campaign_step ?? 0;
+  return {
+    onboardingSteps,
+    nextStep,
+    nextStepIndex,
+    firedSteps,
+    freePreviewArmed,
+    creditsFrozen,
+    campaignSteps,
+    campaignStep,
+    campaignEnabled: clone?.drip_enabled !== false,
+  };
+}
+
+// paywall_hits_since_credits drives the "first hit only" quirk (src/handler.ts:
+// paywallExhausted() + sendPaywall()): hit 1 gets the AI-composed personal line
+// (only when smart_paywall_enabled), hit 2 gets the fixed static default
+// message, and hit 3+ is silently ignored forever - his message is DELETED, no
+// reply, nothing sent - until he tops up, which resets this back to 0.
+function paywallStateOf(hits: number) {
+  return hits <= 0
+    ? { label: "Never hit", tone: "bg-muted/10 text-muted", loud: false }
+    : hits === 1
+      ? { label: "First hit used", tone: "bg-accent/15 text-accent", loud: false }
+      : hits === 2
+        ? { label: "Static hit used", tone: "bg-warn/15 text-warn", loud: true }
+        : { label: "Exhausted, ignored", tone: "bg-crit/15 text-crit", loud: true };
+}
+const PAYWALL_HINT =
+  "By design, not a bug: only his FIRST hit of an out-of-credits episode gets the personalized/smart line. " +
+  "His 2nd hit gets the fixed static default message. Every hit after that (3rd+) is silently ignored entirely " +
+  "- his message is deleted, no reply, nothing sent at all. Resets to 0 the moment he tops up.";
+
+// What the router last picked for this fan. handler.ts writes one system_logs
+// row per turn with source="routing". CLASSIC mode records detail.route (one of
+// the Route union values below); SMART mode records no route at all, only
+// detail.actions, so a smart clone renders its action list instead.
+const ROUTE_CHIP: Record<string, { emoji: string; label: string; tone: string }> = {
+  TEXT_FLOW: { emoji: "💬", label: "text", tone: "bg-muted/15 text-muted" },
+  VOICE_FLOW: { emoji: "🎙", label: "voice", tone: "bg-accent/15 text-accent" },
+  IMAGE_FLOW: { emoji: "📷", label: "photo", tone: "bg-purple-500/15 text-purple-400" },
+  VIDEO_FLOW: { emoji: "🎥", label: "video", tone: "bg-purple-500/15 text-purple-400" },
+  BUNDLE_FLOW: { emoji: "🎁", label: "bundle", tone: "bg-warn/15 text-warn" },
+  SPOIL_FLOW: { emoji: "💸", label: "spoil", tone: "bg-good/15 text-good" },
+  VISION_FLOW: { emoji: "👁", label: "vision", tone: "bg-accent/15 text-accent" },
+};
+
 // Colored filter chips. "Active"/"Unreachable" split on the Telegram 24h
 // messaging window (active = we can still message them, see memory rule).
 const FILTERS = [
@@ -71,14 +204,16 @@ export default async function FansPage({
   const sortKey = SORTS.some((s) => s.key === sort) ? sort : "last_message_received";
   const asc = dir === "asc";
 
-  const [clonesRes, usersRes] = await Promise.all([
-    // id/name for the fan-list "via X" line; the rest is only used to
-    // reconstruct the Journey row's exact onboarding position + credit-freeze
-    // state below (see onboardingActive() in bot/src/onboarding-state.ts,
-    // mirrored here the same way lib/persona-facts.ts mirrors prompt.ts).
+  const [clonesRes, usersRes, routeLogsRes] = await Promise.all([
+    // id/name for the fan-list "via X" line; the rest reconstructs every fan's
+    // exact onboarding position, campaign position and credit-freeze state (see
+    // onboardingActive() in bot/src/onboarding-state.ts and the step walk in
+    // bot/src/campaign.ts, mirrored here the same way lib/persona-facts.ts
+    // mirrors prompt.ts). Both step lists are per-CLONE, so they are fetched
+    // once here and joined to each fan row, never queried per fan.
     supabaseAdmin
       .from("clones")
-      .select("id,name,onboarding_steps,onboarding_free_preview_enabled,photos_enabled"),
+      .select("id,name,onboarding_steps,onboarding_free_preview_enabled,photos_enabled,drip_steps,drip_enabled"),
     (() => {
       let query = supabaseAdmin
         .from("users")
@@ -87,27 +222,53 @@ export default async function FansPage({
       if (cloneId) query = query.eq("clone_id", cloneId);
       return query;
     })(),
+    // Last route per fan. One indexed read of the most recent routing rows
+    // (system_logs_source_ts_idx covers exactly this (source, ts desc) shape),
+    // then newest-per-fan in memory, rather than a query per row. PostgREST
+    // caps every response at 1000 rows on this project, so on a busy fleet this
+    // window only reaches back so far: a fan outside it gets NO route chip,
+    // which is the intended failure - never a stale one presented as current.
+    (() => {
+      let query = supabaseAdmin
+        .from("system_logs")
+        .select("clone_id,telegram_id,detail")
+        .eq("source", "routing")
+        .order("ts", { ascending: false })
+        .limit(1000);
+      if (cloneId) query = query.eq("clone_id", cloneId);
+      return query;
+    })(),
   ]);
 
-  type OnboardingStepRow = {
-    type: "text" | "voice" | "photo" | "video" | "bundle" | "collect" | "tease";
-    after_messages?: number;
-    media_id?: string | null;
-    free?: boolean;
-    collect_field?: string | null;
-    instruction?: string | null;
-    // Stable id (migration 087) — what onboarding_steps_done records.
-    id?: string | null;
-  };
-  const clones = (clonesRes.data ?? []) as {
-    id: string;
-    name: string;
-    onboarding_steps: OnboardingStepRow[] | null;
-    onboarding_free_preview_enabled: boolean | null;
-    photos_enabled: boolean | null;
-  }[];
+  const clones = (clonesRes.data ?? []) as CloneRow[];
   const cloneById = new Map(clones.map((c) => [c.id, c]));
   const allUsers = (usersRes.data ?? []) as any[];
+
+  // Rows arrive newest-first, so the FIRST row seen for a fan is his last turn.
+  // `seen` is tracked separately from the map: a row we cannot render a chip
+  // for (an unknown route value) still closes that fan out, so an older turn
+  // can never be shown as if it were the latest one.
+  const lastRoute = new Map<string, { emoji: string; label: string; tone: string }>();
+  const seenRouteKeys = new Set<string>();
+  for (const row of (routeLogsRes.data ?? []) as any[]) {
+    const key = `${row.clone_id}:${row.telegram_id}`;
+    if (seenRouteKeys.has(key)) continue;
+    seenRouteKeys.add(key);
+    const detail = (row.detail ?? {}) as { route?: string; mode?: string; actions?: unknown; voice?: boolean };
+    const chip = detail.route ? ROUTE_CHIP[detail.route] : null;
+    if (chip) {
+      lastRoute.set(key, chip);
+      continue;
+    }
+    if (detail.mode === "smart") {
+      const actions = (Array.isArray(detail.actions) ? detail.actions : []).map(String);
+      lastRoute.set(key, {
+        emoji: "🤖",
+        label: actions.length ? actions.join("+") : detail.voice ? "voice" : "text",
+        tone: "bg-accent/15 text-accent",
+      });
+    }
+  }
 
   // Data above the list: fleet/clone-scoped counts, unaffected by search/status
   // so they always read as the true totals for the current clone scope.
@@ -277,70 +438,17 @@ export default async function FansPage({
   const qs = (id: string) => baseQs({ fan: id });
 
   // ── Onboarding / paywall journey state (PART 3, 3a; T8 rebuild 2026-07-29) ──
-  // Display only, no writes. paywall_hits_since_credits drives the "first hit
-  // only" quirk (src/handler.ts: paywallExhausted() + sendPaywall()): hit 1
-  // gets the AI-composed personal line (only when smart_paywall_enabled), hit
-  // 2 gets the fixed static default message, and hit 3+ is silently ignored
-  // forever - his message is DELETED, no reply, nothing sent - until he tops
-  // up, which resets this back to 0.
+  // Display only, no writes. Same journeyOf() the fan-list chips above run
+  // through, so the list and this panel cannot disagree about where a fan is.
   const paywallHits: number = selected?.paywall_hits_since_credits ?? 0;
-  const paywallState =
-    paywallHits <= 0
-      ? { label: "Never hit", tone: "bg-muted/10 text-muted" }
-      : paywallHits === 1
-        ? { label: "First hit used", tone: "bg-accent/15 text-accent" }
-        : paywallHits === 2
-          ? { label: "Static hit used", tone: "bg-warn/15 text-warn" }
-          : { label: "Exhausted, ignored", tone: "bg-crit/15 text-crit" };
-  const paywallHint =
-    "By design, not a bug: only his FIRST hit of an out-of-credits episode gets the personalized/smart line. " +
-    "His 2nd hit gets the fixed static default message. Every hit after that (3rd+) is silently ignored entirely " +
-    "- his message is deleted, no reply, nothing sent at all. Resets to 0 the moment he tops up.";
+  const paywallState = paywallStateOf(paywallHits);
+  const paywallHint = PAYWALL_HINT;
 
-  // ── Onboarding position (T8): reconstruct exactly where this fan is in the
-  // clone's ordered onboarding_steps list, and whether credits are frozen for
-  // him right now. Mirrors dueOnboardingStep()/onboardingActive() in
-  // bot/src/onboarding.ts + onboarding-state.ts exactly (same convention as
-  // lib/persona-facts.ts mirroring prompt.ts) rather than approximating.
-  const ONBOARDING_STEP_LABEL: Record<string, { label: string; emoji: string }> = {
-    text: { label: "text", emoji: "💬" },
-    voice: { label: "voice", emoji: "🎙️" },
-    photo: { label: "photo", emoji: "📷" },
-    video: { label: "video", emoji: "🎥" },
-    bundle: { label: "bundle", emoji: "🎁" },
-    collect: { label: "collect", emoji: "❓" },
-    tease: { label: "tease", emoji: "😏" },
-  };
-  const selectedClone = selected ? cloneById.get(selected.clone_id) : undefined;
-  const onboardingSteps: OnboardingStepRow[] = selectedClone?.onboarding_steps ?? [];
-  // Delivery is tracked by STABLE STEP ID (migration 087), never by position:
-  // positions re-point at different steps the moment the list is edited, which
-  // desynced every live fan. Mirrors deliveredStepKeys()/stepKey() in
-  // bot/src/onboarding-state.ts, including the positional fallback for a row
-  // that only has pre-087 history.
-  const stepKeyOf = (s: OnboardingStepRow, i: number) => (s.id?.trim() ? s.id.trim() : `#${i}`);
-  const onboardingStepsSent: number[] = Array.isArray(selected?.onboarding_steps_sent) ? selected.onboarding_steps_sent : [];
-  const onboardingStepsDone: string[] = Array.isArray(selected?.onboarding_steps_done) ? selected.onboarding_steps_done : [];
-  const sentStepSet = new Set<string>(onboardingStepsDone.filter((k) => typeof k === "string" && k.trim()));
-  if (sentStepSet.size === 0) {
-    for (const i of onboardingStepsSent) {
-      const step = onboardingSteps[i];
-      if (step) sentStepSet.add(stepKeyOf(step, i));
-    }
-  }
-  // Sequential pointer, same as dueOnboardingStep(): first step not yet sent.
-  const nextStepIndex = onboardingSteps.findIndex((s, i) => !sentStepSet.has(stepKeyOf(s, i)));
-  const nextStep = nextStepIndex !== -1 ? onboardingSteps[nextStepIndex] : null;
-  const firedSteps = onboardingSteps.filter((s, i) => sentStepSet.has(stepKeyOf(s, i)));
-  // onboardingActive() in bot/src/onboarding-state.ts: frozen while onboarding
-  // has something LEFT to do - an unsent step remains, or the free-preview
-  // fallback is still armed - never a bare "!onboarding_complete" (that would
-  // freeze forever on a clone with no onboarding configured at all).
-  const freePreviewArmed =
-    !!selectedClone?.onboarding_free_preview_enabled &&
-    !!selectedClone?.photos_enabled &&
-    !selected?.onboarding_free_preview_sent;
-  const creditsFrozen = !!selected && !selected.onboarding_complete && (nextStepIndex !== -1 || freePreviewArmed);
+  const selectedJourney = selected ? journeyOf(selected, cloneById.get(selected.clone_id)) : null;
+  const onboardingSteps = selectedJourney?.onboardingSteps ?? [];
+  const nextStep = selectedJourney?.nextStep ?? null;
+  const firedSteps = selectedJourney?.firedSteps ?? [];
+  const creditsFrozen = !!selectedJourney?.creditsFrozen;
   const creditsFrozenHint =
     "Operator decision D3: a fan in onboarding NEVER runs out of messages. His credits are frozen (not " +
     "decremented) and the paywall cannot fire for the whole of onboarding. Onboarding ends when he pays for " +
@@ -465,52 +573,132 @@ export default async function FansPage({
                 {q ? `No fans match "${q}".` : "No fans yet."}
               </div>
             ) : (
-              filtered.map((u) => (
-                <Link
-                  key={u.id}
-                  href={qs(u.id)}
-                  className={
-                    "flex items-center gap-2.5 px-3 py-2.5 text-left transition " +
-                    (selected?.id === u.id ? "bg-accent/10" : "hover:bg-muted/10")
-                  }
-                >
-                  <FanAvatar
-                    cloneId={u.clone_id}
-                    telegramId={u.telegram_id}
-                    name={displayName(u)}
-                    className="h-9 w-9 text-xs"
-                  />
-                  <span className="min-w-0 flex-1">
-                    <span className="flex items-center gap-1.5">
-                      <span className={"min-w-0 flex-1 truncate text-sm font-medium " + (u.blocked ? "text-crit" : "text-ink")}>
-                        {displayName(u)}
+              filtered.map((u) => {
+                // Stage line. Everything here was already in this page's data
+                // (or one extra indexed log read) but was only ever visible
+                // AFTER clicking a fan, one at a time - so "who is stuck where"
+                // was unanswerable by looking at the list.
+                const j = journeyOf(u, cloneById.get(u.clone_id));
+                const route = lastRoute.get(`${u.clone_id}:${u.telegram_id}`);
+                const paywall = paywallStateOf(u.paywall_hits_since_credits ?? 0);
+                const nextLabel = j.nextStep ? ONBOARDING_STEP_LABEL[j.nextStep.type] : null;
+                // One stage per fan, most-blocking first: a hard gate outranks
+                // his onboarding position, which outranks "done". `stripe` is
+                // the row's left edge, so the whole list is scannable by colour
+                // without reading a single chip.
+                const stage =
+                  !!u.minor_flagged_at || u.blocked_reason === "minor"
+                    ? { emoji: "🚫", label: "minor gate", tone: "bg-crit/15 text-crit", stripe: "border-crit" }
+                    : u.blocked
+                      ? { emoji: "🚫", label: "blocked", tone: "bg-crit/15 text-crit", stripe: "border-crit" }
+                      : u.onboarding_complete
+                        ? { emoji: "✅", label: "onboarded", tone: "bg-good/15 text-good", stripe: "border-good" }
+                        : j.nextStep
+                          ? {
+                              emoji: nextLabel?.emoji ?? "🚶",
+                              label: `step ${j.nextStepIndex + 1}/${j.onboardingSteps.length} ${nextLabel?.label ?? j.nextStep.type}`,
+                              tone: "bg-warn/15 text-warn",
+                              stripe: "border-warn",
+                            }
+                          : j.onboardingSteps.length === 0
+                            ? { emoji: "🚶", label: "no onboarding", tone: "bg-muted/10 text-muted", stripe: "border-line" }
+                            : { emoji: "🏁", label: "steps done", tone: "bg-accent/15 text-accent", stripe: "border-accent" };
+                const chip = "shrink-0 rounded-full px-1.5 py-px text-[9px] font-medium leading-[14px]";
+                return (
+                  <Link
+                    key={u.id}
+                    href={qs(u.id)}
+                    className={
+                      "flex items-center gap-2.5 border-l-2 px-3 py-2.5 text-left transition " +
+                      stage.stripe +
+                      " " +
+                      (selected?.id === u.id ? "bg-accent/10" : "hover:bg-muted/10")
+                    }
+                  >
+                    <FanAvatar
+                      cloneId={u.clone_id}
+                      telegramId={u.telegram_id}
+                      name={displayName(u)}
+                      className="h-9 w-9 text-xs"
+                    />
+                    <span className="min-w-0 flex-1">
+                      <span className="flex items-center gap-1.5">
+                        <span className={"min-w-0 flex-1 truncate text-sm font-medium " + (u.blocked ? "text-crit" : "text-ink")}>
+                          {displayName(u)}
+                        </span>
+                        {/* Lifetime spend right after the name - the number that matters. */}
+                        {(u.total_spent_stars ?? 0) > 0 && (
+                          <span className="shrink-0 font-mono text-[11px] font-semibold tabular-nums text-good">
+                            {fmtNum(u.total_spent_stars)}★
+                          </span>
+                        )}
+                        {u.blocked && (
+                          <span className="shrink-0 rounded-full bg-crit/15 px-1.5 text-[9px] font-semibold uppercase text-crit">
+                            flag
+                          </span>
+                        )}
+                        {/* users.paused - one fan paused, distinct from a safety block
+                            and from the whole-clone Active/Paused status. */}
+                        {u.paused && (
+                          <span className="shrink-0 rounded-full bg-warn/15 px-1.5 text-[9px] font-semibold uppercase text-warn">
+                            paused
+                          </span>
+                        )}
                       </span>
-                      {/* Lifetime spend right after the name - the number that matters. */}
-                      {(u.total_spent_stars ?? 0) > 0 && (
-                        <span className="shrink-0 font-mono text-[11px] font-semibold tabular-nums text-good">
-                          {fmtNum(u.total_spent_stars)}★
+                      <span className="block truncate text-[11px] text-muted">
+                        {u.username ? `@${u.username}` : cloneById.get(u.clone_id)?.name ?? "-"}
+                      </span>
+                      <span className="mt-1 flex flex-wrap items-center gap-1">
+                        <span
+                          className={chip + " " + stage.tone}
+                          title={
+                            j.nextStep
+                              ? `Next onboarding step: ${nextLabel?.label ?? j.nextStep.type} at ${j.nextStep.after_messages ?? "?"} messages. ${j.firedSteps.length} of ${j.onboardingSteps.length} already sent.`
+                              : "Onboarding stage for this fan."
+                          }
+                        >
+                          {stage.emoji} {stage.label}
                         </span>
-                      )}
-                      {u.blocked && (
-                        <span className="shrink-0 rounded-full bg-crit/15 px-1.5 text-[9px] font-semibold uppercase text-crit">
-                          flag
-                        </span>
-                      )}
-                      {/* users.paused - one fan paused, distinct from a safety block
-                          and from the whole-clone Active/Paused status. */}
-                      {u.paused && (
-                        <span className="shrink-0 rounded-full bg-warn/15 px-1.5 text-[9px] font-semibold uppercase text-warn">
-                          paused
-                        </span>
-                      )}
+                        {/* Credits frozen is the single most surprising behaviour
+                            in the product (operator decision D3) and the usual
+                            answer to "why is this fan never hitting the paywall". */}
+                        {j.creditsFrozen && (
+                          <span
+                            className={chip + " bg-crit/15 font-semibold text-crit"}
+                            title={creditsFrozenHint}
+                          >
+                            🧊 frozen
+                          </span>
+                        )}
+                        {/* Campaign steps fired in his CURRENT quiet episode. Zero
+                            is not shown: it is the normal state of a fan who just
+                            messaged, not information. */}
+                        {j.campaignStep > 0 && j.campaignSteps.length > 0 && (
+                          <span
+                            className={chip + " bg-purple-500/15 text-purple-400"}
+                            title={`Automated campaign: ${j.campaignStep} of ${j.campaignSteps.length} steps sent this quiet episode. Resets to 0 the moment he messages.${j.campaignEnabled ? "" : " The campaign is currently OFF for this clone."}`}
+                          >
+                            💧 drip {j.campaignStep}/{j.campaignSteps.length}
+                          </span>
+                        )}
+                        {/* Only the two states an operator has to act on. "Never
+                            hit" and "first hit used" are the healthy majority. */}
+                        {paywall.loud && (
+                          <span className={chip + " " + paywall.tone} title={PAYWALL_HINT}>
+                            💳 {paywall.label}
+                          </span>
+                        )}
+                        {route && (
+                          <span className={chip + " " + route.tone} title="What the router picked on this fan's most recent turn.">
+                            {route.emoji} {route.label}
+                          </span>
+                        )}
+                      </span>
                     </span>
-                    <span className="block truncate text-[11px] text-muted">
-                      {u.username ? `@${u.username}` : cloneById.get(u.clone_id)?.name ?? "-"}
-                    </span>
-                  </span>
-                  <span className="shrink-0 text-[10px] text-muted">{ago(u.last_message_received)}</span>
-                </Link>
-              ))
+                    <span className="shrink-0 self-start text-[10px] text-muted">{ago(u.last_message_received)}</span>
+                  </Link>
+                );
+              })
             )}
           </div>
         </Card>
@@ -835,11 +1023,32 @@ export default async function FansPage({
                     {selected.onboarding_complete
                       ? "✅ Onboarded"
                       : nextStep
-                        ? `🚶 Onboarding · next: ${ONBOARDING_STEP_LABEL[nextStep.type]?.emoji ?? ""} ${ONBOARDING_STEP_LABEL[nextStep.type]?.label ?? nextStep.type} at ${nextStep.after_messages ?? "?"} msgs`
+                        ? `🚶 Onboarding · step ${(selectedJourney?.nextStepIndex ?? 0) + 1}/${onboardingSteps.length} next: ${ONBOARDING_STEP_LABEL[nextStep.type]?.emoji ?? ""} ${ONBOARDING_STEP_LABEL[nextStep.type]?.label ?? nextStep.type} at ${nextStep.after_messages ?? "?"} msgs`
                         : onboardingSteps.length === 0
                           ? "🚶 Onboarding (no steps configured)"
                           : "🚶 Onboarding · all steps sent"}
                   </span>
+                  {/* Campaign position and last route, the same two facts the
+                      fan-list chips show, spelled out here. */}
+                  {(selectedJourney?.campaignStep ?? 0) > 0 && (selectedJourney?.campaignSteps.length ?? 0) > 0 && (
+                    <span
+                      className="rounded-full bg-purple-500/15 px-2 py-0.5 text-[10px] font-medium text-purple-400"
+                      title={`Automated campaign: ${selectedJourney!.campaignStep} of ${selectedJourney!.campaignSteps.length} steps sent this quiet episode. Resets to 0 the moment he messages.${selectedJourney!.campaignEnabled ? "" : " The campaign is currently OFF for this clone."}`}
+                    >
+                      💧 drip {selectedJourney!.campaignStep}/{selectedJourney!.campaignSteps.length}
+                    </span>
+                  )}
+                  {(() => {
+                    const r = lastRoute.get(`${selected.clone_id}:${selected.telegram_id}`);
+                    return r ? (
+                      <span
+                        className={"rounded-full px-2 py-0.5 text-[10px] font-medium " + r.tone}
+                        title="What the router picked on this fan's most recent turn. Full history is on the logs page linked above."
+                      >
+                        {r.emoji} last route: {r.label}
+                      </span>
+                    ) : null;
+                  })()}
                   {!selected.onboarding_complete && creditsFrozen && (
                     <span className="flex items-center gap-1 rounded-full bg-crit/15 px-2 py-0.5 text-[10px] font-semibold text-crit">
                       🧊 CREDITS FROZEN
