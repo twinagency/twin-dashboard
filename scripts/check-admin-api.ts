@@ -183,12 +183,25 @@ check("B4 no admin route reaches Supabase directly, bypassing the allowlist chok
   }
 });
 
-// Writing is now allowed, but ONLY on two named routes, and even there only
-// through the dashboard's own validated server actions. Everything else stays
+// Writing is now allowed, but ONLY on named routes, and even there only through
+// the dashboard's own validated server actions. Everything else stays
 // read-only, and no route may touch the database directly (B4 covers that).
-const WRITE_ROUTES = ["/clones/write/route.ts", "/clones/create/route.ts"];
+//
+// ADDING TO THIS LIST IS A DELIBERATE ACT. The list is what catches a writer
+// that nobody meant to ship, so a new entry needs the same argument the first
+// two made: it delegates to a server action, and the action is the one the
+// dashboard's own page already uses.
+//
+//   /media/route.ts  admitted 2026-08-08. It calls uploadPhoto()/uploadVideo(),
+//     the same actions /media uses, which convert format, enforce Telegram's
+//     10MB cap, AI-caption each item, resolve a star price from the clone's own
+//     guide, and set is_free correctly. A clone created through the API had no
+//     way to get content at all without it, so the creation path was only ever
+//     half a path. It had been live and unlisted here since it landed, which is
+//     what this check is for.
+const WRITE_ROUTES = ["/clones/write/route.ts", "/clones/create/route.ts", "/media/route.ts"];
 
-check("B5 only the two named write routes accept writes; the rest are read-only", () => {
+check("B5 only the named write routes accept writes; the rest are read-only", () => {
   for (const p of adminRouteFiles()) {
     const src = sourceCode(p);
     const isWriteRoute = WRITE_ROUTES.some((w) => p.endsWith(w));
