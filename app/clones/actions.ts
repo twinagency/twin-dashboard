@@ -313,6 +313,11 @@ function rowFromForm(fd: FormData) {
     // never resend an already-received item. Listed in MEDIA_RESEND_COLUMNS
     // below so a save before the migration lands still succeeds.
     media_allow_resend: fd.get("media_allow_resend") === "true",
+    // Strict media-match dial (migration 104). false = current behaviour, an
+    // unreadable matcher answer falls back to the first available item.
+    // Listed in MEDIA_MATCH_STRICT_COLUMNS below so a save before the
+    // migration lands still succeeds.
+    media_match_strict: fd.get("media_match_strict") === "true",
     tips_enabled: fd.get("tips_enabled") === "true",
     // Migration 084, the two tip re-ask brakes.
     //
@@ -784,6 +789,9 @@ const FLOW_072_COLUMNS = ["message_catch_wait_seconds"] as const;
 // with this dashboard work). Listed so a save issued before that migration
 // lands strips the column and still succeeds, instead of failing the whole save.
 const MEDIA_RESEND_COLUMNS = ["media_allow_resend"] as const;
+// Strict media-match dial (migration 104). Listed so a save issued before
+// that migration lands strips the column and still succeeds.
+const MEDIA_MATCH_STRICT_COLUMNS = ["media_match_strict"] as const;
 // Migration 080: tip_push_level + greeting_ask_age. Both verified applied on
 // aouaenqayfltoqrmpitg 2026-07-29; listed anyway so the same save still works
 // against a stack where 080 has not run yet.
@@ -913,6 +921,7 @@ const OPTIONAL_COLUMNS = [
   ...FLOW_070_COLUMNS,
   ...FLOW_072_COLUMNS,
   ...MEDIA_RESEND_COLUMNS,
+  ...MEDIA_MATCH_STRICT_COLUMNS,
   ...DIAL_080_COLUMNS,
   ...FLOW_084_COLUMNS,
   ...FLOW_085_COLUMNS,

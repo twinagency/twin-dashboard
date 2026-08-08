@@ -67,6 +67,8 @@ export type CloneConfigState = {
   charge: boolean;
   // Never-resend toggle (clones.media_allow_resend, Track D migration).
   mediaAllowResend: boolean;
+  // Strict media-match dial (clones.media_match_strict, migration 104).
+  mediaMatchStrict: boolean;
 
   sexualLevel: HeatLevel;
   nsfwLevel: HeatLevel;
@@ -253,6 +255,7 @@ function initial(clone?: Partial<Clone>): CloneConfigState {
     voice: clone?.voice_enabled ?? true,
     charge: clone?.charge_messages ?? true,
     mediaAllowResend: clone?.media_allow_resend ?? false,
+    mediaMatchStrict: clone?.media_match_strict ?? false,
 
     sexualLevel: heatLevel(clone?.sexual_level),
     nsfwLevel: heatLevel(clone?.nsfw_level),

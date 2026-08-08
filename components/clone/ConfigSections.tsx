@@ -535,6 +535,23 @@ export default function ConfigSections({
             onChange={(v) => set("mediaAllowResend", v)}
           />
         </div>
+        {/* Strict media-match dial (clones.media_match_strict, migration 104).
+            When the AI can't confidently read what item to send (its answer
+            comes back unparseable), the code has always had to pick something
+            or decline. Off (default) picks the first available item anyway,
+            which is how a fan asking for e.g. a family photo she doesn't have
+            got sent an unrelated item described as if it were the real thing.
+            On makes her say she doesn't have it instead of guessing. */}
+        <div className="border-t border-line pt-2">
+          <ToggleCard
+            emoji="🎯"
+            label={cfg.mediaMatchStrict ? "Only send an exact match" : "May guess if unsure"}
+            title="Off (default): if she can't tell what to send, she picks something from her catalogue anyway rather than send nothing. On: if she's not sure it's a real match, she tells him honestly she doesn't have it instead of sending and describing the wrong item."
+            name="media_match_strict"
+            checked={cfg.mediaMatchStrict}
+            onChange={(v) => set("mediaMatchStrict", v)}
+          />
+        </div>
         {/* Vision lives in its own row: every toggle above controls what she SENDS,
             these control what she RECEIVES, and grouping them together read as
             send toggles. Both default on. Turning either off means she ignores

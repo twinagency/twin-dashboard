@@ -50,6 +50,11 @@ export type Clone = {
   // fan already received. true = resends allowed. Optional so a row saved
   // before the migration lands still type-checks.
   media_allow_resend?: boolean;
+  // Strict media-match dial (migration 104). false (default) = current
+  // behaviour: an unreadable/hallucinated matcher answer falls back to the
+  // first available item. true = decline honestly instead of guessing.
+  // Optional so a row saved before the migration lands still type-checks.
+  media_match_strict?: boolean;
   live_captions_enabled: boolean;
   media_caption_mode: "inline" | "none" | "separate";
   thank_you_enabled: boolean;
