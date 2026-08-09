@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "./supabase";
+import { selectAllRows } from "./select-all";
 
 // The two Star figures Telegram's Bot API actually gives us, and what each
 // genuinely means. Don't add a matured/pending "21-day hold" split back in -
@@ -32,11 +33,17 @@ async function getMyStarBalance(token: string): Promise<number | null> {
 }
 
 export async function getStarBalance(cloneId: string, botToken: string): Promise<StarBalance> {
-  const [{ data: tx }, balance] = await Promise.all([
-    supabaseAdmin.from("star_transactions").select("amount_stars").eq("clone_id", cloneId),
+  // PAGED: this is one clone's LIFETIME star total, so it grows without bound and
+  // is exactly the shape that outruns the PostgREST cap. alanna-pow crossed it on
+  // 2026-08-09 with 5,010 transactions, at which point an unpaged read reported
+  // the first thousand of them as her lifetime earnings.
+  const [{ rows }, balance] = await Promise.all([
+    selectAllRows<{ amount_stars: number | null }>(
+      supabaseAdmin.from("star_transactions").select("amount_stars").eq("clone_id", cloneId),
+      { label: "clone lifetime star total" },
+    ),
     getMyStarBalance(botToken),
   ]);
-  const rows = (tx ?? []) as { amount_stars: number | null }[];
 
   const lifetimeStars = rows.reduce((s, r) => s + (Number(r.amount_stars) || 0), 0);
 

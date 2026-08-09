@@ -10,10 +10,11 @@
     "test:api": "../bot/node_modules/.bin/tsx scripts/check-admin-api.ts",
     "test:public": "../bot/node_modules/.bin/tsx scripts/check-public-api.ts",
     "test:paging": "../bot/node_modules/.bin/tsx scripts/check-select-all.ts",
-    "test": "npm run test:api && npm run test:public && npm run test:paging",
+    "test": "npm run test:api && npm run test:public && npm run test:paging && npm run test:callsites",
     "key:issue": "../bot/node_modules/.bin/tsx scripts/issue-api-key.ts issue",
     "key:list": "../bot/node_modules/.bin/tsx scripts/issue-api-key.ts list",
-    "key:revoke": "../bot/node_modules/.bin/tsx scripts/issue-api-key.ts revoke"
+    "key:revoke": "../bot/node_modules/.bin/tsx scripts/issue-api-key.ts revoke",
+    "test:callsites": "../bot/node_modules/.bin/tsx scripts/check-paged-call-sites.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

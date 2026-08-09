@@ -207,23 +207,36 @@ export async function getDashboard(period: Period, range?: DateRange): Promise<D
     kind: string | null;
     feature: string | null;
   };
+  // PAGED, and this is the revenue number itself. Unpaged, this read stopped at
+  // the PostgREST cap and every total on the page was a fraction of the truth,
+  // with nothing to say so. Measured on alanna-pow 2026-08-09, once her real
+  // Telegram history landed: the 3-month window returned 1000 of 3383 rows and
+  // reported 304,220 stars against an actual 1,340,088, and all-time reported
+  // 572,191 against 2,263,157. The read has no ORDER BY, so WHICH thousand rows
+  // came back was arbitrary - which is how a WIDER window could show LESS money
+  // than a narrower one, the symptom that gave it away.
   let purchases: PurchaseRow[];
   {
-    const withFeature = await supabaseAdmin
-      .from("star_transactions")
-      .select("id,clone_id,amount_stars,paid_at,telegram_id,kind,feature")
-      .gte("paid_at", new Date(startMs).toISOString())
-      .lte("paid_at", new Date(windowEnd).toISOString());
-    if (withFeature.error) {
-      const legacy = await supabaseAdmin
+    const COLS = "id,clone_id,amount_stars,paid_at,telegram_id,kind,feature";
+    const COLS_LEGACY = "id,clone_id,amount_stars,paid_at,telegram_id,kind";
+    // selectAllRows reports a failed read as an empty result, which here would
+    // read as "no revenue" rather than "column not there yet". So the missing
+    // column is probed for with one row BEFORE paging, and the paged read then
+    // asks only for columns that exist. Same defensive intent as before, just
+    // moved ahead of the read that has to succeed.
+    const probe = await supabaseAdmin.from("star_transactions").select(COLS).limit(1);
+    const hasFeature = !probe.error;
+    const paged = await selectAllRows(
+      supabaseAdmin
         .from("star_transactions")
-        .select("id,clone_id,amount_stars,paid_at,telegram_id,kind")
+        .select(hasFeature ? COLS : COLS_LEGACY)
         .gte("paid_at", new Date(startMs).toISOString())
-        .lte("paid_at", new Date(windowEnd).toISOString());
-      purchases = ((legacy.data ?? []) as Omit<PurchaseRow, "feature">[]).map((r) => ({ ...r, feature: null }));
-    } else {
-      purchases = (withFeature.data ?? []) as PurchaseRow[];
-    }
+        .lte("paid_at", new Date(windowEnd).toISOString()),
+      { label: "dashboard revenue ledger" },
+    );
+    purchases = hasFeature
+      ? (paged.rows as PurchaseRow[])
+      : (paged.rows as Omit<PurchaseRow, "feature">[]).map((r) => ({ ...r, feature: null }));
   }
 
   // bucketKey -> cloneId -> stars

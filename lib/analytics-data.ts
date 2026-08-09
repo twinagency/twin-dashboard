@@ -194,25 +194,30 @@ export async function getAnalytics(
   };
   let txs: TxRow[];
   {
-    let withFeatureQ = supabaseAdmin
+    // PAGED, and this is the revenue number on every analytics chart. Unpaged it
+    // stopped at the PostgREST cap with no error: alanna-pow's 3-month window
+    // read 1000 of 3383 rows and reported 304,220 stars against an actual
+    // 1,340,088 (measured 2026-08-09). There is no ORDER BY, so which thousand
+    // came back was arbitrary, and a wider window could report LESS than a
+    // narrower one.
+    //
+    // The missing-column fallback is probed with one row BEFORE the paged read,
+    // because selectAllRows reports a failure as an empty result — which here
+    // would render as "no revenue" instead of "column not there yet".
+    const COLS = "clone_id,amount_stars,paid_at,kind,feature,telegram_id";
+    const COLS_LEGACY = "clone_id,amount_stars,paid_at,kind,telegram_id";
+    const probe = await supabaseAdmin.from("star_transactions").select(COLS).limit(1);
+    const hasFeature = !probe.error;
+    let q = supabaseAdmin
       .from("star_transactions")
-      .select("clone_id,amount_stars,paid_at,kind,feature,telegram_id")
+      .select(hasFeature ? COLS : COLS_LEGACY)
       .gte("paid_at", iso(startMs))
       .lte("paid_at", iso(windowEnd));
-    if (cloneId) withFeatureQ = withFeatureQ.eq("clone_id", cloneId);
-    const withFeature = await withFeatureQ;
-    if (withFeature.error) {
-      let legacyQ = supabaseAdmin
-        .from("star_transactions")
-        .select("clone_id,amount_stars,paid_at,kind,telegram_id")
-        .gte("paid_at", iso(startMs))
-        .lte("paid_at", iso(windowEnd));
-      if (cloneId) legacyQ = legacyQ.eq("clone_id", cloneId);
-      const legacy = await legacyQ;
-      txs = ((legacy.data ?? []) as Omit<TxRow, "feature">[]).map((r) => ({ ...r, feature: null }));
-    } else {
-      txs = (withFeature.data ?? []) as TxRow[];
-    }
+    if (cloneId) q = q.eq("clone_id", cloneId);
+    const { rows } = await selectAllRows(q, { label: "analytics revenue ledger" });
+    txs = hasFeature
+      ? (rows as TxRow[])
+      : (rows as Omit<TxRow, "feature">[]).map((r) => ({ ...r, feature: null }));
   }
 
   // Per-clone revenue + sales.
@@ -302,17 +307,24 @@ export async function getAnalytics(
   }
   // paywalled: distinct fans shown the paywall (paywall_hits — additive table, mig 024).
   // If the table doesn't exist yet the query errors → treat as "still collecting".
-  let paywallQ = supabaseAdmin
-    .from("paywall_hits")
-    .select("telegram_id")
-    .gte("shown_at", iso(startMs))
-    .lte("shown_at", iso(windowEnd));
-  if (cloneId) paywallQ = paywallQ.eq("clone_id", cloneId);
-  const paywallRes = await paywallQ;
-  const paywallCollecting = Boolean(paywallRes.error);
+  // Probe first: this table is additive (migration 024) and may not exist yet, and
+  // a paged read reports that failure as an empty result, which would read as
+  // "nobody was ever paywalled" instead of "still collecting". Then page, because
+  // one paywall hit per fan per session outgrows the row cap faster than payments do.
+  const paywallProbe = await supabaseAdmin.from("paywall_hits").select("telegram_id").limit(1);
+  const paywallCollecting = Boolean(paywallProbe.error);
   const paywalledFans = new Set<number>();
-  for (const p of (paywallRes.data ?? []) as { telegram_id: number | null }[]) {
-    if (p.telegram_id != null) paywalledFans.add(p.telegram_id);
+  if (!paywallCollecting) {
+    let paywallQ = supabaseAdmin
+      .from("paywall_hits")
+      .select("telegram_id")
+      .gte("shown_at", iso(startMs))
+      .lte("shown_at", iso(windowEnd));
+    if (cloneId) paywallQ = paywallQ.eq("clone_id", cloneId);
+    const { rows: paywallRows } = await selectAllRows(paywallQ, { label: "analytics paywall hits" });
+    for (const p of paywallRows as { telegram_id: number | null }[]) {
+      if (p.telegram_id != null) paywalledFans.add(p.telegram_id);
+    }
   }
 
   // ── lifetime fan spend → tiers + funnel (users table) ────────────────────────
