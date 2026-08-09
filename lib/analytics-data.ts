@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "./supabase";
+import { selectAllRows } from "./select-all";
 import { chartColorForClone } from "./colors";
 import { STAR_USD } from "./money";
 import type { DateRange, Period } from "./dashboard-data";
@@ -294,7 +295,7 @@ export async function getAnalytics(
     .gte("created_at", iso(startMs))
     .lte("created_at", iso(windowEnd));
   if (cloneId) msgQ = msgQ.eq("clone_id", cloneId);
-  const { data: msgRows } = await msgQ;
+  const { rows: msgRows } = await selectAllRows(msgQ, { label: "analytics paywall funnel: messaged fans" });
   const messagedFans = new Set<number>();
   for (const m of (msgRows ?? []) as { telegram_id: number | null }[]) {
     if (m.telegram_id != null) messagedFans.add(m.telegram_id);
@@ -317,7 +318,7 @@ export async function getAnalytics(
   // ── lifetime fan spend → tiers + funnel (users table) ────────────────────────
   let userQ = supabaseAdmin.from("users").select("total_spent_stars,spend_tier,purchase_count");
   if (cloneId) userQ = userQ.eq("clone_id", cloneId);
-  const { data: userRows } = await userQ;
+  const { rows: userRows } = await selectAllRows(userQ, { label: "analytics lifetime fan spend" });
   const users = (userRows ?? []) as {
     total_spent_stars: number | null;
     spend_tier: string | null;

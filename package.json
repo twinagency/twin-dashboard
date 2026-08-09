@@ -9,7 +9,8 @@
     "lint": "next lint",
     "test:api": "../bot/node_modules/.bin/tsx scripts/check-admin-api.ts",
     "test:public": "../bot/node_modules/.bin/tsx scripts/check-public-api.ts",
-    "test": "npm run test:api && npm run test:public",
+    "test:paging": "../bot/node_modules/.bin/tsx scripts/check-select-all.ts",
+    "test": "npm run test:api && npm run test:public && npm run test:paging",
     "key:issue": "../bot/node_modules/.bin/tsx scripts/issue-api-key.ts issue",
     "key:list": "../bot/node_modules/.bin/tsx scripts/issue-api-key.ts list",
     "key:revoke": "../bot/node_modules/.bin/tsx scripts/issue-api-key.ts revoke"

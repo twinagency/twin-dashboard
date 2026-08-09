@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "./supabase";
+import { selectAllRows } from "./select-all";
 import { chartColorForClone, profileImagePathForClone } from "./colors";
 
 export type Period = "ALL" | "1Y" | "6M" | "3M" | "1M" | "2W" | "1W" | "1D" | "CUSTOM";
@@ -282,9 +283,12 @@ export async function getDashboard(period: Period, range?: DateRange): Promise<D
   }
 
   // ── per-clone user stats ────────────────────────────────────────────────────
-  const { data: userRows } = await supabaseAdmin
-    .from("users")
-    .select("clone_id,telegram_id,name,stated_name,username,last_message_received,total_messages_sent,purchase_count,total_spent_stars");
+  const { rows: userRows } = await selectAllRows(
+    supabaseAdmin
+      .from("users")
+      .select("clone_id,telegram_id,name,stated_name,username,last_message_received,total_messages_sent,purchase_count,total_spent_stars"),
+    { label: "dashboard per-clone user stats" },
+  );
   const users = (userRows ?? []) as {
     clone_id: string;
     telegram_id: number;
