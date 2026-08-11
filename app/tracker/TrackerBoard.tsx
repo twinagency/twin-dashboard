@@ -111,7 +111,11 @@ function ItemRow({
         <button onClick={() => setOpen((v) => !v)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
           <span className="w-11 shrink-0 font-mono text-xs text-neutral-400">#{item.number}</span>
           <span className="min-w-0 flex-1 truncate text-sm font-medium text-neutral-900">{item.title}</span>
-          {botFor(item.submittedBy) && <BotBadge bot={botFor(item.submittedBy)!} />}
+          {botFor(item.submittedBy) ? (
+            <BotBadge bot={botFor(item.submittedBy)!} />
+          ) : (
+            <Chip className="bg-neutral-200 text-neutral-700">{item.submittedBy}</Chip>
+          )}
           {batchLabel && <Chip className="bg-sky-100 text-sky-700">{batchLabel}</Chip>}
           {item.severity === "money" && <Chip className="bg-red-600 text-white">MONEY</Chip>}
           {item.severity === "high" && <Chip className="bg-orange-100 text-orange-700">high</Chip>}
@@ -580,14 +584,6 @@ export function TrackerBoard({ board }: { board: Board }) {
         {!open.length && <p className="rounded-xl border border-dashed border-black/10 px-4 py-8 text-center text-sm text-neutral-400">nothing open here</p>}
       </section>
 
-      {board.dropped.length > 0 && (
-        <section className="space-y-2">
-          <h2 className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400">Ruled out ({board.dropped.length})</h2>
-          {board.dropped.map((i) => (
-            <ItemRow key={i.id} item={i} batches={board.batches} />
-          ))}
-        </section>
-      )}
     </div>
   );
 }
