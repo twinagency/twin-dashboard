@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Link from "next/link";
 import { KINDS, AREAS, SEVERITIES, ageLabel, type TrackerBatch, type TrackerBoard as Board, type TrackerItem } from "@/lib/tracker";
 import {
   addCommit,
@@ -69,12 +70,14 @@ function ItemRow({
   selected,
   onSelect,
   batches,
+  batchLabel,
 }: {
   item: TrackerItem;
   selectable?: boolean;
   selected?: boolean;
   onSelect?: (id: string, on: boolean) => void;
   batches: TrackerBatch[];
+  batchLabel?: string | null;
 }) {
   const [open, setOpen] = useState(false);
   const [pending, start] = useTransition();
@@ -94,6 +97,7 @@ function ItemRow({
         <button onClick={() => setOpen((v) => !v)} className="flex min-w-0 flex-1 items-center gap-3 text-left">
           <span className="w-11 shrink-0 font-mono text-xs text-neutral-400">#{item.number}</span>
           <span className="min-w-0 flex-1 truncate text-sm font-medium text-neutral-900">{item.title}</span>
+          {batchLabel && <Chip className="bg-sky-100 text-sky-700">{batchLabel}</Chip>}
           {item.severity === "money" && <Chip className="bg-red-600 text-white">MONEY</Chip>}
           {item.severity === "high" && <Chip className="bg-orange-100 text-orange-700">high</Chip>}
           <Chip className={KIND_COLOR[item.kind] ?? "bg-neutral-200 text-neutral-700"}>{item.kind}</Chip>
@@ -254,6 +258,36 @@ function ItemRow({
   );
 }
 
+// A slim bar for the batch currently being worked. Not its own zone: its items
+// stay in the open list below, so there is exactly one place to look for
+// outstanding work. This is only the controls for moving it along.
+function BatchControls({ batch }: { batch: TrackerBatch }) {
+  const [pending, start] = useTransition();
+  return (
+    <form
+      action={(fd) => start(() => void updateBatch(batch.id, fd))}
+      className="flex flex-wrap items-center gap-2 rounded-xl border border-sky-200 bg-sky-50/70 px-3 py-2.5"
+    >
+      <span className="text-sm font-semibold text-sky-900">BATCH {String(batch.number).padStart(2, "0")}</span>
+      <span className="text-xs text-sky-700">
+        {batch.items.length} picked, {batch.status === "shipped" ? "shipped, waiting on verification" : "being fixed"}
+      </span>
+      <input
+        name="deploy_note"
+        defaultValue={batch.deployNote}
+        placeholder="how it shipped, eg deployed bot 16 Aug, verified in container"
+        className="min-w-52 flex-1 rounded-lg border border-sky-200 bg-white px-3 py-1.5 text-xs"
+      />
+      <button name="status" value="shipped" disabled={pending} className="rounded-lg bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white hover:bg-amber-600">
+        mark shipped
+      </button>
+      <button name="status" value="live" disabled={pending} className="rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-semibold text-white hover:bg-emerald-700">
+        verified live, move to done
+      </button>
+    </form>
+  );
+}
+
 // ── one batch ────────────────────────────────────────────────────────────────
 function BatchBlock({ batch, batches, defaultOpen }: { batch: TrackerBatch; batches: TrackerBatch[]; defaultOpen: boolean }) {
   const [open, setOpen] = useState(defaultOpen);
@@ -337,6 +371,7 @@ export function TrackerBoard({ board }: { board: Board }) {
 
   const archive = board.batches.filter((b) => b.status === "live");
   const inFlight = board.batches.filter((b) => b.status !== "live");
+  const batchNumber = new Map(board.batches.map((b) => [b.id, b.number]));
   const open = filter === "all" ? board.open : board.open.filter((i) => i.kind === filter);
   const money = board.open.filter((i) => i.severity === "money").length;
 
@@ -359,9 +394,12 @@ export function TrackerBoard({ board }: { board: Board }) {
             {archive.reduce((n, b) => n + b.items.length, 0)} fixed and live
           </p>
         </div>
+        <Link href="/tracker/bots" className="ml-auto text-sm font-medium text-neutral-500 hover:text-neutral-900">
+          bots
+        </Link>
         <button
           onClick={() => setReporting((v) => !v)}
-          className="ml-auto rounded-xl bg-neutral-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-neutral-800"
+          className="rounded-xl bg-neutral-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-neutral-800"
         >
           {reporting ? "cancel" : "+ new report"}
         </button>
@@ -431,25 +469,20 @@ export function TrackerBoard({ board }: { board: Board }) {
       {/* ARCHIVE. Collapsed by default, one row per ship. */}
       {archive.length > 0 && (
         <section className="space-y-2">
-          <h2 className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400">Archive, fixed and live</h2>
+          <h2 className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400">Done</h2>
           {archive.map((b) => (
             <BatchBlock key={b.id} batch={b} batches={board.batches} defaultOpen={false} />
           ))}
         </section>
       )}
 
-      {/* IN FLIGHT. */}
-      {inFlight.length > 0 && (
-        <section className="space-y-2">
-          <h2 className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400">Being fixed now</h2>
-          {inFlight.map((b) => (
-            <BatchBlock key={b.id} batch={b} batches={board.batches} defaultOpen />
-          ))}
-        </section>
-      )}
-
-      {/* OPEN. */}
+      {/* OPEN. An unfinished batch is NOT a third zone: its items stay in this
+          list, tagged, until the batch is verified live. Only its controls sit
+          up here, so there is one place to look for outstanding work. */}
       <section className="space-y-2">
+        {inFlight.map((b) => (
+          <BatchControls key={b.id} batch={b} />
+        ))}
         <div className="flex flex-wrap items-center gap-2">
           <h2 className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400">Open ({board.open.length})</h2>
           <div className="ml-auto flex flex-wrap gap-1">
@@ -489,7 +522,15 @@ export function TrackerBoard({ board }: { board: Board }) {
         )}
 
         {open.map((i) => (
-          <ItemRow key={i.id} item={i} batches={board.batches} selectable selected={selected.has(i.id)} onSelect={toggle} />
+          <ItemRow
+            key={i.id}
+            item={i}
+            batches={board.batches}
+            batchLabel={i.batchId ? `batch ${String(batchNumber.get(i.batchId) ?? 0).padStart(2, "0")}` : null}
+            selectable
+            selected={selected.has(i.id)}
+            onSelect={toggle}
+          />
         ))}
         {!open.length && <p className="rounded-xl border border-dashed border-black/10 px-4 py-8 text-center text-sm text-neutral-400">nothing open here</p>}
       </section>

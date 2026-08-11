@@ -76,12 +76,13 @@ export type TrackerBatch = {
   items: TrackerItem[];
 };
 
-// An item is OPEN until it has been picked up into a batch. "Open" is about
-// where it sits on the board, not about its status string: an item can be
-// status=fixed and still be in the working batch, and it stays visible there
-// until the batch goes live.
-export function isOpen(item: TrackerItem): boolean {
-  return item.batchId === null && item.status !== "closed" && item.status !== "wontfix";
+// Two zones only, DONE and OPEN. An item is OPEN until the batch carrying it
+// has actually gone live on the boxes. Being picked up into a batch does not
+// make it done, and a separate "being fixed now" zone was just a third place
+// to look: an item in an unfinished batch stays in the open list, tagged.
+export function isOpen(item: TrackerItem, liveBatchIds: Set<string>): boolean {
+  if (item.status === "closed" || item.status === "wontfix") return false;
+  return item.batchId === null || !liveBatchIds.has(item.batchId);
 }
 
 // Whole days since a timestamp. Used for the "4d" age badge on an open row,
@@ -208,10 +209,12 @@ export async function loadBoard(): Promise<TrackerBoard> {
     items: items.filter((i) => i.batchId === b.id).sort((a, c) => a.number - c.number),
   }));
 
+  const liveBatchIds = new Set(batches.filter((b) => b.status === "live").map((b) => b.id));
+
   return {
-    open: sortOpen(items.filter(isOpen)),
+    open: sortOpen(items.filter((i) => isOpen(i, liveBatchIds))),
     batches,
-    dropped: items.filter((i) => i.batchId === null && (i.status === "closed" || i.status === "wontfix")),
+    dropped: items.filter((i) => i.status === "closed" || i.status === "wontfix"),
   };
 }
 
