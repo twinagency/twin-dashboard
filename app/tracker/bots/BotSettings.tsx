@@ -3,6 +3,7 @@
 import { useTransition } from "react";
 import Link from "next/link";
 import { updateBot } from "./actions";
+import { botFor, BotBadge } from "../bot-identity";
 
 export type BotRow = {
   slug: string;
@@ -57,7 +58,7 @@ function Row({ bot, all }: { bot: BotRow; all: BotRow[] }) {
       <div className="flex flex-wrap items-start gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2">
-            <h3 className="text-base font-semibold text-neutral-900">{bot.label}</h3>
+            {botFor(bot.slug) ? <BotBadge bot={botFor(bot.slug)!} size="lg" /> : <h3 className="text-base font-semibold text-neutral-900">{bot.label}</h3>}
             {bot.enabled ? (
               <span className="rounded-full bg-emerald-100 px-2 py-0.5 text-[11px] font-semibold text-emerald-700">ON</span>
             ) : (
