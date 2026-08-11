@@ -17,6 +17,7 @@ const PAGE_LABELS: Record<string, string> = {
   "/jarvis": "AI",
   "/info": "Info",
   "/logs": "Logs",
+  "/tracker": "Tracker",
   "/media": "Media",
   "/clones": "Clones",
   "/settings": "Settings",
