@@ -84,7 +84,7 @@ function ItemRow({
   const [pending, start] = useTransition();
 
   return (
-    <div className={`rounded-xl border ${selected ? "border-sky-400 bg-sky-50/50" : "border-black/8 bg-white"}`}>
+    <div id={`item-${item.number}`} className={`scroll-mt-24 rounded-xl border ${selected ? "border-sky-400 bg-sky-50/50" : "border-black/8 bg-white"}`}>
       <div className="flex items-center gap-3 px-3 py-2.5">
         {selectable && (
           <input
