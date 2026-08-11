@@ -267,17 +267,21 @@ export async function getDashboard(period: Period, range?: DateRange): Promise<D
   });
 
   // ── AI/voice cost in window (usage_events) ──────────────────────────────────
-  const { data: usageRows } = await supabaseAdmin
-    .from("usage_events")
-    .select("clone_id,cost_usd,ok,created_at")
-    .gte("created_at", new Date(startMs).toISOString())
-    .lte("created_at", new Date(windowEnd).toISOString());
-  const usage = (usageRows ?? []) as {
+  // Paged: usage_events runs ~11k rows/day, so an unpaged read of any window
+  // longer than a couple of hours returned 1000 rows and under-reported cost.
+  const { rows: usage } = await selectAllRows<{
     clone_id: string | null;
     cost_usd: number | null;
     ok: boolean;
     created_at: string;
-  }[];
+  }>(
+    supabaseAdmin
+      .from("usage_events")
+      .select("clone_id,cost_usd,ok,created_at")
+      .gte("created_at", new Date(startMs).toISOString())
+      .lte("created_at", new Date(windowEnd).toISOString()),
+    { label: "dashboard usage_events" },
+  );
   const cloneCost = new Map<string, number>();
   const cloneCalls = new Map<string, number>();
   const cloneErrors = new Map<string, number>();

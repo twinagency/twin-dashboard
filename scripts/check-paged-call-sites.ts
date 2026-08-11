@@ -34,7 +34,10 @@ function assert(label: string, cond: boolean) {
 // Tables with no natural ceiling: they grow with fans, messages and payments, so
 // any full read of one outruns the server cap eventually. `clones` is absent on
 // purpose - a fleet is tens of rows and will not reach 1000.
-const UNBOUNDED = ["star_transactions", "users", "chat_history", "paywall_hits", "llm_calls", "system_logs"];
+// `usage_events` joined the list on 2026-08-12: at ~11k rows/day it passes the
+// 1000-row ceiling inside two hours, so even the "today" window of an unpaged
+// read was already returning a fraction of the day and calling it a total.
+const UNBOUNDED = ["star_transactions", "users", "chat_history", "paywall_hits", "llm_calls", "system_logs", "usage_events"];
 
 // A read is acceptable if it pages, or if it deliberately asks for a bounded
 // slice. `.limit()`, `.single()`, `.maybeSingle()` and `.range()` are all

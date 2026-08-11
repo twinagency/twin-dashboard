@@ -393,8 +393,12 @@ export async function getAnalytics(
     .gte("created_at", iso(startMs))
     .lte("created_at", iso(windowEnd));
   if (cloneId) usageQ = usageQ.eq("clone_id", cloneId);
-  const { data: usageRows } = await usageQ;
-  const usage = (usageRows ?? []) as { clone_id: string | null; cost_usd: number | null }[];
+  // Paged: usage_events runs ~11k rows/day, so an unpaged read of any window
+  // longer than a couple of hours returned 1000 rows and under-reported cost.
+  const { rows: usageRows } = await selectAllRows<{ clone_id: string | null; cost_usd: number | null }>(usageQ, {
+    label: "analytics usage_events",
+  });
+  const usage = usageRows;
   const cloneCost = new Map<string, number>();
   let totalCost = 0;
   for (const u of usage) {
