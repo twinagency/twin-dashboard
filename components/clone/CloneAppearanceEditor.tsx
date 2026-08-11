@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { FieldLabel, Section } from "@/components/clone/fields";
 import { initials } from "@/lib/colors";
 
-const COLORS = ["#635bff", "#3b82f6", "#20c5d8", "#16b87a", "#ec4899", "#ff6b61", "#ffbe55", "#101828"];
+const COLORS = ["#06172f", "#0a2540", "#1a4d85", "#4a8ec4", "#78b6df", "#087a61", "#f05a9d", "#c9364f"];
 
 export default function CloneAppearanceEditor({
   cloneName,
@@ -86,8 +86,8 @@ export default function CloneAppearanceEditor({
                 className="h-8 w-8 rounded-full border-2 transition hover:scale-105"
                 style={{
                   backgroundColor: option,
-                  borderColor: color === option ? "#101828" : "white",
-                  boxShadow: color === option ? "0 0 0 2px white, 0 0 0 4px #635bff" : "0 0 0 1px #e5eaf2",
+                  borderColor: color === option ? "#06172f" : "white",
+                  boxShadow: color === option ? "0 0 0 2px white, 0 0 0 4px #4a8ec4" : "0 0 0 1px #cfdeea",
                 }}
               />
             ))}

@@ -80,14 +80,14 @@ const PATHS: Record<string, string> = {
 // use translucent white surfaces rather than dark-mode treatments.
 type LinkColor = "neutral" | "good" | "purple" | "orange" | "blue" | "red" | "pink" | "gray";
 const LINK_COLOR_CLASSES: Record<LinkColor, { icon: string; active: string; idle: string }> = {
-  neutral: { icon: "text-ink/55", active: "bg-white/75 text-ink shadow-[0_6px_18px_rgb(16_24_40/0.07)] ring-1 ring-white/70", idle: "text-ink/80 hover:bg-white/50 hover:text-ink" },
-  good: { icon: "text-good", active: "bg-white/75 text-ink shadow-[0_6px_18px_rgb(16_24_40/0.07)] ring-1 ring-white/70", idle: "text-ink/80 hover:bg-white/50 hover:text-ink" },
-  purple: { icon: "text-accent", active: "bg-white/75 text-ink shadow-[0_6px_18px_rgb(16_24_40/0.07)] ring-1 ring-white/70", idle: "text-ink/80 hover:bg-white/50 hover:text-ink" },
-  orange: { icon: "text-warn", active: "bg-white/75 text-ink shadow-[0_6px_18px_rgb(16_24_40/0.07)] ring-1 ring-white/70", idle: "text-ink/80 hover:bg-white/50 hover:text-ink" },
-  blue: { icon: "text-accent-2", active: "bg-white/75 text-ink shadow-[0_6px_18px_rgb(16_24_40/0.07)] ring-1 ring-white/70", idle: "text-ink/80 hover:bg-white/50 hover:text-ink" },
-  pink: { icon: "text-love", active: "bg-white/75 text-ink shadow-[0_6px_18px_rgb(16_24_40/0.07)] ring-1 ring-white/70", idle: "text-ink/80 hover:bg-white/50 hover:text-ink" },
-  red: { icon: "text-crit", active: "bg-white/75 text-ink shadow-[0_6px_18px_rgb(16_24_40/0.07)] ring-1 ring-white/70", idle: "text-ink/80 hover:bg-white/50 hover:text-ink" },
-  gray: { icon: "text-muted", active: "bg-white/75 text-ink shadow-[0_6px_18px_rgb(16_24_40/0.07)] ring-1 ring-white/70", idle: "text-ink/80 hover:bg-white/50 hover:text-ink" },
+  neutral: { icon: "text-white/55", active: "bg-white text-[#06172f] shadow-[0_12px_30px_rgb(2_10_24/0.22)]", idle: "text-white/72 hover:bg-white/10 hover:text-white" },
+  good: { icon: "text-emerald-300", active: "bg-white text-[#06172f] shadow-[0_12px_30px_rgb(2_10_24/0.22)]", idle: "text-white/72 hover:bg-white/10 hover:text-white" },
+  purple: { icon: "text-[#b9daf1]", active: "bg-white text-[#06172f] shadow-[0_12px_30px_rgb(2_10_24/0.22)]", idle: "text-white/72 hover:bg-white/10 hover:text-white" },
+  orange: { icon: "text-[#f8acd0]", active: "bg-white text-[#06172f] shadow-[0_12px_30px_rgb(2_10_24/0.22)]", idle: "text-white/72 hover:bg-white/10 hover:text-white" },
+  blue: { icon: "text-[#8cc7ea]", active: "bg-white text-[#06172f] shadow-[0_12px_30px_rgb(2_10_24/0.22)]", idle: "text-white/72 hover:bg-white/10 hover:text-white" },
+  pink: { icon: "text-[#f8acd0]", active: "bg-white text-[#06172f] shadow-[0_12px_30px_rgb(2_10_24/0.22)]", idle: "text-white/72 hover:bg-white/10 hover:text-white" },
+  red: { icon: "text-rose-300", active: "bg-white text-[#06172f] shadow-[0_12px_30px_rgb(2_10_24/0.22)]", idle: "text-white/72 hover:bg-white/10 hover:text-white" },
+  gray: { icon: "text-white/50", active: "bg-white text-[#06172f] shadow-[0_12px_30px_rgb(2_10_24/0.22)]", idle: "text-white/72 hover:bg-white/10 hover:text-white" },
 };
 
 // Each page type appears exactly once, scoped by the header clone switcher,
@@ -136,9 +136,9 @@ export function SidebarContent({
     <>
       {/* Brand - fixed height so its bottom border lines up exactly with the
           TopBar's border in the column next to it (both h-16). */}
-      <div className="flex h-16 shrink-0 items-center justify-between border-b border-ink/10 px-4">
+      <div className="flex h-20 shrink-0 items-center justify-between border-b border-white/14 px-5">
         <Link href="/revenue" className="min-w-0" aria-label="Twin Technologies" onClick={onNavigate}>
-          <TwinWordmark />
+          <TwinWordmark inverse />
         </Link>
         {headerAction}
       </div>
@@ -147,18 +147,18 @@ export function SidebarContent({
           row so it reads as an action, not just another nav destination.
           No bottom border: the generous space above it already separates it
           from the brand header, so a hairline as well just reads as clutter. */}
-      <div className="shrink-0 px-3 pb-3 pt-10 [@media(max-height:850px)]:pt-6">
+      <div className="shrink-0 px-4 pb-4 pt-8 [@media(max-height:850px)]:pt-5">
         <Link
           href="/clones/new"
           onClick={onNavigate}
-          className="sidebar-create-button flex items-center justify-center gap-2 rounded-lg px-3 py-2.5 text-sm font-semibold text-white transition"
+          className="sidebar-create-button flex items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-semibold transition"
         >
           <Icon d={PATHS.Plus} className="h-4 w-4" />
           Create new clone
         </Link>
       </div>
 
-      <nav className="flex flex-1 flex-col overflow-y-auto px-3 py-3">
+      <nav className="flex flex-1 flex-col overflow-y-auto px-4 py-3">
         {/* One flat list, icon left, label, full-width row. Rows are spaced
             apart (not divided by hairlines) so each rounded, hoverable row
             reads as its own control instead of a table. PPVs/Edit/Flows
@@ -240,7 +240,7 @@ export function SidebarContent({
                   <>
                     <Icon d={PATHS.Users} className={"h-[18px] w-[18px] " + colors.icon} />
                     <span className="flex-1">{l.label}</span>
-                    <Icon d={PATHS.Messages} className="h-4 w-4 text-ink/40" />
+                    <Icon d={PATHS.Messages} className="h-4 w-4 text-current opacity-45" />
                   </>
                 ) : l.icon === "EarningsCombo" ? (
                   <>
@@ -283,7 +283,7 @@ export default function Sidebar({
   activeCloneId: string | null;
 }) {
   return (
-    <aside className="dashboard-sidebar sticky top-0 hidden h-screen w-64 shrink-0 flex-col lg:flex">
+    <aside className="dashboard-sidebar sticky top-0 hidden h-screen w-72 shrink-0 flex-col lg:flex">
       <SidebarContent activeCloneId={activeCloneId} />
     </aside>
   );

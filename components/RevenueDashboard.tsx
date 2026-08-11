@@ -48,7 +48,7 @@ type FullData = DashboardData & { analytics: AnalyticsData; balance: StarBalance
 // before star-reconcile.ts's photo/video/bundle split existed, not a live
 // dashboard bug. Real-time sales tag correctly going forward.
 const TX_KIND_LABEL: Record<string, string> = {
-  credits: "Message credits",
+  credits: "Paid Messages",
   photo: "Photo",
   video: "Video",
   bundle: "Bundle",
@@ -150,9 +150,9 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
 
   // Recharts colors are inline JS (not CSS classes) so they don't pick up the
   // light-mode constants rather than theme-conditional.
-  const axisColor = "#667085";
-  const gridColor = "#e5eaf2";
-  const cursorColor = "rgba(99,91,255,0.08)";
+  const axisColor = "#526b82";
+  const gridColor = "#cfdeea";
+  const cursorColor = "rgba(74,142,196,0.1)";
   // Last bar in the window is always today/this-bucket and still accumulating.
   // Keep its clone colour, but lower the opacity so "Live" is distinguishable
   // without introducing an off-theme grey bar.
@@ -253,7 +253,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
     <div className="earnings-aurora">
       <div className="earnings-heading mb-5 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
-          <h2 className="flex items-center gap-2 font-heading text-2xl font-semibold tracking-tight text-[#101828] sm:text-3xl">
+          <h2 className="flex items-center gap-2 font-heading text-3xl font-semibold tracking-[-0.035em] text-[#06172f] sm:text-4xl">
             Earnings overview
             <Info text="Revenue, buyer activity and conversion performance across your active clones." />
           </h2>
@@ -451,7 +451,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
                         }}
                       />
                       <YAxis
-                        tick={{ fill: "#101828", fontSize: 11 }}
+                        tick={{ fill: "#06172f", fontSize: 11 }}
                         axisLine={false}
                         tickLine={false}
                         tickFormatter={(v: number) => money(v).replace(/\.00$/, "")}
@@ -504,7 +504,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
                         }}
                       />
                       <YAxis
-                        tick={{ fill: "#101828", fontSize: 11 }}
+                        tick={{ fill: "#06172f", fontSize: 11 }}
                         axisLine={false}
                         tickLine={false}
                         tickFormatter={(v: number) => money(v).replace(/\.00$/, "")}
@@ -635,7 +635,9 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
             const repeatRate = data.analytics.funnel.repeatPct;
             // #1 single source — byFeature splits photos/videos/bundles/tips apart,
             // unlike byKind which lumps them into one "Photos & video" bucket.
-            const topKind = [...data.analytics.byFeature].sort((a, b) => b.share - a.share)[0];
+            const topKind = data.analytics.byFeature
+              .filter((feature) => feature.key !== "media" && feature.key !== "other")
+              .sort((a, b) => b.share - a.share)[0];
             const tiles: { label: string; value: string; money?: boolean }[] = [
               { label: "Users", value: fmtNum(s.users) },
               { label: "Transactions", value: fmtNum(s.sales) },
@@ -664,16 +666,16 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
                   onClick={() => setReportOpen((v) => !v)}
                   aria-expanded={reportOpen}
                   className={
-                    "flex flex-col justify-center rounded-lg border border-dashed px-3 py-2.5 text-left transition " +
+                    "flex flex-col justify-center rounded-xl border px-3 py-2.5 text-left shadow-[0_8px_22px_rgba(6,23,47,0.18)] transition " +
                     (reportOpen
-                      ? "border-accent/60 bg-accent/5"
-                      : "border-line bg-transparent hover:border-muted hover:bg-muted/5")
+                      ? "border-[#4a8ec4] bg-[#4a8ec4] hover:border-[#6ba6d2] hover:bg-[#6ba6d2]"
+                      : "border-[#06172f] bg-[#06172f] hover:border-[#0d3d6e] hover:bg-[#0d3d6e]")
                   }
                 >
-                  <div className={"text-xs font-medium " + (reportOpen ? "text-ink" : "text-muted")}>
+                  <div className="text-xs font-bold text-white">
                     Full revenue report {reportOpen ? "↓" : "→"}
                   </div>
-                  <div className="mt-0.5 text-[10px] uppercase tracking-wide text-muted/60">
+                  <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-white/70">
                     {reportOpen ? "Open below" : "What makes the money"}
                   </div>
                 </button>
@@ -691,6 +693,8 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
           <RevenueReport
             a={data.analytics}
             scoped={scoped}
+            cloneName={focusName ?? "Selected clone"}
+            transactions={cloneId ? data.recent.filter((transaction) => transaction.cloneId === cloneId) : data.recent}
             money={money}
             usd={usd}
             pct={pct}
@@ -927,6 +931,8 @@ function ChartTooltip({
 function RevenueReport({
   a,
   scoped,
+  cloneName,
+  transactions,
   money,
   usd,
   pct,
@@ -936,6 +942,8 @@ function RevenueReport({
 }: {
   a: AnalyticsData;
   scoped: boolean;
+  cloneName: string;
+  transactions: DashboardData["recent"];
   money: (stars: number) => string;
   usd: (n: number) => string;
   pct: (n: number) => string;
@@ -943,9 +951,10 @@ function RevenueReport({
   cursorColor: string;
   onClose: () => void;
 }) {
+  const [selectedMedia, setSelectedMedia] = useState<"photo" | "video" | "bundle" | null>(null);
   // The report uses the same Atlas palette as the rest of the dashboard.
   // Pink handles Other/untagged buckets so no data bars fall back to grey.
-  const CAT = { blue: "#635bff", aqua: "#20c5d8", yellow: "#ffbe55", violet: "#a855f7", red: "#ff6b61", pink: "#ec4899" };
+  const CAT = { blue: "#0a2540", aqua: "#4a8ec4", yellow: "#d7952d", violet: "#2f7eb8", red: "#c9364f", pink: "#f05a9d" };
 
   const featureColor = (k: string) =>
     k === "credits"
@@ -967,9 +976,27 @@ function RevenueReport({
 
   const totalStars = a.totals.revenueStars;
   const hasRevenue = totalStars > 0;
+  const reportFeatureOrder = [
+    { key: "credits", label: "Paid Messages", always: true },
+    { key: "photo", label: "Photos", always: true },
+    { key: "video", label: "Videos", always: true },
+    { key: "bundle", label: "Bundles", always: true },
+    { key: "tip", label: "Tips / spoil", always: false },
+    { key: "subscription", label: "VIP subscriptions", always: false },
+  ] as const;
+  const reportFeatures = reportFeatureOrder.flatMap((definition) => {
+    const feature = a.byFeature.find((item) => item.key === definition.key);
+    if (feature) return [{ ...feature, label: definition.label }];
+    return definition.always
+      ? [{ key: definition.key, label: definition.label, stars: 0, sales: 0, avgStars: 0, share: 0 }]
+      : [];
+  });
+  const selectedPurchases = selectedMedia
+    ? transactions.filter((transaction) => transaction.mediaType === selectedMedia)
+    : [];
 
   // Headline facts — only the ones the data actually supports right now.
-  const topFeature = a.byFeature[0];
+  const topFeature = [...reportFeatures].filter((feature) => feature.stars > 0).sort((a, b) => b.stars - a.stars)[0];
   const topClone = a.clones[0];
   const whale = a.byTier.find((t) => t.key === "whale");
   const bestHour = hasRevenue ? a.byHour.reduce((m, h) => (h.stars > m.stars ? h : m)) : null;
@@ -987,13 +1014,13 @@ function RevenueReport({
 
   return (
     <Card size="sm" className="mt-4">
-      <CardHeader>
-        <CardTitle className="text-xs font-semibold uppercase tracking-wide text-ink">Revenue report</CardTitle>
-        <CardDescription className="text-[11px] text-muted">
+      <CardHeader className="rounded-xl bg-[#06172f] px-4 py-3 text-white shadow-[0_10px_30px_rgba(6,23,47,0.2)]">
+        <CardTitle className="text-sm font-bold uppercase tracking-[0.14em] text-white">Revenue report</CardTitle>
+        <CardDescription className="text-[11px] text-white/70">
           Where the money comes from in this window: product, spender tier, {scoped ? "" : "clone, "}time and funnel.
         </CardDescription>
         <CardAction>
-          <Button variant="ghost" size="sm" onClick={onClose}>
+          <Button variant="ghost" size="sm" onClick={onClose} className="text-white hover:bg-white/10 hover:text-white">
             Close
           </Button>
         </CardAction>
@@ -1013,46 +1040,122 @@ function RevenueReport({
         )}
 
         {/* What sells + who pays */}
-        <div className="grid gap-3 lg:grid-cols-2">
+        <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
           <ReportPanel title="What sells" hint="Revenue by feature, with sales and average per sale.">
-            {a.byFeature.length === 0 ? (
+            {reportFeatures.length === 0 ? (
               <ReportEmpty text="No sales in this window." />
             ) : (
               <div className="flex flex-col gap-3">
-                {a.byFeature.map((f) => (
-                  <ShareRow
-                    key={f.key}
-                    color={featureColor(f.key)}
-                    label={f.label}
-                    share={f.share}
-                    right={money(f.stars)}
-                    rightHint={pct(f.share)}
-                    sub={`${fmtNum(f.sales)} sale${f.sales === 1 ? "" : "s"}`}
-                    subMoney={`avg ${money(f.avgStars)} per sale`}
-                  />
-                ))}
+                {reportFeatures.map((f) => {
+                  const drillable = scoped && (f.key === "photo" || f.key === "video" || f.key === "bundle");
+                  const categoryClassName =
+                    "rounded-xl border border-[#4a8ec4]/35 bg-[#b9daf1]/18 p-3 text-left transition hover:border-[#4a8ec4]/70 hover:bg-[#b9daf1]/34";
+                  const row = (
+                    <ShareRow
+                      color={featureColor(f.key)}
+                      label={f.label}
+                      share={f.share}
+                      right={money(f.stars)}
+                      rightHint={pct(f.share)}
+                      sub={`${fmtNum(f.sales)} sale${f.sales === 1 ? "" : "s"}`}
+                      subMoney={`avg ${money(f.avgStars)} per sale`}
+                    />
+                  );
+                  return drillable ? (
+                    <button
+                      key={f.key}
+                      type="button"
+                      onClick={() => setSelectedMedia(f.key as "photo" | "video" | "bundle")}
+                      className={`${categoryClassName} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4a8ec4]/55`}
+                    >
+                      {row}
+                      <span className="mt-2 block text-[10px] font-bold uppercase tracking-[0.12em] text-[#0d3d6e]">
+                        View purchased items →
+                      </span>
+                    </button>
+                  ) : (
+                    <div key={f.key} className={categoryClassName}>{row}</div>
+                  );
+                })}
               </div>
             )}
           </ReportPanel>
 
-          <ReportPanel title="Who pays" hint="Revenue by spend tier. Tiers are lifetime spend per fan, not this window.">
-            {a.byTier.length === 0 ? (
-              <ReportEmpty text="No fans yet." />
-            ) : (
-              <div className="flex flex-col gap-3">
-                {a.byTier.map((t) => (
-                  <ShareRow
-                    key={t.key}
-                    color={tierColor(t.key)}
-                    label={t.label}
-                    share={t.share}
-                    right={money(t.stars)}
-                    rightHint={pct(t.share)}
-                    sub={`${fmtNum(t.users)} fan${t.users === 1 ? "" : "s"}`}
-                  />
-                ))}
+          <ReportPanel title="Who pays" hint="Top spenders from the last 7 days, followed by lifetime spend tiers.">
+            <div className="flex flex-col gap-4">
+              <div>
+                <div className="mb-2 flex items-end justify-between gap-3">
+                  <div>
+                    <h4 className="inline-flex rounded-lg bg-[#0d3d6e] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.1em] text-white shadow-sm">Top 5 weekly spenders</h4>
+                    <p className="text-[10px] text-muted">Rolling seven days in the current clone scope.</p>
+                  </div>
+                  <div className="text-right">
+                    <div className="money-value font-mono text-sm font-semibold tabular-nums">{money(a.weeklySpenderSummary.stars)}</div>
+                    <div className="text-[10px] text-muted">{fmtNum(a.weeklySpenderSummary.buyers)} buyers · {fmtNum(a.weeklySpenderSummary.purchases)} purchases</div>
+                  </div>
+                </div>
+                {a.topWeeklySpenders.length === 0 ? (
+                  <div className="rounded-xl bg-surface px-3 py-5 text-center text-xs text-muted">No spenders in the last 7 days.</div>
+                ) : (
+                  <div className="grid gap-1.5">
+                    {a.topWeeklySpenders.map((spender, index) => (
+                      <div key={`${spender.cloneId ?? "unknown"}:${spender.telegramId}`} className="flex items-center gap-2.5 rounded-xl border border-line bg-surface/75 px-3 py-2">
+                        <span className="w-4 shrink-0 font-mono text-[10px] font-semibold text-muted">#{index + 1}</span>
+                        <FanAvatar
+                          cloneId={spender.cloneId ?? ""}
+                          telegramId={spender.telegramId}
+                          name={spender.name}
+                          color={CAT.aqua}
+                          className="h-8 w-8"
+                        />
+                        <span className="min-w-0 flex-1">
+                          <span className="block truncate text-xs font-semibold text-ink">{spender.name}</span>
+                          <span className="block truncate text-[10px] text-muted">
+                            {spender.username ? `@${spender.username}` : `Fan ${spender.telegramId}`}
+                            {!scoped ? ` · ${spender.cloneName}` : ""}
+                          </span>
+                        </span>
+                        <span className="shrink-0 text-right">
+                          <span className="money-value block font-mono text-xs font-semibold tabular-nums">{money(spender.stars)}</span>
+                          <span className="block text-[10px] text-muted">⭐ {fmtNum(spender.stars)} · {fmtNum(spender.purchases)} buys</span>
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+                {a.weeklySpenderSummary.buyers > 0 && (
+                  <div className="mt-2 grid grid-cols-2 gap-2">
+                    <InsightMetric label="Avg per weekly buyer" value={money(a.weeklySpenderSummary.avgStars)} />
+                    <InsightMetric
+                      label="Purchases per buyer"
+                      value={(a.weeklySpenderSummary.purchases / a.weeklySpenderSummary.buyers).toFixed(1)}
+                    />
+                  </div>
+                )}
               </div>
-            )}
+
+              <div className="border-t border-line pt-3">
+                <h4 className="mb-1 inline-flex rounded-lg bg-[#0d3d6e] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.1em] text-white shadow-sm">Lifetime spend tiers</h4>
+                <p className="mb-3 text-[10px] text-muted">How the full fan base is distributed by lifetime value.</p>
+                {a.byTier.length === 0 ? (
+                  <ReportEmpty text="No fans yet." />
+                ) : (
+                  <div className="flex flex-col gap-3">
+                    {a.byTier.map((t) => (
+                      <ShareRow
+                        key={t.key}
+                        color={tierColor(t.key)}
+                        label={t.label}
+                        share={t.share}
+                        right={money(t.stars)}
+                        rightHint={pct(t.share)}
+                        sub={`${fmtNum(t.users)} fan${t.users === 1 ? "" : "s"}`}
+                      />
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
           </ReportPanel>
         </div>
 
@@ -1135,7 +1238,7 @@ function RevenueReport({
                   <BarChart data={a.byHour} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
                     <XAxis dataKey="label" tick={{ fill: axisColor, fontSize: 10 }} axisLine={false} tickLine={false} interval={2} />
                     <YAxis
-                      tick={{ fill: "#101828", fontSize: 11 }}
+                      tick={{ fill: "#06172f", fontSize: 11 }}
                       axisLine={false}
                       tickLine={false}
                       width={56}
@@ -1158,7 +1261,7 @@ function RevenueReport({
                   <BarChart data={a.byDow} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
                     <XAxis dataKey="label" tick={{ fill: axisColor, fontSize: 11 }} axisLine={false} tickLine={false} />
                     <YAxis
-                      tick={{ fill: "#101828", fontSize: 11 }}
+                      tick={{ fill: "#06172f", fontSize: 11 }}
                       axisLine={false}
                       tickLine={false}
                       width={56}
@@ -1173,61 +1276,142 @@ function RevenueReport({
           </ReportPanel>
         </div>
 
-        {/* Funnels */}
-        <div className="grid gap-3 lg:grid-cols-2">
+        {/* Conversion and buyer behaviour */}
+        <div className="grid items-start gap-3 xl:grid-cols-2">
           <ReportPanel
-            title="Paywall funnel"
-            hint="Distinct fans this window: chatted, hit the out-of-messages paywall, bought credits."
+            title="Paid-message paywall"
+            hint="Current window: distinct fans who chatted, reached the message limit, then bought more messages."
           >
-            <div className="flex flex-col gap-3">
-              <FunnelRow label="Messaged" value={a.paywallFunnel.messaged} width={a.paywallFunnel.messaged > 0 ? 1 : 0} color={CAT.blue} />
+            <div className="flex flex-col gap-4">
+              <div className="grid gap-2">
+                <JourneyStep
+                  step="1"
+                  label="Chatted with the clone"
+                  value={fmtNum(a.paywallFunnel.messaged)}
+                  note="Unique fans who sent at least one message."
+                  color={CAT.blue}
+                />
               {a.paywallFunnel.collecting ? (
-                <p className="text-[11px] leading-relaxed text-muted">
-                  Paywall hits aren't logged yet (migration 024). This stage fills in once fans start hitting the wall.
-                </p>
+                  <div className="rounded-xl border border-[#d7952d]/30 bg-[#d7952d]/8 px-3 py-2 text-[11px] leading-relaxed text-muted">
+                    Paywall-view tracking is not available yet. Chat and paid-message purchase totals are still shown below.
+                  </div>
               ) : (
-                <FunnelRow
-                  label="Saw paywall"
-                  value={a.paywallFunnel.paywalled}
-                  width={a.paywallFunnel.messaged > 0 ? a.paywallFunnel.paywalled / a.paywallFunnel.messaged : 0}
+                  <JourneyStep
+                    step="2"
+                    label="Reached the message limit"
+                    value={fmtNum(a.paywallFunnel.paywalled)}
+                    note={`${pct(a.paywallFunnel.paywallPct)} of chatting fans · ${fmtNum(a.paywallFunnel.paywallViews)} total paywall views`}
                   color={CAT.yellow}
-                  note={a.paywallFunnel.messaged > 0 ? `${pct(a.paywallFunnel.paywallPct)} of chatters hit the wall` : undefined}
                 />
               )}
-              <FunnelRow
-                label="Bought credits"
-                value={a.paywallFunnel.purchased}
-                width={a.paywallFunnel.messaged > 0 ? a.paywallFunnel.purchased / a.paywallFunnel.messaged : 0}
-                color={CAT.aqua}
-                note={
-                  !a.paywallFunnel.collecting && a.paywallFunnel.paywalled > 0
-                    ? `${pct(a.paywallFunnel.purchasePct)} of them convert`
-                    : undefined
-                }
-              />
+                <JourneyStep
+                  step="3"
+                  label="Bought more messages"
+                  value={fmtNum(a.paywallFunnel.purchased)}
+                  note={
+                    a.paywallFunnel.collecting
+                      ? `${fmtNum(a.paywallFunnel.paidMessageBuyers)} paid-message buyers in this window`
+                      : `${pct(a.paywallFunnel.purchasePct)} of paywalled fans converted`
+                  }
+                  color={CAT.aqua}
+                />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                <InsightMetric label="Overall conversion" value={pct(a.paywallFunnel.overallPct)} hint="chatters → buyers" />
+                <InsightMetric label="Left without buying" value={fmtNum(a.paywallFunnel.abandoned)} hint="after seeing paywall" />
+                <InsightMetric label="Avg paywall views" value={a.paywallFunnel.avgViewsPerFan.toFixed(1)} hint="per reached fan" />
+                <InsightMetric label="Paid-message buyers" value={fmtNum(a.paywallFunnel.paidMessageBuyers)} hint="unique this window" />
+                <InsightMetric label="Message purchases" value={fmtNum(a.paywallFunnel.paidMessagePurchases)} hint="transactions" />
+                <InsightMetric label="Message revenue" value={money(a.paywallFunnel.paidMessageStars)} hint={`⭐ ${fmtNum(a.paywallFunnel.paidMessageStars)}`} moneyValue />
+              </div>
             </div>
           </ReportPanel>
 
-          <ReportPanel title="Buyer funnel" hint="All-time fans, buyers, and repeat buyers in this scope.">
+          <ReportPanel title="Buyer breakdown" hint="Lifetime purchase behaviour for every fan in the current clone scope.">
             <div className="flex flex-col gap-3">
-              <FunnelRow label="Fans" value={a.funnel.fans} width={a.funnel.fans > 0 ? 1 : 0} color={CAT.blue} />
-              <FunnelRow
-                label="Buyers"
-                value={a.funnel.buyers}
-                width={a.funnel.fans > 0 ? a.funnel.buyers / a.funnel.fans : 0}
-                color={CAT.aqua}
-                note={a.funnel.fans > 0 ? `${pct(a.funnel.buyerPct)} of fans convert` : undefined}
-              />
-              <FunnelRow
-                label="Repeat buyers"
-                value={a.funnel.repeat}
-                width={a.funnel.fans > 0 ? a.funnel.repeat / a.funnel.fans : 0}
-                color={CAT.violet}
-                note={a.funnel.buyers > 0 ? `${pct(a.funnel.repeatPct)} of buyers come back` : undefined}
-              />
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                <InsightMetric label="All fans" value={fmtNum(a.funnel.fans)} />
+                <InsightMetric label="Buyers" value={fmtNum(a.funnel.buyers)} hint={`${pct(a.funnel.buyerPct)} of fans`} />
+                <InsightMetric label="Never purchased" value={fmtNum(a.funnel.nonBuyers)} hint={`${pct(1 - a.funnel.buyerPct)} of fans`} />
+                <InsightMetric label="One-time buyers" value={fmtNum(a.funnel.oneTime)} hint={`${pct(a.funnel.oneTimePct)} of buyers`} />
+                <InsightMetric label="Repeat buyers" value={fmtNum(a.funnel.repeat)} hint={`${pct(a.funnel.repeatPct)} of buyers`} />
+                <InsightMetric label="3+ purchase buyers" value={fmtNum(a.funnel.threePlus)} hint="loyal buyers" />
+              </div>
+
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+                <InsightMetric label="Purchases / buyer" value={a.funnel.avgPurchasesPerBuyer.toFixed(1)} />
+                <InsightMetric label="Avg buyer value" value={money(a.funnel.avgStarsPerBuyer)} moneyValue />
+                <InsightMetric label="Median buyer value" value={money(a.funnel.medianStarsPerBuyer)} moneyValue />
+                <InsightMetric label="Repeat revenue" value={pct(a.funnel.repeatRevenueShare)} hint="from repeat buyers" />
+              </div>
+
+              <div className="rounded-xl bg-surface/75 px-3 py-2 text-[10px] leading-relaxed text-muted">
+                One-time buyers have exactly one recorded purchase. Repeat buyers have two or more; loyal buyers have three or more. Buyer value uses lifetime spend, so it is not limited by the date filter above.
+              </div>
             </div>
           </ReportPanel>
         </div>
+
+        <Dialog open={selectedMedia !== null} onOpenChange={(open) => !open && setSelectedMedia(null)}>
+          <DialogContent className="w-[min(880px,calc(100vw-2rem))] max-w-none sm:max-w-none">
+            <DialogHeader>
+              <DialogTitle>
+                {cloneName} · Purchased {selectedMedia === "photo" ? "photos" : selectedMedia === "video" ? "videos" : "bundles"}
+              </DialogTitle>
+              <p className="text-xs text-muted">Most recent matching purchases in the selected revenue window.</p>
+            </DialogHeader>
+            {selectedPurchases.length === 0 ? (
+              <div className="rounded-xl border border-line bg-surface px-4 py-10 text-center text-sm text-muted">
+                No item-level purchases are available for this category in the current window.
+              </div>
+            ) : (
+              <div className="grid max-h-[62vh] gap-2 overflow-y-auto pr-1 md:grid-cols-2">
+                {selectedPurchases.map((purchase, index) => {
+                  const content = (
+                    <>
+                      <TransactionMedia
+                        type={selectedMedia ?? "photo"}
+                        url={purchase.mediaUrl}
+                        name={purchase.mediaName}
+                      />
+                      <span className="min-w-0 flex-1 text-right">
+                        <span className="money-value block font-mono text-sm font-semibold tabular-nums">{money(purchase.stars)}</span>
+                        <span className="block truncate text-[11px] text-muted">{purchase.buyerName}</span>
+                        <span className="block text-[10px] text-muted/75">
+                          {new Date(purchase.paidAt).toLocaleString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                            hour: "numeric",
+                            minute: "2-digit",
+                          })}
+                        </span>
+                      </span>
+                    </>
+                  );
+                  const className =
+                    "flex items-center gap-3 rounded-xl border border-line bg-panel p-3 text-left shadow-sm transition hover:border-[#4a8ec4]/60 hover:bg-[#b9daf1]/18";
+                  return purchase.mediaUrl ? (
+                    <a
+                      key={`${purchase.paidAt}-${purchase.telegramId ?? "unknown"}-${index}`}
+                      href={purchase.mediaUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className={className}
+                      title="Open purchased media"
+                    >
+                      {content}
+                    </a>
+                  ) : (
+                    <div key={`${purchase.paidAt}-${purchase.telegramId ?? "unknown"}-${index}`} className={className}>
+                      {content}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </DialogContent>
+        </Dialog>
       </CardContent>
     </Card>
   );
@@ -1235,10 +1419,10 @@ function RevenueReport({
 
 function ReportPanel({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
   return (
-    <div className="rounded-lg border border-line p-4">
-      <div className="mb-3">
-        <h3 className="text-[11px] font-semibold uppercase tracking-wide text-ink">{title}</h3>
-        {hint && <p className="mt-0.5 text-[11px] text-muted">{hint}</p>}
+    <div className="min-w-0 rounded-xl border border-line p-4">
+      <div className="mb-3 rounded-xl bg-[#06172f] px-3 py-2.5 shadow-[0_7px_20px_rgba(6,23,47,0.16)]">
+        <h3 className="text-[11px] font-bold uppercase tracking-[0.13em] text-white">{title}</h3>
+        {hint && <p className="mt-0.5 text-[10px] leading-relaxed text-white/65">{hint}</p>}
       </div>
       {children}
     </div>
@@ -1288,6 +1472,58 @@ function ShareRow({
           {subMoney && <span className="money-value font-medium">· {subMoney}</span>}
         </div>
       )}
+    </div>
+  );
+}
+
+function InsightMetric({
+  label,
+  value,
+  hint,
+  moneyValue = false,
+}: {
+  label: string;
+  value: string;
+  hint?: string;
+  moneyValue?: boolean;
+}) {
+  return (
+    <div className="min-w-0 rounded-xl border border-line bg-surface/75 px-3 py-2.5">
+      <div className="truncate text-[9px] font-semibold uppercase tracking-[0.08em] text-muted">{label}</div>
+      <div className={`mt-1 truncate font-mono text-base font-semibold tabular-nums ${moneyValue ? "money-value" : "text-ink"}`}>
+        {value}
+      </div>
+      {hint && <div className="mt-0.5 truncate text-[10px] text-muted">{hint}</div>}
+    </div>
+  );
+}
+
+function JourneyStep({
+  step,
+  label,
+  value,
+  note,
+  color,
+}: {
+  step: string;
+  label: string;
+  value: string;
+  note: string;
+  color: string;
+}) {
+  return (
+    <div className="flex items-center gap-3 rounded-xl border border-line bg-surface/75 px-3 py-2.5">
+      <span
+        className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-[10px] font-bold text-white"
+        style={{ background: color }}
+      >
+        {step}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-xs font-semibold text-ink">{label}</span>
+        <span className="block text-[10px] leading-relaxed text-muted">{note}</span>
+      </span>
+      <span className="shrink-0 font-mono text-lg font-semibold tabular-nums text-ink">{value}</span>
     </div>
   );
 }

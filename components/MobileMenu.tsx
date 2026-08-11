@@ -34,7 +34,7 @@ export default function MobileMenu({ activeCloneId }: { activeCloneId: string | 
         aria-expanded={open}
         aria-controls="mobile-sidebar"
         onClick={() => setOpen(true)}
-        className="rounded-lg p-2 text-muted transition hover:bg-muted/10 hover:text-ink"
+        className="rounded-full p-2 text-white/80 transition hover:bg-white/10 hover:text-white"
       >
         <svg
           xmlns="http://www.w3.org/2000/svg"
@@ -74,7 +74,7 @@ export default function MobileMenu({ activeCloneId }: { activeCloneId: string | 
                   type="button"
                   aria-label="Close navigation"
                   onClick={() => setOpen(false)}
-                  className="grid h-9 w-9 place-items-center rounded-lg border border-white/60 bg-white/42 text-ink/65 shadow-sm backdrop-blur transition hover:bg-white/70 hover:text-ink"
+                  className="grid h-9 w-9 place-items-center rounded-full border border-white/25 bg-white/10 text-white/75 shadow-sm backdrop-blur transition hover:bg-white/18 hover:text-white"
                 >
                   <X className="h-4 w-4" />
                 </button>

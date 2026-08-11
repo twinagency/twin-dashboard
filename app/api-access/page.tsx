@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Info } from "@/components/clone/fields";
 
 export const metadata = {
-  title: "API access · Twin Admin",
+  title: "API access · Twin Console",
 };
 
 export const dynamic = "force-dynamic";

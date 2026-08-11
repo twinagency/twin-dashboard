@@ -625,7 +625,7 @@ export default function TwinAssistant({ variant = "sidebar" }: TwinAssistantProp
           ? "fixed inset-0 z-[100] flex items-center justify-center bg-[#020914]/78 p-4 backdrop-blur-md sm:p-8"
           : "w-full px-1 pb-1"
       }
-      aria-label={mobileDock ? "Ask Twin" : "Twin AI assistant"}
+      aria-label={mobileDock ? "Ask TI" : "Twin AI assistant"}
       aria-modal={!mobileDock && expanded ? true : undefined}
       role={!mobileDock && expanded ? "dialog" : undefined}
     >
@@ -634,7 +634,7 @@ export default function TwinAssistant({ variant = "sidebar" }: TwinAssistantProp
           className="pointer-events-none mb-[-7px] text-[15px] font-bold tracking-[-0.025em] text-[#0d2540] drop-shadow-[0_1px_8px_rgba(255,255,255,0.9)]"
           style={{ fontFamily: "var(--font-display), var(--font-sans), sans-serif" }}
         >
-          Ask Twin.
+          Ask TI
         </div>
       ) : null}
       <div
@@ -712,7 +712,7 @@ export default function TwinAssistant({ variant = "sidebar" }: TwinAssistantProp
         />
         {!mobileDock ? <div
           aria-live="polite"
-          className={"pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-center gap-1.5 text-[9px] font-semibold uppercase tracking-[0.16em] " + (expanded ? "text-cyan-100/60" : "text-ink/60")}
+          className={"pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-center gap-1.5 text-[9px] font-semibold uppercase tracking-[0.16em] " + (expanded ? "text-cyan-100/60" : "text-white/65")}
         >
           <span
             className={

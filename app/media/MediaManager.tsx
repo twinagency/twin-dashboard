@@ -151,8 +151,10 @@ function UploadZone({
   return (
     <div
       className={
-        "flex cursor-pointer flex-col items-center justify-center rounded-lg border-2 border-dashed p-8 text-center transition " +
-        (dragging ? "border-accent bg-accent/10" : "border-line hover:border-accent/60")
+        "flex min-h-[124px] cursor-pointer flex-col items-center justify-center rounded-xl border-2 px-5 py-5 text-center shadow-[0_10px_28px_rgba(6,23,47,0.2)] transition lg:min-h-[82px] lg:w-fit lg:min-w-[360px] lg:justify-self-start lg:flex-row lg:gap-4 lg:px-5 lg:py-3 lg:text-left " +
+        (dragging
+          ? "border-[#78b6df] bg-[#0d3d6e] ring-4 ring-[#78b6df]/20"
+          : "border-[#06172f] bg-[#06172f] hover:border-[#4a8ec4] hover:bg-[#082b55]")
       }
       onClick={() => ref.current?.click()}
       onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
@@ -178,9 +180,11 @@ function UploadZone({
           e.target.value = "";
         }}
       />
-      <div className="text-2xl">📁</div>
-      <div className="mt-2 text-sm text-muted">{label}</div>
-      <div className="text-xs text-muted">Click or drag & drop</div>
+      <div className="text-2xl lg:text-xl">📁</div>
+      <div>
+        <div className="mt-2 text-sm font-bold text-white lg:mt-0">{label}</div>
+        <div className="mt-0.5 text-xs font-medium text-white/70">Click or drag & drop</div>
+      </div>
     </div>
   );
 }
@@ -896,7 +900,11 @@ function BundleCard({ bundle, cloneId }: { bundle: Bundle; cloneId: string }) {
               </button>
             </div>
           ))}
-        <label className="flex h-20 w-20 cursor-pointer items-center justify-center rounded border-2 border-dashed border-line text-2xl hover:border-accent/60">
+        <label
+          className="flex h-20 w-20 cursor-pointer items-center justify-center rounded-xl border-2 border-[#06172f] bg-[#06172f] text-2xl font-bold text-white shadow-[0_8px_22px_rgba(6,23,47,0.2)] transition hover:border-[#4a8ec4] hover:bg-[#082b55] lg:h-16 lg:w-16 lg:text-xl"
+          aria-label="Add photos to bundle"
+          title="Add photos to bundle"
+        >
           <input
             type="file"
             accept="image/*"
@@ -934,7 +942,7 @@ function CreateBundleForm({ cloneId }: { cloneId: string }) {
     return (
       <button
         onClick={() => setOpen(true)}
-        className="rounded-md border border-dashed border-line px-4 py-3 text-sm text-muted hover:border-accent/60 hover:text-ink transition"
+        className="w-fit min-w-[210px] rounded-xl border border-[#06172f] bg-[#06172f] px-5 py-3 text-sm font-bold text-white shadow-[0_10px_28px_rgba(6,23,47,0.2)] transition hover:border-[#4a8ec4] hover:bg-[#082b55] lg:py-2.5"
       >
         + New bundle
       </button>
@@ -1005,7 +1013,7 @@ export default function MediaManager({
             onClick={() => setTab(t.key)}
             className={
               "flex-1 rounded-lg px-3 py-2.5 text-center text-sm font-semibold transition " +
-              (tab === t.key ? "bg-panel text-ink shadow-sm" : "text-muted hover:bg-muted/10 hover:text-ink")
+              (tab === t.key ? "bg-panel text-ink shadow-sm" : "text-[#06172f]/75 hover:bg-white/25 hover:text-[#06172f]")
             }
           >
             {t.label}

@@ -28,8 +28,8 @@ const spaceGrotesk = Space_Grotesk({subsets:['latin'],variable:'--font-heading'}
 const interTight = Inter_Tight({subsets:['latin'],variable:'--font-display'});
 
 export const metadata: Metadata = {
-  title: "Twin Admin",
-  description: "Manage and build the bot fleet",
+  title: "Twin Console",
+  description: "Intelligence infrastructure operations console",
 };
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
@@ -132,9 +132,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                 scrolls internally. No page-level (document) scroll anywhere. */}
             <div className="flex h-screen min-w-0 flex-1 flex-col overflow-hidden">
               {/* Mobile-only top bar - the Sidebar above only renders at lg+ */}
-              <header className="dashboard-mobile-header flex shrink-0 items-center justify-between border-b border-line px-4 py-3 lg:hidden">
+              <header className="dashboard-mobile-header flex shrink-0 items-center justify-between border-b border-white/12 px-4 py-3 lg:hidden">
                 <Link href="/revenue" aria-label="Twin Technologies">
-                  <TwinWordmark />
+                  <TwinWordmark inverse />
                 </Link>
                 <div className="flex items-center gap-1">
                   <MobileMenu activeCloneId={activeCloneId} />

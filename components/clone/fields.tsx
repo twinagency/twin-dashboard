@@ -17,7 +17,7 @@ import { useEffect, useState } from "react";
 // (solid). Never drop that placeholder class: without it a field's placeholder
 // and its saved value stop being clearly distinguishable.
 export const inputCls =
-  "min-h-9 min-w-0 w-full rounded-lg border border-line bg-panel px-3 py-2 text-sm text-ink placeholder:text-muted outline-none transition focus:border-accent focus:ring-2 focus:ring-accent/20";
+  "min-h-10 min-w-0 w-full rounded-xl border border-line bg-panel px-3 py-2 text-sm text-ink placeholder:text-muted outline-none transition focus:border-accent-2 focus:ring-2 focus:ring-accent-2/20";
 
 export const selectCls = inputCls;
 
@@ -35,13 +35,13 @@ export type SectionAccent =
   | "cyan"
   | "neutral";
 const SECTION_ACCENTS: Record<SectionAccent, { bar: string; chip: string }> = {
-  blue: { bar: "border-l-accent/70", chip: "bg-accent/15" },
+  blue: { bar: "border-l-accent-2/70", chip: "bg-accent-2/15" },
   green: { bar: "border-l-good/70", chip: "bg-good/15" },
-  pink: { bar: "border-l-pink-500/70", chip: "bg-pink-500/15" },
-  purple: { bar: "border-l-purple-500/70", chip: "bg-purple-500/15" },
+  pink: { bar: "border-l-love/70", chip: "bg-love/15" },
+  purple: { bar: "border-l-accent/70", chip: "bg-accent/12" },
   amber: { bar: "border-l-warn/70", chip: "bg-warn/15" },
   red: { bar: "border-l-crit/70", chip: "bg-crit/15" },
-  cyan: { bar: "border-l-cyan-400/70", chip: "bg-cyan-400/15" },
+  cyan: { bar: "border-l-accent-2/45", chip: "bg-accent-tint/30" },
   neutral: { bar: "border-l-line", chip: "bg-muted/15" },
 };
 
@@ -78,7 +78,7 @@ export function Section({
   const tipText = [hint, tip].filter(Boolean).join(" - ");
   return (
     <section
-      className={`flex h-full min-w-0 flex-col rounded-2xl border border-line border-l-[3px] ${a.bar} bg-panel p-4 text-ink shadow-[0_8px_28px_rgb(16_24_40/0.05)] ` + className}
+      className={`flex h-full min-w-0 flex-col rounded-[20px] border border-line border-l-[3px] ${a.bar} bg-panel p-4 text-ink shadow-[0_12px_34px_rgb(6_23_47/0.055)] ` + className}
     >
       {title && (
         <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-ink">
@@ -689,7 +689,7 @@ const SEG_ACTIVE: Record<SegAccent, string> = {
   red: "bg-crit/20 text-crit",
   green: "bg-good/20 text-good",
   amber: "bg-warn/20 text-warn",
-  purple: "bg-purple-500/20 text-purple-400",
+  purple: "bg-accent/12 text-accent",
 };
 export function Segmented<T extends string>({
   label,

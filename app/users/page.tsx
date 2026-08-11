@@ -174,6 +174,21 @@ const ROUTE_CHIP: Record<string, { emoji: string; label: string; tone: string }>
   VISION_FLOW: { emoji: "👁", label: "vision", tone: "bg-accent/15 text-accent" },
 };
 
+const normalizeProfileKey = (key: string) =>
+  key
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, "_")
+    .replace(/^_+|_+$/g, "");
+
+const profileValueText = (value: unknown): string => {
+  const emptyValues = new Set(["not provided", "not known", "not stated", "unknown", "n/a", "na"]);
+  const values = (Array.isArray(value) ? value : [value])
+    .map((item) => String(item ?? "").trim())
+    .filter((item) => item && !emptyValues.has(item.toLowerCase()));
+  return values.join(", ");
+};
+
 // Colored filter chips. "Active"/"Unreachable" split on the Telegram 24h
 // messaging window (active = we can still message them, see memory rule).
 const FILTERS = [
@@ -182,7 +197,7 @@ const FILTERS = [
   { key: "unreachable", label: "💤 Unreachable", on: "border-line bg-muted/20 text-muted", off: "border-line text-muted/70" },
   { key: "paying", label: "💰 Paying", on: "border-warn/50 bg-warn/15 text-warn", off: "border-warn/20 text-warn/70" },
   { key: "credits", label: "🪙 Credits", on: "border-accent/50 bg-accent/15 text-accent", off: "border-accent/20 text-accent/70" },
-  { key: "new", label: "✨ New", on: "border-purple-500/50 bg-purple-500/15 text-purple-400", off: "border-purple-500/20 text-purple-400/70" },
+  { key: "new", label: "✨ New", on: "border-love/55 bg-love/15 text-love-ink", off: "border-love/25 text-love-ink/75" },
   { key: "flagged", label: "🚩 Flagged", on: "border-crit/50 bg-crit/15 text-crit", off: "border-crit/20 text-crit/70" }, // = users.blocked
 ];
 
@@ -457,10 +472,72 @@ export default async function FansPage({
   const interests: string[] = Array.isArray(profile?.interests) ? profile.interests : [];
   const details: [string, any][] =
     profile?.details && typeof profile.details === "object"
-      ? Object.entries(profile.details).filter(([, v]) => v != null && String(v).trim() !== "")
+      ? Object.entries(profile.details).filter(([, value]) => profileValueText(value) !== "")
       : [];
-  const hasProfile =
-    profile && (profile.summary?.trim() || interests.length > 0 || details.length > 0 || profile.preferences?.trim());
+  const usedDetailKeys = new Set<string>();
+  const takeProfileDetails = (aliases: string[]): string[] => {
+    const normalizedAliases = aliases.map(normalizeProfileKey);
+    return details.flatMap(([key, value]) => {
+      const normalizedKey = normalizeProfileKey(key);
+      const matches = normalizedAliases.some(
+        (alias) => normalizedKey === alias || normalizedKey.startsWith(`${alias}_`),
+      );
+      if (!matches) return [];
+      usedDetailKeys.add(key);
+      const text = profileValueText(value);
+      return text ? [text] : [];
+    });
+  };
+  const uniqueProfileValues = (values: string[]): string => {
+    const seen = new Set<string>();
+    return values
+      .flatMap((value) => value.split(/\s*[|;]\s*/))
+      .map((value) => value.trim())
+      .filter((value) => {
+        const normalized = value.toLowerCase();
+        if (!normalized || seen.has(normalized)) return false;
+        seen.add(normalized);
+        return true;
+      })
+      .join(", ");
+  };
+  const profileCategory = (label: string, aliases: string[], extra: string[] = []) => ({
+    label,
+    value: uniqueProfileValues([...extra, ...takeProfileDetails(aliases)]),
+  });
+
+  // Canonical manager-facing dossier. The extractor stores flexible key/value
+  // details, so aliases keep older profiles useful while future extractions use
+  // the canonical keys listed in profile-extractor.ts.
+  const personalProfileCategories = [
+    profileCategory("Hobbies", ["hobbies", "hobby", "interests"], interests),
+    profileCategory("Siblings", ["siblings", "sibling", "brothers", "sisters"]),
+    profileCategory("Location", ["location", "city", "country", "lives_in", "hometown"]),
+    profileCategory("Timezone", ["timezone", "time_zone", "utc_offset"]),
+    profileCategory("Ethnicity", ["ethnicity", "cultural_background", "heritage"]),
+    profileCategory("Language", ["language", "languages", "preferred_language"]),
+    profileCategory("Occupation", ["occupation", "job", "work", "career"]),
+    profileCategory("Relationship", ["relationship_status", "relationship", "dating_status"]),
+    profileCategory("Family / children", ["family_children", "family", "children", "kids", "parents"]),
+    profileCategory("Education", ["education", "school", "university", "studies"]),
+    profileCategory("Pets", ["pets", "pet"]),
+    profileCategory("Birthday / age", ["birthday_age", "birthday", "date_of_birth", "age"]),
+  ];
+  const contextProfileCategories = [
+    profileCategory("Upcoming events", ["upcoming_events", "upcoming_event", "upcoming_plans"]),
+    profileCategory("Recent events", ["recent_events", "recent_event", "past_recent_events"]),
+    profileCategory("Goals / plans", ["goals_plans", "goals", "ambitions", "plans"]),
+    profileCategory("Routine / availability", ["routine_availability", "routine", "schedule", "availability"]),
+    profileCategory("Likes / favourites", ["likes_favorites", "likes", "favorites", "favourites", "favorite", "favourite"]),
+    profileCategory("Dislikes / boundaries", ["dislikes_boundaries", "dislikes", "boundaries", "dealbreakers"]),
+    profileCategory("Communication style", ["communication_style", "chat_style"]),
+    profileCategory("How they found us", ["how_found", "acquisition_source", "referral_source"]),
+    {
+      label: "Chat / content preferences",
+      value: uniqueProfileValues([profile?.preferences?.trim() ?? "", ...takeProfileDetails(["content_preferences", "chat_preferences"])]),
+    },
+  ];
+  const uncategorizedProfileDetails = details.filter(([key]) => !usedDetailKeys.has(key));
 
   // No heading, no vh-calc guessing — <main> in app/layout.tsx is already
   // pinned to exactly the remaining viewport height for every page (fixed
@@ -794,7 +871,7 @@ export default async function FansPage({
                                     {legacyMedia.bundleName ?? legacyMedia.kind}
                                   </span>
                                   {legacyMedia.paid ? (
-                                    <span className="shrink-0 rounded-full bg-amber-300 px-1.5 py-0.5 text-[10px] font-semibold text-amber-950">
+                                    <span className="shrink-0 rounded-full bg-love-tint px-1.5 py-0.5 text-[10px] font-semibold text-love-ink">
                                       PAID {legacyMedia.stars}★
                                     </span>
                                   ) : (
@@ -833,7 +910,7 @@ export default async function FansPage({
                                   {meta!.type === "bundle" && meta!.count ? ` · ${meta!.count} pics` : ""}
                                 </span>
                                 {meta!.paid ? (
-                                  <span className="shrink-0 rounded-full bg-amber-300 px-1.5 py-0.5 text-[10px] font-semibold text-amber-950">
+                                  <span className="shrink-0 rounded-full bg-love-tint px-1.5 py-0.5 text-[10px] font-semibold text-love-ink">
                                     PAID {meta!.stars ?? 0}★
                                   </span>
                                 ) : (
@@ -1134,37 +1211,67 @@ export default async function FansPage({
                     )}
                   </span>
                 </div>
-                {!hasProfile ? (
-                  <div className="text-xs text-muted">Nothing collected yet.</div>
-                ) : (
-                  <div className="flex flex-col gap-3">
-                    {profile.summary?.trim() && (
-                      <p className="text-xs leading-relaxed text-ink">{profile.summary}</p>
-                    )}
-                    {interests.length > 0 && (
-                      <div className="flex flex-wrap gap-1.5">
-                        {interests.map((it, i) => (
-                          <span key={i} className="rounded-full bg-muted/10 px-2 py-0.5 text-[10px] text-ink">
-                            {it}
-                          </span>
-                        ))}
+                <div className="flex flex-col gap-3">
+                  <div className="rounded-lg border border-line bg-bg/60 p-2.5">
+                    <div className="mb-1 text-[9px] font-bold uppercase tracking-[0.14em] text-muted">
+                      Profile summary
+                    </div>
+                    <p className={`text-xs leading-relaxed ${profile?.summary?.trim() ? "text-ink" : "italic text-muted"}`}>
+                      {profile?.summary?.trim() || "Not learned yet"}
+                    </p>
+                  </div>
+
+                  {[
+                    { title: "Personal details", rows: personalProfileCategories },
+                    { title: "Context & preferences", rows: contextProfileCategories },
+                  ].map((group) => (
+                    <div key={group.title}>
+                      <div className="mb-1.5 text-[9px] font-bold uppercase tracking-[0.14em] text-accent">
+                        {group.title}
                       </div>
-                    )}
-                    {details.length > 0 && (
-                      <dl className="flex flex-col gap-1">
-                        {details.map(([k, v]) => (
-                          <div key={k} className="flex justify-between gap-3 border-b border-line pb-1 text-xs">
-                            <dt className="text-muted">{prettyKey(k)}</dt>
-                            <dd className="text-right font-medium text-ink">{Array.isArray(v) ? v.join(", ") : String(v)}</dd>
+                      <dl className="overflow-hidden rounded-lg border border-line bg-bg/45">
+                        {group.rows.map((item) => (
+                          <div
+                            key={item.label}
+                            className="grid grid-cols-[minmax(0,0.42fr)_minmax(0,0.58fr)] gap-2 border-b border-line/70 px-2.5 py-2 last:border-b-0"
+                          >
+                            <dt className="text-[10px] font-semibold leading-snug text-muted">{item.label}</dt>
+                            <dd
+                              className={`text-right text-[11px] leading-snug ${item.value ? "font-medium text-ink" : "italic text-muted/70"}`}
+                            >
+                              {item.value || "Not learned yet"}
+                            </dd>
                           </div>
                         ))}
                       </dl>
-                    )}
-                    {profile.preferences?.trim() && (
-                      <p className="text-xs leading-relaxed text-ink">{profile.preferences}</p>
-                    )}
-                  </div>
-                )}
+                    </div>
+                  ))}
+
+                  {uncategorizedProfileDetails.length > 0 && (
+                    <div>
+                      <div className="mb-1.5 text-[9px] font-bold uppercase tracking-[0.14em] text-accent">
+                        Other details
+                      </div>
+                      <dl className="overflow-hidden rounded-lg border border-line bg-bg/45">
+                        {uncategorizedProfileDetails.map(([key, value]) => (
+                          <div
+                            key={key}
+                            className="grid grid-cols-[minmax(0,0.42fr)_minmax(0,0.58fr)] gap-2 border-b border-line/70 px-2.5 py-2 last:border-b-0"
+                          >
+                            <dt className="text-[10px] font-semibold leading-snug text-muted">{prettyKey(key)}</dt>
+                            <dd className="text-right text-[11px] font-medium leading-snug text-ink">
+                              {profileValueText(value)}
+                            </dd>
+                          </div>
+                        ))}
+                      </dl>
+                    </div>
+                  )}
+
+                  <p className="text-[9px] leading-relaxed text-muted/75">
+                    Sensitive details are shown only when the fan states them directly; they are never inferred.
+                  </p>
+                </div>
               </div>
 
               {/* Purchases */}

@@ -23,7 +23,7 @@ export function Card({
   padded?: boolean;
 }) {
   return (
-    <div className={`rounded-xl border border-line bg-panel text-ink shadow-[var(--shadow-card)] ${padded ? "p-5" : ""} ${className}`}>
+    <div className={`rounded-[22px] border border-line bg-panel text-ink shadow-[var(--shadow-card)] ${padded ? "p-5 sm:p-6" : ""} ${className}`}>
       {children}
     </div>
   );
@@ -42,7 +42,7 @@ export function PageHeader({
   breadcrumb?: ReactNode;
 }) {
   return (
-    <div className="mb-6">
+    <div className="mb-7 sm:mb-8">
       {breadcrumb && <div className="mb-2 flex flex-wrap items-center gap-2 text-sm text-muted">{breadcrumb}</div>}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
@@ -51,7 +51,7 @@ export function PageHeader({
               and together they were a big share of the "too much grey text"
               complaint. ReactNode subtitles (ones with links/badges) still
               render as a line, they are content rather than explanation. */}
-          <h1 className="flex items-center gap-2 text-2xl font-semibold tracking-tight text-ink">
+          <h1 className="flex items-center gap-2 font-heading text-3xl font-semibold tracking-[-0.035em] text-ink sm:text-4xl">
             {title}
             {typeof subtitle === "string" && subtitle && <Info text={subtitle} />}
           </h1>
@@ -87,7 +87,7 @@ export function SectionCard({
                 card. Non-string hints (rare, ReactNode) still render inline
                 since Info only takes text. */}
             {title && (
-              <h2 className="flex items-center gap-1.5 text-sm font-semibold uppercase tracking-wide text-muted">
+              <h2 className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.18em] text-accent-2">
                 {title}
                 {typeof hint === "string" && hint && <Info text={hint} />}
               </h2>
@@ -126,9 +126,9 @@ export function StatTile({
   className?: string;
 }) {
   return (
-    <div className={`rounded-xl border border-line bg-panel p-4 shadow-[var(--shadow-card)] ${className}`}>
-      <div className="text-xs text-muted">{label}</div>
-      <div className={`mt-1 text-xl font-semibold tabular-nums sm:text-2xl ${STAT_ACCENT_CLS[accent]}`}>{value}</div>
+    <div className={`rounded-2xl border border-line bg-panel p-4 shadow-[var(--shadow-card)] ${className}`}>
+      <div className="text-[11px] font-semibold uppercase tracking-[0.12em] text-muted">{label}</div>
+      <div className={`mt-2 font-heading text-xl font-semibold tabular-nums tracking-[-0.025em] sm:text-2xl ${STAT_ACCENT_CLS[accent]}`}>{value}</div>
       {sub && <div className="mt-0.5 text-[11px] text-muted/80">{sub}</div>}
     </div>
   );
@@ -186,7 +186,7 @@ export function Button({
   return (
     <button
       {...props}
-      className={`inline-flex items-center justify-center gap-1.5 rounded-lg px-4 py-2 text-sm font-medium transition disabled:cursor-not-allowed disabled:opacity-50 ${BUTTON_VARIANT_CLS[variant]} ${className}`}
+      className={`inline-flex items-center justify-center gap-1.5 rounded-full px-5 py-2.5 text-sm font-semibold transition disabled:cursor-not-allowed disabled:opacity-50 ${BUTTON_VARIANT_CLS[variant]} ${className}`}
     >
       {children}
     </button>

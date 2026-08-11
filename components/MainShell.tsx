@@ -19,7 +19,7 @@ export default function MainShell({ children }: { children: React.ReactNode }) {
       className={
         fullBleed
           ? "dashboard-main min-h-0 flex-1 overflow-y-auto pb-28 canvas-glow lg:pb-0"
-          : "dashboard-main mx-auto min-h-0 w-full max-w-6xl flex-1 overflow-y-auto p-4 pb-32 sm:p-5 sm:pb-32 lg:p-6 canvas-glow"
+          : "dashboard-main mx-auto min-h-0 w-full max-w-[1480px] flex-1 overflow-y-auto p-4 pb-32 sm:p-6 sm:pb-32 lg:p-8 canvas-glow"
       }
     >
       {children}
