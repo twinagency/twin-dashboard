@@ -503,7 +503,9 @@ export async function getAnalytics(
     .gte("paid_at", iso(windowEnd - 7 * MS_DAY))
     .lte("paid_at", iso(windowEnd));
   if (cloneId) weeklyQ = weeklyQ.eq("clone_id", cloneId);
-  const { data: weeklyRows } = await weeklyQ;
+  // Paged: a busy fleet week outgrows the row cap, and an unpaged read would drop
+  // spenders off the leaderboard with no error.
+  const { rows: weeklyRows } = await selectAllRows(weeklyQ, { label: "analytics weekly spenders" });
   const weeklyByBuyer = new Map<
     string,
     { cloneId: string | null; telegramId: number; stars: number; purchases: number }
@@ -644,7 +646,10 @@ export async function getAnalytics(
   const byDay: { label: string; stars: number }[] = [];
   const startDay = new Date(startMs);
   startDay.setHours(0, 0, 0, 0);
-  const dayCount = Math.min(180, Math.max(1, Math.ceil((now - startDay.getTime()) / MS_DAY) + 1));
+  // No cap: it was Math.min(180, ...), which on 1Y/ALL charted the OLDEST 180
+  // days and silently dropped everything recent, so the newest revenue was
+  // missing from the very windows meant to show the most history.
+  const dayCount = Math.max(1, Math.ceil((now - startDay.getTime()) / MS_DAY) + 1);
   for (let i = 0; i < dayCount; i++) {
     const d = new Date(startDay.getTime() + i * MS_DAY);
     const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(

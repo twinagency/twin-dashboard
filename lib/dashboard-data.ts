@@ -10,10 +10,13 @@ const SPEC: Record<Period, { days: number | null; gran: Gran }> = {
   "1W": { days: 7, gran: "day" },
   "2W": { days: 14, gran: "day" },
   "1M": { days: 30, gran: "day" },
-  "3M": { days: 90, gran: "week" },
-  "6M": { days: 180, gran: "week" },
-  "1Y": { days: 365, gran: "month" },
-  ALL: { days: null, gran: "month" },
+  // Every multi-day window is day-by-day: Ronan's call 2026-08-11. Weekly/monthly
+  // buckets hid the individual days he reads the chart for. 1D stays hourly
+  // because one bar is not a chart.
+  "3M": { days: 90, gran: "day" },
+  "6M": { days: 180, gran: "day" },
+  "1Y": { days: 365, gran: "day" },
+  ALL: { days: null, gran: "day" },
   // Unused — CUSTOM always comes with an explicit {startMs, endMs} range, which
   // picks its own granularity (see granForSpan) instead of reading this table.
   CUSTOM: { days: null, gran: "day" },
@@ -28,9 +31,8 @@ const MS_DAY = 86_400_000;
 function granForSpan(ms: number): Gran {
   const days = ms / MS_DAY;
   if (days <= 2) return "hour";
-  if (days <= 45) return "day";
-  if (days <= 270) return "week";
-  return "month";
+  // Day-by-day at every span, to match the fixed periods above.
+  return "day";
 }
 
 export type CloneSummary = {
