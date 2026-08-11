@@ -14,6 +14,7 @@ export type LogRow = {
   fan: string | null;
   message: string;
   detail: Record<string, unknown> | null;
+  model: string | null;
 };
 
 function LevelChip({ level }: { level: LogRow["level"] }) {
@@ -80,6 +81,7 @@ export function LogsTable({ rows, showClone }: { rows: LogRow[]; showClone: bool
                   <div className="text-[11px] text-muted" title={`raw source: ${r.source}`}>
                     {sourceLabel(r.source)}
                   </div>
+                  {r.model && <div className="font-mono text-[11px] text-muted/70">{r.model}</div>}
                 </TableCell>
                 {showClone && <TableCell className="whitespace-nowrap">{r.cloneName ?? "-"}</TableCell>}
                 <TableCell className="max-w-[480px]">

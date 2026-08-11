@@ -83,6 +83,7 @@ function systemToRow(r: SystemDbRow): LogRow {
     fan: r.telegram_id != null ? String(r.telegram_id) : null,
     message: r.message,
     detail: r.detail,
+    model: null,
   };
 }
 
@@ -103,6 +104,7 @@ function usageToRow(r: UsageDbRow): LogRow {
     cloneName: r.clones?.name ?? null,
     fan: r.users?.stated_name ?? r.users?.name ?? (r.users?.telegram_id != null ? String(r.users.telegram_id) : null),
     message,
+    model: r.model,
     detail: {
       model: r.model,
       prompt_tokens: r.prompt_tokens,
