@@ -420,8 +420,13 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
               )}
             </div>
           </CardHeader>
-          <CardContent>
-            <div className="h-[160px] sm:h-[220px]">
+          {/* On the fleet view the chart sits beside the 260px clone picker,
+              which is taller than a 220px chart, so the card stretched and the
+              chart left dead space under itself. Here it grows into that space
+              instead. Scoped to one clone there is no second column and nothing
+              to match, so the fixed height stays. */}
+          <CardContent className={scoped ? undefined : "lg:flex lg:min-h-0 lg:flex-1 lg:flex-col"}>
+            <div className={"h-[160px] sm:h-[220px]" + (scoped ? "" : " lg:h-auto lg:min-h-[220px] lg:flex-1")}>
               {loading ? (
                 <div className="flex h-full items-center justify-center text-muted">Loading…</div>
               ) : data && displayStars > 0 ? (
