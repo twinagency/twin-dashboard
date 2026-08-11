@@ -22,9 +22,11 @@ import sharp from "sharp";
 import { supabaseAdmin } from "@/lib/supabase";
 import { captionPhoto, type Caption } from "@/lib/caption";
 import { priceFromGuide } from "@/lib/pricing";
+import { assertPhotoSendable } from "@/lib/photo-guard";
 
 // ── mirrored from app/media/actions.ts (module-private there) ────────────────
-const PHOTO_MAX_BYTES = 9.5 * 1024 * 1024; // Telegram photo limit is 10MB — stay under
+// The photo size + dimension gate is NOT mirrored: it is imported, so the
+// importer cannot drift into admitting a photo the dashboard would refuse.
 
 function storagePath(cloneId: string, type: "photos" | "videos", filename: string) {
   return `${cloneId}/${type}/${Date.now()}-${filename.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
@@ -105,9 +107,10 @@ async function main() {
     try {
       const raw = await readFile(src);
       const jpeg = await sharp(raw).jpeg({ quality: 90 }).toBuffer();
-      if (jpeg.byteLength > PHOTO_MAX_BYTES) {
-        throw new Error(`too large after JPEG conversion (${(jpeg.byteLength / 1024 / 1024).toFixed(1)} MB), Telegram max is 10 MB`);
-      }
+      // Same gate as uploadPhoto: size AND dimensions, before anything is
+      // written, so a bulk import cannot seed the library with items that
+      // sendPaidMedia will refuse.
+      await assertPhotoSendable(jpeg);
       const cap = await captionWithRetry(jpeg, model, label);
       const starValue = resolvePrice(cap, guide, 25);
       const imageName = `${NAME_PREFIX} ${String(n).padStart(2, "0")}${cap.auto_desc ? ` (${cap.auto_desc})` : ""}`;
@@ -174,6 +177,8 @@ async function main() {
         const label = path.basename(src);
         try {
           const bytes = await readFile(src);
+          // Bundle items are paid media too, same gate as addBundleItem.
+          await assertPhotoSendable(bytes);
           const p = storagePath(CLONE_ID!, "photos", `${SLUG}-bundle-${String(i).padStart(2, "0")}.jpg`);
           const { error: upErr } = await supabaseAdmin.storage
             .from("media")

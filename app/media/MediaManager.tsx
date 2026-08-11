@@ -4,6 +4,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import StarAmount from "@/components/StarAmount";
 import { MEDIA_TAGS } from "@/lib/pricing";
+import { checkPhotoDimensions, PHOTO_LIMITS_HINT } from "@/lib/telegram-limits";
 import {
   uploadPhoto,
   uploadVideo,
@@ -135,15 +136,38 @@ function Lightbox({
   );
 }
 
+// Browser-side pre-flight on a photo's dimensions, so the operator learns a
+// file is unsendable before waiting on an upload. THIS IS NOT THE GATE. The
+// gate is assertPhotoSendable() inside the server action (lib/photo-guard.ts),
+// which the upload cannot get past; this only saves a round trip.
+//
+// A format the browser cannot decode (HEIC is the one that matters, the upload
+// zone accepts it and the server converts it) is deliberately NOT a rejection
+// here. Unmeasurable in the browser means "let the server measure it".
+async function measurePhoto(file: File): Promise<{ ok: true } | { ok: false; message: string }> {
+  let bitmap: ImageBitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+  } catch {
+    return { ok: true };
+  }
+  const { width, height } = bitmap;
+  bitmap.close();
+  const verdict = checkPhotoDimensions(width, height);
+  return verdict.ok ? { ok: true } : { ok: false, message: verdict.message };
+}
+
 // ── Upload dropzone ───────────────────────────────────────────────────────────
 function UploadZone({
   label,
   accept,
   onFiles,
+  hint,
 }: {
   label: string;
   accept: string;
   onFiles: (files: File[]) => void;
+  hint?: string;
 }) {
   const ref = useRef<HTMLInputElement>(null);
   const [dragging, setDragging] = useState(false);
@@ -156,6 +180,7 @@ function UploadZone({
           ? "border-[#78b6df] bg-[#0d3d6e] ring-4 ring-[#78b6df]/20"
           : "border-[#06172f] bg-[#06172f] hover:border-[#4a8ec4] hover:bg-[#082b55]")
       }
+      title={hint}
       onClick={() => ref.current?.click()}
       onDragOver={(e) => { e.preventDefault(); setDragging(true); }}
       onDragLeave={() => setDragging(false)}
@@ -212,22 +237,29 @@ function PhotoUploadQueue({
   const [queue, setQueue] = useState<QueueItem[]>([]);
   const router = useRouter();
 
-  function addFiles(files: File[]) {
+  async function addFiles(files: File[]) {
+    // Measure first. A photo Telegram would refuse never becomes "pending", so
+    // it can never be sent up, and it carries the reason on the card instead of
+    // failing silently or being captioned for nothing.
+    const checked = await Promise.all(
+      files.map(async (f) => ({ file: f, verdict: await measurePhoto(f) })),
+    );
     setQueue((prev) => [
       ...prev,
-      ...files.map((f) => ({
-        file: f,
+      ...checked.map(({ file, verdict }) => ({
+        file,
         caption: "",
         teaserCaption: "",
         starValue: "", // blank = auto-price from the category pricing guide
-        imageName: f.name.replace(/\.[^.]+$/, ""),
+        imageName: file.name.replace(/\.[^.]+$/, ""),
         isFree: false,
-        status: "pending" as const,
-        captioning: true,
+        status: (verdict.ok ? "pending" : "error") as QueueItem["status"],
+        error: verdict.ok ? undefined : verdict.message,
+        captioning: verdict.ok,
       })),
     ]);
-    for (const file of files) {
-      autoCaption(file);
+    for (const { file, verdict } of checked) {
+      if (verdict.ok) autoCaption(file);
     }
   }
 
@@ -283,7 +315,7 @@ function PhotoUploadQueue({
 
   return (
     <div className="grid gap-4">
-      <UploadZone label="Add photos (any format: HEIC, JPG, PNG, WebP)" accept="image/*,.heic,.heif" onFiles={addFiles} />
+      <UploadZone label="Add photos (any format: HEIC, JPG, PNG, WebP)" accept="image/*,.heic,.heif" onFiles={addFiles} hint={PHOTO_LIMITS_HINT} />
       {queue.length > 0 && (
         <div className="grid gap-3">
           {queue.map((item, i) => (
@@ -291,7 +323,7 @@ function PhotoUploadQueue({
               <div className="mb-3 flex items-center gap-3">
                 <div className="text-sm font-medium truncate flex-1">{item.file.name}</div>
                 <StatusBadge status={item.status} error={item.error} />
-                {item.status === "pending" && (
+                {(item.status === "pending" || item.status === "error") && (
                   <button
                     onClick={() => setQueue((q) => q.filter((_, j) => j !== i))}
                     className="text-xs text-muted hover:text-crit"
@@ -300,6 +332,13 @@ function PhotoUploadQueue({
                   </button>
                 )}
               </div>
+              {/* A rejected photo needs its reason on screen, not in a tooltip:
+                  the operator has to know WHICH limit it broke to fix the file. */}
+              {item.status === "error" && item.error && (
+                <div className="mb-1 rounded border border-crit/30 bg-crit/10 p-2 text-xs text-crit">
+                  {item.error}
+                </div>
+              )}
               {item.status === "pending" && (
                 <div className="grid grid-cols-2 gap-3 text-xs">
                   <label className="block">
@@ -821,6 +860,14 @@ function BundleCard({ bundle, cloneId }: { bundle: Bundle; cloneId: string }) {
 
   async function addItem(files: File[]) {
     for (const file of files) {
+      // Same pre-flight as the single-photo queue. Bundle items are paid media
+      // too, and one item Telegram refuses takes the whole bundle down with it.
+      // The server action re-checks; this only reports it sooner.
+      const verdict = await measurePhoto(file);
+      if (!verdict.ok) {
+        alert(`${file.name}\n\n${verdict.message}`);
+        continue;
+      }
       const fd = new FormData();
       fd.append("file", file);
       await addBundleItem(bundle.id, cloneId, fd);
@@ -903,7 +950,7 @@ function BundleCard({ bundle, cloneId }: { bundle: Bundle; cloneId: string }) {
         <label
           className="flex h-20 w-20 cursor-pointer items-center justify-center rounded-xl border-2 border-[#06172f] bg-[#06172f] text-2xl font-bold text-white shadow-[0_8px_22px_rgba(6,23,47,0.2)] transition hover:border-[#4a8ec4] hover:bg-[#082b55] lg:h-16 lg:w-16 lg:text-xl"
           aria-label="Add photos to bundle"
-          title="Add photos to bundle"
+          title={`Add photos to bundle. ${PHOTO_LIMITS_HINT}`}
         >
           <input
             type="file"

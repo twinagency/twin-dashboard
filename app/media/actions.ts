@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase";
 import { captionPhoto, captionVideo, type Caption } from "@/lib/caption";
 import { priceFromGuide, MEDIA_TAGS } from "@/lib/pricing";
+import { assertPhotoSendable } from "@/lib/photo-guard";
 
 const TAG_SET = new Set<string>(MEDIA_TAGS);
 
@@ -21,7 +22,9 @@ function parseTags(raw: FormDataEntryValue | null): string[] {
   ];
 }
 
-const PHOTO_MAX_BYTES = 9.5 * 1024 * 1024; // Telegram photo limit is 10MB — stay under
+// Photo size AND dimensions are both enforced by assertPhotoSendable (see
+// lib/photo-guard.ts), which owns the byte ceiling too, so there is one gate
+// rather than a byte check here and a dimension check somewhere else.
 const VIDEO_MAX_BYTES = 49 * 1024 * 1024;  // Telegram video limit is 50MB
 
 function storagePath(cloneId: string, type: "photos" | "videos", filename: string) {
@@ -60,10 +63,15 @@ export async function uploadPhoto(cloneId: string, fd: FormData) {
   const file = fd.get("file") as File | null;
   if (!file) throw new Error("no file");
 
-  // Convert any format (HEIC, PNG, WebP, etc.) → JPEG and enforce Telegram's 10MB limit
+  // Convert any format (HEIC, PNG, WebP, etc.) → JPEG, then gate on what
+  // Telegram will actually accept: size AND dimensions. This runs before the
+  // storage upload and before the row insert on purpose. A photo past
+  // Telegram's dimension limits is refused by sendPaidMedia every time
+  // (PHOTO_INVALID_DIMENSIONS), so admitting one would put an item in the
+  // library that can never be sold, however it is priced.
   const raw = Buffer.from(await file.arrayBuffer());
   const jpeg = await sharp(raw).jpeg({ quality: 90 }).toBuffer();
-  if (jpeg.byteLength > PHOTO_MAX_BYTES) throw new Error(`Photo too large after conversion (${(jpeg.byteLength / 1024 / 1024).toFixed(1)} MB). Telegram max is 10 MB.`);
+  await assertPhotoSendable(jpeg);
 
   const baseName = file.name.replace(/\.[^.]+$/, "");
   const path = storagePath(cloneId, "photos", baseName + ".jpg");
@@ -326,6 +334,9 @@ export async function addBundleItem(bundleId: string, cloneId: string, fd: FormD
 
   const path = storagePath(cloneId, "photos", file.name);
   const bytes = Buffer.from(await file.arrayBuffer());
+  // Bundle items are paid media too (sendPaidPhotoGroup), so they get the same
+  // gate as a single photo. One oversized item makes the whole bundle unsendable.
+  await assertPhotoSendable(bytes);
 
   const { error: upErr } = await supabaseAdmin.storage
     .from("media")
