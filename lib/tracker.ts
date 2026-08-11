@@ -151,6 +151,8 @@ function mapItem(row: ItemRow): TrackerItem {
   };
 }
 
+export type BotJob = { id: string; bot: string; itemId: string | null; status: string; result: string };
+
 export type TrackerBoard = {
   open: TrackerItem[];
   batches: TrackerBatch[];
@@ -158,18 +160,20 @@ export type TrackerBoard = {
   // already decided this one is not a bug" is exactly the knowledge that gets
   // lost and re-investigated three sessions later (see ../BACKLOG.txt).
   dropped: TrackerItem[];
+  jobs: BotJob[];
 };
 
 // One read for the whole board. Four flat selects and a join in memory rather
 // than nested PostgREST embeds: the tables are small, and a flat select cannot
 // silently drop children the way an embed with a bad foreign-key hint does.
 export async function loadBoard(): Promise<TrackerBoard> {
-  const [itemsRes, batchesRes, commitsRes, notesRes, attsRes] = await Promise.all([
+  const [itemsRes, batchesRes, commitsRes, notesRes, attsRes, jobsRes] = await Promise.all([
     supabaseAdmin.from("tracker_items").select("*").order("number", { ascending: false }),
     supabaseAdmin.from("tracker_batches").select("*").order("number", { ascending: false }),
     supabaseAdmin.from("tracker_commits").select("*").order("authored_at", { ascending: true }),
     supabaseAdmin.from("tracker_notes").select("*").order("created_at", { ascending: true }),
     supabaseAdmin.from("tracker_attachments").select("*").order("created_at", { ascending: true }),
+    supabaseAdmin.from("tracker_bot_jobs").select("id,bot,item_id,status,result").order("created_at", { ascending: false }).limit(200),
   ]);
 
   const items = (itemsRes.data ?? []).map((r) => mapItem(r as ItemRow));
@@ -215,6 +219,7 @@ export async function loadBoard(): Promise<TrackerBoard> {
     open: sortOpen(items.filter((i) => isOpen(i, liveBatchIds))),
     batches,
     dropped: items.filter((i) => i.status === "closed" || i.status === "wontfix"),
+    jobs: (jobsRes.data ?? []).map((j) => ({ id: j.id, bot: j.bot, itemId: j.item_id, status: j.status, result: j.result ?? "" })),
   };
 }
 

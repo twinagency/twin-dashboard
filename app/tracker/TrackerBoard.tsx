@@ -2,8 +2,8 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
-import { botFor, BotBadge } from "./bot-identity";
-import { KINDS, AREAS, SEVERITIES, ageLabel, type TrackerBatch, type TrackerBoard as Board, type TrackerItem } from "@/lib/tracker";
+import { botFor, BotBadge, BotMark } from "./bot-identity";
+import { KINDS, AREAS, SEVERITIES, ageLabel, type BotJob, type TrackerBatch, type TrackerBoard as Board, type TrackerItem } from "@/lib/tracker";
 import {
   addCommit,
   addNote,
@@ -13,6 +13,7 @@ import {
   startBatch,
   updateBatch,
   updateItem,
+  askBot,
 } from "./actions";
 
 // The board. Three zones top to bottom:
@@ -36,6 +37,16 @@ const KIND_COLOR: Record<string, string> = {
 };
 
 const STATUS_STEPS = ["open", "fixed", "pushed", "live"] as const;
+
+// Which bots can be pointed at ONE item, and when that is worth doing. Snitch
+// is not here: it reads the whole stream, there is nothing for it to look at on
+// a single report. Warden is not here either, it watches boxes, not bugs.
+const PER_ITEM_BOTS: { slug: string; label: string; when: (i: TrackerItem) => boolean }[] = [
+  { slug: "triage", label: "is this config or code?", when: () => true },
+  { slug: "repro", label: "write me a failing test", when: (i) => i.kind === "bug" || i.kind === "code" },
+  { slug: "ledger", label: "prove it in the numbers", when: (i) => i.severity === "money" },
+  { slug: "blackbox", label: "check the box logs", when: (i) => i.severity === "money" || i.area === "infra" || i.kind === "deploy" },
+];
 
 function Chip({ className = "", children }: { className?: string; children: React.ReactNode }) {
   return <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-[11px] font-semibold ${className}`}>{children}</span>;
@@ -72,6 +83,7 @@ function ItemRow({
   onSelect,
   batches,
   batchLabel,
+  jobs = [],
 }: {
   item: TrackerItem;
   selectable?: boolean;
@@ -79,6 +91,7 @@ function ItemRow({
   onSelect?: (id: string, on: boolean) => void;
   batches: TrackerBatch[];
   batchLabel?: string | null;
+  jobs?: BotJob[];
 }) {
   const [open, setOpen] = useState(false);
   const [pending, start] = useTransition();
@@ -212,6 +225,35 @@ function ItemRow({
               ))}
             </div>
           )}
+
+          {/* Point one bot at this one thing, now. The dashboard cannot reach
+              the home server where they run, so this queues a job the next cron
+              tick picks up. It asks; it never commands. */}
+          <div className="flex flex-wrap items-center gap-2 border-t border-black/6 pt-3">
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-neutral-400">ask a bot</span>
+            {PER_ITEM_BOTS.filter((b) => b.when(item)).map((b) => {
+              const bot = botFor(b.slug);
+              const job = jobs.find((j) => j.bot === b.slug && j.itemId === item.id);
+              const busy = job?.status === "queued" || job?.status === "running";
+              return (
+                <button
+                  key={b.slug}
+                  disabled={pending || busy}
+                  onClick={() => start(() => void askBot(b.slug, item.id, item.number))}
+                  className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold ${
+                    busy ? "bg-neutral-100 text-neutral-400" : "bg-neutral-100 text-neutral-700 hover:bg-neutral-200"
+                  }`}
+                >
+                  {bot && (
+                    <span className={`inline-flex h-4 w-4 items-center justify-center rounded-full text-white ${busy ? "bg-neutral-300" : bot.disc}`}>
+                      <BotMark bot={bot} className="h-2.5 w-2.5" />
+                    </span>
+                  )}
+                  {busy ? `${bot?.label ?? b.slug} is on it` : b.label}
+                </button>
+              );
+            })}
+          </div>
 
           <form action={(fd) => start(() => void addNote(item.id, fd))} className="flex gap-2">
             <input name="body" placeholder="add a note" className="flex-1 rounded-lg border border-black/10 px-3 py-1.5 text-sm" />
@@ -529,6 +571,7 @@ export function TrackerBoard({ board }: { board: Board }) {
             item={i}
             batches={board.batches}
             batchLabel={i.batchId ? `batch ${String(batchNumber.get(i.batchId) ?? 0).padStart(2, "0")}` : null}
+            jobs={board.jobs}
             selectable
             selected={selected.has(i.id)}
             onSelect={toggle}

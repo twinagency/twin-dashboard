@@ -253,3 +253,32 @@ export async function deleteBatch(batchId: string): Promise<void> {
   await supabaseAdmin.from("tracker_batches").delete().eq("id", batchId);
   revalidatePath(PATH);
 }
+
+// ── run a bot against one item, right now ────────────────────────────────────
+// The dashboard cannot reach the home server where the bots run, and must not
+// be given a way to execute anything. So this inserts a job row and the cron
+// tick that already runs every few minutes drains the queue before its
+// scheduled work. The dashboard asks; it never commands.
+//
+// A queued job jumps the schedule and runs even if that bot is switched off,
+// because pressing the button is an explicit request for that one item.
+export async function askBot(bot: string, itemId: string, itemNumber: number): Promise<void> {
+  // One outstanding request per bot per item. Pressing twice while the first is
+  // still queued should not queue a second run.
+  const { data: existing } = await supabaseAdmin
+    .from("tracker_bot_jobs")
+    .select("id")
+    .eq("bot", bot)
+    .eq("item_id", itemId)
+    .in("status", ["queued", "running"])
+    .maybeSingle();
+  if (existing) return;
+
+  await supabaseAdmin.from("tracker_bot_jobs").insert({
+    bot,
+    item_id: itemId,
+    item_number: itemNumber,
+    requested_by: "ronan",
+  });
+  revalidatePath(PATH);
+}
