@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "./supabase";
+import { selectAllRows } from "./select-all";
 
 // Behavioral analytics for /performance: classic-vs-smart flow, day-of-week
 // conversion timing, and the shape of a conversation before a fan's first
@@ -87,15 +88,35 @@ function metaType(meta: Record<string, unknown> | null): string | null {
 }
 
 export async function getPerformanceData(cloneId: string | null): Promise<PerformanceData> {
-  // Fleet-wide fetch (dataset is tiny, fine to roll up in JS). cloneId only
-  // narrows the day-of-week and pre-purchase cuts below; the classic-vs-smart
-  // comparison always spans the whole fleet since that's what it compares.
-  const [{ data: cloneRows }, { data: userRows }, { data: chatRows }, { data: txRows }] = await Promise.all([
-    supabaseAdmin.from("clones").select("id,name,ai_mode,created_at").order("created_at", { ascending: true }),
-    supabaseAdmin.from("users").select("id,clone_id,telegram_id,first_seen_at"),
-    supabaseAdmin.from("chat_history").select("clone_id,telegram_id,role,created_at,meta"),
-    supabaseAdmin.from("star_transactions").select("clone_id,telegram_id,amount_stars,paid_at"),
-  ]);
+  // Fleet-wide fetch, rolled up in JS. This was written when the dataset was
+  // tiny; it is paged now because the n8n import pushes chat_history past a
+  // million rows, and an unpaged read would silently stop at the PostgREST cap
+  // and report a fraction of the fleet as the whole of it.
+  // cloneId only narrows the day-of-week and pre-purchase cuts below; the
+  // classic-vs-smart comparison always spans the whole fleet since that's what
+  // it compares.
+  const [{ data: cloneRows }, { rows: userRows }, { rows: chatRows, truncated: chatTruncated }, { rows: txRows }] =
+    await Promise.all([
+      supabaseAdmin.from("clones").select("id,name,ai_mode,created_at").order("created_at", { ascending: true }),
+      selectAllRows<UserRow>(supabaseAdmin.from("users").select("id,clone_id,telegram_id,first_seen_at"), {
+        label: "performance: fans",
+      }),
+      selectAllRows<ChatRow>(
+        supabaseAdmin.from("chat_history").select("clone_id,telegram_id,role,created_at,meta"),
+        { label: "performance: chat history" },
+      ),
+      selectAllRows<TxRow>(
+        supabaseAdmin.from("star_transactions").select("clone_id,telegram_id,amount_stars,paid_at"),
+        { label: "performance: star transactions" },
+      ),
+    ]);
+  if (chatTruncated) {
+    // Loud on purpose. Retention and message totals below are then lower bounds,
+    // and this page has no way to say so in its own UI yet.
+    console.warn(
+      "[performance] chat_history read hit the row ceiling: message counts and retention are lower bounds, not totals.",
+    );
+  }
 
   const clones = (cloneRows ?? []) as CloneRow[];
   const users = (userRows ?? []) as UserRow[];

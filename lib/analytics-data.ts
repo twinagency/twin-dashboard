@@ -1,4 +1,5 @@
 import { supabaseAdmin } from "./supabase";
+import { selectAllRows } from "./select-all";
 import { chartColorForClone } from "./colors";
 import { STAR_USD } from "./money";
 import type { DateRange, Period } from "./dashboard-data";
@@ -225,25 +226,31 @@ export async function getAnalytics(
   };
   let txs: TxRow[];
   {
-    let withFeatureQ = supabaseAdmin
+    // PAGED, and this is the revenue number on every analytics chart. Unpaged it
+    // stopped at the PostgREST cap with no error: alanna-pow's 3-month window
+    // read 1000 of 3383 rows and reported 304,220 stars against an actual
+    // 1,340,088 (measured 2026-08-09). There is no ORDER BY, so which thousand
+    // came back was arbitrary, and a wider window could report LESS than a
+    // narrower one.
+    //
+    // The missing-column fallback is probed with one row BEFORE the paged read,
+    // because selectAllRows reports a failure as an empty result — which here
+    // would render as "no revenue" instead of "column not there yet".
+    // `id` is required: the legacy-media inference below keys its map on it.
+    const COLS = "id,clone_id,amount_stars,paid_at,kind,feature,telegram_id";
+    const COLS_LEGACY = "id,clone_id,amount_stars,paid_at,kind,telegram_id";
+    const probe = await supabaseAdmin.from("star_transactions").select(COLS).limit(1);
+    const hasFeature = !probe.error;
+    let q = supabaseAdmin
       .from("star_transactions")
-      .select("id,clone_id,amount_stars,paid_at,kind,feature,telegram_id")
+      .select(hasFeature ? COLS : COLS_LEGACY)
       .gte("paid_at", iso(startMs))
       .lte("paid_at", iso(windowEnd));
-    if (cloneId) withFeatureQ = withFeatureQ.eq("clone_id", cloneId);
-    const withFeature = await withFeatureQ;
-    if (withFeature.error) {
-      let legacyQ = supabaseAdmin
-        .from("star_transactions")
-        .select("id,clone_id,amount_stars,paid_at,kind,telegram_id")
-        .gte("paid_at", iso(startMs))
-        .lte("paid_at", iso(windowEnd));
-      if (cloneId) legacyQ = legacyQ.eq("clone_id", cloneId);
-      const legacy = await legacyQ;
-      txs = ((legacy.data ?? []) as Omit<TxRow, "feature">[]).map((r) => ({ ...r, feature: null }));
-    } else {
-      txs = (withFeature.data ?? []) as TxRow[];
-    }
+    if (cloneId) q = q.eq("clone_id", cloneId);
+    const { rows } = await selectAllRows(q, { label: "analytics revenue ledger" });
+    txs = hasFeature
+      ? (rows as TxRow[])
+      : (rows as Omit<TxRow, "feature">[]).map((r) => ({ ...r, feature: null }));
   }
 
   // Older Telegram-imported sales predate star_transactions.feature. Recover
@@ -405,26 +412,36 @@ export async function getAnalytics(
     .gte("created_at", iso(startMs))
     .lte("created_at", iso(windowEnd));
   if (cloneId) msgQ = msgQ.eq("clone_id", cloneId);
-  const { data: msgRows } = await msgQ;
+  const { rows: msgRows } = await selectAllRows(msgQ, { label: "analytics paywall funnel: messaged fans" });
   const messagedFans = new Set<number>();
   for (const m of (msgRows ?? []) as { telegram_id: number | null }[]) {
     if (m.telegram_id != null) messagedFans.add(m.telegram_id);
   }
   // paywalled: distinct fans shown the paywall (paywall_hits — additive table, mig 024).
   // If the table doesn't exist yet the query errors → treat as "still collecting".
-  let paywallQ = supabaseAdmin
-    .from("paywall_hits")
-    .select("telegram_id")
-    .gte("shown_at", iso(startMs))
-    .lte("shown_at", iso(windowEnd));
-  if (cloneId) paywallQ = paywallQ.eq("clone_id", cloneId);
-  const paywallRes = await paywallQ;
-  const paywallCollecting = Boolean(paywallRes.error);
+  // Probe first: this table is additive (migration 024) and may not exist yet, and
+  // a paged read reports that failure as an empty result, which would read as
+  // "nobody was ever paywalled" instead of "still collecting". Then page, because
+  // one paywall hit per fan per session outgrows the row cap faster than payments do.
+  const paywallProbe = await supabaseAdmin.from("paywall_hits").select("telegram_id").limit(1);
+  const paywallCollecting = Boolean(paywallProbe.error);
   const paywalledFans = new Set<number>();
-  const paywallRows = (paywallRes.data ?? []) as { telegram_id: number | null }[];
-  const paywallViews = paywallRows.length;
-  for (const p of paywallRows) {
-    if (p.telegram_id != null) paywalledFans.add(p.telegram_id);
+  // paywallViews counts every hit, not distinct fans, so it must come from the
+  // PAGED rows — off an unpaged read it flattens at the row cap and the
+  // views-per-fan average reads far lower than reality.
+  let paywallViews = 0;
+  if (!paywallCollecting) {
+    let paywallQ = supabaseAdmin
+      .from("paywall_hits")
+      .select("telegram_id")
+      .gte("shown_at", iso(startMs))
+      .lte("shown_at", iso(windowEnd));
+    if (cloneId) paywallQ = paywallQ.eq("clone_id", cloneId);
+    const { rows: paywallRows } = await selectAllRows(paywallQ, { label: "analytics paywall hits" });
+    paywallViews = paywallRows.length;
+    for (const p of paywallRows as { telegram_id: number | null }[]) {
+      if (p.telegram_id != null) paywalledFans.add(p.telegram_id);
+    }
   }
 
   // ── lifetime fan spend → tiers + funnel (users table) ────────────────────────
@@ -432,7 +449,7 @@ export async function getAnalytics(
     .from("users")
     .select("clone_id,telegram_id,name,stated_name,username,total_spent_stars,spend_tier,purchase_count");
   if (cloneId) userQ = userQ.eq("clone_id", cloneId);
-  const { data: userRows } = await userQ;
+  const { rows: userRows } = await selectAllRows(userQ, { label: "analytics lifetime fan spend" });
   const users = (userRows ?? []) as {
     clone_id: string;
     telegram_id: number;

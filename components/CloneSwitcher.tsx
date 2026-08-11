@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useRouter } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { setCloneScope } from "@/app/actions/clone-scope";
 import { initials } from "@/lib/colors";
@@ -34,6 +34,8 @@ export default function CloneSwitcher({
   activeCloneId: string | null;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
+  const searchParams = useSearchParams();
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [pending, startTransition] = useTransition();
@@ -51,10 +53,31 @@ export default function CloneSwitcher({
     return clones.filter((c) => c.name.toLowerCase().includes(q));
   }, [clones, query]);
 
+  // /clones/[id]* is the ONE family of routes that takes its clone from the
+  // URL instead of the scope cookie — the Configure page the sidebar's PPVs and
+  // Edit rows land on. Setting the cookie and refreshing therefore re-rendered
+  // the OLD girl's page, and the only way through was to re-click that sidebar
+  // row (which rebuilds its href from the new scope). Point the URL at the
+  // newly picked clone instead, carrying the query (?tab=/?sub=) so PPVs stays
+  // on PPVs and Edit stays on Edit. Returns null for every cookie-scoped page,
+  // where a refresh alone already switches the data underneath you.
+  function cloneRouteFor(id: string | null): string | null {
+    if (!pathname?.startsWith("/clones/") || pathname === "/clones/new") return null;
+    // "All clones" has no single-girl Configure page, same rule the sidebar
+    // enforces by opening this picker rather than linking anywhere.
+    if (!id) return "/clones";
+    // Deeper routes (/clones/[id]/fans/[userId]) address one girl's own row and
+    // have no equivalent under another, so they land on her Configure page.
+    const query = searchParams.toString();
+    return `/clones/${id}${query ? `?${query}` : ""}`;
+  }
+
   function pick(id: string | null) {
     setOpen(false);
     startTransition(async () => {
       await setCloneScope(id);
+      const dest = cloneRouteFor(id);
+      if (dest) router.push(dest);
       router.refresh();
     });
   }
