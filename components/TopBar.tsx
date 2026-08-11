@@ -35,13 +35,13 @@ export default function TopBar({
     // Fixed h-16 (not padding-driven height) so this bar's bottom border lines
     // up exactly with the Sidebar's brand-row border next to it - the two were
     // drifting apart whenever content pushed either row's natural height.
-    <div className="dashboard-topbar sticky top-0 z-40 grid h-16 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-3 border-b border-line px-4">
-      <h1 className="hidden min-w-0 truncate text-base font-semibold text-ink sm:block">
+    <div className="dashboard-topbar sticky top-0 z-40 grid h-20 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-3 border-b border-line px-5 lg:px-8">
+      <h1 className="hidden min-w-0 truncate font-heading text-sm font-semibold tracking-[-0.02em] text-ink sm:block">
         {scopeLabel}
         {pageLabel != null && <span className="text-muted"> / {pageLabel}</span>}
       </h1>
 
-      <div className="flex shrink-0 items-center gap-1.5">
+      <div className="flex shrink-0 items-center gap-1.5 rounded-full border border-line/80 bg-white/76 px-2 py-1.5 shadow-[0_8px_26px_rgb(6_23_47/0.06)] backdrop-blur-xl">
         <CloneSwitcher clones={clones} activeCloneId={activeCloneId} />
         <div className="h-5 w-px shrink-0 bg-line" />
         {/* All-time cash made, scoped to the clone switcher above - not

@@ -37,7 +37,7 @@ export function techForUsageKind(kind: string): Tech {
 // Filter chips, same shape/style as the Fans page FILTERS.
 export const TECH_CHIPS: { key: Tech | "all"; label: string; on: string; off: string }[] = [
   { key: "all", label: "🧾 All", on: "border-line bg-muted/20 text-ink", off: "border-line text-ink/70" },
-  { key: "elevenlabs", label: "🎙 ElevenLabs", on: "border-purple-500/50 bg-purple-500/15 text-purple-400", off: "border-purple-500/20 text-purple-400/70" },
+  { key: "elevenlabs", label: "🎙 ElevenLabs", on: "border-accent-2/55 bg-accent-2/15 text-accent", off: "border-accent-2/25 text-accent/70" },
   { key: "llm", label: "🧠 OpenRouter", on: "border-info/50 bg-info/15 text-info", off: "border-info/20 text-info/70" },
   { key: "telegram", label: "✈️ Telegram", on: "border-accent/50 bg-accent/15 text-accent", off: "border-accent/20 text-accent/70" },
   { key: "supabase", label: "🗄 Supabase", on: "border-good/50 bg-good/15 text-good", off: "border-good/20 text-good/70" },

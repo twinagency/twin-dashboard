@@ -55,9 +55,18 @@ type CoreParticle = {
   z: number;
   size: number;
   phase: number;
+  cluster: number;
 };
 
 type CoreLink = { a: number; b: number; phase: number };
+type CoreSatellite = {
+  angle: number;
+  distance: number;
+  elevation: number;
+  phase: number;
+  size: number;
+  speed: number;
+};
 type FullData = DashboardData & { error?: string };
 type JourneyCandidate = {
   id: string;
@@ -121,8 +130,9 @@ function makeNeuralSphere(count: number) {
       x: Math.cos(theta) * radius,
       y,
       z: Math.sin(theta) * radius,
-      size: 0.65 + ((index * 17) % 11) / 10,
+      size: 0.6 + ((index * 17) % 11) / 10,
       phase: ((index * 29) % 101) / 101,
+      cluster: index % 7,
     });
   }
 
@@ -150,6 +160,14 @@ function makeNeuralSphere(count: number) {
 }
 
 const SPHERE = makeNeuralSphere(216);
+const CORE_SATELLITES: CoreSatellite[] = Array.from({ length: 14 }, (_, index) => ({
+  angle: (index / 14) * Math.PI * 2 + ((index * 7) % 5) * 0.11,
+  distance: 1.38 + ((index * 13) % 7) * 0.12,
+  elevation: Math.sin(index * 2.17) * 0.72,
+  phase: ((index * 37) % 101) / 101,
+  size: 0.1 + ((index * 11) % 5) * 0.012,
+  speed: (index % 2 === 0 ? 1 : -1) * (0.000035 + (index % 4) * 0.000009),
+}));
 const DATA_SHARDS = Array.from({ length: 15 }, (_, index) => ({
   angle: (index / 15) * Math.PI * 2 + ((index * 11) % 5) * 0.12,
   radius: 0.38 + ((index * 17) % 9) * 0.055,
@@ -361,14 +379,15 @@ export default function JarvisWorkspace({ cloneId }: { cloneId: string | null })
       ctx.save();
       ctx.globalCompositeOperation = "lighter";
 
-      const ambient = ctx.createRadialGradient(cx, cy, radius * 0.08, cx, cy, radius * 1.72);
-      ambient.addColorStop(0, `rgba(15, 92, 148, ${0.07 + dive * 0.08})`);
-      ambient.addColorStop(0.4, `rgba(56, 189, 248, ${0.06 + expand * 0.05})`);
-      ambient.addColorStop(0.75, "rgba(8, 91, 150, 0.025)");
-      ambient.addColorStop(1, "rgba(255, 255, 255, 0)");
+      const ambientRadius = currentPhase === "searching" ? 1.72 : 1.28;
+      const ambient = ctx.createRadialGradient(cx, cy, radius * 0.08, cx, cy, radius * ambientRadius);
+      ambient.addColorStop(0, currentPhase === "searching" ? `rgba(15, 92, 148, ${0.07 + dive * 0.08})` : "rgba(224, 247, 255, 0.08)");
+      ambient.addColorStop(0.33, currentPhase === "searching" ? `rgba(56, 189, 248, ${0.06 + expand * 0.05})` : "rgba(56, 189, 248, 0.065)");
+      ambient.addColorStop(0.66, currentPhase === "searching" ? "rgba(8, 91, 150, 0.025)" : "rgba(37, 99, 235, 0.03)");
+      ambient.addColorStop(1, "rgba(2, 12, 34, 0)");
       ctx.fillStyle = ambient;
       ctx.beginPath();
-      ctx.arc(cx, cy, radius * 1.72, 0, Math.PI * 2);
+      ctx.arc(cx, cy, radius * ambientRadius, 0, Math.PI * 2);
       ctx.fill();
 
       const shellPresence = 1 - inside;
@@ -589,7 +608,7 @@ export default function JarvisWorkspace({ cloneId }: { cloneId: string | null })
       const projected = SPHERE.particles.map((particle) => {
         const neuralSpread = currentPhase === "searching"
           ? 1 + expand * (0.08 + particle.phase * 0.34) + Math.sin(now * 0.003 + particle.phase * 18) * expand * 0.035
-          : 1 + Math.sin(now * 0.0013 + particle.phase * 12) * 0.018;
+          : reducedMotion ? 1 : 1 + Math.sin(now * 0.0014 + particle.phase * 12) * 0.022;
         const px = particle.x * neuralSpread;
         const py = particle.y * neuralSpread;
         const pz = particle.z * neuralSpread;
@@ -597,7 +616,9 @@ export default function JarvisWorkspace({ cloneId }: { cloneId: string | null })
         const z1 = px * sinY + pz * cosY;
         const y2 = py * cosX - z1 * sinX;
         const z2 = py * sinX + z1 * cosX;
-        const perspective = 1 / (1.16 - z2 * (0.2 + dive * 0.035));
+        const perspective = currentPhase === "searching"
+          ? 1 / (1.16 - z2 * (0.2 + dive * 0.035))
+          : 1 / (1.14 - z2 * 0.22);
         return {
           x: cx + x1 * radius * perspective,
           y: cy + y2 * radius * perspective,
@@ -610,20 +631,22 @@ export default function JarvisWorkspace({ cloneId }: { cloneId: string | null })
       SPHERE.links.forEach((link) => {
         const a = projected[link.a];
         const b = projected[link.b];
-        const depth = Math.max(0.08, (a.z + b.z + 2) / 4);
+        const depth = Math.max(currentPhase === "searching" ? 0.08 : 0.12, (a.z + b.z + 2) / 4);
         const flash = currentPhase === "searching" && Math.sin(now * 0.008 + link.phase * 20) > 0.76;
         const outsideShell = inside <= 0.1;
         const linkRgb = inside > 0.12
           ? AURORA_PARTICLE_RGB[Math.floor(link.phase * AURORA_PARTICLE_RGB.length) % AURORA_PARTICLE_RGB.length]
           : "13, 83, 145";
-        ctx.strokeStyle = outsideShell
-          ? flash
-            ? `rgba(224, 247, 255, ${0.62 + locate * 0.2})`
-            : `rgba(45, 190, 255, ${Math.min(0.78, (0.21 + depth * 0.28) * shellPresence)})`
-          : flash
-            ? `rgba(239, 246, 255, ${0.52 + locate * 0.2})`
-            : `rgba(${linkRgb}, ${(0.19 + depth * 0.28 + dive * 0.08) * (1 - inside * 0.22)})`;
-        ctx.lineWidth = outsideShell ? (flash ? 1.15 : 0.78) : (flash ? 1.05 : 0.68);
+        ctx.strokeStyle = currentPhase !== "searching"
+          ? `rgba(45, 190, 255, ${Math.min(0.86, 0.15 + depth * 0.2)})`
+          : outsideShell
+            ? flash
+              ? `rgba(224, 247, 255, ${0.62 + locate * 0.2})`
+              : `rgba(45, 190, 255, ${Math.min(0.78, (0.21 + depth * 0.28) * shellPresence)})`
+            : flash
+              ? `rgba(239, 246, 255, ${0.52 + locate * 0.2})`
+              : `rgba(${linkRgb}, ${(0.19 + depth * 0.28 + dive * 0.08) * (1 - inside * 0.22)})`;
+        ctx.lineWidth = currentPhase !== "searching" ? 0.62 : outsideShell ? (flash ? 1.15 : 0.78) : (flash ? 1.05 : 0.68);
         ctx.beginPath();
         ctx.moveTo(a.x, a.y);
         ctx.lineTo(b.x, b.y);
@@ -631,7 +654,7 @@ export default function JarvisWorkspace({ cloneId }: { cloneId: string | null })
       });
 
       projected.forEach(({ x, y, z, perspective, particle }) => {
-        const depth = Math.max(0.2, (z + 1.2) / 2.2);
+        const depth = Math.max(currentPhase === "searching" ? 0.2 : 0.25, (z + 1.2) / 2.2);
         const thinking = currentPhase === "searching" ? 0.7 + Math.abs(Math.sin(now * 0.006 + particle.phase * 19)) * 0.55 : 1;
         const size = particle.size * perspective * depth * thinking;
         const particleRgb = inside > 0.1
@@ -644,7 +667,7 @@ export default function JarvisWorkspace({ cloneId }: { cloneId: string | null })
             : `rgba(103, 232, 249, ${Math.min(0.95, 0.38 + depth * 0.56)})`
           : glint ? "rgba(244, 252, 255, 0.98)" : `rgba(${particleRgb}, ${z > 0.18 ? 0.93 : 0.79})`;
         ctx.beginPath();
-        ctx.arc(x, y, Math.max(0.65, size), 0, Math.PI * 2);
+        ctx.arc(x, y, currentPhase === "searching" ? Math.max(0.65, size) : Math.max(0.62, size * 1.08), 0, Math.PI * 2);
         ctx.fill();
       });
 
@@ -654,7 +677,7 @@ export default function JarvisWorkspace({ cloneId }: { cloneId: string | null })
           const glintX = cx + Math.cos(angle) * radius * (0.72 + (glintIndex % 3) * 0.08);
           const glintY = cy + Math.sin(angle) * radius * (0.72 + (glintIndex % 3) * 0.08);
           const pulse = 0.32 + Math.abs(Math.sin(now * 0.0028 + glintIndex * 1.9)) * 0.42;
-          const glowRadius = radius * (0.032 + pulse * 0.036);
+          const glowRadius = currentPhase === "searching" ? radius * (0.032 + pulse * 0.036) : 2.4 + pulse * 3.4;
           const outsideGlint = ctx.createRadialGradient(glintX, glintY, 0, glintX, glintY, glowRadius);
           outsideGlint.addColorStop(0, `rgba(255, 255, 255, ${pulse * shellPresence * 0.82})`);
           outsideGlint.addColorStop(0.2, `rgba(224, 247, 255, ${pulse * shellPresence * 0.62})`);
@@ -693,6 +716,62 @@ export default function JarvisWorkspace({ cloneId }: { cloneId: string | null })
           drawOutsideBolt(3.2, 0.2, "56, 189, 248");
           drawOutsideBolt(0.82, 0.94, "248, 254, 255");
         }
+      }
+
+      if (currentPhase !== "searching") {
+        const satelliteAlpha = 0.08;
+        const spread = 0.28;
+        CORE_SATELLITES.forEach((satellite) => {
+          const angle = satellite.angle + now * satellite.speed + pointerRef.current.x * 0.012;
+          const distance = radius * satellite.distance * spread;
+          const depth = (Math.sin(angle * 1.3 + satellite.phase * 8) + 1) / 2;
+          const sx = cx + Math.cos(angle) * distance;
+          const sy = cy + Math.sin(angle) * distance * 0.58 + satellite.elevation * radius * spread * 0.58;
+          const nodeRadius = Math.max(4, radius * satellite.size * (0.72 + depth * 0.38));
+          const pulse = 0.55 + Math.abs(Math.sin(now * 0.0032 + satellite.phase * 14)) * 0.45;
+
+          ctx.strokeStyle = `rgba(45, 190, 255, ${satelliteAlpha * (0.09 + depth * 0.16)})`;
+          ctx.lineWidth = 0.55;
+          ctx.beginPath();
+          ctx.moveTo(cx + Math.cos(angle) * radius * 0.84, cy + Math.sin(angle) * radius * 0.32);
+          ctx.quadraticCurveTo((cx + sx) / 2, cy + satellite.elevation * radius * 0.24, sx, sy);
+          ctx.stroke();
+
+          const nodeGlow = ctx.createRadialGradient(sx, sy, 0, sx, sy, nodeRadius * 2.7);
+          nodeGlow.addColorStop(0, `rgba(239, 254, 255, ${satelliteAlpha * 0.9})`);
+          nodeGlow.addColorStop(0.18, `rgba(34, 211, 238, ${satelliteAlpha * 0.5})`);
+          nodeGlow.addColorStop(1, "rgba(14, 116, 144, 0)");
+          ctx.fillStyle = nodeGlow;
+          ctx.beginPath();
+          ctx.arc(sx, sy, nodeRadius * 2.7, 0, Math.PI * 2);
+          ctx.fill();
+
+          ctx.save();
+          ctx.translate(sx, sy);
+          ctx.rotate(angle * 0.7);
+          ctx.strokeStyle = `rgba(165, 243, 252, ${satelliteAlpha * (0.34 + pulse * 0.3)})`;
+          ctx.lineWidth = 0.55;
+          ctx.beginPath();
+          ctx.ellipse(0, 0, nodeRadius * 1.85, nodeRadius * 0.62, 0, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.rotate(1.04);
+          ctx.beginPath();
+          ctx.ellipse(0, 0, nodeRadius * 1.55, nodeRadius * 0.52, 0, 0, Math.PI * 2);
+          ctx.stroke();
+          ctx.fillStyle = `rgba(240, 253, 255, ${satelliteAlpha})`;
+          ctx.beginPath();
+          ctx.arc(0, 0, Math.max(1, nodeRadius * 0.16 * pulse), 0, Math.PI * 2);
+          ctx.fill();
+          ctx.restore();
+
+          const transfer = (now * 0.00022 + satellite.phase) % 1;
+          const tx = cx + (sx - cx) * transfer;
+          const ty = cy + (sy - cy) * transfer;
+          ctx.fillStyle = `rgba(224, 247, 255, ${satelliteAlpha * Math.sin(transfer * Math.PI) * 0.85})`;
+          ctx.beginPath();
+          ctx.arc(tx, ty, 0.8 + depth * 0.8, 0, Math.PI * 2);
+          ctx.fill();
+        });
       }
 
       let activeShardX = cx;
@@ -791,11 +870,18 @@ export default function JarvisWorkspace({ cloneId }: { cloneId: string | null })
         ctx.stroke();
       }
 
-      for (let index = 0; index < 28; index += 1) {
-        const dustX = ((index * 67 + now * 0.004 * ((index % 3) + 1)) % (width + 20)) - 10;
-        const dustY = ((index * 43 + Math.sin(now * 0.0007 + index) * 18) % height + height) % height;
-        ctx.fillStyle = `rgba(29, 123, 184, ${0.03 + (index % 5) * 0.012})`;
-        ctx.fillRect(dustX, dustY, 0.7, 0.7);
+      const dustCount = currentPhase === "searching" ? 28 : 22;
+      for (let index = 0; index < dustCount; index += 1) {
+        const dustX = currentPhase === "searching"
+          ? ((index * 67 + now * 0.004 * ((index % 3) + 1)) % (width + 20)) - 10
+          : ((index * 47 + now * 0.004 * ((index % 3) + 1)) % (width + 20)) - 10;
+        const dustY = currentPhase === "searching"
+          ? ((index * 43 + Math.sin(now * 0.0007 + index) * 18) % height + height) % height
+          : ((index * 31 + Math.sin(now * 0.0008 + index) * 12) % height + height) % height;
+        ctx.fillStyle = currentPhase === "searching"
+          ? `rgba(29, 123, 184, ${0.03 + (index % 5) * 0.012})`
+          : `rgba(186, 230, 253, ${0.05 + (index % 4) * 0.018})`;
+        ctx.fillRect(dustX, dustY, currentPhase === "searching" ? 0.7 : 0.65, currentPhase === "searching" ? 0.7 : 0.65);
       }
 
       ctx.restore();
@@ -1190,13 +1276,13 @@ export default function JarvisWorkspace({ cloneId }: { cloneId: string | null })
 
   return (
     <div className="jarvis-page relative min-h-full overflow-hidden p-3 sm:p-5">
-      <section className="jarvis-stage relative min-h-[720px] overflow-hidden rounded-[28px] border border-white/55 bg-[#c8dce5]/28 backdrop-blur-xl lg:min-h-[calc(100vh-7.5rem)]">
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_42%,rgba(13,74,126,0.28),transparent_42%),radial-gradient(circle_at_17%_22%,rgba(20,160,184,0.28),transparent_35%),radial-gradient(circle_at_7%_88%,rgba(152,69,29,0.29),transparent_31%),radial-gradient(circle_at_94%_15%,rgba(15,45,108,0.26),transparent_34%),radial-gradient(circle_at_76%_82%,rgba(221,151,48,0.2),transparent_29%),linear-gradient(145deg,rgba(178,211,223,0.62),rgba(204,193,216,0.5)_52%,rgba(231,197,164,0.58))]" />
+      <section className="jarvis-stage relative min-h-[720px] overflow-hidden rounded-[28px] border border-white/15 bg-[#06172f]/50 backdrop-blur-xl lg:min-h-[calc(100vh-7.5rem)]">
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_42%,rgba(74,142,196,0.28),transparent_42%),radial-gradient(circle_at_17%_22%,rgba(120,182,223,0.18),transparent_35%),radial-gradient(circle_at_7%_88%,rgba(240,90,157,0.1),transparent_31%),radial-gradient(circle_at_94%_15%,rgba(8,43,85,0.3),transparent_34%),linear-gradient(145deg,rgba(6,23,47,0.08),rgba(6,23,47,0.58)_56%,rgba(8,43,85,0.72))]" />
 
         <div className="pointer-events-none absolute left-1/2 top-5 z-20 -translate-x-1/2 scale-[0.84] sm:top-6 sm:scale-100">
-          <TwinWordmark descriptor="Intelligence Core" />
+          <TwinWordmark descriptor="Intelligence Core" inverse />
         </div>
-        <div className="absolute right-4 top-14 z-20 rounded-full border border-white/75 bg-white/50 px-3 py-1.5 text-[9px] font-semibold text-ink/45 shadow-sm backdrop-blur-md sm:right-6 sm:top-6">
+        <div className="absolute right-4 top-14 z-20 rounded-full border border-white/20 bg-[#06172f]/45 px-3 py-1.5 text-[9px] font-semibold text-white/70 shadow-sm backdrop-blur-md sm:right-6 sm:top-6">
           {activeClone?.name ?? "All clones"}
         </div>
 
@@ -1304,7 +1390,7 @@ export default function JarvisWorkspace({ cloneId }: { cloneId: string | null })
           </article>
         ) : null}
 
-        <div className="absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-[#edf3f7] via-[#edf3f7]/96 to-transparent px-4 pb-5 pt-24 sm:px-7">
+        <div className="absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-[#06172f] via-[#082b55]/96 to-transparent px-4 pb-5 pt-24 sm:px-7">
           <form onSubmit={submit} className="mx-auto flex max-w-3xl items-center gap-2 rounded-2xl border border-white/85 bg-white/68 p-2 shadow-[0_16px_44px_rgb(12_29_56/0.12)] backdrop-blur-xl transition focus-within:border-cyan-300/80 focus-within:bg-white/82">
             <Search className="ml-2 h-4 w-4 shrink-0 text-[#0b4966]/45" />
             <input
@@ -1341,7 +1427,7 @@ export default function JarvisWorkspace({ cloneId }: { cloneId: string | null })
               Ask
             </button>
           </form>
-          <div aria-live="polite" className="mx-auto min-h-4 max-w-3xl px-2 pt-1 text-[9px] font-medium text-[#0b4966]/60">
+          <div aria-live="polite" className="mx-auto min-h-4 max-w-3xl px-2 pt-1 text-[9px] font-medium text-white/60">
             {listening
               ? "Listening — speak naturally, then tap the microphone to send."
               : voiceUnavailable
@@ -1354,7 +1440,7 @@ export default function JarvisWorkspace({ cloneId }: { cloneId: string | null })
                 key={suggestion}
                 type="button"
                 onClick={() => runQuery(suggestion)}
-                className="shrink-0 rounded-full border border-white/80 bg-white/46 px-3 py-1.5 text-[10px] font-medium text-ink/48 shadow-sm backdrop-blur transition hover:border-cyan-300/65 hover:bg-white/72 hover:text-[#0b4966]"
+                className="shrink-0 rounded-full border border-white/20 bg-white/10 px-3 py-1.5 text-[10px] font-medium text-white/70 shadow-sm backdrop-blur transition hover:border-white/35 hover:bg-white/20 hover:text-white"
               >
                 {suggestion}
               </button>

@@ -38,10 +38,10 @@ const KIND_LABEL: Record<KindKey, string> = {
 export type FeatureKey = "credits" | "photo" | "video" | "bundle" | "media" | "tip" | "subscription" | "other";
 
 const FEATURE_LABEL: Record<FeatureKey, string> = {
-  credits: "Message credits",
-  photo: "Paid photos",
-  video: "Paid videos",
-  bundle: "Photo bundles",
+  credits: "Paid Messages",
+  photo: "Photos",
+  video: "Videos",
+  bundle: "Bundles",
   media: "Media (untagged)",
   tip: "Tips / spoil",
   subscription: "VIP subscriptions",
@@ -99,9 +99,16 @@ export type AnalyticsData = {
     collecting: boolean;
     messaged: number; // distinct fans who sent a message in the window
     paywalled: number; // distinct fans shown the paywall
-    purchased: number; // distinct fans who bought credits
+    purchased: number; // paywalled fans who bought message credits in the window
+    paidMessageBuyers: number;
+    paidMessagePurchases: number;
+    paidMessageStars: number;
+    paywallViews: number;
+    abandoned: number;
     paywallPct: number; // paywalled / messaged
     purchasePct: number; // purchased / paywalled
+    overallPct: number; // purchased / messaged
+    avgViewsPerFan: number;
   };
   // Classic (sorter) vs Smart (agent) flow, split by each clone's ai_mode.
   byFlow: {
@@ -120,12 +127,36 @@ export type AnalyticsData = {
   // (not from byDay, which caps at 180 rendered points on long windows).
   byDow: { dow: number; label: string; stars: number }[];
   byTier: { key: string; label: string; users: number; stars: number; share: number }[];
+  topWeeklySpenders: {
+    cloneId: string | null;
+    cloneName: string;
+    telegramId: number;
+    name: string;
+    username: string | null;
+    stars: number;
+    purchases: number;
+  }[];
+  weeklySpenderSummary: {
+    buyers: number;
+    stars: number;
+    purchases: number;
+    avgStars: number;
+  };
   funnel: {
     fans: number;
     buyers: number;
     repeat: number;
+    oneTime: number;
+    threePlus: number;
+    nonBuyers: number;
+    totalPurchases: number;
     buyerPct: number; // buyers / fans
     repeatPct: number; // repeat / buyers
+    oneTimePct: number;
+    avgPurchasesPerBuyer: number;
+    avgStarsPerBuyer: number;
+    medianStarsPerBuyer: number;
+    repeatRevenueShare: number;
   };
 };
 
@@ -184,6 +215,7 @@ export async function getAnalytics(
   // the pre-feature columns (byFeature then derives buckets from `kind`). This keeps
   // every existing chart working before the migration lands.
   type TxRow = {
+    id: string;
     clone_id: string | null;
     amount_stars: number;
     paid_at: string;
@@ -195,7 +227,7 @@ export async function getAnalytics(
   {
     let withFeatureQ = supabaseAdmin
       .from("star_transactions")
-      .select("clone_id,amount_stars,paid_at,kind,feature,telegram_id")
+      .select("id,clone_id,amount_stars,paid_at,kind,feature,telegram_id")
       .gte("paid_at", iso(startMs))
       .lte("paid_at", iso(windowEnd));
     if (cloneId) withFeatureQ = withFeatureQ.eq("clone_id", cloneId);
@@ -203,7 +235,7 @@ export async function getAnalytics(
     if (withFeature.error) {
       let legacyQ = supabaseAdmin
         .from("star_transactions")
-        .select("clone_id,amount_stars,paid_at,kind,telegram_id")
+        .select("id,clone_id,amount_stars,paid_at,kind,telegram_id")
         .gte("paid_at", iso(startMs))
         .lte("paid_at", iso(windowEnd));
       if (cloneId) legacyQ = legacyQ.eq("clone_id", cloneId);
@@ -211,6 +243,78 @@ export async function getAnalytics(
       txs = ((legacy.data ?? []) as Omit<TxRow, "feature">[]).map((r) => ({ ...r, feature: null }));
     } else {
       txs = (withFeature.data ?? []) as TxRow[];
+    }
+  }
+
+  // Older Telegram-imported sales predate star_transactions.feature. Recover
+  // photo/video/bundle from the original locked chat offer so the revenue
+  // report can show real media categories instead of one generic Media bucket.
+  type MediaFeature = "photo" | "video" | "bundle";
+  const isMediaFeature = (value: unknown): value is MediaFeature =>
+    value === "photo" || value === "video" || value === "bundle";
+  const inferredMediaByTransaction = new Map<string, MediaFeature>();
+  const legacyMediaTransactions = txs.filter(
+    (transaction) => transaction.kind === "media" && !isMediaFeature(transaction.feature),
+  );
+  const legacyCloneIds = [
+    ...new Set(legacyMediaTransactions.map((transaction) => transaction.clone_id).filter((id): id is string => !!id)),
+  ];
+  const legacyTelegramIds = [
+    ...new Set(
+      legacyMediaTransactions
+        .map((transaction) => transaction.telegram_id)
+        .filter((id): id is number => id != null),
+    ),
+  ];
+  if (legacyCloneIds.length && legacyTelegramIds.length) {
+    const { data: offerRows } = await supabaseAdmin
+      .from("chat_history")
+      .select("id,clone_id,telegram_id,created_at,meta")
+      .in("clone_id", legacyCloneIds)
+      .in("telegram_id", legacyTelegramIds)
+      .contains("meta", { paid: true })
+      .order("created_at", { ascending: false })
+      .limit(10000);
+    const offers: {
+      rowId: number;
+      cloneId: string;
+      telegramId: number;
+      createdAt: number;
+      stars: number;
+      type: MediaFeature;
+    }[] = [];
+    for (const row of (offerRows ?? []) as {
+      id: number;
+      clone_id: string;
+      telegram_id: number;
+      created_at: string;
+      meta: { type?: unknown; stars?: unknown } | null;
+    }[]) {
+      if (!isMediaFeature(row.meta?.type)) continue;
+      offers.push({
+        rowId: row.id,
+        cloneId: row.clone_id,
+        telegramId: Number(row.telegram_id),
+        createdAt: new Date(row.created_at).getTime(),
+        stars: Number(row.meta?.stars),
+        type: row.meta.type,
+      });
+    }
+    const usedOffers = new Set<number>();
+    for (const transaction of legacyMediaTransactions) {
+      if (!transaction.clone_id || transaction.telegram_id == null) continue;
+      const paidAt = new Date(transaction.paid_at).getTime();
+      const offer = offers.find(
+        (candidate) =>
+          !usedOffers.has(candidate.rowId) &&
+          candidate.cloneId === transaction.clone_id &&
+          candidate.telegramId === Number(transaction.telegram_id) &&
+          candidate.createdAt <= paidAt &&
+          candidate.stars === Number(transaction.amount_stars),
+      );
+      if (!offer) continue;
+      usedOffers.add(offer.rowId);
+      inferredMediaByTransaction.set(transaction.id, offer.type);
     }
   }
 
@@ -234,6 +338,8 @@ export async function getAnalytics(
 
   let totalStars = 0;
   let totalSales = 0;
+  let paidMessagePurchases = 0;
+  let paidMessageStars = 0;
 
   const normKind = (k: string | null): KindKey =>
     k === "credits" || k === "media" || k === "tip" ? k : "other";
@@ -252,12 +358,17 @@ export async function getAnalytics(
     kindStars.set(k, (kindStars.get(k) ?? 0) + stars);
     kindSales.set(k, (kindSales.get(k) ?? 0) + 1);
 
-    const f = normFeature(t.feature, t.kind);
+    const f = inferredMediaByTransaction.get(t.id) ?? normFeature(t.feature, t.kind);
     featureStars.set(f, (featureStars.get(f) ?? 0) + stars);
     featureSales.set(f, (featureSales.get(f) ?? 0) + 1);
 
-    // Credits purchase = the paywall conversion. Track distinct buyers for the funnel.
-    if (t.kind === "credits" && t.telegram_id != null) creditBuyers.add(t.telegram_id);
+    // Paid-message purchase = the paywall conversion product. Track both
+    // distinct buyers and transaction/revenue volume for the clearer funnel.
+    if (f === "credits") {
+      paidMessagePurchases += 1;
+      paidMessageStars += stars;
+      if (t.telegram_id != null) creditBuyers.add(t.telegram_id);
+    }
 
     const d = new Date(t.paid_at);
     const dayKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
@@ -310,15 +421,24 @@ export async function getAnalytics(
   const paywallRes = await paywallQ;
   const paywallCollecting = Boolean(paywallRes.error);
   const paywalledFans = new Set<number>();
-  for (const p of (paywallRes.data ?? []) as { telegram_id: number | null }[]) {
+  const paywallRows = (paywallRes.data ?? []) as { telegram_id: number | null }[];
+  const paywallViews = paywallRows.length;
+  for (const p of paywallRows) {
     if (p.telegram_id != null) paywalledFans.add(p.telegram_id);
   }
 
   // ── lifetime fan spend → tiers + funnel (users table) ────────────────────────
-  let userQ = supabaseAdmin.from("users").select("total_spent_stars,spend_tier,purchase_count");
+  let userQ = supabaseAdmin
+    .from("users")
+    .select("clone_id,telegram_id,name,stated_name,username,total_spent_stars,spend_tier,purchase_count");
   if (cloneId) userQ = userQ.eq("clone_id", cloneId);
   const { data: userRows } = await userQ;
   const users = (userRows ?? []) as {
+    clone_id: string;
+    telegram_id: number;
+    name: string | null;
+    stated_name: string | null;
+    username: string | null;
     total_spent_stars: number | null;
     spend_tier: string | null;
     purchase_count: number | null;
@@ -329,18 +449,78 @@ export async function getAnalytics(
   let fans = 0;
   let buyers = 0;
   let repeat = 0;
+  let oneTime = 0;
+  let threePlus = 0;
+  let totalPurchases = 0;
+  let repeatBuyerStars = 0;
   let lifetimeStars = 0;
+  const buyerSpend: number[] = [];
   for (const u of users) {
     fans += 1;
     const spent = Number(u.total_spent_stars) || 0;
     const pc = Number(u.purchase_count) || 0;
-    if (pc > 0 || spent > 0) buyers += 1;
-    if (pc > 1) repeat += 1;
+    const isBuyer = pc > 0 || spent > 0;
+    if (isBuyer) {
+      buyers += 1;
+      totalPurchases += Math.max(1, pc);
+      buyerSpend.push(spent);
+      if (pc > 1) {
+        repeat += 1;
+        repeatBuyerStars += spent;
+      } else {
+        oneTime += 1;
+      }
+      if (pc >= 3) threePlus += 1;
+    }
     lifetimeStars += spent;
     const tier = TIERS.some((t) => t.key === u.spend_tier) ? (u.spend_tier as string) : "none";
     tierUsers.set(tier, (tierUsers.get(tier) ?? 0) + 1);
     tierStars.set(tier, (tierStars.get(tier) ?? 0) + spent);
   }
+
+  // Rolling seven-day spender leaderboard, independent of the selected chart
+  // preset so "weekly" always means the latest seven complete days in scope.
+  let weeklyQ = supabaseAdmin
+    .from("star_transactions")
+    .select("clone_id,telegram_id,amount_stars")
+    .gte("paid_at", iso(windowEnd - 7 * MS_DAY))
+    .lte("paid_at", iso(windowEnd));
+  if (cloneId) weeklyQ = weeklyQ.eq("clone_id", cloneId);
+  const { data: weeklyRows } = await weeklyQ;
+  const weeklyByBuyer = new Map<
+    string,
+    { cloneId: string | null; telegramId: number; stars: number; purchases: number }
+  >();
+  for (const transaction of (weeklyRows ?? []) as {
+    clone_id: string | null;
+    telegram_id: number | null;
+    amount_stars: number | null;
+  }[]) {
+    if (transaction.telegram_id == null) continue;
+    const key = `${transaction.clone_id ?? "unknown"}:${transaction.telegram_id}`;
+    const current = weeklyByBuyer.get(key) ?? {
+      cloneId: transaction.clone_id,
+      telegramId: Number(transaction.telegram_id),
+      stars: 0,
+      purchases: 0,
+    };
+    current.stars += Number(transaction.amount_stars) || 0;
+    current.purchases += 1;
+    weeklyByBuyer.set(key, current);
+  }
+  const userByKey = new Map(users.map((user) => [`${user.clone_id}:${user.telegram_id}`, user]));
+  const rankedWeeklySpenders = [...weeklyByBuyer.values()].sort((a, b) => b.stars - a.stars);
+  const weeklyStars = rankedWeeklySpenders.reduce((sum, spender) => sum + spender.stars, 0);
+  const weeklyPurchases = rankedWeeklySpenders.reduce((sum, spender) => sum + spender.purchases, 0);
+  const topWeeklySpenders = rankedWeeklySpenders.slice(0, 5).map((spender) => {
+    const user = userByKey.get(`${spender.cloneId ?? "unknown"}:${spender.telegramId}`);
+    return {
+      ...spender,
+      cloneName: spender.cloneId ? nameById.get(spender.cloneId) ?? "Unknown clone" : "Unknown clone",
+      name: user?.stated_name || user?.name || user?.username || `Fan ${spender.telegramId}`,
+      username: user?.username ?? null,
+    };
+  });
 
   // ── assemble ─────────────────────────────────────────────────────────────────
   const cloneOut = clones
@@ -422,14 +602,24 @@ export async function getAnalytics(
     .filter((f) => f.stars > 0 || f.sales > 0)
     .sort((a, b) => b.stars - a.stars);
 
-  // Distinct-fan drop-off. Purchase stage = credit buyers (what the paywall sells).
+  // Distinct-fan paywall journey. The converted stage is the intersection of
+  // fans who saw the paywall and fans who bought paid messages in the window,
+  // avoiding the misleading implication that every credit buyer saw the wall.
+  const convertedPaywallBuyers = [...paywalledFans].filter((telegramId) => creditBuyers.has(telegramId)).length;
   const paywallFunnel = {
     collecting: paywallCollecting,
     messaged: messagedFans.size,
     paywalled: paywalledFans.size,
-    purchased: creditBuyers.size,
+    purchased: convertedPaywallBuyers,
+    paidMessageBuyers: creditBuyers.size,
+    paidMessagePurchases,
+    paidMessageStars,
+    paywallViews,
+    abandoned: Math.max(0, paywalledFans.size - convertedPaywallBuyers),
     paywallPct: messagedFans.size > 0 ? paywalledFans.size / messagedFans.size : 0,
-    purchasePct: paywalledFans.size > 0 ? creditBuyers.size / paywalledFans.size : 0,
+    purchasePct: paywalledFans.size > 0 ? convertedPaywallBuyers / paywalledFans.size : 0,
+    overallPct: messagedFans.size > 0 ? convertedPaywallBuyers / messagedFans.size : 0,
+    avgViewsPerFan: paywalledFans.size > 0 ? paywallViews / paywalledFans.size : 0,
   };
 
   // Ordered day buckets across the whole window (fill gaps with 0 so the line is
@@ -464,6 +654,12 @@ export async function getAnalytics(
       share: lifetimeStars > 0 ? stars / lifetimeStars : 0,
     };
   }).filter((t) => t.users > 0);
+  const sortedBuyerSpend = [...buyerSpend].sort((a, b) => a - b);
+  const medianStarsPerBuyer = sortedBuyerSpend.length === 0
+    ? 0
+    : sortedBuyerSpend.length % 2 === 1
+      ? sortedBuyerSpend[Math.floor(sortedBuyerSpend.length / 2)]
+      : (sortedBuyerSpend[sortedBuyerSpend.length / 2 - 1] + sortedBuyerSpend[sortedBuyerSpend.length / 2]) / 2;
 
   return {
     period,
@@ -484,12 +680,28 @@ export async function getAnalytics(
     byHour,
     byDow,
     byTier,
+    topWeeklySpenders,
+    weeklySpenderSummary: {
+      buyers: rankedWeeklySpenders.length,
+      stars: weeklyStars,
+      purchases: weeklyPurchases,
+      avgStars: rankedWeeklySpenders.length > 0 ? weeklyStars / rankedWeeklySpenders.length : 0,
+    },
     funnel: {
       fans,
       buyers,
       repeat,
+      oneTime,
+      threePlus,
+      nonBuyers: Math.max(0, fans - buyers),
+      totalPurchases,
       buyerPct: fans > 0 ? buyers / fans : 0,
       repeatPct: buyers > 0 ? repeat / buyers : 0,
+      oneTimePct: buyers > 0 ? oneTime / buyers : 0,
+      avgPurchasesPerBuyer: buyers > 0 ? totalPurchases / buyers : 0,
+      avgStarsPerBuyer: buyers > 0 ? lifetimeStars / buyers : 0,
+      medianStarsPerBuyer,
+      repeatRevenueShare: lifetimeStars > 0 ? repeatBuyerStars / lifetimeStars : 0,
     },
   };
 }

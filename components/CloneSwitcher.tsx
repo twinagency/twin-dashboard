@@ -71,7 +71,7 @@ export default function CloneSwitcher({
         type="button"
         onClick={() => setOpen(true)}
         disabled={pending}
-        className="flex items-center gap-2 rounded-full px-2.5 py-1 text-sm font-medium text-ink transition hover:bg-muted/10 disabled:opacity-60"
+        className="flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-semibold text-ink transition hover:bg-[#e5f0f8] disabled:opacity-60"
       >
         {active ? (
           <>

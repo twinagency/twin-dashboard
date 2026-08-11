@@ -22,7 +22,7 @@ function intakeFromForm(fd: FormData, name: string | null) {
   const color = str(fd, "dashboard_chart_color");
   const appearance = hasAppearance
     ? {
-        chart_color: color && /^#[0-9a-f]{6}$/i.test(color) ? color.toLowerCase() : "#635bff",
+        chart_color: color && /^#[0-9a-f]{6}$/i.test(color) ? color.toLowerCase() : "#4a8ec4",
         profile_image_path: str(fd, "dashboard_profile_image_path"),
       }
     : undefined;

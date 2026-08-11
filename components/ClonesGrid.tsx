@@ -58,7 +58,7 @@ export default function ClonesGrid({ clones }: { clones: CloneCard[] }) {
       </div>
 
       {filtered.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-line bg-panel p-12 text-center text-muted">
+        <div className="rounded-2xl border border-dashed border-line bg-panel p-12 text-center text-muted">
           No clones match “{query}”.
         </div>
       ) : (
@@ -67,7 +67,7 @@ export default function ClonesGrid({ clones }: { clones: CloneCard[] }) {
             <Link
               key={c.id}
               href={`/clones/${c.id}`}
-              className="group rounded-xl border border-line bg-panel p-4 shadow-[var(--shadow-card)] transition hover:border-accent/60"
+              className="group rounded-[22px] border border-line bg-panel p-5 shadow-[var(--shadow-card)] transition duration-200 hover:-translate-y-0.5 hover:border-accent-2/60 hover:shadow-[0_24px_54px_rgb(6_23_47/0.1)]"
             >
               {/* Header: avatar (ringed in the clone color) + name + status + features */}
               <div className="flex items-start gap-3">

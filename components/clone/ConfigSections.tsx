@@ -210,7 +210,7 @@ function LanguagePicker({ value, onChange }: { value: string[]; onChange: (v: st
                 className={
                   "rounded-full border px-3 py-1 text-xs font-medium transition " +
                   (on
-                    ? "border-cyan-400/50 bg-cyan-400/15 text-cyan-300"
+                    ? "border-accent-2/55 bg-accent-2/16 text-accent-2"
                     : "border-line text-muted hover:border-accent/60")
                 }
               >
@@ -491,7 +491,7 @@ export default function ConfigSections({
               aria-pressed={cfg.aiMode === m}
               className={
                 "rounded-md px-4 py-1.5 text-sm font-semibold capitalize transition " +
-                (cfg.aiMode === m ? "bg-purple-500/20 text-purple-400" : "text-muted hover:text-ink")
+                (cfg.aiMode === m ? "bg-accent/12 text-accent" : "text-muted hover:text-ink")
               }
             >
               {m === "classic" ? "🧭 classic" : "🧠 smart"}

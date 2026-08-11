@@ -253,7 +253,7 @@ export default function TwinPanel({ open, onClose }: { open: boolean; onClose: (
         }
       >
         <header className="flex shrink-0 items-center gap-2 border-b border-white/70 px-4 py-3">
-          <span className="h-2 w-2 rounded-full bg-cyan-400 shadow-[0_0_10px_currentColor]" />
+          <span className="h-2 w-2 rounded-full bg-accent-2 shadow-[0_0_10px_currentColor]" />
           <span className="font-heading text-sm font-semibold tracking-tight text-ink">Twin</span>
           <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-ink/40">
             {pending ? "" : "Ready"}
@@ -278,7 +278,7 @@ export default function TwinPanel({ open, onClose }: { open: boolean; onClose: (
                     key={q}
                     type="button"
                     onClick={() => void send(q)}
-                    className="rounded-full border border-white/70 bg-white/50 px-2.5 py-1 text-[11px] font-medium text-ink/70 transition hover:border-cyan-300/70 hover:text-ink"
+                    className="rounded-full border border-white/70 bg-white/50 px-2.5 py-1 text-[11px] font-medium text-ink/70 transition hover:border-accent-2/70 hover:text-ink"
                   >
                     {q}
                   </button>
@@ -322,13 +322,13 @@ export default function TwinPanel({ open, onClose }: { open: boolean; onClose: (
                         key={p.id}
                         className={
                           "space-y-2 rounded-xl border px-3 py-2.5 " +
-                          (p.heavy ? "border-amber-300/70 bg-amber-50/80" : "border-cyan-300/60 bg-cyan-50/70")
+                          (p.heavy ? "border-love/45 bg-love-bg/80" : "border-accent-2/55 bg-accent-tint/35")
                         }
                       >
                         <div className="flex items-start gap-1.5">
                           <span
                             className={
-                              "mt-1 h-1.5 w-1.5 shrink-0 rounded-full " + (p.heavy ? "bg-amber-500" : "bg-cyan-500")
+                              "mt-1 h-1.5 w-1.5 shrink-0 rounded-full " + (p.heavy ? "bg-love" : "bg-accent-2")
                             }
                           />
                           <div className="min-w-0">
@@ -397,7 +397,7 @@ export default function TwinPanel({ open, onClose }: { open: boolean; onClose: (
           }}
           className="shrink-0 border-t border-white/70 px-3 py-3"
         >
-          <div className="flex items-end gap-1 rounded-xl border border-white/70 bg-white/60 p-1 transition focus-within:border-cyan-300/80">
+          <div className="flex items-end gap-1 rounded-xl border border-white/70 bg-white/60 p-1 transition focus-within:border-accent-2/80">
             <textarea
               ref={inputRef}
               value={input}
@@ -420,7 +420,7 @@ export default function TwinPanel({ open, onClose }: { open: boolean; onClose: (
                 aria-pressed={listening}
                 className={
                   "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition " +
-                  (listening ? "bg-cyan-500 text-white" : "text-ink/50 hover:bg-white/70 hover:text-ink")
+                  (listening ? "bg-accent-2 text-white" : "text-ink/50 hover:bg-white/70 hover:text-ink")
                 }
               >
                 {listening ? <MicOff className="h-3.5 w-3.5" /> : <Mic className="h-3.5 w-3.5" />}

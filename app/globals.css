@@ -24,10 +24,10 @@
    (indigo) is reserved for primary buttons, active nav, links, focus rings and
    the brand mark — never for a money figure. */
 @theme {
-  --color-bg: #f6f8fc;
+  --color-bg: #a9cee7;
   --color-panel: #ffffff;
-  --color-elev: #f1f3f9;
-  --color-ink: #101828;
+  --color-elev: #c9e1f1;
+  --color-ink: #06172f;
   /* Secondary TEXT color (labels, hints, placeholders). Darkened 2026-07-29
      from #64729a: the old value was a light, desaturated blue-grey that read as
      washed out against --color-panel, and it is the single token behind every
@@ -35,39 +35,39 @@
      rule for this token, do not reintroduce a lighter value: a REAL SAVED VALUE
      always renders --color-ink (solid); --color-muted is only ever for
      placeholders, examples and explanatory hints. */
-  --color-muted: #667085;
-  --color-line: #e5eaf2;
-  --color-accent: #635bff;
-  --color-accent-2: #3b82f6;
-  --color-accent-deep: #4c46d9;
+  --color-muted: #3f5d76;
+  --color-line: #a9c8dd;
+  --color-accent: #0a2540;
+  --color-accent-2: #4a8ec4;
+  --color-accent-deep: #06172f;
   --color-accent-ink: #ffffff;
-  --color-good: #087a55;
-  --color-warn: #c57919;
-  --color-crit: #d92d20;
-  --color-info: #20c5d8;
+  --color-good: #087a61;
+  --color-warn: #a42c61;
+  --color-crit: #c9364f;
+  --color-info: #2f7eb8;
 
   /* Lighter violet stops from the same ramp as --color-accent, for subtle
      hover/selected surfaces (e.g. a chip or nav-item background) that need
      to read as "accent, but quiet" rather than a full-strength button. */
-  --color-accent-soft: #a855f7;
-  --color-accent-tint: #c4b5fd;
+  --color-accent-soft: #78b6df;
+  --color-accent-tint: #b9daf1;
 
   /* Warm accent reserved for romance-flavored moments (tips/spoil prompts,
      welcome-bundle callouts, "favorite" badges) — never used for buttons,
      nav, links or money, so it can't collide with --color-accent/--color-good. */
-  --color-love: #ec4899;
-  --color-love-ink: #831843;
-  --color-love-tint: #f9a8d4;
-  --color-love-bg: #fff1f7;
-  --color-love-hover: #fbcfe8;
-  --color-love-peach: #ffb4a8;
+  --color-love: #f05a9d;
+  --color-love-ink: #8a194f;
+  --color-love-tint: #f8acd0;
+  --color-love-bg: #fff2f8;
+  --color-love-hover: #ffd9e9;
+  --color-love-peach: #ffbdd8;
 
   /* Legacy brand tokens — kept so nothing that still refers to them 404s,
      but nothing new should use these; use --color-accent instead. */
-  --color-brand: #635bff;
-  --color-brand-light: #3b82f6;
-  --color-grass: #087a55;
-  --color-grass-light: #12a879;
+  --color-brand: #0a2540;
+  --color-brand-light: #4a8ec4;
+  --color-grass: #087a61;
+  --color-grass-light: #10a57d;
 }
 
 /* No `.dark` block: this admin is DAY MODE ONLY, matching allieai2 and
@@ -81,9 +81,9 @@
 
   /* Shared depth tokens so cards/buttons/nav read as intentional, not flat.
      Referenced via Tailwind arbitrary values, e.g. shadow-[var(--shadow-card)]. */
-  --shadow-card: 0 10px 34px rgb(16 24 40 / 0.07), 0 1px 2px rgb(16 24 40 / 0.05);
+  --shadow-card: 0 18px 44px rgb(6 23 47 / 0.07), 0 2px 5px rgb(6 23 47 / 0.04);
   --glow-accent: 0 0 0 1px var(--color-accent),
-    0 4px 14px color-mix(in srgb, var(--color-accent) 22%, transparent);
+    0 10px 24px color-mix(in srgb, var(--color-accent) 20%, transparent);
   --ring-accent: inset 0 0 0 1px
     color-mix(in srgb, var(--color-accent) 30%, transparent);
 
@@ -113,7 +113,7 @@
   --muted: var(--color-elev);
   --muted-foreground: var(--color-muted);
   --destructive: var(--color-crit);
-  --destructive-foreground: var(--color-ink);
+  --destructive-foreground: #ffffff;
   --border: var(--color-line);
   --input: var(--color-line);
   --ring: var(--color-accent);
@@ -122,15 +122,15 @@
   --chart-3: var(--color-info);
   --chart-4: var(--color-warn);
   --chart-5: var(--color-crit);
-  --radius: 0.625rem;
-  --sidebar: var(--color-panel);
-  --sidebar-foreground: var(--color-ink);
-  --sidebar-primary: var(--color-accent);
-  --sidebar-primary-foreground: var(--color-accent-ink);
-  --sidebar-accent: var(--color-elev);
-  --sidebar-accent-foreground: var(--color-ink);
-  --sidebar-border: var(--color-line);
-  --sidebar-ring: var(--color-accent);
+  --radius: 0.875rem;
+  --sidebar: #06172f;
+  --sidebar-foreground: #ffffff;
+  --sidebar-primary: #ffffff;
+  --sidebar-primary-foreground: #06172f;
+  --sidebar-accent: rgb(255 255 255 / 0.1);
+  --sidebar-accent-foreground: #ffffff;
+  --sidebar-border: rgb(255 255 255 / 0.14);
+  --sidebar-ring: #ffffff;
 }
 
 html,
@@ -142,9 +142,13 @@ body {
 /* Atlas-style page canvas. The pale blue-grey upper atmosphere gives way to
    white content space, while dashboard-main adds the diagonal colour ribbon. */
 .canvas-glow {
-  background-color: #f8fafc;
-  background-image: linear-gradient(180deg, #e8eff4 0, #f1f5f8 20rem, #f8fafc 34rem, #f8fafc 100%);
-  background-repeat: no-repeat;
+  background-color: var(--color-bg);
+  background-image:
+    linear-gradient(180deg, rgb(6 23 47 / 0.08), rgb(185 218 241 / 0.2) 24rem, rgb(255 255 255 / 0.24) 100%),
+    url("/brand/twin-blue-texture.png");
+  background-position: center top;
+  background-repeat: no-repeat, repeat-y;
+  background-size: cover, 100% auto;
 }
 
 .dashboard-main {
@@ -158,17 +162,14 @@ body {
   right: 0;
   left: 0;
   z-index: 0;
-  height: 23rem;
+  height: 18rem;
   content: "";
   pointer-events: none;
   background:
-    radial-gradient(circle at 2% 74%, rgb(255 190 85 / 0.95), transparent 31%),
-    radial-gradient(circle at 28% 62%, rgb(255 107 97 / 0.9), transparent 36%),
-    radial-gradient(circle at 59% 35%, rgb(168 85 247 / 0.88), transparent 40%),
-    radial-gradient(circle at 102% 34%, rgb(32 197 216 / 0.92), transparent 43%),
-    linear-gradient(110deg, #ffcf6c 0%, #ff7c7d 27%, #b85be7 62%, #46d4d6 100%);
-  opacity: 0.64;
-  clip-path: polygon(0 0, 100% 0, 100% 61%, 72% 69%, 42% 79%, 0 96%);
+    radial-gradient(900px 520px at 9% 8%, rgb(255 255 255 / 0.18), transparent 64%),
+    linear-gradient(180deg, rgb(6 23 47 / 0.12), transparent 88%);
+  opacity: 0.78;
+  clip-path: polygon(0 0, 100% 0, 100% 72%, 72% 78%, 38% 88%, 0 100%);
 }
 
 .dashboard-main::after {
@@ -177,13 +178,11 @@ body {
   right: 0;
   left: 0;
   z-index: 0;
-  height: 23rem;
+  height: 18rem;
   content: "";
   pointer-events: none;
-  background:
-    linear-gradient(150deg, transparent 0 42%, rgb(255 255 255 / 0.2) 42.2% 43%, transparent 43.2%),
-    linear-gradient(22deg, transparent 0 70%, rgb(255 255 255 / 0.18) 70.2% 71%, transparent 71.2%);
-  clip-path: polygon(0 0, 100% 0, 100% 61%, 72% 69%, 42% 79%, 0 96%);
+  background: linear-gradient(171deg, transparent 0 72%, rgb(74 142 196 / 0.17) 72.2% 72.7%, transparent 72.9%);
+  clip-path: polygon(0 0, 100% 0, 100% 72%, 72% 78%, 38% 88%, 0 100%);
 }
 
 .dashboard-main > * {
@@ -232,13 +231,12 @@ body {
 .dashboard-sidebar {
   isolation: isolate;
   background:
-    radial-gradient(circle at -8% 92%, rgb(255 190 85 / 0.72), transparent 34%),
-    radial-gradient(circle at 22% 68%, rgb(255 107 97 / 0.47), transparent 38%),
-    radial-gradient(circle at 78% 52%, rgb(168 85 247 / 0.42), transparent 39%),
-    radial-gradient(circle at 112% 28%, rgb(32 197 216 / 0.55), transparent 40%),
-    linear-gradient(180deg, #e8eff4 0%, #eef2f6 33%, #e9e5fa 100%);
-  border-right: 1px solid rgb(255 255 255 / 0.7);
-  box-shadow: 12px 0 40px rgb(16 24 40 / 0.08);
+    linear-gradient(180deg, rgb(8 43 85 / 0.08), rgb(6 23 47 / 0.5)),
+    url("/brand/twin-deep-texture.png") center / cover no-repeat,
+    #06172f;
+  border-right: 1px solid rgb(255 255 255 / 0.12);
+  color: #ffffff;
+  box-shadow: 18px 0 55px rgb(6 23 47 / 0.12);
 }
 
 .dashboard-sidebar::before {
@@ -246,47 +244,66 @@ body {
   inset: 0;
   z-index: -1;
   background:
-    linear-gradient(154deg, transparent 0 46%, rgb(255 255 255 / 0.18) 46.2% 47%, transparent 47.2%),
-    linear-gradient(26deg, transparent 0 73%, rgb(255 255 255 / 0.2) 73.2% 74%, transparent 74.2%);
+    radial-gradient(520px 420px at 8% 8%, rgb(120 182 223 / 0.3), transparent 68%),
+    linear-gradient(171deg, transparent 0 76%, rgb(255 255 255 / 0.14) 76.2% 76.6%, transparent 76.8%);
   content: "";
   pointer-events: none;
 }
 
 .twin-brand-dot {
   color: var(--color-love);
-  text-shadow: 0 0 18px rgb(236 72 153 / 0.55);
+  text-shadow: 0 0 18px rgb(240 90 157 / 0.5);
 }
 
 .sidebar-create-button {
-  background: #0d2540;
-  box-shadow: 0 9px 24px rgb(13 37 64 / 0.22);
+  background: #ffffff;
+  color: #06172f;
+  box-shadow: 0 12px 30px rgb(2 10 24 / 0.24);
 }
 
 .sidebar-create-button:hover {
-  filter: brightness(1.08);
-  box-shadow: 0 12px 30px rgb(13 37 64 / 0.3);
+  background: #eaf4fb;
+  box-shadow: 0 15px 34px rgb(2 10 24 / 0.3);
+  transform: translateY(-1px);
 }
 
-.dashboard-topbar,
+.dashboard-topbar {
+  background: rgb(255 255 255 / 0.88);
+  box-shadow: 0 1px 0 rgb(6 23 47 / 0.05), 0 10px 32px rgb(6 23 47 / 0.035);
+  backdrop-filter: blur(22px) saturate(135%);
+}
+
 .dashboard-mobile-header {
-  background: rgb(255 255 255 / 0.82);
-  box-shadow: 0 1px 0 rgb(16 24 40 / 0.03);
-  backdrop-filter: blur(18px) saturate(140%);
+  background:
+    linear-gradient(90deg, rgb(74 142 196 / 0.15), rgb(6 23 47 / 0.46)),
+    url("/brand/twin-deep-texture.png") center 42% / cover no-repeat,
+    #06172f;
+  color: #ffffff;
+  box-shadow: 0 10px 28px rgb(6 23 47 / 0.13);
 }
 
 [data-slot="card"] {
   border: 1px solid var(--color-line);
+  background: rgb(247 252 255 / 0.9);
+  box-shadow: 0 20px 48px rgb(6 23 47 / 0.12), inset 0 1px 0 rgb(255 255 255 / 0.8);
+  backdrop-filter: blur(18px) saturate(120%);
 }
 
 [data-slot="input"],
 [data-slot="select-trigger"],
 textarea {
-  background-color: rgb(255 255 255 / 0.82);
+  border-color: var(--color-line);
+  background-color: rgb(250 253 255 / 0.86);
+  box-shadow: inset 0 1px 2px rgb(6 23 47 / 0.03);
+}
+
+[data-slot="button"] {
+  border-radius: 999px;
 }
 
 /* Stripe-style data surfaces shared by fleet tables and operational pages. */
 [data-slot="table-header"] {
-  background: linear-gradient(90deg, rgb(99 91 255 / 0.06), rgb(32 197 216 / 0.05));
+  background: linear-gradient(90deg, rgb(74 142 196 / 0.1), rgb(185 218 241 / 0.1));
 }
 
 [data-slot="table-head"] {
@@ -302,7 +319,7 @@ textarea {
 }
 
 [data-slot="table-body"] [data-slot="table-row"]:hover {
-  background: rgb(99 91 255 / 0.045);
+  background: rgb(74 142 196 / 0.065);
 }
 
 /* Fans workspace uses three distinct product panels while sharing the same
@@ -314,8 +331,8 @@ textarea {
 
 .users-panel {
   position: relative;
-  background: rgb(255 255 255 / 0.94);
-  backdrop-filter: blur(14px);
+  background: rgb(247 252 255 / 0.88);
+  backdrop-filter: blur(18px) saturate(118%);
 }
 
 .users-panel::before {
@@ -327,54 +344,62 @@ textarea {
 }
 
 .users-panel-list::before {
-  background: linear-gradient(90deg, #ffbe55, #ff6b61, #ec4899);
+  background: #4a8ec4;
 }
 
 .users-panel-chat::before {
-  background: linear-gradient(90deg, #635bff, #a855f7, #ec4899);
+  background: linear-gradient(90deg, #0a2540, #4a8ec4);
 }
 
 .users-panel-profile::before {
-  background: linear-gradient(90deg, #20c5d8, #3b82f6, #635bff);
+  background: #f05a9d;
 }
 
 .users-stat {
-  background: linear-gradient(145deg, rgb(255 255 255 / 0.96), rgb(246 248 252 / 0.9));
-  box-shadow: 0 4px 14px rgb(16 24 40 / 0.04);
+  background: linear-gradient(145deg, rgb(255 255 255 / 0.92), rgb(201 225 241 / 0.66));
+  box-shadow: 0 6px 18px rgb(6 23 47 / 0.045);
 }
 
 .dashboard-page {
   position: relative;
-  padding-top: 0.75rem;
+  padding-top: 1rem;
 }
 
 .dashboard-page::before {
   position: absolute;
   top: 0;
   left: 0;
-  width: 4.5rem;
-  height: 3px;
+  width: 3.75rem;
+  height: 4px;
   border-radius: 999px;
   content: "";
-  background: linear-gradient(90deg, #ffbe55, #ff6b61 32%, #ec4899 58%, #635bff 79%, #20c5d8);
+  background: linear-gradient(90deg, #0a2540 0 62%, #f05a9d 62% 100%);
 }
 
 .dashboard-page > h1,
 .dashboard-page > div:first-child h1 {
-  color: #0d2540;
+  color: #06172f;
+  font-family: var(--font-display), var(--font-sans), sans-serif;
+  letter-spacing: -0.035em;
 }
 
 .dashboard-page > [data-slot="card"],
 .dashboard-page > div > [data-slot="card"] {
-  background: rgb(255 255 255 / 0.96);
-  backdrop-filter: blur(12px);
+  background: rgb(247 252 255 / 0.9);
+  backdrop-filter: blur(18px) saturate(118%);
+}
+
+.dashboard-page [data-slot="card-header"] {
+  background: linear-gradient(90deg, rgb(185 218 241 / 0.26), rgb(255 255 255 / 0.08));
+  border-bottom: 1px solid rgb(74 142 196 / 0.12);
+  padding-bottom: 1rem;
 }
 
 @media (max-width: 640px) {
   .dashboard-main::before,
   .dashboard-main::after {
-    height: 18rem;
-    clip-path: polygon(0 0, 100% 0, 100% 72%, 55% 83%, 0 96%);
+    height: 14rem;
+    clip-path: polygon(0 0, 100% 0, 100% 78%, 55% 87%, 0 100%);
   }
 }
 
@@ -470,7 +495,7 @@ textarea {
    opt-in needed. */
 /* Earnings preview: Twin Aurora. Page-scoped so other routes remain unchanged. */
 .earnings-aurora {
-  --earnings-green: #16b87a;
+  --earnings-green: #087a61;
   position: relative;
   isolation: isolate;
   padding-bottom: 1.5rem;
@@ -487,35 +512,35 @@ textarea {
   margin-top: 1rem;
   border-radius: 999px;
   content: "";
-  background: linear-gradient(90deg, #635bff 0%, #a855f7 35%, #ec4899 62%, #ffbe55 100%);
+  background: linear-gradient(90deg, #0a2540 0 64%, #f05a9d 64% 100%);
 }
 
 .earnings-toolbar {
   width: fit-content;
   max-width: 100%;
   padding: 0.45rem;
-  border: 1px solid #e5eaf2;
-  border-radius: 1rem;
-  background: rgb(255 255 255 / 0.82);
-  box-shadow: 0 8px 28px rgb(16 24 40 / 0.06);
+  border: 1px solid #cfdeea;
+  border-radius: 999px;
+  background: rgb(247 252 255 / 0.9);
+  box-shadow: 0 10px 30px rgb(6 23 47 / 0.07);
   backdrop-filter: blur(14px);
 }
 
 .earnings-control-group {
-  border: 1px solid #e5eaf2;
-  background: #f1f3f9;
+  border: 1px solid #cfdeea;
+  background: #e5f0f8;
 }
 
 .earnings-control-active {
   color: white;
-  background: #635bff;
-  box-shadow: 0 3px 10px rgb(99 91 255 / 0.25);
+  background: #0a2540;
+  box-shadow: 0 6px 16px rgb(6 23 47 / 0.22);
 }
 
 .earnings-aurora [data-slot="card"] {
-  border: 1px solid #e5eaf2;
-  background: rgb(255 255 255 / 0.94);
-  box-shadow: 0 10px 34px rgb(16 24 40 / 0.07), 0 1px 2px rgb(16 24 40 / 0.04);
+  border: 1px solid #cfdeea;
+  background: rgb(247 252 255 / 0.9);
+  box-shadow: 0 18px 44px rgb(6 23 47 / 0.07), 0 2px 5px rgb(6 23 47 / 0.04);
   backdrop-filter: blur(12px);
 }
 
@@ -528,15 +553,15 @@ textarea {
   inset: 0 0 auto;
   height: 3px;
   content: "";
-  background: linear-gradient(90deg, #635bff 0%, #20c5d8 36%, #ec4899 70%, #ffbe55 100%);
+  background: linear-gradient(90deg, #0a2540 0%, #4a8ec4 70%, #f05a9d 100%);
 }
 
 .earnings-stat-tile {
   position: relative;
   overflow: hidden;
-  border-color: #e5eaf2;
-  background: rgb(255 255 255 / 0.9);
-  box-shadow: 0 7px 22px rgb(16 24 40 / 0.055);
+  border-color: #cfdeea;
+  background: rgb(247 252 255 / 0.88);
+  box-shadow: 0 9px 24px rgb(6 23 47 / 0.055);
 }
 
 .earnings-stat-tile::before {
@@ -544,23 +569,23 @@ textarea {
   inset: 0 auto 0 0;
   width: 3px;
   content: "";
-  background: linear-gradient(180deg, #635bff, #ec4899);
+  background: linear-gradient(180deg, #0a2540, #4a8ec4);
 }
 
 .earnings-stat-tile:nth-child(3n + 2)::before {
-  background: linear-gradient(180deg, #20c5d8, #3b82f6);
+  background: linear-gradient(180deg, #4a8ec4, #78b6df);
 }
 
 .earnings-stat-tile:nth-child(3n)::before {
-  background: linear-gradient(180deg, #ff6b61, #ffbe55);
+  background: linear-gradient(180deg, #f05a9d, #f8acd0);
 }
 
 .earnings-aurora .money-value {
-  color: #101828 !important;
+  color: #06172f !important;
 }
 
 .earnings-aurora .money-value-primary {
-  color: #087a55 !important;
+  color: #087a61 !important;
 }
 
 @media (max-width: 640px) {
@@ -580,11 +605,9 @@ html.blur-media video {
 .jarvis-page {
   isolation: isolate;
   background:
-    radial-gradient(circle at 3% 92%, rgb(152 69 29 / 0.4), transparent 31%),
-    radial-gradient(circle at 18% 24%, rgb(17 137 160 / 0.35), transparent 34%),
-    radial-gradient(circle at 92% 13%, rgb(17 45 116 / 0.38), transparent 35%),
-    radial-gradient(circle at 78% 84%, rgb(201 132 38 / 0.3), transparent 30%),
-    linear-gradient(145deg, #c5dce5, #d9d1df 52%, #e9cfb4);
+    linear-gradient(145deg, rgb(6 23 47 / 0.16), rgb(6 23 47 / 0.64)),
+    url("/brand/twin-deep-texture.png") center / cover repeat-y,
+    #06172f;
 }
 
 .jarvis-page::before {
@@ -593,10 +616,21 @@ html.blur-media video {
   z-index: 0;
   pointer-events: none;
   content: "";
-  opacity: 0.42;
+  opacity: 0.52;
   background-image:
-    linear-gradient(154deg, transparent 0 46%, rgb(255 255 255 / 0.34) 46.2% 47%, transparent 47.2%),
-    linear-gradient(26deg, transparent 0 73%, rgb(255 255 255 / 0.3) 73.2% 74%, transparent 74.2%);
+    radial-gradient(circle at 18% 18%, rgb(74 142 196 / 0.28), transparent 31%),
+    radial-gradient(circle at 82% 78%, rgb(240 90 157 / 0.1), transparent 27%),
+    linear-gradient(154deg, transparent 0 46%, rgb(255 255 255 / 0.08) 46.2% 46.7%, transparent 46.9%),
+    linear-gradient(26deg, transparent 0 73%, rgb(74 142 196 / 0.12) 73.2% 73.7%, transparent 73.9%);
+}
+
+.jarvis-stage {
+  background:
+    linear-gradient(180deg, rgb(6 23 47 / 0.08), rgb(6 23 47 / 0.58)),
+    url("/brand/twin-deep-texture.png") center 35% / cover no-repeat,
+    #06172f !important;
+  border-color: rgb(255 255 255 / 0.14) !important;
+  box-shadow: inset 0 1px 0 rgb(255 255 255 / 0.09), 0 24px 70px rgb(6 23 47 / 0.34);
 }
 
 .jarvis-stage::after {
@@ -605,8 +639,10 @@ html.blur-media video {
   z-index: 1;
   pointer-events: none;
   content: "";
-  background: linear-gradient(112deg, transparent 0 38%, rgb(255 255 255 / 0.2) 38.2% 38.8%, transparent 39%);
-  opacity: 0.7;
+  background:
+    radial-gradient(circle at 50% 38%, rgb(74 142 196 / 0.14), transparent 38%),
+    linear-gradient(112deg, transparent 0 38%, rgb(255 255 255 / 0.05) 38.2% 38.8%, transparent 39%);
+  opacity: 0.48;
 }
 
 .jarvis-result-card {
