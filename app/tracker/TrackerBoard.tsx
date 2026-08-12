@@ -3,6 +3,8 @@
 import { useState, useTransition } from "react";
 import Link from "next/link";
 import { botFor, BotBadge, BotMark } from "./bot-identity";
+import { BotStrip, type BotRow } from "./bots/BotSettings";
+import { BotLog, type LogRow } from "./bots/BotLog";
 import { KINDS, AREAS, SEVERITIES, ageLabel, type BotJob, type TrackerBatch, type TrackerBoard as Board, type TrackerItem } from "@/lib/tracker";
 import {
   addCommit,
@@ -411,7 +413,7 @@ function BatchBlock({ batch, batches, defaultOpen }: { batch: TrackerBatch; batc
 }
 
 // ── the whole board ──────────────────────────────────────────────────────────
-export function TrackerBoard({ board }: { board: Board }) {
+export function TrackerBoard({ board, bots, log }: { board: Board; bots: BotRow[]; log: LogRow[] }) {
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [reporting, setReporting] = useState(false);
   const [filter, setFilter] = useState<string>("all");
@@ -442,9 +444,6 @@ export function TrackerBoard({ board }: { board: Board }) {
             {archive.reduce((n, b) => n + b.items.length, 0)} fixed and live
           </p>
         </div>
-        <Link href="/tracker/bots" className="ml-auto text-sm font-medium text-neutral-500 hover:text-neutral-900">
-          bots
-        </Link>
         <button
           onClick={() => setReporting((v) => !v)}
           className="rounded-xl bg-neutral-900 px-4 py-2.5 text-sm font-semibold text-white hover:bg-neutral-800"
@@ -452,6 +451,10 @@ export function TrackerBoard({ board }: { board: Board }) {
           {reporting ? "cancel" : "+ new report"}
         </button>
       </header>
+
+      {/* The bots, inline. They are the thing filing most of this board, so
+          they belong on it rather than behind a link. */}
+      <BotStrip bots={bots} />
 
       {reporting && (
         <form
@@ -584,6 +587,7 @@ export function TrackerBoard({ board }: { board: Board }) {
         {!open.length && <p className="rounded-xl border border-dashed border-black/10 px-4 py-8 text-center text-sm text-neutral-400">nothing open here</p>}
       </section>
 
+      <BotLog rows={log} />
     </div>
   );
 }

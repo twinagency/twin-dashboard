@@ -1,9 +1,9 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import Link from "next/link";
 import { updateBot } from "./actions";
-import { botFor, BotBadge } from "../bot-identity";
+import { botFor, BotBadge, BotMark } from "../bot-identity";
 
 export type BotRow = {
   slug: string;
@@ -175,5 +175,61 @@ export function BotSettings({ bots }: { bots: BotRow[] }) {
 
       {!bots.length && <p className="text-sm text-neutral-400">no bots registered yet</p>}
     </div>
+  );
+}
+
+// The compact strip that sits at the top of the tracker board. One tile per
+// bot: its mark, whether it is on, and how often it runs. Clicking a tile
+// opens its full settings without leaving the page, because a bot and the
+// items it filed are the same subject and were never worth two routes.
+export function BotStrip({ bots }: { bots: BotRow[] }) {
+  const [openSlug, setOpenSlug] = useState<string | null>(null);
+
+  function everyLabel(b: BotRow): string {
+    if (b.runs_after) return `after ${b.runs_after}`;
+    const found = EVERY.find((e) => e.v === b.every_minutes);
+    if (found) return found.label.replace(/^every /, "");
+    return `${b.every_minutes}m`;
+  }
+
+  return (
+    <section className="space-y-2">
+      <div className="flex flex-wrap gap-2">
+        {bots.map((b) => {
+          const id = botFor(b.slug);
+          const on = b.enabled;
+          return (
+            <button
+              key={b.slug}
+              onClick={() => setOpenSlug(openSlug === b.slug ? null : b.slug)}
+              className={`flex items-center gap-2 rounded-xl border px-3 py-2 text-left ${
+                openSlug === b.slug ? "border-neutral-900 bg-white" : on ? "border-black/10 bg-white" : "border-black/8 bg-neutral-100"
+              }`}
+            >
+              {id && (
+                <span className={`inline-flex h-7 w-7 items-center justify-center rounded-lg text-white ${on ? id.disc : "bg-neutral-300"}`}>
+                  <BotMark bot={id} className="h-4 w-4" />
+                </span>
+              )}
+              <span className="leading-tight">
+                <span className={`block text-sm font-semibold ${on ? "text-neutral-900" : "text-neutral-400"}`}>{b.label}</span>
+                <span className="block text-[11px] text-neutral-400">{on ? everyLabel(b) : "off"}</span>
+              </span>
+            </button>
+          );
+        })}
+      </div>
+
+      {openSlug && (
+        <div className="pt-1">
+          {bots.filter((b) => b.slug === openSlug).map((b) => (
+            <Row key={b.slug} bot={b} all={bots} />
+          ))}
+          <p className="mt-1 text-xs text-neutral-400">
+            Read only. The only thing any of these writes is a report on this board.
+          </p>
+        </div>
+      )}
+    </section>
   );
 }
