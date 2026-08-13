@@ -202,7 +202,11 @@ export default async function LogsPage({
   const fanUserId = sp.fanUser?.trim() || null;
   const fanLabel = sp.fanLabel?.trim() || (fanTelegramId != null ? String(fanTelegramId) : null);
   const view = sp.view === "spend" ? "spend" : "activity";
-  const spendWindow = isSpendWindow(sp.w) ? sp.w : "7d";
+  // Defaults to "today", not "7d" - at current call volume (~66k/day and
+  // climbing) a 7-day window is 200-400k rows. Still fetchable (see
+  // fetchUsageEventsPaged in lib/spend-data.ts) but "today" is both the
+  // faster default and the actual question ("what are we burning right now").
+  const spendWindow = isSpendWindow(sp.w) ? sp.w : "today";
 
   // The Spend tab reads usage_events itself (lib/spend-data.ts, paged, whole
   // window) - the activity fetch below is skipped entirely rather than run

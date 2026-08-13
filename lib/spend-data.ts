@@ -420,11 +420,81 @@ const MODEL_COLUMNS = [
   "eleven_model",
 ] as const;
 
-// usage_events runs ~11k rows/day, so 30 days is ~330k rows — past
-// selectAllRows' 200k default. Raised deliberately rather than left to truncate
-// silently, and the result still carries `truncated` for the day the fleet
-// outgrows even this.
+// usage_events ran ~11k rows/day when this was first built; by 2026-08-13 it
+// was ~66k/day and climbing with the fleet, so 30 days can be 1-2M rows. Raised
+// deliberately rather than left to truncate silently, and the result still
+// carries `truncated` for the day the fleet outgrows even this.
 const USAGE_MAX_ROWS = 400_000;
+
+const USAGE_SELECT_COLS =
+  "clone_id,flow,kind,model,cost_usd,prompt_tokens,completion_tokens,cached_prompt_tokens,cache_write_tokens,cache_discount_usd,ok";
+const USAGE_PAGE = 1000;
+// How many 1000-row pages to have in flight at once. 10 turns a 300-page read
+// (300 sequential round trips, the actual "spinner forever" bug) into ~30
+// sequential BATCHES - each still bounded by Supabase's own connection limits,
+// so this is not "as fast as possible", just fast enough that the tab loads.
+const USAGE_PAGE_CONCURRENCY = 10;
+
+/**
+ * usage_events for the window, fetched with bounded concurrency instead of
+ * selectAllRows' one-page-at-a-time loop. Gets the exact row count first (a
+ * cheap HEAD query) so it knows how many pages to fire, then runs a small
+ * worker pool against the same stable created_at+id ordering selectAllRows
+ * used - concurrency changes latency, not which rows land in which page.
+ * Falls back to the ceiling-respecting ordered read if the count query itself
+ * fails, so a transient error degrades to "slower", never "wrong total".
+ */
+async function fetchUsageEventsPaged(
+  startIso: string,
+  endIso: string,
+  cloneId: string | null,
+  maxRows: number,
+): Promise<{ rows: SpendUsageRow[]; truncated: boolean }> {
+  const scoped = <Q extends { gte: any; lte: any; eq: any }>(q: Q): Q => {
+    let x = q.gte("created_at", startIso).lte("created_at", endIso);
+    if (cloneId) x = x.eq("clone_id", cloneId);
+    return x;
+  };
+
+  const { count, error: countErr } = await scoped(
+    supabaseAdmin.from("usage_events").select("id", { count: "exact", head: true }),
+  );
+
+  if (countErr || count == null) {
+    let usageQ = scoped(supabaseAdmin.from("usage_events").select(USAGE_SELECT_COLS))
+      .order("created_at", { ascending: true })
+      .order("id", { ascending: true });
+    return selectAllRows<SpendUsageRow>(usageQ, { maxRows, label: "spend usage_events" });
+  }
+
+  const total = Math.min(count, maxRows);
+  const truncated = count > maxRows;
+  const pageCount = Math.ceil(total / USAGE_PAGE);
+  const pages: SpendUsageRow[][] = new Array(pageCount);
+
+  let nextPage = 0;
+  async function worker(): Promise<void> {
+    for (;;) {
+      const i = nextPage++;
+      if (i >= pageCount) return;
+      const from = i * USAGE_PAGE;
+      const to = Math.min(from + USAGE_PAGE, total) - 1;
+      const { data, error } = await scoped(supabaseAdmin.from("usage_events").select(USAGE_SELECT_COLS))
+        .order("created_at", { ascending: true })
+        .order("id", { ascending: true })
+        .range(from, to);
+      if (error) {
+        console.error(`[spend usage_events] page ${i} (${from}-${to}) failed: ${error.message}`);
+        pages[i] = [];
+        continue;
+      }
+      pages[i] = (data ?? []) as SpendUsageRow[];
+    }
+  }
+
+  await Promise.all(Array.from({ length: Math.min(USAGE_PAGE_CONCURRENCY, pageCount) }, worker));
+  return { rows: pages.flat(), truncated };
+}
 
 export async function getSpendData(
   window: SpendWindow,
@@ -456,25 +526,17 @@ export async function getSpendData(
     }
   }
 
-  // ── usage_events in the window, PAGED ──────────────────────────────────────
-  // The (clone_id, flow, created_at desc) index from migration 107 covers the
-  // scoped read; the fleet-wide one is a plain range scan on created_at.
-  // Ordered so page boundaries are deterministic: an unordered paged read can
-  // repeat or skip rows between pages, and either one is a wrong sum.
-  let usageQ = supabaseAdmin
-    .from("usage_events")
-    .select(
-      "clone_id,flow,kind,model,cost_usd,prompt_tokens,completion_tokens,cached_prompt_tokens,cache_write_tokens,cache_discount_usd,ok",
-    )
-    .gte("created_at", startIso)
-    .lte("created_at", endIso)
-    .order("created_at", { ascending: true })
-    .order("id", { ascending: true });
-  if (cloneId) usageQ = usageQ.eq("clone_id", cloneId);
-  const { rows: usageRows, truncated } = await selectAllRows<SpendUsageRow>(usageQ, {
-    maxRows: USAGE_MAX_ROWS,
-    label: "spend usage_events",
-  });
+  // ── usage_events in the window, PAGED CONCURRENTLY ─────────────────────────
+  // usage_events passed ~66k rows/day by 2026-08-13 (fleet growth, not a leak -
+  // see the tracker's spend investigation), six times the ~11k/day this was
+  // built against. selectAllRows pages sequentially, one round trip at a time;
+  // at today's volume a 7d window is 200-400k rows, i.e. 200-400 round trips
+  // in a row, which is the "Spend tab spins forever" bug. fetchUsageEventsPaged
+  // below fires USAGE_PAGE_CONCURRENCY pages at once instead of one at a time.
+  // Order still doesn't matter for correctness (rollUpSpend only aggregates),
+  // and each page's own range() is still against the same stable
+  // created_at+id sort, so concurrent fetch changes latency, not the result.
+  const { rows: usageRows, truncated } = await fetchUsageEventsPaged(startIso, endIso, cloneId, USAGE_MAX_ROWS);
 
   // ── fan messages in the window (the cost-per-message denominator) ──────────
   // A HEAD count, not a paged read: nothing here needs the rows themselves, and

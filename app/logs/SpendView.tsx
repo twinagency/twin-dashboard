@@ -42,7 +42,7 @@ const GROUP_TONE: Record<FlowGroup, string> = {
 };
 
 function windowHref(w: SpendWindow): string {
-  return w === "7d" ? "/logs?view=spend" : `/logs?view=spend&w=${w}`;
+  return w === "today" ? "/logs?view=spend" : `/logs?view=spend&w=${w}`;
 }
 
 function Pills({ active }: { active: SpendWindow }) {

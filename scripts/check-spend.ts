@@ -298,13 +298,18 @@ check("S11 fractions of a cent are shown, not rounded away to $0.00", () => {
 
 // ── S12 the read is paged ────────────────────────────────────────────────────
 
-check("S12 the spend read pages, and the fan-message count does not fetch rows", () => {
-  // Source-level, deliberately: usage_events runs ~11k rows/day, so an unpaged
-  // select returns the first 1000 and reports the total as if it were complete.
-  // The helper being correct is worth nothing if this read does not call it.
+check("S12 the spend read pages (with a ceiling), and the fan-message count does not fetch rows", () => {
+  // Source-level, deliberately: usage_events runs ~66k+ rows/day (2026-08-14),
+  // so an unpaged select returns the first 1000 and reports the total as if it
+  // were complete. fetchUsageEventsPaged replaced selectAllRows here for SPEED
+  // (bounded concurrency instead of one round trip at a time - see its comment
+  // in lib/spend-data.ts for why), but the invariant this check exists for is
+  // unchanged: every page is still fetched, and a read that hits its ceiling
+  // still says so rather than under-reporting silently.
   const src = readFileSync(new URL("../lib/spend-data.ts", import.meta.url), "utf8");
   const fetchBody = src.slice(src.indexOf("export async function getSpendData"));
-  assert(fetchBody.includes("selectAllRows"), "getSpendData must read usage_events through selectAllRows");
+  assert(fetchBody.includes("fetchUsageEventsPaged"), "getSpendData must read usage_events through a paged fetch");
+  assert(/MAX_ROWS/.test(fetchBody), "the paged fetch must be given a row ceiling, not read unboundedly");
   assert(/truncated/.test(fetchBody), "getSpendData must carry the truncation flag through, not swallow it");
   assert(/head:\s*true/.test(src), "the fan message count must be a HEAD count, not a fetch of chat_history rows");
   assert(!/\.insert\(|\.update\(|\.upsert\(|\.delete\(/.test(src), "the spend page is read only");
