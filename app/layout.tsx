@@ -9,6 +9,8 @@ import MobileMenu from "@/components/MobileMenu";
 import TopBar from "@/components/TopBar";
 import MainShell from "@/components/MainShell";
 import TwinWordmark from "@/components/TwinWordmark";
+import TwinUpdatePopup from "@/components/TwinVersionBadge";
+import { getTwinVersion } from "@/lib/twin-version";
 import { supabaseAdmin } from "@/lib/supabase";
 import { chartColorForClone, profileImagePathForClone } from "@/lib/colors";
 import { isAuthed } from "@/lib/auth";
@@ -53,6 +55,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       </html>
     );
   }
+
+  // Migration 117: which version of Twin this is. Fetched here, once, so both
+  // the sidebar chip and the update popup read the same row.
+  const twinVersion = await getTwinVersion();
 
   let clones: { id: string; name: string; color: string; photoUrl?: string }[] = [];
   try {
@@ -126,7 +132,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
         <CurrencyProvider>
         <BlurProvider>
           <div className="flex h-screen">
-            <Sidebar clones={clones} activeCloneId={activeCloneId} />
+            <Sidebar
+              clones={clones}
+              activeCloneId={activeCloneId}
+              version={twinVersion?.version ?? null}
+              versionName={twinVersion?.name ?? ""}
+              versionSummary={twinVersion?.summary ?? ""}
+            />
             {/* Every page (Fans/inbox included) is a fixed-height shell: the
                 sidebar and TopBar never move, only this column's own <main>
                 scrolls internally. No page-level (document) scroll anywhere. */}
@@ -147,6 +159,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <MainShell>{children}</MainShell>
             </div>
           </div>
+          {/* Mounted ONCE, outside the sidebar, so a phone gets it too. It
+              renders nothing until the version actually changes. */}
+          <TwinUpdatePopup
+            version={twinVersion?.version ?? null}
+            name={twinVersion?.name ?? ""}
+            summary={twinVersion?.summary ?? ""}
+          />
         </BlurProvider>
         </CurrencyProvider>
       </body>

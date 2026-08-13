@@ -220,6 +220,8 @@ export async function updateBatch(batchId: string, fd: FormData): Promise<void> 
   const patch: Record<string, unknown> = {};
   if (fd.has("title")) patch.title = str(fd, "title");
   if (fd.has("deploy_note")) patch.deploy_note = str(fd, "deploy_note");
+  // Migration 117: the high-level "what changed" line on a batch.
+  if (fd.has("summary")) patch.summary = str(fd, "summary");
   if (fd.has("status")) {
     const status = pick(["working", "shipped", "live"] as const, fd.get("status"), "working");
     patch.status = status;

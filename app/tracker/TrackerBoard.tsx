@@ -368,6 +368,13 @@ function BatchBlock({ batch, batches, defaultOpen }: { batch: TrackerBatch; batc
 
       {open && (
         <div className="space-y-2 border-t border-black/6 px-4 py-4">
+          {/* Migration 117, operator ask: "alongside batches a high level
+              description of what was changed". It sits ABOVE the deploy note
+              and the items on purpose. The items are the detail and the deploy
+              note is the logistics; this is the sentence you read first. */}
+          {batch.summary && (
+            <p className="whitespace-pre-wrap text-sm leading-relaxed text-neutral-800">{batch.summary}</p>
+          )}
           {batch.deployNote && <p className="text-xs text-neutral-500">{batch.deployNote}</p>}
 
           {batch.items.map((i) => (
@@ -382,6 +389,12 @@ function BatchBlock({ batch, batches, defaultOpen }: { batch: TrackerBatch; batc
 
           {batch.status !== "live" && (
             <form action={(fd) => start(() => void updateBatch(batch.id, fd))} className="flex flex-wrap items-center gap-2 pt-2">
+              <input
+                name="summary"
+                defaultValue={batch.summary}
+                placeholder="high level: what changed, in one or two plain sentences"
+                className="min-w-56 flex-1 rounded-lg border border-black/10 px-3 py-1.5 text-xs"
+              />
               <input
                 name="deploy_note"
                 defaultValue={batch.deployNote}

@@ -69,6 +69,8 @@ export type TrackerBatch = {
   number: number;
   title: string;
   status: "working" | "shipped" | "live";
+  /** migration 117: the high-level "what changed" line, read before the items */
+  summary: string;
   deployNote: string;
   shippedAt: string | null;
   liveAt: string | null;
@@ -206,6 +208,7 @@ export async function loadBoard(): Promise<TrackerBoard> {
     number: b.number,
     title: b.title ?? "",
     status: b.status,
+    summary: b.summary ?? "",
     deployNote: b.deploy_note ?? "",
     shippedAt: b.shipped_at,
     liveAt: b.live_at,
