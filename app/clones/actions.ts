@@ -342,6 +342,7 @@ function rowFromForm(fd: FormData) {
     read_receipts_enabled: fd.get("read_receipts_enabled") === "true",
     message_effects_enabled: fd.get("message_effects_enabled") === "true",
     ai_disclosure: fd.get("ai_disclosure") === "true",
+    strict_minor_gate: fd.get("strict_minor_gate") === "true",
     // The auto_block_* columns are deliberately no longer written (2026-07-27).
     // The AI never blocks a fan, it only flags for operator review, so there is
     // no UI for these and nothing to save. The columns stay in the DB unread
@@ -889,6 +890,14 @@ const STRICT_098_COLUMNS = ["strict_onboarding_steps"] as const;
 // strips them and still succeeds; stripping is safe because each of these
 // defaults reproduces the hardcoded constant it replaces.
 // See bot/db/migrations/099_advanced_dials_batch2.sql.
+// Migration 116, the strict minor gate. Listed so a save against a stack where
+// 116 has not run yet strips it and still succeeds. Stripping is the SAFE state
+// here, same reasoning as 090's price guard: with the column absent the bot's
+// mapClone falls back to TRUE, so a pre-116 save leaves the brake ARMED rather
+// than silently disarming it.
+// See bot/db/migrations/116_strict_minor_gate.sql.
+const SAFETY_116_COLUMNS = ["strict_minor_gate"] as const;
+
 const ADVANCED_099_COLUMNS = [
   "reaction_ambient_chance_pct",
   "message_effect_chance_pct",
@@ -933,6 +942,7 @@ const OPTIONAL_COLUMNS = [
   ...ADVANCED_097_COLUMNS,
   ...STRICT_098_COLUMNS,
   ...ADVANCED_099_COLUMNS,
+  ...SAFETY_116_COLUMNS,
 ] as const;
 
 function withoutPersonaFactColumns(row: Record<string, unknown>): Record<string, unknown> {

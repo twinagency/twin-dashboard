@@ -42,7 +42,7 @@ const DEFAULT_TOGGLES = [
   "smart_split", "photos_enabled", "videos_enabled", "video_vision_enabled", "bundles_enabled",
   "voice_enabled", "charge_messages", "tips_enabled", "live_captions_enabled", "thank_you_enabled",
   "discounts_enabled", "drip_enabled", "emojis_enabled",
-  "reactions_enabled", "read_receipts_enabled", "message_effects_enabled", "ai_disclosure",
+  "reactions_enabled", "read_receipts_enabled", "message_effects_enabled", "ai_disclosure", "strict_minor_gate",
   "subscriptions_enabled", "smart_paywall_enabled", "paywall_as_voice", "voice_speaker_boost",
   // Migration 069 — pre-lock prime + post-lock resume toggles.
   "paywall_prime_enabled", "paywall_prime_as_voice", "paywall_resume_enabled", "paywall_resume_free",

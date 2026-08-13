@@ -40,7 +40,7 @@ export const ALLOWLIST: Record<string, string[]> = {
     "photos_enabled", "videos_enabled", "bundles_enabled", "voice_enabled",
     "video_vision_enabled", "tips_enabled", "charge_messages",
     "live_captions_enabled", "reactions_enabled", "read_receipts_enabled",
-    "message_effects_enabled", "ai_disclosure", "emojis_enabled", "emoji_amount",
+    "message_effects_enabled", "ai_disclosure", "strict_minor_gate", "emojis_enabled", "emoji_amount",
     "sexual_level", "nsfw_level", "push_level",
     "text_model", "voice_model", "media_model", "routing_model",
     "voice_enhance_model", "photo_reply_model", "vision_model", "voice_id",

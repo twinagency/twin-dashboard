@@ -20,6 +20,9 @@ export const CLONE_TOGGLE_FIELDS = [
   "read_receipts_enabled",
   "message_effects_enabled",
   "ai_disclosure",
+  // Migration 116. The strict minor gate: a fan stating he is under 18 or at
+  // high school is blocked instantly, in any context.
+  "strict_minor_gate",
   "emojis_enabled",
   "discounts_enabled",
   // subscriptions_enabled deliberately NOT listed: VIP/recurring Star

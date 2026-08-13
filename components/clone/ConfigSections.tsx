@@ -1378,6 +1378,27 @@ export default function ConfigSections({
           />
         </Collapse>
 
+        {/* Migration 116, operator rule 2026-08-13. Its own card rather than a
+            row inside another one: this is the only SAFETY control on the page,
+            and it must not read as one more behaviour dial. The minor gate
+            itself is hardcoded and is not switchable from here — this changes
+            only how easily it TRIPS. */}
+        <Section
+          icon="🛡"
+          accent="purple"
+          title="Underage safety"
+          hint="What counts as a fan telling you he is under 18. The block itself is always on and cannot be turned off here. A blocked fan gets one fixed line and nothing ever again: no replies, no media, no voice, no reactions, and no campaign or follow-up messages. He shows as flagged on the Users page, where you can clear it if it was wrong."
+        >
+          <ToggleCard
+            emoji="🚸"
+            label={cfg.strictMinorGate ? "Strict: any mention of being under 18 blocks him" : "Standard: the AI judges it in context"}
+            title="ON (default): a fan stating he is under 18, or that he is in high school / middle school / grades 6-12, is blocked instantly and permanently in ANY context, decided in code with no AI involved, and flagged on the Users page. OFF: the pre-2026-08-13 behaviour, where the safety AI decides and only counts a stated age under 18 in a sexual or romantic context. Either way an unambiguous breach still blocks."
+            name="strict_minor_gate"
+            checked={cfg.strictMinorGate}
+            onChange={(v) => set("strictMinorGate", v)}
+          />
+        </Section>
+
         {/* Migration 097. The combined realism-effects switch plus the 3
             router keyword lists share a card because both are "how she reads
             and reacts mechanically", not money and not pacing. Approved

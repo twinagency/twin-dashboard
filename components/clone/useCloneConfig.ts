@@ -140,6 +140,8 @@ export type CloneConfigState = {
   readReceipts: boolean;
   messageEffects: boolean;
   aiDisclosure: boolean;
+  /** migration 116: a self-stated minor is an instant block, in any context */
+  strictMinorGate: boolean;
 
   // Imperfection profile, as an intensity (migration 042). Controlled the
   // same way the other Level dials (sexual/nsfw/push/emoji) are, so the
@@ -316,6 +318,9 @@ function initial(clone?: Partial<Clone>): CloneConfigState {
     readReceipts: clone?.read_receipts_enabled ?? true,
     messageEffects: clone?.message_effects_enabled ?? true,
     aiDisclosure: clone?.ai_disclosure ?? false,
+    // Defaults TRUE, matching the column and the bot's mapper: a safety brake
+    // must read as ARMED on a row written before the migration landed.
+    strictMinorGate: clone?.strict_minor_gate ?? true,
 
     // Imperfection profile levels (migration 042). A clone saved before this
     // shipped has no level column yet, only the old boolean — start the UI at

@@ -62,6 +62,7 @@ export type Clone = {
   read_receipts_enabled: boolean;
   message_effects_enabled: boolean;
   ai_disclosure: boolean;
+  strict_minor_gate: boolean;
   // The auto_block_* fields (migrations 047/061) were removed on 2026-07-27.
   // The AI never blocks a fan, it only flags for operator review, so nothing
   // reads or writes them. The columns remain in the DB, deliberately unread.
