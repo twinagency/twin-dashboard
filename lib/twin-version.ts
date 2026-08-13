@@ -18,11 +18,17 @@ import { supabaseAdmin } from "@/lib/supabase";
 // '0.9.0' as text, and showing the wrong number is the single thing this
 // module exists to prevent.
 
+/** One line of release notes (migration 118). `kind` splits the popup into
+ *  what is new and what is fixed; `detail` is the small line under the
+ *  headline. Nothing in here mentions a batch or a commit. */
+export type TwinChange = { kind: "feature" | "fix"; title: string; detail: string };
+
 export type TwinVersion = {
   version: string;
   name: string;
   summary: string;
   body: string;
+  changes: TwinChange[];
   releasedAt: string;
 };
 
@@ -30,7 +36,7 @@ export async function getTwinVersion(): Promise<TwinVersion | null> {
   try {
     const { data } = await supabaseAdmin
       .from("twin_versions")
-      .select("version,name,summary,body,released_at")
+      .select("version,name,summary,body,changes,released_at")
       .order("major", { ascending: false })
       .order("minor", { ascending: false })
       .order("patch", { ascending: false })
@@ -42,6 +48,9 @@ export async function getTwinVersion(): Promise<TwinVersion | null> {
       name: data.name ?? "",
       summary: data.summary ?? "",
       body: data.body ?? "",
+      // Defensive: an older row has '[]', and anything unexpected renders as a
+      // plain paragraph rather than throwing inside the app shell.
+      changes: Array.isArray(data.changes) ? (data.changes as TwinChange[]) : [],
       releasedAt: data.released_at,
     };
   } catch {

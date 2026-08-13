@@ -101,23 +101,30 @@ export function ageLabel(iso: string): string {
   return `${d}d`;
 }
 
-// Severity first (money leaks jump the queue), then oldest first. Age is the
-// tiebreak rather than newest-first on purpose: the point of the open list is
-// to surface what has been rotting, not what was typed most recently.
+// NEWEST FIRST, FULL STOP. Date is the sort; severity is a badge on the row.
+//
+// It has been through both other orderings today and both failed the same way.
+// Oldest-first put seven items filed by hand hundreds of rows down. Severity
+// bands with newest-first inside them looked fixed and was not: 211 of the 457
+// open items are tagged MONEY, so today's two money items showed at the top and
+// the other five sat under all 211 of them. The operator's read of the page was
+// "only 2 of Jesse's got filed", which is the exact failure the board exists to
+// prevent, twice in one day.
+//
+// The queue-jumping severity was meant to give is not lost: MONEY and high
+// render as coloured chips on every row and the counts are in the header, so
+// what leaks money is still obvious. What a chronological list adds is the
+// thing a triage order cannot: "I reported that this morning" and "it is at the
+// top" are the same statement.
 const SEVERITY_RANK: Record<Severity, number> = { money: 0, high: 1, normal: 2, low: 3 };
 
 export function sortOpen(items: TrackerItem[]): TrackerItem[] {
   return [...items].sort((a, b) => {
-    const s = SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity];
-    if (s !== 0) return s;
-    // NEWEST FIRST inside a severity band (changed 2026-08-13). It used to be
-    // oldest first, on the reasoning that the longest-waiting item deserves the
-    // top. With 457 open items that is unusable: seven items filed by hand
-    // landed at the BOTTOM of their bands, several hundred rows down, and the
-    // operator's reasonable conclusion from looking at the page was that they
-    // had never been filed at all. A board you cannot find today's report on is
-    // not a board. Severity still wins, so MONEY is still above everything.
-    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    const t = new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    if (t !== 0) return t;
+    // Same instant (a bot files a whole run in one go): severity decides, so a
+    // money find still leads its own batch of arrivals.
+    return SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity];
   });
 }
 

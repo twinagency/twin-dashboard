@@ -432,7 +432,11 @@ function BatchBlock({ batch, batches, defaultOpen }: { batch: TrackerBatch; batc
 }
 
 // ── the whole board ──────────────────────────────────────────────────────────
+// How many open items show before the "show more" button.
+const OPEN_PAGE = 10;
+
 export function TrackerBoard({ board, bots, log }: { board: Board; bots: BotRow[]; log: LogRow[] }) {
+  const [showAllOpen, setShowAllOpen] = useState(false);
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [reporting, setReporting] = useState(false);
   const [filter, setFilter] = useState<string>("all");
@@ -591,7 +595,12 @@ export function TrackerBoard({ board, bots, log }: { board: Board; bots: BotRow[
           </form>
         )}
 
-        {open.map((i) => (
+        {/* TEN, THEN A BUTTON (operator ask, 2026-08-13: "open should also
+            collapse after 10"). 457 rows in one scroll is not a list anyone
+            reads, and the newest ten are the ones being asked about. The count
+            in the heading above still shows the real total, so collapsing can
+            never read as "the rest are gone". */}
+        {open.slice(0, showAllOpen ? open.length : OPEN_PAGE).map((i) => (
           <ItemRow
             key={i.id}
             item={i}
@@ -603,6 +612,14 @@ export function TrackerBoard({ board, bots, log }: { board: Board; bots: BotRow[
             onSelect={toggle}
           />
         ))}
+        {open.length > OPEN_PAGE && (
+          <button
+            onClick={() => setShowAllOpen((v) => !v)}
+            className="w-full rounded-xl border border-dashed border-black/12 px-4 py-2.5 text-sm font-semibold text-neutral-600 hover:border-black/25 hover:text-neutral-900"
+          >
+            {showAllOpen ? "show less" : `show more (${open.length - OPEN_PAGE} more)`}
+          </button>
+        )}
         {!open.length && <p className="rounded-xl border border-dashed border-black/10 px-4 py-8 text-center text-sm text-neutral-400">nothing open here</p>}
       </section>
 

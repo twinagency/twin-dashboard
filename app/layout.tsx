@@ -165,6 +165,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             version={twinVersion?.version ?? null}
             name={twinVersion?.name ?? ""}
             summary={twinVersion?.summary ?? ""}
+            changes={twinVersion?.changes ?? []}
           />
         </BlurProvider>
         </CurrencyProvider>
