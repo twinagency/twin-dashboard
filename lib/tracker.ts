@@ -110,7 +110,14 @@ export function sortOpen(items: TrackerItem[]): TrackerItem[] {
   return [...items].sort((a, b) => {
     const s = SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity];
     if (s !== 0) return s;
-    return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    // NEWEST FIRST inside a severity band (changed 2026-08-13). It used to be
+    // oldest first, on the reasoning that the longest-waiting item deserves the
+    // top. With 457 open items that is unusable: seven items filed by hand
+    // landed at the BOTTOM of their bands, several hundred rows down, and the
+    // operator's reasonable conclusion from looking at the page was that they
+    // had never been filed at all. A board you cannot find today's report on is
+    // not a board. Severity still wins, so MONEY is still above everything.
+    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
   });
 }
 

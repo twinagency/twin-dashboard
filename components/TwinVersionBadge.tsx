@@ -23,10 +23,14 @@
 // written silently, and the popup waits for a real CHANGE of version.
 
 import { useEffect, useState } from "react";
+import { openTwinUpdate, onOpenTwinUpdate } from "@/lib/twin-update-bus";
 
 const SEEN_KEY = "twin.version.seen";
 
-/** The chip. Plain, stateless, safe to render anywhere in the shell. */
+/** The chip. Clicking it reopens the release notes (operator ask, 2026-08-13:
+ *  "I wanna be able to click that and it opens the pop up as well"). Stateless
+ *  itself: it fires an event and the popup below owns the state, so there is
+ *  exactly one popup no matter how many places render a chip. */
 export function TwinVersionChip({
   version,
   name,
@@ -38,14 +42,17 @@ export function TwinVersionChip({
 }) {
   if (!version) return null;
   return (
-    <span
-      className="inline-flex items-center gap-1.5 rounded-full border border-white/15 px-2.5 py-1 text-[11px] font-medium text-white/55"
-      title={summary || `Twin v${version}`}
+    <button
+      type="button"
+      onClick={openTwinUpdate}
+      className="inline-flex items-center gap-1.5 rounded-full border border-white/15 px-2.5 py-1 text-[11px] font-medium text-white/55 transition hover:border-white/30 hover:text-white/80"
+      title={summary ? `${summary}\n\nClick to read again` : `Twin v${version}`}
+      aria-label={`Twin version ${version}, open release notes`}
     >
       <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
       Twin v{version}
       {name ? <span className="text-white/40">{name}</span> : null}
-    </span>
+    </button>
   );
 }
 
@@ -71,9 +78,13 @@ export default function TwinUpdatePopup({
       }
       if (seen !== version) setShow(true);
     } catch {
-      // Private mode / storage disabled: no popup. The chip still renders.
+      // Private mode / storage disabled: no auto popup. The chip still opens it.
     }
   }, [version]);
+
+  // Opened by hand from the chip. Deliberately NOT gated on the seen mark: the
+  // whole point is being able to read the notes again after dismissing them.
+  useEffect(() => onOpenTwinUpdate(() => setShow(true)), []);
 
   function dismiss() {
     setShow(false);

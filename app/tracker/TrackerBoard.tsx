@@ -123,7 +123,13 @@ function ItemRow({
           {item.severity === "high" && <Chip className="bg-orange-100 text-orange-700">high</Chip>}
           <Chip className={KIND_COLOR[item.kind] ?? "bg-neutral-200 text-neutral-700"}>{item.kind}</Chip>
           {item.attachments.length > 0 && <span className="text-xs text-neutral-400">{item.attachments.length} img</span>}
-          <span className="w-14 shrink-0 text-right text-xs text-neutral-400">{ageLabel(item.createdAt)}</span>
+          {/* The DATE it was reported, not "3d" (changed 2026-08-13, operator:
+              "anything submitted should go from top to bottom and the date when
+              the issue was submitted"). An age label answers "how stale" and
+              the operator is asking "did my report land", which is a date. */}
+          <span className="w-16 shrink-0 text-right text-xs tabular-nums text-neutral-400">
+            {new Date(item.createdAt).toLocaleDateString(undefined, { day: "numeric", month: "short" })}
+          </span>
         </button>
       </div>
 
