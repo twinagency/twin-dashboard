@@ -41,10 +41,17 @@ function when(ts: string): string {
   return d.toLocaleDateString();
 }
 
+// TEN, THEN A BUTTON. Same rule as the OPEN list in TrackerBoard.tsx
+// (operator ask, 2026-08-13): a page of hundreds of log lines is not
+// something anyone reads, and the newest ten are what's being asked about.
+const LOG_PAGE = 10;
+
 export function BotLog({ rows }: { rows: LogRow[] }) {
   const [only, setOnly] = useState<string>("all");
+  const [showAll, setShowAll] = useState(false);
   const bots = [...new Set(rows.map((r) => r.bot))];
-  const shown = only === "all" ? rows : rows.filter((r) => r.bot === only);
+  const filtered = only === "all" ? rows : rows.filter((r) => r.bot === only);
+  const shown = showAll ? filtered : filtered.slice(0, LOG_PAGE);
 
   return (
     <section className="space-y-3">
@@ -123,6 +130,14 @@ export function BotLog({ rows }: { rows: LogRow[] }) {
           </p>
         )}
       </div>
+      {filtered.length > LOG_PAGE && (
+        <button
+          onClick={() => setShowAll((v) => !v)}
+          className="w-full rounded-xl border border-dashed border-black/12 px-4 py-2.5 text-sm font-semibold text-neutral-600 hover:border-black/25 hover:text-neutral-900"
+        >
+          {showAll ? "show less" : `show more (${filtered.length - LOG_PAGE} more)`}
+        </button>
+      )}
     </section>
   );
 }

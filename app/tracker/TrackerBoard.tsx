@@ -447,6 +447,7 @@ export function TrackerBoard({ board, bots, log }: { board: Board; bots: BotRow[
   const [pending, start] = useTransition();
 
   const archive = board.batches.filter((b) => b.status === "live");
+  const [showDropped, setShowDropped] = useState(false);
   const inFlight = board.batches.filter((b) => b.status !== "live");
   const batchNumber = new Map(board.batches.map((b) => [b.id, b.number]));
   const open = filter === "all" ? board.open : board.open.filter((i) => i.kind === filter);
@@ -551,6 +552,41 @@ export function TrackerBoard({ board, bots, log }: { board: Board; bots: BotRow[
           {archive.map((b) => (
             <BatchBlock key={b.id} batch={b} batches={board.batches} defaultOpen={false} />
           ))}
+        </section>
+      )}
+
+      {/* WON'T FIX / CLOSED WITHOUT A FIX. board.dropped already existed in
+          lib/tracker.ts, computed and unused: exactly this project's own
+          signature defect, this time inside the board built to catch it.
+          Collapsed by default, same as ARCHIVE. */}
+      {board.dropped.length > 0 && (
+        <section className="space-y-2">
+          <button
+            onClick={() => setShowDropped((v) => !v)}
+            className="flex w-full items-center gap-2 text-left"
+          >
+            <h2 className="text-[11px] font-semibold uppercase tracking-wider text-neutral-400">
+              Won't fix / closed, no fix ({board.dropped.length})
+            </h2>
+            <span className="text-[11px] text-neutral-400">{showDropped ? "hide" : "show"}</span>
+          </button>
+          {showDropped && (
+            <div className="overflow-hidden rounded-2xl border border-black/8 bg-white">
+              {board.dropped.map((i, idx) => (
+                <div key={i.id} className={`px-4 py-2.5 text-sm ${idx > 0 ? "border-t border-black/5" : ""}`}>
+                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
+                    <span className="text-neutral-400">#{i.number}</span>
+                    <span className="text-neutral-700">{i.title}</span>
+                    <Chip className={KIND_COLOR[i.kind] ?? "bg-neutral-100 text-neutral-600"}>{i.kind}</Chip>
+                    <span className="ml-auto text-xs text-neutral-400">{i.status}{i.closedAt ? `, ${ageLabel(i.closedAt)}` : ""}</span>
+                  </div>
+                  {i.notes.length > 0 && (
+                    <p className="mt-1 text-xs text-neutral-500">{i.notes[i.notes.length - 1].body}</p>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
         </section>
       )}
 

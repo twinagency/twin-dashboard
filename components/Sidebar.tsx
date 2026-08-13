@@ -97,6 +97,7 @@ const LINK_COLOR_CLASSES: Record<LinkColor, { icon: string; active: string; idle
 // language, rather than a main block plus a separate footer block.
 const NAV_LINKS: NavLink[] = [
   { kind: "route", label: "Earnings", href: "/revenue", icon: "EarningsCombo", color: "good" },
+  { kind: "route", label: "Spend", href: "/spend", icon: "Dollar", color: "orange" },
   { kind: "route", label: "Fans", href: "/users", icon: "FansCombo", color: "purple" },
   { kind: "route", label: "AI", href: "/jarvis", icon: "Sparkle", color: "blue" },
   { kind: "route", label: "Flows", href: "/flows", icon: "Flows", color: "pink", gateOnClone: true },
