@@ -355,12 +355,16 @@ function BatchBlock({ batch, batches, defaultOpen }: { batch: TrackerBatch; batc
     <div className="rounded-xl border border-black/8 bg-white">
       <button onClick={() => setOpen((v) => !v)} className="flex w-full items-center gap-3 px-4 py-3 text-left">
         <span className="text-neutral-400">{open ? "▾" : "▸"}</span>
-        <span className="font-semibold text-neutral-900">{label}</span>
-        <span className="text-sm text-neutral-500">
+        {/* Operator, 2026-08-13: the batch number and its description are the
+            two things he actually reads on a collapsed row, so the number is
+            green and the title sits straight after it rather than behind the
+            counts. */}
+        <span className="font-semibold text-emerald-700">{label}:</span>
+        {batch.title && <span className="truncate font-medium text-neutral-800">{batch.title}</span>}
+        <span className="whitespace-nowrap text-sm text-neutral-500">
           {batch.items.length} item{batch.items.length === 1 ? "" : "s"}
         </span>
-        <span className="text-sm text-neutral-400">{new Date(date).toLocaleDateString()}</span>
-        {batch.title && <span className="truncate text-sm text-neutral-500">{batch.title}</span>}
+        <span className="whitespace-nowrap text-sm text-neutral-400">{new Date(date).toLocaleDateString()}</span>
         <span className="ml-auto">
           {batch.status === "live" ? (
             <Chip className="bg-emerald-100 text-emerald-700">LIVE</Chip>
