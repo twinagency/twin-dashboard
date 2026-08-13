@@ -1,7 +1,6 @@
 import { Card } from "@/components/ui/card";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Info } from "@/components/clone/fields";
-import { getCloneScope } from "@/lib/clone-scope";
 import {
   FLOW_GROUP_LABEL,
   SPEND_WINDOWS,
@@ -10,19 +9,18 @@ import {
   fmtTokens,
   fmtUsd,
   getSpendData,
-  isSpendWindow,
   type FlowGroup,
   type SpendWindow,
 } from "@/lib/spend-data";
 
-export const dynamic = "force-dynamic";
-
-// ── /spend: where the AI money actually goes ─────────────────────────────────
-// READ ONLY. Every number comes from lib/spend-data.ts (paged read of
-// usage_events + a HEAD count of chat_history); nothing on this page writes.
+// ── Spend: where the AI money actually goes ──────────────────────────────────
+// Lives INSIDE /logs as the "Spend" tab (operator ask, 2026-08-14: not its own
+// nav item - a sub-section of Logs, one click deeper). READ ONLY. Every number
+// comes from lib/spend-data.ts (paged read of usage_events + a HEAD count of
+// chat_history); nothing here writes.
 //
-// Scoped by the global clone switcher like every other data page. When a clone
-// is picked, every table here is that one girl; "All clones" is the fleet.
+// Scoped by the SAME clone as the rest of /logs (the header switcher, or a
+// ?clone= override from a per-fan link) - passed in as a prop, not read here.
 
 const GROUP_ORDER: FlowGroup[] = ["live", "background", "overhead", "unattributed"];
 
@@ -44,7 +42,7 @@ const GROUP_TONE: Record<FlowGroup, string> = {
 };
 
 function windowHref(w: SpendWindow): string {
-  return w === "7d" ? "/spend" : `/spend?w=${w}`;
+  return w === "7d" ? "/logs?view=spend" : `/logs?view=spend&w=${w}`;
 }
 
 function Pills({ active }: { active: SpendWindow }) {
@@ -108,14 +106,7 @@ function GroupBadge({ group }: { group: FlowGroup }) {
   );
 }
 
-export default async function SpendPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ w?: string }>;
-}) {
-  const sp = await searchParams;
-  const win: SpendWindow = isSpendWindow(sp.w) ? sp.w : "7d";
-  const cloneId = await getCloneScope();
+export async function SpendView({ window: win, cloneId }: { window: SpendWindow; cloneId: string | null }) {
   const data = await getSpendData(win, cloneId);
 
   const { totals, cache } = data;

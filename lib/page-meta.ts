@@ -12,7 +12,6 @@ type CloneLite = { id: string; name: string };
 // rather than crashing or showing a raw path segment.
 const PAGE_LABELS: Record<string, string> = {
   "/revenue": "Earnings",
-  "/spend": "Spend",
   "/users": "Fans",
   "/flows": "Flows",
   "/jarvis": "AI",

@@ -5,11 +5,65 @@ import { AutoRefresh } from "./AutoRefresh";
 import { LogFilters } from "./LogFilters";
 import { LogsTable, type LogRow } from "./LogsTable";
 import { CLAIMED_SOURCES, KIND_LABEL, SYSTEM_SOURCE_BUCKETS, techForSystemSource, techForUsageKind, type Tech } from "./tech";
+import { SpendView } from "./SpendView";
+import { isSpendWindow } from "@/lib/spend-data";
 
 export const dynamic = "force-dynamic";
 
 // Unified stream: newest 500 across both tables after merge.
 const CAP = 500;
+
+// Fan/clone-scope params carry over between tabs so switching to Spend while
+// looking at one fan's logs does not silently snap back to the whole fleet.
+type FanParams = { clone?: string; fan?: string; fanUser?: string; fanLabel?: string };
+
+function buildSpendHref(sp: FanParams): string {
+  const p = new URLSearchParams();
+  p.set("view", "spend");
+  if (sp.clone) p.set("clone", sp.clone);
+  return `/logs?${p.toString()}`;
+}
+
+function buildActivityHref(sp: FanParams): string {
+  const p = new URLSearchParams();
+  if (sp.clone) p.set("clone", sp.clone);
+  if (sp.fan) p.set("fan", sp.fan);
+  if (sp.fanUser) p.set("fanUser", sp.fanUser);
+  if (sp.fanLabel) p.set("fanLabel", sp.fanLabel);
+  const qs = p.toString();
+  return qs ? `/logs?${qs}` : "/logs";
+}
+
+function Tabs({
+  active,
+  spendHref,
+  activityHref,
+}: {
+  active: "activity" | "spend";
+} & ({ spendHref: string; activityHref?: undefined } | { activityHref: string; spendHref?: undefined })) {
+  return (
+    <div className="mb-3 flex items-center gap-1 rounded-full bg-elev p-1 w-fit">
+      <a
+        href={active === "activity" ? "#" : activityHref!}
+        className={
+          "rounded-full px-3.5 py-1.5 text-xs font-medium transition " +
+          (active === "activity" ? "bg-white text-ink shadow-sm" : "text-muted hover:text-ink")
+        }
+      >
+        Activity
+      </a>
+      <a
+        href={active === "spend" ? "#" : spendHref!}
+        className={
+          "rounded-full px-3.5 py-1.5 text-xs font-medium transition " +
+          (active === "spend" ? "bg-white text-ink shadow-sm" : "text-muted hover:text-ink")
+        }
+      >
+        Spend
+      </a>
+    </div>
+  );
+}
 
 type SystemDbRow = {
   id: number;
@@ -132,6 +186,10 @@ export default async function LogsPage({
     fan?: string;
     fanUser?: string;
     fanLabel?: string;
+    // The Spend tab. A sub-section of this page, not its own route (operator
+    // ask, 2026-08-14) - so it rides the same searchParams as everything else.
+    view?: string;
+    w?: string;
   }>;
 }) {
   const sp = await searchParams;
@@ -143,6 +201,20 @@ export default async function LogsPage({
   const fanTelegramId = sp.fan?.trim() ? Number(sp.fan.trim()) : null;
   const fanUserId = sp.fanUser?.trim() || null;
   const fanLabel = sp.fanLabel?.trim() || (fanTelegramId != null ? String(fanTelegramId) : null);
+  const view = sp.view === "spend" ? "spend" : "activity";
+  const spendWindow = isSpendWindow(sp.w) ? sp.w : "7d";
+
+  // The Spend tab reads usage_events itself (lib/spend-data.ts, paged, whole
+  // window) - the activity fetch below is skipped entirely rather than run
+  // and thrown away.
+  if (view === "spend") {
+    return (
+      <div className="dashboard-page text-ink">
+        <Tabs active="spend" activityHref={buildActivityHref(sp)} />
+        <SpendView window={spendWindow} cloneId={cloneId} />
+      </div>
+    );
+  }
 
   // usage_events only feeds the ElevenLabs and LLM buckets, and has no warn level.
   const wantUsage = (tech === "all" || tech === "elevenlabs" || tech === "llm") && level !== "warn";
@@ -175,6 +247,7 @@ export default async function LogsPage({
   return (
     <div className="dashboard-page text-ink">
       <AutoRefresh />
+      <Tabs active="activity" spendHref={buildSpendHref(sp)} />
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-line bg-white/90 p-3 shadow-[var(--shadow-card)] backdrop-blur-xl">
         <LogFilters tech={tech} level={level} q={q} clone={sp.clone} fan={sp.fan} fanUser={sp.fanUser} fanLabel={sp.fanLabel} />
         <span className="shrink-0 rounded-full bg-elev px-2.5 py-1 text-[11px] font-medium text-muted">Refreshes every 30s</span>
