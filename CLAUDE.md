@@ -7,7 +7,7 @@ Run locally: `npm run dev`. The `dev` script hardcodes `-p 3001`; pass `-- -p 30
 ## Non-negotiable rules
 
 1. **Supabase target.** Only ever `aouaenqayfltoqrmpitg` ("Allie AI New"). NEVER `cnnsllgzskqkvdovyiiv`, that is old prod with live paying users.
-2. **Supabase writes are allowed on `aouaenqayfltoqrmpitg` only** (owner decision, 2026-07-27: this stack is pre-cutover, real paying users are still on the old n8n system, so this project is a test database). Migrations still ship as numbered `.sql` files in `../bot/db/migrations/` so the change stays reproducible and reviewable, but they may also be applied directly. Two conditions stand: never write to `cnnsllgzskqkvdovyiiv`, and always snapshot `../bot/db/manual/ROLLBACK_*.sql` before editing a fleet-wide `prompt_templates` row, since a bad template reaches every clone within 60s. **This does NOT relax rule 3**, which governs what the AI assistant may do and is a separate, stricter boundary.
+2. **Supabase writes are allowed on `aouaenqayfltoqrmpitg` only** (owner decision, 2026-07-27). That decision predates the cutover, which **finished 2026-08-09/10**: all ten clones now run on Twin against this project and the n8n servers are deleted, so treat it as live, not as a scratch database. Migrations still ship as numbered `.sql` files in `../bot/db/migrations/` so the change stays reproducible and reviewable, but they may also be applied directly. Two conditions stand: never write to `cnnsllgzskqkvdovyiiv`, and always snapshot `../bot/db/manual/ROLLBACK_*.sql` before editing a fleet-wide `prompt_templates` row, since a bad template reaches every clone within 60s. **This does NOT relax rule 3**, which governs what the AI assistant may do and is a separate, stricter boundary.
 3. **The `/ai` assistant reads via an allowlist and writes ONLY through existing validated server actions.** Reads go through the Supabase JS query builder against an explicit table and column allowlist in `app/api/ai-assistant/tools.ts`, never raw SQL. Regex-filtered "read only" raw SQL is bypassable and is not acceptable here. Hard capped at 200 rows per query. `bot_token` and `app_settings.value` (holds OpenRouter, ElevenLabs, Deepgram keys) are excluded from the allowlist entirely. Writes (added 2026-07-27) are thin wrappers over server actions that already exist and are already validated, against the hardcoded allowlist in `app/clones/toggle-fields.ts`; never a generic "update any column" tool, never raw SQL, and never a money VALUE (only the on/off switches). Every assistant write is surfaced in the chat and logged to `system_logs`. Follow this exact pattern for any future AI plus data feature.
 4. **A clone is a database row.** No per-clone code paths.
 
@@ -46,7 +46,7 @@ Anything a fan can ask a factual question about must be a typed column, never in
 
 Read-only internal API over the same data the dashboard renders: clone config, persona/intake blobs, prompt templates, verbatim fan chats, `system_logs`, revenue. Built for sim testing and for AI assistants that read data. Phase 2 of `../scope/SCOPE-TWIN-API.txt`; there is no public/tenant API and no write API, and **this one must not be exposed to an agency** because no tenant model exists in this database.
 
-Four rules, all asserted by `npm run test:api` (36 checks):
+Four rules, all asserted by `npm run test:api`:
 
 1. **A route is authenticated by calling `withAdmin`, not by living under a path.** `middleware.ts` returns early (no auth at all) whenever `NODE_ENV !== "production"` or `DASHBOARD_NO_AUTH` is set, and its matcher covers `/api/*`. Nothing in `lib/api-auth.ts` may read either variable.
 2. **Two independent gates**: a bearer key (`TWIN_ADMIN_API_KEY`, min 32 chars) and the caller's network (loopback or Tailscale `100.64.0.0/10`). An unset key returns 503, never "skip the check". The network gate takes the **rightmost** `X-Forwarded-For` entry, the one Apache appended; the leftmost is client-controlled. This assumes exactly one trusted proxy.
@@ -73,6 +73,6 @@ Synthetic revenue and fans, deterministic by `?seed=`, in exactly the shape of t
 
 `npx tsc --noEmit` for typecheck. Run it once when done, not after every file edit.
 
-`npm test` runs both suites (`test:api`, 43 checks; `test:public`, 30). Unlike a typecheck these have caught real bugs. Every guard was proven by planting the bug back; the record is in `../TWIN-API.txt`.
+`npm test` runs five suites: `test:api`, `test:public`, `test:paging`, `test:callsites`, `test:media`. Unlike a typecheck these have caught real bugs. Do not quote a check count from this file; run the command. Every guard was proven by planting the bug back; the record is in `../TWIN-API.txt`.
 
 `npm run test:api` for the admin API. Unlike a typecheck this one has caught real bugs: each of its guards was proven by planting the bug back and watching it go red (record in `../TWIN-API.txt`). Anything added to `app/api/admin/v1/` ships a check here.
