@@ -187,6 +187,9 @@ export type CloneConfigState = {
   // Migration 093 (clones.silence_fallback_mode). Whether she sends the
   // "brain went blank" recovery line when the model gives up, or says nothing.
   silenceFallbackMode: "on" | "off";
+  // Migration 105 (clones.variety_guard). How hard she is stopped from reusing
+  // the same openers, sign-offs and lines with the same fan.
+  varietyGuard: "off" | "normal" | "strict";
   onboardingCollect: string[];
 
   // Migration 097 advanced dials. bubbleDelayMin/Max and llmMaxTries are
@@ -361,6 +364,10 @@ function initial(clone?: Partial<Clone>): CloneConfigState {
     // same one migration 093 wrote as the column default, so the control can
     // never show a state the bot is not actually running.
     silenceFallbackMode: clone?.silence_fallback_mode ?? "on",
+    // Same fallback normalizeVarietyGuard() uses (bot/src/services/variety.ts)
+    // and the same one migration 105 wrote as the column default, so the control
+    // can never show a level the bot is not actually running.
+    varietyGuard: clone?.variety_guard ?? "normal",
     onboardingCollect: Array.isArray(clone?.onboarding_collect_fields) ? clone!.onboarding_collect_fields! : [],
 
     // Migration 097 advanced dials. Defaults mirror the hardcoded constants

@@ -266,6 +266,14 @@ export type Clone = {
    *  which is money, not silence recovery). Meaningless while
    *  silence_fallback_mode is "off". Default 300. */
   silence_fallback_cooldown_seconds?: number | null;
+  /** Migration 105. How hard she is stopped from reusing the same openers,
+   *  sign-offs and whole lines with the same fan. Read by
+   *  normalizeVarietyGuard() in bot/src/services/variety.ts, which picks the
+   *  tuning thresholds used on the reply path (bot/src/flows/text.ts) and on
+   *  every composed proactive send (bot/src/persona-message.ts). Default
+   *  'normal': unlike most dials here the OFF state is the old buggy
+   *  behaviour, so an absent value must read as 'normal', never 'off'. */
+  variety_guard?: "off" | "normal" | "strict";
   /** Migration 097. How long the first of several split "typing" bubbles waits
    *  before sending (bot/src/flows/human.ts, was a hardcoded range). Must stay
    *  <= bubble_delay_max_ms. Defaults 600/1400. */

@@ -166,6 +166,13 @@ const SEG = {
     { value: "on" as const, label: "💬 Send a recovery line", title: "Default. If the model fails or refuses three times in a row, she sends one short line (\"ugh my brain just went completely blank there babe\") so he is not left on read. The wording is the same for every clone and is not editable here." },
     { value: "off" as const, label: "🔇 Say nothing", title: "She sends NOTHING when the model gives up, so he is simply left on read. That is the exact ghosting the recovery line was written to prevent, which is why On is the default. Pick this only if you would rather she said nothing at all than said something that does not fit her. Worth knowing: this does not only fire during an outage, a refusal from the model counts as a failed try too, so it can fire on a message that was merely too explicit." },
   ],
+  // Migration 105 (clones.variety_guard). Keep Normal first: it is the default
+  // and the fix, and Off is the legacy behaviour that produced the tic.
+  varietyGuard: [
+    { value: "normal" as const, label: "🔁 Normal", title: "Default. She is stopped from opening or signing off with the same phrase over and over to the same fan, from using his name every single turn, and from resending a line he has already had. A phrase gets caught once it shows up three times across her recent messages to him." },
+    { value: "strict" as const, label: "🔒 Strict", title: "The same checks, tighter. A repeated phrase is caught on the second use rather than the third, she looks back over more of her recent messages, and a line only has to be roughly similar to count as a repeat. Use this on a clone that still tics on Normal." },
+    { value: "off" as const, label: "🚫 Off", title: "No checking at all. This is how the bot behaved before the guard existed, and it is what let one clone open 14 replies in a row with 'mmm ...' and another close nearly every message the same way. Only pick this if the guard is chopping lines it should be leaving alone." },
+  ],
   // Migration 084 (clones.fan_time_mode). Keep never_assume first: it is the
   // default and the fix, and assume_same is the legacy behaviour.
   fanTime: [
@@ -1002,6 +1009,35 @@ export default function ConfigSections({
                 <Warning text={silenceGhostConflict.text} detail={silenceGhostConflict.detail} />
               )
             }
+          />
+        </Section>
+
+        {/* Migration 105 (clones.variety_guard), read at
+            bot/src/services/variety.ts by normalizeVarietyGuard() to pick the
+            tuning thresholds used on the reply path (flows/text.ts) and on every
+            composed proactive send (persona-message.ts). Rendered
+            UNCONDITIONALLY and outside the smart-mode card for the same reason
+            the two dials above it are: a control that is not rendered posts
+            nothing, and oneOf(...) in actions.ts would then rewrite the level on
+            every save made from a tab that did not draw it. Note the default is
+            NOT "today's unchanged behaviour" here, "off" is: the guard shipped
+            armed on every clone because the pre-105 behaviour was the bug. */}
+        <Section
+          icon="🔁"
+          accent="purple"
+          title="Repeating herself"
+          hint="How hard she is stopped from reusing the same openers, sign-offs and lines with the same fan."
+          tip="This is enforced in code on the way out, not by a prompt rule. The tics it exists to catch were invented by the model out of its own previous replies, so asking her nicely in the prompt does not reach them."
+          className="xl:col-span-2"
+        >
+          <Segmented
+            label="Variety guard"
+            name="variety_guard"
+            value={cfg.varietyGuard}
+            onChange={(v) => set("varietyGuard", v)}
+            options={SEG.varietyGuard}
+            accent="purple"
+            hint="Leave this on Normal, the default and the fix. It watches her recent messages to each fan and blocks the same opening phrase, the same sign-off, his name every single turn, a near-identical message resent to him, and a stock line going out to two different men close together. Strict catches a phrase on its second use instead of its third and looks back further. Off is the old behaviour that had one clone open 14 replies in a row with the same two words. Hover a step to see exactly what changes."
           />
         </Section>
 

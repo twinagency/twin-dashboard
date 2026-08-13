@@ -127,6 +127,9 @@ const PRICE_GUARD_MODES = ["off", "log", "block"] as const;
 // outright. Read off the live constraint, not off the .sql file:
 //   CHECK (silence_fallback_mode = ANY (ARRAY['on'::text, 'off'::text]))
 const SILENCE_FALLBACK_MODES = ["on", "off"] as const;
+// Migration 105 (clones.variety_guard). Must stay identical to the DB CHECK
+// constraint clones_variety_guard_check, or a save fails outright.
+const VARIETY_GUARD_LEVELS = ["off", "normal", "strict"] as const;
 
 function oneOf<T extends string>(v: string | null, allowed: readonly T[], fallback: T): T {
   return (allowed as readonly string[]).includes(v ?? "") ? (v as T) : fallback;
@@ -530,6 +533,11 @@ function rowFromForm(fd: FormData) {
     // posting it back from this form would overwrite the real handle. The
     // dashboard shows it read-only and never submits it.
     silence_fallback_mode: oneOf(str(fd, "silence_fallback_mode"), SILENCE_FALLBACK_MODES, "on"),
+    // Migration 105. Falls back to 'normal', which is both the column default
+    // and normalizeVarietyGuard()'s fallback in bot/src/services/variety.ts, so
+    // a save can never quietly DISARM the guard: 'off' is the pre-105 behaviour
+    // that produced the "mmm ..." opener tic, so it has to be a deliberate pick.
+    variety_guard: oneOf(str(fd, "variety_guard"), VARIETY_GUARD_LEVELS, "normal"),
     // Migration 097. Same "null is meaningful" reasoning as
     // tip_reask_cooldown_seconds right above it in the UI: null lets the bot's
     // 300s default stand rather than freezing today's constant into the row.
@@ -897,6 +905,13 @@ const STRICT_098_COLUMNS = ["strict_onboarding_steps"] as const;
 // than silently disarming it.
 // See bot/db/migrations/116_strict_minor_gate.sql.
 const SAFETY_116_COLUMNS = ["strict_minor_gate"] as const;
+// Migration 105: the variety guard. Listed so a save against a stack where 105
+// has not run yet strips it and still succeeds. Stripping is the SAFE state,
+// same reasoning as 093's silence fallback: with the column absent
+// normalizeVarietyGuard() in bot/src/services/variety.ts reads it as "normal",
+// so a pre-105 save leaves the guard ARMED rather than silently turning it off.
+// See bot/db/migrations/105_variety_guard.sql.
+const VARIETY_105_COLUMNS = ["variety_guard"] as const;
 
 const ADVANCED_099_COLUMNS = [
   "reaction_ambient_chance_pct",
@@ -942,6 +957,7 @@ const OPTIONAL_COLUMNS = [
   ...ADVANCED_097_COLUMNS,
   ...STRICT_098_COLUMNS,
   ...ADVANCED_099_COLUMNS,
+  ...VARIETY_105_COLUMNS,
   ...SAFETY_116_COLUMNS,
 ] as const;
 
