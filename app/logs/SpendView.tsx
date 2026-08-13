@@ -3,6 +3,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Info } from "@/components/clone/fields";
 import {
   FLOW_GROUP_LABEL,
+  SPEND_PROVIDERS,
   SPEND_WINDOWS,
   fmtCents,
   fmtPct,
@@ -10,6 +11,7 @@ import {
   fmtUsd,
   getSpendData,
   type FlowGroup,
+  type SpendProvider,
   type SpendWindow,
 } from "@/lib/spend-data";
 
@@ -41,23 +43,49 @@ const GROUP_TONE: Record<FlowGroup, string> = {
   unattributed: "text-muted",
 };
 
-function windowHref(w: SpendWindow): string {
-  return w === "today" ? "/logs?view=spend" : `/logs?view=spend&w=${w}`;
+function spendHref(w: SpendWindow, p: SpendProvider): string {
+  const params = new URLSearchParams({ view: "spend" });
+  if (w !== "today") params.set("w", w);
+  if (p !== "all") params.set("src", p);
+  return `/logs?${params.toString()}`;
 }
 
-function Pills({ active }: { active: SpendWindow }) {
+function Pills({ active, provider }: { active: SpendWindow; provider: SpendProvider }) {
   return (
     <div className="flex shrink-0 items-center gap-1 rounded-full bg-elev p-1">
       {SPEND_WINDOWS.map((w) => (
         <a
           key={w.key}
-          href={windowHref(w.key)}
+          href={spendHref(w.key, provider)}
           className={
             "rounded-full px-3 py-1 text-xs font-medium transition " +
             (w.key === active ? "bg-white text-ink shadow-sm" : "text-muted hover:text-ink")
           }
         >
           {w.label}
+        </a>
+      ))}
+    </div>
+  );
+}
+
+// The filter Ronan asked for, 2026-08-14: three different billers (OpenRouter
+// for every LLM call, ElevenLabs for voice, Deepgram for transcription) were
+// rolled into one dollar figure, which made "why is OPENROUTER burning money"
+// unanswerable from the page that exists to answer exactly that.
+function ProviderPills({ active, window: win }: { active: SpendProvider; window: SpendWindow }) {
+  return (
+    <div className="flex shrink-0 flex-wrap items-center gap-1 rounded-full bg-elev p-1">
+      {SPEND_PROVIDERS.map((p) => (
+        <a
+          key={p.key}
+          href={spendHref(win, p.key)}
+          className={
+            "rounded-full px-3 py-1 text-xs font-medium transition " +
+            (p.key === active ? "bg-white text-ink shadow-sm" : "text-muted hover:text-ink")
+          }
+        >
+          {p.label}
         </a>
       ))}
     </div>
@@ -106,11 +134,20 @@ function GroupBadge({ group }: { group: FlowGroup }) {
   );
 }
 
-export async function SpendView({ window: win, cloneId }: { window: SpendWindow; cloneId: string | null }) {
-  const data = await getSpendData(win, cloneId);
+export async function SpendView({
+  window: win,
+  cloneId,
+  provider,
+}: {
+  window: SpendWindow;
+  cloneId: string | null;
+  provider: SpendProvider;
+}) {
+  const data = await getSpendData(win, cloneId, provider);
 
   const { totals, cache } = data;
   const scopedName = cloneId ? data.clones[0]?.name ?? null : null;
+  const providerLabel = SPEND_PROVIDERS.find((p) => p.key === provider)?.label ?? "All";
 
   return (
     <div className="dashboard-page text-ink">
@@ -118,10 +155,13 @@ export async function SpendView({ window: win, cloneId }: { window: SpendWindow;
         <div>
           <h1 className="font-heading text-lg font-semibold">AI spend</h1>
           <p className="text-xs text-muted">
-            {scopedName ? `${scopedName} only` : "All clones"} · every model, every flow, every girl.
+            {scopedName ? `${scopedName} only` : "All clones"} · {provider === "all" ? "every model, every flow, every girl" : `${providerLabel} only`}.
           </p>
         </div>
-        <Pills active={win} />
+        <div className="flex flex-wrap items-center gap-2">
+          <ProviderPills active={provider} window={win} />
+          <Pills active={win} provider={provider} />
+        </div>
       </div>
 
       {data.truncated && (

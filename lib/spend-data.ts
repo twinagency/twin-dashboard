@@ -98,6 +98,36 @@ export function isSpendWindow(v: unknown): v is SpendWindow {
   return v === "today" || v === "7d" || v === "30d";
 }
 
+// ── Provider filter ───────────────────────────────────────────────────────────
+// Ronan, 2026-08-14: "have a filter which only shows OpenRouter" - the page
+// mixes three billers into one dollar figure (OpenRouter for every LLM call,
+// ElevenLabs for voice, Deepgram for transcription), which is exactly what
+// makes "why is OpenRouter burning money" impossible to answer from this page
+// on its own. `kind` on usage_events is already llm/tts/stt at the source
+// (services/llm.ts, services/tts.ts, services/stt.ts in ../bot), and every
+// `kind: "llm"` row IS an OpenRouter call - there is no other LLM provider
+// wired up - so this is a straight filter, not a new attribution scheme.
+export type SpendProvider = "all" | "openrouter" | "elevenlabs" | "deepgram";
+
+export const SPEND_PROVIDERS: { key: SpendProvider; label: string }[] = [
+  { key: "all", label: "All" },
+  { key: "openrouter", label: "OpenRouter" },
+  { key: "elevenlabs", label: "ElevenLabs" },
+  { key: "deepgram", label: "Deepgram" },
+];
+
+export function isSpendProvider(v: unknown): v is SpendProvider {
+  return v === "all" || v === "openrouter" || v === "elevenlabs" || v === "deepgram";
+}
+
+/** The usage_events.kind value a provider filter maps to, or null for "all". */
+function kindForProvider(p: SpendProvider): "llm" | "tts" | "stt" | null {
+  if (p === "openrouter") return "llm";
+  if (p === "elevenlabs") return "tts";
+  if (p === "deepgram") return "stt";
+  return null;
+}
+
 /** Window bounds in ms. "today" is midnight server-local, matching every other
  *  "today" on this dashboard; 7d/30d are rolling from now. */
 export function windowRange(w: SpendWindow, now = Date.now()): { startMs: number; endMs: number } {
@@ -448,11 +478,14 @@ async function fetchUsageEventsPaged(
   startIso: string,
   endIso: string,
   cloneId: string | null,
+  provider: SpendProvider,
   maxRows: number,
 ): Promise<{ rows: SpendUsageRow[]; truncated: boolean }> {
+  const kind = kindForProvider(provider);
   const scoped = <Q extends { gte: any; lte: any; eq: any }>(q: Q): Q => {
     let x = q.gte("created_at", startIso).lte("created_at", endIso);
     if (cloneId) x = x.eq("clone_id", cloneId);
+    if (kind) x = x.eq("kind", kind);
     return x;
   };
 
@@ -499,6 +532,7 @@ async function fetchUsageEventsPaged(
 export async function getSpendData(
   window: SpendWindow,
   cloneId: string | null = null,
+  provider: SpendProvider = "all",
   now = Date.now(),
 ): Promise<SpendData> {
   const { startMs, endMs } = windowRange(window, now);
@@ -536,7 +570,7 @@ export async function getSpendData(
   // Order still doesn't matter for correctness (rollUpSpend only aggregates),
   // and each page's own range() is still against the same stable
   // created_at+id sort, so concurrent fetch changes latency, not the result.
-  const { rows: usageRows, truncated } = await fetchUsageEventsPaged(startIso, endIso, cloneId, USAGE_MAX_ROWS);
+  const { rows: usageRows, truncated } = await fetchUsageEventsPaged(startIso, endIso, cloneId, provider, USAGE_MAX_ROWS);
 
   // ── fan messages in the window (the cost-per-message denominator) ──────────
   // A HEAD count, not a paged read: nothing here needs the rows themselves, and

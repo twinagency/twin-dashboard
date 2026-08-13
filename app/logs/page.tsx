@@ -6,7 +6,7 @@ import { LogFilters } from "./LogFilters";
 import { LogsTable, type LogRow } from "./LogsTable";
 import { CLAIMED_SOURCES, KIND_LABEL, SYSTEM_SOURCE_BUCKETS, techForSystemSource, techForUsageKind, type Tech } from "./tech";
 import { SpendView } from "./SpendView";
-import { isSpendWindow } from "@/lib/spend-data";
+import { isSpendWindow, isSpendProvider } from "@/lib/spend-data";
 
 export const dynamic = "force-dynamic";
 
@@ -190,6 +190,10 @@ export default async function LogsPage({
     // ask, 2026-08-14) - so it rides the same searchParams as everything else.
     view?: string;
     w?: string;
+    // Which biller the Spend tab is scoped to (openrouter/elevenlabs/deepgram),
+    // see SpendProvider in lib/spend-data.ts. "src" not "provider" to keep the
+    // URL short like every other filter on this page.
+    src?: string;
   }>;
 }) {
   const sp = await searchParams;
@@ -207,6 +211,7 @@ export default async function LogsPage({
   // fetchUsageEventsPaged in lib/spend-data.ts) but "today" is both the
   // faster default and the actual question ("what are we burning right now").
   const spendWindow = isSpendWindow(sp.w) ? sp.w : "today";
+  const spendProvider = isSpendProvider(sp.src) ? sp.src : "all";
 
   // The Spend tab reads usage_events itself (lib/spend-data.ts, paged, whole
   // window) - the activity fetch below is skipped entirely rather than run
@@ -215,7 +220,7 @@ export default async function LogsPage({
     return (
       <div className="dashboard-page text-ink">
         <Tabs active="spend" activityHref={buildActivityHref(sp)} />
-        <SpendView window={spendWindow} cloneId={cloneId} />
+        <SpendView window={spendWindow} cloneId={cloneId} provider={spendProvider} />
       </div>
     );
   }
