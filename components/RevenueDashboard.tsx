@@ -17,6 +17,7 @@ import {
 import type { DashboardData, Period } from "@/lib/dashboard-data";
 import type { AnalyticsData } from "@/lib/analytics-data";
 import type { StarBalance } from "@/lib/star-balance";
+import { reportFeatureRows } from "@/lib/report-features";
 import { fmtMoney, fmtNum, starsToMoneyRate } from "@/lib/money";
 import { useCurrency } from "@/components/CurrencyProvider";
 import { initials } from "@/lib/colors";
@@ -981,21 +982,11 @@ function RevenueReport({
 
   const totalStars = a.totals.revenueStars;
   const hasRevenue = totalStars > 0;
-  const reportFeatureOrder = [
-    { key: "credits", label: "Paid Messages", always: true },
-    { key: "photo", label: "Photos", always: true },
-    { key: "video", label: "Videos", always: true },
-    { key: "bundle", label: "Bundles", always: true },
-    { key: "tip", label: "Tips / spoil", always: false },
-    { key: "subscription", label: "VIP subscriptions", always: false },
-  ] as const;
-  const reportFeatures = reportFeatureOrder.flatMap((definition) => {
-    const feature = a.byFeature.find((item) => item.key === definition.key);
-    if (feature) return [{ ...feature, label: definition.label }];
-    return definition.always
-      ? [{ key: definition.key, label: definition.label, stars: 0, sales: 0, avgStars: 0, share: 0 }]
-      : [];
-  });
+  // Every bucket byFeature returns, in product order, catch-alls last. The order
+  // and the "show at zero" rule live in lib/report-features.ts because this list
+  // used to be inline and named six of the eight buckets, so the two it left out
+  // vanished from the panel while the headline still counted them (#600).
+  const reportFeatures = reportFeatureRows(a.byFeature);
   const selectedPurchases = selectedMedia
     ? transactions.filter((transaction) => transaction.mediaType === selectedMedia)
     : [];
@@ -1046,7 +1037,10 @@ function RevenueReport({
 
         {/* What sells + who pays */}
         <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
-          <ReportPanel title="What sells" hint="Revenue by feature, with sales and average per sale.">
+          <ReportPanel
+            title="What sells"
+            hint="Revenue by feature, with sales and average per sale. Every Star in this window sits in one of these rows, so untagged and other sales are listed too and the rows add up to the proceeds above."
+          >
             {reportFeatures.length === 0 ? (
               <ReportEmpty text="No sales in this window." />
             ) : (
