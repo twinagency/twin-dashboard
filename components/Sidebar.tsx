@@ -17,7 +17,6 @@ import type { ReactNode } from "react";
 import { openCloneSwitcher } from "@/lib/clone-switcher-bus";
 import TwinAssistant from "@/components/TwinAssistant";
 import TwinWordmark from "@/components/TwinWordmark";
-import { TwinVersionChip } from "@/components/TwinVersionBadge";
 
 type CloneLite = { id: string; name: string; color: string; photoUrl?: string };
 
@@ -117,20 +116,11 @@ export function SidebarContent({
   onNavigate,
   headerAction,
   showAssistant = true,
-  // Migration 117. Optional with empty defaults so MobileMenu and any other
-  // caller that does not have the version keeps compiling and simply shows no
-  // chip, which is exactly what it shows today.
-  version = null,
-  versionName = "",
-  versionSummary = "",
 }: {
   activeCloneId: string | null;
   onNavigate?: () => void;
   headerAction?: ReactNode;
   showAssistant?: boolean;
-  version?: string | null;
-  versionName?: string;
-  versionSummary?: string;
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -276,19 +266,9 @@ export function SidebarContent({
 
         {showAssistant ? (
           <div className="mt-auto pt-4 [@media(max-height:850px)]:pt-2">
-            {/* Migration 117: which version of Twin you are looking at. Above
-                the assistant so it is the last thing in the rail, and it is a
-                chip rather than a nav row because it is a fact, not a link. */}
-            <div className="px-3 pb-2">
-              <TwinVersionChip version={version} name={versionName} summary={versionSummary} />
-            </div>
             <TwinAssistant />
           </div>
-        ) : (
-          <div className="mt-auto flex h-28 shrink-0 items-end px-3 pb-3">
-            <TwinVersionChip version={version} name={versionName} summary={versionSummary} />
-          </div>
-        )}
+        ) : null}
       </nav>
     </>
   );
@@ -297,24 +277,13 @@ export function SidebarContent({
 export default function Sidebar({
   clones: _clones,
   activeCloneId,
-  version = null,
-  versionName = "",
-  versionSummary = "",
 }: {
   clones: CloneLite[];
   activeCloneId: string | null;
-  version?: string | null;
-  versionName?: string;
-  versionSummary?: string;
 }) {
   return (
     <aside className="dashboard-sidebar sticky top-0 hidden h-screen w-72 shrink-0 flex-col lg:flex">
-      <SidebarContent
-        activeCloneId={activeCloneId}
-        version={version}
-        versionName={versionName}
-        versionSummary={versionSummary}
-      />
+      <SidebarContent activeCloneId={activeCloneId} />
     </aside>
   );
 }

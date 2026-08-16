@@ -189,15 +189,11 @@ const profileValueText = (value: unknown): string => {
   return values.join(", ");
 };
 
-// Colored filter chips. "Active"/"Unreachable" split on the Telegram 24h
-// messaging window (active = we can still message them, see memory rule).
+// Visible quick filters. Additional status filters remain supported by the
+// query logic, but stay out of the compact Fans toolbar.
 const FILTERS = [
   { key: "all", label: "👥 All", on: "border-line bg-muted/20 text-ink", off: "border-line text-ink/70" },
   { key: "active", label: "🟢 Active", on: "border-good/50 bg-good/15 text-good", off: "border-good/20 text-good/70" },
-  { key: "unreachable", label: "💤 Unreachable", on: "border-line bg-muted/20 text-muted", off: "border-line text-muted/70" },
-  { key: "paying", label: "💰 Paying", on: "border-warn/50 bg-warn/15 text-warn", off: "border-warn/20 text-warn/70" },
-  { key: "credits", label: "🪙 Credits", on: "border-accent/50 bg-accent/15 text-accent", off: "border-accent/20 text-accent/70" },
-  { key: "new", label: "✨ New", on: "border-love/55 bg-love/15 text-love-ink", off: "border-love/25 text-love-ink/75" },
   { key: "flagged", label: "🚩 Flagged", on: "border-crit/50 bg-crit/15 text-crit", off: "border-crit/20 text-crit/70" }, // = users.blocked
 ];
 

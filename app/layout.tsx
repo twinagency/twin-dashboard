@@ -135,9 +135,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <Sidebar
               clones={clones}
               activeCloneId={activeCloneId}
-              version={twinVersion?.version ?? null}
-              versionName={twinVersion?.name ?? ""}
-              versionSummary={twinVersion?.summary ?? ""}
             />
             {/* Every page (Fans/inbox included) is a fixed-height shell: the
                 sidebar and TopBar never move, only this column's own <main>

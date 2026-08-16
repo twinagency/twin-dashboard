@@ -102,12 +102,14 @@ const SATELLITES: Satellite[] = Array.from({ length: 14 }, (_, index) => ({
 }));
 
 type TwinAssistantProps = {
-  variant?: "sidebar" | "mobile-dock";
+  variant?: "sidebar" | "mobile-dock" | "page-core";
+  coreState?: CoreState;
 };
 
-export default function TwinAssistant({ variant = "sidebar" }: TwinAssistantProps) {
+export default function TwinAssistant({ variant = "sidebar", coreState = "idle" }: TwinAssistantProps) {
   const router = useRouter();
   const mobileDock = variant === "mobile-dock";
+  const pageCore = variant === "page-core";
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const stateRef = useRef<CoreState>("idle");
   const hoverRef = useRef(false);
@@ -140,6 +142,10 @@ export default function TwinAssistant({ variant = "sidebar" }: TwinAssistantProp
   useEffect(() => {
     stateRef.current = state;
   }, [state]);
+
+  useEffect(() => {
+    if (pageCore) setState(coreState);
+  }, [coreState, pageCore]);
 
   useEffect(() => {
     hoverRef.current = hovered;
@@ -615,6 +621,29 @@ export default function TwinAssistant({ variant = "sidebar" }: TwinAssistantProp
   };
 
   const displayLabel = state !== "idle" ? STATE_LABELS[state] : typingActive ? "Receiving" : hovered ? "Aware" : STATE_LABELS.idle;
+
+  if (pageCore) {
+    return (
+      <canvas
+        ref={canvasRef}
+        className="block h-full w-full touch-none"
+        aria-label={`Twin intelligence core, ${displayLabel.toLowerCase()}`}
+        role="img"
+        onPointerEnter={() => setHovered(true)}
+        onPointerLeave={() => {
+          setHovered(false);
+          pointerRef.current = { x: 0, y: 0 };
+        }}
+        onPointerMove={(event) => {
+          const rect = event.currentTarget.getBoundingClientRect();
+          pointerRef.current = {
+            x: ((event.clientX - rect.left) / rect.width - 0.5) * 2,
+            y: ((event.clientY - rect.top) / rect.height - 0.5) * 2,
+          };
+        }}
+      />
+    );
+  }
 
   const assistant = (
     <section

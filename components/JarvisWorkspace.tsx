@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { setCloneScope } from "@/app/actions/clone-scope";
 import { useCurrency } from "@/components/CurrencyProvider";
+import TwinAssistant from "@/components/TwinAssistant";
 import TwinWordmark from "@/components/TwinWordmark";
 import type { DashboardData } from "@/lib/dashboard-data";
 import { fmtMoney, starsToMoneyRate } from "@/lib/money";
@@ -1288,7 +1289,7 @@ export default function JarvisWorkspace({ cloneId }: { cloneId: string | null })
 
         <canvas
           ref={canvasRef}
-          className="absolute inset-0 h-full w-full touch-none"
+          className={`absolute inset-0 h-full w-full touch-none transition-opacity duration-300 ${phase === "searching" ? "opacity-100" : "pointer-events-none opacity-0"}`}
           aria-label={`Twin intelligence core${activeDomain ? ` searching ${DOMAIN_BY_ID[activeDomain].label}` : ""}`}
           role="img"
           onPointerMove={(event) => {
@@ -1302,6 +1303,14 @@ export default function JarvisWorkspace({ cloneId }: { cloneId: string | null })
             pointerRef.current = { x: 0, y: 0 };
           }}
         />
+
+        <div
+          className={`pointer-events-none absolute inset-x-0 bottom-28 top-16 z-10 flex items-center justify-center transition-opacity duration-300 ${phase === "searching" ? "opacity-0" : "opacity-100"}`}
+        >
+          <div className="pointer-events-auto h-[min(52vw,25rem)] w-[min(52vw,25rem)]">
+            <TwinAssistant variant="page-core" />
+          </div>
+        </div>
 
         {phase === "searching" ? (
           <div className="pointer-events-none absolute inset-0 z-10 overflow-hidden">
@@ -1421,9 +1430,8 @@ export default function JarvisWorkspace({ cloneId }: { cloneId: string | null })
             <button
               type="submit"
               disabled={!query.trim() || phase === "searching"}
-              className="flex h-9 items-center gap-2 rounded-xl bg-[#0d2540] px-3 text-xs font-semibold text-white shadow-[0_8px_22px_rgba(13,37,64,0.2)] transition hover:bg-[#153d67] disabled:cursor-not-allowed disabled:opacity-35"
+              className="flex h-9 items-center rounded-xl bg-[#0d2540] px-3 text-xs font-semibold text-white shadow-[0_8px_22px_rgba(13,37,64,0.2)] transition hover:bg-[#153d67] disabled:cursor-not-allowed disabled:opacity-35"
             >
-              {phase === "searching" ? <LoaderCircle className="h-3.5 w-3.5 animate-spin" /> : <Sparkles className="h-3.5 w-3.5" />}
               Ask
             </button>
           </form>
