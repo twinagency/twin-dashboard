@@ -372,7 +372,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
           <CardHeader className="flex-row items-start gap-4 space-y-0 pb-0">
             <div>
               <div className="flex items-center gap-1.5 text-xs text-muted">
-                {focusName ?? "Fleet"} · {proceedsLabel}
+                {focusName ? <span className="creator-name">{focusName}</span> : "Fleet"} · {proceedsLabel}
                 <Info text="Every Star earned in this window, gross. This is proceeds, not your current wallet balance - see Balance below for that." />
                 {trendPct !== null && (
                   <span className="font-mono font-semibold tabular-nums text-black">
@@ -603,14 +603,14 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
                           <img src={c.photoUrl} alt={c.name} className="h-6 w-6 shrink-0 rounded-full object-cover" />
                         ) : (
                           <span
-                            className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white"
+                            className="creator-name flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white"
                             style={{ background: c.color }}
                           >
                             {initials(c.name)}
                           </span>
                         )}
                         <span className="min-w-0 flex-1">
-                          <span className="block truncate text-xs">{c.name}</span>
+                          <span className="creator-name block truncate text-xs">{c.name}</span>
                           <span className="money-value block font-mono text-[11px] tabular-nums">{money(c.stars)}</span>
                         </span>
                       </button>
@@ -795,7 +795,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
                           <TableCell>
                             <span className="flex items-center gap-1.5">
                               <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: t.cloneColor }} />
-                              {t.cloneName}
+                              <span className="creator-name">{t.cloneName}</span>
                             </span>
                           </TableCell>
                         )}
@@ -914,7 +914,7 @@ function ChartTooltip({
           <div key={p.dataKey} className="flex items-center justify-between gap-4 py-0.5">
             <span className="flex items-center gap-2 text-muted">
               <span className="h-2 w-2 rounded-full" style={{ background: c?.color }} />
-              {c?.name ?? p.dataKey}
+              <span className="creator-name">{c?.name ?? p.dataKey}</span>
             </span>
             <span className="money-value font-mono tabular-nums">{money(p.value)}</span>
           </div>
@@ -997,11 +997,11 @@ function RevenueReport({
   const whale = a.byTier.find((t) => t.key === "whale");
   const bestHour = hasRevenue ? a.byHour.reduce((m, h) => (h.stars > m.stars ? h : m)) : null;
   const bestDow = hasRevenue ? a.byDow.reduce((m, d) => (d.stars > m.stars ? d : m)) : null;
-  const facts: { label: string; value: string; moneyValue?: string }[] = [];
+  const facts: { label: string; value: string; moneyValue?: string; isName?: boolean }[] = [];
   if (topFeature && topFeature.stars > 0)
     facts.push({ label: "Top earner", value: `${topFeature.label.replace(" (untagged)", "")} · ${pct(topFeature.share)}` });
   if (!scoped && topClone && topClone.revenueStars > 0)
-    facts.push({ label: "Top clone", value: topClone.name, moneyValue: money(topClone.revenueStars) });
+    facts.push({ label: "Top clone", value: topClone.name, moneyValue: money(topClone.revenueStars), isName: true });
   if (whale && whale.stars > 0) facts.push({ label: "Whale share", value: `${pct(whale.share)} of lifetime spend` });
   if (bestHour && bestHour.stars > 0) facts.push({ label: "Peak hour", value: bestHour.label });
   if (bestDow && bestDow.stars > 0) facts.push({ label: "Peak day", value: bestDow.label });
@@ -1028,7 +1028,7 @@ function RevenueReport({
             {facts.map((f) => (
               <span key={f.label} className="inline-flex items-baseline gap-1.5 rounded-full bg-elev px-2.5 py-1 text-[11px]">
                 <span className="text-muted">{f.label}</span>
-                <span className="font-medium text-ink">{f.value}</span>
+                <span className={(f.isName ? "creator-name " : "") + "font-medium text-ink"}>{f.value}</span>
                 {f.moneyValue && <span className="money-value font-mono font-semibold tabular-nums">· {f.moneyValue}</span>}
               </span>
             ))}
@@ -1111,7 +1111,12 @@ function RevenueReport({
                           <span className="block truncate text-xs font-semibold text-ink">{spender.name}</span>
                           <span className="block truncate text-[10px] text-muted">
                             {spender.username ? `@${spender.username}` : `Fan ${spender.telegramId}`}
-                            {!scoped ? ` · ${spender.cloneName}` : ""}
+                            {!scoped ? (
+                              <>
+                                {" · "}
+                                <span className="creator-name">{spender.cloneName}</span>
+                              </>
+                            ) : ""}
                           </span>
                         </span>
                         <span className="shrink-0 text-right">
@@ -1182,7 +1187,7 @@ function RevenueReport({
                         <TableCell>
                           <span className="flex items-center gap-2">
                             <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: c.color }} />
-                            <span className="truncate text-ink">{c.name}</span>
+                            <span className="creator-name truncate text-ink">{c.name}</span>
                           </span>
                         </TableCell>
                         <TableCell className="money-value text-right font-mono tabular-nums">{money(c.revenueStars)}</TableCell>
@@ -1356,7 +1361,7 @@ function RevenueReport({
           <DialogContent className="w-[min(880px,calc(100vw-2rem))] max-w-none sm:max-w-none">
             <DialogHeader>
               <DialogTitle>
-                {cloneName} · Purchased {selectedMedia === "photo" ? "photos" : selectedMedia === "video" ? "videos" : "bundles"}
+                <span className="creator-name">{cloneName}</span> · Purchased {selectedMedia === "photo" ? "photos" : selectedMedia === "video" ? "videos" : "bundles"}
               </DialogTitle>
               <p className="text-xs text-muted">Most recent matching purchases in the selected revenue window.</p>
             </DialogHeader>
@@ -1601,7 +1606,9 @@ function AiCostDrillIn({
   return (
     <Card size="sm" className="mt-4">
       <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
-        <CardTitle className="text-xs font-semibold uppercase tracking-wide text-ink">{name} · AI cost</CardTitle>
+        <CardTitle className="text-xs font-semibold uppercase tracking-wide text-ink">
+          <span className="creator-name">{name}</span> · AI cost
+        </CardTitle>
         <Button variant="ghost" size="sm" onClick={onClose}>
           Close
         </Button>

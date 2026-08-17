@@ -600,6 +600,25 @@ html.blur-media video {
   transition: filter 0.15s ease;
 }
 
+/* Privacy/eye mode hides the creator's IDENTITY, not just her media (Jesse,
+   2026-08-17). Any text that names a creator, or initials derived from one,
+   carries .creator-name and blurs with the same switch.
+
+   It is a CSS class rather than a `useBlur()` read on purpose: most of these
+   sites are server components (app/info, app/media, app/flows, app/logs,
+   app/users, app/clones) which cannot consume React context. One class works
+   in both halves of the app.
+
+   Fan names deliberately do NOT carry this class. The operator needs to tell
+   his fans apart; it is the creator he is hiding from someone over his
+   shoulder. */
+html.blur-media .creator-name {
+  filter: blur(6px);
+  transition: filter 0.15s ease;
+  /* Stops a shoulder-surfer selecting the text to read it straight back. */
+  user-select: none;
+}
+
 /* Twin intelligence page: the same pale Aurora atmosphere and cyan neural
    material as the compact sidebar core, scaled up into an interactive field. */
 .jarvis-page {

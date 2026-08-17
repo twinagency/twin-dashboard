@@ -129,6 +129,19 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   return (
     <html lang="en" className={cn("font-sans", inter.variable, plexMono.variable, spaceGrotesk.variable, interTight.variable)} style={{ colorScheme: "light" }} suppressHydrationWarning>
       <body className="min-h-screen bg-bg">
+        {/* Privacy mode has to be on the <html> element BEFORE first paint.
+            BlurProvider applies it too, but only in a useEffect after
+            hydration, which meant a hard reload flashed every creator photo
+            and name on screen for a beat before blurring them. For a feature
+            whose whole job is that nobody over your shoulder sees this, that
+            flash is the bug. This runs synchronously during body parse.
+            <html> already carries suppressHydrationWarning, which is what
+            makes mutating its class list here safe. */}
+        <script
+          dangerouslySetInnerHTML={{
+            __html: `try{if(localStorage.getItem("blurMedia")==="true")document.documentElement.classList.add("blur-media")}catch(e){}`,
+          }}
+        />
         <CurrencyProvider>
         <BlurProvider>
           <div className="flex h-screen">

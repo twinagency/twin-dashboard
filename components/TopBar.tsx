@@ -28,7 +28,7 @@ export default function TopBar({
   allTimeStars: number;
 }) {
   const pathname = usePathname();
-  const { scopeLabel, pageLabel } = getPageMeta(pathname, clones, activeCloneId);
+  const { scopeLabel, pageLabel, scopeIsCreator } = getPageMeta(pathname, clones, activeCloneId);
   return (
     // 3-col grid so the controls sit dead-center of the bar regardless of
     // how wide the breadcrumb text is; right column is an empty balancer.
@@ -37,7 +37,7 @@ export default function TopBar({
     // drifting apart whenever content pushed either row's natural height.
     <div className="dashboard-topbar sticky top-0 z-40 grid h-20 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-3 border-b border-line px-5 lg:px-8">
       <h1 className="hidden min-w-0 truncate font-heading text-sm font-semibold tracking-[-0.02em] text-ink sm:block">
-        {scopeLabel}
+        <span className={scopeIsCreator ? "creator-name" : undefined}>{scopeLabel}</span>
         {pageLabel != null && <span className="text-muted"> / {pageLabel}</span>}
       </h1>
 

@@ -2,7 +2,7 @@
 
 import { INTAKE_SECTIONS, proseValue } from "@/lib/intake";
 import { listEntries } from "@/lib/persona-build";
-import { Field, FieldLabel, Info, LineList, Select, inputCls } from "@/components/clone/fields";
+import { Collapse, Field, FieldLabel, LineList, inputCls } from "@/components/clone/fields";
 
 // The prose half of the onboarding questionnaire (typed facts live in
 // PersonaFactsFields). Each field submits as `intake_<key>`; the server gathers
@@ -29,18 +29,25 @@ export default function IntakeFields({
     return "";
   };
 
+  // How many boxes in a section actually have something in them. Printed on the
+  // closed card so the operator can see where the gaps are without opening all
+  // of them, which is the whole point of collapsing these.
+  const fillCount = (section: (typeof INTAKE_SECTIONS)[number]) =>
+    section.fields.filter((f) => value(f.key).trim() !== "").length;
+
   return (
-    <div className="grid gap-6">
-      {INTAKE_SECTIONS.map((section) => (
-        <div key={section.title} className="rounded-lg border border-line bg-bg/50 p-4">
-          {/* Section hint is an ⓘ hover on the heading, not a grey sentence
-              under it. Six of these stacked up was most of the small print on
-              the Identity tab. */}
-          <h3 className="flex items-center gap-1.5 text-sm font-semibold text-ink">
-            {section.title}
-            {section.hint && <Info text={section.hint} />}
-          </h3>
-          <div className="mt-3 grid gap-3">
+    <div className="grid gap-3">
+      {INTAKE_SECTIONS.map((section) => {
+        const filled = fillCount(section);
+        return (
+        <Collapse
+          key={section.title}
+          label={section.title}
+          hint={section.hint}
+          filled={filled > 0}
+          summary={`${filled}/${section.fields.length} filled`}
+        >
+          <div className="grid gap-3">
             {section.fields.map((f) =>
               f.options ? (
                 <label key={f.key} className="block">
@@ -75,8 +82,9 @@ export default function IntakeFields({
               ),
             )}
           </div>
-        </div>
-      ))}
+        </Collapse>
+        );
+      })}
     </div>
   );
 }

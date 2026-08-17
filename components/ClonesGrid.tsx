@@ -77,7 +77,7 @@ export default function ClonesGrid({ clones }: { clones: CloneCard[] }) {
                       <img src={c.photoUrl} alt={c.name} className="block h-11 w-11 rounded-full object-cover" />
                     ) : (
                       <div
-                        className="flex h-11 w-11 items-center justify-center rounded-full text-sm font-bold text-white"
+                        className="creator-name flex h-11 w-11 items-center justify-center rounded-full text-sm font-bold text-white"
                         style={{ backgroundColor: c.color }}
                       >
                         {initials(c.name)}
@@ -87,7 +87,7 @@ export default function ClonesGrid({ clones }: { clones: CloneCard[] }) {
                 </div>
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
-                    <span className="truncate text-lg font-semibold text-ink">{c.name}</span>
+                    <span className="creator-name truncate text-lg font-semibold text-ink">{c.name}</span>
                     <button
                       type="button"
                       onClick={(e) => togglePause(e, c)}

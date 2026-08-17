@@ -127,7 +127,7 @@ export function KeyManager({
             {keys.map((k) => (
               <tr key={k.id} className="border-b border-line/60">
                 <td className="py-2 pr-3 font-mono text-[12px] text-ink">{k.prefix}…</td>
-                <td className="py-2 pr-3 text-ink">{k.cloneName ?? k.cloneSlug ?? "?"}</td>
+                <td className="creator-name py-2 pr-3 text-ink">{k.cloneName ?? k.cloneSlug ?? "?"}</td>
                 <td className="py-2 pr-3 text-ink">{k.label}</td>
                 <td className="py-2 pr-3 text-muted">{when(k.createdAt)}</td>
                 {/* "never" on a live key is worth seeing: it means whoever it

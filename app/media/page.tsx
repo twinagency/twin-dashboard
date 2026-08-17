@@ -83,7 +83,7 @@ async function FleetMedia() {
               const n = countByClone.get(c.id) ?? { photos: 0, videos: 0, bundles: 0 };
               return (
                 <TableRow key={c.id}>
-                  <TableCell className="font-medium">{c.name} <span className="text-muted">/ {c.slug}</span></TableCell>
+                  <TableCell className="creator-name font-medium">{c.name} <span className="text-muted">/ {c.slug}</span></TableCell>
                   <TableCell className="text-right tabular-nums">{n.photos}</TableCell>
                   <TableCell className="text-right tabular-nums">{n.videos}</TableCell>
                   <TableCell className="text-right tabular-nums">{n.bundles}</TableCell>

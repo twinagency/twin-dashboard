@@ -72,7 +72,7 @@ function BizPhoto({ cloneId, telegramId, name }: { cloneId: string; telegramId: 
     .join("") || "?";
   if (failed || telegramId == null) {
     return (
-      <span className="flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-muted/20 text-lg font-semibold text-muted">
+      <span className="creator-name flex h-14 w-14 shrink-0 items-center justify-center rounded-full bg-muted/20 text-lg font-semibold text-muted">
         {initials}
       </span>
     );
@@ -119,7 +119,7 @@ export default function BusinessConnectionCard({ cloneId }: { cloneId: string })
           <span className="text-sm font-semibold">Business account</span>
           <Info text="Her connected Telegram Business account, if any. Shows here as soon as she connects this bot as her chatbot and it receives at least one message through it." />
         </div>
-        {status.clone && <div className="mb-1 text-xs text-muted">{status.clone.name} / {status.clone.slug}</div>}
+        {status.clone && <div className="creator-name mb-1 text-xs text-muted">{status.clone.name} / {status.clone.slug}</div>}
         <div className="text-sm text-warn">Not connected. {status.error}</div>
       </Card>
     );
@@ -146,12 +146,17 @@ export default function BusinessConnectionCard({ cloneId }: { cloneId: string })
       <div className="mb-3 flex items-center gap-3">
         <BizPhoto cloneId={cloneId} telegramId={account.id} name={fullName} />
         <div className="min-w-0 flex-1">
-          <div className="truncate text-sm font-semibold">{fullName}</div>
+          <div className="creator-name truncate text-sm font-semibold">{fullName}</div>
           <div className="truncate text-xs text-muted">
-            {account.username ? `@${account.username}` : "no username"}
+            {/* The @handle identifies the creator exactly as well as the real
+                name blurred above it, so privacy mode has to take both or it
+                takes neither. The numeric id is not a name, so it stays. */}
+            <span className="creator-name">
+              {account.username ? `@${account.username}` : "no username"}
+            </span>
             {account.id != null ? ` · id ${account.id}` : ""}
           </div>
-          <div className="truncate text-xs text-muted">
+          <div className="creator-name truncate text-xs text-muted">
             {clone.name} <span className="text-muted/70">/ {clone.slug}</span>
           </div>
         </div>

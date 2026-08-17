@@ -155,7 +155,14 @@ export async function SpendView({
         <div>
           <h1 className="font-heading text-lg font-semibold">AI spend</h1>
           <p className="text-xs text-muted">
-            {scopedName ? `${scopedName} only` : "All clones"} · {provider === "all" ? "every model, every flow, every girl" : `${providerLabel} only`}.
+            {scopedName ? (
+              <>
+                <span className="creator-name">{scopedName}</span> only
+              </>
+            ) : (
+              "All clones"
+            )}{" "}
+            · {provider === "all" ? "every model, every flow, every girl" : `${providerLabel} only`}.
           </p>
         </div>
         <div className="flex flex-wrap items-center gap-2">
@@ -258,7 +265,7 @@ export async function SpendView({
                   <TableCell>
                     <span className="flex items-center gap-2">
                       <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: c.color }} />
-                      <span className="font-medium">{c.name}</span>
+                      <span className="creator-name font-medium">{c.name}</span>
                     </span>
                   </TableCell>
                   <TableCell className="text-right font-mono tabular-nums font-semibold">{fmtUsd(c.costUsd)}</TableCell>
@@ -346,7 +353,7 @@ export async function SpendView({
                 <summary className="flex cursor-pointer list-none items-center justify-between gap-3 text-sm">
                   <span className="flex items-center gap-2">
                     <span className="h-2.5 w-2.5 shrink-0 rounded-full" style={{ background: c.color }} />
-                    <span className="font-medium">{c.name}</span>
+                    <span className="creator-name font-medium">{c.name}</span>
                     <span className="text-[11px] text-muted">{c.byFlow.length} flows</span>
                   </span>
                   <span className="font-mono text-sm font-semibold tabular-nums">{fmtUsd(c.costUsd)}</span>

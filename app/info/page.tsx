@@ -102,7 +102,7 @@ async function FleetInfo() {
           <TableBody>
             {rows.map((c) => (
               <TableRow key={c.id}>
-                <TableCell className="font-medium">{c.name} <span className="text-muted">/ {c.slug}</span></TableCell>
+                <TableCell className="creator-name font-medium">{c.name} <span className="text-muted">/ {c.slug}</span></TableCell>
                 <TableCell>
                   <Badge variant="outline" className={c.status === "active" ? "border-good/30 text-good" : "text-muted"}>{c.status}</Badge>
                 </TableCell>

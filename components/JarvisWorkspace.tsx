@@ -40,6 +40,12 @@ type ResultMetric = { label: string; value: string };
 
 type JarvisResult = {
   domain: DomainId;
+  // The creator this result is about, kept SEPARATE from the eyebrow text so
+  // privacy mode can blur the name on its own without taking "last 30 days"
+  // with it. Null when the result is fleet-wide. Titles and summaries in
+  // buildResult() deliberately say "her" rather than naming her, for the same
+  // reason: a plain string has no element to hang .creator-name on.
+  scopeName?: string | null;
   eyebrow: string;
   title: string;
   summary: string;
@@ -75,6 +81,7 @@ type JourneyCandidate = {
   detail: string;
   imageUrl?: string;
   icon: ComponentType<{ className?: string }>;
+  isName?: boolean;
 };
 
 type VoiceRecognitionResult = {
@@ -983,6 +990,7 @@ export default function JarvisWorkspace({ cloneId }: { cloneId: string | null })
         detail: "Clone profile · behavior · voice",
         imageUrl: clone.photoUrl,
         icon: Database,
+        isName: true,
       }));
     const mediaCards: JourneyCandidate[] = media.map((item, index) => ({
         id: `media-${item.cloneId}-${index}`,
@@ -1035,15 +1043,15 @@ export default function JarvisWorkspace({ cloneId }: { cloneId: string | null })
     const namedClone = data?.clones.find((clone) => lower.includes(clone.name.toLowerCase()));
     const targetClone = namedClone ?? activeClone;
     const stats = targetClone && data ? data.perClone[targetClone.id] : null;
-    const scopeName = targetClone?.name ?? "All clones";
 
     if (domain === "revenue") {
       const stars = stats?.stars ?? data?.totals.stars ?? 0;
       return {
         domain,
-        eyebrow: `${scopeName} · last 30 days`,
+        scopeName: targetClone?.name ?? null,
+        eyebrow: targetClone ? "last 30 days" : "All clones · last 30 days",
         title: `${money(stars)} in proceeds`,
-        summary: `I found ${scopeName === "All clones" ? "the fleet-wide" : `${scopeName}'s`} current earnings and pulled the result out of the revenue record.`,
+        summary: `I found ${targetClone ? "her" : "the fleet-wide"} current earnings and pulled the result out of the revenue record.`,
         href: "/revenue",
         action: "Open earnings",
         cloneId: targetClone?.id,
@@ -1061,9 +1069,10 @@ export default function JarvisWorkspace({ cloneId }: { cloneId: string | null })
       const messages = stats?.messages ?? data?.totals.messages ?? 0;
       return {
         domain,
-        eyebrow: `${scopeName} · audience record`,
+        scopeName: targetClone?.name ?? null,
+        eyebrow: targetClone ? "audience record" : "All clones · audience record",
         title: domain === "messages" ? `${compact(messages)} messages found` : `${compact(users)} fans found`,
-        summary: `I located ${scopeName === "All clones" ? "the fleet" : scopeName} inside the audience records and extracted the relevant workspace.`,
+        summary: `I located ${targetClone ? "her" : "the fleet"} inside the audience records and extracted the relevant workspace.`,
         href: "/users",
         action: domain === "messages" ? "Open conversations" : "Open fans",
         cloneId: targetClone?.id,
@@ -1079,7 +1088,8 @@ export default function JarvisWorkspace({ cloneId }: { cloneId: string | null })
     if (domain === "logs") {
       return {
         domain,
-        eyebrow: `${scopeName} · system record`,
+        scopeName: targetClone?.name ?? null,
+        eyebrow: targetClone ? "system record" : "All clones · system record",
         title: `${compact(stats?.aiErrors ?? data?.totals.aiErrors ?? 0)} AI errors detected`,
         summary: "I searched the operational event stream and extracted the health record. The complete timeline is available in Logs.",
         href: "/logs",
@@ -1097,9 +1107,10 @@ export default function JarvisWorkspace({ cloneId }: { cloneId: string | null })
     if (domain === "flows") {
       return {
         domain,
-        eyebrow: `${scopeName} · automation file`,
+        scopeName: targetClone?.name ?? null,
+        eyebrow: targetClone ? "automation file" : "All clones · automation file",
         title: "Conversation flows located",
-        summary: targetClone ? `I found and extracted ${targetClone.name}'s conversation paths.` : "Flows are clone-specific. Select a clone to open its automation paths.",
+        summary: targetClone ? "I found and extracted her conversation paths." : "Flows are clone-specific. Select a clone to open its automation paths.",
         href: "/flows",
         action: "Open flows",
         cloneId: targetClone?.id,
@@ -1112,10 +1123,11 @@ export default function JarvisWorkspace({ cloneId }: { cloneId: string | null })
       const editIntent = /edit|identity|personality|price|pricing/.test(lower);
       return {
         domain,
-        eyebrow: editIntent && targetClone ? `${targetClone.name} · editor file` : "Dashboard configuration",
-        title: editIntent && targetClone ? `Edit ${targetClone.name}` : "Settings located",
+        scopeName: editIntent && targetClone ? targetClone.name : null,
+        eyebrow: editIntent && targetClone ? "editor file" : "Dashboard configuration",
+        title: editIntent && targetClone ? "Edit this clone" : "Settings located",
         summary: editIntent && targetClone
-          ? `I found ${targetClone.name}'s identity, pricing, media, and behavior controls.`
+          ? "I found her identity, pricing, media, and behavior controls."
           : "I located the dashboard configuration. Select a clone first when you want its identity or pricing file.",
         href: editIntent && targetClone ? `/clones/${targetClone.id}?tab=identity` : "/settings",
         action: editIntent && targetClone ? "Open clone editor" : "Open settings",
@@ -1127,11 +1139,12 @@ export default function JarvisWorkspace({ cloneId }: { cloneId: string | null })
 
     return {
       domain: "clones",
+      scopeName: targetClone?.name ?? null,
       eyebrow: "Fleet record",
       title: `${data?.clones.length ?? 0} clones indexed`,
-      summary: targetClone ? `I found ${targetClone.name} and extracted its fleet record.` : "I searched the fleet index and found every connected clone record.",
+      summary: targetClone ? "I found her and extracted her fleet record." : "I searched the fleet index and found every connected clone record.",
       href: targetClone ? `/clones/${targetClone.id}?tab=identity` : "/clones",
-      action: targetClone ? `Open ${targetClone.name}` : "Manage clones",
+      action: targetClone ? "Open clone editor" : "Manage clones",
       cloneId: targetClone?.id,
       imageUrl: targetClone?.photoUrl,
       metrics: [
@@ -1284,7 +1297,7 @@ export default function JarvisWorkspace({ cloneId }: { cloneId: string | null })
           <TwinWordmark descriptor="Intelligence Core" inverse />
         </div>
         <div className="absolute right-4 top-14 z-20 rounded-full border border-white/20 bg-[#06172f]/45 px-3 py-1.5 text-[9px] font-semibold text-white/70 shadow-sm backdrop-blur-md sm:right-6 sm:top-6">
-          {activeClone?.name ?? "All clones"}
+          {activeClone?.name ? <span className="creator-name">{activeClone.name}</span> : "All clones"}
         </div>
 
         <canvas
@@ -1341,7 +1354,7 @@ export default function JarvisWorkspace({ cloneId }: { cloneId: string | null })
                     </span>
                   )}
                   <span className="min-w-0">
-                    <span className="block max-w-[145px] truncate text-[11px] font-semibold text-[#0d2540]">{card.label}</span>
+                    <span className={(card.isName ? "creator-name " : "") + "block max-w-[145px] truncate text-[11px] font-semibold text-[#0d2540]"}>{card.label}</span>
                     <span className="mt-0.5 block max-w-[145px] truncate text-[8px] font-medium text-muted/75">{card.detail}</span>
                   </span>
                 </div>
@@ -1371,6 +1384,12 @@ export default function JarvisWorkspace({ cloneId }: { cloneId: string | null })
               <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full border border-cyan-200/70 bg-cyan-50/70 text-cyan-700">
                 {result.imageUrl ? <img src={result.imageUrl} alt="" className="h-full w-full object-cover" /> : <ResultIcon className="h-4 w-4" />}
               </span>
+              {result.scopeName && (
+                <>
+                  <span className="creator-name">{result.scopeName}</span>
+                  <span aria-hidden="true">·</span>
+                </>
+              )}
               {result.eyebrow}
             </div>
             <h2 className="mt-3 font-heading text-2xl font-semibold tracking-[-0.035em] text-[#0d2540]">{result.title}</h2>

@@ -4,7 +4,11 @@
 // definition of what each route is called — see dashboard/app/layout.tsx for
 // how this feeds TopBar.
 
-export type PageMeta = { scopeLabel: string; pageLabel: string | null };
+// scopeIsCreator says whether scopeLabel is a real creator's name ("Kate") or a
+// generic scope word ("All clones", "New clone"). TopBar only tags the former
+// with .creator-name, so privacy mode blurs the name and leaves "All clones"
+// readable.
+export type PageMeta = { scopeLabel: string; pageLabel: string | null; scopeIsCreator: boolean };
 
 type CloneLite = { id: string; name: string };
 
@@ -35,7 +39,7 @@ export function getPageMeta(
 
   // /clones/new: brand-new clone being drafted, nothing to show after the slash.
   if (path === "/clones/new") {
-    return { scopeLabel: "New clone", pageLabel: null };
+    return { scopeLabel: "New clone", pageLabel: null, scopeIsCreator: false };
   }
 
   // /clones/[id] and /clones/[id]/fans/[userId]: the "scope" here is the clone
@@ -48,6 +52,7 @@ export function getPageMeta(
     return {
       scopeLabel: clone?.name ?? "Clone",
       pageLabel: isFanSubRoute ? "Edit / Fan" : "Edit",
+      scopeIsCreator: clone != null,
     };
   }
 
@@ -55,5 +60,6 @@ export function getPageMeta(
   return {
     scopeLabel: globalScope ?? "All clones",
     pageLabel: PAGE_LABELS[path] ?? "Dashboard",
+    scopeIsCreator: globalScope != null,
   };
 }

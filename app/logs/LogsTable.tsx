@@ -83,7 +83,7 @@ export function LogsTable({ rows, showClone }: { rows: LogRow[]; showClone: bool
                   </div>
                   {r.model && <div className="font-mono text-[11px] text-muted/70">{r.model}</div>}
                 </TableCell>
-                {showClone && <TableCell className="whitespace-nowrap">{r.cloneName ?? "-"}</TableCell>}
+                {showClone && <TableCell className="creator-name whitespace-nowrap">{r.cloneName ?? "-"}</TableCell>}
                 <TableCell className="max-w-[480px]">
                   <span className="block truncate" title={r.message}>
                     {r.message}

@@ -121,7 +121,7 @@ async function FleetFlows() {
               const steps = validSteps(c.drip_steps);
               return (
                 <TableRow key={c.id}>
-                  <TableCell className="font-medium">{c.name} <span className="text-muted">/ {c.slug}</span></TableCell>
+                  <TableCell className="creator-name font-medium">{c.name} <span className="text-muted">/ {c.slug}</span></TableCell>
                   <TableCell>
                     <Badge variant="outline" className={c.drip_enabled ? "border-good/30 text-good" : "text-muted"}>{c.drip_enabled ? "on" : "off"}</Badge>
                   </TableCell>
@@ -199,10 +199,13 @@ async function CloneFlows({ cloneId }: { cloneId: string }) {
       <div className="mb-5 flex items-start justify-between gap-4">
         <div className="min-w-0">
           <h1 className="mb-1 flex items-center gap-1.5 text-2xl font-semibold">
-            Flows · {clone.name}
+            Flows · <span className="creator-name">{clone.name}</span>
             <Info
               className="text-xs"
-              text={`Automated re-engagement steps that fire while ${clone.name} goes quiet, always timed inside Telegram's 24h messaging window.`}
+              // No clone name in here. Info renders a plain string, so there is
+              // no element to hang .creator-name on, and privacy mode cannot
+              // blur it. "She" says the same thing and leaks nothing.
+              text="Automated re-engagement steps that fire while she goes quiet, always timed inside Telegram's 24h messaging window."
             />
           </h1>
         </div>

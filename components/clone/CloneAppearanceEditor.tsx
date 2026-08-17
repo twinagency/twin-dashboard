@@ -48,7 +48,11 @@ export default function CloneAppearanceEditor({
               className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl text-lg font-bold text-white shadow-sm"
               style={{ backgroundColor: color }}
             >
-              {preview ? <img src={preview} alt={`${cloneName} display`} className="h-full w-full object-cover" /> : initials(cloneName)}
+              {preview ? (
+                <img src={preview} alt={`${cloneName} display`} className="h-full w-full object-cover" />
+              ) : (
+                <span className="creator-name">{initials(cloneName)}</span>
+              )}
             </span>
             <label className="inline-flex cursor-pointer items-center rounded-lg border border-line bg-panel px-3 py-2 text-sm font-semibold text-ink shadow-sm transition hover:border-accent hover:text-accent">
               Choose image
@@ -106,7 +110,7 @@ export default function CloneAppearanceEditor({
           <div className="mt-4 rounded-xl border border-line bg-bg p-3">
             <div className="mb-2 flex items-center justify-between text-[11px] text-muted">
               <span>Chart preview</span>
-              <span className="font-semibold" style={{ color }}>{cloneName}</span>
+              <span className="creator-name font-semibold" style={{ color }}>{cloneName}</span>
             </div>
             <div className="flex h-12 items-end gap-1.5">
               {previewBars.map((height, index) => (

@@ -98,13 +98,15 @@ export default function CloneSwitcher({
       >
         {active ? (
           <>
+            {/* Initials leak the name just as plainly as the name does, so the
+                avatar chip carries .creator-name too. */}
             <span
-              className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white"
+              className="creator-name flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white"
               style={{ background: active.color, boxShadow: `0 0 0 2px ${active.color}55` }}
             >
               {initials(active.name)}
             </span>
-            <span className="max-w-[10rem] truncate">{active.name}</span>
+            <span className="creator-name max-w-[10rem] truncate">{active.name}</span>
             <VerifiedBadge />
           </>
         ) : (
@@ -189,13 +191,19 @@ export default function CloneSwitcher({
                   }
                 >
                   {selected && <VerifiedBadge className="absolute right-1.5 top-1.5 h-4 w-4" />}
+                  {/* Jesse, 2026-08-17: with privacy mode on, EVERY other
+                      creator in this dialog is hidden too, not just the active
+                      one. Colour and position still tell them apart. */}
                   <span
-                    className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
+                    className="creator-name flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
                     style={{ background: c.color }}
                   >
                     {initials(c.name)}
                   </span>
-                  <span className="w-full truncate" style={selected ? { color: c.color } : undefined}>
+                  <span
+                    className="creator-name w-full truncate"
+                    style={selected ? { color: c.color } : undefined}
+                  >
                     {c.name}
                   </span>
                 </button>

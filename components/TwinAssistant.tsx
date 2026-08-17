@@ -654,18 +654,10 @@ export default function TwinAssistant({ variant = "sidebar", coreState = "idle" 
           ? "fixed inset-0 z-[100] flex items-center justify-center bg-[#020914]/78 p-4 backdrop-blur-md sm:p-8"
           : "w-full px-1 pb-1"
       }
-      aria-label={mobileDock ? "Ask TI" : "Twin AI assistant"}
+      aria-label="Twin AI assistant"
       aria-modal={!mobileDock && expanded ? true : undefined}
       role={!mobileDock && expanded ? "dialog" : undefined}
     >
-      {mobileDock ? (
-        <div
-          className="pointer-events-none mb-[-7px] text-[15px] font-bold tracking-[-0.025em] text-[#0d2540] drop-shadow-[0_1px_8px_rgba(255,255,255,0.9)]"
-          style={{ fontFamily: "var(--font-display), var(--font-sans), sans-serif" }}
-        >
-          Ask TI
-        </div>
-      ) : null}
       <div
         className={
           mobileDock

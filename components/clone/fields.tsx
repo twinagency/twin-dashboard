@@ -134,15 +134,22 @@ export function GroupHeader({ label, hint }: { label: string; hint?: string }) {
   );
 }
 
-// ── Titled block ──────────────────────────────────────────────────────────────
-// Was a click-to-expand card. The operator wants every setting in the edit
-// section visible at once rather than hidden behind 22 separate "Edit ▼"
-// buttons, so this now renders a plain titled card with its children always on
-// screen.
+// ── Titled block, click to expand ─────────────────────────────────────────────
+// History: this was a click-to-expand card, then flattened to always-open
+// because 22 stacked "Edit ▼" buttons read worse than one long page. It is
+// collapsible again (Jesse, 2026-08-17): the page grew past the point where
+// always-open scans better, and a closed card now carries a summary line and a
+// filled dot so the wall is still readable without opening anything.
 //
-// The props that drove the closed state (defaultOpen, summary, filled) are
-// still accepted and ignored, so all existing call sites keep compiling and
-// nothing needs a sweep. Drop them from the call sites if this sticks.
+// THE RULE THAT MUST NOT BE BROKEN: children stay MOUNTED when closed, hidden
+// with a class. Identity + Config + Money are one <form> with one Save
+// (CloneForm.tsx:166), and Save serializes `new FormData(form)` — an unmounted
+// input is an ABSENT key, and rowFromForm() in app/clones/actions.ts reads an
+// absent key as "cleared", writing NULL over the column (str(), :102) or false
+// over the toggle (bool(), :108). Collapsing with `{open && children}` would
+// silently wipe a persona every time the operator saved from another tab.
+// Same rule as Modal below, Advanced further down, and the tab switcher in
+// ConfigSections.tsx:330.
 export function Collapse({
   label,
   hint,
@@ -158,6 +165,8 @@ export function Collapse({
   // Longer explainer, shown as a hoverable ⓘ next to the title (same
   // convention as Section/FieldLabel — never a grey paragraph).
   hint?: string;
+  // One scannable line shown only while closed, so a shut card still says what
+  // is inside it.
   summary?: string;
   emoji?: string;
   accent?: SectionAccent;
@@ -169,9 +178,17 @@ export function Collapse({
   children: React.ReactNode;
 }) {
   const a = SECTION_ACCENTS[accent];
+  const [open, setOpen] = useState(defaultOpen);
   return (
     <div className={`h-full rounded-xl border border-line border-l-[3px] ${a.bar} bg-panel ` + className}>
-      <div className="flex w-full items-center gap-2 px-3 py-3 text-left">
+      {/* type="button" is load-bearing: this sits inside the clone <form>, and
+          a bare <button> defaults to type="submit" — every expand would save. */}
+      <button
+        type="button"
+        onClick={() => setOpen((o) => !o)}
+        aria-expanded={open}
+        className="flex w-full items-center gap-2 px-3 py-3 text-left transition hover:bg-muted/5"
+      >
         {emoji && (
           <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-[11px] ${a.chip}`}>
             {emoji}
@@ -179,10 +196,40 @@ export function Collapse({
         )}
         <span className="flex shrink-0 items-center gap-1 text-xs font-semibold uppercase tracking-wide text-ink">
           {label}
-          {hint && <Info text={hint} />}
+          {filled != null && (
+            <span
+              title={filled ? "Has data" : "Empty"}
+              className={
+                "ml-0.5 h-1.5 w-1.5 shrink-0 rounded-full " + (filled ? "bg-accent" : "bg-muted/30")
+              }
+            />
+          )}
         </span>
-      </div>
-      <div className="border-t border-line p-3">{children}</div>
+        {hint && <Info text={hint} />}
+        {!open && summary && (
+          <span className="min-w-0 flex-1 truncate text-right text-[11px] text-muted">{summary}</span>
+        )}
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          stroke="currentColor"
+          strokeWidth={2}
+          strokeLinecap="round"
+          strokeLinejoin="round"
+          aria-hidden="true"
+          className={
+            "h-3.5 w-3.5 shrink-0 text-muted transition-transform " +
+            (open ? "rotate-180" : "") +
+            // The summary is the flex-1 spacer when it is showing; without it
+            // the chevron has to push itself to the right edge.
+            (!open && summary ? "" : " ml-auto")
+          }
+        >
+          <path d="M6 9l6 6 6-6" />
+        </svg>
+      </button>
+      {/* hidden, never unmounted — see the block comment above. */}
+      <div className={open ? "border-t border-line p-3" : "hidden"}>{children}</div>
     </div>
   );
 }
