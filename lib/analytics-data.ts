@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "./supabase";
 import { selectAllRows } from "./select-all";
 import { chartColorForClone } from "./colors";
+import { fanSpendStats, fanTiers, messagedFanCount, paywallStats, usageRollup } from "./rollup";
 import { STAR_USD } from "./money";
 import type { DateRange, Period } from "./dashboard-data";
 
@@ -387,18 +388,11 @@ export async function getAnalytics(
   }
 
   // ── AI/voice cost in window (usage_events) ───────────────────────────────────
-  let usageQ = supabaseAdmin
-    .from("usage_events")
-    .select("clone_id,cost_usd")
-    .gte("created_at", iso(startMs))
-    .lte("created_at", iso(windowEnd));
-  if (cloneId) usageQ = usageQ.eq("clone_id", cloneId);
-  // Paged: usage_events runs ~11k rows/day, so an unpaged read of any window
-  // longer than a couple of hours returned 1000 rows and under-reported cost.
-  const { rows: usageRows } = await selectAllRows<{ clone_id: string | null; cost_usd: number | null }>(usageQ, {
-    label: "analytics usage_events",
-  });
-  const usage = usageRows;
+  // SQL rollup (migration 120). This was the second full page-through of
+  // usage_events on every Revenue load — the chart half did the identical 330k
+  // row walk — and like that one it stopped at the 200,000 row ceiling, so the
+  // cost and every margin derived from it were understated.
+  const usage = await usageRollup(startMs, windowEnd, cloneId ?? null);
   const cloneCost = new Map<string, number>();
   let totalCost = 0;
   for (const u of usage) {
@@ -409,94 +403,62 @@ export async function getAnalytics(
 
   // ── paywall funnel: distinct fans messaged → paywalled → purchased (window) ──
   // messaged: distinct fans who sent a message (chat_history role='human').
-  let msgQ = supabaseAdmin
-    .from("chat_history")
-    .select("telegram_id")
-    .eq("role", "human")
-    .gte("created_at", iso(startMs))
-    .lte("created_at", iso(windowEnd));
-  if (cloneId) msgQ = msgQ.eq("clone_id", cloneId);
-  const { rows: msgRows } = await selectAllRows(msgQ, { label: "analytics paywall funnel: messaged fans" });
-  const messagedFans = new Set<number>();
-  for (const m of (msgRows ?? []) as { telegram_id: number | null }[]) {
-    if (m.telegram_id != null) messagedFans.add(m.telegram_id);
-  }
+  // COUNT(DISTINCT) in SQL (migration 120). This single integer used to cost a
+  // page-through of 196,994 chat rows — the biggest single read on the page,
+  // and every one of those rows was thrown away after being counted once.
+  const messagedFanTotal = await messagedFanCount(startMs, windowEnd, cloneId ?? null);
   // paywalled: distinct fans shown the paywall (paywall_hits — additive table, mig 024).
-  // If the table doesn't exist yet the query errors → treat as "still collecting".
-  // Probe first: this table is additive (migration 024) and may not exist yet, and
-  // a paged read reports that failure as an empty result, which would read as
-  // "nobody was ever paywalled" instead of "still collecting". Then page, because
-  // one paywall hit per fan per session outgrows the row cap faster than payments do.
+  // If the table doesn't exist yet the rollup errors → treat as "still collecting",
+  // the same meaning the old probe-then-page had, so an unapplied migration 024
+  // still reads as "collecting" rather than "nobody was ever paywalled".
+  //
+  // The conversion stage is computed in SQL too: creditBuyers (built from the
+  // ledger rows above, a few hundred ids at most) goes down as an array and the
+  // intersection comes back as a number.
+  //
+  // The one-row probe stays. It answers "does this table exist yet", which is a
+  // different question from "did the rollup work", and only the first of those
+  // is allowed to degrade quietly — a failing rollup must surface, not read as
+  // an empty funnel.
   const paywallProbe = await supabaseAdmin.from("paywall_hits").select("telegram_id").limit(1);
   const paywallCollecting = Boolean(paywallProbe.error);
-  const paywalledFans = new Set<number>();
-  // paywallViews counts every hit, not distinct fans, so it must come from the
-  // PAGED rows — off an unpaged read it flattens at the row cap and the
-  // views-per-fan average reads far lower than reality.
   let paywallViews = 0;
+  let paywalledFanTotal = 0;
+  let convertedPaywallBuyers = 0;
   if (!paywallCollecting) {
-    let paywallQ = supabaseAdmin
-      .from("paywall_hits")
-      .select("telegram_id")
-      .gte("shown_at", iso(startMs))
-      .lte("shown_at", iso(windowEnd));
-    if (cloneId) paywallQ = paywallQ.eq("clone_id", cloneId);
-    const { rows: paywallRows } = await selectAllRows(paywallQ, { label: "analytics paywall hits" });
-    paywallViews = paywallRows.length;
-    for (const p of paywallRows as { telegram_id: number | null }[]) {
-      if (p.telegram_id != null) paywalledFans.add(p.telegram_id);
-    }
+    const stats = await paywallStats(startMs, windowEnd, cloneId ?? null, [...creditBuyers]);
+    paywallViews = stats.views;
+    paywalledFanTotal = stats.fans;
+    convertedPaywallBuyers = stats.converted;
   }
 
   // ── lifetime fan spend → tiers + funnel (users table) ────────────────────────
-  let userQ = supabaseAdmin
-    .from("users")
-    .select("clone_id,telegram_id,name,stated_name,username,total_spent_stars,spend_tier,purchase_count");
-  if (cloneId) userQ = userQ.eq("clone_id", cloneId);
-  const { rows: userRows } = await selectAllRows(userQ, { label: "analytics lifetime fan spend" });
-  const users = (userRows ?? []) as {
-    clone_id: string;
-    telegram_id: number;
-    name: string | null;
-    stated_name: string | null;
-    username: string | null;
-    total_spent_stars: number | null;
-    spend_tier: string | null;
-    purchase_count: number | null;
-  }[];
+  // Two SQL rollups (migration 120) in place of a full read of users, which was
+  // 63,557 rows and ~64 round trips for a handful of counters and a median. The
+  // definitions are identical, quirks included: a buyer is anyone with a
+  // purchase or any spend, total_purchases counts at least one per buyer even
+  // when purchase_count is 0, lifetime_stars spans every fan and not just
+  // buyers, and an unknown or missing tier lands in "none".
+  const [spendStats, tierRows] = await Promise.all([
+    fanSpendStats(cloneId ?? null),
+    fanTiers(cloneId ?? null),
+  ]);
+  const fans = Number(spendStats.fans) || 0;
+  const buyers = Number(spendStats.buyers) || 0;
+  const repeat = Number(spendStats.repeat_buyers) || 0;
+  const oneTime = Number(spendStats.one_time) || 0;
+  const threePlus = Number(spendStats.three_plus) || 0;
+  const totalPurchases = Number(spendStats.total_purchases) || 0;
+  const repeatBuyerStars = Number(spendStats.repeat_buyer_stars) || 0;
+  const lifetimeStars = Number(spendStats.lifetime_stars) || 0;
+  const medianStarsPerBuyer = Number(spendStats.median_buyer_stars) || 0;
 
   const tierUsers = new Map<string, number>();
   const tierStars = new Map<string, number>();
-  let fans = 0;
-  let buyers = 0;
-  let repeat = 0;
-  let oneTime = 0;
-  let threePlus = 0;
-  let totalPurchases = 0;
-  let repeatBuyerStars = 0;
-  let lifetimeStars = 0;
-  const buyerSpend: number[] = [];
-  for (const u of users) {
-    fans += 1;
-    const spent = Number(u.total_spent_stars) || 0;
-    const pc = Number(u.purchase_count) || 0;
-    const isBuyer = pc > 0 || spent > 0;
-    if (isBuyer) {
-      buyers += 1;
-      totalPurchases += Math.max(1, pc);
-      buyerSpend.push(spent);
-      if (pc > 1) {
-        repeat += 1;
-        repeatBuyerStars += spent;
-      } else {
-        oneTime += 1;
-      }
-      if (pc >= 3) threePlus += 1;
-    }
-    lifetimeStars += spent;
-    const tier = TIERS.some((t) => t.key === u.spend_tier) ? (u.spend_tier as string) : "none";
-    tierUsers.set(tier, (tierUsers.get(tier) ?? 0) + 1);
-    tierStars.set(tier, (tierStars.get(tier) ?? 0) + spent);
+  for (const row of tierRows) {
+    const tier = TIERS.some((t) => t.key === row.tier) ? row.tier : "none";
+    tierUsers.set(tier, (tierUsers.get(tier) ?? 0) + (Number(row.fans) || 0));
+    tierStars.set(tier, (tierStars.get(tier) ?? 0) + (Number(row.stars) || 0));
   }
 
   // Rolling seven-day spender leaderboard, independent of the selected chart
@@ -531,11 +493,40 @@ export async function getAnalytics(
     current.purchases += 1;
     weeklyByBuyer.set(key, current);
   }
-  const userByKey = new Map(users.map((user) => [`${user.clone_id}:${user.telegram_id}`, user]));
   const rankedWeeklySpenders = [...weeklyByBuyer.values()].sort((a, b) => b.stars - a.stars);
   const weeklyStars = rankedWeeklySpenders.reduce((sum, spender) => sum + spender.stars, 0);
   const weeklyPurchases = rankedWeeklySpenders.reduce((sum, spender) => sum + spender.purchases, 0);
-  const topWeeklySpenders = rankedWeeklySpenders.slice(0, 5).map((spender) => {
+  const topFive = rankedWeeklySpenders.slice(0, 5);
+
+  // Names for the five rows actually rendered. These used to be looked up in a
+  // map built from every fan in the fleet; now the read asks for five fans.
+  const userByKey = new Map<
+    string,
+    { name: string | null; stated_name: string | null; username: string | null }
+  >();
+  if (topFive.length) {
+    const topCloneIds = [...new Set(topFive.map((s) => s.cloneId).filter((id): id is string => !!id))];
+    const topTelegramIds = [...new Set(topFive.map((s) => s.telegramId))];
+    if (topCloneIds.length && topTelegramIds.length) {
+      const { data: topUsers } = await supabaseAdmin
+        .from("users")
+        .select("clone_id,telegram_id,name,stated_name,username")
+        .in("clone_id", topCloneIds)
+        .in("telegram_id", topTelegramIds)
+        .limit(200);
+      for (const user of (topUsers ?? []) as {
+        clone_id: string;
+        telegram_id: number;
+        name: string | null;
+        stated_name: string | null;
+        username: string | null;
+      }[]) {
+        userByKey.set(`${user.clone_id}:${user.telegram_id}`, user);
+      }
+    }
+  }
+
+  const topWeeklySpenders = topFive.map((spender) => {
     const user = userByKey.get(`${spender.cloneId ?? "unknown"}:${spender.telegramId}`);
     return {
       ...spender,
@@ -628,21 +619,20 @@ export async function getAnalytics(
   // Distinct-fan paywall journey. The converted stage is the intersection of
   // fans who saw the paywall and fans who bought paid messages in the window,
   // avoiding the misleading implication that every credit buyer saw the wall.
-  const convertedPaywallBuyers = [...paywalledFans].filter((telegramId) => creditBuyers.has(telegramId)).length;
   const paywallFunnel = {
     collecting: paywallCollecting,
-    messaged: messagedFans.size,
-    paywalled: paywalledFans.size,
+    messaged: messagedFanTotal,
+    paywalled: paywalledFanTotal,
     purchased: convertedPaywallBuyers,
     paidMessageBuyers: creditBuyers.size,
     paidMessagePurchases,
     paidMessageStars,
     paywallViews,
-    abandoned: Math.max(0, paywalledFans.size - convertedPaywallBuyers),
-    paywallPct: messagedFans.size > 0 ? paywalledFans.size / messagedFans.size : 0,
-    purchasePct: paywalledFans.size > 0 ? convertedPaywallBuyers / paywalledFans.size : 0,
-    overallPct: messagedFans.size > 0 ? convertedPaywallBuyers / messagedFans.size : 0,
-    avgViewsPerFan: paywalledFans.size > 0 ? paywallViews / paywalledFans.size : 0,
+    abandoned: Math.max(0, paywalledFanTotal - convertedPaywallBuyers),
+    paywallPct: messagedFanTotal > 0 ? paywalledFanTotal / messagedFanTotal : 0,
+    purchasePct: paywalledFanTotal > 0 ? convertedPaywallBuyers / paywalledFanTotal : 0,
+    overallPct: messagedFanTotal > 0 ? convertedPaywallBuyers / messagedFanTotal : 0,
+    avgViewsPerFan: paywalledFanTotal > 0 ? paywallViews / paywalledFanTotal : 0,
   };
 
   // Ordered day buckets across the whole window (fill gaps with 0 so the line is
@@ -680,13 +670,6 @@ export async function getAnalytics(
       share: lifetimeStars > 0 ? stars / lifetimeStars : 0,
     };
   }).filter((t) => t.users > 0);
-  const sortedBuyerSpend = [...buyerSpend].sort((a, b) => a - b);
-  const medianStarsPerBuyer = sortedBuyerSpend.length === 0
-    ? 0
-    : sortedBuyerSpend.length % 2 === 1
-      ? sortedBuyerSpend[Math.floor(sortedBuyerSpend.length / 2)]
-      : (sortedBuyerSpend[sortedBuyerSpend.length / 2 - 1] + sortedBuyerSpend[sortedBuyerSpend.length / 2]) / 2;
-
   return {
     period,
     totals: {

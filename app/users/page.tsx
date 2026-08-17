@@ -582,7 +582,14 @@ export default async function FansPage({
   // details, so aliases keep older profiles useful while future extractions use
   // the canonical keys listed in profile-extractor.ts.
   const personalProfileCategories = [
-    profileCategory("Hobbies", ["hobbies", "hobby", "interests"], interests),
+    // Hobbies and Interests are separate rows, and Hobbies no longer swallows
+    // the whole `interests` array. That array was the bot's dumping ground —
+    // ten entries of "valuing real identity over commercial personas" printed
+    // into one cell (Jesse, 2026-08-17). The bot now writes one short line to
+    // details.hobbies and leaves the array empty; `interests` stays in the
+    // extra list only so legacy rows still render until they re-extract.
+    profileCategory("Hobbies", ["hobbies", "hobby"], interests),
+    profileCategory("Interests", ["interests", "interest"]),
     profileCategory("Siblings", ["siblings", "sibling", "brothers", "sisters"]),
     profileCategory("Location", ["location", "city", "country", "lives_in", "hometown"]),
     profileCategory("Timezone", ["timezone", "time_zone", "utc_offset"]),

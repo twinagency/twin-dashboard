@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "./supabase";
 import { selectAllRows } from "./select-all";
 import { chartColorForClone, profileImagePathForClone } from "./colors";
+import { cloneUserStats, usageRollup } from "./rollup";
 
 export type Period = "ALL" | "1Y" | "6M" | "3M" | "1M" | "2W" | "1W" | "1D" | "CUSTOM";
 type Gran = "hour" | "day" | "week" | "month";
@@ -267,21 +268,11 @@ export async function getDashboard(period: Period, range?: DateRange): Promise<D
   });
 
   // ── AI/voice cost in window (usage_events) ──────────────────────────────────
-  // Paged: usage_events runs ~11k rows/day, so an unpaged read of any window
-  // longer than a couple of hours returned 1000 rows and under-reported cost.
-  const { rows: usage } = await selectAllRows<{
-    clone_id: string | null;
-    cost_usd: number | null;
-    ok: boolean;
-    created_at: string;
-  }>(
-    supabaseAdmin
-      .from("usage_events")
-      .select("clone_id,cost_usd,ok,created_at")
-      .gte("created_at", new Date(startMs).toISOString())
-      .lte("created_at", new Date(windowEnd).toISOString()),
-    { label: "dashboard usage_events" },
-  );
+  // Aggregated in SQL (migration 120). This read used to page every row: 330,849
+  // of them in a 30 day window, which is ~200 sequential round trips AND past
+  // selectAllRows()'s 200,000 row ceiling, so the cost it reported was a lower
+  // bound with nothing on the page to say so. The rollup is 143ms and complete.
+  const usage = await usageRollup(startMs, windowEnd);
   const cloneCost = new Map<string, number>();
   const cloneCalls = new Map<string, number>();
   const cloneErrors = new Map<string, number>();
@@ -294,43 +285,21 @@ export async function getDashboard(period: Period, range?: DateRange): Promise<D
     // Per-clone stats need a clone to attribute to; skip null-clone rows there only.
     if (!u.clone_id) continue;
     cloneCost.set(u.clone_id, (cloneCost.get(u.clone_id) ?? 0) + (Number(u.cost_usd) || 0));
-    cloneCalls.set(u.clone_id, (cloneCalls.get(u.clone_id) ?? 0) + 1);
-    if (!u.ok) {
-      cloneErrors.set(u.clone_id, (cloneErrors.get(u.clone_id) ?? 0) + 1);
-      totalErrors += 1;
+    cloneCalls.set(u.clone_id, (cloneCalls.get(u.clone_id) ?? 0) + (Number(u.calls) || 0));
+    const errors = Number(u.errors) || 0;
+    if (errors) {
+      cloneErrors.set(u.clone_id, (cloneErrors.get(u.clone_id) ?? 0) + errors);
+      totalErrors += errors;
     }
   }
 
   // ── per-clone user stats ────────────────────────────────────────────────────
-  const { rows: userRows } = await selectAllRows(
-    supabaseAdmin
-      .from("users")
-      .select("clone_id,telegram_id,name,stated_name,username,last_message_received,total_messages_sent,purchase_count,total_spent_stars"),
-    { label: "dashboard per-clone user stats" },
-  );
-  const users = (userRows ?? []) as {
-    clone_id: string;
-    telegram_id: number;
-    name: string | null;
-    stated_name: string | null;
-    username: string | null;
-    last_message_received: string | null;
-    total_messages_sent: number;
-    purchase_count: number | null;
-    total_spent_stars: number | null;
-  }[];
-
-  // Fan's self-stated name is the source of truth over the Telegram display
-  // name (see memory: allieai2-fan-name-truth).
-  const nameByKey = new Map<string, string>();
-  const usernameByKey = new Map<string, string | null>();
-  for (const u of users) {
-    const key = `${u.clone_id}:${u.telegram_id}`;
-    nameByKey.set(key, u.stated_name || u.name || `Fan ${u.telegram_id}`);
-    usernameByKey.set(key, u.username);
-  }
-
+  // Also aggregated in SQL (migration 120). This was a full read of the users
+  // table — 63,557 rows, ~64 round trips — to end up with four counters per
+  // clone. "Buyer" still means ever paid us anything (credits, media, tips),
+  // the same definition lib/analytics-data.ts uses, so the two tabs agree.
   const dayAgo = now - MS_DAY; // "active" = messaged in the last 24h (matches the Telegram messaging window)
+  const userStats = await cloneUserStats(dayAgo);
   const perClone: Record<string, CloneStats> = {};
   for (const c of clones) {
     perClone[c.id] = {
@@ -345,16 +314,13 @@ export async function getDashboard(period: Period, range?: DateRange): Promise<D
       aiErrors: cloneErrors.get(c.id) ?? 0,
     };
   }
-  for (const u of users) {
-    const s = perClone[u.clone_id];
+  for (const row of userStats) {
+    const s = perClone[row.clone_id];
     if (!s) continue;
-    s.users += 1;
-    s.messages += u.total_messages_sent ?? 0;
-    // "Buyer" = ever paid us anything (credits, media, tips) — matches the
-    // definition used in lib/analytics-data.ts so the two tabs agree.
-    if ((u.purchase_count ?? 0) > 0 || (u.total_spent_stars ?? 0) > 0) s.buyers += 1;
-    if (u.last_message_received && new Date(u.last_message_received).getTime() >= dayAgo)
-      s.active24h += 1;
+    s.users = Number(row.fans) || 0;
+    s.messages = Number(row.messages) || 0;
+    s.buyers = Number(row.buyers) || 0;
+    s.active24h = Number(row.active) || 0;
   }
 
   // ── recent transactions — most recent first. Capped generously (not to 30)
@@ -474,6 +440,45 @@ export async function getDashboard(period: Period, range?: DateRange): Promise<D
     ? await supabaseAdmin.storage.from("media").createSignedUrls(mediaPaths, 3600)
     : { data: [] as { signedUrl: string | null }[] };
   const signedUrlByPath = new Map(mediaPaths.map((path, i) => [path, signedMedia?.[i]?.signedUrl ?? null]));
+
+  // ── buyer names for the recent list ─────────────────────────────────────────
+  // Only the ≤300 fans who appear in `recent` need a name, so this asks for
+  // exactly them. It used to fall out of the full users read that the rollup
+  // above replaced — 63k rows fetched to label 300 lines. Still paged: the
+  // telegram_id IN () list crosses every clone, so the result can exceed the
+  // 1,000 row cap even though the input is small.
+  //
+  // Fan's self-stated name is the source of truth over the Telegram display
+  // name (see memory: allieai2-fan-name-truth).
+  const nameByKey = new Map<string, string>();
+  const usernameByKey = new Map<string, string | null>();
+  {
+    const buyerTelegramIds = [
+      ...new Set(latestPurchases.map((p) => p.telegram_id).filter((id): id is number => id != null)),
+    ];
+    const buyerCloneIds = [...new Set(latestPurchases.map((p) => p.clone_id).filter(Boolean))];
+    if (buyerTelegramIds.length && buyerCloneIds.length) {
+      const { rows: buyerRows } = await selectAllRows<{
+        clone_id: string;
+        telegram_id: number;
+        name: string | null;
+        stated_name: string | null;
+        username: string | null;
+      }>(
+        supabaseAdmin
+          .from("users")
+          .select("clone_id,telegram_id,name,stated_name,username")
+          .in("clone_id", buyerCloneIds)
+          .in("telegram_id", buyerTelegramIds),
+        { label: "dashboard recent buyer names" },
+      );
+      for (const u of buyerRows) {
+        const key = `${u.clone_id}:${u.telegram_id}`;
+        nameByKey.set(key, u.stated_name || u.name || `Fan ${u.telegram_id}`);
+        usernameByKey.set(key, u.username);
+      }
+    }
+  }
 
   const cloneNameById = new Map(clones.map((c) => [c.id, c.name]));
   const recent: RecentTransaction[] = latestPurchases.map((p) => {
