@@ -1,6 +1,6 @@
 import { withAdmin, ok, jsonError, fromQueryError } from "@/lib/api-route";
-import { getDashboard, type Period } from "@/lib/dashboard-data";
-import { getAnalytics } from "@/lib/analytics-data";
+import { type Period } from "@/lib/dashboard-data";
+import { getRevenueRollup } from "@/lib/revenue-cache";
 import { resolveClone, parseRevenueWindow, isQueryError } from "@/lib/api-read";
 
 export const dynamic = "force-dynamic";
@@ -32,16 +32,23 @@ export const GET = withAdmin(async (req) => {
   }
 
   const period = window.period as Period;
-  const [dashboard, analytics] = await Promise.all([
-    getDashboard(period, window.range),
-    getAnalytics(period, cloneId, window.range),
-  ]);
+  // Shared cache with the Revenue page (lib/revenue-cache.ts). Rosai polls this
+  // endpoint on a timer and used to pay the full query cost every time, which is
+  // why it had to build a cache of its own in front of it.
+  const { dashboard, analytics, cachedAt, ageSeconds, stale } = await getRevenueRollup(
+    period,
+    cloneId,
+    window.range,
+  );
 
   return ok({
     period,
     range: window.range ?? null,
     clone: clone ? { id: clone.id, slug: clone.slug, name: clone.name } : null,
     scope: cloneId ? "analytics scoped to one clone; headline/chart cover the whole fleet" : "whole fleet",
+    cachedAt,
+    ageSeconds,
+    stale,
     dashboard,
     analytics,
     caveats: [

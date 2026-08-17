@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getDashboard, type Period } from "@/lib/dashboard-data";
-import { getAnalytics } from "@/lib/analytics-data";
+import { type Period } from "@/lib/dashboard-data";
+import { getRevenueRollup } from "@/lib/revenue-cache";
 import { getStarBalance, type StarBalance } from "@/lib/star-balance";
 import { supabaseAdmin } from "@/lib/supabase";
 
@@ -43,12 +43,16 @@ export async function GET(req: NextRequest) {
 
   const period: Period = range ? "CUSTOM" : VALID.includes(p as Period) ? (p as Period) : "1M";
   try {
-    const [dashboard, analytics, balance] = await Promise.all([
-      getDashboard(period, range),
-      getAnalytics(period, clone, range),
+    // The rollup is cached (lib/revenue-cache.ts) because it is tens of seconds
+    // of Supabase on the real fleet. The balance is not: it is one live Telegram
+    // call, it is already best-effort, and it is the only genuinely live number
+    // on the page.
+    const [rollup, balance] = await Promise.all([
+      getRevenueRollup(period, clone, range),
       getScopedBalance(clone),
     ]);
-    return NextResponse.json({ ...dashboard, analytics, balance });
+    const { dashboard, analytics, cachedAt, ageSeconds, stale } = rollup;
+    return NextResponse.json({ ...dashboard, analytics, balance, cachedAt, ageSeconds, stale });
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "failed" },

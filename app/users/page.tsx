@@ -205,17 +205,83 @@ const SORTS = [
   { key: "first_seen_at", label: "Joined" },
 ];
 
+// How many fans one screen of the list holds. The list is a scrolling column
+// with a "Load more" at the bottom, not a numbered pager, so this is a chunk
+// size rather than a page size.
+const FAN_PAGE = 100;
+
+// Rows-per-load ceiling. "Load more" raises the window rather than stepping it
+// (the list is one scroll and losing your place is worse than a bigger read),
+// so this is what stops that from walking back to the unbounded read this page
+// used to do.
+const FAN_MAX = 1000;
+
+// The 24h Telegram messaging window, the only "active" that matters here.
+const REACHABLE_MS = 24 * 3600 * 1000;
+
 export default async function FansPage({
   searchParams,
 }: {
-  searchParams: Promise<{ fan?: string; q?: string; status?: string; sort?: string; dir?: string }>;
+  searchParams: Promise<{ fan?: string; q?: string; status?: string; sort?: string; dir?: string; show?: string }>;
 }) {
   const cloneId = await getCloneScope();
-  const { fan: fanParam, q = "", status = "all", sort = "last_message_received", dir = "" } = await searchParams;
+  const {
+    fan: fanParam,
+    q = "",
+    status = "all",
+    sort = "last_message_received",
+    dir = "",
+    show = "",
+  } = await searchParams;
   const sortKey = SORTS.some((s) => s.key === sort) ? sort : "last_message_received";
   const asc = dir === "asc";
+  const showCount = Math.min(Math.max(Number(show) || FAN_PAGE, FAN_PAGE), FAN_MAX);
 
-  const [clonesRes, usersRes, routeLogsRes] = await Promise.all([
+  const qLower = q.trim().toLowerCase();
+  const cutoffIso = new Date(Date.now() - REACHABLE_MS).toISOString();
+
+  // WHY THIS IS A DATABASE FILTER AND NOT A .filter() ANYMORE: this page used to
+  // read `users` with select("*") and no range at all, then count and search the
+  // whole table in memory. That was written when the fleet was 39 fans. After
+  // the 2026-08-09/10 cutover it is tens of thousands, and an unranged select
+  // does not just get slow, it silently stops at PostgREST's 1000-row cap
+  // (lib/select-all.ts explains that failure in full) so the counts above the
+  // list were wrong and no fan past the first 1000 could be found at all.
+  const scoped = <T extends { eq: (c: string, v: unknown) => T }>(query: T): T =>
+    cloneId ? query.eq("clone_id", cloneId) : query;
+
+  // Status + search, applied server side. Every branch here mirrors the
+  // in-memory predicate it replaced.
+  const applyFilters = (query: any) => {
+    let out = scoped(query);
+    if (status === "active") out = out.gte("last_message_received", cutoffIso);
+    else if (status === "unreachable")
+      out = out.or(`last_message_received.is.null,last_message_received.lt.${cutoffIso}`);
+    else if (status === "paying") out = out.or("purchase_count.gt.0,total_spent_stars.gt.0");
+    else if (status === "credits") out = out.gt("message_credits", 0);
+    else if (status === "flagged") out = out.eq("blocked", true);
+    else if (status === "new") out = out.gte("first_seen_at", cutoffIso);
+
+    if (qLower) {
+      // telegram_id is numeric, and PostgREST cannot cast a column mid-filter,
+      // so an all-digits search matches the id EXACTLY here where the old
+      // in-memory version matched a substring of it. Names still match on
+      // substring, which is what the box is actually used for.
+      const like = `*${qLower.replace(/[,()*]/g, "")}*`;
+      const clauses = [`name.ilike.${like}`, `stated_name.ilike.${like}`, `username.ilike.${like}`];
+      if (/^\d+$/.test(qLower)) clauses.push(`telegram_id.eq.${qLower}`);
+      out = out.or(clauses.join(","));
+    }
+    return out;
+  };
+
+  // Counts come back as counts. Four head:true queries return no rows at all,
+  // so these stay correct and cheap at any fleet size, which is exactly what
+  // counting a truncated select() in memory could not do.
+  const countOf = (build: (q: any) => any) =>
+    build(scoped(supabaseAdmin.from("users").select("id", { count: "exact", head: true })));
+
+  const [clonesRes, usersRes, totalRes, activeRes, payingRes, flaggedRes] = await Promise.all([
     // id/name for the fan-list "via X" line; the rest reconstructs every fan's
     // exact onboarding position, campaign position and credit-freeze state (see
     // onboardingActive() in bot/src/onboarding-state.ts and the step walk in
@@ -225,35 +291,47 @@ export default async function FansPage({
     supabaseAdmin
       .from("clones")
       .select("id,name,onboarding_steps,onboarding_free_preview_enabled,photos_enabled,drip_steps,drip_enabled"),
-    (() => {
-      let query = supabaseAdmin
-        .from("users")
-        .select("*")
-        .order(sortKey, { ascending: asc, nullsFirst: asc });
-      if (cloneId) query = query.eq("clone_id", cloneId);
-      return query;
-    })(),
-    // Last route per fan. One indexed read of the most recent routing rows
-    // (system_logs_source_ts_idx covers exactly this (source, ts desc) shape),
-    // then newest-per-fan in memory, rather than a query per row. PostgREST
-    // caps every response at 1000 rows on this project, so on a busy fleet this
-    // window only reaches back so far: a fan outside it gets NO route chip,
-    // which is the intended failure - never a stale one presented as current.
-    (() => {
-      let query = supabaseAdmin
-        .from("system_logs")
-        .select("clone_id,telegram_id,detail")
-        .eq("source", "routing")
-        .order("ts", { ascending: false })
-        .limit(1000);
-      if (cloneId) query = query.eq("clone_id", cloneId);
-      return query;
-    })(),
+    // The visible slice, ordered and ranged in the database. `id` is the tie
+    // breaker: paging an unstable order can show the same fan twice and skip
+    // another, and every sort key here has ties (a whole clone can share a null
+    // last_message_received).
+    applyFilters(supabaseAdmin.from("users").select("*"))
+      .order(sortKey, { ascending: asc, nullsFirst: asc })
+      .order("id", { ascending: true })
+      // One row past the slice, trimmed off below. That extra row is the only
+      // honest answer to "is there more": a slice that comes back exactly full
+      // could be the end of the set or the middle of it, and guessing shows a
+      // "Load more" that loads nothing.
+      .range(0, showCount),
+    // Counts, unaffected by search/status so they always read as the true
+    // totals for the current clone scope.
+    countOf((q: any) => q),
+    countOf((q: any) => q.gte("last_message_received", cutoffIso)),
+    countOf((q: any) => q.or("purchase_count.gt.0,total_spent_stars.gt.0")),
+    countOf((q: any) => q.eq("blocked", true)),
   ]);
 
   const clones = (clonesRes.data ?? []) as CloneRow[];
   const cloneById = new Map(clones.map((c) => [c.id, c]));
-  const allUsers = (usersRes.data ?? []) as any[];
+  const fetchedFans = (usersRes.data ?? []) as any[];
+  const filtered = fetchedFans.slice(0, showCount);
+
+  // Last route per fan, for the chips on each row. Scoped to the fans actually
+  // on screen (`.in`) rather than "the last 1000 routing rows fleet-wide" as
+  // before: that older window was ordered by time, so on a busy fleet the fans
+  // in the list were frequently not in it and simply got no chip.
+  const pageTelegramIds = Array.from(new Set(filtered.map((u) => u.telegram_id))).slice(0, 300);
+  const routeLogsRes = pageTelegramIds.length
+    ? await scoped(
+        supabaseAdmin
+          .from("system_logs")
+          .select("clone_id,telegram_id,detail")
+          .eq("source", "routing")
+          .in("telegram_id", pageTelegramIds)
+          .order("ts", { ascending: false })
+          .limit(2000),
+      )
+    : { data: [] as any[] };
 
   // Rows arrive newest-first, so the FIRST row seen for a fan is his last turn.
   // `seen` is tracked separately from the map: a row we cannot render a chip
@@ -281,41 +359,24 @@ export default async function FansPage({
     }
   }
 
-  // Data above the list: fleet/clone-scoped counts, unaffected by search/status
-  // so they always read as the true totals for the current clone scope.
-  const totalFans = allUsers.length;
   // "Active" = messaged in the last 24h (the Telegram messaging window), NOT the manual is_active flag.
-  const activeFans = allUsers.filter(
-    (u) => u.last_message_received && Date.now() - new Date(u.last_message_received).getTime() < 24 * 3600 * 1000,
-  ).length;
-  const payingFans = allUsers.filter((u) => (u.purchase_count ?? 0) > 0 || (u.total_spent_stars ?? 0) > 0).length;
-  const flaggedFans = allUsers.filter((u) => !!u.blocked).length;
+  const totalFans = totalRes.count ?? 0;
+  const activeFans = activeRes.count ?? 0;
+  const payingFans = payingRes.count ?? 0;
+  const flaggedFans = flaggedRes.count ?? 0;
 
-  const isPayingRow = (u: any) => (u.purchase_count ?? 0) > 0 || (u.total_spent_stars ?? 0) > 0;
-  const qLower = q.trim().toLowerCase();
-  const now = Date.now();
-  const filtered = allUsers
-    .filter((u) => {
-      const reachable =
-        u.last_message_received && now - new Date(u.last_message_received).getTime() < 24 * 3600_000;
-      if (status === "active") return reachable; // inside the 24h window = we can message them
-      if (status === "unreachable") return !reachable; // outside it = bot can't initiate
-      if (status === "paying") return isPayingRow(u);
-      if (status === "credits") return (u.message_credits ?? 0) > 0;
-      if (status === "flagged") return !!u.blocked;
-      if (status === "new") return u.first_seen_at && now - new Date(u.first_seen_at).getTime() <= 24 * 3600_000;
-      return true;
-    })
-    .filter(
-      (u) =>
-        !qLower ||
-        u.name?.toLowerCase().includes(qLower) ||
-        u.stated_name?.toLowerCase().includes(qLower) ||
-        u.username?.toLowerCase().includes(qLower) ||
-        String(u.telegram_id).includes(qLower),
-    );
+  const hasMore = fetchedFans.length > showCount && showCount < FAN_MAX;
 
-  const selected = (fanParam && filtered.find((u) => u.id === fanParam)) || filtered[0] || null;
+  // The fan in ?fan= is normally on the current slice. When he is not (a deep
+  // link, or he sorted off the end of it) he is fetched on his own rather than
+  // silently swapped for whoever is at the top, which is what falling back to
+  // filtered[0] alone would do.
+  let selected = (fanParam && filtered.find((u) => u.id === fanParam)) || null;
+  if (!selected && fanParam) {
+    const { data } = await supabaseAdmin.from("users").select("*").eq("id", fanParam).maybeSingle();
+    selected = (data as any) ?? null;
+  }
+  if (!selected) selected = filtered[0] || null;
 
   let history: any[] = [];
   let purchases: any[] = [];
@@ -443,6 +504,9 @@ export default async function FansPage({
     if (status !== "all") params.set("status", status);
     if (sortKey !== "last_message_received") params.set("sort", sortKey);
     if (asc) params.set("dir", "asc");
+    // Kept across clicks so picking a fan (or re-sorting) does not collapse a
+    // list you just expanded.
+    if (showCount !== FAN_PAGE) params.set("show", String(showCount));
     Object.entries(extra).forEach(([k, v]) => (v ? params.set(k, v) : params.delete(k)));
     return `/users?${params.toString()}`;
   };
@@ -772,6 +836,14 @@ export default async function FansPage({
                   </Link>
                 );
               })
+            )}
+            {hasMore && (
+              <Link
+                href={baseQs({ show: String(Math.min(showCount + FAN_PAGE, FAN_MAX)) })}
+                className="block px-3 py-3 text-center text-xs font-medium text-accent transition hover:bg-muted/10"
+              >
+                Load more ({fmtNum(filtered.length)} of {fmtNum(totalFans)})
+              </Link>
             )}
           </div>
         </Card>
