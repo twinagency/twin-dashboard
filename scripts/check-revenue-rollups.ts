@@ -37,6 +37,7 @@
 // Run: npm run test:rollups
 import "dotenv/config";
 import { supabaseAdmin } from "../lib/supabase";
+import { TIERS as ANALYTICS_TIERS } from "../lib/analytics-data";
 import { selectAllRows } from "../lib/select-all";
 import {
   cloneUserStats,
@@ -141,10 +142,44 @@ async function main() {
   eq("total cost_usd", Number(sqlCost.toFixed(6)), Number(jsCost.toFixed(6)), 0.000001);
   eq("total calls", sqlCalls, jsCalls);
   eq("total errors (ok IS NOT TRUE, NULL counts)", sqlErrors, jsErrors);
-  assert(
-    "unattributed (clone_id NULL) spend is kept, not dropped",
-    sqlUsage.some((r) => r.clone_id === null) === usageRows.some((r) => r.clone_id === null),
-  );
+  // Unattributed spend, tested where it actually exists. Asserting it inside the
+  // 1D window was worthless: every NULL-clone row in usage_events was written
+  // between 2026-07-04 and 2026-07-29, so `false === false` passed while the
+  // property went untested. This finds the window those rows live in and
+  // compares the group against a read of exactly them.
+  {
+    // PAGED, not .limit(2000): PostgREST caps a response at 1,000 rows whatever
+    // the limit says, and the first version of this assertion read 1,000 of the
+    // 1,474 NULL-clone rows and then failed against the SQL for the missing 474.
+    const { rows } = await selectAllRows<{ created_at: string; cost_usd: number | null }>(
+      supabaseAdmin
+        .from("usage_events")
+        .select("created_at,cost_usd")
+        .is("clone_id", null)
+        .order("created_at", { ascending: true }),
+      { label: "check unattributed usage" },
+    );
+    if (rows.length === 0) {
+      assert("unattributed (clone_id NULL) spend: none in the table to test", true);
+    } else {
+      const firstMs = new Date(rows[0].created_at).getTime();
+      // +1ms on each end. Postgres stores these timestamps to the microsecond
+      // and JS Date truncates to the millisecond, so a window built from a row's
+      // own timestamp excludes that row: the first run of this assertion saw
+      // 1,473 of 1,474 rows and failed by one row's $0.00028.
+      const lastMs = new Date(rows[rows.length - 1].created_at).getTime() + 1;
+      const jsNullCost = rows.reduce((s, r) => s + (Number(r.cost_usd) || 0), 0);
+      const groups = await usageRollup(firstMs, lastMs);
+      const nullGroup = groups.find((g) => g.clone_id === null);
+      const ok =
+        !!nullGroup && Math.abs((Number(nullGroup.cost_usd) || 0) - jsNullCost) <= 0.000001;
+      assert(
+        "unattributed (clone_id NULL) spend is kept, not dropped",
+        ok,
+        ok ? `$${jsNullCost.toFixed(4)} over ${rows.length} rows` : `group ${nullGroup ? "wrong" : "missing"}`,
+      );
+    }
+  }
   let perCloneCostMatches = true;
   for (const row of sqlUsage) {
     if (!row.clone_id) continue;
@@ -339,6 +374,87 @@ async function main() {
     sqlPaywall.converted,
     [...jsPaywalled].filter((id) => creditBuyers.has(id)).length,
   );
+
+  // ── the clone-scoped path ──────────────────────────────────────────────────
+  // Everything above runs fleet-wide (p_clone null). The scoped path is what
+  // /api/v1/revenue hands every model for her own dashboard, and a broken
+  // `(p_clone is null or x = p_clone)` in any of the six functions would ship
+  // green without this. One clone, three of the rollups, same reference reads.
+  console.log("\nscoped to one clone");
+  {
+    const { data: cloneRow } = await supabaseAdmin
+      .from("clones")
+      .select("id,name")
+      .order("created_at", { ascending: true })
+      .limit(1)
+      .maybeSingle();
+    const cloneId = cloneRow?.id as string | undefined;
+    if (!cloneId) {
+      assert("a clone exists to scope to", false);
+    } else {
+      const scopedUsage = await usageRollup(startMs, endMs, cloneId);
+      const fleetUsage = await usageRollup(startMs, endMs);
+      const fleetForClone = fleetUsage.find((r) => r.clone_id === cloneId);
+      assert(
+        "scoped usage returns only that clone",
+        scopedUsage.every((r) => r.clone_id === cloneId),
+        scopedUsage.map((r) => r.clone_id).join(", "),
+      );
+      eq(
+        "scoped usage cost equals that clone's slice of the fleet rollup",
+        Number(Number(scopedUsage[0]?.cost_usd ?? 0).toFixed(6)),
+        Number(Number(fleetForClone?.cost_usd ?? 0).toFixed(6)),
+        0.000001,
+      );
+
+      const { rows: scopedUsers } = await selectAllRows<{
+        purchase_count: number | null;
+        total_spent_stars: number | null;
+      }>(
+        supabaseAdmin
+          .from("users")
+          .select("purchase_count,total_spent_stars")
+          .eq("clone_id", cloneId)
+          .order("id", { ascending: true }),
+        { label: "check scoped users" },
+      );
+      const scopedFansJs = scopedUsers.length;
+      const scopedBuyersJs = scopedUsers.filter(
+        (u) => (u.purchase_count ?? 0) > 0 || (u.total_spent_stars ?? 0) > 0,
+      ).length;
+      const scopedSpend = await fanSpendStats(cloneId);
+      assert(
+        "scoped fan count is this clone's, not the fleet's",
+        Math.abs(Number(scopedSpend.fans) - scopedFansJs) <= 2 && Number(scopedSpend.fans) < fans,
+        `${scopedSpend.fans} vs ${scopedFansJs} (fleet ${fans})`,
+      );
+      eq("scoped buyers", Number(scopedSpend.buyers), scopedBuyersJs, 2);
+
+      const scopedMessaged = await messagedFanCount(startMs, endMs, cloneId);
+      assert(
+        "scoped messaged-fan count is a subset of the fleet's",
+        scopedMessaged <= sqlMessaged,
+        `${scopedMessaged} of ${sqlMessaged}`,
+      );
+    }
+  }
+
+  // ── the tier list has to stay in step with the app ─────────────────────────
+  // The five keys live in three places: the migration, TIERS in
+  // lib/analytics-data.ts, and this file. Adding a tier upstream without
+  // touching the SQL folds it into "none" — the new tier renders 0 users and
+  // "No spend yet" absorbs it. Importing the app's list here means that shows
+  // up as a failure instead of a quietly wrong chart.
+  console.log("\ntier vocabulary");
+  {
+    const appTiers = ANALYTICS_TIERS.map((t) => t.key).sort();
+    const sqlKnown = [...TIER_KEYS].sort();
+    assert(
+      "the app's spend tiers are exactly the ones the SQL knows about",
+      JSON.stringify(appTiers) === JSON.stringify(sqlKnown),
+      `app ${appTiers.join("/")} vs SQL ${sqlKnown.join("/")}`,
+    );
+  }
 
   console.log(failures === 0 ? "\nAll rollups agree with the paged roll-up." : `\n${failures} FAILED`);
   process.exit(failures === 0 ? 0 : 1);

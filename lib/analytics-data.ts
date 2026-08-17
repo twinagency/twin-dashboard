@@ -62,7 +62,7 @@ const normFeature = (feature: string | null, kind: string | null): FeatureKey =>
   feature && (FEATURE_KEYS as string[]).includes(feature) ? (feature as FeatureKey) : kindToFeature(kind);
 
 // Lifetime spend tiers — must match src/data/*-store.ts recordSpend().
-const TIERS: { key: string; label: string }[] = [
+export const TIERS: { key: string; label: string }[] = [
   { key: "whale", label: "Whale · 1,000+ ⭐" },
   { key: "high", label: "High · 300+ ⭐" },
   { key: "mid", label: "Mid · 50+ ⭐" },

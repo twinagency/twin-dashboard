@@ -141,10 +141,3 @@ export async function paywallStats(
     converted: Number(row?.converted) || 0,
   };
 }
-
-/** True when migration 120's functions are present. Used by the check, not by
- *  the runtime — the runtime wants the loud failure. */
-export async function rollupsAvailable(): Promise<boolean> {
-  const { error } = await supabaseAdmin.rpc("revenue_fan_spend_stats", { p_clone: null });
-  return !error;
-}

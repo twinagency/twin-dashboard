@@ -469,7 +469,13 @@ export async function getDashboard(period: Period, range?: DateRange): Promise<D
           .from("users")
           .select("clone_id,telegram_id,name,stated_name,username")
           .in("clone_id", buyerCloneIds)
-          .in("telegram_id", buyerTelegramIds),
+          .in("telegram_id", buyerTelegramIds)
+          // ORDERED, because 300 buyers across 11 clones can cross the 1,000
+          // row page boundary and `users` is written on every inbound message.
+          // Unordered .range() paging over a moving table skips rows, and a
+          // skipped row here renders "Fan 12345" instead of his name. That is
+          // the same defect this commit fixed on usage_events.
+          .order("id", { ascending: true }),
         { label: "dashboard recent buyer names" },
       );
       for (const u of buyerRows) {
