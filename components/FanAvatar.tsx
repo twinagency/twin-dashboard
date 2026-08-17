@@ -29,7 +29,11 @@ export default function FanAvatar({
   if (failed || telegramId == null) {
     return (
       <span
-        className={`flex shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white ${className}`}
+        // grid + place-items-center, and leading-none so the glyph's own line box
+        // cannot push it off the circle's centre (Jesse, 2026-08-17: "the icons
+        // are not centred in their circles"). Initials are short and must never
+        // wrap, or a two-letter fallback re-centres itself onto two lines.
+        className={`grid shrink-0 place-items-center whitespace-nowrap rounded-full text-[10px] font-semibold leading-none text-white ${className}`}
         style={{ background: color ?? "#555" }}
       >
         {initials(name)}

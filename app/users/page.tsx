@@ -423,6 +423,18 @@ export default async function FansPage({
     paid?: boolean;
     stars?: number;
     count?: number;
+    // ── THE AUTOMATED CAMPAIGN STAMP (bot/src/campaign.ts, 2026-08-17) ───────
+    // Written by the campaign worker on every send it makes, so the operator can
+    // see in the scroll where an automated re-engagement went out rather than
+    // guessing which lines she never wrote in a live conversation. Key names are
+    // the jsonb's own (snake_case); bot/src/dev/check-drip.ts asserts them.
+    //
+    // FORWARD ONLY. Nothing recorded which historic sends were drip, so every row
+    // written before the bot shipped this has no stamp and never will. That is
+    // why the marker's absence means "unknown", never "this was live".
+    drip?: boolean;
+    drip_step?: number;
+    drip_kind?: "step" | "winback";
   };
   const metaOf = (m: any): BubbleMeta | null =>
     m?.meta && typeof m.meta === "object" ? (m.meta as BubbleMeta) : null;
@@ -877,6 +889,13 @@ export default async function FansPage({
                     via <span className="creator-name">{cloneById.get(selected.clone_id)?.name ?? "-"}</span>
                   </div>
                 </div>
+                {/* The drip markers drawn through the scroll below need one
+                    explanation, and it belongs here rather than repeated on every
+                    marker: what they mean, and that they only exist going forward. */}
+                <Info
+                  className="shrink-0"
+                  text="A marker in the thread means the campaign sent that message automatically, not a person. Only sends made from 2026-08-17 onward carry it: nothing recorded which earlier messages were automated, so an older message with no marker is unknown, not confirmed live."
+                />
                 {/* Telegram paper-plane, Telegram blue */}
                 <span className="flex shrink-0 items-center gap-1 rounded-full border border-line px-2 py-0.5 text-[10px] font-medium text-muted">
                   <svg viewBox="0 0 24 24" className="h-3 w-3" fill="#2AABEE">
@@ -906,8 +925,47 @@ export default async function FansPage({
                     const legacyVoice = !isVoice && !fan && transcript != null;
                     const legacyMedia = !isVoice && !isMedia && !legacyVoice && !fan ? mediaText(m.content) : null;
                     const caption = mediaText(m.content)?.caption ?? null;
+                    // ── INLINE DRIP MARKER (Jesse, 2026-08-17) ──────────────
+                    // One marker per campaign step, not per row: a win-back fires
+                    // a media send and a text send under the SAME step number, so
+                    // an unconditional marker would draw the same rule twice in a
+                    // row. Compare against the previous row rather than tracking
+                    // state across the map, which a server component re-render
+                    // would not preserve anyway.
+                    const drip = meta?.drip ? meta : null;
+                    const prevDrip = i > 0 ? metaOf(history[i - 1]) : null;
+                    const sameStepAsPrev =
+                      !!drip &&
+                      !!prevDrip?.drip &&
+                      prevDrip.drip_step === drip.drip_step &&
+                      prevDrip.drip_kind === drip.drip_kind;
+                    const dripLabel = drip
+                      ? (drip.drip_kind === "winback" ? "Win-back" : "Automated drip") +
+                        (drip.drip_step ? ` · step ${drip.drip_step}` : "")
+                      : null;
                     return (
-                      <div key={i} className={"flex " + (fan ? "justify-start" : "justify-end")}>
+                      <div key={i}>
+                        {drip && !sameStepAsPrev && (
+                          <div
+                            className="mb-2 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-muted"
+                            title={
+                              drip.drip_kind === "winback"
+                                ? "Sent automatically to pull a lapsed spender back, replacing this campaign step. Nobody typed it."
+                                : "Sent automatically by the campaign, not typed in a live conversation."
+                            }
+                          >
+                            <span className="h-px flex-1 bg-line" />
+                            <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-line bg-elev px-2 py-0.5">
+                              <svg viewBox="0 0 24 24" className="h-3 w-3 shrink-0" fill="none" stroke="currentColor" strokeWidth={2}>
+                                <circle cx="12" cy="12" r="9" />
+                                <path d="M12 7v5l3 2" strokeLinecap="round" />
+                              </svg>
+                              {dripLabel}
+                            </span>
+                            <span className="h-px flex-1 bg-line" />
+                          </div>
+                        )}
+                      <div className={"flex " + (fan ? "justify-start" : "justify-end")}>
                         <div
                           className={
                             "max-w-[75%] rounded-2xl px-3 py-2 text-sm " +
@@ -1012,6 +1070,7 @@ export default async function FansPage({
                             {dateTime(m.created_at)}
                           </div>
                         </div>
+                      </div>
                       </div>
                     );
                   })

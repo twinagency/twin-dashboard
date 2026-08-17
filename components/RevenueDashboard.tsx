@@ -70,13 +70,20 @@ function TransactionMedia({
 }) {
   const label = TX_KIND_LABEL[type];
   return (
-    <span className="flex min-w-[132px] items-center gap-2.5" title={name || label}>
+    // min-w-0 on mobile, not min-w-[132px]: this sits in a table cell on desktop
+    // and a flex card row on a phone, and a hard min-width there is one of the
+    // things that pushed this page past the viewport.
+    <span className="flex min-w-0 items-center gap-2.5 sm:min-w-[132px]" title={name || label}>
       <span className="relative grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-xl border border-line bg-surface text-accent shadow-sm">
         {url && type === "video" ? (
           <>
             <video src={url} muted playsInline preload="metadata" className="h-full w-full object-cover" />
             <span className="pointer-events-none absolute inset-0 grid place-items-center bg-black/10">
-              <span className="h-0 w-0 border-y-[5px] border-l-[8px] border-y-transparent border-l-white drop-shadow" />
+              {/* A CSS border triangle's BOX is 8px wide but its visual mass sits
+                  in the left third, so centring the box leaves the arrow looking
+                  shoved right. translate-x-[2px] centres what the eye actually
+                  sees. Same complaint as the avatar circles above. */}
+              <span className="h-0 w-0 translate-x-[2px] border-y-[5px] border-l-[8px] border-y-transparent border-l-white drop-shadow" />
             </span>
           </>
         ) : url ? (
@@ -104,9 +111,12 @@ function TransactionMedia({
           </svg>
         )}
       </span>
-      <span>
+      {/* min-w-0 + max-w-full, not a fixed max-w-40: without it this filename
+          block could not shrink below 160px and pushed the mobile transaction
+          card 18px past its own border. */}
+      <span className="min-w-0">
         <span className="block font-medium text-ink">{label}</span>
-        {name && <span className="block max-w-40 truncate text-[11px] normal-case text-muted">{name}</span>}
+        {name && <span className="block max-w-full truncate text-[11px] normal-case text-muted sm:max-w-40">{name}</span>}
       </span>
     </span>
   );
@@ -254,7 +264,9 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
     <div className="earnings-aurora">
       <div className="earnings-heading mb-5 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
-          <h2 className="flex items-center gap-2 font-heading text-3xl font-semibold tracking-[-0.035em] text-[#06172f] sm:text-4xl">
+          {/* Mobile first: 2xl on a phone. At 3xl this one line took a quarter of
+              the screen height before a single number appeared. */}
+          <h2 className="flex items-center gap-2 font-heading text-2xl font-semibold tracking-[-0.035em] text-[#06172f] sm:text-3xl md:text-4xl">
             Earnings overview
             <Info text="Revenue, buyer activity and conversion performance across your active clones." />
           </h2>
@@ -263,8 +275,13 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
       {/* ── Period toggle - a segmented control, not tabs: it re-windows the
           same ledger, it doesn't switch views. Custom range + chart type sit
           alongside it, on the same row. ─────────────────────────────────── */}
-      <div className="earnings-toolbar mb-5 flex flex-wrap items-center gap-2">
-        <div className="earnings-control-group inline-flex flex-wrap gap-0.5 rounded-full p-0.5">
+      {/* Mobile first: the pills still WRAP rather than scroll sideways. A scroll
+          strip fitted in one row but hid "1D" and "Custom" off the right edge with
+          no visible cue, which on this page reads as the content being cut off,
+          the exact complaint. Tighter type and padding instead, so they wrap to
+          two rows instead of three and nothing is hidden. */}
+      <div className="earnings-toolbar mb-4 flex flex-wrap items-center gap-1.5 sm:mb-5 sm:gap-2">
+        <div className="earnings-control-group inline-flex min-w-0 flex-wrap gap-0.5 rounded-full p-0.5">
           {PERIODS.map((p) => (
             <button
               key={p.key}
@@ -273,7 +290,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
                 setPeriod(p.key);
               }}
               className={
-                "flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium tabular-nums transition " +
+                "flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium tabular-nums transition sm:px-2.5 sm:text-xs " +
                 (!customRange && period === p.key
                   ? "earnings-control-active"
                   : "text-muted hover:bg-muted/10 hover:text-ink")
@@ -295,7 +312,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
               setCustomOpen(true);
             }}
             className={
-              "flex items-center gap-1 rounded-full px-2.5 py-1 text-xs font-medium tabular-nums transition " +
+              "flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium tabular-nums transition sm:px-2.5 sm:text-xs " +
               (customRange ? "earnings-control-active" : "text-muted hover:bg-muted/10 hover:text-ink")
             }
           >
@@ -307,14 +324,17 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
           </button>
         </div>
 
-        {/* Bar / line toggle - same series, different mark. */}
-        <div className="earnings-control-group inline-flex gap-0.5 rounded-full p-0.5">
+        {/* Bar / line toggle - same series, different mark. Fixed square boxes
+            with place-items-center rather than padding around an icon: padding
+            rounds differently per icon and left both of these looking off-centre
+            inside the round active pill. */}
+        <div className="earnings-control-group inline-flex shrink-0 gap-0.5 rounded-full p-0.5">
           <button
             onClick={() => setChartType("bar")}
             aria-label="Bar chart"
             aria-pressed={chartType === "bar"}
             className={
-              "rounded-full p-1.5 transition " +
+              "grid h-7 w-7 place-items-center rounded-full transition " +
               (chartType === "bar" ? "earnings-control-active" : "text-muted hover:bg-muted/10 hover:text-ink")
             }
           >
@@ -327,11 +347,13 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
             aria-label="Line chart"
             aria-pressed={chartType === "line"}
             className={
-              "rounded-full p-1.5 transition " +
+              "grid h-7 w-7 place-items-center rounded-full transition " +
               (chartType === "line" ? "earnings-control-active" : "text-muted hover:bg-muted/10 hover:text-ink")
             }
           >
-            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2}>
+            {/* The polyline's ink spans y 7..16, so its bounding box centre is not
+                the viewBox centre. Nudged down to sit level in the circle. */}
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 translate-y-[1px]" fill="none" stroke="currentColor" strokeWidth={2}>
               <path d="M4 16l5-6 4 3 7-9" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </button>
@@ -764,6 +786,57 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
               }
               return (
                 <>
+                {/* ── PHONE: one card per transaction ─────────────────────────
+                    Five columns of fan + clone + item + money + date needed 719px
+                    on a 375px screen, so the table scrolled sideways inside its
+                    own box and the operator could not see an amount and who paid
+                    it at the same time. Same rows, same order, same numbers,
+                    stacked instead. The table below takes over at sm. */}
+                <div className="divide-y divide-line sm:hidden">
+                  {rows.map((t, i) => (
+                    <div key={i} className="flex items-start gap-2.5 px-4 py-3">
+                      <FanAvatar
+                        cloneId={t.cloneId}
+                        telegramId={t.telegramId}
+                        name={t.buyerName}
+                        color={t.cloneColor}
+                        className="mt-0.5 h-8 w-8"
+                      />
+                      <div className="min-w-0 flex-1">
+                        <div className="truncate text-sm font-medium text-ink">{t.buyerName}</div>
+                        <div className="mt-0.5 truncate text-[11px] text-muted">
+                          {t.username ? `@${t.username}` : `Fan ${t.telegramId}`}
+                          {!scoped && (
+                            <>
+                              {" · "}
+                              <span className="creator-name">{t.cloneName}</span>
+                            </>
+                          )}
+                        </div>
+                        <div className="mt-1.5 min-w-0 text-xs text-muted">
+                          {t.mediaType ? (
+                            <TransactionMedia type={t.mediaType} url={t.mediaUrl} name={t.mediaName} />
+                          ) : (
+                            <span>{TX_KIND_LABEL[t.kind] ?? t.kind}</span>
+                          )}
+                        </div>
+                      </div>
+                      <div className="shrink-0 text-right">
+                        <div className="money-value font-mono text-sm font-semibold tabular-nums">{money(t.stars)}</div>
+                        <div className="text-[11px] text-muted">⭐ {fmtNum(t.stars)}</div>
+                        <div className="mt-0.5 text-[10px] text-muted/80">
+                          {new Date(t.paidAt).toLocaleString("en-US", {
+                            month: "short",
+                            day: "numeric",
+                            hour: "numeric",
+                            minute: "2-digit",
+                          })}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="hidden sm:block">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -822,6 +895,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
                     ))}
                   </TableBody>
                 </Table>
+                </div>
                 {nextLimit !== null && matches.length > txLimit && (
                   <div className="border-t border-line px-4 py-2 text-center">
                     <Button variant="ghost" size="sm" onClick={() => setTxLimit(nextLimit)}>
@@ -1010,9 +1084,12 @@ function RevenueReport({
 
   return (
     <Card size="sm" className="mt-4">
-      <CardHeader className="rounded-xl bg-[#06172f] px-4 py-3 text-white shadow-[0_10px_30px_rgba(6,23,47,0.2)]">
-        <CardTitle className="text-sm font-bold uppercase tracking-[0.14em] text-white">Revenue report</CardTitle>
-        <CardDescription className="text-[11px] text-white/70">
+      <CardHeader className="rounded-xl bg-[#06172f] px-3 py-2.5 text-white shadow-[0_10px_30px_rgba(6,23,47,0.2)] sm:px-4 sm:py-3">
+        <CardTitle className="text-xs font-bold uppercase tracking-[0.14em] text-white sm:text-sm">Revenue report</CardTitle>
+        {/* Four lines of subtitle on a phone, above any data. Hidden there, and
+            the ⓘ on the Close row is not the place for it either: the panel titles
+            below each carry their own hint. */}
+        <CardDescription className="hidden text-[11px] text-white/70 sm:block">
           Where the money comes from in this window: product, spender tier, {scoped ? "" : "clone, "}time and funnel.
         </CardDescription>
         <CardAction>
@@ -1021,7 +1098,7 @@ function RevenueReport({
           </Button>
         </CardAction>
       </CardHeader>
-      <CardContent className="flex flex-col gap-3">
+      <CardContent className="flex flex-col gap-3 px-2.5 sm:px-(--card-spacing)">
         {/* Key facts */}
         {facts.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
@@ -1098,7 +1175,11 @@ function RevenueReport({
                 ) : (
                   <div className="grid gap-1.5">
                     {a.topWeeklySpenders.map((spender, index) => (
-                      <div key={`${spender.cloneId ?? "unknown"}:${spender.telegramId}`} className="flex items-center gap-2.5 rounded-xl border border-line bg-surface/75 px-3 py-2">
+                      // min-w-0 because this is a GRID item: a grid track sizes to
+                      // its item's min-content width unless told otherwise, so
+                      // without it the fixed-width rank/avatar/amount forced the
+                      // row 20px wider than the panel and it crossed the border.
+                      <div key={`${spender.cloneId ?? "unknown"}:${spender.telegramId}`} className="flex min-w-0 items-center gap-2 rounded-xl border border-line bg-surface/75 px-2.5 py-2 sm:gap-2.5 sm:px-3">
                         <span className="w-4 shrink-0 font-mono text-[10px] font-semibold text-muted">#{index + 1}</span>
                         <FanAvatar
                           cloneId={spender.cloneId ?? ""}
@@ -1121,7 +1202,13 @@ function RevenueReport({
                         </span>
                         <span className="shrink-0 text-right">
                           <span className="money-value block font-mono text-xs font-semibold tabular-nums">{money(spender.stars)}</span>
-                          <span className="block text-[10px] text-muted">⭐ {fmtNum(spender.stars)} · {fmtNum(spender.purchases)} buys</span>
+                          {/* Two lines on a phone, one from sm up: as a single line
+                              this was the widest fixed thing in the row. */}
+                          <span className="block text-[10px] leading-tight text-muted">
+                            ⭐ {fmtNum(spender.stars)}
+                            <span className="hidden sm:inline"> · </span>
+                            <span className="block sm:inline">{fmtNum(spender.purchases)} buys</span>
+                          </span>
                         </span>
                       </div>
                     ))}
@@ -1170,6 +1257,46 @@ function RevenueReport({
               {earningClones.length === 0 ? (
                 <ReportEmpty text="No clone earned in this window." />
               ) : (
+                <>
+                {/* ── PHONE: one card per clone ───────────────────────────────
+                    Six numeric columns wanted 493px inside a 283px panel. Same
+                    six figures, labelled, in a 3-up grid under the name. */}
+                <div className="flex flex-col gap-2 lg:hidden">
+                  {earningClones.map((c) => (
+                    <div key={c.id} className="rounded-xl border border-line bg-surface/75 px-3 py-2.5">
+                      <div className="flex items-baseline justify-between gap-2">
+                        <span className="flex min-w-0 items-center gap-2">
+                          <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: c.color }} />
+                          <span className="creator-name truncate text-xs font-semibold text-ink">{c.name}</span>
+                        </span>
+                        <span className="money-value shrink-0 font-mono text-sm font-semibold tabular-nums">
+                          {money(c.revenueStars)}
+                        </span>
+                      </div>
+                      <div className="mt-2 grid grid-cols-3 gap-2 text-[10px]">
+                        {[
+                          { k: "Share", v: totalStars > 0 ? pct(c.revenueStars / totalStars) : "-" },
+                          { k: "Profit", v: usd(c.profitUsd), money: true },
+                          { k: "Margin", v: c.revenueStars > 0 ? pct(c.margin) : "-" },
+                          { k: "Sales", v: fmtNum(c.sales) },
+                        ].map((cell) => (
+                          <span key={cell.k} className="min-w-0">
+                            <span className="block uppercase tracking-wide text-muted">{cell.k}</span>
+                            <span
+                              className={
+                                "mt-0.5 block truncate font-mono text-xs font-semibold tabular-nums " +
+                                (cell.money ? "money-value" : "text-ink")
+                              }
+                            >
+                              {cell.v}
+                            </span>
+                          </span>
+                        ))}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+                <div className="hidden lg:block">
                 <Table>
                   <TableHeader>
                     <TableRow>
@@ -1205,6 +1332,8 @@ function RevenueReport({
                     ))}
                   </TableBody>
                 </Table>
+                </div>
+                </>
               )}
             </ReportPanel>
 
@@ -1421,12 +1550,20 @@ function RevenueReport({
   );
 }
 
+// Mobile first: p-2.5 on a phone, p-4 from sm up. This panel sits inside a
+// CardContent inside a Card, so three levels of 1rem padding were eating 60 of a
+// 375px screen and leaving the content 283px wide. The hint moves into an
+// ⓘ-hover at phone width for the same reason: as a paragraph it was taller than
+// the data underneath it. Desktop keeps the visible sentence.
 function ReportPanel({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
   return (
-    <div className="min-w-0 rounded-xl border border-line p-4">
-      <div className="mb-3 rounded-xl bg-[#06172f] px-3 py-2.5 shadow-[0_7px_20px_rgba(6,23,47,0.16)]">
-        <h3 className="text-[11px] font-bold uppercase tracking-[0.13em] text-white">{title}</h3>
-        {hint && <p className="mt-0.5 text-[10px] leading-relaxed text-white/65">{hint}</p>}
+    <div className="min-w-0 rounded-xl border border-line p-2.5 sm:p-4">
+      <div className="mb-2.5 rounded-xl bg-[#06172f] px-3 py-2 shadow-[0_7px_20px_rgba(6,23,47,0.16)] sm:mb-3 sm:py-2.5">
+        <h3 className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.13em] text-white">
+          {title}
+          {hint && <Info text={hint} className="text-white/70 sm:hidden" />}
+        </h3>
+        {hint && <p className="mt-0.5 hidden text-[10px] leading-relaxed text-white/65 sm:block">{hint}</p>}
       </div>
       {children}
     </div>
