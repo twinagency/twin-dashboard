@@ -11,6 +11,11 @@ import ConfirmSubmit from "@/components/ConfirmSubmit";
 import { Info } from "@/components/clone/fields";
 import { setCredits, resetCounters, toggleActive, setBlocked, setPaused, deleteUser, clearMinorFlag } from "./actions";
 import ManualTakeover from "@/components/ManualTakeover";
+import { campaignStepsOf, nextDripDueAt } from "@/lib/drip";
+import LiveFeed from "@/components/users/LiveFeed";
+import PurchaseToasts from "@/components/users/PurchaseToasts";
+import FanLive from "@/components/users/FanLive";
+import DripStrip from "@/components/users/DripStrip";
 
 export const dynamic = "force-dynamic";
 
@@ -58,7 +63,6 @@ type OnboardingStepRow = {
   // Stable id (migration 087) — what onboarding_steps_done records.
   id?: string | null;
 };
-type CampaignStepRow = { type: "text" | "voice" | "photo" | "video" | "bundle"; after_hours: number };
 type CloneRow = {
   id: string;
   name: string;
@@ -79,20 +83,9 @@ const ONBOARDING_STEP_LABEL: Record<string, { label: string; emoji: string }> = 
   tease: { label: "tease", emoji: "😏" },
 };
 
-// Mirrors mapClone's campaignSteps in bot/src/data/supabase-store.ts: a row
-// without a type the runtime knows, or an OLD-shape row ({type,text} with no
-// valid after_hours), is dropped exactly as the runtime drops it. Sorted by
-// after_hours because that is the order bot/src/campaign.ts walks, and
-// users.campaign_step indexes into THAT list, not into raw jsonb order.
-const CAMPAIGN_STEP_TYPES = ["text", "voice", "photo", "video", "bundle"];
-function campaignStepsOf(raw: unknown[] | null | undefined): CampaignStepRow[] {
-  return (Array.isArray(raw) ? raw : [])
-    .filter((s): s is { type: string; after_hours?: unknown } => !!s && typeof s === "object" && "type" in s)
-    .filter((s) => CAMPAIGN_STEP_TYPES.includes(s.type))
-    .map((s) => ({ type: s.type as CampaignStepRow["type"], after_hours: Number(s.after_hours) }))
-    .filter((s) => Number.isFinite(s.after_hours) && s.after_hours >= 1 && s.after_hours <= 23)
-    .sort((a, b) => a.after_hours - b.after_hours);
-}
+// campaignStepsOf moved to lib/drip.ts when the live feed needed the same
+// filter server side. Two copies of it would drift, and a drift means the
+// dashboard shows a different step number than the bot will actually send.
 
 // Delivery is tracked by STABLE STEP ID (migration 087), never by position:
 // positions re-point at different steps the moment the list is edited, which
@@ -521,6 +514,13 @@ export default async function FansPage({
 
   const selectedJourney = selected ? journeyOf(selected, cloneById.get(selected.clone_id)) : null;
   const onboardingSteps = selectedJourney?.onboardingSteps ?? [];
+  // First paint for the campaign strip. campaign.ts measures every step from
+  // the fan's last inbound message at tick time, so this is derived the same
+  // way the runtime derives it, never read from users.next_send_at (dead since
+  // migration 032).
+  const selectedDripDue = selectedJourney
+    ? nextDripDueAt(selectedJourney.campaignSteps, selectedJourney.campaignStep, selected?.last_message_received ?? null)
+    : null;
   const nextStep = selectedJourney?.nextStep ?? null;
   const firedSteps = selectedJourney?.firedSteps ?? [];
   const creditsFrozen = !!selectedJourney?.creditsFrozen;
@@ -610,6 +610,12 @@ export default async function FansPage({
 
   return (
     <div className="users-workspace lg:h-full">
+      {/* The ONE live connection for this page, and the toast stack it feeds.
+          Both mounted here rather than in the layout: they are the Fans
+          inbox's, and a stream open on every page in the app would be a poll
+          loop per tab for a screen nobody is looking at. */}
+      <LiveFeed />
+      <PurchaseToasts />
       {/* Middle column capped narrow (~400px, iPhone-width) instead of 1fr - 
           reads like a phone thread, not a stretched-out desktop panel. Left
           gets the extra room for data/filters, right takes whatever's left. */}
@@ -811,17 +817,16 @@ export default async function FansPage({
                             🧊 frozen
                           </span>
                         )}
-                        {/* Campaign steps fired in his CURRENT quiet episode. Zero
-                            is not shown: it is the normal state of a fan who just
-                            messaged, not information. */}
-                        {j.campaignStep > 0 && j.campaignSteps.length > 0 && (
-                          <span
-                            className={chip + " bg-purple-500/15 text-purple-400"}
-                            title={`Automated campaign: ${j.campaignStep} of ${j.campaignSteps.length} steps sent this quiet episode. Resets to 0 the moment he messages.${j.campaignEnabled ? "" : " The campaign is currently OFF for this clone."}`}
-                          >
-                            💧 drip {j.campaignStep}/{j.campaignSteps.length}
-                          </span>
-                        )}
+                        {/* Typing dots and the drip chip are the live pair. The
+                            server values are passed in and shown until the feed
+                            says otherwise, so the row is right before the stream
+                            connects and stays right if it never does. */}
+                        <FanLive
+                          fanId={u.id}
+                          initialStep={j.campaignStep}
+                          initialTotal={j.campaignSteps.length}
+                          initialEnabled={j.campaignEnabled}
+                        />
                         {/* Only the two states an operator has to act on. "Never
                             hit" and "first hit used" are the healthy majority. */}
                         {paywall.loud && (
@@ -1162,6 +1167,22 @@ export default async function FansPage({
                   product and previously invisible on this page. */}
               <div>
                 <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted">Journey</div>
+                {/* At-a-glance campaign status: what has fired, what is next,
+                    when it is due. Live, and computed rather than read, since
+                    users.next_send_at is a dead column (migration 032). */}
+                <div className="mb-2">
+                  <DripStrip
+                    fanId={selected.id}
+                    labels={(selectedJourney?.campaignSteps ?? []).map((s) => s.type)}
+                    initial={{
+                      step: selectedJourney?.campaignStep ?? 0,
+                      total: selectedJourney?.campaignSteps.length ?? 0,
+                      enabled: selectedJourney?.campaignEnabled !== false,
+                      nextType: selectedDripDue?.step.type ?? null,
+                      nextDueAt: selectedDripDue?.at ?? null,
+                    }}
+                  />
+                </div>
                 <div className="flex flex-wrap items-center gap-1.5">
                   <span
                     className={
@@ -1177,16 +1198,8 @@ export default async function FansPage({
                           ? "🚶 Onboarding (no steps configured)"
                           : "🚶 Onboarding · all steps sent"}
                   </span>
-                  {/* Campaign position and last route, the same two facts the
-                      fan-list chips show, spelled out here. */}
-                  {(selectedJourney?.campaignStep ?? 0) > 0 && (selectedJourney?.campaignSteps.length ?? 0) > 0 && (
-                    <span
-                      className="rounded-full bg-purple-500/15 px-2 py-0.5 text-[10px] font-medium text-purple-400"
-                      title={`Automated campaign: ${selectedJourney!.campaignStep} of ${selectedJourney!.campaignSteps.length} steps sent this quiet episode. Resets to 0 the moment he messages.${selectedJourney!.campaignEnabled ? "" : " The campaign is currently OFF for this clone."}`}
-                    >
-                      💧 drip {selectedJourney!.campaignStep}/{selectedJourney!.campaignSteps.length}
-                    </span>
-                  )}
+                  {/* The campaign chip that used to sit here is now the status
+                      strip above: same fact, plus what is next and when. */}
                   {(() => {
                     const r = lastRoute.get(`${selected.clone_id}:${selected.telegram_id}`);
                     return r ? (
