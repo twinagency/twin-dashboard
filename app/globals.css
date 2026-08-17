@@ -589,8 +589,13 @@ textarea {
 }
 
 @media (max-width: 640px) {
+  /* The toolbar is a pill only while its contents are one inline strip. On a
+     phone it holds a 4x2 grid of period cells plus a second row, and a 999px
+     radius around a block that tall cuts the corner cells off. */
   .earnings-toolbar {
     width: 100%;
+    padding: 0.5rem;
+    border-radius: 1.25rem;
   }
 }
 

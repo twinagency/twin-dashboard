@@ -679,8 +679,12 @@ export default async function FansPage({
               />
             </form>
 
-            {/* Quick filters */}
-            <div className="mb-2 flex flex-wrap gap-1">
+            {/* Quick filters. `min-h-9` on a phone and 7 from sm up (Jesse,
+                2026-08-17): these chips and the sort row below were 26px tall,
+                well under the 44px touch minimum, and stacked 4px apart, so on
+                a phone they read as one grey band and mis-taps were routine.
+                Desktop keeps the tight row - a mouse does not need the room. */}
+            <div className="mb-2 flex flex-wrap gap-1.5 sm:gap-1">
               {FILTERS.map((s) => {
                 // Flagged is the "needs attention" chip: always fully lit when any
                 // exist, with a count badge, so it never fades into the row.
@@ -690,7 +694,7 @@ export default async function FansPage({
                     key={s.key}
                     href={baseQs({ status: s.key === "all" ? "" : s.key })}
                     className={
-                      "flex items-center gap-1 rounded-full border px-2.5 py-1 text-xs font-medium transition hover:brightness-125 " +
+                      "flex min-h-9 items-center gap-1 rounded-full border px-3 py-1 text-xs font-medium transition hover:brightness-125 sm:min-h-7 sm:px-2.5 " +
                       (status === s.key || hot ? s.on : s.off) +
                       (hot ? " font-semibold" : "")
                     }
@@ -707,7 +711,7 @@ export default async function FansPage({
             </div>
 
             {/* Sort */}
-            <div className="flex flex-wrap items-center gap-1">
+            <div className="flex flex-wrap items-center gap-1.5 sm:gap-1">
               <span className="text-[10px] text-muted">Sort:</span>
               {SORTS.map((s) => {
                 const on = sortKey === s.key;
@@ -718,7 +722,7 @@ export default async function FansPage({
                     key={s.key}
                     href={baseQs({ sort: s.key === "last_message_received" ? "" : s.key, dir: nextDir })}
                     className={
-                      "rounded-full border px-2.5 py-1 text-xs font-medium transition " +
+                      "inline-flex min-h-9 items-center rounded-full border px-3 py-1 text-xs font-medium transition sm:min-h-7 sm:px-2.5 " +
                       (on ? "border-line bg-muted/20 text-ink" : "border-line text-muted hover:text-ink")
                     }
                   >
@@ -771,7 +775,7 @@ export default async function FansPage({
                     key={u.id}
                     href={qs(u.id)}
                     className={
-                      "flex items-center gap-2.5 border-l-2 px-3 py-2.5 text-left transition " +
+                      "flex items-center gap-2.5 border-l-2 px-3.5 py-3 text-left transition sm:px-3 sm:py-2.5 " +
                       stage.stripe +
                       " " +
                       (selected?.id === u.id ? "bg-accent/10" : "hover:bg-muted/10")
@@ -882,7 +886,7 @@ export default async function FansPage({
             <div className="flex flex-1 items-center justify-center text-sm text-muted">Pick a fan to view messages.</div>
           ) : (
             <>
-              <div className="flex items-center gap-2.5 border-b border-line px-3 py-2.5">
+              <div className="flex items-center gap-2.5 border-b border-line px-3.5 py-3 sm:px-3 sm:py-2.5">
                 <FanAvatar
                   cloneId={selected.clone_id}
                   telegramId={selected.telegram_id}
@@ -912,7 +916,7 @@ export default async function FansPage({
                 </span>
               </div>
 
-              <div className="flex-1 space-y-2 overflow-y-auto bg-bg px-3 py-3">
+              <div className="flex-1 space-y-2.5 overflow-y-auto bg-bg px-3.5 py-3 sm:space-y-2 sm:px-3">
                 {history.length === 0 ? (
                   <div className="flex h-full items-center justify-center text-sm text-muted">No messages yet.</div>
                 ) : (
