@@ -16,6 +16,13 @@ name: deploy-dashboard
 on:
   push:
     branches: [main]
+    # A docs-only push must not bounce a live container. Nothing in here is
+    # copied into the image, so rebuilding on it buys nothing and costs a
+    # restart of a bot that is mid-conversation with paying fans.
+    paths-ignore:
+      - '**/*.md'
+      - '**/*.txt'
+      - 'archive/**'
   workflow_dispatch:
     inputs:
       ref:
