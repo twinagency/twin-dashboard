@@ -4,3 +4,7 @@ node_modules
 .env.local
 *.tsbuildinfo
 next-env.d.ts
+
+# local-only docs, kept on disk, out of GitHub (2026-08-18)
+archive/
+DOCKER.md
