@@ -1,5 +1,4 @@
 import { supabaseAdmin } from "./supabase";
-import { selectAllRows } from "./select-all";
 import { chartColorForClone } from "./colors";
 
 // ── Where the AI money goes (/spend) ─────────────────────────────────────────
@@ -12,9 +11,10 @@ import { chartColorForClone } from "./colors";
 //
 // Same house style as lib/analytics-data.ts and lib/dashboard-data.ts: fetch
 // scoped columns, filter the window in SQL, roll up in JS. Unlike those two this
-// one PAGES (see selectAllRows below) — usage_events runs ~11k rows/day, so a
-// 30-day read is ~330k rows and an unpaged select returns the first 1000 of them
-// without saying so.
+// one PAGES (see fetchUsageEventsPaged below) — usage_events runs ~66k rows/day,
+// so a 30-day read is ~2M rows and an unpaged select returns the first 1000 of
+// them without saying so. It pages by CURSOR, never by offset; the offset read
+// it replaced is what took the dashboard down on 2026-08-18.
 //
 // READ ONLY. Nothing here writes.
 
@@ -458,75 +458,213 @@ const USAGE_MAX_ROWS = 400_000;
 
 const USAGE_SELECT_COLS =
   "clone_id,flow,kind,model,cost_usd,prompt_tokens,completion_tokens,cached_prompt_tokens,cache_write_tokens,cache_discount_usd,ok";
+// The roll-up never reads created_at or id, but the CURSOR does, so the keyset
+// read has to ask for them. Selecting only USAGE_SELECT_COLS here would hand
+// back rows whose created_at is undefined, the cursor would never advance, and
+// every slice would return its first page over and over. Kept as a separate
+// constant so the roll-up's column list stays the roll-up's business.
+const USAGE_KEYSET_COLS = `${USAGE_SELECT_COLS},created_at,id`;
 const USAGE_PAGE = 1000;
-// How many 1000-row pages to have in flight at once. 10 turns a 300-page read
-// (300 sequential round trips, the actual "spinner forever" bug) into ~30
-// sequential BATCHES - each still bounded by Supabase's own connection limits,
-// so this is not "as fast as possible", just fast enough that the tab loads.
-const USAGE_PAGE_CONCURRENCY = 10;
+
+// THE OUTAGE THIS EXISTS FOR (2026-08-18). Both earlier versions of this
+// function paged with .range(from, to), which is LIMIT/OFFSET. Postgres cannot
+// seek to an offset: it walks and discards every row before it, so page N costs
+// N*1000 rows of work. At ~66k rows/day the 30-day window matches ~2M rows and
+// the read runs to the 400k ceiling, i.e. OFFSET 399000 on the last page. Those
+// pages blew the statement timeout ("canceling statement due to statement
+// timeout"), ten at a time, and the hung request pool took the whole Next
+// process down - Apache served "Proxy Error / Error reading from remote server"
+// on every route, not just /spend. Adding concurrency made it worse, not
+// better: it multiplied the number of simultaneous 400k-row sorts.
+//
+// So there is no OFFSET anywhere below. Two mechanisms replace it:
+//
+//   1. TIME SLICING gives concurrency. created_at is already the ordering key,
+//      so cutting the window into N consecutive spans splits the rows into N
+//      ordered, non-overlapping groups. Concatenating the slices in slice order
+//      reproduces the exact global created_at+id ordering - no merge needed.
+//   2. KEYSET (cursor) PAGING walks each slice. Every page asks for rows AFTER
+//      the last row it saw rather than for rows at an offset, which is an index
+//      seek on (created_at, id) and costs the same whether it is page 1 or page
+//      400.
+//
+// Do not "optimise" this back to .range() on a whole window. The offset is the
+// bug; the round trips never were.
+const USAGE_SLICES = 10;
+
+// Safety stop for the cursor loop inside one slice. A slice is 1/10th of the
+// window, so 2000 pages is 2M rows in a single slice - far past USAGE_MAX_ROWS
+// and only reachable if a cursor ever failed to advance. Bounded so a bad
+// cursor cannot spin forever the way the offset read could not fail fast.
+const USAGE_MAX_PAGES_PER_SLICE = 2000;
+
+/** PostgREST filter value: double-quote it so the `+00:00` and `:` in a
+ *  timestamp cannot be read as filter syntax, and escape any embedded quote. */
+function pgrestValue(v: string): string {
+  return `"${v.replace(/"/g, '\\"')}"`;
+}
+
+/** One slice of the read window. `inclusiveEnd` picks lte over lt. */
+export type UsageSlice = { from: string; to: string; inclusiveEnd: boolean };
 
 /**
- * usage_events for the window, fetched with bounded concurrency instead of
- * selectAllRows' one-page-at-a-time loop. Gets the exact row count first (a
- * cheap HEAD query) so it knows how many pages to fire, then runs a small
- * worker pool against the same stable created_at+id ordering selectAllRows
- * used - concurrency changes latency, not which rows land in which page.
- * Falls back to the ceiling-respecting ordered read if the count query itself
- * fails, so a transient error degrades to "slower", never "wrong total".
+ * Cut [startIso, endIso] into `sliceCount` consecutive spans.
+ *
+ * EXPORTED FOR THE CHECK, because the two ways this can be wrong both lose
+ * money silently rather than throwing: a gap between slices drops every row in
+ * it, and an overlap counts those rows twice. So the contract is exact - slice
+ * i's `to` IS slice i+1's `from`, every slice is half-open, and only the LAST
+ * one closes its upper bound (reproducing the single `lte` the unsliced read
+ * used, so the row set is unchanged). A window that cannot be sliced (equal
+ * bounds, reversed bounds, unparseable) degrades to one inclusive slice rather
+ * than to zero slices, i.e. to "slower", never to "empty".
  */
-async function fetchUsageEventsPaged(
+export function usageSliceBounds(startIso: string, endIso: string, sliceCount: number): UsageSlice[] {
+  const startMs = Date.parse(startIso);
+  const endMs = Date.parse(endIso);
+  const n =
+    Number.isFinite(startMs) && Number.isFinite(endMs) && endMs > startMs && sliceCount > 1
+      ? Math.floor(sliceCount)
+      : 1;
+  if (n === 1) return [{ from: startIso, to: endIso, inclusiveEnd: true }];
+
+  const width = (endMs - startMs) / n;
+  const slices: UsageSlice[] = [];
+  for (let i = 0; i < n; i++) {
+    const isLast = i === n - 1;
+    slices.push({
+      from: i === 0 ? startIso : new Date(startMs + width * i).toISOString(),
+      to: isLast ? endIso : new Date(startMs + width * (i + 1)).toISOString(),
+      inclusiveEnd: isLast,
+    });
+  }
+  return slices;
+}
+
+/**
+ * The PostgREST spelling of `(created_at, id) > (cursorAt, cursorId)`.
+ *
+ * EXPORTED FOR THE CHECK. Two failure modes, both silent:
+ *   - `gte` instead of `gt` on created_at re-returns the cursor row forever, so
+ *     the slice never advances and the page guard is the only thing that stops
+ *     it.
+ *   - dropping the `id` leg skips every row that shares a created_at with the
+ *     cursor except one. usage_events writes many rows per timestamp, so this
+ *     does not lose an edge case, it loses a slice of the bill.
+ */
+export function usageCursorFilter(cursorAt: string, cursorId: string): string {
+  const at = pgrestValue(cursorAt);
+  return `created_at.gt.${at},and(created_at.eq.${at},id.gt.${pgrestValue(cursorId)})`;
+}
+
+/**
+ * usage_events for the window, read with time-sliced keyset paging.
+ *
+ * Concurrency comes from the slices (10 in flight), and each slice walks
+ * forward on a (created_at, id) cursor. The row set and its order are identical
+ * to the old offset read; only the cost per page changes, from O(offset) to
+ * O(1). `maxRows` is a shared budget across slices rather than a prefix cut:
+ * a truncated spend read is already flagged as a lower bound, and losing rows
+ * spread across the window keeps the chart's shape, where a hard prefix would
+ * silently end the month early and read as "spend stopped".
+ */
+export async function fetchUsageEventsPaged(
   startIso: string,
   endIso: string,
   cloneId: string | null,
   provider: SpendProvider,
   maxRows: number,
+  // Seam for the check, NOT a feature. check-spend.ts drives this exact loop
+  // against a fake that enforces PostgREST semantics, because the failures that
+  // matter here (a cursor that does not advance, a slice boundary that drops
+  // rows) produce a plausible smaller number rather than an error, and a
+  // source-text assertion cannot see either one.
+  client: { from: (t: string) => any } = supabaseAdmin,
 ): Promise<{ rows: SpendUsageRow[]; truncated: boolean }> {
   const kind = kindForProvider(provider);
-  const scoped = <Q extends { gte: any; lte: any; eq: any }>(q: Q): Q => {
-    let x = q.gte("created_at", startIso).lte("created_at", endIso);
+  /** Every filter except the window, which each slice narrows for itself. */
+  const scoped = <Q extends { eq: any }>(q: Q): Q => {
+    let x = q;
     if (cloneId) x = x.eq("clone_id", cloneId);
     if (kind) x = x.eq("kind", kind);
     return x;
   };
 
-  const { count, error: countErr } = await scoped(
-    supabaseAdmin.from("usage_events").select("id", { count: "exact", head: true }),
-  );
+  const slices = usageSliceBounds(startIso, endIso, USAGE_SLICES);
 
-  if (countErr || count == null) {
-    let usageQ = scoped(supabaseAdmin.from("usage_events").select(USAGE_SELECT_COLS))
-      .order("created_at", { ascending: true })
-      .order("id", { ascending: true });
-    return selectAllRows<SpendUsageRow>(usageQ, { maxRows, label: "spend usage_events" });
-  }
+  // Shared so ten concurrent slices cannot each fetch maxRows and hand back 10x
+  // the ceiling the caller asked for.
+  let budget = maxRows;
+  let hitCeiling = false;
 
-  const total = Math.min(count, maxRows);
-  const truncated = count > maxRows;
-  const pageCount = Math.ceil(total / USAGE_PAGE);
-  const pages: SpendUsageRow[][] = new Array(pageCount);
+  async function readSlice(slice: UsageSlice, i: number): Promise<SpendUsageRow[]> {
+    const rows: SpendUsageRow[] = [];
+    const { from, to, inclusiveEnd } = slice;
 
-  let nextPage = 0;
-  async function worker(): Promise<void> {
-    for (;;) {
-      const i = nextPage++;
-      if (i >= pageCount) return;
-      const from = i * USAGE_PAGE;
-      const to = Math.min(from + USAGE_PAGE, total) - 1;
-      const { data, error } = await scoped(supabaseAdmin.from("usage_events").select(USAGE_SELECT_COLS))
+    let cursorAt: string | null = null;
+    let cursorId: string | null = null;
+
+    for (let page = 0; page < USAGE_MAX_PAGES_PER_SLICE; page++) {
+      if (budget <= 0) {
+        hitCeiling = true;
+        return rows;
+      }
+      // RESERVE the page's worth of budget before awaiting, and refund whatever
+      // the page did not use once it lands. Decrementing after the await instead
+      // lets all ten slices read the same budget, each fetch a full page, and
+      // hand back up to maxRows + 9 pages.
+      const limit = Math.min(USAGE_PAGE, budget);
+      budget -= limit;
+
+      let q = scoped(client.from("usage_events").select(USAGE_KEYSET_COLS)).gte("created_at", from);
+      q = inclusiveEnd ? q.lte("created_at", to) : q.lt("created_at", to);
+      if (cursorAt !== null) q = q.or(usageCursorFilter(cursorAt, String(cursorId)));
+
+      const { data, error } = await q
         .order("created_at", { ascending: true })
         .order("id", { ascending: true })
-        .range(from, to);
+        .limit(limit);
+
       if (error) {
-        console.error(`[spend usage_events] page ${i} (${from}-${to}) failed: ${error.message}`);
-        pages[i] = [];
-        continue;
+        console.error(`[spend usage_events] slice ${i} (${from}..${to}) page ${page} failed: ${error.message}`);
+        budget += limit; // this slice is giving up; the other nine may still use it
+        hitCeiling = true;
+        return rows;
       }
-      pages[i] = (data ?? []) as SpendUsageRow[];
+      const batch = (data ?? []) as SpendUsageRow[];
+      budget += limit - batch.length; // refund the unused reservation
+      if (batch.length === 0) return rows;
+
+      rows.push(...batch);
+
+      // A short page is the end of the slice: the server had nothing more to
+      // give, which is the only reliable end signal (a full page could be
+      // either). Same rule selectAllRows uses.
+      if (batch.length < limit) return rows;
+
+      const last = batch[batch.length - 1] as unknown as { created_at?: string; id?: string | number };
+      // No usable cursor means the next page would repeat this one forever.
+      // Stop and flag rather than loop or silently drop the rest.
+      if (!last?.created_at || last.id == null) {
+        console.error(`[spend usage_events] slice ${i} page ${page} returned rows without created_at/id; stopping.`);
+        hitCeiling = true;
+        return rows;
+      }
+      cursorAt = last.created_at;
+      cursorId = String(last.id);
     }
+
+    console.error(`[spend usage_events] slice ${i} hit the ${USAGE_MAX_PAGES_PER_SLICE} page guard; totals are a lower bound.`);
+    hitCeiling = true;
+    return rows;
   }
 
-  await Promise.all(Array.from({ length: Math.min(USAGE_PAGE_CONCURRENCY, pageCount) }, worker));
-  return { rows: pages.flat(), truncated };
+  const perSlice = await Promise.all(slices.map((s, i) => readSlice(s, i)));
+  if (hitCeiling) {
+    console.warn(`[spend usage_events] stopped short of the full window; totals below are lower bounds.`);
+  }
+  // Slice order IS created_at order, so a flat concat is already sorted.
+  return { rows: perSlice.flat(), truncated: hitCeiling };
 }
 
 export async function getSpendData(
@@ -560,16 +698,15 @@ export async function getSpendData(
     }
   }
 
-  // ── usage_events in the window, PAGED CONCURRENTLY ─────────────────────────
+  // ── usage_events in the window, TIME-SLICED KEYSET READ ────────────────────
   // usage_events passed ~66k rows/day by 2026-08-13 (fleet growth, not a leak -
   // see the tracker's spend investigation), six times the ~11k/day this was
-  // built against. selectAllRows pages sequentially, one round trip at a time;
-  // at today's volume a 7d window is 200-400k rows, i.e. 200-400 round trips
-  // in a row, which is the "Spend tab spins forever" bug. fetchUsageEventsPaged
-  // below fires USAGE_PAGE_CONCURRENCY pages at once instead of one at a time.
-  // Order still doesn't matter for correctness (rollUpSpend only aggregates),
-  // and each page's own range() is still against the same stable
-  // created_at+id sort, so concurrent fetch changes latency, not the result.
+  // built against, so a 30d window matches ~2M rows and runs to the 400k
+  // ceiling. Every earlier version paged with OFFSET, which made the last pages
+  // cost ~400k discarded rows each and took the whole dashboard down on
+  // 2026-08-18. fetchUsageEventsPaged now walks a (created_at, id) cursor inside
+  // each of USAGE_SLICES time slices - same rows, same order, constant cost per
+  // page. Full reasoning at its definition above.
   const { rows: usageRows, truncated } = await fetchUsageEventsPaged(startIso, endIso, cloneId, provider, USAGE_MAX_ROWS);
 
   // ── fan messages in the window (the cost-per-message denominator) ──────────

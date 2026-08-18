@@ -39,6 +39,9 @@ import {
   fmtUsd,
   rollUpSpend,
   windowRange,
+  fetchUsageEventsPaged,
+  usageCursorFilter,
+  usageSliceBounds,
   type SpendUsageRow,
 } from "../lib/spend-data";
 
@@ -302,10 +305,10 @@ check("S12 the spend read pages (with a ceiling), and the fan-message count does
   // Source-level, deliberately: usage_events runs ~66k+ rows/day (2026-08-14),
   // so an unpaged select returns the first 1000 and reports the total as if it
   // were complete. fetchUsageEventsPaged replaced selectAllRows here for SPEED
-  // (bounded concurrency instead of one round trip at a time - see its comment
-  // in lib/spend-data.ts for why), but the invariant this check exists for is
-  // unchanged: every page is still fetched, and a read that hits its ceiling
-  // still says so rather than under-reporting silently.
+  // (time-sliced keyset paging instead of one round trip at a time - see its
+  // comment in lib/spend-data.ts for why), but the invariant this check exists
+  // for is unchanged: every page is still fetched, and a read that hits its
+  // ceiling still says so rather than under-reporting silently.
   const src = readFileSync(new URL("../lib/spend-data.ts", import.meta.url), "utf8");
   const fetchBody = src.slice(src.indexOf("export async function getSpendData"));
   assert(fetchBody.includes("fetchUsageEventsPaged"), "getSpendData must read usage_events through a paged fetch");
@@ -315,10 +318,284 @@ check("S12 the spend read pages (with a ceiling), and the fan-message count does
   assert(!/\.insert\(|\.update\(|\.upsert\(|\.delete\(/.test(src), "the spend page is read only");
 });
 
+// ── S13-S17 the keyset read (the 2026-08-18 outage) ──────────────────────────
+//
+// WHAT WENT WRONG. fetchUsageEventsPaged used to page with .range(from, to),
+// i.e. LIMIT/OFFSET. Postgres cannot seek to an offset, it walks and discards
+// every row before it, so at ~66k rows/day a 30-day window ran to the 400k
+// ceiling and the last pages were OFFSET ~399000. They blew the statement
+// timeout, ten concurrently, and the hung request pool took the whole Next
+// process down: Apache served "Proxy Error / Error reading from remote server"
+// on EVERY route, not just /spend.
+//
+// WHY THESE ARE BEHAVIOURAL AND NOT SOURCE ASSERTIONS. The replacement walks a
+// (created_at, id) cursor inside each of 10 time slices. Every way that can be
+// wrong returns a plausible SMALLER number instead of an error - a gap between
+// slices drops rows, a missing id leg skips rows tied on a timestamp, a `gte`
+// cursor repeats them. So S13-S16 run the REAL exported function against a fake
+// PostgREST that enforces PostgREST's own semantics, and assert on the rows.
+// FAKE_DB below is deliberately strict: it throws if .range() is ever called,
+// so the offset can never come back unnoticed.
+
+// 25,000 rows over 10 days, with created_at TIES (5 rows share each timestamp).
+//
+// BOTH numbers are load-bearing, and the first version of this fixture got the
+// size wrong. Ties are the point of the 5: usage_events writes many rows per
+// timestamp, so a cursor that only compares created_at loses all but one of each
+// group. The SIZE is the point of the 25,000: the read cuts the window into 10
+// slices and pages at 1000 rows, so a fixture under 10,000 rows puts every slice
+// inside a single page, the cursor is never used at all, and the tie assertions
+// pass without testing anything. 25,000 gives ~2,500 rows per slice, i.e. three
+// pages each, so every page boundary is a real cursor hop. S13 asserts the page
+// count to keep it that way.
+const KEYSET_START = "2026-08-01T00:00:00.000Z";
+const KEYSET_END = "2026-08-11T00:00:00.000Z";
+const KEYSET_TIE_SIZE = 5;
+type FakeRow = SpendUsageRow & { created_at: string; id: number };
+
+const FAKE_ROWS: FakeRow[] = (() => {
+  const out: FakeRow[] = [];
+  const startMs = Date.parse(KEYSET_START);
+  const spanMs = Date.parse(KEYSET_END) - startMs;
+  const groups = 5000;
+  for (let g = 0; g < groups; g++) {
+    // Spread groups strictly inside the window so the final lte/lt boundary is
+    // exercised without depending on a row landing exactly on the end.
+    const at = new Date(startMs + Math.floor((spanMs * g) / groups)).toISOString();
+    for (let k = 0; k < KEYSET_TIE_SIZE; k++) {
+      out.push({ ...row({ clone_id: g % 2 === 0 ? A : B, cost_usd: 0.01 }), created_at: at, id: g * 5 + k } as FakeRow);
+    }
+  }
+  return out;
+})();
+
+/** Every filter the builder collected, applied the way PostgREST applies them. */
+type Filter = (r: FakeRow) => boolean;
+
+/**
+ * Parses the `or()` string generically rather than matching the exact text the
+ * code produces. That matters: it means a `gte` cursor or a dropped id leg
+ * changes WHICH ROWS COME BACK (duplicates, or skipped ties) instead of failing
+ * a string comparison, which is what makes S14/S15 real tests and not spelling
+ * tests.
+ */
+function parseOr(expr: string): Filter {
+  const legs: Filter[] = [];
+  const at = /created_at\.(gte?)\."([^"]+)"/g;
+  let m: RegExpExecArray | null;
+  while ((m = at.exec(expr)) !== null) {
+    // Skip the `created_at.eq."..."` inside the and(...) leg; handled below.
+    const [, op, val] = m;
+    legs.push(op === "gt" ? (r) => r.created_at > val : (r) => r.created_at >= val);
+  }
+  const tie = /and\(created_at\.eq\."([^"]+)",id\.(gte?)\."([^"]+)"\)/.exec(expr);
+  if (tie) {
+    const [, tAt, tOp, tId] = tie;
+    legs.push((r) =>
+      r.created_at === tAt && (tOp === "gt" ? String(r.id) > tId || Number(r.id) > Number(tId) : Number(r.id) >= Number(tId)),
+    );
+  }
+  if (legs.length === 0) throw new Error(`FAKE_DB: could not parse or() expression: ${expr}`);
+  return (r) => legs.some((f) => f(r));
+}
+
+type FakeStats = { queries: number; maxLimit: number };
+
+function fakeClient(rows: FakeRow[], stats: FakeStats) {
+  return {
+    from(table: string) {
+      if (table !== "usage_events") throw new Error(`FAKE_DB: unexpected table ${table}`);
+      const filters: Filter[] = [];
+      const builder: any = {
+        select: (cols: string) => {
+          // The cursor cannot advance without these two columns. Asserted here
+          // rather than in source text because selecting without them is the
+          // bug that makes every slice return its first page forever.
+          if (!cols.includes("created_at") || !/\bid\b/.test(cols)) {
+            throw new Error(`FAKE_DB: keyset select must request created_at and id, got: ${cols}`);
+          }
+          return builder;
+        },
+        eq: (c: string, v: unknown) => (filters.push((r) => (r as any)[c] === v), builder),
+        gte: (c: string, v: string) => (filters.push((r) => (r as any)[c] >= v), builder),
+        lte: (c: string, v: string) => (filters.push((r) => (r as any)[c] <= v), builder),
+        lt: (c: string, v: string) => (filters.push((r) => (r as any)[c] < v), builder),
+        or: (expr: string) => (filters.push(parseOr(expr)), builder),
+        order: () => builder,
+        range: () => {
+          throw new Error("FAKE_DB: .range() is OFFSET paging, which is the bug this read exists to avoid");
+        },
+        limit: (n: number) => {
+          stats.queries += 1;
+          stats.maxLimit = Math.max(stats.maxLimit, n);
+          const out = rows
+            .filter((r) => filters.every((f) => f(r)))
+            .sort((a, b) => (a.created_at < b.created_at ? -1 : a.created_at > b.created_at ? 1 : a.id - b.id))
+            .slice(0, n);
+          return Promise.resolve({ data: out, error: null });
+        },
+      };
+      return builder;
+    },
+  };
+}
+
+const KEYSET_SLICES = 10; // must match USAGE_SLICES in lib/spend-data.ts
+
+async function runKeyset(opts: { rows?: FakeRow[]; maxRows?: number; cloneId?: string | null } = {}) {
+  const stats: FakeStats = { queries: 0, maxLimit: 0 };
+  const res = await fetchUsageEventsPaged(
+    KEYSET_START,
+    KEYSET_END,
+    opts.cloneId ?? null,
+    "all",
+    opts.maxRows ?? 400_000,
+    fakeClient(opts.rows ?? FAKE_ROWS, stats) as any,
+  );
+  return { ...res, stats };
+}
+
+const asyncChecks: Array<[string, () => Promise<void>]> = [];
+function checkAsync(name: string, fn: () => Promise<void>): void {
+  asyncChecks.push([name, fn]);
+}
+
+checkAsync("S13 the keyset read returns EVERY row, exactly once, in created_at+id order", async () => {
+  const { rows, truncated, stats } = await runKeyset();
+  eq(rows.length, FAKE_ROWS.length, "every row in the window must come back");
+  eq(truncated, false, "a read well inside its ceiling must not claim truncation");
+
+  // THE FIXTURE MUST ACTUALLY PAGE. The first version of this check used 2,500
+  // rows, which is 250 per slice - under the 1000-row page size, so every slice
+  // finished in one query, no cursor was ever built, and the tie assertions below
+  // passed while testing nothing. More queries than slices is the proof that at
+  // least one slice hopped a page boundary.
+  assert(
+    stats.queries > KEYSET_SLICES,
+    `the fixture must be big enough to page: ${stats.queries} queries for ${KEYSET_SLICES} slices means no cursor was exercised`,
+  );
+
+  const ids = (rows as FakeRow[]).map((r) => r.id);
+  eq(new Set(ids).size, FAKE_ROWS.length, "no row may be returned twice");
+
+  // Slice order IS created_at order, so the concatenation must already be sorted.
+  // If it is not, the time-series chart is built from out-of-order rows.
+  for (let i = 1; i < rows.length; i++) {
+    const p = rows[i - 1] as FakeRow;
+    const c = rows[i] as FakeRow;
+    assert(p.created_at < c.created_at || (p.created_at === c.created_at && p.id < c.id), `rows out of order at index ${i}`);
+  }
+});
+
+checkAsync("S14 the cursor compares (created_at, id), so rows sharing a timestamp are not skipped", async () => {
+  // The fixture puts 5 rows on every timestamp. A cursor of `created_at > last`
+  // alone would drop 4 of every 5 at each page boundary, which reads as a
+  // cheaper bill, not as an error. Proven by deleting the `and(...)` leg from
+  // usageCursorFilter: S13 and this both go red.
+  const filter = usageCursorFilter("2026-08-05T00:00:00.000Z", "42");
+  assert(/created_at\.gt\./.test(filter), "the cursor must advance strictly (gt), or it re-reads its own row forever");
+  assert(!/created_at\.gte\./.test(filter), "gte would return the cursor row again on every page");
+  assert(/and\(created_at\.eq\.[^,]+,id\.gt\./.test(filter), "the cursor needs an id tie-breaker leg");
+  assert(filter.includes('"2026-08-05T00:00:00.000Z"'), "timestamps must be quoted so + and : are not read as filter syntax");
+
+  // And behaviourally: every tie group survives the read whole.
+  const { rows } = await runKeyset();
+  const byTs = new Map<string, number>();
+  for (const r of rows as FakeRow[]) byTs.set(r.created_at, (byTs.get(r.created_at) ?? 0) + 1);
+  const expectedGroups = new Set(FAKE_ROWS.map((r) => r.created_at)).size;
+  eq(byTs.size, expectedGroups, "every distinct timestamp must appear");
+  const wrong = [...byTs.entries()].filter(([, n]) => n !== KEYSET_TIE_SIZE);
+  eq(
+    wrong.length,
+    0,
+    `every timestamp must keep all ${KEYSET_TIE_SIZE} of its rows, bad groups: ${JSON.stringify(wrong.slice(0, 3))}`,
+  );
+});
+
+checkAsync("S15 the slices tile the window with no gap and no overlap", async () => {
+  const slices = usageSliceBounds(KEYSET_START, KEYSET_END, KEYSET_SLICES);
+  eq(slices.length, KEYSET_SLICES, "slice count");
+  eq(slices[0].from, KEYSET_START, "the first slice must start at the window start");
+  eq(slices[slices.length - 1].to, KEYSET_END, "the last slice must end at the window end");
+  for (let i = 1; i < slices.length; i++) {
+    // Touching, not overlapping: [a,b) then [b,c). A gap drops rows silently, an
+    // overlap double-counts money.
+    eq(slices[i].from, slices[i - 1].to, `slice ${i} must start exactly where slice ${i - 1} ends`);
+  }
+  // Only the last closes its upper bound, reproducing the single lte the
+  // unsliced read used, so the row set is unchanged.
+  eq(slices.filter((s) => s.inclusiveEnd).length, 1, "exactly one slice may use an inclusive upper bound");
+  eq(slices[slices.length - 1].inclusiveEnd, true, "and it must be the last one");
+
+  // A window that cannot be sliced degrades to ONE inclusive slice, never zero.
+  for (const [a, b, what] of [
+    [KEYSET_START, KEYSET_START, "equal bounds"],
+    [KEYSET_END, KEYSET_START, "reversed bounds"],
+    ["not-a-date", KEYSET_END, "unparseable start"],
+  ] as const) {
+    const s = usageSliceBounds(a, b, KEYSET_SLICES);
+    eq(s.length, 1, `${what} must degrade to one slice, not zero`);
+    eq(s[0].inclusiveEnd, true, `${what}: the single slice must keep the inclusive end`);
+  }
+});
+
+checkAsync("S16 maxRows is a hard shared ceiling across concurrent slices, and it reports truncation", async () => {
+  // Ten slices run at once against one budget. Decrementing it AFTER the await
+  // instead of reserving before lets all ten read the same value and each fetch
+  // a full page, returning up to maxRows + 9000 rows. Proven by moving the
+  // `budget -= limit` below the await: this goes red.
+  const { rows, truncated } = await runKeyset({ maxRows: 1200 });
+  assert(rows.length <= 1200, `maxRows is a ceiling, got ${rows.length} rows for maxRows 1200`);
+  eq(truncated, true, "a read stopped by its ceiling must say so, or the total reads as complete");
+});
+
+checkAsync("S17 no OFFSET paging, and the read stays read only", async () => {
+  // fakeClient throws if .range() is ever called, so S13 already fails if the
+  // offset comes back. This states it directly as well, because the offset is
+  // the whole outage and a future edit will be tempted by it.
+  const src = readFileSync(new URL("../lib/spend-data.ts", import.meta.url), "utf8");
+  const fn = src.slice(src.indexOf("export async function fetchUsageEventsPaged"));
+  const body = fn.slice(0, fn.indexOf("\nexport async function getSpendData"));
+  assert(!body.includes(".range("), "fetchUsageEventsPaged must not use .range(): that is OFFSET paging and it took the dashboard down");
+  assert(body.includes(".limit("), "each page must be bounded by an explicit limit");
+  assert(/usageCursorFilter/.test(body), "paging must advance by cursor");
+
+  // Slicing is what makes the read concurrent. Setting USAGE_SLICES to 1 is not
+  // a CORRECTNESS bug - a single slice still keyset-pages and still returns every
+  // row, which is why no other assertion here catches it - but it turns the read
+  // back into ~350 sequential round trips, which is the "Spend tab spins forever"
+  // report this file has already been through twice. Asserted in source because
+  // there is no behavioural symptom to assert on, only a slower page.
+  const slicesDecl = /const USAGE_SLICES = (\d+);/.exec(src);
+  assert(slicesDecl != null, "USAGE_SLICES must stay a literal so this check can read it");
+  assert(Number(slicesDecl![1]) > 1, `USAGE_SLICES must be > 1 or the read loses its concurrency, got ${slicesDecl![1]}`);
+  eq(Number(slicesDecl![1]), KEYSET_SLICES, "KEYSET_SLICES in this check must track USAGE_SLICES, or S13's paging assertion drifts");
+
+  await runKeyset({ rows: [] }); // an empty table must not hang or throw
+});
+
 // ── report ───────────────────────────────────────────────────────────────────
 
-console.log("spend roll-up");
-console.log(`  ${passed} passed`);
-for (const f of failures) console.error(`  ✗ ${f}`);
-console.log(failures.length === 0 ? "\nALL PASS" : `\n${failures.length} FAILURE(S)`);
-process.exit(failures.length === 0 ? 0 : 1);
+// tsx transpiles this file to CJS, where top-level await is a syntax error, so
+// the async checks run inside main() rather than at the top level.
+async function main(): Promise<void> {
+  for (const [name, fn] of asyncChecks) {
+    try {
+      await fn();
+      passed++;
+    } catch (e) {
+      failures.push(`${name}\n      ${e instanceof Error ? e.message : String(e)}`);
+    }
+  }
+
+  console.log("spend roll-up");
+  console.log(`  ${passed} passed`);
+  for (const f of failures) console.error(`  ✗ ${f}`);
+  console.log(failures.length === 0 ? "\nALL PASS" : `\n${failures.length} FAILURE(S)`);
+  process.exit(failures.length === 0 ? 0 : 1);
+}
+
+main().catch((e) => {
+  console.error(`  ✗ check-spend crashed: ${e instanceof Error ? e.stack : String(e)}`);
+  process.exit(1);
+});
