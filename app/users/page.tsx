@@ -16,6 +16,8 @@ import LiveFeed from "@/components/users/LiveFeed";
 import PurchaseToasts from "@/components/users/PurchaseToasts";
 import FanLive from "@/components/users/FanLive";
 import DripStrip from "@/components/users/DripStrip";
+import FanDossier from "@/components/users/FanDossier";
+import { toRows, parseEvents, sentenceCase } from "@/lib/fan-dossier";
 
 export const dynamic = "force-dynamic";
 
@@ -617,6 +619,25 @@ export default async function FansPage({
     },
   ];
   const uncategorizedProfileDetails = details.filter(([key]) => !usedDetailKeys.has(key));
+
+  // Dossier presentation. Split into rows, capitalised and (for the two event
+  // categories) date sorted HERE rather than in FanDossier.tsx: that component
+  // is a client component, and parsing "next week" on both sides of hydration
+  // is a mismatch. See lib/fan-dossier.ts.
+  const dossierNow = Date.now();
+  const eventLabels = new Set(["Upcoming events", "Recent events"]);
+  const valueOf = (label: string) =>
+    contextProfileCategories.find((c) => c.label === label)?.value ?? "";
+  const personalRows = toRows(personalProfileCategories);
+  const contextRows = toRows(contextProfileCategories.filter((c) => !eventLabels.has(c.label)));
+  const upcomingEvents = parseEvents(valueOf("Upcoming events"), dossierNow, "upcoming");
+  const recentEvents = parseEvents(valueOf("Recent events"), dossierNow, "past");
+  const otherRows = toRows(
+    uncategorizedProfileDetails.map(([key, value]) => ({
+      label: prettyKey(key),
+      value: profileValueText(value),
+    })),
+  );
 
   // No heading, no vh-calc guessing — <main> in app/layout.tsx is already
   // pinned to exactly the remaining viewport height for every page (fixed
@@ -1366,67 +1387,14 @@ export default async function FansPage({
                     )}
                   </span>
                 </div>
-                <div className="flex flex-col gap-3">
-                  <div className="rounded-lg border border-line bg-bg/60 p-2.5">
-                    <div className="mb-1 text-[9px] font-bold uppercase tracking-[0.14em] text-muted">
-                      Profile summary
-                    </div>
-                    <p className={`text-xs leading-relaxed ${profile?.summary?.trim() ? "text-ink" : "italic text-muted"}`}>
-                      {profile?.summary?.trim() || "Not learned yet"}
-                    </p>
-                  </div>
-
-                  {[
-                    { title: "Personal details", rows: personalProfileCategories },
-                    { title: "Context & preferences", rows: contextProfileCategories },
-                  ].map((group) => (
-                    <div key={group.title}>
-                      <div className="mb-1.5 text-[9px] font-bold uppercase tracking-[0.14em] text-accent">
-                        {group.title}
-                      </div>
-                      <dl className="overflow-hidden rounded-lg border border-line bg-bg/45">
-                        {group.rows.map((item) => (
-                          <div
-                            key={item.label}
-                            className="grid grid-cols-[minmax(0,0.42fr)_minmax(0,0.58fr)] gap-2 border-b border-line/70 px-2.5 py-2 last:border-b-0"
-                          >
-                            <dt className="text-[10px] font-semibold leading-snug text-muted">{item.label}</dt>
-                            <dd
-                              className={`text-right text-[11px] leading-snug ${item.value ? "font-medium text-ink" : "italic text-muted/70"}`}
-                            >
-                              {item.value || "Not learned yet"}
-                            </dd>
-                          </div>
-                        ))}
-                      </dl>
-                    </div>
-                  ))}
-
-                  {uncategorizedProfileDetails.length > 0 && (
-                    <div>
-                      <div className="mb-1.5 text-[9px] font-bold uppercase tracking-[0.14em] text-accent">
-                        Other details
-                      </div>
-                      <dl className="overflow-hidden rounded-lg border border-line bg-bg/45">
-                        {uncategorizedProfileDetails.map(([key, value]) => (
-                          <div
-                            key={key}
-                            className="grid grid-cols-[minmax(0,0.42fr)_minmax(0,0.58fr)] gap-2 border-b border-line/70 px-2.5 py-2 last:border-b-0"
-                          >
-                            <dt className="text-[10px] font-semibold leading-snug text-muted">{prettyKey(key)}</dt>
-                            <dd className="text-right text-[11px] font-medium leading-snug text-ink">
-                              {profileValueText(value)}
-                            </dd>
-                          </div>
-                        ))}
-                      </dl>
-                    </div>
-                  )}
-
-                  <p className="text-[9px] leading-relaxed text-muted/75">
-                    Sensitive details are shown only when the fan states them directly; they are never inferred.
-                  </p>
-                </div>
+                <FanDossier
+                  summary={sentenceCase(profile?.summary?.trim() ?? "")}
+                  personal={personalRows}
+                  contextRows={contextRows}
+                  upcomingEvents={upcomingEvents}
+                  recentEvents={recentEvents}
+                  other={otherRows}
+                />
               </div>
 
               {/* Purchases */}

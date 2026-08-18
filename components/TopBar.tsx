@@ -35,7 +35,15 @@ export default function TopBar({
     // Fixed h-16 (not padding-driven height) so this bar's bottom border lines
     // up exactly with the Sidebar's brand-row border next to it - the two were
     // drifting apart whenever content pushed either row's natural height.
-    <div className="dashboard-topbar sticky top-0 z-40 grid h-20 shrink-0 grid-cols-[1fr_auto_1fr] items-center gap-3 border-b border-line px-5 lg:px-8">
+    //
+    // The grid only exists from sm up, because that is the only place there is
+    // a breadcrumb to balance. Below sm the h1 is display:none, so it is not a
+    // grid item at all: auto-placement then dropped the control pill into the
+    // FIRST 1fr column and the empty balancer into the auto column, which is
+    // what made the pill sit left of centre on a phone. A plain centred flex
+    // has nothing to mis-place. Everything here is breakpoint-scoped, so sm+
+    // (and lg+) renders exactly as before.
+    <div className="dashboard-topbar sticky top-0 z-40 flex h-20 shrink-0 justify-center items-center gap-3 border-b border-line px-5 sm:grid sm:grid-cols-[1fr_auto_1fr] lg:px-8">
       <h1 className="hidden min-w-0 truncate font-heading text-sm font-semibold tracking-[-0.02em] text-ink sm:block">
         <span className={scopeIsCreator ? "creator-name" : undefined}>{scopeLabel}</span>
         {pageLabel != null && <span className="text-muted"> / {pageLabel}</span>}
@@ -100,8 +108,10 @@ export default function TopBar({
         </form>
       </div>
       {/* Empty right column - balances the breadcrumb so the controls stay
-          truly centered. */}
-      <div />
+          truly centered. Mirrors the breadcrumb's own visibility: below sm
+          there is no breadcrumb to balance, and leaving it in the flex row
+          would cost a gap-3 and shove the pill 6px off centre. */}
+      <div className="hidden sm:block" />
     </div>
   );
 }

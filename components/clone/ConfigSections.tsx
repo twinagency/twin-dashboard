@@ -311,6 +311,12 @@ export default function ConfigSections({
   const [tabState, setTabState] = useState<Tab>("identity");
   const tab = tabProp ?? tabState;
   const setTab = onTabChange ?? setTabState;
+  // AI Models start blurred even once the card is open: the model names and
+  // their per-1M prices are the shoulder-surf sensitive part of this page, same
+  // reasoning as Field's `secret` prop. The pickers stay mounted, selected and
+  // fully clickable the whole time, and the hidden inputs still submit their
+  // real values, so this is a visual mask only, not access control.
+  const [modelsVisible, setModelsVisible] = useState(false);
   // The per-category auto-block toggles that used to live here are gone
   // (2026-07-27, operator decision). The AI never blocks a fan, it only ever
   // flags. Blocking stays a purely manual operator action. The safety guard in
@@ -944,9 +950,27 @@ export default function ConfigSections({
           label="AI Models"
           accent="blue"
           className="xl:col-span-2"
-          hint="Search by name. Price per 1M tokens (in / out). ⭐ Best, 💰 Value, 🪙 Cheapest pinned on top."
+          hint="Names and prices are blurred until you hit View. Search by name. Price per 1M tokens (in / out). ⭐ Best, 💰 Value, 🪙 Cheapest pinned on top."
         >
-          <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          {/* type="button": this sits inside the one big clone <form>, so a
+              bare <button> would default to submit and save on every reveal. */}
+          <button
+            type="button"
+            onClick={() => setModelsVisible((v) => !v)}
+            aria-pressed={modelsVisible}
+            className="mb-2 rounded-md border border-line px-2 py-1 text-xs text-muted transition hover:text-ink"
+          >
+            {modelsVisible ? "Hide" : "View"}
+          </button>
+          <div
+            className={
+              "grid grid-cols-1 gap-2 transition-[filter] duration-150 sm:grid-cols-2" +
+              // pointer-events-none while masked so nobody reassigns a model
+              // they cannot read. It does not unmount or disable anything, so
+              // every hidden input still submits its real value.
+              (modelsVisible ? "" : " pointer-events-none select-none blur-[3px]")
+            }
+          >
             {MODEL_FIELDS.map((m) => (
               <ModelSelect
                 key={m.name}
