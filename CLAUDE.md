@@ -81,4 +81,4 @@ There is **no `typecheck` script here** — `build` is `next build`. To typechec
 
 ## Deploys
 
-Push to `main` builds the image in GitHub Actions and the box pulls it by digest. A push that touches only `.md`, `.txt` or `archive/` does NOT deploy — see `paths-ignore` in `.github/workflows/deploy.yml`. Docs live on disk and on the home server; only these `CLAUDE.md`/`README.md` files are in the repo.
+Push to `main` builds the image in GitHub Actions and the box pulls it by digest. A push that touches only `.md`, `.txt` or `archive/` does NOT deploy — see `paths-ignore` in `.github/workflows/deploy.yml` and `ci.yml` — neither deploy nor CI runs on one. Docs live on disk and on the home server; only these `CLAUDE.md`/`README.md` files are in the repo.
