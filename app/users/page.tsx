@@ -1376,81 +1376,52 @@ export default async function FansPage({
                     </p>
                   </div>
 
-                  {/* Jesse, 2026-08-17: the dossier grows without limit as she
-                      learns, and 21 always-open rows (most of them reading
-                      "Not learned yet") was the clutter. Each group is now a
-                      collapsed <details>, and an open group lists only what she
-                      actually knows, with the empty categories named once on a
-                      single muted line instead of costing a row each.
-
-                      <details> rather than a React accordion on purpose: this
-                      page is a server component, so a client component here
-                      would mean shipping JS and a "use client" boundary for
-                      something the browser already does. Same choice as the
-                      <details> further down this file and in logs/SpendView. */}
                   {[
                     { title: "Personal details", rows: personalProfileCategories },
                     { title: "Context & preferences", rows: contextProfileCategories },
-                    {
-                      title: "Other details",
-                      rows: uncategorizedProfileDetails.map(([key, value]) => ({
-                        label: prettyKey(key),
-                        value: profileValueText(value),
-                      })),
-                    },
-                  ]
-                    .filter((group) => group.rows.length > 0)
-                    .map((group) => {
-                      const learned = group.rows.filter((item) => item.value);
-                      const empty = group.rows.filter((item) => !item.value);
-                      return (
-                        <details key={group.title} className="group rounded-lg border border-line bg-bg/45">
-                          <summary className="flex cursor-pointer list-none items-center gap-2 px-2.5 py-2 [&::-webkit-details-marker]:hidden">
-                            <span className="text-[9px] font-bold uppercase tracking-[0.14em] text-accent">
-                              {group.title}
-                            </span>
-                            <span className="ml-auto text-[10px] tabular-nums text-muted">
-                              {learned.length}/{group.rows.length} learned
-                            </span>
-                            <svg
-                              viewBox="0 0 24 24"
-                              fill="none"
-                              stroke="currentColor"
-                              strokeWidth={2}
-                              strokeLinecap="round"
-                              strokeLinejoin="round"
-                              aria-hidden="true"
-                              className="h-3 w-3 shrink-0 text-muted transition-transform group-open:rotate-180"
+                  ].map((group) => (
+                    <div key={group.title}>
+                      <div className="mb-1.5 text-[9px] font-bold uppercase tracking-[0.14em] text-accent">
+                        {group.title}
+                      </div>
+                      <dl className="overflow-hidden rounded-lg border border-line bg-bg/45">
+                        {group.rows.map((item) => (
+                          <div
+                            key={item.label}
+                            className="grid grid-cols-[minmax(0,0.42fr)_minmax(0,0.58fr)] gap-2 border-b border-line/70 px-2.5 py-2 last:border-b-0"
+                          >
+                            <dt className="text-[10px] font-semibold leading-snug text-muted">{item.label}</dt>
+                            <dd
+                              className={`text-right text-[11px] leading-snug ${item.value ? "font-medium text-ink" : "italic text-muted/70"}`}
                             >
-                              <path d="M6 9l6 6 6-6" />
-                            </svg>
-                          </summary>
-                          <dl className="border-t border-line">
-                            {learned.map((item) => (
-                              <div
-                                key={item.label}
-                                className="grid grid-cols-[minmax(0,0.42fr)_minmax(0,0.58fr)] gap-2 border-b border-line/70 px-2.5 py-2 last:border-b-0"
-                              >
-                                <dt className="text-[10px] font-semibold leading-snug text-muted">{item.label}</dt>
-                                <dd className="text-right text-[11px] font-medium leading-snug text-ink">
-                                  {item.value}
-                                </dd>
-                              </div>
-                            ))}
-                            {learned.length === 0 && (
-                              <p className="px-2.5 py-2 text-[11px] italic leading-snug text-muted/70">
-                                Nothing learned in this group yet.
-                              </p>
-                            )}
-                            {empty.length > 0 && (
-                              <p className="border-t border-line/70 px-2.5 py-2 text-[10px] leading-snug text-muted/70">
-                                Not learned yet: {empty.map((item) => item.label).join(", ")}
-                              </p>
-                            )}
-                          </dl>
-                        </details>
-                      );
-                    })}
+                              {item.value || "Not learned yet"}
+                            </dd>
+                          </div>
+                        ))}
+                      </dl>
+                    </div>
+                  ))}
+
+                  {uncategorizedProfileDetails.length > 0 && (
+                    <div>
+                      <div className="mb-1.5 text-[9px] font-bold uppercase tracking-[0.14em] text-accent">
+                        Other details
+                      </div>
+                      <dl className="overflow-hidden rounded-lg border border-line bg-bg/45">
+                        {uncategorizedProfileDetails.map(([key, value]) => (
+                          <div
+                            key={key}
+                            className="grid grid-cols-[minmax(0,0.42fr)_minmax(0,0.58fr)] gap-2 border-b border-line/70 px-2.5 py-2 last:border-b-0"
+                          >
+                            <dt className="text-[10px] font-semibold leading-snug text-muted">{prettyKey(key)}</dt>
+                            <dd className="text-right text-[11px] font-medium leading-snug text-ink">
+                              {profileValueText(value)}
+                            </dd>
+                          </div>
+                        ))}
+                      </dl>
+                    </div>
+                  )}
 
                   <p className="text-[9px] leading-relaxed text-muted/75">
                     Sensitive details are shown only when the fan states them directly; they are never inferred.

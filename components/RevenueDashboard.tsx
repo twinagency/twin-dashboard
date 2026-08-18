@@ -275,17 +275,13 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
       {/* ── Period toggle - a segmented control, not tabs: it re-windows the
           same ledger, it doesn't switch views. Custom range + chart type sit
           alongside it, on the same row. ─────────────────────────────────── */}
-      {/* Mobile first, second pass (Jesse, 2026-08-17: "the buttons look bad").
-          Wrapping nine pills inside a rounded-full strip gave a ragged two rows
-          of 24px-tall targets, under half Apple's 44px minimum, and the Custom
-          pill grew to hold two ISO dates so the ragged edge moved every time the
-          range changed. On a phone the eight fixed windows are now an even 4x2
-          grid of full-height cells, and Custom gets its own row beside the chart
-          toggle, so nothing reflows when its label changes. From sm up this
-          collapses back to the single inline strip - `sm:contents` dissolves the
-          mobile row wrapper so its children rejoin the toolbar's own flex. */}
-      <div className="earnings-toolbar mb-4 flex w-full flex-col gap-2 sm:mb-5 sm:w-fit sm:flex-row sm:flex-wrap sm:items-center">
-        <div className="earnings-control-group grid grid-cols-4 gap-1 rounded-2xl p-1 sm:inline-flex sm:flex-wrap sm:gap-0.5 sm:rounded-full sm:p-0.5">
+      {/* Mobile first: the pills still WRAP rather than scroll sideways. A scroll
+          strip fitted in one row but hid "1D" and "Custom" off the right edge with
+          no visible cue, which on this page reads as the content being cut off,
+          the exact complaint. Tighter type and padding instead, so they wrap to
+          two rows instead of three and nothing is hidden. */}
+      <div className="earnings-toolbar mb-4 flex flex-wrap items-center gap-1.5 sm:mb-5 sm:gap-2">
+        <div className="earnings-control-group inline-flex min-w-0 flex-wrap gap-0.5 rounded-full p-0.5">
           {PERIODS.map((p) => (
             <button
               key={p.key}
@@ -294,7 +290,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
                 setPeriod(p.key);
               }}
               className={
-                "flex h-9 shrink-0 items-center justify-center gap-1 rounded-xl px-2 text-xs font-medium tabular-nums transition sm:h-7 sm:rounded-full sm:px-2.5 " +
+                "flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium tabular-nums transition sm:px-2.5 sm:text-xs " +
                 (!customRange && period === p.key
                   ? "earnings-control-active"
                   : "text-muted hover:bg-muted/10 hover:text-ink")
@@ -309,77 +305,58 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
               {p.label}
             </button>
           ))}
+          <button
+            onClick={() => {
+              setDraftStart(customRange?.start ?? "");
+              setDraftEnd(customRange?.end ?? "");
+              setCustomOpen(true);
+            }}
+            className={
+              "flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium tabular-nums transition sm:px-2.5 sm:text-xs " +
+              (customRange ? "earnings-control-active" : "text-muted hover:bg-muted/10 hover:text-ink")
+            }
+          >
+            <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth={2}>
+              <rect x="3" y="4" width="18" height="18" rx="2" />
+              <path d="M3 9h18M8 2v4M16 2v4" strokeLinecap="round" />
+            </svg>
+            {customRange ? `${customRange.start} → ${customRange.end}` : "Custom"}
+          </button>
         </div>
 
-        <div className="flex items-center gap-2 sm:contents">
-          <div className="earnings-control-group flex min-w-0 flex-1 rounded-2xl p-1 sm:inline-flex sm:flex-none sm:rounded-full sm:p-0.5">
-            <button
-              onClick={() => {
-                setDraftStart(customRange?.start ?? "");
-                setDraftEnd(customRange?.end ?? "");
-                setCustomOpen(true);
-              }}
-              className={
-                "flex h-9 w-full min-w-0 items-center justify-center gap-1.5 rounded-xl px-2 text-xs font-medium tabular-nums transition sm:h-7 sm:rounded-full sm:px-2.5 " +
-                (customRange ? "earnings-control-active" : "text-muted hover:bg-muted/10 hover:text-ink")
-              }
-            >
-              <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth={2}>
-                <rect x="3" y="4" width="18" height="18" rx="2" />
-                <path d="M3 9h18M8 2v4M16 2v4" strokeLinecap="round" />
-              </svg>
-              {/* The dates are the label only where they fit. On a phone the pill
-                  keeps saying "Custom" and the active state is what tells you a
-                  range is set; the exact dates are one tap away in the dialog. */}
-              <span className="truncate">
-                {customRange ? (
-                  <>
-                    <span className="sm:hidden">Custom</span>
-                    <span className="hidden sm:inline">
-                      {customRange.start} → {customRange.end}
-                    </span>
-                  </>
-                ) : (
-                  "Custom"
-                )}
-              </span>
-            </button>
-          </div>
-
-          {/* Bar / line toggle - same series, different mark. Fixed square boxes
-              with place-items-center rather than padding around an icon: padding
-              rounds differently per icon and left both of these looking off-centre
-              inside the round active pill. */}
-          <div className="earnings-control-group flex shrink-0 gap-1 rounded-2xl p-1 sm:inline-flex sm:gap-0.5 sm:rounded-full sm:p-0.5">
-            <button
-              onClick={() => setChartType("bar")}
-              aria-label="Bar chart"
-              aria-pressed={chartType === "bar"}
-              className={
-                "grid h-9 w-9 place-items-center rounded-xl transition sm:h-7 sm:w-7 sm:rounded-full " +
-                (chartType === "bar" ? "earnings-control-active" : "text-muted hover:bg-muted/10 hover:text-ink")
-              }
-            >
-              <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2}>
-                <path d="M4 20V10M12 20V4M20 20v-7" strokeLinecap="round" />
-              </svg>
-            </button>
-            <button
-              onClick={() => setChartType("line")}
-              aria-label="Line chart"
-              aria-pressed={chartType === "line"}
-              className={
-                "grid h-9 w-9 place-items-center rounded-xl transition sm:h-7 sm:w-7 sm:rounded-full " +
-                (chartType === "line" ? "earnings-control-active" : "text-muted hover:bg-muted/10 hover:text-ink")
-              }
-            >
-              {/* The polyline's ink spans y 7..16, so its bounding box centre is not
-                  the viewBox centre. Nudged down to sit level in the circle. */}
-              <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 translate-y-[1px]" fill="none" stroke="currentColor" strokeWidth={2}>
-                <path d="M4 16l5-6 4 3 7-9" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            </button>
-          </div>
+        {/* Bar / line toggle - same series, different mark. Fixed square boxes
+            with place-items-center rather than padding around an icon: padding
+            rounds differently per icon and left both of these looking off-centre
+            inside the round active pill. */}
+        <div className="earnings-control-group inline-flex shrink-0 gap-0.5 rounded-full p-0.5">
+          <button
+            onClick={() => setChartType("bar")}
+            aria-label="Bar chart"
+            aria-pressed={chartType === "bar"}
+            className={
+              "grid h-7 w-7 place-items-center rounded-full transition " +
+              (chartType === "bar" ? "earnings-control-active" : "text-muted hover:bg-muted/10 hover:text-ink")
+            }
+          >
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2}>
+              <path d="M4 20V10M12 20V4M20 20v-7" strokeLinecap="round" />
+            </svg>
+          </button>
+          <button
+            onClick={() => setChartType("line")}
+            aria-label="Line chart"
+            aria-pressed={chartType === "line"}
+            className={
+              "grid h-7 w-7 place-items-center rounded-full transition " +
+              (chartType === "line" ? "earnings-control-active" : "text-muted hover:bg-muted/10 hover:text-ink")
+            }
+          >
+            {/* The polyline's ink spans y 7..16, so its bounding box centre is not
+                the viewBox centre. Nudged down to sit level in the circle. */}
+            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 translate-y-[1px]" fill="none" stroke="currentColor" strokeWidth={2}>
+              <path d="M4 16l5-6 4 3 7-9" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>
+          </button>
         </div>
       </div>
 
