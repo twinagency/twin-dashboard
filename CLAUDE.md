@@ -73,6 +73,8 @@ Synthetic revenue and fans, deterministic by `?seed=`, in exactly the shape of t
 
 `npx tsc --noEmit` for typecheck. Run it once when done, not after every file edit.
 
-`npm test` runs five suites: `test:api`, `test:public`, `test:paging`, `test:callsites`, `test:media`. Unlike a typecheck these have caught real bugs. Do not quote a check count from this file; run the command. Every guard was proven by planting the bug back; the record is in `../TWIN-API.txt`.
+`npm test` chains the `test:*` scripts in `package.json` — read them there, because the list has grown twice without this file noticing. Unlike a typecheck these have caught real bugs. **Do not quote a check count from this file; run the command.** Every guard was proven by planting the bug back; the record is in `../TWIN-API.txt`.
+
+There is **no `typecheck` script here** — `build` is `next build`. To typecheck: `../bot/node_modules/.bin/tsc --noEmit`.
 
 `npm run test:api` for the admin API. Unlike a typecheck this one has caught real bugs: each of its guards was proven by planting the bug back and watching it go red (record in `../TWIN-API.txt`). Anything added to `app/api/admin/v1/` ships a check here.

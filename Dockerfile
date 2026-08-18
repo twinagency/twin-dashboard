@@ -35,6 +35,12 @@ FROM node:22-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
+
+# Baked in by CI so the RUNNING container can be asked which commit it is,
+# rather than inferred from a tag or an image id. Both boxes have served
+# 25-hour-old images while git log said otherwise; this is the read-back.
+ARG GIT_SHA=unknown
+ENV GIT_SHA=$GIT_SHA
 ENV NEXT_TELEMETRY_DISABLED=1
 ENV PORT=3001
 ENV HOSTNAME=0.0.0.0

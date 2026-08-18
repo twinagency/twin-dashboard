@@ -18,7 +18,8 @@
     "key:list": "../bot/node_modules/.bin/tsx scripts/issue-api-key.ts list",
     "key:revoke": "../bot/node_modules/.bin/tsx scripts/issue-api-key.ts revoke",
     "test:callsites": "../bot/node_modules/.bin/tsx scripts/check-paged-call-sites.ts",
-    "test:rollups": "../bot/node_modules/.bin/tsx scripts/check-revenue-rollups.ts"
+    "test:rollups": "../bot/node_modules/.bin/tsx scripts/check-revenue-rollups.ts",
+    "test:offline": "npm run test:paging && npm run test:callsites && npm run test:media && npm run test:spend && npm run test:report && npm run test:rollups"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
