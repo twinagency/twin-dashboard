@@ -773,3 +773,150 @@ html.blur-media .creator-name {
 @media (prefers-reduced-motion: reduce) {
   .typing-dots i { animation: none; opacity: 0.75; }
 }
+
+/* ── Telegram-accurate chat thread (Fans inbox middle column) ────────────────
+   Ronan, 2026-08-18: "formatt whole texting to match telegram almost 1:1".
+   So these values are Telegram Desktop's LIGHT theme, not Twin Aurora tokens:
+   the point of the panel is that it reads as the thing the fan is actually
+   looking at on his phone, and a re-tinted Twin version of it does not.
+   The rest of the page keeps the Aurora palette; only inside .tg-thread do
+   these apply.
+
+   Outgoing (her) is Telegram's #EFFDDE green on the RIGHT, incoming (the fan)
+   is white on the LEFT. That replaces the old blue/grey pair from 2026-07-17 —
+   same sides, Telegram's own colours. */
+.tg-thread {
+  /* Telegram's default light wallpaper: warm blue field plus the faint
+     repeating pattern. Two radial layers rather than an image asset so it
+     costs nothing to load and cannot 404 in the container. */
+  background-color: #7da2c1;
+  background-image:
+    radial-gradient(circle at 20% 22%, rgb(255 255 255 / 0.10) 0 14px, transparent 15px),
+    radial-gradient(circle at 68% 62%, rgb(255 255 255 / 0.08) 0 10px, transparent 11px),
+    radial-gradient(circle at 44% 88%, rgb(255 255 255 / 0.07) 0 16px, transparent 17px),
+    linear-gradient(160deg, #90b3ce 0%, #7fa5c4 45%, #93b8d2 100%);
+  background-size: 168px 168px, 168px 168px, 168px 168px, 100% 100%;
+}
+
+.tg-bubble {
+  position: relative;
+  max-width: 78%;
+  padding: 6px 9px 6px 10px;
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 1.32;
+  box-shadow: 0 1px 1px rgb(16 35 47 / 0.12);
+  word-break: break-word;
+}
+
+.tg-bubble-in {
+  background: #ffffff;
+  color: #000000;
+  border-bottom-left-radius: 12px;
+}
+
+.tg-bubble-out {
+  background: #effdde;
+  color: #000000;
+  border-bottom-right-radius: 12px;
+}
+
+/* Only the LAST bubble of a run gets the tail, exactly like Telegram: a tail on
+   every bubble is the single most obvious tell that a chat UI was not copied
+   from the real thing. */
+.tg-tail-in { border-bottom-left-radius: 3px; }
+.tg-tail-out { border-bottom-right-radius: 3px; }
+
+.tg-tail-in::before,
+.tg-tail-out::before {
+  position: absolute;
+  bottom: 0;
+  width: 11px;
+  height: 20px;
+  content: "";
+  background-repeat: no-repeat;
+}
+
+.tg-tail-in::before {
+  left: -8px;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='20' viewBox='0 0 11 20'%3E%3Cpath fill='%23ffffff' d='M11 20V0C11 8 9 14 0 18c5 2 8 2 11 2z'/%3E%3C/svg%3E");
+}
+
+.tg-tail-out::before {
+  right: -8px;
+  background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='11' height='20' viewBox='0 0 11 20'%3E%3Cpath fill='%23effdde' d='M0 20V0C0 8 2 14 11 18c-5 2-8 2-11 2z'/%3E%3C/svg%3E");
+}
+
+/* Timestamp + ticks, floated into the last text line the way Telegram does it,
+   so a short message does not get a whole extra row for its clock. */
+.tg-meta {
+  float: right;
+  margin: 6px 0 -2px 8px;
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  font-size: 11px;
+  line-height: 1;
+  white-space: nowrap;
+  color: rgb(0 0 0 / 0.38);
+}
+
+.tg-bubble-out .tg-meta { color: #4fae4e; }
+
+/* Floating day pill, and the same pill shape for the "latest message" rule. */
+.tg-daypill {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 0.22);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+/* The "where the newest message starts" rule Ronan asked for. Telegram's own
+   unread divider is a full-width band with the label centred in it. */
+.tg-newline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 3px 10px;
+  background: rgb(0 0 0 / 0.16);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+/* Inline keyboard, drawn under the bubble as Telegram draws it: full width of
+   the bubble column, one translucent white slab per button, rows preserved. */
+.tg-kb-btn {
+  flex: 1 1 0;
+  min-width: 0;
+  padding: 7px 8px;
+  border-radius: 8px;
+  background: rgb(255 255 255 / 0.82);
+  color: #1c93e3;
+  font-size: 12px;
+  font-weight: 600;
+  text-align: center;
+  box-shadow: 0 1px 1px rgb(16 35 47 / 0.12);
+}
+
+/* Provenance line under a bubble (which flow / which onboarding step produced
+   it). Deliberately outside the bubble and quiet: it is operator metadata, not
+   part of the conversation the fan saw. */
+.tg-prov {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 0.20);
+  color: #ffffff;
+  font-size: 10px;
+  font-weight: 600;
+  white-space: nowrap;
+}

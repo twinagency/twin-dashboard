@@ -2,6 +2,7 @@ import Link from "next/link";
 import { supabaseAdmin } from "@/lib/supabase";
 import { fmtNum } from "@/lib/money";
 import { getCloneScope } from "@/lib/clone-scope";
+import { selectAllRows } from "@/lib/select-all";
 import StarAmount from "@/components/StarAmount";
 import { SpendTierChip } from "@/components/SpendTierBadge";
 import { Card } from "@/components/ui/card";
@@ -18,6 +19,8 @@ import FanLive from "@/components/users/FanLive";
 import DripStrip from "@/components/users/DripStrip";
 import FanDossier from "@/components/users/FanDossier";
 import { toRows, parseEvents, sentenceCase } from "@/lib/fan-dossier";
+import ChatThread, { type ThreadMessage } from "@/components/users/ChatThread";
+import { flowLabelOf } from "@/lib/flow-labels";
 
 export const dynamic = "force-dynamic";
 
@@ -263,7 +266,15 @@ export default async function FansPage({
       // in-memory version matched a substring of it. Names still match on
       // substring, which is what the box is actually used for.
       const like = `*${qLower.replace(/[,()*]/g, "")}*`;
-      const clauses = [`name.ilike.${like}`, `stated_name.ilike.${like}`, `username.ilike.${like}`];
+      // Every identifier the operator might have in front of him, not just the
+      // two names: he is as likely to be pasting a telegram id or a business
+      // connection id out of a log as typing a name.
+      const clauses = [
+        `name.ilike.${like}`,
+        `stated_name.ilike.${like}`,
+        `username.ilike.${like}`,
+        `business_connection_id.ilike.${like}`,
+      ];
       if (/^\d+$/.test(qLower)) clauses.push(`telegram_id.eq.${qLower}`);
       out = out.or(clauses.join(","));
     }
@@ -327,6 +338,51 @@ export default async function FansPage({
           .limit(2000),
       )
     : { data: [] as any[] };
+
+  // Paid media unlocks per fan, for the chip beside his name. Ronan, 2026-08-18:
+  // "cant see what pics fans puchased in chat logs + next too name". This is the
+  // "next to name" half and it needs no new column: a kind='media' row IS an
+  // unlock. Which item it was needs migration 121 and is answered in the thread,
+  // not here. Same `.in` scoping as the routing read above, one query for the
+  // whole visible page rather than one per row.
+  //
+  // PAGED AND CHUNKED, not a plain select, and both halves matter.
+  //
+  // PAGED: an unpaged read stops at PostgREST's 1000-row cap without erroring,
+  // so one whale on screen would silently truncate the set and every chip built
+  // from it would be low. lib/select-all.ts exists for exactly that and its
+  // header explains the failure in full. Ordered by id so paging cannot repeat
+  // or skip a row.
+  //
+  // CHUNKED: "Load more" raises this list to FAN_MAX=1000 rows, and 1000 uuids
+  // in one `.in(...)` is a ~37KB query string, past what a URL can carry. The
+  // obvious fix, `.slice(0, 300)`, is the same silent undercount in a different
+  // place: fan 301 would show no unlock chip and nothing would say why. So the
+  // ids are chunked and every visible fan is covered.
+  const ID_CHUNK = 150;
+  const pageUserIds = filtered.map((u) => u.id);
+  const idChunks: string[][] = [];
+  for (let i = 0; i < pageUserIds.length; i += ID_CHUNK) idChunks.push(pageUserIds.slice(i, i + ID_CHUNK));
+  const mediaBuyRows = (
+    await Promise.all(
+      idChunks.map((chunk) =>
+        selectAllRows<{ user_id: string; amount_stars: number | null }>(
+          supabaseAdmin
+            .from("star_transactions")
+            .select("user_id,amount_stars")
+            .eq("kind", "media")
+            .in("user_id", chunk)
+            .order("id", { ascending: true }),
+          { label: "users:media-unlocks" },
+        ),
+      ),
+    )
+  ).flatMap((r) => r.rows);
+  const mediaBuysByFan = new Map<string, { count: number; stars: number }>();
+  for (const row of mediaBuyRows) {
+    const prev = mediaBuysByFan.get(row.user_id) ?? { count: 0, stars: 0 };
+    mediaBuysByFan.set(row.user_id, { count: prev.count + 1, stars: prev.stars + (row.amount_stars ?? 0) });
+  }
 
   // Rows arrive newest-first, so the FIRST row seen for a fan is his last turn.
   // `seen` is tracked separately from the map: a row we cannot render a chip
@@ -394,7 +450,11 @@ export default async function FansPage({
         .limit(60),
       supabaseAdmin
         .from("star_transactions")
-        .select("amount_stars,kind,paid_at")
+        // select * (not named columns) for the same reason chat_history does it
+        // just above: `media_type`/`media_id` (migration 121, which media he
+        // actually unlocked) come along the moment that migration is applied,
+        // and nothing breaks in the window before it is.
+        .select("*")
         .eq("user_id", selected.id)
         .order("paid_at", { ascending: false }),
       supabaseAdmin.from("fan_profiles").select("*").eq("user_id", selected.id).maybeSingle(),
@@ -437,6 +497,21 @@ export default async function FansPage({
     drip?: boolean;
     drip_step?: number;
     drip_kind?: "step" | "winback";
+    // ── THE FLOW STAMP (bot/src/types.ts ChatMeta.flow, 2026-08-18) ──────────
+    // Which code path produced this send: her live text reply, the router
+    // picking a photo, the out-of-credits wall, an onboarding step, the
+    // campaign. Same forward-only rule as the drip stamp above: a row without
+    // it is UNKNOWN, and lib/flow-labels.ts refuses to invent a label for one.
+    // The slug vocabulary is shared with the bot and asserted by
+    // scripts/check-flow-labels.ts.
+    flow?: string;
+    /** onboarding sends only: which configured step fired */
+    step_id?: string;
+    step_index?: number;
+    step_total?: number;
+    /** the inline keyboard exactly as the fan saw it, rows preserved. Labels
+        only, never the invoice URL, which is a live payment link. */
+    buttons?: { text: string }[][];
   };
   const metaOf = (m: any): BubbleMeta | null =>
     m?.meta && typeof m.meta === "object" ? (m.meta as BubbleMeta) : null;
@@ -504,7 +579,200 @@ export default async function FansPage({
 
   const totalSpent = purchases.reduce((s, p) => s + (p.amount_stars ?? 0), 0);
   const isPaying = purchases.length > 0 || (selected?.total_messages_purchased ?? 0) > 0;
-  const displayName = (u: any) => u.stated_name || u.name || `Fan ${u.telegram_id}`;
+
+  // ── WHO THIS FAN IS, IN THE ORDER THE OPERATOR NEEDS IT ────────────────────
+  // Ronan, 2026-08-18: the fan list led with `stated_name` — the name the fan
+  // TYPED at her in chat. That is the one field here he does not control and
+  // cannot verify: it is whatever he felt like calling himself, it is often a
+  // joke, and two fans can trivially share one. Telegram's own name, his
+  // @handle, his telegram id and the business connection he arrived on are the
+  // identifiers that actually resolve to a person, so they lead now and the
+  // stated name trails as a note.
+  //
+  // stated_name is still SOURCE OF TRUTH for what SHE calls him (see the users
+  // table comment and bot/src/prompt.ts) — that has not changed, and this is
+  // only about what the operator reads on a row.
+  const displayName = (u: any) => u.name?.trim() || `Fan ${u.telegram_id}`;
+  const statedAlias = (u: any) => {
+    const stated = u.stated_name?.trim();
+    if (!stated) return null;
+    // Only worth a line when it actually differs from the Telegram name.
+    return stated.toLowerCase() === (u.name?.trim() ?? "").toLowerCase() ? null : stated;
+  };
+  // "number" in the brief: Telegram never gives a bot the fan's phone number, so
+  // the telegram id is the number that exists. Not relabelled as a phone.
+  const identityBits = (u: any): string[] => {
+    const bits: string[] = [];
+    if (u.username) bits.push(`@${u.username}`);
+    bits.push(`id ${u.telegram_id}`);
+    if (u.business_connection_id) bits.push(`biz ${String(u.business_connection_id).slice(0, 10)}`);
+    return bits;
+  };
+
+  // ── What he actually BOUGHT ────────────────────────────────────────────────
+  // Two different questions, and the old panel answered neither. "Which media
+  // did she OFFER him at a price" is meta.paid on the send. "Which of those did
+  // he PAY for" is a star_transactions row of kind 'media', and until migration
+  // 121 lands nothing on that row says which item it was.
+  //
+  // So: a purchase with a media_id resolves to that exact bubble. A purchase
+  // without one (every row written before 121) counts toward the totals but is
+  // NEVER attached to a guess of a bubble. Matching an unlabelled purchase to
+  // the nearest locked send by timestamp would be right most of the time and
+  // wrong silently, which on this project is the more expensive outcome.
+  const mediaPurchases = purchases.filter((p) => p.kind === "media");
+  const purchasedByMediaId = new Map<string, { stars: number; at: string }>();
+  for (const p of mediaPurchases) {
+    if (!p.media_id) continue;
+    const prev = purchasedByMediaId.get(p.media_id);
+    if (!prev || p.paid_at > prev.at) purchasedByMediaId.set(p.media_id, { stars: p.amount_stars ?? 0, at: p.paid_at });
+  }
+  const mediaPurchaseCount = mediaPurchases.length;
+  const unlinkedMediaPurchases = mediaPurchases.filter((p) => !p.media_id).length;
+  // WHEN "NOT BOUGHT" IS A FACT AND WHEN IT IS AN ASSUMPTION. Drawing a padlock
+  // on a message says he did not pay for it. That is only safe when every media
+  // purchase this fan has made names the item it bought. Two cases where one
+  // does not, and the second never resolves with time:
+  //   - anything charged before migration 121, which recorded no item at all
+  //   - EVERY bundle, ever: a bundle's Star charge carries no uuid to record
+  // With any such purchase on his record, an absent link means "not recorded",
+  // not "not bought", and the bubble falls back to showing the price it was
+  // offered at, which is exactly what this panel showed before.
+  const lockStateKnown = unlinkedMediaPurchases === 0;
+
+  // ── The thread, decided here and rendered by ChatThread ────────────────────
+  // Every per-message question (what kind of bubble, which thumb, was it bought,
+  // which flow produced it) is answered on the server so the client component
+  // stays a pure renderer. See components/users/ChatThread.tsx for why that one
+  // has to be a client component at all.
+  // Telegram groups consecutive same-side messages sent close together into one
+  // run: tight spacing, tail on the last one only. Computed here rather than in
+  // the client component so no Date work happens after hydration (see the
+  // hydration note in ChatThread.tsx).
+  const RUN_GAP_MS = 5 * 60_000;
+  const dayKeyOf = (iso: string) => new Date(iso).toDateString();
+  const todayKey = new Date().toDateString();
+  const yesterdayKey = new Date(Date.now() - 86_400_000).toDateString();
+  const dayLabelOf = (iso: string) => {
+    const key = dayKeyOf(iso);
+    if (key === todayKey) return "Today";
+    if (key === yesterdayKey) return "Yesterday";
+    const d = new Date(iso);
+    return d.toLocaleDateString(undefined, {
+      day: "numeric",
+      month: "long",
+      ...(d.getFullYear() === new Date().getFullYear() ? {} : { year: "numeric" }),
+    });
+  };
+  // hour12 pinned rather than left to the locale: an undefined locale resolves
+  // differently under Node and in a browser, which is exactly the mismatch that
+  // broke the first build of this panel.
+  const timeLabelOf = (iso: string) =>
+    new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false });
+
+  const threadMessages: ThreadMessage[] = history.map((m, i) => {
+    const prevRow = i > 0 ? history[i - 1] : null;
+    const nextRow = i < history.length - 1 ? history[i + 1] : null;
+    const fanSide = m.role === "human";
+    const newDay = !prevRow || dayKeyOf(prevRow.created_at) !== dayKeyOf(m.created_at);
+    const startsRun =
+      !prevRow ||
+      (prevRow.role === "human") !== fanSide ||
+      newDay ||
+      new Date(m.created_at).getTime() - new Date(prevRow.created_at).getTime() > RUN_GAP_MS;
+    const endsRun =
+      !nextRow ||
+      (nextRow.role === "human") !== fanSide ||
+      dayKeyOf(nextRow.created_at) !== dayKeyOf(m.created_at) ||
+      new Date(nextRow.created_at).getTime() - new Date(m.created_at).getTime() > RUN_GAP_MS;
+
+    const meta = metaOf(m);
+    const info = meta?.media_id ? mediaInfo.get(meta.media_id) : undefined;
+    const transcript = voiceWords(m.content);
+    const parsed = mediaText(m.content);
+    const fan = m.role === "human";
+
+    // Kind, preferring the recorded meta and falling back to what the memory
+    // line says. A fan's own message is always text: she is the only side that
+    // can send media here.
+    const kind: ThreadMessage["kind"] = fan
+      ? "text"
+      : meta?.type === "voice" || (transcript != null && !meta?.type)
+        ? "voice"
+        : meta?.type === "photo" || meta?.type === "video" || meta?.type === "bundle"
+          ? meta.type
+          : parsed
+            ? (parsed.kind as ThreadMessage["kind"])
+            : "text";
+
+    // ── INLINE DRIP MARKER (Jesse, 2026-08-17, preserved through the 08-18
+    //    Telegram rebuild) ────────────────────────────────────────────────────
+    // One marker per campaign step, not per row: a win-back fires a media send
+    // and a text send under the SAME step number, so an unconditional marker
+    // draws the same rule twice. Compared against the previous row rather than
+    // tracked across the map, which a server component re-render would not
+    // preserve anyway.
+    const dripMeta = meta?.drip ? meta : null;
+    const prevMeta = prevRow ? metaOf(prevRow) : null;
+    const sameStepAsPrev =
+      !!dripMeta &&
+      !!prevMeta?.drip &&
+      prevMeta.drip_step === dripMeta.drip_step &&
+      prevMeta.drip_kind === dripMeta.drip_kind;
+    const dripMarker =
+      dripMeta && !sameStepAsPrev
+        ? {
+            label:
+              (dripMeta.drip_kind === "winback" ? "Win-back" : "Automated drip") +
+              (dripMeta.drip_step ? ` · step ${dripMeta.drip_step}` : ""),
+            hint:
+              dripMeta.drip_kind === "winback"
+                ? "Sent automatically to pull a lapsed spender back, replacing this campaign step. Nobody typed it."
+                : "Sent automatically by the campaign, not typed in a live conversation.",
+          }
+        : null;
+
+    const bought = meta?.media_id ? purchasedByMediaId.get(meta.media_id) : undefined;
+    const flow = flowLabelOf(meta?.flow);
+    // Onboarding carries its step; the campaign carries its step number. Both
+    // sharpen the same one-line label rather than adding a second chip.
+    const stepSuffix =
+      meta?.flow === "onboarding" && typeof meta.step_index === "number"
+        ? ` · step ${meta.step_index + 1}${meta.step_total ? `/${meta.step_total}` : ""}`
+        : (meta?.flow === "drip_step" || meta?.flow === "winback") && meta.drip_step
+          ? ` · step ${meta.drip_step}`
+          : "";
+
+    return {
+      id: String(m.id ?? `${m.created_at}-${i}`),
+      fan,
+      content: m.content,
+      timeLabel: timeLabelOf(m.created_at),
+      dayLabel: newDay ? dayLabelOf(m.created_at) : null,
+      startsRun,
+      endsRun,
+      kind,
+      voiceUrl:
+        meta?.type === "voice" && meta.tg_file_id && selected
+          ? `/api/voice?clone=${selected.clone_id}&file=${encodeURIComponent(meta.tg_file_id)}`
+          : null,
+      transcript,
+      mediaUrl: info?.thumbUrl ?? null,
+      mediaName: info?.name ?? parsed?.bundleName ?? null,
+      mediaCount: meta?.count ?? null,
+      paid: meta?.paid ?? parsed?.paid ?? false,
+      stars: meta?.stars ?? parsed?.stars ?? null,
+      caption: parsed?.caption ?? null,
+      purchased: !!bought,
+      purchasedStars: bought?.stars ?? null,
+      lockKnown: !!meta?.media_id && lockStateKnown,
+      flowLabel: flow ? flow.label + stepSuffix : null,
+      flowEmoji: flow?.emoji ?? null,
+      flowHint: flow?.hint ?? null,
+      buttons: Array.isArray(meta?.buttons) ? (meta.buttons as { text: string }[][]) : null,
+      dripMarker,
+    };
+  });
   const baseQs = (extra: Record<string, string>) => {
     const params = new URLSearchParams();
     if (q) params.set("q", q);
@@ -813,6 +1081,15 @@ export default async function FansPage({
                         <span className={"min-w-0 flex-1 truncate text-sm font-medium " + (u.blocked ? "text-crit" : "text-ink")}>
                           {displayName(u)}
                         </span>
+                        {/* What he has BOUGHT, right beside the name. */}
+                        {(mediaBuysByFan.get(u.id)?.count ?? 0) > 0 && (
+                          <span
+                            className="shrink-0 rounded-full bg-good/15 px-1.5 text-[9px] font-semibold leading-[14px] text-good"
+                            title={`${mediaBuysByFan.get(u.id)!.count} paid media unlocks, ${fmtNum(mediaBuysByFan.get(u.id)!.stars)}★. Open him to see which messages they were.`}
+                          >
+                            🔓 {mediaBuysByFan.get(u.id)!.count}
+                          </span>
+                        )}
                         {/* Lifetime spend right after the name - the number that matters. */}
                         {(u.total_spent_stars ?? 0) > 0 && (
                           <span className="shrink-0 font-mono text-[11px] font-semibold tabular-nums text-good">
@@ -832,12 +1109,19 @@ export default async function FansPage({
                           </span>
                         )}
                       </span>
+                      {/* Telegram identifiers first, stated name after. The
+                          handle, the id and the business connection are what
+                          resolve to a person; the name he typed at her does not. */}
+                      <span className="block truncate font-mono text-[10px] text-muted">
+                        {identityBits(u).join(" · ")}
+                      </span>
                       <span className="block truncate text-[11px] text-muted">
-                        {u.username ? (
-                          `@${u.username}`
-                        ) : (
-                          <span className="creator-name">{cloneById.get(u.clone_id)?.name ?? "-"}</span>
-                        )}
+                        {statedAlias(u) ? (
+                          <>
+                            says <span className="text-ink">{statedAlias(u)}</span> ·{" "}
+                          </>
+                        ) : null}
+                        <span className="creator-name">{cloneById.get(u.clone_id)?.name ?? "-"}</span>
                       </span>
                       <span className="mt-1 flex flex-wrap items-center gap-1">
                         <span
@@ -901,214 +1185,70 @@ export default async function FansPage({
           </div>
         </Card>
 
-        {/* ── Middle: real chat thread ──────────────────────────────────── */}
+        {/* ── Middle: real chat thread, Telegram 1:1 ─────────────────────── */}
         <Card size="sm" className={`users-panel users-panel-chat flex h-[42rem] ${colHeight} flex-col overflow-hidden p-0`}>
           {!selected ? (
             <div className="flex flex-1 items-center justify-center text-sm text-muted">Pick a fan to view messages.</div>
           ) : (
             <>
-              <div className="flex items-center gap-2.5 border-b border-line px-3.5 py-3 sm:px-3 sm:py-2.5">
+              {/* Header. Telegram's own order: who he is, then his handle and
+                  ids. The name he TYPED at her sits under those as a note, not
+                  as the headline — see the identity comment above. */}
+              <div className="flex items-center gap-2.5 border-b border-line px-3.5 py-2.5 sm:px-3 sm:py-2">
                 <FanAvatar
                   cloneId={selected.clone_id}
                   telegramId={selected.telegram_id}
                   name={displayName(selected)}
-                  className="h-8 w-8 text-[11px]"
+                  className="h-9 w-9 text-[11px]"
                 />
                 <div className="min-w-0 flex-1">
-                  <div className="truncate text-sm font-medium text-ink">{displayName(selected)}</div>
-                  <div className="text-[11px] text-muted">
-                    {selected.username ? `@${selected.username} · ` : ""}
-                    via <span className="creator-name">{cloneById.get(selected.clone_id)?.name ?? "-"}</span>
+                  <div className="flex items-center gap-1.5">
+                    <span className="truncate text-sm font-semibold text-ink">{displayName(selected)}</span>
+                    {mediaPurchaseCount > 0 && (
+                      <span
+                        className="shrink-0 rounded-full bg-good/15 px-1.5 py-px text-[10px] font-semibold text-good"
+                        title={
+                          unlinkedMediaPurchases > 0
+                            ? `${mediaPurchaseCount} paid media unlocks. ${unlinkedMediaPurchases} of them were recorded before the purchase started naming the item, so they are counted here but cannot be attached to a specific message in the thread.`
+                            : `${mediaPurchaseCount} paid media unlocks, each marked on its own message in the thread.`
+                        }
+                      >
+                        🔓 {mediaPurchaseCount} bought
+                      </span>
+                    )}
                   </div>
+                  <div className="truncate text-[11px] text-muted">
+                    {identityBits(selected).join(" · ")} · via{" "}
+                    <span className="creator-name">{cloneById.get(selected.clone_id)?.name ?? "-"}</span>
+                  </div>
+                  {statedAlias(selected) && (
+                    <div
+                      className="truncate text-[11px] text-muted"
+                      title="The name this fan typed at her in chat. She calls him this; it is not verified and two fans can share one."
+                    >
+                      says his name is <span className="font-medium text-ink">{statedAlias(selected)}</span>
+                    </div>
+                  )}
                 </div>
-                {/* The drip markers drawn through the scroll below need one
-                    explanation, and it belongs here rather than repeated on every
-                    marker: what they mean, and that they only exist going forward. */}
                 <Info
                   className="shrink-0"
-                  text="A marker in the thread means the campaign sent that message automatically, not a person. Only sends made from 2026-08-17 onward carry it: nothing recorded which earlier messages were automated, so an older message with no marker is unknown, not confirmed live."
+                  text="Under a message, the pill says which flow produced it: her live reply, an onboarding step, the campaign, the out-of-credits wall. Only sends made from 2026-08-18 onward carry it, so an older message with no pill is unknown, not confirmed live. Buttons drawn under a bubble are the ones the fan actually saw."
                 />
-                {/* Telegram paper-plane, Telegram blue */}
                 <span className="flex shrink-0 items-center gap-1 rounded-full border border-line px-2 py-0.5 text-[10px] font-medium text-muted">
-                  <svg viewBox="0 0 24 24" className="h-3 w-3" fill="#2AABEE">
+                  <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="#2AABEE">
                     <path d="M21.9 3.4c.3-1.2-.9-2.2-2-1.7L2.5 9.1c-1.3.5-1.2 2.3.1 2.7l4.4 1.4 1.7 5.5c.4 1.2 1.9 1.5 2.7.6l2.4-2.6 4.5 3.3c1 .7 2.4.2 2.7-1l3-15.6zM8.5 12.6l9.5-6.2c.2-.2.5.2.3.4l-7.6 7.2-.3 3.2-1.9-4.6z" />
                   </svg>
-                  via Telegram
+                  Telegram
                 </span>
               </div>
 
-              <div className="flex-1 space-y-2.5 overflow-y-auto bg-bg px-3.5 py-3 sm:space-y-2 sm:px-3">
-                {history.length === 0 ? (
-                  <div className="flex h-full items-center justify-center text-sm text-muted">No messages yet.</div>
-                ) : (
-                  history.map((m, i) => {
-                    // Bot (her) = blue, RIGHT. Fan = grey, left. (Per Ronan 2026-07-17.)
-                    const fan = m.role === "human";
-                    // Rich bubbles for rows carrying meta (migration 030); anything
-                    // without it — every old row — stays the plain text bubble.
-    	            const meta = metaOf(m);
-                    const info = meta?.media_id ? mediaInfo.get(meta.media_id) : undefined;
-                    const isVoice = meta?.type === "voice" && !!meta.tg_file_id;
-                    const isMedia = !!info && (meta?.type === "photo" || meta?.type === "video" || meta?.type === "bundle");
-                    const transcript = voiceWords(m.content);
-                    // Generic fallbacks for rows we can't fully resolve: old voice
-                    // rows (no file to play) still show 🎙 + transcript; old/unmatched
-                    // media rows show an icon + price + caption parsed from the text.
-                    const legacyVoice = !isVoice && !fan && transcript != null;
-                    const legacyMedia = !isVoice && !isMedia && !legacyVoice && !fan ? mediaText(m.content) : null;
-                    const caption = mediaText(m.content)?.caption ?? null;
-                    // ── INLINE DRIP MARKER (Jesse, 2026-08-17) ──────────────
-                    // One marker per campaign step, not per row: a win-back fires
-                    // a media send and a text send under the SAME step number, so
-                    // an unconditional marker would draw the same rule twice in a
-                    // row. Compare against the previous row rather than tracking
-                    // state across the map, which a server component re-render
-                    // would not preserve anyway.
-                    const drip = meta?.drip ? meta : null;
-                    const prevDrip = i > 0 ? metaOf(history[i - 1]) : null;
-                    const sameStepAsPrev =
-                      !!drip &&
-                      !!prevDrip?.drip &&
-                      prevDrip.drip_step === drip.drip_step &&
-                      prevDrip.drip_kind === drip.drip_kind;
-                    const dripLabel = drip
-                      ? (drip.drip_kind === "winback" ? "Win-back" : "Automated drip") +
-                        (drip.drip_step ? ` · step ${drip.drip_step}` : "")
-                      : null;
-                    return (
-                      <div key={i}>
-                        {drip && !sameStepAsPrev && (
-                          <div
-                            className="mb-2 flex items-center gap-2 text-[10px] font-semibold uppercase tracking-wide text-muted"
-                            title={
-                              drip.drip_kind === "winback"
-                                ? "Sent automatically to pull a lapsed spender back, replacing this campaign step. Nobody typed it."
-                                : "Sent automatically by the campaign, not typed in a live conversation."
-                            }
-                          >
-                            <span className="h-px flex-1 bg-line" />
-                            <span className="inline-flex shrink-0 items-center gap-1 rounded-full border border-line bg-elev px-2 py-0.5">
-                              <svg viewBox="0 0 24 24" className="h-3 w-3 shrink-0" fill="none" stroke="currentColor" strokeWidth={2}>
-                                <circle cx="12" cy="12" r="9" />
-                                <path d="M12 7v5l3 2" strokeLinecap="round" />
-                              </svg>
-                              {dripLabel}
-                            </span>
-                            <span className="h-px flex-1 bg-line" />
-                          </div>
-                        )}
-                      <div className={"flex " + (fan ? "justify-start" : "justify-end")}>
-                        <div
-                          className={
-                            "max-w-[75%] rounded-2xl px-3 py-2 text-sm " +
-                            (fan ? "rounded-bl-sm bg-elev text-ink" : "rounded-br-sm bg-accent text-white")
-                          }
-                        >
-                          {isVoice ? (
-                            <>
-                              {/* Playable voice note, streamed via /api/voice (Telegram getFile proxy) */}
-                              <audio
-                                controls
-                                preload="none"
-                                className="h-9 w-60 max-w-full"
-                                src={`/api/voice?clone=${selected.clone_id}&file=${encodeURIComponent(meta!.tg_file_id!)}`}
-                              />
-                              {transcript && (
-                                <div className="mt-1 whitespace-pre-wrap break-words text-xs italic opacity-80">
-                                  “{transcript}”
-                                </div>
-                              )}
-                            </>
-                          ) : legacyVoice ? (
-                            <div className="flex items-start gap-2">
-                              <span className="text-xl">🎙</span>
-                              <span className="min-w-0">
-                                <span className="block text-xs font-medium opacity-90">Voice message</span>
-                                <span className="block whitespace-pre-wrap break-words text-xs italic opacity-80">“{transcript}”</span>
-                              </span>
-                            </div>
-                          ) : legacyMedia ? (
-                            <div className="flex items-start gap-2">
-                              <span className="text-2xl">
-                                {legacyMedia.kind === "video" ? "🎥" : legacyMedia.kind === "bundle" ? "🎁" : "📷"}
-                              </span>
-                              <span className="min-w-0">
-                                <span className="flex items-center gap-1.5">
-                                  <span className="text-xs font-medium capitalize">
-                                    {legacyMedia.bundleName ?? legacyMedia.kind}
-                                  </span>
-                                  {legacyMedia.paid ? (
-                                    <span className="shrink-0 rounded-full bg-love-tint px-1.5 py-0.5 text-[10px] font-semibold text-love-ink">
-                                      PAID {legacyMedia.stars}★
-                                    </span>
-                                  ) : (
-                                    <span className={"shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium " + (fan ? "bg-muted/15 text-muted" : "bg-white/20 text-white/90")}>
-                                      FREE
-                                    </span>
-                                  )}
-                                </span>
-                                {legacyMedia.caption && (
-                                  <span className="block whitespace-pre-wrap break-words text-xs italic opacity-80">{legacyMedia.caption}</span>
-                                )}
-                              </span>
-                            </div>
-                          ) : isMedia ? (
-                            <>
-                              {info!.thumbUrl &&
-                                (meta!.type === "video" ? (
-                                  <video
-                                    src={info!.thumbUrl}
-                                    muted
-                                    playsInline
-                                    preload="metadata"
-                                    className="h-44 w-52 max-w-full rounded-lg object-cover"
-                                  />
-                                ) : (
-                                  // eslint-disable-next-line @next/next/no-img-element
-                                  <img
-                                    src={info!.thumbUrl}
-                                    alt={info!.name}
-                                    className="h-44 w-52 max-w-full rounded-lg object-cover"
-                                  />
-                                ))}
-                              <div className="mt-1.5 flex items-center gap-1.5">
-                                <span className="min-w-0 truncate text-xs font-medium">
-                                  {info!.name}
-                                  {meta!.type === "bundle" && meta!.count ? ` · ${meta!.count} pics` : ""}
-                                </span>
-                                {meta!.paid ? (
-                                  <span className="shrink-0 rounded-full bg-love-tint px-1.5 py-0.5 text-[10px] font-semibold text-love-ink">
-                                    PAID {meta!.stars ?? 0}★
-                                  </span>
-                                ) : (
-                                  <span
-                                    className={
-                                      "shrink-0 rounded-full px-1.5 py-0.5 text-[10px] font-medium " +
-                                      (fan ? "bg-muted/15 text-muted" : "bg-white/20 text-white/90")
-                                    }
-                                  >
-                                    FREE
-                                  </span>
-                                )}
-                              </div>
-                              {caption && (
-                                <div className="mt-0.5 whitespace-pre-wrap break-words text-xs italic opacity-80">{caption}</div>
-                              )}
-                            </>
-                          ) : (
-                            <div className="whitespace-pre-wrap break-words">{m.content}</div>
-                          )}
-                          <div className={"mt-0.5 text-right text-[10px] " + (fan ? "text-muted" : "text-white/70")}>
-                            {dateTime(m.created_at)}
-                          </div>
-                        </div>
-                      </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-
+              <ChatThread
+                fanId={selected.id}
+                messages={threadMessages}
+                lastActiveLabel={ago(selected.last_message_received)}
+                spentStars={totalSpent}
+                purchasedCount={mediaPurchaseCount}
+              />
             </>
           )}
         </Card>
