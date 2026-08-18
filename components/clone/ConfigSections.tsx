@@ -10,6 +10,9 @@ import {
   Collapse,
   DEFAULT_PAYWALL_BUTTON,
   DEFAULT_PAYWALL_MESSAGE,
+  DEFAULT_PAYWALL_PRIME_STEER,
+  DEFAULT_PAYWALL_RESUME_STEER,
+  DEFAULT_PAYWALL_STEER,
   ELEVEN_MODEL_OPTIONS,
   Field,
   LANGUAGE_OPTIONS,
@@ -35,7 +38,6 @@ import {
 import type { CloneConfigState, SetConfig } from "./useCloneConfig";
 import { DIAL_CONFLICT_RULES } from "@/lib/dial-conflicts";
 import { CategoryPricingEditor, SpoilMenuEditor } from "./editors";
-import { BetaBadge } from "../ui/primitives";
 import { MediaPicker, type MediaRow, type BundleRow } from "./MediaPicker";
 // New dedicated file (migration 056 monetization sequence) — kept out of this
 // file's own card definitions so it doesn't collide with concurrent edits here.
@@ -1289,7 +1291,7 @@ export default function ConfigSections({
         {/* ── Discounts (moved from Monetization) ───────────────────── */}
         <Collapse
           emoji="💸"
-          label={<>Discounts <BetaBadge /></>}
+          label="Discounts"
           accent="green"
           filled={cfg.discountsEnabled}
           hint="She picks when and how hard, % capped here. She only decides WHEN and how hard (light/medium/max); the price is always computed in code. 0 = never discount that type. Caps already default to 15/20/25/10, so the switch that actually gates this is Discounts enabled above, which is off by default. She can ONLY reach for a discount at all once one of the two eligibility gates below is met: a locked offer sitting unpaid past the pending window, OR a quiet gap since his last message. A fan chatting enthusiastically never qualifies until one of those trips."
@@ -1419,15 +1421,18 @@ export default function ConfigSections({
           />
         </Collapse>
 
-        {/* ── Decline brake (D7, migration 085) ───────────────────────── */}
+        {/* ── Stop pitching after refusals (D7, migration 085) ─────────── */}
+        {/* Was labelled "Decline brake" / "Decline cap" until 2026-08-18. The
+            column stays offer_decline_cap; only the words an operator reads
+            changed, because nobody could tell what a "brake" did from the name. */}
         <Collapse
           emoji="🧊"
-          label="Decline brake"
+          label="Stop pitching after refusals"
           accent="amber"
-          hint="How many times a fan has to plainly refuse to pay (e.g. 'i'm not paying', 'too expensive', 'send it free') before she stops INITIATING a new paid photo/video/bundle/tip/VIP pitch at him. She keeps chatting warmly either way, and if he himself asks to buy after this trips, she still delivers. A real purchase always resets his count back to 0. Bot-enforced (clones.offer_decline_cap)."
+          hint="How many times a fan has to plainly refuse to pay (e.g. 'i'm not paying', 'too expensive', 'send it free') before she stops OFFERING him paid photos, videos, bundles, tips and VIP. She keeps chatting warmly either way, and if he asks to buy himself after this trips, she still delivers. Any real purchase resets his count to 0. Bot-enforced (clones.offer_decline_cap)."
         >
           <Slider
-            label="Decline cap"
+            label="Refusals before she backs off"
             name="offer_decline_cap"
             value={cfg.offerDeclineCap}
             onChange={(v) => set("offerDeclineCap", v)}
@@ -1438,26 +1443,33 @@ export default function ConfigSections({
           />
         </Collapse>
 
-        {/* Migration 116, operator rule 2026-08-13. Its own card rather than a
-            row inside another one: this is the only SAFETY control on the page,
-            and it must not read as one more behaviour dial. The minor gate
-            itself is hardcoded and is not switchable from here — this changes
-            only how easily it TRIPS. */}
-        <Section
-          icon="🛡"
-          accent="purple"
-          title="Underage safety"
-          hint="What counts as a fan telling you he is under 18. The block itself is always on and cannot be turned off here. A blocked fan gets one fixed line and nothing ever again: no replies, no media, no voice, no reactions, and no campaign or follow-up messages. He shows as flagged on the Users page, where you can clear it if it was wrong."
-        >
-          <ToggleCard
-            emoji="🚸"
-            label={cfg.strictMinorGate ? "Strict: any mention of being under 18 blocks him" : "Standard: the AI judges it in context"}
-            title="ON (default): a fan stating he is under 18, or that he is in high school / middle school / grades 6-12, is blocked instantly and permanently in ANY context, decided in code with no AI involved, and flagged on the Users page. OFF: the pre-2026-08-13 behaviour, where the safety AI decides and only counts a stated age under 18 in a sexual or romantic context. Either way an unambiguous breach still blocks."
-            name="strict_minor_gate"
-            checked={cfg.strictMinorGate}
-            onChange={(v) => set("strictMinorGate", v)}
-          />
-        </Section>
+        {/* Migration 116, operator rule 2026-08-13, REMOVED FROM THE UI
+            2026-08-18 on the operator's instruction: "remove the underage
+            safety toggle from the UI, it should always be on (keep hard
+            limits)".
+
+            The strict minor gate is no longer an operator choice. It used to
+            render here as a Strict/Standard ToggleCard, where "Standard" meant
+            a stated age under 18 only counted in a sexual or romantic context
+            and the safety AI, not code, made the call. There is no legitimate
+            reason to run a clone that way, so the choice is gone rather than
+            merely defaulted.
+
+            This hidden input is NOT the usual mirror-the-stored-value pattern
+            used elsewhere in this file — it is a hard PIN to "true". A control
+            that does not render posts nothing, and rowFromForm reads
+            `fd.get("strict_minor_gate") === "true"`, so posting nothing would
+            write FALSE and silently disarm the gate on the first save. Pinning
+            the literal instead means every save from this form re-arms it.
+            strict_minor_gate was also removed from CLONE_TOGGLE_FIELDS
+            (app/clones/toggle-fields.ts) so neither setCloneToggle nor the /ai
+            assistant can flip it off through the generic toggle path, exactly
+            as subscriptions_enabled is fenced off there.
+
+            The hard limits themselves are untouched: the block, the fixed
+            reply, the permanent lockout and the Users-page flag all live in the
+            bot and behave exactly as before. */}
+        <input type="hidden" name="strict_minor_gate" value="true" />
 
         {/* Migration 097. The combined realism-effects switch plus the 3
             router keyword lists share a card because both are "how she reads
@@ -1853,13 +1865,18 @@ export function MonetizationSections({
               </div>
             )}
             <div className="mt-3">
+              {/* Prefilled, not blank. Until 2026-08-18 this box rendered
+                  EMPTY and its hint said blank meant "she decides freely" —
+                  untrue. The bot silently fell back to
+                  DEFAULT_PAYWALL_INSTRUCTION (bot/src/handler.ts), so the most
+                  important line in the product was one an operator could not
+                  read or change. */}
               <Area
                 label="Paywall steer"
                 name="paywall_instruction"
-                rows={2}
-                placeholder="e.g. be sweet, remind him what he's missing, gently nudge him to grab more messages"
-                defaultValue={clone?.paywall_instruction}
-                hint="Steers her first out-of-credits line. Blank = she decides freely."
+                rows={4}
+                defaultValue={clone?.paywall_instruction ?? DEFAULT_PAYWALL_STEER}
+                hint="Steers her first out-of-credits line — the one that decides whether he tops up. Edit it freely. Emptying it does NOT mean she improvises: the bot falls back to its own built-in steer."
               />
             </div>
           </div>
@@ -1915,10 +1932,9 @@ export function MonetizationSections({
                 <Area
                   label="Warmup steer"
                   name="paywall_prime_instruction"
-                  rows={2}
-                  placeholder="e.g. hint she's got more coming, build the anticipation"
-                  defaultValue={clone?.paywall_prime_instruction}
-                  hint="Steers the warmup line. Blank = default."
+                  rows={4}
+                  defaultValue={clone?.paywall_prime_instruction ?? DEFAULT_PAYWALL_PRIME_STEER}
+                  hint="Steers the warmup line she works in before he runs out. Emptying it does NOT turn the steer off — the bot falls back to its own built-in one."
                 />
               </div>
             </div>
@@ -1957,10 +1973,9 @@ export function MonetizationSections({
                 <Area
                   label="Pickup steer"
                   name="paywall_resume_instruction"
-                  rows={2}
-                  placeholder="e.g. thank him, pick the mood back up right where it left off"
-                  defaultValue={clone?.paywall_resume_instruction}
-                  hint="Steers the pickup line. Blank = she decides freely."
+                  rows={4}
+                  defaultValue={clone?.paywall_resume_instruction ?? DEFAULT_PAYWALL_RESUME_STEER}
+                  hint="Steers the line she sends the moment he tops up. Emptying it does NOT mean she improvises — the bot falls back to its own built-in steer."
                 />
               </div>
               <div className="xl:col-span-2">

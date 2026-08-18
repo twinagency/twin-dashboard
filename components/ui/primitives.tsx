@@ -154,18 +154,10 @@ export function Badge({ children, tone = "neutral", className = "" }: { children
   return <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium ${BADGE_TONE_CLS[tone]} ${className}`}>{children}</span>;
 }
 
-// Small "newer / less-proven in production" marker — attach next to a feature's
-// label or section title. Deliberately subtle (a pill, not a banner).
-export function BetaBadge({ className = "" }: { className?: string }) {
-  return (
-    <span
-      title="Newer feature. Behavior in live production is still being verified"
-      className={`inline-flex items-center rounded-full bg-info/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-wide text-info ${className}`}
-    >
-      Beta
-    </span>
-  );
-}
+// BetaBadge removed 2026-08-18. Its only caller was the Discounts card label on
+// the Configure page's Advanced tab, and the operator asked for beta markers off
+// the dashboard entirely — Discounts has been live long enough that the pill was
+// reading as a warning not to trust it.
 
 // ── Button ─────────────────────────────────────────────────────────────────
 type ButtonVariant = "primary" | "secondary" | "ghost" | "danger" | "good";

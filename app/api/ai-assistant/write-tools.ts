@@ -91,7 +91,6 @@ const FEATURE_LABELS: Record<CloneToggleField, string> = {
   read_receipts_enabled: "Read receipts",
   message_effects_enabled: "Message effects",
   ai_disclosure: "AI disclosure",
-  strict_minor_gate: "Strict minor gate",
   emojis_enabled: "Emojis",
   discounts_enabled: "Discounts",
   smart_paywall_enabled: "Smart paywall",

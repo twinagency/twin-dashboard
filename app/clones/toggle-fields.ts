@@ -20,9 +20,12 @@ export const CLONE_TOGGLE_FIELDS = [
   "read_receipts_enabled",
   "message_effects_enabled",
   "ai_disclosure",
-  // Migration 116. The strict minor gate: a fan stating he is under 18 or at
-  // high school is blocked instantly, in any context.
-  "strict_minor_gate",
+  // strict_minor_gate (migration 116) deliberately NOT listed, same fence as
+  // subscriptions_enabled below: on 2026-08-18 the operator removed its toggle
+  // from Configure and pinned it ON for every clone. Leaving it here would let
+  // setCloneToggle and the /ai assistant turn the minor gate back off through
+  // the generic path, which is the one thing the removal exists to prevent.
+  // The column stays in the DB and the bot still reads it.
   "emojis_enabled",
   "discounts_enabled",
   // subscriptions_enabled deliberately NOT listed: VIP/recurring Star

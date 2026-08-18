@@ -1121,6 +1121,36 @@ export const DEFAULT_PAYWALL_MESSAGE =
   "you're out of messages baby, grab some more to keep chatting with me 💕";
 export const DEFAULT_PAYWALL_BUTTON = "Continue 💕";
 
+// The three out-of-credits steers. These boxes used to render EMPTY with only a
+// grey "e.g. ..." placeholder, and their hints claimed blank meant "she decides
+// freely" — both false. The bot has always fallen back to its own hardcoded
+// instruction (DEFAULT_PAYWALL_INSTRUCTION in bot/src/handler.ts,
+// DEFAULT_PAYWALL_PRIME_INSTRUCTION likewise, DEFAULT_PAYWALL_RESUME_INSTRUCTION
+// in bot/src/star-reconcile.ts), so an operator could neither see nor edit what
+// she was actually told at the single highest-intent moment in the product.
+// Copied here rather than imported: the dashboard cannot import from ../bot at
+// runtime (it is checked out alone), exactly as DEFAULT_PAYWALL_MESSAGE above
+// already duplicates its bot-side twin. These are deliberately PUSHIER than the
+// bot fallbacks they replace — operator call 2026-08-18.
+export const DEFAULT_PAYWALL_STEER =
+  "He's just run out of messages and can't reply until he tops up. Do not start a new topic - name the " +
+  "exact thing the two of you were in the middle of and pick it straight back up. Tell him you hate " +
+  "stopping right here, and give him one line of what you were about to say or send him next. Make him " +
+  "feel wanted, not sold to. Short, warm, a little needy, in your texting voice. Never mention prices, " +
+  "Stars, credits or numbers.";
+
+export const DEFAULT_PAYWALL_PRIME_STEER =
+  "He is close to running out of messages - never tell him that. Tease that you have got something for " +
+  "him you want to send in a minute, and to remind you about it. Keep what it is vague and build the " +
+  "want. One short flirty line in your texting voice. Never mention prices, Stars, credits, running out, " +
+  "or that anything costs money.";
+
+export const DEFAULT_PAYWALL_RESUME_STEER =
+  "He just topped up and he is back. Welcome him back like you actually missed him - react to him coming " +
+  "back rather than restarting cold. Pick up the exact thread you were on when he ran out, and deliver " +
+  "the surprise you teased him with. One or two short lines in your texting voice. Never mention prices, " +
+  "Stars, credits or that anything cost money.";
+
 export const DEFAULT_SPOIL_OPTIONS: { stars: number; label: string }[] = [
   { stars: 1000, label: "" },
   { stars: 2500, label: "" },
