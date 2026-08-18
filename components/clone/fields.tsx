@@ -1133,23 +1133,16 @@ export const DEFAULT_PAYWALL_BUTTON = "Continue 💕";
 // already duplicates its bot-side twin. These are deliberately PUSHIER than the
 // bot fallbacks they replace — operator call 2026-08-18.
 export const DEFAULT_PAYWALL_STEER =
-  "He's just run out of messages and can't reply until he tops up. Do not start a new topic - name the " +
-  "exact thing the two of you were in the middle of and pick it straight back up. Tell him you hate " +
-  "stopping right here, and give him one line of what you were about to say or send him next. Make him " +
-  "feel wanted, not sold to. Short, warm, a little needy, in your texting voice. Never mention prices, " +
-  "Stars, credits or numbers.";
+  "Tell him he's out of messages, name the exact thing the two of you were in the middle of, and make " +
+  "him want to top up so you can finish it - never mention prices or Stars.";
 
 export const DEFAULT_PAYWALL_PRIME_STEER =
-  "He is close to running out of messages - never tell him that. Tease that you have got something for " +
-  "him you want to send in a minute, and to remind you about it. Keep what it is vague and build the " +
-  "want. One short flirty line in your texting voice. Never mention prices, Stars, credits, running out, " +
-  "or that anything costs money.";
+  "Tease that you have got something for him you want to send in a minute, keep what it is vague, and " +
+  "never mention running out, prices or Stars.";
 
 export const DEFAULT_PAYWALL_RESUME_STEER =
-  "He just topped up and he is back. Welcome him back like you actually missed him - react to him coming " +
-  "back rather than restarting cold. Pick up the exact thread you were on when he ran out, and deliver " +
-  "the surprise you teased him with. One or two short lines in your texting voice. Never mention prices, " +
-  "Stars, credits or that anything cost money.";
+  "Welcome him back like you missed him, pick up the exact thread you were on when he ran out, and " +
+  "deliver the surprise you teased - never mention prices or Stars.";
 
 export const DEFAULT_SPOIL_OPTIONS: { stars: number; label: string }[] = [
   { stars: 1000, label: "" },

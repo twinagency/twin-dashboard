@@ -1874,7 +1874,7 @@ export function MonetizationSections({
               <Area
                 label="Paywall steer"
                 name="paywall_instruction"
-                rows={4}
+                rows={2}
                 defaultValue={clone?.paywall_instruction ?? DEFAULT_PAYWALL_STEER}
                 hint="Steers her first out-of-credits line — the one that decides whether he tops up. Edit it freely. Emptying it does NOT mean she improvises: the bot falls back to its own built-in steer."
               />
@@ -1932,7 +1932,7 @@ export function MonetizationSections({
                 <Area
                   label="Warmup steer"
                   name="paywall_prime_instruction"
-                  rows={4}
+                  rows={2}
                   defaultValue={clone?.paywall_prime_instruction ?? DEFAULT_PAYWALL_PRIME_STEER}
                   hint="Steers the warmup line she works in before he runs out. Emptying it does NOT turn the steer off — the bot falls back to its own built-in one."
                 />
@@ -1973,7 +1973,7 @@ export function MonetizationSections({
                 <Area
                   label="Pickup steer"
                   name="paywall_resume_instruction"
-                  rows={4}
+                  rows={2}
                   defaultValue={clone?.paywall_resume_instruction ?? DEFAULT_PAYWALL_RESUME_STEER}
                   hint="Steers the line she sends the moment he tops up. Emptying it does NOT mean she improvises — the bot falls back to its own built-in steer."
                 />
