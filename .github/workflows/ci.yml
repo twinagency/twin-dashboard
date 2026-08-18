@@ -3,6 +3,12 @@ name: CI
 on:
   push:
     branches: ["**"]
+    # Docs are not shipped and not read at runtime, so a docs-only push has
+    # nothing to test. Matches the same filter in deploy.yml.
+    paths-ignore:
+      - '**/*.md'
+      - '**/*.txt'
+      - 'archive/**'
   pull_request:
     branches: ["**"]
 
