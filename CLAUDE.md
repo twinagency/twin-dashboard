@@ -78,3 +78,7 @@ Synthetic revenue and fans, deterministic by `?seed=`, in exactly the shape of t
 There is **no `typecheck` script here** — `build` is `next build`. To typecheck: `../bot/node_modules/.bin/tsc --noEmit`.
 
 `npm run test:api` for the admin API. Unlike a typecheck this one has caught real bugs: each of its guards was proven by planting the bug back and watching it go red (record in `../TWIN-API.txt`). Anything added to `app/api/admin/v1/` ships a check here.
+
+## Deploys
+
+Push to `main` builds the image in GitHub Actions and the box pulls it by digest. A push that touches only `.md`, `.txt` or `archive/` does NOT deploy — see `paths-ignore` in `.github/workflows/deploy.yml`. Docs live on disk and on the home server; only these `CLAUDE.md`/`README.md` files are in the repo.
