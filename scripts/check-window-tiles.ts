@@ -67,17 +67,30 @@ const iso = (ms: number) => new Date(ms).toISOString();
  *  comparison. Called either side of the page's own read; see the bracketing
  *  note at the call site. */
 async function rawActiveCount(startMs: number, endMs: number, cloneIds: string[]): Promise<number> {
-  const { rows } = await selectAllRows<{ id: string }>(
+  const { rows } = await selectAllRows<{
+    id: string;
+    legacy_id: string | null;
+    first_seen_at: string;
+    last_message_received: string | null;
+  }>(
     supabaseAdmin
       .from("users")
-      .select("id")
+      .select("id,legacy_id,first_seen_at,last_message_received")
       .in("clone_id", cloneIds)
       .gte("last_message_received", iso(startMs))
       .lte("last_message_received", iso(endMs))
       .order("id", { ascending: true }),
     { label: "users last_message_received in window" },
   );
-  return rows.length;
+  // The forged-stamp exclusion (migration 124), reimplemented here rather than
+  // reused: PostgREST cannot compare two columns to each other, so this is done
+  // in JS over the raw rows. That is the point of this file — the page's number
+  // has to be reproducible by something that is not the page's own SQL.
+  return rows.filter(
+    (r) =>
+      !(r.legacy_id !== null && r.last_message_received !== null &&
+        new Date(r.last_message_received).getTime() < new Date(r.first_seen_at).getTime()),
+  ).length;
 }
 
 /** The clone ids getDashboard totals over — it sums perClone, which is keyed off
@@ -254,6 +267,26 @@ async function main(): Promise<void> {
     "repeat rate = repeat buyers / buyers, both in the window",
     Math.abs(day.totals.repeatPct - wantRepeat) < 1e-9,
     `page ${day.totals.repeatPct} vs raw ${wantRepeat}`,
+  );
+
+  // ── 2b. the 30-DAY window's numbers are correct too ─────────────────────────
+  // THIS IS THE ASSERTION THAT WAS MISSING. Everything above value-checks only
+  // the 1-day window, and 1 day is exactly where the forged-timestamp bug did
+  // NOT show: the cutover import wrote 56,262 last_message_received stamps
+  // ranging 2026-05-16..2026-08-09, all of which had already aged out of a 24h
+  // window. So `Users` sat at 2.01x on 30d (18,328 against a true 9,112) while
+  // every 1d assertion stayed green. A check that only ever looks at the
+  // narrowest window cannot see a defect that lives in the older rows.
+  console.log("\nthe 30-day window's numbers match a raw read");
+  const wideActiveBefore = await rawActiveCount(allStartMs, endMs, cloneIds);
+  const wide = await getDashboard("CUSTOM", { startMs: allStartMs, endMs });
+  const wideActiveAfter = await rawActiveCount(allStartMs, endMs, cloneIds);
+  const wlo = Math.min(wideActiveBefore, wideActiveAfter);
+  const whi = Math.max(wideActiveBefore, wideActiveAfter);
+  assert(
+    "users over 30d excludes timestamps the import forged",
+    wide.totals.activeUsers >= wlo && wide.totals.activeUsers <= whi,
+    `page ${wide.totals.activeUsers}, raw bracket ${wlo}..${whi}`,
   );
 
   // ── 3. shape ────────────────────────────────────────────────────────────────

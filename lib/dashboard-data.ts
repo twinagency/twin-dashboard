@@ -358,21 +358,26 @@ export async function getDashboard(period: Period, range?: DateRange): Promise<D
   // on. The ALL view therefore reads lower than it used to (271k vs 641k) — the
   // header of migration 122 explains why both numbers are correct.
   const userStats = await cloneUserStatsWindow(startMs, windowEnd);
-  // The two figures that must NOT move with the filter, from migration 120's
-  // all-time rollup — which returns both in one pass:
-  //   fans   every fan on the clone, imports included — the audience size
-  //   active messaged within the last 24h — Telegram's business-bot messaging
-  //          window, i.e. who the drip may legally reach RIGHT NOW
-  // Asking "how many can I message, over the last 3 months" is not a question,
-  // and neither is "how big is my audience, over the last 3 months", so both
-  // stay fixed while everything else follows the operator's window.
-  const fixedStats = await cloneUserStats(now - MS_DAY);
+  // The two figures that must NOT move with the filter. Asking "how many can I
+  // message, over the last 3 months" is not a question, and neither is "how big
+  // is my audience, over the last 3 months".
+  //
+  // totalFans comes from migration 120's all-time rollup: every fan on the
+  // clone, imports included, which is what audience size means.
+  const fleetStats = await cloneUserStats(now - MS_DAY);
   const totalFansByClone = new Map<string, number>();
+  for (const row of fleetStats) totalFansByClone.set(row.clone_id, Number(row.fans) || 0);
+
+  // reachable24h comes from the WINDOWED function instead of fleetStats.active,
+  // even though both mean "messaged in the last 24h" and both currently agree.
+  // Migration 120's version has no guard against the timestamps the cutover
+  // import forged (migration 124), and it is clean here only because the newest
+  // forged stamp is 2026-08-09 and has aged out of a 24h window. That is
+  // correct-by-coincidence, and the coincidence is what let the same defect sit
+  // undetected in the Users tile. This one is correct by construction.
+  const reachableStats = await cloneUserStatsWindow(now - MS_DAY, now);
   const reachableByClone = new Map<string, number>();
-  for (const row of fixedStats) {
-    totalFansByClone.set(row.clone_id, Number(row.fans) || 0);
-    reachableByClone.set(row.clone_id, Number(row.active) || 0);
-  }
+  for (const row of reachableStats) reachableByClone.set(row.clone_id, Number(row.active) || 0);
   const perClone: Record<string, CloneStats> = {};
   for (const c of clones) {
     const perFan = cloneTxPerFan.get(c.id);
