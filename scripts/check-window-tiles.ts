@@ -127,8 +127,8 @@ async function main(): Promise<void> {
 
   // ── 1. the tiles move with the window ───────────────────────────────────────
   console.log("the window changes the numbers");
-  lt("users", day.totals.users, all.totals.users);
-  lt("active", day.totals.active, all.totals.active);
+  lt("new", day.totals.newFans, all.totals.newFans);
+  lt("users (messaged in window)", day.totals.activeUsers, all.totals.activeUsers);
   lt("messages", day.totals.messages, all.totals.messages);
   lt("buyers", day.totals.buyers, all.totals.buyers);
   // ...and the one that must NOT move. Telegram's 24h business-bot messaging
@@ -144,17 +144,38 @@ async function main(): Promise<void> {
   // repoints this at the window, the two become equal and this goes red.
   assert(
     "reachable24h ignores the window (Telegram's 24h messaging limit)",
-    all.totals.reachable24h < all.totals.active,
-    `24h reachable ${all.totals.reachable24h} vs 30d active ${all.totals.active}`,
+    all.totals.reachable24h < all.totals.activeUsers,
+    `24h reachable ${all.totals.reachable24h} vs 30d active ${all.totals.activeUsers}`,
   );
   // And on a 1-day window the two are measuring almost the same span, so they
   // should land within a couple of percent of each other. 2% of ~870 is ~17
   // fans, comfortably above the handful that cross the boundary mid-run.
-  const spread = Math.abs(day.totals.reachable24h - day.totals.active);
+  const spread = Math.abs(day.totals.reachable24h - day.totals.activeUsers);
   assert(
     "reachable24h ≈ active on a 1-day window (same span, two clocks)",
-    spread <= Math.max(5, day.totals.active * 0.02),
-    `reachable ${day.totals.reachable24h} vs active ${day.totals.active}, spread ${spread}`,
+    spread <= Math.max(5, day.totals.activeUsers * 0.02),
+    `reachable ${day.totals.reachable24h} vs active ${day.totals.activeUsers}, spread ${spread}`,
+  );
+  // totalFans is the audience size, not a fact about a period, so it must not
+  // move either. Both calls read migration 120's all-time rollup, ~2s apart, so
+  // a handful of genuinely new fans can land between them — hence a small
+  // absolute tolerance rather than ==, and it is nowhere near the ~57k a
+  // window-scoped regression would swing it by.
+  assert(
+    "totalFans ignores the window (it is the audience, not a period)",
+    Math.abs(day.totals.totalFans - all.totals.totalFans) <= 20,
+    `day ${day.totals.totalFans} vs all ${all.totals.totalFans}`,
+  );
+  // THE CUTOVER GUARD (migration 123). 57,164 fans were bulk-inserted on
+  // 2026-08-08 and every one carries first_seen_at = that day, so before the
+  // legacy_id filter a 30-day window reported ~65,360 arrivals against a fleet
+  // of ~65,366 — "everyone joined this month". Real signups run 400-770 a day,
+  // so 30 days of them cannot approach the fleet size. If the filter is ever
+  // dropped, this is the assertion that says so.
+  assert(
+    "new over 30d is real signups, not the cutover import",
+    all.totals.newFans < all.totals.totalFans * 0.5,
+    `30d new ${all.totals.newFans} vs ${all.totals.totalFans} fans on the fleet`,
   );
   // Repeat rate is a ratio, so "smaller" is not the property — "not frozen" is.
   // Over a single day almost nobody buys twice; over five years plenty do.
@@ -174,12 +195,13 @@ async function main(): Promise<void> {
       .from("users")
       .select("id")
       .in("clone_id", cloneIds)
+      .is("legacy_id", null)
       .gte("first_seen_at", iso(dayStartMs))
       .lte("first_seen_at", iso(endMs))
       .order("id", { ascending: true }),
     { label: "users first_seen in window" },
   );
-  eq("users = fans who arrived in the window", day.totals.users, joined.length);
+  eq("new = fans who ARRIVED in the window, imports excluded", day.totals.newFans, joined.length);
 
   // BRACKETED, not compared once — see the note at the activeBefore read above.
   // The two reference reads straddle the page's own, so the assertion is "the
@@ -191,8 +213,8 @@ async function main(): Promise<void> {
   const hi = Math.max(activeBefore, activeAfter);
   assert(
     "active = fans who messaged in the window",
-    day.totals.active >= lo && day.totals.active <= hi,
-    `page ${day.totals.active}, raw bracket ${lo}..${hi}`,
+    day.totals.activeUsers >= lo && day.totals.activeUsers <= hi,
+    `page ${day.totals.activeUsers}, raw bracket ${lo}..${hi}`,
   );
 
   const { rows: chatRows } = await selectAllRows<{ id: number }>(

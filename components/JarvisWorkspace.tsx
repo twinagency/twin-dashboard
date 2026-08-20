@@ -930,7 +930,7 @@ export default function JarvisWorkspace({ cloneId }: { cloneId: string | null })
       },
       {
         id: "fans",
-        label: `${compact(data?.totals.users ?? 0)} fan profiles`,
+        label: `${compact(data?.totals.totalFans ?? 0)} fan profiles`,
         detail: "Activity · buyers · history",
         icon: Users,
       },
@@ -1065,7 +1065,8 @@ export default function JarvisWorkspace({ cloneId }: { cloneId: string | null })
     }
 
     if (domain === "fans" || domain === "messages") {
-      const users = stats?.users ?? data?.totals.users ?? 0;
+      // How big the audience IS, not how many arrived in this panel's 1M fetch.
+      const users = stats?.totalFans ?? data?.totals.totalFans ?? 0;
       const messages = stats?.messages ?? data?.totals.messages ?? 0;
       return {
         domain,
@@ -1154,7 +1155,7 @@ export default function JarvisWorkspace({ cloneId }: { cloneId: string | null })
       imageUrl: targetClone?.photoUrl,
       metrics: [
         { label: "Clones", value: String(data?.clones.length ?? 0) },
-        { label: "Fleet fans", value: compact(data?.totals.users ?? 0) },
+        { label: "Fleet fans", value: compact(data?.totals.totalFans ?? 0) },
         { label: "30d proceeds", value: money(data?.totals.stars ?? 0) },
       ],
     };

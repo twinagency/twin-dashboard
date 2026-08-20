@@ -1,7 +1,7 @@
 import { supabaseAdmin } from "./supabase";
 import { selectAllRows } from "./select-all";
 import { chartColorForClone, profileImagePathForClone } from "./colors";
-import { cloneUserStatsWindow, usageRollup } from "./rollup";
+import { cloneUserStats, cloneUserStatsWindow, usageRollup } from "./rollup";
 
 export type Period = "ALL" | "1Y" | "6M" | "3M" | "1M" | "2W" | "1W" | "1D" | "CUSTOM";
 type Gran = "hour" | "day" | "week" | "month";
@@ -53,8 +53,17 @@ export type CloneSummary = {
 export type CloneStats = {
   stars: number;
   sales: number;
-  users: number;
-  active: number;
+  /** Fans who ARRIVED in the window, excluding the cutover import (migration
+   *  123 — 57,164 rows all stamped first_seen_at = 2026-08-08). Rendered as
+   *  "New". A migrated fan is not a new fan. */
+  newFans: number;
+  /** Fans who MESSAGED in the window. Rendered as "Users", because that is what
+   *  "users, over the last week" means to anyone reading it — not signups. */
+  activeUsers: number;
+  /** Every fan on the clone, all-time, imports included. NOT windowed: the
+   *  places that show fleet size ("Fleet fans", "N fan profiles") are asking how
+   *  big the audience is, not how many arrived in a period. */
+  totalFans: number;
   /** Fans messageable RIGHT NOW: last_message_received inside the last 24h,
    *  deliberately NOT scoped to the selected window.
    *
@@ -102,9 +111,10 @@ export type DashboardData = {
     aiErrors: number;
     // Fleet-wide, scoped to the SAME window as stars/sales above. These were
     // all-time until 2026-08-21, which is the bug this shape now rules out.
-    users: number;
-    active: number;
-    /** Not window-scoped, on purpose — see CloneStats.reachable24h. */
+    newFans: number;
+    activeUsers: number;
+    /** Neither of these is window-scoped, on purpose — see CloneStats. */
+    totalFans: number;
     reachable24h: number;
     messages: number;
     buyers: number;
@@ -348,15 +358,21 @@ export async function getDashboard(period: Period, range?: DateRange): Promise<D
   // on. The ALL view therefore reads lower than it used to (271k vs 641k) — the
   // header of migration 122 explains why both numbers are correct.
   const userStats = await cloneUserStatsWindow(startMs, windowEnd);
-  // Second call, fixed at the last 24h whatever the operator picked. This is the
-  // Telegram business-bot messaging window — the fans the fleet may legally
-  // message right now — so it is the one number on the page that must NOT move
-  // with the filter. It is a separate RPC rather than a field on the one above
-  // because the two answer questions about different time spans; migration 122's
-  // users_clone_last_message_idx is what keeps it cheap.
-  const reachableStats = await cloneUserStatsWindow(now - MS_DAY, now);
+  // The two figures that must NOT move with the filter, from migration 120's
+  // all-time rollup — which returns both in one pass:
+  //   fans   every fan on the clone, imports included — the audience size
+  //   active messaged within the last 24h — Telegram's business-bot messaging
+  //          window, i.e. who the drip may legally reach RIGHT NOW
+  // Asking "how many can I message, over the last 3 months" is not a question,
+  // and neither is "how big is my audience, over the last 3 months", so both
+  // stay fixed while everything else follows the operator's window.
+  const fixedStats = await cloneUserStats(now - MS_DAY);
+  const totalFansByClone = new Map<string, number>();
   const reachableByClone = new Map<string, number>();
-  for (const row of reachableStats) reachableByClone.set(row.clone_id, Number(row.active) || 0);
+  for (const row of fixedStats) {
+    totalFansByClone.set(row.clone_id, Number(row.fans) || 0);
+    reachableByClone.set(row.clone_id, Number(row.active) || 0);
+  }
   const perClone: Record<string, CloneStats> = {};
   for (const c of clones) {
     const perFan = cloneTxPerFan.get(c.id);
@@ -366,8 +382,9 @@ export async function getDashboard(period: Period, range?: DateRange): Promise<D
     perClone[c.id] = {
       stars: cloneStars.get(c.id) ?? 0,
       sales: cloneSales.get(c.id) ?? 0,
-      users: 0,
-      active: 0,
+      newFans: 0,
+      activeUsers: 0,
+      totalFans: totalFansByClone.get(c.id) ?? 0,
       reachable24h: reachableByClone.get(c.id) ?? 0,
       messages: 0,
       buyers,
@@ -380,9 +397,9 @@ export async function getDashboard(period: Period, range?: DateRange): Promise<D
   for (const row of userStats) {
     const s = perClone[row.clone_id];
     if (!s) continue;
-    s.users = Number(row.fans) || 0;
+    s.newFans = Number(row.fans) || 0;
     s.messages = Number(row.messages) || 0;
-    s.active = Number(row.active) || 0;
+    s.activeUsers = Number(row.active) || 0;
   }
 
   // ── recent transactions — most recent first. Capped generously (not to 30)
@@ -588,14 +605,16 @@ export async function getDashboard(period: Period, range?: DateRange): Promise<D
   // builds its own per-fan map over every purchase in the window instead of
   // adding the per-clone counts up. Same reason the fleet repeat rate can't be
   // averaged out of the per-clone rates — the denominators overlap.
-  let totalUsers = 0;
-  let totalActive = 0;
+  let totalNewFans = 0;
+  let totalActiveUsers = 0;
+  let totalFans = 0;
   let totalReachable = 0;
   let totalMessages = 0;
   for (const c of clones) {
     const s = perClone[c.id];
-    totalUsers += s.users;
-    totalActive += s.active;
+    totalNewFans += s.newFans;
+    totalActiveUsers += s.activeUsers;
+    totalFans += s.totalFans;
     totalReachable += s.reachable24h;
     totalMessages += s.messages;
   }
@@ -619,8 +638,9 @@ export async function getDashboard(period: Period, range?: DateRange): Promise<D
       sales: totalSales,
       costUsd: totalCost,
       aiErrors: totalErrors,
-      users: totalUsers,
-      active: totalActive,
+      newFans: totalNewFans,
+      activeUsers: totalActiveUsers,
+      totalFans,
       reachable24h: totalReachable,
       messages: totalMessages,
       buyers: totalBuyers,

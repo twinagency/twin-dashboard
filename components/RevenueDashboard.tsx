@@ -655,7 +655,10 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
         <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-6">
           {(() => {
             const s = focusStats ?? data.totals;
-            const revPerUser = s.users > 0 ? displayStars / s.users : 0;
+            // Per ACTIVE user, matching the "Users" tile beside it. Dividing by
+            // arrivals instead would answer "revenue per person who signed up in
+            // this window", which is not what anyone reads "Rev/user" as.
+            const revPerUser = s.activeUsers > 0 ? displayStars / s.activeUsers : 0;
             const revPerBuyer = s.buyers > 0 ? displayStars / s.buyers : 0;
             const avgOrder = s.sales > 0 ? displayStars / s.sales : 0;
             const { messaged, purchased } = data.analytics.paywallFunnel;
@@ -670,12 +673,11 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
               .filter((feature) => feature.key !== "media" && feature.key !== "other")
               .sort((a, b) => b.share - a.share)[0];
             const tiles: { label: string; value: string; money?: boolean }[] = [
-              { label: "Users", value: fmtNum(s.users) },
+              // "Users" = fans who messaged in the window, which is what the
+              // word means when a date filter is on it. Signups are "New".
+              { label: "Users", value: fmtNum(s.activeUsers) },
+              { label: "New", value: fmtNum(s.newFans) },
               { label: "Transactions", value: fmtNum(s.sales) },
-              // "Active", not "Active (24h)": this is now fans who messaged
-              // inside the selected window, so a fixed 24h label would lie on
-              // every period except 1D.
-              { label: "Active", value: fmtNum(s.active) },
               // The ONE tile that ignores the filter, and it says so. Telegram
               // only allows a business bot to message a fan within 24h of that
               // fan's last message, so this is who the fleet can reach right
