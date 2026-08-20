@@ -22,6 +22,7 @@
     "test:tiles": "../bot/node_modules/.bin/tsx scripts/check-window-tiles.ts",
     "test:dossier": "../bot/node_modules/.bin/tsx scripts/check-fan-dossier.ts",
     "test:thread": "../bot/node_modules/.bin/tsx scripts/check-fan-thread.ts",
+    "test:consistency": "../bot/node_modules/.bin/tsx scripts/check-report-consistency.ts",
     "test:offline": "npm run test:paging && npm run test:callsites && npm run test:media && npm run test:spend && npm run test:report && npm run test:rollups && npm run test:tiles && npm run test:dossier && npm run test:thread"
   },
   "dependencies": {

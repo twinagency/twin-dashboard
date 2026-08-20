@@ -24,12 +24,30 @@ import { supabaseAdmin } from "./supabase";
 // dropping back to the paged path — is how this project ends up with two
 // answers to the same question and no way to tell which one is on screen.
 
+// The error message names the actual cause, not a guess.
+//
+// This used to append "Migration 120 must be applied to this project" to EVERY
+// failure. Migration 120 has been applied since 2026-08-17, so the one thing
+// that sentence was guaranteed to be was wrong — and on 2026-08-21 a
+// `statement timeout` on revenue_usage_rollup reported itself as a missing
+// migration and sent a whole verification pass chasing the wrong thing. The
+// suite was green on the re-run; nothing was broken.
+//
+// A timeout and an absent function need opposite responses (retry/narrow the
+// window vs go apply a file), so conflating them is not a cosmetic problem.
+// PGRST202 = no such function in the schema cache; 42883 = undefined_function;
+// 57014 = query_canceled, which is what a Supavisor statement timeout raises.
 async function rpc<T>(fn: string, args: Record<string, unknown>): Promise<T> {
   const { data, error } = await supabaseAdmin.rpc(fn, args);
   if (error) {
-    throw new Error(
-      `${fn} failed: ${error.message}. Migration 120 (bot/db/migrations/120_revenue_rollups.sql) must be applied to this project.`,
-    );
+    const missing = error.code === "PGRST202" || error.code === "42883";
+    const timedOut = error.code === "57014" || /statement timeout|canceling statement/i.test(error.message);
+    const hint = missing
+      ? ` The function does not exist: apply bot/db/migrations/120_revenue_rollups.sql to this project.`
+      : timedOut
+        ? ` The function exists but the query timed out. This is a slow query, NOT an unapplied migration: narrow the window or check the indexes it needs.`
+        : ``;
+    throw new Error(`${fn} failed: ${error.message} (code ${error.code ?? "none"}).${hint}`);
   }
   return data as T;
 }

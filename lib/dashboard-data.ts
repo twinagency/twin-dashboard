@@ -250,8 +250,8 @@ export async function getDashboard(period: Period, range?: DateRange): Promise<D
   // than a narrower one, the symptom that gave it away.
   let purchases: PurchaseRow[];
   {
-    const COLS = "id,clone_id,amount_stars,paid_at,telegram_id,kind,feature";
-    const COLS_LEGACY = "id,clone_id,amount_stars,paid_at,telegram_id,kind";
+    const COLS = "id,clone_id,amount_stars,paid_at,telegram_id,kind,feature,invoice_payload";
+    const COLS_LEGACY = "id,clone_id,amount_stars,paid_at,telegram_id,kind,invoice_payload";
     // selectAllRows reports a failed read as an empty result, which here would
     // read as "no revenue" rather than "column not there yet". So the missing
     // column is probed for with one row BEFORE paging, and the paged read then

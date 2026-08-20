@@ -3,6 +3,7 @@ import { selectAllRows } from "./select-all";
 import { chartColorForClone } from "./colors";
 import { fanSpendStats, fanTiers, messagedFanCount, paywallStats, usageRollup } from "./rollup";
 import { STAR_USD } from "./money";
+import { REPORT_TZ, reportInstant } from "./report-time";
 import type { DateRange, Period } from "./dashboard-data";
 
 // Deep money analytics — WHERE the money comes from. This is the aggregation layer
@@ -238,8 +239,8 @@ export async function getAnalytics(
     // because selectAllRows reports a failure as an empty result — which here
     // would render as "no revenue" instead of "column not there yet".
     // `id` is required: the legacy-media inference below keys its map on it.
-    const COLS = "id,clone_id,amount_stars,paid_at,kind,feature,telegram_id";
-    const COLS_LEGACY = "id,clone_id,amount_stars,paid_at,kind,telegram_id";
+    const COLS = "id,clone_id,amount_stars,paid_at,kind,feature,telegram_id,invoice_payload";
+    const COLS_LEGACY = "id,clone_id,amount_stars,paid_at,kind,telegram_id,invoice_payload";
     const probe = await supabaseAdmin.from("star_transactions").select(COLS).limit(1);
     const hasFeature = !probe.error;
     let q = supabaseAdmin
@@ -248,7 +249,17 @@ export async function getAnalytics(
       .gte("paid_at", iso(startMs))
       .lte("paid_at", iso(windowEnd));
     if (cloneId) q = q.eq("clone_id", cloneId);
-    const { rows } = await selectAllRows(q, { label: "analytics revenue ledger" });
+    // ORDER BY id is not tidiness, it is correctness. selectAllRows walks this
+    // table 1,000 rows at a time with .range(), and star_transactions is being
+    // inserted into while the walk runs — without a stable sort, rows shift
+    // between pages and the same row is read twice or skipped. Measured on
+    // usage_events by check-revenue-rollups.ts: 30,290 rows read of which only
+    // 22,285 were distinct, 26% double-counted, and the cost total came out at
+    // 37.38 against a true 33.94. That check orders by id; this read did not,
+    // so the suite could not see the defect in the code the page actually runs.
+    const { rows } = await selectAllRows(q.order("id", { ascending: true }), {
+      label: "analytics revenue ledger",
+    });
     txs = hasFeature
       ? (rows as TxRow[])
       : (rows as Omit<TxRow, "feature">[]).map((r) => ({ ...r, feature: null }));
@@ -378,13 +389,14 @@ export async function getAnalytics(
       if (t.telegram_id != null) creditBuyers.add(t.telegram_id);
     }
 
-    const d = new Date(t.paid_at);
-    const dayKey = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
-      d.getDate(),
-    ).padStart(2, "0")}`;
-    dayStars.set(dayKey, (dayStars.get(dayKey) ?? 0) + stars);
-    hourStars[d.getHours()] += stars;
-    dowStars[d.getDay()] += stars;
+    // REPORT_TZ, not the container's clock. `new Date().getHours()` here read
+    // UTC and was labelled "(local)" — ten hours out on AEST, which moved peak
+    // hour from lunchtime to 3 AM and filed every evening sale on the wrong
+    // weekday. See lib/report-time.ts.
+    const at = reportInstant(t.paid_at);
+    dayStars.set(at.dayKey, (dayStars.get(at.dayKey) ?? 0) + stars);
+    hourStars[at.hour] += stars;
+    dowStars[at.dow] += stars;
   }
 
   // ── AI/voice cost in window (usage_events) ───────────────────────────────────
@@ -420,8 +432,29 @@ export async function getAnalytics(
   // different question from "did the rollup work", and only the first of those
   // is allowed to degrade quietly — a failing rollup must surface, not read as
   // an empty funnel.
+  //
+  // ...and "does the table exist" is a NARROWER question than "did the probe
+  // return an error". This was `Boolean(paywallProbe.error)`, so a timeout, a
+  // dropped connection or an expired key all resolved to "still collecting" and
+  // the whole funnel rendered 0 views / 0 paywalled / 0% conversion with a
+  // reassuring hint under it. Those zeroes look exactly like a measurement, and
+  // the operator's reading of "0% conversion" is "the paywall is broken", not
+  // "the dashboard could not reach the database".
+  //
+  // So only the two codes that actually mean "no such table" degrade quietly.
+  // PGRST205 is PostgREST's own missing-table-in-schema-cache; 42P01 is
+  // Postgres's undefined_table, which surfaces when the RPC path hits it first.
+  // Everything else throws and the page shows an error, per the NO SILENT
+  // FALLBACK rule at the top of lib/rollup.ts.
   const paywallProbe = await supabaseAdmin.from("paywall_hits").select("telegram_id").limit(1);
-  const paywallCollecting = Boolean(paywallProbe.error);
+  const probeErr = paywallProbe.error;
+  const paywallCollecting = Boolean(probeErr && (probeErr.code === "PGRST205" || probeErr.code === "42P01"));
+  if (probeErr && !paywallCollecting) {
+    throw new Error(
+      `paywall_hits probe failed: ${probeErr.message} (code ${probeErr.code ?? "none"}). ` +
+        `The table exists, so this is not the pre-migration-024 case; refusing to render an empty funnel as a measurement.`,
+    );
+  }
   let paywallViews = 0;
   let paywalledFanTotal = 0;
   let convertedPaywallBuyers = 0;
@@ -643,15 +676,23 @@ export async function getAnalytics(
   // No cap: it was Math.min(180, ...), which on 1Y/ALL charted the OLDEST 180
   // days and silently dropped everything recent, so the newest revenue was
   // missing from the very windows meant to show the most history.
-  const dayCount = Math.max(1, Math.ceil((now - startDay.getTime()) / MS_DAY) + 1);
+  //
+  // ...and it ran to `now`, not to the end of the window being charted. Every
+  // preset window ends at now so it never showed there, but a custom range
+  // ending last month drew a flat zero line from that end date to today — days
+  // the operator did not ask about, rendered as days with no sales. This series
+  // also leaves the building through the public API, so those invented zeroes
+  // were being handed to a model's own dashboard as measurements.
+  const endDay = new Date(Math.max(startDay.getTime(), windowEnd));
+  const dayCount = Math.max(1, Math.ceil((endDay.getTime() - startDay.getTime()) / MS_DAY) + 1);
   for (let i = 0; i < dayCount; i++) {
     const d = new Date(startDay.getTime() + i * MS_DAY);
-    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}-${String(
-      d.getDate(),
-    ).padStart(2, "0")}`;
+    // Keyed through reportInstant for the same reason the buckets are: a key
+    // built on the container's UTC clock cannot match a bucket built in
+    // REPORT_TZ, and every bar would read 0 while the totals stayed right.
     byDay.push({
-      label: d.toLocaleDateString("en-US", { month: "short", day: "numeric" }),
-      stars: dayStars.get(key) ?? 0,
+      label: d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: REPORT_TZ }),
+      stars: dayStars.get(reportInstant(d).dayKey) ?? 0,
     });
   }
 

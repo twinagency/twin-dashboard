@@ -46,3 +46,24 @@ export function reportFeatureRows(byFeature: FeatureRow[]): FeatureRow[] {
   const rest = byFeature.filter((r) => !named.has(r.key)).sort((a, b) => b.stars - a.stars);
   return [...preferred, ...rest];
 }
+
+// The single answer to "what sells most", used by BOTH the "Top source" tile at
+// the top of the Revenue page and the report's "Top earner" fact lower down.
+//
+// They used to compute it separately and printed different answers on the same
+// screen: the tile filtered out `media` and `other` before picking the max and
+// said "Photos 21%", while the report ranked every bucket and said "Media 61%".
+// The tile's filter was the exact mistake this file's header was written about
+// after tracker #600 — dropping the catch-all buckets makes the remaining shares
+// look like the whole story when they are a fifth of it.
+//
+// So: rank everything, hide nothing, and keep the "(untagged)" suffix on the
+// label. An operator seeing "Media (untagged) 61%" learns something true and
+// actionable (most sales are not tagged with what they were); one seeing
+// "Photos 21%" learns something false.
+export function topFeatureRow(byFeature: FeatureRow[]): FeatureRow | null {
+  const ranked = reportFeatureRows(byFeature)
+    .filter((r) => r.stars > 0)
+    .sort((a, b) => b.stars - a.stars);
+  return ranked[0] ?? null;
+}

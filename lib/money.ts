@@ -16,6 +16,16 @@ export function starsToMoneyRate(stars: number, c: Currency, audPerUsd: number):
   return c === "AUD" ? usd * audPerUsd : usd;
 }
 
+// Cost and profit come out of the analytics layer already in USD (usage_events
+// bills in USD), while revenue comes out in Stars and goes through
+// starsToMoneyRate above. Rendering the first with a bare "$" next to the
+// second's "A$" put two different currencies side by side in the same table,
+// unlabelled, and a profit/revenue pair the operator would naturally compare is
+// exactly the wrong place for that: at 1.4 AUD/USD the margin reads 30% low.
+export function usdToMoneyRate(usd: number, c: Currency, audPerUsd: number): number {
+  return c === "AUD" ? usd * audPerUsd : usd;
+}
+
 export function fmtMoney(amount: number, c: Currency): string {
   const sym = c === "AUD" ? "A$" : "$";
   return (

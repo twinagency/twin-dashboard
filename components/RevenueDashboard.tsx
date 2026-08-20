@@ -17,8 +17,9 @@ import {
 import type { DashboardData, Period } from "@/lib/dashboard-data";
 import type { AnalyticsData } from "@/lib/analytics-data";
 import type { StarBalance } from "@/lib/star-balance";
-import { reportFeatureRows } from "@/lib/report-features";
-import { fmtMoney, fmtNum, starsToMoneyRate } from "@/lib/money";
+import { reportFeatureRows, topFeatureRow } from "@/lib/report-features";
+import { reportTzLabel } from "@/lib/report-time";
+import { fmtMoney, fmtNum, starsToMoneyRate, usdToMoneyRate } from "@/lib/money";
 import { useCurrency } from "@/components/CurrencyProvider";
 import { initials } from "@/lib/colors";
 import FanAvatar from "@/components/FanAvatar";
@@ -213,7 +214,10 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
   }
 
   const money = (stars: number) => fmtMoney(starsToMoneyRate(stars, currency, rate), currency);
-  const usd = (n: number) => "$" + n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  // Profit/cost arrive in USD; revenue arrives in Stars. Both are rendered in
+  // the operator's selected currency so a table never puts "A$8,295 revenue"
+  // beside "$4,102 profit" and invites the wrong ratio. Was a bare "$" + toLocaleString.
+  const usd = (n: number) => fmtMoney(usdToMoneyRate(n, currency, rate), currency);
   // Whole percent above 10, one decimal below it. Math.round alone flattened
   // every conversion rate the fleet has ever had into "1%": the real figure sat
   // between 0.62% and 0.68% across 1d/7d/30d on 2026-08-21, and all three
@@ -670,17 +674,26 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
             const revPerUser = s.activeUsers > 0 ? displayStars / s.activeUsers : 0;
             const revPerBuyer = s.buyers > 0 ? displayStars / s.buyers : 0;
             const avgOrder = s.sales > 0 ? displayStars / s.sales : 0;
-            const { messaged, purchased } = data.analytics.paywallFunnel;
-            const conversion = messaged > 0 ? purchased / messaged : null;
+            // "Conversion" on a tile beside "Buyers" means: of the people who
+            // talked to her, how many bought ANYTHING. It used to divide
+            // paywallFunnel.purchased by `messaged`, and .purchased counts only
+            // fans who bought CREDITS — 57 of 401 real buyers over 30 days. A
+            // fan who bought a photo, a video, a bundle or sent a tip was
+            // counted as having left without spending, so the tile read about a
+            // seventh of the truth and disagreed with the Buyers tile next to
+            // it. The credit-only stage is still exactly right for the paywall
+            // funnel panel further down, which is labelled as such.
+            const { messaged } = data.analytics.paywallFunnel;
+            const conversion = messaged > 0 ? s.buyers / messaged : null;
             // Windowed (lib/dashboard-data.ts), NOT analytics.funnel.repeatPct —
             // that one is the Analytics tab's LIFETIME funnel and never moved
             // when the period changed. Same reason as the four tiles above it.
             const repeatRate = s.repeatPct;
-            // #1 single source — byFeature splits photos/videos/bundles/tips apart,
-            // unlike byKind which lumps them into one "Photos & video" bucket.
-            const topKind = data.analytics.byFeature
-              .filter((feature) => feature.key !== "media" && feature.key !== "other")
-              .sort((a, b) => b.share - a.share)[0];
+            // #1 single source. Shares topFeatureRow() with the report's "Top
+            // earner" fact below so the two cannot print different answers on
+            // the same screen — they did, "Photos 21%" here against "Media 61%"
+            // there, because this one dropped the catch-all buckets first.
+            const topKind = topFeatureRow(data.analytics.byFeature);
             const tiles: { label: string; value: string; money?: boolean }[] = [
               // "Users" = fans who messaged in the window, which is what the
               // word means when a date filter is on it. Signups are "New".
@@ -700,7 +713,9 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
               { label: "Conversion", value: conversion !== null ? pct(conversion) : "-" },
               { label: "Repeat rate", value: pct(repeatRate) },
               // Short label so the tile never truncates the number away.
-              { label: "Top source", value: topKind && topKind.share > 0 ? `${topKind.label.replace(" (untagged)", "")} ${pct(topKind.share)}` : "-" },
+              // "(untagged)" is kept, not stripped: it is the difference between
+              // "photos are our product" and "we are not recording what we sell".
+              { label: "Top source", value: topKind ? `${topKind.label} ${pct(topKind.share)}` : "-" },
             ];
             return (
               <>
@@ -1088,21 +1103,27 @@ function RevenueReport({
     : [];
 
   // Headline facts — only the ones the data actually supports right now.
-  const topFeature = [...reportFeatures].filter((feature) => feature.stars > 0).sort((a, b) => b.stars - a.stars)[0];
+  const topFeature = topFeatureRow(a.byFeature);
   const topClone = a.clones[0];
   const whale = a.byTier.find((t) => t.key === "whale");
   const bestHour = hasRevenue ? a.byHour.reduce((m, h) => (h.stars > m.stars ? h : m)) : null;
   const bestDow = hasRevenue ? a.byDow.reduce((m, d) => (d.stars > m.stars ? d : m)) : null;
   const facts: { label: string; value: string; moneyValue?: string; isName?: boolean }[] = [];
   if (topFeature && topFeature.stars > 0)
-    facts.push({ label: "Top earner", value: `${topFeature.label.replace(" (untagged)", "")} · ${pct(topFeature.share)}` });
+    facts.push({ label: "Top earner", value: `${topFeature.label} · ${pct(topFeature.share)}` });
   if (!scoped && topClone && topClone.revenueStars > 0)
     facts.push({ label: "Top clone", value: topClone.name, moneyValue: money(topClone.revenueStars), isName: true });
   if (whale && whale.stars > 0) facts.push({ label: "Whale share", value: `${pct(whale.share)} of lifetime spend` });
-  if (bestHour && bestHour.stars > 0) facts.push({ label: "Peak hour", value: bestHour.label });
-  if (bestDow && bestDow.stars > 0) facts.push({ label: "Peak day", value: bestDow.label });
+  // The zone is printed, not assumed. These were computed on the container's
+  // UTC clock and labelled nothing at all, so "Peak hour 3 AM" was really 1 PM
+  // and evening sales landed on the previous weekday. See lib/report-time.ts.
+  const tz = reportTzLabel();
+  if (bestHour && bestHour.stars > 0) facts.push({ label: "Peak hour", value: `${bestHour.label} ${tz}` });
+  if (bestDow && bestDow.stars > 0) facts.push({ label: "Peak day", value: `${bestDow.label} ${tz}` });
 
-  const earningClones = a.clones.filter((c) => c.revenueStars > 0 || c.sales > 0).slice(0, 8);
+  // Every earning clone, not the top 8 of 12. The cut was silent, and a table
+  // that drops a third of the fleet reads as the whole fleet.
+  const earningClones = a.clones.filter((c) => c.revenueStars > 0 || c.sales > 0);
 
   return (
     <Card size="sm" className="mt-4">
@@ -1112,7 +1133,11 @@ function RevenueReport({
             the ⓘ on the Close row is not the place for it either: the panel titles
             below each carry their own hint. */}
         <CardDescription className="hidden text-[11px] text-white/70 sm:block">
-          Where the money comes from in this window: product, spender tier, {scoped ? "" : "clone, "}time and funnel.
+          {/* "in this window" used to cover the whole list, but the spender tier
+              and buyer breakdown panels are lifetime and say so on themselves.
+              A subtitle that contradicts the panel under it is how a lifetime
+              number gets read as a windowed one. */}
+          Where the money comes from: product, {scoped ? "" : "clone, "}time and funnel for this window, plus spender tiers and buyer behaviour over each fan&apos;s lifetime.
         </CardDescription>
         <CardAction>
           <Button variant="ghost" size="sm" onClick={onClose} className="text-white hover:bg-white/10 hover:text-white">
