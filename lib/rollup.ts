@@ -159,6 +159,54 @@ export async function messagedFanCount(startMs: number, endMs: number, cloneId?:
   return Number(n) || 0;
 }
 
+export type ConversationFunnel = {
+  arrivals: number;
+  arrivalsStarted: number;
+  conversations: number;
+  meaningful: number;
+  offered: number;
+  offeredBought: number;
+  ttfpN: number;
+  ttfpMedianHours: number | null;
+};
+
+/** The counting half of Jesse's seven conversation numbers (migration 125).
+ *
+ *  Five of the seven need a per-fan count over chat_history — 196,994 rows in a
+ *  30-day window — so they are counted in Postgres and arrive as eight
+ *  integers. The other two (revenue per conversation, repeat purchase rate) are
+ *  NOT here and must not be added: lib/dashboard-data.ts already derives both
+ *  from the window's star_transactions rows it holds, and a second SQL answer
+ *  would only be something for the tiles to disagree with.
+ *
+ *  `ttfpMedianHours` is null when ttfpN is 0, which is a real state on a short
+ *  window and must render as "-" rather than as zero hours. */
+export async function conversationFunnel(
+  startMs: number,
+  endMs: number,
+  cloneId?: string | null,
+): Promise<ConversationFunnel> {
+  const rows = await rpc<Record<string, number | string | null>[]>("revenue_conversation_funnel", {
+    p_start: iso(startMs),
+    p_end: iso(endMs),
+    p_clone: cloneId ?? null,
+  });
+  const row = rows?.[0];
+  const median = row?.ttfp_median_hours;
+  return {
+    arrivals: Number(row?.arrivals) || 0,
+    arrivalsStarted: Number(row?.arrivals_started) || 0,
+    conversations: Number(row?.conversations) || 0,
+    meaningful: Number(row?.meaningful) || 0,
+    offered: Number(row?.offered) || 0,
+    offeredBought: Number(row?.offered_bought) || 0,
+    ttfpN: Number(row?.ttfp_n) || 0,
+    // `|| 0` would turn "no fan made a first purchase in this window" into
+    // "they bought instantly", which is the wrong direction to be wrong in.
+    ttfpMedianHours: median == null ? null : Number(median),
+  };
+}
+
 export type PaywallStats = { views: number; fans: number; converted: number };
 
 /** Paywall views, distinct fans paywalled, and how many of those also bought

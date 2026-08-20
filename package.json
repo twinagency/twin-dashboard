@@ -13,7 +13,7 @@
     "test:media": "../bot/node_modules/.bin/tsx scripts/check-media-limits.ts",
     "test:spend": "../bot/node_modules/.bin/tsx scripts/check-spend.ts",
     "test:report": "../bot/node_modules/.bin/tsx scripts/check-report-features.ts",
-    "test": "npm run test:api && npm run test:public && npm run test:paging && npm run test:callsites && npm run test:media && npm run test:spend && npm run test:report && npm run test:rollups && npm run test:tiles && npm run test:dossier && npm run test:thread",
+    "test": "npm run test:api && npm run test:public && npm run test:paging && npm run test:callsites && npm run test:media && npm run test:spend && npm run test:report && npm run test:rollups && npm run test:tiles && npm run test:dossier && npm run test:thread && npm run test:funnel && npm run test:consistency",
     "key:issue": "../bot/node_modules/.bin/tsx scripts/issue-api-key.ts issue",
     "key:list": "../bot/node_modules/.bin/tsx scripts/issue-api-key.ts list",
     "key:revoke": "../bot/node_modules/.bin/tsx scripts/issue-api-key.ts revoke",
@@ -23,7 +23,8 @@
     "test:dossier": "../bot/node_modules/.bin/tsx scripts/check-fan-dossier.ts",
     "test:thread": "../bot/node_modules/.bin/tsx scripts/check-fan-thread.ts",
     "test:consistency": "../bot/node_modules/.bin/tsx scripts/check-report-consistency.ts",
-    "test:offline": "npm run test:paging && npm run test:callsites && npm run test:media && npm run test:spend && npm run test:report && npm run test:rollups && npm run test:tiles && npm run test:dossier && npm run test:thread"
+    "test:offline": "npm run test:paging && npm run test:callsites && npm run test:media && npm run test:spend && npm run test:report && npm run test:rollups && npm run test:tiles && npm run test:dossier && npm run test:thread",
+    "test:funnel": "../bot/node_modules/.bin/tsx scripts/check-conversation-funnel.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

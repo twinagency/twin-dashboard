@@ -264,7 +264,22 @@ export async function getDashboard(period: Period, range?: DateRange): Promise<D
         .from("star_transactions")
         .select(hasFeature ? COLS : COLS_LEGACY)
         .gte("paid_at", new Date(startMs).toISOString())
-        .lte("paid_at", new Date(windowEnd).toISOString()),
+        .lte("paid_at", new Date(windowEnd).toISOString())
+        // ORDER BY id is correctness, not tidiness, and this read is the
+        // headline revenue figure itself. selectAllRows walks the table 1,000
+        // rows at a time with .range() while star_transactions is being
+        // inserted into; without a stable sort, rows shift between pages and
+        // the same row is counted twice or missed. Measured on usage_events by
+        // check-revenue-rollups.ts: 30,290 rows read, 22,285 distinct, 26%
+        // double-counted, a cost total of 37.38 against a true 33.94.
+        //
+        // The 2026-08-21 audit filed this against BOTH paged star_transactions
+        // reads and the fix landed on only one of them (lib/analytics-data.ts,
+        // commit 0743c99). This is the other one, and it is the more expensive
+        // of the two to have wrong: analytics feeds the report panels, this
+        // feeds the headline, every stat tile, the chart and now revenue per
+        // conversation.
+        .order("id", { ascending: true }),
       { label: "dashboard revenue ledger" },
     );
     purchases = hasFeature

@@ -750,6 +750,21 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
         </div>
       )}
 
+      {/* ── Jesse's seven. Above the report toggle, not inside it: these are the
+          numbers that say whether the funnel is working, and a number behind a
+          click is a number nobody reads. Same window and scope as everything
+          above. ──────────────────────────────────────────────────────────── */}
+      {data && (
+        <ConversationFunnelPanel
+          f={data.analytics.conversationFunnel}
+          windowStars={displayStars}
+          buyers={(focusStats ?? data.totals).buyers}
+          repeatPct={(focusStats ?? data.totals).repeatPct}
+          money={money}
+          pct={pct}
+        />
+      )}
+
       {/* ── Full revenue report - every useful cut of the same window/scope as
           the tiles above (data.analytics is fetched with identical period +
           clone params). Toggled by the dashed tile in the stats grid. ─────── */}
@@ -1661,6 +1676,119 @@ function ShareRow({
         </div>
       )}
     </div>
+  );
+}
+
+// A duration a person reads, not a float. 0.4h is "24 min", 4.13h is "4.1h",
+// 61h is "2.5d". Exported-shaped as a plain function because check-conversation
+// -funnel.ts asserts the boundaries: "0h" for a median that is really 3 minutes
+// would read as instant, and instant is a claim.
+export function fmtHours(hours: number | null): string {
+  if (hours === null || !Number.isFinite(hours)) return "-";
+  if (hours < 1) return `${Math.round(hours * 60)} min`;
+  if (hours < 48) return `${hours.toFixed(1)}h`;
+  return `${(hours / 24).toFixed(1)}d`;
+}
+
+// ── Jesse's seven conversation numbers ──────────────────────────────────────
+//
+// Five come from migration 125 (lib/rollup.ts conversationFunnel). The other
+// two are computed here from figures already on this page, deliberately:
+//
+//   revenue per conversation = the SAME window revenue the headline shows,
+//     divided by the same `conversations` the four rates above it divide by.
+//     Not a second revenue definition, and not net of anything: Ronan's
+//     decision of 2026-08-21 is that the totals stay whole.
+//   repeat purchase rate     = totals.repeatPct, the value the "Repeat rate"
+//     tile already renders. Read, not recomputed, so the two can never drift.
+//
+// THE COHORT IS A CONVERSATION, NOT A PERSON: one clone plus one fan. Someone
+// talking to two clones is two conversations, because a rate about how a clone
+// converses is a rate per clone. The "Buyers" tile above dedupes people instead,
+// on purpose, because money paid twice by one person is one person's money.
+//
+// WHY "STARTED" IS NOT "SENT A MESSAGE". A users row is INSERTED by the fan's
+// first message, so arrived and messaged are the same population and the naive
+// rate is ~100% forever (4,313 of 4,315 over 7 days, measured 2026-08-21).
+// There is no impression signal upstream of that in this database. So it counts
+// arrivals who got past the first message, which is the stage fans actually
+// fall out of, and the hint under the tile says so rather than leaving a reader
+// to assume the definition that would have been useless.
+function ConversationFunnelPanel({
+  f,
+  windowStars,
+  buyers,
+  repeatPct,
+  money,
+  pct,
+}: {
+  f: AnalyticsData["conversationFunnel"];
+  windowStars: number;
+  buyers: number;
+  repeatPct: number;
+  money: (stars: number) => string;
+  pct: (n: number) => string;
+}) {
+  const rate = (a: number, b: number) => (b > 0 ? pct(a / b) : "-");
+  const repeatBuyers = Math.round(repeatPct * buyers);
+  const metrics: { label: string; value: string; hint: string; moneyValue?: boolean }[] = [
+    {
+      label: "Conversation start rate",
+      value: rate(f.arrivalsStarted, f.arrivals),
+      hint: `${fmtNum(f.arrivalsStarted)} of ${fmtNum(f.arrivals)} new fans sent more than one message`,
+    },
+    {
+      label: "Meaningful conversation rate",
+      value: rate(f.meaningful, f.conversations),
+      hint: `${fmtNum(f.meaningful)} of ${fmtNum(f.conversations)} reached 5+ messages from the fan`,
+    },
+    {
+      label: "Offer exposure rate",
+      value: rate(f.offered, f.conversations),
+      hint: `${fmtNum(f.offered)} were shown a paywall or a locked item`,
+    },
+    {
+      label: "Offer to purchase",
+      value: rate(f.offeredBought, f.offered),
+      hint: `${fmtNum(f.offeredBought)} of ${fmtNum(f.offered)} bought after seeing an offer`,
+    },
+    {
+      label: "Time to first purchase",
+      value: fmtHours(f.ttfpMedianHours),
+      // n, always. A median over 7 fans and a median over 700 are different
+      // claims and the number alone cannot tell them apart.
+      hint: f.ttfpN > 0 ? `median, ${fmtNum(f.ttfpN)} first-time buyers` : "no first purchases in this window",
+    },
+    {
+      label: "Revenue per conversation",
+      value: f.conversations > 0 ? money(windowStars / f.conversations) : "-",
+      hint: `across ${fmtNum(f.conversations)} conversations`,
+      moneyValue: true,
+    },
+    {
+      label: "Repeat purchase rate",
+      value: pct(repeatPct),
+      hint: `${fmtNum(repeatBuyers)} of ${fmtNum(buyers)} buyers bought more than once`,
+    },
+  ];
+
+  return (
+    <Card size="sm" className="mt-4">
+      <CardHeader className="space-y-0 pb-1">
+        <CardTitle className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-ink">
+          Conversation funnel
+          <Info text="How a conversation turns into money, in the window and scope selected above. A conversation is one clone and one fan, so the same person talking to two clones counts twice here, unlike the Buyers tile which counts people. Conversation start rate counts new fans who got past their first message: a fan record is created BY the first message, so 'sent a message' would read 100% forever. Offer to purchase excludes old n8n subscription renewals, which Telegram auto-renews without Twin raising an invoice. Revenue per conversation is the same headline revenue shown above, undivided and unfiltered." />
+        </CardTitle>
+        <CardDescription className="text-[11px]">
+          Seven numbers, same window as the tiles above.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="grid grid-cols-2 gap-2 pt-2 sm:grid-cols-4 xl:grid-cols-7">
+        {metrics.map((m) => (
+          <InsightMetric key={m.label} label={m.label} value={m.value} hint={m.hint} moneyValue={m.moneyValue} />
+        ))}
+      </CardContent>
+    </Card>
   );
 }
 

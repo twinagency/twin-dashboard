@@ -1,7 +1,15 @@
 import { supabaseAdmin } from "./supabase";
 import { selectAllRows } from "./select-all";
 import { chartColorForClone } from "./colors";
-import { fanSpendStats, fanTiers, messagedFanCount, paywallStats, usageRollup } from "./rollup";
+import {
+  conversationFunnel,
+  fanSpendStats,
+  fanTiers,
+  messagedFanCount,
+  paywallStats,
+  usageRollup,
+  type ConversationFunnel,
+} from "./rollup";
 import { STAR_USD } from "./money";
 import { REPORT_TZ, reportInstant } from "./report-time";
 import type { DateRange, Period } from "./dashboard-data";
@@ -113,6 +121,21 @@ export type AnalyticsData = {
     overallPct: number; // purchased / messaged
     avgViewsPerFan: number;
   };
+  // The counting half of Jesse's seven conversation numbers (migration 125).
+  // Lives here rather than on the dashboard payload because this half of the
+  // page is already clone-scoped, which is what these rates have to respect.
+  //
+  // Only FIVE of the seven are in here. Revenue per conversation and repeat
+  // purchase rate are rendered from figures the dashboard payload already
+  // carries (window revenue, and totals.repeatPct) — see the panel in
+  // components/RevenueDashboard.tsx. A second definition of either would put
+  // two answers to one question on the same screen, which is the defect the
+  // 2026-08-21 audit found three times.
+  //
+  // NOT projected by lib/api-public.ts, which is an allowlist: a field added
+  // here is withheld from a model's own dashboard by default, and that is the
+  // correct posture for anything measuring how well the funnel converts.
+  conversationFunnel: ConversationFunnel;
   // Classic (sorter) vs Smart (agent) flow, split by each clone's ai_mode.
   byFlow: {
     key: "classic" | "smart";
@@ -472,9 +495,14 @@ export async function getAnalytics(
   // purchase or any spend, total_purchases counts at least one per buyer even
   // when purchase_count is 0, lifetime_stars spans every fan and not just
   // buyers, and an unknown or missing tier lands in "none".
-  const [spendStats, tierRows] = await Promise.all([
+  // The conversation funnel joins this Promise.all rather than getting its own
+  // await: it is a ~800ms scan of chat_history in the window (measured 834ms on
+  // 30 days fleet-wide, 2026-08-21) and the page is already several seconds, so
+  // it runs beside the two lifetime rollups instead of after them.
+  const [spendStats, tierRows, funnel] = await Promise.all([
     fanSpendStats(cloneId ?? null),
     fanTiers(cloneId ?? null),
+    conversationFunnel(startMs, windowEnd, cloneId ?? null),
   ]);
   const fans = Number(spendStats.fans) || 0;
   const buyers = Number(spendStats.buyers) || 0;
@@ -725,6 +753,7 @@ export async function getAnalytics(
     byKind,
     byFeature,
     byFlow,
+    conversationFunnel: funnel,
     paywallFunnel,
     byDay,
     byHour,
