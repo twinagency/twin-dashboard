@@ -214,7 +214,16 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
 
   const money = (stars: number) => fmtMoney(starsToMoneyRate(stars, currency, rate), currency);
   const usd = (n: number) => "$" + n.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const pct = (n: number) => `${Math.round(n * 100)}%`;
+  // Whole percent above 10, one decimal below it. Math.round alone flattened
+  // every conversion rate the fleet has ever had into "1%": the real figure sat
+  // between 0.62% and 0.68% across 1d/7d/30d on 2026-08-21, and all three
+  // rounded to the same integer, so the tile looked frozen and looked like a
+  // suspiciously round number at the same time. Repeat rate (~33-41%) and Top
+  // source (~19%) are big enough that a decimal there is just noise.
+  const pct = (n: number) => {
+    const v = n * 100;
+    return v > 0 && v < 10 ? `${v.toFixed(1)}%` : `${Math.round(v)}%`;
+  };
 
   const visibleClones = useMemo(() => {
     const all = data?.clones ?? [];
