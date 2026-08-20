@@ -1079,7 +1079,12 @@ export default function JarvisWorkspace({ cloneId }: { cloneId: string | null })
         imageUrl: targetClone?.photoUrl,
         metrics: [
           { label: "Fans", value: compact(users) },
-          { label: "Active 24h", value: compact(stats?.active24h ?? data?.totals.active24h ?? 0) },
+          // Stays a 24h number, and now genuinely is one. This panel fetches
+          // period=1M, so `active` here would mean "active this month"; the
+          // useful figure next to a fan count is who can be messaged right now
+          // (Telegram's 24h business-bot window), which reachable24h holds and
+          // which no period can move.
+          { label: "Reachable 24h", value: compact(stats?.reachable24h ?? data?.totals.reachable24h ?? 0) },
           { label: "Buyers", value: compact(stats?.buyers ?? data?.totals.buyers ?? 0) },
         ],
       };

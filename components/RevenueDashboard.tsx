@@ -660,7 +660,10 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
             const avgOrder = s.sales > 0 ? displayStars / s.sales : 0;
             const { messaged, purchased } = data.analytics.paywallFunnel;
             const conversion = messaged > 0 ? purchased / messaged : null;
-            const repeatRate = data.analytics.funnel.repeatPct;
+            // Windowed (lib/dashboard-data.ts), NOT analytics.funnel.repeatPct —
+            // that one is the Analytics tab's LIFETIME funnel and never moved
+            // when the period changed. Same reason as the four tiles above it.
+            const repeatRate = s.repeatPct;
             // #1 single source — byFeature splits photos/videos/bundles/tips apart,
             // unlike byKind which lumps them into one "Photos & video" bucket.
             const topKind = data.analytics.byFeature
@@ -669,7 +672,15 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
             const tiles: { label: string; value: string; money?: boolean }[] = [
               { label: "Users", value: fmtNum(s.users) },
               { label: "Transactions", value: fmtNum(s.sales) },
-              { label: "Active (24h)", value: fmtNum(s.active24h) },
+              // "Active", not "Active (24h)": this is now fans who messaged
+              // inside the selected window, so a fixed 24h label would lie on
+              // every period except 1D.
+              { label: "Active", value: fmtNum(s.active) },
+              // The ONE tile that ignores the filter, and it says so. Telegram
+              // only allows a business bot to message a fan within 24h of that
+              // fan's last message, so this is who the fleet can reach right
+              // now — an operational limit, not a stat about the window.
+              { label: "Reachable now (24h)", value: fmtNum(s.reachable24h) },
               { label: "Messages", value: fmtNum(s.messages) },
               { label: "Buyers", value: fmtNum(s.buyers) },
               { label: "Rev/user", value: money(revPerUser), money: true },

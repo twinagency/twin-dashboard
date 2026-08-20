@@ -1,7 +1,7 @@
 import { supabaseAdmin } from "./supabase";
 import { selectAllRows } from "./select-all";
 import { chartColorForClone, profileImagePathForClone } from "./colors";
-import { cloneUserStats, usageRollup } from "./rollup";
+import { cloneUserStatsWindow, usageRollup } from "./rollup";
 
 export type Period = "ALL" | "1Y" | "6M" | "3M" | "1M" | "2W" | "1W" | "1D" | "CUSTOM";
 type Gran = "hour" | "day" | "week" | "month";
@@ -45,13 +45,29 @@ export type CloneSummary = {
   stars: number; // window revenue in stars
 };
 
+// Every field here is scoped to the requested window. `active` was `active24h`
+// until 2026-08-21: it was a hardcoded now()-24h cut that ignored the period
+// filter, and it was renamed rather than redefined in place so that every
+// reader had to be looked at (there were three) instead of silently changing
+// meaning under the two that render it with a "24h" label.
 export type CloneStats = {
   stars: number;
   sales: number;
   users: number;
-  active24h: number;
+  active: number;
+  /** Fans messageable RIGHT NOW: last_message_received inside the last 24h,
+   *  deliberately NOT scoped to the selected window.
+   *
+   *  Telegram only lets a business bot message a fan within 24h of that fan's
+   *  last message, so this is the size of the audience the fleet can actually
+   *  reach this minute — an operational limit, not a statistic about a period.
+   *  Asking "how many can I message, over the last 3 months" is not a question,
+   *  which is why this one tile stays fixed while the rest follow the filter. */
+  reachable24h: number;
   messages: number;
   buyers: number;
+  /** repeat buyers / buyers, both counted inside the window. 0 when no buyers. */
+  repeatPct: number;
   costUsd: number;  // AI + voice spend in the window (from usage_events)
   aiCalls: number;
   aiErrors: number;
@@ -84,11 +100,15 @@ export type DashboardData = {
     sales: number;
     costUsd: number;
     aiErrors: number;
-    // Fleet-wide (all-time, not period-scoped — same semantics as perClone below).
+    // Fleet-wide, scoped to the SAME window as stars/sales above. These were
+    // all-time until 2026-08-21, which is the bug this shape now rules out.
     users: number;
-    active24h: number;
+    active: number;
+    /** Not window-scoped, on purpose — see CloneStats.reachable24h. */
+    reachable24h: number;
     messages: number;
     buyers: number;
+    repeatPct: number;
   };
   perClone: Record<string, CloneStats>;
 };
@@ -293,22 +313,65 @@ export async function getDashboard(period: Period, range?: DateRange): Promise<D
     }
   }
 
-  // ── per-clone user stats ────────────────────────────────────────────────────
-  // Also aggregated in SQL (migration 120). This was a full read of the users
-  // table — 63,557 rows, ~64 round trips — to end up with four counters per
-  // clone. "Buyer" still means ever paid us anything (credits, media, tips),
-  // the same definition lib/analytics-data.ts uses, so the two tabs agree.
-  const dayAgo = now - MS_DAY; // "active" = messaged in the last 24h (matches the Telegram messaging window)
-  const userStats = await cloneUserStats(dayAgo);
+  // ── buyers + repeat rate, per clone, INSIDE THE WINDOW ──────────────────────
+  // Derived from the star_transactions rows loaded above, which are ALREADY
+  // filtered to [startMs, windowEnd] — so this costs no extra round trip, and
+  // this page ends up with exactly one definition of "buyer": someone who paid
+  // inside the window. That is deliberately NOT the users-table definition
+  // ("has ever paid us anything") that lib/analytics-data.ts uses for its
+  // LIFETIME funnel — those are different questions on different tabs, and the
+  // reason the tile now reads this instead of analytics.funnel.repeatPct.
+  //
+  // A row with no telegram_id can't be attributed to a person, so it can't make
+  // one a buyer. It still counts as revenue and as a transaction above, which is
+  // the same thing the totals have always done with it.
+  const cloneTxPerFan = new Map<string, Map<number, number>>();
+  for (const p of purchases) {
+    if (p.telegram_id == null) continue;
+    let perFan = cloneTxPerFan.get(p.clone_id);
+    if (!perFan) {
+      perFan = new Map();
+      cloneTxPerFan.set(p.clone_id, perFan);
+    }
+    perFan.set(p.telegram_id, (perFan.get(p.telegram_id) ?? 0) + 1);
+  }
+
+  // ── per-clone user stats, INSIDE THE WINDOW ─────────────────────────────────
+  // migration 122. The 120 function this replaced took only a p_active_since and
+  // counted fans/messages/buyers over the whole users table, so five tiles sat
+  // on lifetime totals while the period filter moved the other six — the bug
+  // Ronan reported on 2026-08-21. Both ends are bounded now, and by the same
+  // window the chart and the revenue totals above already use.
+  //
+  // `messages` now counts chat_history rows rather than summing
+  // users.total_messages_sent, because only the former has a timestamp to filter
+  // on. The ALL view therefore reads lower than it used to (271k vs 641k) — the
+  // header of migration 122 explains why both numbers are correct.
+  const userStats = await cloneUserStatsWindow(startMs, windowEnd);
+  // Second call, fixed at the last 24h whatever the operator picked. This is the
+  // Telegram business-bot messaging window — the fans the fleet may legally
+  // message right now — so it is the one number on the page that must NOT move
+  // with the filter. It is a separate RPC rather than a field on the one above
+  // because the two answer questions about different time spans; migration 122's
+  // users_clone_last_message_idx is what keeps it cheap.
+  const reachableStats = await cloneUserStatsWindow(now - MS_DAY, now);
+  const reachableByClone = new Map<string, number>();
+  for (const row of reachableStats) reachableByClone.set(row.clone_id, Number(row.active) || 0);
   const perClone: Record<string, CloneStats> = {};
   for (const c of clones) {
+    const perFan = cloneTxPerFan.get(c.id);
+    const buyers = perFan?.size ?? 0;
+    let repeatBuyers = 0;
+    if (perFan) for (const count of perFan.values()) if (count > 1) repeatBuyers += 1;
     perClone[c.id] = {
       stars: cloneStars.get(c.id) ?? 0,
       sales: cloneSales.get(c.id) ?? 0,
       users: 0,
-      active24h: 0,
+      active: 0,
+      reachable24h: reachableByClone.get(c.id) ?? 0,
       messages: 0,
-      buyers: 0,
+      buyers,
+      repeatPct: buyers > 0 ? repeatBuyers / buyers : 0,
       costUsd: cloneCost.get(c.id) ?? 0,
       aiCalls: cloneCalls.get(c.id) ?? 0,
       aiErrors: cloneErrors.get(c.id) ?? 0,
@@ -319,8 +382,7 @@ export async function getDashboard(period: Period, range?: DateRange): Promise<D
     if (!s) continue;
     s.users = Number(row.fans) || 0;
     s.messages = Number(row.messages) || 0;
-    s.buyers = Number(row.buyers) || 0;
-    s.active24h = Number(row.active) || 0;
+    s.active = Number(row.active) || 0;
   }
 
   // ── recent transactions — most recent first. Capped generously (not to 30)
@@ -518,19 +580,33 @@ export async function getDashboard(period: Period, range?: DateRange): Promise<D
     }))
     .sort((a, b) => b.stars - a.stars);
 
-  // Fleet-wide rollup of the same all-time fields perClone tracks, so the
+  // Fleet-wide rollup of the same WINDOWED fields perClone tracks, so the
   // Revenue page's headline tiles have an "All clones" total to show.
+  //
+  // users / active / messages are additive across clones. BUYERS IS NOT: one
+  // fan can pay two clones and a sum counts them twice, which is why this
+  // builds its own per-fan map over every purchase in the window instead of
+  // adding the per-clone counts up. Same reason the fleet repeat rate can't be
+  // averaged out of the per-clone rates — the denominators overlap.
   let totalUsers = 0;
-  let totalActive24h = 0;
+  let totalActive = 0;
+  let totalReachable = 0;
   let totalMessages = 0;
-  let totalBuyers = 0;
   for (const c of clones) {
     const s = perClone[c.id];
     totalUsers += s.users;
-    totalActive24h += s.active24h;
+    totalActive += s.active;
+    totalReachable += s.reachable24h;
     totalMessages += s.messages;
-    totalBuyers += s.buyers;
   }
+  const fleetTxPerFan = new Map<number, number>();
+  for (const p of purchases) {
+    if (p.telegram_id == null) continue;
+    fleetTxPerFan.set(p.telegram_id, (fleetTxPerFan.get(p.telegram_id) ?? 0) + 1);
+  }
+  const totalBuyers = fleetTxPerFan.size;
+  let fleetRepeatBuyers = 0;
+  for (const count of fleetTxPerFan.values()) if (count > 1) fleetRepeatBuyers += 1;
 
   return {
     period,
@@ -544,9 +620,11 @@ export async function getDashboard(period: Period, range?: DateRange): Promise<D
       costUsd: totalCost,
       aiErrors: totalErrors,
       users: totalUsers,
-      active24h: totalActive24h,
+      active: totalActive,
+      reachable24h: totalReachable,
       messages: totalMessages,
       buyers: totalBuyers,
+      repeatPct: totalBuyers > 0 ? fleetRepeatBuyers / totalBuyers : 0,
     },
     perClone,
   };

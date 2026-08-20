@@ -70,6 +70,31 @@ export function cloneUserStats(activeSinceMs: number, cloneId?: string | null) {
   });
 }
 
+export type CloneUserStatsWindowRow = {
+  clone_id: string;
+  fans: number | null;
+  active: number | null;
+  messages: number | null;
+};
+
+/** Per-clone fan counts bounded at BOTH ends (migration 122), for the stat tiles
+ *  that have to answer "in the window the operator picked" rather than
+ *  "ever". Distinct from cloneUserStats() above, which stays all-time on
+ *  purpose — the Analytics tab's lifetime funnel reads that one.
+ *
+ *  `fans` counts arrivals (users.first_seen_at in window), `active` counts
+ *  users.last_message_received in window, `messages` counts chat_history rows in
+ *  window. Buyers are NOT here: dashboard-data.ts already holds the window's
+ *  star_transactions rows and derives buyers from them, so asking SQL for a
+ *  second definition of "buyer" would only create something to disagree with. */
+export function cloneUserStatsWindow(startMs: number, endMs: number, cloneId?: string | null) {
+  return rpc<CloneUserStatsWindowRow[]>("revenue_clone_user_stats_window", {
+    p_start: iso(startMs),
+    p_end: iso(endMs),
+    p_clone: cloneId ?? null,
+  });
+}
+
 export type FanSpendStats = {
   fans: number;
   buyers: number;
