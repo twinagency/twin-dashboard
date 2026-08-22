@@ -149,6 +149,16 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
   const [chartType, setChartType] = useState<"bar" | "line">("bar");
   const { currency, rate } = useCurrency();
   const [data, setData] = useState<FullData | null>(null);
+  // WHY THIS EXISTS. /api/dashboard answers a failure with 500 + {error}, and
+  // fetchData used to setData(that object). `data` was then truthy with no
+  // `totals` on it, so the first read of data.totals.stars threw and React
+  // replaced the whole page with "Application error: a client-side exception
+  // has occurred" — no clue on screen as to which of the eleven numbers on this
+  // page was unavailable. 2026-08-22: revenue_usage_rollup started timing out
+  // on 1M/3M (fleet-wide usage_events has no created_at-leading index and the
+  // Alanna story 10x'd the traffic), so the DEFAULT view white-screened.
+  // A failing query must degrade to a message, never to a blank page.
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<string | null>(null);
@@ -180,8 +190,21 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
         params.set("period", p);
       }
       if (cid) params.set("clone", cid);
-      const res = await fetch(`/api/dashboard?${params}`, { cache: "no-store" });
-      const json = (await res.json()) as FullData;
+      let json: (FullData & { error?: string }) | null = null;
+      try {
+        const res = await fetch(`/api/dashboard?${params}`, { cache: "no-store" });
+        json = (await res.json()) as FullData & { error?: string };
+        // Both halves matter: a 500 carries {error}, but a 200 whose body is
+        // missing `totals` is just as unrenderable and must not reach setData.
+        if (!res.ok || json?.error || !json?.totals) {
+          throw new Error(json?.error || `the server returned ${res.status} with no totals`);
+        }
+      } catch (e) {
+        setLoadError(e instanceof Error ? e.message : String(e));
+        setLoading(false);
+        return; // keep the LAST GOOD data on screen rather than blanking it
+      }
+      setLoadError(null);
       setData(json);
       setLoading(false);
     },
@@ -275,6 +298,17 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
 
   return (
     <div className="earnings-aurora">
+      {/* Named on screen, not just in the console. The operator is the person
+          who has to decide whether to pick a shorter window or call someone. */}
+      {loadError && (
+        <div className="mb-4 rounded-xl border border-[#b4432f] bg-[#fdecea] px-4 py-3 text-sm text-[#7a2b1e]">
+          <div className="font-semibold">This window could not be loaded.</div>
+          <div className="mt-1 font-mono text-[11px] leading-snug break-words">{loadError}</div>
+          <div className="mt-1 text-[12px]">
+            {data ? "Showing the last window that loaded." : "Try a shorter period — 1D and 1W are much cheaper to compute."}
+          </div>
+        </div>
+      )}
       <div className="earnings-heading mb-5 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
         <div>
           {/* Mobile first: 2xl on a phone. At 3xl this one line took a quarter of
