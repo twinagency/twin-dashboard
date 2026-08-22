@@ -668,9 +668,12 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
         <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-6">
           {(() => {
             const s = focusStats ?? data.totals;
-            // Per ACTIVE user, matching the "Users" tile beside it. Dividing by
-            // arrivals instead would answer "revenue per person who signed up in
-            // this window", which is not what anyone reads "Rev/user" as.
+            // Per ACTIVE user — fans who messaged in the window. NOT the
+            // "Users" tile, which is all-time total since 2026-08-22: dividing
+            // one window's revenue by the whole lifetime audience answers
+            // nothing. Dividing by arrivals instead would answer "revenue per
+            // person who signed up in this window", which is not what anyone
+            // reads "Rev/user" as either.
             const revPerUser = s.activeUsers > 0 ? displayStars / s.activeUsers : 0;
             const revPerBuyer = s.buyers > 0 ? displayStars / s.buyers : 0;
             const avgOrder = s.sales > 0 ? displayStars / s.sales : 0;
@@ -695,9 +698,12 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
             // there, because this one dropped the catch-all buckets first.
             const topKind = topFeatureRow(data.analytics.byFeature);
             const tiles: { label: string; value: string; money?: boolean }[] = [
-              // "Users" = fans who messaged in the window, which is what the
-              // word means when a date filter is on it. Signups are "New".
-              { label: "Users", value: fmtNum(s.activeUsers) },
+              // "Users" = every fan, all time, and it does NOT follow the date
+              // filter — same as "Reachable now (24h)" below. Ronan's call,
+              // 2026-08-22: on this page "Users" answers "how big is the
+              // audience", a number that cannot shrink when you pick a shorter
+              // period. The windowed count is "New" beside it.
+              { label: "Users", value: fmtNum(s.totalFans) },
               { label: "New", value: fmtNum(s.newFans) },
               { label: "Transactions", value: fmtNum(s.sales) },
               // The ONE tile that ignores the filter, and it says so. Telegram
