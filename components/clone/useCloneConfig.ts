@@ -388,8 +388,9 @@ function initial(clone?: Partial<Clone>): CloneConfigState {
     spendTierHighStars: clone?.spend_tier_high_stars ?? 300,
     spendTierMidStars: clone?.spend_tier_mid_stars ?? 50,
 
-    // Migration 098. Default false = today's unchanged onboarding behavior.
-    strictOnboardingSteps: clone?.strict_onboarding_steps ?? false,
+    // Migration 098, on fleet-wide since migration 126. Fallback matches the
+    // column DEFAULT so an unread column never reads as lenient.
+    strictOnboardingSteps: clone?.strict_onboarding_steps ?? true,
 
     dripEnabled: clone?.drip_enabled ?? true,
 

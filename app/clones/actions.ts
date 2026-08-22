@@ -886,10 +886,10 @@ const ADVANCED_097_COLUMNS = [
   "voice_keywords",
   "tease_keywords",
 ] as const;
-// Migration 098: the strict-onboarding-steps gate. Stripping degrades to
-// today: absent, the bot's mapClone falls back to false, which is exactly
-// this migration's default and today's unchanged behavior.
-// See bot/db/migrations/098_strict_onboarding_steps.sql.
+// Migration 098: the strict-onboarding-steps gate. Stripping degrades to the
+// column DEFAULT: absent, the bot's mapClone falls back to true, which is the
+// fleet-wide value set by migration 126.
+// See bot/db/migrations/098_strict_onboarding_steps.sql and 126_strict_onboarding_on_by_default.sql.
 const STRICT_098_COLUMNS = ["strict_onboarding_steps"] as const;
 // Migration 099: 11 more advanced dials (reaction/effect frequency, priority
 // VIP wait factor, gap-nudge threshold, onboarding message/attempt/window
