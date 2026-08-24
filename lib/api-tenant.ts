@@ -1,12 +1,29 @@
-// ── Per-model API keys for the public API (app/api/v1/*) ─────────────────────
+// ── API keys for the public API (app/api/v1/*) ───────────────────────────────
 //
-// SCOPE MODEL, decided 2026-08-08: ONE KEY SEES ONE CLONE. There is no agency
-// concept and no tenant table (migration 103 explains why). Every scoped read
-// takes its clone_id from the KEY, never from a request parameter — a
-// `?clone=` on this API would be the whole vulnerability in one line.
+// SCOPE MODEL. There are exactly TWO kinds of key and a key's kind is a
+// property of its database row, never of the request:
+//
+//   scope "clone" — sees exactly the clone in clone_id. The original shape,
+//                   decided 2026-08-08 (migration 103), for a model's own
+//                   dashboard.
+//   scope "fleet" — sees every clone, clone_id is null. Added 2026-08-24
+//                   (migration 127) for an external builder drawing all ten
+//                   girls' earnings on one page.
+//
+// EITHER WAY THE SCOPE COMES FROM THE KEY, NEVER FROM A REQUEST PARAMETER. A
+// `?clone=` on this API would be the whole vulnerability in one line, so it is
+// rejected for both kinds — see api-public-route.ts. A fleet key does not need
+// one (it already gets every clone in the response) and a clone key must not
+// have one.
+//
+// The two columns are pinned to each other by a check constraint in migration
+// 127, and resolveKey() below re-checks the same invariant in code before it
+// hands out a tenant. Belt and braces on purpose: the failure being guarded is
+// a clone key silently widening into a fleet key, which is the one direction
+// that is not survivable.
 //
 // Keys are stored as sha256 hex and never in plaintext. The key is displayed
-// once by scripts/issue-api-key.ts and is unrecoverable after that.
+// once, by the /api-access page, and is unrecoverable after that.
 
 import { createHash, timingSafeEqual } from "node:crypto";
 import { supabaseAdmin } from "./supabase";
@@ -22,9 +39,15 @@ export function keyPrefix(key: string): string {
   return key.slice(0, KEY_PREFIX_LEN);
 }
 
+export type KeyScope = "clone" | "fleet";
+
+// cloneId is null EXACTLY when scope is "fleet". The two are not independent —
+// every consumer should switch on `scope` and treat cloneId as the payload of
+// the "clone" case, rather than testing cloneId for null and inferring.
 export type Tenant = {
   keyId: string;
-  cloneId: string;
+  cloneId: string | null;
+  scope: KeyScope;
   label: string;
 };
 
@@ -95,6 +118,41 @@ export function _resetRateLimits(): void {
   hits.clear();
 }
 
+// ── the scope invariant ──────────────────────────────────────────────────────
+// Migration 127's CHECK constraint already makes "clone with an id" and "fleet
+// with no id" the only two legal rows. This repeats the rule in code, and it is
+// a separate exported function so it can be tested against a hand-built row
+// without a database — the widening cases below are precisely the ones that
+// must never be discovered in production.
+//
+// A ROW THAT SATISFIES NEITHER SHAPE IS REFUSED, not guessed at. An unreadable
+// credential fails closed; an assumed one fails open.
+//
+// Note the direction of every test. "fleet" must PROVE clone_id is null, and
+// anything that is not exactly the string "fleet" is read as a clone key, so a
+// corrupted, missing or unknown scope can only ever narrow what a key sees.
+export function tenantFromRow(row: {
+  id: unknown;
+  clone_id: unknown;
+  scope?: unknown;
+  label: unknown;
+}): Tenant | null {
+  const keyId = String(row.id);
+  const label = String(row.label);
+  const cloneId = row.clone_id == null ? null : String(row.clone_id);
+  const scope = row.scope == null ? "clone" : String(row.scope);
+
+  if (scope === "fleet") {
+    // A fleet row that still names a clone is a half-migrated or tampered row.
+    // Refuse it rather than picking whichever field looks more trustworthy.
+    if (cloneId !== null) return null;
+    return { keyId, cloneId: null, scope: "fleet", label };
+  }
+  if (scope !== "clone") return null;
+  if (cloneId === null) return null;
+  return { keyId, cloneId, scope: "clone", label };
+}
+
 // ── the lookup ───────────────────────────────────────────────────────────────
 // Looks a key up by HASH. A revoked key is not found (the partial index is on
 // `revoked_at is null`), so revocation takes effect on the next request with no
@@ -105,7 +163,7 @@ export async function resolveKey(presented: string | null): Promise<Tenant | nul
 
   const { data, error } = await supabaseAdmin
     .from("api_keys")
-    .select("id,clone_id,label,key_hash,revoked_at")
+    .select("id,clone_id,scope,label,key_hash,revoked_at")
     .eq("key_hash", hash)
     .is("revoked_at", null)
     .maybeSingle();
@@ -117,6 +175,11 @@ export async function resolveKey(presented: string | null): Promise<Tenant | nul
   if (!digestsEqual(String(data.key_hash), hash)) return null;
   if (data.revoked_at) return null;
 
+  const tenant = tenantFromRow(data);
+  if (!tenant) return null;
+
+  // Below the validation, not above it: a key that failed the scope invariant
+  // must not leave a last_used_at behind saying it worked.
   void supabaseAdmin
     .from("api_keys")
     .update({ last_used_at: new Date().toISOString() })
@@ -126,7 +189,7 @@ export async function resolveKey(presented: string | null): Promise<Tenant | nul
       () => undefined, // fire-and-forget: never fail a request over telemetry
     );
 
-  return { keyId: String(data.id), cloneId: String(data.clone_id), label: String(data.label) };
+  return tenant;
 }
 
 export async function authenticateModel(req: Request, now = Date.now()): Promise<TenantResult> {

@@ -129,13 +129,74 @@ export function projectRevenue(a: AnalyticsData, range: DateRange | null): Publi
 
 // cloneId comes from the KEY, never from a request parameter. That is the
 // entire tenancy boundary, so it is one argument on one function.
+//
+// includeCost: false is not an optimisation bolted on here — it is the honest
+// statement of what this function needs. projectRevenue() below cannot return
+// costUsd or profitUsd, so computing them would be work done to be discarded.
+// It also happens to be the fix for the 500s: revenue_usage_rollup was timing
+// out (code 57014) on every period of this endpoint on 2026-08-24. See
+// AnalyticsOptions in lib/analytics-data.ts.
 export async function publicRevenue(
   cloneId: string,
   period: Period,
   range?: DateRange,
 ): Promise<PublicRevenue> {
-  const analytics = await getAnalytics(period, cloneId, range);
+  const analytics = await getAnalytics(period, cloneId, range, { includeCost: false });
   return projectRevenue(analytics, range ?? null);
+}
+
+// ── the fleet projection (migration 127 keys) ────────────────────────────────
+//
+// A fleet key answers "how is every girl doing", so the response is the same
+// revenue shape PLUS a per-model breakdown. Written as its own type and its own
+// projection rather than as an optional field on PublicRevenue, because the
+// question "what may a fleet key see" deserves to be answerable by reading one
+// list, exactly like the per-clone one above.
+//
+// WHAT IS STILL WITHHELD, and this is the whole point of doing it by hand:
+// a.clones[] carries costUsd, profitUsd and margin PER GIRL. That is our margin
+// on each of them, itemised, and it is the single most sensitive object in this
+// codebase to hand to an outside builder. Widening the key's scope from one
+// clone to ten does NOT widen it from revenue to profit — those are different
+// axes and only the first one moved. Only id, name, revenueStars and sales are
+// named below; the rest are not "removed", they are never mentioned.
+export type PublicFleetModel = {
+  id: string;
+  name: string;
+  revenueStars: number;
+  sales: number;
+};
+
+export type PublicFleetRevenue = PublicRevenue & {
+  scope: "fleet";
+  models: PublicFleetModel[];
+};
+
+export function projectFleetRevenue(a: AnalyticsData, range: DateRange | null): PublicFleetRevenue {
+  return {
+    ...projectRevenue(a, range),
+    scope: "fleet",
+    // a.clones is already ranked best → worst by revenue upstream; the order is
+    // part of what makes this useful, so it is preserved rather than re-sorted.
+    models: a.clones.map((c) => ({
+      id: c.id,
+      name: c.name,
+      revenueStars: c.revenueStars,
+      sales: c.sales,
+      // c.costUsd, c.profitUsd and c.margin are deliberately absent.
+    })),
+  };
+}
+
+// No cloneId argument, and that absence is the point: a fleet key is not a
+// clone key with a wildcard, it is a different call. getAnalytics(period, null)
+// is fleet-wide by its own contract.
+export async function publicFleetRevenue(
+  period: Period,
+  range?: DateRange,
+): Promise<PublicFleetRevenue> {
+  const analytics = await getAnalytics(period, null, range, { includeCost: false });
+  return projectFleetRevenue(analytics, range ?? null);
 }
 
 export const MAX_FAN_LIMIT = 500;
@@ -161,6 +222,36 @@ export async function publicFans(cloneId: string, limit: number): Promise<Public
     .select(PUBLIC_FAN_COLUMNS.join(","))
     // The tenancy boundary. Not optional, not derived from a parameter.
     .eq("clone_id", cloneId)
+    .order("total_spent_stars", { ascending: false })
+    .limit(capped);
+  if (error) throw new Error(error.message);
+
+  const fans = (data ?? []) as unknown as Record<string, unknown>[];
+  return {
+    fans,
+    rowCount: fans.length,
+    limitApplied: capped,
+    truncated: fans.length === capped,
+  };
+}
+
+// A fleet key's fan list. Same columns plus `clone_id`, because a row from ten
+// girls' fans is meaningless without saying whose fan it is — and the id names
+// a clone this key can already see, so it discloses nothing the key did not
+// already have.
+//
+// NOT a per-clone loop. One ordered, capped query across the fleet: ten queries
+// at MAX_FAN_LIMIT each would be 5,000 rows to return 500 of them, and the
+// ordering between the ten results would still have to be redone here.
+export const PUBLIC_FLEET_FAN_COLUMNS = ["clone_id", ...PUBLIC_FAN_COLUMNS] as const;
+
+export async function publicFleetFans(limit: number): Promise<PublicFans> {
+  const capped = clampFanLimit(limit);
+  const { data, error } = await supabaseAdmin
+    .from("users")
+    .select(PUBLIC_FLEET_FAN_COLUMNS.join(","))
+    // No .eq() — that IS the fleet scope, and it is reached only from a route
+    // that has already proved tenant.scope === "fleet".
     .order("total_spent_stars", { ascending: false })
     .limit(capped);
   if (error) throw new Error(error.message);

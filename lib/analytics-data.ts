@@ -81,6 +81,10 @@ export const TIERS: { key: string; label: string }[] = [
 
 export type AnalyticsData = {
   period: Period;
+  // Whether revenue_usage_rollup was actually run. When false, every costUsd,
+  // profitUsd and margin in this object is 0 because it was never measured.
+  // See AnalyticsOptions on getAnalytics().
+  costIncluded: boolean;
   totals: {
     revenueStars: number;
     costUsd: number;
@@ -190,11 +194,34 @@ const iso = (ms: number) => new Date(ms).toISOString();
 const hourLabel = (h: number) =>
   new Date(2000, 0, 1, h).toLocaleTimeString("en-US", { hour: "numeric", hour12: true });
 
+// ── why getAnalytics takes an options bag at all ─────────────────────────────
+// `includeCost: false` skips revenue_usage_rollup entirely. That rollup is the
+// single most expensive read on this page — it aggregates usage_events, which
+// is the biggest table here — and on 2026-08-24 it was the reason
+// /api/v1/revenue returned 500 to every caller with a statement timeout
+// (code 57014) on every period.
+//
+// The infuriating part, and the reason this option exists rather than a bigger
+// index being the whole answer: THE PUBLIC API THROWS THE RESULT AWAY. Our AI
+// cost and margin are withheld from every external caller by projectRevenue()
+// in lib/api-public.ts, on purpose and by design. So the public path was paying
+// the most expensive query on the page to compute a number it is contractually
+// forbidden from returning, and then timing out on it.
+//
+// THE ONLY CALLER ALLOWED TO PASS false IS THE PUBLIC API. The operator's own
+// Revenue page shows cost, profit and margin, so it must pass true (the
+// default) or those tiles quietly render as zero — which is exactly this
+// project's signature defect and is why `costIncluded` is on the return value
+// rather than the caller being trusted to remember what it asked for.
+export type AnalyticsOptions = { includeCost?: boolean };
+
 export async function getAnalytics(
   period: Period,
   cloneId?: string | null,
   range?: DateRange,
+  opts?: AnalyticsOptions,
 ): Promise<AnalyticsData> {
+  const includeCost = opts?.includeCost !== false;
   const now = Date.now();
   const windowEnd = range ? range.endMs : now;
 
@@ -427,7 +454,11 @@ export async function getAnalytics(
   // usage_events on every Revenue load — the chart half did the identical 330k
   // row walk — and like that one it stopped at the 200,000 row ceiling, so the
   // cost and every margin derived from it were understated.
-  const usage = await usageRollup(startMs, windowEnd, cloneId ?? null);
+  //
+  // Skipped entirely when includeCost is false — see AnalyticsOptions above.
+  // The public API is forbidden from returning any of this, so on that path the
+  // query is not made slow, it is not made at all.
+  const usage = includeCost ? await usageRollup(startMs, windowEnd, cloneId ?? null) : [];
   const cloneCost = new Map<string, number>();
   let totalCost = 0;
   for (const u of usage) {
@@ -741,6 +772,11 @@ export async function getAnalytics(
   }).filter((t) => t.users > 0);
   return {
     period,
+    // False means costUsd/profitUsd/margin everywhere below are ZERO BECAUSE
+    // THEY WERE NOT ASKED FOR, not because the fleet ran free. Anything that
+    // renders a cost must read this first; anything that hides cost (the public
+    // projection) can ignore it.
+    costIncluded: includeCost,
     totals: {
       revenueStars: totalStars,
       costUsd: totalCost,

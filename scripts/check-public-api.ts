@@ -15,15 +15,19 @@ import {
   rateLimit,
   _resetRateLimits,
   presentedKey,
+  tenantFromRow,
   RATE_LIMIT_PER_MINUTE,
 } from "../lib/api-tenant";
 import {
   projectRevenue,
+  projectFleetRevenue,
   clampFanLimit,
   PUBLIC_FAN_COLUMNS,
+  PUBLIC_FLEET_FAN_COLUMNS,
   NEVER_PUBLIC,
   MAX_FAN_LIMIT,
 } from "../lib/api-public";
+import { validateKeyRequest } from "../lib/api-keys-admin";
 import { simRevenue, simFans, seedFrom } from "../lib/api-sim";
 import { generateKey } from "../lib/api-keys-admin";
 import type { AnalyticsData } from "../lib/analytics-data";
@@ -475,6 +479,128 @@ check("E8 the docs describe the endpoints that actually exist", () => {
   for (const r of routes) {
     assert(docs.includes(`/api/v1/${r}`), `the docs never mention /api/v1/${r}`);
   }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// G. FLEET KEYS (migration 127) — a wider key must not be a deeper one
+//
+// The whole risk of this feature in one sentence: widening a key from one girl
+// to ten must not also widen it from revenue to profit. Section A already
+// proves the per-clone projection withholds our cost; these prove the FLEET
+// projection withholds it too, per model, where the temptation to just pass
+// a.clones straight through is strongest.
+// ─────────────────────────────────────────────────────────────────────────────
+
+check("G1 a fleet key still never sees our AI cost, margin or profit", () => {
+  const keys = deepKeys(projectFleetRevenue(ANALYTICS, null));
+  for (const banned of ["costUsd", "cost_usd", "profitUsd", "margin"]) {
+    assert(!keys.has(banned), `${banned} is in the FLEET payload`);
+  }
+});
+
+check("G2 the per-model breakdown carries revenue only, never our margin on her", () => {
+  const p = projectFleetRevenue(ANALYTICS, null);
+  eq(p.scope, "fleet", "scope must be stated in the body so a client can branch on it");
+  eq(p.models.length, 2, "every clone must appear");
+  eq(p.models[0].revenueStars, 5000, "revenueStars must survive");
+  eq(p.models[1].name, "Model B", "the other model IS visible to a fleet key, on purpose");
+  for (const m of p.models) {
+    const got = Object.keys(m).sort().join(",");
+    eq(got, "id,name,revenueStars,sales", "the per-model shape must be exactly these four fields");
+  }
+});
+
+check("G3 the fleet projection is an allowlist too, so a new upstream field is withheld", () => {
+  const withNewField = {
+    ...ANALYTICS,
+    clones: ANALYTICS.clones.map((c) => ({ ...c, secretPerGirlMetric: 42 })),
+  } as unknown as AnalyticsData;
+  const keys = deepKeys(projectFleetRevenue(withNewField, null));
+  assert(!keys.has("secretPerGirlMetric"), "a field added to clones[] upstream leaked straight through");
+});
+
+check("G4 a fleet row that still names a clone is REFUSED, not read as either one", () => {
+  // The half-migrated / tampered row. Reading it as "fleet" would honour a
+  // widening the constraint was supposed to prevent; reading it as "clone"
+  // would silently ignore a stated scope. Refusing is the only safe answer.
+  assert(tenantFromRow({ id: "k", clone_id: "c1", scope: "fleet", label: "x" }) === null, "accepted a fleet row with a clone_id");
+  assert(tenantFromRow({ id: "k", clone_id: null, scope: "clone", label: "x" }) === null, "accepted a clone row with no clone_id");
+});
+
+check("G5 an unknown, missing or empty scope can only ever NARROW", () => {
+  // The direction that matters. A corrupted scope must never resolve to fleet.
+  for (const scope of [null, undefined, "", "FLEET", "fleet ", "admin", "0"]) {
+    const t = tenantFromRow({ id: "k", clone_id: null, scope, label: "x" });
+    assert(t === null || (t as { scope: string }).scope !== "fleet", `scope ${JSON.stringify(scope)} widened to fleet`);
+  }
+  // And the same value with a clone_id present must resolve to that clone only.
+  const t = tenantFromRow({ id: "k", clone_id: "c1", scope: "wat", label: "x" });
+  assert(t === null, "an unknown scope with a clone_id must be refused rather than assumed");
+  eq(tenantFromRow({ id: "k", clone_id: "c1", scope: null, label: "x" })?.scope, "clone", "a null scope is a clone key");
+});
+
+check("G6 the two legal rows resolve to exactly the two legal tenants", () => {
+  const c = tenantFromRow({ id: "k1", clone_id: "c1", scope: "clone", label: "one girl" });
+  eq(c?.scope, "clone", "clone scope");
+  eq(c?.cloneId, "c1", "clone id");
+  const f = tenantFromRow({ id: "k2", clone_id: null, scope: "fleet", label: "everyone" });
+  eq(f?.scope, "fleet", "fleet scope");
+  eq(f?.cloneId, null, "a fleet tenant must carry no clone id at all");
+});
+
+check("G7 a fleet key cannot be minted by leaving the model out", () => {
+  // "fleet" must be ASKED FOR. An empty or missing model must be an error, not
+  // a silent widening into the broadest credential the system issues.
+  assert(validateKeyRequest(null, "no model picked", "clone").ok === false, "an empty model minted a key");
+  assert(validateKeyRequest("", "empty string", "clone").ok === false, "an empty string model minted a key");
+  assert(validateKeyRequest("c1", "both", "fleet").ok === false, "a fleet key was allowed to also name a model");
+  // And the two legal requests are still accepted, or the guard is just broken.
+  assert(validateKeyRequest("c1", "her dashboard", "clone").ok === true, "a normal per-model key was refused");
+  assert(validateKeyRequest(null, "lovable", "fleet").ok === true, "a legitimate fleet key was refused");
+});
+
+check("G8 the unfiltered fan query exists once and is reached only behind a fleet check", () => {
+  const src = sourceCode(new URL("../lib/api-public.ts", import.meta.url));
+  // publicFans keeps its filter. That is section B1's property and must survive.
+  assert(src.includes('.eq("clone_id", cloneId)'), "publicFans lost its clone_id filter");
+  // There must be exactly ONE function that reads users without that filter.
+  const unfiltered = src.split("export async function").filter((f) => f.includes('.from("users")') && !f.includes('.eq("clone_id"'));
+  eq(unfiltered.length, 1, "there must be exactly one unfiltered fan query, and it must be the fleet one");
+  assert(unfiltered[0].startsWith(" publicFleetFans"), "the unfiltered fan query is not publicFleetFans");
+
+  // And the route must gate it on the key's scope, not on anything from the request.
+  const route = sourceCode(new URL("../app/api/v1/fans/route.ts", import.meta.url));
+  assert(/tenant\.scope === "fleet"/.test(route), "the fans route must branch on tenant.scope");
+  assert(!/params\.get\(\s*["']scope["']/.test(route), "scope must never be read from the request");
+});
+
+check("G9 the fleet fan columns are the per-clone set plus clone_id, and nothing else", () => {
+  const extra = (PUBLIC_FLEET_FAN_COLUMNS as readonly string[]).filter(
+    (c) => !(PUBLIC_FAN_COLUMNS as readonly string[]).includes(c),
+  );
+  eq(extra.join(","), "clone_id", "a fleet key must gain clone_id and no other field");
+  for (const banned of NEVER_PUBLIC) {
+    assert(!(PUBLIC_FLEET_FAN_COLUMNS as readonly string[]).includes(banned), `${banned} is in the fleet fan columns`);
+  }
+});
+
+check("G10 the public revenue path never runs the cost rollup it cannot return", () => {
+  // This is the 500 that started all of this: revenue_usage_rollup timing out
+  // (code 57014) on an endpoint contractually forbidden from returning its
+  // result. If a future edit drops includeCost:false, the timeout comes back.
+  const src = sourceCode(new URL("../lib/api-public.ts", import.meta.url));
+  const calls = src.match(/getAnalytics\([^)]*\)/g) ?? [];
+  assert(calls.length >= 2, `expected both public revenue paths to call getAnalytics, found ${calls.length}`);
+  for (const c of calls) {
+    assert(/includeCost:\s*false/.test(c), `a public getAnalytics call does not pass includeCost:false: ${c}`);
+  }
+});
+
+check("G11 the docs on the page describe both kinds of key", () => {
+  const docs = sourceCode(new URL("../app/api-access/ApiDocs.tsx", import.meta.url));
+  assert(/All models/.test(docs), "the docs never mention the All models key");
+  assert(/scope/.test(docs), "the docs never tell a caller how to find out which key it holds");
+  assert(/clone_id/.test(docs), "the docs never mention the extra fan field a fleet key gets");
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

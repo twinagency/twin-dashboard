@@ -67,9 +67,19 @@ export function withModelKey(handler: PublicHandler): (req: Request) => Promise<
     // A caller who passes ?clone= is either confused or probing. Say no loudly
     // rather than ignoring it, so nobody builds against a parameter that looks
     // accepted and silently does nothing.
+    //
+    // REJECTED FOR FLEET KEYS TOO, which is worth stating because the obvious
+    // reading is that a key already allowed to see every clone loses nothing by
+    // being allowed to name one. True today. The reason it stays rejected is
+    // that accepting it would put a clone id on this API's surface at all, and
+    // the next narrowing of a key's scope would then have to remember to take
+    // it back off. A fleet key does not need the parameter: every clone is
+    // already in the response.
     if (params.has("clone") || params.has("clone_id") || params.has("cloneId")) {
       return publicError(
-        "this API is scoped to the model your key belongs to; a clone parameter is not accepted",
+        auth.tenant.scope === "fleet"
+          ? "a clone parameter is not accepted; a fleet key already returns every model in one response"
+          : "this API is scoped to the model your key belongs to; a clone parameter is not accepted",
         400,
       );
     }

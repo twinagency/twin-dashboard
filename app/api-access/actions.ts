@@ -2,6 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 import { createKey, revokeKeyById } from "@/lib/api-keys-admin";
+import { FLEET_OPTION } from "./scope";
 import { supabaseAdmin } from "@/lib/supabase";
 
 // These run behind the dashboard login (middleware.ts), same as every other
@@ -12,25 +13,32 @@ import { supabaseAdmin } from "@/lib/supabase";
 // introduces, and the KEYS THEMSELVES are never bypassable — the public API
 // authenticates independently (lib/api-tenant.ts).
 
-export type IssueState = { key?: string; prefix?: string; error?: string };
+export type IssueState = { key?: string; prefix?: string; scope?: "clone" | "fleet"; error?: string };
 
 export async function issueKeyAction(_prev: IssueState, fd: FormData): Promise<IssueState> {
-  const cloneId = String(fd.get("clone_id") ?? "");
+  const picked = String(fd.get("clone_id") ?? "");
   const label = String(fd.get("label") ?? "");
+  const fleet = picked === FLEET_OPTION;
 
-  const result = await createKey(cloneId, label);
+  const result = await createKey(fleet ? null : picked, label, fleet ? "fleet" : "clone");
   if (!result.ok) return { error: result.error };
 
   // Deliberately NOT logged to system_logs with the key in it. The issuance
   // event is worth recording; the credential is not.
+  //
+  // A fleet key is logged with a null clone_id and says so in the message. It
+  // is the widest key this system issues, so the one thing its audit line must
+  // not do is look like an ordinary per-model issuance in the log.
   void supabaseAdmin
     .from("system_logs")
     .insert({
-      level: "info",
+      level: fleet ? "warn" : "info",
       source: "api-keys",
-      clone_id: cloneId,
-      message: `API key issued (${result.prefix}…) — ${label}`,
-      detail: { prefix: result.prefix, label },
+      clone_id: fleet ? null : picked,
+      message: fleet
+        ? `FLEET API key issued (${result.prefix}…) — reads every model — ${label}`
+        : `API key issued (${result.prefix}…) — ${label}`,
+      detail: { prefix: result.prefix, label, scope: fleet ? "fleet" : "clone" },
     })
     .then(
       () => undefined,
@@ -38,7 +46,7 @@ export async function issueKeyAction(_prev: IssueState, fd: FormData): Promise<I
     );
 
   revalidatePath("/api-access");
-  return { key: result.key, prefix: result.prefix };
+  return { key: result.key, prefix: result.prefix, scope: fleet ? "fleet" : "clone" };
 }
 
 export async function revokeKeyAction(fd: FormData): Promise<void> {

@@ -12,11 +12,14 @@
 
 import { randomBytes } from "node:crypto";
 import { supabaseAdmin } from "./supabase";
-import { hashKey, keyPrefix, KEY_BYTES } from "./api-tenant";
+import { hashKey, keyPrefix, KEY_BYTES, type KeyScope } from "./api-tenant";
 
 export type ApiKeyRow = {
   id: string;
-  cloneId: string;
+  // Null exactly when scope is "fleet". Kept as two fields rather than one
+  // nullable id for the same reason the table does — see migration 127.
+  cloneId: string | null;
+  scope: KeyScope;
   cloneSlug: string | null;
   cloneName: string | null;
   prefix: string;
@@ -34,19 +37,52 @@ export function generateKey(): string {
 
 export type CreateResult = { ok: true; key: string; prefix: string } | { ok: false; error: string };
 
-export async function createKey(cloneId: string, label: string): Promise<CreateResult> {
+// cloneId is the clone for a "clone" key and MUST be null for a "fleet" one.
+// The signature takes a scope explicitly rather than reading "no cloneId" as
+// "fleet": a fleet key is the widest credential this system issues, and it
+// should not be possible to mint one by leaving an argument out. Migration
+// 127's CHECK constraint enforces the same pairing at the table.
+// The part of createKey() that needs no database, split out so it can be
+// tested directly. What it guards is the one thing worth guarding here: a fleet
+// key must be ASKED FOR. Neither an empty model field nor a missing argument
+// may produce one.
+export function validateKeyRequest(
+  cloneId: string | null,
+  label: string,
+  scope: KeyScope,
+): { ok: true; label: string } | { ok: false; error: string } {
   const trimmed = label.trim();
   if (!trimmed) return { ok: false, error: "a label is required, so keys can be told apart later" };
-  if (!cloneId) return { ok: false, error: "pick a model for this key" };
+  if (scope === "fleet") {
+    if (cloneId) return { ok: false, error: "a fleet key reads every model, so it cannot also name one" };
+  } else if (scope === "clone") {
+    if (!cloneId) return { ok: false, error: "pick a model for this key" };
+  } else {
+    return { ok: false, error: "unknown key scope" };
+  }
+  return { ok: true, label: trimmed };
+}
 
-  // Verify the clone exists rather than relying on the FK error, so the
-  // operator gets a sentence instead of a Postgres constraint name.
-  const { data: clone } = await supabaseAdmin.from("clones").select("id").eq("id", cloneId).maybeSingle();
-  if (!clone) return { ok: false, error: "that model no longer exists" };
+export async function createKey(
+  cloneId: string | null,
+  label: string,
+  scope: KeyScope = "clone",
+): Promise<CreateResult> {
+  const valid = validateKeyRequest(cloneId, label, scope);
+  if (!valid.ok) return valid;
+  const trimmed = valid.label;
+
+  if (scope === "clone") {
+    // Verify the clone exists rather than relying on the FK error, so the
+    // operator gets a sentence instead of a Postgres constraint name.
+    const { data: clone } = await supabaseAdmin.from("clones").select("id").eq("id", cloneId as string).maybeSingle();
+    if (!clone) return { ok: false, error: "that model no longer exists" };
+  }
 
   const key = generateKey();
   const { error } = await supabaseAdmin.from("api_keys").insert({
-    clone_id: cloneId,
+    clone_id: scope === "fleet" ? null : cloneId,
+    scope,
     key_hash: hashKey(key),
     key_prefix: keyPrefix(key),
     label: trimmed,
@@ -68,9 +104,13 @@ function firstEmbed(v: Embedded): { slug: string; name: string } | null {
 export async function listKeys(cloneId?: string | null): Promise<ApiKeyRow[]> {
   let q = supabaseAdmin
     .from("api_keys")
-    .select("id,clone_id,key_prefix,label,created_at,last_used_at,revoked_at,clones(slug,name)")
+    .select("id,clone_id,scope,key_prefix,label,created_at,last_used_at,revoked_at,clones(slug,name)")
     .order("created_at", { ascending: false });
-  if (cloneId) q = q.eq("clone_id", cloneId);
+  // Narrowing the page to one model must NOT hide the fleet keys. A fleet key
+  // reads this model too, so leaving it out of her list would answer "who can
+  // see this girl's numbers" with a list that is missing the widest key there
+  // is — the one answer where an omission is dangerous rather than tidy.
+  if (cloneId) q = q.or(`clone_id.eq.${cloneId},scope.eq.fleet`);
 
   const { data, error } = await q;
   if (error) throw new Error(error.message);
@@ -78,7 +118,8 @@ export async function listKeys(cloneId?: string | null): Promise<ApiKeyRow[]> {
   return (data ?? []).map((r) => {
     const row = r as unknown as {
       id: string;
-      clone_id: string;
+      clone_id: string | null;
+      scope: string | null;
       key_prefix: string;
       label: string;
       created_at: string;
@@ -89,7 +130,10 @@ export async function listKeys(cloneId?: string | null): Promise<ApiKeyRow[]> {
     const clone = firstEmbed(row.clones);
     return {
       id: row.id,
-      cloneId: row.clone_id,
+      cloneId: row.clone_id ?? null,
+      // Same direction as resolveKey(): only the exact string "fleet" reads as
+      // fleet, so anything unexpected renders as the narrower of the two.
+      scope: row.scope === "fleet" ? "fleet" : "clone",
       cloneSlug: clone?.slug ?? null,
       cloneName: clone?.name ?? null,
       prefix: row.key_prefix,

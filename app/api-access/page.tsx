@@ -34,7 +34,7 @@ export default async function ApiAccessPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             Keys
-            <Info text="One key gives one model read-only access to her own revenue and fan data, for a dashboard hosted anywhere. Not the same thing as the Settings page's API keys, which are our OpenRouter, ElevenLabs and Deepgram credentials." />
+            <Info text="A key gives read-only access to revenue and fan data for a dashboard hosted anywhere. Pick one model and it sees only her; pick All models and it sees every girl in one call. Not the same thing as the Settings page's API keys, which are our OpenRouter, ElevenLabs and Deepgram credentials." />
           </CardTitle>
         </CardHeader>
         <CardContent>

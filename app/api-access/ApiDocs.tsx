@@ -1,4 +1,4 @@
-import { PUBLIC_FAN_COLUMNS } from "@/lib/api-public";
+import { PUBLIC_FAN_COLUMNS, PUBLIC_FLEET_FAN_COLUMNS } from "@/lib/api-public";
 import { RATE_LIMIT_PER_MINUTE } from "@/lib/api-tenant";
 
 // Docs rendered from the SAME constants the API enforces, not from a copy.
@@ -22,6 +22,31 @@ export function ApiDocs() {
   return (
     <div className="space-y-5 text-sm">
       <section>
+        <h3 className="mb-1 font-semibold text-ink">Two kinds of key</h3>
+        <p className="text-[12px] leading-relaxed text-muted">
+          The endpoints below are the same for both. What changes is how much a key can see, and that is fixed when
+          the key is created. It cannot be widened by anything the caller sends.
+        </p>
+        <ul className="mt-2 list-disc space-y-1 pl-5 text-[12px] leading-relaxed text-muted">
+          <li>
+            <strong className="text-ink">One model.</strong> Revenue and fans for that girl only.
+          </li>
+          <li>
+            <strong className="text-ink">All models.</strong> The same responses, covering every girl. Revenue adds a{" "}
+            <code className="font-mono">models</code> array, one entry per girl, ranked by revenue. Fans adds a{" "}
+            <code className="font-mono">clone_id</code> to each row so they can be grouped. This is the one to hand to
+            an outside dashboard builder, so they need one key and one URL rather than ten.
+          </li>
+        </ul>
+        <p className="mt-2 text-[12px] leading-relaxed text-muted">
+          Call <code className="font-mono">/api/v1/me</code> to find out which one you are holding. It returns{" "}
+          <code className="font-mono">scope</code> as either <code className="font-mono">&quot;clone&quot;</code> or{" "}
+          <code className="font-mono">&quot;fleet&quot;</code>. Branch on that, not on whether a field happens to be
+          present.
+        </p>
+      </section>
+
+      <section>
         <h3 className="mb-1 font-semibold text-ink">Authentication</h3>
         <p className="text-[12px] leading-relaxed text-muted">
           Send the key as a bearer token on every request. It is never accepted in the URL, because keys in URLs end
@@ -37,16 +62,24 @@ export function ApiDocs() {
         <h3 className="mb-1 font-semibold text-ink">Endpoints</h3>
         <div className="rounded-lg border border-line px-3">
           <Endpoint method="GET" path="/api/v1/me">
-            Which model this key belongs to. Call it first to label the dashboard.
+            What this key can see. Returns <code className="font-mono">scope</code>, plus{" "}
+            <code className="font-mono">model</code> for a one model key or <code className="font-mono">models</code>{" "}
+            for an All models key. Call it first to label the dashboard.
           </Endpoint>
           <Endpoint method="GET" path="/api/v1/revenue?period=1M">
             Revenue for the window. <code className="font-mono">period</code> is one of ALL, 1Y, 6M, 3M, 1M, 2W, 1W,
             1D. Or pass <code className="font-mono">start</code> and <code className="font-mono">end</code> as
             epoch milliseconds for a custom range (both are required together). Returns totals, a daily series, and
-            breakdowns by kind, feature, hour, day of week and spend tier, plus the fan and paywall funnels.
+            breakdowns by kind, feature, hour, day of week and spend tier, plus the fan and paywall funnels. An All
+            models key additionally returns <code className="font-mono">models</code>, with{" "}
+            <code className="font-mono">id</code>, <code className="font-mono">name</code>,{" "}
+            <code className="font-mono">revenueStars</code> and <code className="font-mono">sales</code> per girl.
           </Endpoint>
           <Endpoint method="GET" path="/api/v1/fans?limit=100">
-            This model&apos;s fans, highest lifetime spend first. Max 500 per call.
+            Fans, highest lifetime spend first. Max 500 per call. One model key returns that girl&apos;s fans; an All
+            models key returns the top spenders across the fleet, each row carrying its{" "}
+            <code className="font-mono">clone_id</code>. The <code className="font-mono">fields</code> array in the
+            response names the columns you actually got.
           </Endpoint>
         </div>
       </section>
@@ -54,7 +87,8 @@ export function ApiDocs() {
       <section>
         <h3 className="mb-1 font-semibold text-ink">Fan fields</h3>
         <p className="mb-2 text-[12px] leading-relaxed text-muted">
-          Exactly these, nothing else. No message content is available on this API at any parameter.
+          Exactly these, nothing else. No message content is available on this API at any parameter. An All models key
+          gets one extra field, <code className="font-mono">{PUBLIC_FLEET_FAN_COLUMNS[0]}</code>, and nothing further.
         </p>
         <div className="flex flex-wrap gap-1">
           {PUBLIC_FAN_COLUMNS.map((c) => (
@@ -68,10 +102,16 @@ export function ApiDocs() {
       <section>
         <h3 className="mb-1 font-semibold text-ink">What a key cannot reach</h3>
         <ul className="list-disc space-y-1 pl-5 text-[12px] leading-relaxed text-muted">
-          <li>Any other model. Passing a clone parameter is rejected, not ignored.</li>
+          <li>
+            Any model the key was not issued for. Passing a clone parameter is rejected, not ignored, at either scope.
+          </li>
           <li>Chat messages, prompts, persona or config of any kind.</li>
-          <li>Our AI costs, profit or margin. Those are never in the response.</li>
+          <li>
+            Our AI costs, profit or margin. Those are never in the response, and an All models key does not change
+            that: it widens which girls you can see, never what you can see about them.
+          </li>
           <li>Anything at all after it is revoked, from the very next request.</li>
+          <li>Any write. There is no endpoint on this API that changes anything.</li>
         </ul>
       </section>
 

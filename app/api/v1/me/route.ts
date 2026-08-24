@@ -3,22 +3,29 @@ import { supabaseAdmin } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
 
-// "Whose key is this?" — the first call any client makes, and the one that
-// tells a model's dashboard whose data it is about to render.
+// "What can this key see?" — the first call any client makes, and the one that
+// tells the caller which of the two shapes the other endpoints will return.
+//
+// A clone key answers with one model. A fleet key answers with every model, in
+// `models[]`, and `model` is null — a fleet key is not "a key for a model", so
+// naming one would be a lie a client could build against.
 //
 // Returns identity only. Config, prompts and tokens are not on this API at all.
 export const GET = withModelKey(async ({ tenant }) => {
-  const { data } = await supabaseAdmin
-    .from("clones")
-    .select("id,slug,name,status,timezone")
-    .eq("id", tenant.cloneId)
-    .maybeSingle();
+  const fleet = tenant.scope === "fleet";
+
+  let q = supabaseAdmin.from("clones").select("id,slug,name,status,timezone");
+  q = fleet ? q.order("created_at", { ascending: true }) : q.eq("id", tenant.cloneId as string);
+  const { data } = await q;
+  const rows = (data ?? []) as { id: string; slug: string; name: string; status: string; timezone: string }[];
 
   return publicOk({
-    model: data
-      ? { id: data.id, slug: data.slug, name: data.name, status: data.status, timezone: data.timezone }
-      : null,
+    scope: tenant.scope,
+    model: fleet ? null : (rows[0] ?? null),
+    models: fleet ? rows : null,
     key: { label: tenant.label },
-    scope: "This key can read revenue and fan data for this model only.",
+    reads: fleet
+      ? "Revenue and fan data for every model. Read only."
+      : "Revenue and fan data for this model only. Read only.",
   });
 });

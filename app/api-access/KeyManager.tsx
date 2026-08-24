@@ -2,6 +2,7 @@
 
 import { useActionState, useState } from "react";
 import { issueKeyAction, revokeKeyAction, type IssueState } from "./actions";
+import { FLEET_OPTION } from "./scope";
 import type { ApiKeyRow } from "@/lib/api-keys-admin";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,11 +16,21 @@ function when(iso: string | null): string {
 // The one-time reveal. This is the only moment the key exists outside the
 // caller's hands, so it is deliberately loud and deliberately not dismissible
 // by accident: only its own Done button clears it.
-function KeyReveal({ apiKey, onDone }: { apiKey: string; onDone: () => void }) {
+function KeyReveal({ apiKey, fleet, onDone }: { apiKey: string; fleet: boolean; onDone: () => void }) {
   const [copied, setCopied] = useState(false);
   return (
     <div className="rounded-xl border border-good/40 bg-good/10 p-4">
-      <p className="text-sm font-semibold text-ink">Key created. Copy it now.</p>
+      <p className="text-sm font-semibold text-ink">
+        {fleet ? "All models key created. Copy it now." : "Key created. Copy it now."}
+      </p>
+      {/* Which scope was actually minted is stated on the key itself, not left
+          to be remembered from the form that has already reset. The two are
+          indistinguishable once copied. */}
+      {fleet && (
+        <p className="mt-1 text-[12px] font-semibold leading-relaxed text-warn">
+          This one reads every girl&rsquo;s revenue and fans. Only hand it to someone who should see the whole fleet.
+        </p>
+      )}
       <p className="mt-1 text-[12px] leading-relaxed text-muted">
         Only a hash of this key is stored, so it cannot be shown again or recovered. If it is lost, revoke it and
         issue another.
@@ -61,11 +72,11 @@ export function KeyManager({
   return (
     <div className="space-y-5">
       <Warning
-        text="A key gives whoever holds it read access to that model's revenue and fan list, from anywhere on the internet."
-        detail="It cannot see any other model, any chat message, any prompt, or our AI costs. It is read-only and can be revoked at any time, which takes effect on the very next request. Send it over something private, not in a group chat."
+        text="A key gives whoever holds it read access to revenue and fan lists, from anywhere on the internet. A model key covers one girl. An All models key covers every girl."
+        detail="No key can see a chat message, a prompt, a bot token, or our AI costs and margin, at either scope. Every key is read only and can be revoked at any time, which takes effect on the very next request. Send it over something private, not in a group chat."
       />
 
-      {showKey && <KeyReveal apiKey={state.key!} onDone={() => setDismissed(true)} />}
+      {showKey && <KeyReveal apiKey={state.key!} fleet={state.scope === "fleet"} onDone={() => setDismissed(true)} />}
 
       <form
         action={(fd) => {
@@ -77,14 +88,18 @@ export function KeyManager({
         <label className="block">
           <span className="mb-1 flex items-center gap-1 text-sm text-muted">
             Model
-            <Info text="A key is scoped to exactly one model. There is no key that can see two." />
+            <Info text="Pick one model and the key sees only her. Pick All models and the key sees every girl's revenue and fans in one call, which is the one to hand to an outside dashboard builder. Read only either way, and neither can ever see our AI costs." />
           </span>
+          {/* The fleet option is deliberately NOT the default. Defaulting to
+              the widest credential is how the wrong key gets minted by someone
+              tabbing through the form. */}
           <select name="clone_id" className={selectCls} required defaultValue={clones[0]?.id ?? ""}>
             {clones.map((c) => (
               <option key={c.id} value={c.id}>
                 {c.name} ({c.slug})
               </option>
             ))}
+            <option value={FLEET_OPTION}>All models (every girl)</option>
           </select>
         </label>
 
@@ -127,7 +142,16 @@ export function KeyManager({
             {keys.map((k) => (
               <tr key={k.id} className="border-b border-line/60">
                 <td className="py-2 pr-3 font-mono text-[12px] text-ink">{k.prefix}…</td>
-                <td className="creator-name py-2 pr-3 text-ink">{k.cloneName ?? k.cloneSlug ?? "?"}</td>
+                {/* A fleet key has no clone row to name. It must read as what
+                    it is, not fall through to the "?" that a broken join
+                    produces, because those two states need opposite reactions. */}
+                <td className="creator-name py-2 pr-3 text-ink">
+                  {k.scope === "fleet" ? (
+                    <span className="font-semibold text-warn">All models</span>
+                  ) : (
+                    (k.cloneName ?? k.cloneSlug ?? "?")
+                  )}
+                </td>
                 <td className="py-2 pr-3 text-ink">{k.label}</td>
                 <td className="py-2 pr-3 text-muted">{when(k.createdAt)}</td>
                 {/* "never" on a live key is worth seeing: it means whoever it

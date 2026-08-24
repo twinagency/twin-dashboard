@@ -57,13 +57,19 @@ Four rules, all asserted by `npm run test:api`:
 
 ## The Twin public API (`app/api/v1/*`)
 
-Read-only revenue + fan data for ONE model, called by that model's own dashboard. Internet-facing by design, so unlike the admin API it has no network gate and the key is the only thing standing there.
+Read-only revenue + fan data, called by a model's own dashboard or by an outside builder. Internet-facing by design, so unlike the admin API it has no network gate and the key is the only thing standing there.
 
-**Tenancy is per clone and comes from the key, never from a parameter.** Ronan's call, 2026-08-08: one key sees one girl, no agency concept yet (migration 103 records why, and how agencies would layer on later without redoing it). `withModelKey` hands the handler a resolved `tenant` and **rejects** `?clone=` with a 400 rather than ignoring it. Every scoped query filters on `tenant.cloneId`.
+**Two key scopes, and the scope comes from the key row, never from a parameter.** `tenant.scope` is `"clone"` (sees the one clone in `clone_id`, the original 2026-08-08 shape, migration 103) or `"fleet"` (sees every clone, `clone_id` null, migration 127, added 2026-08-24 so one key can draw all ten girls on one page). `withModelKey` hands the handler a resolved `tenant` and **rejects** `?clone=` with a 400 for BOTH scopes rather than ignoring it — a fleet key gets every clone in the response and does not need one.
+
+The two columns are pinned by a CHECK constraint, and `tenantFromRow()` re-checks the same invariant in code. **Every ambiguous row narrows or is refused**: only the exact string `"fleet"` reads as fleet, a fleet row that still names a clone is refused outright, and `createKey` will not mint a fleet key from a missing model — `validateKeyRequest` requires the scope to be asked for. Widening is the direction that is not survivable, so nothing may widen by accident.
+
+**Widening WHICH girls a key sees never widens WHAT it sees about them.** `projectFleetRevenue` adds `models[]` with `id`, `name`, `revenueStars`, `sales` and nothing else; `a.clones[]`'s per-girl `costUsd`/`profitUsd`/`margin` is not in it. Fan rows gain `clone_id` and no other column.
+
+**Neither public revenue path runs the cost rollup.** Both call `getAnalytics(..., { includeCost: false })`. `revenue_usage_rollup` is the most expensive query on the page and this API is forbidden from returning its result — on 2026-08-24 it was timing out (57014) and 500ing every request to compute a number that `projectRevenue` then deleted. `check-public-api.ts` G10 fails if a future edit drops the flag.
 
 **Our cost and margin never leave the building.** `getAnalytics()` returns `costUsd`, `profitUsd`, `margin` and a fleet-wide per-clone breakdown. `projectRevenue()` in `lib/api-public.ts` is an **allowlist projection**, not a deletion pass: every outbound field is named, so a field added upstream is withheld by default instead of exposed by default. Do not replace it with a spread.
 
-Keys are sha256, never plaintext, revocable, rate limited to 60/min per key (the dashboard shares this process, so a model's refresh loop must not take the operator UI down). Mint with `npm run key:issue -- --clone <slug> --label "..."`; also `key:list`, `key:revoke`.
+Keys are sha256, never plaintext, revocable, rate limited to 60/min per key (the dashboard shares this process, so a model's refresh loop must not take the operator UI down). Mint at `/api-access` (the Model select's last option is **All models**), or with `npm run key:issue -- --clone <slug> --label "..."`; also `key:list`, `key:revoke`. **The CLI mints per-clone keys only** — it writes its own insert rather than calling `createKey`, so a fleet key comes from the page.
 
 ## Sim data (`app/api/admin/v1/sim/*`)
 
