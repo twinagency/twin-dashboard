@@ -192,6 +192,11 @@ async function CloneFlows({ cloneId }: { cloneId: string }) {
     // Per-flow caption kill switch (migration 071) — absent pre-migration, so read defensively.
     onboarding_captions_off?: boolean | null;
     campaign_captions_off?: boolean | null;
+    // Funnel engine + its two dials (migration 130) — absent pre-migration, so
+    // read defensively like every additive column above.
+    funnel_policy?: string | null;
+    intent_rejection_cooldown_messages?: number | null;
+    intent_post_purchase_cooldown_minutes?: number | null;
   };
 
   return (
@@ -242,6 +247,15 @@ async function CloneFlows({ cloneId }: { cloneId: string }) {
               : null,
           freePreviewInstruction: clone.onboarding_free_preview_instruction ?? null,
           followupAfterMinutes: clone.followup_after_minutes ?? 0,
+          // NEW FLOWS (migration 130). Anything that is not the exact string
+          // 'intent_v1' shows as Standard — the same direction funnelPolicyFor()
+          // fails in the bot (bot/src/intent/state.ts), so the page can never
+          // show a clone as switched over when the runtime reads it as legacy.
+          // The two dial fallbacks are the migration's own DEFAULTs, so an
+          // unset clone shows exactly what the runtime will do.
+          funnelPolicy: clone.funnel_policy === "intent_v1" ? "intent_v1" : "legacy",
+          intentRejectionCooldownMessages: clone.intent_rejection_cooldown_messages ?? 8,
+          intentPostPurchaseCooldownMinutes: clone.intent_post_purchase_cooldown_minutes ?? 45,
           // Win-back lapse threshold, read for real by the bot as of 2026-07-29.
           // Falls back to 7 (the same fallback mapClone uses) so an unset clone
           // shows exactly what the runtime will do.

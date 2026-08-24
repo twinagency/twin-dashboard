@@ -193,6 +193,18 @@ export async function saveCampaign(id: string, fd: FormData) {
     drip_enabled: fd.get("drip_enabled") === "true",
     campaign_captions_off: fd.get("campaign_captions_off") === "true",
     drip_steps: parseSteps(fd),
+    // ── NEW FLOWS (migration 130) ────────────────────────────────────────────
+    // Which funnel engine this clone runs. Validated against the SAME two-value
+    // vocabulary the database CHECK constraint enforces and the bot's
+    // funnelPolicyFor() reads, and anything else becomes 'legacy'. A dropdown
+    // cannot normally send a third value, but this column decides whether a
+    // live clone changes how it sells, so it is not left to the client.
+    funnel_policy: fd.get("funnel_policy") === "intent_v1" ? "intent_v1" : "legacy",
+    // The two intent-only dials. Clamped at 0 (0 legitimately DISABLES each
+    // brake) and defaulted to the migration's own values, so a blank field can
+    // never quietly become a different number than the runtime's fallback.
+    intent_rejection_cooldown_messages: Math.max(0, num(fd, "intent_rejection_cooldown_messages", 8)),
+    intent_post_purchase_cooldown_minutes: Math.max(0, num(fd, "intent_post_purchase_cooldown_minutes", 45)),
     updated_at: new Date().toISOString(),
   };
 
@@ -216,6 +228,19 @@ export async function saveCampaign(id: string, fd: FormData) {
       onboarding_free_preview_after_messages: _fc,
       onboarding_free_preview_media_id: _fi,
       onboarding_free_preview_instruction: _fii,
+      ...rest
+    } = row;
+    ({ error } = await supabaseAdmin.from("clones").update(rest).eq("id", id));
+  }
+  if (error && /funnel_policy|intent_rejection_cooldown|intent_post_purchase_cooldown/i.test(error.message)) {
+    // Migration 130 not applied yet: strip the funnel-engine columns and retry
+    // so the rest of the page still saves (same additive-retry pattern as the
+    // four above). Dropping them means the clone stays on the legacy funnel,
+    // which is the correct outcome when the column does not exist.
+    const {
+      funnel_policy: _fp,
+      intent_rejection_cooldown_messages: _ir,
+      intent_post_purchase_cooldown_minutes: _ip,
       ...rest
     } = row;
     ({ error } = await supabaseAdmin.from("clones").update(rest).eq("id", id));

@@ -2,7 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { Area, Field, FieldLabel, GroupHeader, Info, Section, Toggle, inputCls, selectCls, COLLECT_FIELD_OPTIONS } from "@/components/clone/fields";
+import { Area, Field, FieldLabel, GroupHeader, Info, Section, Select, Toggle, inputCls, selectCls, COLLECT_FIELD_OPTIONS } from "@/components/clone/fields";
 import { MediaPicker as StepMediaPicker, type MediaRow, type BundleRow } from "@/components/clone/MediaPicker";
 import { saveCampaign } from "./actions";
 
@@ -91,7 +91,15 @@ type Initial = {
   winbackLapseDays: number;
   // Ordered onboarding step list (migration 068) — see the DripForm section below.
   onboardingSteps: OnboardingStepData[];
+  // ── NEW FLOWS (migration 130) ──────────────────────────────────────────────
+  // Which funnel engine this clone runs. 'legacy' is every clone until someone
+  // switches one here, and switching back is the whole point of the control.
+  funnelPolicy: FunnelPolicy;
+  intentRejectionCooldownMessages: number;
+  intentPostPurchaseCooldownMinutes: number;
 };
+
+export type FunnelPolicy = "legacy" | "intent_v1";
 
 // Small 0h to 24h strip with a dot per step, so the day's rhythm reads at a glance.
 function Timeline({ steps }: { steps: Step[] }) {
@@ -148,6 +156,7 @@ export default function FlowsForm({
   const [saved, setSaved] = useState(false);
 
   const [enabled, setEnabled] = useState(initial.enabled);
+  const [funnelPolicy, setFunnelPolicy] = useState<FunnelPolicy>(initial.funnelPolicy);
   const [campaignCaptionsOff, setCampaignCaptionsOff] = useState(initial.campaignCaptionsOff);
   const [onboardingCaptionsOff, setOnboardingCaptionsOff] = useState(initial.onboardingCaptionsOff);
   const [steps, setSteps] = useState<Step[]>(initial.steps);
@@ -576,6 +585,61 @@ export default function FlowsForm({
             </div>
           )}
         </div>
+      </Section>
+
+      {/* ── NEW FLOWS: which funnel engine this clone runs (migration 130) ── */}
+      <GroupHeader
+        label="Funnel engine"
+        hint="Which set of rules decides when she offers something paid. Per clone, and switchable back at any time."
+      />
+      <Section
+        icon="🎯"
+        accent="purple"
+        title="Selling rules"
+        hint="The standard flow fires steps off his message count. The intent flow remembers what he has already bought, whether he said no, and whether he is in a cooldown, and checks all of that before any paid offer."
+        tip="Switching to the intent flow does NOT change the step builder below, the follow-up, or the win-back: those keep working exactly as they do now. What changes is that a paid offer has to clear a hard eligibility check first. Switch back to Standard at any time and behaviour returns to what it is today."
+      >
+        <Select
+          label="Funnel engine"
+          name="funnel_policy"
+          value={funnelPolicy}
+          onChange={setFunnelPolicy}
+          options={[
+            { value: "legacy", label: "Standard flow (what every clone runs today)" },
+            { value: "intent_v1", label: "Intent flow (remembers what he bought and what he refused)" },
+          ]}
+          hint="Standard is the default. Only clones set to Intent use the new rules; every other clone is untouched."
+        />
+
+        {funnelPolicy === "intent_v1" && (
+          <div className="grid gap-3 sm:grid-cols-2">
+            <Field
+              label="Back off after a no (his messages)"
+              name="intent_rejection_cooldown_messages"
+              type="number"
+              min={0}
+              defaultValue={initial.intentRejectionCooldownMessages}
+              hint="After he explicitly says no to a paid offer, she makes no new paid offer until he has sent this many more messages. Counted in HIS messages, not minutes, so it clears by him warming back up rather than by the clock. If he plainly asks to buy in the meantime, that overrides it. Default 8. 0 turns this brake off."
+            />
+            <Field
+              label="Quiet after a purchase (minutes)"
+              name="intent_post_purchase_cooldown_minutes"
+              type="number"
+              min={0}
+              defaultValue={initial.intentPostPurchaseCooldownMinutes}
+              hint="Straight after he pays, she does not pitch again for this long. This is also what cancels an already-scheduled paid send if he buys just before it was due to fire. Default 45. 0 turns it off."
+            />
+          </div>
+        )}
+
+        {funnelPolicy === "intent_v1" && (
+          <p className="text-[11px] leading-relaxed text-muted">
+            On the intent flow she never offers something he already has, never pitches
+            straight after a refusal, and never sends a scheduled paid item if he bought
+            in the meantime. Safety rules are unchanged and cannot be overridden by
+            anything a fan says.
+          </p>
+        )}
       </Section>
 
       {/* ── Mid-chat follow-up (moved off Configure) ─────────────── */}
