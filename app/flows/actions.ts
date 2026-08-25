@@ -205,6 +205,28 @@ export async function saveCampaign(id: string, fd: FormData) {
     // never quietly become a different number than the runtime's fallback.
     intent_rejection_cooldown_messages: Math.max(0, num(fd, "intent_rejection_cooldown_messages", 8)),
     intent_post_purchase_cooldown_minutes: Math.max(0, num(fd, "intent_post_purchase_cooldown_minutes", 45)),
+    // ── PHASE 2, the trigger redesign (migration 131) ──────────────────────
+    // BOTH BOOLEANS DEFAULT TRUE ON A MISSING FIELD, which is the opposite of
+    // how funnel_policy above resolves an unknown value, and the difference is
+    // deliberate. funnel_policy decides WHICH ENGINE RUNS, so an unreadable
+    // value must fail toward the old behaviour. These two only mean anything on
+    // a clone somebody has already moved to the intent engine by hand, so an
+    // absent field must not silently switch off the thing that clone was moved
+    // over to get. Both mirror the bot's own accessors exactly
+    // (naturalTriggersEnabled / directPurchaseOverrideFor in
+    // bot/src/intent/state.ts): off is an explicit "false", never an absence.
+    //
+    // A Toggle that is off does post its field, so "false" arrives as a real
+    // value; the default only covers a form rendered before this section
+    // existed.
+    intent_natural_triggers: fd.get("intent_natural_triggers") !== "false",
+    intent_direct_purchase_override: fd.get("intent_direct_purchase_override") !== "false",
+    // Clamped at 0, which legitimately disables each one (no fallback attempt
+    // ever / never stop offering), and defaulted to the migration's own values
+    // so a blank field cannot become a different number than the runtime's
+    // fallback.
+    intent_fallback_offer_after_messages: Math.max(0, num(fd, "intent_fallback_offer_after_messages", 8)),
+    intent_max_ignored_offers: Math.max(0, num(fd, "intent_max_ignored_offers", 2)),
     updated_at: new Date().toISOString(),
   };
 
@@ -228,6 +250,20 @@ export async function saveCampaign(id: string, fd: FormData) {
       onboarding_free_preview_after_messages: _fc,
       onboarding_free_preview_media_id: _fi,
       onboarding_free_preview_instruction: _fii,
+      ...rest
+    } = row;
+    ({ error } = await supabaseAdmin.from("clones").update(rest).eq("id", id));
+  }
+  if (error && /intent_natural_triggers|intent_direct_purchase_override|intent_fallback_offer_after_messages|intent_max_ignored_offers/i.test(error.message)) {
+    // Migration 131 not applied yet: strip the phase-2 columns and retry, same
+    // additive pattern as every block around this one. Dropping them leaves the
+    // clone on whatever funnel engine it already had, with phase 1's behaviour,
+    // which is the correct outcome when the columns do not exist.
+    const {
+      intent_natural_triggers: _nt,
+      intent_direct_purchase_override: _dp,
+      intent_fallback_offer_after_messages: _fo,
+      intent_max_ignored_offers: _mi,
       ...rest
     } = row;
     ({ error } = await supabaseAdmin.from("clones").update(rest).eq("id", id));

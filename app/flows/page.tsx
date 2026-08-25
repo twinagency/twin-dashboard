@@ -197,6 +197,11 @@ async function CloneFlows({ cloneId }: { cloneId: string }) {
     funnel_policy?: string | null;
     intent_rejection_cooldown_messages?: number | null;
     intent_post_purchase_cooldown_minutes?: number | null;
+    // Migration 131, the phase-2 trigger redesign.
+    intent_natural_triggers?: boolean | null;
+    intent_direct_purchase_override?: boolean | null;
+    intent_fallback_offer_after_messages?: number | null;
+    intent_max_ignored_offers?: number | null;
   };
 
   return (
@@ -256,6 +261,13 @@ async function CloneFlows({ cloneId }: { cloneId: string }) {
           funnelPolicy: clone.funnel_policy === "intent_v1" ? "intent_v1" : "legacy",
           intentRejectionCooldownMessages: clone.intent_rejection_cooldown_messages ?? 8,
           intentPostPurchaseCooldownMinutes: clone.intent_post_purchase_cooldown_minutes ?? 45,
+          // Migration 131. Each fallback MUST equal the column DEFAULT or the
+          // form renders one value, saves another, and the operator sees a
+          // setting silently change itself.
+          intentNaturalTriggers: clone.intent_natural_triggers ?? true,
+          intentDirectPurchaseOverride: clone.intent_direct_purchase_override ?? true,
+          intentFallbackOfferAfterMessages: clone.intent_fallback_offer_after_messages ?? 8,
+          intentMaxIgnoredOffers: clone.intent_max_ignored_offers ?? 2,
           // Win-back lapse threshold, read for real by the bot as of 2026-07-29.
           // Falls back to 7 (the same fallback mapClone uses) so an unset clone
           // shows exactly what the runtime will do.

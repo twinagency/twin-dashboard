@@ -95,6 +95,10 @@ type Initial = {
   // Which funnel engine this clone runs. 'legacy' is every clone until someone
   // switches one here, and switching back is the whole point of the control.
   funnelPolicy: FunnelPolicy;
+  intentNaturalTriggers: boolean;
+  intentDirectPurchaseOverride: boolean;
+  intentFallbackOfferAfterMessages: number;
+  intentMaxIgnoredOffers: number;
   intentRejectionCooldownMessages: number;
   intentPostPurchaseCooldownMinutes: number;
 };
@@ -157,6 +161,12 @@ export default function FlowsForm({
 
   const [enabled, setEnabled] = useState(initial.enabled);
   const [funnelPolicy, setFunnelPolicy] = useState<FunnelPolicy>(initial.funnelPolicy);
+  // Phase 2 (migration 131). Ronan asked for the redesign to be switchable on
+  // and off without dropping the whole clone back to the standard flow, so
+  // these are two switches, not one: the engine above, and the trigger
+  // behaviour inside it.
+  const [naturalTriggers, setNaturalTriggers] = useState<boolean>(initial.intentNaturalTriggers);
+  const [directPurchase, setDirectPurchase] = useState<boolean>(initial.intentDirectPurchaseOverride);
   const [campaignCaptionsOff, setCampaignCaptionsOff] = useState(initial.campaignCaptionsOff);
   const [onboardingCaptionsOff, setOnboardingCaptionsOff] = useState(initial.onboardingCaptionsOff);
   const [steps, setSteps] = useState<Step[]>(initial.steps);
@@ -611,7 +621,15 @@ export default function FlowsForm({
           hint="Standard is the default. Only clones set to Intent use the new rules; every other clone is untouched."
         />
 
-        {funnelPolicy === "intent_v1" && (
+        {/* HIDDEN, NOT UNMOUNTED, and the difference is a real bug rather than a
+            style choice. React unmounting these fields removes their inputs from
+            the form, so the next save posts nothing for them and the action
+            falls back to the shipped defaults - silently rewriting a clone's
+            cooldowns to 8 and 45 the moment anyone saved this page with the
+            engine set to Standard. Kept mounted and display:none, they post the
+            values the clone actually has, so a save while they are hidden is a
+            no-op on them. Same reason for the phase-2 block below. */}
+        <div className={funnelPolicy === "intent_v1" ? "" : "hidden"}>
           <div className="grid gap-3 sm:grid-cols-2">
             <Field
               label="Back off after a no (his messages)"
@@ -630,7 +648,61 @@ export default function FlowsForm({
               hint="Straight after he pays, she does not pitch again for this long. This is also what cancels an already-scheduled paid send if he buys just before it was due to fire. Default 45. 0 turns it off."
             />
           </div>
-        )}
+        </div>
+
+        {/* ── PHASE 2: the trigger redesign, and its own off switch ────── */}
+        <div className={funnelPolicy === "intent_v1" ? "" : "hidden"}>
+          <div className="border-t border-line pt-3">
+            <Toggle
+              label={
+                naturalTriggers
+                  ? "New flows: she offers when HE brings it up"
+                  : "New flows off: she only offers when he says he wants to buy"
+              }
+              name="intent_natural_triggers"
+              checked={naturalTriggers}
+              onChange={setNaturalTriggers}
+              accent="soft"
+              hint="ON: the paid ask is triggered by what he just said - he asks about pics, he sounds keen, he shows real interest - instead of by how many messages he has sent. OFF: everything above still applies (she still remembers what he bought and what he refused) but she only ever asks when he plainly says he wants to buy. Switching this off never makes her pushier, only quieter."
+            />
+            <div className={naturalTriggers ? "mt-3" : "hidden"}>
+              <div className="grid gap-3 sm:grid-cols-2">
+                <Field
+                  label="Ask anyway after (his messages)"
+                  name="intent_fallback_offer_after_messages"
+                  type="number"
+                  min={0}
+                  defaultValue={initial.intentFallbackOfferAfterMessages}
+                  hint="The safety net for a fan who flirts happily but never asks for anything. If he has never been offered a single thing and has sent this many messages, she makes one attempt anyway. Default 8. 0 means never - she will only ever sell to him if he brings it up himself."
+                />
+                <Field
+                  label="Stop after this many ignored offers"
+                  name="intent_max_ignored_offers"
+                  type="number"
+                  min={0}
+                  defaultValue={initial.intentMaxIgnoredOffers}
+                  hint="If he leaves this many offers in a row with no reply at all, she stops offering him things. Ignoring is not refusing: this arms no cooldown, and if he later says he wants to buy she sells to him straight away. Raising this number brings those fans back on their next message. Default 2. 0 means never stop."
+                />
+              </div>
+            </div>
+            <div className={naturalTriggers ? "mt-3" : "hidden"}>
+              <div>
+                <Toggle
+                  label={
+                    directPurchase
+                      ? "If he asks to buy, sell to him right away"
+                      : "Keep him on the flow even if he asks to buy"
+                  }
+                  name="intent_direct_purchase_override"
+                  checked={directPurchase}
+                  onChange={setDirectPurchase}
+                  accent="soft"
+                  hint="ON (recommended): a fan who says 'got any photos?' on his second message gets a real offer there and then, instead of waiting for the flow to reach that step. It never overrides safety, never offers him something he already owns, and never overrides 'Keep her on script' in onboarding."
+                />
+              </div>
+            </div>
+          </div>
+        </div>
 
         {funnelPolicy === "intent_v1" && (
           <p className="text-[11px] leading-relaxed text-muted">
