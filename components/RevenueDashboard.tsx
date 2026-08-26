@@ -739,6 +739,11 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
               // period. The windowed count is "New" beside it.
               { label: "Users", value: fmtNum(s.totalFans) },
               { label: "New", value: fmtNum(s.newFans) },
+              // Was computed for Rev/user's denominator but never shown itself,
+              // so the tile's math was invisible. Fans who messaged inside the
+              // window - not New (first-time arrivals) and not the 24h
+              // reachable tile below (that one ignores the filter entirely).
+              { label: "Active", value: fmtNum(s.activeUsers) },
               { label: "Transactions", value: fmtNum(s.sales) },
               // The ONE tile that ignores the filter, and it says so. Telegram
               // only allows a business bot to message a fan within 24h of that
