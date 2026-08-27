@@ -946,6 +946,11 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
         </div>
       )}
 
+      {/* Customer conversion needs a shared identity at every stage. Keep the
+          three useful cohorts together rather than hiding a broad percentage in
+          the tile grid, where its denominator is too easy to miss. */}
+      {data && <BuyerConversionPanel conversion={data.analytics.buyerConversion} pct={pct} />}
+
       {/* Optional chat and purchase detail. It stays closed by default because
           the five signals use related, not identical, cohorts. Same selected
           window and creator scope as the rest of the page. ──────────────── */}
@@ -1879,6 +1884,112 @@ export function fmtHours(hours: number | null): string {
   if (hours < 1) return `${Math.round(hours * 60)} min`;
   if (hours < 48) return `${hours.toFixed(1)}h`;
   return `${(hours / 24).toFixed(1)}d`;
+}
+
+// ── Buyer conversion & ongoing engagement ───────────────────────────────────
+//
+// There are deliberately three different cohorts below. The old single
+// "Conversion" tile combined creator–fan profile counts with account-level
+// chatters in All creators, which makes a percentage that looks precise but
+// has no single denominator. Each card now names its cohort and the explainer
+// makes the All-creators identity rule visible before someone shares the number.
+function BuyerConversionPanel({
+  conversion,
+  pct,
+}: {
+  conversion: AnalyticsData["buyerConversion"];
+  pct: (n: number) => string;
+}) {
+  const lifetimeRate = conversion.lifetimeBuyerRate === null ? "—" : pct(conversion.lifetimeBuyerRate);
+  const activeChatRate = conversion.activeChatBuyerRate === null ? "—" : pct(conversion.activeChatBuyerRate);
+  const buyerEngagementRate = conversion.activeBuyerEngagement7d === null ? "—" : pct(conversion.activeBuyerEngagement7d);
+  // Purchase mix is intentionally ordered by number of paid orders, not by
+  // revenue. "What do people buy?" is a product-frequency question; the full
+  // report above remains the place to compare dollar revenue by product.
+  const topPurchases = [...conversion.purchaseMix]
+    .filter((item) => item.sales > 0)
+    .sort((a, b) => b.sales - a.sales || b.stars - a.stars)
+    .slice(0, 3);
+
+  const metrics: { label: string; value: string; summary: string; detail: string }[] = [
+    {
+      label: "All-time buyer conversion",
+      value: lifetimeRate,
+      summary: `${fmtNum(conversion.lifetimeBuyerProfiles)} of ${fmtNum(conversion.lifetimeFanProfiles)} fan profiles`,
+      detail: "Buyer profiles with recorded lifetime spend or purchase history, divided by all fan profiles ever. This is an all-time measure and does not change with the date filter. In All creators, one person who talks to two creators is two creator–fan profiles in both sides of this calculation.",
+    },
+    {
+      label: "Active-chat buyer conversion",
+      value: activeChatRate,
+      summary: `${fmtNum(conversion.activeChatBuyers)} of ${fmtNum(conversion.activeChatters)} people this period`,
+      detail: "Unique people who both sent at least one inbound message and made at least one eligible positive paid order during the selected period, divided by unique people who sent an inbound message during that period. In All creators, people are deduplicated across creators, so a message and payment do not have to involve the same creator. It measures activity and purchase in the same period; it does not prove a particular chat caused the purchase.",
+    },
+    {
+      label: "Buyers still chatting (7d)",
+      value: buyerEngagementRate,
+      summary: `${fmtNum(conversion.activeBuyerProfiles7d)} of ${fmtNum(conversion.lifetimeBuyerProfiles)} buyer profiles`,
+      detail: "Buyer profiles with recorded lifetime spend or purchase history that sent at least one inbound message in the trailing seven days, divided by all buyer profiles. This is a rolling seven-day engagement measure, so it stays on the last seven days even if the earnings date filter changes. In All creators, this is counted as creator–fan profiles, not deduplicated people.",
+    },
+  ];
+
+  return (
+    <Card size="sm" className="mt-4">
+      <details className="group">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-3 text-left sm:px-4 [&::-webkit-details-marker]:hidden">
+          <span className="min-w-0">
+            <span className="block text-xs font-semibold uppercase tracking-wide text-ink">Buyer conversion</span>
+            <span className="mt-0.5 block text-[11px] leading-snug text-muted">All-time: {fmtNum(conversion.lifetimeBuyerProfiles)} buyer profiles of {fmtNum(conversion.lifetimeFanProfiles)} fan profiles.</span>
+          </span>
+          <span className="flex shrink-0 items-center gap-2 text-right">
+            <span>
+              <span className="block text-[9px] font-semibold uppercase tracking-wide text-muted">All-time</span>
+              <span className="block font-mono text-base font-semibold tabular-nums text-ink">{lifetimeRate}</span>
+            </span>
+            <span className="text-xs font-semibold text-[#28658f] group-open:hidden">Open</span>
+            <span className="hidden text-xs font-semibold text-[#28658f] group-open:inline">Hide</span>
+          </span>
+        </summary>
+        <CardContent className="border-t border-line p-3 sm:p-4">
+          <div className="rounded-xl border border-[#4a8ec4]/35 bg-[#eff8ff] px-3 py-2.5 text-[11px] leading-relaxed text-muted">
+            <p><span className="font-semibold text-ink">Why there are different rates:</span> all-time conversion and 7-day buyer engagement use creator–fan profiles. Active-chat conversion uses unique people in the selected period, deduplicated across creators in All creators.</p>
+            <p className="mt-1"><span className="font-semibold text-ink">Selected-period purchase:</span> one eligible positive Star payment. Refunds and adjustments are not purchases. A rate shows an observed overlap or outcome, not proof that a message or offer caused a sale.</p>
+          </div>
+
+          <div className="mt-3 grid grid-cols-2 gap-2 lg:grid-cols-3">
+            {metrics.map((metric) => (
+              <div key={metric.label} className="min-w-0 rounded-xl border border-line bg-surface/75 px-3 py-2.5 last:col-span-2 lg:last:col-span-1">
+                <div className="flex min-w-0 items-start gap-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] text-muted">
+                  <span className="min-w-0 leading-tight">{metric.label}</span>
+                  <Info text={metric.detail} />
+                </div>
+                <div className="mt-1 font-mono text-base font-semibold tabular-nums text-ink">{metric.value}</div>
+                <div className="mt-0.5 text-[10px] leading-snug text-muted">{metric.summary}</div>
+              </div>
+            ))}
+          </div>
+
+          <div className="mt-3 border-t border-line pt-3">
+            <div className="flex items-center gap-1 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">
+              What buyers purchased this period
+              <Info text="The three most frequently purchased product types in the selected earnings period, ranked by positive paid-order count. Refunds and adjustments are excluded. The Full revenue report above shows every product type and its revenue." />
+            </div>
+            {topPurchases.length > 0 ? (
+              <div className="mt-2 grid gap-1.5 sm:grid-cols-3">
+                {topPurchases.map((item) => (
+                  <div key={item.key} className="flex min-w-0 items-baseline justify-between gap-2 rounded-lg bg-surface/75 px-2.5 py-2 text-[11px]">
+                    <span className="min-w-0 break-words font-medium text-ink">{item.label}</span>
+                    <span className="shrink-0 font-mono tabular-nums text-muted">{fmtNum(item.sales)} {item.sales === 1 ? "order" : "orders"}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <p className="mt-1.5 text-[11px] text-muted">No positive paid orders were recorded in the selected period.</p>
+            )}
+          </div>
+        </CardContent>
+      </details>
+    </Card>
+  );
 }
 
 // ── Recorded chat & purchase signals ────────────────────────────────────────

@@ -115,6 +115,32 @@ export type AnalyticsData = {
     overallPct: number; // purchased / messaged
     avgViewsPerFan: number;
   };
+  // The core buyer-conversion measures. They intentionally keep the two
+  // identity models separate instead of pretending they are interchangeable:
+  //
+  // - lifetime fields are rows in `users` (creator–fan profiles). In All
+  //   creators, the same Telegram account can have one profile per creator.
+  // - active-chat fields are distinct Telegram accounts in the selected
+  //   reporting window, so a person talking to or buying from several
+  //   creators is counted once in the fleet view.
+  //
+  // A rate is null rather than 0 when its denominator does not exist. Rendering
+  // 0% in that state would claim a measured conversion failure when no cohort
+  // was available to convert.
+  buyerConversion: {
+    lifetimeFanProfiles: number;
+    lifetimeBuyerProfiles: number;
+    lifetimeBuyerRate: number | null;
+    activeChatters: number;
+    activeChatBuyers: number;
+    activeChatBuyerRate: number | null;
+    activeBuyerProfiles7d: number;
+    activeBuyerEngagement7d: number | null;
+    // What customers purchased in the selected reporting period. `sales` is
+    // positive paid-order count; `stars` is signed revenue after adjustments.
+    // This is a product mix, not a first-purchase or per-buyer cohort.
+    purchaseMix: { key: FeatureKey; label: string; stars: number; sales: number; share: number }[];
+  };
   // Inputs for the five optional chat & purchase signals (migration 125).
   // They live here rather than on the dashboard payload because this half of
   // the page is already creator-scoped. The UI deliberately does not render
@@ -177,6 +203,103 @@ export type AnalyticsData = {
 };
 
 const iso = (ms: number) => new Date(ms).toISOString();
+
+// `revenue_messaged_fans` gives the denominator for active-chat conversion as
+// one exact SQL count. The numerator needs the intersection with the paid
+// buyer IDs already read from the ledger, so query only those candidates rather
+// than paging the entire chat table again. PostgREST encodes `.in()` values in
+// the URL; batching keeps a busy window from producing an oversized request.
+const ACTIVE_BUYER_ID_BATCH = 300;
+
+async function activeChatBuyerCount(
+  startMs: number,
+  endMs: number,
+  cloneId: string | null | undefined,
+  paidBuyerIds: ReadonlySet<number>,
+): Promise<number> {
+  if (paidBuyerIds.size === 0) return 0;
+
+  const buyers = [...paidBuyerIds];
+  const matched = new Set<number>();
+  for (let from = 0; from < buyers.length; from += ACTIVE_BUYER_ID_BATCH) {
+    const batch = buyers.slice(from, from + ACTIVE_BUYER_ID_BATCH);
+    let query = supabaseAdmin
+      .from("chat_history")
+      .select("id,telegram_id")
+      .eq("role", "human")
+      .gte("created_at", iso(startMs))
+      .lte("created_at", iso(endMs))
+      .in("telegram_id", batch)
+      // A stable order is necessary because selectAllRows pages while new
+      // messages can be inserted. The exact count is more important than a
+      // fast but lower-bound-looking conversion rate.
+      .order("id", { ascending: true });
+    if (cloneId) query = query.eq("clone_id", cloneId);
+    const { rows, truncated } = await selectAllRows<{ telegram_id: number | null }>(query, {
+      label: "analytics active-chat buyers",
+    });
+    if (truncated) {
+      throw new Error(
+        "Could not read every matching chat message for active-chat buyer conversion; refusing to publish a partial rate.",
+      );
+    }
+    for (const row of rows) if (row.telegram_id != null) matched.add(Number(row.telegram_id));
+  }
+  return matched.size;
+}
+
+// This intentionally runs against the live clock rather than the report
+// window. “Still chatting (7d)” answers whether lifetime buyers are active
+// now; it must not turn into “were they active during the month I selected?”
+async function activeBuyerProfileCount7d(nowMs: number, cloneId: string | null | undefined): Promise<number> {
+  const from = iso(nowMs - 7 * MS_DAY);
+  const to = iso(nowMs);
+  let countQuery = supabaseAdmin
+    .from("users")
+    .select("id", { count: "exact", head: true })
+    .gte("last_message_received", from)
+    .lte("last_message_received", to)
+    // Same buyer predicate as revenue_fan_spend_stats: a historical row can
+    // be a buyer even if one of its two lifetime fields was not backfilled.
+    .or("purchase_count.gt.0,total_spent_stars.gt.0");
+  if (cloneId) countQuery = countQuery.eq("clone_id", cloneId);
+  const { count, error } = await countQuery;
+  if (error) {
+    throw new Error(
+      `Could not count buyer profiles active in the last 7 days: ${error.message} (code ${error.code ?? "none"}).`,
+    );
+  }
+
+  // Migration 124's imported rows can carry a forged `last_message_received`
+  // that predates their profile's first_seen_at. The normal user-stat rollup
+  // excludes those; make this measure obey the same guard instead of treating
+  // a backfill artefact as a buyer who is actively chatting. Only imported
+  // candidates are paged, not the whole users table.
+  let importedQuery = supabaseAdmin
+    .from("users")
+    .select("id,first_seen_at,last_message_received")
+    .not("legacy_id", "is", null)
+    .gte("last_message_received", from)
+    .lte("last_message_received", to)
+    .or("purchase_count.gt.0,total_spent_stars.gt.0")
+    .order("id", { ascending: true });
+  if (cloneId) importedQuery = importedQuery.eq("clone_id", cloneId);
+  const { rows: importedCandidates, truncated } = await selectAllRows<{
+    first_seen_at: string | null;
+    last_message_received: string | null;
+  }>(importedQuery, { label: "analytics imported active buyer profiles" });
+  if (truncated) {
+    throw new Error(
+      "Could not read every imported active buyer profile for the 7-day guard; refusing to publish a partial engagement rate.",
+    );
+  }
+  let invalidImported = 0;
+  for (const row of importedCandidates) {
+    if (!row.first_seen_at || !row.last_message_received) continue;
+    if (new Date(row.last_message_received).getTime() < new Date(row.first_seen_at).getTime()) invalidImported += 1;
+  }
+  return Math.max(0, (Number(count) || 0) - invalidImported);
+}
 const hourLabel = (h: number) =>
   new Date(2000, 0, 1, h).toLocaleTimeString("en-US", { hour: "numeric", hour12: true });
 
@@ -370,6 +493,11 @@ export async function getAnalytics(
   // Finer per-feature revenue + sales (uses the additive `feature` col, falls back to kind).
   const featureStars = new Map<FeatureKey, number>();
   const featureSales = new Map<FeatureKey, number>();
+  // Every identifiable person with a positive, non-adjustment payment in this
+  // report window. This is deliberately all payment types, unlike
+  // `creditBuyers` below, whose narrower job is the paid-message paywall
+  // journey. It becomes the candidate side of active-chat buyer conversion.
+  const windowPaidBuyerIds = new Set<number>();
   // Distinct fans who bought CREDITS in the window (paywall-funnel conversion stage).
   const creditBuyers = new Set<number>();
   // By calendar day.
@@ -391,6 +519,7 @@ export async function getAnalytics(
     const { stars, paidOrder } = classifyRevenueLedgerRow(t);
     totalStars += stars;
     if (paidOrder) totalSales += 1;
+    if (paidOrder && t.telegram_id != null) windowPaidBuyerIds.add(Number(t.telegram_id));
 
     if (t.clone_id) {
       cloneStars.set(t.clone_id, (cloneStars.get(t.clone_id) ?? 0) + stars);
@@ -450,6 +579,12 @@ export async function getAnalytics(
   // page-through of 196,994 chat rows — the biggest single read on the page,
   // and every one of those rows was thrown away after being counted once.
   const messagedFanTotal = await messagedFanCount(startMs, windowEnd, cloneId ?? null);
+  // Do these direct reads in parallel with the rest of the deeper analytics
+  // work below. Unlike the lifetime spend rollup, both answer a current
+  // conversion question: who chatted in the selected window and who is still
+  // talking now.
+  const activeChatBuyerPromise = activeChatBuyerCount(startMs, windowEnd, cloneId, windowPaidBuyerIds);
+  const activeBuyerProfiles7dPromise = activeBuyerProfileCount7d(nowMs, cloneId);
   // paywalled: distinct fans shown the paywall (paywall_hits — additive table, mig 024).
   // If the table doesn't exist yet the rollup errors → treat as "still collecting",
   // the same meaning the old probe-then-page had, so an unapplied migration 024
@@ -507,10 +642,12 @@ export async function getAnalytics(
   // await: it is a ~800ms scan of chat_history in the window (measured 834ms on
   // 30 days fleet-wide, 2026-08-21) and the page is already several seconds, so
   // it runs beside the two lifetime rollups instead of after them.
-  const [spendStats, tierRows, funnel] = await Promise.all([
+  const [spendStats, tierRows, funnel, activeChatBuyers, activeBuyerProfiles7d] = await Promise.all([
     fanSpendStats(cloneId ?? null),
     fanTiers(cloneId ?? null),
     conversationFunnel(startMs, windowEnd, cloneId ?? null),
+    activeChatBuyerPromise,
+    activeBuyerProfiles7dPromise,
   ]);
   const fans = Number(spendStats.fans) || 0;
   const buyers = Number(spendStats.buyers) || 0;
@@ -767,6 +904,23 @@ export async function getAnalytics(
     clones: cloneOut,
     byKind,
     byFeature,
+    buyerConversion: {
+      lifetimeFanProfiles: fans,
+      lifetimeBuyerProfiles: buyers,
+      lifetimeBuyerRate: fans > 0 ? buyers / fans : null,
+      activeChatters: messagedFanTotal,
+      activeChatBuyers,
+      activeChatBuyerRate: messagedFanTotal > 0 ? activeChatBuyers / messagedFanTotal : null,
+      activeBuyerProfiles7d,
+      activeBuyerEngagement7d: buyers > 0 ? activeBuyerProfiles7d / buyers : null,
+      purchaseMix: byFeature.map((feature) => ({
+        key: feature.key,
+        label: feature.label,
+        stars: feature.stars,
+        sales: feature.sales,
+        share: feature.share,
+      })),
+    },
     byFlow,
     conversationFunnel: funnel,
     paywallFunnel,

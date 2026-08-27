@@ -179,16 +179,32 @@ check("C8 analytics buckets through reportInstant and stops padding past the win
   assert(/endDay/.test(loop), "byDay must run to the window end");
 });
 
-// ── C9-C10: no ambiguous conversion tile, one currency in a table ────────────
+// ── C9-C10: conversion cohorts stay explicit, one currency in a table ────────
 
-check("C9 the top grid does not imply one broad conversion cohort", () => {
+check("C9 buyer conversion keeps each numerator and denominator explicit", () => {
   assert(
     !/label:\s*"Conversion"/.test(DASH),
-    "a top-line Conversion tile mixes account-level buyers and creator–fan chat pairs in All creators; keep it out until one shared cohort exists",
+    "a bare top-grid Conversion tile hides its cohort; conversion belongs in the dedicated buyer panel",
   );
   assert(
-    /title="Paid-message paywall"/.test(DASH) && /label="Overall conversion"/.test(DASH),
-    "the remaining conversion must stay inside the explicitly labelled paid-message paywall report",
+    /function BuyerConversionPanel\(/.test(DASH),
+    "the revenue page must render the dedicated Buyer conversion panel",
+  );
+  assert(
+    /All-time buyer conversion/.test(DASH) && /Active-chat buyer conversion/.test(DASH) && /Buyers still chatting \(7d\)/.test(DASH),
+    "the panel must distinguish lifecycle conversion, selected-window active-chat conversion, and 7-day buyer engagement",
+  );
+  assert(
+    /activeChatBuyerRate: messagedFanTotal > 0 \? activeChatBuyers \/ messagedFanTotal : null/.test(ANALYTICS),
+    "active-chat conversion must use buyers who actually chatted in the window over window chatters",
+  );
+  assert(
+    /lifetimeBuyerRate: fans > 0 \? buyers \/ fans : null/.test(ANALYTICS),
+    "lifetime buyer conversion must use buyer profiles over fan profiles",
+  );
+  assert(
+    /activeBuyerEngagement7d: buyers > 0 \? activeBuyerProfiles7d \/ buyers : null/.test(ANALYTICS),
+    "7-day buyer engagement must use active buyer profiles over all buyer profiles",
   );
 });
 

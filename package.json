@@ -27,6 +27,7 @@
     "test:dossier": "../bot/node_modules/.bin/tsx scripts/check-fan-dossier.ts",
     "test:thread": "../bot/node_modules/.bin/tsx scripts/check-fan-thread.ts",
     "test:consistency": "../bot/node_modules/.bin/tsx scripts/check-report-consistency.ts",
+    "test:buyer-conversion": "../bot/node_modules/.bin/tsx scripts/check-buyer-conversion.ts",
     "test:offline": "npm run test:paging && npm run test:callsites && npm run test:media && npm run test:spend && npm run test:report && npm run test:drivers && npm run test:ledger && npm run test:window && npm run test:rollups && npm run test:tiles && npm run test:dossier && npm run test:thread",
     "test:funnel": "../bot/node_modules/.bin/tsx scripts/check-conversation-funnel.ts"
   },
