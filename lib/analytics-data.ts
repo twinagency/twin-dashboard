@@ -115,16 +115,12 @@ export type AnalyticsData = {
     overallPct: number; // purchased / messaged
     avgViewsPerFan: number;
   };
-  // The counting half of Jesse's seven conversation numbers (migration 125).
-  // Lives here rather than on the dashboard payload because this half of the
-  // page is already clone-scoped, which is what these rates have to respect.
-  //
-  // Only FIVE of the seven are in here. Revenue per conversation and repeat
-  // purchase rate are rendered from figures the dashboard payload already
-  // carries (window revenue, and totals.repeatPct) — see the panel in
-  // components/RevenueDashboard.tsx. A second definition of either would put
-  // two answers to one question on the same screen, which is the defect the
-  // 2026-08-21 audit found three times.
+  // Inputs for the five optional chat & purchase signals (migration 125).
+  // They live here rather than on the dashboard payload because this half of
+  // the page is already creator-scoped. The UI deliberately does not render
+  // revenue per chat pair or repeat purchase rate here: neither shares the
+  // relationship-level cohort and both can suggest causal meaning they do not
+  // have.
   //
   // NOT projected by lib/api-public.ts, which is an allowlist: a field added
   // here is withheld from a model's own dashboard by default, and that is the

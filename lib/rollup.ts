@@ -170,14 +170,13 @@ export type ConversationFunnel = {
   ttfpMedianHours: number | null;
 };
 
-/** The counting half of Jesse's seven conversation numbers (migration 125).
+/** Raw inputs for the five optional chat & purchase signals (migration 125).
  *
- *  Five of the seven need a per-fan count over chat_history — 196,994 rows in a
- *  30-day window — so they are counted in Postgres and arrive as eight
- *  integers. The other two (revenue per conversation, repeat purchase rate) are
- *  NOT here and must not be added: lib/dashboard-data.ts already derives both
- *  from the window's star_transactions rows it holds, and a second SQL answer
- *  would only be something for the tiles to disagree with.
+ *  They need per creator–fan counting over chat_history — 196,994 rows in a
+ *  30-day window — so Postgres returns the eight raw integers rather than the
+ *  page paging every event. The UI intentionally does not add a revenue-per-
+ *  chat-pair or repeat-purchase metric: those do not share this relationship-
+ *  level cohort and can be mistaken for causal explanations.
  *
  *  `ttfpMedianHours` is null when ttfpN is 0, which is a real state on a short
  *  window and must render as "-" rather than as zero hours. */

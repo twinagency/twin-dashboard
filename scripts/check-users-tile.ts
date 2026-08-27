@@ -52,11 +52,20 @@ async function main(): Promise<void> {
   assert('"Users" renders s.totalFans', users === "fmtNum(s.totalFans)", users ?? "-");
   const fresh = tile("New");
   assert('"New" still renders s.newFans (the windowed one)', fresh === "fmtNum(s.newFans)", fresh ?? "-");
-  // Rev/user stays per ACTIVE user: one window's revenue over the lifetime
-  // audience is not a number anyone would want.
+  // The previous "Net / active" label hid both sides of a useful diagnostic
+  // ratio. Its replacement must keep the relationship explicit and must use
+  // the selected-period active-fan denominator — never the all-time Users tile.
   assert(
-    "Rev/user still divides by activeUsers, not the tile",
-    /const revPerUser = s\.activeUsers > 0 \? displayStars \/ s\.activeUsers : 0;/.test(src),
+    "the opaque Net / active label is gone",
+    !/label:\s*"Net \/ active"/.test(src),
+  );
+  assert(
+    "Revenue / active fan keeps the active-fan denominator",
+    /const revenuePerActiveFan = s\.activeUsers > 0 \? displayStars \/ s\.activeUsers : null;/.test(src),
+  );
+  assert(
+    "Revenue / active fan says it uses adjusted revenue",
+    /label:\s*"Revenue \/ active fan"[\s\S]{0,220}scope:\s*"after adjustments ÷ active fans"/.test(src),
   );
 
   // ── 2. totalFans is window-independent and newFans is not ───────────────────

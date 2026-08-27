@@ -11,9 +11,10 @@
 //   - "Top source" said Photos 21% while the report's "Top earner" said
 //     Media 61%, on the same screen, because the tile filtered the catch-all
 //     buckets out before picking the maximum and the report did not.
-//   - "Conversion" divided CREDIT buyers by everyone who messaged — 57 of 401
-//     real buyers over 30 days — so it disagreed with the Buyers tile beside it
-//     and counted every photo, video, bundle and tip buyer as a non-buyer.
+//   - A broad top-line "Conversion" ratio mixed account-level buyers with
+//     creator–fan relationships in All creators. The only remaining conversion
+//     is inside the explicitly labelled paid-message paywall report, where its
+//     cohort is defined by the three visible steps.
 //   - Peak hour and peak day were computed with Date#getHours() in a container
 //     with no TZ, i.e. UTC, and labelled "(local)". Ten hours out on AEST.
 //   - The daily chart padded zeroes from the window's end to today, inventing
@@ -178,16 +179,16 @@ check("C8 analytics buckets through reportInstant and stops padding past the win
   assert(/endDay/.test(loop), "byDay must run to the window end");
 });
 
-// ── C9-C10: one definition of a buyer, one currency in a table ───────────────
+// ── C9-C10: no ambiguous conversion tile, one currency in a table ────────────
 
-check("C9 the Conversion tile counts all buyers, not credit buyers only", () => {
+check("C9 the top grid does not imply one broad conversion cohort", () => {
   assert(
-    /const conversion = messaged > 0 \? s\.buyers \/ messaged : null/.test(DASH),
-    "Conversion must divide the same Buyers number the tile beside it shows; dividing paywallFunnel.purchased counts credit buyers only (57 of 401)",
+    !/label:\s*"Conversion"/.test(DASH),
+    "a top-line Conversion tile mixes account-level buyers and creator–fan chat pairs in All creators; keep it out until one shared cohort exists",
   );
   assert(
-    !/purchased \/ messaged/.test(DASH),
-    "the credit-only ratio belongs to the paywall funnel panel, which is labelled as such, not to the headline tile",
+    /title="Paid-message paywall"/.test(DASH) && /label="Overall conversion"/.test(DASH),
+    "the remaining conversion must stay inside the explicitly labelled paid-message paywall report",
   );
 });
 
@@ -260,8 +261,12 @@ check("C15 analytics distinguishes paid orders from ledger adjustments", () => {
   assert(!explicitRefund.paidOrder, "refund payload must not be a paid order");
   assert(!zero.paidOrder, "zero-value ledger row must not be a paid order");
   assert(
-    /const avgOrder = s\.sales > 0 \? s\.grossPaymentStars \/ s\.sales : 0;/.test(DASH),
-    "Avg paid order must use positive paid-order value, not signed net proceeds",
+    /const avgOrder = s\.sales > 0 \? s\.grossPaymentStars \/ s\.sales : null;/.test(DASH),
+    "Avg paid order must use positive paid-order value, not signed adjusted revenue, and must stay undefined when there are no orders",
+  );
+  assert(
+    /value: avgOrder === null \? "-" : money\(avgOrder\)/.test(DASH),
+    "an empty paid-order denominator must render as an em dash, not a false $0",
   );
 });
 

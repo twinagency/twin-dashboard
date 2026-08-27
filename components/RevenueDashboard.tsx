@@ -285,8 +285,8 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
   // every conversion rate the fleet has ever had into "1%": the real figure sat
   // between 0.62% and 0.68% across 1d/7d/30d on 2026-08-21, and all three
   // rounded to the same integer, so the tile looked frozen and looked like a
-  // suspiciously round number at the same time. Repeat rate (~33-41%) and Top
-  // source (~19%) are big enough that a decimal there is just noise.
+  // suspiciously round number at the same time. Multi-order buyer share and
+  // top revenue type share are big enough that a decimal there is just noise.
   const pct = (n: number) => {
     const v = n * 100;
     return v > 0 && v < 10 ? `${v.toFixed(1)}%` : `${Math.round(v)}%`;
@@ -303,14 +303,14 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
   const displayStars = focusStats ? focusStats.stars : data?.totals.stars ?? 0;
   const focusName = cloneId ? data?.clones.find((c) => c.id === cloneId)?.name : null;
 
-  // Unambiguous label for the headline figure - it is gross Stars EARNED in the
-  // selected window (proceeds), never the wallet balance or what's withdrawable.
+  // The headline is signed Star ledger revenue: positive payments less recorded
+  // refunds/adjustments. It is neither profit nor a withdrawable wallet balance.
   // Only equals "lifetime" when the window is genuinely all-time.
-  const proceedsLabel = customRange
-    ? "Proceeds, custom range"
+  const revenueLabel = customRange
+    ? "Star revenue, custom range"
     : period === "ALL"
-      ? "Lifetime proceeds"
-      : `Proceeds, ${PERIODS.find((p) => p.key === period)?.label ?? period}`;
+      ? "Lifetime Star revenue"
+      : `Star revenue, ${PERIODS.find((p) => p.key === period)?.label ?? period}`;
 
   const toggleHidden = (id: string) =>
     setHidden((prev) => {
@@ -492,8 +492,8 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
           <CardHeader className="flex-row items-start gap-4 space-y-0 pb-0">
             <div>
               <div className="flex items-center gap-1.5 text-xs text-muted">
-                {focusName ? <span className="creator-name">{focusName}</span> : "Fleet"} · {proceedsLabel}
-                <Info text="Every Star earned in this window, gross. This is proceeds, not your current wallet balance - see Balance below for that." />
+                {focusName ? <span className="creator-name">{focusName}</span> : "Fleet"} · {revenueLabel}
+                <Info text="Recorded Star payments in this window, after refunds and adjustments. This is not profit, a payout, or the current wallet balance." />
                 {trendPct !== null && (
                   <span className="font-mono font-semibold tabular-nums text-black">
                     {trendPct >= 0 ? "+" : ""}
@@ -785,33 +785,16 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
         <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-6">
           {(() => {
             const s = focusStats ?? data.totals;
-            // Per ACTIVE user — fans who messaged in the window. NOT the
-            // "Users" tile, which is all-time total since 2026-08-22: dividing
-            // one window's revenue by the whole lifetime audience answers
-            // nothing. Dividing by arrivals instead would answer "revenue per
-            // person who signed up in this window", which is not what anyone
-            // reads "Rev/user" as either.
-            const revPerUser = s.activeUsers > 0 ? displayStars / s.activeUsers : 0;
-            const revPerBuyer = s.buyers > 0 ? displayStars / s.buyers : 0;
-            // Net proceeds include refunds, while "Avg paid order" means the
-            // value of positive paid orders only. Keep those two measures apart
-            // or one refund makes an ordinary purchase look cheaper than it was.
-            const avgOrder = s.sales > 0 ? s.grossPaymentStars / s.sales : 0;
-            // "Conversion" on a tile beside "Buyers" means: of the people who
-            // talked to her, how many bought ANYTHING. It used to divide
-            // paywallFunnel.purchased by `messaged`, and .purchased counts only
-            // fans who bought CREDITS — 57 of 401 real buyers over 30 days. A
-            // fan who bought a photo, a video, a bundle or sent a tip was
-            // counted as having left without spending, so the tile read about a
-            // seventh of the truth and disagreed with the Buyers tile next to
-            // it. The credit-only stage is still exactly right for the paywall
-            // funnel panel further down, which is labelled as such.
-            const { messaged } = data.analytics.paywallFunnel;
-            const conversion = messaged > 0 ? s.buyers / messaged : null;
+            const revenuePerActiveFan = s.activeUsers > 0 ? displayStars / s.activeUsers : null;
+            const revenuePerBuyer = s.buyers > 0 ? displayStars / s.buyers : null;
+            // Star revenue after adjustments includes refunds, while "Avg paid
+            // order" means positive paid orders only. Keep those two measures
+            // apart or one refund makes an ordinary purchase look cheaper.
+            const avgOrder = s.sales > 0 ? s.grossPaymentStars / s.sales : null;
             // Windowed (lib/dashboard-data.ts), NOT analytics.funnel.repeatPct —
             // that one is the Analytics tab's LIFETIME funnel and never moved
             // when the period changed. Same reason as the four tiles above it.
-            const repeatRate = s.repeatPct;
+            const multiOrderBuyerRate = s.buyers > 0 ? s.repeatPct : null;
             // #1 single source. Shares topFeatureRow() with the report's "Top
             // earner" fact below so the two cannot print different answers on
             // the same screen — they did, "Photos 21%" here against "Media 61%"
@@ -851,7 +834,16 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
                 label: "Active",
                 scope: "messaged this period",
                 value: fmtNum(s.activeUsers),
-                hint: `Fans who sent an inbound message during ${periodScope}. This is the denominator for Net / active.${profileScopeNote}`,
+                hint: `Fans who sent an inbound message during ${periodScope}.${profileScopeNote}`,
+              },
+              {
+                label: "Revenue / active fan",
+                scope: "after adjustments ÷ active fans",
+                value: revenuePerActiveFan === null ? "-" : money(revenuePerActiveFan),
+                money: revenuePerActiveFan !== null,
+                hint: s.activeUsers > 0
+                  ? `Recorded Star revenue during ${periodScope}, after refunds and adjustments, divided by Active fans. It helps separate a change in active audience from a change in spend per active fan; it is not profit or a payout.${profileScopeNote}`
+                  : `No Active fans were recorded during ${periodScope}, so this is not shown as $0.${profileScopeNote}`,
               },
               {
                 label: "Orders",
@@ -870,8 +862,8 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
                 hint: `Fan profiles whose last inbound message was within the past 24 hours, so Telegram allows the business bot to message them now. This is measured right now, not by the date filter.${profileScopeNote}`,
               },
               {
-                label: "Messages",
-                scope: "this period",
+                label: "Conversation messages",
+                scope: "fan + creator replies",
                 value: fmtNum(s.messages),
                 hint: `All recorded conversation messages during ${periodScope} for ${creatorScope}, including fan messages and creator replies.${profileScopeNote}`,
               },
@@ -879,60 +871,53 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
                 label: cloneId ? "Buyers" : "Unique buyers",
                 scope: "paid this period",
                 value: fmtNum(s.buyers),
-                hint: `People with at least one positive paid order during ${periodScope}. This is the denominator for Net/buyer and the numerator for Conversion.${buyerScopeNote}`,
+                hint: `People with at least one positive paid order during ${periodScope}.${buyerScopeNote}`,
               },
               {
-                label: "Net / active",
-                scope: "net proceeds",
-                value: money(revPerUser),
-                money: true,
-                hint: `Net proceeds during ${periodScope}, including refunds and adjustments, divided by Active — not by the all-time Users total.`,
-              },
-              {
-                label: "Net / buyer",
-                scope: "net proceeds",
-                value: money(revPerBuyer),
-                money: true,
-                hint: `Net proceeds during ${periodScope}, including refunds and adjustments, divided by Buyers.${buyerScopeNote}`,
+                label: "Revenue / buyer",
+                scope: "after adjustments",
+                value: revenuePerBuyer === null ? "-" : money(revenuePerBuyer),
+                money: revenuePerBuyer !== null,
+                hint: s.buyers > 0
+                  ? `Recorded Star revenue during ${periodScope}, after refunds and adjustments, divided by Buyers. It is not profit or a payout.${buyerScopeNote}`
+                  : `No Buyers were recorded during ${periodScope}, so this is not shown as $0.${buyerScopeNote}`,
               },
               {
                 label: "Avg paid order",
                 scope: "positive payments",
-                value: money(avgOrder),
-                money: true,
-                hint: `Positive paid-order value during ${periodScope} divided by the number of paid orders. Refunds and adjustments are excluded.`,
+                value: avgOrder === null ? "-" : money(avgOrder),
+                money: avgOrder !== null,
+                hint: s.sales > 0
+                  ? `Positive paid-order value during ${periodScope} divided by the number of paid orders. Refunds and adjustments are excluded.`
+                  : `No positive paid orders were recorded during ${periodScope}, so this is not shown as $0.`,
               },
               {
-                label: "Conversion",
-                scope: "buyers ÷ chatters",
-                value: conversion !== null ? pct(conversion) : "-",
-                hint: `Buyers divided by people who sent at least one inbound message during ${periodScope}. It includes any positive payment type, not only paid-message purchases.${buyerScopeNote}`,
-              },
-              {
-                label: "Repeat rate",
-                scope: "2+ orders / buyer",
-                value: pct(repeatRate),
-                hint: `Buyers with more than one paid order during ${periodScope}, divided by Buyers.${buyerScopeNote}`,
+                label: "Multi-order buyers",
+                scope: "2+ paid orders",
+                value: multiOrderBuyerRate === null ? "-" : pct(multiOrderBuyerRate),
+                hint: s.buyers > 0
+                  ? `Share of Buyers with two or more positive paid orders during ${periodScope}.${buyerScopeNote}`
+                  : `No Buyers were recorded during ${periodScope}, so this rate is not shown as 0%.${buyerScopeNote}`,
               },
               // Short label so the tile never truncates the number away.
               // "(untagged)" is kept, not stripped: it is the difference between
               // "photos are our product" and "we are not recording what we sell".
               {
-                label: "Top source",
-                scope: "net share this period",
+                label: "Top revenue type",
+                scope: "share after adjustments",
                 value: topKind ? `${topKind.label} ${pct(topKind.share)}` : "-",
-                hint: `The payment type contributing the largest share of net proceeds during ${periodScope}.`,
+                hint: `The payment type contributing the largest share of recorded Star revenue, after refunds and adjustments, during ${periodScope}.`,
               },
             ];
             return (
               <>
                 {tiles.map((t) => (
                   <div key={t.label} className="earnings-stat-tile rounded-xl border px-3 py-3">
-                    <div className="flex min-w-0 items-center gap-0.5 text-[10px] uppercase tracking-wide text-muted">
-                      <span className="min-w-0 truncate">{t.label}</span>
+                    <div className="flex min-w-0 items-start gap-0.5 text-[10px] uppercase tracking-wide text-muted">
+                      <span className="min-w-0 break-words leading-tight">{t.label}</span>
                       {t.hint && <Info text={t.hint} />}
                     </div>
-                    {t.scope && <div className="mt-0.5 truncate text-[9px] font-medium leading-tight text-muted/85">{t.scope}</div>}
+                    {t.scope && <div className="mt-0.5 break-words text-[9px] font-medium leading-tight text-muted/85">{t.scope}</div>}
                     <div className={"mt-1 break-words font-mono text-base font-semibold leading-tight tabular-nums " + (t.money ? "money-value" : "text-ink")}>{t.value}</div>
                   </div>
                 ))}
@@ -961,17 +946,12 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
         </div>
       )}
 
-      {/* ── Jesse's seven. Above the report toggle, not inside it: these are the
-          numbers that say whether the funnel is working, and a number behind a
-          click is a number nobody reads. Same window and scope as everything
-          above. ──────────────────────────────────────────────────────────── */}
+      {/* Optional chat and purchase detail. It stays closed by default because
+          the five signals use related, not identical, cohorts. Same selected
+          window and creator scope as the rest of the page. ──────────────── */}
       {data && (
         <ConversationFunnelPanel
           f={data.analytics.conversationFunnel}
-          windowStars={displayStars}
-          buyers={(focusStats ?? data.totals).buyers}
-          repeatPct={(focusStats ?? data.totals).repeatPct}
-          money={money}
           pct={pct}
         />
       )}
@@ -1389,7 +1369,7 @@ function RevenueReport({
         <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,0.9fr)_minmax(0,1.1fr)]">
           <ReportPanel
             title="What sells"
-            hint="Revenue by feature, with sales and average per sale. Every Star in this window sits in one of these rows, so untagged and other sales are listed too and the rows add up to the proceeds above."
+            hint="Revenue by feature, with sales and average per sale. Every Star ledger entry in this window sits in one of these rows, so untagged and other sales are listed too and the rows add up to the Star revenue above."
           >
             {reportFeatures.length === 0 ? (
               <ReportEmpty text="No sales in this window." />
@@ -1901,104 +1881,93 @@ export function fmtHours(hours: number | null): string {
   return `${(hours / 24).toFixed(1)}d`;
 }
 
-// ── Jesse's seven conversation numbers ──────────────────────────────────────
+// ── Recorded chat & purchase signals ────────────────────────────────────────
 //
-// Five come from migration 125 (lib/rollup.ts conversationFunnel). The other
-// two are computed here from figures already on this page, deliberately:
+// These five measures come directly from recorded profile, message, offer and
+// payment events. The previous revenue-per-conversation and repeat-rate ratios
+// are intentionally omitted here: the former can read as causal when it is not,
+// and the latter already has a precise top-line Earnings tile.
 //
-//   revenue per conversation = the SAME window revenue the headline shows,
-//     divided by the same `conversations` the four rates above it divide by.
-//     Not a second revenue definition, and not net of anything: Ronan's
-//     decision of 2026-08-21 is that the totals stay whole.
-//   repeat purchase rate     = totals.repeatPct, the value the "Repeat rate"
-//     tile already renders. Read, not recomputed, so the two can never drift.
+// THE COHORT IS A CREATOR–FAN CHAT PAIR, NOT A PERSON: someone talking to two
+// creators is two pairs, because these are relationship-level signals. The
+// Buyers tile above deduplicates people instead, on purpose.
 //
-// THE COHORT IS A CONVERSATION, NOT A PERSON: one clone plus one fan. Someone
-// talking to two clones is two conversations, because a rate about how a clone
-// converses is a rate per clone. The "Buyers" tile above dedupes people instead,
-// on purpose, because money paid twice by one person is one person's money.
-//
-// WHY "STARTED" IS NOT "SENT A MESSAGE". A users row is INSERTED by the fan's
-// first message, so arrived and messaged are the same population and the naive
-// rate is ~100% forever (4,313 of 4,315 over 7 days, measured 2026-08-21).
-// There is no impression signal upstream of that in this database. So it counts
-// arrivals who got past the first message, which is the stage fans actually
-// fall out of, and the hint under the tile says so rather than leaving a reader
-// to assume the definition that would have been useless.
+// WHY "SECOND MESSAGE" IS NOT "SENT A MESSAGE". A users row is created by the
+// fan's first message, so a first-message rate would read ~100% forever. The
+// first meaningful observed drop-off is whether that new fan sends another
+// message in the selected period.
 function ConversationFunnelPanel({
   f,
-  windowStars,
-  buyers,
-  repeatPct,
-  money,
   pct,
 }: {
   f: AnalyticsData["conversationFunnel"];
-  windowStars: number;
-  buyers: number;
-  repeatPct: number;
-  money: (stars: number) => string;
   pct: (n: number) => string;
 }) {
   const rate = (a: number, b: number) => (b > 0 ? pct(a / b) : "-");
-  const repeatBuyers = Math.round(repeatPct * buyers);
-  const metrics: { label: string; value: string; hint: string; moneyValue?: boolean }[] = [
+  const metrics: { label: string; value: string; summary: string; detail: string }[] = [
     {
-      label: "Conversation start rate",
+      label: "Second-message rate",
       value: rate(f.arrivalsStarted, f.arrivals),
-      hint: `${fmtNum(f.arrivalsStarted)} of ${fmtNum(f.arrivals)} new fans sent more than one message`,
+      summary: `${fmtNum(f.arrivalsStarted)} of ${fmtNum(f.arrivals)} new fans`,
+      detail: "New fan profiles in the selected period who sent at least two inbound messages in that same period, divided by all new fan profiles. A fan profile is created by the first message, so a first-message rate would always be nearly 100% and would not be useful.",
     },
     {
-      label: "Meaningful conversation rate",
+      label: "5+ message rate",
       value: rate(f.meaningful, f.conversations),
-      hint: `${fmtNum(f.meaningful)} of ${fmtNum(f.conversations)} reached 5+ messages from the fan`,
+      summary: `${fmtNum(f.meaningful)} of ${fmtNum(f.conversations)} chat pairs`,
+      detail: "Creator–fan chat pairs with at least five inbound fan messages in the selected period, divided by all chat pairs with at least one inbound fan message. This is a message-count threshold, not a qualitative rating of the conversation.",
     },
     {
-      label: "Offer exposure rate",
+      label: "Recorded offer rate",
       value: rate(f.offered, f.conversations),
-      hint: `${fmtNum(f.offered)} were shown a paywall or a locked item`,
+      summary: `${fmtNum(f.offered)} of ${fmtNum(f.conversations)} chat pairs`,
+      detail: "Creator–fan chat pairs with a recorded paywall or locked-item offer in the selected period, divided by all chat pairs. A pair must have a fan message in the period to enter this stage. It confirms a logged offer or paywall event, not that the fan opened or read it.",
     },
     {
-      label: "Offer to purchase",
+      label: "Paid after recorded offer",
       value: rate(f.offeredBought, f.offered),
-      hint: `${fmtNum(f.offeredBought)} of ${fmtNum(f.offered)} bought after seeing an offer`,
+      summary: `${fmtNum(f.offeredBought)} of ${fmtNum(f.offered)} offered chat pairs`,
+      detail: "Creator–fan chat pairs with an eligible positive paid order on or after their first recorded offer in the selected period, divided by offered chat pairs. Refunds and old-system auto-renewals are excluded. This records sequence only: it does not link an order to a specific offer or prove the offer caused the purchase.",
     },
     {
-      label: "Time to first purchase",
+      label: "Time to first paid order",
       value: fmtHours(f.ttfpMedianHours),
-      // n, always. A median over 7 fans and a median over 700 are different
-      // claims and the number alone cannot tell them apart.
-      hint: f.ttfpN > 0 ? `median, ${fmtNum(f.ttfpN)} first-time buyers` : "no first purchases in this window",
-    },
-    {
-      label: "Revenue per conversation",
-      value: f.conversations > 0 ? money(windowStars / f.conversations) : "-",
-      hint: `across ${fmtNum(f.conversations)} conversations`,
-      moneyValue: true,
-    },
-    {
-      label: "Repeat purchase rate",
-      value: pct(repeatPct),
-      hint: `${fmtNum(repeatBuyers)} of ${fmtNum(buyers)} buyers bought more than once`,
+      summary: f.ttfpN > 0 ? `median across ${fmtNum(f.ttfpN)} first-time buyers` : "no first paid orders in this period",
+      detail: "Median time from a fan profile first being seen to that fan's first-ever positive paid order. It includes only fans whose first paid order occurred in the selected period, so it is not an average and it is not a measure of every buyer.",
     },
   ];
 
   return (
     <Card size="sm" className="mt-4">
-      <CardHeader className="space-y-0 pb-1">
-        <CardTitle className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-ink">
-          Conversation funnel
-          <Info text="How a conversation turns into money, in the window and scope selected above. A conversation is one creator and one fan, so the same person talking to two creators counts twice here, unlike the Buyers tile which counts people. Conversation start rate counts new fans who got past their first message: a fan record is created BY the first message, so 'sent a message' would read 100% forever. Offer to purchase excludes old n8n subscription renewals, which Telegram auto-renews without Twin raising an invoice. Revenue per conversation is the same headline revenue shown above, undivided and unfiltered." />
-        </CardTitle>
-        <CardDescription className="text-[11px]">
-          Seven numbers, same window as the tiles above.
-        </CardDescription>
-      </CardHeader>
-      <CardContent className="grid grid-cols-2 gap-2 pt-2 sm:grid-cols-4 xl:grid-cols-7">
-        {metrics.map((m) => (
-          <InsightMetric key={m.label} label={m.label} value={m.value} hint={m.hint} moneyValue={m.moneyValue} />
-        ))}
-      </CardContent>
+      <details className="group">
+        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-3 text-left sm:px-4 [&::-webkit-details-marker]:hidden">
+          <span className="min-w-0">
+            <span className="block text-xs font-semibold uppercase tracking-wide text-ink">Chat &amp; purchase signals</span>
+            <span className="mt-0.5 block text-[11px] leading-snug text-muted">Optional context for the selected period — open to see exactly what is counted.</span>
+          </span>
+          <span className="shrink-0 text-xs font-semibold text-[#28658f] group-open:hidden">Open</span>
+          <span className="hidden shrink-0 text-xs font-semibold text-[#28658f] group-open:inline">Hide</span>
+        </summary>
+        <CardContent className="border-t border-line p-3 sm:p-4">
+          <div className="rounded-xl border border-[#4a8ec4]/35 bg-[#eff8ff] px-3 py-2.5 text-[11px] leading-relaxed text-muted">
+            <p><span className="font-semibold text-ink">What this is:</span> observed chat and payment signals, not a claim that a particular message or offer caused a particular sale. These are related measures, not one linear marketing funnel.</p>
+            <p className="mt-1"><span className="font-semibold text-ink">Scope:</span> one creator–fan chat pair. In All creators, a person who messages two creators is two pairs here; the Buyers tile above counts that person once.</p>
+            <p className="mt-1"><span className="font-semibold text-ink">Data used:</span> for the first four cards, fan profiles and actions recorded in the selected date range. Time to first paid order also checks earlier payment history to identify a first-ever order. All starts at the first recorded Star payment.</p>
+          </div>
+          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
+            {metrics.map((m) => (
+              <div key={m.label} className="min-w-0 rounded-xl border border-line bg-surface/75 px-3 py-2.5">
+                <div className="flex min-w-0 items-start gap-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] text-muted">
+                  <span className="min-w-0 leading-tight">{m.label}</span>
+                  <Info text={m.detail} />
+                </div>
+                <div className="mt-1 font-mono text-base font-semibold tabular-nums text-ink">{m.value}</div>
+                <div className="mt-0.5 text-[10px] leading-snug text-muted">{m.summary}</div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </details>
     </Card>
   );
 }
