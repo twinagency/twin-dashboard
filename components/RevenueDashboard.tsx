@@ -785,7 +785,10 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
         <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-6">
           {(() => {
             const s = focusStats ?? data.totals;
-            const revenuePerActiveFan = s.activeUsers > 0 ? displayStars / s.activeUsers : null;
+            // This ratio uses the same selected-period cohort on both sides:
+            // revenue in the period ÷ users who messaged in the period. Real
+            // current activity has its own explicit 24-hour tile below.
+            const revenuePerMessagedUser = s.activeUsers > 0 ? displayStars / s.activeUsers : null;
             const revenuePerBuyer = s.buyers > 0 ? displayStars / s.buyers : null;
             // Star revenue after adjustments includes refunds, while "Avg paid
             // order" means positive paid orders only. Keep those two measures
@@ -815,39 +818,36 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
               // audience", a number that cannot shrink when you pick a shorter
               // period. The windowed count is "New" beside it.
               {
-                label: "Users",
+                label: "All-time users",
                 value: fmtNum(s.totalFans),
-                scope: "all-time profiles",
                 hint: `All fan profiles for ${creatorScope}, ever. This audience-size number does not change when you change the date filter.${profileScopeNote}`,
               },
               {
-                label: "New",
+                label: "New users",
                 value: fmtNum(s.newFans),
-                scope: "this period",
+                scope: "in selected period",
                 hint: `Fan profiles first seen during ${periodScope}. Historical import rows are excluded.${profileScopeNote}`,
               },
-              // Was computed for Rev/user's denominator but never shown itself,
-              // so the tile's math was invisible. Fans who messaged inside the
-              // window - not New (first-time arrivals) and not the 24h
-              // reachable tile below (that one ignores the filter entirely).
+              // This is deliberately not called “Active”: on a 1M/1Y view it
+              // means “messaged sometime in that window”, not “active now”.
               {
-                label: "Active",
-                scope: "messaged this period",
+                label: "Users who messaged",
+                scope: "in selected period",
                 value: fmtNum(s.activeUsers),
                 hint: `Fans who sent an inbound message during ${periodScope}.${profileScopeNote}`,
               },
               {
-                label: "Revenue / active fan",
-                scope: "after adjustments ÷ active fans",
-                value: revenuePerActiveFan === null ? "-" : money(revenuePerActiveFan),
-                money: revenuePerActiveFan !== null,
+                label: "Revenue / user who messaged",
+                scope: "after adjustments ÷ users who messaged",
+                value: revenuePerMessagedUser === null ? "-" : money(revenuePerMessagedUser),
+                money: revenuePerMessagedUser !== null,
                 hint: s.activeUsers > 0
-                  ? `Recorded Star revenue during ${periodScope}, after refunds and adjustments, divided by Active fans. It helps separate a change in active audience from a change in spend per active fan; it is not profit or a payout.${profileScopeNote}`
-                  : `No Active fans were recorded during ${periodScope}, so this is not shown as $0.${profileScopeNote}`,
+                  ? `Recorded Star revenue during ${periodScope}, after refunds and adjustments, divided by users who messaged during that same period. It is not profit or a payout.${profileScopeNote}`
+                  : `No users messaged during ${periodScope}, so this is not shown as $0.${profileScopeNote}`,
               },
               {
-                label: "Orders",
-                scope: "paid this period",
+                label: "Purchases",
+                scope: "in selected period",
                 value: fmtNum(s.sales),
                 hint: `Individual positive Star payments recorded during ${periodScope}. Refunds and adjustments are not orders. One buyer can place more than one order.`,
               },
@@ -856,10 +856,10 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
               // fan's last message, so this is who the fleet can reach right
               // now — an operational limit, not a stat about the window.
               {
-                label: "Reachable now (24h)",
-                scope: "last inbound <24h",
+                label: "Active users (24h)",
+                scope: "messaged in last 24h",
                 value: fmtNum(s.reachable24h),
-                hint: `Fan profiles whose last inbound message was within the past 24 hours, so Telegram allows the business bot to message them now. This is measured right now, not by the date filter.${profileScopeNote}`,
+                hint: `Fan profiles whose last inbound message was within the past 24 hours. This is measured right now, not by the date filter.${profileScopeNote}`,
               },
               {
                 label: "Conversation messages",
