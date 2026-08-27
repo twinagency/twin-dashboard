@@ -23,6 +23,7 @@ import { fmtMoney, fmtNum, starsToMoneyRate, usdToMoneyRate } from "@/lib/money"
 import { useCurrency } from "@/components/CurrencyProvider";
 import { initials } from "@/lib/colors";
 import FanAvatar from "@/components/FanAvatar";
+import RevenueDayDrivers from "@/components/RevenueDayDrivers";
 import { Info } from "@/components/clone/fields";
 import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -695,6 +696,12 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
           </div>
         )}
       </div>
+
+      {/* The top-line chart says how much arrived; this card makes the next
+          decision possible: did more people show up, did buyer count change, or
+          did one unusually large payment move the entire day? It deliberately
+          stays above the broad report so it is not buried behind a toggle. */}
+      <RevenueDayDrivers cloneId={cloneId} />
 
       {/* ── Fleet/clone stats - same window as the chart above it. A tile
           grid: each stat gets its own card so the row reads at a glance. */}
