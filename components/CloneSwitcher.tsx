@@ -135,7 +135,7 @@ export default function CloneSwitcher({
             ref={inputRef}
             type="text"
             value={query}
-            onValueChange={setQuery}
+            onChange={(event) => setQuery(event.target.value)}
             disabled={pending}
             placeholder="Search creators…"
             className="h-9"

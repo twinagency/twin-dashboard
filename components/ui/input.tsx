@@ -1,14 +1,16 @@
 import * as React from "react"
-import { Input as InputPrimitive } from "@base-ui/react/input"
 
 import { cn } from "@/lib/utils"
 
-// Base UI's controlled-input callback is `onValueChange`, not the native
-// `onChange`. Preserve the component's own prop shape here so callers can use
-// the callback that actually reaches Base UI's state handler.
-function Input({ className, type, ...props }: React.ComponentProps<typeof InputPrimitive>) {
-  return (
-    <InputPrimitive
+// Inputs on the dashboard are controlled with the normal React `onChange`
+// contract. Base UI's Input primitive consumes that handler in favour of its
+// own `onValueChange`, which left native date pickers looking changed while
+// their owning dashboard state never moved. Use the native element here so a
+// typed or picked date always reaches the state that fetches its report.
+const Input = React.forwardRef<HTMLInputElement, React.ComponentProps<"input">>(
+  ({ className, type, ...props }, ref) => (
+    <input
+      ref={ref}
       type={type}
       data-slot="input"
       className={cn(
@@ -17,7 +19,9 @@ function Input({ className, type, ...props }: React.ComponentProps<typeof InputP
       )}
       {...props}
     />
-  )
-}
+  ),
+)
+
+Input.displayName = "Input"
 
 export { Input }

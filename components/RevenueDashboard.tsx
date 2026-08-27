@@ -457,11 +457,11 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
           <div className="flex flex-col gap-3 p-4 pt-0">
             <label className="flex flex-col gap-1 text-xs text-muted">
               From
-              <Input type="date" value={draftStart} onValueChange={setDraftStart} max={draftEnd || undefined} />
+              <Input type="date" value={draftStart} onChange={(event) => setDraftStart(event.target.value)} max={draftEnd || undefined} />
             </label>
             <label className="flex flex-col gap-1 text-xs text-muted">
               To
-              <Input type="date" value={draftEnd} onValueChange={setDraftEnd} min={draftStart || undefined} />
+              <Input type="date" value={draftEnd} onChange={(event) => setDraftEnd(event.target.value)} min={draftStart || undefined} />
             </label>
             <div className="mt-1 flex justify-end gap-2">
               {customRange && (
@@ -691,7 +691,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
                   </svg>
                   <Input
                     value={creatorQuery}
-                    onValueChange={setCreatorQuery}
+                    onChange={(event) => setCreatorQuery(event.target.value)}
                     placeholder="Search creators…"
                     aria-label="Search creators"
                     className="h-8 pl-8 text-xs"
@@ -927,7 +927,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
               </svg>
               <Input
                 value={txQuery}
-                onValueChange={setTxQuery}
+                onChange={(event) => setTxQuery(event.target.value)}
                 placeholder="Search transactions…"
                 className="h-8 pl-8 text-xs"
               />

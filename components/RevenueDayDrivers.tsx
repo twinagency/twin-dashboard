@@ -202,7 +202,7 @@ export default function RevenueDayDrivers({ cloneId }: { cloneId?: string | null
               <Button type="button" variant="ghost" size="sm" aria-pressed={day === today} onClick={() => selectDay(today)} className={(day === today ? "bg-[#eff8ff] text-[#28658f] hover:bg-[#e1f1fb]" : "") + " h-7 border border-line px-2 text-[11px]"}>
                 Today
               </Button>
-              <Input aria-label="Choose a day to review" type="date" value={day} max={today} onValueChange={selectDay} className="h-7 w-[132px] px-2 text-xs" />
+              <Input aria-label="Choose a day to review" type="date" value={day} max={today} onChange={(event) => selectDay(event.target.value)} className="h-7 w-[132px] px-2 text-xs" />
             </div>
           </div>
 
