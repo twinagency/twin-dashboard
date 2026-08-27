@@ -468,6 +468,11 @@ function composeSummary(
   const concentrated = Boolean(topBuyer && topBuyer.share >= 0.35);
   const revenueDelta = totals.stars - baseline.stars;
   const netHeadline = netRevenueHeadline(revenueDelta);
+  const buyersAboveBaseline = totals.buyers > baseline.buyers;
+  const buyersBelowBaseline = totals.buyers < baseline.buyers;
+  const averageOrderAboveBaseline = totals.averageSaleStars > baseline.averageSaleStars;
+  const averageOrderBelowBaseline = totals.averageSaleStars < baseline.averageSaleStars;
+  const messagesAboveBaseline = activity.deltaMessagedFans != null && activity.deltaMessagedFans > 0;
 
   if (totals.grossPaymentStars === 0 && totals.refundStars > 0 && totals.stars <= 0) {
     return {
@@ -504,24 +509,66 @@ function composeSummary(
       concentrated: true,
     };
   }
-  if (activity.deltaMessagedFans != null && activity.deltaMessagedFans > 0 && totals.buyers > baseline.buyers) {
+  if (buyersAboveBaseline && averageOrderBelowBaseline) {
     return {
       headline: netHeadline,
-      detail: "Fans who messaged and buyers were both above their prior-30-day medians. Those are observed conditions, not proof that individual messages directly caused purchases.",
+      detail: `${messagesAboveBaseline ? "Fans who messaged were also above their prior-30-day median. " : ""}Buyer count was above the 30-day median, while average paid-order value was below it.`,
       concentrated: false,
     };
   }
-  if (totals.buyers > baseline.buyers) {
+  if (buyersBelowBaseline && averageOrderAboveBaseline) {
     return {
       headline: netHeadline,
-      detail: "Buyer count was above the 30-day median. This is a count comparison, not a claim about why fans chose to buy.",
+      detail: "Buyer count was below the 30-day median, while average paid-order value was above it.",
       concentrated,
     };
   }
-  if (totals.averageSaleStars > baseline.averageSaleStars) {
+  if (buyersAboveBaseline && averageOrderAboveBaseline) {
     return {
       headline: netHeadline,
-      detail: "Average paid-order value was above the 30-day median. Compare paid-order count and payment types below to see the corresponding observed amounts.",
+      detail: `${messagesAboveBaseline ? "Fans who messaged, buyer count, and average paid-order value were all above their prior-30-day medians." : "Buyer count and average paid-order value were both above their 30-day medians."}`,
+      concentrated,
+    };
+  }
+  if (buyersBelowBaseline && averageOrderBelowBaseline) {
+    return {
+      headline: netHeadline,
+      detail: "Buyer count and average paid-order value were both below their 30-day medians.",
+      concentrated,
+    };
+  }
+  if (messagesAboveBaseline && buyersAboveBaseline) {
+    return {
+      headline: netHeadline,
+      detail: "Fans who messaged and buyer count were both above their prior-30-day medians.",
+      concentrated: false,
+    };
+  }
+  if (buyersAboveBaseline) {
+    return {
+      headline: netHeadline,
+      detail: "Buyer count was above the 30-day median.",
+      concentrated,
+    };
+  }
+  if (buyersBelowBaseline) {
+    return {
+      headline: netHeadline,
+      detail: "Buyer count was below the 30-day median.",
+      concentrated,
+    };
+  }
+  if (averageOrderAboveBaseline) {
+    return {
+      headline: netHeadline,
+      detail: "Average paid-order value was above the 30-day median.",
+      concentrated,
+    };
+  }
+  if (averageOrderBelowBaseline) {
+    return {
+      headline: netHeadline,
+      detail: "Average paid-order value was below the 30-day median.",
       concentrated,
     };
   }
