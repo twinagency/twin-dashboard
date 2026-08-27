@@ -161,6 +161,8 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
   const [customOpen, setCustomOpen] = useState(false);
   const [draftStart, setDraftStart] = useState("");
   const [draftEnd, setDraftEnd] = useState("");
+  const draftStartRef = useRef<HTMLInputElement>(null);
+  const draftEndRef = useRef<HTMLInputElement>(null);
   const [chartType, setChartType] = useState<"bar" | "line">("bar");
   const { currency, rate } = useCurrency();
   const [data, setData] = useState<FullData | null>(null);
@@ -252,8 +254,14 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
   }, [period, cloneId, customRange, fetchData]);
 
   function applyCustomRange() {
-    if (!draftStart || !draftEnd) return;
-    setCustomRange({ start: draftStart, end: draftEnd });
+    // Read the native fields as well as controlled state. Some mobile date
+    // pickers only commit their value at the next click; Apply is that commit.
+    const start = draftStartRef.current?.value || draftStart;
+    const end = draftEndRef.current?.value || draftEnd;
+    if (!start || !end) return;
+    setDraftStart(start);
+    setDraftEnd(end);
+    setCustomRange({ start, end });
     setCustomOpen(false);
   }
 
@@ -457,11 +465,11 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
           <div className="flex flex-col gap-3 p-4 pt-0">
             <label className="flex flex-col gap-1 text-xs text-muted">
               From
-              <Input type="date" value={draftStart} onChange={(event) => setDraftStart(event.target.value)} max={draftEnd || undefined} />
+              <Input ref={draftStartRef} type="date" value={draftStart} onChange={(event) => setDraftStart(event.target.value)} max={draftEnd || undefined} />
             </label>
             <label className="flex flex-col gap-1 text-xs text-muted">
               To
-              <Input type="date" value={draftEnd} onChange={(event) => setDraftEnd(event.target.value)} min={draftStart || undefined} />
+              <Input ref={draftEndRef} type="date" value={draftEnd} onChange={(event) => setDraftEnd(event.target.value)} min={draftStart || undefined} />
             </label>
             <div className="mt-1 flex justify-end gap-2">
               {customRange && (
@@ -469,7 +477,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
                   Clear
                 </Button>
               )}
-              <Button size="sm" onClick={applyCustomRange} disabled={!draftStart || !draftEnd}>
+              <Button size="sm" onClick={applyCustomRange}>
                 Apply
               </Button>
             </div>

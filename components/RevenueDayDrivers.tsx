@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDownIcon, ChevronUpIcon } from "lucide-react";
 import type { RevenueChangeRow, RevenueWhyChanged } from "@/lib/revenue-why-changed";
 import { fmtMoney, starsToMoneyRate } from "@/lib/money";
@@ -117,8 +117,12 @@ export default function RevenueDayDrivers({ cloneId }: { cloneId?: string | null
   const { currency, rate } = useCurrency();
   const today = useMemo(() => reportDayKey(), []);
   const yesterday = useMemo(() => shiftDay(today, -1), [today]);
-  const [day, setDay] = useState(yesterday);
+  // Start on today so both quick actions have an observable outcome: tapping
+  // Yesterday switches to the completed day rather than reselecting the
+  // silently preselected default.
+  const [day, setDay] = useState(today);
   const [selectionVersion, setSelectionVersion] = useState(0);
+  const dayInputRef = useRef<HTMLInputElement>(null);
   const [open, setOpen] = useState(false);
   const [data, setData] = useState<RevenueWhyChanged | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -135,6 +139,14 @@ export default function RevenueDayDrivers({ cloneId }: { cloneId?: string | null
     setError(null);
     setDay(nextDay);
     setSelectionVersion((version) => version + 1);
+  }
+
+  function applyPickedDay() {
+    // Native calendar controls update this field before React receives an
+    // event on a few mobile/browser combinations. The explicit action reads
+    // the rendered value directly, so a picked day can never be a visual-only
+    // change again. Normal onChange still updates immediately where supported.
+    selectDay(dayInputRef.current?.value || day);
   }
 
   // This stays a compact row until someone chooses to investigate. The 30-day
@@ -202,7 +214,10 @@ export default function RevenueDayDrivers({ cloneId }: { cloneId?: string | null
               <Button type="button" variant="ghost" size="sm" aria-pressed={day === today} onClick={() => selectDay(today)} className={(day === today ? "bg-[#eff8ff] text-[#28658f] hover:bg-[#e1f1fb]" : "") + " h-7 border border-line px-2 text-[11px]"}>
                 Today
               </Button>
-              <Input aria-label="Choose a day to review" type="date" value={day} max={today} onChange={(event) => selectDay(event.target.value)} className="h-7 w-[132px] px-2 text-xs" />
+              <Input ref={dayInputRef} aria-label="Choose a day to review" type="date" value={day} max={today} onChange={(event) => selectDay(event.target.value)} className="h-7 w-[132px] px-2 text-xs" />
+              <Button type="button" variant="ghost" size="sm" onClick={applyPickedDay} className="h-7 border border-line px-2 text-[11px]">
+                View
+              </Button>
             </div>
           </div>
 
