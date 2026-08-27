@@ -80,12 +80,12 @@ function ChangeList({
           <div className="min-w-0">
             <div className="truncate font-medium text-ink">{row.label}</div>
             <div className="mt-0.5 text-[11px] leading-relaxed text-muted">
-              Selected day: {money(row.stars)} from {quantity(row.sales, "paid order", "paid orders")}. Baseline: {money(row.usualStars)} from {quantity(row.usualSales, "paid order", "paid orders")}.
+              Selected day: {money(row.stars)} net revenue · {quantity(row.sales, "paid order", "paid orders")}. 30-day typical: {money(row.usualStars)} net revenue · {quantity(row.usualSales, "paid order", "paid orders")}.
             </div>
           </div>
           <div className={(row.deltaStars >= 0 ? "text-good" : "text-[#b4432f]") + " shrink-0 text-right font-mono text-[11px] font-semibold"}>
             {signed(row.deltaStars, money)}
-            <div className="font-sans text-[10px] font-medium text-muted">vs baseline</div>
+            <div className="font-sans text-[10px] font-medium text-muted">vs 30-day typical</div>
           </div>
         </div>
       ))}
@@ -177,7 +177,7 @@ export default function RevenueDayDrivers({ cloneId }: { cloneId?: string | null
     return () => controller.abort();
   }, [day, cloneId, open, selectionVersion]);
 
-  const benchmarkLabel = data?.comparison.benchmarkLabel ?? "30-day baseline";
+  const benchmarkLabel = "30-day benchmark";
 
   return (
     <Card size="sm" className="mt-4 overflow-hidden border-line bg-surface">
@@ -239,7 +239,7 @@ export default function RevenueDayDrivers({ cloneId }: { cloneId?: string | null
                   {data.day.partial && <span className="rounded-full bg-[#fff4d6] px-2 py-0.5 text-[10px] font-semibold text-[#8a5a00]">Today so far</span>}
                 </div>
                 <p className="mt-1 text-[11px] leading-relaxed text-muted">
-                  30-day baseline = the median across the prior 30 calendar days, for {data.comparison.scopeLabel}. {data.day.partial && data.day.elapsedLabel ? `Each day is measured through its first ${data.day.elapsedLabel}.` : "These are full calendar days in Sydney time."}
+                  30-day benchmark = the median daily result across the 30 calendar days immediately before this one ({data.comparison.baselineRangeLabel}), for {data.comparison.scopeLabel}. {data.day.partial && data.day.elapsedLabel ? `Each comparison day is measured through its first ${data.day.elapsedLabel}.` : "These are full calendar days in Sydney time."}
                 </p>
                 {data.totals.refundStars > 0 && <p className="mt-1 text-[11px] font-medium text-[#8a5a00]">Includes {money(data.totals.refundStars)} in refunds or adjustments.</p>}
               </div>
@@ -299,14 +299,17 @@ export default function RevenueDayDrivers({ cloneId }: { cloneId?: string | null
               <details className="rounded-xl border border-line">
                 <summary className="cursor-pointer px-3 py-2.5 text-xs font-bold text-ink">Earnings breakdown</summary>
                 <div className="grid gap-3 border-t border-line p-3 lg:grid-cols-2">
+                  <p className="lg:col-span-2 rounded-lg bg-muted/10 px-2.5 py-2 text-[10px] leading-relaxed text-muted">
+                    <span className="font-semibold text-ink">How to read this:</span> each row compares selected-day net revenue and positive paid orders with the median daily result from the preceding 30 days. $0 and 0 paid orders under <span className="font-medium text-ink">Selected day</span> means none that day. Under <span className="font-medium text-ink">30-day typical</span>, it means the median comparison day was zero—not that the creator has no historical earnings. Refunds and adjustments affect net revenue but are not paid orders.
+                  </p>
                   <div>
-                    <div className="text-xs font-bold uppercase tracking-[0.1em] text-ink">By creator</div>
-                    <p className="mt-1 text-[11px] text-muted">Each line shows that creator&apos;s selected-day revenue versus its {benchmarkLabel.toLowerCase()}.</p>
+                    <div className="text-xs font-bold uppercase tracking-[0.1em] text-ink">Creator revenue &amp; paid orders</div>
+                    <p className="mt-1 text-[11px] text-muted">Creators appear when they had revenue on the selected day or during the prior-30-day comparison.</p>
                     <ChangeList rows={data.byClone} money={money} empty="No creator payments in this comparison." />
                   </div>
                   <div>
-                    <div className="text-xs font-bold uppercase tracking-[0.1em] text-ink">By payment type</div>
-                    <p className="mt-1 text-[11px] text-muted">Each line shows the selected-day revenue for that payment type versus its {benchmarkLabel.toLowerCase()}.</p>
+                    <div className="text-xs font-bold uppercase tracking-[0.1em] text-ink">Payment-type revenue &amp; paid orders</div>
+                    <p className="mt-1 text-[11px] text-muted">Each payment type is measured using the same selected-day and prior-30-day comparison.</p>
                     <ChangeList rows={data.byFeature} money={money} empty="No payment-type data in this comparison." />
                   </div>
                 </div>

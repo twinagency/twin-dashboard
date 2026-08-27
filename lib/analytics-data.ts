@@ -14,6 +14,7 @@ import { STAR_USD } from "./money";
 import { REPORT_TZ, reportInstant } from "./report-time";
 import type { DateRange, Period } from "./dashboard-data";
 import { resolveRevenueWindow } from "./revenue-window";
+import { classifyRevenueLedgerRow } from "./revenue-ledger";
 
 // Deep money analytics — WHERE the money comes from. This is the aggregation layer
 // for /analytics. It mirrors the query style in dashboard-data.ts (fetch scoped
@@ -251,6 +252,7 @@ export async function getAnalytics(
     kind: string | null;
     feature: string | null;
     telegram_id: number | null;
+    invoice_payload: string | null;
   };
   let txs: TxRow[];
   {
@@ -390,29 +392,32 @@ export async function getAnalytics(
     k === "credits" || k === "media" || k === "tip" ? k : "other";
 
   for (const t of txs) {
-    const stars = Number(t.amount_stars) || 0;
+    const { stars, paidOrder } = classifyRevenueLedgerRow(t);
     totalStars += stars;
-    totalSales += 1;
+    if (paidOrder) totalSales += 1;
 
     if (t.clone_id) {
       cloneStars.set(t.clone_id, (cloneStars.get(t.clone_id) ?? 0) + stars);
-      cloneSales.set(t.clone_id, (cloneSales.get(t.clone_id) ?? 0) + 1);
+      if (paidOrder) cloneSales.set(t.clone_id, (cloneSales.get(t.clone_id) ?? 0) + 1);
     }
 
     const k = normKind(t.kind);
     kindStars.set(k, (kindStars.get(k) ?? 0) + stars);
-    kindSales.set(k, (kindSales.get(k) ?? 0) + 1);
+    if (paidOrder) kindSales.set(k, (kindSales.get(k) ?? 0) + 1);
 
     const f = inferredMediaByTransaction.get(t.id) ?? normFeature(t.feature, t.kind);
     featureStars.set(f, (featureStars.get(f) ?? 0) + stars);
-    featureSales.set(f, (featureSales.get(f) ?? 0) + 1);
+    if (paidOrder) featureSales.set(f, (featureSales.get(f) ?? 0) + 1);
 
     // Paid-message purchase = the paywall conversion product. Track both
-    // distinct buyers and transaction/revenue volume for the clearer funnel.
+    // distinct buyers and paid-order volume for the clearer funnel. Revenue
+    // remains signed so a refund still lowers the net paid-message revenue.
     if (f === "credits") {
-      paidMessagePurchases += 1;
       paidMessageStars += stars;
-      if (t.telegram_id != null) creditBuyers.add(t.telegram_id);
+      if (paidOrder) {
+        paidMessagePurchases += 1;
+        if (t.telegram_id != null) creditBuyers.add(t.telegram_id);
+      }
     }
 
     // REPORT_TZ, not the container's clock. `new Date().getHours()` here read
@@ -533,7 +538,7 @@ export async function getAnalytics(
   // preset so "weekly" always means the latest seven complete days in scope.
   let weeklyQ = supabaseAdmin
     .from("star_transactions")
-    .select("clone_id,telegram_id,amount_stars")
+    .select("clone_id,telegram_id,amount_stars,invoice_payload")
     .gte("paid_at", iso(windowEnd - 7 * MS_DAY))
     .lte("paid_at", iso(windowEnd));
   if (cloneId) weeklyQ = weeklyQ.eq("clone_id", cloneId);
@@ -548,6 +553,7 @@ export async function getAnalytics(
     clone_id: string | null;
     telegram_id: number | null;
     amount_stars: number | null;
+    invoice_payload: string | null;
   }[]) {
     if (transaction.telegram_id == null) continue;
     const key = `${transaction.clone_id ?? "unknown"}:${transaction.telegram_id}`;
@@ -557,8 +563,9 @@ export async function getAnalytics(
       stars: 0,
       purchases: 0,
     };
-    current.stars += Number(transaction.amount_stars) || 0;
-    current.purchases += 1;
+    const classified = classifyRevenueLedgerRow(transaction);
+    current.stars += classified.stars;
+    if (classified.paidOrder) current.purchases += 1;
     weeklyByBuyer.set(key, current);
   }
   const rankedWeeklySpenders = [...weeklyByBuyer.values()].sort((a, b) => b.stars - a.stars);

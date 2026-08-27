@@ -5,6 +5,7 @@ import { cloneUserStats, cloneUserStatsWindow, usageRollup } from "./rollup";
 import { REPORT_TZ, reportInstant } from "./report-time";
 import { reportDayStartMs, shiftReportDay } from "./revenue-why-changed";
 import { resolveRevenueWindow } from "./revenue-window";
+import { repeatBuyerCount, rollupRevenueLedger } from "./revenue-ledger";
 
 export type Period = "ALL" | "1Y" | "6M" | "3M" | "1M" | "2W" | "1W" | "1D" | "CUSTOM";
 type Gran = "hour" | "day" | "week" | "month";
@@ -57,7 +58,11 @@ export type CloneSummary = {
 // reader had to be looked at (there were three) instead of silently changing
 // meaning under the two that render it with a "24h" label.
 export type CloneStats = {
+  /** Signed net proceeds, including refunds/adjustments. */
   stars: number;
+  /** Positive, non-adjustment payment volume. Use for average paid-order value. */
+  grossPaymentStars: number;
+  /** Positive, non-adjustment incoming payments only. */
   sales: number;
   /** Fans who ARRIVED in the window, excluding the cutover import (migration
    *  123 — 57,164 rows all stamped first_seen_at = 2026-08-08). Rendered as
@@ -96,7 +101,7 @@ export type RecentTransaction = {
   username: string | null;
   telegramId: number | null;
   stars: number;
-  kind: string; // feature if set (credits/photo/video/bundle/media/tip/subscription), else the coarse `kind`
+  kind: string; // "refund" for adjustments; otherwise feature (credits/photo/video/bundle/media/tip/subscription) or coarse `kind`
   mediaType: "photo" | "video" | "bundle" | null;
   mediaUrl: string | null;
   mediaName: string | null;
@@ -111,7 +116,11 @@ export type DashboardData = {
   series: Record<string, number | string>[];
   recent: RecentTransaction[];
   totals: {
+    /** Signed net proceeds, including refunds/adjustments. */
     stars: number;
+    /** Positive, non-adjustment payment volume. */
+    grossPaymentStars: number;
+    /** Positive, non-adjustment incoming payments only. */
     sales: number;
     costUsd: number;
     aiErrors: number;
@@ -243,11 +252,12 @@ export async function getDashboard(period: Period, range?: DateRange, nowMs = Da
   type PurchaseRow = {
     id: string;
     clone_id: string;
-    amount_stars: number;
+    amount_stars: number | string | null;
     paid_at: string;
     telegram_id: number | null;
     kind: string | null;
     feature: string | null;
+    invoice_payload: string | null;
   };
   // PAGED, and this is the revenue number itself. Unpaged, this read stopped at
   // the PostgREST cap and every total on the page was a fraction of the truth,
@@ -296,22 +306,21 @@ export async function getDashboard(period: Period, range?: DateRange, nowMs = Da
       : (paged.rows as Omit<PurchaseRow, "feature">[]).map((r) => ({ ...r, feature: null }));
   }
 
+  // The signed ledger is the source of truth for net revenue and the chart.
+  // The rollup deliberately keeps its paid-order subset separate: a refund or
+  // adjustment lowers net proceeds, but never becomes an order, buyer, or
+  // repeat purchase.
+  const ledger = rollupRevenueLedger(purchases);
+  const ledgerPurchases = ledger.rows;
+
   // bucketKey -> cloneId -> stars
   const grid = new Map<string, Map<string, number>>();
-  const cloneStars = new Map<string, number>();
-  const cloneSales = new Map<string, number>();
-  let totalStars = 0;
-  let totalSales = 0;
 
-  for (const p of purchases) {
+  for (const p of ledgerPurchases) {
     const bk = keyFor(new Date(p.paid_at).getTime());
     if (!grid.has(bk)) grid.set(bk, new Map());
     const row = grid.get(bk)!;
-    row.set(p.clone_id, (row.get(p.clone_id) ?? 0) + p.amount_stars);
-    cloneStars.set(p.clone_id, (cloneStars.get(p.clone_id) ?? 0) + p.amount_stars);
-    cloneSales.set(p.clone_id, (cloneSales.get(p.clone_id) ?? 0) + 1);
-    totalStars += p.amount_stars;
-    totalSales += 1;
+    row.set(p.clone_id, (row.get(p.clone_id) ?? 0) + p.stars);
   }
 
   const series = keys.map((k, i) => {
@@ -356,19 +365,11 @@ export async function getDashboard(period: Period, range?: DateRange, nowMs = Da
   // LIFETIME funnel — those are different questions on different tabs, and the
   // reason the tile now reads this instead of analytics.funnel.repeatPct.
   //
-  // A row with no telegram_id can't be attributed to a person, so it can't make
-  // one a buyer. It still counts as revenue and as a transaction above, which is
-  // the same thing the totals have always done with it.
-  const cloneTxPerFan = new Map<string, Map<number, number>>();
-  for (const p of purchases) {
-    if (p.telegram_id == null) continue;
-    let perFan = cloneTxPerFan.get(p.clone_id);
-    if (!perFan) {
-      perFan = new Map();
-      cloneTxPerFan.set(p.clone_id, perFan);
-    }
-    perFan.set(p.telegram_id, (perFan.get(p.telegram_id) ?? 0) + 1);
-  }
+  // A row with no telegram_id cannot be attributed to a person. Likewise, an
+  // adjustment is part of signed net proceeds but cannot create a buyer. The
+  // shared ledger rollup already applies both rules consistently to buyer and
+  // repeat-order counts.
+  const cloneTxPerFan = ledger.clonePaidOrdersPerFan;
 
   // ── per-clone user stats, INSIDE THE WINDOW ─────────────────────────────────
   // migration 122. The 120 function this replaced took only a p_active_since and
@@ -406,11 +407,11 @@ export async function getDashboard(period: Period, range?: DateRange, nowMs = Da
   for (const c of clones) {
     const perFan = cloneTxPerFan.get(c.id);
     const buyers = perFan?.size ?? 0;
-    let repeatBuyers = 0;
-    if (perFan) for (const count of perFan.values()) if (count > 1) repeatBuyers += 1;
+    const repeatBuyers = perFan ? repeatBuyerCount(perFan) : 0;
     perClone[c.id] = {
-      stars: cloneStars.get(c.id) ?? 0,
-      sales: cloneSales.get(c.id) ?? 0,
+      stars: ledger.cloneNetStars.get(c.id) ?? 0,
+      grossPaymentStars: ledger.cloneGrossPaymentStars.get(c.id) ?? 0,
+      sales: ledger.cloneSales.get(c.id) ?? 0,
       newFans: 0,
       activeUsers: 0,
       totalFans: totalFansByClone.get(c.id) ?? 0,
@@ -437,7 +438,7 @@ export async function getDashboard(period: Period, range?: DateRange, nowMs = Da
   type MediaType = "photo" | "video" | "bundle";
   const isMediaType = (value: unknown): value is MediaType =>
     value === "photo" || value === "video" || value === "bundle";
-  const latestPurchases = [...purchases]
+  const latestPurchases = [...ledgerPurchases]
     .sort((a, b) => new Date(b.paid_at).getTime() - new Date(a.paid_at).getTime())
     .slice(0, 300);
 
@@ -445,7 +446,11 @@ export async function getDashboard(period: Period, range?: DateRange, nowMs = Da
   // catalogue id. Match a sale to the latest unused same-price locked offer
   // made to that fan before payment, then resolve that exact item below.
   const mediaRefByTransaction = new Map<string, { type: MediaType; id: string }>();
-  const mediaPurchases = latestPurchases.filter((p) => p.kind === "media" || isMediaType(p.feature));
+  // An adjustment can carry a historic media feature, but it must never match
+  // an offer or render as a new media sale in the recent ledger.
+  const mediaPurchases = latestPurchases.filter(
+    (p) => p.paidOrder && (p.kind === "media" || isMediaType(p.feature)),
+  );
   const mediaCloneIds = [...new Set(mediaPurchases.map((p) => p.clone_id))];
   const mediaTelegramIds = [
     ...new Set(mediaPurchases.map((p) => p.telegram_id).filter((id): id is number => id != null)),
@@ -497,7 +502,7 @@ export async function getDashboard(period: Period, range?: DateRange, nowMs = Da
           candidate.cloneId === purchase.clone_id &&
           candidate.telegramId === Number(purchase.telegram_id) &&
           candidate.createdAt <= paidAt &&
-          candidate.stars === Number(purchase.amount_stars) &&
+          candidate.stars === purchase.stars &&
           (!recordedType || candidate.type === recordedType),
       );
       if (offer) {
@@ -596,8 +601,8 @@ export async function getDashboard(period: Period, range?: DateRange, nowMs = Da
 
   const cloneNameById = new Map(clones.map((c) => [c.id, c.name]));
   const recent: RecentTransaction[] = latestPurchases.map((p) => {
-    const mediaRef = mediaRefByTransaction.get(p.id);
-    const mediaType = mediaRef?.type ?? (isMediaType(p.feature) ? p.feature : null);
+    const mediaRef = p.adjustment ? undefined : mediaRefByTransaction.get(p.id);
+    const mediaType = p.adjustment ? null : mediaRef?.type ?? (isMediaType(p.feature) ? p.feature : null);
     const asset = mediaRef ? mediaAssetByKey.get(`${mediaRef.type}:${mediaRef.id}`) : null;
     return {
       cloneId: p.clone_id,
@@ -606,8 +611,8 @@ export async function getDashboard(period: Period, range?: DateRange, nowMs = Da
       buyerName: p.telegram_id != null ? nameByKey.get(`${p.clone_id}:${p.telegram_id}`) ?? `Fan ${p.telegram_id}` : "Unknown",
       username: p.telegram_id != null ? usernameByKey.get(`${p.clone_id}:${p.telegram_id}`) ?? null : null,
       telegramId: p.telegram_id,
-      stars: p.amount_stars,
-      kind: mediaType || p.feature || p.kind || "other",
+      stars: p.stars,
+      kind: p.adjustment ? "refund" : mediaType || p.feature || p.kind || "other",
       mediaType,
       mediaUrl: asset?.path ? signedUrlByPath.get(asset.path) ?? null : null,
       mediaName: asset?.name ?? null,
@@ -622,7 +627,7 @@ export async function getDashboard(period: Period, range?: DateRange, nowMs = Da
       name: c.name,
       color: colorById.get(c.id)!,
       photoUrl: photoById.get(c.id),
-      stars: cloneStars.get(c.id) ?? 0,
+      stars: ledger.cloneNetStars.get(c.id) ?? 0,
     }))
     .sort((a, b) => b.stars - a.stars);
 
@@ -630,10 +635,10 @@ export async function getDashboard(period: Period, range?: DateRange, nowMs = Da
   // Revenue page's headline tiles have an "All clones" total to show.
   //
   // users / active / messages are additive across clones. BUYERS IS NOT: one
-  // fan can pay two clones and a sum counts them twice, which is why this
-  // builds its own per-fan map over every purchase in the window instead of
-  // adding the per-clone counts up. Same reason the fleet repeat rate can't be
-  // averaged out of the per-clone rates — the denominators overlap.
+  // fan can pay two clones and a sum counts them twice, which is why the
+  // ledger rollup builds one paid-order map across the fleet rather than adding
+  // per-clone counts. Same reason the fleet repeat rate cannot be averaged out
+  // of per-clone rates — the denominators overlap.
   let totalNewFans = 0;
   let totalActiveUsers = 0;
   let totalFans = 0;
@@ -647,14 +652,9 @@ export async function getDashboard(period: Period, range?: DateRange, nowMs = Da
     totalReachable += s.reachable24h;
     totalMessages += s.messages;
   }
-  const fleetTxPerFan = new Map<number, number>();
-  for (const p of purchases) {
-    if (p.telegram_id == null) continue;
-    fleetTxPerFan.set(p.telegram_id, (fleetTxPerFan.get(p.telegram_id) ?? 0) + 1);
-  }
+  const fleetTxPerFan = ledger.fleetPaidOrdersPerFan;
   const totalBuyers = fleetTxPerFan.size;
-  let fleetRepeatBuyers = 0;
-  for (const count of fleetTxPerFan.values()) if (count > 1) fleetRepeatBuyers += 1;
+  const fleetRepeatBuyers = repeatBuyerCount(fleetTxPerFan);
 
   return {
     period,
@@ -663,8 +663,9 @@ export async function getDashboard(period: Period, range?: DateRange, nowMs = Da
     series,
     recent,
     totals: {
-      stars: totalStars,
-      sales: totalSales,
+      stars: ledger.netStars,
+      grossPaymentStars: ledger.grossPaymentStars,
+      sales: ledger.sales,
       costUsd: totalCost,
       aiErrors: totalErrors,
       newFans: totalNewFans,

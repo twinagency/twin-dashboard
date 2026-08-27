@@ -7,7 +7,7 @@
 // as "nothing happened today" rather than "this tile can't answer that".
 // Reported by Ronan 2026-08-21. Fixed by migration 122
 // (revenue_clone_user_stats_window) plus deriving buyers/repeat from the
-// star_transactions rows lib/dashboard-data.ts already scopes to the window.
+// positive paid-order rows lib/dashboard-data.ts already scopes to the window.
 //
 // Two things are asserted, and the first one is the regression guard:
 //
@@ -42,6 +42,7 @@
 // Reads the LIVE database. Run: npm run test:tiles
 import "dotenv/config";
 import { getDashboard } from "../lib/dashboard-data";
+import { classifyRevenueLedgerRow } from "../lib/revenue-ledger";
 import { supabaseAdmin } from "../lib/supabase";
 import { selectAllRows } from "../lib/select-all";
 
@@ -242,23 +243,36 @@ async function main(): Promise<void> {
   );
   eq("messages = chat_history rows in the window", day.totals.messages, chatRows.length);
 
-  // Buyers and repeat rate come off the same ledger the Transactions tile does.
-  // Rows with no telegram_id can't be attributed to a person and so can't make
-  // one a buyer — the page skips them here too.
-  const { rows: txRows } = await selectAllRows<{ id: string; telegram_id: number | null }>(
+  // Buyers and repeat rate come off the same signed ledger as the Orders tile.
+  // A refund/adjustment remains in net proceeds but is not a paid order, buyer,
+  // or repeat purchase. Rows with no telegram_id likewise cannot make a buyer.
+  const { rows: txRows } = await selectAllRows<{
+    id: string;
+    telegram_id: number | null;
+    amount_stars: number | string | null;
+    invoice_payload: string | null;
+  }>(
     supabaseAdmin
       .from("star_transactions")
-      .select("id,telegram_id")
+      .select("id,telegram_id,amount_stars,invoice_payload")
       .gte("paid_at", iso(dayStartMs))
       .lte("paid_at", iso(endMs))
       .order("id", { ascending: true }),
     { label: "star_transactions in window" },
   );
   const txPerFan = new Map<number, number>();
+  let paidOrders = 0;
+  let paidOrderStars = 0;
   for (const t of txRows) {
+    const classified = classifyRevenueLedgerRow(t);
+    if (!classified.paidOrder) continue;
+    paidOrders += 1;
+    paidOrderStars += classified.stars;
     if (t.telegram_id == null) continue;
     txPerFan.set(t.telegram_id, (txPerFan.get(t.telegram_id) ?? 0) + 1);
   }
+  eq("orders = positive non-adjustment payments in the window", day.totals.sales, paidOrders);
+  eq("paid-order Stars exclude refunds and adjustments", day.totals.grossPaymentStars, paidOrderStars);
   let repeatBuyers = 0;
   for (const count of txPerFan.values()) if (count > 1) repeatBuyers += 1;
   eq("buyers = distinct fans who paid in the window", day.totals.buyers, txPerFan.size);

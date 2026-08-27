@@ -65,6 +65,7 @@ const TX_KIND_LABEL: Record<string, string> = {
   media: "Media (untagged)",
   tip: "Tip",
   subscription: "VIP subscription",
+  refund: "Refund / adjustment",
   other: "Other",
 };
 
@@ -792,7 +793,10 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
             // reads "Rev/user" as either.
             const revPerUser = s.activeUsers > 0 ? displayStars / s.activeUsers : 0;
             const revPerBuyer = s.buyers > 0 ? displayStars / s.buyers : 0;
-            const avgOrder = s.sales > 0 ? displayStars / s.sales : 0;
+            // Net proceeds include refunds, while "Avg paid order" means the
+            // value of positive paid orders only. Keep those two measures apart
+            // or one refund makes an ordinary purchase look cheaper than it was.
+            const avgOrder = s.sales > 0 ? s.grossPaymentStars / s.sales : 0;
             // "Conversion" on a tile beside "Buyers" means: of the people who
             // talked to her, how many bought ANYTHING. It used to divide
             // paywallFunnel.purchased by `messaged`, and .purchased counts only
@@ -813,42 +817,122 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
             // the same screen — they did, "Photos 21%" here against "Media 61%"
             // there, because this one dropped the catch-all buckets first.
             const topKind = topFeatureRow(data.analytics.byFeature);
-            const tiles: { label: string; value: string; money?: boolean }[] = [
+            const periodScope = customRange ? "the selected calendar range" : "the selected reporting period";
+            const creatorScope = cloneId ? "this creator" : "all creators";
+            const profileScopeNote = cloneId
+              ? ""
+              : " In All creators, the same Telegram person can have a separate profile for each creator they message.";
+            const buyerScopeNote = cloneId
+              ? ""
+              : " In All creators, the same Telegram account is counted once even if it pays more than one creator.";
+            const tiles: { label: string; scope?: string; value: string; money?: boolean; hint?: string }[] = [
               // "Users" = every fan, all time, and it does NOT follow the date
               // filter — same as "Reachable now (24h)" below. Ronan's call,
               // 2026-08-22: on this page "Users" answers "how big is the
               // audience", a number that cannot shrink when you pick a shorter
               // period. The windowed count is "New" beside it.
-              { label: "Users", value: fmtNum(s.totalFans) },
-              { label: "New", value: fmtNum(s.newFans) },
+              {
+                label: "Users",
+                value: fmtNum(s.totalFans),
+                scope: "all-time profiles",
+                hint: `All fan profiles for ${creatorScope}, ever. This audience-size number does not change when you change the date filter.${profileScopeNote}`,
+              },
+              {
+                label: "New",
+                value: fmtNum(s.newFans),
+                scope: "this period",
+                hint: `Fan profiles first seen during ${periodScope}. Historical import rows are excluded.${profileScopeNote}`,
+              },
               // Was computed for Rev/user's denominator but never shown itself,
               // so the tile's math was invisible. Fans who messaged inside the
               // window - not New (first-time arrivals) and not the 24h
               // reachable tile below (that one ignores the filter entirely).
-              { label: "Active", value: fmtNum(s.activeUsers) },
-              { label: "Transactions", value: fmtNum(s.sales) },
+              {
+                label: "Active",
+                scope: "messaged this period",
+                value: fmtNum(s.activeUsers),
+                hint: `Fans who sent an inbound message during ${periodScope}. This is the denominator for Net / active.${profileScopeNote}`,
+              },
+              {
+                label: "Orders",
+                scope: "paid this period",
+                value: fmtNum(s.sales),
+                hint: `Individual positive Star payments recorded during ${periodScope}. Refunds and adjustments are not orders. One buyer can place more than one order.`,
+              },
               // The ONE tile that ignores the filter, and it says so. Telegram
               // only allows a business bot to message a fan within 24h of that
               // fan's last message, so this is who the fleet can reach right
               // now — an operational limit, not a stat about the window.
-              { label: "Reachable now (24h)", value: fmtNum(s.reachable24h) },
-              { label: "Messages", value: fmtNum(s.messages) },
-              { label: cloneId ? "Buyers" : "Unique buyers", value: fmtNum(s.buyers) },
-              { label: "Rev/user", value: money(revPerUser), money: true },
-              { label: "Rev/buyer", value: money(revPerBuyer), money: true },
-              { label: "Avg order", value: money(avgOrder), money: true },
-              { label: "Conversion", value: conversion !== null ? pct(conversion) : "-" },
-              { label: "Repeat rate", value: pct(repeatRate) },
+              {
+                label: "Reachable now (24h)",
+                scope: "last inbound <24h",
+                value: fmtNum(s.reachable24h),
+                hint: `Fan profiles whose last inbound message was within the past 24 hours, so Telegram allows the business bot to message them now. This is measured right now, not by the date filter.${profileScopeNote}`,
+              },
+              {
+                label: "Messages",
+                scope: "this period",
+                value: fmtNum(s.messages),
+                hint: `All recorded conversation messages during ${periodScope} for ${creatorScope}, including fan messages and creator replies.${profileScopeNote}`,
+              },
+              {
+                label: cloneId ? "Buyers" : "Unique buyers",
+                scope: "paid this period",
+                value: fmtNum(s.buyers),
+                hint: `People with at least one positive paid order during ${periodScope}. This is the denominator for Net/buyer and the numerator for Conversion.${buyerScopeNote}`,
+              },
+              {
+                label: "Net / active",
+                scope: "net proceeds",
+                value: money(revPerUser),
+                money: true,
+                hint: `Net proceeds during ${periodScope}, including refunds and adjustments, divided by Active — not by the all-time Users total.`,
+              },
+              {
+                label: "Net / buyer",
+                scope: "net proceeds",
+                value: money(revPerBuyer),
+                money: true,
+                hint: `Net proceeds during ${periodScope}, including refunds and adjustments, divided by Buyers.${buyerScopeNote}`,
+              },
+              {
+                label: "Avg paid order",
+                scope: "positive payments",
+                value: money(avgOrder),
+                money: true,
+                hint: `Positive paid-order value during ${periodScope} divided by the number of paid orders. Refunds and adjustments are excluded.`,
+              },
+              {
+                label: "Conversion",
+                scope: "buyers ÷ chatters",
+                value: conversion !== null ? pct(conversion) : "-",
+                hint: `Buyers divided by people who sent at least one inbound message during ${periodScope}. It includes any positive payment type, not only paid-message purchases.${buyerScopeNote}`,
+              },
+              {
+                label: "Repeat rate",
+                scope: "2+ orders / buyer",
+                value: pct(repeatRate),
+                hint: `Buyers with more than one paid order during ${periodScope}, divided by Buyers.${buyerScopeNote}`,
+              },
               // Short label so the tile never truncates the number away.
               // "(untagged)" is kept, not stripped: it is the difference between
               // "photos are our product" and "we are not recording what we sell".
-              { label: "Top source", value: topKind ? `${topKind.label} ${pct(topKind.share)}` : "-" },
+              {
+                label: "Top source",
+                scope: "net share this period",
+                value: topKind ? `${topKind.label} ${pct(topKind.share)}` : "-",
+                hint: `The payment type contributing the largest share of net proceeds during ${periodScope}.`,
+              },
             ];
             return (
               <>
                 {tiles.map((t) => (
                   <div key={t.label} className="earnings-stat-tile rounded-xl border px-3 py-3">
-                    <div className="text-[10px] uppercase tracking-wide text-muted">{t.label}</div>
+                    <div className="flex min-w-0 items-center gap-0.5 text-[10px] uppercase tracking-wide text-muted">
+                      <span className="min-w-0 truncate">{t.label}</span>
+                      {t.hint && <Info text={t.hint} />}
+                    </div>
+                    {t.scope && <div className="mt-0.5 truncate text-[9px] font-medium leading-tight text-muted/85">{t.scope}</div>}
                     <div className={"mt-1 break-words font-mono text-base font-semibold leading-tight tabular-nums " + (t.money ? "money-value" : "text-ink")}>{t.value}</div>
                   </div>
                 ))}
@@ -912,15 +996,15 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
         </div>
       )}
 
-      {/* ── Recent transactions - same scope/window as everything above it.
+      {/* ── Recent ledger activity - same scope/window as everything above it.
           Server sends up to 300 (fleet-wide, most recent first); scoping to
           one clone filters client-side. Shows 10, "Show more" → 50 → 100. ── */}
       {data && (
         <Card size="sm" className="mt-4">
           <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
             <CardTitle className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-ink">
-              Transactions
-              <Info text="Media purchases show Photo, Video, or Bundle with the exact catalogue thumbnail when the original offer is available. Media (untagged) is older Telegram-imported history whose exact item was never recorded." />
+              Recent ledger activity
+              <Info text="Paid orders and any refunds or adjustments in the selected period. Media purchases show Photo, Video, or Bundle with the exact catalogue thumbnail when the original offer is available. Media (untagged) is older Telegram-imported history whose exact item was never recorded." />
             </CardTitle>
             <div className="relative w-40 sm:w-56">
               <svg
@@ -936,7 +1020,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
               <Input
                 value={txQuery}
                 onChange={(event) => setTxQuery(event.target.value)}
-                placeholder="Search transactions…"
+                placeholder="Search ledger activity…"
                 className="h-8 pl-8 text-xs"
               />
             </div>
@@ -959,7 +1043,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
               if (rows.length === 0) {
                 return (
                   <div className="px-4 py-6 text-center text-sm text-muted">
-                    {q ? `No transactions match "${txQuery}".` : "No transactions in this window."}
+                    {q ? `No ledger activity matches "${txQuery}".` : "No ledger activity in this period."}
                   </div>
                 );
               }
@@ -1021,7 +1105,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
                     <TableRow>
                       <TableHead>Fan</TableHead>
                       {!scoped && <TableHead>Creator</TableHead>}
-                      <TableHead>Bought</TableHead>
+                      <TableHead>Type</TableHead>
                       <TableHead className="text-right">Amount</TableHead>
                       <TableHead className="text-right">Date</TableHead>
                     </TableRow>

@@ -29,6 +29,7 @@
 // message; each item names the assertion it turned red.
 
 import { readFileSync } from "node:fs";
+import { classifyRevenueLedgerRow } from "../lib/revenue-ledger";
 import { reportFeatureRows, topFeatureRow, type FeatureRow } from "../lib/report-features";
 import { REPORT_TZ, normaliseHour, reportInstant, reportTzLabel } from "../lib/report-time";
 import { starsToMoneyRate, usdToMoneyRate, AUD_PER_USD, STAR_USD } from "../lib/money";
@@ -241,6 +242,27 @@ check("C14 topFeatureRow ranks over reportFeatureRows, so no bucket can hide fro
   const biggest = [...ranked].filter((r) => r.stars > 0).sort((a, b) => b.stars - a.stars)[0];
   eq(topFeatureRow(LIVE)?.key, biggest.key, "the tile and the panel must agree on which row is biggest");
   eq(topFeatureRow(LIVE)?.label, biggest.label, "and on what it is called");
+});
+
+// ── C15: a refund changes net revenue, never the count of a paid order ──────
+
+check("C15 analytics distinguishes paid orders from ledger adjustments", () => {
+  const payment = classifyRevenueLedgerRow({ amount_stars: 1000, invoice_payload: null });
+  const negativeAdjustment = classifyRevenueLedgerRow({ amount_stars: -400, invoice_payload: null });
+  const explicitRefund = classifyRevenueLedgerRow({ amount_stars: 400, invoice_payload: "refund" });
+  const zero = classifyRevenueLedgerRow({ amount_stars: 0, invoice_payload: null });
+
+  assert(payment.paidOrder, "positive ordinary ledger row must be a paid order");
+  assert(!payment.adjustment, "positive ordinary ledger row must not be an adjustment");
+  assert(negativeAdjustment.adjustment, "negative amount must be an adjustment");
+  assert(!negativeAdjustment.paidOrder, "negative adjustment must not be a paid order");
+  assert(explicitRefund.adjustment, "refund payload must be an adjustment even if its amount is positive");
+  assert(!explicitRefund.paidOrder, "refund payload must not be a paid order");
+  assert(!zero.paidOrder, "zero-value ledger row must not be a paid order");
+  assert(
+    /const avgOrder = s\.sales > 0 \? s\.grossPaymentStars \/ s\.sales : 0;/.test(DASH),
+    "Avg paid order must use positive paid-order value, not signed net proceeds",
+  );
 });
 
 // ── report ───────────────────────────────────────────────────────────────────
