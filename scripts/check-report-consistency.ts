@@ -191,7 +191,7 @@ check("C9 buyer conversion keeps each numerator and denominator explicit", () =>
     "the revenue page must render the dedicated Buyer conversion panel",
   );
   assert(
-    /Have they ever bought\?/.test(DASH) && /Did messagers buy\?/.test(DASH) && /Did past buyers come back\?/.test(DASH),
+    /Have they ever bought\?/.test(DASH) && /Did people who messaged buy\?/.test(DASH) && /Did past buyers come back\?/.test(DASH),
     "the panel must distinguish all-time buying, selected-window buying, and seven-day return engagement",
   );
   assert(

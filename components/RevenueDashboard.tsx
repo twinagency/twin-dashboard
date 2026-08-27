@@ -1915,7 +1915,7 @@ function BuyerConversionPanel({
       detail: "Of every audience account that has ever chatted, how many have ever bought something? This is an all-time number, so changing the date does not change it. In All creators, one person who chats with two creators has two audience accounts — one with each creator.",
     },
     {
-      label: "Did messagers buy?",
+      label: "Did people who messaged buy?",
       value: activeChatRate,
       summary: `${fmtNum(conversion.activeChatBuyers)} of ${fmtNum(conversion.activeChatters)} people who messaged also bought`,
       detail: "Of the people who sent a message during the dates you picked, how many also bought something during those same dates? This is the buying-conversion number. In All creators, each person is counted once. It shows that both things happened in the same period; it does not prove that one message caused the purchase.",
@@ -1947,7 +1947,7 @@ function BuyerConversionPanel({
         </summary>
         <CardContent className="border-t border-line p-3 sm:p-4">
           <div className="rounded-xl border border-[#4a8ec4]/35 bg-[#eff8ff] px-3 py-2.5 text-[11px] leading-relaxed text-muted">
-            <p><span className="font-semibold text-ink">These are different questions:</span> “Did messagers buy?” uses the dates you picked. “Did past buyers come back?” only asks whether previous buyers messaged in the last 7 days. They are not supposed to be the same number.</p>
+            <p><span className="font-semibold text-ink">These are different questions:</span> “Did people who messaged buy?” uses the dates you picked. “Did past buyers come back?” only asks whether previous buyers messaged in the last 7 days. They are not supposed to be the same number.</p>
             <p className="mt-1"><span className="font-semibold text-ink">What counts as bought?</span> A completed positive Star payment. Refunds and adjustments do not count as a purchase.</p>
           </div>
 
