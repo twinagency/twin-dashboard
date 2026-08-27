@@ -45,6 +45,10 @@ function count(value: number) {
   return Number.isInteger(value) ? value.toLocaleString("en-AU") : value.toLocaleString("en-AU", { maximumFractionDigits: 1 });
 }
 
+function quantity(value: number, singular: string, plural: string) {
+  return `${count(value)} ${value === 1 ? singular : plural}`;
+}
+
 function direction(value: number | null) {
   return value == null || value === 0 ? null : value > 0;
 }
@@ -68,7 +72,7 @@ function ChangeList({
           <div className="min-w-0">
             <div className="truncate font-medium text-ink">{row.label}</div>
             <div className="mt-0.5 text-[11px] leading-relaxed text-muted">
-              Selected day: {money(row.stars)} from {count(row.sales)} paid orders. {benchmarkLabel}: {money(row.usualStars)} from {count(row.usualSales)} paid orders.
+              Selected day: {money(row.stars)} from {quantity(row.sales, "paid order", "paid orders")}. {benchmarkLabel}: {money(row.usualStars)} from {quantity(row.usualSales, "paid order", "paid orders")}.
             </div>
           </div>
           <div className={(row.deltaStars >= 0 ? "text-good" : "text-[#b4432f]") + " shrink-0 text-right font-mono text-[11px] font-semibold"}>
@@ -238,7 +242,7 @@ export default function RevenueDayDrivers({ cloneId }: { cloneId?: string | null
                       <SmallSignal label="Largest paid order" value="N/A" detail="No positive payment" />
                     )}
                     {data.concentration.topBuyer ? (
-                      <SmallSignal label="Highest-paying buyer" value={money(data.concentration.topBuyer.stars)} detail={`${count(data.concentration.topBuyer.sales)} purchases, ${Math.round(data.concentration.topBuyer.share * 100)}% of paid-in amount`} />
+                      <SmallSignal label="Highest-paying buyer" value={money(data.concentration.topBuyer.stars)} detail={`${quantity(data.concentration.topBuyer.sales, "purchase", "purchases")}, ${Math.round(data.concentration.topBuyer.share * 100)}% of paid-in amount`} />
                     ) : (
                       <SmallSignal label="Highest-paying buyer" value="N/A" detail="No identified buyer" />
                     )}
