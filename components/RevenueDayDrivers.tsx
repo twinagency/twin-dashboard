@@ -30,6 +30,16 @@ function shiftDay(day: string, amount: number) {
   return new Date(Date.UTC(year, month - 1, date + amount)).toISOString().slice(0, 10);
 }
 
+function formatDay(day: string) {
+  const [year, month, date] = day.split("-").map(Number);
+  return new Intl.DateTimeFormat("en-AU", {
+    timeZone: "UTC",
+    weekday: "short",
+    day: "numeric",
+    month: "short",
+  }).format(new Date(Date.UTC(year, month - 1, date, 12)));
+}
+
 function signed(value: number, formatter: (stars: number) => string) {
   if (value === 0) return formatter(0);
   return `${value > 0 ? "+" : "−"}${formatter(Math.abs(value))}`;
@@ -106,19 +116,34 @@ function SmallSignal({ label, value, detail, positive }: { label: string; value:
 export default function RevenueDayDrivers({ cloneId }: { cloneId?: string | null }) {
   const { currency, rate } = useCurrency();
   const today = useMemo(() => reportDayKey(), []);
-  const [day, setDay] = useState(() => shiftDay(reportDayKey(), -1));
+  const yesterday = useMemo(() => shiftDay(today, -1), [today]);
+  const [day, setDay] = useState(yesterday);
+  const [selectionVersion, setSelectionVersion] = useState(0);
   const [open, setOpen] = useState(false);
   const [data, setData] = useState<RevenueWhyChanged | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const money = (stars: number) => fmtMoney(starsToMoneyRate(stars, currency, rate), currency);
+  const selectedDayHeading = day === today ? "Earnings today so far" : `Earnings for ${formatDay(day)}`;
 
-  // This stays a compact row until someone chooses to investigate. The five-day
+  function selectDay(nextDay: string) {
+    if (!nextDay || nextDay > today) return;
+    // Clear the previous result straight away so a newly selected date never
+    // appears to be showing the old day's numbers. Incrementing the version
+    // also intentionally reloads when someone presses the already-selected day.
+    setData(null);
+    setError(null);
+    setDay(nextDay);
+    setSelectionVersion((version) => version + 1);
+  }
+
+  // This stays a compact row until someone chooses to investigate. The 30-day
   // comparison is only read after it is opened.
   useEffect(() => {
     if (!open) return;
     const controller = new AbortController();
     setLoading(true);
+    setData(null);
     setError(null);
     fetch(`/api/dashboard/day-insight?date=${encodeURIComponent(day)}`, { cache: "no-store", signal: controller.signal })
       .then(async (response) => {
@@ -138,7 +163,7 @@ export default function RevenueDayDrivers({ cloneId }: { cloneId?: string | null
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [day, cloneId, open]);
+  }, [day, cloneId, open, selectionVersion]);
 
   const benchmarkLabel = data?.comparison.benchmarkLabel ?? "30-day baseline";
 
@@ -151,11 +176,11 @@ export default function RevenueDayDrivers({ cloneId }: { cloneId?: string | null
         className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left transition-colors hover:bg-muted/10 sm:px-4"
       >
         <span className="min-w-0">
-          <span className="flex items-center gap-1.5 text-sm font-bold text-ink">
-            Daily earnings analysis
-            <Info text="Compare one calendar day with the median result across the prior 30 calendar days, in the current creator scope." />
+          <span className="flex min-w-0 items-start gap-1.5 text-sm font-bold leading-tight text-ink">
+            <span className="min-w-0">Daily earnings analysis compared to previous days &amp; weeks</span>
+            <span className="shrink-0"><Info text="Compare one calendar day with the median result across the prior 30 calendar days, in the current creator scope." /></span>
           </span>
-          <span className="mt-0.5 block truncate text-[11px] text-muted">Review buyers, orders, audience activity, major payments, and product mix for any day.</span>
+          <span className="mt-0.5 block text-[11px] leading-snug text-muted">Review buyers, orders, audience activity, major payments, and product mix for any day.</span>
         </span>
         <span className="flex shrink-0 items-center gap-1 text-xs font-semibold text-[#28658f]">
           {open ? "Hide" : "Open"}
@@ -167,17 +192,17 @@ export default function RevenueDayDrivers({ cloneId }: { cloneId?: string | null
         <CardContent className="border-t border-line p-3 sm:p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <div className="text-sm font-bold text-ink">{data ? (data.day.partial ? "Earnings today so far" : `Earnings for ${data.day.label}`) : "Choose a day to review"}</div>
+              <div className="text-sm font-bold text-ink">{selectedDayHeading}</div>
               <p className="mt-0.5 text-[11px] text-muted">{cloneId ? "This selected creator only" : "All creators together"}</p>
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
-              <Button type="button" variant="ghost" size="sm" onClick={() => setDay(shiftDay(today, -1))} className="h-7 border border-line px-2 text-[11px]">
+              <Button type="button" variant="ghost" size="sm" aria-pressed={day === yesterday} onClick={() => selectDay(yesterday)} className={(day === yesterday ? "bg-[#eff8ff] text-[#28658f] hover:bg-[#e1f1fb]" : "") + " h-7 border border-line px-2 text-[11px]"}>
                 Yesterday
               </Button>
-              <Button type="button" variant="ghost" size="sm" onClick={() => setDay(today)} className="h-7 border border-line px-2 text-[11px]">
+              <Button type="button" variant="ghost" size="sm" aria-pressed={day === today} onClick={() => selectDay(today)} className={(day === today ? "bg-[#eff8ff] text-[#28658f] hover:bg-[#e1f1fb]" : "") + " h-7 border border-line px-2 text-[11px]"}>
                 Today
               </Button>
-              <Input aria-label="Choose a day to review" type="date" value={day} max={today} onChange={(event) => event.target.value && setDay(event.target.value)} className="h-7 w-[132px] px-2 text-xs" />
+              <Input aria-label="Choose a day to review" type="date" value={day} max={today} onValueChange={selectDay} className="h-7 w-[132px] px-2 text-xs" />
             </div>
           </div>
 

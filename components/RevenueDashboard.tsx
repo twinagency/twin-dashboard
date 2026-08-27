@@ -38,7 +38,14 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 // read by app/revenue/page.tsx) — when set, every number here scopes to that one
 // clone; when absent ("All clones"), everything aggregates across the fleet.
 
-type FullData = DashboardData & { analytics: AnalyticsData; balance: StarBalance | null };
+type FullData = DashboardData & {
+  analytics: AnalyticsData;
+  balance: StarBalance | null;
+  /** Server snapshot metadata. The API deliberately never serves browser-cached revenue. */
+  cachedAt: number;
+  ageSeconds: number;
+  stale: boolean;
+};
 
 // T8: was `media: "Media"` — a bare, unexplained catch-all that read as broken
 // ("Rev why tf it say media it should be photo or video or message"). The API
@@ -135,7 +142,14 @@ const PERIODS: { key: Period; label: string; live?: boolean }[] = [
   { key: "1D", label: "1D", live: true },
 ];
 
-const REVENUE_REFRESH_MS = 10 * 60 * 1000;
+const REVENUE_REFRESH_MS = 60 * 1000;
+
+function snapshotAgeLabel(ageSeconds: number) {
+  if (ageSeconds <= 5) return "Updated just now";
+  if (ageSeconds < 60) return `Updated ${ageSeconds}s ago`;
+  const minutes = Math.floor(ageSeconds / 60);
+  return `Updated ${minutes}m ago`;
+}
 
 export default function RevenueDashboard({ cloneId }: { cloneId?: string | null } = {}) {
   const scoped = Boolean(cloneId);
@@ -171,6 +185,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
   // Full revenue report — expands below the stats grid from its teaser tile.
   const [reportOpen, setReportOpen] = useState(false);
   const reportRef = useRef<HTMLDivElement | null>(null);
+  const newestRequest = useRef(0);
 
   // Recharts colors are inline JS (not CSS classes) so they don't pick up the
   // light-mode constants rather than theme-conditional.
@@ -182,7 +197,8 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
   // without introducing an off-theme grey bar.
 
   const fetchData = useCallback(
-    async (p: Period, cid?: string | null, range?: { start: string; end: string } | null) => {
+    async (p: Period, cid?: string | null, range?: { start: string; end: string } | null, force = false) => {
+      const request = ++newestRequest.current;
       const params = new URLSearchParams();
       if (range) {
         // Date picker values are report-calendar dates. Sending them as dates
@@ -194,6 +210,10 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
         params.set("period", p);
       }
       if (cid) params.set("clone", cid);
+      // A normal dashboard request waits if its one-minute snapshot has just
+      // expired. An explicit refresh asks for a new snapshot even if it is
+      // still warm, so the operator can verify the live ledger immediately.
+      params.set("fresh", force ? "force" : "1");
       let json: (FullData & { error?: string }) | null = null;
       try {
         const res = await fetch(`/api/dashboard?${params}`, { cache: "no-store" });
@@ -204,10 +224,12 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
           throw new Error(json?.error || `the server returned ${res.status} with no totals`);
         }
       } catch (e) {
+        if (request !== newestRequest.current) return;
         setLoadError(e instanceof Error ? e.message : String(e));
         setLoading(false);
         return; // keep the LAST GOOD data on screen rather than blanking it
       }
+      if (request !== newestRequest.current) return;
       setLoadError(null);
       setData(json);
       setLoading(false);
@@ -238,6 +260,11 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
   function clearCustomRange() {
     setCustomRange(null);
     setCustomOpen(false);
+  }
+
+  function refreshNow() {
+    setLoading(true);
+    fetchData(period, cloneId, customRange, true);
   }
 
   const money = (stars: number) => fmtMoney(starsToMoneyRate(stars, currency, rate), currency);
@@ -319,8 +346,19 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
               the screen height before a single number appeared. */}
           <h2 className="flex items-center gap-2 font-heading text-2xl font-semibold tracking-[-0.035em] text-[#06172f] sm:text-3xl md:text-4xl">
             Earnings overview
-            <Info text="Revenue, buyer activity and conversion performance across your active creators." />
+            <Info text="Revenue, buyer activity and conversion performance across your active creators. In All creators, buyers are unique people across creators; audience and message totals count each creator-fan relationship." />
           </h2>
+          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted">
+            {data && <span>{data.stale ? "Refreshing latest data…" : snapshotAgeLabel(data.ageSeconds)}</span>}
+            <button
+              type="button"
+              onClick={refreshNow}
+              disabled={loading}
+              className="font-semibold text-[#28658f] underline decoration-[#28658f]/35 underline-offset-2 transition hover:text-[#17496c] disabled:cursor-not-allowed disabled:opacity-50"
+            >
+              {loading ? "Refreshing…" : "Refresh"}
+            </button>
+          </div>
         </div>
       </div>
       {/* ── Period toggle - a segmented control, not tabs: it re-windows the
@@ -419,11 +457,11 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
           <div className="flex flex-col gap-3 p-4 pt-0">
             <label className="flex flex-col gap-1 text-xs text-muted">
               From
-              <Input type="date" value={draftStart} onChange={(e) => setDraftStart(e.target.value)} max={draftEnd || undefined} />
+              <Input type="date" value={draftStart} onValueChange={setDraftStart} max={draftEnd || undefined} />
             </label>
             <label className="flex flex-col gap-1 text-xs text-muted">
               To
-              <Input type="date" value={draftEnd} onChange={(e) => setDraftEnd(e.target.value)} min={draftStart || undefined} />
+              <Input type="date" value={draftEnd} onValueChange={setDraftEnd} min={draftStart || undefined} />
             </label>
             <div className="mt-1 flex justify-end gap-2">
               {customRange && (
@@ -653,7 +691,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
                   </svg>
                   <Input
                     value={creatorQuery}
-                    onChange={(e) => setCreatorQuery(e.target.value)}
+                    onValueChange={setCreatorQuery}
                     placeholder="Search creators…"
                     aria-label="Search creators"
                     className="h-8 pl-8 text-xs"
@@ -787,7 +825,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
               // now — an operational limit, not a stat about the window.
               { label: "Reachable now (24h)", value: fmtNum(s.reachable24h) },
               { label: "Messages", value: fmtNum(s.messages) },
-              { label: "Buyers", value: fmtNum(s.buyers) },
+              { label: cloneId ? "Buyers" : "Unique buyers", value: fmtNum(s.buyers) },
               { label: "Rev/user", value: money(revPerUser), money: true },
               { label: "Rev/buyer", value: money(revPerBuyer), money: true },
               { label: "Avg order", value: money(avgOrder), money: true },
@@ -889,7 +927,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
               </svg>
               <Input
                 value={txQuery}
-                onChange={(e) => setTxQuery(e.target.value)}
+                onValueChange={setTxQuery}
                 placeholder="Search transactions…"
                 className="h-8 pl-8 text-xs"
               />

@@ -4,25 +4,29 @@ import { chartColorForClone, profileImagePathForClone } from "./colors";
 import { cloneUserStats, cloneUserStatsWindow, usageRollup } from "./rollup";
 import { REPORT_TZ, reportInstant } from "./report-time";
 import { reportDayStartMs, shiftReportDay } from "./revenue-why-changed";
+import { resolveRevenueWindow } from "./revenue-window";
 
 export type Period = "ALL" | "1Y" | "6M" | "3M" | "1M" | "2W" | "1W" | "1D" | "CUSTOM";
 type Gran = "hour" | "day" | "week" | "month";
 
-const SPEC: Record<Period, { days: number | null; gran: Gran }> = {
-  "1D": { days: 1, gran: "hour" },
-  "1W": { days: 7, gran: "day" },
-  "2W": { days: 14, gran: "day" },
-  "1M": { days: 30, gran: "day" },
+// Window boundaries live in revenue-window.ts so the dashboard and analytics
+// cannot quietly give a named period different dates. This file only decides
+// how many visual buckets the already-resolved window receives.
+const SPEC: Record<Period, { gran: Gran }> = {
+  "1D": { gran: "hour" },
+  "1W": { gran: "day" },
+  "2W": { gran: "day" },
+  "1M": { gran: "day" },
   // Every multi-day window is day-by-day: Ronan's call 2026-08-11. Weekly/monthly
   // buckets hid the individual days he reads the chart for. 1D stays hourly
   // because one bar is not a chart.
-  "3M": { days: 90, gran: "day" },
-  "6M": { days: 180, gran: "day" },
-  "1Y": { days: 365, gran: "day" },
-  ALL: { days: null, gran: "day" },
+  "3M": { gran: "day" },
+  "6M": { gran: "day" },
+  "1Y": { gran: "day" },
+  ALL: { gran: "day" },
   // Unused — CUSTOM always comes with an explicit {startMs, endMs} range, which
   // picks its own granularity (see granForSpan) instead of reading this table.
-  CUSTOM: { days: null, gran: "day" },
+  CUSTOM: { gran: "day" },
 };
 
 export type DateRange = { startMs: number; endMs: number };
@@ -185,10 +189,12 @@ function buildBuckets(startMs: number, endMs: number, gran: Gran) {
   return { keys, labels, keyFor };
 }
 
-export async function getDashboard(period: Period, range?: DateRange): Promise<DashboardData> {
+export async function getDashboard(period: Period, range?: DateRange, nowMs = Date.now()): Promise<DashboardData> {
   const spec = SPEC[period];
-  const now = Date.now();
-  const windowEnd = range ? range.endMs : now;
+  const now = nowMs;
+  const window = await resolveRevenueWindow(period, range, now);
+  const startMs = window.startMs;
+  const windowEnd = window.endMs;
   const gran: Gran = range ? granForSpan(range.endMs - range.startMs) : spec.gran;
 
   // ── clones ──────────────────────────────────────────────────────────────
@@ -226,29 +232,6 @@ export async function getDashboard(period: Period, range?: DateRange): Promise<D
         if (s.signedUrl) photoById.set(entries[i][0], s.signedUrl);
       });
     }
-  }
-
-  // ── window start ──────────────────────────────────────────────────────────
-  let startMs: number;
-  if (range) {
-    startMs = range.startMs;
-  } else if (spec.days !== null) {
-    // Multi-day presets are calendar-day reports, not rolling 24-hour slices.
-    // Keeping the current report day as the last (live) bar gives 1W seven
-    // Sydney dates and 1M thirty, all of which match the day-insight endpoint.
-    startMs = spec.gran === "day"
-      ? reportDayStartMs(shiftReportDay(reportInstant(new Date(now)).dayKey, -(spec.days - 1)))
-      : now - spec.days * MS_DAY;
-  } else {
-    const { data: earliest } = await supabaseAdmin
-      .from("star_transactions")
-      .select("paid_at")
-      .order("paid_at", { ascending: true })
-      .limit(1)
-      .maybeSingle();
-    startMs = earliest?.paid_at
-      ? new Date(earliest.paid_at).getTime()
-      : now - 180 * MS_DAY;
   }
 
   const { keys, labels, keyFor } = buildBuckets(startMs, windowEnd, gran);

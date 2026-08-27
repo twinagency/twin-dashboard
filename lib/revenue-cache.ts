@@ -10,8 +10,8 @@
 // Nothing here changes what the numbers ARE. It changes who waits for them:
 //
 //   - a warm read returns the cached rollup immediately, with its age
-//   - a stale read still returns immediately, and kicks off ONE background
-//     refresh, so the next reader gets the fresh copy
+//   - an ordinary stale read returns immediately and kicks off ONE background
+//     refresh; the live dashboard instead waits for that same single flight
 //   - only a cold read (nothing cached for this window yet) waits on Supabase
 //
 // The single-flight map is the part that actually matters. The Revenue page
@@ -25,6 +25,7 @@
 
 import { getAnalytics, type AnalyticsData } from "./analytics-data";
 import { getDashboard, type DashboardData, type DateRange, type Period } from "./dashboard-data";
+import { resolveRevenueWindow } from "./revenue-window";
 
 export type RevenueRollup = { dashboard: DashboardData; analytics: AnalyticsData };
 
@@ -37,12 +38,10 @@ export type CachedRevenue = RevenueRollup & {
   stale: boolean;
 };
 
-// Five minutes. Revenue is not a live number and a sale showing up a few minutes
-// late costs nothing, while each miss is tens of seconds of the database. The
-// Revenue page polls on a 10 minute timer (REVENUE_REFRESH_MS), so a TTL under
-// that means a poll usually finds a warm entry and never blocks on a refresh it
-// started itself.
-const TTL_MS = 5 * 60 * 1000;
+// One minute. The page's headline tiles are operational numbers, including who
+// is reachable right now, so a 5–10 minute snapshot is too old to call live.
+// The single-flight below keeps a whole fleet from starting duplicate work.
+const TTL_MS = 60 * 1000;
 
 // Preset periods are a closed set, but a custom range is any two dates the
 // calendar picker allows, so the key space is unbounded and the payloads are
@@ -84,12 +83,17 @@ function refresh(key: string, period: Period, cloneId: string | null, range?: Da
   if (running) return running;
 
   const run = (async () => {
+    // Resolve this once, at one instant. The dashboard and analytics halves
+    // render together, so they must not independently choose a calendar vs
+    // rolling window (or even drift a few milliseconds apart at the end).
+    const nowMs = Date.now();
+    const sharedRange = await resolveRevenueWindow(period, range, nowMs);
     const [dashboard, analytics] = await Promise.all([
-      getDashboard(period, range),
-      getAnalytics(period, cloneId, range),
+      getDashboard(period, sharedRange, nowMs),
+      getAnalytics(period, cloneId, sharedRange, undefined, nowMs),
     ]);
     const entry: Entry = { fetchedAt: Date.now(), value: { dashboard, analytics } };
-    evictIfFull();
+    if (!cache.has(key)) evictIfFull();
     cache.set(key, entry);
     return entry;
   })();
@@ -109,12 +113,13 @@ function refresh(key: string, period: Period, cloneId: string | null, range?: Da
  * The revenue rollup for one window, from cache when there is one.
  *
  * Only the first call for a given window awaits Supabase. After that this
- * returns in microseconds and refreshes behind the caller.
+ * returns in microseconds unless a caller explicitly requests the fresh copy.
  */
 export async function getRevenueRollup(
   period: Period,
   cloneId: string | null,
   range?: DateRange,
+  options?: { awaitFresh?: boolean; force?: boolean },
 ): Promise<CachedRevenue> {
   const key = keyOf(period, cloneId, range);
   const cached = cache.get(key);
@@ -122,11 +127,20 @@ export async function getRevenueRollup(
   if (cached) {
     const ageMs = Date.now() - cached.fetchedAt;
     const stale = ageMs > TTL_MS;
+    if (options?.force) {
+      const entry = await refresh(key, period, cloneId, range);
+      return { ...entry.value, cachedAt: entry.fetchedAt, ageSeconds: 0, stale: false };
+    }
     if (stale) {
-      // Started, deliberately not awaited: the point is that this reader does
-      // not pay for it. A failure here is swallowed because there is a good
-      // snapshot to return either way, and the age says how good.
-      refresh(key, period, cloneId, range).catch((e) => {
+      // Ordinary callers receive the last good snapshot while one refresh is
+      // running. The live dashboard opts into awaitFresh so its once-a-minute
+      // poll instead waits for that same single-flight refresh to finish.
+      const updating = refresh(key, period, cloneId, range);
+      if (options?.awaitFresh) {
+        const entry = await updating;
+        return { ...entry.value, cachedAt: entry.fetchedAt, ageSeconds: 0, stale: false };
+      }
+      updating.catch((e) => {
         console.error(`[revenue-cache] background refresh of ${key} failed:`, e);
       });
     }

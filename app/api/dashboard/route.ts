@@ -33,6 +33,7 @@ const VALID: Period[] = ["ALL", "1Y", "6M", "3M", "1M", "2W", "1W", "1D", "CUSTO
 export async function GET(req: NextRequest) {
   const p = req.nextUrl.searchParams.get("period");
   const clone = req.nextUrl.searchParams.get("clone") || null;
+  const freshness = req.nextUrl.searchParams.get("fresh");
 
   // Custom range: the UI sends report-calendar dates so a person in Brisbane
   // does not cut an AEDT day at 1 AM. Epoch-ms bounds remain supported for
@@ -69,16 +70,25 @@ export async function GET(req: NextRequest) {
 
   const period: Period = range ? "CUSTOM" : VALID.includes(p as Period) ? (p as Period) : "1M";
   try {
-    // The rollup is cached (lib/revenue-cache.ts) because it is tens of seconds
-    // of Supabase on the real fleet. The balance is not: it is one live Telegram
-    // call, it is already best-effort, and it is the only genuinely live number
-    // on the page.
+    // The rollup has a one-minute single-flight cache because it is expensive
+    // across the real fleet; the dashboard waits for an expired entry to refresh.
+    // The balance is still a separate best-effort live Telegram call.
     const [rollup, balance] = await Promise.all([
-      getRevenueRollup(period, clone, range),
+      getRevenueRollup(period, clone, range, {
+        // `fresh=1` waits for an expired snapshot to finish refreshing; the
+        // dashboard uses it for its once-a-minute update. `force` is the
+        // operator's explicit Refresh action, even if the one-minute cache is
+        // still warm.
+        awaitFresh: freshness === "1" || freshness === "force",
+        force: freshness === "force",
+      }),
       getScopedBalance(clone),
     ]);
     const { dashboard, analytics, cachedAt, ageSeconds, stale } = rollup;
-    return NextResponse.json({ ...dashboard, analytics, balance, cachedAt, ageSeconds, stale });
+    return NextResponse.json(
+      { ...dashboard, analytics, balance, cachedAt, ageSeconds, stale },
+      { headers: { "Cache-Control": "private, no-store" } },
+    );
   } catch (e) {
     return NextResponse.json(
       { error: e instanceof Error ? e.message : "failed" },

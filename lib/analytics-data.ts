@@ -13,6 +13,7 @@ import {
 import { STAR_USD } from "./money";
 import { REPORT_TZ, reportInstant } from "./report-time";
 import type { DateRange, Period } from "./dashboard-data";
+import { resolveRevenueWindow } from "./revenue-window";
 
 // Deep money analytics — WHERE the money comes from. This is the aggregation layer
 // for /analytics. It mirrors the query style in dashboard-data.ts (fetch scoped
@@ -21,18 +22,6 @@ import type { DateRange, Period } from "./dashboard-data";
 // plenty fast; if it ever grows, these become SQL views / RPCs.
 
 const MS_DAY = 86_400_000;
-
-const WINDOW_DAYS: Record<Period, number | null> = {
-  "1D": 1,
-  "1W": 7,
-  "2W": 14,
-  "1M": 30,
-  "3M": 90,
-  "6M": 180,
-  "1Y": 365,
-  ALL: null,
-  CUSTOM: null,
-};
 
 export type KindKey = "credits" | "media" | "tip" | "other";
 
@@ -220,10 +209,11 @@ export async function getAnalytics(
   cloneId?: string | null,
   range?: DateRange,
   opts?: AnalyticsOptions,
+  nowMs = Date.now(),
 ): Promise<AnalyticsData> {
   const includeCost = opts?.includeCost !== false;
-  const now = Date.now();
-  const windowEnd = range ? range.endMs : now;
+  const window = await resolveRevenueWindow(period, range, nowMs);
+  const windowEnd = window.endMs;
 
   // ── clones (color order matches the nav: created_at asc → colorForIndex) ──────
   // Colors are assigned across the FULL fleet order so they stay stable whether
@@ -245,22 +235,8 @@ export async function getAnalytics(
     flowById.set(c.id, c.ai_mode === "smart" ? "smart" : "classic");
   });
 
-  // ── window start ──────────────────────────────────────────────────────────────
-  const days = WINDOW_DAYS[period];
-  let startMs: number;
-  if (range) {
-    startMs = range.startMs;
-  } else if (days !== null) {
-    startMs = now - days * MS_DAY;
-  } else {
-    const { data: earliest } = await supabaseAdmin
-      .from("star_transactions")
-      .select("paid_at")
-      .order("paid_at", { ascending: true })
-      .limit(1)
-      .maybeSingle();
-    startMs = earliest?.paid_at ? new Date(earliest.paid_at).getTime() : now - 180 * MS_DAY;
-  }
+  // ── shared window ─────────────────────────────────────────────────────────────
+  const startMs = window.startMs;
 
   // ── revenue ledger in window (star_transactions) ─────────────────────────────
   // Try to read the additive `feature` column; if migration 024 hasn't been applied

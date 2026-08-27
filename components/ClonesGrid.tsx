@@ -51,7 +51,7 @@ export default function ClonesGrid({ clones }: { clones: CloneCard[] }) {
         <Input
           type="text"
           value={query}
-          onChange={(e) => setQuery(e.target.value)}
+          onValueChange={setQuery}
           placeholder="Search creators…"
           className="h-9 max-w-xs"
         />

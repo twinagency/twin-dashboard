@@ -3,7 +3,10 @@ import { Input as InputPrimitive } from "@base-ui/react/input"
 
 import { cn } from "@/lib/utils"
 
-function Input({ className, type, ...props }: React.ComponentProps<"input">) {
+// Base UI's controlled-input callback is `onValueChange`, not the native
+// `onChange`. Preserve the component's own prop shape here so callers can use
+// the callback that actually reaches Base UI's state handler.
+function Input({ className, type, ...props }: React.ComponentProps<typeof InputPrimitive>) {
   return (
     <InputPrimitive
       type={type}
