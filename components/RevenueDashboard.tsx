@@ -1886,13 +1886,9 @@ export function fmtHours(hours: number | null): string {
   return `${(hours / 24).toFixed(1)}d`;
 }
 
-// ── Buyer conversion & ongoing engagement ───────────────────────────────────
-//
-// There are deliberately three different cohorts below. The old single
-// "Conversion" tile combined creator–fan profile counts with account-level
-// chatters in All creators, which makes a percentage that looks precise but
-// has no single denominator. Each card now names its cohort and the explainer
-// makes the All-creators identity rule visible before someone shares the number.
+// ── Buying customers ─────────────────────────────────────────────────────────
+// Keep the plain-language question on every card. These rates intentionally
+// answer different questions, so the UI must not make them look interchangeable.
 function BuyerConversionPanel({
   conversion,
   pct,
@@ -1913,22 +1909,22 @@ function BuyerConversionPanel({
 
   const metrics: { label: string; value: string; summary: string; detail: string }[] = [
     {
-      label: "All-time buyer conversion",
+      label: "Have they ever bought?",
       value: lifetimeRate,
-      summary: `${fmtNum(conversion.lifetimeBuyerProfiles)} of ${fmtNum(conversion.lifetimeFanProfiles)} fan profiles`,
-      detail: "Buyer profiles with recorded lifetime spend or purchase history, divided by all fan profiles ever. This is an all-time measure and does not change with the date filter. In All creators, one person who talks to two creators is two creator–fan profiles in both sides of this calculation.",
+      summary: `${fmtNum(conversion.lifetimeBuyerProfiles)} of ${fmtNum(conversion.lifetimeFanProfiles)} audience accounts have bought`,
+      detail: "Of every audience account that has ever chatted, how many have ever bought something? This is an all-time number, so changing the date does not change it. In All creators, one person who chats with two creators has two audience accounts — one with each creator.",
     },
     {
-      label: "Active-chat buyer conversion",
+      label: "Did messagers buy?",
       value: activeChatRate,
-      summary: `${fmtNum(conversion.activeChatBuyers)} of ${fmtNum(conversion.activeChatters)} people this period`,
-      detail: "Unique people who both sent at least one inbound message and made at least one eligible positive paid order during the selected period, divided by unique people who sent an inbound message during that period. In All creators, people are deduplicated across creators, so a message and payment do not have to involve the same creator. It measures activity and purchase in the same period; it does not prove a particular chat caused the purchase.",
+      summary: `${fmtNum(conversion.activeChatBuyers)} of ${fmtNum(conversion.activeChatters)} people who messaged also bought`,
+      detail: "Of the people who sent a message during the dates you picked, how many also bought something during those same dates? This is the buying-conversion number. In All creators, each person is counted once. It shows that both things happened in the same period; it does not prove that one message caused the purchase.",
     },
     {
-      label: "Buyers still chatting (7d)",
+      label: "Did past buyers come back?",
       value: buyerEngagementRate,
-      summary: `${fmtNum(conversion.activeBuyerProfiles7d)} of ${fmtNum(conversion.lifetimeBuyerProfiles)} buyer profiles`,
-      detail: "Buyer profiles with recorded lifetime spend or purchase history that sent at least one inbound message in the trailing seven days, divided by all buyer profiles. This is a rolling seven-day engagement measure, so it stays on the last seven days even if the earnings date filter changes. In All creators, this is counted as creator–fan profiles, not deduplicated people.",
+      summary: `${fmtNum(conversion.activeBuyerProfiles7d)} of ${fmtNum(conversion.lifetimeBuyerProfiles)} past buyers messaged in the last 7 days`,
+      detail: "This is not a buying-conversion number. Of the people who have bought before, how many sent a message in the last seven days? It always checks the last seven days, even if you change the earnings date. In All creators, this counts each creator–buyer account, so one person can appear once for each creator they bought from.",
     },
   ];
 
@@ -1937,13 +1933,13 @@ function BuyerConversionPanel({
       <details className="group">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-3 text-left sm:px-4 [&::-webkit-details-marker]:hidden">
           <span className="min-w-0">
-            <span className="block text-xs font-semibold uppercase tracking-wide text-ink">Buyer conversion</span>
-            <span className="mt-0.5 block text-[11px] leading-snug text-muted">All-time: {fmtNum(conversion.lifetimeBuyerProfiles)} buyer profiles of {fmtNum(conversion.lifetimeFanProfiles)} fan profiles.</span>
+            <span className="block text-xs font-semibold uppercase tracking-wide text-ink">Buying customers</span>
+            <span className="mt-0.5 block text-[11px] leading-snug text-muted">Did people buy after messaging — and did past buyers come back to chat?</span>
           </span>
           <span className="flex shrink-0 items-center gap-2 text-right">
             <span>
-              <span className="block text-[9px] font-semibold uppercase tracking-wide text-muted">All-time</span>
-              <span className="block font-mono text-base font-semibold tabular-nums text-ink">{lifetimeRate}</span>
+              <span className="block text-[9px] font-semibold uppercase tracking-wide text-muted">Bought this period</span>
+              <span className="block font-mono text-base font-semibold tabular-nums text-ink">{activeChatRate}</span>
             </span>
             <span className="text-xs font-semibold text-[#28658f] group-open:hidden">Open</span>
             <span className="hidden text-xs font-semibold text-[#28658f] group-open:inline">Hide</span>
@@ -1951,8 +1947,8 @@ function BuyerConversionPanel({
         </summary>
         <CardContent className="border-t border-line p-3 sm:p-4">
           <div className="rounded-xl border border-[#4a8ec4]/35 bg-[#eff8ff] px-3 py-2.5 text-[11px] leading-relaxed text-muted">
-            <p><span className="font-semibold text-ink">Why there are different rates:</span> all-time conversion and 7-day buyer engagement use creator–fan profiles. Active-chat conversion uses unique people in the selected period, deduplicated across creators in All creators.</p>
-            <p className="mt-1"><span className="font-semibold text-ink">Selected-period purchase:</span> one eligible positive Star payment. Refunds and adjustments are not purchases. A rate shows an observed overlap or outcome, not proof that a message or offer caused a sale.</p>
+            <p><span className="font-semibold text-ink">These are different questions:</span> “Did messagers buy?” uses the dates you picked. “Did past buyers come back?” only asks whether previous buyers messaged in the last 7 days. They are not supposed to be the same number.</p>
+            <p className="mt-1"><span className="font-semibold text-ink">What counts as bought?</span> A completed positive Star payment. Refunds and adjustments do not count as a purchase.</p>
           </div>
 
           <div className="mt-3 grid grid-cols-2 gap-2 lg:grid-cols-3">

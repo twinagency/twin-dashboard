@@ -191,8 +191,8 @@ check("C9 buyer conversion keeps each numerator and denominator explicit", () =>
     "the revenue page must render the dedicated Buyer conversion panel",
   );
   assert(
-    /All-time buyer conversion/.test(DASH) && /Active-chat buyer conversion/.test(DASH) && /Buyers still chatting \(7d\)/.test(DASH),
-    "the panel must distinguish lifecycle conversion, selected-window active-chat conversion, and 7-day buyer engagement",
+    /Have they ever bought\?/.test(DASH) && /Did messagers buy\?/.test(DASH) && /Did past buyers come back\?/.test(DASH),
+    "the panel must distinguish all-time buying, selected-window buying, and seven-day return engagement",
   );
   assert(
     /activeChatBuyerRate: messagedFanTotal > 0 \? activeChatBuyers \/ messagedFanTotal : null/.test(ANALYTICS),
