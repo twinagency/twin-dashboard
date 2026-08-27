@@ -158,22 +158,22 @@ const SEG = {
   // default, and Off is the legacy behaviour that let the bug happen.
   priceGuard: [
     { value: "block" as const, label: "🛑 Block", title: "If she types a Star price that is not one of yours, that message never reaches him. She sends a short neutral line instead and the attempt is recorded in Logs. This is the default. It cannot affect a real price: every amount on a Pay button is computed in code and never routes through this check." },
-    { value: "log" as const, label: "👀 Watch only", title: "The message goes out exactly as written, but every invented price is recorded in Logs. Use this for a day if you want to see how often it actually happens on this clone before you let it start blocking anything." },
+    { value: "log" as const, label: "👀 Watch only", title: "The message goes out exactly as written, but every invented price is recorded in Logs. Use this for a day if you want to see how often it actually happens for this creator before you let it start blocking anything." },
     { value: "off" as const, label: "🚫 Off", title: "No checking at all. This is how the bot behaved before the guard existed, and it is what allowed her to quote 1000 stars for a 40 star photo. Only pick this if the guard is misfiring on a real message." },
   ],
   // Migration 093 (clones.silence_fallback_mode). Keep On first: it is the
   // default and the safe state. Off is an opt-in to silence, not a tidier
   // setting, so its label says what actually happens to the fan.
   silenceFallback: [
-    { value: "on" as const, label: "💬 Send a recovery line", title: "Default. If the model fails or refuses three times in a row, she sends one short line (\"ugh my brain just went completely blank there babe\") so he is not left on read. The wording is the same for every clone and is not editable here." },
+    { value: "on" as const, label: "💬 Send a recovery line", title: "Default. If the model fails or refuses three times in a row, she sends one short line (\"ugh my brain just went completely blank there babe\") so he is not left on read. The wording is the same for every creator and is not editable here." },
     { value: "off" as const, label: "🔇 Say nothing", title: "She sends NOTHING when the model gives up, so he is simply left on read. That is the exact ghosting the recovery line was written to prevent, which is why On is the default. Pick this only if you would rather she said nothing at all than said something that does not fit her. Worth knowing: this does not only fire during an outage, a refusal from the model counts as a failed try too, so it can fire on a message that was merely too explicit." },
   ],
   // Migration 105 (clones.variety_guard). Keep Normal first: it is the default
   // and the fix, and Off is the legacy behaviour that produced the tic.
   varietyGuard: [
     { value: "normal" as const, label: "🔁 Normal", title: "Default. She is stopped from opening or signing off with the same phrase over and over to the same fan, from using his name every single turn, and from resending a line he has already had. A phrase gets caught once it shows up three times across her recent messages to him." },
-    { value: "strict" as const, label: "🔒 Strict", title: "The same checks, tighter. A repeated phrase is caught on the second use rather than the third, she looks back over more of her recent messages, and a line only has to be roughly similar to count as a repeat. Use this on a clone that still tics on Normal." },
-    { value: "off" as const, label: "🚫 Off", title: "No checking at all. This is how the bot behaved before the guard existed, and it is what let one clone open 14 replies in a row with 'mmm ...' and another close nearly every message the same way. Only pick this if the guard is chopping lines it should be leaving alone." },
+    { value: "strict" as const, label: "🔒 Strict", title: "The same checks, tighter. A repeated phrase is caught on the second use rather than the third, she looks back over more of her recent messages, and a line only has to be roughly similar to count as a repeat. Use this on a creator that still tics on Normal." },
+    { value: "off" as const, label: "🚫 Off", title: "No checking at all. This is how the bot behaved before the guard existed, and it is what let one creator open 14 replies in a row with 'mmm ...' and another close nearly every message the same way. Only pick this if the guard is chopping lines it should be leaving alone." },
   ],
   // Migration 084 (clones.fan_time_mode). Keep never_assume first: it is the
   // default and the fix, and assume_same is the legacy behaviour.
@@ -451,7 +451,7 @@ export default function ConfigSections({
         )}
         {mode === "edit" ? (
           <div className="block">
-            <FieldLabel label="Status" hint="Paused means the bot ignores every incoming message for this clone. Nothing is deleted, she just stops replying until you set her active again." />
+            <FieldLabel label="Status" hint="Paused means the bot ignores every incoming message for this creator. Nothing is deleted, she just stops replying until you set her active again." />
             <input type="hidden" name="status" value={cfg.active ? "active" : "paused"} />
             <Toggle label={cfg.active ? "Active" : "Paused"} name="_status_toggle" checked={cfg.active} onChange={(v) => set("active", v)} />
           </div>
@@ -755,7 +755,7 @@ export default function ConfigSections({
             onChange={(v) => set("tipPushLevel", v)}
             options={SEG.tipPush}
             accent="amber"
-            hint="How hard she asks to be TIPPED and spoiled, dialled separately from photos, videos and bundles. Leave on '= Push' and tips follow the Content pushing dial exactly, which adds nothing to her prompt. Move it and only tips change: a soft-sell clone that still loves being spoiled, or a heavy content seller who never begs for Stars. Amounts always come from the fixed spoil menu, she never names a number."
+            hint="How hard she asks to be TIPPED and spoiled, dialled separately from photos, videos and bundles. Leave on '= Push' and tips follow the Content pushing dial exactly, which adds nothing to her prompt. Move it and only tips change: a soft-sell creator that still loves being spoiled, or a heavy content seller who never begs for Stars. Amounts always come from the fixed spoil menu, she never names a number."
           />
         </div>
       </Section>
@@ -1020,7 +1020,7 @@ export default function ConfigSections({
           accent="amber"
           title="When the model gives up"
           hint="After three failed tries she either sends one short recovery line or says nothing at all."
-          tip="This fires when the model fails OR refuses three times in a row, not only during an API outage. To see which is happening on this clone, open Logs and filter OpenRouter for 'all 3 tries failed'."
+          tip="This fires when the model fails OR refuses three times in a row, not only during an API outage. To see which is happening for this creator, open Logs and filter OpenRouter for 'all 3 tries failed'."
           className="xl:col-span-2"
         >
           <Segmented
@@ -1063,7 +1063,7 @@ export default function ConfigSections({
             onChange={(v) => set("varietyGuard", v)}
             options={SEG.varietyGuard}
             accent="purple"
-            hint="Leave this on Normal, the default and the fix. It watches her recent messages to each fan and blocks the same opening phrase, the same sign-off, his name every single turn, a near-identical message resent to him, and a stock line going out to two different men close together. Strict catches a phrase on its second use instead of its third and looks back further. Off is the old behaviour that had one clone open 14 replies in a row with the same two words. Hover a step to see exactly what changes."
+            hint="Leave this on Normal, the default and the fix. It watches her recent messages to each fan and blocks the same opening phrase, the same sign-off, his name every single turn, a near-identical message resent to him, and a stock line going out to two different men close together. Strict catches a phrase on its second use instead of its third and looks back further. Off is the old behaviour that had one creator open 14 replies in a row with the same two words. Hover a step to see exactly what changes."
           />
         </Section>
 
@@ -1173,7 +1173,7 @@ export default function ConfigSections({
               min={0}
               step={1}
               defaultValue={clone?.voice_cooldown_turns ?? 2}
-              hint="How many of her own most recent replies must NOT have been a voice note before Smart mode will pick voice again, unless he freshly and explicitly asks for another one, that always overrides this. Without a cooldown the decider can pattern-match its own recent voice sends and get stuck replying with only voice notes for several turns straight. 0 turns it off entirely for a clone that should send voice often."
+              hint="How many of her own most recent replies must NOT have been a voice note before Smart mode will pick voice again, unless he freshly and explicitly asks for another one, that always overrides this. Without a cooldown the decider can pattern-match its own recent voice sends and get stuck replying with only voice notes for several turns straight. 0 turns it off entirely for a creator that should send voice often."
             />
           </Section>
         )}
@@ -1321,7 +1321,7 @@ export default function ConfigSections({
               <SubHead
                 emoji="🎚"
                 label="How hard each level bites"
-                tip="She only ever picks a LEVEL (light, medium or max), never a number. This is what each of those levels is worth, as a share of the cap above. Defaults 34 / 67 / 100 are exactly what every clone ran on before these became editable."
+                tip="She only ever picks a LEVEL (light, medium or max), never a number. This is what each of those levels is worth, as a share of the cap above. Defaults 34 / 67 / 100 are exactly what every creator ran on before these became editable."
               />
               <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
                 <Slider label="Light" name="discount_level_light_pct" value={cfg.discLevelLight} onChange={(v) => set("discLevelLight", v)} min={1} max={100} step={1} format={(v) => `${v}%`} />
@@ -1407,7 +1407,7 @@ export default function ConfigSections({
           emoji="🎯"
           label="Offer follow-up"
           accent="amber"
-          hint="How many times she'll gently redirect a fan back to a locked, unpaid offer before she backs off and stops mentioning it. Bot-enforced (clones.offer_redirect_cap)."
+          hint="How many times she'll gently redirect a fan back to a locked, unpaid offer before she backs off and stops mentioning it. Bot-enforced setting."
         >
           <Slider
             label="Redirect cap"
@@ -1429,7 +1429,7 @@ export default function ConfigSections({
           emoji="🧊"
           label="Stop pitching after refusals"
           accent="amber"
-          hint="How many times a fan has to plainly refuse to pay (e.g. 'i'm not paying', 'too expensive', 'send it free') before she stops OFFERING him paid photos, videos, bundles, tips and VIP. She keeps chatting warmly either way, and if he asks to buy himself after this trips, she still delivers. Any real purchase resets his count to 0. Bot-enforced (clones.offer_decline_cap)."
+          hint="How many times a fan has to plainly refuse to pay (e.g. 'i'm not paying', 'too expensive', 'send it free') before she stops OFFERING him paid photos, videos, bundles, tips and VIP. She keeps chatting warmly either way, and if he asks to buy himself after this trips, she still delivers. Any real purchase resets his count to 0. Bot-enforced setting."
         >
           <Slider
             label="Refusals before she backs off"
@@ -1619,8 +1619,8 @@ export default function ConfigSections({
             )}
             <div className="mt-1.5">
               <Warning
-                text="This dial does not take effect yet. Every fan's actual spend tier is still computed by a fixed database rule (1000/300/50 Stars), which cannot read this clone's thresholds."
-                detail="users.spend_tier is a Postgres GENERATED column, and a generated column can only reference other fields on the same row, never another table like clones. Moving these sliders saves cleanly and looks live, but has no effect until that column is converted to a regular column set by application code or a trigger. Known gap, tracked as follow-up work, not deployed."
+                text="This dial does not take effect yet. Every fan's actual spend tier is still computed by a fixed database rule (1000/300/50 Stars), which cannot read this creator's thresholds."
+                detail="The spend tier is a Postgres GENERATED column, and a generated column can only reference other fields on the same row, never a related table. Moving these sliders saves cleanly and looks live, but has no effect until that column is converted to a regular column set by application code or a trigger. Known gap, tracked as follow-up work, not deployed."
               />
             </div>
           </div>
@@ -1810,7 +1810,7 @@ export function MonetizationSections({
             onChange={(v) => set("priceGuardMode", v)}
             options={SEG.priceGuard}
             accent="accent"
-            hint="Every price on a Pay button is computed in code and is always correct. This is about the prices she TYPES in chat. On 2026-07-31 she was measured telling a fan photos 'start at 1000 stars' when they are 40 to 90, and quoting a video price on a clone with no videos. Telling her not to, in her prompt, did not work. This is the code check that does. Leave it on Block. Hover a step to see exactly what each one does."
+            hint="Every price on a Pay button is computed in code and is always correct. This is about the prices she TYPES in chat. On 2026-07-31 she was measured telling a fan photos 'start at 1000 stars' when they are 40 to 90, and quoting a video price for a creator with no videos. Telling her not to, in her prompt, did not work. This is the code check that does. Leave it on Block. Hover a step to see exactly what each one does."
           />
         </div>
         <div className="border-t border-line pt-2">
@@ -2042,7 +2042,7 @@ export function MonetizationSections({
           min={0}
           step={1}
           defaultValue={clone?.tip_credits_per_100_stars ?? 0}
-          hint="What a tip gives him back in message credits. 0 means a tip gives no credits, which is the default and what every clone did before this field existed. At 5, a 1000 star tip gives him 50 messages. The amount is always computed from this number, never decided by the AI, and it is rounded DOWN so a tip too small to earn a credit earns none. This is deliberately NOT tied to your pack price: it is a separate rate you control."
+          hint="What a tip gives him back in message credits. 0 means a tip gives no credits, which is the default and what every creator did before this field existed. At 5, a 1000 star tip gives him 50 messages. The amount is always computed from this number, never decided by the AI, and it is rounded DOWN so a tip too small to earn a credit earns none. This is deliberately NOT tied to your pack price: it is a separate rate you control."
         />
         {/* Migration 084, the two tip re-ask brakes. Rendered unconditionally,
             NOT behind cfg.tips like the spoil menu below: a hidden Toggle posts
@@ -2056,7 +2056,7 @@ export function MonetizationSections({
           step={1}
           placeholder="180"
           defaultValue={clone?.tip_reask_cooldown_seconds ?? undefined}
-          hint="After she has shown him a tip button or the spoil menu, how long she stays off the subject before she is allowed to show one again. Leave blank for the default of 180 seconds, which is what every clone ran on before this field existed. Lower means she circles back to being tipped sooner. A fresh, explicit offer from him always goes through immediately, whatever this says."
+          hint="After she has shown him a tip button or the spoil menu, how long she stays off the subject before she is allowed to show one again. Leave blank for the default of 180 seconds, which is what every creator ran on before this field existed. Lower means she circles back to being tipped sooner. A fresh, explicit offer from him always goes through immediately, whatever this says."
         />
         <div className="block">
           <FieldLabel

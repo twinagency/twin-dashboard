@@ -77,7 +77,7 @@ export default function CreateCloneForm({ defaults = {} }: { defaults?: Partial<
 
   // ── Create: run all tasks sequentially ──────────────────────────────────────
   function buildTasks(): Task[] {
-    const t: Task[] = [{ label: "Create clone", status: "pending" }];
+    const t: Task[] = [{ label: "Create creator", status: "pending" }];
     effPhotos().forEach((p) => t.push({ label: `Photo: ${p.name || p.file.name}`, status: "pending" }));
     effVideos().forEach((v) => t.push({ label: `Video: ${v.file.name}`, status: "pending" }));
     effBundles().forEach((b) => t.push({ label: `Bundle: ${b.name || "(unnamed)"}`, status: "pending" }));
@@ -193,7 +193,7 @@ export default function CreateCloneForm({ defaults = {} }: { defaults?: Partial<
   }
 
   async function abortAndDelete() {
-    if (!confirm("Delete this half-created clone and start over?")) return;
+    if (!confirm("Delete this half-created creator and start over?")) return;
     if (cloneIdRef.current) await deleteClone(cloneIdRef.current);
     cloneIdRef.current = null;
     setTasks([]);
@@ -321,7 +321,7 @@ export default function CreateCloneForm({ defaults = {} }: { defaults?: Partial<
               </button>
               <button type="button" onClick={abortAndDelete}
                 className="rounded-lg border border-crit/30 px-4 py-2 text-sm text-crit transition hover:bg-crit/10 dark:text-crit">
-                Delete whole clone
+                Delete whole creator
               </button>
             </div>
           )}

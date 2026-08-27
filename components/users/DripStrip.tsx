@@ -105,7 +105,7 @@ export default function DripStrip({
 
       <div className="mt-1.5 text-[11px] text-muted">
         {!state.enabled ? (
-          <span className="text-warn">Campaign is off for this clone, nothing will send.</span>
+          <span className="text-warn">Campaign is off for this creator, nothing will send.</span>
         ) : finished ? (
           <span>Episode finished. Resets when he messages.</span>
         ) : state.nextDueAt ? (

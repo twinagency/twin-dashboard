@@ -503,7 +503,7 @@ export function TrackerBoard({ board, bots, log }: { board: Board; bots: BotRow[
           <textarea
             name="body"
             rows={6}
-            placeholder="the whole story. what she said, what should have happened, which clone, which fan. as long as you like."
+            placeholder="the whole story. what she said, what should have happened, which creator, which fan. as long as you like."
             className="w-full rounded-lg border border-black/10 px-3 py-2.5 text-sm outline-none focus:border-sky-400"
           />
           <div className="flex flex-wrap gap-2">

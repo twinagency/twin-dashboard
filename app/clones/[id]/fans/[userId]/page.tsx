@@ -95,7 +95,7 @@ export default async function FanDetailPage({
     <div>
       {/* Breadcrumb */}
       <div className="mb-2 flex flex-wrap items-center gap-2 text-sm text-muted">
-        <Link href="/clones" className="hover:text-ink">Clones</Link>
+        <Link href="/clones" className="hover:text-ink">Creators</Link>
         <span>/</span>
         <Link href={`/clones/${id}`} className="creator-name hover:text-ink">{clone.name}</Link>
         <span>/</span>

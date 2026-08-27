@@ -54,7 +54,7 @@ export function LogsTable({ rows, showClone }: { rows: LogRow[]; showClone: bool
           <TableHead>Time</TableHead>
           <TableHead>Level</TableHead>
           <TableHead>Tech</TableHead>
-          {showClone && <TableHead>Clone</TableHead>}
+          {showClone && <TableHead>Creator</TableHead>}
           <TableHead>Message</TableHead>
           <TableHead className="text-right">Fan</TableHead>
         </TableRow>

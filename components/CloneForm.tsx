@@ -125,7 +125,7 @@ export default function CloneForm({
   }
 
   async function handleDelete() {
-    if (!confirm("Delete this clone permanently? This cannot be undone.")) return;
+    if (!confirm("Delete this creator permanently? This cannot be undone.")) return;
     await deleteClone(clone.id);
     router.push("/clones");
   }
@@ -215,7 +215,7 @@ export default function CloneForm({
           <FlowGraph cfg={flowCfg} />
           <Section
             title={`Live prompt: ${promptPreview.mode === "smart" ? (promptPreview.smartSplit ? "Smart (writer + decider)" : "Smart (one model)") : "Classic"} flow`}
-            hint="Exactly what the bot feeds the model for THIS clone's live flow + toggles. Read-only - change it via Identity or Config, then Save."
+            hint="Exactly what the bot feeds the model for THIS creator's live flow + toggles. Read-only - change it via Identity or Config, then Save."
           >
             {promptPreview.blocks.map((b) => (
               <label key={b.key} className="block">
@@ -242,7 +242,7 @@ export default function CloneForm({
           }
         >
           <Button type="button" variant="destructive" onClick={handleDelete}>
-            Delete clone
+            Delete creator
           </Button>
 
           <div className="flex items-center gap-3">

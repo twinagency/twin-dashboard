@@ -25,7 +25,7 @@ type Suggestion = { id: string; cloneName: string; message: string; prompt: stri
 const STARTER_SUGGESTIONS = [
   "Who are our top 5 spenders?",
   "Any errors in the last day?",
-  "What's the ai_mode and text_model for each clone?",
+  "What's the ai_mode and text_model for each creator?",
   "How many open feedback items are there?",
 ];
 

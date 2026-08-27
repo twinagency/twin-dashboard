@@ -49,7 +49,7 @@ async function FleetMedia() {
     <div className="dashboard-page text-ink">
       <h1 className="mb-5 flex items-center gap-2 text-2xl font-semibold">
         Media
-        <Info text="Photo/video library. Pick a clone to upload, tag, and price her content." />
+        <Info text="Photo/video library. Pick a creator to upload, tag, and price her content." />
       </h1>
 
       <div className="mb-5 grid grid-cols-3 gap-3 text-sm">
@@ -96,7 +96,7 @@ async function FleetMedia() {
               );
             })}
             {rows.length === 0 && (
-              <TableRow><TableCell colSpan={5} className="py-8 text-center text-muted">No clones yet.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={5} className="py-8 text-center text-muted">No creators yet.</TableCell></TableRow>
             )}
           </TableBody>
         </Table>
@@ -118,7 +118,7 @@ async function CloneMedia({ cloneId }: { cloneId: string }) {
   ]);
 
   if (cloneRes.error) throw new Error(cloneRes.error.message);
-  if (!cloneRes.data) return <div className="text-muted">Clone not found.</div>;
+  if (!cloneRes.data) return <div className="text-muted">Creator not found.</div>;
 
   const clone = cloneRes.data as { id: string; name: string; slug: string };
 

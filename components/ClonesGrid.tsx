@@ -52,14 +52,14 @@ export default function ClonesGrid({ clones }: { clones: CloneCard[] }) {
           type="text"
           value={query}
           onChange={(e) => setQuery(e.target.value)}
-          placeholder="Search clones…"
+          placeholder="Search creators…"
           className="h-9 max-w-xs"
         />
       </div>
 
       {filtered.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-line bg-panel p-12 text-center text-muted">
-          No clones match “{query}”.
+          No creators match “{query}”.
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">

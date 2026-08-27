@@ -383,7 +383,7 @@ function FleetHardLimits() {
       label="Platform-wide limits (always on)"
       accent="neutral"
       filled
-      hint="Same for every clone in the fleet, hardcoded in the shared prompt templates, not editable per clone and not affected by any toggle here. Separate from her personal hard limits below, which are per-clone and editable."
+      hint="Same for every creator in the fleet, hardcoded in the shared prompt templates, not editable per creator and not affected by any toggle here. Separate from her personal hard limits below, which are per-creator and editable."
     >
       <ul className="grid gap-1.5">
         {FLEET_HARD_LIMITS.map((l) => (

@@ -32,7 +32,7 @@ export default function CloneAppearanceEditor({
       icon="🎨"
       accent="purple"
       title="Dashboard appearance"
-      hint="Controls this clone's display image around the dashboard and her colour in Earnings charts. It does not change her Telegram profile."
+      hint="Controls this creator's display image around the dashboard and her colour in Earnings charts. It does not change her Telegram profile."
     >
       <input type="hidden" name="dashboard_profile_image_path" value={initialImagePath ?? ""} />
       <input type="hidden" name="dashboard_chart_color" value={color} />
@@ -41,7 +41,7 @@ export default function CloneAppearanceEditor({
         <div>
           <FieldLabel
             label="Display image"
-            hint="Shown in the clone switcher, clone cards and Earnings legend. JPG, PNG, WebP or GIF, up to 5 MB."
+            hint="Shown in the creator switcher, creator cards and Earnings legend. JPG, PNG, WebP or GIF, up to 5 MB."
           />
           <div className="mt-2 flex items-center gap-4">
             <span
@@ -77,7 +77,7 @@ export default function CloneAppearanceEditor({
         <div>
           <FieldLabel
             label="Revenue chart colour"
-            hint="Used for this clone's bars, lines, legend dot and dashboard identity accents."
+            hint="Used for this creator's bars, lines, legend dot and dashboard identity accents."
           />
           <div className="mt-2 flex flex-wrap items-center gap-2">
             {COLORS.map((option) => (

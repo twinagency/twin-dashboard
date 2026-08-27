@@ -87,13 +87,13 @@ async function FleetFlows() {
         Flows
         <Info
           className="text-xs"
-          text="Automated re-engagement for fans who've gone quiet: a list of timed steps that fires on each clone's own schedule, always inside Telegram's 24h messaging window."
+          text="Automated re-engagement for fans who've gone quiet: a list of timed steps that fires on each creator's own schedule, always inside Telegram's 24h messaging window."
         />
       </h1>
 
       <div className="mb-5 mt-4 grid grid-cols-2 gap-3 text-sm sm:grid-cols-3">
         <Card className="p-4">
-          <div className="text-xs text-muted">Clones</div>
+          <div className="text-xs text-muted">Creators</div>
           <div className="mt-1 font-mono text-2xl font-semibold tabular-nums">{rows.length}</div>
         </Card>
         <Card className="p-4">
@@ -135,7 +135,7 @@ async function FleetFlows() {
               );
             })}
             {rows.length === 0 && (
-              <TableRow><TableCell colSpan={4} className="py-8 text-center text-muted">No clones yet.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={4} className="py-8 text-center text-muted">No creators yet.</TableCell></TableRow>
             )}
           </TableBody>
         </Table>
@@ -165,7 +165,7 @@ async function CloneFlows({ cloneId }: { cloneId: string }) {
   ]);
 
   if (cloneRes.error) throw new Error(cloneRes.error.message);
-  if (!cloneRes.data) return <div className="text-muted">Clone not found.</div>;
+  if (!cloneRes.data) return <div className="text-muted">Creator not found.</div>;
 
   const clone = cloneRes.data as {
     id: string;

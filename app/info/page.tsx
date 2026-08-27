@@ -117,7 +117,7 @@ async function FleetInfo() {
               </TableRow>
             ))}
             {rows.length === 0 && (
-              <TableRow><TableCell colSpan={6} className="py-8 text-center text-muted">No clones yet.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={6} className="py-8 text-center text-muted">No creators yet.</TableCell></TableRow>
             )}
           </TableBody>
         </Table>
@@ -132,7 +132,7 @@ async function CloneInfo({ cloneId }: { cloneId: string }) {
     .select("id,slug,name,status,bot_token")
     .eq("id", cloneId)
     .maybeSingle();
-  if (!clone) return <div className="text-muted">Clone not found.</div>;
+  if (!clone) return <div className="text-muted">Creator not found.</div>;
 
   const [me, starBalance, { data: users }] = await Promise.all([
     getMe(clone.bot_token),

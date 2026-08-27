@@ -163,7 +163,8 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
   const [loading, setLoading] = useState(true);
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<string | null>(null);
-  const [cloneQuery, setCloneQuery] = useState("");
+  const [creatorListOpen, setCreatorListOpen] = useState(false);
+  const [creatorQuery, setCreatorQuery] = useState("");
   const [txQuery, setTxQuery] = useState("");
   // Transactions shown: 10 by default, "Show more" steps to 50 then 100 (max).
   const [txLimit, setTxLimit] = useState(10);
@@ -318,7 +319,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
               the screen height before a single number appeared. */}
           <h2 className="flex items-center gap-2 font-heading text-2xl font-semibold tracking-[-0.035em] text-[#06172f] sm:text-3xl md:text-4xl">
             Earnings overview
-            <Info text="Revenue, buyer activity and conversion performance across your active clones." />
+            <Info text="Revenue, buyer activity and conversion performance across your active creators." />
           </h2>
         </div>
       </div>
@@ -438,7 +439,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
         </DialogContent>
       </Dialog>
 
-      <div className={scoped ? "" : "grid gap-4 lg:grid-cols-[1fr_260px]"}>
+      <div className="space-y-2">
         {/* ── Chart card ───────────────────────────────────────────── */}
         <Card size="sm" className="earnings-feature-card">
           <CardHeader className="flex-row items-start gap-4 space-y-0 pb-0">
@@ -493,13 +494,8 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
               )}
             </div>
           </CardHeader>
-          {/* On the fleet view the chart sits beside the 260px clone picker,
-              which is taller than a 220px chart, so the card stretched and the
-              chart left dead space under itself. Here it grows into that space
-              instead. Scoped to one clone there is no second column and nothing
-              to match, so the fixed height stays. */}
-          <CardContent className={scoped ? undefined : "lg:flex lg:min-h-0 lg:flex-1 lg:flex-col"}>
-            <div className={"h-[160px] sm:h-[220px]" + (scoped ? "" : " lg:h-auto lg:min-h-[220px] lg:flex-1")}>
+          <CardContent>
+            <div className="h-[160px] sm:h-[220px]">
               {loading ? (
                 <div className="flex h-full items-center justify-center text-muted">Loading…</div>
               ) : data && displayStars > 0 ? (
@@ -613,89 +609,120 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
           </CardContent>
         </Card>
 
-        {/* ── Sidebar ──────────────────────────────────────────────── */}
+        {/* Keep the full creator chooser out of the default page flow. On a
+            phone this sits below the graph, and a large roster must never turn
+            the earnings overview into hundreds of checked rows. */}
         {!scoped && (
-          <div>
-            <div className="relative mb-2">
+          <Card size="sm" className="gap-0 overflow-hidden py-0">
+            <button
+              type="button"
+              aria-expanded={creatorListOpen}
+              aria-controls="creator-chart-picker"
+              onClick={() => setCreatorListOpen((open) => !open)}
+              className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left transition hover:bg-muted/10 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/50"
+            >
+              <span className="min-w-0">
+                <span className="block text-sm font-medium text-ink">{creatorListOpen ? "Hide creators" : "View all creators"}</span>
+                <span className="block truncate text-[11px] text-muted">
+                  {visibleClones.length} of {(data?.clones ?? []).length} creators shown in the chart
+                </span>
+              </span>
               <svg
                 viewBox="0 0 24 24"
-                className="pointer-events-none absolute left-2.5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted"
+                className={"h-4 w-4 shrink-0 text-muted transition-transform " + (creatorListOpen ? "rotate-180" : "")}
                 fill="none"
                 stroke="currentColor"
                 strokeWidth={2}
+                aria-hidden="true"
               >
-                <circle cx="11" cy="11" r="7" />
-                <line x1="21" y1="21" x2="16.65" y2="16.65" strokeLinecap="round" />
+                <path d="m6 9 6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
               </svg>
-              <Input
-                value={cloneQuery}
-                onChange={(e) => setCloneQuery(e.target.value)}
-                placeholder="Search clones…"
-                className="h-8 pl-8 text-xs"
-              />
-            </div>
-          <Card size="sm">
-            <CardContent className="px-0">
-              <div className="divide-y divide-line">
-                {(data?.clones ?? [])
-                  .filter((c) => c.name.toLowerCase().includes(cloneQuery.trim().toLowerCase()))
-                  .map((c) => {
-                  const checked = !hidden.has(c.id);
-                  return (
-                    <div
-                      key={c.id}
-                      className={
-                        "flex items-center gap-2.5 px-3 py-2.5 transition " +
-                        (selected === c.id ? "bg-muted/20" : "hover:bg-muted/10")
-                      }
-                    >
-                      <button
-                        type="button"
-                        role="checkbox"
-                        aria-checked={checked}
-                        aria-label={`Show ${c.name} in chart`}
-                        onClick={() => toggleHidden(c.id)}
-                        className={
-                          "flex h-4 w-4 shrink-0 items-center justify-center rounded border transition " +
-                          (checked ? "border-accent bg-accent" : "border-line bg-transparent hover:border-muted")
-                        }
-                      >
-                        {checked && (
-                          <svg viewBox="0 0 24 24" className="h-3 w-3 text-accent-ink" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M20 6 9 17l-5-5" />
-                          </svg>
-                        )}
-                      </button>
-                      <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: c.color }} />
-                      <button
-                        onClick={() => setSelected(selected === c.id ? null : c.id)}
-                        className="flex min-w-0 flex-1 items-center gap-2 text-left"
-                      >
-                        {c.photoUrl ? (
-                          <img src={c.photoUrl} alt={c.name} className="h-6 w-6 shrink-0 rounded-full object-cover" />
-                        ) : (
-                          <span
-                            className="creator-name flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white"
-                            style={{ background: c.color }}
+            </button>
+            {creatorListOpen && (
+              <div id="creator-chart-picker" className="border-t border-line">
+                <div className="relative border-b border-line p-2.5">
+                  <svg
+                    viewBox="0 0 24 24"
+                    className="pointer-events-none absolute left-5 top-1/2 h-3.5 w-3.5 -translate-y-1/2 text-muted"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth={2}
+                  >
+                    <circle cx="11" cy="11" r="7" />
+                    <line x1="21" y1="21" x2="16.65" y2="16.65" strokeLinecap="round" />
+                  </svg>
+                  <Input
+                    value={creatorQuery}
+                    onChange={(e) => setCreatorQuery(e.target.value)}
+                    placeholder="Search creators…"
+                    aria-label="Search creators"
+                    className="h-8 pl-8 text-xs"
+                  />
+                </div>
+                <div className="max-h-[min(30rem,60vh)] divide-y divide-line overflow-y-auto overscroll-contain">
+                  {(data?.clones ?? [])
+                    .filter((c) => c.name.toLowerCase().includes(creatorQuery.trim().toLowerCase()))
+                    .map((c) => {
+                      const checked = !hidden.has(c.id);
+                      return (
+                        <div
+                          key={c.id}
+                          className={
+                            "flex items-center gap-2.5 px-3 py-2.5 transition " +
+                            (selected === c.id ? "bg-muted/20" : "hover:bg-muted/10")
+                          }
+                        >
+                          <button
+                            type="button"
+                            role="checkbox"
+                            aria-checked={checked}
+                            aria-label={`Show ${c.name} in chart`}
+                            onClick={() => toggleHidden(c.id)}
+                            className={
+                              "flex h-4 w-4 shrink-0 items-center justify-center rounded border transition " +
+                              (checked ? "border-accent bg-accent" : "border-line bg-transparent hover:border-muted")
+                            }
                           >
-                            {initials(c.name)}
-                          </span>
-                        )}
-                        <span className="min-w-0 flex-1">
-                          <span className="creator-name block truncate text-xs">{c.name}</span>
-                          <span className="money-value block font-mono text-[11px] tabular-nums">{money(c.stars)}</span>
-                        </span>
-                      </button>
-                    </div>
-                  );
-                })}
-                {(data?.clones ?? []).length === 0 && (
-                  <div className="px-3 py-3 text-xs text-muted">No clones.</div>
-                )}
+                            {checked && (
+                              <svg viewBox="0 0 24 24" className="h-3 w-3 text-accent-ink" fill="none" stroke="currentColor" strokeWidth={3} strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M20 6 9 17l-5-5" />
+                              </svg>
+                            )}
+                          </button>
+                          <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: c.color }} />
+                          <button
+                            onClick={() => setSelected(selected === c.id ? null : c.id)}
+                            className="flex min-w-0 flex-1 items-center gap-2 text-left"
+                          >
+                            {c.photoUrl ? (
+                              <img src={c.photoUrl} alt={c.name} className="h-6 w-6 shrink-0 rounded-full object-cover" />
+                            ) : (
+                              <span
+                                className="creator-name flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white"
+                                style={{ background: c.color }}
+                              >
+                                {initials(c.name)}
+                              </span>
+                            )}
+                            <span className="min-w-0 flex-1">
+                              <span className="creator-name block truncate text-xs">{c.name}</span>
+                              <span className="money-value block font-mono text-[11px] tabular-nums">{money(c.stars)}</span>
+                            </span>
+                          </button>
+                        </div>
+                      );
+                    })}
+                  {(data?.clones ?? []).length === 0 && (
+                    <div className="px-3 py-3 text-xs text-muted">No creators yet.</div>
+                  )}
+                  {(data?.clones ?? []).length > 0 &&
+                    (data?.clones ?? []).filter((c) => c.name.toLowerCase().includes(creatorQuery.trim().toLowerCase())).length === 0 && (
+                      <div className="px-3 py-3 text-xs text-muted">No creators match “{creatorQuery}”.</div>
+                    )}
+                </div>
               </div>
-            </CardContent>
+            )}
           </Card>
-          </div>
         )}
       </div>
 
@@ -776,7 +803,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
                 {tiles.map((t) => (
                   <div key={t.label} className="earnings-stat-tile rounded-xl border px-3 py-3">
                     <div className="text-[10px] uppercase tracking-wide text-muted">{t.label}</div>
-                    <div className={"mt-1 truncate font-mono text-base font-semibold tabular-nums " + (t.money ? "money-value" : "text-ink")}>{t.value}</div>
+                    <div className={"mt-1 break-words font-mono text-base font-semibold leading-tight tabular-nums " + (t.money ? "money-value" : "text-ink")}>{t.value}</div>
                   </div>
                 ))}
                 {/* Report tile - toggles the full revenue report below the grid. */}
@@ -827,7 +854,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
           <RevenueReport
             a={data.analytics}
             scoped={scoped}
-            cloneName={focusName ?? "Selected clone"}
+            cloneName={focusName ?? "Selected creator"}
             transactions={cloneId ? data.recent.filter((transaction) => transaction.cloneId === cloneId) : data.recent}
             money={money}
             usd={usd}
@@ -947,7 +974,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
                   <TableHeader>
                     <TableRow>
                       <TableHead>Fan</TableHead>
-                      {!scoped && <TableHead>Clone</TableHead>}
+                      {!scoped && <TableHead>Creator</TableHead>}
                       <TableHead>Bought</TableHead>
                       <TableHead className="text-right">Amount</TableHead>
                       <TableHead className="text-right">Date</TableHead>
@@ -1181,7 +1208,7 @@ function RevenueReport({
   if (topFeature && topFeature.stars > 0)
     facts.push({ label: "Top earner", value: `${topFeature.label} · ${pct(topFeature.share)}` });
   if (!scoped && topClone && topClone.revenueStars > 0)
-    facts.push({ label: "Top clone", value: topClone.name, moneyValue: money(topClone.revenueStars), isName: true });
+    facts.push({ label: "Top creator", value: topClone.name, moneyValue: money(topClone.revenueStars), isName: true });
   if (whale && whale.stars > 0) facts.push({ label: "Whale share", value: `${pct(whale.share)} of lifetime spend` });
   // The zone is printed, not assumed. These were computed on the container's
   // UTC clock and labelled nothing at all, so "Peak hour 3 AM" was really 1 PM
@@ -1206,7 +1233,7 @@ function RevenueReport({
               and buyer breakdown panels are lifetime and say so on themselves.
               A subtitle that contradicts the panel under it is how a lifetime
               number gets read as a windowed one. */}
-          Where the money comes from: product, {scoped ? "" : "clone, "}time and funnel for this window, plus spender tiers and buyer behaviour over each fan&apos;s lifetime.
+          Where the money comes from: product, {scoped ? "" : "creator, "}time and funnel for this window, plus spender tiers and buyer behaviour over each fan&apos;s lifetime.
         </CardDescription>
         <CardAction>
           <Button variant="ghost" size="sm" onClick={onClose} className="text-white hover:bg-white/10 hover:text-white">
@@ -1279,7 +1306,7 @@ function RevenueReport({
                 <div className="mb-2 flex items-end justify-between gap-3">
                   <div>
                     <h4 className="inline-flex rounded-lg bg-[#0d3d6e] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.1em] text-white shadow-sm">Top 5 weekly spenders</h4>
-                    <p className="text-[10px] text-muted">Rolling seven days in the current clone scope.</p>
+                    <p className="text-[10px] text-muted">Rolling seven days in the current creator scope.</p>
                   </div>
                   <div className="text-right">
                     <div className="money-value font-mono text-sm font-semibold tabular-nums">{money(a.weeklySpenderSummary.stars)}</div>
@@ -1369,9 +1396,9 @@ function RevenueReport({
         {/* Which clone / which flow - fleet view only (scoped = one clone already) */}
         {!scoped && (
           <div className="grid gap-3 lg:grid-cols-[1fr_280px]">
-            <ReportPanel title="By clone" hint="Ranked by revenue. Profit = revenue minus real AI/voice cost.">
+            <ReportPanel title="By creator" hint="Ranked by revenue. Profit = revenue minus real AI/voice cost.">
               {earningClones.length === 0 ? (
-                <ReportEmpty text="No clone earned in this window." />
+                <ReportEmpty text="No creator earned in this window." />
               ) : (
                 <>
                 {/* ── PHONE: one card per clone ───────────────────────────────
@@ -1416,7 +1443,7 @@ function RevenueReport({
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>Clone</TableHead>
+                      <TableHead>Creator</TableHead>
                       <TableHead className="text-right">Revenue</TableHead>
                       <TableHead className="text-right">Share</TableHead>
                       <TableHead className="text-right">Profit</TableHead>
@@ -1453,7 +1480,7 @@ function RevenueReport({
               )}
             </ReportPanel>
 
-            <ReportPanel title="Classic vs Smart" hint="Revenue split by each clone's AI flow.">
+            <ReportPanel title="Classic vs Smart" hint="Revenue split by each creator's AI flow.">
               {a.byFlow.length === 0 ? (
                 <ReportEmpty text="No flow data." />
               ) : (
@@ -1466,7 +1493,7 @@ function RevenueReport({
                       share={f.share}
                       right={money(f.stars)}
                       rightHint={pct(f.share)}
-                      sub={`${fmtNum(f.clones)} clone${f.clones === 1 ? "" : "s"} · ${fmtNum(f.sales)} sales`}
+                      sub={`${fmtNum(f.clones)} creator${f.clones === 1 ? "" : "s"} · ${fmtNum(f.sales)} sales`}
                       subMoney={`profit ${usd(f.profitUsd)}`}
                     />
                   ))}
@@ -1535,7 +1562,7 @@ function RevenueReport({
               <div className="grid gap-2">
                 <JourneyStep
                   step="1"
-                  label="Chatted with the clone"
+                  label="Chatted with the creator"
                   value={fmtNum(a.paywallFunnel.messaged)}
                   note="Unique fans who sent at least one message."
                   color={CAT.blue}
@@ -1577,7 +1604,7 @@ function RevenueReport({
             </div>
           </ReportPanel>
 
-          <ReportPanel title="Buyer breakdown" hint="Lifetime purchase behaviour for every fan in the current clone scope.">
+          <ReportPanel title="Buyer breakdown" hint="Lifetime purchase behaviour for every fan in the current creator scope.">
             <div className="flex flex-col gap-3">
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 <InsightMetric label="All fans" value={fmtNum(a.funnel.fans)} />
@@ -1831,7 +1858,7 @@ function ConversationFunnelPanel({
       <CardHeader className="space-y-0 pb-1">
         <CardTitle className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-ink">
           Conversation funnel
-          <Info text="How a conversation turns into money, in the window and scope selected above. A conversation is one clone and one fan, so the same person talking to two clones counts twice here, unlike the Buyers tile which counts people. Conversation start rate counts new fans who got past their first message: a fan record is created BY the first message, so 'sent a message' would read 100% forever. Offer to purchase excludes old n8n subscription renewals, which Telegram auto-renews without Twin raising an invoice. Revenue per conversation is the same headline revenue shown above, undivided and unfiltered." />
+          <Info text="How a conversation turns into money, in the window and scope selected above. A conversation is one creator and one fan, so the same person talking to two creators counts twice here, unlike the Buyers tile which counts people. Conversation start rate counts new fans who got past their first message: a fan record is created BY the first message, so 'sent a message' would read 100% forever. Offer to purchase excludes old n8n subscription renewals, which Telegram auto-renews without Twin raising an invoice. Revenue per conversation is the same headline revenue shown above, undivided and unfiltered." />
         </CardTitle>
         <CardDescription className="text-[11px]">
           Seven numbers, same window as the tiles above.

@@ -16,7 +16,7 @@ export default async function ClonesPage() {
   if (error) {
     return (
       <div className="rounded-lg border border-crit/30 bg-crit/10 p-4 text-sm text-crit">
-        Failed to load clones: {error.message}
+        Failed to load creators: {error.message}
       </div>
     );
   }
@@ -78,14 +78,14 @@ export default async function ClonesPage() {
   return (
     <div className="dashboard-page">
       <div className="mb-6 flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-ink">Clones</h1>
+        <h1 className="text-2xl font-bold text-ink">Creators</h1>
         <span className="text-sm font-medium text-muted">{clones.length} total</span>
       </div>
 
       {clones.length === 0 ? (
         <div className="rounded-xl border border-dashed border-line bg-panel p-12 text-center">
-          <p className="mb-4 text-muted">No clones yet.</p>
-          <Button nativeButton={false} render={<Link href="/clones/new" />}>Create the first one</Button>
+          <p className="mb-4 text-muted">No creators yet.</p>
+          <Button nativeButton={false} render={<Link href="/clones/new" />}>Create the first creator</Button>
         </div>
       ) : (
         <ClonesGrid clones={cards} />

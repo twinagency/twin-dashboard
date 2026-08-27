@@ -156,7 +156,7 @@ export default function RevenueDayDrivers({ cloneId }: { cloneId?: string | null
         <span className="min-w-0">
           <span className="flex items-center gap-1.5 text-sm font-bold text-ink">
             Why revenue changed
-            <Info text="Open this to compare one calendar day with the median result from the previous four matching weekdays, in the current clone scope." />
+            <Info text="Open this to compare one calendar day with the median result from the previous four matching weekdays, in the current creator scope." />
           </span>
           <span className="mt-0.5 block truncate text-[11px] text-muted">See whether traffic, buyers, order size, one payment, or product mix changed the result.</span>
         </span>
@@ -171,7 +171,7 @@ export default function RevenueDayDrivers({ cloneId }: { cloneId?: string | null
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
               <div className="text-sm font-bold text-ink">{data ? `Why did ${data.day.partial ? "today" : data.day.label} earn this amount?` : "Choose a day to explain"}</div>
-              <p className="mt-0.5 text-[11px] text-muted">{cloneId ? "This selected clone only" : "All clones together"}</p>
+              <p className="mt-0.5 text-[11px] text-muted">{cloneId ? "This selected creator only" : "All creators together"}</p>
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
               <Button type="button" variant="ghost" size="sm" onClick={() => setDay(shiftDay(today, -1))} className="h-7 border border-line px-2 text-[11px]">
@@ -262,9 +262,9 @@ export default function RevenueDayDrivers({ cloneId }: { cloneId?: string | null
                 <summary className="cursor-pointer px-3 py-2.5 text-xs font-bold text-ink">What made up the revenue difference?</summary>
                 <div className="grid gap-3 border-t border-line p-3 lg:grid-cols-2">
                   <div>
-                    <div className="text-xs font-bold uppercase tracking-[0.1em] text-ink">Revenue by clone</div>
-                    <p className="mt-1 text-[11px] text-muted">Each line shows that clone&apos;s selected-day revenue versus its {benchmarkLabel.toLowerCase()}.</p>
-                    <ChangeList rows={data.byClone} money={money} benchmarkLabel={benchmarkLabel} empty="No clone payments in this comparison." />
+                    <div className="text-xs font-bold uppercase tracking-[0.1em] text-ink">Revenue by creator</div>
+                    <p className="mt-1 text-[11px] text-muted">Each line shows that creator&apos;s selected-day revenue versus its {benchmarkLabel.toLowerCase()}.</p>
+                    <ChangeList rows={data.byClone} money={money} benchmarkLabel={benchmarkLabel} empty="No creator payments in this comparison." />
                   </div>
                   <div>
                     <div className="text-xs font-bold uppercase tracking-[0.1em] text-ink">What people bought</div>

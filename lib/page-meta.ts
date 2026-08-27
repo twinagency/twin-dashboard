@@ -23,7 +23,7 @@ const PAGE_LABELS: Record<string, string> = {
   "/logs": "Logs",
   "/tracker": "Tracker",
   "/media": "Media",
-  "/clones": "Clones",
+  "/clones": "Creators",
   "/settings": "Settings",
   "/admin/submissions": "New Form Submissions",
   "/admin/clients": "Client Database",
@@ -39,7 +39,7 @@ export function getPageMeta(
 
   // /clones/new: brand-new clone being drafted, nothing to show after the slash.
   if (path === "/clones/new") {
-    return { scopeLabel: "New clone", pageLabel: null, scopeIsCreator: false };
+    return { scopeLabel: "New creator", pageLabel: null, scopeIsCreator: false };
   }
 
   // /clones/[id] and /clones/[id]/fans/[userId]: the "scope" here is the clone
@@ -50,7 +50,7 @@ export function getPageMeta(
     const clone = clones.find((c) => c.id === id);
     const isFanSubRoute = /^\/clones\/[^/]+\/fans\/[^/]+/.test(path);
     return {
-      scopeLabel: clone?.name ?? "Clone",
+      scopeLabel: clone?.name ?? "Creator",
       pageLabel: isFanSubRoute ? "Edit / Fan" : "Edit",
       scopeIsCreator: clone != null,
     };
@@ -58,7 +58,7 @@ export function getPageMeta(
 
   const globalScope = activeCloneId ? clones.find((c) => c.id === activeCloneId)?.name : null;
   return {
-    scopeLabel: globalScope ?? "All clones",
+    scopeLabel: globalScope ?? "All creators",
     pageLabel: PAGE_LABELS[path] ?? "Dashboard",
     scopeIsCreator: globalScope != null,
   };

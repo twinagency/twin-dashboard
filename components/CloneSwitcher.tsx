@@ -114,7 +114,7 @@ export default function CloneSwitcher({
             <span className="flex h-5 w-5 shrink-0 items-center justify-center rounded-full bg-muted/20 text-[8px] font-bold text-muted">
               ALL
             </span>
-            <span>All clones</span>
+            <span>All creators</span>
           </>
         )}
         <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 text-muted" fill="none" stroke="currentColor" strokeWidth={2}>
@@ -127,7 +127,7 @@ export default function CloneSwitcher({
         initialFocus={inputRef}
       >
         <DialogHeader className="border-b border-line px-4 py-3">
-          <DialogTitle>Switch clone</DialogTitle>
+          <DialogTitle>Switch creator</DialogTitle>
         </DialogHeader>
 
         <div className="border-b border-line p-3">
@@ -137,7 +137,7 @@ export default function CloneSwitcher({
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             disabled={pending}
-            placeholder="Search clones…"
+            placeholder="Search creators…"
             className="h-9"
           />
         </div>
@@ -157,7 +157,7 @@ export default function CloneSwitcher({
             <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-muted/20 text-[9px] font-bold text-muted">
               ALL
             </span>
-            All clones
+            All creators
           </button>
 
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
@@ -170,7 +170,7 @@ export default function CloneSwitcher({
               <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-dashed border-current text-lg font-bold">
                 +
               </span>
-              <span className="w-full truncate">New clone</span>
+              <span className="w-full truncate">New creator</span>
             </Link>
             {filtered.map((c) => {
               const selected = activeCloneId === c.id;
@@ -212,10 +212,10 @@ export default function CloneSwitcher({
           </div>
 
           {clones.length === 0 && (
-            <div className="px-2.5 py-6 text-center text-sm text-muted">No clones yet.</div>
+            <div className="px-2.5 py-6 text-center text-sm text-muted">No creators yet.</div>
           )}
           {clones.length > 0 && filtered.length === 0 && (
-            <div className="px-2.5 py-6 text-center text-sm text-muted">No clones match &quot;{query}&quot;.</div>
+            <div className="px-2.5 py-6 text-center text-sm text-muted">No creators match &quot;{query}&quot;.</div>
           )}
         </div>
       </DialogContent>

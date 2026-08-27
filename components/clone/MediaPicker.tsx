@@ -63,7 +63,7 @@ export function MediaPicker({
   if (!enabled) {
     return (
       <p className="mt-1 w-full text-[11px] text-warn">
-        {type[0].toUpperCase() + type.slice(1)}s are off for this clone - turn them on in Configure, or this falls
+        {type[0].toUpperCase() + type.slice(1)}s are off for this creator - turn them on in Configure, or this falls
         back to an AI text line.
       </p>
     );

@@ -66,7 +66,7 @@ export default function FanLive({
       {drip.step > 0 && drip.total > 0 && (
         <span
           className={chip + " bg-purple-500/15 text-purple-400"}
-          title={`Automated campaign: ${drip.step} of ${drip.total} steps sent this quiet episode. Resets to 0 the moment he messages.${drip.enabled ? "" : " The campaign is currently OFF for this clone."}`}
+          title={`Automated campaign: ${drip.step} of ${drip.total} steps sent this quiet episode. Resets to 0 the moment he messages.${drip.enabled ? "" : " The campaign is currently OFF for this creator."}`}
         >
           💧 drip {drip.step}/{drip.total}
         </span>

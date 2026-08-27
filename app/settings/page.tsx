@@ -56,8 +56,8 @@ export default async function SettingsPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            New-clone defaults
-            <Info text="The template every new clone starts from. A fresh clone inherits these toggles, dials and models; you can still change anything per clone before going live. Unset fields fall back to the built-in defaults." />
+            New-creator defaults
+            <Info text="The template every new creator starts from. A fresh creator inherits these toggles, dials and models; you can still change anything per creator before going live. Unset fields fall back to the built-in defaults." />
           </CardTitle>
         </CardHeader>
         <CardContent>

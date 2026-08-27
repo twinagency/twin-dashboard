@@ -155,7 +155,7 @@ export function SidebarContent({
           className="sidebar-create-button flex items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-semibold transition"
         >
           <Icon d={PATHS.Plus} className="h-4 w-4" />
-          Create new clone
+          Create new creator
         </Link>
       </div>
 
@@ -181,7 +181,7 @@ export function SidebarContent({
                     key={l.label}
                     type="button"
                     onClick={pickClone}
-                    title="Pick a clone first"
+                    title="Pick a creator first"
                     className={
                       "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold transition [@media(max-height:850px)]:py-2 " +
                       colors.idle
@@ -214,7 +214,7 @@ export function SidebarContent({
                   key={l.href}
                   type="button"
                   onClick={pickClone}
-                  title="Pick a clone first"
+                  title="Pick a creator first"
                   className={
                     "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold transition [@media(max-height:850px)]:py-2 " +
                     colors.idle

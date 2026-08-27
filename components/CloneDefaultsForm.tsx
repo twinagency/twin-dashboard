@@ -175,7 +175,7 @@ export default function CloneDefaultsForm({ defaults }: { defaults: Partial<Clon
           min={0}
           step={1}
           defaultValue={defaults.tip_credits_per_100_stars ?? 0}
-          hint="What a tip gives back in message credits, for new clones. 0 means tips give no credits. At 5, a 1000 star tip gives 50 messages. Rounded down, and set per clone on its own page."
+          hint="What a tip gives back in message credits, for new creators. 0 means tips give no credits. At 5, a 1000 star tip gives 50 messages. Rounded down, and set per creator on its own page."
         />
       </div>
 

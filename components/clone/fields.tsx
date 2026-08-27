@@ -1,6 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useId, useLayoutEffect, useRef, useState } from "react";
+import { createPortal } from "react-dom";
 
 // ── Shared styling tokens ─────────────────────────────────────────────────────
 // One source of truth for input/select look, so Configure + Create match exactly
@@ -301,21 +302,130 @@ export function SubCard({ children, className = "" }: { children: React.ReactNod
 }
 
 // ── Info tooltip ──────────────────────────────────────────────────────────────
-// A real hover bubble, not the native `title` attribute — native tooltips take
-// ~1s to appear, can't be styled, and simply never show on touch devices, which
-// made the ⓘ look broken.
+// A portal is intentional here. Most dashboard cards clip their contents, so a
+// locally-positioned tooltip could be cut off even though the text itself was
+// correct. This keeps every hint inside the viewport, including in mobile cards.
+type InfoPosition = {
+  left: number;
+  top: number;
+  width: number;
+  maxHeight: number;
+};
+
 export function Info({ text, className = "" }: { text: string; className?: string }) {
+  const triggerRef = useRef<HTMLSpanElement>(null);
+  const tooltipRef = useRef<HTMLSpanElement>(null);
+  const [open, setOpen] = useState(false);
+  const [position, setPosition] = useState<InfoPosition | null>(null);
+  const tooltipId = useId();
+
+  useEffect(() => {
+    if (!open) return;
+
+    const closeFromOutside = (event: PointerEvent) => {
+      const target = event.target as Node | null;
+      if (target && (triggerRef.current?.contains(target) || tooltipRef.current?.contains(target))) return;
+      setOpen(false);
+    };
+    const closeFromKeyboard = (event: KeyboardEvent) => {
+      if (event.key === "Escape") setOpen(false);
+    };
+
+    document.addEventListener("pointerdown", closeFromOutside);
+    document.addEventListener("keydown", closeFromKeyboard);
+    return () => {
+      document.removeEventListener("pointerdown", closeFromOutside);
+      document.removeEventListener("keydown", closeFromKeyboard);
+    };
+  }, [open]);
+
+  useLayoutEffect(() => {
+    if (!open) return;
+
+    const updatePosition = () => {
+      const trigger = triggerRef.current;
+      if (!trigger) return;
+
+      const rect = trigger.getBoundingClientRect();
+      const viewportWidth = window.innerWidth;
+      const viewportHeight = window.innerHeight;
+      const inset = 12;
+      const gap = 8;
+      const width = Math.min(352, Math.max(1, viewportWidth - inset * 2));
+      const left = Math.max(inset, Math.min(rect.left + rect.width / 2 - width / 2, viewportWidth - inset - width));
+      const roomAbove = Math.max(0, rect.top - gap - inset);
+      const roomBelow = Math.max(0, viewportHeight - rect.bottom - gap - inset);
+      const tooltipHeight = tooltipRef.current?.scrollHeight ?? 240;
+      const showAbove = tooltipHeight > roomBelow && roomAbove > roomBelow;
+      const availableHeight = showAbove ? roomAbove : roomBelow;
+      const maxHeight = Math.max(1, Math.min(viewportHeight - inset * 2, availableHeight));
+      const top = showAbove
+        ? Math.max(inset, rect.top - gap - Math.min(tooltipHeight, maxHeight))
+        : Math.min(viewportHeight - inset - maxHeight, Math.max(inset, rect.bottom + gap));
+      const next = { left, top, width, maxHeight };
+
+      setPosition((previous) =>
+        previous && previous.left === next.left && previous.top === next.top && previous.width === next.width && previous.maxHeight === next.maxHeight
+          ? previous
+          : next,
+      );
+    };
+
+    updatePosition();
+    window.addEventListener("resize", updatePosition);
+    window.addEventListener("scroll", updatePosition, true);
+    const observer = typeof ResizeObserver === "undefined" || !tooltipRef.current ? null : new ResizeObserver(updatePosition);
+    if (observer && tooltipRef.current) observer.observe(tooltipRef.current);
+
+    return () => {
+      window.removeEventListener("resize", updatePosition);
+      window.removeEventListener("scroll", updatePosition, true);
+      observer?.disconnect();
+    };
+  }, [open, text]);
+
+  const toggle = (event: React.MouseEvent<HTMLSpanElement>) => {
+    event.preventDefault();
+    event.stopPropagation();
+    setOpen((current) => !current);
+  };
+
+  const onKeyDown = (event: React.KeyboardEvent<HTMLSpanElement>) => {
+    if (event.key !== "Enter" && event.key !== " ") return;
+    event.preventDefault();
+    event.stopPropagation();
+    setOpen((current) => !current);
+  };
+
   return (
-    <span className={"group/info relative inline-flex shrink-0 " + className}>
-      <span className="cursor-help text-[10px] leading-none text-muted/80 transition group-hover/info:text-accent">
-        ⓘ
-      </span>
+    <span className={"inline-flex shrink-0 " + className}>
       <span
-        role="tooltip"
-        className="pointer-events-none absolute left-1/2 top-full z-50 mt-1.5 hidden w-64 max-w-[70vw] -translate-x-1/2 rounded-lg border border-line bg-panel p-2 text-[11px] font-normal normal-case leading-relaxed tracking-normal text-ink shadow-xl group-hover/info:block"
+        ref={triggerRef}
+        role="button"
+        tabIndex={0}
+        aria-label="More information"
+        aria-controls={tooltipId}
+        aria-describedby={open ? tooltipId : undefined}
+        aria-expanded={open}
+        onPointerDown={(event) => event.stopPropagation()}
+        onClick={toggle}
+        onKeyDown={onKeyDown}
+        className="inline-flex min-h-5 min-w-5 cursor-pointer items-center justify-center rounded-full text-[10px] leading-none text-muted/80 transition hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-2/60"
       >
-        {text}
+        <span aria-hidden>ⓘ</span>
       </span>
+      {open && typeof document !== "undefined" && createPortal(
+        <span
+          ref={tooltipRef}
+          id={tooltipId}
+          role="tooltip"
+          className="fixed z-[100] block overflow-y-auto rounded-lg border border-line bg-panel p-3 text-left text-[12px] font-normal normal-case leading-relaxed tracking-normal whitespace-normal break-words text-ink shadow-xl"
+          style={position ? { left: position.left, top: position.top, width: position.width, maxHeight: position.maxHeight } : { left: -9999, top: -9999, width: 320, maxHeight: 240 }}
+        >
+          {text}
+        </span>,
+        document.body,
+      )}
     </span>
   );
 }

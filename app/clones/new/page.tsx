@@ -11,7 +11,7 @@ export default async function NewClonePage() {
     <div className="dashboard-page">
       <div className="mb-6 flex items-center justify-between gap-3">
         <Link href="/clones" className="text-sm font-medium text-muted transition hover:text-ink">
-          ← Back to clones
+          ← Back to creators
         </Link>
         <span className="flex items-center gap-1.5 text-xs font-medium text-muted">
           Before you start

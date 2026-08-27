@@ -600,7 +600,7 @@ export default function FlowsForm({
       {/* ── NEW FLOWS: which funnel engine this clone runs (migration 130) ── */}
       <GroupHeader
         label="Funnel engine"
-        hint="Which set of rules decides when she offers something paid. Per clone, and switchable back at any time."
+        hint="Which set of rules decides when she offers something paid. Per creator, and switchable back at any time."
       />
       <Section
         icon="🎯"
@@ -615,10 +615,10 @@ export default function FlowsForm({
           value={funnelPolicy}
           onChange={setFunnelPolicy}
           options={[
-            { value: "legacy", label: "Standard flow (what every clone runs today)" },
+            { value: "legacy", label: "Standard flow (what every creator runs today)" },
             { value: "intent_v1", label: "Intent flow (remembers what he bought and what he refused)" },
           ]}
-          hint="Standard is the default. Only clones set to Intent use the new rules; every other clone is untouched."
+          hint="Standard is the default. Only creators set to Intent use the new rules; every other creator is untouched."
         />
 
         {/* HIDDEN, NOT UNMOUNTED, and the difference is a real bug rather than a
@@ -738,7 +738,7 @@ export default function FlowsForm({
       <Section
         title="Steps"
         hint="Each step is WHEN (hours after his last message) plus WHAT (text, voice, photo, video, or bundle). Content is never canned: text and voice lines are AI-written fresh in her voice, media is always something he hasn't seen. The moment he replies, the timer resets to 0."
-        tip="Steps fire in hour order (they re-sort on save). Voice, photo, video and bundle steps only fire when that feature is on for this clone; a step with nothing fresh to send falls back to an AI text line."
+        tip="Steps fire in hour order (they re-sort on save). Voice, photo, video and bundle steps only fire when that feature is on for this creator; a step with nothing fresh to send falls back to an AI text line."
       >
         <Toggle
           label={enabled ? "Flow is on: she re-engages quiet fans" : "Flow is off: she never messages first"}

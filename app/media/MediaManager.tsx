@@ -893,7 +893,7 @@ function BundleCard({ bundle, cloneId }: { bundle: Bundle; cloneId: string }) {
             className="w-full rounded border border-line bg-bg px-3 py-2 outline-none focus:border-accent" />
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" name="is_onboarding" defaultChecked={bundle.is_onboarding} className="h-4 w-4 accent-good" />
-            Welcome bundle (auto-sent to new fans, only one per clone)
+            Welcome bundle (auto-sent to new fans, only one per creator)
           </label>
           <div className="flex gap-2">
             <button type="submit" disabled={pending}
@@ -1007,7 +1007,7 @@ function CreateBundleForm({ cloneId }: { cloneId: string }) {
         className="w-full rounded border border-line bg-bg px-3 py-2 text-sm outline-none focus:border-accent" />
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" name="is_onboarding" className="h-4 w-4 accent-good" />
-        Welcome bundle (auto-sent to new fans, only one per clone)
+        Welcome bundle (auto-sent to new fans, only one per creator)
       </label>
       <p className="text-xs text-muted">
         Fans can ask for any other bundle in chat; she writes its caption live on send. The welcome bundle uses the caption above.

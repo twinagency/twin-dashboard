@@ -81,7 +81,7 @@ export default function ManualTakeover({ userId, freePhotos }: { userId: string;
     <div className="rounded-md border border-warn/30 bg-warn/5 p-3">
       <div
         className="mb-2 flex items-center gap-1 text-[11px] font-semibold uppercase tracking-wide text-warn"
-        title="This fan is paused, so the bot won't reply to him. Anything sent here goes out AS the bot/clone, right now, exactly once — it does not resume automated replies."
+        title="This fan is paused, so the bot won't reply to him. Anything sent here goes out as this creator's bot, right now, exactly once — it does not resume automated replies."
       >
         Manual takeover (fan is paused)
         <span className="cursor-help text-[10px] normal-case text-warn/70">ⓘ</span>
@@ -123,7 +123,7 @@ export default function ManualTakeover({ userId, freePhotos }: { userId: string;
         <div>
           {freePhotos.length === 0 ? (
             <div className="py-2 text-xs text-muted">
-              No free (non-paywalled) photos uploaded for this clone. Manual takeover only sends free photos, never paid/paywalled ones.
+              No free (non-paywalled) photos uploaded for this creator. Manual takeover only sends free photos, never paid/paywalled ones.
             </div>
           ) : (
             <>

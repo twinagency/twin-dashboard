@@ -160,7 +160,7 @@ export async function SpendView({
                 <span className="creator-name">{scopedName}</span> only
               </>
             ) : (
-              "All clones"
+              "All creators"
             )}{" "}
             · {provider === "all" ? "every model, every flow, every girl" : `${providerLabel} only`}.
           </p>
@@ -176,7 +176,7 @@ export async function SpendView({
           <div className="text-sm font-medium text-warn">This window was too big to read in full</div>
           <p className="mt-1 text-sm text-muted">
             The paged read stopped at its row ceiling, so every total on this page is a lower bound, not a total. Pick a
-            shorter window, or scope to one clone with the switcher.
+            shorter window, or scope to one creator with the switcher.
           </p>
         </Card>
       )}
@@ -187,7 +187,7 @@ export async function SpendView({
           label="Total AI spend"
           value={fmtUsd(totals.costUsd)}
           sub={`${totals.calls.toLocaleString()} calls · ${totals.errors.toLocaleString()} failed`}
-          hint="Every logged LLM, voice and transcription call in the window, including calls we could not attribute to a clone. Failed calls are counted here too because a failed call still bills."
+          hint="Every logged LLM, voice and transcription call in the window, including calls we could not attribute to a creator. Failed calls are counted here too because a failed call still bills."
         />
         <Stat
           label="Cost per fan message"
@@ -249,7 +249,7 @@ export async function SpendView({
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Clone</TableHead>
+                <TableHead>Creator</TableHead>
                 <TableHead className="text-right">Total</TableHead>
                 <TableHead className="text-right">Live</TableHead>
                 <TableHead className="text-right">Background</TableHead>
@@ -280,7 +280,7 @@ export async function SpendView({
               {data.clones.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={8} className="py-6 text-center text-sm text-muted">
-                    No clones.
+                    No creators.
                   </TableCell>
                 </TableRow>
               )}
@@ -375,7 +375,7 @@ export async function SpendView({
               </details>
             ))}
           {data.clones.every((c) => c.byFlow.length === 0) && (
-            <p className="py-2 text-sm text-muted">No attributed calls for any clone in this window.</p>
+            <p className="py-2 text-sm text-muted">No attributed calls for any creator in this window.</p>
           )}
         </div>
       </Card>
@@ -384,10 +384,10 @@ export async function SpendView({
       <Card className="mb-4 p-0">
         <div className="flex flex-wrap items-center gap-1 px-4 pt-4 text-sm font-medium">
           Every model in use
-          <Info text="Every model id that billed in this window, whether or not any clone is configured to use it. Two are hardcoded in bot code and appear in no dashboard config: openai/gpt-4.1-mini is the LLM fallback and openai/gpt-5-mini does image moderation. Anything flagged Not configured is spend you never chose." />
+          <Info text="Every model id that billed in this window, whether or not any creator is configured to use it. Two are hardcoded in bot code and appear in no dashboard config: openai/gpt-4.1-mini is the LLM fallback and openai/gpt-5-mini does image moderation. Anything flagged Not configured is spend you never chose." />
           {data.unconfiguredModels.length > 0 && (
             <span className="ml-2 rounded-full bg-warn/10 px-2 py-0.5 text-[11px] font-medium text-warn">
-              {data.unconfiguredModels.length} not configured by any clone
+              {data.unconfiguredModels.length} not configured by any creator
             </span>
           )}
         </div>
