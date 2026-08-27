@@ -56,12 +56,10 @@ function direction(value: number | null) {
 function ChangeList({
   rows,
   money,
-  benchmarkLabel,
   empty,
 }: {
   rows: RevenueChangeRow[];
   money: (stars: number) => string;
-  benchmarkLabel: string;
   empty: string;
 }) {
   if (!rows.length) return <p className="py-2 text-xs text-muted">{empty}</p>;
@@ -72,12 +70,12 @@ function ChangeList({
           <div className="min-w-0">
             <div className="truncate font-medium text-ink">{row.label}</div>
             <div className="mt-0.5 text-[11px] leading-relaxed text-muted">
-              Selected day: {money(row.stars)} from {quantity(row.sales, "paid order", "paid orders")}. {benchmarkLabel}: {money(row.usualStars)} from {quantity(row.usualSales, "paid order", "paid orders")}.
+              Selected day: {money(row.stars)} from {quantity(row.sales, "paid order", "paid orders")}. Baseline: {money(row.usualStars)} from {quantity(row.usualSales, "paid order", "paid orders")}.
             </div>
           </div>
           <div className={(row.deltaStars >= 0 ? "text-good" : "text-[#b4432f]") + " shrink-0 text-right font-mono text-[11px] font-semibold"}>
             {signed(row.deltaStars, money)}
-            <div className="font-sans text-[10px] font-medium text-muted">difference</div>
+            <div className="font-sans text-[10px] font-medium text-muted">vs baseline</div>
           </div>
         </div>
       ))}
@@ -125,7 +123,7 @@ export default function RevenueDayDrivers({ cloneId }: { cloneId?: string | null
     fetch(`/api/dashboard/day-insight?date=${encodeURIComponent(day)}`, { cache: "no-store", signal: controller.signal })
       .then(async (response) => {
         const json = (await response.json()) as RevenueWhyChanged & { error?: string };
-        if (!response.ok || json.error) throw new Error(json.error || "This day could not be explained.");
+        if (!response.ok || json.error) throw new Error(json.error || "Daily earnings data is unavailable.");
         return json;
       })
       .then((json) => {
@@ -134,7 +132,7 @@ export default function RevenueDayDrivers({ cloneId }: { cloneId?: string | null
       .catch((cause: unknown) => {
         if (controller.signal.aborted) return;
         setData(null);
-        setError(cause instanceof Error ? cause.message : "This day could not be explained.");
+        setError(cause instanceof Error ? cause.message : "Daily earnings data is unavailable.");
       })
       .finally(() => {
         if (!controller.signal.aborted) setLoading(false);
@@ -142,8 +140,7 @@ export default function RevenueDayDrivers({ cloneId }: { cloneId?: string | null
     return () => controller.abort();
   }, [day, cloneId, open]);
 
-  const benchmarkLabel = data?.comparison.benchmarkLabel ?? "4-week benchmark";
-  const benchmarkDates = data?.comparison.baselineDays.map((baseline) => baseline.label).join(", ") ?? "";
+  const benchmarkLabel = data?.comparison.benchmarkLabel ?? "30-day baseline";
 
   return (
     <Card size="sm" className="mt-4 overflow-hidden border-line bg-surface">
@@ -155,10 +152,10 @@ export default function RevenueDayDrivers({ cloneId }: { cloneId?: string | null
       >
         <span className="min-w-0">
           <span className="flex items-center gap-1.5 text-sm font-bold text-ink">
-            Why revenue changed
-            <Info text="Open this to compare one calendar day with the median result from the previous four matching weekdays, in the current creator scope." />
+            Daily earnings analysis
+            <Info text="Compare one calendar day with the median result across the prior 30 calendar days, in the current creator scope." />
           </span>
-          <span className="mt-0.5 block truncate text-[11px] text-muted">See whether traffic, buyers, order size, one payment, or product mix changed the result.</span>
+          <span className="mt-0.5 block truncate text-[11px] text-muted">Review buyers, orders, audience activity, major payments, and product mix for any day.</span>
         </span>
         <span className="flex shrink-0 items-center gap-1 text-xs font-semibold text-[#28658f]">
           {open ? "Hide" : "Open"}
@@ -170,7 +167,7 @@ export default function RevenueDayDrivers({ cloneId }: { cloneId?: string | null
         <CardContent className="border-t border-line p-3 sm:p-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>
-              <div className="text-sm font-bold text-ink">{data ? `Why did ${data.day.partial ? "today" : data.day.label} earn this amount?` : "Choose a day to explain"}</div>
+              <div className="text-sm font-bold text-ink">{data ? (data.day.partial ? "Earnings today so far" : `Earnings for ${data.day.label}`) : "Choose a day to review"}</div>
               <p className="mt-0.5 text-[11px] text-muted">{cloneId ? "This selected creator only" : "All creators together"}</p>
             </div>
             <div className="flex shrink-0 items-center gap-1.5">
@@ -180,14 +177,14 @@ export default function RevenueDayDrivers({ cloneId }: { cloneId?: string | null
               <Button type="button" variant="ghost" size="sm" onClick={() => setDay(today)} className="h-7 border border-line px-2 text-[11px]">
                 Today
               </Button>
-              <Input aria-label="Choose a day to explain" type="date" value={day} max={today} onChange={(event) => event.target.value && setDay(event.target.value)} className="h-7 w-[132px] px-2 text-xs" />
+              <Input aria-label="Choose a day to review" type="date" value={day} max={today} onChange={(event) => event.target.value && setDay(event.target.value)} className="h-7 w-[132px] px-2 text-xs" />
             </div>
           </div>
 
-          {loading && <div className="flex min-h-24 items-center justify-center text-sm text-muted">Loading the day&apos;s explanation...</div>}
+          {loading && <div className="flex min-h-24 items-center justify-center text-sm text-muted">Loading daily earnings data...</div>}
           {error && (
             <div className="mt-3 rounded-xl border border-[#b4432f]/35 bg-[#fdecea] px-3 py-3 text-sm text-[#7a2b1e]">
-              <div className="font-semibold">This day could not be explained.</div>
+              <div className="font-semibold">Daily earnings data is unavailable.</div>
               <div className="mt-1 text-xs">{error}</div>
             </div>
           )}
@@ -202,39 +199,40 @@ export default function RevenueDayDrivers({ cloneId }: { cloneId?: string | null
                   {data.day.partial && <span className="rounded-full bg-[#fff4d6] px-2 py-0.5 text-[10px] font-semibold text-[#8a5a00]">Today so far</span>}
                 </div>
                 <p className="mt-1 text-[11px] leading-relaxed text-muted">
-                  {benchmarkLabel} = the median of {benchmarkDates}, for {data.comparison.scopeLabel}. {data.day.partial && data.day.elapsedLabel ? `Each day is measured through its first ${data.day.elapsedLabel}.` : "These are full calendar days in Sydney time."}
+                  30-day baseline = the median across the prior 30 calendar days, for {data.comparison.scopeLabel}. {data.day.partial && data.day.elapsedLabel ? `Each day is measured through its first ${data.day.elapsedLabel}.` : "These are full calendar days in Sydney time."}
                 </p>
                 {data.totals.refundStars > 0 && <p className="mt-1 text-[11px] font-medium text-[#8a5a00]">Includes {money(data.totals.refundStars)} in refunds or adjustments.</p>}
               </div>
 
               <div className={(data.summary.concentrated ? "border-[#d7952d]/55 bg-[#fff8e8]" : "border-[#4a8ec4]/35 bg-surface") + " rounded-xl border px-3 py-2.5"}>
-                <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted">Summary</div>
+                <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted">Daily summary</div>
                 <p className="mt-1 text-sm font-semibold leading-snug text-ink">{data.summary.headline}</p>
                 <p className="mt-0.5 text-[11px] leading-relaxed text-muted">{data.summary.detail}</p>
               </div>
 
               <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
-                <Stat label="Buyers" value={count(data.totals.buyers)} detail={`${signedNumber(data.totals.deltaBuyers)} vs benchmark of ${count(data.comparison.benchmark.buyers)}`} positive={direction(data.totals.deltaBuyers)} />
-                <Stat label="Paid orders" value={count(data.totals.sales)} detail={`${signedNumber(data.totals.deltaSales)} vs benchmark of ${count(data.comparison.benchmark.sales)}`} positive={direction(data.totals.deltaSales)} />
-                <Stat label="Average paid order" value={money(data.totals.averageSaleStars)} detail={`${signed(data.totals.deltaAverageSaleStars, money)} vs benchmark of ${money(data.comparison.benchmark.averageSaleStars)}`} positive={direction(data.totals.deltaAverageSaleStars)} />
-                <Stat label="Fans who messaged" value={data.activity.messagedFans == null ? "N/A" : count(data.activity.messagedFans)} detail={data.activity.deltaMessagedFans == null ? "Activity unavailable" : `${signedNumber(data.activity.deltaMessagedFans)} vs benchmark of ${count(data.activity.usualMessagedFans ?? 0)}`} positive={direction(data.activity.deltaMessagedFans)} />
+                <Stat label="Buyers" value={count(data.totals.buyers)} detail={`${signedNumber(data.totals.deltaBuyers)} vs baseline of ${count(data.comparison.benchmark.buyers)}`} positive={direction(data.totals.deltaBuyers)} />
+                <Stat label="Paid orders" value={count(data.totals.sales)} detail={`${signedNumber(data.totals.deltaSales)} vs baseline of ${count(data.comparison.benchmark.sales)}`} positive={direction(data.totals.deltaSales)} />
+                <Stat label="Average paid order" value={money(data.totals.averageSaleStars)} detail={`${signed(data.totals.deltaAverageSaleStars, money)} vs baseline of ${money(data.comparison.benchmark.averageSaleStars)}`} positive={direction(data.totals.deltaAverageSaleStars)} />
+                <Stat label="Fans who messaged" value={data.activity.messagedFans == null ? "N/A" : count(data.activity.messagedFans)} detail={data.activity.deltaMessagedFans == null ? "Activity unavailable" : `${signedNumber(data.activity.deltaMessagedFans)} vs baseline of ${count(data.activity.usualMessagedFans ?? 0)}`} positive={direction(data.activity.deltaMessagedFans)} />
               </div>
 
               <details className="rounded-xl border border-line">
-                <summary className="cursor-pointer px-3 py-2.5 text-xs font-bold text-ink">Traffic signals</summary>
+                <summary className="cursor-pointer px-3 py-2.5 text-xs font-bold text-ink">Audience activity</summary>
                 <div className="border-t border-line p-3">
-                  <p className="text-[11px] leading-relaxed text-muted">Useful context for demand, not proof that a message directly caused a payment.</p>
+                  <p className="text-[11px] leading-relaxed text-muted">Daily audience measures. They do not show that a message directly caused a payment.</p>
                   <div className="mt-2 grid gap-2 sm:grid-cols-2">
-                    <SmallSignal label="New fan arrivals" value={data.activity.newFans == null ? "N/A" : count(data.activity.newFans)} detail={data.activity.deltaNewFans == null ? "Activity unavailable" : `${signedNumber(data.activity.deltaNewFans)} vs benchmark of ${count(data.activity.usualNewFans ?? 0)}`} positive={direction(data.activity.deltaNewFans)} />
-                    <SmallSignal label="Total conversation messages" value={data.activity.conversationMessages == null ? "N/A" : count(data.activity.conversationMessages)} detail={data.activity.deltaConversationMessages == null ? "Activity unavailable" : `${signedNumber(data.activity.deltaConversationMessages)} vs benchmark of ${count(data.activity.usualConversationMessages ?? 0)}`} positive={direction(data.activity.deltaConversationMessages)} />
+                    <SmallSignal label="New fans" value={data.activity.newFans == null ? "N/A" : count(data.activity.newFans)} detail={data.activity.deltaNewFans == null ? "Activity unavailable" : `${signedNumber(data.activity.deltaNewFans)} vs baseline of ${count(data.activity.usualNewFans ?? 0)}`} positive={direction(data.activity.deltaNewFans)} />
+                    <SmallSignal label="Conversation messages" value={data.activity.conversationMessages == null ? "N/A" : count(data.activity.conversationMessages)} detail={data.activity.deltaConversationMessages == null ? "Activity unavailable" : `${signedNumber(data.activity.deltaConversationMessages)} vs baseline of ${count(data.activity.usualConversationMessages ?? 0)}`} positive={direction(data.activity.deltaConversationMessages)} />
                   </div>
                   <p className="mt-2 text-[10px] leading-relaxed text-muted">Fans who messaged counts distinct inbound fans. Total conversation messages counts all conversation rows, including replies.</p>
                 </div>
               </details>
 
               <details className="rounded-xl border border-line">
-                <summary className="cursor-pointer px-3 py-2.5 text-xs font-bold text-ink">Was one payment responsible?</summary>
+                <summary className="cursor-pointer px-3 py-2.5 text-xs font-bold text-ink">Largest payments and buyers</summary>
                 <div className="border-t border-line p-3">
+                  <p className="text-[11px] leading-relaxed text-muted">The largest individual paid order and highest-paying buyer on the selected day.</p>
                   <div className="grid gap-2 sm:grid-cols-2">
                     {data.concentration.largestPayment ? (
                       <SmallSignal label="Largest paid order" value={money(data.concentration.largestPayment.stars)} detail={`${data.concentration.largestPayment.feature}, ${Math.round(data.concentration.largestPayment.share * 100)}% of paid-in amount`} />
@@ -259,22 +257,22 @@ export default function RevenueDayDrivers({ cloneId }: { cloneId?: string | null
               </details>
 
               <details className="rounded-xl border border-line">
-                <summary className="cursor-pointer px-3 py-2.5 text-xs font-bold text-ink">What made up the revenue difference?</summary>
+                <summary className="cursor-pointer px-3 py-2.5 text-xs font-bold text-ink">Earnings breakdown</summary>
                 <div className="grid gap-3 border-t border-line p-3 lg:grid-cols-2">
                   <div>
-                    <div className="text-xs font-bold uppercase tracking-[0.1em] text-ink">Revenue by creator</div>
+                    <div className="text-xs font-bold uppercase tracking-[0.1em] text-ink">By creator</div>
                     <p className="mt-1 text-[11px] text-muted">Each line shows that creator&apos;s selected-day revenue versus its {benchmarkLabel.toLowerCase()}.</p>
-                    <ChangeList rows={data.byClone} money={money} benchmarkLabel={benchmarkLabel} empty="No creator payments in this comparison." />
+                    <ChangeList rows={data.byClone} money={money} empty="No creator payments in this comparison." />
                   </div>
                   <div>
-                    <div className="text-xs font-bold uppercase tracking-[0.1em] text-ink">What people bought</div>
+                    <div className="text-xs font-bold uppercase tracking-[0.1em] text-ink">By payment type</div>
                     <p className="mt-1 text-[11px] text-muted">Each line shows the selected-day revenue for that payment type versus its {benchmarkLabel.toLowerCase()}.</p>
-                    <ChangeList rows={data.byFeature} money={money} benchmarkLabel={benchmarkLabel} empty="No payment-type data in this comparison." />
+                    <ChangeList rows={data.byFeature} money={money} empty="No payment-type data in this comparison." />
                   </div>
                 </div>
               </details>
 
-              <p className="border-t border-line pt-3 text-[11px] leading-relaxed text-muted">Payments and buyers come from the revenue ledger. Messaging figures are associated signals, not a claim that one message directly caused a payment.</p>
+              <p className="border-t border-line pt-3 text-[11px] leading-relaxed text-muted">Payments and buyers come from the revenue ledger. Messaging figures are context only and do not establish that a message directly caused a payment.</p>
             </div>
           )}
         </CardContent>

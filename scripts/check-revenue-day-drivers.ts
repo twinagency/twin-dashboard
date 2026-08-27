@@ -5,7 +5,7 @@
 // surprising number explainable, so its most important guarantees should not
 // depend on a live database being available when CI runs.
 
-import { aggregateRevenueDay, reportDayStartMs, shiftReportDay } from "../lib/revenue-why-changed";
+import { aggregateRevenueDay, priorReportDayKeys, reportDayStartMs, shiftReportDay } from "../lib/revenue-why-changed";
 import { reportInstant } from "../lib/report-time";
 
 let passed = 0;
@@ -79,6 +79,15 @@ check("D3 day boundaries use the report timezone through both DST changes", () =
 check("D4 date shifts keep calendar days instead of adding 24 UTC hours", () => {
   equal(shiftReportDay("2028-03-01", -1), "2028-02-29", "leap day");
   equal(shiftReportDay("2026-01-01", -1), "2025-12-31", "year boundary");
+});
+
+check("D5 baseline uses the prior 30 consecutive calendar days", () => {
+  const days = priorReportDayKeys("2026-08-28");
+  equal(days.length, 30, "baseline day count");
+  equal(days[0], "2026-08-27", "most recent comparison day");
+  equal(days[29], "2026-07-29", "earliest comparison day");
+  equal(days.includes("2026-08-28"), false, "selected day excluded");
+  equal(days[6], "2026-08-21", "days are consecutive rather than weekly");
 });
 
 console.log(`\n  ${passed} passed`);

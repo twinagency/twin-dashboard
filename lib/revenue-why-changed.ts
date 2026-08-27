@@ -7,17 +7,20 @@ import { supabaseAdmin } from "./supabase";
 //
 // A total tells an operator WHAT arrived. This module answers the next question:
 // was a high/low day broad demand (more people talking and buying), a product
-// mix shift, or one unusual payment? It deliberately compares the selected day
-// with prior occurrences of the SAME weekday, not simply yesterday: a Saturday
-// and a Tuesday have very different natural baselines for this business.
+// mix shift, or one unusual payment? It compares the selected day with the
+// previous 30 REPORT_TZ calendar days, not simply yesterday. The median keeps
+// one unusually large payment from redefining what a normal day looks like.
 //
 // Do not call any of these correlations "proof of cause". A payment itself is
 // direct evidence; an increase in people messaging is a contemporaneous traffic
 // signal. The UI uses "What changed" and states the raw facts so an operator is
 // not handed a made-up causal story.
 
-const SAMPLE_WEEKS = 4;
-// This card has to inspect five day windows and activity rollups. Keep it
+const BASELINE_DAYS = 30;
+// The activity rollups currently return one day at a time. Keep the exact daily
+// comparison, but do not launch 60 database RPCs at once when this panel opens.
+const ACTIVITY_CONCURRENCY = 6;
+// This card has to inspect 31 day windows and activity rollups. Keep it
 // responsive without letting every opened browser duplicate that work. A short
 // lifetime is intentional: historical days do not need second-by-second
 // updates, while today's next request is never more than a minute old.
@@ -111,13 +114,15 @@ export type RevenueWhyChanged = {
   };
   comparison: {
     label: string;
-    /** Compact, visible name for the four-week median comparison. */
+    /** Compact, visible name for the 30-day median comparison. */
     benchmarkLabel: string;
     /** The exact dates used to make the median understandable and auditable. */
     baselineDays: { key: string; label: string }[];
-    /** Makes it explicit whether the benchmark is fleet-wide or one clone. */
+    /** Short inclusive date range for compact/mobile UI; the detailed dates stay available above. */
+    baselineRangeLabel: string;
+    /** Makes it explicit whether the baseline is fleet-wide or one creator. */
     scopeLabel: string;
-    /** The exact median values behind the visible comparison. */
+    /** The exact median values behind the visible baseline comparison. */
     benchmark: MetricTotals;
     sampleDays: number;
     baselineIsPartial: boolean;
@@ -244,6 +249,13 @@ export function shiftReportDay(dayKey: string, days: number): string {
   return shifted.toISOString().slice(0, 10);
 }
 
+/** The consecutive calendar days immediately before a reporting date. */
+export function priorReportDayKeys(dayKey: string, days = BASELINE_DAYS): string[] {
+  parseDayKey(dayKey);
+  if (!Number.isInteger(days) || days < 1) throw new Error("days must be a positive integer");
+  return Array.from({ length: days }, (_, index) => shiftReportDay(dayKey, -(index + 1)));
+}
+
 function labelForDay(dayKey: string): string {
   // Midday avoids the handful of zones where DST shifts occur overnight.
   return reportDateLabel.format(new Date(reportDayStartMs(dayKey) + 12 * 60 * 60 * 1000));
@@ -362,8 +374,9 @@ function median(values: number[]) {
 }
 
 // A mean turns a previous $10k tip into "normal" and makes the very thing this
-// panel is meant to expose disappear. The median of matching weekdays is a much
-// more honest normal day when a few buyers can be exceptionally high value.
+// panel is meant to expose disappear. The median across the prior 30 calendar
+// days is a much more honest normal day when a few buyers are exceptionally
+// high value.
 function usualTotals(days: DayAggregate[]): MetricTotals {
   return {
     stars: median(days.map((day) => day.totals.stars)),
@@ -429,13 +442,19 @@ function displayBuyer(row: BuyerRow | undefined, telegramId: number | null) {
 function cloneLabelForBuyer(buyer: BuyerTotal, names: Map<string, string>) {
   const labels = [...buyer.byClone.entries()]
     .sort((a, b) => b[1] - a[1])
-    .map(([cloneId]) => names.get(cloneId) ?? "Unknown clone");
+    .map(([cloneId]) => names.get(cloneId) ?? "Unknown creator");
   if (labels.length <= 2) return labels.join(" + ");
   return `${labels.slice(0, 2).join(" + ")} + ${labels.length - 2} more`;
 }
 
 function roundPct(value: number) {
   return Math.round(value * 100);
+}
+
+function netRevenueHeadline(deltaStars: number) {
+  if (deltaStars > 0) return "Net revenue was higher than the 30-day baseline.";
+  if (deltaStars < 0) return "Net revenue was lower than the 30-day baseline.";
+  return "Net revenue matched the 30-day baseline.";
 }
 
 function composeSummary(
@@ -448,80 +467,107 @@ function composeSummary(
   const topPayment = concentration.largestPayment;
   const concentrated = Boolean(topBuyer && topBuyer.share >= 0.35);
   const revenueDelta = totals.stars - baseline.stars;
+  const netHeadline = netRevenueHeadline(revenueDelta);
 
-  if (totals.refundStars > 0 && totals.stars <= 0) {
+  if (totals.grossPaymentStars === 0 && totals.refundStars > 0 && totals.stars <= 0) {
     return {
-      headline: "Refunds or adjustments reduced this day's net proceeds.",
-      detail: "The payment cards below deliberately exclude refunds, so an adjustment is not misread as a sale or a buyer-driven spike.",
+      headline: "Refunds or adjustments left net proceeds at zero or below.",
+      detail: "No positive payments were recorded. Refunds and adjustments are included in net proceeds, but are not counted as paid orders or buyers.",
       concentrated: false,
     };
   }
-  if (totals.stars === 0) {
-    return { headline: "No payments landed on this day.", detail: "There is no sales event to attribute; use the traffic signals below to see whether people were still talking.", concentrated: false };
+  if (totals.grossPaymentStars === 0) {
+    return {
+      headline: "No positive payments landed on this day.",
+      detail: "There is no paid order to compare. The activity figures below still show whether fans were messaging or arriving.",
+      concentrated: false,
+    };
+  }
+  if (revenueDelta < 0 && totals.refundStars > baseline.refundStars) {
+    return {
+      headline: "Net revenue was lower than the 30-day baseline, and refunds or adjustments were higher.",
+      detail: "Those adjustments lower net proceeds. Paid-order and creator comparisons below remain separate, so this does not assume refunds were the only difference.",
+      concentrated,
+    };
   }
   if (topPayment && topPayment.share >= 0.5) {
     return {
-      headline: `${topPayment.name}'s ${topPayment.feature.toLowerCase()} payment made up ${roundPct(topPayment.share)}% of the day's incoming payments.`,
-      detail: "This is a concentrated result: one payment explains most of the total, rather than a broad lift across many buyers.",
+      headline: netHeadline,
+      detail: `One ${topPayment.feature.toLowerCase()} payment from ${topPayment.name} represented ${roundPct(topPayment.share)}% of the day's incoming payments. This describes concentration on the selected day; it does not establish why net revenue differed from the 30-day baseline.`,
       concentrated: true,
     };
   }
   if (topBuyer && topBuyer.share >= 0.35) {
     return {
-      headline: `${topBuyer.name} accounted for ${roundPct(topBuyer.share)}% of the day's incoming payments.`,
-      detail: "A small number of buyers drove this result, so treat the day as concentrated rather than a broad change in demand.",
+      headline: netHeadline,
+      detail: `${topBuyer.name} accounted for ${roundPct(topBuyer.share)}% of the day's incoming payments. This shows concentration on the selected day, not proof of a broader change in demand.`,
       concentrated: true,
     };
   }
   if (activity.deltaMessagedFans != null && activity.deltaMessagedFans > 0 && totals.buyers > baseline.buyers) {
     return {
-      headline: "More fans messaged, and there were more buyers.",
-      detail: "That combination is a broad traffic-and-purchase lift, not just one unusually large payment. It does not claim that the same individual messages directly caused each purchase.",
+      headline: netHeadline,
+      detail: "Fans who messaged and buyers were both above their prior-30-day medians. Those are observed conditions, not proof that individual messages directly caused purchases.",
       concentrated: false,
     };
   }
   if (totals.buyers > baseline.buyers) {
     return {
-      headline: "There were more buyers than in the 4-week benchmark.",
-      detail: "The gain was spread across more paying fans rather than being dominated by one payment.",
+      headline: netHeadline,
+      detail: "Buyer count was above the 30-day median. This is a count comparison, not a claim about why fans chose to buy.",
       concentrated,
     };
   }
   if (totals.averageSaleStars > baseline.averageSaleStars) {
     return {
-      headline: "The average paid order was higher than in the 4-week benchmark.",
-      detail: "Buyer volume did not explain the change as much as product mix or higher-value purchases did.",
+      headline: netHeadline,
+      detail: "Average paid-order value was above the 30-day median. Compare paid-order count and payment types below to see the corresponding observed amounts.",
       concentrated,
     };
   }
   if (revenueDelta < 0) {
     return {
-      headline: "Fewer or smaller payments landed than in the 4-week benchmark.",
-      detail: "Use the product and clone rows below to see what stopped contributing; a quieter day does not automatically mean fewer fans arrived.",
+      headline: netHeadline,
+      detail: "The payment and creator comparisons below show what was lower. A lower result does not, by itself, establish why fans arrived or chose to buy.",
       concentrated,
     };
   }
   return {
-    headline: "The result was spread across several ordinary payments.",
-    detail: "No single buyer dominated the day. Check the traffic and product breakdowns for the clearest operational signal.",
+    headline: netHeadline,
+    detail: "No single buyer dominated the day. Check the activity and payment breakdowns for the observed differences from the 30-day baseline.",
     concentrated,
   };
 }
 
-async function loadPurchases(window: DayWindow, cloneId: string | null, hasFeature: boolean): Promise<DriverPurchase[]> {
+/**
+ * Read the full 31-day ledger range once, then apply each report-calendar
+ * window in memory. This avoids turning a 30-day comparison into 31 paged
+ * ledger requests, while retaining exact same-elapsed-time cutoffs for an
+ * in-progress day.
+ */
+async function loadPurchases(windows: DayWindow[], cloneId: string | null, hasFeature: boolean): Promise<DriverPurchase[][]> {
+  if (!windows.length) return [];
+  const startMs = Math.min(...windows.map((window) => window.startMs));
+  const endMs = Math.max(...windows.map((window) => window.endMs));
   let query = supabaseAdmin
     .from("star_transactions")
     .select(hasFeature ? PURCHASE_COLUMNS : PURCHASE_COLUMNS_LEGACY)
-    .gte("paid_at", new Date(window.startMs).toISOString())
-    .lt("paid_at", new Date(window.endMs).toISOString())
+    .gte("paid_at", new Date(startMs).toISOString())
+    .lt("paid_at", new Date(endMs).toISOString())
     .order("id", { ascending: true });
   if (cloneId) query = query.eq("clone_id", cloneId);
-  const result = await selectAllRows<PurchaseRow>(query, { label: `why-changed revenue for ${window.key}` });
-  if (result.truncated) throw new Error(`Could not safely read every payment for ${window.key}.`);
+  const result = await selectAllRows<PurchaseRow>(query, { label: "why-changed revenue for 30-day comparison" });
+  if (result.truncated) throw new Error("Could not safely read every payment for this 30-day comparison.");
   const rows = hasFeature
     ? result.rows
     : result.rows.map((row) => ({ ...row, feature: null }));
-  return toPurchases(rows);
+  const purchasesByWindow = windows.map((): DriverPurchase[] => []);
+  for (const purchase of toPurchases(rows)) {
+    const paidAtMs = new Date(purchase.paidAt).getTime();
+    const windowIndex = windows.findIndex((window) => paidAtMs >= window.startMs && paidAtMs < window.endMs);
+    if (windowIndex >= 0) purchasesByWindow[windowIndex].push(purchase);
+  }
+  return purchasesByWindow;
 }
 
 async function loadActivity(window: DayWindow, cloneId: string | null): Promise<RevenueDayActivity> {
@@ -542,6 +588,26 @@ async function loadActivity(window: DayWindow, cloneId: string | null): Promise<
   }
 }
 
+async function mapWithConcurrency<T, R>(items: T[], limit: number, mapper: (item: T, index: number) => Promise<R>): Promise<R[]> {
+  const results = new Array<R>(items.length);
+  let nextIndex = 0;
+  const worker = async () => {
+    while (nextIndex < items.length) {
+      const index = nextIndex++;
+      results[index] = await mapper(items[index], index);
+    }
+  };
+  await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+  return results;
+}
+
+function loadActivities(windows: DayWindow[], cloneId: string | null) {
+  // The existing RPCs return exact values for one interval. A grouped daily RPC
+  // would be faster, but until it exists, bounded parallelism keeps all 30
+  // daily medians truthful without overwhelming the database connection pool.
+  return mapWithConcurrency(windows, ACTIVITY_CONCURRENCY, (window) => loadActivity(window, cloneId));
+}
+
 function windowForDay(dayKey: string, nowMs: number, partialDurationMs?: number): DayWindow {
   const startMs = reportDayStartMs(dayKey);
   const fullEndMs = reportDayStartMs(shiftReportDay(dayKey, 1));
@@ -556,9 +622,9 @@ function elapsedLabel(elapsedMs: number) {
 }
 
 /**
- * Build the selected day's explanation using four previous matching weekdays as
- * its normal baseline. For a live/incomplete day, those comparisons are cut at
- * the same elapsed time rather than comparing 2pm today with a whole Tuesday.
+ * Build the selected day's explanation using the prior 30 report-calendar days
+ * as its baseline. For a live/incomplete day, each comparison is cut at the
+ * same elapsed time rather than comparing 2pm today with a whole calendar day.
  */
 export async function getRevenueWhyChanged(dayKey: string, cloneId: string | null = null): Promise<RevenueWhyChanged> {
   parseDayKey(dayKey);
@@ -567,10 +633,7 @@ export async function getRevenueWhyChanged(dayKey: string, cloneId: string | nul
   if (target.startMs >= nowMs) throw new Error("Choose today or an earlier day.");
 
   const elapsedMs = target.endMs - target.startMs;
-  const baselineDays = Array.from({ length: SAMPLE_WEEKS }, (_, index) => {
-    const key = shiftReportDay(dayKey, -7 * (index + 1));
-    return windowForDay(key, nowMs, target.partial ? elapsedMs : undefined);
-  });
+  const baselineDays = priorReportDayKeys(dayKey).map((key) => windowForDay(key, nowMs, target.partial ? elapsedMs : undefined));
   const windows = [target, ...baselineDays];
 
   // Probe once before the paged reads. `selectAllRows()` represents a query
@@ -581,8 +644,8 @@ export async function getRevenueWhyChanged(dayKey: string, cloneId: string | nul
   const hasFeature = !featureProbe.error;
 
   const [purchasesByWindow, activityByWindow] = await Promise.all([
-    Promise.all(windows.map((window) => loadPurchases(window, cloneId, hasFeature))),
-    Promise.all(windows.map((window) => loadActivity(window, cloneId))),
+    loadPurchases(windows, cloneId, hasFeature),
+    loadActivities(windows, cloneId),
   ]);
   const [targetPurchases, ...baselinePurchases] = purchasesByWindow;
   const targetAggregate = aggregateRevenueDay(targetPurchases, cloneId);
@@ -597,7 +660,7 @@ export async function getRevenueWhyChanged(dayKey: string, cloneId: string | nul
   if (allCloneIds.size) {
     const { data, error } = await supabaseAdmin.from("clones").select("id,name").in("id", [...allCloneIds]);
     if (error) throw new Error(`Could not resolve clone names: ${error.message}`);
-    for (const clone of (data ?? []) as CloneRow[]) cloneNameById.set(clone.id, clone.name || "Unknown clone");
+    for (const clone of (data ?? []) as CloneRow[]) cloneNameById.set(clone.id, clone.name || "Unknown creator");
   }
 
   const topBuyer = [...targetAggregate.buyers.values()].sort((a, b) => b.stars - a.stars || b.sales - a.sales)[0] ?? null;
@@ -635,7 +698,7 @@ export async function getRevenueWhyChanged(dayKey: string, cloneId: string | nul
     largestPayment: largestPayment
       ? {
           name: buyerNameByKey.get(identityKey(largestPayment.cloneId, largestPayment.telegramId)) ?? displayBuyer(undefined, largestPayment.telegramId),
-          cloneName: cloneNameById.get(largestPayment.cloneId) ?? "Unknown clone",
+          cloneName: cloneNameById.get(largestPayment.cloneId) ?? "Unknown creator",
           stars: largestPayment.stars,
           feature: FEATURE_LABEL[largestPayment.feature] ?? "Other",
           share: targetAggregate.totals.grossPaymentStars ? largestPayment.stars / targetAggregate.totals.grossPaymentStars : 0,
@@ -661,10 +724,11 @@ export async function getRevenueWhyChanged(dayKey: string, cloneId: string | nul
       elapsedLabel: target.partial ? elapsedLabel(elapsedMs) : null,
     },
     comparison: {
-      label: target.partial ? "the same point in the previous four matching weekdays" : "the previous four matching weekdays",
-      benchmarkLabel: "4-week benchmark",
+      label: target.partial ? "the same elapsed time across the prior 30 calendar days" : "the prior 30 calendar days",
+      benchmarkLabel: "30-day baseline",
       baselineDays: baselineDays.map((baseline) => ({ key: baseline.key, label: comparisonLabelForDay(baseline.key) })),
-      scopeLabel: cloneId ? "the selected clone" : "all clones",
+      baselineRangeLabel: `${comparisonLabelForDay(baselineDays[baselineDays.length - 1].key)} to ${comparisonLabelForDay(baselineDays[0].key)}`,
+      scopeLabel: cloneId ? "the selected creator" : "all creators",
       benchmark: usual,
       sampleDays: baselineDays.length,
       baselineIsPartial: target.partial,
@@ -678,7 +742,7 @@ export async function getRevenueWhyChanged(dayKey: string, cloneId: string | nul
     },
     activity,
     concentration,
-    byClone: changeRows(targetAggregate.clones, baselineAggregates.map((day) => day.clones), (id) => cloneNameById.get(id) ?? "Unknown clone"),
+    byClone: changeRows(targetAggregate.clones, baselineAggregates.map((day) => day.clones), (id) => cloneNameById.get(id) ?? "Unknown creator"),
     byFeature: changeRows(targetAggregate.features, baselineAggregates.map((day) => day.features), (key) => FEATURE_LABEL[key] ?? "Other"),
     summary: composeSummary(targetAggregate.totals, usual, activity, concentration),
   };
