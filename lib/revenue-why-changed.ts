@@ -111,6 +111,14 @@ export type RevenueWhyChanged = {
   };
   comparison: {
     label: string;
+    /** Compact, visible name for the four-week median comparison. */
+    benchmarkLabel: string;
+    /** The exact dates used to make the median understandable and auditable. */
+    baselineDays: { key: string; label: string }[];
+    /** Makes it explicit whether the benchmark is fleet-wide or one clone. */
+    scopeLabel: string;
+    /** The exact median values behind the visible comparison. */
+    benchmark: MetricTotals;
     sampleDays: number;
     baselineIsPartial: boolean;
   };
@@ -179,6 +187,14 @@ const reportDateLabel = new Intl.DateTimeFormat("en-AU", {
   month: "short",
 });
 
+const reportComparisonDateLabel = new Intl.DateTimeFormat("en-AU", {
+  timeZone: REPORT_TZ,
+  weekday: "short",
+  day: "numeric",
+  month: "short",
+  year: "numeric",
+});
+
 function parseDayKey(dayKey: string) {
   const match = /^(\d{4})-(\d{2})-(\d{2})$/.exec(dayKey);
   if (!match) throw new Error("date must be YYYY-MM-DD");
@@ -231,6 +247,10 @@ export function shiftReportDay(dayKey: string, days: number): string {
 function labelForDay(dayKey: string): string {
   // Midday avoids the handful of zones where DST shifts occur overnight.
   return reportDateLabel.format(new Date(reportDayStartMs(dayKey) + 12 * 60 * 60 * 1000));
+}
+
+function comparisonLabelForDay(dayKey: string): string {
+  return reportComparisonDateLabel.format(new Date(reportDayStartMs(dayKey) + 12 * 60 * 60 * 1000));
 }
 
 function normaliseFeature(feature: string | null, kind: string | null, adjustment: boolean): string {
@@ -462,21 +482,21 @@ function composeSummary(
   }
   if (totals.buyers > baseline.buyers) {
     return {
-      headline: "More buyers than usual made the difference.",
+      headline: "There were more buyers than in the 4-week benchmark.",
       detail: "The gain was spread across more paying fans rather than being dominated by one payment.",
       concentrated,
     };
   }
   if (totals.averageSaleStars > baseline.averageSaleStars) {
     return {
-      headline: "Orders were larger than usual.",
+      headline: "The average paid order was higher than in the 4-week benchmark.",
       detail: "Buyer volume did not explain the change as much as product mix or higher-value purchases did.",
       concentrated,
     };
   }
   if (revenueDelta < 0) {
     return {
-      headline: "Fewer or smaller payments landed than usual.",
+      headline: "Fewer or smaller payments landed than in the 4-week benchmark.",
       detail: "Use the product and clone rows below to see what stopped contributing; a quieter day does not automatically mean fewer fans arrived.",
       concentrated,
     };
@@ -642,6 +662,10 @@ export async function getRevenueWhyChanged(dayKey: string, cloneId: string | nul
     },
     comparison: {
       label: target.partial ? "the same point in the previous four matching weekdays" : "the previous four matching weekdays",
+      benchmarkLabel: "4-week benchmark",
+      baselineDays: baselineDays.map((baseline) => ({ key: baseline.key, label: comparisonLabelForDay(baseline.key) })),
+      scopeLabel: cloneId ? "the selected clone" : "all clones",
+      benchmark: usual,
       sampleDays: baselineDays.length,
       baselineIsPartial: target.partial,
     },

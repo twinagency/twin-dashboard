@@ -3,6 +3,7 @@ import { type Period } from "@/lib/dashboard-data";
 import { getRevenueRollup } from "@/lib/revenue-cache";
 import { getStarBalance, type StarBalance } from "@/lib/star-balance";
 import { supabaseAdmin } from "@/lib/supabase";
+import { reportDayStartMs, shiftReportDay } from "@/lib/revenue-why-changed";
 
 export const dynamic = "force-dynamic";
 
@@ -33,13 +34,38 @@ export async function GET(req: NextRequest) {
   const p = req.nextUrl.searchParams.get("period");
   const clone = req.nextUrl.searchParams.get("clone") || null;
 
-  // Custom range: two epoch-ms timestamps from the calendar picker override any
-  // preset period entirely — the chart re-windows to exactly what was picked.
+  // Custom range: the UI sends report-calendar dates so a person in Brisbane
+  // does not cut an AEDT day at 1 AM. Epoch-ms bounds remain supported for
+  // callers that already use this internal endpoint programmatically.
+  const startDate = req.nextUrl.searchParams.get("startDate");
+  const endDate = req.nextUrl.searchParams.get("endDate");
   const startParam = req.nextUrl.searchParams.get("start");
   const endParam = req.nextUrl.searchParams.get("end");
-  const startMs = startParam ? Number(startParam) : NaN;
-  const endMs = endParam ? Number(endParam) : NaN;
-  const range = Number.isFinite(startMs) && Number.isFinite(endMs) ? { startMs, endMs } : undefined;
+  let range: { startMs: number; endMs: number } | undefined;
+  if (startDate !== null || endDate !== null) {
+    if (!startDate || !endDate) {
+      return NextResponse.json({ error: "startDate and endDate must both be YYYY-MM-DD dates" }, { status: 400 });
+    }
+    try {
+      const rangeStartMs = reportDayStartMs(startDate);
+      const rangeEndMs = reportDayStartMs(shiftReportDay(endDate, 1)) - 1;
+      if (rangeEndMs < rangeStartMs) {
+        return NextResponse.json({ error: "endDate must not be before startDate" }, { status: 400 });
+      }
+      range = {
+        startMs: rangeStartMs,
+        // getDashboard's existing bounds are inclusive, so preserve the final
+        // millisecond of the selected report date.
+        endMs: rangeEndMs,
+      };
+    } catch {
+      return NextResponse.json({ error: "startDate and endDate must be real YYYY-MM-DD dates" }, { status: 400 });
+    }
+  } else {
+    const startMs = startParam ? Number(startParam) : NaN;
+    const endMs = endParam ? Number(endParam) : NaN;
+    range = Number.isFinite(startMs) && Number.isFinite(endMs) ? { startMs, endMs } : undefined;
+  }
 
   const period: Period = range ? "CUSTOM" : VALID.includes(p as Period) ? (p as Period) : "1M";
   try {

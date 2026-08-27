@@ -184,9 +184,11 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
     async (p: Period, cid?: string | null, range?: { start: string; end: string } | null) => {
       const params = new URLSearchParams();
       if (range) {
-        // End-of-day on the picked end date, so the day itself is fully included.
-        params.set("start", String(new Date(`${range.start}T00:00:00`).getTime()));
-        params.set("end", String(new Date(`${range.end}T23:59:59.999`).getTime()));
+        // Date picker values are report-calendar dates. Sending them as dates
+        // lets the server apply Sydney midnight boundaries, rather than the
+        // browser's local timezone (which differs during daylight saving).
+        params.set("startDate", range.start);
+        params.set("endDate", range.end);
       } else {
         params.set("period", p);
       }

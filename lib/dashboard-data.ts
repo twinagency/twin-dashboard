@@ -2,6 +2,8 @@ import { supabaseAdmin } from "./supabase";
 import { selectAllRows } from "./select-all";
 import { chartColorForClone, profileImagePathForClone } from "./colors";
 import { cloneUserStats, cloneUserStatsWindow, usageRollup } from "./rollup";
+import { REPORT_TZ, reportInstant } from "./report-time";
+import { reportDayStartMs, shiftReportDay } from "./revenue-why-changed";
 
 export type Period = "ALL" | "1Y" | "6M" | "3M" | "1M" | "2W" | "1W" | "1D" | "CUSTOM";
 type Gran = "hour" | "day" | "week" | "month";
@@ -130,11 +132,11 @@ function buildBuckets(startMs: number, endMs: number, gran: Gran) {
   const keys: string[] = [];
 
   const monthLabel = (d: Date) =>
-    d.toLocaleDateString("en-US", { month: "short", year: "2-digit" });
+    d.toLocaleDateString("en-US", { month: "short", year: "2-digit", timeZone: REPORT_TZ });
   const dayLabel = (d: Date) =>
-    d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+    d.toLocaleDateString("en-US", { month: "short", day: "numeric", timeZone: REPORT_TZ });
   const hourLabel = (d: Date) =>
-    d.toLocaleTimeString("en-US", { hour: "numeric", hour12: true });
+    d.toLocaleTimeString("en-US", { hour: "numeric", hour12: true, timeZone: REPORT_TZ });
 
   if (gran === "month") {
     const start = new Date(startMs);
@@ -152,7 +154,26 @@ function buildBuckets(startMs: number, endMs: number, gran: Gran) {
     return { keys, labels, keyFor };
   }
 
-  const step = gran === "hour" ? 3_600_000 : gran === "day" ? MS_DAY : 7 * MS_DAY;
+  // The day-explanation panel and the revenue chart must mean exactly the
+  // same thing by a date. A fixed 86,400,000 ms step is not a Sydney calendar
+  // day during DST, and using the container's date labels filed evening sales
+  // under the wrong visible day. Enumerate report-calendar keys instead.
+  if (gran === "day") {
+    const startKey = reportInstant(new Date(startMs)).dayKey;
+    const endKey = reportInstant(new Date(endMs)).dayKey;
+    for (let key = startKey; key <= endKey; key = shiftReportDay(key, 1)) {
+      keys.push(key);
+      // Noon is stable even in time zones whose DST change happens overnight.
+      labels.push(dayLabel(new Date(reportDayStartMs(key) + 12 * 60 * 60 * 1000)));
+    }
+    return {
+      keys,
+      labels,
+      keyFor: (ts: number) => reportInstant(new Date(ts)).dayKey,
+    };
+  }
+
+  const step = gran === "hour" ? 3_600_000 : 7 * MS_DAY;
   const count = Math.max(1, Math.ceil((endMs - startMs) / step));
   for (let i = 0; i < count; i++) {
     const d = new Date(startMs + i * step);
@@ -212,7 +233,12 @@ export async function getDashboard(period: Period, range?: DateRange): Promise<D
   if (range) {
     startMs = range.startMs;
   } else if (spec.days !== null) {
-    startMs = now - spec.days * MS_DAY;
+    // Multi-day presets are calendar-day reports, not rolling 24-hour slices.
+    // Keeping the current report day as the last (live) bar gives 1W seven
+    // Sydney dates and 1M thirty, all of which match the day-insight endpoint.
+    startMs = spec.gran === "day"
+      ? reportDayStartMs(shiftReportDay(reportInstant(new Date(now)).dayKey, -(spec.days - 1)))
+      : now - spec.days * MS_DAY;
   } else {
     const { data: earliest } = await supabaseAdmin
       .from("star_transactions")
