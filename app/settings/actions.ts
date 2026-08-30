@@ -188,3 +188,24 @@ export async function saveCloneDefaults(fd: FormData) {
   revalidatePath("/settings");
   revalidatePath("/clones/new");
 }
+
+// ── Models in use, for the OpenRouter request-fields panel ────────────────────
+// Every live text_model/voice_model on the fleet, so the panel can list "this
+// model gets these fields" against what is actually configured right now
+// rather than a guessed example. The fields themselves (OPENROUTER_EXTRA_PARAMS)
+// are the SAME for every model — this project has no per-clone code paths — the
+// per-model list is what changes.
+export async function getModelsInUse(): Promise<{ model: string; clones: string[] }[]> {
+  const { data } = await supabaseAdmin.from("clones").select("name,text_model,voice_model").order("name");
+  const byModel = new Map<string, Set<string>>();
+  for (const row of data ?? []) {
+    for (const model of [row.text_model, row.voice_model]) {
+      if (!model) continue;
+      if (!byModel.has(model)) byModel.set(model, new Set());
+      byModel.get(model)!.add(row.name ?? "unnamed");
+    }
+  }
+  return [...byModel.entries()]
+    .map(([model, clones]) => ({ model, clones: [...clones].sort() }))
+    .sort((a, b) => a.model.localeCompare(b.model));
+}

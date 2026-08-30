@@ -1,6 +1,7 @@
 import CloneDefaultsForm from "@/components/CloneDefaultsForm";
-import { saveApiKeys, getApiKeyStatus, getCloneDefaults } from "./actions";
+import { saveApiKeys, getApiKeyStatus, getCloneDefaults, getModelsInUse } from "./actions";
 import { API_KEY_FIELDS } from "./fields";
+import { OPENROUTER_FIELD_NOTES } from "@/lib/openrouter-fields";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -13,7 +14,7 @@ export const metadata = {
 export const dynamic = "force-dynamic";
 
 export default async function SettingsPage() {
-  const [status, cloneDefaults] = await Promise.all([getApiKeyStatus(), getCloneDefaults()]);
+  const [status, cloneDefaults, modelsInUse] = await Promise.all([getApiKeyStatus(), getCloneDefaults(), getModelsInUse()]);
   return (
     <div className="dashboard-page space-y-6">
       <h1 className="text-2xl font-bold tracking-tight text-ink">
@@ -50,6 +51,47 @@ export default async function SettingsPage() {
               <span className="text-xs text-muted">To clear a key back to .env, type <code>__CLEAR__</code>.</span>
             </div>
           </form>
+        </CardContent>
+      </Card>
+
+      <Card id="openrouter-fields">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            OpenRouter request fields
+            <Info text="The extra fields sent on every OpenRouter call, for every model, every clone. There are no per-clone code paths, so this is the whole fleet at once. Change it in bot/src/services/llm.ts, OPENROUTER_EXTRA_PARAMS." />
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="text-left text-muted">
+                <th className="pb-2 pr-4 font-medium">Field</th>
+                <th className="pb-2 pr-4 font-medium">Value</th>
+                <th className="pb-2 font-medium">Why</th>
+              </tr>
+            </thead>
+            <tbody>
+              {OPENROUTER_FIELD_NOTES.map((f) => (
+                <tr key={f.field} className="border-t border-line align-top">
+                  <td className="py-2 pr-4 font-mono text-xs">{f.field}</td>
+                  <td className="py-2 pr-4 font-mono text-xs">{f.value}</td>
+                  <td className="py-2 text-muted">{f.why}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+          <div>
+            <div className="mb-2 text-sm font-medium text-ink">Models currently live</div>
+            <div className="space-y-1 text-sm">
+              {modelsInUse.length === 0 && <div className="text-muted">No clone has a model set.</div>}
+              {modelsInUse.map((m) => (
+                <div key={m.model} className="flex flex-wrap items-baseline gap-2">
+                  <span className="font-mono text-xs">{m.model}</span>
+                  <span className="text-xs text-muted">{m.clones.join(", ")}</span>
+                </div>
+              ))}
+            </div>
+          </div>
         </CardContent>
       </Card>
 
