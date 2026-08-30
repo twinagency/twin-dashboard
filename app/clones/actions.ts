@@ -538,10 +538,15 @@ function rowFromForm(fd: FormData) {
     // a save can never quietly DISARM the guard: 'off' is the pre-105 behaviour
     // that produced the "mmm ..." opener tic, so it has to be a deliberate pick.
     variety_guard: oneOf(str(fd, "variety_guard"), VARIETY_GUARD_LEVELS, "normal"),
-    // Migration 097. Same "null is meaningful" reasoning as
-    // tip_reask_cooldown_seconds right above it in the UI: null lets the bot's
-    // 300s default stand rather than freezing today's constant into the row.
-    silence_fallback_cooldown_seconds: numOrNull(fd, "silence_fallback_cooldown_seconds"),
+    // Migration 097. UNLIKE tip_reask_cooldown_seconds right above it (genuinely
+    // nullable), this column is `not null default 300` — an explicit null here
+    // is a constraint violation, not "defer to the runtime default". Found
+    // 2026-08-30: numOrNull sent literal null on any create that left this
+    // field blank, the insert failed, and isMissingColumnError's broad /column/i
+    // match mistook the NOT-NULL error for a missing-column one, triggering the
+    // retry that strips PERSONA_FACT_COLUMNS et al. — silently dropping every
+    // typed fact on the row, not just this dial.
+    silence_fallback_cooldown_seconds: num(fd, "silence_fallback_cooldown_seconds", 300),
     // Migration 097. Bubble-send delay range (was a hardcoded constant in
     // bot/src/flows/human.ts). Clamped to a sane floor; the max<min case is
     // NOT corrected here on purpose, the dial-conflict warning in the UI is
@@ -564,9 +569,18 @@ function rowFromForm(fd: FormData) {
     realism_effects_enabled: fd.get("realism_effects_enabled") !== "false",
     // Migration 097. Router keyword lists (bot/src/flows/router.ts), plain
     // comma-separated text, additive to a fixed remainder the bot keeps unedited.
-    media_keywords: str(fd, "media_keywords"),
-    voice_keywords: str(fd, "voice_keywords"),
-    tease_keywords: str(fd, "tease_keywords"),
+    // All three are `not null default '<list>'` — str() returns null when the
+    // field is absent, which the DB rejects outright (same class of bug fixed
+    // on silence_fallback_cooldown_seconds above, found the same way: creating
+    // a clone through the admin API, which doesn't submit every dial the full
+    // Configure form does). Fall back to the exact migration 097 defaults.
+    media_keywords: str(fd, "media_keywords") ?? "pic,pics,pix,photo,photos,picture,selfie",
+    voice_keywords:
+      str(fd, "voice_keywords") ??
+      "voice,hear you,hear your,say it,say that,talk to me,voice note,voice message,audio",
+    tease_keywords:
+      str(fd, "tease_keywords") ??
+      "pic,pics,photo,photos,picture,video,vid,clip,nude,lingerie,show you,see me,sent you,unlock",
 
     // Migration 099 (batch 2 advanced dials). Percent fields clamp 0-100;
     // integer thresholds floor at 1 so a missing/blank field never stores a
@@ -967,8 +981,15 @@ function withoutPersonaFactColumns(row: Record<string, unknown>): Record<string,
   return copy;
 }
 
+// A genuine PostgREST "this column doesn't exist yet" error reads
+// `Could not find the 'x' column of 'clones' in the schema cache`. The
+// original bare /column/i also matched unrelated Postgres errors that merely
+// mention "column" in passing — a NOT NULL violation ("null value in column
+// ... violates not-null constraint") is the one that bit on 2026-08-30,
+// silently stripping every persona fact on any create that hit it. Narrowed to
+// the actual PostgREST missing-column signature only.
 function isMissingColumnError(message: string): boolean {
-  return /column|schema cache/i.test(message);
+  return /schema cache/i.test(message);
 }
 
 function slugify(name: string): string {

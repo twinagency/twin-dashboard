@@ -42,12 +42,36 @@ export const POST = withAdmin(async (req) => {
   const fd = new FormData();
   for (const [k, v] of Object.entries(body)) {
     if (v === null || v === undefined) continue;
+    if (k === "intake" && typeof v === "object") {
+      // intakeFromForm() (app/clones/actions.ts) reads per-field `intake_<key>`
+      // entries and a legacy `intake_answers` fallback — never a single nested
+      // "intake" key. Sending {intake: {fields, answers}} as one JSON-stringified
+      // blob under "intake" (what the generic branch below would do) is read by
+      // nothing: intakeFromForm finds no intake_* keys, so `fields` comes back
+      // empty and the compiler gets facts only, no actual voice/personality
+      // prose. Found 2026-08-30: every clone created through this endpoint had
+      // an empty intake_fields and a persona with only NAME filled in.
+      const intake = v as { fields?: Record<string, unknown>; answers?: unknown };
+      for (const [fk, fv] of Object.entries(intake.fields ?? {})) {
+        if (fv !== null && fv !== undefined && fv !== "") fd.set(`intake_${fk}`, String(fv));
+      }
+      if (intake.answers != null) fd.set("intake_answers", String(intake.answers));
+      continue;
+    }
     if (typeof v === "object") {
       fd.set(k, JSON.stringify(v));
     } else {
       fd.set(k, String(v));
     }
   }
+  // rowFromForm() only writes date_of_birth/hometown/hard_limits/etc. (the
+  // PersonaFactsFields block) when this marker is present — it is how the UI
+  // avoids nulling those columns on an unrelated Configure save. An API create
+  // has no such save-in-progress to protect and every caller here intends to
+  // set facts, so without this every typed fact in the body was silently
+  // dropped on create with no error (found 2026-08-30: clonify's own verify
+  // step read a clone back and found 19 of 21 extracted facts missing).
+  fd.set("persona_facts", "1");
 
   try {
     const id = await createCloneRow(fd);
