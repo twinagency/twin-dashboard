@@ -1,5 +1,6 @@
 import { withAdmin, ok, jsonError, logAdminWrite } from "@/lib/api-route";
 import { createCloneRow } from "@/app/clones/actions";
+import { getCloneDefaults } from "@/app/settings/actions";
 import { resolveClone } from "@/lib/api-read";
 
 export const dynamic = "force-dynamic";
@@ -36,10 +37,28 @@ export const POST = withAdmin(async (req) => {
     );
   }
 
+  // Seed the fleet's new-clone defaults FIRST, same as app/clones/new/page.tsx
+  // does for the dashboard's own create form (getCloneDefaults() -> passed into
+  // CreateCloneForm -> useCloneConfig's initial state -> every field is present
+  // in that form's FormData). Without this, any field the caller omits falls
+  // through to rowFromForm()'s bare per-field fallback (0 / false / "") instead
+  // of the real default, because that fallback only ever runs against a form
+  // that JS controls and always submits. Found 2026-08-31: 5 clones created via
+  // this endpoint (Cat, Tamara, Dakota Lyn, Autumn Renae had older instances of
+  // it; Allison Parker, Riley Mae Lewis, Kyla Yesenosky, Zoey Foxx were the
+  // 2026-08-30 batch) had response_wait_min/max stuck at 0/0, discount caps at
+  // 0, and read_receipts_enabled false, none of it visible until an operator
+  // opened Configure and looked.
+  const defaults = await getCloneDefaults();
+  const fd = new FormData();
+  for (const [k, v] of Object.entries(defaults)) {
+    if (v === null || v === undefined) continue;
+    fd.set(k, typeof v === "object" ? JSON.stringify(v) : String(v));
+  }
   // Anything else the caller passes is forwarded verbatim to the same
   // rowFromForm() the UI uses, so the API cannot drift from the form's own
-  // field handling. Unknown keys are simply ignored by it.
-  const fd = new FormData();
+  // field handling. Unknown keys are simply ignored by it. Set AFTER the
+  // defaults above so an explicit caller value always wins.
   for (const [k, v] of Object.entries(body)) {
     if (v === null || v === undefined) continue;
     if (k === "intake" && typeof v === "object") {

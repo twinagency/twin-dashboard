@@ -241,6 +241,30 @@ check("B7 clone creation reuses createCloneRow, so an API clone equals a UI clon
   assert(!/\.from\(\s*["']clones["']\s*\)/.test(src), "must not insert into clones directly");
 });
 
+check("B7b clone creation seeds fleet defaults before caller fields, so an omitted field is not silently 0/false", () => {
+  // Found 2026-08-31: this route built FormData purely from the caller's JSON
+  // body, so any field the caller didn't send fell through to rowFromForm()'s
+  // bare per-field fallback instead of the real default. The dashboard's own
+  // "New clone" page never hits that path (app/clones/new/page.tsx calls
+  // getCloneDefaults() and every field in useCloneConfig's initial state ends
+  // up in that form's FormData), so five clones created via this endpoint
+  // launched with response_wait_min/max stuck at 0/0, discount caps at 0, and
+  // read_receipts_enabled false — none of it visible until an operator opened
+  // Configure and looked.
+  const src = sourceCode(new URL("../app/api/admin/v1/clones/create/route.ts", import.meta.url));
+  assert(
+    src.includes('from "@/app/settings/actions"') && src.includes("getCloneDefaults"),
+    "must seed from the same getCloneDefaults() the New clone page uses",
+  );
+  const defaultsCallIdx = src.indexOf("getCloneDefaults()");
+  const bodyLoopIdx = src.indexOf("Object.entries(body)");
+  assert(defaultsCallIdx !== -1 && bodyLoopIdx !== -1, "expected both the defaults seed and the body loop to be present");
+  assert(
+    defaultsCallIdx < bodyLoopIdx,
+    "defaults must be written into the FormData BEFORE the caller's body, so an explicit caller value still wins",
+  );
+});
+
 check("B8 money and fan-facing free text are not writable", () => {
   const src = sourceCode(new URL("../app/api/admin/v1/clones/write/route.ts", import.meta.url));
   // The guard is that writes are limited to the two named allowlists plus

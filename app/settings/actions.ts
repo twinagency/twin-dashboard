@@ -129,6 +129,16 @@ const BUILTIN_CLONE_DEFAULTS: CloneDefaults = {
   // The response-pacing defaults (read delay, typing stutter, the ramp) were
   // removed on 2026-07-27 along with the feature itself. The flat
   // response_wait_min/max above is the whole pacing story now.
+  //
+  // read_receipts_enabled -> true (clones column default; useCloneConfig's
+  // initial() already falls back to `?? true`). Added 2026-08-31 after 5
+  // clones created via app/api/admin/v1/clones/create came back with read
+  // receipts OFF: rowFromForm()'s own fallback is `fd.get(...) === "true"`,
+  // which is false on an absent field. The dashboard create form never hits
+  // that path because its checkbox always submits a value; a caller of the
+  // admin API that omits the field does. Same failure class as the rest of
+  // this object, just on a toggle instead of a number.
+  read_receipts_enabled: true,
 };
 
 export async function getCloneDefaults(): Promise<CloneDefaults> {
