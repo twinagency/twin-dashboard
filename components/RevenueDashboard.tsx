@@ -1878,7 +1878,7 @@ export function fmtHours(hours: number | null): string {
   return `${(hours / 24).toFixed(1)}d`;
 }
 
-// ── Buying customers ─────────────────────────────────────────────────────────
+// ── Paying customers ─────────────────────────────────────────────────────────
 // Keep the plain-language question on every card. These rates intentionally
 // answer different questions, so the UI must not make them look interchangeable.
 function BuyerConversionPanel({
@@ -1925,17 +1925,11 @@ function BuyerConversionPanel({
       <details className="group">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-3 text-left sm:px-4 [&::-webkit-details-marker]:hidden">
           <span className="min-w-0">
-            <span className="block text-xs font-semibold uppercase tracking-wide text-ink">Buying customers</span>
+            <span className="block text-xs font-semibold uppercase tracking-wide text-ink">Paying customers</span>
             <span className="mt-0.5 block text-[11px] leading-snug text-muted">Did people buy after messaging, and did past buyers come back to chat?</span>
           </span>
-          <span className="flex shrink-0 items-center gap-2 text-right">
-            <span>
-              <span className="block text-[9px] font-semibold uppercase tracking-wide text-muted">Bought this period</span>
-              <span className="block font-mono text-base font-semibold tabular-nums text-ink">{activeChatRate}</span>
-            </span>
-            <span className="text-xs font-semibold text-[#28658f] group-open:hidden">Open</span>
-            <span className="hidden text-xs font-semibold text-[#28658f] group-open:inline">Hide</span>
-          </span>
+          <span className="shrink-0 text-xs font-semibold text-[#28658f] group-open:hidden">Open</span>
+          <span className="hidden shrink-0 text-xs font-semibold text-[#28658f] group-open:inline">Hide</span>
         </summary>
         <CardContent className="border-t border-line p-3 sm:p-4">
           <div className="rounded-xl border border-[#4a8ec4]/35 bg-[#eff8ff] px-3 py-2.5 text-[11px] leading-relaxed text-muted">
