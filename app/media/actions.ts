@@ -380,3 +380,52 @@ export async function getSignedUrl(path: string): Promise<string> {
   if (error) throw new Error(error.message);
   return data.signedUrl;
 }
+
+// ── Category pricing guide (moved here from Config/Money — lives with the
+// media it prices, per-clone) ───────────────────────────────────────────────
+export async function updateCategoryPricing(cloneId: string, guide: Record<string, number>) {
+  const { error } = await supabaseAdmin.from("clones").update({ category_pricing: guide }).eq("id", cloneId);
+  if (error) throw new Error(error.message);
+  revalidatePath("/media");
+}
+
+// ── Reprice existing media from the CURRENT guide ────────────────────────────
+// Same derivation new uploads use (priceFromGuide, see lib/pricing.ts), just
+// run backwards over rows that already exist instead of at upload time. A
+// changed guide only ever affected future uploads before this; this is what
+// makes it retroactive. Manual price edits are NOT protected here on purpose:
+// "reprice" means what it says, every item in scope gets recomputed. Rows
+// whose tags don't match anything in the guide keep their price (priceFromGuide
+// returns the sfw floor in that case, never null, so this only skips a row
+// when the guide itself is unusable).
+async function repriceTable(table: "photos" | "videos", cloneId: string, guide: unknown): Promise<number> {
+  const { data, error } = await supabaseAdmin
+    .from(table)
+    .select("id, tags, nsfw")
+    .eq("clone_id", cloneId);
+  if (error) throw new Error(error.message);
+  const rows = (data ?? []) as { id: string; tags: string[] | null; nsfw: boolean | null }[];
+  let updated = 0;
+  for (const row of rows) {
+    const price = priceFromGuide(guide, row.tags ?? [], !!row.nsfw);
+    if (price == null) continue;
+    const { error: updErr } = await supabaseAdmin
+      .from(table)
+      .update({ star_value: price, is_free: price <= 0 })
+      .eq("id", row.id);
+    if (updErr) throw new Error(updErr.message);
+    updated++;
+  }
+  return updated;
+}
+
+export async function repriceMedia(cloneId: string, target: "photos" | "videos" | "all"): Promise<{ photos: number; videos: number }> {
+  const { data: clone, error } = await supabaseAdmin.from("clones").select("category_pricing").eq("id", cloneId).maybeSingle();
+  if (error) throw new Error(error.message);
+  const guide = (clone as { category_pricing?: unknown } | null)?.category_pricing;
+  const result = { photos: 0, videos: 0 };
+  if (target === "photos" || target === "all") result.photos = await repriceTable("photos", cloneId, guide);
+  if (target === "videos" || target === "all") result.videos = await repriceTable("videos", cloneId, guide);
+  revalidatePath("/media");
+  return result;
+}

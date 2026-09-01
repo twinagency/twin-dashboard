@@ -6,6 +6,7 @@ import { compileClone } from "@/lib/compiler";
 import { INTAKE_FIELD_KEYS, assembleAnswers } from "@/lib/intake";
 import { vibePresetFor } from "@/lib/vibes";
 import { CLONE_TOGGLE_FIELDS, type CloneToggleField, CLONE_DIAL_FIELDS, type CloneDialField } from "./toggle-fields";
+import { getCloneDefaults } from "@/app/settings/actions";
 
 // Gather the structured intake_<key> fields into { fields, answers } where
 // `answers` is the labelled blob the AI compiler reads (prose + a structured-
@@ -232,25 +233,6 @@ function parseSpoilOptions(fd: FormData): { stars: number; label: string }[] {
   }
 }
 
-// Category pricing arrives as a JSON string in a hidden field. Coerce to a clean
-// { category: non-negative int } map so the runtime always reads money-safe prices.
-function parseCategoryPricing(fd: FormData): Record<string, number> {
-  const raw = fd.get("category_pricing");
-  if (!raw) return {};
-  try {
-    const obj = JSON.parse(String(raw));
-    if (!obj || typeof obj !== "object" || Array.isArray(obj)) return {};
-    const out: Record<string, number> = {};
-    for (const [k, v] of Object.entries(obj)) {
-      const n = Number(v);
-      if (Number.isFinite(n) && n >= 0) out[k] = Math.round(n);
-    }
-    return out;
-  } catch {
-    return {};
-  }
-}
-
 // Onboarding collect-fields arrive as a JSON string array in a hidden field.
 // Coerce to a clean, de-duped string[] of non-empty keys (order preserved).
 function parseCollectFields(fd: FormData): string[] {
@@ -399,7 +381,12 @@ function rowFromForm(fd: FormData) {
     discount_tier_share_high_pct: Math.min(100, Math.max(0, num(fd, "discount_tier_share_high_pct", 90))),
     discount_tier_share_whale_pct: Math.min(100, Math.max(0, num(fd, "discount_tier_share_whale_pct", 100))),
     spoil_options: parseSpoilOptions(fd),
-    category_pricing: parseCategoryPricing(fd),
+    // category_pricing is NOT written here (2026-09-01): the editor moved to
+    // the PPVs page (app/media/actions.ts:updateCategoryPricing), which has
+    // its own save. This form no longer carries a category_pricing field, so
+    // writing parseCategoryPricing(fd) here would silently overwrite it back
+    // to `{}` on every single Config save — see the "half-wired toggle"
+    // warning in CLAUDE.md, this is exactly that failure mode.
     intake: intakeFromForm(fd, str(fd, "name")),
 
     // Structured persona facts (migration 033) — only when the widgets were on
@@ -1063,7 +1050,17 @@ export async function createCloneRow(fd: FormData): Promise<string> {
   }
   await assertBotTokenFree(bot_token);
 
-  const row = { ...rowFromForm(fd), slug, drip_steps: DEFAULT_DRIP_STEPS };
+  // category_pricing no longer arrives through the form (see the comment on
+  // rowFromForm's category_pricing removal below) — a fresh clone seeds it
+  // straight from the Settings default here, matching what the removed
+  // hidden input used to carry through ConfigSections in "create" mode.
+  const cloneDefaults = await getCloneDefaults();
+  const row = {
+    ...rowFromForm(fd),
+    slug,
+    drip_steps: DEFAULT_DRIP_STEPS,
+    category_pricing: cloneDefaults.category_pricing ?? {},
+  };
   let { data, error } = await supabaseAdmin.from("clones").insert(row).select("id").single();
   if (error && isMissingColumnError(error.message)) {
     ({ data, error } = await supabaseAdmin

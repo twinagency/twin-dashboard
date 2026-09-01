@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import StarAmount from "@/components/StarAmount";
-import { MEDIA_TAGS } from "@/lib/pricing";
+import { MEDIA_TAGS, CATEGORY_LABELS, PRICING_CATEGORIES, DEFAULT_CATEGORY_PRICING } from "@/lib/pricing";
 import { checkPhotoDimensions, PHOTO_LIMITS_HINT } from "@/lib/telegram-limits";
 import {
   uploadPhoto,
@@ -17,6 +17,8 @@ import {
   deleteBundle,
   addBundleItem,
   removeBundleItem,
+  updateCategoryPricing,
+  repriceMedia,
 } from "./actions";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -1027,18 +1029,20 @@ function CreateBundleForm({ cloneId }: { cloneId: string }) {
 }
 
 // ── Main component ────────────────────────────────────────────────────────────
-type Tab = "photos" | "videos" | "bundles";
+type Tab = "photos" | "videos" | "bundles" | "pricing";
 
 export default function MediaManager({
   cloneId,
   photos,
   videos,
   bundles,
+  categoryPricing,
 }: {
   cloneId: string;
   photos: Photo[];
   videos: Video[];
   bundles: Bundle[];
+  categoryPricing: Record<string, number> | null;
 }) {
   const [tab, setTab] = useState<Tab>("photos");
 
@@ -1046,6 +1050,7 @@ export default function MediaManager({
     { key: "photos", label: "Photos", count: photos.length },
     { key: "videos", label: "Videos", count: videos.length },
     { key: "bundles", label: "Bundles", count: bundles.length },
+    { key: "pricing", label: "Pricing", count: 0 },
   ];
 
   return (
@@ -1111,6 +1116,161 @@ export default function MediaManager({
           </div>
         )}
       </div>
+
+      <div className={tab === "pricing" ? "grid gap-4" : "hidden"}>
+        <PricingTab cloneId={cloneId} categoryPricing={categoryPricing} photoCount={photos.length} videoCount={videos.length} />
+      </div>
+    </div>
+  );
+}
+
+// ── Pricing guide + reprice (moved here from Config/Money, 2026-09-01) ──────
+// Lives with the media it prices instead of a separate tab, and unlike the old
+// location, changing a price here can be pushed onto every EXISTING item via
+// Reprice — the old Config tab only ever affected new uploads.
+function PricingTab({
+  cloneId,
+  categoryPricing,
+  photoCount,
+  videoCount,
+}: {
+  cloneId: string;
+  categoryPricing: Record<string, number> | null;
+  photoCount: number;
+  videoCount: number;
+}) {
+  const router = useRouter();
+  const [guide, setGuide] = useState<Record<string, number>>(() => ({
+    ...DEFAULT_CATEGORY_PRICING,
+    ...(categoryPricing ?? {}),
+  }));
+  const [savedGuide, setSavedGuide] = useState(guide);
+  const [saving, startSave] = useTransition();
+  const [repricing, setRepricing] = useState<"photos" | "videos" | "all" | null>(null);
+  const [msg, setMsg] = useState<string | null>(null);
+
+  const dirty = JSON.stringify(guide) !== JSON.stringify(savedGuide);
+
+  function save() {
+    startSave(async () => {
+      await updateCategoryPricing(cloneId, guide);
+      setSavedGuide(guide);
+      setMsg("Pricing guide saved.");
+      router.refresh();
+    });
+  }
+
+  async function reprice(target: "photos" | "videos" | "all") {
+    setRepricing(target);
+    setMsg(null);
+    try {
+      const result = await repriceMedia(cloneId, target);
+      const parts: string[] = [];
+      if (target !== "videos") parts.push(`${result.photos} photo${result.photos === 1 ? "" : "s"}`);
+      if (target !== "photos") parts.push(`${result.videos} video${result.videos === 1 ? "" : "s"}`);
+      setMsg(`Repriced ${parts.join(" and ")} from the current guide.`);
+      router.refresh();
+    } catch (e) {
+      setMsg(e instanceof Error ? e.message : String(e));
+    } finally {
+      setRepricing(null);
+    }
+  }
+
+  return (
+    <div className="grid gap-4">
+      <div className="rounded-lg border border-line bg-panel p-4">
+        <div className="mb-1 flex items-center gap-1.5">
+          <div className="text-sm font-semibold">Category pricing</div>
+          <span
+            className="cursor-help text-[11px] text-muted"
+            title="Suggested ⭐ price per content type. On upload, a photo/video is auto-tagged by AI (bikini, lingerie, full nude, ...) and priced from this guide: the highest-priced matching category wins. Leave a price blank on upload to auto-price; type one to override. Prices only ever come from here, she never invents a number."
+          >
+            ⓘ
+          </span>
+        </div>
+        <div className="mb-3 text-xs text-muted">
+          Changing a price here only affects NEW uploads until you press Reprice below — it never silently rewrites what's already priced.
+        </div>
+        <div className="grid grid-cols-3 gap-x-2 gap-y-1.5 sm:grid-cols-4">
+          {PRICING_CATEGORIES.map((k) => (
+            <label key={k} className="grid gap-0.5">
+              <span className="truncate text-[10px] leading-tight text-muted" title={CATEGORY_LABELS[k] ?? k}>
+                {CATEGORY_LABELS[k] ?? k}
+              </span>
+              <input
+                type="number"
+                min={0}
+                value={guide[k] ?? 0}
+                onChange={(e) => setGuide((prev) => ({ ...prev, [k]: Math.max(0, Math.round(Number(e.target.value) || 0)) }))}
+                className="rounded-md border border-line bg-panel px-2 py-1 text-center text-sm tabular-nums text-ink outline-none focus:border-ink/30"
+              />
+            </label>
+          ))}
+        </div>
+        <div className="mt-3 flex items-center gap-3">
+          <button
+            type="button"
+            onClick={save}
+            disabled={!dirty || saving}
+            className="rounded-md bg-ink px-3 py-1.5 text-xs font-semibold text-panel disabled:opacity-40"
+          >
+            {saving ? "Saving…" : "Save guide"}
+          </button>
+          <button
+            type="button"
+            onClick={() => setGuide({ ...DEFAULT_CATEGORY_PRICING })}
+            className="text-[11px] font-medium text-muted underline hover:text-ink"
+          >
+            Reset to default
+          </button>
+        </div>
+      </div>
+
+      <div className="rounded-lg border border-line bg-panel p-4">
+        <div className="mb-1 flex items-center gap-1.5">
+          <div className="text-sm font-semibold">Reprice existing content</div>
+          <span
+            className="cursor-help text-[11px] text-muted"
+            title="Recomputes star_value for every existing photo/video from the guide above and its own AI tags — the same derivation new uploads use. Retroactive: this is what actually applies a changed guide to content that's already uploaded."
+          >
+            ⓘ
+          </span>
+        </div>
+        {dirty && (
+          <div className="mb-2 rounded-md border border-warn/30 bg-warn/10 px-2.5 py-1.5 text-[11px] text-warn">
+            You have unsaved guide changes above — save first, reprice reads the saved guide.
+          </div>
+        )}
+        <div className="flex flex-wrap gap-2">
+          <button
+            type="button"
+            onClick={() => reprice("photos")}
+            disabled={repricing !== null || photoCount === 0}
+            className="rounded-md border border-line px-3 py-1.5 text-xs font-semibold text-ink disabled:opacity-40"
+          >
+            {repricing === "photos" ? "Repricing…" : `Reprice ${photoCount} photo${photoCount === 1 ? "" : "s"}`}
+          </button>
+          <button
+            type="button"
+            onClick={() => reprice("videos")}
+            disabled={repricing !== null || videoCount === 0}
+            className="rounded-md border border-line px-3 py-1.5 text-xs font-semibold text-ink disabled:opacity-40"
+          >
+            {repricing === "videos" ? "Repricing…" : `Reprice ${videoCount} video${videoCount === 1 ? "" : "s"}`}
+          </button>
+          <button
+            type="button"
+            onClick={() => reprice("all")}
+            disabled={repricing !== null || (photoCount === 0 && videoCount === 0)}
+            className="rounded-md bg-ink px-3 py-1.5 text-xs font-semibold text-panel disabled:opacity-40"
+          >
+            {repricing === "all" ? "Repricing…" : "Reprice all"}
+          </button>
+        </div>
+      </div>
+
+      {msg && <div className="rounded-md border border-line bg-panel px-3 py-2 text-xs text-muted">{msg}</div>}
     </div>
   );
 }

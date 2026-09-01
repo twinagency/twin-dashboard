@@ -265,7 +265,7 @@ export default function CloneForm({
       {/* ── PPVs (its own page - own top bar, own upload actions) ─── */}
       <div className={tab === "ppvs" ? "grid gap-4" : "hidden"}>
 
-        <MediaManager cloneId={clone.id} photos={photos} videos={videos} bundles={bundles} />
+        <MediaManager cloneId={clone.id} photos={photos} videos={videos} bundles={bundles} categoryPricing={clone.category_pricing} />
       </div>
 
     </div>

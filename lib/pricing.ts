@@ -114,12 +114,22 @@ export function normalizeGuide(raw: unknown): CategoryPricing | null {
   return Object.keys(out).length ? out : null;
 }
 
+// Tags that only describe actual nudity/exposure, not an outfit or setting. The
+// vision tagger sometimes attaches one of these to a covered/suggestive shot
+// (e.g. a bikini photo tagged "ass"), so when the item ISN'T marked nsfw these
+// tags are ignored for pricing — a non-nude item should never inherit a nude
+// tier price just because a body-part tag slipped onto it. Every other tag
+// (bikini, lingerie, feet, mirror_selfie, outdoor, pool, bed, shower, solo)
+// describes an outfit or setting, not exposure, so it always counts.
+const NUDE_ONLY_TAGS = new Set<string>(["tits", "ass", "topless", "full_nude", "pussy", "anal"]);
+
 // Derive the Star price for an item from the guide, its tags, and its nsfw flag.
 // - Pick the HIGHEST-priced matching category among the item's tags
 //     (so a full_nude+bikini item prices at the full_nude price).
 // - If it's explicit (nsfw) the top matching category wins outright.
-// - If it's not explicit but still tagged, the matching category is used but
-//     never dips below the sfw/default price.
+// - If it's not explicit, NUDE_ONLY_TAGS are excluded from matching first (see
+//     above), then the remaining tags are used but never dip below the
+//     sfw/default price.
 // - No matching category (or no tags, e.g. a plain sfw item) → the sfw price.
 // Returns null when the guide is unusable, so the caller keeps its own default
 // (never overrides existing behavior with a made-up number).
@@ -128,9 +138,8 @@ export function priceFromGuide(raw: unknown, tags: string[], nsfw: boolean): num
   if (!map) return null;
   const sfw = typeof map[SFW_KEY] === "number" ? map[SFW_KEY] : null;
 
-  const matched = (Array.isArray(tags) ? tags : [])
-    .map((t) => map[t])
-    .filter((v): v is number => typeof v === "number");
+  const tagList = (Array.isArray(tags) ? tags : []).filter((t) => nsfw || !NUDE_ONLY_TAGS.has(t));
+  const matched = tagList.map((t) => map[t]).filter((v): v is number => typeof v === "number");
 
   if (matched.length) {
     const top = Math.max(...matched);

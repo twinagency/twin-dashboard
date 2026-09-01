@@ -107,7 +107,7 @@ async function FleetMedia() {
 
 async function CloneMedia({ cloneId }: { cloneId: string }) {
   const [cloneRes, photosRes, videosRes, bundlesRes] = await Promise.all([
-    supabaseAdmin.from("clones").select("id,name,slug").eq("id", cloneId).maybeSingle(),
+    supabaseAdmin.from("clones").select("id,name,slug,category_pricing").eq("id", cloneId).maybeSingle(),
     supabaseAdmin.from("photos").select("*").eq("clone_id", cloneId).order("created_at", { ascending: false }),
     supabaseAdmin.from("videos").select("*").eq("clone_id", cloneId).order("created_at", { ascending: false }),
     supabaseAdmin
@@ -120,7 +120,7 @@ async function CloneMedia({ cloneId }: { cloneId: string }) {
   if (cloneRes.error) throw new Error(cloneRes.error.message);
   if (!cloneRes.data) return <div className="text-muted">Creator not found.</div>;
 
-  const clone = cloneRes.data as { id: string; name: string; slug: string };
+  const clone = cloneRes.data as { id: string; name: string; slug: string; category_pricing: Record<string, number> | null };
 
   return (
     <div className="dashboard-page">
@@ -134,6 +134,7 @@ async function CloneMedia({ cloneId }: { cloneId: string }) {
         photos={photosRes.data ?? []}
         videos={videosRes.data ?? []}
         bundles={bundlesRes.data ?? []}
+        categoryPricing={clone.category_pricing}
       />
     </div>
   );

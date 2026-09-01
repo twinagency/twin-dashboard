@@ -37,7 +37,7 @@ import {
 } from "./fields";
 import type { CloneConfigState, SetConfig } from "./useCloneConfig";
 import { DIAL_CONFLICT_RULES } from "@/lib/dial-conflicts";
-import { CategoryPricingEditor, SpoilMenuEditor } from "./editors";
+import { SpoilMenuEditor } from "./editors";
 import { MediaPicker, type MediaRow, type BundleRow } from "./MediaPicker";
 // New dedicated file (migration 056 monetization sequence) — kept out of this
 // file's own card definitions so it doesn't collide with concurrent edits here.
@@ -1237,16 +1237,10 @@ export default function ConfigSections({
           </div>
         </Collapse>
 
-        {/* ── Category pricing (moved from Monetization) ────────────── */}
-        <Section
-          icon="🏷"
-          accent="pink"
-          title="Category pricing"
-          hint="Suggested ⭐ price per content type."
-          tip="When you upload a photo/video it's auto-tagged by AI (bikini, lingerie, full nude, ...) and priced from this guide: the highest-priced matching category wins. Leave a price blank on upload to auto-price; type one to override. Prices only ever come from here, she never invents a number."
-        >
-          <CategoryPricingEditor cfg={cfg} set={set} />
-        </Section>
+        {/* Category pricing lives on the PPVs page now (2026-09-01) — it's
+            edited alongside the media it prices, with a Reprice action that
+            retroactively repriced existing items, which this tab's Save
+            never did. See app/media/MediaManager.tsx. */}
 
         {/* Migration 097. Two hard money ceilings that sit above everything
             else on this tab: the absolute discount ceiling clamps EVERY
