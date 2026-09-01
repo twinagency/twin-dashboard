@@ -1,7 +1,8 @@
 "use client";
 
 // Left sidebar app shell (desktop). "Create new clone" is always the first
-// thing in it, then one flat nav list, each page type appears ONCE, scoped
+// thing in it, then the live operating tools followed by a distinct CRM
+// workspace. Each page type appears ONCE, scoped
 // by the clone switcher in the header (components/CloneSwitcher.tsx, "All
 // clones" by default). Picking/managing a clone lives in the header switcher
 // popup + the /clones page, not here, no duplicate clone list in the
@@ -113,6 +114,18 @@ const NAV_LINKS: NavLink[] = [
   { kind: "route", label: "Settings", href: "/settings", icon: "Settings", color: "gray" },
 ];
 
+// The CRM workspace is intentionally separate from the live creator tools
+// above. It is a navigable product preview now; its URLs and information
+// architecture are stable so the visual pages can become working screens
+// without moving people around later.
+const CRM_LINKS: NavLink[] = [
+  { kind: "route", label: "Inbox", href: "/crm/inbox", icon: "Inbox", color: "purple" },
+  { kind: "route", label: "Fan CRM", href: "/crm/fans", icon: "Users", color: "blue" },
+  { kind: "route", label: "Campaigns", href: "/crm/campaigns", icon: "Flows", color: "pink" },
+  { kind: "route", label: "Team", href: "/crm/team", icon: "Users", color: "orange" },
+  { kind: "route", label: "Platforms", href: "/crm/platforms", icon: "Database", color: "good" },
+];
+
 export function SidebarContent({
   activeCloneId,
   onNavigate,
@@ -172,15 +185,26 @@ export function SidebarContent({
             instead of navigating anywhere - editing a single girl's config
             always requires picking her first. */}
         <div className="space-y-1">
-          {NAV_LINKS.map((l) => {
+          {[...NAV_LINKS, ...CRM_LINKS].map((l, linkIndex) => {
             const colors = LINK_COLOR_CLASSES[l.color];
+
+            // The lower CRM group has a quiet heading and divider but uses
+            // the same rows and mobile drawer as every live dashboard page.
+            const crmStart = linkIndex === NAV_LINKS.length;
+
+            const crmHeading = crmStart ? (
+              <div key="crm-heading" className="mb-2 mt-5 border-t border-white/14 pt-5 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">
+                CRM
+              </div>
+            ) : null;
 
             if (l.kind === "tab") {
               const active = onConfigurePage && activeTab === l.tab;
               if (!activeCloneId) {
                 return (
-                  <button
-                    key={l.label}
+                  <div key={l.label}>
+                    {crmHeading}
+                    <button
                     type="button"
                     onClick={pickClone}
                     title="Pick a creator first"
@@ -191,12 +215,14 @@ export function SidebarContent({
                   >
                     <Icon d={PATHS[l.icon]} className={"h-[18px] w-[18px] " + colors.icon} />
                     {l.label}
-                  </button>
+                    </button>
+                  </div>
                 );
               }
               return (
-                <Link
-                  key={l.label}
+                <div key={l.label}>
+                  {crmHeading}
+                  <Link
                   href={`/clones/${activeCloneId}?tab=${l.tab}`}
                   onClick={onNavigate}
                   className={
@@ -206,14 +232,16 @@ export function SidebarContent({
                 >
                   <Icon d={PATHS[l.icon]} className={"h-[18px] w-[18px] " + colors.icon} />
                   {l.label}
-                </Link>
+                  </Link>
+                </div>
               );
             }
 
             if (l.kind === "route" && l.gateOnClone && !activeCloneId) {
               return (
-                <button
-                  key={l.href}
+                <div key={l.href}>
+                  {crmHeading}
+                  <button
                   type="button"
                   onClick={pickClone}
                   title="Pick a creator first"
@@ -224,14 +252,16 @@ export function SidebarContent({
                 >
                   <Icon d={PATHS[l.icon]} className={"h-[18px] w-[18px] " + colors.icon} />
                   {l.label}
-                </button>
+                  </button>
+                </div>
               );
             }
 
             const active = isGlobalActive(l.href);
             return (
-              <Link
-                key={l.href}
+              <div key={l.href}>
+                {crmHeading}
+                <Link
                 href={l.href}
                 onClick={onNavigate}
                 className={
@@ -256,7 +286,8 @@ export function SidebarContent({
                     {l.label}
                   </>
                 )}
-              </Link>
+                </Link>
+              </div>
             );
           })}
         </div>
