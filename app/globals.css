@@ -139,16 +139,15 @@ body {
   color: var(--color-ink);
 }
 
-/* Atlas-style page canvas. The pale blue-grey upper atmosphere gives way to
-   white content space, while dashboard-main adds the diagonal colour ribbon. */
+/* A calm working canvas: Twin's deep-blue sidebar carries the brand while the
+   data workspace stays quiet, bright and credible in an executive meeting. */
 .canvas-glow {
-  background-color: var(--color-bg);
+  background-color: #f7fafc;
   background-image:
-    linear-gradient(180deg, rgb(6 23 47 / 0.08), rgb(185 218 241 / 0.2) 24rem, rgb(255 255 255 / 0.24) 100%),
-    url("/brand/twin-blue-texture.png");
+    linear-gradient(180deg, rgb(195 223 239 / 0.6), rgb(247 250 252 / 0) 22rem);
   background-position: center top;
-  background-repeat: no-repeat, repeat-y;
-  background-size: cover, 100% auto;
+  background-repeat: no-repeat;
+  background-size: 100% 28rem;
 }
 
 .dashboard-main {
@@ -162,13 +161,13 @@ body {
   right: 0;
   left: 0;
   z-index: 0;
-  height: 18rem;
+  height: 15rem;
   content: "";
   pointer-events: none;
   background:
-    radial-gradient(900px 520px at 9% 8%, rgb(255 255 255 / 0.18), transparent 64%),
-    linear-gradient(180deg, rgb(6 23 47 / 0.12), transparent 88%);
-  opacity: 0.78;
+    radial-gradient(900px 520px at 9% 8%, rgb(255 255 255 / 0.58), transparent 64%),
+    linear-gradient(180deg, rgb(93 160 204 / 0.13), transparent 88%);
+  opacity: 0.62;
   clip-path: polygon(0 0, 100% 0, 100% 72%, 72% 78%, 38% 88%, 0 100%);
 }
 
@@ -178,16 +177,22 @@ body {
   right: 0;
   left: 0;
   z-index: 0;
-  height: 18rem;
+  height: 15rem;
   content: "";
   pointer-events: none;
-  background: linear-gradient(171deg, transparent 0 72%, rgb(74 142 196 / 0.17) 72.2% 72.7%, transparent 72.9%);
+  background: linear-gradient(171deg, transparent 0 72%, rgb(74 142 196 / 0.09) 72.2% 72.7%, transparent 72.9%);
   clip-path: polygon(0 0, 100% 0, 100% 72%, 72% 78%, 38% 88%, 0 100%);
 }
 
 .dashboard-main > * {
   position: relative;
   z-index: 1;
+}
+
+/* One quieter geometry system across the workspace. Status chips and period
+   controls remain pill-shaped; surfaces and buttons do not. */
+.dashboard-main .rounded-2xl {
+  border-radius: 0.75rem;
 }
 
 .clone-editor-tabs,

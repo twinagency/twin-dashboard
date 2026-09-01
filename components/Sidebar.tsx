@@ -1,8 +1,9 @@
 "use client";
 
 // Left sidebar app shell (desktop). "Create new clone" is always the first
-// thing in it, then the live operating tools followed by a distinct CRM
-// workspace. Each page type appears ONCE, scoped
+// thing in it, then a focused executive workspace followed by CRM. The
+// technical tools sit behind More so the primary operating views are visible
+// without scrolling. Each page type appears ONCE, scoped
 // by the clone switcher in the header (components/CloneSwitcher.tsx, "All
 // clones" by default). Picking/managing a clone lives in the header switcher
 // popup + the /clones page, not here, no duplicate clone list in the
@@ -14,7 +15,7 @@
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import type { ReactNode } from "react";
+import { useState, type ReactNode } from "react";
 import { openCloneSwitcher } from "@/lib/clone-switcher-bus";
 import TwinAssistant from "@/components/TwinAssistant";
 import TwinWordmark from "@/components/TwinWordmark";
@@ -74,6 +75,7 @@ const PATHS: Record<string, string> = {
   ListChecks: '<path d="M13 5h8"/><path d="M13 12h8"/><path d="M13 19h8"/><path d="m3 17 2 2 4-4"/><path d="m3 7 2 2 4-4"/>',
   Bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
   Sparkle: '<path d="M12 3l1.9 5.8L20 11l-6.1 2.2L12 19l-1.9-5.8L4 11l6.1-2.2z"/>',
+  More: '<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
 };
 
 // Icons keep their own Aurora color while labels use Stripe's dark navy ink.
@@ -91,25 +93,25 @@ const LINK_COLOR_CLASSES: Record<LinkColor, { icon: string; active: string; idle
   gray: { icon: "text-white/50", active: "bg-white text-[#06172f] shadow-[0_12px_30px_rgb(2_10_24/0.22)]", idle: "text-white/72 hover:bg-white/10 hover:text-white" },
 };
 
-// Each page type appears exactly once, scoped by the header clone switcher,
-// not by a route param. Ordered by importance: day-to-day fleet views first,
-// girl-only editors next, then reference/meta pages last. One list, one visual
-// language, rather than a main block plus a separate footer block.
+// The primary list is deliberately short. It is what a prospective partner or
+// an operator sees first: business performance, creators, fans, offers and
+// business accounts. The full internal toolkit remains available below More.
 const NAV_LINKS: NavLink[] = [
   { kind: "route", label: "Earnings", href: "/revenue", icon: "EarningsCombo", color: "good" },
+  { kind: "route", label: "Creators", href: "/clones", icon: "Clones", color: "blue" },
   { kind: "route", label: "Fans", href: "/users", icon: "FansCombo", color: "purple" },
+  { kind: "tab", label: "PPVs", tab: "ppvs", icon: "Media", color: "red" },
+  { kind: "route", label: "Business", href: "/business", icon: "Bot", color: "purple", gateOnClone: true },
+];
+
+const MORE_LINKS: NavLink[] = [
   { kind: "route", label: "AI", href: "/jarvis", icon: "Sparkle", color: "blue" },
   { kind: "route", label: "Flows", href: "/flows", icon: "Flows", color: "pink", gateOnClone: true },
-  { kind: "tab", label: "PPVs", tab: "ppvs", icon: "Media", color: "red" },
   { kind: "tab", label: "Edit", tab: "identity", icon: "Dials", color: "blue" },
-  { kind: "route", label: "Business", href: "/business", icon: "Bot", color: "purple", gateOnClone: true },
   { kind: "route", label: "Tracker", href: "/tracker", icon: "ListChecks", color: "orange" },
   { kind: "route", label: "Info", href: "/info", icon: "Info", color: "neutral" },
   { kind: "route", label: "Logs", href: "/logs", icon: "Logs", color: "neutral" },
   { kind: "route", label: "Sim", href: "/sim", icon: "Bot", color: "orange" },
-  // This is the "API - coming soon" placeholder that used to sit greyed out
-  // below the divider, now that it is actually built. Same label and same Code
-  // icon on purpose, so it lands where anyone who saw the placeholder expects.
   { kind: "route", label: "API", href: "/api-access", icon: "Code", color: "blue" },
   { kind: "route", label: "Settings", href: "/settings", icon: "Settings", color: "gray" },
 ];
@@ -130,7 +132,7 @@ export function SidebarContent({
   activeCloneId,
   onNavigate,
   headerAction,
-  showAssistant = true,
+  showAssistant = false,
 }: {
   activeCloneId: string | null;
   onNavigate?: () => void;
@@ -139,6 +141,7 @@ export function SidebarContent({
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const [moreOpen, setMoreOpen] = useState(false);
   const activeTab = searchParams.get("tab") ?? "config";
 
   const isGlobalActive = (href: string) => pathname === href || (href !== "/" && pathname.startsWith(href + "/"));
@@ -146,6 +149,48 @@ export function SidebarContent({
   const pickClone = () => {
     onNavigate?.();
     window.setTimeout(() => openCloneSwitcher(), 0);
+  };
+
+  const navLabel = (link: NavLink, colors: (typeof LINK_COLOR_CLASSES)[LinkColor]) => {
+    if (link.icon === "FansCombo") {
+      return (
+        <>
+          <Icon d={PATHS.Users} className={"h-[18px] w-[18px] " + colors.icon} />
+          <span className="flex-1">{link.label}</span>
+          <Icon d={PATHS.Messages} className="h-4 w-4 text-current opacity-45" />
+        </>
+      );
+    }
+    if (link.icon === "EarningsCombo") {
+      return (
+        <>
+          <Icon d={PATHS.Dollar} className={"h-[18px] w-[18px] " + colors.icon} />
+          <span className="flex-1">{link.label}</span>
+        </>
+      );
+    }
+    return <><Icon d={PATHS[link.icon]} className={"h-[18px] w-[18px] " + colors.icon} />{link.label}</>;
+  };
+
+  const linkKey = (link: NavLink) => link.kind === "route" ? link.href : link.tab;
+
+  const renderLink = (link: NavLink) => {
+    const colors = LINK_COLOR_CLASSES[link.color];
+    const rowClass = "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold transition";
+
+    if (link.kind === "tab") {
+      const active = onConfigurePage && activeTab === link.tab;
+      if (!activeCloneId) {
+        return <button type="button" onClick={pickClone} title="Pick a creator first" className={rowClass + " " + colors.idle}>{navLabel(link, colors)}</button>;
+      }
+      return <Link href={`/clones/${activeCloneId}?tab=${link.tab}`} onClick={onNavigate} className={rowClass + " " + (active ? colors.active : colors.idle)}>{navLabel(link, colors)}</Link>;
+    }
+
+    if (link.gateOnClone && !activeCloneId) {
+      return <button type="button" onClick={pickClone} title="Pick a creator first" className={rowClass + " " + colors.idle}>{navLabel(link, colors)}</button>;
+    }
+
+    return <Link href={link.href} onClick={onNavigate} className={rowClass + " " + (isGlobalActive(link.href) ? colors.active : colors.idle)}>{navLabel(link, colors)}</Link>;
   };
 
   return (
@@ -163,139 +208,36 @@ export function SidebarContent({
           row so it reads as an action, not just another nav destination.
           No bottom border: the generous space above it already separates it
           from the brand header, so a hairline as well just reads as clutter. */}
-      <div className="shrink-0 px-4 pb-4 pt-8 [@media(max-height:850px)]:pt-5">
+      <div className="shrink-0 px-4 pb-3 pt-4">
         <Link
           href="/clones/new"
           onClick={onNavigate}
-          className="sidebar-create-button flex items-center justify-center gap-2 rounded-full px-4 py-3 text-sm font-semibold transition"
+          className="sidebar-create-button flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition"
         >
           <Icon d={PATHS.Plus} className="h-4 w-4" />
           Create new creator
         </Link>
       </div>
 
-      <nav className="flex flex-1 flex-col overflow-y-auto px-4 py-3">
-        {/* One flat list, icon left, label, full-width row. Rows are spaced
-            apart (not divided by hairlines) so each rounded, hoverable row
-            reads as its own control instead of a table. PPVs/Edit/Flows
-            are girl-specific: on "All clones" they render exactly like any
-            other idle row (no dimming - a plain nav row that happens to open
-            the clone picker instead of navigating reads as broken, not as
-            "pick someone first"), and tapping one opens the clone picker
-            instead of navigating anywhere - editing a single girl's config
-            always requires picking her first. */}
+      <nav className="flex flex-1 flex-col overflow-y-auto px-4 py-2">
         <div className="space-y-1">
-          {[...NAV_LINKS, ...CRM_LINKS].map((l, linkIndex) => {
-            const colors = LINK_COLOR_CLASSES[l.color];
-
-            // The lower CRM group has a quiet heading and divider but uses
-            // the same rows and mobile drawer as every live dashboard page.
-            const crmStart = linkIndex === NAV_LINKS.length;
-
-            const crmHeading = crmStart ? (
-              <div key="crm-heading" className="mb-2 mt-5 border-t border-white/14 pt-5 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">
-                CRM
-              </div>
-            ) : null;
-
-            if (l.kind === "tab") {
-              const active = onConfigurePage && activeTab === l.tab;
-              if (!activeCloneId) {
-                return (
-                  <div key={l.label}>
-                    {crmHeading}
-                    <button
-                    type="button"
-                    onClick={pickClone}
-                    title="Pick a creator first"
-                    className={
-                      "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold transition [@media(max-height:850px)]:py-2 " +
-                      colors.idle
-                    }
-                  >
-                    <Icon d={PATHS[l.icon]} className={"h-[18px] w-[18px] " + colors.icon} />
-                    {l.label}
-                    </button>
-                  </div>
-                );
-              }
-              return (
-                <div key={l.label}>
-                  {crmHeading}
-                  <Link
-                  href={`/clones/${activeCloneId}?tab=${l.tab}`}
-                  onClick={onNavigate}
-                  className={
-                    "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold transition [@media(max-height:850px)]:py-2 " +
-                    (active ? colors.active : colors.idle)
-                  }
-                >
-                  <Icon d={PATHS[l.icon]} className={"h-[18px] w-[18px] " + colors.icon} />
-                  {l.label}
-                  </Link>
-                </div>
-              );
-            }
-
-            if (l.kind === "route" && l.gateOnClone && !activeCloneId) {
-              return (
-                <div key={l.href}>
-                  {crmHeading}
-                  <button
-                  type="button"
-                  onClick={pickClone}
-                  title="Pick a creator first"
-                  className={
-                    "flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm font-semibold transition [@media(max-height:850px)]:py-2 " +
-                    colors.idle
-                  }
-                >
-                  <Icon d={PATHS[l.icon]} className={"h-[18px] w-[18px] " + colors.icon} />
-                  {l.label}
-                  </button>
-                </div>
-              );
-            }
-
-            const active = isGlobalActive(l.href);
-            return (
-              <div key={l.href}>
-                {crmHeading}
-                <Link
-                href={l.href}
-                onClick={onNavigate}
-                className={
-                  "flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-semibold transition [@media(max-height:850px)]:py-2 " +
-                  (active ? colors.active : colors.idle)
-                }
-              >
-                {l.icon === "FansCombo" ? (
-                  <>
-                    <Icon d={PATHS.Users} className={"h-[18px] w-[18px] " + colors.icon} />
-                    <span className="flex-1">{l.label}</span>
-                    <Icon d={PATHS.Messages} className="h-4 w-4 text-current opacity-45" />
-                  </>
-                ) : l.icon === "EarningsCombo" ? (
-                  <>
-                    <Icon d={PATHS.Dollar} className={"h-[18px] w-[18px] " + colors.icon} />
-                    <span className="flex-1">{l.label}</span>
-                  </>
-                ) : (
-                  <>
-                    <Icon d={PATHS[l.icon]} className={"h-[18px] w-[18px] " + colors.icon} />
-                    {l.label}
-                  </>
-                )}
-                </Link>
-              </div>
-            );
-          })}
+          {NAV_LINKS.map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}
+          <div className="mb-2 mt-3 border-t border-white/14 pt-3 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">CRM</div>
+          {CRM_LINKS.map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}
+          <div className="mt-3 border-t border-white/14 pt-2">
+            <button
+              type="button"
+              onClick={() => setMoreOpen((open) => !open)}
+              aria-expanded={moreOpen}
+              className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold text-white/62 transition hover:bg-white/10 hover:text-white"
+            >
+              <Icon d={PATHS.More} className="h-[18px] w-[18px] text-white/50" />
+              <span className="flex-1">More</span>
+              <svg className={(moreOpen ? "rotate-180 " : "") + "h-4 w-4 transition-transform"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
+            </button>
+            {moreOpen ? <div className="mt-1 space-y-1">{MORE_LINKS.map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}</div> : null}
+          </div>
         </div>
-
-        {/* The "API - coming soon" placeholder that lived here is GONE: the API
-            is built, so it is a real entry in NAV_LINKS above. Leaving a dead
-            "coming soon" chip next to the working page is the same class of
-            problem as a half-wired toggle, one step further out. */}
 
         {showAssistant ? (
           <div className="mt-auto pt-4 [@media(max-height:850px)]:pt-2">

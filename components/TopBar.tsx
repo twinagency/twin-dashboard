@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import CloneSwitcher from "@/components/CloneSwitcher";
 import CurrencyToggle from "@/components/CurrencyToggle";
 import BlurToggle from "@/components/BlurToggle";
@@ -28,7 +28,10 @@ export default function TopBar({
   allTimeStars: number;
 }) {
   const pathname = usePathname();
-  const { scopeLabel, pageLabel, scopeIsCreator } = getPageMeta(pathname, clones, activeCloneId);
+  const searchParams = useSearchParams();
+  const pageMeta = getPageMeta(pathname, clones, activeCloneId);
+  const pageLabel = pathname?.startsWith("/clones/") && searchParams.get("tab") === "ppvs" ? "PPVs" : pageMeta.pageLabel;
+  const { scopeLabel, scopeIsCreator } = pageMeta;
   return (
     // 3-col grid so the controls sit dead-center of the bar regardless of
     // how wide the breadcrumb text is; right column is an empty balancer.
@@ -49,7 +52,7 @@ export default function TopBar({
         {pageLabel != null && <span className="text-muted"> / {pageLabel}</span>}
       </h1>
 
-      <div className="flex shrink-0 items-center gap-1.5 rounded-full border border-line/80 bg-white/76 px-2 py-1.5 shadow-[0_8px_26px_rgb(6_23_47/0.06)] backdrop-blur-xl">
+      <div className="flex shrink-0 items-center gap-1.5 rounded-xl border border-line/80 bg-white/82 px-2 py-1.5 shadow-[0_8px_26px_rgb(6_23_47/0.06)] backdrop-blur-xl">
         <CloneSwitcher clones={clones} activeCloneId={activeCloneId} />
         <div className="h-5 w-px shrink-0 bg-line" />
         {/* All-time cash made, scoped to the clone switcher above - not
@@ -64,26 +67,6 @@ export default function TopBar({
         <CurrencyToggle compact />
         <BlurToggle />
         <div className="hidden h-5 w-px shrink-0 bg-line sm:block" />
-        {/* Mock - not wired up yet, just holding the spot. */}
-        <button
-          type="button"
-          title="Search (coming soon)"
-          className="flex items-center justify-center rounded-full p-2 text-muted transition hover:bg-muted/10 hover:text-ink"
-        >
-          <svg
-            xmlns="http://www.w3.org/2000/svg"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={1.9}
-            strokeLinecap="round"
-            strokeLinejoin="round"
-            className="h-5 w-5"
-          >
-            <circle cx="11" cy="11" r="7" />
-            <line x1="21" y1="21" x2="16.65" y2="16.65" />
-          </svg>
-        </button>
         <form action={logout}>
           <button
             type="submit"
