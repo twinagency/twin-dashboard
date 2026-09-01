@@ -504,4 +504,10 @@ export type Clone = {
   deployed_at: string | null;
   created_at: string;
   updated_at: string;
+
+  // Migration 132. Whether this clone follows the fleet config-defaults
+  // template (app_settings.clone_defaults, see app/settings/actions.ts) or
+  // has been detached onto its own custom config. Governs only the config
+  // surface those DEFAULT_* lists cover, never identity/persona.
+  uses_default_config?: boolean;
 };

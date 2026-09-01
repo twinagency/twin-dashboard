@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import type { Clone } from "@/lib/types";
 import type { OrModel } from "@/app/api/models/route";
 import ModelSelect from "../ModelSelect";
@@ -410,6 +411,18 @@ export default function ConfigSections({
 
       {/* ── CONFIG ──────────────────────────────────────────────── */}
       <div className={show("config")}>
+      {mode === "edit" && (
+        <Link
+          href="/settings#fleet-defaults"
+          className={
+            "inline-flex w-fit items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-medium transition hover:opacity-80 " +
+            ((clone?.uses_default_config ?? true) ? "bg-good/15 text-good" : "bg-muted/10 text-muted")
+          }
+          title="This clone's config toggles/dials/models — never identity or personality. Manage the fleet template and which clones follow it on Settings."
+        >
+          {(clone?.uses_default_config ?? true) ? "🔗 Following fleet default" : "✎ Custom config"}
+        </Link>
+      )}
       <Section
         icon="🔌"
         accent="blue"

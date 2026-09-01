@@ -46,6 +46,11 @@ const DEFAULT_TOGGLES = [
   "subscriptions_enabled", "smart_paywall_enabled", "paywall_as_voice", "voice_speaker_boost",
   // Migration 069 — pre-lock prime + post-lock resume toggles.
   "paywall_prime_enabled", "paywall_prime_as_voice", "paywall_resume_enabled", "paywall_resume_free",
+  // Added 2026-09-01 fleet-defaults audit: these existed per-clone in
+  // ConfigSections (migrations 097/098) but were never added to this
+  // template, so a fresh clone (or a "reprice to default" push) never got
+  // them even though they'd been editable per-clone for weeks.
+  "realism_effects_enabled", "strict_onboarding_steps",
 ] as const;
 // Enum selects + free-text strings — stored verbatim when non-empty.
 const DEFAULT_SELECTS = [
@@ -57,6 +62,8 @@ const DEFAULT_SELECTS = [
   "paywall_default_message", "paywall_button_label", "eleven_model",
   // Migration 069 — prime/resume steer text + the resume promised-image id.
   "paywall_prime_instruction", "paywall_resume_instruction", "paywall_resume_media_id",
+  // Added 2026-09-01 fleet-defaults audit (migrations 090/093/105).
+  "price_guard_mode", "silence_fallback_mode", "variety_guard",
 ] as const;
 // Numeric dials/fields — stored as numbers (ints and floats both fine via Number()).
 // NOTE: drip_per_day / drip_active_window_minutes stay listed for harmless
@@ -84,6 +91,13 @@ const DEFAULT_NUMBERS = [
   "voice_stability", "voice_similarity", "voice_style", "voice_speed",
   // Migration 069 — messages-before-lock count for the pre-lock warmup.
   "paywall_prime_before",
+  // Added 2026-09-01 fleet-defaults audit (migration 095's two dial groups,
+  // migration 097's money guardrails + pacing dials).
+  "discount_level_light_pct", "discount_level_medium_pct", "discount_level_max_pct",
+  "discount_tier_share_none_pct", "discount_tier_share_low_pct", "discount_tier_share_mid_pct",
+  "discount_tier_share_high_pct", "discount_tier_share_whale_pct",
+  "discount_absolute_max_pct", "tip_max_stars",
+  "bubble_delay_min_ms", "bubble_delay_max_ms", "llm_max_tries",
 ] as const;
 // JSON blobs (hidden inputs carry a stringified object/array) — parsed + stored.
 const DEFAULT_JSON = ["category_pricing", "spoil_options", "subscription_tiers"] as const;
@@ -195,8 +209,80 @@ export async function saveCloneDefaults(fd: FormData) {
     value: JSON.stringify(out),
     updated_at: new Date().toISOString(),
   });
+  // Cascade: every clone still following the fleet default gets the new
+  // values immediately, not just future clones. A clone marked custom
+  // (uses_default_config = false) is left untouched.
+  const { data: followers } = await supabaseAdmin.from("clones").select("id").eq("uses_default_config", true);
+  const ids = (followers ?? []).map((r) => (r as { id: string }).id);
+  if (ids.length) await applyConfigToClones(ids, out);
   revalidatePath("/settings");
   revalidatePath("/clones/new");
+  revalidatePath("/clones");
+}
+
+// category_pricing is excluded from the fields pushed onto EXISTING clones
+// (both the save-time cascade above and the manual bulk-push below), even
+// though it stays in DEFAULT_JSON for new-clone seeding. Pricing moved to a
+// per-clone PPVs workflow with its own Reprice action (2026-09-01) — pushing
+// the template's guide onto an existing clone would silently overwrite
+// pricing someone tuned by hand for her specific media. New clones still get
+// it (see createCloneRow in app/clones/actions.ts, which reads
+// getCloneDefaults().category_pricing directly).
+const CASCADE_EXCLUDE = new Set<string>(["category_pricing"]);
+
+// Write a set of config fields (from the same DEFAULT_* vocabulary
+// saveCloneDefaults produces) onto one or more EXISTING clone rows. Shared by
+// the save-time cascade above and the manual "push to selected clones" button
+// on the Settings page. Never touches identity/persona — `out`/`fields` only
+// ever contains keys from the five DEFAULT_* lists, which draw that line.
+async function applyConfigToClones(cloneIds: string[], fields: Record<string, unknown>): Promise<void> {
+  const update: Record<string, unknown> = {};
+  for (const [k, v] of Object.entries(fields)) {
+    if (CASCADE_EXCLUDE.has(k)) continue;
+    update[k] = v;
+  }
+  if (!Object.keys(update).length || !cloneIds.length) return;
+  const { error } = await supabaseAdmin.from("clones").update(update).in("id", cloneIds);
+  if (error) throw new Error(error.message);
+}
+
+// ── Fleet default sync status + manual push ─────────────────────────────────
+export type CloneDefaultStatus = { id: string; name: string; slug: string; usesDefault: boolean };
+
+export async function getCloneDefaultStatuses(): Promise<CloneDefaultStatus[]> {
+  const { data } = await supabaseAdmin.from("clones").select("id,name,slug,uses_default_config").order("name");
+  return (data ?? []).map((r) => ({
+    id: r.id as string,
+    name: (r.name as string) ?? "unnamed",
+    slug: (r.slug as string) ?? "",
+    usesDefault: (r as { uses_default_config?: boolean }).uses_default_config ?? true,
+  }));
+}
+
+// Flip one clone between following the fleet default and running its own
+// custom config. Does NOT itself change any config value — a clone switched
+// TO default only actually receives the template's values on the next Save
+// or the next manual push below, so flipping this can never silently
+// overwrite a value the operator hasn't asked to apply yet.
+export async function setCloneUsesDefault(cloneId: string, usesDefault: boolean): Promise<void> {
+  const { error } = await supabaseAdmin.from("clones").update({ uses_default_config: usesDefault }).eq("id", cloneId);
+  if (error) throw new Error(error.message);
+  revalidatePath("/settings");
+  revalidatePath("/clones");
+  revalidatePath(`/clones/${cloneId}`);
+}
+
+// "Push to selected clones now" — apply the CURRENTLY SAVED template onto the
+// given clones immediately, independent of Save (e.g. syncing a clone that
+// just got switched from custom back to default, without editing the
+// template itself). Does not change any clone's uses_default_config.
+export async function pushDefaultsToClones(cloneIds: string[]): Promise<void> {
+  if (!cloneIds.length) return;
+  const defaults = await getCloneDefaults();
+  await applyConfigToClones(cloneIds, defaults as Record<string, unknown>);
+  revalidatePath("/settings");
+  revalidatePath("/clones");
+  for (const id of cloneIds) revalidatePath(`/clones/${id}`);
 }
 
 // ── Models in use, for the OpenRouter request-fields panel ────────────────────

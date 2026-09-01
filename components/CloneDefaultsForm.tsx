@@ -182,14 +182,135 @@ export default function CloneDefaultsForm({ defaults }: { defaults: Partial<Clon
       <div className="grid gap-3">
         <Group label="Discounts" />
         <Toggle label={cfg.discountsEnabled ? "She can offer discounts" : "No discounts"} name="discounts_enabled" checked={cfg.discountsEnabled} onChange={(v) => set("discountsEnabled", v)} accent="soft" />
-        {cfg.discountsEnabled && (
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-            <Slider label="Photos max discount" name="discount_max_photo" value={cfg.discMaxPhoto} onChange={(v) => set("discMaxPhoto", v)} min={0} max={90} step={5} format={(v) => `${v}%`} />
-            <Slider label="Videos max discount" name="discount_max_video" value={cfg.discMaxVideo} onChange={(v) => set("discMaxVideo", v)} min={0} max={90} step={5} format={(v) => `${v}%`} />
-            <Slider label="Bundles max discount" name="discount_max_bundle" value={cfg.discMaxBundle} onChange={(v) => set("discMaxBundle", v)} min={0} max={90} step={5} format={(v) => `${v}%`} />
-            <Slider label="Message packs max discount" name="discount_max_credits" value={cfg.discMaxCredits} onChange={(v) => set("discMaxCredits", v)} min={0} max={90} step={5} format={(v) => `${v}%`} />
+        {cfg.discountsEnabled ? (
+          <div className="grid gap-3">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              <Slider label="Photos max discount" name="discount_max_photo" value={cfg.discMaxPhoto} onChange={(v) => set("discMaxPhoto", v)} min={0} max={90} step={5} format={(v) => `${v}%`} />
+              <Slider label="Videos max discount" name="discount_max_video" value={cfg.discMaxVideo} onChange={(v) => set("discMaxVideo", v)} min={0} max={90} step={5} format={(v) => `${v}%`} />
+              <Slider label="Bundles max discount" name="discount_max_bundle" value={cfg.discMaxBundle} onChange={(v) => set("discMaxBundle", v)} min={0} max={90} step={5} format={(v) => `${v}%`} />
+              <Slider label="Message packs max discount" name="discount_max_credits" value={cfg.discMaxCredits} onChange={(v) => set("discMaxCredits", v)} min={0} max={90} step={5} format={(v) => `${v}%`} />
+            </div>
+            {/* Migration 095's two dial groups, added to the template
+                2026-09-01 (were missing here, only present per-clone in
+                ConfigSections — this whole audit pass exists because the
+                template had drifted behind the real Config tab). */}
+            <div className="border-t border-line pt-2 text-xs font-semibold uppercase tracking-wide text-muted">How hard each level bites</div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-3">
+              <Slider label="Light" name="discount_level_light_pct" value={cfg.discLevelLight} onChange={(v) => set("discLevelLight", v)} min={1} max={100} step={1} format={(v) => `${v}%`} />
+              <Slider label="Medium" name="discount_level_medium_pct" value={cfg.discLevelMedium} onChange={(v) => set("discLevelMedium", v)} min={1} max={100} step={1} format={(v) => `${v}%`} />
+              <Slider label="Max" name="discount_level_max_pct" value={cfg.discLevelMax} onChange={(v) => set("discLevelMax", v)} min={1} max={100} step={1} format={(v) => `${v}%`} />
+            </div>
+            <div className="border-t border-line pt-2 text-xs font-semibold uppercase tracking-wide text-muted">How much a fan reaches, by what he has spent</div>
+            <div className="grid grid-cols-1 gap-2 sm:grid-cols-5">
+              <Slider label="New" name="discount_tier_share_none_pct" value={cfg.discTierNone} onChange={(v) => set("discTierNone", v)} min={0} max={100} step={5} format={(v) => `${v}%`} />
+              <Slider label="Low" name="discount_tier_share_low_pct" value={cfg.discTierLow} onChange={(v) => set("discTierLow", v)} min={0} max={100} step={5} format={(v) => `${v}%`} />
+              <Slider label="Mid" name="discount_tier_share_mid_pct" value={cfg.discTierMid} onChange={(v) => set("discTierMid", v)} min={0} max={100} step={5} format={(v) => `${v}%`} />
+              <Slider label="High" name="discount_tier_share_high_pct" value={cfg.discTierHigh} onChange={(v) => set("discTierHigh", v)} min={0} max={100} step={5} format={(v) => `${v}%`} />
+              <Slider label="Whale" name="discount_tier_share_whale_pct" value={cfg.discTierWhale} onChange={(v) => set("discTierWhale", v)} min={0} max={100} step={5} format={(v) => `${v}%`} />
+            </div>
           </div>
+        ) : (
+          /* Same trap ConfigSections already fixed for the per-clone page: with
+             discounts off these fields don't render, so posting nothing would
+             either zero them (rowFromForm's num(...,0) fallback for a per-clone
+             save) or, here, simply drop them from the saved template blob on
+             the next Save (saveCloneDefaults skips a null field rather than
+             writing 0 — but a dropped key still loses the value on the NEXT
+             save, since the blob is replaced whole, not merged). Mirroring cfg
+             keeps whatever was set before the toggle was switched off. */
+          <>
+            <input type="hidden" name="discount_max_photo" value={cfg.discMaxPhoto} />
+            <input type="hidden" name="discount_max_video" value={cfg.discMaxVideo} />
+            <input type="hidden" name="discount_max_bundle" value={cfg.discMaxBundle} />
+            <input type="hidden" name="discount_max_credits" value={cfg.discMaxCredits} />
+            <input type="hidden" name="discount_level_light_pct" value={cfg.discLevelLight} />
+            <input type="hidden" name="discount_level_medium_pct" value={cfg.discLevelMedium} />
+            <input type="hidden" name="discount_level_max_pct" value={cfg.discLevelMax} />
+            <input type="hidden" name="discount_tier_share_none_pct" value={cfg.discTierNone} />
+            <input type="hidden" name="discount_tier_share_low_pct" value={cfg.discTierLow} />
+            <input type="hidden" name="discount_tier_share_mid_pct" value={cfg.discTierMid} />
+            <input type="hidden" name="discount_tier_share_high_pct" value={cfg.discTierHigh} />
+            <input type="hidden" name="discount_tier_share_whale_pct" value={cfg.discTierWhale} />
+          </>
         )}
+      </div>
+
+      {/* ── MONEY GUARDRAILS (added 2026-09-01, mirrors ConfigSections' card
+          of the same name — these are the two hard ceilings that sit above
+          everything else money-related, so the template should set them too) ── */}
+      <div className="grid gap-3">
+        <Group label="Money guardrails" />
+        <Slider
+          label="Absolute discount ceiling"
+          name="discount_absolute_max_pct"
+          value={cfg.discountAbsoluteMaxPct}
+          onChange={(v) => set("discountAbsoluteMaxPct", v)}
+          min={1}
+          max={100}
+          step={1}
+          format={(v) => `${v}%`}
+        />
+        <Field
+          label="Single-tip sanity ceiling (Stars)"
+          name="tip_max_stars"
+          type="number"
+          min={1}
+          step={1}
+          defaultValue={defaults.tip_max_stars ?? 100000}
+        />
+      </div>
+
+      {/* ── BEHAVIOR GUARDRAILS (added 2026-09-01) ── */}
+      <div className="grid gap-3">
+        <Group label="Behavior guardrails" />
+        <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
+          <Select
+            label="If she types an invented price"
+            name="price_guard_mode"
+            value={cfg.priceGuardMode}
+            onChange={(v) => set("priceGuardMode", v)}
+            options={[
+              { value: "block" as const, label: "Block" },
+              { value: "log" as const, label: "Watch only" },
+              { value: "off" as const, label: "Off" },
+            ]}
+          />
+          <Select
+            label="If she cannot generate a reply"
+            name="silence_fallback_mode"
+            value={cfg.silenceFallbackMode}
+            onChange={(v) => set("silenceFallbackMode", v)}
+            options={[
+              { value: "on" as const, label: "Send a recovery line" },
+              { value: "off" as const, label: "Say nothing" },
+            ]}
+          />
+          <Select
+            label="Repeating herself"
+            name="variety_guard"
+            value={cfg.varietyGuard}
+            onChange={(v) => set("varietyGuard", v)}
+            options={[
+              { value: "normal" as const, label: "Normal" },
+              { value: "strict" as const, label: "Strict" },
+              { value: "off" as const, label: "Off" },
+            ]}
+          />
+        </div>
+        <div className="flex flex-wrap gap-x-6 gap-y-3">
+          <Toggle label={cfg.realismEffectsEnabled ? "Reactions & message effects on" : "Reactions & message effects off"} name="realism_effects_enabled" checked={cfg.realismEffectsEnabled} onChange={(v) => set("realismEffectsEnabled", v)} accent="soft" />
+          <Toggle label={cfg.strictOnboardingSteps ? "Strict onboarding steps on" : "Strict onboarding steps off"} name="strict_onboarding_steps" checked={cfg.strictOnboardingSteps} onChange={(v) => set("strictOnboardingSteps", v)} accent="soft" />
+        </div>
+      </div>
+
+      {/* ── PACING & RETRIES (added 2026-09-01) ── */}
+      <div className="grid gap-3">
+        <Group label="Pacing & retries" />
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <Slider label="Bubble delay, minimum" name="bubble_delay_min_ms" value={cfg.bubbleDelayMinMs} onChange={(v) => set("bubbleDelayMinMs", v)} min={0} max={5000} step={100} format={(v) => `${v}ms`} />
+          <Slider label="Bubble delay, maximum" name="bubble_delay_max_ms" value={cfg.bubbleDelayMaxMs} onChange={(v) => set("bubbleDelayMaxMs", v)} min={0} max={5000} step={100} format={(v) => `${v}ms`} />
+        </div>
+        <Slider label="Model retry attempts before giving up" name="llm_max_tries" value={cfg.llmMaxTries} onChange={(v) => set("llmMaxTries", v)} min={1} max={5} step={1} format={(v) => `${v}×`} />
       </div>
 
       <div className="grid gap-3">
