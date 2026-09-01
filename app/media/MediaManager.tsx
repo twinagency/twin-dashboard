@@ -19,6 +19,8 @@ import {
   removeBundleItem,
   updateCategoryPricing,
   repriceMedia,
+  bulkSetMediaPrice,
+  bulkDeleteMedia,
 } from "./actions";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -645,7 +647,19 @@ function TagEditor({ defaultTags }: { defaultTags: string[] | null }) {
 }
 
 // ── Photo card ────────────────────────────────────────────────────────────────
-function PhotoCard({ photo, cloneId }: { photo: Photo; cloneId: string }) {
+function PhotoCard({
+  photo,
+  cloneId,
+  selecting = false,
+  selected = false,
+  onToggleSelect,
+}: {
+  photo: Photo;
+  cloneId: string;
+  selecting?: boolean;
+  selected?: boolean;
+  onToggleSelect?: () => void;
+}) {
   const [editing, setEditing] = useState(false);
   const [viewing, setViewing] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -668,7 +682,18 @@ function PhotoCard({ photo, cloneId }: { photo: Photo; cloneId: string }) {
   }
 
   return (
-    <div className="rounded-lg border border-line bg-panel p-4">
+    <div className={"relative rounded-lg border bg-panel p-4 " + (selected ? "border-accent ring-2 ring-accent/20" : "border-line")}>
+      {selecting && (
+        <label className="absolute left-2 top-2 z-10 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-panel/95 shadow-sm">
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={onToggleSelect}
+            aria-label={`Select ${photo.image_name ?? "photo"}`}
+            className="h-4 w-4 accent-accent"
+          />
+        </label>
+      )}
       {viewing && (
         <Lightbox path={photo.storage_path} type="photo" title={photo.image_name ?? "Untitled"}
           starValue={photo.is_free ? 0 : photo.star_value} caption={photo.caption} teaserCaption={photo.teaser_caption}
@@ -743,7 +768,19 @@ function PhotoCard({ photo, cloneId }: { photo: Photo; cloneId: string }) {
 }
 
 // ── Video card ────────────────────────────────────────────────────────────────
-function VideoCard({ video, cloneId }: { video: Video; cloneId: string }) {
+function VideoCard({
+  video,
+  cloneId,
+  selecting = false,
+  selected = false,
+  onToggleSelect,
+}: {
+  video: Video;
+  cloneId: string;
+  selecting?: boolean;
+  selected?: boolean;
+  onToggleSelect?: () => void;
+}) {
   const [editing, setEditing] = useState(false);
   const [viewing, setViewing] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -766,7 +803,18 @@ function VideoCard({ video, cloneId }: { video: Video; cloneId: string }) {
   }
 
   return (
-    <div className="rounded-lg border border-line bg-panel p-4">
+    <div className={"relative rounded-lg border bg-panel p-4 " + (selected ? "border-accent ring-2 ring-accent/20" : "border-line")}>
+      {selecting && (
+        <label className="absolute left-2 top-2 z-10 flex h-8 w-8 cursor-pointer items-center justify-center rounded-full bg-panel/95 shadow-sm">
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={onToggleSelect}
+            aria-label="Select video"
+            className="h-4 w-4 accent-accent"
+          />
+        </label>
+      )}
       {viewing && (
         <Lightbox path={video.storage_path} type="video" title="Video"
           starValue={video.is_free ? 0 : video.star_value} caption={video.caption} teaserCaption={video.teaser_caption}
@@ -1028,6 +1076,147 @@ function CreateBundleForm({ cloneId }: { cloneId: string }) {
   );
 }
 
+// ── Bulk price / delete controls ─────────────────────────────────────────────
+// This stays closed until an operator asks to edit, so the normal PPV library
+// remains a browse-and-upload screen instead of a wall of checkboxes. When open,
+// every action is limited to the current media type and the current creator.
+function BulkMediaEditor({
+  cloneId,
+  type,
+  total,
+  selectedIds,
+  onSelectAll,
+  onClear,
+  onEditingChange,
+}: {
+  cloneId: string;
+  type: "photos" | "videos";
+  total: number;
+  selectedIds: Set<string>;
+  onSelectAll: () => void;
+  onClear: () => void;
+  onEditingChange: (open: boolean) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [price, setPrice] = useState("");
+  const [message, setMessage] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+  const router = useRouter();
+  const singular = type === "photos" ? "photo" : "video";
+  const selectedCount = selectedIds.size;
+  const parsedPrice = Number(price);
+  const validPrice = price.trim() !== "" && Number.isSafeInteger(parsedPrice) && parsedPrice >= 0;
+
+  function close() {
+    if (pending) return;
+    setOpen(false);
+    onEditingChange(false);
+    setMessage(null);
+    onClear();
+  }
+
+  function changePrice() {
+    if (!validPrice || selectedCount === 0) return;
+    setMessage(null);
+    startTransition(async () => {
+      try {
+        const changed = await bulkSetMediaPrice(cloneId, type, [...selectedIds], parsedPrice);
+        setMessage(`Updated ${changed} ${singular}${changed === 1 ? "" : "s"} to ${parsedPrice} Stars.`);
+        onClear();
+        router.refresh();
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "Could not update prices");
+      }
+    });
+  }
+
+  function deleteSelected() {
+    if (selectedCount === 0) return;
+    const noun = `${selectedCount} ${singular}${selectedCount === 1 ? "" : "s"}`;
+    if (!confirm(`Permanently delete ${noun}? This cannot be undone.`)) return;
+    setMessage(null);
+    startTransition(async () => {
+      try {
+        const deleted = await bulkDeleteMedia(cloneId, type, [...selectedIds]);
+        setMessage(`Deleted ${deleted} ${singular}${deleted === 1 ? "" : "s"}.`);
+        onClear();
+        router.refresh();
+      } catch (error) {
+        setMessage(error instanceof Error ? error.message : "Could not delete the selected items");
+      }
+    });
+  }
+
+  if (!open) {
+    return (
+      <button
+        type="button"
+        onClick={() => {
+          setOpen(true);
+          onEditingChange(true);
+        }}
+        className="w-fit rounded-lg border border-line bg-panel px-3 py-2 text-sm font-semibold text-ink hover:bg-muted/10"
+      >
+        Edit {type}
+      </button>
+    );
+  }
+
+  return (
+    <section className="rounded-xl border border-accent/30 bg-accent/5 p-3 sm:p-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <div className="text-sm font-semibold">Edit {type}</div>
+          <div className="text-xs text-muted">{selectedCount} of {total} selected</div>
+        </div>
+        <div className="flex flex-wrap gap-2">
+          <button type="button" onClick={onSelectAll} disabled={pending || total === 0}
+            className="rounded border border-line bg-panel px-2.5 py-1.5 text-xs font-medium hover:bg-muted/10 disabled:opacity-50">
+            Select all
+          </button>
+          <button type="button" onClick={onClear} disabled={pending || selectedCount === 0}
+            className="rounded border border-line bg-panel px-2.5 py-1.5 text-xs font-medium hover:bg-muted/10 disabled:opacity-50">
+            Clear
+          </button>
+          <button type="button" onClick={close} disabled={pending}
+            className="rounded border border-line bg-panel px-2.5 py-1.5 text-xs font-medium hover:bg-muted/10 disabled:opacity-50">
+            Done
+          </button>
+        </div>
+      </div>
+
+      <div className="mt-3 grid gap-2 sm:grid-cols-[minmax(0,180px)_auto_auto] sm:items-end">
+        <label className="block">
+          <span className="mb-1 block text-xs font-medium text-muted">New price in Stars</span>
+          <input
+            type="number"
+            min={0}
+            step={1}
+            inputMode="numeric"
+            value={price}
+            onChange={(event) => setPrice(event.target.value)}
+            placeholder="e.g. 20"
+            className="w-full rounded border border-line bg-panel px-3 py-2 text-sm outline-none focus:border-accent"
+          />
+        </label>
+        <button type="button" onClick={changePrice} disabled={pending || selectedCount === 0 || !validPrice}
+          className="rounded bg-accent px-3 py-2 text-sm font-semibold text-accent-ink hover:bg-accent-deep disabled:opacity-50">
+          {pending ? "Saving…" : "Change price"}
+        </button>
+        <button type="button" onClick={deleteSelected} disabled={pending || selectedCount === 0}
+          className="rounded border border-crit/35 bg-panel px-3 py-2 text-sm font-semibold text-crit hover:bg-crit/10 disabled:opacity-50">
+          Delete selected
+        </button>
+      </div>
+
+      <p className="mt-3 text-xs text-muted">
+        Changes apply to this creator only. New Telegram offers use the saved price immediately; an invoice already sent keeps its original price.
+      </p>
+      {message && <p role="status" className="mt-2 text-xs font-medium text-ink">{message}</p>}
+    </section>
+  );
+}
+
 // ── Main component ────────────────────────────────────────────────────────────
 type Tab = "photos" | "videos" | "bundles" | "pricing";
 
@@ -1045,6 +1234,20 @@ export default function MediaManager({
   categoryPricing: Record<string, number> | null;
 }) {
   const [tab, setTab] = useState<Tab>("photos");
+  const [editingPhotos, setEditingPhotos] = useState(false);
+  const [editingVideos, setEditingVideos] = useState(false);
+  const [selectedPhotoIds, setSelectedPhotoIds] = useState<Set<string>>(() => new Set());
+  const [selectedVideoIds, setSelectedVideoIds] = useState<Set<string>>(() => new Set());
+
+  function toggleSelection(type: "photos" | "videos", id: string) {
+    const setSelected = type === "photos" ? setSelectedPhotoIds : setSelectedVideoIds;
+    setSelected((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }
 
   const tabs: { key: Tab; label: string; count: number }[] = [
     { key: "photos", label: "Photos", count: photos.length },
@@ -1079,11 +1282,29 @@ export default function MediaManager({
       <div className={tab === "photos" ? "grid gap-6" : "hidden"}>
         <PhotoUploadQueue cloneId={cloneId} onDone={() => {}} />
         {photos.length > 0 ? (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-            {photos.map((p) => (
-              <PhotoCard key={p.id} photo={p} cloneId={cloneId} />
-            ))}
-          </div>
+          <>
+            <BulkMediaEditor
+              cloneId={cloneId}
+              type="photos"
+              total={photos.length}
+              selectedIds={selectedPhotoIds}
+              onSelectAll={() => setSelectedPhotoIds(new Set(photos.map((photo) => photo.id)))}
+              onClear={() => setSelectedPhotoIds(new Set())}
+              onEditingChange={setEditingPhotos}
+            />
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+              {photos.map((p) => (
+                <PhotoCard
+                  key={p.id}
+                  photo={p}
+                  cloneId={cloneId}
+                  selecting={editingPhotos}
+                  selected={selectedPhotoIds.has(p.id)}
+                  onToggleSelect={() => toggleSelection("photos", p.id)}
+                />
+              ))}
+            </div>
+          </>
         ) : (
           <div className="rounded-lg border border-line bg-panel p-10 text-center text-sm text-muted">
             No photos yet. Upload some above.
@@ -1094,11 +1315,29 @@ export default function MediaManager({
       <div className={tab === "videos" ? "grid gap-6" : "hidden"}>
         <VideoUploadQueue cloneId={cloneId} onDone={() => {}} />
         {videos.length > 0 ? (
-          <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
-            {videos.map((v) => (
-              <VideoCard key={v.id} video={v} cloneId={cloneId} />
-            ))}
-          </div>
+          <>
+            <BulkMediaEditor
+              cloneId={cloneId}
+              type="videos"
+              total={videos.length}
+              selectedIds={selectedVideoIds}
+              onSelectAll={() => setSelectedVideoIds(new Set(videos.map((video) => video.id)))}
+              onClear={() => setSelectedVideoIds(new Set())}
+              onEditingChange={setEditingVideos}
+            />
+            <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+              {videos.map((v) => (
+                <VideoCard
+                  key={v.id}
+                  video={v}
+                  cloneId={cloneId}
+                  selecting={editingVideos}
+                  selected={selectedVideoIds.has(v.id)}
+                  onToggleSelect={() => toggleSelection("videos", v.id)}
+                />
+              ))}
+            </div>
+          </>
         ) : (
           <div className="rounded-lg border border-line bg-panel p-10 text-center text-sm text-muted">
             No videos yet. Upload some above.

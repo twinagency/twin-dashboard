@@ -249,6 +249,95 @@ export async function deleteVideo(cloneId: string, videoId: string, storagePath:
   revalidatePath("/media");
 }
 
+// ── Bulk media edits ─────────────────────────────────────────────────────────
+// The browser submits only selected row ids. Every database operation also
+// scopes itself to clone_id, so a stale selection cannot affect another
+// creator's PPVs.
+type BulkMediaType = "photos" | "videos";
+
+function selectedMediaIds(ids: string[]): string[] {
+  const unique = [...new Set(ids.filter((id) => typeof id === "string" && id.trim() !== ""))];
+  if (!unique.length) throw new Error("Select at least one item first");
+  return unique;
+}
+
+function revalidateMediaPages(cloneId: string, includesPhotos = false) {
+  revalidatePath("/media");
+  revalidatePath(`/clones/${cloneId}`);
+  if (includesPhotos) revalidatePath("/flows");
+}
+
+// Zero is the one deliberate free-content value. The live media flow uses
+// is_free to decide whether an item is unlocked, so bulk repricing keeps the
+// two values in sync.
+export async function bulkSetMediaPrice(
+  cloneId: string,
+  type: BulkMediaType,
+  mediaIds: string[],
+  starValue: number,
+): Promise<number> {
+  const ids = selectedMediaIds(mediaIds);
+  if (!Number.isSafeInteger(starValue) || starValue < 0) {
+    throw new Error("Price must be a whole number of Stars, or 0 for free");
+  }
+
+  const { data, error } = await supabaseAdmin
+    .from(type)
+    .update({ star_value: starValue, is_free: starValue <= 0 })
+    .eq("clone_id", cloneId)
+    .in("id", ids)
+    .select("id");
+  if (error) throw new Error(error.message);
+
+  revalidateMediaPages(cloneId);
+  return data?.length ?? 0;
+}
+
+// Permanently removes the private storage files and their matching rows. Storage
+// paths are read from the clone-scoped database query, never trusted from the
+// browser. Photos also clear a selected free-preview reference.
+export async function bulkDeleteMedia(
+  cloneId: string,
+  type: BulkMediaType,
+  mediaIds: string[],
+): Promise<number> {
+  const ids = selectedMediaIds(mediaIds);
+  const { data: rows, error: readError } = await supabaseAdmin
+    .from(type)
+    .select("id, storage_path")
+    .eq("clone_id", cloneId)
+    .in("id", ids);
+  if (readError) throw new Error(readError.message);
+
+  const selected = (rows ?? []) as { id: string; storage_path: string }[];
+  if (!selected.length) throw new Error("None of those selected items belong to this creator");
+
+  const { error: storageError } = await supabaseAdmin.storage
+    .from("media")
+    .remove(selected.map((row) => row.storage_path));
+  if (storageError) throw new Error(storageError.message);
+
+  const resolvedIds = selected.map((row) => row.id);
+  const { error: deleteError } = await supabaseAdmin
+    .from(type)
+    .delete()
+    .eq("clone_id", cloneId)
+    .in("id", resolvedIds);
+  if (deleteError) throw new Error(deleteError.message);
+
+  if (type === "photos") {
+    const { error: previewError } = await supabaseAdmin
+      .from("clones")
+      .update({ onboarding_free_preview_media_id: null })
+      .eq("id", cloneId)
+      .in("onboarding_free_preview_media_id", resolvedIds);
+    if (previewError) throw new Error(previewError.message);
+  }
+
+  revalidateMediaPages(cloneId, type === "photos");
+  return resolvedIds.length;
+}
+
 // ── Create bundle ────────────────────────────────────────────────────────────
 export async function createBundle(cloneId: string, fd: FormData): Promise<string> {
   const name = String(fd.get("name") ?? "").trim();
