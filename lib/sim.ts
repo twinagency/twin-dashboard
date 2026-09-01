@@ -25,6 +25,11 @@ export type SimTurn = {
   media: "none" | "photo" | "video" | "voice";
   mediaCaption?: string;
   mediaStars?: number;
+  mediaUrl?: string | null;
+  /** What the sim itself decided and why — not a real bot route, just this
+   *  simulator's own call, shown so it's never confused with production
+   *  provenance (ChatThread's real flowLabel means something stronger). */
+  log: string;
 };
 
 type CloneRow = PersonaFactCols & {
@@ -34,17 +39,30 @@ type CloneRow = PersonaFactCols & {
   routing_model: string | null;
 };
 
-async function pickMediaSample(cloneId: string, kind: "photo" | "video"): Promise<{ caption: string; stars: number } | null> {
+async function pickMediaSample(
+  cloneId: string,
+  kind: "photo" | "video",
+): Promise<{ caption: string; stars: number; url: string | null } | null> {
   const table = kind === "photo" ? "photos" : "videos";
   const { data } = await supabaseAdmin
     .from(table)
-    .select("caption,teaser_caption,star_value")
+    .select("caption,teaser_caption,star_value,storage_path")
     .eq("clone_id", cloneId)
     .limit(20);
-  const rows = (data ?? []) as { caption: string | null; teaser_caption: string | null; star_value: number | null }[];
+  const rows = (data ?? []) as {
+    caption: string | null;
+    teaser_caption: string | null;
+    star_value: number | null;
+    storage_path: string | null;
+  }[];
   if (!rows.length) return null;
   const row = rows[Math.floor(Math.random() * rows.length)];
-  return { caption: row.teaser_caption?.trim() || row.caption?.trim() || "(no caption)", stars: row.star_value ?? 0 };
+  let url: string | null = null;
+  if (row.storage_path) {
+    const { data: signed } = await supabaseAdmin.storage.from("media").createSignedUrl(row.storage_path, 3600);
+    url = signed?.signedUrl ?? null;
+  }
+  return { caption: row.teaser_caption?.trim() || row.caption?.trim() || "(no caption)", stars: row.star_value ?? 0, url };
 }
 
 function herSystemPrompt(c: CloneRow): string {
@@ -76,7 +94,7 @@ function fanSystemPrompt(personaKey: string): string {
   );
 }
 
-export async function runSim(opts: { cloneId: string; personaKey: string; turns: number }): Promise<SimTurn[]> {
+export async function* runSim(opts: { cloneId: string; personaKey: string; turns: number }): AsyncGenerator<SimTurn> {
   const { data: clone, error } = await supabaseAdmin.from("clones").select("*").eq("id", opts.cloneId).maybeSingle();
   if (error || !clone) throw new Error(`clone not found: ${opts.cloneId}`);
   const c = clone as CloneRow;
@@ -91,7 +109,6 @@ export async function runSim(opts: { cloneId: string; personaKey: string; turns:
   const fanHistory: { role: "user" | "assistant"; content: string }[] = [];
   const herHistory: { role: "user" | "assistant"; content: string }[] = [];
 
-  const turns: SimTurn[] = [];
   const turnCount = Math.max(1, Math.min(opts.turns, 20));
 
   for (let i = 1; i <= turnCount; i++) {
@@ -109,6 +126,7 @@ export async function runSim(opts: { cloneId: string; personaKey: string; turns:
 
     let herReply = "";
     let media: SimTurn["media"] = "none";
+    let log = "";
     try {
       const raw = await orChat({
         model,
@@ -120,26 +138,30 @@ export async function runSim(opts: { cloneId: string; personaKey: string; turns:
       const parsed = JSON.parse(raw) as { reply?: string; media?: string };
       herReply = (parsed.reply ?? "").trim() || "(no reply)";
       if (parsed.media === "photo" || parsed.media === "video" || parsed.media === "voice") media = parsed.media;
-    } catch {
+      log = `model chose media="${parsed.media ?? "none"}" · raw: ${raw.slice(0, 300)}`;
+    } catch (e) {
       herReply = "(reply failed to parse)";
+      log = `JSON parse failed: ${e instanceof Error ? e.message : "unknown"}`;
     }
     herHistory.push({ role: "assistant", content: herReply });
     fanHistory.push({ role: "user", content: herReply });
 
     let mediaCaption: string | undefined;
     let mediaStars: number | undefined;
+    let mediaUrl: string | null | undefined;
     if (media === "photo" || media === "video") {
       const sample = await pickMediaSample(c.id, media);
       if (sample) {
         mediaCaption = sample.caption;
         mediaStars = sample.stars;
+        mediaUrl = sample.url;
+        log += ` · picked a real ${media} from her library (signed URL ${sample.url ? "ok" : "missing"})`;
       } else {
         media = "none"; // nothing in her library to reference — don't fake it
+        log += ` · wanted ${media} but her library is empty, downgraded to text`;
       }
     }
 
-    turns.push({ turn: i, fan: fanText, her: herReply, media, mediaCaption, mediaStars });
+    yield { turn: i, fan: fanText, her: herReply, media, mediaCaption, mediaStars, mediaUrl, log };
   }
-
-  return turns;
 }
