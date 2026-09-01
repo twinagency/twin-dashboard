@@ -345,7 +345,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
           <div className="font-semibold">This window could not be loaded.</div>
           <div className="mt-1 font-mono text-[11px] leading-snug break-words">{loadError}</div>
           <div className="mt-1 text-[12px]">
-            {data ? "Showing the last window that loaded." : "Try a shorter period — 1D and 1W are much cheaper to compute."}
+            {data ? "Showing the last window that loaded." : "Try a shorter period. 1D and 1W are much cheaper to compute."}
           </div>
         </div>
       )}
@@ -825,20 +825,17 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
               {
                 label: "New users",
                 value: fmtNum(s.newFans),
-                scope: "in selected period",
                 hint: `Fan profiles first seen during ${periodScope}. Historical import rows are excluded.${profileScopeNote}`,
               },
               // This is deliberately not called “Active”: on a 1M/1Y view it
               // means “messaged sometime in that window”, not “active now”.
               {
                 label: "Users who messaged",
-                scope: "in selected period",
                 value: fmtNum(s.activeUsers),
                 hint: `Fans who sent an inbound message during ${periodScope}.${profileScopeNote}`,
               },
               {
                 label: "Revenue / user who messaged",
-                scope: "after adjustments ÷ users who messaged",
                 value: revenuePerMessagedUser === null ? "-" : money(revenuePerMessagedUser),
                 money: revenuePerMessagedUser !== null,
                 hint: s.activeUsers > 0
@@ -847,7 +844,6 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
               },
               {
                 label: "Purchases",
-                scope: "in selected period",
                 value: fmtNum(s.sales),
                 hint: `Individual positive Star payments recorded during ${periodScope}. Refunds and adjustments are not orders. One buyer can place more than one order.`,
               },
@@ -862,8 +858,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
                 hint: `Fan profiles whose last inbound message was within the past 24 hours. This is measured right now, not by the date filter.${profileScopeNote}`,
               },
               {
-                label: "Conversation messages",
-                scope: "fan + creator replies",
+                label: "Messages",
                 value: fmtNum(s.messages),
                 hint: `All recorded conversation messages during ${periodScope} for ${creatorScope}, including fan messages and creator replies.${profileScopeNote}`,
               },
@@ -875,7 +870,6 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
               },
               {
                 label: "Revenue / buyer",
-                scope: "after adjustments",
                 value: revenuePerBuyer === null ? "-" : money(revenuePerBuyer),
                 money: revenuePerBuyer !== null,
                 hint: s.buyers > 0
@@ -884,7 +878,6 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
               },
               {
                 label: "Avg paid order",
-                scope: "positive payments",
                 value: avgOrder === null ? "-" : money(avgOrder),
                 money: avgOrder !== null,
                 hint: s.sales > 0
@@ -904,7 +897,6 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
               // "photos are our product" and "we are not recording what we sell".
               {
                 label: "Top revenue type",
-                scope: "share after adjustments",
                 value: topKind ? `${topKind.label} ${pct(topKind.share)}` : "-",
                 hint: `The payment type contributing the largest share of recorded Star revenue, after refunds and adjustments, during ${periodScope}.`,
               },
@@ -1896,9 +1888,9 @@ function BuyerConversionPanel({
   conversion: AnalyticsData["buyerConversion"];
   pct: (n: number) => string;
 }) {
-  const lifetimeRate = conversion.lifetimeBuyerRate === null ? "—" : pct(conversion.lifetimeBuyerRate);
-  const activeChatRate = conversion.activeChatBuyerRate === null ? "—" : pct(conversion.activeChatBuyerRate);
-  const buyerEngagementRate = conversion.activeBuyerEngagement7d === null ? "—" : pct(conversion.activeBuyerEngagement7d);
+  const lifetimeRate = conversion.lifetimeBuyerRate === null ? "-" : pct(conversion.lifetimeBuyerRate);
+  const activeChatRate = conversion.activeChatBuyerRate === null ? "-" : pct(conversion.activeChatBuyerRate);
+  const buyerEngagementRate = conversion.activeBuyerEngagement7d === null ? "-" : pct(conversion.activeBuyerEngagement7d);
   // Purchase mix is intentionally ordered by number of paid orders, not by
   // revenue. "What do people buy?" is a product-frequency question; the full
   // report above remains the place to compare dollar revenue by product.
@@ -1912,7 +1904,7 @@ function BuyerConversionPanel({
       label: "Have they ever bought?",
       value: lifetimeRate,
       summary: `${fmtNum(conversion.lifetimeBuyerProfiles)} of ${fmtNum(conversion.lifetimeFanProfiles)} audience accounts have bought`,
-      detail: "Of every audience account that has ever chatted, how many have ever bought something? This is an all-time number, so changing the date does not change it. In All creators, one person who chats with two creators has two audience accounts — one with each creator.",
+      detail: "Of every audience account that has ever chatted, how many have ever bought something? This is an all-time number, so changing the date does not change it. In All creators, one person who chats with two creators has two audience accounts, one with each creator.",
     },
     {
       label: "Did people who messaged buy?",
@@ -1934,7 +1926,7 @@ function BuyerConversionPanel({
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-3 text-left sm:px-4 [&::-webkit-details-marker]:hidden">
           <span className="min-w-0">
             <span className="block text-xs font-semibold uppercase tracking-wide text-ink">Buying customers</span>
-            <span className="mt-0.5 block text-[11px] leading-snug text-muted">Did people buy after messaging — and did past buyers come back to chat?</span>
+            <span className="mt-0.5 block text-[11px] leading-snug text-muted">Did people buy after messaging, and did past buyers come back to chat?</span>
           </span>
           <span className="flex shrink-0 items-center gap-2 text-right">
             <span>
@@ -2050,7 +2042,7 @@ function ConversationFunnelPanel({
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-3 text-left sm:px-4 [&::-webkit-details-marker]:hidden">
           <span className="min-w-0">
             <span className="block text-xs font-semibold uppercase tracking-wide text-ink">Chat &amp; purchase signals</span>
-            <span className="mt-0.5 block text-[11px] leading-snug text-muted">Optional context for the selected period — open to see exactly what is counted.</span>
+            <span className="mt-0.5 block text-[11px] leading-snug text-muted">Optional context for the selected period. Open to see exactly what is counted.</span>
           </span>
           <span className="shrink-0 text-xs font-semibold text-[#28658f] group-open:hidden">Open</span>
           <span className="hidden shrink-0 text-xs font-semibold text-[#28658f] group-open:inline">Hide</span>
