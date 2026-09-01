@@ -105,6 +105,7 @@ const NAV_LINKS: NavLink[] = [
   { kind: "route", label: "Tracker", href: "/tracker", icon: "ListChecks", color: "orange" },
   { kind: "route", label: "Info", href: "/info", icon: "Info", color: "neutral" },
   { kind: "route", label: "Logs", href: "/logs", icon: "Logs", color: "neutral" },
+  { kind: "route", label: "Sim", href: "/sim", icon: "Bot", color: "orange" },
   // This is the "API - coming soon" placeholder that used to sit greyed out
   // below the divider, now that it is actually built. Same label and same Code
   // icon on purpose, so it lands where anyone who saw the placeholder expects.
