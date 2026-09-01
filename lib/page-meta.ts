@@ -23,6 +23,7 @@ const PAGE_LABELS: Record<string, string> = {
   "/logs": "Logs",
   "/tracker": "Tracker",
   "/media": "Media",
+  "/sim": "Sim",
   "/clones": "Creators",
   "/settings": "Settings",
   "/crm/inbox": "Inbox",
