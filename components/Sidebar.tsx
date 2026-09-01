@@ -101,6 +101,7 @@ const NAV_LINKS: NavLink[] = [
   { kind: "route", label: "Flows", href: "/flows", icon: "Flows", color: "pink", gateOnClone: true },
   { kind: "tab", label: "PPVs", tab: "ppvs", icon: "Media", color: "red" },
   { kind: "tab", label: "Edit", tab: "identity", icon: "Dials", color: "blue" },
+  { kind: "route", label: "Business", href: "/business", icon: "Bot", color: "purple", gateOnClone: true },
   { kind: "route", label: "Tracker", href: "/tracker", icon: "ListChecks", color: "orange" },
   { kind: "route", label: "Info", href: "/info", icon: "Info", color: "neutral" },
   { kind: "route", label: "Logs", href: "/logs", icon: "Logs", color: "neutral" },
