@@ -42,10 +42,14 @@ function validSteps(
 
 // Valid onboarding steps (migration 068 model [{type, after_messages, ...}]).
 // Same defensive-read pattern as validSteps above, message-count bound 1-50.
-const ONBOARDING_STEP_TYPES = ["text", "voice", "photo", "video", "bundle", "collect", "tease"];
+// Migration 133 adds location_gate: a fixed (never AI-improvised) "what
+// country are you texting from" question, whose reply is auto-classified by
+// bot/src/services/us-location-guard.ts when the clone's block_us_fans_enabled
+// is on. See FlowsForm.tsx's ONBOARDING_STEP_TYPES for the operator-facing chip.
+const ONBOARDING_STEP_TYPES = ["text", "voice", "photo", "video", "bundle", "collect", "tease", "location_gate"];
 function validOnboardingSteps(raw: unknown): {
   id?: string;
-  type: "text" | "voice" | "photo" | "video" | "bundle" | "collect" | "tease";
+  type: "text" | "voice" | "photo" | "video" | "bundle" | "collect" | "tease" | "location_gate";
   after_messages: number;
   media_id?: string;
   free?: boolean;
@@ -202,6 +206,8 @@ async function CloneFlows({ cloneId }: { cloneId: string }) {
     intent_direct_purchase_override?: boolean | null;
     intent_fallback_offer_after_messages?: number | null;
     intent_max_ignored_offers?: number | null;
+    // Migration 133 — absent pre-migration, defaults false.
+    block_us_fans_enabled?: boolean | null;
   };
 
   return (
@@ -243,6 +249,7 @@ async function CloneFlows({ cloneId }: { cloneId: string }) {
           })),
           // Onboarding greeting steer + free-preview fallback + follow-up.
           welcomeInstruction: clone.welcome_instruction ?? null,
+          blockUsFansEnabled: clone.block_us_fans_enabled ?? false,
           freePreviewEnabled: clone.onboarding_free_preview_enabled ?? false,
           freePreviewAfterMinutes: clone.onboarding_free_preview_after_minutes ?? null,
           freePreviewAfterMessages: clone.onboarding_free_preview_after_messages ?? null,

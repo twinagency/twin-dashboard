@@ -1044,7 +1044,9 @@ export default async function FansPage({
                 const stage =
                   !!u.minor_flagged_at || u.blocked_reason === "minor"
                     ? { emoji: "🚫", label: "minor gate", tone: "bg-crit/15 text-crit", stripe: "border-crit" }
-                    : u.blocked
+                    : u.blocked_reason === "us_location"
+                      ? { emoji: "🌍", label: "US fan blocked", tone: "bg-crit/15 text-crit", stripe: "border-crit" }
+                      : u.blocked
                       ? { emoji: "🚫", label: "blocked", tone: "bg-crit/15 text-crit", stripe: "border-crit" }
                       : u.onboarding_complete
                         ? { emoji: "✅", label: "onboarded", tone: "bg-good/15 text-good", stripe: "border-good" }
@@ -1300,7 +1302,9 @@ export default async function FansPage({
                   </span>
                   {selected.blocked && (
                     <span className="rounded-full bg-crit/15 px-2 py-0.5 text-[10px] font-medium text-crit">
-                      Blocked (safety)
+                      {selected.blocked_reason === "us_location"
+                        ? "Blocked (US fan, location gate)"
+                        : "Blocked (safety)"}
                     </span>
                   )}
                   {/* The minor gate had NO indicator at all, which is half of why

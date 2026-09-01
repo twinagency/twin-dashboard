@@ -29,7 +29,7 @@ const STEP_EMOJI: Record<StepType, string> = Object.fromEntries(
 // bot/db/migrations/068_onboarding_steps.sql). Two extra types beyond the
 // campaign's five: collect (ask for one detail, fire-once) and tease (a short
 // flirty lead-in line — pairs with a free photo step for "tease then a free pic").
-type OnboardingStepType = "text" | "voice" | "photo" | "video" | "bundle" | "collect" | "tease";
+type OnboardingStepType = "text" | "voice" | "photo" | "video" | "bundle" | "collect" | "tease" | "location_gate";
 type OnboardingStepData = {
   // Stable id (migration 087). null on a step the operator just added; the
   // server mints one on save. It MUST survive every edit round-trip: delivery
@@ -60,6 +60,12 @@ const ONBOARDING_STEP_TYPES: { key: OnboardingStepType; label: string; emoji: st
   { key: "bundle", label: "Bundle", emoji: "🎁", hint: "Sends the next bundle he hasn't been sent." },
   { key: "collect", label: "Collect", emoji: "❓", hint: "She naturally works one detail into this reply (name, age, etc)." },
   { key: "tease", label: "Tease", emoji: "😏", hint: "A short flirty lead-in line, e.g. right before a free photo step." },
+  {
+    key: "location_gate",
+    label: "Location gate",
+    emoji: "🌍",
+    hint: "Sends a fixed, never-AI-written question asking what country he's texting from. If \"Auto-block US fans\" is on above, his very next reply is checked and he's blocked instantly if it says a US state or the USA. Has no custom-line steer on purpose - the question can't be softened or skipped.",
+  },
 ];
 
 type Initial = {
@@ -74,6 +80,10 @@ type Initial = {
   // onboarding flow (voice note, welcome bundle, detail collection) is now built
   // entirely from the ordered onboarding step list below.
   welcomeInstruction: string | null;
+  // Migration 133. Gates whether a "location_gate" step's classified reply
+  // actually blocks — the step can be placed with this off (asks but never
+  // blocks) so an operator can stage the question before turning on the gate.
+  blockUsFansEnabled: boolean;
   // Free-preview fallback (migration 069): a free taste if he hasn't bought the
   // welcome bundle within the window. Either trigger fires (null = that trigger
   // off); media id null = she auto-picks.
@@ -160,6 +170,7 @@ export default function FlowsForm({
   const [saved, setSaved] = useState(false);
 
   const [enabled, setEnabled] = useState(initial.enabled);
+  const [blockUsFansEnabled, setBlockUsFansEnabled] = useState(initial.blockUsFansEnabled);
   const [funnelPolicy, setFunnelPolicy] = useState<FunnelPolicy>(initial.funnelPolicy);
   // Phase 2 (migration 131). Ronan asked for the redesign to be switchable on
   // and off without dropping the whole clone back to the standard flow, so
@@ -332,6 +343,20 @@ export default function FlowsForm({
           placeholder='blank = "greet him warmly, introduce yourself by name, be flirty, and ask his name"'
           hint="How she opens the very FIRST message to a brand-new fan - a free-text steer, written into her own AI-generated line."
         />
+
+        {/* Migration 133. Gates the location_gate step's block action, not the
+            question itself - a "location_gate" step can sit in the list
+            asking with this off. */}
+        <div className="border-t border-line pt-3">
+          <Toggle
+            label="Auto-block US fans"
+            name="block_us_fans_enabled"
+            checked={blockUsFansEnabled}
+            onChange={setBlockUsFansEnabled}
+            accent="soft"
+            hint="Requires a Location gate step below. If his reply to that fixed question names a US state or the USA, he's blocked instantly and silently - no refusal line, he just stops getting replies. Off by default."
+          />
+        </div>
 
         {/* ── The ordered step sequence (migration 068) ─────────────────── */}
         <div className="border-t border-line pt-3">

@@ -58,7 +58,7 @@ function parseSteps(fd: FormData): StepOut[] {
 // array in the operator's saved order (see migration 068's writeup on why the
 // fire-once tracking is an array of indexes, not a counter: reordering must stay
 // safe, which only holds if the runtime respects the order actually saved).
-const ONBOARDING_STEP_TYPES = ["text", "voice", "photo", "video", "bundle", "collect", "tease"] as const;
+const ONBOARDING_STEP_TYPES = ["text", "voice", "photo", "video", "bundle", "collect", "tease", "location_gate"] as const;
 type OnboardingStepType = (typeof ONBOARDING_STEP_TYPES)[number];
 type OnboardingStepOut = {
   id: string;
@@ -181,6 +181,9 @@ export async function saveCampaign(id: string, fd: FormData) {
     // Per-flow caption kill switch (migration 071) — overrides media_caption_mode
     // outright for that flow's photo/video/bundle sends.
     onboarding_captions_off: fd.get("onboarding_captions_off") === "true",
+    // Migration 133. Gates the location_gate step's block action, not the
+    // question itself — see FlowsForm.tsx's Toggle hint.
+    block_us_fans_enabled: fd.get("block_us_fans_enabled") === "true",
     // Mid-chat follow-up
     followup_after_minutes: Math.max(0, num(fd, "followup_after_minutes", 0)),
     // Campaign. winback_lapse_days is read for real by isReturningLapsedSpender
