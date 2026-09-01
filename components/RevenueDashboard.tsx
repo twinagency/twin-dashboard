@@ -2005,34 +2005,34 @@ function ConversationFunnelPanel({
   const rate = (a: number, b: number) => (b > 0 ? pct(a / b) : "-");
   const metrics: { label: string; value: string; summary: string; detail: string }[] = [
     {
-      label: "Second-message rate",
+      label: "Sent a second message",
       value: rate(f.arrivalsStarted, f.arrivals),
-      summary: `${fmtNum(f.arrivalsStarted)} of ${fmtNum(f.arrivals)} new fans`,
-      detail: "New fan profiles in the selected period who sent at least two inbound messages in that same period, divided by all new fan profiles. A fan profile is created by the first message, so a first-message rate would always be nearly 100% and would not be useful.",
+      summary: `${fmtNum(f.arrivalsStarted)} of ${fmtNum(f.arrivals)} new people`,
+      detail: "Of the new people who messaged during the dates you picked, how many sent another message too? This tells you whether new people kept talking after their first message.",
     },
     {
-      label: "5+ message rate",
+      label: "Sent 5+ messages",
       value: rate(f.meaningful, f.conversations),
-      summary: `${fmtNum(f.meaningful)} of ${fmtNum(f.conversations)} chat pairs`,
-      detail: "Creator–fan chat pairs with at least five inbound fan messages in the selected period, divided by all chat pairs with at least one inbound fan message. This is a message-count threshold, not a qualitative rating of the conversation.",
+      summary: `${fmtNum(f.meaningful)} of ${fmtNum(f.conversations)} chats`,
+      detail: "Of the chats that had at least one message during the dates you picked, how many had five or more messages from the person chatting?",
     },
     {
-      label: "Recorded offer rate",
+      label: "Received an offer",
       value: rate(f.offered, f.conversations),
-      summary: `${fmtNum(f.offered)} of ${fmtNum(f.conversations)} chat pairs`,
-      detail: "Creator–fan chat pairs with a recorded paywall or locked-item offer in the selected period, divided by all chat pairs. A pair must have a fan message in the period to enter this stage. It confirms a logged offer or paywall event, not that the fan opened or read it.",
+      summary: `${fmtNum(f.offered)} of ${fmtNum(f.conversations)} chats`,
+      detail: "Of the chats that had a message during the dates you picked, how many were sent a recorded paid offer, such as a paywall or locked item? This confirms an offer was sent, not that the person opened it.",
     },
     {
-      label: "Paid after recorded offer",
+      label: "Bought after an offer",
       value: rate(f.offeredBought, f.offered),
-      summary: `${fmtNum(f.offeredBought)} of ${fmtNum(f.offered)} offered chat pairs`,
-      detail: "Creator–fan chat pairs with an eligible positive paid order on or after their first recorded offer in the selected period, divided by offered chat pairs. Refunds and old-system auto-renewals are excluded. This records sequence only: it does not link an order to a specific offer or prove the offer caused the purchase.",
+      summary: `${fmtNum(f.offeredBought)} of ${fmtNum(f.offered)} chats with an offer`,
+      detail: "Of the chats that received an offer, how many also bought something during the dates you picked? This does not prove that the offer caused the purchase.",
     },
     {
-      label: "Time to first paid order",
+      label: "Typical time to first purchase",
       value: fmtHours(f.ttfpMedianHours),
-      summary: f.ttfpN > 0 ? `median across ${fmtNum(f.ttfpN)} first-time buyers` : "no first paid orders in this period",
-      detail: "Median time from a fan profile first being seen to that fan's first-ever positive paid order. It includes only fans whose first paid order occurred in the selected period, so it is not an average and it is not a measure of every buyer.",
+      summary: f.ttfpN > 0 ? `based on ${fmtNum(f.ttfpN)} first purchases` : "no first purchases in these dates",
+      detail: "The typical time between someone first messaging and their first purchase. It only uses people whose first purchase happened during the dates you picked, so it is not an average of every buyer.",
     },
   ];
 
@@ -2041,17 +2041,17 @@ function ConversationFunnelPanel({
       <details className="group">
         <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-3 text-left sm:px-4 [&::-webkit-details-marker]:hidden">
           <span className="min-w-0">
-            <span className="block text-xs font-semibold uppercase tracking-wide text-ink">Chat &amp; purchase signals</span>
-            <span className="mt-0.5 block text-[11px] leading-snug text-muted">Optional context for the selected period. Open to see exactly what is counted.</span>
+            <span className="block text-xs font-semibold uppercase tracking-wide text-ink">Chat activity &amp; purchases</span>
+            <span className="mt-0.5 block text-[11px] leading-snug text-muted">See what people do in chats during the dates you picked.</span>
           </span>
           <span className="shrink-0 text-xs font-semibold text-[#28658f] group-open:hidden">Open</span>
           <span className="hidden shrink-0 text-xs font-semibold text-[#28658f] group-open:inline">Hide</span>
         </summary>
         <CardContent className="border-t border-line p-3 sm:p-4">
           <div className="rounded-xl border border-[#4a8ec4]/35 bg-[#eff8ff] px-3 py-2.5 text-[11px] leading-relaxed text-muted">
-            <p><span className="font-semibold text-ink">What this is:</span> observed chat and payment signals, not a claim that a particular message or offer caused a particular sale. These are related measures, not one linear marketing funnel.</p>
-            <p className="mt-1"><span className="font-semibold text-ink">Scope:</span> one creator–fan chat pair. In All creators, a person who messages two creators is two pairs here; the Buyers tile above counts that person once.</p>
-            <p className="mt-1"><span className="font-semibold text-ink">Data used:</span> for the first four cards, fan profiles and actions recorded in the selected date range. Time to first paid order also checks earlier payment history to identify a first-ever order. All starts at the first recorded Star payment.</p>
+            <p><span className="font-semibold text-ink">What this shows:</span> whether people keep talking, receive an offer, and buy.</p>
+            <p className="mt-1"><span className="font-semibold text-ink">How to read it:</span> “20 of 100” means 20 chats did the thing in the title, out of 100 chats. It does not mean one particular message caused a purchase.</p>
+            <p className="mt-1"><span className="font-semibold text-ink">All creators:</span> if one person chats with two creators, that counts as two chats, one with each creator.</p>
           </div>
           <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
             {metrics.map((m) => (
