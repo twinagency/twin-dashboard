@@ -119,12 +119,19 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   // All-time cash + stars for the small header readout — scoped by the same
   // clone switcher as everything else, never time-windowed.
+  // Aggregated in SQL (migration 135). This used to select amount_stars and sum
+  // it here, unpaged: PostgREST returned its default 1,000 rows of 8,532 and the
+  // header quietly showed 653,816 stars ($8,499.61) against an actual 4,042,272
+  // ($52,549.54), an 84% understatement that looked like a plausible number and
+  // never moved. Same defect the two paged star_transactions reads in
+  // lib/dashboard-data.ts and lib/analytics-data.ts already carry comments about.
+  // Money out of this table is paged or aggregated in SQL, never bare-selected.
   let allTimeStars = 0;
   try {
-    let txQuery = supabaseAdmin.from("star_transactions").select("amount_stars");
-    if (activeCloneId) txQuery = txQuery.eq("clone_id", activeCloneId);
-    const { data } = await txQuery;
-    allTimeStars = ((data ?? []) as { amount_stars: number }[]).reduce((s, r) => s + (r.amount_stars || 0), 0);
+    const { data } = await supabaseAdmin.rpc("revenue_all_time_stars", {
+      p_clone: activeCloneId ?? null,
+    });
+    allTimeStars = Number(data ?? 0);
   } catch {
     // header still renders with zero if the DB is unreachable
   }
