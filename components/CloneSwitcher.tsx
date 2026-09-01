@@ -11,6 +11,25 @@ import { Input } from "@/components/ui/input";
 
 type CloneLite = { id: string; name: string; color: string; photoUrl?: string };
 
+type CreatorTeam = { label: string | null; creators: CloneLite[] };
+type CreatorCategory = { label: string; teams: CreatorTeam[] };
+
+// These are commercial relationships, not a property of a creator's public
+// persona. Keep the named partner rosters here so new, unassigned creators
+// land safely under Individual talent instead of disappearing from the picker.
+const AGENCY_ROSTERS = [
+  { label: "Tasty", names: ["Alanna Pow", "Dan Dangler", "Autumn Renae"] },
+  { label: "Moxy Agency", names: ["Riley Mae Lewis", "Allison Parker"] },
+] as const;
+
+const WHITELABEL_ROSTERS = [
+  { label: "Toochi", names: ["Kyla Yesenosky", "Zoey Foxx"] },
+  { label: "JB", names: ["Briana Redd", "Mrs Callace"] },
+  { label: "CJ", names: ["Dreka Cakez"] },
+] as const;
+
+const creatorKey = (name: string) => name.trim().toLocaleLowerCase();
+
 // Instagram-style verified badge — always blue, regardless of clone color.
 function VerifiedBadge({ className = "h-3.5 w-3.5" }: { className?: string }) {
   return (
@@ -47,11 +66,49 @@ export default function CloneSwitcher({
   // navigating when no clone is picked yet.
   useEffect(() => onOpenCloneSwitcher(() => setOpen(true)), []);
 
-  const filtered = useMemo(() => {
+  const creatorCategories = useMemo<CreatorCategory[]>(() => {
+    const creatorByName = new Map(clones.map((creator) => [creatorKey(creator.name), creator]));
+    const assigned = new Set<string>();
+
+    const makeTeams = (rosters: readonly { label: string; names: readonly string[] }[]) =>
+      rosters
+        .map((roster) => {
+          const creators = roster.names
+            .map((name) => creatorByName.get(creatorKey(name)))
+            .filter((creator): creator is CloneLite => Boolean(creator));
+          creators.forEach((creator) => assigned.add(creatorKey(creator.name)));
+          return { label: roster.label, creators };
+        })
+        .filter((team) => team.creators.length > 0);
+
+    const agencyTeams = makeTeams(AGENCY_ROSTERS);
+    const whitelabelTeams = makeTeams(WHITELABEL_ROSTERS);
+    const individualCreators = clones.filter((creator) => !assigned.has(creatorKey(creator.name)));
+
+    return [
+      { label: "Individual talent", teams: individualCreators.length ? [{ label: null, creators: individualCreators }] : [] },
+      { label: "Agency", teams: agencyTeams },
+      { label: "Whitelabel partner", teams: whitelabelTeams },
+    ].filter((category) => category.teams.length > 0);
+  }, [clones]);
+
+  const filteredCategories = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return clones;
-    return clones.filter((c) => c.name.toLowerCase().includes(q));
-  }, [clones, query]);
+    if (!q) return creatorCategories;
+    return creatorCategories
+      .map((category) => ({
+        ...category,
+        teams: category.teams
+          .map((team) => ({ ...team, creators: team.creators.filter((creator) => creator.name.toLowerCase().includes(q)) }))
+          .filter((team) => team.creators.length > 0),
+      }))
+      .filter((category) => category.teams.length > 0);
+  }, [creatorCategories, query]);
+
+  const visibleCreatorCount = filteredCategories.reduce(
+    (total, category) => total + category.teams.reduce((teamTotal, team) => teamTotal + team.creators.length, 0),
+    0,
+  );
 
   // /clones/[id]* is the ONE family of routes that takes its clone from the
   // URL instead of the scope cookie — the Configure page the sidebar's PPVs and
@@ -80,6 +137,33 @@ export default function CloneSwitcher({
       if (dest) router.push(dest);
       router.refresh();
     });
+  }
+
+  function CreatorCard({ creator }: { creator: CloneLite }) {
+    const selected = activeCloneId === creator.id;
+    return (
+      <button
+        type="button"
+        onClick={() => pick(creator.id)}
+        disabled={pending}
+        style={selected ? { borderColor: creator.color, backgroundColor: `${creator.color}14` } : undefined}
+        className={
+          "relative flex min-w-0 flex-col items-center gap-1.5 rounded-md border px-2 py-3 text-center text-sm transition disabled:opacity-60 " +
+          (selected ? "font-medium" : "border-line hover:bg-muted/10")
+        }
+      >
+        {selected && <VerifiedBadge className="absolute right-1.5 top-1.5 h-4 w-4" />}
+        <span
+          className="creator-name flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
+          style={{ background: creator.color }}
+        >
+          {initials(creator.name)}
+        </span>
+        <span className="creator-name w-full truncate" style={selected ? { color: creator.color } : undefined}>
+          {creator.name}
+        </span>
+      </button>
+    );
   }
 
   return (
@@ -160,61 +244,49 @@ export default function CloneSwitcher({
             All creators
           </button>
 
-          <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
-            {/* Create lives here — the switcher is the one place you always
-                touch clones from, so "+ New clone" is always one click away. */}
-            <Link
-              href="/clones/new"
-              className="flex flex-col items-center gap-1.5 rounded-md border border-dashed border-line px-2 py-3 text-center text-sm text-muted transition hover:border-accent hover:text-accent"
-            >
-              <span className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full border border-dashed border-current text-lg font-bold">
-                +
-              </span>
-              <span className="w-full truncate">New creator</span>
-            </Link>
-            {filtered.map((c) => {
-              const selected = activeCloneId === c.id;
+          <div className="space-y-2">
+            {filteredCategories.map((category) => {
+              const count = category.teams.reduce((total, team) => total + team.creators.length, 0);
               return (
-                <button
-                  key={c.id}
-                  type="button"
-                  onClick={() => pick(c.id)}
-                  disabled={pending}
-                  style={
-                    selected
-                      ? { borderColor: c.color, backgroundColor: `${c.color}14` }
-                      : undefined
-                  }
-                  className={
-                    "relative flex flex-col items-center gap-1.5 rounded-md border px-2 py-3 text-center text-sm transition disabled:opacity-60 " +
-                    (selected ? "font-medium" : "border-line hover:bg-muted/10")
-                  }
-                >
-                  {selected && <VerifiedBadge className="absolute right-1.5 top-1.5 h-4 w-4" />}
-                  {/* Jesse, 2026-08-17: with privacy mode on, EVERY other
-                      creator in this dialog is hidden too, not just the active
-                      one. Colour and position still tell them apart. */}
-                  <span
-                    className="creator-name flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
-                    style={{ background: c.color }}
-                  >
-                    {initials(c.name)}
-                  </span>
-                  <span
-                    className="creator-name w-full truncate"
-                    style={selected ? { color: c.color } : undefined}
-                  >
-                    {c.name}
-                  </span>
-                </button>
+                <details key={category.label} className="group rounded-lg border border-line bg-surface/40" open={query ? true : undefined}>
+                  <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-2.5 text-sm font-semibold text-ink [&::-webkit-details-marker]:hidden">
+                    <span>{category.label}</span>
+                    <span className="flex items-center gap-2 text-[11px] font-medium text-muted">
+                      {count} {count === 1 ? "creator" : "creators"}
+                      <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 transition group-open:rotate-180" fill="none" stroke="currentColor" strokeWidth={2}>
+                        <path d="M6 9l6 6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+                      </svg>
+                    </span>
+                  </summary>
+                  <div className="space-y-3 border-t border-line px-2.5 py-2.5">
+                    {category.teams.map((team) => (
+                      <div key={team.label ?? "individual"}>
+                        {team.label && <p className="mb-1.5 px-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">{team.label}</p>}
+                        <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                          {team.creators.map((creator) => <CreatorCard key={creator.id} creator={creator} />)}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </details>
               );
             })}
           </div>
 
+          {/* Keep adding a creator available without mixing it into someone’s
+              commercial category. */}
+          <Link
+            href="/clones/new"
+            className="mt-3 flex items-center justify-center gap-2 rounded-md border border-dashed border-line px-3 py-2.5 text-sm text-muted transition hover:border-accent hover:text-accent"
+          >
+            <span className="text-lg leading-none">+</span>
+            New creator
+          </Link>
+
           {clones.length === 0 && (
             <div className="px-2.5 py-6 text-center text-sm text-muted">No creators yet.</div>
           )}
-          {clones.length > 0 && filtered.length === 0 && (
+          {clones.length > 0 && visibleCreatorCount === 0 && (
             <div className="px-2.5 py-6 text-center text-sm text-muted">No creators match &quot;{query}&quot;.</div>
           )}
         </div>
