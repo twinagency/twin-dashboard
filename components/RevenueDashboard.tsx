@@ -1482,17 +1482,73 @@ function RevenueReport({
                   <ReportEmpty text="No fans yet." />
                 ) : (
                   <div className="flex flex-col gap-3">
-                    {a.byTier.map((t) => (
-                      <ShareRow
-                        key={t.key}
-                        color={tierColor(t.key)}
-                        label={t.label}
-                        share={t.share}
-                        right={money(t.stars)}
-                        rightHint={pct(t.share)}
-                        sub={`${fmtNum(t.users)} fan${t.users === 1 ? "" : "s"}`}
-                      />
-                    ))}
+                    {a.byTier.map((t) => {
+                      const tierRow = (
+                        <ShareRow
+                          color={tierColor(t.key)}
+                          label={t.label}
+                          share={t.share}
+                          right={money(t.stars)}
+                          rightHint={pct(t.share)}
+                          sub={`${fmtNum(t.users)} fan${t.users === 1 ? "" : "s"}`}
+                        />
+                      );
+
+                      // Only Whale profiles are shown. The other tiers remain a
+                      // compact overview, even when the fleet becomes large.
+                      if (t.key !== "whale") return <div key={t.key}>{tierRow}</div>;
+
+                      return (
+                        <details key={t.key} className="rounded-xl border border-line bg-surface/55 px-2.5 py-2.5 sm:px-3">
+                          <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">
+                            {tierRow}
+                            <span className="mt-2 block text-[10px] font-semibold text-[#0d3d6e]">View Whale fans</span>
+                          </summary>
+                          <div className="mt-2 max-h-72 overflow-y-auto border-t border-line pt-2">
+                            <div className="mb-1.5 flex items-center justify-between gap-2 text-[10px] text-muted">
+                              <span>Whale fans</span>
+                              <span>{fmtNum(a.whaleFans.length)} listed</span>
+                            </div>
+                            {a.whaleFans.length === 0 ? (
+                              <p className="py-2 text-xs text-muted">No Whale fans to show.</p>
+                            ) : (
+                              <div className="grid gap-1.5">
+                                {a.whaleFans.map((fan) => (
+                                  <div
+                                    key={`${fan.cloneId ?? "unknown"}:${fan.telegramId ?? fan.name}`}
+                                    className="flex min-w-0 items-center gap-2 rounded-lg bg-background/60 px-2 py-1.5"
+                                  >
+                                    <FanAvatar
+                                      cloneId={fan.cloneId ?? ""}
+                                      telegramId={fan.telegramId}
+                                      name={fan.name}
+                                      color={tierColor("whale")}
+                                      className="h-7 w-7"
+                                    />
+                                    <span className="min-w-0 flex-1">
+                                      <span className="block truncate text-xs font-semibold text-ink">{fan.name}</span>
+                                      <span className="block truncate text-[10px] text-muted">
+                                        {fan.username ? `@${fan.username}` : "Whale fan"}
+                                        {!scoped ? (
+                                          <>
+                                            {" · "}
+                                            <span className="creator-name">{fan.cloneName}</span>
+                                          </>
+                                        ) : ""}
+                                      </span>
+                                    </span>
+                                    <span className="shrink-0 text-right">
+                                      <span className="block font-mono text-[11px] font-semibold tabular-nums text-ink">⭐ {fmtNum(fan.stars)}</span>
+                                      <span className="block text-[10px] text-muted">lifetime spend</span>
+                                    </span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </details>
+                      );
+                    })}
                   </div>
                 )}
               </div>

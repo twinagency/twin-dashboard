@@ -169,6 +169,17 @@ export type AnalyticsData = {
   // (not from byDay, which caps at 180 rendered points on long windows).
   byDow: { dow: number; label: string; stars: number }[];
   byTier: { key: string; label: string; users: number; stars: number; share: number }[];
+  // The exact profiles in the Whale tier. This uses the same stored spend tier
+  // as `byTier`, so the list belongs to the number shown beside Whale.
+  whaleFans: {
+    cloneId: string | null;
+    cloneName: string;
+    telegramId: number | null;
+    name: string;
+    username: string | null;
+    stars: number;
+    purchases: number;
+  }[];
   topWeeklySpenders: {
     cloneId: string | null;
     cloneName: string;
@@ -642,12 +653,48 @@ export async function getAnalytics(
   // await: it is a ~800ms scan of chat_history in the window (measured 834ms on
   // 30 days fleet-wide, 2026-08-21) and the page is already several seconds, so
   // it runs beside the two lifetime rollups instead of after them.
-  const [spendStats, tierRows, funnel, activeChatBuyers, activeBuyerProfiles7d] = await Promise.all([
+  // This is intentionally a profile read rather than a reconstruction from
+  // transactions: `users.total_spent_stars` and `users.spend_tier` are the
+  // maintained lifetime ledger used by the tier rollup itself. Re-summing
+  // payment rows here could disagree with the tier on imported history.
+  const whaleFansPromise = (async () => {
+    let query = supabaseAdmin
+      .from("users")
+      .select("id,clone_id,telegram_id,name,stated_name,username,total_spent_stars,purchase_count")
+      .eq("spend_tier", "whale")
+      .order("total_spent_stars", { ascending: false })
+      .order("id", { ascending: true });
+    if (cloneId) query = query.eq("clone_id", cloneId);
+    const { rows, truncated } = await selectAllRows<{
+      clone_id: string | null;
+      telegram_id: number | null;
+      name: string | null;
+      stated_name: string | null;
+      username: string | null;
+      total_spent_stars: number | string | null;
+      purchase_count: number | null;
+    }>(query, { label: "analytics Whale fans" });
+    if (truncated) {
+      throw new Error("Could not read every Whale fan, so the dashboard will not show an incomplete Whale list.");
+    }
+    return rows.map((fan) => ({
+      cloneId: fan.clone_id,
+      cloneName: fan.clone_id ? nameById.get(fan.clone_id) ?? "Unknown creator" : "Unknown creator",
+      telegramId: fan.telegram_id,
+      name: fan.stated_name || fan.name || fan.username || (fan.telegram_id == null ? "Unnamed fan" : `Fan ${fan.telegram_id}`),
+      username: fan.username,
+      stars: Number(fan.total_spent_stars) || 0,
+      purchases: Number(fan.purchase_count) || 0,
+    }));
+  })();
+
+  const [spendStats, tierRows, funnel, activeChatBuyers, activeBuyerProfiles7d, whaleFans] = await Promise.all([
     fanSpendStats(cloneId ?? null),
     fanTiers(cloneId ?? null),
     conversationFunnel(startMs, windowEnd, cloneId ?? null),
     activeChatBuyerPromise,
     activeBuyerProfiles7dPromise,
+    whaleFansPromise,
   ]);
   const fans = Number(spendStats.fans) || 0;
   const buyers = Number(spendStats.buyers) || 0;
@@ -928,6 +975,7 @@ export async function getAnalytics(
     byHour,
     byDow,
     byTier,
+    whaleFans,
     topWeeklySpenders,
     weeklySpenderSummary: {
       buyers: rankedWeeklySpenders.length,
