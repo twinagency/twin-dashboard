@@ -81,6 +81,14 @@ export async function GET(req: NextRequest) {
 
   try {
     const conn = await tgCall(resolved.token, "getBusinessConnection", { business_connection_id: resolved.bcid });
+    // getBusinessConnection doesn't carry bio, but ChatFullInfo does — one
+    // extra call against the connection's own chat (conn.user_chat_id) to
+    // fill it in so the editor can show CURRENT bio, not a blank box.
+    const bio = conn.user_chat_id
+      ? await tgCall(resolved.token, "getChat", { chat_id: conn.user_chat_id })
+          .then((chat) => chat.bio ?? null)
+          .catch(() => null)
+      : null;
     return NextResponse.json({
       connected: true,
       isEnabled: !!conn.is_enabled,
@@ -91,6 +99,7 @@ export async function GET(req: NextRequest) {
         firstName: conn.user?.first_name ?? null,
         lastName: conn.user?.last_name ?? null,
         username: conn.user?.username ?? null,
+        bio,
       },
     });
   } catch (e) {
