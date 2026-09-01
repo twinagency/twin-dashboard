@@ -345,14 +345,28 @@ export async function getAnalytics(
   const includeCost = opts?.includeCost !== false;
   const window = await resolveRevenueWindow(period, range, nowMs);
   const windowEnd = window.endMs;
+  const startMs = window.startMs;
 
   // ── clones (color order matches the nav: created_at asc → colorForIndex) ──────
   // Colors are assigned across the FULL fleet order so they stay stable whether
   // scoped to "All" or narrowed to one clone (same clone always gets same color).
-  const { data: cloneRows } = await supabaseAdmin
-    .from("clones")
-    .select("id,name,created_at,ai_mode,intake")
-    .order("created_at", { ascending: true });
+  //
+  // Fired together with the revenue ledger, the cost rollup, the messaged-fan
+  // count and the paywall probe below — none of these five reads depends on
+  // another's result, only on `startMs`/`windowEnd`/`cloneId`, and they used to
+  // run one after another. Measured 2026-09-02 as part of the same "dashboard
+  // is slow" pass that parallelized lib/dashboard-data.ts.
+  const [cloneRows, txs, usage, messagedFanTotal, paywallProbe] = await Promise.all([
+    supabaseAdmin
+      .from("clones")
+      .select("id,name,created_at,ai_mode,intake")
+      .order("created_at", { ascending: true })
+      .then((r) => r.data),
+    loadTxs(),
+    includeCost ? usageRollup(startMs, windowEnd, cloneId ?? null) : Promise.resolve([]),
+    messagedFanCount(startMs, windowEnd, cloneId ?? null),
+    supabaseAdmin.from("paywall_hits").select("telegram_id").limit(1),
+  ]);
   const allClones = (cloneRows ?? []) as { id: string; name: string; ai_mode: string | null; intake: unknown }[];
   const clones = cloneId ? allClones.filter((c) => c.id === cloneId) : allClones;
   const nameById = new Map<string, string>();
@@ -366,8 +380,6 @@ export async function getAnalytics(
     flowById.set(c.id, c.ai_mode === "smart" ? "smart" : "classic");
   });
 
-  // ── shared window ─────────────────────────────────────────────────────────────
-  const startMs = window.startMs;
 
   // ── revenue ledger in window (star_transactions) ─────────────────────────────
   // Try to read the additive `feature` column; if migration 024 hasn't been applied
@@ -384,8 +396,7 @@ export async function getAnalytics(
     telegram_id: number | null;
     invoice_payload: string | null;
   };
-  let txs: TxRow[];
-  {
+  async function loadTxs(): Promise<TxRow[]> {
     // PAGED, and this is the revenue number on every analytics chart. Unpaged it
     // stopped at the PostgREST cap with no error: alanna-pow's 3-month window
     // read 1000 of 3383 rows and reported 304,220 stars against an actual
@@ -418,7 +429,7 @@ export async function getAnalytics(
     const { rows } = await selectAllRows(q.order("id", { ascending: true }), {
       label: "analytics revenue ledger",
     });
-    txs = hasFeature
+    return hasFeature
       ? (rows as TxRow[])
       : (rows as Omit<TxRow, "feature">[]).map((r) => ({ ...r, feature: null }));
   }
@@ -567,15 +578,7 @@ export async function getAnalytics(
   }
 
   // ── AI/voice cost in window (usage_events) ───────────────────────────────────
-  // SQL rollup (migration 120). This was the second full page-through of
-  // usage_events on every Revenue load — the chart half did the identical 330k
-  // row walk — and like that one it stopped at the 200,000 row ceiling, so the
-  // cost and every margin derived from it were understated.
-  //
-  // Skipped entirely when includeCost is false — see AnalyticsOptions above.
-  // The public API is forbidden from returning any of this, so on that path the
-  // query is not made slow, it is not made at all.
-  const usage = includeCost ? await usageRollup(startMs, windowEnd, cloneId ?? null) : [];
+  // Fetched above, in parallel with clones/txs/messagedFanTotal/paywallProbe.
   const cloneCost = new Map<string, number>();
   let totalCost = 0;
   for (const u of usage) {
@@ -589,7 +592,7 @@ export async function getAnalytics(
   // COUNT(DISTINCT) in SQL (migration 120). This single integer used to cost a
   // page-through of 196,994 chat rows — the biggest single read on the page,
   // and every one of those rows was thrown away after being counted once.
-  const messagedFanTotal = await messagedFanCount(startMs, windowEnd, cloneId ?? null);
+  // Fetched above, in parallel with clones/txs/usage/paywallProbe.
   // Do these direct reads in parallel with the rest of the deeper analytics
   // work below. Unlike the lifetime spend rollup, both answer a current
   // conversion question: who chatted in the selected window and who is still
@@ -623,7 +626,7 @@ export async function getAnalytics(
   // Postgres's undefined_table, which surfaces when the RPC path hits it first.
   // Everything else throws and the page shows an error, per the NO SILENT
   // FALLBACK rule at the top of lib/rollup.ts.
-  const paywallProbe = await supabaseAdmin.from("paywall_hits").select("telegram_id").limit(1);
+  // Fetched above, in parallel with clones/txs/usage/messagedFanTotal.
   const probeErr = paywallProbe.error;
   const paywallCollecting = Boolean(probeErr && (probeErr.code === "PGRST205" || probeErr.code === "42P01"));
   if (probeErr && !paywallCollecting) {

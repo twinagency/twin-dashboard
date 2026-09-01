@@ -58,55 +58,64 @@ export default async function RootLayout({ children }: { children: React.ReactNo
 
   // Migration 117: which version of Twin this is. Fetched here, once, so both
   // the sidebar chip and the update popup read the same row.
-  const twinVersion = await getTwinVersion();
+  //
+  // twinVersion, the clones+photos block and activeCloneId (a cookie read, not
+  // a DB round trip) share no inputs, so they run together instead of one
+  // after another — same "dashboard is slow" pass as lib/dashboard-data.ts and
+  // lib/analytics-data.ts. This runs on every full/hard page load (see the
+  // note below on why it does NOT re-run on client-side nav), so it is the
+  // first-load cost, not the per-navigation one.
+  const [twinVersion, clones, activeCloneId] = await Promise.all([
+    getTwinVersion(),
+    (async (): Promise<{ id: string; name: string; color: string; photoUrl?: string }[]> => {
+      try {
+        const { data } = await supabaseAdmin
+          .from("clones")
+          .select("id,name,intake")
+          .order("created_at", { ascending: true });
+        const rows = (data ?? []) as { id: string; name: string; intake: unknown }[];
 
-  let clones: { id: string; name: string; color: string; photoUrl?: string }[] = [];
-  try {
-    const { data } = await supabaseAdmin
-      .from("clones")
-      .select("id,name,intake")
-      .order("created_at", { ascending: true });
-    const rows = (data ?? []) as { id: string; name: string; intake: unknown }[];
+        // Cover photo per clone (first uploaded), batch-signed for the avatars.
+        const photoByClone = new Map<string, string>();
+        const ids = rows.map((r) => r.id);
+        if (ids.length) {
+          const { data: photos } = await supabaseAdmin
+            .from("photos")
+            .select("clone_id, storage_path")
+            .in("clone_id", ids)
+            .order("created_at", { ascending: true });
+          const firstPath = new Map<string, string>();
+          for (const clone of rows) {
+            const customPath = profileImagePathForClone(clone.intake);
+            if (customPath) firstPath.set(clone.id, customPath);
+          }
+          for (const p of photos ?? []) {
+            if (p.clone_id && !firstPath.has(p.clone_id)) firstPath.set(p.clone_id, p.storage_path);
+          }
+          const entries = [...firstPath.entries()];
+          if (entries.length) {
+            const { data: signed } = await supabaseAdmin.storage
+              .from("media")
+              .createSignedUrls(entries.map((e) => e[1]), 3600);
+            (signed ?? []).forEach((s, i) => {
+              if (s.signedUrl) photoByClone.set(entries[i][0], s.signedUrl);
+            });
+          }
+        }
 
-    // Cover photo per clone (first uploaded), batch-signed for the avatars.
-    const photoByClone = new Map<string, string>();
-    const ids = rows.map((r) => r.id);
-    if (ids.length) {
-      const { data: photos } = await supabaseAdmin
-        .from("photos")
-        .select("clone_id, storage_path")
-        .in("clone_id", ids)
-        .order("created_at", { ascending: true });
-      const firstPath = new Map<string, string>();
-      for (const clone of rows) {
-        const customPath = profileImagePathForClone(clone.intake);
-        if (customPath) firstPath.set(clone.id, customPath);
+        return rows.map((c, i) => ({
+          id: c.id,
+          name: c.name,
+          color: chartColorForClone(c.intake, i),
+          photoUrl: photoByClone.get(c.id),
+        }));
+      } catch {
+        // header nav still renders with an empty clone list if the DB is unreachable
+        return [];
       }
-      for (const p of photos ?? []) {
-        if (p.clone_id && !firstPath.has(p.clone_id)) firstPath.set(p.clone_id, p.storage_path);
-      }
-      const entries = [...firstPath.entries()];
-      if (entries.length) {
-        const { data: signed } = await supabaseAdmin.storage
-          .from("media")
-          .createSignedUrls(entries.map((e) => e[1]), 3600);
-        (signed ?? []).forEach((s, i) => {
-          if (s.signedUrl) photoByClone.set(entries[i][0], s.signedUrl);
-        });
-      }
-    }
-
-    clones = rows.map((c, i) => ({
-      id: c.id,
-      name: c.name,
-      color: chartColorForClone(c.intake, i),
-      photoUrl: photoByClone.get(c.id),
-    }));
-  } catch {
-    // header nav still renders with an empty clone list if the DB is unreachable
-  }
-
-  const activeCloneId = await getCloneScope();
+    })(),
+    getCloneScope(),
+  ]);
 
   // All-time cash + stars for the small header readout — scoped by the same
   // clone switcher as everything else, never time-windowed.

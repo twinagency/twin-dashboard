@@ -341,11 +341,21 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
       {/* Named on screen, not just in the console. The operator is the person
           who has to decide whether to pick a shorter window or call someone. */}
       {loadError && (
-        <div className="mb-4 rounded-xl border border-[#b4432f] bg-[#fdecea] px-4 py-3 text-sm text-[#7a2b1e]">
-          <div className="font-semibold">This window could not be loaded.</div>
-          <div className="mt-1 font-mono text-[11px] leading-snug break-words">{loadError}</div>
-          <div className="mt-1 text-[12px]">
-            {data ? "Showing the last window that loaded." : "Try a shorter period. 1D and 1W are much cheaper to compute."}
+        <div className="mb-4 flex items-start gap-3 rounded-xl border border-[#b4432f]/40 bg-[#fdecea] px-4 py-3 text-sm text-[#7a2b1e]">
+          <span aria-hidden className="mt-0.5 text-base leading-none">⚠️</span>
+          <div className="min-w-0 flex-1">
+            <div className="font-semibold">This window could not be loaded.</div>
+            <div className="mt-0.5 text-[12px] text-[#7a2b1e]/90">
+              {data ? "Showing the last window that loaded." : "Try a shorter period. 1D and 1W are much cheaper to compute."}
+            </div>
+            <details className="mt-1.5 group">
+              <summary className="cursor-pointer select-none text-[12px] font-medium text-[#7a2b1e]/80 underline decoration-[#7a2b1e]/30 underline-offset-2 hover:text-[#7a2b1e]">
+                Technical details
+              </summary>
+              <div className="mt-1 break-words rounded-lg bg-[#7a2b1e]/[0.06] px-2.5 py-2 font-mono text-[11px] leading-snug text-[#7a2b1e]/90">
+                {loadError}
+              </div>
+            </details>
           </div>
         </div>
       )}

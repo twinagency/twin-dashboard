@@ -206,43 +206,6 @@ export async function getDashboard(period: Period, range?: DateRange, nowMs = Da
   const windowEnd = window.endMs;
   const gran: Gran = range ? granForSpan(range.endMs - range.startMs) : spec.gran;
 
-  // ── clones ──────────────────────────────────────────────────────────────
-  const { data: cloneRows } = await supabaseAdmin
-    .from("clones")
-    .select("id,slug,name,created_at,intake")
-    .order("created_at", { ascending: true });
-  const clones = (cloneRows ?? []) as { id: string; slug: string; name: string; intake: unknown }[];
-  const colorById = new Map<string, string>();
-  clones.forEach((c, i) => colorById.set(c.id, chartColorForClone(c.intake, i)));
-
-  // Cover photo per clone (first uploaded), batch-signed — so avatars match
-  // the nav and the clones grid everywhere.
-  const photoById = new Map<string, string>();
-  if (clones.length) {
-    const { data: photoRows } = await supabaseAdmin
-      .from("photos")
-      .select("clone_id, storage_path")
-      .in("clone_id", clones.map((c) => c.id))
-      .order("created_at", { ascending: true });
-    const firstPath = new Map<string, string>();
-    for (const clone of clones) {
-      const customPath = profileImagePathForClone(clone.intake);
-      if (customPath) firstPath.set(clone.id, customPath);
-    }
-    for (const p of photoRows ?? []) {
-      if (p.clone_id && !firstPath.has(p.clone_id)) firstPath.set(p.clone_id, p.storage_path);
-    }
-    const entries = [...firstPath.entries()];
-    if (entries.length) {
-      const { data: signed } = await supabaseAdmin.storage
-        .from("media")
-        .createSignedUrls(entries.map((e) => e[1]), 3600);
-      (signed ?? []).forEach((s, i) => {
-        if (s.signedUrl) photoById.set(entries[i][0], s.signedUrl);
-      });
-    }
-  }
-
   const { keys, labels, keyFor } = buildBuckets(startMs, windowEnd, gran);
 
   // ── purchases in window ────────────────────────────────────────────────────
@@ -267,8 +230,7 @@ export async function getDashboard(period: Period, range?: DateRange, nowMs = Da
   // 572,191 against 2,263,157. The read has no ORDER BY, so WHICH thousand rows
   // came back was arbitrary - which is how a WIDER window could show LESS money
   // than a narrower one, the symptom that gave it away.
-  let purchases: PurchaseRow[];
-  {
+  async function loadPurchases(): Promise<PurchaseRow[]> {
     const COLS = "id,clone_id,amount_stars,paid_at,telegram_id,kind,feature,invoice_payload";
     const COLS_LEGACY = "id,clone_id,amount_stars,paid_at,telegram_id,kind,invoice_payload";
     // selectAllRows reports a failed read as an empty result, which here would
@@ -301,9 +263,88 @@ export async function getDashboard(period: Period, range?: DateRange, nowMs = Da
         .order("id", { ascending: true }),
       { label: "dashboard revenue ledger" },
     );
-    purchases = hasFeature
+    return hasFeature
       ? (paged.rows as PurchaseRow[])
       : (paged.rows as Omit<PurchaseRow, "feature">[]).map((r) => ({ ...r, feature: null }));
+  }
+
+  // ── independent reads, fired together ───────────────────────────────────────
+  // clones, the revenue ledger, the usage/cost rollup and the three per-clone
+  // user-stats calls share no inputs — each used to `await` in series, so the
+  // page paid for every one of their round trips back to back. Measured
+  // 2026-09-02: ~15 sequential Supabase calls on this one page load, several of
+  // them multi-second. None of these six depend on another's result, only on
+  // `startMs`/`windowEnd` computed above, so they run concurrently instead.
+  const [cloneRows, purchases, usage, userStats, fleetStats, reachableStats] = await Promise.all([
+    supabaseAdmin
+      .from("clones")
+      .select("id,slug,name,created_at,intake")
+      .order("created_at", { ascending: true })
+      .then((r) => r.data),
+    loadPurchases(),
+    // Aggregated in SQL (migration 120). This read used to page every row: 330,849
+    // of them in a 30 day window, which is ~200 sequential round trips AND past
+    // selectAllRows()'s 200,000 row ceiling, so the cost it reported was a lower
+    // bound with nothing on the page to say so. The rollup is 143ms and complete.
+    usageRollup(startMs, windowEnd),
+    // migration 122. The 120 function this replaced took only a p_active_since and
+    // counted fans/messages/buyers over the whole users table, so five tiles sat
+    // on lifetime totals while the period filter moved the other six — the bug
+    // Ronan reported on 2026-08-21. Both ends are bounded now, and by the same
+    // window the chart and the revenue totals above already use.
+    //
+    // `messages` now counts chat_history rows rather than summing
+    // users.total_messages_sent, because only the former has a timestamp to filter
+    // on. The ALL view therefore reads lower than it used to (271k vs 641k) — the
+    // header of migration 122 explains why both numbers are correct.
+    cloneUserStatsWindow(startMs, windowEnd),
+    // The two figures that must NOT move with the filter. Asking "how many can I
+    // message, over the last 3 months" is not a question, and neither is "how big
+    // is my audience, over the last 3 months".
+    //
+    // totalFans comes from migration 120's all-time rollup: every fan on the
+    // clone, imports included, which is what audience size means.
+    cloneUserStats(now - MS_DAY),
+    // reachable24h comes from the WINDOWED function instead of fleetStats.active,
+    // even though both mean "messaged in the last 24h" and both currently agree.
+    // Migration 120's version has no guard against the timestamps the cutover
+    // import forged (migration 124), and it is clean here only because the newest
+    // forged stamp is 2026-08-09 and has aged out of a 24h window. That is
+    // correct-by-coincidence, and the coincidence is what let the same defect sit
+    // undetected in the Users tile. This one is correct by construction.
+    cloneUserStatsWindow(now - MS_DAY, now),
+  ]);
+  const clones = (cloneRows ?? []) as { id: string; slug: string; name: string; intake: unknown }[];
+  const colorById = new Map<string, string>();
+  clones.forEach((c, i) => colorById.set(c.id, chartColorForClone(c.intake, i)));
+
+  // Cover photo per clone (first uploaded), batch-signed — so avatars match
+  // the nav and the clones grid everywhere. Depends on `clones` above, so it
+  // stays a second stage rather than joining the Promise.all.
+  const photoById = new Map<string, string>();
+  if (clones.length) {
+    const { data: photoRows } = await supabaseAdmin
+      .from("photos")
+      .select("clone_id, storage_path")
+      .in("clone_id", clones.map((c) => c.id))
+      .order("created_at", { ascending: true });
+    const firstPath = new Map<string, string>();
+    for (const clone of clones) {
+      const customPath = profileImagePathForClone(clone.intake);
+      if (customPath) firstPath.set(clone.id, customPath);
+    }
+    for (const p of photoRows ?? []) {
+      if (p.clone_id && !firstPath.has(p.clone_id)) firstPath.set(p.clone_id, p.storage_path);
+    }
+    const entries = [...firstPath.entries()];
+    if (entries.length) {
+      const { data: signed } = await supabaseAdmin.storage
+        .from("media")
+        .createSignedUrls(entries.map((e) => e[1]), 3600);
+      (signed ?? []).forEach((s, i) => {
+        if (s.signedUrl) photoById.set(entries[i][0], s.signedUrl);
+      });
+    }
   }
 
   // The signed ledger is the source of truth for net revenue and the chart.
@@ -331,11 +372,7 @@ export async function getDashboard(period: Period, range?: DateRange, nowMs = Da
   });
 
   // ── AI/voice cost in window (usage_events) ──────────────────────────────────
-  // Aggregated in SQL (migration 120). This read used to page every row: 330,849
-  // of them in a 30 day window, which is ~200 sequential round trips AND past
-  // selectAllRows()'s 200,000 row ceiling, so the cost it reported was a lower
-  // bound with nothing on the page to say so. The rollup is 143ms and complete.
-  const usage = await usageRollup(startMs, windowEnd);
+  // Fetched above, in parallel with the other independent reads.
   const cloneCost = new Map<string, number>();
   const cloneCalls = new Map<string, number>();
   const cloneErrors = new Map<string, number>();
@@ -372,35 +409,10 @@ export async function getDashboard(period: Period, range?: DateRange, nowMs = Da
   const cloneTxPerFan = ledger.clonePaidOrdersPerFan;
 
   // ── per-clone user stats, INSIDE THE WINDOW ─────────────────────────────────
-  // migration 122. The 120 function this replaced took only a p_active_since and
-  // counted fans/messages/buyers over the whole users table, so five tiles sat
-  // on lifetime totals while the period filter moved the other six — the bug
-  // Ronan reported on 2026-08-21. Both ends are bounded now, and by the same
-  // window the chart and the revenue totals above already use.
-  //
-  // `messages` now counts chat_history rows rather than summing
-  // users.total_messages_sent, because only the former has a timestamp to filter
-  // on. The ALL view therefore reads lower than it used to (271k vs 641k) — the
-  // header of migration 122 explains why both numbers are correct.
-  const userStats = await cloneUserStatsWindow(startMs, windowEnd);
-  // The two figures that must NOT move with the filter. Asking "how many can I
-  // message, over the last 3 months" is not a question, and neither is "how big
-  // is my audience, over the last 3 months".
-  //
-  // totalFans comes from migration 120's all-time rollup: every fan on the
-  // clone, imports included, which is what audience size means.
-  const fleetStats = await cloneUserStats(now - MS_DAY);
+  // userStats/fleetStats/reachableStats all fetched above, in parallel.
   const totalFansByClone = new Map<string, number>();
   for (const row of fleetStats) totalFansByClone.set(row.clone_id, Number(row.fans) || 0);
 
-  // reachable24h comes from the WINDOWED function instead of fleetStats.active,
-  // even though both mean "messaged in the last 24h" and both currently agree.
-  // Migration 120's version has no guard against the timestamps the cutover
-  // import forged (migration 124), and it is clean here only because the newest
-  // forged stamp is 2026-08-09 and has aged out of a 24h window. That is
-  // correct-by-coincidence, and the coincidence is what let the same defect sit
-  // undetected in the Users tile. This one is correct by construction.
-  const reachableStats = await cloneUserStatsWindow(now - MS_DAY, now);
   const reachableByClone = new Map<string, number>();
   for (const row of reachableStats) reachableByClone.set(row.clone_id, Number(row.active) || 0);
   const perClone: Record<string, CloneStats> = {};
