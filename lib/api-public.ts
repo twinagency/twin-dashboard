@@ -18,6 +18,7 @@
 import { getAnalytics, type AnalyticsData } from "./analytics-data";
 import type { Period, DateRange } from "./dashboard-data";
 import { supabaseAdmin } from "./supabase";
+import { STAR_USD, AUD_PER_USD } from "./money";
 
 // The fan fields a model may see about her OWN fans.
 //
@@ -64,7 +65,14 @@ export const NEVER_PUBLIC = [
 export type PublicRevenue = {
   period: Period;
   range: DateRange | null;
-  totals: { revenueStars: number; sales: number; fans: number; buyers: number };
+  totals: {
+    revenueStars: number;
+    revenueUsd: number;
+    revenueAud: number;
+    sales: number;
+    fans: number;
+    buyers: number;
+  };
   byKind: { key: string; label: string; stars: number; sales: number; share: number }[];
   byFeature: { key: string; label: string; stars: number; sales: number; avgStars: number; share: number }[];
   byDay: { label: string; stars: number }[];
@@ -89,6 +97,11 @@ export function projectRevenue(a: AnalyticsData, range: DateRange | null): Publi
     range,
     totals: {
       revenueStars: a.totals.revenueStars,
+      // Static STAR_USD/AUD_PER_USD conversion (lib/money.ts), not a live FX
+      // rate. This is revenue only, not cost or profit, so it does not touch
+      // the "our margin never leaves the building" boundary above.
+      revenueUsd: a.totals.revenueStars * STAR_USD,
+      revenueAud: a.totals.revenueStars * STAR_USD * AUD_PER_USD,
       sales: a.totals.sales,
       fans: a.totals.fans,
       buyers: a.totals.buyers,
@@ -164,6 +177,8 @@ export type PublicFleetModel = {
   id: string;
   name: string;
   revenueStars: number;
+  revenueUsd: number;
+  revenueAud: number;
   sales: number;
 };
 
@@ -182,6 +197,8 @@ export function projectFleetRevenue(a: AnalyticsData, range: DateRange | null): 
       id: c.id,
       name: c.name,
       revenueStars: c.revenueStars,
+      revenueUsd: c.revenueStars * STAR_USD,
+      revenueAud: c.revenueStars * STAR_USD * AUD_PER_USD,
       sales: c.sales,
       // c.costUsd, c.profitUsd and c.margin are deliberately absent.
     })),

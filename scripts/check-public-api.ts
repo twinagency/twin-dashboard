@@ -506,7 +506,11 @@ check("G2 the per-model breakdown carries revenue only, never our margin on her"
   eq(p.models[1].name, "Model B", "the other model IS visible to a fleet key, on purpose");
   for (const m of p.models) {
     const got = Object.keys(m).sort().join(",");
-    eq(got, "id,name,revenueStars,sales", "the per-model shape must be exactly these four fields");
+    eq(
+      got,
+      "id,name,revenueAud,revenueStars,revenueUsd,sales",
+      "the per-model shape must be exactly these six fields",
+    );
   }
 });
 

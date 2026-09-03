@@ -22,6 +22,7 @@
 
 import type { PublicRevenue, PublicFans } from "./api-public";
 import type { Period, DateRange } from "./dashboard-data";
+import { STAR_USD, AUD_PER_USD } from "./money";
 
 // mulberry32: small, fast, deterministic. Not cryptographic and does not need
 // to be — nothing here protects anything.
@@ -143,7 +144,14 @@ export function simRevenue(seed: number, period: Period, nowMs: number, range?: 
   return {
     period,
     range: range ?? null,
-    totals: { revenueStars: totalStars, sales: totalSales, fans, buyers },
+    totals: {
+      revenueStars: totalStars,
+      revenueUsd: totalStars * STAR_USD,
+      revenueAud: totalStars * STAR_USD * AUD_PER_USD,
+      sales: totalSales,
+      fans,
+      buyers,
+    },
     byKind: KINDS.map((k, i) => ({
       key: k.key,
       label: k.label,

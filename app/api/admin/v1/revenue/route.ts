@@ -2,6 +2,7 @@ import { withAdmin, ok, jsonError, fromQueryError } from "@/lib/api-route";
 import { type Period } from "@/lib/dashboard-data";
 import { getRevenueRollup } from "@/lib/revenue-cache";
 import { resolveClone, parseRevenueWindow, isQueryError } from "@/lib/api-read";
+import { STAR_USD, AUD_PER_USD } from "@/lib/money";
 
 export const dynamic = "force-dynamic";
 
@@ -49,6 +50,11 @@ export const GET = withAdmin(async (req) => {
     cachedAt,
     ageSeconds,
     stale,
+    // Static STAR_USD/AUD_PER_USD conversion (lib/money.ts), not a live FX
+    // rate. dashboard/analytics below already carry costUsd/profitUsd in USD;
+    // this is the same conversion applied to revenueStars for convenience.
+    revenueUsd: analytics.totals.revenueStars * STAR_USD,
+    revenueAud: analytics.totals.revenueStars * STAR_USD * AUD_PER_USD,
     dashboard,
     analytics,
     caveats: [
