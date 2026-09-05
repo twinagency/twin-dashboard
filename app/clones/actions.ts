@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { invalidateCloneCaches } from "@/lib/query-cache";
 import { supabaseAdmin } from "@/lib/supabase";
 import { compileClone } from "@/lib/compiler";
 import { INTAKE_FIELD_KEYS, assembleAnswers } from "@/lib/intake";
@@ -1073,6 +1074,7 @@ export async function createCloneRow(fd: FormData): Promise<string> {
   if (!data) throw new Error("insert returned no row");
   revalidatePath("/");
   revalidatePath("/clones");
+  await invalidateCloneCaches();
   return data.id;
 }
 
@@ -1128,6 +1130,7 @@ export async function updateClone(id: string, fd: FormData) {
   revalidatePath("/revenue");
   revalidatePath("/clones");
   revalidatePath(`/clones/${id}`);
+  await invalidateCloneCaches();
 }
 
 export async function deleteClone(id: string) {
@@ -1135,6 +1138,7 @@ export async function deleteClone(id: string) {
   if (error) throw new Error(error.message);
   revalidatePath("/");
   revalidatePath("/clones");
+  await invalidateCloneCaches();
 }
 
 // One-click pause/resume: flip status active↔paused. The running bot reconciles
@@ -1147,6 +1151,7 @@ export async function toggleClonePause(id: string, pause: boolean) {
   if (error) throw new Error(error.message);
   revalidatePath("/");
   revalidatePath("/clones");
+  await invalidateCloneCaches();
 }
 
 // Compile this clone's prompts from its intake answers (AI fills the templates).
@@ -1155,6 +1160,7 @@ export async function compileCloneAction(id: string) {
   revalidatePath("/");
   revalidatePath("/clones");
   revalidatePath(`/clones/${id}`);
+  await invalidateCloneCaches();
 }
 
 export async function setStatus(id: string, status: "active" | "paused") {
@@ -1165,6 +1171,7 @@ export async function setStatus(id: string, status: "active" | "paused") {
   if (error) throw new Error(error.message);
   revalidatePath("/");
   revalidatePath(`/clones/${id}`);
+  await invalidateCloneCaches();
 }
 
 // One-click feature toggle, same shape as toggleClonePause above (single
@@ -1188,6 +1195,7 @@ export async function setCloneToggle(id: string, field: CloneToggleField, value:
   if (error) throw new Error(error.message);
   revalidatePath("/");
   revalidatePath(`/clones/${id}`);
+  await invalidateCloneCaches();
 }
 
 // Same shape as setCloneToggle above, for the tone/behavior "dial" columns
@@ -1210,4 +1218,5 @@ export async function setCloneDial(id: string, field: CloneDialField, value: str
   if (error) throw new Error(error.message);
   revalidatePath("/");
   revalidatePath(`/clones/${id}`);
+  await invalidateCloneCaches();
 }

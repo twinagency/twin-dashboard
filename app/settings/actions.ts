@@ -2,6 +2,7 @@
 
 import { supabaseAdmin } from "@/lib/supabase";
 import { revalidatePath } from "next/cache";
+import { invalidateCloneCaches } from "@/lib/query-cache";
 import type { Clone } from "@/lib/types";
 import { API_KEY_FIELDS, CLONE_DEFAULTS_KEY } from "./fields";
 
@@ -17,6 +18,7 @@ export async function saveApiKeys(fd: FormData) {
     await supabaseAdmin.from("app_settings").upsert({ key, value: v, updated_at: now });
   }
   revalidatePath("/settings");
+  await invalidateCloneCaches();
 }
 
 // Which keys are currently set (for a masked status display — never returns the
@@ -218,6 +220,7 @@ export async function saveCloneDefaults(fd: FormData) {
   revalidatePath("/settings");
   revalidatePath("/clones/new");
   revalidatePath("/clones");
+  await invalidateCloneCaches();
 }
 
 // category_pricing is excluded from the fields pushed onto EXISTING clones
@@ -270,6 +273,7 @@ export async function setCloneUsesDefault(cloneId: string, usesDefault: boolean)
   revalidatePath("/settings");
   revalidatePath("/clones");
   revalidatePath(`/clones/${cloneId}`);
+  await invalidateCloneCaches();
 }
 
 // "Push to selected clones now" — apply the CURRENTLY SAVED template onto the
@@ -283,6 +287,7 @@ export async function pushDefaultsToClones(cloneIds: string[]): Promise<void> {
   revalidatePath("/settings");
   revalidatePath("/clones");
   for (const id of cloneIds) revalidatePath(`/clones/${id}`);
+  await invalidateCloneCaches();
 }
 
 // ── Models in use, for the OpenRouter request-fields panel ────────────────────

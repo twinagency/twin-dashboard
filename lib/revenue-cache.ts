@@ -22,6 +22,13 @@
 //
 // This is deliberately the same shape as rosai's app/core/revenue.py, which had
 // to solve the identical problem one layer up, against this API.
+//
+// WIPED ON EVERY DEPLOY. This Map lives in the single long-lived container's
+// process (twin-ops/deploy.sh, `--memory=1g`), so a deploy or any container
+// restart starts cold and the first Revenue open after it waits the full
+// minute-plus. That is EXPECTED, not a bug — there is no shared cache tier and
+// deliberately no Redis. Same for the unstable_cache entries in
+// lib/query-cache.ts.
 
 import { getAnalytics, type AnalyticsData } from "./analytics-data";
 import { getDashboard, type DashboardData, type DateRange, type Period } from "./dashboard-data";
@@ -153,7 +160,15 @@ export async function getRevenueRollup(
   return { ...entry.value, cachedAt: entry.fetchedAt, ageSeconds: 0, stale: false };
 }
 
-/** Drop everything. For the "Refresh" affordance and for tests. */
+/**
+ * Drop everything. For the "Refresh" affordance and for tests.
+ *
+ * Server actions that mutate clone config should NOT call this directly — call
+ * invalidateCloneCaches() in lib/query-cache.ts, which clears this map and
+ * revalidates the tagged unstable_cache entries in one go. Wiring only one of
+ * the two leaves the dashboard half-stale, which is worse than either alone
+ * because the header and the tiles then disagree.
+ */
 export function clearRevenueCache() {
   cache.clear();
 }

@@ -10,9 +10,7 @@ import TopBar from "@/components/TopBar";
 import MainShell from "@/components/MainShell";
 import TwinWordmark from "@/components/TwinWordmark";
 import TwinUpdatePopup from "@/components/TwinVersionBadge";
-import { getTwinVersion } from "@/lib/twin-version";
-import { supabaseAdmin } from "@/lib/supabase";
-import { chartColorForClone, profileImagePathForClone } from "@/lib/colors";
+import { getCachedTwinVersion, getFleetClones, getHeaderAllTimeStars } from "@/lib/query-cache";
 import { isAuthed } from "@/lib/auth";
 import { getCloneScope } from "@/lib/clone-scope";
 import { Inter, Inter_Tight, Space_Grotesk } from "next/font/google";
@@ -65,55 +63,18 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // lib/analytics-data.ts. This runs on every full/hard page load (see the
   // note below on why it does NOT re-run on client-side nav), so it is the
   // first-load cost, not the per-navigation one.
+  //
+  // All three now come from lib/query-cache.ts. The bodies that used to be
+  // inline here moved there unchanged — same queries, same shapes, same
+  // "render the shell anyway if the DB is unreachable" fallbacks — so that a
+  // repeat page load serves them from cache instead of re-running four round
+  // trips (clones, photos, twin_versions, plus the RPC below) on every hard
+  // load. See that file for the TTLs and for the keying rule; note in
+  // particular that the avatar URLs are still signed fresh on every request,
+  // only the storage paths are cached.
   const [twinVersion, clones, activeCloneId] = await Promise.all([
-    getTwinVersion(),
-    (async (): Promise<{ id: string; name: string; color: string; photoUrl?: string }[]> => {
-      try {
-        const { data } = await supabaseAdmin
-          .from("clones")
-          .select("id,name,intake")
-          .order("created_at", { ascending: true });
-        const rows = (data ?? []) as { id: string; name: string; intake: unknown }[];
-
-        // Cover photo per clone (first uploaded), batch-signed for the avatars.
-        const photoByClone = new Map<string, string>();
-        const ids = rows.map((r) => r.id);
-        if (ids.length) {
-          const { data: photos } = await supabaseAdmin
-            .from("photos")
-            .select("clone_id, storage_path")
-            .in("clone_id", ids)
-            .order("created_at", { ascending: true });
-          const firstPath = new Map<string, string>();
-          for (const clone of rows) {
-            const customPath = profileImagePathForClone(clone.intake);
-            if (customPath) firstPath.set(clone.id, customPath);
-          }
-          for (const p of photos ?? []) {
-            if (p.clone_id && !firstPath.has(p.clone_id)) firstPath.set(p.clone_id, p.storage_path);
-          }
-          const entries = [...firstPath.entries()];
-          if (entries.length) {
-            const { data: signed } = await supabaseAdmin.storage
-              .from("media")
-              .createSignedUrls(entries.map((e) => e[1]), 3600);
-            (signed ?? []).forEach((s, i) => {
-              if (s.signedUrl) photoByClone.set(entries[i][0], s.signedUrl);
-            });
-          }
-        }
-
-        return rows.map((c, i) => ({
-          id: c.id,
-          name: c.name,
-          color: chartColorForClone(c.intake, i),
-          photoUrl: photoByClone.get(c.id),
-        }));
-      } catch {
-        // header nav still renders with an empty clone list if the DB is unreachable
-        return [];
-      }
-    })(),
+    getCachedTwinVersion(),
+    getFleetClones(),
     getCloneScope(),
   ]);
 
@@ -126,15 +87,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // never moved. Same defect the two paged star_transactions reads in
   // lib/dashboard-data.ts and lib/analytics-data.ts already carry comments about.
   // Money out of this table is paged or aggregated in SQL, never bare-selected.
-  let allTimeStars = 0;
-  try {
-    const { data } = await supabaseAdmin.rpc("revenue_all_time_stars", {
-      p_clone: activeCloneId ?? null,
-    });
-    allTimeStars = Number(data ?? 0);
-  } catch {
-    // header still renders with zero if the DB is unreachable
-  }
+  //
+  // Cached for 60s, the same bound lib/revenue-cache.ts puts on every other
+  // money number here. activeCloneId is passed as an explicit argument and ends
+  // up in the cache key — it must never be read from the cookie inside the
+  // cached function, or one operator's clone total would be served as another's.
+  const allTimeStars = await getHeaderAllTimeStars(activeCloneId);
 
   // NOTE: nothing below may depend on `pathname` — this layout does NOT
   // re-render on client-side navigation, so any path-derived value computed

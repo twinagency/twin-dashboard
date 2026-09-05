@@ -1,5 +1,5 @@
 import { supabaseAdmin } from "./supabase";
-import { selectAllRows } from "./select-all";
+import { selectAllRows, selectAllRowsParallel } from "./select-all";
 import { chartColorForClone } from "./colors";
 import {
   conversationFunnel,
@@ -216,10 +216,30 @@ export type AnalyticsData = {
 const iso = (ms: number) => new Date(ms).toISOString();
 
 // `revenue_messaged_fans` gives the denominator for active-chat conversion as
-// one exact SQL count. The numerator needs the intersection with the paid
-// buyer IDs already read from the ledger, so query only those candidates rather
-// than paging the entire chat table again. PostgREST encodes `.in()` values in
-// the URL; batching keeps a busy window from producing an oversized request.
+// one exact SQL count. The numerator is the intersection of that cohort with
+// the paid buyer IDs already read from the ledger, and migration 137 makes it
+// one exact SQL count too.
+//
+// THE ROUND TRIPS THIS REPLACES. The old path sliced the buyer ids into
+// batches of 300 (PostgREST puts `.in()` values in the URL, so a busy window
+// overflowed the request line) and then paged chat_history 1,000 rows at a
+// time, SEQUENTIALLY, for every batch. On a cloud-hosted database every one of
+// those pages is an internet round trip: ~23 of them, one after another, to
+// produce a single COUNT(DISTINCT telegram_id) whose row payloads were all
+// discarded. See db/migrations/137_active_chat_buyers_rpc.sql for the measured
+// cost and for why `count: "exact", head: true` cannot substitute (PostgREST
+// counts rows, not distinct fans, so it would count a chatty buyer once per
+// message and push the rate over 100%).
+//
+// The array now travels in an RPC POST body, so it is not URL-bound and does
+// not need 300-row batches. A very large ALL-window list is still chunked, but
+// at a size where the limit is statement size rather than the request line, and
+// the chunks go out in parallel. The chunks partition a Set, so no telegram_id
+// appears in two of them and summing per-chunk distinct counts is the exact
+// total, not an approximation.
+const ACTIVE_BUYER_RPC_CHUNK = 10_000;
+
+// Only the pre-migration fallback below needs the small URL-bound batches.
 const ACTIVE_BUYER_ID_BATCH = 300;
 
 async function activeChatBuyerCount(
@@ -231,6 +251,61 @@ async function activeChatBuyerCount(
   if (paidBuyerIds.size === 0) return 0;
 
   const buyers = [...paidBuyerIds];
+  const chunks: number[][] = [];
+  for (let from = 0; from < buyers.length; from += ACTIVE_BUYER_RPC_CHUNK) {
+    chunks.push(buyers.slice(from, from + ACTIVE_BUYER_RPC_CHUNK));
+  }
+
+  const counts = await Promise.all(
+    chunks.map((chunk) =>
+      supabaseAdmin.rpc("revenue_active_chat_buyers", {
+        p_start: iso(startMs),
+        p_end: iso(endMs),
+        p_clone: cloneId ?? null,
+        p_buyers: chunk,
+      }),
+    ),
+  );
+
+  // NO SILENT FALLBACK, except for the one condition that is genuinely "the SQL
+  // is not applied yet". PGRST202 = no such function in PostgREST's schema
+  // cache, 42883 = undefined_function. Same two codes lib/rollup.ts treats as
+  // missing, and the same reasoning: a statement timeout (57014) must NOT drop
+  // back to the paged path, because that path is ~23 round trips against a
+  // database that has just said it is overloaded, and because a fallback taken
+  // for the wrong reason is how a page ends up with two answers to one question.
+  const missing = counts.find(
+    (result) => result.error && (result.error.code === "PGRST202" || result.error.code === "42883"),
+  );
+  if (missing) {
+    return activeChatBuyerCountPaged(startMs, endMs, cloneId, buyers);
+  }
+  const failed = counts.find((result) => result.error);
+  if (failed?.error) {
+    throw new Error(
+      `revenue_active_chat_buyers failed: ${failed.error.message} (code ${failed.error.code ?? "none"}). ` +
+        `The function exists, so this is not the pre-migration-137 case; refusing to publish a partial conversion rate.`,
+    );
+  }
+
+  return counts.reduce((total, result) => total + (Number(result.data) || 0), 0);
+}
+
+// The pre-migration-137 path, unchanged in behaviour: page every matching chat
+// row and count distinct ids in JS. Kept ONLY so the Analytics page keeps
+// working between this code shipping and the migration being applied. Delete it
+// (and its caller above) once 137 is applied.
+//
+// It still throws rather than publish a partial count. That guard is the whole
+// reason this is safe to keep: a truncated read here would understate the
+// numerator of a conversion rate, which reads as "our buyers stopped talking to
+// us" rather than as "the read did not finish".
+async function activeChatBuyerCountPaged(
+  startMs: number,
+  endMs: number,
+  cloneId: string | null | undefined,
+  buyers: number[],
+): Promise<number> {
   const matched = new Set<number>();
   for (let from = 0; from < buyers.length; from += ACTIVE_BUYER_ID_BATCH) {
     const batch = buyers.slice(from, from + ACTIVE_BUYER_ID_BATCH);
@@ -412,12 +487,19 @@ export async function getAnalytics(
     const COLS_LEGACY = "id,clone_id,amount_stars,paid_at,kind,telegram_id,invoice_payload";
     const probe = await supabaseAdmin.from("star_transactions").select(COLS).limit(1);
     const hasFeature = !probe.error;
-    let q = supabaseAdmin
-      .from("star_transactions")
-      .select(hasFeature ? COLS : COLS_LEGACY)
-      .gte("paid_at", iso(startMs))
-      .lte("paid_at", iso(windowEnd));
-    if (cloneId) q = q.eq("clone_id", cloneId);
+    // A FACTORY, not a built query: selectAllRowsParallel fetches several ranges
+    // at once and .range() mutates the builder it is called on, so every page
+    // needs its own. Same columns, same window, same clone scope, same ORDER BY
+    // on each call — that sameness is what makes the concurrent ranges line up.
+    const makeQuery = () => {
+      let q = supabaseAdmin
+        .from("star_transactions")
+        .select(hasFeature ? COLS : COLS_LEGACY)
+        .gte("paid_at", iso(startMs))
+        .lte("paid_at", iso(windowEnd));
+      if (cloneId) q = q.eq("clone_id", cloneId);
+      return q.order("id", { ascending: true });
+    };
     // ORDER BY id is not tidiness, it is correctness. selectAllRows walks this
     // table 1,000 rows at a time with .range(), and star_transactions is being
     // inserted into while the walk runs — without a stable sort, rows shift
@@ -426,7 +508,14 @@ export async function getAnalytics(
     // 22,285 were distinct, 26% double-counted, and the cost total came out at
     // 37.38 against a true 33.94. That check orders by id; this read did not,
     // so the suite could not see the defect in the code the page actually runs.
-    const { rows } = await selectAllRows(q.order("id", { ascending: true }), {
+    // Paged CONCURRENTLY after the first page. star_transactions is only ~8.6k
+    // rows, so this is not a row-volume problem and deliberately does not get a
+    // rollup table (migration 136 says why) — but on a cloud database the ALL
+    // window is still ~9 sequential internet round trips for the ledger every
+    // analytics load, and that is the shape 1M/ALL was timing out in. A short
+    // window still costs exactly one round trip: the first page is fetched
+    // alone and a short page ends the read there.
+    const { rows } = await selectAllRowsParallel(makeQuery, {
       label: "analytics revenue ledger",
     });
     return hasFeature

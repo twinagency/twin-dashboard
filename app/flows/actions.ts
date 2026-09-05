@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { invalidateCloneCaches } from "@/lib/query-cache";
 import { randomUUID } from "node:crypto";
 import { supabaseAdmin } from "@/lib/supabase";
 
@@ -294,4 +295,5 @@ export async function saveCampaign(id: string, fd: FormData) {
   revalidatePath("/");
   revalidatePath(`/clones/${id}`);
   revalidatePath("/flows");
+  await invalidateCloneCaches();
 }
