@@ -31,12 +31,12 @@ export type CrmPreviewView = "inbox" | "fans" | "campaigns" | "team" | "platform
 type Tone = "navy" | "blue" | "green" | "pink" | "slate" | "gold";
 
 const TONE: Record<Tone, string> = {
-  navy: "bg-[#06172f] text-white",
-  blue: "bg-[#e6f3fb] text-[#176596]",
-  green: "bg-[#e4f7f1] text-[#087a61]",
-  pink: "bg-[#fff0f7] text-[#b62b70]",
-  slate: "bg-[#eef4f8] text-[#3f5d76]",
-  gold: "bg-[#fff7dc] text-[#966b05]",
+  navy: "bg-[#0b2b4b] text-white",
+  blue: "bg-[#edf3fc] text-[#2f6fed]",
+  green: "bg-[#e8f5f0] text-[#138a63]",
+  pink: "bg-[#fff4f8] text-[#9b2f62]",
+  slate: "bg-[#eef2f6] text-[#607086]",
+  gold: "bg-[#fff6e5] text-[#9a6810]",
 };
 
 const tabs: { view: CrmPreviewView; href: string; label: string }[] = [
@@ -48,7 +48,7 @@ const tabs: { view: CrmPreviewView; href: string; label: string }[] = [
 ];
 
 function Dot({ tone = "green" }: { tone?: "green" | "blue" | "pink" | "gold" }) {
-  const colour = { green: "bg-good", blue: "bg-info", pink: "bg-love", gold: "bg-[#d69a08]" }[tone];
+  const colour = { green: "bg-good", blue: "bg-info", pink: "bg-love", gold: "bg-warn" }[tone];
   return <span className={`inline-block size-2 rounded-full ${colour}`} />;
 }
 
@@ -83,12 +83,12 @@ function PageHeader({ title, detail, action }: { title: string; detail: string; 
     <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
       <div>
         <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-[0.15em] text-accent-2">
-          <span className="size-1.5 rounded-full bg-love" /> CRM workspace
+          <span className="size-1.5 rounded-full bg-accent-2" /> CRM workspace
         </div>
         <h1 className="mt-2 font-heading text-3xl font-semibold tracking-[-0.045em] text-ink sm:text-4xl">{title}</h1>
         <p className="mt-2 max-w-2xl text-sm leading-6 text-muted">{detail}</p>
       </div>
-      {action ? <div className="inline-flex h-10 items-center justify-center gap-2 rounded-xl bg-accent px-4 text-sm font-semibold text-white shadow-[0_12px_22px_rgb(6_23_47/0.16)]"><Plus className="size-4" />{action}</div> : null}
+      {action ? <div className="inline-flex h-10 items-center justify-center gap-2 rounded-lg bg-accent-2 px-4 text-sm font-semibold text-white shadow-[0_6px_14px_rgb(47_111_237/0.18)]"><Plus className="size-4" />{action}</div> : null}
     </div>
   );
 }
@@ -130,7 +130,7 @@ function Inbox() {
       <PageHeader title="Inbox" detail="One place for every creator conversation, with the people who need attention first." action="New message" />
       <CrmTabs view="inbox" />
       <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <Metric label="Needs a reply" value="14" note="across 6 creators" tone="pink" icon={BellRing} />
+        <Metric label="Needs a reply" value="14" note="across 6 creators" tone="gold" icon={BellRing} />
         <Metric label="Priority fans" value="8" note="VIP or ready to buy" tone="gold" icon={Flame} />
         <Metric label="Manual takeover" value="3" note="AI paused" tone="blue" icon={UserRound} />
         <Metric label="Reply time" value="2m 14s" note="team average" tone="green" icon={Clock3} />
@@ -142,7 +142,7 @@ function Inbox() {
             <div className="flex gap-2 overflow-x-auto border-b border-line px-4 py-3"><QuietLabel tone="navy">All 28</QuietLabel><QuietLabel>Unread 14</QuietLabel><QuietLabel tone="gold">VIP 8</QuietLabel></div>
             <div className="divide-y divide-line/80">
               {threads.map((thread) => (
-                <div key={thread.name} className={`flex gap-3 px-4 py-3.5 ${thread.active ? "border-l-[3px] border-accent bg-[#edf6fb] pl-[13px]" : ""}`}>
+                <div key={thread.name} className={`flex gap-3 px-4 py-3.5 ${thread.active ? "border-l-[3px] border-accent-2 bg-accent-2/[0.045] pl-[13px]" : ""}`}>
                   <div className="relative"><Avatar name={thread.name} tone={thread.tone} /><span className="absolute -bottom-0.5 -right-0.5 rounded-full border-2 border-white bg-good p-1" /></div>
                   <div className="min-w-0 flex-1"><div className="flex items-center justify-between gap-2"><span className="truncate text-sm font-semibold text-ink">{thread.name}</span><span className="text-[11px] text-muted">{thread.time}</span></div><p className="mt-0.5 truncate text-xs text-muted">{thread.text}</p>{thread.badge ? <div className="mt-1.5"><QuietLabel tone={thread.tone}>{thread.badge}</QuietLabel></div> : null}</div>
                 </div>
@@ -151,7 +151,7 @@ function Inbox() {
           </section>
           <section className="flex min-h-[420px] flex-col border-b border-line xl:border-b-0 xl:border-r">
             <div className="flex items-center justify-between border-b border-line px-5 py-4"><div className="flex items-center gap-3"><Avatar name="Fan 1842" tone="gold" /><div><div className="font-semibold text-ink">Fan 1842 <QuietLabel tone="gold">VIP</QuietLabel></div><div className="mt-0.5 flex items-center gap-1.5 text-xs text-muted"><Dot /> Active now · True Kait</div></div></div><MoreHorizontal className="size-5 text-muted" /></div>
-            <div className="flex-1 space-y-4 bg-[#f6fafc] p-5">
+            <div className="flex-1 space-y-4 bg-[#f8fafc] p-5">
               <div className="max-w-[82%] rounded-2xl rounded-tl-md bg-white px-4 py-3 text-sm leading-6 text-ink shadow-sm">you’re so sweet for saying that. i saved something just for later tonight 🤍<div className="mt-1 text-[10px] text-muted">8:42 PM</div></div>
               <div className="ml-auto max-w-[82%] rounded-2xl rounded-tr-md bg-accent px-4 py-3 text-sm leading-6 text-white">that sounds perfect honestly<div className="mt-1 text-[10px] text-white/60">8:43 PM · Read</div></div>
               <div className="max-w-[82%] rounded-2xl rounded-tl-md bg-white px-4 py-3 text-sm leading-6 text-ink shadow-sm">okay then, tell me what kind of mood you’re in and i’ll pick the right one ✨<div className="mt-1 text-[10px] text-muted">8:43 PM</div></div>
@@ -161,9 +161,9 @@ function Inbox() {
           </section>
           <aside className="bg-white p-5">
             <div className="flex items-center gap-3"><Avatar name="Fan 1842" tone="gold" size="lg" /><div><div className="font-semibold text-ink">Fan 1842</div><div className="text-xs text-muted">Joined 28 Jul</div></div></div>
-            <div className="mt-5 grid grid-cols-2 gap-2"><div className="rounded-xl bg-[#e4f7f1] p-3"><div className="text-[11px] font-medium text-good">Lifetime spend</div><div className="mt-1 text-lg font-semibold text-good">$412</div></div><div className="rounded-xl bg-[#fff7dc] p-3"><div className="text-[11px] font-medium text-[#966b05]">Purchases</div><div className="mt-1 text-lg font-semibold text-[#966b05]">12</div></div></div>
+            <div className="mt-5 grid grid-cols-2 gap-2"><div className="rounded-xl bg-[#e8f5f0] p-3"><div className="text-[11px] font-medium text-good">Lifetime spend</div><div className="mt-1 text-lg font-semibold text-good">$412</div></div><div className="rounded-xl bg-[#fff6e5] p-3"><div className="text-[11px] font-medium text-[#9a6810]">Purchases</div><div className="mt-1 text-lg font-semibold text-[#9a6810]">12</div></div></div>
             <div className="mt-6"><div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">Tags</div><div className="mt-2 flex flex-wrap gap-1.5"><QuietLabel tone="gold">Whale</QuietLabel><QuietLabel tone="pink">Video buyer</QuietLabel><QuietLabel tone="blue">Late night</QuietLabel></div></div>
-            <div className="mt-6"><div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">Next best action</div><div className="mt-2 rounded-xl border border-[#b9daf1] bg-[#edf6fb] p-3 text-sm leading-5 text-[#176596]"><Sparkles className="mr-1 inline size-4" />Send the saved late-night video offer after the current conversation.</div></div>
+            <div className="mt-6"><div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">Next best action</div><div className="mt-2 rounded-xl border border-accent-2/20 bg-accent-2/[0.055] p-3 text-sm leading-5 text-accent-2"><Sparkles className="mr-1 inline size-4" />Send the saved late-night video offer after the current conversation.</div></div>
           </aside>
         </div>
       </Card>
@@ -183,7 +183,7 @@ function Fans() {
     <>
       <PageHeader title="Fan CRM" detail="Know who each fan is, what they value, and what should happen next." action="Add fan" />
       <CrmTabs view="fans" />
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><Metric label="Total fans" value="2,438" note="across all creators" tone="navy" icon={UsersRound} /><Metric label="Paying customers" value="641" note="26.3% of fans" tone="green" icon={CircleDollarSign} /><Metric label="At risk" value="94" note="buyers quiet 7+ days" tone="pink" icon={BellRing} /><Metric label="Whales" value="18" note="spent more than $250" tone="gold" icon={Flame} /></div>
+      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4"><Metric label="Total fans" value="2,438" note="across all creators" tone="navy" icon={UsersRound} /><Metric label="Paying customers" value="641" note="26.3% of fans" tone="green" icon={CircleDollarSign} /><Metric label="At risk" value="94" note="buyers quiet 7+ days" tone="gold" icon={BellRing} /><Metric label="Whales" value="18" note="spent more than $250" tone="gold" icon={Flame} /></div>
       <div className="grid gap-4 xl:grid-cols-[minmax(0,1fr)_340px]">
         <Card className="gap-0 overflow-hidden rounded-2xl py-0"><CardHeader className="border-b border-line py-4"><div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between"><div><CardTitle>Fans</CardTitle><CardDescription>Saved views make the right group one tap away.</CardDescription></div><div className="w-full sm:w-64"><QuickSearch /></div></div></CardHeader><CardContent className="px-0"><div className="flex gap-2 overflow-x-auto border-b border-line px-4 py-3"><QuietLabel tone="navy">All fans</QuietLabel><QuietLabel tone="gold">Whales</QuietLabel><QuietLabel tone="pink">At risk</QuietLabel><QuietLabel tone="blue">New this week</QuietLabel><QuietLabel>Never bought</QuietLabel></div><div className="overflow-x-auto"><table className="w-full min-w-[680px] text-left text-sm"><thead className="bg-[#f6fafc] text-xs text-muted"><tr><th className="px-5 py-3 font-medium">Fan</th><th className="px-4 py-3 font-medium">Segment</th><th className="px-4 py-3 font-medium">Lifetime spend</th><th className="px-4 py-3 font-medium">Last activity</th><th className="px-5 py-3" /></tr></thead><tbody className="divide-y divide-line/80">{fans.map(([name, segment, spend, activity, tone]) => <tr key={name} className="hover:bg-[#f6fafc]"><td className="px-5 py-3.5"><div className="flex items-center gap-3"><Avatar name={name} tone={tone as Tone} /><div><div className="font-semibold text-ink">{name}</div><div className="text-xs text-muted">True Kait</div></div></div></td><td className="px-4 py-3.5"><QuietLabel tone={tone as Tone}>{segment}</QuietLabel></td><td className="px-4 py-3.5 font-semibold text-good">{spend}</td><td className="px-4 py-3.5 text-muted">{activity}</td><td className="px-5 py-3.5 text-right"><ArrowUpRight className="ml-auto size-4 text-muted" /></td></tr>)}</tbody></table></div></CardContent></Card>
         <Card className="rounded-2xl"><CardHeader><div className="flex items-center gap-2"><div className="grid size-8 place-items-center rounded-xl bg-[#fff7dc] text-[#966b05]"><Flame className="size-4" /></div><div><CardTitle>Smart segments</CardTitle><CardDescription>Groups that stay current by themselves.</CardDescription></div></div></CardHeader><CardContent className="space-y-3">{[["VIP buyers", "18 fans", "gold"], ["Quiet customers", "94 fans", "pink"], ["New fans", "126 fans", "blue"], ["Ready for first offer", "211 fans", "green"]].map(([label, count, tone]) => <div key={label} className="flex items-center justify-between rounded-xl border border-line bg-[#fbfdfe] p-3"><div className="flex items-center gap-3"><span className={`grid size-8 place-items-center rounded-lg ${TONE[tone as Tone]}`}><Layers3 className="size-4" /></span><div><div className="text-sm font-semibold text-ink">{label}</div><div className="text-xs text-muted">{count}</div></div></div><ArrowUpRight className="size-4 text-muted" /></div>)}</CardContent></Card>

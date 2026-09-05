@@ -192,9 +192,9 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
 
   // Recharts colors are inline JS (not CSS classes) so they don't pick up the
   // light-mode constants rather than theme-conditional.
-  const axisColor = "#526b82";
-  const gridColor = "#cfdeea";
-  const cursorColor = "rgba(74,142,196,0.1)";
+  const axisColor = "#607086";
+  const gridColor = "#e3e8ef";
+  const cursorColor = "rgba(47,111,237,0.07)";
   // Last bar in the window is always today/this-bucket and still accumulating.
   // Keep its clone colour, but lower the opacity so "Live" is distinguishable
   // without introducing an off-theme grey bar.
@@ -363,7 +363,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
         <div>
           {/* Mobile first: 2xl on a phone. At 3xl this one line took a quarter of
               the screen height before a single number appeared. */}
-          <h2 className="flex items-center gap-2 font-heading text-2xl font-semibold tracking-[-0.035em] text-[#06172f] sm:text-3xl md:text-4xl">
+          <h2 className="flex items-center gap-2 font-heading text-2xl font-semibold tracking-[-0.035em] text-ink sm:text-3xl md:text-4xl">
             Earnings overview
             <Info text="Revenue, buyer activity and conversion performance across your active creators. In All creators, buyers are unique people across creators; audience and message totals count each creator-fan relationship." />
           </h2>
@@ -582,7 +582,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
                         }}
                       />
                       <YAxis
-                        tick={{ fill: "#06172f", fontSize: 11 }}
+                        tick={{ fill: "#152033", fontSize: 11 }}
                         axisLine={false}
                         tickLine={false}
                         tickFormatter={(v: number) => money(v).replace(/\.00$/, "")}
@@ -597,13 +597,13 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
                           key={c.id}
                           dataKey={c.id}
                           stackId="rev"
-                          fill={c.color}
+                          fill={scoped ? "var(--color-good)" : c.color}
                           radius={i === visibleClones.length - 1 ? [3, 3, 0, 0] : [0, 0, 0, 0]}
                         >
                           {data.series.map((_, idx) => (
                             <Cell
                               key={idx}
-                              fill={c.color}
+                              fill={scoped ? "var(--color-good)" : c.color}
                               fillOpacity={!customRange && idx === data.series.length - 1 ? 0.52 : 1}
                             />
                           ))}
@@ -635,7 +635,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
                         }}
                       />
                       <YAxis
-                        tick={{ fill: "#06172f", fontSize: 11 }}
+                        tick={{ fill: "#152033", fontSize: 11 }}
                         axisLine={false}
                         tickLine={false}
                         tickFormatter={(v: number) => money(v).replace(/\.00$/, "")}
@@ -650,7 +650,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
                           key={c.id}
                           type="monotone"
                           dataKey={c.id}
-                          stroke={c.color}
+                          stroke={scoped ? "var(--color-good)" : c.color}
                           strokeWidth={2}
                           dot={false}
                           activeDot={{ r: 3 }}
@@ -1284,7 +1284,7 @@ function RevenueReport({
   const [selectedMedia, setSelectedMedia] = useState<"photo" | "video" | "bundle" | null>(null);
   // The report uses the same Atlas palette as the rest of the dashboard.
   // Pink handles Other/untagged buckets so no data bars fall back to grey.
-  const CAT = { blue: "#0a2540", aqua: "#4a8ec4", yellow: "#d7952d", violet: "#2f7eb8", red: "#c9364f", pink: "#f05a9d" };
+  const CAT = { blue: "#0b2b4b", aqua: "#4f7fb2", yellow: "#c78520", violet: "#2f6fed", red: "#d6455d", pink: "#e95296" };
 
   const featureColor = (k: string) =>
     k === "credits"
@@ -1687,7 +1687,7 @@ function RevenueReport({
                   <BarChart data={a.byHour} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
                     <XAxis dataKey="label" tick={{ fill: axisColor, fontSize: 10 }} axisLine={false} tickLine={false} interval={2} />
                     <YAxis
-                      tick={{ fill: "#06172f", fontSize: 11 }}
+                      tick={{ fill: "#152033", fontSize: 11 }}
                       axisLine={false}
                       tickLine={false}
                       width={56}
@@ -1710,7 +1710,7 @@ function RevenueReport({
                   <BarChart data={a.byDow} margin={{ top: 4, right: 4, left: 0, bottom: 0 }}>
                     <XAxis dataKey="label" tick={{ fill: axisColor, fontSize: 11 }} axisLine={false} tickLine={false} />
                     <YAxis
-                      tick={{ fill: "#06172f", fontSize: 11 }}
+                      tick={{ fill: "#152033", fontSize: 11 }}
                       axisLine={false}
                       tickLine={false}
                       width={56}

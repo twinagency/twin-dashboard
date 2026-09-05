@@ -78,19 +78,19 @@ const PATHS: Record<string, string> = {
   More: '<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
 };
 
-// Icons keep their own Aurora color while labels use Stripe's dark navy ink.
-// The sidebar itself is a pale, multicolor Atlas-style field, so selected rows
-// use translucent white surfaces rather than dark-mode treatments.
+// Navigation stays monochrome so information hierarchy comes from position and
+// state, not a different decorative colour for every destination. Semantic
+// colours remain inside the data views where they carry actual meaning.
 type LinkColor = "neutral" | "good" | "purple" | "orange" | "blue" | "red" | "pink" | "gray";
 const LINK_COLOR_CLASSES: Record<LinkColor, { icon: string; active: string; idle: string }> = {
-  neutral: { icon: "text-white/55", active: "bg-white text-[#06172f] shadow-[0_12px_30px_rgb(2_10_24/0.22)]", idle: "text-white/72 hover:bg-white/10 hover:text-white" },
-  good: { icon: "text-emerald-300", active: "bg-white text-[#06172f] shadow-[0_12px_30px_rgb(2_10_24/0.22)]", idle: "text-white/72 hover:bg-white/10 hover:text-white" },
-  purple: { icon: "text-[#b9daf1]", active: "bg-white text-[#06172f] shadow-[0_12px_30px_rgb(2_10_24/0.22)]", idle: "text-white/72 hover:bg-white/10 hover:text-white" },
-  orange: { icon: "text-[#f8acd0]", active: "bg-white text-[#06172f] shadow-[0_12px_30px_rgb(2_10_24/0.22)]", idle: "text-white/72 hover:bg-white/10 hover:text-white" },
-  blue: { icon: "text-[#8cc7ea]", active: "bg-white text-[#06172f] shadow-[0_12px_30px_rgb(2_10_24/0.22)]", idle: "text-white/72 hover:bg-white/10 hover:text-white" },
-  pink: { icon: "text-[#f8acd0]", active: "bg-white text-[#06172f] shadow-[0_12px_30px_rgb(2_10_24/0.22)]", idle: "text-white/72 hover:bg-white/10 hover:text-white" },
-  red: { icon: "text-rose-300", active: "bg-white text-[#06172f] shadow-[0_12px_30px_rgb(2_10_24/0.22)]", idle: "text-white/72 hover:bg-white/10 hover:text-white" },
-  gray: { icon: "text-white/50", active: "bg-white text-[#06172f] shadow-[0_12px_30px_rgb(2_10_24/0.22)]", idle: "text-white/72 hover:bg-white/10 hover:text-white" },
+  neutral: { icon: "text-[#9cbad3]", active: "bg-white/12 text-white ring-1 ring-white/12", idle: "text-white/68 hover:bg-white/[0.07] hover:text-white" },
+  good: { icon: "text-[#9cbad3]", active: "bg-white/12 text-white ring-1 ring-white/12", idle: "text-white/68 hover:bg-white/[0.07] hover:text-white" },
+  purple: { icon: "text-[#9cbad3]", active: "bg-white/12 text-white ring-1 ring-white/12", idle: "text-white/68 hover:bg-white/[0.07] hover:text-white" },
+  orange: { icon: "text-[#9cbad3]", active: "bg-white/12 text-white ring-1 ring-white/12", idle: "text-white/68 hover:bg-white/[0.07] hover:text-white" },
+  blue: { icon: "text-[#9cbad3]", active: "bg-white/12 text-white ring-1 ring-white/12", idle: "text-white/68 hover:bg-white/[0.07] hover:text-white" },
+  pink: { icon: "text-[#9cbad3]", active: "bg-white/12 text-white ring-1 ring-white/12", idle: "text-white/68 hover:bg-white/[0.07] hover:text-white" },
+  red: { icon: "text-[#9cbad3]", active: "bg-white/12 text-white ring-1 ring-white/12", idle: "text-white/68 hover:bg-white/[0.07] hover:text-white" },
+  gray: { icon: "text-[#9cbad3]", active: "bg-white/12 text-white ring-1 ring-white/12", idle: "text-white/68 hover:bg-white/[0.07] hover:text-white" },
 };
 
 // The primary list is deliberately short. It is what a prospective partner or
