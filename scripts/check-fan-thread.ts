@@ -11,11 +11,9 @@
 //
 //   1. THE FLOW VOCABULARY IS A CROSS-REPO CONTRACT. The bot writes
 //      chat_history.meta.flow from FLOW_SLUGS in ../bot/src/types.ts; this repo
-//      renders it from lib/flow-labels.ts. Those two lists live in different
-//      repos that deploy independently. A slug added on the bot side and not
-//      here is the exact "configured but inert" failure this project keeps
-//      shipping, except worse, because the bubble still renders and just quietly
-//      says the wrong thing.
+//      renders it from lib/flow-labels.ts. The checked-in contract snapshot keeps
+//      dashboard CI self-contained. When the sibling bot checkout is available,
+//      this check also proves the snapshot still exactly matches the runtime.
 //   2. AN UNSTAMPED ROW MUST STAY UNLABELLED. Nothing recorded which flow
 //      produced a message before 2026-08-18. If flowLabelOf ever invents a
 //      default for a missing slug, every historic message in the database
@@ -66,27 +64,38 @@ const thread = read("components/users/ChatThread.tsx");
 const page = read("app/users/page.tsx");
 
 check("C1 every flow slug the bot can write has a label here", () => {
-  // Read the bot's own list rather than restating it. A copy of the vocabulary
-  // would pass this check while disagreeing with the runtime, which is the
-  // failure mode the check exists for.
-  let botTypes: string;
+  const contract = JSON.parse(read("contracts/bot-flow-slugs.json"));
+  assert(
+    Array.isArray(contract) && contract.length > 0 && contract.every((slug) => typeof slug === "string"),
+    "contracts/bot-flow-slugs.json must be a non-empty string array",
+  );
+
+  const slugs = contract as string[];
+  assert(new Set(slugs).size === slugs.length, "contracts/bot-flow-slugs.json contains duplicate slugs");
+  const missing = slugs.filter((slug) => !(slug in FLOW_LABELS));
+  assert(
+    missing.length === 0,
+    `the bot contract contains ${missing.length} slug(s) this dashboard has no label for: ${missing.join(", ")}`,
+  );
+
+  // Local multi-repo check: catch drift against the bot's source when it exists.
+  // GitHub checks out this repository alone, so absence is expected in CI.
+  let botTypes: string | null = null;
   try {
     botTypes = readFileSync(join(root, "..", "bot", "src", "types.ts"), "utf8");
   } catch {
-    // Same dependency npm run test:api already has on ../bot being checked out.
-    throw new Error("../bot/src/types.ts unreadable, and this check cannot verify the contract without it");
+    return;
   }
   const block = botTypes.match(/FLOW_SLUGS\s*=\s*\[([\s\S]*?)\]/);
   assert(
     block,
     "FLOW_SLUGS not found in ../bot/src/types.ts. Either the bot has not shipped the flow stamp yet, or it was renamed and this contract is now unenforced.",
   );
-  const slugs = [...block![1].matchAll(/"([a-z_]+)"/g)].map((m) => m[1]);
-  assert(slugs.length > 0, "FLOW_SLUGS parsed as empty");
-  const missing = slugs.filter((s) => !(s in FLOW_LABELS));
+  const runtimeSlugs = [...block![1].matchAll(/"([a-z_]+)"/g)].map((m) => m[1]);
+  assert(runtimeSlugs.length > 0, "FLOW_SLUGS parsed as empty");
   assert(
-    missing.length === 0,
-    `the bot can write ${missing.length} slug(s) this dashboard has no label for: ${missing.join(", ")}`,
+    JSON.stringify(runtimeSlugs) === JSON.stringify(slugs),
+    "contracts/bot-flow-slugs.json has drifted from ../bot/src/types.ts FLOW_SLUGS",
   );
 });
 

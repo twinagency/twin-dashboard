@@ -16,10 +16,9 @@
 //    becoming stale looks identical to the bot not stamping at all. Unknown
 //    slugs fall through to a de-underscored version of the slug itself.
 //
-// Check C1 in scripts/check-fan-thread.ts asserts this map covers every slug the
-// bot can write, by reading the bot's own FLOW_SLUGS list out of
-// ../bot/src/types.ts rather than restating it. Adding a flow to the bot without
-// adding it here turns that check red.
+// Check C1 in scripts/check-fan-thread.ts asserts this map covers the checked-in
+// bot contract and, in a local multi-repo checkout, proves that contract still
+// exactly matches ../bot/src/types.ts FLOW_SLUGS.
 
 export type FlowLabel = { label: string; emoji: string; hint: string };
 

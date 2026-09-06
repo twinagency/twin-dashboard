@@ -1,0 +1,20 @@
+[
+  "text_reply",
+  "voice_reply",
+  "vision_reply",
+  "media_photo",
+  "media_video",
+  "media_bundle",
+  "paywall",
+  "spoil_menu",
+  "spoil_invoice",
+  "vip_invoice",
+  "onboarding",
+  "drip_step",
+  "winback",
+  "followup",
+  "bonus_photo",
+  "manual",
+  "refusal",
+  "system"
+]
