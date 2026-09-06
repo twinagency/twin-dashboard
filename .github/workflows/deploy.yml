@@ -66,8 +66,8 @@ jobs:
         run: npm run build
         env:
           NEXT_TELEMETRY_DISABLED: "1"
-      # Six of the eight suites. test:api and test:public need a live server
-      # and stay local - same split the bot uses for test:db.
+      # Repo-local suites only. Database-backed rollup/tiles checks stay local;
+      # the deployment runner intentionally receives no Supabase credentials.
       - name: Checks
         run: npm run test:offline
 

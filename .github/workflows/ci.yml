@@ -41,9 +41,8 @@ jobs:
       # ── ADDED 2026-08-18 ────────────────────────────────────────────────
       # The dashboard has had eight behavioural suites since long before this
       # file existed and CI ran NONE of them - it ran tsc and next build and
-      # called that a pass. Two of the eight (admin-api, public-api) need a
-      # live server, so they stay local. These six need nothing but the repo.
-      # check-revenue-rollups and check-spend sit on the money display path,
-      # which is where two separate August bugs hid 91% and ~98% of revenue.
+      # called that a pass. This command contains only repo-local checks;
+      # database-backed rollup/tiles checks stay out of CI because no production
+      # Supabase credentials are exposed to a build runner.
       - name: Behavioural checks
         run: npm run test:offline

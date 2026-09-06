@@ -53,7 +53,7 @@ Four rules, all asserted by `npm run test:api`:
 3. **One choke point.** Every read goes through `runQuery`/`resolveClone` in `lib/api-read.ts`. No route imports `supabaseAdmin` directly, so there is one place a column can be admitted.
 4. **The allowlist is shared with the AI assistant, not duplicated.** `lib/api-read.ts` imports `ALLOWLIST` from `app/api/ai-assistant/tools.ts` per rule 3 above, adds the blobs the assistant skips for context cost (`persona`, `intake`, the legacy `*_prompt` columns, `business_username`), and subtracts `clones.bot_token` and `app_settings.value` unconditionally, last.
 
-`npm run test:api` runs through `../bot/node_modules/.bin/tsx` — this repo has no TS runner of its own and adding one meant an install. It therefore needs `../bot` checked out beside this repo, which the working folder always has.
+`npm run test:api` runs through this repo's `tsx` development dependency, so the checks work both in the local twin workspace and in a standalone CI checkout.
 
 ## The Twin public API (`app/api/v1/*`)
 
