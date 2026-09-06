@@ -5,51 +5,29 @@ import type { Clone } from "@/lib/types";
 import type { OrModel } from "@/app/api/models/route";
 import ModelSelect from "./ModelSelect";
 import {
-  Area,
-  DEFAULT_PAYWALL_BUTTON,
-  DEFAULT_PAYWALL_MESSAGE,
   Field,
   MODEL_FIELDS,
   Select,
   Slider,
-  SubCard,
   Toggle,
-  inputCls,
 } from "./clone/fields";
 import { CategoryPricingEditor, SpoilMenuEditor } from "./clone/editors";
 import { useCloneConfig } from "./clone/useCloneConfig";
 import { saveCloneDefaults } from "@/app/settings/actions";
 
-// The "new-clone defaults" template — nearly the full Configure field set, minus
-// per-clone identity (name / token / voice ID / persona). Field `name`s match the
-// `clones` columns so CreateCloneForm (which runs the same useCloneConfig +
-// ConfigSections) seeds a fresh clone straight from what's saved here.
+// Operational defaults for new and selected existing clones. Personality,
+// identity, creator-specific style and welcome prose intentionally stay on each
+// creator. Field names match `clones` columns for safe, allowlisted seeding.
 export default function CloneDefaultsForm({ defaults }: { defaults: Partial<Clone> }) {
   const [models, setModels] = useState<OrModel[]>([]);
-  const [saved, setSaved] = useState(false);
+  const [saveState, setSaveState] = useState<"idle" | "saving" | "saved" | "error">("idle");
+  const [saveMessage, setSaveMessage] = useState<string | null>(null);
   const [cfg, set] = useCloneConfig(defaults);
 
   useEffect(() => {
     fetch("/api/models").then((r) => r.json()).then((d) => Array.isArray(d) && setModels(d)).catch(() => {});
   }, []);
 
-  const levelOpts = [
-    { value: "low" as const, label: "Low" },
-    { value: "medium" as const, label: "Med" },
-    { value: "high" as const, label: "High" },
-  ];
-  // The three personality dials went 5-step with migration 082. These are the
-  // NEW-CLONE DEFAULTS template (saved into app_settings, then seeded into a
-  // fresh clones row by CreateCloneForm), so they must offer the same steps the
-  // per-clone Configure page does or a default could never be set to an end
-  // stop. Same vocabulary as SEG in components/clone/ConfigSections.tsx.
-  const heatOpts = [
-    { value: "off" as const, label: "Off" },
-    { value: "mild" as const, label: "Mild" },
-    { value: "medium" as const, label: "Med" },
-    { value: "explicit" as const, label: "Explicit" },
-    { value: "max" as const, label: "Max" },
-  ];
   const pushOpts = [
     { value: "none" as const, label: "None" },
     { value: "low" as const, label: "Low" },
@@ -57,61 +35,47 @@ export default function CloneDefaultsForm({ defaults }: { defaults: Partial<Clon
     { value: "high" as const, label: "High" },
     { value: "relentless" as const, label: "Max" },
   ];
-  // Migration 086, the four warmth-side dials. Med is the default and adds
-  // nothing to the prompt, so leaving these alone changes nothing fleet-wide.
-  const toneOpts = [
-    { value: "off" as const, label: "Off" },
-    { value: "low" as const, label: "Low" },
-    { value: "medium" as const, label: "Med" },
-    { value: "high" as const, label: "High" },
-    { value: "max" as const, label: "Max" },
-  ];
-
   const Group = ({ label }: { label: string }) => (
     <span className="mt-2 text-xs font-semibold uppercase tracking-wide text-muted first:mt-0">{label}</span>
   );
 
   return (
-    <form action={async (fd) => { await saveCloneDefaults(fd); setSaved(true); }} className="mt-4 grid gap-6">
-      {/* ── MODE & PERSONALITY ── */}
+    <form
+      action={async (fd) => {
+        setSaveState("saving");
+        setSaveMessage(null);
+        try {
+          const result = await saveCloneDefaults(fd);
+          setSaveState("saved");
+          setSaveMessage(
+            result.appliedFollowers > 0
+              ? `Saved and applied to ${result.appliedFollowers} creator${result.appliedFollowers === 1 ? "" : "s"}.`
+              : "Defaults saved.",
+          );
+        } catch (error) {
+          setSaveState("error");
+          setSaveMessage(error instanceof Error ? error.message : "Could not save defaults");
+        }
+      }}
+      onSubmit={(event) => {
+        if (!window.confirm("Save this operational template and apply it now to every creator following the fleet default?")) {
+          event.preventDefault();
+        }
+      }}
+      className="mt-4 grid gap-6"
+    >
+      {/* Personality, explicitness, warmth, curiosity, playfulness, memory-use
+          style, emoji style and welcome prose stay per creator. They are not
+          rendered, persisted, or mass-applied from this operational template. */}
       <div className="grid gap-3">
-        <Group label="Mode & personality" />
-        <div className="grid gap-3 sm:grid-cols-2">
+        <Group label="AI mode & sales behavior" />
+        <div className="grid gap-3 sm:grid-cols-3">
           <Select label="AI mode" name="ai_mode" value={cfg.aiMode} onChange={(v) => set("aiMode", v)} options={[{ value: "classic", label: "Classic" }, { value: "smart", label: "Smart" }]} />
           <input type="hidden" name="smart_split" value={String(cfg.smartSplit)} />
           {cfg.aiMode === "smart" && (
             <Toggle label="Two-model split (writer + decider)" name="_smart_split_toggle" checked={cfg.smartSplit} onChange={(v) => set("smartSplit", v)} accent="soft" />
           )}
-        </div>
-        <div className="grid gap-3 sm:grid-cols-3">
-          <Select label="Flirtiness" name="sexual_level" value={cfg.sexualLevel} onChange={(v) => set("sexualLevel", v)} options={heatOpts} />
-          <Select label="How explicit" name="nsfw_level" value={cfg.nsfwLevel} onChange={(v) => set("nsfwLevel", v)} options={heatOpts} />
           <Select label="Upsell push" name="push_level" value={cfg.pushLevel} onChange={(v) => set("pushLevel", v)} options={pushOpts} />
-        </div>
-        {/* Migration 086. Curiosity first: it is the dial behind "she never
-            asks about me", and it is the one most worth raising fleet-wide. */}
-        <div className="grid gap-3 sm:grid-cols-4">
-          <Select label="Curiosity" name="curiosity_level" value={cfg.curiosityLevel} onChange={(v) => set("curiosityLevel", v)} options={toneOpts} />
-          <Select label="Warmth" name="warmth_level" value={cfg.warmthLevel} onChange={(v) => set("warmthLevel", v)} options={toneOpts} />
-          <Select label="Playfulness" name="playfulness_level" value={cfg.playfulnessLevel} onChange={(v) => set("playfulnessLevel", v)} options={toneOpts} />
-          <Select label="Memory use" name="attentiveness_level" value={cfg.attentivenessLevel} onChange={(v) => set("attentivenessLevel", v)} options={toneOpts} />
-        </div>
-        <div className="flex flex-wrap items-end gap-x-6 gap-y-3">
-          <Toggle label="Emojis" name="emojis_enabled" checked={cfg.emojis} onChange={(v) => set("emojis", v)} accent="soft" />
-          {cfg.emojis ? (
-            <>
-              <div className="w-48"><Select label="Emoji amount" name="emoji_amount" value={cfg.emojiAmount} onChange={(v) => set("emojiAmount", v)} options={levelOpts} /></div>
-              <label className="block min-w-[16rem] flex-1">
-                <span className="mb-1 block text-xs text-muted">Allowed emojis (blank = any)</span>
-                <input name="emoji_allowlist" value={cfg.emojiList} onChange={(e) => set("emojiList", e.target.value)} placeholder="e.g. ❤️ 😘 💕 🥹 (blank = any)" className={inputCls} />
-              </label>
-            </>
-          ) : (
-            <>
-              <input type="hidden" name="emoji_amount" value={cfg.emojiAmount} />
-              <input type="hidden" name="emoji_allowlist" value="" />
-            </>
-          )}
         </div>
       </div>
 
@@ -162,9 +126,9 @@ export default function CloneDefaultsForm({ defaults }: { defaults: Partial<Clon
         <Group label="Message credits" />
         <Toggle label={cfg.charge ? "Charge for messages" : "Messages are free"} name="charge_messages" checked={cfg.charge} onChange={(v) => set("charge", v)} accent="soft" />
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <Field label="Starting credits (free)" name="starting_credits" type="number" defaultValue={defaults.starting_credits ?? 50} />
-          <Field label="Pack size (msgs)" name="credit_pack_size" type="number" defaultValue={defaults.credit_pack_size ?? 50} />
-          <Field label="Pack price (⭐)" name="credit_pack_price_stars" type="number" defaultValue={defaults.credit_pack_price_stars ?? 199} />
+          <Field label="Starting credits (free)" name="starting_credits" type="number" min={0} step={1} defaultValue={defaults.starting_credits ?? 20} />
+          <Field label="Pack size (msgs)" name="credit_pack_size" type="number" min={1} step={1} defaultValue={defaults.credit_pack_size ?? 30} />
+          <Field label="Pack price (⭐)" name="credit_pack_price_stars" type="number" min={1} step={1} defaultValue={defaults.credit_pack_price_stars ?? 299} />
         </div>
         {/* Migration 088. Fleet default for what a tip gives back. 0 = a tip
             grants no credits, which is what every clone did before 088. */}
@@ -323,45 +287,12 @@ export default function CloneDefaultsForm({ defaults }: { defaults: Partial<Clon
         {cfg.tips && <SpoilMenuEditor cfg={cfg} set={set} />}
       </div>
 
-      {/* ── ENGAGEMENT / ONBOARDING ── */}
-      <div className="grid gap-3">
-        <Group label="New user flow" />
-        <Area label="Welcome greeting instruction (optional)" name="welcome_instruction" rows={2} placeholder="e.g. greet him warmly, introduce yourself, ask his name" defaultValue={defaults.welcome_instruction} />
-        {/* The four legacy loose onboarding controls (onboarding_voice_after,
-            welcome_bundle_after, onboarding_voice_instruction,
-            welcome_bundle_after_minutes) were removed 2026-07-29. They were dead
-            on both sides: the runtime stopped reading those columns when
-            onboarding became the ordered step list (see bot/src/onboarding.ts,
-            "onboardingSteps is now the ONLY onboarding engine"), and the clone
-            save action deliberately never wrote them either. Onboarding is
-            configured per clone on the Flows page now. Columns are left in
-            place per the additive-only rule, they are simply never written or
-            read. None of the four was a cap or gate on something still running,
-            so nothing is left uncapped by removing them. */}
-      </div>
-
       {/* ── PAYWALL ── */}
       <div className="grid gap-3">
         <Group label="Out of messages flow" />
-        <SubCard>
-          <div className="grid gap-3">
-            <label className="block">
-              <span className="mb-1 block text-xs text-muted">Default message text</span>
-              <textarea name="paywall_default_message" rows={2} value={cfg.paywallDefault} onChange={(e) => set("paywallDefault", e.target.value)} className={inputCls} />
-            </label>
-            <label className="block">
-              <span className="mb-1 block text-xs text-muted">Button text</span>
-              <input name="paywall_button_label" value={cfg.paywallButton} onChange={(e) => set("paywallButton", e.target.value)} className={inputCls} />
-            </label>
-            <button
-              type="button"
-              onClick={() => { set("paywallDefault", DEFAULT_PAYWALL_MESSAGE); set("paywallButton", DEFAULT_PAYWALL_BUTTON); }}
-              className="justify-self-start text-[11px] font-medium text-muted underline transition hover:text-ink"
-            >
-              Reset to default
-            </button>
-          </div>
-        </SubCard>
+        <p className="text-xs text-muted">
+          Timing and enablement can follow the fleet default. Customer-facing copy and promised media stay creator-specific.
+        </p>
         <div className="flex flex-wrap gap-x-6 gap-y-3">
           <Toggle label="Smart first-time message (she writes it once)" name="smart_paywall_enabled" checked={cfg.smartPaywall} onChange={(v) => set("smartPaywall", v)} accent="soft" />
           {/* Unconditional hidden input carries the real value, same pattern as
@@ -373,7 +304,6 @@ export default function CloneDefaultsForm({ defaults }: { defaults: Partial<Clon
             <Toggle label="Send that first one as a voice note" name="_paywall_as_voice_toggle" checked={cfg.paywallVoice} onChange={(v) => set("paywallVoice", v)} accent="soft" />
           )}
         </div>
-        <Area label="Paywall instruction (optional)" name="paywall_instruction" rows={2} placeholder="e.g. be sweet, remind him what he's missing, nudge him to grab more messages" defaultValue={defaults.paywall_instruction} />
 
         {/* Warmup before the wall (pre-lock prime, migration 069) */}
         <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
@@ -387,10 +317,6 @@ export default function CloneDefaultsForm({ defaults }: { defaults: Partial<Clon
             </>
           )}
         </div>
-        {cfg.paywallPrimeEnabled && (
-          <Area label="Warmup steer (optional)" name="paywall_prime_instruction" rows={2} placeholder="e.g. hint she's got more coming, build the anticipation" defaultValue={defaults.paywall_prime_instruction} />
-        )}
-
         {/* Pick up after they pay (post-lock resume, migration 069) */}
         <div className="flex flex-wrap items-center gap-x-6 gap-y-3">
           <Toggle label={cfg.paywallResumeEnabled ? "Pick up warmly after he pays" : "No post-pay pickup"} name="paywall_resume_enabled" checked={cfg.paywallResumeEnabled} onChange={(v) => set("paywallResumeEnabled", v)} accent="soft" />
@@ -400,12 +326,6 @@ export default function CloneDefaultsForm({ defaults }: { defaults: Partial<Clon
             <Toggle label={cfg.paywallResumeFree ? "Send the pickup image free" : "Send the pickup image paid"} name="_paywall_resume_free_toggle" checked={cfg.paywallResumeFree} onChange={(v) => set("paywallResumeFree", v)} accent="soft" />
           )}
         </div>
-        {cfg.paywallResumeEnabled && (
-          <>
-            <Area label="Pickup steer (optional)" name="paywall_resume_instruction" rows={2} placeholder="e.g. thank him, pick the mood back up right where it left off" defaultValue={defaults.paywall_resume_instruction} />
-            <Field label="Promised image (media id, blank = auto)" name="paywall_resume_media_id" defaultValue={defaults.paywall_resume_media_id} placeholder="blank = she auto-picks" />
-          </>
-        )}
       </div>
 
       {/* ── FLOWS ── */}
@@ -466,10 +386,14 @@ export default function CloneDefaultsForm({ defaults }: { defaults: Partial<Clon
       </div>
 
       <div className="flex items-center gap-3">
-        <button type="submit" onClick={() => setSaved(false)} className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-ink hover:bg-accent-deep">
-          Save defaults
+        <button type="submit" disabled={saveState === "saving"} className="rounded-lg bg-accent px-4 py-2 text-sm font-medium text-accent-ink hover:bg-accent-deep disabled:opacity-50">
+          {saveState === "saving" ? "Saving…" : "Save defaults"}
         </button>
-        {saved && <span className="text-sm font-medium text-good">Saved ✓</span>}
+        {saveMessage && (
+          <span role={saveState === "error" ? "alert" : "status"} className={`text-sm font-medium ${saveState === "error" ? "text-crit" : "text-good"}`}>
+            {saveMessage}
+          </span>
+        )}
       </div>
     </form>
   );

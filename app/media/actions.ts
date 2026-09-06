@@ -4,8 +4,19 @@ import sharp from "sharp";
 import { revalidatePath } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase";
 import { captionPhoto, captionVideo, type Caption } from "@/lib/caption";
-import { priceFromGuide, MEDIA_TAGS } from "@/lib/pricing";
+import {
+  buildSafeRepricePlan,
+  isAllowedPaidOrFreePrice,
+  MEDIA_TAGS,
+  MIN_PAID_MEDIA_PRICE_STARS,
+  normalizeSafeCategoryGuide,
+  priceFromGuide,
+  type RepriceableMediaRow,
+  type SafeRepriceChange,
+  type SafeRepricePlan,
+} from "@/lib/pricing";
 import { assertPhotoSendable } from "@/lib/photo-guard";
+import { repriceConfirmationPhrase } from "@/lib/reprice-confirmation";
 
 const TAG_SET = new Set<string>(MEDIA_TAGS);
 
@@ -34,11 +45,13 @@ function storagePath(cloneId: string, type: "photos" | "videos", filename: strin
 // Pull the clone's vision model + category-pricing guide in one read (both needed
 // on every upload: one to tag the item, the other to price it from those tags).
 async function uploadConfig(cloneId: string): Promise<{ model: string; guide: unknown }> {
-  const { data } = await supabaseAdmin
+  const { data, error } = await supabaseAdmin
     .from("clones")
     .select("vision_model, category_pricing")
     .eq("id", cloneId)
     .maybeSingle();
+  if (error) throw new Error(`Could not load creator pricing: ${error.message}`);
+  if (!data) throw new Error("Creator not found");
   return { model: data?.vision_model || "qwen/qwen2.5-vl-72b-instruct", guide: data?.category_pricing };
 }
 
@@ -47,15 +60,36 @@ async function uploadConfig(cloneId: string): Promise<{ model: string; guide: un
 // category-pricing guide + the AI tags. If the guide is empty/missing, fall back
 // to the given default so behavior is unchanged. Money is code-locked: the number
 // always comes from the operator (their typed price, or their guide, or default).
-function resolvePrice(fd: FormData, cap: Caption, guide: unknown, fallback: number): number {
+function manualUploadPrice(fd: FormData): number | null {
   const raw = fd.get("star_value");
   const manual = raw !== null && String(raw).trim() !== "";
   if (manual) {
     const n = Number(raw);
-    if (Number.isFinite(n)) return n;
+    if (!isAllowedPaidOrFreePrice(n)) {
+      throw new Error(`Paid media must cost at least ${MIN_PAID_MEDIA_PRICE_STARS} Stars, or use 0 for free`);
+    }
+    return n;
   }
-  const derived = priceFromGuide(guide, cap.tags, cap.nsfw);
-  return derived ?? fallback;
+  return null;
+}
+
+function assertUploadPricingReady(fd: FormData, guide: unknown): void {
+  if (manualUploadPrice(fd) !== null) return;
+  if (!normalizeSafeCategoryGuide(guide)) {
+    throw new Error(`This creator's pricing guide is missing or outdated. Save a complete guide in PPVs, or enter a manual price of ${MIN_PAID_MEDIA_PRICE_STARS} Stars or more.`);
+  }
+}
+
+function resolvePrice(fd: FormData, cap: Caption, guide: unknown): number {
+  const manual = manualUploadPrice(fd);
+  if (manual !== null) return manual;
+  const safeGuide = normalizeSafeCategoryGuide(guide);
+  if (!safeGuide) {
+    throw new Error("This creator's pricing guide changed during upload. Save it in PPVs and try again.");
+  }
+  const derived = priceFromGuide(safeGuide, cap.tags, cap.nsfw);
+  if (derived == null) throw new Error("Could not derive a price from this creator's pricing guide");
+  return derived;
 }
 
 // ── Upload a single photo ────────────────────────────────────────────────────
@@ -72,6 +106,8 @@ export async function uploadPhoto(cloneId: string, fd: FormData) {
   const raw = Buffer.from(await file.arrayBuffer());
   const jpeg = await sharp(raw).jpeg({ quality: 90 }).toBuffer();
   await assertPhotoSendable(jpeg);
+  const { model, guide } = await uploadConfig(cloneId);
+  assertUploadPricingReady(fd, guide);
 
   const baseName = file.name.replace(/\.[^.]+$/, "");
   const path = storagePath(cloneId, "photos", baseName + ".jpg");
@@ -82,11 +118,10 @@ export async function uploadPhoto(cloneId: string, fd: FormData) {
   if (upErr) throw new Error(upErr.message);
 
   // AI caption + auto-tags in the backend (caption + teaser + nudity + tags/nsfw).
-  const { model, guide } = await uploadConfig(cloneId);
   const cap = await captionPhoto(jpeg, model);
 
   // Price from the operator's guide via the AI tags (manual price wins if set).
-  const starValue = resolvePrice(fd, cap, guide, 25);
+  const starValue = resolvePrice(fd, cap, guide);
   const imageName = String(fd.get("image_name") ?? "").trim() || file.name;
 
   const { error: dbErr } = await supabaseAdmin.from("photos").insert({
@@ -118,6 +153,8 @@ export async function uploadVideo(cloneId: string, fd: FormData) {
 
   const bytes = Buffer.from(await file.arrayBuffer());
   if (bytes.byteLength > VIDEO_MAX_BYTES) throw new Error(`Video too large (${(bytes.byteLength / 1024 / 1024).toFixed(1)} MB). Telegram max is 50 MB.`);
+  const { model, guide } = await uploadConfig(cloneId);
+  assertUploadPricingReady(fd, guide);
 
   const path = storagePath(cloneId, "videos", file.name);
 
@@ -127,10 +164,9 @@ export async function uploadVideo(cloneId: string, fd: FormData) {
   if (upErr) throw new Error(upErr.message);
 
   // AI caption + auto-tags from one extracted frame (caption + teaser + tags/nsfw).
-  const { model, guide } = await uploadConfig(cloneId);
   const cap = await captionVideo(bytes, model);
   // Price from the operator's guide via the AI tags (manual price wins if set).
-  const starValue = resolvePrice(fd, cap, guide, 50);
+  const starValue = resolvePrice(fd, cap, guide);
 
   const { error: dbErr } = await supabaseAdmin.from("videos").insert({
     clone_id: cloneId,
@@ -277,8 +313,8 @@ export async function bulkSetMediaPrice(
   starValue: number,
 ): Promise<number> {
   const ids = selectedMediaIds(mediaIds);
-  if (!Number.isSafeInteger(starValue) || starValue < 0) {
-    throw new Error("Price must be a whole number of Stars, or 0 for free");
+  if (!isAllowedPaidOrFreePrice(starValue)) {
+    throw new Error(`Price must be 0 for free, or a whole number of at least ${MIN_PAID_MEDIA_PRICE_STARS} Stars`);
   }
 
   const { data, error } = await supabaseAdmin
@@ -473,48 +509,152 @@ export async function getSignedUrl(path: string): Promise<string> {
 // ── Category pricing guide (moved here from Config/Money — lives with the
 // media it prices, per-clone) ───────────────────────────────────────────────
 export async function updateCategoryPricing(cloneId: string, guide: Record<string, number>) {
-  const { error } = await supabaseAdmin.from("clones").update({ category_pricing: guide }).eq("id", cloneId);
+  const safeGuide = normalizeSafeCategoryGuide(guide);
+  if (!safeGuide) {
+    throw new Error(`Every category price must be a whole number of at least ${MIN_PAID_MEDIA_PRICE_STARS} Stars`);
+  }
+  const { data, error } = await supabaseAdmin
+    .from("clones")
+    .update({ category_pricing: safeGuide })
+    .eq("id", cloneId)
+    .select("id")
+    .maybeSingle();
   if (error) throw new Error(error.message);
+  if (!data) throw new Error("Creator not found");
   revalidatePath("/media");
 }
 
-// ── Reprice existing media from the CURRENT guide ────────────────────────────
-// Same derivation new uploads use (priceFromGuide, see lib/pricing.ts), just
-// run backwards over rows that already exist instead of at upload time. A
-// changed guide only ever affected future uploads before this; this is what
-// makes it retroactive. Manual price edits are NOT protected here on purpose:
-// "reprice" means what it says, every item in scope gets recomputed. Rows
-// whose tags don't match anything in the guide keep their price (priceFromGuide
-// returns the sfw floor in that case, never null, so this only skips a row
-// when the guide itself is unusable).
-async function repriceTable(table: "photos" | "videos", cloneId: string, guide: unknown): Promise<number> {
+// ── Guarded reprice preview + apply ──────────────────────────────────────────
+// The apply action recomputes the preview and requires the exact confirmation
+// phrase, so a stale browser or a direct server-action call cannot skip review.
+export type RepriceTarget = "photos" | "videos" | "all";
+type RepriceTable = "photos" | "videos";
+
+export type RepricePreview = {
+  target: RepriceTarget;
+  total: number;
+  changes: number;
+  unchanged: number;
+  protectedFree: number;
+  protectedFromDecrease: number;
+  increaseStars: number;
+  confirmationPhrase: string;
+  byType: Record<RepriceTable, { total: number; changes: number }>;
+};
+
+type LoadedRepricePlan = RepricePreview & {
+  rows: Record<RepriceTable, SafeRepriceChange[]>;
+};
+
+function assertRepriceTarget(target: string): asserts target is RepriceTarget {
+  if (target !== "photos" && target !== "videos" && target !== "all") {
+    throw new Error("Invalid reprice target");
+  }
+}
+
+function publicPlan(
+  target: RepriceTarget,
+  photos: SafeRepricePlan,
+  videos: SafeRepricePlan,
+  confirmationPhrase: string,
+): RepricePreview {
+  const changes = photos.changes.length + videos.changes.length;
+  return {
+    target,
+    total: photos.total + videos.total,
+    changes,
+    unchanged: photos.unchanged + videos.unchanged,
+    protectedFree: photos.protectedFree + videos.protectedFree,
+    protectedFromDecrease: photos.protectedFromDecrease + videos.protectedFromDecrease,
+    increaseStars: photos.increaseStars + videos.increaseStars,
+    confirmationPhrase,
+    byType: {
+      photos: { total: photos.total, changes: photos.changes.length },
+      videos: { total: videos.total, changes: videos.changes.length },
+    },
+  };
+}
+
+async function loadRepriceRows(table: RepriceTable, cloneId: string, included: boolean): Promise<RepriceableMediaRow[]> {
+  if (!included) return [];
   const { data, error } = await supabaseAdmin
     .from(table)
-    .select("id, tags, nsfw")
+    .select("id, tags, nsfw, star_value, is_free")
     .eq("clone_id", cloneId);
-  if (error) throw new Error(error.message);
-  const rows = (data ?? []) as { id: string; tags: string[] | null; nsfw: boolean | null }[];
-  let updated = 0;
-  for (const row of rows) {
-    const price = priceFromGuide(guide, row.tags ?? [], !!row.nsfw);
-    if (price == null) continue;
-    const { error: updErr } = await supabaseAdmin
-      .from(table)
-      .update({ star_value: price, is_free: price <= 0 })
-      .eq("id", row.id);
-    if (updErr) throw new Error(updErr.message);
-    updated++;
-  }
-  return updated;
+  if (error) throw new Error(`Could not preview ${table}: ${error.message}`);
+  return (data ?? []) as RepriceableMediaRow[];
 }
 
-export async function repriceMedia(cloneId: string, target: "photos" | "videos" | "all"): Promise<{ photos: number; videos: number }> {
-  const { data: clone, error } = await supabaseAdmin.from("clones").select("category_pricing").eq("id", cloneId).maybeSingle();
-  if (error) throw new Error(error.message);
-  const guide = (clone as { category_pricing?: unknown } | null)?.category_pricing;
-  const result = { photos: 0, videos: 0 };
-  if (target === "photos" || target === "all") result.photos = await repriceTable("photos", cloneId, guide);
-  if (target === "videos" || target === "all") result.videos = await repriceTable("videos", cloneId, guide);
+async function loadRepricePlan(cloneId: string, target: RepriceTarget): Promise<LoadedRepricePlan> {
+  assertRepriceTarget(target);
+  const { data: clone, error } = await supabaseAdmin
+    .from("clones")
+    .select("category_pricing")
+    .eq("id", cloneId)
+    .maybeSingle();
+  if (error) throw new Error(`Could not load pricing guide: ${error.message}`);
+  if (!clone) throw new Error("Creator not found");
+  const guide = normalizeSafeCategoryGuide((clone as { category_pricing?: unknown }).category_pricing);
+  if (!guide) {
+    throw new Error(`Save a complete pricing guide with every category at ${MIN_PAID_MEDIA_PRICE_STARS} Stars or more before repricing`);
+  }
+
+  const [photoRows, videoRows] = await Promise.all([
+    loadRepriceRows("photos", cloneId, target === "photos" || target === "all"),
+    loadRepriceRows("videos", cloneId, target === "videos" || target === "all"),
+  ]);
+  const photos = buildSafeRepricePlan(photoRows, guide);
+  const videos = buildSafeRepricePlan(videoRows, guide);
+  const rows = { photos: photos.changes, videos: videos.changes };
+  const confirmationPhrase = repriceConfirmationPhrase({ cloneId, target, guide, changes: rows });
+  return {
+    ...publicPlan(target, photos, videos, confirmationPhrase),
+    rows,
+  };
+}
+
+export async function previewRepriceMedia(cloneId: string, target: RepriceTarget): Promise<RepricePreview> {
+  const { rows: _rows, ...preview } = await loadRepricePlan(cloneId, target);
+  return preview;
+}
+
+export async function repriceMedia(
+  cloneId: string,
+  target: RepriceTarget,
+  confirmationPhrase: string,
+): Promise<{ photos: number; videos: number; skippedConcurrent: number; failed: number }> {
+  const plan = await loadRepricePlan(cloneId, target);
+  if (!plan.changes) throw new Error("There are no safe price changes to apply");
+  if (confirmationPhrase !== plan.confirmationPhrase) {
+    throw new Error(`Confirmation changed. Preview again and type ${plan.confirmationPhrase}`);
+  }
+
+  const result = { photos: 0, videos: 0, skippedConcurrent: 0, failed: 0 };
+  for (const table of ["photos", "videos"] as const) {
+    for (const change of plan.rows[table]) {
+      // Optimistic guards stop a concurrent manual edit or free toggle from
+      // being overwritten after the preview was shown.
+      const { data, error } = await supabaseAdmin
+        .from(table)
+        .update({ star_value: change.nextPrice, is_free: false })
+        .eq("id", change.id)
+        .eq("clone_id", cloneId)
+        .eq("star_value", change.currentPrice)
+        .eq("is_free", false)
+        .select("id");
+      if (error) {
+        result.failed++;
+        continue;
+      }
+      if (data?.length !== 1) {
+        result.skippedConcurrent++;
+        continue;
+      }
+      result[table]++;
+    }
+  }
+
   revalidatePath("/media");
+  revalidatePath(`/clones/${cloneId}`);
   return result;
 }

@@ -105,7 +105,7 @@ export default async function SettingsPage() {
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             Fleet config defaults
-            <Info text="One template for config only (toggles, dials, discounts, models) — never identity or personality. A new creator inherits it automatically. Saving here also pushes it to every existing creator still marked 'Following default' below, immediately. Category pricing is NOT included: that's per-clone on each creator's PPVs page now, with its own Reprice action." />
+            <Info text="One operational template for timing, monetization, safety, media capabilities and models. Identity, personality, explicitness, warmth, customer-facing paywall copy and promised media stay per creator. A new creator inherits this automatically. Saving also pushes operational fields to every creator marked 'Following default'. The pricing guide seeds new creators only; existing PPVs use the guarded preview on each creator's PPVs page." />
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-6">

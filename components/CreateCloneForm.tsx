@@ -11,6 +11,7 @@ import { Section, inputCls } from "./clone/fields";
 import { useCloneConfig } from "./clone/useCloneConfig";
 import { createCloneRow, deleteClone, compileCloneAction } from "@/app/clones/actions";
 import { uploadPhoto, uploadVideo, createBundle, addBundleItem } from "@/app/media/actions";
+import { MIN_PAID_MEDIA_PRICE_STARS } from "@/lib/pricing";
 
 // ── Staged (browser-only) media types ──────────────────────────────────────────
 type StagedPhoto = { id: number; file: File; caption: string; teaser: string; stars: string; name: string; captioning: boolean };
@@ -50,7 +51,7 @@ export default function CreateCloneForm({ defaults = {} }: { defaults?: Partial<
   // ── Photo staging ───────────────────────────────────────────────────────────
   function addPhotos(files: File[]) {
     const staged = files.map((f) => ({
-      id: nextId(), file: f, caption: "", teaser: "", stars: "25",
+      id: nextId(), file: f, caption: "", teaser: "", stars: "",
       name: f.name.replace(/\.[^.]+$/, ""), captioning: false,
     }));
     setPhotos((prev) => [...prev, ...staged]);
@@ -59,7 +60,7 @@ export default function CreateCloneForm({ defaults = {} }: { defaults?: Partial<
     setPhotos((prev) => prev.map((p) => (p.id === id ? { ...p, ...patch } : p)));
 
   function addVideos(files: File[]) {
-    setVideos((prev) => [...prev, ...files.map((f) => ({ id: nextId(), file: f, caption: "", teaser: "", stars: "50" }))]);
+    setVideos((prev) => [...prev, ...files.map((f) => ({ id: nextId(), file: f, caption: "", teaser: "", stars: "" }))]);
   }
   const setVideo = (id: number, patch: Partial<StagedVideo>) =>
     setVideos((prev) => prev.map((v) => (v.id === id ? { ...v, ...patch } : v)));
@@ -231,7 +232,7 @@ export default function CreateCloneForm({ defaults = {} }: { defaults?: Partial<
                   </div>
                   <div className="grid grid-cols-2 gap-2">
                     <label>Name<input value={p.name} onChange={(e) => setPhoto(p.id, { name: e.target.value })} className={inputCls} /></label>
-                    <label>⭐ Price<input type="number" value={p.stars} onChange={(e) => setPhoto(p.id, { stars: e.target.value })} className={inputCls} /></label>
+                    <label>⭐ Price<input type="number" min={MIN_PAID_MEDIA_PRICE_STARS} step={1} value={p.stars} onChange={(e) => setPhoto(p.id, { stars: e.target.value })} placeholder="Auto from guide" className={inputCls} /></label>
                   </div>
                 </div>
               </div>
@@ -252,7 +253,7 @@ export default function CreateCloneForm({ defaults = {} }: { defaults?: Partial<
                     <span className="truncate font-medium">{v.file.name}</span>
                     <button type="button" onClick={() => setVideos((prev) => prev.filter((x) => x.id !== v.id))} className="text-muted hover:text-crit">✕</button>
                   </div>
-                  <label>⭐ Price<input type="number" value={v.stars} onChange={(e) => setVideo(v.id, { stars: e.target.value })} className={inputCls} /></label>
+                  <label>⭐ Price<input type="number" min={MIN_PAID_MEDIA_PRICE_STARS} step={1} value={v.stars} onChange={(e) => setVideo(v.id, { stars: e.target.value })} placeholder="Auto from guide" className={inputCls} /></label>
                 </div>
               </div>
             </div>

@@ -164,6 +164,22 @@ check("R7 no FeatureKey can be added upstream and silently vanish here", () => {
   eq(sum(shown), 100 * keys.length, "with every bucket populated the panel still sums to the total");
 });
 
+// ── R8 signed adjustments remain visible ────────────────────────────────────
+
+check("R8 a negative adjustment is rendered and reconciles gross products to net revenue", () => {
+  const rows = [
+    row("photo", "Photos", 1_000, 1, 600),
+    row("refund", "Refunds / adjustments", -400, 0, 600),
+  ];
+  const shown = reportFeatureRows(rows);
+  const refund = shown.find((item) => item.key === "refund");
+  assert(refund, "the negative adjustment row must not be filtered out");
+  eq(refund.label, "Refunds / adjustments", "adjustment label");
+  eq(refund.stars, -400, "signed adjustment Stars");
+  eq(refund.sales, 0, "an adjustment is not a paid order");
+  eq(sum(shown), 600, "visible product and adjustment rows must equal net revenue");
+});
+
 // ── report ───────────────────────────────────────────────────────────────────
 
 console.log("what sells breakdown");

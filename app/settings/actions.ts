@@ -4,6 +4,17 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { revalidatePath } from "next/cache";
 import { invalidateCloneCaches } from "@/lib/query-cache";
 import type { Clone } from "@/lib/types";
+import { MIN_PAID_MEDIA_PRICE_STARS, normalizeSafeCategoryGuide } from "@/lib/pricing";
+import {
+  filterCloneDefaultCascade,
+  OPERATIONAL_DEFAULT_JSON,
+  OPERATIONAL_DEFAULT_MODELS,
+  OPERATIONAL_DEFAULT_NUMBERS,
+  OPERATIONAL_DEFAULT_SELECTS,
+  OPERATIONAL_DEFAULT_TOGGLES,
+  sanitizeCloneDefaults,
+  validateCloneDefaultsForWrite,
+} from "@/lib/clone-default-policy";
 import { API_KEY_FIELDS, CLONE_DEFAULTS_KEY } from "./fields";
 
 export async function saveApiKeys(fd: FormData) {
@@ -40,153 +51,36 @@ export async function getApiKeyStatus(): Promise<Record<string, string>> {
 // they map straight through.
 type CloneDefaults = Partial<Clone>;
 
-const DEFAULT_TOGGLES = [
-  "smart_split", "photos_enabled", "videos_enabled", "video_vision_enabled", "bundles_enabled",
-  "voice_enabled", "charge_messages", "tips_enabled", "live_captions_enabled", "thank_you_enabled",
-  "discounts_enabled", "drip_enabled", "emojis_enabled",
-  "reactions_enabled", "read_receipts_enabled", "message_effects_enabled", "ai_disclosure", "strict_minor_gate",
-  "subscriptions_enabled", "smart_paywall_enabled", "paywall_as_voice", "voice_speaker_boost",
-  // Migration 069 — pre-lock prime + post-lock resume toggles.
-  "paywall_prime_enabled", "paywall_prime_as_voice", "paywall_resume_enabled", "paywall_resume_free",
-  // Added 2026-09-01 fleet-defaults audit: these existed per-clone in
-  // ConfigSections (migrations 097/098) but were never added to this
-  // template, so a fresh clone (or a "reprice to default" push) never got
-  // them even though they'd been editable per-clone for weeks.
-  "realism_effects_enabled", "strict_onboarding_steps",
-] as const;
-// Enum selects + free-text strings — stored verbatim when non-empty.
-const DEFAULT_SELECTS = [
-  "ai_mode", "sexual_level", "nsfw_level", "push_level", "emoji_amount", "media_caption_mode",
-  // Migration 086 — the four warmth-side dials, so a new clone can be born
-  // friendly instead of having to be dialled up one at a time after creation.
-  "warmth_level", "curiosity_level", "playfulness_level", "attentiveness_level",
-  "emoji_allowlist", "welcome_instruction", "paywall_instruction",
-  "paywall_default_message", "paywall_button_label", "eleven_model",
-  // Migration 069 — prime/resume steer text + the resume promised-image id.
-  "paywall_prime_instruction", "paywall_resume_instruction", "paywall_resume_media_id",
-  // Added 2026-09-01 fleet-defaults audit (migrations 090/093/105).
-  "price_guard_mode", "silence_fallback_mode", "variety_guard",
-] as const;
-// Numeric dials/fields — stored as numbers (ints and floats both fine via Number()).
-// NOTE: drip_per_day / drip_active_window_minutes stay listed for harmless
-// backward-compat parsing, but CloneDefaultsForm never renders inputs named
-// this, so fd.get() is always null and these never actually get written. Both
-// columns are dead: superseded by drip_steps (migration 029/030), see the
-// comment in app/drip/actions.ts.
-// winback_lapse_days is NOT listed here on purpose: it is a per-clone campaign
-// setting owned by the Campaigns page (saveCampaign in app/drip/actions.ts),
-// which writes it to the clones row where bot/src/campaign.ts actually reads it.
-// It was previously saved into this app_settings blob instead, which nothing
-// ever read back. Do not add it here.
-// The four legacy loose onboarding numbers (welcome_bundle_after,
-// welcome_bundle_after_minutes, onboarding_voice_after) plus
-// onboarding_voice_instruction above were removed 2026-07-29 along with their
-// controls: the runtime replaced that whole flow with the ordered onboarding
-// step list, so nothing read them.
-const DEFAULT_NUMBERS = [
-  "starting_credits", "credit_pack_size", "credit_pack_price_stars",
-  // Migration 088 — what a tip gives back in message credits. 0 = off.
-  "tip_credits_per_100_stars",
-  "discount_max_photo", "discount_max_video", "discount_max_bundle", "discount_max_credits",
-  "drip_per_day", "drip_active_window_minutes", "followup_after_minutes",
-  "response_wait_min", "response_wait_max", "memory_window",
-  "voice_stability", "voice_similarity", "voice_style", "voice_speed",
-  // Migration 069 — messages-before-lock count for the pre-lock warmup.
-  "paywall_prime_before",
-  // Added 2026-09-01 fleet-defaults audit (migration 095's two dial groups,
-  // migration 097's money guardrails + pacing dials).
-  "discount_level_light_pct", "discount_level_medium_pct", "discount_level_max_pct",
-  "discount_tier_share_none_pct", "discount_tier_share_low_pct", "discount_tier_share_mid_pct",
-  "discount_tier_share_high_pct", "discount_tier_share_whale_pct",
-  "discount_absolute_max_pct", "tip_max_stars",
-  "bubble_delay_min_ms", "bubble_delay_max_ms", "llm_max_tries",
-] as const;
-// JSON blobs (hidden inputs carry a stringified object/array) — parsed + stored.
-const DEFAULT_JSON = ["category_pricing", "spoil_options", "subscription_tiers"] as const;
-const DEFAULT_MODELS = [
-  "text_model", "voice_model", "media_model", "routing_model",
-  "photo_reply_model", "vision_model", "voice_enhance_model",
-] as const;
-
-// Built-in fallback for anything the owner hasn't set a template value for yet.
-// Every entry here exists because useCloneConfig's `initial()` falls back to a
-// plain `?? 0` / `?? false` for that field, which DISAGREES with the `clones`
-// column's own DB default (set by a later migration, after useCloneConfig was
-// first written). Without an entry here, a fresh Create form with no saved
-// template silently starts these at the OLD broken value instead of the DB's
-// real default, so a new clone is written with that broken value baked in
-// forever (rowFromForm always sends these fields, so the DB column default
-// never gets a chance to apply on insert). Confirmed against the migration
-// that introduced each default:
-//   videos_enabled                    -> true   (clones table default)
-//   discount_max_photo/video/bundle/credits -> 15/20/25/10 (migration 043:
-//     discounts_enabled defaults false and is untouched, but if an operator
-//     later flips it on for a clone that inherited 0 caps, haggling silently
-//     never moves the price at all - see 043_discount_cap_defaults.sql)
-//   response_wait_min/max             -> 8/45  (migration 055)
-//   read_delay_min/max                -> 2/9   (migration 055)
-//   typing_stutter_enabled            -> true  (migration 055)
-//   pacing_ramp_messages              -> 25    (migration 055)
-//   pacing_new_wait_min/max           -> 20/75 (migration 055)
-//   pacing_established_wait_min/max   -> 6/30  (migration 055)
-// Migration 055's own comment: "the whole response-pacing feature" was
-// launched fully inert because every column defaulted to 0/null/false - the
-// same failure mode this object exists to stop from happening again in the
-// dashboard's own create-flow default. A saved template value (including an
-// explicit "off"/0) always wins over anything here.
-const BUILTIN_CLONE_DEFAULTS: CloneDefaults = {
-  videos_enabled: true,
-  discount_max_photo: 15,
-  discount_max_video: 20,
-  discount_max_bundle: 25,
-  discount_max_credits: 10,
-  response_wait_min: 8,
-  response_wait_max: 45,
-  // The response-pacing defaults (read delay, typing stutter, the ramp) were
-  // removed on 2026-07-27 along with the feature itself. The flat
-  // response_wait_min/max above is the whole pacing story now.
-  //
-  // read_receipts_enabled -> true (clones column default; useCloneConfig's
-  // initial() already falls back to `?? true`). Added 2026-08-31 after 5
-  // clones created via app/api/admin/v1/clones/create came back with read
-  // receipts OFF: rowFromForm()'s own fallback is `fd.get(...) === "true"`,
-  // which is false on an absent field. The dashboard create form never hits
-  // that path because its checkbox always submits a value; a caller of the
-  // admin API that omits the field does. Same failure class as the rest of
-  // this object, just on a toggle instead of a number.
-  read_receipts_enabled: true,
-};
-
 export async function getCloneDefaults(): Promise<CloneDefaults> {
-  const { data } = await supabaseAdmin.from("app_settings").select("value").eq("key", CLONE_DEFAULTS_KEY).maybeSingle();
-  if (!data?.value) return { ...BUILTIN_CLONE_DEFAULTS };
+  const { data, error } = await supabaseAdmin.from("app_settings").select("value").eq("key", CLONE_DEFAULTS_KEY).maybeSingle();
+  if (error) throw new Error(`Could not load fleet defaults: ${error.message}`);
+  if (!data?.value) return sanitizeCloneDefaults(null);
   try {
     const parsed = JSON.parse(String(data.value));
-    return parsed && typeof parsed === "object"
-      ? { ...BUILTIN_CLONE_DEFAULTS, ...(parsed as CloneDefaults) }
-      : { ...BUILTIN_CLONE_DEFAULTS };
+    return sanitizeCloneDefaults(parsed);
   } catch {
-    return { ...BUILTIN_CLONE_DEFAULTS };
+    return sanitizeCloneDefaults(null);
   }
 }
 
-export async function saveCloneDefaults(fd: FormData) {
+export async function saveCloneDefaults(fd: FormData): Promise<{ appliedFollowers: number }> {
   const out: Record<string, unknown> = {};
-  for (const k of DEFAULT_SELECTS) {
+  for (const k of OPERATIONAL_DEFAULT_SELECTS) {
     const v = fd.get(k);
     if (v != null && String(v).trim() !== "") out[k] = String(v);
   }
-  for (const k of DEFAULT_TOGGLES) {
+  for (const k of OPERATIONAL_DEFAULT_TOGGLES) {
     const v = fd.get(k);
     if (v != null) out[k] = String(v) === "true";
   }
-  for (const k of DEFAULT_NUMBERS) {
+  for (const k of OPERATIONAL_DEFAULT_NUMBERS) {
     const v = fd.get(k);
     if (v == null || String(v).trim() === "") continue;
     const n = Number(v);
-    if (Number.isFinite(n)) out[k] = n;
+    if (!Number.isFinite(n)) throw new Error(`${k} must be a valid number`);
+    out[k] = n;
   }
-  for (const k of DEFAULT_JSON) {
+  for (const k of OPERATIONAL_DEFAULT_JSON) {
     const raw = fd.get(k);
     if (raw == null) continue;
     try {
@@ -199,51 +93,62 @@ export async function saveCloneDefaults(fd: FormData) {
         out[k] = parsed;
       }
     } catch {
-      /* ignore malformed JSON */
+      throw new Error(`${k} contains invalid data and was not saved`);
     }
   }
-  for (const k of DEFAULT_MODELS) {
+  if (!normalizeSafeCategoryGuide(out.category_pricing)) {
+    throw new Error(`Every category price must be a whole number of at least ${MIN_PAID_MEDIA_PRICE_STARS} Stars`);
+  }
+  for (const [key, minimum] of [["starting_credits", 0], ["credit_pack_size", 1], ["credit_pack_price_stars", 1]] as const) {
+    const value = out[key];
+    if (typeof value !== "number" || !Number.isSafeInteger(value) || value < minimum) {
+      throw new Error(`${key} must be a whole number of at least ${minimum}`);
+    }
+  }
+  for (const k of OPERATIONAL_DEFAULT_MODELS) {
     const v = fd.get(k);
     if (v != null && String(v).trim() !== "") out[k] = String(v).trim();
   }
-  await supabaseAdmin.from("app_settings").upsert({
+  // Validate the complete candidate before the first database write. The strict
+  // validator covers enums, model ids, number ranges, JSON item schemas and
+  // cross-field ordering; sanitizeCloneDefaults is intentionally read/fallback
+  // behavior and must not be used as the save gate.
+  const safeDefaults = validateCloneDefaultsForWrite(out) as Record<string, unknown>;
+  const { error: saveError } = await supabaseAdmin.from("app_settings").upsert({
     key: CLONE_DEFAULTS_KEY,
-    value: JSON.stringify(out),
+    value: JSON.stringify(safeDefaults),
     updated_at: new Date().toISOString(),
   });
+  if (saveError) throw new Error(`Could not save fleet defaults: ${saveError.message}`);
   // Cascade: every clone still following the fleet default gets the new
   // values immediately, not just future clones. A clone marked custom
   // (uses_default_config = false) is left untouched.
-  const { data: followers } = await supabaseAdmin.from("clones").select("id").eq("uses_default_config", true);
+  const { data: followers, error: followersError } = await supabaseAdmin.from("clones").select("id").eq("uses_default_config", true);
+  if (followersError) throw new Error(`Defaults saved, but followers could not be loaded: ${followersError.message}`);
   const ids = (followers ?? []).map((r) => (r as { id: string }).id);
-  if (ids.length) await applyConfigToClones(ids, out);
+  if (ids.length) await applyConfigToClones(ids, safeDefaults);
   revalidatePath("/settings");
   revalidatePath("/clones/new");
   revalidatePath("/clones");
   await invalidateCloneCaches();
+  return { appliedFollowers: ids.length };
 }
 
 // category_pricing is excluded from the fields pushed onto EXISTING clones
 // (both the save-time cascade above and the manual bulk-push below), even
-// though it stays in DEFAULT_JSON for new-clone seeding. Pricing moved to a
+// though it stays in OPERATIONAL_DEFAULT_JSON for new-clone seeding. Pricing moved to a
 // per-clone PPVs workflow with its own Reprice action (2026-09-01) — pushing
 // the template's guide onto an existing clone would silently overwrite
 // pricing someone tuned by hand for her specific media. New clones still get
 // it (see createCloneRow in app/clones/actions.ts, which reads
 // getCloneDefaults().category_pricing directly).
-const CASCADE_EXCLUDE = new Set<string>(["category_pricing"]);
-
-// Write a set of config fields (from the same DEFAULT_* vocabulary
+// Write a set of config fields (from the same operational allowlist
 // saveCloneDefaults produces) onto one or more EXISTING clone rows. Shared by
 // the save-time cascade above and the manual "push to selected clones" button
 // on the Settings page. Never touches identity/persona — `out`/`fields` only
-// ever contains keys from the five DEFAULT_* lists, which draw that line.
+// is filtered again at the write boundary, even if stored JSON is stale.
 async function applyConfigToClones(cloneIds: string[], fields: Record<string, unknown>): Promise<void> {
-  const update: Record<string, unknown> = {};
-  for (const [k, v] of Object.entries(fields)) {
-    if (CASCADE_EXCLUDE.has(k)) continue;
-    update[k] = v;
-  }
+  const update = filterCloneDefaultCascade(fields);
   if (!Object.keys(update).length || !cloneIds.length) return;
   const { error } = await supabaseAdmin.from("clones").update(update).in("id", cloneIds);
   if (error) throw new Error(error.message);
@@ -253,7 +158,8 @@ async function applyConfigToClones(cloneIds: string[], fields: Record<string, un
 export type CloneDefaultStatus = { id: string; name: string; slug: string; usesDefault: boolean };
 
 export async function getCloneDefaultStatuses(): Promise<CloneDefaultStatus[]> {
-  const { data } = await supabaseAdmin.from("clones").select("id,name,slug,uses_default_config").order("name");
+  const { data, error } = await supabaseAdmin.from("clones").select("id,name,slug,uses_default_config").order("name");
+  if (error) throw new Error(`Could not load clone default status: ${error.message}`);
   return (data ?? []).map((r) => ({
     id: r.id as string,
     name: (r.name as string) ?? "unnamed",

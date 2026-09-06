@@ -19,7 +19,8 @@ import type { AnalyticsData } from "@/lib/analytics-data";
 import type { StarBalance } from "@/lib/star-balance";
 import { reportFeatureRows, topFeatureRow } from "@/lib/report-features";
 import { reportTzLabel } from "@/lib/report-time";
-import { fmtMoney, fmtNum, starsToMoneyRate, usdToMoneyRate } from "@/lib/money";
+import { fmtMoney, fmtNum, STAR_USD, starsToMoneyRate, usdToMoneyRate } from "@/lib/money";
+import { intraPeriodTrendPct } from "@/lib/revenue-trend";
 import { useCurrency } from "@/components/CurrencyProvider";
 import { initials } from "@/lib/colors";
 import FanAvatar from "@/components/FanAvatar";
@@ -277,9 +278,9 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
   }
 
   const money = (stars: number) => fmtMoney(starsToMoneyRate(stars, currency, rate), currency);
-  // Profit/cost arrive in USD; revenue arrives in Stars. Both are rendered in
+  // AI contribution/cost arrive in USD; revenue arrives in Stars. Both are rendered in
   // the operator's selected currency so a table never puts "A$8,295 revenue"
-  // beside "$4,102 profit" and invites the wrong ratio. Was a bare "$" + toLocaleString.
+  // beside "$4,102 AI contribution" and invites the wrong ratio. Was a bare "$" + toLocaleString.
   const usd = (n: number) => fmtMoney(usdToMoneyRate(n, currency, rate), currency);
   // Whole percent above 10, one decimal below it. Math.round alone flattened
   // every conversion rate the fleet has ever had into "1%": the real figure sat
@@ -319,21 +320,17 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
       return next;
     });
 
-  // Rough trend: second half of the visible window vs the first half — no
-  // separate "previous period" fetch exists yet, so this approximates
-  // direction from the same series already on screen.
+  // This is an intra-period direction signal. A real prior-period comparison
+  // would require another full revenue rollup, currently the slowest query on
+  // this page. Keep the existing comparison honest in the UI, and compare
+  // average bucket values so a seven-day chart does not compare four days with
+  // three days as raw totals.
   const trendPct = useMemo(() => {
     if (!data || data.series.length < 2) return null;
-    const sumRows = (rows: typeof data.series) =>
-      rows.reduce(
-        (s, row) => s + visibleClones.reduce((cs, c) => cs + (Number(row[c.id]) || 0), 0),
-        0,
-      );
-    const mid = Math.floor(data.series.length / 2);
-    const first = sumRows(data.series.slice(0, mid));
-    const second = sumRows(data.series.slice(mid));
-    if (first === 0) return second > 0 ? 100 : null;
-    return Math.round(((second - first) / first) * 100);
+    const bucketRevenue = data.series.map((row) =>
+      visibleClones.reduce((sum, clone) => sum + (Number(row[clone.id]) || 0), 0),
+    );
+    return intraPeriodTrendPct(bucketRevenue);
   }, [data, visibleClones]);
 
   return (
@@ -505,9 +502,12 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
                 {focusName ? <span className="creator-name">{focusName}</span> : "Fleet"} · {revenueLabel}
                 <Info text="Recorded Star payments in this window, after refunds and adjustments. This is not profit, a payout, or the current wallet balance." />
                 {trendPct !== null && (
-                  <span className="font-mono font-semibold tabular-nums text-black">
-                    {trendPct >= 0 ? "+" : ""}
-                    {trendPct}%
+                  <span className="inline-flex items-center gap-1">
+                    <span className="font-mono font-semibold tabular-nums text-black">
+                      {trendPct >= 0 ? "+" : ""}
+                      {trendPct}% latter vs earlier half
+                    </span>
+                    <Info text="Average Star revenue per chart interval in the latter half of this selected range compared with its earlier half. This is not a comparison with the previous period." />
                   </span>
                 )}
               </div>
@@ -1393,8 +1393,8 @@ function RevenueReport({
                       share={f.share}
                       right={money(f.stars)}
                       rightHint={pct(f.share)}
-                      sub={`${fmtNum(f.sales)} sale${f.sales === 1 ? "" : "s"}`}
-                      subMoney={`avg ${money(f.avgStars)} per sale`}
+                      sub={f.key === "refund" ? "Net ledger adjustment" : `${fmtNum(f.sales)} sale${f.sales === 1 ? "" : "s"}`}
+                      subMoney={f.key === "refund" ? "included in net revenue" : `avg ${money(f.avgStars)} per sale`}
                     />
                   );
                   return drillable ? (
@@ -1569,7 +1569,7 @@ function RevenueReport({
         {/* Which clone / which flow - fleet view only (scoped = one clone already) */}
         {!scoped && (
           <div className="grid gap-3 lg:grid-cols-[1fr_280px]">
-            <ReportPanel title="By creator" hint="Ranked by revenue. Profit = revenue minus real AI/voice cost.">
+            <ReportPanel title="By creator" hint="Ranked by revenue. Metered AI contribution is Star revenue at the canonical conversion rate minus recorded AI and voice cost. It excludes all other business costs.">
               {earningClones.length === 0 ? (
                 <ReportEmpty text="No creator earned in this window." />
               ) : (
@@ -1592,8 +1592,8 @@ function RevenueReport({
                       <div className="mt-2 grid grid-cols-3 gap-2 text-[10px]">
                         {[
                           { k: "Share", v: totalStars > 0 ? pct(c.revenueStars / totalStars) : "-" },
-                          { k: "Profit", v: usd(c.profitUsd), money: true },
-                          { k: "Margin", v: c.revenueStars > 0 ? pct(c.margin) : "-" },
+                          { k: "AI contribution", v: usd(c.profitUsd), money: true },
+                          { k: "AI margin", v: c.revenueStars > 0 ? pct(c.margin) : "-" },
                           { k: "Sales", v: fmtNum(c.sales) },
                         ].map((cell) => (
                           <span key={cell.k} className="min-w-0">
@@ -1619,8 +1619,8 @@ function RevenueReport({
                       <TableHead>Creator</TableHead>
                       <TableHead className="text-right">Revenue</TableHead>
                       <TableHead className="text-right">Share</TableHead>
-                      <TableHead className="text-right">Profit</TableHead>
-                      <TableHead className="text-right">Margin</TableHead>
+                      <TableHead className="text-right">AI contribution</TableHead>
+                      <TableHead className="text-right">AI margin</TableHead>
                       <TableHead className="text-right">Sales</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -1667,7 +1667,7 @@ function RevenueReport({
                       right={money(f.stars)}
                       rightHint={pct(f.share)}
                       sub={`${fmtNum(f.clones)} creator${f.clones === 1 ? "" : "s"} · ${fmtNum(f.sales)} sales`}
-                      subMoney={`profit ${usd(f.profitUsd)}`}
+                      subMoney={`AI contribution ${usd(f.profitUsd)}`}
                     />
                   ))}
                 </div>
@@ -2250,7 +2250,7 @@ function AiCostDrillIn({
 }) {
   const tiles: { label: string; value: string; money?: boolean }[] = [
     { label: "AI cost", value: `$${stats.costUsd.toFixed(2)}`, money: true },
-    { label: "Profit (USD)", value: `$${(stats.stars / 50 - stats.costUsd).toFixed(2)}`, money: true },
+    { label: "Metered AI contribution (USD)", value: `$${(stats.stars * STAR_USD - stats.costUsd).toFixed(2)}`, money: true },
     { label: "AI calls", value: fmtNum(stats.aiCalls) },
     { label: "AI errors", value: fmtNum(stats.aiErrors) },
   ];

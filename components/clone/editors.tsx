@@ -5,7 +5,7 @@
 // takes the shared cfg/set from useCloneConfig and renders its own hidden input
 // carrying the money-safe JSON the server actions parse.
 
-import { CATEGORY_LABELS, DEFAULT_CATEGORY_PRICING, PRICING_CATEGORIES } from "@/lib/pricing";
+import { CATEGORY_LABELS, DEFAULT_CATEGORY_PRICING, MIN_PAID_MEDIA_PRICE_STARS, PRICING_CATEGORIES } from "@/lib/pricing";
 import { DEFAULT_SPOIL_OPTIONS, SubCard, inputCls } from "./fields";
 import type { CloneConfigState, SetConfig } from "./useCloneConfig";
 
@@ -19,7 +19,7 @@ export function CategoryPricingEditor({ cfg, set }: { cfg: CloneConfigState; set
         name="category_pricing"
         value={JSON.stringify(
           Object.fromEntries(
-            PRICING_CATEGORIES.map((k) => [k, Math.max(0, Math.round(Number(cfg.categoryPricing[k]) || 0))]),
+            PRICING_CATEGORIES.map((k) => [k, Math.max(MIN_PAID_MEDIA_PRICE_STARS, Math.round(Number(cfg.categoryPricing[k]) || MIN_PAID_MEDIA_PRICE_STARS))]),
           ),
         )}
       />
@@ -34,9 +34,13 @@ export function CategoryPricingEditor({ cfg, set }: { cfg: CloneConfigState; set
               </span>
               <input
                 type="number"
-                min={0}
-                value={cfg.categoryPricing[k] ?? 0}
-                onChange={(e) => set("categoryPricing", (prev) => ({ ...prev, [k]: Number(e.target.value) }))}
+                min={MIN_PAID_MEDIA_PRICE_STARS}
+                step={1}
+                value={cfg.categoryPricing[k] ?? MIN_PAID_MEDIA_PRICE_STARS}
+                onChange={(e) => set("categoryPricing", (prev) => ({
+                  ...prev,
+                  [k]: Math.max(MIN_PAID_MEDIA_PRICE_STARS, Math.round(Number(e.target.value) || MIN_PAID_MEDIA_PRICE_STARS)),
+                }))}
                 className={inputCls + " px-2 py-1 text-center tabular-nums"}
               />
             </label>

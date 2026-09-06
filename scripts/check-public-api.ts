@@ -8,6 +8,7 @@
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   hashKey,
   keyPrefix,
@@ -53,7 +54,7 @@ function sourceCode(p: string | URL): string {
   return readFileSync(p, "utf8").replace(/\/\/.*$/gm, "").replace(/\/\*[\s\S]*?\*\//g, "");
 }
 function publicRouteFiles(): string[] {
-  const root = new URL("../app/api/v1/", import.meta.url).pathname;
+  const root = fileURLToPath(new URL("../app/api/v1/", import.meta.url));
   const walk = (dir: string): string[] =>
     readdirSync(dir).flatMap((e) => {
       const p = join(dir, e);
@@ -475,7 +476,7 @@ check("E7 the docs render from the same constants the API enforces", () => {
 
 check("E8 the docs describe the endpoints that actually exist", () => {
   const docs = sourceCode(new URL("../app/api-access/ApiDocs.tsx", import.meta.url));
-  const routes = publicRouteFiles().map((p) => p.split("/api/v1/")[1].replace("/route.ts", ""));
+  const routes = publicRouteFiles().map((p) => p.replace(/\\/g, "/").split("/api/v1/")[1].replace("/route.ts", ""));
   for (const r of routes) {
     assert(docs.includes(`/api/v1/${r}`), `the docs never mention /api/v1/${r}`);
   }

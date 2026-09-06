@@ -107,7 +107,7 @@ export function ApiDocs() {
           </li>
           <li>Chat messages, prompts, persona or config of any kind.</li>
           <li>
-            Our AI costs, profit or margin. Those are never in the response, and an All models key does not change
+            Our AI costs, metered AI contribution or contribution margin. Those are never in the response, and an All models key does not change
             that: it widens which girls you can see, never what you can see about them.
           </li>
           <li>Anything at all after it is revoked, from the very next request.</li>

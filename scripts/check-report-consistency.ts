@@ -34,6 +34,7 @@ import { classifyRevenueLedgerRow } from "../lib/revenue-ledger";
 import { reportFeatureRows, topFeatureRow, type FeatureRow } from "../lib/report-features";
 import { REPORT_TZ, normaliseHour, reportInstant, reportTzLabel } from "../lib/report-time";
 import { starsToMoneyRate, usdToMoneyRate, AUD_PER_USD, STAR_USD } from "../lib/money";
+import { intraPeriodTrendPct } from "../lib/revenue-trend";
 
 let passed = 0;
 const failures: string[] = [];
@@ -283,6 +284,42 @@ check("C15 analytics distinguishes paid orders from ledger adjustments", () => {
   assert(
     /value: avgOrder === null \? "-" : money\(avgOrder\)/.test(DASH),
     "an empty paid-order denominator must render as an em dash, not a false $0",
+  );
+});
+
+// ── C16-C18: reporting labels and arithmetic stay honest ────────────────────
+
+check("C16 an odd-length intra-period trend compares average buckets, not unequal totals", () => {
+  eq(intraPeriodTrendPct([100, 100, 100, 100, 100, 100, 100]), 0, "seven identical daily buckets");
+  eq(intraPeriodTrendPct([0, 0]), null, "an empty range has no trend");
+  eq(intraPeriodTrendPct([0, 100]), 100, "revenue appearing after an empty earlier half");
+  eq(intraPeriodTrendPct([100]), null, "one bucket cannot be split");
+  assert(
+    /latter vs earlier half/.test(DASH) && /This is not a comparison with the previous period\./.test(DASH),
+    "the UI must label the trend as intra-period instead of presenting it as a prior-period change",
+  );
+});
+
+check("C17 creator drill-in uses the canonical Star conversion", () => {
+  assert(
+    /stats\.stars \* STAR_USD - stats\.costUsd/.test(DASH),
+    "creator AI contribution must convert Stars with STAR_USD",
+  );
+  assert(!/stats\.stars \/ 50/.test(DASH), "the obsolete $0.02 per Star conversion must not return");
+});
+
+check("C18 metered AI cost is not labelled as whole-business profit", () => {
+  assert(/Metered AI contribution \(USD\)/.test(DASH), "creator drill-in must name metered AI contribution");
+  assert(/AI contribution/.test(DASH), "the creator and flow report must name AI contribution");
+  assert(!/\{ k: "Profit"/.test(DASH), "creator cards must not label metered contribution as Profit");
+  assert(!/>Profit</.test(DASH), "creator table must not label metered contribution as Profit");
+});
+
+check("C19 credit refunds remain netted against paid-message revenue", () => {
+  const analytics = readFileSync(new URL("../lib/analytics-data.ts", import.meta.url), "utf8");
+  assert(
+    /const originalFeature =[^;]+;[\s\S]*if \(originalFeature === "credits"\)/.test(analytics),
+    "paid-message Stars must use the original product feature even when the display bucket is Refunds",
   );
 });
 

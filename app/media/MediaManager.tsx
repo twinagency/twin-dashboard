@@ -3,7 +3,14 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import StarAmount from "@/components/StarAmount";
-import { MEDIA_TAGS, CATEGORY_LABELS, PRICING_CATEGORIES, DEFAULT_CATEGORY_PRICING } from "@/lib/pricing";
+import {
+  MEDIA_TAGS,
+  CATEGORY_LABELS,
+  PRICING_CATEGORIES,
+  DEFAULT_CATEGORY_PRICING,
+  MIN_PAID_MEDIA_PRICE_STARS,
+  normalizeSafeCategoryGuide,
+} from "@/lib/pricing";
 import { checkPhotoDimensions, PHOTO_LIMITS_HINT } from "@/lib/telegram-limits";
 import {
   uploadPhoto,
@@ -18,9 +25,12 @@ import {
   addBundleItem,
   removeBundleItem,
   updateCategoryPricing,
+  previewRepriceMedia,
   repriceMedia,
   bulkSetMediaPrice,
   bulkDeleteMedia,
+  type RepricePreview,
+  type RepriceTarget,
 } from "./actions";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
@@ -357,6 +367,8 @@ function PhotoUploadQueue({
                     <span className="mb-1 block text-muted">⭐ Price</span>
                     <input
                       type="number"
+                      min={MIN_PAID_MEDIA_PRICE_STARS}
+                      step={1}
                       value={item.starValue}
                       onChange={(e) => update(i, { starValue: e.target.value })}
                       placeholder="Auto (pricing guide)"
@@ -495,6 +507,8 @@ function VideoUploadQueue({
                     <span className="mb-1 block text-muted">⭐ Price</span>
                     <input
                       type="number"
+                      min={MIN_PAID_MEDIA_PRICE_STARS}
+                      step={1}
                       value={item.starValue}
                       onChange={(e) => update(i, { starValue: e.target.value })}
                       placeholder="Auto (pricing guide)"
@@ -1105,7 +1119,9 @@ function BulkMediaEditor({
   const singular = type === "photos" ? "photo" : "video";
   const selectedCount = selectedIds.size;
   const parsedPrice = Number(price);
-  const validPrice = price.trim() !== "" && Number.isSafeInteger(parsedPrice) && parsedPrice >= 0;
+  const validPrice = price.trim() !== ""
+    && Number.isSafeInteger(parsedPrice)
+    && (parsedPrice === 0 || parsedPrice >= MIN_PAID_MEDIA_PRICE_STARS);
 
   function close() {
     if (pending) return;
@@ -1117,6 +1133,8 @@ function BulkMediaEditor({
 
   function changePrice() {
     if (!validPrice || selectedCount === 0) return;
+    const label = parsedPrice === 0 ? "make them free" : `set them to ${parsedPrice} Stars`;
+    if (!window.confirm(`Change ${selectedCount} selected ${singular}${selectedCount === 1 ? "" : "s"} and ${label}? Existing invoices keep their original price.`)) return;
     setMessage(null);
     startTransition(async () => {
       try {
@@ -1166,7 +1184,15 @@ function BulkMediaEditor({
     <section className="rounded-xl border border-accent/30 bg-accent/5 p-3 sm:p-4">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div>
-          <div className="text-sm font-semibold">Edit {type}</div>
+          <div className="flex items-center gap-1.5 text-sm font-semibold">
+            Edit {type}
+            <span
+              className="cursor-help text-[11px] font-normal text-muted"
+              title={`Changes apply to this creator only. Use 0 for free content. Paid bulk prices must be at least ${MIN_PAID_MEDIA_PRICE_STARS} Stars. Existing invoices keep their original price.`}
+            >
+              ⓘ
+            </span>
+          </div>
           <div className="text-xs text-muted">{selectedCount} of {total} selected</div>
         </div>
         <div className="flex flex-wrap gap-2">
@@ -1195,7 +1221,7 @@ function BulkMediaEditor({
             inputMode="numeric"
             value={price}
             onChange={(event) => setPrice(event.target.value)}
-            placeholder="e.g. 20"
+            placeholder={`0 or ${MIN_PAID_MEDIA_PRICE_STARS}+`}
             className="w-full rounded border border-line bg-panel px-3 py-2 text-sm outline-none focus:border-accent"
           />
         </label>
@@ -1209,9 +1235,6 @@ function BulkMediaEditor({
         </button>
       </div>
 
-      <p className="mt-3 text-xs text-muted">
-        Changes apply to this creator only. New Telegram offers use the saved price immediately; an invoice already sent keeps its original price.
-      </p>
       {message && <p role="status" className="mt-2 text-xs font-medium text-ink">{message}</p>}
     </section>
   );
@@ -1379,38 +1402,81 @@ function PricingTab({
   videoCount: number;
 }) {
   const router = useRouter();
+  const initialSavedGuide = normalizeSafeCategoryGuide(categoryPricing);
   const [guide, setGuide] = useState<Record<string, number>>(() => ({
-    ...DEFAULT_CATEGORY_PRICING,
-    ...(categoryPricing ?? {}),
+    ...(initialSavedGuide ?? DEFAULT_CATEGORY_PRICING),
   }));
-  const [savedGuide, setSavedGuide] = useState(guide);
+  const [savedGuide, setSavedGuide] = useState<Record<string, number> | null>(initialSavedGuide);
   const [saving, startSave] = useTransition();
-  const [repricing, setRepricing] = useState<"photos" | "videos" | "all" | null>(null);
+  const [previewing, setPreviewing] = useState<RepriceTarget | null>(null);
+  const [preview, setPreview] = useState<RepricePreview | null>(null);
+  const [confirmation, setConfirmation] = useState("");
+  const [repricing, setRepricing] = useState<RepriceTarget | null>(null);
   const [msg, setMsg] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
 
-  const dirty = JSON.stringify(guide) !== JSON.stringify(savedGuide);
+  const dirty = savedGuide == null || JSON.stringify(guide) !== JSON.stringify(savedGuide);
 
   function save() {
+    setMsg(null);
+    setFailed(false);
     startSave(async () => {
-      await updateCategoryPricing(cloneId, guide);
-      setSavedGuide(guide);
-      setMsg("Pricing guide saved.");
-      router.refresh();
+      try {
+        await updateCategoryPricing(cloneId, guide);
+        setSavedGuide({ ...guide });
+        setPreview(null);
+        setConfirmation("");
+        setMsg("Pricing guide saved. Preview existing content before applying it.");
+        router.refresh();
+      } catch (error) {
+        setFailed(true);
+        setMsg(error instanceof Error ? error.message : "Could not save the pricing guide");
+      }
     });
   }
 
-  async function reprice(target: "photos" | "videos" | "all") {
+  async function loadPreview(target: RepriceTarget) {
+    if (dirty) return;
+    setPreviewing(target);
+    setPreview(null);
+    setConfirmation("");
+    setMsg(null);
+    setFailed(false);
+    try {
+      setPreview(await previewRepriceMedia(cloneId, target));
+    } catch (error) {
+      setFailed(true);
+      setMsg(error instanceof Error ? error.message : "Could not preview price changes");
+    } finally {
+      setPreviewing(null);
+    }
+  }
+
+  async function applyReprice() {
+    if (!preview || confirmation !== preview.confirmationPhrase || preview.changes === 0) return;
+    const target = preview.target;
     setRepricing(target);
     setMsg(null);
+    setFailed(false);
     try {
-      const result = await repriceMedia(cloneId, target);
+      const result = await repriceMedia(cloneId, target, confirmation);
       const parts: string[] = [];
       if (target !== "videos") parts.push(`${result.photos} photo${result.photos === 1 ? "" : "s"}`);
       if (target !== "photos") parts.push(`${result.videos} video${result.videos === 1 ? "" : "s"}`);
-      setMsg(`Repriced ${parts.join(" and ")} from the current guide.`);
+      const incomplete = result.skippedConcurrent + result.failed;
+      setFailed(incomplete > 0);
+      setMsg(
+        `Safely repriced ${parts.join(" and ")}. Free items and higher existing prices stayed unchanged.` +
+          (incomplete > 0
+            ? ` ${result.skippedConcurrent} changed after preview and ${result.failed} failed; refresh and preview again for those items.`
+            : ""),
+      );
+      setPreview(null);
+      setConfirmation("");
       router.refresh();
-    } catch (e) {
-      setMsg(e instanceof Error ? e.message : String(e));
+    } catch (error) {
+      setFailed(true);
+      setMsg(error instanceof Error ? error.message : "Could not apply price changes");
     } finally {
       setRepricing(null);
     }
@@ -1423,14 +1489,16 @@ function PricingTab({
           <div className="text-sm font-semibold">Category pricing</div>
           <span
             className="cursor-help text-[11px] text-muted"
-            title="Suggested ⭐ price per content type. On upload, a photo/video is auto-tagged by AI (bikini, lingerie, full nude, ...) and priced from this guide: the highest-priced matching category wins. Leave a price blank on upload to auto-price; type one to override. Prices only ever come from here, she never invents a number."
+            title={`Suggested price per content type. New uploads are tagged and priced from the highest matching category. Paid guide prices must be at least ${MIN_PAID_MEDIA_PRICE_STARS} Stars. Leave price blank on upload to use this guide.`}
           >
             ⓘ
           </span>
         </div>
-        <div className="mb-3 text-xs text-muted">
-          Changing a price here only affects NEW uploads until you press Reprice below — it never silently rewrites what's already priced.
-        </div>
+        {initialSavedGuide == null && (
+          <div className="mb-3 rounded-md border border-warn/30 bg-warn/10 px-2.5 py-1.5 text-[11px] text-warn">
+            The saved guide was missing or below the {MIN_PAID_MEDIA_PRICE_STARS}-Star safety floor. Safe defaults are shown. Save before previewing existing content.
+          </div>
+        )}
         <div className="grid grid-cols-3 gap-x-2 gap-y-1.5 sm:grid-cols-4">
           {PRICING_CATEGORIES.map((k) => (
             <label key={k} className="grid gap-0.5">
@@ -1439,9 +1507,13 @@ function PricingTab({
               </span>
               <input
                 type="number"
-                min={0}
-                value={guide[k] ?? 0}
-                onChange={(e) => setGuide((prev) => ({ ...prev, [k]: Math.max(0, Math.round(Number(e.target.value) || 0)) }))}
+                min={MIN_PAID_MEDIA_PRICE_STARS}
+                step={1}
+                value={guide[k] ?? MIN_PAID_MEDIA_PRICE_STARS}
+                onChange={(e) => setGuide((prev) => ({
+                  ...prev,
+                  [k]: Math.max(MIN_PAID_MEDIA_PRICE_STARS, Math.round(Number(e.target.value) || MIN_PAID_MEDIA_PRICE_STARS)),
+                }))}
                 className="rounded-md border border-line bg-panel px-2 py-1 text-center text-sm tabular-nums text-ink outline-none focus:border-ink/30"
               />
             </label>
@@ -1458,7 +1530,11 @@ function PricingTab({
           </button>
           <button
             type="button"
-            onClick={() => setGuide({ ...DEFAULT_CATEGORY_PRICING })}
+            onClick={() => {
+              if (window.confirm("Reset this guide to the safe 600-3600 Star commercial baseline? Existing content will not change until a separate preview is confirmed.")) {
+                setGuide({ ...DEFAULT_CATEGORY_PRICING });
+              }
+            }}
             className="text-[11px] font-medium text-muted underline hover:text-ink"
           >
             Reset to default
@@ -1471,45 +1547,81 @@ function PricingTab({
           <div className="text-sm font-semibold">Reprice existing content</div>
           <span
             className="cursor-help text-[11px] text-muted"
-            title="Recomputes star_value for every existing photo/video from the guide above and its own AI tags — the same derivation new uploads use. Retroactive: this is what actually applies a changed guide to content that's already uploaded."
+            title="Preview compares every item with the saved guide. Apply can only raise a paid price. Free content and higher existing prices are protected. Use selected-item editing for a deliberate reduction."
           >
             ⓘ
           </span>
         </div>
         {dirty && (
-          <div className="mb-2 rounded-md border border-warn/30 bg-warn/10 px-2.5 py-1.5 text-[11px] text-warn">
-            You have unsaved guide changes above — save first, reprice reads the saved guide.
-          </div>
+            <div className="mb-2 rounded-md border border-warn/30 bg-warn/10 px-2.5 py-1.5 text-[11px] text-warn">
+            Save the guide first. Preview always reads the saved server copy.
+            </div>
         )}
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            onClick={() => reprice("photos")}
-            disabled={repricing !== null || photoCount === 0}
+            onClick={() => loadPreview("photos")}
+            disabled={dirty || previewing !== null || repricing !== null || photoCount === 0}
             className="rounded-md border border-line px-3 py-1.5 text-xs font-semibold text-ink disabled:opacity-40"
           >
-            {repricing === "photos" ? "Repricing…" : `Reprice ${photoCount} photo${photoCount === 1 ? "" : "s"}`}
+            {previewing === "photos" ? "Previewing…" : `Preview ${photoCount} photo${photoCount === 1 ? "" : "s"}`}
           </button>
           <button
             type="button"
-            onClick={() => reprice("videos")}
-            disabled={repricing !== null || videoCount === 0}
+            onClick={() => loadPreview("videos")}
+            disabled={dirty || previewing !== null || repricing !== null || videoCount === 0}
             className="rounded-md border border-line px-3 py-1.5 text-xs font-semibold text-ink disabled:opacity-40"
           >
-            {repricing === "videos" ? "Repricing…" : `Reprice ${videoCount} video${videoCount === 1 ? "" : "s"}`}
+            {previewing === "videos" ? "Previewing…" : `Preview ${videoCount} video${videoCount === 1 ? "" : "s"}`}
           </button>
           <button
             type="button"
-            onClick={() => reprice("all")}
-            disabled={repricing !== null || (photoCount === 0 && videoCount === 0)}
+            onClick={() => loadPreview("all")}
+            disabled={dirty || previewing !== null || repricing !== null || (photoCount === 0 && videoCount === 0)}
             className="rounded-md bg-ink px-3 py-1.5 text-xs font-semibold text-panel disabled:opacity-40"
           >
-            {repricing === "all" ? "Repricing…" : "Reprice all"}
+            {previewing === "all" ? "Previewing…" : "Preview all"}
           </button>
         </div>
+
+        {preview && (
+          <div className="mt-3 grid gap-3 rounded-lg border border-line bg-bg p-3 text-xs">
+            <div className="grid grid-cols-2 gap-2 sm:grid-cols-4">
+              <div><span className="block text-muted">Will increase</span><strong className="text-ink">{preview.changes}</strong></div>
+              <div><span className="block text-muted">Already matched</span><strong className="text-ink">{preview.unchanged}</strong></div>
+              <div><span className="block text-muted">Higher price protected</span><strong className="text-ink">{preview.protectedFromDecrease}</strong></div>
+              <div><span className="block text-muted">Free protected</span><strong className="text-ink">{preview.protectedFree}</strong></div>
+            </div>
+            <div className="text-muted">
+              Net catalogue increase: <strong className="text-ink">+{preview.increaseStars.toLocaleString()} Stars</strong>. No price will be lowered.
+            </div>
+            {preview.changes > 0 ? (
+              <div className="grid gap-2 sm:grid-cols-[minmax(0,260px)_auto] sm:items-end">
+                <label className="block">
+                  <span className="mb-1 block text-muted">Type {preview.confirmationPhrase} to apply</span>
+                  <input
+                    value={confirmation}
+                    onChange={(event) => setConfirmation(event.target.value)}
+                    className="w-full rounded border border-line bg-panel px-2.5 py-1.5 font-mono outline-none focus:border-accent"
+                  />
+                </label>
+                <button
+                  type="button"
+                  onClick={applyReprice}
+                  disabled={repricing !== null || confirmation !== preview.confirmationPhrase}
+                  className="rounded-md bg-ink px-3 py-1.5 font-semibold text-panel disabled:opacity-40"
+                >
+                  {repricing ? "Applying…" : `Apply ${preview.changes} safe change${preview.changes === 1 ? "" : "s"}`}
+                </button>
+              </div>
+            ) : (
+              <div className="font-medium text-good">Nothing needs changing under the safe rules.</div>
+            )}
+          </div>
+        )}
       </div>
 
-      {msg && <div className="rounded-md border border-line bg-panel px-3 py-2 text-xs text-muted">{msg}</div>}
+      {msg && <div role={failed ? "alert" : "status"} className={`rounded-md border px-3 py-2 text-xs ${failed ? "border-crit/30 bg-crit/10 text-crit" : "border-line bg-panel text-muted"}`}>{msg}</div>}
     </div>
   );
 }

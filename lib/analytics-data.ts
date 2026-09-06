@@ -24,19 +24,20 @@ import { classifyRevenueLedgerRow } from "./revenue-ledger";
 
 const MS_DAY = 86_400_000;
 
-export type KindKey = "credits" | "media" | "tip" | "other";
+export type KindKey = "credits" | "media" | "tip" | "other" | "refund";
 
 const KIND_LABEL: Record<KindKey, string> = {
   credits: "Message credits",
   media: "Photos & video",
   tip: "Tips / spoil",
   other: "Other",
+  refund: "Refunds / adjustments",
 };
 
 // Finer per-feature breakdown. Reads star_transactions.feature (additive column,
 // migration 024) and falls back to the coarse `kind` for older rows written before
 // the column existed — so the cut degrades gracefully instead of dropping revenue.
-export type FeatureKey = "credits" | "photo" | "video" | "bundle" | "media" | "tip" | "subscription" | "other";
+export type FeatureKey = "credits" | "photo" | "video" | "bundle" | "media" | "tip" | "subscription" | "other" | "refund";
 
 const FEATURE_LABEL: Record<FeatureKey, string> = {
   credits: "Paid Messages",
@@ -47,6 +48,7 @@ const FEATURE_LABEL: Record<FeatureKey, string> = {
   tip: "Tips / spoil",
   subscription: "VIP subscriptions",
   other: "Other",
+  refund: "Refunds / adjustments",
 };
 const FEATURE_KEYS = Object.keys(FEATURE_LABEL) as FeatureKey[];
 
@@ -627,7 +629,7 @@ export async function getAnalytics(
     k === "credits" || k === "media" || k === "tip" ? k : "other";
 
   for (const t of txs) {
-    const { stars, paidOrder } = classifyRevenueLedgerRow(t);
+    const { stars, adjustment, paidOrder } = classifyRevenueLedgerRow(t);
     totalStars += stars;
     if (paidOrder) totalSales += 1;
     if (paidOrder && t.telegram_id != null) windowPaidBuyerIds.add(Number(t.telegram_id));
@@ -637,18 +639,23 @@ export async function getAnalytics(
       if (paidOrder) cloneSales.set(t.clone_id, (cloneSales.get(t.clone_id) ?? 0) + 1);
     }
 
-    const k = normKind(t.kind);
+    // Adjustments need their own visible row. Assigning them to their original
+    // product hid negative-only buckets and made the product rows fail to
+    // reconcile with net revenue whenever, for example, this window contained
+    // a photo refund but no photo sale.
+    const k: KindKey = adjustment ? "refund" : normKind(t.kind);
     kindStars.set(k, (kindStars.get(k) ?? 0) + stars);
     if (paidOrder) kindSales.set(k, (kindSales.get(k) ?? 0) + 1);
 
-    const f = inferredMediaByTransaction.get(t.id) ?? normFeature(t.feature, t.kind);
+    const originalFeature = inferredMediaByTransaction.get(t.id) ?? normFeature(t.feature, t.kind);
+    const f: FeatureKey = adjustment ? "refund" : originalFeature;
     featureStars.set(f, (featureStars.get(f) ?? 0) + stars);
     if (paidOrder) featureSales.set(f, (featureSales.get(f) ?? 0) + 1);
 
     // Paid-message purchase = the paywall conversion product. Track both
     // distinct buyers and paid-order volume for the clearer funnel. Revenue
     // remains signed so a refund still lowers the net paid-message revenue.
-    if (f === "credits") {
+    if (originalFeature === "credits") {
       paidMessageStars += stars;
       if (paidOrder) {
         paidMessagePurchases += 1;
@@ -945,7 +952,7 @@ export async function getAnalytics(
         share: totalStars > 0 ? stars / totalStars : 0,
       };
     })
-    .filter((k) => k.stars > 0 || k.sales > 0)
+    .filter((k) => k.stars !== 0 || k.sales > 0)
     .sort((a, b) => b.stars - a.stars);
 
   const byFeature = FEATURE_KEYS.map((key) => {
@@ -960,7 +967,7 @@ export async function getAnalytics(
       share: totalStars > 0 ? stars / totalStars : 0,
     };
   })
-    .filter((f) => f.stars > 0 || f.sales > 0)
+    .filter((f) => f.stars !== 0 || f.sales > 0)
     .sort((a, b) => b.stars - a.stars);
 
   // Distinct-fan paywall journey. The converted stage is the intersection of

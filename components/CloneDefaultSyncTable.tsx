@@ -19,6 +19,7 @@ export default function CloneDefaultSyncTable({ clones }: { clones: CloneDefault
   const [busyId, setBusyId] = useState<string | null>(null);
   const [pushing, startPush] = useTransition();
   const [msg, setMsg] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
 
   function toggleSelected(id: string) {
     setSelected((prev) => {
@@ -31,9 +32,14 @@ export default function CloneDefaultSyncTable({ clones }: { clones: CloneDefault
 
   async function toggleDefault(clone: CloneDefaultStatus) {
     setBusyId(clone.id);
+    setMsg(null);
+    setFailed(false);
     try {
       await setCloneUsesDefault(clone.id, !clone.usesDefault);
       router.refresh();
+    } catch (error) {
+      setFailed(true);
+      setMsg(error instanceof Error ? error.message : "Could not update the creator's default status");
     } finally {
       setBusyId(null);
     }
@@ -42,12 +48,20 @@ export default function CloneDefaultSyncTable({ clones }: { clones: CloneDefault
   function pushSelected() {
     const ids = [...selected];
     if (!ids.length) return;
+    const names = clones.filter((clone) => selected.has(clone.id)).map((clone) => clone.name);
+    if (!window.confirm(`Apply the saved operational default to ${names.join(", ")}? Creator personality and PPV pricing will stay unchanged.`)) return;
     setMsg(null);
+    setFailed(false);
     startPush(async () => {
-      await pushDefaultsToClones(ids);
-      setMsg(`Pushed the current default onto ${ids.length} clone${ids.length === 1 ? "" : "s"}.`);
-      setSelected(new Set());
-      router.refresh();
+      try {
+        await pushDefaultsToClones(ids);
+        setMsg(`Pushed the operational default onto ${ids.length} creator${ids.length === 1 ? "" : "s"}.`);
+        setSelected(new Set());
+        router.refresh();
+      } catch (error) {
+        setFailed(true);
+        setMsg(error instanceof Error ? error.message : "Could not push the selected defaults");
+      }
     });
   }
 
@@ -66,7 +80,7 @@ export default function CloneDefaultSyncTable({ clones }: { clones: CloneDefault
         </Button>
       </div>
 
-      {msg && <div className="rounded-md border border-line bg-panel px-3 py-2 text-xs text-muted">{msg}</div>}
+      {msg && <div role={failed ? "alert" : "status"} className={`rounded-md border px-3 py-2 text-xs ${failed ? "border-crit/30 bg-crit/10 text-crit" : "border-line bg-panel text-muted"}`}>{msg}</div>}
 
       <div className="overflow-hidden rounded-lg border border-line">
         <table className="w-full text-sm">

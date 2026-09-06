@@ -21,7 +21,7 @@ import path from "node:path";
 import sharp from "sharp";
 import { supabaseAdmin } from "@/lib/supabase";
 import { captionPhoto, type Caption } from "@/lib/caption";
-import { priceFromGuide } from "@/lib/pricing";
+import { normalizeSafeCategoryGuide, priceFromGuide, type CategoryPricing } from "@/lib/pricing";
 import { assertPhotoSendable } from "@/lib/photo-guard";
 
 // ── mirrored from app/media/actions.ts (module-private there) ────────────────
@@ -43,8 +43,16 @@ async function uploadConfig(cloneId: string): Promise<{ model: string; guide: un
 
 // No manual price is ever typed by an importer, so this is resolvePrice() with
 // the manual branch removed: guide + AI tags, else the caller's fallback.
-function resolvePrice(cap: Caption, guide: unknown, fallback: number): number {
-  return priceFromGuide(guide, cap.tags, cap.nsfw) ?? fallback;
+function requireSafeGuide(raw: unknown): CategoryPricing {
+  const guide = normalizeSafeCategoryGuide(raw);
+  if (!guide) throw new Error("creator pricing guide is missing or outdated; save the guide in PPVs before importing");
+  return guide;
+}
+
+function resolvePrice(cap: Caption, guide: CategoryPricing): number {
+  const price = priceFromGuide(guide, cap.tags, cap.nsfw);
+  if (price == null) throw new Error("could not derive a price from the creator pricing guide");
+  return price;
 }
 
 // ── args ─────────────────────────────────────────────────────────────────────
@@ -88,7 +96,8 @@ async function captionWithRetry(jpeg: Buffer, model: string, label: string): Pro
 }
 
 async function main() {
-  const { model, guide } = await uploadConfig(CLONE_ID!);
+  const { model, guide: rawGuide } = await uploadConfig(CLONE_ID!);
+  const guide = requireSafeGuide(rawGuide);
   console.log(`clone=${CLONE_ID} vision_model=${model} guide=${JSON.stringify(guide)}`);
 
   const failures: string[] = [];
@@ -112,7 +121,7 @@ async function main() {
       // sendPaidMedia will refuse.
       await assertPhotoSendable(jpeg);
       const cap = await captionWithRetry(jpeg, model, label);
-      const starValue = resolvePrice(cap, guide, 25);
+      const starValue = resolvePrice(cap, guide);
       const imageName = `${NAME_PREFIX} ${String(n).padStart(2, "0")}${cap.auto_desc ? ` (${cap.auto_desc})` : ""}`;
       const p = storagePath(CLONE_ID!, "photos", safeBase + ".jpg");
 

@@ -80,25 +80,33 @@ export const CATEGORY_LABELS: Record<string, string> = {
   anal: "Anal",
 };
 
-// Sensible out-of-the-box ladder (⭐). Nudes cost more than lingerie; lingerie/
-// bikini above sfw; sfw lowest. The operator edits these freely.
+// Corruption guard, not a recommended selling price. Zero remains the deliberate
+// free-content value on an individual item, while paid values below this floor
+// are rejected so a stale 15-100 Star template cannot silently underprice PPV.
+// The floor stays below every current high-volume creator catalogue, so it does
+// not force an automatic price increase on existing content.
+export const MIN_PAID_MEDIA_PRICE_STARS = 250;
+
+// Recommended new-creator baseline (⭐). The old 15-100 Star ladder predated the
+// live catalogue and could erase most PPV value when Reset + Reprice was used.
+// This recommendation is deliberately separate from the lower corruption guard.
 export const DEFAULT_CATEGORY_PRICING: CategoryPricing = {
-  sfw: 15,
-  mirror_selfie: 20,
-  outdoor: 20,
-  pool: 25,
-  bed: 25,
-  solo: 25,
-  shower: 30,
-  bikini: 30,
-  feet: 35,
-  lingerie: 40,
-  ass: 55,
-  topless: 60,
-  tits: 60,
-  full_nude: 90,
-  pussy: 90,
-  anal: 100,
+  sfw: 600,
+  mirror_selfie: 600,
+  outdoor: 600,
+  pool: 800,
+  bed: 800,
+  solo: 800,
+  shower: 1000,
+  bikini: 800,
+  feet: 1000,
+  lingerie: 1000,
+  ass: 1400,
+  topless: 1400,
+  tits: 1400,
+  full_nude: 2000,
+  pussy: 2800,
+  anal: 3600,
 };
 
 // Coerce a raw jsonb value into a clean { category: positive-int price } map.
@@ -112,6 +120,87 @@ export function normalizeGuide(raw: unknown): CategoryPricing | null {
     if (Number.isFinite(n) && n >= 0) out[k] = Math.round(n);
   }
   return Object.keys(out).length ? out : null;
+}
+
+// Bulk repricing is allowed only from a complete, explicit and commercially
+// safe guide. Unknown keys are ignored so a future/stale client cannot make
+// arbitrary JSON part of the pricing contract.
+export function normalizeSafeCategoryGuide(raw: unknown): CategoryPricing | null {
+  const normalized = normalizeGuide(raw);
+  if (!normalized) return null;
+  const safe: CategoryPricing = {};
+  for (const category of PRICING_CATEGORIES) {
+    const price = normalized[category];
+    if (!Number.isSafeInteger(price) || price < MIN_PAID_MEDIA_PRICE_STARS) return null;
+    safe[category] = price;
+  }
+  return safe;
+}
+
+export function isAllowedPaidOrFreePrice(value: number): boolean {
+  return Number.isSafeInteger(value) && (value === 0 || value >= MIN_PAID_MEDIA_PRICE_STARS);
+}
+
+export type RepriceableMediaRow = {
+  id: string;
+  tags: string[] | null;
+  nsfw: boolean | null;
+  star_value: number;
+  is_free: boolean | null;
+};
+
+export type SafeRepriceChange = { id: string; currentPrice: number; nextPrice: number };
+
+export type SafeRepricePlan = {
+  total: number;
+  changes: SafeRepriceChange[];
+  unchanged: number;
+  protectedFree: number;
+  protectedFromDecrease: number;
+  increaseStars: number;
+};
+
+// A safe bulk reprice is monotonic: it may raise guide-managed prices, but it
+// never turns free media paid and never lowers a higher/manual price. Deliberate
+// reductions remain available through selected-item editing, where the operator
+// sees the exact items being changed.
+export function buildSafeRepricePlan(rows: RepriceableMediaRow[], rawGuide: unknown): SafeRepricePlan {
+  const guide = normalizeSafeCategoryGuide(rawGuide);
+  if (!guide) throw new Error(`Every category price must be a whole number of at least ${MIN_PAID_MEDIA_PRICE_STARS} Stars`);
+
+  const plan: SafeRepricePlan = {
+    total: rows.length,
+    changes: [],
+    unchanged: 0,
+    protectedFree: 0,
+    protectedFromDecrease: 0,
+    increaseStars: 0,
+  };
+
+  for (const row of rows) {
+    const currentPrice = Number.isFinite(row.star_value) ? Math.max(0, Math.round(row.star_value)) : 0;
+    if (row.is_free || currentPrice === 0) {
+      plan.protectedFree++;
+      continue;
+    }
+    const nextPrice = priceFromGuide(guide, row.tags ?? [], !!row.nsfw);
+    if (nextPrice == null) {
+      plan.unchanged++;
+      continue;
+    }
+    if (nextPrice < currentPrice) {
+      plan.protectedFromDecrease++;
+      continue;
+    }
+    if (nextPrice === currentPrice) {
+      plan.unchanged++;
+      continue;
+    }
+    plan.changes.push({ id: row.id, currentPrice, nextPrice });
+    plan.increaseStars += nextPrice - currentPrice;
+  }
+
+  return plan;
 }
 
 // Tags that only describe actual nudity/exposure, not an outfit or setting. The

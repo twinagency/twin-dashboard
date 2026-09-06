@@ -14,7 +14,7 @@ import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { supabaseAdmin } from "@/lib/supabase";
 import { captionVideo, type Caption } from "@/lib/caption";
-import { priceFromGuide } from "@/lib/pricing";
+import { normalizeSafeCategoryGuide, priceFromGuide, type CategoryPricing } from "@/lib/pricing";
 
 const VIDEO_MAX_BYTES = 49 * 1024 * 1024; // Telegram video limit is 50MB
 
@@ -31,8 +31,16 @@ async function uploadConfig(cloneId: string): Promise<{ model: string; guide: un
   return { model: data?.vision_model || "qwen/qwen2.5-vl-72b-instruct", guide: data?.category_pricing };
 }
 
-function resolvePrice(cap: Caption, guide: unknown, fallback: number): number {
-  return priceFromGuide(guide, cap.tags, cap.nsfw) ?? fallback;
+function requireSafeGuide(raw: unknown): CategoryPricing {
+  const guide = normalizeSafeCategoryGuide(raw);
+  if (!guide) throw new Error("creator pricing guide is missing or outdated; save the guide in PPVs before importing");
+  return guide;
+}
+
+function resolvePrice(cap: Caption, guide: CategoryPricing): number {
+  const price = priceFromGuide(guide, cap.tags, cap.nsfw);
+  if (price == null) throw new Error("could not derive a price from the creator pricing guide");
+  return price;
 }
 
 function arg(flag: string): string | undefined {
@@ -70,7 +78,8 @@ async function captionWithRetry(bytes: Buffer, model: string, label: string): Pr
 }
 
 async function main() {
-  const { model, guide } = await uploadConfig(CLONE_ID!);
+  const { model, guide: rawGuide } = await uploadConfig(CLONE_ID!);
+  const guide = requireSafeGuide(rawGuide);
   console.log(`clone=${CLONE_ID} vision_model=${model} guide=${JSON.stringify(guide)}`);
 
   const files = await videosIn(DIR!);
@@ -89,7 +98,7 @@ async function main() {
       }
       const bytes = await readFile(src);
       const cap = await captionWithRetry(bytes, model, label);
-      const starValue = resolvePrice(cap, guide, 50);
+      const starValue = resolvePrice(cap, guide);
       const ext = path.extname(src).toLowerCase();
       const contentType = ext === ".mov" ? "video/quicktime" : "video/mp4";
       const safeBase = `${NAME_PREFIX.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${String(n).padStart(2, "0")}${ext}`;

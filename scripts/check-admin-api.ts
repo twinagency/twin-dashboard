@@ -14,6 +14,7 @@
 
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { join } from "node:path";
+import { fileURLToPath } from "node:url";
 import {
   authenticate,
   checkNetwork,
@@ -72,7 +73,7 @@ function sourceCode(path: string | URL): string {
 
 // Every route.ts under the admin tree.
 function adminRouteFiles(): string[] {
-  const root = new URL("../app/api/admin/v1/", import.meta.url).pathname;
+  const root = fileURLToPath(new URL("../app/api/admin/v1/", import.meta.url));
   const walk = (dir: string): string[] =>
     readdirSync(dir).flatMap((e) => {
       const p = join(dir, e);
@@ -204,7 +205,8 @@ const WRITE_ROUTES = ["/clones/write/route.ts", "/clones/create/route.ts", "/med
 check("B5 only the named write routes accept writes; the rest are read-only", () => {
   for (const p of adminRouteFiles()) {
     const src = sourceCode(p);
-    const isWriteRoute = WRITE_ROUTES.some((w) => p.endsWith(w));
+    const portablePath = p.replace(/\\/g, "/");
+    const isWriteRoute = WRITE_ROUTES.some((w) => portablePath.endsWith(w));
     for (const verb of ["POST", "PUT", "PATCH", "DELETE"]) {
       if (isWriteRoute && verb === "POST") continue;
       assert(
