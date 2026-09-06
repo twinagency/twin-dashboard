@@ -36,6 +36,12 @@ export type Clone = {
   status: "active" | "paused";
   ai_mode: "classic" | "smart";
   smart_split: boolean;
+  // Migration 138. This is the authoritative New System vs Control cohort
+  // flag for the Classic conversion rollout. Optional so pre-migration rows
+  // still type-check and are treated as Control by the overview.
+  intent_classic_promotions_enabled?: boolean;
+  // Migration 139. Durable cohort enrollment time; null for Control rows.
+  intent_classic_promotions_enabled_at?: string | null;
 
   photos_enabled: boolean;
   videos_enabled: boolean;

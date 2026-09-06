@@ -3,6 +3,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 import type { Clone } from "@/lib/types";
 import ClonesGrid, { type CloneCard } from "@/components/ClonesGrid";
 import { chartColorForClone, profileImagePathForClone } from "@/lib/colors";
+import { cloneCohortFromPromotionFlag } from "@/lib/clone-cohort";
 import { Button } from "@/components/ui/button";
 
 export const dynamic = "force-dynamic";
@@ -10,7 +11,7 @@ export const dynamic = "force-dynamic";
 export default async function ClonesPage() {
   const { data, error } = await supabaseAdmin
     .from("clones")
-    .select("id,slug,name,status,photos_enabled,videos_enabled,voice_enabled,voice_id,created_at,intake")
+    .select("id,slug,name,status,photos_enabled,videos_enabled,voice_enabled,voice_id,created_at,intake,intent_classic_promotions_enabled,intent_classic_promotions_enabled_at")
     .order("created_at", { ascending: true });
 
   if (error) {
@@ -64,6 +65,8 @@ export default async function ClonesPage() {
     slug: c.slug ?? "",
     status: c.status ?? "paused",
     active: c.status === "active",
+    cohort: cloneCohortFromPromotionFlag(c.intent_classic_promotions_enabled),
+    cohortEnrolledAt: c.intent_classic_promotions_enabled_at ?? null,
     color: chartColorForClone(c.intake, i),
     photoUrl: c.id ? avatarUrlByCloneId.get(c.id) : undefined,
     stars: c.id ? starsByClone.get(c.id) ?? 0 : 0,

@@ -9,6 +9,12 @@ import { initials } from "@/lib/colors";
 import { toggleClonePause } from "@/app/clones/actions";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
+import {
+  cloneCohortEnrollmentLabel,
+  cloneMatchesCohort,
+  type CloneCohort,
+  type CloneCohortFilter,
+} from "@/lib/clone-cohort";
 
 export type CloneCard = {
   id: string;
@@ -16,6 +22,8 @@ export type CloneCard = {
   slug: string;
   status: string;
   active: boolean;
+  cohort: CloneCohort;
+  cohortEnrolledAt: string | null;
   color: string;
   photoUrl?: string;
   stars: number;
@@ -23,8 +31,15 @@ export type CloneCard = {
   features: string[];
 };
 
+const COHORT_OPTIONS: { value: CloneCohortFilter; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "new-system", label: "New System" },
+  { value: "control", label: "Control" },
+];
+
 export default function ClonesGrid({ clones }: { clones: CloneCard[] }) {
   const [query, setQuery] = useState("");
+  const [cohortFilter, setCohortFilter] = useState<CloneCohortFilter>("all");
   const router = useRouter();
   const [, startTransition] = useTransition();
 
@@ -39,15 +54,24 @@ export default function ClonesGrid({ clones }: { clones: CloneCard[] }) {
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-    if (!q) return clones;
-    return clones.filter(
-      (c) => c.name.toLowerCase().includes(q) || c.slug.toLowerCase().includes(q),
-    );
-  }, [query, clones]);
+    return clones.filter((c) => {
+      const matchesSearch = !q || c.name.toLowerCase().includes(q) || c.slug.toLowerCase().includes(q);
+      return matchesSearch && cloneMatchesCohort(c.cohort, cohortFilter);
+    });
+  }, [query, cohortFilter, clones]);
+
+  const cohortCounts = useMemo(
+    () => ({
+      all: clones.length,
+      "new-system": clones.filter((c) => c.cohort === "new-system").length,
+      control: clones.filter((c) => c.cohort === "control").length,
+    }),
+    [clones],
+  );
 
   return (
     <div>
-      <div className="mb-5">
+      <div className="mb-5 flex flex-wrap items-center gap-3">
         <Input
           type="text"
           value={query}
@@ -55,11 +79,37 @@ export default function ClonesGrid({ clones }: { clones: CloneCard[] }) {
           placeholder="Search creators…"
           className="h-9 max-w-xs"
         />
+        <div
+          role="group"
+          aria-label="Filter creators by system"
+          className="flex flex-wrap items-center gap-1 rounded-full border border-line bg-panel p-1"
+        >
+          {COHORT_OPTIONS.map((option) => {
+            const selected = cohortFilter === option.value;
+            return (
+              <button
+                key={option.value}
+                type="button"
+                onClick={() => setCohortFilter(option.value)}
+                aria-pressed={selected}
+                className={
+                  "inline-flex min-h-7 items-center gap-1.5 rounded-full px-2.5 py-1 text-xs font-medium transition-colors " +
+                  (selected ? "bg-accent text-white shadow-sm" : "text-muted hover:bg-elev hover:text-ink")
+                }
+              >
+                {option.label}
+                <span className={"font-mono text-[10px] tabular-nums " + (selected ? "text-white/75" : "text-muted")}>
+                  {cohortCounts[option.value]}
+                </span>
+              </button>
+            );
+          })}
+        </div>
       </div>
 
       {filtered.length === 0 ? (
         <div className="rounded-2xl border border-dashed border-line bg-panel p-12 text-center text-muted">
-          No creators match “{query}”.
+          {query.trim() ? `No creators match “${query}” in this cohort.` : "No creators in this cohort."}
         </div>
       ) : (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -106,11 +156,36 @@ export default function ClonesGrid({ clones }: { clones: CloneCard[] }) {
                     </button>
                   </div>
                   <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
+                    <Badge
+                      title={
+                        c.cohort === "new-system"
+                          ? "New conversion system enabled"
+                          : "Control group using the existing conversion system"
+                      }
+                      className={
+                        "border font-semibold " +
+                        (c.cohort === "new-system"
+                          ? "border-accent-2/30 bg-accent-2/10 text-accent-2"
+                          : "border-line bg-elev text-muted")
+                      }
+                    >
+                      <span
+                        aria-hidden="true"
+                        className={
+                          "h-1.5 w-1.5 rounded-full " +
+                          (c.cohort === "new-system" ? "bg-accent-2" : "bg-muted")
+                        }
+                      />
+                      {c.cohort === "new-system" ? "New System" : "Control"}
+                    </Badge>
                     {c.features.map((f) => (
                       <Badge key={f} variant="secondary" className="font-medium text-muted">
                         {f}
                       </Badge>
                     ))}
+                  </div>
+                  <div className="mt-1 text-[11px] font-medium text-muted">
+                    {cloneCohortEnrollmentLabel(c.cohort, c.cohortEnrolledAt)}
                   </div>
                 </div>
               </div>

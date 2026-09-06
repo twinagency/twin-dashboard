@@ -7,6 +7,8 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Info } from "@/components/clone/fields";
+import { cloneCohortEnrollmentLabel, cloneCohortFromPromotionFlag } from "@/lib/clone-cohort";
+import ConversionCohortStatus from "./ConversionCohortStatus";
 
 export const dynamic = "force-dynamic";
 
@@ -73,6 +75,8 @@ type FleetRow = {
   slug: string;
   drip_enabled: boolean | null;
   winback_lapse_days: number | null;
+  intent_classic_promotions_enabled?: boolean | null;
+  intent_classic_promotions_enabled_at?: string | null;
   // absent pre-migration-029, so read defensively
   drip_steps?: unknown[] | null;
 };
@@ -116,6 +120,7 @@ async function FleetFlows() {
             <TableRow>
               <TableHead>Bot</TableHead>
               <TableHead>Flow</TableHead>
+              <TableHead>Conversion system</TableHead>
               <TableHead className="text-right">Steps</TableHead>
               <TableHead />
             </TableRow>
@@ -123,11 +128,29 @@ async function FleetFlows() {
           <TableBody>
             {rows.map((c) => {
               const steps = validSteps(c.drip_steps);
+              const cohort = cloneCohortFromPromotionFlag(c.intent_classic_promotions_enabled);
               return (
                 <TableRow key={c.id}>
                   <TableCell className="creator-name font-medium">{c.name} <span className="text-muted">/ {c.slug}</span></TableCell>
                   <TableCell>
                     <Badge variant="outline" className={c.drip_enabled ? "border-good/30 text-good" : "text-muted"}>{c.drip_enabled ? "on" : "off"}</Badge>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-col items-start gap-1">
+                      <Badge
+                        variant="outline"
+                        className={
+                          cohort === "new-system"
+                            ? "border-accent/30 bg-accent/10 text-accent"
+                            : "border-line bg-elev text-muted"
+                        }
+                      >
+                        {cohort === "new-system" ? "New System" : "Control"}
+                      </Badge>
+                      <span className="text-[11px] text-muted">
+                        {cloneCohortEnrollmentLabel(cohort, c.intent_classic_promotions_enabled_at)}
+                      </span>
+                    </div>
                   </TableCell>
                   <TableCell className="text-right tabular-nums">{steps.length}</TableCell>
                   <TableCell className="text-right">
@@ -139,7 +162,7 @@ async function FleetFlows() {
               );
             })}
             {rows.length === 0 && (
-              <TableRow><TableCell colSpan={4} className="py-8 text-center text-muted">No creators yet.</TableCell></TableRow>
+              <TableRow><TableCell colSpan={5} className="py-8 text-center text-muted">No creators yet.</TableCell></TableRow>
             )}
           </TableBody>
         </Table>
@@ -150,7 +173,40 @@ async function FleetFlows() {
 
 async function CloneFlows({ cloneId }: { cloneId: string }) {
   const [cloneRes, photosRes, videosRes, bundlesRes] = await Promise.all([
-    supabaseAdmin.from("clones").select("*").eq("id", cloneId).maybeSingle(),
+    supabaseAdmin
+      .from("clones")
+      .select(`
+        id,
+        name,
+        photos_enabled,
+        videos_enabled,
+        bundles_enabled,
+        drip_enabled,
+        winback_lapse_days,
+        drip_steps,
+        onboarding_steps,
+        welcome_instruction,
+        onboarding_free_preview_enabled,
+        onboarding_free_preview_after_minutes,
+        onboarding_free_preview_after_messages,
+        onboarding_free_preview_media_id,
+        onboarding_free_preview_instruction,
+        followup_after_minutes,
+        onboarding_captions_off,
+        campaign_captions_off,
+        funnel_policy,
+        intent_rejection_cooldown_messages,
+        intent_post_purchase_cooldown_minutes,
+        intent_natural_triggers,
+        intent_direct_purchase_override,
+        intent_fallback_offer_after_messages,
+        intent_max_ignored_offers,
+        intent_classic_promotions_enabled,
+        intent_classic_promotions_enabled_at,
+        block_us_fans_enabled
+      `)
+      .eq("id", cloneId)
+      .maybeSingle(),
     supabaseAdmin
       .from("photos")
       .select("id,storage_path,caption,teaser_caption,star_value,is_free")
@@ -179,7 +235,6 @@ async function CloneFlows({ cloneId }: { cloneId: string }) {
     bundles_enabled: boolean;
     drip_enabled: boolean;
     winback_lapse_days: number | null;
-    drip_media_ids: { type: "photo" | "video" | "bundle"; id: string }[] | null;
     // absent pre-migration-029, so read defensively
     drip_steps?: unknown[] | null;
     // absent pre-migration-068, so read defensively
@@ -206,9 +261,15 @@ async function CloneFlows({ cloneId }: { cloneId: string }) {
     intent_direct_purchase_override?: boolean | null;
     intent_fallback_offer_after_messages?: number | null;
     intent_max_ignored_offers?: number | null;
+    // Migration 138. Internal default-off cohort assignment; read-only here.
+    intent_classic_promotions_enabled?: boolean | null;
+    // Migration 139. Durable enrollment metadata; null for Control rows.
+    intent_classic_promotions_enabled_at?: string | null;
     // Migration 133 — absent pre-migration, defaults false.
     block_us_fans_enabled?: boolean | null;
   };
+
+  const onboardingSteps = validOnboardingSteps(clone.onboarding_steps);
 
   return (
     <div className="dashboard-page">
@@ -229,6 +290,15 @@ async function CloneFlows({ cloneId }: { cloneId: string }) {
           <Button type="submit" variant="ghost" size="sm">← All bots</Button>
         </form>
       </div>
+
+      <ConversionCohortStatus
+        newSystemEnabled={clone.intent_classic_promotions_enabled === true}
+        enrolledAt={clone.intent_classic_promotions_enabled_at}
+        step1AfterMessages={onboardingSteps[0]?.after_messages ?? null}
+        step2AfterMessages={onboardingSteps[1]?.after_messages ?? null}
+        intentFallbackOfferAfterMessages={clone.intent_fallback_offer_after_messages}
+        intentMaxIgnoredOffers={clone.intent_max_ignored_offers}
+      />
 
       <FlowsForm
         cloneId={cloneId}
@@ -280,7 +350,7 @@ async function CloneFlows({ cloneId }: { cloneId: string }) {
           // shows exactly what the runtime will do.
           winbackLapseDays: clone.winback_lapse_days ?? 7,
           // Ordered onboarding step list (migration 068) — see validOnboardingSteps above.
-          onboardingSteps: validOnboardingSteps(clone.onboarding_steps).map((s) => ({
+          onboardingSteps: onboardingSteps.map((s) => ({
             // The stable id (migration 087) MUST round-trip through the form.
             // If it is dropped here the save mints a fresh one, every live fan
             // sees the step as brand new, and the desync bug is back.
