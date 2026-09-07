@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import TwinWordmark from "@/components/TwinWordmark";
 
 export const metadata = {
-  title: "Sign in · Twin Console",
+  title: "Admin sign in · Twin Console",
 };
 
 export default async function LoginPage({
@@ -36,15 +36,15 @@ export default async function LoginPage({
           <CardHeader className="px-7 pt-7">
             <div className="mb-5 lg:hidden"><TwinWordmark /></div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent-2">Twin Console</p>
-            <h2 className="font-heading text-3xl font-semibold tracking-[-0.035em] text-ink">Welcome back.</h2>
-            <p className="text-sm text-muted">Sign in to continue to operations.</p>
+            <h2 className="font-heading text-3xl font-semibold tracking-[-0.035em] text-ink">Admin sign in</h2>
+            <p className="text-sm text-muted">Use your dashboard admin password.</p>
           </CardHeader>
           <CardContent className="px-7 pb-7">
             <LoginForm error={!!error} next={next && next.startsWith("/") ? next : "/"} />
+            <a href="/agency/login" className="mt-5 block text-center text-sm font-medium text-accent hover:underline">Agency sign in</a>
           </CardContent>
         </Card>
       </section>
     </div>
   );
 }
-
