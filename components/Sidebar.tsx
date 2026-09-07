@@ -249,7 +249,7 @@ export function SidebarContent({
           {(!readOnly || showUnavailable) && <><div className="mb-2 mt-3 border-t border-white/14 pt-3 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">CRM</div>
           {CRM_LINKS.map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}</>}
           {showUnavailable ? <div className="mt-3 space-y-1 border-t border-white/14 pt-2">
-            {MORE_LINKS.filter(link => link.kind !== "route" || link.href !== "/jarvis").map(link => <div key={linkKey(link)}>{renderLink(link)}</div>)}
+            {MORE_LINKS.filter(link => link.kind !== "route" || !["/jarvis", "/agency-admin"].includes(link.href)).map(link => <div key={linkKey(link)}>{renderLink(link)}</div>)}
           </div> : <div className="mt-3 border-t border-white/14 pt-2">
             <button
               type="button"
