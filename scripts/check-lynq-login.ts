@@ -3,6 +3,7 @@ import { NextRequest } from "next/server";
 import { POST as login, GET as loginPage } from "../app/lynq/auth/route";
 import { POST as logout } from "../app/agency/logout/route";
 import { POST as adminLogin } from "../app/admin-auth/route";
+import { POST as resetPassword } from "../app/agency-admin/lynq-password/update/route";
 import { middleware } from "../middleware";
 import { signSession, SESSION_COOKIE } from "../lib/session";
 import { AGENCY_COOKIE } from "../lib/agency-policy";
@@ -20,10 +21,16 @@ async function main() {
   let returnedUser = userId;
   let tokenRequests = 0;
   let logoutScope = "";
+  let passwordUpdates = 0;
   globalThis.fetch = async (input, init) => {
     const url = new URL(String(input));
     let body: unknown;
-    if (url.pathname === "/auth/v1/token") {
+    if (url.pathname === `/auth/v1/admin/users/${userId}`) {
+      assert.equal(init?.method,"PUT");
+      assert.deepEqual(JSON.parse(String(init?.body)),{password:"test-new-lynq-password"});
+      passwordUpdates++;
+      body={user:{id:userId}};
+    } else if (url.pathname === "/auth/v1/token") {
       tokenRequests++;
       const credentials = JSON.parse(String(init?.body));
       assert.equal(credentials.email, "shared@example.test", "Never take an email from the form");
@@ -37,6 +44,10 @@ async function main() {
         assert.equal(url.searchParams.get("agency_id"),`eq.${agencyId}`);
         assert.equal(url.searchParams.get("user_id"),`eq.${userId}`);
         body=memberActive?{email:"shared@example.test"}:null;
+      } else if(url.searchParams.get("select")==="user_id") {
+        assert.equal(url.searchParams.get("agency_id"),`eq.${agencyId}`);
+        assert.equal(url.searchParams.get("user_id"),`eq.${userId}`);
+        body=memberActive?{user_id:userId}:null;
       } else body=memberActive?{agency_id:agencyId}:null;
     } else if (url.pathname === "/rest/v1/partner_agencies") body=agencyActive?{id:agencyId,name:"LYNQ"}:null;
     else if (url.pathname === "/rest/v1/agency_creators") body=[{clone_id:creatorId}];
@@ -88,6 +99,22 @@ async function main() {
     assert.equal((await middleware(new NextRequest(`${origin}/settings`,{headers:{cookie}}))).status,403);
     assert.equal((await middleware(new NextRequest(`${origin}/clones/cccccccc-cccc-cccc-cccc-cccccccccccc`,{headers:{cookie}}))).status,403);
     const signedAdmin=await signSession();
+    const resetRequest=(cookie:string,source=origin)=>new NextRequest(`${origin}/agency-admin/lynq-password/update`,{method:"POST",headers:{origin:source,cookie},body:new URLSearchParams({password:"test-new-lynq-password",user_id:"other-user",agency_id:"other-agency"})});
+    assert.equal((await resetPassword(resetRequest(""))).status,401);
+    assert.equal((await resetPassword(resetRequest(cookie))).status,401);
+    assert.equal((await resetPassword(resetRequest(`${SESSION_COOKIE}=${signedAdmin}; ${cookie}`))).status,401);
+    assert.equal((await resetPassword(resetRequest(`${SESSION_COOKIE}=${signedAdmin}`,"https://evil.example"))).status,403);
+    assert.equal(passwordUpdates,0);
+    memberActive=false;
+    assert.equal((await resetPassword(resetRequest(`${SESSION_COOKIE}=${signedAdmin}`))).status,403);
+    assert.equal(passwordUpdates,0);
+    memberActive=true;
+    assert.equal((await resetPassword(resetRequest(`${SESSION_COOKIE}=${signedAdmin}`))).status,200);
+    assert.equal(passwordUpdates,1,"Only admin can reset the fixed LYNQ account");
+    const setup=await middleware(new NextRequest(`${origin}/login?next=/agency-admin/lynq-password`,{headers:{cookie:`${SESSION_COOKIE}=${signedAdmin}`}}));
+    assert.equal(setup.headers.get("location"),`${origin}/agency-admin/lynq-password`);
+    const unsafeNext=await middleware(new NextRequest(`${origin}/login?next=//evil.example`,{headers:{cookie:`${SESSION_COOKIE}=${signedAdmin}`}}));
+    assert.equal(unsafeNext.headers.get("location"),`${origin}/`);
     assert.equal((await middleware(new NextRequest(`${origin}/login`,{headers:{cookie:`${cookie}; ${SESSION_COOKIE}=${signedAdmin}`}}))).status,200,"Admin sign-in remains reachable when switching accounts");
     const exited=await logout(new NextRequest(`${origin}/agency/logout`,{method:"POST",headers:{origin,cookie}}));
     assert.equal(exited.headers.get("location"),`${origin}/lynq`);

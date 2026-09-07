@@ -88,7 +88,11 @@ export async function middleware(req: NextRequest) {
   const authed = await verifySessionToken(token);
 
   if (pathname === "/login") {
-    if (authed && !agencyToken) return NextResponse.redirect(new URL("/", dashboardOrigin(req)));
+    if (authed && !agencyToken) {
+      const next = req.nextUrl.searchParams.get("next") || "/";
+      const safe = next.startsWith("/") && !next.startsWith("//") && !next.includes("\\") ? next : "/";
+      return NextResponse.redirect(new URL(safe, dashboardOrigin(req)));
+    }
     return withPathname(req);
   }
 
