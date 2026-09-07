@@ -49,7 +49,7 @@ test("counts stable fan assignments once per creator and fan", () => {
 
 test("renders both fan variants, rates, Stars and block reasons", () => {
   const html = renderToStaticMarkup(
-    <IntentOfferFunnelSummary events={events} assignments={assignments} hasV2Creators windowLabel="Since V2 enrollment" />,
+    <IntentOfferFunnelSummary events={events} assignments={assignments} hasCreators version={2} windowLabel="Since V2 enrollment" />,
   );
   assert.match(html, /50\/50 fan split/);
   assert.match(html, />Attempted</);
@@ -66,20 +66,35 @@ test("renders both fan variants, rates, Stars and block reasons", () => {
 
 test("fails gracefully when analytics are unavailable or empty", () => {
   const unavailable = renderToStaticMarkup(
-    <IntentOfferFunnelSummary events={[]} assignments={[]} hasV2Creators unavailable windowLabel="Since V2 enrollment" />,
+    <IntentOfferFunnelSummary events={[]} assignments={[]} hasCreators version={2} unavailable windowLabel="Since V2 enrollment" />,
   );
   assert.match(unavailable, /temporarily unavailable/);
 
   const empty = renderToStaticMarkup(
-    <IntentOfferFunnelSummary events={[]} assignments={[]} hasV2Creators windowLabel="Since V2 enrollment" />,
+    <IntentOfferFunnelSummary events={[]} assignments={[]} hasCreators version={2} windowLabel="Since V2 enrollment" />,
   );
   assert.match(empty, /No V2 offer events/);
 });
 
 test("keeps fan assignment counts visible before the first offer event", () => {
   const html = renderToStaticMarkup(
-    <IntentOfferFunnelSummary events={[]} assignments={assignments} hasV2Creators windowLabel="Since V2 enrollment" />,
+    <IntentOfferFunnelSummary events={[]} assignments={assignments} hasCreators version={2} windowLabel="Since V2 enrollment" />,
   );
   assert.match(html, /Fan assignments are live/);
   assert.match(html, />Assigned fans</);
+});
+
+test("renders V3 as a direct creator cohort without fake assignment counts", () => {
+  const v3Events: IntentOfferEventRow[] = [
+    { id: "v3-1", attempt_id: "v3-a", clone_id: "v3-c", event_type: "attempted", variant: "v3", price_stars: null, block_reason: null, created_at: "2026-09-07T01:00:00Z" },
+    { id: "v3-2", attempt_id: "v3-a", clone_id: "v3-c", event_type: "delivered", variant: "v3", price_stars: 399, block_reason: null, created_at: "2026-09-07T01:00:01Z" },
+  ];
+  const html = renderToStaticMarkup(
+    <IntentOfferFunnelSummary events={v3Events} assignments={[]} hasCreators version={3} windowLabel="Since V3 enrollment" />,
+  );
+  assert.match(html, /V3 offer funnel/);
+  assert.match(html, /Creator cohort/);
+  assert.match(html, />V3</);
+  assert.match(html, />N\/A</);
+  assert.doesNotMatch(html, />Control</);
 });

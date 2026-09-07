@@ -17,7 +17,8 @@ function check(name: string, fn: () => void) {
 
 console.log("Clone cohort overview checks");
 
-check("the enabled flag and explicit version distinguish V2, V1 and Control", () => {
+check("the enabled flag and explicit version distinguish V3, V2, V1 and Control", () => {
+  assert.equal(cloneCohortFromPromotionFlag(true, 3), "new-system-v3");
   assert.equal(cloneCohortFromPromotionFlag(true, 2), "new-system-v2");
   assert.equal(cloneCohortFromPromotionFlag(true, 1), "new-system-v1");
   assert.equal(cloneCohortFromPromotionFlag(true, null), "new-system-v1");
@@ -27,21 +28,25 @@ check("the enabled flag and explicit version distinguish V2, V1 and Control", ()
 });
 
 check("cohort filters include only their matching cards", () => {
+  assert.equal(cloneMatchesCohort("new-system-v3", "all"), true);
   assert.equal(cloneMatchesCohort("new-system-v2", "all"), true);
   assert.equal(cloneMatchesCohort("new-system-v1", "all"), true);
   assert.equal(cloneMatchesCohort("control", "all"), true);
   assert.equal(cloneMatchesCohort("new-system-v2", "new-system-v2"), true);
+  assert.equal(cloneMatchesCohort("new-system-v3", "new-system-v3"), true);
   assert.equal(cloneMatchesCohort("new-system-v1", "new-system-v2"), false);
   assert.equal(cloneMatchesCohort("control", "new-system-v2"), false);
   assert.equal(cloneMatchesCohort("control", "control"), true);
   assert.equal(cloneMatchesCohort("new-system-v2", "control"), false);
   assert.equal(cloneCohortLabel("new-system-v2"), "New System V2");
+  assert.equal(cloneCohortLabel("new-system-v3"), "New System V3");
   assert.equal(cloneCohortLabel("new-system-v1"), "V1");
 });
 
 check("enrollment labels use the timestamp only after the flag enables the cohort", () => {
   const enabledAt = "2026-09-06T12:30:00.000Z";
   assert.equal(cloneCohortEnrollmentLabel("new-system-v2", enabledAt), "Enrolled 6 Sept 2026");
+  assert.equal(cloneCohortEnrollmentLabel("new-system-v3", enabledAt), "Enrolled 6 Sept 2026");
   assert.equal(cloneCohortEnrollmentLabel("new-system-v1", enabledAt), "Enrolled 6 Sept 2026");
   assert.equal(cloneCohortEnrollmentLabel("control", enabledAt), "Not enrolled");
   assert.equal(cloneCohortEnrollmentLabel("new-system-v2", null), "Enrollment date unavailable");
@@ -60,6 +65,7 @@ check("the overview reads the authoritative database column", () => {
 check("every card renders a visible cohort label and exposes a cohort filter", () => {
   const grid = readFileSync(new URL("../components/ClonesGrid.tsx", import.meta.url), "utf8");
   assert.match(grid, /"New System V2"/);
+  assert.match(grid, /"New System V3"/);
   assert.match(grid, /"V1"/);
   assert.match(grid, /aria-label="Filter creators by system"/);
   assert.match(grid, /cloneMatchesCohort\(c\.cohort, cohortFilter\)/);

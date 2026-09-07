@@ -13,7 +13,8 @@ import {
 type IntentOfferFunnelSummaryProps = {
   events: IntentOfferEventRow[];
   assignments: IntentExperimentAssignmentRow[];
-  hasV2Creators: boolean;
+  hasCreators: boolean;
+  version: 2 | 3;
   unavailable?: boolean;
   assignmentsUnavailable?: boolean;
   truncated?: boolean;
@@ -26,6 +27,7 @@ function formatRate(value: number | null): string {
 }
 
 function variantLabel(variant: IntentOfferVariant): string {
+  if (variant === "v3") return "V3";
   return variant === "v2" ? "V2" : "Control";
 }
 
@@ -36,43 +38,47 @@ function reasonLabel(reason: string): string {
 export default function IntentOfferFunnelSummary({
   events,
   assignments,
-  hasV2Creators,
+  hasCreators,
+  version,
   unavailable = false,
   assignmentsUnavailable = false,
   truncated = false,
   windowLabel,
 }: IntentOfferFunnelSummaryProps) {
-  const summaries = (["v2", "control"] as const).map((variant) =>
+  const variants: IntentOfferVariant[] = version === 3 ? ["v3"] : ["v2", "control"];
+  const summaries = variants.map((variant) =>
     summarizeIntentOfferEvents(events, variant),
   );
 
   return (
-    <Card aria-label="V2 offer funnel" className="mb-5 overflow-hidden border border-line p-0">
+    <Card aria-label={`V${version} offer funnel`} className="mb-5 overflow-hidden border border-line p-0">
       <div className="flex flex-col gap-2 border-b border-line px-4 py-3 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <div className="flex flex-wrap items-center gap-2">
-            <h2 className="text-sm font-semibold text-ink">V2 offer funnel</h2>
+            <h2 className="text-sm font-semibold text-ink">V{version} offer funnel</h2>
             <Badge variant="outline" className="border-accent/30 bg-accent/10 text-accent">
-              50/50 fan split
+              {version === 3 ? "Creator cohort" : "50/50 fan split"}
             </Badge>
           </div>
           <p className="mt-1 max-w-3xl text-xs leading-relaxed text-muted">
-            Inside every V2 creator, each fan is assigned once to V2 or the existing Classic control and stays in that variant.
+            {version === 3
+              ? "Every fan of an enrolled V3 creator receives V3."
+              : "Inside every V2 creator, each fan is assigned once to V2 or the existing Classic control and stays in that variant."}{" "}
             Attempted, blocked, actually delivered and purchased offers are recorded separately.
           </p>
         </div>
         <span className="shrink-0 text-[11px] font-medium text-muted">{windowLabel}</span>
       </div>
 
-      {!hasV2Creators ? (
-        <div className="px-4 py-5 text-sm text-muted">No New System V2 creators are enrolled.</div>
+      {!hasCreators ? (
+        <div className="px-4 py-5 text-sm text-muted">No New System V{version} creators are enrolled.</div>
       ) : unavailable ? (
         <div className="px-4 py-5 text-sm text-muted">
           Offer-event analytics are temporarily unavailable. Creator flows continue running normally.
         </div>
       ) : events.length === 0 && assignments.length === 0 ? (
         <div className="px-4 py-5 text-sm text-muted">
-          No V2 offer events have been recorded in this enrollment window yet.
+          No V{version} offer events have been recorded in this enrollment window yet.
         </div>
       ) : (
         <>
@@ -117,7 +123,7 @@ export default function IntentOfferFunnelSummary({
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right font-mono tabular-nums">
-                      {assignmentsUnavailable
+                      {version === 3 || assignmentsUnavailable
                         ? "N/A"
                         : countIntentExperimentAssignments(assignments, summary.variant).toLocaleString("en-AU")}
                     </TableCell>

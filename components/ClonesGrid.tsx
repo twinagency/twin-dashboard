@@ -35,6 +35,7 @@ export type CloneCard = {
 
 const COHORT_OPTIONS: { value: CloneCohortFilter; label: string }[] = [
   { value: "all", label: "All" },
+  { value: "new-system-v3", label: "New System V3" },
   { value: "new-system-v2", label: "New System V2" },
   { value: "new-system-v1", label: "V1" },
   { value: "control", label: "Control" },
@@ -66,6 +67,7 @@ export default function ClonesGrid({ clones }: { clones: CloneCard[] }) {
   const cohortCounts = useMemo(
     () => ({
       all: clones.length,
+      "new-system-v3": clones.filter((c) => c.cohort === "new-system-v3").length,
       "new-system-v2": clones.filter((c) => c.cohort === "new-system-v2").length,
       "new-system-v1": clones.filter((c) => c.cohort === "new-system-v1").length,
       control: clones.filter((c) => c.cohort === "control").length,
@@ -162,7 +164,9 @@ export default function ClonesGrid({ clones }: { clones: CloneCard[] }) {
                   <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                     <Badge
                       title={
-                        c.cohort === "new-system-v2"
+                        c.cohort === "new-system-v3"
+                          ? "New System V3 enabled for every fan"
+                          : c.cohort === "new-system-v2"
                           ? "New System V2 enabled with a stable 50/50 fan-level split"
                           : c.cohort === "new-system-v1"
                             ? "Version 1 conversion system enabled"

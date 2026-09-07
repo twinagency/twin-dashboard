@@ -64,6 +64,7 @@ export default function ConversionCohortStatus({
   const cohort = cloneCohortFromPromotionFlag(newSystemEnabled, promotionVersion);
   const enabled = cloneCohortIsEnabled(cohort);
   const isV2 = cohort === "new-system-v2";
+  const isV3 = cohort === "new-system-v3";
   const enrollmentDateTime = enabled ? formatEnrollmentDateTime(enrolledAt) : null;
   const fallbackAfterMessages = effectiveConversionDial(intentFallbackOfferAfterMessages, 8);
   const maxIgnoredOffers = effectiveConversionDial(intentMaxIgnoredOffers, 2);
@@ -99,7 +100,9 @@ export default function ConversionCohortStatus({
             </Badge>
           </div>
           <p className="mt-1 text-xs leading-relaxed text-muted">
-            {isV2
+            {isV3
+              ? "This creator runs V3 for every fan: exact catalogue matching, truthful alternatives and clear, flirty locked-content descriptions."
+              : isV2
               ? "This creator runs a stable 50/50 fan-level test: each fan is assigned once to V2 or Control and stays there."
               : cohort === "new-system-v1"
                 ? "This creator is still on the V1 conversion system."
@@ -125,16 +128,16 @@ export default function ConversionCohortStatus({
         </div>
       </div>
 
-      {isV2 ? (
+      {isV2 || isV3 ? (
         <div>
           <div className="mb-2 text-[11px] font-medium uppercase tracking-[0.08em] text-muted">
-            V2 conversion rules
+            {isV3 ? "V3 conversion rules" : "V2 conversion rules"}
           </div>
           <dl className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
             {[
-              { label: "Fan assignment", value: "50% V2 / 50% Control" },
+              { label: "Fan assignment", value: isV3 ? "100% V3" : "50% V2 / 50% Control" },
               { label: "First paid offer", value: "After an explicit request" },
-              { label: "Ignored offers", value: "Cooldown, then a different offer" },
+              { label: isV3 ? "Content promise" : "Ignored offers", value: isV3 ? "Exact match or honest alternative" : "Cooldown, then a different offer" },
               { label: "Lifecycle tracking", value: "Attempted / blocked / delivered / purchased" },
             ].map((item) => (
               <div key={item.label} className="rounded-lg border border-line bg-bg px-3 py-2.5">

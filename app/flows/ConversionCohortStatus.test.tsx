@@ -37,6 +37,16 @@ test("shows New System V2 and its stable fan-level experiment", () => {
   assert.doesNotMatch(html, /<(?:input|select|button)\b/);
 });
 
+test("shows New System V3 as a creator-level exact-content cohort", () => {
+  const html = render({ promotionVersion: 3 });
+
+  assert.match(html, /data-cohort="new-system-v3"/);
+  assert.match(html, />New System V3</);
+  assert.match(html, /100% V3/);
+  assert.match(html, /Exact match or honest alternative/);
+  assert.match(html, /truthful alternatives/);
+});
+
 test("shows an enabled version-1 creator as V1 with its saved timing", () => {
   const html = render({ promotionVersion: 1 });
 

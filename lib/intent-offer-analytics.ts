@@ -1,5 +1,5 @@
 export const INTENT_OFFER_EVENT_TYPES = ["attempted", "blocked", "delivered", "purchased"] as const;
-export const INTENT_OFFER_VARIANTS = ["v2", "control"] as const;
+export const INTENT_OFFER_VARIANTS = ["v2", "v3", "control"] as const;
 
 export type IntentOfferEventType = (typeof INTENT_OFFER_EVENT_TYPES)[number];
 export type IntentOfferVariant = (typeof INTENT_OFFER_VARIANTS)[number];

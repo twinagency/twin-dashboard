@@ -90,12 +90,12 @@ type FleetRow = {
   drip_steps?: unknown[] | null;
 };
 
-type V2CreatorWindow = {
+type IntentCreatorWindow = {
   id: string;
   enrolledAt: string | null | undefined;
 };
 
-type V2Analytics = {
+type IntentAnalytics = {
   events: IntentOfferEventRow[];
   assignments: IntentExperimentAssignmentRow[];
   eventsUnavailable: boolean;
@@ -109,7 +109,7 @@ function validTimestamp(value: string | null | undefined): number | null {
   return Number.isFinite(parsed) ? parsed : null;
 }
 
-async function loadV2Analytics(windows: V2CreatorWindow[]): Promise<V2Analytics> {
+async function loadIntentAnalytics(windows: IntentCreatorWindow[], version: 2 | 3): Promise<IntentAnalytics> {
   if (windows.length === 0) {
     return {
       events: [],
@@ -127,19 +127,19 @@ async function loadV2Analytics(windows: V2CreatorWindow[]): Promise<V2Analytics>
     ? new Date(Math.min(...knownEnrollmentTimes)).toISOString()
     : "1970-01-01T00:00:00.000Z";
 
-  const [eventResult, assignmentResult] = await Promise.all([
-    selectAllRows<IntentOfferEventRow>(
+  const eventResult = await selectAllRows<IntentOfferEventRow>(
       supabaseAdmin
         .from("intent_offer_events")
         .select("id,attempt_id,clone_id,event_type,variant,price_stars,block_reason,created_at")
         .in("clone_id", cloneIds)
-        .eq("version", 2)
+        .eq("version", version)
         .gte("created_at", earliestEnrollment)
         .order("created_at", { ascending: true })
         .order("id", { ascending: true }),
-      { label: "V2 intent offer funnel", maxRows: 200_000 },
-    ),
-    selectAllRows<IntentExperimentAssignmentRow>(
+      { label: `V${version} intent offer funnel`, maxRows: 200_000 },
+    );
+  const assignmentResult = version === 2
+    ? await selectAllRows<IntentExperimentAssignmentRow>(
       supabaseAdmin
         .from("intent_experiment_assignments")
         .select("clone_id,user_id,variant,assigned_at")
@@ -150,8 +150,8 @@ async function loadV2Analytics(windows: V2CreatorWindow[]): Promise<V2Analytics>
         .order("clone_id", { ascending: true })
         .order("user_id", { ascending: true }),
       { label: "V2 fan assignments", maxRows: 200_000 },
-    ),
-  ]);
+    )
+    : { rows: [] as IntentExperimentAssignmentRow[], truncated: false };
 
   const inCreatorWindow = (cloneId: string, timestamp: string): boolean => {
     const enrollment = enrollmentByClone.get(cloneId);
@@ -185,8 +185,16 @@ async function FleetFlows() {
   const v2Rows = rows.filter(
     (row) => row.intent_classic_promotions_enabled === true && row.intent_classic_promotion_version === 2,
   );
-  const v2Analytics = await loadV2Analytics(
+  const v2Analytics = await loadIntentAnalytics(
     v2Rows.map((row) => ({ id: row.id, enrolledAt: row.intent_classic_promotions_enabled_at })),
+    2,
+  );
+  const v3Rows = rows.filter(
+    (row) => row.intent_classic_promotions_enabled === true && row.intent_classic_promotion_version === 3,
+  );
+  const v3Analytics = await loadIntentAnalytics(
+    v3Rows.map((row) => ({ id: row.id, enrolledAt: row.intent_classic_promotions_enabled_at })),
+    3,
   );
 
   return (
@@ -217,11 +225,23 @@ async function FleetFlows() {
       <IntentOfferFunnelSummary
         events={v2Analytics.events}
         assignments={v2Analytics.assignments}
-        hasV2Creators={v2Rows.length > 0}
+        hasCreators={v2Rows.length > 0}
+        version={2}
         unavailable={v2Analytics.eventsUnavailable}
         assignmentsUnavailable={v2Analytics.assignmentsUnavailable}
         truncated={v2Analytics.truncated}
         windowLabel="Since each creator's V2 enrollment"
+      />
+
+      <IntentOfferFunnelSummary
+        events={v3Analytics.events}
+        assignments={v3Analytics.assignments}
+        hasCreators={v3Rows.length > 0}
+        version={3}
+        unavailable={v3Analytics.eventsUnavailable}
+        assignmentsUnavailable={false}
+        truncated={v3Analytics.truncated}
+        windowLabel="Since each creator's V3 enrollment"
       />
 
       <Card className="overflow-hidden p-0">
@@ -379,7 +399,7 @@ async function CloneFlows({ cloneId }: { cloneId: string }) {
     intent_classic_promotions_enabled?: boolean | null;
     // Migration 139. Durable enrollment metadata; null for Control rows.
     intent_classic_promotions_enabled_at?: string | null;
-    // Migration 143. V2 is explicit; absent/missing stays V1.
+    // Migrations 143/144. V2 and V3 are explicit; absent/missing stays V1.
     intent_classic_promotion_version?: number | null;
     // Migration 133 — absent pre-migration, defaults false.
     block_us_fans_enabled?: boolean | null;
@@ -390,9 +410,9 @@ async function CloneFlows({ cloneId }: { cloneId: string }) {
     clone.intent_classic_promotions_enabled,
     clone.intent_classic_promotion_version,
   );
-  const isV2 = conversionCohort === "new-system-v2";
-  const v2Analytics = isV2
-    ? await loadV2Analytics([{ id: clone.id, enrolledAt: clone.intent_classic_promotions_enabled_at }])
+  const analyticsVersion = conversionCohort === "new-system-v3" ? 3 : conversionCohort === "new-system-v2" ? 2 : null;
+  const intentAnalytics = analyticsVersion
+    ? await loadIntentAnalytics([{ id: clone.id, enrolledAt: clone.intent_classic_promotions_enabled_at }], analyticsVersion)
     : null;
 
   return (
@@ -425,14 +445,15 @@ async function CloneFlows({ cloneId }: { cloneId: string }) {
         intentMaxIgnoredOffers={clone.intent_max_ignored_offers}
       />
 
-      {v2Analytics && (
+      {intentAnalytics && analyticsVersion && (
         <IntentOfferFunnelSummary
-          events={v2Analytics.events}
-          assignments={v2Analytics.assignments}
-          hasV2Creators
-          unavailable={v2Analytics.eventsUnavailable}
-          assignmentsUnavailable={v2Analytics.assignmentsUnavailable}
-          truncated={v2Analytics.truncated}
+          events={intentAnalytics.events}
+          assignments={intentAnalytics.assignments}
+          hasCreators
+          version={analyticsVersion}
+          unavailable={intentAnalytics.eventsUnavailable}
+          assignmentsUnavailable={intentAnalytics.assignmentsUnavailable}
+          truncated={intentAnalytics.truncated}
           windowLabel={cloneCohortEnrollmentLabel(
             conversionCohort,
             clone.intent_classic_promotions_enabled_at,
