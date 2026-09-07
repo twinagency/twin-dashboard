@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { dashboardOrigin, trustedFormOrigin } from "../lib/form-origin";
 import { NextRequest } from "next/server";
 import { agencyRequestAllowed, scopeAgencyClones } from "../lib/agency-policy";
 import { middleware } from "../middleware";
@@ -21,6 +22,14 @@ async function main() {
   for (const path of ["/login", "/admin-auth"]) {
     assert.equal((await middleware(new NextRequest(`https://twin.test${path}`, {method:"POST",headers:{"next-action":"known-admin-action"}}))).status,403);
   }
+  const proxyRequest = {url:"http://localhost:3000/agency-admin/provision",headers:new Headers({origin:"https://dashboard.tgaiclone.xyz",host:"localhost:3000"})};
+  assert.equal(trustedFormOrigin(proxyRequest),true,"Public origin must work behind an internal proxy host");
+  assert.equal(new URL("/agency-admin?result=created", dashboardOrigin(proxyRequest)).href,"https://dashboard.tgaiclone.xyz/agency-admin?result=created");
+  for (const origin of ["https://evil.example","http://dashboard.tgaiclone.xyz","null","not a url","https://dashboard.tgaiclone.xyz.evil.example","https://dashboard.tgaiclone.xyz/path", ""]) {
+    const headers = new Headers({origin,host:"evil.example","x-forwarded-host":"evil.example"});
+    assert.equal(trustedFormOrigin({...proxyRequest,headers}),false,`Reject ${origin}`);
+  }
+  assert.equal(trustedFormOrigin({...proxyRequest,headers:new Headers()}),false);
   process.env.DASHBOARD_NO_AUTH = "true";
   for (const path of ["/clones","/revenue","/api/media-sign","/agency-admin/provision"]) {
     const req = new NextRequest(`https://twin.test${path}`,{headers:{cookie:"twin_agency_access=some-agency-token"}});

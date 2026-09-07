@@ -1,10 +1,11 @@
+import { dashboardOrigin, trustedFormOrigin } from "@/lib/form-origin";
 import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { agencyIdentity } from "@/lib/agency-access";
 import { AGENCY_COOKIE } from "@/lib/agency-policy";
 
 export async function POST(req: NextRequest) {
-  if (!req.headers.get("origin") || new URL(req.headers.get("origin")!).host !== req.headers.get("host")) {
+  if (!trustedFormOrigin(req)) {
     return new NextResponse("Forbidden", { status: 403 });
   }
   const fd = await req.formData();
@@ -17,9 +18,9 @@ export async function POST(req: NextRequest) {
   const { data, error } = await auth.auth.signInWithPassword({ email, password });
   const token = data.session?.access_token;
   if (error || !token || !await agencyIdentity(token)) {
-    return NextResponse.redirect(new URL("/agency/login?error=1", req.url), 303);
+    return NextResponse.redirect(new URL("/agency/login?error=1", dashboardOrigin(req)), 303);
   }
-  const response = NextResponse.redirect(new URL("/agency", req.url), 303);
+  const response = NextResponse.redirect(new URL("/agency", dashboardOrigin(req)), 303);
   response.cookies.set(AGENCY_COOKIE, token, { httpOnly: true, secure: process.env.NODE_ENV === "production",
     sameSite: "strict", path: "/", maxAge: Math.min(data.session?.expires_in ?? 3600, 3600) });
   response.headers.set("Cache-Control", "no-store");
