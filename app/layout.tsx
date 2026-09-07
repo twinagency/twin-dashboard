@@ -30,10 +30,21 @@ const plexMono = Inter({subsets:['latin'],variable:'--font-mono'});
 const spaceGrotesk = Space_Grotesk({subsets:['latin'],variable:'--font-heading'});
 const interTight = Inter_Tight({subsets:['latin'],variable:'--font-display'});
 
-export const metadata: Metadata = {
-  title: "Twin Console",
-  description: "Intelligence infrastructure operations console",
-};
+export async function generateMetadata(): Promise<Metadata> {
+  const pathname = (await headers()).get("x-pathname");
+  const agencyName = pathname && isAgencyPath(pathname)
+    ? "LYNQ"
+    : pathname === "/login" ? undefined : (await getDashboardAccess())?.name;
+  return agencyName ? {
+    title: `${agencyName} Dashboard`,
+    description: `${agencyName} creator dashboard`,
+    icons: { icon: { url: "/agency/icon.svg", type: "image/svg+xml" } },
+  } : {
+    title: "Twin Console",
+    description: "Intelligence infrastructure operations console",
+    icons: { icon: { url: "/icon.png", type: "image/png" } },
+  };
+}
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   // Mirrors middleware.ts's dev bypass — otherwise the app shell (sidebar, nav)
@@ -81,7 +92,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // particular that the avatar URLs are still signed fresh on every request,
   // only the storage paths are cached.
   const [twinVersion, clones, activeCloneId] = await Promise.all([
-    getCachedTwinVersion(),
+    agency ? Promise.resolve(null) : getCachedTwinVersion(),
     getFleetClones(),
     getCloneScope(),
   ]);
@@ -138,8 +149,8 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <div className="flex h-screen min-w-0 flex-1 flex-col overflow-hidden">
               {/* Mobile-only top bar - the Sidebar above only renders at lg+ */}
               <header className="dashboard-mobile-header flex shrink-0 items-center justify-between border-b border-white/12 px-4 py-3 lg:hidden">
-                <Link href="/revenue" aria-label="Twin Technologies">
-                  <TwinWordmark inverse />
+                <Link href="/revenue" aria-label={agency?.name || "Twin Technologies"}>
+                  <TwinWordmark inverse agencyName={agency?.name} />
                 </Link>
                 <div className="flex items-center gap-1">
                   <MobileMenu activeCloneId={activeCloneId} />
@@ -154,12 +165,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           </div>
           {/* Mounted ONCE, outside the sidebar, so a phone gets it too. It
               renders nothing until the version actually changes. */}
-          <TwinUpdatePopup
+          {!agency && <TwinUpdatePopup
             version={twinVersion?.version ?? null}
             name={twinVersion?.name ?? ""}
             summary={twinVersion?.summary ?? ""}
             changes={twinVersion?.changes ?? []}
-          />
+          />}
         </BlurProvider>
         </CurrencyProvider>
         </DashboardAccessProvider>
@@ -167,4 +178,3 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     </html>
   );
 }
-

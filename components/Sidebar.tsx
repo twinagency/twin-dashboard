@@ -202,8 +202,8 @@ export function SidebarContent({
       {/* Brand - fixed height so its bottom border lines up exactly with the
           TopBar's border in the column next to it (both h-16). */}
       <div className="flex h-20 shrink-0 items-center justify-between border-b border-white/14 px-5">
-        <Link href="/revenue" className="min-w-0" aria-label="Twin Technologies" onClick={onNavigate}>
-          <TwinWordmark inverse />
+        <Link href="/revenue" className="min-w-0" aria-label={agencyName || "Twin Technologies"} onClick={onNavigate}>
+          <TwinWordmark inverse agencyName={agencyName} />
         </Link>
         {headerAction}
       </div>
@@ -267,4 +267,3 @@ export default function Sidebar({
     </aside>
   );
 }
-
