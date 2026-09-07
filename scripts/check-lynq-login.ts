@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { NextRequest } from "next/server";
-import { POST as login } from "../app/lynq/auth/route";
+import { POST as login, GET as loginPage } from "../app/lynq/auth/route";
 import { POST as logout } from "../app/agency/logout/route";
 import { POST as adminLogin } from "../app/admin-auth/route";
 import { middleware } from "../middleware";
@@ -49,7 +49,20 @@ async function main() {
   try {
     assert.equal((await login(request("test-lynq-password","https://evil.example"))).status,403);
     assert.equal(tokenRequests,0);
+    assert.equal(loginPage(new NextRequest(`${origin}/lynq/auth`)).headers.get("location"),`${origin}/lynq`,"Opening the submission URL must not show a blank 405 page");
     assert.match((await login(request("wrong-password"))).headers.get("location")!,/\/lynq\?error=1$/);
+    const jsonRequest=(password:string)=>new NextRequest(`${origin}/lynq/auth`,{method:"POST",headers:{origin,accept:"application/json"},body:new URLSearchParams({password})});
+    const rejected=await login(jsonRequest("wrong-password"));
+    assert.equal(rejected.status,401);
+    assert.deepEqual(await rejected.json(),{ok:false,error:"credentials"});
+    const accepted=await login(jsonRequest("test-lynq-password"));
+    assert.equal(accepted.status,200);
+    assert.deepEqual(await accepted.json(),{ok:true});
+    assert.equal(accepted.cookies.get(AGENCY_COOKIE)?.value,"test-session");
+    assert.equal(accepted.headers.get("location"),null,"Browser stays on the sign-in page until success is handled");
+    const malformed=await login(new NextRequest(`${origin}/lynq/auth`,{method:"POST",headers:{origin,accept:"application/json","content-type":"application/json"},body:"invalid"}));
+    assert.equal(malformed.status,503);
+    assert.deepEqual(await malformed.json(),{ok:false,error:"unavailable"},"Unexpected errors must return a usable response");
     const success=await login(request("test-lynq-password",origin,{email:"admin@example.test",agency:"other",next:"/settings"}));
     assert.equal(success.status,303);
     assert.equal(success.headers.get("location"),`${origin}/revenue`);
