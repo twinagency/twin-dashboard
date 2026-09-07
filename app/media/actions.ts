@@ -6,6 +6,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { captionPhoto, captionVideo, type Caption } from "@/lib/caption";
 import {
   buildSafeRepricePlan,
+  requirePhotoBundlePrice,
   isAllowedPaidOrFreePrice,
   MEDIA_TAGS,
   MIN_PAID_MEDIA_PRICE_STARS,
@@ -378,6 +379,9 @@ export async function bulkDeleteMedia(
 export async function createBundle(cloneId: string, fd: FormData): Promise<string> {
   const name = String(fd.get("name") ?? "").trim();
   if (!name) throw new Error("name required");
+  // Validate before the welcome-bundle demotion below. An invalid price must
+  // not make any database change, even when the form marks this as onboarding.
+  const starPrice = requirePhotoBundlePrice(fd.get("star_price"));
 
   const isOnboarding = fd.get("is_onboarding") === "on";
   // Only ONE welcome bundle per clone — demote any existing one first.
@@ -393,7 +397,7 @@ export async function createBundle(cloneId: string, fd: FormData): Promise<strin
     clone_id: cloneId,
     name,
     caption: String(fd.get("caption") ?? "").trim() || null,
-    star_price: Number(fd.get("star_price") ?? 99),
+    star_price: starPrice,
     is_onboarding: isOnboarding,
   }).select("id").single();
   if (error) throw new Error(error.message);
@@ -405,6 +409,9 @@ export async function createBundle(cloneId: string, fd: FormData): Promise<strin
 export async function updateBundle(cloneId: string, bundleId: string, fd: FormData) {
   const name = String(fd.get("name") ?? "").trim();
   if (!name) throw new Error("name required");
+  // Keep the guard ahead of every write, including demoting another welcome
+  // bundle, so a rejected form leaves the creator's current state untouched.
+  const starPrice = requirePhotoBundlePrice(fd.get("star_price"));
 
   const isOnboarding = fd.get("is_onboarding") === "on";
   // Only ONE welcome bundle per clone — demote any OTHER welcome bundle first.
@@ -422,7 +429,7 @@ export async function updateBundle(cloneId: string, bundleId: string, fd: FormDa
     .update({
       name,
       caption: String(fd.get("caption") ?? "").trim() || null,
-      star_price: Number(fd.get("star_price") ?? 99),
+      star_price: starPrice,
       is_onboarding: isOnboarding,
     })
     .eq("id", bundleId)

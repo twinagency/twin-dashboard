@@ -21,7 +21,12 @@ import path from "node:path";
 import sharp from "sharp";
 import { supabaseAdmin } from "@/lib/supabase";
 import { captionPhoto, type Caption } from "@/lib/caption";
-import { normalizeSafeCategoryGuide, priceFromGuide, type CategoryPricing } from "@/lib/pricing";
+import {
+  DEFAULT_PHOTO_BUNDLE_PRICE_STARS,
+  normalizeSafeCategoryGuide,
+  priceFromGuide,
+  type CategoryPricing,
+} from "@/lib/pricing";
 import { assertPhotoSendable } from "@/lib/photo-guard";
 
 // ── mirrored from app/media/actions.ts (module-private there) ────────────────
@@ -174,7 +179,7 @@ async function main() {
         clone_id: CLONE_ID,
         name: BUNDLE_NAME,
         caption: null,
-        star_price: 99, // the dashboard's create-bundle default
+        star_price: DEFAULT_PHOTO_BUNDLE_PRICE_STARS,
         is_onboarding: false,
       }).select("id").single();
       if (bErr) throw new Error(bErr.message);

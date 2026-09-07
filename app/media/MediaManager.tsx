@@ -8,6 +8,8 @@ import {
   CATEGORY_LABELS,
   PRICING_CATEGORIES,
   DEFAULT_CATEGORY_PRICING,
+  DEFAULT_PHOTO_BUNDLE_PRICE_STARS,
+  MAX_PHOTO_BUNDLE_PRICE_STARS,
   MIN_PAID_MEDIA_PRICE_STARS,
   normalizeSafeCategoryGuide,
 } from "@/lib/pricing";
@@ -953,7 +955,8 @@ function BundleCard({ bundle, cloneId }: { bundle: Bundle; cloneId: string }) {
             className="w-full rounded border border-line bg-bg px-3 py-2 outline-none focus:border-accent" />
           <input name="caption" defaultValue={bundle.caption ?? ""} placeholder="Caption (welcome bundle only, others AI-written on send)"
             className="w-full rounded border border-line bg-bg px-3 py-2 outline-none focus:border-accent" />
-          <input name="star_price" type="number" defaultValue={bundle.star_price} placeholder="⭐ price"
+          <input name="star_price" type="number" min={1} max={MAX_PHOTO_BUNDLE_PRICE_STARS} step={1} required
+            defaultValue={bundle.star_price} placeholder="⭐ price"
             className="w-full rounded border border-line bg-bg px-3 py-2 outline-none focus:border-accent" />
           <label className="flex items-center gap-2 text-sm">
             <input type="checkbox" name="is_onboarding" defaultChecked={bundle.is_onboarding} className="h-4 w-4 accent-good" />
@@ -1067,7 +1070,8 @@ function CreateBundleForm({ cloneId }: { cloneId: string }) {
         className="w-full rounded border border-line bg-bg px-3 py-2 text-sm outline-none focus:border-accent" />
       <input name="caption" placeholder="Caption (welcome bundle only, others are AI-written on send)"
         className="w-full rounded border border-line bg-bg px-3 py-2 text-sm outline-none focus:border-accent" />
-      <input name="star_price" type="number" defaultValue={99} placeholder="⭐ price"
+      <input name="star_price" type="number" min={1} max={MAX_PHOTO_BUNDLE_PRICE_STARS} step={1} required
+        defaultValue={DEFAULT_PHOTO_BUNDLE_PRICE_STARS} placeholder="⭐ price"
         className="w-full rounded border border-line bg-bg px-3 py-2 text-sm outline-none focus:border-accent" />
       <label className="flex items-center gap-2 text-sm">
         <input type="checkbox" name="is_onboarding" className="h-4 w-4 accent-good" />

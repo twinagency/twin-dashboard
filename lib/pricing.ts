@@ -87,6 +87,19 @@ export const CATEGORY_LABELS: Record<string, string> = {
 // not force an automatic price increase on existing content.
 export const MIN_PAID_MEDIA_PRICE_STARS = 250;
 
+// Photo bundles have their own commercial ceiling. Keep this separate from
+// individual photo/video category pricing, whose higher tiers are intentional.
+export const DEFAULT_PHOTO_BUNDLE_PRICE_STARS = 99;
+export const MAX_PHOTO_BUNDLE_PRICE_STARS = 900;
+
+export function requirePhotoBundlePrice(raw: unknown): number {
+  const value = typeof raw === "string" && raw.trim() === "" ? Number.NaN : Number(raw);
+  if (!Number.isSafeInteger(value) || value < 1 || value > MAX_PHOTO_BUNDLE_PRICE_STARS) {
+    throw new Error(`Bundle price must be a whole number from 1 to ${MAX_PHOTO_BUNDLE_PRICE_STARS} Stars`);
+  }
+  return value;
+}
+
 // Recommended new-creator baseline (⭐). The old 15-100 Star ladder predated the
 // live catalogue and could erase most PPV value when Reset + Reprice was used.
 // This recommendation is deliberately separate from the lower corruption guard.

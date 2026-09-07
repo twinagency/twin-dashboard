@@ -10,8 +10,11 @@ import {
 import {
   buildSafeRepricePlan,
   DEFAULT_CATEGORY_PRICING,
+  DEFAULT_PHOTO_BUNDLE_PRICE_STARS,
+  MAX_PHOTO_BUNDLE_PRICE_STARS,
   MIN_PAID_MEDIA_PRICE_STARS,
   normalizeSafeCategoryGuide,
+  requirePhotoBundlePrice,
 } from "../lib/pricing";
 import { repriceConfirmationPhrase } from "../lib/reprice-confirmation";
 
@@ -21,6 +24,14 @@ function check(name: string, fn: () => void) {
   fn();
   passed++;
   console.log(`  ✓ ${name}`);
+}
+
+function functionBody(src: string, declaration: string): string {
+  const start = src.indexOf(declaration);
+  if (start < 0) throw new Error(`no such function: ${declaration}`);
+  const rest = src.slice(start + declaration.length);
+  const end = rest.search(/\nexport (async )?function |\nfunction /);
+  return end < 0 ? rest : rest.slice(0, end);
 }
 
 console.log("Config and pricing safety checks");
@@ -115,6 +126,22 @@ check("the corruption floor stays below current catalogue prices", () => {
   assert.ok(MIN_PAID_MEDIA_PRICE_STARS < DEFAULT_CATEGORY_PRICING.sfw);
 });
 
+check("photo bundle prices have a strict bundle-only ceiling", () => {
+  assert.equal(DEFAULT_PHOTO_BUNDLE_PRICE_STARS, 99);
+  assert.equal(MAX_PHOTO_BUNDLE_PRICE_STARS, 900);
+  for (const [raw, expected] of [[1, 1], ["99", 99], [900, 900]] as const) {
+    assert.equal(requirePhotoBundlePrice(raw), expected);
+  }
+  for (const raw of [0, -1, 901, 900.5, Number.NaN, Number.POSITIVE_INFINITY, "", "nope", null]) {
+    assert.throws(() => requirePhotoBundlePrice(raw), /whole number from 1 to 900 Stars/);
+  }
+
+  // The cap belongs only to photo bundles. High individual-media categories
+  // must remain valid and must not be flattened to the bundle ceiling.
+  assert.ok(DEFAULT_CATEGORY_PRICING.anal > MAX_PHOTO_BUNDLE_PRICE_STARS);
+  assert.ok(normalizeSafeCategoryGuide(DEFAULT_CATEGORY_PRICING));
+});
+
 check("the legacy 15-100 Star guide is rejected", () => {
   const legacy = Object.fromEntries(Object.keys(DEFAULT_CATEGORY_PRICING).map((key, index) => [key, 15 + index]));
   assert.equal(normalizeSafeCategoryGuide(legacy), null);
@@ -183,6 +210,42 @@ check("automatic uploads and importers reject stale guides instead of flattening
   assert.ok(!mediaActions.includes("Math.max(derived ?? fallback"));
   assert.ok(photoImporter.includes("requireSafeGuide(rawGuide)"));
   assert.ok(videoImporter.includes("requireSafeGuide(rawGuide)"));
+});
+
+check("every dashboard bundle write and input uses the shared price guard", () => {
+  const mediaActions = readFileSync(new URL("../app/media/actions.ts", import.meta.url), "utf8");
+  for (const declaration of ["export async function createBundle", "export async function updateBundle"]) {
+    const body = functionBody(mediaActions, declaration);
+    const guard = body.indexOf("requirePhotoBundlePrice(");
+    const firstWrite = body.indexOf('.from("photo_bundles")');
+    assert.ok(guard >= 0, `${declaration} does not validate the bundle price`);
+    assert.ok(firstWrite >= 0, `${declaration} no longer writes photo_bundles, this check needs updating`);
+    assert.ok(guard < firstWrite, `${declaration} mutates photo_bundles before validating the price`);
+    assert.ok(body.includes("star_price: starPrice"), `${declaration} does not write the validated value`);
+  }
+
+  const mediaManager = readFileSync(new URL("../app/media/MediaManager.tsx", import.meta.url), "utf8");
+  const managerInputs = mediaManager.match(/<input name="star_price"[\s\S]*?\/>/g) ?? [];
+  assert.equal(managerInputs.length, 2, "MediaManager must expose exactly the create and edit bundle price inputs");
+  for (const input of managerInputs) {
+    assert.ok(input.includes("min={1}"), "MediaManager bundle input is missing min={1}");
+    assert.ok(input.includes("max={MAX_PHOTO_BUNDLE_PRICE_STARS}"), "MediaManager bundle input is missing the shared max");
+    assert.ok(input.includes("step={1}"), "MediaManager bundle input is missing step={1}");
+    assert.ok(/\brequired\b/.test(input), "MediaManager bundle input is not required");
+  }
+  assert.ok(mediaManager.includes("defaultValue={DEFAULT_PHOTO_BUNDLE_PRICE_STARS}"), "new bundle form is not using the shared default");
+
+  const createClone = readFileSync(new URL("../components/CreateCloneForm.tsx", import.meta.url), "utf8");
+  const stagedInput = createClone.split(/\r?\n/).find((line) => line.includes("value={b.stars}")) ?? "";
+  assert.ok(stagedInput, "new-clone bundle price input was not found");
+  assert.ok(stagedInput.includes("min={1}"), "new-clone bundle input is missing min={1}");
+  assert.ok(stagedInput.includes("max={MAX_PHOTO_BUNDLE_PRICE_STARS}"), "new-clone bundle input is missing the shared max");
+  assert.ok(stagedInput.includes("step={1}"), "new-clone bundle input is missing step={1}");
+  assert.ok(/\brequired\b/.test(stagedInput), "new-clone bundle input is not required");
+  assert.ok(createClone.includes("stars: String(DEFAULT_PHOTO_BUNDLE_PRICE_STARS)"), "new-clone bundle staging is not using the shared default");
+
+  const importer = readFileSync(new URL("../scripts/import-media.ts", import.meta.url), "utf8");
+  assert.ok(importer.includes("star_price: DEFAULT_PHOTO_BUNDLE_PRICE_STARS"));
 });
 
 console.log(`\n${passed} config and pricing safety checks passed.`);

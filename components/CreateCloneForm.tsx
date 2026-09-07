@@ -11,7 +11,11 @@ import { Section, inputCls } from "./clone/fields";
 import { useCloneConfig } from "./clone/useCloneConfig";
 import { createCloneRow, deleteClone, compileCloneAction } from "@/app/clones/actions";
 import { uploadPhoto, uploadVideo, createBundle, addBundleItem } from "@/app/media/actions";
-import { MIN_PAID_MEDIA_PRICE_STARS } from "@/lib/pricing";
+import {
+  DEFAULT_PHOTO_BUNDLE_PRICE_STARS,
+  MAX_PHOTO_BUNDLE_PRICE_STARS,
+  MIN_PAID_MEDIA_PRICE_STARS,
+} from "@/lib/pricing";
 
 // ── Staged (browser-only) media types ──────────────────────────────────────────
 type StagedPhoto = { id: number; file: File; caption: string; teaser: string; stars: string; name: string; captioning: boolean };
@@ -66,7 +70,14 @@ export default function CreateCloneForm({ defaults = {} }: { defaults?: Partial<
     setVideos((prev) => prev.map((v) => (v.id === id ? { ...v, ...patch } : v)));
 
   function addBundle() {
-    setBundles((prev) => [...prev, { id: nextId(), name: "", caption: "", stars: "99", onboarding: false, files: [] }]);
+    setBundles((prev) => [...prev, {
+      id: nextId(),
+      name: "",
+      caption: "",
+      stars: String(DEFAULT_PHOTO_BUNDLE_PRICE_STARS),
+      onboarding: false,
+      files: [],
+    }]);
   }
   const setBundle = (id: number, patch: Partial<StagedBundle>) =>
     setBundles((prev) => prev.map((b) => (b.id === id ? { ...b, ...patch } : b)));
@@ -271,7 +282,7 @@ export default function CreateCloneForm({ defaults = {} }: { defaults?: Partial<
               </div>
               <div className="grid grid-cols-2 gap-2">
                 <label>Name<input value={b.name} onChange={(e) => setBundle(b.id, { name: e.target.value })} placeholder="e.g. Welcome bundle" className={inputCls} /></label>
-                <label>⭐ Price<input type="number" value={b.stars} onChange={(e) => setBundle(b.id, { stars: e.target.value })} className={inputCls} /></label>
+                <label>⭐ Price<input type="number" min={1} max={MAX_PHOTO_BUNDLE_PRICE_STARS} step={1} required value={b.stars} onChange={(e) => setBundle(b.id, { stars: e.target.value })} className={inputCls} /></label>
               </div>
               <label>Caption (shown to fan)<input value={b.caption} onChange={(e) => setBundle(b.id, { caption: e.target.value })} className={inputCls} /></label>
               <label className="flex items-center gap-2">
