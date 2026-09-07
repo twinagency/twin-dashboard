@@ -1,4 +1,5 @@
 "use client";
+import { useDashboardAccess } from "./DashboardAccessProvider";
 
 import { useEffect, useState, useTransition } from "react";
 import { manualSendText, manualSendVoice, manualSendPhoto } from "@/app/users/actions";
@@ -30,6 +31,7 @@ function Thumb({ path }: { path: string }) {
 }
 
 export default function ManualTakeover({ userId, freePhotos }: { userId: string; freePhotos: Photo[] }) {
+  const {readOnly}=useDashboardAccess();
   const [mode, setMode] = useState<Mode>("text");
   const [text, setText] = useState("");
   const [words, setWords] = useState("");
@@ -77,6 +79,7 @@ export default function ManualTakeover({ userId, freePhotos }: { userId: string;
     });
   }
 
+  if (readOnly) return null;
   return (
     <div className="rounded-md border border-warn/30 bg-warn/5 p-3">
       <div
@@ -167,3 +170,4 @@ export default function ManualTakeover({ userId, freePhotos }: { userId: string;
     </div>
   );
 }
+

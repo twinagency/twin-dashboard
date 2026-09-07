@@ -1,7 +1,9 @@
+import { dashboardOrigin } from "@/lib/form-origin";
+import { agencyIdentity } from "@/lib/agency-identity";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/session";
-import { isAgencyPath, agencyRequestAllowed } from "@/lib/agency-policy";
+import { isAgencyPath, agencyRequestAllowed, agencyDashboardPath, AGENCY_COOKIE } from "@/lib/agency-policy";
 
 // Forwards the request pathname to server components via a header (layout.tsx
 // needs it to know it's rendering /login specifically, since that route must
@@ -57,6 +59,23 @@ export async function middleware(req: NextRequest) {
     return withPathname(req);
   }
 
+  const adminToken = req.cookies.get(SESSION_COOKIE)?.value;
+  const admin = await verifySessionToken(adminToken);
+  const agencyToken = req.cookies.get(AGENCY_COOKIE)?.value;
+  if (agencyToken && pathname !== "/login") {
+    if (req.headers.has("next-action") || !["GET", "HEAD"].includes(req.method)) return new NextResponse("Read-only agency access", {status:403});
+    if (pathname === "/login") return NextResponse.redirect(new URL("/agency/login",dashboardOrigin(req)));
+    if (!agencyDashboardPath(pathname)) return new NextResponse("Administrator access required", {status:403});
+    const identity = await agencyIdentity(agencyToken);
+    if (!identity) return NextResponse.redirect(new URL("/agency/login",dashboardOrigin(req)));
+    const embedded = pathname.match(/^\/clones\/([0-9a-f-]{36})/i)?.[1];
+    const requested = embedded || req.nextUrl.searchParams.get("clone") || req.nextUrl.searchParams.get("cloneId");
+    if (requested && !identity.cloneIds.includes(requested)) return new NextResponse("Creator access denied",{status:403});
+    const response = withPathname(req);
+    response.headers.set("Cache-Control","private, no-store");
+    return response;
+  }
+
   // ─── LOGIN DISABLED WHILE BUILDING ───────────────────────────────────────
   // Auth is bypassed in development (and whenever DASHBOARD_NO_AUTH is set) so we
   // + agents can view/screenshot the UI without the password. Production builds
@@ -70,12 +89,12 @@ export async function middleware(req: NextRequest) {
   const authed = await verifySessionToken(token);
 
   if (pathname === "/login") {
-    if (authed) return NextResponse.redirect(new URL("/", req.url));
+    if (authed) return NextResponse.redirect(new URL("/", dashboardOrigin(req)));
     return withPathname(req);
   }
 
   if (!authed) {
-    const url = new URL("/login", req.url);
+    const url = new URL("/login", dashboardOrigin(req));
     url.searchParams.set("next", pathname);
     return NextResponse.redirect(url);
   }

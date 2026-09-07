@@ -1,3 +1,4 @@
+import { getDashboardAccess, withDashboardAccess, accessCacheKey, requireCloneAccess } from "./dashboard-access";
 // One cache in front of the two slowest reads in this codebase.
 //
 // THE THING THAT SHAPES THIS FILE: getDashboard() + getAnalytics() together take
@@ -128,21 +129,23 @@ export async function getRevenueRollup(
   range?: DateRange,
   options?: { awaitFresh?: boolean; force?: boolean },
 ): Promise<CachedRevenue> {
-  const key = keyOf(period, cloneId, range);
+  const access = await getDashboardAccess();
+  await requireCloneAccess(cloneId);
+  const key = `${accessCacheKey(access)}|${keyOf(period, cloneId, range)}`;
   const cached = cache.get(key);
 
   if (cached) {
     const ageMs = Date.now() - cached.fetchedAt;
     const stale = ageMs > TTL_MS;
     if (options?.force) {
-      const entry = await refresh(key, period, cloneId, range);
+      const entry = await withDashboardAccess(access, () => refresh(key, period, cloneId, range));
       return { ...entry.value, cachedAt: entry.fetchedAt, ageSeconds: 0, stale: false };
     }
     if (stale) {
       // Ordinary callers receive the last good snapshot while one refresh is
       // running. The live dashboard opts into awaitFresh so its once-a-minute
       // poll instead waits for that same single-flight refresh to finish.
-      const updating = refresh(key, period, cloneId, range);
+      const updating = withDashboardAccess(access, () => refresh(key, period, cloneId, range));
       if (options?.awaitFresh) {
         const entry = await updating;
         return { ...entry.value, cachedAt: entry.fetchedAt, ageSeconds: 0, stale: false };
@@ -156,7 +159,7 @@ export async function getRevenueRollup(
 
   // Cold. Nothing to serve, so this one waits. Errors propagate so the route can
   // return a 500 rather than an empty dashboard that reads as "you earned zero".
-  const entry = await refresh(key, period, cloneId, range);
+  const entry = await withDashboardAccess(access, () => refresh(key, period, cloneId, range));
   return { ...entry.value, cachedAt: entry.fetchedAt, ageSeconds: 0, stale: false };
 }
 
@@ -172,3 +175,4 @@ export async function getRevenueRollup(
 export function clearRevenueCache() {
   cache.clear();
 }
+

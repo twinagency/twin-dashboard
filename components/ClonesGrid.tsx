@@ -1,4 +1,5 @@
 "use client";
+import { useDashboardAccess } from "./DashboardAccessProvider";
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -38,6 +39,7 @@ const COHORT_OPTIONS: { value: CloneCohortFilter; label: string }[] = [
 ];
 
 export default function ClonesGrid({ clones }: { clones: CloneCard[] }) {
+  const {readOnly}=useDashboardAccess();
   const [query, setQuery] = useState("");
   const [cohortFilter, setCohortFilter] = useState<CloneCohortFilter>("all");
   const router = useRouter();
@@ -143,7 +145,8 @@ export default function ClonesGrid({ clones }: { clones: CloneCard[] }) {
                     <button
                       type="button"
                       onClick={(e) => togglePause(e, c)}
-                      title={c.active ? "Click to pause this bot" : "Click to resume this bot"}
+                      disabled={readOnly}
+                      title={readOnly ? "Read only" : c.active ? "Click to pause this bot" : "Click to resume this bot"}
                       className="shrink-0"
                     >
                       <Badge
@@ -153,7 +156,7 @@ export default function ClonesGrid({ clones }: { clones: CloneCard[] }) {
                         }
                       >
                         <span className={"h-2 w-2 rounded-full " + (c.active ? "bg-good" : "bg-muted")} />
-                        {c.active ? "active · pause" : "paused · resume"}
+                        {readOnly ? (c.active ? "active" : "paused") : c.active ? "active · pause" : "paused · resume"}
                       </Badge>
                     </button>
                   </div>

@@ -1,3 +1,4 @@
+import { serviceClient } from "./supabase-service";
 import { supabaseAdmin } from "./supabase";
 import { applyStructuredPersona, fillDerivedSlots, type PersonaFactCols } from "./persona-facts";
 import { vibePresetFor } from "./vibes";
@@ -52,7 +53,7 @@ export async function assembleClonePrompts(
   // prior behaviour for every existing caller.
   templateOverrides?: Partial<Record<"text" | "voice" | "vision" | "routing", string>>,
 ): Promise<Record<"text" | "voice" | "vision" | "routing", string>> {
-  const { data: tplRows } = await supabaseAdmin
+  const { data: tplRows } = await serviceClient()
     .from("prompt_templates")
     .select("agent_type,template")
     .in("agent_type", ["text", "voice", "vision", "routing"]);
@@ -373,7 +374,7 @@ export async function compileClone(cloneId: string) {
   if (!clone) throw new Error("clone not found");
   const c = clone as CloneRow;
 
-  const { data: tplRows, error: te } = await supabaseAdmin
+  const { data: tplRows, error: te } = await serviceClient()
     .from("prompt_templates")
     .select("agent_type,template")
     .in("agent_type", ["text", "voice", "vision", "routing"]);
@@ -425,3 +426,4 @@ export async function compileClone(cloneId: string) {
 
   return { persona, text_prompt, voice_prompt, photo_reply_prompt, routing_prompt };
 }
+

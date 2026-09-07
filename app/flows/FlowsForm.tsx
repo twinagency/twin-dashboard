@@ -1,4 +1,5 @@
 "use client";
+import { ReadOnlyEditor } from "@/components/DashboardAccessProvider";
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -320,7 +321,7 @@ export default function FlowsForm({
   }
 
   return (
-    <form action={onSubmit} className="mx-auto grid w-full min-w-0 max-w-5xl grid-cols-1 gap-6">
+    <ReadOnlyEditor><form action={onSubmit} className="mx-auto grid w-full min-w-0 max-w-5xl grid-cols-1 gap-6">
       {/* ── New fan onboarding. The whole flow (greeting steer + the ordered
           step list) lives here now; the legacy loose fields (voice-on-msg-N,
           bundle-on-msg-N, teased, collect-fields, onboarding length) were
@@ -889,6 +890,7 @@ export default function FlowsForm({
         </button>
         {saved && <span className="text-sm text-good">Saved ✓</span>}
       </div>
-    </form>
+    </form></ReadOnlyEditor>
   );
 }
+

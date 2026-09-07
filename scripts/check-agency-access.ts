@@ -30,11 +30,6 @@ async function main() {
     assert.equal(trustedFormOrigin({...proxyRequest,headers}),false,`Reject ${origin}`);
   }
   assert.equal(trustedFormOrigin({...proxyRequest,headers:new Headers()}),false);
-  process.env.DASHBOARD_NO_AUTH = "true";
-  for (const path of ["/clones","/revenue","/api/media-sign","/agency-admin/provision"]) {
-    const req = new NextRequest(`https://twin.test${path}`,{headers:{cookie:"twin_agency_access=some-agency-token"}});
-    assert.equal((await middleware(req)).status,307,`agency cookie cannot access ${path}`);
-  }
   process.env.SUPABASE_URL="https://agency-test.supabase.co";
   process.env.SUPABASE_SERVICE_KEY="fake-service-key";
   const { agencyIdentity } = await import("../lib/agency-access");
@@ -49,18 +44,27 @@ async function main() {
       assert.match(url,/user_id=eq.verified-user/);assert.match(url,/active=eq.true/);
       body=enabled?{agency_id:"lynq"}:null;
     } else if(url.includes('/partner_agencies')) {assert.match(url,/id=eq.lynq/);body={id:"lynq",name:"LYNQ"};}
-    else if(url.includes('/agency_creators')) {assert.match(url,/agency_id=eq.lynq/);body=[{clone_id:"a"},{clone_id:"b"}];}
+    else if(url.includes('/agency_creators')) {assert.match(url,/agency_id=eq.lynq/);body=[{clone_id:"aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa"},{clone_id:"bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"}];}
     else throw new Error(`Unexpected query ${url}`);
     return new Response(JSON.stringify(body),{status:200,headers:{"content-type":"application/json"}});
   };
   try {
     assert.equal(await agencyIdentity(undefined),null);
     assert.equal(calls.length,0);
-    assert.deepEqual(await agencyIdentity("verified-token"),{id:"lynq",name:"LYNQ",cloneIds:["a","b"]});
+    assert.deepEqual(await agencyIdentity("verified-token"),{id:"lynq",name:"LYNQ",cloneIds:["aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa","bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb"]});
+    for (const path of ["/revenue","/clones","/users","/flows","/media","/logs","/info","/api/dashboard","/api/users/live"]) {
+      const req=new NextRequest(`https://twin.test${path}`,{headers:{cookie:"twin_agency_access=verified-token"}});
+      assert.equal((await middleware(req)).status,200,`Shared page allowed: ${path}`);
+      assert.equal((await middleware(new NextRequest(req.url,{method:"POST",headers:{cookie:"twin_agency_access=verified-token","next-action":"admin-write"}}))).status,403);
+    }
+    for (const path of ["/settings","/agency-admin","/clones/new","/tracker","/api/ai-assistant","/api/dashboard?clone=cccccccc-cccc-cccc-cccc-cccccccccccc"]) {
+      assert.equal((await middleware(new NextRequest(`https://twin.test${path}`,{headers:{cookie:"twin_agency_access=verified-token"}}))).status,403,`Restricted: ${path}`);
+    }
     enabled=false;
     assert.equal(await agencyIdentity("verified-token"),null,"revocation must apply immediately despite a valid token");
     globalThis.fetch=async()=>new Response(JSON.stringify({message:"invalid token"}),{status:401,headers:{"content-type":"application/json"}});
     assert.equal(await agencyIdentity("forged-token"),null);
+    assert.equal((await middleware(new NextRequest("https://twin.test/revenue",{headers:{cookie:"twin_agency_access=forged-token"}}))).status,307);
   } finally {globalThis.fetch=originalFetch;}
   console.log("Agency access: scope, direct-route protection, server-action blocking, revocation and forged-token checks passed");
 }

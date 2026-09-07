@@ -1,3 +1,7 @@
+import { agencyIdentity } from "@/lib/agency-identity";
+import { AGENCY_COOKIE } from "@/lib/agency-policy";
+import { getDashboardAccess, accessCacheKey } from "@/lib/dashboard-access";
+import { dashboardReader } from "@/lib/dashboard-reader";
 // THE ONE live connection behind the Fans inbox.
 //
 // Session 2 of Jesse's list asked for four live things on /users: purchase
@@ -48,7 +52,8 @@ const DRIP_SCAN_LIMIT = 500;
 
 const sse = (event: Record<string, unknown>) => `data: ${JSON.stringify(event)}\n\n`;
 
-export async function GET(req: NextRequest) {
+async function read(req: NextRequest) {
+  const access = await getDashboardAccess();
   const cloneId = await getCloneScope();
   const scoped = <T extends { eq: (c: string, v: unknown) => T }>(query: T): T =>
     cloneId ? query.eq("clone_id", cloneId) : query;
@@ -95,6 +100,10 @@ export async function GET(req: NextRequest) {
 
       try {
         while (!closed && !req.signal.aborted) {
+          if (access) {
+            const current = await agencyIdentity(req.cookies.get(AGENCY_COOKIE)?.value);
+            if (!current || accessCacheKey(current) !== accessCacheKey(access)) break;
+          }
           const now = Date.now();
 
           // ── 1. Purchases since the cursor ───────────────────────────────
@@ -268,3 +277,6 @@ export async function GET(req: NextRequest) {
     },
   });
 }
+
+
+export const GET = dashboardReader(read);

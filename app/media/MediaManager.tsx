@@ -1,4 +1,5 @@
 "use client";
+import { AdminOnly, ReadOnlyEditor, useDashboardAccess } from "@/components/DashboardAccessProvider";
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -676,6 +677,7 @@ function PhotoCard({
   selected?: boolean;
   onToggleSelect?: () => void;
 }) {
+  const {readOnly}=useDashboardAccess();
   const [editing, setEditing] = useState(false);
   const [viewing, setViewing] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -769,11 +771,11 @@ function PhotoCard({
         </form>
       ) : (
         <div className="flex gap-2">
-          <button onClick={() => setEditing(true)}
+          <button disabled={readOnly} onClick={() => setEditing(true)}
             className="flex-1 rounded border border-line py-1 text-xs hover:bg-muted/10">
             Edit
           </button>
-          <button onClick={remove} disabled={pending}
+          <button onClick={remove} disabled={pending || readOnly}
             className="rounded border border-crit/30 px-3 py-1 text-xs text-crit hover:bg-crit/10 disabled:opacity-50">
             Delete
           </button>
@@ -797,6 +799,7 @@ function VideoCard({
   selected?: boolean;
   onToggleSelect?: () => void;
 }) {
+  const {readOnly}=useDashboardAccess();
   const [editing, setEditing] = useState(false);
   const [viewing, setViewing] = useState(false);
   const [pending, startTransition] = useTransition();
@@ -888,11 +891,11 @@ function VideoCard({
         </form>
       ) : (
         <div className="flex gap-2">
-          <button onClick={() => setEditing(true)}
+          <button disabled={readOnly} onClick={() => setEditing(true)}
             className="flex-1 rounded border border-line py-1 text-xs hover:bg-muted/10">
             Edit
           </button>
-          <button onClick={remove} disabled={pending}
+          <button onClick={remove} disabled={pending || readOnly}
             className="rounded border border-crit/30 px-3 py-1 text-xs text-crit hover:bg-crit/10 disabled:opacity-50">
             Delete
           </button>
@@ -905,6 +908,7 @@ function VideoCard({
 // ── Bundle card ───────────────────────────────────────────────────────────────
 function BundleCard({ bundle, cloneId }: { bundle: Bundle; cloneId: string }) {
   const [pending, startTransition] = useTransition();
+  const {readOnly}=useDashboardAccess();
   const [editing, setEditing] = useState(false);
   const router = useRouter();
 
@@ -985,14 +989,14 @@ function BundleCard({ bundle, cloneId }: { bundle: Bundle; cloneId: string }) {
           </div>
           <div className="flex gap-2">
             <button
-              onClick={() => setEditing(true)}
+              disabled={readOnly} onClick={() => setEditing(true)}
               className="rounded border border-line px-3 py-1 text-xs hover:bg-muted/10"
             >
               Edit
             </button>
             <button
               onClick={remove}
-              disabled={pending}
+              disabled={pending || readOnly}
               className="rounded border border-crit/30 px-3 py-1 text-xs text-crit hover:bg-crit/10 disabled:opacity-50"
             >
               Delete
@@ -1007,7 +1011,7 @@ function BundleCard({ bundle, cloneId }: { bundle: Bundle; cloneId: string }) {
             <div key={item.id} className="group relative">
               <Thumb path={item.storage_path} type="photo" />
               <button
-                onClick={() => removeItem(item.id, item.storage_path)}
+                disabled={readOnly} onClick={() => removeItem(item.id, item.storage_path)}
                 className="absolute right-0.5 top-0.5 hidden rounded-full bg-black/70 px-1 text-xs text-crit group-hover:flex"
               >
                 ✕
@@ -1016,7 +1020,7 @@ function BundleCard({ bundle, cloneId }: { bundle: Bundle; cloneId: string }) {
           ))}
         <label
           className="flex h-20 w-20 cursor-pointer items-center justify-center rounded-xl border-2 border-[#06172f] bg-[#06172f] text-2xl font-bold text-white shadow-[0_8px_22px_rgba(6,23,47,0.2)] transition hover:border-[#4a8ec4] hover:bg-[#082b55] lg:h-16 lg:w-16 lg:text-xl"
-          aria-label="Add photos to bundle"
+          hidden={readOnly} aria-label="Add photos to bundle"
           title={`Add photos to bundle. ${PHOTO_LIMITS_HINT}`}
         >
           <input
@@ -1307,10 +1311,10 @@ export default function MediaManager({
       </div>
 
       <div className={tab === "photos" ? "grid gap-6" : "hidden"}>
-        <PhotoUploadQueue cloneId={cloneId} onDone={() => {}} />
+        <AdminOnly><PhotoUploadQueue cloneId={cloneId} onDone={() => {}} /></AdminOnly>
         {photos.length > 0 ? (
           <>
-            <BulkMediaEditor
+            <AdminOnly><BulkMediaEditor
               cloneId={cloneId}
               type="photos"
               total={photos.length}
@@ -1318,7 +1322,7 @@ export default function MediaManager({
               onSelectAll={() => setSelectedPhotoIds(new Set(photos.map((photo) => photo.id)))}
               onClear={() => setSelectedPhotoIds(new Set())}
               onEditingChange={setEditingPhotos}
-            />
+            /></AdminOnly>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
               {photos.map((p) => (
                 <PhotoCard
@@ -1340,10 +1344,10 @@ export default function MediaManager({
       </div>
 
       <div className={tab === "videos" ? "grid gap-6" : "hidden"}>
-        <VideoUploadQueue cloneId={cloneId} onDone={() => {}} />
+        <AdminOnly><VideoUploadQueue cloneId={cloneId} onDone={() => {}} /></AdminOnly>
         {videos.length > 0 ? (
           <>
-            <BulkMediaEditor
+            <AdminOnly><BulkMediaEditor
               cloneId={cloneId}
               type="videos"
               total={videos.length}
@@ -1351,7 +1355,7 @@ export default function MediaManager({
               onSelectAll={() => setSelectedVideoIds(new Set(videos.map((video) => video.id)))}
               onClear={() => setSelectedVideoIds(new Set())}
               onEditingChange={setEditingVideos}
-            />
+            /></AdminOnly>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
               {videos.map((v) => (
                 <VideoCard
@@ -1373,7 +1377,7 @@ export default function MediaManager({
       </div>
 
       <div className={tab === "bundles" ? "grid gap-4" : "hidden"}>
-        <CreateBundleForm cloneId={cloneId} />
+        <AdminOnly><CreateBundleForm cloneId={cloneId} /></AdminOnly>
         {bundles.length > 0 ? (
           bundles.map((b) => <BundleCard key={b.id} bundle={b} cloneId={cloneId} />)
         ) : (
@@ -1384,7 +1388,7 @@ export default function MediaManager({
       </div>
 
       <div className={tab === "pricing" ? "grid gap-4" : "hidden"}>
-        <PricingTab cloneId={cloneId} categoryPricing={categoryPricing} photoCount={photos.length} videoCount={videos.length} />
+        <ReadOnlyEditor><PricingTab cloneId={cloneId} categoryPricing={categoryPricing} photoCount={photos.length} videoCount={videos.length} /></ReadOnlyEditor>
       </div>
     </div>
   );
@@ -1629,3 +1633,4 @@ function PricingTab({
     </div>
   );
 }
+

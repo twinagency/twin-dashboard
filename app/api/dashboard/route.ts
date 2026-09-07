@@ -1,3 +1,5 @@
+import { cloneBotToken } from "@/lib/clone-credentials";
+import { dashboardReader } from "@/lib/dashboard-reader";
 import { NextRequest, NextResponse } from "next/server";
 import { type Period } from "@/lib/dashboard-data";
 import { getRevenueRollup } from "@/lib/revenue-cache";
@@ -14,9 +16,9 @@ export const dynamic = "force-dynamic";
 async function getScopedBalance(cloneId: string | null): Promise<StarBalance | null> {
   if (!cloneId) return null;
   try {
-    const { data: clone } = await supabaseAdmin.from("clones").select("bot_token").eq("id", cloneId).maybeSingle();
-    if (!clone?.bot_token) return null;
-    return await getStarBalance(cloneId, clone.bot_token);
+    const token = await cloneBotToken(cloneId);
+    if (!token) return null;
+    return await getStarBalance(cloneId, token);
   } catch {
     return null;
   }
@@ -30,7 +32,7 @@ const VALID: Period[] = ["ALL", "1Y", "6M", "3M", "1M", "2W", "1W", "1D", "CUSTO
 // ship as one payload. `clone` scopes the deeper cuts (analytics) to one clone;
 // the chart/headline (dashboard) always carries every clone so the stacked bar
 // and per-clone drill-in keep working regardless of scope.
-export async function GET(req: NextRequest) {
+async function read(req: NextRequest) {
   const p = req.nextUrl.searchParams.get("period");
   const clone = req.nextUrl.searchParams.get("clone") || null;
   const freshness = req.nextUrl.searchParams.get("fresh");
@@ -96,3 +98,6 @@ export async function GET(req: NextRequest) {
     );
   }
 }
+
+
+export const GET = dashboardReader(read);

@@ -1,3 +1,4 @@
+import { dashboardFetch } from "./agency-fetch";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 // Server-only admin client (service key). NEVER import this into a client component.
@@ -11,7 +12,7 @@ function getClient(): SupabaseClient {
     client = createClient(
       process.env.SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_KEY!,
-      { auth: { persistSession: false } },
+      { auth: { persistSession: false, autoRefreshToken: false }, global: { fetch: dashboardFetch } },
     );
   }
   return client;
@@ -22,3 +23,4 @@ export const supabaseAdmin = new Proxy({} as SupabaseClient, {
     return Reflect.get(getClient(), prop, receiver);
   },
 });
+

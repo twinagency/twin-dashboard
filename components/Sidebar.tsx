@@ -1,4 +1,6 @@
 "use client";
+import { useDashboardAccess } from "./DashboardAccessProvider";
+import { agencyDashboardPath } from "@/lib/agency-policy";
 
 // Left sidebar app shell (desktop). "Create new clone" is always the first
 // thing in it, then a focused executive workspace followed by CRM. The
@@ -140,6 +142,7 @@ export function SidebarContent({
   headerAction?: ReactNode;
   showAssistant?: boolean;
 }) {
+  const {readOnly,agencyName}=useDashboardAccess();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [moreOpen, setMoreOpen] = useState(false);
@@ -209,7 +212,7 @@ export function SidebarContent({
           row so it reads as an action, not just another nav destination.
           No bottom border: the generous space above it already separates it
           from the brand header, so a hairline as well just reads as clutter. */}
-      <div className="shrink-0 px-4 pb-3 pt-4">
+      {readOnly ? <div className="px-7 py-4 text-sm text-white/75">{agencyName} · Read only</div> : <div className="shrink-0 px-4 pb-3 pt-4">
         <Link
           href="/clones/new"
           onClick={onNavigate}
@@ -220,11 +223,12 @@ export function SidebarContent({
         </Link>
       </div>
 
+      }
       <nav className="flex flex-1 flex-col overflow-y-auto px-4 py-2">
         <div className="space-y-1">
           {NAV_LINKS.map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}
-          <div className="mb-2 mt-3 border-t border-white/14 pt-3 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">CRM</div>
-          {CRM_LINKS.map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}
+          {!readOnly && <><div className="mb-2 mt-3 border-t border-white/14 pt-3 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">CRM</div>
+          {CRM_LINKS.map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}</>}
           <div className="mt-3 border-t border-white/14 pt-2">
             <button
               type="button"
@@ -236,11 +240,11 @@ export function SidebarContent({
               <span className="flex-1">More</span>
               <svg className={(moreOpen ? "rotate-180 " : "") + "h-4 w-4 transition-transform"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
             </button>
-            {moreOpen ? <div className="mt-1 space-y-1">{MORE_LINKS.map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}</div> : null}
+            {moreOpen ? <div className="mt-1 space-y-1">{MORE_LINKS.filter(link => !readOnly || link.kind === "tab" || agencyDashboardPath(link.href)).map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}</div> : null}
           </div>
         </div>
 
-        {showAssistant ? (
+        {showAssistant && !readOnly ? (
           <div className="mt-auto pt-4 [@media(max-height:850px)]:pt-2">
             <TwinAssistant />
           </div>

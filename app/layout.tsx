@@ -1,3 +1,5 @@
+import DashboardAccessProvider from "@/components/DashboardAccessProvider";
+import { getDashboardAccess } from "@/lib/dashboard-access";
 import "./globals.css";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -41,13 +43,14 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // same as it would once real auth is re-enabled.
   const pathname = (await headers()).get("x-pathname");
   // The agency shell must never fetch or serialize the internal fleet data.
-  if (pathname && isAgencyPath(pathname)) {
+  if (pathname === "/login" || (pathname && isAgencyPath(pathname))) {
     return <html lang="en" className={cn("font-sans", inter.variable, plexMono.variable, spaceGrotesk.variable, interTight.variable)}><body className="min-h-screen bg-bg">{children}</body></html>;
   }
   const devBypass =
     pathname !== "/login" &&
     (process.env.NODE_ENV !== "production");
-  const authed = devBypass || (await isAuthed());
+  const agency = await getDashboardAccess();
+  const authed = !!agency || devBypass || (await isAuthed());
 
   if (!authed) {
     return (
@@ -121,6 +124,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             __html: `try{if(localStorage.getItem("blurMedia")==="true")document.documentElement.classList.add("blur-media")}catch(e){}`,
           }}
         />
+        <DashboardAccessProvider agencyName={agency?.name}>
         <CurrencyProvider>
         <BlurProvider>
           <div className="flex h-screen">
@@ -158,6 +162,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           />
         </BlurProvider>
         </CurrencyProvider>
+        </DashboardAccessProvider>
       </body>
     </html>
   );

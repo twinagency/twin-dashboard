@@ -1,3 +1,4 @@
+import { getDashboardAccess, withDashboardAccess, accessCacheKey, requireCloneAccess } from "./dashboard-access";
 import { cloneUserStatsWindow, messagedFanCount } from "./rollup";
 import { REPORT_TZ } from "./report-time";
 import { selectAllRows } from "./select-all";
@@ -824,14 +825,16 @@ function evictOldInsights() {
  * not turn a current-day result into a stale daily report.
  */
 export async function getCachedRevenueWhyChanged(dayKey: string, cloneId: string | null = null): Promise<RevenueWhyChanged> {
-  const key = insightCacheKey(dayKey, cloneId);
+  const access = await getDashboardAccess();
+  await requireCloneAccess(cloneId);
+  const key = `${accessCacheKey(access)}|${insightCacheKey(dayKey, cloneId)}`;
   const cached = insightCache.get(key);
   if (cached && Date.now() - cached.fetchedAt < INSIGHT_CACHE_TTL_MS) return cached.value;
 
   const running = insightInflight.get(key);
   if (running) return running;
 
-  const run = getRevenueWhyChanged(dayKey, cloneId).then((value) => {
+  const run = withDashboardAccess(access, () => getRevenueWhyChanged(dayKey, cloneId)).then((value) => {
     evictOldInsights();
     insightCache.set(key, { fetchedAt: Date.now(), value });
     return value;
@@ -842,3 +845,4 @@ export async function getCachedRevenueWhyChanged(dayKey: string, cloneId: string
   }).catch(() => {});
   return run;
 }
+

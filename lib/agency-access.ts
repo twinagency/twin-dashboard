@@ -5,22 +5,8 @@ import { AGENCY_COOKIE, scopeAgencyClones } from "./agency-policy";
 import { selectAllRowsParallel } from "./select-all";
 import { rollupRevenueLedger, type RevenueLedgerRow } from "./revenue-ledger";
 
-export async function agencyIdentity(token: string | undefined) {
-  if (!token) return null;
-  const { data, error } = await supabaseAdmin.auth.getUser(token);
-  if (error || !data.user) return null;
-  const member = await supabaseAdmin.from("agency_memberships")
-    .select("agency_id").eq("user_id", data.user.id).eq("active", true).maybeSingle();
-  if (member.error || !member.data) return null;
-  const agency = await supabaseAdmin.from("partner_agencies")
-    .select("id,name").eq("id", member.data.agency_id).eq("active", true).maybeSingle();
-  if (agency.error || !agency.data) return null;
-  const assigned = await supabaseAdmin.from("agency_creators")
-    .select("clone_id").eq("agency_id", agency.data.id);
-  if (assigned.error) return null;
-  return { id: agency.data.id as string, name: agency.data.name as string,
-    cloneIds: (assigned.data ?? []).map(row => row.clone_id as string) };
-}
+export { agencyIdentity } from "./agency-identity";
+import { agencyIdentity } from "./agency-identity";
 
 export async function agencyData(requested?: string, days = 7, fan?: string) {
   const identity = await agencyIdentity((await cookies()).get(AGENCY_COOKIE)?.value);

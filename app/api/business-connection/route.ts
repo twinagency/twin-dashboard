@@ -1,3 +1,5 @@
+import { cloneBotToken } from "@/lib/clone-credentials";
+import { dashboardReader } from "@/lib/dashboard-reader";
 import dns from "node:dns";
 import net from "node:net";
 import { NextRequest, NextResponse } from "next/server";
@@ -31,7 +33,8 @@ async function resolveConnection(cloneId: string): Promise<
     .eq("id", cloneId)
     .maybeSingle();
   const c = clone as { id: string; name: string; slug: string; bot_token?: string } | null;
-  if (!c?.bot_token) return { ok: false, status: 404, error: "Clone not found." };
+  const token = await cloneBotToken(cloneId);
+  if (!c || !token) return { ok: false, status: 404, error: "Clone not found." };
   const cloneInfo = { id: c.id, name: c.name, slug: c.slug };
 
   const { data: userRow } = await supabaseAdmin
@@ -52,10 +55,10 @@ async function resolveConnection(cloneId: string): Promise<
         "No business connection observed yet for this clone. It shows up after she connects the bot as her Telegram Business chatbot and it receives at least one message through it.",
     };
   }
-  return { ok: true, token: c.bot_token, bcid, clone: cloneInfo };
+  return { ok: true, token, bcid, clone: cloneInfo };
 }
 
-export async function GET(req: NextRequest) {
+async function read(req: NextRequest) {
   const cloneId = req.nextUrl.searchParams.get("cloneId");
   if (!cloneId) return NextResponse.json({ error: "missing cloneId" }, { status: 400 });
 
@@ -91,3 +94,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ connected: false, error: msg, clone: resolved.clone }, { status: 200 });
   }
 }
+
+
+export const GET = dashboardReader(read);

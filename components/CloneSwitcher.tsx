@@ -1,4 +1,5 @@
 "use client";
+import { useDashboardAccess } from "./DashboardAccessProvider";
 
 import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -53,6 +54,7 @@ export default function CloneSwitcher({
   activeCloneId: string | null;
 }) {
   const router = useRouter();
+  const {readOnly}=useDashboardAccess();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [open, setOpen] = useState(false);
@@ -132,7 +134,10 @@ export default function CloneSwitcher({
   function pick(id: string | null) {
     setOpen(false);
     startTransition(async () => {
-      await setCloneScope(id);
+      if (readOnly) {
+        const response = await fetch("/agency/clone-scope",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({clone:id})});
+        if (!response.ok) throw new Error("Unable to switch creator");
+      } else await setCloneScope(id);
       const dest = cloneRouteFor(id);
       if (dest) router.push(dest);
       router.refresh();
@@ -275,13 +280,13 @@ export default function CloneSwitcher({
 
           {/* Keep adding a creator available without mixing it into someone’s
               commercial category. */}
-          <Link
+          {!readOnly && <Link
             href="/clones/new"
             className="mt-3 flex items-center justify-center gap-2 rounded-md border border-dashed border-line px-3 py-2.5 text-sm text-muted transition hover:border-accent hover:text-accent"
           >
             <span className="text-lg leading-none">+</span>
             New creator
-          </Link>
+          </Link>}
 
           {clones.length === 0 && (
             <div className="px-2.5 py-6 text-center text-sm text-muted">No creators yet.</div>
@@ -294,3 +299,4 @@ export default function CloneSwitcher({
     </Dialog>
   );
 }
+

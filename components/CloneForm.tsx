@@ -1,4 +1,5 @@
 "use client";
+import { AdminOnly, ReadOnlyEditor } from "./DashboardAccessProvider";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -165,7 +166,7 @@ export default function CloneForm({
           ConfigSections (one flat strip, PPVs and View injected as extraTabs). */}
       <form ref={formRef} onSubmit={(e) => { e.preventDefault(); save(false); }} className="grid min-w-0 gap-4">
         <div className={tab === "ppvs" ? "hidden" : "grid min-w-0 gap-4"}>
-        <ConfigSections
+        <ReadOnlyEditor><ConfigSections
           cfg={cfg}
           set={set}
           clone={clone}
@@ -206,7 +207,7 @@ export default function CloneForm({
               <IntakeFields fields={clone.intake?.fields} legacyAnswers={clone.intake?.answers} />
             </Section>
           }
-        />
+        /></ReadOnlyEditor>
 
         </div>
 
@@ -234,6 +235,7 @@ export default function CloneForm({
           </Section>
         </div>
 
+        <AdminOnly>
         {/* Save bar - shared by Edit (except read-only Flow) + Monetization */}
         <div
           className={
@@ -260,6 +262,7 @@ export default function CloneForm({
             )}
           </div>
         </div>
+        </AdminOnly>
       </form>
 
       {/* ── PPVs (its own page - own top bar, own upload actions) ─── */}
@@ -271,3 +274,4 @@ export default function CloneForm({
     </div>
   );
 }
+

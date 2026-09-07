@@ -1,4 +1,5 @@
 "use client";
+import { useDashboardAccess } from "./DashboardAccessProvider";
 
 import { usePathname, useSearchParams } from "next/navigation";
 import CloneSwitcher from "@/components/CloneSwitcher";
@@ -27,6 +28,7 @@ export default function TopBar({
   activeCloneId: string | null;
   allTimeStars: number;
 }) {
+  const {readOnly}=useDashboardAccess();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const pageMeta = getPageMeta(pathname, clones, activeCloneId);
@@ -67,7 +69,7 @@ export default function TopBar({
         <CurrencyToggle compact />
         <BlurToggle />
         <div className="hidden h-5 w-px shrink-0 bg-line sm:block" />
-        <form action={logout}>
+        <form action={readOnly ? "/agency/logout" : logout} method={readOnly ? "post" : undefined}>
           <button
             type="submit"
             title="Sign out"
@@ -98,3 +100,4 @@ export default function TopBar({
     </div>
   );
 }
+

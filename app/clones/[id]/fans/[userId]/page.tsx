@@ -1,3 +1,4 @@
+import { MutationForm } from "@/components/DashboardAccessProvider";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { supabaseAdmin } from "@/lib/supabase";
@@ -269,7 +270,7 @@ export default async function FanDetailPage({
         <h2 className="mb-4 text-sm font-semibold uppercase tracking-wide text-muted">Controls</h2>
         <div className="flex flex-col gap-4">
           {/* Set / reset credits */}
-          <form action={setCredits} className="flex flex-wrap items-end gap-2">
+          <MutationForm action={setCredits} className="flex flex-wrap items-end gap-2">
             <input type="hidden" name="userId" value={userId} />
             <input type="hidden" name="cloneId" value={id} />
             <label className="text-sm">
@@ -285,11 +286,11 @@ export default async function FanDetailPage({
             <button type="submit" className="rounded-md bg-accent px-4 py-2 text-sm font-medium text-accent-ink hover:bg-accent-deep transition">
               Save credits
             </button>
-          </form>
+          </MutationForm>
 
           <div className="flex flex-wrap gap-2 border-t border-line pt-4">
             {/* Reset credits to 0 */}
-            <form action={setCredits}>
+            <MutationForm action={setCredits}>
               <input type="hidden" name="userId" value={userId} />
               <input type="hidden" name="cloneId" value={id} />
               <input type="hidden" name="credits" value="0" />
@@ -299,10 +300,10 @@ export default async function FanDetailPage({
               >
                 Reset credits to 0
               </ConfirmSubmit>
-            </form>
+            </MutationForm>
 
             {/* Reset lifetime counters */}
-            <form action={resetCounters}>
+            <MutationForm action={resetCounters}>
               <input type="hidden" name="userId" value={userId} />
               <input type="hidden" name="cloneId" value={id} />
               <ConfirmSubmit
@@ -311,20 +312,20 @@ export default async function FanDetailPage({
               >
                 Reset counters
               </ConfirmSubmit>
-            </form>
+            </MutationForm>
 
             {/* Toggle active */}
-            <form action={toggleActive}>
+            <MutationForm action={toggleActive}>
               <input type="hidden" name="userId" value={userId} />
               <input type="hidden" name="cloneId" value={id} />
               <input type="hidden" name="active" value={u.is_active ? "false" : "true"} />
               <button type="submit" className="rounded-md border border-line px-3 py-2 text-sm hover:bg-bg transition">
                 {u.is_active ? "Mark inactive" : "Mark active"}
               </button>
-            </form>
+            </MutationForm>
 
             {/* Delete */}
-            <form action={deleteUser} className="ml-auto">
+            <MutationForm action={deleteUser} className="ml-auto">
               <input type="hidden" name="userId" value={userId} />
               <input type="hidden" name="cloneId" value={id} />
               <input type="hidden" name="telegramId" value={u.telegram_id} />
@@ -334,7 +335,7 @@ export default async function FanDetailPage({
               >
                 Delete user
               </ConfirmSubmit>
-            </form>
+            </MutationForm>
           </div>
         </div>
       </div>
@@ -410,3 +411,4 @@ export default async function FanDetailPage({
     </div>
   );
 }
+

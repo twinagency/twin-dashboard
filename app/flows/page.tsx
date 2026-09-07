@@ -1,3 +1,4 @@
+import CloneScopeForm from "@/components/CloneScopeForm";
 import { supabaseAdmin } from "@/lib/supabase";
 import { getCloneScope } from "@/lib/clone-scope";
 import { setCloneScope } from "@/app/actions/clone-scope";
@@ -287,9 +288,9 @@ async function FleetFlows() {
                   </TableCell>
                   <TableCell className="text-right tabular-nums">{steps.length}</TableCell>
                   <TableCell className="text-right">
-                    <form action={setCloneScope.bind(null, c.id)}>
+                    <CloneScopeForm cloneId={c.id}>
                       <Button type="submit" variant="link" size="sm" className="h-auto p-0 text-accent">Manage →</Button>
-                    </form>
+                    </CloneScopeForm>
                   </TableCell>
                 </TableRow>
               );
@@ -430,9 +431,9 @@ async function CloneFlows({ cloneId }: { cloneId: string }) {
             />
           </h1>
         </div>
-        <form action={setCloneScope.bind(null, null)} className="shrink-0">
+        <CloneScopeForm cloneId={null} className="shrink-0">
           <Button type="submit" variant="ghost" size="sm">← All bots</Button>
-        </form>
+        </CloneScopeForm>
       </div>
 
       <ConversionCohortStatus

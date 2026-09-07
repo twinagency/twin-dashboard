@@ -1,3 +1,6 @@
+import { cloneBotToken } from "@/lib/clone-credentials";
+import { getDashboardAccess } from "@/lib/dashboard-access";
+import CloneScopeForm from "@/components/CloneScopeForm";
 import dns from "node:dns";
 import net from "node:net";
 import { supabaseAdmin } from "@/lib/supabase";
@@ -110,9 +113,9 @@ async function FleetInfo() {
                 <TableCell className="text-right tabular-nums">{buyersByClone.get(c.id) ?? 0}</TableCell>
                 <TableCell className="text-right font-mono tabular-nums text-good">{starsByClone.get(c.id) ?? 0} ⭐</TableCell>
                 <TableCell className="text-right">
-                  <form action={setCloneScope.bind(null, c.id)}>
+                  <CloneScopeForm cloneId={c.id}>
                     <Button type="submit" variant="link" size="sm" className="h-auto p-0 text-accent">Info →</Button>
-                  </form>
+                  </CloneScopeForm>
                 </TableCell>
               </TableRow>
             ))}
@@ -134,9 +137,11 @@ async function CloneInfo({ cloneId }: { cloneId: string }) {
     .maybeSingle();
   if (!clone) return <div className="text-muted">Creator not found.</div>;
 
+  const token = await cloneBotToken(cloneId);
+  const agency = await getDashboardAccess();
   const [me, starBalance, { data: users }] = await Promise.all([
-    getMe(clone.bot_token),
-    getStarBalance(cloneId, clone.bot_token),
+    getMe(token ?? ""),
+    getStarBalance(cloneId, token ?? ""),
     supabaseAdmin.from("users").select("business_connection_id,total_messages_purchased,last_message_received").eq("clone_id", cloneId),
   ]);
 
@@ -165,15 +170,15 @@ async function CloneInfo({ cloneId }: { cloneId: string }) {
     },
     { label: "Fans", value: String(userList.length) },
     { label: "Buyers", value: String(buyers) },
-    { label: "Bot token", value: `••••${(clone.bot_token ?? "").slice(-6)}` },
+    { label: "Bot token", value: agency ? "Restricted" : `••••${(token ?? "").slice(-6)}` },
   ];
 
   return (
     <div className="dashboard-page mx-auto max-w-3xl text-ink">
       <div className="mb-2 flex items-center justify-end">
-        <form action={setCloneScope.bind(null, null)}>
+        <CloneScopeForm cloneId={null}>
           <Button type="submit" variant="ghost" size="sm">← All bots</Button>
-        </form>
+        </CloneScopeForm>
       </div>
       <p className="mb-5 text-sm text-muted">Connection, business account, and Stars.</p>
 
@@ -210,3 +215,4 @@ function Stat({ label, value, accent, money, hint }: { label: string; value: str
     </Card>
   );
 }
+

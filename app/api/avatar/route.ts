@@ -1,3 +1,6 @@
+import { cloneBotToken } from "@/lib/clone-credentials";
+import { getDashboardAccess, requireCloneAccess } from "@/lib/dashboard-access";
+import { dashboardReader } from "@/lib/dashboard-reader";
 import dns from "node:dns";
 import net from "node:net";
 import { NextRequest, NextResponse } from "next/server";
@@ -17,11 +20,16 @@ export const runtime = "nodejs";
 const cache = new Map<string, { at: number; body: ArrayBuffer | null; type: string }>();
 const TTL = 60 * 60 * 1000;
 
-export async function GET(req: NextRequest) {
+async function read(req: NextRequest) {
   const clone = req.nextUrl.searchParams.get("clone");
   const tg = req.nextUrl.searchParams.get("tg");
   if (!clone || !tg) return new NextResponse("missing params", { status: 400 });
 
+  await requireCloneAccess(clone);
+  if (await getDashboardAccess()) {
+    const {data,error}=await supabaseAdmin.from("users").select("id").eq("clone_id",clone).eq("telegram_id",tg).limit(1).maybeSingle();
+    if(error || !data) return new NextResponse("Not found",{status:404});
+  }
   const key = `${clone}:${tg}`;
   const hit = cache.get(key);
   if (hit && Date.now() - hit.at < TTL) {
@@ -29,8 +37,7 @@ export async function GET(req: NextRequest) {
     return new NextResponse(hit.body, { headers: { "content-type": hit.type, "cache-control": "private, max-age=3600" } });
   }
 
-  const { data: row } = await supabaseAdmin.from("clones").select("bot_token").eq("id", clone).maybeSingle();
-  const token = (row as { bot_token?: string } | null)?.bot_token;
+  const token = await cloneBotToken(clone);
   if (!token) return new NextResponse("no clone", { status: 404 });
 
   try {
@@ -54,3 +61,6 @@ export async function GET(req: NextRequest) {
     return new NextResponse(null, { status: 404 });
   }
 }
+
+
+export const GET = dashboardReader(read);

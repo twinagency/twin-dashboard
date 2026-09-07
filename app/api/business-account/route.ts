@@ -1,3 +1,5 @@
+import { cloneBotToken } from "@/lib/clone-credentials";
+import { dashboardReader } from "@/lib/dashboard-reader";
 import { NextRequest, NextResponse } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
 import { tgCall, tgUpload, TelegramApiError } from "@/lib/telegram-raw";
@@ -48,7 +50,8 @@ async function resolveConnection(cloneId: string): Promise<
     .select("id,bot_token")
     .eq("id", cloneId)
     .maybeSingle();
-  if (!(clone as any)?.bot_token) return { ok: false, status: 404, error: "clone not found" };
+  const token = await cloneBotToken(cloneId);
+  if (!token) return { ok: false, status: 404, error: "clone not found" };
 
   const { data: userRow } = await supabaseAdmin
     .from("users")
@@ -67,12 +70,12 @@ async function resolveConnection(cloneId: string): Promise<
         "No business connection observed yet for this clone. She needs to connect the bot as her Telegram Business chatbot and receive at least one message before this page can find the connection.",
     };
   }
-  return { ok: true, token: (clone as any).bot_token as string, bcid };
+  return { ok: true, token, bcid };
 }
 
 // ── GET: connection status + granted rights, for the UI to enable/disable
 // each action and explain a missing one before the operator even tries. ────
-export async function GET(req: NextRequest) {
+async function read(req: NextRequest) {
   const cloneId = req.nextUrl.searchParams.get("cloneId");
   if (!cloneId) return NextResponse.json({ error: "missing cloneId" }, { status: 400 });
 
@@ -258,3 +261,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
+
+
+export const GET = dashboardReader(read);

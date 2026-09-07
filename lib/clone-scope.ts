@@ -1,3 +1,4 @@
+import { getDashboardAccess } from "./dashboard-access";
 import { cache } from "react";
 import { cookies } from "next/headers";
 import { cloneExists } from "./query-cache";
@@ -27,5 +28,8 @@ export const CLONE_SCOPE_COOKIE = "clone_scope";
 export const getCloneScope = cache(async (): Promise<string | null> => {
   const id = (await cookies()).get(CLONE_SCOPE_COOKIE)?.value || null;
   if (!id) return null;
+  const agency = await getDashboardAccess();
+  if (agency) return agency.cloneIds.includes(id) ? id : null;
   return (await cloneExists(id)) ? id : null;
 });
+

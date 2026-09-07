@@ -367,7 +367,7 @@ export default function ConfigSections({
   return (
     <div className="grid min-w-0 gap-4">
       {/* ── Tab bar ─────────────────────────────────────────────── */}
-      <div className="clone-editor-tabs sticky top-0 z-30 flex gap-1 overflow-x-auto rounded-2xl border border-white/55 bg-white/80 p-1.5 shadow-[0_10px_30px_rgb(16_24_40/0.08)] backdrop-blur-xl">
+      <div data-readonly-navigation className="clone-editor-tabs sticky top-0 z-30 flex gap-1 overflow-x-auto rounded-2xl border border-white/55 bg-white/80 p-1.5 shadow-[0_10px_30px_rgb(16_24_40/0.08)] backdrop-blur-xl">
         {visibleTabs.map((t) => (
           <button
             key={t.key}
@@ -2106,4 +2106,5 @@ export function MonetizationSections({
     </>
   );
 }
+
 

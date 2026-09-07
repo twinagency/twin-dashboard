@@ -5,7 +5,7 @@ import Link from "next/link";
 import { botFor, BotBadge, BotMark } from "./bot-identity";
 import { BotStrip, type BotRow } from "./bots/BotSettings";
 import { BotLog, type LogRow } from "./bots/BotLog";
-import { KINDS, AREAS, SEVERITIES, ageLabel, type BotJob, type TrackerBatch, type TrackerBoard as Board, type TrackerItem } from "@/lib/tracker";
+import { KINDS, AREAS, SEVERITIES, ageLabel, type BotJob, type TrackerBatch, type TrackerBoard as Board, type TrackerItem } from "@/lib/tracker-shared";
 import {
   addCommit,
   addNote,
@@ -667,3 +667,4 @@ export function TrackerBoard({ board, bots, log }: { board: Board; bots: BotRow[
     </div>
   );
 }
+

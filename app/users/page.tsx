@@ -1,3 +1,4 @@
+import { MutationForm } from "@/components/DashboardAccessProvider";
 import Link from "next/link";
 import { supabaseAdmin } from "@/lib/supabase";
 import { fmtNum } from "@/lib/money";
@@ -1493,7 +1494,7 @@ export default async function FansPage({
               {/* Credits - live adjust */}
               <div>
                 <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted">Credits</div>
-                <form action={setCredits} className="flex items-center gap-2">
+                <MutationForm action={setCredits} className="flex items-center gap-2">
                   <input type="hidden" name="userId" value={selected.id} />
                   <Input
                     name="credits"
@@ -1508,7 +1509,7 @@ export default async function FansPage({
                   >
                     Save
                   </button>
-                </form>
+                </MutationForm>
               </div>
 
               {/* Knowledge / profile dossier - what the bot has learned. Built by
@@ -1579,7 +1580,7 @@ export default async function FansPage({
                   Controls
                 </summary>
                 <div className="flex flex-col gap-1.5 border-t border-line p-2.5">
-                  <form action={setCredits}>
+                  <MutationForm action={setCredits}>
                     <input type="hidden" name="userId" value={selected.id} />
                     <input type="hidden" name="credits" value="0" />
                     <ConfirmSubmit
@@ -1588,9 +1589,9 @@ export default async function FansPage({
                     >
                       Reset credits to 0
                     </ConfirmSubmit>
-                  </form>
+                  </MutationForm>
 
-                  <form action={resetCounters}>
+                  <MutationForm action={resetCounters}>
                     <input type="hidden" name="userId" value={selected.id} />
                     <ConfirmSubmit
                       message="Reset lifetime counters (messages sent + bought) to 0? This does not change credits or purchase history."
@@ -1598,9 +1599,9 @@ export default async function FansPage({
                     >
                       Reset counters
                     </ConfirmSubmit>
-                  </form>
+                  </MutationForm>
 
-                  <form action={toggleActive}>
+                  <MutationForm action={toggleActive}>
                     <input type="hidden" name="userId" value={selected.id} />
                     <input type="hidden" name="active" value={selected.is_active ? "false" : "true"} />
                     <button
@@ -1609,9 +1610,9 @@ export default async function FansPage({
                     >
                       {selected.is_active ? "Mark inactive" : "Mark active"}
                     </button>
-                  </form>
+                  </MutationForm>
 
-                  <form action={setBlocked}>
+                  <MutationForm action={setBlocked}>
                     <input type="hidden" name="userId" value={selected.id} />
                     <input type="hidden" name="blocked" value={selected.blocked ? "false" : "true"} />
                     <ConfirmSubmit
@@ -1626,14 +1627,14 @@ export default async function FansPage({
                     >
                       {selected.blocked ? "Unblock (safety)" : "Block (safety)"}
                     </ConfirmSubmit>
-                  </form>
+                  </MutationForm>
 
                   {/* Only rendered for an actually-gated fan. There is no reason
                       to offer "clear the minor gate" on a fan who does not have
                       one, and an always-visible button invites a misclick on the
                       single safety verdict with a real-world cost if reversed. */}
                   {(!!selected.minor_flagged_at || selected.blocked_reason === "minor") && (
-                    <form action={clearMinorFlag}>
+                    <MutationForm action={clearMinorFlag}>
                       <input type="hidden" name="userId" value={selected.id} />
                       <ConfirmSubmit
                         message="Clear the minor gate for this fan? Only do this if you have READ THE CONVERSATION and are satisfied he is an adult who was flagged by mistake. This restores all photos, videos, bundles and voice notes for him permanently."
@@ -1641,13 +1642,13 @@ export default async function FansPage({
                       >
                         Clear minor gate
                       </ConfirmSubmit>
-                    </form>
+                    </MutationForm>
                   )}
 
                   {/* users.paused - pauses just this one fan (no replies, no drip)
                       without blocking him and without touching the clone's own
                       Active/Paused status. */}
-                  <form action={setPaused}>
+                  <MutationForm action={setPaused}>
                     <input type="hidden" name="userId" value={selected.id} />
                     <input type="hidden" name="paused" value={selected.paused ? "false" : "true"} />
                     <ConfirmSubmit
@@ -1660,9 +1661,9 @@ export default async function FansPage({
                     >
                       {selected.paused ? "Resume this fan" : "Pause this fan"}
                     </ConfirmSubmit>
-                  </form>
+                  </MutationForm>
 
-                  <form action={deleteUser}>
+                  <MutationForm action={deleteUser}>
                     <input type="hidden" name="userId" value={selected.id} />
                     <input type="hidden" name="cloneId" value={selected.clone_id} />
                     <input type="hidden" name="telegramId" value={selected.telegram_id} />
@@ -1672,7 +1673,7 @@ export default async function FansPage({
                     >
                       Delete user
                     </ConfirmSubmit>
-                  </form>
+                  </MutationForm>
                 </div>
               </details>
             </div>
@@ -1682,3 +1683,4 @@ export default async function FansPage({
     </div>
   );
 }
+

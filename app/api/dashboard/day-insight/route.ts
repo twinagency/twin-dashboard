@@ -1,3 +1,4 @@
+import { dashboardReader } from "@/lib/dashboard-reader";
 import { NextRequest, NextResponse } from "next/server";
 import { getCloneScope } from "@/lib/clone-scope";
 import { getCachedRevenueWhyChanged } from "@/lib/revenue-why-changed";
@@ -8,7 +9,7 @@ export const runtime = "nodejs";
 // This stays under the ordinary session-gated `/api/dashboard` prefix. It is
 // deliberately not part of the public revenue API: buyer concentration and the
 // names behind an unusual payment are operator-only information.
-export async function GET(req: NextRequest) {
+async function read(req: NextRequest) {
   const day = req.nextUrl.searchParams.get("date");
   if (!day) return NextResponse.json({ error: "date is required" }, { status: 400 });
 
@@ -29,3 +30,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({ error: message }, { status });
   }
 }
+
+
+export const GET = dashboardReader(read);

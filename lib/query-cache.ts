@@ -1,3 +1,4 @@
+import { getDashboardAccess, withDashboardAccess, accessCacheKey } from "./dashboard-access";
 import { cache } from "react";
 import { unstable_cache, revalidateTag } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase";
@@ -67,8 +68,9 @@ const TTL = {
  * result — above all any clone id. `fn` takes no arguments on purpose: there is
  * no second channel through which an unkeyed value can reach it.
  */
-function cached<T>(keyParts: string[], tags: string[], ttlSeconds: number, fn: () => Promise<T>): Promise<T> {
-  return unstable_cache(fn, keyParts, { revalidate: ttlSeconds, tags })();
+async function cached<T>(keyParts: string[], tags: string[], ttlSeconds: number, fn: () => Promise<T>): Promise<T> {
+  const access = await getDashboardAccess();
+  return unstable_cache(() => withDashboardAccess(access, fn), [...keyParts, accessCacheKey(access)], { revalidate: ttlSeconds, tags })();
 }
 
 // ── Clones ───────────────────────────────────────────────────────────────────
@@ -249,3 +251,4 @@ export async function invalidateCloneCaches() {
 export function invalidateTwinVersionCache() {
   revalidateTag(CACHE_TAGS.twinVersion);
 }
+

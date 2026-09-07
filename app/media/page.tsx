@@ -1,3 +1,4 @@
+import CloneScopeForm from "@/components/CloneScopeForm";
 import { supabaseAdmin } from "@/lib/supabase";
 import { getCloneScope } from "@/lib/clone-scope";
 import { setCloneScope } from "@/app/actions/clone-scope";
@@ -88,9 +89,9 @@ async function FleetMedia() {
                   <TableCell className="text-right tabular-nums">{n.videos}</TableCell>
                   <TableCell className="text-right tabular-nums">{n.bundles}</TableCell>
                   <TableCell className="text-right">
-                    <form action={setCloneScope.bind(null, c.id)}>
+                    <CloneScopeForm cloneId={c.id}>
                       <Button type="submit" variant="link" size="sm" className="h-auto p-0 text-accent">Manage →</Button>
-                    </form>
+                    </CloneScopeForm>
                   </TableCell>
                 </TableRow>
               );
@@ -125,9 +126,9 @@ async function CloneMedia({ cloneId }: { cloneId: string }) {
   return (
     <div className="dashboard-page">
       <div className="mb-2 flex items-center justify-end">
-        <form action={setCloneScope.bind(null, null)}>
+        <CloneScopeForm cloneId={null}>
           <Button type="submit" variant="ghost" size="sm">← All bots</Button>
-        </form>
+        </CloneScopeForm>
       </div>
       <MediaManager
         cloneId={cloneId}
@@ -139,3 +140,4 @@ async function CloneMedia({ cloneId }: { cloneId: string }) {
     </div>
   );
 }
+

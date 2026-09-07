@@ -1,3 +1,5 @@
+import { ReadOnlyEditor } from "@/components/DashboardAccessProvider";
+import CloneScopeForm from "@/components/CloneScopeForm";
 import { supabaseAdmin } from "@/lib/supabase";
 import { getCloneScope } from "@/lib/clone-scope";
 import { setCloneScope } from "@/app/actions/clone-scope";
@@ -15,7 +17,7 @@ export const dynamic = "force-dynamic";
 // sense scoped to a single clone, same reasoning as Media/Campaigns.
 export default async function BusinessPage() {
   const cloneId = await getCloneScope();
-  if (cloneId) return <BusinessAccountManager cloneId={cloneId} />;
+  if (cloneId) return <ReadOnlyEditor><BusinessAccountManager cloneId={cloneId} /></ReadOnlyEditor>;
 
   const { data: clones } = await supabaseAdmin
     .from("clones")
@@ -34,7 +36,7 @@ export default async function BusinessPage() {
           <div className="p-4 text-sm text-muted">No clones yet.</div>
         ) : (
           rows.map((c) => (
-            <form key={c.id} action={setCloneScope.bind(null, c.id)} className="flex items-center justify-between gap-2 p-3">
+            <CloneScopeForm key={c.id} cloneId={c.id} className="flex items-center justify-between gap-2 p-3">
               <div>
                 <div className="text-sm font-medium">{c.name}</div>
                 <div className="text-xs text-muted">@{c.slug}</div>
@@ -42,10 +44,11 @@ export default async function BusinessPage() {
               <Button type="submit" variant="outline" size="sm">
                 Open
               </Button>
-            </form>
+            </CloneScopeForm>
           ))
         )}
       </Card>
     </div>
   );
 }
+
