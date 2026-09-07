@@ -41,7 +41,6 @@ export default async function LoginPage({
           </CardHeader>
           <CardContent className="px-7 pb-7">
             <LoginForm error={!!error} next={next && next.startsWith("/") ? next : "/"} />
-            <a href="/agency/login" className="mt-5 block text-center text-sm font-medium text-accent hover:underline">Agency sign in</a>
           </CardContent>
         </Card>
       </section>

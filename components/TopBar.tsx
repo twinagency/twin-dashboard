@@ -73,7 +73,8 @@ export default function TopBar({
           <button
             type="submit"
             title="Sign out"
-            className="flex items-center justify-center rounded-full p-2 text-muted transition hover:bg-muted/10 hover:text-ink"
+            aria-label="Sign out"
+            className="flex items-center justify-center gap-1.5 rounded-full p-2 text-muted transition hover:bg-muted/10 hover:text-ink"
           >
             <svg
               xmlns="http://www.w3.org/2000/svg"
@@ -89,6 +90,7 @@ export default function TopBar({
               <polyline points="16 17 21 12 16 7" />
               <line x1="21" y1="12" x2="9" y2="12" />
             </svg>
+            {readOnly && <span className="hidden text-xs font-medium sm:inline">Sign out</span>}
           </button>
         </form>
       </div>
@@ -100,4 +102,3 @@ export default function TopBar({
     </div>
   );
 }
-

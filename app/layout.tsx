@@ -153,6 +153,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
                   <TwinWordmark inverse agencyName={agency?.name} />
                 </Link>
                 <div className="flex items-center gap-1">
+                  {agency && <form action="/agency/logout" method="post">
+                    <button type="submit" className="rounded-lg px-3 py-2 text-sm font-medium text-white/80 hover:bg-white/10">Sign out</button>
+                  </form>}
                   <MobileMenu activeCloneId={activeCloneId} />
                 </div>
               </header>
