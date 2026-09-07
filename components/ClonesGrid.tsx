@@ -3,8 +3,6 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import MoneyAmount from "@/components/MoneyAmount";
-import { fmtNum } from "@/lib/money";
 import { initials } from "@/lib/colors";
 import { toggleClonePause } from "@/app/clones/actions";
 import { Input } from "@/components/ui/input";
@@ -28,8 +26,6 @@ export type CloneCard = {
   cohortEnrolledAt: string | null;
   color: string;
   photoUrl?: string;
-  stars: number;
-  users: number;
   features: string[];
 };
 
@@ -200,23 +196,6 @@ export default function ClonesGrid({ clones }: { clones: CloneCard[] }) {
                 </div>
               </div>
 
-              {/* Stats: stars · made · users */}
-              <div className="mt-4 grid grid-cols-3 gap-2 border-t border-line pt-3 text-center">
-                <div>
-                  <div className="font-mono text-lg font-bold tabular-nums text-good">{fmtNum(c.stars)}⭐</div>
-                  <div className="mt-0.5 text-xs font-medium uppercase tracking-wide text-muted">Stars</div>
-                </div>
-                <div>
-                  <div className="font-mono text-lg font-bold tabular-nums text-good">
-                    <MoneyAmount stars={c.stars} />
-                  </div>
-                  <div className="mt-0.5 text-xs font-medium uppercase tracking-wide text-muted">Made</div>
-                </div>
-                <div>
-                  <div className="font-mono text-lg font-bold tabular-nums text-ink">{fmtNum(c.users)}</div>
-                  <div className="mt-0.5 text-xs font-medium uppercase tracking-wide text-muted">Users</div>
-                </div>
-              </div>
             </Link>
           ))}
         </div>

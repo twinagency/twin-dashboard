@@ -62,6 +62,15 @@ check("the overview reads the authoritative database column", () => {
   assert.match(page, /cohortEnrolledAt: c\.intent_classic_promotions_enabled_at/);
 });
 
+check("creator cards omit ambiguous revenue and user totals", () => {
+  const page = readFileSync(new URL("../app/clones/page.tsx", import.meta.url), "utf8");
+  const grid = readFileSync(new URL("../components/ClonesGrid.tsx", import.meta.url), "utf8");
+  assert.doesNotMatch(page, /from\("star_transactions"\)/);
+  assert.doesNotMatch(page, /from\("message_purchases"\)/);
+  assert.doesNotMatch(page, /from\("users"\)/);
+  assert.doesNotMatch(grid, /MoneyAmount|Stars earned|Gross value|Total fans/);
+});
+
 check("every card renders a visible cohort label and exposes a cohort filter", () => {
   const grid = readFileSync(new URL("../components/ClonesGrid.tsx", import.meta.url), "utf8");
   assert.match(grid, /"New System V2"/);

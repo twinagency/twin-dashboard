@@ -25,24 +25,15 @@ export default async function ClonesPage() {
   const clones = (data ?? []) as Partial<Clone>[];
   const cloneIds = clones.map((c) => c.id).filter(Boolean) as string[];
 
-  // Per-clone totals: stars earned, user count, and a cover photo for the avatar.
-  const starsByClone = new Map<string, number>();
-  const usersByClone = new Map<string, number>();
+  // Per-clone cover photo for the avatar.
   const avatarUrlByCloneId = new Map<string, string>();
 
   if (cloneIds.length > 0) {
-    const [purchasesRes, usersRes, photosRes] = await Promise.all([
-      supabaseAdmin.from("message_purchases").select("clone_id, amount_stars").in("clone_id", cloneIds),
-      supabaseAdmin.from("users").select("clone_id").in("clone_id", cloneIds),
-      supabaseAdmin.from("photos").select("clone_id, storage_path").in("clone_id", cloneIds).order("created_at", { ascending: true }),
-    ]);
-
-    for (const p of purchasesRes.data ?? []) {
-      if (p.clone_id) starsByClone.set(p.clone_id, (starsByClone.get(p.clone_id) ?? 0) + (p.amount_stars ?? 0));
-    }
-    for (const u of usersRes.data ?? []) {
-      if (u.clone_id) usersByClone.set(u.clone_id, (usersByClone.get(u.clone_id) ?? 0) + 1);
-    }
+    const photosRes = await supabaseAdmin
+      .from("photos")
+      .select("clone_id, storage_path")
+      .in("clone_id", cloneIds)
+      .order("created_at", { ascending: true });
 
     const firstPath = new Map<string, string>();
     for (const clone of clones) {
@@ -72,8 +63,6 @@ export default async function ClonesPage() {
     cohortEnrolledAt: c.intent_classic_promotions_enabled_at ?? null,
     color: chartColorForClone(c.intake, i),
     photoUrl: c.id ? avatarUrlByCloneId.get(c.id) : undefined,
-    stars: c.id ? starsByClone.get(c.id) ?? 0 : 0,
-    users: c.id ? usersByClone.get(c.id) ?? 0 : 0,
     features: [
       c.photos_enabled && "📷 Photo",
       c.videos_enabled && "🎬 Video",
