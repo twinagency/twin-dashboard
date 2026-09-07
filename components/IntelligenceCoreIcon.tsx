@@ -11,7 +11,7 @@ const POINTS = Array.from({ length: 72 }, (_, i) => {
   return { x: Math.cos(angle) * r, y, z: Math.sin(angle) * r };
 });
 
-export default function IntelligenceCoreIcon() {
+export default function IntelligenceCoreIcon({ size: displaySize = 30 }: { size?: number }) {
   const ref = useRef<HTMLCanvasElement>(null);
   useEffect(() => {
     const canvas = ref.current;
@@ -22,11 +22,12 @@ export default function IntelligenceCoreIcon() {
     const draw = (now: number) => {
       const dpr = Math.min(devicePixelRatio || 1, 2);
       const size = 30;
-      if (canvas.width !== size * dpr) {
-        canvas.width = size * dpr;
-        canvas.height = size * dpr;
+      if (canvas.width !== displaySize * dpr) {
+        canvas.width = displaySize * dpr;
+        canvas.height = displaySize * dpr;
       }
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      const scale = dpr * displaySize / size;
+      ctx.setTransform(scale, 0, 0, scale, 0, 0);
       ctx.clearRect(0, 0, size, size);
       const turn = motion.matches ? 0.4 : now * 0.0003;
       const points = POINTS.map(p => {
@@ -55,6 +56,6 @@ export default function IntelligenceCoreIcon() {
     document.addEventListener("visibilitychange", restart);
     restart();
     return () => { cancelAnimationFrame(frame); motion.removeEventListener("change", restart); document.removeEventListener("visibilitychange", restart); };
-  }, []);
-  return <canvas ref={ref} width={60} height={60} aria-hidden="true" className="pointer-events-none h-[30px] w-[30px] shrink-0" />;
+  }, [displaySize]);
+  return <canvas ref={ref} width={displaySize * 2} height={displaySize * 2} style={{width:displaySize,height:displaySize}} aria-hidden="true" className="pointer-events-none shrink-0" />;
 }

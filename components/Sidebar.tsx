@@ -186,13 +186,6 @@ export function SidebarContent({
     const rowClass = "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold transition";
 
     if (readOnly && link.kind === "route" && !agencyDashboardPath(link.href, agencyName)) {
-      if (showUnavailable && link.href === "/jarvis") return <div aria-disabled="true" className={rowClass + " cursor-not-allowed !gap-2"}>
-        <IntelligenceCoreIcon />
-        <span className="min-w-0 flex-1">
-          <span className="block text-[13px] leading-5 text-[#38bdf8]">AI Intelligence Core</span>
-          <span className="mt-1 inline-block rounded border border-white/15 px-1.5 py-0.5 text-[9px] font-medium text-white/60">Not available</span>
-        </span>
-      </div>;
       return <div aria-disabled="true" className={rowClass + " cursor-not-allowed text-white/45"}>
         <Icon d={PATHS[link.icon]} className="h-[18px] w-[18px] text-white/35" />
         <span className="flex-1">{link.label}</span>
@@ -230,7 +223,15 @@ export function SidebarContent({
           row so it reads as an action, not just another nav destination.
           No bottom border: the generous space above it already separates it
           from the brand header, so a hairline as well just reads as clutter. */}
-      {readOnly ? <div className="px-7 py-4 text-sm text-white/75">{agencyName} · Read only</div> : <div className="shrink-0 px-4 pb-3 pt-4">
+      {showUnavailable ? <div className="shrink-0 px-4 pb-2 pt-4">
+        <div aria-disabled="true" className="flex cursor-not-allowed items-center gap-3 rounded-xl border border-sky-400/20 bg-sky-400/[0.05] px-3 py-3">
+          <IntelligenceCoreIcon size={64} />
+          <div className="min-w-0 flex-1">
+            <span className="block text-sm font-semibold leading-5 text-[#38bdf8]">AI Intelligence Core</span>
+            <span className="mt-1.5 inline-block rounded border border-white/15 px-1.5 py-0.5 text-[9px] font-medium text-white/60">Not available</span>
+          </div>
+        </div>
+      </div> : readOnly ? <div className="px-7 py-4 text-sm text-white/75">{agencyName} · Read only</div> : <div className="shrink-0 px-4 pb-3 pt-4">
         <Link
           href="/clones/new"
           onClick={onNavigate}
@@ -248,7 +249,7 @@ export function SidebarContent({
           {(!readOnly || showUnavailable) && <><div className="mb-2 mt-3 border-t border-white/14 pt-3 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">CRM</div>
           {CRM_LINKS.map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}</>}
           {showUnavailable ? <div className="mt-3 space-y-1 border-t border-white/14 pt-2">
-            {MORE_LINKS.map(link => <div key={linkKey(link)}>{renderLink(link)}</div>)}
+            {MORE_LINKS.filter(link => link.kind !== "route" || link.href !== "/jarvis").map(link => <div key={linkKey(link)}>{renderLink(link)}</div>)}
           </div> : <div className="mt-3 border-t border-white/14 pt-2">
             <button
               type="button"

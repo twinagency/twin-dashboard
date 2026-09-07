@@ -11,7 +11,7 @@ export default async function MoxyLogin({ searchParams }: { searchParams: Promis
         <h1 className="mb-7 text-2xl font-semibold tracking-tight text-white">Sign in</h1>
         <LoginForm initialError={!!error} />
       </div>
-      <p className="mt-8 text-center text-[10px] font-medium uppercase tracking-[0.25em] text-white/45">Creator dashboard · Read only</p>
+      <p className="mt-8 text-center text-[10px] font-medium uppercase tracking-[0.25em] text-white/45">Creator dashboard</p>
     </div>
   </main>;
 }

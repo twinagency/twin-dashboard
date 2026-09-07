@@ -110,9 +110,11 @@ async function main() {
   const sidebar=readFileSync("components/Sidebar.tsx","utf8");
   assert.match(sidebar,/aria-disabled="true"/);assert.match(sidebar,/Not available/);assert.match(sidebar,/!readOnly \|\| showUnavailable/);
   assert.match(sidebar,/showUnavailable \? <div/);
-  assert.match(sidebar,/MORE_LINKS\.map\(link/);
+  assert.match(sidebar,/MORE_LINKS\.filter\(link => link.kind !== "route" \|\| link.href !== "\/jarvis"\)/);
   assert.match(sidebar,/AI Intelligence Core/);
-  assert.match(sidebar,/<IntelligenceCoreIcon \/>/);
+  assert.match(sidebar,/<IntelligenceCoreIcon size=\{64\} \/>/);
+  assert.ok(sidebar.indexOf("<IntelligenceCoreIcon size={64}") < sidebar.indexOf("<nav className="),"Core sits above the navigation");
+  assert.doesNotMatch(readFileSync("app/moxy/page.tsx","utf8"),/read.only/i);
   const core=readFileSync("components/IntelligenceCoreIcon.tsx","utf8");
   assert.match(core,/prefers-reduced-motion/);assert.match(core,/cancelAnimationFrame/);
   assert.match(core,/45,190,255/);assert.doesNotMatch(core,/fetch\(|onClick|useRouter/);
