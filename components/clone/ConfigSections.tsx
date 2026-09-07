@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { useDashboardAccess } from "../DashboardAccessProvider";
+import { isMoxy } from "@/lib/agency-brand";
 import Link from "next/link";
 import type { Clone } from "@/lib/types";
 import type { OrModel } from "@/app/api/models/route";
@@ -312,6 +314,8 @@ export default function ConfigSections({
   bundles?: BundleRow[];
 }) {
   const [tabState, setTabState] = useState<Tab>("identity");
+  const {readOnly, agencyName} = useDashboardAccess();
+  const privateSettings = readOnly && isMoxy(agencyName);
   const tab = tabProp ?? tabState;
   const setTab = onTabChange ?? setTabState;
   // AI Models start blurred even once the card is open: the model names and
@@ -411,7 +415,7 @@ export default function ConfigSections({
 
       {/* ── CONFIG ──────────────────────────────────────────────── */}
       <div className={show("config")}>
-      {mode === "edit" && (
+      {mode === "edit" && !readOnly && (
         <Link
           href="/settings#fleet-defaults"
           className={
@@ -430,14 +434,20 @@ export default function ConfigSections({
         cols={2}
         hint="Bot token from @BotFather."
       >
-        <Field
+        {readOnly ? <div>
+          <FieldLabel label="Bot token" hint="Only the dashboard administrator can access this credential." />
+          <div aria-label="Bot token concealed" className="flex min-h-10 items-center gap-3 rounded-lg border border-line bg-elev px-3">
+            <span aria-hidden="true" className="select-none blur-[3px]">••••••••••••••••••••</span>
+            <span className="ml-auto text-xs text-muted">Locked</span>
+          </div>
+        </div> : <Field
           label="Bot token"
           name="bot_token"
           defaultValue={clone && clone.bot_token !== "PLACEHOLDER" ? clone.bot_token : ""}
           required
           placeholder="1234:ABC..."
           secret
-        />
+        />}
         {/* Migration 092 as CORRECTED by 094. This is the connected BUSINESS
             ACCOUNT's handle - the identity a fan actually messages - not the
             bot's own API handle. 092 originally captured the latter from
@@ -960,7 +970,7 @@ export default function ConfigSections({
             than nested inside it. */}
         {identityImperfectionSlot}
 
-        <Collapse
+        {!privateSettings && <Collapse
           emoji="⚙️"
           label="AI Models"
           accent="blue"
@@ -998,7 +1008,7 @@ export default function ConfigSections({
               />
             ))}
           </div>
-        </Collapse>
+        </Collapse>}
       </div>
 
       {/* ── ADVANCED - power-user settings, nobody touches these configuring
@@ -2106,5 +2116,4 @@ export function MonetizationSections({
     </>
   );
 }
-
 

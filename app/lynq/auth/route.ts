@@ -3,6 +3,7 @@ import { createClient } from "@supabase/supabase-js";
 import { serviceClient } from "@/lib/supabase-service";
 import { agencyIdentity } from "@/lib/agency-identity";
 import { AGENCY_COOKIE } from "@/lib/agency-policy";
+import { AGENCY_PORTAL_COOKIE } from "@/lib/agency-brand";
 import { SESSION_COOKIE } from "@/lib/session";
 import { CLONE_SCOPE_COOKIE } from "@/lib/clone-scope";
 import { dashboardOrigin, trustedFormOrigin } from "@/lib/form-origin";
@@ -40,6 +41,7 @@ export async function POST(req: NextRequest) {
     sameSite: "strict", path: "/", maxAge: Math.min(data.session?.expires_in ?? 3600, 3600) });
   response.cookies.delete(SESSION_COOKIE);
   response.cookies.delete(CLONE_SCOPE_COOKIE);
+  response.cookies.set(AGENCY_PORTAL_COOKIE,"lynq",{httpOnly:true,secure:process.env.NODE_ENV === "production",sameSite:"strict",path:"/",maxAge:60*60*24*30});
   response.headers.set("Cache-Control", "no-store");
   return response;
   } catch {

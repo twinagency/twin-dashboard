@@ -1,5 +1,6 @@
 "use client";
-import { AdminOnly, ReadOnlyEditor } from "./DashboardAccessProvider";
+import { AdminOnly, ReadOnlyEditor, useDashboardAccess } from "./DashboardAccessProvider";
+import { isMoxy } from "@/lib/agency-brand";
 
 import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
@@ -82,6 +83,7 @@ export default function CloneForm({
   appearanceColor: string;
 }) {
   const router = useRouter();
+  const {agencyName} = useDashboardAccess();
   const searchParams = useSearchParams();
   const formRef = useRef<HTMLFormElement>(null);
   const tabParam = searchParams.get("tab");
@@ -94,8 +96,9 @@ export default function CloneForm({
   const [cfg, set] = useCloneConfig(clone);
 
   useEffect(() => {
+    if (isMoxy(agencyName)) return;
     fetch("/api/models").then((r) => r.json()).then((d) => Array.isArray(d) && setModels(d)).catch(() => {});
-  }, []);
+  }, [agencyName]);
 
   // The sidebar deep-links via ?tab= — clicking one doesn't remount CloneForm
   // (same route, just a query change), so pick the change up here.
@@ -274,4 +277,3 @@ export default function CloneForm({
     </div>
   );
 }
-

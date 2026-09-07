@@ -1,4 +1,5 @@
 import { dashboardOrigin } from "@/lib/form-origin";
+import { AGENCY_PORTAL_COOKIE, portalLoginPath } from "@/lib/agency-brand";
 import { agencyIdentity } from "@/lib/agency-identity";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
@@ -66,7 +67,8 @@ export async function middleware(req: NextRequest) {
     if (req.headers.has("next-action") || !["GET", "HEAD"].includes(req.method)) return new NextResponse("Read-only agency access", {status:403});
     if (!agencyDashboardPath(pathname)) return new NextResponse("Administrator access required", {status:403});
     const identity = await agencyIdentity(agencyToken);
-    if (!identity) return NextResponse.redirect(new URL("/lynq",dashboardOrigin(req)));
+    if (!identity) return NextResponse.redirect(new URL(portalLoginPath(req.cookies.get(AGENCY_PORTAL_COOKIE)?.value),dashboardOrigin(req)));
+    if (!agencyDashboardPath(pathname, identity.name)) return new NextResponse("Administrator access required", {status:403});
     const embedded = pathname.match(/^\/clones\/([0-9a-f-]{36})/i)?.[1];
     const requested = embedded || req.nextUrl.searchParams.get("clone") || req.nextUrl.searchParams.get("cloneId");
     if (requested && !identity.cloneIds.includes(requested)) return new NextResponse("Creator access denied",{status:403});
@@ -97,6 +99,7 @@ export async function middleware(req: NextRequest) {
   }
 
   if (!authed) {
+    if (req.cookies.get(AGENCY_PORTAL_COOKIE)?.value === "moxy") return NextResponse.redirect(new URL("/moxy", dashboardOrigin(req)));
     const url = new URL("/login", dashboardOrigin(req));
     url.searchParams.set("next", pathname);
     return NextResponse.redirect(url);

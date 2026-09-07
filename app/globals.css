@@ -129,6 +129,29 @@
   --sidebar-ring: #ffffff;
 }
 
+/* Moxy's own monochrome shell. Financial/status colours keep their meaning.
+   The attribute is rendered from the verified agency, never local storage. */
+html[data-agency="moxy"] {
+  --color-bg: #f6f6f6;
+  --color-elev: #efefef;
+  --color-ink: #181818;
+  --color-muted: #686868;
+  --color-line: #e4e4e4;
+  --color-accent: #171717;
+  --color-accent-2: #343434;
+  --color-accent-deep: #080808;
+  --color-accent-soft: #777777;
+  --color-accent-tint: #e9e9e9;
+  --color-brand: #171717;
+  --color-brand-light: #343434;
+}
+html[data-agency="moxy"] .dashboard-sidebar,
+html[data-agency="moxy"] .dashboard-mobile-header { background: #080808; }
+html[data-agency="moxy"] .dashboard-sidebar svg { color: inherit; }
+html[data-agency="moxy"] .dashboard-main::before,
+html[data-agency="moxy"] .canvas-glow { background-image: none; }
+html[data-agency="moxy"] .moxy-login { background: #080808; color: white; }
+
 html,
 body {
   background: var(--color-bg);

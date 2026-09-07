@@ -1,4 +1,5 @@
 import { AGENCY_COOKIE } from "@/lib/agency-policy";
+import { AGENCY_PORTAL_COOKIE } from "@/lib/agency-brand";
 import { CLONE_SCOPE_COOKIE } from "@/lib/clone-scope";
 import { dashboardOrigin, trustedFormOrigin } from "@/lib/form-origin";
 import { NextRequest, NextResponse } from "next/server";
@@ -14,6 +15,7 @@ export async function POST(req: NextRequest) {
   const response=NextResponse.redirect(new URL(safe,dashboardOrigin(req)),303);
   response.cookies.set(SESSION_COOKIE,await signSession(),{httpOnly:true,secure:process.env.NODE_ENV==="production",sameSite:"lax",path:"/",maxAge:60*60*24*30});
   response.cookies.delete(AGENCY_COOKIE);
+  response.cookies.delete(AGENCY_PORTAL_COOKIE);
   response.cookies.delete(CLONE_SCOPE_COOKIE);
   return response;
 }

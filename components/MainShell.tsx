@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import TwinAssistant from "@/components/TwinAssistant";
+import { useDashboardAccess } from "./DashboardAccessProvider";
 
 // The scrollable content area under the TopBar. CLIENT component for the same
 // reason TopBar is: which page is showing decides its width/padding (the Fans
@@ -13,6 +14,7 @@ import TwinAssistant from "@/components/TwinAssistant";
 // the bug behind "pages break when switching between them".
 export default function MainShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
+  const {readOnly} = useDashboardAccess();
   const fullBleed = pathname === "/users" || pathname === "/jarvis";
   return (
     <main
@@ -23,7 +25,7 @@ export default function MainShell({ children }: { children: React.ReactNode }) {
       }
     >
       {children}
-      {pathname !== "/jarvis" ? <TwinAssistant variant="mobile-dock" /> : null}
+      {!readOnly && pathname !== "/jarvis" ? <TwinAssistant variant="mobile-dock" /> : null}
     </main>
   );
 }

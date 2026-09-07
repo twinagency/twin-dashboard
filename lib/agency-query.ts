@@ -1,4 +1,5 @@
 import { AGENCY_COLUMNS } from "./agency-columns";
+import { isMoxy, MOXY_PRIVATE_MODEL_COLUMNS } from "./agency-brand";
 import type { AgencyIdentity } from "./agency-identity";
 export const AGENCY_ROLLUPS = new Set([
   "revenue_usage_rollup", "revenue_clone_user_stats", "revenue_clone_user_stats_window",
@@ -8,8 +9,9 @@ export const AGENCY_ROLLUPS = new Set([
 const GLOBAL_COLUMNS: Record<string, readonly string[]> = {
   twin_versions: ["id", "version", "name", "summary", "body", "changes", "created_at", "released_at"],
 };
-export function scopedSelection(table: string, selection: string): string {
-  const allowed = AGENCY_COLUMNS[table] ?? GLOBAL_COLUMNS[table];
+export function scopedSelection(table: string, selection: string, hideModels = false): string {
+  const source = AGENCY_COLUMNS[table] ?? GLOBAL_COLUMNS[table];
+  const allowed = hideModels && table === "clones" ? source?.filter(field => !MOXY_PRIVATE_MODEL_COLUMNS.has(field)) : source;
   if (!allowed) throw new Error("This data is restricted to administrators");
   // Split top-level fields; the only related rows admitted are bundle children.
   const parts = selection.match(/[^,()]+\([^()]*\)|[^,()]+/g) ?? [];
@@ -21,7 +23,7 @@ export function scopedSelection(table: string, selection: string): string {
     else if (table === "photo_bundles" && /^photo_bundle_items\([^()]*\)$/.test(field)) {
       output.push(`photo_bundle_items(${scopedSelection("photo_bundle_items",field.slice(19,-1))})`);
     } else if (allowed.includes(field)) output.push(field);
-    else if (table === "clones" && field === "bot_token") continue;
+    else if (table === "clones" && (field === "bot_token" || (hideModels && MOXY_PRIVATE_MODEL_COLUMNS.has(field)))) continue;
     else throw new Error("Unsupported agency column");
   }
   return [...new Set(output)].join(",") || "id";
@@ -30,7 +32,7 @@ export function scopeReadUrl(input: URL, agency: AgencyIdentity): {url: URL; tab
   const url = new URL(input);
   const table = url.pathname.split("/").pop()!;
   if (!/^[a-z_]+$/.test(table)) throw new Error("Unsupported agency resource");
-  url.searchParams.set("select",scopedSelection(table,url.searchParams.get("select") || "*"));
+  url.searchParams.set("select",scopedSelection(table,url.searchParams.get("select") || "*", isMoxy(agency.name)));
   if (GLOBAL_COLUMNS[table]) return {url,table};
   if (table === "photo_bundle_items") throw new Error("Read bundle items through their assigned bundle");
   const owner = table === "clones" ? "id" : "clone_id";

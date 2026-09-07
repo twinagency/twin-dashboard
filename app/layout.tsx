@@ -15,6 +15,7 @@ import TwinUpdatePopup from "@/components/TwinVersionBadge";
 import { getCachedTwinVersion, getFleetClones, getHeaderAllTimeStars } from "@/lib/query-cache";
 import { isAuthed } from "@/lib/auth";
 import { isAgencyPath } from "@/lib/agency-policy";
+import { isMoxy, pathAgencyName } from "@/lib/agency-brand";
 import { getCloneScope } from "@/lib/clone-scope";
 import { Inter, Inter_Tight, Space_Grotesk } from "next/font/google";
 import { cn } from "@/lib/utils";
@@ -33,12 +34,12 @@ const interTight = Inter_Tight({subsets:['latin'],variable:'--font-display'});
 export async function generateMetadata(): Promise<Metadata> {
   const pathname = (await headers()).get("x-pathname");
   const agencyName = pathname && isAgencyPath(pathname)
-    ? "LYNQ"
+    ? pathAgencyName(pathname)
     : pathname === "/login" ? undefined : (await getDashboardAccess())?.name;
   return agencyName ? {
     title: `${agencyName} Dashboard`,
     description: `${agencyName} creator dashboard`,
-    icons: { icon: { url: "/agency/icon.svg", type: "image/svg+xml" } },
+    icons: { icon: { url: isMoxy(agencyName) ? "/moxy/icon.svg" : "/agency/icon.svg", type: "image/svg+xml" } },
   } : {
     title: "Twin Console",
     description: "Intelligence infrastructure operations console",
@@ -55,7 +56,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const pathname = (await headers()).get("x-pathname");
   // The agency shell must never fetch or serialize the internal fleet data.
   if (pathname === "/login" || (pathname && isAgencyPath(pathname))) {
-    return <html lang="en" className={cn("font-sans", inter.variable, plexMono.variable, spaceGrotesk.variable, interTight.variable)}><body className="min-h-screen bg-bg">{children}</body></html>;
+    return <html lang="en" data-agency={pathname && isAgencyPath(pathname) && isMoxy(pathAgencyName(pathname)) ? "moxy" : undefined} className={cn("font-sans", inter.variable, plexMono.variable, spaceGrotesk.variable, interTight.variable)}><body className="min-h-screen bg-bg">{children}</body></html>;
   }
   const devBypass =
     pathname !== "/login" &&
@@ -120,7 +121,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // rendering lives in the TopBar/MainShell CLIENT components (usePathname).
 
   return (
-    <html lang="en" className={cn("font-sans", inter.variable, plexMono.variable, spaceGrotesk.variable, interTight.variable)} style={{ colorScheme: "light" }} suppressHydrationWarning>
+    <html lang="en" data-agency={isMoxy(agency?.name) ? "moxy" : undefined} className={cn("font-sans", inter.variable, plexMono.variable, spaceGrotesk.variable, interTight.variable)} style={{ colorScheme: "light" }} suppressHydrationWarning>
       <body className="min-h-screen bg-bg">
         {/* Privacy mode has to be on the <html> element BEFORE first paint.
             BlurProvider applies it too, but only in a useEffect after
