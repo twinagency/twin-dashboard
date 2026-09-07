@@ -1,15 +1,13 @@
 "use client";
 
-import { useActionState } from "react";
-import { login } from "./actions";
+
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 
-export default function LoginForm({ next }: { next: string }) {
-  const [state, formAction, pending] = useActionState(login, undefined);
+export default function LoginForm({ next, error }: { next: string; error?: boolean }) {
 
   return (
-    <form action={formAction} className="grid gap-4">
+    <form action="/admin-auth" method="post" className="grid gap-4">
       <input type="hidden" name="next" value={next} />
       <label className="block">
         <span className="mb-1 block text-sm text-muted">Password</span>
@@ -21,10 +19,11 @@ export default function LoginForm({ next }: { next: string }) {
           required
         />
       </label>
-      {state?.error && <p className="text-sm text-crit">{state.error}</p>}
-      <Button type="submit" disabled={pending} className="w-full">
-        {pending ? "Signing in…" : "Sign in"}
+      {error && <p className="text-sm text-crit">Unable to sign in. Check your password.</p>}
+      <Button type="submit" className="w-full">
+        Sign in
       </Button>
     </form>
   );
 }
+

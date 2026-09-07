@@ -112,6 +112,7 @@ const MORE_LINKS: NavLink[] = [
   { kind: "route", label: "Info", href: "/info", icon: "Info", color: "neutral" },
   { kind: "route", label: "Logs", href: "/logs", icon: "Logs", color: "neutral" },
   { kind: "route", label: "Sim", href: "/sim", icon: "Bot", color: "orange" },
+  { kind: "route", label: "Agency access", href: "/agency-admin", icon: "Settings", color: "gray" },
   { kind: "route", label: "API", href: "/api-access", icon: "Code", color: "blue" },
   { kind: "route", label: "Settings", href: "/settings", icon: "Settings", color: "gray" },
 ];
@@ -262,3 +263,4 @@ export default function Sidebar({
     </aside>
   );
 }
+

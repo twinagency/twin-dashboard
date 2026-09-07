@@ -12,6 +12,7 @@ import TwinWordmark from "@/components/TwinWordmark";
 import TwinUpdatePopup from "@/components/TwinVersionBadge";
 import { getCachedTwinVersion, getFleetClones, getHeaderAllTimeStars } from "@/lib/query-cache";
 import { isAuthed } from "@/lib/auth";
+import { isAgencyPath } from "@/lib/agency-policy";
 import { getCloneScope } from "@/lib/clone-scope";
 import { Inter, Inter_Tight, Space_Grotesk } from "next/font/google";
 import { cn } from "@/lib/utils";
@@ -39,9 +40,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // itself is excluded — it must always render standalone (no sidebar), the
   // same as it would once real auth is re-enabled.
   const pathname = (await headers()).get("x-pathname");
+  // The agency shell must never fetch or serialize the internal fleet data.
+  if (pathname && isAgencyPath(pathname)) {
+    return <html lang="en" className={cn("font-sans", inter.variable, plexMono.variable, spaceGrotesk.variable, interTight.variable)}><body className="min-h-screen bg-bg">{children}</body></html>;
+  }
   const devBypass =
     pathname !== "/login" &&
-    (process.env.NODE_ENV !== "production" || process.env.DASHBOARD_NO_AUTH === "true");
+    (process.env.NODE_ENV !== "production");
   const authed = devBypass || (await isAuthed());
 
   if (!authed) {
@@ -157,3 +162,4 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     </html>
   );
 }
+

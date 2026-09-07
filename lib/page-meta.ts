@@ -26,6 +26,7 @@ const PAGE_LABELS: Record<string, string> = {
   "/sim": "Sim",
   "/clones": "Creators",
   "/settings": "Settings",
+  "/agency-admin": "Agency access",
   "/crm/inbox": "Inbox",
   "/crm/fans": "Fan CRM",
   "/crm/campaigns": "Campaigns",
@@ -69,3 +70,4 @@ export function getPageMeta(
     scopeIsCreator: globalScope != null,
   };
 }
+

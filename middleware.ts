@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/session";
+import { isAgencyPath, agencyRequestAllowed } from "@/lib/agency-policy";
 
 // Forwards the request pathname to server components via a header (layout.tsx
 // needs it to know it's rendering /login specifically, since that route must
@@ -31,6 +32,24 @@ const SELF_AUTHENTICATED_PREFIXES = ["/api/v1/", "/api/admin/"];
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
 
+  if (pathname === "/admin-auth") {
+    if (req.method !== "POST" || req.headers.has("next-action")) return new NextResponse("Forbidden", {status:403});
+    return withPathname(req);
+  }
+  // Public login is a native form endpoint, never a generic server-action entry.
+  if (pathname === "/login" && !["GET","HEAD"].includes(req.method)) return new NextResponse("Forbidden",{status:403});
+
+  // Agency routes have an independent identity. Never execute any Next server
+  // action on this public entry point, even when its action ID is known.
+  if (isAgencyPath(pathname)) {
+    if (!agencyRequestAllowed(pathname, req.method, req.headers.has("next-action"))) {
+      return new NextResponse("Read-only agency portal", { status: 403 });
+    }
+    const response = withPathname(req);
+    response.headers.set("Cache-Control", "private, no-store");
+    return response;
+  }
+
   // Checked BEFORE the dev bypass so the rule is identical in every
   // environment, which is the only way local testing says anything about
   // production behaviour.
@@ -43,7 +62,7 @@ export async function middleware(req: NextRequest) {
   // + agents can view/screenshot the UI without the password. Production builds
   // (NODE_ENV=production) STILL enforce the login. Re-enable fully before deploy
   // by removing this block.
-  if (process.env.NODE_ENV !== "production" || process.env.DASHBOARD_NO_AUTH === "true") {
+  if (process.env.NODE_ENV !== "production") {
     return withPathname(req);
   }
 
@@ -67,3 +86,4 @@ export async function middleware(req: NextRequest) {
 export const config = {
   matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.png).*)"],
 };
+

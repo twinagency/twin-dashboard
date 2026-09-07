@@ -9,9 +9,9 @@ export const metadata = {
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string }>;
+  searchParams: Promise<{ next?: string; error?: string }>;
 }) {
-  const { next } = await searchParams;
+  const { next, error } = await searchParams;
   return (
     <div className="grid min-h-screen bg-white lg:grid-cols-[1.12fr_0.88fr]">
       <section className="relative hidden overflow-hidden bg-[#06172f] p-12 text-white lg:flex lg:flex-col lg:justify-between">
@@ -40,10 +40,11 @@ export default async function LoginPage({
             <p className="text-sm text-muted">Sign in to continue to operations.</p>
           </CardHeader>
           <CardContent className="px-7 pb-7">
-            <LoginForm next={next && next.startsWith("/") ? next : "/"} />
+            <LoginForm error={!!error} next={next && next.startsWith("/") ? next : "/"} />
           </CardContent>
         </Card>
       </section>
     </div>
   );
 }
+
