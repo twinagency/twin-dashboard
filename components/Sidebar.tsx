@@ -22,6 +22,7 @@ import { useState, type ReactNode } from "react";
 import { openCloneSwitcher } from "@/lib/clone-switcher-bus";
 import TwinAssistant from "@/components/TwinAssistant";
 import TwinWordmark from "@/components/TwinWordmark";
+import IntelligenceCoreIcon from "@/components/IntelligenceCoreIcon";
 
 type CloneLite = { id: string; name: string; color: string; photoUrl?: string };
 
@@ -185,6 +186,13 @@ export function SidebarContent({
     const rowClass = "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold transition";
 
     if (readOnly && link.kind === "route" && !agencyDashboardPath(link.href, agencyName)) {
+      if (showUnavailable && link.href === "/jarvis") return <div aria-disabled="true" className={rowClass + " cursor-not-allowed !gap-2"}>
+        <IntelligenceCoreIcon />
+        <span className="min-w-0 flex-1">
+          <span className="block text-[13px] leading-5 text-[#38bdf8]">AI Intelligence Core</span>
+          <span className="mt-1 inline-block rounded border border-white/15 px-1.5 py-0.5 text-[9px] font-medium text-white/60">Not available</span>
+        </span>
+      </div>;
       return <div aria-disabled="true" className={rowClass + " cursor-not-allowed text-white/45"}>
         <Icon d={PATHS[link.icon]} className="h-[18px] w-[18px] text-white/35" />
         <span className="flex-1">{link.label}</span>
@@ -239,7 +247,9 @@ export function SidebarContent({
           {NAV_LINKS.map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}
           {(!readOnly || showUnavailable) && <><div className="mb-2 mt-3 border-t border-white/14 pt-3 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">CRM</div>
           {CRM_LINKS.map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}</>}
-          <div className="mt-3 border-t border-white/14 pt-2">
+          {showUnavailable ? <div className="mt-3 space-y-1 border-t border-white/14 pt-2">
+            {MORE_LINKS.map(link => <div key={linkKey(link)}>{renderLink(link)}</div>)}
+          </div> : <div className="mt-3 border-t border-white/14 pt-2">
             <button
               type="button"
               onClick={() => setMoreOpen((open) => !open)}
@@ -251,7 +261,7 @@ export function SidebarContent({
               <svg className={(moreOpen ? "rotate-180 " : "") + "h-4 w-4 transition-transform"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
             </button>
             {moreOpen ? <div className="mt-1 space-y-1">{MORE_LINKS.filter(link => !readOnly || showUnavailable || link.kind === "tab" || agencyDashboardPath(link.href)).map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}</div> : null}
-          </div>
+          </div>}
         </div>
 
         {showAssistant && !readOnly ? (

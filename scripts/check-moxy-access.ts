@@ -109,6 +109,13 @@ async function main() {
   assert.equal(pathAgencyName("/moxy/auth"),"Moxy");assert.equal(isMoxy("Moxy"),true);assert.equal(isMoxy("LYNQ"),false);assert.equal(portalLoginPath("https://evil.example"),"/lynq");
   const sidebar=readFileSync("components/Sidebar.tsx","utf8");
   assert.match(sidebar,/aria-disabled="true"/);assert.match(sidebar,/Not available/);assert.match(sidebar,/!readOnly \|\| showUnavailable/);
+  assert.match(sidebar,/showUnavailable \? <div/);
+  assert.match(sidebar,/MORE_LINKS\.map\(link/);
+  assert.match(sidebar,/AI Intelligence Core/);
+  assert.match(sidebar,/<IntelligenceCoreIcon \/>/);
+  const core=readFileSync("components/IntelligenceCoreIcon.tsx","utf8");
+  assert.match(core,/prefers-reduced-motion/);assert.match(core,/cancelAnimationFrame/);
+  assert.match(core,/45,190,255/);assert.doesNotMatch(core,/fetch\(|onClick|useRouter/);
   const settings=readFileSync("components/clone/ConfigSections.tsx","utf8");
   assert.match(settings,/!privateSettings && <Collapse/);assert.match(settings,/Bot token concealed/);
   const loginForm=readFileSync("app/moxy/LoginForm.tsx","utf8");
