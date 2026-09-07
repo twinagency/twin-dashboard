@@ -7,8 +7,16 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Info } from "@/components/clone/fields";
-import { cloneCohortEnrollmentLabel, cloneCohortFromPromotionFlag } from "@/lib/clone-cohort";
+import {
+  cloneCohortEnrollmentLabel,
+  cloneCohortFromPromotionFlag,
+  cloneCohortIsEnabled,
+  cloneCohortLabel,
+} from "@/lib/clone-cohort";
+import { selectAllRows } from "@/lib/select-all";
+import type { IntentExperimentAssignmentRow, IntentOfferEventRow } from "@/lib/intent-offer-analytics";
 import ConversionCohortStatus from "./ConversionCohortStatus";
+import IntentOfferFunnelSummary from "./IntentOfferFunnelSummary";
 
 export const dynamic = "force-dynamic";
 
@@ -77,9 +85,95 @@ type FleetRow = {
   winback_lapse_days: number | null;
   intent_classic_promotions_enabled?: boolean | null;
   intent_classic_promotions_enabled_at?: string | null;
+  intent_classic_promotion_version?: number | null;
   // absent pre-migration-029, so read defensively
   drip_steps?: unknown[] | null;
 };
+
+type V2CreatorWindow = {
+  id: string;
+  enrolledAt: string | null | undefined;
+};
+
+type V2Analytics = {
+  events: IntentOfferEventRow[];
+  assignments: IntentExperimentAssignmentRow[];
+  eventsUnavailable: boolean;
+  assignmentsUnavailable: boolean;
+  truncated: boolean;
+};
+
+function validTimestamp(value: string | null | undefined): number | null {
+  if (!value) return null;
+  const parsed = new Date(value).getTime();
+  return Number.isFinite(parsed) ? parsed : null;
+}
+
+async function loadV2Analytics(windows: V2CreatorWindow[]): Promise<V2Analytics> {
+  if (windows.length === 0) {
+    return {
+      events: [],
+      assignments: [],
+      eventsUnavailable: false,
+      assignmentsUnavailable: false,
+      truncated: false,
+    };
+  }
+
+  const cloneIds = windows.map((window) => window.id);
+  const enrollmentByClone = new Map(windows.map((window) => [window.id, validTimestamp(window.enrolledAt)]));
+  const knownEnrollmentTimes = [...enrollmentByClone.values()].filter((value): value is number => value !== null);
+  const earliestEnrollment = knownEnrollmentTimes.length > 0
+    ? new Date(Math.min(...knownEnrollmentTimes)).toISOString()
+    : "1970-01-01T00:00:00.000Z";
+
+  const [eventResult, assignmentResult] = await Promise.all([
+    selectAllRows<IntentOfferEventRow>(
+      supabaseAdmin
+        .from("intent_offer_events")
+        .select("id,attempt_id,clone_id,event_type,variant,price_stars,block_reason,created_at")
+        .in("clone_id", cloneIds)
+        .eq("version", 2)
+        .gte("created_at", earliestEnrollment)
+        .order("created_at", { ascending: true })
+        .order("id", { ascending: true }),
+      { label: "V2 intent offer funnel", maxRows: 200_000 },
+    ),
+    selectAllRows<IntentExperimentAssignmentRow>(
+      supabaseAdmin
+        .from("intent_experiment_assignments")
+        .select("clone_id,user_id,variant,assigned_at")
+        .in("clone_id", cloneIds)
+        .eq("policy_version", 2)
+        .gte("assigned_at", earliestEnrollment)
+        .order("assigned_at", { ascending: true })
+        .order("clone_id", { ascending: true })
+        .order("user_id", { ascending: true }),
+      { label: "V2 fan assignments", maxRows: 200_000 },
+    ),
+  ]);
+
+  const inCreatorWindow = (cloneId: string, timestamp: string): boolean => {
+    const enrollment = enrollmentByClone.get(cloneId);
+    const eventTime = validTimestamp(timestamp);
+    if (enrollment === undefined || eventTime === null) return false;
+    return enrollment === null || eventTime >= enrollment;
+  };
+
+  return {
+    events: eventResult.rows.filter((event) => inCreatorWindow(event.clone_id, event.created_at)),
+    assignments: assignmentResult.rows.filter((assignment) =>
+      inCreatorWindow(assignment.clone_id, assignment.assigned_at),
+    ),
+    // selectAllRows marks a read failure as truncated. If it returned some rows
+    // we can still show them, clearly labelled as lower bounds.
+    eventsUnavailable: eventResult.truncated && eventResult.rows.length === 0,
+    assignmentsUnavailable: assignmentResult.truncated && assignmentResult.rows.length === 0,
+    truncated:
+      (eventResult.truncated && eventResult.rows.length > 0) ||
+      (assignmentResult.truncated && assignmentResult.rows.length > 0),
+  };
+}
 
 async function FleetFlows() {
   const { data } = await supabaseAdmin
@@ -88,6 +182,12 @@ async function FleetFlows() {
     .order("created_at", { ascending: true });
   const rows = (data ?? []) as FleetRow[];
   const enabledCount = rows.filter((r) => r.drip_enabled).length;
+  const v2Rows = rows.filter(
+    (row) => row.intent_classic_promotions_enabled === true && row.intent_classic_promotion_version === 2,
+  );
+  const v2Analytics = await loadV2Analytics(
+    v2Rows.map((row) => ({ id: row.id, enrolledAt: row.intent_classic_promotions_enabled_at })),
+  );
 
   return (
     <div className="dashboard-page text-ink">
@@ -114,6 +214,16 @@ async function FleetFlows() {
         </Card>
       </div>
 
+      <IntentOfferFunnelSummary
+        events={v2Analytics.events}
+        assignments={v2Analytics.assignments}
+        hasV2Creators={v2Rows.length > 0}
+        unavailable={v2Analytics.eventsUnavailable}
+        assignmentsUnavailable={v2Analytics.assignmentsUnavailable}
+        truncated={v2Analytics.truncated}
+        windowLabel="Since each creator's V2 enrollment"
+      />
+
       <Card className="overflow-hidden p-0">
         <Table>
           <TableHeader>
@@ -128,7 +238,10 @@ async function FleetFlows() {
           <TableBody>
             {rows.map((c) => {
               const steps = validSteps(c.drip_steps);
-              const cohort = cloneCohortFromPromotionFlag(c.intent_classic_promotions_enabled);
+              const cohort = cloneCohortFromPromotionFlag(
+                c.intent_classic_promotions_enabled,
+                c.intent_classic_promotion_version,
+              );
               return (
                 <TableRow key={c.id}>
                   <TableCell className="creator-name font-medium">{c.name} <span className="text-muted">/ {c.slug}</span></TableCell>
@@ -140,12 +253,12 @@ async function FleetFlows() {
                       <Badge
                         variant="outline"
                         className={
-                          cohort === "new-system"
+                          cloneCohortIsEnabled(cohort)
                             ? "border-accent/30 bg-accent/10 text-accent"
                             : "border-line bg-elev text-muted"
                         }
                       >
-                        {cohort === "new-system" ? "New System" : "Control"}
+                        {cloneCohortLabel(cohort)}
                       </Badge>
                       <span className="text-[11px] text-muted">
                         {cloneCohortEnrollmentLabel(cohort, c.intent_classic_promotions_enabled_at)}
@@ -203,6 +316,7 @@ async function CloneFlows({ cloneId }: { cloneId: string }) {
         intent_max_ignored_offers,
         intent_classic_promotions_enabled,
         intent_classic_promotions_enabled_at,
+        intent_classic_promotion_version,
         block_us_fans_enabled
       `)
       .eq("id", cloneId)
@@ -265,11 +379,21 @@ async function CloneFlows({ cloneId }: { cloneId: string }) {
     intent_classic_promotions_enabled?: boolean | null;
     // Migration 139. Durable enrollment metadata; null for Control rows.
     intent_classic_promotions_enabled_at?: string | null;
+    // Migration 143. V2 is explicit; absent/missing stays V1.
+    intent_classic_promotion_version?: number | null;
     // Migration 133 — absent pre-migration, defaults false.
     block_us_fans_enabled?: boolean | null;
   };
 
   const onboardingSteps = validOnboardingSteps(clone.onboarding_steps);
+  const conversionCohort = cloneCohortFromPromotionFlag(
+    clone.intent_classic_promotions_enabled,
+    clone.intent_classic_promotion_version,
+  );
+  const isV2 = conversionCohort === "new-system-v2";
+  const v2Analytics = isV2
+    ? await loadV2Analytics([{ id: clone.id, enrolledAt: clone.intent_classic_promotions_enabled_at }])
+    : null;
 
   return (
     <div className="dashboard-page">
@@ -293,12 +417,28 @@ async function CloneFlows({ cloneId }: { cloneId: string }) {
 
       <ConversionCohortStatus
         newSystemEnabled={clone.intent_classic_promotions_enabled === true}
+        promotionVersion={clone.intent_classic_promotion_version}
         enrolledAt={clone.intent_classic_promotions_enabled_at}
         step1AfterMessages={onboardingSteps[0]?.after_messages ?? null}
         step2AfterMessages={onboardingSteps[1]?.after_messages ?? null}
         intentFallbackOfferAfterMessages={clone.intent_fallback_offer_after_messages}
         intentMaxIgnoredOffers={clone.intent_max_ignored_offers}
       />
+
+      {v2Analytics && (
+        <IntentOfferFunnelSummary
+          events={v2Analytics.events}
+          assignments={v2Analytics.assignments}
+          hasV2Creators
+          unavailable={v2Analytics.eventsUnavailable}
+          assignmentsUnavailable={v2Analytics.assignmentsUnavailable}
+          truncated={v2Analytics.truncated}
+          windowLabel={cloneCohortEnrollmentLabel(
+            conversionCohort,
+            clone.intent_classic_promotions_enabled_at,
+          ).replace(/^Enrolled/, "Since")}
+        />
+      )}
 
       <FlowsForm
         cloneId={cloneId}

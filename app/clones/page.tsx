@@ -11,7 +11,7 @@ export const dynamic = "force-dynamic";
 export default async function ClonesPage() {
   const { data, error } = await supabaseAdmin
     .from("clones")
-    .select("id,slug,name,status,photos_enabled,videos_enabled,voice_enabled,voice_id,created_at,intake,intent_classic_promotions_enabled,intent_classic_promotions_enabled_at")
+    .select("id,slug,name,status,photos_enabled,videos_enabled,voice_enabled,voice_id,created_at,intake,intent_classic_promotions_enabled,intent_classic_promotions_enabled_at,intent_classic_promotion_version")
     .order("created_at", { ascending: true });
 
   if (error) {
@@ -65,7 +65,10 @@ export default async function ClonesPage() {
     slug: c.slug ?? "",
     status: c.status ?? "paused",
     active: c.status === "active",
-    cohort: cloneCohortFromPromotionFlag(c.intent_classic_promotions_enabled),
+    cohort: cloneCohortFromPromotionFlag(
+      c.intent_classic_promotions_enabled,
+      c.intent_classic_promotion_version,
+    ),
     cohortEnrolledAt: c.intent_classic_promotions_enabled_at ?? null,
     color: chartColorForClone(c.intake, i),
     photoUrl: c.id ? avatarUrlByCloneId.get(c.id) : undefined,

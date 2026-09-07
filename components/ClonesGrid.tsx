@@ -11,6 +11,8 @@ import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
 import {
   cloneCohortEnrollmentLabel,
+  cloneCohortIsEnabled,
+  cloneCohortLabel,
   cloneMatchesCohort,
   type CloneCohort,
   type CloneCohortFilter,
@@ -33,7 +35,8 @@ export type CloneCard = {
 
 const COHORT_OPTIONS: { value: CloneCohortFilter; label: string }[] = [
   { value: "all", label: "All" },
-  { value: "new-system", label: "New System" },
+  { value: "new-system-v2", label: "New System V2" },
+  { value: "new-system-v1", label: "V1" },
   { value: "control", label: "Control" },
 ];
 
@@ -63,7 +66,8 @@ export default function ClonesGrid({ clones }: { clones: CloneCard[] }) {
   const cohortCounts = useMemo(
     () => ({
       all: clones.length,
-      "new-system": clones.filter((c) => c.cohort === "new-system").length,
+      "new-system-v2": clones.filter((c) => c.cohort === "new-system-v2").length,
+      "new-system-v1": clones.filter((c) => c.cohort === "new-system-v1").length,
       control: clones.filter((c) => c.cohort === "control").length,
     }),
     [clones],
@@ -158,13 +162,15 @@ export default function ClonesGrid({ clones }: { clones: CloneCard[] }) {
                   <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
                     <Badge
                       title={
-                        c.cohort === "new-system"
-                          ? "New conversion system enabled"
+                        c.cohort === "new-system-v2"
+                          ? "New System V2 enabled with a stable 50/50 fan-level split"
+                          : c.cohort === "new-system-v1"
+                            ? "Version 1 conversion system enabled"
                           : "Control group using the existing conversion system"
                       }
                       className={
                         "border font-semibold " +
-                        (c.cohort === "new-system"
+                        (cloneCohortIsEnabled(c.cohort)
                           ? "border-accent-2/30 bg-accent-2/10 text-accent-2"
                           : "border-line bg-elev text-muted")
                       }
@@ -173,10 +179,10 @@ export default function ClonesGrid({ clones }: { clones: CloneCard[] }) {
                         aria-hidden="true"
                         className={
                           "h-1.5 w-1.5 rounded-full " +
-                          (c.cohort === "new-system" ? "bg-accent-2" : "bg-muted")
+                          (cloneCohortIsEnabled(c.cohort) ? "bg-accent-2" : "bg-muted")
                         }
                       />
-                      {c.cohort === "new-system" ? "New System" : "Control"}
+                      {cloneCohortLabel(c.cohort)}
                     </Badge>
                     {c.features.map((f) => (
                       <Badge key={f} variant="secondary" className="font-medium text-muted">

@@ -13,6 +13,7 @@ function render(overrides: Partial<Parameters<typeof ConversionCohortStatus>[0]>
   return renderToStaticMarkup(
     <ConversionCohortStatus
       newSystemEnabled={true}
+      promotionVersion={2}
       enrolledAt={ENROLLED_AT}
       step1AfterMessages={3}
       step2AfterMessages={4}
@@ -23,18 +24,28 @@ function render(overrides: Partial<Parameters<typeof ConversionCohortStatus>[0]>
   );
 }
 
-test("shows the New System cohort and its saved conversion timing", () => {
+test("shows New System V2 and its stable fan-level experiment", () => {
   const html = render();
 
-  assert.match(html, /data-cohort="new-system"/);
-  assert.match(html, />New System</);
+  assert.match(html, /data-cohort="new-system-v2"/);
+  assert.match(html, />New System V2</);
   assert.match(html, new RegExp(`dateTime="${ENROLLED_AT}"`));
   assert.match(html, />Enrolled [^<]*2026[^<]*(?:am|pm)[^<]*</i);
+  assert.match(html, /50% V2 \/ 50% Control/);
+  assert.match(html, /After an explicit request/);
+  assert.match(html, /Cooldown, then a different offer/);
+  assert.doesNotMatch(html, /<(?:input|select|button)\b/);
+});
+
+test("shows an enabled version-1 creator as V1 with its saved timing", () => {
+  const html = render({ promotionVersion: 1 });
+
+  assert.match(html, /data-cohort="new-system-v1"/);
+  assert.match(html, />V1</);
   assert.match(html, />After 3 messages</);
   assert.match(html, />After 4 messages</);
   assert.match(html, />After 5 messages</);
   assert.match(html, />After 2 ignored offers</);
-  assert.doesNotMatch(html, /<(?:input|select|button)\b/);
 });
 
 test("shows Control as not enrolled even if stale timestamp metadata exists", () => {
@@ -56,6 +67,7 @@ test("renders runtime defaults and deliberate zero-value off switches", () => {
   assert.equal(formatEnrollmentDateTime("not-a-date"), null);
 
   const defaults = render({
+    promotionVersion: 1,
     step1AfterMessages: null,
     step2AfterMessages: null,
     intentFallbackOfferAfterMessages: null,
@@ -66,6 +78,7 @@ test("renders runtime defaults and deliberate zero-value off switches", () => {
   assert.match(defaults, />After 2 ignored offers</);
 
   const disabled = render({
+    promotionVersion: 1,
     intentFallbackOfferAfterMessages: 0,
     intentMaxIgnoredOffers: 0,
   });
@@ -73,10 +86,10 @@ test("renders runtime defaults and deliberate zero-value off switches", () => {
   assert.match(disabled, />No cap</);
 });
 
-test("keeps a New System assignment truthful when enrollment metadata is unavailable", () => {
+test("keeps a V2 assignment truthful when enrollment metadata is unavailable", () => {
   const html = render({ enrolledAt: null });
 
-  assert.match(html, />New System</);
+  assert.match(html, />New System V2</);
   assert.match(html, />Enrollment date unavailable</);
   assert.doesNotMatch(html, />Not enrolled</);
 });

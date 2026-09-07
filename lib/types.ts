@@ -42,6 +42,10 @@ export type Clone = {
   intent_classic_promotions_enabled?: boolean;
   // Migration 139. Durable cohort enrollment time; null for Control rows.
   intent_classic_promotions_enabled_at?: string | null;
+  // Migration 143. Version 2 adds fan-level V2/control assignment and a
+  // separately measured offer lifecycle. Enabled rows missing this metadata
+  // remain V1; the database default is 1.
+  intent_classic_promotion_version?: 1 | 2;
 
   photos_enabled: boolean;
   videos_enabled: boolean;
