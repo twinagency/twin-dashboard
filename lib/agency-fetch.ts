@@ -1,3 +1,6 @@
+import { agencyCanManage } from "./agency-management-policy";
+import { assignedStoragePath } from "./agency-management";
+import { scopeAgencyWrite, scopeBundleItems } from "./agency-write";
 import { getDashboardAccess } from "./dashboard-access";
 import { AGENCY_ROLLUPS, scopeReadUrl, redactAgencyData } from "./agency-query";
 import { serviceClient } from "./supabase-service";
@@ -29,30 +32,61 @@ export async function dashboardFetch(input: RequestInfo | URL, init?: RequestIni
   if (!agency) return fetch(input,init);
   const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
   const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
-  const jsonBody = () => JSON.parse(String(init?.body ?? "{}"));
-  if (url.pathname.startsWith("/rest/v1/rpc/")) {
-    const fn = url.pathname.split("/").pop()!;
-    if (method !== "POST" || !AGENCY_ROLLUPS.has(fn)) return denied();
-    const args = jsonBody();
-    if (args.p_clone && !agency.cloneIds.includes(args.p_clone)) return denied("Creator access denied");
-    url.pathname = url.pathname.replace(`/rpc/${fn}`,`/rpc/agency_${fn}`);
-    return fetch(url,{...init,cache:"no-store",body:JSON.stringify({...args,p_clones:agency.cloneIds})});
-  }
-  if (url.pathname.startsWith("/rest/v1/")) {
-    if (!["GET","HEAD"].includes(method)) return denied();
-    let scoped;
-    try { scoped = scopeReadUrl(url,agency); } catch { return denied("This data is restricted to administrators"); }
-    const res = await fetch(scoped.url,{...init,cache:"no-store"});
-    if (!res.ok || method === "HEAD") return res;
-    const data = redactAgencyData(await res.json());
-    const headers = new Headers(res.headers);headers.delete("content-length");headers.delete("content-encoding");
-    return new Response(JSON.stringify(data),{status:res.status,headers});
-  }
-  if (url.pathname.startsWith("/storage/v1/object/sign/media") && method === "POST") {
-    const prefix = "/storage/v1/object/sign/media";
-    const paths = url.pathname === prefix ? jsonBody().paths : [decodeURIComponent(url.pathname.slice(prefix.length+1))];
-    if (!Array.isArray(paths) || !await ownsMedia(agency,paths)) return denied("Media access denied");
-    return fetch(url,{...init,cache:"no-store"});
-  }
+  const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined));
+  const jsonBody = async () => {
+    if (typeof init?.body === "string") return JSON.parse(init.body);
+    if (input instanceof Request && init?.body == null) return input.clone().json();
+    return {};
+  };
+  const safeResponse = async (res: Response) => {
+    if (!res.ok || method === "HEAD" || res.status === 204) return res;
+    const text=await res.text();
+    const safeHeaders=new Headers(res.headers);safeHeaders.delete("content-length");safeHeaders.delete("content-encoding");
+    return new Response(text ? JSON.stringify(redactAgencyData(JSON.parse(text))) : null,{status:res.status,headers:safeHeaders});
+  };
+  try {
+    // This service-key client only admits the public schema, never a caller-selected profile.
+    if ([headers.get("content-profile"),headers.get("accept-profile")].some(p=>p && p!=="public")) return denied();
+    if (url.pathname.startsWith("/rest/v1/rpc/")) {
+      const fn = url.pathname.split("/").pop()!;
+      if (method !== "POST" || !AGENCY_ROLLUPS.has(fn)) return denied();
+      const args = await jsonBody();
+      if (args.p_clone && !agency.cloneIds.includes(args.p_clone)) return denied("Creator access denied");
+      url.pathname = url.pathname.replace(`/rpc/${fn}`,`/rpc/agency_${fn}`);
+      return fetch(url,{...init,cache:"no-store",body:JSON.stringify({...args,p_clones:agency.cloneIds})});
+    }
+    if (url.pathname.startsWith("/rest/v1/")) {
+      let scoped: URL;
+      if (["GET","HEAD"].includes(method)) {
+        scoped = agencyCanManage(agency) && url.pathname === "/rest/v1/photo_bundle_items"
+          ? await scopeBundleItems(url,agency)
+          : scopeReadUrl(url,agency).url;
+      } else {
+        if (headers.get("prefer")?.includes("resolution=")) return denied("Agency upserts are not allowed");
+        scoped=await scopeAgencyWrite(url,method,await jsonBody(),agency);
+      }
+      return await safeResponse(await fetch(scoped,{...init,cache:"no-store"}));
+    }
+    if (url.pathname.startsWith("/storage/v1/object/sign/media") && method === "POST") {
+      const prefix = "/storage/v1/object/sign/media";
+      const paths = url.pathname === prefix ? (await jsonBody()).paths : [decodeURIComponent(url.pathname.slice(prefix.length+1))];
+      if (!Array.isArray(paths) || !await ownsMedia(agency,paths)) return denied("Media access denied");
+      return fetch(url,{...init,cache:"no-store"});
+    }
+    if (agencyCanManage(agency)) {
+      const prefix="/storage/v1/object/media";
+      if (url.pathname.startsWith(prefix+"/") && ["POST","GET"].includes(method)) {
+        assignedStoragePath(agency,decodeURIComponent(url.pathname.slice(prefix.length+1)));
+        if (headers.get("x-upsert")==="true") return denied("Agency storage replacement is not allowed");
+        return fetch(url,{...init,cache:"no-store"});
+      }
+      if (url.pathname===prefix && method==="DELETE") {
+        const paths=(await jsonBody()).prefixes;
+        if (!Array.isArray(paths) || !paths.length || paths.length>1000) return denied("Invalid media selection");
+        paths.forEach(path=>assignedStoragePath(agency,path));
+        return fetch(url,{...init,cache:"no-store"});
+      }
+    }
+  } catch { return denied("Agency permission or resource validation failed"); }
   return denied();
 }

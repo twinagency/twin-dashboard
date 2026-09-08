@@ -3,19 +3,49 @@ on:
   push:
     branches: [codex/lynq-scoped-management]
 permissions:
-  contents: read
+  contents: write
+concurrency:
+  group: lynq-scoped-management-validation
+  cancel-in-progress: false
 jobs:
   validate:
+    if: github.ref == 'refs/heads/codex/lynq-scoped-management'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
         with:
-          persist-credentials: false
-      - name: Package source for scoped access review
-        run: |
-          git ls-files -z -- app components lib scripts contracts middleware.ts instrumentation.ts package.json package-lock.json tsconfig.json next.config.mjs postcss.config.mjs .github/workflows CLAUDE.md | tar --null -T - -czf /tmp/dashboard-review.tar.gz
-      - uses: actions/upload-artifact@v4
+          ref: ${{ github.sha }}
+      - uses: actions/setup-node@v4
         with:
-          name: lynq-access-review
-          path: /tmp/dashboard-review.tar.gz
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Apply scoped controls and guard every server action
+        run: |
+          python3 .github/lynq-install.py
+          node .github/lynq-guard-actions.cjs
+          git diff --check
+          rm .github/lynq-install.py .github/lynq-guard-actions.cjs .github/workflows/lynq-access-validation.yml
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add app components lib middleware.ts package.json scripts .github
+          git commit -m 'feat: enable scoped Lynq creator management and live controls'
+          git push origin HEAD:refs/heads/codex/lynq-scoped-management
+          echo "Validated source SHA: $(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
+      - name: Typecheck
+        run: npx tsc --noEmit
+      - name: Behavioural and security regression checks
+        run: npm run test:offline
+      - name: Production build
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'
+      - name: Package reviewed source
+        if: always()
+        run: git ls-files -z -- app components lib scripts contracts middleware.ts instrumentation.ts package.json package-lock.json tsconfig.json next.config.mjs postcss.config.mjs .github/workflows CLAUDE.md | tar --null -T - -czf /tmp/lynq-management-source.tar.gz
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: lynq-management-source
+          path: /tmp/lynq-management-source.tar.gz
           retention-days: 1
