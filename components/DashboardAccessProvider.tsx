@@ -1,5 +1,5 @@
 "use client";
-import { createContext, useContext, useEffect, useRef, type ReactNode, type ComponentProps } from "react";
+import React, { createContext, useContext, useEffect, useRef, type ReactNode, type ComponentProps } from "react";
 const Access = createContext<{readOnly:boolean; isAgency:boolean; canManage:boolean; agencyName?:string}>({readOnly:false,isAgency:false,canManage:true});
 export const useDashboardAccess = () => useContext(Access);
 export default function DashboardAccessProvider({agencyName,canManage=false,children}:{agencyName?:string;canManage?:boolean;children:ReactNode}) {
