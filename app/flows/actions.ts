@@ -1,5 +1,7 @@
 "use server";
 
+import { guardDashboardAction } from "@/lib/agency-management";
+
 import { revalidatePath } from "next/cache";
 import { invalidateCloneCaches } from "@/lib/query-cache";
 import { randomUUID } from "node:crypto";
@@ -162,6 +164,7 @@ function numOrNull(fd: FormData, key: string): number | null {
 // drip_active_window_minutes / drip_mode / drip_sequence / drip_step_mode) are
 // no longer read by the runtime and are never written here.
 export async function saveCampaign(id: string, fd: FormData) {
+  await guardDashboardAction("app/flows/actions.ts#saveCampaign", [id, fd]);
   const row: Record<string, unknown> = {
     // New-fan onboarding. The legacy loose fields (welcome_bundle_after[_minutes]
     // / welcome_bundle_teased / onboarding_voice_after / onboarding_voice_instruction

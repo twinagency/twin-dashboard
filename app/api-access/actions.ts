@@ -1,5 +1,7 @@
 "use server";
 
+import { guardDashboardAction } from "@/lib/agency-management";
+
 import { revalidatePath } from "next/cache";
 import { createKey, revokeKeyById } from "@/lib/api-keys-admin";
 import { FLEET_OPTION } from "./scope";
@@ -16,6 +18,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 export type IssueState = { key?: string; prefix?: string; scope?: "clone" | "fleet"; error?: string };
 
 export async function issueKeyAction(_prev: IssueState, fd: FormData): Promise<IssueState> {
+  await guardDashboardAction("app/api-access/actions.ts#issueKeyAction", [_prev, fd]);
   const picked = String(fd.get("clone_id") ?? "");
   const label = String(fd.get("label") ?? "");
   const fleet = picked === FLEET_OPTION;
@@ -50,6 +53,7 @@ export async function issueKeyAction(_prev: IssueState, fd: FormData): Promise<I
 }
 
 export async function revokeKeyAction(fd: FormData): Promise<void> {
+  await guardDashboardAction("app/api-access/actions.ts#revokeKeyAction", [fd]);
   const id = String(fd.get("key_id") ?? "");
   const prefix = String(fd.get("key_prefix") ?? "");
   const result = await revokeKeyById(id);

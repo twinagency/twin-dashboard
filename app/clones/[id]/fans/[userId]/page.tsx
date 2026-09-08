@@ -325,7 +325,7 @@ export default async function FanDetailPage({
             </MutationForm>
 
             {/* Delete */}
-            <MutationForm action={deleteUser} className="ml-auto">
+            <MutationForm adminOnly action={deleteUser} className="ml-auto">
               <input type="hidden" name="userId" value={userId} />
               <input type="hidden" name="cloneId" value={id} />
               <input type="hidden" name="telegramId" value={u.telegram_id} />

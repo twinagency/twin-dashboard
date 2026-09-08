@@ -1,3 +1,4 @@
+import { AdminOnly } from "@/components/DashboardAccessProvider";
 import Link from "next/link";
 import { supabaseAdmin } from "@/lib/supabase";
 import type { Clone } from "@/lib/types";
@@ -80,7 +81,7 @@ export default async function ClonesPage() {
       {clones.length === 0 ? (
         <div className="rounded-xl border border-dashed border-line bg-panel p-12 text-center">
           <p className="mb-4 text-muted">No creators yet.</p>
-          <Button nativeButton={false} render={<Link href="/clones/new" />}>Create the first creator</Button>
+          <AdminOnly><Button nativeButton={false} render={<Link href="/clones/new" />}>Create the first creator</Button></AdminOnly>
         </div>
       ) : (
         <ClonesGrid clones={cards} />

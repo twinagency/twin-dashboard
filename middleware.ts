@@ -1,4 +1,5 @@
-import { dashboardOrigin } from "@/lib/form-origin";
+import { agencyCanManage, agencyManagementRequestAllowed } from "@/lib/agency-management-policy";
+import { dashboardOrigin, trustedFormOrigin } from "@/lib/form-origin";
 import { AGENCY_PORTAL_COOKIE, portalLoginPath } from "@/lib/agency-brand";
 import { agencyIdentity } from "@/lib/agency-identity";
 import { NextResponse } from "next/server";
@@ -64,11 +65,16 @@ export async function middleware(req: NextRequest) {
   const admin = await verifySessionToken(adminToken);
   const agencyToken = req.cookies.get(AGENCY_COOKIE)?.value;
   if (agencyToken && pathname !== "/login") {
-    if (req.headers.has("next-action") || !["GET", "HEAD"].includes(req.method)) return new NextResponse("Read-only agency access", {status:403});
-    if (!agencyDashboardPath(pathname)) return new NextResponse("Administrator access required", {status:403});
     const identity = await agencyIdentity(agencyToken);
     if (!identity) return NextResponse.redirect(new URL(portalLoginPath(req.cookies.get(AGENCY_PORTAL_COOKIE)?.value),dashboardOrigin(req)));
-    if (!agencyDashboardPath(pathname, identity.name)) return new NextResponse("Administrator access required", {status:403});
+    const canManage = agencyCanManage(identity);
+    const serverAction = req.headers.has("next-action");
+    const isWrite = serverAction || !["GET", "HEAD"].includes(req.method);
+    if (isWrite && (!canManage || !agencyManagementRequestAllowed(pathname,req.method,serverAction))) return new NextResponse("Administrator access required", {status:403});
+    if (isWrite && !trustedFormOrigin(req)) return new NextResponse("Untrusted request origin", {status:403});
+    if (!agencyDashboardPath(pathname, identity.name, canManage)) return new NextResponse("Administrator access required", {status:403});
+    // The legacy compiler GET mutates data. Agencies use its POST counterpart.
+    if (pathname === "/api/compile" && !isWrite) return new NextResponse("Use POST", {status:405});
     const embedded = pathname.match(/^\/clones\/([0-9a-f-]{36})/i)?.[1];
     const requested = embedded || req.nextUrl.searchParams.get("clone") || req.nextUrl.searchParams.get("cloneId");
     if (requested && !identity.cloneIds.includes(requested)) return new NextResponse("Creator access denied",{status:403});

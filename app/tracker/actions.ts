@@ -1,5 +1,7 @@
 "use server";
 
+import { guardDashboardAction } from "@/lib/agency-management";
+
 import { revalidatePath } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase";
 import { KINDS, AREAS, SEVERITIES, STATUSES, type Kind, type Area, type Severity, type Status } from "@/lib/tracker";
@@ -25,6 +27,7 @@ function str(fd: FormData, key: string): string {
 // a form that refuses a half-finished report is a form that loses reports: the
 // whole point is that a thought gets captured the moment it happens.
 export async function createItem(fd: FormData): Promise<void> {
+  await guardDashboardAction("app/tracker/actions.ts#createItem", [fd]);
   const title = str(fd, "title");
   if (!title) throw new Error("a title is required");
 
@@ -72,12 +75,14 @@ async function attachFile(itemId: string, file: File): Promise<void> {
 }
 
 export async function addAttachments(itemId: string, fd: FormData): Promise<void> {
+  await guardDashboardAction("app/tracker/actions.ts#addAttachments", [itemId, fd]);
   const files = fd.getAll("screenshots").filter((f): f is File => f instanceof File && f.size > 0);
   for (const file of files) await attachFile(itemId, file);
   revalidatePath(PATH);
 }
 
 export async function removeAttachment(attachmentId: string): Promise<void> {
+  await guardDashboardAction("app/tracker/actions.ts#removeAttachment", [attachmentId]);
   const { data } = await supabaseAdmin.from("tracker_attachments").select("path").eq("id", attachmentId).maybeSingle();
   if (data?.path) await supabaseAdmin.storage.from("media").remove([data.path]);
   await supabaseAdmin.from("tracker_attachments").delete().eq("id", attachmentId);
@@ -86,6 +91,7 @@ export async function removeAttachment(attachmentId: string): Promise<void> {
 
 // ── edit an item ─────────────────────────────────────────────────────────────
 export async function updateItem(itemId: string, fd: FormData): Promise<void> {
+  await guardDashboardAction("app/tracker/actions.ts#updateItem", [itemId, fd]);
   const patch: Record<string, unknown> = { updated_at: new Date().toISOString() };
   if (fd.has("title")) patch.title = str(fd, "title");
   if (fd.has("body")) patch.body = str(fd, "body");
@@ -104,12 +110,14 @@ export async function updateItem(itemId: string, fd: FormData): Promise<void> {
 }
 
 export async function setStatus(itemId: string, status: Status): Promise<void> {
+  await guardDashboardAction("app/tracker/actions.ts#setStatus", [itemId, status]);
   const fd = new FormData();
   fd.set("status", status);
   await updateItem(itemId, fd);
 }
 
 export async function deleteItem(itemId: string): Promise<void> {
+  await guardDashboardAction("app/tracker/actions.ts#deleteItem", [itemId]);
   const { data } = await supabaseAdmin.from("tracker_attachments").select("path").eq("item_id", itemId);
   const paths = (data ?? []).map((a) => a.path).filter(Boolean);
   if (paths.length) await supabaseAdmin.storage.from("media").remove(paths);
@@ -119,6 +127,7 @@ export async function deleteItem(itemId: string): Promise<void> {
 
 // ── notes ────────────────────────────────────────────────────────────────────
 export async function addNote(itemId: string, fd: FormData): Promise<void> {
+  await guardDashboardAction("app/tracker/actions.ts#addNote", [itemId, fd]);
   const body = str(fd, "body");
   if (!body) return;
   await supabaseAdmin.from("tracker_notes").insert({
@@ -130,6 +139,7 @@ export async function addNote(itemId: string, fd: FormData): Promise<void> {
 }
 
 export async function deleteNote(noteId: string): Promise<void> {
+  await guardDashboardAction("app/tracker/actions.ts#deleteNote", [noteId]);
   await supabaseAdmin.from("tracker_notes").delete().eq("id", noteId);
   revalidatePath(PATH);
 }
@@ -139,6 +149,7 @@ export async function deleteNote(noteId: string): Promise<void> {
 // erroring: attaching the same commit twice is a normal thing to do and should
 // not throw a red box at anybody.
 export async function addCommit(itemId: string, fd: FormData): Promise<void> {
+  await guardDashboardAction("app/tracker/actions.ts#addCommit", [itemId, fd]);
   const sha = str(fd, "sha");
   if (!sha) return;
   await supabaseAdmin.from("tracker_commits").upsert(
@@ -155,6 +166,7 @@ export async function addCommit(itemId: string, fd: FormData): Promise<void> {
 }
 
 export async function deleteCommit(commitId: string): Promise<void> {
+  await guardDashboardAction("app/tracker/actions.ts#deleteCommit", [commitId]);
   await supabaseAdmin.from("tracker_commits").delete().eq("id", commitId);
   revalidatePath(PATH);
 }
@@ -165,6 +177,7 @@ export async function deleteCommit(commitId: string): Promise<void> {
 // one deployer, and two open batches would mean two people shipping trees over
 // each other (see CLAUDE.md, "One deployer at a time").
 export async function startBatch(fd: FormData): Promise<void> {
+  await guardDashboardAction("app/tracker/actions.ts#startBatch", [fd]);
   const ids = fd.getAll("item_ids").map(String).filter(Boolean);
 
   const { data: existing } = await supabaseAdmin
@@ -198,6 +211,7 @@ export async function startBatch(fd: FormData): Promise<void> {
 }
 
 export async function addToBatch(itemId: string, batchId: string): Promise<void> {
+  await guardDashboardAction("app/tracker/actions.ts#addToBatch", [itemId, batchId]);
   await supabaseAdmin
     .from("tracker_items")
     .update({ batch_id: batchId, updated_at: new Date().toISOString() })
@@ -209,6 +223,7 @@ export async function addToBatch(itemId: string, batchId: string): Promise<void>
 // not "fixed", and leaving a stale status behind is how the archive starts
 // lying.
 export async function removeFromBatch(itemId: string): Promise<void> {
+  await guardDashboardAction("app/tracker/actions.ts#removeFromBatch", [itemId]);
   await supabaseAdmin
     .from("tracker_items")
     .update({ batch_id: null, status: "open", updated_at: new Date().toISOString() })
@@ -217,6 +232,7 @@ export async function removeFromBatch(itemId: string): Promise<void> {
 }
 
 export async function updateBatch(batchId: string, fd: FormData): Promise<void> {
+  await guardDashboardAction("app/tracker/actions.ts#updateBatch", [batchId, fd]);
   const patch: Record<string, unknown> = {};
   if (fd.has("title")) patch.title = str(fd, "title");
   if (fd.has("deploy_note")) patch.deploy_note = str(fd, "deploy_note");
@@ -248,6 +264,7 @@ export async function updateBatch(batchId: string, fd: FormData): Promise<void> 
 // Deleting a batch never deletes the work. Its items go back to the open pile,
 // which is the only safe thing to do with a record of outstanding bugs.
 export async function deleteBatch(batchId: string): Promise<void> {
+  await guardDashboardAction("app/tracker/actions.ts#deleteBatch", [batchId]);
   await supabaseAdmin
     .from("tracker_items")
     .update({ batch_id: null, status: "open", updated_at: new Date().toISOString() })
@@ -265,6 +282,7 @@ export async function deleteBatch(batchId: string): Promise<void> {
 // A queued job jumps the schedule and runs even if that bot is switched off,
 // because pressing the button is an explicit request for that one item.
 export async function askBot(bot: string, itemId: string, itemNumber: number): Promise<void> {
+  await guardDashboardAction("app/tracker/actions.ts#askBot", [bot, itemId, itemNumber]);
   // One outstanding request per bot per item. Pressing twice while the first is
   // still queued should not queue a second run.
   const { data: existing } = await supabaseAdmin

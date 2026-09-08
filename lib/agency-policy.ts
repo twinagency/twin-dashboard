@@ -1,5 +1,6 @@
 export const AGENCY_COOKIE = "twin_agency_access";
 import { isMoxy } from "./agency-brand";
+import { AGENCY_LIVE_CRM_ROUTES } from "./agency-management-policy";
 export const isAgencyPath = (path: string) => path === "/agency" || path.startsWith("/agency/") || path === "/lynq" || path.startsWith("/lynq/") || path === "/moxy" || path.startsWith("/moxy/");
 export function agencyRequestAllowed(path: string, method: string, serverAction: boolean): boolean {
   if (!isAgencyPath(path) || serverAction) return false;
@@ -11,8 +12,9 @@ export function scopeAgencyClones(allowed: readonly string[], requested?: string
   return requested ? [requested] : [...allowed];
 }
 
-export function agencyDashboardPath(path: string, agencyName?: string): boolean {
+export function agencyDashboardPath(path: string, agencyName?: string, canManage = false): boolean {
   if (isMoxy(agencyName) && path === "/api/models") return false;
+  if (canManage && (Object.hasOwn(AGENCY_LIVE_CRM_ROUTES,path) || ["/api/caption","/api/compile"].includes(path))) return true;
   if (["/", "/revenue", "/analytics", "/clones", "/users", "/media", "/info", "/flows", "/drip", "/messages", "/logs", "/business"].includes(path)) return true;
   if (/^\/clones\/[0-9a-f-]{36}(\/fans\/[0-9a-f-]{36})?$/i.test(path)) return true;
   return ["/api/dashboard", "/api/dashboard/day-insight", "/api/users/live", "/api/media-sign", "/api/fx", "/api/models", "/api/avatar", "/api/voice", "/api/business-account", "/api/business-connection"].includes(path);

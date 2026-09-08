@@ -1,12 +1,16 @@
+import { requireManagedClone } from "@/lib/agency-management";
+import { trustedFormOrigin } from "@/lib/form-origin";
 import { NextRequest, NextResponse } from "next/server";
 import sharp from "sharp";
 import { supabaseAdmin } from "@/lib/supabase";
 import { orVision } from "@/lib/openrouter";
 
 export async function POST(req: NextRequest) {
+  if (!trustedFormOrigin(req)) return NextResponse.json({error:"Untrusted request origin"},{status:403});
   const fd = await req.formData();
   const file = fd.get("file") as File | null;
   const cloneId = fd.get("clone_id") as string | null;
+  try { await requireManagedClone(cloneId); } catch { return NextResponse.json({error:"Creator access denied"},{status:403}); }
   if (!file) return NextResponse.json({ error: "no file" }, { status: 400 });
 
   let model = "qwen/qwen2.5-vl-72b-instruct";

@@ -1,5 +1,7 @@
 "use server";
 
+import { guardDashboardAction } from "@/lib/agency-management";
+
 import { revalidatePath } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase";
 
@@ -7,6 +9,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 // /clones/[id]/fans/[userId] page — everything lives in the inbox now).
 
 export async function setCredits(fd: FormData) {
+  await guardDashboardAction("app/users/actions.ts#setCredits", [fd]);
   const userId = String(fd.get("userId"));
   const credits = Math.max(0, Math.floor(Number(fd.get("credits")) || 0));
   const { error } = await supabaseAdmin
@@ -20,6 +23,7 @@ export async function setCredits(fd: FormData) {
 // Zero the lifetime usage counters (messages sent + purchased). Does not touch
 // the live credit balance — that's `setCredits`.
 export async function resetCounters(fd: FormData) {
+  await guardDashboardAction("app/users/actions.ts#resetCounters", [fd]);
   const userId = String(fd.get("userId"));
   const { error } = await supabaseAdmin
     .from("users")
@@ -30,6 +34,7 @@ export async function resetCounters(fd: FormData) {
 }
 
 export async function toggleActive(fd: FormData) {
+  await guardDashboardAction("app/users/actions.ts#toggleActive", [fd]);
   const userId = String(fd.get("userId"));
   const active = fd.get("active") === "true";
   const { error } = await supabaseAdmin
@@ -47,6 +52,7 @@ export async function toggleActive(fd: FormData) {
 // see clearMinorFlag below: unblocking is a routine action, and silently
 // un-gating a fan who stated he was underage is not.
 export async function setBlocked(fd: FormData) {
+  await guardDashboardAction("app/users/actions.ts#setBlocked", [fd]);
   const userId = String(fd.get("userId"));
   const blocked = fd.get("blocked") === "true";
   const { error } = await supabaseAdmin
@@ -81,6 +87,7 @@ export async function setBlocked(fd: FormData) {
 // it should take a deliberate second click and its own confirmation, not ride
 // along on a routine unblock.
 export async function clearMinorFlag(fd: FormData) {
+  await guardDashboardAction("app/users/actions.ts#clearMinorFlag", [fd]);
   const userId = String(fd.get("userId"));
   const { error } = await supabaseAdmin
     .from("users")
@@ -96,6 +103,7 @@ export async function clearMinorFlag(fd: FormData) {
 // block above (users.blocked): this is just "leave him on read for a while",
 // not a ban and not a clone-wide pause.
 export async function setPaused(fd: FormData) {
+  await guardDashboardAction("app/users/actions.ts#setPaused", [fd]);
   const userId = String(fd.get("userId"));
   const paused = fd.get("paused") === "true";
   const { error } = await supabaseAdmin
@@ -130,6 +138,7 @@ async function assertPaused(userId: string): Promise<{ cloneId: string; telegram
 }
 
 export async function manualSendText(fd: FormData) {
+  await guardDashboardAction("app/users/actions.ts#manualSendText", [fd]);
   const userId = String(fd.get("userId"));
   const text = String(fd.get("text") ?? "").trim();
   if (!text) throw new Error("message text is required");
@@ -149,6 +158,7 @@ export async function manualSendText(fd: FormData) {
 // speak() SSML+TTS pipeline every automated voice note uses, then sends it as
 // a voice note (services/telegram-messenger.ts sendVoice).
 export async function manualSendVoice(fd: FormData) {
+  await guardDashboardAction("app/users/actions.ts#manualSendVoice", [fd]);
   const userId = String(fd.get("userId"));
   const words = String(fd.get("words") ?? "").trim();
   if (!words) throw new Error("voice script is required");
@@ -169,6 +179,7 @@ export async function manualSendVoice(fd: FormData) {
 // through manual takeover would give away paid content with no purchase, so
 // the bot-side handler refuses it outright even if this ever got bypassed.
 export async function manualSendPhoto(fd: FormData) {
+  await guardDashboardAction("app/users/actions.ts#manualSendPhoto", [fd]);
   const userId = String(fd.get("userId"));
   const photoId = String(fd.get("photoId") ?? "");
   const caption = String(fd.get("caption") ?? "").trim() || null;
@@ -197,6 +208,7 @@ export async function manualSendPhoto(fd: FormData) {
 // Full wipe: the user row (cascades purchases + received-media via FK) plus
 // chat_history, which is keyed by (clone_id, telegram_id) and won't cascade.
 export async function deleteUser(fd: FormData) {
+  await guardDashboardAction("app/users/actions.ts#deleteUser", [fd]);
   const userId = String(fd.get("userId"));
   const cloneId = String(fd.get("cloneId"));
   const telegramId = String(fd.get("telegramId"));

@@ -1,3 +1,4 @@
+import { agencyCanManage } from "@/lib/agency-management-policy";
 import DashboardAccessProvider from "@/components/DashboardAccessProvider";
 import { getDashboardAccess } from "@/lib/dashboard-access";
 import "./globals.css";
@@ -136,7 +137,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             __html: `try{if(localStorage.getItem("blurMedia")==="true")document.documentElement.classList.add("blur-media")}catch(e){}`,
           }}
         />
-        <DashboardAccessProvider agencyName={agency?.name}>
+        <DashboardAccessProvider agencyName={agency?.name} canManage={agencyCanManage(agency)}>
         <CurrencyProvider>
         <BlurProvider>
           <div className="flex h-screen">

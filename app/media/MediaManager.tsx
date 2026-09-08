@@ -1,5 +1,5 @@
 "use client";
-import { AdminOnly, ReadOnlyEditor, useDashboardAccess } from "@/components/DashboardAccessProvider";
+import { ManagerOnly, ReadOnlyEditor, useDashboardAccess } from "@/components/DashboardAccessProvider";
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -1311,10 +1311,10 @@ export default function MediaManager({
       </div>
 
       <div className={tab === "photos" ? "grid gap-6" : "hidden"}>
-        <AdminOnly><PhotoUploadQueue cloneId={cloneId} onDone={() => {}} /></AdminOnly>
+        <ManagerOnly><PhotoUploadQueue cloneId={cloneId} onDone={() => {}} /></ManagerOnly>
         {photos.length > 0 ? (
           <>
-            <AdminOnly><BulkMediaEditor
+            <ManagerOnly><BulkMediaEditor
               cloneId={cloneId}
               type="photos"
               total={photos.length}
@@ -1322,7 +1322,7 @@ export default function MediaManager({
               onSelectAll={() => setSelectedPhotoIds(new Set(photos.map((photo) => photo.id)))}
               onClear={() => setSelectedPhotoIds(new Set())}
               onEditingChange={setEditingPhotos}
-            /></AdminOnly>
+            /></ManagerOnly>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
               {photos.map((p) => (
                 <PhotoCard
@@ -1344,10 +1344,10 @@ export default function MediaManager({
       </div>
 
       <div className={tab === "videos" ? "grid gap-6" : "hidden"}>
-        <AdminOnly><VideoUploadQueue cloneId={cloneId} onDone={() => {}} /></AdminOnly>
+        <ManagerOnly><VideoUploadQueue cloneId={cloneId} onDone={() => {}} /></ManagerOnly>
         {videos.length > 0 ? (
           <>
-            <AdminOnly><BulkMediaEditor
+            <ManagerOnly><BulkMediaEditor
               cloneId={cloneId}
               type="videos"
               total={videos.length}
@@ -1355,7 +1355,7 @@ export default function MediaManager({
               onSelectAll={() => setSelectedVideoIds(new Set(videos.map((video) => video.id)))}
               onClear={() => setSelectedVideoIds(new Set())}
               onEditingChange={setEditingVideos}
-            /></AdminOnly>
+            /></ManagerOnly>
             <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
               {videos.map((v) => (
                 <VideoCard
@@ -1377,7 +1377,7 @@ export default function MediaManager({
       </div>
 
       <div className={tab === "bundles" ? "grid gap-4" : "hidden"}>
-        <AdminOnly><CreateBundleForm cloneId={cloneId} /></AdminOnly>
+        <ManagerOnly><CreateBundleForm cloneId={cloneId} /></ManagerOnly>
         {bundles.length > 0 ? (
           bundles.map((b) => <BundleCard key={b.id} bundle={b} cloneId={cloneId} />)
         ) : (

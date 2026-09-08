@@ -1,5 +1,5 @@
 "use client";
-import { AdminOnly, ReadOnlyEditor, useDashboardAccess } from "./DashboardAccessProvider";
+import { AdminOnly, ManagerOnly, ReadOnlyEditor, useDashboardAccess } from "./DashboardAccessProvider";
 import { isMoxy } from "@/lib/agency-brand";
 
 import { useEffect, useMemo, useRef, useState } from "react";
@@ -238,7 +238,7 @@ export default function CloneForm({
           </Section>
         </div>
 
-        <AdminOnly>
+        <ManagerOnly>
         {/* Save bar - shared by Edit (except read-only Flow) + Monetization */}
         <div
           className={
@@ -246,9 +246,9 @@ export default function CloneForm({
             (tab === "identity" || tab === "config" || tab === "money" || tab === "advanced" ? "" : "hidden")
           }
         >
-          <Button type="button" variant="destructive" onClick={handleDelete}>
+          <AdminOnly><Button type="button" variant="destructive" onClick={handleDelete}>
             Delete creator
-          </Button>
+          </Button></AdminOnly>
 
           <div className="flex items-center gap-3">
             {step === "saving" && <span className="text-sm text-muted">Saving…</span>}
@@ -265,7 +265,7 @@ export default function CloneForm({
             )}
           </div>
         </div>
-        </AdminOnly>
+        </ManagerOnly>
       </form>
 
       {/* ── PPVs (its own page - own top bar, own upload actions) ─── */}

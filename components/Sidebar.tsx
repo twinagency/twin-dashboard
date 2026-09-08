@@ -144,7 +144,7 @@ export function SidebarContent({
   headerAction?: ReactNode;
   showAssistant?: boolean;
 }) {
-  const {readOnly,agencyName}=useDashboardAccess();
+  const {readOnly,isAgency,canManage,agencyName}=useDashboardAccess();
   const showUnavailable = readOnly && isMoxy(agencyName);
   const primaryLinks = NAV_LINKS.flatMap(link =>
     showUnavailable && link.kind === "tab" && link.tab === "ppvs"
@@ -190,7 +190,8 @@ export function SidebarContent({
     const colors = LINK_COLOR_CLASSES[link.color];
     const rowClass = "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold transition";
 
-    if (readOnly && link.kind === "route" && !agencyDashboardPath(link.href, agencyName)) {
+    if (isAgency && link.kind === "route" && !agencyDashboardPath(link.href, agencyName, canManage)) {
+      if (!showUnavailable) return null;
       return <div aria-disabled="true" className={rowClass + " cursor-not-allowed text-white/45"}>
         <Icon d={PATHS[link.icon]} className="h-[18px] w-[18px] text-white/35" />
         <span className="flex-1">{link.label}</span>
@@ -236,7 +237,7 @@ export function SidebarContent({
             <span className="mt-1.5 inline-block rounded border border-white/15 px-1.5 py-0.5 text-[9px] font-medium text-white/60">Not available</span>
           </div>
         </div>
-      </div> : readOnly ? <div className="px-7 py-4 text-sm text-white/75">{agencyName} · Read only</div> : <div className="shrink-0 px-4 pb-3 pt-4">
+      </div> : isAgency ? <div className="px-7 py-4 text-sm text-white/75">{agencyName} · {readOnly ? "Read only" : "Creator management"}</div> : <div className="shrink-0 px-4 pb-3 pt-4">
         <Link
           href="/clones/new"
           onClick={onNavigate}
@@ -266,11 +267,11 @@ export function SidebarContent({
               <span className="flex-1">More</span>
               <svg className={(moreOpen ? "rotate-180 " : "") + "h-4 w-4 transition-transform"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
             </button>
-            {moreOpen ? <div className="mt-1 space-y-1">{MORE_LINKS.filter(link => !readOnly || showUnavailable || link.kind === "tab" || agencyDashboardPath(link.href)).map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}</div> : null}
+            {moreOpen ? <div className="mt-1 space-y-1">{MORE_LINKS.filter(link => !isAgency || showUnavailable || link.kind === "tab" || agencyDashboardPath(link.href, agencyName, canManage)).map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}</div> : null}
           </div>}
         </div>
 
-        {showAssistant && !readOnly ? (
+        {showAssistant && !isAgency ? (
           <div className="mt-auto pt-4 [@media(max-height:850px)]:pt-2">
             <TwinAssistant />
           </div>

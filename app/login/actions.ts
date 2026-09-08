@@ -1,10 +1,13 @@
 "use server";
 
+import { guardDashboardAction } from "@/lib/agency-management";
+
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { SESSION_COOKIE, signSession, constantTimeEqual } from "@/lib/session";
 
 export async function login(_prevState: { error?: string } | undefined, fd: FormData) {
+  await guardDashboardAction("app/login/actions.ts#login", [_prevState, fd]);
   const password = String(fd.get("password") ?? "");
   const expected = process.env.DASHBOARD_PASSWORD;
   const next = String(fd.get("next") ?? "/");
@@ -29,6 +32,7 @@ export async function login(_prevState: { error?: string } | undefined, fd: Form
 }
 
 export async function logout() {
+  await guardDashboardAction("app/login/actions.ts#logout", []);
   (await cookies()).delete(SESSION_COOKIE);
   redirect("/login");
 }
