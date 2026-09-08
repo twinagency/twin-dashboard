@@ -38,6 +38,7 @@ export default function RevenueTooltipFix() {
 
         content.dataset.revenueTooltipEnhanced = "true";
         labelRow.dataset.paidCount = ` (${creatorRows.length})`;
+        totalRow.dataset.revenueTooltipTotal = "true";
 
         // Reorder visually without moving React-owned DOM nodes. Total is now
         // always visible immediately under the hovered date instead of being
@@ -46,6 +47,17 @@ export default function RevenueTooltipFix() {
         totalRow.style.order = "1";
         creatorRows.forEach((row) => {
           row.style.order = "2";
+
+          // Keep long creator names from hiding the amount on narrow phones.
+          const nameCell = row.firstElementChild;
+          const amountCell = row.lastElementChild;
+          if (nameCell instanceof HTMLElement) {
+            nameCell.style.minWidth = "0";
+            nameCell.style.flex = "1 1 auto";
+          }
+          if (amountCell instanceof HTMLElement) {
+            amountCell.style.flex = "0 0 auto";
+          }
         });
 
         // Let a long creator list scroll on desktop and touch devices rather
@@ -92,20 +104,18 @@ export default function RevenueTooltipFix() {
         font-variant-numeric: tabular-nums;
       }
 
-      [data-revenue-tooltip-enhanced="true"] > :first-child {
+      [data-revenue-tooltip-enhanced="true"] > :first-child,
+      [data-revenue-tooltip-total="true"] {
         flex: 0 0 auto;
       }
 
-      [data-revenue-tooltip-enhanced="true"] > :last-child {
-        flex: 0 0 auto;
-      }
-
-      [data-revenue-tooltip-enhanced="true"] > [style*="order: 1"] {
+      [data-revenue-tooltip-total="true"] {
         margin-top: 0;
         margin-bottom: 0.35rem;
       }
 
       [data-revenue-tooltip-enhanced="true"] .creator-name {
+        display: block;
         min-width: 0;
         overflow: hidden;
         text-overflow: ellipsis;
