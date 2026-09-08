@@ -1,5 +1,7 @@
 "use server";
 
+import { guardDashboardAction } from "@/lib/agency-management";
+
 import { supabaseAdmin } from "@/lib/supabase";
 import { revalidatePath } from "next/cache";
 import { invalidateCloneCaches } from "@/lib/query-cache";
@@ -18,6 +20,7 @@ import {
 import { API_KEY_FIELDS, CLONE_DEFAULTS_KEY } from "./fields";
 
 export async function saveApiKeys(fd: FormData) {
+  await guardDashboardAction("app/settings/actions.ts#saveApiKeys", [fd]);
   const now = new Date().toISOString();
   for (const { key } of API_KEY_FIELDS) {
     const v = String(fd.get(key) ?? "").trim();
@@ -35,6 +38,7 @@ export async function saveApiKeys(fd: FormData) {
 // Which keys are currently set (for a masked status display — never returns the
 // raw secret).
 export async function getApiKeyStatus(): Promise<Record<string, string>> {
+  await guardDashboardAction("app/settings/actions.ts#getApiKeyStatus", []);
   const { data } = await supabaseAdmin.from("app_settings").select("key,value").in("key", API_KEY_FIELDS.map((f) => f.key));
   const out: Record<string, string> = {};
   for (const r of data ?? []) {
@@ -52,6 +56,7 @@ export async function getApiKeyStatus(): Promise<Record<string, string>> {
 type CloneDefaults = Partial<Clone>;
 
 export async function getCloneDefaults(): Promise<CloneDefaults> {
+  await guardDashboardAction("app/settings/actions.ts#getCloneDefaults", []);
   const { data, error } = await supabaseAdmin.from("app_settings").select("value").eq("key", CLONE_DEFAULTS_KEY).maybeSingle();
   if (error) throw new Error(`Could not load fleet defaults: ${error.message}`);
   if (!data?.value) return sanitizeCloneDefaults(null);
@@ -64,6 +69,7 @@ export async function getCloneDefaults(): Promise<CloneDefaults> {
 }
 
 export async function saveCloneDefaults(fd: FormData): Promise<{ appliedFollowers: number }> {
+  await guardDashboardAction("app/settings/actions.ts#saveCloneDefaults", [fd]);
   const out: Record<string, unknown> = {};
   for (const k of OPERATIONAL_DEFAULT_SELECTS) {
     const v = fd.get(k);
@@ -158,6 +164,7 @@ async function applyConfigToClones(cloneIds: string[], fields: Record<string, un
 export type CloneDefaultStatus = { id: string; name: string; slug: string; usesDefault: boolean };
 
 export async function getCloneDefaultStatuses(): Promise<CloneDefaultStatus[]> {
+  await guardDashboardAction("app/settings/actions.ts#getCloneDefaultStatuses", []);
   const { data, error } = await supabaseAdmin.from("clones").select("id,name,slug,uses_default_config").order("name");
   if (error) throw new Error(`Could not load clone default status: ${error.message}`);
   return (data ?? []).map((r) => ({
@@ -174,6 +181,7 @@ export async function getCloneDefaultStatuses(): Promise<CloneDefaultStatus[]> {
 // or the next manual push below, so flipping this can never silently
 // overwrite a value the operator hasn't asked to apply yet.
 export async function setCloneUsesDefault(cloneId: string, usesDefault: boolean): Promise<void> {
+  await guardDashboardAction("app/settings/actions.ts#setCloneUsesDefault", [cloneId, usesDefault]);
   const { error } = await supabaseAdmin.from("clones").update({ uses_default_config: usesDefault }).eq("id", cloneId);
   if (error) throw new Error(error.message);
   revalidatePath("/settings");
@@ -187,6 +195,7 @@ export async function setCloneUsesDefault(cloneId: string, usesDefault: boolean)
 // just got switched from custom back to default, without editing the
 // template itself). Does not change any clone's uses_default_config.
 export async function pushDefaultsToClones(cloneIds: string[]): Promise<void> {
+  await guardDashboardAction("app/settings/actions.ts#pushDefaultsToClones", [cloneIds]);
   if (!cloneIds.length) return;
   const defaults = await getCloneDefaults();
   await applyConfigToClones(cloneIds, defaults as Record<string, unknown>);
@@ -203,6 +212,7 @@ export async function pushDefaultsToClones(cloneIds: string[]): Promise<void> {
 // are the SAME for every model — this project has no per-clone code paths — the
 // per-model list is what changes.
 export async function getModelsInUse(): Promise<{ model: string; clones: string[] }[]> {
+  await guardDashboardAction("app/settings/actions.ts#getModelsInUse", []);
   const { data } = await supabaseAdmin.from("clones").select("name,text_model,voice_model").order("name");
   const byModel = new Map<string, Set<string>>();
   for (const row of data ?? []) {

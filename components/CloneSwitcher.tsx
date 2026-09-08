@@ -35,7 +35,7 @@ export default function CloneSwitcher({
   activeCloneId: string | null;
 }) {
   const router = useRouter();
-  const {readOnly}=useDashboardAccess();
+  const {isAgency}=useDashboardAccess();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [open, setOpen] = useState(false);
@@ -76,7 +76,7 @@ export default function CloneSwitcher({
   function pick(id: string | null) {
     setOpen(false);
     startTransition(async () => {
-      if (readOnly) {
+      if (isAgency) {
         const response = await fetch("/agency/clone-scope",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({clone:id})});
         if (!response.ok) throw new Error("Unable to switch creator");
       } else await setCloneScope(id);
@@ -195,7 +195,7 @@ export default function CloneSwitcher({
             {filteredCreators.map((creator) => <CreatorCard key={creator.id} creator={creator} />)}
           </div>
 
-          {!readOnly && <Link
+          {!isAgency && <Link
             href="/clones/new"
             className="mt-3 flex items-center justify-center gap-2 rounded-md border border-dashed border-line px-3 py-2.5 text-sm text-muted transition hover:border-accent hover:text-accent"
           >

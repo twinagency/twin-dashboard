@@ -314,7 +314,7 @@ export default function ConfigSections({
   bundles?: BundleRow[];
 }) {
   const [tabState, setTabState] = useState<Tab>("identity");
-  const {readOnly, agencyName} = useDashboardAccess();
+  const {readOnly, isAgency, agencyName} = useDashboardAccess();
   const privateSettings = readOnly && isMoxy(agencyName);
   const tab = tabProp ?? tabState;
   const setTab = onTabChange ?? setTabState;
@@ -415,7 +415,7 @@ export default function ConfigSections({
 
       {/* ── CONFIG ──────────────────────────────────────────────── */}
       <div className={show("config")}>
-      {mode === "edit" && !readOnly && (
+      {mode === "edit" && !isAgency && (
         <Link
           href="/settings#fleet-defaults"
           className={
@@ -434,7 +434,7 @@ export default function ConfigSections({
         cols={2}
         hint="Bot token from @BotFather."
       >
-        {readOnly ? <div>
+        {isAgency ? <div>
           <FieldLabel label="Bot token" hint="Only the dashboard administrator can access this credential." />
           <div aria-label="Bot token concealed" className="flex min-h-10 items-center gap-3 rounded-lg border border-line bg-elev px-3">
             <span aria-hidden="true" className="select-none blur-[3px]">••••••••••••••••••••</span>

@@ -1,5 +1,7 @@
 "use server";
 
+import { guardDashboardAction } from "@/lib/agency-management";
+
 import sharp from "sharp";
 import { revalidatePath } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase";
@@ -95,6 +97,7 @@ function resolvePrice(fd: FormData, cap: Caption, guide: unknown): number {
 
 // ── Upload a single photo ────────────────────────────────────────────────────
 export async function uploadPhoto(cloneId: string, fd: FormData) {
+  await guardDashboardAction("app/media/actions.ts#uploadPhoto", [cloneId, fd]);
   const file = fd.get("file") as File | null;
   if (!file) throw new Error("no file");
 
@@ -149,6 +152,7 @@ export async function uploadPhoto(cloneId: string, fd: FormData) {
 
 // ── Upload a single video ────────────────────────────────────────────────────
 export async function uploadVideo(cloneId: string, fd: FormData) {
+  await guardDashboardAction("app/media/actions.ts#uploadVideo", [cloneId, fd]);
   const file = fd.get("file") as File | null;
   if (!file) throw new Error("no file");
 
@@ -194,6 +198,7 @@ export async function updatePhoto(
   photoId: string,
   fd: FormData,
 ) {
+  await guardDashboardAction("app/media/actions.ts#updatePhoto", [cloneId, photoId, fd]);
   const starValue = Number(fd.get("star_value") ?? 25);
   const update: Record<string, unknown> = {
     caption: String(fd.get("caption") ?? "").trim() || null,
@@ -224,6 +229,7 @@ export async function updateVideo(
   videoId: string,
   fd: FormData,
 ) {
+  await guardDashboardAction("app/media/actions.ts#updateVideo", [cloneId, videoId, fd]);
   const starValue = Number(fd.get("star_value") ?? 50);
   const update: Record<string, unknown> = {
     caption: String(fd.get("caption") ?? "").trim() || null,
@@ -249,6 +255,7 @@ export async function updateVideo(
 
 // ── Delete photo ─────────────────────────────────────────────────────────────
 export async function deletePhoto(cloneId: string, photoId: string, storagePath: string) {
+  await guardDashboardAction("app/media/actions.ts#deletePhoto", [cloneId, photoId, storagePath]);
   await supabaseAdmin.storage.from("media").remove([storagePath]);
   const { error } = await supabaseAdmin
     .from("photos")
@@ -276,6 +283,7 @@ export async function deletePhoto(cloneId: string, photoId: string, storagePath:
 
 // ── Delete video ─────────────────────────────────────────────────────────────
 export async function deleteVideo(cloneId: string, videoId: string, storagePath: string) {
+  await guardDashboardAction("app/media/actions.ts#deleteVideo", [cloneId, videoId, storagePath]);
   await supabaseAdmin.storage.from("media").remove([storagePath]);
   const { error } = await supabaseAdmin
     .from("videos")
@@ -313,6 +321,7 @@ export async function bulkSetMediaPrice(
   mediaIds: string[],
   starValue: number,
 ): Promise<number> {
+  await guardDashboardAction("app/media/actions.ts#bulkSetMediaPrice", [cloneId, type, mediaIds, starValue]);
   const ids = selectedMediaIds(mediaIds);
   if (!isAllowedPaidOrFreePrice(starValue)) {
     throw new Error(`Price must be 0 for free, or a whole number of at least ${MIN_PAID_MEDIA_PRICE_STARS} Stars`);
@@ -338,6 +347,7 @@ export async function bulkDeleteMedia(
   type: BulkMediaType,
   mediaIds: string[],
 ): Promise<number> {
+  await guardDashboardAction("app/media/actions.ts#bulkDeleteMedia", [cloneId, type, mediaIds]);
   const ids = selectedMediaIds(mediaIds);
   const { data: rows, error: readError } = await supabaseAdmin
     .from(type)
@@ -377,6 +387,7 @@ export async function bulkDeleteMedia(
 
 // ── Create bundle ────────────────────────────────────────────────────────────
 export async function createBundle(cloneId: string, fd: FormData): Promise<string> {
+  await guardDashboardAction("app/media/actions.ts#createBundle", [cloneId, fd]);
   const name = String(fd.get("name") ?? "").trim();
   if (!name) throw new Error("name required");
   // Validate before the welcome-bundle demotion below. An invalid price must
@@ -407,6 +418,7 @@ export async function createBundle(cloneId: string, fd: FormData): Promise<strin
 
 // ── Update bundle (name / caption / price / welcome) ─────────────────────────
 export async function updateBundle(cloneId: string, bundleId: string, fd: FormData) {
+  await guardDashboardAction("app/media/actions.ts#updateBundle", [cloneId, bundleId, fd]);
   const name = String(fd.get("name") ?? "").trim();
   if (!name) throw new Error("name required");
   // Keep the guard ahead of every write, including demoting another welcome
@@ -440,6 +452,7 @@ export async function updateBundle(cloneId: string, bundleId: string, fd: FormDa
 
 // ── Delete bundle ────────────────────────────────────────────────────────────
 export async function deleteBundle(cloneId: string, bundleId: string) {
+  await guardDashboardAction("app/media/actions.ts#deleteBundle", [cloneId, bundleId]);
   // items + storage paths — fetch first
   const { data: items } = await supabaseAdmin
     .from("photo_bundle_items")
@@ -461,6 +474,7 @@ export async function deleteBundle(cloneId: string, bundleId: string) {
 
 // ── Add photo to bundle ──────────────────────────────────────────────────────
 export async function addBundleItem(bundleId: string, cloneId: string, fd: FormData) {
+  await guardDashboardAction("app/media/actions.ts#addBundleItem", [bundleId, cloneId, fd]);
   const file = fd.get("file") as File | null;
   if (!file) throw new Error("no file");
 
@@ -495,6 +509,7 @@ export async function addBundleItem(bundleId: string, cloneId: string, fd: FormD
 
 // ── Remove bundle item ───────────────────────────────────────────────────────
 export async function removeBundleItem(cloneId: string, itemId: string, storagePath: string) {
+  await guardDashboardAction("app/media/actions.ts#removeBundleItem", [cloneId, itemId, storagePath]);
   await supabaseAdmin.storage.from("media").remove([storagePath]);
   const { error } = await supabaseAdmin
     .from("photo_bundle_items")
@@ -506,6 +521,7 @@ export async function removeBundleItem(cloneId: string, itemId: string, storageP
 
 // ── Get signed preview URL (short-lived, private bucket) ────────────────────
 export async function getSignedUrl(path: string): Promise<string> {
+  await guardDashboardAction("app/media/actions.ts#getSignedUrl", [path]);
   const { data, error } = await supabaseAdmin.storage
     .from("media")
     .createSignedUrl(path, 300); // 5 min
@@ -516,6 +532,7 @@ export async function getSignedUrl(path: string): Promise<string> {
 // ── Category pricing guide (moved here from Config/Money — lives with the
 // media it prices, per-clone) ───────────────────────────────────────────────
 export async function updateCategoryPricing(cloneId: string, guide: Record<string, number>) {
+  await guardDashboardAction("app/media/actions.ts#updateCategoryPricing", [cloneId, guide]);
   const safeGuide = normalizeSafeCategoryGuide(guide);
   if (!safeGuide) {
     throw new Error(`Every category price must be a whole number of at least ${MIN_PAID_MEDIA_PRICE_STARS} Stars`);
@@ -621,6 +638,7 @@ async function loadRepricePlan(cloneId: string, target: RepriceTarget): Promise<
 }
 
 export async function previewRepriceMedia(cloneId: string, target: RepriceTarget): Promise<RepricePreview> {
+  await guardDashboardAction("app/media/actions.ts#previewRepriceMedia", [cloneId, target]);
   const { rows: _rows, ...preview } = await loadRepricePlan(cloneId, target);
   return preview;
 }
@@ -630,6 +648,7 @@ export async function repriceMedia(
   target: RepriceTarget,
   confirmationPhrase: string,
 ): Promise<{ photos: number; videos: number; skippedConcurrent: number; failed: number }> {
+  await guardDashboardAction("app/media/actions.ts#repriceMedia", [cloneId, target, confirmationPhrase]);
   const plan = await loadRepricePlan(cloneId, target);
   if (!plan.changes) throw new Error("There are no safe price changes to apply");
   if (confirmationPhrase !== plan.confirmationPhrase) {

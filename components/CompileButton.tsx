@@ -12,7 +12,7 @@ export default function CompileButton({ cloneId }: { cloneId: string }) {
     setState("running");
     setMsg("");
     try {
-      const res = await fetch(`/api/compile?id=${cloneId}`);
+      const res = await fetch("/api/compile", { method: "POST", headers: { "content-type": "application/json" }, body: JSON.stringify({ id: cloneId }) });
       const json = await res.json();
       if (!res.ok) throw new Error(json.error ?? "compile failed");
       setState("done");

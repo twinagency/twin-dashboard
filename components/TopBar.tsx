@@ -28,7 +28,7 @@ export default function TopBar({
   activeCloneId: string | null;
   allTimeStars: number;
 }) {
-  const {readOnly}=useDashboardAccess();
+  const {isAgency}=useDashboardAccess();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const pageMeta = getPageMeta(pathname, clones, activeCloneId);
@@ -69,7 +69,7 @@ export default function TopBar({
         <CurrencyToggle compact />
         <BlurToggle />
         <div className="hidden h-5 w-px shrink-0 bg-line sm:block" />
-        <form action={readOnly ? "/agency/logout" : logout} method={readOnly ? "post" : undefined}>
+        <form action={isAgency ? "/agency/logout" : logout} method={isAgency ? "post" : undefined}>
           <button
             type="submit"
             title="Sign out"
@@ -90,7 +90,7 @@ export default function TopBar({
               <polyline points="16 17 21 12 16 7" />
               <line x1="21" y1="12" x2="9" y2="12" />
             </svg>
-            {readOnly && <span className="hidden text-xs font-medium sm:inline">Sign out</span>}
+            {isAgency && <span className="hidden text-xs font-medium sm:inline">Sign out</span>}
           </button>
         </form>
       </div>

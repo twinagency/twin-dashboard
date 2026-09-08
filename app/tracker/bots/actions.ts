@@ -1,5 +1,7 @@
 "use server";
 
+import { guardDashboardAction } from "@/lib/agency-management";
+
 import { revalidatePath } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase";
 
@@ -13,6 +15,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 // anyone can flip from a dashboard.
 
 export async function updateBot(slug: string, fd: FormData): Promise<void> {
+  await guardDashboardAction("app/tracker/bots/actions.ts#updateBot", [slug, fd]);
   const num = (key: string, min: number, max: number, fallback: number) => {
     const n = Number(fd.get(key));
     if (!Number.isFinite(n)) return fallback;
@@ -39,6 +42,7 @@ export async function updateBot(slug: string, fd: FormData): Promise<void> {
 }
 
 export async function toggleBot(slug: string, on: boolean): Promise<void> {
+  await guardDashboardAction("app/tracker/bots/actions.ts#toggleBot", [slug, on]);
   await supabaseAdmin
     .from("tracker_bots")
     .update({ enabled: on, updated_at: new Date().toISOString() })

@@ -1,5 +1,7 @@
 "use server";
 
+import { guardDashboardAction } from "@/lib/agency-management";
+
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
 import { supabaseAdmin } from "@/lib/supabase";
@@ -7,6 +9,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 // All actions operate on a single fan (user row) in the "Allie AI New" project.
 
 export async function setCredits(fd: FormData) {
+  await guardDashboardAction("app/clones/[id]/fans/[userId]/actions.ts#setCredits", [fd]);
   const userId = String(fd.get("userId"));
   const cloneId = String(fd.get("cloneId"));
   const credits = Math.max(0, Math.floor(Number(fd.get("credits")) || 0));
@@ -21,6 +24,7 @@ export async function setCredits(fd: FormData) {
 // Zero the lifetime usage counters (messages sent + purchased). Does not touch
 // the live credit balance — that's `setCredits`.
 export async function resetCounters(fd: FormData) {
+  await guardDashboardAction("app/clones/[id]/fans/[userId]/actions.ts#resetCounters", [fd]);
   const userId = String(fd.get("userId"));
   const cloneId = String(fd.get("cloneId"));
   const { error } = await supabaseAdmin
@@ -32,6 +36,7 @@ export async function resetCounters(fd: FormData) {
 }
 
 export async function toggleActive(fd: FormData) {
+  await guardDashboardAction("app/clones/[id]/fans/[userId]/actions.ts#toggleActive", [fd]);
   const userId = String(fd.get("userId"));
   const cloneId = String(fd.get("cloneId"));
   const active = fd.get("active") === "true";
@@ -47,6 +52,7 @@ export async function toggleActive(fd: FormData) {
 // FK on delete cascade) plus chat_history, which is keyed by (clone_id,
 // telegram_id) and has no FK so won't cascade on its own.
 export async function deleteUser(fd: FormData) {
+  await guardDashboardAction("app/clones/[id]/fans/[userId]/actions.ts#deleteUser", [fd]);
   const userId = String(fd.get("userId"));
   const cloneId = String(fd.get("cloneId"));
   const telegramId = String(fd.get("telegramId"));

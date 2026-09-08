@@ -1,5 +1,9 @@
 "use server";
 
+import { guardDashboardAction } from "@/lib/agency-management";
+
+import { getDashboardAccess } from "@/lib/dashboard-access";
+import { AGENCY_PROTECTED_CLONE_FIELDS } from "@/lib/agency-write";
 import { revalidatePath } from "next/cache";
 import { invalidateCloneCaches } from "@/lib/query-cache";
 import { supabaseAdmin } from "@/lib/supabase";
@@ -1035,6 +1039,7 @@ const DEFAULT_DRIP_STEPS = [
 // Step 1 of the one-page create flow: insert the clone row from settings only
 // (prompts compiled later, media uploaded later by the client). Returns the new id.
 export async function createCloneRow(fd: FormData): Promise<string> {
+  await guardDashboardAction("app/clones/actions.ts#createCloneRow", [fd]);
   const name = str(fd, "name");
   const bot_token = str(fd, "bot_token");
   if (!name || !bot_token) throw new Error("Name and bot token are required");
@@ -1079,6 +1084,7 @@ export async function createCloneRow(fd: FormData): Promise<string> {
 }
 
 export async function updateClone(id: string, fd: FormData) {
+  await guardDashboardAction("app/clones/actions.ts#updateClone", [id, fd]);
   const image = fd.get("dashboard_profile_image");
   const previousImagePath = str(fd, "dashboard_profile_image_path");
   let uploadedImagePath: string | null = null;
@@ -1098,6 +1104,9 @@ export async function updateClone(id: string, fd: FormData) {
   }
 
   const row = rowFromForm(fd);
+  if (await getDashboardAccess()) {
+    for (const key of AGENCY_PROTECTED_CLONE_FIELDS) delete (row as Record<string, unknown>)[key];
+  }
   if (row.bot_token) await assertBotTokenFree(row.bot_token, id);
 
   let { error } = await supabaseAdmin
@@ -1134,6 +1143,7 @@ export async function updateClone(id: string, fd: FormData) {
 }
 
 export async function deleteClone(id: string) {
+  await guardDashboardAction("app/clones/actions.ts#deleteClone", [id]);
   const { error } = await supabaseAdmin.from("clones").delete().eq("id", id);
   if (error) throw new Error(error.message);
   revalidatePath("/");
@@ -1144,6 +1154,7 @@ export async function deleteClone(id: string) {
 // One-click pause/resume: flip status active↔paused. The running bot reconciles
 // within ~30s (index.ts) so it goes offline/online without a redeploy.
 export async function toggleClonePause(id: string, pause: boolean) {
+  await guardDashboardAction("app/clones/actions.ts#toggleClonePause", [id, pause]);
   const { error } = await supabaseAdmin
     .from("clones")
     .update({ status: pause ? "paused" : "active", updated_at: new Date().toISOString() })
@@ -1156,6 +1167,7 @@ export async function toggleClonePause(id: string, pause: boolean) {
 
 // Compile this clone's prompts from its intake answers (AI fills the templates).
 export async function compileCloneAction(id: string) {
+  await guardDashboardAction("app/clones/actions.ts#compileCloneAction", [id]);
   await compileClone(id);
   revalidatePath("/");
   revalidatePath("/clones");
@@ -1164,6 +1176,7 @@ export async function compileCloneAction(id: string) {
 }
 
 export async function setStatus(id: string, status: "active" | "paused") {
+  await guardDashboardAction("app/clones/actions.ts#setStatus", [id, status]);
   const { error } = await supabaseAdmin
     .from("clones")
     .update({ status, updated_at: new Date().toISOString() })
@@ -1186,6 +1199,7 @@ export async function setStatus(id: string, status: "active" | "paused") {
 // action: the field must be one of these named columns, never an arbitrary
 // string, and it can only ever set true/false.
 export async function setCloneToggle(id: string, field: CloneToggleField, value: boolean) {
+  await guardDashboardAction("app/clones/actions.ts#setCloneToggle", [id, field, value]);
   if (!CLONE_TOGGLE_FIELDS.includes(field)) throw new Error(`field not allowed: ${String(field)}`);
   if (typeof value !== "boolean") throw new Error("value must be a boolean");
   const { error } = await supabaseAdmin
@@ -1206,6 +1220,7 @@ export async function setCloneToggle(id: string, field: CloneToggleField, value:
 // of the named CLONE_DIAL_FIELDS keys, and value must be one of THAT field's
 // exact allowed enum steps — an out-of-range value is rejected, never clamped.
 export async function setCloneDial(id: string, field: CloneDialField, value: string) {
+  await guardDashboardAction("app/clones/actions.ts#setCloneDial", [id, field, value]);
   const allowed = CLONE_DIAL_FIELDS[field];
   if (!allowed) throw new Error(`field not allowed: ${String(field)}`);
   if (!(allowed as readonly string[]).includes(value)) {

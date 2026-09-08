@@ -1634,7 +1634,7 @@ export default async function FansPage({
                       one, and an always-visible button invites a misclick on the
                       single safety verdict with a real-world cost if reversed. */}
                   {(!!selected.minor_flagged_at || selected.blocked_reason === "minor") && (
-                    <MutationForm action={clearMinorFlag}>
+                    <MutationForm adminOnly action={clearMinorFlag}>
                       <input type="hidden" name="userId" value={selected.id} />
                       <ConfirmSubmit
                         message="Clear the minor gate for this fan? Only do this if you have READ THE CONVERSATION and are satisfied he is an adult who was flagged by mistake. This restores all photos, videos, bundles and voice notes for him permanently."
@@ -1663,7 +1663,7 @@ export default async function FansPage({
                     </ConfirmSubmit>
                   </MutationForm>
 
-                  <MutationForm action={deleteUser}>
+                  <MutationForm adminOnly action={deleteUser}>
                     <input type="hidden" name="userId" value={selected.id} />
                     <input type="hidden" name="cloneId" value={selected.clone_id} />
                     <input type="hidden" name="telegramId" value={selected.telegram_id} />

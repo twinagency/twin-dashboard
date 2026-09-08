@@ -1,3 +1,5 @@
+import { requireManagedClone } from "@/lib/agency-management";
+import { trustedFormOrigin } from "@/lib/form-origin";
 import { cloneBotToken } from "@/lib/clone-credentials";
 import { dashboardReader } from "@/lib/dashboard-reader";
 import { NextRequest, NextResponse } from "next/server";
@@ -113,10 +115,12 @@ async function read(req: NextRequest) {
 
 // ── POST: perform one action (multipart — photo/story actions carry a file). ─
 export async function POST(req: NextRequest) {
+  if (!trustedFormOrigin(req)) return NextResponse.json({error:"Untrusted request origin"},{status:403});
   try {
     const form = await req.formData();
     const cloneId = String(form.get("cloneId") ?? "");
     const action = String(form.get("action") ?? "");
+    try { await requireManagedClone(cloneId); } catch { return NextResponse.json({error:"Creator access denied"},{status:403}); }
     if (!cloneId || !action) return NextResponse.json({ error: "cloneId and action are required" }, { status: 400 });
     const rightDef = RIGHT_FOR_ACTION[action];
     if (!rightDef) return NextResponse.json({ error: `unknown action "${action}"` }, { status: 400 });
