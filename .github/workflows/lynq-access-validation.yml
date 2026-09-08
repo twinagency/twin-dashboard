@@ -1,0 +1,21 @@
+name: Lynq access validation
+on:
+  push:
+    branches: [codex/lynq-scoped-management]
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Package source for scoped access review
+        run: |
+          git ls-files -z -- app components lib scripts contracts middleware.ts instrumentation.ts package.json package-lock.json tsconfig.json next.config.mjs postcss.config.mjs .github/workflows CLAUDE.md | tar --null -T - -czf /tmp/dashboard-review.tar.gz
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lynq-access-review
+          path: /tmp/dashboard-review.tar.gz
+          retention-days: 1
