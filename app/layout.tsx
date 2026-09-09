@@ -1,3 +1,4 @@
+import { isTwinLoginPath } from "@/lib/login-routing";
 import { agencyCanManage } from "@/lib/agency-management-policy";
 import DashboardAccessProvider from "@/components/DashboardAccessProvider";
 import { getDashboardAccess } from "@/lib/dashboard-access";
@@ -36,7 +37,7 @@ export async function generateMetadata(): Promise<Metadata> {
   const pathname = (await headers()).get("x-pathname");
   const agencyName = pathname && isAgencyPath(pathname)
     ? pathAgencyName(pathname)
-    : pathname === "/login" ? undefined : (await getDashboardAccess())?.name;
+    : isTwinLoginPath(pathname) ? undefined : (await getDashboardAccess())?.name;
   return agencyName ? {
     title: `${agencyName} Dashboard`,
     description: `${agencyName} creator dashboard`,
@@ -56,11 +57,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // same as it would once real auth is re-enabled.
   const pathname = (await headers()).get("x-pathname");
   // The agency shell must never fetch or serialize the internal fleet data.
-  if (pathname === "/login" || (pathname && isAgencyPath(pathname))) {
+  if (isTwinLoginPath(pathname) || (pathname && isAgencyPath(pathname))) {
     return <html lang="en" data-agency={pathname && isAgencyPath(pathname) && isMoxy(pathAgencyName(pathname)) ? "moxy" : undefined} className={cn("font-sans", inter.variable, plexMono.variable, spaceGrotesk.variable, interTight.variable)}><body className="min-h-screen bg-bg">{children}</body></html>;
   }
   const devBypass =
-    pathname !== "/login" &&
+    !isTwinLoginPath(pathname) &&
     (process.env.NODE_ENV !== "production");
   const agency = await getDashboardAccess();
   const authed = !!agency || devBypass || (await isAuthed());

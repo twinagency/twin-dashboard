@@ -106,7 +106,7 @@ async function main() {
   assert.equal(explicit.searchParams.get("select"),"id");
   assert.ok(scoped.searchParams.get("and")!.includes(creator));assert.ok(scoped.searchParams.get("and")!.includes(secondCreator));assert.ok(!scoped.searchParams.get("and")!.includes(outsider));
   assert.notEqual(accessCacheKey(moxy),accessCacheKey({...moxy,id:lynqId}));
-  assert.equal(pathAgencyName("/moxy/auth"),"Moxy");assert.equal(isMoxy("Moxy"),true);assert.equal(isMoxy("LYNQ"),false);assert.equal(portalLoginPath("https://evil.example"),"/lynq");
+  assert.equal(pathAgencyName("/moxy/auth"),"Moxy");assert.equal(isMoxy("Moxy"),true);assert.equal(isMoxy("LYNQ"),false);assert.equal(portalLoginPath("https://evil.example"),"/link");
   const sidebar=readFileSync("components/Sidebar.tsx","utf8");
   assert.match(sidebar,/aria-disabled="true"/);assert.match(sidebar,/Not available/);assert.match(sidebar,/!readOnly \|\| showUnavailable/);
   assert.match(sidebar,/showUnavailable \? <div/);

@@ -58,6 +58,17 @@ async function main() {
     method:"POST",headers:{origin:source},body:new URLSearchParams({password,...extra}),
   });
   try {
+    for (const alias of ["/link", "/lynq"]) {
+      const aliasReq = (password: string, source = origin) => new NextRequest(`${origin}${alias}/auth`, {method:"POST", headers:{origin:source}, body:new URLSearchParams({password})});
+      assert.equal(loginPage(new NextRequest(`${origin}${alias}/auth`)).headers.get("location"), `${origin}${alias}`);
+      assert.equal((await login(aliasReq("wrong-password"))).headers.get("location"), `${origin}${alias}?error=1`);
+      assert.equal((await login(aliasReq("test-lynq-password", "https://evil.example"))).status, 403);
+      const ok = await login(aliasReq("test-lynq-password"));
+      assert.equal(ok.headers.get("location"), `${origin}/revenue`);
+      assert.equal(ok.cookies.get(AGENCY_COOKIE)?.value, "test-session");
+      assert.equal(ok.cookies.get(SESSION_COOKIE)?.value, "");
+    }
+    tokenRequests = 0;
     assert.equal((await login(request("test-lynq-password","https://evil.example"))).status,403);
     assert.equal(tokenRequests,0);
     assert.equal(loginPage(new NextRequest(`${origin}/lynq/auth`)).headers.get("location"),`${origin}/lynq`,"Opening the submission URL must not show a blank 405 page");
@@ -114,10 +125,10 @@ async function main() {
     const setup=await middleware(new NextRequest(`${origin}/login?next=/agency-admin/lynq-password`,{headers:{cookie:`${SESSION_COOKIE}=${signedAdmin}`}}));
     assert.equal(setup.headers.get("location"),`${origin}/agency-admin/lynq-password`);
     const unsafeNext=await middleware(new NextRequest(`${origin}/login?next=//evil.example`,{headers:{cookie:`${SESSION_COOKIE}=${signedAdmin}`}}));
-    assert.equal(unsafeNext.headers.get("location"),`${origin}/`);
+    assert.equal(unsafeNext.headers.get("location"),`${origin}/revenue`);
     assert.equal((await middleware(new NextRequest(`${origin}/login`,{headers:{cookie:`${cookie}; ${SESSION_COOKIE}=${signedAdmin}`}}))).status,200,"Admin sign-in remains reachable when switching accounts");
     const exited=await logout(new NextRequest(`${origin}/agency/logout`,{method:"POST",headers:{origin,cookie}}));
-    assert.equal(exited.headers.get("location"),`${origin}/lynq`);
+    assert.equal(exited.headers.get("location"),`${origin}/link`);
     assert.equal(exited.cookies.get(AGENCY_COOKIE)?.value,"");
     assert.equal(logoutScope,"local","One operator signing out must not sign out the other");
     const admin=await adminLogin(new NextRequest(`${origin}/admin-auth`,{method:"POST",headers:{origin},body:new URLSearchParams({password:"test-admin-password"})}));

@@ -8,20 +8,22 @@ import { SESSION_COOKIE } from "@/lib/session";
 import { CLONE_SCOPE_COOKIE } from "@/lib/clone-scope";
 import { dashboardOrigin, trustedFormOrigin } from "@/lib/form-origin";
 
-// This is the existing read-only LYNQ login, shared by its two operators.
+// This is the existing LYNQ login, shared by its two operators.
 // Neither the account nor its agency can be selected by a submitted form.
 const LYNQ_AGENCY_ID = "74b03b70-397e-49ab-841f-8adb8241d87d";
 const LYNQ_LOGIN_USER_ID = "6e6491b9-8db0-43f5-b04a-d4509318dac9";
 
+const loginPath = (req: NextRequest) => req.nextUrl.pathname === "/link/auth" ? "/link" : "/lynq";
+
 export function GET(req: NextRequest) {
-  return NextResponse.redirect(new URL("/lynq", dashboardOrigin(req)), 303);
+  return NextResponse.redirect(new URL(loginPath(req), dashboardOrigin(req)), 303);
 }
 
 export async function POST(req: NextRequest) {
   const json = req.headers.get("accept")?.includes("application/json");
   const failed = (error = "credentials", status = 401) => json
     ? NextResponse.json({ ok: false, error }, { status, headers: { "Cache-Control": "no-store" } })
-    : NextResponse.redirect(new URL("/lynq?error=1", dashboardOrigin(req)), 303);
+    : NextResponse.redirect(new URL(`${loginPath(req)}?error=1`, dashboardOrigin(req)), 303);
   if (!trustedFormOrigin(req) || req.headers.has("next-action")) return NextResponse.json({ ok: false, error: "origin" }, { status: 403 });
   try {
   const password = String((await req.formData()).get("password") ?? "");
