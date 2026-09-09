@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { setTimeout as delay } from 'node:timers/promises';
 
-const revision = 'polish-20260910';
+const revision = 'compact-mobile-20260910';
 const httpOnly = process.argv.includes('--http-only');
 const port = 3128;
 const origin = process.env.AVA_CHECK_ORIGIN || `http://127.0.0.1:${port}`;
@@ -74,7 +74,10 @@ async function main() {
       const dimensions=await page.evaluate(()=>({
         width:innerWidth, overflow:document.documentElement.scrollWidth-innerWidth,
         offscreen:[...document.querySelectorAll('.ava-site *')].filter(e=>{const r=e.getBoundingClientRect();return r.width>0&&(r.left < -1||r.right>innerWidth+1);}).map(e=>String(e.className)),
-        phones:[...document.querySelectorAll('.ava-phone')].map(e=>({width:e.offsetWidth,height:e.offsetHeight,overflow:e.querySelector('.ava-chat').scrollHeight-e.querySelector('.ava-chat').clientHeight})),
+        phones:[...document.querySelectorAll('.ava-phone')].map(e=>({width:e.offsetWidth,height:e.offsetHeight,renderedWidth:e.getBoundingClientRect().width,renderedHeight:e.getBoundingClientRect().height,overflow:e.querySelector('.ava-chat').scrollHeight-e.querySelector('.ava-chat').clientHeight})),
+        dashboardWidth:document.querySelector('.ava-dashboard-frame').getBoundingClientRect().width,
+        dashboardHeight:document.querySelector('.ava-dashboard-frame').getBoundingClientRect().height,
+        phoneStageHeight:document.querySelector('.ava-phone-stage').offsetHeight,
         moneyFont:parseFloat(getComputedStyle(document.querySelector('.ava-revenue-value strong')).fontSize),
         moneyColor:getComputedStyle(document.querySelector('.ava-revenue-value strong')).color,
         sidebar:getComputedStyle(document.querySelector('.ava-dashboard-sidebar')).display,
@@ -92,8 +95,12 @@ async function main() {
       if(width<=680) {
         assert.equal(dimensions.sidebar,'none');
         assert.equal(dimensions.displayedStats,2);
-        assert.ok(dimensions.moneyFont>=28);
+        assert.ok(dimensions.moneyFont>=22, `${width}: revenue remains legible in a compact preview`);
         assert.ok(dimensions.phones.every(p=>p.width<=142&&p.height<=307));
+        assert.ok(dimensions.phones.every(p=>p.renderedWidth<=125&&p.renderedHeight<=248), `${width}: visible phone composition is reduced`);
+        assert.ok(dimensions.phoneStageHeight<=266, `${width}: scaled phones must not leave oversized blank space`);
+        assert.ok(dimensions.dashboardWidth<=302, `${width}: dashboard preview must stay compact`);
+        assert.ok(dimensions.dashboardHeight<=420, `${width}: preview must not become a full-height mobile application`);
         await page.locator('.ava-mobile-nav summary').click();
         assert.equal(await page.locator('.ava-mobile-nav').getAttribute('open'),'');
         assert.ok(await page.locator('.ava-mobile-nav nav').isVisible());
