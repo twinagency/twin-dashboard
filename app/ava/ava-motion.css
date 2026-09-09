@@ -2,8 +2,17 @@
 .ava-site .ava-chat-history { display: contents; }
 .ava-site .ava-dashboard-bars > i { transform-origin: 50% 100%; }
 
+/* A discreet, keyboard-accessible pause control, without a caption beneath the phones. */
+.ava-site .ava-motion-toggle { display: grid; place-items: center; width: 24px; height: 24px; flex: none; margin: 0 auto; padding: 5px; border: 0; border-radius: 50%; background: transparent; color: var(--ava-muted); cursor: pointer; }
+.ava-site .ava-motion-toggle[hidden] { display: none; }
+.ava-site .ava-motion-toggle svg { width: 14px; height: 14px; }
+.ava-site .ava-motion-toggle .ava-motion-play { display: none; }
+.ava-site .ava-motion-toggle[aria-pressed="true"] .ava-motion-play { display: block; }
+.ava-site .ava-motion-toggle[aria-pressed="true"] .ava-motion-pause { display: none; }
+.ava-site .ava-motion-toggle:hover { color: var(--ava-cherry); background: rgb(122 23 52 / .06); }
+
 @media (prefers-reduced-motion: no-preference) {
-  /* One existing conversation scrolls inside its fixed Telegram viewport.
+  /* The same history loops inside its fixed Telegram viewport.
      The header, composer, phone frame and second phone stay completely still. */
   .ava-site .ava-chat[data-ava-scroll-ready="true"] {
     display: block;
@@ -47,5 +56,6 @@
 
 @media (prefers-reduced-motion: reduce) {
   .ava-site .ava-chat-history { display: contents; }
+  .ava-site .ava-motion-toggle { display: none; }
   .ava-site .ava-dashboard-bars > i, .ava-site .ava-button > .ava-icon { transform: none; }
 }
