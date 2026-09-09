@@ -1,4 +1,5 @@
 import { isMoxy } from "@/lib/agency-brand";
+import { JESS_KATE_PORTAL } from "@/lib/partner-portals";
 
 export default function TwinWordmark({
   className = "",
@@ -12,6 +13,23 @@ export default function TwinWordmark({
   agencyName?: string;
 }) {
   if (isMoxy(agencyName)) return <img src="/moxy/logo.png" alt="Moxy, Los Angeles and Miami" width={1100} height={400} className={`block h-auto w-40 max-w-full ${inverse ? "" : "invert"} ${className}`} />;
+  if (agencyName === JESS_KATE_PORTAL.name) {
+    return (
+      <span
+        aria-label="Ava"
+        className={`inline-block leading-none ${inverse ? "text-[#f7f2ec]" : "text-[#3f0c1c]"} ${className}`}
+        style={{
+          fontFamily: 'Georgia, "Times New Roman", serif',
+          fontStyle: "italic",
+          fontSize: "34px",
+          fontWeight: 700,
+          letterSpacing: "-0.06em",
+        }}
+      >
+        Ava
+      </span>
+    );
+  }
   return (
     <span
       className={`inline-flex items-baseline gap-2 ${agencyName ? "whitespace-normal" : "whitespace-nowrap"} leading-none ${inverse ? "text-white" : "text-black"} ${className}`}
