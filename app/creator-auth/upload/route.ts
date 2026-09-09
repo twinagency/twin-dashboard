@@ -3,9 +3,10 @@ import { cookies } from "next/headers";
 import { randomUUID } from "crypto";
 import { supabaseAdmin } from "@/lib/supabase";
 import { CREATOR_SESSION_COOKIE, verifyCreatorSession } from "@/lib/creator-session";
+import { creatorRequestUrl } from "@/lib/creator-origin";
 
 function back(req: Request, status: string) {
-  const url = new URL("/creator/onboarding", req.url);
+  const url = creatorRequestUrl(req, "/creator/onboarding");
   url.searchParams.set("status", status);
   return NextResponse.redirect(url, 303);
 }
@@ -16,7 +17,7 @@ function safeName(name: string) {
 
 export async function POST(req: Request) {
   const session = await verifyCreatorSession((await cookies()).get(CREATOR_SESSION_COOKIE)?.value);
-  if (!session) return NextResponse.redirect(new URL("/creator/login", req.url), 303);
+  if (!session) return NextResponse.redirect(creatorRequestUrl(req, "/creator/login"), 303);
 
   const form = await req.formData();
   const kind = String(form.get("kind") || "");
