@@ -38,11 +38,9 @@ jobs:
         env:
           NEXT_TELEMETRY_DISABLED: "1"
 
-      # ── ADDED 2026-08-18 ────────────────────────────────────────────────
-      # The dashboard has had eight behavioural suites since long before this
-      # file existed and CI ran NONE of them - it ran tsc and next build and
-      # called that a pass. This command contains only repo-local checks;
-      # database-backed rollup/tiles checks stay out of CI because no production
-      # Supabase credentials are exposed to a build runner.
+      # These checks use isolated fixtures, never production database credentials.
       - name: Behavioural checks
         run: npm run test:offline
+
+      - name: Production login routing smoke
+        run: node scripts/check-login-pages.mjs

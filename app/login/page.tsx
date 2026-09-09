@@ -1,4 +1,5 @@
 import LoginForm from "./LoginForm";
+import { safeAdminNext } from "@/lib/login-routing";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import TwinWordmark from "@/components/TwinWordmark";
 
@@ -40,7 +41,7 @@ export default async function LoginPage({
             <p className="text-sm text-muted">Use your dashboard admin password.</p>
           </CardHeader>
           <CardContent className="px-7 pb-7">
-            <LoginForm error={!!error} next={next && next.startsWith("/") ? next : "/"} />
+            <LoginForm error={!!error} next={safeAdminNext(next)} />
           </CardContent>
         </Card>
       </section>

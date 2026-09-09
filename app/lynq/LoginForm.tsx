@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 
-export default function LynqLoginForm({ initialError = false }: { initialError?: boolean }) {
+export default function LynqLoginForm({ initialError = false, action = "/lynq/auth" }: { initialError?: boolean; action?: "/lynq/auth" | "/link/auth" }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState(initialError ? "Unable to sign in. Please check your password and try again." : "");
 
@@ -15,7 +15,7 @@ export default function LynqLoginForm({ initialError = false }: { initialError?:
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 20000);
     try {
-      const response = await fetch("/lynq/auth", {
+      const response = await fetch(action, {
         method: "POST", body, credentials: "same-origin", cache: "no-store",
         headers: { Accept: "application/json" }, signal: controller.signal,
       });
@@ -35,7 +35,7 @@ export default function LynqLoginForm({ initialError = false }: { initialError?:
     }
   }
 
-  return <form action="/lynq/auth" method="post" onSubmit={submit} className="space-y-5" aria-busy={pending}>
+  return <form action={action} method="post" onSubmit={submit} className="space-y-5" aria-busy={pending}>
     {error && <p role="alert" className="text-sm text-crit">{error}</p>}
     <label className="block text-sm font-medium text-ink">Password
       <input name="password" type="password" autoComplete="current-password" required maxLength={256} disabled={pending} className="mt-2 w-full rounded-lg border border-line bg-white p-3" />
