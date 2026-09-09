@@ -32,7 +32,7 @@
     "test:offline": "npm run test:paging && npm run test:callsites && npm run test:media && npm run test:config-safety && npm run test:spend && npm run test:report && npm run test:drivers && npm run test:ledger && npm run test:window && npm run test:dossier && npm run test:thread && npm run test:consistency && npm run test:cohorts && npm run test:agency",
     "test:funnel": "tsx scripts/check-conversation-funnel.ts",
     "test:cohorts": "tsx scripts/check-clone-cohorts.ts && tsx --test app/flows/ConversionCohortStatus.test.tsx app/flows/IntentOfferFunnelSummary.test.tsx",
-    "test:agency": "tsx scripts/check-agency-access.ts && tsx scripts/check-agency-queries.ts && tsx scripts/check-lynq-login.ts && tsx scripts/check-moxy-access.ts && tsx scripts/check-lynq-management.tsx && tsx scripts/check-login-routing.ts && tsx scripts/check-jess-kate-access.ts && TEST_JESS_KATE=1 tsx scripts/check-lynq-management.tsx"
+    "test:agency": "tsx scripts/check-agency-access.ts && tsx scripts/check-agency-queries.ts && tsx scripts/check-lynq-login.ts && tsx scripts/check-moxy-access.ts && tsx scripts/check-lynq-management.tsx && tsx scripts/check-login-routing.ts && tsx scripts/check-jess-kate-access.ts && TEST_JESS_KATE=1 tsx scripts/check-lynq-management.tsx && tsx scripts/check-sidebar-layout.tsx"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

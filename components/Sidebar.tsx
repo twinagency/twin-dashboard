@@ -2,6 +2,7 @@
 import { useDashboardAccess } from "./DashboardAccessProvider";
 import { agencyDashboardPath } from "@/lib/agency-policy";
 import { isMoxy } from "@/lib/agency-brand";
+import { JESS_KATE_PORTAL } from "@/lib/partner-portals";
 
 // Left sidebar app shell (desktop). "Create new clone" is always the first
 // thing in it, then a focused executive workspace followed by CRM. The
@@ -146,6 +147,8 @@ export function SidebarContent({
 }) {
   const {readOnly,isAgency,canManage,agencyName}=useDashboardAccess();
   const showUnavailable = readOnly && isMoxy(agencyName);
+  // Presentation only. Existing server-side creator permissions stay unchanged.
+  const isJessKate = isAgency && agencyName === JESS_KATE_PORTAL.name;
   const primaryLinks = NAV_LINKS.flatMap(link =>
     showUnavailable && link.kind === "tab" && link.tab === "ppvs"
       ? [link, ...MORE_LINKS.filter(item => item.kind === "tab" && item.tab === "identity")]
@@ -229,12 +232,12 @@ export function SidebarContent({
           row so it reads as an action, not just another nav destination.
           No bottom border: the generous space above it already separates it
           from the brand header, so a hairline as well just reads as clutter. */}
-      {showUnavailable ? <div className="shrink-0 px-4 pb-2 pt-4">
-        <div aria-disabled="true" className="flex cursor-not-allowed items-center gap-3 rounded-xl border border-sky-400/20 bg-sky-400/[0.05] px-3 py-3">
+      {showUnavailable || isJessKate ? <div className="shrink-0 px-4 pb-2 pt-4">
+        <div aria-disabled={showUnavailable || undefined} className={"flex " + (showUnavailable ? "cursor-not-allowed " : "") + "items-center gap-3 rounded-xl border border-sky-400/20 bg-sky-400/[0.05] px-3 py-3"}>
           <IntelligenceCoreIcon size={64} />
           <div className="min-w-0 flex-1">
             <span className="block text-sm font-semibold leading-5 text-[#38bdf8]">AI Intelligence Core</span>
-            <span className="mt-1.5 inline-block rounded border border-white/15 px-1.5 py-0.5 text-[9px] font-medium text-white/60">Not available</span>
+            {showUnavailable && <span className="mt-1.5 inline-block rounded border border-white/15 px-1.5 py-0.5 text-[9px] font-medium text-white/60">Not available</span>}
           </div>
         </div>
       </div> : isAgency ? <div className="px-7 py-4 text-sm text-white/75">{agencyName} · {readOnly ? "Read only" : "Creator management"}</div> : <div className="shrink-0 px-4 pb-3 pt-4">
@@ -252,10 +255,15 @@ export function SidebarContent({
       <nav className="flex flex-1 flex-col overflow-y-auto px-4 py-2">
         <div className="space-y-1">
           {primaryLinks.map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}
-          {(!readOnly || showUnavailable) && <><div className="mb-2 mt-3 border-t border-white/14 pt-3 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">CRM</div>
+          {!isJessKate && (!readOnly || showUnavailable) && <><div className="mb-2 mt-3 border-t border-white/14 pt-3 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">CRM</div>
           {CRM_LINKS.map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}</>}
           {showUnavailable ? <div className="mt-3 space-y-1 border-t border-white/14 pt-2">
             {MORE_LINKS.filter(link => link.kind !== "route" || !["/jarvis", "/agency-admin"].includes(link.href)).filter(link => link.kind !== "tab" || link.tab !== "identity").map(link => <div key={linkKey(link)}>{renderLink(link)}</div>)}
+          </div> : isJessKate ? <div className="mt-3 border-t border-white/14 pt-3">
+            <h2 className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">More</h2>
+            <div className="space-y-1">
+              {MORE_LINKS.filter(link => link.kind === "tab" || agencyDashboardPath(link.href, agencyName, canManage)).map(link => <div key={linkKey(link)}>{renderLink(link)}</div>)}
+            </div>
           </div> : <div className="mt-3 border-t border-white/14 pt-2">
             <button
               type="button"
