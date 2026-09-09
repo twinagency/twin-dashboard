@@ -36,7 +36,9 @@ export async function POST(req: Request) {
   if (action === "questionnaire") {
     const answers: Record<string, string> = {};
     for (const question of CREATOR_QUESTIONNAIRE) {
-      answers[question.id] = String(form.get(question.id) || "").trim();
+      const values = form.getAll(question.id).map((value) => String(value || "").trim());
+      const value = [...values].reverse().find(Boolean) ?? "";
+      if (!(question.id in answers) || value) answers[question.id] = value;
     }
     if (!answers.full_name || !answers.preferred_name || !answers.platforms || !answers.boundaries) {
       return back(req, "questionnaire_missing");
