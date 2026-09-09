@@ -1,5 +1,7 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import { supabaseAdmin } from "@/lib/supabase";
+import { getDashboardAccess } from "@/lib/dashboard-access";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
@@ -42,6 +44,12 @@ function prettyBytes(bytes: number | null) {
 }
 
 export default async function StoragePage({ searchParams }: { searchParams: Promise<{ creator?: string }> }) {
+  // Storage contains cross-creator migration data and manual legacy mappings,
+  // so it is deliberately an administrator-only workspace. Partner portals
+  // continue to use their existing creator-scoped media views.
+  const agencyAccess = await getDashboardAccess();
+  if (agencyAccess) redirect("/revenue");
+
   const params = await searchParams;
 
   const [creatorRes, cloneRes, linkRes, fileRes] = await Promise.all([
@@ -68,6 +76,7 @@ export default async function StoragePage({ searchParams }: { searchParams: Prom
 
   const linkByCreator = new Map(links.map((row) => [row.creator_account_id, row]));
   const cloneById = new Map(clones.map((row) => [row.id, row]));
+  const cloneBySlug = new Map(clones.map((row) => [row.slug, row]));
   const counts = new Map<string, { total: number; verified: number; photos: number; videos: number; voice: number }>();
 
   for (const creator of creators) counts.set(creator.id, { total: 0, verified: 0, photos: 0, videos: 0, voice: 0 });
@@ -85,7 +94,7 @@ export default async function StoragePage({ searchParams }: { searchParams: Prom
     (a, c) => ({ files: a.files + c.total, verified: a.verified + c.verified, photos: a.photos + c.photos, videos: a.videos + c.videos }),
     { files: 0, verified: 0, photos: 0, videos: 0 },
   );
-  const mapped = links.filter((l) => l.clone_id).length;
+  const mapped = links.filter((l) => l.clone_id || l.twin_slug).length;
 
   const selected = creators.find((c) => c.id === params.creator) ?? null;
   const selectedFiles = selected ? files.filter((f) => f.creator_account_id === selected.id && f.storage_transfer_status === "verified") : [];
@@ -131,7 +140,7 @@ export default async function StoragePage({ searchParams }: { searchParams: Prom
               {creators.map((creator) => {
                 const count = counts.get(creator.id)!;
                 const link = linkByCreator.get(creator.id);
-                const linkedClone = link?.clone_id ? cloneById.get(link.clone_id) : null;
+                const linkedClone = link?.clone_id ? cloneById.get(link.clone_id) : link?.twin_slug ? cloneBySlug.get(link.twin_slug) : null;
                 return (
                   <TableRow key={creator.id}>
                     <TableCell>
@@ -142,13 +151,14 @@ export default async function StoragePage({ searchParams }: { searchParams: Prom
                     <TableCell>
                       <form action={linkCreatorToClone} className="flex min-w-[260px] items-center gap-2">
                         <input type="hidden" name="creator_account_id" value={creator.id} />
-                        <select name="clone_id" defaultValue={link?.clone_id ?? ""} className="h-9 flex-1 rounded-md border border-border bg-background px-2 text-sm">
+                        <select name="clone_id" defaultValue={link?.clone_id ?? linkedClone?.id ?? ""} className="h-9 flex-1 rounded-md border border-border bg-background px-2 text-sm">
                           <option value="">Not linked</option>
                           {clones.map((clone) => <option key={clone.id} value={clone.id}>{clone.name} / {clone.slug}</option>)}
                         </select>
                         <Button type="submit" size="sm">Save</Button>
                       </form>
                       {linkedClone && <div className="mt-1 text-[11px] text-muted">Currently {linkedClone.name}</div>}
+                      {!linkedClone && link?.twin_slug && <div className="mt-1 text-[11px] text-muted">Pre-mapped to {link.twin_slug}; clone ID resolves at cutover.</div>}
                     </TableCell>
                     <TableCell className="text-right"><Link href={`/storage?creator=${creator.id}`} className="text-sm font-medium text-accent hover:underline">View files →</Link></TableCell>
                   </TableRow>
