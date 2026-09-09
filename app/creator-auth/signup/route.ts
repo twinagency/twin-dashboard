@@ -2,9 +2,10 @@ import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 import { supabaseAdmin } from "@/lib/supabase";
 import { CREATOR_SESSION_COOKIE, creatorCookieOptions, signCreatorSession } from "@/lib/creator-session";
+import { creatorRequestUrl } from "@/lib/creator-origin";
 
 function redirectWithError(req: Request, code: string) {
-  const url = new URL("/creator/signup", req.url);
+  const url = creatorRequestUrl(req, "/creator/signup");
   url.searchParams.set("error", code);
   return NextResponse.redirect(url, 303);
 }
@@ -53,7 +54,11 @@ export async function POST(req: Request) {
     email_confirm: true,
     user_metadata: { display_name: displayName },
   });
-  if (createError || !created.user) return redirectWithError(req, "exists");
+  if (createError || !created.user) {
+    console.error("creator auth user creation failed", createError);
+    const duplicate = !!createError && /already|registered|exists/i.test(createError.message || "");
+    return redirectWithError(req, duplicate ? "exists" : "failed");
+  }
 
   let accountId = existing?.id as string | undefined;
   try {
@@ -98,7 +103,7 @@ export async function POST(req: Request) {
 
     const token = await signCreatorSession(accountId!, created.user.id);
     (await cookies()).set(CREATOR_SESSION_COOKIE, token, creatorCookieOptions());
-    return NextResponse.redirect(new URL("/creator", req.url), 303);
+    return NextResponse.redirect(creatorRequestUrl(req, "/creator"), 303);
   } catch (error) {
     await supabaseAdmin.auth.admin.deleteUser(created.user.id).catch(() => undefined);
     console.error("creator signup failed", error);
