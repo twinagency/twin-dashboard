@@ -28,11 +28,6 @@ html[data-brand-theme="ivory-cherry"] {
   --sidebar-accent-foreground: #461323;
   --sidebar-border: rgb(235 203 210 / 0.2);
   --sidebar-ring: #ebcbd2;
-  /* RGB triplets used only by the decorative particle canvas. */
-  --intelligence-core-glow-rgb: 235,203,210;
-  --intelligence-core-edge-rgb: 235,203,210;
-  --intelligence-core-front-rgb: 247,242,236;
-  --intelligence-core-back-rgb: 235,203,210;
 }
 
 /* Replace the shared shell's hard-coded navy without changing its geometry. */
@@ -60,17 +55,24 @@ html[data-brand-theme="ivory-cherry"] .dashboard-sidebar nav :is(a, button)[clas
   background: var(--color-accent-tint);
 }
 
-/* Only the decorative core tile uses these literal sky classes in the sidebar. */
-html[data-brand-theme="ivory-cherry"] .dashboard-sidebar [class~="text-[#38bdf8]"] {
-  color: var(--jess-kate-blush);
-}
-
+/* Jess and Kate core tile: keep Twin's original animated core colours,
+   remove the surrounding box, and make the animation 5% larger. */
 html[data-brand-theme="ivory-cherry"] .dashboard-sidebar [class~="border-sky-400/20"] {
-  border-color: rgb(235 203 210 / 0.28);
+  border-color: transparent;
 }
 
 html[data-brand-theme="ivory-cherry"] .dashboard-sidebar [class~="bg-sky-400/[0.05]"] {
-  background-color: rgb(235 203 210 / 0.06);
+  background-color: transparent;
+}
+
+html[data-brand-theme="ivory-cherry"] .dashboard-sidebar [class~="border-sky-400/20"] canvas {
+  transform: scale(1.05);
+  transform-origin: center;
+}
+
+html[data-brand-theme="ivory-cherry"] .dashboard-sidebar [class~="text-[#38bdf8]"] {
+  color: #7dd3fc;
+  text-shadow: 0 0 12px rgb(125 211 252 / 0.18);
 }
 
 /* Neutral working surfaces, no blue wash or decorative pink glow. */
