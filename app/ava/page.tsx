@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import IntelligenceCoreIcon from "@/components/IntelligenceCoreIcon";
 import "./ava.css";
+import "./ava-mobile.css";
 
 export const metadata: Metadata = {
   title: "Ava | AI clones for creators",
@@ -116,7 +117,7 @@ function DashboardMockup() {
 }
 const features: [keyof typeof paths, string, string][] = [["send","Built for Telegram","Conversations in the app your fans already use."],["chat","Your personality","Chats shaped around your tone and style."],["photo","Your content","Photos, videos and bundles in the conversation."],["chart","Clear insights","Messages, buyers and earnings, all in one place."],["spark","Fully managed","We handle the technology. You keep creating."]];
 export default function AvaPage() {
-  return <main className="ava-site" data-ava-revision="polish-20260910">
+  return <main className="ava-site" data-ava-revision="compact-mobile-20260910">
     <header className="ava-header"><a className="ava-wordmark" href="#top" aria-label="Ava home">Ava</a><nav aria-label="Main navigation"><Navigation/></nav><div className="ava-header-actions"><PreviewButton>Get Started</PreviewButton><details className="ava-mobile-nav"><summary aria-label="Open navigation"><Icon name="menu"/></summary><nav aria-label="Mobile navigation"><Navigation/></nav></details></div></header>
     <section id="top" className="ava-hero">
       <div className="ava-hero-copy"><div className="ava-eyebrow">AI clones for real creators</div><h1>Your Fans.<br/>Your Rules.<br/><em>More Revenue.</em></h1><p>Ava builds AI clones for creators that chat, sell content and grow your income 24/7 on Telegram.</p><div className="ava-hero-actions"><PreviewButton>Get Started</PreviewButton><PreviewButton ghost>Book a Call</PreviewButton></div><div className="ava-platform-note"><span><Icon name="send"/></span><div><strong>Built for Telegram.</strong><small>Your personality. A new way to connect.</small></div></div></div>
