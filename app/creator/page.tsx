@@ -9,6 +9,15 @@ import { CREATOR_SESSION_COOKIE, verifyCreatorSession } from "@/lib/creator-sess
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Creator Portal · Twin" };
 
+function reviewCopy(status: string | null | undefined) {
+  if (status === "submitted") return { title: "Application submitted", body: "Your onboarding has been received and is waiting for review." };
+  if (status === "reviewing") return { title: "Under review", body: "The Twin team is reviewing your onboarding and media now." };
+  if (status === "approved") return { title: "Approved", body: "Your creator application has been approved. Your Twin connection will appear here as it is activated." };
+  if (status === "rejected") return { title: "Application not approved", body: "Your application has been reviewed. Contact your Twin or agency representative if you need more information." };
+  if (status === "withdrawn") return { title: "Application withdrawn", body: "This application is no longer under review." };
+  return null;
+}
+
 export default async function CreatorHomePage() {
   const session = await verifyCreatorSession((await cookies()).get(CREATOR_SESSION_COOKIE)?.value);
   if (!session) redirect("/creator/login");
@@ -31,6 +40,7 @@ export default async function CreatorHomePage() {
   const cloneName = (link as any)?.clones?.name || link?.twin_slug || "Not linked yet";
   const steps = [progress?.questionnaire_completed, progress?.content_completed, progress?.voice_completed, !!consent].filter(Boolean).length;
   const submitted = application?.status === "submitted" || application?.status === "reviewing" || application?.status === "approved";
+  const review = reviewCopy(application?.status);
 
   return (
     <div className="min-h-screen bg-bg">
@@ -45,6 +55,8 @@ export default async function CreatorHomePage() {
         <h1 className="mt-2 font-heading text-4xl font-semibold tracking-[-0.04em] text-ink">Welcome, {account.display_name || "creator"}</h1>
         <p className="mt-2 text-muted">Your Twin creator account, onboarding and stored media now live in one place.</p>
         <div className="mt-5"><Link href="/creator/onboarding" className="inline-flex h-9 items-center justify-center rounded-lg bg-primary px-4 text-sm font-medium text-primary-foreground hover:bg-primary/80">{submitted ? "View onboarding" : steps ? "Continue onboarding" : "Start onboarding"}</Link></div>
+
+        {review && <div className="mt-6 rounded-2xl border border-border bg-white px-5 py-4"><div className="font-semibold text-ink">{review.title}</div><div className="mt-1 text-sm text-muted">{review.body}</div></div>}
 
         <div className="mt-8 grid gap-4 md:grid-cols-4">
           <Card><CardHeader className="pb-2 text-sm text-muted">Account</CardHeader><CardContent className="text-xl font-semibold capitalize text-ink">{account.account_status}</CardContent></Card>
