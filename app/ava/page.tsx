@@ -1,156 +1,133 @@
 import type { Metadata } from "next";
+import type { ReactNode } from "react";
+import IntelligenceCoreIcon from "@/components/IntelligenceCoreIcon";
 import "./ava.css";
 
 export const metadata: Metadata = {
   title: "Ava | AI clones for creators",
-  description: "A premium AI creator clone experience built around Telegram conversations, paid content and creator analytics.",
+  description: "Your personality. Your content. A new way to connect with your fans on Telegram.",
   robots: { index: false, follow: false },
 };
 
-const metrics = [
-  ["70,000+", "Fans engaged"],
-  ["51%", "Repeat order rate"],
-  ["12+", "Live AI clones"],
-  ["A$384k+", "Revenue generated"],
-];
-
-const features = [
-  ["✈", "Built for Telegram", "Meet your fans where they already are."],
-  ["◌", "Natural conversations", "On-brand chats that feel personal and convert."],
-  ["▧", "Sells your content", "Photos, videos, bundles and custom offers."],
-  ["▥", "Real-time analytics", "Track messages, buyers, revenue and retention."],
-  ["✦", "Fully managed", "We handle the technology so you can keep creating."],
-];
-
+const paths = {
+  arrow: "M5 12h14m-6-6 6 6-6 6",
+  back: "m14 6-6 6 6 6",
+  down: "m6 9 6 6 6-6",
+  menu: "M4 6h16M4 12h16M4 18h16",
+  send: "m22 2-7 20-4-9-9-4 20-7ZM22 2 11 13",
+  chat: "M21 11.5a8.5 8.5 0 0 1-8.5 8.5H4l-2 2V11.5a9.5 9.5 0 0 1 19 0Z",
+  lock: "M7 10V7a5 5 0 0 1 10 0v3M5 10h14v11H5zM12 14v3",
+  mic: "M9 3h6v12H9zM5 11v3a7 7 0 0 0 14 0v-3M12 21v-3",
+  attach: "m8 13 7-7a3 3 0 0 1 4 4L9 20a5 5 0 0 1-7-7L13 2",
+  play: "m8 5 11 7-11 7V5Z",
+  check: "m5 12 4 4L19 6",
+  ticks: "m2 12 4 4L16 6m-5 10 10-10",
+  more: "M12 4h.01M12 12h.01M12 20h.01",
+  photo: "M3 3h18v18H3zM3 17l6-6 4 4 3-3 5 5M8 7h.01",
+  chart: "M5 20v-8M12 20V4M19 20V9",
+  line: "m3 17 6-7 5 3 7-10",
+  money: "M12 2v20m5-16H9a4 4 0 0 0 0 8h6a4 4 0 0 1 0 8H6",
+  users: "M16 21v-3a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v3M21 21v-3a4 4 0 0 0-3-4M13 6a4 4 0 1 1-8 0 4 4 0 0 1 8 0Zm5-4a4 4 0 0 1 0 8",
+  grid: "M3 3h7v7H3zM14 3h7v7h-7zM3 14h7v7H3zM14 14h7v7h-7z",
+  business: "M3 8h18v13H3zM8 8V3h8v5M3 13h18",
+  flow: "M4 3h6v6H4zM14 15h6v6h-6zM7 9v9h7",
+  edit: "m4 16 12-12 4 4L8 20H4v-4ZM13 7l4 4",
+  info: "M12 8h.01M12 12v5M22 12a10 10 0 1 1-20 0 10 10 0 0 1 20 0Z",
+  logs: "M8 6h13M8 12h13M8 18h13M3 6h.01M3 12h.01M3 18h.01",
+  eye: "M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Zm13 0a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z",
+  logout: "M9 3H3v18h6M8 12h13m-5-5 5 5-5 5",
+  calendar: "M3 5h18v16H3zM3 10h18M8 2v6M16 2v6",
+  spark: "m12 2 3 7 7 3-7 3-3 7-3-7-7-3 7-3 3-7Z",
+} as const;
+function Icon({ name, className = "" }: { name: keyof typeof paths; className?: string }) {
+  return <svg className={`ava-icon ${className}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d={paths[name]} /></svg>;
+}
+function PreviewButton({ children, light = false, ghost = false }: { children: ReactNode; light?: boolean; ghost?: boolean }) {
+  return <button type="button" aria-disabled="true" title="Design preview. Onboarding is not connected yet." className={`ava-button ${light ? "cream" : ghost ? "ghost" : "solid"}`}>{children}{!ghost && <Icon name="arrow" />}</button>;
+}
+const links = [["#top", "Home"], ["#how", "How It Works"], ["#features", "Features"], ["#results", "Dashboard"], ["#faq", "FAQ"]];
+function Navigation() { return <>{links.map(([href, label]) => <a key={href} href={href}>{label}</a>)}</>; }
+function Bubble({ children, outgoing = false, time }: { children: ReactNode; outgoing?: boolean; time: string }) {
+  return <div className={`ava-bubble ${outgoing ? "me" : "them"}`}><span className="ava-bubble-copy">{children}</span><span className="ava-message-time">{time}{outgoing && <Icon name="ticks" />}</span></div>;
+}
 function TelegramPhone({ secondary = false }: { secondary?: boolean }) {
   const creator = secondary ? "Sienna Rose" : "Mia Vale";
-  const initial = secondary ? "S" : "M";
-  return (
-    <div className={`ava-phone ava-phone-real ${secondary ? "ava-phone-secondary" : ""}`} aria-label={`Demo Telegram conversation with ${creator}`}>
-      <div className="ava-phone-notch" />
-      <div className="ava-telegram-topbar">
-        <span className="ava-back">‹</span>
-        <span className="ava-avatar">{initial}</span>
-        <span className="ava-chat-name"><strong>{creator}</strong><small>{secondary ? "last seen recently" : "online"}</small></span>
-        <span className="ava-tg-actions">⌕ ⋮</span>
+  return <div className={`ava-phone ${secondary ? "ava-phone-secondary" : ""}`} aria-label={`Illustrative Telegram chat with fictional creator ${creator}`}>
+    <div className="ava-phone-screen">
+      <div className="ava-statusbar"><span>9:41</span><i className="ava-island" /><span className="ava-status-icons"><i className="ava-signal"/><svg viewBox="0 0 18 14" aria-hidden="true"><path d="M1 4Q9-2 17 4M4 7q5-4 10 0M7 10q2-2 4 0" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"/><circle cx="9" cy="12" r="1" fill="currentColor"/></svg><i className="ava-battery"/></span></div>
+      <div className="ava-telegram-topbar"><Icon name="back"/><div className="ava-chat-name"><strong>{creator}</strong><small>{secondary ? "last seen recently" : "online"}</small></div><span className={`ava-avatar ${secondary ? "sienna" : "mia"}`}>{secondary ? "SR" : "MV"}</span></div>
+      <div className="ava-chat"><span className="ava-chat-day">Today</span>
+        {secondary ? <>
+          <Bubble outgoing time="10:24">You’re amazing 😍</Bubble>
+          <div className="ava-voice"><span className="ava-play"><Icon name="play"/></span><div><div className="ava-wave">{[8,13,20,11,17,24,14,9,18,23,13,19,10,17,22,12,7,15].map((h,i)=><i key={i} style={{height:h}}/>)}</div><small>0:24</small></div><span className="ava-message-time">10:24</span></div>
+          <Bubble time="10:25">Should I send you a custom video?</Bubble>
+          <Bubble outgoing time="10:25">Yes please 🔥</Bubble>
+          <div className="ava-content-card compact"><div className="ava-content-blur"/><div className="ava-lock"><Icon name="lock"/><small>Tap to unlock</small></div><span className="ava-media-caption">Just for you 💗</span></div>
+        </> : <>
+          <Bubble time="10:24">Hey handsome 💕<br/>Good to see you here...</Bubble>
+          <Bubble outgoing time="10:25">You got any new content? 😏</Bubble>
+          <Bubble time="10:25">I do... want a little preview? 😉</Bubble>
+          <div className="ava-content-card"><div className="ava-content-blur"/><div className="ava-lock"><Icon name="lock"/><small>Tap to unlock</small></div><span className="ava-media-time">10:26</span></div>
+          <Bubble time="10:26">This set is so hot 🔥</Bubble>
+          <button className="ava-unlock" type="button" aria-disabled="true">Unlock for $12</button>
+        </>}
       </div>
-      <div className="ava-chat">
-        {secondary ? (
-          <>
-            <div className="ava-bubble them">You’re amazing 😍</div>
-            <div className="ava-voice"><span>▶</span><i /><i /><i /><i /><i /><i /><b>0:24</b></div>
-            <div className="ava-bubble them">Should I send you a custom video?</div>
-            <div className="ava-bubble me">Yes please 🔥</div>
-            <div className="ava-content-card compact"><div className="ava-content-blur" /><span>Just for you 💗</span></div>
-          </>
-        ) : (
-          <>
-            <div className="ava-bubble them">Hey handsome 💕<br/>Good to see you here...</div>
-            <div className="ava-bubble me">You got any new content? 😏</div>
-            <div className="ava-bubble them">I do... want a little preview? 😉</div>
-            <div className="ava-content-card"><div className="ava-content-blur" /><div className="ava-lock">🔒<small>Tap to unlock</small></div></div>
-            <div className="ava-bubble them">This set is so hot 🔥</div>
-            <button type="button" className="ava-unlock">Unlock for $12</button>
-          </>
-        )}
-      </div>
-      <div className="ava-message-bar"><span>Message</span><span>◉ 🎙</span></div>
-      <div className="ava-home-indicator" />
+      <div className="ava-message-bar"><Icon name="attach"/><span>Message <i>◯</i></span><Icon name="mic"/></div><div className="ava-phone-bottom"><i/></div>
     </div>
-  );
+  </div>;
 }
 
+// Static, fictional presentation data only. Never connected to the private ledger.
+const demoRevenue = 384729.84;
+const demoBalance = 72441.18;
+const weights = [43,55,48,62,80,74,57,69,91,86,78,105,96,122,110,89,107,131,144,126,150,169,157,145,182,161,174,198,181];
+const weightTotal = weights.reduce((sum, n) => sum + n, 0);
+const dailyCents = weights.map(n => Math.floor(n / weightTotal * Math.round(demoRevenue * 100)));
+dailyCents[dailyCents.length - 1] += Math.round(demoRevenue * 100) - dailyCents.reduce((sum, n) => sum + n, 0);
+const aud = (value: number) => `A$${value.toLocaleString("en-AU", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+const stats = [["All-time users", "184,209"], ["New users", "28,941"], ["Users who messaged", "162,774"], ["Revenue / user who messaged", aud(demoRevenue / 162774)], ["Purchases", "24,892"], ["Active users (24h)", "4,218"]];
+const sidebar: [keyof typeof paths, string][] = [["money","Earnings"],["grid","Creators"],["users","Fans"],["photo","PPVs"],["business","Business"],["flow","Flows"],["edit","Edit"],["info","Info"],["logs","Logs"]];
 function DashboardMockup() {
-  const bars = [24,34,28,46,41,58,55,69,77,71,86,93,82,101,108,96,118,124,113,132,141,136,154,164,158,176,185,194];
-  const nav = ["Earnings", "Creators", "Fans", "PPVs", "Business", "Flows", "Edit", "Settings", "Logs"];
-  const cards = [
-    ["Total revenue", "A$384,729.84", "+32.8%"],
-    ["Total balance", "A$72,441.18", "+18.6%"],
-    ["Telegram Stars", "1,948,220", "+28.1%"],
-    ["Orders", "24,892", "+35.4%"],
-  ];
-  const secondary = [
-    ["All-time users", "184,209"],
-    ["New users", "28,941"],
-    ["Users who messaged", "162,774"],
-    ["Revenue per user", "A$2.09"],
-  ];
-  return (
+  return <figure className="ava-dashboard-preview" id="results" aria-label="Ava earnings dashboard with fictional sample data">
     <div className="ava-dashboard-frame">
-      <aside className="ava-dashboard-sidebar">
-        <div className="ava-dashboard-logo">Ava</div>
-        <div className="ava-core-pill"><span>◉</span><b>AI Intelligence Core</b></div>
-        {nav.map((item, index) => <span key={item} className={index === 0 ? "active" : ""}>{item}</span>)}
+      <aside className="ava-dashboard-sidebar" aria-label="Dashboard preview navigation">
+        <div className="ava-dashboard-brand">Ava</div>
+        <div className="ava-dashboard-core"><IntelligenceCoreIcon size={68}/><span>AI Intelligence<strong>CORE</strong></span></div>
+        <div className="ava-dashboard-nav">{sidebar.map(([icon,label],i)=><div key={label}>{i===5 && <small>MORE</small>}<span className={i===0?"active":""}><Icon name={icon}/>{label}</span></div>)}</div>
       </aside>
       <div className="ava-dashboard-main">
-        <div className="ava-dashboard-mobilebar"><span className="ava-dashboard-logo">Ava</span><span>Mia Vale</span></div>
-        <div className="ava-dashboard-topbar">
-          <div><small>Mia Vale / Earnings</small><h3>Earnings overview</h3></div>
-          <div className="ava-dashboard-controls"><span>Updated just now</span><span>AUD</span><span>◉</span><span>•••</span></div>
-        </div>
-        <div className="ava-dashboard-periods">
-          {['All','1D','7D','1M','3M','6M','1Y','Custom'].map(x => <span key={x} className={x === '1M' ? 'active' : ''}>{x}</span>)}
-        </div>
-        <div className="ava-dashboard-kpis">
-          {cards.map(([label,value,trend]) => <article key={label}><small>{label}</small><strong>{value}</strong><em>↗ {trend}</em></article>)}
-        </div>
-        <div className="ava-dashboard-chart">
-          <div className="ava-dashboard-charthead"><div><small>Revenue</small><strong>A$128,442.63</strong></div><span>Last 30 days</span></div>
-          <div className="ava-dashboard-bars">{bars.map((h,i)=><i key={i} style={{height:`${h}px`}} />)}</div>
-          <div className="ava-dashboard-axis"><span>Aug 12</span><span>Aug 19</span><span>Aug 26</span><span>Sep 2</span><span>Sep 9</span></div>
-        </div>
-        <div className="ava-dashboard-secondary">
-          {secondary.map(([label,value]) => <article key={label}><small>{label}</small><strong>{value}</strong></article>)}
+        <div className="ava-dashboard-topbar"><span className="ava-dashboard-breadcrumb">Mia Vale <i>/ Earnings</i></span><span className="ava-dashboard-mobile-brand">Ava</span><div className="ava-dashboard-account"><span className="ava-demo-avatar">MV</span><b>Mia Vale</b><Icon name="down"/><span className="ava-account-balance">{aud(demoBalance)}</span><span className="ava-currency">AUD</span><Icon name="eye"/><span className="ava-signout"><Icon name="logout"/>Sign out</span></div></div>
+        <div className="ava-dashboard-body">
+          <div className="ava-dashboard-heading"><div><h3>Earnings overview</h3><p>Updated just now <span>Refresh</span></p></div><span className="ava-demo-badge">Demo data</span></div>
+          <div className="ava-dashboard-filters" aria-label="Illustrative timeframe controls"><div className="ava-dashboard-periods">{['All','1Y','6M','3M','1M','2W','1W','1D'].map(x=><span key={x} className={x==='1M'?'active':''}>{x==='1D'&&<i/>}{x}</span>)}<span><Icon name="calendar"/>Custom</span></div><span className="ava-chart-switch"><Icon name="chart"/><Icon name="line"/></span></div>
+          <div className="ava-earnings-card">
+            <div className="ava-earnings-description">Mia Vale · Star revenue, 1M <Icon name="info"/></div>
+            <div className="ava-earnings-values"><div className="ava-revenue-value"><small className="ava-mobile-label">Revenue this month</small><strong>{aud(demoRevenue)}</strong></div><div className="ava-stars-value"><small>Telegram Stars</small><strong><span>⭐</span>19,236,492</strong></div></div>
+            <div className="ava-balance-value"><small>Total balance <Icon name="info"/></small><strong>{aud(demoBalance)} <span>· ⭐ 3,622,059</span></strong></div>
+            <div className="ava-chart" role="img" aria-label="Illustrative daily revenue from August 12 to September 9, totalling A$384,729.84"><div className="ava-y-axis"><span>A$25k</span><span>A$18.75k</span><span>A$12.5k</span><span>A$6.25k</span><span>A$0</span></div><div className="ava-chart-plot"><div className="ava-chart-grid">{[0,1,2,3,4].map(i=><i key={i}/>)}</div><div className="ava-dashboard-bars">{dailyCents.map((n,i)=><i key={i} style={{height:`${n/25000}%`}}/>)}</div></div><div className="ava-x-axis"><span>Aug 12</span><span>Aug 19</span><span>Aug 26</span><span>Sep 2</span><span>Sep 9</span></div></div>
+          </div>
+          <div className="ava-day-analysis"><div><strong>Daily earnings analysis compared to previous days &amp; weeks</strong><p>Review buyers, orders, audience activity and product mix for any day.</p></div><span>Open <Icon name="down"/></span></div>
+          <div className="ava-dashboard-stats">{stats.map(([label,value],i)=><article key={label} className={i===4||i===5?"ava-stat-mobile":""}><small>{label}<Icon name="info"/></small><strong>{value}</strong></article>)}</div>
         </div>
       </div>
     </div>
-  );
+    <figcaption>Illustrative dashboard. Figures and creator profiles are fictional, not actual earnings.</figcaption>
+  </figure>;
 }
-
+const features: [keyof typeof paths, string, string][] = [["send","Built for Telegram","Conversations in the app your fans already use."],["chat","Your personality","Chats shaped around your tone and style."],["photo","Your content","Photos, videos and bundles in the conversation."],["chart","Clear insights","Messages, buyers and earnings, all in one place."],["spark","Fully managed","We handle the technology. You keep creating."]];
 export default function AvaPage() {
-  return (
-    <main className="ava-site">
-      <style>{`
-        .ava-hero-visual{min-height:470px;gap:0;overflow:visible}.ava-phone-real{width:205px!important;height:430px!important;border-radius:34px!important;padding:7px!important;background:#08090c!important;border:1px solid #50545a!important;box-shadow:0 28px 60px rgba(34,13,20,.24),inset 0 0 0 1px rgba(255,255,255,.08)!important;transform:rotate(-2.5deg)!important}.ava-phone-secondary{transform:translate(-24px,20px) rotate(3.5deg)!important;z-index:1!important}.ava-phone-notch{top:8px!important;width:74px!important;height:19px!important}.ava-telegram-topbar{height:58px!important;border-radius:28px 28px 0 0!important;background:#17212b!important;grid-template-columns:18px 29px 1fr 35px!important;gap:6px!important;padding:14px 9px 7px!important;align-items:center!important}.ava-avatar{width:29px!important;height:29px!important;background:linear-gradient(135deg,#c0617e,#6f102d)!important}.ava-chat-name strong{font-size:10.5px}.ava-chat-name small{font-size:7px!important;color:#62c58b!important}.ava-tg-actions{font-size:9px;color:#dce5eb;letter-spacing:2px}.ava-chat{height:326px!important;background:#0e1621!important;padding:8px!important;gap:6px!important}.ava-bubble{font-size:9px!important;padding:7px 8px!important;border-radius:10px!important;box-shadow:0 1px 0 rgba(0,0,0,.22)}.ava-bubble.them{background:#182533!important}.ava-bubble.me{background:#2b5278!important}.ava-content-card{height:96px!important;border-radius:10px!important}.ava-content-card.compact{height:80px!important}.ava-unlock{font-size:8.8px!important;padding:7px 10px!important;background:#8c2146!important}.ava-message-bar{height:38px!important;border-radius:0 0 27px 27px!important;background:#17212b!important;padding:9px 10px!important;font-size:8.5px!important}.ava-home-indicator{position:absolute;bottom:4px;left:50%;width:68px;height:3px;border-radius:99px;background:#f1f1f1;transform:translateX(-50%);opacity:.72}.ava-script-note{display:none!important}.ava-orb.one{width:300px!important;height:300px!important}.ava-orb.two{width:250px!important;height:250px!important}
-        .ava-dashboard-frame{display:grid;grid-template-columns:154px minmax(0,1fr);width:100%;border:1px solid #d7dce4;border-radius:18px;overflow:hidden;background:#f7f8fb;box-shadow:0 30px 70px rgba(8,18,32,.28),0 0 0 7px #101318;min-height:520px}.ava-dashboard-sidebar{background:linear-gradient(180deg,#65152f,#3a0c1c);color:#fff;padding:18px 12px;display:flex;flex-direction:column;gap:4px}.ava-dashboard-logo{font-family:Georgia,'Times New Roman',serif;font-style:italic;font-size:28px;line-height:1;color:#fff;margin:4px 8px 14px}.ava-core-pill{display:flex;align-items:center;gap:7px;padding:9px 8px;margin:0 3px 12px;border-radius:11px;background:rgba(255,255,255,.04);border:1px solid rgba(125,211,252,.22);font-size:8px}.ava-core-pill span{color:#7dd3fc}.ava-core-pill b{font-size:7.4px;color:#fff}.ava-dashboard-sidebar>span{font-size:9px;padding:8px 9px;border-radius:8px;color:#eadde2}.ava-dashboard-sidebar>span.active{background:#8b2a4b;color:#fff}.ava-dashboard-main{min-width:0;padding:18px;background:#f5f7fa;color:#202733}.ava-dashboard-mobilebar{display:none}.ava-dashboard-topbar{display:flex;justify-content:space-between;gap:12px;align-items:center;padding-bottom:12px;border-bottom:1px solid #e0e5eb}.ava-dashboard-topbar small{display:block;font-size:8px;color:#738091;margin-bottom:3px}.ava-dashboard-topbar h3{margin:0;font-size:19px;letter-spacing:-.02em}.ava-dashboard-controls{display:flex;gap:6px;align-items:center}.ava-dashboard-controls span{font-size:7.5px;background:#fff;border:1px solid #dfe4ea;border-radius:8px;padding:6px 7px;color:#667180}.ava-dashboard-periods{display:flex;gap:5px;flex-wrap:wrap;padding:12px 0}.ava-dashboard-periods span{font-size:8px;padding:5px 7px;border-radius:7px;background:#fff;border:1px solid #dfe4ea;color:#667085}.ava-dashboard-periods span.active{background:#24354b;color:#fff}.ava-dashboard-kpis{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px}.ava-dashboard-kpis article,.ava-dashboard-secondary article,.ava-dashboard-chart{background:#fff;border:1px solid #e0e5eb;border-radius:12px;box-shadow:0 5px 15px rgba(33,46,62,.035)}.ava-dashboard-kpis article{padding:11px}.ava-dashboard-kpis small,.ava-dashboard-secondary small,.ava-dashboard-chart small{display:block;color:#7a8491;font-size:7.5px}.ava-dashboard-kpis strong{display:block;color:#15945d;font-size:16px;margin:4px 0;letter-spacing:-.02em;white-space:nowrap}.ava-dashboard-kpis em{font-style:normal;color:#2a9b67;font-size:7px}.ava-dashboard-chart{padding:12px;margin-top:9px}.ava-dashboard-charthead{display:flex;justify-content:space-between;align-items:end;gap:10px}.ava-dashboard-charthead strong{display:block;font-size:16px;margin-top:3px}.ava-dashboard-charthead>span{font-size:7px;color:#7a8491}.ava-dashboard-bars{height:180px;display:flex;align-items:flex-end;gap:4px;border-bottom:1px solid #dce2e9;background:repeating-linear-gradient(to top,#fff 0,#fff 44px,#edf1f5 45px)}.ava-dashboard-bars i{flex:1;background:#8c2146;border-radius:3px 3px 0 0;min-width:2px;max-width:12px}.ava-dashboard-axis{display:flex;justify-content:space-between;padding-top:6px;color:#89929d;font-size:6.5px}.ava-dashboard-secondary{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin-top:9px}.ava-dashboard-secondary article{padding:10px}.ava-dashboard-secondary strong{display:block;font-size:14px;margin-top:3px}.ava-product-section{grid-template-columns:.72fr 1.28fr!important}
-        @media(max-width:760px){.ava-header{grid-template-columns:1fr auto!important;padding:14px 18px!important}.ava-header nav{display:none!important}.ava-header>.ava-button{padding:11px 16px!important;font-size:13px!important}.ava-wordmark{font-size:30px!important}.ava-hero{display:block!important;min-height:auto!important;padding:48px 22px 28px!important}.ava-hero h1{font-size:clamp(50px,14vw,72px)!important}.ava-hero-copy>p{font-size:17px!important;line-height:1.5!important}.ava-trust{align-items:flex-start!important;gap:10px!important;flex-wrap:wrap}.ava-hero-visual{min-height:360px!important;margin-top:14px!important;justify-content:center!important}.ava-phone-real{width:154px!important;height:326px!important;border-radius:27px!important}.ava-phone-secondary{transform:translate(-25px,20px) rotate(3deg)!important}.ava-phone-notch{width:58px!important;height:15px!important}.ava-telegram-topbar{height:48px!important;border-radius:22px 22px 0 0!important;grid-template-columns:14px 24px 1fr 27px!important;padding:11px 7px 6px!important}.ava-avatar{width:23px!important;height:23px!important;font-size:9px!important}.ava-chat-name strong{font-size:8.5px}.ava-chat-name small{font-size:5.5px!important}.ava-tg-actions{font-size:7px}.ava-chat{height:246px!important;padding:6px!important;gap:4px!important}.ava-bubble{font-size:7.1px!important;padding:5px 6px!important}.ava-content-card{height:66px!important}.ava-content-card.compact{height:56px!important}.ava-unlock{font-size:7px!important;padding:5px 7px!important}.ava-message-bar{height:29px!important;padding:7px 7px!important;font-size:6.5px!important}.ava-home-indicator{width:50px}.ava-metrics{grid-template-columns:repeat(2,1fr)!important}.ava-product-section{display:block!important;padding:48px 18px 58px!important}.ava-product-copy{margin-bottom:34px}.ava-product-copy h2{font-size:44px!important}.ava-dashboard-frame{display:block;min-height:0;border-radius:16px;box-shadow:0 20px 42px rgba(0,0,0,.26),0 0 0 4px #101318}.ava-dashboard-sidebar{display:none}.ava-dashboard-main{padding:12px}.ava-dashboard-mobilebar{display:flex;justify-content:space-between;align-items:center;background:linear-gradient(90deg,#65152f,#4a1023);margin:-12px -12px 12px;padding:11px 12px;color:#fff;font-size:10px}.ava-dashboard-mobilebar .ava-dashboard-logo{font-size:20px;margin:0}.ava-dashboard-topbar{align-items:flex-start}.ava-dashboard-topbar h3{font-size:17px}.ava-dashboard-controls span:first-child,.ava-dashboard-controls span:nth-child(3),.ava-dashboard-controls span:nth-child(4){display:none}.ava-dashboard-controls span{font-size:7px;padding:5px 6px}.ava-dashboard-periods{gap:4px;overflow-x:auto;flex-wrap:nowrap;padding:10px 0 11px;scrollbar-width:none}.ava-dashboard-periods::-webkit-scrollbar{display:none}.ava-dashboard-periods span{flex:0 0 auto;font-size:7px;padding:5px 7px}.ava-dashboard-kpis{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.ava-dashboard-kpis article{padding:10px}.ava-dashboard-kpis small{font-size:7px}.ava-dashboard-kpis strong{font-size:14px;white-space:normal}.ava-dashboard-kpis em{font-size:6.5px}.ava-dashboard-chart{padding:10px;margin-top:8px}.ava-dashboard-charthead strong{font-size:14px}.ava-dashboard-bars{height:128px;gap:2px}.ava-dashboard-axis{font-size:5.5px}.ava-dashboard-secondary{grid-template-columns:repeat(2,minmax(0,1fr));gap:7px}.ava-dashboard-secondary article{padding:9px}.ava-dashboard-secondary strong{font-size:13px}.ava-features{grid-template-columns:1fr!important}.ava-testimonial{grid-template-columns:1fr!important}.ava-portrait{display:none!important}.ava-footer{grid-template-columns:1fr!important;text-align:center}.ava-footer nav{justify-content:center;flex-wrap:wrap}.ava-footer small{justify-self:center!important}}
-      `}</style>
-
-      <header className="ava-header">
-        <a className="ava-wordmark" href="#top">Ava</a>
-        <nav><a href="#top">Home</a><a href="#how">How It Works</a><a href="#features">Features</a><a href="#results">Results</a><a href="#faq">FAQ</a></nav>
-        <button type="button" className="ava-button solid">Get Started <span>→</span></button>
-      </header>
-
-      <section id="top" className="ava-hero">
-        <div className="ava-hero-copy">
-          <div className="ava-eyebrow">AI clones for real creators</div>
-          <h1>Your Fans.<br/>Your Rules.<br/><em>More Revenue.</em></h1>
-          <p>Ava builds AI clones for creators that chat, sell content and grow your income 24/7 on Telegram.</p>
-          <div className="ava-hero-actions"><button type="button" className="ava-button solid">Get Started <span>→</span></button><button type="button" className="ava-button ghost">Book a Call</button></div>
-          <div className="ava-trust"><div className="ava-face-stack">{['M','S','L','A','N'].map((x,i)=><i key={i}>{x}</i>)}</div><div><div className="ava-stars">★★★★★ <b>5.0</b></div><small>Trusted by top creators</small></div></div>
-        </div>
-        <div className="ava-hero-visual"><div className="ava-orb one"/><div className="ava-orb two"/><TelegramPhone/><TelegramPhone secondary/></div>
-      </section>
-
-      <section className="ava-metrics" id="results">{metrics.map(([value,label])=><div key={label}><strong>{value}</strong><span>{label}</span></div>)}</section>
-
-      <section id="how" className="ava-product-section">
-        <div className="ava-product-copy">
-          <div className="ava-eyebrow light">Creator growth platform</div>
-          <h2>Everything You Need<br/>to Scale as a Creator.</h2>
-          <p>Ava handles the conversations, sells your content and builds real relationships with your fans, so you can focus on creating.</p>
-          <ul><li>Autonomous AI chat on Telegram</li><li>Sells photos, videos, bundles and customs</li><li>Learns your style, tone and personality</li><li>24/7 operation with full analytics</li><li>Fully managed setup and support</li></ul>
-          <button type="button" className="ava-button cream">Get Started <span>→</span></button>
-        </div>
-        <DashboardMockup />
-      </section>
-
-      <section className="ava-features" id="features">{features.map(([icon,title,copy])=><article key={title}><i>{icon}</i><h3>{title}</h3><p>{copy}</p></article>)}</section>
-      <section className="ava-testimonial"><div className="ava-portrait ava-left-portrait"><span>A</span></div><div className="ava-testimonial-copy"><div className="ava-eyebrow">Trusted by top creators</div><blockquote>“Ava feels like another me, talking to my fans 24/7.”</blockquote><div className="ava-stars centered">★★★★★</div><small>Demo creator testimonial</small></div><div className="ava-portrait ava-right-portrait"><span>V</span></div></section>
-      <section className="ava-final-cta"><div className="ava-eyebrow light">Same girls. Bigger opportunities.</div><h2>Ready to Scale with Ava?</h2><button type="button" className="ava-button cream">Get Started <span>→</span></button></section>
-      <footer className="ava-footer"><a className="ava-wordmark" href="#top">Ava</a><nav><a href="#how">How It Works</a><a href="#features">Features</a><a href="#results">Results</a><a href="#faq">FAQ</a></nav><small>© 2026 Ava. Front-end preview.</small></footer>
-      <div id="faq" className="ava-faq-anchor" />
-    </main>
-  );
+  return <main className="ava-site" data-ava-revision="polish-20260910">
+    <header className="ava-header"><a className="ava-wordmark" href="#top" aria-label="Ava home">Ava</a><nav aria-label="Main navigation"><Navigation/></nav><div className="ava-header-actions"><PreviewButton>Get Started</PreviewButton><details className="ava-mobile-nav"><summary aria-label="Open navigation"><Icon name="menu"/></summary><nav aria-label="Mobile navigation"><Navigation/></nav></details></div></header>
+    <section id="top" className="ava-hero">
+      <div className="ava-hero-copy"><div className="ava-eyebrow">AI clones for real creators</div><h1>Your Fans.<br/>Your Rules.<br/><em>More Revenue.</em></h1><p>Ava builds AI clones for creators that chat, sell content and grow your income 24/7 on Telegram.</p><div className="ava-hero-actions"><PreviewButton>Get Started</PreviewButton><PreviewButton ghost>Book a Call</PreviewButton></div><div className="ava-platform-note"><span><Icon name="send"/></span><div><strong>Built for Telegram.</strong><small>Your personality. A new way to connect.</small></div></div></div>
+      <div className="ava-hero-visual"><div className="ava-phone-stage"><TelegramPhone/><TelegramPhone secondary/></div><p className="ava-chat-disclaimer">Example conversations · Fictional creators</p></div>
+    </section>
+    <section className="ava-capabilities" aria-label="Platform overview">{[["24/7","Conversations"],["Your voice","Your personality"],["Your content","Your pricing"],["One dashboard","Complete visibility"]].map(([value,label])=><div key={value}><strong>{value}</strong><span>{label}</span></div>)}</section>
+    <section id="how" className="ava-product-section"><div className="ava-product-copy"><div className="ava-eyebrow light">Creator growth platform</div><h2>Everything You Need<br/>to Scale as a Creator.</h2><p>Ava handles the conversations, sells your content and builds real relationships with your fans, so you can focus on creating.</p><ul><li><Icon name="check"/>Autonomous AI chat on Telegram</li><li><Icon name="check"/>Sells photos, videos, bundles and customs</li><li><Icon name="check"/>Learns your style, tone and personality</li><li><Icon name="check"/>24/7 operation with full analytics</li><li><Icon name="check"/>Fully managed setup and support</li></ul><PreviewButton light>Get Started</PreviewButton></div><DashboardMockup/></section>
+    <section className="ava-features-section" id="features"><div className="ava-section-intro"><div className="ava-eyebrow">Less admin. More you.</div><h2>The details that make it yours.</h2></div><div className="ava-features">{features.map(([icon,title,copy])=><article key={title}><span className="ava-feature-icon"><Icon name={icon}/></span><h3>{title}</h3><p>{copy}</p></article>)}</div></section>
+    <section className="ava-personality"><span className="ava-personality-mark" aria-hidden="true">Ava</span><div><div className="ava-eyebrow">Built around you</div><h2>Your personality.<br/>Not another template.</h2><p>Your tone, your content, your boundaries. A creator experience that feels like an extension of you.</p></div></section>
+    <section className="ava-faq" id="faq"><div><div className="ava-eyebrow">A few things to know</div><h2>Before you get started.</h2></div><div className="ava-faq-items"><details><summary>Where do fans talk to my AI clone?<Icon name="down"/></summary><p>On Telegram, in a one-to-one conversation with your creator bot.</p></details><details><summary>What does the dashboard show?<Icon name="down"/></summary><p>Earnings, balances, buyers, messages and audience activity. The example above uses fictional figures to demonstrate the layout.</p></details><details><summary>Can I sign up through this preview?<Icon name="down"/></summary><p>Not yet. This is a front-end preview. Signup, onboarding and payments are not connected.</p></details></div></section>
+    <section className="ava-final-cta"><div className="ava-eyebrow light">Your next chapter</div><h2>Ready to Scale with Ava?</h2><PreviewButton light>Get Started</PreviewButton></section>
+    <footer className="ava-footer"><a className="ava-wordmark" href="#top">Ava</a><nav aria-label="Footer navigation"><Navigation/></nav><small>© 2026 Ava. Front-end preview.</small></footer>
+  </main>;
 }

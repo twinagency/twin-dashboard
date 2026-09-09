@@ -143,3 +143,9 @@ jobs:
           echo "$OUT" | grep -q "${{ steps.build.outputs.sha }}" \
             || { echo "RUNNING CONTAINER IS NOT THE COMMIT WE SHIPPED"; exit 1; }
           echo "confirmed: container is running ${{ steps.build.outputs.sha }}"
+
+      # Public GETs only. A successful container swap is not proof of URL routing.
+      - name: Verify public Ava homepage
+        run: node scripts/check-ava-site.mjs --http-only
+        env:
+          AVA_CHECK_ORIGIN: https://dashboard.tgaiclone.xyz
