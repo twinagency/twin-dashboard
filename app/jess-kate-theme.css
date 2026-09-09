@@ -28,6 +28,14 @@ html[data-brand-theme="ivory-cherry"] {
   --sidebar-accent-foreground: #461323;
   --sidebar-border: rgb(235 203 210 / 0.2);
   --sidebar-ring: #ebcbd2;
+
+  /* Core hero keeps Twin's blue/cyan DNA with restrained warm highlights. */
+  --intelligence-core-glow-rgb: 37, 156, 255;
+  --intelligence-core-edge-rgb: 66, 196, 255;
+  --intelligence-core-front-rgb: 238, 252, 255;
+  --intelligence-core-back-rgb: 103, 232, 249;
+  --intelligence-core-accent-rgb: 255, 169, 77;
+  --intelligence-core-glow-alpha: 0.42;
 }
 
 /* Replace the shared shell's hard-coded navy without changing its geometry. */
@@ -55,10 +63,34 @@ html[data-brand-theme="ivory-cherry"] .dashboard-sidebar nav :is(a, button)[clas
   background: var(--color-accent-tint);
 }
 
-/* Jess and Kate core tile: keep Twin's original animated core colours,
-   remove the surrounding box, and make the animation 5% larger. */
+/* AI Intelligence Core hero: no box, larger centred sphere, atmospheric glow. */
 html[data-brand-theme="ivory-cherry"] .dashboard-sidebar [class~="border-sky-400/20"] {
+  position: relative;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  min-height: 8.9rem;
+  overflow: visible;
   border-color: transparent;
+  background-color: transparent;
+  padding-top: 0.6rem;
+  padding-bottom: 0.85rem;
+}
+
+html[data-brand-theme="ivory-cherry"] .dashboard-sidebar [class~="border-sky-400/20"]::before {
+  position: absolute;
+  top: 0.25rem;
+  left: 50%;
+  width: 9rem;
+  height: 7rem;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 50% 43%, rgb(80 205 255 / 0.28), rgb(37 156 255 / 0.12) 34%, transparent 68%);
+  filter: blur(8px);
+  content: "";
+  pointer-events: none;
 }
 
 html[data-brand-theme="ivory-cherry"] .dashboard-sidebar [class~="bg-sky-400/[0.05]"] {
@@ -66,13 +98,52 @@ html[data-brand-theme="ivory-cherry"] .dashboard-sidebar [class~="bg-sky-400/[0.
 }
 
 html[data-brand-theme="ivory-cherry"] .dashboard-sidebar [class~="border-sky-400/20"] canvas {
-  transform: scale(1.05);
+  position: relative;
+  z-index: 1;
+  transform: scale(1.34);
   transform-origin: center;
+  margin-top: 0.4rem;
+  margin-bottom: 0.65rem;
+  filter: drop-shadow(0 0 10px rgb(64 190 255 / 0.56)) drop-shadow(0 0 22px rgb(37 156 255 / 0.26));
+}
+
+html[data-brand-theme="ivory-cherry"] .dashboard-sidebar [class~="border-sky-400/20"] > div {
+  position: relative;
+  z-index: 2;
+  width: 100%;
+  text-align: center;
 }
 
 html[data-brand-theme="ivory-cherry"] .dashboard-sidebar [class~="text-[#38bdf8]"] {
+  display: block;
+  color: transparent;
+  font-size: 0;
+  line-height: 1;
+  text-shadow: none;
+}
+
+html[data-brand-theme="ivory-cherry"] .dashboard-sidebar [class~="text-[#38bdf8]"]::before {
+  display: block;
+  color: #fff7ef;
+  font-size: 0.86rem;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  line-height: 1.15;
+  content: "AI Intelligence";
+  text-shadow: 0 1px 10px rgb(255 247 239 / 0.12);
+}
+
+html[data-brand-theme="ivory-cherry"] .dashboard-sidebar [class~="text-[#38bdf8]"]::after {
+  display: block;
+  margin-top: 0.22rem;
   color: #7dd3fc;
-  text-shadow: 0 0 12px rgb(125 211 252 / 0.18);
+  font-size: 0.76rem;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  line-height: 1;
+  text-transform: uppercase;
+  content: "Core";
+  text-shadow: 0 0 14px rgb(80 205 255 / 0.45);
 }
 
 /* Neutral working surfaces, no blue wash or decorative pink glow. */
