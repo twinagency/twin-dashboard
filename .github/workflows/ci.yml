@@ -49,7 +49,16 @@ jobs:
         run: npx tsx scripts/check-marketing-access.ts
 
       - name: Install browser for public site verification
-        run: npx playwright install --with-deps chromium
+        run: |
+          # Playwright downloads its pinned browser separately. Its OS libraries
+          # come from Ubuntu, not the runner's unrelated Chrome apt feed, which
+          # can publish inconsistent index hashes during an update. Isolate that
+          # feed in this disposable runner; retain all signature/hash checks.
+          sudo mkdir -p /tmp/ci-unused-chrome-feed
+          while IFS= read -r source; do
+            sudo mv "$source" "/tmp/ci-unused-chrome-feed/${source##*/}"
+          done < <(sudo grep -rl 'dl.google.com/linux/chrome' /etc/apt/sources.list.d 2>/dev/null || true)
+          npx playwright install --with-deps chromium
 
       - name: Public site responsive and interaction checks
         run: node scripts/check-marketing-site.mjs
