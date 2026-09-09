@@ -53,6 +53,8 @@ try {
     assert.ok(await page.getByRole('heading',{level:1}).isVisible());
     assert.equal(await page.title(),'Twin Agency | Your audience. Your AI twin.');
     assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1),`No horizontal overflow at ${width}`);
+    const cardsFit = await page.locator('#product > div, [class*="featureCard"], [class*="dashboardMock"], [class*="controlCard"]').evaluateAll(elements => elements.every(el => { const r=el.getBoundingClientRect(); return r.left>=-1 && r.right<=window.innerWidth+1; }));
+    assert.ok(cardsFit, `Primary cards must remain inside the ${width}px viewport even when page overflow is clipped`);
     const assertChatFits = async () => {
       const geometry = await page.locator('[class*="chatArea"]').evaluate(el => ({
         bottom: el.getBoundingClientRect().bottom,
