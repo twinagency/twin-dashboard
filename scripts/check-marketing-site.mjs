@@ -18,8 +18,7 @@ let browser;
 const report = { viewports: [], loginRoutes: [], forbiddenWrites: true, backendRequests: [], pageErrors: [] };
 try {
   let ready=false;
-  for (let n=0;n<80;n++) { try { if ((await request('/twin-agency')).status===200) {ready=true;break;} } catch {} await delay(250);
-  }
+  for (let n=0;n<80;n++) { try { if ((await request('/twin-agency')).status===200) {ready=true;break;} } catch {} await delay(250); }
   assert.ok(ready,'Production marketing page must start');
   const cookies = ['', 'twin_agency_access=stale; twin_agency_portal=moxy', 'twin_agency_access=stale; twin_agency_portal=jess-and-kate-ai'];
   for (const cookie of cookies) {
@@ -54,11 +53,30 @@ try {
     assert.ok(await page.getByRole('heading',{level:1}).isVisible());
     assert.equal(await page.title(),'Twin Agency | Your audience. Your AI twin.');
     assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1),`No horizontal overflow at ${width}`);
+    const assertChatFits = async () => {
+      const geometry = await page.locator('[class*="chatArea"]').evaluate(el => ({
+        bottom: el.getBoundingClientRect().bottom,
+        childBottom: Math.max(...Array.from(el.children, child => child.getBoundingClientRect().bottom)),
+      }));
+      assert.ok(geometry.childBottom <= geometry.bottom + 1, `Chat content must not overlap composer at ${width}px`);
+    };
+    await assertChatFits();
+    await page.locator('[class*="demoStage"]').screenshot({path:`test-results/twin-public/${name}-conversation.png`});
+    const description = await page.locator('[class*="heroDescription"]').innerText();
+    assert.ok(!description.includes('you.Keep'),'Hero sentences retain whitespace on mobile');
     await page.getByRole('button',{name:'Paid content',exact:true}).click();
     await page.getByRole('button',{name:'Preview the unlock',exact:true}).click();
     assert.ok(await page.getByText('Demo only. No payment was taken.',{exact:true}).isVisible());
+    await assertChatFits();
     await page.getByRole('button',{name:'Voice',exact:true}).click();
     assert.ok(await page.getByText('Visual example',{exact:true}).isVisible());
+    await assertChatFits();
+    const voiceFits = await page.locator('[class*="voiceMessage"]').evaluate(el => {
+      const box = el.getBoundingClientRect();
+      return Array.from(el.children).every(child => { const b=child.getBoundingClientRect(); return b.left>=box.left-1 && b.right<=box.right+1; });
+    });
+    assert.ok(voiceFits,`Voice preview must fit at ${width}px`);
+    await page.locator('[class*="demoStage"]').screenshot({path:`test-results/twin-public/${name}-voice.png`});
     await page.getByRole('button',{name:'Conversations',exact:true}).first().click();
     await page.getByRole('button',{name:'Content',exact:true}).click();
     assert.ok(await page.getByText('One library. More possibilities.',{exact:true}).isVisible());
@@ -81,12 +99,12 @@ try {
     await page.screenshot({path:`test-results/twin-public/${name}.png`,fullPage:true});
     await page.screenshot({path:`test-results/twin-public/${name}-top.png`});
     if(name==='desktop') await writeFile('test-results/twin-public/rendered.html',await page.content());
-    report.viewports.push({name,width,height,interactiveChecks:'passed',horizontalOverflow:false});
+    report.viewports.push({name,width,height,interactiveChecks:'passed',horizontalOverflow:false,chatOverflow:false,voiceOverflow:false});
     await context.close();
   }
   assert.deepEqual(report.pageErrors,[]);
   assert.deepEqual(report.backendRequests,[],'Marketing interactions must not access backend APIs or write data');
   await writeFile('test-results/twin-public/report.json',JSON.stringify(report,null,2));
-  console.log('Public site production/browser checks passed: desktop/tablet/mobile, product previews, menu/dialogs/FAQ, no data calls or horizontal overflow, independent existing logins.');
+  console.log('Public site production/browser checks passed: desktop/tablet/mobile, product previews, menu/dialogs/FAQ, no data calls, no horizontal overflow or clipped messages, independent existing logins.');
 } catch(error) { console.error(error,output);process.exitCode=1; }
 finally { if(browser)await browser.close();server.kill('SIGTERM');setTimeout(()=>server.kill('SIGKILL'),5000).unref(); }
