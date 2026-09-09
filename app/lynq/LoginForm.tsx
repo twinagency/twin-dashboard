@@ -2,7 +2,7 @@
 
 import { useState, type FormEvent } from "react";
 
-export default function LynqLoginForm({ initialError = false, action = "/lynq/auth" }: { initialError?: boolean; action?: "/lynq/auth" | "/link/auth" }) {
+export default function LynqLoginForm({ initialError = false, action = "/lynq/auth" }: { initialError?: boolean; action?: "/lynq/auth" | "/link/auth" | "/jess-and-kate-ai/auth" }) {
   const [pending, setPending] = useState(false);
   const [error, setError] = useState(initialError ? "Unable to sign in. Please check your password and try again." : "");
 

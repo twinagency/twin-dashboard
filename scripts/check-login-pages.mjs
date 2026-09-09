@@ -21,8 +21,8 @@ try {
     await delay(250);
   }
   assert.equal(ready, true, 'Production login page must start');
-  for (const cookie of ['', 'twin_agency_access=stale; twin_agency_portal=moxy', 'twin_agency_access=stale; twin_agency_portal=lynq']) {
-    for (const [path, action, brand] of [['/', '/admin-auth', 'Admin sign in'], ['/twin', '/admin-auth', 'Admin sign in'], ['/moxy', '/moxy/auth', 'Moxy'], ['/link', '/link/auth', 'Link'], ['/lynq', '/lynq/auth', 'LYNQ']]) {
+  for (const cookie of ['', 'twin_agency_access=stale; twin_agency_portal=moxy', 'twin_agency_access=stale; twin_agency_portal=lynq', 'twin_agency_access=stale; twin_agency_portal=jess-and-kate-ai']) {
+    for (const [path, action, brand] of [['/', '/admin-auth', 'Admin sign in'], ['/twin', '/admin-auth', 'Admin sign in'], ['/moxy', '/moxy/auth', 'Moxy'], ['/link', '/link/auth', 'Link'], ['/lynq', '/lynq/auth', 'LYNQ'], ['/jess-and-kate-ai', '/jess-and-kate-ai/auth', 'Jess and Kate AI']]) {
       const response = await request(path, { headers: { cookie } });
       assert.equal(response.status, 200, path);
       assert.equal(response.headers.get('location'), null, `${path} must not redirect to another login`);
@@ -32,7 +32,7 @@ try {
       if (path === '/' || path === '/twin') assert.ok(!html.includes('data-agency="moxy"'), 'Twin must not inherit partner branding');
     }
   }
-  for (const path of ['/', '/twin', '/link', '/moxy']) assert.equal((await request(path, {method:'POST', headers:{'next-action':'not-authorized'}})).status, 403);
+  for (const path of ['/', '/twin', '/link', '/moxy', '/jess-and-kate-ai']) assert.equal((await request(path, {method:'POST', headers:{'next-action':'not-authorized'}})).status, 403);
   const denied = await request('/settings');
   assert.equal(denied.status, 307);
   assert.equal(new URL(denied.headers.get('location')).pathname, '/twin');
