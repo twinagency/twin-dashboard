@@ -2,7 +2,7 @@ import TwinWordmark from "@/components/TwinWordmark";
 import PortalLoginForm from "@/app/lynq/LoginForm";
 import { JESS_KATE_PORTAL } from "@/lib/partner-portals";
 
-export const metadata = { title: "Sign in · Jess and Kate AI" };
+export const metadata = { title: "Sign in · Ava" };
 export const dynamic = "force-dynamic";
 export default async function JessKateLogin({ searchParams }: { searchParams: Promise<{ error?: string }> }) {
   const { error } = await searchParams;
