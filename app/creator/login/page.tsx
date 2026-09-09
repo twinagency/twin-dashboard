@@ -36,7 +36,7 @@ export default async function CreatorLoginPage({ searchParams }: { searchParams:
             <form action="/creator-auth/login" method="post" className="grid gap-4">
               <input type="hidden" name="next" value={safeNext} />
               <label className="block"><span className="mb-1 block text-sm text-muted">Email</span><Input name="email" type="email" autoComplete="email" required autoFocus /></label>
-              <label className="block"><span className="mb-1 block text-sm text-muted">Password</span><Input name="password" type="password" autoComplete="current-password" required /></label>
+              <label className="block"><span className="mb-1 flex items-center justify-between gap-3 text-sm text-muted"><span>Password</span><Link href="/creator/forgot-password" className="font-medium text-accent-2 hover:underline">Forgot password?</Link></span><Input name="password" type="password" autoComplete="current-password" required /></label>
               {error && <p className="text-sm text-crit">Unable to sign in. Check your details and try again.</p>}
               <Button type="submit" className="w-full">Sign in</Button>
             </form>
