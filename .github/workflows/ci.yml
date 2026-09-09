@@ -54,6 +54,9 @@ jobs:
       - name: Public site responsive and interaction checks
         run: node scripts/check-marketing-site.mjs
 
+      - name: Ava responsive and preview integrity checks
+        run: node scripts/check-ava-site.mjs
+
       - name: Public site review screenshots
         if: always()
         uses: actions/upload-artifact@v4
