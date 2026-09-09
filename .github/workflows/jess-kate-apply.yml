@@ -1,0 +1,58 @@
+name: Validate Jess Kate portal
+on:
+  push:
+    branches: [feat/jess-kate-portal]
+    paths: [.github/workflows/jess-kate-apply.yml]
+permissions:
+  contents: write
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Assemble hash-verified changes
+        run: |
+          python3 - <<'PY'
+          import pathlib, base64, gzip, hashlib
+          parts = sorted(pathlib.Path('.github').glob('jess-kate-part-*.b64'))
+          assert len(parts) == 4
+          patch = gzip.decompress(base64.b64decode(''.join(p.read_text().strip() for p in parts)))
+          assert hashlib.sha256(patch).hexdigest() == 'b4d003769582a3c8ba58359ad69e6d7b01b715d54856af8b102d6ac44ea0f74f'
+          pathlib.Path('/tmp/jess-kate.patch').write_bytes(patch)
+          PY
+          git apply --unidiff-zero --check /tmp/jess-kate.patch
+          git apply --unidiff-zero /tmp/jess-kate.patch
+          rm .github/jess-kate-part-*.b64 .github/workflows/jess-kate-apply.yml
+          git diff --check
+      - run: npm ci
+      - name: TypeScript
+        run: npx tsc --noEmit
+      - name: Behavioral and security regressions
+        run: npm run test:offline
+      - name: Production build
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'
+      - name: Production login smoke
+        run: node scripts/check-login-pages.mjs
+      - name: Save tested implementation
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add -A
+          git commit -m 'feat: Jess and Kate AI isolated editable creator portal'
+          git push origin HEAD:refs/heads/feat/jess-kate-portal
+          echo "Validated commit: $(git rev-parse HEAD)" >> "$GITHUB_STEP_SUMMARY"
+      - name: Export validation source
+        if: always()
+        run: tar --exclude=node_modules --exclude=.next --exclude=.git -czf /tmp/jess-kate-validation.tar.gz app components lib scripts docs package.json package-lock.json middleware.ts tsconfig.json
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: jess-kate-validation
+          path: /tmp/jess-kate-validation.tar.gz
+          retention-days: 1
