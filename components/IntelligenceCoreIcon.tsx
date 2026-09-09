@@ -17,14 +17,14 @@ export default function IntelligenceCoreIcon({ size: displaySize = 30 }: { size?
     const canvas = ref.current;
     const ctx = canvas?.getContext("2d");
     if (!canvas || !ctx) return;
-    // Read the optional brand tokens once, not on every animation frame.
-    // Other partners retain the original cyan particle colours exactly.
     const styles = getComputedStyle(canvas);
     const token = (name: string, fallback: string) => styles.getPropertyValue(name).trim() || fallback;
     const glowRgb = token("--intelligence-core-glow-rgb", "56,189,248");
     const edgeRgb = token("--intelligence-core-edge-rgb", "45,190,255");
     const frontRgb = token("--intelligence-core-front-rgb", "238,252,255");
     const backRgb = token("--intelligence-core-back-rgb", "103,232,249");
+    const accentRgb = styles.getPropertyValue("--intelligence-core-accent-rgb").trim();
+    const glowAlpha = Number(token("--intelligence-core-glow-alpha", "0.22"));
     const motion = matchMedia("(prefers-reduced-motion: reduce)");
     let frame = 0;
     const draw = (now: number) => {
@@ -44,18 +44,29 @@ export default function IntelligenceCoreIcon({ size: displaySize = 30 }: { size?
         return { x: 15 + x * 11, y: 15 + (p.y * 0.98 + z * 0.18) * 11, z };
       });
       const glow = ctx.createRadialGradient(15, 15, 1, 15, 15, 15);
-      glow.addColorStop(0, `rgba(${glowRgb},0.22)`);
+      glow.addColorStop(0, `rgba(${glowRgb},${Math.min(Math.max(glowAlpha, 0), 0.65)})`);
+      glow.addColorStop(0.5, `rgba(${glowRgb},${Math.min(Math.max(glowAlpha * 0.28, 0), 0.24)})`);
       glow.addColorStop(1, "rgba(37,99,235,0)");
-      ctx.fillStyle = glow; ctx.fillRect(0, 0, size, size);
+      ctx.fillStyle = glow;
+      ctx.fillRect(0, 0, size, size);
       points.forEach((p, i) => {
         points.slice(i + 1).forEach(q => {
           const distance = Math.hypot(p.x - q.x, p.y - q.y);
           if (distance > 4 || Math.abs(p.z - q.z) > 0.55) return;
-          ctx.strokeStyle = `rgba(${edgeRgb},${0.09 + (p.z + q.z + 2) * 0.04})`;
-          ctx.lineWidth = 0.45; ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.stroke();
+          ctx.strokeStyle = `rgba(${edgeRgb},${0.13 + (p.z + q.z + 2) * 0.055})`;
+          ctx.lineWidth = 0.5;
+          ctx.beginPath();
+          ctx.moveTo(p.x, p.y);
+          ctx.lineTo(q.x, q.y);
+          ctx.stroke();
         });
-        ctx.fillStyle = `rgba(${p.z > 0.25 ? frontRgb : backRgb},${0.45 + (p.z + 1) * 0.25})`;
-        ctx.beginPath(); ctx.arc(p.x, p.y, 0.4 + (p.z + 1) * 0.22, 0, Math.PI * 2); ctx.fill();
+        const isAccent = !!accentRgb && i % 13 === 0;
+        ctx.fillStyle = isAccent
+          ? `rgba(${accentRgb},${0.62 + (p.z + 1) * 0.16})`
+          : `rgba(${p.z > 0.25 ? frontRgb : backRgb},${0.56 + (p.z + 1) * 0.22})`;
+        ctx.beginPath();
+        ctx.arc(p.x, p.y, (isAccent ? 0.54 : 0.44) + (p.z + 1) * 0.23, 0, Math.PI * 2);
+        ctx.fill();
       });
       if (!motion.matches && !document.hidden) frame = requestAnimationFrame(draw);
     };
@@ -63,7 +74,11 @@ export default function IntelligenceCoreIcon({ size: displaySize = 30 }: { size?
     motion.addEventListener("change", restart);
     document.addEventListener("visibilitychange", restart);
     restart();
-    return () => { cancelAnimationFrame(frame); motion.removeEventListener("change", restart); document.removeEventListener("visibilitychange", restart); };
+    return () => {
+      cancelAnimationFrame(frame);
+      motion.removeEventListener("change", restart);
+      document.removeEventListener("visibilitychange", restart);
+    };
   }, [displaySize]);
   return <canvas ref={ref} width={displaySize * 2} height={displaySize * 2} style={{width:displaySize,height:displaySize}} aria-hidden="true" className="pointer-events-none shrink-0" />;
 }
