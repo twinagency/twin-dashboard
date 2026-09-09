@@ -16,6 +16,21 @@ function withPathname(req: NextRequest): NextResponse {
   return NextResponse.next({ request: { headers } });
 }
 
+// Twin's administrator-facing entry point. Keep this separate from partner
+// portal cookies so a browser that last visited Moxy/LYNQ can still reliably
+// reach the full admin backend.
+const TWIN_ADMIN_PREFIX = "/twin";
+
+function isTwinAdminPath(pathname: string): boolean {
+  return pathname === TWIN_ADMIN_PREFIX || pathname.startsWith(`${TWIN_ADMIN_PREFIX}/`);
+}
+
+function stripTwinPrefix(pathname: string): string {
+  if (pathname === TWIN_ADMIN_PREFIX) return "/";
+  const stripped = pathname.slice(TWIN_ADMIN_PREFIX.length);
+  return stripped.startsWith("/") ? stripped : `/${stripped}`;
+}
+
 // ─── Routes that authenticate THEMSELVES, per request ────────────────────────
 // These carry a bearer key, not a dashboard session cookie, so the session gate
 // below must not touch them: it would redirect an API caller to /login and the
@@ -64,6 +79,32 @@ export async function middleware(req: NextRequest) {
   const adminToken = req.cookies.get(SESSION_COOKIE)?.value;
   const admin = await verifySessionToken(adminToken);
   const agencyToken = req.cookies.get(AGENCY_COOKIE)?.value;
+
+  // /twin is the canonical master-admin namespace. Agency cookies never hijack
+  // it. An authenticated admin sees the existing admin app under the /twin URL;
+  // everyone else is sent to the admin login flow.
+  if (isTwinAdminPath(pathname)) {
+    if (!admin) {
+      const url = new URL("/login", dashboardOrigin(req));
+      url.searchParams.set("next", pathname);
+      return NextResponse.redirect(url);
+    }
+    const rewritten = req.nextUrl.clone();
+    rewritten.pathname = stripTwinPrefix(pathname);
+    const response = NextResponse.rewrite(rewritten, {
+      request: {
+        headers: (() => {
+          const headers = new Headers(req.headers);
+          headers.set("x-pathname", stripTwinPrefix(pathname));
+          headers.set("x-admin-prefix", TWIN_ADMIN_PREFIX);
+          return headers;
+        })(),
+      },
+    });
+    response.headers.set("Cache-Control", "private, no-store");
+    return response;
+  }
+
   if (agencyToken && pathname !== "/login") {
     const identity = await agencyIdentity(agencyToken);
     if (!identity) return NextResponse.redirect(new URL(portalLoginPath(req.cookies.get(AGENCY_PORTAL_COOKIE)?.value),dashboardOrigin(req)));
@@ -71,7 +112,7 @@ export async function middleware(req: NextRequest) {
     const serverAction = req.headers.has("next-action");
     const isWrite = serverAction || !["GET", "HEAD"].includes(req.method);
     if (isWrite && (!canManage || !agencyManagementRequestAllowed(pathname,req.method,serverAction))) return new NextResponse("Administrator access required", {status:403});
-    if (isWrite && !trustedFormOrigin(req)) return new NextResponse("Untrusted request origin", {status:403});
+    if (isWrite && !trustedFormOrigin(req)) return new NextResponse("Untrusted request origin",{status:403});
     if (!agencyDashboardPath(pathname, identity.name, canManage)) return new NextResponse("Administrator access required", {status:403});
     // The legacy compiler GET mutates data. Agencies use its POST counterpart.
     if (pathname === "/api/compile" && !isWrite) return new NextResponse("Use POST", {status:405});
@@ -97,11 +138,21 @@ export async function middleware(req: NextRequest) {
 
   if (pathname === "/login") {
     if (authed && !agencyToken) {
-      const next = req.nextUrl.searchParams.get("next") || "/";
-      const safe = next.startsWith("/") && !next.startsWith("//") && !next.includes("\\") ? next : "/";
+      const next = req.nextUrl.searchParams.get("next") || TWIN_ADMIN_PREFIX;
+      const safe = next.startsWith("/") && !next.startsWith("//") && !next.includes("\\") ? next : TWIN_ADMIN_PREFIX;
       return NextResponse.redirect(new URL(safe, dashboardOrigin(req)));
     }
     return withPathname(req);
+  }
+
+  // Bare domain is now a deterministic router rather than an ambiguous admin
+  // entry. Admins land on /twin; partner sessions return to their own portal;
+  // unauthenticated users go to login.
+  if (pathname === "/") {
+    if (authed) return NextResponse.redirect(new URL(TWIN_ADMIN_PREFIX, dashboardOrigin(req)));
+    const portal = req.cookies.get(AGENCY_PORTAL_COOKIE)?.value;
+    if (portal) return NextResponse.redirect(new URL(portalLoginPath(portal), dashboardOrigin(req)));
+    return NextResponse.redirect(new URL("/login", dashboardOrigin(req)));
   }
 
   if (!authed) {
