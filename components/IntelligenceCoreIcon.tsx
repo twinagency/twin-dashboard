@@ -17,6 +17,14 @@ export default function IntelligenceCoreIcon({ size: displaySize = 30 }: { size?
     const canvas = ref.current;
     const ctx = canvas?.getContext("2d");
     if (!canvas || !ctx) return;
+    // Read the optional brand tokens once, not on every animation frame.
+    // Other partners retain the original cyan particle colours exactly.
+    const styles = getComputedStyle(canvas);
+    const token = (name: string, fallback: string) => styles.getPropertyValue(name).trim() || fallback;
+    const glowRgb = token("--intelligence-core-glow-rgb", "56,189,248");
+    const edgeRgb = token("--intelligence-core-edge-rgb", "45,190,255");
+    const frontRgb = token("--intelligence-core-front-rgb", "238,252,255");
+    const backRgb = token("--intelligence-core-back-rgb", "103,232,249");
     const motion = matchMedia("(prefers-reduced-motion: reduce)");
     let frame = 0;
     const draw = (now: number) => {
@@ -36,17 +44,17 @@ export default function IntelligenceCoreIcon({ size: displaySize = 30 }: { size?
         return { x: 15 + x * 11, y: 15 + (p.y * 0.98 + z * 0.18) * 11, z };
       });
       const glow = ctx.createRadialGradient(15, 15, 1, 15, 15, 15);
-      glow.addColorStop(0, "rgba(56,189,248,0.22)");
+      glow.addColorStop(0, `rgba(${glowRgb},0.22)`);
       glow.addColorStop(1, "rgba(37,99,235,0)");
       ctx.fillStyle = glow; ctx.fillRect(0, 0, size, size);
       points.forEach((p, i) => {
         points.slice(i + 1).forEach(q => {
           const distance = Math.hypot(p.x - q.x, p.y - q.y);
           if (distance > 4 || Math.abs(p.z - q.z) > 0.55) return;
-          ctx.strokeStyle = `rgba(45,190,255,${0.09 + (p.z + q.z + 2) * 0.04})`;
+          ctx.strokeStyle = `rgba(${edgeRgb},${0.09 + (p.z + q.z + 2) * 0.04})`;
           ctx.lineWidth = 0.45; ctx.beginPath(); ctx.moveTo(p.x, p.y); ctx.lineTo(q.x, q.y); ctx.stroke();
         });
-        ctx.fillStyle = `rgba(${p.z > 0.25 ? "238,252,255" : "103,232,249"},${0.45 + (p.z + 1) * 0.25})`;
+        ctx.fillStyle = `rgba(${p.z > 0.25 ? frontRgb : backRgb},${0.45 + (p.z + 1) * 0.25})`;
         ctx.beginPath(); ctx.arc(p.x, p.y, 0.4 + (p.z + 1) * 0.22, 0, Math.PI * 2); ctx.fill();
       });
       if (!motion.matches && !document.hidden) frame = requestAnimationFrame(draw);

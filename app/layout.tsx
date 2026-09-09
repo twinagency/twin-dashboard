@@ -4,6 +4,8 @@ import { agencyCanManage } from "@/lib/agency-management-policy";
 import DashboardAccessProvider from "@/components/DashboardAccessProvider";
 import { getDashboardAccess } from "@/lib/dashboard-access";
 import "./globals.css";
+import "./jess-kate-theme.css";
+import { JESS_KATE_PORTAL } from "@/lib/partner-portals";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { headers } from "next/headers";
@@ -68,7 +70,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   }
   // The agency shell must never fetch or serialize the internal fleet data.
   if (isTwinLoginPath(pathname) || (pathname && isAgencyPath(pathname))) {
-    return <html lang="en" data-agency={pathname && isAgencyPath(pathname) && isMoxy(pathAgencyName(pathname)) ? "moxy" : undefined} className={cn("font-sans", inter.variable, plexMono.variable, spaceGrotesk.variable, interTight.variable)}><body className="min-h-screen bg-bg">{children}</body></html>;
+    return <html lang="en" data-agency={pathname && isAgencyPath(pathname) && isMoxy(pathAgencyName(pathname)) ? "moxy" : undefined} data-brand-theme={pathname && isAgencyPath(pathname) && pathAgencyName(pathname) === JESS_KATE_PORTAL.name ? "ivory-cherry" : undefined} className={cn("font-sans", inter.variable, plexMono.variable, spaceGrotesk.variable, interTight.variable)}><body className="min-h-screen bg-bg">{children}</body></html>;
   }
   const devBypass =
     !isTwinLoginPath(pathname) &&
@@ -133,7 +135,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // rendering lives in the TopBar/MainShell CLIENT components (usePathname).
 
   return (
-    <html lang="en" data-agency={isMoxy(agency?.name) ? "moxy" : undefined} className={cn("font-sans", inter.variable, plexMono.variable, spaceGrotesk.variable, interTight.variable)} style={{ colorScheme: "light" }} suppressHydrationWarning>
+    <html lang="en" data-agency={isMoxy(agency?.name) ? "moxy" : undefined} data-brand-theme={agency?.name === JESS_KATE_PORTAL.name ? "ivory-cherry" : undefined} className={cn("font-sans", inter.variable, plexMono.variable, spaceGrotesk.variable, interTight.variable)} style={{ colorScheme: "light" }} suppressHydrationWarning>
       <body className="min-h-screen bg-bg">
         {/* Privacy mode has to be on the <html> element BEFORE first paint.
             BlurProvider applies it too, but only in a useEffect after

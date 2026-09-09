@@ -1,0 +1,115 @@
+/* Jess and Kate AI: ivory and cherry, presentation only.
+   RootLayout sets this attribute for this partner's login or verified session.
+   Keeping it on <html> also themes body-portalled menus and mobile navigation.
+   Do not override good/warn/crit/info, revenue series, Stars, emojis, avatars,
+   or the Telegram conversation preview. Those colours communicate meaning. */
+html[data-brand-theme="ivory-cherry"] {
+  --color-bg: #f7f2ec;
+  --color-panel: #fffcf9;
+  --color-elev: #f1e7e5;
+  --color-ink: #211c1e;
+  --color-muted: #74676b;
+  --color-line: #e5d8d8;
+  --color-accent: #7a1734;
+  --color-accent-2: #7a1734;
+  --color-accent-deep: #461323;
+  --color-accent-ink: #ffffff;
+  --color-accent-soft: #c9a3ad;
+  --color-accent-tint: #f3e1e5;
+  --color-brand: #7a1734;
+  --color-brand-light: #963b55;
+  --jess-kate-blush: #ebcbd2;
+  --shadow-card: 0 1px 2px rgb(33 28 30 / 0.035), 0 8px 24px rgb(70 19 35 / 0.04);
+  --sidebar: #461323;
+  --sidebar-foreground: #f7f2ec;
+  --sidebar-primary: #ebcbd2;
+  --sidebar-primary-foreground: #461323;
+  --sidebar-accent: #ebcbd2;
+  --sidebar-accent-foreground: #461323;
+  --sidebar-border: rgb(235 203 210 / 0.2);
+  --sidebar-ring: #ebcbd2;
+  /* RGB triplets used only by the decorative particle canvas. */
+  --intelligence-core-glow-rgb: 235,203,210;
+  --intelligence-core-edge-rgb: 235,203,210;
+  --intelligence-core-front-rgb: 247,242,236;
+  --intelligence-core-back-rgb: 235,203,210;
+}
+
+/* Replace the shared shell's hard-coded navy without changing its geometry. */
+html[data-brand-theme="ivory-cherry"] .dashboard-sidebar,
+html[data-brand-theme="ivory-cherry"] .dashboard-mobile-header {
+  background: linear-gradient(180deg, #7a1734 0%, #461323 100%);
+  box-shadow: 8px 0 28px rgb(70 19 35 / 0.08);
+}
+
+html[data-brand-theme="ivory-cherry"] .dashboard-sidebar nav [class~="text-[#9cbad3]"] {
+  color: inherit;
+}
+
+html[data-brand-theme="ivory-cherry"] .dashboard-sidebar nav [class~="text-white/68"] {
+  color: rgb(247 242 236 / 0.82);
+}
+
+html[data-brand-theme="ivory-cherry"] .dashboard-sidebar nav :is(a, button)[class~="bg-white/12"] {
+  background: var(--jess-kate-blush);
+  color: var(--color-accent-deep);
+  box-shadow: inset 0 0 0 1px rgb(247 242 236 / 0.2);
+}
+
+html[data-brand-theme="ivory-cherry"] .dashboard-sidebar nav :is(a, button)[class~="bg-white/12"]:hover {
+  background: var(--color-accent-tint);
+}
+
+/* Only the decorative core tile uses these literal sky classes in the sidebar. */
+html[data-brand-theme="ivory-cherry"] .dashboard-sidebar [class~="text-[#38bdf8]"] {
+  color: var(--jess-kate-blush);
+}
+
+html[data-brand-theme="ivory-cherry"] .dashboard-sidebar [class~="border-sky-400/20"] {
+  border-color: rgb(235 203 210 / 0.28);
+}
+
+html[data-brand-theme="ivory-cherry"] .dashboard-sidebar [class~="bg-sky-400/[0.05]"] {
+  background-color: rgb(235 203 210 / 0.06);
+}
+
+/* Neutral working surfaces, no blue wash or decorative pink glow. */
+html[data-brand-theme="ivory-cherry"] .canvas-glow,
+html[data-brand-theme="ivory-cherry"] .dashboard-main::before {
+  background-image: none;
+}
+
+html[data-brand-theme="ivory-cherry"] .dashboard-main::after {
+  background: none;
+}
+
+html[data-brand-theme="ivory-cherry"] .dashboard-topbar {
+  background: rgb(255 252 249 / 0.97);
+}
+
+html[data-brand-theme="ivory-cherry"] .dashboard-topbar > [class~="bg-white/82"] {
+  background: rgb(255 252 249 / 0.94);
+  box-shadow: 0 8px 26px rgb(70 19 35 / 0.045);
+}
+
+/* The topbar's sole tabular amount is its cash balance. Preserve semantic green. */
+html[data-brand-theme="ivory-cherry"] .dashboard-topbar .tabular-nums {
+  color: var(--color-good);
+}
+
+html[data-brand-theme="ivory-cherry"] [data-slot="table-header"] {
+  background: var(--color-elev);
+}
+
+html[data-brand-theme="ivory-cherry"] [data-slot="table-body"] [data-slot="table-row"]:hover {
+  background: color-mix(in srgb, var(--jess-kate-blush) 24%, var(--color-panel));
+}
+
+html[data-brand-theme="ivory-cherry"] .earnings-control-active {
+  box-shadow: 0 3px 8px rgb(70 19 35 / 0.16);
+}
+
+/* Grid guides, never the financial bars/lines or status dots. */
+html[data-brand-theme="ivory-cherry"] .recharts-cartesian-grid line {
+  stroke: var(--color-line);
+}
