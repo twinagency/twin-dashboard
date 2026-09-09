@@ -69,6 +69,10 @@ export type CloneConfigState = {
   mediaAllowResend: boolean;
   // Strict media-match dial (clones.media_match_strict, migration 104).
   mediaMatchStrict: boolean;
+  // Per-creator video-sequence opt-in (clones.video_sequences_enabled,
+  // migration 147). AND-ed with the bot's VIDEO_SEQUENCES_ENABLED env flag, so
+  // turning this on alone cannot switch the feature on.
+  videoSequencesEnabled: boolean;
 
   sexualLevel: HeatLevel;
   nsfwLevel: HeatLevel;
@@ -261,6 +265,7 @@ function initial(clone?: Partial<Clone>): CloneConfigState {
     charge: clone?.charge_messages ?? true,
     mediaAllowResend: clone?.media_allow_resend ?? false,
     mediaMatchStrict: clone?.media_match_strict ?? false,
+    videoSequencesEnabled: clone?.video_sequences_enabled ?? false,
 
     sexualLevel: heatLevel(clone?.sexual_level),
     nsfwLevel: heatLevel(clone?.nsfw_level),

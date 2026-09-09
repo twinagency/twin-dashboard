@@ -573,6 +573,23 @@ export default function ConfigSections({
             onChange={(v) => set("mediaAllowResend", v)}
           />
         </div>
+        {/* Per-creator video sequences (clones.video_sequences_enabled,
+            migration 147). Its own row because it is not a media type she can
+            send, it is permission to sell one long recording as a free preview
+            plus paid parts. Read by videoSequencesEnabled() in
+            bot/src/intent/sequence.ts, which AND-s it with the global
+            VIDEO_SEQUENCES_ENABLED env flag, so this switch alone cannot turn
+            the feature on. */}
+        <div className="border-t border-line pt-2">
+          <ToggleCard
+            emoji="🎬"
+            label={cfg.videoSequencesEnabled ? "Sells video sequences" : "No video sequences"}
+            title="Off (default): she never offers a sequence. On: a published sequence for this creator can be introduced with its free preview and its paid parts sold one at a time, in order. Needs a published sequence on the Sequences page, and the feature also has to be switched on for the whole fleet in the bot's environment."
+            name="video_sequences_enabled"
+            checked={cfg.videoSequencesEnabled}
+            onChange={(v) => set("videoSequencesEnabled", v)}
+          />
+        </div>
         {/* Strict media-match dial (clones.media_match_strict, migration 104).
             When the AI can't confidently read what item to send (its answer
             comes back unparseable), the code has always had to pick something

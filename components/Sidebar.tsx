@@ -107,6 +107,7 @@ const NAV_LINKS: NavLink[] = [
 const MORE_LINKS: NavLink[] = [
   { kind: "route", label: "AI", href: "/jarvis", icon: "Sparkle", color: "blue" },
   { kind: "route", label: "Flows", href: "/flows", icon: "Flows", color: "pink", gateOnClone: true },
+  { kind: "route", label: "Sequences", href: "/sequences", icon: "Media", color: "red", gateOnClone: true },
   { kind: "tab", label: "Edit", tab: "identity", icon: "Dials", color: "blue" },
   { kind: "route", label: "Tracker", href: "/tracker", icon: "ListChecks", color: "orange" },
   { kind: "route", label: "Info", href: "/info", icon: "Info", color: "neutral" },

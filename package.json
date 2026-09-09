@@ -17,7 +17,7 @@
     "test:drivers": "tsx scripts/check-revenue-day-drivers.ts",
     "test:ledger": "tsx scripts/check-dashboard-ledger.ts",
     "test:window": "tsx scripts/check-revenue-window.ts",
-    "test": "npm run test:api && npm run test:public && npm run test:paging && npm run test:callsites && npm run test:media && npm run test:config-safety && npm run test:spend && npm run test:report && npm run test:drivers && npm run test:ledger && npm run test:window && npm run test:rollups && npm run test:tiles && npm run test:users-tile && npm run test:dossier && npm run test:thread && npm run test:funnel && npm run test:consistency && npm run test:cohorts",
+    "test": "npm run test:api && npm run test:public && npm run test:paging && npm run test:callsites && npm run test:media && npm run test:config-safety && npm run test:spend && npm run test:report && npm run test:drivers && npm run test:ledger && npm run test:window && npm run test:rollups && npm run test:tiles && npm run test:users-tile && npm run test:dossier && npm run test:thread && npm run test:funnel && npm run test:consistency && npm run test:cohorts && npm run test:videos && npm run test:sequence && npm run test:sequence-ui",
     "key:issue": "tsx scripts/issue-api-key.ts issue",
     "key:list": "tsx scripts/issue-api-key.ts list",
     "key:revoke": "tsx scripts/issue-api-key.ts revoke",
@@ -32,6 +32,9 @@
     "test:offline": "npm run test:paging && npm run test:callsites && npm run test:media && npm run test:config-safety && npm run test:spend && npm run test:report && npm run test:drivers && npm run test:ledger && npm run test:window && npm run test:dossier && npm run test:thread && npm run test:consistency && npm run test:cohorts && npm run test:agency",
     "test:funnel": "tsx scripts/check-conversation-funnel.ts",
     "test:cohorts": "tsx scripts/check-clone-cohorts.ts && tsx --test app/flows/ConversionCohortStatus.test.tsx app/flows/IntentOfferFunnelSummary.test.tsx",
+    "test:videos": "tsx scripts/check-video-import.ts",
+    "test:sequence": "tsx scripts/check-sequence-render.ts",
+    "test:sequence-ui": "tsx scripts/check-sequence-ui.ts",
     "test:agency": "tsx scripts/check-agency-access.ts && tsx scripts/check-agency-queries.ts && tsx scripts/check-lynq-login.ts && tsx scripts/check-moxy-access.ts && tsx scripts/check-lynq-management.tsx && tsx scripts/check-login-routing.ts && tsx scripts/check-jess-kate-access.ts && TEST_JESS_KATE=1 tsx scripts/check-lynq-management.tsx && tsx scripts/check-sidebar-layout.tsx"
   },
   "dependencies": {

@@ -25,6 +25,8 @@ import {
   DEFAULT_PHOTO_BUNDLE_PRICE_STARS,
   normalizeSafeCategoryGuide,
   priceFromGuide,
+  isAllowedPaidOrFreePrice,
+  MIN_PAID_MEDIA_PRICE_STARS,
   type CategoryPricing,
 } from "@/lib/pricing";
 import { assertPhotoSendable } from "@/lib/photo-guard";
@@ -46,15 +48,32 @@ async function uploadConfig(cloneId: string): Promise<{ model: string; guide: un
   return { model: data?.vision_model || "qwen/qwen2.5-vl-72b-instruct", guide: data?.category_pricing };
 }
 
-// No manual price is ever typed by an importer, so this is resolvePrice() with
-// the manual branch removed: guide + AI tags, else the caller's fallback.
-function requireSafeGuide(raw: unknown): CategoryPricing {
+// --price <stars>, mirroring the manual branch of app/media/actions.ts's
+// resolvePrice: an operator-typed price is used verbatim and skips the guide
+// entirely. Money still comes from the operator, never from this script or the
+// AI, which only supplies the tags a guide would be looked up by.
+const MANUAL_PRICE: number | null = (() => {
+  const i = process.argv.indexOf("--price");
+  if (i === -1) return null;
+  const n = Number(process.argv[i + 1]);
+  if (!isAllowedPaidOrFreePrice(n)) {
+    throw new Error(`--price must be 0 (free) or at least ${MIN_PAID_MEDIA_PRICE_STARS} Stars`);
+  }
+  return n;
+})();
+
+// With --price the guide is not consulted, so a stale guide must not block the
+// run. Without one the guide is still mandatory.
+function requireSafeGuide(raw: unknown): CategoryPricing | null {
+  if (MANUAL_PRICE !== null) return null;
   const guide = normalizeSafeCategoryGuide(raw);
-  if (!guide) throw new Error("creator pricing guide is missing or outdated; save the guide in PPVs before importing");
+  if (!guide) throw new Error("creator pricing guide is missing or outdated; save the guide in PPVs before importing, or pass --price <stars>");
   return guide;
 }
 
-function resolvePrice(cap: Caption, guide: CategoryPricing): number {
+function resolvePrice(cap: Caption, guide: CategoryPricing | null): number {
+  if (MANUAL_PRICE !== null) return MANUAL_PRICE;
+  if (!guide) throw new Error("no pricing guide and no --price");
   const price = priceFromGuide(guide, cap.tags, cap.nsfw);
   if (price == null) throw new Error("could not derive a price from the creator pricing guide");
   return price;
