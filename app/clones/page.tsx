@@ -26,7 +26,6 @@ export default async function ClonesPage() {
   const clones = (data ?? []) as Partial<Clone>[];
   const cloneIds = clones.map((c) => c.id).filter(Boolean) as string[];
 
-  // Per-clone cover photo for the avatar.
   const avatarUrlByCloneId = new Map<string, string>();
 
   if (cloneIds.length > 0) {
@@ -73,9 +72,14 @@ export default async function ClonesPage() {
 
   return (
     <div className="dashboard-page">
-      <div className="mb-6 flex items-center justify-between">
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold text-ink">Creators</h1>
-        <span className="text-sm font-medium text-muted">{clones.length} total</span>
+        <div className="flex items-center gap-3">
+          <AdminOnly>
+            <Button nativeButton={false} variant="outline" render={<Link href="/creator-management" />}>Review onboarding</Button>
+          </AdminOnly>
+          <span className="text-sm font-medium text-muted">{clones.length} total</span>
+        </div>
       </div>
 
       {clones.length === 0 ? (
