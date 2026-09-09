@@ -2,7 +2,7 @@ import type { Metadata } from "next";
 import "./ava.css";
 
 export const metadata: Metadata = {
-  title: "Ava — AI clones for creators",
+  title: "Ava | AI clones for creators",
   description: "A premium AI creator clone experience built around Telegram conversations, paid content and creator analytics.",
   robots: { index: false, follow: false },
 };
