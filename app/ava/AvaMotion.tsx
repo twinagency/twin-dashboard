@@ -31,9 +31,21 @@ export default function AvaMotion() {
       frame = 0;
       previous = null;
     };
+    const restoreStatic = () => {
+      cancelFrame();
+      delete scroller.dataset.avaScrollReady;
+      scroller.dataset.avaScrollState = "static";
+      scroller.removeAttribute("tabindex");
+      scroller.removeAttribute("aria-label");
+      scroller.scrollTop = 0;
+      elapsed = 0;
+      complete = false;
+    };
     const canScroll = () => !disposed && inView && !document.hidden && !reduced.matches && !hovering && !manual && !complete;
     const tick = (now: number) => {
       frame = 0;
+      // A preference change can precede delivery of the MediaQueryList event.
+      if (reduced.matches) { restoreStatic(); return; }
       if (!canScroll()) { previous = null; return; }
       if (previous !== null) elapsed += Math.min(now - previous, 64);
       previous = now;
@@ -51,6 +63,7 @@ export default function AvaMotion() {
       }
     };
     const syncScroll = () => {
+      if (reduced.matches) { restoreStatic(); return; }
       if (canScroll()) {
         if (!scroller.hasAttribute("data-ava-scroll-ready")) {
           scroller.dataset.avaScrollReady = "true";
@@ -65,6 +78,8 @@ export default function AvaMotion() {
       }
     };
     const stopForReader = () => {
+      // Static/reduced-motion content is not an active scroll demonstration.
+      if (reduced.matches || !scroller.hasAttribute("data-ava-scroll-ready")) return;
       manual = true;
       cancelFrame();
       scroller.dataset.avaScrollState = "stopped";
@@ -131,16 +146,8 @@ export default function AvaMotion() {
     };
     const onPreference = () => {
       if (reduced.matches) {
-        cancelFrame();
         for (const animation of animations) animation.cancel();
         animations.clear();
-        delete scroller.dataset.avaScrollReady;
-        scroller.dataset.avaScrollState = "static";
-        scroller.removeAttribute("tabindex");
-        scroller.removeAttribute("aria-label");
-        scroller.scrollTop = 0;
-        elapsed = 0;
-        complete = false;
       }
       syncScroll();
     };
