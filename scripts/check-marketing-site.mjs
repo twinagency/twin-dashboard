@@ -30,7 +30,7 @@ try{
     assert.ok(await page.getByText('Charge per message',{exact:true}).first().isVisible());
     assert.equal(await page.getByText('Amber',{exact:true}).count(),1); assert.equal(await page.getByText('Mia',{exact:true}).count(),1); assert.equal(await page.getByText('Sasha',{exact:true}).count(),1);
     const globe=page.getByRole('heading',{name:'Fans paying right now across the globe',exact:true}); await globe.scrollIntoViewIfNeeded(); assert.ok(await globe.isVisible());
-    assert.ok(await page.getByText('Tokyo',{exact:true}).isAttached()); assert.ok(await page.getByText('Dubai',{exact:true}).isAttached()); assert.ok(await page.getByText(/fans paying now/).isVisible());
+    assert.ok((await page.getByText('Tokyo',{exact:true}).count())>0); assert.ok((await page.getByText('Dubai',{exact:true}).count())>0); assert.ok(await page.getByText(/fans paying now/).isVisible());
     await page.getByRole('button',{name:'Sign up',exact:true}).click(); assert.ok(await page.getByRole('dialog').isVisible()); assert.ok(await page.getByRole('heading',{name:'Creator signup is next.',exact:true}).isVisible()); assert.equal(await page.getByRole('dialog').locator('input,form').count(),0); await page.keyboard.press('Escape');
     if(width>=640){await page.getByRole('button',{name:'Sign in',exact:true}).click();assert.ok(await page.getByRole('heading',{name:'Creator login is next.',exact:true}).isVisible());await page.keyboard.press('Escape')}
     await page.screenshot({path:`test-results/twin-public/${name}.png`,fullPage:true}); await page.screenshot({path:`test-results/twin-public/${name}-top.png`});
