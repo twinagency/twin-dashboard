@@ -1,6 +1,7 @@
 "use server";
 
 import { revalidatePath } from "next/cache";
+import { guardDashboardAction } from "@/lib/agency-management";
 import { supabaseAdmin } from "@/lib/supabase";
 
 function value(fd: FormData, key: string) {
@@ -9,6 +10,8 @@ function value(fd: FormData, key: string) {
 }
 
 export async function linkCreatorToClone(fd: FormData) {
+  await guardDashboardAction("app/storage/actions.ts#linkCreatorToClone", [fd]);
+
   const creatorAccountId = value(fd, "creator_account_id");
   const cloneId = value(fd, "clone_id");
 
