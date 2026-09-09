@@ -77,6 +77,25 @@ export async function guardDashboardAction(action: string, args: unknown[]): Pro
     }
     return;
   }
+  if (file === "app/sequences/actions.ts") {
+    const allowed = ["createSequence","saveSequenceParts","approveSequenceRevision","publishSequenceRevision","withdrawSequenceRevision","setFanSequenceStatus"];
+    if (!allowed.includes(name)) throw new Error("Administrator access required");
+    // Pausing a fan's sequence is keyed on the fan, not the creator id.
+    if (name === "setFanSequenceStatus") {
+      if (!(args[0] instanceof FormData)) throw new Error("Invalid fan form");
+      const user = await ownedResource(access, "users", args[0].get("userId"));
+      if (args[0].get("cloneId") !== user.clone_id) throw new Error("Creator access denied");
+      return;
+    }
+    const cloneId = assignedClone(access, args[0]);
+    // A sequence may only ever be cut from this creator's own recording.
+    if (name === "createSequence") {
+      if (!(args[1] instanceof FormData)) throw new Error("Invalid sequence form");
+      const source = args[1].get("sourceVideoId");
+      if (source) await ownedResource(access, "videos", source, cloneId);
+    }
+    return;
+  }
   if (file === "app/media/actions.ts") {
     if (name === "getSignedUrl") { assignedStoragePath(access,args[0]); return; }
     const allowed=["uploadPhoto","uploadVideo","updatePhoto","updateVideo","deletePhoto","deleteVideo","bulkSetMediaPrice","bulkDeleteMedia","createBundle","updateBundle","deleteBundle","addBundleItem","removeBundleItem","updateCategoryPricing","previewRepriceMedia","repriceMedia"];
