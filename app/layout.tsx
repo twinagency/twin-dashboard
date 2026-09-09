@@ -1,3 +1,4 @@
+import { isMarketingPath } from "@/lib/marketing-routing";
 import { isTwinLoginPath } from "@/lib/login-routing";
 import { agencyCanManage } from "@/lib/agency-management-policy";
 import DashboardAccessProvider from "@/components/DashboardAccessProvider";
@@ -35,6 +36,12 @@ const interTight = Inter_Tight({subsets:['latin'],variable:'--font-display'});
 
 export async function generateMetadata(): Promise<Metadata> {
   const pathname = (await headers()).get("x-pathname");
+  if (isMarketingPath(pathname)) return {
+    title: "Twin Agency",
+    description: "Your audience. Your AI twin.",
+    robots: { index: false, follow: false },
+    icons: { icon: { url: "/icon.png", type: "image/png" } },
+  };
   const agencyName = pathname && isAgencyPath(pathname)
     ? pathAgencyName(pathname)
     : isTwinLoginPath(pathname) ? undefined : (await getDashboardAccess())?.name;
@@ -56,6 +63,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // itself is excluded — it must always render standalone (no sidebar), the
   // same as it would once real auth is re-enabled.
   const pathname = (await headers()).get("x-pathname");
+  if (isMarketingPath(pathname)) {
+    return <html lang="en" className={cn("font-sans", inter.variable, plexMono.variable, spaceGrotesk.variable, interTight.variable)}><body>{children}</body></html>;
+  }
   // The agency shell must never fetch or serialize the internal fleet data.
   if (isTwinLoginPath(pathname) || (pathname && isAgencyPath(pathname))) {
     return <html lang="en" data-agency={pathname && isAgencyPath(pathname) && isMoxy(pathAgencyName(pathname)) ? "moxy" : undefined} className={cn("font-sans", inter.variable, plexMono.variable, spaceGrotesk.variable, interTight.variable)}><body className="min-h-screen bg-bg">{children}</body></html>;

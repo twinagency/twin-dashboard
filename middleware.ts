@@ -1,3 +1,4 @@
+import { isMarketingPath } from "@/lib/marketing-routing";
 import { isTwinLoginPath, safeAdminNext } from "@/lib/login-routing";
 import { agencyCanManage, agencyManagementRequestAllowed } from "@/lib/agency-management-policy";
 import { dashboardOrigin, trustedFormOrigin } from "@/lib/form-origin";
@@ -36,6 +37,18 @@ const SELF_AUTHENTICATED_PREFIXES = ["/api/v1/", "/api/admin/"];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+
+  // Marketing is a standalone read-only surface, even with partner/admin cookies.
+  // Public pages must never become alternate Server Action entry points.
+  if (isMarketingPath(pathname)) {
+    if (!["GET", "HEAD"].includes(req.method) || req.headers.has("next-action")) {
+      return new NextResponse("Forbidden", { status: 403 });
+    }
+    const response = withPathname(req);
+    response.headers.set("Cache-Control", "private, no-store");
+    response.headers.set("X-Robots-Tag", "noindex, nofollow");
+    return response;
+  }
 
   if (pathname === "/admin-auth") {
     if (req.method !== "POST" || req.headers.has("next-action")) return new NextResponse("Forbidden", {status:403});
