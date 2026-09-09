@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { supabaseAdmin } from "@/lib/supabase";
 import { CREATOR_SESSION_COOKIE, verifyCreatorSession } from "@/lib/creator-session";
+import { CREATOR_QUESTIONNAIRE_SECTIONS, type CreatorQuestion } from "@/lib/creator-questionnaire";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Creator onboarding · Twin" };
@@ -27,8 +28,34 @@ const statusCopy: Record<string,string> = {
   error: "Something went wrong. Please try again.",
 };
 
+const requiredQuestionIds = new Set(["full_name", "preferred_name", "platforms", "boundaries"]);
+
 function textAreaClass() {
   return "min-h-24 w-full rounded-lg border border-input bg-transparent px-3 py-2 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
+}
+
+function selectClass() {
+  return "h-9 w-full rounded-md border border-input bg-transparent px-3 text-sm outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
+}
+
+function QuestionField({ question, value }: { question: CreatorQuestion; value: string }) {
+  const required = requiredQuestionIds.has(question.id);
+  const label = <span className="mb-1 block text-sm font-medium text-ink">{question.label}{required ? " *" : ""}</span>;
+  const help = question.help ? <span className="mt-1 block text-xs leading-relaxed text-muted">{question.help}</span> : null;
+
+  if (question.type === "textarea") {
+    return <label className="block">{label}<textarea name={question.id} className={textAreaClass()} placeholder={question.placeholder} defaultValue={value} required={required} />{help}</label>;
+  }
+
+  if (question.type === "select") {
+    return <label className="block">{label}<select name={question.id} className={selectClass()} defaultValue={value} required={required}><option value="">Select...</option>{(question.options || []).map((option) => <option key={option} value={option}>{option}</option>)}</select>{help}</label>;
+  }
+
+  if (question.type === "radio") {
+    return <fieldset className="block"><legend className="mb-2 text-sm font-medium text-ink">{question.label}{required ? " *" : ""}</legend><div className="flex flex-wrap gap-3">{(question.options || []).map((option) => <label key={option} className="flex items-center gap-2 rounded-lg border border-border bg-white px-3 py-2 text-sm text-ink"><input type="radio" name={question.id} value={option} defaultChecked={value === option} required={required} />{option}</label>)}</div>{help}</fieldset>;
+  }
+
+  return <label className="block">{label}<Input name={question.id} defaultValue={value} placeholder={question.placeholder} required={required} />{help}</label>;
 }
 
 export default async function CreatorOnboardingPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
@@ -59,6 +86,7 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
           <div className="flex items-center gap-4"><Link href="/creator" className="text-sm font-medium text-muted hover:text-ink">Dashboard</Link><form action="/creator-auth/logout" method="post"><button className="text-sm font-medium text-muted hover:text-ink">Sign out</button></form></div>
         </div>
       </header>
+
       <main className="mx-auto max-w-5xl px-5 py-10">
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent-2">Creator onboarding</p>
         <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
@@ -70,29 +98,24 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
 
         <div className="mt-8 grid gap-6">
           <Card>
-            <CardHeader><div className="flex items-center justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent-2">Step 1</p><h2 className="font-heading text-2xl font-semibold text-ink">Questionnaire</h2></div><span className="text-sm font-medium text-muted">{progress?.questionnaire_completed ? "Complete" : "Required"}</span></div></CardHeader>
+            <CardHeader><div className="flex items-center justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent-2">Step 1</p><h2 className="font-heading text-2xl font-semibold text-ink">Questionnaire</h2><p className="mt-1 text-sm text-muted">This is the same questionnaire used in the current Twin/Lovable onboarding.</p></div><span className="text-sm font-medium text-muted">{progress?.questionnaire_completed ? "Complete" : "Required"}</span></div></CardHeader>
             <CardContent>
-              <form action="/creator-auth/onboarding" method="post" className="grid gap-4 md:grid-cols-2">
+              <form action="/creator-auth/onboarding" method="post" className="grid gap-8">
                 <input type="hidden" name="action" value="questionnaire" />
-                <label><span className="mb-1 block text-sm text-muted">Full legal name *</span><Input name="full_name" defaultValue={answers.full_name || ""} required /></label>
-                <label><span className="mb-1 block text-sm text-muted">Preferred creator name *</span><Input name="preferred_name" defaultValue={answers.preferred_name || account.display_name || ""} required /></label>
-                <label><span className="mb-1 block text-sm text-muted">Date of birth</span><Input name="date_of_birth" type="date" defaultValue={answers.date_of_birth || ""} /></label>
-                <label><span className="mb-1 block text-sm text-muted">Pronouns</span><Input name="pronouns" defaultValue={answers.pronouns || ""} /></label>
-                <label><span className="mb-1 block text-sm text-muted">Where are you from / where did you grow up?</span><Input name="from_grew_up" defaultValue={answers.from_grew_up || ""} /></label>
-                <label><span className="mb-1 block text-sm text-muted">Platforms *</span><Input name="platforms" placeholder="Instagram, TikTok, X..." defaultValue={answers.platforms || ""} required /></label>
-                <label><span className="mb-1 block text-sm text-muted">Audience size</span><Input name="audience_size" defaultValue={answers.audience_size || ""} /></label>
-                <label><span className="mb-1 block text-sm text-muted">Main niche</span><Input name="main_niche" defaultValue={answers.main_niche || ""} /></label>
-                <label className="md:col-span-2"><span className="mb-1 block text-sm text-muted">Describe your audience</span><textarea name="audience_description" className={textAreaClass()} defaultValue={answers.audience_description || ""} /></label>
-                <label className="md:col-span-2"><span className="mb-1 block text-sm text-muted">Content style</span><textarea name="content_style" className={textAreaClass()} defaultValue={answers.content_style || ""} /></label>
-                <label className="md:col-span-2"><span className="mb-1 block text-sm text-muted">How should your Twin come across?</span><textarea name="creator_persona" className={textAreaClass()} defaultValue={answers.creator_persona || ""} /></label>
-                <label><span className="mb-1 block text-sm text-muted">Overall tone</span><Input name="overall_tone" defaultValue={answers.overall_tone || ""} /></label>
-                <label><span className="mb-1 block text-sm text-muted">AI personality</span><Input name="ai_personality" defaultValue={answers.ai_personality || ""} /></label>
-                <label className="md:col-span-2"><span className="mb-1 block text-sm text-muted">Traits your Twin should have</span><textarea name="ai_traits" className={textAreaClass()} defaultValue={answers.ai_traits || ""} /></label>
-                <label className="md:col-span-2"><span className="mb-1 block text-sm text-muted">Boundaries / things your Twin must not do *</span><textarea name="boundaries" className={textAreaClass()} defaultValue={answers.boundaries || ""} required /></label>
-                <label><span className="mb-1 block text-sm text-muted">Catch phrases</span><Input name="catch_phrases" defaultValue={answers.catch_phrases || ""} /></label>
-                <label><span className="mb-1 block text-sm text-muted">Future goals</span><Input name="future_goals" defaultValue={answers.future_goals || ""} /></label>
-                <label className="md:col-span-2"><span className="mb-1 block text-sm text-muted">Anything else we should know?</span><textarea name="anything_else" className={textAreaClass()} defaultValue={answers.anything_else || ""} /></label>
-                <div className="md:col-span-2"><Button type="submit">Save questionnaire</Button></div>
+                {CREATOR_QUESTIONNAIRE_SECTIONS.map((section, sectionIndex) => (
+                  <section key={`${section.title}-${sectionIndex}`} className="rounded-2xl border border-border bg-white p-5">
+                    <h3 className="text-lg font-semibold text-ink">{section.title}</h3>
+                    {section.intro && <p className="mt-2 text-sm leading-relaxed text-muted">{section.intro}</p>}
+                    <div className="mt-5 grid gap-5 md:grid-cols-2">
+                      {section.questions.map((question, questionIndex) => (
+                        <div key={`${question.id}-${questionIndex}`} className={question.type === "textarea" || question.type === "radio" ? "md:col-span-2" : ""}>
+                          <QuestionField question={question} value={answers[question.id] || (question.id === "preferred_name" ? account.display_name || "" : question.id === "email_address" ? account.email || "" : "")} />
+                        </div>
+                      ))}
+                    </div>
+                  </section>
+                ))}
+                <div className="sticky bottom-4 z-10 rounded-2xl border border-border bg-white/95 p-4 shadow-lg backdrop-blur"><Button type="submit">Save questionnaire</Button></div>
               </form>
             </CardContent>
           </Card>
