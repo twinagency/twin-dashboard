@@ -1,0 +1,43 @@
+name: Verify deployed public site
+on:
+  push:
+    branches: [feat/twinagency-public-site]
+    paths: [.github/workflows/twin-public-live-check.yml]
+permissions:
+  contents: read
+jobs:
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: Read-only public HTTPS checks
+        run: |
+          python3 - <<'PY'
+          import urllib.request,json,pathlib,datetime
+          origin='https://dashboard.tgaiclone.xyz'
+          report={'expected_deployed_commit':'56acbd542603676a382aee5ac1249fc642ed0f6c','checked_at':datetime.datetime.now(datetime.timezone.utc).isoformat(),'checks':[]}
+          cases=[('/twin-agency','Your audience. Your AI twin.'),('/','action="/admin-auth"'),('/twin','action="/admin-auth"'),('/moxy','action="/moxy/auth"'),('/link','action="/link/auth"'),('/jess-and-kate-ai','action="/jess-and-kate-ai/auth"')]
+          for cookie in ['', 'twin_agency_access=stale; twin_agency_portal=moxy']:
+            for path,expected in cases:
+              req=urllib.request.Request(origin+path,headers={'User-Agent':'Twin-public-deployment-check','Cookie':cookie})
+              with urllib.request.urlopen(req,timeout=40) as response:
+                html=response.read().decode()
+                assert response.status==200,path
+                assert response.geturl()==origin+path,'Unexpected redirect: '+path
+                assert expected in html,'Incorrect page: '+path
+                assert 'An error occurred in the Server Components render' not in html,path
+                if path=='/twin-agency':
+                  assert 'Creator signup and login are not connected yet.' in html
+                  assert 'noindex' in response.headers.get('X-Robots-Tag','')
+                  assert 'dashboard-sidebar' not in html
+                  assert 'data-agency="moxy"' not in html
+                report['checks'].append({'path':path,'stale_partner_cookie':bool(cookie),'status':response.status,'expected_page':True,'redirected':False})
+          report['result']='passed'
+          pathlib.Path('/tmp/twin-public-live.json').write_text(json.dumps(report,indent=2))
+          print(json.dumps(report,indent=2))
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: twin-public-live-verification
+          path: /tmp/twin-public-live.json
+          retention-days: 3
