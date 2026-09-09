@@ -3,8 +3,10 @@
  *
  * Drains public.video_sequence_jobs (migration 148). One job is one revision:
  * download the approved source recording, cut it at the human-approved
- * timestamps, validate every clip, upload them, then publish the whole manifest
- * in a single step.
+ * timestamps, validate every clip, upload them, then write the whole manifest
+ * in a single step and hand the revision to a human for review. The worker never
+ * publishes: publication is a second, separate human decision made in the
+ * dashboard once the clips exist (see lib/sequence-policy.ts).
  *
  * WHY THIS IS A WORKER AND NOT A SERVER ACTION: brief section 3. Cutting a
  * source recording is minutes of ffmpeg on a file that can be hundreds of
@@ -194,15 +196,22 @@ function parseCutPoints(raw: unknown): CutPoint[] {
 }
 
 /**
- * The single publish step.
+ * The single manifest-write step.
  *
  * Parts are rewritten wholesale before the revision flips, so a retry of a job
  * that died after uploading some clips cannot leave a stale manifest behind.
  * The order matters: nothing selects an unpublished revision, so parts existing
  * without a published revision is invisible, while a published revision with
  * missing parts would be a product that cannot be delivered.
+ *
+ * THE WORKER DOES NOT PUBLISH. It moves the revision to 'review_required' and
+ * stops. Two reasons, and both are the state machine in lib/sequence-policy.ts
+ * rather than taste: 'processing' -> 'published' is not a legal transition, and
+ * a person has to look at the clips that came out of ffmpeg before a fan can
+ * buy one. Human approval before the render says "cut it here"; publication
+ * says "this is what came out, sell it". They are different decisions.
  */
-async function publish(job: JobRow, cuts: CutPoint[], rendered: RenderedClip[]): Promise<void> {
+async function writeManifest(job: JobRow, cuts: CutPoint[], rendered: RenderedClip[]): Promise<void> {
   const byPosition = new Map(rendered.map((r) => [r.position, r]));
 
   const { error: clearErr } = await supabaseAdmin
@@ -215,16 +224,23 @@ async function publish(job: JobRow, cuts: CutPoint[], rendered: RenderedClip[]):
   const { error: insertErr } = await supabaseAdmin.from("video_sequence_parts").insert(rows);
   if (insertErr) throw new Error(`could not write the manifest: ${insertErr.message}`);
 
-  const { error: pubErr } = await supabaseAdmin
+  // Conditional on the revision still being the one that was queued. An
+  // operator who withdrew it mid-render must not have it resurrected into
+  // review by a worker that started before they clicked.
+  const { data: moved, error: revErr } = await supabaseAdmin
     .from("video_sequence_revisions")
     .update({
-      state: "published",
+      state: "review_required",
       approved_by: job.approved_by,
       approved_at: job.approved_at,
-      published_at: new Date().toISOString(),
     })
-    .eq("id", job.revision_id);
-  if (pubErr) throw new Error(`could not publish the revision: ${pubErr.message}`);
+    .eq("id", job.revision_id)
+    .eq("state", "processing")
+    .select("id");
+  if (revErr) throw new Error(`could not hand the revision to review: ${revErr.message}`);
+  if (!moved?.length) {
+    throw new Error("the revision left the processing state while it was rendering, so nothing was handed to review");
+  }
 }
 
 async function runJob(job: JobRow, dryRun: boolean): Promise<void> {
@@ -286,23 +302,23 @@ async function runJob(job: JobRow, dryRun: boolean): Promise<void> {
     const decision = decidePublish(cuts, rendered, job.status);
     if (!decision.publish) {
       if (decision.reason === "already_published") {
-        console.log(`job ${job.id}: already published, nothing to do`);
+        console.log(`job ${job.id}: manifest already written, nothing to do`);
         return;
       }
-      throw new Error(`refusing to publish: parts ${decision.missing.join(", ")} did not render`);
+      throw new Error(`refusing to write the manifest: parts ${decision.missing.join(", ")} did not render`);
     }
 
     if (dryRun) {
-      console.log(`DRY RUN: would publish ${decision.parts} part(s) and mark the revision published`);
+      console.log(`DRY RUN: would write ${decision.parts} part(s) and hand the revision to review`);
       return;
     }
 
-    await publish(job, cuts, rendered);
+    await writeManifest(job, cuts, rendered);
     await supabaseAdmin
       .from("video_sequence_jobs")
       .update({ status: "succeeded", error: null, finished_at: new Date().toISOString() })
       .eq("id", job.id);
-    console.log(`job ${job.id}: published ${decision.parts} part(s)`);
+    console.log(`job ${job.id}: wrote ${decision.parts} part(s), revision is now awaiting review`);
   } catch (err) {
     const reason = err instanceof Error ? err.message : String(err);
     // Nothing partial may remain visible. The revision was never flipped, and

@@ -65,6 +65,11 @@ export type Clone = {
   // first available item. true = decline honestly instead of guessing.
   // Optional so a row saved before the migration lands still type-checks.
   media_match_strict?: boolean;
+  // Per-creator half of the video-sequence flag pair (migration 147). The
+  // global half is VIDEO_SEQUENCES_ENABLED in the bot's environment and both
+  // must be true. Optional so a row read before the migration lands still
+  // type-checks; absent reads as off, which is the fail-closed direction.
+  video_sequences_enabled?: boolean;
   live_captions_enabled: boolean;
   media_caption_mode: "inline" | "none" | "separate";
   thank_you_enabled: boolean;

@@ -308,6 +308,12 @@ function rowFromForm(fd: FormData) {
     // Listed in MEDIA_MATCH_STRICT_COLUMNS below so a save before the
     // migration lands still succeeds.
     media_match_strict: fd.get("media_match_strict") === "true",
+    // Per-creator video-sequence opt-in (migration 147). Listed in
+    // SEQUENCE_147_COLUMNS below so a save against a stack where 147 has not
+    // run yet strips it and still succeeds. Stripping is the SAFE state: with
+    // the column absent the bot's mapClone reads it as false and the feature
+    // stays off.
+    video_sequences_enabled: fd.get("video_sequences_enabled") === "true",
     tips_enabled: fd.get("tips_enabled") === "true",
     // Migration 084, the two tip re-ask brakes.
     //
@@ -911,6 +917,12 @@ const STRICT_098_COLUMNS = ["strict_onboarding_steps"] as const;
 // than silently disarming it.
 // See bot/db/migrations/116_strict_minor_gate.sql.
 const SAFETY_116_COLUMNS = ["strict_minor_gate"] as const;
+// Migration 147, the per-creator video-sequence opt-in. Listed so a save
+// against a stack where 147 has not run yet strips it and still succeeds.
+// Stripping is the SAFE state: with the column absent mapClone reads false and
+// videoSequencesEnabled() in bot/src/intent/sequence.ts fails closed.
+// See bot/db/migrations/147_video_sequences.sql.
+const SEQUENCE_147_COLUMNS = ["video_sequences_enabled"] as const;
 // Migration 105: the variety guard. Listed so a save against a stack where 105
 // has not run yet strips it and still succeeds. Stripping is the SAFE state,
 // same reasoning as 093's silence fallback: with the column absent
@@ -965,6 +977,7 @@ const OPTIONAL_COLUMNS = [
   ...ADVANCED_099_COLUMNS,
   ...VARIETY_105_COLUMNS,
   ...SAFETY_116_COLUMNS,
+  ...SEQUENCE_147_COLUMNS,
 ] as const;
 
 function withoutPersonaFactColumns(row: Record<string, unknown>): Record<string, unknown> {

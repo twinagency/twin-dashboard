@@ -6,7 +6,7 @@ import { Info } from "@/components/clone/fields";
 import { Button } from "@/components/ui/button";
 import {
   descriptionIsInherited,
-  publishBlockers,
+  manifestBlockers,
   type PartDraft,
   type RevisionState,
 } from "@/lib/sequence-policy";
@@ -51,10 +51,11 @@ export default function SequenceEditor({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const blockers = useMemo(
-    () => publishBlockers({ state, approvedBy, approvedAt, parts, sourceCaption }),
-    [state, approvedBy, approvedAt, parts, sourceCaption],
-  );
+  // manifestBlockers, not publishBlockers: this panel lists what the reviewer
+  // can fix in this editor. Whether a person has approved the cut, and whether
+  // the renderer has produced the clips, are steps that happen after this
+  // screen is saved, and listing them here would read as an error in the cut.
+  const blockers = useMemo(() => manifestBlockers(parts, sourceCaption), [parts, sourceCaption]);
 
   function update(index: number, patch: Partial<PartDraft>) {
     setParts((current) => renumber(current.map((p, i) => (i === index ? { ...p, ...patch } : p))));
@@ -214,10 +215,10 @@ export default function SequenceEditor({
       <div className="rounded-xl border border-line bg-panel p-3">
         <div className="mb-2 flex items-center gap-2">
           <h3 className="text-sm font-semibold text-ink">Before this can go live</h3>
-          <Info text="Publication is blocked until every item here is cleared. A person still has to approve the cut." />
+          <Info text="Publication is blocked until every item here is cleared. After that a person approves the cut, the renderer cuts the clips, and publication is the last step." />
         </div>
         {blockers.length === 0 ? (
-          <p className="text-sm text-good">Ready to publish.</p>
+          <p className="text-sm text-good">Ready to approve and render.</p>
         ) : (
           <ul className="space-y-1 text-sm text-ink">
             {blockers.map((b) => <li key={b} className="flex gap-2"><span className="text-warn">-</span><span>{b}</span></li>)}

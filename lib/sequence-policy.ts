@@ -42,7 +42,11 @@ export type PartDraft = {
 const REVISION_TRANSITIONS: Record<RevisionState, readonly RevisionState[]> = {
   draft: ["processing", "review_required", "unavailable"],
   processing: ["review_required", "draft", "unavailable"],
-  review_required: ["published", "draft", "unavailable"],
+  // review_required -> processing is the re-cut path. A reviewer who changes a
+  // clip boundary after the first render has to send it back through the
+  // renderer: the clips on disk no longer match the manifest, and publishing
+  // that pair would sell footage nobody approved.
+  review_required: ["published", "processing", "draft", "unavailable"],
   published: ["unavailable"],
   unavailable: [],
 };
@@ -92,6 +96,77 @@ export function descriptionIsInherited(partCaption: string | null, sourceCaption
   return part === source;
 }
 
+// ── Rendered evidence ───────────────────────────────────────────────────────
+// THE GAP THIS SECTION CLOSES: publishing used to flip a revision to 'published'
+// on the strength of the manifest alone. The manifest is only a list of
+// timestamps. The clips themselves are produced by the render worker
+// (scripts/render-sequence.ts), which is what writes a real storage path and a
+// measured duration onto each parts row. Without that evidence a revision can
+// be published whose parts point at "pending/<revision>/<n>", and the bot then
+// tries to download a file that was never cut.
+//
+// So publication now requires proof of a render, not a promise of one.
+
+/** The placeholder a draft manifest carries before anything has been cut. */
+export const PENDING_STORAGE_PREFIX = "pending/";
+
+/** Job states as they exist in video_sequence_jobs (migration 148). */
+export type RenderJobStatus = "queued" | "running" | "succeeded" | "failed";
+
+export type RenderedPart = {
+  position: number;
+  storagePath: string | null;
+  /** Measured from the rendered file by the worker, never typed by anyone. */
+  durationSeconds: number | null;
+};
+
+export type RenderEvidence = {
+  /** The newest render job for this revision, or null when none was queued. */
+  jobStatus: RenderJobStatus | null;
+  parts: RenderedPart[];
+};
+
+/** Does this parts row point at a file the worker actually produced? */
+export function isRenderedStoragePath(path: string | null | undefined): boolean {
+  const value = String(path ?? "").trim();
+  if (!value) return false;
+  if (value.startsWith(PENDING_STORAGE_PREFIX)) return false;
+  return value.toLowerCase().endsWith(".mp4");
+}
+
+/** Everything about the render that stands between this cut and publication. */
+export function renderBlockers(evidence: RenderEvidence): string[] {
+  const blockers: string[] = [];
+  switch (evidence.jobStatus) {
+    case null:
+      blockers.push("This cut has never been rendered. Record an approval to send it to the renderer.");
+      break;
+    case "queued":
+      blockers.push("This cut is waiting for the renderer. It can be published once the clips are cut.");
+      break;
+    case "running":
+      blockers.push("This cut is being rendered right now. It can be published once the clips are cut.");
+      break;
+    case "failed":
+      blockers.push("The last render of this cut failed. Fix the clip list and approve it again.");
+      break;
+    case "succeeded":
+      break;
+  }
+  if (evidence.jobStatus !== "succeeded") return blockers;
+
+  if (!evidence.parts.length) blockers.push("The renderer produced no clips for this revision.");
+  for (const part of [...evidence.parts].sort((a, b) => a.position - b.position)) {
+    const label = part.position === 0 ? "The preview" : `Part ${part.position}`;
+    if (!isRenderedStoragePath(part.storagePath)) {
+      blockers.push(`${label} has no rendered video file behind it.`);
+    } else if (part.durationSeconds === null || !(part.durationSeconds > 0)) {
+      blockers.push(`${label} has no measured duration, so it was not produced by the renderer.`);
+    }
+  }
+  return blockers;
+}
+
 // ── Publish readiness ───────────────────────────────────────────────────────
 export type PublishContext = {
   state: RevisionState;
@@ -100,6 +175,10 @@ export type PublishContext = {
   parts: PartDraft[];
   /** The source recording's caption, so an inherited description is caught. */
   sourceCaption: string | null;
+  /** Proof the clips exist. REQUIRED rather than optional on purpose: an
+   *  optional field is one a future caller forgets, and forgetting it is
+   *  exactly the defect this whole file exists to prevent. */
+  render: RenderEvidence;
 };
 
 /** Everything standing between this revision and publication, most structural
@@ -112,7 +191,21 @@ export function publishBlockers(ctx: PublishContext): string[] {
   // Human approval is required and cannot be satisfied by any automatic step.
   if (!ctx.approvedBy || !ctx.approvedAt) blockers.push("A person must approve this cut before it can be published.");
 
-  const parts = [...ctx.parts].sort((a, b) => a.position - b.position);
+  blockers.push(...manifestBlockers(ctx.parts, ctx.sourceCaption));
+  blockers.push(...renderBlockers(ctx.render));
+  return blockers;
+}
+
+/**
+ * Everything wrong with the manifest itself: shape, prices, descriptions,
+ * dependencies. Split out of publishBlockers because approving a cut has to
+ * apply the SAME rules before a render job is queued. Rendering six clips and
+ * only then discovering Part 3 has no description wastes minutes of ffmpeg and
+ * leaves a revision that can never publish.
+ */
+export function manifestBlockers(draftParts: PartDraft[], sourceCaption: string | null): string[] {
+  const blockers: string[] = [];
+  const parts = [...draftParts].sort((a, b) => a.position - b.position);
   if (!parts.length) blockers.push("This revision has no clips.");
 
   const previews = parts.filter((p) => p.isPreview);
@@ -135,7 +228,7 @@ export function publishBlockers(ctx: PublishContext): string[] {
     const label = part.isPreview ? "The preview" : `Part ${part.position}`;
     if (part.sourceEndSeconds <= part.sourceStartSeconds) blockers.push(`${label} ends before it starts.`);
     if (!normalizeCaption(part.caption)) blockers.push(`${label} needs its own description.`);
-    if (descriptionIsInherited(part.caption, ctx.sourceCaption)) {
+    if (descriptionIsInherited(part.caption, sourceCaption)) {
       blockers.push(`${label} still uses the source video's description. Describe what is in this clip specifically.`);
     }
     if (!part.isPreview) {

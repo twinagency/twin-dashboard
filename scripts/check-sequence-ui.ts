@@ -29,6 +29,9 @@ import {
   canTransitionRevision,
   canTransitionSession,
   continuationBlockReason,
+  isRenderedStoragePath,
+  manifestBlockers,
+  renderBlockers,
   descriptionIsInherited,
   nextEligiblePosition,
   patchTouchesOwnership,
@@ -36,9 +39,12 @@ import {
   revisionEditBlocker,
   revisionTransitionBlocker,
   sessionOperatorPatch,
+  PENDING_STORAGE_PREFIX,
   type PartDraft,
   type PublishContext,
+  type RenderEvidence,
 } from "../lib/sequence-policy";
+import { clipStoragePath, cutPointRows, cutPointsFromParts } from "../lib/sequence-render";
 import { MIN_PAID_MEDIA_PRICE_STARS } from "../lib/pricing";
 
 let passed = 0;
@@ -59,14 +65,29 @@ const part = (position: number, over: Partial<PartDraft> = {}): PartDraft => ({
   priceStars: 400, sourceStartSeconds: position * 60, sourceEndSeconds: position * 60 + 55,
   requiresPosition: position > 1 ? position - 1 : null, ...over,
 });
-const readyToPublish = (over: Partial<PublishContext> = {}): PublishContext => ({
-  state: "review_required",
-  approvedBy: "ronan",
-  approvedAt: "2026-09-09T12:00:00Z",
-  parts: [preview(), part(1), part(2), part(3)],
-  sourceCaption: "the full forty minute recording",
-  ...over,
+// A render the worker actually finished: a succeeded job, and every clip
+// pointing at a real file with a measured duration.
+const rendered = (parts: PartDraft[]): RenderEvidence => ({
+  jobStatus: "succeeded",
+  parts: parts.map((p) => ({
+    position: p.position,
+    storagePath: clipStoragePath("clone-1", "rev-1", p.position),
+    durationSeconds: p.sourceEndSeconds - p.sourceStartSeconds,
+  })),
 });
+const readyParts = [preview(), part(1), part(2), part(3)];
+const readyToPublish = (over: Partial<PublishContext> = {}): PublishContext => {
+  const parts = over.parts ?? readyParts;
+  return {
+    state: "review_required",
+    approvedBy: "ronan",
+    approvedAt: "2026-09-09T12:00:00Z",
+    parts,
+    sourceCaption: "the full forty minute recording",
+    render: rendered(parts),
+    ...over,
+  };
+};
 
 // ── A published revision is immutable ───────────────────────────────────────
 
@@ -179,6 +200,158 @@ check("a clip that ends before it starts cannot publish", () => {
   assert.ok(publishBlockers(readyToPublish({
     parts: [preview(), part(1, { sourceStartSeconds: 90, sourceEndSeconds: 30 })],
   })).some((b) => /ends before it starts/i.test(b)));
+});
+
+// ── Publication requires a render that happened ─────────────────────────────
+// THE GAP THIS BLOCK GUARDS: publishing used to flip a revision to 'published'
+// from the manifest alone. A manifest is a list of timestamps. The clips are
+// produced by scripts/render-sequence.ts, which is the only thing that writes a
+// real storage path and a measured duration onto a parts row. Publishing
+// without that evidence sells a fan a file that was never cut.
+
+check("a cut nothing has rendered cannot publish", () => {
+  const blockers = publishBlockers(readyToPublish({ render: { jobStatus: null, parts: [] } }));
+  assert.ok(blockers.some((b) => /never been rendered/i.test(b)), blockers.join(" | "));
+});
+
+check("a render still in flight, or failed, cannot publish", () => {
+  for (const [status, pattern] of [["queued", /waiting for the renderer/i], ["running", /being rendered/i],
+                                   ["failed", /render of this cut failed/i]] as const) {
+    const blockers = publishBlockers(readyToPublish({ render: { jobStatus: status, parts: [] } }));
+    assert.ok(blockers.some((b) => pattern.test(b)), `${status}: ${blockers.join(" | ")}`);
+  }
+});
+
+check("a clip still on its draft placeholder cannot publish", () => {
+  assert.equal(isRenderedStoragePath(`${PENDING_STORAGE_PREFIX}rev-1/2`), false);
+  assert.equal(isRenderedStoragePath(""), false);
+  assert.equal(isRenderedStoragePath(null), false);
+  assert.equal(isRenderedStoragePath(clipStoragePath("clone-1", "rev-1", 2)), true);
+
+  const render = rendered(readyParts);
+  render.parts[2].storagePath = `${PENDING_STORAGE_PREFIX}rev-1/2`;
+  const blockers = publishBlockers(readyToPublish({ render }));
+  assert.ok(blockers.some((b) => /Part 2 has no rendered video file/i.test(b)), blockers.join(" | "));
+});
+
+check("a clip with no measured duration did not come from the renderer", () => {
+  const render = rendered(readyParts);
+  render.parts[1].durationSeconds = null;
+  const blockers = publishBlockers(readyToPublish({ render }));
+  assert.ok(blockers.some((b) => /Part 1 has no measured duration/i.test(b)), blockers.join(" | "));
+});
+
+check("a succeeded job that produced no clips cannot publish", () => {
+  const blockers = renderBlockers({ jobStatus: "succeeded", parts: [] });
+  assert.ok(blockers.some((b) => /produced no clips/i.test(b)), blockers.join(" | "));
+});
+
+check("the publish action actually reads render evidence", () => {
+  const actions = readFileSync(resolve(root, "app/sequences/actions.ts"), "utf8");
+  const body = actions.slice(actions.indexOf("export async function publishSequenceRevision"));
+  const end = body.indexOf("export async function withdrawSequenceRevision");
+  const publish = body.slice(0, end === -1 ? undefined : end);
+  assert.ok(/renderEvidence\(/.test(publish), "publishSequenceRevision does not gather render evidence");
+  assert.ok(/render,/.test(publish), "publishSequenceRevision does not pass render evidence to publishBlockers");
+  // The evidence has to come from the parts rows and the job ledger, not a form
+  // field: a browser-supplied storage path would defeat the whole gate.
+  const evidence = actions.slice(actions.indexOf("async function renderEvidence"));
+  assert.ok(/video_sequence_jobs/.test(evidence.slice(0, 900)), "render evidence never looks at the job ledger");
+  assert.ok(!/fd\.get\(`storagePath/.test(actions), "a form field may not supply a clip's storage path");
+});
+
+// ── Approval queues the render ──────────────────────────────────────────────
+// THE GAP THIS BLOCK GUARDS: nothing in either repo ever inserted a
+// video_sequence_jobs row, so the worker had no work to drain and no clip was
+// ever cut. Approval is the one moment a named human signs off on boundaries,
+// which is why migration 148 makes approved_by/approved_at NOT NULL.
+
+check("approving a cut queues a render job and starts processing", () => {
+  const actions = readFileSync(resolve(root, "app/sequences/actions.ts"), "utf8");
+  const body = actions.slice(actions.indexOf("export async function approveSequenceRevision"));
+  const end = body.indexOf("export async function publishSequenceRevision");
+  const approve = body.slice(0, end === -1 ? undefined : end);
+  assert.ok(/from\("video_sequence_jobs"\)\s*\.insert\(/.test(approve.replace(/\n\s*/g, "")),
+    "approveSequenceRevision does not insert a render job: the worker has nothing to drain");
+  assert.ok(/state: "processing"/.test(approve), "an approved cut must go to processing, not straight to review");
+  assert.ok(/approved_by: approver/.test(approve), "the job must carry the named approver");
+});
+
+check("a reviewed cut can be sent back to the renderer", () => {
+  // Editing a boundary after the first render invalidates the clips on disk, so
+  // the re-cut has to go through the worker again rather than straight to sale.
+  assert.equal(canTransitionRevision("review_required", "processing"), true);
+  assert.equal(canTransitionRevision("draft", "processing"), true);
+  assert.equal(canTransitionRevision("published", "processing"), false);
+});
+
+check("the worker hands the render to review and never publishes it", () => {
+  const worker = readFileSync(resolve(root, "scripts/render-sequence.ts"), "utf8");
+  assert.ok(/state: "review_required"/.test(worker), "the worker does not move the revision to review");
+  assert.ok(!/state: "published"/.test(worker),
+    "the worker publishes directly, which skips both the state machine and the human looking at the clips");
+});
+
+check("the approved cut list carries every field the renderer needs", () => {
+  const cuts = cutPointsFromParts([preview(), part(1), part(2)]);
+  assert.deepEqual(cuts.map((c) => c.position), [0, 1, 2]);
+  assert.equal(cuts[0].priceStars, null, "the preview must reach the renderer unpriced");
+  assert.equal(cuts[1].caption, "what happens in part 1", "a clip must keep its own description");
+  const rows = cutPointRows(cuts);
+  assert.deepEqual(Object.keys(rows[1]).sort(), [
+    "caption", "end_seconds", "is_preview", "position", "price_stars",
+    "requires_position", "standalone_sale_allowed", "start_seconds",
+  ]);
+  assert.equal(rows[1].start_seconds, 60);
+  assert.equal(rows[1].requires_position, null);
+});
+
+check("approval refuses a cut that could never publish", () => {
+  // Same rules as publication, minus the render that has not happened yet.
+  // Rendering six clips and only then finding Part 2 has no description wastes
+  // minutes of ffmpeg on a revision that is already dead.
+  assert.deepEqual(manifestBlockers(readyParts, "the full forty minute recording"), []);
+  assert.ok(manifestBlockers([preview(), part(1, { caption: null })], null)
+    .some((b) => /needs its own description/i.test(b)));
+  const actions = readFileSync(resolve(root, "app/sequences/actions.ts"), "utf8");
+  const approve = actions.slice(actions.indexOf("export async function approveSequenceRevision"));
+  assert.ok(/manifestBlockers\(/.test(approve.slice(0, approve.indexOf("export async function publishSequenceRevision"))),
+    "approveSequenceRevision does not apply the manifest rules before spending ffmpeg time");
+});
+
+// ── The per-creator switch is wired end to end ──────────────────────────────
+// clones.video_sequences_enabled existed in the database and in the bot's
+// mapClone, and NOTHING in this repo read or wrote it, so the operator had no
+// way to turn the feature on for one creator. Walk the whole chain from
+// dashboard/CLAUDE.md here, because a half-wired toggle is worse than none.
+
+check("the per-creator sequence toggle is wired from the form to the column", () => {
+  const actions = readFileSync(resolve(root, "app/clones/actions.ts"), "utf8");
+  assert.ok(/video_sequences_enabled: fd\.get\("video_sequences_enabled"\) === "true"/.test(actions),
+    "rowFromForm does not map the sequence toggle, so the control saves nothing");
+  assert.ok(/SEQUENCE_147_COLUMNS = \["video_sequences_enabled"\]/.test(actions),
+    "the column is not an optional column: a save before migration 147 lands would fail outright");
+  assert.ok(/\.\.\.SEQUENCE_147_COLUMNS,/.test(actions), "SEQUENCE_147_COLUMNS is declared but not in OPTIONAL_COLUMNS");
+
+  const hook = readFileSync(resolve(root, "components/clone/useCloneConfig.ts"), "utf8");
+  assert.ok(/videoSequencesEnabled: clone\?\.video_sequences_enabled \?\? false/.test(hook),
+    "useCloneConfig does not read the column, so the control always renders off");
+
+  const ui = readFileSync(resolve(root, "components/clone/ConfigSections.tsx"), "utf8");
+  assert.ok(/name="video_sequences_enabled"/.test(ui), "there is no control for the sequence toggle");
+  assert.ok(/checked={cfg\.videoSequencesEnabled}/.test(ui), "the control does not show the saved value");
+
+  const types = readFileSync(resolve(root, "lib/types.ts"), "utf8");
+  assert.ok(/video_sequences_enabled\?: boolean/.test(types), "the column is missing from this repo's Clone type");
+});
+
+check("the bot reads the same column the dashboard writes", () => {
+  const store = readFileSync(resolve(root, "../twin-bot/src/data/supabase-store.ts"), "utf8");
+  assert.ok(/videoSequencesEnabled: r\.video_sequences_enabled/.test(store),
+    "mapClone drops the column, which is this project's number one silent failure");
+  const gate = readFileSync(resolve(root, "../twin-bot/src/intent/sequence.ts"), "utf8");
+  assert.ok(/perCreator/.test(gate) && /VIDEO_SEQUENCES_ENABLED/.test(gate),
+    "the runtime gate no longer composes the per-creator flag with the global one");
 });
 
 // ── Pause is not repossession ───────────────────────────────────────────────

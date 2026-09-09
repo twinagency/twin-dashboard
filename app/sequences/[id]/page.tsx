@@ -117,7 +117,7 @@ export default async function SequenceRevisionPage({ params }: { params: Promise
           <Card className="p-4">
             <div className="mb-2 flex items-center gap-2">
               <h2 className="text-sm font-semibold">Approval</h2>
-              <Info text="A person has to approve the cut before it can be published. An automatic step can never satisfy this." />
+              <Info text="A person has to approve the cut before anything is cut from the recording. Approving sends it to the renderer, which produces the clips and hands them back for review. An automatic step can never satisfy this." />
             </div>
             {revision.approved_by ? (
               <p className="mb-3 text-xs text-muted">
@@ -130,7 +130,7 @@ export default async function SequenceRevisionPage({ params }: { params: Promise
             {editable && (
               <form action={approve} className="space-y-2">
                 <input name="approvedBy" required className={inputCls} placeholder="who reviewed this" />
-                <Button type="submit" variant="outline" size="sm">Record approval</Button>
+                <Button type="submit" variant="outline" size="sm">Approve and render</Button>
               </form>
             )}
           </Card>
@@ -138,7 +138,7 @@ export default async function SequenceRevisionPage({ params }: { params: Promise
           <Card className="p-4">
             <div className="mb-2 flex items-center gap-2">
               <h2 className="text-sm font-semibold">Publication</h2>
-              <Info text="Publishing makes this cut sellable. A published revision is frozen: to change it, publish a new one." />
+              <Info text="Publishing makes this cut sellable, and is only possible once the renderer has produced every clip. A published revision is frozen: to change it, publish a new one." />
             </div>
             <div className="flex flex-wrap gap-2">
               {canTransitionRevision(revision.state, "published") && (

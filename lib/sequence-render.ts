@@ -16,6 +16,7 @@
 // The operator gets a list of what to fix in the timeline editor; an exception
 // would give them one problem at a time.
 import { MIN_PAID_MEDIA_PRICE_STARS } from "./pricing";
+import type { PartDraft } from "./sequence-policy";
 
 /** The shortest clip worth selling. Below this a "part" is a glitch, not a product. */
 export const MIN_CLIP_SECONDS = 3;
@@ -35,6 +36,65 @@ export interface CutPoint {
   caption?: string | null;
   requiresPosition?: number | null;
   standaloneSaleAllowed?: boolean;
+}
+
+/**
+ * The reviewer's timeline turned into the renderer's instructions.
+ *
+ * One function, so a field the operator set cannot go missing on the way to
+ * ffmpeg. The caption travels with the cut deliberately: the worker writes the
+ * parts manifest itself, and a clip that arrives without its own description is
+ * a clip the bot will describe using something else.
+ */
+export function cutPointsFromParts(parts: PartDraft[]): CutPoint[] {
+  return [...parts]
+    .sort((a, b) => a.position - b.position)
+    .map((part) => ({
+      position: part.position,
+      isPreview: part.isPreview,
+      startSeconds: part.sourceStartSeconds,
+      endSeconds: part.sourceEndSeconds,
+      priceStars: part.isPreview ? null : part.priceStars,
+      caption: part.caption,
+      requiresPosition: part.requiresPosition,
+      standaloneSaleAllowed: false,
+    }));
+}
+
+/**
+ * The cut list exactly as it is written into video_sequence_jobs.cut_points.
+ *
+ * Snake_case on purpose: this is the wire format the worker reads back
+ * (parseCutPoints accepts both, but the row is the record of what a human
+ * approved, so it is written in the column vocabulary of the table it lives in
+ * rather than in whichever casing the caller happened to hold).
+ */
+export interface CutPointRow {
+  position: number;
+  is_preview: boolean;
+  start_seconds: number;
+  end_seconds: number;
+  price_stars: number | null;
+  caption: string | null;
+  requires_position: number | null;
+  standalone_sale_allowed: boolean;
+}
+
+/** One approved clip, in the shape the job row stores. Ordered by position so
+ *  the persisted record reads in the same order the fan receives them. */
+export function cutPointRows(cuts: CutPoint[]): CutPointRow[] {
+  return [...cuts]
+    .sort((a, b) => a.position - b.position)
+    .map((cut) => ({
+      position: cut.position,
+      is_preview: cut.isPreview,
+      start_seconds: cut.startSeconds,
+      end_seconds: cut.endSeconds,
+      price_stars: cut.isPreview ? null : cut.priceStars,
+      caption: cut.caption ?? null,
+      requires_position: cut.requiresPosition ?? null,
+      standalone_sale_allowed: cut.standaloneSaleAllowed ?? false,
+    }));
 }
 
 export type CutListErrorCode =
