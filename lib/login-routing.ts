@@ -1,6 +1,9 @@
-// These are login entry points, never an alternate authorization mechanism.
+// These are standalone entry points, never an alternate authorization mechanism.
+// Creator routes are included so the root layout never wraps the creator portal
+// in the internal admin shell. Creator auth itself is enforced separately by
+// middleware.ts before this helper is consulted there.
 export function isTwinLoginPath(path: string | null | undefined): boolean {
-  return path === "/" || path === "/twin" || path === "/login";
+  return path === "/" || path === "/twin" || path === "/login" || (!!path && path.startsWith("/creator"));
 }
 
 export function safeAdminNext(value: string | null | undefined): string {
