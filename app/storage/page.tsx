@@ -41,11 +41,7 @@ function prettyBytes(bytes: number | null) {
   return `${n >= 10 || i === 0 ? n.toFixed(0) : n.toFixed(1)} ${units[i]}`;
 }
 
-export default async function StoragePage({
-  searchParams,
-}: {
-  searchParams: Promise<{ creator?: string }>;
-}) {
+export default async function StoragePage({ searchParams }: { searchParams: Promise<{ creator?: string }> }) {
   const params = await searchParams;
 
   const [creatorRes, cloneRes, linkRes, fileRes] = await Promise.all([
@@ -154,7 +150,7 @@ export default async function StoragePage({
                       </form>
                       {linkedClone && <div className="mt-1 text-[11px] text-muted">Currently {linkedClone.name}</div>}
                     </TableCell>
-                    <TableCell className="text-right"><Button asChild variant="link" size="sm" className="h-auto p-0"><Link href={`/storage?creator=${creator.id}`}>View files →</Link></Button></TableCell>
+                    <TableCell className="text-right"><Link href={`/storage?creator=${creator.id}`} className="text-sm font-medium text-accent hover:underline">View files →</Link></TableCell>
                   </TableRow>
                 );
               })}
@@ -168,7 +164,7 @@ export default async function StoragePage({
         <section>
           <div className="mb-3 flex items-end justify-between gap-3">
             <div><h2 className="text-lg font-semibold">{selected.display_name || selected.email} storage</h2><p className="text-xs text-muted">Only verified files are shown.</p></div>
-            <Button asChild variant="ghost" size="sm"><Link href="/storage">Close</Link></Button>
+            <Link href="/storage" className="rounded-md px-3 py-2 text-sm font-medium text-muted hover:bg-black/5 hover:text-ink">Close</Link>
           </div>
 
           <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5">
