@@ -4,9 +4,10 @@ import { cookies } from "next/headers";
 import { supabaseAdmin } from "@/lib/supabase";
 import { CREATOR_SESSION_COOKIE, creatorCookieOptions, signCreatorSession } from "@/lib/creator-session";
 import { safeCreatorNext } from "@/lib/creator-routing";
+import { creatorRequestUrl } from "@/lib/creator-origin";
 
 function redirectWithError(req: Request, next: string) {
-  const url = new URL("/creator/login", req.url);
+  const url = creatorRequestUrl(req, "/creator/login");
   url.searchParams.set("error", "1");
   url.searchParams.set("next", next);
   return NextResponse.redirect(url, 303);
@@ -36,5 +37,5 @@ export async function POST(req: Request) {
 
   const token = await signCreatorSession(account.id, data.user.id);
   (await cookies()).set(CREATOR_SESSION_COOKIE, token, creatorCookieOptions());
-  return NextResponse.redirect(new URL(next, req.url), 303);
+  return NextResponse.redirect(creatorRequestUrl(req, next), 303);
 }
