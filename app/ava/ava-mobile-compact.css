@@ -75,7 +75,7 @@
   .ava-site .ava-stars-value strong > span { font-size: 11px; }
   .ava-site .ava-chart {
     grid-column: 1 / -1; grid-template-columns: 33px minmax(0, 1fr);
-    grid-template-rows: 88px 18px; column-gap: 4px; margin-top: 6px;
+    grid-template-rows: 80px 18px; column-gap: 4px; margin-top: 6px;
   }
   .ava-site .ava-y-axis { font-size: 6.5px; }
   .ava-site .ava-x-axis { font-size: 7px; padding-top: 5px; }
