@@ -24,13 +24,12 @@ async function main() {
         assert.match(response.headers.get("x-robots-tag")!, /noindex/);
         assert.match(response.headers.get("cache-control")!, /no-store/);
       }
-      for (const method of ["POST", "PUT", "PATCH", "DELETE", "OPTIONS"]) {
-        assert.equal((await middleware(new NextRequest("https://dashboard.tgaiclone.xyz/twin-agency", { method, headers: { cookie } }))).status, 403);
-      }
+      for (const method of ["POST", "PUT", "PATCH", "DELETE", "OPTIONS"]) assert.equal((await middleware(new NextRequest("https://dashboard.tgaiclone.xyz/twin-agency", { method, headers: { cookie } }))).status, 403);
       assert.equal((await middleware(new NextRequest("https://dashboard.tgaiclone.xyz/twin-agency", { headers: { cookie, "next-action": "known-action-id" } }))).status, 403);
     }
     assert.equal(calls, 0);
   } finally { globalThis.fetch = originalFetch; }
+
   const page = readFileSync("app/twin-agency/page.tsx", "utf8");
   const client = readFileSync("app/twin-agency/MarketingSite.tsx", "utf8");
   for (const source of [page, client]) {
@@ -38,14 +37,16 @@ async function main() {
     assert.doesNotMatch(source, /<form\b|<input\b|signUp\s*\(/);
     assert.doesNotMatch(source, /\u2014/);
   }
-  assert.match(client, /Website preview/);
-  assert.match(client, /Creator signup and login are not connected yet/);
+  assert.match(client, /Fans paying right now across the globe/);
+  assert.match(client, /creator dashboard are not connected yet/);
+  assert.match(client, /Tokyo/);
+  assert.match(client, /TelegramPhone/);
   const layout = readFileSync("app/layout.tsx", "utf8");
   const metadata = layout.slice(layout.indexOf("export async function generateMetadata"), layout.indexOf("export default async function RootLayout"));
   const render = layout.slice(layout.indexOf("export default async function RootLayout"));
   assert.ok(metadata.indexOf("if (isMarketingPath(pathname))") < metadata.indexOf("await getDashboardAccess()"));
   assert.ok(render.indexOf("if (isMarketingPath(pathname))") < render.indexOf("await getDashboardAccess()"));
   assert.match(readFileSync("app/page.tsx", "utf8"), /login\/page/);
-  console.log("Public site boundary checks passed: exact GET/HEAD allowlist, stale cookies ignored, no data fetch, no Server Actions or account writes, login routes preserved.");
+  console.log("Public live-site port boundary checks passed: exact route only, stale partner cookies ignored, no private data/account writes, branded logins preserved.");
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

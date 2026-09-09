@@ -1,13 +1,14 @@
 import type { Metadata } from "next";
 import MarketingSite from "./MarketingSite";
+import "./live.css";
 
 export const metadata: Metadata = {
-  title: "Twin Agency | Your audience. Your AI twin.",
-  description: "Let your AI twin handle the conversations. Personalised fan chats, paid content and optional voice replies, with you in control.",
+  title: "Twin - Your AI voice twin that never sleeps",
+  description: "Twin clones your voice into an AI version that chats with fans 24/7 via written and voice messages.",
   robots: { index: false, follow: false },
 };
 
-// Phase-one preview. No account creation, tenant resolution or database reads.
+// Phase one mirrors the live Twin Agency homepage. Creator auth stays deferred.
 export default function TwinAgencyPage() {
   return <MarketingSite />;
 }
