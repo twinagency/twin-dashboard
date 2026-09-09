@@ -2,30 +2,30 @@
 
 import { useEffect } from "react";
 
-/** Progressive, front-end-only motion. All content remains readable without JS. */
+/** Front-end-only motion. The existing chat loops independently of page scroll. */
 export default function AvaMotion() {
   useEffect(() => {
     const root = document.querySelector<HTMLElement>(".ava-site");
     const scroller = root?.querySelector<HTMLElement>('[data-ava-scroll="preview"]');
-    const phone = scroller?.closest<HTMLElement>(".ava-phone");
-    if (!root || !scroller || !phone || typeof IntersectionObserver === "undefined") return;
+    const toggle = root?.querySelector<HTMLButtonElement>("[data-ava-motion-toggle]");
+    if (!root || !scroller || !toggle) return;
 
     const reduced = matchMedia("(prefers-reduced-motion: reduce)");
-    const hover = matchMedia("(hover: hover) and (pointer: fine)");
     const animations = new Set<Animation>();
     let disposed = false;
-    let inView = false;
-    let hovering = false;
-    let manual = false;
-    let complete = false;
+    let manuallyPaused = false;
     let elapsed = 0;
     let previous: number | null = null;
     let frame = 0;
 
-    // Existing history only. A brief hold, one slow downward scroll, then rest.
-    // No new messages, typing simulation, counters, requests or endless loops.
-    const holdMs = 850;
-    const scrollMs = 3400;
+    // Reuse exactly the same history: hold, scroll down, hold, ease back, repeat.
+    // Viewport entry, hover and page scrolling never gate or reset this timeline.
+    const topHoldMs = 600;
+    const downMs = 3600;
+    const bottomHoldMs = 850;
+    const returnMs = 2000;
+    const cycleMs = topHoldMs + downMs + bottomHoldMs + returnMs;
+    const ease = (progress: number) => (1 - Math.cos(progress * Math.PI)) / 2;
     const cancelFrame = () => {
       cancelAnimationFrame(frame);
       frame = 0;
@@ -34,69 +34,78 @@ export default function AvaMotion() {
     const restoreStatic = () => {
       cancelFrame();
       delete scroller.dataset.avaScrollReady;
+      delete scroller.dataset.avaScrollPhase;
+      delete scroller.dataset.avaScrollCycle;
       scroller.dataset.avaScrollState = "static";
       scroller.removeAttribute("tabindex");
       scroller.removeAttribute("aria-label");
       scroller.scrollTop = 0;
+      toggle.hidden = true;
+      toggle.setAttribute("aria-pressed", "false");
+      manuallyPaused = false;
       elapsed = 0;
-      complete = false;
     };
-    const canScroll = () => !disposed && inView && !document.hidden && !reduced.matches && !hovering && !manual && !complete;
+    const canScroll = () => !disposed && !document.hidden && !reduced.matches && !manuallyPaused;
     const tick = (now: number) => {
       frame = 0;
-      // A preference change can precede delivery of the MediaQueryList event.
       if (reduced.matches) { restoreStatic(); return; }
       if (!canScroll()) { previous = null; return; }
-      if (previous !== null) elapsed += Math.min(now - previous, 64);
+      if (previous !== null) elapsed += Math.max(0, now - previous);
       previous = now;
-      const progress = Math.min(1, Math.max(0, (elapsed - holdMs) / scrollMs));
-      const eased = (1 - Math.cos(progress * Math.PI)) / 2;
-      const distance = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
-      scroller.scrollTop = distance * eased;
-      scroller.dataset.avaScrollState = progress > 0 ? "running" : "waiting";
-      if (progress >= 1) {
-        complete = true;
-        previous = null;
-        scroller.dataset.avaScrollState = "complete";
-      } else {
-        frame = requestAnimationFrame(tick);
+      const phaseTime = elapsed % cycleMs;
+      let fraction = 0;
+      let phase = "top";
+      if (phaseTime >= topHoldMs && phaseTime < topHoldMs + downMs) {
+        phase = "down";
+        fraction = ease((phaseTime - topHoldMs) / downMs);
+      } else if (phaseTime >= topHoldMs + downMs && phaseTime < topHoldMs + downMs + bottomHoldMs) {
+        phase = "bottom";
+        fraction = 1;
+      } else if (phaseTime >= topHoldMs + downMs + bottomHoldMs) {
+        phase = "return";
+        fraction = 1 - ease((phaseTime - topHoldMs - downMs - bottomHoldMs) / returnMs);
       }
+      const distance = Math.max(0, scroller.scrollHeight - scroller.clientHeight);
+      scroller.scrollTop = distance * fraction;
+      scroller.dataset.avaScrollState = "running";
+      scroller.dataset.avaScrollPhase = phase;
+      scroller.dataset.avaScrollCycle = String(Math.floor(elapsed / cycleMs));
+      frame = requestAnimationFrame(tick);
     };
     const syncScroll = () => {
       if (reduced.matches) { restoreStatic(); return; }
+      if (disposed) return;
+      if (!scroller.hasAttribute("data-ava-scroll-ready")) {
+        scroller.dataset.avaScrollReady = "true";
+        scroller.setAttribute("aria-label", "Telegram conversation preview. Pause the animation to scroll through the messages.");
+        scroller.scrollTop = 0;
+      }
+      toggle.hidden = false;
+      toggle.setAttribute("aria-pressed", String(manuallyPaused));
+      toggle.setAttribute("aria-label", manuallyPaused ? "Resume chat animation" : "Pause chat animation");
+      toggle.title = manuallyPaused ? "Resume chat animation" : "Pause chat animation";
+      scroller.tabIndex = manuallyPaused ? 0 : -1;
       if (canScroll()) {
-        if (!scroller.hasAttribute("data-ava-scroll-ready")) {
-          scroller.dataset.avaScrollReady = "true";
-          scroller.tabIndex = 0;
-          scroller.setAttribute("aria-label", "Example Telegram conversation. Scroll to read the existing messages.");
-          scroller.scrollTop = 0;
-        }
+        scroller.dataset.avaScrollState = "running";
         if (!frame) frame = requestAnimationFrame(tick);
       } else {
         cancelFrame();
-        if (scroller.hasAttribute("data-ava-scroll-ready") && !complete && !manual) scroller.dataset.avaScrollState = "paused";
+        scroller.dataset.avaScrollState = manuallyPaused ? "paused" : "suspended";
       }
     };
-    const stopForReader = () => {
-      // Static/reduced-motion content is not an active scroll demonstration.
-      if (reduced.matches || !scroller.hasAttribute("data-ava-scroll-ready")) return;
-      manual = true;
-      cancelFrame();
-      scroller.dataset.avaScrollState = "stopped";
-    };
-    const enter = () => { if (hover.matches) { hovering = true; syncScroll(); } };
-    const leave = () => { hovering = false; syncScroll(); };
-    const phoneObserver = new IntersectionObserver(entries => {
-      inView = entries.some(entry => entry.isIntersecting && entry.intersectionRatio >= 0.6);
+    const onToggle = () => {
+      if (reduced.matches) return;
+      manuallyPaused = !manuallyPaused;
+      if (!manuallyPaused) {
+        // Resume smoothly from a reader's current position, not with a jump.
+        const distance = Math.max(1, scroller.scrollHeight - scroller.clientHeight);
+        const fraction = Math.min(1, Math.max(0, scroller.scrollTop / distance));
+        const cycle = Math.floor(elapsed / cycleMs);
+        elapsed = cycle * cycleMs + topHoldMs + downMs * Math.acos(1 - 2 * fraction) / Math.PI;
+      }
       syncScroll();
-    }, { threshold: [0, 0.6] });
-    phoneObserver.observe(phone);
-    scroller.addEventListener("pointerdown", stopForReader, { passive: true });
-    scroller.addEventListener("wheel", stopForReader, { passive: true });
-    scroller.addEventListener("keydown", stopForReader);
-    scroller.addEventListener("focusin", stopForReader);
-    scroller.addEventListener("pointerenter", enter);
-    scroller.addEventListener("pointerleave", leave);
+    };
+    toggle.addEventListener("click", onToggle);
 
     const animate = (element: HTMLElement, keyframes: Keyframe[], options: KeyframeAnimationOptions) => {
       if (reduced.matches || typeof element.animate !== "function") return;
@@ -107,11 +116,11 @@ export default function AvaMotion() {
       if (document.hidden) animation.pause();
     };
     const revealed = new WeakSet<Element>();
-    const revealObserver = new IntersectionObserver(entries => {
+    const revealObserver = typeof IntersectionObserver === "undefined" ? null : new IntersectionObserver(entries => {
       for (const entry of entries) {
         if (!entry.isIntersecting || revealed.has(entry.target)) continue;
         revealed.add(entry.target);
-        revealObserver.unobserve(entry.target);
+        revealObserver?.unobserve(entry.target);
         const element = entry.target as HTMLElement;
         element.dataset.avaRevealed = "true";
         animate(element, [{ opacity: 0.25, transform: "translateY(10px)" }, { opacity: 1, transform: "translateY(0)" }], {
@@ -119,15 +128,15 @@ export default function AvaMotion() {
         });
       }
     }, { threshold: 0.12, rootMargin: "0px 0px -20px 0px" });
-    // Never hide or delay the hero headline. No scroll interception or parallax.
-    root.querySelectorAll<HTMLElement>(".ava-product-copy, .ava-dashboard-preview, .ava-features-section, .ava-personality, .ava-faq, .ava-final-cta").forEach(element => revealObserver.observe(element));
+    // These one-time section reveals do not control the continuously looping chat.
+    root.querySelectorAll<HTMLElement>(".ava-product-copy, .ava-dashboard-preview, .ava-features-section, .ava-personality, .ava-faq, .ava-final-cta").forEach(element => revealObserver?.observe(element));
 
     const plot = root.querySelector<HTMLElement>(".ava-chart-plot");
     let chartRevealed = false;
-    const chartObserver = new IntersectionObserver(entries => {
+    const chartObserver = typeof IntersectionObserver === "undefined" ? null : new IntersectionObserver(entries => {
       if (chartRevealed || !entries.some(entry => entry.isIntersecting && entry.intersectionRatio >= 0.4)) return;
       chartRevealed = true;
-      chartObserver.disconnect();
+      chartObserver?.disconnect();
       if (plot) plot.dataset.avaChartRevealed = "true";
       root.querySelectorAll<HTMLElement>(".ava-dashboard-bars > i").forEach((bar, index) => {
         animate(bar, [{ transform: "scaleY(.06)" }, { transform: "scaleY(1)" }], {
@@ -135,13 +144,14 @@ export default function AvaMotion() {
         });
       });
     }, { threshold: [0, 0.4] });
-    if (plot) chartObserver.observe(plot);
+    if (plot) chartObserver?.observe(plot);
 
     const onVisibility = () => {
       for (const animation of animations) {
         if (document.hidden) animation.pause();
         else if (!reduced.matches) animation.play();
       }
+      // Suspend only hidden browser tabs, never an off-screen phone on this page.
       syncScroll();
     };
     const onPreference = () => {
@@ -159,22 +169,19 @@ export default function AvaMotion() {
     return () => {
       disposed = true;
       cancelFrame();
-      phoneObserver.disconnect();
-      revealObserver.disconnect();
-      chartObserver.disconnect();
+      revealObserver?.disconnect();
+      chartObserver?.disconnect();
       for (const animation of animations) animation.cancel();
       animations.clear();
       document.removeEventListener("visibilitychange", onVisibility);
       reduced.removeEventListener("change", onPreference);
-      scroller.removeEventListener("pointerdown", stopForReader);
-      scroller.removeEventListener("wheel", stopForReader);
-      scroller.removeEventListener("keydown", stopForReader);
-      scroller.removeEventListener("focusin", stopForReader);
-      scroller.removeEventListener("pointerenter", enter);
-      scroller.removeEventListener("pointerleave", leave);
+      toggle.removeEventListener("click", onToggle);
+      toggle.hidden = true;
       delete root.dataset.avaMotionReady;
       delete scroller.dataset.avaScrollReady;
       delete scroller.dataset.avaScrollState;
+      delete scroller.dataset.avaScrollPhase;
+      delete scroller.dataset.avaScrollCycle;
       scroller.removeAttribute("tabindex");
       scroller.removeAttribute("aria-label");
       scroller.scrollTop = 0;
