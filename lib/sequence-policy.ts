@@ -239,3 +239,14 @@ export function continuationBlockReason(ctx: ContinuationContext): string | null
   }
   return null;
 }
+
+// Migration 147 may not be applied yet. A dashboard that 500s because a table
+// is missing is worse than one that says so, and this repo already takes that
+// position elsewhere (see rowFromForm's missing-column retry in
+// app/clones/actions.ts). It lives here rather than in actions.ts because that
+// file is "use server": every export there is a callable endpoint, and this is
+// a pure predicate, not an action.
+const MISSING_TABLE = "42P01";
+export function isMissingSequenceTables(error: { code?: string } | null | undefined): boolean {
+  return error?.code === MISSING_TABLE;
+}

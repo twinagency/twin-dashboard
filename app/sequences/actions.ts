@@ -18,15 +18,6 @@ import {
   type SessionStatus,
 } from "@/lib/sequence-policy";
 
-// Migration 147 may not be applied yet. A dashboard that 500s because a table
-// is missing is worse than one that says so, and this repo already takes that
-// position elsewhere (see rowFromForm's missing-column retry in
-// app/clones/actions.ts).
-const MISSING_TABLE = "42P01";
-export function isMissingSequenceTables(error: { code?: string } | null | undefined): boolean {
-  return error?.code === MISSING_TABLE;
-}
-
 type RevisionRow = {
   id: string;
   sequence_id: string;

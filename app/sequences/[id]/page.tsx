@@ -10,13 +10,13 @@ import SequenceEditor from "@/components/sequence/SequenceEditor";
 import {
   canEditRevision,
   canTransitionRevision,
+  isMissingSequenceTables,
   revisionEditBlocker,
   type PartDraft,
   type RevisionState,
 } from "@/lib/sequence-policy";
 import {
   approveSequenceRevision,
-  isMissingSequenceTables,
   publishSequenceRevision,
   saveSequenceParts,
   withdrawSequenceRevision,

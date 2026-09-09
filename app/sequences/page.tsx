@@ -6,7 +6,8 @@ import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Info, inputCls } from "@/components/clone/fields";
 import RevisionStateBadge from "@/components/sequence/RevisionStateBadge";
-import { createSequence, isMissingSequenceTables } from "./actions";
+import { createSequence } from "./actions";
+import { isMissingSequenceTables } from "@/lib/sequence-policy";
 import type { RevisionState } from "@/lib/sequence-policy";
 
 export const dynamic = "force-dynamic";
