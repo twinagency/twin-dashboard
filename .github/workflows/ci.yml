@@ -44,3 +44,21 @@ jobs:
 
       - name: Production login routing smoke
         run: node scripts/check-login-pages.mjs
+
+      - name: Public marketing access checks
+        run: npx tsx scripts/check-marketing-access.ts
+
+      - name: Install browser for public site verification
+        run: npx playwright install --with-deps chromium
+
+      - name: Public site responsive and interaction checks
+        run: node scripts/check-marketing-site.mjs
+
+      - name: Public site review screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: twin-public-site-preview
+          path: test-results/twin-public
+          if-no-files-found: ignore
+          retention-days: 3
