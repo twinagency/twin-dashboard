@@ -1,0 +1,45 @@
+name: Public site design reference
+on:
+  push:
+    branches: [feat/twinagency-public-site]
+    paths: [.github/workflows/twin-public-review.yml]
+permissions:
+  contents: read
+jobs:
+  reference:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium
+      - name: Capture public marketing reference only
+        run: |
+          mkdir -p /tmp/twin-public-reference
+          node --input-type=module <<'JS'
+          import { chromium } from 'playwright';
+          import { writeFile } from 'node:fs/promises';
+          const browser = await chromium.launch();
+          for (const [name,width,height] of [['desktop',1440,1000],['mobile',390,844]]) {
+            const page = await browser.newPage({viewport:{width,height},reducedMotion:'reduce'});
+            await page.goto('https://twinagency.co/',{waitUntil:'networkidle',timeout:60000});
+            await page.waitForTimeout(2500);
+            await page.screenshot({path:`/tmp/twin-public-reference/original-${name}.png`,fullPage:true});
+            await writeFile(`/tmp/twin-public-reference/original-${name}.html`,await page.content());
+            await page.close();
+          }
+          await browser.close();
+          JS
+      - name: Export tracked source without credentials or dependencies
+        if: always()
+        run: git archive --format=tar.gz HEAD > /tmp/twin-public-reference/source.tar.gz
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: twin-public-reference
+          path: /tmp/twin-public-reference
+          retention-days: 1
