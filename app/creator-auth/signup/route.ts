@@ -25,13 +25,18 @@ export async function POST(req: Request) {
     return redirectWithError(req, "invalid");
   }
 
-  let agencyId: string | null = null;
+  let agencyCodeHash: string | null = null;
   if (agencyCode) {
-    const codeHash = await sha256(agencyCode);
-    const { data: claim, error: claimError } = await supabaseAdmin.rpc("claim_creator_agency_code", { p_code_hash: codeHash });
-    const first = Array.isArray(claim) ? claim[0] : null;
-    if (claimError || !first?.agency_id) return redirectWithError(req, "agency_code");
-    agencyId = first.agency_id as string;
+    agencyCodeHash = await sha256(agencyCode);
+    const now = new Date().toISOString();
+    const { data: code } = await supabaseAdmin
+      .from("creator_agency_codes")
+      .select("id,active,max_uses,uses,expires_at")
+      .eq("code_hash", agencyCodeHash)
+      .maybeSingle();
+    if (!code?.active || (code.expires_at && code.expires_at <= now) || (code.max_uses != null && code.uses >= code.max_uses)) {
+      return redirectWithError(req, "agency_code");
+    }
   }
 
   const { data: existing } = await supabaseAdmin
@@ -52,6 +57,14 @@ export async function POST(req: Request) {
 
   let accountId = existing?.id as string | undefined;
   try {
+    let agencyId: string | null = null;
+    if (agencyCodeHash) {
+      const { data: claim, error: claimError } = await supabaseAdmin.rpc("claim_creator_agency_code", { p_code_hash: agencyCodeHash });
+      const first = Array.isArray(claim) ? claim[0] : null;
+      if (claimError || !first?.agency_id) throw new Error("agency_code_unavailable");
+      agencyId = first.agency_id as string;
+    }
+
     if (accountId) {
       const { error } = await supabaseAdmin
         .from("creator_accounts")
@@ -68,7 +81,10 @@ export async function POST(req: Request) {
       accountId = data.id as string;
     }
 
-    await supabaseAdmin.from("creator_onboarding_progress").upsert({ creator_account_id: accountId }, { onConflict: "creator_account_id", ignoreDuplicates: true });
+    const { error: progressError } = await supabaseAdmin
+      .from("creator_onboarding_progress")
+      .upsert({ creator_account_id: accountId }, { onConflict: "creator_account_id", ignoreDuplicates: true });
+    if (progressError) throw progressError;
 
     if (agencyId) {
       const { error } = await supabaseAdmin.from("creator_agency_assignments").upsert({
@@ -86,6 +102,6 @@ export async function POST(req: Request) {
   } catch (error) {
     await supabaseAdmin.auth.admin.deleteUser(created.user.id).catch(() => undefined);
     console.error("creator signup failed", error);
-    return redirectWithError(req, "failed");
+    return redirectWithError(req, error instanceof Error && error.message === "agency_code_unavailable" ? "agency_code" : "failed");
   }
 }
