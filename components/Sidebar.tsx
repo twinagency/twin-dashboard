@@ -55,7 +55,7 @@ const PATHS: Record<string, string> = {
   Revenue: '<path d="M3 17l6-6 4 4 7-7"/><path d="M14 7h5v5"/>',
   Clones: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
   Edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/>',
-  Users: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>',
+  Users: '<path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 1 0 7.75"/>',
   Logs: '<line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/><line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/><line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>',
   Info: '<circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>',
   Flows:
@@ -66,7 +66,7 @@ const PATHS: Record<string, string> = {
   Dials: '<line x1="4" y1="21" x2="4" y2="14"/><line x1="4" y1="10" x2="4" y2="3"/><line x1="12" y1="21" x2="12" y2="12"/><line x1="12" y1="8" x2="12" y2="3"/><line x1="20" y1="21" x2="20" y2="16"/><line x1="20" y1="12" x2="20" y2="3"/><line x1="1" y1="14" x2="7" y2="14"/><line x1="9" y1="8" x2="15" y2="8"/><line x1="17" y1="16" x2="23" y2="16"/>',
   Dollar: '<line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>',
   Settings:
-    '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+    '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v-.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
   Plus: '<path d="M12 5v14M5 12h14"/>',
   Code: '<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>',
   SignOut: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>',
@@ -83,9 +83,6 @@ const PATHS: Record<string, string> = {
   More: '<circle cx="5" cy="12" r="1"/><circle cx="12" cy="12" r="1"/><circle cx="19" cy="12" r="1"/>',
 };
 
-// Navigation stays monochrome so information hierarchy comes from position and
-// state, not a different decorative colour for every destination. Semantic
-// colours remain inside the data views where they carry actual meaning.
 type LinkColor = "neutral" | "good" | "purple" | "orange" | "blue" | "red" | "pink" | "gray";
 const LINK_COLOR_CLASSES: Record<LinkColor, { icon: string; active: string; idle: string }> = {
   neutral: { icon: "text-[#9cbad3]", active: "bg-white/12 text-white ring-1 ring-white/12", idle: "text-white/68 hover:bg-white/[0.07] hover:text-white" },
@@ -98,14 +95,12 @@ const LINK_COLOR_CLASSES: Record<LinkColor, { icon: string; active: string; idle
   gray: { icon: "text-[#9cbad3]", active: "bg-white/12 text-white ring-1 ring-white/12", idle: "text-white/68 hover:bg-white/[0.07] hover:text-white" },
 };
 
-// The primary list is deliberately short. It is what a prospective partner or
-// an operator sees first: business performance, creators, fans, offers and
-// business accounts. The full internal toolkit remains available below More.
 const NAV_LINKS: NavLink[] = [
   { kind: "route", label: "Earnings", href: "/revenue", icon: "EarningsCombo", color: "good" },
   { kind: "route", label: "Creators", href: "/clones", icon: "Clones", color: "blue" },
   { kind: "route", label: "Fans", href: "/users", icon: "FansCombo", color: "purple" },
   { kind: "tab", label: "PPVs", tab: "ppvs", icon: "Media", color: "red" },
+  { kind: "route", label: "Storage", href: "/storage", icon: "Database", color: "blue" },
   { kind: "route", label: "Business", href: "/business", icon: "Bot", color: "purple", gateOnClone: true },
 ];
 
@@ -122,10 +117,6 @@ const MORE_LINKS: NavLink[] = [
   { kind: "route", label: "Settings", href: "/settings", icon: "Settings", color: "gray" },
 ];
 
-// The CRM workspace is intentionally separate from the live creator tools
-// above. It is a navigable product preview now; its URLs and information
-// architecture are stable so the visual pages can become working screens
-// without moving people around later.
 const CRM_LINKS: NavLink[] = [
   { kind: "route", label: "Inbox", href: "/crm/inbox", icon: "Inbox", color: "purple" },
   { kind: "route", label: "Fan CRM", href: "/crm/fans", icon: "Users", color: "blue" },
@@ -134,171 +125,48 @@ const CRM_LINKS: NavLink[] = [
   { kind: "route", label: "Platforms", href: "/crm/platforms", icon: "Database", color: "good" },
 ];
 
-export function SidebarContent({
-  activeCloneId,
-  onNavigate,
-  headerAction,
-  showAssistant = false,
-}: {
-  activeCloneId: string | null;
-  onNavigate?: () => void;
-  headerAction?: ReactNode;
-  showAssistant?: boolean;
-}) {
+export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAssistant = false }: { activeCloneId: string | null; onNavigate?: () => void; headerAction?: ReactNode; showAssistant?: boolean }) {
   const {readOnly,isAgency,canManage,agencyName}=useDashboardAccess();
   const showUnavailable = readOnly && isMoxy(agencyName);
-  // Presentation only. Existing server-side creator permissions stay unchanged.
   const isJessKate = isAgency && agencyName === JESS_KATE_PORTAL.name;
-  const primaryLinks = NAV_LINKS.flatMap(link =>
-    showUnavailable && link.kind === "tab" && link.tab === "ppvs"
-      ? [link, ...MORE_LINKS.filter(item => item.kind === "tab" && item.tab === "identity")]
-      : [link],
-  );
+  const primaryLinks = NAV_LINKS.flatMap(link => showUnavailable && link.kind === "tab" && link.tab === "ppvs" ? [link, ...MORE_LINKS.filter(item => item.kind === "tab" && item.tab === "identity")] : [link]);
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [moreOpen, setMoreOpen] = useState(false);
   const activeTab = searchParams.get("tab") ?? "config";
-
   const isGlobalActive = (href: string) => pathname === href || (href !== "/" && pathname.startsWith(href + "/"));
   const onConfigurePage = activeCloneId ? pathname === `/clones/${activeCloneId}` : false;
-  const pickClone = () => {
-    onNavigate?.();
-    window.setTimeout(() => openCloneSwitcher(), 0);
-  };
+  const pickClone = () => { onNavigate?.(); window.setTimeout(() => openCloneSwitcher(), 0); };
 
   const navLabel = (link: NavLink, colors: (typeof LINK_COLOR_CLASSES)[LinkColor]) => {
-    if (link.icon === "FansCombo") {
-      return (
-        <>
-          <Icon d={PATHS.Users} className={"h-[18px] w-[18px] " + colors.icon} />
-          <span className="flex-1">{link.label}</span>
-          <Icon d={PATHS.Messages} className="h-4 w-4 text-current opacity-45" />
-        </>
-      );
-    }
-    if (link.icon === "EarningsCombo") {
-      return (
-        <>
-          <Icon d={PATHS.Dollar} className={"h-[18px] w-[18px] " + colors.icon} />
-          <span className="flex-1">{link.label}</span>
-        </>
-      );
-    }
+    if (link.icon === "FansCombo") return <><Icon d={PATHS.Users} className={"h-[18px] w-[18px] " + colors.icon} /><span className="flex-1">{link.label}</span><Icon d={PATHS.Messages} className="h-4 w-4 text-current opacity-45" /></>;
+    if (link.icon === "EarningsCombo") return <><Icon d={PATHS.Dollar} className={"h-[18px] w-[18px] " + colors.icon} /><span className="flex-1">{link.label}</span></>;
     return <><Icon d={PATHS[link.icon]} className={"h-[18px] w-[18px] " + colors.icon} />{link.label}</>;
   };
-
   const linkKey = (link: NavLink) => link.kind === "route" ? link.href : link.tab;
-
   const renderLink = (link: NavLink) => {
     const colors = LINK_COLOR_CLASSES[link.color];
     const rowClass = "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold transition";
-
     if (isAgency && link.kind === "route" && !agencyDashboardPath(link.href, agencyName, canManage)) {
       if (!showUnavailable) return null;
-      return <div aria-disabled="true" className={rowClass + " cursor-not-allowed text-white/45"}>
-        <Icon d={PATHS[link.icon]} className="h-[18px] w-[18px] text-white/35" />
-        <span className="flex-1">{link.label}</span>
-        <span className="whitespace-nowrap rounded border border-white/15 px-1.5 py-0.5 text-[9px] font-medium text-white/60">Not available</span>
-      </div>;
+      return <div aria-disabled="true" className={rowClass + " cursor-not-allowed text-white/45"}><Icon d={PATHS[link.icon]} className="h-[18px] w-[18px] text-white/35" /><span className="flex-1">{link.label}</span><span className="whitespace-nowrap rounded border border-white/15 px-1.5 py-0.5 text-[9px] font-medium text-white/60">Not available</span></div>;
     }
-
     if (link.kind === "tab") {
       const active = onConfigurePage && activeTab === link.tab;
-      if (!activeCloneId) {
-        return <button type="button" onClick={pickClone} title="Pick a creator first" className={rowClass + " " + colors.idle}>{navLabel(link, colors)}</button>;
-      }
+      if (!activeCloneId) return <button type="button" onClick={pickClone} title="Pick a creator first" className={rowClass + " " + colors.idle}>{navLabel(link, colors)}</button>;
       return <Link href={`/clones/${activeCloneId}?tab=${link.tab}`} onClick={onNavigate} className={rowClass + " " + (active ? colors.active : colors.idle)}>{navLabel(link, colors)}</Link>;
     }
-
-    if (link.gateOnClone && !activeCloneId) {
-      return <button type="button" onClick={pickClone} title="Pick a creator first" className={rowClass + " " + colors.idle}>{navLabel(link, colors)}</button>;
-    }
-
+    if (link.gateOnClone && !activeCloneId) return <button type="button" onClick={pickClone} title="Pick a creator first" className={rowClass + " " + colors.idle}>{navLabel(link, colors)}</button>;
     return <Link href={link.href} onClick={onNavigate} className={rowClass + " " + (isGlobalActive(link.href) ? colors.active : colors.idle)}>{navLabel(link, colors)}</Link>;
   };
 
-  return (
-    <>
-      {/* Brand - fixed height so its bottom border lines up exactly with the
-          TopBar's border in the column next to it (both h-16). */}
-      <div className="flex h-20 shrink-0 items-center justify-between border-b border-white/14 px-5">
-        <Link href="/revenue" className="min-w-0" aria-label={agencyName || "Twin Technologies"} onClick={onNavigate}>
-          <TwinWordmark inverse agencyName={agencyName} />
-        </Link>
-        {headerAction}
-      </div>
-
-      {/* Create new clone - always the first thing in the sidebar, its own
-          row so it reads as an action, not just another nav destination.
-          No bottom border: the generous space above it already separates it
-          from the brand header, so a hairline as well just reads as clutter. */}
-      {showUnavailable || isJessKate ? <div className="shrink-0 px-4 pb-2 pt-4">
-        <div aria-disabled={showUnavailable || undefined} className={"flex " + (showUnavailable ? "cursor-not-allowed " : "") + "items-center gap-3 rounded-xl border border-sky-400/20 bg-sky-400/[0.05] px-3 py-3"}>
-          <IntelligenceCoreIcon size={64} />
-          <div className="min-w-0 flex-1">
-            <span className="block text-sm font-semibold leading-5 text-[#38bdf8]">AI Intelligence Core</span>
-            {showUnavailable && <span className="mt-1.5 inline-block rounded border border-white/15 px-1.5 py-0.5 text-[9px] font-medium text-white/60">Not available</span>}
-          </div>
-        </div>
-      </div> : isAgency ? <div className="px-7 py-4 text-sm text-white/75">{agencyName} · {readOnly ? "Read only" : "Creator management"}</div> : <div className="shrink-0 px-4 pb-3 pt-4">
-        <Link
-          href="/clones/new"
-          onClick={onNavigate}
-          className="sidebar-create-button flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition"
-        >
-          <Icon d={PATHS.Plus} className="h-4 w-4" />
-          Create new creator
-        </Link>
-      </div>
-
-      }
-      <nav className="flex flex-1 flex-col overflow-y-auto px-4 py-2">
-        <div className="space-y-1">
-          {primaryLinks.map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}
-          {!isJessKate && (!readOnly || showUnavailable) && <><div className="mb-2 mt-3 border-t border-white/14 pt-3 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">CRM</div>
-          {CRM_LINKS.map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}</>}
-          {showUnavailable ? <div className="mt-3 space-y-1 border-t border-white/14 pt-2">
-            {MORE_LINKS.filter(link => link.kind !== "route" || !["/jarvis", "/agency-admin"].includes(link.href)).filter(link => link.kind !== "tab" || link.tab !== "identity").map(link => <div key={linkKey(link)}>{renderLink(link)}</div>)}
-          </div> : isJessKate ? <div className="mt-3 border-t border-white/14 pt-3">
-            <h2 className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">More</h2>
-            <div className="space-y-1">
-              {MORE_LINKS.filter(link => link.kind === "tab" || agencyDashboardPath(link.href, agencyName, canManage)).map(link => <div key={linkKey(link)}>{renderLink(link)}</div>)}
-            </div>
-          </div> : <div className="mt-3 border-t border-white/14 pt-2">
-            <button
-              type="button"
-              onClick={() => setMoreOpen((open) => !open)}
-              aria-expanded={moreOpen}
-              className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold text-white/62 transition hover:bg-white/10 hover:text-white"
-            >
-              <Icon d={PATHS.More} className="h-[18px] w-[18px] text-white/50" />
-              <span className="flex-1">More</span>
-              <svg className={(moreOpen ? "rotate-180 " : "") + "h-4 w-4 transition-transform"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
-            </button>
-            {moreOpen ? <div className="mt-1 space-y-1">{MORE_LINKS.filter(link => !isAgency || showUnavailable || link.kind === "tab" || agencyDashboardPath(link.href, agencyName, canManage)).map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}</div> : null}
-          </div>}
-        </div>
-
-        {showAssistant && !isAgency ? (
-          <div className="mt-auto pt-4 [@media(max-height:850px)]:pt-2">
-            <TwinAssistant />
-          </div>
-        ) : null}
-      </nav>
-    </>
-  );
+  return <>
+    <div className="flex h-20 shrink-0 items-center justify-between border-b border-white/14 px-5"><Link href="/revenue" className="min-w-0" aria-label={agencyName || "Twin Technologies"} onClick={onNavigate}><TwinWordmark inverse agencyName={agencyName} /></Link>{headerAction}</div>
+    {showUnavailable || isJessKate ? <div className="shrink-0 px-4 pb-2 pt-4"><div aria-disabled={showUnavailable || undefined} className={"flex " + (showUnavailable ? "cursor-not-allowed " : "") + "items-center gap-3 rounded-xl border border-sky-400/20 bg-sky-400/[0.05] px-3 py-3"}><IntelligenceCoreIcon size={64} /><div className="min-w-0 flex-1"><span className="block text-sm font-semibold leading-5 text-[#38bdf8]">AI Intelligence Core</span>{showUnavailable && <span className="mt-1.5 inline-block rounded border border-white/15 px-1.5 py-0.5 text-[9px] font-medium text-white/60">Not available</span>}</div></div></div> : isAgency ? <div className="px-7 py-4 text-sm text-white/75">{agencyName} · {readOnly ? "Read only" : "Creator management"}</div> : <div className="shrink-0 px-4 pb-3 pt-4"><Link href="/clones/new" onClick={onNavigate} className="sidebar-create-button flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition"><Icon d={PATHS.Plus} className="h-4 w-4" />Create new creator</Link></div>}
+    <nav className="flex flex-1 flex-col overflow-y-auto px-4 py-2"><div className="space-y-1">{primaryLinks.map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}{!isJessKate && (!readOnly || showUnavailable) && <><div className="mb-2 mt-3 border-t border-white/14 pt-3 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">CRM</div>{CRM_LINKS.map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}</>}{showUnavailable ? <div className="mt-3 space-y-1 border-t border-white/14 pt-2">{MORE_LINKS.filter(link => link.kind !== "route" || !["/jarvis", "/agency-admin"].includes(link.href)).filter(link => link.kind !== "tab" || link.tab !== "identity").map(link => <div key={linkKey(link)}>{renderLink(link)}</div>)}</div> : isJessKate ? <div className="mt-3 border-t border-white/14 pt-3"><h2 className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">More</h2><div className="space-y-1">{MORE_LINKS.filter(link => link.kind === "tab" || agencyDashboardPath(link.href, agencyName, canManage)).map(link => <div key={linkKey(link)}>{renderLink(link)}</div>)}</div></div> : <div className="mt-3 border-t border-white/14 pt-2"><button type="button" onClick={() => setMoreOpen((open) => !open)} aria-expanded={moreOpen} className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold text-white/62 transition hover:bg-white/10 hover:text-white"><Icon d={PATHS.More} className="h-[18px] w-[18px] text-white/50" /><span className="flex-1">More</span><svg className={(moreOpen ? "rotate-180 " : "") + "h-4 w-4 transition-transform"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg></button>{moreOpen ? <div className="mt-1 space-y-1">{MORE_LINKS.filter(link => !isAgency || showUnavailable || link.kind === "tab" || agencyDashboardPath(link.href, agencyName, canManage)).map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}</div> : null}</div>}</div>{showAssistant && !isAgency ? <div className="mt-auto pt-4 [@media(max-height:850px)]:pt-2"><TwinAssistant /></div> : null}</nav>
+  </>;
 }
 
-export default function Sidebar({
-  clones: _clones,
-  activeCloneId,
-}: {
-  clones: CloneLite[];
-  activeCloneId: string | null;
-}) {
-  return (
-    <aside className="dashboard-sidebar sticky top-0 hidden h-screen w-72 shrink-0 flex-col lg:flex">
-      <SidebarContent activeCloneId={activeCloneId} />
-    </aside>
-  );
+export default function Sidebar({ clones: _clones, activeCloneId }: { clones: CloneLite[]; activeCloneId: string | null }) {
+  return <aside className="dashboard-sidebar sticky top-0 hidden h-screen w-72 shrink-0 flex-col lg:flex"><SidebarContent activeCloneId={activeCloneId} /></aside>;
 }
