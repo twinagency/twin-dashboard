@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import IntelligenceCoreIcon from "@/components/IntelligenceCoreIcon";
+import AvaMotion from "./AvaMotion";
 import "./ava.css";
 import "./ava-mobile.css";
+import "./ava-motion.css";
 
 export const metadata: Metadata = {
   title: "Ava | AI clones for creators",
@@ -57,7 +59,7 @@ function TelegramPhone({ secondary = false }: { secondary?: boolean }) {
     <div className="ava-phone-screen">
       <div className="ava-statusbar"><span>9:41</span><i className="ava-island" /><span className="ava-status-icons"><i className="ava-signal"/><svg viewBox="0 0 18 14" aria-hidden="true"><path d="M1 4Q9-2 17 4M4 7q5-4 10 0M7 10q2-2 4 0" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round"/><circle cx="9" cy="12" r="1" fill="currentColor"/></svg><i className="ava-battery"/></span></div>
       <div className="ava-telegram-topbar"><Icon name="back"/><div className="ava-chat-name"><strong>{creator}</strong><small>{secondary ? "last seen recently" : "online"}</small></div><span className={`ava-avatar ${secondary ? "sienna" : "mia"}`}>{secondary ? "SR" : "MV"}</span></div>
-      <div className="ava-chat"><span className="ava-chat-day">Today</span>
+      <div className="ava-chat" data-ava-scroll={secondary ? undefined : "preview"}><div className="ava-chat-history"><span className="ava-chat-day">Today</span>
         {secondary ? <>
           <Bubble outgoing time="10:24">You’re amazing 😍</Bubble>
           <div className="ava-voice"><span className="ava-play"><Icon name="play"/></span><div><div className="ava-wave">{[8,13,20,11,17,24,14,9,18,23,13,19,10,17,22,12,7,15].map((h,i)=><i key={i} style={{height:h}}/>)}</div><small>0:24</small></div><span className="ava-message-time">10:24</span></div>
@@ -72,7 +74,7 @@ function TelegramPhone({ secondary = false }: { secondary?: boolean }) {
           <Bubble time="10:26">This set is so hot 🔥</Bubble>
           <button className="ava-unlock" type="button" aria-disabled="true">Unlock for $12</button>
         </>}
-      </div>
+      </div></div>
       <div className="ava-message-bar"><Icon name="attach"/><span>Message <i>◯</i></span><Icon name="mic"/></div><div className="ava-phone-bottom"><i/></div>
     </div>
   </div>;
@@ -117,7 +119,7 @@ function DashboardMockup() {
 }
 const features: [keyof typeof paths, string, string][] = [["send","Built for Telegram","Conversations in the app your fans already use."],["chat","Your personality","Chats shaped around your tone and style."],["photo","Your content","Photos, videos and bundles in the conversation."],["chart","Clear insights","Messages, buyers and earnings, all in one place."],["spark","Fully managed","We handle the technology. You keep creating."]];
 export default function AvaPage() {
-  return <main className="ava-site" data-ava-revision="compact-mobile-20260910">
+  return <main className="ava-site" data-ava-revision="motion-scroll-20260910">
     <header className="ava-header"><a className="ava-wordmark" href="#top" aria-label="Ava home">Ava</a><nav aria-label="Main navigation"><Navigation/></nav><div className="ava-header-actions"><PreviewButton>Get Started</PreviewButton><details className="ava-mobile-nav"><summary aria-label="Open navigation"><Icon name="menu"/></summary><nav aria-label="Mobile navigation"><Navigation/></nav></details></div></header>
     <section id="top" className="ava-hero">
       <div className="ava-hero-copy"><div className="ava-eyebrow">AI clones for real creators</div><h1>Your Fans.<br/>Your Rules.<br/><em>More Revenue.</em></h1><p>Ava builds AI clones for creators that chat, sell content and grow your income 24/7 on Telegram.</p><div className="ava-hero-actions"><PreviewButton>Get Started</PreviewButton><PreviewButton ghost>Book a Call</PreviewButton></div><div className="ava-platform-note"><span><Icon name="send"/></span><div><strong>Built for Telegram.</strong><small>Your personality. A new way to connect.</small></div></div></div>
@@ -130,5 +132,6 @@ export default function AvaPage() {
     <section className="ava-faq" id="faq"><div><div className="ava-eyebrow">A few things to know</div><h2>Before you get started.</h2></div><div className="ava-faq-items"><details><summary>Where do fans talk to my AI clone?<Icon name="down"/></summary><p>On Telegram, in a one-to-one conversation with your creator bot.</p></details><details><summary>What does the dashboard show?<Icon name="down"/></summary><p>Earnings, balances, buyers, messages and audience activity. The example above uses fictional figures to demonstrate the layout.</p></details><details><summary>Can I sign up through this preview?<Icon name="down"/></summary><p>Not yet. This is a front-end preview. Signup, onboarding and payments are not connected.</p></details></div></section>
     <section className="ava-final-cta"><div className="ava-eyebrow light">Your next chapter</div><h2>Ready to Scale with Ava?</h2><PreviewButton light>Get Started</PreviewButton></section>
     <footer className="ava-footer"><a className="ava-wordmark" href="#top">Ava</a><nav aria-label="Footer navigation"><Navigation/></nav><small>© 2026 Ava. Front-end preview.</small></footer>
+    <AvaMotion/>
   </main>;
 }

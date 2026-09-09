@@ -3,7 +3,7 @@ import { spawn } from 'node:child_process';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { setTimeout as delay } from 'node:timers/promises';
 
-const revision = 'compact-mobile-20260910';
+const revision = 'motion-scroll-20260910';
 const httpOnly = process.argv.includes('--http-only');
 const port = 3128;
 const origin = process.env.AVA_CHECK_ORIGIN || `http://127.0.0.1:${port}`;
@@ -16,6 +16,7 @@ async function verifyPublicPage() {
     assert.match(new URL(response.url).pathname, /^\/ava\/?$/, `${path}: must not redirect to a login`);
     const html = await response.text();
     assert.ok(html.includes(`data-ava-revision="${revision}"`), `${path}: correct released revision`);
+    assert.ok(html.includes('data-ava-scroll="preview"'), `${path}: existing-history scroll preview is shipped`);
     for (const text of ['Mia Vale','Sienna Rose','Earnings overview','384,729.84','72,441.18','Demo data','not actual earnings']) assert.ok(html.includes(text), `${path}: ${text}`);
     assert.doesNotMatch(html, /Tru Kait|True Kate|Riley Mae|Trusted by top creators|Demo creator testimonial/);
     assert.doesNotMatch(html, /<form\b/);
@@ -132,6 +133,8 @@ async function main() {
     assert.deepEqual(forbiddenRequests,[],'Preview must never call private APIs or submit data');
     await writeFile(`${outputDir}/checks.json`,JSON.stringify(results,null,2));
     console.log('Ava production browser checks passed: 12 viewport widths, no private data calls, original core rendering, fictional examples and non-functional CTAs.');
+    const { checkAvaMotion } = await import('./check-ava-motion.mjs');
+    await checkAvaMotion(browser, origin, outputDir);
   } finally {
     await browser?.close();
     if(server) { server.kill('SIGTERM'); setTimeout(()=>server.kill('SIGKILL'),5000).unref(); }
