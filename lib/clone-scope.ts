@@ -27,9 +27,9 @@ export const CLONE_SCOPE_COOKIE = "clone_scope";
 // across requests.
 export const getCloneScope = cache(async (): Promise<string | null> => {
   const id = (await cookies()).get(CLONE_SCOPE_COOKIE)?.value || null;
-  if (!id) return null;
   const agency = await getDashboardAccess();
-  if (agency) return agency.cloneIds.includes(id) ? id : null;
+  if (agency) return id && agency.cloneIds.includes(id) ? id : agency.cloneIds.length === 1 ? agency.cloneIds[0] : null;
+  if (!id) return null;
   return (await cloneExists(id)) ? id : null;
 });
 

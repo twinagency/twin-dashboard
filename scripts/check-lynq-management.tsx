@@ -1,3 +1,4 @@
+import { JESS_KATE_PORTAL } from "../lib/partner-portals";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
 import { join } from "node:path";
@@ -14,7 +15,7 @@ import Access, {AdminOnly,ManagerOnly,MutationForm,ReadOnlyFields} from "../comp
 
 const a="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",b="bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",other="cccccccc-cccc-cccc-cccc-cccccccccccc";
 const user="11111111-1111-1111-1111-111111111111",photo="22222222-2222-2222-2222-222222222222",bundle="33333333-3333-3333-3333-333333333333",item="44444444-4444-4444-4444-444444444444";
-const manager={id:LYNQ_MANAGEMENT_AGENCY_ID,name:"LYNQ",cloneIds:[a,b]};
+const manager={id:process.env.TEST_JESS_KATE ? JESS_KATE_PORTAL.id : LYNQ_MANAGEMENT_AGENCY_ID,name:process.env.TEST_JESS_KATE ? JESS_KATE_PORTAL.name : "LYNQ",cloneIds:[a,b]};
 const reader={id:"another-agency",name:"LYNQ",cloneIds:[a]};
 const base="https://lynq-test.supabase.co/rest/v1/",origin="https://dashboard.tgaiclone.xyz";
 async function main(){
@@ -104,7 +105,7 @@ async function main(){
     });
   }finally{globalThis.fetch=previous;}
   const controls=<><ManagerOnly><button>Save changes</button></ManagerOnly><AdminOnly><button>Delete creator</button></AdminOnly><ReadOnlyFields><input name="setting"/></ReadOnlyFields><MutationForm><button>Send message</button></MutationForm><MutationForm adminOnly><button>Clear minor gate</button></MutationForm></>;
-  const live=renderToStaticMarkup(<Access agencyName="LYNQ" canManage>{controls}</Access>);
+  const live=renderToStaticMarkup(<Access agencyName={manager.name} canManage>{controls}</Access>);
   assert.match(live,/Save changes/);assert.match(live,/Send message/);assert.doesNotMatch(live,/disabled|Delete creator|Clear minor gate/);
   const view=renderToStaticMarkup(<Access agencyName="Moxy">{controls}</Access>);assert.match(view,/disabled/);assert.doesNotMatch(view,/Save changes|Send message/);
   const admin=renderToStaticMarkup(<Access>{controls}</Access>);assert.match(admin,/Delete creator/);

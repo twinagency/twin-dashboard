@@ -14,7 +14,7 @@ export default function TwinWordmark({
   if (isMoxy(agencyName)) return <img src="/moxy/logo.png" alt="Moxy, Los Angeles and Miami" width={1100} height={400} className={`block h-auto w-40 max-w-full ${inverse ? "" : "invert"} ${className}`} />;
   return (
     <span
-      className={`inline-flex items-baseline gap-2 whitespace-nowrap leading-none ${inverse ? "text-white" : "text-black"} ${className}`}
+      className={`inline-flex items-baseline gap-2 ${agencyName ? "whitespace-normal" : "whitespace-nowrap"} leading-none ${inverse ? "text-white" : "text-black"} ${className}`}
     >
       <span
         className="text-[20px] font-bold tracking-[-0.025em]"
