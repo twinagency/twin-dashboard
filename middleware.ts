@@ -16,9 +16,7 @@ function withPathname(req: NextRequest): NextResponse {
   return NextResponse.next({ request: { headers } });
 }
 
-// Twin's administrator-facing entry point. Keep this separate from partner
-// portal cookies so a browser that last visited Moxy/LYNQ can still reliably
-// reach the full admin backend.
+// Canonical Twin administrator namespace. Partner cookies must never hijack it.
 const TWIN_ADMIN_PREFIX = "/twin";
 
 function isTwinAdminPath(pathname: string): boolean {
@@ -29,6 +27,11 @@ function stripTwinPrefix(pathname: string): string {
   if (pathname === TWIN_ADMIN_PREFIX) return "/";
   const stripped = pathname.slice(TWIN_ADMIN_PREFIX.length);
   return stripped.startsWith("/") ? stripped : `/${stripped}`;
+}
+
+function twinAdminPath(pathname: string): string {
+  if (pathname === "/") return TWIN_ADMIN_PREFIX;
+  return `${TWIN_ADMIN_PREFIX}${pathname.startsWith("/") ? pathname : `/${pathname}`}`;
 }
 
 // ─── Routes that authenticate THEMSELVES, per request ────────────────────────
@@ -79,35 +82,56 @@ export async function middleware(req: NextRequest) {
   const adminToken = req.cookies.get(SESSION_COOKIE)?.value;
   const admin = await verifySessionToken(adminToken);
   const agencyToken = req.cookies.get(AGENCY_COOKIE)?.value;
+  const portal = req.cookies.get(AGENCY_PORTAL_COOKIE)?.value;
 
-  // /twin is the canonical master-admin namespace. Agency cookies never hijack
-  // it. An authenticated admin sees the existing admin app under the /twin URL;
-  // everyone else is sent to the admin login flow.
+  // /twin is the canonical master-admin namespace. It always checks the admin
+  // session first and ignores remembered partner identity for routing purposes.
   if (isTwinAdminPath(pathname)) {
     if (!admin) {
       const url = new URL("/login", dashboardOrigin(req));
       url.searchParams.set("next", pathname);
       return NextResponse.redirect(url);
     }
+    const internalPath = stripTwinPrefix(pathname);
     const rewritten = req.nextUrl.clone();
-    rewritten.pathname = stripTwinPrefix(pathname);
-    const response = NextResponse.rewrite(rewritten, {
-      request: {
-        headers: (() => {
-          const headers = new Headers(req.headers);
-          headers.set("x-pathname", stripTwinPrefix(pathname));
-          headers.set("x-admin-prefix", TWIN_ADMIN_PREFIX);
-          return headers;
-        })(),
-      },
-    });
+    rewritten.pathname = internalPath;
+    const headers = new Headers(req.headers);
+    headers.set("x-pathname", internalPath);
+    headers.set("x-admin-prefix", TWIN_ADMIN_PREFIX);
+    const response = NextResponse.rewrite(rewritten, { request: { headers } });
     response.headers.set("Cache-Control", "private, no-store");
     return response;
   }
 
-  if (agencyToken && pathname !== "/login") {
+  // The bare hostname is only a router. It is never a blank page and never the
+  // canonical admin URL.
+  if (pathname === "/") {
+    if (admin) return NextResponse.redirect(new URL(TWIN_ADMIN_PREFIX, dashboardOrigin(req)));
+    if (agencyToken) {
+      const identity = await agencyIdentity(agencyToken);
+      if (identity) return NextResponse.redirect(new URL(portalLoginPath(portal), dashboardOrigin(req)));
+    }
+    if (portal) return NextResponse.redirect(new URL(portalLoginPath(portal), dashboardOrigin(req)));
+    return NextResponse.redirect(new URL("/login", dashboardOrigin(req)));
+  }
+
+  // Once an admin is authenticated, keep browser navigation visibly inside the
+  // /twin namespace. This prevents a stale partner cookie from ever taking over
+  // a subsequent admin page click. APIs/auth endpoints are intentionally exempt.
+  if (
+    admin &&
+    ["GET", "HEAD"].includes(req.method) &&
+    pathname !== "/login" &&
+    !pathname.startsWith("/api/") &&
+    !pathname.startsWith("/_next/")
+  ) {
+    return NextResponse.redirect(new URL(twinAdminPath(pathname), dashboardOrigin(req)));
+  }
+
+  // Partner identity applies only when there is no active administrator session.
+  if (agencyToken && !admin && pathname !== "/login") {
     const identity = await agencyIdentity(agencyToken);
-    if (!identity) return NextResponse.redirect(new URL(portalLoginPath(req.cookies.get(AGENCY_PORTAL_COOKIE)?.value),dashboardOrigin(req)));
+    if (!identity) return NextResponse.redirect(new URL(portalLoginPath(portal),dashboardOrigin(req)));
     const canManage = agencyCanManage(identity);
     const serverAction = req.headers.has("next-action");
     const isWrite = serverAction || !["GET", "HEAD"].includes(req.method);
@@ -137,7 +161,7 @@ export async function middleware(req: NextRequest) {
   const authed = await verifySessionToken(token);
 
   if (pathname === "/login") {
-    if (authed && !agencyToken) {
+    if (authed) {
       const next = req.nextUrl.searchParams.get("next") || TWIN_ADMIN_PREFIX;
       const safe = next.startsWith("/") && !next.startsWith("//") && !next.includes("\\") ? next : TWIN_ADMIN_PREFIX;
       return NextResponse.redirect(new URL(safe, dashboardOrigin(req)));
@@ -145,18 +169,8 @@ export async function middleware(req: NextRequest) {
     return withPathname(req);
   }
 
-  // Bare domain is now a deterministic router rather than an ambiguous admin
-  // entry. Admins land on /twin; partner sessions return to their own portal;
-  // unauthenticated users go to login.
-  if (pathname === "/") {
-    if (authed) return NextResponse.redirect(new URL(TWIN_ADMIN_PREFIX, dashboardOrigin(req)));
-    const portal = req.cookies.get(AGENCY_PORTAL_COOKIE)?.value;
-    if (portal) return NextResponse.redirect(new URL(portalLoginPath(portal), dashboardOrigin(req)));
-    return NextResponse.redirect(new URL("/login", dashboardOrigin(req)));
-  }
-
   if (!authed) {
-    if (req.cookies.get(AGENCY_PORTAL_COOKIE)?.value === "moxy") return NextResponse.redirect(new URL("/moxy", dashboardOrigin(req)));
+    if (portal) return NextResponse.redirect(new URL(portalLoginPath(portal), dashboardOrigin(req)));
     const url = new URL("/login", dashboardOrigin(req));
     url.searchParams.set("next", pathname);
     return NextResponse.redirect(url);
