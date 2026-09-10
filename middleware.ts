@@ -50,7 +50,7 @@ export async function middleware(req: NextRequest) {
     if (!["GET", "HEAD"].includes(req.method) || req.headers.has("next-action")) return new NextResponse("Forbidden", { status: 403 });
     let creator = null;
     try { creator = await verifyCreatorSession(req.cookies.get(CREATOR_SESSION_COOKIE)?.value); } catch { /* malformed cookies cannot authenticate */ }
-    if (creator && ["/creator/login", "/creator/signup"].includes(pathname)) return privateResponse(NextResponse.redirect(new URL(safeCreatorNext(req.nextUrl.searchParams.get("next")), dashboardOrigin(req))));
+    if (creator && (pathname.endsWith("/login") || pathname.endsWith("/signup"))) return privateResponse(NextResponse.redirect(new URL(safeCreatorNext(req.nextUrl.searchParams.get("next")), dashboardOrigin(req))));
     return privateResponse(withPathname(req));
   }
   if (isCreatorPath(pathname)) {

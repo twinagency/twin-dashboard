@@ -3,6 +3,7 @@ import { useDashboardAccess } from "./DashboardAccessProvider";
 import { agencyDashboardPath } from "@/lib/agency-policy";
 import { isMoxy } from "@/lib/agency-brand";
 import { JESS_KATE_PORTAL, TETHER_PORTAL } from "@/lib/partner-portals";
+import { CREATOR_DASHBOARD_NAV } from "@/lib/creator-dashboard-policy";
 
 // Left sidebar app shell (desktop). "Create new clone" is always the first
 // thing in it, then a focused executive workspace followed by CRM. The
@@ -100,6 +101,14 @@ const NAV_LINKS: NavLink[] = [
   { kind: "route", label: "Business", href: "/business", icon: "Bot", color: "purple", gateOnClone: true },
 ];
 
+const CREATOR_LINKS: NavLink[] = CREATOR_DASHBOARD_NAV.map((item) => ({
+  kind: "route",
+  href: item.href,
+  label: item.label,
+  icon: item.icon,
+  color: "neutral",
+}));
+
 const MORE_LINKS: NavLink[] = [
   { kind: "route", label: "AI", href: "/jarvis", icon: "Sparkle", color: "blue" },
   { kind: "route", label: "Flows", href: "/flows", icon: "Flows", color: "pink", gateOnClone: true },
@@ -163,6 +172,12 @@ const TETHER_SIDEBAR_THEME = `
 }
 .dashboard-sidebar [class~="bg-sky-400/[0.05]"] { background-color: transparent; }
 .dashboard-sidebar [class~="border-sky-400/20"] canvas {
+  --intelligence-core-glow-rgb: 56,189,248;
+  --intelligence-core-edge-rgb: 45,190,255;
+  --intelligence-core-front-rgb: 238,252,255;
+  --intelligence-core-back-rgb: 103,232,249;
+  --intelligence-core-accent-rgb: initial;
+  --intelligence-core-glow-alpha: .22;
   position: relative;
   z-index: 1;
   transform: scale(1.34);
@@ -208,17 +223,24 @@ const TETHER_SIDEBAR_THEME = `
 `;
 
 export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAssistant = false }: { activeCloneId: string | null; onNavigate?: () => void; headerAction?: ReactNode; showAssistant?: boolean }) {
-  const {readOnly,isAgency,canManage,agencyName}=useDashboardAccess();
-  const showUnavailable = readOnly && isMoxy(agencyName);
+  const {readOnly,isAgency,isCreator,canManage,agencyName}=useDashboardAccess();
+  const showUnavailable = isAgency && readOnly && isMoxy(agencyName);
   const isJessKate = isAgency && agencyName === JESS_KATE_PORTAL.name;
-  const isTether = isAgency && agencyName === TETHER_PORTAL.name;
-  const usesBrandedCore = isJessKate || isTether;
-  const primaryLinks = NAV_LINKS.flatMap(link => showUnavailable && link.kind === "tab" && link.tab === "ppvs" ? [link, ...MORE_LINKS.filter(item => item.kind === "tab" && item.tab === "identity")] : [link]);
+  const isTether = agencyName === TETHER_PORTAL.name;
+  // Creator workspaces use this exact core block as well. The audience only
+  // narrows navigation and authority; it does not fork the Tether design.
+  const usesBrandedCore = isCreator || isJessKate || isTether;
+  const primaryLinks = isCreator
+    ? CREATOR_LINKS
+    : NAV_LINKS.flatMap(link => showUnavailable && link.kind === "tab" && link.tab === "ppvs" ? [link, ...MORE_LINKS.filter(item => item.kind === "tab" && item.tab === "identity")] : [link]);
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [moreOpen, setMoreOpen] = useState(false);
   const activeTab = searchParams.get("tab") ?? "config";
-  const isGlobalActive = (href: string) => pathname === href || (href !== "/" && pathname.startsWith(href + "/"));
+  // /creator is the creator Earnings page, not a parent navigation section.
+  // Exact matching prevents Earnings staying highlighted on all five child
+  // routes at the same time as their own item.
+  const isGlobalActive = (href: string) => pathname === href || (!isCreator && href !== "/" && pathname.startsWith(href + "/"));
   const onConfigurePage = activeCloneId ? pathname === `/clones/${activeCloneId}` : false;
   const pickClone = () => { onNavigate?.(); window.setTimeout(() => openCloneSwitcher(), 0); };
 
@@ -246,9 +268,9 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
 
   return <>
     {isTether ? <style dangerouslySetInnerHTML={{__html:TETHER_SIDEBAR_THEME}} /> : null}
-    <div className="flex h-20 shrink-0 items-center justify-between border-b border-white/14 px-5"><Link href="/revenue" className="min-w-0" aria-label={agencyName || "Twin Technologies"} onClick={onNavigate}><TwinWordmark inverse agencyName={agencyName} /></Link>{headerAction}</div>
-    {showUnavailable || usesBrandedCore ? <div className="shrink-0 px-4 pb-2 pt-4"><div aria-disabled={showUnavailable || undefined} className={"flex " + (showUnavailable ? "cursor-not-allowed " : "") + "items-center gap-3 rounded-xl border border-sky-400/20 bg-sky-400/[0.05] px-3 py-3"}><IntelligenceCoreIcon size={64} /><div className="min-w-0 flex-1"><span className="block text-sm font-semibold leading-5 text-[#38bdf8]">AI Intelligence Core</span>{showUnavailable && <span className="mt-1.5 inline-block rounded border border-white/15 px-1.5 py-0.5 text-[9px] font-medium text-white/60">Not available</span>}</div></div></div> : isAgency ? <div className="px-7 py-4 text-sm text-white/75">{agencyName} · {readOnly ? "Read only" : "Creator management"}</div> : <div className="shrink-0 px-4 pb-3 pt-4"><Link href="/clones/new" onClick={onNavigate} className="sidebar-create-button flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition"><Icon d={PATHS.Plus} className="h-4 w-4" />Create new creator</Link></div>}
-    <nav className="flex flex-1 flex-col overflow-y-auto px-4 py-2"><div className="space-y-1">{primaryLinks.map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}{!usesBrandedCore && (!readOnly || showUnavailable) && <><div className="mb-2 mt-3 border-t border-white/14 pt-3 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">CRM</div>{CRM_LINKS.map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}</>}{showUnavailable ? <div className="mt-3 space-y-1 border-t border-white/14 pt-2">{MORE_LINKS.filter(link => link.kind !== "route" || !["/jarvis", "/agency-admin"].includes(link.href)).filter(link => link.kind !== "tab" || link.tab !== "identity").map(link => <div key={linkKey(link)}>{renderLink(link)}</div>)}</div> : usesBrandedCore ? <div className="mt-3 border-t border-white/14 pt-3"><h2 className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">More</h2><div className="space-y-1">{MORE_LINKS.filter(link => link.kind === "tab" || agencyDashboardPath(link.href, agencyName, canManage)).map(link => <div key={linkKey(link)}>{renderLink(link)}</div>)}</div></div> : <div className="mt-3 border-t border-white/14 pt-2"><button type="button" onClick={() => setMoreOpen((open) => !open)} aria-expanded={moreOpen} className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold text-white/62 transition hover:bg-white/10 hover:text-white"><Icon d={PATHS.More} className="h-[18px] w-[18px] text-white/50" /><span className="flex-1">More</span><svg className={(moreOpen ? "rotate-180 " : "") + "h-4 w-4 transition-transform"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg></button>{moreOpen ? <div className="mt-1 space-y-1">{MORE_LINKS.filter(link => !isAgency || showUnavailable || link.kind === "tab" || agencyDashboardPath(link.href, agencyName, canManage)).map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}</div> : null}</div>}</div>{showAssistant && !isAgency ? <div className="mt-auto pt-4 [@media(max-height:850px)]:pt-2"><TwinAssistant /></div> : null}</nav>
+    <div className="flex h-20 shrink-0 items-center justify-between border-b border-white/14 px-5"><Link href={isCreator ? "/creator" : "/revenue"} className="min-w-0" aria-label={agencyName || "Twin Technologies"} onClick={onNavigate}><TwinWordmark inverse agencyName={agencyName === "Twin" ? undefined : agencyName} /></Link>{headerAction}</div>
+    {showUnavailable || usesBrandedCore ? <div className="shrink-0 px-4 pb-2 pt-4" data-creator-core={isCreator ? "hero" : undefined}><div aria-disabled={showUnavailable || undefined} className={"flex " + (showUnavailable ? "cursor-not-allowed " : "") + "items-center gap-3 rounded-xl border border-sky-400/20 bg-sky-400/[0.05] px-3 py-3"}><IntelligenceCoreIcon size={64} /><div className="min-w-0 flex-1"><span className="block text-sm font-semibold leading-5 text-[#38bdf8]">AI Intelligence Core</span>{showUnavailable && <span className="mt-1.5 inline-block rounded border border-white/15 px-1.5 py-0.5 text-[9px] font-medium text-white/60">Not available</span>}</div></div></div> : isAgency ? <div className="px-7 py-4 text-sm text-white/75">{agencyName} · {readOnly ? "Read only" : "Creator management"}</div> : <div className="shrink-0 px-4 pb-3 pt-4"><Link href="/clones/new" onClick={onNavigate} className="sidebar-create-button flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition"><Icon d={PATHS.Plus} className="h-4 w-4" />Create new creator</Link></div>}
+    <nav aria-label={isCreator ? "Creator navigation" : "Main navigation"} className="flex flex-1 flex-col overflow-y-auto px-4 py-2"><div className="space-y-1">{primaryLinks.map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}{!isCreator && !usesBrandedCore && (!readOnly || showUnavailable) && <><div className="mb-2 mt-3 border-t border-white/14 pt-3 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">CRM</div>{CRM_LINKS.map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}</>}{isCreator ? null : showUnavailable ? <div className="mt-3 space-y-1 border-t border-white/14 pt-2">{MORE_LINKS.filter(link => link.kind !== "route" || !["/jarvis", "/agency-admin"].includes(link.href)).filter(link => link.kind !== "tab" || link.tab !== "identity").map(link => <div key={linkKey(link)}>{renderLink(link)}</div>)}</div> : usesBrandedCore ? <div className="mt-3 border-t border-white/14 pt-3"><h2 className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">More</h2><div className="space-y-1">{MORE_LINKS.filter(link => link.kind === "tab" || agencyDashboardPath(link.href, agencyName, canManage)).map(link => <div key={linkKey(link)}>{renderLink(link)}</div>)}</div></div> : <div className="mt-3 border-t border-white/14 pt-2"><button type="button" onClick={() => setMoreOpen((open) => !open)} aria-expanded={moreOpen} className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold text-white/62 transition hover:bg-white/10 hover:text-white"><Icon d={PATHS.More} className="h-[18px] w-[18px] text-white/50" /><span className="flex-1">More</span><svg className={(moreOpen ? "rotate-180 " : "") + "h-4 w-4 transition-transform"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg></button>{moreOpen ? <div className="mt-1 space-y-1">{MORE_LINKS.filter(link => !isAgency || showUnavailable || link.kind === "tab" || agencyDashboardPath(link.href, agencyName, canManage)).map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}</div> : null}</div>}</div>{showAssistant && !isAgency && !isCreator ? <div className="mt-auto pt-4 [@media(max-height:850px)]:pt-2"><TwinAssistant /></div> : null}</nav>
   </>;
 }
 

@@ -4,8 +4,37 @@ import { INTAKE_FIELD_KEYS, assembleAnswers } from "./intake";
 // routing, safety switches or configuration can enter this patch.
 export const CREATOR_IDENTITY_TEXT = ["name","date_of_birth","gender","height","sexuality","hometown","current_city","stage_name","real_name","name_shared_with_fans","creator_type","known_for","career_history","cover_story","hair_length","hair_color","eye_color","body_type","cup_size","measurements","enhancements","voice_accent","voice_pace","voice_texture","relationship_canon","meeting_policy","love_policy","vibe_preset","reaction_to_rudeness","reaction_to_compliments","burst_style","wake_time","sleep_time","hard_limits_extra","saving_goal","living_situation","ethnicity_other","lowercase_level","punctuation_drop_level","typo_level","double_text_level"] as const;
 export const CREATOR_IDENTITY_ARRAYS = ["platforms","tattoo_details","piercing_details","fan_nicknames","turn_ons","turn_offs","content_done","content_hard_nos","hard_limits","catchphrases","favorite_things","dislikes","hobbies","pet_details","ethnicity_tags"] as const;
-export const CREATOR_IDENTITY_BOOLS = ["admits_platforms","tattoos","piercings","has_pets"] as const;
+export const CREATOR_IDENTITY_BOOLS = ["admits_platforms","tattoos","piercings","has_pets","acknowledges_other_fans","uses_lowercase","drops_punctuation","makes_typos","double_texts"] as const;
 export const CREATOR_IDENTITY_COLUMNS = ["id","intake","updated_at",...CREATOR_IDENTITY_TEXT,...CREATOR_IDENTITY_ARRAYS,...CREATOR_IDENTITY_BOOLS,"career_start_year","socials","daily_blocks"] as const;
+// These two values are emitted by PersonaFactsFields to coordinate its UI with
+// the shared admin editor. They are accepted from the creator form but never
+// forwarded to SQL.
+export const CREATOR_IDENTITY_FORM_MARKERS = ["persona_facts","_imperfection_toggle"] as const;
+export const CREATOR_IDENTITY_FORM_KEYS = [
+  "revision",
+  ...CREATOR_IDENTITY_FORM_MARKERS,
+  ...CREATOR_IDENTITY_TEXT,
+  ...CREATOR_IDENTITY_ARRAYS,
+  ...CREATOR_IDENTITY_BOOLS,
+  "career_start_year",
+  "socials",
+  "daily_blocks",
+  ...INTAKE_FIELD_KEYS.map((key) => `intake_${key}`),
+] as const;
+
+const CREATOR_IDENTITY_FORM_KEY_SET = new Set<string>(CREATOR_IDENTITY_FORM_KEYS);
+
+/** Refuse mass-assignment attempts rather than silently discarding them. Every
+ * field in this form is scalar at the HTTP layer, including JSON-backed lists,
+ * so repeated keys are ambiguous and fail closed as well. */
+export function assertCreatorIdentityForm(fd: FormData): void {
+  const seen = new Set<string>();
+  for (const [key] of fd.entries()) {
+    if (!CREATOR_IDENTITY_FORM_KEY_SET.has(key)) throw new Error("Unsupported identity field");
+    if (seen.has(key)) throw new Error("Identity fields must be supplied once");
+    seen.add(key);
+  }
+}
 
 function stringValue(value: FormDataEntryValue | null, limit = 12000): string {
   if (typeof value !== "string" || value.length > limit) throw new Error("An identity field is missing or too long");

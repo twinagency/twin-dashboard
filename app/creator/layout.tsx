@@ -4,7 +4,7 @@ import CreatorDemoBanner from "@/components/CreatorDemoBanner";
 import { requireCreatorWorkspace } from "@/lib/creator-dashboard";
 import { isCreatorDashboardPath } from "@/lib/creator-dashboard-policy";
 import { withDashboardAccess } from "@/lib/dashboard-access";
-import { getHeaderAllTimeStars } from "@/lib/query-cache";
+import { getFleetClones, getHeaderAllTimeStars } from "@/lib/query-cache";
 import { isZaneDemo } from "@/lib/creator-demo-policy";
 import { creatorDemoData } from "@/lib/creator-demo-data";
 export const dynamic = "force-dynamic";
@@ -14,6 +14,23 @@ export default async function CreatorLayout({ children }: { children: React.Reac
   const creator = await requireCreatorWorkspace();
   const cloneId = creator.cloneIds[0] ?? null;
   const demo = isZaneDemo(creator);
-  const allTimeStars = demo ? creatorDemoData("1D").balance.lifetimeStars : cloneId ? await withDashboardAccess(creator, () => getHeaderAllTimeStars(cloneId)) : 0;
-  return <CreatorWorkspaceShell agencyName={creator.name} creatorName={creator.creatorName} connected={!!cloneId || demo} allTimeStars={allTimeStars}>{demo && <CreatorDemoBanner />}{children}</CreatorWorkspaceShell>;
+  const [clones, allTimeStars] = demo
+    ? [[], creatorDemoData("1D").balance.lifetimeStars]
+    : await withDashboardAccess(creator, () => Promise.all([
+        getFleetClones(),
+        cloneId ? getHeaderAllTimeStars(cloneId) : Promise.resolve(0),
+      ]));
+  return (
+    <CreatorWorkspaceShell
+      agencyName={creator.name}
+      creatorName={creator.creatorName}
+      clones={clones}
+      activeCloneId={cloneId}
+      connected={!!cloneId || demo}
+      allTimeStars={allTimeStars}
+    >
+      {demo && <CreatorDemoBanner />}
+      {children}
+    </CreatorWorkspaceShell>
+  );
 }

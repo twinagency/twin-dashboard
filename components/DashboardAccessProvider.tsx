@@ -1,12 +1,48 @@
 "use client";
 import React, { createContext, useContext, useEffect, useRef, type ReactNode, type ComponentProps } from "react";
-const Access = createContext<{readOnly:boolean; isAgency:boolean; canManage:boolean; agencyName?:string}>({readOnly:false,isAgency:false,canManage:true});
+
+export type DashboardAudience = "admin" | "agency" | "creator";
+type DashboardAccessContext = {
+  audience: DashboardAudience;
+  readOnly: boolean;
+  isAgency: boolean;
+  isCreator: boolean;
+  canManage: boolean;
+  agencyName?: string;
+};
+
+const Access = createContext<DashboardAccessContext>({
+  audience: "admin",
+  readOnly: false,
+  isAgency: false,
+  isCreator: false,
+  canManage: true,
+});
 export const useDashboardAccess = () => useContext(Access);
 
 // The palette lives only in app/lynq-theme.css. Server rendering sets this
 // same verified-identity attribute before first paint; the effect keeps it
 // in sync when this provider is mounted independently.
-export default function DashboardAccessProvider({agencyName,canManage=false,children}:{agencyName?:string;canManage?:boolean;children:ReactNode}) {
+export default function DashboardAccessProvider({
+  agencyName,
+  canManage = false,
+  audience,
+  children,
+}: {
+  agencyName?: string;
+  canManage?: boolean;
+  audience?: DashboardAudience;
+  children: ReactNode;
+}) {
+  // Existing callers need no migration: a verified agency name still means an
+  // agency operator and no name still means internal admin. Creator layouts
+  // opt in explicitly so shared shell components never infer creator authority
+  // from presentation-only branding.
+  const resolvedAudience: DashboardAudience = audience ?? (agencyName ? "agency" : "admin");
+  const isAgency = resolvedAudience === "agency";
+  const isCreator = resolvedAudience === "creator";
+  const resolvedCanManage = resolvedAudience === "admin" || (isAgency && canManage);
+  const readOnly = isCreator || (isAgency && !canManage);
   const lynq = agencyName?.trim().toLowerCase() === "lynq";
   useEffect(()=>{
     if(!lynq) return;
@@ -51,10 +87,17 @@ export default function DashboardAccessProvider({agencyName,canManage=false,chil
       if(previousAgency) root.setAttribute("data-agency",previousAgency); else root.removeAttribute("data-agency");
     };
   },[lynq]);
-  return <Access.Provider value={{readOnly:!!agencyName && !canManage,isAgency:!!agencyName,canManage:!agencyName || canManage,agencyName}}>{children}</Access.Provider>;
+  return <Access.Provider value={{
+    audience: resolvedAudience,
+    readOnly,
+    isAgency,
+    isCreator,
+    canManage: resolvedCanManage,
+    agencyName,
+  }}>{children}</Access.Provider>;
 }
 export function AdminOnly({children}:{children:ReactNode}) {
-  return useDashboardAccess().isAgency ? null : <>{children}</>;
+  return useDashboardAccess().audience === "admin" ? <>{children}</> : null;
 }
 export function ManagerOnly({children}:{children:ReactNode}) {
   return useDashboardAccess().readOnly ? null : <>{children}</>;
@@ -64,8 +107,8 @@ export function ReadOnlyFields({children,className=""}:{children:ReactNode;class
   return <fieldset disabled={readOnly} className={`min-w-0 border-0 p-0 ${className}`}>{children}</fieldset>;
 }
 export function MutationForm({adminOnly=false,...props}:ComponentProps<"form"> & {adminOnly?:boolean}) {
-  const {readOnly,isAgency}=useDashboardAccess();
-  return readOnly || (adminOnly && isAgency) ? null : <form {...props}/>;
+  const {readOnly,audience}=useDashboardAccess();
+  return readOnly || (adminOnly && audience !== "admin") ? null : <form {...props}/>;
 }
 
 // Presentation only. Server middleware and the scoped data client independently

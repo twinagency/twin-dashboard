@@ -7,9 +7,11 @@ import { AGENCY_COOKIE } from "@/lib/agency-policy";
 import { AGENCY_PORTAL_COOKIE } from "@/lib/agency-brand";
 import { SESSION_COOKIE } from "@/lib/session";
 import { CLONE_SCOPE_COOKIE } from "@/lib/clone-scope";
+import { TETHER_PORTAL } from "@/lib/partner-portals";
+import { TETHER_CREATOR_SIGNUP_PATH } from "@/lib/creator-routing";
 
-function redirectWithError(req: Request, code: string) {
-  const url = creatorRequestUrl(req, "/creator/signup");
+function redirectWithError(req: Request, code: string, portal: "twin" | "tether") {
+  const url = creatorRequestUrl(req, portal === "tether" ? TETHER_CREATOR_SIGNUP_PATH : "/creator/signup");
   url.searchParams.set("error", code);
   return NextResponse.redirect(url, 303);
 }
@@ -25,10 +27,14 @@ export async function POST(req: Request) {
   const email = String(form.get("email") || "").trim().toLowerCase();
   const password = String(form.get("password") || "");
   const agencyCode = String(form.get("agency_code") || "").trim().toUpperCase();
+  // Presentation hint only. A matching Tether agency code is still required
+  // before any account can receive a Tether assignment.
+  const portal = form.get("portal") === "tether" ? "tether" : "twin";
 
   if (!displayName || !/^\S+@\S+\.\S+$/.test(email) || password.length < 8) {
-    return redirectWithError(req, "invalid");
+    return redirectWithError(req, "invalid", portal);
   }
+  if (portal === "tether" && !agencyCode) return redirectWithError(req, "agency_code", portal);
 
   // Creator auth is an independent security context. Do not allow an existing
   // agency/operator cookie in the same browser to scope or block these writes.
@@ -40,12 +46,13 @@ export async function POST(req: Request) {
     const now = new Date().toISOString();
     const { data: code } = await db
       .from("creator_agency_codes")
-      .select("id,active,max_uses,uses,expires_at")
+      .select("id,agency_id,active,max_uses,uses,expires_at")
       .eq("code_hash", agencyCodeHash)
       .maybeSingle();
     if (!code?.active || (code.expires_at && code.expires_at <= now) || (code.max_uses != null && code.uses >= code.max_uses)) {
-      return redirectWithError(req, "agency_code");
+      return redirectWithError(req, "agency_code", portal);
     }
+    if (portal === "tether" && code.agency_id !== TETHER_PORTAL.id) return redirectWithError(req, "agency_code", portal);
   }
 
   const { data: existing } = await db
@@ -54,7 +61,7 @@ export async function POST(req: Request) {
     .ilike("email", email)
     .maybeSingle();
 
-  if (existing?.auth_user_id) return redirectWithError(req, "exists");
+  if (existing?.auth_user_id) return redirectWithError(req, "exists", portal);
 
   const { data: created, error: createError } = await db.auth.admin.createUser({
     email,
@@ -65,7 +72,7 @@ export async function POST(req: Request) {
   if (createError || !created.user) {
     console.error("creator auth user creation failed", createError);
     const duplicate = !!createError && /already|registered|exists/i.test(createError.message || "");
-    return redirectWithError(req, duplicate ? "exists" : "failed");
+    return redirectWithError(req, duplicate ? "exists" : "failed", portal);
   }
 
   let accountId = existing?.id as string | undefined;
@@ -123,6 +130,6 @@ export async function POST(req: Request) {
   } catch (error) {
     await db.auth.admin.deleteUser(created.user.id).catch(() => undefined);
     console.error("creator signup failed", error);
-    return redirectWithError(req, error instanceof Error && error.message === "agency_code_unavailable" ? "agency_code" : "failed");
+    return redirectWithError(req, error instanceof Error && error.message === "agency_code_unavailable" ? "agency_code" : "failed", portal);
   }
 }

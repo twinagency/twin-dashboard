@@ -4,10 +4,12 @@ import { useDashboardAccess } from "./DashboardAccessProvider";
 import { usePathname, useSearchParams } from "next/navigation";
 import CloneSwitcher from "@/components/CloneSwitcher";
 import CurrencyToggle from "@/components/CurrencyToggle";
+import { useCurrency } from "@/components/CurrencyProvider";
 import BlurToggle from "@/components/BlurToggle";
 import { logout } from "@/app/login/actions";
-import { fmtMoney, starsToMoney } from "@/lib/money";
+import { fmtMoney, starsToMoneyRate } from "@/lib/money";
 import { getPageMeta } from "@/lib/page-meta";
+import { CREATOR_DASHBOARD_NAV } from "@/lib/creator-dashboard-policy";
 
 // Straight, full-width top bar — replaces the old floating/overlay pill.
 // One row: breadcrumb on the left, account controls in the middle. Always in
@@ -23,17 +25,24 @@ export default function TopBar({
   clones,
   activeCloneId,
   allTimeStars,
+  creatorName,
 }: {
   clones: { id: string; name: string; color: string; photoUrl?: string }[];
   activeCloneId: string | null;
   allTimeStars: number;
+  /** Verified creator identity. Supplying it locks the shared clone chip. */
+  creatorName?: string;
 }) {
-  const {isAgency}=useDashboardAccess();
+  const {isAgency,isCreator}=useDashboardAccess();
+  const { currency, rate } = useCurrency();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const pageMeta = getPageMeta(pathname, clones, activeCloneId);
-  const pageLabel = pathname?.startsWith("/clones/") && searchParams.get("tab") === "ppvs" ? "PPVs" : pageMeta.pageLabel;
-  const { scopeLabel, scopeIsCreator } = pageMeta;
+  const pageLabel = isCreator
+    ? CREATOR_DASHBOARD_NAV.find((item) => item.href === pathname)?.label ?? "Earnings"
+    : pathname?.startsWith("/clones/") && searchParams.get("tab") === "ppvs" ? "PPVs" : pageMeta.pageLabel;
+  const scopeLabel = isCreator ? creatorName || clones.find((clone) => clone.id === activeCloneId)?.name || "Creator" : pageMeta.scopeLabel;
+  const scopeIsCreator = isCreator || pageMeta.scopeIsCreator;
   return (
     // 3-col grid so the controls sit dead-center of the bar regardless of
     // how wide the breadcrumb text is; right column is an empty balancer.
@@ -55,21 +64,21 @@ export default function TopBar({
       </h1>
 
       <div className="flex shrink-0 items-center gap-1.5 rounded-xl border border-line/80 bg-white/82 px-2 py-1.5 shadow-[0_8px_26px_rgb(6_23_47/0.06)] backdrop-blur-xl">
-        <CloneSwitcher clones={clones} activeCloneId={activeCloneId} />
+        <CloneSwitcher clones={clones} activeCloneId={activeCloneId} locked={isCreator} fallbackName={creatorName} />
         <div className="h-5 w-px shrink-0 bg-line" />
         {/* All-time cash made, scoped to the clone switcher above - not
             time-windowed like the Revenue page's period toggle. */}
         <span className="hidden items-baseline gap-1 px-1.5 sm:flex">
           <span className="text-xs">💵</span>
           <span className="font-mono text-xs font-semibold tabular-nums text-ink">
-            {fmtMoney(starsToMoney(allTimeStars, "USD"), "USD")}
+            {fmtMoney(starsToMoneyRate(allTimeStars, currency, rate), currency)}
           </span>
         </span>
         <div className="hidden h-5 w-px shrink-0 bg-line sm:block" />
         <CurrencyToggle compact />
         <BlurToggle />
         <div className="hidden h-5 w-px shrink-0 bg-line sm:block" />
-        <form action={isAgency ? "/agency/logout" : logout} method={isAgency ? "post" : undefined}>
+        <form action={isCreator ? "/creator-auth/logout" : isAgency ? "/agency/logout" : logout} method={isCreator || isAgency ? "post" : undefined}>
           <button
             type="submit"
             title="Sign out"
@@ -90,7 +99,7 @@ export default function TopBar({
               <polyline points="16 17 21 12 16 7" />
               <line x1="21" y1="12" x2="9" y2="12" />
             </svg>
-            {isAgency && <span className="hidden text-xs font-medium sm:inline">Sign out</span>}
+            {(isAgency || isCreator) && <span className="hidden text-xs font-medium sm:inline">Sign out</span>}
           </button>
         </form>
       </div>

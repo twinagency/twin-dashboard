@@ -1,12 +1,15 @@
 // Presentation and routing only. Every request also verifies the creator session
 // and the account's current, server-owned creator_clone_links row.
 export const CREATOR_DASHBOARD_NAV = [
-  { href: "/creator", label: "Earnings", icon: "earnings" },
-  { href: "/creator/ppvs", label: "PPVs", icon: "media" },
-  { href: "/creator/business", label: "Business", icon: "business" },
-  { href: "/creator/info", label: "Info", icon: "info" },
-  { href: "/creator/logs", label: "Logs", icon: "logs" },
-  { href: "/creator/edit", label: "Edit", icon: "edit" },
+  // Icon keys intentionally use the shared operator sidebar's SVG set. The
+  // creator workspace is a permission variant of that interface, not a second
+  // independently styled navigation system.
+  { href: "/creator", label: "Earnings", icon: "EarningsCombo" },
+  { href: "/creator/ppvs", label: "Pay Per View", icon: "Media" },
+  { href: "/creator/business", label: "Business", icon: "Bot" },
+  { href: "/creator/info", label: "Info", icon: "Info" },
+  { href: "/creator/logs", label: "Logs", icon: "Logs" },
+  { href: "/creator/edit", label: "Edit", icon: "Dials" },
 ] as const;
 export const CREATOR_AUDIENCE_HEADER = "x-dashboard-audience";
 export function isCreatorDashboardPath(path: string | null | undefined): boolean {
