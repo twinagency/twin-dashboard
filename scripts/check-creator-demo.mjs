@@ -31,7 +31,8 @@ const insight=creatorDemoInsight('2026-09-10',now);assert.ok(insight.totals.star
 assert.throws(()=>creatorDemoInsight('2026-02-31',now));assert.throws(()=>creatorDemoInsight('2030-01-01',now));
 const source=readFileSync('lib/creator-demo-data.ts','utf8');
 assert.doesNotMatch(source,/\b(?:fetch|serviceClient|supabaseAdmin)\s*\(/);
-assert.doesNotMatch(source,/\.from\(|\.rpc\(|\.insert\(|\.update\(|\.upsert\(/);
+// Array.from creates chart buckets; .from("table") would access a database.
+assert.doesNotMatch(source,/\.from\(\s*["'`]|\.rpc\(|\.insert\(|\.update\(|\.upsert\(/);
 Object.assign(process.env,{NODE_ENV:'production',SUPABASE_URL:'https://creator-offline.supabase.co',SUPABASE_SERVICE_KEY:'offline-only-fixture',CREATOR_SESSION_SECRET:'offline-secret-never-used-in-production',DASHBOARD_PASSWORD:'offline-admin'});
 const user='22222222-2222-4222-8222-222222222222',real='44444444-4444-4444-8444-444444444444',other='55555555-5555-4555-8555-555555555555';
 let linked=false,archived=false,onboarded=true;let calls=0;
