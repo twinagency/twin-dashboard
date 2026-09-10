@@ -124,13 +124,14 @@ async function runHttpChecks() {
   // substitute for staging auth/SQL/RPC and browser checks before rollout.
   const server = readFileSync('lib/creator-reporting.ts', 'utf8');
   const layout = readFileSync('app/layout.tsx', 'utf8');
-  const ui = readFileSync('components/CreatorRevenueDashboard.tsx', 'utf8');
+  const ui = readFileSync('components/CreatorLinkEarningsDashboard.jsx', 'utf8');
   check('bootstrap binds account to authenticated user', () => { assert.ok(server.includes(".eq('id', session.accountId).eq('auth_user_id', session.userId)")); });
   check('shared reporting runs inside the restricted scope', () => assert.ok(server.includes('withDashboardAccess(scope, () =>')));
   check('creator root exits before admin/agency fleet lookup', () => { const body = layout.slice(layout.indexOf('export default async function RootLayout')); assert.ok(body.indexOf('if (isCreatorSurface(pathname))') < body.indexOf('getDashboardAccess()')); assert.ok(body.indexOf('if (isCreatorSurface(pathname))') < body.indexOf('getFleetClones()')); });
   check('creator scope does not accidentally match creator-management', () => assert.ok(layout.includes('pathname === "/creator" || !!pathname?.startsWith("/creator/")')));
   check('client does not call operator APIs or import server readers', () => { assert.ok(!ui.includes('/api/dashboard')); assert.ok(!ui.includes('@/lib/creator-reporting')); assert.ok(!ui.includes('supabase')); });
-  check('conversion ratios are formatted as percentages', () => { assert.ok(ui.includes('value * 100')); assert.ok(ui.includes('ratioPercent(report.conversion.activeChatBuyerRate)')); });
+  check('conversion ratios are formatted as percentages', () => { assert.ok(ui.includes('value * 100')); assert.ok(ui.includes('ratio(report.conversion.activeChatBuyerRate)')); });
+  check('creator UI is LYNQ-branded and AUD-first', () => { assert.ok(ui.includes('agencyName="LYNQ"')); assert.ok(ui.includes("'$AUD'" ) || ui.includes('>$AUD<')); assert.ok(ui.includes("starsToMoney(Number(stars || 0), 'AUD')")); });
   console.log(`Creator reporting: ${checks} checks passed. No live data or credentials used.`);
 }
 runHttpChecks().catch(error => { console.error(error); process.exitCode = 1; });
