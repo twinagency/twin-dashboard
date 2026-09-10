@@ -7,8 +7,8 @@ import { agencyIdentity } from "@/lib/agency-identity";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/session";
-import { CREATOR_SESSION_COOKIE, verifyCreatorSession } from "@/lib/creator-session";
-import { isCreatorAuthPath, isCreatorPath, isCreatorPublicPath, safeCreatorNext } from "@/lib/creator-routing";
+import { CREATOR_SESSION_COOKIE } from "@/lib/creator-session";
+import { CREATOR_PORTAL_COOKIE, creatorLoginPath, creatorPortalCookieOptions, creatorPublicPortal, isCreatorAuthPath, isCreatorPath, isCreatorPublicPath, safeCreatorNext } from "@/lib/creator-routing";
 import { isAgencyPath, agencyRequestAllowed, agencyDashboardPath, AGENCY_COOKIE } from "@/lib/agency-policy";
 import { creatorDashboardIdentity } from "@/lib/creator-dashboard-identity";
 import { CREATOR_AUDIENCE_HEADER, isCreatorDashboardPath, creatorApiAllowed, assertCreatorQuery, creatorDashboardAlias } from "@/lib/creator-dashboard-policy";
@@ -48,17 +48,25 @@ export async function middleware(req: NextRequest) {
   }
   if (isCreatorPublicPath(pathname)) {
     if (!["GET", "HEAD"].includes(req.method) || req.headers.has("next-action")) return new NextResponse("Forbidden", { status: 403 });
-    let creator = null;
-    try { creator = await verifyCreatorSession(req.cookies.get(CREATOR_SESSION_COOKIE)?.value); } catch { /* malformed cookies cannot authenticate */ }
-    if (creator && (pathname.endsWith("/login") || pathname.endsWith("/signup"))) return privateResponse(NextResponse.redirect(new URL(safeCreatorNext(req.nextUrl.searchParams.get("next")), dashboardOrigin(req))));
-    return privateResponse(withPathname(req));
+    const creatorToken = req.cookies.get(CREATOR_SESSION_COOKIE)?.value;
+    const creator = await creatorDashboardIdentity(creatorToken);
+    const response = creator && (pathname.endsWith("/login") || pathname.endsWith("/signup"))
+      ? privateResponse(NextResponse.redirect(new URL(safeCreatorNext(req.nextUrl.searchParams.get("next")), dashboardOrigin(req))))
+      : privateResponse(withPathname(req));
+    // The explicit public route refreshes only a presentation choice. A stale
+    // or forged value cannot satisfy creatorDashboardIdentity or reach a
+    // private creator page.
+    response.cookies.set(CREATOR_PORTAL_COOKIE, creatorPublicPortal(pathname), creatorPortalCookieOptions());
+    if (creatorToken && !creator) response.cookies.delete(CREATOR_SESSION_COOKIE);
+    return response;
   }
   if (isCreatorPath(pathname)) {
     if (!["GET", "HEAD"].includes(req.method) || req.headers.has("next-action")) return new NextResponse("Forbidden", { status: 403 });
     if (!isCreatorDashboardPath(pathname) && pathname !== "/creator/onboarding") return new NextResponse("Creator page not found", { status: 404 });
     const creator = await creatorDashboardIdentity(req.cookies.get(CREATOR_SESSION_COOKIE)?.value);
     if (!creator) {
-      const url = new URL("/creator/login", dashboardOrigin(req));
+      const loginPath = creatorLoginPath(creator, req.cookies.get(CREATOR_PORTAL_COOKIE)?.value);
+      const url = new URL(loginPath, dashboardOrigin(req));
       url.searchParams.set("next", safeCreatorNext(pathname + req.nextUrl.search));
       const response = privateResponse(NextResponse.redirect(url));
       response.cookies.delete(CREATOR_SESSION_COOKIE);

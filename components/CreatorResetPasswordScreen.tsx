@@ -19,7 +19,7 @@ const supabase = createClient(
   { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } },
 );
 
-export default function CreatorResetPasswordScreen({ brand = "twin" }: { brand?: CreatorAuthBrand }) {
+export default function CreatorResetPasswordScreen({ brand }: { brand: CreatorAuthBrand }) {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [ready, setReady] = useState(false);

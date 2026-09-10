@@ -1,5 +1,5 @@
 import CreatorResetPasswordScreen from "@/components/CreatorResetPasswordScreen";
 
 export default function CreatorResetPasswordPage() {
-  return <CreatorResetPasswordScreen />;
+  return <CreatorResetPasswordScreen brand="twin" />;
 }

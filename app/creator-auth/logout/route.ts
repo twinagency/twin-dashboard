@@ -3,8 +3,7 @@ import { cookies } from "next/headers";
 import { CREATOR_SESSION_COOKIE } from "@/lib/creator-session";
 import { creatorRequestUrl } from "@/lib/creator-origin";
 import { creatorDashboardIdentity } from "@/lib/creator-dashboard-identity";
-import { TETHER_PORTAL } from "@/lib/partner-portals";
-import { TETHER_CREATOR_LOGIN_PATH } from "@/lib/creator-routing";
+import { CREATOR_PORTAL_COOKIE, creatorLoginPath } from "@/lib/creator-routing";
 
 async function clearCreatorSession() {
   (await cookies()).set(CREATOR_SESSION_COOKIE, "", {
@@ -19,7 +18,7 @@ async function clearCreatorSession() {
 async function creatorLoginDestination() {
   const jar = await cookies();
   const identity = await creatorDashboardIdentity(jar.get(CREATOR_SESSION_COOKIE)?.value);
-  return identity?.name === TETHER_PORTAL.name ? TETHER_CREATOR_LOGIN_PATH : "/creator/login";
+  return creatorLoginPath(identity, jar.get(CREATOR_PORTAL_COOKIE)?.value);
 }
 
 // Allow a browser that lands on the logout URL to recover cleanly instead of

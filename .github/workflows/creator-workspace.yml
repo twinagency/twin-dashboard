@@ -23,6 +23,8 @@ jobs:
         run: npx tsc --noEmit
       - name: Creator identity and permissions
         run: npx tsx scripts/check-creator-workspace.ts
+      - name: Tether creator routing and signup isolation
+        run: npm run test:creator-routing && npm run test:tether-creator-signup
       - name: Existing partner and revenue regression tests
         run: npm run test:offline
       - name: Production build
@@ -39,6 +41,8 @@ jobs:
         run: npx playwright install chromium
       - name: Real earnings, mobile navigation, animated core and locked identity tabs
         run: node scripts/check-creator-ui.mjs
+      - name: Tether creator auth, onboarding and white-label branding
+        run: node scripts/check-creator-branding.mjs
       - uses: actions/upload-artifact@v4
         if: always()
         with:

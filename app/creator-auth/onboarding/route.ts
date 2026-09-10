@@ -4,6 +4,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { CREATOR_SESSION_COOKIE, verifyCreatorSession } from "@/lib/creator-session";
 import { creatorRequestUrl } from "@/lib/creator-origin";
 import { CREATOR_QUESTIONNAIRE } from "@/lib/creator-questionnaire";
+import { CREATOR_PORTAL_COOKIE, creatorLoginPath } from "@/lib/creator-routing";
 
 function back(req: Request, status: string) {
   const url = creatorRequestUrl(req, "/creator/onboarding");
@@ -12,7 +13,11 @@ function back(req: Request, status: string) {
 }
 
 async function getSession() {
-  return verifyCreatorSession((await cookies()).get(CREATOR_SESSION_COOKIE)?.value);
+  const jar = await cookies();
+  return {
+    session: await verifyCreatorSession(jar.get(CREATOR_SESSION_COOKIE)?.value),
+    portal: jar.get(CREATOR_PORTAL_COOKIE)?.value,
+  };
 }
 
 async function latestApplication(accountId: string) {
@@ -27,8 +32,8 @@ async function latestApplication(accountId: string) {
 }
 
 export async function POST(req: Request) {
-  const session = await getSession();
-  if (!session) return NextResponse.redirect(creatorRequestUrl(req, "/creator/login"), 303);
+  const { session, portal } = await getSession();
+  if (!session) return NextResponse.redirect(creatorRequestUrl(req, creatorLoginPath(null, portal)), 303);
   const form = await req.formData();
   const action = String(form.get("action") || "");
   const now = new Date().toISOString();

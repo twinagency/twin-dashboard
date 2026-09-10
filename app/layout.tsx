@@ -6,7 +6,7 @@ import { getDashboardAccess } from "@/lib/dashboard-access";
 import "./globals.css";
 import "./jess-kate-theme.css";
 import "./creator-workspace.css";
-import { JESS_KATE_PORTAL } from "@/lib/partner-portals";
+import { JESS_KATE_PORTAL, TETHER_PORTAL } from "@/lib/partner-portals";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { headers } from "next/headers";
@@ -37,12 +37,16 @@ const fontClass = cn("font-sans", inter.variable, plexMono.variable, spaceGrotes
 
 export async function generateMetadata(): Promise<Metadata> {
   const pathname = (await headers()).get("x-pathname");
-  if (isCreatorPath(pathname)) return {
-    title: creatorPublicPortal(pathname) === "tether" ? "Tether creator workspace" : "Creator dashboard",
-    description: creatorPublicPortal(pathname) === "tether" ? "Private Tether creator access" : "Your creator workspace",
-    robots: { index: false, follow: false },
-    icons: { icon: { url: "/icon.png", type: "image/png" } },
-  };
+  if (isCreatorPath(pathname)) {
+    const creator = !isCreatorPublicPath(pathname) ? await getCreatorWorkspace() : null;
+    const tether = creatorPublicPortal(pathname) === "tether" || creator?.name === TETHER_PORTAL.name;
+    return {
+      title: tether ? "Tether creator workspace" : "Creator dashboard",
+      description: tether ? "Private Tether creator access" : "Your creator workspace",
+      robots: { index: false, follow: false },
+      icons: { icon: { url: tether ? "/tether/icon.svg" : "/icon.png", type: tether ? "image/svg+xml" : "image/png" } },
+    };
+  }
   if (isMarketingPath(pathname)) return {
     title: "Twin Agency", description: "Your audience. Your AI twin.", robots: { index: false, follow: false },
     icons: { icon: { url: "/icon.png", type: "image/png" } },
