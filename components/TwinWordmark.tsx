@@ -1,6 +1,5 @@
 import { isLynq, isMoxy } from "@/lib/agency-brand";
 import { JESS_KATE_PORTAL } from "@/lib/partner-portals";
-import IntelligenceCoreIcon from "@/components/IntelligenceCoreIcon";
 
 export default function TwinWordmark({
   className = "",
@@ -16,14 +15,12 @@ export default function TwinWordmark({
   if (isMoxy(agencyName)) return <img src="/moxy/logo.png" alt="Moxy, Los Angeles and Miami" width={1100} height={400} className={`block h-auto w-40 max-w-full ${inverse ? "" : "invert"} ${className}`} />;
   if (isLynq(agencyName)) {
     return (
-      <span className={`lynq-wordmark inline-flex items-center gap-2.5 leading-none ${className}`} aria-label="LYNQ">
-        <span className="lynq-ai-orb"><IntelligenceCoreIcon size={inverse ? 48 : 40} /></span>
-        <span
-          className={`text-[21px] font-extrabold tracking-[0.18em] ${inverse ? "text-white" : "text-[#061820]"}`}
-          style={{ fontFamily: "var(--font-display), var(--font-sans), sans-serif" }}
-        >
-          LYNQ
-        </span>
+      <span
+        className={`lynq-wordmark inline-block text-[23px] font-extrabold leading-none tracking-[-0.035em] text-[#19191f] ${className}`}
+        style={{ fontFamily: "var(--font-display), var(--font-sans), sans-serif" }}
+        aria-label="LYNQ"
+      >
+        LYNQ
       </span>
     );
   }
