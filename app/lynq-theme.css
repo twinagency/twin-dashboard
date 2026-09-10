@@ -1,137 +1,181 @@
-/* LYNQ / Link partner dashboard theme. Scoped by the verified LYNQ wordmark in the agency sidebar. */
-html:has(.dashboard-sidebar a[aria-label="LYNQ"]) {
-  --color-bg: #090b12;
-  --color-panel: #0f1320;
-  --color-elev: #151a2a;
-  --color-ink: #f5f7ff;
-  --color-muted: #929ab3;
-  --color-line: #262d43;
-  --color-accent: #275cff;
-  --color-accent-2: #7a4dff;
-  --color-accent-deep: #111838;
+/* LYNQ has one light palette, selected by verified server-rendered identity.
+   Do not select a theme with :has(wordmark): that previously overrode the
+   real theme and painted a second, fake AI sphere using pseudo-elements. */
+html[data-brand-theme="lynq-light"] {
+  color-scheme: light;
+  --color-bg: #faf9fc;
+  --color-panel: #ffffff;
+  --color-elev: #f3f2f8;
+  --color-ink: #19191f;
+  --color-muted: #656575;
+  --color-line: #e6e2ed;
+  --color-accent: #293bea;
+  --color-accent-2: #3f55ff;
+  --color-accent-deep: #202fb7;
   --color-accent-ink: #ffffff;
-  --color-accent-soft: #5c7dff;
-  --color-accent-tint: #1a2448;
-  --color-brand: #275cff;
-  --color-brand-light: #7a4dff;
-  --background: #090b12;
-  --foreground: #f5f7ff;
-  --card: #0f1320;
-  --card-foreground: #f5f7ff;
-  --popover: #121726;
-  --popover-foreground: #f5f7ff;
-  --secondary: #151a2a;
-  --secondary-foreground: #f5f7ff;
-  --muted: #151a2a;
-  --muted-foreground: #929ab3;
-  --border: #262d43;
-  --input: #262d43;
-  --ring: #4d70ff;
-  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.24), 0 12px 36px rgb(0 0 0 / 0.24);
+  --color-accent-soft: #8e9bff;
+  --color-accent-tint: #ebeefe;
+  --color-brand: #293bea;
+  --color-brand-light: #3f55ff;
+  --color-info: #293bea;
+  --color-love: #e94b9c;
+  --color-love-ink: #a32d6a;
+  --color-love-tint: #f6c3dc;
+  --color-love-bg: #fff3f9;
+  --color-love-hover: #fde3f0;
+  --color-love-peach: #ffd7bf;
+  --lynq-orange: #ff8b35;
+  --lynq-pink: #e94b9c;
+  --lynq-blue: #293bea;
+  --shadow-card: 0 2px 3px rgb(31 25 52 / 0.035), 0 12px 32px rgb(31 25 52 / 0.055);
+  --background: var(--color-bg);
+  --foreground: var(--color-ink);
+  --card: var(--color-panel);
+  --card-foreground: var(--color-ink);
+  --popover: var(--color-panel);
+  --popover-foreground: var(--color-ink);
+  --primary: var(--color-accent);
+  --primary-foreground: #ffffff;
+  --secondary: var(--color-elev);
+  --secondary-foreground: var(--color-ink);
+  --muted: var(--color-elev);
+  --muted-foreground: var(--color-muted);
+  --border: var(--color-line);
+  --input: var(--color-line);
+  --ring: var(--color-accent);
+  --sidebar: #ffffff;
+  --sidebar-foreground: #19191f;
+  --sidebar-primary: #293bea;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #ebeefe;
+  --sidebar-accent-foreground: #293bea;
+  --sidebar-border: #e6e2ed;
+  --sidebar-ring: #293bea;
 }
-
-html:has(.dashboard-sidebar a[aria-label="LYNQ"]) body,
-html:has(.dashboard-sidebar a[aria-label="LYNQ"]) .canvas-glow {
-  background-color: #090b12;
-  color: #f5f7ff;
+html[data-brand-theme="lynq-light"] body {
+  background: var(--color-bg);
+  color: var(--color-ink);
 }
-
-html:has(.dashboard-sidebar a[aria-label="LYNQ"]) .canvas-glow {
+html[data-brand-theme="lynq-light"] .dashboard-sidebar {
+  background:
+    radial-gradient(360px 260px at 0% 0%, rgb(255 139 53 / 0.10), transparent 72%),
+    radial-gradient(360px 280px at 100% 100%, rgb(233 75 156 / 0.07), transparent 72%),
+    #ffffff;
+  border-right: 1px solid var(--color-line);
+  color: var(--color-ink);
+  box-shadow: 8px 0 28px rgb(31 25 52 / 0.04);
+}
+html[data-brand-theme="lynq-light"] .dashboard-sidebar::before {
+  background: none;
+}
+html[data-brand-theme="lynq-light"] .dashboard-mobile-header {
+  background: #ffffff;
+  color: var(--color-ink);
+  border-color: var(--color-line);
+  box-shadow: 0 1px 0 var(--color-line);
+}
+html[data-brand-theme="lynq-light"] .dashboard-topbar {
+  background: rgb(255 255 255 / 0.97);
+  color: var(--color-ink);
+  box-shadow: 0 1px 0 var(--color-line);
+}
+/* Match the onboarding reference: orange above pink, with a blue/lilac
+   fade on an otherwise light canvas. Data remains on solid white cards. */
+html[data-brand-theme="lynq-light"] .canvas-glow {
+  background-color: var(--color-bg);
   background-image:
-    radial-gradient(900px 420px at 18% -8%, rgb(39 92 255 / 0.16), transparent 60%),
-    radial-gradient(720px 360px at 88% 4%, rgb(122 77 255 / 0.11), transparent 60%);
+    radial-gradient(ellipse 72% 36% at 0% 10%, rgb(255 139 53 / 0.68), transparent 100%),
+    radial-gradient(ellipse 66% 38% at 0% 46%, rgb(233 75 156 / 0.45), transparent 100%),
+    radial-gradient(ellipse 64% 35% at 7% 84%, rgb(63 85 255 / 0.22), transparent 100%);
+  background-position: left top;
+  background-size: 100% 70rem;
+  background-repeat: no-repeat;
 }
-
-html:has(.dashboard-sidebar a[aria-label="LYNQ"]) .dashboard-main::before {
-  background: radial-gradient(760px 340px at 10% 0%, rgb(47 105 255 / 0.14), transparent 68%);
-  opacity: 1;
+html[data-brand-theme="lynq-light"] .dashboard-main::before,
+html[data-brand-theme="lynq-light"] .dashboard-main::after {
+  background: none;
 }
-html:has(.dashboard-sidebar a[aria-label="LYNQ"]) .dashboard-main::after {
-  background: linear-gradient(180deg, transparent 0 96%, rgb(81 89 255 / 0.12) 100%);
+html[data-brand-theme="lynq-light"] .dashboard-main .rounded-2xl,
+html[data-brand-theme="lynq-light"] .dashboard-main [data-slot="card"] {
+  border-radius: 1.25rem;
 }
-
-html:has(.dashboard-sidebar a[aria-label="LYNQ"]) .dashboard-sidebar,
-html:has(.dashboard-sidebar a[aria-label="LYNQ"]) .dashboard-mobile-header {
-  background:
-    radial-gradient(420px 310px at 52% 12%, rgb(53 79 255 / 0.22), transparent 66%),
-    linear-gradient(180deg, #0b0e18 0%, #080a10 100%);
-  border-color: rgb(91 105 255 / 0.18);
-  box-shadow: 12px 0 42px rgb(0 0 0 / 0.34), inset -1px 0 0 rgb(76 97 255 / 0.08);
-}
-
-html:has(.dashboard-sidebar a[aria-label="LYNQ"]) .dashboard-sidebar nav [class~="text-[#9cbad3]"] { color: #6e8cff; }
-html:has(.dashboard-sidebar a[aria-label="LYNQ"]) .dashboard-sidebar nav [class~="text-white/68"] { color: rgb(224 230 255 / 0.72); }
-html:has(.dashboard-sidebar a[aria-label="LYNQ"]) .dashboard-sidebar nav :is(a, button)[class~="bg-white/12"] {
-  background: linear-gradient(90deg, rgb(38 83 255 / 0.24), rgb(118 72 255 / 0.18));
-  color: #fff;
-  box-shadow: inset 0 0 0 1px rgb(101 115 255 / 0.26), 0 0 22px rgb(50 86 255 / 0.08);
-}
-
-/* Reuse the existing LYNQ agency-status block as a persistent floating AI orb hero. */
-html:has(.dashboard-sidebar a[aria-label="LYNQ"]) .dashboard-sidebar > .px-7.py-4 {
-  position: relative;
-  min-height: 10.5rem;
-  margin: 0.35rem 1rem 0.2rem;
-  padding: 7.9rem 0.75rem 0.75rem;
-  color: transparent;
-  text-align: center;
-}
-html:has(.dashboard-sidebar a[aria-label="LYNQ"]) .dashboard-sidebar > .px-7.py-4::before {
-  position: absolute;
-  top: 0.75rem;
-  left: 50%;
-  width: 7.2rem;
-  height: 7.2rem;
-  transform: translateX(-50%);
-  border-radius: 999px;
-  background:
-    radial-gradient(circle at 36% 30%, rgb(255 255 255 / 0.98) 0 2%, transparent 3%),
-    radial-gradient(circle at 58% 25%, rgb(81 205 255 / 0.94) 0 2.2%, transparent 3.3%),
-    radial-gradient(circle at 70% 46%, rgb(146 83 255 / 0.95) 0 2.3%, transparent 3.4%),
-    radial-gradient(circle at 42% 63%, rgb(64 110 255 / 0.95) 0 2.4%, transparent 3.5%),
-    radial-gradient(circle at 54% 47%, rgb(40 76 255 / 0.9), rgb(77 59 255 / 0.62) 36%, rgb(17 22 53 / 0.3) 63%, transparent 72%),
-    conic-gradient(from 25deg, #1e55ff, #7948ff, #173fff, #55c8ff, #1e55ff);
-  box-shadow: 0 0 12px rgb(76 111 255 / 0.8), 0 0 34px rgb(64 84 255 / 0.52), 0 0 72px rgb(105 68 255 / 0.34);
-  content: "";
-  animation: lynq-orb-float 4.4s ease-in-out infinite;
-}
-html:has(.dashboard-sidebar a[aria-label="LYNQ"]) .dashboard-sidebar > .px-7.py-4::after {
-  position: absolute;
-  top: 7.9rem;
-  left: 0;
-  right: 0;
-  color: #cfd8ff;
-  font-size: 0.72rem;
-  font-weight: 800;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-  content: "AI Intelligence Core";
-  text-shadow: 0 0 16px rgb(74 100 255 / 0.55);
-}
-@keyframes lynq-orb-float {
-  0%, 100% { transform: translateX(-50%) translateY(0) scale(1); }
-  50% { transform: translateX(-50%) translateY(-7px) scale(1.025); }
-}
-
-html:has(.dashboard-sidebar a[aria-label="LYNQ"]) .dashboard-topbar {
-  background: rgb(9 11 18 / 0.94);
-  border-color: #252b40;
-  backdrop-filter: blur(18px);
-}
-html:has(.dashboard-sidebar a[aria-label="LYNQ"]) [data-slot="card"],
-html:has(.dashboard-sidebar a[aria-label="LYNQ"]) [data-slot="dialog-content"],
-html:has(.dashboard-sidebar a[aria-label="LYNQ"]) [data-slot="popover-content"] {
-  background-color: #0f1320;
-  border-color: #262d43;
+html[data-brand-theme="lynq-light"] [data-slot="card"],
+html[data-brand-theme="lynq-light"] [data-slot="dialog-content"],
+html[data-brand-theme="lynq-light"] [data-slot="popover-content"] {
+  background: #ffffff;
+  color: var(--color-ink);
+  border-color: var(--color-line);
   box-shadow: var(--shadow-card);
 }
-html:has(.dashboard-sidebar a[aria-label="LYNQ"]) [data-slot="table-header"] { background: #131827; }
-html:has(.dashboard-sidebar a[aria-label="LYNQ"]) [data-slot="table-body"] [data-slot="table-row"]:hover { background: #141a2b; }
-html:has(.dashboard-sidebar a[aria-label="LYNQ"]) input,
-html:has(.dashboard-sidebar a[aria-label="LYNQ"]) textarea,
-html:has(.dashboard-sidebar a[aria-label="LYNQ"]) select {
-  background-color: #0d111d;
-  color: #f5f7ff;
-  border-color: #2a3148;
+html[data-brand-theme="lynq-light"] input,
+html[data-brand-theme="lynq-light"] textarea,
+html[data-brand-theme="lynq-light"] select {
+  background-color: #ffffff;
+  color: var(--color-ink);
+  border-color: var(--color-line);
 }
-html:has(.dashboard-sidebar a[aria-label="LYNQ"]) .recharts-cartesian-grid line { stroke: #252d43; }
+html[data-brand-theme="lynq-light"] [data-slot="table-header"] { background: #f6f5fa; }
+html[data-brand-theme="lynq-light"] [data-slot="table-body"] [data-slot="table-row"]:hover { background: #f4f3fe; }
+html[data-brand-theme="lynq-light"] .recharts-cartesian-grid line { stroke: var(--color-line); }
+html[data-brand-theme="lynq-light"] .dashboard-page::before,
+html[data-brand-theme="lynq-light"] .users-panel::before {
+  background: linear-gradient(90deg, var(--lynq-orange), var(--lynq-pink), var(--lynq-blue));
+}
+html[data-brand-theme="lynq-light"] .dashboard-sidebar [class*="border-white"] { border-color: var(--color-line); }
+html[data-brand-theme="lynq-light"] .dashboard-sidebar [class*="text-white"] { color: var(--color-muted); }
+html[data-brand-theme="lynq-light"] .dashboard-sidebar nav a,
+html[data-brand-theme="lynq-light"] .dashboard-sidebar nav button {
+  color: #535361;
+  border-radius: 0.875rem;
+}
+html[data-brand-theme="lynq-light"] .dashboard-sidebar nav a:hover,
+html[data-brand-theme="lynq-light"] .dashboard-sidebar nav button:hover {
+  color: var(--lynq-blue);
+  background: #f3f2fc;
+}
+html[data-brand-theme="lynq-light"] .dashboard-sidebar [class*="text-[#9cbad3]"] { color: var(--lynq-blue); }
+html[data-brand-theme="lynq-light"] .dashboard-sidebar nav a[href*="ppvs"] > svg,
+html[data-brand-theme="lynq-light"] .dashboard-sidebar nav a[href="/crm/campaigns"] > svg { color: #c93082; }
+html[data-brand-theme="lynq-light"] .dashboard-sidebar nav a[href="/business"] > svg { color: #bc591c; }
+html[data-brand-theme="lynq-light"] .dashboard-sidebar nav [class*="bg-white/12"] {
+  background: linear-gradient(110deg, #ebeefe, #fff0f7);
+  color: var(--lynq-blue);
+  box-shadow: inset 0 0 0 1px #dddff6;
+}
+html[data-brand-theme="lynq-light"] .dashboard-sidebar nav [class*="bg-white/12"] > svg { color: var(--lynq-blue); }
+html[data-brand-theme="lynq-light"] .dashboard-sidebar [aria-label="Close navigation"],
+html[data-brand-theme="lynq-light"] .dashboard-mobile-header button {
+  color: var(--color-ink);
+  border-color: var(--color-line);
+}
+html[data-brand-theme="lynq-light"] .dashboard-sidebar [aria-label="Close navigation"] { background: #f3f2f8; }
+html[data-brand-theme="lynq-light"] .dashboard-mobile-header button:hover { background: #ebeefe; }
+html[data-brand-theme="lynq-light"] .dashboard-sidebar a:focus-visible,
+html[data-brand-theme="lynq-light"] .dashboard-sidebar button:focus-visible,
+html[data-brand-theme="lynq-light"] .dashboard-mobile-header button:focus-visible {
+  outline: 2px solid var(--lynq-blue);
+  outline-offset: 3px;
+}
+html[data-brand-theme="lynq-light"] .sidebar-create-button {
+  background: linear-gradient(110deg, var(--lynq-blue), #7040df 65%, #b8359e);
+  color: #ffffff;
+  box-shadow: 0 8px 20px rgb(41 59 234 / 0.18);
+}
+/* This is the ORIGINAL canvas particle animation beside the wordmark.
+   It remains compact, with visible blue/cyan points on the white header.
+   No large sphere, pseudo-element artwork, or spacer is added above nav. */
+.lynq-wordmark {
+  color: #19191f;
+  text-shadow: none;
+}
+.lynq-wordmark [data-lynq-core] {
+  display: inline-grid;
+  place-items: center;
+  flex-shrink: 0;
+  --intelligence-core-glow-rgb: 31, 224, 235;
+  --intelligence-core-edge-rgb: 27, 172, 205;
+  --intelligence-core-front-rgb: 41, 59, 234;
+  --intelligence-core-back-rgb: 20, 162, 183;
+  --intelligence-core-accent-rgb: 233, 75, 156;
+  --intelligence-core-glow-alpha: 0.22;
+}
