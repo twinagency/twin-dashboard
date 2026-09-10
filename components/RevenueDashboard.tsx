@@ -22,6 +22,7 @@ import { reportTzLabel } from "@/lib/report-time";
 import { fmtMoney, fmtNum, STAR_USD, starsToMoneyRate, usdToMoneyRate } from "@/lib/money";
 import { intraPeriodTrendPct } from "@/lib/revenue-trend";
 import { useCurrency } from "@/components/CurrencyProvider";
+import { useDashboardAccess } from "@/components/DashboardAccessProvider";
 import { initials } from "@/lib/colors";
 import FanAvatar from "@/components/FanAvatar";
 import RevenueDayDrivers from "@/components/RevenueDayDrivers";
@@ -154,6 +155,7 @@ function snapshotAgeLabel(ageSeconds: number) {
 }
 
 export default function RevenueDashboard({ cloneId }: { cloneId?: string | null } = {}) {
+  const { isCreator } = useDashboardAccess();
   const scoped = Boolean(cloneId);
   const [period, setPeriod] = useState<Period>("1M");
   // Custom calendar range (yyyy-mm-dd strings, straight from <input type="date">).
@@ -345,14 +347,14 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
             <div className="mt-0.5 text-[12px] text-[#7a2b1e]/90">
               {data ? "Showing the last window that loaded." : "Try a shorter period. 1D and 1W are much cheaper to compute."}
             </div>
-            <details className="mt-1.5 group">
+            {!isCreator && <details className="mt-1.5 group">
               <summary className="cursor-pointer select-none text-[12px] font-medium text-[#7a2b1e]/80 underline decoration-[#7a2b1e]/30 underline-offset-2 hover:text-[#7a2b1e]">
                 Technical details
               </summary>
               <div className="mt-1 break-words rounded-lg bg-[#7a2b1e]/[0.06] px-2.5 py-2 font-mono text-[11px] leading-snug text-[#7a2b1e]/90">
                 {loadError}
               </div>
-            </details>
+            </details>}
           </div>
         </div>
       )}
@@ -362,7 +364,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
               the screen height before a single number appeared. */}
           <h2 className="flex items-center gap-2 font-heading text-2xl font-semibold tracking-[-0.035em] text-ink sm:text-3xl md:text-4xl">
             Earnings overview
-            <Info text="Revenue, buyer activity and conversion performance across your active creators. In All creators, buyers are unique people across creators; audience and message totals count each creator-fan relationship." />
+            <Info text={isCreator ? "Revenue, buyer activity and conversion performance for your creator account." : "Revenue, buyer activity and conversion performance across your active creators. In All creators, buyers are unique people across creators; audience and message totals count each creator-fan relationship."} />
           </h2>
           <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted">
             {data && <span>{data.stale ? "Refreshing latest data…" : snapshotAgeLabel(data.ageSeconds)}</span>}
@@ -545,7 +547,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
                   />
                 </div>
               ) : (
-                <Link href="/info" className="mt-2 inline-block text-xs font-medium text-accent underline decoration-accent/30 underline-offset-2 hover:text-accent-deep">
+                <Link href={isCreator ? "/creator/info" : "/info"} className="mt-2 inline-block text-xs font-medium text-accent underline decoration-accent/30 underline-offset-2 hover:text-accent-deep">
                   {scoped ? "Balance unavailable right now" : "See Total balance per bot"}
                 </Link>
               )}
@@ -669,7 +671,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
         {/* Keep the full creator chooser out of the default page flow. On a
             phone this sits below the graph, and a large roster must never turn
             the earnings overview into hundreds of checked rows. */}
-        {!scoped && (
+        {!scoped && !isCreator && (
           <Card size="sm" className="gap-0 overflow-hidden py-0">
             <button
               type="button"

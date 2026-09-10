@@ -25,7 +25,7 @@ import { isLynq, isMoxy, pathAgencyName } from "@/lib/agency-brand";
 import { getCloneScope } from "@/lib/clone-scope";
 import { Inter, Inter_Tight, Space_Grotesk } from "next/font/google";
 import { cn } from "@/lib/utils";
-import { isCreatorPath, isCreatorPublicPath } from "@/lib/creator-routing";
+import { creatorPublicPortal, isCreatorPath, isCreatorPublicPath } from "@/lib/creator-routing";
 import { isCreatorDashboardPath } from "@/lib/creator-dashboard-policy";
 import { getCreatorWorkspace } from "@/lib/creator-dashboard";
 
@@ -38,7 +38,9 @@ const fontClass = cn("font-sans", inter.variable, plexMono.variable, spaceGrotes
 export async function generateMetadata(): Promise<Metadata> {
   const pathname = (await headers()).get("x-pathname");
   if (isCreatorPath(pathname)) return {
-    title: "Creator dashboard", description: "Your creator workspace", robots: { index: false, follow: false },
+    title: creatorPublicPortal(pathname) === "tether" ? "Tether creator workspace" : "Creator dashboard",
+    description: creatorPublicPortal(pathname) === "tether" ? "Private Tether creator access" : "Your creator workspace",
+    robots: { index: false, follow: false },
     icons: { icon: { url: "/icon.png", type: "image/png" } },
   };
   if (isMarketingPath(pathname)) return {

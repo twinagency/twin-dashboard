@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { revalidatePath } from "next/cache";
 import { CREATOR_SESSION_COOKIE } from "@/lib/creator-session";
 import { creatorDashboardIdentity } from "@/lib/creator-dashboard-identity";
-import { creatorIdentityPatch } from "@/lib/creator-identity-fields";
+import { assertCreatorIdentityForm, creatorIdentityPatch } from "@/lib/creator-identity-fields";
 import { serviceClient } from "@/lib/supabase-service";
 import { trustedFormOrigin } from "@/lib/form-origin";
 import { invalidateCloneCaches } from "@/lib/query-cache";
@@ -15,6 +15,7 @@ export async function POST(req: NextRequest) {
   if (!creator?.onboarded || creator.cloneIds.length !== 1) return reply({ error: "Creator access denied" }, 403);
   try {
     const fd = await req.formData();
+    assertCreatorIdentityForm(fd);
     const id = creator.cloneIds[0]; // NEVER use an account/clone ID from the form.
     const db = serviceClient();
     const { data: current, error } = await db.from("clones").select("id,name,intake,updated_at").eq("id", id).maybeSingle();

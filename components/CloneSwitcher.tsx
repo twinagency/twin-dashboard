@@ -30,9 +30,15 @@ function VerifiedBadge({ className = "h-3.5 w-3.5" }: { className?: string }) {
 export default function CloneSwitcher({
   clones,
   activeCloneId,
+  locked = false,
+  fallbackName,
 }: {
   clones: CloneLite[];
   activeCloneId: string | null;
+  /** Render the selected identity without opening the fleet picker. */
+  locked?: boolean;
+  /** Account display name used while a creator is waiting for clone linking. */
+  fallbackName?: string;
 }) {
   const router = useRouter();
   const {isAgency}=useDashboardAccess();
@@ -47,7 +53,7 @@ export default function CloneSwitcher({
 
   // Girl-only nav rows (Sidebar's PPVs/Edit) dispatch this instead of
   // navigating when no clone is picked yet.
-  useEffect(() => onOpenCloneSwitcher(() => setOpen(true)), []);
+  useEffect(() => locked ? undefined : onOpenCloneSwitcher(() => setOpen(true)), [locked]);
 
   const filteredCreators = useMemo(() => {
     const q = query.trim().toLowerCase();
@@ -110,6 +116,28 @@ export default function CloneSwitcher({
           {creator.name}
         </span>
       </button>
+    );
+  }
+
+  if (locked) {
+    const name = active?.name || fallbackName || "Creator";
+    return (
+      <div
+        aria-label={`Creator account: ${name}`}
+        className="flex min-w-0 items-center gap-2 rounded-full px-3 py-1.5 text-sm font-semibold text-ink"
+      >
+        <span
+          className={
+            "creator-name flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white " +
+            (active ? "" : "bg-accent")
+          }
+          style={active ? { background: active.color, boxShadow: `0 0 0 2px ${active.color}55` } : undefined}
+        >
+          {initials(name)}
+        </span>
+        <span className="creator-name max-w-[10rem] truncate">{name}</span>
+        <VerifiedBadge />
+      </div>
     );
   }
 

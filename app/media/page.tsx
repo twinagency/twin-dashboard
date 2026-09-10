@@ -2,11 +2,11 @@ import CloneScopeForm from "@/components/CloneScopeForm";
 import { supabaseAdmin } from "@/lib/supabase";
 import { getCloneScope } from "@/lib/clone-scope";
 import { setCloneScope } from "@/app/actions/clone-scope";
-import MediaManager from "./MediaManager";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Info } from "@/components/clone/fields";
+import CloneMediaPage from "@/components/CloneMediaPage";
 
 export const dynamic = "force-dynamic";
 
@@ -16,7 +16,7 @@ export const dynamic = "force-dynamic";
 // used to be the separate /clones/[id]/media route).
 export default async function MediaPage() {
   const cloneId = await getCloneScope();
-  if (cloneId) return <CloneMedia cloneId={cloneId} />;
+  if (cloneId) return <CloneMediaPage cloneId={cloneId} />;
   return <FleetMedia />;
 }
 
@@ -102,41 +102,6 @@ async function FleetMedia() {
           </TableBody>
         </Table>
       </Card>
-    </div>
-  );
-}
-
-async function CloneMedia({ cloneId }: { cloneId: string }) {
-  const [cloneRes, photosRes, videosRes, bundlesRes] = await Promise.all([
-    supabaseAdmin.from("clones").select("id,name,slug,category_pricing").eq("id", cloneId).maybeSingle(),
-    supabaseAdmin.from("photos").select("*").eq("clone_id", cloneId).order("created_at", { ascending: false }),
-    supabaseAdmin.from("videos").select("*").eq("clone_id", cloneId).order("created_at", { ascending: false }),
-    supabaseAdmin
-      .from("photo_bundles")
-      .select("*, photo_bundle_items(*)")
-      .eq("clone_id", cloneId)
-      .order("created_at", { ascending: true }),
-  ]);
-
-  if (cloneRes.error) throw new Error(cloneRes.error.message);
-  if (!cloneRes.data) return <div className="text-muted">Creator not found.</div>;
-
-  const clone = cloneRes.data as { id: string; name: string; slug: string; category_pricing: Record<string, number> | null };
-
-  return (
-    <div className="dashboard-page">
-      <div className="mb-2 flex items-center justify-end">
-        <CloneScopeForm cloneId={null}>
-          <Button type="submit" variant="ghost" size="sm">← All bots</Button>
-        </CloneScopeForm>
-      </div>
-      <MediaManager
-        cloneId={cloneId}
-        photos={photosRes.data ?? []}
-        videos={videosRes.data ?? []}
-        bundles={bundlesRes.data ?? []}
-        categoryPricing={clone.category_pricing}
-      />
     </div>
   );
 }

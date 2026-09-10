@@ -5,7 +5,17 @@ import { middleware } from "../middleware";
 import { signCreatorSession, CREATOR_SESSION_COOKIE } from "../lib/creator-session";
 import { creatorDashboardIdentity } from "../lib/creator-dashboard-identity";
 import { CREATOR_DASHBOARD_NAV, CREATOR_AUDIENCE_HEADER, assertCreatorQuery, creatorApiAllowed } from "../lib/creator-dashboard-policy";
-import { creatorIdentityPatch, CREATOR_IDENTITY_COLUMNS } from "../lib/creator-identity-fields";
+import {
+  assertCreatorIdentityForm,
+  creatorIdentityPatch,
+  CREATOR_IDENTITY_ARRAYS,
+  CREATOR_IDENTITY_BOOLS,
+  CREATOR_IDENTITY_COLUMNS,
+  CREATOR_IDENTITY_FORM_KEYS,
+  CREATOR_IDENTITY_FORM_MARKERS,
+  CREATOR_IDENTITY_TEXT,
+} from "../lib/creator-identity-fields";
+import { INTAKE_FIELD_KEYS } from "../lib/intake";
 import { scopeReadUrl, redactAgencyData } from "../lib/agency-query";
 import { accessCacheKey, withDashboardAccess } from "../lib/dashboard-access";
 import { guardDashboardAction } from "../lib/agency-management";
@@ -52,7 +62,16 @@ async function main() {
     assert.equal(agencyCanManage(identity), false);
     assert.notEqual(accessCacheKey(identity), accessCacheKey(null));
     assert.notEqual(accessCacheKey(identity), accessCacheKey({ ...identity, id: "another-creator" }));
-    assert.deepEqual(CREATOR_DASHBOARD_NAV.map(item => item.label), ["Earnings", "PPVs", "Business", "Info", "Logs", "Edit"]);
+    assert.deepEqual(CREATOR_DASHBOARD_NAV, [
+      { href: "/creator", label: "Earnings", icon: "EarningsCombo" },
+      { href: "/creator/ppvs", label: "Pay Per View", icon: "Media" },
+      { href: "/creator/business", label: "Business", icon: "Bot" },
+      { href: "/creator/info", label: "Info", icon: "Info" },
+      { href: "/creator/logs", label: "Logs", icon: "Logs" },
+      { href: "/creator/edit", label: "Edit", icon: "Dials" },
+    ]);
+    assert.equal(CREATOR_DASHBOARD_NAV.length, 6);
+    assert.equal(new Set(CREATOR_DASHBOARD_NAV.map(item => item.href)).size, 6);
     for (const item of CREATOR_DASHBOARD_NAV) {
       const response = await middleware(request(item.href));
       assert.equal(response.status, 200, item.href);
@@ -85,10 +104,52 @@ async function main() {
       for (const action of ["app/clones/actions.ts#updateClone", "app/clones/actions.ts#setStatus", "app/settings/actions.ts#save", "app/media/actions.ts#updateCategoryPricing", "app/users/actions.ts#setCredits"]) await assert.rejects(guardDashboardAction(action, [own, new FormData()]));
     });
     const fd = new FormData();
-    fd.set("name", "Updated identity"); fd.set("hair_color", "Brown"); fd.set("hobbies", JSON.stringify(["Hiking", "Hiking"])); fd.set("tattoos", "false");
-    for (const key of ["clone_id", "auth_user_id", "bot_token", "text_model", "starting_credits", "credit_pack_price_stars", "ai_mode", "status", "strict_minor_gate", "category_pricing", "intake"]) fd.set(key, "FORGED");
+    fd.set("revision", "fixture-revision"); fd.set("name", "Updated identity"); fd.set("hair_color", "Brown"); fd.set("hobbies", JSON.stringify(["Hiking", "Hiking"])); fd.set("tattoos", "false");
+    assert.doesNotThrow(() => assertCreatorIdentityForm(fd));
     const patch = creatorIdentityPatch(fd, { name: "Before", intake: { appearance: { chart_color: "#123456" } } });
     assert.deepEqual(patch, { name: "Updated identity", hair_color: "Brown", hobbies: ["Hiking"], tattoos: false });
+
+    const allowedFormKeys = new Set<string>(CREATOR_IDENTITY_FORM_KEYS);
+    const personaFactsSource = readFileSync("components/clone/PersonaFactsFields.tsx", "utf8");
+    const emittedPersonaKeys = [...new Set([...personaFactsSource.matchAll(/name="([^"]+)"/g)].map(match => match[1]))];
+    for (const key of emittedPersonaKeys) assert.ok(allowedFormKeys.has(key), `PersonaFactsFields emits an unapproved key: ${key}`);
+    for (const key of INTAKE_FIELD_KEYS) assert.ok(allowedFormKeys.has(`intake_${key}`), `IntakeFields emits an unapproved key: intake_${key}`);
+
+    const completeIdentity = new FormData();
+    for (const key of CREATOR_IDENTITY_FORM_KEYS) {
+      let value = "Fixture value";
+      if (key === "revision") value = "fixture-revision";
+      else if (key === "persona_facts") value = "1";
+      else if (key === "_imperfection_toggle") value = "true";
+      else if (key === "date_of_birth") value = "2000-01-01";
+      else if (key === "wake_time" || key === "sleep_time") value = "08:30";
+      else if (["lowercase_level", "punctuation_drop_level", "typo_level", "double_text_level"].includes(key)) value = "sometimes";
+      else if (CREATOR_IDENTITY_ARRAYS.includes(key as (typeof CREATOR_IDENTITY_ARRAYS)[number])) value = JSON.stringify(["Fixture"]);
+      else if (CREATOR_IDENTITY_BOOLS.includes(key as (typeof CREATOR_IDENTITY_BOOLS)[number])) value = "true";
+      else if (key === "career_start_year") value = "2020";
+      else if (key === "socials") value = JSON.stringify([{ platform: "instagram", handle: "@fixture", followers: "100" }]);
+      else if (key === "daily_blocks") value = JSON.stringify([{ time: "08:30", activity: "Gym" }]);
+      completeIdentity.set(key, value);
+    }
+    assert.doesNotThrow(() => assertCreatorIdentityForm(completeIdentity));
+    const completePatch = creatorIdentityPatch(completeIdentity, { name: "Before", intake: { appearance: { chart_color: "#123456" } } });
+    for (const key of [...CREATOR_IDENTITY_TEXT, ...CREATOR_IDENTITY_ARRAYS, ...CREATOR_IDENTITY_BOOLS, "career_start_year", "socials", "daily_blocks"]) {
+      assert.ok(Object.hasOwn(completePatch, key), `Valid identity field was not persisted: ${key}`);
+    }
+    assert.ok(Object.hasOwn(completePatch, "intake"));
+    for (const marker of CREATOR_IDENTITY_FORM_MARKERS) assert.equal(Object.hasOwn(completePatch, marker), false);
+
+    for (const key of ["clone_id", "auth_user_id", "bot_token", "text_model", "starting_credits", "credit_pack_price_stars", "ai_mode", "status", "strict_minor_gate", "category_pricing", "intake"]) {
+      const forged = new FormData();
+      forged.set("revision", "fixture-revision");
+      forged.set("name", "Safe identity");
+      forged.set(key, "FORGED");
+      assert.throws(() => assertCreatorIdentityForm(forged), /Unsupported identity field/);
+    }
+    const duplicated = new FormData();
+    duplicated.append("revision", "first");
+    duplicated.append("revision", "second");
+    assert.throws(() => assertCreatorIdentityForm(duplicated), /supplied once/);
     assert.equal(CREATOR_IDENTITY_COLUMNS.includes("bot_token" as any), false);
     assert.equal(CREATOR_IDENTITY_COLUMNS.includes("starting_credits" as any), false);
     const invalid = new FormData(); invalid.set("hobbies", '{"price":1}'); assert.throws(() => creatorIdentityPatch(invalid, {}));
@@ -110,9 +171,36 @@ async function main() {
     const source = readFileSync("app/creator/page.tsx", "utf8");
     assert.match(source, /<RevenueDashboard/); assert.match(source, /<RevenueTooltipFix/);
     assert.doesNotMatch(source, /RevenueTrend|aggregateTrend|metric\(/);
-    assert.match(readFileSync("components/CreatorWorkspaceShell.tsx", "utf8"), /<IntelligenceCoreIcon size=\{64\}/);
-    assert.doesNotMatch(readFileSync("components/CreatorIdentityEditor.tsx", "utf8"), /<ConfigSections|<CloneForm|fetch\("\/api\/models/);
-    console.log("CREATOR WORKSPACE PASSED: live earnings component, six routes, onboarding, single/no-clone isolation, cache keys, mixed cookies, forged headers, denied settings/actions and identity-only patch.");
+    const identityRouteSource = readFileSync("app/creator-auth/identity/route.ts", "utf8");
+    assert.ok(identityRouteSource.indexOf("assertCreatorIdentityForm(fd)") < identityRouteSource.indexOf("const db = serviceClient()"), "Forged fields must be rejected before the write client is created");
+    const shellSource = readFileSync("components/CreatorWorkspaceShell.tsx", "utf8");
+    assert.match(shellSource, /<DashboardAccessProvider agencyName=\{agencyName\} audience="creator">/);
+    for (const sharedComponent of ["Sidebar", "MobileMenu", "TopBar", "MainShell"]) {
+      assert.match(shellSource, new RegExp(`<${sharedComponent}\\b`), `${sharedComponent} must come from the shared dashboard shell`);
+    }
+    assert.doesNotMatch(shellSource, /CREATOR_DASHBOARD_NAV|IntelligenceCoreIcon|function Navigation|function WorkspaceTopBar/, "Creator shell must not fork shared navigation or core markup");
+
+    const sidebarSource = readFileSync("components/Sidebar.tsx", "utf8");
+    assert.match(sidebarSource, /const CREATOR_LINKS:[\s\S]*?= CREATOR_DASHBOARD_NAV\.map/);
+    assert.match(sidebarSource, /const usesBrandedCore = isCreator \|\| isJessKate \|\| isTether;/);
+    assert.match(sidebarSource, /data-creator-core=\{isCreator \? "hero" : undefined\}[\s\S]*?<IntelligenceCoreIcon size=\{64\} \/>[\s\S]*?AI Intelligence Core/,
+      "Creator and Tether must share the exact 64px intelligence-core block");
+    assert.match(sidebarSource, /<nav aria-label=\{isCreator \? "Creator navigation" : "Main navigation"\}/);
+    assert.match(sidebarSource, /\{isCreator \? null :[\s\S]*?More/);
+    assert.match(sidebarSource, /showAssistant && !isAgency && !isCreator/);
+
+    const topBarSource = readFileSync("components/TopBar.tsx", "utf8");
+    assert.match(topBarSource, /locked=\{isCreator\}/);
+    assert.match(topBarSource, /fallbackName=\{creatorName\}/);
+    const switcherSource = readFileSync("components/CloneSwitcher.tsx", "utf8");
+    assert.match(switcherSource, /if \(locked\)[\s\S]*?aria-label=\{`Creator account: \$\{name\}`\}/);
+    assert.doesNotMatch(switcherSource.match(/if \(locked\)[\s\S]*?\n  \}/)?.[0] ?? "", /<button|All creators/,
+      "Locked creator chip must be a fixed, noninteractive identity");
+    assert.match(readFileSync("components/MainShell.tsx", "utf8"), /!isAgency && !isCreator && pathname !== "\/jarvis"/);
+    const creatorEditorSource = readFileSync("components/CreatorIdentityEditor.tsx", "utf8");
+    assert.doesNotMatch(creatorEditorSource, /<ConfigSections|<CloneForm|fetch\("\/api\/models/);
+    assert.doesNotMatch(creatorEditorSource, /LockKeyhole|\["Configuration","Monetization","Advanced","View"\]/);
+    console.log("CREATOR WORKSPACE PASSED: shared Tether shell, exact six-route creator navigation, locked creator chip, 64px shared core, no admin assistant, live earnings, onboarding, single/no-clone isolation, cache keys, mixed cookies, forged headers, denied settings/actions and identity-only patch.");
   } finally { globalThis.fetch = oldFetch; }
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

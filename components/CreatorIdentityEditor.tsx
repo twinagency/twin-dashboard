@@ -1,7 +1,6 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { LockKeyhole } from "lucide-react";
 import type { Clone } from "@/lib/types";
 import PersonaFactsFields from "./clone/PersonaFactsFields";
 import { useCloneConfig } from "./clone/useCloneConfig";
@@ -18,7 +17,7 @@ export default function CreatorIdentityEditor({ clone, revision }: { clone: Part
   const router = useRouter();
   return <div className="grid min-w-0 gap-4">
     <div><h1 className="text-2xl font-semibold text-ink">Edit identity</h1><p className="mt-1 text-sm text-muted">Your personal facts, voice, background and boundaries.</p></div>
-    <div aria-label="Creator settings" className="flex flex-wrap gap-2 rounded-xl border border-line bg-panel p-2"><span aria-current="page" className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white">Identity</span>{["Configuration","Monetization","Advanced","View"].map(label => <button type="button" key={label} disabled title="Managed by your agency" className="flex cursor-not-allowed items-center gap-1.5 rounded-lg px-3 py-2 text-sm text-muted opacity-55"><LockKeyhole className="h-3.5 w-3.5" />{label}</button>)}</div>
+    <div aria-label="Creator settings" className="flex flex-wrap gap-2 rounded-xl border border-line bg-panel p-2"><span aria-current="page" className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white">Identity</span></div>
     <form className="grid min-w-0 gap-4" onSubmit={async event => {
       event.preventDefault(); if (busy) return;
       const data = new FormData(event.currentTarget);

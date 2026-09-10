@@ -14,7 +14,7 @@ import { useDashboardAccess } from "./DashboardAccessProvider";
 // the bug behind "pages break when switching between them".
 export default function MainShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
-  const {isAgency} = useDashboardAccess();
+  const {isAgency, isCreator} = useDashboardAccess();
   const fullBleed = pathname === "/users" || pathname === "/jarvis";
   return (
     <main
@@ -25,7 +25,7 @@ export default function MainShell({ children }: { children: React.ReactNode }) {
       }
     >
       {children}
-      {!isAgency && pathname !== "/jarvis" ? <TwinAssistant variant="mobile-dock" /> : null}
+      {!isAgency && !isCreator && pathname !== "/jarvis" ? <TwinAssistant variant="mobile-dock" /> : null}
     </main>
   );
 }
