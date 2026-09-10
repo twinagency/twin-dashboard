@@ -137,9 +137,6 @@ html[data-brand-theme="lynq-light"] .dashboard-sidebar nav [class*="bg-white/12"
 html[data-brand-theme="lynq-light"] .dashboard-sidebar nav [class*="bg-white/12"] > svg {
   color: var(--lynq-blue);
 }
-html[data-brand-theme="lynq-light"] .dashboard-sidebar [aria-disabled="true"] {
-  color: #777783;
-}
 html[data-brand-theme="lynq-light"] .dashboard-sidebar [aria-label="Close navigation"],
 html[data-brand-theme="lynq-light"] .dashboard-mobile-header button {
   color: var(--color-ink);
