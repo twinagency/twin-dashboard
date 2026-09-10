@@ -9,6 +9,7 @@ import type { NextRequest } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/session";
 import { CREATOR_SESSION_COOKIE, verifyCreatorSession } from "@/lib/creator-session";
 import { isCreatorAuthPath, isCreatorPath, isCreatorPublicPath, safeCreatorNext } from "@/lib/creator-routing";
+import { creatorDataResource, creatorIdentityTabAllowed } from "@/lib/creator-dashboard-policy";
 import { isAgencyPath, agencyRequestAllowed, agencyDashboardPath, AGENCY_COOKIE } from "@/lib/agency-policy";
 
 function withPathname(req: NextRequest): NextResponse {
@@ -16,42 +17,29 @@ function withPathname(req: NextRequest): NextResponse {
   headers.set("x-pathname", req.nextUrl.pathname);
   return NextResponse.next({ request: { headers } });
 }
-
 const SELF_AUTHENTICATED_PREFIXES = ["/api/v1/", "/api/admin/"];
+async function validCreator(req: NextRequest) {
+  try { return await verifyCreatorSession(req.cookies.get(CREATOR_SESSION_COOKIE)?.value); } catch { return null; }
+}
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
-
   if (isMarketingPath(pathname)) {
-    if (!["GET", "HEAD"].includes(req.method) || req.headers.has("next-action")) {
-      return new NextResponse("Forbidden", { status: 403 });
-    }
+    if (!["GET", "HEAD"].includes(req.method) || req.headers.has("next-action")) return new NextResponse("Forbidden", { status: 403 });
     const response = withPathname(req);
     response.headers.set("Cache-Control", "private, no-store");
     response.headers.set("X-Robots-Tag", "noindex, nofollow");
     return response;
   }
-
-  // Creator auth is fully separate from admin and agency identity. Form posts
-  // are same-origin only; creator pages never inherit the admin dev bypass.
+  // Creator auth never inherits an operator identity or the admin dev bypass.
   if (isCreatorAuthPath(pathname)) {
-    // A browser can legitimately land on the logout URL after a stale creator
-    // session/account redirect. Let the logout route clear the cookie and send
-    // the user back to /creator/login rather than trapping them on a 403.
-    if (pathname === "/creator-auth/logout" && ["GET", "HEAD"].includes(req.method) && !req.headers.has("next-action")) {
-      return withPathname(req);
-    }
-    if (req.method !== "POST" || req.headers.has("next-action") || !trustedFormOrigin(req)) {
-      return new NextResponse("Forbidden", { status: 403 });
-    }
+    if (pathname === "/creator-auth/logout" && ["GET", "HEAD"].includes(req.method) && !req.headers.has("next-action")) return withPathname(req);
+    if (req.method !== "POST" || req.headers.has("next-action") || !trustedFormOrigin(req)) return new NextResponse("Forbidden", { status: 403 });
     return withPathname(req);
   }
-
   if (isCreatorPublicPath(pathname)) {
-    if (!["GET", "HEAD"].includes(req.method) || req.headers.has("next-action")) {
-      return new NextResponse("Forbidden", { status: 403 });
-    }
-    const creator = await verifyCreatorSession(req.cookies.get(CREATOR_SESSION_COOKIE)?.value);
+    if (!["GET", "HEAD"].includes(req.method) || req.headers.has("next-action")) return new NextResponse("Forbidden", { status: 403 });
+    const creator = await validCreator(req);
     if (creator) {
       const response = NextResponse.redirect(new URL(safeCreatorNext(req.nextUrl.searchParams.get("next")), dashboardOrigin(req)));
       response.headers.set("Cache-Control", "private, no-store");
@@ -61,13 +49,9 @@ export async function middleware(req: NextRequest) {
     response.headers.set("Cache-Control", "private, no-store");
     return response;
   }
-
   if (isCreatorPath(pathname)) {
-    if (!["GET", "HEAD"].includes(req.method) || req.headers.has("next-action")) {
-      return new NextResponse("Forbidden", { status: 403 });
-    }
-    const creator = await verifyCreatorSession(req.cookies.get(CREATOR_SESSION_COOKIE)?.value);
-    if (!creator) {
+    if (!["GET", "HEAD"].includes(req.method) || req.headers.has("next-action") || !creatorIdentityTabAllowed(req.nextUrl)) return new NextResponse("Forbidden", { status: 403 });
+    if (!await validCreator(req)) {
       const url = new URL("/creator/login", dashboardOrigin(req));
       url.searchParams.set("next", safeCreatorNext(pathname + req.nextUrl.search));
       return NextResponse.redirect(url);
@@ -76,14 +60,12 @@ export async function middleware(req: NextRequest) {
     response.headers.set("Cache-Control", "private, no-store");
     return response;
   }
-
   if (pathname === "/admin-auth") {
-    if (req.method !== "POST" || req.headers.has("next-action")) return new NextResponse("Forbidden", {status:403});
+    if (req.method !== "POST" || req.headers.has("next-action")) return new NextResponse("Forbidden", { status: 403 });
     return withPathname(req);
   }
-
   if (isTwinLoginPath(pathname)) {
-    if (!["GET", "HEAD"].includes(req.method) || req.headers.has("next-action")) return new NextResponse("Forbidden", {status:403});
+    if (!["GET", "HEAD"].includes(req.method) || req.headers.has("next-action")) return new NextResponse("Forbidden", { status: 403 });
     if (pathname === "/login" && !req.cookies.has(AGENCY_COOKIE) && await verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value)) {
       const response = NextResponse.redirect(new URL(safeAdminNext(req.nextUrl.searchParams.get("next")), dashboardOrigin(req)));
       response.headers.set("Cache-Control", "private, no-store");
@@ -93,61 +75,65 @@ export async function middleware(req: NextRequest) {
     response.headers.set("Cache-Control", "private, no-store");
     return response;
   }
-
   if (pathname.startsWith("/brand/") && /\.(?:png|jpg|webp|svg)$/.test(pathname)) {
-    if (!["GET", "HEAD"].includes(req.method) || req.headers.has("next-action")) return new NextResponse("Forbidden", {status:403});
+    if (!["GET", "HEAD"].includes(req.method) || req.headers.has("next-action")) return new NextResponse("Forbidden", { status: 403 });
     return withPathname(req);
   }
-
   if (isAgencyPath(pathname)) {
-    if (!agencyRequestAllowed(pathname, req.method, req.headers.has("next-action"))) {
-      return new NextResponse("Read-only agency portal", { status: 403 });
-    }
+    if (!agencyRequestAllowed(pathname, req.method, req.headers.has("next-action"))) return new NextResponse("Read-only agency portal", { status: 403 });
     const response = withPathname(req);
     response.headers.set("Cache-Control", "private, no-store");
     return response;
   }
+  if (SELF_AUTHENTICATED_PREFIXES.some(p => pathname.startsWith(p))) return withPathname(req);
 
-  if (SELF_AUTHENTICATED_PREFIXES.some((p) => pathname.startsWith(p))) {
-    return withPathname(req);
+  // Shared client components retain their original API URLs. For a creator,
+  // route only their read allowlist into an independently authenticated,
+  // single-clone adapter. Never send them to the unscoped admin API handler.
+  if (req.cookies.has(CREATOR_SESSION_COOKIE)) {
+    const resource = creatorDataResource(pathname);
+    if (resource) {
+      if (!["GET", "HEAD"].includes(req.method) || req.headers.has("next-action") || !await validCreator(req)) return NextResponse.json({ error: "Creator access denied" }, { status: 403 });
+      const target = req.nextUrl.clone();
+      target.pathname = `/creator/data/${resource}`;
+      const headers = new Headers(req.headers);
+      headers.set("x-pathname", target.pathname);
+      const response = NextResponse.rewrite(target, { request: { headers } });
+      response.headers.set("Cache-Control", "private, no-store");
+      return response;
+    }
+    // A creator cookie alone is never sufficient for fleet pages, model APIs,
+    // generic clone actions, pricing writes or fan drill-through routes.
+    if (!req.cookies.has(AGENCY_COOKIE) && !await verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value)) return new NextResponse("Creator access denied", { status: 403 });
   }
 
   const agencyToken = req.cookies.get(AGENCY_COOKIE)?.value;
   if (agencyToken) {
     const identity = await agencyIdentity(agencyToken);
-    if (!identity) return NextResponse.redirect(new URL(portalLoginPath(req.cookies.get(AGENCY_PORTAL_COOKIE)?.value),dashboardOrigin(req)));
+    if (!identity) return NextResponse.redirect(new URL(portalLoginPath(req.cookies.get(AGENCY_PORTAL_COOKIE)?.value), dashboardOrigin(req)));
     const canManage = agencyCanManage(identity);
     const serverAction = req.headers.has("next-action");
     const isWrite = serverAction || !["GET", "HEAD"].includes(req.method);
-    if (isWrite && (!canManage || !agencyManagementRequestAllowed(pathname,req.method,serverAction))) return new NextResponse("Administrator access required", {status:403});
-    if (isWrite && !trustedFormOrigin(req)) return new NextResponse("Untrusted request origin", {status:403});
-    if (!agencyDashboardPath(pathname, identity.name, canManage)) return new NextResponse("Administrator access required", {status:403});
-    if (pathname === "/api/compile" && !isWrite) return new NextResponse("Use POST", {status:405});
+    if (isWrite && (!canManage || !agencyManagementRequestAllowed(pathname, req.method, serverAction))) return new NextResponse("Administrator access required", { status: 403 });
+    if (isWrite && !trustedFormOrigin(req)) return new NextResponse("Untrusted request origin", { status: 403 });
+    if (!agencyDashboardPath(pathname, identity.name, canManage)) return new NextResponse("Administrator access required", { status: 403 });
+    if (pathname === "/api/compile" && !isWrite) return new NextResponse("Use POST", { status: 405 });
     const embedded = pathname.match(/^\/clones\/([0-9a-f-]{36})/i)?.[1];
     const requested = embedded || req.nextUrl.searchParams.get("clone") || req.nextUrl.searchParams.get("cloneId");
-    if (requested && !identity.cloneIds.includes(requested)) return new NextResponse("Creator access denied",{status:403});
+    if (requested && !identity.cloneIds.includes(requested)) return new NextResponse("Creator access denied", { status: 403 });
     const response = withPathname(req);
-    response.headers.set("Cache-Control","private, no-store");
+    response.headers.set("Cache-Control", "private, no-store");
     return response;
   }
-
-  if (process.env.NODE_ENV !== "production") {
-    return withPathname(req);
-  }
-
+  if (process.env.NODE_ENV !== "production") return withPathname(req);
   const token = req.cookies.get(SESSION_COOKIE)?.value;
   const authed = await verifySessionToken(token);
-
   if (!authed) {
     if (req.cookies.get(AGENCY_PORTAL_COOKIE)?.value === "moxy") return NextResponse.redirect(new URL("/moxy", dashboardOrigin(req)));
     const url = new URL("/twin", dashboardOrigin(req));
     url.searchParams.set("next", pathname);
     return NextResponse.redirect(url);
   }
-
   return withPathname(req);
 }
-
-export const config = {
-  matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.png).*)"],
-};
+export const config = { matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.png).*)"] };

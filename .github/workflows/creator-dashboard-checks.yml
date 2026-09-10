@@ -1,0 +1,36 @@
+name: Creator dashboard access checks
+on:
+  pull_request:
+    paths:
+      - 'app/creator/**'
+      - 'app/creator-auth/identity/**'
+      - 'components/creator/**'
+      - 'lib/creator-dashboard-*.ts'
+      - 'lib/creator-identity-fields.ts'
+      - 'middleware.ts'
+      - 'scripts/check-creator-dashboard.ts'
+  push:
+    branches: [main]
+    paths:
+      - 'app/creator/**'
+      - 'app/creator-auth/identity/**'
+      - 'components/creator/**'
+      - 'lib/creator-dashboard-*.ts'
+      - 'lib/creator-identity-fields.ts'
+      - 'middleware.ts'
+      - 'scripts/check-creator-dashboard.ts'
+permissions:
+  contents: read
+jobs:
+  creator-access:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npx tsx scripts/check-creator-dashboard.ts

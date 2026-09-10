@@ -1,0 +1,16 @@
+/* Scoped creator shell. Shared financial/status colours retain their meaning. */
+html[data-creator-brand] { --creator-sidebar-from: #0d2f4e; --creator-sidebar-to: #07192b; --creator-active-bg: #dbeafa; --creator-active-ink: #102f4e; }
+html[data-creator-brand="tether"] { --color-bg:#f3f8f8; --color-panel:#ffffff; --color-elev:#e8f1f2; --color-line:#dbe6e7; --color-ink:#10272d; --color-muted:#64787e; --color-accent:#087f8c; --color-accent-2:#087f8c; --color-accent-deep:#063c46; --color-accent-ink:#fff; --color-accent-tint:#e0f4f5; --creator-sidebar-from:#102d35; --creator-sidebar-to:#071c23; --creator-active-bg:#b5eef0; --creator-active-ink:#103b43; }
+html[data-creator-brand="jess-and-kate-ai"] { --creator-sidebar-from:#7a1734; --creator-sidebar-to:#461323; --creator-active-bg:#ebcbd2; --creator-active-ink:#461323; }
+html[data-creator-brand] .creator-dashboard-shell .dashboard-sidebar { background:linear-gradient(180deg,var(--creator-sidebar-from),var(--creator-sidebar-to)); box-shadow:8px 0 28px rgb(7 25 43 / .07); }
+html[data-creator-brand] .creator-nav-active { background:var(--creator-active-bg); color:var(--creator-active-ink); }
+html[data-creator-brand] .creator-core-hero { position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:.35rem; min-height:8.9rem; padding:.6rem 0 .85rem; --intelligence-core-glow-rgb:37,156,255; --intelligence-core-edge-rgb:66,196,255; --intelligence-core-front-rgb:238,252,255; --intelligence-core-back-rgb:103,232,249; --intelligence-core-accent-rgb:255,169,77; --intelligence-core-glow-alpha:.42; }
+html[data-creator-brand] .creator-core-hero::before { content:""; position:absolute; top:.25rem; left:50%; width:9rem; height:7rem; transform:translateX(-50%); border-radius:999px; background:radial-gradient(circle at 50% 43%,rgb(80 205 255 / .28),rgb(37 156 255 / .12) 34%,transparent 68%); filter:blur(8px); pointer-events:none; }
+html[data-creator-brand] .creator-core-hero canvas { position:relative; z-index:1; transform:scale(1.34); transform-origin:center; margin-top:.4rem; margin-bottom:.65rem; filter:drop-shadow(0 0 10px rgb(64 190 255 / .56)) drop-shadow(0 0 22px rgb(37 156 255 / .26)); }
+html[data-creator-brand] .creator-core-hero > div { position:relative; z-index:2; text-align:center; }
+html[data-creator-brand] .creator-core-hero span { display:block; color:#fff7ef; font-size:.86rem; font-weight:700; line-height:1.15; letter-spacing:-.015em; }
+html[data-creator-brand] .creator-core-hero strong { display:block; margin-top:.22rem; color:#7dd3fc; font-size:.76rem; font-weight:800; letter-spacing:.12em; line-height:1; text-transform:uppercase; }
+html[data-creator-brand] .creator-dashboard-shell .dashboard-main::before,
+html[data-creator-brand] .creator-dashboard-shell .dashboard-main::after { background:none; }
+/* Fan drill-through is not part of the creator workspace. Server guards deny it too. */
+.creator-dashboard-shell a[href^="/users"], .creator-dashboard-shell a[href^="/clones/"] { pointer-events:none; text-decoration:none; color:inherit; cursor:default; }
