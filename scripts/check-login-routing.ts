@@ -66,8 +66,17 @@ async function main() {
   const layout = readFileSync("app/layout.tsx","utf8");
   assert.match(layout,/isTwinLoginPath\(pathname\) \? undefined/);
   assert.match(layout,/if \(isTwinLoginPath\(pathname\) \|\|/);
-  assert.match(readFileSync("app/link/page.tsx","utf8"), /agencyName="Link"/);
-  assert.match(readFileSync("app/link/page.tsx","utf8"), /action="\/link\/auth"/);
+  // Link and LYNQ now share the approved dashboard branding, but keep their
+  // own public route title and authentication endpoint.
+  const linkPage = readFileSync("app/link/page.tsx","utf8");
+  const lynqPage = readFileSync("app/lynq/page.tsx","utf8");
+  const loginShell = readFileSync("app/lynq/LoginShell.tsx","utf8");
+  assert.match(linkPage, /Sign in · Link/);
+  assert.match(linkPage, /<LoginShell>/);
+  assert.match(lynqPage, /<LoginShell>/);
+  assert.match(loginShell, /<TwinWordmark agencyName="LYNQ"/);
+  assert.match(loginShell, /data-lynq-login="light"/);
+  assert.match(linkPage, /action="\/link\/auth"/);
   assert.match(readFileSync("app/moxy/page.tsx","utf8"), /Moxy/);
   console.log("Login routing passed: Twin root/twin, stale partner cookies, Link/LYNQ aliases, Moxy branding, authentication and action isolation");
 }
