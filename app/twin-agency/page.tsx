@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import MarketingSite from "./MarketingSite";
+import AccountLinkBridge from "./AccountLinkBridge";
 import "./live.css";
 
 export const metadata: Metadata = {
@@ -8,7 +9,11 @@ export const metadata: Metadata = {
   robots: { index: false, follow: false },
 };
 
-// Phase one mirrors the live Twin Agency homepage. Creator auth stays deferred.
 export default function TwinAgencyPage() {
-  return <MarketingSite />;
+  return (
+    <>
+      <AccountLinkBridge />
+      <MarketingSite />
+    </>
+  );
 }
