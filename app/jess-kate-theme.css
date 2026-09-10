@@ -1,3 +1,5 @@
+@import "./lynq-theme.css";
+
 /* Jess and Kate AI: ivory and cherry, presentation only.
    RootLayout sets this attribute for this partner's login or verified session.
    Keeping it on <html> also themes body-portalled menus and mobile navigation.
