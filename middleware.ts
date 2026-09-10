@@ -40,8 +40,10 @@ export async function middleware(req: NextRequest) {
     response.headers.set("X-Robots-Tag", "noindex, nofollow");
     return response;
   }
-  // Auth form handlers independently verify their own credentials or creator
-  // session. Never infer creator privileges from an agency login.
+  // Keep the concurrent main-branch logout recovery fix: external browsers
+  // landing here must be able to clear a stale creator cookie using GET.
+  if (pathname === "/creator-auth/logout" && ["GET", "HEAD"].includes(req.method) && !req.headers.has("next-action")) return privateResponse(withPathname(req));
+  // Auth handlers independently verify their credentials/creator session.
   if (isCreatorAuthPath(pathname)) {
     if (req.method !== "POST" || req.headers.has("next-action") || !trustedFormOrigin(req)) return new NextResponse("Forbidden", { status: 403 });
     return privateResponse(withPathname(req));
@@ -50,9 +52,7 @@ export async function middleware(req: NextRequest) {
     if (!["GET", "HEAD"].includes(req.method) || req.headers.has("next-action")) return new NextResponse("Forbidden", { status: 403 });
     let creator = null;
     try { creator = await verifyCreatorSession(req.cookies.get(CREATOR_SESSION_COOKIE)?.value); } catch { /* malformed cookies cannot authenticate */ }
-    if (creator && ["/creator/login", "/creator/signup"].includes(pathname)) {
-      return privateResponse(NextResponse.redirect(new URL(safeCreatorNext(req.nextUrl.searchParams.get("next")), dashboardOrigin(req))));
-    }
+    if (creator && ["/creator/login", "/creator/signup"].includes(pathname)) return privateResponse(NextResponse.redirect(new URL(safeCreatorNext(req.nextUrl.searchParams.get("next")), dashboardOrigin(req))));
     return privateResponse(withPathname(req));
   }
   if (isCreatorPath(pathname)) {
@@ -87,9 +87,8 @@ export async function middleware(req: NextRequest) {
     if (!agencyRequestAllowed(pathname, req.method, req.headers.has("next-action"))) return new NextResponse("Read-only agency portal", { status: 403 });
     return privateResponse(withPathname(req));
   }
-  // The shared revenue/media widgets use the live dashboard APIs. Select their
-  // audience using page context, then verify DB ownership, not a submitted ID.
-  // A referrer never grants access; a valid creator cookie is always required.
+  // Shared earnings/media widgets use existing live APIs. Page context selects
+  // the audience only; a verified current creator account is always required.
   const creatorToken = req.cookies.get(CREATOR_SESSION_COOKIE)?.value;
   const useCreator = creatorReferrer(req) || (!!creatorToken && !req.cookies.has(AGENCY_COOKIE) && !req.cookies.has(SESSION_COOKIE));
   if (useCreator) {
@@ -125,8 +124,7 @@ export async function middleware(req: NextRequest) {
   const authed = await verifySessionToken(token);
   if (!authed) {
     if (req.cookies.get(AGENCY_PORTAL_COOKIE)?.value === "moxy") return NextResponse.redirect(new URL("/moxy", dashboardOrigin(req)));
-    const url = new URL("/twin", dashboardOrigin(req));
-    url.searchParams.set("next", pathname);
+    const url = new URL("/twin", dashboardOrigin(req)); url.searchParams.set("next", pathname);
     return NextResponse.redirect(url);
   }
   return withPathname(req);

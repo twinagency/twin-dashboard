@@ -27,3 +27,14 @@ jobs:
         run: npm run test:offline
       - name: Production build
         run: npm run build
+      - name: Install browser
+        run: npx playwright install chromium
+      - name: Real earnings, mobile navigation, animated core and locked identity tabs
+        run: node scripts/check-creator-ui.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: creator-workspace-verification
+          path: test-results/creator-workspace
+          retention-days: 3
+          if-no-files-found: ignore

@@ -26,7 +26,7 @@ export async function POST(req: NextRequest) {
     const result = await db.from("clones").update({ ...patch, updated_at: new Date().toISOString() }).eq("id", id).eq("updated_at", revision).select("id").maybeSingle();
     if (result.error) return reply({ error: "Identity could not be saved. Check the entered values." }, 400);
     if (!result.data) return reply({ error: "Your identity changed in another window. Refresh before saving." }, 409);
-    invalidateCloneCaches(id);
+    invalidateCloneCaches();
     revalidatePath("/creator/edit"); revalidatePath("/creator"); revalidatePath(`/clones/${id}`);
     return reply({ ok: true });
   } catch (error) {

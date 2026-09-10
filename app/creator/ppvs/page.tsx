@@ -21,10 +21,9 @@ export default async function CreatorPpvsPage() {
   const id = creator.cloneIds[0];
   if (!id) return <CreatorMediaLibrary items={[]} />;
   const items = await withDashboardAccess(creator, async () => {
-    const columns = "id,storage_path,caption,teaser_caption,star_value,is_free,created_at";
     const [photos, videos, bundles] = await Promise.all([
-      allRows<DbMedia>((start, end) => supabaseAdmin.from("photos").select(columns + ",image_name").eq("clone_id", id).order("created_at", { ascending: false }).order("id").range(start, end)),
-      allRows<DbMedia>((start, end) => supabaseAdmin.from("videos").select(columns).eq("clone_id", id).order("created_at", { ascending: false }).order("id").range(start, end)),
+      allRows<DbMedia>((start, end) => supabaseAdmin.from("photos").select("id,storage_path,caption,teaser_caption,star_value,is_free,created_at,image_name").eq("clone_id", id).order("created_at", { ascending: false }).order("id").range(start, end)),
+      allRows<DbMedia>((start, end) => supabaseAdmin.from("videos").select("id,storage_path,caption,teaser_caption,star_value,is_free,created_at").eq("clone_id", id).order("created_at", { ascending: false }).order("id").range(start, end)),
       allRows<DbBundle>((start, end) => supabaseAdmin.from("photo_bundles").select("id,name,caption,star_price,created_at,photo_bundle_items(storage_path,sort_order)").eq("clone_id", id).order("created_at", { ascending: false }).order("id").range(start, end)),
     ]);
     const map = (row: DbMedia, kind: "photo" | "video"): CreatorMediaItem => ({ id: row.id, kind, name: row.image_name || (kind === "photo" ? "Photo" : "Video"), caption: row.caption, teaser: row.teaser_caption, stars: row.is_free ? 0 : row.star_value, paths: [row.storage_path], createdAt: row.created_at });
