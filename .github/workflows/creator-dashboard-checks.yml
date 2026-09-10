@@ -4,9 +4,12 @@ on:
     paths:
       - 'app/creator/**'
       - 'app/creator-auth/identity/**'
+      - 'app/creator-dashboard.css'
+      - 'app/layout.tsx'
       - 'components/creator/**'
       - 'lib/creator-dashboard-*.ts'
       - 'lib/creator-identity-fields.ts'
+      - 'lib/creator-routing.ts'
       - 'middleware.ts'
       - 'scripts/check-creator-dashboard*.ts'
       - '.github/workflows/creator-dashboard-checks.yml'
@@ -15,9 +18,12 @@ on:
     paths:
       - 'app/creator/**'
       - 'app/creator-auth/identity/**'
+      - 'app/creator-dashboard.css'
+      - 'app/layout.tsx'
       - 'components/creator/**'
       - 'lib/creator-dashboard-*.ts'
       - 'lib/creator-identity-fields.ts'
+      - 'lib/creator-routing.ts'
       - 'middleware.ts'
       - 'scripts/check-creator-dashboard*.ts'
       - '.github/workflows/creator-dashboard-checks.yml'
@@ -36,6 +42,7 @@ jobs:
       - run: npm ci
       - run: npx tsc --noEmit
       - run: npx tsx scripts/check-creator-dashboard.ts
+      - run: npx tsx scripts/check-creator-dashboard-routing.ts
       - run: npm run build
       - run: npx playwright install --with-deps chromium
       - name: Isolated browser and API checks with fixture data
