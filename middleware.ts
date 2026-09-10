@@ -12,6 +12,7 @@ import { isCreatorAuthPath, isCreatorPath, isCreatorPublicPath, safeCreatorNext 
 import { isAgencyPath, agencyRequestAllowed, agencyDashboardPath, AGENCY_COOKIE } from "@/lib/agency-policy";
 import { creatorDashboardIdentity } from "@/lib/creator-dashboard-identity";
 import { CREATOR_AUDIENCE_HEADER, isCreatorDashboardPath, creatorApiAllowed, assertCreatorQuery, creatorDashboardAlias } from "@/lib/creator-dashboard-policy";
+import { creatorDemoQueryIds } from "@/lib/creator-demo-policy";
 
 function withPathname(req: NextRequest, creator = false): NextResponse {
   const headers = new Headers(req.headers);
@@ -40,10 +41,7 @@ export async function middleware(req: NextRequest) {
     response.headers.set("X-Robots-Tag", "noindex, nofollow");
     return response;
   }
-  // Keep the concurrent main-branch logout recovery fix: external browsers
-  // landing here must be able to clear a stale creator cookie using GET.
   if (pathname === "/creator-auth/logout" && ["GET", "HEAD"].includes(req.method) && !req.headers.has("next-action")) return privateResponse(withPathname(req));
-  // Auth handlers independently verify their credentials/creator session.
   if (isCreatorAuthPath(pathname)) {
     if (req.method !== "POST" || req.headers.has("next-action") || !trustedFormOrigin(req)) return new NextResponse("Forbidden", { status: 403 });
     return privateResponse(withPathname(req));
@@ -87,14 +85,13 @@ export async function middleware(req: NextRequest) {
     if (!agencyRequestAllowed(pathname, req.method, req.headers.has("next-action"))) return new NextResponse("Read-only agency portal", { status: 403 });
     return privateResponse(withPathname(req));
   }
-  // Shared earnings/media widgets use existing live APIs. Page context selects
-  // the audience only; a verified current creator account is always required.
   const creatorToken = req.cookies.get(CREATOR_SESSION_COOKIE)?.value;
   const useCreator = creatorReferrer(req) || (!!creatorToken && !req.cookies.has(AGENCY_COOKIE) && !req.cookies.has(SESSION_COOKIE));
   if (useCreator) {
     const creator = await creatorDashboardIdentity(creatorToken);
     if (!creator || !creator.onboarded) return privateResponse(NextResponse.json({ error: "Creator access unavailable. Please sign in again." }, { status: 403 }));
-    try { assertCreatorQuery(req.nextUrl.searchParams, creator.cloneIds); } catch { return new NextResponse("Creator access denied", { status: 403 }); }
+    // Demo query IDs are only valid for this account's synthetic earnings API.
+    try { assertCreatorQuery(req.nextUrl.searchParams, creatorDemoQueryIds(pathname, creator)); } catch { return new NextResponse("Creator access denied", { status: 403 }); }
     if (creatorApiAllowed(pathname, req.method, req.headers.has("next-action"))) return privateResponse(withPathname(req, true));
     if (["GET", "HEAD"].includes(req.method) && !req.headers.has("next-action")) {
       const alias = creatorDashboardAlias(pathname, req.nextUrl.searchParams, creator.cloneIds);
