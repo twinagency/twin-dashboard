@@ -114,6 +114,6 @@ export default function CreatorAuthFrame({
   );
 }
 
-export const tetherAuthInputClass = "w-full rounded-xl border border-white/10 bg-black/25 px-3.5 py-3 text-base text-white outline-none transition placeholder:text-white/25 focus:border-sky-300/60 focus-visible:ring-2 focus-visible:ring-sky-300/15";
+export const tetherAuthInputClass = "tether-auth-input w-full rounded-xl border border-white/20 bg-white px-3.5 py-3 text-base text-[#080a0e] caret-[#080a0e] shadow-[0_1px_0_rgba(255,255,255,0.08),0_8px_24px_rgba(0,0,0,0.14)] outline-none transition placeholder:text-[#667085] hover:border-white/35 focus:border-sky-300 focus:bg-white focus-visible:ring-2 focus-visible:ring-sky-300/25";
 export const tetherAuthButtonClass = "w-full rounded-xl bg-white px-4 py-3.5 text-sm font-semibold text-[#080a0e] shadow-[0_8px_30px_rgba(255,255,255,0.08)] transition hover:bg-sky-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-300 focus-visible:ring-offset-2 focus-visible:ring-offset-[#090b0f] disabled:cursor-not-allowed disabled:opacity-60";
 export const tetherAuthLinkClass = "font-medium text-sky-300 hover:text-sky-200 hover:underline";

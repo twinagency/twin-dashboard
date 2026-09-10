@@ -54,6 +54,9 @@ COPY --from=builder /app/package.json ./
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+# This exact, allowlisted one-time operation is invoked manually through SSM.
+# Keep it in the runtime image; the standalone Next.js copy excludes scripts/.
+COPY --from=builder --chown=nextjs:nodejs /app/scripts/reset-recent-creator-test-accounts.mjs ./scripts/reset-recent-creator-test-accounts.mjs
 
 USER nextjs
 EXPOSE 3001
