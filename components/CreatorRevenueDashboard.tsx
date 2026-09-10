@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Bar, BarChart, CartesianGrid, Cell, Line, LineChart, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts';
-import { DollarSign, ClipboardCheck, UserRound, LogOut, Menu, X, RefreshCw, Eye, ExternalLink, ChevronDown, Search, Download } from 'lucide-react';
+import { DollarSign, ClipboardCheck, LogOut, Menu, X, Eye, ExternalLink, ChevronDown, Search, Download } from 'lucide-react';
 import TwinWordmark from '@/components/TwinWordmark';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -92,7 +92,6 @@ export default function CreatorRevenueDashboard({ displayName, cloneName, connec
   const nav = <>
     <a href="#earnings" onClick={() => setMobileOpen(false)} className="flex items-center gap-4 rounded-[18px] border border-[#3657f5]/15 bg-gradient-to-r from-[#f3f4ff] to-[#fff1f4] px-5 py-4 text-[17px] font-semibold text-[#304bf4]"><DollarSign size={25} strokeWidth={1.8}/>Earnings</a>
     <a href="/creator/onboarding" onClick={() => setMobileOpen(false)} className="flex items-center gap-4 rounded-xl px-5 py-3.5 text-[16px] font-medium text-[#646575] hover:bg-[#f7f7fa]"><ClipboardCheck size={22} strokeWidth={1.8}/>Onboarding</a>
-    <a href="/creator/account" onClick={() => setMobileOpen(false)} className="flex items-center gap-4 rounded-xl px-5 py-3.5 text-[16px] font-medium text-[#646575] hover:bg-[#f7f7fa]"><UserRound size={22} strokeWidth={1.8}/>Account</a>
   </>;
 
   return <div className="min-h-screen bg-[#f8f8fb] text-[#17181d]" data-creator-brand="lynq">
