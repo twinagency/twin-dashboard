@@ -11,7 +11,7 @@ import { chromium } from 'playwright';
 const root=process.cwd(),out=path.join(root,'test-results/creator-workspace');
 mkdirSync(out,{recursive:true});
 const own='33333333-3333-4333-8333-333333333333';
-const stats={stars:22000,grossPaymentStars:22000,sales:6,newFans:18,activeUsers:15,totalFans:18,reachable24h:8,messages:120,buyers:3,repeatPct:33,costUsd:0,aiCalls:50,aiErrors:0};
+const stats={stars:22000,grossPaymentStars:22000,sales:6,newFans:18,activeUsers:15,totalFans:18,reachable24h:8,messages:120,buyers:3,repeatPct:1/3,costUsd:0,aiCalls:50,aiErrors:0};
 const funnel={fans:18,buyers:3,repeat:1,oneTime:2,threePlus:1,nonBuyers:15,totalPurchases:6,buyerPct:1/6,repeatPct:1/3,oneTimePct:2/3,avgPurchasesPerBuyer:2,avgStarsPerBuyer:22000/3,medianStarsPerBuyer:7000,repeatRevenueShare:.3};
 const source=readFileSync('components/RevenueDashboard.tsx','utf8');
 const signals=Object.fromEntries([...source.matchAll(/\bf\.([A-Za-z0-9_]+)/g)].map(match=>[match[1],0]));
@@ -60,7 +60,7 @@ try{
   const page=await browser.newPage({viewport:{width,height:1000},colorScheme:'light'});const errors=[];page.on('pageerror',error=>{errors.push(error.message);console.error('Browser runtime error:',error.stack)});
   try {
    await page.goto(origin+'/creator',{waitUntil:'networkidle'});
-   await page.getByRole('heading',{name:'Earnings overview',exact:true}).waitFor();
+   await page.getByRole('heading',{name:/^Earnings overview/}).waitFor();
    await page.locator('.recharts-wrapper').first().waitFor();
    assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'No horizontal document overflow');
    await page.getByRole('button',{name:'1W',exact:true}).click();await page.waitForTimeout(180);
