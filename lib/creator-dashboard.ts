@@ -1,0 +1,15 @@
+import { cache } from "react";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import { CREATOR_SESSION_COOKIE } from "./creator-session";
+import { creatorDashboardIdentity } from "./creator-dashboard-identity";
+
+export const getCreatorWorkspace = cache(async () => {
+  return creatorDashboardIdentity((await cookies()).get(CREATOR_SESSION_COOKIE)?.value);
+});
+export async function requireCreatorWorkspace() {
+  const identity = await getCreatorWorkspace();
+  if (!identity) redirect("/creator/login");
+  if (!identity.onboarded) redirect("/creator/onboarding");
+  return identity;
+}
