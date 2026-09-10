@@ -2,6 +2,7 @@
 // the verified membership in agency-identity.ts.
 import { PARTNER_PORTALS, portalForPath } from "./partner-portals";
 export const isMoxy = (name?: string) => name?.trim().toLowerCase() === "moxy";
+export const isLynq = (name?: string) => name?.trim().toLowerCase() === "lynq";
 export const AGENCY_PORTAL_COOKIE = "twin_agency_portal";
 export const portalLoginPath = (portal?: string) => PARTNER_PORTALS.find(p => p.slug === portal)?.loginPath ?? "/link";
 export const agencyLoginPath = (name?: string) => PARTNER_PORTALS.find(p => p.name.toLowerCase() === name?.trim().toLowerCase())?.loginPath ?? "/link";
