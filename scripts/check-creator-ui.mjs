@@ -31,7 +31,7 @@ const router={refresh(){},push(p){history.pushState({},'',p);dispatchEvent(new P
 export const useRouter=()=>router;
 `;
 const linkMock=`import React from 'react';export default function Link({children,href,onClick,...props}){return <a {...props} href={href} onClick={e=>{onClick?.(e);if(!e.defaultPrevented&&!e.metaKey&&!e.ctrlKey){e.preventDefault();history.pushState({},'',href);dispatchEvent(new PopStateEvent('popstate'));}}}>{children}</a>}`;
-const bundle=await build({stdin:{contents:fixture,resolveDir:root,sourcefile:'creator-ui-fixture.tsx',loader:'tsx'},bundle:true,write:false,format:'iife',platform:'browser',jsx:'automatic',alias:{'@':root},define:{'process.env.NODE_ENV':'"production"'},plugins:[{name:'local-navigation',setup(b){
+const bundle=await build({stdin:{contents:fixture,resolveDir:root,sourcefile:'creator-ui-fixture.tsx',loader:'tsx'},bundle:true,write:false,format:'iife',platform:'browser',jsx:'automatic',alias:{'@':root},define:{'process.env.NODE_ENV':'"production"'},banner:{js:'var process={env:{NODE_ENV:"production"},browser:true};'},plugins:[{name:'local-navigation',setup(b){
  b.onResolve({filter:/^(next\/link|next\/navigation)$|(?:^|\/)TwinAssistant(?:\.tsx)?$/},args=>({path:args.path,namespace:'fixture'}));
  b.onLoad({filter:/.*/,namespace:'fixture'},args=>({loader:'jsx',resolveDir:root,contents:args.path.includes('TwinAssistant')?'export default function Assistant(){return null}':args.path==='next/link'?linkMock:navigationMock}));
 }}]});
@@ -57,7 +57,7 @@ const browser=await chromium.launch({headless:true});
 const evidence=[];
 try{
  for(const width of [390,1440]){
-  const page=await browser.newPage({viewport:{width,height:1000},colorScheme:'light'});const errors=[];page.on('pageerror',error=>{errors.push(error.message);console.error('Browser runtime error:',error.message)});
+  const page=await browser.newPage({viewport:{width,height:1000},colorScheme:'light'});const errors=[];page.on('pageerror',error=>{errors.push(error.message);console.error('Browser runtime error:',error.stack)});
   try {
    await page.goto(origin+'/creator',{waitUntil:'networkidle'});
    await page.getByRole('heading',{name:'Earnings overview',exact:true}).waitFor();
