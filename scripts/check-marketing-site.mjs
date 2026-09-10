@@ -31,11 +31,25 @@ try{
     assert.equal(await page.getByText('Amber',{exact:true}).count(),1); assert.equal(await page.getByText('Mia',{exact:true}).count(),1); assert.equal(await page.getByText('Sasha',{exact:true}).count(),1);
     const globe=page.getByRole('heading',{name:'Fans paying right now across the globe',exact:true}); await globe.scrollIntoViewIfNeeded(); assert.ok(await globe.isVisible());
     assert.ok((await page.getByText('Tokyo',{exact:true}).count())>0); assert.ok((await page.getByText('Dubai',{exact:true}).count())>0); assert.ok(await page.getByText(/fans paying now/).isVisible());
-    await page.getByRole('button',{name:'Sign up',exact:true}).click(); assert.ok(await page.getByRole('dialog').isVisible()); assert.ok(await page.getByRole('heading',{name:'Creator signup is next.',exact:true}).isVisible()); assert.equal(await page.getByRole('dialog').locator('input,form').count(),0); await page.keyboard.press('Escape');
-    if(width>=640){await page.getByRole('button',{name:'Sign in',exact:true}).click();assert.ok(await page.getByRole('heading',{name:'Creator login is next.',exact:true}).isVisible());await page.keyboard.press('Escape')}
+    // AccountLinkBridge now opens real creator auth pages. The retired
+    // phase-two modal is no longer the expected behaviour. Do not submit forms.
+    await Promise.all([page.waitForURL(local+'/creator/signup'),page.getByRole('button',{name:'Sign up',exact:true}).click()]);
+    await page.locator('form[action="/creator-auth/signup"]').waitFor();
+    assert.equal(await page.locator('input[name="email"]').count(),1);
+    assert.equal(await page.locator('input[name="password"]').count(),1);
+    assert.equal(await page.locator('.dashboard-sidebar').count(),0);
+    await page.goto(local+'/twin-agency',{waitUntil:'networkidle'});
+    if(width>=640){
+      await Promise.all([page.waitForURL(local+'/creator/login'),page.getByRole('button',{name:'Sign in',exact:true}).click()]);
+      await page.locator('form[action="/creator-auth/login"]').waitFor();
+      assert.equal(await page.locator('input[name="email"]').count(),1);
+      assert.equal(await page.locator('input[name="password"]').count(),1);
+      assert.equal(await page.locator('.dashboard-sidebar').count(),0);
+      await page.goto(local+'/twin-agency',{waitUntil:'networkidle'});
+    }
     await page.screenshot({path:`test-results/twin-public/${name}.png`,fullPage:true}); await page.screenshot({path:`test-results/twin-public/${name}-top.png`});
     await globe.scrollIntoViewIfNeeded(); await page.screenshot({path:`test-results/twin-public/${name}-globe.png`});
-    if(name==='desktop')await writeFile('test-results/twin-public/rendered.html',await page.content()); report.viewports.push({name,width,height,liveHero:true,telegramPhones:true,globe:true,phaseTwoDialog:true,horizontalOverflow:false}); await context.close();
+    if(name==='desktop')await writeFile('test-results/twin-public/rendered.html',await page.content()); report.viewports.push({name,width,height,liveHero:true,telegramPhones:true,globe:true,creatorAuthNavigation:true,horizontalOverflow:false}); await context.close();
   }
-  assert.deepEqual(report.pageErrors,[]); assert.deepEqual(report.backendRequests,[],'Marketing interactions must not access backend APIs or write data'); await writeFile('test-results/twin-public/report.json',JSON.stringify(report,null,2)); console.log('Exact live Twin Agency port checks passed: hero/marquee, three animated phones, rotating globe markers/counters, responsive layouts, phase-two auth notice, no private API traffic.');
+  assert.deepEqual(report.pageErrors,[]); assert.deepEqual(report.backendRequests,[],'Marketing and auth navigation must not access private APIs or submit account data'); await writeFile('test-results/twin-public/report.json',JSON.stringify(report,null,2)); console.log('Exact live Twin Agency port checks passed: hero/marquee, three animated phones, rotating globe markers/counters, responsive layouts, real creator auth links, no private API traffic.');
 }catch(error){console.error(error,output);process.exitCode=1}finally{if(browser)await browser.close();server.kill('SIGTERM');setTimeout(()=>server.kill('SIGKILL'),5000).unref()}
