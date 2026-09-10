@@ -34,6 +34,7 @@ const core = compile("components/IntelligenceCoreIcon.tsx");
 const wordmark = compile("components/TwinWordmark.tsx", {
   "@/lib/agency-brand": agencyBrand,
   "@/lib/partner-portals": portals,
+  "@/components/IntelligenceCoreIcon": core,
 });
 const components = compile("components/Sidebar.tsx", {
   "./DashboardAccessProvider": accessModule,
@@ -75,24 +76,30 @@ for (const [name, manage] of [["LYNQ", true], [undefined, false]] as const) {
   assert.match(html, />CRM</); assert.match(html, /aria-expanded="false"/);
   assert.doesNotMatch(html, /AI Intelligence Core|href="\/info"/);
 }
+const palette = readFileSync("app/lynq-theme.css", "utf8");
+assert.match(palette, /html\[data-brand-theme="lynq-light"\]/);
+assert.match(palette, /color-scheme: light/);
+assert.match(palette, /--color-panel: #ffffff/);
+assert.match(palette, /--lynq-orange: #ff8b35/);
+assert.match(palette, /--lynq-pink: #e94b9c/);
+assert.match(palette, /--lynq-blue: #293bea/);
+assert.doesNotMatch(palette, /html:has\(|content:\s*"AI Intelligence Core"|conic-gradient|lynq-orb-float|#090b12|#0f1320/, "Delete the competing dark stylesheet and generated sphere, not the real canvas");
+assert.doesNotMatch(palette, /--color-good:/, "Financial status colours remain unchanged");
+assert.doesNotMatch(readFileSync("components/DashboardAccessProvider.tsx", "utf8"), /const LYNQ_CSS|<style/, "Exactly one stylesheet owns the palette");
 for (const mobile of [false, true]) {
   for (const manage of [false, true]) {
     const lynq = render("LYNQ", manage, clone, mobile);
     assert.match(lynq, /aria-label="LYNQ"/);
-    assert.doesNotMatch(lynq, /<canvas|lynq-ai-orb|AI Intelligence Core|lynq-cyan/, "LYNQ has no decorative globe or old cyan theme");
-    assert.match(lynq, /html\[data-brand-theme="lynq-light"\]/);
-    assert.match(lynq, /color-scheme: light/);
-    assert.match(lynq, /--color-panel: #ffffff/);
-    assert.match(lynq, /--lynq-orange: #ff8b35/);
-    assert.match(lynq, /--lynq-pink: #e94b9c/);
-    assert.match(lynq, /--lynq-blue: #293bea/);
-    assert.doesNotMatch(lynq, /--color-good:/, "Financial status colours are not redefined by branding");
+    assert.match(lynq, /data-lynq-core="particles"/);
+    assert.equal((lynq.match(/<canvas/g) || []).length, 1, "Keep one original compact particle canvas in the wordmark");
+    assert.match(lynq, /style="width:48px;height:48px"/);
+    assert.doesNotMatch(lynq, /AI Intelligence Core|lynq-cyan/, "No separate large sphere hero");
     assert.ok(lynq.includes('href="/revenue"'));
     assert.ok(lynq.includes('href="/users"'));
   }
 }
 for (const name of [undefined, "Moxy", portals.JESS_KATE_PORTAL.name]) {
-  assert.doesNotMatch(render(name), /lynq-light|--lynq-orange/, "LYNQ styles never leak into another portal");
+  assert.doesNotMatch(render(name), /data-lynq-core|lynq-light|--lynq-orange/, "LYNQ branding never leaks into another portal");
 }
 assert.match(readFileSync("app/layout.tsx", "utf8"), /data-brand-theme=\{isLynq\(agency\?\.name\) \? "lynq-light"/, "Verified LYNQ branding is applied during server render");
 assert.match(render(undefined), /href="\/clones\/new"/);
@@ -100,4 +107,4 @@ assert.match(render(portals.JESS_KATE_PORTAL.name, true, null), /Pick a creator 
 pathname = `/clones/${clone}`; query = new URLSearchParams("tab=identity");
 assert.match(render(portals.JESS_KATE_PORTAL.name, true), /href="[^\"]+tab=identity"[^>]*bg-white\/12/);
 assert.match(readFileSync("components/MobileMenu.tsx", "utf8"), /<SidebarContent/);
-console.log("Sidebar: LYNQ light palette and no globes, mobile/desktop parity, Kate and Moxy branding and permissions preserved");
+console.log("Sidebar: original LYNQ particle core retained, fake sphere and dark overrides removed, mobile/desktop and other portals preserved");
