@@ -1,24 +1,26 @@
+export type CreatorPortal = "twin" | "tether" | "link";
+export const CREATOR_PORTAL_COOKIE = "creator_portal";
 export const TETHER_CREATOR_LOGIN_PATH = "/creator/tether/login";
 export const TETHER_CREATOR_SIGNUP_PATH = "/creator/tether/signup";
+export const LINK_CREATOR_LOGIN_PATH = "/creator/link/login";
+export const LINK_CREATOR_SIGNUP_PATH = "/creator/link/signup";
 
-export function isCreatorPublicPath(pathname: string | null | undefined): boolean {
-  return [
-    "/creator/login",
-    "/creator/signup",
-    "/creator/forgot-password",
-    "/creator/reset-password",
-    TETHER_CREATOR_LOGIN_PATH,
-    TETHER_CREATOR_SIGNUP_PATH,
-    "/creator/tether/forgot-password",
-    "/creator/tether/reset-password",
-  ].includes(pathname || "");
+// Presentation only. These values never select a creator, clone or permissions.
+export function creatorPortal(value: unknown): CreatorPortal {
+  return value === "link" || value === "lynq" ? "link" : value === "tether" ? "tether" : "twin";
 }
-
-// Brand selection only controls public presentation and redirect destinations.
-// Creator authority still comes exclusively from the signed session plus the
-// server-owned account, agency-assignment and clone-link rows.
-export function creatorPublicPortal(pathname: string | null | undefined): "tether" | "twin" {
-  return pathname?.startsWith("/creator/tether/") ? "tether" : "twin";
+export function creatorAuthPath(portal: CreatorPortal, page: "login" | "signup" | "forgot-password" | "reset-password"): string {
+  return `${portal === "twin" ? "/creator" : `/creator/${portal}`}/${page}`;
+}
+export function creatorPortalCookieOptions() {
+  return { httpOnly: true, secure: process.env.NODE_ENV === "production", sameSite: "lax" as const, path: "/", maxAge: 60 * 60 * 24 * 30 };
+}
+export function isCreatorPublicPath(pathname: string | null | undefined): boolean {
+  return pathname === "/creator/link" || (["twin", "tether", "link"] as const).some(portal =>
+    (["login", "signup", "forgot-password", "reset-password"] as const).some(page => creatorAuthPath(portal, page) === pathname));
+}
+export function creatorPublicPortal(pathname: string | null | undefined): CreatorPortal {
+  return pathname === "/creator/link" || pathname?.startsWith("/creator/link/") ? "link" : pathname?.startsWith("/creator/tether/") ? "tether" : "twin";
 }
 export function isCreatorAuthPath(pathname: string | null | undefined): boolean {
   return !!pathname && pathname.startsWith("/creator-auth/");

@@ -28,71 +28,44 @@ import { cn } from "@/lib/utils";
 import { creatorPublicPortal, isCreatorPath, isCreatorPublicPath } from "@/lib/creator-routing";
 import { isCreatorDashboardPath } from "@/lib/creator-dashboard-policy";
 import { getCreatorWorkspace } from "@/lib/creator-dashboard";
-
 const inter = Inter({subsets:['latin'],variable:'--font-sans'});
 const plexMono = Inter({subsets:['latin'],variable:'--font-mono'});
 const spaceGrotesk = Space_Grotesk({subsets:['latin'],variable:'--font-heading'});
 const interTight = Inter_Tight({subsets:['latin'],variable:'--font-display'});
 const fontClass = cn("font-sans", inter.variable, plexMono.variable, spaceGrotesk.variable, interTight.variable);
-
 export async function generateMetadata(): Promise<Metadata> {
   const pathname = (await headers()).get("x-pathname");
   if (isCreatorPath(pathname)) return {
-    title: creatorPublicPortal(pathname) === "tether" ? "Tether creator workspace" : "Creator dashboard",
-    description: creatorPublicPortal(pathname) === "tether" ? "Private Tether creator access" : "Your creator workspace",
+    title: creatorPublicPortal(pathname) === "link" ? "LYNQ creator workspace" : creatorPublicPortal(pathname) === "tether" ? "Tether creator workspace" : "Creator dashboard",
+    description: creatorPublicPortal(pathname) === "link" ? "Your LYNQ creator account, onboarding and dashboard" : creatorPublicPortal(pathname) === "tether" ? "Private Tether creator access" : "Your creator workspace",
     robots: { index: false, follow: false },
-    icons: { icon: { url: "/icon.png", type: "image/png" } },
+    icons: { icon: { url: creatorPublicPortal(pathname) === "link" ? "/agency/icon.svg" : "/icon.png" } },
   };
-  if (isMarketingPath(pathname)) return {
-    title: "Twin Agency", description: "Your audience. Your AI twin.", robots: { index: false, follow: false },
-    icons: { icon: { url: "/icon.png", type: "image/png" } },
-  };
+  if (isMarketingPath(pathname)) return { title: "Twin Agency", description: "Your audience. Your AI twin.", robots: { index: false, follow: false }, icons: { icon: { url: "/icon.png", type: "image/png" } } };
   const agencyName = pathname && isAgencyPath(pathname) ? pathAgencyName(pathname) : isTwinLoginPath(pathname) ? undefined : (await getDashboardAccess())?.name;
-  return agencyName ? {
-    title: `${agencyName} Dashboard`, description: `${agencyName} creator dashboard`,
-    icons: { icon: { url: isMoxy(agencyName) ? "/moxy/icon.svg" : "/agency/icon.svg", type: "image/svg+xml" } },
-  } : { title: "Twin Console", description: "Intelligence infrastructure operations console", icons: { icon: { url: "/icon.png", type: "image/png" } } };
+  return agencyName ? { title: `${agencyName} Dashboard`, description: `${agencyName} creator dashboard`, icons: { icon: { url: isMoxy(agencyName) ? "/moxy/icon.svg" : "/agency/icon.svg", type: "image/svg+xml" } } } : { title: "Twin Console", description: "Intelligence infrastructure operations console", icons: { icon: { url: "/icon.png", type: "image/png" } } };
 }
-
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const pathname = (await headers()).get("x-pathname");
-  // Creator pages never mount the operator shell or fetch its fleet/version.
-  // The dedicated creator layout supplies the same earnings geometry with a
-  // fixed, verified creator identity. Login/onboarding remain standalone.
+  // Public branding is chosen by the dedicated URL. Private workspace branding
+  // and all access still come from the verified account, never the brand cookie.
   if (isCreatorPath(pathname)) {
     const creator = !isCreatorPublicPath(pathname) ? await getCreatorWorkspace() : null;
-    const theme = isLynq(creator?.name) ? "lynq-light" : creator?.name === JESS_KATE_PORTAL.name ? "ivory-cherry" : undefined;
-    return <html lang="en" data-creator-workspace={isCreatorDashboardPath(pathname) ? "true" : undefined} data-brand-theme={theme} data-agency={isLynq(creator?.name) ? "lynq" : isMoxy(creator?.name) ? "moxy" : undefined} className={fontClass} style={{colorScheme:"light"}} suppressHydrationWarning><body className="min-h-screen bg-bg"><script dangerouslySetInnerHTML={{__html:'try{if(localStorage.getItem("blurMedia")==="true")document.documentElement.classList.add("blur-media")}catch(e){}'}} />{children}</body></html>;
+    const linkPublic = isCreatorPublicPath(pathname) && creatorPublicPortal(pathname) === "link";
+    const theme = linkPublic || isLynq(creator?.name) ? "lynq-light" : creator?.name === JESS_KATE_PORTAL.name ? "ivory-cherry" : undefined;
+    return <html lang="en" data-creator-workspace={isCreatorDashboardPath(pathname) ? "true" : undefined} data-brand-theme={theme} data-agency={linkPublic || isLynq(creator?.name) ? "lynq" : isMoxy(creator?.name) ? "moxy" : undefined} className={fontClass} style={{colorScheme:"light"}} suppressHydrationWarning><body className="min-h-screen bg-bg"><script dangerouslySetInnerHTML={{__html:'try{if(localStorage.getItem("blurMedia")==="true")document.documentElement.classList.add("blur-media")}catch(e){}'}} />{children}</body></html>;
   }
   if (isMarketingPath(pathname)) return <html lang="en" className={fontClass}><body>{children}</body></html>;
-  if (isTwinLoginPath(pathname) || (pathname && isAgencyPath(pathname))) {
-    return <html lang="en" data-agency={pathname && isAgencyPath(pathname) && isMoxy(pathAgencyName(pathname)) ? "moxy" : undefined} data-brand-theme={pathname && isAgencyPath(pathname) && pathAgencyName(pathname) === JESS_KATE_PORTAL.name ? "ivory-cherry" : undefined} className={fontClass}><body className="min-h-screen bg-bg">{children}</body></html>;
-  }
+  if (isTwinLoginPath(pathname) || (pathname && isAgencyPath(pathname))) return <html lang="en" data-agency={pathname && isAgencyPath(pathname) && isMoxy(pathAgencyName(pathname)) ? "moxy" : undefined} data-brand-theme={pathname && isAgencyPath(pathname) && pathAgencyName(pathname) === JESS_KATE_PORTAL.name ? "ivory-cherry" : undefined} className={fontClass}><body className="min-h-screen bg-bg">{children}</body></html>;
   const devBypass = !isTwinLoginPath(pathname) && process.env.NODE_ENV !== "production";
   const agency = await getDashboardAccess();
   const authed = !!agency || devBypass || await isAuthed();
   if (!authed) return <html lang="en" className={fontClass} style={{colorScheme:"light"}} suppressHydrationWarning><body className="min-h-screen bg-bg">{children}</body></html>;
-  const [twinVersion, clones, activeCloneId] = await Promise.all([
-    agency ? Promise.resolve(null) : getCachedTwinVersion(), getFleetClones(), getCloneScope(),
-  ]);
+  const [twinVersion, clones, activeCloneId] = await Promise.all([agency ? Promise.resolve(null) : getCachedTwinVersion(), getFleetClones(), getCloneScope()]);
   const allTimeStars = await getHeaderAllTimeStars(activeCloneId);
-  // Path-dependent navigation stays in client components, not frozen here.
   return <html lang="en" data-agency={isMoxy(agency?.name) ? "moxy" : isLynq(agency?.name) ? "lynq" : undefined} data-brand-theme={isLynq(agency?.name) ? "lynq-light" : agency?.name === JESS_KATE_PORTAL.name ? "ivory-cherry" : undefined} className={fontClass} style={{ colorScheme: "light" }} suppressHydrationWarning>
-    <body className="min-h-screen bg-bg">
-      <script dangerouslySetInnerHTML={{__html:'try{if(localStorage.getItem("blurMedia")==="true")document.documentElement.classList.add("blur-media")}catch(e){}'}} />
-      <DashboardAccessProvider agencyName={agency?.name} canManage={agencyCanManage(agency)}><CurrencyProvider><BlurProvider>
-        <div className="flex h-screen">
-          <Sidebar clones={clones} activeCloneId={activeCloneId} />
-          <div className="flex h-screen min-w-0 flex-1 flex-col overflow-hidden">
-            <header className="dashboard-mobile-header flex shrink-0 items-center justify-between border-b border-white/12 px-4 py-3 lg:hidden">
-              <Link href="/revenue" aria-label={agency?.name || "Twin Technologies"}><TwinWordmark inverse agencyName={agency?.name} /></Link>
-              <div className="flex items-center gap-1">{agency && <form action="/agency/logout" method="post"><button type="submit" className="rounded-lg px-3 py-2 text-sm font-medium text-white/80 hover:bg-white/10">Sign out</button></form>}<MobileMenu activeCloneId={activeCloneId} /></div>
-            </header>
-            <TopBar clones={clones} activeCloneId={activeCloneId} allTimeStars={allTimeStars} /><MainShell>{children}</MainShell>
-          </div>
-        </div>
-        {!agency && <TwinUpdatePopup version={twinVersion?.version ?? null} name={twinVersion?.name ?? ""} summary={twinVersion?.summary ?? ""} changes={twinVersion?.changes ?? []} />}
-      </BlurProvider></CurrencyProvider></DashboardAccessProvider>
+    <body className="min-h-screen bg-bg"><script dangerouslySetInnerHTML={{__html:'try{if(localStorage.getItem("blurMedia")==="true")document.documentElement.classList.add("blur-media")}catch(e){}'}} />
+      <DashboardAccessProvider agencyName={agency?.name} canManage={agencyCanManage(agency)}><CurrencyProvider><BlurProvider><div className="flex h-screen"><Sidebar clones={clones} activeCloneId={activeCloneId} /><div className="flex h-screen min-w-0 flex-1 flex-col overflow-hidden"><header className="dashboard-mobile-header flex shrink-0 items-center justify-between border-b border-white/12 px-4 py-3 lg:hidden"><Link href="/revenue" aria-label={agency?.name || "Twin Technologies"}><TwinWordmark inverse agencyName={agency?.name} /></Link><div className="flex items-center gap-1">{agency && <form action="/agency/logout" method="post"><button type="submit" className="rounded-lg px-3 py-2 text-sm font-medium text-white/80 hover:bg-white/10">Sign out</button></form>}<MobileMenu activeCloneId={activeCloneId} /></div></header><TopBar clones={clones} activeCloneId={activeCloneId} allTimeStars={allTimeStars} /><MainShell>{children}</MainShell></div></div>{!agency && <TwinUpdatePopup version={twinVersion?.version ?? null} name={twinVersion?.name ?? ""} summary={twinVersion?.summary ?? ""} changes={twinVersion?.changes ?? []} />}</BlurProvider></CurrencyProvider></DashboardAccessProvider>
     </body>
   </html>;
 }

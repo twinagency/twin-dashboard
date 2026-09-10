@@ -8,38 +8,27 @@ import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/session";
 import { CREATOR_SESSION_COOKIE, verifyCreatorSession } from "@/lib/creator-session";
-import { isCreatorAuthPath, isCreatorPath, isCreatorPublicPath, safeCreatorNext } from "@/lib/creator-routing";
+import { isCreatorAuthPath, isCreatorPath, isCreatorPublicPath, safeCreatorNext, CREATOR_PORTAL_COOKIE, creatorPublicPortal, creatorPortal, creatorAuthPath, creatorPortalCookieOptions } from "@/lib/creator-routing";
 import { isAgencyPath, agencyRequestAllowed, agencyDashboardPath, AGENCY_COOKIE } from "@/lib/agency-policy";
 import { creatorDashboardIdentity } from "@/lib/creator-dashboard-identity";
 import { CREATOR_AUDIENCE_HEADER, isCreatorDashboardPath, creatorApiAllowed, assertCreatorQuery, creatorDashboardAlias } from "@/lib/creator-dashboard-policy";
 import { creatorDemoQueryIds } from "@/lib/creator-demo-policy";
-
 function withPathname(req: NextRequest, creator = false): NextResponse {
   const headers = new Headers(req.headers);
-  headers.delete(CREATOR_AUDIENCE_HEADER);
-  headers.set("x-pathname", req.nextUrl.pathname);
+  headers.delete(CREATOR_AUDIENCE_HEADER); headers.set("x-pathname", req.nextUrl.pathname);
   if (creator) headers.set(CREATOR_AUDIENCE_HEADER, "creator");
   return NextResponse.next({ request: { headers } });
 }
-function privateResponse(response: NextResponse): NextResponse {
-  response.headers.set("Cache-Control", "private, no-store");
-  return response;
-}
+function privateResponse(response: NextResponse): NextResponse { response.headers.set("Cache-Control", "private, no-store"); return response; }
 function creatorReferrer(req: NextRequest): boolean {
-  try {
-    const referrer = new URL(req.headers.get("referer") || "");
-    return referrer.origin === dashboardOrigin(req) && isCreatorPath(referrer.pathname);
-  } catch { return false; }
+  try { const referrer = new URL(req.headers.get("referer") || ""); return referrer.origin === dashboardOrigin(req) && isCreatorPath(referrer.pathname); } catch { return false; }
 }
 const SELF_AUTHENTICATED_PREFIXES = ["/api/v1/", "/api/admin/"];
-
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
   if (isMarketingPath(pathname)) {
     if (!["GET", "HEAD"].includes(req.method) || req.headers.has("next-action")) return new NextResponse("Forbidden", { status: 403 });
-    const response = privateResponse(withPathname(req));
-    response.headers.set("X-Robots-Tag", "noindex, nofollow");
-    return response;
+    const response = privateResponse(withPathname(req)); response.headers.set("X-Robots-Tag", "noindex, nofollow"); return response;
   }
   if (pathname === "/creator-auth/logout" && ["GET", "HEAD"].includes(req.method) && !req.headers.has("next-action")) return privateResponse(withPathname(req));
   if (isCreatorAuthPath(pathname)) {
@@ -48,6 +37,20 @@ export async function middleware(req: NextRequest) {
   }
   if (isCreatorPublicPath(pathname)) {
     if (!["GET", "HEAD"].includes(req.method) || req.headers.has("next-action")) return new NextResponse("Forbidden", { status: 403 });
+    const portal = creatorPublicPortal(pathname);
+    // Link's public entry stays branded even when the browser has a stale
+    // account cookie. Verify the current account, not only its old signature.
+    if (portal === "link") {
+      const token = req.cookies.get(CREATOR_SESSION_COOKIE)?.value;
+      const identity = token ? await creatorDashboardIdentity(token) : null;
+      let response = privateResponse(withPathname(req));
+      if (identity && (pathname.endsWith("/login") || pathname.endsWith("/signup"))) {
+        const destination = identity.onboarded ? safeCreatorNext(req.nextUrl.searchParams.get("next")) : "/creator/onboarding";
+        response = privateResponse(NextResponse.redirect(new URL(destination, dashboardOrigin(req))));
+      } else if (token && !identity) response.cookies.delete(CREATOR_SESSION_COOKIE);
+      response.cookies.set(CREATOR_PORTAL_COOKIE, "link", creatorPortalCookieOptions());
+      return response;
+    }
     let creator = null;
     try { creator = await verifyCreatorSession(req.cookies.get(CREATOR_SESSION_COOKIE)?.value); } catch { /* malformed cookies cannot authenticate */ }
     if (creator && (pathname.endsWith("/login") || pathname.endsWith("/signup"))) return privateResponse(NextResponse.redirect(new URL(safeCreatorNext(req.nextUrl.searchParams.get("next")), dashboardOrigin(req))));
@@ -58,11 +61,9 @@ export async function middleware(req: NextRequest) {
     if (!isCreatorDashboardPath(pathname) && pathname !== "/creator/onboarding") return new NextResponse("Creator page not found", { status: 404 });
     const creator = await creatorDashboardIdentity(req.cookies.get(CREATOR_SESSION_COOKIE)?.value);
     if (!creator) {
-      const url = new URL("/creator/login", dashboardOrigin(req));
+      const url = new URL(creatorAuthPath(creatorPortal(req.cookies.get(CREATOR_PORTAL_COOKIE)?.value), "login"), dashboardOrigin(req));
       url.searchParams.set("next", safeCreatorNext(pathname + req.nextUrl.search));
-      const response = privateResponse(NextResponse.redirect(url));
-      response.cookies.delete(CREATOR_SESSION_COOKIE);
-      return response;
+      const response = privateResponse(NextResponse.redirect(url)); response.cookies.delete(CREATOR_SESSION_COOKIE); return response;
     }
     try { assertCreatorQuery(req.nextUrl.searchParams, creator.cloneIds); } catch { return new NextResponse("Creator access denied", { status: 403 }); }
     if (isCreatorDashboardPath(pathname) && !creator.onboarded) return privateResponse(NextResponse.redirect(new URL("/creator/onboarding", dashboardOrigin(req))));
@@ -90,7 +91,6 @@ export async function middleware(req: NextRequest) {
   if (useCreator) {
     const creator = await creatorDashboardIdentity(creatorToken);
     if (!creator || !creator.onboarded) return privateResponse(NextResponse.json({ error: "Creator access unavailable. Please sign in again." }, { status: 403 }));
-    // Demo query IDs are only valid for this account's synthetic earnings API.
     try { assertCreatorQuery(req.nextUrl.searchParams, creatorDemoQueryIds(pathname, creator)); } catch { return new NextResponse("Creator access denied", { status: 403 }); }
     if (creatorApiAllowed(pathname, req.method, req.headers.has("next-action"))) return privateResponse(withPathname(req, true));
     if (["GET", "HEAD"].includes(req.method) && !req.headers.has("next-action")) {
@@ -104,8 +104,7 @@ export async function middleware(req: NextRequest) {
   if (agencyToken) {
     const identity = await agencyIdentity(agencyToken);
     if (!identity) return NextResponse.redirect(new URL(portalLoginPath(req.cookies.get(AGENCY_PORTAL_COOKIE)?.value),dashboardOrigin(req)));
-    const canManage = agencyCanManage(identity);
-    const serverAction = req.headers.has("next-action");
+    const canManage = agencyCanManage(identity); const serverAction = req.headers.has("next-action");
     const isWrite = serverAction || !["GET", "HEAD"].includes(req.method);
     if (isWrite && (!canManage || !agencyManagementRequestAllowed(pathname,req.method,serverAction))) return new NextResponse("Administrator access required", {status:403});
     if (isWrite && !trustedFormOrigin(req)) return new NextResponse("Untrusted request origin", {status:403});
@@ -117,12 +116,10 @@ export async function middleware(req: NextRequest) {
     return privateResponse(withPathname(req));
   }
   if (process.env.NODE_ENV !== "production") return withPathname(req);
-  const token = req.cookies.get(SESSION_COOKIE)?.value;
-  const authed = await verifySessionToken(token);
+  const token = req.cookies.get(SESSION_COOKIE)?.value; const authed = await verifySessionToken(token);
   if (!authed) {
     if (req.cookies.get(AGENCY_PORTAL_COOKIE)?.value === "moxy") return NextResponse.redirect(new URL("/moxy", dashboardOrigin(req)));
-    const url = new URL("/twin", dashboardOrigin(req)); url.searchParams.set("next", pathname);
-    return NextResponse.redirect(url);
+    const url = new URL("/twin", dashboardOrigin(req)); url.searchParams.set("next", pathname); return NextResponse.redirect(url);
   }
   return withPathname(req);
 }

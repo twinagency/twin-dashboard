@@ -1,0 +1,44 @@
+name: Link creator entry verification
+on:
+  push:
+    branches: [fix/link-creator-entry-flow]
+  pull_request:
+    branches: [main]
+    paths:
+      - 'lib/creator-routing.ts'
+      - 'app/creator/link/**'
+      - 'components/Creator*Screen.tsx'
+      - 'components/CreatorAuthFrame.tsx'
+      - 'app/creator-auth/**'
+      - 'scripts/check-link-creator-flow.mjs'
+      - '.github/workflows/link-creator-flow.yml'
+permissions:
+  contents: read
+concurrency:
+  group: link-creator-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 22, cache: npm}
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - name: Signup ownership, account preservation and redirect tests
+        run: node --import tsx scripts/check-link-creator-flow.mjs --unit
+      - name: Existing creator, demo and partner safeguards
+        run: npx tsx scripts/check-creator-workspace.ts && node --import tsx scripts/check-creator-demo.mjs && npm run test:offline
+      - run: npm run build
+        env: {NEXT_TELEMETRY_DISABLED: '1'}
+      - run: npx playwright install chromium
+      - name: Production Link signup, login and session-expiry screens
+        run: node --import tsx scripts/check-link-creator-flow.mjs --browser
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: link-creator-entry
+          path: test-results/link-creator-entry
+          if-no-files-found: ignore
+          retention-days: 3
