@@ -15,16 +15,16 @@ const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-
 const accountIds = new Set(TARGETS.map((target) => target.accountId));
 const authUserIds = new Set(TARGETS.map((target) => target.authUserId));
 
-assert.equal(TARGETS.length, 4, "operation must remain locked to four creator/auth pairs");
-assert.equal(accountIds.size, 4, "creator account IDs must be unique");
-assert.equal(authUserIds.size, 4, "auth user IDs must be unique");
+assert.equal(TARGETS.length, 3, "operation must remain locked to three creator/auth pairs");
+assert.equal(accountIds.size, 3, "creator account IDs must be unique");
+assert.equal(authUserIds.size, 3, "auth user IDs must be unique");
 for (const target of TARGETS) {
   assert.match(target.accountId, uuid);
   assert.match(target.authUserId, uuid);
 }
 
-assert.equal(STORAGE_OBJECTS.length, 6, "operation must remain locked to six Storage objects");
-assert.equal(new Set(STORAGE_OBJECTS.map((object) => `${object.bucket}/${object.path}`)).size, 6);
+assert.equal(STORAGE_OBJECTS.length, 5, "operation must remain locked to five Storage objects");
+assert.equal(new Set(STORAGE_OBJECTS.map((object) => `${object.bucket}/${object.path}`)).size, 5);
 for (const object of STORAGE_OBJECTS) {
   assert.ok(accountIds.has(object.accountId), "each Storage object must belong to an allowlisted account");
   assert.match(object.path, new RegExp(`^creators/${object.accountId}/`));
@@ -74,11 +74,9 @@ assert.match(dockerfile, /COPY --from=builder[^\n]+reset-recent-creator-test-acc
 
 const applicationIds = [
   "7a7d6196-b5c3-48cb-a3b9-591e2ddf84f6",
-  "c1318626-c3c7-4402-b32d-e06535d82af8",
 ];
 const consentIds = [
   "9951ad7a-0656-433d-986c-71dd0d756795",
-  "c6ca3489-e7fe-4106-abd6-879cdf1e1940",
 ];
 const fileIds = [
   "69610a53-163e-40ba-a134-1cafcfef35b7",
@@ -86,15 +84,17 @@ const fileIds = [
   "304246f2-59db-4bbd-b94d-fa1bc96645ee",
   "6c37209e-239f-4cf3-848b-4c5a7db0f8ac",
   "2c9d88b2-6a04-4e65-89a5-f5df91769c76",
-  "11e2e877-e478-4ef1-930d-487363a1cc17",
 ];
 for (const id of [...applicationIds, ...consentIds, ...fileIds]) {
   assert.match(id, uuid, "every destructive child-record allowlist entry must be a valid UUID");
 }
 const sentinel = Object.freeze({
-  accountId: "11111111-1111-4111-8111-111111111111",
-  authUserId: "22222222-2222-4222-8222-222222222222",
-  storageKey: "onboarding-content/creators/11111111-1111-4111-8111-111111111111/content/keep.png",
+  accountId: "36311e0c-3b1a-4aad-aa97-ed40e32cb31d",
+  authUserId: "70018ea2-81f1-4ff4-bdd2-439bc533df94",
+  applicationId: "c1318626-c3c7-4402-b32d-e06535d82af8",
+  consentId: "c6ca3489-e7fe-4106-abd6-879cdf1e1940",
+  fileId: "11e2e877-e478-4ef1-930d-487363a1cc17",
+  storageKey: "onboarding-content/creators/36311e0c-3b1a-4aad-aa97-ed40e32cb31d/content/1789070712346-ae5013fb-a20e-44b4-b684-6ca4792f6bd4-aaa.png",
 });
 
 function clone(value) {
@@ -119,21 +119,32 @@ function initialMockState() {
         created_at: "2026-09-01T00:00:00.000Z",
       },
     ],
-    creator_applications: applicationIds.map((id, index) => ({
-      id,
-      creator_account_id: TARGETS[index === 0 ? 0 : 3].accountId,
-    })),
-    creator_consents: consentIds.map((id, index) => ({
-      id,
-      creator_account_id: TARGETS[index === 0 ? 0 : 3].accountId,
-    })),
-    creator_files: STORAGE_OBJECTS.map((object, index) => ({
-      id: fileIds[index],
-      creator_account_id: object.accountId,
-      bucket: object.bucket,
-      storage_path: object.path,
-    })),
-    creator_onboarding_progress: TARGETS.map((target) => ({ creator_account_id: target.accountId })),
+    creator_applications: [
+      ...applicationIds.map((id) => ({ id, creator_account_id: TARGETS[2].accountId })),
+      { id: sentinel.applicationId, creator_account_id: sentinel.accountId },
+    ],
+    creator_consents: [
+      ...consentIds.map((id) => ({ id, creator_account_id: TARGETS[2].accountId })),
+      { id: sentinel.consentId, creator_account_id: sentinel.accountId },
+    ],
+    creator_files: [
+      ...STORAGE_OBJECTS.map((object, index) => ({
+        id: fileIds[index],
+        creator_account_id: object.accountId,
+        bucket: object.bucket,
+        storage_path: object.path,
+      })),
+      {
+        id: sentinel.fileId,
+        creator_account_id: sentinel.accountId,
+        bucket: "onboarding-content",
+        storage_path: sentinel.storageKey.slice("onboarding-content/".length),
+      },
+    ],
+    creator_onboarding_progress: [
+      ...TARGETS.map((target) => ({ creator_account_id: target.accountId })),
+      { creator_account_id: sentinel.accountId },
+    ],
     creator_agency_assignments: [],
     creator_clone_links: [{
       creator_account_id: PRESERVED_CLONE.linkedAccountId,
@@ -231,14 +242,21 @@ function createFetchMock(state, serviceKey) {
       return jsonResponse({});
     }
 
+    if (url.pathname.startsWith("/storage/v1/object/info/")) {
+      assert.equal(method, "GET", "Storage existence checks must use the metadata endpoint");
+      const suffix = url.pathname.slice("/storage/v1/object/info/".length);
+      const [encodedBucket, ...encodedPath] = suffix.split("/");
+      const bucket = decodeURIComponent(encodedBucket);
+      const path = encodedPath.map(decodeURIComponent).join("/");
+      return state.storageObjects.has(`${bucket}/${path}`)
+        ? jsonResponse({ name: path }, 200)
+        : jsonResponse({ code: "NoSuchKey", message: "not found" }, 404);
+    }
+
     if (url.pathname.startsWith("/storage/v1/object/")) {
       const suffix = url.pathname.slice("/storage/v1/object/".length);
       const [encodedBucket, ...encodedPath] = suffix.split("/");
       const bucket = decodeURIComponent(encodedBucket);
-      if (method === "HEAD") {
-        const path = encodedPath.map(decodeURIComponent).join("/");
-        return jsonResponse(null, state.storageObjects.has(`${bucket}/${path}`) ? 200 : 404);
-      }
       assert.equal(method, "DELETE");
       assert.equal(encodedPath.length, 0, "Storage DELETE must target a bucket endpoint");
       const body = JSON.parse(init.body);
@@ -268,20 +286,24 @@ await runReset({
   request: createFetchMock(state, mockServiceKey),
 });
 
-assert.deepEqual(new Set(state.deletedAccountIds), accountIds, "exactly the four allowlisted creator accounts must be removed");
+assert.deepEqual(new Set(state.deletedAccountIds), accountIds, "exactly the three allowlisted creator accounts must be removed");
 assert.equal(state.deletedAccountIds.length, TARGETS.length, "no creator account may be deleted more than once");
-assert.deepEqual(new Set(state.deletedAuthUserIds), authUserIds, "exactly the four allowlisted Auth users must be removed");
+assert.deepEqual(new Set(state.deletedAuthUserIds), authUserIds, "exactly the three allowlisted Auth users must be removed");
 assert.equal(state.deletedAuthUserIds.length, TARGETS.length, "no Auth user may be deleted more than once");
 assert.deepEqual(
   new Set(state.deletedStorageKeys),
   new Set(STORAGE_OBJECTS.map((object) => `${object.bucket}/${object.path}`)),
-  "exactly the six allowlisted Storage objects must be removed",
+  "exactly the five allowlisted Storage objects must be removed",
 );
 assert.equal(state.deletedStorageKeys.length, STORAGE_OBJECTS.length, "no Storage object may be removed more than once");
 
 assert.ok(state.tables.creator_accounts.some((row) => row.id === sentinel.accountId), "an unrelated creator account must survive");
 assert.ok(state.authUsers.has(sentinel.authUserId), "an unrelated Auth user must survive");
 assert.ok(state.storageObjects.has(sentinel.storageKey), "an unrelated Storage object must survive");
+assert.ok(state.tables.creator_applications.some((row) => row.id === sentinel.applicationId), "Zane's submitted application must survive");
+assert.ok(state.tables.creator_consents.some((row) => row.id === sentinel.consentId), "Zane's consent must survive");
+assert.ok(state.tables.creator_files.some((row) => row.id === sentinel.fileId), "Zane's uploaded file record must survive");
+assert.ok(state.tables.creator_onboarding_progress.some((row) => row.creator_account_id === sentinel.accountId), "Zane's onboarding progress must survive");
 assert.deepEqual(state.tables.agency_memberships, membershipsBefore, "protected memberships must remain byte-for-byte intact");
 assert.deepEqual(state.tables.clones, cloneBefore, "Mrs Callace must remain byte-for-byte intact");
 

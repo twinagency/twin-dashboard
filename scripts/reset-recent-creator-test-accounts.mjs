@@ -1,5 +1,5 @@
 /**
- * One-time, allowlisted production reset for four creator test signups.
+ * One-time, allowlisted production reset for three creator test signups.
  * It intentionally matches immutable IDs, never dates or email addresses.
  */
 import { resolve } from "node:path";
@@ -8,12 +8,6 @@ import { pathToFileURL } from "node:url";
 export const EXPECTED_PROJECT_REF = "aouaenqayfltoqrmpitg";
 
 export const TARGETS = Object.freeze([
-  Object.freeze({
-    accountId: "36311e0c-3b1a-4aad-aa97-ed40e32cb31d",
-    authUserId: "70018ea2-81f1-4ff4-bdd2-439bc533df94",
-    accountCreatedAt: "2026-09-10T19:47:32.960Z",
-    authCreatedAt: "2026-09-10T19:47:32.905Z",
-  }),
   Object.freeze({
     accountId: "215409bb-ed0c-40d8-8676-75bc47d491a7",
     authUserId: "7e664d9b-4e01-48f9-b482-d870155d50e5",
@@ -35,7 +29,6 @@ export const TARGETS = Object.freeze([
 ]);
 
 export const STORAGE_OBJECTS = Object.freeze([
-  Object.freeze({ accountId: "36311e0c-3b1a-4aad-aa97-ed40e32cb31d", bucket: "onboarding-content", path: "creators/36311e0c-3b1a-4aad-aa97-ed40e32cb31d/content/1789070712346-ae5013fb-a20e-44b4-b684-6ca4792f6bd4-aaa.png" }),
   Object.freeze({ accountId: "5031e297-7667-4042-b7aa-41dd35334f0a", bucket: "onboarding-content", path: "creators/5031e297-7667-4042-b7aa-41dd35334f0a/content/1788987544317-409d7b41-09e8-4f80-8358-d78509b47c9e-IMG_0678.png" }),
   Object.freeze({ accountId: "5031e297-7667-4042-b7aa-41dd35334f0a", bucket: "onboarding-content", path: "creators/5031e297-7667-4042-b7aa-41dd35334f0a/content/1788987768271-abbbe135-0c81-4b75-aa68-9b495b5a73eb-IMG_0678.png" }),
   Object.freeze({ accountId: "5031e297-7667-4042-b7aa-41dd35334f0a", bucket: "onboarding-content", path: "creators/5031e297-7667-4042-b7aa-41dd35334f0a/content/1788987787365-617ee64d-3c47-4a35-87db-6b4b2fcf4399-BC8390AC-AB0D-4885-B162-FF7D9BC005CA.png" }),
@@ -56,9 +49,9 @@ export const PROTECTED_MEMBERSHIPS = Object.freeze([
 ]);
 
 const EXPECTED_CHILD_IDS = Object.freeze({
-  creator_applications: new Set(["7a7d6196-b5c3-48cb-a3b9-591e2ddf84f6", "c1318626-c3c7-4402-b32d-e06535d82af8"]),
-  creator_consents: new Set(["9951ad7a-0656-433d-986c-71dd0d756795", "c6ca3489-e7fe-4106-abd6-879cdf1e1940"]),
-  creator_files: new Set(["69610a53-163e-40ba-a134-1cafcfef35b7", "5a1a0142-10d4-462f-afdb-b9c92c87da24", "304246f2-59db-4bbd-b94d-fa1bc96645ee", "6c37209e-239f-4cf3-848b-4c5a7db0f8ac", "2c9d88b2-6a04-4e65-89a5-f5df91769c76", "11e2e877-e478-4ef1-930d-487363a1cc17"]),
+  creator_applications: new Set(["7a7d6196-b5c3-48cb-a3b9-591e2ddf84f6"]),
+  creator_consents: new Set(["9951ad7a-0656-433d-986c-71dd0d756795"]),
+  creator_files: new Set(["69610a53-163e-40ba-a134-1cafcfef35b7", "5a1a0142-10d4-462f-afdb-b9c92c87da24", "304246f2-59db-4bbd-b94d-fa1bc96645ee", "6c37209e-239f-4cf3-848b-4c5a7db0f8ac", "2c9d88b2-6a04-4e65-89a5-f5df91769c76"]),
 });
 
 const DEPENDENT_TABLES = Object.freeze([
@@ -174,12 +167,22 @@ function createApi(rawUrl, serviceKey, request = fetch) {
     },
     async storageExists(object) {
       const response = await timedRequest(
-        `/storage/v1/object/${encodeURIComponent(object.bucket)}/${encodeObjectPath(object.path)}`,
-        { method: "HEAD", headers: authHeaders },
+        `/storage/v1/object/info/${encodeURIComponent(object.bucket)}/${encodeObjectPath(object.path)}`,
+        { method: "GET", headers: authHeaders },
         "Storage-object lookup",
       );
-      if (response.status === 404) return false;
-      if (!response.ok) throw new ApiError("Storage-object lookup", response.status);
+      let payload = null;
+      const responseText = await response.text();
+      if (responseText) {
+        try { payload = JSON.parse(responseText); } catch { payload = null; }
+      }
+      const missingCode = payload?.code === "NoSuchKey" || payload?.code === "not_found" || payload?.error === "not_found";
+      if (response.status === 404 && missingCode) return false;
+      if (!response.ok) {
+        const rawCode = typeof payload?.code === "string" ? payload.code : "unknown";
+        const code = /^[a-z0-9_]{1,64}$/i.test(rawCode) ? rawCode : "unknown";
+        throw new ApiError("Storage-object lookup", response.status, code);
+      }
       return true;
     },
     removeStorage(bucket, paths) {
