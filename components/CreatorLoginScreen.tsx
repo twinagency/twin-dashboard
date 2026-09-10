@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import { safeCreatorNext } from "@/lib/creator-routing";
 import CreatorAuthFrame, { creatorAuthPaths, tetherAuthButtonClass, tetherAuthInputClass, tetherAuthLinkClass, type CreatorAuthBrand } from "@/components/CreatorAuthFrame";
 
-export default async function CreatorLoginScreen({ searchParams, brand = "twin" }: { searchParams: Promise<{ next?: string; error?: string }>; brand?: CreatorAuthBrand }) {
+export default async function CreatorLoginScreen({ searchParams, brand }: { searchParams: Promise<{ next?: string; error?: string }>; brand: CreatorAuthBrand }) {
   const { next, error } = await searchParams;
   const safeNext = safeCreatorNext(next);
   const tether = brand === "tether";

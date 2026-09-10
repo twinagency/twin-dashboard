@@ -4,6 +4,7 @@ import { randomUUID } from "crypto";
 import { supabaseAdmin } from "@/lib/supabase";
 import { CREATOR_SESSION_COOKIE, verifyCreatorSession } from "@/lib/creator-session";
 import { creatorRequestUrl } from "@/lib/creator-origin";
+import { CREATOR_PORTAL_COOKIE, creatorLoginPath } from "@/lib/creator-routing";
 
 function back(req: Request, status: string) {
   const url = creatorRequestUrl(req, "/creator/onboarding");
@@ -16,8 +17,9 @@ function safeName(name: string) {
 }
 
 export async function POST(req: Request) {
-  const session = await verifyCreatorSession((await cookies()).get(CREATOR_SESSION_COOKIE)?.value);
-  if (!session) return NextResponse.redirect(creatorRequestUrl(req, "/creator/login"), 303);
+  const jar = await cookies();
+  const session = await verifyCreatorSession(jar.get(CREATOR_SESSION_COOKIE)?.value);
+  if (!session) return NextResponse.redirect(creatorRequestUrl(req, creatorLoginPath(null, jar.get(CREATOR_PORTAL_COOKIE)?.value)), 303);
 
   const form = await req.formData();
   const kind = String(form.get("kind") || "");

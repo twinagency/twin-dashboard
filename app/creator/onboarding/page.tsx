@@ -11,9 +11,9 @@ import { creatorDashboardIdentity } from "@/lib/creator-dashboard-identity";
 import { CREATOR_QUESTIONNAIRE_SECTIONS, type CreatorQuestion } from "@/lib/creator-questionnaire";
 import { TETHER_PORTAL } from "@/lib/partner-portals";
 import IntelligenceCoreIcon from "@/components/IntelligenceCoreIcon";
+import { CREATOR_PORTAL_COOKIE, creatorLoginPath } from "@/lib/creator-routing";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Creator onboarding" };
 
 const statusCopy: Record<string,string> = {
   questionnaire_saved: "Questionnaire saved.",
@@ -62,8 +62,9 @@ function QuestionField({ question, value }: { question: CreatorQuestion; value: 
 }
 
 export default async function CreatorOnboardingPage({ searchParams }: { searchParams: Promise<{ status?: string }> }) {
-  const creator = await creatorDashboardIdentity((await cookies()).get(CREATOR_SESSION_COOKIE)?.value);
-  if (!creator) redirect("/creator/login");
+  const jar = await cookies();
+  const creator = await creatorDashboardIdentity(jar.get(CREATOR_SESSION_COOKIE)?.value);
+  if (!creator) redirect(creatorLoginPath(creator, jar.get(CREATOR_PORTAL_COOKIE)?.value));
   const session = { accountId: creator.accountId };
   const tether = creator.name === TETHER_PORTAL.name;
   const { status } = await searchParams;
@@ -103,7 +104,7 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
 
         <div className="mt-8 grid gap-6">
           <Card>
-            <CardHeader><div className="flex items-center justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent-2">Step 1</p><h2 className="font-heading text-2xl font-semibold text-ink">Questionnaire</h2><p className="mt-1 text-sm text-muted">This is the same questionnaire used in the current Twin/Lovable onboarding.</p></div><span className="text-sm font-medium text-muted">{progress?.questionnaire_completed ? "Complete" : "Required"}</span></div></CardHeader>
+            <CardHeader><div className="flex items-center justify-between gap-3"><div><p className="text-xs font-semibold uppercase tracking-[0.16em] text-accent-2">Step 1</p><h2 className="font-heading text-2xl font-semibold text-ink">Questionnaire</h2><p className="mt-1 text-sm text-muted">Complete this once to keep your creator profile accurate.</p></div><span className="text-sm font-medium text-muted">{progress?.questionnaire_completed ? "Complete" : "Required"}</span></div></CardHeader>
             <CardContent>
               <form action="/creator-auth/onboarding" method="post" className="grid gap-8">
                 <input type="hidden" name="action" value="questionnaire" />

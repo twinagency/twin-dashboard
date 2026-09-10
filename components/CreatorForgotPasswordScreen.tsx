@@ -19,7 +19,7 @@ const supabase = createClient(
   { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } },
 );
 
-export default function CreatorForgotPasswordScreen({ brand = "twin" }: { brand?: CreatorAuthBrand }) {
+export default function CreatorForgotPasswordScreen({ brand }: { brand: CreatorAuthBrand }) {
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const tether = brand === "tether";
