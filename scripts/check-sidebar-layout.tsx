@@ -31,6 +31,10 @@ function compile(path: string, imports: Record<string, unknown> = {}) {
   return result.exports;
 }
 const core = compile("components/IntelligenceCoreIcon.tsx");
+const wordmark = compile("components/TwinWordmark.tsx", {
+  "@/lib/agency-brand": agencyBrand,
+  "@/lib/partner-portals": portals,
+});
 const components = compile("components/Sidebar.tsx", {
   "./DashboardAccessProvider": accessModule,
   "@/lib/agency-policy": agencyPolicy,
@@ -40,7 +44,7 @@ const components = compile("components/Sidebar.tsx", {
   "next/navigation": { usePathname: () => pathname, useSearchParams: () => query },
   "@/lib/clone-switcher-bus": { openCloneSwitcher: () => undefined },
   "@/components/TwinAssistant": { __esModule: true, default: () => null },
-  "@/components/TwinWordmark": { __esModule: true, default: ({ agencyName }: { agencyName?: string }) => React.createElement("span", null, agencyName || "Twin") },
+  "@/components/TwinWordmark": wordmark,
   "@/components/IntelligenceCoreIcon": core,
 });
 const Content = components.SidebarContent as React.ComponentType<{ activeCloneId: string | null; headerAction?: React.ReactNode; showAssistant?: boolean }>;
@@ -71,9 +75,29 @@ for (const [name, manage] of [["LYNQ", true], [undefined, false]] as const) {
   assert.match(html, />CRM</); assert.match(html, /aria-expanded="false"/);
   assert.doesNotMatch(html, /AI Intelligence Core|href="\/info"/);
 }
+for (const mobile of [false, true]) {
+  for (const manage of [false, true]) {
+    const lynq = render("LYNQ", manage, clone, mobile);
+    assert.match(lynq, /aria-label="LYNQ"/);
+    assert.doesNotMatch(lynq, /<canvas|lynq-ai-orb|AI Intelligence Core|lynq-cyan/, "LYNQ has no decorative globe or old cyan theme");
+    assert.match(lynq, /html\[data-brand-theme="lynq-light"\]/);
+    assert.match(lynq, /color-scheme: light/);
+    assert.match(lynq, /--color-panel: #ffffff/);
+    assert.match(lynq, /--lynq-orange: #ff8b35/);
+    assert.match(lynq, /--lynq-pink: #e94b9c/);
+    assert.match(lynq, /--lynq-blue: #293bea/);
+    assert.doesNotMatch(lynq, /--color-good:/, "Financial status colours are not redefined by branding");
+    assert.ok(lynq.includes('href="/revenue"'));
+    assert.ok(lynq.includes('href="/users"'));
+  }
+}
+for (const name of [undefined, "Moxy", portals.JESS_KATE_PORTAL.name]) {
+  assert.doesNotMatch(render(name), /lynq-light|--lynq-orange/, "LYNQ styles never leak into another portal");
+}
+assert.match(readFileSync("app/layout.tsx", "utf8"), /data-brand-theme=\{isLynq\(agency\?\.name\) \? "lynq-light"/, "Verified LYNQ branding is applied during server render");
 assert.match(render(undefined), /href="\/clones\/new"/);
 assert.match(render(portals.JESS_KATE_PORTAL.name, true, null), /Pick a creator first/);
 pathname = `/clones/${clone}`; query = new URLSearchParams("tab=identity");
 assert.match(render(portals.JESS_KATE_PORTAL.name, true), /href="[^\"]+tab=identity"[^>]*bg-white\/12/);
 assert.match(readFileSync("components/MobileMenu.tsx", "utf8"), /<SidebarContent/);
-console.log("Sidebar: Kate CRM removed, More always visible, Moxy animated core reused, desktop/mobile parity and other portals preserved");
+console.log("Sidebar: LYNQ light palette and no globes, mobile/desktop parity, Kate and Moxy branding and permissions preserved");
