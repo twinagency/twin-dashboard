@@ -19,7 +19,7 @@ const readers: Record<string, (req: NextRequest) => Promise<Response>> = {
 };
 export async function GET(req: NextRequest, { params }: { params: Promise<{ resource: string[] }> }) {
   const key = (await params).resource.join("/");
-  const reader = readers[key];
+  const reader = Object.hasOwn(readers, key) ? readers[key] : undefined;
   if (!reader) return NextResponse.json({ error: "Not found" }, { status: 404 });
   try {
     const identity = await resolveCreatorDashboardIdentity(req.cookies.get(CREATOR_SESSION_COOKIE)?.value);
@@ -34,9 +34,9 @@ export async function GET(req: NextRequest, { params }: { params: Promise<{ reso
     const response = await withDashboardAccess(identity, () => reader(new NextRequest(url, { headers: req.headers })));
     const headers = new Headers(response.headers);
     headers.set("Cache-Control", "private, no-store");
+    headers.delete("content-length");
     if (response.status >= 500) return NextResponse.json({ error: "Unable to load this data. Please refresh." }, { status: response.status, headers });
     if (headers.get("content-type")?.includes("application/json")) {
-      headers.delete("content-length");
       return NextResponse.json(redactAgencyData(await response.json()), { status: response.status, headers });
     }
     return new Response(response.body, { status: response.status, headers });

@@ -19,7 +19,7 @@ export async function POST(req: NextRequest) {
   const revision = String(fd.get("revision") || "");
   if (!name || name.length > 100 || !revision || !Number.isFinite(Date.parse(revision))) return back(req, "error=invalid");
   const dob = String(fd.get("date_of_birth") || "");
-  if (dob && (!/^\d{4}-\d{2}-\d{2}$/.test(dob) || !Number.isFinite(Date.parse(dob)))) return back(req, "error=invalid");
+  if (dob && (!/^\d{4}-\d{2}-\d{2}$/.test(dob) || !Number.isFinite(Date.parse(dob)) || new Date(dob).toISOString().slice(0, 10) !== dob)) return back(req, "error=invalid");
   const db = serviceClient();
   const prior = await db.from("clones").select("id,intake,updated_at").eq("id", identity.cloneId).single();
   if (prior.error || !prior.data) return back(req, "error=failed");
@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
   const updated = await db.from("clones").update(patch).eq("id", identity.cloneId).eq("updated_at", revision).select("id").maybeSingle();
   if (updated.error) return back(req, "error=failed");
   if (!updated.data) return back(req, "error=conflict");
-  invalidateCloneCaches(identity.cloneId);
+  await invalidateCloneCaches();
   revalidatePath("/creator/edit");
   revalidatePath(`/clones/${identity.cloneId}`);
   return back(req, "saved=1");
