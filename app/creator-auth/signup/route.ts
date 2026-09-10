@@ -1,8 +1,12 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
-import { supabaseAdmin } from "@/lib/supabase";
+import { serviceClient } from "@/lib/supabase-service";
 import { CREATOR_SESSION_COOKIE, creatorCookieOptions, signCreatorSession } from "@/lib/creator-session";
 import { creatorRequestUrl } from "@/lib/creator-origin";
+import { AGENCY_COOKIE } from "@/lib/agency-policy";
+import { AGENCY_PORTAL_COOKIE } from "@/lib/agency-brand";
+import { SESSION_COOKIE } from "@/lib/session";
+import { CLONE_SCOPE_COOKIE } from "@/lib/clone-scope";
 
 function redirectWithError(req: Request, code: string) {
   const url = creatorRequestUrl(req, "/creator/signup");
@@ -26,11 +30,15 @@ export async function POST(req: Request) {
     return redirectWithError(req, "invalid");
   }
 
+  // Creator auth is an independent security context. Do not allow an existing
+  // agency/operator cookie in the same browser to scope or block these writes.
+  const db = serviceClient();
+
   let agencyCodeHash: string | null = null;
   if (agencyCode) {
     agencyCodeHash = await sha256(agencyCode);
     const now = new Date().toISOString();
-    const { data: code } = await supabaseAdmin
+    const { data: code } = await db
       .from("creator_agency_codes")
       .select("id,active,max_uses,uses,expires_at")
       .eq("code_hash", agencyCodeHash)
@@ -40,7 +48,7 @@ export async function POST(req: Request) {
     }
   }
 
-  const { data: existing } = await supabaseAdmin
+  const { data: existing } = await db
     .from("creator_accounts")
     .select("id,auth_user_id")
     .ilike("email", email)
@@ -48,7 +56,7 @@ export async function POST(req: Request) {
 
   if (existing?.auth_user_id) return redirectWithError(req, "exists");
 
-  const { data: created, error: createError } = await supabaseAdmin.auth.admin.createUser({
+  const { data: created, error: createError } = await db.auth.admin.createUser({
     email,
     password,
     email_confirm: true,
@@ -64,20 +72,20 @@ export async function POST(req: Request) {
   try {
     let agencyId: string | null = null;
     if (agencyCodeHash) {
-      const { data: claim, error: claimError } = await supabaseAdmin.rpc("claim_creator_agency_code", { p_code_hash: agencyCodeHash });
+      const { data: claim, error: claimError } = await db.rpc("claim_creator_agency_code", { p_code_hash: agencyCodeHash });
       const first = Array.isArray(claim) ? claim[0] : null;
       if (claimError || !first?.agency_id) throw new Error("agency_code_unavailable");
       agencyId = first.agency_id as string;
     }
 
     if (accountId) {
-      const { error } = await supabaseAdmin
+      const { error } = await db
         .from("creator_accounts")
         .update({ auth_user_id: created.user.id, email, display_name: displayName, updated_at: new Date().toISOString() })
         .eq("id", accountId);
       if (error) throw error;
     } else {
-      const { data, error } = await supabaseAdmin
+      const { data, error } = await db
         .from("creator_accounts")
         .insert({ auth_user_id: created.user.id, email, display_name: displayName, account_status: "applicant", source: "twin" })
         .select("id")
@@ -86,13 +94,13 @@ export async function POST(req: Request) {
       accountId = data.id as string;
     }
 
-    const { error: progressError } = await supabaseAdmin
+    const { error: progressError } = await db
       .from("creator_onboarding_progress")
       .upsert({ creator_account_id: accountId }, { onConflict: "creator_account_id", ignoreDuplicates: true });
     if (progressError) throw progressError;
 
     if (agencyId) {
-      const { error } = await supabaseAdmin.from("creator_agency_assignments").upsert({
+      const { error } = await db.from("creator_agency_assignments").upsert({
         creator_account_id: accountId,
         agency_id: agencyId,
         assignment_source: "invite",
@@ -102,10 +110,18 @@ export async function POST(req: Request) {
     }
 
     const token = await signCreatorSession(accountId!, created.user.id);
-    (await cookies()).set(CREATOR_SESSION_COOKIE, token, creatorCookieOptions());
+    const jar = await cookies();
+    jar.set(CREATOR_SESSION_COOKIE, token, creatorCookieOptions());
+    // A browser can be an agency operator OR a creator for this app session,
+    // not both. Clearing the operator state prevents the creator pages from
+    // inheriting agency-scoped data access after signup.
+    jar.delete(AGENCY_COOKIE);
+    jar.delete(AGENCY_PORTAL_COOKIE);
+    jar.delete(SESSION_COOKIE);
+    jar.delete(CLONE_SCOPE_COOKIE);
     return NextResponse.redirect(creatorRequestUrl(req, "/creator"), 303);
   } catch (error) {
-    await supabaseAdmin.auth.admin.deleteUser(created.user.id).catch(() => undefined);
+    await db.auth.admin.deleteUser(created.user.id).catch(() => undefined);
     console.error("creator signup failed", error);
     return redirectWithError(req, error instanceof Error && error.message === "agency_code_unavailable" ? "agency_code" : "failed");
   }
