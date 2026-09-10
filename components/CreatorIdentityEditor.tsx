@@ -5,7 +5,7 @@ import { LockKeyhole } from "lucide-react";
 import type { Clone } from "@/lib/types";
 import PersonaFactsFields from "./clone/PersonaFactsFields";
 import { useCloneConfig } from "./clone/useCloneConfig";
-import { Section, Field } from "./clone/fields";
+import { Section } from "./clone/fields";
 import IntakeFields from "./IntakeFields";
 import { Button } from "./ui/button";
 
@@ -32,7 +32,8 @@ export default function CreatorIdentityEditor({ clone, revision }: { clone: Part
       finally { setBusy(false); }
     }}>
       <input type="hidden" name="revision" value={revision} />
-      <Section title="Creator identity"><Field label="Creator name" name="name" defaultValue={clone.name || ""} /></Section>
+      {/* PersonaFactsFields owns the name input. A second name field here
+          caused FormData.get("name") to silently ignore edits in the original. */}
       <PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} cfg={cfg} set={set} part="all" />
       <Section title="Her own words" hint="Your questionnaire and examples, in your own words."><IntakeFields fields={clone.intake?.fields} legacyAnswers={clone.intake?.answers} /></Section>
       <div className="sticky bottom-0 z-20 flex flex-wrap items-center gap-4 rounded-xl border border-line bg-panel/95 p-4 shadow-lg backdrop-blur"><Button type="submit" disabled={busy}>{busy ? "Saving…" : "Save identity"}</Button>{status && <p role="status" className="text-sm text-ink">{status}</p>}</div>
