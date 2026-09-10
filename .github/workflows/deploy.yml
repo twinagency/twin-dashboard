@@ -115,11 +115,13 @@ jobs:
         id: deploy
         run: |
           set -euo pipefail
+          # Only unused images/build cache are reclaimed. Docker preserves the
+          # image backing the currently running dashboard container.
           CMD_ID=$(aws ssm send-command \
             --instance-ids "$INSTANCE_ID" \
             --document-name AWS-RunShellScript \
             --comment "deploy ${{ steps.build.outputs.sha }}" \
-            --parameters commands="[\"sudo /usr/local/bin/twin-pull.sh '${{ steps.build.outputs.digest }}' '$CONTAINER' '$REMOTE_DIR' $EXTRA_RUN_ARGS\"]" \
+            --parameters commands="[\"sudo docker image prune -af && sudo docker builder prune -af && sudo /usr/local/bin/twin-pull.sh '${{ steps.build.outputs.digest }}' '$CONTAINER' '$REMOTE_DIR' $EXTRA_RUN_ARGS\"]" \
             --query 'Command.CommandId' --output text)
           echo "command: $CMD_ID"
           aws ssm wait command-executed --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" || true
