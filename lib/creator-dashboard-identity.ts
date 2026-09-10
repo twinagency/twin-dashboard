@@ -1,17 +1,10 @@
 import { verifyCreatorSession } from "./creator-session";
 import { serviceClient } from "./supabase-service";
 import type { AgencyIdentity } from "./agency-identity";
-
-export type CreatorDashboardIdentity = AgencyIdentity & {
-  kind: "creator";
-  accountId: string;
-  userId: string;
-  creatorName: string;
-  onboarded: boolean;
-};
-
-// This is an identity lookup, not a fleet query. A valid signature alone is
-// insufficient: deleted, reassigned, rejected and archived accounts fail closed.
+import { isZaneDemo } from "./creator-demo-policy";
+export type CreatorDashboardIdentity = AgencyIdentity & { kind: "creator"; accountId: string; userId: string; creatorName: string; onboarded: boolean };
+// A signature is insufficient: verify current identity and ownership. Demo
+// presentation never supplies a real clone or changes agency membership.
 export async function creatorDashboardIdentity(token: string | null | undefined): Promise<CreatorDashboardIdentity | null> {
   try {
     const session = await verifyCreatorSession(token);
@@ -29,18 +22,8 @@ export async function creatorDashboardIdentity(token: string | null | undefined)
     if (assignment.data?.agency_id && (!relatedAgency || !relatedAgency.active)) return null;
     const clone = link.data?.clones as unknown as { id: string; name: string } | null;
     if (link.data?.clone_id && (!clone || clone.id !== link.data.clone_id)) return null;
-    return {
-      // Not an agency UUID: it can never acquire the operator management allowlist.
-      id: `creator:${session.accountId}`,
-      kind: "creator",
-      accountId: session.accountId,
-      userId: session.userId,
-      name: relatedAgency?.name || "Twin",
-      creatorName: clone?.name || account.data.display_name || "Your creator account",
-      cloneIds: clone ? [clone.id] : [],
-      onboarded: ["submitted", "reviewing", "approved"].includes(application.data?.status || ""),
-    };
-  } catch {
-    return null;
-  }
+    const identity: CreatorDashboardIdentity = { id: `creator:${session.accountId}`, kind: "creator", accountId: session.accountId, userId: session.userId, name: relatedAgency?.name || "Twin", creatorName: clone?.name || account.data.display_name || "Your creator account", cloneIds: clone ? [clone.id] : [], onboarded: ["submitted", "reviewing", "approved"].includes(application.data?.status || "") };
+    // Branding only, not an assignment, permission or real-account status change.
+    return isZaneDemo(identity) ? { ...identity, name: "LYNQ" } : identity;
+  } catch { return null; }
 }
