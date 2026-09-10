@@ -113,7 +113,11 @@ async function main() {
   assert.match(sidebar,/MORE_LINKS\.filter\(link => link.kind !== "route" \|\| !\["\/jarvis", "\/agency-admin"\]\.includes\(link.href\)\)/);
   assert.match(sidebar,/AI Intelligence Core/);
   assert.match(sidebar,/<IntelligenceCoreIcon size=\{64\} \/>/);
-  assert.ok(sidebar.indexOf("<IntelligenceCoreIcon size={64}") < sidebar.indexOf("<nav className="),"Core sits above the navigation");
+  // The shared sidebar now gives nav an aria-label before className. Test the
+  // element order, not the incidental order of its HTML attributes.
+  const coreIndex = sidebar.indexOf("<IntelligenceCoreIcon size={64}");
+  const navIndex = sidebar.search(/<nav\b/);
+  assert.ok(coreIndex >= 0 && navIndex >= 0 && coreIndex < navIndex,"Core sits above the navigation");
   assert.doesNotMatch(readFileSync("app/moxy/page.tsx","utf8"),/read.only/i);
   const core=readFileSync("components/IntelligenceCoreIcon.tsx","utf8");
   assert.match(core,/prefers-reduced-motion/);assert.match(core,/cancelAnimationFrame/);
