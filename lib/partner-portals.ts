@@ -12,8 +12,15 @@ export const TETHER_PORTAL = {
   slug: "tether",
   loginPath: "/tether",
 } as const;
+export const LYNQ_PORTAL = {
+  id: "74b03b70-397e-49ab-841f-8adb8241d87d",
+  name: "LYNQ",
+  slug: "lynq",
+  loginPath: "/link",
+  aliases: ["/lynq"],
+} as const;
 export const PARTNER_PORTALS = [
-  { id: "74b03b70-397e-49ab-841f-8adb8241d87d", name: "LYNQ", slug: "lynq", loginPath: "/link", aliases: ["/lynq"] },
+  LYNQ_PORTAL,
   { id: "bc670215-110b-4ea0-8f5c-af3dfe21d253", name: "Moxy", slug: "moxy", loginPath: "/moxy", aliases: [] },
   { ...JESS_KATE_PORTAL, aliases: [] },
   { ...TETHER_PORTAL, aliases: [] },

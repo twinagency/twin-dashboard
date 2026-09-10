@@ -3,7 +3,6 @@ import RevenueTooltipFix from "@/components/RevenueTooltipFix";
 import { requireCreatorWorkspace } from "@/lib/creator-dashboard";
 import { DEMO_CLONE_ID, isZaneDemo } from "@/lib/creator-demo-policy";
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Earnings overview · Creator dashboard" };
 export default async function CreatorHomePage() {
   const creator = await requireCreatorWorkspace();
   const cloneId = isZaneDemo(creator) ? DEMO_CLONE_ID : creator.cloneIds[0];

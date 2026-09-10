@@ -12,11 +12,13 @@
   position: relative;
   isolation: isolate;
   display: grid;
-  place-items: center;
+  align-items: start;
+  justify-items: center;
   min-height: 100vh;
   min-height: 100svh;
   padding: max(32px, env(safe-area-inset-top)) 24px max(32px, env(safe-area-inset-bottom));
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
   background: #faf9fc;
   color: #19191f;
   color-scheme: light;
@@ -36,6 +38,7 @@
 
 .workspace {
   width: min(100%, 460px);
+  margin-block: auto;
 }
 
 .brand {
@@ -113,6 +116,18 @@
   outline: 0;
   border-color: #293bea;
   box-shadow: 0 0 0 3px rgb(41 59 234 / 0.12);
+}
+
+.card form input:autofill,
+.card form input:-webkit-autofill,
+.card form input:-webkit-autofill:hover,
+.card form input:-webkit-autofill:focus {
+  color: #19191f !important;
+  caret-color: #19191f;
+  background-color: #ffffff !important;
+  -webkit-text-fill-color: #19191f !important;
+  -webkit-box-shadow: 0 0 0 1000px #ffffff inset !important;
+  box-shadow: 0 0 0 1000px #ffffff inset !important;
 }
 
 .card form button[type="submit"] {

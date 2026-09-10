@@ -39,12 +39,14 @@ export async function generateMetadata(): Promise<Metadata> {
   const pathname = (await headers()).get("x-pathname");
   if (isCreatorPath(pathname)) {
     const creator = !isCreatorPublicPath(pathname) ? await getCreatorWorkspace() : null;
-    const tether = creatorPublicPortal(pathname) === "tether" || creator?.name === TETHER_PORTAL.name;
+    const publicPortal = creatorPublicPortal(pathname);
+    const link = publicPortal === "link" || isLynq(creator?.name);
+    const tether = publicPortal === "tether" || creator?.name === TETHER_PORTAL.name;
     return {
-      title: tether ? "Tether creator workspace" : "Creator dashboard",
-      description: tether ? "Private Tether creator access" : "Your creator workspace",
+      title: link ? "LYNQ creator workspace" : tether ? "Tether creator workspace" : "Creator dashboard",
+      description: link ? "Private LYNQ creator access" : tether ? "Private Tether creator access" : "Your creator workspace",
       robots: { index: false, follow: false },
-      icons: { icon: { url: tether ? "/tether/icon.svg" : "/icon.png", type: tether ? "image/svg+xml" : "image/png" } },
+      icons: { icon: { url: link ? "/lynq/icon.svg" : tether ? "/tether/icon.svg" : "/icon.png", type: link || tether ? "image/svg+xml" : "image/png" } },
     };
   }
   if (isMarketingPath(pathname)) return {
@@ -65,8 +67,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // fixed, verified creator identity. Login/onboarding remain standalone.
   if (isCreatorPath(pathname)) {
     const creator = !isCreatorPublicPath(pathname) ? await getCreatorWorkspace() : null;
-    const theme = isLynq(creator?.name) ? "lynq-light" : creator?.name === JESS_KATE_PORTAL.name ? "ivory-cherry" : undefined;
-    return <html lang="en" data-creator-workspace={isCreatorDashboardPath(pathname) ? "true" : undefined} data-brand-theme={theme} data-agency={isLynq(creator?.name) ? "lynq" : isMoxy(creator?.name) ? "moxy" : undefined} className={fontClass} style={{colorScheme:"light"}} suppressHydrationWarning><body className="min-h-screen bg-bg"><script dangerouslySetInnerHTML={{__html:'try{if(localStorage.getItem("blurMedia")==="true")document.documentElement.classList.add("blur-media")}catch(e){}'}} />{children}</body></html>;
+    const publicPortal = creatorPublicPortal(pathname);
+    const link = publicPortal === "link" || isLynq(creator?.name);
+    const theme = link ? "lynq-light" : creator?.name === JESS_KATE_PORTAL.name ? "ivory-cherry" : undefined;
+    return <html lang="en" data-creator-workspace={isCreatorDashboardPath(pathname) ? "true" : undefined} data-brand-theme={theme} data-agency={link ? "lynq" : isMoxy(creator?.name) ? "moxy" : undefined} className={fontClass} style={{colorScheme:"light"}} suppressHydrationWarning><body className="min-h-screen bg-bg"><script dangerouslySetInnerHTML={{__html:'try{if(localStorage.getItem("blurMedia")==="true")document.documentElement.classList.add("blur-media")}catch(e){}'}} />{children}</body></html>;
   }
   if (isMarketingPath(pathname)) return <html lang="en" className={fontClass}><body>{children}</body></html>;
   if (isTwinLoginPath(pathname) || (pathname && isAgencyPath(pathname))) {

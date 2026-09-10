@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { TETHER_PORTAL } from "../lib/partner-portals";
+import { exactCaseInsensitiveEmailPattern } from "../lib/creator-email";
 import {
   parseTetherCreatorSignup,
   tetherCreatorAccountRow,
@@ -13,16 +14,20 @@ const route = readFileSync("app/creator-auth/tether/signup/route.ts", "utf8");
 const genericRoute = readFileSync("app/creator-auth/signup/route.ts", "utf8");
 
 assert.equal(TETHER_CREATOR_SIGNUP_ACTION, "/creator-auth/tether/signup");
-assert.match(component, /action=\{tether \? TETHER_CREATOR_SIGNUP_ACTION : "\/creator-auth\/signup"\}/);
-assert.match(component, /\{!tether && <label[\s\S]*?name="agency_code"/);
-assert.match(component, /\{!tether && <input type="hidden" name="portal" value="twin" \/>\}/);
+assert.match(component, /const directAgencySignup = tether \|\| link;/);
+assert.match(component, /const signupAction = tether \? TETHER_CREATOR_SIGNUP_ACTION : link \? LINK_CREATOR_SIGNUP_ACTION : "\/creator-auth\/signup";/);
+assert.match(component, /<form action=\{signupAction\} method="post"/);
+assert.match(component, /\{!directAgencySignup && <label[\s\S]*?name="agency_code"/);
+assert.match(component, /\{!directAgencySignup && <input type="hidden" name="portal" value="twin" \/>\}/);
 assert.doesNotMatch(route, /form\.get\(["'](?:portal|agency_code|agency_id)["']\)/);
 assert.doesNotMatch(route, /creator_agency_codes|claim_creator_agency_code/);
 assert.match(route, /auth\.auth\.signUp\(/);
 assert.doesNotMatch(route, /email_confirm\s*:\s*true|auth\.admin\.createUser/);
 assert.match(route, /created\.user\.identities\?\.length === 0/);
 assert.match(route, /if \(existing\) return redirectWithError\(req, "exists"\)/);
+assert.match(route, /\.ilike\("email", exactCaseInsensitiveEmailPattern\(input\.email\)\)/);
 assert.match(genericRoute, /claim_creator_agency_code/);
+assert.equal(exactCaseInsensitiveEmailPattern("creator%_box@example.com"), "creator\\%\\_box@example.com");
 
 const form = new FormData();
 form.set("display_name", "  Tether Applicant  ");
