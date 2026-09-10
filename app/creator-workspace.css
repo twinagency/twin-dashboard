@@ -1,0 +1,19 @@
+/* Creator-only presentation. Financial colours and the shared revenue component
+   are deliberately untouched. Geometry matches the existing Ava/Tether core. */
+html[data-creator-workspace="true"] .creator-sidebar,
+html[data-creator-workspace="true"] .dashboard-mobile-header { background: linear-gradient(180deg,#0c2233 0%,#06121d 100%); }
+html[data-creator-workspace="true"][data-brand-theme="ivory-cherry"] .creator-sidebar,
+html[data-creator-workspace="true"][data-brand-theme="ivory-cherry"] .dashboard-mobile-header { background: linear-gradient(180deg,#7a1734 0%,#461323 100%); }
+html[data-creator-workspace="true"][data-brand-theme="lynq-light"] .creator-sidebar,
+html[data-creator-workspace="true"][data-brand-theme="lynq-light"] .dashboard-mobile-header { background: #f7f7fa; color: #19191f; }
+html[data-creator-workspace="true"][data-brand-theme="lynq-light"] .creator-nav-link { color: #393944; }
+html[data-creator-workspace="true"][data-brand-theme="lynq-light"] .creator-nav-link[aria-current="page"] { background: #e6e6ec; color: #19191f; }
+html[data-creator-workspace="true"][data-brand-theme="ivory-cherry"] .creator-nav-link[aria-current="page"] { background: #ebcbd2; color: #461323; }
+.creator-core-hero { position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:.35rem; min-height:8.9rem; overflow:visible; padding:.6rem .75rem .85rem; }
+.creator-core-hero::before { position:absolute; top:.25rem; left:50%; width:9rem; height:7rem; transform:translateX(-50%); border-radius:999px; background:radial-gradient(circle at 50% 43%,rgb(80 205 255/.28),rgb(37 156 255/.12) 34%,transparent 68%); filter:blur(8px); content:""; pointer-events:none; }
+.creator-core-hero canvas { position:relative; z-index:1; transform:scale(1.34); transform-origin:center; margin-top:.4rem; margin-bottom:.65rem; filter:drop-shadow(0 0 10px rgb(64 190 255/.56)) drop-shadow(0 0 22px rgb(37 156 255/.26)); }
+.creator-core-hero > div { position:relative; z-index:2; width:100%; text-align:center; }
+.creator-core-hero span { display:block; color:#fff7ef; font-size:.86rem; font-weight:700; letter-spacing:-.015em; line-height:1.15; }
+.creator-core-hero strong { display:block; margin-top:.22rem; color:#7dd3fc; font-size:.76rem; font-weight:800; letter-spacing:.12em; line-height:1; text-transform:uppercase; text-shadow:0 0 14px rgb(80 205 255/.45); }
+html[data-creator-workspace="true"][data-brand-theme="lynq-light"] .creator-core-hero span { color:#19191f; }
+html[data-creator-workspace="true"] { --intelligence-core-glow-rgb:37,156,255; --intelligence-core-edge-rgb:66,196,255; --intelligence-core-front-rgb:238,252,255; --intelligence-core-back-rgb:103,232,249; --intelligence-core-accent-rgb:255,169,77; --intelligence-core-glow-alpha:.42; }
