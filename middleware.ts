@@ -12,10 +12,19 @@ import { isCreatorAuthPath, isCreatorPath, isCreatorPublicPath, safeCreatorNext 
 import { creatorDataResource, creatorIdentityTabAllowed } from "@/lib/creator-dashboard-policy";
 import { isAgencyPath, agencyRequestAllowed, agencyDashboardPath, AGENCY_COOKIE } from "@/lib/agency-policy";
 
+function clearCreatorOnOperatorEntry(req: NextRequest, response: NextResponse): NextResponse {
+  const path = req.nextUrl.pathname;
+  const operatorEntry = isTwinLoginPath(path) || path === "/admin-auth" || path === "/agency/auth"
+    || ["/tether", "/link", "/lynq", "/moxy", "/jess-and-kate-ai"].some(base => path === base || path === `${base}/auth`);
+  // Creator sign-in already clears operator cookies. Make the reverse switch
+  // explicit as well, so a stale creator cookie cannot pin an operator's API.
+  if (operatorEntry && req.cookies.has(CREATOR_SESSION_COOKIE)) response.cookies.delete(CREATOR_SESSION_COOKIE);
+  return response;
+}
 function withPathname(req: NextRequest): NextResponse {
   const headers = new Headers(req.headers);
   headers.set("x-pathname", req.nextUrl.pathname);
-  return NextResponse.next({ request: { headers } });
+  return clearCreatorOnOperatorEntry(req, NextResponse.next({ request: { headers } }));
 }
 const SELF_AUTHENTICATED_PREFIXES = ["/api/v1/", "/api/admin/"];
 async function validCreator(req: NextRequest) {
@@ -67,7 +76,7 @@ export async function middleware(req: NextRequest) {
   if (isTwinLoginPath(pathname)) {
     if (!["GET", "HEAD"].includes(req.method) || req.headers.has("next-action")) return new NextResponse("Forbidden", { status: 403 });
     if (pathname === "/login" && !req.cookies.has(AGENCY_COOKIE) && await verifySessionToken(req.cookies.get(SESSION_COOKIE)?.value)) {
-      const response = NextResponse.redirect(new URL(safeAdminNext(req.nextUrl.searchParams.get("next")), dashboardOrigin(req)));
+      const response = clearCreatorOnOperatorEntry(req, NextResponse.redirect(new URL(safeAdminNext(req.nextUrl.searchParams.get("next")), dashboardOrigin(req))));
       response.headers.set("Cache-Control", "private, no-store");
       return response;
     }
