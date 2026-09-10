@@ -1,13 +1,13 @@
-/* Creator-only presentation. Financial colours and the shared revenue component
-   are deliberately untouched. Geometry matches the existing Ava/Tether core. */
+/* Creator-only presentation. The earnings component, financial colours and
+   LYNQ wordmark animation inherit the original live dashboard styles. */
 html[data-creator-workspace="true"] .creator-sidebar,
 html[data-creator-workspace="true"] .dashboard-mobile-header { background: linear-gradient(180deg,#0c2233 0%,#06121d 100%); }
 html[data-creator-workspace="true"][data-brand-theme="ivory-cherry"] .creator-sidebar,
 html[data-creator-workspace="true"][data-brand-theme="ivory-cherry"] .dashboard-mobile-header { background: linear-gradient(180deg,#7a1734 0%,#461323 100%); }
-html[data-creator-workspace="true"][data-brand-theme="lynq-light"] .creator-sidebar,
-html[data-creator-workspace="true"][data-brand-theme="lynq-light"] .dashboard-mobile-header { background: #f7f7fa; color: #19191f; }
-html[data-creator-workspace="true"][data-brand-theme="lynq-light"] .creator-nav-link { color: #393944; }
-html[data-creator-workspace="true"][data-brand-theme="lynq-light"] .creator-nav-link[aria-current="page"] { background: #e6e6ec; color: #19191f; }
+/* Same surfaces as lynq-theme.css. Do not replace its blue/gradient active
+   navigation or original blue/cyan particle tokens with a grey approximation. */
+html[data-creator-workspace="true"][data-brand-theme="lynq-light"] .creator-sidebar { background: radial-gradient(360px 260px at 0% 0%,rgb(255 139 53 / 0.10),transparent 72%),radial-gradient(360px 280px at 100% 100%,rgb(233 75 156 / 0.07),transparent 72%),#ffffff; color:#19191f; }
+html[data-creator-workspace="true"][data-brand-theme="lynq-light"] .dashboard-mobile-header { background:#ffffff; color:#19191f; }
 html[data-creator-workspace="true"][data-brand-theme="ivory-cherry"] .creator-nav-link[aria-current="page"] { background: #ebcbd2; color: #461323; }
 .creator-core-hero { position:relative; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:.35rem; min-height:8.9rem; overflow:visible; padding:.6rem .75rem .85rem; }
 .creator-core-hero::before { position:absolute; top:.25rem; left:50%; width:9rem; height:7rem; transform:translateX(-50%); border-radius:999px; background:radial-gradient(circle at 50% 43%,rgb(80 205 255/.28),rgb(37 156 255/.12) 34%,transparent 68%); filter:blur(8px); content:""; pointer-events:none; }
