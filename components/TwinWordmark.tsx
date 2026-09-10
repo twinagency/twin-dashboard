@@ -1,5 +1,5 @@
 import { isLynq, isMoxy } from "@/lib/agency-brand";
-import { JESS_KATE_PORTAL } from "@/lib/partner-portals";
+import { JESS_KATE_PORTAL, TETHER_PORTAL } from "@/lib/partner-portals";
 import IntelligenceCoreIcon from "@/components/IntelligenceCoreIcon";
 
 export default function TwinWordmark({
@@ -41,6 +41,22 @@ export default function TwinWordmark({
         }}
       >
         Ava
+      </span>
+    );
+  }
+  if (agencyName === TETHER_PORTAL.name) {
+    return (
+      <span
+        aria-label="Tether"
+        className={`inline-block leading-none ${inverse ? "text-white" : "text-[#080a0e]"} ${className}`}
+        style={{
+          fontFamily: "var(--font-display), var(--font-sans), sans-serif",
+          fontSize: "24px",
+          fontWeight: 700,
+          letterSpacing: "-0.045em",
+        }}
+      >
+        Tether.
       </span>
     );
   }
