@@ -1,5 +1,6 @@
 import { redirect } from 'next/navigation';
-import CreatorLinkEarningsDashboard from '@/components/CreatorLinkEarningsDashboard';
+import CreatorPortalShell from '@/components/CreatorPortalShell';
+import CreatorEarningsContent from '@/components/CreatorEarningsContent';
 import TwinWordmark from '@/components/TwinWordmark';
 import { requireCreatorReportIdentity } from '@/lib/creator-reporting';
 import { CreatorReportError } from '@/lib/creator-report-contract';
@@ -24,19 +25,21 @@ export default async function CreatorHomePage() {
         </p>
         <div className="mt-6 flex gap-5">
           <a href="/creator" className="font-medium text-primary">Try again</a>
-          <a href="/creator/onboarding" className="font-medium text-primary">View onboarding</a>
+          <a href="/creator/onboarding-view" className="font-medium text-primary">View onboarding</a>
           <form action="/creator-auth/logout" method="post"><button className="font-medium text-primary">Sign out</button></form>
         </div>
       </main>
     );
   }
 
+  const name = identity.cloneName || identity.displayName;
   return (
-    <CreatorLinkEarningsDashboard
-      displayName={identity.displayName}
-      cloneName={identity.cloneName}
-      connected={!!identity.cloneId}
-      onboardingComplete={identity.onboardingComplete}
-    />
+    <CreatorPortalShell displayName={name}>
+      <CreatorEarningsContent
+        name={name}
+        connected={!!identity.cloneId}
+        onboardingComplete={identity.onboardingComplete}
+      />
+    </CreatorPortalShell>
   );
 }
