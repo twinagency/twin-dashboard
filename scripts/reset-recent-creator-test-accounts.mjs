@@ -176,8 +176,9 @@ function createApi(rawUrl, serviceKey, request = fetch) {
       if (responseText) {
         try { payload = JSON.parse(responseText); } catch { payload = null; }
       }
-      const missingCode = payload?.code === "NoSuchKey" || payload?.code === "not_found" || payload?.error === "not_found";
-      if (response.status === 404 && missingCode) return false;
+      const noSuchKey = payload?.code === "NoSuchKey";
+      const legacyNotFound = payload?.code === "not_found" || payload?.error === "not_found";
+      if ((noSuchKey && (response.status === 400 || response.status === 404)) || (legacyNotFound && response.status === 404)) return false;
       if (!response.ok) {
         const rawCode = typeof payload?.code === "string" ? payload.code : "unknown";
         const code = /^[a-z0-9_]{1,64}$/i.test(rawCode) ? rawCode : "unknown";

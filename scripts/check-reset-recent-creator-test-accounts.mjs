@@ -250,7 +250,7 @@ function createFetchMock(state, serviceKey) {
       const path = encodedPath.map(decodeURIComponent).join("/");
       return state.storageObjects.has(`${bucket}/${path}`)
         ? jsonResponse({ name: path }, 200)
-        : jsonResponse({ code: "NoSuchKey", message: "not found" }, 404);
+        : jsonResponse({ code: "NoSuchKey", message: "not found" }, 400);
     }
 
     if (url.pathname.startsWith("/storage/v1/object/")) {
