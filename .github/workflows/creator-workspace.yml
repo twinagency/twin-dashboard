@@ -1,0 +1,29 @@
+name: Creator workspace verification
+on:
+  push:
+    branches: [feat/creator-live-earnings-workspace, main]
+    paths: [app/**, components/**, lib/**, middleware.ts, scripts/check-creator-*, .github/workflows/creator-workspace.yml]
+  pull_request:
+    paths: [app/**, components/**, lib/**, middleware.ts, scripts/check-creator-*, .github/workflows/creator-workspace.yml]
+permissions:
+  contents: read
+concurrency:
+  group: creator-workspace-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Creator identity and permissions
+        run: npx tsx scripts/check-creator-workspace.ts
+      - name: Existing partner and revenue regression tests
+        run: npm run test:offline
+      - name: Production build
+        run: npm run build
