@@ -1,0 +1,137 @@
+/* LYNQ / Link partner dashboard theme. Scoped by the verified LYNQ wordmark in the agency sidebar. */
+html:has(.dashboard-sidebar a[aria-label="LYNQ"]) {
+  --color-bg: #090b12;
+  --color-panel: #0f1320;
+  --color-elev: #151a2a;
+  --color-ink: #f5f7ff;
+  --color-muted: #929ab3;
+  --color-line: #262d43;
+  --color-accent: #275cff;
+  --color-accent-2: #7a4dff;
+  --color-accent-deep: #111838;
+  --color-accent-ink: #ffffff;
+  --color-accent-soft: #5c7dff;
+  --color-accent-tint: #1a2448;
+  --color-brand: #275cff;
+  --color-brand-light: #7a4dff;
+  --background: #090b12;
+  --foreground: #f5f7ff;
+  --card: #0f1320;
+  --card-foreground: #f5f7ff;
+  --popover: #121726;
+  --popover-foreground: #f5f7ff;
+  --secondary: #151a2a;
+  --secondary-foreground: #f5f7ff;
+  --muted: #151a2a;
+  --muted-foreground: #929ab3;
+  --border: #262d43;
+  --input: #262d43;
+  --ring: #4d70ff;
+  --shadow-card: 0 1px 2px rgb(0 0 0 / 0.24), 0 12px 36px rgb(0 0 0 / 0.24);
+}
+
+html:has(.dashboard-sidebar a[aria-label="LYNQ"]) body,
+html:has(.dashboard-sidebar a[aria-label="LYNQ"]) .canvas-glow {
+  background-color: #090b12;
+  color: #f5f7ff;
+}
+
+html:has(.dashboard-sidebar a[aria-label="LYNQ"]) .canvas-glow {
+  background-image:
+    radial-gradient(900px 420px at 18% -8%, rgb(39 92 255 / 0.16), transparent 60%),
+    radial-gradient(720px 360px at 88% 4%, rgb(122 77 255 / 0.11), transparent 60%);
+}
+
+html:has(.dashboard-sidebar a[aria-label="LYNQ"]) .dashboard-main::before {
+  background: radial-gradient(760px 340px at 10% 0%, rgb(47 105 255 / 0.14), transparent 68%);
+  opacity: 1;
+}
+html:has(.dashboard-sidebar a[aria-label="LYNQ"]) .dashboard-main::after {
+  background: linear-gradient(180deg, transparent 0 96%, rgb(81 89 255 / 0.12) 100%);
+}
+
+html:has(.dashboard-sidebar a[aria-label="LYNQ"]) .dashboard-sidebar,
+html:has(.dashboard-sidebar a[aria-label="LYNQ"]) .dashboard-mobile-header {
+  background:
+    radial-gradient(420px 310px at 52% 12%, rgb(53 79 255 / 0.22), transparent 66%),
+    linear-gradient(180deg, #0b0e18 0%, #080a10 100%);
+  border-color: rgb(91 105 255 / 0.18);
+  box-shadow: 12px 0 42px rgb(0 0 0 / 0.34), inset -1px 0 0 rgb(76 97 255 / 0.08);
+}
+
+html:has(.dashboard-sidebar a[aria-label="LYNQ"]) .dashboard-sidebar nav [class~="text-[#9cbad3]"] { color: #6e8cff; }
+html:has(.dashboard-sidebar a[aria-label="LYNQ"]) .dashboard-sidebar nav [class~="text-white/68"] { color: rgb(224 230 255 / 0.72); }
+html:has(.dashboard-sidebar a[aria-label="LYNQ"]) .dashboard-sidebar nav :is(a, button)[class~="bg-white/12"] {
+  background: linear-gradient(90deg, rgb(38 83 255 / 0.24), rgb(118 72 255 / 0.18));
+  color: #fff;
+  box-shadow: inset 0 0 0 1px rgb(101 115 255 / 0.26), 0 0 22px rgb(50 86 255 / 0.08);
+}
+
+/* Reuse the existing LYNQ agency-status block as a persistent floating AI orb hero. */
+html:has(.dashboard-sidebar a[aria-label="LYNQ"]) .dashboard-sidebar > .px-7.py-4 {
+  position: relative;
+  min-height: 10.5rem;
+  margin: 0.35rem 1rem 0.2rem;
+  padding: 7.9rem 0.75rem 0.75rem;
+  color: transparent;
+  text-align: center;
+}
+html:has(.dashboard-sidebar a[aria-label="LYNQ"]) .dashboard-sidebar > .px-7.py-4::before {
+  position: absolute;
+  top: 0.75rem;
+  left: 50%;
+  width: 7.2rem;
+  height: 7.2rem;
+  transform: translateX(-50%);
+  border-radius: 999px;
+  background:
+    radial-gradient(circle at 36% 30%, rgb(255 255 255 / 0.98) 0 2%, transparent 3%),
+    radial-gradient(circle at 58% 25%, rgb(81 205 255 / 0.94) 0 2.2%, transparent 3.3%),
+    radial-gradient(circle at 70% 46%, rgb(146 83 255 / 0.95) 0 2.3%, transparent 3.4%),
+    radial-gradient(circle at 42% 63%, rgb(64 110 255 / 0.95) 0 2.4%, transparent 3.5%),
+    radial-gradient(circle at 54% 47%, rgb(40 76 255 / 0.9), rgb(77 59 255 / 0.62) 36%, rgb(17 22 53 / 0.3) 63%, transparent 72%),
+    conic-gradient(from 25deg, #1e55ff, #7948ff, #173fff, #55c8ff, #1e55ff);
+  box-shadow: 0 0 12px rgb(76 111 255 / 0.8), 0 0 34px rgb(64 84 255 / 0.52), 0 0 72px rgb(105 68 255 / 0.34);
+  content: "";
+  animation: lynq-orb-float 4.4s ease-in-out infinite;
+}
+html:has(.dashboard-sidebar a[aria-label="LYNQ"]) .dashboard-sidebar > .px-7.py-4::after {
+  position: absolute;
+  top: 7.9rem;
+  left: 0;
+  right: 0;
+  color: #cfd8ff;
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  content: "AI Intelligence Core";
+  text-shadow: 0 0 16px rgb(74 100 255 / 0.55);
+}
+@keyframes lynq-orb-float {
+  0%, 100% { transform: translateX(-50%) translateY(0) scale(1); }
+  50% { transform: translateX(-50%) translateY(-7px) scale(1.025); }
+}
+
+html:has(.dashboard-sidebar a[aria-label="LYNQ"]) .dashboard-topbar {
+  background: rgb(9 11 18 / 0.94);
+  border-color: #252b40;
+  backdrop-filter: blur(18px);
+}
+html:has(.dashboard-sidebar a[aria-label="LYNQ"]) [data-slot="card"],
+html:has(.dashboard-sidebar a[aria-label="LYNQ"]) [data-slot="dialog-content"],
+html:has(.dashboard-sidebar a[aria-label="LYNQ"]) [data-slot="popover-content"] {
+  background-color: #0f1320;
+  border-color: #262d43;
+  box-shadow: var(--shadow-card);
+}
+html:has(.dashboard-sidebar a[aria-label="LYNQ"]) [data-slot="table-header"] { background: #131827; }
+html:has(.dashboard-sidebar a[aria-label="LYNQ"]) [data-slot="table-body"] [data-slot="table-row"]:hover { background: #141a2b; }
+html:has(.dashboard-sidebar a[aria-label="LYNQ"]) input,
+html:has(.dashboard-sidebar a[aria-label="LYNQ"]) textarea,
+html:has(.dashboard-sidebar a[aria-label="LYNQ"]) select {
+  background-color: #0d111d;
+  color: #f5f7ff;
+  border-color: #2a3148;
+}
+html:has(.dashboard-sidebar a[aria-label="LYNQ"]) .recharts-cartesian-grid line { stroke: #252d43; }
