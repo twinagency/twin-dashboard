@@ -35,6 +35,12 @@ export async function middleware(req: NextRequest) {
   // Creator auth is fully separate from admin and agency identity. Form posts
   // are same-origin only; creator pages never inherit the admin dev bypass.
   if (isCreatorAuthPath(pathname)) {
+    // A browser can legitimately land on the logout URL after a stale creator
+    // session/account redirect. Let the logout route clear the cookie and send
+    // the user back to /creator/login rather than trapping them on a 403.
+    if (pathname === "/creator-auth/logout" && ["GET", "HEAD"].includes(req.method) && !req.headers.has("next-action")) {
+      return withPathname(req);
+    }
     if (req.method !== "POST" || req.headers.has("next-action") || !trustedFormOrigin(req)) {
       return new NextResponse("Forbidden", { status: 403 });
     }
