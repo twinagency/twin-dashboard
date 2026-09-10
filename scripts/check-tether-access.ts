@@ -74,7 +74,8 @@ async function main() {
     assert.equal((await login(request({}, "https://evil.example"))).status, 403);
     assert.equal((await login(request({}, origin, { "next-action": "forged" }))).status, 403);
     assert.equal(tokenRequests, 0);
-    for (const values of [{ email: "" }, { email: "not-an-email" }, { email: "not-a-member@tether.test" }, { password: "" }, { password: "x".repeat(257) }]) assert.equal((await login(request(values))).status, 401);
+    const invalidCases: Record<string, string>[] = [{ email: "" }, { email: "not-an-email" }, { email: "not-a-member@tether.test" }, { password: "" }, { password: "x".repeat(257) }];
+    for (const values of invalidCases) assert.equal((await login(request(values))).status, 401);
     assert.equal(tokenRequests, 0);
     assert.equal((await login(request({ password: "wrong-password" }))).status, 401);
     const ok = await login(request({ email: "  OPERATOR@TETHER.TEST  ", agency: LYNQ_MANAGEMENT_AGENCY_ID, clone: other, next: "/settings" }));
