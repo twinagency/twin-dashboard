@@ -20,7 +20,7 @@ import TwinUpdatePopup from "@/components/TwinVersionBadge";
 import { getCachedTwinVersion, getFleetClones, getHeaderAllTimeStars } from "@/lib/query-cache";
 import { isAuthed } from "@/lib/auth";
 import { isAgencyPath } from "@/lib/agency-policy";
-import { isMoxy, pathAgencyName } from "@/lib/agency-brand";
+import { isLynq, isMoxy, pathAgencyName } from "@/lib/agency-brand";
 import { getCloneScope } from "@/lib/clone-scope";
 import { Inter, Inter_Tight, Space_Grotesk } from "next/font/google";
 import { cn } from "@/lib/utils";
@@ -134,8 +134,10 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // stale breadcrumb + Fans full-bleed leaking across pages). Path-dependent
   // rendering lives in the TopBar/MainShell CLIENT components (usePathname).
 
+  // Set the verified agency theme on the server so mobile never flashes the
+  // default dark sidebar before DashboardAccessProvider hydrates.
   return (
-    <html lang="en" data-agency={isMoxy(agency?.name) ? "moxy" : undefined} data-brand-theme={agency?.name === JESS_KATE_PORTAL.name ? "ivory-cherry" : undefined} className={cn("font-sans", inter.variable, plexMono.variable, spaceGrotesk.variable, interTight.variable)} style={{ colorScheme: "light" }} suppressHydrationWarning>
+    <html lang="en" data-agency={isMoxy(agency?.name) ? "moxy" : isLynq(agency?.name) ? "lynq" : undefined} data-brand-theme={isLynq(agency?.name) ? "lynq-light" : agency?.name === JESS_KATE_PORTAL.name ? "ivory-cherry" : undefined} className={cn("font-sans", inter.variable, plexMono.variable, spaceGrotesk.variable, interTight.variable)} style={{ colorScheme: "light" }} suppressHydrationWarning>
       <body className="min-h-screen bg-bg">
         {/* Privacy mode has to be on the <html> element BEFORE first paint.
             BlurProvider applies it too, but only in a useEffect after
