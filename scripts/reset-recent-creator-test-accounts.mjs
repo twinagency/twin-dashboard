@@ -58,7 +58,7 @@ export const PROTECTED_MEMBERSHIPS = Object.freeze([
 const EXPECTED_CHILD_IDS = Object.freeze({
   creator_applications: new Set(["7a7d6196-b5c3-48cb-a3b9-591e2ddf84f6", "c1318626-c3c7-4402-b32d-e06535d82af8"]),
   creator_consents: new Set(["9951ad7a-0656-433d-986c-71dd0d756795", "c6ca3489-e7fe-4106-abd6-879cdf1e1940"]),
-  creator_files: new Set(["69610a53-163e-40ba-a134-1cafcfef35b7", "5a1a0142-10d4-462f-afdb-b9c92c87da24", "304246f2-59db-4bbd-b94d-fa1bc96645ee", "6c37209e-239f-4cf3-848b-4c5a7db0f8ac", "2c9d88b-6a04-4e65-89a5-f5df91769c76", "11e2e877-e478-4ef1-930d-487363a1cc17"]),
+  creator_files: new Set(["69610a53-163e-40ba-a134-1cafcfef35b7", "5a1a0142-10d4-462f-afdb-b9c92c87da24", "304246f2-59db-4bbd-b94d-fa1bc96645ee", "6c37209e-239f-4cf3-848b-4c5a7db0f8ac", "2c9d88b2-6a04-4e65-89a5-f5df91769c76", "11e2e877-e478-4ef1-930d-487363a1cc17"]),
 });
 
 const DEPENDENT_TABLES = Object.freeze([

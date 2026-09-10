@@ -85,9 +85,12 @@ const fileIds = [
   "5a1a0142-10d4-462f-afdb-b9c92c87da24",
   "304246f2-59db-4bbd-b94d-fa1bc96645ee",
   "6c37209e-239f-4cf3-848b-4c5a7db0f8ac",
-  "2c9d88b-6a04-4e65-89a5-f5df91769c76",
+  "2c9d88b2-6a04-4e65-89a5-f5df91769c76",
   "11e2e877-e478-4ef1-930d-487363a1cc17",
 ];
+for (const id of [...applicationIds, ...consentIds, ...fileIds]) {
+  assert.match(id, uuid, "every destructive child-record allowlist entry must be a valid UUID");
+}
 const sentinel = Object.freeze({
   accountId: "11111111-1111-4111-8111-111111111111",
   authUserId: "22222222-2222-4222-8222-222222222222",
