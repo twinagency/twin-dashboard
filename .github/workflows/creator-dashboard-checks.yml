@@ -8,7 +8,8 @@ on:
       - 'lib/creator-dashboard-*.ts'
       - 'lib/creator-identity-fields.ts'
       - 'middleware.ts'
-      - 'scripts/check-creator-dashboard.ts'
+      - 'scripts/check-creator-dashboard*.ts'
+      - '.github/workflows/creator-dashboard-checks.yml'
   push:
     branches: [main]
     paths:
@@ -18,13 +19,14 @@ on:
       - 'lib/creator-dashboard-*.ts'
       - 'lib/creator-identity-fields.ts'
       - 'middleware.ts'
-      - 'scripts/check-creator-dashboard.ts'
+      - 'scripts/check-creator-dashboard*.ts'
+      - '.github/workflows/creator-dashboard-checks.yml'
 permissions:
   contents: read
 jobs:
   creator-access:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -34,3 +36,13 @@ jobs:
       - run: npm ci
       - run: npx tsc --noEmit
       - run: npx tsx scripts/check-creator-dashboard.ts
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - name: Isolated browser and API checks with fixture data
+        run: npx tsx scripts/check-creator-dashboard-browser.ts
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: creator-dashboard-review
+          path: creator-review/
+          if-no-files-found: ignore
