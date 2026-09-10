@@ -9,8 +9,6 @@ import { CLONE_SCOPE_COOKIE } from "@/lib/clone-scope";
 import { dashboardOrigin, trustedFormOrigin } from "@/lib/form-origin";
 import { TETHER_PORTAL as portal } from "@/lib/partner-portals";
 
-const BOOTSTRAP_EMAILS = new Set(["contact@twinagency.co", "italia.kash@yahoo.com"]);
-
 export function GET(req: NextRequest) {
   return NextResponse.redirect(new URL(portal.loginPath, dashboardOrigin(req)), 303);
 }
@@ -27,29 +25,9 @@ export async function POST(req: NextRequest) {
     const password = String(form.get("password") ?? "");
     if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email) || email.length > 254 || !password || password.length > 256) return failed();
 
-    const admin = serviceClient();
-    let member = await admin.from("agency_memberships").select("user_id,email")
+    const member = await serviceClient().from("agency_memberships").select("user_id,email")
       .eq("agency_id", portal.id).eq("email", email).eq("active", true).maybeSingle();
     if (member.error) return failed("unavailable", 503);
-
-    if (!member.data?.user_id && BOOTSTRAP_EMAILS.has(email)) {
-      const created = await admin.auth.admin.createUser({ email, password, email_confirm: true });
-      if (created.error || !created.data.user?.id) return failed("unavailable", 503);
-      const inserted = await admin.from("agency_memberships").insert({
-        agency_id: portal.id,
-        user_id: created.data.user.id,
-        email,
-        active: true,
-      });
-      if (inserted.error) {
-        await admin.auth.admin.deleteUser(created.data.user.id);
-        return failed("unavailable", 503);
-      }
-      member = await admin.from("agency_memberships").select("user_id,email")
-        .eq("agency_id", portal.id).eq("email", email).eq("active", true).maybeSingle();
-      if (member.error) return failed("unavailable", 503);
-    }
-
     if (!member.data?.user_id || member.data.email !== email) return failed();
     const auth = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_KEY!, {
       auth: { persistSession: false, autoRefreshToken: false },
