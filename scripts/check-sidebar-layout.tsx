@@ -8,6 +8,7 @@ import Access, * as accessModule from "../components/DashboardAccessProvider";
 import * as agencyPolicy from "../lib/agency-policy";
 import * as agencyBrand from "../lib/agency-brand";
 import * as portals from "../lib/partner-portals";
+import * as creatorPolicy from "../lib/creator-dashboard-policy";
 
 // Render the actual shared desktop/mobile content with isolated navigation.
 // No credentials, database calls or messages are used by these fixtures.
@@ -41,6 +42,7 @@ const components = compile("components/Sidebar.tsx", {
   "@/lib/agency-policy": agencyPolicy,
   "@/lib/agency-brand": agencyBrand,
   "@/lib/partner-portals": portals,
+  "@/lib/creator-dashboard-policy": creatorPolicy,
   "next/link": { __esModule: true, default: ({ children, ...props }: React.ComponentProps<"a">) => React.createElement("a", props, children) },
   "next/navigation": { usePathname: () => pathname, useSearchParams: () => query },
   "@/lib/clone-switcher-bus": { openCloneSwitcher: () => undefined },
