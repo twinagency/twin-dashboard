@@ -2,8 +2,10 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { NextRequest } from "next/server";
 import { middleware } from "../middleware";
+import { POST as saveCreatorOnboarding } from "../app/creator-auth/onboarding/route";
+import { POST as uploadCreatorOnboarding } from "../app/creator-auth/upload/route";
 import { signCreatorSession, CREATOR_SESSION_COOKIE } from "../lib/creator-session";
-import { creatorDashboardIdentity } from "../lib/creator-dashboard-identity";
+import { creatorAccountStatusAllowsAccess, creatorDashboardIdentity } from "../lib/creator-dashboard-identity";
 import { CREATOR_DASHBOARD_NAV, CREATOR_AUDIENCE_HEADER, assertCreatorQuery, creatorApiAllowed } from "../lib/creator-dashboard-policy";
 import {
   assertCreatorIdentityForm,
@@ -19,7 +21,8 @@ import { INTAKE_FIELD_KEYS } from "../lib/intake";
 import { scopeReadUrl, redactAgencyData } from "../lib/agency-query";
 import { accessCacheKey, withDashboardAccess } from "../lib/dashboard-access";
 import { guardDashboardAction } from "../lib/agency-management";
-import { agencyCanManage } from "../lib/agency-management-policy";
+import { agencyCanManage, LYNQ_MANAGEMENT_AGENCY_ID } from "../lib/agency-management-policy";
+import { TETHER_PORTAL } from "../lib/partner-portals";
 
 const account = "11111111-1111-4111-8111-111111111111";
 const user = "22222222-2222-4222-8222-222222222222";
@@ -27,24 +30,33 @@ const own = "33333333-3333-4333-8333-333333333333";
 const other = "44444444-4444-4444-8444-444444444444";
 const origin = "https://dashboard.tgaiclone.xyz";
 async function main() {
+  for (const status of ["applicant", "approved", "active"]) assert.equal(creatorAccountStatusAllowsAccess(status), true);
+  for (const status of ["paused", "rejected", "archived", "unexpected", null]) assert.equal(creatorAccountStatusAllowsAccess(status), false);
   Object.assign(process.env, { NODE_ENV: "production", SUPABASE_URL: "https://creator-offline.supabase.co", SUPABASE_SERVICE_KEY: "offline-fixture-only", CREATOR_SESSION_SECRET: "offline-creator-secret-not-for-production", DASHBOARD_PASSWORD: "offline-admin-secret" });
   const oldFetch = globalThis.fetch;
-  let archived = false, mismatched = false, onboarded = true, linked = true, databaseError = false;
-  globalThis.fetch = async (input) => {
-    const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
+  let accountExists = true, accountStatus = "active", accountSource = "twin", mismatched = false, onboarded = true, linked = true, databaseError = false;
+  let assignmentExists = true, agencyId: string = TETHER_PORTAL.id, agencyName: string = TETHER_PORTAL.name, agencyActive = true;
+  const writes: Array<{ method: string; path: string; body: string }> = [];
+  globalThis.fetch = async (input, init) => {
+    const request = new Request(input, init);
+    const url = new URL(request.url);
     if (url.hostname !== "creator-offline.supabase.co") throw new Error("No live requests in offline creator tests");
     if (databaseError) return new Response(JSON.stringify({ message: "offline database unavailable" }), { status: 503, headers: { "content-type": "application/json" } });
+    if (!["GET", "HEAD"].includes(request.method)) {
+      writes.push({ method: request.method, path: url.pathname, body: await request.clone().text() });
+      return new Response(null, { status: 201, headers: { "content-type": "application/json" } });
+    }
     let body: unknown;
     switch (url.pathname) {
       case "/rest/v1/creator_accounts":
         assert.equal(url.searchParams.get("id"), `eq.${account}`);
-        body = { id: account, auth_user_id: mismatched ? other : user, display_name: "Fixture Creator", account_status: archived ? "archived" : "active" }; break;
+        body = accountExists ? { id: account, auth_user_id: mismatched ? other : user, display_name: "Fixture Creator", account_status: accountStatus, source: accountSource } : null; break;
       case "/rest/v1/creator_applications":
         assert.equal(url.searchParams.get("creator_account_id"), `eq.${account}`);
         body = { status: onboarded ? "submitted" : "draft" }; break;
       case "/rest/v1/creator_agency_assignments":
         assert.equal(url.searchParams.get("creator_account_id"), `eq.${account}`);
-        body = { agency_id: "fixture-agency", partner_agencies: { name: "Tether", active: true } }; break;
+        body = assignmentExists ? { agency_id: agencyId, partner_agencies: { name: agencyName, active: agencyActive } } : null; break;
       case "/rest/v1/creator_clone_links":
         assert.equal(url.searchParams.get("creator_account_id"), `eq.${account}`);
         body = linked ? { clone_id: own, clones: { id: own, name: "Fixture Creator" } } : null; break;
@@ -59,6 +71,8 @@ async function main() {
     assert.ok(identity);
     assert.deepEqual(identity.cloneIds, [own]);
     assert.equal(identity.id, `creator:${account}`);
+    assert.equal(identity.agencyId, TETHER_PORTAL.id);
+    assert.equal(identity.name, TETHER_PORTAL.name);
     assert.equal(agencyCanManage(identity), false);
     assert.notEqual(accessCacheKey(identity), accessCacheKey(null));
     assert.notEqual(accessCacheKey(identity), accessCacheKey({ ...identity, id: "another-creator" }));
@@ -164,15 +178,84 @@ async function main() {
     linked = true; onboarded = false;
     assert.equal((await middleware(request("/creator"))).headers.get("location"), origin + "/creator/onboarding");
     assert.equal((await middleware(request("/api/dashboard"))).status, 403);
-    onboarded = true; archived = true; assert.equal(await creatorDashboardIdentity(token), null);
-    archived = false; mismatched = true; assert.equal(await creatorDashboardIdentity(token), null);
-    mismatched = false; databaseError = true; assert.equal(await creatorDashboardIdentity(token), null);
+    onboarded = true;
+
+    // Keep legitimate pre-launch and approved creator states usable (including
+    // the existing demo/onboarding flows) while denying paused/terminal states.
+    accountStatus = "applicant"; assert.ok(await creatorDashboardIdentity(token));
+    accountStatus = "approved"; assert.ok(await creatorDashboardIdentity(token));
+    accountStatus = "active";
+
+    // Brand and agency context come from the current active assignment, while
+    // the synthetic creator identity must never gain LYNQ management powers.
+    agencyId = LYNQ_MANAGEMENT_AGENCY_ID; agencyName = "LYNQ";
+    const lynqIdentity = await creatorDashboardIdentity(token);
+    assert.ok(lynqIdentity);
+    assert.equal(lynqIdentity.agencyId, LYNQ_MANAGEMENT_AGENCY_ID);
+    assert.equal(lynqIdentity.name, "LYNQ");
+    assert.equal(lynqIdentity.id, `creator:${account}`);
+    assert.equal(agencyCanManage(lynqIdentity), false);
+
+    accountSource = "agency_invite"; assignmentExists = false;
+    assert.equal(await creatorDashboardIdentity(token), null, "an incomplete direct-agency signup cannot fall back to Twin access");
+    accountSource = "twin"; assignmentExists = true;
+
+    const actionRequest = (path: string, body: Record<string, string>) => new NextRequest(origin + path, {
+      method: "POST",
+      headers: { cookie: `${CREATOR_SESSION_COOKIE}=${token}`, origin },
+      body: new URLSearchParams(body),
+    });
+    writes.length = 0;
+    const allowedOnboarding = await withDashboardAccess(null, () => saveCreatorOnboarding(actionRequest("/creator-auth/onboarding", { action: "skip_voice" })));
+    assert.equal(allowedOnboarding.status, 303);
+    assert.equal(new URL(allowedOnboarding.headers.get("location")!).searchParams.get("status"), "voice_skipped");
+    assert.equal(writes.length, 1);
+    assert.equal(writes[0].path, "/rest/v1/creator_onboarding_progress");
+    assert.equal(JSON.parse(writes[0].body).creator_account_id, account);
+
+    async function assertStaleSessionCannotWrite(label: string) {
+      for (const [path, body, handler] of [
+        ["/creator-auth/onboarding", { action: "skip_voice" }, saveCreatorOnboarding],
+        ["/creator-auth/upload", { kind: "content" }, uploadCreatorOnboarding],
+      ] as const) {
+        writes.length = 0;
+        const response = await withDashboardAccess(null, () => handler(actionRequest(path, body)));
+        assert.equal(response.status, 303, `${label}: ${path}`);
+        assert.equal(new URL(response.headers.get("location")!).pathname, "/creator/login", `${label}: ${path}`);
+        assert.deepEqual(writes, [], `${label}: ${path} performed a write`);
+      }
+    }
+
+    accountStatus = "paused";
+    assert.equal(await creatorDashboardIdentity(token), null);
+    await assertStaleSessionCannotWrite("paused account");
+    accountStatus = "archived";
+    assert.equal(await creatorDashboardIdentity(token), null);
+    accountStatus = "rejected";
+    assert.equal(await creatorDashboardIdentity(token), null);
+    accountStatus = "unexpected";
+    assert.equal(await creatorDashboardIdentity(token), null, "unknown statuses must fail closed");
+    accountStatus = "active"; accountExists = false;
+    await assertStaleSessionCannotWrite("deleted account");
+    accountExists = true; mismatched = true;
+    assert.equal(await creatorDashboardIdentity(token), null);
+    await assertStaleSessionCannotWrite("stale auth ownership");
+    mismatched = false; agencyActive = false;
+    assert.equal(await creatorDashboardIdentity(token), null);
+    await assertStaleSessionCannotWrite("inactive LYNQ assignment");
+    agencyActive = true; databaseError = true; assert.equal(await creatorDashboardIdentity(token), null);
     databaseError = false; assert.equal(await creatorDashboardIdentity("invalid.signature"), null);
     const source = readFileSync("app/creator/page.tsx", "utf8");
     assert.match(source, /<RevenueDashboard/); assert.match(source, /<RevenueTooltipFix/);
     assert.doesNotMatch(source, /RevenueTrend|aggregateTrend|metric\(/);
     const identityRouteSource = readFileSync("app/creator-auth/identity/route.ts", "utf8");
     assert.ok(identityRouteSource.indexOf("assertCreatorIdentityForm(fd)") < identityRouteSource.indexOf("const db = serviceClient()"), "Forged fields must be rejected before the write client is created");
+    for (const route of ["app/creator-auth/onboarding/route.ts", "app/creator-auth/upload/route.ts"]) {
+      const routeSource = readFileSync(route, "utf8");
+      assert.match(routeSource, /creatorDashboardIdentity/, `${route} must revalidate current creator state`);
+      assert.doesNotMatch(routeSource, /verifyCreatorSession/, `${route} must not authorize from the signed cookie alone`);
+      assert.ok(routeSource.indexOf("creatorDashboardIdentity") < routeSource.indexOf("req.formData()"), `${route} must authorize before parsing or writing form data`);
+    }
     const shellSource = readFileSync("components/CreatorWorkspaceShell.tsx", "utf8");
     assert.match(shellSource, /<DashboardAccessProvider agencyName=\{agencyName\} audience="creator">/);
     for (const sharedComponent of ["Sidebar", "MobileMenu", "TopBar", "MainShell"]) {

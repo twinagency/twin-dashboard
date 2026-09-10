@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64">
+  <defs>
+    <linearGradient id="lynq" x1="12" y1="10" x2="54" y2="54" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#ff8b35"/>
+      <stop offset="0.48" stop-color="#e94b9c"/>
+      <stop offset="1" stop-color="#293bea"/>
+    </linearGradient>
+  </defs>
+  <rect width="64" height="64" rx="14" fill="#faf9fc"/>
+  <path d="M16 13h10v28h25v10H16z" fill="url(#lynq)"/>
+  <circle cx="47" cy="17" r="5" fill="#293bea"/>
+</svg>

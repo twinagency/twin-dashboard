@@ -1,7 +1,8 @@
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
+import type { NextRequest } from "next/server";
 import { supabaseAdmin } from "@/lib/supabase";
-import { CREATOR_SESSION_COOKIE, verifyCreatorSession } from "@/lib/creator-session";
+import { CREATOR_SESSION_COOKIE } from "@/lib/creator-session";
+import { creatorDashboardIdentity } from "@/lib/creator-dashboard-identity";
 import { creatorRequestUrl } from "@/lib/creator-origin";
 import { CREATOR_QUESTIONNAIRE } from "@/lib/creator-questionnaire";
 import { CREATOR_PORTAL_COOKIE, creatorLoginPath } from "@/lib/creator-routing";
@@ -12,11 +13,10 @@ function back(req: Request, status: string) {
   return NextResponse.redirect(url, 303);
 }
 
-async function getSession() {
-  const jar = await cookies();
+async function getCreator(req: NextRequest) {
   return {
-    session: await verifyCreatorSession(jar.get(CREATOR_SESSION_COOKIE)?.value),
-    portal: jar.get(CREATOR_PORTAL_COOKIE)?.value,
+    creator: await creatorDashboardIdentity(req.cookies.get(CREATOR_SESSION_COOKIE)?.value),
+    portal: req.cookies.get(CREATOR_PORTAL_COOKIE)?.value,
   };
 }
 
@@ -31,9 +31,10 @@ async function latestApplication(accountId: string) {
   return data;
 }
 
-export async function POST(req: Request) {
-  const { session, portal } = await getSession();
-  if (!session) return NextResponse.redirect(creatorRequestUrl(req, creatorLoginPath(null, portal)), 303);
+export async function POST(req: NextRequest) {
+  const { creator, portal } = await getCreator(req);
+  if (!creator) return NextResponse.redirect(creatorRequestUrl(req, creatorLoginPath(null, portal)), 303);
+  const accountId = creator.accountId;
   const form = await req.formData();
   const action = String(form.get("action") || "");
   const now = new Date().toISOString();
@@ -49,7 +50,7 @@ export async function POST(req: Request) {
       return back(req, "questionnaire_missing");
     }
 
-    const existing = await latestApplication(session.accountId);
+    const existing = await latestApplication(accountId);
     if (existing?.id) {
       const merged = { ...(existing.answers || {}), ...answers };
       const { error } = await supabaseAdmin
@@ -60,20 +61,20 @@ export async function POST(req: Request) {
     } else {
       const { error } = await supabaseAdmin
         .from("creator_applications")
-        .insert({ creator_account_id: session.accountId, answers, status: "draft" });
+        .insert({ creator_account_id: accountId, answers, status: "draft" });
       if (error) return back(req, "error");
     }
 
     await supabaseAdmin
       .from("creator_onboarding_progress")
-      .upsert({ creator_account_id: session.accountId, questionnaire_completed: true, updated_at: now }, { onConflict: "creator_account_id" });
+      .upsert({ creator_account_id: accountId, questionnaire_completed: true, updated_at: now }, { onConflict: "creator_account_id" });
     return back(req, "questionnaire_saved");
   }
 
   if (action === "skip_voice") {
     await supabaseAdmin
       .from("creator_onboarding_progress")
-      .upsert({ creator_account_id: session.accountId, voice_completed: true, updated_at: now }, { onConflict: "creator_account_id" });
+      .upsert({ creator_account_id: accountId, voice_completed: true, updated_at: now }, { onConflict: "creator_account_id" });
     return back(req, "voice_skipped");
   }
 
@@ -85,7 +86,7 @@ export async function POST(req: Request) {
     const { data: existing } = await supabaseAdmin
       .from("creator_consents")
       .select("id")
-      .eq("creator_account_id", session.accountId)
+      .eq("creator_account_id", accountId)
       .eq("consent_version", "twin-creator-consent-v1")
       .order("created_at", { ascending: false })
       .limit(1)
@@ -94,7 +95,7 @@ export async function POST(req: Request) {
     if (!existing) {
       const { error } = await supabaseAdmin
         .from("creator_consents")
-        .insert({ creator_account_id: session.accountId, legal_name: legalName, consent_version: "twin-creator-consent-v1", signed_at: now });
+        .insert({ creator_account_id: accountId, legal_name: legalName, consent_version: "twin-creator-consent-v1", signed_at: now });
       if (error) return back(req, "error");
     }
     return back(req, "consent_saved");
@@ -102,16 +103,16 @@ export async function POST(req: Request) {
 
   if (action === "submit") {
     const [{ data: progress }, { data: consent }, { data: files }] = await Promise.all([
-      supabaseAdmin.from("creator_onboarding_progress").select("questionnaire_completed,content_completed,voice_completed").eq("creator_account_id", session.accountId).maybeSingle(),
-      supabaseAdmin.from("creator_consents").select("id").eq("creator_account_id", session.accountId).limit(1).maybeSingle(),
-      supabaseAdmin.from("creator_files").select("kind,storage_transfer_status").eq("creator_account_id", session.accountId),
+      supabaseAdmin.from("creator_onboarding_progress").select("questionnaire_completed,content_completed,voice_completed").eq("creator_account_id", accountId).maybeSingle(),
+      supabaseAdmin.from("creator_consents").select("id").eq("creator_account_id", accountId).limit(1).maybeSingle(),
+      supabaseAdmin.from("creator_files").select("kind,storage_transfer_status").eq("creator_account_id", accountId),
     ]);
     const hasContent = (files || []).some((f) => f.kind === "content" && f.storage_transfer_status === "verified");
     if (!progress?.questionnaire_completed || !progress?.content_completed || !progress?.voice_completed || !consent || !hasContent) {
       return back(req, "not_ready");
     }
 
-    const existing = await latestApplication(session.accountId);
+    const existing = await latestApplication(accountId);
     if (existing?.id) {
       const { error } = await supabaseAdmin
         .from("creator_applications")
@@ -121,7 +122,7 @@ export async function POST(req: Request) {
     } else {
       const { error } = await supabaseAdmin
         .from("creator_applications")
-        .insert({ creator_account_id: session.accountId, status: "submitted", submitted_at: now, answers: {} });
+        .insert({ creator_account_id: accountId, status: "submitted", submitted_at: now, answers: {} });
       if (error) return back(req, "error");
     }
     return NextResponse.redirect(creatorRequestUrl(req, "/creator?submitted=1"), 303);

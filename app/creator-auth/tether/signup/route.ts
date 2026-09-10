@@ -7,6 +7,7 @@ import { AGENCY_PORTAL_COOKIE } from "@/lib/agency-brand";
 import { SESSION_COOKIE } from "@/lib/session";
 import { CLONE_SCOPE_COOKIE } from "@/lib/clone-scope";
 import { dashboardOrigin } from "@/lib/form-origin";
+import { exactCaseInsensitiveEmailPattern } from "@/lib/creator-email";
 import { TETHER_CREATOR_LOGIN_PATH, TETHER_CREATOR_SIGNUP_PATH } from "@/lib/creator-routing";
 import {
   creatorPublishableKey,
@@ -41,12 +42,12 @@ export async function POST(req: Request) {
   if (!input) return redirectWithError(req, "invalid");
 
   const db = serviceClient();
-  // Exact normalized email comparison: wildcard matching must never select a
-  // pre-provisioned account for a public applicant.
+  // Catch legacy mixed-case emails without allowing LIKE wildcards to select
+  // a different pre-provisioned account.
   const { data: existing, error: existingError } = await db
     .from("creator_accounts")
     .select("id")
-    .eq("email", input.email)
+    .ilike("email", exactCaseInsensitiveEmailPattern(input.email))
     .maybeSingle();
   if (existingError) {
     console.error("Tether creator account lookup failed", existingError);

@@ -1,20 +1,35 @@
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
-import { cookies } from "next/headers";
 import { serviceClient } from "@/lib/supabase-service";
+import { creatorAccountStatusAllowsAccess, creatorDashboardIdentity } from "@/lib/creator-dashboard-identity";
 import { CREATOR_SESSION_COOKIE, creatorCookieOptions, signCreatorSession } from "@/lib/creator-session";
-import { safeCreatorNext, TETHER_CREATOR_LOGIN_PATH } from "@/lib/creator-routing";
-import { creatorRequestUrl } from "@/lib/creator-origin";
+import {
+  CREATOR_PORTAL_COOKIE,
+  creatorPortalCookieOptions,
+  creatorPortalForIdentity,
+  creatorPublicLoginPath,
+  normalizeCreatorPublicPortal,
+  safeCreatorNext,
+  type CreatorPublicPortal,
+} from "@/lib/creator-routing";
+import { dashboardOrigin } from "@/lib/form-origin";
 import { AGENCY_COOKIE } from "@/lib/agency-policy";
 import { AGENCY_PORTAL_COOKIE } from "@/lib/agency-brand";
 import { SESSION_COOKIE } from "@/lib/session";
 import { CLONE_SCOPE_COOKIE } from "@/lib/clone-scope";
 
-function redirectWithError(req: Request, next: string, portal: "twin" | "tether") {
-  const url = creatorRequestUrl(req, portal === "tether" ? TETHER_CREATOR_LOGIN_PATH : "/creator/login");
+function withCreatorPortal(response: NextResponse, portal: CreatorPublicPortal): NextResponse {
+  // This cookie only remembers which public sign-in page to show. Verified
+  // account and assignment rows remain the sole source of creator authority.
+  response.cookies.set(CREATOR_PORTAL_COOKIE, portal, creatorPortalCookieOptions());
+  return response;
+}
+
+function redirectWithError(req: Request, next: string, portal: CreatorPublicPortal) {
+  const url = new URL(creatorPublicLoginPath(portal), dashboardOrigin(req));
   url.searchParams.set("error", "1");
   url.searchParams.set("next", next);
-  return NextResponse.redirect(url, 303);
+  return withCreatorPortal(NextResponse.redirect(url, 303), portal);
 }
 
 export async function POST(req: Request) {
@@ -22,8 +37,8 @@ export async function POST(req: Request) {
   const email = String(form.get("email") || "").trim().toLowerCase();
   const password = String(form.get("password") || "");
   const next = safeCreatorNext(String(form.get("next") || ""));
-  // Presentation hint only. It never grants a Tether assignment or clone.
-  const portal = form.get("portal") === "tether" ? "tether" : "twin";
+  // Presentation hint only. It never grants an agency assignment or clone.
+  const portal = normalizeCreatorPublicPortal(form.get("portal"));
   if (!email || !password) return redirectWithError(req, next, portal);
 
   const authClient = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_KEY!, {
@@ -39,16 +54,20 @@ export async function POST(req: Request) {
     .select("id,account_status")
     .eq("auth_user_id", data.user.id)
     .maybeSingle();
-  if (accountError || !account || account.account_status === "archived" || account.account_status === "rejected") {
+  if (accountError || !account || !creatorAccountStatusAllowsAccess(account.account_status)) {
     return redirectWithError(req, next, portal);
   }
 
   const token = await signCreatorSession(account.id, data.user.id);
-  const jar = await cookies();
-  jar.set(CREATOR_SESSION_COOKIE, token, creatorCookieOptions());
-  jar.delete(AGENCY_COOKIE);
-  jar.delete(AGENCY_PORTAL_COOKIE);
-  jar.delete(SESSION_COOKIE);
-  jar.delete(CLONE_SCOPE_COOKIE);
-  return NextResponse.redirect(creatorRequestUrl(req, next), 303);
+  const identity = await creatorDashboardIdentity(token);
+  if (!identity) return redirectWithError(req, next, portal);
+
+  const verifiedPortal = creatorPortalForIdentity(identity, portal);
+  const response = withCreatorPortal(NextResponse.redirect(new URL(next, dashboardOrigin(req)), 303), verifiedPortal);
+  response.cookies.set(CREATOR_SESSION_COOKIE, token, creatorCookieOptions());
+  response.cookies.delete(AGENCY_COOKIE);
+  response.cookies.delete(AGENCY_PORTAL_COOKIE);
+  response.cookies.delete(SESSION_COOKIE);
+  response.cookies.delete(CLONE_SCOPE_COOKIE);
+  return response;
 }

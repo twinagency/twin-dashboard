@@ -196,7 +196,7 @@ try {
   await reference.screenshot({ path: path.join(out, 'tether-agency-core-reference.png'), fullPage: true });
   await reference.close();
 
-  for (const brand of ['Tether']) for (const width of [390, 1440]) {
+  for (const brand of ['Tether', 'LYNQ']) for (const width of [390, 1440]) {
     const viewport = width < 1024 ? 'mobile' : 'desktop';
     const page = await browser.newPage({ viewport: { width, height: 1000 }, colorScheme: 'light' });
     const errors = [];
@@ -210,6 +210,12 @@ try {
       await page.locator('.dashboard-topbar').waitFor();
       await page.locator('.dashboard-main').waitFor();
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, 'No horizontal document overflow');
+      if (brand === 'LYNQ') {
+        assert.equal(await page.locator('html').getAttribute('data-brand-theme'), 'lynq-light');
+        assert.ok(await page.getByText('LYNQ', { exact: true }).count(), 'Verified LYNQ identity brands the shared creator shell');
+        assert.doesNotMatch(await page.locator('body').innerText(), /Twin Technologies/i, 'LYNQ creator workspace does not visibly expose Twin');
+        assert.ok(await page.locator('[data-lynq-core="particles"] canvas').count(), 'LYNQ keeps the original particle wordmark');
+      }
 
       const creatorChip = page.getByLabel('Creator account: Fixture Creator', { exact: true });
       assert.equal(await creatorChip.count(), 1, 'Creator identity appears once in the shared top bar');
@@ -342,6 +348,7 @@ try {
         noAdminNavigation: true,
         noAssistant: true,
         exactTetherCore: brand === 'Tether',
+        verifiedLynqBranding: brand === 'LYNQ',
         customDateRange: true,
         currencyToggle: true,
         creatorInfoNavigation: true,

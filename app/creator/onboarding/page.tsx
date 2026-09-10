@@ -12,6 +12,7 @@ import { CREATOR_QUESTIONNAIRE_SECTIONS, type CreatorQuestion } from "@/lib/crea
 import { TETHER_PORTAL } from "@/lib/partner-portals";
 import IntelligenceCoreIcon from "@/components/IntelligenceCoreIcon";
 import { CREATOR_PORTAL_COOKIE, creatorLoginPath } from "@/lib/creator-routing";
+import { isLynq } from "@/lib/agency-brand";
 
 export const dynamic = "force-dynamic";
 
@@ -67,6 +68,8 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
   if (!creator) redirect(creatorLoginPath(creator, jar.get(CREATOR_PORTAL_COOKIE)?.value));
   const session = { accountId: creator.accountId };
   const tether = creator.name === TETHER_PORTAL.name;
+  const link = isLynq(creator.name);
+  const brandName = tether ? "Tether" : link ? "LYNQ" : "Twin";
   const { status } = await searchParams;
 
   const [{ data: account }, { data: progress }, { data: application }, { data: files }, { data: consent }] = await Promise.all([
@@ -85,18 +88,18 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
   const submitted = application?.status === "submitted" || application?.status === "reviewing" || application?.status === "approved";
 
   return (
-    <div className="min-h-screen bg-bg" data-creator-onboarding-brand={tether ? "tether" : "twin"}>
+    <div className={`min-h-screen bg-bg ${link ? "canvas-glow" : ""}`} data-creator-onboarding-brand={tether ? "tether" : link ? "link" : "twin"}>
       <header className={tether ? "border-b border-white/10 bg-[#06080c] text-white shadow-[0_8px_30px_rgba(0,0,0,0.16)]" : "border-b border-border bg-white/90 backdrop-blur"}>
         <div className="mx-auto flex max-w-5xl items-center justify-between px-5 py-4">
-          <div className="flex items-center gap-3">{tether && <IntelligenceCoreIcon size={34} />}<TwinWordmark inverse={tether} agencyName={tether ? TETHER_PORTAL.name : undefined} />{tether && <span className="hidden text-xs font-bold uppercase tracking-[0.18em] text-sky-300 sm:inline">Creator</span>}</div>
+          <div className="flex min-w-0 items-center gap-3">{tether && <IntelligenceCoreIcon size={34} />}<TwinWordmark inverse={tether} agencyName={brandName === "Twin" ? undefined : brandName} />{tether && <span className="hidden text-xs font-bold uppercase tracking-[0.18em] text-sky-300 sm:inline">Creator</span>}</div>
           <div className="flex items-center gap-4"><Link href="/creator" className={tether ? "text-sm font-medium text-white/65 hover:text-white" : "text-sm font-medium text-muted hover:text-ink"}>Dashboard</Link><form action="/creator-auth/logout" method="post"><button className={tether ? "text-sm font-medium text-white/65 hover:text-white" : "text-sm font-medium text-muted hover:text-ink"}>Sign out</button></form></div>
         </div>
       </header>
 
       <main className="mx-auto max-w-5xl px-5 py-10">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent-2">{tether ? "Tether creator onboarding" : "Creator onboarding"}</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent-2">{tether ? "Tether creator onboarding" : link ? "LYNQ creator onboarding" : "Creator onboarding"}</p>
         <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
-          <div><h1 className="font-heading text-4xl font-semibold tracking-[-0.04em] text-ink">Build your {tether ? "Tether" : "Twin"} profile</h1><p className="mt-2 text-muted">Complete the steps below. Your answers and media stay attached to this creator account.</p></div>
+          <div><h1 className="font-heading text-4xl font-semibold tracking-[-0.04em] text-ink">Build your {brandName} profile</h1><p className="mt-2 text-muted">Complete the steps below. Your answers and media stay attached to this creator account.</p></div>
           <div className="rounded-full border border-border bg-white px-4 py-2 text-sm font-medium text-ink">{submitted ? "Submitted" : `${steps}/4 complete`}</div>
         </div>
 
@@ -161,7 +164,7 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
               {!consent ? <form action="/creator-auth/onboarding" method="post" className="grid gap-4">
                 <input type="hidden" name="action" value="consent" />
                 <label><span className="mb-1 block text-sm text-muted">Legal name</span><Input name="legal_name" required /></label>
-                <label className="flex items-start gap-3 text-sm text-ink"><input name="agreed" type="checkbox" required className="mt-1" /><span>I confirm the information and media I submit are mine or I have permission to provide them, and I authorize {tether ? "Tether" : "Twin"} to use them to build and operate my AI creator profile under my agreement.</span></label>
+                <label className="flex items-start gap-3 text-sm text-ink"><input name="agreed" type="checkbox" required className="mt-1" /><span>I confirm the information and media I submit are mine or I have permission to provide them, and I authorize {brandName} to use them to build and operate my AI creator profile under my agreement.</span></label>
                 <div><Button type="submit" variant="outline">Save consent</Button></div>
               </form> : <div className="rounded-xl border border-border bg-muted/20 px-4 py-3 text-sm text-muted">Consent signed by {consent.legal_name}.</div>}
 

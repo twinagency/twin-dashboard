@@ -2,8 +2,18 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { NextRequest } from "next/server";
 import { middleware } from "../middleware";
-import { CREATOR_SESSION_COOKIE, signCreatorSession } from "../lib/creator-session";
-import { CREATOR_PORTAL_COOKIE, creatorLoginPath } from "../lib/creator-routing";
+import { CREATOR_SESSION_COOKIE, creatorCookieOptions, signCreatorSession } from "../lib/creator-session";
+import { creatorRequestUrl } from "../lib/creator-origin";
+import {
+  CREATOR_PORTAL_COOKIE,
+  creatorLoginPath,
+  creatorPortalForIdentity,
+  creatorPublicPortal,
+  isCreatorPublicPath,
+  LINK_CREATOR_LOGIN_PATH,
+  LINK_CREATOR_SIGNUP_PATH,
+  safeCreatorNext,
+} from "../lib/creator-routing";
 
 const origin = "https://dashboard.tgaiclone.xyz";
 const accountId = "11111111-1111-4111-8111-111111111111";
@@ -46,6 +56,8 @@ async function main() {
   };
 
   try {
+    const forwardedHostRequest = new Request(origin + "/creator-auth/login", { headers: { "x-forwarded-host": "attacker.example", "x-forwarded-proto": "http" } });
+    assert.equal(creatorRequestUrl(forwardedHostRequest, LINK_CREATOR_LOGIN_PATH).origin, origin, "creator redirects ignore untrusted forwarded hosts");
     const token = await signCreatorSession(accountId, userId);
     const request = (path: string, cookie = "") => new NextRequest(origin + path, { headers: cookie ? { cookie } : undefined });
 
@@ -56,18 +68,33 @@ async function main() {
     assert.equal(tetherEntry.cookies.get(CREATOR_PORTAL_COOKIE)?.secure, true);
     assert.equal(tetherEntry.cookies.get(CREATOR_PORTAL_COOKIE)?.sameSite, "lax");
 
+    const linkEntry = await middleware(request(LINK_CREATOR_LOGIN_PATH));
+    assert.equal(linkEntry.status, 200);
+    assert.equal(linkEntry.cookies.get(CREATOR_PORTAL_COOKIE)?.value, "link");
+    assert.ok((linkEntry.cookies.get(CREATOR_PORTAL_COOKIE)?.maxAge || 0) > creatorCookieOptions().maxAge, "Link presentation affinity must survive an expired creator session");
+    assert.equal(creatorPublicPortal(LINK_CREATOR_SIGNUP_PATH), "link");
+    assert.equal(isCreatorPublicPath("/creator/link/forgot-password"), true);
+    assert.equal(isCreatorPublicPath("/creator/link/reset-password"), true);
+    assert.equal(safeCreatorNext(LINK_CREATOR_LOGIN_PATH), "/creator", "a public Link auth page is never a protected next destination");
+
     const portalOnly = `${CREATOR_PORTAL_COOKIE}=tether`;
     const protectedResponse = await middleware(request("/creator", portalOnly));
     assert.equal(protectedResponse.status, 307);
     assert.equal(protectedResponse.headers.get("location"), origin + "/creator/tether/login?next=%2Fcreator");
     assert.equal(protectedResponse.headers.get("x-middleware-request-x-creator-audience"), null, "portal cookie must not authenticate");
 
+    const linkPortalOnly = `${CREATOR_PORTAL_COOKIE}=link`;
+    const linkProtectedResponse = await middleware(request("/creator", linkPortalOnly));
+    assert.equal(linkProtectedResponse.status, 307);
+    assert.equal(linkProtectedResponse.headers.get("location"), origin + "/creator/link/login?next=%2Fcreator");
+    assert.equal(linkProtectedResponse.headers.get("x-middleware-request-x-creator-audience"), null, "Link portal cookie must not authenticate");
+
     const genericResponse = await middleware(request("/creator"));
     assert.equal(genericResponse.headers.get("location"), origin + "/creator/login?next=%2Fcreator");
 
-    const explicitTwinEntry = await middleware(request("/creator/login", portalOnly));
+    const explicitTwinEntry = await middleware(request("/creator/login", linkPortalOnly));
     assert.equal(explicitTwinEntry.status, 200);
-    assert.equal(explicitTwinEntry.cookies.get(CREATOR_PORTAL_COOKIE)?.value, "twin", "an explicit Twin route must clear stale Tether presentation affinity");
+    assert.equal(explicitTwinEntry.cookies.get(CREATOR_PORTAL_COOKIE)?.value, "twin", "an explicit Twin route must clear stale Link presentation affinity");
 
     accountExists = false;
     const staleResponse = await middleware(request("/creator/tether/login", `${CREATOR_SESSION_COOKIE}=${token}`));
@@ -81,9 +108,18 @@ async function main() {
     assert.equal(liveResponse.headers.get("location"), origin + "/creator");
     assert.equal(liveResponse.cookies.get(CREATOR_PORTAL_COOKIE)?.value, "tether");
 
+    agencyName = "LYNQ";
+    const liveLinkResponse = await middleware(request(LINK_CREATOR_LOGIN_PATH, `${CREATOR_SESSION_COOKIE}=${token}`));
+    assert.equal(liveLinkResponse.headers.get("location"), origin + "/creator");
+    assert.equal(liveLinkResponse.cookies.get(CREATOR_PORTAL_COOKIE)?.value, "link");
+
     agencyName = "Twin";
-    assert.equal(creatorLoginPath({ name: "Twin" }, "tether"), "/creator/login", "verified identity wins over presentation cookie");
+    assert.equal(creatorLoginPath({ name: "Twin", agencyId: "74b03b70-397e-49ab-841f-8adb8241d87d" }, "twin"), LINK_CREATOR_LOGIN_PATH, "verified LYNQ agency id wins over display branding");
+    assert.equal(creatorPortalForIdentity({ name: "LYNQ", agencyId: "fixture-agency" }, "tether"), "link", "verified LYNQ database identity wins over a stale presentation cookie");
+    assert.equal(creatorLoginPath({ name: "Twin" }, "link"), "/creator/login", "verified identity wins over presentation cookie");
     assert.equal(creatorLoginPath({ name: "Tether" }, "twin"), "/creator/tether/login", "verified Tether identity wins over presentation cookie");
+    assert.equal(creatorLoginPath({ name: "LYNQ" }, "tether"), LINK_CREATOR_LOGIN_PATH, "verified LYNQ identity wins over presentation cookie");
+    assert.equal(creatorLoginPath(null, "link"), LINK_CREATOR_LOGIN_PATH);
     assert.equal(creatorLoginPath(null, "tether"), "/creator/tether/login");
     assert.equal(creatorLoginPath(null, "forged-value"), "/creator/login");
 
@@ -100,7 +136,7 @@ async function main() {
       assert.doesNotMatch(source, /redirect\("\/creator\/login"\)|creatorRequestUrl\(req, "\/creator\/login"\)/, `${file} retains a hard-coded Twin fallback`);
     }
 
-    console.log("CREATOR ROUTING PASSED: Tether portal affinity, live-identity checks, stale-cookie recovery, generic fallback and presentation-only access isolation.");
+    console.log("CREATOR ROUTING PASSED: Link and Tether portal affinity, live-identity checks, stale-cookie recovery, generic fallback and presentation-only access isolation.");
   } finally {
     globalThis.fetch = oldFetch;
   }
