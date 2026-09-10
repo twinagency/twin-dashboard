@@ -158,6 +158,30 @@ body {
   color: var(--color-ink);
 }
 
+/* Tether creator auth deliberately uses light fields inside its dark glass
+   card. Keep native typing, password-manager fills and browser autofill on the
+   same high-contrast treatment; WebKit otherwise supplies its own fill while
+   retaining the page's inherited white text. The selectors are scoped to the
+   verified Tether auth frame so Twin and every other agency stay untouched. */
+[data-creator-auth-brand="tether"] .tether-auth-input {
+  color: #080a0e;
+  caret-color: #080a0e;
+  background-color: #ffffff;
+  color-scheme: light;
+}
+
+[data-creator-auth-brand="tether"] input.tether-auth-input:autofill,
+[data-creator-auth-brand="tether"] input.tether-auth-input:-webkit-autofill,
+[data-creator-auth-brand="tether"] input.tether-auth-input:-webkit-autofill:hover,
+[data-creator-auth-brand="tether"] input.tether-auth-input:-webkit-autofill:focus {
+  color: #080a0e !important;
+  caret-color: #080a0e;
+  background-color: #ffffff !important;
+  -webkit-text-fill-color: #080a0e !important;
+  -webkit-box-shadow: 0 0 0 1000px #ffffff inset !important;
+  box-shadow: 0 0 0 1000px #ffffff inset !important;
+}
+
 /* A neutral working canvas. A very small blue wash provides continuity with
    the navigation without placing decorative texture behind operational data. */
 .canvas-glow {

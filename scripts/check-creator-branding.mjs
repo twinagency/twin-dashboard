@@ -211,6 +211,20 @@ try {
         for (const href of await page.locator("a").evaluateAll((links) => links.map((link) => link.getAttribute("href")).filter(Boolean))) {
           assert.match(href, /^\/creator\/tether\//, `${route} contains a non-Tether creator link: ${href}`);
         }
+        for (const styles of await page.locator("input:not([type='hidden'])").evaluateAll((inputs) => inputs.map((input) => {
+          const computed = getComputedStyle(input);
+          return {
+            className: input.className,
+            color: computed.color,
+            backgroundColor: computed.backgroundColor,
+            caretColor: computed.caretColor,
+          };
+        }))) {
+          assert.match(styles.className, /\btether-auth-input\b/, `${route} has an auth input outside the shared Tether treatment`);
+          assert.equal(styles.color, "rgb(8, 10, 14)", `${route} typed text must be near-black`);
+          assert.equal(styles.backgroundColor, "rgb(255, 255, 255)", `${route} inputs must retain a white background`);
+          assert.equal(styles.caretColor, "rgb(8, 10, 14)", `${route} input caret must remain visible`);
+        }
         const desktopHero = page.locator("main > div.relative.z-10 > section").first();
         assert.equal(await desktopHero.isVisible(), width >= 1024, `${route} must switch hero layout at the desktop breakpoint`);
       }
