@@ -1,0 +1,44 @@
+name: LYNQ theme inspection
+on:
+  push:
+    branches: [fix/lynq-theme-override-and-core]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Inspect public HTML and source theme references
+        run: |
+          python3 - <<'PY'
+          import urllib.request, urllib.parse, re, pathlib, json
+          base='https://dashboard.tgaiclone.xyz'
+          out=pathlib.Path('test-results/lynq-inspection');out.mkdir(parents=True,exist_ok=True)
+          html=urllib.request.urlopen(base+'/link',timeout=25).read().decode()
+          (out/'live-link.html').write_text(html)
+          print('PUBLIC HTML LENGTH',len(html))
+          for tag in re.findall(r'<(?:script|link|style)\b[^>]*>',html): print(tag)
+          for style in re.findall(r'<style\b[^>]*>.*?</style>',html,re.S): print('STYLE',style[:24000])
+          for attrs,code in re.findall(r'<script\b([^>]*)>(.*?)</script>',html,re.S):
+            if code and 'self.__next_f.push' not in code: print('INLINE SCRIPT',attrs,code[:24000])
+          for src in re.findall(r'<script[^>]+src="([^"]+)"',html):
+            if '/_next/' not in src:
+              url=urllib.parse.urljoin(base,src)
+              if urllib.parse.urlparse(url).netloc != 'dashboard.tgaiclone.xyz': continue
+              text=urllib.request.urlopen(url,timeout=25).read().decode()
+              (out/(pathlib.Path(urllib.parse.urlparse(url).path).name or 'injected.js')).write_text(text)
+              print('EXTERNAL SCRIPT',url,text[:40000])
+          for folder in ['app','components','public']:
+            for f in pathlib.Path(folder).rglob('*'):
+              if f.suffix not in ['.css','.tsx','.ts','.js','.mjs']:continue
+              for i,line in enumerate(f.read_text(errors='replace').splitlines(),1):
+                if re.search(r'lynq|intelligence.core|orb|inject|dark.theme',line,re.I):
+                  print('SOURCE',str(f),i,line[:400])
+          PY
+      - uses: actions/upload-artifact@v4
+        with:
+          name: lynq-live-inspection
+          path: test-results/lynq-inspection
+          retention-days: 1
