@@ -1,9 +1,12 @@
 // Local-only verification. No production accounts, consent or media are created.
 import assert from 'node:assert/strict';
 import { build } from 'esbuild';
-import { mkdirSync, writeFileSync } from 'node:fs';
+import { mkdirSync, writeFileSync, readFileSync, mkdtempSync, rmSync } from 'node:fs';
 import { createRequire } from 'node:module';
-import { spawn } from 'node:child_process';
+import { spawn, execFileSync } from 'node:child_process';
+import { createServer as createHttpsServer } from 'node:https';
+import { request as proxyRequest } from 'node:http';
+import { tmpdir } from 'node:os';
 import { setTimeout as delay } from 'node:timers/promises';
 import path from 'node:path';
 import { creatorAuthPath, creatorPublicPortal, isCreatorPublicPath, safeCreatorNext } from '../lib/creator-routing.ts';
@@ -53,36 +56,51 @@ async function unit(){
 }
 async function browserCheck(){
   const {chromium}=await import('playwright');
-  const base='http://127.0.0.1:3124';
+  const local='http://127.0.0.1:3124',base='https://127.0.0.1:3125';
+  // Production deliberately requires HTTPS. Reproduce the real proxy and
+  // Secure cookies locally instead of weakening that application safeguard.
+  const certificates=mkdtempSync(path.join(tmpdir(),'link-flow-tls-'));
+  const key=path.join(certificates,'key.pem'),cert=path.join(certificates,'cert.pem');
+  execFileSync('openssl',['req','-x509','-newkey','rsa:2048','-nodes','-keyout',key,'-out',cert,'-days','1','-subj','/CN=127.0.0.1','-addext','subjectAltName=IP:127.0.0.1'],{stdio:'ignore'});
+  const proxy=createHttpsServer({key:readFileSync(key),cert:readFileSync(cert)},(req,res)=>{
+    const upstream=proxyRequest(local+req.url,{method:req.method,headers:{...req.headers,host:'127.0.0.1:3125','x-forwarded-host':'127.0.0.1:3125','x-forwarded-proto':'https'}},reply=>{res.writeHead(reply.statusCode||502,reply.headers);reply.pipe(res)});
+    upstream.on('error',()=>{if(!res.headersSent)res.writeHead(502);res.end('Local test proxy unavailable')});req.pipe(upstream);
+  });
   const server=spawn(process.execPath,['node_modules/next/dist/bin/next','start','-H','127.0.0.1','-p','3124'],{env:{...process.env,NODE_ENV:'production',DASHBOARD_PASSWORD:'offline-link-flow',DASHBOARD_PUBLIC_ORIGIN:base},stdio:['ignore','pipe','pipe']});
   let log='';for(const stream of [server.stdout,server.stderr])stream.on('data',chunk=>log=(log+chunk).slice(-12000));
   let browser;
   try{
-    let ready=false;for(let attempt=0;attempt<80;attempt++){try{const response=await fetch(base+'/creator/link/signup',{redirect:'manual'});if(response.status===200){ready=true;break}}catch{}await delay(250)}assert.ok(ready,log);
+    await new Promise((resolve,reject)=>{proxy.once('error',reject);proxy.listen(3125,'127.0.0.1',resolve)});
+    let ready=false;for(let attempt=0;attempt<80;attempt++){try{const response=await fetch(local+'/creator/link/signup',{redirect:'manual'});if(response.status===200){ready=true;break}}catch{}await delay(250)}assert.ok(ready,log);
     browser=await chromium.launch({headless:true});
     for(const width of [390,1440]){
-      const context=await browser.newContext({viewport:{width,height:1000}});const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(String(e)));
+      const context=await browser.newContext({viewport:{width,height:1000},ignoreHTTPSErrors:true});const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(String(e)));
       await page.route('**/*',route=>new URL(route.request().url()).origin===base?route.continue():route.abort());
-      for(const stale of [false,true]){
-        if(stale)await context.addCookies([{name:'twin_creator_session',value:'stale',url:base},{name:'twin_agency_access',value:'stale',url:base},{name:'twin_agency_portal',value:'moxy',url:base}]);
-        await page.goto(base+'/creator/link/signup',{waitUntil:'networkidle'});await page.getByRole('heading',{name:'Join LYNQ as a creator',exact:true}).waitFor();
-        assert.equal(new URL(page.url()).pathname,'/creator/link/signup');assert.doesNotMatch(await page.locator('body').innerText(),/Twin|Technologies/);
-        assert.equal(await page.locator('form[action="/creator-auth/signup"] input[name="portal"]').inputValue(),'link');assert.equal(await page.locator('input[name="agency_code"]').count(),0);
-        assert.equal(await page.locator('html').getAttribute('data-brand-theme'),'lynq-light');assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
-        const canvas=page.locator('[data-lynq-core="particles"] canvas').first();const frame=await canvas.evaluate(c=>c.toDataURL());await delay(180);assert.notEqual(await canvas.evaluate(c=>c.toDataURL()),frame);
-        if(!stale)await page.screenshot({path:path.join(out,`link-signup-${width}.png`),fullPage:true});
-        await page.getByRole('link',{name:'Sign in',exact:true}).click();await page.getByRole('heading',{name:'Sign in to LYNQ',exact:true}).waitFor();assert.equal(new URL(page.url()).pathname,'/creator/link/login');assert.doesNotMatch(await page.locator('body').innerText(),/Twin|Technologies/);
-        assert.equal(await page.getByRole('link',{name:'Create creator account',exact:true}).getAttribute('href'),'/creator/link/signup');
-        await page.getByRole('link',{name:'Forgot password?',exact:true}).click();await page.getByRole('heading',{name:'Reset password',exact:true}).waitFor();assert.doesNotMatch(await page.locator('body').innerText(),/Twin|Technologies/);
-        await page.goto(base+'/creator/onboarding',{waitUntil:'networkidle'});assert.equal(new URL(page.url()).pathname,'/creator/link/login');
-      }
-      const invalid=await context.request.post(base+'/creator-auth/signup',{form:{portal:'link'},headers:{origin:base},maxRedirects:0});assert.equal(invalid.status(),303);assert.match(invalid.headers().location,/creator\/link\/signup\?error=invalid/);
-      const login=await context.request.post(base+'/creator-auth/login',{form:{portal:'link'},headers:{origin:base},maxRedirects:0});assert.equal(login.status(),303);assert.match(login.headers().location,/creator\/link\/login\?error=1/);
-      const expired=await context.request.post(base+'/creator-auth/onboarding',{form:{action:'submit'},headers:{origin:base},maxRedirects:0});assert.equal(expired.status(),303);assert.match(expired.headers().location,/creator\/link\/login/);
-      assert.deepEqual(errors,[]);await context.close();
+      try {
+        for(const stale of [false,true]){
+          if(stale)await context.addCookies([{name:'twin_creator_session',value:'stale',url:base},{name:'twin_agency_access',value:'stale',url:base},{name:'twin_agency_portal',value:'moxy',url:base}]);
+          await page.goto(base+'/creator/link/signup',{waitUntil:'networkidle'});await page.getByRole('heading',{name:'Join LYNQ as a creator',exact:true}).waitFor();
+          assert.equal(new URL(page.url()).pathname,'/creator/link/signup');assert.doesNotMatch(await page.locator('body').innerText(),/Twin|Technologies/);
+          assert.equal(await page.locator('form[action="/creator-auth/signup"] input[name="portal"]').inputValue(),'link');assert.equal(await page.locator('input[name="agency_code"]').count(),0);
+          assert.equal(await page.locator('html').getAttribute('data-brand-theme'),'lynq-light');assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=innerWidth+1));
+          const canvas=page.locator('[data-lynq-core="particles"] canvas').first();const frame=await canvas.evaluate(c=>c.toDataURL());await delay(180);assert.notEqual(await canvas.evaluate(c=>c.toDataURL()),frame);
+          if(!stale)await page.screenshot({path:path.join(out,`link-signup-${width}.png`),fullPage:true});
+          await page.getByRole('link',{name:'Sign in',exact:true}).click();await page.getByRole('heading',{name:'Sign in to LYNQ',exact:true}).waitFor();assert.equal(new URL(page.url()).pathname,'/creator/link/login');assert.doesNotMatch(await page.locator('body').innerText(),/Twin|Technologies/);
+          if(!stale)await page.screenshot({path:path.join(out,`link-login-${width}.png`),fullPage:true});
+          assert.equal(await page.getByRole('link',{name:'Create creator account',exact:true}).getAttribute('href'),'/creator/link/signup');
+          await page.getByRole('link',{name:'Forgot password?',exact:true}).click();await page.getByRole('heading',{name:'Reset password',exact:true}).waitFor();assert.doesNotMatch(await page.locator('body').innerText(),/Twin|Technologies/);
+          await page.goto(base+'/creator/onboarding',{waitUntil:'networkidle'});assert.equal(new URL(page.url()).pathname,'/creator/link/login');
+        }
+        const invalid=await context.request.post(base+'/creator-auth/signup',{form:{portal:'link'},headers:{origin:base},maxRedirects:0});assert.equal(invalid.status(),303);assert.match(invalid.headers().location,/creator\/link\/signup\?error=invalid/);
+        const login=await context.request.post(base+'/creator-auth/login',{form:{portal:'link'},headers:{origin:base},maxRedirects:0});assert.equal(login.status(),303);assert.match(login.headers().location,/creator\/link\/login\?error=1/);
+        const expired=await context.request.post(base+'/creator-auth/onboarding',{form:{action:'submit'},headers:{origin:base},maxRedirects:0});assert.equal(expired.status(),303);assert.match(expired.headers().location,/creator\/link\/login/);
+        const logout=await context.request.get(base+'/creator-auth/logout',{maxRedirects:0});assert.equal(logout.status(),303);assert.match(logout.headers().location,/creator\/link\/login/);
+        assert.deepEqual(errors,[]);
+      } catch(error){await page.screenshot({path:path.join(out,`failure-${width}.png`),fullPage:true});writeFileSync(path.join(out,`failure-${width}.json`),JSON.stringify({error:String(error),url:page.url(),text:await page.locator('body').innerText(),pageErrors:errors},null,2));throw error}
+      finally {await context.close()}
     }
-    writeFileSync(path.join(out,'results.json'),JSON.stringify({publicLinkSignup:true,brandedLoginAndRecovery:true,staleCookies:true,sessionExpiry:true,originalParticles:true,widths:[390,1440],productionAccountsCreated:0},null,2));
-    console.log('Production Link public entry, mobile/desktop branding, login/signup links, recovery and expired-session redirects passed.');
-  }catch(error){console.error(log);throw error}finally{if(browser)await browser.close();server.kill('SIGTERM');setTimeout(()=>server.kill('SIGKILL'),3000).unref()}
+    writeFileSync(path.join(out,'results.json'),JSON.stringify({publicLinkSignup:true,brandedLoginAndRecovery:true,staleCookies:true,sessionExpiry:true,logout:true,originalParticles:true,httpsProxy:true,widths:[390,1440],productionAccountsCreated:0},null,2));
+    console.log('Production Link public entry, mobile/desktop branding, login/signup links, recovery, logout and expired-session redirects passed over HTTPS.');
+  }catch(error){console.error(log);throw error}finally{if(browser)await browser.close();proxy.closeAllConnections();await new Promise(resolve=>proxy.close(resolve));server.kill('SIGTERM');setTimeout(()=>server.kill('SIGKILL'),3000).unref();rmSync(certificates,{recursive:true,force:true})}
 }
 if(process.argv.includes('--unit'))await unit();else if(process.argv.includes('--browser'))await browserCheck();else{await unit();await browserCheck()}
