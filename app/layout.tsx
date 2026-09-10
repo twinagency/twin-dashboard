@@ -36,8 +36,19 @@ const plexMono = Inter({subsets:['latin'],variable:'--font-mono'});
 const spaceGrotesk = Space_Grotesk({subsets:['latin'],variable:'--font-heading'});
 const interTight = Inter_Tight({subsets:['latin'],variable:'--font-display'});
 
+// Bounded paths: /creator-management remains an operator page.
+function isCreatorSurface(pathname: string | null) {
+  return pathname === "/creator" || !!pathname?.startsWith("/creator/");
+}
+
 export async function generateMetadata(): Promise<Metadata> {
   const pathname = (await headers()).get("x-pathname");
+  if (isCreatorSurface(pathname)) return {
+    title: "Creator Dashboard · Twin",
+    description: "Your Twin performance and creator reports",
+    robots: { index: false, follow: false },
+    icons: { icon: { url: "/icon.png", type: "image/png" } },
+  };
   if (isMarketingPath(pathname)) return {
     title: "Twin Agency",
     description: "Your audience. Your AI twin.",
@@ -65,6 +76,11 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // itself is excluded — it must always render standalone (no sidebar), the
   // same as it would once real auth is re-enabled.
   const pathname = (await headers()).get("x-pathname");
+  // A creator surface must not render or fetch the operator fleet shell, even
+  // when the same browser also holds an agency/admin cookie, or in development.
+  if (isCreatorSurface(pathname)) {
+    return <html lang="en" className={cn("font-sans", inter.variable, plexMono.variable, spaceGrotesk.variable, interTight.variable)}><body className="min-h-screen bg-bg">{children}</body></html>;
+  }
   if (isMarketingPath(pathname)) {
     return <html lang="en" className={cn("font-sans", inter.variable, plexMono.variable, spaceGrotesk.variable, interTight.variable)}><body>{children}</body></html>;
   }
