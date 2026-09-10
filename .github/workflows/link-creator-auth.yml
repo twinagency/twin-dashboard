@@ -1,0 +1,28 @@
+name: Link creator authentication verification
+on:
+  push:
+    branches: [fix/link-creator-auth-brand]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: 22, cache: npm}
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npx tsx scripts/check-creator-workspace.ts && node --import tsx scripts/check-creator-demo.mjs
+      - run: npm run build
+        env: {NEXT_TELEMETRY_DISABLED: '1'}
+      - run: npx playwright install chromium
+      - run: node scripts/check-link-creator-auth.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: link-creator-auth-verification
+          path: test-results/link-creator-auth
+          retention-days: 3
+          if-no-files-found: ignore

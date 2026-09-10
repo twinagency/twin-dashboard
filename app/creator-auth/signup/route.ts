@@ -7,67 +7,39 @@ import { AGENCY_COOKIE } from "@/lib/agency-policy";
 import { AGENCY_PORTAL_COOKIE } from "@/lib/agency-brand";
 import { SESSION_COOKIE } from "@/lib/session";
 import { CLONE_SCOPE_COOKIE } from "@/lib/clone-scope";
+import { withCreatorPortal } from "@/lib/creator-portal-server";
 
 function redirectWithError(req: Request, code: string) {
-  const url = creatorRequestUrl(req, "/creator/signup");
-  url.searchParams.set("error", code);
+  const url = creatorRequestUrl(req, "/creator/signup"); url.searchParams.set("error", code);
   return NextResponse.redirect(url, 303);
 }
-
 async function sha256(value: string): Promise<string> {
   const data = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(value));
-  return Array.from(new Uint8Array(data)).map((b) => b.toString(16).padStart(2, "0")).join("");
+  return Array.from(new Uint8Array(data)).map(b => b.toString(16).padStart(2, "0")).join("");
 }
-
-export async function POST(req: Request) {
+async function signUp(req: Request) {
   const form = await req.formData();
   const displayName = String(form.get("display_name") || "").trim();
   const email = String(form.get("email") || "").trim().toLowerCase();
   const password = String(form.get("password") || "");
   const agencyCode = String(form.get("agency_code") || "").trim().toUpperCase();
-
-  if (!displayName || !/^\S+@\S+\.\S+$/.test(email) || password.length < 8) {
-    return redirectWithError(req, "invalid");
-  }
-
-  // Creator auth is an independent security context. Do not allow an existing
-  // agency/operator cookie in the same browser to scope or block these writes.
+  if (!displayName || !/^\S+@\S+\.\S+$/.test(email) || password.length < 8) return redirectWithError(req, "invalid");
   const db = serviceClient();
-
   let agencyCodeHash: string | null = null;
   if (agencyCode) {
     agencyCodeHash = await sha256(agencyCode);
     const now = new Date().toISOString();
-    const { data: code } = await db
-      .from("creator_agency_codes")
-      .select("id,active,max_uses,uses,expires_at")
-      .eq("code_hash", agencyCodeHash)
-      .maybeSingle();
-    if (!code?.active || (code.expires_at && code.expires_at <= now) || (code.max_uses != null && code.uses >= code.max_uses)) {
-      return redirectWithError(req, "agency_code");
-    }
+    const { data: code } = await db.from("creator_agency_codes").select("id,active,max_uses,uses,expires_at").eq("code_hash", agencyCodeHash).maybeSingle();
+    if (!code?.active || (code.expires_at && code.expires_at <= now) || (code.max_uses != null && code.uses >= code.max_uses)) return redirectWithError(req, "agency_code");
   }
-
-  const { data: existing } = await db
-    .from("creator_accounts")
-    .select("id,auth_user_id")
-    .ilike("email", email)
-    .maybeSingle();
-
+  const { data: existing } = await db.from("creator_accounts").select("id,auth_user_id").ilike("email", email).maybeSingle();
   if (existing?.auth_user_id) return redirectWithError(req, "exists");
-
-  const { data: created, error: createError } = await db.auth.admin.createUser({
-    email,
-    password,
-    email_confirm: true,
-    user_metadata: { display_name: displayName },
-  });
+  const { data: created, error: createError } = await db.auth.admin.createUser({ email, password, email_confirm: true, user_metadata: { display_name: displayName } });
   if (createError || !created.user) {
     console.error("creator auth user creation failed", createError);
     const duplicate = !!createError && /already|registered|exists/i.test(createError.message || "");
     return redirectWithError(req, duplicate ? "exists" : "failed");
   }
-
   let accountId = existing?.id as string | undefined;
   try {
     let agencyId: string | null = null;
@@ -77,48 +49,26 @@ export async function POST(req: Request) {
       if (claimError || !first?.agency_id) throw new Error("agency_code_unavailable");
       agencyId = first.agency_id as string;
     }
-
     if (accountId) {
-      const { error } = await db
-        .from("creator_accounts")
-        .update({ auth_user_id: created.user.id, email, display_name: displayName, updated_at: new Date().toISOString() })
-        .eq("id", accountId);
+      const { error } = await db.from("creator_accounts").update({ auth_user_id: created.user.id, email, display_name: displayName, updated_at: new Date().toISOString() }).eq("id", accountId);
       if (error) throw error;
     } else {
-      const { data, error } = await db
-        .from("creator_accounts")
-        .insert({ auth_user_id: created.user.id, email, display_name: displayName, account_status: "applicant", source: "twin" })
-        .select("id")
-        .single();
+      // The portal hint is not authority to assign an agency. The existing
+      // verified invite-code flow remains the only assignment mechanism here.
+      const { data, error } = await db.from("creator_accounts").insert({ auth_user_id: created.user.id, email, display_name: displayName, account_status: "applicant", source: "twin" }).select("id").single();
       if (error || !data) throw error || new Error("creator account insert failed");
       accountId = data.id as string;
     }
-
-    const { error: progressError } = await db
-      .from("creator_onboarding_progress")
-      .upsert({ creator_account_id: accountId }, { onConflict: "creator_account_id", ignoreDuplicates: true });
+    const { error: progressError } = await db.from("creator_onboarding_progress").upsert({ creator_account_id: accountId }, { onConflict: "creator_account_id", ignoreDuplicates: true });
     if (progressError) throw progressError;
-
     if (agencyId) {
-      const { error } = await db.from("creator_agency_assignments").upsert({
-        creator_account_id: accountId,
-        agency_id: agencyId,
-        assignment_source: "invite",
-        assigned_at: new Date().toISOString(),
-      }, { onConflict: "creator_account_id" });
+      const { error } = await db.from("creator_agency_assignments").upsert({ creator_account_id: accountId, agency_id: agencyId, assignment_source: "invite", assigned_at: new Date().toISOString() }, { onConflict: "creator_account_id" });
       if (error) throw error;
     }
-
     const token = await signCreatorSession(accountId!, created.user.id);
     const jar = await cookies();
     jar.set(CREATOR_SESSION_COOKIE, token, creatorCookieOptions());
-    // A browser can be an agency operator OR a creator for this app session,
-    // not both. Clearing the operator state prevents the creator pages from
-    // inheriting agency-scoped data access after signup.
-    jar.delete(AGENCY_COOKIE);
-    jar.delete(AGENCY_PORTAL_COOKIE);
-    jar.delete(SESSION_COOKIE);
-    jar.delete(CLONE_SCOPE_COOKIE);
+    jar.delete(AGENCY_COOKIE); jar.delete(AGENCY_PORTAL_COOKIE); jar.delete(SESSION_COOKIE); jar.delete(CLONE_SCOPE_COOKIE);
     return NextResponse.redirect(creatorRequestUrl(req, "/creator"), 303);
   } catch (error) {
     await db.auth.admin.deleteUser(created.user.id).catch(() => undefined);
@@ -126,3 +76,4 @@ export async function POST(req: Request) {
     return redirectWithError(req, error instanceof Error && error.message === "agency_code_unavailable" ? "agency_code" : "failed");
   }
 }
+export const POST = withCreatorPortal(signUp);
