@@ -13,6 +13,7 @@ import {
   LINK_CREATOR_LOGIN_PATH,
   LINK_CREATOR_SIGNUP_PATH,
   safeCreatorNext,
+  shouldRedirectAuthenticatedCreatorEntry,
 } from "../lib/creator-routing";
 
 const origin = "https://dashboard.tgaiclone.xyz";
@@ -108,10 +109,50 @@ async function main() {
     assert.equal(liveResponse.headers.get("location"), origin + "/creator");
     assert.equal(liveResponse.cookies.get(CREATOR_PORTAL_COOKIE)?.value, "tether");
 
+    const signedInTetherSignup = await middleware(request("/creator/tether/signup", `${CREATOR_SESSION_COOKIE}=${token}`));
+    assert.equal(signedInTetherSignup.headers.get("location"), origin + "/creator", "same-portal Tether signup returns an authenticated creator to the workspace");
+
+    const tetherToLinkSignup = await middleware(request(LINK_CREATOR_SIGNUP_PATH, `${CREATOR_SESSION_COOKIE}=${token}`));
+    assert.equal(tetherToLinkSignup.status, 200, "a Tether session must not hijack an explicit LYNQ signup link");
+    assert.equal(tetherToLinkSignup.headers.get("location"), null);
+    assert.equal(tetherToLinkSignup.cookies.get(CREATOR_PORTAL_COOKIE)?.value, "link");
+    assert.equal(tetherToLinkSignup.cookies.get(CREATOR_SESSION_COOKIE)?.value, "", "crossing from Tether to LYNQ clears the old creator session");
+    assert.equal(tetherToLinkSignup.headers.get("x-middleware-request-x-creator-audience"), null);
+
+    const tetherToLinkLogin = await middleware(request(LINK_CREATOR_LOGIN_PATH, `${CREATOR_SESSION_COOKIE}=${token}`));
+    assert.equal(tetherToLinkLogin.status, 200, "a Tether session must not hijack an explicit LYNQ login link");
+    assert.equal(tetherToLinkLogin.headers.get("location"), null);
+    assert.equal(tetherToLinkLogin.cookies.get(CREATOR_SESSION_COOKIE)?.value, "");
+
     agencyName = "LYNQ";
+    const crossBrandTetherSignup = await middleware(request("/creator/tether/signup", `${CREATOR_SESSION_COOKIE}=${token}`));
+    assert.equal(crossBrandTetherSignup.status, 200, "a LYNQ session must not hijack an explicit Tether signup link");
+    assert.equal(crossBrandTetherSignup.headers.get("location"), null);
+    assert.equal(crossBrandTetherSignup.cookies.get(CREATOR_PORTAL_COOKIE)?.value, "tether");
+    assert.equal(crossBrandTetherSignup.cookies.get(CREATOR_SESSION_COOKIE)?.value, "", "crossing from LYNQ to Tether clears the old creator session");
+    assert.equal(crossBrandTetherSignup.headers.get("x-middleware-request-x-creator-audience"), null);
+
+    const crossBrandTetherLogin = await middleware(request("/creator/tether/login", `${CREATOR_SESSION_COOKIE}=${token}`));
+    assert.equal(crossBrandTetherLogin.status, 200, "a LYNQ session must not hijack an explicit Tether login link");
+    assert.equal(crossBrandTetherLogin.headers.get("location"), null);
+    assert.equal(crossBrandTetherLogin.cookies.get(CREATOR_PORTAL_COOKIE)?.value, "tether");
+    assert.equal(crossBrandTetherLogin.cookies.get(CREATOR_SESSION_COOKIE)?.value, "");
+
+    const crossBrandTetherReset = await middleware(request("/creator/tether/reset-password", `${CREATOR_SESSION_COOKIE}=${token}`));
+    assert.equal(crossBrandTetherReset.status, 200, "Tether password recovery must not retain a LYNQ creator session");
+    assert.equal(crossBrandTetherReset.cookies.get(CREATOR_SESSION_COOKIE)?.value, "");
+
     const liveLinkResponse = await middleware(request(LINK_CREATOR_LOGIN_PATH, `${CREATOR_SESSION_COOKIE}=${token}`));
     assert.equal(liveLinkResponse.headers.get("location"), origin + "/creator");
     assert.equal(liveLinkResponse.cookies.get(CREATOR_PORTAL_COOKIE)?.value, "link");
+
+    const liveLinkSignupResponse = await middleware(request(LINK_CREATOR_SIGNUP_PATH, `${CREATOR_SESSION_COOKIE}=${token}`));
+    assert.equal(liveLinkSignupResponse.headers.get("location"), origin + "/creator", "same-portal LYNQ signup returns an authenticated creator to the workspace");
+
+    assert.equal(shouldRedirectAuthenticatedCreatorEntry("/creator/tether/signup", { name: "LYNQ" }), false);
+    assert.equal(shouldRedirectAuthenticatedCreatorEntry("/creator/tether/login", { name: "LYNQ" }), false);
+    assert.equal(shouldRedirectAuthenticatedCreatorEntry(LINK_CREATOR_LOGIN_PATH, { name: "LYNQ" }), true);
+    assert.equal(shouldRedirectAuthenticatedCreatorEntry(LINK_CREATOR_SIGNUP_PATH, { name: "LYNQ" }), true);
 
     agencyName = "Twin";
     assert.equal(creatorLoginPath({ name: "Twin", agencyId: "74b03b70-397e-49ab-841f-8adb8241d87d" }, "twin"), LINK_CREATOR_LOGIN_PATH, "verified LYNQ agency id wins over display branding");
@@ -136,7 +177,7 @@ async function main() {
       assert.doesNotMatch(source, /redirect\("\/creator\/login"\)|creatorRequestUrl\(req, "\/creator\/login"\)/, `${file} retains a hard-coded Twin fallback`);
     }
 
-    console.log("CREATOR ROUTING PASSED: Link and Tether portal affinity, live-identity checks, stale-cookie recovery, generic fallback and presentation-only access isolation.");
+    console.log("CREATOR ROUTING PASSED: cross-brand entry isolation, same-brand redirects, portal affinity, stale-cookie recovery and presentation-only access isolation.");
   } finally {
     globalThis.fetch = oldFetch;
   }
