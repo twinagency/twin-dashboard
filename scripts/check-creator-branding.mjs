@@ -138,6 +138,17 @@ const brand = location.pathname.includes('/creator/link/')
     ? 'tether'
     : 'twin';
 const params = Object.fromEntries(new URLSearchParams(location.search));
+const nativeFetch = globalThis.fetch.bind(globalThis);
+globalThis.__creatorDraftRequests=[];
+globalThis.fetch=async(input,init)=>{
+  const requestUrl=new URL(typeof input==='string'?input:input.url,location.origin);
+  if(requestUrl.pathname==='/creator-auth/onboarding/draft'){
+    const payload=JSON.parse(String(init?.body||'{}'));
+    globalThis.__creatorDraftRequests.push(payload);
+    return new Response(JSON.stringify({ok:true,revision:'fixture-revision-'+globalThis.__creatorDraftRequests.length}),{status:200,headers:{'content-type':'application/json'}});
+  }
+  return nativeFetch(input,init);
+};
 function App(){
   const [node,setNode]=useState(null);
   useEffect(()=>{
@@ -179,10 +190,26 @@ const databaseMock = `
 const rows={
   creator_accounts:{display_name:'Fixture Creator',email:'creator@example.test'},
   creator_onboarding_progress:{questionnaire_completed:false,content_completed:false,voice_completed:false},
-  creator_applications:{id:'application-fixture',status:'draft',answers:{}},
+  creator_applications:{id:'application-fixture',status:'draft',answers:{full_name:'Fixture Creator',preferred_name:'Fixture',platforms:'Telegram',boundaries:'Keep private details private.'},updated_at:'2026-09-12T00:00:00.000Z'},
   creator_files:[],
   creator_consents:null,
 };
+function completeContentFiles(){
+  const requirements=[
+    ['content_sfw_image',20,'image/jpeg','sfw-image.jpg'],
+    ['content_nsfw_image',30,'image/jpeg','nsfw-image.jpg'],
+    ['content_sfw_video',15,'video/mp4','sfw-video.mp4'],
+    ['content_nsfw_video',30,'video/mp4','nsfw-video.mp4'],
+  ];
+  return requirements.flatMap(([kind,count,mime_type,original_name])=>Array.from({length:count},(_,index)=>({
+    id:kind+'-'+index,
+    kind,
+    mime_type,
+    original_name,
+    size_bytes:1024,
+    storage_transfer_status:'verified',
+  })));
+}
 function query(table){
   const result=()=>{
     const complete=new URLSearchParams(location.search).get('fixture_complete')==='1';
@@ -191,7 +218,7 @@ function query(table){
       : complete&&table==='creator_consents'
         ? {id:'consent-fixture',legal_name:'Fixture Creator',signed_at:'2026-09-12T00:00:00.000Z'}
         : complete&&table==='creator_files'
-          ? [{id:'content-fixture',kind:'content',original_name:'sample.jpg',size_bytes:1024,storage_transfer_status:'verified'}]
+          ? completeContentFiles()
         : rows[table]??null;
     return Promise.resolve({data,error:null});
   };
@@ -379,22 +406,66 @@ try {
           for (const step of ["questionnaire", "content", "voice", "consent"]) {
             await page.goto(`${origin}/creator/onboarding?fixture_brand=${brand}&step=${step}`, { waitUntil: "networkidle" });
             assert.equal(await page.locator(`[data-onboarding-active-step='${step}']`).count(), 1, `${brand} must open only the requested ${step} step`);
-            assert.equal(await page.getByRole("link", { name: "Return to onboarding", exact: true }).count() > 0, true, `${brand} ${step} must return to the hub`);
+            if (step === "questionnaire") assert.equal(await page.getByRole("button", { name: "Save and return to onboarding", exact: true }).count(), 1, `${brand} questionnaire must save before returning to the hub`);
+            else assert.equal(await page.getByRole("link", { name: "Return to onboarding", exact: true }).count() > 0, true, `${brand} ${step} must return to the hub`);
             const actions = new Set(await page.locator("form").evaluateAll((forms) => forms.map((form) => form.getAttribute("action")).filter(Boolean)));
-            if (step === "questionnaire" || step === "consent") assert.ok(actions.has("/creator-auth/onboarding"), `${brand} ${step} must retain the onboarding server action`);
+            if (step === "questionnaire") {
+              const questionnaire = page.locator("[data-questionnaire-page='personal-contact']");
+              await questionnaire.waitFor();
+              const questionNames = await questionnaire.locator("input[name]:not([type='hidden']), textarea[name]").evaluateAll((fields) => [...new Set(fields.map((field) => field.getAttribute("name")))]);
+              assert.ok(questionNames.length > 0 && questionNames.length <= 8, `${brand} questionnaire parts must remain short`);
+              assert.match(await questionnaire.innerText(), /Part 1 of 18/i);
+              assert.match(await questionnaire.innerText(), /Changes save automatically/);
+              assert.equal(await page.getByRole("button", { name: "Save and continue", exact: true }).count(), 1);
+              if (brand === "twin" && width === 390) {
+                await questionnaire.locator("input[name='full_name']").fill("Autosaved Creator");
+                await questionnaire.getByRole("status").getByText("Saved", { exact: true }).waitFor({ timeout: 5000 });
+                const requests = await page.evaluate(() => globalThis.__creatorDraftRequests);
+                assert.equal(requests.length, 1, "questionnaire edits must produce one debounced autosave");
+                assert.equal(requests[0].section, "personal-contact");
+                assert.equal(requests[0].answers.full_name, "Autosaved Creator");
+                assert.deepEqual(Object.keys(requests[0].answers).sort(), questionNames.sort(), "autosave must send only the current questionnaire part");
+              }
+            }
+            if (step === "consent") {
+              assert.ok(actions.has("/creator-auth/onboarding"), `${brand} consent must retain the onboarding server action`);
+              assert.equal(await page.getByRole("heading", { name: "Ready to submit?", exact: true }).count(), 1);
+              assert.equal(await page.getByRole("button", { name: "Submit onboarding", exact: true }).isDisabled(), true, `${brand} incomplete onboarding must not submit`);
+            }
             if (step === "content" || step === "voice") assert.ok(actions.has("/creator-auth/upload"), `${brand} ${step} must retain the upload server action`);
             if (step === "content") {
               const contentText = await page.locator("body").innerText();
               assert.match(contentText, /Upload minimum 20 SFW images and 30 NSFW images\./);
               assert.match(contentText, /Upload 15 SFW videos and 30 NSFW videos\./);
               assert.doesNotMatch(contentText, /separate from PPV content/i);
+              assert.equal(await page.locator("[data-content-category]").count(), 4, `${brand} content must expose four explicit upload categories`);
+              const categoryKinds = await page.locator("[data-content-category] input[name='kind']").evaluateAll((inputs) => inputs.map((input) => input.getAttribute("value")));
+              assert.deepEqual(categoryKinds, ["content_sfw_image", "content_nsfw_image", "content_sfw_video", "content_nsfw_video"]);
+              const acceptedTypes = await page.locator("[data-content-category] input[type='file']").evaluateAll((inputs) => inputs.map((input) => input.getAttribute("accept")));
+              assert.deepEqual(acceptedTypes, [
+                "image/jpeg,image/png,image/webp,image/gif",
+                "image/jpeg,image/png,image/webp,image/gif",
+                "video/mp4,video/quicktime,video/webm",
+                "video/mp4,video/quicktime,video/webm",
+              ]);
+              assert.doesNotMatch(`${contentText} ${acceptedTypes.join(" ")}`, /heic|heif/i, `${brand} must not advertise unsupported HEIC uploads`);
+              assert.match(contentText, /JPG, PNG, WebP or GIF · max 25 MP and 15 MB each/);
+              assert.match(contentText, /MP4, MOV or WebM · max 30 minutes/);
             }
             await page.screenshot({ path: path.join(out, `${brand}-onboarding-${step}-${viewport}.png`), fullPage: true });
+          }
+
+          for (const section of ["personal-contact", "appearance", "life-values"]) {
+            await page.goto(`${origin}/creator/onboarding?fixture_brand=${brand}&step=questionnaire&section=${section}`, { waitUntil: "networkidle" });
+            assert.equal(await page.locator(`[data-questionnaire-page='${section}']`).count(), 1, `${brand} must render questionnaire section ${section}`);
           }
 
           await page.goto(`${origin}/creator/onboarding?fixture_brand=${brand}&fixture_complete=1`, { waitUntil: "networkidle" });
           assert.equal(await page.getByText("Complete", { exact: true }).count(), 4, `${brand} completed hub must show four visible completion ticks`);
           await page.screenshot({ path: path.join(out, `${brand}-onboarding-complete-${viewport}.png`), fullPage: true });
+
+          await page.goto(`${origin}/creator/onboarding?fixture_brand=${brand}&fixture_complete=1&step=consent`, { waitUntil: "networkidle" });
+          assert.equal(await page.getByRole("button", { name: "Submit onboarding", exact: true }).isEnabled(), true, `${brand} complete onboarding must be ready to submit`);
 
           await page.goto(`${origin}/creator/onboarding?fixture_brand=${brand}&fixture_complete=1&step=questionnaire&status=questionnaire_saved#step-result`, { waitUntil: "networkidle" });
           await page.getByRole("status").getByText("Questionnaire saved", { exact: true }).waitFor();

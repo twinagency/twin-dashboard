@@ -40,6 +40,7 @@
     "test:creator-routing": "tsx scripts/check-creator-routing.ts",
     "test:creator-login": "tsx scripts/check-creator-login.ts",
     "test:creator-live-demo": "tsx scripts/check-creator-live-demo.ts",
+    "test:creator-onboarding": "tsx scripts/check-creator-onboarding-v2.ts",
     "test:link-creator-signup": "tsx scripts/check-link-creator-signup.ts",
     "test:tether-creator-signup": "tsx scripts/check-tether-creator-signup.ts",
     "test:tether-auth-ui": "tsx scripts/check-tether-auth-ui.ts",
@@ -57,6 +58,7 @@
     "react-dom": "^19.0.0",
     "recharts": "^2.13.0",
     "shadcn": "^4.13.0",
+    "sharp": "^0.34.5",
     "tailwind-merge": "^3.6.0",
     "tw-animate-css": "^1.4.0"
   },

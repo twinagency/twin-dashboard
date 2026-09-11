@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { NextRequest } from "next/server";
+import sharp from "sharp";
 import { middleware } from "../middleware";
 import { POST as saveCreatorOnboarding } from "../app/creator-auth/onboarding/route";
 import { POST as uploadCreatorOnboarding } from "../app/creator-auth/upload/route";
@@ -23,12 +24,26 @@ import { accessCacheKey, withDashboardAccess } from "../lib/dashboard-access";
 import { guardDashboardAction } from "../lib/agency-management";
 import { agencyCanManage, LYNQ_MANAGEMENT_AGENCY_ID } from "../lib/agency-management-policy";
 import { TETHER_PORTAL } from "../lib/partner-portals";
+import { creatorImageDecodes } from "../lib/creator-image-validation";
 
 const account = "11111111-1111-4111-8111-111111111111";
 const user = "22222222-2222-4222-8222-222222222222";
 const own = "33333333-3333-4333-8333-333333333333";
 const other = "44444444-4444-4444-8444-444444444444";
 const origin = "https://dashboard.tgaiclone.xyz";
+
+function jpegWithDimensions(input: Uint8Array, width: number, height: number) {
+  const result = Buffer.from(input);
+  const startOfFrameMarkers = new Set([0xc0, 0xc1, 0xc2, 0xc3, 0xc5, 0xc6, 0xc7, 0xc9, 0xca, 0xcb, 0xcd, 0xce, 0xcf]);
+  for (let index = 0; index < result.length - 8; index += 1) {
+    if (result[index] !== 0xff || !startOfFrameMarkers.has(result[index + 1])) continue;
+    result.writeUInt16BE(height, index + 5);
+    result.writeUInt16BE(width, index + 7);
+    return result;
+  }
+  throw new Error("Generated JPEG had no start-of-frame marker");
+}
+
 async function main() {
   for (const status of ["applicant", "approved", "active"]) assert.equal(creatorAccountStatusAllowsAccess(status), true);
   for (const status of ["paused", "rejected", "archived", "unexpected", null]) assert.equal(creatorAccountStatusAllowsAccess(status), false);
@@ -54,6 +69,9 @@ async function main() {
       case "/rest/v1/creator_applications":
         assert.equal(url.searchParams.get("creator_account_id"), `eq.${account}`);
         body = { status: onboarded ? "submitted" : "draft" }; break;
+      case "/rest/v1/creator_files":
+        assert.equal(url.searchParams.get("creator_account_id"), `eq.${account}`);
+        body = []; break;
       case "/rest/v1/creator_agency_assignments":
         assert.equal(url.searchParams.get("creator_account_id"), `eq.${account}`);
         body = assignmentExists ? { agency_id: agencyId, partner_agencies: { name: agencyName, active: agencyActive } } : null; break;
@@ -65,6 +83,24 @@ async function main() {
     return new Response(JSON.stringify(body), { headers: { "content-type": "application/json" } });
   };
   try {
+    const imageFixture = { create: { width: 1024, height: 1024, channels: 3 as const, background: "#789abc" } };
+    const validJpeg = await sharp(imageFixture).jpeg().toBuffer();
+    const validPng = await sharp(imageFixture).png().toBuffer();
+    const validWebp = await sharp(imageFixture).webp().toBuffer();
+    const validGif = await sharp(imageFixture).gif().toBuffer();
+    assert.equal(await creatorImageDecodes(validJpeg, "image/jpeg"), true);
+    assert.equal(await creatorImageDecodes(validPng, "image/png"), true);
+    assert.equal(await creatorImageDecodes(validWebp, "image/webp"), true);
+    assert.equal(await creatorImageDecodes(validGif, "image/gif"), true);
+    assert.equal(await creatorImageDecodes(validJpeg, "image/png"), false, "MIME mismatches must fail image validation");
+    const truncatedJpeg = validJpeg.subarray(0, Math.floor(validJpeg.length * 0.95));
+    assert.equal((await sharp(truncatedJpeg).metadata()).format, "jpeg", "Truncated regression fixture must still pass a header-only metadata check");
+    assert.equal(await creatorImageDecodes(truncatedJpeg, "image/jpeg"), false, "A metadata-valid truncated image must fail a real decode");
+    const oversizedPixelsJpeg = jpegWithDimensions(validJpeg, 6000, 5000);
+    const oversizedMetadata = await sharp(oversizedPixelsJpeg, { limitInputPixels: false }).metadata();
+    assert.deepEqual([oversizedMetadata.width, oversizedMetadata.height], [6000, 5000]);
+    assert.equal(await creatorImageDecodes(oversizedPixelsJpeg, "image/jpeg"), false, "Images over the pixel budget must fail before decoding");
+
     const token = await signCreatorSession(account, user);
     const request = (path: string, method = "GET", extra: Record<string, string> = {}, cookie = `${CREATOR_SESSION_COOKIE}=${token}`) => new NextRequest(origin + path, { method, headers: { cookie, ...extra } });
     const identity = await creatorDashboardIdentity(token);
@@ -205,6 +241,7 @@ async function main() {
       headers: { cookie: `${CREATOR_SESSION_COOKIE}=${token}`, origin },
       body: new URLSearchParams(body),
     });
+    onboarded = false;
     writes.length = 0;
     const allowedOnboarding = await withDashboardAccess(null, () => saveCreatorOnboarding(actionRequest("/creator-auth/onboarding", { action: "skip_voice" })));
     assert.equal(allowedOnboarding.status, 303);
@@ -215,6 +252,56 @@ async function main() {
     assert.equal(writes.length, 1);
     assert.equal(writes[0].path, "/rest/v1/creator_onboarding_progress");
     assert.equal(JSON.parse(writes[0].body).creator_account_id, account);
+
+    const postUpload = async (form: FormData) => withDashboardAccess(null, () => uploadCreatorOnboarding(new NextRequest(origin + "/creator-auth/upload", {
+      method: "POST",
+      headers: { cookie: `${CREATOR_SESSION_COOKIE}=${token}`, origin },
+      body: form,
+    })));
+    const assertRejectedUpload = async (kind: string, file: File, message: string) => {
+      const form = new FormData();
+      form.set("kind", kind);
+      form.set("files", file);
+      writes.length = 0;
+      const response = await postUpload(form);
+      assert.equal(new URL(response.headers.get("location")!).searchParams.get("status"), "upload_wrong_type", message);
+      assert.deepEqual(writes, [], `${message}: invalid media must not reach Storage or database writes`);
+      return form;
+    };
+    const invalidUploadForm = await assertRejectedUpload(
+      "content_sfw_image",
+      new File([new Uint8Array([0xff, 0xd8, 0xff, ...new Array(125).fill(0)])], "fake.jpg", { type: "image/jpeg" }),
+      "A fake JPEG prefix must not count as verified media",
+    );
+    await assertRejectedUpload("content_sfw_image", new File([Uint8Array.from(truncatedJpeg)], "truncated.jpg", { type: "image/jpeg" }), "A truncated JPEG must not count as verified media");
+    await assertRejectedUpload("content_sfw_image", new File([Uint8Array.from(oversizedPixelsJpeg)], "pixel-bomb.jpg", { type: "image/jpeg" }), "An image above the pixel limit must not count as verified media");
+    for (const [extension, mime] of [["heic", "image/heic"], ["heif", "image/heif"]] as const) {
+      const heif = Buffer.alloc(128);
+      heif.write("ftyp", 4, "ascii");
+      heif.write(extension, 8, "ascii");
+      await assertRejectedUpload("content_sfw_image", new File([Uint8Array.from(heif)], `unsupported.${extension}`, { type: mime }), `${extension.toUpperCase()} must be rejected until the production decoder supports it`);
+    }
+    const fakeVideo = Buffer.alloc(2048);
+    fakeVideo.writeUInt32BE(24, 0);
+    fakeVideo.write("ftyp", 4, "ascii");
+    fakeVideo.write("isom", 8, "ascii");
+    fakeVideo.write("moov", 64, "ascii");
+    fakeVideo.write("mdat", 128, "ascii");
+    fakeVideo.write("vide", 192, "ascii");
+    await assertRejectedUpload("content_sfw_video", new File([Uint8Array.from(fakeVideo)], "fake.mp4", { type: "video/mp4" }), "Marker strings alone must not pass video validation");
+
+    onboarded = true;
+    writes.length = 0;
+    const lockedOnboarding = await withDashboardAccess(null, () => saveCreatorOnboarding(actionRequest("/creator-auth/onboarding", { action: "skip_voice" })));
+    assert.equal(new URL(lockedOnboarding.headers.get("location")!).searchParams.get("status"), "application_locked");
+    assert.deepEqual(writes, [], "a submitted application must not accept onboarding mutations");
+    const lockedUpload = await withDashboardAccess(null, () => uploadCreatorOnboarding(new NextRequest(origin + "/creator-auth/upload", {
+      method: "POST",
+      headers: { cookie: `${CREATOR_SESSION_COOKIE}=${token}`, origin },
+      body: invalidUploadForm,
+    })));
+    assert.equal(lockedUpload.status, 409);
+    assert.deepEqual(writes, [], "a submitted application must not accept direct upload mutations");
 
     async function assertStaleSessionCannotWrite(label: string) {
       for (const [path, body, handler] of [
@@ -257,7 +344,8 @@ async function main() {
       const routeSource = readFileSync(route, "utf8");
       assert.match(routeSource, /creatorDashboardIdentity/, `${route} must revalidate current creator state`);
       assert.doesNotMatch(routeSource, /verifyCreatorSession/, `${route} must not authorize from the signed cookie alone`);
-      assert.ok(routeSource.indexOf("creatorDashboardIdentity") < routeSource.indexOf("req.formData()"), `${route} must authorize before parsing or writing form data`);
+      const formParseCall = route.endsWith("upload/route.ts") ? "boundedFormData(req)" : "req.formData()";
+      assert.ok(routeSource.indexOf("creatorDashboardIdentity") < routeSource.indexOf(formParseCall), `${route} must authorize before parsing or writing form data`);
     }
     const shellSource = readFileSync("components/CreatorWorkspaceShell.tsx", "utf8");
     assert.match(shellSource, /<DashboardAccessProvider agencyName=\{agencyName\} audience="creator">/);

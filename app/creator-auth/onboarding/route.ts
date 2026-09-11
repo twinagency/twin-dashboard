@@ -4,13 +4,20 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { CREATOR_SESSION_COOKIE } from "@/lib/creator-session";
 import { creatorDashboardIdentity } from "@/lib/creator-dashboard-identity";
 import { creatorRequestUrl } from "@/lib/creator-origin";
-import { CREATOR_QUESTIONNAIRE } from "@/lib/creator-questionnaire";
 import { CREATOR_PORTAL_COOKIE, creatorLoginPath } from "@/lib/creator-routing";
+import {
+  CREATOR_QUESTIONNAIRE_TERMINAL_STATUSES,
+  creatorQuestionnairePageForQuestion,
+  nextQuestionnaireRevision,
+  questionnaireRequiredMissing,
+} from "@/lib/creator-questionnaire-draft";
+import { creatorContentCompleted } from "@/lib/creator-content-requirements";
 
-function back(req: Request, status: string, step?: "questionnaire" | "voice" | "consent") {
+function back(req: Request, status: string, step?: "questionnaire" | "voice" | "consent", section?: string) {
   const url = creatorRequestUrl(req, "/creator/onboarding");
   url.searchParams.set("status", status);
   if (step) url.searchParams.set("step", step);
+  if (section) url.searchParams.set("section", section);
   url.hash = "step-result";
   return NextResponse.redirect(url, 303);
 }
@@ -23,14 +30,13 @@ async function getCreator(req: NextRequest) {
 }
 
 async function latestApplication(accountId: string) {
-  const { data } = await supabaseAdmin
+  return supabaseAdmin
     .from("creator_applications")
-    .select("id,status,answers")
+    .select("id,status,answers,updated_at")
     .eq("creator_account_id", accountId)
     .order("created_at", { ascending: false })
     .limit(1)
     .maybeSingle();
-  return data;
 }
 
 export async function POST(req: NextRequest) {
@@ -43,36 +49,40 @@ export async function POST(req: NextRequest) {
   const now = new Date().toISOString();
 
   if (action === "questionnaire") {
-    const answers: Record<string, string> = {};
-    for (const question of CREATOR_QUESTIONNAIRE) {
-      const values = form.getAll(question.id).map((value) => String(value || "").trim());
-      const value = [...values].reverse().find(Boolean) ?? "";
-      if (!(question.id in answers) || value) answers[question.id] = value;
-    }
-    if (!answers.full_name || !answers.preferred_name || !answers.platforms || !answers.boundaries) {
-      return back(req, "questionnaire_missing", "questionnaire");
-    }
+    const { data: existing, error: readError } = await latestApplication(accountId);
+    if (readError) return back(req, "error", "questionnaire");
+    if (existing && CREATOR_QUESTIONNAIRE_TERMINAL_STATUSES.has(existing.status)) return back(req, "questionnaire_saved", "questionnaire");
+    if (existing && existing.status !== "draft") return back(req, "application_locked", "questionnaire");
+    const revision = String(form.get("revision") || "");
+    if (!existing?.id || !revision) return back(req, "questionnaire_missing", "questionnaire");
+    if (existing.updated_at !== revision) return back(req, "questionnaire_conflict", "questionnaire");
+    const answers = (existing.answers || {}) as Record<string, string>;
+    const missing = questionnaireRequiredMissing(answers);
+    if (missing.length) return back(req, "questionnaire_missing", "questionnaire", creatorQuestionnairePageForQuestion(missing[0]).slug);
 
-    const existing = await latestApplication(accountId);
-    if (existing?.id) {
-      const merged = { ...(existing.answers || {}), ...answers };
-      const { error } = await supabaseAdmin
-        .from("creator_applications")
-        .update({ answers: merged, status: existing.status === "submitted" ? "submitted" : "draft", updated_at: now })
-        .eq("id", existing.id);
-      if (error) return back(req, "error", "questionnaire");
-    } else {
-      const { error } = await supabaseAdmin
-        .from("creator_applications")
-        .insert({ creator_account_id: accountId, answers, status: "draft" });
-      if (error) return back(req, "error", "questionnaire");
-    }
+    const sealedAt = nextQuestionnaireRevision(existing.updated_at);
+    const { data: sealed, error: sealError } = await supabaseAdmin
+      .from("creator_applications")
+      .update({ updated_at: sealedAt })
+      .eq("id", existing.id)
+      .eq("creator_account_id", accountId)
+      .eq("updated_at", revision)
+      .select("updated_at")
+      .maybeSingle();
+    if (sealError) return back(req, "error", "questionnaire");
+    if (!sealed) return back(req, "questionnaire_conflict", "questionnaire");
 
     const { error: progressError } = await supabaseAdmin
       .from("creator_onboarding_progress")
-      .upsert({ creator_account_id: accountId, questionnaire_completed: true, updated_at: now }, { onConflict: "creator_account_id" });
+      .upsert({ creator_account_id: accountId, questionnaire_completed: true, updated_at: sealedAt }, { onConflict: "creator_account_id" });
     if (progressError) return back(req, "error", "questionnaire");
     return back(req, "questionnaire_saved", "questionnaire");
+  }
+
+  if (action === "skip_voice" || action === "consent") {
+    const { data: existing, error } = await latestApplication(accountId);
+    if (error) return back(req, "error", action === "consent" ? "consent" : "voice");
+    if (existing && existing.status !== "draft") return back(req, "application_locked", action === "consent" ? "consent" : "voice");
   }
 
   if (action === "skip_voice") {
@@ -107,29 +117,34 @@ export async function POST(req: NextRequest) {
   }
 
   if (action === "submit") {
-    const [{ data: progress }, { data: consent }, { data: files }] = await Promise.all([
+    const [{ data: progress }, { data: consent }, { data: files }, { data: existing, error: applicationError }] = await Promise.all([
       supabaseAdmin.from("creator_onboarding_progress").select("questionnaire_completed,content_completed,voice_completed").eq("creator_account_id", accountId).maybeSingle(),
       supabaseAdmin.from("creator_consents").select("id").eq("creator_account_id", accountId).limit(1).maybeSingle(),
       supabaseAdmin.from("creator_files").select("kind,storage_transfer_status").eq("creator_account_id", accountId),
+      latestApplication(accountId),
     ]);
-    const hasContent = (files || []).some((f) => f.kind === "content" && f.storage_transfer_status === "verified");
-    if (!progress?.questionnaire_completed || !progress?.content_completed || !progress?.voice_completed || !consent || !hasContent) {
+    if (applicationError) return back(req, "error", "consent");
+    if (existing && CREATOR_QUESTIONNAIRE_TERMINAL_STATUSES.has(existing.status)) return NextResponse.redirect(creatorRequestUrl(req, "/creator"), 303);
+    if (existing && existing.status !== "draft") return back(req, "application_locked", "consent");
+    const questionnaireComplete = !!progress?.questionnaire_completed && !!existing && questionnaireRequiredMissing((existing.answers || {}) as Record<string, string>).length === 0;
+    const contentComplete = creatorContentCompleted(files || [], !!progress?.content_completed);
+    const voiceComplete = !!progress?.voice_completed || (files || []).some((file) => file.kind === "voice" && file.storage_transfer_status === "verified");
+    if (!questionnaireComplete || !contentComplete || !voiceComplete || !consent) {
       return back(req, "not_ready", "consent");
     }
 
-    const existing = await latestApplication(accountId);
-    if (existing?.id) {
-      const { error } = await supabaseAdmin
-        .from("creator_applications")
-        .update({ status: "submitted", submitted_at: now, updated_at: now })
-        .eq("id", existing.id);
-      if (error) return back(req, "error", "consent");
-    } else {
-      const { error } = await supabaseAdmin
-        .from("creator_applications")
-        .insert({ creator_account_id: accountId, status: "submitted", submitted_at: now, answers: {} });
-      if (error) return back(req, "error", "consent");
-    }
+    const submittedAt = nextQuestionnaireRevision(existing.updated_at);
+    const { data: submittedApplication, error } = await supabaseAdmin
+      .from("creator_applications")
+      .update({ status: "submitted", submitted_at: now, updated_at: submittedAt })
+      .eq("id", existing.id)
+      .eq("creator_account_id", accountId)
+      .eq("status", "draft")
+      .eq("updated_at", existing.updated_at)
+      .select("id")
+      .maybeSingle();
+    if (error) return back(req, "error", "consent");
+    if (!submittedApplication) return back(req, "questionnaire_conflict", "consent");
     return NextResponse.redirect(creatorRequestUrl(req, "/creator?submitted=1"), 303);
   }
 

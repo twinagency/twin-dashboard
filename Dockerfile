@@ -46,7 +46,8 @@ ENV PORT=3001
 ENV HOSTNAME=0.0.0.0
 
 RUN addgroup --system --gid 1001 nodejs \
-  && adduser --system --uid 1001 nextjs
+  && adduser --system --uid 1001 nextjs \
+  && apk add --no-cache ffmpeg
 
 # Standalone output: a self-contained server.js plus only the node_modules
 # it actually needs (see next.config.mjs `output: "standalone"`).
