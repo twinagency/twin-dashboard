@@ -3,8 +3,9 @@
 import { useState, type FormEvent } from "react";
 
 export default function LynqLoginForm({ initialError = false, action = "/lynq/auth" }: { initialError?: boolean; action?: "/lynq/auth" | "/link/auth" | "/jess-and-kate-ai/auth" }) {
+  const collectsEmail = action === "/lynq/auth" || action === "/link/auth";
   const [pending, setPending] = useState(false);
-  const [error, setError] = useState(initialError ? "Unable to sign in. Please check your password and try again." : "");
+  const [error, setError] = useState(initialError ? `Unable to sign in. Please check your ${collectsEmail ? "email and password" : "password"} and try again.` : "");
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -25,7 +26,7 @@ export default function LynqLoginForm({ initialError = false, action = "/lynq/au
         return;
       }
       setError(result?.error === "credentials"
-        ? "That password wasn’t accepted. Please try again."
+        ? `Those ${collectsEmail ? "login details weren’t" : "password wasn’t"} accepted. Please try again.`
         : "Sign-in is temporarily unavailable. Please try again shortly.");
     } catch {
       setError("The sign-in request couldn’t finish. Please check your connection and try again.");
@@ -37,8 +38,11 @@ export default function LynqLoginForm({ initialError = false, action = "/lynq/au
 
   return <form action={action} method="post" onSubmit={submit} className="space-y-5" aria-busy={pending}>
     {error && <p role="alert" className="text-sm text-crit">{error}</p>}
+    {collectsEmail ? <label className="block text-sm font-medium text-ink">Email address
+      <input name="email" type="email" inputMode="email" autoComplete="username" required maxLength={254} disabled={pending} className="mt-2 w-full rounded-lg border border-line bg-white p-3 text-ink" />
+    </label> : null}
     <label className="block text-sm font-medium text-ink">Password
-      <input name="password" type="password" autoComplete="current-password" required maxLength={256} disabled={pending} className="mt-2 w-full rounded-lg border border-line bg-white p-3" />
+      <input name="password" type="password" autoComplete="current-password" required maxLength={256} disabled={pending} className="mt-2 w-full rounded-lg border border-line bg-white p-3 text-ink" />
     </label>
     <button type="submit" disabled={pending} className="w-full rounded-lg bg-accent p-3 font-semibold text-white disabled:opacity-60">{pending ? "Signing in…" : "Sign in"}</button>
   </form>;

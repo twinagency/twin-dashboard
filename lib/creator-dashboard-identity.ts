@@ -2,12 +2,19 @@ import { verifyCreatorSession } from "./creator-session";
 import { serviceClient } from "./supabase-service";
 import type { AgencyIdentity } from "./agency-identity";
 import { isZaneDemo } from "./creator-demo-policy";
+import {
+  BRI_LIVE_DEMO_AGENCY_ID,
+  BRI_LIVE_DEMO_CLONE_ID,
+  isBriLiveDemoAccount,
+} from "./creator-live-demo-policy";
 export type CreatorDashboardIdentity = AgencyIdentity & {
   kind: "creator";
   accountId: string;
   userId: string;
   creatorName: string;
   onboarded: boolean;
+  /** Live-data preview accounts can read their one scoped clone but cannot mutate it. */
+  readOnly: boolean;
   /** Current server-verified assignment. Never copy a portal hint here. */
   agencyId: string | null;
 };
@@ -17,8 +24,8 @@ const CREATOR_ACCESS_STATUSES = new Set(["applicant", "approved", "active"]);
 export function creatorAccountStatusAllowsAccess(status: unknown): boolean {
   return typeof status === "string" && CREATOR_ACCESS_STATUSES.has(status);
 }
-// A signature is insufficient: verify current identity and ownership. Demo
-// presentation never supplies a real clone or changes agency membership.
+// A signature is insufficient: verify current identity and ownership. Any
+// preview scope must be exact-account, server-validated and read-only.
 export async function creatorDashboardIdentity(token: string | null | undefined): Promise<CreatorDashboardIdentity | null> {
   try {
     const session = await verifyCreatorSession(token);
@@ -37,8 +44,19 @@ export async function creatorDashboardIdentity(token: string | null | undefined)
     // Direct agency applicants must retain a current server-owned assignment.
     // A partial provisioning failure must never fall back to Twin access.
     if (account.data.source === "agency_invite" && !assignment.data?.agency_id) return null;
-    const clone = link.data?.clones as unknown as { id: string; name: string } | null;
+    let clone = link.data?.clones as unknown as { id: string; name: string } | null;
     if (link.data?.clone_id && (!clone || clone.id !== link.data.clone_id)) return null;
+    const briLiveDemo = isBriLiveDemoAccount(session.accountId);
+    if (briLiveDemo) {
+      // The preview is a separate creator account. It does not own, replace or
+      // mutate Bri's real creator account or its existing clone link.
+      if (account.data.source !== "admin" || application.data?.status !== "approved" || assignment.data?.agency_id !== BRI_LIVE_DEMO_AGENCY_ID || link.data?.clone_id) return null;
+      const demoClone = await db.from("agency_creators").select("clone_id,clones(id,name)")
+        .eq("agency_id", BRI_LIVE_DEMO_AGENCY_ID).eq("clone_id", BRI_LIVE_DEMO_CLONE_ID).maybeSingle();
+      const relatedClone = demoClone.data?.clones as unknown as { id: string; name: string } | null;
+      if (demoClone.error || demoClone.data?.clone_id !== BRI_LIVE_DEMO_CLONE_ID || relatedClone?.id !== BRI_LIVE_DEMO_CLONE_ID) return null;
+      clone = relatedClone;
+    }
     const identity: CreatorDashboardIdentity = {
       id: `creator:${session.accountId}`,
       kind: "creator",
@@ -49,6 +67,7 @@ export async function creatorDashboardIdentity(token: string | null | undefined)
       creatorName: clone?.name || account.data.display_name || "Your creator account",
       cloneIds: clone ? [clone.id] : [],
       onboarded: ["submitted", "reviewing", "approved"].includes(application.data?.status || ""),
+      readOnly: briLiveDemo,
     };
     // Branding only, not an assignment, permission or real-account status change.
     return isZaneDemo(identity) ? { ...identity, name: "LYNQ" } : identity;

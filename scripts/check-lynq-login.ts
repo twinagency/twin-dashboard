@@ -11,6 +11,7 @@ import { AGENCY_COOKIE } from "../lib/agency-policy";
 const origin = "https://dashboard.tgaiclone.xyz";
 const agencyId = "74b03b70-397e-49ab-841f-8adb8241d87d";
 const userId = "6e6491b9-8db0-43f5-b04a-d4509318dac9";
+const partnerUserId = "77777777-7777-4777-8777-777777777777";
 const creatorId = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 
 async function main() {
@@ -33,17 +34,21 @@ async function main() {
     } else if (url.pathname === "/auth/v1/token") {
       tokenRequests++;
       const credentials = JSON.parse(String(init?.body));
-      assert.equal(credentials.email, "shared@example.test", "Never take an email from the form");
-      if (credentials.password !== "test-lynq-password") return new Response(JSON.stringify({message:"Invalid login credentials"}), {status:400, headers:{"content-type":"application/json"}});
+      const valid = (credentials.email === "shared@example.test" && credentials.password === "test-lynq-password")
+        || (credentials.email === "partner@example.test" && credentials.password === "test-partner-password");
+      if (!valid) return new Response(JSON.stringify({message:"Invalid login credentials"}), {status:400, headers:{"content-type":"application/json"}});
       body = {access_token:"test-session",refresh_token:"test-refresh",expires_in:3600,token_type:"bearer",user:{id:returnedUser}};
     } else if (url.pathname === "/auth/v1/user") body = {id:returnedUser};
     else if (url.pathname === "/auth/v1/logout") {logoutScope=url.searchParams.get("scope") ?? "";body={};}
     else if (url.pathname === "/rest/v1/agency_memberships") {
       assert.equal(url.searchParams.get("active"), "eq.true");
-      if (url.searchParams.get("select") === "email") {
+      if (url.searchParams.get("select") === "user_id,email") {
         assert.equal(url.searchParams.get("agency_id"),`eq.${agencyId}`);
-        assert.equal(url.searchParams.get("user_id"),`eq.${userId}`);
-        body=memberActive?{email:"shared@example.test"}:null;
+        const requestedEmail = url.searchParams.get("email");
+        const requestedUser = url.searchParams.get("user_id");
+        if (requestedEmail === "eq.partner@example.test") body=memberActive?{user_id:partnerUserId,email:"partner@example.test"}:null;
+        else if (requestedEmail === "eq.shared@example.test" || requestedUser === `eq.${userId}`) body=memberActive?{user_id:userId,email:"shared@example.test"}:null;
+        else body=null;
       } else if(url.searchParams.get("select")==="user_id") {
         assert.equal(url.searchParams.get("agency_id"),`eq.${agencyId}`);
         assert.equal(url.searchParams.get("user_id"),`eq.${userId}`);
@@ -85,7 +90,10 @@ async function main() {
     const malformed=await login(new NextRequest(`${origin}/lynq/auth`,{method:"POST",headers:{origin,accept:"application/json","content-type":"application/json"},body:"invalid"}));
     assert.equal(malformed.status,503);
     assert.deepEqual(await malformed.json(),{ok:false,error:"unavailable"},"Unexpected errors must return a usable response");
-    const success=await login(request("test-lynq-password",origin,{email:"admin@example.test",agency:"other",next:"/settings"}));
+    const unknown=await login(request("test-lynq-password",origin,{email:"admin@example.test",agency:"other",next:"/settings"}));
+    assert.match(unknown.headers.get("location")!,/error=1/,"An email without an active LYNQ membership is denied");
+    returnedUser=partnerUserId;
+    const success=await login(request("test-partner-password",origin,{email:"partner@example.test",agency:"other",next:"/settings"}));
     assert.equal(success.status,303);
     assert.equal(success.headers.get("location"),`${origin}/revenue`);
     assert.equal(success.cookies.get(AGENCY_COOKIE)?.value,"test-session");
@@ -93,6 +101,7 @@ async function main() {
     assert.equal(success.cookies.get(AGENCY_COOKIE)?.secure,true);
     assert.equal(success.cookies.get(SESSION_COOKIE)?.value,"");
     assert.equal(success.cookies.get("clone_scope")?.value,"");
+    returnedUser=userId;
     memberActive=false;
     const before=tokenRequests;
     assert.match((await login(request("test-lynq-password"))).headers.get("location")!,/error=1/);
@@ -136,6 +145,6 @@ async function main() {
     assert.equal(admin.cookies.get(AGENCY_COOKIE)?.value,"");
     assert.equal(admin.cookies.get("clone_scope")?.value,"");
   } finally {globalThis.fetch=previous;}
-  console.log("LYNQ login: password authentication, fixed account, revocation, read-only scope, sign-out and admin switching passed");
+  console.log("LYNQ login: original and additional member authentication, revocation, read-only scope, sign-out and admin switching passed");
 }
 main().catch(error=>{console.error(error);process.exit(1)});

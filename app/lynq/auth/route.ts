@@ -8,8 +8,8 @@ import { SESSION_COOKIE } from "@/lib/session";
 import { CLONE_SCOPE_COOKIE } from "@/lib/clone-scope";
 import { dashboardOrigin, trustedFormOrigin } from "@/lib/form-origin";
 
-// This is the existing LYNQ login, shared by its two operators.
-// Neither the account nor its agency can be selected by a submitted form.
+// This is the LYNQ-only operator login. A submitted email may select an
+// active member of this fixed agency, but it can never select another agency.
 const LYNQ_AGENCY_ID = "74b03b70-397e-49ab-841f-8adb8241d87d";
 const LYNQ_LOGIN_USER_ID = "6e6491b9-8db0-43f5-b04a-d4509318dac9";
 
@@ -26,18 +26,25 @@ export async function POST(req: NextRequest) {
     : NextResponse.redirect(new URL(`${loginPath(req)}?error=1`, dashboardOrigin(req)), 303);
   if (!trustedFormOrigin(req) || req.headers.has("next-action")) return NextResponse.json({ ok: false, error: "origin" }, { status: 403 });
   try {
-  const password = String((await req.formData()).get("password") ?? "");
-  if (!password || password.length > 256) return failed();
-  const member = await serviceClient().from("agency_memberships").select("email")
-    .eq("agency_id", LYNQ_AGENCY_ID).eq("user_id", LYNQ_LOGIN_USER_ID).eq("active", true).maybeSingle();
-  if (member.error || !member.data?.email) return failed("unavailable", 503);
+  const form = await req.formData();
+  const email = String(form.get("email") ?? "").trim().toLowerCase();
+  const password = String(form.get("password") ?? "");
+  if (email.length > 254 || !password || password.length > 256) return failed();
+  const memberQuery = serviceClient().from("agency_memberships").select("user_id,email")
+    .eq("agency_id", LYNQ_AGENCY_ID).eq("active", true);
+  // Password-only POSTs remain compatible with the original shared account;
+  // the branded browser form now supplies an email for additional owners.
+  const member = email
+    ? await memberQuery.eq("email", email).maybeSingle()
+    : await memberQuery.eq("user_id", LYNQ_LOGIN_USER_ID).maybeSingle();
+  if (member.error || !member.data?.user_id || !member.data.email) return failed();
   const auth = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_KEY!, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
   const { data, error } = await auth.auth.signInWithPassword({ email: member.data.email, password });
   const token = data.session?.access_token;
   const identity = token ? await agencyIdentity(token) : null;
-  if (error || !token || data.user?.id !== LYNQ_LOGIN_USER_ID || identity?.id !== LYNQ_AGENCY_ID) return failed();
+  if (error || !token || data.user?.id !== member.data.user_id || identity?.id !== LYNQ_AGENCY_ID) return failed();
   const response = json ? NextResponse.json({ ok: true }) : NextResponse.redirect(new URL("/revenue", dashboardOrigin(req)), 303);
   response.cookies.set(AGENCY_COOKIE, token, { httpOnly: true, secure: process.env.NODE_ENV === "production",
     sameSite: "strict", path: "/", maxAge: Math.min(data.session?.expires_in ?? 3600, 3600) });

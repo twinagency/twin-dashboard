@@ -39,6 +39,7 @@
     "test:tether": "tsx scripts/check-tether-access.ts",
     "test:creator-routing": "tsx scripts/check-creator-routing.ts",
     "test:creator-login": "tsx scripts/check-creator-login.ts",
+    "test:creator-live-demo": "tsx scripts/check-creator-live-demo.ts",
     "test:link-creator-signup": "tsx scripts/check-link-creator-signup.ts",
     "test:tether-creator-signup": "tsx scripts/check-tether-creator-signup.ts",
     "test:tether-auth-ui": "tsx scripts/check-tether-auth-ui.ts",

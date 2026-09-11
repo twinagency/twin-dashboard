@@ -1,2 +1,2 @@
-// Reuse the fixed LYNQ identity and all existing password/ownership checks.
+// Reuse the LYNQ-only membership and ownership checks.
 export { GET, POST } from "../../lynq/auth/route";
