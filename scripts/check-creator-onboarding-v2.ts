@@ -24,10 +24,42 @@ import {
 } from "../lib/creator-image-validation";
 
 const pagedQuestions = CREATOR_QUESTIONNAIRE_PAGES.flatMap(questionnairePageQuestions);
-assert.equal(CREATOR_QUESTIONNAIRE_PAGES.length, 18);
-assert.equal(pagedQuestions.length, 108);
-assert.equal(new Set(pagedQuestions.map(({ id }) => id)).size, 108);
+const deletedQuestionIds = [
+  "appearance_physical",
+  "creating_duration",
+  "platforms",
+  "main_niche",
+  "lifestyle_routines",
+  "secondary_niche",
+  "audience_description",
+  "audience_size",
+  "audience_interests",
+  "creator_persona",
+  "content_unique",
+  "core_values",
+  "content_style",
+  "ai_personality",
+  "short_term_goals",
+  "collabs",
+  "fun_fact",
+  "ai_dont_know",
+  "car",
+  "parents_status",
+  "creator_friends",
+  "inspires_you",
+  "best_advice",
+  "top_accomplishments",
+  "most_extreme",
+] as const;
+
+assert.equal(CREATOR_QUESTIONNAIRE_PAGES.length, 17);
+assert.equal(CREATOR_QUESTIONNAIRE.length, 83);
+assert.equal(pagedQuestions.length, 83);
+assert.equal(new Set(pagedQuestions.map(({ id }) => id)).size, 83);
 assert.deepEqual(pagedQuestions.map(({ id }) => id), CREATOR_QUESTIONNAIRE.map(({ id }) => id), "Questionnaire pages must preserve every canonical question in order");
+for (const id of deletedQuestionIds) {
+  assert.equal(CREATOR_QUESTIONNAIRE.some((question) => question.id === id), false, `${id} must remain deleted`);
+}
 assert.ok(CREATOR_QUESTIONNAIRE_PAGES.every((page) => questionnairePageQuestions(page).length <= 8), "Every questionnaire part must stay short");
 assert.equal(creatorQuestionnairePage("forged").slug, CREATOR_QUESTIONNAIRE_PAGES[0].slug);
 
@@ -37,8 +69,8 @@ assert.deepEqual(parseQuestionnairePagePatch(firstPage, { full_name: "" }), { fu
 assert.throws(() => parseQuestionnairePagePatch(firstPage, { boundaries: "forged cross-page value" }), /Unsupported/);
 const tonePage = CREATOR_QUESTIONNAIRE_PAGES.find((page) => page.slug === "style-tone-ai")!;
 assert.throws(() => parseQuestionnairePagePatch(tonePage, { humour_style: "Forged choice" }), /Invalid questionnaire choice/);
-assert.deepEqual(questionnaireRequiredMissing({ full_name: "A", preferred_name: "B", platforms: "C", boundaries: "D" }), []);
-assert.deepEqual(questionnaireRequiredMissing({ full_name: "A" }), ["preferred_name", "platforms", "boundaries"]);
+assert.deepEqual(questionnaireRequiredMissing({ full_name: "A", preferred_name: "B", boundaries: "D" }), []);
+assert.deepEqual(questionnaireRequiredMissing({ full_name: "A" }), ["preferred_name", "boundaries"]);
 assert.ok(Date.parse(nextQuestionnaireRevision("2099-01-01T00:00:00.000Z")) > Date.parse("2099-01-01T00:00:00.000Z"));
 
 assert.deepEqual(CREATOR_CONTENT_REQUIREMENTS.map(({ kind, minimum }) => [kind, minimum]), [
@@ -96,4 +128,4 @@ assert.match(pageSource, /disabled=\{!readyToSubmit \|\| applicationLocked\}/);
 const dockerSource = readFileSync("Dockerfile", "utf8");
 assert.match(dockerSource, /apk add --no-cache ffmpeg/);
 
-console.log("CREATOR ONBOARDING V2 PASSED: 108 questions in 18 short autosave parts, strict category counts, verified-only content requirements, and gated final submission.");
+console.log("CREATOR ONBOARDING V2 PASSED: 83 questions in 17 short autosave parts, strict category counts, verified-only content requirements, and gated final submission.");

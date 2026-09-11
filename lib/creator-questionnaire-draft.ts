@@ -5,7 +5,7 @@ import {
   type CreatorQuestionSection,
 } from "@/lib/creator-questionnaire";
 
-export const CREATOR_QUESTIONNAIRE_REQUIRED_IDS = ["full_name", "preferred_name", "platforms", "boundaries"] as const;
+export const CREATOR_QUESTIONNAIRE_REQUIRED_IDS = ["full_name", "preferred_name", "boundaries"] as const;
 export const CREATOR_QUESTIONNAIRE_TERMINAL_STATUSES = new Set(["submitted", "reviewing", "approved"]);
 
 export type CreatorQuestionnairePage = {
@@ -26,10 +26,10 @@ function section(index: number, start = 0, end?: number, title?: string): Creato
 
 export const CREATOR_QUESTIONNAIRE_PAGES: CreatorQuestionnairePage[] = [
   { slug: "personal-contact", title: "Personal details", description: "Start with your basic information and contact details.", sections: [section(0), section(1)] },
-  { slug: "background-story", title: "Background and story", description: "Share your creator background, experience and story.", sections: [section(2), section(3)] },
-  { slug: "audience-identity", title: "Audience and creator identity", description: "Describe the people who follow you and what makes your brand distinct.", sections: [section(4), section(5)] },
-  { slug: "style-tone-ai", title: "Style, tone and personality", description: "Show us how you communicate and how your AI should feel.", sections: [section(6), section(7), section(8), section(9)] },
-  { slug: "goals-replies", title: "Goals and real replies", description: "Set your goals and write examples in your natural voice.", sections: [section(10), section(11)] },
+  { slug: "background-story", title: "Background", description: "Share the background details that help your digital twin understand you.", sections: [section(2)] },
+  { slug: "audience-identity", title: "What makes you unique", description: "Describe what makes you distinct and memorable to the people who follow you.", sections: [section(4)] },
+  { slug: "style-tone-ai", title: "Style, tone and personality", description: "Show us how you communicate and how your AI should feel.", sections: [section(7), section(8), section(9)] },
+  { slug: "goals-replies", title: "Real replies", description: "Write examples that teach your digital twin to respond in your natural voice.", sections: [section(11)] },
   { slug: "collaboration-boundaries", title: "Collaborations and boundaries", description: "Define how your AI should handle fans, offers and personal boundaries.", sections: [section(12)] },
   { slug: "ai-context", title: "Additional AI context", description: "Add the phrases, habits and guardrails that make responses feel like you.", sections: [section(13)] },
   { slug: "identity-basics", title: "Identity and background", description: "Add the public identity details fans may ask about.", sections: [section(14, 0, 6, "Identity basics")] },
@@ -42,7 +42,6 @@ export const CREATOR_QUESTIONNAIRE_PAGES: CreatorQuestionnairePage[] = [
   { slug: "favourites-lifestyle", title: "Lifestyle favourites", description: "Add your favourite colours, food, flowers and social preferences.", sections: [section(18, 8, 14, "Lifestyle favourites")] },
   { slug: "travel-lifestyle", title: "Travel and events", description: "Tell us where you travel and which events matter to you.", sections: [section(19)] },
   { slug: "relationships", title: "Relationship persona", description: "Set the intimate and relationship context your AI is allowed to use.", sections: [section(20)] },
-  { slug: "life-values", title: "Life and values", description: "Finish with the experiences, values and achievements that shape you.", sections: [section(21)] },
 ];
 
 export function creatorQuestionnairePage(slug: string | null | undefined): CreatorQuestionnairePage {

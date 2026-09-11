@@ -414,7 +414,7 @@ try {
               await questionnaire.waitFor();
               const questionNames = await questionnaire.locator("input[name]:not([type='hidden']), textarea[name]").evaluateAll((fields) => [...new Set(fields.map((field) => field.getAttribute("name")))]);
               assert.ok(questionNames.length > 0 && questionNames.length <= 8, `${brand} questionnaire parts must remain short`);
-              assert.match(await questionnaire.innerText(), /Part 1 of 18/i);
+              assert.match(await questionnaire.innerText(), /Part 1 of 17/i);
               assert.match(await questionnaire.innerText(), /Changes save automatically/);
               assert.equal(await page.getByRole("button", { name: "Save and continue", exact: true }).count(), 1);
               if (brand === "twin" && width === 390) {
@@ -455,7 +455,7 @@ try {
             await page.screenshot({ path: path.join(out, `${brand}-onboarding-${step}-${viewport}.png`), fullPage: true });
           }
 
-          for (const section of ["personal-contact", "appearance", "life-values"]) {
+          for (const section of ["personal-contact", "appearance", "relationships"]) {
             await page.goto(`${origin}/creator/onboarding?fixture_brand=${brand}&step=questionnaire&section=${section}`, { waitUntil: "networkidle" });
             assert.equal(await page.locator(`[data-questionnaire-page='${section}']`).count(), 1, `${brand} must render questionnaire section ${section}`);
           }
