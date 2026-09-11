@@ -20,6 +20,7 @@ function safeName(name: string) {
 export async function POST(req: NextRequest) {
   const creator = await creatorDashboardIdentity(req.cookies.get(CREATOR_SESSION_COOKIE)?.value);
   if (!creator) return NextResponse.redirect(creatorRequestUrl(req, creatorLoginPath(null, req.cookies.get(CREATOR_PORTAL_COOKIE)?.value)), 303);
+  if (creator.readOnly) return new NextResponse("Creator demo is read-only", { status: 403 });
   const accountId = creator.accountId;
 
   const form = await req.formData();

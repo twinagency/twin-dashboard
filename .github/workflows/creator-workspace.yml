@@ -50,7 +50,7 @@ jobs:
       - name: Creator identity and permissions
         run: npx tsx scripts/check-creator-workspace.ts
       - name: Creator routing and direct agency signup isolation
-        run: npm run test:creator-routing && npm run test:creator-login && npm run test:tether-creator-signup && npm run test:link-creator-signup && npm run test:tether-auth-ui && npm run test:reset-creator-guardrails
+        run: npm run test:creator-routing && npm run test:creator-login && npm run test:creator-live-demo && npm run test:tether-creator-signup && npm run test:link-creator-signup && npm run test:tether-auth-ui && npm run test:reset-creator-guardrails
       - name: Existing partner and revenue regression tests
         run: npm run test:offline
       - name: Production build

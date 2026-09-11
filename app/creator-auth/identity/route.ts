@@ -12,7 +12,7 @@ const reply = (body: unknown, status = 200) => NextResponse.json(body, { status,
 export async function POST(req: NextRequest) {
   if (req.headers.has("next-action") || !trustedFormOrigin(req)) return reply({ error: "Untrusted request" }, 403);
   const creator = await creatorDashboardIdentity((await cookies()).get(CREATOR_SESSION_COOKIE)?.value);
-  if (!creator?.onboarded || creator.cloneIds.length !== 1) return reply({ error: "Creator access denied" }, 403);
+  if (!creator?.onboarded || creator.readOnly || creator.cloneIds.length !== 1) return reply({ error: "Creator access denied" }, 403);
   try {
     const fd = await req.formData();
     assertCreatorIdentityForm(fd);
