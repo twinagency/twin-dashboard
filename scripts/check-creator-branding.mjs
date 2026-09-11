@@ -132,7 +132,11 @@ import Reset from './components/CreatorResetPasswordScreen';
 import Onboarding from './app/creator/onboarding/page';
 
 const kind = location.pathname.split('/').filter(Boolean).at(-1) || 'login';
-const brand = location.pathname.includes('/creator/link/') ? 'link' : 'tether';
+const brand = location.pathname.includes('/creator/link/')
+  ? 'link'
+  : location.pathname.includes('/creator/tether/')
+    ? 'tether'
+    : 'twin';
 const params = Object.fromEntries(new URLSearchParams(location.search));
 function App(){
   const [node,setNode]=useState(null);
@@ -166,7 +170,9 @@ const navigationMock = `export function redirect(path){throw new Error('Unexpect
 const identityMock = `
 export async function creatorDashboardIdentity(){
   const brand=new URLSearchParams(location.search).get('fixture_brand');
-  return {accountId:'11111111-1111-4111-8111-111111111111',userId:'22222222-2222-4222-8222-222222222222',name:brand==='link'?'LYNQ':'Tether',creatorName:'Fixture Creator',cloneIds:[],onboarded:false,agencyId:brand==='link'?'74b03b70-397e-49ab-841f-8adb8241d87d':'fixture-tether'};
+  const name=brand==='link'?'LYNQ':brand==='tether'?'Tether':'Twin';
+  const agencyId=brand==='link'?'74b03b70-397e-49ab-841f-8adb8241d87d':brand==='tether'?'fixture-tether':null;
+  return {accountId:'11111111-1111-4111-8111-111111111111',userId:'22222222-2222-4222-8222-222222222222',name,creatorName:'Fixture Creator',cloneIds:[],onboarded:false,agencyId};
 }
 `;
 const databaseMock = `
@@ -178,7 +184,17 @@ const rows={
   creator_consents:null,
 };
 function query(table){
-  const result=()=>Promise.resolve({data:rows[table]??null,error:null});
+  const result=()=>{
+    const complete=new URLSearchParams(location.search).get('fixture_complete')==='1';
+    const data=complete&&table==='creator_onboarding_progress'
+      ? {questionnaire_completed:true,content_completed:true,voice_completed:true}
+      : complete&&table==='creator_consents'
+        ? {id:'consent-fixture',legal_name:'Fixture Creator',signed_at:'2026-09-12T00:00:00.000Z'}
+        : complete&&table==='creator_files'
+          ? [{id:'content-fixture',kind:'content',original_name:'sample.jpg',size_bytes:1024,storage_transfer_status:'verified'}]
+        : rows[table]??null;
+    return Promise.resolve({data,error:null});
+  };
   const chain={select(){return chain},eq(){return chain},order(){return chain},limit(){return chain},single(){return result()},maybeSingle(){return result()},then(resolve,reject){return result().then(resolve,reject)}};
   return chain;
 }
@@ -247,19 +263,34 @@ const server = createServer((req, res) => {
 
 await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
 const origin = `http://127.0.0.1:${server.address().port}`;
+if (process.argv.includes("--twin-onboarding-preview")) {
+  console.log(`TWIN ONBOARDING PREVIEW: ${origin}/creator/onboarding?fixture_brand=twin`);
+  await new Promise((resolve) => {
+    const close = () => server.close(resolve);
+    process.once("SIGINT", close);
+    process.once("SIGTERM", close);
+  });
+  process.exit(0);
+}
 const executablePath = process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH;
 const browser = await chromium.launch({ headless: true, ...(executablePath ? { executablePath } : {}) });
 const expectations = {
+  twin: {
+    name: "Twin",
+    headings: { login: "Sign in", signup: "Create account", "forgot-password": "Reset password", "reset-password": "New password", onboarding: "Build your Twin digital clone" },
+    authBase: "/creator",
+    signupAction: "/creator-auth/signup",
+  },
   tether: {
     name: "Tether",
-    headings: { login: "Sign in to Tether", signup: "Join Tether", "forgot-password": "Reset password", "reset-password": "New password", onboarding: "Build your Tether profile" },
+    headings: { login: "Sign in to Tether", signup: "Join Tether", "forgot-password": "Reset password", "reset-password": "New password", onboarding: "Build your Tether digital clone" },
     input: { color: "rgb(8, 10, 14)", background: "rgb(255, 255, 255)", caret: "rgb(8, 10, 14)" },
     authBase: "/creator/tether",
     signupAction: "/creator-auth/tether/signup",
   },
   link: {
     name: "LYNQ",
-    headings: { login: "Sign in to LYNQ", signup: "Join LYNQ", "forgot-password": "Reset password", "reset-password": "New password", onboarding: "Build your LYNQ profile" },
+    headings: { login: "Sign in to LYNQ", signup: "Join LYNQ", "forgot-password": "Reset password", "reset-password": "New password", onboarding: "Build your LYNQ digital clone" },
     input: { color: "rgb(25, 25, 31)", background: "rgb(255, 255, 255)", caret: "rgb(25, 25, 31)" },
     authBase: "/creator/link",
     signupAction: "/creator-auth/link/signup",
@@ -280,11 +311,16 @@ try {
           : `${origin}${expectation.authBase}/${route}`;
         await page.goto(target, { waitUntil: "networkidle" });
         await page.getByRole("heading", { name: heading, exact: true }).waitFor();
-        const marker = route === "onboarding" ? `[data-creator-onboarding-brand='${brand}']` : `[data-creator-auth-brand='${brand}']`;
+        const marker = route === "onboarding"
+          ? `[data-creator-onboarding-brand='${brand}']`
+          : brand === "twin"
+            ? "body"
+            : `[data-creator-auth-brand='${brand}']`;
         assert.equal(await page.locator(marker).count(), 1, `${brand} ${route} must render its explicit presentation`);
         const visibleText = await page.locator("body").innerText();
         assert.match(visibleText, new RegExp(expectation.name, "i"));
-        assert.doesNotMatch(visibleText, /\bTwin\b|Lovable/i, `${brand} ${route} must not visibly leak Twin or Lovable`);
+        assert.doesNotMatch(visibleText, /Lovable/i, `${brand} ${route} must not visibly expose Lovable`);
+        if (brand !== "twin") assert.doesNotMatch(visibleText, /\bTwin\b/i, `${brand} ${route} must not visibly leak Twin`);
         assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, `${brand} ${route} must not overflow at ${width}px`);
 
         if (brand === "link") {
@@ -308,9 +344,11 @@ try {
           }));
           assert.ok(inputStyles.length > 0, `${brand} ${route} must render its auth fields`);
           for (const input of inputStyles) {
-            assert.equal(input.color, expectation.input.color, `${brand} ${route} typed text must be dark`);
-            assert.equal(input.backgroundColor, expectation.input.background, `${brand} ${route} fields must stay white`);
-            assert.equal(input.caretColor, expectation.input.caret, `${brand} ${route} caret must remain visible`);
+            if (expectation.input) {
+              assert.equal(input.color, expectation.input.color, `${brand} ${route} typed text must be dark`);
+              assert.equal(input.backgroundColor, expectation.input.background, `${brand} ${route} fields must stay white`);
+              assert.equal(input.caretColor, expectation.input.caret, `${brand} ${route} caret must remain visible`);
+            }
           }
 
           const form = page.locator("form").first();
@@ -333,16 +371,43 @@ try {
             assert.equal(await desktopHero.isVisible(), width >= 1024, `${route} must preserve the Tether desktop hero breakpoint`);
           }
         } else {
-          const formActions = new Set(await page.locator("form").evaluateAll((forms) => forms.map((form) => form.getAttribute("action")).filter(Boolean)));
-          assert.ok(formActions.has("/creator-auth/onboarding"), `${brand} onboarding must retain its verified server action`);
-          assert.ok(formActions.has("/creator-auth/upload"), `${brand} onboarding must retain its upload action`);
-          assert.ok(formActions.has("/creator-auth/logout"), `${brand} onboarding must retain creator-only logout`);
+          assert.equal(await page.locator("[data-onboarding-hub]").count(), 1, `${brand} onboarding must open on the compact hub`);
+          assert.equal(await page.locator("[data-onboarding-step-card]").count(), 4, `${brand} onboarding hub must show four step cards`);
+          assert.equal(await page.locator('form[action="/creator-auth/logout"]').count(), 1, `${brand} onboarding must retain creator-only logout`);
           assert.equal(await page.getByRole("link", { name: "Dashboard", exact: true }).getAttribute("href"), "/creator");
+
+          for (const step of ["questionnaire", "content", "voice", "consent"]) {
+            await page.goto(`${origin}/creator/onboarding?fixture_brand=${brand}&step=${step}`, { waitUntil: "networkidle" });
+            assert.equal(await page.locator(`[data-onboarding-active-step='${step}']`).count(), 1, `${brand} must open only the requested ${step} step`);
+            assert.equal(await page.getByRole("link", { name: "Return to onboarding", exact: true }).count() > 0, true, `${brand} ${step} must return to the hub`);
+            const actions = new Set(await page.locator("form").evaluateAll((forms) => forms.map((form) => form.getAttribute("action")).filter(Boolean)));
+            if (step === "questionnaire" || step === "consent") assert.ok(actions.has("/creator-auth/onboarding"), `${brand} ${step} must retain the onboarding server action`);
+            if (step === "content" || step === "voice") assert.ok(actions.has("/creator-auth/upload"), `${brand} ${step} must retain the upload server action`);
+            if (step === "content") {
+              const contentText = await page.locator("body").innerText();
+              assert.match(contentText, /Upload minimum 20 SFW images and 30 NSFW images\./);
+              assert.match(contentText, /Upload 15 SFW videos and 30 NSFW videos\./);
+              assert.doesNotMatch(contentText, /separate from PPV content/i);
+            }
+            await page.screenshot({ path: path.join(out, `${brand}-onboarding-${step}-${viewport}.png`), fullPage: true });
+          }
+
+          await page.goto(`${origin}/creator/onboarding?fixture_brand=${brand}&fixture_complete=1`, { waitUntil: "networkidle" });
+          assert.equal(await page.getByText("Complete", { exact: true }).count(), 4, `${brand} completed hub must show four visible completion ticks`);
+          await page.screenshot({ path: path.join(out, `${brand}-onboarding-complete-${viewport}.png`), fullPage: true });
+
+          await page.goto(`${origin}/creator/onboarding?fixture_brand=${brand}&fixture_complete=1&step=questionnaire&status=questionnaire_saved#step-result`, { waitUntil: "networkidle" });
+          await page.getByRole("status").getByText("Questionnaire saved", { exact: true }).waitFor();
+          assert.equal(await page.locator('form[action="/creator-auth/onboarding"]').count(), 0, `${brand} saved questionnaire must show confirmation instead of jumping back into the form`);
+          assert.equal(await page.getByRole("link", { name: "Return to onboarding", exact: true }).count() > 0, true);
+          await page.screenshot({ path: path.join(out, `${brand}-onboarding-questionnaire-saved-${viewport}.png`), fullPage: true });
+
+          await page.goto(`${origin}/creator/onboarding?fixture_brand=${brand}`, { waitUntil: "networkidle" });
         }
 
         assert.deepEqual(runtimeErrors, [], `${brand} ${route} raised browser errors: ${runtimeErrors.join(", ")}`);
         await page.screenshot({ path: path.join(out, `${brand}-${route}-${viewport}.png`), fullPage: true });
-        evidence.push({ brand, route, viewport, noOverflow: true, noTwinLeak: true, darkFields: route !== "onboarding", originalParticleCore: brand === "link" });
+        evidence.push({ brand, route, viewport, noOverflow: true, noBrandLeak: true, darkFields: route !== "onboarding", originalParticleCore: brand === "link" });
         await page.close();
       }
     }
@@ -364,7 +429,7 @@ try {
   await reduced.close();
 
   writeFileSync(path.join(out, "results.json"), JSON.stringify(evidence, null, 2));
-  console.log("CREATOR BRANDING PASSED: Tether and Link auth, onboarding, exact routes, dark autofill-safe fields, original LYNQ particles, reduced motion, and 390px/1440px layouts.");
+  console.log("CREATOR BRANDING PASSED: Twin, Tether and Link auth/onboarding previews, exact routes, dark autofill-safe fields, original LYNQ particles, reduced motion, and 390px/1440px layouts.");
 } finally {
   await browser.close();
   await new Promise((resolve) => server.close(resolve));

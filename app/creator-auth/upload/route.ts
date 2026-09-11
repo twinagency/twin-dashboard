@@ -7,9 +7,11 @@ import { creatorDashboardIdentity } from "@/lib/creator-dashboard-identity";
 import { creatorRequestUrl } from "@/lib/creator-origin";
 import { CREATOR_PORTAL_COOKIE, creatorLoginPath } from "@/lib/creator-routing";
 
-function back(req: Request, status: string) {
+function back(req: Request, status: string, step?: "content" | "voice") {
   const url = creatorRequestUrl(req, "/creator/onboarding");
   url.searchParams.set("status", status);
+  if (step) url.searchParams.set("step", step);
+  url.hash = "step-result";
   return NextResponse.redirect(url, 303);
 }
 
@@ -27,15 +29,15 @@ export async function POST(req: NextRequest) {
   const kind = String(form.get("kind") || "");
   if (kind !== "content" && kind !== "voice") return back(req, "upload_error");
   const files = form.getAll("files").filter((value): value is File => value instanceof File && value.size > 0);
-  if (!files.length) return back(req, "upload_empty");
-  if (files.length > 25) return back(req, "upload_too_many");
+  if (!files.length) return back(req, "upload_empty", kind);
+  if (files.length > 25) return back(req, "upload_too_many", kind);
 
   const maxBytes = kind === "voice" ? 100 * 1024 * 1024 : 250 * 1024 * 1024;
   const bucket = kind === "voice" ? "voice-samples" : "onboarding-content";
   const now = new Date().toISOString();
 
   for (const file of files) {
-    if (file.size > maxBytes) return back(req, "upload_too_large");
+    if (file.size > maxBytes) return back(req, "upload_too_large", kind);
     const objectPath = `creators/${accountId}/${kind}/${Date.now()}-${randomUUID()}-${safeName(file.name)}`;
     const body = new Uint8Array(await file.arrayBuffer());
     const { error: uploadError } = await supabaseAdmin.storage.from(bucket).upload(objectPath, body, {
@@ -43,7 +45,7 @@ export async function POST(req: NextRequest) {
       cacheControl: "3600",
       upsert: false,
     });
-    if (uploadError) return back(req, "upload_error");
+    if (uploadError) return back(req, "upload_error", kind);
 
     const { error: rowError } = await supabaseAdmin.from("creator_files").insert({
       creator_account_id: accountId,
@@ -60,11 +62,12 @@ export async function POST(req: NextRequest) {
     });
     if (rowError) {
       await supabaseAdmin.storage.from(bucket).remove([objectPath]);
-      return back(req, "upload_error");
+      return back(req, "upload_error", kind);
     }
   }
 
   const patch = kind === "content" ? { content_completed: true, updated_at: now } : { voice_completed: true, updated_at: now };
-  await supabaseAdmin.from("creator_onboarding_progress").upsert({ creator_account_id: accountId, ...patch }, { onConflict: "creator_account_id" });
-  return back(req, kind === "content" ? "content_saved" : "voice_saved");
+  const { error: progressError } = await supabaseAdmin.from("creator_onboarding_progress").upsert({ creator_account_id: accountId, ...patch }, { onConflict: "creator_account_id" });
+  if (progressError) return back(req, "upload_error", kind);
+  return back(req, kind === "content" ? "content_saved" : "voice_saved", kind);
 }

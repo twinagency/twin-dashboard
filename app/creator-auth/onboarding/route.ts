@@ -7,9 +7,11 @@ import { creatorRequestUrl } from "@/lib/creator-origin";
 import { CREATOR_QUESTIONNAIRE } from "@/lib/creator-questionnaire";
 import { CREATOR_PORTAL_COOKIE, creatorLoginPath } from "@/lib/creator-routing";
 
-function back(req: Request, status: string) {
+function back(req: Request, status: string, step?: "questionnaire" | "voice" | "consent") {
   const url = creatorRequestUrl(req, "/creator/onboarding");
   url.searchParams.set("status", status);
+  if (step) url.searchParams.set("step", step);
+  url.hash = "step-result";
   return NextResponse.redirect(url, 303);
 }
 
@@ -48,7 +50,7 @@ export async function POST(req: NextRequest) {
       if (!(question.id in answers) || value) answers[question.id] = value;
     }
     if (!answers.full_name || !answers.preferred_name || !answers.platforms || !answers.boundaries) {
-      return back(req, "questionnaire_missing");
+      return back(req, "questionnaire_missing", "questionnaire");
     }
 
     const existing = await latestApplication(accountId);
@@ -58,31 +60,33 @@ export async function POST(req: NextRequest) {
         .from("creator_applications")
         .update({ answers: merged, status: existing.status === "submitted" ? "submitted" : "draft", updated_at: now })
         .eq("id", existing.id);
-      if (error) return back(req, "error");
+      if (error) return back(req, "error", "questionnaire");
     } else {
       const { error } = await supabaseAdmin
         .from("creator_applications")
         .insert({ creator_account_id: accountId, answers, status: "draft" });
-      if (error) return back(req, "error");
+      if (error) return back(req, "error", "questionnaire");
     }
 
-    await supabaseAdmin
+    const { error: progressError } = await supabaseAdmin
       .from("creator_onboarding_progress")
       .upsert({ creator_account_id: accountId, questionnaire_completed: true, updated_at: now }, { onConflict: "creator_account_id" });
-    return back(req, "questionnaire_saved");
+    if (progressError) return back(req, "error", "questionnaire");
+    return back(req, "questionnaire_saved", "questionnaire");
   }
 
   if (action === "skip_voice") {
-    await supabaseAdmin
+    const { error } = await supabaseAdmin
       .from("creator_onboarding_progress")
       .upsert({ creator_account_id: accountId, voice_completed: true, updated_at: now }, { onConflict: "creator_account_id" });
-    return back(req, "voice_skipped");
+    if (error) return back(req, "error", "voice");
+    return back(req, "voice_skipped", "voice");
   }
 
   if (action === "consent") {
     const legalName = String(form.get("legal_name") || "").trim();
     const agreed = form.get("agreed") === "on";
-    if (!legalName || !agreed) return back(req, "consent_missing");
+    if (!legalName || !agreed) return back(req, "consent_missing", "consent");
 
     const { data: existing } = await supabaseAdmin
       .from("creator_consents")
@@ -97,9 +101,9 @@ export async function POST(req: NextRequest) {
       const { error } = await supabaseAdmin
         .from("creator_consents")
         .insert({ creator_account_id: accountId, legal_name: legalName, consent_version: "twin-creator-consent-v1", signed_at: now });
-      if (error) return back(req, "error");
+      if (error) return back(req, "error", "consent");
     }
-    return back(req, "consent_saved");
+    return back(req, "consent_saved", "consent");
   }
 
   if (action === "submit") {
@@ -110,7 +114,7 @@ export async function POST(req: NextRequest) {
     ]);
     const hasContent = (files || []).some((f) => f.kind === "content" && f.storage_transfer_status === "verified");
     if (!progress?.questionnaire_completed || !progress?.content_completed || !progress?.voice_completed || !consent || !hasContent) {
-      return back(req, "not_ready");
+      return back(req, "not_ready", "consent");
     }
 
     const existing = await latestApplication(accountId);
@@ -119,12 +123,12 @@ export async function POST(req: NextRequest) {
         .from("creator_applications")
         .update({ status: "submitted", submitted_at: now, updated_at: now })
         .eq("id", existing.id);
-      if (error) return back(req, "error");
+      if (error) return back(req, "error", "consent");
     } else {
       const { error } = await supabaseAdmin
         .from("creator_applications")
         .insert({ creator_account_id: accountId, status: "submitted", submitted_at: now, answers: {} });
-      if (error) return back(req, "error");
+      if (error) return back(req, "error", "consent");
     }
     return NextResponse.redirect(creatorRequestUrl(req, "/creator?submitted=1"), 303);
   }

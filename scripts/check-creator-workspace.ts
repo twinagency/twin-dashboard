@@ -208,7 +208,10 @@ async function main() {
     writes.length = 0;
     const allowedOnboarding = await withDashboardAccess(null, () => saveCreatorOnboarding(actionRequest("/creator-auth/onboarding", { action: "skip_voice" })));
     assert.equal(allowedOnboarding.status, 303);
-    assert.equal(new URL(allowedOnboarding.headers.get("location")!).searchParams.get("status"), "voice_skipped");
+    const onboardingReturn = new URL(allowedOnboarding.headers.get("location")!);
+    assert.equal(onboardingReturn.searchParams.get("status"), "voice_skipped");
+    assert.equal(onboardingReturn.searchParams.get("step"), "voice");
+    assert.equal(onboardingReturn.hash, "#step-result");
     assert.equal(writes.length, 1);
     assert.equal(writes[0].path, "/rest/v1/creator_onboarding_progress");
     assert.equal(JSON.parse(writes[0].body).creator_account_id, account);
