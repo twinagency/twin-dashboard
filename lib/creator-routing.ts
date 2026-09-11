@@ -72,6 +72,17 @@ export function creatorPortalForIdentity(
   return "twin";
 }
 
+// Public login and signup pages only skip to the workspace when the active
+// creator session belongs to that same branded portal. A different portal
+// must remain reachable so its white-label authentication journey can start.
+export function shouldRedirectAuthenticatedCreatorEntry(
+  pathname: string | null | undefined,
+  identity: CreatorPortalIdentity | null | undefined,
+): boolean {
+  if (!identity || (!pathname?.endsWith("/login") && !pathname?.endsWith("/signup"))) return false;
+  return creatorPublicPortal(pathname) === creatorPortalForIdentity(identity, null);
+}
+
 export function creatorLoginPath(
   identity: CreatorPortalIdentity | null | undefined,
   portalCookie: string | null | undefined,
