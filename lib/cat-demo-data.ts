@@ -25,6 +25,20 @@ const CAT_LIFETIME_BUYERS = 2_040;
 const CAT_NEW_USERS_30D = 12_000;
 const CAT_REACHABLE_24H = 684;
 
+// Day zero is the launch baseline. The rest deliberately mixes strong days,
+// softer days and short pull-backs while the overall month grows. A real first
+// month should not look like a mathematically perfect staircase.
+const CAT_FIRST_MONTH_REVENUE_WEIGHTS = [
+  0, .18, .32, .27, .41, .66, .52, .85, .77, 1.08, 1.36,
+  1.12, 1.49, 1.77, 1.55, 2.03, 2.46, 2.18, 1.94, 2.71,
+  3.15, 2.69, 3.44, 3.18, 3.92, 4.35, 3.73, 4.68, 4.19,
+  5.06, 4.72,
+] as const;
+
+const CAT_LATEST_DAY_INTRADAY_WEIGHTS = [
+  .61, .47, .36, .42, .58, .73, .91, 1.16, .98, 1.29, 1.08, 1.41, 1.24,
+] as const;
+
 const FEATURE_REVENUE_WEIGHT: Record<FeatureKey, number> = {
   credits: 10,
   photo: 20,
@@ -71,6 +85,47 @@ function allocate(total: number, weights: readonly number[]): number[] {
   return values;
 }
 
+function fitWeights(template: readonly number[], length: number): number[] {
+  if (length <= 0) return [];
+  if (length === template.length) return [...template];
+  if (length === 1) return [template[template.length - 1] ?? 1];
+  return Array.from({ length }, (_, index) => {
+    const templateIndex = Math.round(index * (template.length - 1) / (length - 1));
+    return template[templateIndex] ?? 0;
+  });
+}
+
+function catPresetSeriesStars(
+  period: Period,
+  length: number,
+  monthLength: number,
+): number[] | null {
+  if (length <= 0 || monthLength <= 0) return null;
+  const monthSeries = allocate(
+    CAT_DEMO_30D_STARS,
+    fitWeights(CAT_FIRST_MONTH_REVENUE_WEIGHTS, monthLength),
+  );
+
+  if (period === "1M") {
+    return length === monthLength
+      ? monthSeries
+      : allocate(CAT_DEMO_30D_STARS, fitWeights(CAT_FIRST_MONTH_REVENUE_WEIGHTS, length));
+  }
+  if (period === "2W" || period === "1W") {
+    return length <= monthSeries.length ? monthSeries.slice(-length) : null;
+  }
+  if (period === "1D") {
+    return allocate(
+      monthSeries[monthSeries.length - 1] ?? 0,
+      fitWeights(CAT_LATEST_DAY_INTRADAY_WEIGHTS, length),
+    );
+  }
+  if (period === "ALL") {
+    return allocate(CAT_DEMO_LIFETIME_STARS, fitWeights(CAT_FIRST_MONTH_REVENUE_WEIGHTS, length));
+  }
+  return null;
+}
+
 function targetStars(sourceStars: number, monthStars: number, lifetimeStars: number): number {
   if (sourceStars <= 0 || monthStars <= 0) return 0;
   if (sourceStars <= monthStars || lifetimeStars <= monthStars) {
@@ -103,9 +158,14 @@ export function catDemoData(period: Period = "1M", range?: DateRange, now = Date
   const source = creatorDemoData(period, range, now);
   const month = creatorDemoData("1M", undefined, now);
   const lifetimeSource = creatorDemoData("ALL", undefined, now);
-  const stars = period === "1M" && !range
-    ? CAT_DEMO_30D_STARS
-    : targetStars(source.totals.stars, month.totals.stars, lifetimeSource.totals.stars);
+  const presetSeriesStars = range
+    ? null
+    : catPresetSeriesStars(period, source.series.length, month.series.length);
+  const stars = presetSeriesStars
+    ? presetSeriesStars.reduce((sum, value) => sum + value, 0)
+    : period === "1M" && !range
+      ? CAT_DEMO_30D_STARS
+      : targetStars(source.totals.stars, month.totals.stars, lifetimeSource.totals.stars);
   const counts = periodCounts(stars);
 
   const featureStars = allocate(stars, source.analytics.byFeature.map((feature) => FEATURE_REVENUE_WEIGHT[feature.key]));
@@ -138,10 +198,10 @@ export function catDemoData(period: Period = "1M", range?: DateRange, now = Date
     };
   });
 
-  // Month one should read as launch growth, not as a random mature-account
-  // fluctuation. Keep the real date buckets, but distribute the synthetic
-  // total along a steadily rising curve for every selectable window.
-  const seriesStars = allocate(stars, source.series.map((_, index) => Math.pow(index + 8, 1.18)));
+  const seriesStars = presetSeriesStars ?? allocate(
+    stars,
+    fitWeights(CAT_FIRST_MONTH_REVENUE_WEIGHTS, source.series.length),
+  );
   const series = source.series.map((row, index) => ({ bucket: row.bucket, [CAT_DEMO_CLONE_ID]: seriesStars[index] }));
   const hourStars = allocate(stars, source.analytics.byHour.map((row) => row.stars));
   const dowStars = allocate(stars, source.analytics.byDow.map((row) => row.stars));
@@ -170,7 +230,8 @@ export function catDemoData(period: Period = "1M", range?: DateRange, now = Date
     stars: whaleStars[index],
   }));
 
-  const weeklyStars = targetStars(source.analytics.weeklySpenderSummary.stars, month.totals.stars, lifetimeSource.totals.stars);
+  const monthSeriesStars = catPresetSeriesStars("1M", month.series.length, month.series.length) ?? [];
+  const weeklyStars = monthSeriesStars.slice(-Math.min(8, monthSeriesStars.length)).reduce((sum, value) => sum + value, 0);
   const weeklyScale = fraction(weeklyStars, CAT_DEMO_30D_STARS);
   const weeklyBuyers = Math.max(1, Math.round(CAT_DEMO_BUYERS_30D * weeklyScale));
   const weeklyPurchases = Math.max(weeklyBuyers, Math.round(CAT_DEMO_PURCHASES_30D * weeklyScale));

@@ -238,6 +238,10 @@ try {
       assert.doesNotMatch(bodyText, /\bdemo\b/i, "the presentation UI uses sample wording instead of demo wording");
       assert.doesNotMatch(bodyText, /latter vs earlier half/i, "first-month growth does not show a half-over-half comparison");
       assert.doesNotMatch(bodyText, /(?:^|\s)[−-]\d+(?:\.\d+)?%/m, "the first-month view does not show negative percentage metrics");
+      assert.doesNotMatch(bodyText, /A\$-/i, "the first-month chart never renders a negative currency tick");
+      const renderedSeries = dashboardResponses.at(-1).series.map(row => row[CAT_DEMO_CLONE_ID]);
+      assert.equal(renderedSeries[0], 0, "the first-month chart starts at zero");
+      assert.ok(renderedSeries.slice(1).some((value, index) => value < renderedSeries[index]), "the first-month chart includes natural pull-backs");
 
       await page.getByRole("button", { name: /Full revenue report/i }).click();
       await page.locator('[data-slot="card-title"]', { hasText: /^Revenue report$/i }).waitFor();

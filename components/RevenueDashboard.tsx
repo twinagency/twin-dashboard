@@ -611,6 +611,8 @@ export default function RevenueDashboard({
                         tick={{ fill: "#152033", fontSize: 11 }}
                         axisLine={false}
                         tickLine={false}
+                        domain={demoMode === "cat" ? [0, (dataMax: number) => Math.ceil(dataMax * 1.08)] : undefined}
+                        allowDataOverflow={demoMode === "cat"}
                         tickFormatter={(v: number) => money(v).replace(/\.00$/, "")}
                         width={64}
                       />
@@ -664,6 +666,8 @@ export default function RevenueDashboard({
                         tick={{ fill: "#152033", fontSize: 11 }}
                         axisLine={false}
                         tickLine={false}
+                        domain={demoMode === "cat" ? [0, (dataMax: number) => Math.ceil(dataMax * 1.08)] : undefined}
+                        allowDataOverflow={demoMode === "cat"}
                         tickFormatter={(v: number) => money(v).replace(/\.00$/, "")}
                         width={64}
                       />

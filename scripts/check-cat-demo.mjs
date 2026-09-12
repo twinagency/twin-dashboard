@@ -67,10 +67,24 @@ assert.equal(month.totals.stars, sumStars(month.analytics.byKind));
 assert.equal(month.totals.stars, sumStars(month.analytics.byHour));
 assert.equal(month.totals.stars, sumStars(month.analytics.byDow));
 assert.equal(month.totals.stars, month.series.reduce((sum, row) => sum + row[CAT_DEMO_CLONE_ID], 0));
+const monthDailyStars = month.series.map(row => row[CAT_DEMO_CLONE_ID]);
+assert.equal(monthDailyStars[0], 0, "The first-month chart begins at the A$0 launch baseline");
+assert.ok(monthDailyStars.every(value => value >= 0), "Daily revenue never drops below A$0");
+const rises = monthDailyStars.slice(1).filter((value, index) => value > monthDailyStars[index]).length;
+const dips = monthDailyStars.slice(1).filter((value, index) => value < monthDailyStars[index]).length;
+assert.ok(rises >= 7 && dips >= 7, "The month contains believable rises and pull-backs");
+const average = values => values.reduce((sum, value) => sum + value, 0) / Math.max(1, values.length);
 assert.ok(
-  month.series.every((row, index, rows) => index === 0 || row[CAT_DEMO_CLONE_ID] > rows[index - 1][CAT_DEMO_CLONE_ID]),
-  "The first-month chart is strictly increasing",
+  average(monthDailyStars.slice(-7)) > average(monthDailyStars.slice(1, 8)),
+  "The final week is stronger than the first paying week without growing in a straight line",
 );
+assert.notEqual(monthDailyStars.at(-1), Math.max(...monthDailyStars), "The final day is not an artificial all-time peak");
+const twoWeeks = catDemoData("2W", undefined, now);
+const oneWeek = catDemoData("1W", undefined, now);
+const oneDay = catDemoData("1D", undefined, now);
+assert.equal(twoWeeks.totals.stars, monthDailyStars.slice(-twoWeeks.series.length).reduce((sum, value) => sum + value, 0));
+assert.equal(oneWeek.totals.stars, monthDailyStars.slice(-oneWeek.series.length).reduce((sum, value) => sum + value, 0));
+assert.equal(oneDay.totals.stars, monthDailyStars.at(-1));
 assert.equal(month.totals.sales, month.analytics.byFeature.reduce((sum, row) => sum + row.sales, 0));
 assert.equal(month.analytics.totals.fans, month.analytics.byTier.reduce((sum, row) => sum + row.users, 0));
 assert.equal(CAT_DEMO_LIFETIME_STARS, sumStars(month.analytics.byTier));
