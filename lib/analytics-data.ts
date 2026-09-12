@@ -185,7 +185,7 @@ export type AnalyticsData = {
   topWeeklySpenders: {
     cloneId: string | null;
     cloneName: string;
-    telegramId: number;
+    telegramId: number | null;
     name: string;
     username: string | null;
     stars: number;

@@ -57,6 +57,9 @@ function eq(a: unknown, b: unknown, what: string): void {
 
 const src = (p: string) => readFileSync(new URL(`../${p}`, import.meta.url), "utf8");
 const DASH = src("components/RevenueDashboard.tsx");
+const DAY_DRIVERS = src("components/RevenueDayDrivers.tsx");
+const PERSONA_FACTS = src("components/clone/PersonaFactsFields.tsx");
+const GLOBALS = src("app/globals.css");
 const ANALYTICS = src("lib/analytics-data.ts");
 const ROLLUP = src("lib/rollup.ts");
 
@@ -320,6 +323,26 @@ check("C19 credit refunds remain netted against paid-message revenue", () => {
   assert(
     /const originalFeature =[^;]+;[\s\S]*if \(originalFeature === "credits"\)/.test(analytics),
     "paid-message Stars must use the original product feature even when the display bucket is Refunds",
+  );
+});
+
+check("C20 privacy mode covers creator names added after the original privacy pass", () => {
+  assert(
+    /html\.blur-media \.creator-name\s*\{[^}]*filter:\s*blur\(/.test(GLOBALS),
+    "the shared creator-name privacy class must stay connected to blur mode",
+  );
+  assert(
+    /<ChangeList\s+rows=\{data\.byClone\}[^>]*\screatorLabels\s*\/>/.test(DAY_DRIVERS) &&
+      /creatorLabels\s*\?\s*"creator-name /.test(DAY_DRIVERS),
+    "daily creator comparison labels must opt into the shared creator-name blur",
+  );
+  assert(
+    [...DAY_DRIVERS.matchAll(/<span className="creator-name">\{data\.concentration\.(?:largestPayment|topBuyer)\.cloneName\}<\/span>/g)].length === 2,
+    "fleet concentration copy must wrap both creator names instead of embedding them in plain strings",
+  );
+  assert(
+    /<div className="creator-name">\s*<Field label="Name" name="name"/.test(PERSONA_FACTS),
+    "the editable creator name must remain inside the shared privacy mask",
   );
 });
 

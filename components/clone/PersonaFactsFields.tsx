@@ -613,7 +613,9 @@ export default function PersonaFactsFields({
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
           {/* Name lives here rather than in its own card - one input never
               justified a whole section at the top of the tab. */}
-          <Field label="Name" name="name" required defaultValue={clone?.name ?? ""} placeholder="e.g. Sophie" />
+          <div className="creator-name">
+            <Field label="Name" name="name" required defaultValue={clone?.name ?? ""} placeholder="e.g. Sophie" />
+          </div>
           <Field
             label="Birthday"
             name="date_of_birth"

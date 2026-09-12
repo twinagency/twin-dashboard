@@ -115,10 +115,11 @@ export function creatorDemoData(period: Period = "1M", range?: DateRange, now = 
   return { demo: true, period, clones: [{ id: DEMO_CLONE_ID, slug: "zane-demo", name: NAME, color: COLOR, stars }], bucketLabels: points.map(p => p.label), series: points.map(p => ({ bucket: p.label, [DEMO_CLONE_ID]: p.stars })), recent: [...rows].reverse().slice(0, 300).map(r => ({ cloneId: DEMO_CLONE_ID, cloneName: NAME, cloneColor: COLOR, buyerName: buyerName(r.buyer), username: null, telegramId: -(r.buyer + 1), stars: r.stars, kind: r.feature, mediaType: ["photo", "video", "bundle"].includes(r.feature) ? r.feature as "photo" | "video" | "bundle" : null, mediaUrl: null, mediaName: ["photo", "video", "bundle"].includes(r.feature) ? `Demo ${r.feature} ${r.buyer % 6 + 1}` : null, paidAt: new Date(r.at).toISOString() })), totals: stats, perClone: { [DEMO_CLONE_ID]: stats }, analytics, balance: { lifetimeStars: lifetime, totalBalanceStars: Math.round(lifetime * .12) }, cachedAt: now, ageSeconds: 0, stale: false };
 }
 function metrics(rows: Sale[]) { const stars = sum(rows); return { stars, grossPaymentStars: stars, refundStars: 0, sales: rows.length, buyers: buyers(rows).length, averageSaleStars: fraction(stars, rows.length) }; }
-export function creatorDemoInsight(day: string, now = Date.now()): RevenueWhyChanged {
+export function creatorDemoInsight(day: string, now = Date.now(), baselineDayCount = 30): RevenueWhyChanged {
   if (!/^\d{4}-\d{2}-\d{2}$/.test(day) || !Number.isFinite(Date.parse(`${day}T12:00:00Z`)) || new Date(`${day}T12:00:00Z`).toISOString().slice(0, 10) !== day || day > parts(now).key) throw new Error("Choose today or a valid earlier date");
   const all = ledger(now), current = all.filter(r => parts(r.at).key === day);
-  const baselineDays = Array.from({ length: 30 }, (_, i) => { const key = new Date(Date.parse(`${day}T12:00:00Z`) - (30 - i) * DAY).toISOString().slice(0, 10); return { key, label: key }; });
+  const sampleDays = Math.min(30, Math.max(1, Math.round(baselineDayCount)));
+  const baselineDays = Array.from({ length: sampleDays }, (_, i) => { const key = new Date(Date.parse(`${day}T12:00:00Z`) - (sampleDays - i) * DAY).toISOString().slice(0, 10); return { key, label: key }; });
   const daily = baselineDays.map(d => all.filter(r => parts(r.at).key === d.key));
   const totals = metrics(current), baselines = daily.map(metrics);
   const benchmark = Object.fromEntries(Object.keys(totals).map(key => [key, median(baselines.map(m => m[key as keyof typeof m]))])) as typeof totals;
@@ -128,7 +129,7 @@ export function creatorDemoInsight(day: string, now = Date.now()): RevenueWhyCha
   const top = buyers(current)[0], largest = [...current].sort((a, b) => b.stars - a.stars)[0];
   return {
     day: { key: day, label: day, partial: day === parts(now).key, elapsedLabel: day === parts(now).key ? "Demo day so far" : null },
-    comparison: { label: "Synthetic 30-day comparison", benchmarkLabel: "30-day benchmark", baselineDays, baselineRangeLabel: `${baselineDays[0].key} to ${baselineDays[29].key}`, scopeLabel: "ZANE · Demo data", benchmark, sampleDays: 30, baselineIsPartial: false },
+    comparison: { label: `Synthetic ${sampleDays}-day comparison`, benchmarkLabel: `${sampleDays}-day benchmark`, baselineDays, baselineRangeLabel: `${baselineDays[0].key} to ${baselineDays[baselineDays.length - 1].key}`, scopeLabel: "ZANE · Demo data", benchmark, sampleDays, baselineIsPartial: false },
     totals: { ...totals, deltaStars: totals.stars - benchmark.stars, deltaSales: totals.sales - benchmark.sales, deltaBuyers: totals.buyers - benchmark.buyers, deltaAverageSaleStars: totals.averageSaleStars - benchmark.averageSaleStars },
     activity: { ...activity, usualMessagedFans, usualNewFans, usualConversationMessages, deltaMessagedFans: activity.messagedFans - usualMessagedFans, deltaNewFans: activity.newFans - usualNewFans, deltaConversationMessages: activity.conversationMessages - usualConversationMessages },
     concentration: { topBuyer: top ? { name: buyerName(top.id), cloneName: NAME, stars: top.stars, sales: top.purchases, share: fraction(top.stars, totals.stars) } : null, largestPayment: largest ? { name: buyerName(largest.buyer), cloneName: NAME, stars: largest.stars, feature: FEATURES.find(f => f.key === largest.feature)!.label, share: fraction(largest.stars, totals.stars) } : null },

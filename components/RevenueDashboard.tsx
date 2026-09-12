@@ -19,7 +19,7 @@ import type { AnalyticsData } from "@/lib/analytics-data";
 import type { StarBalance } from "@/lib/star-balance";
 import { reportFeatureRows, topFeatureRow } from "@/lib/report-features";
 import { reportTzLabel } from "@/lib/report-time";
-import { fmtMoney, fmtNum, STAR_USD, starsToMoneyRate, usdToMoneyRate } from "@/lib/money";
+import { AUD_PER_USD, fmtMoney, fmtNum, STAR_USD, starsToMoneyRate, usdToMoneyRate } from "@/lib/money";
 import { intraPeriodTrendPct } from "@/lib/revenue-trend";
 import { useCurrency } from "@/components/CurrencyProvider";
 import { useDashboardAccess } from "@/components/DashboardAccessProvider";
@@ -31,6 +31,7 @@ import { Card, CardAction, CardContent, CardDescription, CardHeader, CardTitle }
 import { Button } from "@/components/ui/button";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { CAT_PRESENTATION_QUERY_KEY } from "@/lib/cat-demo-policy";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 
 // The Revenue page is the ONE money destination: headline + chart + the 9 core
@@ -154,7 +155,14 @@ function snapshotAgeLabel(ageSeconds: number) {
   return `Updated ${minutes}m ago`;
 }
 
-export default function RevenueDashboard({ cloneId }: { cloneId?: string | null } = {}) {
+export default function RevenueDashboard({
+  cloneId,
+  demoMode,
+}: {
+  cloneId?: string | null;
+  /** Explicit, server-authorized presentation mode. Never inferred from clone data. */
+  demoMode?: "cat" | null;
+} = {}) {
   const { isCreator } = useDashboardAccess();
   const scoped = Boolean(cloneId);
   const [period, setPeriod] = useState<Period>("1M");
@@ -216,6 +224,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
         params.set("period", p);
       }
       if (cid) params.set("clone", cid);
+      if (demoMode === "cat") params.set(CAT_PRESENTATION_QUERY_KEY, "cat");
       // A normal dashboard request waits if its one-minute snapshot has just
       // expired. An explicit refresh asks for a new snapshot even if it is
       // still warm, so the operator can verify the live ledger immediately.
@@ -240,7 +249,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
       setData(json);
       setLoading(false);
     },
-    [],
+    [demoMode],
   );
 
   // Opening the report scrolls it into view (it renders below the fold).
@@ -279,11 +288,15 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
     fetchData(period, cloneId, customRange, true);
   }
 
-  const money = (stars: number) => fmtMoney(starsToMoneyRate(stars, currency, rate), currency);
+  // Cat presentation figures are denominated using the dashboard's documented
+  // fallback FX rate so the requested A$129,384 does not drift whenever the
+  // live FX endpoint refreshes. This affects only the explicit demo URL.
+  const moneyRate = demoMode === "cat" ? AUD_PER_USD : rate;
+  const money = (stars: number) => fmtMoney(starsToMoneyRate(stars, currency, moneyRate), currency);
   // AI contribution/cost arrive in USD; revenue arrives in Stars. Both are rendered in
   // the operator's selected currency so a table never puts "A$8,295 revenue"
   // beside "$4,102 AI contribution" and invites the wrong ratio. Was a bare "$" + toLocaleString.
-  const usd = (n: number) => fmtMoney(usdToMoneyRate(n, currency, rate), currency);
+  const usd = (n: number) => fmtMoney(usdToMoneyRate(n, currency, moneyRate), currency);
   // Whole percent above 10, one decimal below it. Math.round alone flattened
   // every conversion rate the fleet has ever had into "1%": the real figure sat
   // between 0.62% and 0.68% across 1d/7d/30d on 2026-08-21, and all three
@@ -313,7 +326,9 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
     ? "Star revenue, custom range"
     : period === "ALL"
       ? "Lifetime Star revenue"
-      : `Star revenue, ${PERIODS.find((p) => p.key === period)?.label ?? period}`;
+      : demoMode === "cat" && period === "1M"
+        ? "Star revenue, first 30 days"
+        : `Star revenue, ${PERIODS.find((p) => p.key === period)?.label ?? period}`;
 
   const toggleHidden = (id: string) =>
     setHidden((prev) => {
@@ -337,6 +352,15 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
 
   return (
     <div className="earnings-aurora">
+      {demoMode === "cat" && (
+        <div
+          role="status"
+          data-cat-sample="true"
+          className="mb-4 inline-flex flex-wrap items-center gap-x-2 gap-y-1 rounded-full border border-line bg-panel px-3 py-1.5 text-xs text-muted shadow-sm"
+        >
+          <strong className="text-ink">Sample figures · First 30 days</strong>
+        </div>
+      )}
       {/* Named on screen, not just in the console. The operator is the person
           who has to decide whether to pick a shorter window or call someone. */}
       {loadError && (
@@ -389,7 +413,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
           two rows instead of three and nothing is hidden. */}
       <div className="earnings-toolbar mb-4 flex flex-wrap items-center gap-1.5 sm:mb-5 sm:gap-2">
         <div className="earnings-control-group inline-flex min-w-0 flex-wrap gap-0.5 rounded-full p-0.5">
-          {PERIODS.map((p) => (
+          {PERIODS.filter((p) => demoMode !== "cat" || ["1M", "2W", "1W", "1D"].includes(p.key)).map((p) => (
             <button
               key={p.key}
               onClick={() => {
@@ -412,7 +436,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
               {p.label}
             </button>
           ))}
-          <button
+          {demoMode !== "cat" && <button
             onClick={() => {
               setDraftStart(customRange?.start ?? "");
               setDraftEnd(customRange?.end ?? "");
@@ -428,7 +452,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
               <path d="M3 9h18M8 2v4M16 2v4" strokeLinecap="round" />
             </svg>
             {customRange ? `${customRange.start} → ${customRange.end}` : "Custom"}
-          </button>
+          </button>}
         </div>
 
         {/* Bar / line toggle - same series, different mark. Fixed square boxes
@@ -467,7 +491,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
         </div>
       </div>
 
-      <Dialog open={customOpen} onOpenChange={setCustomOpen}>
+      {demoMode !== "cat" && <Dialog open={customOpen} onOpenChange={setCustomOpen}>
         <DialogContent className="max-w-sm">
           <DialogHeader>
             <DialogTitle>Custom date range</DialogTitle>
@@ -493,7 +517,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
             </div>
           </div>
         </DialogContent>
-      </Dialog>
+      </Dialog>}
 
       <div className="space-y-2">
         {/* ── Chart card ───────────────────────────────────────────── */}
@@ -503,7 +527,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
               <div className="flex items-center gap-1.5 text-xs text-muted">
                 {focusName ? <span className="creator-name">{focusName}</span> : "Fleet"} · {revenueLabel}
                 <Info text="Recorded Star payments in this window, after refunds and adjustments. This is not profit, a payout, or the current wallet balance." />
-                {trendPct !== null && (
+                {demoMode !== "cat" && trendPct !== null && (
                   <span className="inline-flex items-center gap-1">
                     <span className="font-mono font-semibold tabular-nums text-black">
                       {trendPct >= 0 ? "+" : ""}
@@ -789,7 +813,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
           decision possible: did more people show up, did buyer count change, or
           did one unusually large payment move the entire day? It deliberately
           stays above the broad report so it is not buried behind a toggle. */}
-      <RevenueDayDrivers cloneId={cloneId} />
+      {demoMode !== "cat" && <RevenueDayDrivers cloneId={cloneId} demoMode={demoMode} />}
 
       {/* ── Fleet/clone stats - same window as the chart above it. A tile
           grid: each stat gets its own card so the row reads at a glance. */}
@@ -830,9 +854,11 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
               // audience", a number that cannot shrink when you pick a shorter
               // period. The windowed count is "New" beside it.
               {
-                label: "All-time users",
+                label: demoMode === "cat" ? "First-month users" : "All-time users",
                 value: fmtNum(s.totalFans),
-                hint: `All fan profiles for ${creatorScope}, ever. This audience-size number does not change when you change the date filter.${profileScopeNote}`,
+                hint: demoMode === "cat"
+                  ? "All people who messaged during the first 30 days."
+                  : `All fan profiles for ${creatorScope}, ever. This audience-size number does not change when you change the date filter.${profileScopeNote}`,
               },
               {
                 label: "New users",
@@ -953,7 +979,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
       {/* Customer conversion needs a shared identity at every stage. Keep the
           three useful cohorts together rather than hiding a broad percentage in
           the tile grid, where its denominator is too easy to miss. */}
-      {data && <BuyerConversionPanel conversion={data.analytics.buyerConversion} pct={pct} />}
+      {data && <BuyerConversionPanel conversion={data.analytics.buyerConversion} pct={pct} firstMonth={demoMode === "cat"} />}
 
       {/* Optional chat and purchase detail. It stays closed by default because
           the five signals use related, not identical, cohorts. Same selected
@@ -980,6 +1006,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
             pct={pct}
             axisColor={axisColor}
             cursorColor={cursorColor}
+            syntheticDemo={demoMode === "cat"}
             onClose={() => setReportOpen(false)}
           />
         </div>
@@ -1057,7 +1084,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
                       <div className="min-w-0 flex-1">
                         <div className="truncate text-sm font-medium text-ink">{t.buyerName}</div>
                         <div className="mt-0.5 truncate text-[11px] text-muted">
-                          {t.username ? `@${t.username}` : `Fan ${t.telegramId}`}
+                          {t.username ? `@${t.username}` : t.telegramId == null ? (demoMode === "cat" ? "Sample fan" : "Fan ID unavailable") : `Fan ${t.telegramId}`}
                           {!scoped && (
                             <>
                               {" · "}
@@ -1270,6 +1297,7 @@ function RevenueReport({
   pct,
   axisColor,
   cursorColor,
+  syntheticDemo,
   onClose,
 }: {
   a: AnalyticsData;
@@ -1281,6 +1309,7 @@ function RevenueReport({
   pct: (n: number) => string;
   axisColor: string;
   cursorColor: string;
+  syntheticDemo?: boolean;
   onClose: () => void;
 }) {
   const [selectedMedia, setSelectedMedia] = useState<"photo" | "video" | "bundle" | null>(null);
@@ -1328,7 +1357,7 @@ function RevenueReport({
     facts.push({ label: "Top earner", value: `${topFeature.label} · ${pct(topFeature.share)}` });
   if (!scoped && topClone && topClone.revenueStars > 0)
     facts.push({ label: "Top creator", value: topClone.name, moneyValue: money(topClone.revenueStars), isName: true });
-  if (whale && whale.stars > 0) facts.push({ label: "Whale share", value: `${pct(whale.share)} of lifetime spend` });
+  if (whale && whale.stars > 0) facts.push({ label: "Whale share", value: `${pct(whale.share)} of ${syntheticDemo ? "first-month" : "lifetime"} spend` });
   // The zone is printed, not assumed. These were computed on the container's
   // UTC clock and labelled nothing at all, so "Peak hour 3 AM" was really 1 PM
   // and evening sales landed on the previous weekday. See lib/report-time.ts.
@@ -1352,7 +1381,7 @@ function RevenueReport({
               and buyer breakdown panels are lifetime and say so on themselves.
               A subtitle that contradicts the panel under it is how a lifetime
               number gets read as a windowed one. */}
-          Where the money comes from: product, {scoped ? "" : "creator, "}time and funnel for this window, plus spender tiers and buyer behaviour over each fan&apos;s lifetime.
+          Where the money comes from: product, {scoped ? "" : "creator, "}time and funnel for this window, plus spender tiers and buyer behaviour {syntheticDemo ? "during the first month" : "over each fan's lifetime"}.
         </CardDescription>
         <CardAction>
           <Button variant="ghost" size="sm" onClick={onClose} className="text-white hover:bg-white/10 hover:text-white">
@@ -1419,7 +1448,7 @@ function RevenueReport({
             )}
           </ReportPanel>
 
-          <ReportPanel title="Who pays" hint="Top spenders from the last 7 days, followed by lifetime spend tiers.">
+          <ReportPanel title="Who pays" hint={`Top spenders from the last 7 days, followed by ${syntheticDemo ? "first-month" : "lifetime"} spend tiers.`}>
             <div className="flex flex-col gap-4">
               <div>
                 <div className="mb-2 flex items-end justify-between gap-3">
@@ -1441,7 +1470,7 @@ function RevenueReport({
                       // its item's min-content width unless told otherwise, so
                       // without it the fixed-width rank/avatar/amount forced the
                       // row 20px wider than the panel and it crossed the border.
-                      <div key={`${spender.cloneId ?? "unknown"}:${spender.telegramId}`} className="flex min-w-0 items-center gap-2 rounded-xl border border-line bg-surface/75 px-2.5 py-2 sm:gap-2.5 sm:px-3">
+                      <div key={`${spender.cloneId ?? "unknown"}:${spender.telegramId ?? `${spender.name}:${index}`}`} className="flex min-w-0 items-center gap-2 rounded-xl border border-line bg-surface/75 px-2.5 py-2 sm:gap-2.5 sm:px-3">
                         <span className="w-4 shrink-0 font-mono text-[10px] font-semibold text-muted">#{index + 1}</span>
                         <FanAvatar
                           cloneId={spender.cloneId ?? ""}
@@ -1453,7 +1482,7 @@ function RevenueReport({
                         <span className="min-w-0 flex-1">
                           <span className="block truncate text-xs font-semibold text-ink">{spender.name}</span>
                           <span className="block truncate text-[10px] text-muted">
-                            {spender.username ? `@${spender.username}` : `Fan ${spender.telegramId}`}
+                            {spender.username ? `@${spender.username}` : spender.telegramId == null ? (syntheticDemo ? "Sample fan" : "Fan ID unavailable") : `Fan ${spender.telegramId}`}
                             {!scoped ? (
                               <>
                                 {" · "}
@@ -1488,8 +1517,8 @@ function RevenueReport({
               </div>
 
               <div className="border-t border-line pt-3">
-                <h4 className="mb-1 inline-flex rounded-lg bg-[#0d3d6e] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.1em] text-white shadow-sm">Lifetime spend tiers</h4>
-                <p className="mb-3 text-[10px] text-muted">How the full fan base is distributed by lifetime value.</p>
+                <h4 className="mb-1 inline-flex rounded-lg bg-[#0d3d6e] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.1em] text-white shadow-sm">{syntheticDemo ? "First-month" : "Lifetime"} spend tiers</h4>
+                <p className="mb-3 text-[10px] text-muted">How the full fan base is distributed by {syntheticDemo ? "first-month" : "lifetime"} value.</p>
                 {a.byTier.length === 0 ? (
                   <ReportEmpty text="No fans yet." />
                 ) : (
@@ -1551,7 +1580,7 @@ function RevenueReport({
                                     </span>
                                     <span className="shrink-0 text-right">
                                       <span className="block font-mono text-[11px] font-semibold tabular-nums text-ink">⭐ {fmtNum(fan.stars)}</span>
-                                      <span className="block text-[10px] text-muted">lifetime spend</span>
+                                      <span className="block text-[10px] text-muted">{syntheticDemo ? "first-month" : "lifetime"} spend</span>
                                     </span>
                                   </div>
                                 ))}
@@ -1779,7 +1808,7 @@ function RevenueReport({
             </div>
           </ReportPanel>
 
-          <ReportPanel title="Buyer breakdown" hint="Lifetime purchase behaviour for every fan in the current creator scope.">
+          <ReportPanel title="Buyer breakdown" hint={`${syntheticDemo ? "First-month" : "Lifetime"} purchase behaviour for every fan in the current creator scope.`}>
             <div className="flex flex-col gap-3">
               <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
                 <InsightMetric label="All fans" value={fmtNum(a.funnel.fans)} />
@@ -1798,7 +1827,7 @@ function RevenueReport({
               </div>
 
               <div className="rounded-xl bg-surface/75 px-3 py-2 text-[10px] leading-relaxed text-muted">
-                One-time buyers have exactly one recorded purchase. Repeat buyers have two or more; loyal buyers have three or more. Buyer value uses lifetime spend, so it is not limited by the date filter above.
+                One-time buyers have exactly one recorded purchase. Repeat buyers have two or more; loyal buyers have three or more. Buyer value uses {syntheticDemo ? "the full first month" : "lifetime spend, so it is not limited by the date filter above"}.
               </div>
             </div>
           </ReportPanel>
@@ -1952,9 +1981,11 @@ export function fmtHours(hours: number | null): string {
 function BuyerConversionPanel({
   conversion,
   pct,
+  firstMonth = false,
 }: {
   conversion: AnalyticsData["buyerConversion"];
   pct: (n: number) => string;
+  firstMonth?: boolean;
 }) {
   const lifetimeRate = conversion.lifetimeBuyerRate === null ? "-" : pct(conversion.lifetimeBuyerRate);
   const activeChatRate = conversion.activeChatBuyerRate === null ? "-" : pct(conversion.activeChatBuyerRate);
@@ -1969,10 +2000,12 @@ function BuyerConversionPanel({
 
   const metrics: { label: string; value: string; summary: string; detail: string }[] = [
     {
-      label: "Have they ever bought?",
+      label: firstMonth ? "Did they buy this month?" : "Have they ever bought?",
       value: lifetimeRate,
-      summary: `${fmtNum(conversion.lifetimeBuyerProfiles)} of ${fmtNum(conversion.lifetimeFanProfiles)} audience accounts have bought`,
-      detail: "Of every audience account that has ever chatted, how many have ever bought something? This is an all-time number, so changing the date does not change it. In All creators, one person who chats with two creators has two audience accounts, one with each creator.",
+      summary: `${fmtNum(conversion.lifetimeBuyerProfiles)} of ${fmtNum(conversion.lifetimeFanProfiles)} audience accounts ${firstMonth ? "bought in the first month" : "have bought"}`,
+      detail: firstMonth
+        ? "Of everyone who messaged during the first 30 days, how many bought something during that same first month?"
+        : "Of every audience account that has ever chatted, how many have ever bought something? This is an all-time number, so changing the date does not change it. In All creators, one person who chats with two creators has two audience accounts, one with each creator.",
     },
     {
       label: "Did people who messaged buy?",
@@ -1981,10 +2014,12 @@ function BuyerConversionPanel({
       detail: "Of the people who sent a message during the dates you picked, how many also bought something during those same dates? This is the buying-conversion number. In All creators, each person is counted once. It shows that both things happened in the same period; it does not prove that one message caused the purchase.",
     },
     {
-      label: "Did past buyers come back?",
+      label: firstMonth ? "Did buyers come back this week?" : "Did past buyers come back?",
       value: buyerEngagementRate,
       summary: `${fmtNum(conversion.activeBuyerProfiles7d)} of ${fmtNum(conversion.lifetimeBuyerProfiles)} past buyers messaged in the last 7 days`,
-      detail: "This is not a buying-conversion number. Of the people who have bought before, how many sent a message in the last seven days? It always checks the last seven days, even if you change the earnings date. In All creators, this counts each creator–buyer account, so one person can appear once for each creator they bought from.",
+      detail: firstMonth
+        ? "Of the people who bought during the first month, how many messaged again in the latest seven days?"
+        : "This is not a buying-conversion number. Of the people who have bought before, how many sent a message in the last seven days? It always checks the last seven days, even if you change the earnings date. In All creators, this counts each creator–buyer account, so one person can appear once for each creator they bought from.",
     },
   ];
 

@@ -9,6 +9,8 @@ import { getDashboardAccess } from "@/lib/dashboard-access";
 import { isZaneDemo, DEMO_CLONE_ID, creatorDemoQueryIds } from "@/lib/creator-demo-policy";
 import { assertCreatorQuery } from "@/lib/creator-dashboard-policy";
 import { creatorDemoData } from "@/lib/creator-demo-data";
+import { isCatDemoRequest } from "@/lib/cat-demo-policy";
+import { catDemoData } from "@/lib/cat-demo-data";
 export const dynamic = "force-dynamic";
 async function getScopedBalance(cloneId: string | null): Promise<StarBalance | null> {
   if (!cloneId) return null;
@@ -40,6 +42,11 @@ async function read(req: NextRequest) {
       assertCreatorQuery(req.nextUrl.searchParams, creatorDemoQueryIds("/api/dashboard", access!));
       // Return before live rollups, Telegram reads or shared financial caches.
       return NextResponse.json(creatorDemoData(period, range), { headers: { "Cache-Control": "private, no-store", "X-Data-Mode": "synthetic-demo" } });
+    }
+    if (isCatDemoRequest(req.nextUrl.searchParams, access, clone)) {
+      // Temporary Twin-admin presentation data. Return before any live Cat
+      // rollup, cache or Telegram balance read; the database stays untouched.
+      return NextResponse.json(catDemoData(period, range), { headers: { "Cache-Control": "private, no-store", "X-Data-Mode": "cat-presentation-demo" } });
     }
     if (clone === DEMO_CLONE_ID) return NextResponse.json({ error: "Demo data is unavailable for this account" }, { status: 403 });
     const [rollup, balance] = await Promise.all([getRevenueRollup(period, clone, range, { awaitFresh: freshness === "1" || freshness === "force", force: freshness === "force" }), getScopedBalance(clone)]);

@@ -7,9 +7,10 @@ import CurrencyToggle from "@/components/CurrencyToggle";
 import { useCurrency } from "@/components/CurrencyProvider";
 import BlurToggle from "@/components/BlurToggle";
 import { logout } from "@/app/login/actions";
-import { fmtMoney, starsToMoneyRate } from "@/lib/money";
+import { AUD_PER_USD, fmtMoney, starsToMoneyRate } from "@/lib/money";
 import { getPageMeta } from "@/lib/page-meta";
 import { CREATOR_DASHBOARD_NAV } from "@/lib/creator-dashboard-policy";
+import { CAT_DEMO_CLONE_ID, CAT_DEMO_LIFETIME_STARS, CAT_DEMO_QUERY_VALUE, CAT_PRESENTATION_QUERY_KEY } from "@/lib/cat-demo-policy";
 
 // Straight, full-width top bar — replaces the old floating/overlay pill.
 // One row: breadcrumb on the left, account controls in the middle. Always in
@@ -33,7 +34,7 @@ export default function TopBar({
   /** Verified creator identity. Supplying it locks the shared clone chip. */
   creatorName?: string;
 }) {
-  const {isAgency,isCreator}=useDashboardAccess();
+  const {audience,isAgency,isCreator}=useDashboardAccess();
   const { currency, rate } = useCurrency();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -43,6 +44,13 @@ export default function TopBar({
     : pathname?.startsWith("/clones/") && searchParams.get("tab") === "ppvs" ? "PPVs" : pageMeta.pageLabel;
   const scopeLabel = isCreator ? creatorName || clones.find((clone) => clone.id === activeCloneId)?.name || "Creator" : pageMeta.scopeLabel;
   const scopeIsCreator = isCreator || pageMeta.scopeIsCreator;
+  const demoValues = searchParams.getAll(CAT_PRESENTATION_QUERY_KEY);
+  const catDemo = audience === "admin"
+    && activeCloneId === CAT_DEMO_CLONE_ID
+    && demoValues.length === 1
+    && demoValues[0] === CAT_DEMO_QUERY_VALUE;
+  const headerStars = catDemo ? CAT_DEMO_LIFETIME_STARS : allTimeStars;
+  const moneyRate = catDemo ? AUD_PER_USD : rate;
   return (
     // 3-col grid so the controls sit dead-center of the bar regardless of
     // how wide the breadcrumb text is; right column is an empty balancer.
@@ -71,7 +79,7 @@ export default function TopBar({
         <span className="hidden items-baseline gap-1 px-1.5 sm:flex">
           <span className="text-xs">💵</span>
           <span className="font-mono text-xs font-semibold tabular-nums text-ink">
-            {fmtMoney(starsToMoneyRate(allTimeStars, currency, rate), currency)}
+            {fmtMoney(starsToMoneyRate(headerStars, currency, moneyRate), currency)}
           </span>
         </span>
         <div className="hidden h-5 w-px shrink-0 bg-line sm:block" />

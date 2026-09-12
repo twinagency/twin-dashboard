@@ -3,12 +3,13 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ChevronDownIcon, ChevronUpIcon } from "lucide-react";
 import type { RevenueChangeRow, RevenueWhyChanged } from "@/lib/revenue-why-changed";
-import { fmtMoney, starsToMoneyRate } from "@/lib/money";
+import { AUD_PER_USD, fmtMoney, starsToMoneyRate } from "@/lib/money";
 import { useCurrency } from "@/components/CurrencyProvider";
 import { Info } from "@/components/clone/fields";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { CAT_PRESENTATION_QUERY_KEY } from "@/lib/cat-demo-policy";
 
 const REPORT_TZ = process.env.NEXT_PUBLIC_REPORT_TIMEZONE || "Australia/Sydney";
 
@@ -67,10 +68,12 @@ function ChangeList({
   rows,
   money,
   empty,
+  creatorLabels = false,
 }: {
   rows: RevenueChangeRow[];
   money: (stars: number) => string;
   empty: string;
+  creatorLabels?: boolean;
 }) {
   if (!rows.length) return <p className="py-2 text-xs text-muted">{empty}</p>;
   return (
@@ -78,7 +81,7 @@ function ChangeList({
       {rows.map((row) => (
         <div key={row.key} className="flex items-center justify-between gap-3 py-2.5 text-sm">
           <div className="min-w-0">
-            <div className="truncate font-medium text-ink">{row.label}</div>
+            <div className={(creatorLabels ? "creator-name " : "") + "truncate font-medium text-ink"}>{row.label}</div>
             <div className="mt-0.5 text-[11px] leading-relaxed text-muted">
               Selected day: {money(row.stars)} net revenue · {quantity(row.sales, "paid order", "paid orders")}. 30-day typical: {money(row.usualStars)} net revenue · {quantity(row.usualSales, "paid order", "paid orders")}.
             </div>
@@ -113,7 +116,7 @@ function SmallSignal({ label, value, detail, positive }: { label: string; value:
   );
 }
 
-export default function RevenueDayDrivers({ cloneId }: { cloneId?: string | null }) {
+export default function RevenueDayDrivers({ cloneId, demoMode }: { cloneId?: string | null; demoMode?: "cat" | null }) {
   const { currency, rate } = useCurrency();
   const today = useMemo(() => reportDayKey(), []);
   const yesterday = useMemo(() => shiftDay(today, -1), [today]);
@@ -127,7 +130,7 @@ export default function RevenueDayDrivers({ cloneId }: { cloneId?: string | null
   const [data, setData] = useState<RevenueWhyChanged | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const money = (stars: number) => fmtMoney(starsToMoneyRate(stars, currency, rate), currency);
+  const money = (stars: number) => fmtMoney(starsToMoneyRate(stars, currency, demoMode === "cat" ? AUD_PER_USD : rate), currency);
   const selectedDayHeading = day === today ? "Earnings today so far" : `Earnings for ${formatDay(day)}`;
 
   function selectDay(nextDay: string) {
@@ -157,7 +160,10 @@ export default function RevenueDayDrivers({ cloneId }: { cloneId?: string | null
     setLoading(true);
     setData(null);
     setError(null);
-    fetch(`/api/dashboard/day-insight?date=${encodeURIComponent(day)}`, { cache: "no-store", signal: controller.signal })
+    const params = new URLSearchParams({ date: day });
+    if (cloneId) params.set("clone", cloneId);
+    if (demoMode === "cat") params.set(CAT_PRESENTATION_QUERY_KEY, "cat");
+    fetch(`/api/dashboard/day-insight?${params}`, { cache: "no-store", signal: controller.signal })
       .then(async (response) => {
         const json = (await response.json()) as RevenueWhyChanged & { error?: string };
         if (!response.ok || json.error) throw new Error(json.error || "Daily earnings data is unavailable.");
@@ -175,7 +181,7 @@ export default function RevenueDayDrivers({ cloneId }: { cloneId?: string | null
         if (!controller.signal.aborted) setLoading(false);
       });
     return () => controller.abort();
-  }, [day, cloneId, open, selectionVersion]);
+  }, [day, cloneId, demoMode, open, selectionVersion]);
 
   const benchmarkLabel = "30-day benchmark";
 
@@ -287,9 +293,19 @@ export default function RevenueDayDrivers({ cloneId }: { cloneId?: string | null
                   </div>
                   {(data.concentration.largestPayment || data.concentration.topBuyer) && (
                     <p className="mt-2 text-[11px] leading-relaxed text-muted">
-                      {data.concentration.largestPayment ? `Largest paid order: ${data.concentration.largestPayment.name}${cloneId ? "" : `, on ${data.concentration.largestPayment.cloneName}`}.` : ""}
+                      {data.concentration.largestPayment ? (
+                        <>
+                          Largest paid order: {data.concentration.largestPayment.name}
+                          {!cloneId && <>, on <span className="creator-name">{data.concentration.largestPayment.cloneName}</span></>}.
+                        </>
+                      ) : ""}
                       {data.concentration.largestPayment && data.concentration.topBuyer ? " " : ""}
-                      {data.concentration.topBuyer ? `Highest-paying buyer: ${data.concentration.topBuyer.name}${cloneId ? "" : `, on ${data.concentration.topBuyer.cloneName}`}.` : ""}
+                      {data.concentration.topBuyer ? (
+                        <>
+                          Highest-paying buyer: {data.concentration.topBuyer.name}
+                          {!cloneId && <>, on <span className="creator-name">{data.concentration.topBuyer.cloneName}</span></>}.
+                        </>
+                      ) : ""}
                     </p>
                   )}
                   <p className="mt-2 text-[10px] leading-relaxed text-muted">Refunds are not counted as paid orders or buyers. They are shown separately in the earnings total above.</p>
@@ -305,7 +321,7 @@ export default function RevenueDayDrivers({ cloneId }: { cloneId?: string | null
                   <div>
                     <div className="text-xs font-bold uppercase tracking-[0.1em] text-ink">Creator revenue &amp; paid orders</div>
                     <p className="mt-1 text-[11px] text-muted">Creators appear when they had revenue on the selected day or during the prior-30-day comparison.</p>
-                    <ChangeList rows={data.byClone} money={money} empty="No creator payments in this comparison." />
+                    <ChangeList rows={data.byClone} money={money} empty="No creator payments in this comparison." creatorLabels />
                   </div>
                   <div>
                     <div className="text-xs font-bold uppercase tracking-[0.1em] text-ink">Payment-type revenue &amp; paid orders</div>
