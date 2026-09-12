@@ -53,10 +53,11 @@ assert.ok([
   month.balance.totalBalanceStars,
 ].every(value => value > 0), "Every first-month headline figure is positive");
 assert.equal(month.analytics.totals.buyers, month.totals.buyers, "Analytics and headline use the same period buyer cohort");
-assert.equal(month.totals.buyers / month.totals.activeUsers, 0.17, "30-day users-to-buyers conversion is exactly 17%");
-assert.equal(month.analytics.buyerConversion.activeChatBuyerRate, 0.17);
-assert.equal(month.analytics.buyerConversion.lifetimeBuyerRate, 0.17);
-assert.equal(month.analytics.funnel.buyerPct, 0.17);
+assert.ok(month.totals.buyers / month.totals.activeUsers >= 0.17, "30-day users-to-buyers conversion is at least 17%");
+assert.ok(month.totals.buyers / month.totals.activeUsers < 0.171, "30-day users-to-buyers conversion still displays as a believable 17%");
+assert.equal(month.analytics.buyerConversion.activeChatBuyerRate, month.totals.buyers / month.totals.activeUsers);
+assert.equal(month.analytics.buyerConversion.lifetimeBuyerRate, CAT_DEMO_BUYERS_30D / CAT_DEMO_ACTIVE_USERS_30D);
+assert.equal(month.analytics.funnel.buyerPct, CAT_DEMO_BUYERS_30D / CAT_DEMO_ACTIVE_USERS_30D);
 assert.ok(month.totals.sales >= month.totals.buyers, "A buyer can make one or more purchases");
 assert.ok(month.totals.messages >= month.totals.activeUsers, "An active user sends at least one message");
 assert.ok(month.totals.newFans <= month.totals.activeUsers);
@@ -146,4 +147,4 @@ try {
   globalThis.fetch = originalFetch;
 }
 
-console.log("CAT DEMO PASSED: A$129,384 at 1.4 AUD/USD, exact 17% active conversion, coherent ledger totals, internal-admin-only exact-clone gating, and no live financial reads.");
+console.log("CAT DEMO PASSED: A$129,384 at 1.4 AUD/USD, at least 17% active conversion, coherent ledger totals, internal-admin-only exact-clone gating, and no live financial reads.");

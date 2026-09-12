@@ -12,18 +12,18 @@ import { CAT_DEMO_30D_STARS, CAT_DEMO_CLONE_ID, CAT_DEMO_LIFETIME_STARS } from "
 export { CAT_DEMO_30D_STARS, CAT_DEMO_LIFETIME_STARS } from "./cat-demo-policy";
 
 export const CAT_DEMO_KIND = "cat-presentation" as const;
-export const CAT_DEMO_ACTIVE_USERS_30D = 12_000;
-export const CAT_DEMO_BUYERS_30D = 2_040;
-export const CAT_DEMO_PURCHASES_30D = 5_100;
-export const CAT_DEMO_MESSAGES_30D = 216_840;
+export const CAT_DEMO_ACTIVE_USERS_30D = 12_124;
+export const CAT_DEMO_BUYERS_30D = 2_062;
+export const CAT_DEMO_PURCHASES_30D = 5_147;
+export const CAT_DEMO_MESSAGES_30D = 219_386;
 
 const CAT_NAME = "Cat";
 const CAT_SLUG = "cat-chase";
 const CAT_COLOR = "#2f6fed";
-const CAT_ALL_TIME_USERS = 12_000;
-const CAT_LIFETIME_BUYERS = 2_040;
-const CAT_NEW_USERS_30D = 12_000;
-const CAT_REACHABLE_24H = 684;
+const CAT_ALL_TIME_USERS = CAT_DEMO_ACTIVE_USERS_30D;
+const CAT_LIFETIME_BUYERS = CAT_DEMO_BUYERS_30D;
+const CAT_NEW_USERS_30D = CAT_DEMO_ACTIVE_USERS_30D;
+const CAT_REACHABLE_24H = 691;
 
 // Day zero is the launch baseline. The rest deliberately mixes strong days,
 // softer days and short pull-backs while the overall month grows. A real first
@@ -139,7 +139,7 @@ function periodCounts(stars: number) {
   if (stars <= 0) return { activeUsers: 0, buyers: 0, newFans: 0, messages: 0, sales: 0, repeatPct: 0 };
   const scale = stars / CAT_DEMO_30D_STARS;
   const activeUsers = Math.min(CAT_ALL_TIME_USERS, Math.max(1, Math.round(CAT_DEMO_ACTIVE_USERS_30D * scale)));
-  const buyers = Math.min(activeUsers, Math.round(activeUsers * .17));
+  const buyers = Math.min(activeUsers, Math.ceil(activeUsers * .17));
   const newFans = Math.min(activeUsers, Math.round(CAT_NEW_USERS_30D * Math.min(scale, CAT_ALL_TIME_USERS / CAT_NEW_USERS_30D)));
   const messages = Math.max(activeUsers, Math.round(CAT_DEMO_MESSAGES_30D * scale));
   const sales = Math.max(buyers, Math.round(CAT_DEMO_PURCHASES_30D * scale));
@@ -210,8 +210,8 @@ export function catDemoData(period: Period = "1M", range?: DateRange, now = Date
   const paidMessageBuyers = Math.min(counts.buyers, Math.round(counts.buyers * .25));
   const paywallViews = Math.round(paywalled * 1.8);
 
-  const lifetimeTierUsers = [60, 900, 650, 430, 9_960];
-  const lifetimeTierStars = [6_322_011, 720_000, 52_000, 15_000, 0];
+  const lifetimeTierUsers = [67, 891, 664, 440, 10_062];
+  const lifetimeTierStars = [6_315_287, 724_915, 52_463, 16_346, 0];
   const byTier = source.analytics.byTier.map((tier, index) => ({
     ...tier,
     users: lifetimeTierUsers[index] ?? 0,
@@ -246,7 +246,7 @@ export function catDemoData(period: Period = "1M", range?: DateRange, now = Date
     purchases: Math.max(1, Math.round(fan.purchases * CAT_DEMO_PURCHASES_30D / Math.max(1, month.totals.sales))),
   }));
 
-  const lifetimeRepeat = 1_224;
+  const lifetimeRepeat = 1_237;
   const lifetimeOneTime = CAT_LIFETIME_BUYERS - lifetimeRepeat;
   const lifetimePurchases = CAT_DEMO_PURCHASES_30D;
   const activeBuyerProfiles7d = Math.min(CAT_LIFETIME_BUYERS, Math.round(weeklyBuyers * .82));
@@ -336,7 +336,7 @@ export function catDemoData(period: Period = "1M", range?: DateRange, now = Date
       buyers: CAT_LIFETIME_BUYERS,
       repeat: lifetimeRepeat,
       oneTime: lifetimeOneTime,
-      threePlus: 1_080,
+      threePlus: 1_089,
       nonBuyers: CAT_ALL_TIME_USERS - CAT_LIFETIME_BUYERS,
       totalPurchases: lifetimePurchases,
       buyerPct: fraction(CAT_LIFETIME_BUYERS, CAT_ALL_TIME_USERS),

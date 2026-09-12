@@ -231,7 +231,7 @@ try {
       const headline = page.locator(".money-value-primary").first();
       assert.equal((await headline.innerText()).trim(), "A$129,384.00", "the default 1M headline must be exact and stable");
       assert.equal(dashboardResponses.at(-1).demoKind, CAT_DEMO_KIND);
-      assert.match(await page.locator("body").innerText(), /First-month users[\s\S]{0,24}12,000/i);
+      assert.match(await page.locator("body").innerText(), /First-month users[\s\S]{0,24}12,124/i);
       assert.equal(await page.getByRole("button", { name: "1Y", exact: true }).count(), 0, "pre-launch periods stay hidden");
       assert.equal(await page.getByRole("button", { name: "Custom", exact: true }).count(), 0, "the first-month view cannot select pre-launch dates");
       const bodyText = await page.locator("body").innerText();
