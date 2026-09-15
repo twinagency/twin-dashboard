@@ -1,9 +1,11 @@
-import { getDashboardAccess } from "@/lib/dashboard-access";
-import { agencyCanManage } from "@/lib/agency-management-policy";
-import { redirect } from "next/navigation";
-import CrmPreview from "@/components/crm/CrmPreview";
+import FansPage from "@/app/users/page";
 
-export default async function CrmInboxPage() {
-  if (agencyCanManage(await getDashboardAccess())) redirect("/users");
-  return <CrmPreview view="inbox" />;
+export const dynamic = "force-dynamic";
+
+export default async function CrmInboxPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ fan?: string; q?: string; status?: string; sort?: string; dir?: string; show?: string }>;
+}) {
+  return <FansPage searchParams={searchParams} basePath="/crm/inbox" />;
 }

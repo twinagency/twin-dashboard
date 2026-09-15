@@ -80,7 +80,7 @@ async function main() {
       for(const method of ["POST","PUT","PATCH","DELETE"])
         assert.equal((await middleware(new NextRequest(origin+path,{method,headers:{cookie,"next-action":"admin-write"}}))).status,403,`${method} ${path}`);
     }
-    for(const path of ["/crm/inbox","/crm/fans","/crm/campaigns","/crm/team","/crm/platforms","/ai","/jarvis","/tracker","/api-access","/agency-admin","/agency-admin/provision","/api/models","/settings","/clones/new",`/clones/${outsider}`,`/api/dashboard?clone=${outsider}`])
+    for(const path of ["/crm","/crm/inbox","/crm/fans","/crm/mass-messages","/crm/automations","/crm/vault","/crm/publishing","/crm/analytics","/crm/campaigns","/crm/team","/crm/settings","/crm/platforms","/ai","/jarvis","/tracker","/api-access","/agency-admin","/agency-admin/provision","/api/models","/settings","/clones/new",`/clones/${outsider}`,`/api/dashboard?clone=${outsider}`])
       assert.equal((await middleware(new NextRequest(origin+path,{headers:{cookie}}))).status,403,path);
     assert.equal(agencyDashboardPath("/api/models","LYNQ"),true,"Existing LYNQ model access preserved");
     const fakeBrandCookie=`${AGENCY_PORTAL_COOKIE}=moxy`;
@@ -109,8 +109,8 @@ async function main() {
   assert.equal(pathAgencyName("/moxy/auth"),"Moxy");assert.equal(isMoxy("Moxy"),true);assert.equal(isMoxy("LYNQ"),false);assert.equal(portalLoginPath("https://evil.example"),"/link");
   const sidebar=readFileSync("components/Sidebar.tsx","utf8");
   assert.match(sidebar,/aria-disabled="true"/);assert.match(sidebar,/Not available/);assert.match(sidebar,/!readOnly \|\| showUnavailable/);
-  assert.match(sidebar,/showUnavailable \? <div/);
-  assert.match(sidebar,/MORE_LINKS\.filter\(link => link.kind !== "route" \|\| !\["\/jarvis", "\/agency-admin"\]\.includes\(link.href\)\)/);
+  assert.match(sidebar,/showUnavailable \? \(/);
+  assert.match(sidebar,/MORE_LINKS\.filter\(\(link\) => link.kind !== "route" \|\| !\["\/jarvis", "\/agency-admin"\]\.includes\(link.href\)\)/);
   assert.match(sidebar,/AI Intelligence Core/);
   assert.match(sidebar,/<IntelligenceCoreIcon size=\{64\} \/>/);
   assert.ok(sidebar.indexOf("<IntelligenceCoreIcon size={64}") < sidebar.indexOf("<nav "),"Core sits above the navigation");

@@ -8,7 +8,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { NextRequest } from "next/server";
 import { middleware } from "../middleware";
 import { withDashboardAccess } from "../lib/dashboard-access";
-import { agencyCanManage, LYNQ_MANAGEMENT_AGENCY_ID, agencyManagementRequestAllowed } from "../lib/agency-management-policy";
+import { AGENCY_LIVE_CRM_ROUTES, agencyCanManage, LYNQ_MANAGEMENT_AGENCY_ID, agencyManagementRequestAllowed } from "../lib/agency-management-policy";
 import { assignedStoragePath, guardDashboardAction, requireManagedClone } from "../lib/agency-management";
 import { dashboardFetch } from "../lib/agency-fetch";
 import Access, {AdminOnly,ManagerOnly,MutationForm,ReadOnlyFields} from "../components/DashboardAccessProvider";
@@ -44,7 +44,8 @@ async function main(){
   const writes=()=>calls.filter(c=>!['GET','HEAD'].includes(c.method));
   try{
     const headers={cookie:"twin_agency_access=verified-token",origin,"next-action":"any-known-action-id"};
-    for(const path of ["/users","/flows","/media",`/clones/${a}`])assert.equal((await middleware(new NextRequest(origin+path,{method:"POST",headers}))).status,200,path);
+    for(const path of ["/users","/flows","/media","/crm/inbox","/crm/automations","/crm/vault",`/clones/${a}`])assert.equal((await middleware(new NextRequest(origin+path,{method:"POST",headers}))).status,200,path);
+    for(const path of Object.keys(AGENCY_LIVE_CRM_ROUTES))assert.equal((await middleware(new NextRequest(origin+path,{headers:{cookie:headers.cookie}}))).status,200,path);
     for(const path of ["/settings","/agency-admin","/api-access","/tracker","/clones/new",`/clones/${other}`])assert.equal((await middleware(new NextRequest(origin+path,{method:"POST",headers}))).status,403,path);
     for(const path of ["/api/business-account","/api/caption","/api/compile"])assert.equal((await middleware(new NextRequest(origin+path,{method:"POST",headers:{cookie:headers.cookie,origin}}))).status,200,path);
     assert.equal((await middleware(new NextRequest(origin+"/users",{method:"POST",headers:{...headers,origin:"https://evil.example"}}))).status,403);
@@ -121,7 +122,8 @@ async function main(){
   assert.match(readFileSync('components/MainShell.tsx','utf8'),/!isAgency/);
   assert.match(readFileSync('components/clone/ConfigSections.tsx','utf8'),/isAgency \? <div>/);
   assert.match(readFileSync('components/CompileButton.tsx','utf8'),/method: "POST"/);
-  for(const page of ['fans','inbox','campaigns','platforms'])assert.match(readFileSync(`app/crm/${page}/page.tsx`,'utf8'),/agencyCanManage\(await getDashboardAccess\(\)\)/);
+  for(const page of ['fans','inbox','campaigns','platforms','team'])assert.doesNotMatch(readFileSync(`app/crm/${page}/page.tsx`,'utf8'),/CrmPreview/);
+  for(const route of ["/crm","/crm/inbox","/crm/fans","/crm/mass-messages","/crm/automations","/crm/vault","/crm/publishing","/crm/analytics","/crm/team","/crm/settings"])assert.ok(Object.hasOwn(AGENCY_LIVE_CRM_ROUTES,route),route);
   console.log(`Lynq management: live controls, ${guarded} guarded actions, clone/fan/media isolation, immutable ledger/credentials, CSRF, revocation, storage, business routes and read-only-agency regression checks passed`);
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

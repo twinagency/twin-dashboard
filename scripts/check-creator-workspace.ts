@@ -127,7 +127,7 @@ async function main() {
       assert.equal(response.status, 200, item.href);
       assert.equal(response.headers.get(`x-middleware-request-${CREATOR_AUDIENCE_HEADER}`), "creator");
     }
-    for (const path of ["/creator/edit?tab=config", "/creator/edit?tab=identity&tab=money", "/creator/edit?sub=advanced", `/creator?clone=${other}`, `/api/dashboard?clone=${own}&clone=${other}`, "/users", "/settings", "/agency-admin", "/crm/inbox", `/clones/${other}?tab=identity`, "/api/models", "/api/compile"]) {
+    for (const path of ["/creator/edit?tab=config", "/creator/edit?tab=identity&tab=money", "/creator/edit?sub=advanced", `/creator?clone=${other}`, `/api/dashboard?clone=${own}&clone=${other}`, "/users", "/settings", "/agency-admin", "/crm", "/crm/inbox", "/crm/fans", "/crm/team", "/crm/settings", `/clones/${other}?tab=identity`, "/api/models", "/api/compile"]) {
       assert.equal((await middleware(request(path))).status, 403, path);
     }
     for (const path of ["/creator", "/creator/edit", "/api/dashboard", "/clones/" + own]) assert.equal((await middleware(request(path, "POST", { origin, "next-action": "forged-action" }))).status, 403, path);

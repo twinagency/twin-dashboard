@@ -87,7 +87,7 @@ const SYSTEM_PROMPT =
   "any money field like starting_credits/credit_pack_price_stars/discount_max_*, campaign or onboarding " +
   "text, persona facts) you have no write tool - recommend it in plain words and say specifically where in " +
   "the dashboard to change it (e.g. 'Configure > Personality & style', 'Configure > Credits & paywall', the " +
-  "Campaigns page), never claim to have applied it. Never invent, recommend a specific number for, or apply " +
+  "Automations page), never claim to have applied it. Never invent, recommend a specific number for, or apply " +
   "any money value - amounts are always the operator's call.";
 
 // Labels for write tools now describe PROPOSING, not doing. "Updating a

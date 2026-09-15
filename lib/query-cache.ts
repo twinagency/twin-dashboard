@@ -207,21 +207,38 @@ export const getCachedTwinVersion = cache((): Promise<TwinVersion | null> =>
  * Aggregated in SQL by the revenue_all_time_stars RPC (migration 135); this
  * caches the single scalar it returns, never rows.
  */
-export function getHeaderAllTimeStars(cloneId: string | null): Promise<number> {
+export type HeaderAllTimeStarsResult = {
+  stars: number | null;
+  available: boolean;
+};
+
+/** Same cached ledger read as getHeaderAllTimeStars(), but preserves whether
+ * Supabase actually returned a value. Use this on surfaces where showing a
+ * genuine zero and showing a failed read as zero would mean different things. */
+export function getHeaderAllTimeStarsResult(cloneId: string | null): Promise<HeaderAllTimeStarsResult> {
   return cached(
     ["header-all-time-stars", cloneId ?? "fleet"],
     [CACHE_TAGS.revenue],
     TTL.money,
     async () => {
       try {
-        const { data } = await supabaseAdmin.rpc("revenue_all_time_stars", { p_clone: cloneId ?? null });
-        return Number(data ?? 0);
+        const { data, error } = await supabaseAdmin.rpc("revenue_all_time_stars", { p_clone: cloneId ?? null });
+        if (error) return { stars: null, available: false };
+        const stars = Number(data ?? 0);
+        return Number.isFinite(stars)
+          ? { stars, available: true }
+          : { stars: null, available: false };
       } catch {
-        // header still renders with zero if the DB is unreachable
-        return 0;
+        return { stars: null, available: false };
       }
     },
   );
+}
+
+export async function getHeaderAllTimeStars(cloneId: string | null): Promise<number> {
+  // Preserve the long-standing TopBar/layout contract: those callers continue
+  // to render zero when the ledger cannot be reached.
+  return (await getHeaderAllTimeStarsResult(cloneId)).stars ?? 0;
 }
 
 // ── Invalidation ─────────────────────────────────────────────────────────────
