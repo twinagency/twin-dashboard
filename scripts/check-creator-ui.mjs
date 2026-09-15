@@ -273,7 +273,7 @@ try {
       const refreshResponse = page.waitForResponse(response => response.url().includes('fresh=force'));
       await page.getByRole('button', { name: 'Refresh', exact: true }).click();
       await refreshResponse;
-      const report = page.getByRole('button', { name: /revenue report/i }).first();
+      const report = page.getByRole('tab', { name: /revenue report/i }).first();
       await report.click();
       assert.equal(await report.getAttribute('aria-expanded'), 'true');
       for (const title of ['What sells', 'Who pays', 'Peak hours', 'Peak days', 'Paid-message paywall', 'Buyer breakdown']) {

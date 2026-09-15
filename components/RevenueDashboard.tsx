@@ -75,10 +75,12 @@ function TransactionMedia({
   type,
   url,
   name,
+  compact = false,
 }: {
   type: "photo" | "video" | "bundle";
   url: string | null;
   name: string | null;
+  compact?: boolean;
 }) {
   const label = TX_KIND_LABEL[type];
   return (
@@ -86,7 +88,7 @@ function TransactionMedia({
     // and a flex card row on a phone, and a hard min-width there is one of the
     // things that pushed this page past the viewport.
     <span className="flex min-w-0 items-center gap-2.5 sm:min-w-[132px]" title={name || label}>
-      <span className="relative grid h-10 w-10 shrink-0 place-items-center overflow-hidden rounded-xl border border-line bg-surface text-accent shadow-sm">
+      <span className={`relative grid shrink-0 place-items-center overflow-hidden rounded-md border border-line bg-surface text-accent ${compact ? "h-8 w-8" : "h-10 w-10"}`}>
         {url && type === "video" ? (
           <>
             <video src={url} muted playsInline preload="metadata" className="h-full w-full object-cover" />
@@ -145,6 +147,55 @@ const PERIODS: { key: Period; label: string; live?: boolean }[] = [
   { key: "1D", label: "1D", live: true },
 ];
 
+type LedgerSortKey = "fan" | "creator" | "type" | "amount" | "date";
+type LedgerSortDirection = "asc" | "desc";
+
+function ledgerTypeLabel(transaction: DashboardData["recent"][number]) {
+  if (transaction.mediaType) return TX_KIND_LABEL[transaction.mediaType] ?? transaction.mediaType;
+  return TX_KIND_LABEL[transaction.kind] ?? transaction.kind;
+}
+
+function LedgerSortHead({
+  label,
+  sortKey,
+  activeKey,
+  direction,
+  onSort,
+  align = "left",
+  className = "",
+}: {
+  label: string;
+  sortKey: LedgerSortKey;
+  activeKey: LedgerSortKey;
+  direction: LedgerSortDirection;
+  onSort: (key: LedgerSortKey) => void;
+  align?: "left" | "right";
+  className?: string;
+}) {
+  const active = activeKey === sortKey;
+  const nextDirection = active && direction === "asc" ? "descending" : "ascending";
+  return (
+    <TableHead
+      aria-sort={active ? (direction === "asc" ? "ascending" : "descending") : "none"}
+      className={`h-8 text-[9px] font-semibold uppercase tracking-[0.1em] text-muted ${className}`}
+    >
+      <button
+        type="button"
+        onClick={() => onSort(sortKey)}
+        aria-label={`Sort by ${label}, ${nextDirection}`}
+        className={`flex h-full w-full items-center gap-1 rounded-[3px] transition hover:text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40 ${
+          align === "right" ? "justify-end text-right" : "justify-start text-left"
+        }`}
+      >
+        <span>{label}</span>
+        <span aria-hidden="true" className={active ? "text-ink" : "text-muted/60"}>
+          {active ? (direction === "asc" ? "↑" : "↓") : "↕"}
+        </span>
+      </button>
+    </TableHead>
+  );
+}
+
 const REVENUE_REFRESH_MS = 60 * 1000;
 
 function snapshotAgeLabel(ageSeconds: number) {
@@ -168,6 +219,8 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
   const draftStartRef = useRef<HTMLInputElement>(null);
   const draftEndRef = useRef<HTMLInputElement>(null);
   const [chartType, setChartType] = useState<"bar" | "line">("bar");
+  const [chartMode, setChartMode] = useState<"total" | "creator">("total");
+  const [analysisView, setAnalysisView] = useState<"customers" | "journey">("customers");
   const { currency, rate } = useCurrency();
   const [data, setData] = useState<FullData | null>(null);
   // WHY THIS EXISTS. /api/dashboard answers a failure with 500 + {error}, and
@@ -186,6 +239,10 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
   const [creatorListOpen, setCreatorListOpen] = useState(false);
   const [creatorQuery, setCreatorQuery] = useState("");
   const [txQuery, setTxQuery] = useState("");
+  const [txSort, setTxSort] = useState<{ key: LedgerSortKey; direction: LedgerSortDirection }>({
+    key: "date",
+    direction: "desc",
+  });
   // Transactions shown: 10 by default, "Show more" steps to 50 then 100 (max).
   const [txLimit, setTxLimit] = useState(10);
   // Full revenue report — expands below the stats grid from its teaser tile.
@@ -279,6 +336,19 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
     fetchData(period, cloneId, customRange, true);
   }
 
+  function toggleTxSort(key: LedgerSortKey) {
+    setTxSort((current) => {
+      if (current.key === key) {
+        return { key, direction: current.direction === "asc" ? "desc" : "asc" };
+      }
+      return { key, direction: key === "amount" || key === "date" ? "desc" : "asc" };
+    });
+  }
+
+  function selectTxSort(key: LedgerSortKey) {
+    setTxSort({ key, direction: key === "amount" || key === "date" ? "desc" : "asc" });
+  }
+
   const money = (stars: number) => fmtMoney(starsToMoneyRate(stars, currency, rate), currency);
   // AI contribution/cost arrive in USD; revenue arrives in Stars. Both are rendered in
   // the operator's selected currency so a table never puts "A$8,295 revenue"
@@ -335,12 +405,78 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
     return intraPeriodTrendPct(bucketRevenue);
   }, [data, visibleClones]);
 
+  // The default chart is intentionally a single fleet line/bar. Creator
+  // colours remain available as an explicit diagnostic view, but the first
+  // read should answer one question clearly: how did total revenue move?
+  const totalChartSeries = useMemo(
+    () =>
+      (data?.series ?? []).map((row) => ({
+        ...row,
+        __total: visibleClones.reduce((sum, creator) => sum + (Number(row[creator.id]) || 0), 0),
+      })),
+    [data, visibleClones],
+  );
+
+  const summaryStats = focusStats ?? data?.totals ?? null;
+  const summaryRevenuePerBuyer = summaryStats && summaryStats.buyers > 0 ? displayStars / summaryStats.buyers : null;
+  const summaryAverageOrder = summaryStats && summaryStats.sales > 0 ? summaryStats.grossPaymentStars / summaryStats.sales : null;
+  const primaryKpis = data && summaryStats
+    ? [
+        {
+          label: "Net revenue",
+          value: money(displayStars),
+          meta: `⭐ ${fmtNum(displayStars)} after adjustments`,
+          hint: "Recorded Star payments in this window after refunds and adjustments. This is not profit, a payout, or the current wallet balance.",
+          primary: true,
+        },
+        {
+          label: cloneId ? "Buyers" : "Unique buyers",
+          value: fmtNum(summaryStats.buyers),
+          meta: "positive paid orders",
+          hint: "People with at least one positive paid order during the selected period.",
+        },
+        {
+          label: "Messaged → buyer",
+          value: data.analytics.buyerConversion.activeChatBuyerRate === null
+            ? "-"
+            : pct(data.analytics.buyerConversion.activeChatBuyerRate),
+          meta: `${fmtNum(data.analytics.buyerConversion.activeChatBuyers)} of ${fmtNum(data.analytics.buyerConversion.activeChatters)}`,
+          hint: "Of the people who sent a message during the selected dates, the share who also bought during those same dates. This does not prove the message caused the purchase.",
+        },
+        {
+          label: "Revenue / buyer",
+          value: summaryRevenuePerBuyer === null ? "-" : money(summaryRevenuePerBuyer),
+          meta: "net revenue per buyer",
+          hint: "Adjusted Star revenue in the selected period divided by buyers in that same period.",
+        },
+        {
+          label: "Paid orders",
+          value: fmtNum(summaryStats.sales),
+          meta: summaryAverageOrder === null ? "No paid orders" : `${money(summaryAverageOrder)} average`,
+          hint: "Positive Star payments in the selected period. Refunds and adjustments are not counted as orders.",
+        },
+      ]
+    : [];
+  const creatorCount = data?.clones.length ?? 0;
+  const chartScopeLabel = chartMode === "creator"
+    ? visibleClones.length === creatorCount
+      ? "Creator breakdown"
+      : `Creator breakdown (${visibleClones.length} of ${creatorCount})`
+    : visibleClones.length === creatorCount
+      ? "All creators"
+      : `${visibleClones.length} of ${creatorCount} creators`;
+  const txSortSummary = txSort.key === "date"
+    ? txSort.direction === "desc" ? "Newest first" : "Oldest first"
+    : txSort.key === "amount"
+      ? txSort.direction === "desc" ? "Highest amount first" : "Lowest amount first"
+      : `${txSort.key === "fan" ? "Fan" : txSort.key === "creator" ? "Creator" : "Type"} ${txSort.direction === "asc" ? "A–Z" : "Z–A"}`;
+
   return (
-    <div className="earnings-aurora">
+    <div className="pb-6">
       {/* Named on screen, not just in the console. The operator is the person
           who has to decide whether to pick a shorter window or call someone. */}
       {loadError && (
-        <div className="mb-4 flex items-start gap-3 rounded-xl border border-[#b4432f]/40 bg-[#fdecea] px-4 py-3 text-sm text-[#7a2b1e]">
+        <div className="mb-3 flex items-start gap-3 rounded-md border border-[#b4432f]/40 bg-[#fdecea] px-4 py-3 text-sm text-[#7a2b1e]">
           <span aria-hidden className="mt-0.5 text-base leading-none">⚠️</span>
           <div className="min-w-0 flex-1">
             <div className="font-semibold">This window could not be loaded.</div>
@@ -351,76 +487,77 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
               <summary className="cursor-pointer select-none text-[12px] font-medium text-[#7a2b1e]/80 underline decoration-[#7a2b1e]/30 underline-offset-2 hover:text-[#7a2b1e]">
                 Technical details
               </summary>
-              <div className="mt-1 break-words rounded-lg bg-[#7a2b1e]/[0.06] px-2.5 py-2 font-mono text-[11px] leading-snug text-[#7a2b1e]/90">
+              <div className="mt-1 break-words rounded bg-[#7a2b1e]/[0.06] px-2.5 py-2 font-mono text-[11px] leading-snug text-[#7a2b1e]/90">
                 {loadError}
               </div>
             </details>}
           </div>
         </div>
       )}
-      <div className="earnings-heading mb-5 flex flex-col justify-between gap-4 sm:flex-row sm:items-end">
-        <div>
-          {/* Mobile first: 2xl on a phone. At 3xl this one line took a quarter of
-              the screen height before a single number appeared. */}
-          <h2 className="flex items-center gap-2 font-heading text-2xl font-semibold tracking-[-0.035em] text-ink sm:text-3xl md:text-4xl">
-            Earnings overview
-            <Info text={isCreator ? "Revenue, buyer activity and conversion performance for your creator account." : "Revenue, buyer activity and conversion performance across your active creators. In All creators, buyers are unique people across creators; audience and message totals count each creator-fan relationship."} />
-          </h2>
-          <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-muted">
-            {data && <span>{data.stale ? "Refreshing latest data…" : snapshotAgeLabel(data.ageSeconds)}</span>}
+      <div className="mb-3 overflow-hidden rounded-lg border border-line bg-panel">
+        <div className="flex flex-col justify-between gap-3 border-b border-line px-3 py-3 sm:flex-row sm:items-center sm:px-4">
+          <div className="min-w-0">
+            <div className="mb-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">Finance operations</div>
+            <h2 className="flex items-center gap-1.5 font-heading text-xl font-semibold tracking-[-0.025em] text-ink sm:text-2xl">
+              Earnings overview
+              <Info text={isCreator ? "Revenue, buyer activity and conversion performance for your creator account." : "Revenue, buyer activity and conversion performance across your active creators. In All creators, buyers are unique people across creators; audience and message totals count each creator-fan relationship."} />
+            </h2>
+          </div>
+          <div className="flex items-center gap-2 text-[11px] text-muted">
+            {data && (
+              <span className="inline-flex items-center gap-1.5">
+                <span className={`h-1.5 w-1.5 rounded-full ${data.stale ? "bg-[#b7791f]" : "bg-good"}`} />
+                {data.stale ? "Refreshing latest data…" : snapshotAgeLabel(data.ageSeconds)}
+              </span>
+            )}
             <button
               type="button"
               onClick={refreshNow}
               disabled={loading}
-              className="font-semibold text-[#28658f] underline decoration-[#28658f]/35 underline-offset-2 transition hover:text-[#17496c] disabled:cursor-not-allowed disabled:opacity-50"
+              className="h-7 rounded border border-line bg-panel px-2.5 text-[11px] font-semibold text-ink transition hover:bg-elev disabled:cursor-not-allowed disabled:opacity-50"
             >
               {loading ? "Refreshing…" : "Refresh"}
             </button>
           </div>
         </div>
-      </div>
-      {/* ── Period toggle - a segmented control, not tabs: it re-windows the
-          same ledger, it doesn't switch views. Custom range + chart type sit
-          alongside it, on the same row. ─────────────────────────────────── */}
-      {/* Mobile first: the pills still WRAP rather than scroll sideways. A scroll
-          strip fitted in one row but hid "1D" and "Custom" off the right edge with
-          no visible cue, which on this page reads as the content being cut off,
-          the exact complaint. Tighter type and padding instead, so they wrap to
-          two rows instead of three and nothing is hidden. */}
-      <div className="earnings-toolbar mb-4 flex flex-wrap items-center gap-1.5 sm:mb-5 sm:gap-2">
-        <div className="earnings-control-group inline-flex min-w-0 flex-wrap gap-0.5 rounded-full p-0.5">
+
+        {/* One compact command surface for time window, aggregation and mark. */}
+        <div className="flex flex-wrap items-center gap-1.5 px-2 py-2 sm:px-3">
+          <span className="px-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-muted">Window</span>
+          <div role="group" aria-label="Reporting window" className="inline-flex min-w-0 flex-wrap gap-0.5 rounded-md border border-line bg-elev p-0.5">
           {PERIODS.map((p) => (
             <button
               key={p.key}
+              type="button"
+              aria-pressed={!customRange && period === p.key}
               onClick={() => {
                 setCustomRange(null);
                 setPeriod(p.key);
               }}
               className={
-                "flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium tabular-nums transition sm:px-2.5 sm:text-xs " +
+                "flex h-6 shrink-0 items-center gap-1 rounded-[3px] px-2 text-[10px] font-medium tabular-nums transition sm:text-[11px] " +
                 (!customRange && period === p.key
-                  ? "earnings-control-active"
-                  : "text-muted hover:bg-muted/10 hover:text-ink")
+                  ? "bg-[#172b3d] text-white"
+                  : "text-muted hover:bg-panel hover:text-ink")
               }
             >
               {p.live && (
-                <span className="relative flex h-1.5 w-1.5">
-                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-good opacity-75" />
-                  <span className="relative inline-flex h-1.5 w-1.5 rounded-full bg-good" />
-                </span>
+                <span className="h-1.5 w-1.5 rounded-full bg-good" />
               )}
               {p.label}
             </button>
           ))}
           <button
+            type="button"
+            aria-pressed={Boolean(customRange)}
             onClick={() => {
               setDraftStart(customRange?.start ?? "");
               setDraftEnd(customRange?.end ?? "");
               setCustomOpen(true);
             }}
             className={
-              "flex shrink-0 items-center gap-1 rounded-full px-2 py-1 text-[11px] font-medium tabular-nums transition sm:px-2.5 sm:text-xs " +
-              (customRange ? "earnings-control-active" : "text-muted hover:bg-muted/10 hover:text-ink")
+              "flex h-6 shrink-0 items-center gap-1 rounded-[3px] px-2 text-[10px] font-medium tabular-nums transition sm:text-[11px] " +
+              (customRange ? "bg-[#172b3d] text-white" : "text-muted hover:bg-panel hover:text-ink")
             }
           >
             <svg viewBox="0 0 24 24" className="h-3 w-3" fill="none" stroke="currentColor" strokeWidth={2}>
@@ -431,18 +568,42 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
           </button>
         </div>
 
-        {/* Bar / line toggle - same series, different mark. Fixed square boxes
-            with place-items-center rather than padding around an icon: padding
-            rounds differently per icon and left both of these looking off-centre
-            inside the round active pill. */}
-        <div className="earnings-control-group inline-flex shrink-0 gap-0.5 rounded-full p-0.5">
+          {!scoped && !isCreator && (
+            <>
+              <span className="mx-0.5 h-5 w-px bg-line" />
+              <span className="px-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-muted">Series</span>
+              <div role="group" aria-label="Revenue series" className="inline-flex shrink-0 gap-0.5 rounded-md border border-line bg-elev p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setChartMode("total")}
+                  aria-pressed={chartMode === "total"}
+                  className={`h-6 rounded-[3px] px-2 text-[10px] font-medium transition sm:text-[11px] ${chartMode === "total" ? "bg-[#172b3d] text-white" : "text-muted hover:bg-panel hover:text-ink"}`}
+                >
+                  Total
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setChartMode("creator")}
+                  aria-pressed={chartMode === "creator"}
+                  className={`h-6 rounded-[3px] px-2 text-[10px] font-medium transition sm:text-[11px] ${chartMode === "creator" ? "bg-[#172b3d] text-white" : "text-muted hover:bg-panel hover:text-ink"}`}
+                >
+                  By creator
+                </button>
+              </div>
+            </>
+          )}
+
+          <span className="mx-0.5 h-5 w-px bg-line" />
+          <span className="px-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-muted">Chart</span>
+          <div role="group" aria-label="Chart type" className="inline-flex shrink-0 gap-0.5 rounded-md border border-line bg-elev p-0.5">
           <button
+            type="button"
             onClick={() => setChartType("bar")}
             aria-label="Bar chart"
             aria-pressed={chartType === "bar"}
             className={
-              "grid h-7 w-7 place-items-center rounded-full transition " +
-              (chartType === "bar" ? "earnings-control-active" : "text-muted hover:bg-muted/10 hover:text-ink")
+              "grid h-6 w-7 place-items-center rounded-[3px] transition " +
+              (chartType === "bar" ? "bg-[#172b3d] text-white" : "text-muted hover:bg-panel hover:text-ink")
             }
           >
             <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2}>
@@ -450,12 +611,13 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
             </svg>
           </button>
           <button
+            type="button"
             onClick={() => setChartType("line")}
             aria-label="Line chart"
             aria-pressed={chartType === "line"}
             className={
-              "grid h-7 w-7 place-items-center rounded-full transition " +
-              (chartType === "line" ? "earnings-control-active" : "text-muted hover:bg-muted/10 hover:text-ink")
+              "grid h-6 w-7 place-items-center rounded-[3px] transition " +
+              (chartType === "line" ? "bg-[#172b3d] text-white" : "text-muted hover:bg-panel hover:text-ink")
             }
           >
             {/* The polyline's ink spans y 7..16, so its bounding box centre is not
@@ -464,6 +626,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
               <path d="M4 16l5-6 4 3 7-9" strokeLinecap="round" strokeLinejoin="round" />
             </svg>
           </button>
+        </div>
         </div>
       </div>
 
@@ -495,49 +658,66 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
         </DialogContent>
       </Dialog>
 
-      <div className="space-y-2">
+      <section aria-label="Earnings summary" className="mb-3 overflow-hidden rounded-lg border border-line bg-panel">
+        <div className="grid grid-cols-2 gap-px bg-line sm:grid-cols-5">
+          {primaryKpis.length > 0 ? (
+            primaryKpis.map((metric, index) => (
+              <div
+                key={metric.label}
+                className={`min-w-0 bg-panel px-3 py-2.5 sm:px-3.5 ${index === 0 ? "col-span-2 sm:col-span-1" : ""}`}
+              >
+                <div className="flex items-center gap-1 text-[9px] font-semibold uppercase tracking-[0.11em] text-muted">
+                  <span>{metric.label}</span>
+                  <Info text={metric.hint} />
+                </div>
+                <div
+                  className={`mt-1 break-words font-mono text-lg font-semibold leading-none tabular-nums sm:text-xl ${
+                    metric.primary
+                      ? displayStars > 0
+                        ? "money-value-primary text-good"
+                        : displayStars < 0
+                          ? "text-[#b4432f]"
+                          : "text-ink"
+                      : "text-ink"
+                  }`}
+                >
+                  {metric.value}
+                </div>
+                <div className="mt-1 truncate text-[9px] text-muted">{metric.meta}</div>
+              </div>
+            ))
+          ) : (
+            Array.from({ length: 5 }).map((_, index) => (
+              <div key={index} className={`h-[70px] animate-pulse bg-elev ${index === 0 ? "col-span-2 sm:col-span-1" : ""}`} />
+            ))
+          )}
+        </div>
+      </section>
+
+      <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1.7fr)_minmax(320px,0.75fr)]">
+        <div className="space-y-2">
         {/* ── Chart card ───────────────────────────────────────────── */}
-        <Card size="sm" className="earnings-feature-card">
-          <CardHeader className="flex-row items-start gap-4 space-y-0 pb-0">
-            <div>
-              <div className="flex items-center gap-1.5 text-xs text-muted">
-                {focusName ? <span className="creator-name">{focusName}</span> : "Fleet"} · {revenueLabel}
+        <Card size="sm" className="rounded-lg border border-line bg-panel shadow-none">
+          <CardHeader className="flex-row items-start justify-between gap-4 space-y-0 border-b border-line pb-3">
+            <div className="min-w-0">
+              <CardTitle className="text-sm font-semibold text-ink">Revenue performance</CardTitle>
+              <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[10px] text-muted">
+                <span>{focusName ? <span className="creator-name">{focusName}</span> : chartScopeLabel} · {revenueLabel}</span>
                 <Info text="Recorded Star payments in this window, after refunds and adjustments. This is not profit, a payout, or the current wallet balance." />
-                {trendPct !== null && (
-                  <span className="inline-flex items-center gap-1">
-                    <span className="font-mono font-semibold tabular-nums text-black">
-                      {trendPct >= 0 ? "+" : ""}
-                      {trendPct}% latter vs earlier half
-                    </span>
-                    <Info text="Average Star revenue per chart interval in the latter half of this selected range compared with its earlier half. This is not a comparison with the previous period." />
-                  </span>
-                )}
               </div>
-              <div className="mt-0.5 flex flex-wrap items-start gap-3">
-                <span className="flex items-baseline gap-1.5">
-                  <span className="money-value-primary font-mono text-2xl font-bold tabular-nums tracking-tight sm:text-3xl">
-                    {data ? money(displayStars) : "-"}
+            </div>
+            <div className="shrink-0 text-right">
+              {trendPct !== null && (
+                <div className="inline-flex items-center gap-1 rounded border border-line bg-elev px-2 py-1 text-[10px]">
+                  <span className={`font-mono font-semibold tabular-nums ${trendPct > 0 ? "text-good" : trendPct < 0 ? "text-[#b4432f]" : "text-ink"}`}>
+                    {trendPct >= 0 ? "+" : ""}{trendPct}%
                   </span>
-                  {!customRange && period === "1D" && (
-                    <span className="relative flex h-2 w-2" title="Live - refreshes automatically">
-                      <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-good opacity-75" />
-                      <span className="relative inline-flex h-2 w-2 rounded-full bg-good" />
-                    </span>
-                  )}
-                </span>
-                <span className="h-9 w-px bg-line" />
-                <span>
-                  <span className="block text-[11px] text-muted">Telegram Stars</span>
-                  <span className="mt-0.5 flex items-baseline gap-1">
-                    <span className="text-xs">⭐</span>
-                    <span className="font-mono text-sm font-semibold tabular-nums text-black">
-                      {data ? fmtNum(displayStars) : "-"}
-                    </span>
-                  </span>
-                </span>
-              </div>
+                  <span className="text-muted">latter vs earlier half</span>
+                  <Info text="Average Star revenue per chart interval in the latter half of this selected range compared with its earlier half. This is not a comparison with the previous period." />
+                </div>
+              )}
               {scoped && data?.balance ? (
-                <div className="mt-3 flex flex-wrap gap-4">
+                <div className="mt-1.5 flex justify-end">
                   <BalanceStat
                     label="Total balance"
                     hint="Every Star sitting in this bot's Telegram wallet right now, minus anything already withdrawn or spent. Read directly from Telegram (getMyStarBalance)."
@@ -547,20 +727,28 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
                   />
                 </div>
               ) : (
-                <Link href={isCreator ? "/creator/info" : "/info"} className="mt-2 inline-block text-xs font-medium text-accent underline decoration-accent/30 underline-offset-2 hover:text-accent-deep">
+                <Link href={isCreator ? "/creator/info" : "/info"} className="mt-1.5 inline-block text-[10px] font-medium text-accent underline decoration-accent/30 underline-offset-2 hover:text-accent-deep">
                   {scoped ? "Balance unavailable right now" : "See Total balance per bot"}
                 </Link>
               )}
             </div>
           </CardHeader>
           <CardContent>
-            <div className="h-[160px] sm:h-[220px]">
+            <div
+              className="h-[190px] sm:h-[250px]"
+              role="img"
+              aria-label={
+                data
+                  ? `${chartScopeLabel}, ${revenueLabel}: ${money(displayStars)}${trendPct === null ? "" : `. Latter half ${trendPct >= 0 ? "up" : "down"} ${Math.abs(trendPct)} percent versus the earlier half.`}`
+                  : "Revenue performance chart loading"
+              }
+            >
               {loading ? (
                 <div className="flex h-full items-center justify-center text-muted">Loading…</div>
               ) : data && displayStars > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
                   {chartType === "bar" ? (
-                    <BarChart data={data.series} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+                    <BarChart data={chartMode === "total" ? totalChartSeries : data.series} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
                       <XAxis
                         dataKey="bucket"
@@ -592,9 +780,19 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
                       />
                       <Tooltip
                         cursor={{ fill: cursorColor }}
-                        content={<ChartTooltip clones={visibleClones} money={money} />}
+                        content={<ChartTooltip clones={visibleClones} money={money} totalOnly={chartMode === "total"} totalLabel={focusName ?? "Total revenue"} />}
                       />
-                      {visibleClones.map((c, i) => (
+                      {chartMode === "total" ? (
+                        <Bar dataKey="__total" fill="#172b3d" radius={[3, 3, 0, 0]}>
+                          {totalChartSeries.map((_, idx) => (
+                            <Cell
+                              key={idx}
+                              fill="#172b3d"
+                              fillOpacity={!customRange && idx === totalChartSeries.length - 1 ? 0.52 : 1}
+                            />
+                          ))}
+                        </Bar>
+                      ) : visibleClones.map((c, i) => (
                         <Bar
                           key={c.id}
                           dataKey={c.id}
@@ -613,7 +811,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
                       ))}
                     </BarChart>
                   ) : (
-                    <LineChart data={data.series} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
+                    <LineChart data={chartMode === "total" ? totalChartSeries : data.series} margin={{ top: 8, right: 8, left: 8, bottom: 0 }}>
                       <CartesianGrid strokeDasharray="3 3" stroke={gridColor} vertical={false} />
                       <XAxis
                         dataKey="bucket"
@@ -645,9 +843,18 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
                       />
                       <Tooltip
                         cursor={{ stroke: cursorColor }}
-                        content={<ChartTooltip clones={visibleClones} money={money} />}
+                        content={<ChartTooltip clones={visibleClones} money={money} totalOnly={chartMode === "total"} totalLabel={focusName ?? "Total revenue"} />}
                       />
-                      {visibleClones.map((c) => (
+                      {chartMode === "total" ? (
+                        <Line
+                          type="monotone"
+                          dataKey="__total"
+                          stroke="#172b3d"
+                          strokeWidth={2}
+                          dot={false}
+                          activeDot={{ r: 3 }}
+                        />
+                      ) : visibleClones.map((c) => (
                         <Line
                           key={c.id}
                           type="monotone"
@@ -672,7 +879,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
             phone this sits below the graph, and a large roster must never turn
             the earnings overview into hundreds of checked rows. */}
         {!scoped && !isCreator && (
-          <Card size="sm" className="gap-0 overflow-hidden py-0">
+          <Card size="sm" className="gap-0 overflow-hidden rounded-lg border border-line bg-panel py-0 shadow-none">
             <button
               type="button"
               aria-expanded={creatorListOpen}
@@ -789,12 +996,32 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
           decision possible: did more people show up, did buyer count change, or
           did one unusually large payment move the entire day? It deliberately
           stays above the broad report so it is not buried behind a toggle. */}
-      <RevenueDayDrivers cloneId={cloneId} />
+      <div className="space-y-3">
+        <RevenueDayDrivers cloneId={cloneId} />
+        {data && (
+          <CreatorPerformanceRail
+            creators={data.analytics.clones}
+            totalStars={data.analytics.totals.revenueStars}
+            money={money}
+            pct={pct}
+          />
+        )}
+      </div>
+      </div>
 
-      {/* ── Fleet/clone stats - same window as the chart above it. A tile
-          grid: each stat gets its own card so the row reads at a glance. */}
+      {/* ── Secondary operating metrics: one structured matrix, not a wall of
+          detached dashboard cards. Every measure still follows its original
+          scope/window semantics. ───────────────────────────────────────── */}
       {data && (
-        <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-6">
+        <section className="mt-3 overflow-hidden rounded-lg border border-line bg-panel">
+          <div className="flex items-center justify-between gap-3 border-b border-line px-3 py-2.5 sm:px-4">
+            <div>
+              <h3 className="text-xs font-semibold uppercase tracking-[0.1em] text-ink">Operating metrics</h3>
+              <p className="mt-0.5 text-[10px] text-muted">Audience, engagement and order quality for the active reporting scope.</p>
+            </div>
+            <span className="shrink-0 text-[10px] text-muted">{customRange ? "Custom range" : PERIODS.find((item) => item.key === period)?.label}</span>
+          </div>
+          <div className="grid grid-cols-2 gap-px bg-line sm:grid-cols-3">
           {(() => {
             const s = focusStats ?? data.totals;
             // This ratio uses the same selected-period cohort on both sides:
@@ -915,86 +1142,118 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
             ];
             return (
               <>
-                {tiles.map((t) => (
-                  <div key={t.label} className="earnings-stat-tile rounded-xl border px-3 py-3">
-                    <div className="flex min-w-0 items-start gap-0.5 text-[10px] uppercase tracking-wide text-muted">
+                {tiles
+                  .filter((tile) => !["Purchases", "Buyers", "Unique buyers", "Revenue / buyer"].includes(tile.label))
+                  .map((t) => (
+                  <div key={t.label} className="min-w-0 bg-panel px-3 py-2.5 last:col-span-2 sm:last:col-span-1 sm:px-3.5">
+                    <div className="flex min-w-0 items-start gap-0.5 text-[9px] font-semibold uppercase tracking-[0.1em] text-muted">
                       <span className="min-w-0 break-words leading-tight">{t.label}</span>
                       {t.hint && <Info text={t.hint} />}
                     </div>
                     {t.scope && <div className="mt-0.5 break-words text-[9px] font-medium leading-tight text-muted/85">{t.scope}</div>}
-                    <div className={"mt-1 break-words font-mono text-base font-semibold leading-tight tabular-nums " + (t.money ? "money-value" : "text-ink")}>{t.value}</div>
+                    <div className={"mt-1 break-words font-mono text-base font-semibold leading-tight tabular-nums text-ink"}>{t.value}</div>
                   </div>
                 ))}
-                {/* Report tile - toggles the full revenue report below the grid. */}
-                <button
-                  type="button"
-                  onClick={() => setReportOpen((v) => !v)}
-                  aria-expanded={reportOpen}
-                  className={
-                    "flex flex-col justify-center rounded-xl border px-3 py-2.5 text-left shadow-[0_8px_22px_rgba(6,23,47,0.18)] transition " +
-                    (reportOpen
-                      ? "border-[#4a8ec4] bg-[#4a8ec4] hover:border-[#6ba6d2] hover:bg-[#6ba6d2]"
-                      : "border-[#06172f] bg-[#06172f] hover:border-[#0d3d6e] hover:bg-[#0d3d6e]")
-                  }
-                >
-                  <div className="text-xs font-bold text-white">
-                    Full revenue report {reportOpen ? "↓" : "→"}
-                  </div>
-                  <div className="mt-0.5 text-[10px] font-semibold uppercase tracking-wide text-white/70">
-                    {reportOpen ? "Open below" : "What makes the money"}
-                  </div>
-                </button>
               </>
             );
           })()}
-        </div>
+          </div>
+        </section>
       )}
 
-      {/* Customer conversion needs a shared identity at every stage. Keep the
-          three useful cohorts together rather than hiding a broad percentage in
-          the tile grid, where its denominator is too easy to miss. */}
-      {data && <BuyerConversionPanel conversion={data.analytics.buyerConversion} pct={pct} />}
-
-      {/* Optional chat and purchase detail. It stays closed by default because
-          the five signals use related, not identical, cohorts. Same selected
-          window and creator scope as the rest of the page. ──────────────── */}
+      {/* One analysis workspace replaces three oversized disclosure cards. The
+          selected tab changes presentation only; all panels still use the same
+          fetched analytics payload, period and creator scope. */}
       {data && (
-        <ConversationFunnelPanel
-          f={data.analytics.conversationFunnel}
-          pct={pct}
-        />
-      )}
-
-      {/* ── Full revenue report - every useful cut of the same window/scope as
-          the tiles above (data.analytics is fetched with identical period +
-          clone params). Toggled by the dashed tile in the stats grid. ─────── */}
-      {data && reportOpen && (
-        <div ref={reportRef} className="scroll-mt-20">
-          <RevenueReport
-            a={data.analytics}
-            scoped={scoped}
-            cloneName={focusName ?? "Selected creator"}
-            transactions={cloneId ? data.recent.filter((transaction) => transaction.cloneId === cloneId) : data.recent}
-            money={money}
-            usd={usd}
-            pct={pct}
-            axisColor={axisColor}
-            cursorColor={cursorColor}
-            onClose={() => setReportOpen(false)}
-          />
-        </div>
+        <section className="mt-3 overflow-hidden rounded-lg border border-line bg-panel">
+          <div className="flex flex-col justify-between gap-2 border-b border-line px-3 pt-2.5 sm:flex-row sm:items-end sm:px-4">
+            <div className="pb-2">
+              <h3 className="text-xs font-semibold uppercase tracking-[0.1em] text-ink">Performance analysis</h3>
+              <p className="mt-0.5 text-[10px] text-muted">Move from customer conversion to chat behaviour and the full operating report.</p>
+            </div>
+            <div role="tablist" aria-label="Earnings analysis" className="flex flex-wrap gap-0.5">
+              <button
+                type="button"
+                role="tab"
+                aria-selected={!reportOpen && analysisView === "customers"}
+                aria-controls="earnings-analysis-panel"
+                onClick={() => {
+                  setReportOpen(false);
+                  setAnalysisView("customers");
+                }}
+                className={`border-b-2 px-2.5 py-2 text-[11px] font-medium transition ${!reportOpen && analysisView === "customers" ? "border-[#172b3d] text-ink" : "border-transparent text-muted hover:text-ink"}`}
+              >
+                Paying customers
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={!reportOpen && analysisView === "journey"}
+                aria-controls="earnings-analysis-panel"
+                onClick={() => {
+                  setReportOpen(false);
+                  setAnalysisView("journey");
+                }}
+                className={`border-b-2 px-2.5 py-2 text-[11px] font-medium transition ${!reportOpen && analysisView === "journey" ? "border-[#172b3d] text-ink" : "border-transparent text-muted hover:text-ink"}`}
+              >
+                Chat journey
+              </button>
+              <button
+                type="button"
+                role="tab"
+                aria-selected={reportOpen}
+                aria-expanded={reportOpen}
+                aria-controls="earnings-analysis-panel"
+                onClick={() => setReportOpen(true)}
+                className={`border-b-2 px-2.5 py-2 text-[11px] font-medium transition ${reportOpen ? "border-[#172b3d] text-ink" : "border-transparent text-muted hover:text-ink"}`}
+              >
+                Full revenue report
+              </button>
+            </div>
+          </div>
+          <div id="earnings-analysis-panel" role="tabpanel" className="p-3 sm:p-4">
+            {!reportOpen && analysisView === "customers" && (
+              <BuyerConversionPanel conversion={data.analytics.buyerConversion} pct={pct} />
+            )}
+            {!reportOpen && analysisView === "journey" && (
+              <ConversationFunnelPanel f={data.analytics.conversationFunnel} pct={pct} />
+            )}
+            {reportOpen && (
+              <div ref={reportRef} className="scroll-mt-20">
+                <RevenueReport
+                  a={data.analytics}
+                  scoped={scoped}
+                  cloneName={focusName ?? "Selected creator"}
+                  transactions={cloneId ? data.recent.filter((transaction) => transaction.cloneId === cloneId) : data.recent}
+                  money={money}
+                  usd={usd}
+                  pct={pct}
+                  axisColor={axisColor}
+                  cursorColor={cursorColor}
+                  onClose={() => {
+                    setReportOpen(false);
+                    setAnalysisView("customers");
+                  }}
+                />
+              </div>
+            )}
+          </div>
+        </section>
       )}
 
       {/* ── Recent ledger activity - same scope/window as everything above it.
           Server sends up to 300 (fleet-wide, most recent first); scoping to
           one clone filters client-side. Shows 10, "Show more" → 50 → 100. ── */}
       {data && (
-        <Card size="sm" className="mt-4">
-          <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
-            <CardTitle className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-wide text-ink">
-              Recent ledger activity
-              <Info text="Paid orders and any refunds or adjustments in the selected period. Media purchases show Photo, Video, or Bundle with the exact catalogue thumbnail when the original offer is available. Media (untagged) is older Telegram-imported history whose exact item was never recorded." />
-            </CardTitle>
+        <Card size="sm" className="mt-3 gap-0 overflow-hidden rounded-lg border border-line bg-panel py-0 shadow-none">
+          <CardHeader className="flex-row items-center justify-between gap-3 space-y-0 border-b border-line px-3 py-2.5 sm:px-4">
+            <div>
+              <CardTitle className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.1em] text-ink">
+                Recent ledger activity
+                <Info text="Paid orders and any refunds or adjustments in the selected period. Media purchases show Photo, Video, or Bundle with the exact catalogue thumbnail when the original offer is available. Media (untagged) is older Telegram-imported history whose exact item was never recorded." />
+              </CardTitle>
+              <p className="mt-0.5 hidden text-[10px] text-muted sm:block">{txSortSummary} · signed payments, refunds and adjustments</p>
+            </div>
             <div className="relative w-40 sm:w-56">
               <svg
                 viewBox="0 0 24 24"
@@ -1010,16 +1269,18 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
                 value={txQuery}
                 onChange={(event) => setTxQuery(event.target.value)}
                 placeholder="Search ledger activity…"
-                className="h-8 pl-8 text-xs"
+                className="h-7 rounded pl-8 text-[11px]"
               />
             </div>
           </CardHeader>
-          <CardContent className="px-0">
+          <CardContent className="px-0 pb-0">
             {(() => {
               const q = txQuery.trim().toLowerCase();
-              const matches = (cloneId ? data.recent.filter((t) => t.cloneId === cloneId) : data.recent)
+              const scopedTransactions = cloneId ? data.recent.filter((t) => t.cloneId === cloneId) : data.recent;
+              const matches = scopedTransactions
+                .map((transaction, sourceIndex) => ({ transaction, sourceIndex }))
                 .filter(
-                  (t) =>
+                  ({ transaction: t }) =>
                     !q ||
                     t.buyerName.toLowerCase().includes(q) ||
                     (t.username?.toLowerCase().includes(q) ?? false) ||
@@ -1027,7 +1288,22 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
                     (t.mediaName?.toLowerCase().includes(q) ?? false) ||
                     (TX_KIND_LABEL[t.kind] ?? t.kind).toLowerCase().includes(q),
                 );
-              const rows = matches.slice(0, txLimit);
+              const direction = txSort.direction === "asc" ? 1 : -1;
+              const compareTransactions = (
+                first: DashboardData["recent"][number],
+                second: DashboardData["recent"][number],
+              ) => {
+                let result = 0;
+                if (txSort.key === "fan") result = first.buyerName.localeCompare(second.buyerName);
+                else if (txSort.key === "creator") result = first.cloneName.localeCompare(second.cloneName);
+                else if (txSort.key === "type") result = ledgerTypeLabel(first).localeCompare(ledgerTypeLabel(second));
+                else if (txSort.key === "amount") result = first.stars - second.stars;
+                else result = (Date.parse(first.paidAt) || 0) - (Date.parse(second.paidAt) || 0);
+                return result * direction;
+              };
+              const sortedMatches = [...matches]
+                .sort((first, second) => compareTransactions(first.transaction, second.transaction) || first.sourceIndex - second.sourceIndex);
+              const rows = sortedMatches.slice(0, txLimit);
               const nextLimit = txLimit < 50 ? 50 : txLimit < 100 ? 100 : null;
               if (rows.length === 0) {
                 return (
@@ -1038,6 +1314,31 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
               }
               return (
                 <>
+                <div className="flex items-center justify-between gap-2 border-b border-line bg-elev px-3 py-2 sm:hidden">
+                  <label className="flex min-w-0 items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">
+                    <span>Sort</span>
+                    <select
+                      value={txSort.key}
+                      onChange={(event) => selectTxSort(event.target.value as LedgerSortKey)}
+                      className="h-7 min-w-0 rounded border border-line bg-panel px-2 text-[11px] font-medium normal-case tracking-normal text-ink outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                      aria-label="Sort ledger by"
+                    >
+                      <option value="fan">Fan</option>
+                      {!scoped && <option value="creator">Creator</option>}
+                      <option value="type">Type</option>
+                      <option value="amount">Amount</option>
+                      <option value="date">Date</option>
+                    </select>
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => toggleTxSort(txSort.key)}
+                    aria-label={`Reverse ledger sort; currently ${txSortSummary}`}
+                    className="h-7 shrink-0 rounded border border-line bg-panel px-2 text-[11px] font-semibold text-ink focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent/40"
+                  >
+                    <span aria-hidden="true">{txSort.direction === "asc" ? "↑" : "↓"}</span>
+                  </button>
+                </div>
                 {/* ── PHONE: one card per transaction ─────────────────────────
                     Five columns of fan + clone + item + money + date needed 719px
                     on a 375px screen, so the table scrolled sideways inside its
@@ -1045,8 +1346,8 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
                     it at the same time. Same rows, same order, same numbers,
                     stacked instead. The table below takes over at sm. */}
                 <div className="divide-y divide-line sm:hidden">
-                  {rows.map((t, i) => (
-                    <div key={i} className="flex items-start gap-2.5 px-4 py-3">
+                  {rows.map(({ transaction: t, sourceIndex }) => (
+                    <div key={sourceIndex} className="flex items-start gap-2.5 px-4 py-3">
                       <FanAvatar
                         cloneId={t.cloneId}
                         telegramId={t.telegramId}
@@ -1088,21 +1389,21 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
                     </div>
                   ))}
                 </div>
-                <div className="hidden sm:block">
-                <Table>
-                  <TableHeader>
+                <div className="hidden max-h-[520px] overflow-y-auto sm:block">
+                <Table className="text-xs">
+                  <TableHeader className="sticky top-0 z-10 bg-elev shadow-[0_1px_0_var(--color-line)]">
                     <TableRow>
-                      <TableHead>Fan</TableHead>
-                      {!scoped && <TableHead>Creator</TableHead>}
-                      <TableHead>Type</TableHead>
-                      <TableHead className="text-right">Amount</TableHead>
-                      <TableHead className="text-right">Date</TableHead>
+                      <LedgerSortHead label="Fan" sortKey="fan" activeKey={txSort.key} direction={txSort.direction} onSort={toggleTxSort} className="px-3" />
+                      {!scoped && <LedgerSortHead label="Creator" sortKey="creator" activeKey={txSort.key} direction={txSort.direction} onSort={toggleTxSort} />}
+                      <LedgerSortHead label="Type" sortKey="type" activeKey={txSort.key} direction={txSort.direction} onSort={toggleTxSort} />
+                      <LedgerSortHead label="Amount" sortKey="amount" activeKey={txSort.key} direction={txSort.direction} onSort={toggleTxSort} align="right" />
+                      <LedgerSortHead label="Date" sortKey="date" activeKey={txSort.key} direction={txSort.direction} onSort={toggleTxSort} align="right" className="pr-3" />
                     </TableRow>
                   </TableHeader>
                   <TableBody>
-                    {rows.map((t, i) => (
-                      <TableRow key={i}>
-                        <TableCell>
+                    {rows.map(({ transaction: t, sourceIndex }) => (
+                      <TableRow key={sourceIndex} className="hover:bg-elev/70">
+                        <TableCell className="py-1.5 pl-3">
                           <span className="flex items-center gap-2">
                             <FanAvatar
                               cloneId={t.cloneId}
@@ -1117,25 +1418,25 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
                           </span>
                         </TableCell>
                         {!scoped && (
-                          <TableCell>
+                          <TableCell className="py-1.5">
                             <span className="flex items-center gap-1.5">
                               <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: t.cloneColor }} />
                               <span className="creator-name">{t.cloneName}</span>
                             </span>
                           </TableCell>
                         )}
-                        <TableCell className="text-muted">
+                        <TableCell className="py-1.5 text-muted">
                           {t.mediaType ? (
-                            <TransactionMedia type={t.mediaType} url={t.mediaUrl} name={t.mediaName} />
+                            <TransactionMedia type={t.mediaType} url={t.mediaUrl} name={t.mediaName} compact />
                           ) : (
                             <span className="capitalize">{TX_KIND_LABEL[t.kind] ?? t.kind}</span>
                           )}
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="py-1.5 text-right">
                           <span className="money-value block font-mono tabular-nums">{money(t.stars)}</span>
                           <span className="block text-[11px] text-muted">⭐ {fmtNum(t.stars)}</span>
                         </TableCell>
-                        <TableCell className="text-right text-xs text-muted">
+                        <TableCell className="py-1.5 pr-3 text-right text-[11px] text-muted">
                           {new Date(t.paidAt).toLocaleString("en-US", {
                             month: "short",
                             day: "numeric",
@@ -1172,6 +1473,63 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
       )}
 
     </div>
+  );
+}
+
+
+function CreatorPerformanceRail({
+  creators,
+  totalStars,
+  money,
+  pct,
+}: {
+  creators: AnalyticsData["clones"];
+  totalStars: number;
+  money: (stars: number) => string;
+  pct: (value: number) => string;
+}) {
+  const ranked = creators.filter((creator) => creator.revenueStars !== 0 || creator.sales > 0);
+  const visible = ranked.slice(0, 6);
+
+  return (
+    <section aria-label="Creator performance" className="overflow-hidden rounded-lg border border-line bg-panel">
+      <div className="border-b border-line px-3 py-2.5">
+        <h3 className="text-xs font-semibold uppercase tracking-[0.1em] text-ink">Creator performance</h3>
+        <p className="mt-0.5 text-[10px] text-muted">Revenue rank in the selected window</p>
+      </div>
+      {visible.length === 0 ? (
+        <div className="px-3 py-6 text-center text-xs text-muted">No creator revenue in this window.</div>
+      ) : (
+        <>
+          <div className="grid grid-cols-[22px_minmax(0,1fr)_auto_42px] gap-2 border-b border-line bg-elev px-3 py-1.5 text-[8px] font-semibold uppercase tracking-[0.1em] text-muted">
+            <span>#</span>
+            <span>Creator</span>
+            <span className="text-right">Revenue</span>
+            <span className="text-right">Orders</span>
+          </div>
+          <ol className="divide-y divide-line">
+            {visible.map((creator, index) => (
+              <li key={creator.id} className="grid grid-cols-[22px_minmax(0,1fr)_auto_42px] items-center gap-2 px-3 py-2 text-[11px]">
+                <span className="font-mono tabular-nums text-muted">{index + 1}</span>
+                <span className="min-w-0">
+                  <span className="creator-name block truncate font-medium text-ink">{creator.name}</span>
+                  <span className="block text-[9px] tabular-nums text-muted">
+                    {totalStars > 0 ? pct(creator.revenueStars / totalStars) : "-"} share
+                  </span>
+                </span>
+                <span className="font-mono font-semibold tabular-nums text-ink">{money(creator.revenueStars)}</span>
+                <span className="text-right font-mono tabular-nums text-muted">{fmtNum(creator.sales)}</span>
+              </li>
+            ))}
+          </ol>
+          {ranked.length > visible.length && (
+            <div className="border-t border-line px-3 py-2 text-[10px] text-muted">
+              {fmtNum(ranked.length - visible.length)} more in Full revenue report
+            </div>
+          )}
+        </>
+      )}
+    </section>
   );
 }
 
@@ -1220,16 +1578,23 @@ function ChartTooltip({
   label,
   clones,
   money,
+  totalOnly = false,
+  totalLabel = "Total revenue",
 }: {
   active?: boolean;
   payload?: { dataKey: string; value: number }[];
   label?: string;
   clones: { id: string; name: string; color: string }[];
   money: (stars: number) => string;
+  totalOnly?: boolean;
+  totalLabel?: string;
 }) {
   if (!active || !payload?.length) return null;
   const byId = new Map(clones.map((c) => [c.id, c]));
-  const rows = payload.filter((p) => p.value > 0);
+  // A signed fleet total must remain inspectable even when it is zero or when
+  // refunds make the bucket negative. Creator breakdown keeps the established
+  // positive-series behaviour so empty creator rows do not crowd the tooltip.
+  const rows = totalOnly ? payload : payload.filter((p) => p.value > 0);
   const total = rows.reduce((s, p) => s + p.value, 0);
   return (
     <div className="rounded-lg border border-line bg-panel p-3 text-xs shadow-[var(--shadow-card)]">
@@ -1239,17 +1604,24 @@ function ChartTooltip({
         return (
           <div key={p.dataKey} className="flex items-center justify-between gap-4 py-0.5">
             <span className="flex items-center gap-2 text-muted">
-              <span className="h-2 w-2 rounded-full" style={{ background: c?.color }} />
-              <span className="creator-name">{c?.name ?? p.dataKey}</span>
+              <span
+                className="h-2 w-2 rounded-full"
+                style={{ background: totalOnly && p.value < 0 ? "#b4432f" : totalOnly ? "#172b3d" : c?.color }}
+              />
+              <span className={totalOnly ? "" : "creator-name"}>{totalOnly ? totalLabel : c?.name ?? p.dataKey}</span>
             </span>
-            <span className="money-value font-mono tabular-nums">{money(p.value)}</span>
+            <span className={`font-mono font-semibold tabular-nums ${p.value > 0 ? "text-good" : p.value < 0 ? "text-[#b4432f]" : "text-ink"}`}>
+              {money(p.value)}
+            </span>
           </div>
         );
       })}
-      <div className="mt-2 flex justify-between border-t border-line pt-2 font-medium">
-        <span>Total</span>
-        <span className="money-value font-mono tabular-nums">{money(total)}</span>
-      </div>
+      {!totalOnly && (
+        <div className="mt-2 flex justify-between border-t border-line pt-2 font-medium">
+          <span>Total</span>
+          <span className="money-value font-mono tabular-nums">{money(total)}</span>
+        </div>
+      )}
     </div>
   );
 }
@@ -1284,9 +1656,10 @@ function RevenueReport({
   onClose: () => void;
 }) {
   const [selectedMedia, setSelectedMedia] = useState<"photo" | "video" | "bundle" | null>(null);
-  // The report uses the same Atlas palette as the rest of the dashboard.
-  // Pink handles Other/untagged buckets so no data bars fall back to grey.
-  const CAT = { blue: "#0b2b4b", aqua: "#4f7fb2", yellow: "#c78520", violet: "#2f6fed", red: "#d6455d", pink: "#e95296" };
+  // A quiet, predominantly navy scale keeps category comparison legible without
+  // turning the operating report into a rainbow. Red stays reserved for the
+  // genuinely signed adjustment bucket.
+  const CAT = { blue: "#172b3d", aqua: "#526578", yellow: "#7f8b96", violet: "#2e465d", red: "#9a4d43", pink: "#697785" };
 
   const featureColor = (k: string) =>
     k === "credits"
@@ -1296,12 +1669,14 @@ function RevenueReport({
         : k === "video"
           ? CAT.aqua
           : k === "bundle"
-            ? CAT.red
+            ? CAT.pink
             : k === "tip"
               ? CAT.yellow
               : k === "subscription"
                 ? CAT.aqua
-                : CAT.pink;
+                : k === "refund"
+                  ? CAT.red
+                  : CAT.yellow;
   const tierColor = (k: string) =>
     k === "whale" ? CAT.violet : k === "high" ? CAT.blue : k === "mid" ? CAT.aqua : k === "low" ? CAT.yellow : CAT.pink;
   const flowColor = (k: string) => (k === "smart" ? CAT.violet : CAT.blue);
@@ -1341,13 +1716,13 @@ function RevenueReport({
   const earningClones = a.clones.filter((c) => c.revenueStars > 0 || c.sales > 0);
 
   return (
-    <Card size="sm" className="mt-4">
-      <CardHeader className="rounded-xl bg-[#06172f] px-3 py-2.5 text-white shadow-[0_10px_30px_rgba(6,23,47,0.2)] sm:px-4 sm:py-3">
-        <CardTitle className="text-xs font-bold uppercase tracking-[0.14em] text-white sm:text-sm">Revenue report</CardTitle>
+    <Card size="sm" className="gap-0 rounded-md border border-line bg-panel py-0 shadow-none">
+      <CardHeader className="border-b border-line bg-elev px-3 py-2.5 sm:px-4 sm:py-3">
+        <CardTitle className="text-xs font-semibold uppercase tracking-[0.12em] text-ink sm:text-sm">Revenue report</CardTitle>
         {/* Four lines of subtitle on a phone, above any data. Hidden there, and
             the ⓘ on the Close row is not the place for it either: the panel titles
             below each carry their own hint. */}
-        <CardDescription className="hidden text-[11px] text-white/70 sm:block">
+        <CardDescription className="hidden text-[11px] text-muted sm:block">
           {/* "in this window" used to cover the whole list, but the spender tier
               and buyer breakdown panels are lifetime and say so on themselves.
               A subtitle that contradicts the panel under it is how a lifetime
@@ -1355,7 +1730,7 @@ function RevenueReport({
           Where the money comes from: product, {scoped ? "" : "creator, "}time and funnel for this window, plus spender tiers and buyer behaviour over each fan&apos;s lifetime.
         </CardDescription>
         <CardAction>
-          <Button variant="ghost" size="sm" onClick={onClose} className="text-white hover:bg-white/10 hover:text-white">
+          <Button variant="ghost" size="sm" onClick={onClose} className="h-7 rounded border border-line bg-panel px-2.5 text-[11px] text-ink hover:bg-muted/10">
             Close
           </Button>
         </CardAction>
@@ -1365,7 +1740,7 @@ function RevenueReport({
         {facts.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {facts.map((f) => (
-              <span key={f.label} className="inline-flex items-baseline gap-1.5 rounded-full bg-elev px-2.5 py-1 text-[11px]">
+              <span key={f.label} className="inline-flex items-baseline gap-1.5 rounded border border-line bg-elev px-2.5 py-1 text-[11px]">
                 <span className="text-muted">{f.label}</span>
                 <span className={(f.isName ? "creator-name " : "") + "font-medium text-ink"}>{f.value}</span>
                 {f.moneyValue && <span className="money-value font-mono font-semibold tabular-nums">· {f.moneyValue}</span>}
@@ -1387,7 +1762,7 @@ function RevenueReport({
                 {reportFeatures.map((f) => {
                   const drillable = scoped && (f.key === "photo" || f.key === "video" || f.key === "bundle");
                   const categoryClassName =
-                    "rounded-xl border border-[#4a8ec4]/35 bg-[#b9daf1]/18 p-3 text-left transition hover:border-[#4a8ec4]/70 hover:bg-[#b9daf1]/34";
+                    "rounded-md border border-line bg-panel p-3 text-left transition hover:border-[#7f8b96] hover:bg-elev";
                   const row = (
                     <ShareRow
                       color={featureColor(f.key)}
@@ -1404,10 +1779,10 @@ function RevenueReport({
                       key={f.key}
                       type="button"
                       onClick={() => setSelectedMedia(f.key as "photo" | "video" | "bundle")}
-                      className={`${categoryClassName} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#4a8ec4]/55`}
+                      className={`${categoryClassName} focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#172b3d]/35`}
                     >
                       {row}
-                      <span className="mt-2 block text-[10px] font-bold uppercase tracking-[0.12em] text-[#0d3d6e]">
+                      <span className="mt-2 block text-[10px] font-semibold uppercase tracking-[0.1em] text-[#172b3d]">
                         View purchased items →
                       </span>
                     </button>
@@ -1424,7 +1799,7 @@ function RevenueReport({
               <div>
                 <div className="mb-2 flex items-end justify-between gap-3">
                   <div>
-                    <h4 className="inline-flex rounded-lg bg-[#0d3d6e] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.1em] text-white shadow-sm">Top 5 weekly spenders</h4>
+                    <h4 className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ink">Top 5 weekly spenders</h4>
                     <p className="text-[10px] text-muted">Rolling seven days in the current creator scope.</p>
                   </div>
                   <div className="text-right">
@@ -1433,7 +1808,7 @@ function RevenueReport({
                   </div>
                 </div>
                 {a.topWeeklySpenders.length === 0 ? (
-                  <div className="rounded-xl bg-surface px-3 py-5 text-center text-xs text-muted">No spenders in the last 7 days.</div>
+                  <div className="rounded-md bg-surface px-3 py-5 text-center text-xs text-muted">No spenders in the last 7 days.</div>
                 ) : (
                   <div className="grid gap-1.5">
                     {a.topWeeklySpenders.map((spender, index) => (
@@ -1441,7 +1816,7 @@ function RevenueReport({
                       // its item's min-content width unless told otherwise, so
                       // without it the fixed-width rank/avatar/amount forced the
                       // row 20px wider than the panel and it crossed the border.
-                      <div key={`${spender.cloneId ?? "unknown"}:${spender.telegramId}`} className="flex min-w-0 items-center gap-2 rounded-xl border border-line bg-surface/75 px-2.5 py-2 sm:gap-2.5 sm:px-3">
+                      <div key={`${spender.cloneId ?? "unknown"}:${spender.telegramId}`} className="flex min-w-0 items-center gap-2 rounded-md border border-line bg-panel px-2.5 py-2 sm:gap-2.5 sm:px-3">
                         <span className="w-4 shrink-0 font-mono text-[10px] font-semibold text-muted">#{index + 1}</span>
                         <FanAvatar
                           cloneId={spender.cloneId ?? ""}
@@ -1488,7 +1863,7 @@ function RevenueReport({
               </div>
 
               <div className="border-t border-line pt-3">
-                <h4 className="mb-1 inline-flex rounded-lg bg-[#0d3d6e] px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.1em] text-white shadow-sm">Lifetime spend tiers</h4>
+                <h4 className="mb-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-ink">Lifetime spend tiers</h4>
                 <p className="mb-3 text-[10px] text-muted">How the full fan base is distributed by lifetime value.</p>
                 {a.byTier.length === 0 ? (
                   <ReportEmpty text="No fans yet." />
@@ -1511,10 +1886,10 @@ function RevenueReport({
                       if (t.key !== "whale") return <div key={t.key}>{tierRow}</div>;
 
                       return (
-                        <details key={t.key} className="rounded-xl border border-line bg-surface/55 px-2.5 py-2.5 sm:px-3">
+                        <details key={t.key} className="rounded-md border border-line bg-surface/55 px-2.5 py-2.5 sm:px-3">
                           <summary className="cursor-pointer list-none [&::-webkit-details-marker]:hidden">
                             {tierRow}
-                            <span className="mt-2 block text-[10px] font-semibold text-[#0d3d6e]">View Whale fans</span>
+                            <span className="mt-2 block text-[10px] font-semibold text-[#172b3d]">View Whale fans</span>
                           </summary>
                           <div className="mt-2 max-h-72 overflow-y-auto border-t border-line pt-2">
                             <div className="mb-1.5 flex items-center justify-between gap-2 text-[10px] text-muted">
@@ -1581,7 +1956,7 @@ function RevenueReport({
                     six figures, labelled, in a 3-up grid under the name. */}
                 <div className="flex flex-col gap-2 lg:hidden">
                   {earningClones.map((c) => (
-                    <div key={c.id} className="rounded-xl border border-line bg-surface/75 px-3 py-2.5">
+                    <div key={c.id} className="rounded-md border border-line bg-surface/75 px-3 py-2.5">
                       <div className="flex items-baseline justify-between gap-2">
                         <span className="flex min-w-0 items-center gap-2">
                           <span className="h-2 w-2 shrink-0 rounded-full" style={{ background: c.color }} />
@@ -1743,7 +2118,7 @@ function RevenueReport({
                   color={CAT.blue}
                 />
               {a.paywallFunnel.collecting ? (
-                  <div className="rounded-xl border border-[#d7952d]/30 bg-[#d7952d]/8 px-3 py-2 text-[11px] leading-relaxed text-muted">
+                  <div className="rounded-md border border-[#d7952d]/30 bg-[#d7952d]/8 px-3 py-2 text-[11px] leading-relaxed text-muted">
                     Paywall-view tracking is not available yet. Chat and paid-message purchase totals are still shown below.
                   </div>
               ) : (
@@ -1797,7 +2172,7 @@ function RevenueReport({
                 <InsightMetric label="Repeat revenue" value={pct(a.funnel.repeatRevenueShare)} hint="from repeat buyers" />
               </div>
 
-              <div className="rounded-xl bg-surface/75 px-3 py-2 text-[10px] leading-relaxed text-muted">
+              <div className="rounded-md bg-surface/75 px-3 py-2 text-[10px] leading-relaxed text-muted">
                 One-time buyers have exactly one recorded purchase. Repeat buyers have two or more; loyal buyers have three or more. Buyer value uses lifetime spend, so it is not limited by the date filter above.
               </div>
             </div>
@@ -1813,7 +2188,7 @@ function RevenueReport({
               <p className="text-xs text-muted">Most recent matching purchases in the selected revenue window.</p>
             </DialogHeader>
             {selectedPurchases.length === 0 ? (
-              <div className="rounded-xl border border-line bg-surface px-4 py-10 text-center text-sm text-muted">
+              <div className="rounded-md border border-line bg-surface px-4 py-10 text-center text-sm text-muted">
                 No item-level purchases are available for this category in the current window.
               </div>
             ) : (
@@ -1841,7 +2216,7 @@ function RevenueReport({
                     </>
                   );
                   const className =
-                    "flex items-center gap-3 rounded-xl border border-line bg-panel p-3 text-left shadow-sm transition hover:border-[#4a8ec4]/60 hover:bg-[#b9daf1]/18";
+                    "flex items-center gap-3 rounded-md border border-line bg-panel p-3 text-left transition hover:border-[#7f8b96] hover:bg-elev";
                   return purchase.mediaUrl ? (
                     <a
                       key={`${purchase.paidAt}-${purchase.telegramId ?? "unknown"}-${index}`}
@@ -1875,13 +2250,13 @@ function RevenueReport({
 // the data underneath it. Desktop keeps the visible sentence.
 function ReportPanel({ title, hint, children }: { title: string; hint?: string; children: React.ReactNode }) {
   return (
-    <div className="min-w-0 rounded-xl border border-line p-2.5 sm:p-4">
-      <div className="mb-2.5 rounded-xl bg-[#06172f] px-3 py-2 shadow-[0_7px_20px_rgba(6,23,47,0.16)] sm:mb-3 sm:py-2.5">
-        <h3 className="flex items-center gap-1.5 text-[11px] font-bold uppercase tracking-[0.13em] text-white">
+    <div className="min-w-0 rounded-md border border-line p-2.5 sm:p-3">
+      <div className="mb-2.5 border-b border-line pb-2 sm:mb-3">
+        <h3 className="flex items-center gap-1.5 text-[11px] font-semibold uppercase tracking-[0.11em] text-ink">
           {title}
-          {hint && <Info text={hint} className="text-white/70 sm:hidden" />}
+          {hint && <Info text={hint} className="text-muted sm:hidden" />}
         </h3>
-        {hint && <p className="mt-0.5 hidden text-[10px] leading-relaxed text-white/65 sm:block">{hint}</p>}
+        {hint && <p className="mt-0.5 hidden text-[10px] leading-relaxed text-muted sm:block">{hint}</p>}
       </div>
       {children}
     </div>
@@ -1989,25 +2364,20 @@ function BuyerConversionPanel({
   ];
 
   return (
-    <Card size="sm" className="mt-4">
-      <details className="group">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-3 text-left sm:px-4 [&::-webkit-details-marker]:hidden">
-          <span className="min-w-0">
-            <span className="block text-xs font-semibold uppercase tracking-wide text-ink">Paying customers</span>
-            <span className="mt-0.5 block text-[11px] leading-snug text-muted">Did people buy after messaging, and did past buyers come back to chat?</span>
-          </span>
-          <span className="shrink-0 text-xs font-semibold text-[#28658f] group-open:hidden">Open</span>
-          <span className="hidden shrink-0 text-xs font-semibold text-[#28658f] group-open:inline">Hide</span>
-        </summary>
-        <CardContent className="border-t border-line p-3 sm:p-4">
-          <div className="rounded-xl border border-[#4a8ec4]/35 bg-[#eff8ff] px-3 py-2.5 text-[11px] leading-relaxed text-muted">
-            <p><span className="font-semibold text-ink">These are different questions:</span> “Did people who messaged buy?” uses the dates you picked. “Did past buyers come back?” only asks whether previous buyers messaged in the last 7 days. They are not supposed to be the same number.</p>
-            <p className="mt-1"><span className="font-semibold text-ink">What counts as bought?</span> A completed positive Star payment. Refunds and adjustments do not count as a purchase.</p>
-          </div>
+    <div>
+      <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-start">
+        <div>
+          <h4 className="text-sm font-semibold text-ink">Paying customers</h4>
+          <p className="mt-0.5 text-[11px] text-muted">Did people buy after messaging, and did past buyers come back to chat?</p>
+        </div>
+        <p className="max-w-xl border-l-2 border-line pl-2.5 text-[10px] leading-relaxed text-muted">
+          Each rate answers a different question. A purchase means a completed positive Star payment; refunds and adjustments do not count.
+        </p>
+      </div>
 
-          <div className="mt-3 grid grid-cols-2 gap-2 lg:grid-cols-3">
+          <div className="mt-3 grid grid-cols-2 gap-px overflow-hidden rounded-md border border-line bg-line lg:grid-cols-3">
             {metrics.map((metric) => (
-              <div key={metric.label} className="min-w-0 rounded-xl border border-line bg-surface/75 px-3 py-2.5 last:col-span-2 lg:last:col-span-1">
+              <div key={metric.label} className="min-w-0 bg-panel px-3 py-2.5 last:col-span-2 lg:last:col-span-1">
                 <div className="flex min-w-0 items-start gap-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] text-muted">
                   <span className="min-w-0 leading-tight">{metric.label}</span>
                   <Info text={metric.detail} />
@@ -2024,9 +2394,9 @@ function BuyerConversionPanel({
               <Info text="The three most frequently purchased product types in the selected earnings period, ranked by positive paid-order count. Refunds and adjustments are excluded. The Full revenue report above shows every product type and its revenue." />
             </div>
             {topPurchases.length > 0 ? (
-              <div className="mt-2 grid gap-1.5 sm:grid-cols-3">
+              <div className="mt-2 grid gap-px overflow-hidden rounded-md border border-line bg-line sm:grid-cols-3">
                 {topPurchases.map((item) => (
-                  <div key={item.key} className="flex min-w-0 items-baseline justify-between gap-2 rounded-lg bg-surface/75 px-2.5 py-2 text-[11px]">
+                  <div key={item.key} className="flex min-w-0 items-baseline justify-between gap-2 bg-panel px-2.5 py-2 text-[11px]">
                     <span className="min-w-0 break-words font-medium text-ink">{item.label}</span>
                     <span className="shrink-0 font-mono tabular-nums text-muted">{fmtNum(item.sales)} {item.sales === 1 ? "order" : "orders"}</span>
                   </div>
@@ -2036,9 +2406,7 @@ function BuyerConversionPanel({
               <p className="mt-1.5 text-[11px] text-muted">No positive paid orders were recorded in the selected period.</p>
             )}
           </div>
-        </CardContent>
-      </details>
-    </Card>
+    </div>
   );
 }
 
@@ -2099,25 +2467,20 @@ function ConversationFunnelPanel({
   ];
 
   return (
-    <Card size="sm" className="mt-4">
-      <details className="group">
-        <summary className="flex cursor-pointer list-none items-center justify-between gap-3 px-3 py-3 text-left sm:px-4 [&::-webkit-details-marker]:hidden">
-          <span className="min-w-0">
-            <span className="block text-xs font-semibold uppercase tracking-wide text-ink">Chat activity &amp; purchases</span>
-            <span className="mt-0.5 block text-[11px] leading-snug text-muted">See what people do in chats during the dates you picked.</span>
-          </span>
-          <span className="shrink-0 text-xs font-semibold text-[#28658f] group-open:hidden">Open</span>
-          <span className="hidden shrink-0 text-xs font-semibold text-[#28658f] group-open:inline">Hide</span>
-        </summary>
-        <CardContent className="border-t border-line p-3 sm:p-4">
-          <div className="rounded-xl border border-[#4a8ec4]/35 bg-[#eff8ff] px-3 py-2.5 text-[11px] leading-relaxed text-muted">
-            <p><span className="font-semibold text-ink">What this shows:</span> whether people keep talking, receive an offer, and buy.</p>
-            <p className="mt-1"><span className="font-semibold text-ink">How to read it:</span> “20 of 100” means 20 chats did the thing in the title, out of 100 chats. It does not mean one particular message caused a purchase.</p>
-            <p className="mt-1"><span className="font-semibold text-ink">All creators:</span> if one person chats with two creators, that counts as two chats, one with each creator.</p>
-          </div>
-          <div className="mt-3 grid grid-cols-2 gap-2 sm:grid-cols-3 xl:grid-cols-5">
-            {metrics.map((m) => (
-              <div key={m.label} className="min-w-0 rounded-xl border border-line bg-surface/75 px-3 py-2.5">
+    <div>
+      <div className="flex flex-col justify-between gap-2 sm:flex-row sm:items-start">
+        <div>
+          <h4 className="text-sm font-semibold text-ink">Chat activity &amp; purchases</h4>
+          <p className="mt-0.5 text-[11px] text-muted">A stage-by-stage view of engagement, recorded offers and buying signals.</p>
+        </div>
+        <p className="max-w-xl border-l-2 border-line pl-2.5 text-[10px] leading-relaxed text-muted">
+          “20 of 100” means 20 chats reached that measured stage. Related stages can use different cohorts and do not prove causation.
+        </p>
+      </div>
+          <div className="mt-3 grid grid-cols-2 gap-px overflow-hidden rounded-md border border-line bg-line sm:grid-cols-3 xl:grid-cols-5">
+            {metrics.map((m, index) => (
+              <div key={m.label} className="min-w-0 bg-panel px-3 py-2.5">
+                <div className="mb-2 text-[9px] font-semibold tabular-nums text-muted">0{index + 1}</div>
                 <div className="flex min-w-0 items-start gap-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] text-muted">
                   <span className="min-w-0 leading-tight">{m.label}</span>
                   <Info text={m.detail} />
@@ -2127,9 +2490,7 @@ function ConversationFunnelPanel({
               </div>
             ))}
           </div>
-        </CardContent>
-      </details>
-    </Card>
+    </div>
   );
 }
 
@@ -2145,7 +2506,7 @@ function InsightMetric({
   moneyValue?: boolean;
 }) {
   return (
-    <div className="min-w-0 rounded-xl border border-line bg-surface/75 px-3 py-2.5">
+    <div className="min-w-0 rounded-md border border-line bg-surface/75 px-3 py-2.5">
       <div className="truncate text-[9px] font-semibold uppercase tracking-[0.08em] text-muted">{label}</div>
       <div className={`mt-1 truncate font-mono text-base font-semibold tabular-nums ${moneyValue ? "money-value" : "text-ink"}`}>
         {value}
@@ -2169,7 +2530,7 @@ function JourneyStep({
   color: string;
 }) {
   return (
-    <div className="flex items-center gap-3 rounded-xl border border-line bg-surface/75 px-3 py-2.5">
+    <div className="flex items-center gap-3 rounded-md border border-line bg-surface/75 px-3 py-2.5">
       <span
         className="grid h-7 w-7 shrink-0 place-items-center rounded-full text-[10px] font-bold text-white"
         style={{ background: color }}
@@ -2257,7 +2618,7 @@ function AiCostDrillIn({
     { label: "AI errors", value: fmtNum(stats.aiErrors) },
   ];
   return (
-    <Card size="sm" className="mt-4">
+    <Card size="sm" className="mt-3 rounded-lg border border-line bg-panel shadow-none">
       <CardHeader className="flex-row items-center justify-between gap-3 space-y-0">
         <CardTitle className="text-xs font-semibold uppercase tracking-wide text-ink">
           <span className="creator-name">{name}</span> · AI cost

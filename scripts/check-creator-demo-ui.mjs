@@ -46,7 +46,7 @@ try{
    assert.notEqual(responses.at(-1).totals.stars,before);
    await page.getByRole('button',{name:'Line chart',exact:true}).click();assert.equal(await page.getByRole('button',{name:'Line chart',exact:true}).getAttribute('aria-pressed'),'true');await page.getByRole('button',{name:'Bar chart',exact:true}).click();
    await Promise.all([page.waitForResponse(r=>r.url().includes('fresh=force')),page.getByRole('button',{name:'Refresh',exact:true}).click()]);
-   await page.getByRole('button',{name:/Full revenue report/i}).click();
+   await page.getByRole('tab',{name:/Full revenue report/i}).click();
    for(const title of ['What sells','Who pays','Peak hours','Peak days','Paid-message paywall','Buyer breakdown'])await page.getByRole('heading',{name:new RegExp('^'+title,'i')}).waitFor();
    for(const kind of ['Photos','Videos','Bundles']){
     const button=page.getByRole('button',{name:new RegExp(kind+'.*View purchased items','i')});await button.click();

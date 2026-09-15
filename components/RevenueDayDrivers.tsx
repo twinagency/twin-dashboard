@@ -95,7 +95,7 @@ function ChangeList({
 
 function Stat({ label, value, detail, positive }: { label: string; value: string; detail: string; positive?: boolean | null }) {
   return (
-    <div className="rounded-xl border border-line bg-surface px-3 py-2.5">
+    <div className="rounded-md border border-line bg-panel px-3 py-2.5">
       <div className="text-[10px] font-semibold uppercase tracking-[0.1em] text-muted">{label}</div>
       <div className="mt-1 font-mono text-lg font-bold tabular-nums text-ink">{value}</div>
       <div className={(positive == null ? "text-muted" : positive ? "text-good" : "text-[#b4432f]") + " mt-0.5 text-[11px] font-medium"}>{detail}</div>
@@ -105,7 +105,7 @@ function Stat({ label, value, detail, positive }: { label: string; value: string
 
 function SmallSignal({ label, value, detail, positive }: { label: string; value: string; detail: string; positive?: boolean | null }) {
   return (
-    <div className="rounded-lg bg-muted/10 px-2.5 py-2">
+    <div className="rounded bg-elev px-2.5 py-2">
       <div className="text-[10px] font-semibold uppercase tracking-[0.08em] text-muted">{label}</div>
       <div className="mt-0.5 font-mono text-base font-bold text-ink">{value}</div>
       <div className={(positive == null ? "text-muted" : positive ? "text-good" : "text-[#b4432f]") + " mt-0.5 text-[10px] font-medium"}>{detail}</div>
@@ -180,7 +180,7 @@ export default function RevenueDayDrivers({ cloneId }: { cloneId?: string | null
   const benchmarkLabel = "30-day benchmark";
 
   return (
-    <Card size="sm" className="mt-4 overflow-hidden border-line bg-surface">
+    <Card size="sm" className="gap-0 overflow-hidden rounded-lg border border-line bg-panel py-0 shadow-none">
       <button
         type="button"
         onClick={() => setOpen((current) => !current)}
@@ -188,14 +188,14 @@ export default function RevenueDayDrivers({ cloneId }: { cloneId?: string | null
         className="flex w-full items-center justify-between gap-3 px-3 py-2.5 text-left transition-colors hover:bg-muted/10 sm:px-4"
       >
         <span className="min-w-0">
-          <span className="flex min-w-0 items-start gap-1.5 text-sm font-bold leading-tight text-ink">
-            <span className="min-w-0">Daily earnings analysis compared to previous days &amp; weeks</span>
+          <span className="flex min-w-0 items-start gap-1.5 text-sm font-semibold leading-tight text-ink">
+            <span className="min-w-0">Revenue drivers</span>
             <span className="shrink-0"><Info text="Compare one calendar day with the median result across the prior 30 calendar days, in the current creator scope." /></span>
           </span>
-          <span className="mt-0.5 block text-[11px] leading-snug text-muted">Review buyers, orders, audience activity, major payments, and product mix for any day.</span>
+          <span className="mt-0.5 block text-[11px] leading-snug text-muted">Daily earnings analysis compared to previous days &amp; weeks</span>
         </span>
-        <span className="flex shrink-0 items-center gap-1 text-xs font-semibold text-[#28658f]">
-          {open ? "Hide" : "Open"}
+        <span className="flex shrink-0 items-center gap-1 text-[11px] font-semibold text-ink">
+          {open ? "Close" : "Inspect"}
           {open ? <ChevronUpIcon className="size-4" /> : <ChevronDownIcon className="size-4" />}
         </span>
       </button>
@@ -207,15 +207,15 @@ export default function RevenueDayDrivers({ cloneId }: { cloneId?: string | null
               <div className="text-sm font-bold text-ink">{selectedDayHeading}</div>
               <p className="mt-0.5 text-[11px] text-muted">{cloneId ? "This selected creator only" : "All creators together"}</p>
             </div>
-            <div className="flex shrink-0 items-center gap-1.5">
-              <Button type="button" variant="ghost" size="sm" aria-pressed={day === yesterday} onClick={() => selectDay(yesterday)} className={(day === yesterday ? "bg-[#eff8ff] text-[#28658f] hover:bg-[#e1f1fb]" : "") + " h-7 border border-line px-2 text-[11px]"}>
+            <div className="flex flex-wrap items-center justify-end gap-1.5">
+              <Button type="button" variant="ghost" size="sm" aria-pressed={day === yesterday} onClick={() => selectDay(yesterday)} className={(day === yesterday ? "bg-[#172b3d] text-white hover:bg-[#0f1d29] hover:text-white" : "") + " h-7 rounded border border-line px-2 text-[11px]"}>
                 Yesterday
               </Button>
-              <Button type="button" variant="ghost" size="sm" aria-pressed={day === today} onClick={() => selectDay(today)} className={(day === today ? "bg-[#eff8ff] text-[#28658f] hover:bg-[#e1f1fb]" : "") + " h-7 border border-line px-2 text-[11px]"}>
+              <Button type="button" variant="ghost" size="sm" aria-pressed={day === today} onClick={() => selectDay(today)} className={(day === today ? "bg-[#172b3d] text-white hover:bg-[#0f1d29] hover:text-white" : "") + " h-7 rounded border border-line px-2 text-[11px]"}>
                 Today
               </Button>
-              <Input ref={dayInputRef} aria-label="Choose a day to review" type="date" value={day} max={today} onChange={(event) => selectDay(event.target.value)} className="h-7 w-[132px] px-2 text-xs" />
-              <Button type="button" variant="ghost" size="sm" onClick={applyPickedDay} className="h-7 border border-line px-2 text-[11px]">
+              <Input ref={dayInputRef} aria-label="Choose a day to review" type="date" value={day} max={today} onChange={(event) => selectDay(event.target.value)} className="h-7 w-[132px] rounded px-2 text-xs" />
+              <Button type="button" variant="ghost" size="sm" onClick={applyPickedDay} className="h-7 rounded border border-line px-2 text-[11px]">
                 View
               </Button>
             </div>
@@ -223,20 +223,20 @@ export default function RevenueDayDrivers({ cloneId }: { cloneId?: string | null
 
           {loading && <div className="flex min-h-24 items-center justify-center text-sm text-muted">Loading daily earnings data...</div>}
           {error && (
-            <div className="mt-3 rounded-xl border border-[#b4432f]/35 bg-[#fdecea] px-3 py-3 text-sm text-[#7a2b1e]">
+            <div className="mt-3 rounded-md border border-[#b4432f]/35 bg-[#fdecea] px-3 py-3 text-sm text-[#7a2b1e]">
               <div className="font-semibold">Daily earnings data is unavailable.</div>
               <div className="mt-1 text-xs">{error}</div>
             </div>
           )}
           {!loading && data && (
             <div className="mt-3 space-y-3">
-              <div className="rounded-xl border border-[#4a8ec4]/35 bg-[#eff8ff] px-3 py-2.5">
+              <div className="rounded-md border border-line bg-elev px-3 py-2.5">
                 <div className="flex flex-wrap items-baseline gap-x-2 gap-y-1">
                   <span className="money-value-primary font-mono text-xl font-bold tabular-nums tracking-tight">{money(data.totals.stars)}</span>
                   <span className={(direction(data.totals.deltaStars) == null ? "text-muted" : data.totals.deltaStars > 0 ? "text-good" : "text-[#b4432f]") + " font-mono text-sm font-bold"}>
                     {signed(data.totals.deltaStars, money)} vs {benchmarkLabel} ({money(data.comparison.benchmark.stars)})
                   </span>
-                  {data.day.partial && <span className="rounded-full bg-[#fff4d6] px-2 py-0.5 text-[10px] font-semibold text-[#8a5a00]">Today so far</span>}
+                  {data.day.partial && <span className="rounded bg-[#fff4d6] px-2 py-0.5 text-[10px] font-semibold text-[#8a5a00]">Today so far</span>}
                 </div>
                 <p className="mt-1 text-[11px] leading-relaxed text-muted">
                   30-day benchmark = the median daily result across the 30 calendar days immediately before this one ({data.comparison.baselineRangeLabel}), for {data.comparison.scopeLabel}. {data.day.partial && data.day.elapsedLabel ? `Each comparison day is measured through its first ${data.day.elapsedLabel}.` : "These are full calendar days in Sydney time."}
@@ -244,20 +244,20 @@ export default function RevenueDayDrivers({ cloneId }: { cloneId?: string | null
                 {data.totals.refundStars > 0 && <p className="mt-1 text-[11px] font-medium text-[#8a5a00]">Includes {money(data.totals.refundStars)} in refunds or adjustments.</p>}
               </div>
 
-              <div className={(data.summary.concentrated ? "border-[#d7952d]/55 bg-[#fff8e8]" : "border-[#4a8ec4]/35 bg-surface") + " rounded-xl border px-3 py-2.5"}>
+              <div className={(data.summary.concentrated ? "border-[#d7952d]/55 bg-[#fff8e8]" : "border-line bg-panel") + " rounded-md border px-3 py-2.5"}>
                 <div className="text-[10px] font-bold uppercase tracking-[0.12em] text-muted">Daily summary</div>
                 <p className="mt-1 text-sm font-semibold leading-snug text-ink">{data.summary.headline}</p>
                 <p className="mt-0.5 text-[11px] leading-relaxed text-muted">{data.summary.detail}</p>
               </div>
 
-              <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-4">
+              <div className="grid grid-cols-2 gap-2">
                 <Stat label="Buyers" value={count(data.totals.buyers)} detail={`${signedNumber(data.totals.deltaBuyers)} vs baseline of ${count(data.comparison.benchmark.buyers)}`} positive={direction(data.totals.deltaBuyers)} />
                 <Stat label="Paid orders" value={count(data.totals.sales)} detail={`${signedNumber(data.totals.deltaSales)} vs baseline of ${count(data.comparison.benchmark.sales)}`} positive={direction(data.totals.deltaSales)} />
                 <Stat label="Average paid order" value={money(data.totals.averageSaleStars)} detail={`${signed(data.totals.deltaAverageSaleStars, money)} vs baseline of ${money(data.comparison.benchmark.averageSaleStars)}`} positive={direction(data.totals.deltaAverageSaleStars)} />
                 <Stat label="Fans who messaged" value={data.activity.messagedFans == null ? "N/A" : count(data.activity.messagedFans)} detail={data.activity.deltaMessagedFans == null ? "Activity unavailable" : `${signedNumber(data.activity.deltaMessagedFans)} vs baseline of ${count(data.activity.usualMessagedFans ?? 0)}`} positive={direction(data.activity.deltaMessagedFans)} />
               </div>
 
-              <details className="rounded-xl border border-line">
+              <details className="rounded-md border border-line">
                 <summary className="cursor-pointer px-3 py-2.5 text-xs font-bold text-ink">Audience activity</summary>
                 <div className="border-t border-line p-3">
                   <p className="text-[11px] leading-relaxed text-muted">Daily audience measures. They do not show that a message directly caused a payment.</p>
@@ -269,7 +269,7 @@ export default function RevenueDayDrivers({ cloneId }: { cloneId?: string | null
                 </div>
               </details>
 
-              <details className="rounded-xl border border-line">
+              <details className="rounded-md border border-line">
                 <summary className="cursor-pointer px-3 py-2.5 text-xs font-bold text-ink">Largest payments and buyers</summary>
                 <div className="border-t border-line p-3">
                   <p className="text-[11px] leading-relaxed text-muted">The largest individual paid order and highest-paying buyer on the selected day.</p>
@@ -296,7 +296,7 @@ export default function RevenueDayDrivers({ cloneId }: { cloneId?: string | null
                 </div>
               </details>
 
-              <details className="rounded-xl border border-line">
+              <details className="rounded-md border border-line">
                 <summary className="cursor-pointer px-3 py-2.5 text-xs font-bold text-ink">Earnings breakdown</summary>
                 <div className="grid gap-3 border-t border-line p-3 lg:grid-cols-2">
                   <p className="lg:col-span-2 rounded-lg bg-muted/10 px-2.5 py-2 text-[10px] leading-relaxed text-muted">
