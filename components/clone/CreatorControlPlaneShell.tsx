@@ -371,7 +371,7 @@ export function ControlPlaneInspector({
 
 export function ReadOnlyControlPlaneNotice() {
   return (
-    <div className="sticky bottom-4 z-40 mt-4 rounded-[3px] border border-ink/25 bg-panel/95 px-4 py-3 shadow-[0_8px_24px_rgb(21_32_51/0.1)] backdrop-blur-xl">
+    <div className="mt-4 rounded-[3px] border border-ink/25 bg-panel px-4 py-3 lg:sticky lg:bottom-4 lg:z-40 lg:bg-panel/95 lg:shadow-[0_8px_24px_rgb(21_32_51/0.1)] lg:backdrop-blur-xl">
       <p className="text-xs font-semibold text-ink">Read-only access</p>
       <p className="mt-0.5 text-[11px] text-muted">Configuration changes require manager access.</p>
     </div>

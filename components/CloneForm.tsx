@@ -413,9 +413,12 @@ export default function CloneForm({
       </div>
 
       <ManagerOnly>
-        <div className={editableTab ? "pointer-events-none sticky bottom-20 z-40 lg:bottom-4" : "hidden"}>
-          <div className="pointer-events-auto flex items-center justify-between gap-2 rounded-[3px] border border-ink/25 bg-panel/95 px-3 py-2.5 shadow-[0_8px_24px_rgb(21_32_51/0.1)] backdrop-blur-xl sm:px-4">
-            <div className="flex min-w-0 items-center gap-3 max-sm:hidden">
+        <div
+          data-control-plane-save-bar
+          className={editableTab ? "pointer-events-none mt-4 lg:sticky lg:bottom-4 lg:z-40" : "hidden"}
+        >
+          <div className="pointer-events-auto grid gap-2 rounded-[3px] border border-ink/25 bg-panel px-3 py-3 sm:px-4 lg:flex lg:items-center lg:justify-between lg:bg-panel/95 lg:py-2.5 lg:shadow-[0_8px_24px_rgb(21_32_51/0.1)] lg:backdrop-blur-xl">
+            <div className="hidden min-w-0 items-center gap-3 lg:flex">
               <div className="min-w-0">
                 <span className="text-xs font-semibold text-ink">
                   {changedFields.length
@@ -428,18 +431,18 @@ export default function CloneForm({
               </div>
             </div>
 
-            <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5 max-sm:w-full">
-              {step === "saving" && <span className="inline-flex items-center gap-1.5 text-xs text-muted"><LoaderCircle className="size-3.5 animate-spin" /> Saving</span>}
-              {step === "done" && <span className="text-xs font-medium text-good">Saved</span>}
-              {step === "save-error" && <span className="max-w-64 truncate text-xs text-crit">{errorMsg}</span>}
-              <Button type="button" variant="outline" onClick={openReview} disabled={!changedFields.length || busy}>
+            <div className="grid w-full grid-cols-2 items-center gap-2 lg:flex lg:w-auto lg:shrink-0 lg:flex-wrap lg:justify-end lg:gap-1.5">
+              {step === "saving" && <span className="col-span-2 inline-flex items-center gap-1.5 text-xs text-muted lg:col-auto"><LoaderCircle className="size-3.5 animate-spin" /> Saving</span>}
+              {step === "done" && <span className="col-span-2 text-xs font-medium text-good lg:col-auto">Saved</span>}
+              {step === "save-error" && <span className="col-span-2 truncate text-xs text-crit lg:col-auto lg:max-w-64">{errorMsg}</span>}
+              <Button type="button" variant="outline" onClick={openReview} disabled={!changedFields.length || busy} className="w-full lg:w-auto">
                 Review
               </Button>
-              <Button type="submit" form={formId} disabled={busy}>
+              <Button type="submit" form={formId} disabled={busy} className="w-full lg:w-auto">
                 {isPaused ? "Save paused" : "Save changes"}
               </Button>
               {isPaused && (
-                <Button type="button" onClick={() => save(true)} disabled={busy}>
+                <Button type="button" onClick={() => save(true)} disabled={busy} className="col-span-2 w-full lg:col-auto lg:w-auto">
                   Finalise and go live
                 </Button>
               )}

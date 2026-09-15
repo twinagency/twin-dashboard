@@ -127,7 +127,7 @@ const clone = {
   updated_at: "2026-09-15T11:45:00.000Z",
   bot_token: "0000000000:LOCAL_FIXTURE_TOKEN_NEVER_SENT",
   business_username: "ava_vale_preview",
-  status: "active",
+  status: new URLSearchParams(window.location.search).get("status") === "paused" ? "paused" : "active",
   uses_default_config: false,
   ai_mode: "smart",
   smart_split: true,
@@ -468,7 +468,10 @@ async function runCheck() {
   const externalRequests = [];
   try {
     for (const viewport of [
+      { width: 320, height: 740 },
       { width: 390, height: 900 },
+      { width: 768, height: 1024 },
+      { width: 1024, height: 900 },
       { width: 1440, height: 1000 },
       { width: 1720, height: 1050 },
     ]) {
@@ -537,6 +540,29 @@ async function runCheck() {
       await page.getByRole("heading", { name: "Identity", exact: true }).waitFor();
       await configTab.click();
       await page.getByText("Runtime summary", { exact: true }).waitFor();
+
+      const saveBar = page.locator("[data-control-plane-save-bar]");
+      const saveBarPosition = await saveBar.evaluate((element) => getComputedStyle(element).position);
+      const saveBarBounds = await saveBar.boundingBox();
+      assert.ok(saveBarBounds, `${viewport.width}px save controls should render`);
+      if (viewport.width < 1024) {
+        assert.equal(saveBarPosition, "static", `${viewport.width}px save controls must scroll with the page instead of covering the form`);
+        assert.ok(saveBarBounds.y >= viewport.height, `${viewport.width}px save controls should not follow the user over the form`);
+      } else {
+        assert.equal(saveBarPosition, "sticky", `${viewport.width}px desktop save controls should remain available while editing`);
+      }
+      assert.ok(saveBarBounds.x >= 0 && saveBarBounds.x + saveBarBounds.width <= viewport.width + 1, `${viewport.width}px save controls overflow the viewport`);
+
+      if (viewport.width === 320) {
+        await page.goto(`${origin}/?tab=config&status=paused`, { waitUntil: "networkidle" });
+        const reviewBounds = await page.getByRole("button", { name: "Review", exact: true }).boundingBox();
+        const savePausedBounds = await page.getByRole("button", { name: "Save paused", exact: true }).boundingBox();
+        const goLiveBounds = await page.getByRole("button", { name: "Finalise and go live", exact: true }).boundingBox();
+        assert.ok(reviewBounds && savePausedBounds && goLiveBounds, "320px paused save actions should render");
+        assert.ok(Math.abs(reviewBounds.y - savePausedBounds.y) <= 1, "320px Review and Save paused should share the first row");
+        assert.ok(goLiveBounds.y >= reviewBounds.y + reviewBounds.height, "320px Finalise and go live should use its own row");
+        assert.ok(goLiveBounds.x >= 0 && goLiveBounds.x + goLiveBounds.width <= viewport.width + 1, "320px paused actions overflow the viewport");
+      }
 
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, `${viewport.width}px horizontal overflow`);
       assert.deepEqual(pageErrors, [], `${viewport.width}px page errors`);
