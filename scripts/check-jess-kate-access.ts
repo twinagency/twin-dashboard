@@ -59,7 +59,7 @@ async function main(){
     active=false;const count=tokenRequests;assert.equal((await login(request())).status,503);assert.equal(tokenRequests,count);active=true;
     for(const set of [(x:boolean)=>wrongUser=x,(x:boolean)=>wrongAgency=x,(x:boolean)=>emptyScope=x,(x:boolean)=>agencyActive=!x]){set(true);assert.equal((await login(request())).status,401);set(false);}
     const cookie=`${AGENCY_COOKIE}=partner-token; twin_agency_portal=${portal.slug}; clone_scope=${other}`;
-    for(const path of ["/revenue","/clones","/users","/media","/flows","/business","/crm","/crm/inbox","/crm/fans","/crm/mass-messages","/crm/automations","/crm/vault","/crm/publishing","/crm/analytics","/crm/team","/crm/settings",`/clones/${kate}`])assert.equal((await middleware(new NextRequest(origin+path,{headers:{cookie}}))).status,200);
+    for(const path of ["/revenue","/clones","/users","/media","/flows","/business",`/clones/${kate}`])assert.equal((await middleware(new NextRequest(origin+path,{headers:{cookie}}))).status,200);
     for(const path of ["/settings","/agency-admin","/api-access",`/clones/${other}`,`/revenue?clone=${other}`,`/users?cloneId=${other}`])assert.equal((await middleware(new NextRequest(origin+path,{headers:{cookie}}))).status,403);
     active=false;const expired=await middleware(new NextRequest(origin+"/revenue",{headers:{cookie}}));assert.equal(expired.headers.get("location"),origin+portal.loginPath);active=true;
     const identity={id:portal.id,name:portal.name,cloneIds:[kate]};

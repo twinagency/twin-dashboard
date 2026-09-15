@@ -51,7 +51,38 @@ export default function DashboardAccessProvider({
     const previousAgency=root.getAttribute("data-agency");
     root.setAttribute("data-brand-theme","lynq-light");
     root.setAttribute("data-agency","lynq");
+
+    // LYNQ intentionally has no CRM group in its sidebar. Keep the technical
+    // tools that used to sit behind More visible at all times on desktop and
+    // in the mobile drawer. This is presentation-only; server route policy is
+    // unchanged.
+    const polishSidebar=()=>{
+      document.querySelectorAll<HTMLElement>(".dashboard-sidebar nav").forEach(nav=>{
+        const list=nav.firstElementChild as HTMLElement|null;
+        if(!list) return;
+        const children=Array.from(list.children) as HTMLElement[];
+        const crmIndex=children.findIndex(el=>el.textContent?.trim()==="CRM");
+        if(crmIndex>=0){
+          children[crmIndex].style.display="none";
+          for(let i=crmIndex+1;i<children.length;i++){
+            const moreButton=Array.from(children[i].querySelectorAll("button")).find(button=>button.textContent?.trim()==="More") as HTMLButtonElement|undefined;
+            if(moreButton) break;
+            children[i].style.display="none";
+          }
+        }
+        const moreButton=Array.from(nav.querySelectorAll("button")).find(button=>button.textContent?.trim()==="More") as HTMLButtonElement|undefined;
+        if(moreButton){
+          if(moreButton.getAttribute("aria-expanded")!=="true") moreButton.click();
+          moreButton.style.display="none";
+        }
+      });
+    };
+    polishSidebar();
+    const observer=new MutationObserver(polishSidebar);
+    observer.observe(document.body,{childList:true,subtree:true});
+
     return ()=>{
+      observer.disconnect();
       if(previousTheme) root.setAttribute("data-brand-theme",previousTheme); else root.removeAttribute("data-brand-theme");
       if(previousAgency) root.setAttribute("data-agency",previousAgency); else root.removeAttribute("data-agency");
     };

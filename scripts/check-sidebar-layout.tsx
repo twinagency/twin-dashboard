@@ -56,20 +56,26 @@ const render = (agencyName?: string, canManage = false, activeCloneId: string | 
 
 for (const mobile of [false, true]) {
   const kate = render(portals.JESS_KATE_PORTAL.name, true, clone, mobile);
-  for (const label of ["Dashboard", "Operate", "Inbox", "Fans", "Mass messages", "Automations", "Content", "Vault", "Publishing", "Measure", "Analytics", "Manage", "Creators", "Team", "Settings"]) assert.match(kate, new RegExp(`>${label}<`));
-  for (const href of ["/crm", "/crm/inbox", "/crm/fans", "/crm/mass-messages", "/crm/automations", "/crm/vault", "/crm/publishing", "/crm/analytics", "/clones", "/crm/team", "/crm/settings"]) assert.ok(kate.includes(`href="${href}"`), `Keep accessible CRM link ${href}`);
-  assert.match(kate, /aria-expanded="false"/);
-  assert.doesNotMatch(kate, /Not available|Read only|Creator management|AI Intelligence Core/);
+  assert.doesNotMatch(kate, /CRM|\/crm\//, "Remove the whole CRM group, not just its heading");
+  assert.match(kate, /<h2[^>]*>More<\/h2>/, "More is an always-visible heading");
+  assert.doesNotMatch(kate, /aria-expanded|Not available|Read only|Creator management/);
+  for (const href of ["/revenue", "/clones", "/users", "/business", "/flows", "/info", "/logs", `/clones/${clone}?tab=ppvs`, `/clones/${clone}?tab=identity`]) {
+    assert.ok(kate.includes(`href="${href}"`), `Keep accessible link ${href}`);
+  }
   for (const href of ["/settings", "/agency-admin", "/api-access", "/jarvis", "/clones/new"]) assert.ok(!kate.includes(`href="${href}"`), `Do not widen access to ${href}`);
+  assert.equal((kate.match(/AI Intelligence Core/g) || []).length, 1);
+  assert.equal((kate.match(/<canvas/g) || []).length, 1);
+  assert.ok(kate.indexOf("<canvas") < kate.indexOf("<nav"), "Animated core above nav");
+  assert.match(kate, /<canvas[^>]*width="128"[^>]*height="128"[^>]*style="width:64px;height:64px"/);
   if (mobile) assert.match(kate, /aria-label="Close navigation"/);
 }
 const moxy = render("Moxy");
 assert.match(moxy, />CRM</); assert.match(moxy, /AI Intelligence Core/); assert.match(moxy, /Not available/);
 assert.doesNotMatch(moxy, /aria-expanded/);
-assert.equal((moxy.match(/<canvas/g) || []).length, 1, "Moxy keeps its unavailable intelligence-core treatment");
+assert.equal(moxy.match(/<canvas[^>]*><\/canvas>/)?.[0], render(portals.JESS_KATE_PORTAL.name, true).match(/<canvas[^>]*><\/canvas>/)?.[0], "Reuse Moxy's exact animated globe component and size");
 for (const [name, manage] of [["LYNQ", true], [undefined, false]] as const) {
   const html = render(name, manage);
-  assert.match(html, />Dashboard</); assert.match(html, />Operate</); assert.match(html, /aria-expanded="false"/);
+  assert.match(html, />CRM</); assert.match(html, /aria-expanded="false"/);
   assert.doesNotMatch(html, /AI Intelligence Core|href="\/info"/);
 }
 const palette = readFileSync("app/lynq-theme.css", "utf8");
@@ -90,13 +96,8 @@ for (const mobile of [false, true]) {
     assert.equal((lynq.match(/<canvas/g) || []).length, 1, "Keep one original compact particle canvas in the wordmark");
     assert.match(lynq, /style="width:48px;height:48px"/);
     assert.doesNotMatch(lynq, /AI Intelligence Core|lynq-cyan/, "No separate large sphere hero");
-    if (manage) {
-      assert.ok(lynq.includes('href="/crm"'));
-      assert.ok(lynq.includes('href="/crm/inbox"'));
-    } else {
-      assert.ok(lynq.includes('href="/revenue"'));
-      assert.ok(lynq.includes('href="/users"'));
-    }
+    assert.ok(lynq.includes('href="/revenue"'));
+    assert.ok(lynq.includes('href="/users"'));
   }
 }
 for (const name of [undefined, "Moxy", portals.JESS_KATE_PORTAL.name]) {
@@ -104,7 +105,8 @@ for (const name of [undefined, "Moxy", portals.JESS_KATE_PORTAL.name]) {
 }
 assert.match(readFileSync("app/layout.tsx", "utf8"), /data-brand-theme=\{isLynq\(agency\?\.name\) \? "lynq-light"/, "Verified LYNQ branding is applied during server render");
 assert.match(render(undefined), /href="\/clones\/new"/);
-pathname = "/crm/fans"; query = new URLSearchParams();
-assert.match(render(portals.JESS_KATE_PORTAL.name, true), /href="\/crm\/fans"[^>]*bg-white\/12/);
+assert.match(render(portals.JESS_KATE_PORTAL.name, true, null), /Pick a creator first/);
+pathname = `/clones/${clone}`; query = new URLSearchParams("tab=identity");
+assert.match(render(portals.JESS_KATE_PORTAL.name, true), /href="[^\"]+tab=identity"[^>]*bg-white\/12/);
 assert.match(readFileSync("components/MobileMenu.tsx", "utf8"), /<SidebarContent/);
 console.log("Sidebar: original LYNQ particle core retained, fake sphere and dark overrides removed, mobile/desktop and other portals preserved");

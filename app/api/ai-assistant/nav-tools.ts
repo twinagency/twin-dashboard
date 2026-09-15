@@ -14,16 +14,7 @@
 
 /** Every page the assistant is allowed to send you to, with what it is for. */
 export const NAV_TARGETS: { path: string; label: string; what: string }[] = [
-  { path: "/crm", label: "CRM Dashboard", what: "the live CRM operating dashboard" },
-  { path: "/crm/inbox", label: "CRM Inbox", what: "live fan conversations and manual takeover" },
-  { path: "/crm/fans", label: "CRM Fans", what: "the searchable and segmented fan directory" },
-  { path: "/crm/mass-messages", label: "Mass messages", what: "mass-message audience and capability status" },
-  { path: "/crm/automations", label: "Automations", what: "the live conversation automation builder" },
-  { path: "/crm/vault", label: "Vault", what: "the live creator media vault" },
-  { path: "/crm/publishing", label: "Publishing", what: "publishing queue and connector status" },
-  { path: "/crm/analytics", label: "CRM Analytics", what: "live revenue, conversion and audience analytics" },
-  { path: "/crm/team", label: "CRM Team", what: "agency memberships and creator access scope" },
-  { path: "/crm/settings", label: "CRM Settings", what: "CRM connections, permissions and operating settings" },
+  { path: "/", label: "Overview", what: "the fleet-wide home dashboard" },
   { path: "/revenue", label: "Earnings", what: "revenue, Star income, top spenders" },
   { path: "/users", label: "Fans", what: "the fan list across every clone" },
   { path: "/messages", label: "Messages", what: "conversation history with fans" },

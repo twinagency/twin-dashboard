@@ -15,7 +15,7 @@ import { useDashboardAccess } from "./DashboardAccessProvider";
 export default function MainShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const {isAgency, isCreator} = useDashboardAccess();
-  const fullBleed = pathname === "/users" || pathname === "/jarvis" || pathname === "/crm/inbox";
+  const fullBleed = pathname === "/users" || pathname === "/jarvis";
   return (
     <main
       className={

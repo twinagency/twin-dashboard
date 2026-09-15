@@ -84,7 +84,6 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     agency ? Promise.resolve(null) : getCachedTwinVersion(), getFleetClones(), getCloneScope(),
   ]);
   const allTimeStars = await getHeaderAllTimeStars(activeCloneId);
-  const dashboardHome = !agency || agencyCanManage(agency) ? "/crm" : "/revenue";
   // Path-dependent navigation stays in client components, not frozen here.
   return <html lang="en" data-agency={isMoxy(agency?.name) ? "moxy" : isLynq(agency?.name) ? "lynq" : undefined} data-brand-theme={isLynq(agency?.name) ? "lynq-light" : agency?.name === JESS_KATE_PORTAL.name ? "ivory-cherry" : undefined} className={fontClass} style={{ colorScheme: "light" }} suppressHydrationWarning>
     <body className="min-h-screen bg-bg">
@@ -94,7 +93,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <Sidebar clones={clones} activeCloneId={activeCloneId} />
           <div className="flex h-screen min-w-0 flex-1 flex-col overflow-hidden">
             <header className="dashboard-mobile-header flex shrink-0 items-center justify-between border-b border-white/12 px-4 py-3 lg:hidden">
-              <Link href={dashboardHome} aria-label={agency?.name || "Twin Technologies"}><TwinWordmark inverse agencyName={agency?.name} /></Link>
+              <Link href="/revenue" aria-label={agency?.name || "Twin Technologies"}><TwinWordmark inverse agencyName={agency?.name} /></Link>
               <div className="flex items-center gap-1">{agency && <form action="/agency/logout" method="post"><button type="submit" className="rounded-lg px-3 py-2 text-sm font-medium text-white/80 hover:bg-white/10">Sign out</button></form>}<MobileMenu activeCloneId={activeCloneId} /></div>
             </header>
             <TopBar clones={clones} activeCloneId={activeCloneId} allTimeStars={allTimeStars} /><MainShell>{children}</MainShell>

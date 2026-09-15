@@ -106,7 +106,7 @@ async function main() {
     assert.equal(pair.status, 200);
     assert.equal(pair.cookies.get("clone_scope")?.value, "");
     const cookie = `${AGENCY_COOKIE}=tether-token; twin_agency_portal=${portal.slug}; clone_scope=${other}`;
-    for (const path of ["/revenue", "/analytics", "/clones", "/users", "/media", "/flows", "/business", "/crm", "/crm/inbox", "/crm/fans", "/crm/mass-messages", "/crm/automations", "/crm/vault", "/crm/publishing", "/crm/analytics", "/crm/team", "/crm/settings", `/clones/${first}`, `/clones/${second}`]) assert.equal((await middleware(new NextRequest(origin + path, { headers: { cookie } }))).status, 200);
+    for (const path of ["/revenue", "/analytics", "/clones", "/users", "/media", "/flows", "/business", `/clones/${first}`, `/clones/${second}`]) assert.equal((await middleware(new NextRequest(origin + path, { headers: { cookie } }))).status, 200);
     for (const path of ["/settings", "/agency-admin", "/api-access", `/clones/${other}`, `/revenue?clone=${other}`, `/users?cloneId=${other}`]) assert.equal((await middleware(new NextRequest(origin + path, { headers: { cookie } }))).status, 403);
     assert.equal((await middleware(new NextRequest(origin + `/clones/${other}`, { method: "POST", headers: { cookie, origin, "next-action": "forged" } }))).status, 403);
     active = false;

@@ -5,11 +5,15 @@ import { isMoxy } from "@/lib/agency-brand";
 import { JESS_KATE_PORTAL, TETHER_PORTAL } from "@/lib/partner-portals";
 import { CREATOR_DASHBOARD_NAV } from "@/lib/creator-dashboard-policy";
 
-// Left sidebar app shell. Administrators and verified managing agencies get a
-// compact CRM hierarchy; read-only and creator audiences keep their restricted
-// navigation. Each page type appears once and the header clone switcher scopes
-// its data. Technical controls stay behind System tools so day-to-day CRM work
-// remains visible without a second, duplicate navigation block.
+// Left sidebar app shell (desktop). "Create new clone" is always the first
+// thing in it, then a focused executive workspace followed by CRM. The
+// technical tools sit behind More so the primary operating views are visible
+// without scrolling. Each page type appears ONCE, scoped
+// by the clone switcher in the header (components/CloneSwitcher.tsx, "All
+// clones" by default). Picking/managing a clone lives in the header switcher
+// popup + the /clones page, not here, no duplicate clone list in the
+// sidebar. Settings/AI/Feedback/Changelog used to live in a separate footer
+// section; they're folded into the one list now, ordered by importance.
 //
 // Mobile keeps the existing hamburger (MobileMenu), this component only
 // renders at lg+ (see layout.tsx).
@@ -119,65 +123,12 @@ const MORE_LINKS: NavLink[] = [
   { kind: "route", label: "Settings", href: "/settings", icon: "Settings", color: "gray" },
 ];
 
-// The CRM is an operating workspace, not a second list of preview pages. Each
-// canonical URL below either renders a distinct live-data view or mounts one
-// of Twin's existing production tools in place. Keeping the URLs under /crm
-// also lets agency access remain an exact allowlist instead of a broad grant.
-const CRM_NAV_GROUPS: { label?: string; links: NavLink[] }[] = [
-  {
-    links: [
-      { kind: "route", label: "Dashboard", href: "/crm", icon: "Clones", color: "neutral" },
-    ],
-  },
-  {
-    label: "Operate",
-    links: [
-      { kind: "route", label: "Inbox", href: "/crm/inbox", icon: "Inbox", color: "neutral" },
-      { kind: "route", label: "Fans", href: "/crm/fans", icon: "Users", color: "neutral" },
-      { kind: "route", label: "Mass messages", href: "/crm/mass-messages", icon: "Messages", color: "neutral" },
-      { kind: "route", label: "Automations", href: "/crm/automations", icon: "Flows", color: "neutral" },
-    ],
-  },
-  {
-    label: "Content",
-    links: [
-      { kind: "route", label: "Vault", href: "/crm/vault", icon: "Media", color: "neutral" },
-      { kind: "route", label: "Publishing", href: "/crm/publishing", icon: "Bell", color: "neutral" },
-    ],
-  },
-  {
-    label: "Measure",
-    links: [
-      { kind: "route", label: "Analytics", href: "/crm/analytics", icon: "Revenue", color: "neutral" },
-    ],
-  },
-  {
-    label: "Manage",
-    links: [
-      { kind: "route", label: "Creators", href: "/clones", icon: "Clones", color: "neutral" },
-      { kind: "route", label: "Team", href: "/crm/team", icon: "Users", color: "neutral" },
-      { kind: "route", label: "Settings", href: "/crm/settings", icon: "Settings", color: "neutral" },
-    ],
-  },
-];
-
-// Several canonical CRM routes mount an existing production surface. Keep the
-// CRM item selected if that surface links back to its legacy URL. Matching is
-// segment-aware below so, for example, /media-kit cannot activate Vault.
-const CRM_ACTIVE_ROUTE_ALIASES: Partial<Record<string, readonly string[]>> = {
-  "/crm/inbox": ["/users", "/messages"],
-  "/crm/automations": ["/flows", "/drip"],
-  "/crm/vault": ["/media", "/storage"],
-  "/crm/analytics": ["/revenue", "/analytics"],
-  "/crm/settings": ["/business"],
-};
-
-const LEGACY_CRM_LINKS: NavLink[] = [
-  { kind: "route", label: "Inbox", href: "/crm/inbox", icon: "Inbox", color: "neutral" },
-  { kind: "route", label: "Fans", href: "/crm/fans", icon: "Users", color: "neutral" },
-  { kind: "route", label: "Mass messages", href: "/crm/mass-messages", icon: "Messages", color: "neutral" },
-  { kind: "route", label: "Team", href: "/crm/team", icon: "Users", color: "neutral" },
-  { kind: "route", label: "Settings", href: "/crm/settings", icon: "Settings", color: "neutral" },
+const CRM_LINKS: NavLink[] = [
+  { kind: "route", label: "Inbox", href: "/crm/inbox", icon: "Inbox", color: "purple" },
+  { kind: "route", label: "Fan CRM", href: "/crm/fans", icon: "Users", color: "blue" },
+  { kind: "route", label: "Campaigns", href: "/crm/campaigns", icon: "Flows", color: "pink" },
+  { kind: "route", label: "Team", href: "/crm/team", icon: "Users", color: "orange" },
+  { kind: "route", label: "Platforms", href: "/crm/platforms", icon: "Database", color: "good" },
 ];
 
 const TETHER_SIDEBAR_THEME = `
@@ -279,12 +230,9 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
   // Creator workspaces use this exact core block as well. The audience only
   // narrows navigation and authority; it does not fork the Tether design.
   const usesBrandedCore = isCreator || isJessKate || isTether;
-  const crmWorkspace = !isCreator && !showUnavailable && (!isAgency || canManage);
   const primaryLinks = isCreator
     ? CREATOR_LINKS
-    : crmWorkspace
-      ? []
-      : NAV_LINKS.flatMap(link => showUnavailable && link.kind === "tab" && link.tab === "ppvs" ? [link, ...MORE_LINKS.filter(item => item.kind === "tab" && item.tab === "identity")] : [link]);
+    : NAV_LINKS.flatMap(link => showUnavailable && link.kind === "tab" && link.tab === "ppvs" ? [link, ...MORE_LINKS.filter(item => item.kind === "tab" && item.tab === "identity")] : [link]);
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [moreOpen, setMoreOpen] = useState(false);
@@ -292,11 +240,7 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
   // /creator is the creator Earnings page, not a parent navigation section.
   // Exact matching prevents Earnings staying highlighted on all five child
   // routes at the same time as their own item.
-  const routeMatches = (href: string) => pathname === href || pathname.startsWith(`${href}/`);
-  const isGlobalActive = (href: string) =>
-    pathname === href ||
-    (!isCreator && href !== "/" && href !== "/crm" && pathname.startsWith(`${href}/`)) ||
-    (crmWorkspace && (CRM_ACTIVE_ROUTE_ALIASES[href] ?? []).some(routeMatches));
+  const isGlobalActive = (href: string) => pathname === href || (!isCreator && href !== "/" && pathname.startsWith(href + "/"));
   const onConfigurePage = activeCloneId ? pathname === `/clones/${activeCloneId}` : false;
   const pickClone = () => { onNavigate?.(); window.setTimeout(() => openCloneSwitcher(), 0); };
 
@@ -322,84 +266,12 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
     return <Link href={link.href} onClick={onNavigate} className={rowClass + " " + (isGlobalActive(link.href) ? colors.active : colors.idle)}>{navLabel(link, colors)}</Link>;
   };
 
-  const systemLinkCandidates = crmWorkspace
-    ? [...MORE_LINKS, ...NAV_LINKS.filter((link) => link.kind === "tab" && link.tab === "ppvs")]
-    : MORE_LINKS;
-  const moreLinks = systemLinkCandidates
-    .filter((link) => !crmWorkspace || link.kind === "tab" || link.href !== "/flows")
-    .filter((link) => !isAgency || showUnavailable || link.kind === "tab" || agencyDashboardPath(link.href, agencyName, canManage));
-
-  return (
-    <>
-      {isTether ? <style dangerouslySetInnerHTML={{ __html: TETHER_SIDEBAR_THEME }} /> : null}
-      <div className="flex h-20 shrink-0 items-center justify-between border-b border-white/14 px-5">
-        <Link href={isCreator ? "/creator" : crmWorkspace ? "/crm" : "/revenue"} className="min-w-0" aria-label={agencyName || "Twin Technologies"} onClick={onNavigate}>
-          <TwinWordmark inverse agencyName={agencyName === "Twin" ? undefined : agencyName} />
-        </Link>
-        {headerAction}
-      </div>
-
-      {showUnavailable || (usesBrandedCore && !crmWorkspace) ? (
-        <div className="shrink-0 px-4 pb-2 pt-4" data-creator-core={isCreator ? "hero" : undefined}>
-          <div aria-disabled={showUnavailable || undefined} className={`flex items-center gap-3 rounded-xl border border-sky-400/20 bg-sky-400/[0.05] px-3 py-3 ${showUnavailable ? "cursor-not-allowed" : ""}`}>
-            <IntelligenceCoreIcon size={64} />
-            <div className="min-w-0 flex-1">
-              <span className="block text-sm font-semibold leading-5 text-[#38bdf8]">AI Intelligence Core</span>
-              {showUnavailable ? <span className="mt-1.5 inline-block rounded border border-white/15 px-1.5 py-0.5 text-[9px] font-medium text-white/60">Not available</span> : null}
-            </div>
-          </div>
-        </div>
-      ) : isAgency ? (
-        <div className="px-7 py-4 text-xs font-medium uppercase tracking-[0.12em] text-white/55">{agencyName} · {readOnly ? "Read only" : "Operations"}</div>
-      ) : (
-        <div className="shrink-0 px-4 pb-3 pt-4">
-          <Link href="/clones/new" onClick={onNavigate} className="sidebar-create-button flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition">
-            <Icon d={PATHS.Plus} className="h-4 w-4" />
-            Create new creator
-          </Link>
-        </div>
-      )}
-
-      <nav aria-label={isCreator ? "Creator navigation" : "Main navigation"} className="flex flex-1 flex-col overflow-y-auto px-4 py-2">
-        <div className="space-y-1">
-          {crmWorkspace ? (
-            CRM_NAV_GROUPS.map((group, index) => (
-              <section key={group.label ?? "dashboard"} className={index === 0 ? "" : "mt-3 border-t border-white/14 pt-3"}>
-                {group.label ? <h2 className="mb-1 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-white/42">{group.label}</h2> : null}
-                <div className="space-y-1">{group.links.map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}</div>
-              </section>
-            ))
-          ) : (
-            <>
-              {primaryLinks.map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}
-              {!isCreator && !usesBrandedCore && (!readOnly || showUnavailable) ? (
-                <>
-                  <div className="mb-2 mt-3 border-t border-white/14 pt-3 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">CRM</div>
-                  {LEGACY_CRM_LINKS.map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}
-                </>
-              ) : null}
-            </>
-          )}
-
-          {isCreator ? null : showUnavailable ? (
-            <div className="mt-3 space-y-1 border-t border-white/14 pt-2">
-              {MORE_LINKS.filter((link) => link.kind !== "route" || !["/jarvis", "/agency-admin"].includes(link.href)).filter((link) => link.kind !== "tab" || link.tab !== "identity").map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}
-            </div>
-          ) : (
-            <div className="mt-3 border-t border-white/14 pt-2">
-              <button type="button" onClick={() => setMoreOpen((open) => !open)} aria-expanded={moreOpen} className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold text-white/62 transition hover:bg-white/10 hover:text-white">
-                <Icon d={PATHS.More} className="h-[18px] w-[18px] text-white/50" />
-                <span className="flex-1">System tools</span>
-                <svg className={`${moreOpen ? "rotate-180 " : ""}h-4 w-4 transition-transform`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>
-              </button>
-              {moreOpen ? <div className="mt-1 space-y-1">{moreLinks.map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}</div> : null}
-            </div>
-          )}
-        </div>
-        {showAssistant && !isAgency && !isCreator ? <div className="mt-auto pt-4 [@media(max-height:850px)]:pt-2"><TwinAssistant /></div> : null}
-      </nav>
-    </>
-  );
+  return <>
+    {isTether ? <style dangerouslySetInnerHTML={{__html:TETHER_SIDEBAR_THEME}} /> : null}
+    <div className="flex h-20 shrink-0 items-center justify-between border-b border-white/14 px-5"><Link href={isCreator ? "/creator" : "/revenue"} className="min-w-0" aria-label={agencyName || "Twin Technologies"} onClick={onNavigate}><TwinWordmark inverse agencyName={agencyName === "Twin" ? undefined : agencyName} /></Link>{headerAction}</div>
+    {showUnavailable || usesBrandedCore ? <div className="shrink-0 px-4 pb-2 pt-4" data-creator-core={isCreator ? "hero" : undefined}><div aria-disabled={showUnavailable || undefined} className={"flex " + (showUnavailable ? "cursor-not-allowed " : "") + "items-center gap-3 rounded-xl border border-sky-400/20 bg-sky-400/[0.05] px-3 py-3"}><IntelligenceCoreIcon size={64} /><div className="min-w-0 flex-1"><span className="block text-sm font-semibold leading-5 text-[#38bdf8]">AI Intelligence Core</span>{showUnavailable && <span className="mt-1.5 inline-block rounded border border-white/15 px-1.5 py-0.5 text-[9px] font-medium text-white/60">Not available</span>}</div></div></div> : isAgency ? <div className="px-7 py-4 text-sm text-white/75">{agencyName} · {readOnly ? "Read only" : "Creator management"}</div> : <div className="shrink-0 px-4 pb-3 pt-4"><Link href="/clones/new" onClick={onNavigate} className="sidebar-create-button flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition"><Icon d={PATHS.Plus} className="h-4 w-4" />Create new creator</Link></div>}
+    <nav aria-label={isCreator ? "Creator navigation" : "Main navigation"} className="flex flex-1 flex-col overflow-y-auto px-4 py-2"><div className="space-y-1">{primaryLinks.map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}{!isCreator && !usesBrandedCore && (!readOnly || showUnavailable) && <><div className="mb-2 mt-3 border-t border-white/14 pt-3 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">CRM</div>{CRM_LINKS.map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}</>}{isCreator ? null : showUnavailable ? <div className="mt-3 space-y-1 border-t border-white/14 pt-2">{MORE_LINKS.filter(link => link.kind !== "route" || !["/jarvis", "/agency-admin"].includes(link.href)).filter(link => link.kind !== "tab" || link.tab !== "identity").map(link => <div key={linkKey(link)}>{renderLink(link)}</div>)}</div> : usesBrandedCore ? <div className="mt-3 border-t border-white/14 pt-3"><h2 className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">More</h2><div className="space-y-1">{MORE_LINKS.filter(link => link.kind === "tab" || agencyDashboardPath(link.href, agencyName, canManage)).map(link => <div key={linkKey(link)}>{renderLink(link)}</div>)}</div></div> : <div className="mt-3 border-t border-white/14 pt-2"><button type="button" onClick={() => setMoreOpen((open) => !open)} aria-expanded={moreOpen} className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold text-white/62 transition hover:bg-white/10 hover:text-white"><Icon d={PATHS.More} className="h-[18px] w-[18px] text-white/50" /><span className="flex-1">More</span><svg className={(moreOpen ? "rotate-180 " : "") + "h-4 w-4 transition-transform"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg></button>{moreOpen ? <div className="mt-1 space-y-1">{MORE_LINKS.filter(link => !isAgency || showUnavailable || link.kind === "tab" || agencyDashboardPath(link.href, agencyName, canManage)).map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}</div> : null}</div>}</div>{showAssistant && !isAgency && !isCreator ? <div className="mt-auto pt-4 [@media(max-height:850px)]:pt-2"><TwinAssistant /></div> : null}</nav>
+  </>;
 }
 
 export default function Sidebar({ clones: _clones, activeCloneId }: { clones: CloneLite[]; activeCloneId: string | null }) {
