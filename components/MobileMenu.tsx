@@ -9,7 +9,7 @@ import { SidebarContent } from "@/components/Sidebar";
 // The phone menu is the desktop sidebar's real content in a touch-friendly
 // drawer. Sharing SidebarContent keeps the links, icons, active states and
 // clone-gated behavior identical at every breakpoint.
-export default function MobileMenu({ activeCloneId }: { activeCloneId: string | null }) {
+export default function MobileMenu({ activeCloneId, hybridCrmFoundationEnabled = false }: { activeCloneId: string | null; hybridCrmFoundationEnabled?: boolean }) {
   const pathname = usePathname();
   const [open, setOpen] = useState(false);
 
@@ -67,6 +67,7 @@ export default function MobileMenu({ activeCloneId }: { activeCloneId: string | 
           >
             <SidebarContent
               activeCloneId={activeCloneId}
+              hybridCrmFoundationEnabled={hybridCrmFoundationEnabled}
               onNavigate={() => setOpen(false)}
               showAssistant={false}
               headerAction={

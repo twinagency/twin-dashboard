@@ -50,7 +50,7 @@ async function main() {
   Object.assign(process.env, { NODE_ENV: "production", SUPABASE_URL: "https://creator-offline.supabase.co", SUPABASE_SERVICE_KEY: "offline-fixture-only", CREATOR_SESSION_SECRET: "offline-creator-secret-not-for-production", DASHBOARD_PASSWORD: "offline-admin-secret" });
   const oldFetch = globalThis.fetch;
   let accountExists = true, accountStatus = "active", accountSource = "twin", mismatched = false, onboarded = true, linked = true, databaseError = false;
-  let assignmentExists = true, agencyId: string = TETHER_PORTAL.id, agencyName: string = TETHER_PORTAL.name, agencyActive = true;
+  let assignmentExists = true, agencyId: string = TETHER_PORTAL.id, agencyName: string = TETHER_PORTAL.name, agencyActive = true, agencyCloneAssigned = true;
   const writes: Array<{ method: string; path: string; body: string }> = [];
   globalThis.fetch = async (input, init) => {
     const request = new Request(input, init);
@@ -78,6 +78,10 @@ async function main() {
       case "/rest/v1/creator_clone_links":
         assert.equal(url.searchParams.get("creator_account_id"), `eq.${account}`);
         body = linked ? { clone_id: own, clones: { id: own, name: "Fixture Creator" } } : null; break;
+      case "/rest/v1/agency_creators":
+        assert.equal(url.searchParams.get("agency_id"), `eq.${agencyId}`);
+        assert.equal(url.searchParams.get("clone_id"), `eq.${own}`);
+        body = agencyCloneAssigned ? { clone_id: own } : null; break;
       default: throw new Error(`Unexpected database resource ${url.pathname}`);
     }
     return new Response(JSON.stringify(body), { headers: { "content-type": "application/json" } });
@@ -109,6 +113,9 @@ async function main() {
     assert.equal(identity.id, `creator:${account}`);
     assert.equal(identity.agencyId, TETHER_PORTAL.id);
     assert.equal(identity.name, TETHER_PORTAL.name);
+    agencyCloneAssigned = false;
+    assert.equal(await creatorDashboardIdentity(token), null, "a linked clone outside the assigned agency must fail closed");
+    agencyCloneAssigned = true;
     assert.equal(agencyCanManage(identity), false);
     assert.notEqual(accessCacheKey(identity), accessCacheKey(null));
     assert.notEqual(accessCacheKey(identity), accessCacheKey({ ...identity, id: "another-creator" }));
@@ -127,7 +134,7 @@ async function main() {
       assert.equal(response.status, 200, item.href);
       assert.equal(response.headers.get(`x-middleware-request-${CREATOR_AUDIENCE_HEADER}`), "creator");
     }
-    for (const path of ["/creator/edit?tab=config", "/creator/edit?tab=identity&tab=money", "/creator/edit?sub=advanced", `/creator?clone=${other}`, `/api/dashboard?clone=${own}&clone=${other}`, "/users", "/settings", "/agency-admin", "/crm/inbox", `/clones/${other}?tab=identity`, "/api/models", "/api/compile"]) {
+    for (const path of ["/creator/edit?tab=config", "/creator/edit?tab=identity&tab=money", "/creator/edit?sub=advanced", `/creator?clone=${other}`, `/api/dashboard?clone=${own}&clone=${other}`, "/users", "/settings", "/agency-admin", "/crm/inbox", "/crm/connections", "/workspace/creators", `/clones/${other}?tab=identity`, "/api/models", "/api/compile"]) {
       assert.equal((await middleware(request(path))).status, 403, path);
     }
     for (const path of ["/creator", "/creator/edit", "/api/dashboard", "/clones/" + own]) assert.equal((await middleware(request(path, "POST", { origin, "next-action": "forged-action" }))).status, 403, path);

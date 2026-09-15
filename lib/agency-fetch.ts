@@ -3,6 +3,7 @@ import { assignedStoragePath } from "./agency-management";
 import { scopeAgencyWrite, scopeBundleItems } from "./agency-write";
 import { getDashboardAccess } from "./dashboard-access";
 import { AGENCY_ROLLUPS, scopeReadUrl, redactAgencyData } from "./agency-query";
+import { crmFoundationTable, scopeCrmFoundationReadUrl } from "./crm-agency-scope";
 import { serviceClient } from "./supabase-service";
 import { profileImagePathForClone } from "./colors";
 import type { AgencyIdentity } from "./agency-identity";
@@ -56,12 +57,16 @@ export async function dashboardFetch(input: RequestInfo | URL, init?: RequestIni
       return fetch(url,{...init,cache:"no-store",body:JSON.stringify({...args,p_clones:agency.cloneIds})});
     }
     if (url.pathname.startsWith("/rest/v1/")) {
+      const crmTable = crmFoundationTable(url);
       let scoped: URL;
       if (["GET","HEAD"].includes(method)) {
-        scoped = agencyCanManage(agency) && url.pathname === "/rest/v1/photo_bundle_items"
+        scoped = crmTable
+          ? await scopeCrmFoundationReadUrl(url,agency)
+          : agencyCanManage(agency) && url.pathname === "/rest/v1/photo_bundle_items"
           ? await scopeBundleItems(url,agency)
           : scopeReadUrl(url,agency).url;
       } else {
+        if (crmTable) return denied("CRM foundation is read-only");
         if (headers.get("prefer")?.includes("resolution=")) return denied("Agency upserts are not allowed");
         scoped=await scopeAgencyWrite(url,method,await jsonBody(),agency);
       }

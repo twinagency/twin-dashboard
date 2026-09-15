@@ -50,6 +50,9 @@ async function main() {
       case "/rest/v1/creator_clone_links":
         body = { clone_id: cloneId, clones: { id: cloneId, name: "Fixture Creator" } };
         break;
+      case "/rest/v1/agency_creators":
+        body = { clone_id: cloneId };
+        break;
       default:
         throw new Error(`Unexpected database resource ${url.pathname}`);
     }

@@ -13,6 +13,13 @@ export const AGENCY_LIVE_CRM_ROUTES: Record<string, string> = {
   "/crm/campaigns": "/flows",
   "/crm/platforms": "/business",
 };
+
+// The hybrid CRM foundation is read-only in Sprint 1. Keep these routes
+// exact so enabling its UI cannot broaden access to future CRM pages.
+export const AGENCY_HYBRID_CRM_READ_ROUTES = new Set([
+  "/workspace/creators",
+  "/crm/connections",
+]);
 export function agencyManagementRequestAllowed(path: string, method: string, serverAction: boolean): boolean {
   if (serverAction) {
     return method === "POST" && (["/", "/revenue", "/analytics", "/clones", "/users", "/media", "/sequences", "/info", "/flows", "/drip", "/business"].includes(path)

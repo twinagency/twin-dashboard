@@ -44,6 +44,8 @@ async function main(){
   const writes=()=>calls.filter(c=>!['GET','HEAD'].includes(c.method));
   try{
     const headers={cookie:"twin_agency_access=verified-token",origin,"next-action":"any-known-action-id"};
+    for(const path of ["/workspace/creators","/crm/connections"])assert.equal((await middleware(new NextRequest(origin+path,{headers:{cookie:headers.cookie}}))).status,200,path);
+    for(const path of ["/workspace/creators/export","/crm/connections/export"])assert.equal((await middleware(new NextRequest(origin+path,{headers:{cookie:headers.cookie}}))).status,403,path);
     for(const path of ["/users","/flows","/media",`/clones/${a}`])assert.equal((await middleware(new NextRequest(origin+path,{method:"POST",headers}))).status,200,path);
     for(const path of ["/settings","/agency-admin","/api-access","/tracker","/clones/new",`/clones/${other}`])assert.equal((await middleware(new NextRequest(origin+path,{method:"POST",headers}))).status,403,path);
     for(const path of ["/api/business-account","/api/caption","/api/compile"])assert.equal((await middleware(new NextRequest(origin+path,{method:"POST",headers:{cookie:headers.cookie,origin}}))).status,200,path);

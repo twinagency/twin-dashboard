@@ -1,5 +1,44 @@
 // Explicit projections: newly added database fields are not exposed to partners by default.
 export const AGENCY_COLUMNS: Record<string, readonly string[]> = {
+  "crm_channel_connection_capabilities": [
+    "connection_id",
+    "capability",
+    "state",
+    "source",
+    "detail",
+    "checked_at"
+  ],
+  "crm_channel_connections": [
+    "id",
+    "creator_id",
+    "provider",
+    "provider_account_id",
+    "handle",
+    "display_name",
+    "connection_status",
+    "sync_status",
+    "last_verified_at",
+    "last_synced_at",
+    "created_at",
+    "updated_at"
+  ],
+  "crm_creator_bindings": [
+    "creator_id",
+    "creator_account_id",
+    "clone_id",
+    "agency_id",
+    "mapping_status",
+    "conflict_reason",
+    "created_at",
+    "updated_at"
+  ],
+  "crm_creators": [
+    "id",
+    "display_name",
+    "status",
+    "created_at",
+    "updated_at"
+  ],
   "chat_history": [
     "id",
     "clone_id",

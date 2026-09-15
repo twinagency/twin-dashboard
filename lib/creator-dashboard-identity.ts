@@ -46,6 +46,7 @@ export async function creatorDashboardIdentity(token: string | null | undefined)
     if (account.data.source === "agency_invite" && !assignment.data?.agency_id) return null;
     let clone = link.data?.clones as unknown as { id: string; name: string } | null;
     if (link.data?.clone_id && (!clone || clone.id !== link.data.clone_id)) return null;
+    let cloneAgencyVerified = false;
     const briLiveDemo = isBriLiveDemoAccount(session.accountId);
     if (briLiveDemo) {
       // The preview is a separate creator account. It does not own, replace or
@@ -56,6 +57,15 @@ export async function creatorDashboardIdentity(token: string | null | undefined)
       const relatedClone = demoClone.data?.clones as unknown as { id: string; name: string } | null;
       if (demoClone.error || demoClone.data?.clone_id !== BRI_LIVE_DEMO_CLONE_ID || relatedClone?.id !== BRI_LIVE_DEMO_CLONE_ID) return null;
       clone = relatedClone;
+      cloneAgencyVerified = true;
+    }
+    if (assignment.data?.agency_id && clone && !cloneAgencyVerified) {
+      // An account link and an agency assignment are separate legacy records.
+      // Require the linked clone to belong to that same agency before combining
+      // them into one creator identity.
+      const agencyClone = await db.from("agency_creators").select("clone_id")
+        .eq("agency_id", assignment.data.agency_id).eq("clone_id", clone.id).maybeSingle();
+      if (agencyClone.error || agencyClone.data?.clone_id !== clone.id) return null;
     }
     const identity: CreatorDashboardIdentity = {
       id: `creator:${session.accountId}`,
