@@ -45,8 +45,8 @@ export default function CloneAppearanceEditor({
           />
           <div className="mt-2 flex items-center gap-4">
             <span
-              className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-2xl text-lg font-bold text-white shadow-sm"
-              style={{ backgroundColor: color }}
+              className="flex h-20 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl border border-line bg-white text-lg font-bold shadow-sm"
+              style={{ color }}
             >
               {preview ? (
                 <img src={preview} alt={`${cloneName} display`} className="h-full w-full object-cover" />
