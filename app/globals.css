@@ -250,6 +250,86 @@ body {
   grid-column: 1 / -1 !important;
 }
 
+/* Clone configuration is an internal operating console, not a branded
+   landing page. Keep its palette and typography deliberately restrained and
+   local to this workspace so public/creator-facing screens do not change. */
+.creator-control-plane {
+  --color-bg: #f6f5f2;
+  --color-panel: #fff;
+  --color-elev: #fbfaf8;
+  --color-ink: #171a1f;
+  --color-muted: #555d66;
+  --color-line: #d7d9dc;
+  --color-accent: #172b3d;
+  --color-accent-2: #172b3d;
+  --color-accent-deep: #0f1d29;
+  --color-accent-soft: #748291;
+  --color-accent-tint: #e9edf0;
+  background: var(--color-bg);
+  color: var(--color-ink);
+  font-family: var(--font-sans), Inter, ui-sans-serif, system-ui, sans-serif;
+  font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+  letter-spacing: -0.006em;
+}
+
+.creator-control-plane :is(h1, h2, h3, h4) {
+  font-family: var(--font-display), var(--font-sans), Inter, ui-sans-serif, system-ui, sans-serif;
+}
+
+/* Monospace micro-labels made ordinary operator copy look like a developer
+   template. Technical values remain distinguishable through weight and case. */
+.creator-control-plane .font-mono {
+  font-family: var(--font-sans), Inter, ui-sans-serif, system-ui, sans-serif;
+  letter-spacing: normal;
+}
+
+.creator-control-plane :is(input, select, textarea) {
+  border-radius: 0.25rem;
+}
+
+/* Identity uses a denser console layout inside the control plane only. These
+   selectors deliberately preserve the layouts used by onboarding and the
+   standalone creator identity editor, which share the same React fields. */
+.creator-control-plane .identity-console-scope .identity-social-row {
+  display: grid;
+  min-width: 0;
+  grid-template-columns: 7.5rem minmax(7rem, 1fr) 6.5rem auto;
+  gap: 0.375rem;
+}
+
+@media (max-width: 639px) {
+  .creator-control-plane .identity-console-scope .identity-social-row {
+    grid-template-columns: minmax(6.5rem, 0.8fr) minmax(0, 1.2fr) auto;
+  }
+
+  .creator-control-plane .identity-console-scope .identity-social-platform,
+  .creator-control-plane .identity-console-scope .identity-social-followers {
+    max-width: none;
+  }
+
+  .creator-control-plane .identity-console-scope .identity-social-followers {
+    grid-column: 1 / span 2;
+    grid-row: 2;
+  }
+
+  .creator-control-plane .identity-console-scope .identity-social-remove {
+    grid-column: 3;
+    grid-row: 1;
+  }
+}
+
+@media (min-width: 1280px) and (max-width: 1535px) {
+  .creator-control-plane .identity-console-scope .identity-who-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1024px) and (max-width: 1535px) {
+  .creator-control-plane .identity-console-scope .identity-physical-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 * {
   border-color: var(--color-line);
 }

@@ -3,21 +3,6 @@
 import { useState } from "react";
 import { useDashboardAccess } from "../DashboardAccessProvider";
 import { isMoxy } from "@/lib/agency-brand";
-import Link from "next/link";
-import {
-  Activity,
-  AudioLines,
-  Bot,
-  ChevronRight,
-  Clock3,
-  Image as ImageIcon,
-  Layers3,
-  Link2,
-  MessageSquareText,
-  Network,
-  SlidersHorizontal,
-  Video,
-} from "lucide-react";
 import type { Clone } from "@/lib/types";
 import type { OrModel } from "@/app/api/models/route";
 import ModelSelect from "../ModelSelect";
@@ -250,18 +235,9 @@ function LanguagePicker({ value, onChange }: { value: string[]; onChange: (v: st
   );
 }
 
-// ── Edit-mode configuration control plane ────────────────────────────────────
-// Create keeps the compact setup form below. An existing creator has materially
-// different operator needs: understand the effective runtime first, then move
-// through its modules without losing the existing field/form semantics.
-const CONFIG_MODULES = [
-  { id: "config-runtime", index: "01", label: "Runtime & connection", detail: "Ingress, state and orchestration", Icon: Network },
-  { id: "config-capabilities", index: "02", label: "Capabilities", detail: "Media, vision and voice", Icon: Layers3 },
-  { id: "config-calibration", index: "03", label: "Response calibration", detail: "Tone and commercial posture", Icon: SlidersHorizontal },
-  { id: "config-policy", index: "04", label: "Interaction policy", detail: "Language, realism and disclosure", Icon: Bot },
-  { id: "config-delivery", index: "05", label: "Delivery mechanics", detail: "Waits, length and imperfections", Icon: Clock3 },
-  { id: "config-models", index: "06", label: "Model routing", detail: "Task-specific model assignments", Icon: Activity },
-] as const;
+// ── Edit-mode configuration workspace ────────────────────────────────────────
+// Create keeps the compact setup form below. Existing creators get a denser,
+// text-first presentation; all form fields and submit semantics remain shared.
 
 function plainControlLabel(label: string) {
   return label.replace(/^[^A-Za-z0-9=]+/, "");
@@ -277,62 +253,39 @@ function controlOptions<T extends string>(
 function ConfigModule({
   editMode,
   id,
-  index,
   title,
-  description,
-  source,
   children,
 }: {
   editMode: boolean;
   id: string;
-  index: string;
   title: string;
-  description: string;
-  source?: string;
   children: React.ReactNode;
 }) {
   if (!editMode) return <>{children}</>;
 
   return (
-    <div id={id} className="scroll-mt-24 overflow-hidden rounded-xl border border-line bg-panel shadow-[0_10px_30px_rgb(6_23_47/0.045)]">
-      <div className="flex flex-wrap items-start justify-between gap-3 border-b border-line bg-elev/45 px-4 py-3.5 sm:px-5">
-        <div className="flex min-w-0 items-start gap-3">
-          <span className="mt-0.5 font-mono text-[10px] font-semibold tracking-[0.18em] text-accent-2">{index}</span>
-          <div className="min-w-0">
-            <h3 className="text-sm font-semibold tracking-[-0.01em] text-ink">{title}</h3>
-            <p className="mt-0.5 text-xs leading-relaxed text-muted">{description}</p>
-          </div>
-        </div>
-        {source && (
-          <span className="rounded-md border border-line bg-panel px-2 py-1 font-mono text-[9px] font-semibold uppercase tracking-[0.12em] text-muted">
-            {source}
-          </span>
-        )}
+    <section id={id} className="scroll-mt-24 overflow-hidden rounded-[4px] border border-line bg-panel">
+      <header className="border-b border-line px-4 py-3 sm:px-5">
+        <h3 className="text-[13px] font-semibold tracking-[-0.01em] text-ink">{title}</h3>
+      </header>
+      <div className="grid gap-3 p-4 sm:p-5 [&_button]:rounded-[3px] [&_input]:rounded-[3px] [&_select]:rounded-[3px] [&_textarea]:rounded-[3px] [&_.clone-segmented]:rounded-[3px] [&_.clone-segmented>button]:rounded-[2px]">
+        {children}
       </div>
-      <div className="grid gap-3 p-4 sm:p-5">{children}</div>
-    </div>
+    </section>
   );
 }
 
-function RuntimeStep({
+function RuntimeDatum({
   label,
   value,
-  detail,
-  Icon,
 }: {
   label: string;
   value: string;
-  detail: string;
-  Icon: React.ComponentType<{ className?: string }>;
 }) {
   return (
-    <div className="min-w-0 flex-1 rounded-lg border border-white/10 bg-white/[0.055] p-3">
-      <div className="flex items-center gap-2 text-white/60">
-        <Icon className="h-3.5 w-3.5" />
-        <span className="font-mono text-[9px] font-semibold uppercase tracking-[0.16em]">{label}</span>
-      </div>
-      <p className="mt-2 truncate text-sm font-semibold text-white" title={value}>{value}</p>
-      <p className="mt-1 min-h-8 text-[11px] leading-4 text-white/55">{detail}</p>
+    <div className="min-w-0 bg-panel px-4 py-3">
+      <dt className="text-[9px] font-semibold uppercase tracking-[0.14em] text-muted">{label}</dt>
+      <dd className="mt-1 truncate text-xs font-semibold text-ink" title={value}>{value}</dd>
     </div>
   );
 }
@@ -348,7 +301,6 @@ function ConfigRuntimeOverview({
   isAgency: boolean;
   readOnly: boolean;
 }) {
-  const followsFleet = clone?.uses_default_config ?? true;
   const outputNames = [
     "Text",
     cfg.photosEnabled ? "Photos" : null,
@@ -362,86 +314,18 @@ function ConfigRuntimeOverview({
     : "Task-specific model roles";
 
   return (
-    <section aria-labelledby="configuration-workspace-title" className="overflow-hidden rounded-xl border border-accent-deep/20 bg-panel shadow-[0_16px_42px_rgb(6_23_47/0.08)]">
-      <div
-        className="relative overflow-hidden bg-accent-deep px-4 py-5 text-white sm:px-5"
-        style={{
-          backgroundImage:
-            "linear-gradient(rgba(255,255,255,.035) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.035) 1px, transparent 1px)",
-          backgroundSize: "28px 28px",
-        }}
-      >
-        <div className="relative flex flex-wrap items-start justify-between gap-4">
-          <div className="max-w-2xl">
-            <div className="flex items-center gap-2 font-mono text-[10px] font-semibold uppercase tracking-[0.2em] text-white/55">
-              <Activity className="h-3.5 w-3.5" />
-              Creator operations / live runtime
-            </div>
-            <h2 id="configuration-workspace-title" className="mt-2 text-xl font-semibold tracking-[-0.025em] text-white sm:text-2xl">
-              Configuration workspace
-            </h2>
-            <p className="mt-1.5 max-w-xl text-sm leading-relaxed text-white/60">
-              Control the decision path, response behaviour, capabilities and delivery mechanics that operate this creator.
-            </p>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <span className={`inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-[11px] font-semibold ${
-              cfg.active ? "border-good/35 bg-good/20 text-white" : "border-white/15 bg-white/[0.06] text-white/70"
-            }`}>
-              <span className={`h-1.5 w-1.5 rounded-full ${cfg.active ? "bg-good" : "bg-white/40"}`} />
-              {cfg.active ? "Runtime active" : "Runtime paused"}
-            </span>
-            <span className="rounded-md border border-white/15 bg-white/[0.06] px-2.5 py-1.5 font-mono text-[10px] uppercase tracking-[0.12em] text-white/65">
-              {readOnly ? "Read-only access" : "Operator access"}
-            </span>
-          </div>
-        </div>
-
-        <div className="relative mt-5 grid gap-2 lg:grid-cols-[1fr_auto_1fr_auto_1fr_auto_1.15fr] lg:items-center">
-          <RuntimeStep
-            label="Ingress"
-            value={clone?.business_username ? `@${clone.business_username}` : "Telegram business"}
-            detail={clone?.business_username ? "Business identity observed" : "Awaiting an observed business identity"}
-            Icon={Link2}
-          />
-          <ChevronRight className="hidden h-4 w-4 text-white/25 lg:block" />
-          <RuntimeStep
-            label="Decision engine"
-            value={orchestration}
-            detail={cfg.aiMode === "classic" ? "Fixed flow selects the next action" : "AI selects the next action"}
-            Icon={Network}
-          />
-          <ChevronRight className="hidden h-4 w-4 text-white/25 lg:block" />
-          <RuntimeStep label="Execution" value={modelPath} detail={cfg.aiMode === "smart" && cfg.smartSplit ? "Writing and actions are separated" : "Configured roles execute the response"} Icon={Bot} />
-          <ChevronRight className="hidden h-4 w-4 text-white/25 lg:block" />
-          <RuntimeStep label="Delivery" value={outputNames} detail="Currently permitted output types" Icon={MessageSquareText} />
-        </div>
-      </div>
-
-      <div className="grid divide-y divide-line sm:grid-cols-3 sm:divide-x sm:divide-y-0">
-        <div className="px-4 py-3 sm:px-5">
-          <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.16em] text-muted">Configuration source</p>
-          <div className="mt-1.5 flex items-center gap-2 text-sm font-semibold text-ink">
-            {followsFleet ? <Link2 className="h-3.5 w-3.5 text-good" /> : <SlidersHorizontal className="h-3.5 w-3.5 text-accent-2" />}
-            {followsFleet ? "Fleet default" : "Creator override"}
-          </div>
-        </div>
-        <div className="px-4 py-3 sm:px-5">
-          <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.16em] text-muted">Creator timezone</p>
-          <p className="mt-1.5 truncate font-mono text-xs font-semibold text-ink">{cfg.timezone}</p>
-        </div>
-        <div className="flex items-center justify-between gap-3 px-4 py-3 sm:px-5">
-          <div>
-            <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.16em] text-muted">Management scope</p>
-            <p className="mt-1.5 text-sm font-semibold text-ink">{isAgency ? "Assigned creator" : "Internal operator"}</p>
-          </div>
-          {!isAgency && (
-            <Link href="/settings#fleet-defaults" className="text-xs font-semibold text-accent-2 transition hover:text-accent">
-              Fleet settings
-            </Link>
-          )}
-        </div>
-      </div>
+    <section aria-labelledby="runtime-summary-title" className="overflow-hidden rounded-[4px] border border-line bg-panel">
+      <header className="border-b border-line px-4 py-3 sm:px-5">
+        <h2 id="runtime-summary-title" className="text-[13px] font-semibold tracking-[-0.01em] text-ink">Runtime summary</h2>
+      </header>
+      <dl className="grid gap-px bg-line sm:grid-cols-2 xl:grid-cols-6">
+        <RuntimeDatum label="Account" value={clone?.business_username ? `@${clone.business_username}` : "Not connected"} />
+        <RuntimeDatum label="Status" value={cfg.active ? "Active" : "Paused"} />
+        <RuntimeDatum label="Engine" value={orchestration} />
+        <RuntimeDatum label="Execution" value={modelPath} />
+        <RuntimeDatum label="Outputs" value={outputNames} />
+        <RuntimeDatum label="Access" value={`${readOnly ? "Read only" : "Editable"} · ${isAgency ? "Agency" : cfg.timezone}`} />
+      </dl>
     </section>
   );
 }
@@ -450,26 +334,16 @@ function CapabilityState({
   label,
   state,
   detail,
-  Icon,
-  tone = "neutral",
 }: {
   label: string;
   state: string;
   detail: string;
-  Icon: React.ComponentType<{ className?: string }>;
-  tone?: "neutral" | "good" | "warn";
 }) {
   return (
-    <div className="rounded-lg border border-line bg-elev/35 p-3">
-      <div className="flex items-center justify-between gap-2">
-        <span className="flex min-w-0 items-center gap-2 text-xs font-semibold text-ink">
-          <Icon className="h-3.5 w-3.5 shrink-0 text-muted" />
-          {label}
-        </span>
-        <span className={`h-1.5 w-1.5 shrink-0 rounded-full ${tone === "good" ? "bg-good" : tone === "warn" ? "bg-warn" : "bg-muted/35"}`} />
-      </div>
-      <p className={`mt-2 text-[11px] font-semibold ${tone === "good" ? "text-good" : tone === "warn" ? "text-warn" : "text-muted"}`}>{state}</p>
-      <p className="mt-0.5 text-[10px] leading-4 text-muted">{detail}</p>
+    <div className="bg-panel px-3 py-3">
+      <p className="text-[9px] font-semibold uppercase tracking-[0.12em] text-muted">{label}</p>
+      <p className="mt-1 text-xs font-semibold text-ink">{state}</p>
+      <p className="mt-1 text-[10px] leading-4 text-muted">{detail}</p>
     </div>
   );
 }
@@ -477,84 +351,28 @@ function CapabilityState({
 function CapabilityMatrix({ cfg, clone }: { cfg: CloneConfigState; clone?: Partial<Clone> }) {
   const hasVoiceId = Boolean(clone?.voice_id?.trim());
   return (
-    <div aria-label="Capability dependencies" className="grid gap-2 sm:grid-cols-2 xl:grid-cols-4">
+    <div aria-label="Capability dependencies" className="grid gap-px overflow-hidden rounded-[3px] border border-line bg-line sm:grid-cols-2 xl:grid-cols-4">
       <CapabilityState
         label="Photos"
         state={cfg.photosEnabled ? "Delivery enabled" : "Delivery disabled"}
         detail={cfg.photoVision ? "Fan-photo understanding enabled" : "Incoming photos use caption only"}
-        Icon={ImageIcon}
-        tone={cfg.photosEnabled ? "good" : "neutral"}
       />
       <CapabilityState
         label="Video"
         state={cfg.videosEnabled ? "Delivery enabled" : "Delivery disabled"}
         detail={cfg.videoVision ? "Fan-video understanding enabled" : "Incoming videos use caption only"}
-        Icon={Video}
-        tone={cfg.videosEnabled ? "good" : "neutral"}
       />
       <CapabilityState
         label="Voice"
         state={!cfg.voice ? "Delivery disabled" : hasVoiceId ? "Voice ID present" : "Voice ID required"}
         detail={!cfg.voice ? "Voice stays outside the delivery path" : hasVoiceId ? "Voice delivery has its required identifier" : "Add the identifier in this module"}
-        Icon={AudioLines}
-        tone={!cfg.voice ? "neutral" : hasVoiceId ? "good" : "warn"}
       />
       <CapabilityState
         label="Sequences"
         state={cfg.videoSequencesEnabled ? "Creator permission enabled" : "Creator permission disabled"}
         detail={cfg.videoSequencesEnabled ? "Also requires the fleet flag and a published sequence" : "Sequence offers stay outside the runtime"}
-        Icon={Layers3}
-        tone={cfg.videoSequencesEnabled ? "warn" : "neutral"}
       />
     </div>
-  );
-}
-
-function ConfigSectionRail({
-  clone,
-  isAgency,
-  readOnly,
-}: {
-  clone?: Partial<Clone>;
-  isAgency: boolean;
-  readOnly: boolean;
-}) {
-  const followsFleet = clone?.uses_default_config ?? true;
-  return (
-    <aside className="hidden xl:block">
-      <div className="sticky top-20 overflow-hidden rounded-xl border border-line bg-panel shadow-[0_8px_24px_rgb(6_23_47/0.035)]">
-        <div className="border-b border-line px-3.5 py-3">
-          <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.18em] text-muted">Configuration map</p>
-        </div>
-        <nav aria-label="Configuration sections" className="p-1.5">
-          {CONFIG_MODULES.map(({ id, index, label, detail, Icon }) => (
-            <a key={id} href={`#${id}`} className="group flex items-start gap-2.5 rounded-lg px-2 py-2.5 transition hover:bg-elev">
-              <Icon className="mt-0.5 h-3.5 w-3.5 shrink-0 text-muted transition group-hover:text-accent-2" />
-              <span className="min-w-0">
-                <span className="flex items-center gap-1.5 text-xs font-semibold text-ink">
-                  <span className="font-mono text-[9px] text-muted">{index}</span>
-                  {label}
-                </span>
-                <span className="mt-0.5 block text-[10px] leading-4 text-muted">{detail}</span>
-              </span>
-            </a>
-          ))}
-        </nav>
-        <div className="border-t border-line bg-elev/40 p-3">
-          <p className="font-mono text-[9px] font-semibold uppercase tracking-[0.14em] text-muted">Effective source</p>
-          <p className="mt-1.5 flex items-center gap-1.5 text-xs font-semibold text-ink">
-            <span className={`h-1.5 w-1.5 rounded-full ${followsFleet ? "bg-good" : "bg-accent-2"}`} />
-            {followsFleet ? "Fleet inherited" : "Creator-specific"}
-          </p>
-          <p className="mt-1 text-[10px] leading-4 text-muted">{readOnly ? "Visible with read-only access." : "Editable with the page-level save action."}</p>
-          {!isAgency && (
-            <Link href="/settings#fleet-defaults" className="mt-2 inline-flex text-[10px] font-semibold text-accent-2 hover:text-accent">
-              Manage inheritance
-            </Link>
-          )}
-        </div>
-      </div>
-    </aside>
   );
 }
 
@@ -697,7 +515,7 @@ export default function ConfigSections({
         data-readonly-navigation
         className={
           mode === "edit"
-            ? "clone-editor-tabs sticky top-0 z-30 flex gap-0 overflow-x-auto rounded-xl border border-line bg-panel/95 px-2 shadow-[0_8px_26px_rgb(6_23_47/0.07)] backdrop-blur-xl"
+            ? "clone-editor-tabs sticky top-0 z-30 grid grid-cols-2 overflow-hidden rounded-[4px] border border-line bg-panel/95 sm:grid-cols-3 lg:[grid-template-columns:repeat(auto-fit,minmax(7.5rem,1fr))]"
             : "clone-editor-tabs sticky top-0 z-30 flex gap-1 overflow-x-auto rounded-2xl border border-white/55 bg-white/80 p-1.5 shadow-[0_10px_30px_rgb(16_24_40/0.08)] backdrop-blur-xl"
         }
       >
@@ -709,7 +527,7 @@ export default function ConfigSections({
             onClick={() => setTab(t.key)}
             className={
               (mode === "edit"
-                ? "min-w-[8rem] flex-none whitespace-nowrap border-b-2 px-4 py-3 text-center text-xs font-semibold uppercase tracking-[0.08em] transition sm:min-w-0 sm:flex-1 "
+                ? "min-w-0 whitespace-nowrap border-b-2 px-3 py-2.5 text-center text-xs font-semibold transition "
                 : "min-w-[8rem] flex-none whitespace-nowrap rounded-xl px-4 py-2.5 text-center text-sm font-semibold transition sm:min-w-0 sm:flex-1 ") +
               (tab === t.key
                 ? (mode === "edit" ? "border-accent-2 bg-accent-2/[0.04] text-ink" : "bg-panel text-ink shadow-sm")
@@ -747,16 +565,11 @@ export default function ConfigSections({
       {/* ── CONFIG ──────────────────────────────────────────────── */}
       <div className={show("config")}>
       {mode === "edit" && <ConfigRuntimeOverview cfg={cfg} clone={clone} isAgency={isAgency} readOnly={readOnly} />}
-      <div className={mode === "edit" ? "grid min-w-0 items-start gap-4 xl:grid-cols-[12.5rem_minmax(0,1fr)]" : "contents"}>
-      {mode === "edit" && <ConfigSectionRail clone={clone} isAgency={isAgency} readOnly={readOnly} />}
       <div className={mode === "edit" ? "grid min-w-0 gap-4" : "contents"}>
       <ConfigModule
         editMode={mode === "edit"}
         id="config-runtime"
-        index="01"
         title="Runtime & connection"
-        description="Telegram ingress, operating state, time context and the decision engine."
-        source="Creator runtime"
       >
       <Section
         icon={mode === "edit" ? undefined : "🔌"}
@@ -883,10 +696,7 @@ export default function ConfigSections({
       <ConfigModule
         editMode={mode === "edit"}
         id="config-capabilities"
-        index="02"
         title="Media & delivery capabilities"
-        description="Control which formats the runtime can understand, select and deliver."
-        source={(clone?.uses_default_config ?? true) ? "Fleet inherited" : "Creator override"}
       >
       {mode === "edit" && <CapabilityMatrix cfg={cfg} clone={clone} />}
       <Section
@@ -1032,10 +842,7 @@ export default function ConfigSections({
       <ConfigModule
         editMode={mode === "edit"}
         id="config-calibration"
-        index="03"
         title="Response calibration"
-        description="Calibrate independent response axes without changing hard limits or fixed prices."
-        source={(clone?.uses_default_config ?? true) ? "Fleet inherited" : "Creator override"}
       >
       <Section
         icon={mode === "edit" ? undefined : "🎚"}
@@ -1052,7 +859,7 @@ export default function ConfigSections({
             value={cfg.sexualLevel}
             onChange={(v) => set("sexualLevel", v)}
             options={controlOptions(SEG.sexual, mode === "edit")}
-            accent="pink"
+            accent={mode === "edit" ? "accent" : "pink"}
             hint="Does SHE start it: how boldly she flirts first. Off means she stays clean and redirects; Max means she leads the tension in almost every exchange. This is wording sent to the model, not a code lock, so treat the ends as strong steering rather than a guarantee. Hover a step to see exactly what she is told."
           />
           <Segmented
@@ -1061,7 +868,7 @@ export default function ConfigSections({
             value={cfg.nsfwLevel}
             onChange={(v) => set("nsfwLevel", v)}
             options={controlOptions(SEG.nsfw, mode === "edit")}
-            accent="red"
+            accent={mode === "edit" ? "accent" : "red"}
             hint="How graphic once things heat up. Off deflects every explicit request; Max is fully filthy, blunt language, no fade to black. Wording sent to the model, not a code lock, so it steers her hard but cannot guarantee. The built-in hard limits still apply at every step."
           />
           <Segmented
@@ -1070,7 +877,7 @@ export default function ConfigSections({
             value={cfg.pushLevel}
             onChange={(v) => set("pushLevel", v)}
             options={controlOptions(SEG.push, mode === "edit")}
-            accent="green"
+            accent={mode === "edit" ? "accent" : "green"}
             hint="How eagerly she upsells. None means she NEVER initiates a sell, not a hint or a tease, but she still sells fully and enthusiastically the moment HE asks, so it costs you nothing from fans who want to buy. Max hunts for an opening every exchange. None is an explicit prohibition rather than a vague steer, which a model follows far more reliably, but every step here is prompt wording, not a code lock. Prices never move."
           />
         </div>
@@ -1110,7 +917,7 @@ export default function ConfigSections({
             value={cfg.warmthLevel}
             onChange={(v) => set("warmthLevel", v)}
             options={controlOptions(SEG.warmth, mode === "edit")}
-            accent="purple"
+            accent={mode === "edit" ? "accent" : "purple"}
             hint="How much affection and comfort she gives. Separate from flirtiness on purpose: this is care, not heat. High makes her acknowledge a hard thing before moving on and stops her going cold when he is negative or short with her. Read a transcript before raising this, her baseline warmth is already decent. Wording sent to the model, not a code lock."
           />
           <Segmented
@@ -1119,7 +926,7 @@ export default function ConfigSections({
             value={cfg.playfulnessLevel}
             onChange={(v) => set("playfulnessLevel", v)}
             options={controlOptions(SEG.playfulness, mode === "edit")}
-            accent="amber"
+            accent={mode === "edit" ? "accent" : "amber"}
             hint="How much she teases and jokes. Owns humour only, never affection or curiosity, so it will not make her ask more questions. Every step above Off still requires her to drop the teasing instantly if he is genuinely upset. Wording sent to the model, not a code lock."
           />
           <Segmented
@@ -1128,7 +935,7 @@ export default function ConfigSections({
             value={cfg.attentivenessLevel}
             onChange={(v) => set("attentivenessLevel", v)}
             options={controlOptions(SEG.attentiveness, mode === "edit")}
-            accent="green"
+            accent={mode === "edit" ? "accent" : "green"}
             hint="How much she USES what he already told her: callbacks, continuity, not re-asking answered questions. Different from Curiosity, which asks about things he has not mentioned yet. This one depends on her fan dossier, which does not populate until he has sent about 3 messages, so High and Max both carry an explicit instruction never to invent a detail she does not actually have. Wording sent to the model, not a code lock."
           />
         </div>
@@ -1147,7 +954,7 @@ export default function ConfigSections({
             value={cfg.tipPushLevel}
             onChange={(v) => set("tipPushLevel", v)}
             options={controlOptions(SEG.tipPush, mode === "edit")}
-            accent="amber"
+            accent={mode === "edit" ? "accent" : "amber"}
             hint="How hard she asks to be TIPPED and spoiled, dialled separately from photos, videos and bundles. Leave on '= Push' and tips follow the Content pushing dial exactly, which adds nothing to her prompt. Move it and only tips change: a soft-sell creator that still loves being spoiled, or a heavy content seller who never begs for Stars. Amounts always come from the fixed spoil menu, she never names a number."
           />
         </div>
@@ -1164,10 +971,7 @@ export default function ConfigSections({
       <ConfigModule
         editMode={mode === "edit"}
         id="config-policy"
-        index="04"
         title="Interaction policy"
-        description="Set first-message behaviour, language enforcement, realism signals and disclosure posture."
-        source={(clone?.uses_default_config ?? true) ? "Fleet inherited" : "Creator override"}
       >
       <Section
         icon={mode === "edit" ? undefined : "🎛"}
@@ -1268,10 +1072,7 @@ export default function ConfigSections({
         <ConfigModule
           editMode={mode === "edit"}
           id="config-delivery"
-          index="05"
           title="Delivery mechanics"
-          description="Tune batching, response latency, message length and humanising text patterns."
-          source={(clone?.uses_default_config ?? true) ? "Fleet inherited" : "Creator override"}
         >
         <Collapse
           emoji={mode === "edit" ? "" : "⏱"}
@@ -1363,10 +1164,7 @@ export default function ConfigSections({
         <ConfigModule
           editMode={mode === "edit"}
           id="config-models"
-          index="06"
           title="Model routing"
-          description="Assign specialised models to writing, routing, media matching, vision and voice enhancement."
-          source={(clone?.uses_default_config ?? true) ? "Fleet inherited" : "Creator override"}
         >
         {!privateSettings && <Collapse
           emoji={mode === "edit" ? "" : "⚙️"}
@@ -1415,7 +1213,6 @@ export default function ConfigSections({
         </ConfigModule>
       </div>
       </div>
-      </div>
 
       {/* ── ADVANCED - power-user settings, nobody touches these configuring
           a fresh clone. Everything here used to live in Config or Monetization;
@@ -1424,7 +1221,7 @@ export default function ConfigSections({
           doing. All controlled state (cfg.smartSplit, cfg.stability, ...) is
           shared across tabs regardless of which one is visible, so nothing
           here needs its own hidden-input duplication. */}
-      <div className={show("advanced")}>
+      <div className={`${show("advanced")} ${mode === "edit" ? "[&>section]:rounded-[4px] [&>section]:border-l [&>section]:shadow-none [&>div]:rounded-[4px] [&>div]:border-l [&_button]:rounded-[3px] [&_input]:rounded-[3px] [&_select]:rounded-[3px] [&_textarea]:rounded-[3px] [&_.clone-segmented]:rounded-[3px] [&_.clone-segmented>button]:rounded-[2px]" : ""}`}>
         {/* One caution for the whole tab, not one per card. Everything below
             either changes what a fan is charged (category pricing, the four
             discount caps) or relaxes a limit that exists to slow her down (the
@@ -1445,8 +1242,8 @@ export default function ConfigSections({
             It sits directly under the warning because "off" means she ghosts
             the fan, which is the most consequential switch on this tab. */}
         <Section
-          icon="🔇"
-          accent="amber"
+          icon={mode === "edit" ? undefined : "🔇"}
+          accent={mode === "edit" ? "neutral" : "amber"}
           title="When the model gives up"
           hint="After three failed tries she either sends one short recovery line or says nothing at all."
           tip="This fires when the model fails OR refuses three times in a row, not only during an API outage. To see which is happening for this creator, open Logs and filter OpenRouter for 'all 3 tries failed'."
@@ -1457,8 +1254,8 @@ export default function ConfigSections({
             name="silence_fallback_mode"
             value={cfg.silenceFallbackMode}
             onChange={(v) => set("silenceFallbackMode", v)}
-            options={SEG.silenceFallback}
-            accent="amber"
+            options={controlOptions(SEG.silenceFallback, mode === "edit")}
+            accent={mode === "edit" ? "accent" : "amber"}
             warning={
               silenceGhostConflict && (
                 <Warning text={silenceGhostConflict.text} detail={silenceGhostConflict.detail} />
@@ -1478,8 +1275,8 @@ export default function ConfigSections({
             NOT "today's unchanged behaviour" here, "off" is: the guard shipped
             armed on every clone because the pre-105 behaviour was the bug. */}
         <Section
-          icon="🔁"
-          accent="purple"
+          icon={mode === "edit" ? undefined : "🔁"}
+          accent={mode === "edit" ? "neutral" : "purple"}
           title="Repeating herself"
           hint="How hard she is stopped from reusing the same openers, sign-offs and lines with the same fan."
           tip="This is enforced in code on the way out, not by a prompt rule. The tics it exists to catch were invented by the model out of its own previous replies, so asking her nicely in the prompt does not reach them."
@@ -1490,8 +1287,8 @@ export default function ConfigSections({
             name="variety_guard"
             value={cfg.varietyGuard}
             onChange={(v) => set("varietyGuard", v)}
-            options={SEG.varietyGuard}
-            accent="purple"
+            options={controlOptions(SEG.varietyGuard, mode === "edit")}
+            accent={mode === "edit" ? "accent" : "purple"}
             hint="Leave this on Normal, the default and the fix. It watches her recent messages to each fan and blocks the same opening phrase, the same sign-off, his name every single turn, a near-identical message resent to him, and a stock line going out to two different men close together. Strict catches a phrase on its second use instead of its third and looks back further. Off is the old behaviour that had one creator open 14 replies in a row with the same two words. Hover a step to see exactly what changes."
           />
         </Section>
@@ -1502,8 +1299,8 @@ export default function ConfigSections({
             guardrails and the realism/router keywords below. Approved
             2026-07-31 off coord/ADVANCED-DIAL-CANDIDATES.txt (all 8 items). */}
         <Section
-          icon="⏳"
-          accent="cyan"
+          icon={mode === "edit" ? undefined : "⏳"}
+          accent={mode === "edit" ? "neutral" : "cyan"}
           title="Pacing & retries"
           hint="Bubble-send timing, the silence-recovery cooldown, and how many tries the model gets before giving up."
           className="xl:col-span-2"
@@ -1575,8 +1372,8 @@ export default function ConfigSections({
             so this card is just the visible control. */}
         {cfg.aiMode === "smart" && (
           <Section
-            icon="🧠"
-            accent="purple"
+            icon={mode === "edit" ? undefined : "🧠"}
+            accent={mode === "edit" ? "neutral" : "purple"}
             title="Smart mode: model split"
             hint="Whether one model both writes and fires actions, or two models split the job."
           >
@@ -1607,7 +1404,7 @@ export default function ConfigSections({
           </Section>
         )}
 
-        <Collapse emoji="🎛" label="Voice tuning" accent="purple" hint="ElevenLabs sound controls.">
+        <Collapse emoji={mode === "edit" ? "" : "🎛"} label="Voice tuning" accent={mode === "edit" ? "neutral" : "purple"} hint="ElevenLabs sound controls.">
           <label className="block">
             <FieldLabel label="Model" hint="Which ElevenLabs TTS model generates her voice notes." />
             <select name="eleven_model" defaultValue={clone?.eleven_model ?? "eleven_multilingual_v2"} className={selectCls}>
@@ -1648,9 +1445,9 @@ export default function ConfigSections({
         </Collapse>
 
         <Collapse
-          emoji="🧠"
+          emoji={mode === "edit" ? "" : "🧠"}
           label="Memory"
-          accent="cyan"
+          accent={mode === "edit" ? "neutral" : "cyan"}
           hint="How many past messages she recalls each reply. Higher costs more tokens per reply."
         >
           <Slider label="Memory window" name="memory_window" value={cfg.memoryWindow} onChange={(v) => set("memoryWindow", v)} min={1} max={100} step={1} format={(v) => `${v} msgs`} />
@@ -1679,8 +1476,8 @@ export default function ConfigSections({
             unlike the Discounts card's internal dials. Approved 2026-07-31 off
             coord/ADVANCED-DIAL-CANDIDATES.txt. */}
         <Section
-          icon="🛡"
-          accent="red"
+          icon={mode === "edit" ? undefined : "🛡"}
+          accent={mode === "edit" ? "neutral" : "red"}
           title="Money guardrails"
           hint="Hard ceilings that clamp what a fan can ever be charged, regardless of the dials elsewhere on this tab."
         >
@@ -1713,9 +1510,9 @@ export default function ConfigSections({
 
         {/* ── Discounts (moved from Monetization) ───────────────────── */}
         <Collapse
-          emoji="💸"
+          emoji={mode === "edit" ? "" : "💸"}
           label="Discounts"
-          accent="green"
+          accent={mode === "edit" ? "neutral" : "green"}
           filled={cfg.discountsEnabled}
           hint="She picks when and how hard, % capped here. She only decides WHEN and how hard (light/medium/max); the price is always computed in code. 0 = never discount that type. Caps already default to 15/20/25/10, so the switch that actually gates this is Discounts enabled above, which is off by default. She can ONLY reach for a discount at all once one of the two eligibility gates below is met: a locked offer sitting unpaid past the pending window, OR a quiet gap since his last message. A fan chatting enthusiastically never qualifies until one of those trips."
         >
@@ -1742,7 +1539,7 @@ export default function ConfigSections({
               />
 
               <SubHead
-                emoji="🎚"
+                emoji={mode === "edit" ? "" : "🎚"}
                 label="How hard each level bites"
                 tip="She only ever picks a LEVEL (light, medium or max), never a number. This is what each of those levels is worth, as a share of the cap above. Defaults 34 / 67 / 100 are exactly what every creator ran on before these became editable."
               />
@@ -1753,7 +1550,7 @@ export default function ConfigSections({
               </div>
 
               <SubHead
-                emoji="🐋"
+                emoji={mode === "edit" ? "" : "🐋"}
                 label="How much a fan reaches, by what he has spent"
                 tip="The whale ladder. A fan who has spent more gets closer to the full cap; a brand-new fan gets a smaller slice of it. 0 means that tier never gets a discount at all. Defaults 50 / 60 / 75 / 90 / 100 match the old hardcoded ladder."
               />
@@ -1827,9 +1624,9 @@ export default function ConfigSections({
 
         {/* ── Open-offer redirects (restored 2026-07-29, D6) ──────────── */}
         <Collapse
-          emoji="🎯"
+          emoji={mode === "edit" ? "" : "🎯"}
           label="Offer follow-up"
-          accent="amber"
+          accent={mode === "edit" ? "neutral" : "amber"}
           hint="How many times she'll gently redirect a fan back to a locked, unpaid offer before she backs off and stops mentioning it. Bot-enforced setting."
         >
           <Slider
@@ -1849,9 +1646,9 @@ export default function ConfigSections({
             column stays offer_decline_cap; only the words an operator reads
             changed, because nobody could tell what a "brake" did from the name. */}
         <Collapse
-          emoji="🧊"
+          emoji={mode === "edit" ? "" : "🧊"}
           label="Stop pitching after refusals"
-          accent="amber"
+          accent={mode === "edit" ? "neutral" : "amber"}
           hint="How many times a fan has to plainly refuse to pay (e.g. 'i'm not paying', 'too expensive', 'send it free') before she stops OFFERING him paid photos, videos, bundles, tips and VIP. She keeps chatting warmly either way, and if he asks to buy himself after this trips, she still delivers. Any real purchase resets his count to 0. Bot-enforced setting."
         >
           <Slider
@@ -1899,13 +1696,13 @@ export default function ConfigSections({
             and reacts mechanically", not money and not pacing. Approved
             2026-07-31 off coord/ADVANCED-DIAL-CANDIDATES.txt. */}
         <Section
-          icon="🎭"
-          accent="purple"
+          icon={mode === "edit" ? undefined : "🎭"}
+          accent={mode === "edit" ? "neutral" : "purple"}
           title="Realism & routing"
           hint="Reactions/message effects on or off, and the keyword lists the router matches on for photo/voice/tease requests."
         >
           <ToggleCard
-            emoji="✨"
+            emoji={mode === "edit" ? "" : "✨"}
             label={cfg.realismEffectsEnabled ? "Reactions & message effects on" : "Reactions & message effects off"}
             title="One switch for BOTH emoji reactions and Telegram message effects (fire/heart) together, not a per-emoji picker: Telegram only accepts a fixed set of reaction emoji, so this is deliberately a single on/off."
             name="realism_effects_enabled"
@@ -1971,8 +1768,8 @@ export default function ConfigSections({
             distinct from the pacing/retry mechanics above and the money
             ceilings in Money guardrails. */}
         <Section
-          icon="🎯"
-          accent="blue"
+          icon={mode === "edit" ? undefined : "🎯"}
+          accent={mode === "edit" ? "neutral" : "blue"}
           title="Timing & thresholds"
           hint="Priority-fan reply speed, the gap-awareness trigger, spend-tier cutoffs, and how far back the spoil-context window looks."
         >
@@ -2065,8 +1862,8 @@ export default function ConfigSections({
             while the fan is still inside the onboarding step engine, same as
             the gate toggle above them. */}
         <Section
-          icon="🎓"
-          accent="green"
+          icon={mode === "edit" ? undefined : "🎓"}
+          accent={mode === "edit" ? "neutral" : "green"}
           title="Onboarding tuning"
           hint="How strictly she stays on-script during onboarding, and the message/attempt caps the step engine runs on."
         >
@@ -2079,7 +1876,7 @@ export default function ConfigSections({
               against. photos_enabled being off is harmless redundancy, not
               a surprise, so that case deliberately does not warn either. */}
           <ToggleCard
-            emoji="📜"
+            emoji={mode === "edit" ? "" : "📜"}
             label={cfg.strictOnboardingSteps ? "Strict onboarding steps on" : "Strict onboarding steps off"}
             title="When on, blocks BOTH self-initiated and fan-requested photo/video/bundle/tip/vip actions while the fan's current onboarding step is a text/voice step, keeping her on-script until onboarding reaches a photo-appropriate step. Off (default) is today's unchanged behavior: a fan who asks for media himself always gets through."
             name="strict_onboarding_steps"
@@ -2147,7 +1944,7 @@ export default function ConfigSections({
           tab instead, inside the same <form>. Create mode keeps them here. */}
       {showMoney && (
         <div className={show("money")}>
-          <MonetizationSections cfg={cfg} set={set} clone={clone} photos={photos} videos={videos} bundles={bundles} />
+          <MonetizationSections cfg={cfg} set={set} clone={clone} photos={photos} videos={videos} bundles={bundles} editMode={mode === "edit"} />
           {/* The monetization-sequence cards (tease/locked bundle & re-warm,
               proactive PPV, discount trigger gating, paywall warmup & unlock
               bonus, pre-lock tease, post-lock re-engagement) were removed on
@@ -2173,6 +1970,7 @@ export function MonetizationSections({
   photos = [],
   videos = [],
   bundles = [],
+  editMode = false,
 }: {
   cfg: CloneConfigState;
   set: SetConfig;
@@ -2183,13 +1981,14 @@ export function MonetizationSections({
   photos?: MediaRow[];
   videos?: MediaRow[];
   bundles?: BundleRow[];
+  editMode?: boolean;
 }) {
   return (
-    <>
+    <div className={editMode ? "contents [&>section]:rounded-[4px] [&>section]:border-l [&>section]:shadow-none [&>div]:rounded-[4px] [&>div]:border-l [&_button]:rounded-[3px] [&_input]:rounded-[3px] [&_select]:rounded-[3px] [&_textarea]:rounded-[3px] [&_.clone-segmented]:rounded-[3px] [&_.clone-segmented>button]:rounded-[2px]" : "contents"}>
       {/* ── 💬 Credits & paywall ─────────────────────────────────── */}
       <Section
-        icon="💬"
-        accent="green"
+        icon={editMode ? undefined : "💬"}
+        accent={editMode ? "neutral" : "green"}
         title="Credits & paywall"
         className="xl:col-span-3"
         hint="Telegram Stars. Credits = messages."
@@ -2231,14 +2030,14 @@ export function MonetizationSections({
             name="price_guard_mode"
             value={cfg.priceGuardMode}
             onChange={(v) => set("priceGuardMode", v)}
-            options={SEG.priceGuard}
+            options={controlOptions(SEG.priceGuard, editMode)}
             accent="accent"
             hint="Every price on a Pay button is computed in code and is always correct. This is about the prices she TYPES in chat. On 2026-07-31 she was measured telling a fan photos 'start at 1000 stars' when they are 40 to 90, and quoting a video price for a creator with no videos. Telling her not to, in her prompt, did not work. This is the code check that does. Leave it on Block. Hover a step to see exactly what each one does."
           />
         </div>
         <div className="border-t border-line pt-2">
           <SubHead
-            emoji="🚧"
+            emoji={editMode ? "" : "🚧"}
             label="Out of messages"
             tip="What a fan sees when he runs out of message credits. The buy-more button is attached automatically. By design, only his FIRST hit of an episode gets the Smart personal line below; his 2nd hit gets this static Default message; every hit after that is silently ignored (deleted, no reply) until he tops up. Resets on any top-up."
           />
@@ -2308,7 +2107,7 @@ export function MonetizationSections({
         {/* ── Warmup before the wall (pre-lock prime, migration 069) ──────── */}
         <div className="border-t border-line pt-2">
           <SubHead
-            emoji="🔥"
+            emoji={editMode ? "" : "🔥"}
             label="Warmup before the wall"
             tip="A gentle heads-up she works in a few messages BEFORE he runs out, so the paywall never lands cold."
           />
@@ -2367,7 +2166,7 @@ export function MonetizationSections({
         {/* ── Pick up after they pay (post-lock resume, migration 069) ────── */}
         <div className="border-t border-line pt-2">
           <SubHead
-            emoji="💝"
+            emoji={editMode ? "" : "💝"}
             label="Pick up after they pay"
             tip="The line (and optional promised image) she sends right after he buys more messages, so paying feels rewarded."
           />
@@ -2440,9 +2239,9 @@ export function MonetizationSections({
 
       {/* ── 🎁 Tips (own box) ────────────────────────────────────── */}
       <Collapse
-        emoji="🎁"
+        emoji={editMode ? "" : "🎁"}
         label="Tips"
-        accent="amber"
+        accent={editMode ? "neutral" : "amber"}
         filled={cfg.tips}
         hint="She can ask to be spoiled with Stars. Always recorded as tip revenue. It can also give him message credits back, at the rate you set below, which is off until you set it. The spoil menu is what he sees when he wants to tip but names no amount."
       >
@@ -2483,7 +2282,7 @@ export function MonetizationSections({
         />
         <div className="block">
           <FieldLabel
-            label="🎁 May ask again right after a tip"
+            label={editMode ? "May ask again right after a tip" : "🎁 May ask again right after a tip"}
             hint="Leave this OFF, which is the default and the recommendation. Off, her thank-you after a tip is warm and grateful and stops there. On, that same message may add that she would love another one, seconds after he has just paid you. Tips only, it never touches her reaction to credits, media or subscriptions. Prices and amounts are unaffected either way."
           />
           <Toggle
@@ -2503,14 +2302,14 @@ export function MonetizationSections({
           out to a full row on its own; now the only thing here, still fine
           as a single card. */}
       <Collapse
-        emoji="💌"
+        emoji={editMode ? "" : "💌"}
         label="Extras"
-        accent="cyan"
+        accent={editMode ? "neutral" : "cyan"}
         filled={cfg.thankYou}
         hint="Automatic follow-ups after money changes hands."
       >
         <ToggleCard
-          emoji="💌"
+          emoji={editMode ? "" : "💌"}
           label="Auto thank-you"
           title="She sends a thank-you after any purchase or gift"
           name="thank_you_enabled"
@@ -2519,7 +2318,7 @@ export function MonetizationSections({
         />
       </Collapse>
 
-    </>
+    </div>
   );
 }
 

@@ -337,23 +337,13 @@ const promptPreview = {
 function PreviewApp() {
   return <DashboardAccessProvider>
     <div data-control-plane-preview className="min-h-screen bg-bg text-ink">
-      <header className="sticky top-0 z-50 border-b border-line bg-panel/95 px-4 py-3 shadow-sm backdrop-blur sm:px-8">
-        <div className="mx-auto flex max-w-[1500px] flex-wrap items-center justify-between gap-3">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2">
-              <span className="rounded-full bg-warn/15 px-2.5 py-1 text-[11px] font-bold uppercase tracking-[0.14em] text-warn">Local fixture</span>
-              <span className="text-xs font-medium text-muted">Read-only services, in-memory interactions</span>
-            </div>
-            <h1 className="creator-name mt-1 truncate text-2xl font-semibold tracking-tight">Ava Vale</h1>
-            <p className="text-sm text-muted">Operator clone control plane · Configuration review</p>
-          </div>
-          <div className="rounded-xl border border-good/25 bg-good/10 px-3 py-2 text-right">
-            <div className="text-xs font-semibold text-good">No live services</div>
-            <div className="text-[11px] text-muted">Save is a local no-op</div>
-          </div>
+      <header className="border-b border-line bg-panel px-4 py-2 sm:px-8">
+        <div className="mx-auto flex max-w-[1600px] items-center justify-between gap-3 text-[11px] font-medium text-muted">
+          <span className="font-semibold text-ink">Local preview</span>
+          <span>Live services disabled · changes are not saved</span>
         </div>
       </header>
-      <main className="mx-auto w-full max-w-[1500px] px-3 py-5 sm:px-8">
+      <main className="mx-auto w-full max-w-[1600px] px-3 py-4 sm:px-8">
         <CloneForm clone={clone} promptPreview={promptPreview} photos={[]} videos={[]} bundles={[]} appearanceColor="#e95296" />
       </main>
     </div>
@@ -414,7 +404,7 @@ const html = `<!doctype html>
     <meta http-equiv="Content-Security-Policy" content="default-src 'self'; connect-src 'self'; img-src 'self' data: blob:; media-src 'self' data: blob:; script-src 'self'; style-src 'self' 'unsafe-inline'; font-src 'self' data:">
     <title>Twin local clone control plane</title>
     <link rel="stylesheet" href="/styles.css">
-    <style>html{--font-sans:Arial,sans-serif;--font-display:Arial,sans-serif;--font-heading:Arial,sans-serif;--font-mono:ui-monospace,monospace}body{margin:0}</style>
+    <style>html{--font-sans:"Segoe UI Variable Text","Segoe UI",Inter,Arial,sans-serif;--font-display:"Segoe UI Variable Display","Segoe UI",Inter,Arial,sans-serif;--font-heading:var(--font-display);--font-mono:"Cascadia Mono","SFMono-Regular",Consolas,monospace}body{margin:0}</style>
   </head>
   <body><div id="root"></div><script src="/bundle.js"></script></body>
 </html>`;
@@ -504,37 +494,49 @@ async function runCheck() {
       await page.locator("[data-control-plane-preview]").waitFor();
       const visibleText = await page.locator("body").innerText();
       for (const expected of [
-        "Local fixture",
+        "Local preview",
         "Ava Vale",
-        "Operator clone control plane",
-        "Creator control plane",
-        "Domain 02",
+        "Control Panel",
         "Configuration",
-        "Configuration workspace",
+        "Runtime summary",
         "Runtime & connection",
         "Media & delivery capabilities",
         "Response calibration",
         "Interaction policy",
-        "No live services",
+        "Live services disabled",
       ]) assert.ok(visibleText.toLowerCase().includes(expected.toLowerCase()), `${viewport.width}px missing ${expected}`);
 
+      for (const removed of [
+        "Creator control plane",
+        "Domain 01",
+        "Control domains",
+        "One creator, one effective configuration",
+        "Inspect system",
+        "Fleet settings",
+      ]) assert.equal(visibleText.toLowerCase().includes(removed.toLowerCase()), false, `${viewport.width}px still shows removed copy: ${removed}`);
+
       if (viewport.width >= 1536) {
-        await page.getByText("Context inspector", { exact: true }).waitFor();
+        await page.getByText("Current state", { exact: true }).waitFor();
         await page.getByText("Execution context", { exact: true }).waitFor();
       } else {
         assert.equal(
-          await page.getByText("Context inspector", { exact: true }).isVisible(),
+          await page.getByText("Current state", { exact: true }).isVisible(),
           false,
           `${viewport.width}px should reserve width for the configuration workspace`,
         );
       }
-      const controlNav = page.getByRole("navigation", { name: "Control plane domains" });
-      const configTab = controlNav.getByRole("button", { name: /Configuration/, exact: false });
-      assert.equal(await configTab.getAttribute("aria-current"), "page", "Configuration domain should be active initially");
-      await controlNav.getByRole("button", { name: /Identity/, exact: false }).click();
+      const controlNav = page.getByRole("navigation", { name: "Control Panel sections" });
+      const configTab = controlNav.getByRole("button", { name: "Configuration", exact: true });
+      assert.equal(await configTab.getAttribute("aria-current"), "page", "Configuration should be active initially");
+      assert.equal(
+        await controlNav.evaluate((element) => element.scrollWidth > element.clientWidth + 1),
+        false,
+        `${viewport.width}px navigation should not scroll horizontally`,
+      );
+      await controlNav.getByRole("button", { name: "Identity", exact: true }).click();
       await page.getByRole("heading", { name: "Identity", exact: true }).waitFor();
       await configTab.click();
-      await page.getByText("Configuration workspace", { exact: true }).waitFor();
+      await page.getByText("Runtime summary", { exact: true }).waitFor();
 
       assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth + 1), false, `${viewport.width}px horizontal overflow`);
       assert.deepEqual(pageErrors, [], `${viewport.width}px page errors`);

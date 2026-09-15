@@ -18,7 +18,13 @@ import { createPortal } from "react-dom";
 // (solid). Never drop that placeholder class: without it a field's placeholder
 // and its saved value stop being clearly distinguishable.
 export const inputCls =
-  "min-h-10 min-w-0 w-full rounded-xl border border-line bg-panel px-3 py-2 text-sm text-ink placeholder:text-muted outline-none transition focus:border-accent-2 focus:ring-2 focus:ring-accent-2/20";
+  "min-h-10 min-w-0 w-full rounded-xl border border-line bg-panel px-3 py-2 text-sm text-ink placeholder:text-muted outline-none transition focus:border-accent-2 focus:ring-2 focus:ring-accent-2/20 " +
+  "[.creator-control-plane_.identity-console-scope_&]:min-h-9 [.creator-control-plane_.identity-console-scope_&]:rounded-[6px] " +
+  "[.creator-control-plane_.identity-console-scope_&]:border-[#b8bec6] [.creator-control-plane_.identity-console-scope_&]:bg-white " +
+  "[.creator-control-plane_.identity-console-scope_&]:px-2.5 [.creator-control-plane_.identity-console-scope_&]:py-1.5 " +
+  "[.creator-control-plane_.identity-console-scope_&]:text-[13px] [.creator-control-plane_.identity-console-scope_&]:shadow-none " +
+  "[.creator-control-plane_.identity-console-scope_&]:placeholder:text-[#717983] " +
+  "[.creator-control-plane_.identity-console-scope_&]:focus:border-[#59636f] [.creator-control-plane_.identity-console-scope_&]:focus:ring-[#59636f]/15";
 
 export const selectCls = inputCls;
 
@@ -74,17 +80,28 @@ export function Section({
 }) {
   const a = SECTION_ACCENTS[accent];
   const colCls = cols === 3 ? "sm:grid-cols-3" : cols === 2 ? "sm:grid-cols-2" : "";
+  // These two sections are composed by CloneForm rather than
+  // PersonaFactsFields, so mark them here to keep the enterprise Identity
+  // treatment scoped to the creator control plane without changing create mode.
+  const identityConsoleSection =
+    typeof title === "string" && (title === "Dashboard appearance" || title === "Her own words");
   // Hint + tip both live in the header tooltip now — the visible explanatory
   // sentence was costing a line on every card. The ⓘ marks that there's more.
   const tipText = [hint, tip].filter(Boolean).join(" - ");
   return (
     <section
-      className={`flex h-full min-w-0 flex-col rounded-[20px] border border-line border-l-[3px] ${a.bar} bg-panel p-4 text-ink shadow-[0_12px_34px_rgb(6_23_47/0.055)] ` + className}
+      className={
+        `flex h-full min-w-0 flex-col rounded-[20px] border border-line border-l-[3px] ${a.bar} bg-panel p-4 text-ink shadow-[0_12px_34px_rgb(6_23_47/0.055)] ` +
+        (identityConsoleSection
+          ? "identity-console-scope [.creator-control-plane_&]:rounded-[6px] [.creator-control-plane_&]:border-[#c3c8ce] [.creator-control-plane_&]:border-l-[#8d959f] [.creator-control-plane_&]:bg-[#fffefa] [.creator-control-plane_&]:p-3.5 [.creator-control-plane_&]:shadow-none "
+          : "") +
+        className
+      }
     >
       {title && (
-        <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-ink">
+        <h3 className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wide text-ink [.creator-control-plane_.identity-console-scope_&]:text-[13px] [.creator-control-plane_.identity-console-scope_&]:normal-case [.creator-control-plane_.identity-console-scope_&]:tracking-normal">
           {icon && (
-            <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-[11px] ${a.chip}`}>
+            <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-[11px] [.creator-control-plane_.identity-console-scope_&]:hidden ${a.chip}`}>
               {icon}
             </span>
           )}
@@ -92,7 +109,7 @@ export function Section({
           {tipText && <Info text={tipText} />}
         </h3>
       )}
-      <div className={`grid min-w-0 grid-cols-1 items-start gap-3 ${colCls}` + (title ? " mt-3" : "")}>{children}</div>
+      <div className={`grid min-w-0 grid-cols-1 items-start gap-3 [.creator-control-plane_.identity-console-scope_&]:gap-2.5 ${colCls}` + (title ? " mt-3 [.creator-control-plane_.identity-console-scope_&]:mt-2.5" : "")}>{children}</div>
     </section>
   );
 }
@@ -113,8 +130,8 @@ export function SubHead({
   // native `title` attribute plus a decorative ⓘ glyph that did nothing on its
   // own: native tooltips take ~1s, can't be styled, and never appear on touch.
   return (
-    <p className="flex items-center gap-1.5 text-xs font-semibold text-ink">
-      <span>{emoji}</span>
+    <p className="flex items-center gap-1.5 text-xs font-semibold text-ink [.creator-control-plane_.identity-console-scope_&]:text-[12px] [.creator-control-plane_.identity-console-scope_&]:tracking-[0.01em]">
+      <span className="[.creator-control-plane_.identity-console-scope_&]:hidden">{emoji}</span>
       {label}
       {tip && <Info text={tip} />}
       {children}
@@ -181,21 +198,21 @@ export function Collapse({
   const a = SECTION_ACCENTS[accent];
   const [open, setOpen] = useState(defaultOpen);
   return (
-    <div className={`h-full rounded-xl border border-line border-l-[3px] ${a.bar} bg-panel ` + className}>
+    <div className={`h-full rounded-xl border border-line border-l-[3px] ${a.bar} bg-panel [.creator-control-plane_.identity-console-scope_&]:rounded-[6px] [.creator-control-plane_.identity-console-scope_&]:border-[#c3c8ce] [.creator-control-plane_.identity-console-scope_&]:border-l-[#8d959f] [.creator-control-plane_.identity-console-scope_&]:bg-[#fffefa] [.creator-control-plane_.identity-console-scope_&]:shadow-none ` + className}>
       {/* type="button" is load-bearing: this sits inside the clone <form>, and
           a bare <button> defaults to type="submit" — every expand would save. */}
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        className="flex w-full items-center gap-2 px-3 py-3 text-left transition hover:bg-muted/5"
+        className="flex w-full items-center gap-2 px-3 py-3 text-left transition hover:bg-muted/5 [.creator-control-plane_.identity-console-scope_&]:px-3.5 [.creator-control-plane_.identity-console-scope_&]:py-2.5 [.creator-control-plane_.identity-console-scope_&]:hover:bg-[#f5f3ee]"
       >
         {emoji && (
-          <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-[11px] ${a.chip}`}>
+          <span className={`flex h-5 w-5 shrink-0 items-center justify-center rounded-md text-[11px] [.creator-control-plane_.identity-console-scope_&]:hidden ${a.chip}`}>
             {emoji}
           </span>
         )}
-        <span className="flex shrink-0 items-center gap-1 text-xs font-semibold uppercase tracking-wide text-ink">
+        <span className="flex shrink-0 items-center gap-1 text-xs font-semibold uppercase tracking-wide text-ink [.creator-control-plane_.identity-console-scope_&]:text-[13px] [.creator-control-plane_.identity-console-scope_&]:normal-case [.creator-control-plane_.identity-console-scope_&]:tracking-normal">
           {label}
           {filled != null && (
             <span
@@ -208,7 +225,7 @@ export function Collapse({
         </span>
         {hint && <Info text={hint} />}
         {!open && summary && (
-          <span className="min-w-0 flex-1 truncate text-right text-[11px] text-muted">{summary}</span>
+          <span className="min-w-0 flex-1 truncate text-right text-[11px] text-muted [.creator-control-plane_.identity-console-scope_&]:font-medium [.creator-control-plane_.identity-console-scope_&]:text-[#626b75]">{summary}</span>
         )}
         <svg
           viewBox="0 0 24 24"
@@ -230,7 +247,7 @@ export function Collapse({
         </svg>
       </button>
       {/* hidden, never unmounted — see the block comment above. */}
-      <div className={open ? "border-t border-line p-3" : "hidden"}>{children}</div>
+      <div className={open ? "border-t border-line p-3 [.creator-control-plane_.identity-console-scope_&]:border-[#d5d8dc] [.creator-control-plane_.identity-console-scope_&]:bg-white/55 [.creator-control-plane_.identity-console-scope_&]:px-3.5 [.creator-control-plane_.identity-console-scope_&]:py-3" : "hidden"}>{children}</div>
     </div>
   );
 }
@@ -410,7 +427,7 @@ export function Info({ text, className = "" }: { text: string; className?: strin
         onPointerDown={(event) => event.stopPropagation()}
         onClick={toggle}
         onKeyDown={onKeyDown}
-        className="inline-flex min-h-5 min-w-5 cursor-pointer items-center justify-center rounded-full text-[10px] leading-none text-muted/80 transition hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-2/60"
+        className="inline-flex min-h-5 min-w-5 cursor-pointer items-center justify-center rounded-full text-[10px] leading-none text-muted/80 transition hover:text-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-accent-2/60 [.creator-control-plane_.identity-console-scope_&]:text-[#626b75]"
       >
         <span aria-hidden>ⓘ</span>
       </span>
@@ -477,7 +494,7 @@ export function FieldLabel({
   required?: boolean;
 }) {
   return (
-    <span className="mb-0.5 flex items-center gap-1 text-xs text-muted">
+    <span className="mb-0.5 flex items-center gap-1 text-xs text-muted [.creator-control-plane_.identity-console-scope_&]:mb-1 [.creator-control-plane_.identity-console-scope_&]:text-[11px] [.creator-control-plane_.identity-console-scope_&]:font-semibold [.creator-control-plane_.identity-console-scope_&]:tracking-[0.01em] [.creator-control-plane_.identity-console-scope_&]:text-[#4f5964]">
       <span>{label}</span>
       {required && <span className="text-accent">*</span>}
       {hint && <Info text={hint} />}
@@ -600,7 +617,7 @@ export function LineList({
     <div className="block">
       <FieldLabel label={label} hint={hint} />
       <input type="hidden" name={name} value={entries.map((e) => e.trim()).filter(Boolean).join("\n")} />
-      <div className="grid gap-1.5">
+      <div className="grid gap-1.5 [.creator-control-plane_.identity-console-scope_&]:gap-1">
         {entries.map((e, i) => (
           <div key={i} className="flex items-start gap-1.5">
             <textarea
@@ -614,7 +631,7 @@ export function LineList({
               type="button"
               onClick={() => remove(i)}
               aria-label="Remove this entry"
-              className="mt-1 shrink-0 rounded-md border border-line px-2 py-1 text-xs text-muted hover:text-ink"
+              className="mt-1 shrink-0 rounded-md border border-line px-2 py-1 text-xs text-muted hover:text-ink [.creator-control-plane_.identity-console-scope_&]:rounded-[5px] [.creator-control-plane_.identity-console-scope_&]:border-[#c3c8ce] [.creator-control-plane_.identity-console-scope_&]:text-[#626b75]"
             >
               ✕
             </button>
@@ -624,7 +641,7 @@ export function LineList({
       <button
         type="button"
         onClick={() => setEntries((prev) => [...prev, ""])}
-        className="mt-1.5 rounded-md border border-line px-2 py-1 text-xs text-muted hover:text-ink"
+        className="mt-1.5 rounded-md border border-line px-2 py-1 text-xs text-muted hover:text-ink [.creator-control-plane_.identity-console-scope_&]:rounded-[5px] [.creator-control-plane_.identity-console-scope_&]:border-[#b8bec6] [.creator-control-plane_.identity-console-scope_&]:bg-white [.creator-control-plane_.identity-console-scope_&]:font-semibold [.creator-control-plane_.identity-console-scope_&]:text-[#505a65]"
       >
         + Add another
       </button>
@@ -705,7 +722,7 @@ export function TagInput({
       <input type="hidden" name={name} value={JSON.stringify(chips)} />
       <div className={inputCls + " flex flex-wrap items-center gap-1.5"}>
         {chips.map((c) => (
-          <span key={c} className="flex items-center gap-1 rounded-full bg-accent/15 px-2 py-0.5 text-xs text-accent">
+          <span key={c} className="flex items-center gap-1 rounded-full bg-accent/15 px-2 py-0.5 text-xs text-accent [.creator-control-plane_.identity-console-scope_&]:rounded-[4px] [.creator-control-plane_.identity-console-scope_&]:border [.creator-control-plane_.identity-console-scope_&]:border-[#c5cad0] [.creator-control-plane_.identity-console-scope_&]:bg-[#f1f2f2] [.creator-control-plane_.identity-console-scope_&]:text-[#39434e]">
             {c}
             <button
               type="button"
@@ -730,7 +747,7 @@ export function TagInput({
           }}
           onBlur={() => add()}
           placeholder={chips.length ? "" : placeholder}
-          className="min-w-24 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-muted"
+          className="min-w-24 flex-1 bg-transparent text-sm text-ink outline-none placeholder:text-muted [.creator-control-plane_.identity-console-scope_&]:text-[13px] [.creator-control-plane_.identity-console-scope_&]:placeholder:text-[#717983]"
         />
       </div>
       {remaining.length > 0 && (
@@ -740,7 +757,7 @@ export function TagInput({
               key={s}
               type="button"
               onClick={() => add(s)}
-              className="rounded-full border border-line px-2 py-0.5 text-[11px] text-muted transition hover:border-accent/50 hover:text-accent"
+              className="rounded-full border border-line px-2 py-0.5 text-[11px] text-muted transition hover:border-accent/50 hover:text-accent [.creator-control-plane_.identity-console-scope_&]:rounded-[4px] [.creator-control-plane_.identity-console-scope_&]:border-[#c5cad0] [.creator-control-plane_.identity-console-scope_&]:bg-white [.creator-control-plane_.identity-console-scope_&]:font-medium [.creator-control-plane_.identity-console-scope_&]:text-[#5a6470]"
             >
               + {s}
             </button>
@@ -794,11 +811,11 @@ export function MultiSelect({
         aria-expanded={open}
         className={inputCls + " flex items-center justify-between gap-2 text-left"}
       >
-        <span className={"min-w-0 flex-1 truncate " + (checked.length ? "text-ink" : "text-muted")} title={summary}>{summary}</span>
-        <span className="shrink-0 text-[11px] text-muted">{open ? "▲" : "▼"}</span>
+        <span className={"min-w-0 flex-1 truncate [.creator-control-plane_.identity-console-scope_&]:font-medium " + (checked.length ? "text-ink" : "text-muted [.creator-control-plane_.identity-console-scope_&]:text-[#69727c]")} title={summary}>{summary}</span>
+        <span className="shrink-0 text-[11px] text-muted [.creator-control-plane_.identity-console-scope_&]:text-[#626b75]">{open ? "▲" : "▼"}</span>
       </button>
       {open && (
-        <div className="mt-1.5 grid gap-1.5 rounded-lg border border-line bg-bg/40 p-2">
+        <div className="mt-1.5 grid gap-1.5 rounded-lg border border-line bg-bg/40 p-2 [.creator-control-plane_.identity-console-scope_&]:rounded-[5px] [.creator-control-plane_.identity-console-scope_&]:border-[#c3c8ce] [.creator-control-plane_.identity-console-scope_&]:bg-[#f8f7f3]">
           <div className={`grid grid-cols-2 gap-1.5 ${gridCls}`}>
             {options.map((o) => {
               const on = checked.includes(o);
@@ -809,8 +826,8 @@ export function MultiSelect({
                   aria-pressed={on}
                   onClick={() => toggle(o)}
                   className={
-                    "rounded-lg border px-2.5 py-1.5 text-left text-xs font-medium transition " +
-                    (on ? "border-accent/50 bg-accent/10 text-accent" : "border-line bg-bg/40 text-muted hover:text-ink")
+                    "rounded-lg border px-2.5 py-1.5 text-left text-xs font-medium transition [.creator-control-plane_.identity-console-scope_&]:rounded-[5px] " +
+                    (on ? "border-accent/50 bg-accent/10 text-accent" : "border-line bg-bg/40 text-muted hover:text-ink [.creator-control-plane_.identity-console-scope_&]:border-[#c5cad0] [.creator-control-plane_.identity-console-scope_&]:bg-white [.creator-control-plane_.identity-console-scope_&]:text-[#5a6470]")
                   }
                 >
                   {o}
@@ -821,7 +838,7 @@ export function MultiSelect({
           {custom.length > 0 && (
             <div className="flex flex-wrap gap-1.5 border-t border-line pt-1.5">
               {custom.map((c) => (
-                <span key={c} className="flex items-center gap-1 rounded-full bg-muted/15 px-2 py-0.5 text-xs text-ink">
+                <span key={c} className="flex items-center gap-1 rounded-full bg-muted/15 px-2 py-0.5 text-xs text-ink [.creator-control-plane_.identity-console-scope_&]:rounded-[4px] [.creator-control-plane_.identity-console-scope_&]:border [.creator-control-plane_.identity-console-scope_&]:border-[#c5cad0] [.creator-control-plane_.identity-console-scope_&]:bg-white">
                   {c}
                   <button type="button" onClick={() => toggle(c)} className="text-muted/70 hover:text-ink">
                     ✕
@@ -873,7 +890,7 @@ export function Segmented<T extends string>({
     <div className="block">
       <FieldLabel label={label} hint={hint} />
       <input type="hidden" name={name} value={value} />
-      <div className="clone-segmented flex gap-1 overflow-x-auto rounded-xl border border-line bg-bg/60 p-1">
+      <div className="clone-segmented flex gap-1 overflow-x-auto rounded-xl border border-line bg-bg/60 p-1 [.creator-control-plane_&]:rounded-[3px] [.creator-control-plane_&]:border-ink/20 [.creator-control-plane_&]:bg-white [.creator-control-plane_&]:p-0.5 [.creator-control-plane_.identity-console-scope_&]:rounded-[6px] [.creator-control-plane_.identity-console-scope_&]:border-[#b8bec6] [.creator-control-plane_.identity-console-scope_&]:bg-[#f4f3ef]">
         {options.map((o) => (
           <button
             key={o.value}
@@ -882,8 +899,10 @@ export function Segmented<T extends string>({
             aria-pressed={value === o.value}
             onClick={() => onChange(o.value)}
             className={
-              "min-w-max flex-1 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-xs font-semibold transition " +
-              (value === o.value ? SEG_ACTIVE[accent] : "text-muted hover:text-ink")
+              "min-w-max flex-1 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-xs font-semibold transition [.creator-control-plane_.identity-console-scope_&]:rounded-[4px] [.creator-control-plane_.identity-console-scope_&]:px-2 [.creator-control-plane_.identity-console-scope_&]:py-1.5 " +
+              (value === o.value
+                ? `${SEG_ACTIVE[accent]} [.creator-control-plane_&]:bg-accent [.creator-control-plane_&]:text-white`
+                : "text-muted hover:text-ink [.creator-control-plane_&]:text-[#4d5660] [.creator-control-plane_.identity-console-scope_&]:text-[#626b75]")
             }
           >
             {o.label}
@@ -943,7 +962,7 @@ export function ToggleCard({
         aria-pressed={checked}
         onClick={() => onChange(!checked)}
         className={
-          "flex items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-left transition " +
+          "flex items-center justify-between gap-2 rounded-lg border px-2.5 py-1.5 text-left transition [.creator-control-plane_.identity-console-scope_&]:rounded-[5px] " +
           (checked
             ? "border-accent/40 bg-accent/10"
             : "border-line bg-bg/40 opacity-75 hover:opacity-100")
@@ -952,7 +971,7 @@ export function ToggleCard({
         {/* `title` renders as a real ⓘ hover bubble, not the native title
             attribute (~1s delay, unstyleable, invisible on touch). */}
         <span className="flex min-w-0 flex-wrap items-center gap-1.5 text-xs font-medium text-ink">
-          <span className="text-sm">{emoji}</span>
+          <span className="text-sm [.creator-control-plane_.identity-console-scope_&]:hidden">{emoji}</span>
           <span>{label}</span>
           {title && <Info text={title} />}
           {badge}
@@ -1050,7 +1069,7 @@ export function Toggle({
       ? "bg-muted/30"
       : "bg-crit";
   return (
-    <label className="flex min-w-0 cursor-pointer items-center gap-2 text-sm">
+    <label className="flex min-w-0 cursor-pointer items-center gap-2 text-sm [.creator-control-plane_.identity-console-scope_&]:text-[13px]">
       <input type="hidden" name={name} value={String(checked)} />
       <button
         type="button"

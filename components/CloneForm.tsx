@@ -4,7 +4,7 @@ import { isMoxy } from "@/lib/agency-brand";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { CircleAlert, CheckCircle2, ListChecks, LoaderCircle, Save, Trash2 } from "lucide-react";
+import { LoaderCircle } from "lucide-react";
 import type { Clone } from "@/lib/types";
 import type { PromptPreview } from "@/lib/compiler";
 import type { OrModel } from "@/app/api/models/route";
@@ -283,25 +283,16 @@ export default function CloneForm({
   const formId = "creator-control-plane-form";
 
   return (
-    <div className="creator-control-plane grid min-w-0 gap-5">
+    <div className="creator-control-plane grid min-w-0 gap-4 font-sans">
       <CreatorControlPlaneHeader
         clone={clone}
         cfg={cfg}
         imageUrl={appearanceImageUrl}
-        appearanceColor={appearanceColor}
-        onOpenSystemView={() => setTab("view")}
       />
 
-      <div className="grid min-w-0 gap-4 lg:grid-cols-[13rem_minmax(0,1fr)] 2xl:grid-cols-[13rem_minmax(0,1fr)_16rem]">
-        <ControlPlaneNavigation
-          tab={tab}
-          clone={clone}
-          cfg={cfg}
-          promptBlockCount={promptPreview.blocks.length}
-          mediaCounts={mediaCounts}
-          onTabChange={setTab}
-        />
+      <ControlPlaneNavigation tab={tab} onTabChange={setTab} />
 
+      <div className="grid min-w-0 gap-4 2xl:grid-cols-[minmax(0,1fr)_17rem]">
         <main className="min-w-0">
           <ControlPlaneWorkspaceHeader tab={tab} />
 
@@ -380,7 +371,7 @@ export default function CloneForm({
                       readOnly
                       rows={8}
                       value={block.content}
-                      className="w-full cursor-default rounded-xl border border-line bg-bg px-3 py-2.5 font-mono text-xs leading-relaxed text-ink outline-none"
+                      className="w-full cursor-default rounded-[3px] border border-ink/20 bg-panel px-3 py-2.5 font-mono text-xs leading-relaxed text-ink outline-none"
                     />
                   </label>
                 ))}
@@ -389,13 +380,12 @@ export default function CloneForm({
           </form>
 
           <AdminOnly>
-            <section className={tab === "advanced" ? "mt-4 flex flex-col gap-4 rounded-xl border border-crit/20 bg-panel p-4 sm:flex-row sm:items-center sm:justify-between" : "hidden"}>
+            <section className={tab === "advanced" ? "mt-4 flex flex-col gap-4 rounded-[3px] border border-crit/30 bg-panel p-4 sm:flex-row sm:items-center sm:justify-between" : "hidden"}>
               <div>
                 <p className="text-xs font-semibold text-ink">Danger zone</p>
                 <p className="mt-1 text-[11px] leading-5 text-muted">Permanently removes this creator and leaves the normal configuration workflow.</p>
               </div>
               <Button type="button" variant="destructive" onClick={handleDelete} className="shrink-0">
-                <Trash2 className="size-3.5" />
                 Delete creator
               </Button>
             </section>
@@ -423,34 +413,29 @@ export default function CloneForm({
       </div>
 
       <ManagerOnly>
-        <div className={editableTab ? `pointer-events-none sticky z-40 ${!isAgency && !readOnly ? "bottom-20 lg:bottom-4" : "bottom-4"}` : "hidden"}>
-          <div className="pointer-events-auto flex flex-col gap-3 rounded-xl border border-accent/15 bg-panel/95 px-3 py-3 shadow-[0_18px_55px_rgb(7_26_47/0.18)] backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between sm:px-4">
-            <div className="flex min-w-0 items-center gap-3">
+        <div className={editableTab ? "pointer-events-none sticky bottom-20 z-40 lg:bottom-4" : "hidden"}>
+          <div className="pointer-events-auto flex items-center justify-between gap-2 rounded-[3px] border border-ink/25 bg-panel/95 px-3 py-2.5 shadow-[0_8px_24px_rgb(21_32_51/0.1)] backdrop-blur-xl sm:px-4">
+            <div className="flex min-w-0 items-center gap-3 max-sm:hidden">
               <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <ListChecks className="size-3.5 shrink-0 text-accent" />
-                  <span className="text-xs font-semibold text-ink">
-                    {changedFields.length
-                      ? `${changedFields.length} field${changedFields.length === 1 ? "" : "s"} changed`
-                      : "No unsaved field changes"}
-                  </span>
-                </div>
-                <p className="mt-0.5 truncate text-[10px] text-muted">
+                <span className="text-xs font-semibold text-ink">
+                  {changedFields.length
+                    ? `${changedFields.length} field${changedFields.length === 1 ? "" : "s"} changed`
+                    : "No changes"}
+                </span>
+                <p className="mt-0.5 hidden truncate text-[10px] text-muted sm:block">
                   {isPaused ? "Saving keeps this creator paused unless you choose go live." : "Saving updates the active creator configuration."}
                 </p>
               </div>
             </div>
 
-            <div className="flex flex-wrap items-center justify-end gap-2">
+            <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5 max-sm:w-full">
               {step === "saving" && <span className="inline-flex items-center gap-1.5 text-xs text-muted"><LoaderCircle className="size-3.5 animate-spin" /> Saving</span>}
-              {step === "done" && <span className="inline-flex items-center gap-1.5 text-xs font-medium text-good"><CheckCircle2 className="size-3.5" /> Saved</span>}
-              {step === "save-error" && <span className="inline-flex max-w-64 items-center gap-1.5 text-xs text-crit"><CircleAlert className="size-3.5 shrink-0" /> <span className="truncate">{errorMsg}</span></span>}
+              {step === "done" && <span className="text-xs font-medium text-good">Saved</span>}
+              {step === "save-error" && <span className="max-w-64 truncate text-xs text-crit">{errorMsg}</span>}
               <Button type="button" variant="outline" onClick={openReview} disabled={!changedFields.length || busy}>
-                <ListChecks className="size-3.5" />
                 Review
               </Button>
               <Button type="submit" form={formId} disabled={busy}>
-                <Save className="size-3.5" />
                 {isPaused ? "Save paused" : "Save changes"}
               </Button>
               {isPaused && (
@@ -471,7 +456,7 @@ export default function CloneForm({
         title={`Review ${changedFields.length} changed field${changedFields.length === 1 ? "" : "s"}`}
         hint="This is a comparison against the form payload loaded for this creator. Nothing is applied until you save."
       >
-        <div className="rounded-xl border border-line bg-bg/60">
+        <div className="rounded-[3px] border border-ink/20 bg-panel">
           {changedFields.length ? (
             <ul className="divide-y divide-line">
               {changedFields.map((field) => {
@@ -481,16 +466,16 @@ export default function CloneForm({
                   <li key={field} className="px-4 py-3.5">
                     <div className="flex flex-wrap items-center justify-between gap-2">
                       <span className="text-sm font-medium text-ink">{humanFieldName(field)}</span>
-                      <code className="rounded-md bg-elev px-2 py-1 text-[10px] text-muted" title={field}>{field}</code>
+                      <code className="rounded-[2px] border border-ink/10 bg-elev/45 px-2 py-1 text-[10px] text-muted" title={field}>{field}</code>
                     </div>
                     <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
-                      <div className="min-w-0 rounded-lg border border-line bg-panel px-3 py-2">
+                      <div className="min-w-0 rounded-[2px] border border-ink/15 bg-panel px-3 py-2">
                         <span className="block text-[9px] font-semibold uppercase tracking-[0.14em] text-muted">Previous</span>
                         <span className="mt-1 block truncate text-xs text-ink" title={previousValue}>{previousValue}</span>
                       </div>
                       <span className="hidden text-muted sm:block" aria-hidden="true">→</span>
-                      <div className="min-w-0 rounded-lg border border-accent-2/25 bg-accent-tint/25 px-3 py-2">
-                        <span className="block text-[9px] font-semibold uppercase tracking-[0.14em] text-accent-2">Proposed</span>
+                      <div className="min-w-0 rounded-[2px] border border-ink/25 bg-elev/30 px-3 py-2">
+                        <span className="block text-[9px] font-semibold uppercase tracking-[0.14em] text-ink">Proposed</span>
                         <span className="mt-1 block truncate text-xs font-medium text-ink" title={proposedValue}>{proposedValue}</span>
                       </div>
                     </div>
@@ -505,7 +490,6 @@ export default function CloneForm({
         <div className="mt-4 flex justify-end gap-2">
           <Button type="button" variant="outline" onClick={() => setReviewOpen(false)}>Continue editing</Button>
           <Button type="submit" form={formId} disabled={busy}>
-            <Save className="size-3.5" />
             {isPaused ? "Save paused" : "Apply changes"}
           </Button>
         </div>

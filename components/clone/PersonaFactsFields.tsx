@@ -243,7 +243,7 @@ function Tri({
     <div className="block">
       <FieldLabel label={label} hint={hint} />
       {value !== "unset" && <input type="hidden" name={name} value={value === "yes" ? "true" : "false"} />}
-      <div className="grid auto-cols-fr grid-flow-col gap-0.5 rounded-lg border border-line bg-bg/60 p-0.5">
+      <div className="grid auto-cols-fr grid-flow-col gap-0.5 rounded-lg border border-line bg-bg/60 p-0.5 [.creator-control-plane_.identity-console-scope_&]:rounded-[6px] [.creator-control-plane_.identity-console-scope_&]:border-[#b8bec6] [.creator-control-plane_.identity-console-scope_&]:bg-[#f4f3ef]">
         {options.map((o) => {
           const active = value === o.value;
           const activeCls =
@@ -254,7 +254,7 @@ function Tri({
               type="button"
               aria-pressed={active}
               onClick={() => setValue(o.value)}
-              className={"rounded-md px-2 py-1.5 text-xs font-semibold transition " + (active ? activeCls : "text-muted hover:text-ink")}
+              className={"rounded-md px-2 py-1.5 text-xs font-semibold transition [.creator-control-plane_.identity-console-scope_&]:rounded-[4px] " + (active ? activeCls : "text-muted hover:text-ink [.creator-control-plane_.identity-console-scope_&]:text-[#626b75]")}
             >
               {o.label}
             </button>
@@ -272,14 +272,14 @@ function DailyBlocksEditor({ initial }: { initial: { time: string; activity: str
     setRows((prev) => prev.map((r, j) => (j === i ? { ...r, ...patch } : r)));
 
   return (
-    <div className="grid gap-2">
+    <div className="grid gap-2 [.creator-control-plane_.identity-console-scope_&]:gap-1.5">
       <input
         type="hidden"
         name="daily_blocks"
         value={JSON.stringify(rows.filter((r) => r.activity.trim()))}
       />
       {rows.map((r, i) => (
-        <div key={i} className="flex items-center gap-2">
+        <div key={i} className="flex items-center gap-2 [.creator-control-plane_.identity-console-scope_&]:gap-1.5">
           <input
             type="time"
             value={r.time}
@@ -296,7 +296,7 @@ function DailyBlocksEditor({ initial }: { initial: { time: string; activity: str
             type="button"
             aria-label="remove row"
             onClick={() => setRows((prev) => prev.filter((_, j) => j !== i))}
-            className="shrink-0 text-muted transition hover:text-crit"
+            className="shrink-0 text-muted transition hover:text-crit [.creator-control-plane_.identity-console-scope_&]:text-[#626b75]"
           >
             ✕
           </button>
@@ -305,7 +305,7 @@ function DailyBlocksEditor({ initial }: { initial: { time: string; activity: str
       <button
         type="button"
         onClick={() => setRows((prev) => [...prev, { time: "", activity: "" }])}
-        className="justify-self-start rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-muted transition hover:text-ink"
+        className="justify-self-start rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-muted transition hover:text-ink [.creator-control-plane_.identity-console-scope_&]:rounded-[5px] [.creator-control-plane_.identity-console-scope_&]:border-[#b8bec6] [.creator-control-plane_.identity-console-scope_&]:bg-white [.creator-control-plane_.identity-console-scope_&]:font-semibold [.creator-control-plane_.identity-console-scope_&]:text-[#505a65]"
       >
         + Add block
       </button>
@@ -320,14 +320,14 @@ function SocialsEditor({ initial }: { initial: SocialRow[] }) {
     setRows((prev) => prev.map((r, j) => (j === i ? { ...r, ...patch } : r)));
 
   return (
-    <div className="grid gap-2">
+    <div className="grid gap-2 [.creator-control-plane_.identity-console-scope_&]:gap-1.5">
       <input type="hidden" name="socials" value={JSON.stringify(rows.filter((r) => r.handle.trim()))} />
       {rows.map((r, i) => (
-        <div key={i} className="flex items-center gap-2">
+        <div key={i} className="identity-social-row flex items-center gap-2">
           <select
             value={r.platform}
             onChange={(e) => set(i, { platform: e.target.value })}
-            className={selectCls + " max-w-36"}
+            className={selectCls + " identity-social-platform max-w-36"}
           >
             {SOCIAL_PLATFORMS.map((p) => (
               <option key={p} value={p}>
@@ -346,13 +346,13 @@ function SocialsEditor({ initial }: { initial: SocialRow[] }) {
             value={r.followers ?? ""}
             onChange={(e) => set(i, { followers: e.target.value })}
             placeholder="followers (2M)"
-            className={inputCls + " max-w-32"}
+            className={inputCls + " identity-social-followers max-w-32"}
           />
           <button
             type="button"
             aria-label="remove row"
             onClick={() => setRows((prev) => prev.filter((_, j) => j !== i))}
-            className="shrink-0 text-muted transition hover:text-crit"
+            className="identity-social-remove shrink-0 text-muted transition hover:text-crit [.creator-control-plane_.identity-console-scope_&]:text-[#626b75]"
           >
             ✕
           </button>
@@ -361,7 +361,7 @@ function SocialsEditor({ initial }: { initial: SocialRow[] }) {
       <button
         type="button"
         onClick={() => setRows((prev) => [...prev, { platform: "instagram", handle: "", followers: "" }])}
-        className="justify-self-start rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-muted transition hover:text-ink"
+        className="justify-self-start rounded-lg border border-line px-3 py-1.5 text-xs font-medium text-muted transition hover:text-ink [.creator-control-plane_.identity-console-scope_&]:rounded-[5px] [.creator-control-plane_.identity-console-scope_&]:border-[#b8bec6] [.creator-control-plane_.identity-console-scope_&]:bg-white [.creator-control-plane_.identity-console-scope_&]:font-semibold [.creator-control-plane_.identity-console-scope_&]:text-[#505a65]"
       >
         + Add social
       </button>
@@ -387,8 +387,8 @@ function FleetHardLimits() {
     >
       <ul className="grid gap-1.5">
         {FLEET_HARD_LIMITS.map((l) => (
-          <li key={l} className="flex items-start gap-1.5 text-xs text-muted">
-            <span className="mt-0.5 shrink-0 text-crit">⛔</span>
+          <li key={l} className="flex items-start gap-1.5 text-xs text-muted [.creator-control-plane_.identity-console-scope_&]:leading-5 [.creator-control-plane_.identity-console-scope_&]:text-[#525c67]">
+            <span className="mt-0.5 shrink-0 text-crit [.creator-control-plane_.identity-console-scope_&]:hidden">⛔</span>
             <span>{l}</span>
           </li>
         ))}
@@ -428,11 +428,11 @@ function HardLimits({ initial, extraInitial }: { initial: string[]; extraInitial
                 aria-pressed={on}
                 onClick={() => toggle(o)}
                 className={
-                  "rounded-lg border px-2.5 py-1.5 text-left text-xs font-medium transition " +
+                  "rounded-lg border px-2.5 py-1.5 text-left text-xs font-medium transition [.creator-control-plane_.identity-console-scope_&]:rounded-[5px] " +
                   (on ? "border-crit/50 bg-crit/10 text-crit" : "border-line bg-bg/40 text-muted hover:text-ink")
                 }
               >
-                {on ? "⛔ " : ""}
+                {on ? <span className="[.creator-control-plane_.identity-console-scope_&]:hidden">⛔ </span> : null}
                 {o}
               </button>
             );
@@ -441,7 +441,7 @@ function HardLimits({ initial, extraInitial }: { initial: string[]; extraInitial
         {custom.length > 0 && (
           <div className="flex flex-wrap gap-1.5">
             {custom.map((c) => (
-              <span key={c} className="flex items-center gap-1 rounded-full bg-crit/10 px-2 py-0.5 text-xs text-crit">
+              <span key={c} className="flex items-center gap-1 rounded-full bg-crit/10 px-2 py-0.5 text-xs text-crit [.creator-control-plane_.identity-console-scope_&]:rounded-[4px] [.creator-control-plane_.identity-console-scope_&]:border [.creator-control-plane_.identity-console-scope_&]:border-crit/30">
                 {c}
                 <button type="button" onClick={() => toggle(c)} className="text-crit/70 hover:text-crit">
                   ✕
@@ -596,7 +596,7 @@ export default function PersonaFactsFields({
     cfg.doubleTextLevel !== "never";
 
   return (
-    <>
+    <div className="identity-console-scope contents">
       {/* Marker: tells the save action the typed widgets were on this form.
           Only the facts pass renders it, so it is never duplicated. */}
       {showWho && <input type="hidden" name="persona_facts" value="1" />}
@@ -610,7 +610,7 @@ export default function PersonaFactsFields({
         filled={whoFilled}
         hint="Typed facts, injected into her prompt exactly as written (never through the AI), so they can't drift or go stale."
       >
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
+        <div className="identity-who-grid grid grid-cols-1 gap-2 sm:grid-cols-2 xl:grid-cols-4">
           {/* Name lives here rather than in its own card - one input never
               justified a whole section at the top of the tab. */}
           <Field label="Name" name="name" required defaultValue={clone?.name ?? ""} placeholder="e.g. Sophie" />
@@ -775,7 +775,7 @@ export default function PersonaFactsFields({
         filled={physicalFilled}
         hint="Highest-priority facts on the page. Without these she improvises and contradicts herself between sessions. Condensed 2026-07-27: tattoo/piercing locations and voice moved into their own nested Collapses below since they're touched far less often than the rest."
       >
-        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
+        <div className="identity-physical-grid grid grid-cols-1 gap-2 sm:grid-cols-2 lg:grid-cols-4">
           <label className="block">
             <FieldLabel label="Hair length" />
             <select name="hair_length" defaultValue={clone?.hair_length ?? ""} className={selectCls}>
@@ -1210,6 +1210,6 @@ export default function PersonaFactsFields({
           <HardLimits initial={clone?.hard_limits ?? []} extraInitial={hardLimitsExtraInitial} />
         </>
       )}
-    </>
+    </div>
   );
 }
