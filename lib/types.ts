@@ -247,6 +247,7 @@ export type Clone = {
   vision_model: string;
 
   voice_id: string | null;
+  elevenlabs_api_key: string | null;
   eleven_model: string;
   voice_stability: number;
   voice_similarity: number;

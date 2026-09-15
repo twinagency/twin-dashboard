@@ -802,6 +802,13 @@ export default function ConfigSections({
             placeholder="Paste voice ID"
             secret
           />
+          <Field
+            label="ElevenLabs API key"
+            name="elevenlabs_api_key"
+            defaultValue={clone?.elevenlabs_api_key}
+            placeholder="Leave blank to use the shared key"
+            secret
+          />
           <div
             className="block"
             title={`What she does when a fan asks if she's an AI. Default: she stays fully in character as a real woman and deflects. On: she admits she's an AI companion.`}
