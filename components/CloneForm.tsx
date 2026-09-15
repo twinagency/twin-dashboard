@@ -2,8 +2,9 @@
 import { AdminOnly, ManagerOnly, ReadOnlyEditor, useDashboardAccess } from "./DashboardAccessProvider";
 import { isMoxy } from "@/lib/agency-brand";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
+import { CircleAlert, CheckCircle2, ListChecks, LoaderCircle, Save, Trash2 } from "lucide-react";
 import type { Clone } from "@/lib/types";
 import type { PromptPreview } from "@/lib/compiler";
 import type { OrModel } from "@/app/api/models/route";
@@ -19,7 +20,14 @@ import { FieldLabel, Modal, Section } from "./clone/fields";
 import { useCloneConfig } from "./clone/useCloneConfig";
 import { updateClone, deleteClone } from "@/app/clones/actions";
 import { Button } from "./ui/button";
-import { Badge } from "./ui/badge";
+import {
+  ControlPlaneInspector,
+  ControlPlaneNavigation,
+  ControlPlaneWorkspaceHeader,
+  CreatorControlPlaneHeader,
+  ReadOnlyControlPlaneNotice,
+  type ControlPlaneTab,
+} from "./clone/CreatorControlPlaneShell";
 
 type Step = "idle" | "saving" | "done" | "save-error";
 
@@ -33,13 +41,13 @@ type Step = "idle" | "saving" | "done" | "save-error";
 // own built-in TABS (identity/config/money/advanced) — but its clicks still
 // flow up through onTabChange into this state via an `as Tab` cast, so it
 // must be a real member here too or comparisons against it silently miss.
-type Tab = "ppvs" | "identity" | "config" | "money" | "view" | "advanced";
+type Tab = ControlPlaneTab;
 type MediaProps = React.ComponentProps<typeof MediaManager>;
 
 const EXTRA_TABS: { key: Tab; label: string; hint: string }[] = [
-  { key: "view", label: "👁 View", hint: "Read-only: flow diagram + live prompts" },
+  { key: "view", label: "System view", hint: "Read-only: flow diagram + compiled prompts" },
 ];
-const ALL_TABS: Tab[] = ["ppvs", "identity", "config", "money", "view"];
+const ALL_TABS: Tab[] = ["ppvs", "identity", "config", "money", "advanced", "view"];
 
 // Every retired route shape still in links, bookmarks and the sidebar. Old URLs
 // carried tab= plus an optional sub=; both collapse onto the flat tab list.
@@ -65,6 +73,69 @@ function resolveTab(tabParam: string | null, subParam: string | null): Tab {
   return "identity";
 }
 
+type FormSnapshot = Record<string, string[]>;
+
+function snapshotForm(form: HTMLFormElement | null): FormSnapshot {
+  if (!form) return {};
+  const snapshot: FormSnapshot = {};
+  for (const [name, rawValue] of new FormData(form).entries()) {
+    // Leading-underscore inputs are UI controls paired with a canonical hidden
+    // field (for example `_status_toggle` -> `status`). They are deliberately
+    // ignored by the server action, so counting them would turn one logical
+    // edit into two review rows and imply that a helper value is persisted.
+    if (name.startsWith("_")) continue;
+    // Browsers materialise an empty file input as a fresh zero-byte File on
+    // each FormData read. Its generated timestamp changes even when the user
+    // did nothing, so omit only that empty placeholder from dirty comparison.
+    if (typeof File !== "undefined" && rawValue instanceof File && !rawValue.name && rawValue.size === 0) continue;
+    const value =
+      typeof File !== "undefined" && rawValue instanceof File
+        ? `file:${rawValue.name}:${rawValue.size}:${rawValue.lastModified}`
+        : String(rawValue);
+    (snapshot[name] ??= []).push(value);
+  }
+  return snapshot;
+}
+
+function changedSnapshotKeys(baseline: FormSnapshot, current: FormSnapshot) {
+  const names = new Set([...Object.keys(baseline), ...Object.keys(current)]);
+  return [...names]
+    .filter((name) => JSON.stringify(baseline[name] ?? []) !== JSON.stringify(current[name] ?? []))
+    .sort((a, b) => a.localeCompare(b));
+}
+
+function humanFieldName(name: string) {
+  const initialisms: Record<string, string> = {
+    ai: "AI",
+    id: "ID",
+    llm: "LLM",
+    nsfw: "NSFW",
+    ppv: "PPV",
+    url: "URL",
+  };
+  return name
+    .replace(/^dashboard_/, "dashboard ")
+    .split(/[_-]+/)
+    .filter(Boolean)
+    .map((word) => initialisms[word.toLowerCase()] ?? word[0]?.toUpperCase() + word.slice(1))
+    .join(" ");
+}
+
+function snapshotValueLabel(name: string, values: string[] | undefined) {
+  if (!values?.length) return "Not set";
+  // Match the same shoulder-surfing boundary as the form itself: credentials,
+  // voice identifiers and routing/model assignments never appear in review.
+  if (/(?:token|password|secret|api[_-]?key|voice[_-]?id|(?:^|[_-])model(?:$|[_-]))/i.test(name)) {
+    return "Protected value";
+  }
+  const displayValues = values.map((value) => {
+    if (!value.startsWith("file:")) return value || "Not set";
+    const fileParts = value.slice(5).split(":");
+    return fileParts.slice(0, Math.max(1, fileParts.length - 2)).join(":") || "Selected file";
+  });
+  return displayValues.join(", ");
+}
+
 export default function CloneForm({
   clone,
   promptPreview,
@@ -83,15 +154,20 @@ export default function CloneForm({
   appearanceColor: string;
 }) {
   const router = useRouter();
-  const {agencyName} = useDashboardAccess();
+  const {agencyName, isAgency, readOnly} = useDashboardAccess();
   const searchParams = useSearchParams();
   const formRef = useRef<HTMLFormElement>(null);
+  const baselineRef = useRef<FormSnapshot>({});
+  const dirtyFrameRef = useRef<number | null>(null);
   const tabParam = searchParams.get("tab");
   const subParam = searchParams.get("sub");
   const [tab, setTab] = useState<Tab>(resolveTab(tabParam, subParam));
   const [models, setModels] = useState<OrModel[]>([]);
   const [step, setStep] = useState<Step>("idle");
   const [errorMsg, setErrorMsg] = useState("");
+  const [changedFields, setChangedFields] = useState<string[]>([]);
+  const [reviewSnapshot, setReviewSnapshot] = useState<FormSnapshot>({});
+  const [reviewOpen, setReviewOpen] = useState(false);
 
   const [cfg, set] = useCloneConfig(clone);
 
@@ -107,6 +183,43 @@ export default function CloneForm({
     if (next !== tab) setTab(next);
   }, [tabParam, subParam]);
 
+  const refreshDirtyState = useCallback(() => {
+    const current = snapshotForm(formRef.current);
+    const changed = changedSnapshotKeys(baselineRef.current, current);
+    setChangedFields(changed);
+    if (changed.length > 0) setStep((currentStep) => currentStep === "done" ? "idle" : currentStep);
+  }, []);
+
+  const scheduleDirtyCheck = useCallback(() => {
+    if (dirtyFrameRef.current != null) cancelAnimationFrame(dirtyFrameRef.current);
+    dirtyFrameRef.current = requestAnimationFrame(() => {
+      dirtyFrameRef.current = null;
+      refreshDirtyState();
+    });
+  }, [refreshDirtyState]);
+
+  const openReview = useCallback(() => {
+    const current = snapshotForm(formRef.current);
+    setChangedFields(changedSnapshotKeys(baselineRef.current, current));
+    setReviewSnapshot(current);
+    setReviewOpen(true);
+  }, []);
+
+  // All configuration domains intentionally stay mounted. Capture that full
+  // submitted shape once, then compare the exact FormData payload after any
+  // input or control interaction. This gives the review dock a real count
+  // without migrating hundreds of existing uncontrolled fields.
+  useEffect(() => {
+    const frame = requestAnimationFrame(() => {
+      baselineRef.current = snapshotForm(formRef.current);
+      setChangedFields([]);
+    });
+    return () => {
+      cancelAnimationFrame(frame);
+      if (dirtyFrameRef.current != null) cancelAnimationFrame(dirtyFrameRef.current);
+    };
+  }, [clone.id]);
+
   // Save as-is — does NOT recompile, so your prompt/caption edits survive.
   // goLive=true also flips status to active.
   async function save(goLive: boolean) {
@@ -116,6 +229,9 @@ export default function CloneForm({
     setErrorMsg("");
     try {
       await updateClone(clone.id, fd);
+      baselineRef.current = snapshotForm(formRef.current);
+      setChangedFields([]);
+      setReviewOpen(false);
       setStep("done");
       if (goLive) {
         router.push("/clones");
@@ -162,118 +278,238 @@ export default function CloneForm({
     [cfg, clone.text_model, clone.routing_model],
   );
 
+  const mediaCounts = { photos: photos.length, videos: videos.length, bundles: bundles.length };
+  const editableTab = tab === "identity" || tab === "config" || tab === "money" || tab === "advanced";
+  const formId = "creator-control-plane-form";
+
   return (
-    <div className="grid min-w-0 gap-4">
-      {/* Identity + Config + Money live in one form so a single Save persists
-          all of them, from any tab. The tab bar itself is rendered by
-          ConfigSections (one flat strip, PPVs and View injected as extraTabs). */}
-      <form ref={formRef} onSubmit={(e) => { e.preventDefault(); save(false); }} className="grid min-w-0 gap-4">
-        <div className={tab === "ppvs" ? "hidden" : "grid min-w-0 gap-4"}>
-        <ReadOnlyEditor><ConfigSections
-          cfg={cfg}
-          set={set}
-          clone={clone}
-          models={models}
-          mode="edit"
+    <div className="creator-control-plane grid min-w-0 gap-5">
+      <CreatorControlPlaneHeader
+        clone={clone}
+        cfg={cfg}
+        imageUrl={appearanceImageUrl}
+        appearanceColor={appearanceColor}
+        onOpenSystemView={() => setTab("view")}
+      />
+
+      <div className="grid min-w-0 gap-4 lg:grid-cols-[13rem_minmax(0,1fr)] 2xl:grid-cols-[13rem_minmax(0,1fr)_16rem]">
+        <ControlPlaneNavigation
           tab={tab}
-          onTabChange={(t) => setTab(t as Tab)}
-          extraTabs={EXTRA_TABS}
-          photos={photos}
-          videos={videos}
-          bundles={bundles}
-          identityWhoSlot={
-            <>
-              <CloneAppearanceEditor
-                cloneName={clone.name}
-                initialColor={appearanceColor}
-                initialImagePath={clone.intake?.appearance?.profile_image_path ?? null}
-                initialImageUrl={appearanceImageUrl}
-              />
-              <PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="who" cfg={cfg} set={set} />
-            </>
-          }
-          identityCreatorSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="creator" cfg={cfg} set={set} />}
-          identityPhysicalSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="physical" cfg={cfg} set={set} />}
-          identitySocialsSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="socials" cfg={cfg} set={set} />}
-          identityVibeSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="vibe" cfg={cfg} set={set} />}
-          identityBehaviourSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="behaviour" cfg={cfg} set={set} />}
-          identityRhythmSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="rhythm" cfg={cfg} set={set} />}
-          identityLifeSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="life" cfg={cfg} set={set} />}
-          identityContentSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="content" cfg={cfg} set={set} />}
-          identityImperfectionSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="imperfection" cfg={cfg} set={set} />}
-          identityLimitsSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="limits" cfg={cfg} set={set} />}
-          identityQuestionnaireSlot={
-            <Section
-              title="Her own words"
-              hint="Goes into her prompt exactly as you type it. Nothing here is rewritten. One entry per row, use Add another for more."
-            >
-              <IntakeFields fields={clone.intake?.fields} legacyAnswers={clone.intake?.answers} />
-            </Section>
-          }
-        /></ReadOnlyEditor>
+          clone={clone}
+          cfg={cfg}
+          promptBlockCount={promptPreview.blocks.length}
+          mediaCounts={mediaCounts}
+          onTabChange={setTab}
+        />
 
-        </div>
+        <main className="min-w-0">
+          <ControlPlaneWorkspaceHeader tab={tab} />
 
-        {/* ── VIEW (read-only: flow diagram, then the live prompts) ── */}
-        <div className={tab === "view" ? "grid gap-4" : "hidden"}>
-          <FlowGraph cfg={flowCfg} />
-          <Section
-            title={`Live prompt: ${promptPreview.mode === "smart" ? (promptPreview.smartSplit ? "Smart (writer + decider)" : "Smart (one model)") : "Classic"} flow`}
-            hint="Exactly what the bot feeds the model for THIS creator's live flow + toggles. Read-only - change it via Identity or Config, then Save."
+          {/* Identity, Configuration, Monetization and Advanced remain one
+              mounted form. Hiding a domain is CSS-only because updateClone
+              expects the complete FormData shape on every save. */}
+          <form
+            id={formId}
+            ref={formRef}
+            onSubmit={(event) => {
+              event.preventDefault();
+              save(false);
+            }}
+            onInputCapture={scheduleDirtyCheck}
+            onChangeCapture={scheduleDirtyCheck}
+            onClickCapture={scheduleDirtyCheck}
+            className="grid min-w-0 gap-4 [&_.clone-editor-tabs]:hidden"
           >
-            {promptPreview.blocks.map((b) => (
-              <label key={b.key} className="block">
-                <FieldLabel label={<span className="font-medium">{b.label}</span>} hint={b.hint} />
-                {/* This is the REAL compiled prompt the bot sends, so it renders
-                    text-ink solid. Read-only is signalled by the greyed bg +
-                    cursor, never by greying the content itself. */}
-                <textarea
-                  readOnly
-                  rows={8}
-                  value={b.content}
-                  className="w-full cursor-default rounded-xl border border-line bg-bg px-3 py-2.5 font-mono text-xs leading-relaxed text-ink outline-none"
+            <div className={tab === "ppvs" ? "hidden" : "grid min-w-0 gap-4"}>
+              <ReadOnlyEditor>
+                <ConfigSections
+                  cfg={cfg}
+                  set={set}
+                  clone={clone}
+                  models={models}
+                  mode="edit"
+                  tab={tab}
+                  onTabChange={(nextTab) => setTab(nextTab as Tab)}
+                  extraTabs={EXTRA_TABS}
+                  photos={photos}
+                  videos={videos}
+                  bundles={bundles}
+                  identityWhoSlot={
+                    <>
+                      <CloneAppearanceEditor
+                        cloneName={clone.name}
+                        initialColor={appearanceColor}
+                        initialImagePath={clone.intake?.appearance?.profile_image_path ?? null}
+                        initialImageUrl={appearanceImageUrl}
+                      />
+                      <PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="who" cfg={cfg} set={set} />
+                    </>
+                  }
+                  identityCreatorSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="creator" cfg={cfg} set={set} />}
+                  identityPhysicalSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="physical" cfg={cfg} set={set} />}
+                  identitySocialsSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="socials" cfg={cfg} set={set} />}
+                  identityVibeSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="vibe" cfg={cfg} set={set} />}
+                  identityBehaviourSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="behaviour" cfg={cfg} set={set} />}
+                  identityRhythmSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="rhythm" cfg={cfg} set={set} />}
+                  identityLifeSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="life" cfg={cfg} set={set} />}
+                  identityContentSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="content" cfg={cfg} set={set} />}
+                  identityImperfectionSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="imperfection" cfg={cfg} set={set} />}
+                  identityLimitsSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="limits" cfg={cfg} set={set} />}
+                  identityQuestionnaireSlot={
+                    <Section
+                      title="Her own words"
+                      hint="Goes into her prompt exactly as you type it. Nothing here is rewritten. One entry per row, use Add another for more."
+                    >
+                      <IntakeFields fields={clone.intake?.fields} legacyAnswers={clone.intake?.answers} />
+                    </Section>
+                  }
                 />
-              </label>
-            ))}
-          </Section>
-        </div>
+              </ReadOnlyEditor>
+            </div>
 
-        <ManagerOnly>
-        {/* Save bar - shared by Edit (except read-only Flow) + Monetization */}
-        <div
-          className={
-            "flex items-center justify-between gap-4 " +
-            (tab === "identity" || tab === "config" || tab === "money" || tab === "advanced" ? "" : "hidden")
-          }
-        >
-          <AdminOnly><Button type="button" variant="destructive" onClick={handleDelete}>
-            Delete creator
-          </Button></AdminOnly>
+            <div className={tab === "view" ? "grid gap-4" : "hidden"}>
+              <FlowGraph cfg={flowCfg} />
+              <Section
+                title={`Compiled prompt: ${promptPreview.mode === "smart" ? (promptPreview.smartSplit ? "Smart (writer + decider)" : "Smart (one model)") : "Classic"} flow`}
+                hint="The prompt currently saved for this creator. The flow map responds to live toggles; save changes before using these prompt blocks for final verification."
+              >
+                {promptPreview.blocks.map((block) => (
+                  <label key={block.key} className="block">
+                    <FieldLabel label={<span className="font-medium">{block.label}</span>} hint={block.hint} />
+                    <textarea
+                      readOnly
+                      rows={8}
+                      value={block.content}
+                      className="w-full cursor-default rounded-xl border border-line bg-bg px-3 py-2.5 font-mono text-xs leading-relaxed text-ink outline-none"
+                    />
+                  </label>
+                ))}
+              </Section>
+            </div>
+          </form>
 
-          <div className="flex items-center gap-3">
-            {step === "saving" && <span className="text-sm text-muted">Saving…</span>}
-            {step === "done" && <Badge className="bg-good/15 text-good">Saved ✓</Badge>}
-            {step === "save-error" && <span className="text-sm text-crit">Save failed: {errorMsg}</span>}
-
-            <Button type="submit" disabled={busy}>
-              {isPaused ? "Save (stay paused)" : "Save changes"}
-            </Button>
-            {isPaused && (
-              <Button type="button" onClick={() => save(true)} disabled={busy}>
-                Finalise → go live
+          <AdminOnly>
+            <section className={tab === "advanced" ? "mt-4 flex flex-col gap-4 rounded-xl border border-crit/20 bg-panel p-4 sm:flex-row sm:items-center sm:justify-between" : "hidden"}>
+              <div>
+                <p className="text-xs font-semibold text-ink">Danger zone</p>
+                <p className="mt-1 text-[11px] leading-5 text-muted">Permanently removes this creator and leaves the normal configuration workflow.</p>
+              </div>
+              <Button type="button" variant="destructive" onClick={handleDelete} className="shrink-0">
+                <Trash2 className="size-3.5" />
+                Delete creator
               </Button>
-            )}
+            </section>
+          </AdminOnly>
+
+          <div className={tab === "ppvs" ? "grid gap-4" : "hidden"}>
+            <MediaManager
+              cloneId={clone.id}
+              photos={photos}
+              videos={videos}
+              bundles={bundles}
+              categoryPricing={clone.category_pricing}
+            />
           </div>
-        </div>
-        </ManagerOnly>
-      </form>
+        </main>
 
-      {/* ── PPVs (its own page - own top bar, own upload actions) ─── */}
-      <div className={tab === "ppvs" ? "grid gap-4" : "hidden"}>
-
-        <MediaManager cloneId={clone.id} photos={photos} videos={videos} bundles={bundles} categoryPricing={clone.category_pricing} />
+        <ControlPlaneInspector
+          tab={tab}
+          clone={clone}
+          cfg={cfg}
+          promptBlocks={promptPreview.blocks}
+          mediaCounts={mediaCounts}
+          showModelDetails={!isAgency && !readOnly}
+        />
       </div>
 
+      <ManagerOnly>
+        <div className={editableTab ? `pointer-events-none sticky z-40 ${!isAgency && !readOnly ? "bottom-20 lg:bottom-4" : "bottom-4"}` : "hidden"}>
+          <div className="pointer-events-auto flex flex-col gap-3 rounded-xl border border-accent/15 bg-panel/95 px-3 py-3 shadow-[0_18px_55px_rgb(7_26_47/0.18)] backdrop-blur-xl sm:flex-row sm:items-center sm:justify-between sm:px-4">
+            <div className="flex min-w-0 items-center gap-3">
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <ListChecks className="size-3.5 shrink-0 text-accent" />
+                  <span className="text-xs font-semibold text-ink">
+                    {changedFields.length
+                      ? `${changedFields.length} field${changedFields.length === 1 ? "" : "s"} changed`
+                      : "No unsaved field changes"}
+                  </span>
+                </div>
+                <p className="mt-0.5 truncate text-[10px] text-muted">
+                  {isPaused ? "Saving keeps this creator paused unless you choose go live." : "Saving updates the active creator configuration."}
+                </p>
+              </div>
+            </div>
+
+            <div className="flex flex-wrap items-center justify-end gap-2">
+              {step === "saving" && <span className="inline-flex items-center gap-1.5 text-xs text-muted"><LoaderCircle className="size-3.5 animate-spin" /> Saving</span>}
+              {step === "done" && <span className="inline-flex items-center gap-1.5 text-xs font-medium text-good"><CheckCircle2 className="size-3.5" /> Saved</span>}
+              {step === "save-error" && <span className="inline-flex max-w-64 items-center gap-1.5 text-xs text-crit"><CircleAlert className="size-3.5 shrink-0" /> <span className="truncate">{errorMsg}</span></span>}
+              <Button type="button" variant="outline" onClick={openReview} disabled={!changedFields.length || busy}>
+                <ListChecks className="size-3.5" />
+                Review
+              </Button>
+              <Button type="submit" form={formId} disabled={busy}>
+                <Save className="size-3.5" />
+                {isPaused ? "Save paused" : "Save changes"}
+              </Button>
+              {isPaused && (
+                <Button type="button" onClick={() => save(true)} disabled={busy}>
+                  Finalise and go live
+                </Button>
+              )}
+            </div>
+          </div>
+        </div>
+      </ManagerOnly>
+
+      {readOnly ? <ReadOnlyControlPlaneNotice /> : null}
+
+      <Modal
+        open={reviewOpen}
+        onClose={() => setReviewOpen(false)}
+        title={`Review ${changedFields.length} changed field${changedFields.length === 1 ? "" : "s"}`}
+        hint="This is a comparison against the form payload loaded for this creator. Nothing is applied until you save."
+      >
+        <div className="rounded-xl border border-line bg-bg/60">
+          {changedFields.length ? (
+            <ul className="divide-y divide-line">
+              {changedFields.map((field) => {
+                const previousValue = snapshotValueLabel(field, baselineRef.current[field]);
+                const proposedValue = snapshotValueLabel(field, reviewSnapshot[field]);
+                return (
+                  <li key={field} className="px-4 py-3.5">
+                    <div className="flex flex-wrap items-center justify-between gap-2">
+                      <span className="text-sm font-medium text-ink">{humanFieldName(field)}</span>
+                      <code className="rounded-md bg-elev px-2 py-1 text-[10px] text-muted" title={field}>{field}</code>
+                    </div>
+                    <div className="mt-3 grid gap-2 sm:grid-cols-[1fr_auto_1fr] sm:items-center">
+                      <div className="min-w-0 rounded-lg border border-line bg-panel px-3 py-2">
+                        <span className="block text-[9px] font-semibold uppercase tracking-[0.14em] text-muted">Previous</span>
+                        <span className="mt-1 block truncate text-xs text-ink" title={previousValue}>{previousValue}</span>
+                      </div>
+                      <span className="hidden text-muted sm:block" aria-hidden="true">→</span>
+                      <div className="min-w-0 rounded-lg border border-accent-2/25 bg-accent-tint/25 px-3 py-2">
+                        <span className="block text-[9px] font-semibold uppercase tracking-[0.14em] text-accent-2">Proposed</span>
+                        <span className="mt-1 block truncate text-xs font-medium text-ink" title={proposedValue}>{proposedValue}</span>
+                      </div>
+                    </div>
+                  </li>
+                );
+              })}
+            </ul>
+          ) : (
+            <p className="px-4 py-6 text-center text-sm text-muted">No fields differ from the loaded configuration.</p>
+          )}
+        </div>
+        <div className="mt-4 flex justify-end gap-2">
+          <Button type="button" variant="outline" onClick={() => setReviewOpen(false)}>Continue editing</Button>
+          <Button type="submit" form={formId} disabled={busy}>
+            <Save className="size-3.5" />
+            {isPaused ? "Save paused" : "Apply changes"}
+          </Button>
+        </div>
+      </Modal>
     </div>
   );
 }
