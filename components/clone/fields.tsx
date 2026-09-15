@@ -218,7 +218,8 @@ export function Collapse({
             <span
               title={filled ? "Has data" : "Empty"}
               className={
-                "ml-0.5 h-1.5 w-1.5 shrink-0 rounded-full " + (filled ? "bg-accent" : "bg-muted/30")
+                "ml-0.5 h-1.5 w-1.5 shrink-0 rounded-full [.creator-control-plane_.identity-tab-scope_&]:hidden " +
+                (filled ? "bg-accent" : "bg-muted/30")
               }
             />
           )}

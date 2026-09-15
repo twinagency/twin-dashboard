@@ -543,7 +543,7 @@ export default function ConfigSections({
           Personality & style (flirt/nsfw/push dials, emoji, realism, language)
           moved OUT to Config 2026-07-26: those are operator dials for HOW she
           behaves, not facts about her, so they don't belong in this tab. */}
-      <div className={show("identity")}>
+      <div className={`${show("identity")} identity-tab-scope`}>
         {/* Columns are hand-balanced to end at the same height. */}
         <div className="grid content-start gap-3">
           {identityWhoSlot}
