@@ -92,6 +92,35 @@ export function sourceLabel(source: string): string {
     .join(" ");
 }
 
+// ── Search window ────────────────────────────────────────────────────────────
+// system_logs is 3.3M+ rows and growing at ~287k inserts/day. An `ilike` over
+// `message` with no time bound forces a parallel sequential scan (measured:
+// 26.6s / 2.7GB of buffers) against an 8s PostgREST statement timeout, so
+// typing anything in the search box guaranteed a timeout and an empty result
+// - indistinguishable from "no matches". A trigram index would fix the query
+// but costs several hundred MB and would slow the 287k/day inserts, so the
+// fix is a required time window instead. Same story for the "code" bucket's
+// `NOT source IN (...)`: a negation over the whole table, not a lookup.
+// Default is 24h; a longer window is available but has to be picked on
+// purpose, and the window in effect is always shown so an empty result reads
+// as "nothing in this window" and never as "search is broken".
+export type LogSearchWindow = "24h" | "7d" | "30d";
+
+export const LOG_SEARCH_WINDOWS: { key: LogSearchWindow; label: string; hours: number }[] = [
+  { key: "24h", label: "Last 24h", hours: 24 },
+  { key: "7d", label: "Last 7 days", hours: 24 * 7 },
+  { key: "30d", label: "Last 30 days", hours: 24 * 30 },
+];
+
+export function isLogSearchWindow(v: unknown): v is LogSearchWindow {
+  return v === "24h" || v === "7d" || v === "30d";
+}
+
+export function logSearchWindowStartIso(w: LogSearchWindow, now = Date.now()): string {
+  const hours = LOG_SEARCH_WINDOWS.find((x) => x.key === w)?.hours ?? 24;
+  return new Date(now - hours * 3600_000).toISOString();
+}
+
 // Friendly names for usage_events.kind, used to build a plain-English headline
 // for AI/voice calls instead of showing the raw model slug up front. The raw
 // kind + model + token counts stay in the row's detail payload either way.

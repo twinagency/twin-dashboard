@@ -4,7 +4,18 @@ import { Card } from "@/components/ui/card";
 import { AutoRefresh } from "./AutoRefresh";
 import { LogFilters } from "./LogFilters";
 import { LogsTable, type LogRow } from "./LogsTable";
-import { CLAIMED_SOURCES, KIND_LABEL, SYSTEM_SOURCE_BUCKETS, techForSystemSource, techForUsageKind, type Tech } from "./tech";
+import {
+  CLAIMED_SOURCES,
+  KIND_LABEL,
+  LOG_SEARCH_WINDOWS,
+  SYSTEM_SOURCE_BUCKETS,
+  isLogSearchWindow,
+  logSearchWindowStartIso,
+  techForSystemSource,
+  techForUsageKind,
+  type LogSearchWindow,
+  type Tech,
+} from "./tech";
 import { SpendView } from "./SpendView";
 import { isSpendWindow, isSpendProvider } from "@/lib/spend-data";
 
@@ -26,6 +37,26 @@ function buildSpendHref(sp: FanParams): string {
 
 function buildActivityHref(sp: FanParams): string {
   const p = new URLSearchParams();
+  if (sp.clone) p.set("clone", sp.clone);
+  if (sp.fan) p.set("fan", sp.fan);
+  if (sp.fanUser) p.set("fanUser", sp.fanUser);
+  if (sp.fanLabel) p.set("fanLabel", sp.fanLabel);
+  const qs = p.toString();
+  return qs ? `/logs?${qs}` : "/logs";
+}
+
+// Carries every current filter forward, changing only the search window - so
+// widening from 24h to 30d never loses the tech/level/search/fan the operator
+// already had set.
+function buildSearchWindowHref(
+  sp: { tech?: string; level?: string; q?: string } & FanParams,
+  sw: LogSearchWindow,
+): string {
+  const p = new URLSearchParams();
+  if (sp.tech && sp.tech !== "all") p.set("tech", sp.tech);
+  if (sp.level && sp.level !== "all") p.set("level", sp.level);
+  if (sp.q?.trim()) p.set("q", sp.q.trim());
+  if (sw !== "24h") p.set("sw", sw);
   if (sp.clone) p.set("clone", sp.clone);
   if (sp.fan) p.set("fan", sp.fan);
   if (sp.fanUser) p.set("fanUser", sp.fanUser);
@@ -92,18 +123,30 @@ type UsageDbRow = {
 
 const TECHS: Tech[] = ["elevenlabs", "llm", "telegram", "supabase", "payments", "code"];
 
-function fetchSystemRows(tech: string, level: string, q: string, cloneId: string | null, fanTelegramId: number | null) {
+function fetchSystemRows(
+  tech: string,
+  level: string,
+  q: string,
+  cloneId: string | null,
+  fanTelegramId: number | null,
+  searchWindow: LogSearchWindow,
+) {
   let query = supabaseAdmin
     .from("system_logs")
     .select("id,ts,level,source,telegram_id,message,detail,clones(name,slug)")
     .order("ts", { ascending: false })
     .limit(CAP);
   if (level === "info" || level === "warn" || level === "error") query = query.eq("level", level);
-  if (tech === "code") {
+  const isCodeBucket = tech === "code";
+  if (isCodeBucket) {
     query = query.not("source", "in", `(${CLAIMED_SOURCES.map((s) => `"${s}"`).join(",")})`);
   } else if (TECHS.includes(tech as Tech)) {
     query = query.in("source", SYSTEM_SOURCE_BUCKETS[tech as Exclude<Tech, "code">]);
   }
+  // `ilike` and the "code" bucket's `NOT IN` both have to check every row
+  // rather than use an index lookup - over 3.3M+ rows that is an 8s-timeout
+  // guarantee with no time bound. See the "Search window" comment in tech.ts.
+  if (q.trim() || isCodeBucket) query = query.gte("ts", logSearchWindowStartIso(searchWindow));
   if (q.trim()) query = query.ilike("message", `%${q.trim().replace(/[%_]/g, "\\$&")}%`);
   if (cloneId) query = query.eq("clone_id", cloneId);
   if (fanTelegramId != null) query = query.eq("telegram_id", fanTelegramId);
@@ -186,6 +229,9 @@ export default async function LogsPage({
     fan?: string;
     fanUser?: string;
     fanLabel?: string;
+    // How far back a text search (or the "code" bucket) looks, see tech.ts.
+    // "sw" not "w" - "w" is already the Spend tab's own window param below.
+    sw?: string;
     // The Spend tab. A sub-section of this page, not its own route (operator
     // ask, 2026-08-14) - so it rides the same searchParams as everything else.
     view?: string;
@@ -205,6 +251,7 @@ export default async function LogsPage({
   const fanTelegramId = sp.fan?.trim() ? Number(sp.fan.trim()) : null;
   const fanUserId = sp.fanUser?.trim() || null;
   const fanLabel = sp.fanLabel?.trim() || (fanTelegramId != null ? String(fanTelegramId) : null);
+  const searchWindow = isLogSearchWindow(sp.sw) ? sp.sw : "24h";
   const view = sp.view === "spend" ? "spend" : "activity";
   // Defaults to "today", not "7d" - at current call volume (~66k/day and
   // climbing) a 7-day window is 200-400k rows. Still fetchable (see
@@ -228,8 +275,11 @@ export default async function LogsPage({
   // usage_events only feeds the ElevenLabs and LLM buckets, and has no warn level.
   const wantUsage = (tech === "all" || tech === "elevenlabs" || tech === "llm") && level !== "warn";
 
+  const isCodeBucket = tech === "code";
+  const windowActive = !!q.trim() || isCodeBucket;
+
   const [systemRes, usageRes] = await Promise.all([
-    fetchSystemRows(tech, level, q, cloneId, Number.isFinite(fanTelegramId) ? fanTelegramId : null),
+    fetchSystemRows(tech, level, q, cloneId, Number.isFinite(fanTelegramId) ? fanTelegramId : null, searchWindow),
     wantUsage
       ? fetchUsageRows(tech, level, cloneId, fanUserId)
       : Promise.resolve({ data: [], error: null }),
@@ -271,6 +321,32 @@ export default async function LogsPage({
           <a href="/logs" className="shrink-0 text-xs font-medium text-accent hover:underline">
             Clear fan filter
           </a>
+        </Card>
+      )}
+
+      {windowActive && (
+        <Card className="mb-4 flex flex-wrap items-center justify-between gap-3 border-line bg-elev/60 p-3">
+          <span className="text-sm text-ink">
+            {q.trim() ? (
+              <>Searching messages from the <span className="font-medium">{LOG_SEARCH_WINDOWS.find((w) => w.key === searchWindow)?.label.toLowerCase()}</span> only. No results below means no match in that window, widen it to look further back.</>
+            ) : (
+              <>System events from the <span className="font-medium">{LOG_SEARCH_WINDOWS.find((w) => w.key === searchWindow)?.label.toLowerCase()}</span> only.</>
+            )}
+          </span>
+          <div className="flex shrink-0 items-center gap-1 rounded-full bg-white p-1">
+            {LOG_SEARCH_WINDOWS.map((w) => (
+              <a
+                key={w.key}
+                href={buildSearchWindowHref(sp, w.key)}
+                className={
+                  "rounded-full px-3 py-1 text-xs font-medium transition " +
+                  (w.key === searchWindow ? "bg-elev text-ink shadow-sm" : "text-muted hover:text-ink")
+                }
+              >
+                {w.label}
+              </a>
+            ))}
+          </div>
         </Card>
       )}
 
