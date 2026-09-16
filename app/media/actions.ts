@@ -20,6 +20,7 @@ import {
 } from "@/lib/pricing";
 import { assertPhotoSendable } from "@/lib/photo-guard";
 import { repriceConfirmationPhrase } from "@/lib/reprice-confirmation";
+import { mediaStoragePath } from "@/lib/media-storage-path";
 
 const TAG_SET = new Set<string>(MEDIA_TAGS);
 
@@ -41,9 +42,10 @@ function parseTags(raw: FormDataEntryValue | null): string[] {
 // rather than a byte check here and a dimension check somewhere else.
 const VIDEO_MAX_BYTES = 49 * 1024 * 1024;  // Telegram video limit is 50MB
 
-function storagePath(cloneId: string, type: "photos" | "videos", filename: string) {
-  return `${cloneId}/${type}/${Date.now()}-${filename.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
-}
+// Path builder moved to lib/media-storage-path.ts (content-hash prefix, not
+// Date.now()) — see that file for why. Kept as a thin alias here so the three
+// call sites below read the same as before.
+const storagePath = mediaStoragePath;
 
 // Pull the clone's vision model + category-pricing guide in one read (both needed
 // on every upload: one to tag the item, the other to price it from those tags).
@@ -114,11 +116,15 @@ export async function uploadPhoto(cloneId: string, fd: FormData) {
   assertUploadPricingReady(fd, guide);
 
   const baseName = file.name.replace(/\.[^.]+$/, "");
-  const path = storagePath(cloneId, "photos", baseName + ".jpg");
+  const path = storagePath(cloneId, "photos", baseName + ".jpg", jpeg);
 
+  // upsert: true is safe here because the path is content-derived: identical
+  // bytes always resolve to the same path, so a retry/double-submit overwrites
+  // the object it already wrote (a no-op) instead of erroring or piling up a
+  // second copy. Different bytes always get a different path.
   const { error: upErr } = await supabaseAdmin.storage
     .from("media")
-    .upload(path, jpeg, { contentType: "image/jpeg", upsert: false });
+    .upload(path, jpeg, { contentType: "image/jpeg", upsert: true });
   if (upErr) throw new Error(upErr.message);
 
   // AI caption + auto-tags in the backend (caption + teaser + nudity + tags/nsfw).
@@ -161,11 +167,12 @@ export async function uploadVideo(cloneId: string, fd: FormData) {
   const { model, guide } = await uploadConfig(cloneId);
   assertUploadPricingReady(fd, guide);
 
-  const path = storagePath(cloneId, "videos", file.name);
+  const path = storagePath(cloneId, "videos", file.name, bytes);
 
+  // See uploadPhoto for why upsert: true is safe with a content-derived path.
   const { error: upErr } = await supabaseAdmin.storage
     .from("media")
-    .upload(path, bytes, { contentType: file.type, upsert: false });
+    .upload(path, bytes, { contentType: file.type, upsert: true });
   if (upErr) throw new Error(upErr.message);
 
   // AI caption + auto-tags from one extracted frame (caption + teaser + tags/nsfw).
@@ -478,15 +485,16 @@ export async function addBundleItem(bundleId: string, cloneId: string, fd: FormD
   const file = fd.get("file") as File | null;
   if (!file) throw new Error("no file");
 
-  const path = storagePath(cloneId, "photos", file.name);
   const bytes = Buffer.from(await file.arrayBuffer());
   // Bundle items are paid media too (sendPaidPhotoGroup), so they get the same
   // gate as a single photo. One oversized item makes the whole bundle unsendable.
   await assertPhotoSendable(bytes);
+  const path = storagePath(cloneId, "photos", file.name, bytes);
 
+  // See uploadPhoto for why upsert: true is safe with a content-derived path.
   const { error: upErr } = await supabaseAdmin.storage
     .from("media")
-    .upload(path, bytes, { contentType: file.type, upsert: false });
+    .upload(path, bytes, { contentType: file.type, upsert: true });
   if (upErr) throw new Error(upErr.message);
 
   const { data: existing } = await supabaseAdmin

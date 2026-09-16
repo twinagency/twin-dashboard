@@ -32,6 +32,7 @@ import path from "node:path";
 import { supabaseAdmin } from "@/lib/supabase";
 import { captionVideo } from "@/lib/caption";
 import { MIN_PAID_MEDIA_PRICE_STARS } from "@/lib/pricing";
+import { mediaStoragePath } from "@/lib/media-storage-path";
 import {
   VIDEO_MAX_BYTES,
   COMPRESSION_LADDER,
@@ -49,13 +50,13 @@ import {
 
 const execFileAsync = promisify(execFile);
 
-// mirrored from app/media/actions.ts (module-private there). Safe under
-// concurrency without a sequence number: readdir yields unique filenames, so
-// two parallel uploads inside the same millisecond still differ in the name
-// component. Adding a counter here would also put a third numeric segment in
-// front of the stem that importedStemVariants has to strip back off.
-function storagePath(cloneId: string, filename: string) {
-  return `${cloneId}/videos/${Date.now()}-${filename.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
+// storagePath: see lib/media-storage-path.ts — content-hash prefix, shared
+// with app/media/actions.ts and the other importers, not duplicated here. A
+// hash prefix is also stable across retries within one run (unlike Date.now(),
+// which changed every millisecond), and importedStemVariants (lib/video-import)
+// knows how to strip it when checking what is already imported.
+function storagePath(cloneId: string, filename: string, bytes: Uint8Array | Buffer) {
+  return mediaStoragePath(cloneId, "videos", filename, bytes);
 }
 
 function arg(name: string): string | undefined {
@@ -215,10 +216,10 @@ async function main(): Promise<void> {
         continue;
       }
 
-      const storedAt = storagePath(cloneId, name.replace(/\.[A-Za-z0-9]+$/, ".mp4"));
+      const storedAt = storagePath(cloneId, name.replace(/\.[A-Za-z0-9]+$/, ".mp4"), fitted.bytes);
       const { error: upErr } = await supabaseAdmin.storage
         .from("media")
-        .upload(storedAt, fitted.bytes, { contentType: "video/mp4", upsert: false });
+        .upload(storedAt, fitted.bytes, { contentType: "video/mp4", upsert: true });
       if (upErr) throw new Error(upErr.message);
 
       const { error: dbErr } = await supabaseAdmin.from("videos").insert({

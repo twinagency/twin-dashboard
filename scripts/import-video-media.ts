@@ -15,12 +15,11 @@ import path from "node:path";
 import { supabaseAdmin } from "@/lib/supabase";
 import { captionVideo, type Caption } from "@/lib/caption";
 import { normalizeSafeCategoryGuide, priceFromGuide, type CategoryPricing } from "@/lib/pricing";
+import { mediaStoragePath as storagePath } from "@/lib/media-storage-path";
 
 const VIDEO_MAX_BYTES = 49 * 1024 * 1024; // Telegram video limit is 50MB
-
-function storagePath(cloneId: string, type: "photos" | "videos", filename: string) {
-  return `${cloneId}/${type}/${Date.now()}-${filename.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
-}
+// storagePath: see lib/media-storage-path.ts — content-hash prefix, shared
+// with app/media/actions.ts and the other importers, not duplicated here.
 
 async function uploadConfig(cloneId: string): Promise<{ model: string; guide: unknown }> {
   const { data } = await supabaseAdmin
@@ -102,7 +101,7 @@ async function main() {
       const ext = path.extname(src).toLowerCase();
       const contentType = ext === ".mov" ? "video/quicktime" : "video/mp4";
       const safeBase = `${NAME_PREFIX.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${String(n).padStart(2, "0")}${ext}`;
-      const p = storagePath(CLONE_ID!, "videos", safeBase);
+      const p = storagePath(CLONE_ID!, "videos", safeBase, bytes);
 
       if (DRY) {
         console.log(`  [dry] ${label} -> ${p} ⭐${starValue} "${cap.caption}"`);
@@ -112,7 +111,7 @@ async function main() {
 
       const { error: upErr } = await supabaseAdmin.storage
         .from("media")
-        .upload(p, bytes, { contentType, upsert: false });
+        .upload(p, bytes, { contentType, upsert: true });
       if (upErr) throw new Error(upErr.message);
 
       const { error: dbErr } = await supabaseAdmin.from("videos").insert({

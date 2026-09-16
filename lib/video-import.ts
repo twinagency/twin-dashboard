@@ -19,16 +19,21 @@ export function isVideoFile(filename: string): boolean {
 /**
  * Dedup key for an already-imported row.
  *
- * The importer writes `<cloneId>/videos/<timestamp>-<originalName>`, and the
- * dashboard's own uploader has historically written a second timestamp too
- * (`<ts>-<ts>-<name>`). Strip both, drop the extension, lowercase. Extension is
- * dropped on purpose: a .mov submitted today was stored as .mp4 after
- * transcoding, and it is the same content.
+ * The importer used to write `<cloneId>/videos/<timestamp>-<originalName>`,
+ * and the dashboard's own uploader had historically written a second
+ * timestamp too (`<ts>-<ts>-<name>`) — strip both. Since 2026-09-16 both write
+ * a content-hash prefix instead (`<32-hex-hash>-<originalName>`, see
+ * lib/media-storage-path.ts) — strip that too. Old rows keep their old
+ * timestamp-prefixed paths forever, so both forms have to be recognised
+ * side by side, not just the current one. Drop the extension, lowercase.
+ * Extension is dropped on purpose: a .mov submitted today was stored as .mp4
+ * after transcoding, and it is the same content.
  */
 export function importedStem(storagePath: string): string {
   const base = storagePath.split("/").pop() ?? storagePath;
   return base
     .replace(/^\d+-(\d+-)?/, "")
+    .replace(/^[0-9a-f]{32}-/, "")
     .replace(/\.[A-Za-z0-9]+$/, "")
     .toLowerCase();
 }
@@ -60,7 +65,10 @@ export function importedStemVariants(storagePath: string): string[] {
     .toLowerCase();
   const oneStripped = base.replace(/^\d+-/, "");
   const twoStripped = oneStripped.replace(/^\d+-/, "");
-  return Array.from(new Set([base, oneStripped, twoStripped]));
+  // Since 2026-09-16, new uploads are prefixed with a 32-hex content hash
+  // (lib/media-storage-path.ts) instead of a timestamp. Offer that reading too.
+  const hashStripped = base.replace(/^[0-9a-f]{32}-/, "");
+  return Array.from(new Set([base, oneStripped, twoStripped, hashStripped]));
 }
 
 export function localStemVariants(filename: string): string[] {

@@ -30,14 +30,14 @@ import {
   type CategoryPricing,
 } from "@/lib/pricing";
 import { assertPhotoSendable } from "@/lib/photo-guard";
+import { mediaStoragePath as storagePath } from "@/lib/media-storage-path";
 
-// ── mirrored from app/media/actions.ts (module-private there) ────────────────
 // The photo size + dimension gate is NOT mirrored: it is imported, so the
 // importer cannot drift into admitting a photo the dashboard would refuse.
-
-function storagePath(cloneId: string, type: "photos" | "videos", filename: string) {
-  return `${cloneId}/${type}/${Date.now()}-${filename.replace(/[^a-zA-Z0-9._-]/g, "_")}`;
-}
+// storagePath is imported from lib/media-storage-path.ts (shared with
+// app/media/actions.ts) rather than duplicated here, for the same reason: a
+// bulk import re-run over the same folder must land on the SAME objects it
+// already wrote, not new ones. See that file for the fleet-wide numbers.
 
 async function uploadConfig(cloneId: string): Promise<{ model: string; guide: unknown }> {
   const { data } = await supabaseAdmin
@@ -147,7 +147,7 @@ async function main() {
       const cap = await captionWithRetry(jpeg, model, label);
       const starValue = resolvePrice(cap, guide);
       const imageName = `${NAME_PREFIX} ${String(n).padStart(2, "0")}${cap.auto_desc ? ` (${cap.auto_desc})` : ""}`;
-      const p = storagePath(CLONE_ID!, "photos", safeBase + ".jpg");
+      const p = storagePath(CLONE_ID!, "photos", safeBase + ".jpg", jpeg);
 
       if (DRY) {
         console.log(`  [dry] ${label} -> ${p} ⭐${starValue} "${cap.caption}"`);
@@ -157,7 +157,7 @@ async function main() {
 
       const { error: upErr } = await supabaseAdmin.storage
         .from("media")
-        .upload(p, jpeg, { contentType: "image/jpeg", upsert: false });
+        .upload(p, jpeg, { contentType: "image/jpeg", upsert: true });
       if (upErr) throw new Error(upErr.message);
 
       const { error: dbErr } = await supabaseAdmin.from("photos").insert({
@@ -212,10 +212,10 @@ async function main() {
           const bytes = await readFile(src);
           // Bundle items are paid media too, same gate as addBundleItem.
           await assertPhotoSendable(bytes);
-          const p = storagePath(CLONE_ID!, "photos", `${SLUG}-bundle-${String(i).padStart(2, "0")}.jpg`);
+          const p = storagePath(CLONE_ID!, "photos", `${SLUG}-bundle-${String(i).padStart(2, "0")}.jpg`, bytes);
           const { error: upErr } = await supabaseAdmin.storage
             .from("media")
-            .upload(p, bytes, { contentType: "image/jpeg", upsert: false });
+            .upload(p, bytes, { contentType: "image/jpeg", upsert: true });
           if (upErr) throw new Error(upErr.message);
 
           const { data: existing } = await supabaseAdmin
