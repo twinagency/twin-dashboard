@@ -159,8 +159,9 @@ async function read(req: NextRequest) {
 
           // ── 2. Drip phase per fan, and the status strip ─────────────────
           const cutoff = new Date(now - DRIP_WINDOW_MS).toISOString();
+          const clonesQ = supabaseAdmin.from("clones").select("id,drip_steps,drip_enabled");
           const [clonesRes, dripFansRes] = await Promise.all([
-            scoped(supabaseAdmin.from("clones").select("id,drip_steps,drip_enabled") as any),
+            cloneId ? clonesQ.eq("id", cloneId) : clonesQ,
             scoped(
               supabaseAdmin
                 .from("users")
