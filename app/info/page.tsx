@@ -7,6 +7,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { getCloneScope } from "@/lib/clone-scope";
 import { setCloneScope } from "@/app/actions/clone-scope";
 import { getStarBalance } from "@/lib/star-balance";
+import { selectAllRows } from "@/lib/select-all";
 import BusinessConnectionCard from "./BusinessConnectionCard";
 import { Info } from "@/components/clone/fields";
 import { Card } from "@/components/ui/card";
@@ -46,14 +47,21 @@ export default async function InfoPage() {
 }
 
 async function FleetInfo() {
-  const [{ data: clones }, { data: users }, { data: tx }] = await Promise.all([
+  // Both reads are unbounded fleet-wide scans (users is 80k+ rows) - a plain
+  // .select() silently truncates at PostgREST's 1000 row cap with no error, so
+  // this page's totals were wrong. selectAllRows pages past that cap, see its
+  // header for the full failure mode.
+  const [{ data: clones }, { rows: userList }, { rows: txList }] = await Promise.all([
     supabaseAdmin.from("clones").select("id,name,slug,status").order("created_at", { ascending: true }),
-    supabaseAdmin.from("users").select("clone_id,total_messages_purchased"),
-    supabaseAdmin.from("star_transactions").select("clone_id,amount_stars"),
+    selectAllRows<{ clone_id: string; total_messages_purchased: number | null }>(
+      supabaseAdmin.from("users").select("clone_id,total_messages_purchased"),
+      { label: "fleet info users" },
+    ),
+    selectAllRows<{ clone_id: string; amount_stars: number | null }>(
+      supabaseAdmin.from("star_transactions").select("clone_id,amount_stars"),
+      { label: "fleet info star_transactions" },
+    ),
   ]);
-
-  const userList = (users ?? []) as { clone_id: string; total_messages_purchased: number | null }[];
-  const txList = (tx ?? []) as { clone_id: string; amount_stars: number | null }[];
 
   const fansByClone = new Map<string, number>();
   const buyersByClone = new Map<string, number>();
@@ -139,13 +147,18 @@ async function CloneInfo({ cloneId }: { cloneId: string }) {
 
   const token = await cloneBotToken(cloneId);
   const agency = await getDashboardAccess();
-  const [me, starBalance, { data: users }] = await Promise.all([
+  // Same unbounded-read hazard as FleetInfo above, just scoped to one clone -
+  // a fleet of ~80k users over ten clones averages well past the 1000 row cap
+  // per clone too, so fan/buyer counts here were undercounted the same way.
+  const [me, starBalance, { rows: userList }] = await Promise.all([
     getMe(token ?? ""),
     getStarBalance(cloneId, token ?? ""),
-    supabaseAdmin.from("users").select("business_connection_id,total_messages_purchased,last_message_received").eq("clone_id", cloneId),
+    selectAllRows<{ business_connection_id: string | null; total_messages_purchased: number; last_message_received: string | null }>(
+      supabaseAdmin.from("users").select("business_connection_id,total_messages_purchased,last_message_received").eq("clone_id", cloneId),
+      { label: "clone info users" },
+    ),
   ]);
 
-  const userList = (users ?? []) as { business_connection_id: string | null; total_messages_purchased: number; last_message_received: string | null }[];
   // Two genuinely different figures, see lib/star-balance.ts for how each is
   // derived — never collapse them into one "revenue" number:
   const { lifetimeStars, totalBalanceStars } = starBalance;

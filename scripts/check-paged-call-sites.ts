@@ -45,56 +45,66 @@ const UNBOUNDED = ["star_transactions", "users", "chat_history", "paywall_hits",
 const BOUNDED_BY = ["selectAllRows", ".limit(", ".single(", ".maybeSingle(", ".range(", "head: true", "count:"];
 
 const LIB = join(import.meta.dirname, "..", "lib");
+// app/info/ reads users and star_transactions fleet-wide directly (no lib/
+// helper in between) - it named both tables as unbounded-sensitive and still
+// truncated at 1000 rows for months because this scanner only ever looked at
+// lib/. Scanned separately since it holds .tsx, not .ts.
+const APP_INFO = join(import.meta.dirname, "..", "app", "info");
 
 type Offence = { file: string; line: number; table: string; text: string };
 const offences: Offence[] = [];
 let readsChecked = 0;
 
-for (const name of readdirSync(LIB).filter((f) => f.endsWith(".ts"))) {
-  const src = readFileSync(join(LIB, name), "utf8");
-  const lines = src.split("\n");
+function scanDir(dir: string, exts: string[]) {
+  for (const name of readdirSync(dir).filter((f) => exts.some((e) => f.endsWith(e)))) {
+    const src = readFileSync(join(dir, name), "utf8");
+    const lines = src.split("\n");
 
-  for (const table of UNBOUNDED) {
-    const needle = `.from("${table}")`;
-    lines.forEach((line, i) => {
-      if (!line.includes(needle)) return;
-      readsChecked += 1;
+    for (const table of UNBOUNDED) {
+      const needle = `.from("${table}")`;
+      lines.forEach((line, i) => {
+        if (!line.includes(needle)) return;
+        readsChecked += 1;
 
-      // The statement this read belongs to: walk back to the line that opens it
-      // (an assignment or an await) and forward to the one that ends it. Chained
-      // builders span many lines, and .limit() often sits several below .from().
-      let start = i;
-      while (start > 0 && !/(^|[\s(])(const|let|var|await|return)\s|=\s*$/.test(lines[start])) {
-        start -= 1;
-        if (i - start > 12) break; // a statement longer than this is not a simple read
-      }
-      let end = i;
-      while (end < lines.length - 1 && !/;\s*$/.test(lines[end])) {
-        end += 1;
-        if (end - i > 20) break;
-      }
-      const stmt = lines.slice(start, end + 1).join("\n");
+        // The statement this read belongs to: walk back to the line that opens it
+        // (an assignment or an await) and forward to the one that ends it. Chained
+        // builders span many lines, and .limit() often sits several below .from().
+        let start = i;
+        while (start > 0 && !/(^|[\s(])(const|let|var|await|return)\s|=\s*$/.test(lines[start])) {
+          start -= 1;
+          if (i - start > 12) break; // a statement longer than this is not a simple read
+        }
+        let end = i;
+        while (end < lines.length - 1 && !/;\s*$/.test(lines[end])) {
+          end += 1;
+          if (end - i > 20) break;
+        }
+        const stmt = lines.slice(start, end + 1).join("\n");
 
-      // Only READS can truncate. `.insert()`, `.update()`, `.upsert()` and
-      // `.delete()` name the same tables and are none of this check's business.
-      if (!stmt.includes(".select(")) {
-        readsChecked -= 1;
-        return;
-      }
+        // Only READS can truncate. `.insert()`, `.update()`, `.upsert()` and
+        // `.delete()` name the same tables and are none of this check's business.
+        if (!stmt.includes(".select(")) {
+          readsChecked -= 1;
+          return;
+        }
 
-      // A builder assigned to a variable and awaited elsewhere (the `let q = ...;
-      // if (x) q = q.eq(...); await selectAllRows(q)` shape) is judged on the
-      // whole function, not the assignment - so widen once before condemning it.
-      const widened = stmt + "\n" + lines.slice(end, Math.min(lines.length, end + 12)).join("\n");
+        // A builder assigned to a variable and awaited elsewhere (the `let q = ...;
+        // if (x) q = q.eq(...); await selectAllRows(q)` shape) is judged on the
+        // whole function, not the assignment - so widen once before condemning it.
+        const widened = stmt + "\n" + lines.slice(end, Math.min(lines.length, end + 12)).join("\n");
 
-      if (!BOUNDED_BY.some((b) => stmt.includes(b) || widened.includes(b))) {
-        offences.push({ file: name, line: i + 1, table, text: line.trim() });
-      }
-    });
+        if (!BOUNDED_BY.some((b) => stmt.includes(b) || widened.includes(b))) {
+          offences.push({ file: name, line: i + 1, table, text: line.trim() });
+        }
+      });
+    }
   }
 }
 
-console.log("unpaged fleet-wide reads in lib/");
+scanDir(LIB, [".ts"]);
+scanDir(APP_INFO, [".tsx", ".ts"]);
+
+console.log("unpaged fleet-wide reads in lib/ and app/info/");
 assert(`scanned some reads at all (found ${readsChecked})`, readsChecked > 0);
 assert(
   `every read of an unbounded table is paged or explicitly bounded`,
