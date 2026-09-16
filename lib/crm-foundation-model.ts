@@ -23,6 +23,8 @@ export type CrmConnectionView = {
   creatorId: string;
   provider: string;
   providerLabel: string;
+  handle: string | null;
+  displayName: string | null;
   accountLabel: string | null;
   connectionStatus: string;
   syncStatus: string;
@@ -31,7 +33,36 @@ export type CrmConnectionView = {
   statusTone: CrmStatusTone;
   lastVerifiedAt: string | null;
   lastSyncedAt: string | null;
+  revision: number | null;
   capabilities: CrmCapabilityView[];
+};
+
+export type CrmMappingConflictView = {
+  id: string;
+  creatorId: string | null;
+  conflictType: string;
+  conflictTypeLabel: string;
+  status: "open" | "resolved" | "ignored" | "unknown";
+  detectedAt: string | null;
+  revision: number | null;
+};
+
+export type CrmActivityView = {
+  id: string;
+  creatorId: string | null;
+  connectionId: string | null;
+  eventType: string;
+  eventLabel: string;
+  status: "recorded" | "succeeded" | "failed" | "warning" | "unknown";
+  occurredAt: string | null;
+};
+
+export type CrmReferenceOption = { id: string; label: string; detail: string | null };
+
+export type CrmFoundationReferences = {
+  agencies: CrmReferenceOption[];
+  clones: CrmReferenceOption[];
+  creatorAccounts: CrmReferenceOption[];
 };
 
 export type CrmCreatorView = {
@@ -40,11 +71,16 @@ export type CrmCreatorView = {
   status: string;
   statusLabel: string;
   accountLinked: boolean;
+  creatorAccountId: string | null;
+  cloneId: string | null;
   agency: { id: string; name: string } | null;
   twin: { id: string; name: string; slug: string | null; status: string } | null;
   mappingStatus: "resolved" | "conflict" | "unbound" | "unknown";
   mappingStatusLabel: string;
   mappingWarning: string | null;
+  revision: number | null;
+  bindingRevision: number | null;
+  mappingConflicts: CrmMappingConflictView[];
   connections: CrmConnectionView[];
   updatedAt: string | null;
 };
@@ -53,6 +89,8 @@ export type CrmFoundationAvailable = {
   status: "available";
   creators: CrmCreatorView[];
   loadedAt: string;
+  references?: CrmFoundationReferences;
+  activities?: CrmActivityView[];
 };
 
 export type CrmFoundationUnavailable = {
@@ -70,6 +108,7 @@ export type CrmCreatorRow = {
   status: string | null;
   created_at: string | null;
   updated_at: string | null;
+  revision?: number | null;
 };
 
 export type CrmCreatorBindingRow = {
@@ -81,6 +120,7 @@ export type CrmCreatorBindingRow = {
   conflict_reason: string | null;
   created_at: string | null;
   updated_at: string | null;
+  revision?: number | null;
 };
 
 export type CrmChannelConnectionRow = {
@@ -95,6 +135,7 @@ export type CrmChannelConnectionRow = {
   last_synced_at: string | null;
   created_at: string | null;
   updated_at: string | null;
+  revision?: number | null;
 };
 
 export type CrmConnectionCapabilityRow = {
@@ -107,6 +148,24 @@ export type CrmConnectionCapabilityRow = {
 
 export type CrmAgencyRow = { id: string; name: string | null };
 export type CrmCloneRow = { id: string; name: string | null; slug: string | null; status: string | null };
+export type CrmCreatorAccountRow = { id: string; display_name: string | null; account_status: string | null };
+export type CrmMappingConflictRow = {
+  id: string;
+  creator_id: string | null;
+  conflict_type: string | null;
+  status: string | null;
+  detected_at: string | null;
+  revision: number | null;
+};
+export type CrmActivityRow = {
+  id: string;
+  creator_id: string | null;
+  agency_id: string | null;
+  connection_id: string | null;
+  event_type: string | null;
+  status: string | null;
+  occurred_at: string | null;
+};
 
 export type CrmFoundationRows = {
   creators: CrmCreatorRow[];
@@ -115,6 +174,7 @@ export type CrmFoundationRows = {
   capabilities: CrmConnectionCapabilityRow[];
   agencies: CrmAgencyRow[];
   clones: CrmCloneRow[];
+  conflicts?: CrmMappingConflictRow[];
 };
 
 const DISPLAY_STATUS: Record<CrmConnectionDisplayStatus, { label: string; tone: CrmStatusTone }> = {
@@ -160,6 +220,9 @@ const cleanDate = (value: unknown): string | null => {
   if (typeof value !== "string" || !value || Number.isNaN(Date.parse(value))) return null;
   return value;
 };
+
+const cleanRevision = (value: unknown): number | null =>
+  typeof value === "number" && Number.isSafeInteger(value) && value > 0 ? value : null;
 
 const titleCase = (value: string): string =>
   value
@@ -221,6 +284,29 @@ export function buildCrmFoundationView(rows: CrmFoundationRows): CrmCreatorView[
   const agencyById = new Map(rows.agencies.map((agency) => [agency.id, agency]));
   const cloneById = new Map(rows.clones.map((clone) => [clone.id, clone]));
   const capabilityByConnection = new Map<string, CrmCapabilityView[]>();
+  const conflictsByCreator = new Map<string, CrmMappingConflictView[]>();
+
+  for (const row of rows.conflicts ?? []) {
+    if (!row.id) continue;
+    const conflictType = cleanText(row.conflict_type, "unknown", 120).toLowerCase();
+    const statusValue = cleanText(row.status, "unknown", 80).toLowerCase();
+    const status: CrmMappingConflictView["status"] = ["open", "resolved", "ignored"].includes(statusValue)
+      ? statusValue as CrmMappingConflictView["status"]
+      : "unknown";
+    const conflict: CrmMappingConflictView = {
+      id: row.id,
+      creatorId: row.creator_id || null,
+      conflictType,
+      conflictTypeLabel: titleCase(conflictType),
+      status,
+      detectedAt: cleanDate(row.detected_at),
+      revision: cleanRevision(row.revision),
+    };
+    if (!row.creator_id) continue;
+    const existing = conflictsByCreator.get(row.creator_id) ?? [];
+    existing.push(conflict);
+    conflictsByCreator.set(row.creator_id, existing);
+  }
 
   for (const row of rows.capabilities) {
     if (!row.connection_id || !row.capability) continue;
@@ -244,12 +330,18 @@ export function buildCrmFoundationView(rows: CrmFoundationRows): CrmCreatorView[
     if (!row.id || !row.creator_id) continue;
     const provider = cleanText(row.provider, "unknown", 80).toLowerCase();
     const display = connectionDisplayStatus(row.connection_status, row.sync_status);
+    // Preserve the full editable values allowed by the mutation contract. The
+    // UI can truncate them visually, but must never resubmit a shortened value.
+    const handle = cleanOptionalText(row.handle, 500);
+    const displayName = cleanOptionalText(row.display_name, 500);
     const connection: CrmConnectionView = {
       id: row.id,
       creatorId: row.creator_id,
       provider,
       providerLabel: providerLabel(provider),
-      accountLabel: cleanOptionalText(row.display_name, 120) ?? cleanOptionalText(row.handle, 120),
+      handle,
+      displayName,
+      accountLabel: displayName ?? handle,
       connectionStatus: cleanText(row.connection_status, "unknown", 80).toLowerCase(),
       syncStatus: cleanText(row.sync_status, "unknown", 80).toLowerCase(),
       displayStatus: display.status,
@@ -257,6 +349,7 @@ export function buildCrmFoundationView(rows: CrmFoundationRows): CrmCreatorView[
       statusTone: display.tone,
       lastVerifiedAt: cleanDate(row.last_verified_at),
       lastSyncedAt: cleanDate(row.last_synced_at),
+      revision: cleanRevision(row.revision),
       capabilities: (capabilityByConnection.get(row.id) ?? []).sort((a, b) => a.label.localeCompare(b.label)),
     };
     const existing = connectionsByCreator.get(row.creator_id) ?? [];
@@ -270,7 +363,14 @@ export function buildCrmFoundationView(rows: CrmFoundationRows): CrmCreatorView[
       const binding = bindingByCreator.get(creator.id);
       const agency = binding?.agency_id ? agencyById.get(binding.agency_id) : null;
       const twin = binding?.clone_id ? cloneById.get(binding.clone_id) : null;
-      const mappingStatus = normalizeMappingStatus(binding?.mapping_status ?? null);
+      const creatorStatus = cleanText(creator.status, "unknown", 80).toLowerCase();
+      const mappingConflicts = (conflictsByCreator.get(creator.id) ?? []).sort((a, b) =>
+        (b.detectedAt ?? "").localeCompare(a.detectedAt ?? ""),
+      );
+      const storedMappingStatus = normalizeMappingStatus(binding?.mapping_status ?? null);
+      const mappingStatus = mappingConflicts.length > 0 || creatorStatus === "mapping_conflict"
+        ? "conflict"
+        : storedMappingStatus;
       const mappingWarning =
         mappingStatus === "conflict"
           ? cleanOptionalText(binding?.conflict_reason, 240) ?? "This creator has an unresolved legacy mapping."
@@ -280,10 +380,12 @@ export function buildCrmFoundationView(rows: CrmFoundationRows): CrmCreatorView[
 
       return {
         id: creator.id,
-        displayName: cleanText(creator.display_name, "Unnamed creator", 120),
-        status: cleanText(creator.status, "unknown", 80).toLowerCase(),
+        displayName: cleanText(creator.display_name, "Unnamed creator", 200),
+        status: creatorStatus,
         statusLabel: titleCase(cleanText(creator.status, "unknown", 80)),
         accountLinked: Boolean(binding?.creator_account_id),
+        creatorAccountId: binding?.creator_account_id ?? null,
+        cloneId: binding?.clone_id ?? null,
         agency: agency ? { id: agency.id, name: cleanText(agency.name, "Unknown agency", 120) } : null,
         twin: twin
           ? {
@@ -296,6 +398,9 @@ export function buildCrmFoundationView(rows: CrmFoundationRows): CrmCreatorView[
         mappingStatus,
         mappingStatusLabel: mappingStatusLabel(mappingStatus),
         mappingWarning,
+        revision: cleanRevision(creator.revision),
+        bindingRevision: cleanRevision(binding?.revision),
+        mappingConflicts,
         connections: (connectionsByCreator.get(creator.id) ?? []).sort((a, b) =>
           a.providerLabel.localeCompare(b.providerLabel),
         ),
@@ -303,6 +408,54 @@ export function buildCrmFoundationView(rows: CrmFoundationRows): CrmCreatorView[
       };
     })
     .sort((a, b) => a.displayName.localeCompare(b.displayName));
+}
+
+export function buildCrmActivityView(rows: CrmActivityRow[]): CrmActivityView[] {
+  return rows
+    .filter((row) => Boolean(row.id))
+    .map((row): CrmActivityView => {
+      const eventType = cleanText(row.event_type, "unknown", 120).toLowerCase();
+      const rawStatus = cleanText(row.status, "unknown", 80).toLowerCase();
+      const status: CrmActivityView["status"] = ["recorded", "succeeded", "failed", "warning"].includes(rawStatus)
+        ? rawStatus as CrmActivityView["status"]
+        : "unknown";
+      return {
+        id: row.id,
+        creatorId: row.creator_id || null,
+        connectionId: row.connection_id || null,
+        eventType,
+        eventLabel: titleCase(eventType.replace(/\./g, " ")),
+        status,
+        occurredAt: cleanDate(row.occurred_at),
+      };
+    })
+    .sort((a, b) => (b.occurredAt ?? "").localeCompare(a.occurredAt ?? ""));
+}
+
+export function buildCrmFoundationReferences(input: {
+  agencies: CrmAgencyRow[];
+  clones: CrmCloneRow[];
+  creatorAccounts: CrmCreatorAccountRow[];
+}): CrmFoundationReferences {
+  return {
+    agencies: input.agencies
+      .map((row) => ({ id: row.id, label: cleanText(row.name, "Unknown agency", 120), detail: null }))
+      .sort((a, b) => a.label.localeCompare(b.label)),
+    clones: input.clones
+      .map((row) => ({
+        id: row.id,
+        label: cleanText(row.name, "Unnamed Twin", 120),
+        detail: cleanOptionalText(row.slug, 120),
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label)),
+    creatorAccounts: input.creatorAccounts
+      .map((row) => ({
+        id: row.id,
+        label: cleanText(row.display_name, "Unnamed creator account", 120),
+        detail: cleanOptionalText(row.account_status, 80),
+      }))
+      .sort((a, b) => a.label.localeCompare(b.label)),
+  };
 }
 
 export function crmFoundationSummary(creators: CrmCreatorView[]) {

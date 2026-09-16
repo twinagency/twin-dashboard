@@ -19,6 +19,7 @@ export const AGENCY_COLUMNS: Record<string, readonly string[]> = {
     "sync_status",
     "last_verified_at",
     "last_synced_at",
+    "revision",
     "created_at",
     "updated_at"
   ],
@@ -29,6 +30,7 @@ export const AGENCY_COLUMNS: Record<string, readonly string[]> = {
     "agency_id",
     "mapping_status",
     "conflict_reason",
+    "revision",
     "created_at",
     "updated_at"
   ],
@@ -36,6 +38,7 @@ export const AGENCY_COLUMNS: Record<string, readonly string[]> = {
     "id",
     "display_name",
     "status",
+    "revision",
     "created_at",
     "updated_at"
   ],
