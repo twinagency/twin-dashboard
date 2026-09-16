@@ -44,9 +44,18 @@ export default async function ClonesPage() {
     for (const p of photosRes.data ?? []) {
       if (p.clone_id && !firstPath.has(p.clone_id)) firstPath.set(p.clone_id, p.storage_path);
     }
-    for (const [cloneId, path] of firstPath) {
-      const { data: signed } = await supabaseAdmin.storage.from("media").createSignedUrl(path, 3600);
-      if (signed?.signedUrl) avatarUrlByCloneId.set(cloneId, signed.signedUrl);
+    // Batched (createSignedUrls, plural), same as app/users/page.tsx. The old
+    // code called createSignedUrl once per clone in a serial for loop, ~30-80ms
+    // each, adding up to 1-1.5s of pure round trip latency for ten clones.
+    const pathEntries = [...firstPath.entries()];
+    if (pathEntries.length > 0) {
+      const { data: signed } = await supabaseAdmin.storage
+        .from("media")
+        .createSignedUrls(pathEntries.map(([, path]) => path), 3600);
+      pathEntries.forEach(([cloneId], i) => {
+        const url = signed?.[i]?.signedUrl;
+        if (url) avatarUrlByCloneId.set(cloneId, url);
+      });
     }
   }
 
