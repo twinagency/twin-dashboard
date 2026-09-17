@@ -1,6 +1,9 @@
 import Link from "next/link";
 import { redirect } from "next/navigation";
-import { supabaseAdmin } from "@/lib/supabase";
+// serviceClient, not supabaseAdmin: supabaseAdmin's fetch is intercepted for
+// agency sessions and force-scoped by clone_id, which these agency_id-scoped
+// tables do not have. Every query here scopes to the signed-in agency explicitly.
+import { serviceClient } from "@/lib/supabase-service";
 import { getDashboardAccess } from "@/lib/dashboard-access";
 import { Card } from "@/components/ui/card";
 
@@ -19,7 +22,7 @@ export default async function AgencyCreatorsPage() {
   const access = await getDashboardAccess();
   if (!access) redirect("/creator-management");
 
-  const { data: assignmentRows } = await supabaseAdmin
+  const { data: assignmentRows } = await serviceClient()
     .from("creator_agency_assignments")
     .select("creator_account_id,agency_id")
     .eq("agency_id", access.id);
@@ -31,12 +34,12 @@ export default async function AgencyCreatorsPage() {
   }
 
   const [creatorRes, applicationRes, progressRes, fileRes, linkRes, cloneRes] = await Promise.all([
-    supabaseAdmin.from("creator_accounts").select("id,display_name,email,account_status,created_at").in("id", ids).order("created_at", { ascending: false }),
-    supabaseAdmin.from("creator_applications").select("creator_account_id,status,submitted_at,created_at").in("creator_account_id", ids).order("created_at", { ascending: false }),
-    supabaseAdmin.from("creator_onboarding_progress").select("creator_account_id,questionnaire_completed,content_completed,voice_completed").in("creator_account_id", ids),
-    supabaseAdmin.from("creator_files").select("creator_account_id,storage_transfer_status").in("creator_account_id", ids),
-    supabaseAdmin.from("creator_clone_links").select("creator_account_id,clone_id,twin_slug").in("creator_account_id", ids),
-    supabaseAdmin.from("clones").select("id,name").in("id", access.cloneIds.length ? access.cloneIds : ["00000000-0000-0000-0000-000000000000"]),
+    serviceClient().from("creator_accounts").select("id,display_name,email,account_status,created_at").in("id", ids).order("created_at", { ascending: false }),
+    serviceClient().from("creator_applications").select("creator_account_id,status,submitted_at,created_at").in("creator_account_id", ids).order("created_at", { ascending: false }),
+    serviceClient().from("creator_onboarding_progress").select("creator_account_id,questionnaire_completed,content_completed,voice_completed").in("creator_account_id", ids),
+    serviceClient().from("creator_files").select("creator_account_id,storage_transfer_status").in("creator_account_id", ids),
+    serviceClient().from("creator_clone_links").select("creator_account_id,clone_id,twin_slug").in("creator_account_id", ids),
+    serviceClient().from("clones").select("id,name").in("id", access.cloneIds.length ? access.cloneIds : ["00000000-0000-0000-0000-000000000000"]),
   ]);
 
   const creators = (creatorRes.data ?? []) as Creator[];

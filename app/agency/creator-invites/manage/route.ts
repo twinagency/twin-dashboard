@@ -2,7 +2,10 @@ import { dashboardOrigin, trustedFormOrigin } from "@/lib/form-origin";
 import { NextRequest, NextResponse } from "next/server";
 import { getDashboardAccess } from "@/lib/dashboard-access";
 import { hashInviteCode, randomInviteCode } from "@/lib/creator-invite-codes";
-import { supabaseAdmin } from "@/lib/supabase";
+// serviceClient, not supabaseAdmin: supabaseAdmin's fetch is intercepted for
+// agency sessions and force-scoped by clone_id, which these agency_id-scoped
+// tables do not have. Every query here scopes to the signed-in agency explicitly.
+import { serviceClient } from "@/lib/supabase-service";
 
 export async function POST(req: NextRequest) {
   if (!trustedFormOrigin(req)) return new NextResponse("Forbidden", { status: 403 });
@@ -20,7 +23,7 @@ export async function POST(req: NextRequest) {
     const id = String(fd.get("id") ?? "");
     if (!isUuid(id)) return fail();
     // Scoped to this agency: an agency can only revoke its own codes.
-    const revoked = await supabaseAdmin
+    const revoked = await serviceClient()
       .from("creator_agency_codes")
       .update({ active: false, updated_at: new Date().toISOString() })
       .eq("id", id)
@@ -53,7 +56,7 @@ export async function POST(req: NextRequest) {
   }
 
   const code = randomInviteCode();
-  const inserted = await supabaseAdmin.from("creator_agency_codes").insert({
+  const inserted = await serviceClient().from("creator_agency_codes").insert({
     agency_id: access.id,
     code_hash: hashInviteCode(code),
     label: label || null,

@@ -3,7 +3,10 @@ import { getDashboardAccess } from "@/lib/dashboard-access";
 import { dashboardOrigin } from "@/lib/form-origin";
 import { headers } from "next/headers";
 import { INVITE_CODE_PATTERN, inviteUrl } from "@/lib/creator-invite-codes";
-import { supabaseAdmin } from "@/lib/supabase";
+// serviceClient, not supabaseAdmin: supabaseAdmin's fetch is intercepted for
+// agency sessions and force-scoped by clone_id, which these agency_id-scoped
+// tables do not have. Every query below scopes to access.id explicitly.
+import { serviceClient } from "@/lib/supabase-service";
 
 export const metadata = { title: "Creator invites · Twin" };
 export const dynamic = "force-dynamic";
@@ -28,7 +31,7 @@ export default async function AgencyCreatorInvites({ searchParams }: { searchPar
   const { result, created } = await searchParams;
   const newCode = created && INVITE_CODE_PATTERN.test(created) ? created : null;
 
-  const codes = await supabaseAdmin
+  const codes = await serviceClient()
     .from("creator_agency_codes")
     .select("id,label,active,max_uses,uses,expires_at,created_at")
     .eq("agency_id", access.id)
