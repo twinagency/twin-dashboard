@@ -206,7 +206,7 @@ function snapshotAgeLabel(ageSeconds: number) {
 }
 
 export default function RevenueDashboard({ cloneId }: { cloneId?: string | null } = {}) {
-  const { isCreator } = useDashboardAccess();
+  const { isCreator, isAgency } = useDashboardAccess();
   const scoped = Boolean(cloneId);
   const [period, setPeriod] = useState<Period>("1M");
   // Custom calendar range (yyyy-mm-dd strings, straight from <input type="date">).
@@ -475,7 +475,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
     <div className="pb-6">
       {/* Named on screen, not just in the console. The operator is the person
           who has to decide whether to pick a shorter window or call someone. */}
-      {loadError && (
+      {loadError && !isAgency && (
         <div className="mb-3 flex items-start gap-3 rounded-md border border-[#b4432f]/40 bg-[#fdecea] px-4 py-3 text-sm text-[#7a2b1e]">
           <span aria-hidden className="mt-0.5 text-base leading-none">⚠️</span>
           <div className="min-w-0 flex-1">
