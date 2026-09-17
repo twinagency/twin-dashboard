@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { getDashboardAccess } from "@/lib/dashboard-access";
 import { dashboardOrigin } from "@/lib/form-origin";
 import { headers } from "next/headers";
+import CopyField from "./CopyField";
 import { INVITE_CODE_PATTERN, inviteUrl } from "@/lib/creator-invite-codes";
 // serviceClient, not supabaseAdmin: supabaseAdmin's fetch is intercepted for
 // agency sessions and force-scoped by clone_id, which these agency_id-scoped
@@ -60,10 +61,8 @@ export default async function AgencyCreatorInvites({ searchParams }: { searchPar
       {newCode && (
         <div role="status" className="mb-6 rounded-2xl border border-good/40 bg-good/10 p-5">
           <p className="text-sm font-semibold">Copy this now. It is shown once and cannot be recovered.</p>
-          <p className="mt-3 text-xs uppercase tracking-wide text-muted">Code</p>
-          <p className="select-all font-mono text-xl tracking-[0.2em]">{newCode}</p>
-          <p className="mt-3 text-xs uppercase tracking-wide text-muted">Invite link</p>
-          <p className="select-all break-all font-mono text-sm">{inviteUrl(origin, newCode)}</p>
+          <CopyField label="Code" value={newCode} mono="code" />
+          <CopyField label="Invite link" value={inviteUrl(origin, newCode)} mono="link" />
           <p className="mt-3 text-xs text-muted">
             Only a hash of the code is stored, so nobody, including this dashboard, can show it again. If it is lost,
             revoke it below and generate a new one.
