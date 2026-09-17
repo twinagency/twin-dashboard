@@ -73,7 +73,12 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     return <html lang="en" data-creator-workspace={isCreatorDashboardPath(pathname) ? "true" : undefined} data-brand-theme={theme} data-agency={link ? "lynq" : isMoxy(creator?.name) ? "moxy" : undefined} className={fontClass} style={{colorScheme:"light"}} suppressHydrationWarning><body className="min-h-screen bg-bg"><script dangerouslySetInnerHTML={{__html:'try{if(localStorage.getItem("blurMedia")==="true")document.documentElement.classList.add("blur-media")}catch(e){}'}} />{children}</body></html>;
   }
   if (isMarketingPath(pathname)) return <html lang="en" className={fontClass}><body>{children}</body></html>;
-  if (isTwinLoginPath(pathname) || (pathname && isAgencyPath(pathname))) {
+  // These two live under the /agency/ prefix but are authenticated operator
+  // pages, not part of the login/portal shell that prefix otherwise means:
+  // they need the real Sidebar and DashboardAccessProvider below, not the
+  // bare shell every other /agency/* path gets.
+  const isAgencyOperatorPage = pathname === "/agency/creators" || pathname === "/agency/creator-invites";
+  if (isTwinLoginPath(pathname) || (pathname && isAgencyPath(pathname) && !isAgencyOperatorPage)) {
     return <html lang="en" data-agency={pathname && isAgencyPath(pathname) && isMoxy(pathAgencyName(pathname)) ? "moxy" : undefined} data-brand-theme={pathname && isAgencyPath(pathname) && pathAgencyName(pathname) === JESS_KATE_PORTAL.name ? "ivory-cherry" : undefined} className={fontClass}><body className="min-h-screen bg-bg">{children}</body></html>;
   }
   const devBypass = !isTwinLoginPath(pathname) && process.env.NODE_ENV !== "production";
