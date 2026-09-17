@@ -1,11 +1,15 @@
 import { INVITE_CODE_PATTERN, hashInviteCode } from "./creator-invite-codes";
 import { serviceClient } from "./supabase-service";
 
-export type InviteAgency = { name: string; slug: string; logo: string | null };
+export type InviteAgency = { name: string; slug: string; logo: string | null; icon: string | null };
 
 // Slugs with a brand asset in public/. An agency without one is presented by
 // name rather than a broken image, so a new agency needs no code change.
 const INVITE_LOGOS: Record<string, string> = { moxy: "/moxy/logo.png" };
+// The browser tab / chat-app link preview icon. Separate from the page logo:
+// this is what generateMetadata puts in the page's own <link rel="icon">, so
+// an agency invite carries its own favicon instead of Twin's.
+const INVITE_ICONS: Record<string, string> = { moxy: "/moxy/icon.svg" };
 
 /**
  * The agency behind an invite code, for presentation only. Resolving this never
@@ -27,7 +31,7 @@ export async function agencyForInviteCode(code: string | undefined): Promise<Inv
     const expired = !!row.data.expires_at && Date.parse(row.data.expires_at as string) <= Date.now();
     const exhausted = row.data.max_uses != null && (row.data.uses as number) >= (row.data.max_uses as number);
     if (!row.data.active || expired || exhausted || !agency?.active) return null;
-    return { name: agency.name, slug: agency.slug, logo: INVITE_LOGOS[agency.slug] ?? null };
+    return { name: agency.name, slug: agency.slug, logo: INVITE_LOGOS[agency.slug] ?? null, icon: INVITE_ICONS[agency.slug] ?? null };
   } catch {
     return null;
   }
