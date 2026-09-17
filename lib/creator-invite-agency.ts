@@ -1,7 +1,7 @@
 import { INVITE_CODE_PATTERN, hashInviteCode } from "./creator-invite-codes";
 import { serviceClient } from "./supabase-service";
 
-export type InviteAgency = { name: string; slug: string; logo: string | null; icon: string | null };
+export type InviteAgency = { name: string; slug: string; logo: string | null; icon: string | null; dark: boolean };
 
 // Slugs with a brand asset in public/. An agency without one is presented by
 // name rather than a broken image, so a new agency needs no code change.
@@ -10,6 +10,10 @@ const INVITE_LOGOS: Record<string, string> = { moxy: "/moxy/logo.png" };
 // this is what generateMetadata puts in the page's own <link rel="icon">, so
 // an agency invite carries its own favicon instead of Twin's.
 const INVITE_ICONS: Record<string, string> = { moxy: "/moxy/icon.svg" };
+// Agencies whose own brand is dark/monochrome (see docs/moxy-portal.md), so the
+// invite page matches their actual sign-in screen instead of Twin's light blue
+// layout with only the logo swapped in. Anything not listed stays light.
+const INVITE_DARK = new Set(["moxy"]);
 
 /**
  * The agency behind an invite code, for presentation only. Resolving this never
@@ -31,7 +35,7 @@ export async function agencyForInviteCode(code: string | undefined): Promise<Inv
     const expired = !!row.data.expires_at && Date.parse(row.data.expires_at as string) <= Date.now();
     const exhausted = row.data.max_uses != null && (row.data.uses as number) >= (row.data.max_uses as number);
     if (!row.data.active || expired || exhausted || !agency?.active) return null;
-    return { name: agency.name, slug: agency.slug, logo: INVITE_LOGOS[agency.slug] ?? null, icon: INVITE_ICONS[agency.slug] ?? null };
+    return { name: agency.name, slug: agency.slug, logo: INVITE_LOGOS[agency.slug] ?? null, icon: INVITE_ICONS[agency.slug] ?? null, dark: INVITE_DARK.has(agency.slug) };
   } catch {
     return null;
   }

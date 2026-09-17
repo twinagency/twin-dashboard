@@ -14,18 +14,29 @@ assert.doesNotMatch(inputClass, /\btext-white(?:\/\d+)?\b|\bbg-black(?:\/\d+)?\b
 
 for (const file of [
   "components/CreatorLoginScreen.tsx",
-  "components/CreatorSignupScreen.tsx",
   "components/CreatorForgotPasswordScreen.tsx",
   "components/CreatorResetPasswordScreen.tsx",
 ]) {
   const source = readFileSync(file, "utf8");
   assert.match(source, /className=\{tether \? tetherAuthInputClass : undefined\}/, `${file} must use the shared Tether input treatment`);
 }
+// CreatorSignupScreen.tsx also offers this treatment to a dark-brand agency
+// invite (Moxy), so its gate is darkForm (tether || a dark invite) rather
+// than tether alone. Both must still resolve to the same shared input class.
+{
+  const source = readFileSync("components/CreatorSignupScreen.tsx", "utf8");
+  assert.match(source, /const darkForm = tether \|\| !!invited\?\.dark;/, "CreatorSignupScreen.tsx must gate the dark form on tether or a dark agency invite");
+  assert.match(source, /className=\{darkForm \? tetherAuthInputClass : undefined\}/, "CreatorSignupScreen.tsx must use the shared Tether input treatment for darkForm");
+}
 
-assert.match(globals, /\[data-creator-auth-brand="tether"\] \.tether-auth-input\s*\{[\s\S]*?color:\s*#080a0e;[\s\S]*?background-color:\s*#ffffff;/);
+assert.match(globals, /\[data-creator-auth-brand="tether"\] \.tether-auth-input,?\s*(?:\[data-creator-auth-brand="moxy"\] \.tether-auth-input,?\s*)?\{[\s\S]*?color:\s*#080a0e;[\s\S]*?background-color:\s*#ffffff;/);
 assert.match(globals, /\[data-creator-auth-brand="tether"\] input\.tether-auth-input:-webkit-autofill/);
 assert.match(globals, /-webkit-text-fill-color:\s*#080a0e !important;/);
 assert.match(globals, /-webkit-box-shadow:\s*0 0 0 1000px #ffffff inset !important;/);
 assert.doesNotMatch(globals, /\[data-creator-auth-brand="twin"\][^{]*tether-auth-input/);
+// A dark-brand agency invite is scoped by its own slug ("moxy"), never by
+// "twin", so the dark treatment cannot leak onto plain Twin creator pages.
+assert.match(globals, /\[data-creator-auth-brand="moxy"\] \.tether-auth-input/);
+assert.match(globals, /\[data-creator-auth-brand="moxy"\] input\.tether-auth-input:-webkit-autofill/);
 
 console.log("TETHER AUTH UI PASSED: typed and autofilled values stay dark on light inputs across signup, login, forgot-password and reset-password without changing Twin auth.");

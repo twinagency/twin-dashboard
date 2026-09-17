@@ -162,8 +162,12 @@ body {
    card. Keep native typing, password-manager fills and browser autofill on the
    same high-contrast treatment; WebKit otherwise supplies its own fill while
    retaining the page's inherited white text. The selectors are scoped to the
-   verified Tether auth frame so Twin and every other agency stay untouched. */
-[data-creator-auth-brand="tether"] .tether-auth-input {
+   verified Tether auth frame so Twin and every other agency stay untouched.
+   A dark-brand agency invite (Moxy) shares this same treatment, scoped by its
+   own slug rather than "tether" or "twin", so it stays independently correct
+   as either brand's markup changes. */
+[data-creator-auth-brand="tether"] .tether-auth-input,
+[data-creator-auth-brand="moxy"] .tether-auth-input {
   color: #080a0e;
   caret-color: #080a0e;
   background-color: #ffffff;
@@ -173,7 +177,11 @@ body {
 [data-creator-auth-brand="tether"] input.tether-auth-input:autofill,
 [data-creator-auth-brand="tether"] input.tether-auth-input:-webkit-autofill,
 [data-creator-auth-brand="tether"] input.tether-auth-input:-webkit-autofill:hover,
-[data-creator-auth-brand="tether"] input.tether-auth-input:-webkit-autofill:focus {
+[data-creator-auth-brand="tether"] input.tether-auth-input:-webkit-autofill:focus,
+[data-creator-auth-brand="moxy"] input.tether-auth-input:autofill,
+[data-creator-auth-brand="moxy"] input.tether-auth-input:-webkit-autofill,
+[data-creator-auth-brand="moxy"] input.tether-auth-input:-webkit-autofill:hover,
+[data-creator-auth-brand="moxy"] input.tether-auth-input:-webkit-autofill:focus {
   color: #080a0e !important;
   caret-color: #080a0e;
   background-color: #ffffff !important;

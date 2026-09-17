@@ -36,8 +36,33 @@ export default function CreatorAuthFrame({
   footer?: ReactNode;
   // Present when the visitor arrived on an agency invite link, so the page
   // carries that agency's name and artwork instead of Twin's.
-  agencyBrand?: { name: string; logo: string | null } | null;
+  agencyBrand?: { name: string; slug: string; logo: string | null; dark?: boolean } | null;
 }) {
+  // A dark-brand agency invite gets that agency's actual look (same shape as
+  // its own /<slug> sign-in screen), not Twin's light two-panel layout with a
+  // logo swapped in. Only reachable via brand === "twin" today.
+  if (agencyBrand?.dark) {
+    return (
+      // data-creator-auth-brand carries the agency's own slug (not "twin"), so
+      // its dark-input CSS in globals.css stays scoped to this agency and never
+      // leaks onto the plain Twin creator pages the same class name appears on.
+      <main data-creator-auth-brand={agencyBrand.slug} className="flex min-h-dvh items-center justify-center bg-black px-6 py-12">
+        <div className="w-full max-w-sm">
+          {agencyBrand.logo
+            ? <img src={agencyBrand.logo} alt={agencyBrand.name} className="mx-auto mb-12 h-auto w-full" />
+            : <p className="mb-12 text-center text-3xl font-semibold text-white">{agencyBrand.name}</p>}
+          <div className="rounded-2xl border border-white/15 bg-white/[0.04] p-7 shadow-2xl sm:p-8">
+            <p className="mb-1 text-xs font-semibold uppercase tracking-[0.2em] text-white/50">{eyebrow}</p>
+            <h1 className="mb-2 text-2xl font-semibold tracking-tight text-white">{title}</h1>
+            {description ? <p className="mb-6 text-sm leading-6 text-white/60">{description}</p> : null}
+            {children}
+          </div>
+          {footer ? <div className="mt-6 text-center text-sm text-white/60">{footer}</div> : null}
+          <p className="mt-8 text-center text-[10px] font-medium uppercase tracking-[0.25em] text-white/45">Creator workspace</p>
+        </div>
+      </main>
+    );
+  }
   if (brand === "link") {
     return (
       <LynqLoginShell
