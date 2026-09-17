@@ -110,7 +110,7 @@ async function main() {
   const sidebar=readFileSync("components/Sidebar.tsx","utf8");
   assert.match(sidebar,/aria-disabled="true"/);assert.match(sidebar,/Not available/);assert.match(sidebar,/!readOnly \|\| showUnavailable/);
   assert.match(sidebar,/showUnavailable \? <div/);
-  assert.match(sidebar,/MORE_LINKS\.filter\(link => link.kind !== "route" \|\| !\["\/jarvis", "\/agency-admin"\]\.includes\(link.href\)\)/);
+  assert.match(sidebar,/MORE_LINKS\.filter\(link => link.kind !== "route" \|\| !\["\/jarvis", "\/agency-admin", "\/agency-admin\/creator-codes"\]\.includes\(link.href\)\)/);
   assert.match(sidebar,/AI Intelligence Core/);
   assert.match(sidebar,/<IntelligenceCoreIcon size=\{64\} \/>/);
   assert.ok(sidebar.indexOf("<IntelligenceCoreIcon size={64}") < sidebar.indexOf("<nav "),"Core sits above the navigation");
