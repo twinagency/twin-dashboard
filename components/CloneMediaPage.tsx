@@ -2,6 +2,7 @@ import CloneScopeForm from "@/components/CloneScopeForm";
 import { supabaseAdmin } from "@/lib/supabase";
 import { Button } from "@/components/ui/button";
 import MediaManager from "@/app/media/MediaManager";
+import DashboardAccessProvider from "@/components/DashboardAccessProvider";
 
 export default async function CloneMediaPage({ cloneId, creatorMode = false }: { cloneId: string; creatorMode?: boolean }) {
   const [cloneRes, photosRes, videosRes, bundlesRes] = await Promise.all([
@@ -20,7 +21,7 @@ export default async function CloneMediaPage({ cloneId, creatorMode = false }: {
       {creatorMode ? (
         <div className="mb-5">
           <h1 className="text-2xl font-semibold text-ink">Pay Per View</h1>
-          <p className="mt-1 text-sm text-muted">Your photos, videos, bundles and current prices.</p>
+          <p className="mt-1 text-sm text-muted">Your photos, videos, bundles and current prices. Upload new content below.</p>
         </div>
       ) : (
         <div className="mb-2 flex items-center justify-end">
@@ -29,7 +30,13 @@ export default async function CloneMediaPage({ cloneId, creatorMode = false }: {
           </CloneScopeForm>
         </div>
       )}
-      <MediaManager cloneId={cloneId} photos={photosRes.data ?? []} videos={videosRes.data ?? []} bundles={bundlesRes.data ?? []} categoryPricing={clone.category_pricing} />
+      {creatorMode ? (
+        <DashboardAccessProvider audience="admin">
+          <MediaManager cloneId={cloneId} photos={photosRes.data ?? []} videos={videosRes.data ?? []} bundles={bundlesRes.data ?? []} categoryPricing={clone.category_pricing} />
+        </DashboardAccessProvider>
+      ) : (
+        <MediaManager cloneId={cloneId} photos={photosRes.data ?? []} videos={videosRes.data ?? []} bundles={bundlesRes.data ?? []} categoryPricing={clone.category_pricing} />
+      )}
     </div>
   );
 }
