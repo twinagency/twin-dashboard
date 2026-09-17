@@ -27,6 +27,7 @@ const PAGE_LABELS: Record<string, string> = {
   "/clones": "Creators",
   "/settings": "Settings",
   "/agency-admin": "Agency access",
+  "/agency-admin/creator-codes": "Creator invites",
   "/crm/inbox": "Inbox",
   "/crm/fans": "Fan CRM",
   "/crm/campaigns": "Campaigns",

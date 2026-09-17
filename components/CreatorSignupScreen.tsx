@@ -19,7 +19,7 @@ const errorCopy: Record<string,string> = {
   failed: "We couldn't create your account. Please try again.",
 };
 
-export default async function CreatorSignupScreen({ searchParams, brand }: { searchParams: Promise<{ error?: string; status?: string }>; brand: CreatorAuthBrand }) {
+export default async function CreatorSignupScreen({ searchParams, brand, initialAgencyCode }: { searchParams: Promise<{ error?: string; status?: string }>; brand: CreatorAuthBrand; initialAgencyCode?: string }) {
   const { error, status } = await searchParams;
   const tether = brand === "tether";
   const link = brand === "link";
@@ -48,7 +48,7 @@ export default async function CreatorSignupScreen({ searchParams, brand }: { sea
         <label className="block"><span className={tether ? "mb-2 block text-sm font-medium text-white/82" : "mb-1 block text-sm text-muted"}>Creator name</span><Input name="display_name" autoComplete="name" required autoFocus className={tether ? tetherAuthInputClass : undefined} /></label>
         <label className="block"><span className={tether ? "mb-2 block text-sm font-medium text-white/82" : "mb-1 block text-sm text-muted"}>Email address</span><Input name="email" type="email" autoComplete="email" required className={tether ? tetherAuthInputClass : undefined} /></label>
         <label className="block"><span className={tether ? "mb-2 block text-sm font-medium text-white/82" : "mb-1 block text-sm text-muted"}>Password</span><Input name="password" type="password" minLength={8} autoComplete="new-password" required className={tether ? tetherAuthInputClass : undefined} /></label>
-        {!directAgencySignup && <label className="block"><span className="mb-1 block text-sm text-muted">Agency code <span className="text-muted/70">(optional)</span></span><Input name="agency_code" autoCapitalize="characters" autoComplete="off" placeholder="Enter code" /></label>}
+        {!directAgencySignup && <label className="block"><span className="mb-1 block text-sm text-muted">Agency code <span className="text-muted/70">(optional)</span></span><Input name="agency_code" defaultValue={initialAgencyCode} autoCapitalize="characters" autoComplete="off" placeholder="Enter code" /></label>}
         {error && <p role="alert" className={tether ? "rounded-xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-100" : "text-sm text-crit"}>{errorCopy[error] || errorCopy.failed}</p>}
         {tether ? <button type="submit" className={tetherAuthButtonClass}>Create creator account</button> : <Button type="submit" className="w-full">{link ? "Create creator account" : "Create account"}</Button>}
       </form>}
