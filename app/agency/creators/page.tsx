@@ -5,7 +5,7 @@ import { getDashboardAccess } from "@/lib/dashboard-access";
 import { Card } from "@/components/ui/card";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Agency Creators · Twin" };
+export const metadata = { title: "Agency Accounts · Twin" };
 
 type Assignment = { creator_account_id: string; agency_id: string | null };
 type Creator = { id: string; display_name: string | null; email: string | null; account_status: string; created_at: string };
@@ -27,7 +27,7 @@ export default async function AgencyCreatorsPage() {
   const ids = assignments.map((row) => row.creator_account_id);
 
   if (!ids.length) {
-    return <div className="dashboard-page text-ink"><h1 className="text-2xl font-semibold">Creators</h1><p className="mt-2 text-sm text-muted">No creator accounts are assigned to {access.name} yet.</p></div>;
+    return <div className="dashboard-page text-ink"><h1 className="text-2xl font-semibold">Accounts</h1><p className="mt-2 text-sm text-muted">No creator accounts are assigned to {access.name} yet.</p></div>;
   }
 
   const [creatorRes, applicationRes, progressRes, fileRes, linkRes, cloneRes] = await Promise.all([
@@ -62,7 +62,7 @@ export default async function AgencyCreatorsPage() {
 
   return (
     <div className="dashboard-page text-ink">
-      <div className="mb-6"><p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent-2">{access.name}</p><h1 className="mt-1 text-2xl font-semibold">Creators</h1><p className="mt-1 text-sm text-muted">Creator onboarding assigned to your agency. You can link a creator to any clone Twin has already assigned you; Twin admin still handles application approval and Twin setup.</p></div>
+      <div className="mb-6"><p className="text-xs font-semibold uppercase tracking-[0.18em] text-accent-2">{access.name}</p><h1 className="mt-1 text-2xl font-semibold">Accounts</h1><p className="mt-1 text-sm text-muted">Creator onboarding assigned to your agency. You can link a creator to any clone Twin has already assigned you; Twin admin still handles application approval and Twin setup.</p></div>
       <div className="grid gap-3">
         {creators.map((creator) => {
           const application = latestApplication.get(creator.id);
