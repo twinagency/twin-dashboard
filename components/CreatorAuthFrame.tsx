@@ -24,6 +24,7 @@ export default function CreatorAuthFrame({
   description,
   children,
   footer,
+  agencyBrand,
 }: {
   brand: CreatorAuthBrand;
   heroTitle: string;
@@ -33,6 +34,9 @@ export default function CreatorAuthFrame({
   description?: string;
   children: ReactNode;
   footer?: ReactNode;
+  // Present when the visitor arrived on an agency invite link, so the page
+  // carries that agency's name and artwork instead of Twin's.
+  agencyBrand?: { name: string; logo: string | null } | null;
 }) {
   if (brand === "link") {
     return (
@@ -108,9 +112,13 @@ export default function CreatorAuthFrame({
       <section className="relative hidden overflow-hidden bg-[#06172f] p-12 text-white lg:flex lg:flex-col lg:justify-between">
         <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(8,43,85,0.08),rgba(6,23,47,0.55)),url('/brand/twin-deep-texture.png')] bg-cover bg-center" />
         <div className="absolute inset-0 bg-[radial-gradient(900px_700px_at_14%_12%,rgba(120,182,223,0.34),transparent_66%)]" />
-        <div className="relative z-10"><TwinWordmark inverse /></div>
+        <div className="relative z-10">{agencyBrand
+          ? (agencyBrand.logo
+            ? <img src={agencyBrand.logo} alt={agencyBrand.name} className="h-auto w-56 max-w-full" />
+            : <span className="font-heading text-3xl font-semibold tracking-[-0.03em] text-white">{agencyBrand.name}</span>)
+          : <TwinWordmark inverse />}</div>
         <div className="relative z-10 max-w-2xl pb-10">
-          <p className="mb-6 text-xs font-semibold uppercase tracking-[0.28em] text-white/60">Twin Creator</p>
+          <p className="mb-6 text-xs font-semibold uppercase tracking-[0.28em] text-white/60">{agencyBrand ? `${agencyBrand.name} Creator` : "Twin Creator"}</p>
           <h1 className="font-heading text-5xl font-semibold leading-[1.02] tracking-[-0.045em] xl:text-6xl">{heroTitle}</h1>
           {heroCopy ? <p className="mt-6 max-w-xl text-base leading-relaxed text-white/68">{heroCopy}</p> : null}
         </div>
@@ -118,7 +126,8 @@ export default function CreatorAuthFrame({
       <section className="relative flex items-center justify-center overflow-hidden bg-bg px-5 py-12">
         <div className="absolute inset-0 bg-[linear-gradient(180deg,rgba(6,23,47,0.08),rgba(255,255,255,0.34)),url('/brand/twin-blue-texture.png')] bg-cover bg-center" />
         <div className="relative z-10 w-full max-w-md rounded-xl border border-white/80 bg-white/90 px-7 pb-7 pt-7 shadow-[0_28px_70px_rgb(6_23_47/0.12)] backdrop-blur-xl">
-          <div className="mb-5 lg:hidden"><TwinWordmark /></div>
+          {/* Light card: the agency's name in ink, since a white-on-dark logo would vanish here. */}
+          <div className="mb-5 lg:hidden">{agencyBrand ? <span className="font-heading text-2xl font-semibold tracking-[-0.03em] text-ink">{agencyBrand.name}</span> : <TwinWordmark />}</div>
           <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent-2">{eyebrow}</p>
           <h2 className="font-heading text-3xl font-semibold tracking-[-0.035em] text-ink">{title}</h2>
           {description ? <p className="mt-1 text-sm text-muted">{description}</p> : null}
