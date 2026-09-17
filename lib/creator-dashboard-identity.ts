@@ -66,7 +66,10 @@ export async function creatorDashboardIdentity(token: string | null | undefined)
       agencyId: assignment.data?.agency_id || null,
       creatorName: clone?.name || account.data.display_name || "Your creator account",
       cloneIds: clone ? [clone.id] : [],
-      onboarded: ["submitted", "reviewing", "approved"].includes(application.data?.status || ""),
+      // A live clone link IS onboarding: the twin exists and its intake is done,
+      // so the questionnaire would ask this creator to rebuild what they have.
+      // Onboarding stays for new accounts that have no clone yet.
+      onboarded: !!clone || ["submitted", "reviewing", "approved"].includes(application.data?.status || ""),
       readOnly: briLiveDemo,
     };
     // Branding only, not an assignment, permission or real-account status change.

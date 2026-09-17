@@ -211,10 +211,15 @@ async function main() {
     const empty = await creatorDashboardIdentity(token); assert.ok(empty); assert.deepEqual(empty.cloneIds, []);
     assert.ok(scopeReadUrl(new URL("https://creator-offline.supabase.co/rest/v1/clones"), empty).url.searchParams.get("and")?.includes("00000000-0000-0000-0000-000000000000"));
     assert.equal((await middleware(request("/api/dashboard?clone=" + own))).status, 403);
+    // A creator already linked to a live clone is onboarded by definition: the
+    // twin exists and its intake is done, so the questionnaire must not reappear.
     linked = true; onboarded = false;
+    assert.equal((await middleware(request("/creator"))).headers.get("location"), null);
+    // Onboarding still gates a brand-new account that has no clone yet.
+    linked = false;
     assert.equal((await middleware(request("/creator"))).headers.get("location"), origin + "/creator/onboarding");
     assert.equal((await middleware(request("/api/dashboard"))).status, 403);
-    onboarded = true;
+    linked = true; onboarded = true;
 
     // Keep legitimate pre-launch and approved creator states usable (including
     // the existing demo/onboarding flows) while denying paused/terminal states.
