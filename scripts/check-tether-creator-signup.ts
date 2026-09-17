@@ -17,7 +17,11 @@ assert.equal(TETHER_CREATOR_SIGNUP_ACTION, "/creator-auth/tether/signup");
 assert.match(component, /const directAgencySignup = tether \|\| link;/);
 assert.match(component, /const signupAction = tether \? TETHER_CREATOR_SIGNUP_ACTION : link \? LINK_CREATOR_SIGNUP_ACTION : "\/creator-auth\/signup";/);
 assert.match(component, /<form action=\{signupAction\} method="post"/);
-assert.match(component, /\{!directAgencySignup && <label[\s\S]*?name="agency_code"/);
+// Still gated behind !directAgencySignup. Inside that gate the field now
+// branches on whether the visitor arrived on a resolved agency invite.
+assert.match(component, /\{!directAgencySignup && \(invited[\s\S]*?name="agency_code"/);
+// and it must not appear anywhere outside that gate.
+assert.equal(component.split('name="agency_code"').length - 1, 2);
 assert.match(component, /\{!directAgencySignup && <input type="hidden" name="portal" value="twin" \/>\}/);
 assert.doesNotMatch(route, /form\.get\(["'](?:portal|agency_code|agency_id)["']\)/);
 assert.doesNotMatch(route, /creator_agency_codes|claim_creator_agency_code/);
