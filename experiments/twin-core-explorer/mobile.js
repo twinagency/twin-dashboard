@@ -19,7 +19,7 @@
   const markerOrder = ['identity','communication','automation','sales','crm','privacy'];
   const captions = {
     identity:['Identity & Memory'], communication:['Voice Cloning','& Communication'],
-    automation:['Business','Automation'], sales:['Sales &','Customer Automation'],
+    automation:['Business','Automation'], sales:['Sales & Customer','Automation'],
     crm:['CRM &','Integrations'], privacy:['Private','Intelligence']
   };
   const motionControl = button('Pause animation', () => {
@@ -33,9 +33,9 @@
   function layout() {
     if (!media.matches || state.category || state.view !== 'core') return;
     const stage = $('stage'); const w = stage.getBoundingClientRect().width;
-    const radius = Math.min(155, w * .345);
-    const radiusY = Math.max(132, radius);
-    const h = radiusY * 2 + 120;
+    const radius = Math.min(164, w * .365);
+    const radiusY = Math.max(178, radius * 1.09);
+    const h = radiusY * 2 + 156;
     stage.style.setProperty('--mobile-radius', radius + 'px');
     stage.style.setProperty('--mobile-radius-y', radiusY + 'px');
     stage.style.setProperty('--mobile-stage-height', h + 'px');
@@ -47,8 +47,9 @@
       // The ring and marker use this exact same radius and centre.
       const x = w/2 + Math.cos(angle)*radius;
       b.style.setProperty('--mx', x + 'px');
-      const labelWidth = w <= 350 ? 102 : 114;
-      const side = b.dataset.side === 'left' ? -19 : b.dataset.side === 'right' ? 19 : 0;
+      const labelWidth = w <= 350 ? 108 : 124;
+      b.style.setProperty('--label-width', (i === 0 || i === 3 ? Math.min(220, w - 36) : labelWidth) + 'px');
+      const side = b.dataset.side === 'left' ? -12 : b.dataset.side === 'right' ? 12 : 0;
       const centre = Math.max(labelWidth/2 + 6, Math.min(w - labelWidth/2 - 6, x + side));
       b.style.setProperty('--label-shift', (i === 0 || i === 3 ? 0 : centre-x) + 'px');
       b.style.setProperty('--my', (h/2 + Math.sin(angle)*radiusY) + 'px');
@@ -76,7 +77,13 @@
         const mark=node('span',undefined,'mobile-marker');mark.setAttribute('aria-hidden','true');
         const label=node('span',undefined,'node-title');
         (captions[b.dataset.id]||[b.getAttribute('aria-label')]).forEach((s,i)=>{if(i)label.append(document.createElement('br'));label.append(document.createTextNode(s));});
-        b.replaceChildren(mark,label);
+        const caption=node('span',undefined,'mobile-label');
+        const item=CATALOGUE.find(c=>c.id===b.dataset.id);
+        const order=markerOrder.indexOf(b.dataset.id)+1;
+        const meta=node('span',`${String(order).padStart(2,'0')} · ${item.features.length} capabilities`,'mobile-meta');
+        meta.setAttribute('aria-hidden','true');
+        caption.append(label,meta);
+        b.replaceChildren(mark,caption);
       }
     }
     layout();
@@ -155,5 +162,6 @@
   window.addEventListener('pageshow',restart);
   window.addEventListener('pagehide',()=>{cancelAnimationFrame(raf);});
   window.TwinMobile={sourceBlob:'83bb5068a6d4ab517a9ce810c16d4bdccaa515a7',logicalDock:{width:118,height:86},layout};
+  document.fonts?.ready.then(() => { layout(); resize(); });
   refresh();resize();
 })();
