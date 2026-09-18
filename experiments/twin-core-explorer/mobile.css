@@ -22,13 +22,18 @@
   .mobile-design.mobile-root .node { left:var(--mx); top:var(--my); width:104px!important; min-width:44px; height:64px; min-height:64px; padding:0; transform:translate(-50%,-12px)!important; border:0; background:none!important; animation:none!important; text-align:center; border-radius:12px; }
   .mobile-design.mobile-root .node::before { display:none; }
   .mobile-marker { position:absolute; left:50%; top:12px; width:12px; height:12px; border:2px solid #fff; background:#138aff; border-radius:50%; transform:translate(-50%,-50%); box-shadow:0 0 0 3px #ffffffd9,0 0 13px #55baff38; transition:box-shadow .25s; }
-  .mobile-design.mobile-root .node-title { position:absolute; top:27px; left:50%; width:var(--label-width,114px); transform:translateX(-50%); font-size:12px; line-height:1.48; font-weight:500; letter-spacing:-.025em; color:#142135; text-wrap:balance; text-shadow:0 0 5px #fff,0 0 4px #fff; }
+  .mobile-design.mobile-root .node-title { position:absolute; top:32px; left:50%; width:var(--label-width,114px); transform:translateX(-50%); font-size:12px; line-height:1.48; font-weight:500; letter-spacing:-.025em; color:#142135; text-wrap:balance; text-shadow:0 0 5px #fff,0 0 4px #fff; }
   .mobile-design.mobile-root .node[data-side='left'] .node-title { margin-left:var(--label-shift,0px); }
   .mobile-design.mobile-root .node[data-side='right'] .node-title { margin-left:var(--label-shift,0px); }
-  .mobile-design.mobile-root .node:first-child { transform:translate(-50%,-50px)!important; height:64px; }
-  .mobile-design.mobile-root .node:first-child .mobile-marker { top:50px; }
-  .mobile-design.mobile-root .node:first-child .node-title { top:8px; width:200px; }
+  .mobile-design.mobile-root .node:first-child { transform:translate(-50%,-38px)!important; height:44px; min-height:44px; }
+  .mobile-design.mobile-root .node:first-child .mobile-marker { top:38px; }
+  .mobile-design.mobile-root .node:first-child .node-title { top:6px; width:200px; }
   .mobile-design.mobile-root .node:nth-child(4) .node-title { width:190px; }
+  /* Put upper-side labels outside the sphere, not over its animated edge.
+     Each marker stays on its existing ring coordinate; only its label/target moves. */
+  .mobile-design.mobile-root .node:is([data-id='communication'],[data-id='privacy']) { transform:translate(-50%,-60px)!important; height:78px; }
+  .mobile-design.mobile-root .node:is([data-id='communication'],[data-id='privacy']) .mobile-marker { top:60px; }
+  .mobile-design.mobile-root .node:is([data-id='communication'],[data-id='privacy']) .node-title { top:8px; }
   .mobile-design.mobile-root .node:is(:hover,:focus-visible,[aria-current='true']) .mobile-marker { box-shadow:0 0 0 4px #e9f6ff,0 0 17px #339eff66; }
   .mobile-design.mobile-root .orb-note { display:none; }
   .mobile-design.mobile-root .command-area { width:calc(100% - 30px); max-width:430px; margin:18px auto 0; }
@@ -40,6 +45,10 @@
   .mobile-design .command .icon { width:44px; height:44px; min-width:44px; border-radius:50%; background:none; color:#586d85; }
   .mobile-design .command .icon svg { width:20px; height:20px; }
   .mobile-design .command .icon:last-child { margin-left:3px; width:45px; min-width:45px; height:45px; color:white; background:linear-gradient(140deg,#63bdff 0%,#0784ff 70%); font-size:25px; font-weight:400; box-shadow:inset 0 0 0 1px #ffffff35; }
+  /* Smaller visible send face; its touch target stays 44 by 44 pixels. */
+  .mobile-design.mobile-root .command .icon:last-child { position:relative; isolation:isolate; width:44px; min-width:44px; height:44px; background:none; box-shadow:none; font-size:20px; }
+  .mobile-design.mobile-root .command .icon:last-child::before { content:''; position:absolute; inset:4px; z-index:-1; border-radius:50%; background:#2486e9; transition:background .2s; }
+  .mobile-design.mobile-root .command .icon:last-child:is(:hover,:focus-visible)::before { background:#1672cd; }
   .mobile-design .status:empty { min-height:0; margin:0; }
   .mobile-design .utility { gap:22px; margin-top:8px; margin-bottom:0; }
   .mobile-design .utility .text-button { min-height:44px; font-size:10px; color:#6c7f91; }
