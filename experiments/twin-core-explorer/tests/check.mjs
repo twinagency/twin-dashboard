@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 const html = readFileSync(new URL('../index.html', import.meta.url), 'utf8');
-const script = html.match(/<script>([\s\S]*?)<\/script>/)[1];
+const script = readFileSync(new URL('../core.js', import.meta.url), 'utf8');
 new vm.Script(script); // Check syntax of the complete application.
 const start = script.indexOf('const makeFeature');
 const end = script.indexOf('let state=parseHash');
@@ -40,3 +40,31 @@ assert.equal(parentOf({ view:'core', category:'privacy', feature:'deployment' })
 assert.equal(parentOf({ view:'core' }).view, 'home');
 assert.ok(!/fetch\(|XMLHttpRequest|localStorage|sessionStorage|sendBeacon/.test(script));
 console.log('PASS: full-script syntax; 6 categories; 31 unique feature routes and exact-name commands; synonyms; back/unknown/ambiguity; invalid routes; no API or storage calls.');
+
+for (const file of ['experience.js', 'speech.js']) {
+  const source = readFileSync(new URL('../' + file, import.meta.url), 'utf8');
+  new vm.Script(source);
+  assert.ok(!/fetch\(|XMLHttpRequest|localStorage|sessionStorage|sendBeacon/.test(source));
+}
+const experience = readFileSync(new URL('../experience.js', import.meta.url), 'utf8');
+const body = experience.slice(experience.indexOf('  function workflowStep'), experience.indexOf('  const workflowScenes'));
+vm.runInNewContext(body + ';window.workflowStep=workflowStep;', sandbox);
+const step = sandbox.window.workflowStep;
+let model = { step:0, approved:false, paused:false };
+assert.equal(step(model, 'approve').step, 0);
+for (let i=0;i<3;i++) model=step(model, 'next');
+assert.equal(model.step, 3);
+assert.equal(step(model, 'next').step, 3);
+model=step(model, 'takeover');
+assert.equal(step(model, 'approve').step, 3);
+assert.equal(step(model, 'next').step, 3);
+model=step(step(model, 'resume'), 'approve');
+assert.equal(model.step, 4);assert.equal(model.approved, true);
+model=step(model, 'next');assert.equal(model.step, 5);
+assert.equal(step(model, 'next').step, 5);
+assert.equal(step(model, 'reset').step, 0);
+assert.equal(resolveIntent('customer retention').state.feature,'retention');
+assert.equal(resolveIntent('memory boundaries').state.feature,'data-boundaries');
+assert.equal(resolveIntent('Voice Cloning & Communication').state.category,'communication');
+assert.equal(resolveIntent('Voice Cloning & Communication').state.feature,undefined);
+console.log('PASS: additional-script syntax; no API/storage calls; bounded workflow approval/takeover gates; additional intent regressions.');

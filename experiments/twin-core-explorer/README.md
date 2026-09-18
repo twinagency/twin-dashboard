@@ -1,54 +1,68 @@
 # Twin Core Explorer
 
-GitHub-first, standalone interactive preview. No Lovable dependency, npm install, build service, database, API key or paid model call is required to run this version.
+A GitHub-first, standalone interactive product explorer. No Lovable dependency, npm install, database, model API key or paid generation call is needed for this version.
 
-## Isolation
+## Scope and isolation
 
-This work lives only on `feat/twin-core-explorer`, under `experiments/twin-core-explorer`. Do not merge it into the dashboard's main branch or deploy the dashboard to preview it. Main, existing application routes, workflows and production credentials are unchanged. No hosting or domain has been configured.
+Work remains on `feat/twin-core-explorer` under `experiments/twin-core-explorer`. Do not merge the dashboard's main branch or deploy its production image to preview this work. No production routes, workflows, credentials or customer data are changed. Hosting and the public address are a separate milestone.
+
+The explorer presents the offering and clearly labelled fictional demonstrations. It does not implement the customer-facing business integrations described by its panels.
 
 ## Run
 
-Open `index.html` in a browser for click and text navigation, or serve this folder locally:
+Open `index.html` for ordinary browsing or serve this folder:
 
 ```sh
 python3 -m http.server 8080 --bind 127.0.0.1
 ```
 
-Then open `http://localhost:8080`. Microphone support depends on browser support, permissions and a secure context. Voice is optional; clicks and text commands always remain available.
+Open `http://localhost:8080`. A real HTTPS preview and supported browser are required for public microphone testing. Click and text navigation remain available when speech is unsupported or denied.
 
-## Included in this first GitHub build
+## Implemented experience
 
-- White hero, one primary CTA, blue Intelligence heading, responsive layout.
-- Standalone Canvas2D port of Twin's 216-point golden-angle orb geometry, links, palette, rotation, orbital ellipses and shell glints/arcs.
-- Six fixed circular category labels, category replacement, 31 final capability detail panels, back/close controls and hash routes.
-- Local text routing for requests such as "show me security", "follow up my leads", "clone my voice" and "go back".
-- Optional browser speech navigation: explicit consent, start/stop state, denial handling, session timeout, cancellation and navigation cleanup.
-- Pause/resume, reduced-motion support and background/offscreen suspension.
-- Feature-specific process diagrams and local copy-only enquiry composer.
+- Original 216-point Twin particle geometry, nearest-neighbour links, cyan/blue palette, shell glints/arcs and normal rotation, adapted from `components/TwinAssistant.tsx` blob `83bb5068a6d4ab517a9ce810c16d4bdccaa515a7`.
+- One premium white hero; six fixed labels on a circular path; category replacement; 31 final capability panels. No spinning labels or additional menu layer.
+- Reactive orb opening, selected arc highlighting, desktop repositioning, hover, live audio amplitude when available, pause/resume and reduced-motion handling.
+- Local keyword/synonym navigation, visible status, safe unknown/ambiguous results, browser back/forward, keyboard arrows, focus restoration and mobile layouts.
+- A six-step fictional customer workflow. Approval is a real simulation gate, human takeover blocks progression, and restart resets the example.
+- Owner briefing with inspectable fictional source records, including unverified delivery information that is not converted into an invented promise.
+- Deployment diagrams that visibly distinguish the customer environment from external providers.
+- A permission-gated local audio comparison player. Select an original recording and an already-generated, authorised sample. The page does not generate or verify a cloned voice, upload files or present generic speech synthesis as cloning. Actual public samples have not been supplied.
+- A local enquiry composer with copy support and manual-copy fallback. It does not send or store enquiries.
 
-The original reference is `components/TwinAssistant.tsx`, blob `83bb5068a6d4ab517a9ce810c16d4bdccaa515a7`. The orb is a standalone adaptation, not a claim that the entire dashboard component was copied unchanged. Full visual parity and transition polish remain to be reviewed.
+## Code
 
-## Privacy and cost boundaries
+- `index.html`: semantic entry page.
+- `core.css`: original white visual foundation.
+- `core.js`: approved catalogue, local routing and original orb renderer.
+- `experience.css`: circular transitions, detail/demo styling and responsive refinements.
+- `experience.js`: bounded workflow, briefing, deployment and local audio experiences.
+- `speech.js`: opt-in browser recognition and local audio-amplitude adapter.
+- `tests/check.mjs`: dependency-free syntax, route and workflow checks.
+- `tests/browser-check.py`: reproducible browser regression suite.
 
-No customer records, internal endpoints, analytics, transcript storage, live CRM calls, API secrets or enquiry-sending backend are included. Browser speech recognition may use the browser provider's external service; the consent dialog says so. The page itself does not upload audio. Its listening animation reflects recording state, not an audio-amplitude analyser. Speech playback is not falsely presented as voice cloning.
+## Microphone and privacy
 
-The optional Satoshi stylesheet is requested from Fontshare. A system-font fallback works without it. No font files are included. Hosting, future paid APIs and account plan limits are separate decisions; this repository does not promise all future operation is free.
+Microphone access is requested only after the visitor chooses Start in the disclosure dialog. The browser's recognition provider may process audio externally. There is no always-listening mode, backend transcription, transcript logging or recording storage in the application.
 
-## Validation
+Recognition and the optional local analyser have cancellation guards. Final result, timeout, denial, navigation, background and page exit stop active capture. Audio streams returned after cancellation are immediately stopped. Optional analyser failure does not block ordinary speech routing. No synthetic amplitude is presented as a live microphone signal.
+
+Audio files selected for comparison remain object URLs in the current page and are released on navigation or consent withdrawal. There is no upload endpoint. Fontshare is the optional Satoshi stylesheet provider; system fonts work without it. No font files are bundled.
+
+## Tests
 
 ```sh
 node tests/check.mjs
+# Requires local Python Playwright and Chromium, not a runtime dependency:
+python tests/browser-check.py
 ```
 
-The code syntax, all 31 unique routes, exact feature-name commands, representative natural-language requests, unknown/ambiguous requests and safe fallbacks are checked without dependencies.
+See `TEST-RESULTS.md` for the exact checks and limitations. The browser suite inlines the source in an isolated local test document because served-origin navigation is blocked by this execution environment. That is not a hosted-site test. The suite uses actual browser clicks and actual synthetic-tone playback, but mocked speech/permission APIs. No physical microphone or iPhone result is claimed.
 
-Local injected-HTML Chromium checks additionally exercised all panels, command navigation, copy composer, pause/resume, reduced motion, five viewport sizes and mocked speech lifecycle. See `TEST-RESULTS.md`. The environment blocked served-page navigation, so no deployed-site or real microphone result is claimed.
+## Before public release
 
-## Remaining milestones
+1. Review the real HTTPS preview on iPhone/Safari and Chrome, including microphone permissions and selected-font rendering.
+2. Supply authorised before/after recordings for a curated public voice sample, or retain the local comparison mode.
+3. Select hosting and configure the real enquiry destination with approval.
 
-1. Visual review and original-orb transition parity, including the more immersive category opening.
-2. Three polished demonstrations: customer workflow, owner briefing, and a consented voice sample once provided. Current diagrams are explanations, not functioning business workflows.
-3. Real iPhone/Safari/Chrome microphone testing and final accessibility/keyboard review.
-4. Choose preview hosting and wire the real enquiry destination only with approval.
-
-This is a working foundation, not the final sales-ready release or an implementation of every backend capability described inside it.
+No hosting has been configured and no production merge or deployment is part of this change.
