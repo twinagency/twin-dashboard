@@ -49,7 +49,7 @@ with sync_playwright() as pw:
     assert page.locator('#status').inner_text()==''
     page.locator('#back').click()
     assert page.locator('#status').inner_text()==''
-    assert page.locator('#query').get_attribute('placeholder')=='Ask Twin to explore…'
+    assert page.locator('#query').get_attribute('placeholder')=='Ask Twin…'
     page.emulate_media(reduced_motion='no-preference')
     page.evaluate("TwinCore.navigate({view:'home'})")
     page.locator('#explore').click()

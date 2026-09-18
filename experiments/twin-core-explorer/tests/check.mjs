@@ -41,7 +41,7 @@ assert.equal(parentOf({ view:'core' }).view, 'home');
 assert.ok(!/fetch\(|XMLHttpRequest|localStorage|sessionStorage|sendBeacon/.test(script));
 console.log('PASS: full-script syntax; 6 categories; 31 unique feature routes and exact-name commands; synonyms; back/unknown/ambiguity; invalid routes; no API or storage calls.');
 
-for (const file of ['experience.js', 'speech.js']) {
+for (const file of ['experience.js', 'speech.js', 'mobile.js']) {
   const source = readFileSync(new URL('../' + file, import.meta.url), 'utf8');
   new vm.Script(source);
   assert.ok(!/fetch\(|XMLHttpRequest|localStorage|sessionStorage|sendBeacon/.test(source));
@@ -68,3 +68,11 @@ assert.equal(resolveIntent('memory boundaries').state.feature,'data-boundaries')
 assert.equal(resolveIntent('Voice Cloning & Communication').state.category,'communication');
 assert.equal(resolveIntent('Voice Cloning & Communication').state.feature,undefined);
 console.log('PASS: additional-script syntax; no API/storage calls; bounded workflow approval/takeover gates; additional intent regressions.');
+
+const mobile = readFileSync(new URL('../mobile.js', import.meta.url), 'utf8');
+assert.ok(mobile.includes("83bb5068a6d4ab517a9ce810c16d4bdccaa515a7"));
+assert.ok(mobile.includes("width:118,height:86"));
+assert.ok(mobile.includes("baseDraw(now)"));
+assert.ok(mobile.includes("const W=118,H=86"));
+assert.ok(!mobile.includes('createImageBitmap') && !mobile.includes('new Image('));
+console.log('PASS: mobile-source provenance, dock aspect ratio and desktop renderer fallback.');

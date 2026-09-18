@@ -8,12 +8,8 @@ import os, re, json, wave, math, struct, tempfile
 ROOT=Path(__file__).resolve().parents[1]
 OUT=ROOT.parent/'checks'; OUT.mkdir(exist_ok=True)
 html=(ROOT/'index.html').read_text()
-for css in ['core.css','experience.css','presentation.css']:
- html=html.replace(f'<link rel="stylesheet" href="{css}">','<style>'+(ROOT/css).read_text()+'</style>')
-for f in ['core.js','experience.js','speech.js']:
- html=html.replace(f'<script src="{f}"></script>','<script>'+(ROOT/f).read_text()+'</script>')
-# Keep deterministic screenshots independent of the external font CDN.
-html=re.sub(r'<link rel="stylesheet" href="https://api.fontshare.com[^>]+>','',html)
+html=re.sub(r'<link rel="stylesheet" href="([^"]+)">',lambda m:'' if m[1].startswith('https:') else '<style>'+(ROOT/m[1]).read_text()+'</style>',html)
+html=re.sub(r'<script src="([^"]+)"></script>',lambda m:'<script>'+(ROOT/m[1]).read_text()+'</script>',html)
 checks=[]
 def passed(s): checks.append(s); print('PASS:',s,flush=True)
 MOCK=r'''() => {

@@ -1,61 +1,21 @@
-# Twin Core Explorer: interaction implementation validation
+# Twin Core Explorer validation
 
-These checks were run locally against the final split-file source in this implementation session, not on GitHub Actions or a deployed website.
+## Current mobile implementation
 
-## Passed: dependency-free checks
+The exact final source was tested locally, not through GitHub Actions or a hosted website.
 
-Command: `node tests/check.mjs`.
-
-- Syntax of all three JavaScript files.
-- Six categories and 31 unique capability routes, with complete source/control descriptions.
-- Exact capability-name routing and representative security, automation, voice, data ownership and follow-up requests.
-- Category-name, customer-retention and memory-boundary routing regressions.
-- Unknown/ambiguous requests and invalid-route fallbacks.
-- Bounded workflow model: no advance through the approval checkpoint without approval, no advance during human takeover, explicit resume, completed-state bounds and reset.
-- No application fetch, XHR, beacon, localStorage or sessionStorage calls.
-
-## Passed: 17 browser check groups
-
-Command: `python tests/browser-check.py`.
-
-1. Six-step fictional workflow, approval gate, takeover pause, resume and restart.
-2. Briefing source inspection and example briefing assembly.
-3. Deployment-pattern switch with explicit external-processing boundary.
-4. No horizontal overflow across home, core, category and detail states at 1440x900, 1024x768, 768x1024, 390x844 and 320x740.
-5. All 31 capability panels opened and closed using browser clicks; focus restored to the selected capability.
-6. Arrow, Enter and Escape navigation plus native dialog dismissal.
-7. Typed routing, unknown/ambiguous requests, browser back/forward and copy-only enquiry composer.
-8. Orb animation, pause, resume and reduced-motion pixel freeze.
-9. Consent-gated local sample selection, real browser playback of a synthetic test tone and clearing on consent withdrawal.
-10. Mocked speech cancellation while permission is pending.
-11. Mocked microphone permission denial.
-12. Mocked final-transcript routing and analyser-input response, with track and AudioContext cleanup.
-13. Late microphone stream returned after cancellation is stopped.
-14. Late analyser stream returned after capture ends is stopped.
-15. Background event stops recognition and audio tracks.
-16. Navigation cancels speech; unsupported speech retains typed/click navigation.
-17. No JavaScript page errors in the tested paths.
+- `node tests/check.mjs`: syntax of all four JavaScript files, six categories, 31 unique detail routes, exact-name and representative natural-language commands, invalid/unknown/ambiguous routing, workflow approval/takeover/reset bounds, no application API/storage calls, mobile renderer provenance and desktop fallback.
+- `python tests/browser-check.py`: all 17 existing check groups pass with the mobile adapter included. Covers workflow gates, briefing sources, deployment diagrams, 31 panels, five viewport sizes, keyboard/navigation/focus/history, copy-only enquiry, pause/reduced motion, real synthetic-tone playback and mocked speech lifecycle.
+- `python tests/visual-check.py`: 48 viewport/route combinations pass. No horizontal overflow, non-overlapping 44px+ targets, retained mobile circular layout, stale-status cleanup and settled transitions.
+- `TWIN_BASELINE_DIR=... python tests/mobile-check.py`: eight additional groups pass. Seven mobile widths, ring/marker alignment, complete labels, minimum targets, approved wordmark/copy/command design, genuine main and mini canvas motion, pause/resume, reduced-motion freeze, offscreen miniature animation, resize restoration, touch-emulated navigation and no page errors.
+- Desktop home, core and detail screenshot bytes match the 9a55fd1 baseline under identical deterministic reduced-motion settings.
 
 ## Method and limitations
 
-The runtime browser policy blocks file and served-origin navigation. The suite therefore inlines the exact local CSS and JavaScript into an isolated Chromium document using Playwright, then exercises ordinary browser clicks, keyboard input, same-document history and media playback. It does not bypass the policy or claim a hosted-origin test.
+Tests inline the exact local split-file source into Chromium because this execution environment does not allow served-origin browser navigation. This is not a deployed-site or physical-device result. Ordinary browser clicks, keyboard events, touch emulation and media playback are exercised.
 
-Speech recognition, permission responses, microphone data and associated cleanup were mocked. The synthetic tone tested local playback only; it is not a voice clone and is not included as a public demonstration. No physical microphone, external transcription service or actual iPhone/Safari session was tested. A real HTTPS/device pass remains required.
+Speech recognition, permissions and microphone input are mocked. Synthetic audio tests playback only; it is not a voice clone and is not shipped as a public sample. Physical iPhone/Safari and HTTPS checks remain necessary.
 
-Screenshots use the system font fallback to avoid nondeterministic CDN loading. Verify Satoshi loading on the real preview. These checks are not an exhaustive accessibility or penetration audit.
+Actual screenshots and video use the installed Inter fallback. External Satoshi loading is not verified in this environment. No font files are bundled. These checks are not an exhaustive accessibility, compatibility or security audit.
 
-No authorised public before/after voice recordings were supplied. The local comparison player is implemented, but connecting a curated public sample requires approved recordings. No real enquiry destination or hosting is configured.
-
-## Visual finishing pass
-
-Commands run against the final source:
-
-- `node tests/check.mjs`: passed.
-- `python tests/browser-check.py`: all 17 groups passed again.
-- `python tests/visual-check.py`: 48 viewport/route combinations passed at 320x740, 390x844, 430x932, 768x1024, 1024x768 and 1440x900.
-
-Additional assertions: all visible category/capability navigation targets are at least 44x44 CSS pixels and do not overlap each other; the mobile navigator retains its circular layout; navigation clears the previous status; the opening state settles after its transition; no page errors in checked paths. The checks caught and corrected invisible decorative-arc overflow and a narrow-screen five-capability target overlap.
-
-A 20.7-second walkthrough was recorded from the actual local Chromium application, showing entry, security navigation, a typed automation request and the workflow approval/handover demonstration. A 390x844 emulated touch context captured high-resolution mobile images and exercised tap navigation. These are browser emulations, not physical-phone validation.
-
-The recording and screenshots use the installed Inter fallback. Network resolution prevented verifying the external Satoshi stylesheet. No font files were added or distributed. External-font loading, real HTTPS/browser policy, physical iPhone/Safari speech input, curated authorised voice recordings and the enquiry destination remain release checks. No main-branch merge, hosting, paid service, live dashboard or customer-data changes were performed.
+No public hosting, real enquiry recipient or authorised curated voice comparison has been configured. See `MOBILE-UPDATE.md` for source provenance and the mobile-only scope.
