@@ -13,20 +13,20 @@ assert.match(inputClass, /(?:^|\s)caret-\[#080a0e\](?:\s|$)/);
 assert.doesNotMatch(inputClass, /\btext-white(?:\/\d+)?\b|\bbg-black(?:\/\d+)?\b/);
 
 for (const file of [
-  "components/CreatorLoginScreen.tsx",
   "components/CreatorForgotPasswordScreen.tsx",
   "components/CreatorResetPasswordScreen.tsx",
 ]) {
   const source = readFileSync(file, "utf8");
   assert.match(source, /className=\{tether \? tetherAuthInputClass : undefined\}/, `${file} must use the shared Tether input treatment`);
 }
-// CreatorSignupScreen.tsx also offers this treatment to a dark-brand agency
-// invite (Moxy), so its gate is darkForm (tether || a dark invite) rather
-// than tether alone. Both must still resolve to the same shared input class.
-{
-  const source = readFileSync("components/CreatorSignupScreen.tsx", "utf8");
-  assert.match(source, /const darkForm = tether \|\| !!invited\?\.dark;/, "CreatorSignupScreen.tsx must gate the dark form on tether or a dark agency invite");
-  assert.match(source, /className=\{darkForm \? tetherAuthInputClass : undefined\}/, "CreatorSignupScreen.tsx must use the shared Tether input treatment for darkForm");
+// CreatorSignupScreen.tsx and CreatorLoginScreen.tsx also offer this
+// treatment to a dark-brand agency invite/login (Moxy), so their gate is
+// darkForm (tether || a dark invite) rather than tether alone. All three
+// must still resolve to the same shared input class.
+for (const file of ["components/CreatorSignupScreen.tsx", "components/CreatorLoginScreen.tsx"]) {
+  const source = readFileSync(file, "utf8");
+  assert.match(source, /const darkForm = tether \|\| !!invited\?\.dark;/, `${file} must gate the dark form on tether or a dark agency invite`);
+  assert.match(source, /className=\{darkForm \? tetherAuthInputClass : undefined\}/, `${file} must use the shared Tether input treatment for darkForm`);
 }
 
 assert.match(globals, /\[data-creator-auth-brand="tether"\] \.tether-auth-input,?\s*(?:\[data-creator-auth-brand="moxy"\] \.tether-auth-input,?\s*)?\{[\s\S]*?color:\s*#080a0e;[\s\S]*?background-color:\s*#ffffff;/);
