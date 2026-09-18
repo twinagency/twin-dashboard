@@ -8,7 +8,7 @@ import os, re, json, wave, math, struct, tempfile
 ROOT=Path(__file__).resolve().parents[1]
 OUT=ROOT.parent/'checks'; OUT.mkdir(exist_ok=True)
 html=(ROOT/'index.html').read_text()
-for css in ['core.css','experience.css']:
+for css in ['core.css','experience.css','presentation.css']:
  html=html.replace(f'<link rel="stylesheet" href="{css}">','<style>'+(ROOT/css).read_text()+'</style>')
 for f in ['core.js','experience.js','speech.js']:
  html=html.replace(f'<script src="{f}"></script>','<script>'+(ROOT/f).read_text()+'</script>')

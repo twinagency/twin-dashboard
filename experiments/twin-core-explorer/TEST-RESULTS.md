@@ -45,3 +45,17 @@ Speech recognition, permission responses, microphone data and associated cleanup
 Screenshots use the system font fallback to avoid nondeterministic CDN loading. Verify Satoshi loading on the real preview. These checks are not an exhaustive accessibility or penetration audit.
 
 No authorised public before/after voice recordings were supplied. The local comparison player is implemented, but connecting a curated public sample requires approved recordings. No real enquiry destination or hosting is configured.
+
+## Visual finishing pass
+
+Commands run against the final source:
+
+- `node tests/check.mjs`: passed.
+- `python tests/browser-check.py`: all 17 groups passed again.
+- `python tests/visual-check.py`: 48 viewport/route combinations passed at 320x740, 390x844, 430x932, 768x1024, 1024x768 and 1440x900.
+
+Additional assertions: all visible category/capability navigation targets are at least 44x44 CSS pixels and do not overlap each other; the mobile navigator retains its circular layout; navigation clears the previous status; the opening state settles after its transition; no page errors in checked paths. The checks caught and corrected invisible decorative-arc overflow and a narrow-screen five-capability target overlap.
+
+A 20.7-second walkthrough was recorded from the actual local Chromium application, showing entry, security navigation, a typed automation request and the workflow approval/handover demonstration. A 390x844 emulated touch context captured high-resolution mobile images and exercised tap navigation. These are browser emulations, not physical-phone validation.
+
+The recording and screenshots use the installed Inter fallback. Network resolution prevented verifying the external Satoshi stylesheet. No font files were added or distributed. External-font loading, real HTTPS/browser policy, physical iPhone/Safari speech input, curated authorised voice recordings and the enquiry destination remain release checks. No main-branch merge, hosting, paid service, live dashboard or customer-data changes were performed.

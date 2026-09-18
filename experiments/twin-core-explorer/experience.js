@@ -37,6 +37,8 @@
   function cleanup() {
     clearTimeout(noteTimer);
     clearTimeout(transitionTimer);
+    signal.focused=false;
+    $('stage').classList.remove('engaged');
     document.body.classList.remove('core-opening', 'revealing');
     for (const fn of dispose.splice(0)) fn();
     suspend();
@@ -272,9 +274,9 @@
     const stage = $('stage');
     const labels = [...$('nodes').querySelectorAll('.node')];
     labels.forEach((label, i) => {
-      const highlight = () => { stage.classList.add('engaged'); stage.style.setProperty('--bearing', label.style.getPropertyValue('--angle')); };
+      const highlight = () => { stage.classList.add('engaged'); stage.style.setProperty('--bearing', label.style.getPropertyValue('--angle')); signal.targetX=Number(label.style.getPropertyValue('--nx')); signal.targetY=Number(label.style.getPropertyValue('--ny')); signal.focused=true; restart(); };
       label.onpointerenter = label.onfocus = highlight;
-      label.onpointerleave = label.onblur = () => stage.classList.remove('engaged');
+      label.onpointerleave = label.onblur = () => {stage.classList.remove('engaged');signal.focused=false;restart();};
       label.onkeydown = e => {
         let index = null;
         if (e.key === 'ArrowRight' || e.key === 'ArrowDown') index = (i + 1) % labels.length;
