@@ -24,6 +24,10 @@ export function isCreatorPublicPath(pathname: string | null | undefined): boolea
   return [
     "/creator/login",
     "/creator/signup",
+    // A dedicated, always-on branded entry point for an agency whose creators
+    // still authenticate through the plain Twin portal underneath (unlike
+    // Tether/LYNQ, which are full separate portals below). Presentation only.
+    "/creator/moxy/login",
     "/creator/forgot-password",
     "/creator/reset-password",
     LINK_CREATOR_LOGIN_PATH,
