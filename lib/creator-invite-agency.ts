@@ -40,3 +40,20 @@ export async function agencyForInviteCode(code: string | undefined): Promise<Inv
     return null;
   }
 }
+
+/**
+ * The same presentation lookup as {@link agencyForInviteCode}, keyed by the
+ * agency's own slug instead of a one-time invite code. For a dedicated,
+ * always-on branded entry point (e.g. a login page at that agency's own
+ * path), not a link that expires or gets claimed.
+ */
+export async function agencyForSlug(slug: string): Promise<InviteAgency | null> {
+  try {
+    const db = serviceClient();
+    const row = await db.from("partner_agencies").select("name,slug,active").eq("slug", slug).eq("active", true).maybeSingle();
+    if (row.error || !row.data) return null;
+    return { name: row.data.name, slug: row.data.slug, logo: INVITE_LOGOS[row.data.slug] ?? null, icon: INVITE_ICONS[row.data.slug] ?? null, dark: INVITE_DARK.has(row.data.slug) };
+  } catch {
+    return null;
+  }
+}
