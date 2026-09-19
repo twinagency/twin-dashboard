@@ -1,0 +1,54 @@
+name: Twin Core Option B verification
+on:
+  push:
+    branches: ['feat/twin-core-explorer']
+    paths:
+      - 'experiments/twin-core-explorer/**'
+      - '.github/workflows/twin-core-option-b.yml'
+permissions:
+  contents: read
+concurrency:
+  group: twin-core-option-b-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify-and-package:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build self-contained Option B site
+        working-directory: experiments/twin-core-explorer
+        run: |
+          node --check orb-runtime.js
+          node build-option-b.mjs
+      - name: Install isolated browser test tools
+        run: |
+          npm install --prefix "$RUNNER_TEMP/twin-qa" playwright
+          "$RUNNER_TEMP/twin-qa/node_modules/.bin/playwright" install --with-deps chromium
+      - name: Verify mobile and desktop
+        working-directory: experiments/twin-core-explorer
+        env:
+          QA_TOOLCHAIN: ${{ runner.temp }}/twin-qa
+        run: |
+          python3 -m http.server 4173 --bind 127.0.0.1 --directory dist-option-b > /tmp/twin-option-b-http.log 2>&1 &
+          node qa-option-b.mjs
+      - name: Package validated standalone website
+        working-directory: experiments/twin-core-explorer/dist-option-b
+        run: zip -r ../twin-option-b-release.zip index.html _headers release.json
+      - name: Upload validated website
+        uses: actions/upload-artifact@v4
+        with:
+          name: twin-option-b-release
+          path: experiments/twin-core-explorer/twin-option-b-release.zip
+          retention-days: 14
+      - name: Upload browser test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: twin-option-b-browser-checks
+          path: experiments/twin-core-explorer/qa-option-b
+          if-no-files-found: ignore
+          retention-days: 14
