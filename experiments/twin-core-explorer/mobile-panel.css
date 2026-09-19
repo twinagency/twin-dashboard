@@ -1,28 +1,71 @@
-/* Shared rotating AI prompt + mobile Option B capability panel. */
-.visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+/* Mobile Option B. One quiet panel; existing desktop composition is untouched. */
+.visually-hidden {
+  position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px;
+  overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0;
+}
 .question-heading { margin: 0 2px 8px; color: #172033; font-size: 14px; font-weight: 600; line-height: 1.45; letter-spacing: -.01em; }
 .question-input { position: relative; display: block; flex: 1 1 0; min-width: 0; height: 42px; }
 .question-input input { display: block; width: 100%; min-width: 0; height: 42px; }
-.question-placeholder { position: absolute; inset: 0 4px; display: flex; align-items: center; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: clip; pointer-events: none; font-size: 14px; font-weight: 400; line-height: 18px; background: linear-gradient(90deg, #536173 0%, #536173 32%, #a8d4e5 48%, #e7f7fb 52%, #8fbfd2 57%, #536173 72%, #536173 100%); background-size: 220% 100%; background-position: 160% 50%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: twin-question-shimmer 1800ms ease-in-out infinite alternate; }
+.question-placeholder {
+  position: absolute;
+  inset: 0 4px;
+  display: flex;
+  align-items: center;
+  min-width: 0;
+  overflow: hidden;
+  white-space: nowrap;
+  pointer-events: none;
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 18px;
+  background: none;
+  color: #536173;
+  animation: none;
+}
+.question-track {
+  display: block;
+  flex: 0 0 auto;
+  width: max-content;
+  white-space: nowrap;
+  background: none;
+  color: inherit;
+  animation: none;
+  transform: translateX(0px);
+}
 .question-placeholder[hidden] { display: none; }
 .utility #browse { display: none !important; }
-@keyframes twin-question-shimmer { from { background-position: 160% 50%; } to { background-position: -60% 50%; } }
-@media (prefers-reduced-motion: reduce) { .question-placeholder { animation: none; background: none; color: #536173; } }
 @media (min-width: 721px) { .question-heading { margin-bottom: 10px; font-size: 14px; } .command .question-input input { padding: 10px 15px; } .command .question-placeholder { inset-inline: 15px; font-size: 14px; } }
 @media (max-width: 720px) {
   body.mobile-panel-ui { background: #fff; }
   body.mobile-panel-ui::before, .mobile-panel-ui .orb::before { display: none !important; }
   .mobile-panel-ui header { padding-inline: 20px; }
-  .mobile-panel-ui .title, .mobile-panel-ui.mobile-root .title, .mobile-panel-ui.has-detail .title { margin: 18px auto 0; padding: 0 20px; min-height: 0; max-width: 460px; }
+  .mobile-panel-ui .title,
+  .mobile-panel-ui.mobile-root .title,
+  .mobile-panel-ui.has-detail .title { margin: 18px auto 0; padding: 0 20px; min-height: 0; max-width: 460px; }
   .mobile-panel-ui .title h1 { font-size: clamp(28px, 8vw, 34px); line-height: 1.12; font-weight: 700; letter-spacing: -.05em; }
-  .mobile-panel-ui .title .subtitle, .mobile-panel-ui.has-detail .subtitle { display: block; font-size: 14px; line-height: 1.65; margin: 16px auto 0; max-width: 360px; color: #445467; text-wrap: pretty; }
-  .mobile-panel-ui .workspace, .mobile-panel-ui.has-detail .workspace { display: block; padding: 0; }
-  .mobile-panel-ui .core-side, .mobile-panel-ui.has-detail .core-side { display: block; width: 100%; }
-  .mobile-panel-ui .stage, .mobile-panel-ui.mobile-root .stage, .mobile-panel-ui.mobile-root:not(.exploring) .stage, .mobile-panel-ui.has-detail .stage { height: 238px; max-width: 460px; width: 100%; margin: 2px auto 0; padding: 0; }
-  .mobile-panel-ui .stage .orb, .mobile-panel-ui.mobile-root:not(.exploring) .orb { width: 288px; height: 288px; max-width: 90vw; max-height: 90vw; left: 50%; top: 50%; transform: translate(-50%, -50%); }
-  .mobile-panel-ui .ring, .mobile-panel-ui #nodes, .mobile-panel-ui #orb-state, .mobile-panel-ui #hero-hit, .mobile-panel-ui #explore, .mobile-panel-ui #preview-note { display: none !important; }
-  .mobile-panel-ui .command-area, .mobile-panel-ui.mobile-root .command-area, .mobile-panel-ui.has-detail .command-area { width: calc(100% - 40px); max-width: 420px; margin: 0 auto; }
-  .mobile-panel-ui .command, .mobile-panel-ui.mobile-root .command { min-height: 54px; height: 54px; padding: 4px 6px; border: 1px solid #bdd1dc; border-radius: 27px; background: #fff; box-shadow: none; }
+  .mobile-panel-ui .title .subtitle,
+  .mobile-panel-ui.has-detail .subtitle { display: block; font-size: 14px; line-height: 1.65; margin: 16px auto 0; max-width: 360px; color: #445467; text-wrap: pretty; }
+  .mobile-panel-ui .workspace,
+  .mobile-panel-ui.has-detail .workspace { display: block; padding: 0; }
+  .mobile-panel-ui .core-side,
+  .mobile-panel-ui.has-detail .core-side { display: block; width: 100%; }
+  .mobile-panel-ui .stage,
+  .mobile-panel-ui.mobile-root .stage,
+  .mobile-panel-ui.mobile-root:not(.exploring) .stage,
+  .mobile-panel-ui.has-detail .stage { height: 238px; max-width: 460px; width: 100%; margin: 2px auto 0; padding: 0; }
+  .mobile-panel-ui .stage .orb,
+  .mobile-panel-ui.mobile-root:not(.exploring) .orb { width: 288px; height: 288px; max-width: 90vw; max-height: 90vw; left: 50%; top: 50%; transform: translate(-50%, -50%); }
+  .mobile-panel-ui .ring,
+  .mobile-panel-ui #nodes,
+  .mobile-panel-ui #orb-state,
+  .mobile-panel-ui #hero-hit,
+  .mobile-panel-ui #explore,
+  .mobile-panel-ui #preview-note { display: none !important; }
+  .mobile-panel-ui .command-area,
+  .mobile-panel-ui.mobile-root .command-area,
+  .mobile-panel-ui.has-detail .command-area { width: calc(100% - 40px); max-width: 420px; margin: 0 auto; }
+  .mobile-panel-ui .command,
+  .mobile-panel-ui.mobile-root .command { min-height: 54px; height: 54px; padding: 4px 6px; border: 1px solid #bdd1dc; border-radius: 27px; background: #fff; box-shadow: none; }
   .mobile-panel-ui .command:focus-within { border-color: var(--accent); box-shadow: 0 0 0 3px #167cb40b; }
   .mobile-panel-ui .mini-orb-wrap { flex: 0 0 33px; height: 30px; margin-right: 4px; border-color: #d5e1e8; }
   .mobile-panel-ui #mini-orb { width: 31px; height: 31px; margin: 0 5px 0 0; }
@@ -67,9 +110,22 @@
   .mobile-panel-ui .stage { height: 220px !important; }
   .mobile-panel-ui .stage .orb { width: 268px; height: 268px; }
   .mobile-panel-ui header { padding-inline: 16px; }
-  .mobile-panel-ui .command-area, .mobile-panel-ui.mobile-root .command-area, .mobile-panel-ui.has-detail .command-area, .capability-panel { width: calc(100% - 32px); }
+  .mobile-panel-ui .command-area,
+  .mobile-panel-ui.mobile-root .command-area,
+  .mobile-panel-ui.has-detail .command-area,
+  .capability-panel { width: calc(100% - 32px); }
   .mobile-panel-ui .question-placeholder { font-size: 13px; }
   .system-button { padding-right: 10px; padding-left: 10px; }
   .system-button:nth-child(odd) { padding-left: 0; }
   .system-name { font-size: 13px; }
+}
+
+/* Keep long examples readable without movement when reduced motion is selected. */
+@media (prefers-reduced-motion: reduce) {
+  .question-placeholder { overflow: visible; }
+  .question-track { width: 100%; white-space: normal; }
+  .mobile-panel-ui .question-input,
+  .mobile-panel-ui .question-input input { height: 88px; }
+  .mobile-panel-ui .command,
+  .mobile-panel-ui.mobile-root .command { height: 100px; min-height: 100px; }
 }

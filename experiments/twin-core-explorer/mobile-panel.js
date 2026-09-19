@@ -11,6 +11,8 @@
   const questionInput = node('span', undefined, 'question-input');
   const questionPlaceholder = node('span', undefined, 'question-placeholder');
   questionPlaceholder.setAttribute('aria-hidden', 'true');
+  const questionTrack = node('span', undefined, 'question-track');
+  questionPlaceholder.append(questionTrack);
   const description = '<strong>Twin Technologies</strong> builds its own autonomous AI models, digital identity, commercial infrastructure and connected systems within <strong>one unified platform.</strong>';
   const examples = [
     { hint: 'How can Twin automate my construction company…', compact: 'Can Twin automate construction…', question: 'How can Twin automate my construction company?', category: 'automation' },
@@ -33,7 +35,14 @@
     privacy: 'Set who can access your data and how it is processed.'
   };
   let exampleIndex = 0;
+  // Every example gets the same complete 2.5-second reading window.
+  const QUESTION_DURATION = 2500;
+  const START_HOLD = 350;
+  const END_HOLD = 350;
   let rotationTimer = 0;
+  let promptFrame = 0;
+  let questionMotion = null;
+  let pageSuspended = false;
   const questionHeading = node('div', 'See what Twin can do for you', 'question-heading');
   const questionHelp = node('span', 'Type any question. The rotating examples show the kinds of things you can ask Twin Intelligence.', 'visually-hidden');
   questionHelp.id = 'question-help';
@@ -68,6 +77,7 @@
     if (next !== null) { event.preventDefault(); gridButtons[next].focus(); }
   });
   section.append(headingRow, grid, featureSection);
+
   function ensureQuestionPrompt() {
     if (!questionInput.isConnected) {
       query.before(questionInput);
@@ -85,21 +95,58 @@
     browse.tabIndex = -1;
     browse.setAttribute('aria-hidden', 'true');
   }
-  function updatePrompt() {
-    ensureQuestionPrompt();
-    const example = examples[exampleIndex];
-    questionPlaceholder.hidden = Boolean(query.value);
-    query.placeholder = '';
-    questionPlaceholder.textContent = innerWidth < 370 ? example.compact : example.hint;
+
+  function stopPromptCycle() {
+    clearTimeout(rotationTimer);
+    cancelAnimationFrame(promptFrame);
+    rotationTimer = 0;
+    promptFrame = 0;
+    questionMotion?.cancel();
+    questionMotion = null;
+    questionTrack.style.transform = 'translateX(0px)';
   }
-  function scheduleExamples() {
-    clearInterval(rotationTimer);
-    if (document.hidden || reduced.matches) return;
-    rotationTimer = setInterval(() => {
-      if (paused || reduced.matches || document.hidden || query.value || document.querySelector('dialog[open]')) return;
-      exampleIndex = (exampleIndex + 1) % examples.length;
-      updatePrompt();
-    }, 2000);
+  function motionBlocked() {
+    return pageSuspended || document.hidden || paused || reduced.matches ||
+      Boolean(query.value) || document.activeElement === query ||
+      Boolean(document.querySelector('dialog[open]'));
+  }
+  function updatePrompt() {
+    stopPromptCycle();
+    ensureQuestionPrompt();
+    const editing = Boolean(query.value) || document.activeElement === query;
+    questionPlaceholder.hidden = editing;
+    query.placeholder = '';
+    // Always display the complete example, including on the narrowest phones.
+    questionTrack.textContent = examples[exampleIndex].hint;
+    if (editing || motionBlocked()) return;
+    promptFrame = requestAnimationFrame(() => {
+      promptFrame = 0;
+      if (motionBlocked() || questionInput.getBoundingClientRect().width <= 0) return;
+      const availableWidth = questionPlaceholder.getBoundingClientRect().width;
+      if (availableWidth <= 0) return;
+      const overflow = Math.max(0, Math.ceil(
+        questionTrack.getBoundingClientRect().width - availableWidth
+      ));
+      // Move only the clipped distance. A longer question travels faster, but
+      // every question reaches its end before the same 2.5-second deadline.
+      if (media.matches && overflow > 0 && questionTrack.animate) {
+        const end = `translateX(-${overflow}px)`;
+        questionMotion = questionTrack.animate([
+          { transform: 'translateX(0px)', offset: 0 },
+          { transform: 'translateX(0px)', offset: START_HOLD / QUESTION_DURATION },
+          { transform: end, offset: 1 - END_HOLD / QUESTION_DURATION },
+          { transform: end, offset: 1 }
+        ], { duration: QUESTION_DURATION, easing: 'linear', fill: 'forwards' });
+      }
+      rotationTimer = setTimeout(() => {
+        if (motionBlocked()) {
+          updatePrompt();
+          return;
+        }
+        exampleIndex = (exampleIndex + 1) % examples.length;
+        updatePrompt();
+      }, QUESTION_DURATION);
+    });
   }
   function apply(previous) {
     ensureQuestionPrompt();
@@ -133,8 +180,7 @@
     if (current.category) {
       const category = getCategory(current.category);
       const title = node('h3', category.name);
-      title.id = 'selected-system-title';
-      title.tabIndex = -1;
+      title.id = 'selected-system-title'; title.tabIndex = -1;
       featureSection.setAttribute('aria-labelledby', title.id);
       const links = node('div', undefined, 'system-feature-links');
       for (const feature of category.features) {
@@ -145,6 +191,7 @@
       }
       featureSection.append(title, node('p', benefits[category.id]), links);
     }
+    updatePrompt();
     if (previous) {
       const target = current.feature ? $('feature-title') : current.category ? $('selected-system-title') : gridButtons.find(b => b.dataset.system === previous.category);
       if (target) {
@@ -174,7 +221,11 @@
     }
   };
   $('command').onsubmit = event => {
-    if (!media.matches) return baseFormSubmit(event);
+    if (!media.matches) {
+      const result = baseFormSubmit(event);
+      updatePrompt();
+      return result;
+    }
     event.preventDefault();
     const text = query.value.trim();
     if (!text) {
@@ -187,14 +238,32 @@
     updatePrompt();
   };
   query.addEventListener('input', updatePrompt);
+  query.addEventListener('focus', updatePrompt);
+  query.addEventListener('blur', updatePrompt);
   media.addEventListener('change', () => apply());
-  reduced.addEventListener('change', scheduleExamples);
-  document.addEventListener('visibilitychange', scheduleExamples);
-  window.addEventListener('resize', updatePrompt);
-  window.addEventListener('pagehide', () => clearInterval(rotationTimer));
-  window.addEventListener('pageshow', scheduleExamples);
+  reduced.addEventListener('change', updatePrompt);
+  document.addEventListener('visibilitychange', updatePrompt);
+  $('motion').addEventListener('click', updatePrompt);
+  const promptSizeObserver = new ResizeObserver(updatePrompt);
+  promptSizeObserver.observe(questionInput);
+  const dialogObserver = new MutationObserver(updatePrompt);
+  document.querySelectorAll('dialog').forEach(dialog => {
+    dialogObserver.observe(dialog, { attributes: true, attributeFilter: ['open'] });
+  });
+  window.addEventListener('pagehide', () => {
+    pageSuspended = true;
+    stopPromptCycle();
+  });
+  window.addEventListener('pageshow', () => {
+    pageSuspended = false;
+    updatePrompt();
+  });
   document.fonts?.ready.then(updatePrompt);
-  window.TwinUI = Object.freeze({ revision: 'option-b-prompts-4', examples: examples.map(({ question }) => question) });
+  window.TwinUI = Object.freeze({
+    revision: 'option-b-prompts-5',
+    questionDuration: QUESTION_DURATION,
+    promptMotion: 'mobile-overflow-scroll',
+    examples: examples.map(({ question }) => question)
+  });
   apply();
-  scheduleExamples();
 })();
