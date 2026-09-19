@@ -78,7 +78,12 @@
     query.setAttribute('aria-label', 'Ask Twin Intelligence a question');
     query.setAttribute('aria-describedby', 'question-help');
     $('command').lastElementChild.setAttribute('aria-label', 'Ask Twin Intelligence');
-    $('browse').hidden = true;
+    document.querySelectorAll('.question-example, .question-header').forEach(element => element.remove());
+    const browse = $('browse');
+    browse.hidden = true;
+    browse.textContent = '';
+    browse.tabIndex = -1;
+    browse.setAttribute('aria-hidden', 'true');
   }
   function updatePrompt() {
     ensureQuestionPrompt();
@@ -94,7 +99,7 @@
       if (paused || reduced.matches || document.hidden || query.value || document.querySelector('dialog[open]')) return;
       exampleIndex = (exampleIndex + 1) % examples.length;
       updatePrompt();
-    }, 1500);
+    }, 2000);
   }
   function apply(previous) {
     ensureQuestionPrompt();
@@ -189,7 +194,7 @@
   window.addEventListener('pagehide', () => clearInterval(rotationTimer));
   window.addEventListener('pageshow', scheduleExamples);
   document.fonts?.ready.then(updatePrompt);
-  window.TwinUI = Object.freeze({ revision: 'option-b-prompts-3', examples: examples.map(({ question }) => question) });
+  window.TwinUI = Object.freeze({ revision: 'option-b-prompts-4', examples: examples.map(({ question }) => question) });
   apply();
   scheduleExamples();
 })();
