@@ -1,5 +1,5 @@
 'use strict';
-/* Option B: one mobile capability panel. Suggestions navigate; no model is connected. */
+/* Option B mobile panel + shared rotating AI question prompts for every viewport. */
 (() => {
   const media = matchMedia('(max-width:720px)');
   const baseRender = render;
@@ -11,16 +11,18 @@
   const questionInput = node('span', undefined, 'question-input');
   const questionPlaceholder = node('span', undefined, 'question-placeholder');
   questionPlaceholder.setAttribute('aria-hidden', 'true');
-  const initialLabel = query.getAttribute('aria-label');
-  const initialDescription = query.getAttribute('aria-describedby');
-  const originalSubmitLabel = $('command').lastElementChild.getAttribute('aria-label');
   const description = '<strong>Twin Technologies</strong> builds its own autonomous AI models, digital identity, commercial infrastructure and connected systems within <strong>one unified platform.</strong>';
   const examples = [
-    { hint: 'How can I automate my construction company…', compact: 'Can you automate my business…', question: 'How can I automate my construction company?', category: 'automation' },
-    { hint: 'Can you connect the apps I use…', compact: 'Can you connect my apps…', question: 'Can you connect the apps I already use?', category: 'crm', feature: 'system-integrations' },
-    { hint: 'Can you follow up my leads…', compact: 'Can you follow up leads…', question: 'How can I follow up leads automatically?', category: 'sales', feature: 'nurturing-follow-up' },
-    { hint: 'Can you handle customer enquiries…', compact: 'Can you handle enquiries…', question: 'Can you help handle customer enquiries?', category: 'sales', feature: 'lead-qualification' },
-    { hint: 'How can I cut down on paperwork…', compact: 'Can you cut my paperwork…', question: 'How can I spend less time on paperwork?', category: 'automation', feature: 'documents-data' }
+    { hint: 'How can AI automate my construction company…', compact: 'Can AI automate construction…', question: 'How can AI automate my construction company?', category: 'automation' },
+    { hint: 'Can AI build a Shopify store for me…', compact: 'Can AI build my Shopify store…', question: 'Can AI build a Shopify store for me?', category: 'crm', feature: 'system-integrations' },
+    { hint: 'Can AI help me write and debug code…', compact: 'Can AI help me write code…', question: 'Can AI help me write and debug code?' },
+    { hint: 'Can AI answer my customer enquiries…', compact: 'Can AI answer customers…', question: 'Can AI answer my customer enquiries?', category: 'sales', feature: 'lead-qualification' },
+    { hint: 'Can AI connect the apps I use…', compact: 'Can AI connect my apps…', question: 'Can AI connect the apps I use?', category: 'crm', feature: 'system-integrations' },
+    { hint: 'Can AI follow up my leads automatically…', compact: 'Can AI follow up leads…', question: 'Can AI follow up my leads automatically?', category: 'sales', feature: 'nurturing-follow-up' },
+    { hint: 'Can AI manage my emails and calendar…', compact: 'Can AI manage my emails…', question: 'Can AI manage my emails and calendar?', category: 'automation', feature: 'email-automation' },
+    { hint: 'Can AI create reports from my business data…', compact: 'Can AI create business reports…', question: 'Can AI create reports from my business data?', category: 'automation', feature: 'briefings-reporting' },
+    { hint: 'Can AI personalise replies to my customers…', compact: 'Can AI personalise replies…', question: 'Can AI personalise replies to my customers?', category: 'identity' },
+    { hint: 'Can AI reduce admin in my business…', compact: 'Can AI reduce my admin…', question: 'Can AI reduce admin in my business?', category: 'automation' }
   ];
   const benefits = {
     identity: 'Remember your customers and the details that matter.',
@@ -32,17 +34,7 @@
   };
   let exampleIndex = 0;
   let rotationTimer = 0;
-  const questionHeader = node('div', undefined, 'question-header');
-  const questionLabel = node('label', 'What would you like to do?');
-  questionLabel.htmlFor = 'query';
-  const exampleButton = button('Try example', () => {
-    const example = examples[exampleIndex];
-    query.value = example.question;
-    query.focus({ preventScroll: true });
-    query.dispatchEvent(new Event('input', { bubbles: true }));
-  }, 'question-example');
-  questionHeader.append(questionLabel, exampleButton);
-  const questionHelp = node('span', 'Try an example or write your question. This preview opens relevant capabilities; conversational AI answers are not connected yet.', 'visually-hidden');
+  const questionHelp = node('span', 'Type any question. The rotating examples show the kinds of things you can ask Twin Intelligence.', 'visually-hidden');
   questionHelp.id = 'question-help';
   const section = node('section', undefined, 'capability-panel');
   section.id = 'capability-panel';
@@ -75,39 +67,42 @@
     if (next !== null) { event.preventDefault(); gridButtons[next].focus(); }
   });
   section.append(headingRow, grid, featureSection);
+  function ensureQuestionPrompt() {
+    if (!questionInput.isConnected) {
+      query.before(questionInput);
+      questionInput.append(query, questionPlaceholder);
+    }
+    if (!questionHelp.isConnected) $('command-area').append(questionHelp);
+    query.setAttribute('aria-label', 'Ask Twin Intelligence a question');
+    query.setAttribute('aria-describedby', 'question-help');
+    $('command').lastElementChild.setAttribute('aria-label', 'Ask Twin Intelligence');
+    $('browse').hidden = true;
+  }
   function updatePrompt() {
-    if (!media.matches) return;
+    ensureQuestionPrompt();
     const example = examples[exampleIndex];
-    exampleButton.title = example.question;
-    exampleButton.setAttribute('aria-label', `Use example: ${example.question}`);
-    const editing = Boolean(query.value) || document.activeElement === query;
-    questionPlaceholder.hidden = editing;
-    query.placeholder = editing && !query.value ? 'Your question…' : '';
+    questionPlaceholder.hidden = Boolean(query.value);
+    query.placeholder = '';
     questionPlaceholder.textContent = innerWidth < 370 ? example.compact : example.hint;
   }
   function scheduleExamples() {
     clearInterval(rotationTimer);
-    if (!media.matches || document.hidden || reduced.matches) return;
+    if (document.hidden || reduced.matches) return;
     rotationTimer = setInterval(() => {
-      if (paused || reduced.matches || document.hidden || query.value || document.activeElement === query || document.querySelector('dialog[open]')) return;
+      if (paused || reduced.matches || document.hidden || query.value || document.querySelector('dialog[open]')) return;
       exampleIndex = (exampleIndex + 1) % examples.length;
       updatePrompt();
-    }, 6500);
+    }, 1500);
   }
   function apply(previous) {
+    ensureQuestionPrompt();
+    updatePrompt();
     const active = media.matches;
     document.body.classList.toggle('mobile-panel-ui', active);
     if (!active) {
       panelParent.append(detailPanel);
-      section.remove(); questionHeader.remove(); questionHelp.remove();
-      if (questionInput.isConnected) questionInput.replaceWith(query);
-      questionPlaceholder.remove();
+      section.remove();
       $('back').hidden = false;
-      query.setAttribute('aria-label', initialLabel);
-      if (initialDescription) query.setAttribute('aria-describedby', initialDescription);
-      else query.removeAttribute('aria-describedby');
-      $('command').lastElementChild.setAttribute('aria-label', originalSubmitLabel);
-      clearInterval(rotationTimer);
       return;
     }
     const current = window.TwinCore.getState();
@@ -119,15 +114,6 @@
     $('nodes').hidden = true;
     $('preview-note').hidden = true;
     $('back').hidden = !current.category;
-    query.setAttribute('aria-label', 'Your question for Twin');
-    query.setAttribute('aria-describedby', 'question-help');
-    $('command').lastElementChild.setAttribute('aria-label', 'Explore your question');
-    if (!questionInput.isConnected) {
-      query.before(questionInput);
-      questionInput.append(query, questionPlaceholder);
-    }
-    $('command-area').prepend(questionHeader);
-    questionHeader.after(questionHelp);
     document.querySelector('.core-side').append(section);
     section.append(detailPanel);
     gridButtons.forEach(b => {
@@ -140,7 +126,8 @@
     if (current.category) {
       const category = getCategory(current.category);
       const title = node('h3', category.name);
-      title.id = 'selected-system-title'; title.tabIndex = -1;
+      title.id = 'selected-system-title';
+      title.tabIndex = -1;
       featureSection.setAttribute('aria-labelledby', title.id);
       const links = node('div', undefined, 'system-feature-links');
       for (const feature of category.features) {
@@ -151,7 +138,6 @@
       }
       featureSection.append(title, node('p', benefits[category.id]), links);
     }
-    updatePrompt();
     if (previous) {
       const target = current.feature ? $('feature-title') : current.category ? $('selected-system-title') : gridButtons.find(b => b.dataset.system === previous.category);
       if (target) {
@@ -169,14 +155,14 @@
   submitQuery = function(text) {
     if (!media.matches) return baseSubmit(text);
     const q = normalise(text);
-    const example = examples.find(item => normalise(item.question) === q || normalise(item.hint) === q || normalise(item.compact) === q);
-    if (example) {
+    const example = examples.find(item => normalise(item.question) === q);
+    if (example?.category) {
       navigate({ view: 'core', category: example.category, ...(example.feature ? { feature: example.feature } : {}) });
       $('status').textContent = 'Relevant capabilities for your question are open below.';
     } else {
       baseSubmit(text);
       if (resolveIntent(text, state.category).kind === 'unknown') {
-        $('status').textContent = 'This preview opens relevant capabilities, rather than answering every question. Try automation, app connections, leads or privacy.';
+        $('status').textContent = 'Twin Intelligence will answer broader questions here once the conversational AI layer is connected.';
       }
     }
   };
@@ -185,7 +171,7 @@
     event.preventDefault();
     const text = query.value.trim();
     if (!text) {
-      $('status').textContent = 'Write your question, or tap Try example.';
+      $('status').textContent = 'Type a question for Twin Intelligence.';
       query.focus({ preventScroll: true });
       return;
     }
@@ -193,17 +179,15 @@
     query.value = '';
     updatePrompt();
   };
-  query.addEventListener('focus', updatePrompt);
-  query.addEventListener('blur', updatePrompt);
   query.addEventListener('input', updatePrompt);
-  media.addEventListener('change', () => { apply(); scheduleExamples(); });
+  media.addEventListener('change', () => apply());
   reduced.addEventListener('change', scheduleExamples);
   document.addEventListener('visibilitychange', scheduleExamples);
   window.addEventListener('resize', updatePrompt);
   window.addEventListener('pagehide', () => clearInterval(rotationTimer));
   window.addEventListener('pageshow', scheduleExamples);
   document.fonts?.ready.then(updatePrompt);
-  window.TwinUI = Object.freeze({ revision: 'option-b-1', examples: examples.map(({ question }) => question) });
+  window.TwinUI = Object.freeze({ revision: 'option-b-prompts-2', examples: examples.map(({ question }) => question) });
   apply();
   scheduleExamples();
 })();
