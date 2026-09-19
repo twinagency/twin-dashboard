@@ -7,7 +7,7 @@ export const dynamic = "force-dynamic";
 export async function generateMetadata(): Promise<Metadata> {
   const agency = await agencyForSlug("moxy");
   return {
-    title: agency ? `Sign in · ${agency.name}` : "Creator sign in · Twin",
+    title: agency ? `Sign in · ${agency.name}` : "Creator sign in · FLIRT",
     ...(agency?.icon ? { icons: { icon: { url: agency.icon, type: "image/svg+xml" } } } : {}),
   };
 }

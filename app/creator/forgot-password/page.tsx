@@ -1,5 +1,6 @@
+import { creatorPublicAuthConfig } from "@/lib/creator-public-auth";
 import CreatorForgotPasswordScreen from "@/components/CreatorForgotPasswordScreen";
 
 export default function CreatorForgotPasswordPage() {
-  return <CreatorForgotPasswordScreen brand="twin" />;
+  return <CreatorForgotPasswordScreen authConfig={creatorPublicAuthConfig()} brand="twin" />;
 }

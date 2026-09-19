@@ -5,7 +5,7 @@ import { getDashboardAccess } from "@/lib/dashboard-access";
 import { Card } from "@/components/ui/card";
 
 export const dynamic = "force-dynamic";
-export const metadata = { title: "Creator Management · Twin" };
+export const metadata = { title: "Creator Management · FLIRT" };
 
 type Creator = { id: string; display_name: string | null; email: string | null; account_status: string; created_at: string };
 type Application = { id: string; creator_account_id: string; status: string; submitted_at: string | null; created_at: string };
@@ -114,7 +114,7 @@ export default async function CreatorManagementPage() {
                     <div className="mt-1 truncate text-xs text-muted">{creator.email || "No email"}</div>
                   </div>
                   <div className="grid grid-cols-2 gap-x-6 gap-y-3 text-sm sm:grid-cols-4 lg:min-w-[560px]">
-                    <div><div className="text-xs text-muted">Agency</div><div className="mt-0.5 font-medium">{agency?.name || "Twin Direct"}</div></div>
+                    <div><div className="text-xs text-muted">Agency</div><div className="mt-0.5 font-medium">{agency?.name || "FLIRT Direct"}</div></div>
                     <div><div className="text-xs text-muted">Onboarding</div><div className="mt-0.5 font-medium">{completed}/3</div></div>
                     <div><div className="text-xs text-muted">Media</div><div className="mt-0.5 font-medium">{count.verified}/{count.total} verified</div></div>
                     <div><div className="text-xs text-muted">Clone</div><div className="mt-0.5 truncate font-medium">{clone?.name || link?.twin_slug || "Not linked"}</div></div>

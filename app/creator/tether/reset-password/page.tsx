@@ -1,7 +1,7 @@
-"use client";
+import { creatorPublicAuthConfig } from "@/lib/creator-public-auth";
 
 import CreatorResetPasswordScreen from "@/components/CreatorResetPasswordScreen";
 
 export default function TetherCreatorResetPasswordPage() {
-  return <CreatorResetPasswordScreen brand="tether" />;
+  return <CreatorResetPasswordScreen authConfig={creatorPublicAuthConfig()} brand="tether" />;
 }

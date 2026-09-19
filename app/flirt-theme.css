@@ -1,0 +1,85 @@
+/* FLIRT presentation layer over the original Twin layouts.
+   Geometry, typography, responsive rules and financial/status colours stay
+   with the source components. Only platform branding is changed here. */
+html[data-app-brand="flirt"],
+html[data-app-brand="flirt"] .creator-control-plane {
+  --color-bg: #fffafc;
+  --color-panel: #ffffff;
+  --color-elev: #fff1f6;
+  --color-ink: #111014;
+  --color-muted: #5f5660;
+  --color-line: #e9dde3;
+  --color-accent: #cc0055;
+  --color-accent-2: #cc0055;
+  --color-accent-deep: #111014;
+  --color-accent-ink: #ffffff;
+  --color-accent-soft: #ff006a;
+  --color-accent-tint: #ffe3ee;
+  --color-brand: #cc0055;
+  --color-brand-light: #ff006a;
+  --color-love: #ff006a;
+  --color-love-ink: #cc0055;
+  --color-love-tint: #ffc2da;
+  --color-love-bg: #fff1f6;
+  --color-love-hover: #ffe3ee;
+  --color-love-peach: #ffd2e3;
+  --sidebar: #111014;
+  --sidebar-primary-foreground: #111014;
+  --intelligence-core-glow-rgb: 255,0,106;
+  --intelligence-core-edge-rgb: 255,105,168;
+  --intelligence-core-front-rgb: 255,250,252;
+  --intelligence-core-back-rgb: 255,194,218;
+  --intelligence-core-accent-rgb: 255,227,238;
+}
+
+html[data-app-brand="flirt"] .canvas-glow {
+  background-image: linear-gradient(180deg, rgb(255 0 106 / .035), transparent 14rem);
+}
+html[data-app-brand="flirt"] .dashboard-main::before {
+  background: radial-gradient(760px 360px at 8% 0%, rgb(255 255 255 / .7), transparent 68%),
+    linear-gradient(180deg, rgb(255 0 106 / .025), transparent 88%);
+}
+html[data-app-brand="flirt"] .dashboard-main::after {
+  background: linear-gradient(180deg, transparent 0 96%, rgb(255 0 106 / .08) 100%);
+}
+html[data-app-brand="flirt"] .dashboard-sidebar,
+html[data-app-brand="flirt"][data-creator-workspace="true"] .creator-sidebar,
+html[data-app-brand="flirt"] .dashboard-mobile-header {
+  background: linear-gradient(180deg, #27151f 0%, #111014 100%);
+  color: #ffffff;
+}
+html[data-app-brand="flirt"] .sidebar-create-button:hover {
+  background: #b8004d;
+}
+html[data-app-brand="flirt"] .creator-core-hero::before {
+  background: radial-gradient(circle at 50% 43%, rgb(255 0 106 / .28), rgb(255 105 168 / .12) 34%, transparent 68%);
+}
+html[data-app-brand="flirt"] .creator-core-hero canvas {
+  filter: drop-shadow(0 0 10px rgb(255 0 106 / .56)) drop-shadow(0 0 22px rgb(255 105 168 / .26));
+}
+html[data-app-brand="flirt"] .creator-core-hero strong {
+  color: #ffc2da;
+  text-shadow: 0 0 14px rgb(255 0 106 / .45);
+}
+html[data-app-brand="flirt"] .creator-core-hero span { color: #fffafc; }
+
+/* Recolour the original texture layers only. Do not filter forms, text,
+   images of creators, graphs or the Telegram conversation previews. */
+.flirt-auth-texture { filter: hue-rotate(108deg) saturate(.88); }
+.flirt-auth-dark { background-color: #27151f; }
+.flirt-auth-glow {
+  background: radial-gradient(900px 700px at 14% 12%, rgb(255 194 218 / .34), transparent 66%);
+}
+
+html[data-app-brand="flirt"] .jarvis-page,
+html[data-app-brand="flirt"] .jarvis-stage {
+  background-color: #111014 !important;
+  background-image: linear-gradient(145deg, rgb(17 16 20 / .2), rgb(17 16 20 / .7)),
+    linear-gradient(#cc0055, #cc0055), url('/brand/twin-deep-texture.png') !important;
+  background-blend-mode: normal, color, normal;
+}
+
+/* Preserve the original neural animation; tint just its decorative canvas. */
+html[data-app-brand="flirt"] canvas[aria-label^="FLIRT intelligence core"] {
+  filter: hue-rotate(108deg) saturate(.88);
+}

@@ -4,7 +4,7 @@ import { isAuthed } from "@/lib/auth";
 import { INVITE_CODE_PATTERN, inviteUrl } from "@/lib/creator-invite-codes";
 import { supabaseAdmin } from "@/lib/supabase";
 
-export const metadata = { title: "Creator invites · Twin" };
+export const metadata = { title: "Creator invites · FLIRT" };
 export const dynamic = "force-dynamic";
 
 const inputCls = "mt-1 block w-full rounded-lg border border-line p-3";
@@ -150,3 +150,4 @@ export default async function CreatorCodes({ searchParams }: { searchParams: Pro
     </main>
   );
 }
+

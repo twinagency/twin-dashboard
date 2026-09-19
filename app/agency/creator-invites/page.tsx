@@ -9,7 +9,7 @@ import { INVITE_CODE_PATTERN, inviteUrl } from "@/lib/creator-invite-codes";
 // tables do not have. Every query below scopes to access.id explicitly.
 import { serviceClient } from "@/lib/supabase-service";
 
-export const metadata = { title: "Creator invites · Twin" };
+export const metadata = { title: "Creator invites · FLIRT" };
 export const dynamic = "force-dynamic";
 
 const inputCls = "mt-1 block w-full rounded-lg border border-line p-3";
@@ -118,3 +118,4 @@ export default async function AgencyCreatorInvites({ searchParams }: { searchPar
     </main>
   );
 }
+

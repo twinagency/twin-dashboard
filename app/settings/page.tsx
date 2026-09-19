@@ -9,7 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Info } from "@/components/clone/fields";
 
 export const metadata = {
-  title: "Settings · Twin Console",
+  title: "Settings · FLIRT Console",
 };
 
 export const dynamic = "force-dynamic";

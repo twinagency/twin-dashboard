@@ -245,7 +245,7 @@ export default function TwinPanel({ open, onClose }: { open: boolean; onClose: (
 
       <aside
         role="dialog"
-        aria-label="Twin assistant"
+        aria-label="FLIRT assistant"
         aria-hidden={!open}
         className={
           "fixed right-0 top-0 z-50 flex h-dvh w-full max-w-[440px] flex-col border-l border-white/60 bg-[#f6f9ff]/95 shadow-[-18px_0_60px_rgb(12_29_56/0.18)] backdrop-blur-xl transition-transform duration-300 ease-out " +
@@ -254,14 +254,14 @@ export default function TwinPanel({ open, onClose }: { open: boolean; onClose: (
       >
         <header className="flex shrink-0 items-center gap-2 border-b border-white/70 px-4 py-3">
           <span className="h-2 w-2 rounded-full bg-accent-2 shadow-[0_0_10px_currentColor]" />
-          <span className="font-heading text-sm font-semibold tracking-tight text-ink">Twin</span>
+          <span className="font-heading text-sm font-semibold tracking-tight text-ink">FLIRT</span>
           <span className="text-[10px] font-medium uppercase tracking-[0.14em] text-ink/40">
             {pending ? "" : "Ready"}
           </span>
           <button
             type="button"
             onClick={onClose}
-            aria-label="Close Twin"
+            aria-label="Close FLIRT"
             className="ml-auto rounded-lg p-1.5 text-ink/50 transition hover:bg-white/70 hover:text-ink"
           >
             <X className="h-4 w-4" />

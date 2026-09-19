@@ -29,10 +29,10 @@ export default async function CreatorLoginScreen({ searchParams, brand, agencyBr
       brand={brand}
       agencyBrand={invited ? { name: invited.name, slug: invited.slug, logo: invited.logo, dark: invited.dark } : null}
       heroTitle={tether ? "Your voice, cloned. Always online." : link ? "Your content. Your identity. Your LYNQ workspace." : invited ? `Your ${invited.name} creator workspace.` : "Your content. Your identity. One place."}
-      heroCopy={tether ? "Creator earnings, content and account activity in one private workspace." : link ? "Creator earnings, content and account activity in one private LYNQ workspace." : invited ? `Creator earnings, content and account activity in one private ${invited.name} workspace.` : "Manage your Twin onboarding, content storage and connected creator profile."}
+      heroCopy={tether ? "Creator earnings, content and account activity in one private workspace." : link ? "Creator earnings, content and account activity in one private LYNQ workspace." : invited ? `Creator earnings, content and account activity in one private ${invited.name} workspace.` : "Manage your FLIRT onboarding, content storage and connected creator profile."}
       eyebrow="Creator workspace"
       title={tether ? "Sign in to Tether" : link ? "Sign in to LYNQ" : invited ? `Sign in to ${invited.name}` : "Sign in"}
-      description={tether ? "Private creator access. Agency operator access remains separate." : link ? "Access your LYNQ creator account." : invited ? `Access your ${invited.name} creator account.` : "Access your Twin creator account."}
+      description={tether ? "Private creator access. Agency operator access remains separate." : link ? "Access your LYNQ creator account." : invited ? `Access your ${invited.name} creator account.` : "Access your FLIRT creator account."}
       footer={<span>New here? <Link href={paths.signup} className={authLinkClass}>Create creator account</Link></span>}
     >
       <form action="/creator-auth/login" method="post" className={darkForm ? "space-y-5" : "grid gap-4"}>

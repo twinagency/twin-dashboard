@@ -12,7 +12,7 @@ export async function generateMetadata({ searchParams }: { searchParams: Promise
   const { code } = await searchParams;
   const agency = await agencyForInviteCode(typeof code === "string" ? code.trim().toUpperCase().slice(0, 64) : undefined);
   return {
-    title: agency ? `Create creator account · ${agency.name}` : "Create creator account · Twin",
+    title: agency ? `Create creator account · ${agency.name}` : "Create creator account · FLIRT",
     // Only set when the invite has its own icon; leaving it out for every
     // other case keeps Twin's favicon exactly as it was.
     ...(agency?.icon ? { icons: { icon: { url: agency.icon, type: "image/svg+xml" } } } : {}),

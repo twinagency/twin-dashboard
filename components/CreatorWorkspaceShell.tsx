@@ -48,7 +48,7 @@ export default function CreatorWorkspaceShell({
             <Sidebar clones={clones} activeCloneId={activeCloneId} />
             <div className="flex h-screen min-w-0 flex-1 flex-col overflow-hidden">
               <header className="dashboard-mobile-header flex shrink-0 items-center justify-between border-b border-white/12 px-4 py-3 lg:hidden">
-                <Link href="/creator" aria-label={agencyName || "Twin Technologies"}>
+                <Link href="/creator" aria-label={agencyName || "FLIRT"}>
                   <TwinWordmark inverse agencyName={wordmarkAgency} />
                 </Link>
                 <div className="flex items-center gap-1">

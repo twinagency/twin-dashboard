@@ -25,4 +25,5 @@ jobs:
           NEXT_TELEMETRY_DISABLED: "1"
       - name: Existing offline checks
         run: npm run test:offline
-
+      - name: Creator signup and onboarding regression checks
+        run: npm run test:creator-routing && npm run test:creator-login && npm run test:creator-onboarding

@@ -2,7 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import Link from "next/link";
-import { createClient } from "@supabase/supabase-js";
+import { creatorBrowserAuth, type CreatorPublicAuth } from "@/lib/creator-browser-auth";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import CreatorAuthFrame, {
@@ -14,13 +14,7 @@ import CreatorAuthFrame, {
   type CreatorAuthBrand,
 } from "@/components/CreatorAuthFrame";
 
-const supabase = createClient(
-  "https://aouaenqayfltoqrmpitg.supabase.co",
-  "sb_publishable_GaunWyo_PKF82PDziCc9mQ_B9_3O16a",
-  { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } },
-);
-
-export default function CreatorForgotPasswordScreen({ brand }: { brand: CreatorAuthBrand }) {
+export default function CreatorForgotPasswordScreen({ brand, authConfig }: { brand: CreatorAuthBrand; authConfig: CreatorPublicAuth }) {
   const [email, setEmail] = useState("");
   const [status, setStatus] = useState<"idle" | "sending" | "sent" | "error">("idle");
   const tether = brand === "tether";
@@ -31,9 +25,12 @@ export default function CreatorForgotPasswordScreen({ brand }: { brand: CreatorA
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     setStatus("sending");
-    const redirectTo = `${window.location.origin}${paths.reset}`;
-    const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), { redirectTo });
-    setStatus(error ? "error" : "sent");
+    try {
+      const supabase = creatorBrowserAuth(authConfig);
+      const redirectTo = `${window.location.origin}${paths.reset}`;
+      const { error } = await supabase.auth.resetPasswordForEmail(email.trim().toLowerCase(), { redirectTo });
+      setStatus(error ? "error" : "sent");
+    } catch { setStatus("error"); }
   }
 
   return (

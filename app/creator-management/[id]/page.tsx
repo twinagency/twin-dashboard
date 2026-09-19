@@ -160,7 +160,7 @@ export default async function CreatorDetailPage({ params }: { params: Promise<{ 
             <form action={assignCreatorAgency} className="grid gap-3">
               <input type="hidden" name="creator_account_id" value={creator.id} />
               <select name="agency_id" defaultValue={assignment?.agency_id || ""} className="h-10 w-full rounded-lg border border-border bg-background px-3 text-sm">
-                <option value="">Twin Direct</option>
+                <option value="">FLIRT Direct</option>
                 {agencies.map((agency) => <option key={agency.id} value={agency.id}>{agency.name}</option>)}
               </select>
               <Button type="submit" variant="outline">Save agency</Button>

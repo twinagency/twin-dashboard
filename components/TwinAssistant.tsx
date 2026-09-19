@@ -612,7 +612,7 @@ export default function TwinAssistant({ variant = "sidebar", coreState = "idle" 
     typingActiveUntilRef.current = 0;
     setState("processing");
 
-    const response = "I am here. Your message has reached the Twin intelligence core.";
+    const response = "I am here. Your message has reached the FLIRT intelligence core.";
     const timer = window.setTimeout(() => {
       setTranscript((lines) => [...lines.slice(-2), { role: "Twin", text: response }]);
       speakResponse(response);
@@ -627,7 +627,7 @@ export default function TwinAssistant({ variant = "sidebar", coreState = "idle" 
       <canvas
         ref={canvasRef}
         className="block h-full w-full touch-none"
-        aria-label={`Twin intelligence core, ${displayLabel.toLowerCase()}`}
+        aria-label={`FLIRT intelligence core, ${displayLabel.toLowerCase()}`}
         role="img"
         onPointerEnter={() => setHovered(true)}
         onPointerLeave={() => {
@@ -651,10 +651,10 @@ export default function TwinAssistant({ variant = "sidebar", coreState = "idle" 
         mobileDock
           ? "fixed bottom-1 left-1/2 z-[100] flex -translate-x-1/2 flex-col items-center lg:hidden"
           : expanded
-          ? "fixed inset-0 z-[100] flex items-center justify-center bg-[#020914]/78 p-4 backdrop-blur-md sm:p-8"
+          ? "fixed inset-0 z-[100] flex items-center justify-center bg-[#111014]/78 p-4 backdrop-blur-md sm:p-8"
           : "w-full px-1 pb-1"
       }
-      aria-label="Twin AI assistant"
+      aria-label="FLIRT AI assistant"
       aria-modal={!mobileDock && expanded ? true : undefined}
       role={!mobileDock && expanded ? "dialog" : undefined}
     >
@@ -663,23 +663,23 @@ export default function TwinAssistant({ variant = "sidebar", coreState = "idle" 
           mobileDock
             ? "w-[118px]"
             : expanded
-            ? "relative w-full max-w-[820px] overflow-hidden rounded-[30px] border border-cyan-300/25 bg-[#031324]/95 p-4 shadow-[0_0_100px_rgba(14,165,233,0.24),inset_0_0_80px_rgba(8,145,178,0.08)] sm:p-6"
+            ? "relative w-full max-w-[820px] overflow-hidden rounded-[30px] border border-pink-300/25 bg-[#21121c]/95 p-4 shadow-[0_0_100px_rgba(14,165,233,0.24),inset_0_0_80px_rgba(8,145,178,0.08)] sm:p-6"
             : "w-full"
         }
       >
         {expanded ? (
-          <div className="flex items-center justify-between px-1 pb-2 text-cyan-50">
+          <div className="flex items-center justify-between px-1 pb-2 text-pink-50">
             <div>
-              <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.24em] text-cyan-300/70">
+              <div className="flex items-center gap-2 text-[10px] font-semibold uppercase tracking-[0.24em] text-pink-300/70">
                 <Sparkles className="h-3.5 w-3.5" />
-                Twin neural field
+                FLIRT neural field
               </div>
-              <p className="mt-1 text-xs text-cyan-100/45">Move through the field · tap the core to send an impulse</p>
+              <p className="mt-1 text-xs text-pink-100/45">Move through the field · tap the core to send an impulse</p>
             </div>
             <button
               type="button"
               onClick={() => setExpanded(false)}
-              className="flex h-9 w-9 items-center justify-center rounded-full border border-cyan-200/20 bg-cyan-100/5 text-cyan-50/75 transition hover:border-cyan-200/45 hover:bg-cyan-100/10 hover:text-white"
+              className="flex h-9 w-9 items-center justify-center rounded-full border border-pink-200/20 bg-pink-100/5 text-pink-50/75 transition hover:border-pink-200/45 hover:bg-pink-100/10 hover:text-white"
               aria-label="Close neural field"
               title="Close (Esc)"
             >
@@ -698,10 +698,10 @@ export default function TwinAssistant({ variant = "sidebar", coreState = "idle" 
               ? "block h-[min(62vh,560px)] min-h-[390px] w-full touch-none cursor-crosshair rounded-2xl bg-[radial-gradient(circle_at_center,rgba(8,47,73,0.34),rgba(2,8,23,0.08)_54%,transparent_76%)] drop-shadow-[0_0_28px_rgba(34,211,238,0.38)]"
               : "block h-[176px] w-full touch-none cursor-pointer transition [@media(max-height:850px)]:h-[148px]"
           }
-          aria-label={`Twin intelligence core, ${displayLabel.toLowerCase()}`}
+          aria-label={`FLIRT intelligence core, ${displayLabel.toLowerCase()}`}
           role="button"
           tabIndex={0}
-          title={expanded ? "Tap to send an energy impulse" : "Open Twin AI"}
+          title={expanded ? "Tap to send an energy impulse" : "Open FLIRT AI"}
           onClick={() => {
             if (!expanded) {
               router.push("/jarvis");
@@ -733,13 +733,13 @@ export default function TwinAssistant({ variant = "sidebar", coreState = "idle" 
         />
         {!mobileDock ? <div
           aria-live="polite"
-          className={"pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-center gap-1.5 text-[9px] font-semibold uppercase tracking-[0.16em] " + (expanded ? "text-cyan-100/60" : "text-white/65")}
+          className={"pointer-events-none absolute inset-x-0 bottom-0 flex items-center justify-center gap-1.5 text-[9px] font-semibold uppercase tracking-[0.16em] " + (expanded ? "text-pink-100/60" : "text-white/65")}
         >
           <span
             className={
               "h-1.5 w-1.5 rounded-full shadow-[0_0_8px_currentColor] " +
               (state === "listening"
-                ? "animate-pulse bg-cyan-500 text-cyan-500"
+                ? "animate-pulse bg-pink-500 text-pink-500"
                 : state === "processing"
                   ? "animate-pulse bg-blue-600 text-blue-600"
                   : state === "speaking"
@@ -752,7 +752,7 @@ export default function TwinAssistant({ variant = "sidebar", coreState = "idle" 
           {displayLabel}
         </div> : null}
         {!mobileDock && !expanded ? (
-          <div className="pointer-events-none absolute right-1 top-1 flex items-center gap-1 rounded-full border border-cyan-200/35 bg-white/35 px-2 py-1 text-[8px] font-semibold uppercase tracking-[0.12em] text-[#0b4966]/65 opacity-0 shadow-sm backdrop-blur transition group-hover:opacity-100">
+          <div className="pointer-events-none absolute right-1 top-1 flex items-center gap-1 rounded-full border border-pink-200/35 bg-white/35 px-2 py-1 text-[8px] font-semibold uppercase tracking-[0.12em] text-[#862548]/65 opacity-0 shadow-sm backdrop-blur transition group-hover:opacity-100">
             <Maximize2 className="h-2.5 w-2.5" /> Open AI
           </div>
         ) : null}
@@ -760,7 +760,7 @@ export default function TwinAssistant({ variant = "sidebar", coreState = "idle" 
 
       {!mobileDock ? <>
       <form onSubmit={submit} className={expanded ? "mx-auto mt-3 max-w-xl" : "mt-2"}>
-        <div className={"flex items-center gap-1 rounded-xl border p-1 shadow-[0_8px_24px_rgb(12_29_56/0.1)] backdrop-blur-md transition focus-within:border-cyan-300/80 " + (expanded ? "border-cyan-200/20 bg-cyan-50/10 focus-within:bg-cyan-50/15" : "border-white/65 bg-white/45 focus-within:bg-white/60")}>
+        <div className={"flex items-center gap-1 rounded-xl border p-1 shadow-[0_8px_24px_rgb(12_29_56/0.1)] backdrop-blur-md transition focus-within:border-pink-300/80 " + (expanded ? "border-pink-200/20 bg-pink-50/10 focus-within:bg-pink-50/15" : "border-white/65 bg-white/45 focus-within:bg-white/60")}>
           <input
             value={input}
             onChange={(event) => {
@@ -774,9 +774,9 @@ export default function TwinAssistant({ variant = "sidebar", coreState = "idle" 
               const last = typingPulsesRef.current.at(-1) ?? 0;
               if (now - last > 90) typingPulsesRef.current.push(now);
             }}
-            placeholder="Ask Twin anything"
-            aria-label="Ask Twin anything"
-            className={"min-w-0 flex-1 bg-transparent px-2 py-1.5 text-[11px] font-medium outline-none " + (expanded ? "text-cyan-50 placeholder:text-cyan-100/35" : "text-ink placeholder:text-ink/45")}
+            placeholder="Ask FLIRT anything"
+            aria-label="Ask FLIRT anything"
+            className={"min-w-0 flex-1 bg-transparent px-2 py-1.5 text-[11px] font-medium outline-none " + (expanded ? "text-pink-50 placeholder:text-pink-100/35" : "text-ink placeholder:text-ink/45")}
           />
           <button
             type="button"
@@ -786,17 +786,17 @@ export default function TwinAssistant({ variant = "sidebar", coreState = "idle" 
             title={state === "listening" ? "Stop listening" : "Use microphone"}
             className={
               "flex h-7 w-7 shrink-0 items-center justify-center rounded-lg transition " +
-              (state === "listening" ? "bg-cyan-500 text-white shadow-[0_0_12px_rgba(6,182,212,0.5)]" : expanded ? "text-cyan-100/55 hover:bg-cyan-50/10 hover:text-cyan-50" : "text-ink/55 hover:bg-white/70 hover:text-ink")
+              (state === "listening" ? "bg-pink-500 text-white shadow-[0_0_12px_rgba(6,182,212,0.5)]" : expanded ? "text-pink-100/55 hover:bg-pink-50/10 hover:text-pink-50" : "text-ink/55 hover:bg-white/70 hover:text-ink")
             }
           >
             {state === "listening" ? <MicOff className="h-3.5 w-3.5" /> : <Mic className="h-3.5 w-3.5" />}
           </button>
           <button
             type="submit"
-            aria-label="Send to Twin"
+            aria-label="Send to FLIRT"
             title="Send"
             disabled={!input.trim()}
-            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#0b2444] text-white shadow-sm transition hover:bg-[#123a66] disabled:cursor-not-allowed disabled:opacity-35"
+            className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#cc0055] text-white shadow-sm transition hover:bg-[#b8004d] disabled:cursor-not-allowed disabled:opacity-35"
           >
             <Send className="h-3.5 w-3.5" />
           </button>
@@ -814,26 +814,26 @@ export default function TwinAssistant({ variant = "sidebar", coreState = "idle" 
           className={
             "inline-flex items-center gap-1 rounded-full border px-2 py-1 text-[9px] font-semibold transition " +
             (voiceMode
-              ? expanded ? "border-cyan-300/30 bg-cyan-100/10 text-cyan-100/75" : "border-cyan-300/60 bg-white/45 text-[#0b4966]"
-              : expanded ? "border-cyan-100/15 bg-white/5 text-cyan-100/40" : "border-white/50 bg-white/25 text-ink/45")
+              ? expanded ? "border-pink-300/30 bg-pink-100/10 text-pink-100/75" : "border-pink-300/60 bg-white/45 text-[#862548]"
+              : expanded ? "border-pink-100/15 bg-white/5 text-pink-100/40" : "border-white/50 bg-white/25 text-ink/45")
           }
         >
           {voiceMode ? <Volume2 className="h-3 w-3" /> : <VolumeX className="h-3 w-3" />}
           Voice {voiceMode ? "on" : "off"}
         </button>
-        <span className={"inline-flex items-center gap-1 text-[9px] font-medium " + (expanded ? "text-cyan-100/40" : "text-ink/40")}>
+        <span className={"inline-flex items-center gap-1 text-[9px] font-medium " + (expanded ? "text-pink-100/40" : "text-ink/40")}>
           <AudioLines className="h-3 w-3" />
           Neural audio
         </span>
       </div>
 
-      <div aria-live="polite" className={"mt-1.5 min-h-8 space-y-0.5 px-1 text-[9px] leading-relaxed [@media(max-height:850px)]:min-h-5 " + (expanded ? "text-center text-cyan-100/45" : "text-ink/55")}>
+      <div aria-live="polite" className={"mt-1.5 min-h-8 space-y-0.5 px-1 text-[9px] leading-relaxed [@media(max-height:850px)]:min-h-5 " + (expanded ? "text-center text-pink-100/45" : "text-ink/55")}>
         {transcript.length === 0 ? (
           <p className="text-center">The intelligence core is online.</p>
         ) : (
           transcript.slice(-2).map((line, index) => (
             <p key={`${line.role}-${index}`} className="line-clamp-2">
-              <span className={"font-semibold " + (expanded ? "text-cyan-50/70" : "text-ink/70")}>{line.role}:</span> {line.text}
+              <span className={"font-semibold " + (expanded ? "text-pink-50/70" : "text-ink/70")}>{line.role === "Twin" ? "FLIRT" : line.role}:</span> {line.text}
             </p>
           ))
         )}

@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Info } from "@/components/clone/fields";
 
 export const metadata = {
-  title: "API access · Twin Console",
+  title: "API access · FLIRT Console",
 };
 
 export const dynamic = "force-dynamic";
@@ -56,3 +56,4 @@ export default async function ApiAccessPage() {
     </div>
   );
 }
+

@@ -1296,20 +1296,20 @@ export default function JarvisWorkspace({ cloneId }: { cloneId: string | null })
 
   return (
     <div className="jarvis-page relative min-h-full overflow-hidden p-3 sm:p-5">
-      <section className="jarvis-stage relative min-h-[720px] overflow-hidden rounded-[28px] border border-white/15 bg-[#06172f]/50 backdrop-blur-xl lg:min-h-[calc(100vh-7.5rem)]">
+      <section className="jarvis-stage relative min-h-[720px] overflow-hidden rounded-[28px] border border-white/15 bg-[#21121c]/50 backdrop-blur-xl lg:min-h-[calc(100vh-7.5rem)]">
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_50%_42%,rgba(74,142,196,0.28),transparent_42%),radial-gradient(circle_at_17%_22%,rgba(120,182,223,0.18),transparent_35%),radial-gradient(circle_at_7%_88%,rgba(240,90,157,0.1),transparent_31%),radial-gradient(circle_at_94%_15%,rgba(8,43,85,0.3),transparent_34%),linear-gradient(145deg,rgba(6,23,47,0.08),rgba(6,23,47,0.58)_56%,rgba(8,43,85,0.72))]" />
 
         <div className="pointer-events-none absolute left-1/2 top-5 z-20 -translate-x-1/2 scale-[0.84] sm:top-6 sm:scale-100">
           <TwinWordmark descriptor="Intelligence Core" inverse />
         </div>
-        <div className="absolute right-4 top-14 z-20 rounded-full border border-white/20 bg-[#06172f]/45 px-3 py-1.5 text-[9px] font-semibold text-white/70 shadow-sm backdrop-blur-md sm:right-6 sm:top-6">
+        <div className="absolute right-4 top-14 z-20 rounded-full border border-white/20 bg-[#21121c]/45 px-3 py-1.5 text-[9px] font-semibold text-white/70 shadow-sm backdrop-blur-md sm:right-6 sm:top-6">
           {activeClone?.name ? <span className="creator-name">{activeClone.name}</span> : "All clones"}
         </div>
 
         <canvas
           ref={canvasRef}
           className={`absolute inset-0 h-full w-full touch-none transition-opacity duration-300 ${phase === "searching" ? "opacity-100" : "pointer-events-none opacity-0"}`}
-          aria-label={`Twin intelligence core${activeDomain ? ` searching ${DOMAIN_BY_ID[activeDomain].label}` : ""}`}
+          aria-label={`FLIRT intelligence core${activeDomain ? ` searching ${DOMAIN_BY_ID[activeDomain].label}` : ""}`}
           role="img"
           onPointerMove={(event) => {
             const rect = event.currentTarget.getBoundingClientRect();
@@ -1353,14 +1353,14 @@ export default function JarvisWorkspace({ cloneId }: { cloneId: string | null })
                   } as CSSProperties}
                 >
                   {card.imageUrl ? (
-                    <img src={card.imageUrl} alt="" className="h-11 w-11 shrink-0 rounded-xl object-cover ring-1 ring-cyan-200/60" />
+                    <img src={card.imageUrl} alt="" className="h-11 w-11 shrink-0 rounded-xl object-cover ring-1 ring-pink-200/60" />
                   ) : (
-                    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-cyan-200/60 bg-cyan-50/80 text-[#0b6691]">
+                    <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl border border-pink-200/60 bg-pink-50/80 text-[#cc0055]">
                       <JourneyIcon className="h-4.5 w-4.5" />
                     </span>
                   )}
                   <span className="min-w-0">
-                    <span className={(card.isName ? "creator-name " : "") + "block max-w-[145px] truncate text-[11px] font-semibold text-[#0d2540]"}>{card.label}</span>
+                    <span className={(card.isName ? "creator-name " : "") + "block max-w-[145px] truncate text-[11px] font-semibold text-[#111014]"}>{card.label}</span>
                     <span className="mt-0.5 block max-w-[145px] truncate text-[8px] font-medium text-muted/75">{card.detail}</span>
                   </span>
                 </div>
@@ -1371,7 +1371,7 @@ export default function JarvisWorkspace({ cloneId }: { cloneId: string | null })
 
         {phase === "searching" ? (
           <div className="pointer-events-none absolute left-1/2 top-[4.5rem] z-30 -translate-x-1/2 text-center sm:top-[4.75rem]">
-            <p className="whitespace-nowrap rounded-full border border-white/70 bg-white/58 px-3 py-1.5 text-[9px] font-semibold uppercase tracking-[0.19em] text-[#0b4966]/70 shadow-[0_7px_26px_rgba(12,46,78,0.08)] backdrop-blur-md">{searchStep}</p>
+            <p className="whitespace-nowrap rounded-full border border-white/70 bg-white/58 px-3 py-1.5 text-[9px] font-semibold uppercase tracking-[0.19em] text-[#862548]/70 shadow-[0_7px_26px_rgba(12,46,78,0.08)] backdrop-blur-md">{searchStep}</p>
           </div>
         ) : null}
 
@@ -1382,12 +1382,12 @@ export default function JarvisWorkspace({ cloneId }: { cloneId: string | null })
               onClick={dismissResult}
               aria-label="Close answer"
               title="Close answer"
-              className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full border border-slate-200/80 bg-white/75 text-slate-500 shadow-sm transition hover:border-cyan-200 hover:bg-white hover:text-[#0d2540] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-cyan-400/60"
+              className="absolute right-3 top-3 grid h-8 w-8 place-items-center rounded-full border border-slate-200/80 bg-white/75 text-slate-500 shadow-sm transition hover:border-pink-200 hover:bg-white hover:text-[#111014] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-pink-400/60"
             >
               <X className="h-4 w-4" />
             </button>
-            <div className="flex items-center gap-2 pr-9 text-[9px] font-semibold uppercase tracking-[0.16em] text-cyan-700/65">
-              <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full border border-cyan-200/70 bg-cyan-50/70 text-cyan-700">
+            <div className="flex items-center gap-2 pr-9 text-[9px] font-semibold uppercase tracking-[0.16em] text-pink-700/65">
+              <span className="grid h-9 w-9 shrink-0 place-items-center overflow-hidden rounded-full border border-pink-200/70 bg-pink-50/70 text-pink-700">
                 {result.imageUrl ? <img src={result.imageUrl} alt="" className="h-full w-full object-cover" /> : <ResultIcon className="h-4 w-4" />}
               </span>
               {result.scopeName && (
@@ -1398,7 +1398,7 @@ export default function JarvisWorkspace({ cloneId }: { cloneId: string | null })
               )}
               {result.eyebrow}
             </div>
-            <h2 className="mt-3 font-heading text-2xl font-semibold tracking-[-0.035em] text-[#0d2540]">{result.title}</h2>
+            <h2 className="mt-3 font-heading text-2xl font-semibold tracking-[-0.035em] text-[#111014]">{result.title}</h2>
             <p className="mt-2 text-xs leading-5 text-muted">{result.summary}</p>
 
             {result.metrics.length > 0 ? (
@@ -1406,7 +1406,7 @@ export default function JarvisWorkspace({ cloneId }: { cloneId: string | null })
                 {result.metrics.map((metric) => (
                   <div key={metric.label} className="rounded-xl border border-line/75 bg-white/62 p-2.5">
                     <div className="text-[7px] font-semibold uppercase tracking-[0.1em] text-muted/70">{metric.label}</div>
-                    <div className="mt-1 text-sm font-semibold text-[#0d2540]">{metric.value}</div>
+                    <div className="mt-1 text-sm font-semibold text-[#111014]">{metric.value}</div>
                   </div>
                 ))}
               </div>
@@ -1416,7 +1416,7 @@ export default function JarvisWorkspace({ cloneId }: { cloneId: string | null })
               type="button"
               onClick={openResult}
               disabled={navigating}
-              className="mt-4 flex w-full items-center justify-between rounded-xl bg-[#0d2540] px-4 py-3 text-left text-sm font-semibold text-white shadow-[0_10px_28px_rgba(13,37,64,0.24)] transition hover:bg-[#153d67] disabled:opacity-50"
+              className="mt-4 flex w-full items-center justify-between rounded-xl bg-accent px-4 py-3 text-left text-sm font-semibold text-white shadow-[0_10px_28px_rgba(13,37,64,0.24)] transition hover:bg-[#b8004d] disabled:opacity-50"
             >
               <span>{result.action}</span>
               {navigating ? <LoaderCircle className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
@@ -1424,17 +1424,17 @@ export default function JarvisWorkspace({ cloneId }: { cloneId: string | null })
           </article>
         ) : null}
 
-        <div className="absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-[#06172f] via-[#082b55]/96 to-transparent px-4 pb-5 pt-24 sm:px-7">
-          <form onSubmit={submit} className="mx-auto flex max-w-3xl items-center gap-2 rounded-2xl border border-white/85 bg-white/68 p-2 shadow-[0_16px_44px_rgb(12_29_56/0.12)] backdrop-blur-xl transition focus-within:border-cyan-300/80 focus-within:bg-white/82">
-            <Search className="ml-2 h-4 w-4 shrink-0 text-[#0b4966]/45" />
+        <div className="absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-[#21121c] via-[#321624]/96 to-transparent px-4 pb-5 pt-24 sm:px-7">
+          <form onSubmit={submit} className="mx-auto flex max-w-3xl items-center gap-2 rounded-2xl border border-white/85 bg-white/68 p-2 shadow-[0_16px_44px_rgb(12_29_56/0.12)] backdrop-blur-xl transition focus-within:border-pink-300/80 focus-within:bg-white/82">
+            <Search className="ml-2 h-4 w-4 shrink-0 text-[#862548]/45" />
             <input
               value={query}
               onChange={(event) => {
                 setQuery(event.target.value);
                 setVoiceUnavailable(false);
               }}
-              placeholder={listening ? "Listening to your question…" : "Ask Twin about the dashboard…"}
-              aria-label="Ask Twin about the dashboard"
+              placeholder={listening ? "Listening to your question…" : "Ask FLIRT about the dashboard…"}
+              aria-label="Ask FLIRT about the dashboard"
               className="min-w-0 flex-1 bg-transparent px-1 py-2 text-sm font-medium text-ink outline-none placeholder:text-ink/38"
             />
             <button
@@ -1446,8 +1446,8 @@ export default function JarvisWorkspace({ cloneId }: { cloneId: string | null })
               title={listening ? "Stop and send voice question" : "Ask with voice"}
               className={`grid h-9 w-9 shrink-0 place-items-center rounded-xl border transition disabled:cursor-not-allowed disabled:opacity-35 ${
                 listening
-                  ? "border-cyan-400 bg-cyan-500 text-white shadow-[0_0_18px_rgba(6,182,212,0.45)]"
-                  : "border-slate-200/80 bg-white/58 text-[#0b4966]/60 hover:border-cyan-300 hover:bg-cyan-50/80 hover:text-cyan-700"
+                  ? "border-pink-400 bg-pink-500 text-white shadow-[0_0_18px_rgba(6,182,212,0.45)]"
+                  : "border-slate-200/80 bg-white/58 text-[#862548]/60 hover:border-pink-300 hover:bg-pink-50/80 hover:text-pink-700"
               }`}
             >
               {listening ? <MicOff className="h-4 w-4" /> : <Mic className="h-4 w-4" />}
@@ -1455,7 +1455,7 @@ export default function JarvisWorkspace({ cloneId }: { cloneId: string | null })
             <button
               type="submit"
               disabled={!query.trim() || phase === "searching"}
-              className="flex h-9 items-center rounded-xl bg-[#0d2540] px-3 text-xs font-semibold text-white shadow-[0_8px_22px_rgba(13,37,64,0.2)] transition hover:bg-[#153d67] disabled:cursor-not-allowed disabled:opacity-35"
+              className="flex h-9 items-center rounded-xl bg-accent px-3 text-xs font-semibold text-white shadow-[0_8px_22px_rgba(13,37,64,0.2)] transition hover:bg-[#b8004d] disabled:cursor-not-allowed disabled:opacity-35"
             >
               Ask
             </button>

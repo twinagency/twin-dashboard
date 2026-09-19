@@ -40,11 +40,11 @@ export default async function CreatorSignupScreen({ searchParams, brand, initial
     <CreatorAuthFrame
       brand={brand}
       agencyBrand={invited ? { name: invited.name, slug: invited.slug, logo: invited.logo, dark: invited.dark } : null}
-      heroTitle={tether ? "Your creator workspace starts here." : link ? "Your LYNQ creator workspace starts here." : invited ? `Your ${invited.name} creator workspace starts here.` : "Build your Twin from one creator account."}
-      heroCopy={tether ? "Complete onboarding once, then access your Tether earnings, content and profile." : link ? "Complete onboarding once, then access your LYNQ earnings, content and profile." : invited ? `Complete onboarding once, then access your ${invited.name} earnings, content and profile.` : "Start onboarding, upload your creator media and keep everything connected to your live Twin profile."}
+      heroTitle={tether ? "Your creator workspace starts here." : link ? "Your LYNQ creator workspace starts here." : invited ? `Your ${invited.name} creator workspace starts here.` : "Build your FLIRT AI from one creator account."}
+      heroCopy={tether ? "Complete onboarding once, then access your Tether earnings, content and profile." : link ? "Complete onboarding once, then access your LYNQ earnings, content and profile." : invited ? `Complete onboarding once, then access your ${invited.name} earnings, content and profile.` : "Start onboarding, upload your creator media and keep everything connected to your live FLIRT profile."}
       eyebrow="Creator workspace"
       title={tether ? "Join Tether" : link ? "Join LYNQ" : invited ? `Join ${invited.name}` : "Create account"}
-      description={tether ? "Create your account and your application will be connected directly to Tether for review." : link ? "Create your account and your application will be connected directly to LYNQ for review." : invited ? `Create your account and your application will be connected directly to ${invited.name} for review.` : "Agency code is optional. Leave it blank if you're joining Twin directly."}
+      description={tether ? "Create your account and your application will be connected directly to Tether for review." : link ? "Create your account and your application will be connected directly to LYNQ for review." : invited ? `Create your account and your application will be connected directly to ${invited.name} for review.` : "Agency code is optional. Leave it blank if you're joining FLIRT directly."}
       footer={<span>Already have an account? <Link href={paths.login} className={authLinkClass}>Sign in</Link></span>}
     >
       {directAgencySignup && status === signupStatus ? (

@@ -60,6 +60,15 @@ export default function TwinWordmark({
       </span>
     );
   }
+  if (!agencyName || agencyName === "Twin") return (
+    <img
+      src="/brand/flirt-logo.webp"
+      alt="FLIRT"
+      width={720}
+      height={360}
+      className={`block h-10 w-auto max-w-full object-contain ${className}`}
+    />
+  );
   return (
     <span
       className={`inline-flex items-baseline gap-2 ${agencyName ? "whitespace-normal" : "whitespace-nowrap"} leading-none ${inverse ? "text-white" : "text-black"} ${className}`}
@@ -68,7 +77,7 @@ export default function TwinWordmark({
         className="text-[20px] font-bold tracking-[-0.025em]"
         style={{ fontFamily: "var(--font-display), var(--font-sans), sans-serif" }}
       >
-        {agencyName || "Twin."}
+        {agencyName}
       </span>
       {!agencyName && <span className={`text-[13px] font-bold uppercase tracking-[0.28em] ${inverse ? "text-white/72" : "text-black/70"}`}>
         {descriptor}

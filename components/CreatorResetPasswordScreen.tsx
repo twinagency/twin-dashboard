@@ -2,7 +2,7 @@
 
 import { FormEvent, useEffect, useState } from "react";
 import Link from "next/link";
-import { createClient } from "@supabase/supabase-js";
+import { creatorBrowserAuth, type CreatorPublicAuth } from "@/lib/creator-browser-auth";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import CreatorAuthFrame, {
@@ -14,13 +14,7 @@ import CreatorAuthFrame, {
   type CreatorAuthBrand,
 } from "@/components/CreatorAuthFrame";
 
-const supabase = createClient(
-  "https://aouaenqayfltoqrmpitg.supabase.co",
-  "sb_publishable_GaunWyo_PKF82PDziCc9mQ_B9_3O16a",
-  { auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true } },
-);
-
-export default function CreatorResetPasswordScreen({ brand }: { brand: CreatorAuthBrand }) {
+export default function CreatorResetPasswordScreen({ brand, authConfig }: { brand: CreatorAuthBrand; authConfig: CreatorPublicAuth }) {
   const [password, setPassword] = useState("");
   const [confirm, setConfirm] = useState("");
   const [ready, setReady] = useState(false);
@@ -31,27 +25,32 @@ export default function CreatorResetPasswordScreen({ brand }: { brand: CreatorAu
   const authLinkClass = tether ? tetherAuthLinkClass : link ? linkAuthLinkClass : "font-medium text-accent-2 hover:underline";
 
   useEffect(() => {
+    let supabase;
+    try { supabase = creatorBrowserAuth(authConfig); } catch { return; }
     let active = true;
     supabase.auth.getSession().then(({ data }) => {
       if (active) setReady(!!data.session);
-    });
+    }).catch(() => { if (active) setReady(false); });
     const { data: listener } = supabase.auth.onAuthStateChange((_event, session) => {
       if (active) setReady(!!session);
     });
     return () => { active = false; listener.subscription.unsubscribe(); };
-  }, []);
+  }, [authConfig]);
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (password.length < 8 || password !== confirm) return setStatus("error");
     setStatus("saving");
-    const { error } = await supabase.auth.updateUser({ password });
-    if (error) return setStatus("error");
-    await supabase.auth.signOut();
-    // The dashboard uses a separate HttpOnly creator cookie. Finish through
-    // the server logout route so a successful password reset clears it too,
-    // then returns to the verified creator brand's sign-in page.
-    window.location.replace("/creator-auth/logout");
+    try {
+      const supabase = creatorBrowserAuth(authConfig);
+      const { error } = await supabase.auth.updateUser({ password });
+      if (error) return setStatus("error");
+      await supabase.auth.signOut();
+      // The dashboard uses a separate HttpOnly creator cookie. Finish through
+      // the server logout route so a successful password reset clears it too,
+      // then returns to the verified creator brand's sign-in page.
+      window.location.replace("/creator-auth/logout");
+    } catch { setStatus("error"); }
   }
 
   return (

@@ -1,3 +1,4 @@
+import { configureFlirtOfflineEnv } from "./flirt-offline-env";
 import assert from "node:assert/strict";
 import { CREATOR_PORTAL_COOKIE } from "../lib/creator-routing";
 import { CREATOR_SESSION_COOKIE } from "../lib/creator-session";
@@ -8,11 +9,13 @@ type Scenario = "lynq" | "tether" | "paused" | "inactive_agency" | "orphan_invit
 async function main() {
   Object.assign(process.env, {
     NODE_ENV: "production",
-    DASHBOARD_PUBLIC_ORIGIN: "https://dashboard.tgaiclone.xyz",
-    SUPABASE_URL: "https://creator-login.test.supabase.co",
+    DASHBOARD_PUBLIC_ORIGIN: "https://dashboard.flirt.example",
+    SUPABASE_URL: "https://abcdefghijklmnopqrst.supabase.co",
     SUPABASE_SERVICE_KEY: "offline-login-fixture",
     CREATOR_SESSION_SECRET: "offline-login-session-secret",
   });
+
+  configureFlirtOfflineEnv();
 
   const oldFetch = globalThis.fetch;
   const userId = "11111111-1111-4111-8111-111111111111";
@@ -27,7 +30,7 @@ async function main() {
   globalThis.fetch = async (input, init) => {
     const request = new Request(input, init);
     const url = new URL(request.url);
-    assert.equal(url.hostname, "creator-login.test.supabase.co", "creator login test must remain offline");
+    assert.equal(url.hostname, "abcdefghijklmnopqrst.supabase.co", "creator login test must remain offline");
     requests.push(`${request.method} ${url.pathname}`);
 
     if (url.pathname === "/auth/v1/token") {
@@ -73,10 +76,10 @@ async function main() {
     form.set("password", "fixture-password");
     form.set("portal", portal);
     form.set("next", "/creator");
-    return new Request("https://dashboard.tgaiclone.xyz/creator-auth/login", {
+    return new Request("https://dashboard.flirt.example/creator-auth/login", {
       method: "POST",
       headers: {
-        origin: "https://dashboard.tgaiclone.xyz",
+        origin: "https://dashboard.flirt.example",
         "x-forwarded-host": "attacker.example",
         "x-forwarded-proto": "http",
       },
@@ -90,7 +93,7 @@ async function main() {
     scenario = "lynq";
     const lynq = await POST(makeRequest("twin"));
     assert.equal(lynq.status, 303);
-    assert.equal(lynq.headers.get("location"), "https://dashboard.tgaiclone.xyz/creator");
+    assert.equal(lynq.headers.get("location"), "https://dashboard.flirt.example/creator");
     assert.equal(lynq.cookies.get(CREATOR_PORTAL_COOKIE)?.value, "link", "verified LYNQ assignment replaces a stale public-brand hint");
     assert.ok(lynq.cookies.get(CREATOR_SESSION_COOKIE)?.value, "verified LYNQ login receives a creator session");
 
@@ -104,7 +107,7 @@ async function main() {
       const denied = await POST(makeRequest("link"));
       assert.equal(denied.status, 303, scenario);
       const location = new URL(denied.headers.get("location")!);
-      assert.equal(location.origin, "https://dashboard.tgaiclone.xyz", `${scenario} cannot influence the redirect host`);
+      assert.equal(location.origin, "https://dashboard.flirt.example", `${scenario} cannot influence the redirect host`);
       assert.equal(location.pathname, "/creator/link/login", scenario);
       assert.equal(location.searchParams.get("error"), "1", scenario);
       assert.equal(denied.cookies.get(CREATOR_PORTAL_COOKIE)?.value, "link", scenario);

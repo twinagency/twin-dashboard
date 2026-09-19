@@ -6,6 +6,7 @@ import { getDashboardAccess } from "@/lib/dashboard-access";
 import "./globals.css";
 import "./jess-kate-theme.css";
 import "./creator-workspace.css";
+import "./flirt-theme.css";
 import { JESS_KATE_PORTAL, TETHER_PORTAL } from "@/lib/partner-portals";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -43,21 +44,21 @@ export async function generateMetadata(): Promise<Metadata> {
     const link = publicPortal === "link" || isLynq(creator?.name);
     const tether = publicPortal === "tether" || creator?.name === TETHER_PORTAL.name;
     return {
-      title: link ? "LYNQ creator workspace" : tether ? "Tether creator workspace" : "Creator dashboard",
+      title: link ? "LYNQ creator workspace" : tether ? "Tether creator workspace" : "FLIRT creator dashboard",
       description: link ? "Private LYNQ creator access" : tether ? "Private Tether creator access" : "Your creator workspace",
       robots: { index: false, follow: false },
-      icons: { icon: { url: link ? "/lynq/icon.svg" : tether ? "/tether/icon.svg" : "/icon.png", type: link || tether ? "image/svg+xml" : "image/png" } },
+      icons: { icon: { url: "/brand/flirt-icon.svg", type: "image/svg+xml" }, apple: "/brand/flirt-apple-touch-icon.png" },
     };
   }
   if (isMarketingPath(pathname)) return {
-    title: "Twin Agency", description: "Your audience. Your AI twin.", robots: { index: false, follow: false },
-    icons: { icon: { url: "/icon.png", type: "image/png" } },
+    title: "FLIRT", description: "Your personal AI, built to chat like you.", robots: { index: false, follow: false },
+    icons: { icon: { url: "/brand/flirt-icon.svg", type: "image/svg+xml" }, apple: "/brand/flirt-apple-touch-icon.png" },
   };
   const agencyName = pathname && isAgencyPath(pathname) ? pathAgencyName(pathname) : isTwinLoginPath(pathname) ? undefined : (await getDashboardAccess())?.name;
   return agencyName ? {
     title: `${agencyName} Dashboard`, description: `${agencyName} creator dashboard`,
     icons: { icon: { url: isMoxy(agencyName) ? "/moxy/icon.svg" : "/agency/icon.svg", type: "image/svg+xml" } },
-  } : { title: "Twin Console", description: "Intelligence infrastructure operations console", icons: { icon: { url: "/icon.png", type: "image/png" } } };
+  } : { title: "FLIRT Console", description: "Intelligence infrastructure operations console", icons: { icon: { url: "/brand/flirt-icon.svg", type: "image/svg+xml" }, apple: "/brand/flirt-apple-touch-icon.png" } };
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
@@ -70,27 +71,27 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     const publicPortal = creatorPublicPortal(pathname);
     const link = publicPortal === "link" || isLynq(creator?.name);
     const theme = link ? "lynq-light" : creator?.name === JESS_KATE_PORTAL.name ? "ivory-cherry" : undefined;
-    return <html lang="en" data-creator-workspace={isCreatorDashboardPath(pathname) ? "true" : undefined} data-brand-theme={theme} data-agency={link ? "lynq" : isMoxy(creator?.name) ? "moxy" : undefined} className={fontClass} style={{colorScheme:"light"}} suppressHydrationWarning><body className="min-h-screen bg-bg"><script dangerouslySetInnerHTML={{__html:'try{if(localStorage.getItem("blurMedia")==="true")document.documentElement.classList.add("blur-media")}catch(e){}'}} />{children}</body></html>;
+    return <html lang="en" data-app-brand="flirt" data-creator-workspace={isCreatorDashboardPath(pathname) ? "true" : undefined} data-brand-theme={theme} data-agency={link ? "lynq" : isMoxy(creator?.name) ? "moxy" : undefined} className={fontClass} style={{colorScheme:"light"}} suppressHydrationWarning><body className="min-h-screen bg-bg"><script dangerouslySetInnerHTML={{__html:'try{if(localStorage.getItem("blurMedia")==="true")document.documentElement.classList.add("blur-media")}catch(e){}'}} />{children}</body></html>;
   }
-  if (isMarketingPath(pathname)) return <html lang="en" className={fontClass}><body>{children}</body></html>;
+  if (isMarketingPath(pathname)) return <html lang="en" data-app-brand="flirt" className={fontClass}><body>{children}</body></html>;
   // These two live under the /agency/ prefix but are authenticated operator
   // pages, not part of the login/portal shell that prefix otherwise means:
   // they need the real Sidebar and DashboardAccessProvider below, not the
   // bare shell every other /agency/* path gets.
   const isAgencyOperatorPage = pathname === "/agency/creators" || pathname === "/agency/creator-invites";
   if (isTwinLoginPath(pathname) || (pathname && isAgencyPath(pathname) && !isAgencyOperatorPage)) {
-    return <html lang="en" data-agency={pathname && isAgencyPath(pathname) && isMoxy(pathAgencyName(pathname)) ? "moxy" : undefined} data-brand-theme={pathname && isAgencyPath(pathname) && pathAgencyName(pathname) === JESS_KATE_PORTAL.name ? "ivory-cherry" : undefined} className={fontClass}><body className="min-h-screen bg-bg">{children}</body></html>;
+    return <html lang="en" data-app-brand="flirt" data-agency={pathname && isAgencyPath(pathname) && isMoxy(pathAgencyName(pathname)) ? "moxy" : undefined} data-brand-theme={pathname && isAgencyPath(pathname) && pathAgencyName(pathname) === JESS_KATE_PORTAL.name ? "ivory-cherry" : undefined} className={fontClass}><body className="min-h-screen bg-bg">{children}</body></html>;
   }
   const devBypass = !isTwinLoginPath(pathname) && process.env.NODE_ENV !== "production";
   const agency = await getDashboardAccess();
   const authed = !!agency || devBypass || await isAuthed();
-  if (!authed) return <html lang="en" className={fontClass} style={{colorScheme:"light"}} suppressHydrationWarning><body className="min-h-screen bg-bg">{children}</body></html>;
+  if (!authed) return <html lang="en" data-app-brand="flirt" className={fontClass} style={{colorScheme:"light"}} suppressHydrationWarning><body className="min-h-screen bg-bg">{children}</body></html>;
   const [twinVersion, clones, activeCloneId] = await Promise.all([
     agency ? Promise.resolve(null) : getCachedTwinVersion(), getFleetClones(), getCloneScope(),
   ]);
   const allTimeStars = await getHeaderAllTimeStars(activeCloneId);
   // Path-dependent navigation stays in client components, not frozen here.
-  return <html lang="en" data-agency={isMoxy(agency?.name) ? "moxy" : isLynq(agency?.name) ? "lynq" : undefined} data-brand-theme={isLynq(agency?.name) ? "lynq-light" : agency?.name === JESS_KATE_PORTAL.name ? "ivory-cherry" : undefined} className={fontClass} style={{ colorScheme: "light" }} suppressHydrationWarning>
+  return <html lang="en" data-app-brand="flirt" data-agency={isMoxy(agency?.name) ? "moxy" : isLynq(agency?.name) ? "lynq" : undefined} data-brand-theme={isLynq(agency?.name) ? "lynq-light" : agency?.name === JESS_KATE_PORTAL.name ? "ivory-cherry" : undefined} className={fontClass} style={{ colorScheme: "light" }} suppressHydrationWarning>
     <body className="min-h-screen bg-bg">
       <script dangerouslySetInnerHTML={{__html:'try{if(localStorage.getItem("blurMedia")==="true")document.documentElement.classList.add("blur-media")}catch(e){}'}} />
       <DashboardAccessProvider agencyName={agency?.name} canManage={agencyCanManage(agency)}><CurrencyProvider><BlurProvider>
@@ -98,7 +99,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <Sidebar clones={clones} activeCloneId={activeCloneId} />
           <div className="flex h-screen min-w-0 flex-1 flex-col overflow-hidden">
             <header className="dashboard-mobile-header flex shrink-0 items-center justify-between border-b border-white/12 px-4 py-3 lg:hidden">
-              <Link href="/revenue" aria-label={agency?.name || "Twin Technologies"}><TwinWordmark inverse agencyName={agency?.name} /></Link>
+              <Link href="/revenue" aria-label={agency?.name || "FLIRT"}><TwinWordmark inverse agencyName={agency?.name} /></Link>
               <div className="flex items-center gap-1">{agency && <form action="/agency/logout" method="post"><button type="submit" className="rounded-lg px-3 py-2 text-sm font-medium text-white/80 hover:bg-white/10">Sign out</button></form>}<MobileMenu activeCloneId={activeCloneId} /></div>
             </header>
             <TopBar clones={clones} activeCloneId={activeCloneId} allTimeStars={allTimeStars} /><MainShell>{children}</MainShell>

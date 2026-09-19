@@ -1,19 +1,5 @@
-import type { Metadata } from "next";
-import MarketingSite from "./MarketingSite";
-import AccountLinkBridge from "./AccountLinkBridge";
-import "./live.css";
+import { redirect } from "next/navigation";
 
-export const metadata: Metadata = {
-  title: "Twin - Your AI voice twin that never sleeps",
-  description: "Twin clones your voice into an AI version that chats with fans 24/7 via written and voice messages.",
-  robots: { index: false, follow: false },
-};
-
-export default function TwinAgencyPage() {
-  return (
-    <>
-      <AccountLinkBridge />
-      <MarketingSite />
-    </>
-  );
+export default function MarketingPage() {
+  redirect("https://lynqai.co/#top");
 }

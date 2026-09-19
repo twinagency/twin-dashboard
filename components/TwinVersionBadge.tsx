@@ -46,11 +46,11 @@ export function TwinVersionChip({
       type="button"
       onClick={openTwinUpdate}
       className="inline-flex items-center gap-1.5 rounded-full border border-white/15 px-2.5 py-1 text-[11px] font-medium text-white/55 transition hover:border-white/30 hover:text-white/80"
-      title={summary ? `${summary}\n\nClick to read again` : `Twin v${version}`}
-      aria-label={`Twin version ${version}, open release notes`}
+      title={summary ? `${summary}\n\nClick to read again` : `FLIRT v${version}`}
+      aria-label={`FLIRT version ${version}, open release notes`}
     >
       <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
-      Twin v{version}
+      FLIRT v{version}
       {name ? <span className="text-white/40">{name}</span> : null}
     </button>
   );
@@ -126,7 +126,7 @@ export default function TwinUpdatePopup({
             <span className="text-[11px] text-white/50">just shipped</span>
           </div>
           <h2 id="twin-update-title" className="mt-1.5 font-display text-xl font-semibold">
-            Twin v{version}
+            FLIRT v{version}
             {name ? <span className="ml-2 text-base font-normal text-white/50">{name}</span> : null}
           </h2>
         </div>
@@ -170,7 +170,7 @@ export default function TwinUpdatePopup({
               the paragraph rather than showing an empty popup. */}
           {features.length === 0 && fixes.length === 0 && (
             <p className="whitespace-pre-wrap text-sm leading-relaxed text-neutral-700">
-              {summary || "Twin has been updated."}
+              {summary || "FLIRT has been updated."}
             </p>
           )}
         </div>

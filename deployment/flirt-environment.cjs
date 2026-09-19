@@ -1,4 +1,5 @@
 "use strict";
+const { publicAuthConfig } = require("./flirt-public-auth.cjs");
 
 // This branch is a separate FLIRT installation. Never fall back to Twin.
 const FORBIDDEN_PROJECTS = new Set([
@@ -45,6 +46,9 @@ function assertDatabase(env = process.env) {
     if (env[field] && env[field] !== url.origin && env[field] !== `${url.origin}/`) {
       fail("public Supabase URL differs from the FLIRT server project");
     }
+  }
+  if (env.SUPABASE_PUBLISHABLE_KEY) {
+    publicAuthConfig({ ref, url: env.SUPABASE_URL, key: env.SUPABASE_PUBLISHABLE_KEY });
   }
   if (env.DATABASE_URL) {
     const db = parseUrl(env.DATABASE_URL, "DATABASE_URL");

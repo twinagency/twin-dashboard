@@ -1,3 +1,4 @@
+import { configureFlirtOfflineEnv } from "./flirt-offline-env";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { NextRequest } from "next/server";
@@ -16,7 +17,7 @@ import {
   shouldRedirectAuthenticatedCreatorEntry,
 } from "../lib/creator-routing";
 
-const origin = "https://dashboard.tgaiclone.xyz";
+const origin = "https://dashboard.flirt.example";
 const accountId = "11111111-1111-4111-8111-111111111111";
 const userId = "22222222-2222-4222-8222-222222222222";
 const cloneId = "33333333-3333-4333-8333-333333333333";
@@ -24,18 +25,20 @@ const cloneId = "33333333-3333-4333-8333-333333333333";
 async function main() {
   Object.assign(process.env, {
     NODE_ENV: "production",
-    SUPABASE_URL: "https://creator-routing.test.supabase.co",
+    SUPABASE_URL: "https://abcdefghijklmnopqrst.supabase.co",
     SUPABASE_SERVICE_KEY: "offline-routing-fixture",
     CREATOR_SESSION_SECRET: "offline-creator-routing-secret",
     DASHBOARD_PASSWORD: "offline-admin-secret",
   });
+
+  configureFlirtOfflineEnv();
 
   const oldFetch = globalThis.fetch;
   let accountExists = true;
   let agencyName = "Tether";
   globalThis.fetch = async (input) => {
     const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
-    assert.equal(url.hostname, "creator-routing.test.supabase.co", "routing test must remain offline");
+    assert.equal(url.hostname, "abcdefghijklmnopqrst.supabase.co", "routing test must remain offline");
     let body: unknown;
     switch (url.pathname) {
       case "/rest/v1/creator_accounts":
