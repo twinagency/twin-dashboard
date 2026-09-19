@@ -1,3 +1,4 @@
+import { assertStartup } from "../../../../deployment/flirt-environment.cjs";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { serviceClient } from "@/lib/supabase-service";
@@ -41,6 +42,7 @@ export async function POST(req: Request) {
   const portal = normalizeCreatorPublicPortal(form.get("portal"));
   if (!email || !password) return redirectWithError(req, next, portal);
 
+  assertStartup("dashboard");
   const authClient = createClient(process.env.SUPABASE_URL!, process.env.SUPABASE_SERVICE_KEY!, {
     auth: { persistSession: false, autoRefreshToken: false },
   });
@@ -71,3 +73,4 @@ export async function POST(req: Request) {
   response.cookies.delete(CLONE_SCOPE_COOKIE);
   return response;
 }
+

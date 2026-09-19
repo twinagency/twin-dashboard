@@ -6,9 +6,10 @@ export const TETHER_CREATOR_SIGNUP_STATUS = "check_email";
 // This is a Supabase publishable key, not a secret. Prefer an injected value
 // so non-production environments can point at their own Supabase project.
 export function creatorPublishableKey(): string {
-  return process.env.SUPABASE_PUBLISHABLE_KEY
-    || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY
-    || "sb_publishable_GaunWyo_PKF82PDziCc9mQ_B9_3O16a";
+  const key = process.env.SUPABASE_PUBLISHABLE_KEY
+    || process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
+  if (!key) throw new Error("FLIRT SUPABASE_PUBLISHABLE_KEY is required");
+  return key;
 }
 
 export type TetherCreatorSignup = {
@@ -47,3 +48,4 @@ export function tetherCreatorAssignmentRow(accountId: string, assignedAt: string
     assigned_at: assignedAt,
   } as const;
 }
+

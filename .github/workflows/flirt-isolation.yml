@@ -1,0 +1,28 @@
+name: FLIRT isolated preparation
+on:
+  push:
+    branches: ["flirt/**"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  offline:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - name: Independent configuration checks
+        run: npm run test:flirt-isolation
+      - run: npm ci
+      - name: Typecheck
+        run: npx tsc --noEmit
+      - name: Build without live credentials
+        run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: "1"
+      - name: Existing offline checks
+        run: npm run test:offline
+

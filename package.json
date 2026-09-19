@@ -45,7 +45,9 @@
     "test:link-creator-signup": "tsx scripts/check-link-creator-signup.ts",
     "test:tether-creator-signup": "tsx scripts/check-tether-creator-signup.ts",
     "test:tether-auth-ui": "tsx scripts/check-tether-auth-ui.ts",
-    "test:reset-creator-guardrails": "node scripts/check-reset-recent-creator-test-accounts.mjs"
+    "test:reset-creator-guardrails": "node scripts/check-reset-recent-creator-test-accounts.mjs",
+    "test:flirt-isolation": "node --test deployment/flirt-environment.test.cjs",
+    "flirt:preflight": "node deployment/flirt-preflight.cjs dashboard"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

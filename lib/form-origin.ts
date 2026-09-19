@@ -1,8 +1,10 @@
 /** Canonical browser origin, independent of reverse-proxy Host headers. */
 export function dashboardOrigin(request: { url: string }): string {
   const configured = process.env.DASHBOARD_PUBLIC_ORIGIN;
-  const origin = new URL(configured || (process.env.NODE_ENV === "production"
-    ? "https://dashboard.tgaiclone.xyz" : request.url));
+  if (!configured && process.env.NODE_ENV === "production") {
+    throw new Error("FLIRT DASHBOARD_PUBLIC_ORIGIN is required");
+  }
+  const origin = new URL(configured || request.url);
   if (!["https:", "http:"].includes(origin.protocol)) throw new Error("Invalid dashboard origin");
   if (process.env.NODE_ENV === "production" && origin.protocol !== "https:") throw new Error("Dashboard origin must use HTTPS");
   return origin.origin;
@@ -15,3 +17,4 @@ export function trustedFormOrigin(request: { url: string; headers: Headers }): b
     return source === dashboardOrigin(request);
   } catch { return false; }
 }
+

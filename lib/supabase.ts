@@ -1,14 +1,16 @@
+import { assertStartup } from "../deployment/flirt-environment.cjs";
 import { dashboardFetch } from "./agency-fetch";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
 
 // Server-only admin client (service key). NEVER import this into a client component.
-// HARD RULE: this points at "Allie AI New" only — never the old prod project.
+// FLIRT branch: only the explicitly provisioned independent project is allowed.
 let client: SupabaseClient | undefined;
 
 // Lazy so `next build` (which loads route modules to collect page data) doesn't
 // need SUPABASE_URL/SUPABASE_SERVICE_KEY — they're only read at request time.
 function getClient(): SupabaseClient {
   if (!client) {
+    assertStartup("dashboard");
     client = createClient(
       process.env.SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_KEY!,
@@ -23,4 +25,5 @@ export const supabaseAdmin = new Proxy({} as SupabaseClient, {
     return Reflect.get(getClient(), prop, receiver);
   },
 });
+
 
