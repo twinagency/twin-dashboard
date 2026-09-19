@@ -1,0 +1,80 @@
+/* Approved interface palette. No canvas filters or changes to orb drawing. */
+:root, body.mobile-design {
+  --blue: #167cb4;
+  --accent: #167cb4;
+  --accent-soft: #eef6fa;
+  --accent-line: #bfd7e5;
+}
+.title h1 span,
+.mobile-design.mobile-root h1 span,
+.mobile-brand b,
+.brand-dot {
+  color: var(--accent);
+}
+#subtitle strong {
+  font-weight: 700;
+  color: #263b4c;
+}
+button:focus-visible, input:focus-visible, textarea:focus-visible,
+.mobile-design.mobile-root .node:focus-visible {
+  outline-color: var(--accent);
+}
+.node:is(:hover, :focus-visible, [aria-current='true']) .node-title,
+.mobile-design.mobile-root .node:is(:hover, :focus-visible, [aria-current='true']) .node-title,
+.utility .text-button:hover, .enquiry-link:hover,
+.command .icon:hover, .command .icon[aria-pressed='true'],
+.demo-guide .active, .demo-button.primary {
+  color: var(--accent);
+}
+.mobile-design .mobile-marker,
+.mobile-design.mobile-root .mobile-marker,
+.node-code::before,
+.node:is(:hover, :focus-visible, [aria-current='true']) .node-code::before,
+.demo-progress li.active,
+.demo-label::before {
+  background: var(--accent);
+}
+.mobile-design.mobile-root .mobile-marker {
+  box-shadow: 0 0 0 3px #fff, 0 0 12px #167cb420;
+}
+.node:is(:hover, :focus-visible, [aria-current='true']) .node-code::before,
+.mobile-design.mobile-root .node:is(:hover, :focus-visible, [aria-current='true']) .mobile-marker {
+  box-shadow: 0 0 0 4px var(--accent-soft);
+}
+.command .icon:last-child,
+.mobile-design .command .icon:last-child {
+  color: #fff;
+  background: var(--accent);
+  box-shadow: none;
+}
+.mobile-design.mobile-root .command .icon:last-child {
+  background: none;
+}
+.mobile-design.mobile-root .command .icon:last-child::before,
+.mobile-design.mobile-root .command .icon:last-child:is(:hover, :focus-visible)::before {
+  background: var(--accent);
+}
+.command:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px #167cb40b;
+}
+.ring, .mobile-design.mobile-root .ring {
+  border-color: var(--accent-line);
+}
+.ring::after { border-top-color: var(--accent); }
+.briefing-item[aria-pressed='true'],
+.privacy-tabs button[aria-pressed='true'] {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+.sample-consent input { accent-color: var(--accent); }
+/* Root-only removal requested earlier; demonstration disclosures remain. */
+body:not(.has-detail) #preview-note { display: none !important; }
+@media (max-width: 720px) {
+  .mobile-design #home { align-items: baseline; }
+  .mobile-design .mobile-technologies {
+    border-left: 0;
+    padding-left: 0;
+    line-height: 1;
+  }
+}
