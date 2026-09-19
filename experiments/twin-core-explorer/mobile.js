@@ -141,6 +141,27 @@
     for(let i=0;i<22;i++){const dx=((i*47+time*.004*((i%3)+1))%(W+20))-10,dy=((i*31+Math.sin(time*.0008+i)*12)%H+H)%H;c.fillStyle=`rgba(186,230,253,${.05+(i%4)*.018})`;c.fillRect(dx,dy,.65,.65);}
     c.restore();
   }
+  // Preserve the sampled appearance of the original 118 by 86 dashboard dock.
+  // This redraws the live source canvas each frame; it is not a bitmap asset.
+  const nativePaint = paint;
+  const dockLayer = document.createElement('canvas');
+  const dockDpr = 1.75;
+  dockLayer.width = Math.round(118 * dockDpr);
+  dockLayer.height = Math.round(86 * dockDpr);
+  const dockContext = dockLayer.getContext('2d', { alpha: true });
+  paint = function(context, pixelW, pixelH, ratio, time, rotation, frozen, energy, impulse, isMini) {
+    if (!context || pixelW <= 0 || pixelH <= 0) return;
+    if (!dockContext) {
+      nativePaint(context, pixelW, pixelH, ratio, time, rotation, frozen, energy, impulse, isMini);
+      return;
+    }
+    nativePaint(dockContext, 118, 86, dockDpr, time, rotation, frozen, energy, impulse, isMini);
+    context.setTransform(ratio, 0, 0, ratio, 0, 0);
+    context.clearRect(0, 0, pixelW, pixelH);
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = 'high';
+    context.drawImage(dockLayer, 16 * dockDpr, 0, 86 * dockDpr, 86 * dockDpr, 0, 0, pixelW, pixelH);
+  };
   draw = function(now) {
     if (!media.matches) return baseDraw(now);
     raf=0; if(!ctx||document.hidden||(!visible&&!miniVisible))return;
@@ -161,7 +182,7 @@
   reduced.addEventListener('change',()=>{syncMotion();restart();});
   window.addEventListener('pageshow',restart);
   window.addEventListener('pagehide',()=>{cancelAnimationFrame(raf);});
-  window.TwinMobile={sourceBlob:'83bb5068a6d4ab517a9ce810c16d4bdccaa515a7',logicalDock:{width:118,height:86},layout};
+  window.TwinMobile={sourceBlob:'83bb5068a6d4ab517a9ce810c16d4bdccaa515a7',logicalDock:{width:118,height:86},orbRevision:'source-raster-v1',layout};
   document.fonts?.ready.then(() => { layout(); resize(); });
   refresh();resize();
 })();
