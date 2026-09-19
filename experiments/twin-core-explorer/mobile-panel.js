@@ -1,5 +1,5 @@
 'use strict';
-/* Option B mobile panel + shared rotating AI question prompts for every viewport. */
+/* Option B mobile panel + shared rotating Twin question prompts for every viewport. */
 (() => {
   const media = matchMedia('(max-width:720px)');
   const baseRender = render;
@@ -13,16 +13,16 @@
   questionPlaceholder.setAttribute('aria-hidden', 'true');
   const description = '<strong>Twin Technologies</strong> builds its own autonomous AI models, digital identity, commercial infrastructure and connected systems within <strong>one unified platform.</strong>';
   const examples = [
-    { hint: 'How can AI automate my construction company…', compact: 'Can AI automate construction…', question: 'How can AI automate my construction company?', category: 'automation' },
-    { hint: 'Can AI build a Shopify store for me…', compact: 'Can AI build my Shopify store…', question: 'Can AI build a Shopify store for me?', category: 'crm', feature: 'system-integrations' },
-    { hint: 'Can AI help me write and debug code…', compact: 'Can AI help me write code…', question: 'Can AI help me write and debug code?' },
-    { hint: 'Can AI answer my customer enquiries…', compact: 'Can AI answer customers…', question: 'Can AI answer my customer enquiries?', category: 'sales', feature: 'lead-qualification' },
-    { hint: 'Can AI connect the apps I use…', compact: 'Can AI connect my apps…', question: 'Can AI connect the apps I use?', category: 'crm', feature: 'system-integrations' },
-    { hint: 'Can AI follow up my leads automatically…', compact: 'Can AI follow up leads…', question: 'Can AI follow up my leads automatically?', category: 'sales', feature: 'nurturing-follow-up' },
-    { hint: 'Can AI manage my emails and calendar…', compact: 'Can AI manage my emails…', question: 'Can AI manage my emails and calendar?', category: 'automation', feature: 'email-automation' },
-    { hint: 'Can AI create reports from my business data…', compact: 'Can AI create business reports…', question: 'Can AI create reports from my business data?', category: 'automation', feature: 'briefings-reporting' },
-    { hint: 'Can AI personalise replies to my customers…', compact: 'Can AI personalise replies…', question: 'Can AI personalise replies to my customers?', category: 'identity' },
-    { hint: 'Can AI reduce admin in my business…', compact: 'Can AI reduce my admin…', question: 'Can AI reduce admin in my business?', category: 'automation' }
+    { hint: 'How can Twin automate my construction company…', compact: 'Can Twin automate construction…', question: 'How can Twin automate my construction company?', category: 'automation' },
+    { hint: 'Can Twin build a Shopify store for me…', compact: 'Can Twin build my Shopify store…', question: 'Can Twin build a Shopify store for me?', category: 'crm', feature: 'system-integrations' },
+    { hint: 'Can Twin help me write and debug code…', compact: 'Can Twin help me write code…', question: 'Can Twin help me write and debug code?' },
+    { hint: 'Can Twin answer my customer enquiries…', compact: 'Can Twin answer customers…', question: 'Can Twin answer my customer enquiries?', category: 'sales', feature: 'lead-qualification' },
+    { hint: 'Can Twin connect the apps I use…', compact: 'Can Twin connect my apps…', question: 'Can Twin connect the apps I use?', category: 'crm', feature: 'system-integrations' },
+    { hint: 'Can Twin follow up my leads automatically…', compact: 'Can Twin follow up leads…', question: 'Can Twin follow up my leads automatically?', category: 'sales', feature: 'nurturing-follow-up' },
+    { hint: 'Can Twin manage my emails and calendar…', compact: 'Can Twin manage my emails…', question: 'Can Twin manage my emails and calendar?', category: 'automation', feature: 'email-automation' },
+    { hint: 'Can Twin create reports from my business data…', compact: 'Can Twin create business reports…', question: 'Can Twin create reports from my business data?', category: 'automation', feature: 'briefings-reporting' },
+    { hint: 'Can Twin personalise replies to my customers…', compact: 'Can Twin personalise replies…', question: 'Can Twin personalise replies to my customers?', category: 'identity' },
+    { hint: 'Can Twin reduce admin in my business…', compact: 'Can Twin reduce my admin…', question: 'Can Twin reduce admin in my business?', category: 'automation' }
   ];
   const benefits = {
     identity: 'Remember your customers and the details that matter.',
@@ -34,6 +34,7 @@
   };
   let exampleIndex = 0;
   let rotationTimer = 0;
+  const questionHeading = node('div', 'See what Twin can do for you', 'question-heading');
   const questionHelp = node('span', 'Type any question. The rotating examples show the kinds of things you can ask Twin Intelligence.', 'visually-hidden');
   questionHelp.id = 'question-help';
   const section = node('section', undefined, 'capability-panel');
@@ -72,6 +73,7 @@
       query.before(questionInput);
       questionInput.append(query, questionPlaceholder);
     }
+    if (!questionHeading.isConnected) $('command-area').prepend(questionHeading);
     if (!questionHelp.isConnected) $('command-area').append(questionHelp);
     query.setAttribute('aria-label', 'Ask Twin Intelligence a question');
     query.setAttribute('aria-describedby', 'question-help');
@@ -187,7 +189,7 @@
   window.addEventListener('pagehide', () => clearInterval(rotationTimer));
   window.addEventListener('pageshow', scheduleExamples);
   document.fonts?.ready.then(updatePrompt);
-  window.TwinUI = Object.freeze({ revision: 'option-b-prompts-2', examples: examples.map(({ question }) => question) });
+  window.TwinUI = Object.freeze({ revision: 'option-b-prompts-3', examples: examples.map(({ question }) => question) });
   apply();
   scheduleExamples();
 })();
