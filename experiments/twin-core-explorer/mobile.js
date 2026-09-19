@@ -63,8 +63,8 @@
         const label = node('span', undefined, 'node-title');
         (captions[b.dataset.id] || [b.getAttribute('aria-label')]).forEach((s, i) => { if (i) label.append(document.createElement('br')); label.append(document.createTextNode(s)); });
         const caption = node('span', undefined, 'mobile-label');
-        const item = CATALOGUE.find(c => c.id === b.dataset.id), order = markerOrder.indexOf(b.dataset.id) + 1;
-        const meta = node('span', `${String(order).padStart(2, '0')} · ${item.features.length} capabilities`, 'mobile-meta');
+        const item = CATALOGUE.find(c => c.id === b.dataset.id);
+        const meta = node('span', `${item.features.length} capabilities`, 'mobile-meta');
         meta.setAttribute('aria-hidden', 'true'); caption.append(label, meta); b.replaceChildren(mark, caption);
       }
     }
