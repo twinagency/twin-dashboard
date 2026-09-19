@@ -1,5 +1,6 @@
 /* Shared rotating AI prompt + mobile Option B capability panel. */
 .visually-hidden { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip-path: inset(50%); white-space: nowrap; border: 0; }
+.question-heading { margin: 0 2px 8px; color: #172033; font-size: 14px; font-weight: 600; line-height: 1.45; letter-spacing: -.01em; }
 .question-input { position: relative; display: block; flex: 1 1 0; min-width: 0; height: 42px; }
 .question-input input { display: block; width: 100%; min-width: 0; height: 42px; }
 .question-placeholder { position: absolute; inset: 0 4px; display: flex; align-items: center; min-width: 0; overflow: hidden; white-space: nowrap; text-overflow: clip; pointer-events: none; font-size: 14px; font-weight: 400; line-height: 18px; background: linear-gradient(90deg, #536173 0%, #536173 32%, #a8d4e5 48%, #e7f7fb 52%, #8fbfd2 57%, #536173 72%, #536173 100%); background-size: 220% 100%; background-position: 160% 50%; -webkit-background-clip: text; background-clip: text; color: transparent; animation: twin-question-shimmer 750ms ease-in-out infinite alternate; }
@@ -7,7 +8,7 @@
 .utility #browse { display: none !important; }
 @keyframes twin-question-shimmer { from { background-position: 160% 50%; } to { background-position: -60% 50%; } }
 @media (prefers-reduced-motion: reduce) { .question-placeholder { animation: none; background: none; color: #536173; } }
-@media (min-width: 721px) { .command .question-input input { padding: 10px 15px; } .command .question-placeholder { inset-inline: 15px; font-size: 14px; } }
+@media (min-width: 721px) { .question-heading { margin-bottom: 10px; font-size: 14px; } .command .question-input input { padding: 10px 15px; } .command .question-placeholder { inset-inline: 15px; font-size: 14px; } }
 @media (max-width: 720px) {
   body.mobile-panel-ui { background: #fff; }
   body.mobile-panel-ui::before, .mobile-panel-ui .orb::before { display: none !important; }
