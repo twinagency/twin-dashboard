@@ -1,3 +1,4 @@
+import { configureFlirtOfflineEnv } from "./flirt-offline-env";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { NextRequest } from "next/server";
@@ -10,7 +11,7 @@ import { scopeReadUrl } from "../lib/agency-query";
 import { SESSION_COOKIE, signSession } from "../lib/session";
 import { accessCacheKey } from "../lib/dashboard-access";
 
-const origin="https://dashboard.tgaiclone.xyz";
+const origin="https://dashboard.flirt.example";
 const moxyId="11111111-1111-1111-1111-111111111111";
 const lynqId="22222222-2222-2222-2222-222222222222";
 const creator="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
@@ -18,7 +19,8 @@ const secondCreator="bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
 const outsider="cccccccc-cccc-cccc-cccc-cccccccccccc";
 
 async function main() {
-  Object.assign(process.env,{NODE_ENV:"production",SUPABASE_URL:"https://moxy-test.supabase.co",SUPABASE_SERVICE_KEY:"test-key",DASHBOARD_PASSWORD:"offline-admin-password"});
+  Object.assign(process.env,{NODE_ENV:"production",SUPABASE_URL:"https://abcdefghijklmnopqrst.supabase.co",SUPABASE_SERVICE_KEY:"sb_secret_synthetic_test_only",DASHBOARD_PASSWORD:"offline-admin-password"});
+  configureFlirtOfflineEnv();
   const previous=globalThis.fetch;
   let active=true, memberActive=true, signedInAgency=moxyId, authCalls=0, signoutScope="";
   globalThis.fetch=async(input,init)=>{

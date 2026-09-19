@@ -1,3 +1,4 @@
+import { configureFlirtOfflineEnv } from "./flirt-offline-env";
 import { JESS_KATE_PORTAL } from "../lib/partner-portals";
 import assert from "node:assert/strict";
 import { readFileSync, readdirSync } from "node:fs";
@@ -17,9 +18,10 @@ const a="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",b="bbbbbbbb-bbbb-bbbb-bbbb-bbbbbb
 const user="11111111-1111-1111-1111-111111111111",photo="22222222-2222-2222-2222-222222222222",bundle="33333333-3333-3333-3333-333333333333",item="44444444-4444-4444-4444-444444444444";
 const manager={id:process.env.TEST_JESS_KATE ? JESS_KATE_PORTAL.id : LYNQ_MANAGEMENT_AGENCY_ID,name:process.env.TEST_JESS_KATE ? JESS_KATE_PORTAL.name : "LYNQ",cloneIds:[a,b]};
 const reader={id:"another-agency",name:"LYNQ",cloneIds:[a]};
-const base="https://lynq-test.supabase.co/rest/v1/",origin="https://dashboard.tgaiclone.xyz";
+const base="https://abcdefghijklmnopqrst.supabase.co/rest/v1/",origin="https://dashboard.flirt.example";
 async function main(){
-  Object.assign(process.env,{NODE_ENV:"production",SUPABASE_URL:"https://lynq-test.supabase.co",SUPABASE_SERVICE_KEY:"offline-test-key"});
+  Object.assign(process.env,{NODE_ENV:"production",SUPABASE_URL:"https://abcdefghijklmnopqrst.supabase.co",SUPABASE_SERVICE_KEY:"sb_secret_synthetic_test_only"});
+  configureFlirtOfflineEnv();
   assert.equal(agencyCanManage(manager),true);
   assert.equal(agencyCanManage(reader),false,"Branding alone does not grant management");
   assert.equal(agencyCanManage(null),false);
@@ -95,9 +97,9 @@ async function main(){
       assert.equal((await dashboardFetch(base+`clones?id=eq.${a}`,{method:'PATCH',headers:{prefer:'resolution=merge-duplicates'},body:'{}'})).status,403);
       const listed=await dashboardFetch(base+'clones?select=*');assert.equal((await listed.json())[0].bot_token,null);
       await dashboardFetch(base+`photo_bundle_items?bundle_id=eq.${bundle}`);assert.ok(calls.at(-1)?.url.searchParams.get('and')?.includes(bundle));
-      for(const method of ['POST','GET'])assert.equal((await dashboardFetch(`https://lynq-test.supabase.co/storage/v1/object/media/${a}/photos/new.jpg`,{method})).status,200);
-      assert.equal((await dashboardFetch('https://lynq-test.supabase.co/storage/v1/object/media',{method:'DELETE',body:JSON.stringify({prefixes:[`${a}/photos/new.jpg`]})})).status,200);
-      assert.equal((await dashboardFetch('https://lynq-test.supabase.co/storage/v1/object/media',{method:'DELETE',body:JSON.stringify({prefixes:[`${other}/photos/new.jpg`]})})).status,403);
+      for(const method of ['POST','GET'])assert.equal((await dashboardFetch(`https://abcdefghijklmnopqrst.supabase.co/storage/v1/object/media/${a}/photos/new.jpg`,{method})).status,200);
+      assert.equal((await dashboardFetch('https://abcdefghijklmnopqrst.supabase.co/storage/v1/object/media',{method:'DELETE',body:JSON.stringify({prefixes:[`${a}/photos/new.jpg`]})})).status,200);
+      assert.equal((await dashboardFetch('https://abcdefghijklmnopqrst.supabase.co/storage/v1/object/media',{method:'DELETE',body:JSON.stringify({prefixes:[`${other}/photos/new.jpg`]})})).status,403);
     });
     await withDashboardAccess(reader,async()=>{
       await assert.rejects(requireManagedClone(a));await assert.rejects(guardDashboardAction('app/users/actions.ts#setCredits',[]));

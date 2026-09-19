@@ -1,3 +1,4 @@
+import { configureFlirtOfflineEnv } from "./flirt-offline-env";
 import assert from "node:assert/strict";
 import { NextRequest } from "next/server";
 import { POST as login, GET as loginEntry } from "../app/jess-and-kate-ai/auth/route";
@@ -12,10 +13,11 @@ import { agencyCanManage } from "../lib/agency-management-policy";
 import { withDashboardAccess, accessCacheKey } from "../lib/dashboard-access";
 import { scopeReadUrl } from "../lib/agency-query";
 import { scopeAgencyWrite } from "../lib/agency-write";
-const origin="https://dashboard.tgaiclone.xyz";
+const origin="https://dashboard.flirt.example";
 const kate="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",other="bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",user="11111111-1111-1111-1111-111111111111";
 async function main(){
-  Object.assign(process.env,{NODE_ENV:"production",SUPABASE_URL:"https://jess-kate-test.supabase.co",SUPABASE_SERVICE_KEY:"offline-test-key",DASHBOARD_PASSWORD:"offline-admin-password"});
+  Object.assign(process.env,{NODE_ENV:"production",SUPABASE_URL:"https://abcdefghijklmnopqrst.supabase.co",SUPABASE_SERVICE_KEY:"sb_secret_synthetic_test_only",DASHBOARD_PASSWORD:"offline-admin-password"});
+  configureFlirtOfflineEnv();
   const oldFetch=globalThis.fetch;
   let active=true,agencyActive=true,wrongUser=false,wrongAgency=false,emptyScope=false,tokenRequests=0,passwordUpdates=0;
   globalThis.fetch=async(input,init)=>{
@@ -68,12 +70,12 @@ async function main(){
     assert.notEqual(accessCacheKey(identity),accessCacheKey({id:"moxy",name:"Moxy",cloneIds:[other]}));
     await withDashboardAccess(identity,async()=>{
       for(const table of ["clones","users","star_transactions","photos","videos","chat_history"]){
-        const {url}=scopeReadUrl(new URL(`https://jess-kate-test.supabase.co/rest/v1/${table}?select=*&or=(clone_id.eq.${other})`),identity);
+        const {url}=scopeReadUrl(new URL(`https://abcdefghijklmnopqrst.supabase.co/rest/v1/${table}?select=*&or=(clone_id.eq.${other})`),identity);
         assert.ok(url.searchParams.get("and")?.includes(kate));
       }
-      const u=new URL(`https://jess-kate-test.supabase.co/rest/v1/clones?id=eq.${kate}`);
+      const u=new URL(`https://abcdefghijklmnopqrst.supabase.co/rest/v1/clones?id=eq.${kate}`);
       assert.ok((await scopeAgencyWrite(u,"PATCH",{text_model:"example-model",starting_credits:10},identity)).searchParams.get("and")?.includes(kate));
-      await assert.rejects(scopeAgencyWrite(new URL(`https://jess-kate-test.supabase.co/rest/v1/clones?id=eq.${other}`),"PATCH",{starting_credits:10},identity));
+      await assert.rejects(scopeAgencyWrite(new URL(`https://abcdefghijklmnopqrst.supabase.co/rest/v1/clones?id=eq.${other}`),"PATCH",{starting_credits:10},identity));
     });
     const session=await signSession();
     const reset=(cookies:string,source=origin)=>new NextRequest(origin+"/agency-admin/jess-kate-password/update",{method:"POST",headers:{origin:source,cookie:cookies},body:new URLSearchParams({password:"a-new-offline-password",user_id:"other-user",agency_id:"other"})});

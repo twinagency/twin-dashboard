@@ -1,3 +1,4 @@
+import { configureFlirtOfflineEnv } from "./flirt-offline-env";
 import assert from "node:assert/strict";
 import { NextRequest } from "next/server";
 import { POST as login, GET as loginPage } from "../app/lynq/auth/route";
@@ -8,14 +9,15 @@ import { middleware } from "../middleware";
 import { signSession, SESSION_COOKIE } from "../lib/session";
 import { AGENCY_COOKIE } from "../lib/agency-policy";
 
-const origin = "https://dashboard.tgaiclone.xyz";
+const origin = "https://dashboard.flirt.example";
 const agencyId = "74b03b70-397e-49ab-841f-8adb8241d87d";
 const userId = "6e6491b9-8db0-43f5-b04a-d4509318dac9";
 const partnerUserId = "77777777-7777-4777-8777-777777777777";
 const creatorId = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 
 async function main() {
-  Object.assign(process.env, { NODE_ENV: "production", SUPABASE_URL: "https://lynq-test.supabase.co", SUPABASE_SERVICE_KEY: "test-service", DASHBOARD_PASSWORD: "test-admin-password" });
+  Object.assign(process.env, { NODE_ENV: "production", SUPABASE_URL: "https://abcdefghijklmnopqrst.supabase.co", SUPABASE_SERVICE_KEY: "sb_secret_synthetic_test_only", DASHBOARD_PASSWORD: "test-admin-password" });
+  configureFlirtOfflineEnv();
   const previous = globalThis.fetch;
   let memberActive = true;
   let agencyActive = true;

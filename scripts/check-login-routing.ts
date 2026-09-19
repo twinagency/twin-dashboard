@@ -1,3 +1,4 @@
+import { configureFlirtOfflineEnv } from "./flirt-offline-env";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { NextRequest } from "next/server";
@@ -11,7 +12,8 @@ import { GET as linkAuthEntry } from "../app/link/auth/route";
 
 async function main() {
   Object.assign(process.env, { NODE_ENV:"production", DASHBOARD_PASSWORD:"offline-routing-password" });
-  const origin = "https://dashboard.tgaiclone.xyz";
+  configureFlirtOfflineEnv();
+  const origin = "https://dashboard.flirt.example";
   const admin = await signSession();
   const previous = globalThis.fetch;
   let calls = 0;

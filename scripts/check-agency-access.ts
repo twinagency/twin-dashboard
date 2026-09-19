@@ -1,3 +1,4 @@
+import { configureFlirtOfflineEnv } from "./flirt-offline-env";
 import assert from "node:assert/strict";
 import { dashboardOrigin, trustedFormOrigin } from "../lib/form-origin";
 import { NextRequest } from "next/server";
@@ -19,19 +20,20 @@ async function main() {
   assert.equal(agencyRequestAllowed("/agency-admin/provision", "POST",false),false);
   assert.equal(agencyRequestAllowed("/agency/auth", "POST",false),true);
   Object.assign(process.env, { NODE_ENV: "production" });
+  configureFlirtOfflineEnv();
   for (const path of ["/login", "/admin-auth"]) {
     assert.equal((await middleware(new NextRequest(`https://twin.test${path}`, {method:"POST",headers:{"next-action":"known-admin-action"}}))).status,403);
   }
-  const proxyRequest = {url:"http://localhost:3000/agency-admin/provision",headers:new Headers({origin:"https://dashboard.tgaiclone.xyz",host:"localhost:3000"})};
+  const proxyRequest = {url:"http://localhost:3000/agency-admin/provision",headers:new Headers({origin:"https://dashboard.flirt.example",host:"localhost:3000"})};
   assert.equal(trustedFormOrigin(proxyRequest),true,"Public origin must work behind an internal proxy host");
-  assert.equal(new URL("/agency-admin?result=created", dashboardOrigin(proxyRequest)).href,"https://dashboard.tgaiclone.xyz/agency-admin?result=created");
-  for (const origin of ["https://evil.example","http://dashboard.tgaiclone.xyz","null","not a url","https://dashboard.tgaiclone.xyz.evil.example","https://dashboard.tgaiclone.xyz/path", ""]) {
+  assert.equal(new URL("/agency-admin?result=created", dashboardOrigin(proxyRequest)).href,"https://dashboard.flirt.example/agency-admin?result=created");
+  for (const origin of ["https://evil.example","http://dashboard.flirt.example","null","not a url","https://dashboard.flirt.example.evil.example","https://dashboard.flirt.example/path", ""]) {
     const headers = new Headers({origin,host:"evil.example","x-forwarded-host":"evil.example"});
     assert.equal(trustedFormOrigin({...proxyRequest,headers}),false,`Reject ${origin}`);
   }
   assert.equal(trustedFormOrigin({...proxyRequest,headers:new Headers()}),false);
-  process.env.SUPABASE_URL="https://agency-test.supabase.co";
-  process.env.SUPABASE_SERVICE_KEY="fake-service-key";
+  process.env.SUPABASE_URL="https://abcdefghijklmnopqrst.supabase.co";
+  process.env.SUPABASE_SERVICE_KEY="sb_secret_synthetic_test_only";
   const { agencyIdentity } = await import("../lib/agency-access");
   const originalFetch=globalThis.fetch;
   let enabled=true;

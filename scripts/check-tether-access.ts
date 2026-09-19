@@ -1,3 +1,4 @@
+import { configureFlirtOfflineEnv } from "./flirt-offline-env";
 import assert from "node:assert/strict";
 import { NextRequest } from "next/server";
 import { POST as login, GET as loginEntry } from "../app/tether/auth/route";
@@ -12,7 +13,7 @@ import { withDashboardAccess, accessCacheKey } from "../lib/dashboard-access";
 import { scopeReadUrl } from "../lib/agency-query";
 import { scopeAgencyWrite } from "../lib/agency-write";
 
-const origin = "https://dashboard.tgaiclone.xyz";
+const origin = "https://dashboard.flirt.example";
 // Offline fixtures only: never assign production creators or issue live tokens.
 const first = "aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa";
 const second = "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb";
@@ -21,7 +22,8 @@ const user = "11111111-1111-1111-1111-111111111111";
 const email = "operator@tether.test";
 
 async function main() {
-  Object.assign(process.env, { NODE_ENV: "production", SUPABASE_URL: "https://tether-test.supabase.co", SUPABASE_SERVICE_KEY: "offline-test-key", DASHBOARD_PASSWORD: "offline-admin-password" });
+  Object.assign(process.env, { NODE_ENV: "production", SUPABASE_URL: "https://abcdefghijklmnopqrst.supabase.co", SUPABASE_SERVICE_KEY: "sb_secret_synthetic_test_only", DASHBOARD_PASSWORD: "offline-admin-password" });
+  configureFlirtOfflineEnv();
   const oldFetch = globalThis.fetch;
   let active = true, agencyActive = true, wrongUser = false, wrongAgency = false, tokenRequests = 0;
   let assigned = [first];
@@ -124,13 +126,13 @@ async function main() {
     assert.notEqual(accessCacheKey(identity), accessCacheKey({ id: LYNQ_MANAGEMENT_AGENCY_ID, name: "LYNQ", cloneIds: [first, second] }));
     await withDashboardAccess(identity, async () => {
       for (const table of ["clones", "users", "star_transactions", "photos", "videos", "chat_history"]) {
-        const { url } = scopeReadUrl(new URL(`https://tether-test.supabase.co/rest/v1/${table}?select=*&or=(clone_id.eq.${other})`), identity);
+        const { url } = scopeReadUrl(new URL(`https://abcdefghijklmnopqrst.supabase.co/rest/v1/${table}?select=*&or=(clone_id.eq.${other})`), identity);
         assert.ok(url.searchParams.get("and")?.includes(first));
         assert.ok(url.searchParams.get("and")?.includes(second));
       }
-      const own = new URL(`https://tether-test.supabase.co/rest/v1/clones?id=eq.${first}`);
+      const own = new URL(`https://abcdefghijklmnopqrst.supabase.co/rest/v1/clones?id=eq.${first}`);
       assert.ok((await scopeAgencyWrite(own, "PATCH", { starting_credits: 10 }, identity)).searchParams.get("and")?.includes(first));
-      await assert.rejects(scopeAgencyWrite(new URL(`https://tether-test.supabase.co/rest/v1/clones?id=eq.${other}`), "PATCH", { starting_credits: 10 }, identity));
+      await assert.rejects(scopeAgencyWrite(new URL(`https://abcdefghijklmnopqrst.supabase.co/rest/v1/clones?id=eq.${other}`), "PATCH", { starting_credits: 10 }, identity));
     });
     const exit = await logout(new NextRequest(origin + "/agency/logout", { method: "POST", headers: { cookie, origin } }));
     assert.equal(exit.headers.get("location"), origin + portal.loginPath);
