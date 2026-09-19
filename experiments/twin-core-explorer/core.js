@@ -81,7 +81,7 @@ function render(previous){
  document.body.classList.toggle('exploring',entered);document.body.classList.toggle('has-detail',!!f);
  for(const id of ['crumbs','motion','nodes','command-area','preview-note'])$(id).hidden=!entered;
  $('hero-hit').hidden=entered;$('explore').hidden=entered;$('panel').hidden=!f;$('nodes').replaceChildren();$('choices').replaceChildren();$('crumbs').replaceChildren();$('status').textContent='';
- if(!entered){$('title').innerHTML='Twin <span>Intelligence</span> Core';$('subtitle').textContent='Your identity, memory and business intelligence—connected.';}
+ if(!entered){$('title').innerHTML='Twin <span>Intelligence</span> Core';$('subtitle').textContent='Your identity, memory and business intelligence, connected.';}
  else{
   if(c) $('title').textContent=c.name; else $('title').innerHTML='Twin <span>Intelligence</span> Core';$('subtitle').textContent=c?c.description:'Select a system, or ask Twin to open it.';
   $('crumbs').append(button('Core',()=>navigate({view:'core'})));
