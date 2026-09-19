@@ -1,0 +1,4 @@
+/* The source renderer supplies its own halo. Do not add another globe. */
+.orb::before {
+  display: none !important;
+}
