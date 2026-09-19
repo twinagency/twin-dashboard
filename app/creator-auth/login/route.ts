@@ -1,4 +1,4 @@
-import { assertStartup } from "../../../../deployment/flirt-environment.cjs";
+import { assertStartup } from "@/deployment/flirt-environment.cjs";
 import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { serviceClient } from "@/lib/supabase-service";
@@ -73,4 +73,3 @@ export async function POST(req: Request) {
   response.cookies.delete(CLONE_SCOPE_COOKIE);
   return response;
 }
-
