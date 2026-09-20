@@ -33,10 +33,11 @@ async function main() {
   const accountId = "22222222-2222-4222-8222-222222222222";
   const userId = "11111111-1111-4111-8111-111111111111";
   const origin = "https://dashboard.flirt.example";
-  let application: Record<string, any> | null = null;
-  let progress: Record<string, any> | null = null;
-  const consents: Record<string, any>[] = [];
-  const writes: { table: string; body: Record<string, any> }[] = [];
+  type Row = Record<string, any>;
+  let application = null as Row | null;
+  let progress = null as Row | null;
+  const consents: Row[] = [];
+  const writes: { table: string; body: Row }[] = [];
   let applicationInserts = 0;
   const json = (value: unknown, status = 200) => new Response(JSON.stringify(value), { status, headers: { "content-type": "application/json" } });
   const oldFetch = globalThis.fetch;
@@ -128,8 +129,8 @@ async function main() {
     assert.equal(location(locked).searchParams.get("status"), "application_locked");
     assert.equal(consents.length, 0);
 
-    application = null;
-    progress = null;
+    application = null as Row | null;
+    progress = null as Row | null;
     const skipAll = await post("submit");
     assert.equal(location(skipAll).pathname, "/creator");
     assert.equal(application?.status, "submitted");
