@@ -94,12 +94,40 @@ export function buildPersona(fields: Fields, cloneName: string, vibePreset: stri
     .filter(Boolean)
     .join("\n\n");
 
+  // ── THE SEX-PERSONALITY BOX (2026-09-20) ──────────────────────────────────
+  // FLIRT_NSFW is the body of the prompt's "FLIRTING & SEXUAL CONTENT" heading,
+  // and until now the ONLY thing that could fill it was the vibe_preset
+  // dropdown. That had three consequences, all measured on the live fleet:
+  //
+  //   * vibe_preset is null on 15 of 18 clones, so FLIRT_NSFW is EMPTY on 16.
+  //   * not one of the 6 presets is explicit. Every one describes restraint:
+  //     "withholding", "makes him work for it", "hints and almosts",
+  //     "promises nothing", "teases denial", "a little shy at first".
+  //   * on the 8 clones carrying hard_limits_extra, the bot appends that list
+  //     of NOs into this same slot (twin-bot prompt.ts effectivePersona), so
+  //     the entire sexual-content section of their prompt is prohibitions and
+  //     nothing else. One of those NOs, copied verbatim off Tru Kait's
+  //     questionnaire onto 8 clones, is "Never invent sexual experiences,
+  //     preferences or collaborations" -- she meant "don't invent my real sex
+  //     life"; the model reads it as "don't write sex".
+  //
+  // Result, over 14 days and ~144,141 AI messages: 1.8% contained anything
+  // explicit, and when the FAN was explicit she matched him 8.6% of the time.
+  //
+  // So this adds the missing free-text source. It does NOT replace the preset:
+  // the preset stays as the baseline, and the creator's own words are appended
+  // after it, because a preset chosen months ago should not silently erase
+  // what someone typed. Either alone works; both together read as one section.
+  const flirt = [vibe?.flirt?.trim() ?? "", listEntries(f.flirt_nsfw).join(" ")]
+    .filter(Boolean)
+    .join("\n");
+
   return {
     NAME: cloneName,
     PERSONA: persona,
     VOICE_TRAITS: voiceTraits,
     NICKNAMES: "",
-    FLIRT_NSFW: vibe?.flirt?.trim() ?? "",
+    FLIRT_NSFW: flirt,
     RELATIONSHIP: "",
     KNOWLEDGE_BASE: knowledge,
   };
