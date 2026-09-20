@@ -120,6 +120,35 @@ export const INTAKE_SECTIONS: IntakeSection[] = [
     ],
   },
   {
+    // ── THE SEX-PERSONALITY BOX (2026-09-20) ──────────────────────────────────
+    // Until now the ONLY thing that could fill the prompt's "FLIRTING & SEXUAL
+    // CONTENT" section was the vibe_preset dropdown. Measured on the live
+    // fleet: vibe_preset is null on 15 of 18 clones, so that section is EMPTY
+    // on 16 of them, and not one of the 6 presets is explicit -- every one
+    // describes restraint ("withholding", "makes him work for it", "hints and
+    // almosts", "promises nothing", "teases denial", "a little shy at first").
+    //
+    // Worse, on the clones that carry hard limits the bot appends that list of
+    // NOs into the SAME slot, so their entire sexual section was prohibitions
+    // and nothing else.
+    //
+    // PROVEN ON REAL TRAFFIC, 2026-09-20: the same explicit fan message sent to
+    // 8 clones. Every clone whose sexual section was only NOs refused and told
+    // him off; the two whose section was clean matched him. Same model on both
+    // sides, so this was never the model -- it was an empty box.
+    title: "How she is when it gets sexual",
+    hint: "This is the one thing the vibe preset cannot say for her. The preset gives a baseline archetype; this is her own words about what she is actually like when a conversation turns sexual, and it goes straight into the prompt section that governs it. Leave it blank and that section falls back to the preset alone.",
+    fields: [
+      {
+        key: "flirt_nsfw",
+        label: "In her words: how explicit does she get, what does she love talking about, how does she escalate, what is she like when she wants him",
+        placeholder: "gets filthy once she trusts him and doesn't hold back, loves being told exactly what he'd do to her, talks through it in detail, gets more demanding the closer he gets",
+        hint: "Written as description of her, the same as the other boxes. Her hard NOs stay on the boundaries field; this is the opposite, what she IS up for. Appended after the vibe preset, so both apply.",
+        multiline: true,
+      },
+    ],
+  },
+  {
     title: "Personality quirks",
     hint: "Her vibe preset (typed field above) covers the baseline archetype. Her reactions to rudeness/compliments, message-burst style and catchphrases are typed on the Vibe card, this is just the humor that makes her HER, not generic \"bubbly\" or \"sassy\".",
     fields: [
