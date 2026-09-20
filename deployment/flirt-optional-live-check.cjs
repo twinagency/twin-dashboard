@@ -1,0 +1,126 @@
+/* Runs inside FLIRT only. No credentials, cookies or customer records are logged. */
+const { randomBytes } = require('node:crypto');
+const PROJECT = 'lkmfwpqegjluirfusnaw';
+const ORIGIN = 'https://dashboard.lynqai.co';
+const API = `https://${PROJECT}.supabase.co`;
+const fixtures = [];
+const checks = [];
+const sections = ['personal-contact','background-story','audience-identity','style-tone-ai','goals-replies','collaboration-boundaries','ai-context','identity-basics','family-home','appearance','sizes-health','work-public-life','personality-depth','favourites-media','favourites-lifestyle','travel-lifestyle','relationships'];
+function assert(ok, label) { if (!ok) throw new Error(label); }
+async function request(url, options = {}) { return fetch(url, { redirect: 'manual', signal: AbortSignal.timeout(25000), ...options }); }
+async function api(path, options = {}) {
+  const response = await request(API + path, { ...options, headers: { apikey: process.env.SUPABASE_SERVICE_KEY, ...options.headers } });
+  assert(response.ok, `FLIRT fixture API returned ${response.status}`);
+  if (response.status === 204) return null;
+  const body = await response.text();
+  return body ? JSON.parse(body) : null;
+}
+async function page(path, fixture, options = {}) {
+  return request(ORIGIN + path, { ...options, headers: { Origin: ORIGIN, ...(fixture ? { Cookie: fixture.cookie } : {}), ...options.headers } });
+}
+async function rows(table, fixture, select = '*') {
+  return api(`/rest/v1/${table}?select=${encodeURIComponent(select)}&creator_account_id=eq.${fixture.id}`);
+}
+async function accountRows(email) { return api('/rest/v1/creator_accounts?select=id,auth_user_id,account_status&email=eq.' + encodeURIComponent(email)); }
+async function signup(suffix) {
+  const fixture = { email: `flirt-optional-${Date.now()}-${randomBytes(7).toString('hex')}-${suffix}@example.com`, password: randomBytes(24).toString('hex') };
+  fixtures.push(fixture);
+  assert((await accountRows(fixture.email)).length === 0, 'Synthetic account collision');
+  const response = await page('/creator-auth/signup', null, { method: 'POST', body: new URLSearchParams({ display_name: 'FLIRT optional intake check', email: fixture.email, password: fixture.password }) });
+  const saved = await accountRows(fixture.email);
+  if (saved.length === 1) Object.assign(fixture, saved[0]);
+  assert(response.status === 303 && fixture.id && fixture.auth_user_id, 'Synthetic signup failed');
+  const cookie = response.headers.getSetCookie().find(value => value.startsWith('twin_creator_session='));
+  assert(cookie && /HttpOnly/i.test(cookie) && /Secure/i.test(cookie), 'Secure creator session missing');
+  fixture.cookie = cookie.split(';')[0];
+  return fixture;
+}
+async function post(fixture, action, fields = {}) {
+  return page('/creator-auth/onboarding', fixture, { method: 'POST', body: new URLSearchParams({ action, ...fields }) });
+}
+function location(response) { return new URL(response.headers.get('location'), ORIGIN); }
+function noRequired(html, label) {
+  assert(!/<(?:input|textarea|select)\b[^>]*\srequired(?:=|\s|>)/i.test(html), `${label} still has a required field`);
+  assert(html.includes('data-onboarding-optional="true"'), `${label} is not optional`);
+}
+async function main() {
+  assert(process.env.FLIRT_BACKEND_ENABLED === 'true' && process.env.FLIRT_SUPABASE_PROJECT_REF === PROJECT && process.env.SUPABASE_URL === API && process.env.DASHBOARD_PUBLIC_ORIGIN === ORIGIN, 'Refusing a non-FLIRT runtime');
+  const unauthenticated = await post(null, 'submit');
+  assert([303,307,308].includes(unauthenticated.status) && location(unauthenticated).pathname.includes('/login'), 'Anonymous submission must require sign-in');
+  checks.push('Unauthenticated submission denied over public HTTPS');
+  const a = await signup('walkthrough');
+  const b = await signup('skip-all');
+  for (const section of sections) {
+    const response = await page(`/creator/onboarding?step=questionnaire&section=${section}`, a);
+    assert(response.status === 200, 'Questionnaire page did not load');
+    noRequired(await response.text(), section);
+  }
+  checks.push('All 17 questionnaire pages load without required fields');
+  const existing = await rows('creator_applications', a, 'answers,updated_at');
+  const questionnaire = await post(a, 'questionnaire', { revision: existing[0]?.updated_at || '' });
+  assert(location(questionnaire).searchParams.get('step') === 'content', 'Empty questionnaire could not continue');
+  const content = await page('/creator/onboarding?step=content', a);
+  const contentHtml = await content.text();
+  assert(content.status === 200, 'Content page failed');
+  noRequired(contentHtml, 'content');
+  assert(contentHtml.includes('data-onboarding-continue="voice"'), 'Content needs a no-upload continue path');
+  const voice = await page('/creator/onboarding?step=voice', a);
+  noRequired(await voice.text(), 'voice');
+  const skippedVoice = await post(a, 'skip_voice');
+  assert(location(skippedVoice).searchParams.get('step') === 'consent', 'Voice skip could not continue');
+  const consentPage = await page('/creator/onboarding?step=consent', a);
+  const consentHtml = await consentPage.text();
+  noRequired(consentHtml, 'consent');
+  assert(/<button\b[^>]*>Finish onboarding<\/button>/.test(consentHtml), 'Final action missing');
+  assert(!/<button\b[^>]*\sdisabled[^>]*>Finish onboarding<\/button>/.test(consentHtml), 'Final action remains blocked');
+  const skippedConsent = await post(a, 'consent');
+  assert(location(skippedConsent).searchParams.get('status') === 'consent_skipped', 'Blank consent was not skippable');
+  assert((await rows('creator_consents', a, 'id')).length === 0, 'Skipped consent must not create a signature');
+  const submit = await post(a, 'submit');
+  assert(submit.status === 303 && location(submit).pathname === '/creator', 'Empty onboarding did not finish');
+  const home = await page('/creator', a);
+  assert(home.status === 200, 'Submitted empty intake cannot enter the workspace');
+  const submittedRows = await rows('creator_applications', a, 'status,answers');
+  assert(submittedRows.length === 1 && submittedRows[0].status === 'submitted', 'Submission was not persisted');
+  assert(Object.keys(submittedRows[0].answers || {}).length === 0, 'Blank walkthrough invented answers');
+  for (const table of ['creator_consents','creator_files','creator_clone_links']) assert((await rows(table, a, 'id')).length === 0, `Walkthrough invented ${table}`);
+  assert((await accountRows(a.email))[0].account_status === a.account_status, 'Intake silently changed creator approval');
+  checks.push('Empty questionnaire, no uploads, skipped voice/consent and final workspace entry');
+  checks.push('No fabricated answers, consent, files, clone links or creator approval');
+
+  const hub = await page('/creator/onboarding', b);
+  const hubHtml = await hub.text();
+  assert(hubHtml.includes('data-onboarding-skip-all'), 'Skip-all action missing');
+  assert((await rows('creator_applications', b, 'status')).every(row => row.status === 'draft'), 'Another creator submission leaked to this account');
+  const skipAll = await post(b, 'submit', { creator_account_id: a.id });
+  assert(skipAll.status === 303 && location(skipAll).pathname === '/creator', 'Skip-all failed');
+  assert((await page('/creator', b)).status === 200, 'Skip-all cannot enter the workspace');
+  assert((await rows('creator_consents', b, 'id')).length === 0, 'Skip-all invented consent');
+  assert((await rows('creator_files', b, 'id')).length === 0, 'Skip-all invented uploads');
+  assert((await rows('creator_applications', a, 'status'))[0].status === 'submitted', 'Posted foreign account ID changed another creator');
+  checks.push('One-click skip-all and per-account submission isolation');
+  const twin = await request('https://dashboard.tgaiclone.xyz');
+  assert(twin.status === 200 && (await twin.text()).includes('Twin'), 'Existing Twin login stopped responding');
+  checks.push('Existing Twin HTTPS login still responds');
+}
+async function cleanup() {
+  let failed = false;
+  for (const fixture of fixtures) {
+    try {
+      if (!fixture.id) { const saved = await accountRows(fixture.email); if (saved.length === 1) Object.assign(fixture, saved[0]); }
+      if (fixture.id) {
+        await api('/rest/v1/creator_accounts?id=eq.' + fixture.id + '&email=eq.' + encodeURIComponent(fixture.email), { method: 'DELETE' });
+        await api('/auth/v1/admin/users/' + fixture.auth_user_id, { method: 'DELETE' });
+        assert((await accountRows(fixture.email)).length === 0, 'Synthetic account remained');
+      }
+    } catch { failed = true; }
+  }
+  assert(!failed, 'Synthetic fixture cleanup failed');
+}
+(async () => {
+  let failure;
+  try { await main(); } catch (error) { failure = error.message; }
+  try { await cleanup(); } catch (error) { failure = (failure ? failure + '; ' : '') + error.message; }
+  console.log(JSON.stringify({ passed: !failure, checks, ...(failure ? { error: failure } : { synthetic_fixtures_removed: true }), credentials_logged: false }));
+  if (failure) process.exitCode = 1;
+})();
