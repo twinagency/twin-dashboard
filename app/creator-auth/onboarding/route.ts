@@ -12,8 +12,9 @@ import {
   questionnaireRequiredMissing,
 } from "@/lib/creator-questionnaire-draft";
 import { creatorContentCompleted } from "@/lib/creator-content-requirements";
+import { flirtOnboardingOptional } from "@/lib/flirt-onboarding";
 
-function back(req: Request, status: string, step?: "questionnaire" | "voice" | "consent", section?: string) {
+function back(req: Request, status: string, step?: "questionnaire" | "content" | "voice" | "consent", section?: string) {
   const url = creatorRequestUrl(req, "/creator/onboarding");
   url.searchParams.set("status", status);
   if (step) url.searchParams.set("step", step);
@@ -47,18 +48,31 @@ export async function POST(req: NextRequest) {
   const form = await req.formData();
   const action = String(form.get("action") || "");
   const now = new Date().toISOString();
+  const optional = flirtOnboardingOptional();
 
   if (action === "questionnaire") {
-    const { data: existing, error: readError } = await latestApplication(accountId);
-    if (readError) return back(req, "error", "questionnaire");
+    const loaded = await latestApplication(accountId);
+    if (loaded.error) return back(req, "error", "questionnaire");
+    let existing = loaded.data;
     if (existing && CREATOR_QUESTIONNAIRE_TERMINAL_STATUSES.has(existing.status)) return back(req, "questionnaire_saved", "questionnaire");
     if (existing && existing.status !== "draft") return back(req, "application_locked", "questionnaire");
-    const revision = String(form.get("revision") || "");
+    let revision = String(form.get("revision") || "");
+    // A creator who clicks through without typing has not triggered autosave.
+    // Create only their empty draft; never manufacture questionnaire answers.
+    if (!existing && optional && !revision) {
+      const created = await supabaseAdmin.from("creator_applications")
+        .insert({ id: accountId, creator_account_id: accountId, answers: {}, status: "draft", updated_at: now })
+        .select("id,status,answers,updated_at").single();
+      if (created.error?.code === "23505") return back(req, "questionnaire_conflict", "questionnaire");
+      if (created.error || !created.data) return back(req, "error", "questionnaire");
+      existing = created.data;
+      revision = existing.updated_at;
+    }
     if (!existing?.id || !revision) return back(req, "questionnaire_missing", "questionnaire");
     if (existing.updated_at !== revision) return back(req, "questionnaire_conflict", "questionnaire");
     const answers = (existing.answers || {}) as Record<string, string>;
     const missing = questionnaireRequiredMissing(answers);
-    if (missing.length) return back(req, "questionnaire_missing", "questionnaire", creatorQuestionnairePageForQuestion(missing[0]).slug);
+    if (!optional && missing.length) return back(req, "questionnaire_missing", "questionnaire", creatorQuestionnairePageForQuestion(missing[0]).slug);
 
     const sealedAt = nextQuestionnaireRevision(existing.updated_at);
     const { data: sealed, error: sealError } = await supabaseAdmin
@@ -66,6 +80,7 @@ export async function POST(req: NextRequest) {
       .update({ updated_at: sealedAt })
       .eq("id", existing.id)
       .eq("creator_account_id", accountId)
+      .eq("status", "draft")
       .eq("updated_at", revision)
       .select("updated_at")
       .maybeSingle();
@@ -76,7 +91,7 @@ export async function POST(req: NextRequest) {
       .from("creator_onboarding_progress")
       .upsert({ creator_account_id: accountId, questionnaire_completed: true, updated_at: sealedAt }, { onConflict: "creator_account_id" });
     if (progressError) return back(req, "error", "questionnaire");
-    return back(req, "questionnaire_saved", "questionnaire");
+    return back(req, "questionnaire_saved", optional ? "content" : "questionnaire");
   }
 
   if (action === "skip_voice" || action === "consent") {
@@ -90,15 +105,16 @@ export async function POST(req: NextRequest) {
       .from("creator_onboarding_progress")
       .upsert({ creator_account_id: accountId, voice_completed: true, updated_at: now }, { onConflict: "creator_account_id" });
     if (error) return back(req, "error", "voice");
-    return back(req, "voice_skipped", "voice");
+    return back(req, "voice_skipped", optional ? "consent" : "voice");
   }
 
   if (action === "consent") {
     const legalName = String(form.get("legal_name") || "").trim();
     const agreed = form.get("agreed") === "on";
-    if (!legalName || !agreed) return back(req, "consent_missing", "consent");
+    // Skipping consent is not agreement. No name, signature or consent row is invented.
+    if (!legalName || !agreed) return back(req, optional ? "consent_skipped" : "consent_missing", "consent");
 
-    const { data: existing } = await supabaseAdmin
+    const { data: existing, error: readError } = await supabaseAdmin
       .from("creator_consents")
       .select("id")
       .eq("creator_account_id", accountId)
@@ -106,6 +122,7 @@ export async function POST(req: NextRequest) {
       .order("created_at", { ascending: false })
       .limit(1)
       .maybeSingle();
+    if (readError) return back(req, "error", "consent");
 
     if (!existing) {
       const { error } = await supabaseAdmin
@@ -117,23 +134,37 @@ export async function POST(req: NextRequest) {
   }
 
   if (action === "submit") {
-    const [{ data: progress }, { data: consent }, { data: files }, { data: existing, error: applicationError }] = await Promise.all([
+    const [progressResult, consentResult, filesResult, applicationResult] = await Promise.all([
       supabaseAdmin.from("creator_onboarding_progress").select("questionnaire_completed,content_completed,voice_completed").eq("creator_account_id", accountId).maybeSingle(),
       supabaseAdmin.from("creator_consents").select("id").eq("creator_account_id", accountId).limit(1).maybeSingle(),
       supabaseAdmin.from("creator_files").select("kind,storage_transfer_status").eq("creator_account_id", accountId),
       latestApplication(accountId),
     ]);
-    if (applicationError) return back(req, "error", "consent");
+    if (progressResult.error || consentResult.error || filesResult.error || applicationResult.error) return back(req, "error", "consent");
+    const progress = progressResult.data;
+    const consent = consentResult.data;
+    const files = filesResult.data;
+    const existing = applicationResult.data;
     if (existing && CREATOR_QUESTIONNAIRE_TERMINAL_STATUSES.has(existing.status)) return NextResponse.redirect(creatorRequestUrl(req, "/creator"), 303);
     if (existing && existing.status !== "draft") return back(req, "application_locked", "consent");
     const questionnaireComplete = !!progress?.questionnaire_completed && !!existing && questionnaireRequiredMissing((existing.answers || {}) as Record<string, string>).length === 0;
     const contentComplete = creatorContentCompleted(files || [], !!progress?.content_completed);
     const voiceComplete = !!progress?.voice_completed || (files || []).some((file) => file.kind === "voice" && file.storage_transfer_status === "verified");
-    if (!questionnaireComplete || !contentComplete || !voiceComplete || !consent) {
+    if (!optional && (!questionnaireComplete || !contentComplete || !voiceComplete || !consent)) {
       return back(req, "not_ready", "consent");
     }
 
-    const submittedAt = nextQuestionnaireRevision(existing.updated_at);
+    // Intake submission grants workspace access only. It does not approve the
+    // creator, create a clone, connect Telegram, grant consent or start a bot.
+    const submittedAt = nextQuestionnaireRevision(existing?.updated_at);
+    if (!existing) {
+      if (!optional) return back(req, "not_ready", "consent");
+      const { error } = await supabaseAdmin.from("creator_applications")
+        .insert({ id: accountId, creator_account_id: accountId, answers: {}, status: "submitted", submitted_at: now, updated_at: submittedAt });
+      if (error?.code === "23505") return back(req, "questionnaire_conflict", "consent");
+      if (error) return back(req, "error", "consent");
+      return NextResponse.redirect(creatorRequestUrl(req, "/creator?submitted=1"), 303);
+    }
     const { data: submittedApplication, error } = await supabaseAdmin
       .from("creator_applications")
       .update({ status: "submitted", submitted_at: now, updated_at: submittedAt })
