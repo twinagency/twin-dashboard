@@ -13,11 +13,18 @@ concurrency:
   cancel-in-progress: false
 jobs:
   inspect:
+    name: Inspect ${{ matrix.target.name }} host
     runs-on: ubuntu-latest
     timeout-minutes: 8
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - { name: dashboard, instance: i-09a9dd3bd749643a5 }
+          - { name: bot, instance: i-0584d283506f3f6be }
     env:
       AWS_REGION: ap-southeast-2
-      INSTANCE_ID: i-09a9dd3bd749643a5
+      INSTANCE_ID: ${{ matrix.target.instance }}
     steps:
       - uses: actions/checkout@v4
       - name: Check existing deployment credentials
@@ -41,7 +48,7 @@ jobs:
           account=$(aws sts get-caller-identity --query Account --output text)
           test "$account" = '323149985112'
           echo 'Existing Twin AWS account verified.'
-      - name: Inspect the existing dashboard host without changing it
+      - name: Inspect the existing host without changing it
         run: |
           set -euo pipefail
           python3 - <<'PY'
