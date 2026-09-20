@@ -83,7 +83,7 @@ async function main() {
   const submittedRows = await rows('creator_applications', a, 'status,answers');
   assert(submittedRows.length === 1 && submittedRows[0].status === 'submitted', 'Submission was not persisted');
   assert(Object.keys(submittedRows[0].answers || {}).length === 0, 'Blank walkthrough invented answers');
-  for (const table of ['creator_consents','creator_files','creator_clone_links']) assert((await rows(table, a, 'id')).length === 0, `Walkthrough invented ${table}`);
+  for (const table of ['creator_consents','creator_files','creator_clone_links']) assert((await rows(table, a, 'creator_account_id')).length === 0, `Walkthrough invented ${table}`);
   assert((await accountRows(a.email))[0].account_status === a.account_status, 'Intake silently changed creator approval');
   checks.push('Empty questionnaire, no uploads, skipped voice/consent and final workspace entry');
   checks.push('No fabricated answers, consent, files, clone links or creator approval');
