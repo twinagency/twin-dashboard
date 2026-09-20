@@ -23,8 +23,8 @@ function selectClass() {
   return "h-11 w-full rounded-md border border-[#7b8798] bg-transparent px-3 text-base text-ink outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 }
 
-function QuestionField({ question, value, locked }: { question: CreatorQuestion; value: string; locked: boolean }) {
-  const required = CREATOR_QUESTIONNAIRE_REQUIRED_IDS.includes(question.id as (typeof CREATOR_QUESTIONNAIRE_REQUIRED_IDS)[number]);
+function QuestionField({ question, value, locked, optional }: { question: CreatorQuestion; value: string; locked: boolean; optional: boolean }) {
+  const required = !optional && CREATOR_QUESTIONNAIRE_REQUIRED_IDS.includes(question.id as (typeof CREATOR_QUESTIONNAIRE_REQUIRED_IDS)[number]);
   const label = <span className="mb-1.5 block text-sm font-medium text-ink">{question.label}{required ? " *" : ""}</span>;
   const help = question.help ? <span className="mt-1.5 block text-sm leading-relaxed text-muted">{question.help}</span> : null;
 
@@ -55,11 +55,13 @@ export default function CreatorQuestionnaireWizard({
   initialAnswers,
   initialRevision,
   locked = false,
+  optional = false,
 }: {
   page: CreatorQuestionnairePage;
   initialAnswers: Record<string, string>;
   initialRevision: string;
   locked?: boolean;
+  optional?: boolean;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
   const revisionRef = useRef(initialRevision);
@@ -143,11 +145,14 @@ export default function CreatorQuestionnaireWizard({
       return;
     }
     if (target === "finish") {
-      const response = await fetch("/creator-auth/onboarding", {
-        method: "POST",
-        body: new URLSearchParams({ action: "questionnaire", revision: revisionRef.current }),
-      });
-      window.location.assign(response.url);
+      try {
+        const response = await fetch("/creator-auth/onboarding", {
+          method: "POST",
+          body: new URLSearchParams({ action: "questionnaire", revision: revisionRef.current }),
+        });
+        if (!response.ok) { setSaveState("error"); return; }
+        window.location.assign(response.url);
+      } catch { setSaveState("error"); }
       return;
     }
     const next = CREATOR_QUESTIONNAIRE_PAGES[target];
@@ -172,13 +177,14 @@ export default function CreatorQuestionnaireWizard({
   const progress = Math.round(((currentIndex + 1) / CREATOR_QUESTIONNAIRE_PAGES.length) * 100);
 
   return (
-    <form ref={formRef} onInput={markDirty} className="grid gap-6" data-questionnaire-page={page.slug}>
+    <form ref={formRef} onInput={markDirty} className="grid gap-6" data-questionnaire-page={page.slug} data-onboarding-optional={optional ? "true" : "false"}>
       <div id="questionnaire-top" className="rounded-2xl border border-border bg-muted/10 p-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#1d4ed8]">Part {currentIndex + 1} of {CREATOR_QUESTIONNAIRE_PAGES.length}</p>
             <h3 className="mt-1 font-heading text-2xl font-semibold text-ink">{page.title}</h3>
             <p className="mt-2 text-sm leading-6 text-muted">{page.description}</p>
+            {optional && <p className="mt-2 text-sm font-medium text-accent">Every answer is optional. Continue with blank fields or skip the questionnaire.</p>}
           </div>
           <div role="status" aria-live="polite" className={`inline-flex items-center gap-2 text-sm font-semibold ${saved.className}`}>
             <SaveIcon className={`size-4 ${saveState === "saving" ? "animate-spin" : ""}`} aria-hidden="true" /> {saved.text}
@@ -197,7 +203,7 @@ export default function CreatorQuestionnaireWizard({
           <div className="mt-5 grid gap-5 md:grid-cols-2">
             {group.questions.map((question) => (
               <div key={question.id} className={question.type === "textarea" || question.type === "radio" ? "md:col-span-2" : ""}>
-                <QuestionField question={question} value={initialAnswers[question.id] || ""} locked={locked} />
+                <QuestionField question={question} value={initialAnswers[question.id] || ""} locked={locked} optional={optional} />
               </div>
             ))}
           </div>
@@ -209,7 +215,8 @@ export default function CreatorQuestionnaireWizard({
           <Button type="button" variant="outline" size="lg" disabled={saveState === "saving"} onClick={() => void goTo("hub")} className="min-h-11 w-full sm:w-auto">
             <ArrowLeft className="size-4" aria-hidden="true" /> {locked ? "Return to onboarding" : "Save and return to onboarding"}
           </Button>
-          <div className="flex flex-col-reverse gap-3 sm:flex-row">
+          <div className="flex flex-col-reverse gap-3 sm:flex-row sm:flex-wrap">
+            {optional && !locked && currentIndex < CREATOR_QUESTIONNAIRE_PAGES.length - 1 && <Button type="button" variant="outline" size="lg" disabled={saveState === "saving"} onClick={() => void goTo("finish")} className="min-h-11 w-full sm:w-auto">Skip questionnaire</Button>}
             {currentIndex > 0 && <Button type="button" variant="outline" size="lg" disabled={saveState === "saving"} onClick={() => void goTo(currentIndex - 1)} className="min-h-11 w-full sm:w-auto">
               <ArrowLeft className="size-4" aria-hidden="true" /> {locked ? "Previous part" : "Save and go back"}
             </Button>}
@@ -219,7 +226,7 @@ export default function CreatorQuestionnaireWizard({
               </Button>
             ) : !locked ? (
               <Button type="button" size="lg" disabled={saveState === "saving"} onClick={() => void goTo("finish")} className="min-h-11 w-full sm:w-auto">
-                Finish questionnaire <Check className="size-4" aria-hidden="true" />
+                {optional ? "Continue to content" : "Finish questionnaire"} <Check className="size-4" aria-hidden="true" />
               </Button>
             ) : null}
           </div>
