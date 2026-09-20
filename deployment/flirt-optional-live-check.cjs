@@ -43,8 +43,18 @@ function noRequired(html, label) {
   assert(!/<(?:input|textarea|select)\b[^>]*\srequired(?:=|\s|>)/i.test(html), `${label} still has a required field`);
   assert(html.includes('data-onboarding-optional="true"'), `${label} is not optional`);
 }
+function buttonDisabled(openingTag) {
+  // Quoted class values contain disabled: utilities even on enabled buttons.
+  const attributesOnly = openingTag.replace(/"[^"]*"|'[^']*'/g, '""');
+  return /\sdisabled(?=[\s=>])/i.test(attributesOnly)
+    || /\saria-disabled\s*=\s*["']true["']/i.test(openingTag);
+}
 async function main() {
   assert(process.env.FLIRT_BACKEND_ENABLED === 'true' && process.env.FLIRT_SUPABASE_PROJECT_REF === PROJECT && process.env.SUPABASE_URL === API && process.env.DASHBOARD_PUBLIC_ORIGIN === ORIGIN, 'Refusing a non-FLIRT runtime');
+  assert(!buttonDisabled('<button class="disabled:pointer-events-none disabled:opacity-50">'), 'Disabled class parsing regression');
+  assert(buttonDisabled('<button class="button" disabled="">'), 'Disabled attribute parsing regression');
+  assert(buttonDisabled('<button disabled>'), 'Boolean disabled parsing regression');
+  assert(buttonDisabled('<button aria-disabled="true">'), 'Accessible disabled parsing regression');
   const unauthenticated = await post(null, 'submit');
   assert([303,307,308].includes(unauthenticated.status) && location(unauthenticated).pathname.includes('/login'), 'Anonymous submission must require sign-in');
   checks.push('Unauthenticated submission denied over public HTTPS');
@@ -71,8 +81,9 @@ async function main() {
   const consentPage = await page('/creator/onboarding?step=consent', a);
   const consentHtml = await consentPage.text();
   noRequired(consentHtml, 'consent');
-  assert(/<button\b[^>]*>Finish onboarding<\/button>/.test(consentHtml), 'Final action missing');
-  assert(!/<button\b[^>]*\sdisabled[^>]*>Finish onboarding<\/button>/.test(consentHtml), 'Final action remains blocked');
+  const finishButton = consentHtml.match(/(<button\b[^>]*>)Finish onboarding<\/button>/);
+  assert(finishButton, 'Final action missing');
+  assert(!buttonDisabled(finishButton[1]), 'Final action remains blocked');
   const skippedConsent = await post(a, 'consent');
   assert(location(skippedConsent).searchParams.get('status') === 'consent_skipped', 'Blank consent was not skippable');
   assert((await rows('creator_consents', a, 'id')).length === 0, 'Skipped consent must not create a signature');
