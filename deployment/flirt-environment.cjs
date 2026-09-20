@@ -1,5 +1,4 @@
 "use strict";
-require("./flirt-shared-services.cjs");
 const { publicAuthConfig } = require("./flirt-public-auth.cjs");
 
 // Shared Twin providers and hosting are supported. Customer data stays in FLIRT.
