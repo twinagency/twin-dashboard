@@ -46,7 +46,7 @@
     "test:tether-creator-signup": "tsx scripts/check-tether-creator-signup.ts",
     "test:tether-auth-ui": "tsx scripts/check-tether-auth-ui.ts",
     "test:reset-creator-guardrails": "node scripts/check-reset-recent-creator-test-accounts.mjs",
-    "test:flirt-isolation": "node --test deployment/flirt-environment.test.cjs deployment/flirt-public-auth.test.cjs deployment/flirt-shared-services.test.cjs",
+    "test:flirt-isolation": "node --test deployment/flirt-environment.test.cjs deployment/flirt-public-auth.test.cjs deployment/flirt-shared-services.test.cjs deployment/flirt-provision-storage.test.cjs",
     "flirt:preflight": "node deployment/flirt-preflight.cjs dashboard"
   },
   "dependencies": {

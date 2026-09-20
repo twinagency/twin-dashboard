@@ -1,6 +1,6 @@
 # FLIRT white label on Twin services
 
-Status: code preparation and offline checks only. The FLIRT database, live deployment and end-to-end acceptance checks remain pending.
+Status: FLIRT database provisioned and schema/configuration verified. Live hosting, Storage/Auth configuration and end-to-end acceptance remain pending.
 
 ## Confirmed scope, 20 September 2026
 Jesse owns Twin and wants FLIRT to use the existing Twin operation. Reuse the current AI, voice cloning, transcription, hosting and email provider accounts. New provider accounts, subscriptions or a separate AWS account are not requirements.
@@ -42,15 +42,35 @@ The old Twin deployment and account-reset workflows remain absent from the FLIRT
 - No users, conversations, transactions, uploads, sessions, bot tokens or full `app_settings` table have been copied.
 - Original historical migrations remain blocked. Some include production imports, fleet-wide mutations and partner identifiers. Do not replay them onto a new database.
 
+## Provisioning checkpoint, 20 September 2026
+
+The approved FLIRT project is `lkmfwpqegjluirfusnaw` in the existing Sage AI organisation, Sydney region. Jesse approved the quoted US$10/month project cost. The public project reference and bucket specification are in `deployment/flirt-project.json`. Runtime remains disabled until live acceptance.
+
+Completed on FLIRT:
+- 62 tables, 882 columns, 285 constraints, 198 indexes, 3 sequences, 34 application functions, 3 triggers and 1 reporting view copied as schema only.
+- Table, constraint and index comparison matches Twin. UUID generation resolves to the equivalent extension function. Function bodies are unchanged; three previously unset search paths are fixed.
+- Row-level security is enabled on all 62 tables. Browser roles have no table, sequence or function privileges. Only the server service role can use application records. The reporting view uses security-invoker mode.
+- Four reviewed local cleanup/reporting schedules installed. No customer data, production counters or cross-project connections copied.
+- Six generic prompt templates copied verbatim. Operational defaults passed through the existing dashboard allowlist and validators. Creator identity, personality, credentials, voice IDs and bot assignments are excluded.
+- One new FLIRT agency created with a generated ID. No owner login, reusable invite token or creator account created.
+- Database transaction tests passed for server onboarding writes, creator relationships, credit updates, generated spend tiers, single-use agency codes and denial of browser reads/RPCs/TRUNCATE. All synthetic rows rolled back.
+- All business tables and Auth users remain empty. Only six prompt templates, one defaults row and the fresh FLIRT agency are present.
+- Supabase security advisor has no warning/error findings. Its 62 informational "RLS enabled, no policy" notices reflect intentional server-only access. Do not add broad browser access just to clear them. [Advisor explanation](https://supabase.com/docs/guides/database/database-linter?lint=0008_rls_enabled_no_policy).
+
+Authoritative migrations are in the FLIRT branch of `jesse98/twin-bot`:
+- `supabase/migrations/20260920022012_flirt_schema_baseline.sql`
+- `supabase/migrations/20260920022353_flirt_reusable_defaults.sql`
+
+These match the recorded remote migration versions and are already applied. The original historical migrations remain blocked and must not be replayed. The rollback-only SQL check is `deployment/flirt-database-smoke.sql` in that repository.
+
 ## Remaining provisioning steps
-1. Confirm the Supabase organisation and project cost. Using the existing Twin organisation is supported. Check administrator membership if limiting staff access is required.
-2. Create the fresh FLIRT project. Export and review the current schema only, including tables, functions, triggers, RLS, grants and custom storage policies. Do not restore Twin's Auth users or customer data. The checked-in historical schema predates current onboarding.
-3. Review and copy only reusable prompt templates and sanitised operational defaults. Do not copy `app_settings` wholesale. Service credentials should use the controlled injection above.
-4. Create fresh FLIRT agency/admin/invite records. Configure FLIRT storage buckets, SMTP and Auth redirects. Preserve scoped access, creator consent and payment deduplication.
-5. Inject the FLIRT database/login environment plus the authorised existing Twin provider keys. Run `npm run flirt:preflight` with the environment supplied. This is an offline check, not proof of provider access.
-6. Deploy the FLIRT dashboard/bot alongside Twin using separate application resources. Configure HTTPS on the FLIRT hostname and proxy the dashboard to port 3101.
-7. Test signup, recovery, agency invites, onboarding, uploads, creator-scoped access, chat, voice and test payments with FLIRT-only accounts. Check desktop/mobile pages against Twin, then connect the landing page.
-8. Retire the older LYNQ backend as a separate task. No deletion or automatic migration of its existing data is included.
+1. Obtain authorised hosting access and the FLIRT server key through secure settings, not chat or Git. Existing connections support GitHub and database SQL; AWS console access was unavailable and the Supabase dashboard required sign-in.
+2. Configure FLIRT Storage through its API/dashboard. The bucket manifest retains Twin's private bucket names, size limits and media MIME types, but no buckets or files have been copied yet. On the dashboard checkout, use `node deployment/flirt-provision-storage.cjs --check` or `--create` with FLIRT environment injected. Confirm the project's global upload limit permits the existing 2 GiB onboarding/voice limits first. This script only creates missing private buckets, validates the exact approved project and fails on mismatched existing settings. [Storage must be changed through its API](https://supabase.com/docs/guides/storage/schema/design).
+3. Configure FLIRT Auth SMTP using the existing authorised email provider, a verified sender and the final FLIRT recovery redirect allowlist. No new email subscription is required.
+4. Inject the FLIRT database/login environment and the authorised existing Twin provider keys. Generate separate creator/operator signing secrets and a new operator password on the protected host. Run `npm run flirt:preflight`. No live credentials have been copied or committed.
+5. Deploy separate FLIRT dashboard/bot containers on suitable existing Twin hosting. Keep Twin's containers and ports unchanged. Set the FLIRT HTTPS hostname and proxy the dashboard to port 3101.
+6. Test live signup, recovery, agency invites, onboarding, uploads, two-account isolation, chat, voice and test payments with FLIRT-only accounts. Compare desktop/mobile pages against Twin, then connect the marketing login. Neither a GitHub build nor the database checks prove these flows work live.
+7. Retire the old LYNQ backend only after acceptance. No deletion or automatic customer migration is part of this setup.
 
 ## Verification
 `npm run test:flirt-isolation` tests provider sharing, startup, credential boundaries and data isolation using synthetic inputs. Existing offline suites remain in branch CI. These checks do not prove live signup, emails, provider availability or payments work.
