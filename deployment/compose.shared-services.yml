@@ -1,0 +1,13 @@
+# Run together with the repository-root docker-compose.yml.
+# FLIRT_SHARED_SERVICES_PATH points to an existing protected JSON file on the
+# host containing only OPENROUTER_API_KEY, ELEVENLABS_API_KEY, DEEPGRAM_API_KEY.
+services:
+  dashboard:
+    environment:
+      FLIRT_SHARED_SERVICES_FILE: /run/secrets/twin-ai-services
+    secrets:
+      - source: twin-ai-services
+        target: twin-ai-services
+secrets:
+  twin-ai-services:
+    file: ${FLIRT_SHARED_SERVICES_PATH:?Set the protected Twin provider credentials file path}

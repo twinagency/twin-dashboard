@@ -1,7 +1,8 @@
 "use strict";
+require("./flirt-shared-services.cjs");
 const { publicAuthConfig } = require("./flirt-public-auth.cjs");
 
-// This branch is a separate FLIRT installation. Never fall back to Twin.
+// Shared Twin providers and hosting are supported. Customer data stays in FLIRT.
 const FORBIDDEN_PROJECTS = new Set([
   "aouaenqayfltoqrmpitg",
   "cnnsllgzskqkvdovyiiv",
@@ -95,7 +96,7 @@ function assertStartup(kind, env = process.env) {
 
 function assertBotConfig(env = process.env) {
   // Importing pure offline tests is permitted. Any configured external service
-  // requires the full independent backend, even when MOCK was left enabled.
+  // requires the FLIRT data boundary, even when MOCK was left enabled.
   const networkFields = ["SUPABASE_URL", "SUPABASE_SERVICE_KEY", "DATABASE_URL", "BOT_TOKEN",
     "OPENROUTER_API_KEY", "ELEVENLABS_API_KEY", "DEEPGRAM_API_KEY"];
   if (!["false", "0"].includes(env.MOCK) && !networkFields.some((field) => env[field])) return;
