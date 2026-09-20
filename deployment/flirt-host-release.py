@@ -5,6 +5,7 @@ No credentials are printed. Incoming credentials use RSA-OAEP transport encrypti
 import base64, fcntl, json, os, re, secrets, shutil, stat, subprocess, sys, tempfile, time
 from pathlib import Path
 from urllib.request import Request, urlopen
+from urllib.error import HTTPError
 
 PROJECT = "lkmfwpqegjluirfusnaw"
 ORIGIN = "https://dashboard.lynqai.co"
@@ -85,6 +86,24 @@ def read_env(path):
     return dict(line.split("=", 1) for line in path.read_text().splitlines() if line and not line.startswith("#"))
 
 
+def verify_database(key):
+    request = Request("https://" + PROJECT + ".supabase.co/rest/v1/partner_agencies?select=id&limit=1", headers={"apikey": key})
+    try:
+        with urlopen(request, timeout=20) as response:
+            if response.status != 200 or not isinstance(json.load(response), list):
+                raise RuntimeError("FLIRT database verification failed")
+    except HTTPError as error:
+        # Only allow a status and structured PostgREST code into deployment logs.
+        code = "unavailable"
+        try:
+            candidate = json.loads(error.read(4096)).get("code", "")
+            if isinstance(candidate, str) and re.fullmatch(r"(?:PGRST\d{3}|[0-9A-Z]{5})", candidate):
+                code = candidate
+        except (ValueError, AttributeError):
+            pass
+        raise RuntimeError("FLIRT database verification failed: HTTP " + str(error.code) + ", code " + code) from None
+
+
 def configure(encoded):
     secured_directory()
     key_file = ROOT / "transport.key"
@@ -95,10 +114,7 @@ def configure(encoded):
     clear = command(["openssl", "pkeyutl", "-decrypt", "-inkey", str(key_file), "-pkeyopt", "rsa_padding_mode:oaep", "-pkeyopt", "rsa_oaep_md:sha256", "-pkeyopt", "rsa_mgf1_md:sha256"], encrypted)
     payload = validate_payload(json.loads(clear))
     # Confirm the credential is accepted by the exact FLIRT project before storing it.
-    request = Request("https://" + PROJECT + ".supabase.co/rest/v1/agencies?select=id&limit=1", headers={"apikey": payload["key"]})
-    with urlopen(request, timeout=20) as response:
-        if response.status != 200 or not isinstance(json.load(response), list):
-            raise RuntimeError("FLIRT database verification failed")
+    verify_database(payload["key"])
     provider_script = "const names=" + json.dumps(PROVIDERS) + "; console.log(JSON.stringify(Object.fromEntries(names.map(k=>[k,process.env[k]||'']))));"
     providers = json.loads(command(["docker", "exec", "next-app", "node", "-e", provider_script], timeout=20))
     if set(providers) != set(PROVIDERS) or not all(providers.values()):

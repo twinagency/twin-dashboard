@@ -1,10 +1,18 @@
-import importlib.util, unittest
+import importlib.util, io, unittest
+from unittest.mock import patch
+from urllib.error import HTTPError
 from pathlib import Path
 spec = importlib.util.spec_from_file_location("release", Path(__file__).with_name("flirt-host-release.py"))
 release = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(release)
 
 class ReleaseBoundaryTests(unittest.TestCase):
+    def test_database_errors_never_disclose_response_or_key(self):
+        for body, expected in [(b'{"code":"PGRST205","message":"secret-value"}', "PGRST205"), (b'{"code":"sb_secret_do_not_log","message":"secret-value"}', "unavailable")]:
+            error = HTTPError("https://example.invalid", 404, "secret-value", {}, io.BytesIO(body))
+            with patch.object(release, "urlopen", side_effect=error):
+                with self.assertRaises(RuntimeError) as result: release.verify_database("secret-value")
+                self.assertEqual(str(result.exception), "FLIRT database verification failed: HTTP 404, code " + expected)
     def payload(self):
         return {"project": release.PROJECT, "kind": "dashboard", "key": "sb_secret_" + "s"*32, "public_key": "sb_publishable_" + "p"*32}
     def test_only_flirt_payloads(self):
