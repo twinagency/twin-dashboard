@@ -1,0 +1,94 @@
+name: FLIRT dashboard edge route
+on:
+  push:
+    branches: ["flirt/independent-backend-2026-09-19"]
+    paths:
+      - .github/workflows/flirt-edge.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+env:
+  AWS_REGION: ap-southeast-2
+  INSTANCE_ID: i-09a9dd3bd749643a5
+
+jobs:
+  configure:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Existing authorised AWS connection
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Verify AWS account
+        run: |
+          set -euo pipefail
+          test "$(aws sts get-caller-identity --query Account --output text)" = "323149985112"
+
+      - name: Add FLIRT hostname and HTTPS without changing Twin
+        run: |
+          set -euo pipefail
+          cat > /tmp/flirt-edge.sh <<'SCRIPT'
+          set -euo pipefail
+
+          test "$(docker inspect -f '{{.State.Running}}' flirt-dashboard)" = "true"
+          curl -fsS http://127.0.0.1:3101/creator/login | grep -q "FLIRT"
+
+          test -n "$(getent ahostsv4 dashboard.lynqai.co | awk 'NR==1{print $1}')"
+
+          cat > /etc/apache2/sites-available/dashboard.lynqai.co.conf <<'APACHE'
+          <VirtualHost *:80>
+              ServerName dashboard.lynqai.co
+              ProxyPreserveHost On
+              ProxyPass / http://127.0.0.1:3101/
+              ProxyPassReverse / http://127.0.0.1:3101/
+              ErrorLog ${APACHE_LOG_DIR}/flirt-dashboard-error.log
+              CustomLog ${APACHE_LOG_DIR}/flirt-dashboard-access.log combined
+          </VirtualHost>
+          APACHE
+
+          a2enmod proxy proxy_http ssl headers rewrite >/dev/null
+          a2ensite dashboard.lynqai.co.conf >/dev/null
+          apache2ctl configtest
+          systemctl reload apache2
+
+          certbot --apache -d dashboard.lynqai.co --non-interactive --redirect --keep-until-expiring
+
+          apache2ctl configtest
+          systemctl reload apache2
+
+          curl -fsS https://dashboard.lynqai.co/creator/login | grep -q "FLIRT"
+          echo "FLIRT edge route and HTTPS verified."
+          SCRIPT
+
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          script = Path('/tmp/flirt-edge.sh').read_text()
+          Path('/tmp/flirt-edge.json').write_text(json.dumps({
+              "commands": [script],
+              "executionTimeout": ["600"]
+          }))
+          PY
+
+          command_id=$(aws ssm send-command             --instance-ids "$INSTANCE_ID"             --document-name AWS-RunShellScript             --comment "Add FLIRT dashboard HTTPS route only"             --parameters file:///tmp/flirt-edge.json             --query Command.CommandId --output text)
+
+          for i in {1..80}; do
+            status=$(aws ssm get-command-invocation --command-id "$command_id" --instance-id "$INSTANCE_ID" --query Status --output text 2>/dev/null || true)
+            case "$status" in
+              Success) break ;;
+              Failed|Cancelled|TimedOut)
+                aws ssm get-command-invocation --command-id "$command_id" --instance-id "$INSTANCE_ID" --query '{status:Status,out:StandardOutputContent,err:StandardErrorContent}' --output json
+                exit 1
+                ;;
+            esac
+            sleep 5
+          done
+
+          aws ssm get-command-invocation --command-id "$command_id" --instance-id "$INSTANCE_ID" --query '{status:Status,out:StandardOutputContent,err:StandardErrorContent}' --output json
+          test "$(aws ssm get-command-invocation --command-id "$command_id" --instance-id "$INSTANCE_ID" --query Status --output text)" = "Success"
