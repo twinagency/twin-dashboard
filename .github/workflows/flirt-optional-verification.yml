@@ -1,0 +1,33 @@
+name: FLIRT optional onboarding verification
+on:
+  push:
+    branches: ["flirt/independent-backend-2026-09-19"]
+    paths:
+      - .github/workflows/flirt-optional-verification.yml
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: flirt-optional-live-verification
+  cancel-in-progress: false
+jobs:
+  verify:
+    if: github.ref == 'refs/heads/flirt/independent-backend-2026-09-19'
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      FLIRT_EXPECTED_COMMIT: c1ae46e04a96ed3d296ee42a71ea09dcda6ca451
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check verification script syntax
+        run: |
+          node --check deployment/flirt-optional-live-check.cjs
+          python3 -m py_compile deployment/flirt-optional-live-check.py
+      - name: Existing authorised AWS connection
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-southeast-2
+      - name: Test public empty onboarding, skip-all and unchanged Twin
+        run: python3 deployment/flirt-optional-live-check.py
