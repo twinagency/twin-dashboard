@@ -1,0 +1,57 @@
+name: FLIRT read-only hosting check
+on:
+  push:
+    branches: ["flirt/independent-backend-2026-09-19"]
+    paths:
+      - .github/workflows/flirt-hosting-check.yml
+      - deployment/flirt-hosting-check.sh
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: flirt-read-only-hosting-check
+  cancel-in-progress: false
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    env:
+      AWS_REGION: ap-southeast-2
+      INSTANCE_ID: i-09a9dd3bd749643a5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check existing deployment credentials
+        env:
+          DEPLOY_KEY_PRESENT: ${{ secrets.AWS_ACCESS_KEY_ID != '' }}
+          DEPLOY_SECRET_PRESENT: ${{ secrets.AWS_SECRET_ACCESS_KEY != '' }}
+        run: |
+          if [ "$DEPLOY_KEY_PRESENT" != true ] || [ "$DEPLOY_SECRET_PRESENT" != true ]; then
+            echo 'Existing AWS deployment credentials are not available in this repository.'
+            exit 1
+          fi
+      - name: Use existing Twin deployment connection
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ env.AWS_REGION }}
+      - name: Verify AWS account
+        run: |
+          set -euo pipefail
+          account=$(aws sts get-caller-identity --query Account --output text)
+          test "$account" = '323149985112'
+          echo 'Existing Twin AWS account verified.'
+      - name: Inspect the existing dashboard host without changing it
+        run: |
+          set -euo pipefail
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          script = Path('deployment/flirt-hosting-check.sh').read_text()
+          Path('/tmp/flirt-hosting-check.json').write_text(json.dumps({'commands': [script], 'executionTimeout': ['90']}))
+          PY
+          command_id=$(aws ssm send-command --instance-ids "$INSTANCE_ID" --document-name AWS-RunShellScript --comment 'FLIRT read-only hosting readiness check' --parameters file:///tmp/flirt-hosting-check.json --query Command.CommandId --output text)
+          aws ssm wait command-executed --command-id "$command_id" --instance-id "$INSTANCE_ID" || true
+          aws ssm get-command-invocation --command-id "$command_id" --instance-id "$INSTANCE_ID" --query '{status:Status,out:StandardOutputContent,err:StandardErrorContent}' --output json
+          status=$(aws ssm get-command-invocation --command-id "$command_id" --instance-id "$INSTANCE_ID" --query Status --output text)
+          test "$status" = Success
