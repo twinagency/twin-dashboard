@@ -5,6 +5,7 @@ import importlib.util
 import json
 import os
 from pathlib import Path
+import re
 import shlex
 import sys
 import time
@@ -19,7 +20,9 @@ def main():
     if release.aws(["sts", "get-caller-identity"])["Account"] != release.ACCOUNT:
         raise RuntimeError("Unexpected AWS account")
     source = base64.b64encode((ROOT / "flirt-optional-live-check.cjs").read_bytes()).decode()
-    expected = os.environ.get("GITHUB_SHA", "")
+    expected = os.environ.get("FLIRT_EXPECTED_COMMIT") or os.environ.get("GITHUB_SHA", "")
+    if not re.fullmatch(r"[a-f0-9]{40}", expected):
+        raise RuntimeError("An exact deployed revision is required for verification")
     host = '''import base64,json,subprocess
 
 def run(args, data=None):
