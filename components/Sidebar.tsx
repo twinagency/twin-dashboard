@@ -94,6 +94,7 @@ const LINK_COLOR_CLASSES: Record<LinkColor, { icon: string; active: string; idle
 
 const NAV_LINKS: NavLink[] = [
   { kind: "route", label: "Earnings", href: "/revenue", icon: "EarningsCombo", color: "good" },
+  { kind: "route", label: "Sales Health", href: "/sales-health", icon: "ListChecks", color: "blue" },
   { kind: "route", label: "Creators", href: "/clones", icon: "Clones", color: "blue" },
   { kind: "route", label: "Fans", href: "/users", icon: "FansCombo", color: "purple" },
   { kind: "tab", label: "PPVs", tab: "ppvs", icon: "Media", color: "red" },
