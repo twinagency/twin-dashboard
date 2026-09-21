@@ -24,12 +24,12 @@ Reach fans who went silent for more than 24h, **once per silent stretch**, from 
 |---|---|---|
 | Dashboard area | `twin-dashboard` branch `mtproto-campaign` (`app/mtproto-campaign`, `lib/mtproto`, `components/mtproto`, `app/api/admin/v1/mtproto`) | pushed, main untouched |
 | Migrations | `twin-bot/db/migrations/162_reengage_mtproto.sql`, `163_reengage_identity_by_telegram_id.sql` (on twin-bot branch `mtproto-campaign`) | **applied live**. 162 was recorded live under the name `158_reengage_mtproto`; renumbered because `main` already owns 158 to 161 |
-| Worker | `twin-userbot/` (Node/TS, mtcute) | own local git repo, see "Worker code" below |
+| Worker | `ronan-com/twin-userbot`, branch `main` (Node/TS, mtcute) | pushed, private repo, see "Worker code" below |
 | Owner-message guard | `twin-bot/src/index.ts` plus `src/dev/check-owner-business-message.ts` | on `main`, deployed |
 
 ### Worker code
 
-`twin-userbot` was created as its own repo and has no remote yet. Ask Ronan whether to create a private repo for it. Its layout:
+The worker is its own private repo: **`ronan-com/twin-userbot`**, branch `main` (pushed 2026-09-22, no secrets, `.env` and `sessions/` are gitignored). Its layout:
 `src/index.ts` (entry), `config.ts` (Supabase project guard, live gate), `contract.ts` (types and constants, mirrors the SQL CHECK lists), `policy.ts` (eligibility), `compose.ts`, `store.ts` + `paging.ts` (Supabase access, every read paged past the 1000-row cap), `telegram.ts` (mtcute wrapper), `session.ts` (AES-256-GCM session file), `spike.ts` + `replyClassifier.ts` (auto-halt), `loops/` (runClaimer, scanner, sender, replyWatcher, sessionKeeper, runProcessor, recovery), `cli/` (login, logout, web connect page), `dev/` (35 check files), `integration/` (real PostgREST test).
 
 ## Database (live)
@@ -83,7 +83,7 @@ Known pre-existing failures, unrelated to this work: dashboard `test:rollups` an
 4. First real campaign send to a **test fan** (Ronan's own test account), using the full gated flow. The fan's chat must have been silent 24h or more. Then reply from the test account and check the bot answers exactly once and no phantom fan appears.
 5. Only then a tiny real pilot with the hold-out on, cap 5, then ramp.
 6. `claim_reengage_run` takes the oldest queued run for any caller, so a dry-only worker in front of a queued live run keeps handing it back. Fix needs a claim-function change.
-7. Legal review of Telegram's API and content-licensing terms on AI use; Ronan's decision on the 2026-09-21 "unsolicited off" exception; create a remote repo for `twin-userbot`.
+7. Legal review of Telegram's API and content-licensing terms on AI use; Ronan's decision on the 2026-09-21 "unsolicited off" exception; decide who else gets access to the private `twin-userbot` repo.
 
 ## Do not
 
