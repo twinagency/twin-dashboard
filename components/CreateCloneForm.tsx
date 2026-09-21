@@ -287,7 +287,7 @@ export default function CreateCloneForm({ defaults = {} }: { defaults?: Partial<
               <label>Caption (shown to fan)<input value={b.caption} onChange={(e) => setBundle(b.id, { caption: e.target.value })} className={inputCls} /></label>
               <label className="flex items-center gap-2">
                 <input type="checkbox" checked={b.onboarding} onChange={(e) => setBundle(b.id, { onboarding: e.target.checked })} className="h-4 w-4 accent-good" />
-                Welcome bundle (auto-sent to new fans)
+                Primary bundle (sellable inventory, not auto-sent)
               </label>
               {b.files.length > 0 && (
                 <div className="flex flex-wrap gap-2">
