@@ -598,7 +598,7 @@ async function loadPurchases(windows: DayWindow[], cloneId: string | null, hasFe
   const startMs = Math.min(...windows.map((window) => window.startMs));
   const endMs = Math.max(...windows.map((window) => window.endMs));
   let query = supabaseAdmin
-    .from("star_transactions")
+    .from("clean_star_transactions_v")
     .select(hasFeature ? PURCHASE_COLUMNS : PURCHASE_COLUMNS_LEGACY)
     .gte("paid_at", new Date(startMs).toISOString())
     .lt("paid_at", new Date(endMs).toISOString())
@@ -688,7 +688,7 @@ export async function getRevenueWhyChanged(dayKey: string, cloneId: string | nul
   // error as a safe truncation, which is right for money but does not reveal a
   // missing additive column. Resolving that here keeps old and new database
   // installations equally usable.
-  const featureProbe = await supabaseAdmin.from("star_transactions").select(PURCHASE_COLUMNS).limit(1);
+  const featureProbe = await supabaseAdmin.from("clean_star_transactions_v").select(PURCHASE_COLUMNS).limit(1);
   const hasFeature = !featureProbe.error;
 
   const [purchasesByWindow, activityByWindow] = await Promise.all([
