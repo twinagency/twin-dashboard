@@ -34,7 +34,7 @@ export type PagedResult<T> = {
  */
 export async function selectAllRowsMtproto<T>(
   makeQuery: () => Rangeable,
-  opts: { maxRows?: number; label?: string; concurrency?: number } = {},
+  opts: { maxRows?: number; label?: string; concurrency?: number; throwOnError?: boolean } = {},
 ): Promise<PagedResult<T>> {
   const maxRows = opts.maxRows ?? DEFAULT_MAX_ROWS;
   const concurrency = Math.max(1, opts.concurrency ?? 4);
@@ -57,6 +57,9 @@ export async function selectAllRowsMtproto<T>(
     for (const page of pages) {
       if (page.error) {
         console.error(`[mtproto paging] ${label} failed at ${page.from}-${page.to}: ${page.error.message}`);
+        // Safety-critical reads (opt-outs, already-contacted) must not quietly
+        // continue with a partial list.
+        if (opts.throwOnError) throw Object.assign(new Error(`${label}: ${page.error.message}`), { code: (page.error as { code?: string }).code });
         return { rows, truncated: true };
       }
       const batch = (page.data ?? []) as T[];

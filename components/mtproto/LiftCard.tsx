@@ -14,11 +14,18 @@ export default function LiftCard({ reports }: { reports: LiftReport[] }) {
       <CardHeader>
         <CardTitle>Lift vs hold-out</CardTitle>
         <CardDescription>
-          A purchase counts here only if the fan replied to our send AND bought within the window shown. Stars are OBSERVED for the
-          contacted group in that window, not net profit — splits and costs still apply.
+          Buyer rate and Stars per fan compare contacted fans (real, acked sends) with the hold-out over the SAME window length, each
+          measured from that fan&apos;s own send time (hold-out: when they would have been contacted), same rule for both groups, paid
+          orders only, and only fans whose window has finished. &quot;Replied + bought&quot; is the stricter attribution rule for contacted fans.
+          Stars are OBSERVED, not net profit.
         </CardDescription>
       </CardHeader>
       <CardContent>
+        {reports.some((r) => r.partial) && (
+          <div className="mb-2 rounded-md border border-warn/40 bg-warn/10 px-2 py-1 text-xs text-warn">
+            The purchase read was cut short: every figure here is a lower bound.
+          </div>
+        )}
         <Table>
           <TableHeader>
             <TableRow>
@@ -29,6 +36,7 @@ export default function LiftCard({ reports }: { reports: LiftReport[] }) {
               <TableHead>Buyer rate</TableHead>
               <TableHead>⭐ / fan</TableHead>
               <TableHead>⭐ total</TableHead>
+              <TableHead>Replied + bought</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
@@ -44,6 +52,9 @@ export default function LiftCard({ reports }: { reports: LiftReport[] }) {
                   <TableCell className="tabular-nums">{pct(r.contacted.buyerRate)}</TableCell>
                   <TableCell className="tabular-nums text-good">{r.contacted.starsPerFan.toFixed(1)}</TableCell>
                   <TableCell className="tabular-nums text-good">{r.contacted.stars}</TableCell>
+                  <TableCell className="tabular-nums">
+                    {r.contacted.attributedBuyers} fans / {r.contacted.attributedStars}⭐
+                  </TableCell>
                 </TableRow>
                 <TableRow key={`${r.windowHours}-h`}>
                   <TableCell className="text-muted-foreground">Hold-out</TableCell>
@@ -52,6 +63,7 @@ export default function LiftCard({ reports }: { reports: LiftReport[] }) {
                   <TableCell className="tabular-nums text-muted-foreground">{pct(r.holdout.buyerRate)}</TableCell>
                   <TableCell className="tabular-nums text-muted-foreground">{r.holdout.starsPerFan.toFixed(1)}</TableCell>
                   <TableCell className="tabular-nums text-muted-foreground">{r.holdout.stars}</TableCell>
+                  <TableCell className="text-muted-foreground">—</TableCell>
                 </TableRow>
               </Fragment>
             ))}

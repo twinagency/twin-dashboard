@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { listEvents } from "@/lib/mtproto/events";
+import { RunValidationError } from "@/lib/mtproto/validate";
 
 export const dynamic = "force-dynamic";
 
@@ -17,10 +18,15 @@ export async function GET(req: Request) {
   const runId = params.get("runId") ?? undefined;
   const cloneId = params.get("cloneId") ?? undefined;
   const afterIdRaw = params.get("afterId");
-  const afterId = afterIdRaw ? Number(afterIdRaw) : undefined;
+  const afterId = afterIdRaw ? Number(afterIdRaw) : undefined; // validated in listEvents
   if (!runId && !cloneId) {
     return NextResponse.json({ error: "runId or cloneId is required" }, { status: 400 });
   }
-  const events = await listEvents({ runId, cloneId, afterId, limit: 200 });
-  return NextResponse.json({ events });
+  try {
+    const events = await listEvents({ runId, cloneId, afterId, limit: 200 });
+    return NextResponse.json({ events }, { headers: { "Cache-Control": "private, no-store" } });
+  } catch (e) {
+    const status = e instanceof RunValidationError ? 400 : 500;
+    return NextResponse.json({ error: e instanceof Error ? e.message : "read failed" }, { status });
+  }
 }

@@ -5,8 +5,9 @@
 // migration's header. This module never reads or writes anything shaped like
 // a session string; it only reads/writes status, pause and daily_cap.
 
-import { supabaseAdmin } from "@/lib/supabase";
+import { mtDb } from "./db";
 import { insertEvent } from "./events";
+import { RunValidationError, isMissingTable, requireUuid } from "./validate";
 import { HARD_MAX_DAILY_CAP, type ConnectionStatus, type UserbotConnection } from "./types";
 
 type ConnectionRow = {
@@ -45,12 +46,17 @@ function fromRow(r: ConnectionRow): UserbotConnection {
  *  connected a userbot session on day one. */
 export async function listConnections(): Promise<UserbotConnection[]> {
   try {
-    const { data, error } = await supabaseAdmin.from("userbot_connections").select();
+    const { data, error } = await mtDb().from("userbot_connections").select();
     if (error) throw error;
     return (data as ConnectionRow[]).map(fromRow);
   } catch (e) {
-    console.warn(`[mtproto] userbot_connections unavailable (migration 158 applied?): ${e instanceof Error ? e.message : e}`);
-    return [];
+    if (isMissingTable(e)) {
+      console.warn(`[mtproto] userbot_connections not created yet (migration 158 not applied)`);
+      return [];
+    }
+    // Do NOT return [] here: that would render every creator as "active,
+    // not paused" when the truth is unknown.
+    throw new Error(`could not read userbot_connections: ${(e as { message?: string })?.message ?? e}`);
   }
 }
 
@@ -72,27 +78,47 @@ export function connectionFor(cloneId: string, connections: UserbotConnection[])
   );
 }
 
+export async function getConnection(cloneId: string): Promise<UserbotConnection | null> {
+  const { data, error } = await mtDb().from("userbot_connections").select().eq("clone_id", cloneId).maybeSingle();
+  if (error) throw new Error(`could not read connection: ${error.message}`);
+  return data ? fromRow(data as ConnectionRow) : null;
+}
+
 export async function setConnectionPaused(cloneId: string, paused: boolean, reason: string | null, actor: string): Promise<void> {
-  const { error } = await supabaseAdmin
+  requireUuid(cloneId, "cloneId");
+  const cleanReason = reason ? reason.slice(0, 500) : null;
+  const before = await getConnection(cloneId);
+  const { error } = await mtDb()
     .from("userbot_connections")
-    .upsert({ clone_id: cloneId, paused, paused_reason: reason }, { onConflict: "clone_id" });
-  if (error) throw new Error(error.message);
-  await insertEvent({
-    runId: null,
-    episodeId: null,
-    cloneId,
-    userId: null,
-    eventType: "control_action",
-    actor,
-    detail: { action: paused ? "pause_connection" : "resume_connection", reason },
-  });
+    .upsert({ clone_id: cloneId, paused, paused_reason: paused ? cleanReason : null }, { onConflict: "clone_id" });
+  if (error) throw new Error(`could not ${paused ? "pause" : "resume"} connection: ${error.message}`);
+  try {
+    await insertEvent({
+      runId: null,
+      episodeId: null,
+      cloneId,
+      userId: null,
+      eventType: "control_action",
+      actor,
+      detail: {
+        action: paused ? "pause_connection" : "resume_connection",
+        reason: cleanReason,
+        before: { paused: before?.paused ?? false },
+        after: { paused },
+      },
+    });
+  } catch (e) {
+    throw new Error(`connection WAS ${paused ? "paused" : "resumed"}, but the audit event failed: ${e instanceof Error ? e.message : e}`);
+  }
 }
 
 export async function setConnectionDailyCap(cloneId: string, dailyCap: number, actor: string): Promise<void> {
-  if (!Number.isFinite(dailyCap) || dailyCap <= 0 || dailyCap > HARD_MAX_DAILY_CAP) {
-    throw new Error(`dailyCap must be between 1 and ${HARD_MAX_DAILY_CAP}`);
+  requireUuid(cloneId, "cloneId");
+  if (!Number.isInteger(dailyCap) || dailyCap <= 0 || dailyCap > HARD_MAX_DAILY_CAP) {
+    throw new RunValidationError(`dailyCap must be a whole number between 1 and ${HARD_MAX_DAILY_CAP}`);
   }
-  const { error } = await supabaseAdmin.from("userbot_connections").upsert({ clone_id: cloneId, daily_cap: dailyCap }, { onConflict: "clone_id" });
+  const before = await getConnection(cloneId);
+  const { error } = await mtDb().from("userbot_connections").upsert({ clone_id: cloneId, daily_cap: dailyCap }, { onConflict: "clone_id" });
   if (error) throw new Error(error.message);
   await insertEvent({
     runId: null,
@@ -101,6 +127,6 @@ export async function setConnectionDailyCap(cloneId: string, dailyCap: number, a
     userId: null,
     eventType: "config_change",
     actor,
-    detail: { action: "set_daily_cap", dailyCap },
+    detail: { action: "set_daily_cap", before: { dailyCap: before?.dailyCap ?? 30 }, after: { dailyCap } },
   });
 }

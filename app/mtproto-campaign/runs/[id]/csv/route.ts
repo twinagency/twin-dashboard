@@ -11,9 +11,16 @@ export const dynamic = "force-dynamic";
 // middleware.ts, exactly like the JSON events poll route.
 export async function GET(_req: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
-  const run = await getRun(id);
+  let run;
+  try {
+    run = await getRun(id);
+  } catch (e) {
+    return NextResponse.json({ error: e instanceof Error ? e.message : "read failed" }, { status: 500 });
+  }
   if (!run) return NextResponse.json({ error: "run not found" }, { status: 404 });
-  const [{ episodes }, creators] = await Promise.all([listEpisodesForRun(id), listCreators()]);
+  const [{ episodes, truncated }, creators] = await Promise.all([listEpisodesForRun(id), listCreators()]);
+  // A silently partial export is worse than none.
+  if (truncated) return NextResponse.json({ error: "run has more episodes than one export can hold; export refused" }, { status: 413 });
   const rows = await buildSendRows(episodes, creators);
   const csv = sendsToCsv(rows);
   return new NextResponse(csv, {

@@ -7,7 +7,7 @@
 // unpaged select, matching the convention lib/select-all.ts's own comments
 // describe ("`clones` is absent [from the unbounded list] on purpose").
 
-import { supabaseAdmin } from "@/lib/supabase";
+import { mtDb } from "./db";
 import type { CreatorLite } from "./types";
 
 type CloneRow = {
@@ -19,7 +19,7 @@ type CloneRow = {
 };
 
 export async function listCreators(): Promise<CreatorLite[]> {
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await mtDb()
     .from("clones")
     .select("id,name,slug,status,business_username")
     .order("name", { ascending: true });
@@ -37,7 +37,7 @@ export async function listCreators(): Promise<CreatorLite[]> {
 }
 
 export async function getCreator(cloneId: string): Promise<CreatorLite | null> {
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await mtDb()
     .from("clones")
     .select("id,name,slug,status,business_username")
     .eq("id", cloneId)

@@ -12,6 +12,7 @@ const POLL_MS = 4_000;
 // ticks (an id cursor), not just trigger a server-component refresh.
 export default function LiveFeed({ runId }: { runId: string }) {
   const [events, setEvents] = useState<ReengageEvent[]>([]);
+  const [feedError, setFeedError] = useState<string | null>(null);
   const cursorRef = useRef<number | undefined>(undefined);
 
   useEffect(() => {
@@ -22,14 +23,26 @@ export default function LiveFeed({ runId }: { runId: string }) {
       if (cursorRef.current != null) params.set("afterId", String(cursorRef.current));
       try {
         const res = await fetch(`/mtproto-campaign/live?${params}`, { cache: "no-store" });
-        if (!res.ok) return;
+        if (!res.ok) {
+          if (!cancelled) setFeedError(`live feed unavailable (${res.status})`);
+          return;
+        }
         const { events: batch } = (await res.json()) as { events: ReengageEvent[] };
-        if (cancelled || batch.length === 0) return;
-        cursorRef.current = batch[batch.length - 1].id;
-        setEvents((prev) => [...prev, ...batch].slice(-200));
+        if (cancelled) return;
+        setFeedError(null);
+        if (batch.length === 0) return;
+        // The first page arrives newest-first, later pages oldest-first: never
+        // trust position. Cursor = highest id seen; merge de-duplicated by id.
+        cursorRef.current = Math.max(cursorRef.current ?? 0, ...batch.map((b) => b.id));
+        setEvents((prev) => {
+          const byId = new Map(prev.map((p) => [p.id, p]));
+          for (const b of batch) byId.set(b.id, b);
+          return [...byId.values()].sort((a, b) => a.id - b.id).slice(-200);
+        });
       } catch {
         // A transient fetch failure just means this tick is skipped; the next
-        // one retries. Never throw out of a poll loop.
+        // one retries. Never throw out of a poll loop, but say so on screen.
+        if (!cancelled) setFeedError("live feed disconnected, retrying");
       }
     };
     tick();
@@ -47,6 +60,7 @@ export default function LiveFeed({ runId }: { runId: string }) {
         <CardDescription>Newest events as they land — who was hit, replies, purchases.</CardDescription>
       </CardHeader>
       <CardContent>
+        {feedError && <div className="mb-2 rounded-md border border-warn/40 bg-warn/10 px-2 py-1 text-xs text-warn">{feedError}</div>}
         {events.length === 0 ? (
           <div className="py-6 text-center text-sm text-muted-foreground">No events yet.</div>
         ) : (

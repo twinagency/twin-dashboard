@@ -3,21 +3,41 @@
 // N3 ("ATTRIBUTION RULES, fixed BEFORE launch so numbers can't be gamed
 // later"): a purchase counts as re-engagement-driven only if the fan REPLIED
 // to our send AND bought within a fixed window of it. Windows are shown side
-// by side — 24h / 72h / 7d — never collapsed to one number. Hold-out fans are
-// measured over the identical window, from the same reference point (when
-// they would have been contacted), with no reply requirement since they were
-// never sent anything to reply to.
+// by side — 24h / 72h / 7d — never collapsed to one number.
 //
-// N4: "Do NOT rollup star_transactions; join by fan_id + time window with an
-// index." This reads star_transactions filtered to exactly the run's own
-// fans (bounded set, chunked .in() calls) and a coarse paid_at lower bound —
-// never an unfiltered or fleet-wide read.
+// LIFT (contacted vs hold-out) has to be apples to apples, so it does NOT use
+// the reply requirement: on BOTH sides "buyers" is any fan with a paid order in
+// the window, measured from that fan's own anchor time. The reply-gated number
+// is reported separately as attributedBuyers/attributedStars (contacted only).
+//
+//   contacted anchor = the real send time (acked, with a Telegram message id)
+//   hold-out anchor  = the episode's creation time + the median (send - created)
+//                      lag of the contacted fans of the SAME creator, i.e. when
+//                      that fan would have been contacted. Same window length.
+//
+// Only fans whose window has fully elapsed are counted (per window), so a
+// half-finished 7d window cannot depress whichever group was assigned last.
+// Groups are disjoint (a fan who is both in a hold-out episode and a sent one
+// is dropped from the hold-out) and deduplicated per (creator, fan).
+//
+// Purchases come from star_transactions restricted to exactly this run's fans
+// (chunked .in()), bounded by paid_at, paged with a stable order, and run
+// through lib/revenue-ledger.ts's classifier so refunds/adjustments are never a
+// "purchase" (N4: never rollup star_transactions).
 
-import { supabaseAdmin } from "@/lib/supabase";
+import { mtDb } from "./db";
+import { classifyRevenueLedgerRow } from "@/lib/revenue-ledger";
+import { isRealSend } from "./episodes";
 import { selectAllRowsMtproto } from "./paging";
 import { ATTRIBUTION_WINDOWS_HOURS, type AttributionWindowHours, type LiftReport, type LiftSide, type ReengageEpisode } from "./types";
 
-export type PurchaseRow = { user_id: string; clone_id: string; amount_stars: number; paid_at: string | null; created_at: string };
+export type PurchaseRow = { id: string; user_id: string; clone_id: string; amount_stars: number; invoice_payload: string | null; paid_at: string; created_at: string };
+export type PaidOrder = { userId: string; cloneId: string; stars: number; paidMs: number };
+export type PurchaseRead = { orders: PaidOrder[]; truncated: boolean };
+
+const CHUNK = 200; // uuid IN lists this long stay well inside the URL limit
+const HOUR = 3_600_000;
+const MAX_WINDOW_MS = ATTRIBUTION_WINDOWS_HOURS[ATTRIBUTION_WINDOWS_HOURS.length - 1] * HOUR;
 
 function chunk<T>(arr: T[], size: number): T[][] {
   const out: T[][] = [];
@@ -25,52 +45,80 @@ function chunk<T>(arr: T[], size: number): T[][] {
   return out;
 }
 
-export async function purchasesForUsers(userIds: string[], earliestIso: string): Promise<PurchaseRow[]> {
-  if (userIds.length === 0) return [];
+/** Paid orders (positive, non-refund) for these fans with paid_at in
+ *  [earliestMs, latestMs]. Chunks run in parallel; `truncated` is true if any
+ *  chunk hit the row ceiling or failed. */
+export async function purchasesForUsers(userIds: string[], earliestMs: number, latestMs: number = Date.now()): Promise<PurchaseRead> {
+  if (userIds.length === 0) return { orders: [], truncated: false };
+  const earliestIso = new Date(earliestMs).toISOString();
+  const latestIso = new Date(latestMs).toISOString();
   const results = await Promise.all(
-    chunk(userIds, 400).map((ids) =>
+    chunk(userIds, CHUNK).map((ids) =>
       selectAllRowsMtproto<PurchaseRow>(
         () =>
-          supabaseAdmin
+          mtDb()
             .from("star_transactions")
-            .select("user_id,clone_id,amount_stars,paid_at,created_at")
+            .select("id,user_id,clone_id,amount_stars,invoice_payload,paid_at,created_at")
             .in("user_id", ids)
-            .gte("created_at", earliestIso) as any,
+            .gte("paid_at", earliestIso)
+            .lte("paid_at", latestIso)
+            .order("id", { ascending: true }) as any,
         { label: "star_transactions (mtproto attribution)", maxRows: 20_000 },
       ),
     ),
   );
-  return results.flatMap((r) => r.rows);
+  const orders: PaidOrder[] = [];
+  for (const r of results) {
+    for (const row of r.rows) {
+      const c = classifyRevenueLedgerRow(row);
+      if (!c.paidOrder) continue;
+      orders.push({ userId: row.user_id, cloneId: row.clone_id, stars: c.stars, paidMs: new Date(row.paid_at ?? row.created_at).getTime() });
+    }
+  }
+  return { orders, truncated: results.some((r) => r.truncated) };
 }
 
-type Side = { userId: string; cloneId: string; referenceMs: number; replied: boolean; attributionEligible: boolean };
+/** One read that serves lift, funnel and the sends table for a set of episodes. */
+export async function loadPurchasesForEpisodes(episodes: ReengageEpisode[]): Promise<PurchaseRead> {
+  const relevant = episodes.filter((e) => e.state === "holdout" || isRealSend(e));
+  if (relevant.length === 0) return { orders: [], truncated: false };
+  const earliest = Math.min(...relevant.map((e) => new Date(e.sentAt ?? e.createdAt).getTime()));
+  return purchasesForUsers([...new Set(relevant.map((e) => e.userId))], earliest);
+}
 
-function liftSideFor(
-  side: Side[],
-  purchasesByUser: Map<string, PurchaseRow[]>,
-  windowHours: AttributionWindowHours,
-): LiftSide {
-  const fans = side.length;
+type Side = { userId: string; cloneId: string; anchorMs: number; replied: boolean };
+
+function median(nums: number[]): number {
+  if (nums.length === 0) return 0;
+  const s = [...nums].sort((a, b) => a - b);
+  const mid = Math.floor(s.length / 2);
+  return s.length % 2 ? s[mid] : (s[mid - 1] + s[mid]) / 2;
+}
+
+function liftSideFor(side: Side[], ordersByUser: Map<string, PaidOrder[]>, windowHours: AttributionWindowHours, nowMs: number, contactedSide: boolean): LiftSide {
+  let fans = 0;
   let replies = 0;
   let buyers = 0;
   let stars = 0;
-  const seenBuyers = new Set<string>();
+  let attributedBuyers = 0;
+  let attributedStars = 0;
   for (const s of side) {
+    if (s.anchorMs + windowHours * HOUR > nowMs) continue; // window not finished yet
+    fans += 1;
     if (s.replied) replies += 1;
-    if (!s.attributionEligible) continue;
-    const txns = purchasesByUser.get(s.userId) ?? [];
-    let boughtInWindow = false;
-    for (const t of txns) {
-      const paidMs = new Date(t.paid_at ?? t.created_at).getTime();
-      const hoursSince = (paidMs - s.referenceMs) / 3_600_000;
-      if (hoursSince >= 0 && hoursSince <= windowHours) {
-        boughtInWindow = true;
-        stars += t.amount_stars ?? 0;
-      }
+    let fanStars = 0;
+    for (const o of ordersByUser.get(s.userId) ?? []) {
+      if (o.cloneId !== s.cloneId) continue;
+      const hours = (o.paidMs - s.anchorMs) / HOUR;
+      if (hours >= 0 && hours <= windowHours) fanStars += o.stars;
     }
-    if (boughtInWindow && !seenBuyers.has(s.userId)) {
-      seenBuyers.add(s.userId);
+    if (fanStars > 0) {
       buyers += 1;
+      stars += fanStars;
+      if (contactedSide && s.replied) {
+        attributedBuyers += 1;
+        attributedStars += fanStars;
+      }
     }
   }
   return {
@@ -78,54 +126,64 @@ function liftSideFor(
     replies,
     buyers,
     stars,
+    attributedBuyers,
+    attributedStars,
     replyRate: fans ? replies / fans : 0,
     buyerRate: fans ? buyers / fans : 0,
     starsPerFan: fans ? stars / fans : 0,
   };
 }
 
-/** One LiftReport per attribution window (24h/72h/7d), contacted vs holdout,
- *  for a set of episodes (a single run, or a fleet/date-range roll-up handed
- *  in by the caller). */
-export async function computeLift(episodes: ReengageEpisode[]): Promise<LiftReport[]> {
-  const contactedSide: Side[] = episodes
-    .filter((e) => e.state !== "holdout")
-    .map((e) => ({
-      userId: e.userId,
-      cloneId: e.cloneId,
-      referenceMs: new Date(e.sentAt ?? e.episodeStartInboundAt).getTime(),
-      replied: e.state === "replied",
-      // Attribution requires a reply (N3) — a contacted fan who never
-      // replied is "observed" revenue at most, never counted as
-      // re-engagement-driven here.
-      attributionEligible: e.state === "replied",
-    }));
-  const holdoutSide: Side[] = episodes
-    .filter((e) => e.state === "holdout")
-    .map((e) => ({
-      userId: e.userId,
-      cloneId: e.cloneId,
-      referenceMs: new Date(e.episodeStartInboundAt).getTime(),
-      replied: false, // hold-out was never sent anything to reply to
-      attributionEligible: true, // but IS measured for purchases over the identical window (N3)
-    }));
+/** Pure core of computeLift (no I/O): exported so the test can drive it. */
+export function liftFromData(episodes: ReengageEpisode[], purchases: PurchaseRead, nowMs: number = Date.now()): LiftReport[] {
+  const contactedByFan = new Map<string, Side & { createdMs: number }>();
+  for (const e of episodes) {
+    if (!isRealSend(e)) continue;
+    const key = `${e.cloneId}:${e.userId}`;
+    const sentMs = new Date(e.sentAt as string).getTime();
+    const prev = contactedByFan.get(key);
+    // one row per fan; the earliest send anchors the window, replied is sticky
+    if (!prev || sentMs < prev.anchorMs) {
+      contactedByFan.set(key, { userId: e.userId, cloneId: e.cloneId, anchorMs: sentMs, replied: (prev?.replied ?? false) || e.state === "replied", createdMs: new Date(e.createdAt).getTime() });
+    } else if (e.state === "replied") prev.replied = true;
+  }
+  const contactedSide = [...contactedByFan.values()];
 
-  const allUserIds = [...new Set([...contactedSide, ...holdoutSide].map((s) => s.userId))];
-  const earliestMs = Math.min(
-    ...[...contactedSide, ...holdoutSide].map((s) => s.referenceMs),
-    Date.now(),
-  );
-  const purchases = allUserIds.length ? await purchasesForUsers(allUserIds, new Date(earliestMs).toISOString()) : [];
-  const purchasesByUser = new Map<string, PurchaseRow[]>();
-  for (const p of purchases) {
-    const list = purchasesByUser.get(p.user_id) ?? [];
-    list.push(p);
-    purchasesByUser.set(p.user_id, list);
+  const lagByClone = new Map<string, number>();
+  for (const cloneId of new Set(contactedSide.map((s) => s.cloneId))) {
+    lagByClone.set(cloneId, Math.max(0, median(contactedSide.filter((s) => s.cloneId === cloneId).map((s) => s.anchorMs - s.createdMs))));
+  }
+
+  const holdoutByFan = new Map<string, Side>();
+  for (const e of episodes) {
+    if (e.state !== "holdout") continue;
+    const key = `${e.cloneId}:${e.userId}`;
+    if (contactedByFan.has(key)) continue; // keep the groups disjoint
+    const anchorMs = new Date(e.createdAt).getTime() + (lagByClone.get(e.cloneId) ?? 0);
+    const prev = holdoutByFan.get(key);
+    if (!prev || anchorMs < prev.anchorMs) holdoutByFan.set(key, { userId: e.userId, cloneId: e.cloneId, anchorMs, replied: false });
+  }
+  const holdoutSide = [...holdoutByFan.values()];
+
+  const ordersByUser = new Map<string, PaidOrder[]>();
+  for (const o of purchases.orders) {
+    const list = ordersByUser.get(o.userId) ?? [];
+    list.push(o);
+    ordersByUser.set(o.userId, list);
   }
 
   return ATTRIBUTION_WINDOWS_HOURS.map((windowHours) => ({
     windowHours,
-    contacted: liftSideFor(contactedSide, purchasesByUser, windowHours),
-    holdout: liftSideFor(holdoutSide, purchasesByUser, windowHours),
+    partial: purchases.truncated || undefined,
+    contacted: liftSideFor(contactedSide, ordersByUser, windowHours, nowMs, true),
+    holdout: liftSideFor(holdoutSide, ordersByUser, windowHours, nowMs, false),
   }));
 }
+
+/** One LiftReport per attribution window (24h/72h/7d), contacted vs holdout,
+ *  for a set of episodes. Pass `purchases` to reuse a read done for the page. */
+export async function computeLift(episodes: ReengageEpisode[], purchases?: PurchaseRead): Promise<LiftReport[]> {
+  return liftFromData(episodes, purchases ?? (await loadPurchasesForEpisodes(episodes)));
+}
+
+export { MAX_WINDOW_MS };

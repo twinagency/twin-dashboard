@@ -43,11 +43,17 @@ export const POST = withAdmin(async (req) => {
           createdBy: ACTOR,
           cloneIds,
           filters,
-          dailyCap: typeof body.dailyCap === "number" ? body.dailyCap : DEFAULT_DAILY_CAP,
-          runCap: typeof body.runCap === "number" ? body.runCap : null,
-          holdoutPct: typeof body.holdoutPct === "number" ? body.holdoutPct : DEFAULT_HOLDOUT_PCT,
+          // A value that is present but not a number is a 400, never a silent default.
+          dailyCap: body.dailyCap === undefined ? DEFAULT_DAILY_CAP : (body.dailyCap as number),
+          runCap: body.runCap === undefined || body.runCap === null ? null : (body.runCap as number),
+          holdoutPct: body.holdoutPct === undefined ? DEFAULT_HOLDOUT_PCT : (body.holdoutPct as number),
           note: typeof body.note === "string" ? body.note : null,
         };
+        for (const k of ["dailyCap", "runCap", "holdoutPct"] as const) {
+          const v = input[k];
+          if (v !== null && typeof v !== "number") return jsonError(`${k} must be a number`, 400);
+        }
+        // body.dryRun / body.confirmLiveAt are ignored on purpose: creation is dry-run only.
         validateCreateRunInput(input);
         const run = await createDryRun(input);
         await queueRun(run.id, ACTOR);
@@ -55,10 +61,11 @@ export const POST = withAdmin(async (req) => {
         return ok({ run, action });
       }
 
+      // confirm_live needs body.confirmText === "GO LIVE"; global_resume needs "RESUME".
       case "confirm_live": {
         const runId = String(body.runId ?? "");
         if (!runId) return jsonError("runId is required", 400);
-        const run = await confirmLive(runId, ACTOR);
+        const run = await confirmLive(runId, ACTOR, typeof body.confirmText === "string" ? body.confirmText : null);
         logAdminWrite("mtproto:confirm_live", null, { runId });
         return ok({ run, action });
       }
@@ -74,7 +81,7 @@ export const POST = withAdmin(async (req) => {
       case "global_stop":
       case "global_resume": {
         const stopped = action === "global_stop";
-        await setGlobalStop(stopped, ACTOR, typeof body.reason === "string" ? body.reason : undefined);
+        await setGlobalStop(stopped, ACTOR, typeof body.reason === "string" ? body.reason : undefined, typeof body.confirmText === "string" ? body.confirmText : null);
         logAdminWrite(`mtproto:${action}`, null, {});
         return ok({ action, stopped: await getGlobalStop() });
       }

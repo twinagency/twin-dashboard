@@ -1,5 +1,6 @@
 import { withAdmin, ok, jsonError } from "@/lib/api-route";
 import { listEvents } from "@/lib/mtproto/events";
+import { RunValidationError } from "@/lib/mtproto/validate";
 import { EVENT_TYPES, type EventType } from "@/lib/mtproto/types";
 
 export const dynamic = "force-dynamic";
@@ -18,12 +19,17 @@ export const GET = withAdmin(async (req) => {
     return jsonError(`eventType must be one of ${EVENT_TYPES.join(", ")}`, 400);
   }
 
-  const events = await listEvents({
-    runId,
-    cloneId,
-    eventType: eventTypeRaw as EventType | undefined,
-    sinceIso: params.get("since") ?? undefined,
-    limit: params.get("limit") ? Number(params.get("limit")) : undefined,
-  });
-  return ok({ events });
+  try {
+    const events = await listEvents({
+      runId,
+      cloneId,
+      eventType: eventTypeRaw as EventType | undefined,
+      sinceIso: params.get("since") ?? undefined,
+      limit: params.get("limit") ? Number(params.get("limit")) : undefined,
+    });
+    return ok({ events });
+  } catch (e) {
+    if (e instanceof RunValidationError) return jsonError(e.message, 400);
+    throw e;
+  }
 });

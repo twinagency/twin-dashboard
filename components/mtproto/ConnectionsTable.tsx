@@ -1,6 +1,6 @@
 "use client";
 
-import { useTransition } from "react";
+import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -23,13 +23,20 @@ function Row({ row }: { row: ConnRow }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const { creator, connection } = row;
+  const [error, setError] = useState<string | null>(null);
 
   const togglePause = () => {
     const fd = new FormData();
     fd.set("cloneId", creator.id);
     fd.set("paused", String(!connection.paused));
+    setError(null);
     startTransition(async () => {
-      await setConnectionPausedAction(fd);
+      try {
+        const result = await setConnectionPausedAction(fd);
+        if (!result.ok) setError(result.error);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "failed");
+      }
       router.refresh();
     });
   };
@@ -38,12 +45,21 @@ function Row({ row }: { row: ConnRow }) {
     const next = window.prompt(`Daily cap for ${creator.name}`, String(connection.dailyCap));
     if (!next) return;
     const dailyCap = Number(next);
-    if (!Number.isFinite(dailyCap) || dailyCap <= 0) return;
+    if (!Number.isInteger(dailyCap) || dailyCap <= 0 || dailyCap > 100) {
+      setError("Daily cap must be a whole number between 1 and 100");
+      return;
+    }
     const fd = new FormData();
     fd.set("cloneId", creator.id);
     fd.set("dailyCap", String(dailyCap));
+    setError(null);
     startTransition(async () => {
-      await setConnectionDailyCapAction(fd);
+      try {
+        const result = await setConnectionDailyCapAction(fd);
+        if (!result.ok) setError(result.error);
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "failed");
+      }
       router.refresh();
     });
   };
@@ -59,7 +75,8 @@ function Row({ row }: { row: ConnRow }) {
       </TableCell>
       <TableCell className="tabular-nums">{connection.dailyCap}</TableCell>
       <TableCell>{connection.paused ? <Badge variant="destructive">paused</Badge> : <Badge variant="outline">active</Badge>}</TableCell>
-      <TableCell className="flex gap-2">
+      <TableCell className="flex flex-wrap items-center gap-2">
+        {error && <span className="text-xs text-destructive">{error}</span>}
         <Button size="sm" variant="outline" onClick={editCap} disabled={pending}>
           Edit cap
         </Button>

@@ -4,7 +4,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { listCreators } from "@/lib/mtproto/clones";
 import { listRuns } from "@/lib/mtproto/runs";
-import { listAllEventsForRun } from "@/lib/mtproto/events";
 import { listEpisodesForRun } from "@/lib/mtproto/episodes";
 import { computeFunnel } from "@/lib/mtproto/funnel";
 import { computeSafetySnapshots } from "@/lib/mtproto/safety";
@@ -21,16 +20,30 @@ export const dynamic = "force-dynamic";
 // Fleet-wide funnel across every run, safety per creator, the run list, and
 // the Global Stop control (kill-switch layer 4 of 4 — section G).
 export default async function MtprotoCampaignPage() {
-  const [creators, runs, globalStopped] = await Promise.all([listCreators(), listRuns(20), currentGlobalStop()]);
+  const [creators, runs] = await Promise.all([listCreators(), listRuns(20)]);
+
+  // Global stop is read alongside everything else; if it cannot be read we say
+  // so loudly instead of showing "not stopped".
+  let globalStopped: boolean | null = null;
+  let globalStopError: string | null = null;
+  const globalStopP = currentGlobalStop().then(
+    (v) => {
+      globalStopped = v;
+    },
+    (e) => {
+      globalStopError = e instanceof Error ? e.message : "unreadable";
+    },
+  );
 
   // Fleet funnel = union of every run's episodes, bounded per run (each read
-  // is already bounded by run_id — see lib/mtproto/episodes.ts). Runs list is
-  // itself capped at 20, so this stays a small, predictable fan-out.
-  const episodeSets = await Promise.all(runs.map((r) => listEpisodesForRun(r.id)));
-  const allEpisodes = episodeSets.flatMap((s) => s.episodes);
+  // is already bounded by run_id) and per page (10k episodes per run) so the
+  // overview stays a small, predictable fan-out. Funnel and safety load in
+  // parallel; the truncation warning covers the capped reads.
+  const episodesP = Promise.all(runs.map((r) => listEpisodesForRun(r.id, 10_000)));
+  const safetyP = computeSafetySnapshots(creators);
+  const funnelP = episodesP.then((sets) => computeFunnel(sets.flatMap((s) => s.episodes)));
+  const [episodeSets, funnel, safety] = await Promise.all([episodesP, funnelP, safetyP, globalStopP]).then(([a, b, c]) => [a, b, c] as const);
   const anyTruncated = episodeSets.some((s) => s.truncated);
-  const funnel = await computeFunnel(allEpisodes);
-  const safety = await computeSafetySnapshots(creators);
 
   return (
     <div className="dashboard-page">
@@ -42,7 +55,7 @@ export default async function MtprotoCampaignPage() {
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
-          <GlobalStopControl stopped={globalStopped} />
+          <GlobalStopControl stopped={globalStopError ? null : globalStopped} />
           <Link href="/mtproto-campaign/connections">
             <Button variant="outline">Connections</Button>
           </Link>
@@ -52,13 +65,18 @@ export default async function MtprotoCampaignPage() {
         </div>
       </div>
 
+      {globalStopError && (
+        <div className="mb-5 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive">
+          Cannot read the global stop flag ({globalStopError}). Treat sending as possibly ACTIVE; press GLOBAL STOP if in doubt.
+        </div>
+      )}
       {globalStopped && (
         <div className="mb-5 rounded-lg border border-destructive/40 bg-destructive/10 px-4 py-3 text-sm font-medium text-destructive">
           GLOBAL STOP is active. No creator&apos;s userbot will send anything until it is lifted.
         </div>
       )}
 
-      <FunnelCard title="Fleet funnel" subtitle={`Across the last ${runs.length} run(s)${anyTruncated ? " — partial, some runs truncated their episode read" : ""}`} funnel={funnel} />
+      <FunnelCard title="Fleet funnel" subtitle={`Across the last ${runs.length} run(s)${anyTruncated ? " — partial, some runs truncated their episode read" : ""}`} funnel={anyTruncated ? { ...funnel, partial: true } : funnel} />
 
       <div className="mt-6">
         <SafetyPanel snapshots={safety} />

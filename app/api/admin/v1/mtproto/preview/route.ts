@@ -1,5 +1,6 @@
 import { withAdmin, ok, jsonError } from "@/lib/api-route";
 import { computeAudiencePreview } from "@/lib/mtproto/audience";
+import { RunValidationError } from "@/lib/mtproto/validate";
 import { DEFAULT_DAILY_CAP, DEFAULT_HOLDOUT_PCT, RUN_SEGMENTS, type RunFilters, type RunSegment } from "@/lib/mtproto/types";
 
 export const dynamic = "force-dynamic";
@@ -30,6 +31,11 @@ export const GET = withAdmin(async (req) => {
   const runCap = params.get("runCap") ? Number(params.get("runCap")) : null;
   const holdoutPct = params.get("holdoutPct") ? Number(params.get("holdoutPct")) : DEFAULT_HOLDOUT_PCT;
 
-  const preview = await computeAudiencePreview(filters, { dailyCap, runCap, holdoutPct });
-  return ok({ preview });
+  try {
+    const preview = await computeAudiencePreview(filters, { dailyCap, runCap, holdoutPct });
+    return ok({ preview });
+  } catch (e) {
+    if (e instanceof RunValidationError) return jsonError(e.message, 400);
+    throw e;
+  }
 });

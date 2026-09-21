@@ -21,6 +21,11 @@ export default function FunnelCard({ title, subtitle, funnel }: { title: string;
         {subtitle && <CardDescription>{subtitle}</CardDescription>}
       </CardHeader>
       <CardContent>
+        {funnel.partial && (
+          <div className="mb-2 rounded-md border border-warn/40 bg-warn/10 px-2 py-1 text-xs text-warn">
+            A paged read was cut short: figures below are lower bounds.
+          </div>
+        )}
         <div className="grid grid-cols-2 gap-3 sm:grid-cols-4 lg:grid-cols-7">
           {steps.map((s) => (
             <div key={s.label} className="rounded-xl border border-border bg-muted/20 p-3">

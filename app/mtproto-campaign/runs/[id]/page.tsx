@@ -3,7 +3,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getRun } from "@/lib/mtproto/runs";
 import { listEpisodesForRun } from "@/lib/mtproto/episodes";
 import { computeFunnel } from "@/lib/mtproto/funnel";
-import { computeLift } from "@/lib/mtproto/attribution";
+import { computeLift, loadPurchasesForEpisodes } from "@/lib/mtproto/attribution";
 import { buildSendRows } from "@/lib/mtproto/sends";
 import { listCreators } from "@/lib/mtproto/clones";
 import RunStatusBadge from "@/components/mtproto/RunStatusBadge";
@@ -22,7 +22,10 @@ export default async function RunDetailPage({ params }: { params: Promise<{ id: 
   if (!run) notFound();
 
   const [{ episodes, truncated }, creators] = await Promise.all([listEpisodesForRun(id), listCreators()]);
-  const [funnel, lift, sends] = await Promise.all([computeFunnel(episodes), computeLift(episodes), buildSendRows(episodes, creators)]);
+  // ONE star_transactions read feeds the funnel, the lift table and the sends table.
+  const purchases = await loadPurchasesForEpisodes(episodes);
+  const lift = await computeLift(episodes, purchases);
+  const [funnel, sends] = await Promise.all([computeFunnel(episodes, lift), buildSendRows(episodes, creators, purchases)]);
 
   const failedRows = sends.filter((s) => s.errorCode);
   const failuresByCode = new Map<string, number>();
@@ -53,7 +56,7 @@ export default async function RunDetailPage({ params }: { params: Promise<{ id: 
         </div>
       )}
 
-      <FunnelCard title="Funnel" funnel={funnel} />
+      <FunnelCard title="Funnel" funnel={truncated ? { ...funnel, partial: true } : funnel} />
 
       <div className="mt-6">
         <LiftCard reports={lift} />

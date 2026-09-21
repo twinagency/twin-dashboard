@@ -5,44 +5,45 @@
 // episodes plus a bounded star_transactions lookup, and a matching cloneName
 // lookup so the table reads "Riley" not a uuid.
 
-import { ATTRIBUTION_WINDOWS_HOURS, type AttributionWindowHours, type CreatorLite, type ReengageEpisode, type SendRow } from "./types";
-import { purchasesForUsers } from "./attribution";
+import { ATTRIBUTION_WINDOWS_HOURS, type AttributionWindowHours, type CreatorLite, type EpisodeState, type ReengageEpisode, type SendRow } from "./types";
+import { loadPurchasesForEpisodes, type PurchaseRead } from "./attribution";
+
+// States where a send was attempted or landed. cancelled/skipped/claimed/
+// prepared/eligible/holdout are NOT sends and never appear in the table.
+const SEND_TABLE_STATES: EpisodeState[] = ["sent", "acked", "replied", "failed", "uncertain"];
+const HOUR = 3_600_000;
+const WIDEST_MS = ATTRIBUTION_WINDOWS_HOURS[ATTRIBUTION_WINDOWS_HOURS.length - 1] * HOUR;
 
 function firstWindowHit(paidMs: number, sentMs: number): AttributionWindowHours | null {
-  const hours = (paidMs - sentMs) / 3_600_000;
+  const hours = (paidMs - sentMs) / HOUR;
   if (hours < 0) return null;
   for (const w of ATTRIBUTION_WINDOWS_HOURS) if (hours <= w) return w;
   return null;
 }
 
-export async function buildSendRows(episodes: ReengageEpisode[], creators: CreatorLite[]): Promise<SendRow[]> {
-  const sent = episodes.filter((e) => e.state !== "holdout" && e.state !== "eligible");
+export async function buildSendRows(episodes: ReengageEpisode[], creators: CreatorLite[], purchases?: PurchaseRead): Promise<SendRow[]> {
+  const sent = episodes.filter((e) => SEND_TABLE_STATES.includes(e.state));
   const nameOf = new Map(creators.map((c) => [c.id, c.name]));
-  const userIds = [...new Set(sent.map((e) => e.userId))];
-  const earliestSentMs = sent.reduce((min, e) => {
-    const t = e.sentAt ? new Date(e.sentAt).getTime() : Infinity;
-    return Math.min(min, t);
-  }, Date.now());
-  const purchases = userIds.length ? await purchasesForUsers(userIds, new Date(earliestSentMs).toISOString()) : [];
-  const purchasesByUser = new Map<string, typeof purchases>();
-  for (const p of purchases) {
-    const list = purchasesByUser.get(p.user_id) ?? [];
-    list.push(p);
-    purchasesByUser.set(p.user_id, list);
+  const read = purchases ?? (await loadPurchasesForEpisodes(episodes));
+  const ordersByUser = new Map<string, typeof read.orders>();
+  for (const o of read.orders) {
+    const list = ordersByUser.get(o.userId) ?? [];
+    list.push(o);
+    ordersByUser.set(o.userId, list);
   }
 
   return sent.map((e) => {
     const sentMs = e.sentAt ? new Date(e.sentAt).getTime() : null;
     let boughtStars: number | null = null;
     let boughtWithinHours: AttributionWindowHours | null = null;
+    // Total paid Stars within the widest window after this send, and the
+    // narrowest window the first such purchase fell in.
     if (sentMs != null) {
-      for (const p of purchasesByUser.get(e.userId) ?? []) {
-        const paidMs = new Date(p.paid_at ?? p.created_at).getTime();
-        const window = firstWindowHit(paidMs, sentMs);
-        if (window != null && (boughtWithinHours == null || window < boughtWithinHours)) {
-          boughtWithinHours = window;
-          boughtStars = (boughtStars ?? 0) + (p.amount_stars ?? 0);
-        }
+      for (const o of ordersByUser.get(e.userId) ?? []) {
+        if (o.cloneId !== e.cloneId || o.paidMs < sentMs || o.paidMs - sentMs > WIDEST_MS) continue;
+        boughtStars = (boughtStars ?? 0) + o.stars;
+        const w = firstWindowHit(o.paidMs, sentMs);
+        if (w != null && (boughtWithinHours == null || w < boughtWithinHours)) boughtWithinHours = w;
       }
     }
     return {
@@ -67,7 +68,10 @@ export async function buildSendRows(episodes: ReengageEpisode[], creators: Creat
 // The exact send text can contain commas/newlines, which is exactly the case
 // this exists to handle correctly.
 function csvCell(v: unknown): string {
-  const s = v == null ? "" : String(v);
+  let s = v == null ? "" : String(v);
+  // Spreadsheet formula injection: a text cell starting with = + - @ (or a
+  // tab/CR) is executed by Excel/Sheets. The exact send text is model output.
+  if (typeof v === "string" && /^[=+\-@\t\r]/.test(s)) s = `'${s}`;
   return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s;
 }
 

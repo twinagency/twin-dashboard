@@ -5,7 +5,8 @@
 // are bounded to "today" (a UTC day boundary) plus a fixed lookback for the
 // "days clean" figure — never an unfiltered scan of reengage_events.
 
-import { supabaseAdmin } from "@/lib/supabase";
+import { mtDb } from "./db";
+import { isMissingTable } from "./validate";
 import type { CreatorLite, SafetySnapshot } from "./types";
 import { connectionFor, listConnections } from "./connections";
 
@@ -21,16 +22,18 @@ type RestrictionEvent = { clone_id: string | null; ts: string; event_type: strin
 async function sentTodayByClone(cloneIds: string[]): Promise<Map<string, number>> {
   const out = new Map<string, number>();
   if (cloneIds.length === 0) return out;
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await mtDb()
     .from("reengage_episodes")
     .select("clone_id")
     .in("clone_id", cloneIds)
-    .not("sent_at", "is", null)
+    // Real sends only: a dry run marks episodes acked with sent_at set but no
+    // Telegram message id, and must not count against the daily cap.
+    .not("tg_message_id", "is", null)
     .gte("sent_at", startOfUtcDay())
     .limit(10_000);
   if (error) {
-    console.warn(`[mtproto] sentTodayByClone failed: ${error.message}`);
-    return out;
+    if (isMissingTable(error)) return out;
+    throw new Error(`could not read today's sends: ${error.message}`); // never show 0 for "unknown"
   }
   for (const row of (data ?? []) as { clone_id: string }[]) out.set(row.clone_id, (out.get(row.clone_id) ?? 0) + 1);
   return out;
@@ -39,19 +42,27 @@ async function sentTodayByClone(cloneIds: string[]): Promise<Map<string, number>
 async function restrictionEvents(cloneIds: string[]): Promise<RestrictionEvent[]> {
   if (cloneIds.length === 0) return [];
   const since = new Date(Date.now() - LOOKBACK_DAYS * 86_400_000).toISOString();
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await mtDb()
     .from("reengage_events")
     .select("clone_id,ts,event_type,detail")
     .in("clone_id", cloneIds)
     .in("event_type", RESTRICTION_EVENT_TYPES as unknown as string[])
     .gte("ts", since)
     .order("ts", { ascending: false })
+    .order("id", { ascending: false })
     .limit(5_000);
   if (error) {
-    console.warn(`[mtproto] restrictionEvents unavailable (migration 158 applied?): ${error.message}`);
-    return [];
+    if (isMissingTable(error)) return [];
+    throw new Error(`could not read restriction events: ${error.message}`);
   }
   return data as RestrictionEvent[];
+}
+
+/** A restriction is an account halt or a flood/peer-flood failure. Ordinary
+ *  per-fan send failures (e.g. PEER_NOT_RESOLVED) are not account restrictions
+ *  and must not reset the "days clean" figure. */
+function isRestriction(e: RestrictionEvent): boolean {
+  return e.event_type === "account_halt" || isFloodOrPeerFlood(e.detail);
 }
 
 function isFloodOrPeerFlood(detail: Record<string, unknown>): boolean {
@@ -70,7 +81,7 @@ export async function computeSafetySnapshots(creators: CreatorLite[]): Promise<S
 
   return creators.map((creator) => {
     const conn = connectionFor(creator.id, connections);
-    const cloneEvents = restrictions.filter((e) => e.clone_id === creator.id);
+    const cloneEvents = restrictions.filter((e) => e.clone_id === creator.id && isRestriction(e));
     const floodWaitCount = cloneEvents.filter((e) => new Date(e.ts).getTime() >= todayStart && isFloodOrPeerFlood(e.detail)).length;
     const last = cloneEvents[0]; // already ordered ts desc
     const lastRestrictionMs = cloneEvents.length ? new Date(cloneEvents[0].ts).getTime() : null;

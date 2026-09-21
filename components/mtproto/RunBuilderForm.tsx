@@ -9,6 +9,8 @@ import { previewAudienceAction, createRunAction } from "@/app/mtproto-campaign/a
 import {
   DEFAULT_DAILY_CAP,
   DEFAULT_HOLDOUT_PCT,
+  HOLDOUT_MAX_PCT,
+  HOLDOUT_MIN_PCT,
   PREVIEW_EXCLUSION_REASONS,
   RUN_SEGMENTS,
   type AudiencePreview,
@@ -30,7 +32,7 @@ const REASON_LABEL: Record<(typeof PREVIEW_EXCLUSION_REASONS)[number], string> =
   us_location: "US location",
   opt_out: "Opted out",
   already_contacted: "Already contacted this episode",
-  legacy_import: "Legacy import (unverified timestamp)",
+  legacy_import: "Legacy import (old n8n stack)",
   no_chat_id: "No chat id",
   within_24h: "Not yet 24h silent",
   holdout: "Hold-out (control group)",
@@ -50,7 +52,12 @@ export default function RunBuilderForm({ creators }: { creators: CreatorLite[] }
     startTransition(async () => {
       try {
         const result = await previewAudienceAction(fd);
-        setPreview(result);
+        if (!result.ok) {
+          setError(result.error);
+          setPreview(null);
+          return;
+        }
+        setPreview(result.preview);
       } catch (e) {
         setError(e instanceof Error ? e.message : "preview failed");
         setPreview(null);
@@ -63,8 +70,12 @@ export default function RunBuilderForm({ creators }: { creators: CreatorLite[] }
     const fd = new FormData(formRef.current!);
     startTransition(async () => {
       try {
-        const { id } = await createRunAction(fd);
-        router.push(`/mtproto-campaign/runs/${id}`);
+        const result = await createRunAction(fd);
+        if (!result.ok) {
+          setError(result.error);
+          return;
+        }
+        router.push(`/mtproto-campaign/runs/${result.id}`);
       } catch (e) {
         setError(e instanceof Error ? e.message : "create run failed");
       }
@@ -141,15 +152,15 @@ export default function RunBuilderForm({ creators }: { creators: CreatorLite[] }
           <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <label className="text-sm">
               Daily cap / creator
-              <input type="number" min={1} max={100} defaultValue={DEFAULT_DAILY_CAP} name="dailyCap" onChange={() => setPreview(null)} className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm" />
+              <input type="number" min={1} max={100} step={1} defaultValue={DEFAULT_DAILY_CAP} name="dailyCap" onChange={() => setPreview(null)} className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm" />
             </label>
             <label className="text-sm">
               Run cap / creator (optional)
-              <input type="number" min={1} name="runCap" onChange={() => setPreview(null)} className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm" />
+              <input type="number" min={1} max={10000} step={1} name="runCap" onChange={() => setPreview(null)} className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm" />
             </label>
             <label className="text-sm">
-              Hold-out %
-              <input type="number" min={0} max={50} defaultValue={DEFAULT_HOLDOUT_PCT} name="holdoutPct" onChange={() => setPreview(null)} className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm" />
+              Hold-out % (10-20)
+              <input type="number" min={HOLDOUT_MIN_PCT} max={HOLDOUT_MAX_PCT} step={1} defaultValue={DEFAULT_HOLDOUT_PCT} name="holdoutPct" onChange={() => setPreview(null)} className="mt-1 h-9 w-full rounded-md border border-input bg-background px-2 text-sm" />
             </label>
           </CardContent>
         </Card>

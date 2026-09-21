@@ -124,14 +124,27 @@ export const DEFAULT_HOLDOUT_PCT = 15;
 export const DEFAULT_DAILY_CAP = 30;
 export const HARD_MAX_DAILY_CAP = 100;
 
-/** Fans created before the n8n -> Twin cutover (twin-bot/CLAUDE.md: "finished
- *  2026-08-09/10 ... the n8n servers are deleted") have first_seen_at values
- *  carried over from the import rather than a genuine first contact, which is
- *  what plan section B calls "forged legacy-import timestamps (57k legacy
- *  imports)". There is no dedicated legacy-import column in the schema, so
- *  this cutoff is a GUESS standing in for one — confirm with Jesse/Ronan
- *  before relying on it for anything beyond a dashboard exclusion count. */
-export const LEGACY_IMPORT_CUTOFF_ISO = "2026-08-10T00:00:00Z";
+// Dashboard-side bounds (stricter than the migration's CHECKs on purpose):
+// the hold-out is what makes lift measurable, so it is never allowed to
+// vanish (below 10%) or eat the audience (above 20%).
+export const HOLDOUT_MIN_PCT = 10;
+export const HOLDOUT_MAX_PCT = 20;
+export const MAX_RUN_CAP = 10_000;
+/** Mirrors twin-userbot/src/policy.ts DEFAULT_TOP_SPENDER_MIN_STARS. */
+export const TOP_SPENDER_DEFAULT_MIN_STARS = 500;
+
+/** Typed confirmations enforced SERVER-SIDE (the client input is a courtesy). */
+export const CONFIRM_LIVE_PHRASE = "GO LIVE";
+export const RESUME_PHRASE = "RESUME";
+
+// LEGACY IMPORT DETECTION (verified 2026-09-22 against twin-bot migrations
+// 081 and 123): the 57k fans carried over from the old n8n stack are exactly
+// the `users` rows with legacy_id IS NOT NULL (081: "every row created
+// natively here has NULL, only imported rows carry a value"; 123 measured
+// 57,164 imported vs 8,216 native). first_seen_at is NOT a usable marker: the
+// import stamped 2026-08-08 on all of them but native fans exist from
+// 2026-07-28. A fan is legacy_import iff legacy_id is non-null; an unreadable
+// value is treated as legacy (exclude when unsure).
 
 // ── SHAPES (mirrors migration 158 columns) ──────────────────────────────────
 
@@ -260,13 +273,23 @@ export interface FunnelCounts {
   replied: number;
   bought: number;
   stars: number;
+  /** True when a paged read was cut short: every figure is a lower bound. */
+  partial?: boolean;
 }
 
 export interface LiftSide {
+  /** Fans whose window has fully elapsed (a half-finished 7d window would
+   *  understate whichever group was assigned more recently). */
   fans: number;
   replies: number;
+  /** Fans with ANY paid order in the window. Same rule for contacted and
+   *  hold-out, so buyerRate/starsPerFan are directly comparable (incremental). */
   buyers: number;
   stars: number;
+  /** Contacted only (0 for hold-out): fans who replied to our send AND bought
+   *  within the window (the N3 attribution rule), and their Stars. */
+  attributedBuyers: number;
+  attributedStars: number;
   replyRate: number;
   buyerRate: number;
   starsPerFan: number;
@@ -274,6 +297,8 @@ export interface LiftSide {
 
 export interface LiftReport {
   windowHours: AttributionWindowHours;
+  /** True when the purchase read was truncated: figures are lower bounds. */
+  partial?: boolean;
   contacted: LiftSide;
   holdout: LiftSide;
 }

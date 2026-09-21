@@ -15,8 +15,8 @@
 // the impure shell that reads Supabase and calls it per candidate row.
 //
 // GUESSES, called out explicitly (see also lib/mtproto/types.ts):
-// - legacy_import uses LEGACY_IMPORT_CUTOFF_ISO (first_seen_at before the
-//   n8n cutover) because there is no dedicated legacy-import column.
+// - legacy_import is users.legacy_id IS NOT NULL (verified against twin-bot
+//   migrations 081/123, see lib/mtproto/types.ts). NOT a first_seen_at cutoff.
 // - "cap_reached" here orders survivors oldest-silence-first per creator and
 //   keeps the first `effectiveCap` of them; the real worker's own ordering
 //   may differ once it exists, so this is an ESTIMATE of what a run would
@@ -25,11 +25,12 @@
 // - holdout at PREVIEW time is a size ESTIMATE (deterministic hash, no run id
 //   exists yet); the real split happens per-episode once a run is created.
 
-import { supabaseAdmin } from "@/lib/supabase";
+import { mtDb } from "./db";
 import { selectAllRowsMtproto } from "./paging";
+import { isMissingTable, sanitizeFilters, uuidList, validateCaps } from "./validate";
 import {
   MIN_SILENCE_HOURS,
-  LEGACY_IMPORT_CUTOFF_ISO,
+  TOP_SPENDER_DEFAULT_MIN_STARS,
   type AudiencePreview,
   type ExclusionCounts,
   type PreviewExclusionReason,
@@ -52,6 +53,9 @@ export type CandidateRow = {
   is_active: boolean | null;
   minor_flagged_at: string | null;
   first_seen_at: string | null;
+  /** Non-null = imported from the old n8n stack (twin-bot migration 081). */
+  legacy_id: string | null;
+  purchase_count: number | null;
   last_message_received: string | null;
   total_spent_stars: number | null;
   spend_tier: string | null;
@@ -80,9 +84,8 @@ export function classifyFan(row: CandidateRow, ctx: ClassifyContext): PreviewExc
   if (ctx.isOptedOut(row.clone_id, row.id)) return "opt_out";
   if (!row.last_message_received) return "within_24h"; // never messaged in = no episode to open yet
   if (ctx.isAlreadyContacted(row.clone_id, row.id, row.last_message_received)) return "already_contacted";
-  if (row.first_seen_at && new Date(row.first_seen_at).getTime() < new Date(LEGACY_IMPORT_CUTOFF_ISO).getTime()) {
-    return "legacy_import";
-  }
+  // Exclude when unsure: any non-null legacy_id (even "") marks an import.
+  if (row.legacy_id !== null && row.legacy_id !== undefined) return "legacy_import";
   if (!row.telegram_id) return "no_chat_id";
   const silentMs = ctx.nowMs - new Date(row.last_message_received).getTime();
   if (silentMs < ctx.minSilenceHours * 3600_000) return "within_24h";
@@ -106,53 +109,73 @@ export function isHoldout(seed: string, cloneId: string, userId: string, holdout
   return hash01(`${seed}:${cloneId}:${userId}`) < holdoutPct / 100;
 }
 
-async function optedOutSet(cloneIds: string[], userIds: string[]): Promise<Set<string>> {
-  if (userIds.length === 0) return new Set();
+/** ISO string -> epoch ms key part, so "…+00:00" and "…Z" spellings of the
+ *  same instant compare equal. */
+function tsKey(iso: string): number {
+  return new Date(iso).getTime();
+}
+
+// Both reads below are paged by clone_id (never by a 50k-uuid IN list, which
+// blows the request URL limit) and FAIL CLOSED: an error other than "table not
+// created yet" throws, so the preview can never quietly treat opted-out fans
+// as fine. (The worker's own unique key + opt-out check remain the real gate.)
+async function optedOutSet(cloneIds: string[]): Promise<Set<string>> {
   try {
-    const { data, error } = await supabaseAdmin
-      .from("reengage_optouts")
-      .select("clone_id,user_id")
-      .in("clone_id", cloneIds)
-      .in("user_id", userIds);
-    if (error) throw error;
-    return new Set((data ?? []).map((r: any) => `${r.clone_id}:${r.user_id}`));
+    const { rows, truncated } = await selectAllRowsMtproto<{ clone_id: string; user_id: string }>(
+      () =>
+        mtDb()
+          .from("reengage_optouts")
+          .select("clone_id,user_id")
+          .in("clone_id", cloneIds)
+          .order("id", { ascending: true }) as any,
+      { label: "reengage_optouts", maxRows: 200_000, throwOnError: true },
+    );
+    if (truncated) throw new Error("reengage_optouts read hit the row ceiling; refusing to preview with an incomplete opt-out list");
+    return new Set(rows.map((r) => `${r.clone_id}:${r.user_id}`));
   } catch (e) {
-    // Table not migrated yet (see prompt's hard rule: it does not exist until
-    // Ronan approves and applies migration 158) — fail open to "nobody known
-    // opted out YET" rather than crash the preview.
-    console.warn(`[mtproto] reengage_optouts unavailable (migration 158 applied?): ${e instanceof Error ? e.message : e}`);
-    return new Set();
+    if (isMissingTable(e)) {
+      console.warn(`[mtproto] reengage_optouts not created yet (migration 158 not applied): ${e instanceof Error ? e.message : e}`);
+      return new Set();
+    }
+    throw e;
   }
 }
 
-async function alreadyContactedSet(cloneIds: string[], userIds: string[]): Promise<Set<string>> {
-  if (userIds.length === 0) return new Set();
+async function alreadyContactedSet(cloneIds: string[]): Promise<{ keys: Set<string>; truncated: boolean }> {
   try {
-    const { rows } = await selectAllRowsMtproto<{ clone_id: string; user_id: string; episode_start_inbound_at: string }>(
+    const { rows, truncated } = await selectAllRowsMtproto<{ clone_id: string; user_id: string; episode_start_inbound_at: string }>(
       () =>
-        supabaseAdmin
+        mtDb()
           .from("reengage_episodes")
           .select("clone_id,user_id,episode_start_inbound_at")
           .in("clone_id", cloneIds)
-          .in("user_id", userIds)
-          .order("created_at", { ascending: true }) as any,
-      { label: "reengage_episodes (already-contacted check)", maxRows: 20_000 },
+          .order("id", { ascending: true }) as any,
+      { label: "reengage_episodes (already-contacted check)", maxRows: 200_000, throwOnError: true },
     );
-    return new Set(rows.map((r) => `${r.clone_id}:${r.user_id}:${r.episode_start_inbound_at}`));
+    return { keys: new Set(rows.map((r) => `${r.clone_id}:${r.user_id}:${tsKey(r.episode_start_inbound_at)}`)), truncated };
   } catch (e) {
-    console.warn(`[mtproto] reengage_episodes unavailable (migration 158 applied?): ${e instanceof Error ? e.message : e}`);
-    return new Set();
+    if (isMissingTable(e)) {
+      console.warn(`[mtproto] reengage_episodes not created yet (migration 158 not applied): ${e instanceof Error ? e.message : e}`);
+      return { keys: new Set(), truncated: false };
+    }
+    throw e;
   }
 }
 
+/** Mirrors twin-userbot/src/policy.ts matchesSegment/matchesFilters so the
+ *  preview counts the same audience the worker will scan. lapsed_buyers is
+ *  the worker's purchase_count > 0. never_bought is deliberately STRICTER
+ *  than the worker (no Stars AND purchase_count 0): users.purchase_count is
+ *  known to undercount buyers, and this side must never call a buyer "never
+ *  bought". */
 function applySegmentFilter(q: any, filters: RunFilters) {
   switch (filters.segment) {
     case "top_spenders":
-      return q.in("spend_tier", ["high", "whale"]);
+      return q.gte("total_spent_stars", filters.minSpendStars ?? TOP_SPENDER_DEFAULT_MIN_STARS);
     case "lapsed_buyers":
-      return q.gt("total_spent_stars", 0);
+      return q.gt("purchase_count", 0);
     case "never_bought":
-      return q.or("total_spent_stars.is.null,total_spent_stars.eq.0");
+      return q.eq("purchase_count", 0).eq("total_spent_stars", 0);
     case "all_silent":
     default:
       return q;
@@ -163,14 +186,16 @@ export async function computeAudiencePreview(
   filters: RunFilters,
   opts: { dailyCap: number; runCap: number | null; holdoutPct: number; seed?: string },
 ): Promise<AudiencePreview> {
-  const cloneIds = filters.cloneIds ?? filters.creatorIds ?? [];
+  const cloneIds = uuidList(filters.cloneIds ?? filters.creatorIds ?? [], "cloneIds", 100);
+  validateCaps({ dailyCap: opts.dailyCap, runCap: opts.runCap, holdoutPct: opts.holdoutPct });
+  filters = sanitizeFilters(filters, cloneIds);
   const excluded: ExclusionCounts = Object.fromEntries(PREVIEW_EXCLUSION_REASONS.map((r) => [r, 0])) as ExclusionCounts;
   if (cloneIds.length === 0) {
     return { candidatePool: 0, eligible: 0, holdout: 0, excluded, excludedTotal: 0, sample: [], truncated: false };
   }
 
   const cols =
-    "id,clone_id,telegram_id,name,language_code,blocked,blocked_reason,paused,is_active,minor_flagged_at,first_seen_at,last_message_received,total_spent_stars,spend_tier";
+    "id,clone_id,telegram_id,name,language_code,blocked,blocked_reason,paused,is_active,minor_flagged_at,first_seen_at,legacy_id,purchase_count,last_message_received,total_spent_stars,spend_tier";
 
   const makeQuery = () => {
     // Typed `any` from the first call on purpose: chaining this many filters
@@ -178,10 +203,12 @@ export async function computeAudiencePreview(
     // type level) blows past TS's instantiation depth limit (TS2589). The
     // runtime behaviour is unaffected — CandidateRow is the real, checked
     // shape this function returns to its caller.
-    let q: any = supabaseAdmin.from("users").select(cols).in("clone_id", cloneIds).not("last_message_received", "is", null);
+    let q: any = mtDb().from("users").select(cols).in("clone_id", cloneIds).not("last_message_received", "is", null);
     q = applySegmentFilter(q, filters);
     if (filters.minSpendStars) q = q.gte("total_spent_stars", filters.minSpendStars);
     if (filters.language) q = q.eq("language_code", filters.language);
+    // excludeIds are UUID-validated by sanitizeFilters, so this string can
+    // only ever contain hex and dashes.
     if (filters.excludeIds?.length) q = q.not("id", "in", `(${filters.excludeIds.join(",")})`);
     // lastActiveToDays bounds the SILENCE window from above (drop fans quiet
     // longer than that) — a candidate-pool narrowing, not one of the fixed
@@ -190,7 +217,9 @@ export async function computeAudiencePreview(
       const cutoff = new Date(Date.now() - filters.lastActiveToDays * 86_400_000).toISOString();
       q = q.gte("last_message_received", cutoff);
     }
-    return q.order("last_message_received", { ascending: true }) as any;
+    // id tiebreaker: without it rows sharing a timestamp can be skipped or
+    // duplicated across .range() pages.
+    return q.order("last_message_received", { ascending: true }).order("id", { ascending: true }) as any;
   };
 
   const { rows, truncated } = await selectAllRowsMtproto<CandidateRow>(makeQuery, {
@@ -198,8 +227,8 @@ export async function computeAudiencePreview(
     maxRows: 50_000,
   });
 
-  const userIds = rows.map((r) => r.id);
-  const [optOuts, contacted] = await Promise.all([optedOutSet(cloneIds, userIds), alreadyContactedSet(cloneIds, userIds)]);
+  const [optOuts, contactedRead] = await Promise.all([optedOutSet(cloneIds), alreadyContactedSet(cloneIds)]);
+  const contacted = contactedRead.keys;
 
   const nowMs = Date.now();
   const minSilenceHours = Math.max(MIN_SILENCE_HOURS, filters.lastActiveFromDays ? filters.lastActiveFromDays * 24 : 0);
@@ -207,7 +236,7 @@ export async function computeAudiencePreview(
     nowMs,
     minSilenceHours,
     isOptedOut: (c, u) => optOuts.has(`${c}:${u}`),
-    isAlreadyContacted: (c, u, iso) => contacted.has(`${c}:${u}:${iso}`),
+    isAlreadyContacted: (c, u, iso) => contacted.has(`${c}:${u}:${tsKey(iso)}`),
   };
 
   const seed = opts.seed ?? "preview";
@@ -230,7 +259,9 @@ export async function computeAudiencePreview(
     survivorsByClone.set(row.clone_id, list);
   }
 
-  const effectiveCap = opts.runCap ?? opts.dailyCap;
+  // A run sends at most dailyCap per creator per day and runCap in total, so
+  // the first-day estimate is the smaller of the two (not runCap alone).
+  const effectiveCap = Math.min(opts.dailyCap, opts.runCap ?? Infinity);
   let eligible = 0;
   const kept: CandidateRow[] = [];
   for (const [, list] of survivorsByClone) {
@@ -253,5 +284,5 @@ export async function computeAudiencePreview(
   }));
 
   const excludedTotal = (Object.values(excluded) as number[]).reduce((a, b) => a + b, 0);
-  return { candidatePool: rows.length, eligible, holdout: holdoutCount, excluded, excludedTotal, sample, truncated };
+  return { candidatePool: rows.length, eligible, holdout: holdoutCount, excluded, excludedTotal, sample, truncated: truncated || contactedRead.truncated };
 }
