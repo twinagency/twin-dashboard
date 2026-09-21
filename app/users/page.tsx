@@ -11,7 +11,7 @@ import FanAvatar from "@/components/FanAvatar";
 import { Input } from "@/components/ui/input";
 import ConfirmSubmit from "@/components/ConfirmSubmit";
 import { Info } from "@/components/clone/fields";
-import { setCredits, resetCounters, toggleActive, setBlocked, setPaused, deleteUser, clearMinorFlag } from "./actions";
+import { setCredits, resetCounters, setTestTraffic, toggleActive, setBlocked, setPaused, deleteUser, clearMinorFlag } from "./actions";
 import ManualTakeover from "@/components/ManualTakeover";
 import { campaignStepsOf, nextDripDueAt } from "@/lib/drip";
 import LiveFeed from "@/components/users/LiveFeed";
@@ -1601,6 +1601,22 @@ export default async function FansPage({
                     </ConfirmSubmit>
                   </MutationForm>
 
+
+                  <MutationForm adminOnly action={setTestTraffic}>
+                    <input type="hidden" name="telegramId" value={selected.telegram_id} />
+                    <input type="hidden" name="isTest" value={selected.is_test ? "false" : "true"} />
+                    <ConfirmSubmit
+                      message={
+                        selected.is_test
+                          ? "Count this Telegram account as real traffic again across every creator?"
+                          : "Mark this Telegram account as TEST traffic across every creator? Conversation-led sales analytics will exclude it. Bot behaviour and purchase records are not deleted."
+                      }
+                      className="w-full rounded-md border border-line px-3 py-1.5 text-left text-xs text-ink transition hover:bg-elev"
+                    >
+                      {selected.is_test ? "Remove test-traffic flag" : "Mark as test traffic"}
+                    </ConfirmSubmit>
+                  </MutationForm>
+
                   <MutationForm action={toggleActive}>
                     <input type="hidden" name="userId" value={selected.id} />
                     <input type="hidden" name="active" value={selected.is_active ? "false" : "true"} />
@@ -1654,8 +1670,8 @@ export default async function FansPage({
                     <ConfirmSubmit
                       message={
                         selected.paused
-                          ? "Resume this fan? The bot will reply to him and resume drip again."
-                          : "Pause this fan? He gets no replies and no drip messages until resumed. He is not blocked, and no other fan is affected."
+                          ? "Resume this fan? The bot will reply to him again."
+                          : "Pause this fan? He gets no replies until resumed. He is not blocked, and no other fan is affected."
                       }
                       className="w-full rounded-md border border-line px-3 py-1.5 text-left text-xs text-ink transition hover:bg-elev"
                     >
