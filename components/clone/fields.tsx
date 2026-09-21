@@ -516,6 +516,7 @@ export function Field({
   min,
   max,
   step,
+  disabled,
 }: {
   label: string;
   name: string;
@@ -535,6 +536,7 @@ export function Field({
   min?: number;
   max?: number;
   step?: number;
+  disabled?: boolean;
 }) {
   return (
     <label className="block min-w-0">
@@ -548,7 +550,8 @@ export function Field({
         min={type === "number" ? min : undefined}
         max={type === "number" ? max : undefined}
         step={type === "number" ? step : undefined}
-        className={inputCls + (secret ? " blur-[3px] transition-[filter] duration-150 focus:blur-none" : "")}
+        disabled={disabled}
+        className={inputCls + (secret ? " blur-[3px] transition-[filter] duration-150 focus:blur-none" : "") + (disabled ? " opacity-60 cursor-not-allowed" : "")}
       />
     </label>
   );
@@ -561,6 +564,7 @@ export function Area({
   placeholder,
   rows = 2,
   hint,
+  disabled = false,
 }: {
   label: string;
   name: string;
@@ -1061,6 +1065,7 @@ export function Toggle({
   onChange: (v: boolean) => void;
   accent?: "default" | "soft";
   hint?: string;
+  disabled?: boolean;
 }) {
   const trackColor = checked
     ? accent === "soft"
@@ -1074,8 +1079,9 @@ export function Toggle({
       <input type="hidden" name={name} value={String(checked)} />
       <button
         type="button"
+        disabled={disabled}
         onClick={() => onChange(!checked)}
-        className={`relative h-5 w-9 shrink-0 rounded-full transition ${trackColor}`}
+        className={`relative h-5 w-9 shrink-0 rounded-full transition ${trackColor} ${disabled ? "cursor-not-allowed opacity-60" : ""}`}
       >
         <span
           className={`absolute top-0.5 h-4 w-4 rounded-full bg-white shadow-md transition-all ${checked ? "left-[18px]" : "left-0.5"}`}
