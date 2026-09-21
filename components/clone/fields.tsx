@@ -564,7 +564,6 @@ export function Area({
   placeholder,
   rows = 2,
   hint,
-  disabled = false,
 }: {
   label: string;
   name: string;
@@ -1058,6 +1057,7 @@ export function Toggle({
   onChange,
   accent = "default",
   hint,
+  disabled = false,
 }: {
   label: string;
   name: string;
