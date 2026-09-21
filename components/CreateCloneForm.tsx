@@ -273,7 +273,7 @@ export default function CreateCloneForm({ defaults = {} }: { defaults?: Partial<
       )}
 
       {cfg.photosEnabled && (
-        <Section title={`Bundles${bundles.length ? ` (${bundles.length})` : ""}`} hint="Multiple photos sold together. Mark one as the welcome bundle for new fans.">
+        <Section title={`Bundles${bundles.length ? ` (${bundles.length})` : ""}`} hint="Multiple photos sold together. Mark one as the primary bundle if you want a preferred bundle in sellable inventory; it is not auto-sent.">
           {bundles.map((b) => (
             <div key={b.id} className="grid gap-2 rounded-lg border border-line bg-bg p-4 text-xs/40">
               <div className="flex items-center justify-between">
@@ -281,7 +281,7 @@ export default function CreateCloneForm({ defaults = {} }: { defaults?: Partial<
                 <button type="button" onClick={() => setBundles((prev) => prev.filter((x) => x.id !== b.id))} className="text-muted hover:text-crit">✕</button>
               </div>
               <div className="grid grid-cols-2 gap-2">
-                <label>Name<input value={b.name} onChange={(e) => setBundle(b.id, { name: e.target.value })} placeholder="e.g. Welcome bundle" className={inputCls} /></label>
+                <label>Name<input value={b.name} onChange={(e) => setBundle(b.id, { name: e.target.value })} placeholder="e.g. Primary bundle" className={inputCls} /></label>
                 <label>⭐ Price<input type="number" min={1} max={MAX_PHOTO_BUNDLE_PRICE_STARS} step={1} required value={b.stars} onChange={(e) => setBundle(b.id, { stars: e.target.value })} className={inputCls} /></label>
               </div>
               <label>Caption (shown to fan)<input value={b.caption} onChange={(e) => setBundle(b.id, { caption: e.target.value })} className={inputCls} /></label>
