@@ -14,10 +14,12 @@
 
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
-import { classifyFan, computeAudiencePreview, isHoldout, type CandidateRow, type ClassifyContext } from "../audience";
-import { funnelFromEpisodes } from "../episodes";
+import { classifyFan, computeAudiencePreview, isMissingIsTestColumn, isHoldout, type CandidateRow, type ClassifyContext } from "../audience";
+import { funnelFromEpisodes, isRealSend } from "../episodes";
 import { sendsToCsv } from "../sends";
-import { validateCreateRunInput, RunValidationError, createDryRun, queueRun, confirmLive, stopRun, getRun, type CreateRunInput } from "../runs";
+import { validateCreateRunInput, RunValidationError, createDryRun, queueRun, confirmLive, stopRun, getRun, recordDryRunReview, type CreateRunInput } from "../runs";
+import { computeDryRunSummary, redactFan, redactText, computeSendPlan } from "../review";
+import { insertEvent } from "../events";
 import { getGlobalStop, setGlobalStop } from "../global-stop";
 import { setConnectionDailyCap, setConnectionPaused } from "../connections";
 import { liftFromData } from "../attribution";
@@ -201,6 +203,7 @@ function episode(partial: Partial<ReengageEpisode>): ReengageEpisode {
     telegramId: 1,
     episodeStartInboundAt: "2026-09-20T00:00:00Z",
     state: "eligible",
+    dryRun: false,
     preparedText: null,
     ackedText: null,
     tgMessageId: null,
@@ -440,10 +443,25 @@ acheck("H3 filters are rebuilt: injection strings in excludeIds/language/numbers
   assert(!("evil" in clean) && !("dryRun" in clean), "unknown keys must be dropped");
 });
 
-acheck("H4 confirmLive: needs the typed phrase, a finished dry run, no stop, no global stop; then sets confirm_live_at once", async () => {
-  const db = freshDb();
+/** A finished dry run: 3 would-send episodes (+1 hold-out), 4 matching users, one
+ *  scan_excluded event, status 'done'. Returns the run id. */
+async function finishedDryRun(db: FakeDb): Promise<string> {
   const run = await createDryRun(RUN_OK);
   await queueRun(run.id, "operator");
+  Object.assign(db.rows("reengage_runs")[0], { status: "done" });
+  db.seed("users", [1, 2, 3, 4].map((n) => userRow(uid(n), { name: n === 1 ? "Mike Smith" : `Fan${n}` })));
+  const start = T(72);
+  db.seed("reengage_episodes", [
+    ...[1, 2, 3].map((n) => ({ id: `e${n}`, run_id: run.id, clone_id: CLONE_A, user_id: uid(n), telegram_id: 1000 + n, episode_start_inbound_at: start, state: "acked", dry_run: true, tg_message_id: null, sent_at: T(1), prepared_text: `hey ${n === 1 ? "Mike" : "Fan" + n}, thinking of you`, acked_text: `hey ${n === 1 ? "Mike" : "Fan" + n}, thinking of you`, skip_reason: null, error_code: null, created_at: T(2) })),
+    { id: "e4", run_id: run.id, clone_id: CLONE_A, user_id: uid(4), telegram_id: 1004, episode_start_inbound_at: start, state: "holdout", dry_run: true, tg_message_id: null, sent_at: null, prepared_text: null, acked_text: null, skip_reason: null, error_code: null, created_at: T(2) },
+  ]);
+  await insertEvent({ runId: run.id, cloneId: CLONE_A, userId: uid(9), episodeId: null, eventType: "scan_excluded", actor: "system", detail: { reason: "blocked" } });
+  return run.id;
+}
+
+acheck("H4 confirmLive: needs the typed phrase, a finished dry run, no stop, no global stop; then sets confirm_live_at once", async () => {
+  const db = freshDb();
+  const run = { id: await finishedDryRun(db) };
   const setStatus = (status: string, extra: object = {}) => Object.assign(db.rows("reengage_runs")[0], { status }, extra);
 
   setStatus("done");
@@ -467,6 +485,9 @@ acheck("H4 confirmLive: needs the typed phrase, a finished dry run, no stop, no 
   db.seed("app_settings", [{ key: "mtproto_global_stop", value: "false" }]);
   eq(db.rows("reengage_runs")[0].dry_run, true, "every refusal left the run dry");
 
+  await rejects(confirmLive(run.id, "operator", CONFIRM_LIVE_PHRASE), /nobody has reviewed/);
+  eq(db.rows("reengage_runs")[0].dry_run, true, "unreviewed: still dry");
+  await recordDryRunReview(run.id, "operator");
   const live = await confirmLive(run.id, "operator", ` ${CONFIRM_LIVE_PHRASE} `);
   eq(live.dryRun, false, "dryRun after confirm");
   assert(live.confirmLiveAt !== null, "confirm_live_at set");
@@ -579,7 +600,7 @@ acheck("H8 preview: every ineligible class excluded, numbers add up, caps and ho
   ]);
   db.seed("reengage_optouts", [{ id: "1", clone_id: CLONE_A, user_id: uid(19) }]);
   // stored with a different spelling of the same instant
-  db.seed("reengage_episodes", [{ id: "e1", clone_id: CLONE_A, user_id: uid(18), episode_start_inbound_at: contactedStart.replace("Z", "+00:00") }]);
+  db.seed("reengage_episodes", [{ id: "e1", clone_id: CLONE_A, user_id: uid(18), dry_run: false, episode_start_inbound_at: contactedStart.replace("Z", "+00:00") }]);
 
   const p = await computeAudiencePreview({ cloneIds: [CLONE_A], segment: "all_silent" }, { dailyCap: 30, runCap: null, holdoutPct: 15 });
   eq(p.excluded.blocked, 1, "blocked");
@@ -661,7 +682,7 @@ check("I1 lift: contacted and hold-out use the same rule and window; reply-gated
 
 check("I2 lift: only acked sends WITH a message id are contacted (dry-run acks, failed, cancelled are not)", () => {
   const episodes = [
-    ep({ userId: "dry", state: "acked", sentAt: at(300), tgMessageId: null }),
+    ep({ userId: "dry", state: "acked", sentAt: at(300), tgMessageId: null, dryRun: true }),
     ep({ userId: "failed", state: "failed", sentAt: at(300), tgMessageId: null }),
     ep({ userId: "cancelled", state: "cancelled" }),
     ep({ userId: "real", state: "acked", sentAt: at(300), tgMessageId: 9 }),
@@ -817,6 +838,228 @@ check("J7 column/table/event names used here match migration 158 and twin-userbo
   for (const col of ["run_id", "clone_id", "user_id", "telegram_id", "episode_start_inbound_at", "tg_message_id", "sent_at", "confirm_live_at", "stop_requested", "holdout_pct", "daily_cap", "run_cap", "paused_reason", "dry_run", "prepared_text", "acked_text", "error_code", "skip_reason"]) {
     assert(new RegExp(`\\b${col}\\b`).test(mig), `column ${col} used by the dashboard is not in migration 158`);
   }
+});
+
+
+// ── K. dry-run review gate + dry-episode awareness ───────────────────────────
+
+acheck("K1 review gate: live is REFUSED without a recorded review, even with the right phrase and a done run", async () => {
+  const db = freshDb();
+  const id = await finishedDryRun(db);
+  await rejects(confirmLive(id, "operator", CONFIRM_LIVE_PHRASE), /nobody has reviewed/);
+  eq(db.rows("reengage_runs")[0].dry_run, true, "still dry");
+  eq(db.rows("reengage_runs")[0].confirm_live_at, null, "confirm_live_at untouched");
+});
+
+acheck("K2 review gate: REFUSED after the dry-run counts change since review; re-review reopens it", async () => {
+  const db = freshDb();
+  const id = await finishedDryRun(db);
+  await recordDryRunReview(id, "operator");
+  const ev = eventsOf(db, "control_action").find((e) => e.detail.kind === "dry_run_reviewed");
+  assert(ev, "review event written");
+  eq(ev!.detail.run_id, id, "event run_id");
+  eq(ev!.detail.would_send_count, 3, "stored would_send_count is the server-computed one");
+  eq(ev!.actor, "operator", "reviewed_by");
+
+  // one more would-send appears
+  db.rows("reengage_episodes").push({ id: "e5", run_id: id, clone_id: CLONE_A, user_id: uid(4), state: "acked", dry_run: true, tg_message_id: null, sent_at: T(1), acked_text: "x", prepared_text: "x", created_at: T(1) });
+  await rejects(confirmLive(id, "operator", CONFIRM_LIVE_PHRASE), /changed since/);
+  eq(db.rows("reengage_runs")[0].dry_run, true, "still dry");
+  db.rows("reengage_episodes").pop();
+  const live = await confirmLive(id, "operator", CONFIRM_LIVE_PHRASE);
+  eq(live.dryRun, false, "counts back to what was reviewed: allowed");
+});
+
+acheck("K2b counts drift: hold-out flip and a new exclusion are each caught; re-review then allows", async () => {
+  const db = freshDb();
+  const id = await finishedDryRun(db);
+  await recordDryRunReview(id, "operator");
+  const holdoutRow = db.rows("reengage_episodes").find((e) => e.id === "e4")!;
+  Object.assign(holdoutRow, { state: "acked", sent_at: T(1), acked_text: "hi", prepared_text: "hi" });
+  await rejects(confirmLive(id, "operator", CONFIRM_LIVE_PHRASE), /changed since/);
+  Object.assign(holdoutRow, { state: "holdout", sent_at: null, acked_text: null, prepared_text: null });
+  await insertEvent({ runId: id, cloneId: CLONE_A, userId: uid(8), episodeId: null, eventType: "scan_excluded", actor: "system", detail: { reason: "paused" } });
+  await rejects(confirmLive(id, "operator", CONFIRM_LIVE_PHRASE), /changed since/);
+  await recordDryRunReview(id, "operator"); // human looks again at the new numbers
+  const live = await confirmLive(id, "operator", CONFIRM_LIVE_PHRASE);
+  eq(live.dryRun, false, "allowed after re-review");
+});
+
+acheck("K3 review gate: REFUSED with the wrong phrase even when reviewed and everything else holds", async () => {
+  const db = freshDb();
+  const id = await finishedDryRun(db);
+  await recordDryRunReview(id, "operator");
+  for (const typed of [undefined, "", "go live", "GO LIVE NOW", "yes"]) await rejects(confirmLive(id, "operator", typed as never), /GO LIVE/);
+  eq(db.rows("reengage_runs")[0].dry_run, true, "still dry after wrong phrases");
+});
+
+acheck("K4 review gate: the live audience may be identical or smaller than reviewed, NEVER larger", async () => {
+  const db = freshDb();
+  const id = await finishedDryRun(db);
+  await recordDryRunReview(id, "operator");
+  db.rows("users").push(userRow(uid(50))); // a new fan became eligible
+  await rejects(confirmLive(id, "operator", CONFIRM_LIVE_PHRASE), /audience grew/);
+  eq(db.rows("reengage_runs")[0].dry_run, true, "still dry");
+  db.tables["users"] = db.rows("users").filter((u) => u.id !== uid(50) && u.id !== uid(2)); // and one fan left
+  const live = await confirmLive(id, "operator", CONFIRM_LIVE_PHRASE);
+  eq(live.dryRun, false, "smaller audience is allowed");
+});
+
+acheck("K5 review gate: allowed ONLY when review + unchanged counts + phrase + no global stop + not stopped + audience not larger all hold", async () => {
+  const db = freshDb();
+  const id = await finishedDryRun(db);
+  await recordDryRunReview(id, "operator");
+  db.seed("app_settings", [{ key: "mtproto_global_stop", value: "true" }]);
+  await rejects(confirmLive(id, "operator", CONFIRM_LIVE_PHRASE), /GLOBAL STOP/);
+  db.seed("app_settings", [{ key: "mtproto_global_stop", value: "false" }]);
+  Object.assign(db.rows("reengage_runs")[0], { stop_requested: true });
+  await rejects(confirmLive(id, "operator", CONFIRM_LIVE_PHRASE), /stopped/);
+  Object.assign(db.rows("reengage_runs")[0], { stop_requested: false });
+  eq(db.rows("reengage_runs")[0].dry_run, true, "every refusal left it dry");
+  const live = await confirmLive(id, "operator", CONFIRM_LIVE_PHRASE);
+  eq(live.dryRun, false, "live");
+  const ev = eventsOf(db, "control_action").find((e) => e.detail.action === "confirm_live");
+  assert(ev && typeof ev.detail.reviewed_event_id === "number", "confirm event names the review it relied on");
+  await rejects(confirmLive(id, "operator", CONFIRM_LIVE_PHRASE), /already live/);
+});
+
+acheck("K5b a review cannot be recorded for a run that is not done, is stopped, or would send nothing", async () => {
+  const db = freshDb();
+  const id = await finishedDryRun(db);
+  const row = db.rows("reengage_runs")[0];
+  for (const st of ["draft", "queued", "running", "failed"]) {
+    Object.assign(row, { status: st });
+    await rejects(recordDryRunReview(id, "operator"), /not finished/);
+  }
+  Object.assign(row, { status: "done", stop_requested: true });
+  await rejects(recordDryRunReview(id, "operator"), /stopped/);
+  Object.assign(row, { stop_requested: false });
+  db.fail("reengage_episodes", "select", { message: "boom" });
+  await rejects(recordDryRunReview(id, "operator"));
+  db.fail("reengage_episodes", "select", null);
+  db.tables["reengage_episodes"] = db.rows("reengage_episodes").filter((e) => e.state === "holdout");
+  await rejects(recordDryRunReview(id, "operator"), /nothing/);
+  eq(eventsOf(db, "control_action").filter((e) => e.detail.kind === "dry_run_reviewed").length, 0, "no review event written by any refusal");
+});
+
+acheck("K5c gate fails CLOSED when the review record or dry-run counts cannot be read", async () => {
+  const db = freshDb();
+  const id = await finishedDryRun(db);
+  await recordDryRunReview(id, "operator");
+  db.fail("reengage_events", "select", { message: "events unreadable" });
+  await rejects(confirmLive(id, "operator", CONFIRM_LIVE_PHRASE), /unreadable/);
+  db.fail("reengage_events", "select", null);
+  db.fail("reengage_episodes", "select", { message: "episodes unreadable" });
+  await rejects(confirmLive(id, "operator", CONFIRM_LIVE_PHRASE), /unreadable/);
+  db.fail("reengage_episodes", "select", null);
+  eq(db.rows("reengage_runs")[0].dry_run, true, "still dry");
+});
+
+acheck("K6 dry-run summary: counts, excluded by reason, at most 25 samples, fan names redacted to initial + id tail", async () => {
+  const db = freshDb();
+  const id = await finishedDryRun(db);
+  const s = await computeDryRunSummary(id);
+  eq(s.wouldSendCount, 3, "would send");
+  eq(s.holdoutCount, 1, "hold-out");
+  eq(s.excludedByReason.blocked, 1, "excluded by reason");
+  const mike = s.sample.find((m) => m.who.startsWith("M."));
+  assert(mike, "redacted label is initial + id tail");
+  assert(mike!.who.endsWith(uid(1).slice(-4)), "id tail");
+  assert(!JSON.stringify(s.sample).includes("Mike") && !JSON.stringify(s.sample).includes("Smith"), "no full name anywhere in the sample");
+  eq(redactFan("Ann", "abcdef1234"), "A. …1234", "redactFan");
+  eq(redactText("hi Ann and ann", "Ann"), "hi [name] and [name]", "redactText");
+  for (let i = 0; i < 30; i++) db.rows("reengage_episodes").push({ id: `x${i}`, run_id: id, clone_id: CLONE_A, user_id: uid(100 + i), state: "acked", dry_run: true, tg_message_id: null, sent_at: T(1), acked_text: "hello", prepared_text: "hello", created_at: T(1) });
+  const big = await computeDryRunSummary(id);
+  eq(big.sample.length, 25, "sample capped at 25");
+  eq(big.wouldSendCount, 33, "count is not capped");
+  db.fail("users", "select", { message: "users down" });
+  const withheld = await computeDryRunSummary(id);
+  assert(withheld.sampleWithheld && withheld.sample.length === 0, "sample withheld when names cannot be read");
+});
+
+acheck("K7 send plan is capped by the min of run cap, daily cap and per-creator cap", async () => {
+  const db = freshDb();
+  const id = await finishedDryRun(db);
+  const run = (await getRun(id))!;
+  db.seed("userbot_connections", [{ clone_id: CLONE_A, status: "connected", paused: false, daily_cap: 2, tg_user_id: 1, dc_id: 1, last_seen_at: null, paused_reason: null, session_ref: null, created_at: T(1), updated_at: T(1) }]);
+  const summary = await computeDryRunSummary(id);
+  const plan = await computeSendPlan({ ...run, dailyCap: 30, runCap: null }, summary);
+  eq(plan.firstDayTotal, 2, "creator cap 2 wins over 3 would-send and daily cap 30");
+  eq(plan.runTotal, 3, "whole run is the would-send total");
+  eq((await computeSendPlan({ ...run, dailyCap: 1, runCap: null }, summary)).firstDayTotal, 1, "run daily cap 1 wins");
+  const plan3 = await computeSendPlan({ ...run, dailyCap: 30, runCap: 1 }, summary);
+  eq(plan3.runTotal, 1, "run cap 1 wins");
+  eq(plan3.firstDayTotal, 1, "run cap also bounds day one");
+});
+
+acheck("K8 preview excludes users.is_test accounts; falls back only when the column is missing; other errors fail closed", async () => {
+  const db = freshDb();
+  db.seed("users", [userRow(uid(1)), userRow(uid(2), { is_test: true }), userRow(uid(3), { is_test: false })]);
+  const opts = { dailyCap: 30, runCap: null, holdoutPct: 15 };
+  const p = await computeAudiencePreview({ cloneIds: [CLONE_A] }, opts);
+  eq(p.excluded.test_account, 1, "test account excluded");
+  eq(p.eligible + p.holdout, 2, "the other two survive");
+  db.fail("users", "select", { message: "column users.is_test does not exist", code: "42703", ifSelectIncludes: "is_test" });
+  const q = await computeAudiencePreview({ cloneIds: [CLONE_A] }, opts);
+  eq(q.candidatePool, 3, "fallback read still works without the column");
+  eq(q.excluded.test_account, 0, "no test filter without the column");
+  db.fail("users", "select", { message: "connection reset", ifSelectIncludes: "is_test" });
+  await rejects(computeAudiencePreview({ cloneIds: [CLONE_A] }, opts), /connection reset/);
+  db.fail("users", "select", { message: "permission denied for table users", code: "42501" });
+  await rejects(computeAudiencePreview({ cloneIds: [CLONE_A] }, opts), /permission denied/);
+  db.fail("users", "select", { message: "column users.other does not exist", code: "42703" });
+  await rejects(computeAudiencePreview({ cloneIds: [CLONE_A] }, opts), /other/);
+  eq(isMissingIsTestColumn({ code: "42703", message: "column users.is_test does not exist" }), true, "is_test column error recognised");
+  eq(isMissingIsTestColumn({ code: "42703", message: "column users.foo does not exist" }), false, "other column not recognised");
+  eq(isMissingIsTestColumn({ message: "timeout while reading is_test" }), false, "unrelated failure mentioning is_test not recognised");
+});
+
+acheck("K9 dry-run episodes never count as contacted, and never block a later live audience", async () => {
+  const db = freshDb();
+  const start = T(72);
+  db.seed("users", [userRow(uid(1), { last_message_received: start }), userRow(uid(2), { last_message_received: start })]);
+  db.seed("reengage_episodes", [
+    { id: "d1", clone_id: CLONE_A, user_id: uid(1), dry_run: true, episode_start_inbound_at: start },
+    { id: "l2", clone_id: CLONE_A, user_id: uid(2), dry_run: false, episode_start_inbound_at: start },
+  ]);
+  const p = await computeAudiencePreview({ cloneIds: [CLONE_A] }, { dailyCap: 30, runCap: null, holdoutPct: 15 });
+  eq(p.excluded.already_contacted, 1, "only the LIVE episode marks a fan contacted");
+  eq(p.eligible + p.holdout, 1, "the fan with only a dry episode is still audience");
+  db.fail("reengage_episodes", "select", { message: "column reengage_episodes.dry_run does not exist", code: "42703" });
+  await rejects(computeAudiencePreview({ cloneIds: [CLONE_A] }, { dailyCap: 30, runCap: null, holdoutPct: 15 }));
+});
+
+check("K10 dry episodes are not real sends, funnel, lift or send rows", () => {
+  const dryAcked = episode({ dryRun: true, state: "acked", sentAt: T(1), tgMessageId: 7 });
+  const live = episode({ dryRun: false, state: "acked", sentAt: T(1), tgMessageId: 7 });
+  eq(isRealSend(dryAcked), false, "dry+acked+message id is still not real");
+  eq(isRealSend(live), true, "live is real");
+  const f = funnelFromEpisodes([dryAcked, episode({ dryRun: true, state: "holdout" }), { ...live, userId: "u2" }]);
+  eq(f.contacted, 1, "only the live send is contacted");
+  eq(f.delivered, 1, "delivered");
+  eq(f.holdout, 0, "a dry hold-out is not part of the real funnel");
+  const reports = liftFromData([{ ...dryAcked, userId: "a" }, episode({ dryRun: true, state: "holdout", userId: "b", createdAt: T(50) })], { orders: [], truncated: false });
+  const total = JSON.stringify(reports);
+  assert(!/"fans":[1-9]/.test(total), `dry rows never enter lift: ${total}`);
+});
+
+check("K11 source: dry_run filters are in place; the dashboard never writes episodes, dry_run or dedupe_scope", () => {
+  assert(/\.eq\("dry_run", false\)/.test(sourceCode("../audience.ts")), "audience already-contacted read filters dry_run=false");
+  assert(/\.eq\("dry_run", false\)/.test(sourceCode("../safety.ts")), "safety sentToday filters dry_run=false");
+  for (const f of ["../runs.ts", "../audience.ts", "../episodes.ts", "../review.ts", "../safety.ts", "../attribution.ts", "../sends.ts", "../funnel.ts", "../connections.ts", "../events.ts", "../global-stop.ts", "../../../app/mtproto-campaign/actions.ts", "../../../app/api/admin/v1/mtproto/write/route.ts"]) {
+    const src = sourceCode(f);
+    assert(!/dedupe_scope/.test(src), `${f} must not reference dedupe_scope`);
+    if (/reengage_episodes/.test(src)) assert(!/\.(insert|upsert|update|delete)\(/.test(src), `${f} reads reengage_episodes and must not write anything`);
+  }
+});
+
+check("K12 review gate is wired: confirmLive calls checkReviewGate before its conditional update", () => {
+  const runs = sourceCode("../runs.ts");
+  const c = runs.slice(runs.indexOf("export async function confirmLive"), runs.indexOf("const STOPPABLE"));
+  const g = c.indexOf("checkReviewGate(run)");
+  assert(g > 0, "confirmLive must call checkReviewGate");
+  assert(g < c.indexOf('.from("reengage_runs")'), "the gate must run before the update");
+  assert(c.indexOf("CONFIRM_LIVE_PHRASE") < g, "phrase is checked first");
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -1,5 +1,5 @@
 import { withAdmin, ok, jsonError, logAdminWrite } from "@/lib/api-route";
-import { confirmLive, createDryRun, queueRun, stopRun, validateCreateRunInput, RunValidationError, type CreateRunInput } from "@/lib/mtproto/runs";
+import { confirmLive, createDryRun, queueRun, recordDryRunReview, stopRun, validateCreateRunInput, RunValidationError, type CreateRunInput } from "@/lib/mtproto/runs";
 import { setConnectionDailyCap, setConnectionPaused } from "@/lib/mtproto/connections";
 import { getGlobalStop, setGlobalStop } from "@/lib/mtproto/global-stop";
 import { DEFAULT_DAILY_CAP, DEFAULT_HOLDOUT_PCT, type RunFilters } from "@/lib/mtproto/types";
@@ -22,7 +22,7 @@ export const dynamic = "force-dynamic";
 // own "operator" (N6 GAP: no per-user roles yet, so this is a label).
 const ACTOR = "api-key";
 
-type Action = "create_run" | "confirm_live" | "stop_run" | "global_stop" | "global_resume" | "set_connection_pause" | "set_connection_cap";
+type Action = "create_run" | "review_dry_run" | "confirm_live" | "stop_run" | "global_stop" | "global_resume" | "set_connection_pause" | "set_connection_cap";
 
 export const POST = withAdmin(async (req) => {
   let body: Record<string, unknown>;
@@ -59,6 +59,15 @@ export const POST = withAdmin(async (req) => {
         await queueRun(run.id, ACTOR);
         logAdminWrite("mtproto:create_run", null, { runId: run.id, cloneIds, filters });
         return ok({ run, action });
+      }
+
+      // Records "a human reviewed this finished dry run"; confirm_live refuses without it.
+      case "review_dry_run": {
+        const runId = String(body.runId ?? "");
+        if (!runId) return jsonError("runId is required", 400);
+        const summary = await recordDryRunReview(runId, ACTOR);
+        logAdminWrite("mtproto:review_dry_run", null, { runId, wouldSendCount: summary.wouldSendCount });
+        return ok({ action, summary: { ...summary, sample: undefined } });
       }
 
       // confirm_live needs body.confirmText === "GO LIVE"; global_resume needs "RESUME".
@@ -106,7 +115,7 @@ export const POST = withAdmin(async (req) => {
 
       default:
         return jsonError(
-          `unknown action: "${action}". Allowed: create_run, confirm_live, stop_run, global_stop, global_resume, set_connection_pause, set_connection_cap.`,
+          `unknown action: "${action}". Allowed: create_run, review_dry_run, confirm_live, stop_run, global_stop, global_resume, set_connection_pause, set_connection_cap.`,
           400,
         );
     }

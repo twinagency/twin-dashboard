@@ -31,7 +31,7 @@
 import { revalidatePath } from "next/cache";
 import { guardDashboardAction } from "@/lib/agency-management";
 import { computeAudiencePreview } from "@/lib/mtproto/audience";
-import { confirmLive, createDryRun, queueRun, stopRun, type CreateRunInput } from "@/lib/mtproto/runs";
+import { confirmLive, createDryRun, queueRun, recordDryRunReview, stopRun, type CreateRunInput } from "@/lib/mtproto/runs";
 import { setConnectionDailyCap, setConnectionPaused } from "@/lib/mtproto/connections";
 import { getGlobalStop, setGlobalStop } from "@/lib/mtproto/global-stop";
 import { sanitizeFilters, uuidList, validateCaps } from "@/lib/mtproto/validate";
@@ -101,6 +101,21 @@ export async function createRunAction(fd: FormData): Promise<ActionResult<{ id: 
     return { ok: true, id: run.id };
   } catch (e) {
     return fail(e);
+  }
+}
+
+/** "I reviewed this dry run". The counts recorded are recomputed server-side
+ *  from the episodes; nothing the browser sends is trusted or stored. */
+export async function reviewDryRunAction(fd: FormData): Promise<ActionResult> {
+  await guardDashboardAction("app/mtproto-campaign/actions.ts#reviewDryRunAction", [fd]);
+  const runId = String(fd.get("runId") ?? "");
+  try {
+    await recordDryRunReview(runId, ACTOR);
+    return { ok: true };
+  } catch (e) {
+    return fail(e);
+  } finally {
+    revalidatePath(`/mtproto-campaign/runs/${runId}`);
   }
 }
 

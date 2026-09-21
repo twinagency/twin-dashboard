@@ -110,7 +110,10 @@ export const PREVIEW_EXCLUSION_REASONS = [
   "within_24h",
   "holdout",
   "cap_reached",
-] as const satisfies readonly ExclusionReason[];
+  // Dashboard-only: users.is_test fans (migration 157) are the operator's own
+  // test accounts. Not in the worker contract's EXCLUSION_REASONS on purpose.
+  "test_account",
+] as const satisfies readonly (ExclusionReason | "test_account")[];
 export type PreviewExclusionReason = (typeof PREVIEW_EXCLUSION_REASONS)[number];
 
 export const RUN_SEGMENTS = ["all_silent", "top_spenders", "lapsed_buyers", "never_bought"] as const;
@@ -185,12 +188,12 @@ export interface ReengageEpisode {
   telegramId: number;
   episodeStartInboundAt: string;
   state: EpisodeState;
-  preparedText: string | null;
-  ackedText: string | null;
-  tgMessageId: number | null;
   /** Set by a DB trigger from the run at insert, immutable; the dashboard never
    *  writes it. Anything other than an explicit false reads as dry (safe side). */
   dryRun: boolean;
+  preparedText: string | null;
+  ackedText: string | null;
+  tgMessageId: number | null;
   claimedBy: string | null;
   claimedAt: string | null;
   sentAt: string | null;

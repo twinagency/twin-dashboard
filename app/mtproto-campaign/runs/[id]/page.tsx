@@ -1,6 +1,8 @@
 import { notFound } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { getRun } from "@/lib/mtproto/runs";
+import { checkReviewGate, computeDryRunSummary, computeSendPlan, latestReview } from "@/lib/mtproto/review";
+import DryRunReview, { type ReviewState } from "@/components/mtproto/DryRunReview";
 import { listEpisodesForRun } from "@/lib/mtproto/episodes";
 import { computeFunnel } from "@/lib/mtproto/funnel";
 import { computeLift, loadPurchasesForEpisodes } from "@/lib/mtproto/attribution";
@@ -27,6 +29,37 @@ export default async function RunDetailPage({ params }: { params: Promise<{ id: 
   const lift = await computeLift(episodes, purchases);
   const [funnel, sends] = await Promise.all([computeFunnel(episodes, lift), buildSendRows(episodes, creators, purchases)]);
 
+  // Dry-run review card: only for a finished, unstopped dry run.
+  let reviewCard: React.ReactNode = null;
+  let reviewed = false;
+  let plan: Awaited<ReturnType<typeof computeSendPlan>> | null = null;
+  if (run.dryRun && run.status === "done" && !run.stopRequested) {
+    try {
+      const summary = await computeDryRunSummary(id);
+      plan = await computeSendPlan(run, summary);
+      const gate = await checkReviewGate(run);
+      let state: ReviewState;
+      if (gate.ok) {
+        reviewed = true;
+        state = { reviewed: true, by: gate.review.reviewedBy, at: gate.review.reviewedAt };
+      } else {
+        const prior = await latestReview(id).catch(() => null);
+        state = { reviewed: false, reason: prior ? gate.reason : "no review recorded yet" };
+      }
+      reviewCard = (
+        <div className="mb-6">
+          <DryRunReview runId={id} summary={summary} plan={plan} creatorNames={Object.fromEntries(creators.map((c) => [c.id, c.name]))} state={state} />
+        </div>
+      );
+    } catch (e) {
+      reviewCard = (
+        <div className="mb-6 rounded-md border border-destructive/40 bg-destructive/10 px-3 py-2 text-xs text-destructive">
+          Could not load the dry-run review, so going live stays locked: {e instanceof Error ? e.message : String(e)}
+        </div>
+      );
+    }
+  }
+
   const failedRows = sends.filter((s) => s.errorCode);
   const failuresByCode = new Map<string, number>();
   for (const r of failedRows) failuresByCode.set(r.errorCode!, (failuresByCode.get(r.errorCode!) ?? 0) + 1);
@@ -47,7 +80,7 @@ export default async function RunDetailPage({ params }: { params: Promise<{ id: 
             {run.dailyCap} · hold-out {run.holdoutPct}%{run.runCap ? ` · run cap ${run.runCap}` : ""}
           </p>
         </div>
-        <RunControls run={run} />
+        <RunControls run={run} reviewed={reviewed} plan={plan} />
       </div>
 
       {truncated && (
@@ -55,6 +88,8 @@ export default async function RunDetailPage({ params }: { params: Promise<{ id: 
           This run has more episodes than one read can safely hold — figures below are a lower bound. Narrow the date range or filters.
         </div>
       )}
+
+      {reviewCard}
 
       <FunnelCard title="Funnel" funnel={truncated ? { ...funnel, partial: true } : funnel} />
 

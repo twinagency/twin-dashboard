@@ -37,6 +37,7 @@ const REASON_LABEL: Record<(typeof PREVIEW_EXCLUSION_REASONS)[number], string> =
   within_24h: "Not yet 24h silent",
   holdout: "Hold-out (control group)",
   cap_reached: "Cap reached",
+  test_account: "Test account",
 };
 
 export default function RunBuilderForm({ creators }: { creators: CreatorLite[] }) {

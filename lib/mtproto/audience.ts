@@ -56,6 +56,8 @@ export type CandidateRow = {
   /** Non-null = imported from the old n8n stack (twin-bot migration 081). */
   legacy_id: string | null;
   purchase_count: number | null;
+  /** users.is_test (migration 157; the column may not exist yet, then undefined). */
+  is_test?: boolean | null;
   last_message_received: string | null;
   total_spent_stars: number | null;
   spend_tier: string | null;
@@ -73,6 +75,7 @@ export type ClassifyContext = {
  *  the one it is counted under, so a blocked+opted-out fan counts once, as
  *  "blocked" (blocked is checked first because it is the hardest stop). */
 export function classifyFan(row: CandidateRow, ctx: ClassifyContext): PreviewExclusionReason | "eligible" {
+  if (row.is_test === true) return "test_account"; // the operator's own manual test fans are never real audience
   if (row.blocked) {
     if (row.blocked_reason === "minor" || row.minor_flagged_at) return "minor_gated";
     if (row.blocked_reason === "us_location") return "us_location";
@@ -149,12 +152,12 @@ async function alreadyContactedSet(cloneIds: string[]): Promise<{ keys: Set<stri
           .from("reengage_episodes")
           .select("clone_id,user_id,episode_start_inbound_at")
           .in("clone_id", cloneIds)
-          .order("id", { ascending: true }) as any,
-      { label: "reengage_episodes (already-contacted check)", maxRows: 200_000, throwOnError: true },
-    );
           // LIVE episodes only: a dry run's simulated episodes must never mark a
           // fan as already contacted (migration 158 scopes their dedupe to the run).
           .eq("dry_run", false)
+          .order("id", { ascending: true }) as any,
+      { label: "reengage_episodes (already-contacted check)", maxRows: 200_000, throwOnError: true },
+    );
     return { keys: new Set(rows.map((r) => `${r.clone_id}:${r.user_id}:${tsKey(r.episode_start_inbound_at)}`)), truncated };
   } catch (e) {
     if (isMissingTable(e)) {
@@ -185,6 +188,15 @@ function applySegmentFilter(q: any, filters: RunFilters) {
   }
 }
 
+/** True only for "users.is_test column does not exist" (Postgres 42703 or
+ *  PostgREST's equivalent), never for any other failure. */
+export function isMissingIsTestColumn(e: unknown): boolean {
+  const err = e as { code?: string; message?: string } | null;
+  const msg = String(err?.message ?? e ?? "");
+  if (!/is_test/.test(msg)) return false;
+  return err?.code === "42703" || err?.code === "PGRST204" || /does not exist|could not find/i.test(msg);
+}
+
 export async function computeAudiencePreview(
   filters: RunFilters,
   opts: { dailyCap: number; runCap: number | null; holdoutPct: number; seed?: string },
@@ -200,13 +212,13 @@ export async function computeAudiencePreview(
   const cols =
     "id,clone_id,telegram_id,name,language_code,blocked,blocked_reason,paused,is_active,minor_flagged_at,first_seen_at,legacy_id,purchase_count,last_message_received,total_spent_stars,spend_tier";
 
-  const makeQuery = () => {
+  const makeQuery = (withIsTest: boolean) => () => {
     // Typed `any` from the first call on purpose: chaining this many filters
     // onto supabase-js's own generic builder type (which parses `cols` at the
     // type level) blows past TS's instantiation depth limit (TS2589). The
     // runtime behaviour is unaffected — CandidateRow is the real, checked
     // shape this function returns to its caller.
-    let q: any = mtDb().from("users").select(cols).in("clone_id", cloneIds).not("last_message_received", "is", null);
+    let q: any = mtDb().from("users").select(withIsTest ? `${cols},is_test` : cols).in("clone_id", cloneIds).not("last_message_received", "is", null);
     q = applySegmentFilter(q, filters);
     if (filters.minSpendStars) q = q.gte("total_spent_stars", filters.minSpendStars);
     if (filters.language) q = q.eq("language_code", filters.language);
@@ -225,10 +237,24 @@ export async function computeAudiencePreview(
     return q.order("last_message_received", { ascending: true }).order("id", { ascending: true }) as any;
   };
 
-  const { rows, truncated } = await selectAllRowsMtproto<CandidateRow>(makeQuery, {
-    label: "users (mtproto audience candidates)",
-    maxRows: 50_000,
-  });
+  // users.is_test is read when it exists. ONLY a "column does not exist" error
+  // on is_test falls back to the base columns (migration 157 not applied); any
+  // other read error throws, so the preview never fails open.
+  const readUsers = (withIsTest: boolean) =>
+    selectAllRowsMtproto<CandidateRow>(makeQuery(withIsTest), {
+      label: "users (mtproto audience candidates)",
+      maxRows: 50_000,
+      throwOnError: true,
+    });
+  let usersRead: { rows: CandidateRow[]; truncated: boolean };
+  try {
+    usersRead = await readUsers(true);
+  } catch (e) {
+    if (!isMissingIsTestColumn(e)) throw e;
+    console.warn("[mtproto] users.is_test not present (migration 157 not applied); previewing without the test-account filter");
+    usersRead = await readUsers(false);
+  }
+  const { rows, truncated } = usersRead;
 
   const [optOuts, contactedRead] = await Promise.all([optedOutSet(cloneIds), alreadyContactedSet(cloneIds)]);
   const contacted = contactedRead.keys;

@@ -12,6 +12,7 @@
 import { mtDb } from "./db";
 import { insertEvent } from "./events";
 import { getGlobalStop } from "./global-stop";
+import { REVIEW_KIND, checkReviewGate, computeDryRunSummary, currentAudienceSize, type DryRunSummary } from "./review";
 import { RunValidationError, isMissingTable, isUuid, requireUuid, sanitizeFilters, validateCaps } from "./validate";
 import {
   DEFAULT_DAILY_CAP,
@@ -186,6 +187,41 @@ export async function queueRun(id: string, actor: string): Promise<ReengageRun> 
   return fromRow(data as RunRow);
 }
 
+/** Records "a human reviewed this finished dry run" as a control_action event
+ *  {kind:'dry_run_reviewed', run_id, would_send_count, ...}. The counts stored
+ *  are the ones computed NOW from the episodes, never client-supplied, so
+ *  confirmLive() can later prove nothing changed. Latest review wins. */
+export async function recordDryRunReview(id: string, actor: string): Promise<DryRunSummary> {
+  requireUuid(id, "runId");
+  const run = await getRun(id);
+  if (!run) throw new RunValidationError("run not found");
+  if (!run.dryRun || run.confirmLiveAt) throw new RunValidationError("this run is already live; there is no dry run to review");
+  if (run.status !== "done") throw new RunValidationError(`the dry run is not finished (status "${run.status}", need "done")`);
+  if (run.stopRequested) throw new RunValidationError("this run was stopped; create a new run instead");
+  const summary = await computeDryRunSummary(id);
+  if (summary.truncated) throw new RunValidationError("the dry run is too large to review completely; narrow the audience");
+  if (summary.wouldSendCount === 0) throw new RunValidationError("the dry run would send nothing; there is nothing to review or take live");
+  const audienceSize = await currentAudienceSize(run);
+  await insertEvent({
+    runId: id,
+    cloneId: null,
+    userId: null,
+    episodeId: null,
+    eventType: "control_action",
+    actor,
+    detail: {
+      kind: REVIEW_KIND,
+      run_id: id,
+      would_send_count: summary.wouldSendCount,
+      holdout_count: summary.holdoutCount,
+      episode_count: summary.episodeCount,
+      excluded_total: summary.excludedTotal,
+      audience_size: audienceSize,
+    },
+  });
+  return summary;
+}
+
 /** The second, clearly-marked explicit action (prompt step 5). Only allowed
  *  on a run that has already been dry-run reviewed (status 'done', the
  *  worker's terminal state for a finished dry pass) — a run cannot go live
@@ -218,6 +254,13 @@ export async function confirmLive(id: string, actor: string, typed: string | nul
   }
   if (globallyStopped) throw new RunValidationError("GLOBAL STOP is active; lift it before confirming a live run");
 
+  // REVIEW GATE: a recorded human review, dry-run counts unchanged since, and
+  // an audience no larger than what was reviewed. Checked immediately before
+  // the conditional update below, which itself only matches a still-'done',
+  // still-dry, not-stopped run, so two concurrent confirms cannot both win.
+  const gate = await checkReviewGate(run);
+  if (!gate.ok) throw new RunValidationError(gate.reason);
+
   const confirmedAt = new Date().toISOString();
   const { data, error } = await mtDb()
     .from("reengage_runs")
@@ -228,7 +271,7 @@ export async function confirmLive(id: string, actor: string, typed: string | nul
     .eq("stop_requested", false)
     .select()
     .single();
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(`confirm live did not apply (the run changed underneath it; reload and try again): ${error.message}`);
   await insertEvent({
     runId: id,
     cloneId: null,
@@ -236,7 +279,7 @@ export async function confirmLive(id: string, actor: string, typed: string | nul
     episodeId: null,
     eventType: "control_action",
     actor,
-    detail: { action: "confirm_live", before: { dryRun: true, status: "done", confirmLiveAt: null }, after: { dryRun: false, status: "queued", confirmLiveAt: confirmedAt } },
+    detail: { action: "confirm_live", reviewed_event_id: gate.review.eventId, reviewed_would_send_count: gate.review.counts.wouldSendCount, before: { dryRun: true, status: "done", confirmLiveAt: null }, after: { dryRun: false, status: "queued", confirmLiveAt: confirmedAt } },
   });
   return fromRow(data as RunRow);
 }

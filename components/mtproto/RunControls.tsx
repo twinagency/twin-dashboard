@@ -5,13 +5,14 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { confirmLiveAction, stopRunAction } from "@/app/mtproto-campaign/actions";
 import { CONFIRM_LIVE_PHRASE, type ReengageRun } from "@/lib/mtproto/types";
+import type { SendPlan } from "@/lib/mtproto/review";
 
 // Prompt step 5: "a separate clearly-marked 'Confirm LIVE' action". Only
 // offered once the dry run has actually finished (status 'done'), and only
 // after typing the phrase. Both gates are enforced again server-side in
 // lib/mtproto/runs.ts confirmLive(); this component is only where the phrase
 // is collected. Every failure is shown, never swallowed.
-export default function RunControls({ run }: { run: ReengageRun }) {
+export default function RunControls({ run, reviewed = false, plan = null }: { run: ReengageRun; reviewed?: boolean; plan?: SendPlan | null }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
   const [arming, setArming] = useState(false);
@@ -55,7 +56,8 @@ export default function RunControls({ run }: { run: ReengageRun }) {
     });
   };
 
-  const canConfirmLive = run.dryRun && run.status === "done" && !run.stopRequested;
+  // The server re-checks the review (and that nothing changed since) in confirmLive().
+  const canConfirmLive = run.dryRun && run.status === "done" && !run.stopRequested && reviewed;
   const canStop = ["draft", "queued", "running", "paused"].includes(run.status);
 
   return (
@@ -63,9 +65,13 @@ export default function RunControls({ run }: { run: ReengageRun }) {
       <div className="flex flex-wrap items-center gap-2">
         {run.dryRun ? (
           arming ? (
-            <div className="flex items-center gap-2 rounded-lg border border-destructive/40 bg-card p-2">
+            <div className="flex flex-wrap items-center gap-2 rounded-lg border border-destructive/40 bg-card p-2">
               <span className="text-xs text-destructive">
-                Sends for real from {run.cloneIds.length} creator account(s). Type {CONFIRM_LIVE_PHRASE}.
+                Sends for real from {run.cloneIds.length} creator account(s)
+                {plan ? `: up to ${plan.firstDayTotal} today, up to ${plan.runTotal} over the whole run (min of run cap, daily cap, per-creator cap)` : ""}. Type {CONFIRM_LIVE_PHRASE}.
+              </span>
+              <span className="basis-full text-[11px] text-muted-foreground">
+                The worker on the laptop additionally needs REENGAGE_ALLOW_LIVE=true, otherwise it stays a dry run even after this.
               </span>
               <input
                 autoFocus
@@ -82,7 +88,7 @@ export default function RunControls({ run }: { run: ReengageRun }) {
               </Button>
             </div>
           ) : (
-            <Button onClick={() => setArming(true)} disabled={pending || !canConfirmLive} title={!canConfirmLive ? "Review the finished dry run before going live" : undefined}>
+            <Button onClick={() => setArming(true)} disabled={pending || !canConfirmLive} title={!canConfirmLive ? "Press \"I reviewed this dry run\" on the finished dry run first" : undefined}>
               Go live...
             </Button>
           )

@@ -10,7 +10,7 @@ type Result = { data: any; error: { message: string; code?: string } | null };
 export class FakeDb {
   tables: Record<string, Row[]> = {};
   /** table -> op ("select"|"insert"|"update"|"upsert") -> error to return */
-  failures: Record<string, Partial<Record<string, { message: string; code?: string }>>> = {};
+  failures: Record<string, Partial<Record<string, { message: string; code?: string; ifSelectIncludes?: string }>>> = {};
   private seq = 0;
 
   seed(table: string, rows: Row[]): void {
@@ -19,7 +19,9 @@ export class FakeDb {
   rows(table: string): Row[] {
     return (this.tables[table] ??= []);
   }
-  fail(table: string, op: string, error: { message: string; code?: string } | null): void {
+  /** `ifSelectIncludes`: only fail a select whose column list contains this
+   *  string (simulates "column does not exist" for one optional column). */
+  fail(table: string, op: string, error: { message: string; code?: string; ifSelectIncludes?: string } | null): void {
     (this.failures[table] ??= {})[op] = error ?? undefined;
   }
   nextId(): number {
@@ -44,7 +46,9 @@ class FakeQuery implements PromiseLike<Result> {
 
   constructor(private db: FakeDb, private table: string) {}
 
-  select(_cols?: string) {
+  private selectCols = "";
+  select(cols?: string) {
+    if (this.op === "select") this.selectCols = cols ?? "";
     if (this.op !== "select") this.returning = true;
     return this;
   }
@@ -125,7 +129,7 @@ class FakeQuery implements PromiseLike<Result> {
 
   private run(): Result {
     const fail = this.db.failures[this.table]?.[this.op];
-    if (fail) return { data: null, error: fail };
+    if (fail && !(fail.ifSelectIncludes && !this.selectCols.includes(fail.ifSelectIncludes))) return { data: null, error: { message: fail.message, code: fail.code } };
     const rows = this.db.rows(this.table);
     let out: Row[];
     if (this.op === "insert") {
@@ -158,7 +162,10 @@ class FakeQuery implements PromiseLike<Result> {
       if (this.rangeFrom != null) out = out.slice(this.rangeFrom, (this.rangeTo as number) + 1);
       if (this.lim != null) out = out.slice(0, this.lim);
     }
-    out = out.map((r) => ({ ...r }));
+    // Project to the selected columns for plain column lists (like PostgREST does), so an
+    // optional column that was not selected is really absent from the row.
+    const cols = this.op === "select" && /^[a-z_,\s]+$/i.test(this.selectCols) && this.selectCols.trim() ? this.selectCols.split(",").map((c) => c.trim()) : null;
+    out = out.map((r) => (cols ? Object.fromEntries(cols.map((c) => [c, r[c]])) : { ...r }));
     if (this.wantOne) {
       if (out.length === 0) return this.wantOne === "single" ? { data: null, error: { message: "JSON object requested, multiple (or no) rows returned" } } : { data: null, error: null };
       if (out.length > 1 && this.wantOne === "single") return { data: null, error: { message: "multiple rows returned" } };
