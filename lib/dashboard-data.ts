@@ -238,11 +238,11 @@ export async function getDashboard(period: Period, range?: DateRange, nowMs = Da
     // column is probed for with one row BEFORE paging, and the paged read then
     // asks only for columns that exist. Same defensive intent as before, just
     // moved ahead of the read that has to succeed.
-    const probe = await supabaseAdmin.from("star_transactions").select(COLS).limit(1);
+    const probe = await supabaseAdmin.from("clean_star_transactions_v").select(COLS).limit(1);
     const hasFeature = !probe.error;
     const paged = await selectAllRows(
       supabaseAdmin
-        .from("star_transactions")
+        .from("clean_star_transactions_v")
         .select(hasFeature ? COLS : COLS_LEGACY)
         .gte("paid_at", new Date(startMs).toISOString())
         .lte("paid_at", new Date(windowEnd).toISOString())
