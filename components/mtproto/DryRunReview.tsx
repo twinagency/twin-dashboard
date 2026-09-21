@@ -111,9 +111,15 @@ export default function DryRunReview({
             {plan.perClone.map((r) => (
               <li key={r.cloneId} className="flex justify-between">
                 <span>{creatorNames[r.cloneId] ?? r.cloneId}</span>
-                <span className="tabular-nums text-muted-foreground">
-                  {r.wouldSend} would send, day one {r.firstDay} (run daily cap {r.runDailyCap}, creator cap {r.creatorDailyCap ?? "no connection"})
-                </span>
+                {r.paused ? (
+                  <span className="tabular-nums font-semibold text-destructive">
+                    paused: not sent ({r.wouldSend} would have sent{r.pausedReason ? `; ${r.pausedReason}` : ""})
+                  </span>
+                ) : (
+                  <span className="tabular-nums text-muted-foreground">
+                    {r.wouldSend} would send, day one {r.firstDay} (run daily cap {r.runDailyCap}, creator cap {r.creatorDailyCap ?? "no connection"})
+                  </span>
+                )}
               </li>
             ))}
           </ul>

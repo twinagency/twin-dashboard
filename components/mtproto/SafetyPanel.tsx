@@ -8,6 +8,7 @@ import type { SafetySnapshot } from "@/lib/mtproto/types";
 // FloodWait/PeerFlood today, amber if a restriction landed within 7 days,
 // green otherwise — matches the plan's "green/amber/red" language exactly.
 function health(s: SafetySnapshot): { label: string; cls: string } {
+  if (s.paused && s.autoHalt) return { label: "red", cls: "bg-destructive/15 text-destructive" };
   if (s.floodWaitCount > 0) return { label: "red", cls: "bg-destructive/15 text-destructive" };
   if (s.daysCleanSinceRestriction != null && s.daysCleanSinceRestriction < 7) return { label: "amber", cls: "bg-warn/15 text-warn" };
   return { label: "green", cls: "bg-good/15 text-good" };
@@ -51,6 +52,17 @@ export default function SafetyPanel({ snapshots }: { snapshots: SafetySnapshot[]
                     <TableCell className="text-muted-foreground">{s.daysCleanSinceRestriction ?? "—"}</TableCell>
                     <TableCell>
                       <Badge variant={s.connectionStatus === "connected" ? "default" : "outline"}>{s.connectionStatus}</Badge>
+                      {s.paused && s.autoHalt ? (
+                        <div className="mt-1 max-w-[260px] space-y-0.5">
+                          <span className="rounded bg-destructive px-1.5 py-0.5 text-[11px] font-bold tracking-wide text-white">AUTO-HALTED</span>
+                          <div className="text-xs font-semibold text-destructive">{s.autoHalt.label}</div>
+                          {s.autoHalt.tripped && <div className="text-xs">{s.autoHalt.tripped}</div>}
+                          {s.autoHalt.threshold && <div className="text-xs text-muted-foreground">{s.autoHalt.threshold}</div>}
+                          {!s.autoHalt.eventFound && <div className="text-xs text-warn">halt numbers unavailable</div>}
+                        </div>
+                      ) : s.paused ? (
+                        <div className="mt-1 text-xs text-muted-foreground">paused (manual){s.pausedReason ? `: ${s.pausedReason}` : ""}</div>
+                      ) : null}
                     </TableCell>
                     <TableCell className="max-w-[220px] truncate text-xs text-muted-foreground" title={s.lastError ?? undefined}>
                       {s.lastError ?? "—"}

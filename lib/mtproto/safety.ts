@@ -9,6 +9,7 @@ import { mtDb } from "./db";
 import { isMissingTable } from "./validate";
 import type { CreatorLite, SafetySnapshot } from "./types";
 import { connectionFor, listConnections } from "./connections";
+import { buildAutoHaltInfo, pickHaltEvent } from "./halt";
 
 const RESTRICTION_EVENT_TYPES = ["send_failed", "account_halt"] as const;
 const LOOKBACK_DAYS = 30;
@@ -85,10 +86,14 @@ export async function computeSafetySnapshots(creators: CreatorLite[]): Promise<S
     const cloneEvents = restrictions.filter((e) => e.clone_id === creator.id && isRestriction(e));
     const floodWaitCount = cloneEvents.filter((e) => new Date(e.ts).getTime() >= todayStart && isFloodOrPeerFlood(e.detail)).length;
     const last = cloneEvents[0]; // already ordered ts desc
+    const autoHalt = conn.paused ? buildAutoHaltInfo(conn.pausedReason, pickHaltEvent(conn.pausedReason ?? "", cloneEvents)) : null;
     const lastRestrictionMs = cloneEvents.length ? new Date(cloneEvents[0].ts).getTime() : null;
     return {
       cloneId: creator.id,
       cloneName: creator.name,
+      paused: conn.paused,
+      pausedReason: conn.pausedReason,
+      autoHalt,
       sentToday: sentToday.get(creator.id) ?? 0,
       dailyCap: conn.dailyCap,
       floodWaitCount,

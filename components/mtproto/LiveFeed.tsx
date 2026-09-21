@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { describeEvent } from "@/lib/mtproto/event-format";
 import type { ReengageEvent } from "@/lib/mtproto/types";
 
 const POLL_MS = 4_000;
@@ -68,13 +69,16 @@ export default function LiveFeed({ runId }: { runId: string }) {
             {[...events]
               .slice()
               .reverse()
-              .map((e) => (
-                <li key={e.id} className="flex items-center gap-2 rounded px-2 py-1 odd:bg-muted/20">
-                  <span className="w-20 shrink-0 text-muted-foreground">{new Date(e.ts).toLocaleTimeString()}</span>
-                  <span className="w-40 shrink-0 font-medium">{e.eventType}</span>
-                  <span className="truncate text-muted-foreground">{JSON.stringify(e.detail)}</span>
-                </li>
-              ))}
+              .map((e) => {
+                const d = describeEvent(e);
+                return (
+                  <li key={e.id} className={`flex items-center gap-2 rounded px-2 py-1 ${d?.danger ? "bg-destructive/10" : "odd:bg-muted/20"}`}>
+                    <span className="w-20 shrink-0 text-muted-foreground">{new Date(e.ts).toLocaleTimeString()}</span>
+                    <span className={`w-40 shrink-0 font-medium ${d?.danger ? "text-destructive" : ""}`}>{e.eventType}</span>
+                    <span className={d ? (d.danger ? "font-medium text-destructive" : "") : "truncate text-muted-foreground"}>{d ? d.text : JSON.stringify(e.detail)}</span>
+                  </li>
+                );
+              })}
           </ul>
         )}
       </CardContent>

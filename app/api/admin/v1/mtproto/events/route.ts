@@ -1,5 +1,6 @@
 import { withAdmin, ok, jsonError } from "@/lib/api-route";
 import { listEvents } from "@/lib/mtproto/events";
+import { describeEvent } from "@/lib/mtproto/event-format";
 import { RunValidationError } from "@/lib/mtproto/validate";
 import { EVENT_TYPES, type EventType } from "@/lib/mtproto/types";
 
@@ -27,7 +28,8 @@ export const GET = withAdmin(async (req) => {
       sinceIso: params.get("since") ?? undefined,
       limit: params.get("limit") ? Number(params.get("limit")) : undefined,
     });
-    return ok({ events });
+    // `summary`: a readable line for spike auto-halts (stats + threshold) and resumes; null otherwise.
+    return ok({ events: events.map((e) => ({ ...e, summary: describeEvent(e)?.text ?? null })) });
   } catch (e) {
     if (e instanceof RunValidationError) return jsonError(e.message, 400);
     throw e;

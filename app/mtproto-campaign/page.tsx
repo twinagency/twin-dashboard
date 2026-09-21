@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { listCreators } from "@/lib/mtproto/clones";
 import { listRuns } from "@/lib/mtproto/runs";
 import { listEpisodesForRun } from "@/lib/mtproto/episodes";
-import { computeFunnel } from "@/lib/mtproto/funnel";
+import { computeFunnel, computeOptOuts } from "@/lib/mtproto/funnel";
 import { computeSafetySnapshots } from "@/lib/mtproto/safety";
 import { currentGlobalStop } from "./actions";
 import GlobalStopControl from "@/components/mtproto/GlobalStopControl";
@@ -42,7 +42,8 @@ export default async function MtprotoCampaignPage() {
   const episodesP = Promise.all(runs.map((r) => listEpisodesForRun(r.id, 10_000)));
   const safetyP = computeSafetySnapshots(creators);
   const funnelP = episodesP.then((sets) => computeFunnel(sets.flatMap((s) => s.episodes)));
-  const [episodeSets, funnel, safety] = await Promise.all([episodesP, funnelP, safetyP, globalStopP]).then(([a, b, c]) => [a, b, c] as const);
+  const optOutsP = episodesP.then((sets) => computeOptOuts(sets.flatMap((s) => s.episodes), creators));
+  const [episodeSets, funnel, safety, optOuts] = await Promise.all([episodesP, funnelP, safetyP, optOutsP, globalStopP]).then(([a, b, c, d]) => [a, b, c, d] as const);
   const anyTruncated = episodeSets.some((s) => s.truncated);
 
   return (
@@ -76,7 +77,7 @@ export default async function MtprotoCampaignPage() {
         </div>
       )}
 
-      <FunnelCard title="Fleet funnel" subtitle={`Across the last ${runs.length} run(s)${anyTruncated ? " — partial, some runs truncated their episode read" : ""}`} funnel={anyTruncated ? { ...funnel, partial: true } : funnel} />
+      <FunnelCard title="Fleet funnel" subtitle={`Across the last ${runs.length} run(s)${anyTruncated ? " — partial, some runs truncated their episode read" : ""}`} funnel={anyTruncated ? { ...funnel, partial: true } : funnel} optOuts={optOuts} />
 
       <div className="mt-6">
         <SafetyPanel snapshots={safety} />

@@ -234,7 +234,17 @@ export async function checkReviewGate(run: ReengageRun): Promise<ReviewVerdict> 
   return { ok: true, review };
 }
 
-export type SendPlanRow = { cloneId: string; wouldSend: number; runDailyCap: number; creatorDailyCap: number | null; firstDay: number };
+export type SendPlanRow = {
+  cloneId: string;
+  wouldSend: number;
+  runDailyCap: number;
+  creatorDailyCap: number | null;
+  /** 0 when the creator is paused. */
+  firstDay: number;
+  /** The creator's connection is paused (manual or auto-halt): "paused: not sent". */
+  paused: boolean;
+  pausedReason: string | null;
+};
 export type SendPlan = {
   perClone: SendPlanRow[];
   /** Most that can go out on day one: sum of per-creator min(would-send, run daily cap, creator cap), then capped by the run cap. */
@@ -249,12 +259,19 @@ export type SendPlan = {
 export async function computeSendPlan(run: ReengageRun, summary: DryRunSummary): Promise<SendPlan> {
   const conns = await listConnections();
   const capOf = new Map(conns.map((c) => [c.cloneId, c.dailyCap]));
+  const connOf = new Map(conns.map((c) => [c.cloneId, c]));
   const perClone: SendPlanRow[] = summary.wouldSendByClone.map(({ cloneId, count }) => {
     const creatorDailyCap = capOf.get(cloneId) ?? null;
-    return { cloneId, wouldSend: count, runDailyCap: run.dailyCap, creatorDailyCap, firstDay: Math.min(count, run.dailyCap, creatorDailyCap ?? Infinity) };
+    const conn = connOf.get(cloneId);
+    const paused = conn?.paused === true;
+    return {
+      cloneId, wouldSend: count, runDailyCap: run.dailyCap, creatorDailyCap,
+      firstDay: paused ? 0 : Math.min(count, run.dailyCap, creatorDailyCap ?? Infinity),
+      paused, pausedReason: paused ? conn?.pausedReason ?? null : null,
+    };
   });
   const runCap = run.runCap ?? Infinity;
   const firstDayTotal = Math.min(perClone.reduce((a, r) => a + r.firstDay, 0), runCap);
-  const runTotal = Math.min(perClone.reduce((a, r) => a + r.wouldSend, 0), runCap);
+  const runTotal = Math.min(perClone.reduce((a, r) => a + (r.paused ? 0 : r.wouldSend), 0), runCap);
   return { perClone, firstDayTotal, runTotal, runCap: run.runCap };
 }

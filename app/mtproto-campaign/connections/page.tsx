@@ -1,5 +1,6 @@
 import { listCreators } from "@/lib/mtproto/clones";
 import { connectionFor, listConnections } from "@/lib/mtproto/connections";
+import { autoHaltsFor, resumePhraseFor, shortId } from "@/lib/mtproto/halt";
 import ConnectionsTable from "@/components/mtproto/ConnectionsTable";
 
 export const dynamic = "force-dynamic";
@@ -12,7 +13,13 @@ export const dynamic = "force-dynamic";
 // the whole area is built around.
 export default async function MtprotoConnectionsPage() {
   const [creators, connections] = await Promise.all([listCreators(), listConnections()]);
-  const rows = creators.map((c) => ({ creator: c, connection: connectionFor(c.id, connections) }));
+  const halts = await autoHaltsFor(connections);
+  const rows = creators.map((c) => ({
+    creator: c,
+    connection: connectionFor(c.id, connections),
+    autoHalt: halts.get(c.id) ?? null,
+    resumePhrase: resumePhraseFor(c.name || shortId(c.id)),
+  }));
 
   return (
     <div className="dashboard-page">

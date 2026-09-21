@@ -169,7 +169,7 @@ export async function currentGlobalStop(): Promise<boolean> {
 export async function setConnectionPausedAction(fd: FormData): Promise<ActionResult> {
   await guardDashboardAction("app/mtproto-campaign/actions.ts#setConnectionPausedAction", [fd]);
   try {
-    await setConnectionPaused(String(fd.get("cloneId") ?? ""), fd.get("paused") === "true", String(fd.get("reason") ?? "") || null, ACTOR);
+    await setConnectionPaused(String(fd.get("cloneId") ?? ""), fd.get("paused") === "true", String(fd.get("reason") ?? "") || null, ACTOR, String(fd.get("confirmText") ?? ""));
     return { ok: true };
   } catch (e) {
     return fail(e);

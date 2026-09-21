@@ -140,6 +140,12 @@ export const TOP_SPENDER_DEFAULT_MIN_STARS = 500;
 export const CONFIRM_LIVE_PHRASE = "GO LIVE";
 export const RESUME_PHRASE = "RESUME";
 
+/** paused_reason written by the worker's spike detector (twin-userbot
+ *  contract.ts SPIKE_PAUSE_REASON_PREFIX). A pause carrying it is an
+ *  AUTO-HALT, distinct from an operator's manual pause. */
+export const AUTO_HALT_PREFIX = "auto_halt_spike:";
+export const AUTO_HALT_KINDS = ["optout_spike", "complaint_spike", "error_spike", "detector_error"] as const;
+
 // LEGACY IMPORT DETECTION (verified 2026-09-22 against twin-bot migrations
 // 081 and 123): the 57k fans carried over from the old n8n stack are exactly
 // the `users` rows with legacy_id IS NOT NULL (081: "every row created
@@ -261,14 +267,48 @@ export interface SampleFan {
 
 export type ExclusionCounts = Record<PreviewExclusionReason, number>;
 
+/** A creator whose connection is paused: none of its fans are previewed as
+ *  sendable (the worker and migration 158's claim skip paused creators). */
+export interface PausedCreatorPreview {
+  cloneId: string;
+  reason: string | null;
+  /** True when the pause is a spike auto-halt, false for a manual pause. */
+  autoHalted: boolean;
+  /** Fans that matched the filters but will NOT be sent to: "paused: not sent". */
+  notSent: number;
+}
+
 export interface AudiencePreview {
+  /** Fans of NON-paused creators that matched the filters. Paused creators'
+   *  fans are counted in pausedNotSent instead, never in eligible/excluded. */
   candidatePool: number;
+  pausedCreators: PausedCreatorPreview[];
+  pausedNotSent: number;
   eligible: number;
   holdout: number;
   excluded: ExclusionCounts;
   excludedTotal: number;
   sample: SampleFan[];
   truncated: boolean;
+}
+
+export interface OptOutRow {
+  cloneId: string;
+  cloneName: string;
+  /** Unique fans with an acked real send. */
+  contacted: number;
+  /** Unique contacted fans with an opt_out event. */
+  optedOut: number;
+  /** optedOut / contacted, null when nobody was contacted. */
+  rate: number | null;
+}
+
+export interface OptOutReport {
+  total: OptOutRow;
+  perCreator: OptOutRow[];
+  /** Set when the opt_out events could not be read: figures are unknown, not zero. */
+  error?: string;
+  partial?: boolean;
 }
 
 export interface FunnelCounts {
@@ -309,7 +349,28 @@ export interface LiftReport {
   holdout: LiftSide;
 }
 
+/** Read-out of a spike auto-halt for the Connections page and Safety panel. */
+export interface AutoHaltInfo {
+  /** Suffix of paused_reason, e.g. "optout_spike". */
+  kind: string;
+  /** Short badge text, e.g. "Opt-out spike". */
+  label: string;
+  /** One sentence: what happened and what it means. */
+  explanation: string;
+  /** "3 of 12 sends opted out (25.0%)", from the latest account_halt event. */
+  tripped: string | null;
+  /** "trips at 10% or 3 opt-outs, minimum 10 sends", from the same event. */
+  threshold: string | null;
+  haltedAt: string | null;
+  /** False when no matching account_halt event could be found (say so, do not guess). */
+  eventFound: boolean;
+}
+
 export interface SafetySnapshot {
+  /** connection paused (manual or auto). */
+  paused: boolean;
+  pausedReason: string | null;
+  autoHalt: AutoHaltInfo | null;
   cloneId: string;
   cloneName: string;
   sentToday: number;

@@ -4,7 +4,11 @@ import { getRun } from "@/lib/mtproto/runs";
 import { checkReviewGate, computeDryRunSummary, computeSendPlan, latestReview } from "@/lib/mtproto/review";
 import DryRunReview, { type ReviewState } from "@/components/mtproto/DryRunReview";
 import { listEpisodesForRun } from "@/lib/mtproto/episodes";
-import { computeFunnel } from "@/lib/mtproto/funnel";
+import { computeFunnel, computeOptOuts } from "@/lib/mtproto/funnel";
+import { listEvents } from "@/lib/mtproto/events";
+import { connectionFor, listConnections } from "@/lib/mtproto/connections";
+import { autoHaltsFor } from "@/lib/mtproto/halt";
+import HaltPanel, { type PausedNow } from "@/components/mtproto/HaltPanel";
 import { computeLift, loadPurchasesForEpisodes } from "@/lib/mtproto/attribution";
 import { buildSendRows } from "@/lib/mtproto/sends";
 import { listCreators } from "@/lib/mtproto/clones";
@@ -27,7 +31,24 @@ export default async function RunDetailPage({ params }: { params: Promise<{ id: 
   // ONE star_transactions read feeds the funnel, the lift table and the sends table.
   const purchases = await loadPurchasesForEpisodes(episodes);
   const lift = await computeLift(episodes, purchases);
-  const [funnel, sends] = await Promise.all([computeFunnel(episodes, lift), buildSendRows(episodes, creators, purchases)]);
+  const [funnel, sends, optOuts] = await Promise.all([computeFunnel(episodes, lift), buildSendRows(episodes, creators, purchases), computeOptOuts(episodes, creators)]);
+
+  // Account halts: the run's own account_halt events, plus any of its creators
+  // that are paused/auto-halted right now. A failed read is shown, not hidden.
+  let haltEvents: Awaited<ReturnType<typeof listEvents>> = [];
+  let haltError: string | null = null;
+  let pausedNow: PausedNow[] = [];
+  try {
+    haltEvents = await listEvents({ runId: id, eventType: "account_halt", limit: 50 });
+    const conns = await listConnections();
+    const autoInfo = await autoHaltsFor(conns.filter((c) => run.cloneIds.includes(c.cloneId)));
+    pausedNow = run.cloneIds
+      .map((cid) => connectionFor(cid, conns))
+      .filter((c) => c.paused)
+      .map((c) => ({ cloneId: c.cloneId, name: creators.find((x) => x.id === c.cloneId)?.name ?? c.cloneId, reason: c.pausedReason, info: autoInfo.get(c.cloneId) ?? null }));
+  } catch (e) {
+    haltError = e instanceof Error ? e.message : String(e);
+  }
 
   // Dry-run review card: only for a finished, unstopped dry run.
   let reviewCard: React.ReactNode = null;
@@ -91,7 +112,11 @@ export default async function RunDetailPage({ params }: { params: Promise<{ id: 
 
       {reviewCard}
 
-      <FunnelCard title="Funnel" funnel={truncated ? { ...funnel, partial: true } : funnel} />
+      <FunnelCard title="Funnel" funnel={truncated ? { ...funnel, partial: true } : funnel} optOuts={optOuts} />
+
+      <div className="mt-6">
+        <HaltPanel events={haltEvents} pausedNow={pausedNow} error={haltError} creatorNames={Object.fromEntries(creators.map((c) => [c.id, c.name]))} />
+      </div>
 
       <div className="mt-6">
         <LiftCard reports={lift} />

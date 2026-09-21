@@ -22,6 +22,11 @@ import { computeDryRunSummary, redactFan, redactText, computeSendPlan } from "..
 import { insertEvent } from "../events";
 import { getGlobalStop, setGlobalStop } from "../global-stop";
 import { setConnectionDailyCap, setConnectionPaused } from "../connections";
+import { autoHaltKind, autoHaltsFor, buildAutoHaltInfo, describeAutoHaltEvent, resumePhraseOk } from "../halt";
+import { describeEvent } from "../event-format";
+import { computeOptOuts, optOutReport } from "../funnel";
+import { computeSafetySnapshots } from "../safety";
+import { AUTO_HALT_PREFIX } from "../types";
 import { liftFromData } from "../attribution";
 import { scrubDetail } from "../events";
 import { sanitizeFilters } from "../validate";
@@ -1060,6 +1065,238 @@ check("K12 review gate is wired: confirmLive calls checkReviewGate before its co
   assert(g > 0, "confirmLive must call checkReviewGate");
   assert(g < c.indexOf('.from("reengage_runs")'), "the gate must run before the update");
   assert(c.indexOf("CONFIRM_LIVE_PHRASE") < g, "phrase is checked first");
+});
+
+
+// ── L. spike auto-halts (twin-userbot 5294362: src/spike.ts pauseCreator) ───
+// Detail shape below is EXACTLY what pauseCreator writes.
+
+const HALT_DETAIL = {
+  errorCode: "auto_halt_spike:optout_spike", auto: true, kind: "optout_spike", requiresOperatorUnpause: true,
+  stats: { sample: 12, optOuts: 3, complaints: 0, failures: 0 }, rate: 0.25, count: 3,
+  threshold: { rate: 0.1, count: 3, minSample: 10 }, windowHours: 24, sampleMax: 50,
+};
+function haltedDb(reason = "auto_halt_spike:optout_spike", detail: Record<string, unknown> = HALT_DETAIL): FakeDb {
+  const db = freshDb();
+  db.seed("userbot_connections", [{ clone_id: CLONE_A, status: "connected", paused: true, paused_reason: reason, daily_cap: 30, tg_user_id: 1, dc_id: 1, last_seen_at: null, session_ref: null, created_at: T(5), updated_at: T(1) }]);
+  db.seed("reengage_events", [
+    { id: 1, ts: T(30), clone_id: CLONE_A, event_type: "account_halt", actor: "system", detail: { errorCode: "FLOOD_WAIT_300" } },
+    { id: 2, ts: T(1), clone_id: CLONE_A, run_id: null, event_type: "account_halt", actor: "system", detail },
+  ]);
+  return db;
+}
+
+check("L1 pure: auto-halt reasons are recognised, manual pauses are not; text carries the tripped rate and threshold", () => {
+  eq(autoHaltKind("auto_halt_spike:complaint_spike"), "complaint_spike", "kind");
+  eq(autoHaltKind("auto_halt_spike:"), "unknown", "empty suffix still an auto-halt");
+  eq(autoHaltKind("flood"), null, "manual reason");
+  eq(autoHaltKind(null), null, "no reason");
+  eq(AUTO_HALT_PREFIX, "auto_halt_spike:", "prefix mirrors twin-userbot contract");
+  const info = buildAutoHaltInfo("auto_halt_spike:optout_spike", { ts: T(1), event_type: "account_halt", detail: HALT_DETAIL })!;
+  eq(info.label, "Opt-out spike", "label");
+  eq(info.tripped, "3 of 12 recent sends opted out (25%)", "tripped");
+  assert(info.threshold!.includes("10% of sends") && info.threshold!.includes("3 opt-outs") && info.threshold!.includes("minimum 10"), `threshold text: ${info.threshold}`);
+  const fail = buildAutoHaltInfo("auto_halt_spike:error_spike", { ts: T(1), detail: { kind: "error_spike", stats: { sample: 10, optOuts: 0, complaints: 0, failures: 4 }, rate: 0.4, threshold: { rate: 0.3, count: null, minSample: 10 } } })!;
+  eq(fail.tripped, "4 of 10 recent sends hard-failed (40%)", "error spike");
+  assert(fail.threshold!.includes("30% of sends") && !fail.threshold!.includes("null"), `error threshold: ${fail.threshold}`);
+  const det = buildAutoHaltInfo("auto_halt_spike:detector_error", { ts: T(1), detail: { kind: "detector_error", error: "boom" } })!;
+  assert(det.tripped!.includes("boom"), "detector error text");
+  const nothing = buildAutoHaltInfo("auto_halt_spike:optout_spike", null)!;
+  assert(!nothing.eventFound && nothing.tripped === null, "no event: say so, invent nothing");
+  eq(buildAutoHaltInfo("flood", null), null, "manual pause has no auto-halt info");
+});
+
+check("L2 resume phrase: only 'RESUME <name>' or 'RESUME <short id>' (any case/spacing); bare RESUME, other names, empty never pass", () => {
+  assert(resumePhraseOk("RESUME Alpha", "Alpha", CLONE_A), "name");
+  assert(resumePhraseOk("  resume   alpha ", "Alpha", CLONE_A), "case and spacing");
+  assert(resumePhraseOk("RESUME aaaaaaaa", "Alpha", CLONE_A), "short id");
+  for (const bad of ["RESUME", "resume", "", "  ", "Alpha", "RESUME Beta", "RESUME aaaaaaa", "GO LIVE", null, undefined]) {
+    assert(!resumePhraseOk(bad as never, "Alpha", CLONE_A), `must not pass: ${JSON.stringify(bad)}`);
+  }
+  assert(!resumePhraseOk("RESUME ", "", CLONE_A), "empty name never matches an empty phrase");
+});
+
+acheck("L3 Connections read-out: auto-halt shows reason + tripped rate/threshold from the LATEST matching account_halt; manual pause does not", async () => {
+  const db = haltedDb();
+  db.rows("userbot_connections").push({ clone_id: CLONE_B, status: "connected", paused: true, paused_reason: "operator said so", daily_cap: 30 } as never);
+  db.rows("userbot_connections").push({ clone_id: CLONE_PAUSED, status: "connected", paused: false, paused_reason: null, daily_cap: 30 } as never);
+  const { listConnections } = await import("../connections");
+  const halts = await autoHaltsFor(await listConnections());
+  eq(halts.size, 1, "only the auto-halted creator");
+  const a = halts.get(CLONE_A)!;
+  eq(a.tripped, "3 of 12 recent sends opted out (25%)", "tripped comes from the account_halt event, not the older flood halt");
+  assert(a.threshold && a.eventFound, "threshold + event found");
+  assert(!halts.has(CLONE_B), "manual pause is not an auto-halt");
+  // unreadable halt events: still flagged AUTO-HALTED, without invented numbers
+  db.fail("reengage_events", "select", { message: "events down" });
+  const degraded = await autoHaltsFor(await listConnections());
+  assert(degraded.get(CLONE_A) && !degraded.get(CLONE_A)!.eventFound, "flagged even when the event read fails");
+});
+
+acheck("L4 Safety panel snapshot carries the auto-halt (paused, reason, tripped, threshold); manual pause has none", async () => {
+  const db = haltedDb();
+  db.rows("userbot_connections").push({ clone_id: CLONE_B, status: "connected", paused: true, paused_reason: "manual", daily_cap: 30 } as never);
+  const snaps = await computeSafetySnapshots([{ id: CLONE_A, name: "Alpha", slug: "a", status: "active", businessUsername: null }, { id: CLONE_B, name: "Beta", slug: "b", status: "active", businessUsername: null }]);
+  const a = snaps.find((x) => x.cloneId === CLONE_A)!;
+  const b = snaps.find((x) => x.cloneId === CLONE_B)!;
+  assert(a.paused && a.autoHalt && a.autoHalt.tripped === "3 of 12 recent sends opted out (25%)", "auto-halt on the snapshot");
+  assert(b.paused && b.autoHalt === null && b.pausedReason === "manual", "manual pause is distinct");
+});
+
+acheck("L5 RESUME of an auto-halt is REFUSED server-side without the phrase; nothing is written", async () => {
+  const db = haltedDb();
+  for (const typed of [undefined, null, "", "RESUME", "resume now", "RESUME Beta", "yes"]) {
+    await rejects(setConnectionPaused(CLONE_A, false, null, "operator", typed as never), /AUTO-HALTED/);
+  }
+  const conn = db.rows("userbot_connections")[0];
+  eq(conn.paused, true, "still paused");
+  eq(conn.paused_reason, "auto_halt_spike:optout_spike", "reason untouched");
+  eq(eventsOf(db, "control_action").length, 0, "no control_action event for a refused resume");
+});
+
+acheck("L6 RESUME with the phrase works and logs actor + before/after including the halt reason and numbers", async () => {
+  const db = haltedDb();
+  await setConnectionPaused(CLONE_A, false, null, "operator", "resume alpha");
+  const conn = db.rows("userbot_connections")[0];
+  eq(conn.paused, false, "resumed");
+  eq(conn.paused_reason, null, "reason cleared");
+  const ev = eventsOf(db, "control_action")[0];
+  eq(ev.actor, "operator", "actor");
+  eq(ev.clone_id, CLONE_A, "clone");
+  eq(ev.detail.action, "resume_connection", "action");
+  eq(ev.detail.before.paused, true, "before.paused");
+  eq(ev.detail.before.pausedReason, "auto_halt_spike:optout_spike", "before carries the halt reason");
+  eq(ev.detail.before.autoHalt.tripped, "3 of 12 recent sends opted out (25%)", "before carries what tripped");
+  eq(ev.detail.after.paused, false, "after.paused");
+  eq(ev.detail.confirmed, true, "typed confirmation recorded");
+  eq(ev.detail.resumedAutoHalt, "auto_halt_spike:optout_spike", "resumed halt reason");
+  // short id also accepted
+  const db2 = haltedDb("auto_halt_spike:error_spike", { ...HALT_DETAIL, kind: "error_spike", errorCode: "auto_halt_spike:error_spike" });
+  await setConnectionPaused(CLONE_A, false, null, "api-key", "RESUME aaaaaaaa");
+  eq(db2.rows("userbot_connections")[0].paused, false, "short id resumes");
+  eq(eventsOf(db2, "control_action")[0].actor, "api-key", "api actor");
+});
+
+acheck("L7 a MANUAL pause still resumes without a phrase; pausing an auto-halted creator keeps its halt reason; unreadable connection fails closed", async () => {
+  const db = freshDb();
+  await setConnectionPaused(CLONE_A, true, "flood", "operator");
+  await setConnectionPaused(CLONE_A, false, null, "operator");
+  eq(db.rows("userbot_connections")[0].paused, false, "manual resume needs no phrase");
+  const db2 = haltedDb();
+  await setConnectionPaused(CLONE_A, true, "just in case", "operator");
+  eq(db2.rows("userbot_connections")[0].paused_reason, "auto_halt_spike:optout_spike", "auto-halt reason survives a manual pause click");
+  db2.fail("userbot_connections", "select", { message: "down" });
+  await rejects(setConnectionPaused(CLONE_A, false, null, "operator", "RESUME Alpha"), /could not read connection/);
+});
+
+check("L8 the resume gate is wired in the lib function, the server action and the API route (source)", () => {
+  const c = sourceCode("../connections.ts");
+  assert(/resumePhraseOk\(/.test(c), "setConnectionPaused calls resumePhraseOk");
+  assert(c.indexOf("resumePhraseOk(") < c.indexOf('.from("userbot_connections")\n    .upsert'), "the phrase is checked before the write");
+  assert(/confirmText/.test(sourceCode("../../../app/mtproto-campaign/actions.ts")), "server action passes confirmText");
+  assert(/confirmText/.test(sourceCode("../../../app/api/admin/v1/mtproto/write/route.ts")), "API route passes confirmText");
+  const table = sourceCode("../../../components/mtproto/ConnectionsTable.tsx");
+  assert(table.includes("AUTO-HALTED") && table.includes("confirmText"), "connections UI shows the badge and collects the phrase");
+  assert(sourceCode("../../../components/mtproto/SafetyPanel.tsx").includes("AUTO-HALTED"), "safety panel shows the badge");
+});
+
+check("L9 account_halt events read as text (stats + threshold) in the feed formatter, API summary and run page", () => {
+  const t = describeAutoHaltEvent(HALT_DETAIL)!;
+  assert(t.startsWith("AUTO-HALTED: Opt-out spike") && t.includes("3 of 12") && t.includes("trips at 10%"), `text: ${t}`);
+  eq(describeAutoHaltEvent({ errorCode: "FLOOD_WAIT_300" }), null, "a flood halt is not a spike auto-halt");
+  const e = describeEvent({ eventType: "account_halt", detail: HALT_DETAIL })!;
+  assert(e.danger && e.text.includes("3 of 12") && e.text.includes("25%"), "feed text");
+  assert(describeEvent({ eventType: "account_halt", detail: { errorCode: "FLOOD_WAIT_300" } })!.text.includes("FLOOD_WAIT_300"), "other halts still readable");
+  const r = describeEvent({ eventType: "control_action", detail: { action: "resume_connection", confirmed: true, before: { pausedReason: "auto_halt_spike:optout_spike" } } })!;
+  assert(r.text.includes("resumed") && r.text.includes("auto_halt_spike:optout_spike"), "resume text");
+  eq(describeEvent({ eventType: "send_acked", detail: {} }), null, "plain events fall back to raw detail");
+  assert(sourceCode("../../../components/mtproto/LiveFeed.tsx").includes("describeEvent"), "live feed uses the formatter");
+  assert(sourceCode("../../../app/api/admin/v1/mtproto/events/route.ts").includes("describeEvent"), "events API adds summary");
+  assert(sourceCode("../../../app/mtproto-campaign/runs/[id]/page.tsx").includes("HaltPanel"), "run detail renders halts");
+});
+
+acheck("L10 audience preview: a paused creator's fans are 'paused: not sent', never eligible, hold-out or counted as excluded", async () => {
+  const db = freshDb();
+  db.seed("users", [
+    ...[1, 2, 3, 4, 5].map((n) => userRow(uid(n))),
+    ...[21, 22, 23].map((n) => userRow(uid(n), {}, CLONE_B)),
+  ]);
+  db.seed("userbot_connections", [
+    { clone_id: CLONE_A, status: "connected", paused: false, paused_reason: null, daily_cap: 30 },
+    { clone_id: CLONE_B, status: "connected", paused: true, paused_reason: "auto_halt_spike:complaint_spike", daily_cap: 30 },
+  ]);
+  const p = await computeAudiencePreview({ cloneIds: [CLONE_A, CLONE_B] }, { dailyCap: 30, runCap: null, holdoutPct: 15 });
+  eq(p.pausedNotSent, 3, "paused fans not sent");
+  eq(p.pausedCreators.length, 1, "one paused creator");
+  assert(p.pausedCreators[0].cloneId === CLONE_B && p.pausedCreators[0].autoHalted && p.pausedCreators[0].notSent === 3, "flagged as auto-halted with its fan count");
+  eq(p.candidatePool, 5, "pool is the sendable creators only");
+  eq(p.eligible + p.excludedTotal, p.candidatePool, "numbers still add up");
+  assert(p.sample.every((f) => Number(f.telegramId) < 1020), "no sample fan belongs to the paused creator");
+  // a manual pause is also not sent, but not flagged auto-halted
+  db.rows("userbot_connections")[1].paused_reason = "manual";
+  const m = await computeAudiencePreview({ cloneIds: [CLONE_B] }, { dailyCap: 30, runCap: null, holdoutPct: 15 });
+  eq(m.eligible, 0, "nothing eligible for a paused creator");
+  eq(m.pausedCreators[0].autoHalted, false, "manual pause distinct");
+  // unreadable connections must not fail open
+  db.fail("userbot_connections", "select", { message: "conn down" });
+  await rejects(computeAudiencePreview({ cloneIds: [CLONE_A] }, { dailyCap: 30, runCap: null, holdoutPct: 15 }), /userbot_connections/);
+});
+
+acheck("L11 send plan (cap estimate): a paused creator contributes 0 on day one and to the run total, labelled paused", async () => {
+  const db = freshDb();
+  const id = await finishedDryRun(db);
+  const run = (await getRun(id))!;
+  db.seed("userbot_connections", [{ clone_id: CLONE_A, status: "connected", paused: true, paused_reason: "auto_halt_spike:optout_spike", daily_cap: 30 }]);
+  const plan = await computeSendPlan({ ...run, dailyCap: 30, runCap: null }, await computeDryRunSummary(id));
+  eq(plan.firstDayTotal, 0, "paused: nothing on day one");
+  eq(plan.runTotal, 0, "paused: nothing over the run");
+  assert(plan.perClone[0].paused && plan.perClone[0].pausedReason === "auto_halt_spike:optout_spike" && plan.perClone[0].wouldSend === 3, "still shows what it would have sent");
+  assert(sourceCode("../../../components/mtproto/DryRunReview.tsx").includes("paused: not sent"), "review UI labels it");
+});
+
+check("L12 opted-out report: unique contacted fans per creator, opt-outs only from contacted fans, rate never above 100%", () => {
+  const eps = [
+    ep({ id: "a1", cloneId: CLONE_A, userId: "u1", state: "acked", tgMessageId: 1, sentAt: at(5) }),
+    ep({ id: "a2", cloneId: CLONE_A, userId: "u2", state: "replied", tgMessageId: 2, sentAt: at(5) }),
+    ep({ id: "a3", cloneId: CLONE_A, userId: "u3", state: "acked", tgMessageId: 3, sentAt: at(5) }),
+    ep({ id: "a4", cloneId: CLONE_A, userId: "u4", state: "failed" }),
+    ep({ id: "a5", cloneId: CLONE_A, userId: "u5", state: "acked", tgMessageId: 5, sentAt: at(5), dryRun: true }),
+    ep({ id: "b1", cloneId: CLONE_B, userId: "u9", state: "acked", tgMessageId: 9, sentAt: at(5) }),
+  ];
+  const events = [
+    { clone_id: CLONE_A, user_id: "u1" }, { clone_id: CLONE_A, user_id: "u1" }, // duplicate counts once
+    { clone_id: CLONE_A, user_id: "u4" }, { clone_id: CLONE_A, user_id: "u5" }, // never really contacted: ignored
+    { clone_id: CLONE_A, user_id: "zzz" }, { clone_id: CLONE_B, user_id: "u1" }, // other fan / wrong creator
+  ];
+  const r = optOutReport(eps, events, [{ id: CLONE_A, name: "Alpha" }, { id: CLONE_B, name: "Beta" }]);
+  const a = r.perCreator.find((x) => x.cloneId === CLONE_A)!;
+  eq(a.contacted, 3, "contacted"); eq(a.optedOut, 1, "opted out"); eq(Math.round((a.rate as number) * 1000), 333, "rate");
+  eq(a.cloneName, "Alpha", "name");
+  const b = r.perCreator.find((x) => x.cloneId === CLONE_B)!;
+  eq(b.optedOut, 0, "beta none");
+  eq(r.total.contacted, 4, "total contacted"); eq(r.total.optedOut, 1, "total opt-outs");
+  eq(optOutReport([], [], []).total.rate, null, "no sends: rate unknown, not 0%");
+});
+
+acheck("L13 opted-out counts read opt_out events (fake db); a failed read is reported as unknown, not zero", async () => {
+  const db = freshDb();
+  const eps = [
+    ep({ id: "a1", userId: "u1", state: "acked", tgMessageId: 1, sentAt: at(5) }),
+    ep({ id: "a2", userId: "u2", state: "acked", tgMessageId: 2, sentAt: at(5) }),
+  ];
+  db.seed("reengage_events", [
+    { id: 1, ts: at(4), clone_id: CLONE_A, user_id: "u1", event_type: "opt_out", detail: {} },
+    { id: 2, ts: at(4), clone_id: CLONE_A, user_id: "u2", event_type: "fan_replied", detail: {} },
+    { id: 3, ts: at(900), clone_id: CLONE_A, user_id: "u2", event_type: "opt_out", detail: {} }, // before the send
+  ]);
+  const rep = await computeOptOuts(eps, [{ id: CLONE_A, name: "Alpha" }]);
+  eq(rep.total.optedOut, 1, "one opt-out"); eq(rep.total.contacted, 2, "two contacted"); eq(rep.total.rate, 0.5, "50%");
+  db.fail("reengage_events", "select", { message: "events down" });
+  const bad = await computeOptOuts(eps, [{ id: CLONE_A, name: "Alpha" }]);
+  assert(bad.error && /events down/.test(bad.error), "error surfaced");
+  const card = sourceCode("../../../components/mtproto/FunnelCard.tsx");
+  assert(card.includes("Opted out") && card.includes("unknown, not zero"), "funnel card renders opted-out and the unknown state");
+  assert(sourceCode("../../../app/mtproto-campaign/runs/[id]/page.tsx").includes("computeOptOuts") && sourceCode("../../../app/mtproto-campaign/page.tsx").includes("computeOptOuts"), "wired on run and overview pages");
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

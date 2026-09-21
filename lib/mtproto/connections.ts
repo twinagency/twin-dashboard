@@ -7,6 +7,8 @@
 
 import { mtDb } from "./db";
 import { insertEvent } from "./events";
+import { getCreator } from "./clones";
+import { autoHaltKind, buildAutoHaltInfo, listHaltEvents, pickHaltEvent, resumePhraseFor, resumePhraseOk, shortId } from "./halt";
 import { RunValidationError, isMissingTable, requireUuid } from "./validate";
 import { HARD_MAX_DAILY_CAP, type ConnectionStatus, type UserbotConnection } from "./types";
 
@@ -84,10 +86,38 @@ export async function getConnection(cloneId: string): Promise<UserbotConnection 
   return data ? fromRow(data as ConnectionRow) : null;
 }
 
-export async function setConnectionPaused(cloneId: string, paused: boolean, reason: string | null, actor: string): Promise<void> {
+/** Pause or resume one creator's connection.
+ *
+ *  RESUMING A SPIKE AUTO-HALT (paused_reason 'auto_halt_spike:*') needs the
+ *  typed phrase `RESUME <clone name or short id>`, checked HERE server-side (the
+ *  form and the API only collect it). The control_action event then records who,
+ *  and before/after including the halt reason and the numbers that tripped it.
+ *  Resuming a manual pause is unchanged (no phrase). Pausing is always one call;
+ *  pausing an already auto-halted creator keeps the auto-halt reason. */
+export async function setConnectionPaused(cloneId: string, paused: boolean, reason: string | null, actor: string, confirmText?: string | null): Promise<void> {
   requireUuid(cloneId, "cloneId");
-  const cleanReason = reason ? reason.slice(0, 500) : null;
+  let cleanReason = reason ? reason.slice(0, 500) : null;
+  // getConnection throws on a read error: never resume (or pause) blind.
   const before = await getConnection(cloneId);
+  const wasAutoHalt = !!before?.paused && autoHaltKind(before.pausedReason) !== null;
+  let haltInfo: ReturnType<typeof buildAutoHaltInfo> = null;
+  let phrase: string | null = null;
+  if (!paused && wasAutoHalt) {
+    const creator = await getCreator(cloneId);
+    if (!resumePhraseOk(confirmText, creator?.name, cloneId)) {
+      throw new RunValidationError(
+        `this creator was AUTO-HALTED (${before!.pausedReason}). Type "${resumePhraseFor(creator?.name ?? shortId(cloneId))}" (or "RESUME ${shortId(cloneId)}") to resume it`,
+      );
+    }
+    phrase = (confirmText ?? "").trim().replace(/\s+/g, " ");
+    try {
+      const events = await listHaltEvents([cloneId]);
+      haltInfo = buildAutoHaltInfo(before!.pausedReason, pickHaltEvent(before!.pausedReason as string, events));
+    } catch {
+      haltInfo = buildAutoHaltInfo(before!.pausedReason, null); // reason still recorded; numbers unavailable
+    }
+  }
+  if (paused && wasAutoHalt) cleanReason = before!.pausedReason; // a manual pause must not erase why it auto-halted
   const { error } = await mtDb()
     .from("userbot_connections")
     .upsert({ clone_id: cloneId, paused, paused_reason: paused ? cleanReason : null }, { onConflict: "clone_id" });
@@ -103,8 +133,9 @@ export async function setConnectionPaused(cloneId: string, paused: boolean, reas
       detail: {
         action: paused ? "pause_connection" : "resume_connection",
         reason: cleanReason,
-        before: { paused: before?.paused ?? false },
-        after: { paused },
+        before: { paused: before?.paused ?? false, pausedReason: before?.pausedReason ?? null, ...(haltInfo ? { autoHalt: haltInfo } : {}) },
+        after: { paused, pausedReason: paused ? cleanReason : null },
+        ...(phrase ? { confirmed: true, confirmText: phrase, resumedAutoHalt: before!.pausedReason } : {}),
       },
     });
   } catch (e) {

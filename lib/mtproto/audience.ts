@@ -27,12 +27,15 @@
 
 import { mtDb } from "./db";
 import { selectAllRowsMtproto } from "./paging";
+import { listConnections } from "./connections";
+import { autoHaltKind } from "./halt";
 import { isMissingTable, sanitizeFilters, uuidList, validateCaps } from "./validate";
 import {
   MIN_SILENCE_HOURS,
   TOP_SPENDER_DEFAULT_MIN_STARS,
   type AudiencePreview,
   type ExclusionCounts,
+  type PausedCreatorPreview,
   type PreviewExclusionReason,
   PREVIEW_EXCLUSION_REASONS,
   type RunFilters,
@@ -206,7 +209,7 @@ export async function computeAudiencePreview(
   filters = sanitizeFilters(filters, cloneIds);
   const excluded: ExclusionCounts = Object.fromEntries(PREVIEW_EXCLUSION_REASONS.map((r) => [r, 0])) as ExclusionCounts;
   if (cloneIds.length === 0) {
-    return { candidatePool: 0, eligible: 0, holdout: 0, excluded, excludedTotal: 0, sample: [], truncated: false };
+    return { candidatePool: 0, pausedCreators: [], pausedNotSent: 0, eligible: 0, holdout: 0, excluded, excludedTotal: 0, sample: [], truncated: false };
   }
 
   const cols =
@@ -256,6 +259,12 @@ export async function computeAudiencePreview(
   }
   const { rows, truncated } = usersRead;
 
+  // A creator whose connection is paused (manual or spike auto-halt) sends
+  // nothing: the worker and migration 158's claim skip it. Read fails CLOSED
+  // (listConnections throws on anything but a missing table).
+  const connections = await listConnections();
+  const pausedConn = new Map(connections.filter((c) => c.paused && cloneIds.includes(c.cloneId)).map((c) => [c.cloneId, c]));
+
   const [optOuts, contactedRead] = await Promise.all([optedOutSet(cloneIds), alreadyContactedSet(cloneIds)]);
   const contacted = contactedRead.keys;
 
@@ -272,7 +281,14 @@ export async function computeAudiencePreview(
   const survivorsByClone = new Map<string, CandidateRow[]>();
   let holdoutCount = 0;
 
+  const pausedCounts = new Map<string, number>();
+  let poolRows = 0;
   for (const row of rows) {
+    if (pausedConn.has(row.clone_id)) {
+      pausedCounts.set(row.clone_id, (pausedCounts.get(row.clone_id) ?? 0) + 1);
+      continue; // "paused: not sent": not eligible, not hold-out, not an exclusion reason
+    }
+    poolRows += 1;
     const verdict = classifyFan(row, ctx);
     if (verdict !== "eligible") {
       excluded[verdict] += 1;
@@ -313,5 +329,12 @@ export async function computeAudiencePreview(
   }));
 
   const excludedTotal = (Object.values(excluded) as number[]).reduce((a, b) => a + b, 0);
-  return { candidatePool: rows.length, eligible, holdout: holdoutCount, excluded, excludedTotal, sample, truncated: truncated || contactedRead.truncated };
+  const pausedCreators: PausedCreatorPreview[] = [...pausedConn.values()].map((c) => ({
+    cloneId: c.cloneId,
+    reason: c.pausedReason,
+    autoHalted: autoHaltKind(c.pausedReason) !== null,
+    notSent: pausedCounts.get(c.cloneId) ?? 0,
+  }));
+  const pausedNotSent = pausedCreators.reduce((a, p) => a + p.notSent, 0);
+  return { candidatePool: poolRows, pausedCreators, pausedNotSent, eligible, holdout: holdoutCount, excluded, excludedTotal, sample, truncated: truncated || contactedRead.truncated };
 }
