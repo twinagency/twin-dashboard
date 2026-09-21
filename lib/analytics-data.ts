@@ -487,7 +487,7 @@ export async function getAnalytics(
     // `id` is required: the legacy-media inference below keys its map on it.
     const COLS = "id,clone_id,amount_stars,paid_at,kind,feature,telegram_id,invoice_payload";
     const COLS_LEGACY = "id,clone_id,amount_stars,paid_at,kind,telegram_id,invoice_payload";
-    const probe = await supabaseAdmin.from("star_transactions").select(COLS).limit(1);
+    const probe = await supabaseAdmin.from("clean_star_transactions_v").select(COLS).limit(1);
     const hasFeature = !probe.error;
     // A FACTORY, not a built query: selectAllRowsParallel fetches several ranges
     // at once and .range() mutates the builder it is called on, so every page
@@ -495,7 +495,7 @@ export async function getAnalytics(
     // on each call — that sameness is what makes the concurrent ranges line up.
     const makeQuery = () => {
       let q = supabaseAdmin
-        .from("star_transactions")
+        .from("clean_star_transactions_v")
         .select(hasFeature ? COLS : COLS_LEGACY)
         .gte("paid_at", iso(startMs))
         .lte("paid_at", iso(windowEnd));
@@ -816,7 +816,7 @@ export async function getAnalytics(
   // Rolling seven-day spender leaderboard, independent of the selected chart
   // preset so "weekly" always means the latest seven complete days in scope.
   let weeklyQ = supabaseAdmin
-    .from("star_transactions")
+    .from("clean_star_transactions_v")
     .select("clone_id,telegram_id,amount_stars,invoice_payload")
     .gte("paid_at", iso(windowEnd - 7 * MS_DAY))
     .lte("paid_at", iso(windowEnd));
