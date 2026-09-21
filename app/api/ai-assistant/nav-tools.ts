@@ -16,6 +16,7 @@
 export const NAV_TARGETS: { path: string; label: string; what: string }[] = [
   { path: "/", label: "Overview", what: "the fleet-wide home dashboard" },
   { path: "/revenue", label: "Earnings", what: "revenue, Star income, top spenders" },
+  { path: "/sales-health", label: "Sales Health", what: "conversation-led offer delivery, purchases, block reasons, and inventory readiness" },
   { path: "/users", label: "Fans", what: "the fan list across every clone" },
   { path: "/messages", label: "Messages", what: "conversation history with fans" },
   { path: "/clones", label: "Clones", what: "the list of clones (girls)" },
