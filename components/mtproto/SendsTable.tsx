@@ -1,81 +1,61 @@
 import Link from "next/link";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription, CardAction } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Badge } from "@/components/ui/badge";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { SendRow } from "@/lib/mtproto/types";
 import { sendFanLabel } from "@/lib/mtproto/sends";
-
-const STATE_VARIANT: Record<string, "default" | "secondary" | "outline" | "destructive"> = {
-  sent: "secondary",
-  acked: "default",
-  replied: "default",
-  failed: "destructive",
-  uncertain: "outline",
-  cancelled: "outline",
-  skipped: "outline",
-};
+import { Bubble, EmptyBlock, Panel, StatusPill, When } from "./kit";
+import { humanError, sendState, timeAgo } from "./view";
 
 // N2.4: every send with ts, fan, exact text, status, error, reply Y/N, reply
-// latency, purchase Y/N + Stars. CSV export via a plain link (no client JS
-// needed) to the route's own text/csv response.
+// latency, purchase Y/N + Stars. Each send reads like a chat: the exact text
+// as a message bubble, then what happened after. CSV export is a plain link
+// (no client JS) to the route's own text/csv response.
 export default function SendsTable({ runId, rows }: { runId: string; rows: SendRow[] }) {
   return (
-    <Card>
-      <CardHeader>
-        <CardTitle>Sends</CardTitle>
-        <CardDescription>Exact text sent, Telegram-acknowledged status (accepted, not proof of delivery or reading), reply and purchase attribution.</CardDescription>
-        <CardAction>
-          <Link href={`/mtproto-campaign/runs/${runId}/csv`}>
-            <Button variant="outline" size="sm">
-              Export CSV
-            </Button>
-          </Link>
-        </CardAction>
-      </CardHeader>
-      <CardContent>
-        {rows.length === 0 ? (
-          <div className="py-6 text-center text-sm text-muted-foreground">Nothing sent yet.</div>
-        ) : (
-          <div className="max-h-[32rem] overflow-y-auto">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Sent</TableHead>
-                  <TableHead>Creator</TableHead>
-                  <TableHead>Fan</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead>Text</TableHead>
-                  <TableHead>Reply</TableHead>
-                  <TableHead>Bought</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {rows.map((r) => (
-                  <TableRow key={r.episodeId}>
-                    <TableCell className="whitespace-nowrap text-xs text-muted-foreground">
-                      {r.sentAt ? new Date(r.sentAt).toLocaleString() : "—"}
-                    </TableCell>
-                    <TableCell>{r.cloneName}</TableCell>
-                    <TableCell className="font-mono text-xs">{sendFanLabel(r)}</TableCell>
-                    <TableCell>
-                      <Badge variant={STATE_VARIANT[r.state] ?? "outline"}>{r.state}</Badge>
-                      {r.errorCode && <div className="mt-0.5 text-[11px] text-destructive">{r.errorCode}</div>}
-                    </TableCell>
-                    <TableCell className="max-w-[280px] truncate text-xs" title={r.text ?? undefined}>
-                      {r.text ?? "—"}
-                    </TableCell>
-                    <TableCell>{r.repliedAt ? "Yes" : "No"}</TableCell>
-                    <TableCell className={r.boughtStars ? "font-semibold text-good" : "text-muted-foreground"}>
-                      {r.boughtStars ? `${r.boughtStars}⭐ (≤${r.boughtWithinHours}h)` : "No"}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
-        )}
-      </CardContent>
-    </Card>
+    <Panel
+      title={`Messages sent (${rows.length})`}
+      tip="The exact text each fan received, whether Telegram accepted it (accepted is not the same as read), and whether they replied or bought afterwards."
+      actions={
+        <Link href={`/mtproto-campaign/runs/${runId}/csv`}>
+          <Button variant="outline" size="sm">
+            Export CSV
+          </Button>
+        </Link>
+      }
+    >
+      {rows.length === 0 ? (
+        <EmptyBlock icon="✉" title="Nothing sent yet" hint="Real messages appear here as chat bubbles once a live run starts sending. A dry run sends nothing." />
+      ) : (
+        <ul className="max-h-[40rem] divide-y divide-line overflow-y-auto">
+          {rows.map((r) => {
+            const st = sendState(r.state);
+            return (
+              <li key={r.episodeId} className="py-3.5 first:pt-0">
+                <div className="mb-2 flex flex-wrap items-center gap-x-2 gap-y-1">
+                  <span className="text-sm font-semibold text-ink">{r.cloneName}</span>
+                  <span className="text-xs text-muted">
+                    to <span className="font-mono">{sendFanLabel(r)}</span>
+                  </span>
+                  <span className="text-xs text-muted">·</span>
+                  <When iso={r.sentAt} relative={r.sentAt ? timeAgo(r.sentAt) : "not sent"} className="text-xs text-muted" />
+                  <StatusPill tone={st.tone} dot title={st.hint} className="ml-auto">
+                    {st.label}
+                  </StatusPill>
+                </div>
+                {r.text ? <Bubble text={r.text} /> : <div className="text-right text-xs text-muted">No text recorded</div>}
+                <div className="mt-2 flex flex-wrap items-center justify-end gap-x-3 gap-y-1 text-xs">
+                  {r.errorCode && (
+                    <span className="text-crit" title={r.errorCode}>
+                      {humanError(r.errorCode)} <span className="font-mono text-[11px]">({r.errorCode})</span>
+                    </span>
+                  )}
+                  <span className={r.repliedAt ? "font-semibold text-good" : "text-muted"}>{r.repliedAt ? "Replied" : "No reply"}</span>
+                  <span className={r.boughtStars ? "font-semibold text-good" : "text-muted"}>{r.boughtStars ? `Bought ${r.boughtStars} ⭐ within ${r.boughtWithinHours}h` : "No purchase"}</span>
+                </div>
+              </li>
+            );
+          })}
+        </ul>
+      )}
+    </Panel>
   );
 }

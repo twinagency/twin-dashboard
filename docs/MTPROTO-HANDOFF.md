@@ -60,7 +60,7 @@ A real send needs **all** of: run confirmed live, dry-run review recorded, typed
 | connect page check | 81 assertions green |
 | twin-userbot `integration/run.sh` (real PostgREST) | 41 green |
 | `twin-bot/db/manual/TEST_158_reengage.sh` (Postgres 16) | 97 green |
-| dashboard `test:mtproto` | 89 green |
+| dashboard `test:mtproto` | 93 green |
 | dashboard `test:api` | 51 green |
 | twin-bot `npm test` (with the owner guard) | 170 green |
 
@@ -77,8 +77,9 @@ Known pre-existing failures, unrelated to this work: dashboard `test:rollups` an
 
 ## Still open (in priority order)
 
-1. **Dashboard sync with migration 163.** `lib/mtproto/audience.ts` (about L130 to 164) keys opt-outs as `clone:user_id` and existing episodes by `user_id`; it must key on `telegram_id`. `episodes.ts`, `review.ts`, `sends.ts` assume `episodes.user_id` is non-null; guard for nulls.
-2. Dashboard visual polish (a partial pass was stopped; some component edits are uncommitted locally and are not part of this branch).
+1. ~~**Dashboard sync with migration 163.**~~ DONE (commit f69e382, keyed by telegram_id, null user_id handled).
+   (old note:) `lib/mtproto/audience.ts` (about L130 to 164) keys opt-outs as `clone:user_id` and existing episodes by `user_id`; it must key on `telegram_id`. `episodes.ts`, `review.ts`, `sends.ts` assume `episodes.user_id` is non-null; guard for nulls.
+2. Dashboard visual polish: DONE and pushed (KPI strip, safety strip, funnel, lift, chat-bubble samples). Not yet reviewed by eye on real data; typecheck, 93 mtproto checks and 51 api checks green.
 3. Create Cat's dry run, run the worker dry, review the numbers and the sample messages.
 4. First real campaign send to a **test fan** (Ronan's own test account), using the full gated flow. The fan's chat must have been silent 24h or more. Then reply from the test account and check the bot answers exactly once and no phantom fan appears.
 5. Only then a tiny real pilot with the hold-out on, cap 5, then ramp.

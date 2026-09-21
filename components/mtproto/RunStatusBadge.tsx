@@ -1,16 +1,25 @@
-import { Badge } from "@/components/ui/badge";
 import type { RunStatus } from "@/lib/mtproto/types";
-
-const VARIANT: Record<RunStatus, "default" | "secondary" | "outline" | "destructive"> = {
-  draft: "outline",
-  queued: "secondary",
-  running: "default",
-  paused: "secondary",
-  stopped: "destructive",
-  done: "outline",
-  failed: "destructive",
-};
+import { StatusPill } from "./kit";
+import { RUN_STATUS_INFO } from "./view";
 
 export default function RunStatusBadge({ status }: { status: RunStatus }) {
-  return <Badge variant={VARIANT[status]}>{status}</Badge>;
+  const info = RUN_STATUS_INFO[status];
+  return (
+    <StatusPill tone={info.tone} dot title={info.hint}>
+      {info.label}
+    </StatusPill>
+  );
+}
+
+/** Dry run = nothing is sent. LIVE = real messages. Never ambiguous. */
+export function RunModeBadge({ dryRun }: { dryRun: boolean }) {
+  return dryRun ? (
+    <StatusPill tone="info" title="A rehearsal. Nothing is sent to any fan.">
+      Dry run
+    </StatusPill>
+  ) : (
+    <StatusPill solid title="Real messages go out to real fans.">
+      LIVE
+    </StatusPill>
+  );
 }

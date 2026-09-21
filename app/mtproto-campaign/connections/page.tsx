@@ -1,7 +1,7 @@
-import { listCreators } from "@/lib/mtproto/clones";
 import { connectionFor, listConnections } from "@/lib/mtproto/connections";
 import { autoHaltsFor, resumePhraseFor, shortId } from "@/lib/mtproto/halt";
 import ConnectionsTable from "@/components/mtproto/ConnectionsTable";
+import { getCreators, getSafety } from "@/components/mtproto/data";
 
 export const dynamic = "force-dynamic";
 
@@ -12,22 +12,16 @@ export const dynamic = "force-dynamic";
 // reads, matching the "dashboard writes a request, worker acts on it" split
 // the whole area is built around.
 export default async function MtprotoConnectionsPage() {
-  const [creators, connections] = await Promise.all([listCreators(), listConnections()]);
+  const [creators, connections, safety] = await Promise.all([getCreators(), listConnections(), getSafety()]);
   const halts = await autoHaltsFor(connections);
+  const sentToday = new Map(safety.snapshots.map((s) => [s.cloneId, s.sentToday]));
   const rows = creators.map((c) => ({
     creator: c,
     connection: connectionFor(c.id, connections),
     autoHalt: halts.get(c.id) ?? null,
     resumePhrase: resumePhraseFor(c.name || shortId(c.id)),
+    sentToday: safety.error ? null : (sentToday.get(c.id) ?? 0),
   }));
 
-  return (
-    <div className="dashboard-page">
-      <h1 className="mb-1 text-2xl font-semibold">Connections</h1>
-      <p className="mb-6 text-sm text-muted-foreground">
-        One MTProto session per creator. Pausing here stops that creator&apos;s sends without touching any other creator or the Business Bot.
-      </p>
-      <ConnectionsTable rows={rows} />
-    </div>
-  );
+  return <ConnectionsTable rows={rows} />;
 }
