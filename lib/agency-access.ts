@@ -18,7 +18,7 @@ export async function agencyData(requested?: string, days = 7, fan?: string) {
   const [creators, ledger, fans, photos, videos, events] = await Promise.all([
     supabaseAdmin.from("clones").select("id,name,status,photos_enabled,videos_enabled,voice_enabled,intent_classic_promotions_enabled,intent_classic_promotion_version")
       .in("id", ids).order("name"),
-    selectAllRowsParallel<RevenueLedgerRow>(() => supabaseAdmin.from("clean_star_transactions_v")
+    selectAllRowsParallel<RevenueLedgerRow>(() => supabaseAdmin.from("star_transactions")
       .select("id,clone_id,telegram_id,amount_stars,invoice_payload")
       .in("clone_id", ids).gte("paid_at", start).lte("paid_at", end).order("id"), { label: "agency revenue" }),
     requested ? supabaseAdmin.from("users").select("id,telegram_id,name")
