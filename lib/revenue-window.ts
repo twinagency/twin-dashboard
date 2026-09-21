@@ -53,7 +53,7 @@ export async function resolveRevenueWindow(
   if (preset) return preset;
 
   const { data: earliest } = await supabaseAdmin
-    .from("clean_star_transactions_v")
+    .from("star_transactions")
     .select("paid_at")
     .order("paid_at", { ascending: true })
     .limit(1)
