@@ -33,6 +33,23 @@ export async function resetCounters(fd: FormData) {
   revalidatePath("/users");
 }
 
+
+// Mark an operator/synthetic Telegram account as test traffic across EVERY
+// clone row for that Telegram identity. Commercial measurement views exclude
+// these rows; the bot's conversational behaviour is unchanged.
+export async function setTestTraffic(fd: FormData) {
+  await guardDashboardAction("app/users/actions.ts#setTestTraffic", [fd]);
+  const telegramId = Number(fd.get("telegramId"));
+  const isTest = fd.get("isTest") === "true";
+  if (!Number.isSafeInteger(telegramId) || telegramId <= 0) throw new Error("valid Telegram id is required");
+  const { error } = await supabaseAdmin
+    .from("users")
+    .update({ is_test: isTest })
+    .eq("telegram_id", telegramId);
+  if (error) throw new Error(error.message);
+  revalidatePath("/users");
+}
+
 export async function toggleActive(fd: FormData) {
   await guardDashboardAction("app/users/actions.ts#toggleActive", [fd]);
   const userId = String(fd.get("userId"));
