@@ -1,7 +1,7 @@
 // lib/mtproto/episodes.ts
 //
 // reengage_episodes reads: the funnel (eligible -> holdout -> contacted ->
-// delivered -> replied), the sends table, and per-fan lookups. Every read is
+// acknowledged -> replied), the sends table, and per-fan lookups. Every read is
 // bounded by run_id or clone_id (both indexed — reengage_episodes_run_state_idx,
 // reengage_episodes_clone_state_sent_idx), never an unfiltered scan.
 
@@ -89,25 +89,25 @@ const fanKey = (ep: ReengageEpisode) => `${ep.cloneId}:${ep.userId}`;
  *  episodes table alone can't give).
  *
  *  eligible/holdout count episodes (assignment is per episode); contacted,
- *  delivered and replied count UNIQUE fans from ACKED sends only, so a failed,
+ *  acknowledged and replied count UNIQUE fans from ACKED sends only, so a failed,
  *  uncertain, cancelled or merely-claimed episode never inflates them and a
- *  fan with two episodes in one run counts once. contacted >= delivered >=
+ *  fan with two episodes in one run counts once. contacted >= acknowledged >=
  *  replied by construction. */
 export function funnelFromEpisodes(episodes: ReengageEpisode[]): Omit<FunnelCounts, "bought" | "stars"> {
   let eligible = 0;
   let holdout = 0;
   const contacted = new Set<string>();
-  const delivered = new Set<string>();
+  const acknowledged = new Set<string>();
   const replied = new Set<string>();
   for (const ep of episodes) {
     if (ep.dryRun) continue; // simulated episodes are not part of the real funnel
     if (ep.state === "holdout") holdout += 1;
     else eligible += 1;
     if (isAckedSend(ep)) contacted.add(fanKey(ep));
-    if (isRealSend(ep)) delivered.add(fanKey(ep));
+    if (isRealSend(ep)) acknowledged.add(fanKey(ep));
     if (ep.state === "replied" && isRealSend(ep)) replied.add(fanKey(ep));
   }
-  return { eligible: eligible + holdout, holdout, contacted: contacted.size, delivered: delivered.size, replied: replied.size };
+  return { eligible: eligible + holdout, holdout, contacted: contacted.size, acknowledged: acknowledged.size, replied: replied.size };
 }
 
 export async function getEpisode(id: string): Promise<ReengageEpisode | null> {

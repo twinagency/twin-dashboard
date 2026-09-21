@@ -1,7 +1,7 @@
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import type { FunnelCounts } from "@/lib/mtproto/types";
 
-// Funnel (N2.1): eligible -> holdout | contacted -> delivered -> replied ->
+// Funnel (N2.1): eligible -> holdout | contacted -> acknowledged -> replied ->
 // bought -> Stars. Money tile uses text-good, matching the house rule that a
 // dollar/star figure is always green, never accent blue.
 export default function FunnelCard({ title, subtitle, funnel }: { title: string; subtitle?: string; funnel: FunnelCounts }) {
@@ -9,7 +9,7 @@ export default function FunnelCard({ title, subtitle, funnel }: { title: string;
     { label: "Eligible", value: funnel.eligible },
     { label: "Hold-out", value: funnel.holdout },
     { label: "Contacted", value: funnel.contacted },
-    { label: "Delivered", value: funnel.delivered },
+    { label: "Acknowledged", value: funnel.acknowledged },
     { label: "Replied", value: funnel.replied },
     { label: "Bought", value: funnel.bought },
     { label: "Stars", value: funnel.stars, money: true },

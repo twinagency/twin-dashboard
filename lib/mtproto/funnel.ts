@@ -3,7 +3,7 @@
 // Composes episodes.ts (state-derived funnel steps) with attribution.ts
 // (purchase-derived bought/stars) into the one FunnelCounts the Overview /
 // run detail pages render (N2.1: "eligible -> holdout | contacted ->
-// delivered -> replied -> bought -> Stars"). Bought/stars here are the N3
+// acknowledged -> replied -> bought -> Stars"). Bought/stars here are the N3
 // attribution (replied AND bought within the window) at the widest window
 // (7d), so bought <= replied always holds; the Lift panel shows 24h/72h/7d
 // side by side for anyone who needs the narrower cut.

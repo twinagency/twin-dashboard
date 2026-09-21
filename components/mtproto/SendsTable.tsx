@@ -23,7 +23,7 @@ export default function SendsTable({ runId, rows }: { runId: string; rows: SendR
     <Card>
       <CardHeader>
         <CardTitle>Sends</CardTitle>
-        <CardDescription>Exact text sent, delivery status, reply and purchase attribution.</CardDescription>
+        <CardDescription>Exact text sent, Telegram-acknowledged status (accepted, not proof of delivery or reading), reply and purchase attribution.</CardDescription>
         <CardAction>
           <Link href={`/mtproto-campaign/runs/${runId}/csv`}>
             <Button variant="outline" size="sm">

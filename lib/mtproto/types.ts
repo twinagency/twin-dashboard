@@ -275,7 +275,7 @@ export interface FunnelCounts {
   eligible: number;
   holdout: number;
   contacted: number;
-  delivered: number;
+  acknowledged: number;
   replied: number;
   bought: number;
   stars: number;

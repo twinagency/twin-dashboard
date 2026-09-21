@@ -225,7 +225,7 @@ check("C1 funnel counts holdout and non-holdout separately, eligible includes bo
   eq(f.holdout, 2, "holdout count");
 });
 
-check("C2 contacted/delivered/replied climb monotonically down the funnel", () => {
+check("C2 contacted/acknowledged/replied climb monotonically down the funnel", () => {
   const episodes = [
     episode({ state: "sent", sentAt: "2026-09-21T00:00:00Z" }),
     episode({ state: "acked", sentAt: "2026-09-21T00:00:00Z", tgMessageId: 5 }),
@@ -235,9 +235,9 @@ check("C2 contacted/delivered/replied climb monotonically down the funnel", () =
     episodes.map((e, i) => ({ ...e, userId: `u${i}`, state: i === 0 ? "acked" : e.state, tgMessageId: i === 0 ? 4 : e.tgMessageId })),
   );
   eq(f.contacted, 3, "contacted: acked + acked + replied (state sent is NOT contacted; the first was rewritten to acked)");
-  eq(f.delivered, 3, "delivered: real sends carrying a message id");
+  eq(f.acknowledged, 3, "acknowledged: real sends Telegram accepted (message id)");
   eq(f.replied, 1, "replied");
-  assert(f.contacted >= f.delivered && f.delivered >= f.replied, "funnel must narrow, never widen");
+  assert(f.contacted >= f.acknowledged && f.acknowledged >= f.replied, "funnel must narrow, never widen");
 });
 
 // ── D. sendsToCsv — shape + escaping ────────────────────────────────────────
@@ -734,10 +734,10 @@ check("I6 funnel counts unique fans from acked sends only and narrows monotonica
   ];
   const f = funnelFromEpisodes(episodes);
   eq(f.contacted, 2, "a (once) + the dry would-send e; failed/uncertain/cancelled excluded");
-  eq(f.delivered, 1, "a only: real message id");
+  eq(f.acknowledged, 1, "a only: real message id");
   eq(f.replied, 1, "a");
   eq(f.holdout, 1, "f");
-  assert(f.contacted >= f.delivered && f.delivered >= f.replied, "narrowing");
+  assert(f.contacted >= f.acknowledged && f.acknowledged >= f.replied, "narrowing");
 });
 
 check("D4 CSV neutralises spreadsheet formulas in text cells but leaves numbers alone", () => {
@@ -1036,7 +1036,7 @@ check("K10 dry episodes are not real sends, funnel, lift or send rows", () => {
   eq(isRealSend(live), true, "live is real");
   const f = funnelFromEpisodes([dryAcked, episode({ dryRun: true, state: "holdout" }), { ...live, userId: "u2" }]);
   eq(f.contacted, 1, "only the live send is contacted");
-  eq(f.delivered, 1, "delivered");
+  eq(f.acknowledged, 1, "acknowledged");
   eq(f.holdout, 0, "a dry hold-out is not part of the real funnel");
   const reports = liftFromData([{ ...dryAcked, userId: "a" }, episode({ dryRun: true, state: "holdout", userId: "b", createdAt: T(50) })], { orders: [], truncated: false });
   const total = JSON.stringify(reports);
