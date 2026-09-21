@@ -58,7 +58,7 @@ async function FleetInfo() {
       { label: "fleet info users" },
     ),
     selectAllRows<{ clone_id: string; amount_stars: number | null }>(
-      supabaseAdmin.from("star_transactions").select("clone_id,amount_stars"),
+      supabaseAdmin.from("clean_star_transactions_v").select("clone_id,amount_stars"),
       { label: "fleet info star_transactions" },
     ),
   ]);
