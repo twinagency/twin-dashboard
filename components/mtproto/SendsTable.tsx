@@ -4,6 +4,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import type { SendRow } from "@/lib/mtproto/types";
+import { sendFanLabel } from "@/lib/mtproto/sends";
 
 const STATE_VARIANT: Record<string, "default" | "secondary" | "outline" | "destructive"> = {
   sent: "secondary",
@@ -56,7 +57,7 @@ export default function SendsTable({ runId, rows }: { runId: string; rows: SendR
                       {r.sentAt ? new Date(r.sentAt).toLocaleString() : "—"}
                     </TableCell>
                     <TableCell>{r.cloneName}</TableCell>
-                    <TableCell className="font-mono text-xs">{r.telegramId}</TableCell>
+                    <TableCell className="font-mono text-xs">{sendFanLabel(r)}</TableCell>
                     <TableCell>
                       <Badge variant={STATE_VARIANT[r.state] ?? "outline"}>{r.state}</Badge>
                       {r.errorCode && <div className="mt-0.5 text-[11px] text-destructive">{r.errorCode}</div>}

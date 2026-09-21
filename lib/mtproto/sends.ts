@@ -21,6 +21,12 @@ function firstWindowHit(paidMs: number, sentMs: number): AttributionWindowHours 
   return null;
 }
 
+/** What the sends list calls a fan: the telegram id, or "deleted fan" when the
+ *  users row is gone (migration 163 sets user_id NULL; the send still shows). */
+export function sendFanLabel(r: Pick<SendRow, "userId" | "telegramId">): string {
+  return r.userId == null ? `deleted fan (${r.telegramId})` : String(r.telegramId);
+}
+
 export async function buildSendRows(episodes: ReengageEpisode[], creators: CreatorLite[], purchases?: PurchaseRead): Promise<SendRow[]> {
   const sent = episodes.filter((e) => !e.dryRun && SEND_TABLE_STATES.includes(e.state)); // simulated (dry) rows are not sends
   const nameOf = new Map(creators.map((c) => [c.id, c.name]));
@@ -39,7 +45,8 @@ export async function buildSendRows(episodes: ReengageEpisode[], creators: Creat
     // Total paid Stars within the widest window after this send, and the
     // narrowest window the first such purchase fell in.
     if (sentMs != null) {
-      for (const o of ordersByUser.get(e.userId) ?? []) {
+      // A deleted fan (user_id NULL, migration 163) has nothing to join purchases to.
+      for (const o of (e.userId != null ? ordersByUser.get(e.userId) : undefined) ?? []) {
         if (o.cloneId !== e.cloneId || o.paidMs < sentMs || o.paidMs - sentMs > WIDEST_MS) continue;
         boughtStars = (boughtStars ?? 0) + o.stars;
         const w = firstWindowHit(o.paidMs, sentMs);
@@ -83,7 +90,7 @@ export function sendsToCsv(rows: SendRow[]): string {
       [
         r.episodeId,
         r.cloneName,
-        r.userId,
+        r.userId ?? "", // empty = deleted fan; telegram_id still identifies them
         r.telegramId,
         r.sentAt ?? "",
         r.state,

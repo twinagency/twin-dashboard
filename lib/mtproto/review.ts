@@ -51,7 +51,9 @@ export type DryRunSummary = DryRunCounts & {
 type DryEpisodeRow = {
   id: string;
   clone_id: string;
-  user_id: string;
+  /** NULL once the fan row was deleted (migration 163). */
+  user_id: string | null;
+  telegram_id: number | null;
   state: string;
   dry_run: boolean | null;
   prepared_text: string | null;
@@ -62,7 +64,10 @@ type DryEpisodeRow = {
 };
 
 /** "M. ...a1b2" : first initial of the fan's name plus the last 4 of the id. */
-export function redactFan(name: string | null | undefined, userId: string): string {
+export function redactFan(name: string | null | undefined, userId: string | null, telegramId?: number | null): string {
+  // A deleted fan (user_id NULL, migration 163) has no name to read, and its
+  // users.id is gone: label it as such with the last 4 of the telegram id.
+  if (userId == null) return `deleted fan …${telegramId != null ? String(telegramId).slice(-4) : "????"}`;
   const initial = (name ?? "").trim().charAt(0).toUpperCase() || "?";
   return `${initial}. …${userId.slice(-4)}`;
 }
@@ -83,7 +88,7 @@ export async function computeDryRunSummary(runId: string): Promise<DryRunSummary
     () =>
       mtDb()
         .from("reengage_episodes")
-        .select("id,clone_id,user_id,state,dry_run,prepared_text,acked_text,skip_reason,error_code,tg_message_id")
+        .select("id,clone_id,user_id,telegram_id,state,dry_run,prepared_text,acked_text,skip_reason,error_code,tg_message_id")
         .eq("run_id", runId)
         .eq("dry_run", true)
         .order("created_at", { ascending: true })
@@ -124,16 +129,19 @@ export async function computeDryRunSummary(runId: string): Promise<DryRunSummary
   const picked = wouldSendRows.slice(0, MAX_SAMPLE);
   let sampleWithheld = false;
   const names = new Map<string, string | null>();
-  if (picked.length > 0) {
-    const { data, error } = await mtDb().from("users").select("id,name").in("id", picked.map((r) => r.user_id));
+  const pickedIds = [...new Set(picked.map((r) => r.user_id).filter((u): u is string => u != null))];
+  if (pickedIds.length > 0) {
+    const { data, error } = await mtDb().from("users").select("id,name").in("id", pickedIds);
     if (error) sampleWithheld = true;
     else for (const u of (data ?? []) as { id: string; name: string | null }[]) names.set(u.id, u.name);
   }
   const sample: SampleMessage[] = sampleWithheld
     ? []
     : picked.map((r) => ({
-        who: redactFan(names.get(r.user_id), r.user_id),
-        text: redactText(r.acked_text ?? r.prepared_text ?? "", names.get(r.user_id)),
+        who: redactFan(r.user_id != null ? names.get(r.user_id) : null, r.user_id, r.telegram_id),
+        // A deleted fan's name is unknown, so the text cannot be redacted: withhold it
+        // rather than show a message that may still contain the name.
+        text: r.user_id == null ? "[text withheld: the fan was deleted, so the name cannot be removed]" : redactText(r.acked_text ?? r.prepared_text ?? "", names.get(r.user_id)),
       }));
 
   return {

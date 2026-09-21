@@ -69,8 +69,12 @@ export type CandidateRow = {
 export type ClassifyContext = {
   nowMs: number;
   minSilenceHours: number;
-  isOptedOut: (cloneId: string, userId: string) => boolean;
-  isAlreadyContacted: (cloneId: string, userId: string, episodeStartIso: string) => boolean;
+  // A fan's identity inside one creator is (clone_id, telegram_id) since
+  // migration 163 (users.id changes when a fan row is deleted and re-created,
+  // the telegram id does not). null = the fan has no telegram id: nothing can
+  // be keyed, so these answer false and the no_chat_id rule excludes the fan.
+  isOptedOut: (cloneId: string, telegramId: number | null) => boolean;
+  isAlreadyContacted: (cloneId: string, telegramId: number | null, episodeStartIso: string) => boolean;
 };
 
 /** One fan in, one verdict out: a PreviewExclusionReason, or "eligible". Order
@@ -87,9 +91,9 @@ export function classifyFan(row: CandidateRow, ctx: ClassifyContext): PreviewExc
   if (row.minor_flagged_at) return "minor_gated"; // defence in depth: gate survives even if `blocked` was ever cleared by hand
   if (row.paused) return "paused";
   if (row.is_active === false) return "inactive";
-  if (ctx.isOptedOut(row.clone_id, row.id)) return "opt_out";
+  if (ctx.isOptedOut(row.clone_id, row.telegram_id)) return "opt_out";
   if (!row.last_message_received) return "within_24h"; // never messaged in = no episode to open yet
-  if (ctx.isAlreadyContacted(row.clone_id, row.id, row.last_message_received)) return "already_contacted";
+  if (ctx.isAlreadyContacted(row.clone_id, row.telegram_id, row.last_message_received)) return "already_contacted";
   // Exclude when unsure: any non-null legacy_id (even "") marks an import.
   if (row.legacy_id !== null && row.legacy_id !== undefined) return "legacy_import";
   if (!row.telegram_id) return "no_chat_id";
@@ -115,6 +119,12 @@ export function isHoldout(seed: string, cloneId: string, userId: string, holdout
   return hash01(`${seed}:${cloneId}:${userId}`) < holdoutPct / 100;
 }
 
+/** One fan inside one creator (migration 163). String() so a bigint that
+ *  arrives as a string and one that arrives as a number key identically. */
+export function fanKey(cloneId: string, telegramId: number | string): string {
+  return `${cloneId}:${telegramId}`;
+}
+
 /** ISO string -> epoch ms key part, so "…+00:00" and "…Z" spellings of the
  *  same instant compare equal. */
 function tsKey(iso: string): number {
@@ -127,17 +137,20 @@ function tsKey(iso: string): number {
 // as fine. (The worker's own unique key + opt-out check remain the real gate.)
 async function optedOutSet(cloneIds: string[]): Promise<Set<string>> {
   try {
-    const { rows, truncated } = await selectAllRowsMtproto<{ clone_id: string; user_id: string }>(
+    // Keyed on telegram_id (NOT NULL), never user_id: after migration 163 a
+    // deleted fan's opt-out survives with user_id NULL and must still exclude a
+    // re-created fan row with the same telegram id.
+    const { rows, truncated } = await selectAllRowsMtproto<{ clone_id: string; telegram_id: number }>(
       () =>
         mtDb()
           .from("reengage_optouts")
-          .select("clone_id,user_id")
+          .select("clone_id,telegram_id")
           .in("clone_id", cloneIds)
           .order("id", { ascending: true }) as any,
       { label: "reengage_optouts", maxRows: 200_000, throwOnError: true },
     );
     if (truncated) throw new Error("reengage_optouts read hit the row ceiling; refusing to preview with an incomplete opt-out list");
-    return new Set(rows.map((r) => `${r.clone_id}:${r.user_id}`));
+    return new Set(rows.map((r) => fanKey(r.clone_id, r.telegram_id)));
   } catch (e) {
     if (isMissingTable(e)) {
       console.warn(`[mtproto] reengage_optouts not created yet (migration 158 not applied): ${e instanceof Error ? e.message : e}`);
@@ -149,11 +162,11 @@ async function optedOutSet(cloneIds: string[]): Promise<Set<string>> {
 
 async function alreadyContactedSet(cloneIds: string[]): Promise<{ keys: Set<string>; truncated: boolean }> {
   try {
-    const { rows, truncated } = await selectAllRowsMtproto<{ clone_id: string; user_id: string; episode_start_inbound_at: string }>(
+    const { rows, truncated } = await selectAllRowsMtproto<{ clone_id: string; telegram_id: number; episode_start_inbound_at: string }>(
       () =>
         mtDb()
           .from("reengage_episodes")
-          .select("clone_id,user_id,episode_start_inbound_at")
+          .select("clone_id,telegram_id,episode_start_inbound_at")
           .in("clone_id", cloneIds)
           // LIVE episodes only: a dry run's simulated episodes must never mark a
           // fan as already contacted (migration 158 scopes their dedupe to the run).
@@ -161,7 +174,7 @@ async function alreadyContactedSet(cloneIds: string[]): Promise<{ keys: Set<stri
           .order("id", { ascending: true }) as any,
       { label: "reengage_episodes (already-contacted check)", maxRows: 200_000, throwOnError: true },
     );
-    return { keys: new Set(rows.map((r) => `${r.clone_id}:${r.user_id}:${tsKey(r.episode_start_inbound_at)}`)), truncated };
+    return { keys: new Set(rows.map((r) => `${fanKey(r.clone_id, r.telegram_id)}:${tsKey(r.episode_start_inbound_at)}`)), truncated };
   } catch (e) {
     if (isMissingTable(e)) {
       console.warn(`[mtproto] reengage_episodes not created yet (migration 158 not applied): ${e instanceof Error ? e.message : e}`);
@@ -273,8 +286,8 @@ export async function computeAudiencePreview(
   const ctx: ClassifyContext = {
     nowMs,
     minSilenceHours,
-    isOptedOut: (c, u) => optOuts.has(`${c}:${u}`),
-    isAlreadyContacted: (c, u, iso) => contacted.has(`${c}:${u}:${tsKey(iso)}`),
+    isOptedOut: (c, t) => t != null && optOuts.has(fanKey(c, t)),
+    isAlreadyContacted: (c, t, iso) => t != null && contacted.has(`${fanKey(c, t)}:${tsKey(iso)}`),
   };
 
   const seed = opts.seed ?? "preview";

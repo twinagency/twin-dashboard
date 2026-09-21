@@ -13,7 +13,8 @@ type EpisodeRow = {
   id: string;
   run_id: string;
   clone_id: string;
-  user_id: string;
+  /** NULL after the fan row was deleted (migration 163). */
+  user_id: string | null;
   telegram_id: number;
   episode_start_inbound_at: string;
   state: EpisodeState;
@@ -82,7 +83,10 @@ export function isAckedSend(ep: ReengageEpisode): boolean {
   return !ep.dryRun && SENT_STATES.includes(ep.state) && ep.sentAt != null;
 }
 
-const fanKey = (ep: ReengageEpisode) => `${ep.cloneId}:${ep.userId}`;
+/** A fan inside one creator is (clone_id, telegram_id) since migration 163:
+ *  user_id is NULL once the fan row is deleted, so it can never be the key. */
+export const episodeFanKey = (ep: Pick<ReengageEpisode, "cloneId" | "telegramId">) => `${ep.cloneId}:${ep.telegramId}`;
+const fanKey = episodeFanKey;
 
 /** Funnel counts derived purely from episode state (stars/bought come from
  *  lib/mtproto/attribution.ts, which needs a star_transactions join the
@@ -118,13 +122,15 @@ export async function getEpisode(id: string): Promise<ReengageEpisode | null> {
 
 /** Full ordered history for one fan (per-fan timeline, N2.5) — every episode
  *  this clone/fan pair has ever had, oldest first. Bounded by (clone_id,
- *  user_id), a small set by construction (one episode per silence stretch). */
-export async function listEpisodesForFan(cloneId: string, userId: string): Promise<ReengageEpisode[]> {
+ *  telegram_id), a small set by construction (one episode per silence
+ *  stretch). Keyed on telegram_id so a deleted-and-recreated fan keeps one
+ *  history (migration 163). */
+export async function listEpisodesForFan(cloneId: string, telegramId: number): Promise<ReengageEpisode[]> {
   const { data, error } = await mtDb()
     .from("reengage_episodes")
     .select()
     .eq("clone_id", cloneId)
-    .eq("user_id", userId)
+    .eq("telegram_id", telegramId)
     .order("created_at", { ascending: true })
     .limit(200);
   if (error) {

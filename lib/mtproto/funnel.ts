@@ -9,7 +9,7 @@
 // side by side for anyone who needs the narrower cut.
 
 import { computeLift } from "./attribution";
-import { funnelFromEpisodes, isAckedSend } from "./episodes";
+import { episodeFanKey, funnelFromEpisodes, isAckedSend } from "./episodes";
 import { mtDb } from "./db";
 import { selectAllRowsMtproto } from "./paging";
 import { isMissingTable } from "./validate";
@@ -36,23 +36,33 @@ export async function computeFunnel(episodes: ReengageEpisode[], lift?: LiftRepo
 // "Contacted"), and only opt-outs by those fans count, so the rate can never
 // exceed 100% and an opt-out from another run is not attributed here.
 
-export type OptOutEventLike = { clone_id: string | null; user_id: string | null };
+/** reengage_events has no telegram_id column. user_id goes NULL when the fan row
+ *  is deleted (migration 163), so an event is tied to its fan through
+ *  episode_id first (the episode carries telegram_id) and through user_id only
+ *  as a fallback. An event with neither cannot be attributed and is ignored,
+ *  never guessed. */
+export type OptOutEventLike = { clone_id: string | null; user_id: string | null; episode_id?: string | null };
 
-const fanKey = (cloneId: string, userId: string) => `${cloneId}:${userId}`;
-
-/** Pure. */
+/** Pure. Fans are counted by (clone_id, telegram_id). */
 export function optOutReport(episodes: ReengageEpisode[], events: OptOutEventLike[], creators: Pick<CreatorLite, "id" | "name">[]): OptOutReport {
   const contacted = new Map<string, Set<string>>(); // clone -> fan keys
   for (const ep of episodes) {
     if (!isAckedSend(ep)) continue;
     const set = contacted.get(ep.cloneId) ?? new Set<string>();
-    set.add(fanKey(ep.cloneId, ep.userId));
+    set.add(episodeFanKey(ep));
     contacted.set(ep.cloneId, set);
+  }
+  const keyByEpisode = new Map<string, string>();
+  const keyByUser = new Map<string, string>(); // `${clone}:${users.id}` -> fan key
+  for (const ep of episodes) {
+    keyByEpisode.set(ep.id, episodeFanKey(ep));
+    if (ep.userId != null) keyByUser.set(`${ep.cloneId}:${ep.userId}`, episodeFanKey(ep));
   }
   const opted = new Map<string, Set<string>>();
   for (const e of events) {
-    if (!e.clone_id || !e.user_id) continue;
-    const key = fanKey(e.clone_id, e.user_id);
+    if (!e.clone_id) continue;
+    const key = (e.episode_id ? keyByEpisode.get(e.episode_id) : undefined) ?? (e.user_id ? keyByUser.get(`${e.clone_id}:${e.user_id}`) : undefined);
+    if (!key) continue;
     if (!contacted.get(e.clone_id)?.has(key)) continue;
     const set = opted.get(e.clone_id) ?? new Set<string>();
     set.add(key);
@@ -78,11 +88,11 @@ export async function computeOptOuts(episodes: ReengageEpisode[], creators: Pick
   const cloneIds = [...new Set(real.map((e) => e.cloneId))];
   const since = real.reduce((m, e) => (e.sentAt && e.sentAt < m ? e.sentAt : m), real[0].sentAt as string);
   try {
-    const { rows, truncated } = await selectAllRowsMtproto<{ id: number; clone_id: string | null; user_id: string | null }>(
+    const { rows, truncated } = await selectAllRowsMtproto<{ id: number; clone_id: string | null; user_id: string | null; episode_id: string | null }>(
       () =>
         mtDb()
           .from("reengage_events")
-          .select("id,clone_id,user_id")
+          .select("id,clone_id,user_id,episode_id")
           .eq("event_type", "opt_out")
           .in("clone_id", cloneIds)
           .gte("ts", since)

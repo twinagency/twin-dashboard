@@ -16,7 +16,8 @@ import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { classifyFan, computeAudiencePreview, isMissingIsTestColumn, isHoldout, type CandidateRow, type ClassifyContext } from "../audience";
 import { funnelFromEpisodes, isRealSend } from "../episodes";
-import { sendsToCsv } from "../sends";
+import { buildSendRows, sendFanLabel, sendsToCsv } from "../sends";
+import { listEpisodesForRun } from "../episodes";
 import { validateCreateRunInput, RunValidationError, createDryRun, queueRun, confirmLive, stopRun, getRun, recordDryRunReview, type CreateRunInput } from "../runs";
 import { computeDryRunSummary, redactFan, redactText, computeSendPlan } from "../review";
 import { insertEvent } from "../events";
@@ -199,13 +200,20 @@ check("B4 holdoutPct=0 never holds anyone out", () => {
 
 // ── C. funnelFromEpisodes ────────────────────────────────────────────────────
 
+// A fan is (clone_id, telegram_id) since migration 163, so a test fan needs its
+// own telegram id: derive a stable one from the userId label unless given.
+const tgOf = (label: string | null | undefined): number => {
+  let h = 7;
+  for (const ch of label ?? "deleted") h = (h * 31 + ch.charCodeAt(0)) % 900_000_000;
+  return 100_000_000 + h;
+};
 function episode(partial: Partial<ReengageEpisode>): ReengageEpisode {
   return {
     id: "ep-1",
     runId: "run-1",
     cloneId: "clone-1",
     userId: "user-1",
-    telegramId: 1,
+    telegramId: tgOf("userId" in partial ? partial.userId : "user-1"),
     episodeStartInboundAt: "2026-09-20T00:00:00Z",
     state: "eligible",
     dryRun: false,
@@ -237,7 +245,7 @@ check("C2 contacted/acknowledged/replied climb monotonically down the funnel", (
     episode({ state: "replied", sentAt: "2026-09-21T00:00:00Z", tgMessageId: 6 }),
   ];
   const f = funnelFromEpisodes(
-    episodes.map((e, i) => ({ ...e, userId: `u${i}`, state: i === 0 ? "acked" : e.state, tgMessageId: i === 0 ? 4 : e.tgMessageId })),
+    episodes.map((e, i) => ({ ...e, userId: `u${i}`, telegramId: tgOf(`u${i}`), state: i === 0 ? "acked" : e.state, tgMessageId: i === 0 ? 4 : e.tgMessageId })),
   );
   eq(f.contacted, 3, "contacted: acked + acked + replied (state sent is NOT contacted; the first was rewritten to acked)");
   eq(f.acknowledged, 3, "acknowledged: real sends Telegram accepted (message id)");
@@ -603,9 +611,9 @@ acheck("H8 preview: every ineligible class excluded, numbers add up, caps and ho
     userRow(uid(21), { is_active: false }),
     userRow(uid(22), { last_message_received: null }), // never messaged: not even a candidate
   ]);
-  db.seed("reengage_optouts", [{ id: "1", clone_id: CLONE_A, user_id: uid(19) }]);
+  db.seed("reengage_optouts", [{ id: "1", clone_id: CLONE_A, user_id: uid(19), telegram_id: 1019 }]);
   // stored with a different spelling of the same instant
-  db.seed("reengage_episodes", [{ id: "e1", clone_id: CLONE_A, user_id: uid(18), dry_run: false, episode_start_inbound_at: contactedStart.replace("Z", "+00:00") }]);
+  db.seed("reengage_episodes", [{ id: "e1", clone_id: CLONE_A, user_id: uid(18), telegram_id: 1018, dry_run: false, episode_start_inbound_at: contactedStart.replace("Z", "+00:00") }]);
 
   const p = await computeAudiencePreview({ cloneIds: [CLONE_A], segment: "all_silent" }, { dailyCap: 30, runCap: null, holdoutPct: 15 });
   eq(p.excluded.blocked, 1, "blocked");
@@ -823,8 +831,8 @@ check("J6 no mtproto module or component uses raw HTML injection or reads a secr
   }
 });
 
-check("J7 column/table/event names used here match migration 158 and twin-userbot contract.ts exactly", () => {
-  const mig = readFileSync(fileURLToPath(new URL("../../../../twin-bot/db/migrations/158_reengage_mtproto.sql", import.meta.url)), "utf8");
+check("J7 column/table/event names used here match migration 162 and twin-userbot contract.ts exactly", () => {
+  const mig = readFileSync(fileURLToPath(new URL("../../../../twin-bot/db/migrations/162_reengage_mtproto.sql", import.meta.url)), "utf8");
   const contract = readFileSync(fileURLToPath(new URL("../../../../twin-userbot/src/contract.ts", import.meta.url)), "utf8");
   const listOf = (src: string, name: string) => {
     const m = new RegExp(`export const ${name} = \\[([\\s\\S]*?)\\] as const`).exec(src);
@@ -841,7 +849,7 @@ check("J7 column/table/event names used here match migration 158 and twin-userbo
   for (const v of listOf(mine, "EPISODE_STATES")) assert(mig.includes(`'${v}'`), `episode state ${v} missing from the migration CHECK`);
   for (const v of listOf(mine, "RUN_STATUSES")) assert(mig.includes(`'${v}'`), `run status ${v} missing from the migration CHECK`);
   for (const col of ["run_id", "clone_id", "user_id", "telegram_id", "episode_start_inbound_at", "tg_message_id", "sent_at", "confirm_live_at", "stop_requested", "holdout_pct", "daily_cap", "run_cap", "paused_reason", "dry_run", "prepared_text", "acked_text", "error_code", "skip_reason"]) {
-    assert(new RegExp(`\\b${col}\\b`).test(mig), `column ${col} used by the dashboard is not in migration 158`);
+    assert(new RegExp(`\\b${col}\\b`).test(mig), `column ${col} used by the dashboard is not in migration 162`);
   }
 });
 
@@ -1024,8 +1032,8 @@ acheck("K9 dry-run episodes never count as contacted, and never block a later li
   const start = T(72);
   db.seed("users", [userRow(uid(1), { last_message_received: start }), userRow(uid(2), { last_message_received: start })]);
   db.seed("reengage_episodes", [
-    { id: "d1", clone_id: CLONE_A, user_id: uid(1), dry_run: true, episode_start_inbound_at: start },
-    { id: "l2", clone_id: CLONE_A, user_id: uid(2), dry_run: false, episode_start_inbound_at: start },
+    { id: "d1", clone_id: CLONE_A, user_id: uid(1), telegram_id: 1001, dry_run: true, episode_start_inbound_at: start },
+    { id: "l2", clone_id: CLONE_A, user_id: uid(2), telegram_id: 1002, dry_run: false, episode_start_inbound_at: start },
   ]);
   const p = await computeAudiencePreview({ cloneIds: [CLONE_A] }, { dailyCap: 30, runCap: null, holdoutPct: 15 });
   eq(p.excluded.already_contacted, 1, "only the LIVE episode marks a fan contacted");
@@ -1297,6 +1305,102 @@ acheck("L13 opted-out counts read opt_out events (fake db); a failed read is rep
   const card = sourceCode("../../../components/mtproto/FunnelCard.tsx");
   assert(card.includes("Opted out") && card.includes("unknown, not zero"), "funnel card renders opted-out and the unknown state");
   assert(sourceCode("../../../app/mtproto-campaign/runs/[id]/page.tsx").includes("computeOptOuts") && sourceCode("../../../app/mtproto-campaign/page.tsx").includes("computeOptOuts"), "wired on run and overview pages");
+});
+
+// ── M. migration 163: a fan is (clone_id, telegram_id), user_id may be NULL ──
+
+acheck("M1 an opt-out whose fan row was DELETED (user_id NULL) still excludes a re-created fan with the same telegram id", async () => {
+  const db = freshDb();
+  const RECREATED_TG = 2001;
+  db.seed("users", [
+    userRow(uid(50), { telegram_id: RECREATED_TG }), // re-created: new users.id, same telegram id
+    userRow(uid(51), { telegram_id: RECREATED_TG }, CLONE_B), // same telegram id in ANOTHER creator: a different fan
+    userRow(uid(52), { telegram_id: 2002 }), // unrelated clean fan
+  ]);
+  db.seed("reengage_optouts", [{ id: "1", clone_id: CLONE_A, user_id: null, telegram_id: RECREATED_TG }]);
+  const p = await computeAudiencePreview({ cloneIds: [CLONE_A, CLONE_B] }, { dailyCap: 30, runCap: null, holdoutPct: 10 });
+  eq(p.excluded.opt_out, 1, "exactly the re-created fan in creator A is opted out");
+  eq(p.eligible + p.holdout + p.excluded.cap_reached, 2, "creator B's fan with the same telegram id and the unrelated fan stay in the audience");
+  eq(p.eligible + p.excludedTotal, p.candidatePool, "numbers still add up");
+  // an opt-out is never matched by users.id
+  db.seed("reengage_optouts", [{ id: "2", clone_id: CLONE_A, user_id: uid(52), telegram_id: 9999 }]);
+  const q = await computeAudiencePreview({ cloneIds: [CLONE_A] }, { dailyCap: 30, runCap: null, holdoutPct: 10 });
+  eq(q.excluded.opt_out, 0, "an opt-out is matched by telegram id, not by users.id");
+});
+
+acheck("M2 already-contacted works by telegram id, also for an episode whose fan row was deleted, and only for the same silence stretch", async () => {
+  const db = freshDb();
+  const start = T(100);
+  db.seed("users", [
+    userRow(uid(60), { telegram_id: 3001, last_message_received: start }), // re-created fan, same silence stretch
+    userRow(uid(61), { telegram_id: 3002, last_message_received: T(90) }), // same telegram id as an old episode, but a NEW stretch
+    userRow(uid(62), { telegram_id: 3003, last_message_received: start }), // never contacted
+  ]);
+  db.seed("reengage_episodes", [
+    { id: "x1", clone_id: CLONE_A, user_id: null, telegram_id: 3001, dry_run: false, episode_start_inbound_at: start.replace("Z", "+00:00") },
+    { id: "x2", clone_id: CLONE_A, user_id: null, telegram_id: 3002, dry_run: false, episode_start_inbound_at: start },
+  ]);
+  const p = await computeAudiencePreview({ cloneIds: [CLONE_A] }, { dailyCap: 30, runCap: null, holdoutPct: 10 });
+  eq(p.excluded.already_contacted, 1, "only the re-created fan of the SAME stretch is already contacted");
+  eq(p.eligible + p.holdout, 2, "new stretch and never-contacted fans stay in");
+  eq(p.eligible + p.excludedTotal, p.candidatePool, "adds up");
+});
+
+acheck("M3 rows with user_id NULL render: sends keep their row with a deleted-fan label, CSV and dry-run sample do not crash or leak a name", async () => {
+  const db = freshDb();
+  const id = await finishedDryRun(db);
+  // fan 1 (Mike Smith) is deleted: the episode survives with user_id NULL
+  Object.assign(db.rows("reengage_episodes").find((e) => e.id === "e1")!, { user_id: null });
+  db.tables["users"] = db.rows("users").filter((u) => u.id !== uid(1));
+  const sum = await computeDryRunSummary(id);
+  eq(sum.wouldSendCount, 3, "the deleted fan's would-send still counts");
+  assert(sum.sample.some((x) => /^deleted fan/.test(x.who)), `sample labels the deleted fan: ${JSON.stringify(sum.sample)}`);
+  assert(!/Mike/i.test(JSON.stringify(sum.sample)), "the deleted fan's name never appears in the sample");
+  eq(sum.sample.length, 3, "all three still in the sample");
+
+  const sentAgo = (h: number) => new Date(Date.now() - h * 3_600_000).toISOString();
+  const eps = [
+    episode({ id: "s1", userId: null, telegramId: 4001, cloneId: CLONE_A, state: "replied", sentAt: sentAgo(30), tgMessageId: 1, ackedText: "hi" }),
+    episode({ id: "s2", userId: "user-2", telegramId: 4002, cloneId: CLONE_A, state: "acked", sentAt: sentAgo(30), tgMessageId: 2, ackedText: "hey" }),
+  ];
+  const rows = await buildSendRows(eps, [{ id: CLONE_A, name: "Alpha", slug: "a", status: "active", businessUsername: null }], { orders: [], truncated: false });
+  eq(rows.length, 2, "the deleted fan's send still shows");
+  const dr = rows.find((r) => r.episodeId === "s1")!;
+  eq(dr.userId, null, "userId stays null");
+  assert(/^deleted fan/.test(sendFanLabel(dr)) && sendFanLabel(dr).includes("4001"), "labelled deleted fan, telegram id kept");
+  eq(sendFanLabel(rows.find((r) => r.episodeId === "s2")!), "4002", "a live fan shows its telegram id");
+  assert(sendsToCsv(rows).includes(",,4001,"), "CSV keeps the row with an empty user_id");
+  assert(sourceCode("../../../components/mtproto/SendsTable.tsx").includes("sendFanLabel"), "SendsTable uses the deleted-fan label");
+
+  const read = await listEpisodesForRun(id);
+  eq(read.episodes.find((e) => e.id === "e1")!.userId, null, "listEpisodesForRun maps a NULL user_id");
+});
+
+check("M4 funnel, lift and opt-out counts add up when user_id is NULL: fans are counted by telegram id", () => {
+  const send = (over: Partial<ReengageEpisode>) => ep({ state: "acked", tgMessageId: 5, sentAt: at(30), createdAt: at(40), ...over });
+  const eps = [
+    send({ id: "n1", userId: null, telegramId: 5001 }), // two DIFFERENT deleted fans must not collapse into one
+    send({ id: "n2", userId: null, telegramId: 5002, state: "replied" }),
+    send({ id: "n3", userId: null, telegramId: 5003, episodeStartInboundAt: at(600) }), // deleted fan ...
+    send({ id: "n4", userId: "u-new", telegramId: 5003, episodeStartInboundAt: at(500) }), // ... re-created, second silence stretch: one fan
+    ep({ id: "n5", userId: null, telegramId: 5004, state: "holdout" }),
+  ];
+  const f = funnelFromEpisodes(eps);
+  eq(f.eligible, 5, "eligible = every episode incl. hold-out");
+  eq(f.holdout, 1, "holdout");
+  eq(f.contacted, 3, "5001, 5002, 5003 (two episodes, one fan); NULL user ids are NOT one fan");
+  eq(f.acknowledged, 3, "acknowledged");
+  eq(f.replied, 1, "replied");
+  assert(f.contacted >= f.acknowledged && f.acknowledged >= f.replied, "funnel still narrows");
+  const lift = liftFromData(eps, { orders: [{ userId: "u-new", cloneId: CLONE_A, stars: 100, paidMs: NOWMS - 20 * H }], truncated: false }, NOWMS);
+  const w = lift.find((l) => l.windowHours === 24)!;
+  eq(w.contacted.fans, 3, "lift counts 3 contacted fans");
+  eq(w.contacted.buyers, 1, "only the fan with a real user id can be a buyer; NULL user ids never join purchases");
+  eq(w.holdout.fans, 1, "hold-out fan with a NULL user id is still a control fan");
+  // the opt-out events have user_id NULL too: tied to the fan through episode_id
+  const r = optOutReport(eps, [{ clone_id: CLONE_A, user_id: null, episode_id: "n1" }, { clone_id: CLONE_A, user_id: null, episode_id: null }, { clone_id: CLONE_A, user_id: "u-new", episode_id: null }], [{ id: CLONE_A, name: "Alpha" }]);
+  eq(r.total.contacted, 3, "opt-out denominator counts fans by telegram id");
+  eq(r.total.optedOut, 2, "n1 via episode_id, 5003 via user_id; the event with neither is ignored, not guessed");
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

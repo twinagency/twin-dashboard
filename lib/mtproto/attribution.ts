@@ -27,7 +27,7 @@
 
 import { mtDb } from "./db";
 import { classifyRevenueLedgerRow } from "@/lib/revenue-ledger";
-import { isRealSend } from "./episodes";
+import { episodeFanKey, isRealSend } from "./episodes";
 import { selectAllRowsMtproto } from "./paging";
 import { ATTRIBUTION_WINDOWS_HOURS, type AttributionWindowHours, type LiftReport, type LiftSide, type ReengageEpisode } from "./types";
 
@@ -83,10 +83,16 @@ export async function loadPurchasesForEpisodes(episodes: ReengageEpisode[]): Pro
   const relevant = episodes.filter((e) => (e.state === "holdout" && !e.dryRun) || isRealSend(e));
   if (relevant.length === 0) return { orders: [], truncated: false };
   const earliest = Math.min(...relevant.map((e) => new Date(e.sentAt ?? e.createdAt).getTime()));
-  return purchasesForUsers([...new Set(relevant.map((e) => e.userId))], earliest);
+  // star_transactions joins on users.id. An episode whose fan row was deleted
+  // (user_id NULL, migration 163) has nothing to join, so it is left out of the
+  // purchase read: it counts as a fan in the funnel/lift but never as a buyer,
+  // and it can never be joined to somebody else's purchases.
+  const userIds = [...new Set(relevant.map((e) => e.userId).filter((u): u is string => u != null))];
+  return purchasesForUsers(userIds, earliest);
 }
 
-type Side = { userId: string; cloneId: string; anchorMs: number; replied: boolean };
+/** userId is null for a deleted fan (no purchase can be joined to it). */
+type Side = { userId: string | null; cloneId: string; anchorMs: number; replied: boolean };
 
 function median(nums: number[]): number {
   if (nums.length === 0) return 0;
@@ -107,7 +113,7 @@ function liftSideFor(side: Side[], ordersByUser: Map<string, PaidOrder[]>, windo
     fans += 1;
     if (s.replied) replies += 1;
     let fanStars = 0;
-    for (const o of ordersByUser.get(s.userId) ?? []) {
+    for (const o of (s.userId != null ? ordersByUser.get(s.userId) : undefined) ?? []) {
       if (o.cloneId !== s.cloneId) continue;
       const hours = (o.paidMs - s.anchorMs) / HOUR;
       if (hours >= 0 && hours <= windowHours) fanStars += o.stars;
@@ -139,13 +145,16 @@ export function liftFromData(episodes: ReengageEpisode[], purchases: PurchaseRea
   const contactedByFan = new Map<string, Side & { createdMs: number }>();
   for (const e of episodes) {
     if (!isRealSend(e)) continue;
-    const key = `${e.cloneId}:${e.userId}`;
+    const key = episodeFanKey(e); // (clone_id, telegram_id): user_id may be NULL
     const sentMs = new Date(e.sentAt as string).getTime();
     const prev = contactedByFan.get(key);
     // one row per fan; the earliest send anchors the window, replied is sticky
     if (!prev || sentMs < prev.anchorMs) {
-      contactedByFan.set(key, { userId: e.userId, cloneId: e.cloneId, anchorMs: sentMs, replied: (prev?.replied ?? false) || e.state === "replied", createdMs: new Date(e.createdAt).getTime() });
-    } else if (e.state === "replied") prev.replied = true;
+      contactedByFan.set(key, { userId: e.userId ?? prev?.userId ?? null, cloneId: e.cloneId, anchorMs: sentMs, replied: (prev?.replied ?? false) || e.state === "replied", createdMs: new Date(e.createdAt).getTime() });
+    } else {
+      if (e.state === "replied") prev.replied = true;
+      prev.userId = e.userId ?? prev.userId;
+    }
   }
   const contactedSide = [...contactedByFan.values()];
 
@@ -157,7 +166,7 @@ export function liftFromData(episodes: ReengageEpisode[], purchases: PurchaseRea
   const holdoutByFan = new Map<string, Side>();
   for (const e of episodes) {
     if (e.state !== "holdout" || e.dryRun) continue; // a dry run's hold-out is not a control group
-    const key = `${e.cloneId}:${e.userId}`;
+    const key = episodeFanKey(e);
     if (contactedByFan.has(key)) continue; // keep the groups disjoint
     const anchorMs = new Date(e.createdAt).getTime() + (lagByClone.get(e.cloneId) ?? 0);
     const prev = holdoutByFan.get(key);

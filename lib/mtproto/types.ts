@@ -190,7 +190,9 @@ export interface ReengageEpisode {
   id: string;
   runId: string;
   cloneId: string;
-  userId: string;
+  /** NULL once the fan row was deleted (migration 163: FK ON DELETE SET NULL).
+   *  The fan's real identity here is (cloneId, telegramId). */
+  userId: string | null;
   telegramId: number;
   episodeStartInboundAt: string;
   state: EpisodeState;
@@ -386,7 +388,8 @@ export interface SendRow {
   episodeId: string;
   cloneId: string;
   cloneName: string;
-  userId: string;
+  /** NULL for a deleted fan (shown as "deleted fan"). */
+  userId: string | null;
   telegramId: number;
   sentAt: string | null;
   text: string | null;
