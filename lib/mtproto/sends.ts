@@ -22,7 +22,7 @@ function firstWindowHit(paidMs: number, sentMs: number): AttributionWindowHours 
 }
 
 export async function buildSendRows(episodes: ReengageEpisode[], creators: CreatorLite[], purchases?: PurchaseRead): Promise<SendRow[]> {
-  const sent = episodes.filter((e) => SEND_TABLE_STATES.includes(e.state));
+  const sent = episodes.filter((e) => !e.dryRun && SEND_TABLE_STATES.includes(e.state)); // simulated (dry) rows are not sends
   const nameOf = new Map(creators.map((c) => [c.id, c.name]));
   const read = purchases ?? (await loadPurchasesForEpisodes(episodes));
   const ordersByUser = new Map<string, typeof read.orders>();

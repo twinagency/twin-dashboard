@@ -80,7 +80,7 @@ export async function purchasesForUsers(userIds: string[], earliestMs: number, l
 
 /** One read that serves lift, funnel and the sends table for a set of episodes. */
 export async function loadPurchasesForEpisodes(episodes: ReengageEpisode[]): Promise<PurchaseRead> {
-  const relevant = episodes.filter((e) => e.state === "holdout" || isRealSend(e));
+  const relevant = episodes.filter((e) => (e.state === "holdout" && !e.dryRun) || isRealSend(e));
   if (relevant.length === 0) return { orders: [], truncated: false };
   const earliest = Math.min(...relevant.map((e) => new Date(e.sentAt ?? e.createdAt).getTime()));
   return purchasesForUsers([...new Set(relevant.map((e) => e.userId))], earliest);
@@ -156,7 +156,7 @@ export function liftFromData(episodes: ReengageEpisode[], purchases: PurchaseRea
 
   const holdoutByFan = new Map<string, Side>();
   for (const e of episodes) {
-    if (e.state !== "holdout") continue;
+    if (e.state !== "holdout" || e.dryRun) continue; // a dry run's hold-out is not a control group
     const key = `${e.cloneId}:${e.userId}`;
     if (contactedByFan.has(key)) continue; // keep the groups disjoint
     const anchorMs = new Date(e.createdAt).getTime() + (lagByClone.get(e.cloneId) ?? 0);

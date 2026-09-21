@@ -152,6 +152,9 @@ async function alreadyContactedSet(cloneIds: string[]): Promise<{ keys: Set<stri
           .order("id", { ascending: true }) as any,
       { label: "reengage_episodes (already-contacted check)", maxRows: 200_000, throwOnError: true },
     );
+          // LIVE episodes only: a dry run's simulated episodes must never mark a
+          // fan as already contacted (migration 158 scopes their dedupe to the run).
+          .eq("dry_run", false)
     return { keys: new Set(rows.map((r) => `${r.clone_id}:${r.user_id}:${tsKey(r.episode_start_inbound_at)}`)), truncated };
   } catch (e) {
     if (isMissingTable(e)) {

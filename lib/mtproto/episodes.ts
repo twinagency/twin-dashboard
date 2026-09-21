@@ -17,6 +17,7 @@ type EpisodeRow = {
   telegram_id: number;
   episode_start_inbound_at: string;
   state: EpisodeState;
+  dry_run: boolean | null;
   prepared_text: string | null;
   acked_text: string | null;
   tg_message_id: number | null;
@@ -38,6 +39,7 @@ function fromRow(r: EpisodeRow): ReengageEpisode {
     telegramId: r.telegram_id,
     episodeStartInboundAt: r.episode_start_inbound_at,
     state: r.state,
+    dryRun: r.dry_run !== false,
     preparedText: r.prepared_text,
     ackedText: r.acked_text,
     tgMessageId: r.tg_message_id,
@@ -72,12 +74,12 @@ const SENT_STATES: EpisodeState[] = ["acked", "replied"];
  *  message id. A dry run's "would send" marks an episode acked too but with no
  *  tg_message_id, so this is what separates real sends from simulated ones. */
 export function isRealSend(ep: ReengageEpisode): boolean {
-  return SENT_STATES.includes(ep.state) && ep.tgMessageId != null && ep.sentAt != null;
+  return !ep.dryRun && SENT_STATES.includes(ep.state) && ep.tgMessageId != null && ep.sentAt != null;
 }
 
 /** Acked (real or dry "would send"), never failed/uncertain/cancelled. */
 export function isAckedSend(ep: ReengageEpisode): boolean {
-  return SENT_STATES.includes(ep.state) && ep.sentAt != null;
+  return !ep.dryRun && SENT_STATES.includes(ep.state) && ep.sentAt != null;
 }
 
 const fanKey = (ep: ReengageEpisode) => `${ep.cloneId}:${ep.userId}`;
@@ -98,6 +100,7 @@ export function funnelFromEpisodes(episodes: ReengageEpisode[]): Omit<FunnelCoun
   const delivered = new Set<string>();
   const replied = new Set<string>();
   for (const ep of episodes) {
+    if (ep.dryRun) continue; // simulated episodes are not part of the real funnel
     if (ep.state === "holdout") holdout += 1;
     else eligible += 1;
     if (isAckedSend(ep)) contacted.add(fanKey(ep));

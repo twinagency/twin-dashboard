@@ -94,5 +94,8 @@ export function validateCaps(c: Caps): void {
 export function isMissingTable(e: unknown): boolean {
   const err = e as { code?: string; message?: string } | null;
   const msg = String(err?.message ?? e ?? "");
+  // A missing COLUMN (42703 / PGRST204) is not a missing table: treating it as
+  // one would let a safety read fall back to "empty" (fail open).
+  if (err?.code === "42703" || err?.code === "PGRST204" || /column/i.test(msg)) return false;
   return err?.code === "42P01" || err?.code === "PGRST205" || /does not exist|could not find the table|schema cache/i.test(msg);
 }

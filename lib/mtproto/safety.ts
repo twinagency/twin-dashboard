@@ -29,6 +29,7 @@ async function sentTodayByClone(cloneIds: string[]): Promise<Map<string, number>
     // Real sends only: a dry run marks episodes acked with sent_at set but no
     // Telegram message id, and must not count against the daily cap.
     .not("tg_message_id", "is", null)
+    .eq("dry_run", false)
     .gte("sent_at", startOfUtcDay())
     .limit(10_000);
   if (error) {

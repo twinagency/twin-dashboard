@@ -188,6 +188,9 @@ export interface ReengageEpisode {
   preparedText: string | null;
   ackedText: string | null;
   tgMessageId: number | null;
+  /** Set by a DB trigger from the run at insert, immutable; the dashboard never
+   *  writes it. Anything other than an explicit false reads as dry (safe side). */
+  dryRun: boolean;
   claimedBy: string | null;
   claimedAt: string | null;
   sentAt: string | null;
