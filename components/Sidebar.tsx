@@ -113,6 +113,13 @@ const MORE_LINKS: NavLink[] = [
   { kind: "route", label: "AI", href: "/jarvis", icon: "Sparkle", color: "blue" },
   { kind: "route", label: "Flows", href: "/flows", icon: "Flows", color: "pink", gateOnClone: true },
   { kind: "route", label: "Sequences", href: "/sequences", icon: "Media", color: "red", gateOnClone: true },
+  // MTProto Campaign (2026-09-22): its own top-level system, not a Flows
+  // sub-page (plan section N7) — a laptop-only re-engagement extension, self
+  // -contained under app/mtproto-campaign, lib/mtproto, components/mtproto.
+  // Not gated on a selected clone: the page has its own multi-creator picker.
+  // Deliberately absent from lib/agency-policy.ts agencyDashboardPath(), so
+  // this row and the route itself stay invisible/403 to every agency session.
+  { kind: "route", label: "MTProto Campaign", href: "/mtproto-campaign", icon: "Bell", color: "pink" },
   { kind: "tab", label: "Edit", tab: "identity", icon: "Dials", color: "blue" },
   { kind: "route", label: "Tracker", href: "/tracker", icon: "ListChecks", color: "orange" },
   { kind: "route", label: "Info", href: "/info", icon: "Info", color: "neutral" },

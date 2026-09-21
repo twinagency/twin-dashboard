@@ -1,0 +1,110 @@
+import { withAdmin, ok, jsonError, logAdminWrite } from "@/lib/api-route";
+import { confirmLive, createDryRun, queueRun, stopRun, validateCreateRunInput, RunValidationError, type CreateRunInput } from "@/lib/mtproto/runs";
+import { setConnectionDailyCap, setConnectionPaused } from "@/lib/mtproto/connections";
+import { getGlobalStop, setGlobalStop } from "@/lib/mtproto/global-stop";
+import { DEFAULT_DAILY_CAP, DEFAULT_HOLDOUT_PCT, type RunFilters } from "@/lib/mtproto/types";
+
+export const dynamic = "force-dynamic";
+
+// ── The write half of the MTProto admin API ──────────────────────────────────
+//
+// Named actions over an allowlist, mirroring app/api/admin/v1/clones/write/
+// route.ts's shape exactly: every action calls the SAME functions
+// app/mtproto-campaign/actions.ts uses for the dashboard's own buttons
+// (lib/mtproto/runs.ts, connections.ts, global-stop.ts), so an external
+// caller (sim testing, an AI assistant) can never do anything the UI itself
+// couldn't. Every write logs via logAdminWrite (system_logs) IN ADDITION to
+// the reengage_events row the underlying function already writes — the
+// domain audit trail (N1) and the dashboard's admin-API audit trail are both
+// kept, not one instead of the other.
+//
+// Actor for API-key writes is "api-key", distinct from the dashboard UI's
+// own "operator" (N6 GAP: no per-user roles yet, so this is a label).
+const ACTOR = "api-key";
+
+type Action = "create_run" | "confirm_live" | "stop_run" | "global_stop" | "global_resume" | "set_connection_pause" | "set_connection_cap";
+
+export const POST = withAdmin(async (req) => {
+  let body: Record<string, unknown>;
+  try {
+    body = (await req.json()) as Record<string, unknown>;
+  } catch {
+    return jsonError("body must be JSON", 400);
+  }
+  const action = String(body.action ?? "") as Action;
+
+  try {
+    switch (action) {
+      // ── create a dry run (never live on creation, see lib/mtproto/runs.ts) ──
+      case "create_run": {
+        const cloneIds = Array.isArray(body.cloneIds) ? body.cloneIds.map(String) : [];
+        const filters: RunFilters = { ...(typeof body.filters === "object" && body.filters ? (body.filters as RunFilters) : {}), cloneIds };
+        const input: CreateRunInput = {
+          createdBy: ACTOR,
+          cloneIds,
+          filters,
+          dailyCap: typeof body.dailyCap === "number" ? body.dailyCap : DEFAULT_DAILY_CAP,
+          runCap: typeof body.runCap === "number" ? body.runCap : null,
+          holdoutPct: typeof body.holdoutPct === "number" ? body.holdoutPct : DEFAULT_HOLDOUT_PCT,
+          note: typeof body.note === "string" ? body.note : null,
+        };
+        validateCreateRunInput(input);
+        const run = await createDryRun(input);
+        await queueRun(run.id, ACTOR);
+        logAdminWrite("mtproto:create_run", null, { runId: run.id, cloneIds, filters });
+        return ok({ run, action });
+      }
+
+      case "confirm_live": {
+        const runId = String(body.runId ?? "");
+        if (!runId) return jsonError("runId is required", 400);
+        const run = await confirmLive(runId, ACTOR);
+        logAdminWrite("mtproto:confirm_live", null, { runId });
+        return ok({ run, action });
+      }
+
+      case "stop_run": {
+        const runId = String(body.runId ?? "");
+        if (!runId) return jsonError("runId is required", 400);
+        const run = await stopRun(runId, ACTOR, typeof body.reason === "string" ? body.reason : undefined);
+        logAdminWrite("mtproto:stop_run", null, { runId });
+        return ok({ run, action });
+      }
+
+      case "global_stop":
+      case "global_resume": {
+        const stopped = action === "global_stop";
+        await setGlobalStop(stopped, ACTOR, typeof body.reason === "string" ? body.reason : undefined);
+        logAdminWrite(`mtproto:${action}`, null, {});
+        return ok({ action, stopped: await getGlobalStop() });
+      }
+
+      case "set_connection_pause": {
+        const cloneId = String(body.cloneId ?? "");
+        if (!cloneId) return jsonError("cloneId is required", 400);
+        const paused = body.paused === true;
+        await setConnectionPaused(cloneId, paused, typeof body.reason === "string" ? body.reason : null, ACTOR);
+        logAdminWrite("mtproto:set_connection_pause", cloneId, { paused });
+        return ok({ action, cloneId, paused });
+      }
+
+      case "set_connection_cap": {
+        const cloneId = String(body.cloneId ?? "");
+        const dailyCap = Number(body.dailyCap);
+        if (!cloneId) return jsonError("cloneId is required", 400);
+        await setConnectionDailyCap(cloneId, dailyCap, ACTOR);
+        logAdminWrite("mtproto:set_connection_cap", cloneId, { dailyCap });
+        return ok({ action, cloneId, dailyCap });
+      }
+
+      default:
+        return jsonError(
+          `unknown action: "${action}". Allowed: create_run, confirm_live, stop_run, global_stop, global_resume, set_connection_pause, set_connection_cap.`,
+          400,
+        );
+    }
+  } catch (e) {
+    if (e instanceof RunValidationError) return jsonError(e.message, 400);
+    return jsonError(e instanceof Error ? e.message : "write failed", 500);
+  }
+});

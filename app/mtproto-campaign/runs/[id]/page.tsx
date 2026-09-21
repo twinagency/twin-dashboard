@@ -1,0 +1,117 @@
+import { notFound } from "next/navigation";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { getRun } from "@/lib/mtproto/runs";
+import { listEpisodesForRun } from "@/lib/mtproto/episodes";
+import { computeFunnel } from "@/lib/mtproto/funnel";
+import { computeLift } from "@/lib/mtproto/attribution";
+import { buildSendRows } from "@/lib/mtproto/sends";
+import { listCreators } from "@/lib/mtproto/clones";
+import RunStatusBadge from "@/components/mtproto/RunStatusBadge";
+import RunControls from "@/components/mtproto/RunControls";
+import FunnelCard from "@/components/mtproto/FunnelCard";
+import LiftCard from "@/components/mtproto/LiftCard";
+import LiveFeed from "@/components/mtproto/LiveFeed";
+import SendsTable from "@/components/mtproto/SendsTable";
+import { Badge } from "@/components/ui/badge";
+
+export const dynamic = "force-dynamic";
+
+export default async function RunDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  const { id } = await params;
+  const run = await getRun(id);
+  if (!run) notFound();
+
+  const [{ episodes, truncated }, creators] = await Promise.all([listEpisodesForRun(id), listCreators()]);
+  const [funnel, lift, sends] = await Promise.all([computeFunnel(episodes), computeLift(episodes), buildSendRows(episodes, creators)]);
+
+  const failedRows = sends.filter((s) => s.errorCode);
+  const failuresByCode = new Map<string, number>();
+  for (const r of failedRows) failuresByCode.set(r.errorCode!, (failuresByCode.get(r.errorCode!) ?? 0) + 1);
+  const repliedRows = sends.filter((s) => s.repliedAt);
+
+  return (
+    <div className="dashboard-page">
+      <div className="mb-6 flex flex-wrap items-start justify-between gap-4">
+        <div>
+          <div className="mb-1 flex items-center gap-2">
+            <h1 className="text-2xl font-semibold">Run</h1>
+            <RunStatusBadge status={run.status} />
+            {run.dryRun ? <Badge variant="outline">dry run</Badge> : <Badge variant="destructive">LIVE</Badge>}
+            {run.stopRequested && <Badge variant="destructive">stop requested</Badge>}
+          </div>
+          <p className="text-sm text-muted-foreground">
+            Created {new Date(run.createdAt).toLocaleString()} by {run.createdBy} · {run.cloneIds.length} creator(s) · daily cap{" "}
+            {run.dailyCap} · hold-out {run.holdoutPct}%{run.runCap ? ` · run cap ${run.runCap}` : ""}
+          </p>
+        </div>
+        <RunControls run={run} />
+      </div>
+
+      {truncated && (
+        <div className="mb-5 rounded-md border border-warn/40 bg-warn/10 px-3 py-2 text-xs text-warn">
+          This run has more episodes than one read can safely hold — figures below are a lower bound. Narrow the date range or filters.
+        </div>
+      )}
+
+      <FunnelCard title="Funnel" funnel={funnel} />
+
+      <div className="mt-6">
+        <LiftCard reports={lift} />
+      </div>
+
+      <div className="mt-6 grid grid-cols-1 gap-6 xl:grid-cols-2">
+        <LiveFeed runId={id} />
+        <Card>
+          <CardHeader>
+            <CardTitle>Failures</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {failuresByCode.size === 0 ? (
+              <div className="py-6 text-center text-sm text-muted-foreground">No failures.</div>
+            ) : (
+              <ul className="space-y-1 text-sm">
+                {[...failuresByCode.entries()].map(([code, count]) => (
+                  <li key={code} className="flex justify-between rounded-md border border-destructive/30 bg-destructive/5 px-2 py-1">
+                    <span className="font-mono text-xs">{code}</span>
+                    <span className="tabular-nums">{count}</span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      <div className="mt-6">
+        <SendsTable runId={id} rows={sends} />
+      </div>
+
+      <div className="mt-6">
+        <Card>
+          <CardHeader>
+            <CardTitle>Replies ({repliedRows.length})</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {repliedRows.length === 0 ? (
+              <div className="py-6 text-center text-sm text-muted-foreground">No replies yet.</div>
+            ) : (
+              <ul className="space-y-1 text-sm">
+                {repliedRows.map((r) => (
+                  <li key={r.episodeId} className="flex items-center justify-between gap-3 rounded-md border border-border px-2 py-1">
+                    <span>
+                      {r.cloneName} · fan {r.telegramId}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      replied {r.repliedAt ? new Date(r.repliedAt).toLocaleString() : ""}
+                      {r.boughtStars ? ` · bought ${r.boughtStars}⭐` : ""}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
