@@ -174,22 +174,23 @@ export async function saveCampaign(id: string, fd: FormData) {
     welcome_instruction: str(fd, "welcome_instruction"),
     // Ordered onboarding step list (migration 068). Per-step steer added in 069.
     onboarding_steps: parseOnboardingSteps(fd),
-    // Free-preview fallback (migration 069). Either trigger fires (null = off);
-    // media id null = she auto-picks. Written here (Campaigns owns onboarding).
-    onboarding_free_preview_enabled: fd.get("onboarding_free_preview_enabled") === "true",
-    onboarding_free_preview_after_minutes: numOrNull(fd, "onboarding_free_preview_after_minutes"),
-    onboarding_free_preview_after_messages: numOrNull(fd, "onboarding_free_preview_after_messages"),
-    onboarding_free_preview_media_id: str(fd, "onboarding_free_preview_media_id"),
-    // Steer for the spoken lead-in line before the free photo (migration 073).
-    onboarding_free_preview_instruction: str(fd, "onboarding_free_preview_instruction"),
+    // Conversation-led sales release: legacy unsolicited preview/follow-up/drip
+    // systems are retired fleet-wide. Keep their persisted config OFF even if an
+    // old/stale browser still submits those fields.
+    onboarding_free_preview_enabled: false,
+    onboarding_free_preview_after_minutes: null,
+    onboarding_free_preview_after_messages: null,
+    onboarding_free_preview_media_id: null,
+    onboarding_free_preview_instruction: null,
     // Per-flow caption kill switch (migration 071) — overrides media_caption_mode
     // outright for that flow's photo/video/bundle sends.
     onboarding_captions_off: fd.get("onboarding_captions_off") === "true",
     // Migration 133. Gates the location_gate step's block action, not the
     // question itself — see FlowsForm.tsx's Toggle hint.
     block_us_fans_enabled: fd.get("block_us_fans_enabled") === "true",
-    // Mid-chat follow-up
-    followup_after_minutes: Math.max(0, num(fd, "followup_after_minutes", 0)),
+    // Retired by conversation-led sales. The runtime also has its own hard OFF
+    // policy; keeping config at zero prevents dormant jobs from being re-armed.
+    followup_after_minutes: 0,
     // Campaign. winback_lapse_days is read for real by isReturningLapsedSpender
     // in bot/src/campaign.ts (wired 2026-07-29). It MUST be written to the clones
     // row, which is the only place the bot reads it from. An earlier control for
@@ -197,7 +198,8 @@ export async function saveCampaign(id: string, fd: FormData) {
     // is how the setting died the first time. Clamped to at least 1 day: 0 would
     // mark every paying fan as lapsed immediately.
     winback_lapse_days: Math.max(1, num(fd, "winback_lapse_days", 7)),
-    drip_enabled: fd.get("drip_enabled") === "true",
+    // Legacy timed quiet-fan campaigns/win-backs are retired.
+    drip_enabled: false,
     campaign_captions_off: fd.get("campaign_captions_off") === "true",
     drip_steps: parseSteps(fd),
     // ── NEW FLOWS (migration 130) ────────────────────────────────────────────

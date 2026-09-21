@@ -170,7 +170,7 @@ export default function FlowsForm({
   const [pending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
 
-  const [enabled, setEnabled] = useState(initial.enabled);
+  const [enabled, setEnabled] = useState(false);
   const [blockUsFansEnabled, setBlockUsFansEnabled] = useState(initial.blockUsFansEnabled);
   const [funnelPolicy, setFunnelPolicy] = useState<FunnelPolicy>(initial.funnelPolicy);
   // Phase 2 (migration 131). Ronan asked for the redesign to be switchable on
@@ -183,7 +183,7 @@ export default function FlowsForm({
   const [onboardingCaptionsOff, setOnboardingCaptionsOff] = useState(initial.onboardingCaptionsOff);
   const [steps, setSteps] = useState<Step[]>(initial.steps);
   const [onboardingSteps, setOnboardingSteps] = useState<OnboardingStepData[]>(initial.onboardingSteps);
-  const [freePreviewEnabled, setFreePreviewEnabled] = useState(initial.freePreviewEnabled);
+  const [freePreviewEnabled, setFreePreviewEnabled] = useState(false);
   const [freePreviewMediaId, setFreePreviewMediaId] = useState<string | null>(initial.freePreviewMediaId);
 
   // Switching a step's type clears any picked media (ids don't carry across
@@ -566,12 +566,13 @@ export default function FlowsForm({
         {/* ── Free-preview fallback (migration 069) ─────────────────────── */}
         <div className="border-t border-line pt-3">
           <Toggle
-            label={freePreviewEnabled ? "Free preview if he hasn't bought" : "No free-preview fallback"}
+            label="Retired: no background free-preview fallback"
             name="onboarding_free_preview_enabled"
-            checked={freePreviewEnabled}
-            onChange={setFreePreviewEnabled}
+            checked={false}
+            onChange={() => setFreePreviewEnabled(false)}
             accent="soft"
-            hint="A safety net: if he hasn't bought the welcome bundle within the window below, she sends one free taste. Either trigger can fire; leave both blank to turn the triggers off."
+            disabled
+            hint="Conversation-led sales does not send a timed free preview while the fan is silent. Saves keep this OFF."
           />
           {freePreviewEnabled && (
             <div className="mt-2 grid min-w-0 grid-cols-1 gap-2 sm:grid-cols-2">
@@ -744,34 +745,38 @@ export default function FlowsForm({
       <Section
         icon="⏰"
         accent="amber"
-        title="Follow-up"
-        hint="One short nudge in her voice if he goes quiet mid-chat, once per hang, never repeated until he replies."
+        title="Follow-up retired"
+        hint="Conversation-led sales no longer sends 7/10-minute silence nudges. This remains visible only so older clone settings are understandable."
       >
         <Field
           label="Follow-up (mins)"
           name="followup_after_minutes"
           type="number"
-          defaultValue={initial.followupAfterMinutes}
+          defaultValue={0}
           placeholder="0"
+          disabled
+          hint="Retired. Saves are forced to 0 and the bot has an independent fleet-wide OFF policy."
         />
       </Section>
 
       {/* ── Automated flow ───────────────────────────────────────── */}
       <GroupHeader
-        label="Automated flow"
-        hint="Timed steps that fire while a fan goes quiet. Telegram only lets her message a fan within 24 hours of his last activity, so every step lands inside that window."
+        label="Legacy quiet-fan flow"
+        hint="Retired by the conversation-led sales release. Timed drips and win-backs no longer run; future 24h+ re-engagement is handled separately."
       />
       <Section
-        title="Steps"
-        hint="Each step is WHEN (hours after his last message) plus WHAT (text, voice, photo, video, or bundle). Content is never canned: text and voice lines are AI-written fresh in her voice, media is always something he hasn't seen. The moment he replies, the timer resets to 0."
-        tip="Steps fire in hour order (they re-sort on save). Voice, photo, video and bundle steps only fire when that feature is on for this creator; a step with nothing fresh to send falls back to an AI text line."
+        title="Retired automation"
+        hint="These legacy timed steps are preserved as historical configuration only. Saving this page keeps the flow OFF."
+        tip="The active model sells during live conversation instead of scheduling background messages while the fan is silent."
       >
         <Toggle
-          label={enabled ? "Flow is on: she re-engages quiet fans" : "Flow is off: she never messages first"}
+          label="Retired: scheduled quiet-fan messages are off"
           name="drip_enabled"
-          checked={enabled}
-          onChange={setEnabled}
+          checked={false}
+          onChange={() => setEnabled(false)}
           accent="soft"
+          disabled
+          hint="The dashboard and bot both force this OFF."
         />
 
         {/* Win-back lapse threshold. Rendered UNCONDITIONALLY, never behind the
@@ -786,7 +791,8 @@ export default function FlowsForm({
             type="number"
             min={1}
             defaultValue={initial.winbackLapseDays}
-            hint="A fan who has PAID before and then goes quiet this many days gets the warm win-back (a softer one-time discount plus a fresh teaser) on his next flow step instead of a normal one. Fans who never paid are unaffected. Default 7. Lower means she chases returning payers sooner."
+            disabled
+            hint="Legacy setting only. Timed win-backs are retired and do not run."
           />
         </div>
 
