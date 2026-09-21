@@ -24,12 +24,12 @@ Reach fans who went silent for more than 24h, **once per silent stretch**, from 
 |---|---|---|
 | Dashboard area | `twin-dashboard` branch `mtproto-campaign` (`app/mtproto-campaign`, `lib/mtproto`, `components/mtproto`, `app/api/admin/v1/mtproto`) | pushed, main untouched |
 | Migrations | `twin-bot/db/migrations/162_reengage_mtproto.sql`, `163_reengage_identity_by_telegram_id.sql` (on twin-bot branch `mtproto-campaign`) | **applied live**. 162 was recorded live under the name `158_reengage_mtproto`; renumbered because `main` already owns 158 to 161 |
-| Worker | `ronan-com/twin-userbot`, branch `main` (Node/TS, mtcute) | pushed, private repo, see "Worker code" below |
+| Worker | `jesse98/twin-userbot`, branch `main` (Node/TS, mtcute) | pushed, private repo, see "Worker code" below |
 | Owner-message guard | `twin-bot/src/index.ts` plus `src/dev/check-owner-business-message.ts` | on `main`, deployed |
 
 ### Worker code
 
-The worker is its own private repo: **`ronan-com/twin-userbot`**, branch `main` (pushed 2026-09-22, no secrets, `.env` and `sessions/` are gitignored). Its layout:
+The worker is its own private repo: **`jesse98/twin-userbot`**, branch `main` (pushed 2026-09-22, no secrets, `.env` and `sessions/` are gitignored). Its layout:
 `src/index.ts` (entry), `config.ts` (Supabase project guard, live gate), `contract.ts` (types and constants, mirrors the SQL CHECK lists), `policy.ts` (eligibility), `compose.ts`, `store.ts` + `paging.ts` (Supabase access, every read paged past the 1000-row cap), `telegram.ts` (mtcute wrapper), `session.ts` (AES-256-GCM session file), `spike.ts` + `replyClassifier.ts` (auto-halt), `loops/` (runClaimer, scanner, sender, replyWatcher, sessionKeeper, runProcessor, recovery), `cli/` (login, logout, web connect page), `dev/` (35 check files), `integration/` (real PostgREST test).
 
 ## Database (live)
@@ -73,7 +73,7 @@ Known pre-existing failures, unrelated to this work: dashboard `test:rollups` an
 - Dry run: create it in the dashboard, then `npm run dry` (sends nothing).
 - Dashboard: `cd twin-dashboard && npm run dev` (port 3001), then `/mtproto-campaign`.
 - Config lives in `twin-userbot/.env` (gitignored): Supabase URL and service key, `TG_API_ID`, `TG_API_HASH`, `SESSION_ENCRYPTION_KEY`, `WORKER_ID`, `REENGAGE_ALLOW_LIVE` (default false), `REENGAGE_DRY_RUN`.
-- Session files live in `twin-userbot/sessions/` (encrypted, mode 600, gitignored). Back up the folder **and** the `SESSION_ENCRYPTION_KEY`; losing either means the creator scans again.
+- Session files live in `twin-userbot/sessions/` (encrypted, mode 600, gitignored). Back up both the session folder and the `SESSION_ENCRYPTION_KEY`, but keep them in separate protected locations; never store the encrypted session files and the key in the same backup. Losing either means the creator scans again.
 
 ## Still open (in priority order)
 
