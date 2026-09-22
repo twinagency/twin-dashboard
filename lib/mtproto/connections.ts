@@ -8,7 +8,7 @@
 import { mtDb } from "./db";
 import { insertEvent } from "./events";
 import { getCreator } from "./clones";
-import { autoHaltKind, buildAutoHaltInfo, pickHaltEvent, resumePhraseFor, resumePhraseOk, shortId } from "./halt";
+import { autoHaltKind, buildAutoHaltInfo, goLivePhraseFor, goLivePhraseOk, pickHaltEvent, resumePhraseFor, resumePhraseOk, shortId } from "./halt";
 import { listHaltEvents } from "./halt-server";
 import { RunValidationError, isMissingTable, requireUuid } from "./validate";
 import { HARD_MAX_DAILY_CAP, type ConnectionStatus, type UserbotConnection } from "./types";
@@ -22,6 +22,9 @@ type ConnectionRow = {
   paused: boolean;
   paused_reason: string | null;
   daily_cap: number;
+  /** Migration 164. Optional on the type so a row read before 164 is applied
+   *  is still parsed (and reads DRY), rather than throwing. */
+  live_enabled?: boolean | null;
   session_ref: string | null;
   created_at: string;
   updated_at: string;
@@ -37,6 +40,9 @@ function fromRow(r: ConnectionRow): UserbotConnection {
     paused: r.paused,
     pausedReason: r.paused_reason,
     dailyCap: r.daily_cap,
+    // `=== true` on purpose: a missing/null column (migration 164 not applied
+    // yet) reads as DRY, never as live. Fail to the safe side.
+    liveEnabled: r.live_enabled === true,
     sessionRef: r.session_ref,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
@@ -74,6 +80,8 @@ export function connectionFor(cloneId: string, connections: UserbotConnection[])
       paused: false,
       pausedReason: null,
       dailyCap: 30,
+      // A creator who has never connected is DRY, same as the column default.
+      liveEnabled: false,
       sessionRef: null,
       createdAt: "",
       updatedAt: "",
@@ -161,4 +169,54 @@ export async function setConnectionDailyCap(cloneId: string, dailyCap: number, a
     actor,
     detail: { action: "set_daily_cap", before: { dailyCap: before?.dailyCap ?? 30 }, after: { dailyCap } },
   });
+}
+
+/** Switch one creator between LIVE and DRY (userbot_connections.live_enabled,
+ *  migration 164).
+ *
+ *  This is the per-creator half of the worker's live gate. It is an ADDITIONAL
+ *  gate: turning it on can never make a dry run live, can never make a worker
+ *  started without REENGAGE_ALLOW_LIVE send, and can never lift a pause, a kill
+ *  switch or a cap. It can only ever hold a send back.
+ *
+ *  TURNING IT ON needs the typed phrase `GO LIVE <clone name or short id>`,
+ *  checked HERE server-side (the form and the action only collect it), the same
+ *  shape as resuming an auto-halt. Naming the creator is the point: a phrase
+ *  typed for one creator cannot be reused for another.
+ *  TURNING IT OFF is never gated. Going back to dry is always allowed, at once.
+ *  Logged as config_change with before/after, like the daily cap next door. */
+export async function setConnectionLiveEnabled(cloneId: string, liveEnabled: boolean, actor: string, confirmText?: string | null): Promise<void> {
+  requireUuid(cloneId, "cloneId");
+  // getConnection throws on a read error: never switch a creator live blind.
+  const before = await getConnection(cloneId);
+  let phrase: string | null = null;
+  if (liveEnabled) {
+    const creator = await getCreator(cloneId);
+    if (!goLivePhraseOk(confirmText, creator?.name, cloneId)) {
+      throw new RunValidationError(
+        `switching this creator to LIVE means real messages to real fans. Type "${goLivePhraseFor(creator?.name ?? shortId(cloneId))}" (or "GO LIVE ${shortId(cloneId)}") to confirm`,
+      );
+    }
+    phrase = (confirmText ?? "").trim().replace(/\s+/g, " ");
+  }
+  const { error } = await mtDb().from("userbot_connections").upsert({ clone_id: cloneId, live_enabled: liveEnabled }, { onConflict: "clone_id" });
+  if (error) throw new Error(`could not switch connection to ${liveEnabled ? "LIVE" : "DRY"}: ${error.message}`);
+  try {
+    await insertEvent({
+      runId: null,
+      episodeId: null,
+      cloneId,
+      userId: null,
+      eventType: "config_change",
+      actor,
+      detail: {
+        action: liveEnabled ? "enable_live_sending" : "disable_live_sending",
+        before: { liveEnabled: before?.liveEnabled ?? false },
+        after: { liveEnabled },
+        ...(phrase ? { confirmed: true, confirmText: phrase } : {}),
+      },
+    });
+  } catch (e) {
+    throw new Error(`connection WAS switched to ${liveEnabled ? "LIVE" : "DRY"}, but the audit event failed: ${e instanceof Error ? e.message : e}`);
+  }
 }

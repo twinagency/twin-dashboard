@@ -1,13 +1,13 @@
 import { connectionFor, listConnections } from "@/lib/mtproto/connections";
-import { resumePhraseFor, shortId } from "@/lib/mtproto/halt";
+import { goLivePhraseFor, resumePhraseFor, shortId } from "@/lib/mtproto/halt";
 import { autoHaltsFor } from "@/lib/mtproto/halt-server";
 import ConnectionsTable from "@/components/mtproto/ConnectionsTable";
 import { getCreators, getSafety } from "@/components/mtproto/data";
 
 export const dynamic = "force-dynamic";
 
-// Connection panel (N2.8): session status, last seen, pause/resume, daily
-// cap, per creator. Reconnect/disconnect/QR login themselves are actions the
+// Connection panel (N2.8): session status, last seen, LIVE/DRY, pause/resume,
+// daily cap, per creator. Reconnect/disconnect/QR login themselves are actions the
 // twin-userbot worker performs against Telegram, not this dashboard — this
 // page only reads/writes the userbot_connections row twin-userbot also
 // reads, matching the "dashboard writes a request, worker acts on it" split
@@ -21,6 +21,7 @@ export default async function MtprotoConnectionsPage() {
     connection: connectionFor(c.id, connections),
     autoHalt: halts.get(c.id) ?? null,
     resumePhrase: resumePhraseFor(c.name || shortId(c.id)),
+    goLivePhrase: goLivePhraseFor(c.name || shortId(c.id)),
     sentToday: safety.error ? null : (sentToday.get(c.id) ?? 0),
   }));
 

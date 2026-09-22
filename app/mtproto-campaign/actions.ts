@@ -32,7 +32,7 @@ import { revalidatePath } from "next/cache";
 import { guardDashboardAction } from "@/lib/agency-management";
 import { computeAudiencePreview } from "@/lib/mtproto/audience";
 import { confirmLive, createDryRun, queueRun, recordDryRunReview, stopRun, type CreateRunInput } from "@/lib/mtproto/runs";
-import { setConnectionDailyCap, setConnectionPaused } from "@/lib/mtproto/connections";
+import { setConnectionDailyCap, setConnectionLiveEnabled, setConnectionPaused } from "@/lib/mtproto/connections";
 import { getGlobalStop, setGlobalStop } from "@/lib/mtproto/global-stop";
 import { sanitizeFilters, uuidList, validateCaps } from "@/lib/mtproto/validate";
 import { DEFAULT_DAILY_CAP, DEFAULT_HOLDOUT_PCT } from "@/lib/mtproto/types";
@@ -170,6 +170,24 @@ export async function setConnectionPausedAction(fd: FormData): Promise<ActionRes
   await guardDashboardAction("app/mtproto-campaign/actions.ts#setConnectionPausedAction", [fd]);
   try {
     await setConnectionPaused(String(fd.get("cloneId") ?? ""), fd.get("paused") === "true", String(fd.get("reason") ?? "") || null, ACTOR, String(fd.get("confirmText") ?? ""));
+    return { ok: true };
+  } catch (e) {
+    return fail(e);
+  } finally {
+    revalidatePath("/mtproto-campaign/connections");
+    revalidatePath("/mtproto-campaign");
+  }
+}
+
+/** Per-creator LIVE/DRY switch (userbot_connections.live_enabled, migration
+ *  164). Same shape as setConnectionPausedAction next door, including the
+ *  typed phrase: the form only COLLECTS confirmText, setConnectionLiveEnabled
+ *  re-checks it server-side before the write. Turning a creator OFF (back to
+ *  dry) needs no phrase. */
+export async function setConnectionLiveEnabledAction(fd: FormData): Promise<ActionResult> {
+  await guardDashboardAction("app/mtproto-campaign/actions.ts#setConnectionLiveEnabledAction", [fd]);
+  try {
+    await setConnectionLiveEnabled(String(fd.get("cloneId") ?? ""), fd.get("liveEnabled") === "true", ACTOR, String(fd.get("confirmText") ?? ""));
     return { ok: true };
   } catch (e) {
     return fail(e);

@@ -22,8 +22,8 @@ import { validateCreateRunInput, RunValidationError, createDryRun, queueRun, con
 import { computeDryRunSummary, redactFan, redactText, computeSendPlan } from "../review";
 import { insertEvent } from "../events";
 import { getGlobalStop, setGlobalStop } from "../global-stop";
-import { setConnectionDailyCap, setConnectionPaused } from "../connections";
-import { autoHaltKind, buildAutoHaltInfo, describeAutoHaltEvent, resumePhraseOk } from "../halt";
+import { connectionFor, listConnections, setConnectionDailyCap, setConnectionLiveEnabled, setConnectionPaused } from "../connections";
+import { autoHaltKind, buildAutoHaltInfo, describeAutoHaltEvent, goLivePhraseOk, resumePhraseOk } from "../halt";
 import { autoHaltsFor } from "../halt-server";
 import { describeEvent } from "../event-format";
 import { computeOptOuts, optOutReport } from "../funnel";
@@ -852,6 +852,7 @@ check("J7 column/table/event names used here match migration 162 and twin-userbo
     }
   };
   const mig = sibling("../../../../twin-bot/db/migrations/162_reengage_mtproto.sql");
+  const mig164 = sibling("../../../../twin-bot/db/migrations/164_userbot_live_enabled.sql");
   const contract = sibling("../../../../twin-userbot/src/contract.ts");
   const listOf = (src: string, name: string) => {
     const m = new RegExp(`export const ${name} = \\[([\\s\\S]*?)\\] as const`).exec(src);
@@ -865,6 +866,28 @@ check("J7 column/table/event names used here match migration 162 and twin-userbo
     const b = listOf(contract, name);
     if (b.length) eq(JSON.stringify(a), JSON.stringify(b), `${name} drifted from twin-userbot/src/contract.ts`);
   }
+  // The UserbotConnection shape is shared with the worker the same way the
+  // const lists are: every field the worker's contract names must exist here,
+  // spelled the same. (This side may carry extra columns the worker never
+  // reads, createdAt/updatedAt today, so the rule is subset, not equality.)
+  const fieldsOf = (src: string) => {
+    const m = /export interface UserbotConnection \{([\s\S]*?)\n\}/.exec(src);
+    return m ? [...m[1].matchAll(/^\s{2}(\w+)\??:/gm)].map((x) => x[1]) : [];
+  };
+  const mineFields = fieldsOf(mine);
+  assert(mineFields.includes("liveEnabled"), "UserbotConnection.liveEnabled missing from types.ts (migration 164)");
+  if (contract) {
+    const theirs = fieldsOf(contract);
+    assert(theirs.length > 0, "UserbotConnection not found in twin-userbot/src/contract.ts");
+    assert(theirs.includes("liveEnabled"), "UserbotConnection.liveEnabled missing from twin-userbot/src/contract.ts");
+    for (const f of theirs) assert(mineFields.includes(f), `UserbotConnection.${f} is in twin-userbot/src/contract.ts but not in types.ts`);
+  }
+  if (mig164) {
+    assert(/\blive_enabled\b/.test(mig164), "migration 164 does not add live_enabled");
+    assert(/not null default false/.test(mig164), "migration 164 must default live_enabled to false (dry) for every existing row");
+    assert(!/\bdrop\s+(table|column)\b/i.test(mig164), "migration 164 must be additive only");
+  }
+  assert(sourceCode("../connections.ts").includes("live_enabled"), "connections.ts must map the live_enabled column");
   if (!mig) return;
   for (const v of listOf(mine, "EVENT_TYPES")) assert(mig.includes(`'${v}'`), `event type ${v} missing from the migration CHECK`);
   for (const v of listOf(mine, "EPISODE_STATES")) assert(mig.includes(`'${v}'`), `episode state ${v} missing from the migration CHECK`);
@@ -1422,6 +1445,91 @@ check("M4 funnel, lift and opt-out counts add up when user_id is NULL: fans are 
   const r = optOutReport(eps, [{ clone_id: CLONE_A, user_id: null, episode_id: "n1" }, { clone_id: CLONE_A, user_id: null, episode_id: null }, { clone_id: CLONE_A, user_id: "u-new", episode_id: null }], [{ id: CLONE_A, name: "Alpha" }]);
   eq(r.total.contacted, 3, "opt-out denominator counts fans by telegram id");
   eq(r.total.optedOut, 2, "n1 via episode_id, 5003 via user_id; the event with neither is ignored, not guessed");
+});
+
+// ── N. per-creator LIVE/DRY switch (migration 164) ──────────────────────────
+//
+// The switch that decides whether real messages reach real fans from ONE
+// creator's account. It is an ADDITIONAL gate on top of the run's GO LIVE and
+// the worker's REENGAGE_ALLOW_LIVE, never a replacement, and the worker proves
+// that half (twin-userbot src/dev/check-clone-live-switch.ts). What is proven
+// here is the dashboard half: the default is dry, turning it ON costs a typed
+// phrase that names the creator, turning it OFF never does, and every flip is
+// an audited config_change.
+
+check("N1 go-live phrase: only 'GO LIVE <name>' or 'GO LIVE <short id>'; bare GO LIVE and the RESUME phrase never pass", () => {
+  assert(goLivePhraseOk("GO LIVE Alpha", "Alpha", CLONE_A), "name");
+  assert(goLivePhraseOk("  go   live   alpha ", "Alpha", CLONE_A), "case and spacing");
+  assert(goLivePhraseOk("GO LIVE aaaaaaaa", "Alpha", CLONE_A), "short id");
+  assert(goLivePhraseOk(`GO LIVE ${CLONE_A}`, "Alpha", CLONE_A), "full id");
+  for (const bad of ["GO LIVE", "golive", "", "  ", "Alpha", "GO LIVE Beta", "RESUME Alpha", "LIVE Alpha", null, undefined]) {
+    assert(!goLivePhraseOk(bad as never, "Alpha", CLONE_A), `must not pass: ${JSON.stringify(bad)}`);
+  }
+  // The two phrases are not interchangeable in either direction.
+  assert(!resumePhraseOk("GO LIVE Alpha", "Alpha", CLONE_A), "the go-live phrase must not resume an auto-halt");
+});
+
+acheck("N2 switching a creator to LIVE is REFUSED server-side without the phrase; nothing is written", async () => {
+  const db = freshDb();
+  await rejects(setConnectionLiveEnabled(CLONE_A, true, "operator"), /Type "GO LIVE Alpha"/);
+  await rejects(setConnectionLiveEnabled(CLONE_A, true, "operator", "GO LIVE"), /Type "GO LIVE Alpha"/);
+  await rejects(setConnectionLiveEnabled(CLONE_A, true, "operator", "GO LIVE Beta"), /Type "GO LIVE Alpha"/);
+  await rejects(setConnectionLiveEnabled(CLONE_A, true, "operator", "RESUME Alpha"), /Type "GO LIVE Alpha"/);
+  eq(db.rows("userbot_connections").length, 0, "no row was written at all");
+  eq(eventsOf(db, "config_change").length, 0, "no event either");
+  await rejects(setConnectionLiveEnabled("not-a-uuid", true, "operator", "GO LIVE Alpha"));
+});
+
+acheck("N3 with the phrase it goes live and logs config_change with before/after; going back to DRY needs no phrase", async () => {
+  const db = freshDb();
+  await setConnectionLiveEnabled(CLONE_A, true, "operator", "  go live   alpha ");
+  eq(db.rows("userbot_connections")[0].live_enabled, true, "stored live_enabled");
+  const on = eventsOf(db, "config_change").find((e) => e.detail.action === "enable_live_sending");
+  assert(on, "enable event written");
+  eq(on!.clone_id, CLONE_A, "clone id on the event");
+  eq(on!.actor, "operator", "actor");
+  eq(on!.detail.before.liveEnabled, false, "before: a creator with no row reads DRY");
+  eq(on!.detail.after.liveEnabled, true, "after");
+  eq(on!.detail.confirmed, true, "the typed confirmation is recorded");
+  eq(on!.detail.confirmText, "go live alpha", "the exact phrase is recorded, normalised");
+
+  // OFF is never gated: going dry must always be one call away.
+  await setConnectionLiveEnabled(CLONE_A, false, "operator");
+  eq(db.rows("userbot_connections")[0].live_enabled, false, "back to dry");
+  const off = eventsOf(db, "config_change").find((e) => e.detail.action === "disable_live_sending");
+  assert(off, "disable event written");
+  eq(off!.detail.before.liveEnabled, true, "before");
+  eq(off!.detail.after.liveEnabled, false, "after");
+  eq(off!.detail.confirmed, undefined, "no phrase is recorded for going dry, because none is asked for");
+});
+
+acheck("N4 a creator with no connection row reads DRY, and a write / audit failure surfaces loudly", async () => {
+  const db = freshDb();
+  eq(connectionFor(CLONE_B, await listConnections()).liveEnabled, false, "never connected reads DRY");
+  db.seed("userbot_connections", [{ clone_id: CLONE_A, status: "connected", paused: false, paused_reason: null, daily_cap: 30, tg_user_id: 1, dc_id: 1, last_seen_at: null, session_ref: null, created_at: T(1), updated_at: T(1) }]);
+  eq(connectionFor(CLONE_A, await listConnections()).liveEnabled, false, "a row from before migration 164 reads DRY, not live");
+  db.fail("userbot_connections", "upsert", { message: "nope" });
+  await rejects(setConnectionLiveEnabled(CLONE_A, false, "operator"), /could not switch connection to DRY/);
+  db.fail("userbot_connections", "upsert", null);
+  db.fail("reengage_events", "insert", { message: "events down" });
+  await rejects(setConnectionLiveEnabled(CLONE_A, false, "operator"), /WAS switched to DRY, but the audit event failed/);
+});
+
+check("N5 the live switch is wired end to end (source): lib gate, server action, UI, and no UI em dash", () => {
+  const c = sourceCode("../connections.ts");
+  assert(/goLivePhraseOk\(/.test(c), "setConnectionLiveEnabled calls goLivePhraseOk");
+  const fn = c.slice(c.indexOf("export async function setConnectionLiveEnabled"));
+  assert(fn.indexOf("goLivePhraseOk(") < fn.indexOf('live_enabled: liveEnabled'), "the phrase is checked BEFORE the write");
+  const actions = sourceCode("../../../app/mtproto-campaign/actions.ts");
+  assert(/setConnectionLiveEnabled\(/.test(actions), "the server action calls the lib function");
+  const table = sourceCode("../../../components/mtproto/ConnectionsTable.tsx");
+  assert(table.includes("setConnectionLiveEnabledAction"), "the connections UI calls the action");
+  assert(table.includes("goLivePhrase"), "the connections UI collects the typed phrase");
+  assert(table.includes("LIVE") && table.includes("DRY RUN"), "the UI states which mode the creator is in");
+  // UI convention (twin-dashboard/CLAUDE.md): no em dashes anywhere in copy.
+  for (const f of ["../../../components/mtproto/ConnectionsTable.tsx", "../../../app/mtproto-campaign/connections/page.tsx"]) {
+    assert(!sourceCode(f).includes("\u2014"), `${f} contains an em dash in UI copy`);
+  }
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

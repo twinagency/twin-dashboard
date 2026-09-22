@@ -14,7 +14,7 @@
 // into the client bundle and fails the build. The bounded read
 // (listHaltEvents/autoHaltsFor) lives in ./halt-server instead.
 
-import { AUTO_HALT_PREFIX, RESUME_PHRASE, type AutoHaltInfo, type UserbotConnection } from "./types";
+import { AUTO_HALT_PREFIX, CONFIRM_LIVE_PHRASE, RESUME_PHRASE, type AutoHaltInfo, type UserbotConnection } from "./types";
 
 /** The kind suffix of an auto-halt pause reason, or null for a manual pause
  *  (or no pause). An unknown suffix under the prefix is STILL an auto-halt. */
@@ -129,12 +129,41 @@ export function resumePhraseFor(cloneName: string | null | undefined): string {
   return `${RESUME_PHRASE} ${cloneName && cloneName.trim() ? cloneName.trim() : ""}`.trim();
 }
 
+/** True only for `<prefix> <clone name>`, `<prefix> <short id>` or
+ *  `<prefix> <full id>`, case- and whitespace-insensitive. The bare prefix
+ *  never passes: it must name the creator, so a phrase typed for one creator
+ *  cannot be pasted at another. */
+function phraseOk(prefix: string, typed: string | null | undefined, cloneName: string | null | undefined, cloneId: string): boolean {
+  if (typeof typed !== "string") return false;
+  const t = norm(typed);
+  const ok = [`${prefix} ${shortId(cloneId)}`, `${prefix} ${cloneId}`];
+  if (cloneName && cloneName.trim()) ok.push(`${prefix} ${cloneName}`);
+  return ok.some((o) => norm(o) === t);
+}
+
 /** True only for `RESUME <clone name>` or `RESUME <short id>`, case- and
  *  whitespace-insensitive. Bare RESUME never passes: it must name the creator. */
 export function resumePhraseOk(typed: string | null | undefined, cloneName: string | null | undefined, cloneId: string): boolean {
-  if (typeof typed !== "string") return false;
-  const t = norm(typed);
-  const ok = [`${RESUME_PHRASE} ${shortId(cloneId)}`, `${RESUME_PHRASE} ${cloneId}`];
-  if (cloneName && cloneName.trim()) ok.push(`${RESUME_PHRASE} ${cloneName}`);
-  return ok.some((o) => norm(o) === t);
+  return phraseOk(RESUME_PHRASE, typed, cloneName, cloneId);
+}
+
+// ── per-creator LIVE switch gate (migration 164) ────────────────────────────
+//
+// Turning ONE creator live is the switch that decides whether real messages
+// reach real fans from that account, so it is gated exactly the way the other
+// two dangerous actions are: a phrase the operator has to type, naming the
+// creator, checked SERVER-SIDE (lib/mtproto/connections.ts), not in the form.
+// Turning it back OFF is never gated: going dry is always allowed instantly.
+
+/** "GO LIVE <clone name>" (the phrase shown to the operator). */
+export function goLivePhraseFor(cloneName: string | null | undefined): string {
+  return `${CONFIRM_LIVE_PHRASE} ${cloneName && cloneName.trim() ? cloneName.trim() : ""}`.trim();
+}
+
+/** True only for `GO LIVE <clone name>` or `GO LIVE <short id>`, case- and
+ *  whitespace-insensitive. Bare GO LIVE never passes (that is the RUN-level
+ *  phrase and must not double as consent for a creator), and neither does the
+ *  RESUME phrase. */
+export function goLivePhraseOk(typed: string | null | undefined, cloneName: string | null | undefined, cloneId: string): boolean {
+  return phraseOk(CONFIRM_LIVE_PHRASE, typed, cloneName, cloneId);
 }

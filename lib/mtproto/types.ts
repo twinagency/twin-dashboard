@@ -232,9 +232,20 @@ export interface UserbotConnection {
   tgUserId: number | null;
   dcId: number | null;
   lastSeenAt: string | null;
+  /** Kill switch: a paused creator is skipped by the scan and by every send. */
   paused: boolean;
   pausedReason: string | null;
   dailyCap: number;
+  /**
+   * userbot_connections.live_enabled (migration 164), default FALSE. The
+   * per-creator half of the live gate, owned by THIS dashboard. A real send
+   * needs this AND a live-confirmed run AND a worker started with
+   * REENGAGE_ALLOW_LIVE — see twin-userbot/src/config.ts canSendLive. False
+   * means this creator is dry-run only: episodes still scan, compose and
+   * record, nothing leaves the Telegram account. Anything other than an
+   * explicit true reads as false.
+   */
+  liveEnabled: boolean;
   sessionRef: string | null;
   createdAt: string;
   updatedAt: string;
