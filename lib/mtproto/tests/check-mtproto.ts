@@ -833,8 +833,26 @@ check("J6 no mtproto module or component uses raw HTML injection or reads a secr
 });
 
 check("J7 column/table/event names used here match migration 162 and twin-userbot contract.ts exactly", () => {
-  const mig = readFileSync(fileURLToPath(new URL("../../../../twin-bot/db/migrations/162_reengage_mtproto.sql", import.meta.url)), "utf8");
-  const contract = readFileSync(fileURLToPath(new URL("../../../../twin-userbot/src/contract.ts", import.meta.url)), "utf8");
+  // Two of the three files this compares live in SIBLING checkouts (../twin-bot,
+  // ../twin-userbot). CI checks out this repo on its own, so there they are simply
+  // absent and readFileSync threw ENOENT, failing the whole offline chain on files
+  // the runner was never handed. Read them optionally and announce the skip out
+  // loud. The in-repo half still runs everywhere, and when a sibling IS present
+  // (every local workspace, which is where the drift actually happens) the full
+  // comparison still fails on a mismatch. This is why check-sequence-render.ts and
+  // check-sequence-ui.ts, which read ../twin-bot the same way, are kept out of the
+  // test:offline chain entirely.
+  const sibling = (rel: string) => {
+    try {
+      return readFileSync(fileURLToPath(new URL(rel, import.meta.url)), "utf8");
+    } catch (e) {
+      if ((e as NodeJS.ErrnoException).code !== "ENOENT") throw e;
+      console.log(`  [J7] cross-repo half SKIPPED: ${rel.split("/").slice(-1)[0]} is not checked out beside this repo`);
+      return null;
+    }
+  };
+  const mig = sibling("../../../../twin-bot/db/migrations/162_reengage_mtproto.sql");
+  const contract = sibling("../../../../twin-userbot/src/contract.ts");
   const listOf = (src: string, name: string) => {
     const m = new RegExp(`export const ${name} = \\[([\\s\\S]*?)\\] as const`).exec(src);
     return m ? [...m[1].matchAll(/"([^"]+)"/g)].map((x) => x[1]) : [];
@@ -843,9 +861,11 @@ check("J7 column/table/event names used here match migration 162 and twin-userbo
   for (const name of ["EPISODE_STATES", "RUN_STATUSES", "EVENT_TYPES", "EXCLUSION_REASONS", "RUN_SEGMENTS", "CONNECTION_STATUSES"]) {
     const a = listOf(mine, name);
     assert(a.length > 0, `${name} not found in types.ts`);
+    if (!contract) continue;
     const b = listOf(contract, name);
     if (b.length) eq(JSON.stringify(a), JSON.stringify(b), `${name} drifted from twin-userbot/src/contract.ts`);
   }
+  if (!mig) return;
   for (const v of listOf(mine, "EVENT_TYPES")) assert(mig.includes(`'${v}'`), `event type ${v} missing from the migration CHECK`);
   for (const v of listOf(mine, "EPISODE_STATES")) assert(mig.includes(`'${v}'`), `episode state ${v} missing from the migration CHECK`);
   for (const v of listOf(mine, "RUN_STATUSES")) assert(mig.includes(`'${v}'`), `run status ${v} missing from the migration CHECK`);
