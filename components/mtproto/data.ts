@@ -7,7 +7,7 @@
 // functions, same arguments, same results: this only shares them.
 
 import { cache } from "react";
-import { currentGlobalStop } from "@/app/mtproto-campaign/actions";
+import { currentGlobalLiveArm, currentGlobalStop } from "@/app/mtproto-campaign/actions";
 import { listCreators } from "@/lib/mtproto/clones";
 import { listRuns } from "@/lib/mtproto/runs";
 import { computeSafetySnapshots } from "@/lib/mtproto/safety";
@@ -32,5 +32,16 @@ export const getGlobalStop = cache(async (): Promise<{ stopped: boolean | null; 
     return { stopped: await currentGlobalStop(), error: null };
   } catch (e) {
     return { stopped: null, error: e instanceof Error ? e.message : "unreadable" };
+  }
+});
+
+/** `armed` is null when the flag could not be read. Unknown is NOT shown as
+ *  disarmed: an operator must never be told "nothing can send" about a state
+ *  nobody could verify. */
+export const getGlobalLiveArm = cache(async (): Promise<{ armed: boolean | null; error: string | null }> => {
+  try {
+    return { armed: await currentGlobalLiveArm(), error: null };
+  } catch (e) {
+    return { armed: null, error: e instanceof Error ? e.message : "unreadable" };
   }
 });

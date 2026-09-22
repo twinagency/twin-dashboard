@@ -22,8 +22,9 @@ import { validateCreateRunInput, RunValidationError, createDryRun, queueRun, con
 import { computeDryRunSummary, redactFan, redactText, computeSendPlan } from "../review";
 import { insertEvent } from "../events";
 import { getGlobalStop, setGlobalStop } from "../global-stop";
+import { getGlobalLiveArm, setGlobalLiveArm } from "../global-live-arm";
 import { connectionFor, listConnections, setConnectionDailyCap, setConnectionLiveEnabled, setConnectionPaused } from "../connections";
-import { autoHaltKind, buildAutoHaltInfo, describeAutoHaltEvent, goLivePhraseOk, resumePhraseOk } from "../halt";
+import { armLivePhraseOk, autoHaltKind, buildAutoHaltInfo, describeAutoHaltEvent, goLivePhraseOk, resumePhraseOk } from "../halt";
 import { autoHaltsFor } from "../halt-server";
 import { describeEvent } from "../event-format";
 import { computeOptOuts, optOutReport } from "../funnel";
@@ -566,6 +567,69 @@ acheck("H6 global stop: writes flag + control_action (actor, before/after); lift
   await rejects(setGlobalStop(true, "operator"), /WAS applied, but the audit event failed/);
 });
 
+acheck("H6b global live arm: defaults DISARMED, arming needs the phrase server-side, disarming never does, config_change carries actor + before/after", async () => {
+  const db = freshDb();
+  // Default. A database with no row at all reads DISARMED, which is what the
+  // worker must see on a fresh/restored project (migration 165 seeds 'false'
+  // as well, but absence must not read as armed either).
+  eq(await getGlobalLiveArm(), false, "no row reads as DISARMED");
+  db.seed("app_settings", [{ key: "mtproto_global_live_arm", value: null, updated_at: "2026-09-22T00:00:00Z" }]);
+  eq(await getGlobalLiveArm(), false, "a null value reads as DISARMED");
+
+  // ARMING is gated. The phrase is checked HERE, not in the form: every one of
+  // these is a realistic thing a form could send.
+  const db2 = freshDb();
+  for (const t of [undefined, null, "", "arm", "ARM", "LIVE", "GO LIVE", "GO LIVE Alpha", "arm live please", "yes"]) {
+    await rejects(setGlobalLiveArm(true, "operator", undefined, t as never), /ARM LIVE/);
+  }
+  eq(await getGlobalLiveArm(), false, "still disarmed after every refused arm");
+
+  // ...and the phrase that DOES pass, case- and whitespace-insensitively.
+  await setGlobalLiveArm(true, "operator", "one test fan", "  arm   live  ");
+  eq(await getGlobalLiveArm(), true, "armed with the phrase");
+  const armEv = eventsOf(db2, "config_change").find((e) => e.detail.action === "global_live_arm");
+  assert(armEv, "global_live_arm event written");
+  eq(armEv!.actor, "operator", "actor");
+  eq(armEv!.detail.before.armed, false, "before");
+  eq(armEv!.detail.after.armed, true, "after");
+  eq(armEv!.detail.confirmed, true, "the typed confirmation is recorded");
+  eq(armEv!.detail.reason, "one test fan", "reason");
+  eq(db2.rows("app_settings").find((r) => r.key === "mtproto_global_live_arm")!.value, "true", "stored as the text 'true'");
+
+  // DISARMING is never gated: no phrase, no reason, one call.
+  await setGlobalLiveArm(false, "operator");
+  eq(await getGlobalLiveArm(), false, "disarmed with no phrase at all");
+  const offEv = eventsOf(db2, "config_change").find((e) => e.detail.action === "global_live_disarm");
+  assert(offEv, "global_live_disarm event written");
+  eq(offEv!.detail.before.armed, true, "before");
+  eq(offEv!.detail.after.armed, false, "after");
+
+  // The arm is its own row: it must not be readable from, or writable by, the
+  // global stop's row (a fleet halt is not a disarm, and vice versa).
+  await setGlobalStop(true, "operator", "unrelated");
+  eq(await getGlobalLiveArm(), false, "the global stop does not arm anything");
+  eq(db2.rows("app_settings").filter((r) => r.key === "mtproto_global_live_arm").length, 1, "one arm row");
+
+  // Failures surface; they are never reported as "disarmed".
+  db2.fail("app_settings", "select", { message: "read failed" });
+  await rejects(getGlobalLiveArm(), /could not read the global live arm/);
+  db2.fail("app_settings", "select", null);
+  db2.fail("app_settings", "upsert", { message: "write failed" });
+  await rejects(setGlobalLiveArm(true, "operator", undefined, "ARM LIVE"), /failed/);
+  db2.fail("app_settings", "upsert", null);
+  db2.fail("reengage_events", "insert", { message: "events down" });
+  await rejects(setGlobalLiveArm(true, "operator", undefined, "ARM LIVE"), /WAS applied, but the audit event failed/);
+});
+
+check("H6c the ARM phrase is its own phrase: no creator-level consent can pass it, and it cannot pass for a creator", () => {
+  for (const ok of ["ARM LIVE", "arm live", "  Arm   Live  "]) assert(armLivePhraseOk(ok), `${JSON.stringify(ok)} should pass`);
+  for (const bad of [undefined, null, "", "ARM", "LIVE", "GO LIVE", "GO LIVE Alpha", "RESUME", "ARMLIVE", "ARM LIVE NOW"]) {
+    assert(!armLivePhraseOk(bad as never), `${JSON.stringify(bad)} must NOT arm the fleet`);
+  }
+  // ...and the fleet phrase must not switch a single creator live either.
+  assert(!goLivePhraseOk("ARM LIVE", "Alpha", CLONE_A), "the fleet arm phrase must not pass a creator's GO LIVE gate");
+});
+
 acheck("H7 connection pause/cap write before/after events and reject bad input", async () => {
   const db = freshDb();
   await setConnectionPaused(CLONE_A, true, "flood", "operator");
@@ -795,7 +859,7 @@ check("J2 no agency route: /mtproto-campaign and every sub-path/action file is o
 
 check("J3 confirm_live_at and dry_run:false are written by confirmLive ONLY (never by createRun, the action layer or any route)", () => {
   const files = [
-    "../runs.ts", "../audience.ts", "../connections.ts", "../global-stop.ts", "../events.ts", "../episodes.ts",
+    "../runs.ts", "../audience.ts", "../connections.ts", "../global-stop.ts", "../global-live-arm.ts", "../events.ts", "../episodes.ts",
     "../../../app/mtproto-campaign/actions.ts", "../../../app/api/admin/v1/mtproto/write/route.ts",
   ];
   for (const f of files) {
@@ -814,6 +878,14 @@ check("J4 the typed confirmations are enforced in the lib functions, not only th
   assert(/CONFIRM_LIVE_PHRASE/.test(runs.slice(runs.indexOf("export async function confirmLive"))), "confirmLive checks the phrase");
   const gs = sourceCode("../global-stop.ts");
   assert(/RESUME_PHRASE/.test(gs), "setGlobalStop checks the resume phrase");
+  // The fleet arm: the phrase check must be in the lib function, and the
+  // DISARM path must never be behind it (the safe direction is always free).
+  const arm = sourceCode("../global-live-arm.ts");
+  assert(/armLivePhraseOk/.test(arm), "setGlobalLiveArm checks the arm phrase server-side");
+  assert(/if \(armed && !armLivePhraseOk/.test(arm), "the phrase gate must apply ONLY when arming, so disarming is never gated");
+  const control = sourceCode("../../../components/mtproto/GlobalLiveArmControl.tsx");
+  assert(/globalLiveArmAction/.test(control), "the control goes through the server action, not the db");
+  assert(!/mtDb|supabaseAdmin/.test(control), "a client control must never touch the database directly");
 });
 
 check("J5 the live feed route and CSV export are not reachable through any allowlist and never cache", () => {
@@ -827,7 +899,7 @@ check("J6 no mtproto module or component uses raw HTML injection or reads a secr
   for (const f of ["../../../components/mtproto/LiveFeed.tsx", "../../../components/mtproto/SendsTable.tsx", "../../../components/mtproto/ConnectionsTable.tsx", "../../../app/mtproto-campaign/runs/[id]/page.tsx"]) {
     assert(!/dangerouslySetInnerHTML|innerHTML|eval\(/.test(sourceCode(f)), `${f} injects raw HTML`);
   }
-  for (const f of ["../events.ts", "../connections.ts", "../runs.ts", "../global-stop.ts"]) {
+  for (const f of ["../events.ts", "../connections.ts", "../runs.ts", "../global-stop.ts", "../global-live-arm.ts"]) {
     assert(!/process\.env|SUPABASE_SERVICE|api_hash|SESSION_ENCRYPTION/i.test(sourceCode(f)), `${f} touches a secret`);
   }
 });
@@ -853,7 +925,10 @@ check("J7 column/table/event names used here match migration 162 and twin-userbo
   };
   const mig = sibling("../../../../twin-bot/db/migrations/162_reengage_mtproto.sql");
   const mig164 = sibling("../../../../twin-bot/db/migrations/164_userbot_live_enabled.sql");
+  const mig165 = sibling("../../../../twin-bot/db/migrations/165_mtproto_global_live_arm.sql");
   const contract = sibling("../../../../twin-userbot/src/contract.ts");
+  const workerStore = sibling("../../../../twin-userbot/src/store.ts");
+  const workerConfig = sibling("../../../../twin-userbot/src/config.ts");
   const listOf = (src: string, name: string) => {
     const m = new RegExp(`export const ${name} = \\[([\\s\\S]*?)\\] as const`).exec(src);
     return m ? [...m[1].matchAll(/"([^"]+)"/g)].map((x) => x[1]) : [];
@@ -888,6 +963,34 @@ check("J7 column/table/event names used here match migration 162 and twin-userbo
     assert(!/\bdrop\s+(table|column)\b/i.test(mig164), "migration 164 must be additive only");
   }
   assert(sourceCode("../connections.ts").includes("live_enabled"), "connections.ts must map the live_enabled column");
+
+  // ── the GLOBAL LIVE ARM (migration 165) ──────────────────────────────
+  // Three files have to agree on ONE string, and two of them are in other
+  // repos. A drift here is silent and catastrophic: the dashboard would write
+  // an arm the worker never reads, i.e. a control that looks armed and sends
+  // nothing, or worse, one that looks disarmed while the worker reads a
+  // different row.
+  const armKey = /export const GLOBAL_LIVE_ARM_KEY = "([^"]+)"/.exec(mine)?.[1];
+  eq(armKey, "mtproto_global_live_arm", "GLOBAL_LIVE_ARM_KEY in types.ts");
+  if (mig165) {
+    assert(mig165.includes(`'${armKey}'`), "migration 165 does not use the same app_settings key as types.ts");
+    assert(/'false'/.test(mig165), "migration 165 must seed the arm DISARMED");
+    assert(/on conflict \(key\) do nothing/i.test(mig165), "migration 165 must not overwrite an existing arm row");
+    assert(!/create table|\bdrop\s+(table|column)\b|alter table/i.test(mig165), "migration 165 must be additive only, no new table and no ALTER");
+  }
+  if (workerStore) {
+    assert(workerStore.includes(`"${armKey}"`), "twin-userbot/src/store.ts reads a DIFFERENT app_settings key than the dashboard writes");
+    assert(/isGlobalLiveArmed/.test(workerStore), "twin-userbot/src/store.ts must expose isGlobalLiveArmed");
+  }
+  if (workerConfig) {
+    // The env half that moved must be gone on the worker side, and the half
+    // that did NOT move must still be there. If REENGAGE_ALLOW_LIVE came back,
+    // this dashboard control would be a lie (the "half-wired toggle" defect).
+    assert(!/env, "REENGAGE_ALLOW_LIVE"/.test(workerConfig), "twin-userbot still reads REENGAGE_ALLOW_LIVE: the dashboard arm would not be the real gate");
+    assert(/REENGAGE_DRY_RUN/.test(workerConfig), "twin-userbot must keep REENGAGE_DRY_RUN as the out-of-band force-dry lock");
+    assert(/globalArm/.test(workerConfig), "twin-userbot's live gate must take the arm as an argument");
+  }
+
   if (!mig) return;
   for (const v of listOf(mine, "EVENT_TYPES")) assert(mig.includes(`'${v}'`), `event type ${v} missing from the migration CHECK`);
   for (const v of listOf(mine, "EPISODE_STATES")) assert(mig.includes(`'${v}'`), `episode state ${v} missing from the migration CHECK`);

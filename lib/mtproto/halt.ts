@@ -14,7 +14,7 @@
 // into the client bundle and fails the build. The bounded read
 // (listHaltEvents/autoHaltsFor) lives in ./halt-server instead.
 
-import { AUTO_HALT_PREFIX, CONFIRM_LIVE_PHRASE, RESUME_PHRASE, type AutoHaltInfo, type UserbotConnection } from "./types";
+import { ARM_LIVE_PHRASE, AUTO_HALT_PREFIX, CONFIRM_LIVE_PHRASE, RESUME_PHRASE, type AutoHaltInfo, type UserbotConnection } from "./types";
 
 /** The kind suffix of an auto-halt pause reason, or null for a manual pause
  *  (or no pause). An unknown suffix under the prefix is STILL an auto-halt. */
@@ -166,4 +166,25 @@ export function goLivePhraseFor(cloneName: string | null | undefined): string {
  *  RESUME phrase. */
 export function goLivePhraseOk(typed: string | null | undefined, cloneName: string | null | undefined, cloneId: string): boolean {
   return phraseOk(CONFIRM_LIVE_PHRASE, typed, cloneName, cloneId);
+}
+
+// ── GLOBAL LIVE ARM gate (migration 165) ───────────────────────────────────
+//
+// The fleet-wide arm names no creator, so it cannot use phraseOk above (which
+// exists precisely so a phrase typed for one creator cannot be pasted at
+// another). It uses the same normalisation, against one fixed phrase, and is
+// checked SERVER-SIDE in lib/mtproto/global-live-arm.ts. DISARMING is never
+// gated: going dry is always allowed, at once, in one click.
+
+/** The phrase shown to the operator when arming the fleet. */
+export function armLivePhraseFor(): string {
+  return ARM_LIVE_PHRASE;
+}
+
+/** True only for exactly `ARM LIVE`, case- and whitespace-insensitive. A
+ *  creator-level "GO LIVE <name>" must NOT pass: consent for one creator is
+ *  not consent for the fleet. */
+export function armLivePhraseOk(typed: string | null | undefined): boolean {
+  if (typeof typed !== "string") return false;
+  return norm(typed) === norm(ARM_LIVE_PHRASE);
 }

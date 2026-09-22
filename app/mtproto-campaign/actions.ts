@@ -34,6 +34,7 @@ import { computeAudiencePreview } from "@/lib/mtproto/audience";
 import { confirmLive, createDryRun, queueRun, recordDryRunReview, stopRun, type CreateRunInput } from "@/lib/mtproto/runs";
 import { setConnectionDailyCap, setConnectionLiveEnabled, setConnectionPaused } from "@/lib/mtproto/connections";
 import { getGlobalStop, setGlobalStop } from "@/lib/mtproto/global-stop";
+import { getGlobalLiveArm, setGlobalLiveArm } from "@/lib/mtproto/global-live-arm";
 import { sanitizeFilters, uuidList, validateCaps } from "@/lib/mtproto/validate";
 import { DEFAULT_DAILY_CAP, DEFAULT_HOLDOUT_PCT } from "@/lib/mtproto/types";
 import type { AudiencePreview, RunFilters } from "@/lib/mtproto/types";
@@ -164,6 +165,27 @@ export async function globalStopAction(fd: FormData): Promise<ActionResult> {
 export async function currentGlobalStop(): Promise<boolean> {
   await guardDashboardAction("app/mtproto-campaign/actions.ts#currentGlobalStop", []);
   return getGlobalStop();
+}
+
+/** The fleet-wide LIVE ARM (migration 165), gate 2's database half. Arming
+ *  needs the typed phrase, re-checked in setGlobalLiveArm; the form only
+ *  collects it. Disarming is never gated. */
+export async function globalLiveArmAction(fd: FormData): Promise<ActionResult> {
+  await guardDashboardAction("app/mtproto-campaign/actions.ts#globalLiveArmAction", [fd]);
+  try {
+    const armed = fd.get("armed") === "true";
+    await setGlobalLiveArm(armed, ACTOR, String(fd.get("reason") ?? "") || undefined, String(fd.get("confirmText") ?? ""));
+    return { ok: true };
+  } catch (e) {
+    return fail(e);
+  } finally {
+    revalidatePath("/mtproto-campaign");
+  }
+}
+
+export async function currentGlobalLiveArm(): Promise<boolean> {
+  await guardDashboardAction("app/mtproto-campaign/actions.ts#currentGlobalLiveArm", []);
+  return getGlobalLiveArm();
 }
 
 export async function setConnectionPausedAction(fd: FormData): Promise<ActionResult> {

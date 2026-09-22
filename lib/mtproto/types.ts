@@ -257,6 +257,34 @@ export interface UserbotConnection {
  *  header comment). Not a new table, an existing app_settings row. */
 export const GLOBAL_STOP_KEY = "mtproto_global_stop";
 
+/**
+ * app_settings key for the GLOBAL LIVE ARM (migration 165), the database half
+ * of the worker's live gate 2. Same table, same mechanism and same read path
+ * as GLOBAL_STOP_KEY above; the worker reads it in
+ * twin-userbot/src/store.ts isGlobalLiveArmed, which hardcodes this same
+ * string (check-mtproto J7 asserts the two spellings have not drifted).
+ *
+ * DEFAULT AND FAIL-SAFE: DISARMED. Only the exact text "true" arms.
+ *
+ * WHAT THIS REPLACED, SAID PLAINLY: arming live sending used to require the
+ * env var REENGAGE_ALLOW_LIVE on the worker's own box, reachable only over
+ * SSM. It now requires nothing but dashboard admin access. That is a smaller
+ * gate than an out-of-band env var was, traded on purpose so live/dry can be
+ * driven without a terminal. The compensations are that arming needs the typed
+ * ARM_LIVE_PHRASE checked server-side, every change is logged to
+ * reengage_events with the actor and before/after, disarming is always one
+ * click, and the two OTHER gates (a live-confirmed run, and the per-creator
+ * live_enabled switch) are untouched and still required.
+ */
+export const GLOBAL_LIVE_ARM_KEY = "mtproto_global_live_arm";
+
+/** Typed confirmation for arming the fleet, enforced SERVER-SIDE in
+ *  lib/mtproto/global-live-arm.ts (the input is a courtesy). Deliberately not
+ *  "GO LIVE": that phrase belongs to a single run and a single creator, and
+ *  must never double as consent for the whole fleet. DISARMING is never
+ *  gated. */
+export const ARM_LIVE_PHRASE = "ARM LIVE";
+
 export const ATTRIBUTION_WINDOWS_HOURS = [24, 72, 7 * 24] as const;
 export type AttributionWindowHours = (typeof ATTRIBUTION_WINDOWS_HOURS)[number];
 

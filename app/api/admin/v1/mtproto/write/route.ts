@@ -2,6 +2,7 @@ import { withAdmin, ok, jsonError, logAdminWrite } from "@/lib/api-route";
 import { confirmLive, createDryRun, queueRun, recordDryRunReview, stopRun, validateCreateRunInput, RunValidationError, type CreateRunInput } from "@/lib/mtproto/runs";
 import { setConnectionDailyCap, setConnectionPaused } from "@/lib/mtproto/connections";
 import { getGlobalStop, setGlobalStop } from "@/lib/mtproto/global-stop";
+import { getGlobalLiveArm, setGlobalLiveArm } from "@/lib/mtproto/global-live-arm";
 import { DEFAULT_DAILY_CAP, DEFAULT_HOLDOUT_PCT, type RunFilters } from "@/lib/mtproto/types";
 
 export const dynamic = "force-dynamic";
@@ -22,7 +23,17 @@ export const dynamic = "force-dynamic";
 // own "operator" (N6 GAP: no per-user roles yet, so this is a label).
 const ACTOR = "api-key";
 
-type Action = "create_run" | "review_dry_run" | "confirm_live" | "stop_run" | "global_stop" | "global_resume" | "set_connection_pause" | "set_connection_cap";
+type Action =
+  | "create_run"
+  | "review_dry_run"
+  | "confirm_live"
+  | "stop_run"
+  | "global_stop"
+  | "global_resume"
+  | "global_arm_live"
+  | "global_disarm_live"
+  | "set_connection_pause"
+  | "set_connection_cap";
 
 export const POST = withAdmin(async (req) => {
   let body: Record<string, unknown>;
@@ -95,6 +106,17 @@ export const POST = withAdmin(async (req) => {
         return ok({ action, stopped: await getGlobalStop() });
       }
 
+      // The fleet-wide LIVE ARM (migration 165). global_arm_live needs
+      // body.confirmText === "ARM LIVE" (checked in setGlobalLiveArm, not
+      // here); disarming needs nothing.
+      case "global_arm_live":
+      case "global_disarm_live": {
+        const armed = action === "global_arm_live";
+        await setGlobalLiveArm(armed, ACTOR, typeof body.reason === "string" ? body.reason : undefined, typeof body.confirmText === "string" ? body.confirmText : null);
+        logAdminWrite(`mtproto:${action}`, null, {});
+        return ok({ action, armed: await getGlobalLiveArm() });
+      }
+
       case "set_connection_pause": {
         const cloneId = String(body.cloneId ?? "");
         if (!cloneId) return jsonError("cloneId is required", 400);
@@ -116,7 +138,7 @@ export const POST = withAdmin(async (req) => {
 
       default:
         return jsonError(
-          `unknown action: "${action}". Allowed: create_run, review_dry_run, confirm_live, stop_run, global_stop, global_resume, set_connection_pause, set_connection_cap.`,
+          `unknown action: "${action}". Allowed: create_run, review_dry_run, confirm_live, stop_run, global_stop, global_resume, global_arm_live, global_disarm_live, set_connection_pause, set_connection_cap.`,
           400,
         );
     }
