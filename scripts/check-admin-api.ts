@@ -200,7 +200,16 @@ check("B4 no admin route reaches Supabase directly, bypassing the allowlist chok
 //     way to get content at all without it, so the creation path was only ever
 //     half a path. It had been live and unlisted here since it landed, which is
 //     what this check is for.
-const WRITE_ROUTES = ["/clones/write/route.ts", "/clones/create/route.ts", "/media/route.ts"];
+//
+//   /mtproto/write/route.ts  admitted 2026-09-22 (MTProto Campaign build). It
+//     calls lib/mtproto/runs.ts + connections.ts + global-stop.ts, the SAME
+//     functions app/mtproto-campaign/actions.ts calls for the dashboard's own
+//     Run/Confirm-LIVE/Stop/Global-Stop buttons, so an external caller can
+//     never do anything the UI itself couldn't. A run is created dry_run=true
+//     unconditionally (see createDryRun) and going live requires the run to
+//     already be a reviewed, finished dry run (see confirmLive) — this route
+//     cannot skip either check, they live in lib/mtproto/runs.ts, not here.
+const WRITE_ROUTES = ["/clones/write/route.ts", "/clones/create/route.ts", "/media/route.ts", "/mtproto/write/route.ts"];
 
 check("B5 only the named write routes accept writes; the rest are read-only", () => {
   for (const p of adminRouteFiles()) {
