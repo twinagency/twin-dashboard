@@ -1,5 +1,6 @@
 import { connectionFor, listConnections } from "@/lib/mtproto/connections";
-import { autoHaltsFor, resumePhraseFor, shortId } from "@/lib/mtproto/halt";
+import { resumePhraseFor, shortId } from "@/lib/mtproto/halt";
+import { autoHaltsFor } from "@/lib/mtproto/halt-server";
 import ConnectionsTable from "@/components/mtproto/ConnectionsTable";
 import { getCreators, getSafety } from "@/components/mtproto/data";
 

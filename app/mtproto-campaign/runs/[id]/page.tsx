@@ -7,7 +7,7 @@ import { listEpisodesForRun } from "@/lib/mtproto/episodes";
 import { computeFunnel, computeOptOuts } from "@/lib/mtproto/funnel";
 import { listEvents } from "@/lib/mtproto/events";
 import { connectionFor, listConnections } from "@/lib/mtproto/connections";
-import { autoHaltsFor } from "@/lib/mtproto/halt";
+import { autoHaltsFor } from "@/lib/mtproto/halt-server";
 import HaltPanel, { type PausedNow } from "@/components/mtproto/HaltPanel";
 import { computeLift, loadPurchasesForEpisodes } from "@/lib/mtproto/attribution";
 import { buildSendRows } from "@/lib/mtproto/sends";

@@ -23,7 +23,8 @@ import { computeDryRunSummary, redactFan, redactText, computeSendPlan } from "..
 import { insertEvent } from "../events";
 import { getGlobalStop, setGlobalStop } from "../global-stop";
 import { setConnectionDailyCap, setConnectionPaused } from "../connections";
-import { autoHaltKind, autoHaltsFor, buildAutoHaltInfo, describeAutoHaltEvent, resumePhraseOk } from "../halt";
+import { autoHaltKind, buildAutoHaltInfo, describeAutoHaltEvent, resumePhraseOk } from "../halt";
+import { autoHaltsFor } from "../halt-server";
 import { describeEvent } from "../event-format";
 import { computeOptOuts, optOutReport } from "../funnel";
 import { computeSafetySnapshots } from "../safety";

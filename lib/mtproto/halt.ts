@@ -8,10 +8,12 @@
 // operator can read, tells an auto-halt apart from a manual pause, and owns
 // the typed phrase that gates resuming one.
 //
-// Pure functions first (tested against the exact shapes spike.ts writes), then
-// one bounded read.
+// Pure only, no db import: components/mtproto/LiveFeed.tsx ("use client")
+// imports describeAutoHaltEvent via event-format.ts, and any import here
+// that reaches lib/mtproto/db.ts drags lib/supabase.ts's next/headers use
+// into the client bundle and fails the build. The bounded read
+// (listHaltEvents/autoHaltsFor) lives in ./halt-server instead.
 
-import { mtDb } from "./db";
 import { AUTO_HALT_PREFIX, RESUME_PHRASE, type AutoHaltInfo, type UserbotConnection } from "./types";
 
 /** The kind suffix of an auto-halt pause reason, or null for a manual pause
@@ -135,47 +137,4 @@ export function resumePhraseOk(typed: string | null | undefined, cloneName: stri
   const ok = [`${RESUME_PHRASE} ${shortId(cloneId)}`, `${RESUME_PHRASE} ${cloneId}`];
   if (cloneName && cloneName.trim()) ok.push(`${RESUME_PHRASE} ${cloneName}`);
   return ok.some((o) => norm(o) === t);
-}
-
-// ── bounded read ────────────────────────────────────────────────────────────
-
-/** Newest-first account_halt events for the given creators, bounded by clone_id
- *  (indexed) and the last 30 days. Throws on a read error: "no halt info" must
- *  never look like "no halt". A missing table reads as none. */
-export async function listHaltEvents(cloneIds: string[]): Promise<Array<HaltEventLike & { clone_id: string | null }>> {
-  if (cloneIds.length === 0) return [];
-  const since = new Date(Date.now() - 30 * 86_400_000).toISOString();
-  const { data, error } = await mtDb()
-    .from("reengage_events")
-    .select("id,clone_id,ts,event_type,detail")
-    .in("clone_id", cloneIds)
-    .eq("event_type", "account_halt")
-    .gte("ts", since)
-    .order("ts", { ascending: false })
-    .order("id", { ascending: false })
-    .limit(2_000);
-  if (error) {
-    if (/does not exist|could not find the table|PGRST205|42P01/i.test(`${error.code ?? ""} ${error.message}`)) return [];
-    throw new Error(`could not read account_halt events: ${error.message}`);
-  }
-  return data as Array<HaltEventLike & { clone_id: string | null }>;
-}
-
-/** cloneId -> AutoHaltInfo for every connection that is auto-halted right now. */
-export async function autoHaltsFor(connections: UserbotConnection[]): Promise<Map<string, AutoHaltInfo>> {
-  const halted = connections.filter((c) => isAutoHalted(c));
-  const out = new Map<string, AutoHaltInfo>();
-  if (halted.length === 0) return out;
-  let events: Array<HaltEventLike & { clone_id: string | null }> = [];
-  try {
-    events = await listHaltEvents(halted.map((c) => c.cloneId));
-  } catch (e) {
-    console.error(`[mtproto] ${e instanceof Error ? e.message : e}`);
-    // Still flag the row AUTO-HALTED (from paused_reason alone), just without the numbers.
-  }
-  for (const c of halted) {
-    const info = buildAutoHaltInfo(c.pausedReason, pickHaltEvent(c.pausedReason as string, events.filter((e) => e.clone_id === c.cloneId)));
-    if (info) out.set(c.cloneId, info);
-  }
-  return out;
 }

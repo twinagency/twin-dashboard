@@ -1,7 +1,7 @@
 import { withAdmin, ok } from "@/lib/api-route";
 import { listConnections } from "@/lib/mtproto/connections";
 import { listCreators } from "@/lib/mtproto/clones";
-import { autoHaltsFor } from "@/lib/mtproto/halt";
+import { autoHaltsFor } from "@/lib/mtproto/halt-server";
 import { computeSafetySnapshots } from "@/lib/mtproto/safety";
 
 export const dynamic = "force-dynamic";

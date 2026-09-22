@@ -8,7 +8,8 @@
 import { mtDb } from "./db";
 import { insertEvent } from "./events";
 import { getCreator } from "./clones";
-import { autoHaltKind, buildAutoHaltInfo, listHaltEvents, pickHaltEvent, resumePhraseFor, resumePhraseOk, shortId } from "./halt";
+import { autoHaltKind, buildAutoHaltInfo, pickHaltEvent, resumePhraseFor, resumePhraseOk, shortId } from "./halt";
+import { listHaltEvents } from "./halt-server";
 import { RunValidationError, isMissingTable, requireUuid } from "./validate";
 import { HARD_MAX_DAILY_CAP, type ConnectionStatus, type UserbotConnection } from "./types";
 
