@@ -212,9 +212,13 @@ tests.push(check("M12 every photo upload path gates BEFORE it writes anything", 
   ];
   for (const [file, decl] of paths) {
     const body = functionBody(sourceCode(new URL(file, import.meta.url)), decl);
-    const gate = body.indexOf("assertPhotoSendable");
+    // Upload actions may call the strict guard directly, or pass through the
+    // normalizer which resizes first and then invokes that same strict guard.
+    const directGate = body.indexOf("assertPhotoSendable");
+    const normalizedGate = body.indexOf("preparePhotoForTelegram");
+    const gate = [directGate, normalizedGate].filter((index) => index >= 0).sort((a, b) => a - b)[0] ?? -1;
     const write = body.indexOf(".upload(");
-    assert(gate >= 0, `${decl} does not call assertPhotoSendable`);
+    assert(gate >= 0, `${decl} does not validate or normalize the photo`);
     assert(write >= 0, `${decl} no longer uploads, this check needs rewriting`);
     assert(gate < write, `${decl} uploads the file before checking it, so a refused photo still lands in storage`);
     const insert = body.indexOf(".insert(");
@@ -247,7 +251,9 @@ tests.push(check("M14 the browser pre-flight shares the rules and is not the onl
   eq((ui.match(/measurePhoto\(/g) ?? []).length, 3, "measurePhoto must be defined and used by both add paths");
   // And the client must not be trusted: the server action still gates.
   const server = sourceCode(new URL("../app/media/actions.ts", import.meta.url));
-  assert(server.includes("assertPhotoSendable"), "the server action must gate regardless of the browser check");
+  const preparation = sourceCode(new URL("../lib/photo-prepare.ts", import.meta.url));
+  assert(server.includes("preparePhotoForTelegram"), "the server action must normalize regardless of the browser check");
+  assert(preparation.includes("assertPhotoSendable"), "the server normalizer must still enforce the Telegram guard");
 }));
 
 // ─────────────────────────────────────────────────────────────────────────────
