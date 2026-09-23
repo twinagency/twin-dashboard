@@ -8,7 +8,7 @@ import { setConnectionDailyCapAction, setConnectionLiveEnabledAction, setConnect
 import { HARD_MAX_DAILY_CAP } from "@/lib/mtproto/types";
 import type { AutoHaltInfo, CreatorLite, UserbotConnection } from "@/lib/mtproto/types";
 import { CreatorAvatar, Meter, StatusPill, When } from "./kit";
-import { CONNECTION_INFO, num, timeAgo } from "./view";
+import { connectionStatusInfo, num, timeAgo } from "./view";
 
 export type SettingsConnRow = { creator: CreatorLite; connection: UserbotConnection; autoHalt: AutoHaltInfo | null; resumePhrase: string; goLivePhrase: string; sentToday: number | null };
 
@@ -87,7 +87,7 @@ function ConnRowView({ row }: { row: SettingsConnRow }) {
     send(fd, setConnectionDailyCapAction, () => setEditingCap(false));
   };
 
-  const status = CONNECTION_INFO[connection.status];
+  const status = connectionStatusInfo(connection);
   const sent = row.sentToday;
 
   return (

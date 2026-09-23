@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { Panel, EmptyBlock, CreatorAvatar, Meter, StatusPill } from "./kit";
-import { CONNECTION_INFO, humanError, num, type Tone } from "./view";
+import { connectionStatusInfo, humanError, num, type Tone } from "./view";
 import type { SafetySnapshot } from "@/lib/mtproto/types";
 
 // N2.7: sends today vs daily cap, FloodWait/PeerFlood count, last error,
@@ -31,7 +31,7 @@ export default function SafetyPanel({ snapshots }: { snapshots: SafetySnapshot[]
         <div className="grid grid-cols-1 gap-3 md:grid-cols-2 xl:grid-cols-3">
           {snapshots.map((s) => {
             const h = health(s);
-            const conn = CONNECTION_INFO[s.connectionStatus];
+            const conn = connectionStatusInfo({ status: s.connectionStatus, pausedReason: s.pausedReason });
             return (
               <div key={s.cloneId} className={`rounded-2xl border p-3.5 ${h.tone === "crit" ? "border-crit/40 bg-crit/5" : "border-line"}`}>
                 <div className="flex items-center gap-3">

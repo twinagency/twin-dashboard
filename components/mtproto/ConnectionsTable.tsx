@@ -1,7 +1,7 @@
 "use client";
 
 import { CreatorAvatar, EmptyBlock, StatusPill } from "./kit";
-import { CONNECTION_INFO } from "./view";
+import { connectionStatusInfo } from "./view";
 import TelegramLoginControl from "./TelegramLoginControl";
 import type { AutoHaltInfo, CreatorLite, UserbotConnection } from "@/lib/mtproto/types";
 
@@ -12,7 +12,7 @@ type ConnRow = { creator: CreatorLite; connection: UserbotConnection; autoHalt: 
 // answers one question per creator: is Telegram connected or not.
 function ConnectionRow({ row }: { row: ConnRow }) {
   const { creator, connection } = row;
-  const status = CONNECTION_INFO[connection.status];
+  const status = connectionStatusInfo(connection);
   const connected = connection.status === "connected";
 
   return (

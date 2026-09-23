@@ -177,6 +177,32 @@ export const CONNECTION_INFO: Record<UserbotConnection["status"], { label: strin
   error: { label: "Error", tone: "crit", hint: "The login hit an error. Nothing can be sent until it is fixed." },
 };
 
+/** Matches twin-userbot's telegram.ts LOGGED_OUT_REASON exactly: the
+ *  paused_reason the worker writes when TELEGRAM ITSELF killed the session
+ *  (AUTH_KEY_UNREGISTERED / SESSION_REVOKED / AUTH_KEY_DUPLICATED, e.g. its
+ *  anti-spam response to a fresh session bursting DMs, 2026-09-23) as
+ *  opposed to a plain manual sign-out. Same status='revoked' either way
+ *  (migration 162's CHECK list), distinguished only by this reason string. */
+export const LOGGED_OUT_REASON = "logged_out";
+
+/** CONNECTION_INFO, sharpened for the "Telegram killed this session" case:
+ *  tells the operator exactly what happened and what to do (rescan the QR)
+ *  instead of the generic "Signed out" wording every other 'revoked' reason
+ *  still gets. Use this instead of indexing CONNECTION_INFO directly
+ *  wherever a connection's status pill is rendered. */
+export function connectionStatusInfo(
+  connection: Pick<UserbotConnection, "status" | "pausedReason">,
+): { label: string; tone: Tone; hint: string } {
+  if (connection.status === "revoked" && connection.pausedReason === LOGGED_OUT_REASON) {
+    return {
+      label: "Logged out — rescan QR",
+      tone: "crit",
+      hint: "Telegram itself ended this session (its own anti-spam kill, not a manual sign-out). Rescan the QR code to reconnect.",
+    };
+  }
+  return CONNECTION_INFO[connection.status];
+}
+
 // ── avatars ──────────────────────────────────────────────────────────────────
 
 /** Stable index from a string, so a creator keeps the same colour everywhere. */
