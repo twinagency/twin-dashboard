@@ -75,6 +75,9 @@ export type ClassifyContext = {
   // be keyed, so these answer false and the no_chat_id rule excludes the fan.
   isOptedOut: (cloneId: string, telegramId: number | null) => boolean;
   isAlreadyContacted: (cloneId: string, telegramId: number | null, episodeStartIso: string) => boolean;
+  /** run.filters.includeLegacy (types.ts). When true, a fan is not excluded
+   *  for legacy_import. Mirrors twin-userbot/src/policy.ts matchesFilters. */
+  includeLegacy: boolean;
 };
 
 /** One fan in, one verdict out: a PreviewExclusionReason, or "eligible". Order
@@ -95,7 +98,9 @@ export function classifyFan(row: CandidateRow, ctx: ClassifyContext): PreviewExc
   if (!row.last_message_received) return "within_24h"; // never messaged in = no episode to open yet
   if (ctx.isAlreadyContacted(row.clone_id, row.telegram_id, row.last_message_received)) return "already_contacted";
   // Exclude when unsure: any non-null legacy_id (even "") marks an import.
-  if (row.legacy_id !== null && row.legacy_id !== undefined) return "legacy_import";
+  // includeLegacy (an explicit operator opt-in on the run) is the one escape
+  // hatch, mirroring twin-userbot/src/policy.ts matchesFilters exactly.
+  if (!ctx.includeLegacy && row.legacy_id !== null && row.legacy_id !== undefined) return "legacy_import";
   if (!row.telegram_id) return "no_chat_id";
   const silentMs = ctx.nowMs - new Date(row.last_message_received).getTime();
   if (silentMs < ctx.minSilenceHours * 3600_000) return "within_24h";
@@ -288,6 +293,7 @@ export async function computeAudiencePreview(
     minSilenceHours,
     isOptedOut: (c, t) => t != null && optOuts.has(fanKey(c, t)),
     isAlreadyContacted: (c, t, iso) => t != null && contacted.has(`${fanKey(c, t)}:${tsKey(iso)}`),
+    includeLegacy: filters.includeLegacy === true,
   };
 
   const seed = opts.seed ?? "preview";

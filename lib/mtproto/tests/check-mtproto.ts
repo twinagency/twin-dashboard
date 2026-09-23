@@ -23,6 +23,7 @@ import { computeDryRunSummary, redactFan, redactText, computeSendPlan } from "..
 import { insertEvent } from "../events";
 import { getGlobalStop, setGlobalStop } from "../global-stop";
 import { getGlobalLiveArm, setGlobalLiveArm } from "../global-live-arm";
+import { clampMtprotoLimits, getMtprotoLimits, setMtprotoLimits } from "../limits";
 import { connectionFor, listConnections, setConnectionDailyCap, setConnectionLiveEnabled, setConnectionPaused } from "../connections";
 import { armLivePhraseOk, autoHaltKind, buildAutoHaltInfo, describeAutoHaltEvent, goLivePhraseOk, resumePhraseOk } from "../halt";
 import { autoHaltsFor } from "../halt-server";
@@ -36,7 +37,17 @@ import { sanitizeFilters } from "../validate";
 import { __setMtDbForTest } from "../db";
 import { FakeDb } from "./fake-db";
 import { agencyDashboardPath } from "../../agency-policy";
-import { CONFIRM_LIVE_PHRASE, HARD_MAX_DAILY_CAP, MIN_SILENCE_HOURS, PREVIEW_EXCLUSION_REASONS } from "../types";
+import {
+  CONFIRM_LIVE_PHRASE,
+  HARD_MAX_DAILY_CAP,
+  HARD_MAX_HOURLY_CAP,
+  HARD_MAX_JITTER_MS,
+  HARD_MIN_HOURLY_CAP,
+  MIN_SEND_SPACING_MS,
+  MIN_SILENCE_HOURS,
+  MTPROTO_LIMITS_DEFAULTS,
+  PREVIEW_EXCLUSION_REASONS,
+} from "../types";
 import type { ReengageEpisode, SendRow } from "../types";
 
 let passed = 0;
@@ -83,6 +94,7 @@ const baseCtx: ClassifyContext = {
   minSilenceHours: MIN_SILENCE_HOURS,
   isOptedOut: () => false,
   isAlreadyContacted: () => false,
+  includeLegacy: false,
 };
 const baseRow: CandidateRow = {
   id: "user-1",
@@ -144,6 +156,7 @@ check("A9 already-contacted-this-episode fan -> already_contacted", () => {
 check("A10 users.legacy_id set (the real import marker, twin-bot migration 081/123) -> legacy_import", () => {
   eq(classifyFan({ ...baseRow, legacy_id: "old-123" }, baseCtx), "legacy_import", "verdict");
   eq(classifyFan({ ...baseRow, legacy_id: "" }, baseCtx), "legacy_import", "even an empty legacy_id counts: exclude when unsure");
+  eq(classifyFan({ ...baseRow, legacy_id: "old-123" }, { ...baseCtx, includeLegacy: true }), "eligible", "includeLegacy opts a legacy-imported fan back in");
 });
 
 check("A11 a NATIVE fan first seen before 2026-08-10 (legacy_id null) is NOT legacy_import", () => {
@@ -631,6 +644,54 @@ check("H6c the ARM phrase is its own phrase: no creator-level consent can pass i
   assert(!goLivePhraseOk("ARM LIVE", "Alpha", CLONE_A), "the fleet arm phrase must not pass a creator's GO LIVE gate");
 });
 
+check("H6d clampMtprotoLimits: missing/bad input falls back to defaults, every field clamped, jitterMax never below jitterMin", () => {
+  eq(JSON.stringify(clampMtprotoLimits(undefined)), JSON.stringify(MTPROTO_LIMITS_DEFAULTS), "no value at all -> built-in defaults");
+  eq(JSON.stringify(clampMtprotoLimits(null)), JSON.stringify(MTPROTO_LIMITS_DEFAULTS), "null -> built-in defaults");
+  eq(JSON.stringify(clampMtprotoLimits("not an object")), JSON.stringify(MTPROTO_LIMITS_DEFAULTS), "a non-object -> built-in defaults, never a throw");
+  eq(clampMtprotoLimits({ hourlyCap: 9999 }).hourlyCap, HARD_MAX_HOURLY_CAP, "hourlyCap clamped to the ceiling");
+  eq(clampMtprotoLimits({ hourlyCap: -5 }).hourlyCap, HARD_MIN_HOURLY_CAP, "hourlyCap clamped to the floor");
+  eq(clampMtprotoLimits({ jitterMinMs: 500 }).jitterMinMs, MIN_SEND_SPACING_MS, "jitterMinMs floor is MIN_SEND_SPACING_MS");
+  eq(clampMtprotoLimits({ jitterMaxMs: 10_000_000 }).jitterMaxMs, HARD_MAX_JITTER_MS, "jitterMaxMs clamped to the ceiling");
+  const swapped = clampMtprotoLimits({ jitterMinMs: 20_000, jitterMaxMs: 5_000 });
+  assert(swapped.jitterMaxMs >= swapped.jitterMinMs, "jitterMaxMs is never left below the resolved jitterMinMs, even if the input tried to");
+  eq(clampMtprotoLimits({ hourlyCap: NaN, defaultDailyCap: "not a number" as unknown as number }).hourlyCap, MTPROTO_LIMITS_DEFAULTS.hourlyCap, "non-finite input falls back to default, not 0");
+});
+
+acheck("H6e getMtprotoLimits/setMtprotoLimits: unreadable/missing row reads as defaults (never throws), writes validate, clamp and log config_change", async () => {
+  const db = freshDb();
+  // No row at all yet (migration 169/171 not applied, or a fresh project):
+  // reads as the built-in defaults, same safe fallback the worker itself uses.
+  eq(JSON.stringify(await getMtprotoLimits()), JSON.stringify(MTPROTO_LIMITS_DEFAULTS), "no row -> defaults");
+  db.fail("app_settings", "select", { message: "boom" });
+  eq(JSON.stringify(await getMtprotoLimits()), JSON.stringify(MTPROTO_LIMITS_DEFAULTS), "an unreadable row never throws: reads as defaults, the safe side");
+  db.fail("app_settings", "select", null);
+
+  // A write validates each provided field is a finite number in range BEFORE
+  // touching the DB; unrelated fields (not passed) are left at their current value.
+  await rejects(setMtprotoLimits({ hourlyCap: 9999 }, "operator"), /hourlyCap must be between/);
+  await rejects(setMtprotoLimits({ hourlyCap: NaN }, "operator"), /hourlyCap must be a number/);
+  await rejects(setMtprotoLimits({ jitterMinMs: 30_000, jitterMaxMs: 5_000 }, "operator"), /jitterMaxMs must not be smaller than jitterMinMs/);
+  eq(JSON.stringify(await getMtprotoLimits()), JSON.stringify(MTPROTO_LIMITS_DEFAULTS), "every rejected write left the stored value untouched");
+
+  const after = await setMtprotoLimits({ hourlyCap: 40, minSilenceHours: 12 }, "operator");
+  eq(after.hourlyCap, 40, "hourlyCap updated");
+  eq(after.minSilenceHours, 12, "minSilenceHours updated");
+  eq(after.defaultDailyCap, MTPROTO_LIMITS_DEFAULTS.defaultDailyCap, "an untouched field keeps its prior (default) value");
+  eq(JSON.stringify(await getMtprotoLimits()), JSON.stringify(after), "read-back matches the write");
+
+  const ev = eventsOf(db, "config_change").find((e) => e.detail.action === "set_mtproto_limits");
+  assert(ev, "set_mtproto_limits event written");
+  eq(ev!.actor, "operator", "actor");
+  eq((ev!.detail.before as typeof MTPROTO_LIMITS_DEFAULTS).hourlyCap, MTPROTO_LIMITS_DEFAULTS.hourlyCap, "before");
+  eq((ev!.detail.after as typeof MTPROTO_LIMITS_DEFAULTS).hourlyCap, 40, "after");
+
+  db.fail("app_settings", "upsert", { message: "write failed" });
+  await rejects(setMtprotoLimits({ hourlyCap: 10 }, "operator"), /could not save limits/);
+  db.fail("app_settings", "upsert", null);
+  db.fail("reengage_events", "insert", { message: "events down" });
+  await rejects(setMtprotoLimits({ hourlyCap: 10 }, "operator"), /WERE saved, but the audit event failed/);
+});
+
 acheck("H7 connection pause/cap write before/after events and reject bad input", async () => {
   const db = freshDb();
   await setConnectionPaused(CLONE_A, true, "flood", "operator");
@@ -703,6 +764,10 @@ acheck("H8 preview: every ineligible class excluded, numbers add up, caps and ho
   for (const holdoutPct of [0, 9, 21]) await rejects(computeAudiencePreview({ cloneIds: [CLONE_A] }, { dailyCap: 30, runCap: null, holdoutPct }));
   const wrote = db.rows("reengage_runs").length + db.rows("reengage_events").length;
   eq(wrote, 0, "preview wrote nothing");
+
+  const withLegacy = await computeAudiencePreview({ cloneIds: [CLONE_A], includeLegacy: true }, { dailyCap: 30, runCap: null, holdoutPct: 15 });
+  eq(withLegacy.excluded.legacy_import, 0, "includeLegacy: true stops excluding the legacy-imported fan");
+  assert(withLegacy.eligible + withLegacy.holdout > p.eligible + p.holdout, "the legacy fan now lands in eligible or hold-out instead of being excluded");
 });
 
 acheck("H9 preview fails CLOSED when opt-outs cannot be read; tolerates only a missing table", async () => {

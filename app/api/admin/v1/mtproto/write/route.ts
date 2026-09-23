@@ -3,7 +3,8 @@ import { confirmLive, createDryRun, queueRun, recordDryRunReview, stopRun, valid
 import { setConnectionDailyCap, setConnectionPaused } from "@/lib/mtproto/connections";
 import { getGlobalStop, setGlobalStop } from "@/lib/mtproto/global-stop";
 import { getGlobalLiveArm, setGlobalLiveArm } from "@/lib/mtproto/global-live-arm";
-import { DEFAULT_DAILY_CAP, DEFAULT_HOLDOUT_PCT, type RunFilters } from "@/lib/mtproto/types";
+import { setMtprotoLimits } from "@/lib/mtproto/limits";
+import { DEFAULT_DAILY_CAP, DEFAULT_HOLDOUT_PCT, type MtprotoLimits, type RunFilters } from "@/lib/mtproto/types";
 import { sanitizeMessageVariants } from "@/lib/mtproto/validate";
 
 export const dynamic = "force-dynamic";
@@ -34,7 +35,8 @@ type Action =
   | "global_arm_live"
   | "global_disarm_live"
   | "set_connection_pause"
-  | "set_connection_cap";
+  | "set_connection_cap"
+  | "set_mtproto_limits";
 
 export const POST = withAdmin(async (req) => {
   let body: Record<string, unknown>;
@@ -138,9 +140,24 @@ export const POST = withAdmin(async (req) => {
         return ok({ action, cloneId, dailyCap });
       }
 
+      // The six tunable limits (migration 169/171). No typed confirmation:
+      // every field is clamped into the same hard range the worker itself
+      // enforces regardless of this write (lib/mtproto/limits.ts).
+      case "set_mtproto_limits": {
+        const input: Partial<MtprotoLimits> = {};
+        for (const k of ["hourlyCap", "defaultDailyCap", "jitterMinMs", "jitterMaxMs", "minSilenceHours", "floodWaitMultiplier"] as const) {
+          if (body[k] === undefined) continue;
+          if (typeof body[k] !== "number") return jsonError(`${k} must be a number`, 400);
+          input[k] = body[k] as number;
+        }
+        const limits = await setMtprotoLimits(input, ACTOR);
+        logAdminWrite("mtproto:set_mtproto_limits", null, { limits });
+        return ok({ action, limits });
+      }
+
       default:
         return jsonError(
-          `unknown action: "${action}". Allowed: create_run, review_dry_run, confirm_live, stop_run, global_stop, global_resume, global_arm_live, global_disarm_live, set_connection_pause, set_connection_cap.`,
+          `unknown action: "${action}". Allowed: create_run, review_dry_run, confirm_live, stop_run, global_stop, global_resume, global_arm_live, global_disarm_live, set_connection_pause, set_connection_cap, set_mtproto_limits.`,
           400,
         );
     }

@@ -80,6 +80,7 @@ export default function RunBuilderForm({ creators }: { creators: CreatorLite[] }
   const [holdout, setHoldout] = useState(String(DEFAULT_HOLDOUT_PCT));
   const [audienceChoice, setAudienceChoice] = useState<AudienceChoice>("silent");
   const [advancedSegment, setAdvancedSegment] = useState<RunSegment>("top_spenders");
+  const [includeLegacy, setIncludeLegacy] = useState(false);
   const [variantCount, setVariantCount] = useState(1);
 
   const segment: RunSegment = audienceChoice === "advanced" ? advancedSegment : "all_silent";
@@ -153,6 +154,7 @@ export default function RunBuilderForm({ creators }: { creators: CreatorLite[] }
 
       {/* Hidden fields that mirror UI-only state into the form's own FormData. */}
       <input type="hidden" name="segment" value={segment} />
+      <input type="hidden" name="includeLegacy" value={String(includeLegacy)} />
 
       <StepCard>
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -195,6 +197,12 @@ export default function RunBuilderForm({ creators }: { creators: CreatorLite[] }
             title="Silent fans"
             hint="Fans who have gone quiet. Skips the old n8n imports."
             onClick={() => setAudienceChoice("silent")}
+          />
+          <AudienceTile
+            active={includeLegacy}
+            title="Include old n8n fans"
+            hint="Also message the ~57k fans carried over from the old n8n stack, normally skipped."
+            onClick={() => setIncludeLegacy((v) => !v)}
           />
         </div>
         <div>

@@ -181,6 +181,11 @@ export interface RunFilters {
   lastActiveToDays?: number;
   language?: string;
   excludeIds?: string[];
+  /** Mirrors twin-userbot/src/policy.ts MatchContext.includeLegacy. When true,
+   *  a fan is not excluded for legacy_import (the ~57k fans imported from the
+   *  old n8n stack, users.legacy_id IS NOT NULL). Default/undefined excludes
+   *  them, same as before this field existed. */
+  includeLegacy?: boolean;
 }
 
 export interface ReengageRun {
@@ -306,6 +311,54 @@ export const GLOBAL_LIVE_ARM_KEY = "mtproto_global_live_arm";
  *  must never double as consent for the whole fleet. DISARMING is never
  *  gated. */
 export const ARM_LIVE_PHRASE = "ARM LIVE";
+
+// ── MTPROTO LIMITS (migration 169/171: app_settings key 'mtproto_limits') ──
+//
+// Mirrors twin-userbot/src/contract.ts's MtprotoLimits + hard ranges exactly
+// (same cross-repo mirror pattern as the rest of this file). The worker
+// clamps into these ranges regardless of what the DB row says; the dashboard
+// is expected to reject a write outside these before it ever reaches the
+// table, which is what lib/mtproto/limits.ts's setMtprotoLimits does.
+
+export const MTPROTO_LIMITS_KEY = "mtproto_limits";
+
+export const HARD_MIN_HOURLY_CAP = 1;
+export const HARD_MAX_HOURLY_CAP = 60;
+export const HARD_MIN_DAILY_CAP = 1;
+// HARD_MAX_DAILY_CAP above (400, migration 168) doubles as this range's ceiling.
+export const MIN_SEND_SPACING_MS = 2_000;
+export const HARD_MAX_JITTER_MS = 300_000;
+export const HARD_MIN_MIN_SILENCE_HOURS = 1;
+export const HARD_MAX_MIN_SILENCE_HOURS = 720;
+export const HARD_MIN_FLOOD_WAIT_MULTIPLIER = 1;
+export const HARD_MAX_FLOOD_WAIT_MULTIPLIER = 10;
+
+export interface MtprotoLimits {
+  /** Sends per creator per rolling hour. Range [HARD_MIN_HOURLY_CAP, HARD_MAX_HOURLY_CAP]. */
+  hourlyCap: number;
+  /** Suggested starting per-run/connection daily cap. Range [HARD_MIN_DAILY_CAP, HARD_MAX_DAILY_CAP]. */
+  defaultDailyCap: number;
+  /** Floor of the human-like pacing jitter between sends, ms. Range [MIN_SEND_SPACING_MS, HARD_MAX_JITTER_MS]. */
+  jitterMinMs: number;
+  /** Ceiling of the jitter, ms. Range [jitterMinMs (resolved), HARD_MAX_JITTER_MS]. */
+  jitterMaxMs: number;
+  /** Hours a fan must be silent before becoming eligible. Range [HARD_MIN_MIN_SILENCE_HOURS, HARD_MAX_MIN_SILENCE_HOURS]. */
+  minSilenceHours: number;
+  /** Multiplied onto Telegram's own FLOOD_WAIT/SLOWMODE_WAIT/FLOOD_PREMIUM_WAIT seconds to
+   *  compute userbot_connections.paused_until. Range [HARD_MIN_FLOOD_WAIT_MULTIPLIER, HARD_MAX_FLOOD_WAIT_MULTIPLIER]. */
+  floodWaitMultiplier: number;
+}
+
+/** Built-in defaults, MUST match twin-bot migration 169/171's seed row byte
+ *  for byte, so an unreadable DB read behaves identically to a fresh one. */
+export const MTPROTO_LIMITS_DEFAULTS: MtprotoLimits = {
+  hourlyCap: 20,
+  defaultDailyCap: DEFAULT_DAILY_CAP,
+  jitterMinMs: 4_000,
+  jitterMaxMs: 25_000,
+  minSilenceHours: MIN_SILENCE_HOURS,
+  floodWaitMultiplier: 2,
+};
 
 export const ATTRIBUTION_WINDOWS_HOURS = [24, 72, 7 * 24] as const;
 export type AttributionWindowHours = (typeof ATTRIBUTION_WINDOWS_HOURS)[number];

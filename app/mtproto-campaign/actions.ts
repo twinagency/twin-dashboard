@@ -35,6 +35,7 @@ import { confirmLive, createDryRun, queueRun, recordDryRunReview, stopRun, type 
 import { setConnectionDailyCap, setConnectionLiveEnabled, setConnectionPaused } from "@/lib/mtproto/connections";
 import { getGlobalStop, setGlobalStop } from "@/lib/mtproto/global-stop";
 import { getGlobalLiveArm, setGlobalLiveArm } from "@/lib/mtproto/global-live-arm";
+import { getMtprotoLimits, setMtprotoLimits } from "@/lib/mtproto/limits";
 import { sanitizeFilters, sanitizeMessageVariants, uuidList, validateCaps } from "@/lib/mtproto/validate";
 import {
   cancelTelegramConnectionRequest,
@@ -45,7 +46,7 @@ import {
   type LoginRequestView,
 } from "@/lib/mtproto/login-control";
 import { DEFAULT_DAILY_CAP, DEFAULT_HOLDOUT_PCT } from "@/lib/mtproto/types";
-import type { AudiencePreview, RunFilters } from "@/lib/mtproto/types";
+import type { AudiencePreview, MtprotoLimits, RunFilters } from "@/lib/mtproto/types";
 
 const ACTOR = "operator";
 
@@ -69,6 +70,7 @@ function filtersFromForm(fd: FormData): { cloneIds: string[]; filters: RunFilter
       lastActiveFromDays: numOrUndef(fd.get("lastActiveFromDays")),
       lastActiveToDays: numOrUndef(fd.get("lastActiveToDays")),
       language: String(fd.get("language") ?? ""),
+      includeLegacy: fd.get("includeLegacy") === "true",
     },
     cloneIds,
   );
@@ -202,6 +204,33 @@ export async function globalLiveArmAction(fd: FormData): Promise<ActionResult> {
 export async function currentGlobalLiveArm(): Promise<boolean> {
   await guardDashboardAction("app/mtproto-campaign/actions.ts#currentGlobalLiveArm", []);
   return getGlobalLiveArm();
+}
+
+/** Settings tab's limits editor (migration 169/171). No typed confirmation
+ *  needed here, unlike the global arm/stop: every field is validated and
+ *  clamped into the same hard range the worker itself enforces regardless of
+ *  this write (see lib/mtproto/limits.ts), so there is no "unsafe" value this
+ *  form can produce. */
+export async function setMtprotoLimitsAction(fd: FormData): Promise<ActionResult<{ limits: MtprotoLimits }>> {
+  await guardDashboardAction("app/mtproto-campaign/actions.ts#setMtprotoLimitsAction", [fd]);
+  try {
+    const input: Partial<MtprotoLimits> = {};
+    for (const key of ["hourlyCap", "defaultDailyCap", "jitterMinMs", "jitterMaxMs", "minSilenceHours", "floodWaitMultiplier"] as const) {
+      const n = numOrUndef(fd.get(key));
+      if (n !== undefined) input[key] = n;
+    }
+    const limits = await setMtprotoLimits(input, ACTOR);
+    return { ok: true, limits };
+  } catch (e) {
+    return fail(e);
+  } finally {
+    revalidatePath("/mtproto-campaign/settings");
+  }
+}
+
+export async function currentMtprotoLimits(): Promise<MtprotoLimits> {
+  await guardDashboardAction("app/mtproto-campaign/actions.ts#currentMtprotoLimits", []);
+  return getMtprotoLimits();
 }
 
 export async function setConnectionPausedAction(fd: FormData): Promise<ActionResult> {

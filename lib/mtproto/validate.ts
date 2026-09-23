@@ -72,6 +72,7 @@ export function sanitizeFilters(raw: unknown, cloneIds: string[]): RunFilters {
     if (!LANGUAGE.test(lang)) throw new RunValidationError("language must look like a language code, e.g. en or pt-br");
     out.language = lang;
   }
+  if (r.includeLegacy === true || r.includeLegacy === "true") out.includeLegacy = true;
   const exclude = uuidList(r.excludeIds, "excludeIds", 5000);
   if (exclude.length) out.excludeIds = exclude;
   return out;
