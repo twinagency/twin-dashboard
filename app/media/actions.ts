@@ -139,8 +139,8 @@ function resolvePrice(fd: FormData, cap: Caption, guide: unknown): number {
 
 // ── Upload a single photo ────────────────────────────────────────────────────
 export async function uploadPhoto(cloneId: string, fd: FormData): Promise<MediaUploadResult> {
+  await guardDashboardAction("app/media/actions.ts#uploadPhoto", [cloneId, fd]);
   try {
-    await guardDashboardAction("app/media/actions.ts#uploadPhoto", [cloneId, fd]);
   const file = fd.get("file") as File | null;
   if (!file) throw new Error("no file");
 
@@ -205,8 +205,8 @@ export async function uploadPhoto(cloneId: string, fd: FormData): Promise<MediaU
 
 // ── Upload a single video ────────────────────────────────────────────────────
 export async function uploadVideo(cloneId: string, fd: FormData): Promise<MediaUploadResult> {
+  await guardDashboardAction("app/media/actions.ts#uploadVideo", [cloneId, fd]);
   try {
-    await guardDashboardAction("app/media/actions.ts#uploadVideo", [cloneId, fd]);
   const file = fd.get("file") as File | null;
   if (!file) throw new Error("no file");
 
