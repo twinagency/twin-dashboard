@@ -36,6 +36,14 @@ import { setConnectionDailyCap, setConnectionLiveEnabled, setConnectionPaused } 
 import { getGlobalStop, setGlobalStop } from "@/lib/mtproto/global-stop";
 import { getGlobalLiveArm, setGlobalLiveArm } from "@/lib/mtproto/global-live-arm";
 import { sanitizeFilters, uuidList, validateCaps } from "@/lib/mtproto/validate";
+import {
+  cancelTelegramConnectionRequest,
+  getTelegramConnectionRequest,
+  requestTelegramConnection,
+  submitTelegramTwoFactorPassword,
+  type LoginRequestAction,
+  type LoginRequestView,
+} from "@/lib/mtproto/login-control";
 import { DEFAULT_DAILY_CAP, DEFAULT_HOLDOUT_PCT } from "@/lib/mtproto/types";
 import type { AudiencePreview, RunFilters } from "@/lib/mtproto/types";
 
@@ -231,3 +239,52 @@ export async function setConnectionDailyCapAction(fd: FormData): Promise<ActionR
   }
 }
 
+
+
+export async function requestTelegramConnectionAction(fd: FormData): Promise<ActionResult<{ request: LoginRequestView }>> {
+  await guardDashboardAction("app/mtproto-campaign/actions.ts#requestTelegramConnectionAction", [fd]);
+  try {
+    const cloneId = String(fd.get("cloneId") ?? "");
+    const action = String(fd.get("action") ?? "") as LoginRequestAction;
+    const request = await requestTelegramConnection(cloneId, action, ACTOR);
+    revalidatePath("/mtproto-campaign/connections");
+    return { ok: true, request };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function pollTelegramConnectionAction(fd: FormData): Promise<ActionResult<{ request: LoginRequestView }>> {
+  await guardDashboardAction("app/mtproto-campaign/actions.ts#pollTelegramConnectionAction", [fd]);
+  try {
+    const request = await getTelegramConnectionRequest(String(fd.get("requestId") ?? ""));
+    return { ok: true, request };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function submitTelegramTwoFactorAction(fd: FormData): Promise<ActionResult<{ request: LoginRequestView }>> {
+  await guardDashboardAction("app/mtproto-campaign/actions.ts#submitTelegramTwoFactorAction", [fd]);
+  try {
+    const request = await submitTelegramTwoFactorPassword(
+      String(fd.get("requestId") ?? ""),
+      String(fd.get("password") ?? ""),
+      ACTOR,
+    );
+    return { ok: true, request };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function cancelTelegramConnectionAction(fd: FormData): Promise<ActionResult> {
+  await guardDashboardAction("app/mtproto-campaign/actions.ts#cancelTelegramConnectionAction", [fd]);
+  try {
+    await cancelTelegramConnectionRequest(String(fd.get("requestId") ?? ""), ACTOR);
+    revalidatePath("/mtproto-campaign/connections");
+    return { ok: true };
+  } catch (e) {
+    return fail(e);
+  }
+}

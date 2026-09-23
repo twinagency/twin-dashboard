@@ -8,8 +8,9 @@ import { setConnectionDailyCapAction, setConnectionLiveEnabledAction, setConnect
 import type { AutoHaltInfo, CreatorLite, UserbotConnection } from "@/lib/mtproto/types";
 import { CreatorAvatar, EmptyBlock, Meter, StatusPill, When } from "./kit";
 import { CONNECTION_INFO, num, timeAgo } from "./view";
+import TelegramLoginControl from "./TelegramLoginControl";
 
-type ConnRow = { creator: CreatorLite; connection: UserbotConnection; autoHalt: AutoHaltInfo | null; resumePhrase: string; goLivePhrase: string; sentToday?: number | null };
+type ConnRow = { creator: CreatorLite; connection: UserbotConnection; autoHalt: AutoHaltInfo | null; resumePhrase: string; goLivePhrase: string; sentToday?: number | null; initialLoginRequest?: import("@/lib/mtproto/login-control").LoginRequestView | null };
 
 const inputCls = "h-9 min-w-0 rounded-lg border border-line bg-panel px-2.5 text-sm text-ink outline-none placeholder:text-muted focus:border-accent-2 focus:ring-2 focus:ring-accent-2/20";
 
@@ -152,6 +153,13 @@ function ConnectionCard({ row }: { row: ConnRow }) {
           </dd>
         </div>
       </dl>
+
+      <TelegramLoginControl
+        cloneId={creator.id}
+        creatorName={creator.name}
+        connected={connection.status === "connected"}
+        initialRequest={row.initialLoginRequest ?? null}
+      />
 
       <div className="mt-4">
         <div className="mb-1 flex items-center justify-between gap-2 text-xs text-muted">
