@@ -10,6 +10,8 @@ import { previewAudienceAction, createRunAction } from "@/app/mtproto-campaign/a
 import {
   DEFAULT_DAILY_CAP,
   DEFAULT_HOLDOUT_PCT,
+  DEFAULT_REENGAGEMENT_VARIANTS,
+  MAX_MESSAGE_VARIANTS,
   HARD_MAX_DAILY_CAP,
   HOLDOUT_MAX_PCT,
   HOLDOUT_MIN_PCT,
@@ -225,6 +227,31 @@ export default function RunBuilderForm({ creators }: { creators: CreatorLite[] }
               </span>
             )}
           </div>
+        </div>
+
+        <div className="border-t border-line pt-4">
+          <div className="mb-2 flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
+            Re-engagement message variants
+            <Info text="These are the approved openers for this campaign. One is selected deterministically per fan, so retries and the dry-to-live replay keep the same wording for that fan." />
+          </div>
+          <div className="space-y-2">
+            {Array.from({ length: MAX_MESSAGE_VARIANTS }, (_, i) => (
+              <label key={i} className="block">
+                <span className="mb-1 block text-xs font-medium text-muted">Variant {i + 1}</span>
+                <input
+                  type="text"
+                  name="messageVariants"
+                  maxLength={280}
+                  defaultValue={DEFAULT_REENGAGEMENT_VARIANTS[i] ?? ""}
+                  placeholder={i === 0 ? "Add a message" : "Optional"}
+                  className={inputCls}
+                />
+              </label>
+            ))}
+          </div>
+          <p className="mt-2 text-xs leading-relaxed text-muted">
+            Leave any unused lines blank. At least one message is required. The worker still applies its final safety validation before any send.
+          </p>
         </div>
       </StepCard>
 
