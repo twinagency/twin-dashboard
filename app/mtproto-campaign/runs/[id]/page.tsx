@@ -29,9 +29,11 @@ export default async function RunDetailPage({ params }: { params: Promise<{ id: 
 
   const [{ episodes, truncated }, creators] = await Promise.all([listEpisodesForRun(id), listCreators()]);
   // ONE star_transactions read feeds the funnel, the lift table and the sends table.
-  const purchases = await loadPurchasesForEpisodes(episodes);
-  const lift = await computeLift(episodes, purchases);
-  const [funnel, sends, optOuts] = await Promise.all([computeFunnel(episodes, lift), buildSendRows(episodes, creators, purchases), computeOptOuts(episodes, creators)]);
+  // Live only: exclude dry-run episodes
+  const liveEpisodes = episodes.filter((e) => !e.dryRun);
+  const purchases = await loadPurchasesForEpisodes(liveEpisodes);
+  const lift = await computeLift(liveEpisodes, purchases);
+  const [funnel, sends, optOuts] = await Promise.all([computeFunnel(liveEpisodes, lift), buildSendRows(liveEpisodes, creators, purchases), computeOptOuts(liveEpisodes, creators)]);
 
   // Account halts: the run's own account_halt events, plus any of its creators
   // that are paused/auto-halted right now. A failed read is shown, not hidden.

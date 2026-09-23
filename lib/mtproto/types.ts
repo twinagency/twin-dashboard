@@ -123,7 +123,7 @@ export type RunSegment = (typeof RUN_SEGMENTS)[number];
 
 export const COOLDOWN_HOURS = 24;
 export const MIN_SILENCE_HOURS = 24;
-export const DEFAULT_HOLDOUT_PCT = 15;
+export const DEFAULT_HOLDOUT_PCT = 0;
 export const DEFAULT_DAILY_CAP = 30;
 export const HARD_MAX_DAILY_CAP = 400;
 
@@ -142,10 +142,8 @@ export const DEFAULT_REENGAGEMENT_VARIANTS = [
   "Hey you, how's your day going ?",
 ] as const;
 
-// Dashboard-side bounds (stricter than the migration's CHECKs on purpose):
-// the hold-out is what makes lift measurable, so it is never allowed to
-// vanish (below 10%) or eat the audience (above 20%).
-export const HOLDOUT_MIN_PCT = 10;
+// Dashboard-side bounds: allow 0% to disable hold-out entirely.
+export const HOLDOUT_MIN_PCT = 0;
 export const HOLDOUT_MAX_PCT = 20;
 export const MAX_RUN_CAP = 10_000;
 /** Mirrors twin-userbot/src/policy.ts DEFAULT_TOP_SPENDER_MIN_STARS. */

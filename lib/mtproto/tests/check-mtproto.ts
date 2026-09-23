@@ -350,8 +350,8 @@ check("E3 dailyCap above the hard ceiling is rejected", () => {
   );
 });
 
-check("E4 holdoutPct outside 10-20 (or fractional) is rejected, 10 / 15 / 20 accepted", () => {
-  for (const bad of [0, 5, 9, 21, 51, 15.5, NaN]) {
+check("E4 holdoutPct 0-20 accepted, outside that range rejected, fractional rejected", () => {
+  for (const bad of [-1, 21, 51, 15.5, NaN]) {
     let threw = false;
     try {
       validateCreateRunInput({ ...validInput, holdoutPct: bad });
@@ -360,7 +360,7 @@ check("E4 holdoutPct outside 10-20 (or fractional) is rejected, 10 / 15 / 20 acc
     }
     assert(threw, `holdoutPct ${bad} must be rejected`);
   }
-  for (const good of [10, 15, 20]) validateCreateRunInput({ ...validInput, holdoutPct: good });
+  for (const good of [0, 1, 5, 10, 15, 20]) validateCreateRunInput({ ...validInput, holdoutPct: good });
 });
 
 // ── F. every PREVIEW_EXCLUSION_REASONS entry is actually produced somewhere
@@ -453,7 +453,7 @@ acheck("H1 createDryRun is always dry, draft, unconfirmed, whatever the caller s
 acheck("H2 createDryRun rejects out-of-bounds caps and hold-out, unknown, paused and malformed creators", async () => {
   const db = freshDb();
   const bad: Partial<CreateRunInput>[] = [
-    { holdoutPct: 9 }, { holdoutPct: 21 }, { holdoutPct: 0 }, { dailyCap: 0 }, { dailyCap: 401 }, { dailyCap: 30.5 },
+    { holdoutPct: -1 }, { holdoutPct: 21 }, { dailyCap: 0 }, { dailyCap: 401 }, { dailyCap: 30.5 },
     { runCap: 0 }, { runCap: 10_001 }, { runCap: 2.5 }, { cloneIds: ["clone-1"] }, { cloneIds: ["dddddddd-dddd-4ddd-8ddd-dddddddddddd"] },
     { cloneIds: [CLONE_PAUSED] }, { cloneIds: [] },
   ];
@@ -805,9 +805,11 @@ acheck("H8 preview: every ineligible class excluded, numbers add up, caps and ho
   assert(capped.eligible <= 1, "eligible is bounded by min(dailyCap, runCap)");
   eq(capped.eligible + capped.excludedTotal, capped.candidatePool, "still adds up when capped");
 
-  for (const holdoutPct of [0, 9, 21]) await rejects(computeAudiencePreview({ cloneIds: [CLONE_A] }, { dailyCap: 30, runCap: null, holdoutPct }));
+  for (const holdoutPct of [-1, 21]) await rejects(computeAudiencePreview({ cloneIds: [CLONE_A] }, { dailyCap: 30, runCap: null, holdoutPct }));
   const wrote = db.rows("reengage_runs").length + db.rows("reengage_events").length;
   eq(wrote, 0, "preview wrote nothing");
+  const withZero = await computeAudiencePreview({ cloneIds: [CLONE_A] }, { dailyCap: 30, runCap: null, holdoutPct: 0 });
+  eq(withZero.holdout, 0, "holdoutPct 0 disables hold-out");
 
   const withLegacy = await computeAudiencePreview({ cloneIds: [CLONE_A], includeLegacy: true }, { dailyCap: 30, runCap: null, holdoutPct: 15 });
   eq(withLegacy.excluded.legacy_import, 0, "includeLegacy: true stops excluding the legacy-imported fan");

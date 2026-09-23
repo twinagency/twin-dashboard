@@ -18,7 +18,8 @@ const RECENT_SENDS_LIMIT = 300;
 // component only reads and shapes the data. Fleet KPIs, funnel and lift
 // detail live on each run's own page (linked from here as "Full details").
 export default async function MtprotoCampaignPage() {
-  const [creators, runs, connections] = await Promise.all([getCreators(), getRecentRuns(), listConnections()]);
+  const [creators, allRuns, connections] = await Promise.all([getCreators(), getRecentRuns(), listConnections()]);
+  const runs = allRuns.filter((run) => !run.dryRun);
   const nameFor = (id: string) => creators.find((c) => c.id === id)?.name ?? id;
   const connFor = (id: string) => connections.find((c) => c.cloneId === id) ?? null;
 
@@ -26,15 +27,16 @@ export default async function MtprotoCampaignPage() {
     runs.map(async (run) => {
       const { episodes } = await listEpisodesForRun(run.id, 10_000);
       const purchases = await loadPurchasesForEpisodes(episodes);
+      const liveEpisodes = episodes.filter((e) => !e.dryRun);
       const [funnel, sendRows] = await Promise.all([
-        computeFunnel(episodes, undefined),
-        buildSendRows(episodes, creators, purchases, { includeDry: true }),
+        computeFunnel(liveEpisodes, undefined),
+        buildSendRows(liveEpisodes, creators, purchases),
       ]);
-      const sent = episodes.filter((e) => e.state === "sent" || e.state === "acked" || e.state === "replied").length;
-      const replied = episodes.filter((e) => e.state === "replied").length;
-      const heldBack = episodes.filter((e) => e.state === "holdout").length;
-      const queued = episodes.filter((e) => e.state === "eligible" || e.state === "claimed" || e.state === "prepared").length;
-      const failed = episodes.filter((e) => e.state === "failed" || e.state === "uncertain").length;
+      const sent = liveEpisodes.filter((e) => e.state === "sent" || e.state === "acked" || e.state === "replied").length;
+      const replied = liveEpisodes.filter((e) => e.state === "replied").length;
+      const heldBack = liveEpisodes.filter((e) => e.state === "holdout").length;
+      const queued = liveEpisodes.filter((e) => e.state === "eligible" || e.state === "claimed" || e.state === "prepared").length;
+      const failed = liveEpisodes.filter((e) => e.state === "failed" || e.state === "uncertain").length;
       return { run, funnel, sendRows, sent, replied, heldBack, queued, failed };
     }),
   );
@@ -70,6 +72,7 @@ export default async function MtprotoCampaignPage() {
 
   const recentSends: (SendRow & { runId: string })[] = perRun
     .flatMap(({ run, sendRows }) => sendRows.map((r) => ({ ...r, runId: run.id })))
+    .filter((r) => !r.dryRun)
     .sort((a, b) => new Date(b.sentAt ?? 0).getTime() - new Date(a.sentAt ?? 0).getTime())
     .slice(0, RECENT_SENDS_LIMIT);
 

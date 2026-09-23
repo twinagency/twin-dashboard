@@ -58,7 +58,7 @@ export default async function FanDetailPage({
       .order("paid_at", { ascending: false }),
     supabaseAdmin
       .from("chat_history")
-      .select("role, content, created_at")
+      .select("role, content, created_at, meta")
       .eq("clone_id", id)
       .eq("telegram_id", u.telegram_id)
       .order("created_at", { ascending: false })
@@ -386,6 +386,7 @@ export default async function FanDetailPage({
               {history.map((m, i) => {
                 // Bot (her) = blue, RIGHT. Fan = grey, left. Same as /users inbox.
                 const fan = m.role === "human";
+                const isMtproto = m.meta?.source === "mtproto";
                 return (
                   <div key={i} className={"flex " + (fan ? "justify-start" : "justify-end")}>
                     <div
@@ -397,8 +398,9 @@ export default async function FanDetailPage({
                       }
                     >
                       <div className="whitespace-pre-wrap break-words">{m.content}</div>
-                      <div className={"mt-0.5 text-[10px] " + (fan ? "text-muted" : "text-white/60")}>
-                        {dateTime(m.created_at)}
+                      <div className={"mt-0.5 flex items-center gap-1.5 text-[10px] " + (fan ? "text-muted" : "text-white/60")}>
+                        <span>{dateTime(m.created_at)}</span>
+                        {isMtproto && <span className="rounded bg-white/20 px-1.5 py-0.5 font-medium">MTProto</span>}
                       </div>
                     </div>
                   </div>
