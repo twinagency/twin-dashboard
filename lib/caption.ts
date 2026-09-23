@@ -45,9 +45,9 @@ const FALLBACK: Caption = {
   auto_desc: "",
 };
 
-async function visionCaption(jpegBytes: Buffer, model: string): Promise<Caption> {
+async function visionCaption(jpegBytes: Buffer, model: string, signal?: AbortSignal): Promise<Caption> {
   const dataUrl = `data:image/jpeg;base64,${jpegBytes.toString("base64")}`;
-  const raw = await orVision({ model, dataUrl, prompt: PROMPT, json: true });
+  const raw = await orVision({ model, dataUrl, prompt: PROMPT, json: true, signal });
   try {
     const j = JSON.parse(raw);
     const explicitness: Caption["explicitness"] =
@@ -70,13 +70,13 @@ async function visionCaption(jpegBytes: Buffer, model: string): Promise<Caption>
 }
 
 // Caption a photo: downscale to 768px, then vision.
-export async function captionPhoto(bytes: Buffer, model: string): Promise<Caption> {
+export async function captionPhoto(bytes: Buffer, model: string, signal?: AbortSignal): Promise<Caption> {
   const resized = await sharp(bytes).resize({ width: 768, withoutEnlargement: true }).jpeg({ quality: 80 }).toBuffer();
-  return visionCaption(resized, model);
+  return visionCaption(resized, model, signal);
 }
 
 // Caption a video: pull one frame ~1s in via ffmpeg, then vision on that frame.
-export async function captionVideo(bytes: Buffer, model: string): Promise<Caption> {
+export async function captionVideo(bytes: Buffer, model: string, signal?: AbortSignal): Promise<Caption> {
   const stamp = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
   const inPath = path.join(tmpdir(), `cap-${stamp}.mp4`);
   const outPath = path.join(tmpdir(), `cap-${stamp}.jpg`);
@@ -84,7 +84,7 @@ export async function captionVideo(bytes: Buffer, model: string): Promise<Captio
     await writeFile(inPath, bytes);
     await execFileAsync("ffmpeg", ["-y", "-ss", "00:00:01", "-i", inPath, "-vframes", "1", "-vf", "scale=768:-1", outPath]);
     const frame = await readFile(outPath);
-    return await visionCaption(frame, model);
+    return await visionCaption(frame, model, signal);
   } catch {
     return FALLBACK;
   } finally {

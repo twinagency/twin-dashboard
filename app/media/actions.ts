@@ -24,6 +24,35 @@ import { mediaStoragePath } from "@/lib/media-storage-path";
 
 const TAG_SET = new Set<string>(MEDIA_TAGS);
 
+// Vision analysis improves matching and automatic pricing, but it must never
+// decide whether an otherwise valid media upload is saved. OpenRouter credit,
+// model availability, or a slow response are all recoverable metadata issues.
+const UPLOAD_ANALYSIS_TIMEOUT_MS = 12_000;
+const EMPTY_CAPTION: Caption = {
+  caption: "",
+  teaser_caption: "",
+  is_nude: false,
+  explicitness: "none",
+  nsfw: false,
+  tags: [],
+  auto_desc: "",
+};
+
+async function bestEffortUploadAnalysis(
+  analyse: (signal: AbortSignal) => Promise<Caption>,
+): Promise<Caption> {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), UPLOAD_ANALYSIS_TIMEOUT_MS);
+  try {
+    return await analyse(controller.signal);
+  } catch (error) {
+    console.warn("Media vision analysis unavailable; saving upload without generated metadata", error);
+    return { ...EMPTY_CAPTION };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
 // Parse a comma-joined tags field from the edit form into a clean, deduped array
 // of known-vocabulary tags (invalid/unknown tags dropped, same as auto-tagging).
 function parseTags(raw: FormDataEntryValue | null): string[] {
@@ -127,8 +156,9 @@ export async function uploadPhoto(cloneId: string, fd: FormData) {
     .upload(path, jpeg, { contentType: "image/jpeg", upsert: true });
   if (upErr) throw new Error(upErr.message);
 
-  // AI caption + auto-tags in the backend (caption + teaser + nudity + tags/nsfw).
-  const cap = await captionPhoto(jpeg, model);
+  // Best-effort INTERNAL analysis only. A model outage must not reject a valid
+  // upload, and the fan-facing message is generated later from the live chat.
+  const cap = await bestEffortUploadAnalysis((signal) => captionPhoto(jpeg, model, signal));
 
   // Price from the operator's guide via the AI tags (manual price wins if set).
   const starValue = resolvePrice(fd, cap, guide);
@@ -138,7 +168,9 @@ export async function uploadPhoto(cloneId: string, fd: FormData) {
     clone_id: cloneId,
     storage_path: path,
     caption: cap.caption || null,
-    teaser_caption: cap.teaser_caption || null,
+    // New uploads never persist a generic customer-facing line. The bot builds
+    // the outgoing caption from the current conversation when it sends media.
+    teaser_caption: null,
     is_nude: cap.is_nude,
     explicitness: cap.explicitness,
     nsfw: cap.nsfw,
@@ -175,8 +207,8 @@ export async function uploadVideo(cloneId: string, fd: FormData) {
     .upload(path, bytes, { contentType: file.type, upsert: true });
   if (upErr) throw new Error(upErr.message);
 
-  // AI caption + auto-tags from one extracted frame (caption + teaser + tags/nsfw).
-  const cap = await captionVideo(bytes, model);
+  // Best-effort INTERNAL analysis only. See the matching photo path above.
+  const cap = await bestEffortUploadAnalysis((signal) => captionVideo(bytes, model, signal));
   // Price from the operator's guide via the AI tags (manual price wins if set).
   const starValue = resolvePrice(fd, cap, guide);
 
@@ -184,7 +216,7 @@ export async function uploadVideo(cloneId: string, fd: FormData) {
     clone_id: cloneId,
     storage_path: path,
     caption: cap.caption || null,
-    teaser_caption: cap.teaser_caption || null,
+    teaser_caption: null,
     is_nude: cap.is_nude,
     explicitness: cap.explicitness,
     nsfw: cap.nsfw,

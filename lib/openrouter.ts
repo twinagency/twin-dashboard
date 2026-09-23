@@ -6,12 +6,14 @@ export async function orVision(opts: {
   dataUrl: string;
   prompt: string;
   json?: boolean;
+  signal?: AbortSignal;
 }): Promise<string> {
   const key = process.env.OPENROUTER_API_KEY;
   if (!key) throw new Error("OPENROUTER_API_KEY missing");
 
   const res = await fetch(URL, {
     method: "POST",
+    signal: opts.signal,
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
     body: JSON.stringify({
       model: opts.model,

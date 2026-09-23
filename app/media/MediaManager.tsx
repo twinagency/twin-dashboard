@@ -272,34 +272,9 @@ function PhotoUploadQueue({
         isFree: false,
         status: (verdict.ok ? "pending" : "error") as QueueItem["status"],
         error: verdict.ok ? undefined : verdict.message,
-        captioning: verdict.ok,
+        captioning: false,
       })),
     ]);
-    for (const { file, verdict } of checked) {
-      if (verdict.ok) autoCaption(file);
-    }
-  }
-
-  async function autoCaption(file: File) {
-    try {
-      const fd = new FormData();
-      fd.append("file", file);
-      fd.append("clone_id", cloneId);
-      const res = await fetch("/api/caption", { method: "POST", body: fd });
-      if (!res.ok) throw new Error("failed");
-      const { caption, teaser_caption } = await res.json();
-      setQueue((prev) =>
-        prev.map((q) =>
-          q.file === file
-            ? { ...q, caption: caption ?? "", teaserCaption: teaser_caption ?? "", captioning: false }
-            : q
-        )
-      );
-    } catch {
-      setQueue((prev) =>
-        prev.map((q) => (q.file === file ? { ...q, captioning: false } : q))
-      );
-    }
   }
 
   function update(idx: number, patch: Partial<QueueItem>) {
@@ -313,8 +288,6 @@ function PhotoUploadQueue({
       try {
         const fd = new FormData();
         fd.append("file", queue[i].file);
-        fd.append("caption", queue[i].caption);
-        fd.append("teaser_caption", queue[i].teaserCaption);
         fd.append("star_value", queue[i].starValue);
         fd.append("image_name", queue[i].imageName);
         fd.append("is_free", String(queue[i].isFree));
@@ -333,6 +306,9 @@ function PhotoUploadQueue({
   return (
     <div className="grid gap-4">
       <UploadZone label="Add photos (any format: HEIC, JPG, PNG, WebP)" accept="image/*,.heic,.heif" onFiles={addFiles} hint={PHOTO_LIMITS_HINT} />
+      <p className="text-xs text-muted">
+        The AI writes the internal content description automatically. The message sent with the photo is created from each fan's live conversation.
+      </p>
       {queue.length > 0 && (
         <div className="grid gap-3">
           {queue.map((item, i) => (
@@ -389,29 +365,6 @@ function PhotoUploadQueue({
                       <option value="false">Paid</option>
                       <option value="true">Free</option>
                     </select>
-                  </label>
-                  <label className="block col-span-2">
-                    <span className="mb-1 flex items-center gap-2 text-muted">
-                      Caption (for AI matching)
-                      {item.captioning && <span className="text-accent">AI captioning…</span>}
-                    </span>
-                    <input
-                      value={item.caption}
-                      onChange={(e) => update(i, { caption: e.target.value })}
-                      placeholder={item.captioning ? "Generating…" : "e.g. bikini on the beach, smiling"}
-                      disabled={item.captioning}
-                      className="w-full rounded border border-line bg-bg px-2 py-1.5 outline-none focus:border-accent disabled:opacity-40"
-                    />
-                  </label>
-                  <label className="block col-span-2">
-                    <span className="mb-1 block text-muted">Teaser caption (shown to fan)</span>
-                    <input
-                      value={item.teaserCaption}
-                      onChange={(e) => update(i, { teaserCaption: e.target.value })}
-                      placeholder={item.captioning ? "Generating…" : "e.g. I took this just for you 😈"}
-                      disabled={item.captioning}
-                      className="w-full rounded border border-line bg-bg px-2 py-1.5 outline-none focus:border-accent disabled:opacity-40"
-                    />
                   </label>
                 </div>
               )}
