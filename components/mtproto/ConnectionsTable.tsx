@@ -8,6 +8,7 @@ import { setConnectionDailyCapAction, setConnectionLiveEnabledAction, setConnect
 import type { AutoHaltInfo, CreatorLite, UserbotConnection } from "@/lib/mtproto/types";
 import { CreatorAvatar, EmptyBlock, Meter, StatusPill, When } from "./kit";
 import { CONNECTION_INFO, num, timeAgo } from "./view";
+import TelegramLoginControl from "./TelegramLoginControl";
 
 type ConnRow = { creator: CreatorLite; connection: UserbotConnection; autoHalt: AutoHaltInfo | null; resumePhrase: string; goLivePhrase: string; sentToday?: number | null };
 
@@ -152,6 +153,12 @@ function ConnectionCard({ row }: { row: ConnRow }) {
           </dd>
         </div>
       </dl>
+
+      <TelegramLoginControl
+        cloneId={creator.id}
+        creatorName={creator.name}
+        connected={connection.status === "connected"}
+      />
 
       <div className="mt-4">
         <div className="mb-1 flex items-center justify-between gap-2 text-xs text-muted">
