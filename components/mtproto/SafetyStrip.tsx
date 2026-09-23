@@ -42,15 +42,22 @@ export default async function SafetyStrip() {
   // The global stop wins the frame when it is on (nothing can send, and that
   // is the single most important fact). Otherwise an armed fleet owns it.
   const frame = stopped
-    ? "border-crit/50 bg-crit/5"
+    ? "border-crit/50"
     : armLoud
-      ? "border-crit/60 bg-crit/10 ring-2 ring-crit/50"
+      ? "border-crit/60 ring-2 ring-crit/50"
       : stopped === null
-        ? "border-warn/50 bg-warn/5"
-        : "border-line bg-panel";
+        ? "border-warn/50"
+        : "border-line";
+  // The tint is a separate layer over an opaque bg-panel, not the section's
+  // own translucent background. This section is `sticky`: if the tint were
+  // the background directly, page content scrolling underneath would show
+  // through it and overlap the strip's own text.
+  const tint = stopped ? "bg-crit/5" : armLoud ? "bg-crit/10" : stopped === null ? "bg-warn/5" : "";
 
   return (
-    <section aria-label="Safety" className={`mb-5 rounded-2xl border p-3 shadow-[var(--shadow-card)] sm:p-4 md:sticky md:top-2 md:z-20 ${frame}`}>
+    <section aria-label="Safety" className={`relative mb-5 overflow-hidden rounded-2xl border bg-panel p-3 shadow-[var(--shadow-card)] sm:p-4 md:sticky md:top-2 md:z-20 ${frame}`}>
+      {tint && <div aria-hidden className={`absolute inset-0 ${tint}`} />}
+      <div className="relative z-10">
       <div className="flex flex-col gap-3 md:flex-row md:items-center md:gap-4">
         <div className="grid min-w-0 flex-1 grid-cols-2 gap-x-4 gap-y-3 lg:grid-cols-5">
           <Cell label="Mode">
@@ -166,6 +173,7 @@ export default async function SafetyStrip() {
           Today&apos;s safety numbers could not be read ({safety.error}). This is unknown, not zero.
         </div>
       )}
+      </div>
     </section>
   );
 }
