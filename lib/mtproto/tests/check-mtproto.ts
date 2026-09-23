@@ -453,7 +453,7 @@ acheck("H1 createDryRun is always dry, draft, unconfirmed, whatever the caller s
 acheck("H2 createDryRun rejects out-of-bounds caps and hold-out, unknown, paused and malformed creators", async () => {
   const db = freshDb();
   const bad: Partial<CreateRunInput>[] = [
-    { holdoutPct: -1 }, { holdoutPct: 21 }, { dailyCap: 0 }, { dailyCap: 1001 }, { dailyCap: 30.5 },
+    { holdoutPct: -1 }, { holdoutPct: 21 }, { dailyCap: 0 }, { dailyCap: 2401 }, { dailyCap: 30.5 },
     { runCap: 0 }, { runCap: 10_001 }, { runCap: 2.5 }, { cloneIds: ["clone-1"] }, { cloneIds: ["dddddddd-dddd-4ddd-8ddd-dddddddddddd"] },
     { cloneIds: [CLONE_PAUSED] }, { cloneIds: [] },
   ];
@@ -745,7 +745,7 @@ acheck("H7 connection pause/cap write before/after events and reject bad input",
   eq(ev!.detail.after.paused, true, "after");
   eq(ev!.clone_id, CLONE_A, "clone id on the event");
   await rejects(setConnectionPaused("not-a-uuid", true, null, "operator"));
-  for (const bad of [0, 1001, 30.5, NaN]) await rejects(setConnectionDailyCap(CLONE_A, bad, "operator"));
+  for (const bad of [0, 2401, 30.5, NaN]) await rejects(setConnectionDailyCap(CLONE_A, bad, "operator"));
   await setConnectionDailyCap(CLONE_A, 40, "operator");
   eq(db.rows("userbot_connections")[0].daily_cap, 40, "cap stored");
   db.fail("userbot_connections", "upsert", { message: "nope" });
