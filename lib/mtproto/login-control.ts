@@ -101,6 +101,9 @@ export async function requestTelegramConnection(
     if (!PHONE_RE.test(cleanPhone)) {
       throw new RunValidationError("Enter a phone number in international format, for example +15551234567");
     }
+    // Remember every number typed here so the next reconnect is prefilled.
+    const { error: phoneErr } = await mtDb().from("clones").update({ account_phone: cleanPhone }).eq("id", cloneId);
+    if (phoneErr) console.error(`[mtproto] could not save account phone: ${phoneErr.message}`);
   }
 
   // Going anywhere near a login/session change immediately removes this
