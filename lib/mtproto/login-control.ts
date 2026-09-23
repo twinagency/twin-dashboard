@@ -223,3 +223,18 @@ export async function cancelTelegramConnectionRequest(id: string, actor: string)
     detail: { action: "dashboard_login_cancelled", requestId: id },
   });
 }
+
+
+export async function listActiveTelegramConnectionRequests(): Promise<Map<string, LoginRequestView>> {
+  const { data, error } = await mtDb()
+    .from("userbot_login_requests")
+    .select("*")
+    .in("status", [...ACTIVE])
+    .order("created_at", { ascending: false });
+  if (error) throw new Error(`could not read active Telegram connection requests: ${error.message}`);
+  const out = new Map<string, LoginRequestView>();
+  for (const raw of (data ?? []) as Row[]) {
+    if (!out.has(raw.clone_id)) out.set(raw.clone_id, view(raw));
+  }
+  return out;
+}
