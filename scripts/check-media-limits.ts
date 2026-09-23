@@ -217,7 +217,9 @@ tests.push(check("M12 every photo upload path gates BEFORE it writes anything", 
     const directGate = body.indexOf("assertPhotoSendable");
     const normalizedGate = body.indexOf("preparePhotoForTelegram");
     const gate = [directGate, normalizedGate].filter((index) => index >= 0).sort((a, b) => a - b)[0] ?? -1;
-    const write = body.indexOf(".upload(");
+    const directWrite = body.indexOf(".upload(");
+    const helperWrite = body.indexOf("uploadContentAddressedMedia(");
+    const write = [directWrite, helperWrite].filter((index) => index >= 0).sort((a, b) => a - b)[0] ?? -1;
     assert(gate >= 0, `${decl} does not validate or normalize the photo`);
     assert(write >= 0, `${decl} no longer uploads, this check needs rewriting`);
     assert(gate < write, `${decl} uploads the file before checking it, so a refused photo still lands in storage`);

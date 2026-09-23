@@ -35,6 +35,28 @@ function uploadFailure(error: unknown): MediaUploadResult {
   return { ok: false, error: message };
 }
 
+function isExistingStorageObject(error: unknown): boolean {
+  const value = error as { statusCode?: string | number; message?: string; error?: string } | null;
+  const text = `${value?.message ?? ""} ${value?.error ?? ""}`;
+  return String(value?.statusCode ?? "") === "409" || /already exists|duplicate/i.test(text);
+}
+
+async function uploadContentAddressedMedia(
+  path: string,
+  bytes: Buffer,
+  contentType: string,
+): Promise<"created" | "existing"> {
+  // Agency sessions deliberately cannot replace Storage objects. These paths
+  // are derived from the file bytes, so create-only upload is sufficient: a
+  // 409 means this exact content was already written by an earlier attempt.
+  const { error } = await supabaseAdmin.storage
+    .from("media")
+    .upload(path, bytes, { contentType, upsert: false });
+  if (!error) return "created";
+  if (isExistingStorageObject(error)) return "existing";
+  throw new Error(error.message);
+}
+
 // Vision analysis improves matching and automatic pricing, but it must never
 // decide whether an otherwise valid media upload is saved. OpenRouter credit,
 // model availability, or a slow response are all recoverable metadata issues.
@@ -158,14 +180,21 @@ export async function uploadPhoto(cloneId: string, fd: FormData): Promise<MediaU
   const baseName = file.name.replace(/\.[^.]+$/, "");
   const path = storagePath(cloneId, "photos", baseName + ".jpg", jpeg);
 
-  // upsert: true is safe here because the path is content-derived: identical
-  // bytes always resolve to the same path, so a retry/double-submit overwrites
-  // the object it already wrote (a no-op) instead of erroring or piling up a
-  // second copy. Different bytes always get a different path.
-  const { error: upErr } = await supabaseAdmin.storage
-    .from("media")
-    .upload(path, jpeg, { contentType: "image/jpeg", upsert: true });
-  if (upErr) throw new Error(upErr.message);
+  const storageResult = await uploadContentAddressedMedia(path, jpeg, "image/jpeg");
+  if (storageResult === "existing") {
+    const { data: existingPhoto, error: existingError } = await supabaseAdmin
+      .from("photos")
+      .select("id")
+      .eq("clone_id", cloneId)
+      .eq("storage_path", path)
+      .limit(1)
+      .maybeSingle();
+    if (existingError) throw new Error(existingError.message);
+    if (existingPhoto) {
+      revalidatePath("/media");
+      return { ok: true };
+    }
+  }
 
   // Best-effort INTERNAL analysis only. A model outage must not reject a valid
   // upload, and the fan-facing message is generated later from the live chat.
@@ -217,11 +246,21 @@ export async function uploadVideo(cloneId: string, fd: FormData): Promise<MediaU
 
   const path = storagePath(cloneId, "videos", file.name, bytes);
 
-  // See uploadPhoto for why upsert: true is safe with a content-derived path.
-  const { error: upErr } = await supabaseAdmin.storage
-    .from("media")
-    .upload(path, bytes, { contentType: file.type, upsert: true });
-  if (upErr) throw new Error(upErr.message);
+  const storageResult = await uploadContentAddressedMedia(path, bytes, file.type || "video/mp4");
+  if (storageResult === "existing") {
+    const { data: existingVideo, error: existingError } = await supabaseAdmin
+      .from("videos")
+      .select("id")
+      .eq("clone_id", cloneId)
+      .eq("storage_path", path)
+      .limit(1)
+      .maybeSingle();
+    if (existingError) throw new Error(existingError.message);
+    if (existingVideo) {
+      revalidatePath("/media");
+      return { ok: true };
+    }
+  }
 
   // Best-effort INTERNAL analysis only. See the matching photo path above.
   const cap = await bestEffortUploadAnalysis((signal) => captionVideo(bytes, model, signal));
@@ -545,11 +584,21 @@ export async function addBundleItem(bundleId: string, cloneId: string, fd: FormD
   const baseName = file.name.replace(/\.[^.]+$/, "");
   const path = storagePath(cloneId, "photos", baseName + ".jpg", bytes);
 
-  // See uploadPhoto for why upsert: true is safe with a content-derived path.
-  const { error: upErr } = await supabaseAdmin.storage
-    .from("media")
-    .upload(path, bytes, { contentType: "image/jpeg", upsert: true });
-  if (upErr) throw new Error(upErr.message);
+  const storageResult = await uploadContentAddressedMedia(path, bytes, "image/jpeg");
+  if (storageResult === "existing") {
+    const { data: existingItem, error: existingError } = await supabaseAdmin
+      .from("photo_bundle_items")
+      .select("id")
+      .eq("bundle_id", bundleId)
+      .eq("storage_path", path)
+      .limit(1)
+      .maybeSingle();
+    if (existingError) throw new Error(existingError.message);
+    if (existingItem) {
+      revalidatePath("/media");
+      return;
+    }
+  }
 
   const { data: existing } = await supabaseAdmin
     .from("photo_bundle_items")

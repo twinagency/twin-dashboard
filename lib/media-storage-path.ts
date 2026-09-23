@@ -27,10 +27,10 @@
 // instead of the clock. This keeps the exact guard Date.now() was providing
 // (two different files with the same name still get different paths, because
 // their content differs) while making a retry of the SAME bytes resolve to
-// the SAME path. Callers pair this with `upsert: true`, so a re-upload of
-// identical content overwrites the object already there instead of adding a
-// second one. A 16-byte (128-bit) hex prefix is far more collision-resistant
-// than this use case will ever need.
+// the SAME path. Dashboard callers use create-only Storage writes and treat an
+// existing object as a safe retry; this avoids replacing agency-owned objects
+// while still preventing a second copy. A 16-byte (128-bit) hex prefix is far
+// more collision-resistant than this use case will ever need.
 //
 // EXISTING ROWS ARE UNTOUCHED: this only changes what path a NEW upload
 // writes to. Nothing renames, re-uploads, or re-points already-referenced

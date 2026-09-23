@@ -13,7 +13,7 @@
 // to tell which of several timestamped copies was "the" object to keep.
 //
 // THE CHECK THAT MATTERS: the same bytes uploaded twice must resolve to the
-// SAME path, so a re-upload overwrites (upsert: true) instead of accumulating.
+// SAME path, so a create-only retry can reuse the object instead of accumulating.
 // Everything else here is the guard the old Date.now() prefix was actually
 // providing, proven to still hold: two DIFFERENT files that share an original
 // filename must NOT collide on one path.
@@ -84,13 +84,14 @@ check("the filename is still sanitised into the path", () => {
   assert.doesNotMatch(p, /[^a-zA-Z0-9._/-]/, `path has unsafe characters: ${p}`);
 });
 
-check("app/media/actions.ts uploads all three call sites with upsert: true, not false", () => {
+check("app/media/actions.ts uses create-only storage and handles safe retries", () => {
   const src = codeOnly("app/media/actions.ts");
-  assert.ok(!/upsert:\s*false/.test(src), "a content-hash path must overwrite on retry (upsert: true), not 409");
+  assert.ok(!/upsert:\s*true/.test(src), "agency uploads must never request storage replacement");
   const uploads = (src.match(/\.upload\(/g) ?? []).length;
-  assert.equal(uploads, 3, "expected exactly 3 storage uploads: uploadPhoto, uploadVideo, addBundleItem");
-  const upserts = (src.match(/upsert:\s*true/g) ?? []).length;
-  assert.equal(upserts, 3, "all 3 upload() calls in app/media/actions.ts must pass upsert: true");
+  assert.equal(uploads, 1, "all dashboard media writes must use the shared upload helper");
+  assert.match(src, /uploadContentAddressedMedia/, "dashboard uploads must use the retry-safe helper");
+  assert.match(src, /isExistingStorageObject/, "the helper must distinguish an existing object from a real failure");
+  assert.equal((src.match(/upsert:\s*false/g) ?? []).length, 1, "the shared helper must explicitly use create-only storage");
 });
 
 check("app/media/actions.ts does not redeclare its own storage-path builder", () => {
