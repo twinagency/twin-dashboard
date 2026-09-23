@@ -120,6 +120,7 @@ export const EXCLUSION_INFO: Record<string, { label: string; why: string }> = {
   other_sender: { label: "Someone else messaged them", why: "Another sender already reached this fan." },
   holdout: { label: "Held back on purpose", why: "The control group, kept out so we can measure if messaging works." },
   cap_reached: { label: "Over the daily cap", why: "The creator's daily limit is already used up." },
+  not_in_chats: { label: "Not in her chats", why: "This fan is not in the creator's Telegram chat list, so her account cannot message them." },
   test_account: { label: "Test account", why: "One of the operator's own test fans." },
   other: { label: "Other reason", why: "Left out for a reason not in the usual list." },
 };

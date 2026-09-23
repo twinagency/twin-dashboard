@@ -89,6 +89,7 @@ export const EXCLUSION_REASONS = [
   "holdout",
   "other_sender",
   "cap_reached",
+  "not_in_chats",
   "other",
 ] as const;
 export type ExclusionReason = (typeof EXCLUSION_REASONS)[number];
