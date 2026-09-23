@@ -92,9 +92,12 @@ export async function requestTelegramConnection(
     .upsert(
       {
         clone_id: cloneId,
+        // Immediate safe direction: remove this creator from the live-send
+        // gate before the worker even claims the request. The worker itself
+        // temporarily pauses while it changes the Telegram session and then
+        // restores the creator's pre-existing pause state after a successful
+        // connect/reconnect.
         live_enabled: false,
-        paused: true,
-        paused_reason: "dashboard_login",
       },
       { onConflict: "clone_id" },
     );
