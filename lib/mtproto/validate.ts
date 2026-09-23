@@ -11,6 +11,9 @@ import {
   HOLDOUT_MAX_PCT,
   HOLDOUT_MIN_PCT,
   HARD_MAX_DAILY_CAP,
+  MAX_MESSAGE_VARIANTS,
+  MAX_REENGAGEMENT_MESSAGE_CHARS,
+  DEFAULT_REENGAGEMENT_VARIANTS,
   MAX_RUN_CAP,
   RUN_SEGMENTS,
   type RunFilters,
@@ -98,4 +101,24 @@ export function isMissingTable(e: unknown): boolean {
   // one would let a safety read fall back to "empty" (fail open).
   if (err?.code === "42703" || err?.code === "PGRST204" || /column/i.test(msg)) return false;
   return err?.code === "42P01" || err?.code === "PGRST205" || /does not exist|could not find the table|schema cache/i.test(msg);
+}
+
+
+export function sanitizeMessageVariants(raw: unknown): string[] {
+  const source = raw == null ? [...DEFAULT_REENGAGEMENT_VARIANTS] : raw;
+  if (!Array.isArray(source)) throw new RunValidationError("messageVariants must be a list");
+  const cleaned: string[] = [];
+  for (const value of source) {
+    const text = String(value ?? "").replace(/\s+/g, " ").trim();
+    if (!text) continue;
+    if (text.length > MAX_REENGAGEMENT_MESSAGE_CHARS) {
+      throw new RunValidationError(`each re-engagement message must be at most ${MAX_REENGAGEMENT_MESSAGE_CHARS} characters`);
+    }
+    if (!cleaned.includes(text)) cleaned.push(text);
+  }
+  if (cleaned.length < 1) throw new RunValidationError("add at least one re-engagement message");
+  if (cleaned.length > MAX_MESSAGE_VARIANTS) {
+    throw new RunValidationError(`messageVariants has too many entries (max ${MAX_MESSAGE_VARIANTS})`);
+  }
+  return cleaned;
 }

@@ -4,6 +4,7 @@ import { setConnectionDailyCap, setConnectionPaused } from "@/lib/mtproto/connec
 import { getGlobalStop, setGlobalStop } from "@/lib/mtproto/global-stop";
 import { getGlobalLiveArm, setGlobalLiveArm } from "@/lib/mtproto/global-live-arm";
 import { DEFAULT_DAILY_CAP, DEFAULT_HOLDOUT_PCT, type RunFilters } from "@/lib/mtproto/types";
+import { sanitizeMessageVariants } from "@/lib/mtproto/validate";
 
 export const dynamic = "force-dynamic";
 
@@ -58,6 +59,7 @@ export const POST = withAdmin(async (req) => {
           dailyCap: body.dailyCap === undefined ? DEFAULT_DAILY_CAP : (body.dailyCap as number),
           runCap: body.runCap === undefined || body.runCap === null ? null : (body.runCap as number),
           holdoutPct: body.holdoutPct === undefined ? DEFAULT_HOLDOUT_PCT : (body.holdoutPct as number),
+          messageVariants: sanitizeMessageVariants(body.messageVariants),
           note: typeof body.note === "string" ? body.note : null,
         };
         for (const k of ["dailyCap", "runCap", "holdoutPct"] as const) {

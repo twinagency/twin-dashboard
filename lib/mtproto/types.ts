@@ -125,7 +125,22 @@ export const COOLDOWN_HOURS = 24;
 export const MIN_SILENCE_HOURS = 24;
 export const DEFAULT_HOLDOUT_PCT = 15;
 export const DEFAULT_DAILY_CAP = 30;
-export const HARD_MAX_DAILY_CAP = 100;
+export const HARD_MAX_DAILY_CAP = 400;
+
+export const MAX_MESSAGE_VARIANTS = 10;
+export const MAX_REENGAGEMENT_MESSAGE_CHARS = 280;
+export const DEFAULT_REENGAGEMENT_VARIANTS = [
+  "Hey how are you sweetie ?",
+  "Hey sweetie how have you been ?",
+  "Heyy how are you babe ?",
+  "Hi sweetie, how are you ?",
+  "Hey you, how have you been ?",
+  "Hey babe how's everything going ?",
+  "Hey sweetie, what have you been up to ?",
+  "Heyy, how have you been lately ?",
+  "Hi babe, how are things with you ?",
+  "Hey you, how's your day going ?",
+] as const;
 
 // Dashboard-side bounds (stricter than the migration's CHECKs on purpose):
 // the hold-out is what makes lift measurable, so it is never allowed to
@@ -179,6 +194,7 @@ export interface ReengageRun {
   dailyCap: number;
   runCap: number | null;
   holdoutPct: number;
+  messageVariants: string[];
   confirmLiveAt: string | null;
   startedAt: string | null;
   finishedAt: string | null;

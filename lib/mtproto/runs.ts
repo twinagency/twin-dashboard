@@ -13,7 +13,7 @@ import { mtDb } from "./db";
 import { insertEvent } from "./events";
 import { getGlobalStop } from "./global-stop";
 import { REVIEW_KIND, checkReviewGate, computeDryRunSummary, currentAudienceSize, type DryRunSummary } from "./review";
-import { RunValidationError, isMissingTable, isUuid, requireUuid, sanitizeFilters, validateCaps } from "./validate";
+import { RunValidationError, isMissingTable, isUuid, requireUuid, sanitizeFilters, sanitizeMessageVariants, validateCaps } from "./validate";
 import {
   DEFAULT_DAILY_CAP,
   DEFAULT_HOLDOUT_PCT,
@@ -34,6 +34,7 @@ type RunRow = {
   daily_cap: number;
   run_cap: number | null;
   holdout_pct: number;
+  message_variants: string[];
   confirm_live_at: string | null;
   started_at: string | null;
   finished_at: string | null;
@@ -53,6 +54,7 @@ function fromRow(r: RunRow): ReengageRun {
     dailyCap: r.daily_cap,
     runCap: r.run_cap,
     holdoutPct: r.holdout_pct,
+    messageVariants: r.message_variants ?? [],
     confirmLiveAt: r.confirm_live_at,
     startedAt: r.started_at,
     finishedAt: r.finished_at,
@@ -68,6 +70,7 @@ export type CreateRunInput = {
   dailyCap: number;
   runCap: number | null;
   holdoutPct: number;
+  messageVariants?: string[];
   note?: string | null;
 };
 
@@ -82,6 +85,7 @@ export function validateCreateRunInput(input: CreateRunInput): void {
   if (input.cloneIds.length > 100) throw new RunValidationError("too many creators in one run");
   for (const id of input.cloneIds) requireUuid(id, "cloneIds");
   validateCaps({ dailyCap: input.dailyCap, runCap: input.runCap, holdoutPct: input.holdoutPct });
+  sanitizeMessageVariants(input.messageVariants);
   if (!input.createdBy.trim() || input.createdBy.length > 200) throw new RunValidationError("createdBy is required (max 200 chars)");
   if (input.note != null && input.note.length > 500) throw new RunValidationError("note is too long (max 500 chars)");
 }
@@ -108,6 +112,7 @@ export async function createDryRun(input: CreateRunInput): Promise<ReengageRun> 
   const cloneIds = input.cloneIds.map((id) => (isUuid(id) ? id.toLowerCase() : id));
   validateCreateRunInput({ ...input, cloneIds });
   const filters = sanitizeFilters(input.filters, cloneIds);
+  const messageVariants = sanitizeMessageVariants(input.messageVariants);
   await assertUsableCreators(cloneIds);
   const { data, error } = await mtDb()
     .from("reengage_runs")
@@ -120,6 +125,7 @@ export async function createDryRun(input: CreateRunInput): Promise<ReengageRun> 
       daily_cap: input.dailyCap,
       run_cap: input.runCap,
       holdout_pct: input.holdoutPct,
+      message_variants: messageVariants,
       note: input.note ?? null,
     })
     .select()
@@ -133,7 +139,7 @@ export async function createDryRun(input: CreateRunInput): Promise<ReengageRun> 
     episodeId: null,
     eventType: "config_change",
     actor: input.createdBy,
-    detail: { action: "run_created", dryRun: true, cloneIds, filters, dailyCap: input.dailyCap, runCap: input.runCap, holdoutPct: input.holdoutPct },
+    detail: { action: "run_created", dryRun: true, cloneIds, filters, dailyCap: input.dailyCap, runCap: input.runCap, holdoutPct: input.holdoutPct, messageVariants },
   });
   return run;
 }

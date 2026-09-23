@@ -84,8 +84,8 @@ function ConnectionCard({ row }: { row: ConnRow }) {
 
   const saveCap = () => {
     const dailyCap = Number(capText);
-    if (!Number.isInteger(dailyCap) || dailyCap <= 0 || dailyCap > 100) {
-      setError("Daily cap must be a whole number between 1 and 100");
+    if (!Number.isInteger(dailyCap) || dailyCap <= 0 || dailyCap > 400) {
+      setError("Daily cap must be a whole number between 1 and 400");
       return;
     }
     const fd = new FormData();

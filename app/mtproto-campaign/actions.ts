@@ -35,7 +35,7 @@ import { confirmLive, createDryRun, queueRun, recordDryRunReview, stopRun, type 
 import { setConnectionDailyCap, setConnectionLiveEnabled, setConnectionPaused } from "@/lib/mtproto/connections";
 import { getGlobalStop, setGlobalStop } from "@/lib/mtproto/global-stop";
 import { getGlobalLiveArm, setGlobalLiveArm } from "@/lib/mtproto/global-live-arm";
-import { sanitizeFilters, uuidList, validateCaps } from "@/lib/mtproto/validate";
+import { sanitizeFilters, sanitizeMessageVariants, uuidList, validateCaps } from "@/lib/mtproto/validate";
 import {
   cancelTelegramConnectionRequest,
   getTelegramConnectionRequest,
@@ -103,7 +103,13 @@ export async function createRunAction(fd: FormData): Promise<ActionResult<{ id: 
   await guardDashboardAction("app/mtproto-campaign/actions.ts#createRunAction", [fd]);
   try {
     const { cloneIds, filters } = filtersFromForm(fd);
-    const input: CreateRunInput = { createdBy: ACTOR, cloneIds, filters, ...capsFromForm(fd) };
+    const input: CreateRunInput = {
+      createdBy: ACTOR,
+      cloneIds,
+      filters,
+      messageVariants: sanitizeMessageVariants(fd.getAll("messageVariants").map(String)),
+      ...capsFromForm(fd),
+    };
     const run = await createDryRun(input);
     await queueRun(run.id, ACTOR);
     revalidatePath("/mtproto-campaign");
