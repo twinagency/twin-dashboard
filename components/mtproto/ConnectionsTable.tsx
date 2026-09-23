@@ -13,7 +13,7 @@ type ConnRow = { creator: CreatorLite; connection: UserbotConnection; autoHalt: 
 function ConnectionRow({ row }: { row: ConnRow }) {
   const { creator, connection } = row;
   const status = connectionStatusInfo(connection);
-  const connected = connection.status === "connected";
+  const connected = connection.status === "connected" || connection.status === "connecting";
 
   return (
     <div className="flex flex-wrap items-center gap-3 border-b border-line px-4 py-2.5 last:border-b-0 sm:flex-nowrap">
