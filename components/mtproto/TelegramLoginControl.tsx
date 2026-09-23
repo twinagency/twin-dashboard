@@ -182,17 +182,15 @@ export default function TelegramLoginControl({
         >
           {connected ? "Reconnect Telegram" : "Connect Telegram"}
         </Button>
-        {connected && (
-          <Button
-            type="button"
-            variant="outline"
-            className="h-9 rounded-lg"
-            disabled={pending}
-            onClick={() => begin("disconnect")}
-          >
-            Disconnect
-          </Button>
-        )}
+        <Button
+          type="button"
+          variant="outline"
+          className="h-9 rounded-lg"
+          disabled={pending}
+          onClick={() => begin("disconnect")}
+        >
+          {connected ? "Disconnect" : "Clear connection"}
+        </Button>
       </div>
 
       {error && !request && <p className="mt-2 text-xs text-crit">{error}</p>}
