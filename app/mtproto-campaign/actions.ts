@@ -41,6 +41,7 @@ import {
   cancelTelegramConnectionRequest,
   getTelegramConnectionRequest,
   requestTelegramConnection,
+  submitTelegramCode,
   submitTelegramTwoFactorPassword,
   type LoginRequestAction,
   type LoginRequestView,
@@ -293,7 +294,8 @@ export async function requestTelegramConnectionAction(fd: FormData): Promise<Act
   try {
     const cloneId = String(fd.get("cloneId") ?? "");
     const action = String(fd.get("action") ?? "") as LoginRequestAction;
-    const request = await requestTelegramConnection(cloneId, action, ACTOR);
+    const phone = fd.get("phone");
+    const request = await requestTelegramConnection(cloneId, action, ACTOR, phone != null ? String(phone) : undefined);
     revalidatePath("/mtproto-campaign/connections");
     return { ok: true, request };
   } catch (e) {
@@ -317,6 +319,20 @@ export async function submitTelegramTwoFactorAction(fd: FormData): Promise<Actio
     const request = await submitTelegramTwoFactorPassword(
       String(fd.get("requestId") ?? ""),
       String(fd.get("password") ?? ""),
+      ACTOR,
+    );
+    return { ok: true, request };
+  } catch (e) {
+    return fail(e);
+  }
+}
+
+export async function submitTelegramCodeAction(fd: FormData): Promise<ActionResult<{ request: LoginRequestView }>> {
+  await guardDashboardAction("app/mtproto-campaign/actions.ts#submitTelegramCodeAction", [fd]);
+  try {
+    const request = await submitTelegramCode(
+      String(fd.get("requestId") ?? ""),
+      String(fd.get("code") ?? ""),
       ACTOR,
     );
     return { ok: true, request };

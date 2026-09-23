@@ -16,12 +16,13 @@ type CloneRow = {
   slug: string | null;
   status: string | null;
   business_username: string | null;
+  account_phone: string | null;
 };
 
 export async function listCreators(): Promise<CreatorLite[]> {
   const { data, error } = await mtDb()
     .from("clones")
-    .select("id,name,slug,status,business_username")
+    .select("id,name,slug,status,business_username,account_phone")
     .order("name", { ascending: true });
   if (error) {
     console.error(`[mtproto] listCreators failed: ${error.message}`);
@@ -33,13 +34,14 @@ export async function listCreators(): Promise<CreatorLite[]> {
     slug: r.slug ?? r.id,
     status: r.status === "paused" ? "paused" : "active",
     businessUsername: r.business_username,
+    accountPhone: r.account_phone ?? null,
   }));
 }
 
 export async function getCreator(cloneId: string): Promise<CreatorLite | null> {
   const { data, error } = await mtDb()
     .from("clones")
-    .select("id,name,slug,status,business_username")
+    .select("id,name,slug,status,business_username,account_phone")
     .eq("id", cloneId)
     .maybeSingle();
   if (error || !data) return null;
@@ -50,5 +52,6 @@ export async function getCreator(cloneId: string): Promise<CreatorLite | null> {
     slug: r.slug ?? r.id,
     status: r.status === "paused" ? "paused" : "active",
     businessUsername: r.business_username,
+    accountPhone: r.account_phone ?? null,
   };
 }

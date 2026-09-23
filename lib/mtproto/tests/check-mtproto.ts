@@ -1403,7 +1403,7 @@ acheck("L3 Connections read-out: auto-halt shows reason + tripped rate/threshold
 acheck("L4 Safety panel snapshot carries the auto-halt (paused, reason, tripped, threshold); manual pause has none", async () => {
   const db = haltedDb();
   db.rows("userbot_connections").push({ clone_id: CLONE_B, status: "connected", paused: true, paused_reason: "manual", daily_cap: 30 } as never);
-  const snaps = await computeSafetySnapshots([{ id: CLONE_A, name: "Alpha", slug: "a", status: "active", businessUsername: null }, { id: CLONE_B, name: "Beta", slug: "b", status: "active", businessUsername: null }]);
+  const snaps = await computeSafetySnapshots([{ id: CLONE_A, name: "Alpha", slug: "a", status: "active", businessUsername: null, accountPhone: null }, { id: CLONE_B, name: "Beta", slug: "b", status: "active", businessUsername: null, accountPhone: null }]);
   const a = snaps.find((x) => x.cloneId === CLONE_A)!;
   const b = snaps.find((x) => x.cloneId === CLONE_B)!;
   assert(a.paused && a.autoHalt && a.autoHalt.tripped === "3 of 12 recent sends opted out (25%)", "auto-halt on the snapshot");
@@ -1628,7 +1628,7 @@ acheck("M3 rows with user_id NULL render: sends keep their row with a deleted-fa
     episode({ id: "s1", userId: null, telegramId: 4001, cloneId: CLONE_A, state: "replied", sentAt: sentAgo(30), tgMessageId: 1, ackedText: "hi" }),
     episode({ id: "s2", userId: "user-2", telegramId: 4002, cloneId: CLONE_A, state: "acked", sentAt: sentAgo(30), tgMessageId: 2, ackedText: "hey" }),
   ];
-  const rows = await buildSendRows(eps, [{ id: CLONE_A, name: "Alpha", slug: "a", status: "active", businessUsername: null }], { orders: [], truncated: false });
+  const rows = await buildSendRows(eps, [{ id: CLONE_A, name: "Alpha", slug: "a", status: "active", businessUsername: null, accountPhone: null }], { orders: [], truncated: false });
   eq(rows.length, 2, "the deleted fan's send still shows");
   const dr = rows.find((r) => r.episodeId === "s1")!;
   eq(dr.userId, null, "userId stays null");
@@ -1642,7 +1642,7 @@ acheck("M3 rows with user_id NULL render: sends keep their row with a deleted-fa
 });
 
 acheck("M4 buildSendRows({includeDry:true}) surfaces dry would-send rows marked dryRun, default still excludes them", async () => {
-  const creators = [{ id: CLONE_A, name: "Alpha", slug: "a", status: "active" as const, businessUsername: null }];
+  const creators = [{ id: CLONE_A, name: "Alpha", slug: "a", status: "active" as const, businessUsername: null, accountPhone: null }];
   const eps = [
     episode({ id: "d1", dryRun: true, cloneId: CLONE_A, telegramId: 5001, state: "acked", sentAt: "2026-09-20T00:00:00Z", ackedText: "would send this" }),
     episode({ id: "r1", dryRun: false, cloneId: CLONE_A, telegramId: 5002, state: "acked", sentAt: "2026-09-20T00:00:00Z", ackedText: "real send", tgMessageId: 9 }),

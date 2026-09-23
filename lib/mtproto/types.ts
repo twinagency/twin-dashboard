@@ -396,6 +396,9 @@ export interface CreatorLite {
   slug: string;
   status: "active" | "paused";
   businessUsername: string | null;
+  /** clones.account_phone, operator record only. Used to prefill the phone
+   *  login option; nothing else reads it (migration 170). */
+  accountPhone: string | null;
 }
 
 export interface SampleFan {

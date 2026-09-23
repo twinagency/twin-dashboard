@@ -124,6 +124,23 @@ class FakeQuery implements PromiseLike<Result> {
       return { id: `00000000-0000-4000-8000-${String(this.db.nextId()).padStart(12, "0")}`, created_at: now, status: "draft", dry_run: true, confirm_live_at: null, stop_requested: false, started_at: null, finished_at: null, note: null, ...row };
     }
     if (this.table === "reengage_events") return { id: this.db.nextId(), ts: now, detail: {}, actor: "system", ...row };
+    if (this.table === "userbot_login_requests") {
+      return {
+        id: `00000000-0000-4000-9000-${String(this.db.nextId()).padStart(12, "0")}`,
+        status: "pending",
+        worker_id: null,
+        qr_url: null,
+        qr_expires_at: null,
+        phone: null,
+        password_ciphertext: null,
+        password_key_id: null,
+        message: null,
+        created_at: now,
+        updated_at: now,
+        completed_at: null,
+        ...row,
+      };
+    }
     return row;
   }
 

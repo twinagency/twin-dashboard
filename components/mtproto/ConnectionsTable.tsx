@@ -22,7 +22,13 @@ function ConnectionRow({ row }: { row: ConnRow }) {
       <StatusPill tone={status.tone} dot title={status.hint}>
         {status.label}
       </StatusPill>
-      <TelegramLoginControl cloneId={creator.id} creatorName={creator.name} connected={connected} initialRequest={row.initialLoginRequest ?? null} />
+      <TelegramLoginControl
+        cloneId={creator.id}
+        creatorName={creator.name}
+        connected={connected}
+        initialRequest={row.initialLoginRequest ?? null}
+        initialPhone={creator.accountPhone}
+      />
     </div>
   );
 }
