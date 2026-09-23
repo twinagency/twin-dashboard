@@ -14,6 +14,7 @@
     "test:media": "tsx scripts/check-media-limits.ts",
     "test:media-paths": "tsx scripts/check-media-storage-paths.ts",
     "test:media-upload-resilience": "tsx scripts/check-media-upload-resilience.ts",
+    "test:photo-prepare": "tsx scripts/check-photo-prepare.ts",
     "test:config-safety": "tsx scripts/check-config-pricing-safety.ts",
     "test:spend": "tsx scripts/check-spend.ts",
     "test:report": "tsx scripts/check-report-features.ts",

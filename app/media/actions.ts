@@ -2,7 +2,6 @@
 
 import { guardDashboardAction } from "@/lib/agency-management";
 
-import sharp from "sharp";
 import { revalidatePath } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase";
 import { captionPhoto, captionVideo, type Caption } from "@/lib/caption";
@@ -18,11 +17,23 @@ import {
   type SafeRepriceChange,
   type SafeRepricePlan,
 } from "@/lib/pricing";
-import { assertPhotoSendable } from "@/lib/photo-guard";
+import { preparePhotoForTelegram } from "@/lib/photo-prepare";
 import { repriceConfirmationPhrase } from "@/lib/reprice-confirmation";
 import { mediaStoragePath } from "@/lib/media-storage-path";
 
 const TAG_SET = new Set<string>(MEDIA_TAGS);
+
+export type MediaUploadResult =
+  | { ok: true }
+  | { ok: false; error: string };
+
+function uploadFailure(error: unknown): MediaUploadResult {
+  const message = error instanceof Error && error.message.trim()
+    ? error.message.trim()
+    : "Upload failed. Please try again.";
+  console.error("Media upload failed", error);
+  return { ok: false, error: message };
+}
 
 // Vision analysis improves matching and automatic pricing, but it must never
 // decide whether an otherwise valid media upload is saved. OpenRouter credit,
@@ -127,8 +138,9 @@ function resolvePrice(fd: FormData, cap: Caption, guide: unknown): number {
 }
 
 // ── Upload a single photo ────────────────────────────────────────────────────
-export async function uploadPhoto(cloneId: string, fd: FormData) {
-  await guardDashboardAction("app/media/actions.ts#uploadPhoto", [cloneId, fd]);
+export async function uploadPhoto(cloneId: string, fd: FormData): Promise<MediaUploadResult> {
+  try {
+    await guardDashboardAction("app/media/actions.ts#uploadPhoto", [cloneId, fd]);
   const file = fd.get("file") as File | null;
   if (!file) throw new Error("no file");
 
@@ -139,8 +151,7 @@ export async function uploadPhoto(cloneId: string, fd: FormData) {
   // (PHOTO_INVALID_DIMENSIONS), so admitting one would put an item in the
   // library that can never be sold, however it is priced.
   const raw = Buffer.from(await file.arrayBuffer());
-  const jpeg = await sharp(raw).jpeg({ quality: 90 }).toBuffer();
-  await assertPhotoSendable(jpeg);
+  const jpeg = await preparePhotoForTelegram(raw);
   const { model, guide } = await uploadConfig(cloneId);
   assertUploadPricingReady(fd, guide);
 
@@ -186,11 +197,16 @@ export async function uploadPhoto(cloneId: string, fd: FormData) {
   if (dbErr) throw new Error(dbErr.message);
 
   revalidatePath("/media");
+    return { ok: true };
+  } catch (error) {
+    return uploadFailure(error);
+  }
 }
 
 // ── Upload a single video ────────────────────────────────────────────────────
-export async function uploadVideo(cloneId: string, fd: FormData) {
-  await guardDashboardAction("app/media/actions.ts#uploadVideo", [cloneId, fd]);
+export async function uploadVideo(cloneId: string, fd: FormData): Promise<MediaUploadResult> {
+  try {
+    await guardDashboardAction("app/media/actions.ts#uploadVideo", [cloneId, fd]);
   const file = fd.get("file") as File | null;
   if (!file) throw new Error("no file");
 
@@ -229,6 +245,10 @@ export async function uploadVideo(cloneId: string, fd: FormData) {
   if (dbErr) throw new Error(dbErr.message);
 
   revalidatePath("/media");
+    return { ok: true };
+  } catch (error) {
+    return uploadFailure(error);
+  }
 }
 
 // ── Update photo metadata ───────────────────────────────────────────────────
@@ -517,16 +537,18 @@ export async function addBundleItem(bundleId: string, cloneId: string, fd: FormD
   const file = fd.get("file") as File | null;
   if (!file) throw new Error("no file");
 
-  const bytes = Buffer.from(await file.arrayBuffer());
+  const raw = Buffer.from(await file.arrayBuffer());
   // Bundle items are paid media too (sendPaidPhotoGroup), so they get the same
-  // gate as a single photo. One oversized item makes the whole bundle unsendable.
-  await assertPhotoSendable(bytes);
-  const path = storagePath(cloneId, "photos", file.name, bytes);
+  // normalization as single photos. One oversized item must not make the whole
+  // bundle unsendable.
+  const bytes = await preparePhotoForTelegram(raw);
+  const baseName = file.name.replace(/\.[^.]+$/, "");
+  const path = storagePath(cloneId, "photos", baseName + ".jpg", bytes);
 
   // See uploadPhoto for why upsert: true is safe with a content-derived path.
   const { error: upErr } = await supabaseAdmin.storage
     .from("media")
-    .upload(path, bytes, { contentType: file.type, upsert: true });
+    .upload(path, bytes, { contentType: "image/jpeg", upsert: true });
   if (upErr) throw new Error(upErr.message);
 
   const { data: existing } = await supabaseAdmin

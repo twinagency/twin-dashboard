@@ -291,7 +291,8 @@ function PhotoUploadQueue({
         fd.append("star_value", queue[i].starValue);
         fd.append("image_name", queue[i].imageName);
         fd.append("is_free", String(queue[i].isFree));
-        await uploadPhoto(cloneId, fd);
+        const result = await uploadPhoto(cloneId, fd);
+        if (!result.ok) throw new Error(result.error);
         update(i, { status: "done" });
       } catch (e) {
         update(i, { status: "error", error: e instanceof Error ? e.message : "failed" });
@@ -426,7 +427,8 @@ function VideoUploadQueue({
         fd.append("teaser_caption", queue[i].teaserCaption);
         fd.append("star_value", queue[i].starValue);
         fd.append("is_free", String(queue[i].isFree));
-        await uploadVideo(cloneId, fd);
+        const result = await uploadVideo(cloneId, fd);
+        if (!result.ok) throw new Error(result.error);
         update(i, { status: "done" });
       } catch (e) {
         update(i, { status: "error", error: e instanceof Error ? e.message : "failed" });

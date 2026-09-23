@@ -112,7 +112,8 @@ export default function CreateCloneForm({ defaults = {} }: { defaults?: Partial<
       const fd = new FormData();
       fd.append("file", p.file); fd.append("caption", p.caption); fd.append("teaser_caption", p.teaser);
       fd.append("star_value", p.stars); fd.append("image_name", p.name);
-      await uploadPhoto(cloneId!, fd);
+      const result = await uploadPhoto(cloneId!, fd);
+      if (!result.ok) throw new Error(result.error);
       return;
     }
     idx -= ph.length;
@@ -121,7 +122,8 @@ export default function CreateCloneForm({ defaults = {} }: { defaults?: Partial<
       const fd = new FormData();
       fd.append("file", v.file); fd.append("caption", v.caption); fd.append("teaser_caption", v.teaser);
       fd.append("star_value", v.stars);
-      await uploadVideo(cloneId!, fd);
+      const result = await uploadVideo(cloneId!, fd);
+      if (!result.ok) throw new Error(result.error);
       return;
     }
     idx -= vid.length;
