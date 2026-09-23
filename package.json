@@ -11,7 +11,7 @@
     "test:mtproto": "tsx lib/mtproto/tests/check-mtproto.ts",
     "test:public": "tsx scripts/check-public-api.ts",
     "test:paging": "tsx scripts/check-select-all.ts",
-    "test:media": "tsx scripts/check-media-limits.ts",
+    "test:media": "tsx scripts/check-media-limits.ts && tsx scripts/check-media-classification.ts",
     "test:media-paths": "tsx scripts/check-media-storage-paths.ts",
     "test:media-upload-resilience": "tsx scripts/check-media-upload-resilience.ts",
     "test:photo-prepare": "tsx scripts/check-photo-prepare.ts",

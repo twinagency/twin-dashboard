@@ -6,7 +6,7 @@ import { tmpdir } from "node:os";
 import path from "node:path";
 import sharp from "sharp";
 import { orVision } from "./openrouter";
-import { MEDIA_TAGS } from "./pricing";
+import { MEDIA_CLASSIFICATION_PROMPT, normalizeMediaClassification } from "./media-classification";
 
 const execFileAsync = promisify(execFile);
 
@@ -21,20 +21,6 @@ export type Caption = {
   auto_desc: string;       // very short description, e.g. "bikini pool"
 };
 
-const TAG_SET = new Set<string>(MEDIA_TAGS);
-
-const PROMPT = `You are tagging a photo for an AI girlfriend content bot. Return JSON only:
-{
-  "caption": "Factual description for AI matching, max 18 words. Note clothing/nudity/pose plainly. E.g. 'topless brunette kneeling on bed, hand in hair, looking at camera'",
-  "teaser_caption": "A flirty first-person message she'd send WITH this photo, max 12 words. End with ONE emoji that FITS this specific photo's mood - vary it (a heart 💕, a flirt 😏😈, a fire 🔥, a kiss 😘, etc). Do NOT default to the same emoji every time.",
-  "is_nude": true or false (true if breasts/genitals/buttocks are exposed),
-  "explicitness": "none" | "suggestive" | "explicit"  (none = fully clothed/safe, suggestive = lingerie/implied/teasing, explicit = nudity or sexual),
-  "nsfw": true or false (true if it is sexually explicit content),
-  "tags": ["subset of this FIXED vocabulary that applies, or []: ${MEDIA_TAGS.join(", ")}"],
-  "auto_desc": "2-4 word summary of what's shown, e.g. 'bikini pool' or 'topless bed'"
-}
-Only use tags from the vocabulary above; never invent new ones.`;
-
 const FALLBACK: Caption = {
   caption: "",
   teaser_caption: "",
@@ -47,26 +33,20 @@ const FALLBACK: Caption = {
 
 async function visionCaption(jpegBytes: Buffer, model: string, signal?: AbortSignal): Promise<Caption> {
   const dataUrl = `data:image/jpeg;base64,${jpegBytes.toString("base64")}`;
-  const raw = await orVision({ model, dataUrl, prompt: PROMPT, json: true, signal });
-  try {
-    const j = JSON.parse(raw);
-    const explicitness: Caption["explicitness"] =
-      j.explicitness === "explicit" || j.explicitness === "suggestive" ? j.explicitness : "none";
-    // Keep only known-vocabulary tags (deduped) so the pricing/matching stays clean.
-    const rawTags: unknown[] = Array.isArray(j.tags) ? j.tags : [];
-    const tags = [...new Set(rawTags.filter((t): t is string => typeof t === "string" && TAG_SET.has(t)))];
-    return {
-      caption: typeof j.caption === "string" ? j.caption : "",
-      teaser_caption: typeof j.teaser_caption === "string" ? j.teaser_caption : "",
-      is_nude: !!j.is_nude,
-      explicitness,
-      nsfw: typeof j.nsfw === "boolean" ? j.nsfw : explicitness === "explicit",
-      tags,
-      auto_desc: typeof j.auto_desc === "string" ? j.auto_desc : "",
-    };
-  } catch {
-    return FALLBACK;
+  // Retry contradictory metadata once, under the upload's existing abort
+  // deadline. Never save an unsupported topless/nude claim from either attempt.
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const prompt = MEDIA_CLASSIFICATION_PROMPT + (attempt
+      ? "\nThe previous answer was invalid or internally contradictory. Re-examine the image and make every description and evidence field agree."
+      : "");
+    const raw = await orVision({ model, dataUrl, prompt, json: true, signal });
+    try {
+      return normalizeMediaClassification(JSON.parse(raw));
+    } catch (error) {
+      if (attempt === 1 || signal?.aborted) throw error;
+    }
   }
+  throw new Error("Unable to validate visual metadata");
 }
 
 // Caption a photo: downscale to 768px, then vision.
