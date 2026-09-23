@@ -125,7 +125,7 @@ export const COOLDOWN_HOURS = 24;
 export const MIN_SILENCE_HOURS = 24;
 export const DEFAULT_HOLDOUT_PCT = 15;
 export const DEFAULT_DAILY_CAP = 30;
-export const HARD_MAX_DAILY_CAP = 100;
+export const HARD_MAX_DAILY_CAP = 400;
 
 export const MAX_MESSAGE_VARIANTS = 10;
 export const MAX_REENGAGEMENT_MESSAGE_CHARS = 280;
