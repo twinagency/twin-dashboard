@@ -23,15 +23,21 @@ import { mtDb } from "./db";
 import { insertEvent } from "./events";
 import { RunValidationError } from "./validate";
 import {
+  HARD_MAX_FIRST_DAY_MAX_SENDS,
   HARD_MAX_FLOOD_WAIT_MULTIPLIER,
   HARD_MAX_HOURLY_CAP,
   HARD_MAX_JITTER_MS,
   HARD_MAX_DAILY_CAP,
+  HARD_MAX_MIN_SEND_GAP_MINUTES,
   HARD_MAX_MIN_SILENCE_HOURS,
+  HARD_MAX_WARMUP_HOURS,
   HARD_MIN_DAILY_CAP,
+  HARD_MIN_FIRST_DAY_MAX_SENDS,
   HARD_MIN_FLOOD_WAIT_MULTIPLIER,
   HARD_MIN_HOURLY_CAP,
+  HARD_MIN_MIN_SEND_GAP_MINUTES,
   HARD_MIN_MIN_SILENCE_HOURS,
+  HARD_MIN_WARMUP_HOURS,
   MIN_SEND_SPACING_MS,
   MTPROTO_LIMITS_DEFAULTS,
   MTPROTO_LIMITS_KEY,
@@ -58,7 +64,13 @@ export function clampMtprotoLimits(raw: unknown): MtprotoLimits {
   const jitterMaxMs = clampInt(Math.max(finite(r.jitterMaxMs) ?? MTPROTO_LIMITS_DEFAULTS.jitterMaxMs, jitterMinMs), jitterMinMs, HARD_MAX_JITTER_MS);
   const minSilenceHours = clampInt(finite(r.minSilenceHours) ?? MTPROTO_LIMITS_DEFAULTS.minSilenceHours, HARD_MIN_MIN_SILENCE_HOURS, HARD_MAX_MIN_SILENCE_HOURS);
   const floodWaitMultiplier = clampInt(finite(r.floodWaitMultiplier) ?? MTPROTO_LIMITS_DEFAULTS.floodWaitMultiplier, HARD_MIN_FLOOD_WAIT_MULTIPLIER, HARD_MAX_FLOOD_WAIT_MULTIPLIER);
-  return { hourlyCap, defaultDailyCap, jitterMinMs, jitterMaxMs, minSilenceHours, floodWaitMultiplier };
+  // 0 is a valid, meaningful value for these three (off, the default) — the
+  // shared clampInt still applies since its floor here is 0, so a genuine 0
+  // passes straight through unchanged, same as the worker's resolveMtprotoLimits.
+  const warmupHours = clampInt(finite(r.warmupHours) ?? MTPROTO_LIMITS_DEFAULTS.warmupHours, HARD_MIN_WARMUP_HOURS, HARD_MAX_WARMUP_HOURS);
+  const minSendGapMinutes = clampInt(finite(r.minSendGapMinutes) ?? MTPROTO_LIMITS_DEFAULTS.minSendGapMinutes, HARD_MIN_MIN_SEND_GAP_MINUTES, HARD_MAX_MIN_SEND_GAP_MINUTES);
+  const firstDayMaxSends = clampInt(finite(r.firstDayMaxSends) ?? MTPROTO_LIMITS_DEFAULTS.firstDayMaxSends, HARD_MIN_FIRST_DAY_MAX_SENDS, HARD_MAX_FIRST_DAY_MAX_SENDS);
+  return { hourlyCap, defaultDailyCap, jitterMinMs, jitterMaxMs, minSilenceHours, floodWaitMultiplier, warmupHours, minSendGapMinutes, firstDayMaxSends };
 }
 
 /** Reads the current limits, clamped. Never throws: an unreadable row (missing
@@ -97,6 +109,9 @@ export async function setMtprotoLimits(input: Partial<MtprotoLimits>, actor: str
     ["jitterMaxMs", MIN_SEND_SPACING_MS, HARD_MAX_JITTER_MS],
     ["minSilenceHours", HARD_MIN_MIN_SILENCE_HOURS, HARD_MAX_MIN_SILENCE_HOURS],
     ["floodWaitMultiplier", HARD_MIN_FLOOD_WAIT_MULTIPLIER, HARD_MAX_FLOOD_WAIT_MULTIPLIER],
+    ["warmupHours", HARD_MIN_WARMUP_HOURS, HARD_MAX_WARMUP_HOURS],
+    ["minSendGapMinutes", HARD_MIN_MIN_SEND_GAP_MINUTES, HARD_MAX_MIN_SEND_GAP_MINUTES],
+    ["firstDayMaxSends", HARD_MIN_FIRST_DAY_MAX_SENDS, HARD_MAX_FIRST_DAY_MAX_SENDS],
   ] as const) {
     if (input[key] === undefined) continue;
     const n = finite(merged[key]);

@@ -7,14 +7,20 @@ import { FieldLabel } from "@/components/clone/fields";
 import { setMtprotoLimitsAction } from "@/app/mtproto-campaign/actions";
 import {
   HARD_MAX_DAILY_CAP,
+  HARD_MAX_FIRST_DAY_MAX_SENDS,
   HARD_MAX_FLOOD_WAIT_MULTIPLIER,
   HARD_MAX_HOURLY_CAP,
   HARD_MAX_JITTER_MS,
+  HARD_MAX_MIN_SEND_GAP_MINUTES,
   HARD_MAX_MIN_SILENCE_HOURS,
+  HARD_MAX_WARMUP_HOURS,
   HARD_MIN_DAILY_CAP,
+  HARD_MIN_FIRST_DAY_MAX_SENDS,
   HARD_MIN_FLOOD_WAIT_MULTIPLIER,
   HARD_MIN_HOURLY_CAP,
+  HARD_MIN_MIN_SEND_GAP_MINUTES,
   HARD_MIN_MIN_SILENCE_HOURS,
+  HARD_MIN_WARMUP_HOURS,
   MIN_SEND_SPACING_MS,
   type MtprotoLimits,
 } from "@/lib/mtproto/types";
@@ -37,6 +43,9 @@ const FIELDS: Field[] = [
   { key: "jitterMaxMs", label: "Pacing, maximum (ms)", hint: `The longest pause between two sends. Safe max ${HARD_MAX_JITTER_MS}ms (5 minutes).`, min: MIN_SEND_SPACING_MS, max: HARD_MAX_JITTER_MS, step: 500 },
   { key: "minSilenceHours", label: "Silent for at least (hours)", hint: `How long a fan must have gone quiet before she is eligible. Range ${HARD_MIN_MIN_SILENCE_HOURS} to ${HARD_MAX_MIN_SILENCE_HOURS} hours.`, min: HARD_MIN_MIN_SILENCE_HOURS, max: HARD_MAX_MIN_SILENCE_HOURS },
   { key: "floodWaitMultiplier", label: "Flood-wait multiplier", hint: `Telegram's own wait time is multiplied by this before the girl auto-resumes. Range ${HARD_MIN_FLOOD_WAIT_MULTIPLIER} to ${HARD_MAX_FLOOD_WAIT_MULTIPLIER}.`, min: HARD_MIN_FLOOD_WAIT_MULTIPLIER, max: HARD_MAX_FLOOD_WAIT_MULTIPLIER },
+  { key: "warmupHours", label: "Warm-up after login (hours, 0 = off)", hint: `Blocks every live send for this many hours after a fresh QR login. Not a Telegram rule, an optional precaution. Off by default. Range ${HARD_MIN_WARMUP_HOURS} to ${HARD_MAX_WARMUP_HOURS}.`, min: HARD_MIN_WARMUP_HOURS, max: HARD_MAX_WARMUP_HOURS },
+  { key: "minSendGapMinutes", label: "Min gap between sends (minutes, 0 = off)", hint: `Minimum minutes between any two live sends from the same girl, on top of pacing and the hourly cap. Off by default. Range ${HARD_MIN_MIN_SEND_GAP_MINUTES} to ${HARD_MAX_MIN_SEND_GAP_MINUTES}.`, min: HARD_MIN_MIN_SEND_GAP_MINUTES, max: HARD_MAX_MIN_SEND_GAP_MINUTES },
+  { key: "firstDayMaxSends", label: "Day-one send cap (0 = off)", hint: `Max live sends in the first 24 hours after a fresh login, regardless of the hourly or daily cap. Off by default. Range ${HARD_MIN_FIRST_DAY_MAX_SENDS} to ${HARD_MAX_FIRST_DAY_MAX_SENDS}.`, min: HARD_MIN_FIRST_DAY_MAX_SENDS, max: HARD_MAX_FIRST_DAY_MAX_SENDS },
 ];
 
 // Settings tab's limits editor (migration 169/171): the six values that used

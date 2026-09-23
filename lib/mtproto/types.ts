@@ -333,6 +333,18 @@ export const HARD_MAX_MIN_SILENCE_HOURS = 720;
 export const HARD_MIN_FLOOD_WAIT_MULTIPLIER = 1;
 export const HARD_MAX_FLOOD_WAIT_MULTIPLIER = 10;
 
+// Three anti-burst floors, mirrors twin-userbot/src/contract.ts. Unlike every
+// field above, 0 is a valid, meaningful setting here (off), not something
+// clamped away as unsafe: these are NOT Telegram rules, they're an opt-in
+// precaution added 2026-09-23 and off by default (see that repo's policy.ts
+// header for the incident and why the cause is unconfirmed).
+export const HARD_MIN_WARMUP_HOURS = 0;
+export const HARD_MAX_WARMUP_HOURS = 48;
+export const HARD_MIN_MIN_SEND_GAP_MINUTES = 0;
+export const HARD_MAX_MIN_SEND_GAP_MINUTES = 60;
+export const HARD_MIN_FIRST_DAY_MAX_SENDS = 0;
+export const HARD_MAX_FIRST_DAY_MAX_SENDS = 400;
+
 export interface MtprotoLimits {
   /** Sends per creator per rolling hour. Range [HARD_MIN_HOURLY_CAP, HARD_MAX_HOURLY_CAP]. */
   hourlyCap: number;
@@ -347,10 +359,23 @@ export interface MtprotoLimits {
   /** Multiplied onto Telegram's own FLOOD_WAIT/SLOWMODE_WAIT/FLOOD_PREMIUM_WAIT seconds to
    *  compute userbot_connections.paused_until. Range [HARD_MIN_FLOOD_WAIT_MULTIPLIER, HARD_MAX_FLOOD_WAIT_MULTIPLIER]. */
   floodWaitMultiplier: number;
+  /** Hours to hold back ALL live sends after a fresh login. 0 = off (default).
+   *  Range [HARD_MIN_WARMUP_HOURS, HARD_MAX_WARMUP_HOURS]. */
+  warmupHours: number;
+  /** Minimum minutes between two live sends, same account, on top of
+   *  jitterMinMs/jitterMaxMs/hourlyCap. 0 = off (default). Range
+   *  [HARD_MIN_MIN_SEND_GAP_MINUTES, HARD_MAX_MIN_SEND_GAP_MINUTES]. */
+  minSendGapMinutes: number;
+  /** Cap on live sends inside the fixed 24h window after a fresh login. 0 =
+   *  off (default). Range [HARD_MIN_FIRST_DAY_MAX_SENDS, HARD_MAX_FIRST_DAY_MAX_SENDS]. */
+  firstDayMaxSends: number;
 }
 
 /** Built-in defaults, MUST match twin-bot migration 169/171's seed row byte
- *  for byte, so an unreadable DB read behaves identically to a fresh one. */
+ *  for byte, so an unreadable DB read behaves identically to a fresh one.
+ *  The three anti-burst floors are NOT in that seed row (no migration was
+ *  needed for them, a missing JSON key just falls back to this default) but
+ *  MUST still match twin-userbot/src/contract.ts's MTPROTO_LIMITS_DEFAULTS. */
 export const MTPROTO_LIMITS_DEFAULTS: MtprotoLimits = {
   hourlyCap: 20,
   defaultDailyCap: DEFAULT_DAILY_CAP,
@@ -358,6 +383,9 @@ export const MTPROTO_LIMITS_DEFAULTS: MtprotoLimits = {
   jitterMaxMs: 25_000,
   minSilenceHours: MIN_SILENCE_HOURS,
   floodWaitMultiplier: 2,
+  warmupHours: 0,
+  minSendGapMinutes: 0,
+  firstDayMaxSends: 0,
 };
 
 export const ATTRIBUTION_WINDOWS_HOURS = [24, 72, 7 * 24] as const;

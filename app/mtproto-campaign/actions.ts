@@ -215,7 +215,17 @@ export async function setMtprotoLimitsAction(fd: FormData): Promise<ActionResult
   await guardDashboardAction("app/mtproto-campaign/actions.ts#setMtprotoLimitsAction", [fd]);
   try {
     const input: Partial<MtprotoLimits> = {};
-    for (const key of ["hourlyCap", "defaultDailyCap", "jitterMinMs", "jitterMaxMs", "minSilenceHours", "floodWaitMultiplier"] as const) {
+    for (const key of [
+      "hourlyCap",
+      "defaultDailyCap",
+      "jitterMinMs",
+      "jitterMaxMs",
+      "minSilenceHours",
+      "floodWaitMultiplier",
+      "warmupHours",
+      "minSendGapMinutes",
+      "firstDayMaxSends",
+    ] as const) {
       const n = numOrUndef(fd.get(key));
       if (n !== undefined) input[key] = n;
     }

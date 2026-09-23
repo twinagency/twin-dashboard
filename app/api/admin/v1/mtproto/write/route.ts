@@ -145,7 +145,17 @@ export const POST = withAdmin(async (req) => {
       // enforces regardless of this write (lib/mtproto/limits.ts).
       case "set_mtproto_limits": {
         const input: Partial<MtprotoLimits> = {};
-        for (const k of ["hourlyCap", "defaultDailyCap", "jitterMinMs", "jitterMaxMs", "minSilenceHours", "floodWaitMultiplier"] as const) {
+        for (const k of [
+          "hourlyCap",
+          "defaultDailyCap",
+          "jitterMinMs",
+          "jitterMaxMs",
+          "minSilenceHours",
+          "floodWaitMultiplier",
+          "warmupHours",
+          "minSendGapMinutes",
+          "firstDayMaxSends",
+        ] as const) {
           if (body[k] === undefined) continue;
           if (typeof body[k] !== "number") return jsonError(`${k} must be a number`, 400);
           input[k] = body[k] as number;

@@ -40,8 +40,11 @@ import { agencyDashboardPath } from "../../agency-policy";
 import {
   CONFIRM_LIVE_PHRASE,
   HARD_MAX_DAILY_CAP,
+  HARD_MAX_FIRST_DAY_MAX_SENDS,
   HARD_MAX_HOURLY_CAP,
   HARD_MAX_JITTER_MS,
+  HARD_MAX_MIN_SEND_GAP_MINUTES,
+  HARD_MAX_WARMUP_HOURS,
   HARD_MIN_HOURLY_CAP,
   MIN_SEND_SPACING_MS,
   MIN_SILENCE_HOURS,
@@ -657,6 +660,23 @@ check("H6d clampMtprotoLimits: missing/bad input falls back to defaults, every f
   eq(clampMtprotoLimits({ hourlyCap: NaN, defaultDailyCap: "not a number" as unknown as number }).hourlyCap, MTPROTO_LIMITS_DEFAULTS.hourlyCap, "non-finite input falls back to default, not 0");
 });
 
+check("H6f clampMtprotoLimits: warmupHours/minSendGapMinutes/firstDayMaxSends default to 0 (off) and 0 is never clamped up", () => {
+  eq(MTPROTO_LIMITS_DEFAULTS.warmupHours, 0, "warmupHours default is 0");
+  eq(MTPROTO_LIMITS_DEFAULTS.minSendGapMinutes, 0, "minSendGapMinutes default is 0");
+  eq(MTPROTO_LIMITS_DEFAULTS.firstDayMaxSends, 0, "firstDayMaxSends default is 0");
+  eq(clampMtprotoLimits({ warmupHours: 0 }).warmupHours, 0, "warmupHours 0 stays 0, unlike every other field's floor");
+  eq(clampMtprotoLimits({ minSendGapMinutes: 0 }).minSendGapMinutes, 0, "minSendGapMinutes 0 stays 0");
+  eq(clampMtprotoLimits({ firstDayMaxSends: 0 }).firstDayMaxSends, 0, "firstDayMaxSends 0 stays 0");
+  eq(clampMtprotoLimits({ warmupHours: 999 }).warmupHours, HARD_MAX_WARMUP_HOURS, "warmupHours clamped to the ceiling");
+  eq(clampMtprotoLimits({ warmupHours: -5 }).warmupHours, 0, "warmupHours negative clamps up to 0, not below");
+  eq(clampMtprotoLimits({ minSendGapMinutes: 999 }).minSendGapMinutes, HARD_MAX_MIN_SEND_GAP_MINUTES, "minSendGapMinutes clamped to the ceiling");
+  eq(clampMtprotoLimits({ firstDayMaxSends: 99_999 }).firstDayMaxSends, HARD_MAX_FIRST_DAY_MAX_SENDS, "firstDayMaxSends clamped to the ceiling");
+  const nonzero = clampMtprotoLimits({ warmupHours: 6, minSendGapMinutes: 8, firstDayMaxSends: 10 });
+  eq(nonzero.warmupHours, 6, "nonzero warmupHours round-trips");
+  eq(nonzero.minSendGapMinutes, 8, "nonzero minSendGapMinutes round-trips");
+  eq(nonzero.firstDayMaxSends, 10, "nonzero firstDayMaxSends round-trips");
+});
+
 acheck("H6e getMtprotoLimits/setMtprotoLimits: unreadable/missing row reads as defaults (never throws), writes validate, clamp and log config_change", async () => {
   const db = freshDb();
   // No row at all yet (migration 169/171 not applied, or a fresh project):
@@ -690,6 +710,30 @@ acheck("H6e getMtprotoLimits/setMtprotoLimits: unreadable/missing row reads as d
   db.fail("app_settings", "upsert", null);
   db.fail("reengage_events", "insert", { message: "events down" });
   await rejects(setMtprotoLimits({ hourlyCap: 10 }, "operator"), /WERE saved, but the audit event failed/);
+});
+
+acheck("H6g setMtprotoLimits: warmupHours/minSendGapMinutes/firstDayMaxSends write, validate and default to off (0)", async () => {
+  freshDb();
+  const fresh = await getMtprotoLimits();
+  eq(fresh.warmupHours, 0, "a fresh/unreadable row reads warmupHours as off");
+  eq(fresh.minSendGapMinutes, 0, "a fresh/unreadable row reads minSendGapMinutes as off");
+  eq(fresh.firstDayMaxSends, 0, "a fresh/unreadable row reads firstDayMaxSends as off");
+
+  await rejects(setMtprotoLimits({ warmupHours: 999 }, "operator"), /warmupHours must be between/);
+  await rejects(setMtprotoLimits({ minSendGapMinutes: -1 }, "operator"), /minSendGapMinutes must be between/);
+  await rejects(setMtprotoLimits({ firstDayMaxSends: NaN }, "operator"), /firstDayMaxSends must be a number/);
+
+  // Writing 0 explicitly (turning it back off after having enabled it) must
+  // work, not be treated as "no value provided".
+  const enabled = await setMtprotoLimits({ warmupHours: 6, minSendGapMinutes: 8, firstDayMaxSends: 10 }, "operator");
+  eq(enabled.warmupHours, 6, "warmupHours enabled");
+  eq(enabled.minSendGapMinutes, 8, "minSendGapMinutes enabled");
+  eq(enabled.firstDayMaxSends, 10, "firstDayMaxSends enabled");
+  const disabledAgain = await setMtprotoLimits({ warmupHours: 0, minSendGapMinutes: 0, firstDayMaxSends: 0 }, "operator");
+  eq(disabledAgain.warmupHours, 0, "warmupHours can be written back to 0 (off)");
+  eq(disabledAgain.minSendGapMinutes, 0, "minSendGapMinutes can be written back to 0 (off)");
+  eq(disabledAgain.firstDayMaxSends, 0, "firstDayMaxSends can be written back to 0 (off)");
+  eq(JSON.stringify(await getMtprotoLimits()), JSON.stringify(disabledAgain), "read-back matches the 0/off write");
 });
 
 acheck("H7 connection pause/cap write before/after events and reject bad input", async () => {
