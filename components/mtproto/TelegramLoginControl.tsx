@@ -18,14 +18,16 @@ export default function TelegramLoginControl({
   cloneId,
   creatorName,
   connected,
+  initialRequest = null,
 }: {
   cloneId: string;
   creatorName: string;
   connected: boolean;
+  initialRequest?: LoginRequestView | null;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
-  const [request, setRequest] = useState<LoginRequestView | null>(null);
+  const [request, setRequest] = useState<LoginRequestView | null>(initialRequest);
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
