@@ -25,6 +25,10 @@ type ConnectionRow = {
   /** Migration 164. Optional on the type so a row read before 164 is applied
    *  is still parsed (and reads DRY), rather than throwing. */
   live_enabled?: boolean | null;
+  /** Not part of any migration yet (worker's auto flood-wait handling, in
+   *  progress in twin-userbot as of 2026-09-23). Optional so a DB without the
+   *  column parses fine and this simply reads null forever. */
+  paused_until?: string | null;
   session_ref: string | null;
   created_at: string;
   updated_at: string;
@@ -43,6 +47,7 @@ function fromRow(r: ConnectionRow): UserbotConnection {
     // `=== true` on purpose: a missing/null column (migration 164 not applied
     // yet) reads as DRY, never as live. Fail to the safe side.
     liveEnabled: r.live_enabled === true,
+    pausedUntil: r.paused_until ?? null,
     sessionRef: r.session_ref,
     createdAt: r.created_at,
     updatedAt: r.updated_at,
@@ -82,6 +87,7 @@ export function connectionFor(cloneId: string, connections: UserbotConnection[])
       dailyCap: 30,
       // A creator who has never connected is DRY, same as the column default.
       liveEnabled: false,
+      pausedUntil: null,
       sessionRef: null,
       createdAt: "",
       updatedAt: "",

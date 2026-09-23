@@ -4,9 +4,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 
 const TABS = [
-  { href: "/mtproto-campaign", label: "Overview", match: (p: string) => p === "/mtproto-campaign" || p.startsWith("/mtproto-campaign/runs") },
+  { href: "/mtproto-campaign", label: "Activity", match: (p: string) => p === "/mtproto-campaign" },
+  { href: "/mtproto-campaign/new", label: "New run", match: (p: string) => p.startsWith("/mtproto-campaign/new") || p.startsWith("/mtproto-campaign/runs") },
   { href: "/mtproto-campaign/connections", label: "Connections", match: (p: string) => p.startsWith("/mtproto-campaign/connections") },
-  { href: "/mtproto-campaign/new", label: "New run", match: (p: string) => p.startsWith("/mtproto-campaign/new") },
+  { href: "/mtproto-campaign/settings", label: "Settings", match: (p: string) => p.startsWith("/mtproto-campaign/settings") },
 ];
 
 // Three-tab strip at the top of every MTProto Campaign screen.

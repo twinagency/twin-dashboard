@@ -7,6 +7,12 @@
 
 import { ATTRIBUTION_WINDOWS_HOURS, type AttributionWindowHours, type CreatorLite, type EpisodeState, type ReengageEpisode, type SendRow } from "./types";
 import { loadPurchasesForEpisodes, type PurchaseRead } from "./attribution";
+import { sendFanLabel } from "./sends-format";
+
+// Re-exported so existing importers ("@/lib/mtproto/sends") keep working;
+// the pure implementation lives in ./sends-format so a client component can
+// use it without pulling this module's db import chain into its bundle.
+export { sendFanLabel };
 
 // States where a send was attempted or landed. cancelled/skipped/claimed/
 // prepared/eligible/holdout are NOT sends and never appear in the table.
@@ -21,14 +27,16 @@ function firstWindowHit(paidMs: number, sentMs: number): AttributionWindowHours 
   return null;
 }
 
-/** What the sends list calls a fan: the telegram id, or "deleted fan" when the
- *  users row is gone (migration 163 sets user_id NULL; the send still shows). */
-export function sendFanLabel(r: Pick<SendRow, "userId" | "telegramId">): string {
-  return r.userId == null ? `deleted fan (${r.telegramId})` : String(r.telegramId);
-}
-
-export async function buildSendRows(episodes: ReengageEpisode[], creators: CreatorLite[], purchases?: PurchaseRead): Promise<SendRow[]> {
-  const sent = episodes.filter((e) => !e.dryRun && SEND_TABLE_STATES.includes(e.state)); // simulated (dry) rows are not sends
+export async function buildSendRows(
+  episodes: ReengageEpisode[],
+  creators: CreatorLite[],
+  purchases?: PurchaseRead,
+  opts?: { includeDry?: boolean },
+): Promise<SendRow[]> {
+  // Default behaviour unchanged: simulated (dry) rows are not sends. The
+  // Activity tab's log opts in to see dry "would send" rows too, clearly
+  // marked (SendRow.dryRun), never mixed in silently.
+  const sent = episodes.filter((e) => (opts?.includeDry || !e.dryRun) && SEND_TABLE_STATES.includes(e.state));
   const nameOf = new Map(creators.map((c) => [c.id, c.name]));
   const read = purchases ?? (await loadPurchasesForEpisodes(episodes));
   const ordersByUser = new Map<string, typeof read.orders>();
@@ -66,6 +74,7 @@ export async function buildSendRows(episodes: ReengageEpisode[], creators: Creat
       repliedAt: e.state === "replied" ? e.updatedAt : null,
       boughtStars,
       boughtWithinHours,
+      dryRun: e.dryRun,
     };
   });
 }

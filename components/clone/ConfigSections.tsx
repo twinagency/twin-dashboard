@@ -617,6 +617,14 @@ export default function ConfigSections({
             </div>
           </div>
         )}
+        <Field
+          label="Account phone number"
+          name="account_phone"
+          type="tel"
+          defaultValue={clone?.account_phone ?? ""}
+          placeholder="+61 400 000 000"
+          hint="The phone number of the Telegram account this creator runs on. Just a note for your records, nothing uses it."
+        />
         {mode === "edit" ? (
           <div className="block">
             <FieldLabel label="Status" hint="Paused means the bot ignores every incoming message for this creator. Nothing is deleted, she just stops replying until you set her active again." />

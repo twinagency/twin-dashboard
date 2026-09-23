@@ -271,6 +271,7 @@ function sendRow(partial: Partial<SendRow>): SendRow {
     repliedAt: null,
     boughtStars: null,
     boughtWithinHours: null,
+    dryRun: false,
     ...partial,
   };
 }
@@ -1350,8 +1351,10 @@ check("L8 the resume gate is wired in the lib function, the server action and th
   assert(c.indexOf("resumePhraseOk(") < c.indexOf('.from("userbot_connections")\n    .upsert'), "the phrase is checked before the write");
   assert(/confirmText/.test(sourceCode("../../../app/mtproto-campaign/actions.ts")), "server action passes confirmText");
   assert(/confirmText/.test(sourceCode("../../../app/api/admin/v1/mtproto/write/route.ts")), "API route passes confirmText");
-  const table = sourceCode("../../../components/mtproto/ConnectionsTable.tsx");
-  assert(table.includes("AUTO-HALTED") && table.includes("confirmText"), "connections UI shows the badge and collects the phrase");
+  // 2026-09-23: the per-girl pause/resume UI moved from Connections (now a
+  // skinny list) to Settings, in a compact table.
+  const table = sourceCode("../../../components/mtproto/SettingsConnectionsTable.tsx");
+  assert(table.includes("AUTO-HALTED") && table.includes("confirmText"), "settings UI shows the badge and collects the phrase");
   assert(sourceCode("../../../components/mtproto/SafetyPanel.tsx").includes("AUTO-HALTED"), "safety panel shows the badge");
 });
 
@@ -1451,7 +1454,11 @@ acheck("L13 opted-out counts read opt_out events (fake db); a failed read is rep
   assert(bad.error && /events down/.test(bad.error), "error surfaced");
   const card = sourceCode("../../../components/mtproto/FunnelCard.tsx");
   assert(card.includes("Opted out") && card.includes("unknown, not zero"), "funnel card renders opted-out and the unknown state");
-  assert(sourceCode("../../../app/mtproto-campaign/runs/[id]/page.tsx").includes("computeOptOuts") && sourceCode("../../../app/mtproto-campaign/page.tsx").includes("computeOptOuts"), "wired on run and overview pages");
+  // 2026-09-23: the Activity tab's overview no longer computes opt-outs itself
+  // (it shows sent/replied/converted/held back/queued/failed per run instead);
+  // full opt-out detail is one click away on the run's own page, which still
+  // wires computeOptOuts through FunnelCard.
+  assert(sourceCode("../../../app/mtproto-campaign/runs/[id]/page.tsx").includes("computeOptOuts"), "wired on the run detail page");
 });
 
 // ── M. migration 163: a fan is (clone_id, telegram_id), user_id may be NULL ──
@@ -1521,6 +1528,24 @@ acheck("M3 rows with user_id NULL render: sends keep their row with a deleted-fa
 
   const read = await listEpisodesForRun(id);
   eq(read.episodes.find((e) => e.id === "e1")!.userId, null, "listEpisodesForRun maps a NULL user_id");
+});
+
+acheck("M4 buildSendRows({includeDry:true}) surfaces dry would-send rows marked dryRun, default still excludes them", async () => {
+  const creators = [{ id: CLONE_A, name: "Alpha", slug: "a", status: "active" as const, businessUsername: null }];
+  const eps = [
+    episode({ id: "d1", dryRun: true, cloneId: CLONE_A, telegramId: 5001, state: "acked", sentAt: "2026-09-20T00:00:00Z", ackedText: "would send this" }),
+    episode({ id: "r1", dryRun: false, cloneId: CLONE_A, telegramId: 5002, state: "acked", sentAt: "2026-09-20T00:00:00Z", ackedText: "real send", tgMessageId: 9 }),
+  ];
+  const withoutDry = await buildSendRows(eps, creators, { orders: [], truncated: false });
+  eq(withoutDry.length, 1, "default excludes the dry row");
+  eq(withoutDry[0].dryRun, false, "the surviving row is marked not-dry");
+
+  const withDry = await buildSendRows(eps, creators, { orders: [], truncated: false }, { includeDry: true });
+  eq(withDry.length, 2, "includeDry surfaces both");
+  const dryRow = withDry.find((r) => r.episodeId === "d1")!;
+  eq(dryRow.dryRun, true, "dry row is marked dryRun:true");
+  const realRow = withDry.find((r) => r.episodeId === "r1")!;
+  eq(realRow.dryRun, false, "the real row stays marked dryRun:false");
 });
 
 check("M4 funnel, lift and opt-out counts add up when user_id is NULL: fans are counted by telegram id", () => {
@@ -1625,12 +1650,14 @@ check("N5 the live switch is wired end to end (source): lib gate, server action,
   assert(fn.indexOf("goLivePhraseOk(") < fn.indexOf('live_enabled: liveEnabled'), "the phrase is checked BEFORE the write");
   const actions = sourceCode("../../../app/mtproto-campaign/actions.ts");
   assert(/setConnectionLiveEnabled\(/.test(actions), "the server action calls the lib function");
-  const table = sourceCode("../../../components/mtproto/ConnectionsTable.tsx");
-  assert(table.includes("setConnectionLiveEnabledAction"), "the connections UI calls the action");
-  assert(table.includes("goLivePhrase"), "the connections UI collects the typed phrase");
+  // 2026-09-23: the LIVE/DRY switch moved from Connections (now a skinny
+  // list) to Settings, in a compact table.
+  const table = sourceCode("../../../components/mtproto/SettingsConnectionsTable.tsx");
+  assert(table.includes("setConnectionLiveEnabledAction"), "the settings UI calls the action");
+  assert(table.includes("goLivePhrase"), "the settings UI collects the typed phrase");
   assert(table.includes("LIVE") && table.includes("DRY RUN"), "the UI states which mode the creator is in");
   // UI convention (twin-dashboard/CLAUDE.md): no em dashes anywhere in copy.
-  for (const f of ["../../../components/mtproto/ConnectionsTable.tsx", "../../../app/mtproto-campaign/connections/page.tsx"]) {
+  for (const f of ["../../../components/mtproto/SettingsConnectionsTable.tsx", "../../../components/mtproto/ConnectionsTable.tsx", "../../../app/mtproto-campaign/connections/page.tsx"]) {
     assert(!sourceCode(f).includes("\u2014"), `${f} contains an em dash in UI copy`);
   }
 });

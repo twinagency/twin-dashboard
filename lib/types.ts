@@ -33,6 +33,8 @@ export type Clone = {
    *  shows it read-only and must not post it back on save. NULL until a
    *  business connection has been observed at least once. */
   business_username?: string | null;
+  /** Migration 170. Operator-typed note of the Telegram account's phone number. Display only, nothing reads it. */
+  account_phone?: string | null;
   status: "active" | "paused";
   ai_mode: "classic" | "smart";
   smart_split: boolean;

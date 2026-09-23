@@ -19,16 +19,10 @@ import {
   RUN_SEGMENTS,
   type AudiencePreview,
   type CreatorLite,
+  type RunSegment,
 } from "@/lib/mtproto/types";
 import { CreatorAvatar, EmptyBlock, Notice, Skeleton, StatusPill, StepHeading } from "./kit";
-import { exclusion, num } from "./view";
-
-const SEGMENT_LABEL: Record<(typeof RUN_SEGMENTS)[number], string> = {
-  all_silent: "All silent fans",
-  top_spenders: "Top spenders",
-  lapsed_buyers: "Lapsed buyers (bought before, gone quiet)",
-  never_bought: "Never bought",
-};
+import { exclusion, num, SEGMENT_LABEL } from "./view";
 
 function StepCard({ children }: { children: React.ReactNode }) {
   return <Card className="gap-4 border border-line p-4 sm:p-5">{children}</Card>;
@@ -44,10 +38,36 @@ function Stat({ label, sub, value, tone = "text-ink" }: { label: string; sub: st
   );
 }
 
-// Run builder as three plain steps: pick creators, set limits, preview and
-// create. Preview is read-only. Creating always starts as a DRY RUN: nothing is
-// sent, and going live is a separate, later step on the run's own page. All
-// limits are re-validated server-side; this form only collects them.
+type AudienceChoice = "silent" | "advanced";
+const ADVANCED_SEGMENTS = RUN_SEGMENTS.filter((s) => s !== "all_silent");
+
+/** One big pickable tile for the two most-used audiences. */
+function AudienceTile({ active, title, hint, onClick }: { active: boolean; title: string; hint: string; onClick: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={`flex flex-col items-start gap-0.5 rounded-xl border p-3.5 text-left transition ${
+        active ? "border-accent-2 bg-accent-2/5 ring-2 ring-accent-2/20" : "border-line hover:bg-muted/5"
+      }`}
+    >
+      <span className="flex items-center gap-1.5 text-sm font-semibold text-ink">
+        <span className={`grid size-4 shrink-0 place-items-center rounded-full border ${active ? "border-accent-2 bg-accent-2" : "border-line"}`}>
+          {active && <span aria-hidden className="size-1.5 rounded-full bg-white" />}
+        </span>
+        {title}
+      </span>
+      <span className="pl-6 text-xs leading-snug text-muted">{hint}</span>
+    </button>
+  );
+}
+
+// Run builder, simplified to one screen (2026-09-23): pick creators, pick the
+// audience (two big buttons for the common cases, a small select for the
+// rest), write the message(s), set the daily cap, name the run, then preview
+// and create. Preview is read-only. Creating always starts as a DRY RUN:
+// nothing is sent, and going live is a separate, later step with its own
+// typed confirmation on the run's own page.
 export default function RunBuilderForm({ creators }: { creators: CreatorLite[] }) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
@@ -58,6 +78,11 @@ export default function RunBuilderForm({ creators }: { creators: CreatorLite[] }
   const [selected, setSelected] = useState<Set<string>>(new Set());
   const [dailyCap, setDailyCap] = useState(String(DEFAULT_DAILY_CAP));
   const [holdout, setHoldout] = useState(String(DEFAULT_HOLDOUT_PCT));
+  const [audienceChoice, setAudienceChoice] = useState<AudienceChoice>("silent");
+  const [advancedSegment, setAdvancedSegment] = useState<RunSegment>("top_spenders");
+  const [variantCount, setVariantCount] = useState(1);
+
+  const segment: RunSegment = audienceChoice === "advanced" ? advancedSegment : "all_silent";
 
   const toggle = (id: string) => {
     setPreview(null);
@@ -126,7 +151,9 @@ export default function RunBuilderForm({ creators }: { creators: CreatorLite[] }
         Preview only reads. Creating a run always starts as a dry run, a rehearsal. Going live is a separate step later, with its own typed confirmation.
       </Notice>
 
-      {/* STEP 1 */}
+      {/* Hidden fields that mirror UI-only state into the form's own FormData. */}
+      <input type="hidden" name="segment" value={segment} />
+
       <StepCard>
         <div className="flex flex-wrap items-center justify-between gap-2">
           <StepHeading n={1} title="Pick creators" tip="Choose whose silent fans to message. Each message is sent from that creator's own Telegram account. Caps and the hold-out apply to each creator separately." done={selected.size > 0} />
@@ -160,104 +187,123 @@ export default function RunBuilderForm({ creators }: { creators: CreatorLite[] }
         <div className="text-xs text-muted">{selected.size === 0 ? "None picked yet." : `${selected.size} creator${selected.size === 1 ? "" : "s"} picked.`}</div>
       </StepCard>
 
-      {/* STEP 2 */}
       <StepCard>
-        <StepHeading n={2} title="Set limits" tip="Who counts as a silent fan, and how many of them may be messaged. The safety caps here are checked again by the server before anything is saved." done={selected.size > 0 && capOk && holdOk} />
-
+        <StepHeading n={2} title="Who to message" tip="Silent fans is the usual choice. The old n8n imports are skipped there on purpose." done={selected.size > 0} />
+        <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
+          <AudienceTile
+            active={audienceChoice === "silent"}
+            title="Silent fans"
+            hint="Fans who have gone quiet. Skips the old n8n imports."
+            onClick={() => setAudienceChoice("silent")}
+          />
+        </div>
         <div>
-          <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">Who to message</div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-            <label className="block">
-              <FieldLabel label="Which fans" hint="Start with All silent fans. Top spenders and Lapsed buyers narrow it to people who have paid before." />
-              <select name="segment" defaultValue="all_silent" className={selectCls}>
-                {RUN_SEGMENTS.map((s) => (
+          <button
+            type="button"
+            onClick={() => setAudienceChoice("advanced")}
+            className={`text-xs font-semibold underline decoration-dotted underline-offset-2 ${audienceChoice === "advanced" ? "text-ink" : "text-accent-2"}`}
+          >
+            More audiences (top spenders, lapsed buyers, never bought)
+          </button>
+          {audienceChoice === "advanced" && (
+            <label className="mt-2 block max-w-xs">
+              <FieldLabel label="Audience" hint="A narrower slice of fans instead of everyone silent." />
+              <select value={advancedSegment} onChange={(e) => setAdvancedSegment(e.target.value as RunSegment)} className={selectCls}>
+                {ADVANCED_SEGMENTS.map((s) => (
                   <option key={s} value={s}>
                     {SEGMENT_LABEL[s]}
                   </option>
                 ))}
               </select>
             </label>
-            <label className="block">
-              <FieldLabel label="Spent at least (Stars)" hint="Leave empty to include everyone. Only fans who spent at least this many Stars in total are chosen." />
-              <input type="number" min={0} name="minSpendStars" placeholder="any amount" className={inputCls} />
-            </label>
-            <label className="block">
-              <FieldLabel label="Silent for at least (days)" hint="How long a fan must have gone quiet. 1 means at least a day since their last message. Fans who wrote in the last 24 hours are never messaged." />
-              <input type="number" min={1} defaultValue={1} name="lastActiveFromDays" className={inputCls} />
-            </label>
-            <label className="block">
-              <FieldLabel label="Silent for at most (days)" hint="Optional. Set it to skip fans who have been gone a very long time." />
-              <input type="number" min={1} name="lastActiveToDays" placeholder="no limit" className={inputCls} />
-            </label>
-            <label className="block">
-              <FieldLabel label="Language" hint="Optional two-letter code such as en. Empty means every language." />
-              <input type="text" name="language" placeholder="en" className={inputCls} />
-            </label>
-          </div>
+          )}
         </div>
 
-        <div className="border-t border-line pt-4">
-          <div className="mb-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">How many</div>
-          <div className="grid grid-cols-1 gap-3 sm:grid-cols-3">
-            <label className="block">
-              <FieldLabel label="Daily cap per creator" hint={`The most messages one creator's account sends in a day. Default ${DEFAULT_DAILY_CAP}. Lower is safer for the account. Between 1 and ${HARD_MAX_DAILY_CAP}.`} />
-              <input type="number" min={1} max={HARD_MAX_DAILY_CAP} step={1} value={dailyCap} onChange={(e) => setDailyCap(e.target.value)} name="dailyCap" className={inputCls} />
-            </label>
-            <label className="block">
-              <FieldLabel label="Whole-run cap per creator" hint="Optional. A hard ceiling on the total one creator sends over the entire run, however many days it takes." />
-              <input type="number" min={1} max={10000} step={1} name="runCap" placeholder="no limit" className={inputCls} />
-            </label>
-            <label className="block">
-              <FieldLabel label={`Hold-out % (${HOLDOUT_MIN_PCT} to ${HOLDOUT_MAX_PCT})`} hint="The share of chosen fans deliberately NOT messaged. Comparing them with the messaged fans is the only honest way to tell whether the messages worked." />
-              <input type="number" min={HOLDOUT_MIN_PCT} max={HOLDOUT_MAX_PCT} step={1} value={holdout} onChange={(e) => setHoldout(e.target.value)} name="holdoutPct" className={inputCls} />
-            </label>
-          </div>
-          <div className="mt-3 rounded-xl bg-muted/5 px-3.5 py-2.5 text-[13px] leading-relaxed text-ink">
-            {selected.size === 0 ? (
-              <span className="text-muted">Pick a creator to see what these limits mean.</span>
-            ) : capOk && holdOk ? (
-              <>
-                At most <span className="font-semibold">{num(capN * selected.size)}</span> messages on day one ({capN} for each of {selected.size} creator{selected.size === 1 ? "" : "s"}). About{" "}
-                <span className="font-semibold">{holdN}%</span> of chosen fans are held back to compare against.
-              </>
-            ) : (
-              <span className="text-crit">
-                {!capOk ? `Daily cap must be a whole number from 1 to ${HARD_MAX_DAILY_CAP}. ` : ""}
-                {!holdOk ? `Hold-out must be from ${HOLDOUT_MIN_PCT} to ${HOLDOUT_MAX_PCT}.` : ""}
-              </span>
-            )}
-          </div>
+        <div className="grid grid-cols-1 gap-3 border-t border-line pt-4 sm:grid-cols-2">
+          <label className="block">
+            <FieldLabel label="Silent for at least (days)" hint="How long a fan must have gone quiet. 1 means at least a day since their last message. Fans who wrote in the last 24 hours are never messaged." />
+            <input type="number" min={1} defaultValue={1} name="lastActiveFromDays" className={inputCls} />
+          </label>
+          <label className="block">
+            <FieldLabel label="Spent at least (Stars)" hint="Leave empty to include everyone. Only fans who spent at least this many Stars in total are chosen." />
+            <input type="number" min={0} name="minSpendStars" placeholder="any amount" className={inputCls} />
+          </label>
+          <label className="block">
+            <FieldLabel label="Silent for at most (days)" hint="Optional. Set it to skip fans who have been gone a very long time." />
+            <input type="number" min={1} name="lastActiveToDays" placeholder="no limit" className={inputCls} />
+          </label>
+          <label className="block">
+            <FieldLabel label="Language" hint="Optional two-letter code such as en. Empty means every language." />
+            <input type="text" name="language" placeholder="en" className={inputCls} />
+          </label>
         </div>
+      </StepCard>
 
-        <div className="border-t border-line pt-4">
+      <StepCard>
+        <StepHeading n={3} title="Message and limits" tip="Every fan gets one of these openers. The daily cap protects the creator's Telegram account." done={selected.size > 0 && capOk && holdOk} />
+
+        <div>
           <div className="mb-2 flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
-            Re-engagement message variants
+            Message
             <Info text="These are the approved openers for this campaign. One is selected deterministically per fan, so retries and the dry-to-live replay keep the same wording for that fan." />
           </div>
           <div className="space-y-2">
-            {Array.from({ length: MAX_MESSAGE_VARIANTS }, (_, i) => (
+            {Array.from({ length: variantCount }, (_, i) => (
               <label key={i} className="block">
-                <span className="mb-1 block text-xs font-medium text-muted">Variant {i + 1}</span>
+                {variantCount > 1 && <span className="mb-1 block text-xs font-medium text-muted">Variant {i + 1}</span>}
                 <input
                   type="text"
                   name="messageVariants"
                   maxLength={280}
                   defaultValue={DEFAULT_REENGAGEMENT_VARIANTS[i] ?? ""}
-                  placeholder={i === 0 ? "Add a message" : "Optional"}
+                  placeholder="Add a message"
                   className={inputCls}
                 />
               </label>
             ))}
           </div>
-          <p className="mt-2 text-xs leading-relaxed text-muted">
-            Leave any unused lines blank. At least one message is required. The worker still applies its final safety validation before any send.
-          </p>
+          {variantCount < MAX_MESSAGE_VARIANTS ? (
+            <button type="button" onClick={() => setVariantCount((c) => c + 1)} className="mt-2 text-xs font-semibold text-accent-2 hover:underline">
+              + Add another
+            </button>
+          ) : (
+            <div className="mt-2 text-xs text-muted">Maximum {MAX_MESSAGE_VARIANTS} variants.</div>
+          )}
+        </div>
+
+        <div className="grid grid-cols-1 gap-3 border-t border-line pt-4 sm:grid-cols-3">
+          <label className="block">
+            <FieldLabel label="Daily cap per creator" hint={`The most messages one creator's account sends in a day. Default ${DEFAULT_DAILY_CAP}. Lower is safer for the account. Between 1 and ${HARD_MAX_DAILY_CAP}.`} />
+            <input type="number" min={1} max={HARD_MAX_DAILY_CAP} step={1} value={dailyCap} onChange={(e) => setDailyCap(e.target.value)} name="dailyCap" className={inputCls} />
+          </label>
+          <label className="block">
+            <FieldLabel label={`Hold-out % (${HOLDOUT_MIN_PCT} to ${HOLDOUT_MAX_PCT})`} hint="The share of chosen fans deliberately NOT messaged. Comparing them with the messaged fans is the only honest way to tell whether the messages worked." />
+            <input type="number" min={HOLDOUT_MIN_PCT} max={HOLDOUT_MAX_PCT} step={1} value={holdout} onChange={(e) => setHoldout(e.target.value)} name="holdoutPct" className={inputCls} />
+          </label>
+          <label className="block">
+            <FieldLabel label="Run name" hint="Optional. Shown on the Activity tab instead of an auto-generated name. Not shown to fans." />
+            <input type="text" name="note" maxLength={500} placeholder="e.g. Riley win-back Sept" className={inputCls} />
+          </label>
+        </div>
+        <div className="rounded-xl bg-muted/5 px-3.5 py-2.5 text-[13px] leading-relaxed text-ink">
+          {selected.size === 0 ? (
+            <span className="text-muted">Pick a creator to see what these limits mean.</span>
+          ) : capOk && holdOk ? (
+            <>
+              At most <span className="font-semibold">{num(capN * selected.size)}</span> messages on day one ({capN} for each of {selected.size} creator{selected.size === 1 ? "" : "s"}). About{" "}
+              <span className="font-semibold">{holdN}%</span> of chosen fans are held back to compare against.
+            </>
+          ) : (
+            <span className="text-crit">
+              {!capOk ? `Daily cap must be a whole number from 1 to ${HARD_MAX_DAILY_CAP}. ` : ""}
+              {!holdOk ? `Hold-out must be from ${HOLDOUT_MIN_PCT} to ${HOLDOUT_MAX_PCT}.` : ""}
+            </span>
+          )}
         </div>
       </StepCard>
 
-      {/* STEP 3 */}
       <StepCard>
-        <StepHeading n={3} title="Preview, then create" tip="Preview shows who this would reach and who would be left out, without saving or sending anything. Then create the run: it starts as a dry run." done={!!preview} />
+        <StepHeading n={4} title="Preview, then create" tip="Preview shows who this would reach and who would be left out, without saving or sending anything. Then create the run: it starts as a dry run." done={!!preview} />
 
         {error && <Notice tone="crit">{error}</Notice>}
 
@@ -274,16 +320,16 @@ export default function RunBuilderForm({ creators }: { creators: CreatorLite[] }
         {working === "preview" ? (
           <div className="space-y-2">
             <div className="grid grid-cols-3 gap-3">
-              <Skeleton className="h-24" />
-              <Skeleton className="h-24" />
-              <Skeleton className="h-24" />
+              <Skeleton className="h-20" />
+              <Skeleton className="h-20" />
+              <Skeleton className="h-20" />
             </div>
-            <Skeleton className="h-16 w-full" />
+            <Skeleton className="h-12 w-full" />
           </div>
         ) : !preview ? (
           <EmptyBlock icon="◎" title="No preview yet" hint="Pick creators, check the limits, then press Preview. It costs nothing and writes nothing." />
         ) : (
-          <div className="space-y-5">
+          <div className="space-y-4">
             <div className="grid grid-cols-3 gap-3">
               <Stat label="Matched" sub="fit your filters" value={preview.candidatePool} />
               <Stat label="Will be messaged" sub="passed every check" value={preview.eligible} tone="text-good" />
@@ -308,51 +354,53 @@ export default function RunBuilderForm({ creators }: { creators: CreatorLite[] }
               </Notice>
             )}
 
-            <section>
-              <h3 className="mb-2 flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
+            <details className="rounded-2xl border border-line">
+              <summary className="cursor-pointer select-none px-3.5 py-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
                 Why fans were left out ({num(preview.excludedTotal)})
-                <Info text="Every fan who matched but will not be messaged has exactly one reason. These are safety and fairness rules, not errors." />
-              </h3>
-              {preview.excludedTotal === 0 ? (
-                <div className="text-sm text-muted">Nobody was left out.</div>
-              ) : (
-                <ul className="divide-y divide-line rounded-2xl border border-line">
-                  {PREVIEW_EXCLUSION_REASONS.filter((r) => preview.excluded[r] > 0).map((r) => {
-                    const ex = exclusion(r);
-                    return (
-                      <li key={r} className="flex items-center justify-between gap-3 px-3.5 py-2 text-sm">
-                        <span className="flex min-w-0 items-center gap-1 text-ink">
-                          <span className="truncate">{ex.label}</span>
-                          <Info text={ex.why} />
-                        </span>
-                        <span className="shrink-0 font-semibold tabular-nums text-ink">{num(preview.excluded[r])}</span>
-                      </li>
-                    );
-                  })}
-                </ul>
-              )}
-            </section>
+              </summary>
+              <div className="border-t border-line px-3.5 py-2.5">
+                {preview.excludedTotal === 0 ? (
+                  <div className="text-sm text-muted">Nobody was left out.</div>
+                ) : (
+                  <ul className="divide-y divide-line">
+                    {PREVIEW_EXCLUSION_REASONS.filter((r) => preview.excluded[r] > 0).map((r) => {
+                      const ex = exclusion(r);
+                      return (
+                        <li key={r} className="flex items-center justify-between gap-3 py-2 text-sm">
+                          <span className="flex min-w-0 items-center gap-1 text-ink">
+                            <span className="truncate">{ex.label}</span>
+                            <Info text={ex.why} />
+                          </span>
+                          <span className="shrink-0 font-semibold tabular-nums text-ink">{num(preview.excluded[r])}</span>
+                        </li>
+                      );
+                    })}
+                  </ul>
+                )}
+              </div>
+            </details>
 
-            <section>
-              <h3 className="mb-2 flex items-center gap-1 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
+            <details className="rounded-2xl border border-line">
+              <summary className="cursor-pointer select-none px-3.5 py-2 text-[11px] font-semibold uppercase tracking-[0.1em] text-muted">
                 A few of the fans who would be messaged
-                <Info text="A small sample, so you can sanity check who is in the audience. Spend tier is how much they have paid us so far." />
-              </h3>
-              {preview.sample.length === 0 ? (
-                <div className="text-sm text-muted">No eligible fans yet.</div>
-              ) : (
-                <ul className="divide-y divide-line rounded-2xl border border-line">
-                  {preview.sample.map((f) => (
-                    <li key={f.userId} className="flex items-center justify-between gap-3 px-3.5 py-2 text-sm">
-                      <span className="min-w-0 truncate text-ink">{f.name ?? `Fan ${f.telegramId}`}</span>
-                      <span className="shrink-0 text-xs text-muted">
-                        {f.spendTier ?? "no tier"} · <span className="font-semibold text-good">{f.totalSpentStars} ⭐</span>
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </section>
+              </summary>
+              <div className="border-t border-line px-3.5 py-2.5">
+                {preview.sample.length === 0 ? (
+                  <div className="text-sm text-muted">No eligible fans yet.</div>
+                ) : (
+                  <ul className="divide-y divide-line">
+                    {preview.sample.map((f) => (
+                      <li key={f.userId} className="flex items-center justify-between gap-3 py-2 text-sm">
+                        <span className="min-w-0 truncate text-ink">{f.name ?? `Fan ${f.telegramId}`}</span>
+                        <span className="shrink-0 text-xs text-muted">
+                          {f.spendTier ?? "no tier"} · <span className="font-semibold text-good">{f.totalSpentStars} ⭐</span>
+                        </span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </details>
           </div>
         )}
       </StepCard>

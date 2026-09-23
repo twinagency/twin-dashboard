@@ -263,6 +263,12 @@ export interface UserbotConnection {
    */
   liveEnabled: boolean;
   sessionRef: string | null;
+  /** Dashboard-only: set by the worker's auto flood-wait handling when it
+   *  exists (userbot_connections.paused_until, not part of migration 158/164).
+   *  Read defensively: a DB without this column simply returns null forever,
+   *  never an error (see lib/mtproto/connections.ts). Null unless the current
+   *  pause is a timed one Telegram itself imposed. */
+  pausedUntil: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -453,4 +459,8 @@ export interface SendRow {
   repliedAt: string | null;
   boughtStars: number | null;
   boughtWithinHours: AttributionWindowHours | null;
+  /** True for a dry run's simulated "would send" row: nothing left the
+   *  Telegram account. Only ever true when buildSendRows was called with
+   *  { includeDry: true } (its default excludes dry rows entirely). */
+  dryRun: boolean;
 }

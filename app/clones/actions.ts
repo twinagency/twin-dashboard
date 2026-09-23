@@ -506,6 +506,7 @@ function rowFromForm(fd: FormData) {
 
     voice_id: str(fd, "voice_id"),
     elevenlabs_api_key: str(fd, "elevenlabs_api_key"),
+    account_phone: str(fd, "account_phone"),
     eleven_model: str(fd, "eleven_model") ?? "eleven_multilingual_v2",
     voice_stability: num(fd, "voice_stability", 0.4),
     voice_similarity: num(fd, "voice_similarity", 0.75),
@@ -925,6 +926,8 @@ const SAFETY_116_COLUMNS = ["strict_minor_gate"] as const;
 // See bot/db/migrations/147_video_sequences.sql.
 const SEQUENCE_147_COLUMNS = ["video_sequences_enabled"] as const;
 const ELEVENLABS_150_COLUMNS = ["elevenlabs_api_key"] as const;
+// Migration 170: operator's manual note of the Telegram account's phone number. Nothing reads it.
+const ACCOUNT_PHONE_170_COLUMNS = ["account_phone"] as const;
 // Migration 105: the variety guard. Listed so a save against a stack where 105
 // has not run yet strips it and still succeeds. Stripping is the SAFE state,
 // same reasoning as 093's silence fallback: with the column absent
@@ -981,6 +984,7 @@ const OPTIONAL_COLUMNS = [
   ...SAFETY_116_COLUMNS,
   ...SEQUENCE_147_COLUMNS,
   ...ELEVENLABS_150_COLUMNS,
+  ...ACCOUNT_PHONE_170_COLUMNS,
 ] as const;
 
 function withoutPersonaFactColumns(row: Record<string, unknown>): Record<string, unknown> {

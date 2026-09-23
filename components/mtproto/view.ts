@@ -6,9 +6,16 @@
 // names (states, reason codes, error codes) stay as they are and are only
 // translated for the operator's eyes. No em dashes in any visible string.
 
-import type { EpisodeState, FunnelCounts, LiftReport, RunStatus, UserbotConnection } from "@/lib/mtproto/types";
+import type { EpisodeState, FunnelCounts, LiftReport, RunSegment, RunStatus, UserbotConnection } from "@/lib/mtproto/types";
 
 export type Tone = "neutral" | "good" | "warn" | "crit" | "info" | "accent";
+
+export const SEGMENT_LABEL: Record<RunSegment, string> = {
+  all_silent: "All silent fans",
+  top_spenders: "Top spenders",
+  lapsed_buyers: "Lapsed buyers",
+  never_bought: "Never bought",
+};
 
 // ── numbers ──────────────────────────────────────────────────────────────────
 

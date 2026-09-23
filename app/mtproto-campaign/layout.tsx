@@ -1,12 +1,7 @@
-import { Suspense } from "react";
 import { Info } from "@/components/clone/fields";
 import MtprotoNav from "@/components/mtproto/MtprotoNav";
-import SafetyStrip from "@/components/mtproto/SafetyStrip";
-import { Skeleton } from "@/components/mtproto/kit";
 
-// One shell for every MTProto Campaign screen: title, the three-tab strip and
-// the SAFETY strip (with the big red Stop) always at the top. The strip
-// streams in on its own so the page underneath is never held up by it.
+// Global live arm and global stop live on the Settings tab, not in this shell.
 export default function MtprotoCampaignLayout({ children }: { children: React.ReactNode }) {
   return (
     <div className="dashboard-page pb-10">
@@ -17,9 +12,6 @@ export default function MtprotoCampaignLayout({ children }: { children: React.Re
         </h1>
         <MtprotoNav />
       </div>
-      <Suspense fallback={<Skeleton className="mb-5 h-[92px] w-full rounded-2xl" />}>
-        <SafetyStrip />
-      </Suspense>
       {children}
     </div>
   );

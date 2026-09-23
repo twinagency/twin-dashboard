@@ -103,11 +103,13 @@ export async function createRunAction(fd: FormData): Promise<ActionResult<{ id: 
   await guardDashboardAction("app/mtproto-campaign/actions.ts#createRunAction", [fd]);
   try {
     const { cloneIds, filters } = filtersFromForm(fd);
+    const note = String(fd.get("note") ?? "").trim();
     const input: CreateRunInput = {
       createdBy: ACTOR,
       cloneIds,
       filters,
       messageVariants: sanitizeMessageVariants(fd.getAll("messageVariants").map(String)),
+      note: note || null,
       ...capsFromForm(fd),
     };
     const run = await createDryRun(input);
