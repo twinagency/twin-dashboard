@@ -126,7 +126,7 @@ export const COOLDOWN_HOURS = 24;
 export const MIN_SILENCE_HOURS = 24;
 export const DEFAULT_HOLDOUT_PCT = 0;
 export const DEFAULT_DAILY_CAP = 30;
-export const HARD_MAX_DAILY_CAP = 400;
+export const HARD_MAX_DAILY_CAP = 1000;
 
 export const MAX_MESSAGE_VARIANTS = 10;
 export const MAX_REENGAGEMENT_MESSAGE_CHARS = 280;
@@ -322,7 +322,7 @@ export const ARM_LIVE_PHRASE = "ARM LIVE";
 export const MTPROTO_LIMITS_KEY = "mtproto_limits";
 
 export const HARD_MIN_HOURLY_CAP = 1;
-export const HARD_MAX_HOURLY_CAP = 60;
+export const HARD_MAX_HOURLY_CAP = 80;
 export const HARD_MIN_DAILY_CAP = 1;
 // HARD_MAX_DAILY_CAP above (400, migration 168) doubles as this range's ceiling.
 export const MIN_SEND_SPACING_MS = 2_000;
