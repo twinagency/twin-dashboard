@@ -67,7 +67,7 @@ for log in Path('/var/log/apache2').glob('*access.log*'):
     with log.open(errors='replace') as handle:
         for line in handle:
             if '/creator-auth/upload' not in line: continue
-            match = re.search(r'"POST /creator-auth/upload(?:[ ?][^"]*)? HTTP/[0-9.]+" (\\d{3}) ', line)
+            match = re.search(r'"POST /creator-auth/upload(?:[ ?][^"]*)? HTTP/[0-9.]+" ([0-9]{3}) ', line)
             if match: counts[match.group(1)] += 1
 print(dict(counts))
 PY
