@@ -76,12 +76,14 @@ export default function CreatorUploadForm({
     pending.current = queue;
     setMessage("");
     setWorking(true);
+    let complete = uploaded;
     try {
       for (const file of queue) {
-        setMessage(`Uploading ${file.name} · ${uploaded + 1} of ${selected || queue.length}`);
+        setMessage(`Uploading ${file.name} · ${complete + 1} of ${selected || queue.length}`);
         await uploadOne(file);
         pending.current = pending.current.slice(1);
-        setUploaded((count) => count + 1);
+        complete += 1;
+        setUploaded(complete);
       }
       pending.current = [];
       if (inputRef.current) inputRef.current.value = "";
