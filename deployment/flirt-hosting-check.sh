@@ -54,3 +54,20 @@ for root in ('/etc/apache2/sites-enabled','/etc/apache2/conf-enabled'):
             if any(token in line.lower() for token in ('limitrequestbody', 'proxytimeout', 'timeout ')):
                 print(path.name + ': ' + line.strip())
 PY
+
+
+printf 'FLIRT_UPLOAD_HTTP_STATUS_COUNTS\n'
+python3 - <<'PY'
+from collections import Counter
+from pathlib import Path
+import re
+counts = Counter()
+for log in Path('/var/log/apache2').glob('*access.log*'):
+    if 'lynqai' not in log.name or log.suffix == '.gz' or not log.is_file(): continue
+    with log.open(errors='replace') as handle:
+        for line in handle:
+            if '/creator-auth/upload' not in line: continue
+            match = re.search(r'"POST /creator-auth/upload(?:[ ?][^"]*)? HTTP/[0-9.]+" (\\d{3}) ', line)
+            if match: counts[match.group(1)] += 1
+print(dict(counts))
+PY
