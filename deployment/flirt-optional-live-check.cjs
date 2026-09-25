@@ -35,6 +35,12 @@ async function signup(suffix) {
   fixture.cookie = cookie.split(';')[0];
   return fixture;
 }
+async function upload(fixture, kind, name, bytes, mime) {
+  const form = new FormData();
+  form.set('kind', kind);
+  form.append('files', new Blob([bytes], { type: mime }), name);
+  return page('/creator-auth/upload', fixture, { method: 'POST', body: form });
+}
 async function post(fixture, action, fields = {}) {
   return page('/creator-auth/onboarding', fixture, { method: 'POST', body: new URLSearchParams({ action, ...fields }) });
 }
@@ -110,6 +116,23 @@ async function main() {
   assert((await rows('creator_files', b, 'id')).length === 0, 'Skip-all invented uploads');
   assert((await rows('creator_applications', a, 'status'))[0].status === 'submitted', 'Posted foreign account ID changed another creator');
   checks.push('One-click skip-all and per-account submission isolation');
+
+  const uploadFixture = await signup('uploads');
+  const photo = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR4nGOs1nVmYGBgYmBgYGBgAAALZgDvHS4cXQAAAABJRU5ErkJggg==', 'base64');
+  for (let index = 0; index < 2; index++) {
+    const response = await upload(uploadFixture, 'content_sfw_image', 'sample-' + index + '.png', photo, 'image/png');
+    assert(response.status === 303 && location(response).searchParams.get('status') === 'content_saved', 'Sequential image upload failed');
+  }
+  const photos = await rows('creator_files', uploadFixture, 'kind,storage_transfer_status,bucket,storage_path');
+  assert(photos.length === 2 && photos.every(file => file.kind === 'content_sfw_image' && file.storage_transfer_status === 'verified'), 'Sequential images were not verified');
+  const submittedUpload = await post(uploadFixture, 'submit');
+  assert(submittedUpload.status === 303 && location(submittedUpload).pathname === '/creator', 'Upload fixture could not finish onboarding');
+  const memo = Buffer.from('524946462400000057415645666d74201000000001000100401f0000803e0000020010006461746100000000', 'hex');
+  const voiceUpload = await upload(uploadFixture, 'voice', 'sample-memo.wav', memo, 'audio/wav');
+  assert(voiceUpload.status === 303 && location(voiceUpload).searchParams.get('status') === 'voice_saved', 'Voice upload after optional onboarding failed');
+  const saved = await rows('creator_files', uploadFixture, 'kind,storage_transfer_status,bucket,storage_path');
+  assert(saved.length === 3 && saved.some(file => file.kind === 'voice' && file.storage_transfer_status === 'verified'), 'Voice sample was not verified');
+  checks.push('Sequential photo uploads and voice memo after optional onboarding');
   const twin = await request('https://dashboard.tgaiclone.xyz');
   assert(twin.status === 200 && (await twin.text()).includes('Twin'), 'Existing Twin login stopped responding');
   checks.push('Existing Twin HTTPS login still responds');
@@ -120,6 +143,11 @@ async function cleanup() {
     try {
       if (!fixture.id) { const saved = await accountRows(fixture.email); if (saved.length === 1) Object.assign(fixture, saved[0]); }
       if (fixture.id) {
+        const savedFiles = await rows('creator_files', fixture, 'bucket,storage_path');
+        for (const file of savedFiles) {
+          if (!['onboarding-content', 'voice-samples'].includes(file.bucket) || !file.storage_path?.startsWith('creators/' + fixture.id + '/')) throw new Error('Unexpected synthetic storage object');
+          await api('/storage/v1/object/' + file.bucket + '/' + file.storage_path, { method: 'DELETE', headers: { Authorization: 'Bearer ' + process.env.SUPABASE_SERVICE_KEY } });
+        }
         await api('/rest/v1/creator_accounts?id=eq.' + fixture.id + '&email=eq.' + encodeURIComponent(fixture.email), { method: 'DELETE' });
         await api('/auth/v1/admin/users/' + fixture.auth_user_id, { method: 'DELETE' });
         assert((await accountRows(fixture.email)).length === 0, 'Synthetic account remained');
