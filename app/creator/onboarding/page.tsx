@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button, buttonVariants } from "@/components/ui/button";
 import CreatorQuestionnaireWizard from "@/components/CreatorQuestionnaireWizard";
+import CreatorUploadForm from "@/components/CreatorUploadForm";
 import { supabaseAdmin } from "@/lib/supabase";
 import { CREATOR_SESSION_COOKIE } from "@/lib/creator-session";
 import { creatorDashboardIdentity } from "@/lib/creator-dashboard-identity";
@@ -26,7 +27,7 @@ import IntelligenceCoreIcon from "@/components/IntelligenceCoreIcon";
 import { CREATOR_PORTAL_COOKIE, creatorLoginPath } from "@/lib/creator-routing";
 import { isLynq } from "@/lib/agency-brand";
 import { flirtOnboardingOptional } from "@/lib/flirt-onboarding";
-import { ArrowLeft, Check, CheckCircle2, ChevronRight, Circle, FileText, Images, Mic2, ShieldCheck, Upload } from "lucide-react";
+import { ArrowLeft, Check, CheckCircle2, ChevronRight, Circle, FileText, Images, Mic2, ShieldCheck } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -42,7 +43,7 @@ const statusCopy: Record<string,string> = {
   consent_skipped: "Consent skipped. No consent has been recorded.",
   upload_empty: "Choose at least one file.",
   upload_too_many: "Upload up to 25 files at a time.",
-  upload_too_large: "Keep each upload batch under 64 MB. Images must be under 15 MB each.",
+  upload_too_large: "Keep each file under 64 MB. Images must be under 15 MB each.",
   upload_busy: "Another upload is still being checked. Wait for it to finish, then try again.",
   upload_quota: "This account has reached its onboarding upload limit. Contact support before adding more files.",
   upload_wrong_type: "Use JPG, PNG, WebP or GIF for images, and MP4, MOV or WebM for videos. Upload each file to the matching category.",
@@ -178,18 +179,7 @@ function ContentUploadCard({ kind, count, minimum, label, accept, formatHint, co
       {!optional && <div className="mt-4 h-2 overflow-hidden rounded-full bg-border" role="progressbar" aria-label={`${label} upload progress`} aria-valuemin={0} aria-valuemax={minimum} aria-valuenow={Math.min(count, minimum)}>
         <div className={`h-full rounded-full transition-[width] ${complete ? "bg-emerald-600" : "bg-accent"}`} style={{ width: `${percent}%` }} />
       </div>}
-      <form action="/creator-auth/upload" method="post" encType="multipart/form-data" className="mt-5 grid gap-3">
-        <input type="hidden" name="kind" value={kind} />
-        <label>
-          <span className="mb-1.5 block text-sm font-medium text-ink">Choose {label.toLowerCase()}</span>
-          <Input name="files" type="file" accept={accept} multiple required={!optional} disabled={locked} className="h-auto min-h-11 border-[#7b8798] py-2 text-sm" />
-          <span className="mt-1.5 block text-xs text-muted">{formatHint}</span>
-        </label>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <span className="text-xs text-muted">Up to 25 files and 64 MB per batch.</span>
-          <Button type="submit" size="lg" disabled={locked} className="min-h-11"><Upload className="size-4" aria-hidden="true" /> Upload</Button>
-        </div>
-      </form>
+      <CreatorUploadForm kind={kind} label={label} accept={accept} formatHint={formatHint} locked={locked} />
     </section>
   );
 }
@@ -327,11 +317,7 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
                 {saved && <SavedConfirmation title={status === "voice_skipped" ? "Voice step saved" : "Voice samples saved"} detail={statusCopy[status!]} />}
                 <p className="text-sm leading-6 text-muted">Voice is not required to get onboarded. Add samples now or skip it and activate voice later.</p>
                 <div className="grid gap-3 md:grid-cols-[1fr_auto]">
-                  <form action="/creator-auth/upload" method="post" encType="multipart/form-data" className="flex flex-col gap-3 sm:flex-row sm:items-end">
-                    <input type="hidden" name="kind" value="voice" />
-                    <label className="flex-1"><span className="mb-1 block text-sm text-muted">Voice recordings</span><Input name="files" type="file" accept="audio/*,video/*" multiple disabled={applicationLocked} className="h-auto border-[#7b8798] py-2" /></label>
-                    <Button type="submit" variant="outline" size="lg" disabled={applicationLocked} className="min-h-11">Upload voice</Button>
-                  </form>
+                  <CreatorUploadForm kind="voice" label="Voice recordings" accept="audio/*,video/*" locked={applicationLocked && !optional} voice />
                   <form action="/creator-auth/onboarding" method="post" className="self-end"><input type="hidden" name="action" value="skip_voice" /><Button type="submit" variant="outline" size="lg" disabled={applicationLocked} className="min-h-11">Skip for now</Button></form>
                 </div>
                 {voiceFiles.length > 0 && <p className="text-sm text-muted">{voiceFiles.length} voice file{voiceFiles.length === 1 ? "" : "s"} verified.</p>}
