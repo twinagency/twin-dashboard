@@ -2,17 +2,21 @@
 //
 // Run: npm run test:bundle-results
 //
-// The bundle-on-reply results panel's numbers. Pure aggregation plus the real
-// loader against the in-memory FakeDb: eligible vs refused, sent vs failed with
-// reasons, purchase matching (duplicate ledger rows must not count twice,
-// wrong price / before send / other fan must not count), conversion, stars,
-// and the "tables not there yet" and read-only guarantees.
+// The bundle-on-reply results panel's numbers, multi-flow. Pure aggregation
+// plus the real loader against the in-memory FakeDb: eligible vs refused vs
+// flow-gated, sent vs failed with reasons, exact Part 1 / Part 2 purchase
+// attribution via video_sequence_entitlements (not price/time guessing), two
+// flows on the same creator staying separate, conversion, stars, and the
+// "tables not there yet" and read-only guarantees.
 
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { __setMtDbForTest } from "../db";
 import { FakeDb } from "./fake-db";
-import { dedupeLedger, loadBundleResults, matchPurchases, summarizeBundleResults, type BundleSendDbRow, type LedgerTx } from "../bundle-results";
+import {
+  loadBundleResults, reasonLabel, summarizeBundleResults,
+  type BundleConfigRow, type BundleSendDbRow, type EntitlementRow, type PartRow,
+} from "../bundle-results";
 
 let passed = 0;
 const failures: string[] = [];
@@ -25,112 +29,164 @@ const CLONE = "6ca0782d-b5cf-433d-8329-f3ef7ec5f011";
 const OTHER = "22222222-2222-4222-8222-222222222222";
 const creators = [{ id: CLONE, name: "Alanna Pow" }, { id: OTHER, name: "Other" }];
 
+const FLOW_A = "f1f1f1f1-f1f1-41f1-81f1-f1f1f1f1f1f1";
+const FLOW_B = "f2f2f2f2-f2f2-42f2-82f2-f2f2f2f2f2f2";
+const REV_A = "11111111-1111-4111-8111-111111111111";
+const REV_B = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+const P1_A = "p1a"; const P2_A = "p2a";
+const P1_B = "p1b"; const P2_B = "p2b";
+
+const cfg = (over: Partial<BundleConfigRow> = {}): BundleConfigRow => ({
+  id: FLOW_A, clone_id: CLONE, flow_key: "joi-on-bed", name: "JOI", enabled: true, priority: 100, audience: "campaign_repliers",
+  min_gap_hours: 24, sequence_id: "seq-a", caption: "unlock it", part1_star_price: 320, part2_star_price: 480,
+  delay_seconds: 30, allow_uncertain: false, enabled_at: "2026-09-26T00:00:00Z", ...over,
+});
+
 let n = 0;
 const send = (tg: number, state: BundleSendDbRow["state"], o: Partial<BundleSendDbRow> = {}): BundleSendDbRow => ({
-  id: `s${++n}`, clone_id: CLONE, telegram_id: tg, state, error: null, star_price: 500, trigger_source: "reply",
+  id: `s${++n}`, clone_id: CLONE, flow_id: FLOW_A, user_id: `u${tg}`, telegram_id: tg, sequence_id: "seq-a",
+  revision_id: state === "sent" ? REV_A : null, state, error: null, trigger_source: "reply",
   reply_classification: "none", created_at: "2026-09-26T10:00:00Z", sent_at: state === "sent" ? "2026-09-26T10:05:00Z" : null, ...o,
 });
-let tx = 0;
-const charge = (tg: number, o: Partial<LedgerTx> = {}): LedgerTx => ({
-  id: `t${++tx}`, clone_id: CLONE, telegram_id: tg, kind: "media", feature: "bundle", amount_stars: 500,
-  invoice_payload: null, paid_at: "2026-09-26T11:00:00Z", created_at: "2026-09-26T11:00:01Z", ...o,
-});
-const cfg = { clone_id: CLONE, enabled: true, bundle_id: "b1", caption: "unlock it", star_price: 500, delay_seconds: 30, allow_uncertain: false, enabled_at: "2026-09-26T00:00:00Z" };
+
+const PARTS: PartRow[] = [
+  { id: P1_A, revision_id: REV_A, position: 1, price_stars: 320 },
+  { id: P2_A, revision_id: REV_A, position: 2, price_stars: 480 },
+  { id: P1_B, revision_id: REV_B, position: 1, price_stars: 700 },
+  { id: P2_B, revision_id: REV_B, position: 2, price_stars: 700 }, // same price as part 1 on purpose
+];
+
+const ent = (userId: string, partId: string, stars: number, revoked: string | null = null): EntitlementRow =>
+  ({ user_id: userId, part_id: partId, price_stars_paid: stars, revoked_at: revoked });
 
 async function main() {
-  await check("dedupe collapses one charge recorded twice under different ids", () => {
-    eq(dedupeLedger([charge(1), charge(1, { id: "dupe", created_at: "2026-09-28T00:00:00Z" })]).length, 1, "rows");
-    eq(dedupeLedger([charge(1), charge(1, { paid_at: "2026-09-26T11:00:05Z" })]).length, 2, "different second is a different charge");
+  await check("reasonLabel: blank reads as 'no reason recorded', long text is capped", () => {
+    eq(reasonLabel(null), "no reason recorded", "null");
+    eq(reasonLabel("  "), "no reason recorded", "blank");
+    eq(reasonLabel("x".repeat(200)).length, 90, "capped");
   });
 
-  await check("a duplicated charge is counted once (money)", () => {
+  await check("exact entitlement attribution: buying Part 1 does not count as Part 2, even at the same price", () => {
     const sends = [send(1, "sent")];
-    const m = matchPurchases(sends, [charge(1), charge(1, { id: "dupe" })]);
-    eq(m.size, 1, "matched sends");
-    eq(m.get(sends[0].id)!.stars, 500, "stars");
-    const r = summarizeBundleResults(creators, [cfg], sends, [charge(1), charge(1, { id: "dupe" })]);
-    eq(r.totals.stars, 500, "stars total (not 1000)");
-    eq(r.totals.purchases, 1, "purchases");
+    const r = summarizeBundleResults(creators, [cfg()], sends, PARTS, [ent("u1", P1_A, 320)]);
+    const f = r.clones[0].flows[0];
+    eq(f.part1Purchases, 1, "part1");
+    eq(f.part2Purchases, 0, "part2");
+    eq(f.stars, 320, "stars");
   });
 
-  await check("does not match: wrong price, before send, other fan, too late, refund, non-bundle feature", () => {
-    const s = [send(1, "sent")];
-    eq(matchPurchases(s, [charge(1, { amount_stars: 400 })]).size, 0, "wrong price");
-    eq(matchPurchases(s, [charge(1, { paid_at: "2026-09-26T09:00:00Z" })]).size, 0, "before the send");
-    eq(matchPurchases(s, [charge(2)]).size, 0, "other fan");
-    eq(matchPurchases(s, [charge(1, { paid_at: "2026-10-20T11:00:00Z" })]).size, 0, "outside the window");
-    eq(matchPurchases(s, [charge(1, { amount_stars: -500 })]).size, 0, "refund");
-    eq(matchPurchases(s, [charge(1, { invoice_payload: "refund" })]).size, 0, "refund payload");
-    eq(matchPurchases(s, [charge(1, { feature: "photo" })]).size, 0, "a photo purchase");
-    eq(matchPurchases([send(1, "failed")], [charge(1)]).size, 0, "a send that never went out");
+  await check("both parts bought, sums correctly, and a same-priced Part 1/2 pair never collides", () => {
+    // flow B's Part 1 and Part 2 share a price (700); attribution is by part id, not price.
+    const sendsB = [send(2, "sent", { flow_id: FLOW_B, revision_id: REV_B, user_id: "u2" })];
+    const r = summarizeBundleResults(creators, [cfg({ id: FLOW_B, flow_key: "second", sequence_id: "seq-b" })], sendsB, PARTS, [ent("u2", P1_B, 700), ent("u2", P2_B, 700)]);
+    const f = r.clones[0].flows[0];
+    eq(f.part1Purchases, 1, "part1");
+    eq(f.part2Purchases, 1, "part2");
+    eq(f.stars, 1400, "stars: both counted, no collision");
   });
 
-  await check("one charge serves one send only", () => {
-    const a = send(1, "sent");
-    const b = send(1, "sent", { sent_at: "2026-09-26T10:30:00Z" });
-    eq(matchPurchases([a, b], [charge(1)]).size, 1, "matches");
+  await check("a revoked entitlement (refund) does not count", () => {
+    const sends = [send(1, "sent")];
+    const r = summarizeBundleResults(creators, [cfg()], sends, PARTS, [ent("u1", P1_A, 320, "2026-09-27T00:00:00Z")]);
+    eq(r.clones[0].flows[0].part1Purchases, 0, "refunded part1 not counted");
   });
 
-  await check("per-creator numbers: eligible, refused, sent, failed with reasons, gated, conversion, recent", () => {
+  await check("another fan's entitlement never attributes to this send", () => {
+    const sends = [send(1, "sent")];
+    const r = summarizeBundleResults(creators, [cfg()], sends, PARTS, [ent("u999", P1_A, 320)]);
+    eq(r.clones[0].flows[0].part1Purchases, 0, "not this fan");
+  });
+
+  await check("per-flow numbers: eligible, refused, flow-gated, sent, failed with reasons, gated, conversion, recent", () => {
     const sends = [
       send(1, "sent"), send(2, "sent"), send(3, "sent", { trigger_source: "backfill" }), send(4, "sent"),
-      send(5, "failed", { error: "PHOTO_INVALID_DIMENSIONS" }), send(6, "failed", { error: "PHOTO_INVALID_DIMENSIONS" }),
+      send(5, "failed", { error: "wrong file identifier" }), send(6, "failed", { error: "wrong file identifier" }),
       send(7, "uncertain", { error: "socket hang up" }),
       send(8, "pending"),
       send(9, "skipped", { error: "gate_outside_window" }),
       send(10, "skipped", { error: "negative:complaint:profanity_off" }),
       send(11, "skipped", { error: "negative:opt_out:stop_contacting_me" }),
       send(12, "skipped", { error: "opted_out" }),
+      send(13, "skipped", { error: "other_flow_recent" }),
+      send(14, "skipped", { error: "already_has_flow" }),
+      send(15, "skipped", { error: "other_flow_in_flight" }),
     ];
-    const ledger = [charge(1), charge(2), charge(2, { id: "dupe" }), charge(99)];
-    const r = summarizeBundleResults(creators, [cfg], sends, ledger);
-    const c = r.clones[0];
-    eq(c.replies, 12, "replies");
-    eq(c.negative, 3, "negative (refused)");
-    eq(c.eligible, 9, "eligible");
-    eq(c.sent, 4, "sent");
-    eq(c.sentByBackfill, 1, "sent by backfill");
-    eq(c.sentByReply, 3, "sent by reply");
-    eq(c.failed, 2, "failed");
-    eq(c.uncertain, 1, "uncertain");
-    eq(c.pending, 1, "pending");
-    eq(c.gated, 1, "gated");
-    eq(c.purchases, 2, "purchases");
-    eq(c.stars, 1000, "stars");
-    eq(c.conversion, 0.5, "conversion = 2 buyers / 4 sent");
-    eq(c.failureReasons[0].reason, "PHOTO_INVALID_DIMENSIONS", "top reason");
-    eq(c.failureReasons[0].count, 2, "top reason count");
-    eq(c.failureReasons.some((f) => /negative|opt_out/.test(f.reason)), false, "refused replies are not listed as failures");
-    eq(c.recent.length, 12, "recent list");
-    eq(c.recent.find((x) => x.telegramId === 1)!.boughtStars, 500, "recent shows the purchase");
+    const entitlements = [ent("u1", P1_A, 320), ent("u2", P1_A, 320), ent("u2", P2_A, 480)];
+    const r = summarizeBundleResults(creators, [cfg()], sends, PARTS, entitlements);
+    const f = r.clones[0].flows[0];
+    eq(f.replies, 15, "replies");
+    eq(f.negative, 3, "negative (refused)");
+    eq(f.flowGated, 3, "flow-gated (multi-flow rules)");
+    eq(f.eligible, 9, "eligible (excludes negative and flow-gated)");
+    eq(f.previewsSent, 4, "previews sent");
+    eq(f.sentByBackfill, 1, "sent by backfill");
+    eq(f.sentByReply, 3, "sent by reply");
+    eq(f.failed, 2, "failed");
+    eq(f.uncertain, 1, "uncertain");
+    eq(f.pending, 1, "pending");
+    eq(f.gated, 1, "gated (fan safety gate, e.g. outside window)");
+    eq(f.part1Purchases, 2, "part1 purchases");
+    eq(f.part2Purchases, 1, "part2 purchases");
+    eq(f.stars, 320 + 320 + 480, "stars");
+    eq(f.conversion, (2 + 1) / (2 * 4), "conversion = purchases / (2*previewsSent)");
+    eq(f.failureReasons[0].reason, "wrong file identifier", "top reason");
+    eq(f.failureReasons[0].count, 2, "top reason count");
+    eq(f.failureReasons.some((x) => /negative|opt_out|other_flow|already_has_flow/.test(x.reason)), false, "refused/flow-gated replies are not listed as failures");
+    eq(f.recent.length, 9, "recent list excludes negative and flow-gated rows (= eligible count)");
+    eq(f.recent.find((x) => x.telegramId === 2)!.part1Bought, 320, "recent shows part1 purchase");
+    eq(f.recent.find((x) => x.telegramId === 2)!.part2Bought, 480, "recent shows part2 purchase");
+  });
+
+  await check("two flows on the same creator stay separate and roll up into the clone total", () => {
+    const sendsA = [send(1, "sent")];
+    const sendsB = [send(2, "sent", { flow_id: FLOW_B, revision_id: REV_B, user_id: "u2" })];
+    const r = summarizeBundleResults(
+      creators,
+      [cfg(), cfg({ id: FLOW_B, flow_key: "second", sequence_id: "seq-b", priority: 200 })],
+      [...sendsA, ...sendsB],
+      PARTS,
+      [ent("u1", P1_A, 320), ent("u2", P1_B, 700)],
+    );
+    const c = r.clones.find((x) => x.cloneId === CLONE)!;
+    eq(c.flows.length, 2, "two flows");
+    eq(c.previewsSent, 2, "clone total previews");
+    eq(c.purchases, 2, "clone total purchases");
+    eq(c.stars, 1020, "clone total stars");
   });
 
   await check("fleet totals add up across creators and conversion is null with nothing sent", () => {
-    const sends = [send(1, "sent"), send(2, "sent", { clone_id: OTHER })];
-    const r = summarizeBundleResults(creators, [cfg], sends, [charge(1), charge(2, { clone_id: OTHER })]);
-    eq(r.totals.sent, 2, "sent");
-    eq(r.totals.purchases, 2, "purchases");
-    eq(summarizeBundleResults(creators, [cfg], [send(1, "pending")], []).totals.conversion, null, "null conversion");
+    const sends = [send(1, "sent"), send(2, "sent", { clone_id: OTHER, flow_id: FLOW_A })];
+    const cfgOther = cfg({ clone_id: OTHER });
+    const r = summarizeBundleResults(creators, [cfg(), cfgOther], sends, PARTS, [ent("u1", P1_A, 320), ent("u2", P1_A, 320)]);
+    eq(r.totals.previewsSent, 2, "previews sent");
+    eq(r.totals.part1Purchases, 2, "part1 purchases");
+    eq(summarizeBundleResults(creators, [cfg()], [send(1, "pending")], PARTS, []).totals.conversion, null, "null conversion");
   });
 
-  await check("placeholder config is flagged so the UI can say 'needs setup'", () => {
-    const r = summarizeBundleResults(creators, [{ ...cfg, enabled: false, bundle_id: null, caption: "TODO: caption not decided yet" }], [], []);
-    eq(r.clones[0].config!.placeholder, true, "placeholder");
-    eq(r.clones[0].config!.enabled, false, "enabled");
+  await check("placeholder flow is flagged so the UI can say 'needs setup'", () => {
+    const r = summarizeBundleResults(creators, [cfg({ enabled: false, sequence_id: null, caption: "TODO: caption not decided yet", part1_star_price: null, part2_star_price: null })], [], PARTS, []);
+    eq(r.clones[0].flows[0].placeholder, true, "placeholder");
+    eq(r.clones[0].flows[0].enabled, false, "enabled");
+  });
+  await check("a real sequence/prices with a TODO-personalise caption is still a placeholder", () => {
+    const r = summarizeBundleResults(creators, [cfg({ caption: "TODO-personalise: hey baby" })], [], PARTS, []);
+    eq(r.clones[0].flows[0].placeholder, true, "still placeholder");
   });
 
-  await check("loader (FakeDb): reads configs, sends and only the ledger it needs", async () => {
+  await check("loader (FakeDb): reads configs, sends, and only the parts/entitlements the sends need", async () => {
     const db = new FakeDb();
-    db.seed("bundle_push_config", [cfg]);
+    db.seed("bundle_push_config", [cfg()]);
     db.seed("bundle_push_sends", [send(1, "sent"), send(2, "failed", { error: "boom" })]);
-    db.seed("star_transactions", [charge(1), charge(1, { id: "dupe" }), charge(2), charge(1, { clone_id: OTHER, id: "x" })]);
+    db.seed("video_sequence_parts", PARTS);
+    db.seed("video_sequence_entitlements", [ent("u1", P1_A, 320), ent("u1", P2_A, 480), ent("u999", P1_B, 700)]);
     __setMtDbForTest(db);
     const r = await loadBundleResults(creators);
     eq(r.available, true, "available");
     eq(r.truncated, false, "truncated");
-    eq(r.totals.sent, 1, "sent");
-    eq(r.totals.purchases, 1, "purchases (duplicate ignored)");
-    eq(r.totals.stars, 500, "stars");
+    eq(r.totals.previewsSent, 1, "previews sent");
+    eq(r.totals.part1Purchases, 1, "part1 purchases (only u1's revision A entitlements considered)");
+    eq(r.totals.part2Purchases, 1, "part2 purchases");
+    eq(r.totals.stars, 800, "stars");
     eq(r.totals.failed, 1, "failed");
     __setMtDbForTest(null);
   });
@@ -147,12 +203,23 @@ async function main() {
 
   await check("loader: an unreadable send table is reported, never shown as zero sends", async () => {
     const db = new FakeDb();
-    db.seed("bundle_push_config", [cfg]);
+    db.seed("bundle_push_config", [cfg()]);
     db.fail("bundle_push_sends", "select", { message: "statement timeout", code: "57014" });
     __setMtDbForTest(db);
     const r = await loadBundleResults(creators);
     eq(r.available, true, "available");
     eq(typeof r.error, "string", "error is reported");
+    __setMtDbForTest(null);
+  });
+
+  await check("loader: no sends at all reads no entitlements (nothing to bound the read by)", async () => {
+    const db = new FakeDb();
+    db.seed("bundle_push_config", [cfg()]);
+    db.seed("bundle_push_sends", []);
+    db.seed("video_sequence_entitlements", [ent("u1", P1_A, 320)]);
+    __setMtDbForTest(db);
+    const r = await loadBundleResults(creators);
+    eq(r.totals.part1Purchases, 0, "no purchases counted");
     __setMtDbForTest(null);
   });
 
