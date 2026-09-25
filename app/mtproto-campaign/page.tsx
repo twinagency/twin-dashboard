@@ -4,6 +4,8 @@ import { buildSendRows } from "@/lib/mtproto/sends";
 import { loadPurchasesForEpisodes } from "@/lib/mtproto/attribution";
 import { listConnections } from "@/lib/mtproto/connections";
 import { getCreators, getRecentRuns } from "@/components/mtproto/data";
+import BundleResultsPanel from "@/components/mtproto/BundleResultsPanel";
+import { loadBundleResults } from "@/lib/mtproto/bundle-results";
 import ActivityFeed, { type ActivityRunRow } from "@/components/mtproto/ActivityFeed";
 import { SEGMENT_LABEL } from "@/components/mtproto/view";
 import type { SendRow } from "@/lib/mtproto/types";
@@ -76,5 +78,14 @@ export default async function MtprotoCampaignPage() {
     .sort((a, b) => new Date(b.sentAt ?? 0).getTime() - new Date(a.sentAt ?? 0).getTime())
     .slice(0, RECENT_SENDS_LIMIT);
 
-  return <ActivityFeed runs={rows} sends={recentSends} />;
+  // Bundle-on-reply results (read only, never throws). Additive: the panel sits
+  // above the existing feed and shows "Not set up yet" until the tables exist.
+  const bundleResults = await loadBundleResults(creators);
+
+  return (
+    <div className="space-y-6">
+      <BundleResultsPanel results={bundleResults} />
+      <ActivityFeed runs={rows} sends={recentSends} />
+    </div>
+  );
 }
