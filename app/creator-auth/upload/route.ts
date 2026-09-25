@@ -17,6 +17,7 @@ import {
   isCreatorContentKind,
 } from "@/lib/creator-content-requirements";
 import { creatorImageDecodes } from "@/lib/creator-image-validation";
+import { flirtOnboardingOptional } from "@/lib/flirt-onboarding";
 
 export const runtime = "nodejs";
 
@@ -238,7 +239,6 @@ export async function POST(req: NextRequest) {
     existingUploadUsage(accountId),
   ]);
   if (applicationError || uploadUsage.error) return back(req, "upload_error");
-  if (application && application.status !== "draft") return new NextResponse("This onboarding application is locked", { status: 409 });
   if (uploadUsage.count >= MAX_ACCOUNT_FILES) return back(req, "upload_quota");
   const bounded = await boundedFormData(req);
   if (bounded.tooLarge) return back(req, "upload_too_large");
@@ -247,6 +247,11 @@ export async function POST(req: NextRequest) {
   const kind = String(form.get("kind") || "");
   const contentRequirement = creatorContentRequirement(kind);
   if (kind !== "voice" && !isCreatorContentKind(kind)) return back(req, "upload_error");
+  // FLIRT's optional intake tells creators they can add voice later. Keep
+  // content locked after submission; only voice can be added afterward.
+  if (application && application.status !== "draft" && !(kind === "voice" && flirtOnboardingOptional())) {
+    return new NextResponse("This onboarding application is locked", { status: 409 });
+  }
   const step = kind === "voice" ? "voice" : "content";
   const files = form.getAll("files").filter((value): value is File => value instanceof File && value.size > 0);
   if (!files.length) return back(req, "upload_empty", step);
