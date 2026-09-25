@@ -32,3 +32,25 @@ for p in paths:
 report['routes']=routes
 print(json.dumps({'edge_readiness':report}))
 PY
+
+
+printf 'FLIRT_CONTAINER_STATE\n'
+python3 - <<'PY'
+import json, subprocess
+for name in ('flirt-dashboard', 'flirt-dashboard-rollback', 'flirt-bot', 'flirt-bot-rollback'):
+    result = subprocess.run(['docker', 'inspect', '--format', '{{json .}}', name], capture_output=True, text=True)
+    if result.returncode: continue
+    info = json.loads(result.stdout)
+    labels = info.get('Config', {}).get('Labels') or {}
+    print(json.dumps({'name':name,'running':info['State']['Running'],'status':info['State']['Status'],'commit':labels.get('io.flirt.commit'),'project':labels.get('io.flirt.project'),'created':info.get('Created')}))
+PY
+printf 'UPLOAD_PROXY_LIMITS\n'
+python3 - <<'PY'
+from pathlib import Path
+for root in ('/etc/apache2/sites-enabled','/etc/apache2/conf-enabled'):
+    for path in Path(root).glob('*'):
+        if not path.is_file() or path.stat().st_size > 100000: continue
+        for line in path.read_text(errors='replace').splitlines():
+            if any(token in line.lower() for token in ('limitrequestbody', 'proxytimeout', 'timeout ')):
+                print(path.name + ': ' + line.strip())
+PY
