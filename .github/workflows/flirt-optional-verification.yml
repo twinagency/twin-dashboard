@@ -16,7 +16,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 12
     env:
-      FLIRT_EXPECTED_COMMIT: c1ae46e04a96ed3d296ee42a71ea09dcda6ca451
+      FLIRT_EXPECTED_COMMIT: 2a350a1c0687a9bd59620e29958e24eb1b5db64e
     steps:
       - uses: actions/checkout@v4
       - name: Check verification script syntax
@@ -29,5 +29,5 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ap-southeast-2
-      - name: Test public empty onboarding, skip-all and unchanged Twin
+      - name: Test public onboarding uploads and unchanged Twin
         run: python3 deployment/flirt-optional-live-check.py
