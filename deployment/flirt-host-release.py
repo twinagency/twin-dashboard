@@ -177,8 +177,16 @@ def deploy(kind, image, sha):
     if previous and (previous["Config"].get("Labels") or {}).get("io.flirt.project") != PROJECT:
         raise RuntimeError("Container name belongs to an unrecognised deployment")
     rollback = name + "-rollback"
-    if inspect(rollback):
-        raise RuntimeError("An earlier FLIRT rollback container needs review")
+    older = inspect(rollback)
+    archived = None
+    if older:
+        labels = older["Config"].get("Labels") or {}
+        old_sha = labels.get("io.flirt.commit", "")
+        if labels.get("io.flirt.project") != PROJECT or not re.fullmatch(r"[a-f0-9]{40}", old_sha) or older["State"]["Running"]:
+            raise RuntimeError("An earlier FLIRT rollback container needs review")
+        archived = name + "-archive-" + old_sha[:12]
+        if inspect(archived):
+            raise RuntimeError("A FLIRT rollback archive already uses the expected name")
     password = command(["aws", "ecr", "get-login-password", "--region", "ap-southeast-2"])
     command(["docker", "login", "--username", "AWS", "--password-stdin", REGISTRY], password)
     command(["docker", "pull", image], timeout=480)
@@ -190,10 +198,14 @@ def deploy(kind, image, sha):
     args = ["docker", "run", "-d", "--name", name, "--restart", "unless-stopped", "--stop-timeout", "30", "--memory", limit, "--memory-swap", limit, "--cpus", "1", "--log-opt", "max-size=10m", "--log-opt", "max-file=3", "--label", "io.flirt.project=" + PROJECT, "--label", "io.flirt.commit=" + sha, "--env-file", str(env_file)]
     if kind == "dashboard": args.extend(["-p", "127.0.0.1:3101:3001"])
     args.append(image)
-    if previous:
-        command(["docker", "stop", "-t", "30", name])
-        command(["docker", "rename", name, rollback])
+    if older:
+        # Preserve the stopped, labelled older version without blocking the
+        # current version from becoming the new rollback.
+        command(["docker", "rename", rollback, archived])
     try:
+        if previous:
+            command(["docker", "stop", "-t", "30", name])
+            command(["docker", "rename", name, rollback])
         command(args)
         healthy = False
         for _ in range(25):
@@ -224,9 +236,11 @@ def deploy(kind, image, sha):
         if current and (current["Config"].get("Labels") or {}).get("io.flirt.commit") == sha:
             if current["State"]["Running"]: command(["docker", "stop", "-t", "30", name])
             command(["docker", "rm", name])
-        if previous:
+        if previous and inspect(rollback):
             command(["docker", "rename", rollback, name])
             command(["docker", "start", name])
+        if older and archived and inspect(archived) and not inspect(rollback):
+            command(["docker", "rename", archived, rollback])
         raise
 
 
