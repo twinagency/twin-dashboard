@@ -51,7 +51,7 @@
     "test:tether-creator-signup": "tsx scripts/check-tether-creator-signup.ts",
     "test:tether-auth-ui": "tsx scripts/check-tether-auth-ui.ts",
     "test:reset-creator-guardrails": "node scripts/check-reset-recent-creator-test-accounts.mjs",
-    "test:catalogue": "node --import tsx scripts/check-catalogue.ts"
+    "test:catalogue": "node --import tsx scripts/check-catalogue.ts && node --import tsx scripts/check-catalogue-navigation.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
