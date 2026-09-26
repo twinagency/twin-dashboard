@@ -1,7 +1,7 @@
 "use client";
 import Script from "next/script";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, Check, ImageIcon, LockKeyhole, Search, ShoppingBag, SlidersHorizontal, Sparkles, Star, Video, X } from "lucide-react";
+import { ArrowLeft, Check, ImageIcon, LockKeyhole, Search, ShoppingBag, SlidersHorizontal, Star, Video, X } from "lucide-react";
 import type { CatalogueItem } from "@/lib/catalogue-core";
 import "./catalogue.css";
 
@@ -152,7 +152,11 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
           <p>{setup.hasMainApp ? "A Main Mini App is configured. Confirm its URL matches above before enabling." : "The Main Mini App still needs to be configured."}</p>
           <button className="cat-primary" disabled={busy || !setup.hasMainApp} onClick={activate}>URL checked, enable catalogue</button></div>}
       </section>}
-      <section className="cat-intro"><div className="cat-intro-icon"><Sparkles size={19} /></div><div><h2>A little more to explore</h2><p>Browse the previews. Pick your favourite.</p></div></section>
+      <section className="cat-intro">
+        <div className="cat-intro-icon" aria-hidden="true"><svg width="28" height="28" viewBox="0 0 32 32" fill="none"><path d="M6 15C2 12 2 5 4 2c1 5 4 6 8 7M26 15c4-3 4-10 2-13-1 5-4 6-8 7" fill="#e53935" /><path d="M16 8C9 8 5 12 5 19s5 11 11 11 11-4 11-11S23 8 16 8Z" fill="#e53935" /><path d="m10 16 3 2m9-2-3 2M11 23c3 3 7 3 10 0" stroke="#721b24" strokeWidth="2" strokeLinecap="round" /></svg></div>
+        <div><h2>I’ve blurred them down just enough for you to see what you’re getting daddy x. ❤️</h2>
+          <p>Once you tap on one you will just double tap and pay then it’s all yours xxx come back to the chat after I want to talk dirty with you 👀 🍑</p></div>
+      </section>
       {error ? <div className="cat-empty"><LockKeyhole /><h2>{error}</h2>{preview && <a className="cat-primary" href={`/twin?next=${encodeURIComponent(`/catalogue/${slug}?preview=1`)}`}>Sign in</a>}<button className="cat-secondary" onClick={load}>Try again</button></div>
         : !data ? <div className="cat-empty" aria-live="polite">Loading your collection…</div> : <>
         <nav className="cat-tabs" aria-label="Catalogue categories">{[...(data.items.some(i => i.free) ? ["Free Content"] : []), ...tabs].map(tab =>
