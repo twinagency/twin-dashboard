@@ -15,12 +15,6 @@ const tabs = ["New", "Discounted", "Photos", "Videos", "Bundles", "My Purchases"
 
 function DevilIcon() { return <svg width="28" height="28" viewBox="0 0 32 32" fill="none"><path d="M6 15C2 12 2 5 4 2c1 5 4 6 8 7M26 15c4-3 4-10 2-13-1 5-4 6-8 7" fill="#e53935" /><path d="M16 8C9 8 5 12 5 19s5 11 11 11 11-4 11-11S23 8 16 8Z" fill="#e53935" /><path d="m10 16 3 2m9-2-3 2M11 23c3 3 7 3 10 0" stroke="#721b24" strokeWidth="2" strokeLinecap="round" /></svg>; }
 
-function itemTitle(item: CatalogueItem) {
-  const settings: Array<[RegExp, string]> = [[/\bshower\b/i, "Shower"], [/\bbedroom\b/i, "Bedroom"], [/\bmirror\b/i, "Mirror"], [/\bpool\b/i, "Poolside"], [/\bbeach\b/i, "Beach"], [/\bclose[ -]?up\b/i, "Close-up"], [/\bbed\b/i, "Bedroom"]];
-  const setting = settings.find(([pattern]) => pattern.test(item.description))?.[1];
-  return setting ? `${setting} ${item.type}` : item.type === "video" ? "Video" : "Photo";
-}
-
 function Preview({ item, blur, call, retryable = true }: { item: CatalogueItem; blur: number; call: Call; retryable?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
@@ -235,7 +229,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
         {section === "My Purchases" && <p className="cat-purchase-note">{data.purchaseNote}</p>}
         {visible.length ? <div className="cat-grid">{visible.slice(0, pageSize).map(item => <article className="cat-card" key={`${item.type}:${item.id}`}>
           <button className="cat-picture-button" onClick={() => { setSelected(item); setNotice(""); }} aria-label={`View ${item.type}: ${item.description.slice(0, 100)}`}><Preview item={item} blur={renderBlur} call={call} /></button>
-          <div className="cat-card-body"><p>{itemTitle(item)}</p><div className="cat-card-bottom"><span className="cat-price">{item.purchased ? <><Check size={15} /> Purchased</> : item.free ? "Free" : <><Star size={15} fill="currentColor" />{item.stars.toLocaleString()}</>}</span>
+          <div className="cat-card-body"><p>{item.description}</p><div className="cat-card-bottom"><span className="cat-price">{item.purchased ? <><Check size={15} /> Purchased</> : item.free ? "Free" : <><Star size={15} fill="currentColor" />{item.stars.toLocaleString()}</>}</span>
             <button onClick={() => { setSelected(item); setNotice(""); }}>{item.purchased||item.received?"View":"Unlock"}</button></div></div></article>)}</div>
           : !search&&section==='Bundles'&&data.bundles.length ? <p className="cat-purchase-note">Choose one of the bundle deals above.</p> : <div className="cat-empty"><ShoppingBag size={30} /><h2>{search ? "No matching items" : section === "My Purchases" ? "No linked purchases yet" : `No ${section.toLowerCase()} available right now`}</h2><button className="cat-secondary" onClick={() => { setSection("New"); setSearch(""); }}>Explore the collection</button></div>}
         {visible.length > pageSize && <button className="cat-load-more" onClick={() => setPageSize(v => v + 12)}>Show more</button>}
