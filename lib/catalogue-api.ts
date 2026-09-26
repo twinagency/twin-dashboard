@@ -40,8 +40,10 @@ return async function POST(request: NextRequest, context: { params: Promise<{ sl
     // Identity resolution only; credentials never enter the returned projection.
     const clone = checked(await db.from("clones").select("id,name,slug,bot_token,browse_enabled,photos_enabled,videos_enabled,bundles_enabled,business_username,status")
       .eq("slug", slug).maybeSingle());
-    if (!clone?.browse_enabled || clone.status !== "active") return json({ error: "Catalogue unavailable." }, 404);
+    if (!clone || clone.status !== "active") return json({ error: "Catalogue unavailable." }, 404);
     const admin = body.preview === true && await deps.admin();
+    // Operators can prepare a catalogue before any discovery messages are enabled.
+    if (!admin && !clone.browse_enabled) return json({ error: "Catalogue unavailable." }, 404);
     let fan: any = null;
     if (!admin) {
       if (body.preview === true) return json({ error: "Sign in to the operator dashboard to preview." }, 401);
@@ -81,6 +83,9 @@ return async function POST(request: NextRequest, context: { params: Promise<{ sl
       const url = safeMiniAppUrl(`https://t.me/${me.result.username}?startapp`);
       if (!url) return json({ error: "Invalid app link." }, 400);
       checked(await db.from("creator_catalogue_settings").upsert({ clone_id: clone.id, blur_strength: blur, enabled: true, mini_app_url: url }));
+      // Publish the verified app link before enabling discovery, so new creators
+      // never receive the legacy text menu during catalogue setup.
+      checked(await db.from("clones").update({ browse_enabled: true }).eq("id", clone.id));
       return json({ enabled: true, url });
     }
     if (action === "catalogue") {

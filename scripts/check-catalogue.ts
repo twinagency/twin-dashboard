@@ -23,10 +23,10 @@ let rows:Record<string,any[]>;let owner=false;let rendered:{path:string;blur:num
 function reset(){owner=false;rendered=undefined;rows={clones:[{...clone}],users:[{...fan}],photos:[{...photo}],videos:[],creator_catalogue_settings:[{clone_id:cloneId,enabled:true,blur_strength:16}],user_received_media:[],star_transactions:[],catalogue_requests:[],catalogue_bundles:[],catalogue_loyalty_programs:[]};}
 let rpcCall:any=null;
 const db:any={rpc:async(name:string,args:any)=>{rpcCall={name,args};return {data:{balance:1890,earned:1890,spent:0,cost:2500,startsAt:new Date().toISOString()},error:null};},from(table:string){
-  const filters:Array<(r:any)=>boolean>=[];let single=false;let take=Infinity;let change:any;let selected='*';let insertion=false;
-  const q:any={select(s='*'){selected=s;return q},eq(k:string,v:any){filters.push(r=>r[k]===v);return q},in(k:string,v:any[]){filters.push(r=>v.includes(r[k]));return q},gt(k:string,v:any){filters.push(r=>r[k]>v);return q},gte(k:string,v:any){filters.push(r=>r[k]>=v);return q},not(k:string,_op:string,v:any){filters.push(r=>r[k]!==v);return q},order(){return q},limit(n:number){take=n;return q},maybeSingle(){single=true;return q},single(){single=true;return q},insert(v:any){change=v;insertion=true;return q},upsert(v:any){change=v;return q},then(resolve:any,reject:any){
+  const filters:Array<(r:any)=>boolean>=[];let single=false;let take=Infinity;let change:any;let selected='*';let insertion=false;let updating=false;
+  const q:any={select(s='*'){selected=s;return q},eq(k:string,v:any){filters.push(r=>r[k]===v);return q},in(k:string,v:any[]){filters.push(r=>v.includes(r[k]));return q},gt(k:string,v:any){filters.push(r=>r[k]>v);return q},gte(k:string,v:any){filters.push(r=>r[k]>=v);return q},not(k:string,_op:string,v:any){filters.push(r=>r[k]!==v);return q},order(){return q},limit(n:number){take=n;return q},maybeSingle(){single=true;return q},single(){single=true;return q},insert(v:any){change=v;insertion=true;return q},upsert(v:any){change=v;return q},update(v:any){change=v;updating=true;return q},then(resolve:any,reject:any){
     try {
-      if(change){if(insertion){rows[table].push({...change,status:'pending',created_at:new Date().toISOString()})}else{const row=rows[table].find(r=>r.clone_id===change.clone_id);if(row)Object.assign(row,change);else rows[table].push(change)}}
+      if(change){if(updating){for(const row of rows[table].filter(r=>filters.every(f=>f(r))))Object.assign(row,change)}else if(insertion){rows[table].push({...change,status:'pending',created_at:new Date().toISOString()})}else{const row=rows[table].find(r=>r.clone_id===change.clone_id);if(row)Object.assign(row,change);else rows[table].push(change)}}
       const result=rows[table].filter(r=>filters.every(f=>f(r))).slice(0,take).map(r=>selected==='*'?{...r}:Object.fromEntries(selected.split(',').map(k=>[k,r[k]])));
       return Promise.resolve({data:single?(result[0]??null):result,error:null}).then(resolve,reject);
     }catch(e){return Promise.reject(e).then(resolve,reject)}
@@ -48,6 +48,21 @@ async function main(){
  assert.equal(windowOpen(new Date(Date.now()+300000).toISOString()),false);
  reset();rows.users[0].minor_flagged_at=new Date().toISOString();assert.equal((await call('catalogue')).status,403);
  reset();rows.clones[0].status='paused';assert.equal((await call('catalogue')).status,404);
+ reset();rows.clones[0].browse_enabled=false;rows.creator_catalogue_settings[0].enabled=false;
+ assert.equal((await call('catalogue')).status,404,'unpublished catalogue is blocked for fans');
+ assert.equal((await call('catalogue',{preview:true})).status,404,'preview flag does not grant operator access');
+ owner=true;assert.equal((await call('catalogue',{preview:true})).status,200,'operator can prepare without enabling discovery');
+ assert.equal(rows.clones[0].browse_enabled,false);
+ const originalFetch=globalThis.fetch;
+ try {
+  globalThis.fetch=async()=>Response.json({ok:true,result:{username:'test_catalogue_bot',has_main_web_app:false}});
+  assert.equal((await call('activate',{preview:true})).status,409);
+  assert.equal(rows.clones[0].browse_enabled,false);assert.equal(rows.creator_catalogue_settings[0].enabled,false);
+  globalThis.fetch=async()=>Response.json({ok:true,result:{username:'test_catalogue_bot',has_main_web_app:true}});
+  assert.equal((await call('activate',{preview:true})).status,200);
+  assert.equal(rows.creator_catalogue_settings[0].mini_app_url,'https://t.me/test_catalogue_bot?startapp');
+  assert.equal(rows.clones[0].browse_enabled,true);assert.equal(rows.creator_catalogue_settings[0].enabled,true);
+ } finally {globalThis.fetch=originalFetch;}
  reset();const res=await call('catalogue');assert.equal(res.status,200);const data=await res.json();
  assert.equal(data.items[0].description,photo.caption);assert.equal(data.items[0].stars,630);assert.equal(data.items[0].purchased,false);
  for(const forbidden of ['bot_token','storage_path','business_connection_id','telegram_id']) assert(!JSON.stringify(data).includes(forbidden));
