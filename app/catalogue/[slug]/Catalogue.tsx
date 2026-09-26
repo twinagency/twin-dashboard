@@ -2,6 +2,7 @@
 import Script from "next/script";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowLeft, Check, ImageIcon, LockKeyhole, Search, ShoppingBag, SlidersHorizontal, Star, Video, X } from "lucide-react";
+import { openCatalogueChat } from "@/lib/catalogue-navigation";
 import type { CatalogueItem } from "@/lib/catalogue-core";
 import "./catalogue.css";
 
@@ -59,6 +60,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
   const [renderBlur, setRenderBlur] = useState(16);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [delivered, setDelivered] = useState<Set<string>>(() => new Set());
   const sending = useRef(false);
   const [notice, setNotice] = useState("");
   const [setup, setSetup] = useState<{ username: string; hasMainApp: boolean; appUrl: string } | null>(null);
@@ -67,7 +69,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const call = useCallback<Call>((action, payload = {}) => fetch(`/api/catalogue/${encodeURIComponent(slug)}`, {
-    method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", "x-telegram-init-data": app()?.initData ?? "" },
+    signal: AbortSignal.timeout(20_000), method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", "x-telegram-init-data": app()?.initData ?? "" },
     body: JSON.stringify({ ...payload, action, preview }),
   }), [slug, preview]);
   const read = useCallback(async (action: string, payload?: Record<string, unknown>) => {
@@ -90,13 +92,12 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
     return () => { document.removeEventListener("keydown", fn); document.body.style.overflow = old; };
   }, [selected, busy]);
   function backToChat() {
-    if (data?.chatUrl) { if (app()?.initData) { app()!.openTelegramLink(data.chatUrl); app()!.close(); } else window.location.href = data.chatUrl; }
-    else app()?.close();
+    openCatalogueChat(data?.chatUrl, app(), url => { window.location.href = url; }, (callback, delay) => window.setTimeout(callback, delay));
   }
   async function sendItem(item: CatalogueItem) {
     if (sending.current) return;
     if (data?.admin) { setNotice("This is your preview. Sending is disabled here."); return; }
-    if (item.received || item.purchased) { backToChat(); return; }
+    if (item.received || item.purchased || delivered.has(`${item.type}:${item.id}`)) { backToChat(); return; }
     sending.current = true; setBusy(true); setNotice("");
     try {
       const key = `${item.type}:${item.id}`;
@@ -108,8 +109,13 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
         result = await read("status", { id: result.id });
       }
       if (["failed", "expired"].includes(result.status)) requestKeys.current.delete(key);
-      setNotice(result.status === "delivered" ? (item.free ? "Your item is in the chat." : "Your locked item is in the chat. Confirm the Stars payment there to unlock it.")
-        : result.result || "Still processing. Check the chat before trying again.");
+      if (result.status === "delivered") {
+        setDelivered(previous => new Set(previous).add(key));
+        setNotice(item.free ? "Sent. Opening your chat…" : `Tap the locked item in the chat to pay ${item.stars.toLocaleString()} Stars. Opening your chat…`);
+        backToChat();
+      } else {
+        setNotice(result.result || "Still processing. Check the chat before trying again.");
+      }
     } catch (e) { setNotice(e instanceof Error ? e.message : "Please try again."); }
     finally { sending.current = false; if (mounted.current) setBusy(false); }
   }
@@ -179,9 +185,13 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
       <button className="cat-modal-close" aria-label="Close item" disabled={busy} onClick={() => setSelected(null)}><X size={21} /></button>
       <Preview item={selected} blur={renderBlur} call={call} /><div className="cat-detail"><span className="cat-eyebrow">{selected.type}</span><p>{selected.description}</p>
         {!data?.admin && !data?.canSend && !selected.received && <p className="cat-window">Send a message in the creator's chat first to receive this item.</p>}
-        <button className="cat-primary" disabled={busy} onClick={() => !data?.admin && !data?.canSend ? backToChat() : void sendItem(selected)}>{busy ? "Sending to your chat…" : data?.admin ? "Preview only" : selected.received || selected.purchased ? "View in chat" : !data?.canSend ? "Open chat" : selected.free ? "Send free item to chat" : `Unlock in chat · ${selected.stars.toLocaleString()} Stars`}</button>
+        <button className="cat-primary" disabled={busy} onClick={() => !data?.admin && !data?.canSend ? backToChat() : void sendItem(selected)}>{busy ? "Sending to your chat…" : data?.admin ? "Preview only" : selected.received || selected.purchased ? "View in chat" : delivered.has(`${selected.type}:${selected.id}`) ? selected.free ? "Open item in chat" : "Open payment in chat" : !data?.canSend ? "Open chat" : selected.free ? "Send free item to chat" : `Unlock in chat · ${selected.stars.toLocaleString()} Stars`}</button>
         {!selected.free && !selected.received && <p className="cat-payment-note">No payment is taken here. Confirm in Telegram to unlock.</p>}
-        {notice && <div role="status" className="cat-result"><p>{notice}</p>{!data?.admin && <button className="cat-secondary" onClick={backToChat}>Return to chat</button>}</div>}
+        {notice && <div role="status" className="cat-result"><p>{notice}</p>{!data?.admin && <>
+          <button className="cat-secondary" onClick={backToChat}>Return to chat</button>
+          {data?.chatUrl && <a className="cat-chat-link" href={data.chatUrl} target="_blank" rel="noopener noreferrer">Open {data.name}’s chat</a>}
+          <button className="cat-close-app" onClick={() => app()?.close()}>Close catalogue</button>
+        </>}</div>}
       </div></section></div>}
   </main>;
 }
