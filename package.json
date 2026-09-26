@@ -34,7 +34,7 @@
     "test:thread": "tsx scripts/check-fan-thread.ts",
     "test:consistency": "tsx scripts/check-report-consistency.ts",
     "test:buyer-conversion": "tsx scripts/check-buyer-conversion.ts",
-    "test:offline": "npm run test:mtproto && npm run test:login-phone && npm run test:paging && npm run test:callsites && npm run test:media && npm run test:media-paths && npm run test:config-safety && npm run test:spend && npm run test:report && npm run test:drivers && npm run test:ledger && npm run test:window && npm run test:dossier && npm run test:thread && npm run test:consistency && npm run test:cohorts && npm run test:agency && npm run test:nsfw-field",
+    "test:offline": "npm run test:mtproto && npm run test:login-phone && npm run test:paging && npm run test:callsites && npm run test:media && npm run test:media-paths && npm run test:config-safety && npm run test:spend && npm run test:report && npm run test:drivers && npm run test:ledger && npm run test:window && npm run test:dossier && npm run test:thread && npm run test:consistency && npm run test:cohorts && npm run test:agency && npm run test:nsfw-field && npm run test:catalogue",
     "test:funnel": "tsx scripts/check-conversation-funnel.ts",
     "test:cohorts": "tsx scripts/check-clone-cohorts.ts && tsx --test app/flows/ConversionCohortStatus.test.tsx app/flows/IntentOfferFunnelSummary.test.tsx",
     "test:videos": "tsx scripts/check-video-import.ts",
@@ -50,7 +50,8 @@
     "test:link-creator-signup": "tsx scripts/check-link-creator-signup.ts",
     "test:tether-creator-signup": "tsx scripts/check-tether-creator-signup.ts",
     "test:tether-auth-ui": "tsx scripts/check-tether-auth-ui.ts",
-    "test:reset-creator-guardrails": "node scripts/check-reset-recent-creator-test-accounts.mjs"
+    "test:reset-creator-guardrails": "node scripts/check-reset-recent-creator-test-accounts.mjs",
+    "test:catalogue": "node --import tsx scripts/check-catalogue.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
