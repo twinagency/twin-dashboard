@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import {rewardProgress,projectBundle} from '../lib/catalogue-commerce';
 import { createHmac } from 'node:crypto';
 import sharp from 'sharp';
 import { NextRequest } from 'next/server';
@@ -19,8 +20,9 @@ const clone={id:cloneId,slug:'test-creator',name:'Test Creator',bot_token:token,
 const fan={id:fanId,clone_id:cloneId,telegram_id:123456,blocked_at:null,paused:false,minor_flagged_at:null,business_connection_id:'test-business',last_message_received:new Date().toISOString()};
 const photo={id:itemId,clone_id:cloneId,caption:'A portrait in a blue jacket',auto_desc:'',star_value:630,is_free:false,created_at:new Date().toISOString(),storage_path:'private-original.jpg'};
 let rows:Record<string,any[]>;let owner=false;let rendered:{path:string;blur:number}|undefined;
-function reset(){owner=false;rendered=undefined;rows={clones:[{...clone}],users:[{...fan}],photos:[{...photo}],videos:[],creator_catalogue_settings:[{clone_id:cloneId,enabled:true,blur_strength:16}],user_received_media:[],star_transactions:[],catalogue_requests:[]};}
-const db:any={from(table:string){
+function reset(){owner=false;rendered=undefined;rows={clones:[{...clone}],users:[{...fan}],photos:[{...photo}],videos:[],creator_catalogue_settings:[{clone_id:cloneId,enabled:true,blur_strength:16}],user_received_media:[],star_transactions:[],catalogue_requests:[],catalogue_bundles:[],catalogue_loyalty_programs:[]};}
+let rpcCall:any=null;
+const db:any={rpc:async(name:string,args:any)=>{rpcCall={name,args};return {data:{balance:1890,earned:1890,spent:0,cost:2500,startsAt:new Date().toISOString()},error:null};},from(table:string){
   const filters:Array<(r:any)=>boolean>=[];let single=false;let take=Infinity;let change:any;let selected='*';let insertion=false;
   const q:any={select(s='*'){selected=s;return q},eq(k:string,v:any){filters.push(r=>r[k]===v);return q},in(k:string,v:any[]){filters.push(r=>v.includes(r[k]));return q},gt(k:string,v:any){filters.push(r=>r[k]>v);return q},gte(k:string,v:any){filters.push(r=>r[k]>=v);return q},not(k:string,_op:string,v:any){filters.push(r=>r[k]!==v);return q},order(){return q},limit(n:number){take=n;return q},maybeSingle(){single=true;return q},single(){single=true;return q},insert(v:any){change=v;insertion=true;return q},upsert(v:any){change=v;return q},then(resolve:any,reject:any){
     try {
@@ -63,6 +65,15 @@ async function main(){
  await call('request',{...request,requestKey:cloneId});assert.equal(rows.catalogue_requests.length,1,'double tap must not enqueue twice');
  rows.catalogue_requests[0].status='uncertain';await call('request',{...request,requestKey:cloneId});assert.equal(rows.catalogue_requests.length,1,'uncertain send must not replay');
  reset();rows.catalogue_requests.push({id:requestId,clone_id:cloneId,user_id:'another-fan',status:'delivered'});assert.equal((await call('status',{id:requestId})).status,404);
+ reset();rows.catalogue_loyalty_programs.push({clone_id:cloneId,enabled:true,points_cost:2500,starts_at:new Date().toISOString(),reward_photo_ids:[itemId]});
+ const loyalty=await (await call('catalogue')).json();assert.equal(loyalty.rewards.balance,1890);assert.equal(rpcCall.args.p_user,fanId);assert.equal(rpcCall.args.p_clone,cloneId);assert.equal(rewardProgress(loyalty.rewards).remaining,610);assert.equal(rewardProgress({...loyalty.rewards,balance:-500}).percent,0);assert.equal(rewardProgress({...loyalty.rewards,balance:6000}).percent,100);
+ await call('request',{type:'reward',id:itemId,requestKey:requestId,userId:'someone-else',points:0});assert.equal(rpcCall.name,'catalogue_claim_reward');assert.equal(rpcCall.args.p_user,fanId);assert.equal(rpcCall.args.p_photo,itemId);assert.equal(rpcCall.args.points,undefined);
+ reset();const ids=Array.from({length:5},(_,i)=>`00000000-0000-0000-0000-${String(i+40).padStart(12,'0')}`);rows.photos=ids.map(id=>({...photo,id}));rows.clones[0].bundles_enabled=true;
+ const bundle={id:requestId,clone_id:cloneId,enabled:true,title:'Five photo bundle',photo_ids:ids,price_stars:2200,regular_stars:3150};rows.catalogue_bundles.push(bundle);
+ const bundleData=await (await call('catalogue')).json();assert.equal(bundleData.bundles.length,1);assert.equal(bundleData.bundles[0].stars,2200);assert.equal(projectBundle({...bundle,price_stars:1},bundleData.items),null);
+ assert.equal((await call('request',{type:'bundle',id:requestId,requestKey:itemId,stars:1})).status,200);assert.equal(rows.catalogue_requests[0].media_type,'bundle');
+ rows.catalogue_requests[0].status='delivered';rows.catalogue_requests[0].created_at='2020-01-01T00:00:00Z';await call('request',{type:'bundle',id:requestId,requestKey:cloneId});assert.equal(rows.catalogue_requests.length,1,'a delivered bundle never generates a second payable card');
+ rows.user_received_media.push({clone_id:cloneId,user_id:fanId,media_type:'photo',media_id:ids[0]});assert.equal((await call('request',{type:'bundle',id:requestId,requestKey:cloneId})).status,409);
  // Real server transformation: strips metadata, limits size and changes pixels.
  const input=await sharp(Buffer.from('<svg width="840" height="840"><rect width="420" height="840" fill="red"/><rect x="420" width="420" height="840" fill="blue"/></svg>')).jpeg().withMetadata().toBuffer();
  const light=await blurPreview(input,6),heavy=await blurPreview(input,30);const meta=await sharp(heavy).metadata();

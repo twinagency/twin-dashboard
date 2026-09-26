@@ -1,14 +1,15 @@
 "use client";
 import Script from "next/script";
 import { useCallback, useEffect, useRef, useState } from "react";
-import { ArrowLeft, Check, ImageIcon, LockKeyhole, Search, ShoppingBag, SlidersHorizontal, Star, Video, X } from "lucide-react";
+import { ArrowLeft, Cat, Check, Gift, ImageIcon, LockKeyhole, Search, ShoppingBag, SlidersHorizontal, Star, Video, X } from "lucide-react";
+import { rewardProgress, type CatalogueBundle, type CatalogueRewards } from '@/lib/catalogue-commerce';
 import { openCatalogueChat } from "@/lib/catalogue-navigation";
 import type { CatalogueItem } from "@/lib/catalogue-core";
 import "./catalogue.css";
 
 type WebApp = { initData: string; ready(): void; expand(): void; close(): void; openTelegramLink(url: string): void };
 function app(): WebApp | undefined { return (window as unknown as { Telegram?: { WebApp?: WebApp } }).Telegram?.WebApp; }
-type Data = { name: string; items: CatalogueItem[]; blur: number; admin: boolean; enabled: boolean; canSend: boolean; chatUrl: string | null; purchaseNote: string };
+type Data = { name: string; items: CatalogueItem[]; blur: number; admin: boolean; enabled: boolean; canSend: boolean; chatUrl: string | null; purchaseNote: string; bundles:CatalogueBundle[]; rewards:CatalogueRewards|null };
 type Call = (action: string, payload?: Record<string, unknown>) => Promise<Response>;
 const tabs = ["New", "Discounted", "Photos", "Videos", "Bundles", "My Purchases"];
 
@@ -60,6 +61,8 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
   const [renderBlur, setRenderBlur] = useState(16);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [rewardsOpen,setRewardsOpen]=useState(false);
+  const [commerceBusy,setCommerceBusy]=useState(false);
   const [delivered, setDelivered] = useState<Set<string>>(() => new Set());
   const sending = useRef(false);
   const [notice, setNotice] = useState("");
@@ -83,6 +86,12 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
     catch (e) { setError(e instanceof Error ? e.message : "Couldn't load the catalogue."); }
   }, [read]);
   useEffect(() => { if (ready) { app()?.ready(); app()?.expand(); void load(); } }, [ready, load]);
+  useEffect(()=>{
+    if(!ready||preview) return;
+    const refresh=()=>{if(document.visibilityState==='visible'&&!sending.current) void load();};
+    const timer=window.setInterval(refresh,30_000);document.addEventListener('visibilitychange',refresh);
+    return ()=>{window.clearInterval(timer);document.removeEventListener('visibilitychange',refresh);};
+  },[ready,preview,load]);
   useEffect(() => { const timer = window.setTimeout(() => setRenderBlur(blur), 450); return () => window.clearTimeout(timer); }, [blur]);
   useEffect(() => { setPageSize(12); }, [section, search]);
   useEffect(() => {
@@ -119,6 +128,26 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
     } catch (e) { setNotice(e instanceof Error ? e.message : "Please try again."); }
     finally { sending.current = false; if (mounted.current) setBusy(false); }
   }
+  async function sendCommerce(type:'bundle'|'reward',id:string) {
+    if(sending.current) return;
+    if(data?.admin){setNotice('Owner preview. No items are sent here.');return;}
+    if(!data?.canSend){backToChat();return;}
+    sending.current=true;setCommerceBusy(true);setNotice('');
+    const key=`${type}:${id}`;
+    try {
+      if(!requestKeys.current.has(key)) requestKeys.current.set(key,crypto.randomUUID());
+      let result=await read('request',{type,id,requestKey:requestKeys.current.get(key)});
+      for(let i=0;i<25&&['pending','sending'].includes(result.status);i++){
+        await new Promise(r=>window.setTimeout(r,2000));if(!mounted.current)return;
+        result=await read('status',{id:result.id});
+      }
+      if(['failed','expired'].includes(result.status))requestKeys.current.delete(key);
+      if(result.status==='delivered'){setNotice(type==='reward'?'Reward sent. No Stars charged.':'Bundle sent. Confirm payment in your chat.');backToChat();}
+      else setNotice(result.result||'Still processing. Check your chat before trying again.');
+      await load();
+    }catch(e){setNotice(e instanceof Error?e.message:'Please try again.');}
+    finally{sending.current=false;if(mounted.current)setCommerceBusy(false);}
+  }
   async function saveBlur() {
     setBusy(true);
     try { await read("settings", { blur }); setData(v => v && ({ ...v, blur })); setNotice("Preview blur saved."); }
@@ -141,6 +170,9 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
     if (section === "Discounted" || section === "Bundles") return false;
     return true;
   });
+  const rewards=data?.rewards;
+  const progress=rewards?rewardProgress(rewards):null;
+  const rewardItems=rewards?data!.items.filter(p=>p.type==='photo'&&rewards.photoIds.includes(p.id)):[];
   return <main className="catalogue">
     <Script src="https://telegram.org/js/telegram-web-app.js" strategy="afterInteractive" onReady={() => setReady(true)} onError={() => { setReady(true); }} />
     <div className="cat-shell">
@@ -165,15 +197,29 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
       </section>
       {error ? <div className="cat-empty"><LockKeyhole /><h2>{error}</h2>{preview && <a className="cat-primary" href={`/twin?next=${encodeURIComponent(`/catalogue/${slug}?preview=1`)}`}>Sign in</a>}<button className="cat-secondary" onClick={load}>Try again</button></div>
         : !data ? <div className="cat-empty" aria-live="polite">Loading your collection…</div> : <>
+        {rewards&&progress&&<section className="cat-rewards" aria-label="Your loyalty rewards">
+          <div className="cat-reward-heading"><span className="cat-mascot"><Cat size={27}/></span><div><span className="cat-eyebrow">A LITTLE THANK YOU</span><h2>Your rewards</h2></div><span className="cat-points">{Math.max(0,rewards.balance).toLocaleString()}<small>points</small></span></div>
+          <div className="cat-reward-track"><div className="cat-reward-meter-wrap"><div className="cat-reward-meter" role="progressbar" aria-label="Progress to next reward" aria-valuemin={0} aria-valuemax={rewards.cost} aria-valuenow={Math.min(rewards.cost,Math.max(0,rewards.balance))}><span style={{width:`${progress.percent}%`}}/></div><p>{progress.ready?'Your reward is ready':`${progress.remaining.toLocaleString()} points to your next reward`}</p></div>
+          <div className="cat-reward-target">{rewardItems[0]?<Preview item={rewardItems[0]} blur={renderBlur} call={call}/>:<Gift size={28}/>}<span><LockKeyhole size={14}/></span></div></div>
+          <button className="cat-secondary" disabled={commerceBusy||!progress.ready||!rewardItems.length} onClick={()=>setRewardsOpen(v=>!v)}>{rewardItems.length?progress.ready?'Choose your bonus photo':'Bonus photo at '+rewards.cost.toLocaleString()+' points':'You own all current rewards'}</button>
+          <details><summary>How rewards work</summary><p>Earn 1 point per Star spent on confirmed purchases with {data.name}, in chat or here, from {new Date(rewards.startsAt).toLocaleDateString()}. Redeem {rewards.cost.toLocaleString()} points for one eligible photo you do not own. Points are not Telegram Stars or cash. Refunds reverse points. Payment updates may take a minute.</p></details>
+          {rewardsOpen&&progress.ready&&<div className="cat-reward-choices">{rewardItems.map(item=><article key={item.id}><Preview item={item} blur={renderBlur} call={call}/><button className="cat-secondary" disabled={commerceBusy} onClick={()=>void sendCommerce('reward',item.id)}>{commerceBusy?'Sending…':'Claim for '+rewards.cost.toLocaleString()+' points'}</button></article>)}</div>}
+        </section>}
+        {!!data.bundles?.length&&<section className="cat-bundle-section"><div className="cat-section-heading"><h2>‼️ Bundle deal ‼️</h2><span>5 photos each</span></div>
+          <div className="cat-bundle-grid">{data.bundles.map(bundle=><article className="cat-bundle-card" key={bundle.id}>
+            <div className="cat-bundle-mosaic">{bundle.photoIds.map(id=>{const item=data.items.find(p=>p.type==='photo'&&p.id===id);return item?<Preview key={id} item={item} blur={renderBlur} call={call}/>:null;})}<span className="cat-bundle-badge">5 photos · 1 included free</span></div>
+            <div className="cat-card-body"><h3>{bundle.title}</h3><p>Five photos together. All previews are protected.</p><div className="cat-bundle-price"><strong><Star size={16}/>{bundle.stars.toLocaleString()}</strong><s>{bundle.regularStars.toLocaleString()}</s><span>Save {(bundle.regularStars-bundle.stars).toLocaleString()} Stars</span></div>
+            <button className="cat-primary" disabled={commerceBusy||bundle.partial} onClick={()=>bundle.owned?backToChat():void sendCommerce('bundle',bundle.id)}>{commerceBusy?'Sending…':bundle.owned?'View in chat':bundle.partial?'You already own some of these':'Unlock bundle in chat'}</button></div>
+          </article>)}</div></section>}
         <nav className="cat-tabs" aria-label="Catalogue categories">{[...(data.items.some(i => i.free) ? ["Free Content"] : []), ...tabs].map(tab =>
           <button key={tab} className={section === tab && !search ? "active" : ""} onClick={() => { setSection(tab); setSearch(""); }}>{tab}</button>)}</nav>
-        <div className="cat-section-heading"><h2>{search ? "Search results" : section}</h2><span>{visible.length} {visible.length === 1 ? "item" : "items"}</span></div>
+        <div className="cat-section-heading"><h2>{search ? "Search results" : section}</h2><span>{!search&&section==='Bundles'?`${data.bundles.length} bundles`:`${visible.length} ${visible.length===1?'item':'items'}`}</span></div>
         {section === "My Purchases" && <p className="cat-purchase-note">{data.purchaseNote}</p>}
         {visible.length ? <div className="cat-grid">{visible.slice(0, pageSize).map(item => <article className="cat-card" key={`${item.type}:${item.id}`}>
           <button className="cat-picture-button" onClick={() => { setSelected(item); setNotice(""); }} aria-label={`View ${item.type}: ${item.description.slice(0, 100)}`}><Preview item={item} blur={renderBlur} call={call} /></button>
           <div className="cat-card-body"><p>{item.description}</p><div className="cat-card-bottom"><span className="cat-price">{item.purchased ? <><Check size={15} /> Purchased</> : item.free ? "Free" : <><Star size={15} fill="currentColor" />{item.stars.toLocaleString()}</>}</span>
             <button onClick={() => { setSelected(item); setNotice(""); }}>View</button></div></div></article>)}</div>
-          : <div className="cat-empty"><ShoppingBag size={30} /><h2>{search ? "No matching items" : section === "My Purchases" ? "No linked purchases yet" : `No ${section.toLowerCase()} available right now`}</h2><button className="cat-secondary" onClick={() => { setSection("New"); setSearch(""); }}>Explore the collection</button></div>}
+          : !search&&section==='Bundles'&&data.bundles.length ? <p className="cat-purchase-note">Choose one of the bundle deals above.</p> : <div className="cat-empty"><ShoppingBag size={30} /><h2>{search ? "No matching items" : section === "My Purchases" ? "No linked purchases yet" : `No ${section.toLowerCase()} available right now`}</h2><button className="cat-secondary" onClick={() => { setSection("New"); setSearch(""); }}>Explore the collection</button></div>}
         {visible.length > pageSize && <button className="cat-load-more" onClick={() => setPageSize(v => v + 12)}>Show more</button>}
         <footer className="cat-bottom"><button onClick={() => setSearchOpen(v => !v)}><Search size={18} />Search the collection</button>
           {searchOpen && <label className="cat-search"><Search size={18} /><input autoFocus value={search} onChange={e => setSearch(e.target.value)} placeholder="Search descriptions…" aria-label="Search descriptions" />{search && <button aria-label="Clear search" onClick={() => setSearch("")}><X size={16} /></button>}</label>}

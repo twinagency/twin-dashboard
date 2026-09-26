@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { dashboardOrigin, trustedFormOrigin } from "./form-origin";
 import { catalogueEligible, DEFAULT_BLUR, projectItem, safeMiniAppUrl, validBlur, validateTelegramData, windowOpen } from "./catalogue-core";
+import { projectBundle } from './catalogue-commerce';
 export type CatalogueDependencies = {
   db(): SupabaseClient;
   admin(): Promise<boolean>;
@@ -83,6 +84,8 @@ return async function POST(request: NextRequest, context: { params: Promise<{ sl
       return json({ enabled: true, url });
     }
     if (action === "catalogue") {
+      const bundleRows = checked(await db.from('catalogue_bundles').select('id,title,photo_ids,price_stars,regular_stars').eq('clone_id',clone.id).eq('enabled',true).order('sort_order')) ?? [];
+      const program = checked(await db.from('catalogue_loyalty_programs').select('points_cost,starts_at,reward_photo_ids').eq('clone_id',clone.id).eq('enabled',true).maybeSingle());
       const columns = "id,caption,auto_desc,star_value,is_free,created_at";
       const [photos, videos, received, purchases] = await Promise.all([
         clone.photos_enabled ? db.from("photos").select(columns).eq("clone_id", clone.id).order("created_at", { ascending: false }).limit(1000) : Promise.resolve({ data: [], error: null }),
@@ -92,15 +95,20 @@ return async function POST(request: NextRequest, context: { params: Promise<{ sl
       ]);
       const owned = new Set((checked(received) ?? []).map((r: any) => `${r.media_type}:${r.media_id}`));
       const bought = new Set((checked(purchases) ?? []).map((r: any) => `${r.media_type}:${r.media_id}`));
+      for (const b of bundleRows) if (bought.has(`bundle:${b.id}`)) for (const id of b.photo_ids) bought.add(`photo:${id}`);
       const items = [...(checked(photos) ?? []).map((r: any) => projectItem(r, "photo", bought.has(`photo:${r.id}`), owned.has(`photo:${r.id}`))),
         ...(checked(videos) ?? []).map((r: any) => projectItem(r, "video", bought.has(`video:${r.id}`), owned.has(`video:${r.id}`)))].filter(r => r.free || Number.isInteger(r.stars) && r.stars > 0);
       items.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
+      const bundles = clone.bundles_enabled ? bundleRows.map((b:any)=>projectBundle(b,items)).filter(Boolean) : [];
+      const points = program && fan ? checked(await db.rpc('catalogue_reward_balance',{p_clone:clone.id,p_user:fan.id})) : null;
+      const rewards = program ? { ...(points || {balance:0,earned:0,spent:0,cost:program.points_cost,startsAt:program.starts_at}),
+        photoIds:clone.photos_enabled ? items.filter(p=>p.type==='photo'&&!p.purchased&&!p.received&&program.reward_photo_ids.includes(p.id)).map(p=>p.id) : [] } : null;
       const username = String(clone.business_username ?? "").replace(/^@/, "");
       return json({ name: clone.name, items, blur, admin, enabled: settings?.enabled === true,
         canSend: !!fan?.business_connection_id && windowOpen(fan.last_message_received) && clone.status === "active",
         chatUrl: /^[a-zA-Z0-9_]{5,32}$/.test(username) ? `https://t.me/${username}` : null,
         purchaseNote: "Purchases linked to catalogue items appear here. Your unlocked originals remain in your chat history.",
-        bundlesAvailable: false });
+        bundlesAvailable: bundles.length>0, bundles, rewards });
     }
     if (action === "preview") {
       if (body.type !== "photo" || typeof body.id !== "string" || !uuid.test(body.id) || !clone.photos_enabled)
@@ -122,14 +130,31 @@ return async function POST(request: NextRequest, context: { params: Promise<{ sl
       if (admin || !fan) return json({ error: "Preview mode cannot send or purchase content." }, 403);
       if (!fan.business_connection_id || !windowOpen(fan.last_message_received) || clone.status !== "active")
         return json({ error: "Send a message in the creator's chat first, then reopen the catalogue." }, 409);
-      if (!['photo', 'video'].includes(String(body.type)) || typeof body.id !== 'string' || !uuid.test(body.id) ||
+      if (!['photo', 'video','bundle','reward'].includes(String(body.type)) || typeof body.id !== 'string' || !uuid.test(body.id) ||
         typeof body.requestKey !== 'string' || !uuid.test(body.requestKey)) return json({ error: "Invalid item." }, 400);
+      if (body.type === 'reward') {
+        rateLimit(`send:${fan.id}`,10);
+        const claim=await db.rpc('catalogue_claim_reward',{p_clone:clone.id,p_user:fan.id,p_photo:body.id,p_request:body.requestKey});
+        if(claim.error) return json({error:'Reward not available. Refresh your points and check your chat before trying again.'},409);
+        return json(claim.data);
+      }
+      if (body.type === 'bundle') {
+        if(!clone.bundles_enabled || !clone.photos_enabled) return json({error:'Bundle unavailable.'},404);
+        const b=checked(await db.from('catalogue_bundles').select('id,title,photo_ids,price_stars,regular_stars').eq('clone_id',clone.id).eq('id',body.id).eq('enabled',true).maybeSingle());
+        if(!b) return json({error:'Bundle unavailable.'},404);
+        const p=checked(await db.from('photos').select('id,star_value,is_free').eq('clone_id',clone.id).in('id',b.photo_ids));
+        if(!projectBundle(b,(p??[]).map((r:any)=>projectItem(r,'photo')))) return json({error:'Bundle price or contents changed. Please refresh.'},409);
+        const owned=checked(await db.from('user_received_media').select('media_id').eq('clone_id',clone.id).eq('user_id',fan.id).eq('media_type','photo').in('media_id',b.photo_ids));
+        const paid=checked(await db.from('star_transactions').select('media_id').eq('clone_id',clone.id).eq('telegram_id',fan.telegram_id).gt('amount_stars',0).in('media_id',[...b.photo_ids,b.id]));
+        if(owned?.length||paid?.length) return json({error:'You already own content in this bundle. Choose individual items to avoid duplicates.'},409);
+      } else {
       if (body.type === 'photo' ? !clone.photos_enabled : !clone.videos_enabled) return json({ error: "Item unavailable." }, 404);
       const table = body.type === 'photo' ? 'photos' : 'videos';
       const asset = checked(await db.from(table).select("id,star_value,is_free").eq("clone_id", clone.id).eq("id", body.id).maybeSingle());
       if (!asset || (!asset.is_free && (!Number.isInteger(asset.star_value) || asset.star_value <= 0))) return json({ error: "Item unavailable." }, 404);
       const owned = checked(await db.from("user_received_media").select("id").eq("clone_id", clone.id).eq("user_id", fan.id).eq("media_type", body.type).eq("media_id", body.id).limit(1));
       if (owned?.length) return json({ error: "You already have this item in your chat history." }, 409);
+      }
       rateLimit(`send:${fan.id}`, 10);
       // A network retry retains its key. Terminal failures require a fresh tap/key.
       const exact = checked(await db.from("catalogue_requests").select("id,status,result,media_type,media_id")
@@ -145,8 +170,10 @@ return async function POST(request: NextRequest, context: { params: Promise<{ sl
         return json({ id: active[0].id, status: active[0].status, result: active[0].result });
       }
       // Delivered/uncertain outcomes are not replayed on a second device or tap.
-      const existing = checked(await db.from("catalogue_requests").select("id,status,result").eq("clone_id", clone.id).eq("user_id", fan.id).eq("media_type", body.type).eq("media_id", body.id)
-        .in("status", ["delivered", "uncertain"]).gte("created_at", new Date(Date.now() - 10 * 60_000).toISOString()).order("created_at", { ascending: false }).limit(1));
+      let previous = db.from("catalogue_requests").select("id,status,result").eq("clone_id", clone.id).eq("user_id", fan.id).eq("media_type", body.type).eq("media_id", body.id)
+        .in("status", ["delivered", "uncertain"]);
+      if (body.type !== 'bundle') previous=previous.gte('created_at',new Date(Date.now()-10*60_000).toISOString());
+      const existing = checked(await previous.order("created_at", { ascending: false }).limit(1));
       if (existing?.length) return json(existing[0]);
       const inserted = await db.from("catalogue_requests").insert({ id: body.requestKey, clone_id: clone.id, user_id: fan.id, media_type: body.type, media_id: body.id }).select("id,status,result").single();
       if (inserted.error?.code === '23505') {
