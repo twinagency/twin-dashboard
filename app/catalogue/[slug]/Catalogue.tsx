@@ -15,6 +15,12 @@ const tabs = ["New", "Discounted", "Photos", "Videos", "Bundles", "My Purchases"
 
 function DevilIcon() { return <svg width="28" height="28" viewBox="0 0 32 32" fill="none"><path d="M6 15C2 12 2 5 4 2c1 5 4 6 8 7M26 15c4-3 4-10 2-13-1 5-4 6-8 7" fill="#e53935" /><path d="M16 8C9 8 5 12 5 19s5 11 11 11 11-4 11-11S23 8 16 8Z" fill="#e53935" /><path d="m10 16 3 2m9-2-3 2M11 23c3 3 7 3 10 0" stroke="#721b24" strokeWidth="2" strokeLinecap="round" /></svg>; }
 
+function itemTitle(item: CatalogueItem) {
+  const settings: Array<[RegExp, string]> = [[/\bshower\b/i, "Shower"], [/\bbedroom\b/i, "Bedroom"], [/\bmirror\b/i, "Mirror"], [/\bpool\b/i, "Poolside"], [/\bbeach\b/i, "Beach"], [/\bclose[ -]?up\b/i, "Close-up"], [/\bbed\b/i, "Bedroom"]];
+  const setting = settings.find(([pattern]) => pattern.test(item.description))?.[1];
+  return setting ? `${setting} ${item.type}` : item.type === "video" ? "Video" : "Photo";
+}
+
 function Preview({ item, blur, call, retryable = true }: { item: CatalogueItem; blur: number; call: Call; retryable?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
@@ -179,9 +185,9 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
     <Script src="https://telegram.org/js/telegram-web-app.js" strategy="afterInteractive" onReady={() => setReady(true)} onError={() => { setReady(true); }} />
     <div className="cat-shell">
       <header className="cat-header"><button className="cat-icon" aria-label="Back to chat" onClick={backToChat}><ArrowLeft size={21} /></button>
-        <div><span className="cat-eyebrow">THE COLLECTION</span><h1>{data?.name || "Your catalogue"}</h1></div>
+        <div><h1>{data?.name || "Your catalogue"}</h1></div>
         {data?.admin ? <button className="cat-icon" aria-label="Catalogue settings" onClick={() => setSettingsOpen(v => !v)}><SlidersHorizontal size={21} /></button>
-          : <span className="cat-secure"><LockKeyhole size={15} /></span>}</header>
+          : <button className="cat-icon" aria-label="My purchases" onClick={() => { setSection("My Purchases"); setSearch(""); document.getElementById("catalogue-items")?.scrollIntoView({ behavior: "smooth" }); }}><ShoppingBag size={19} /></button>}</header>
       {data?.admin && <div className="cat-admin-label">Owner preview <span>{data.enabled ? "Catalogue enabled" : "Not live for fans"}</span></div>}
       {settingsOpen && data?.admin && <section className="cat-settings"><h2>Preview blur</h2>
         <div className="cat-presets">{[[6, "Light"], [16, "Medium"], [30, "Heavy"]].map(([n, label]) => <button key={n} onClick={() => setBlur(Number(n))} className={blur === n ? "active" : ""}>{label}</button>)}</div>
@@ -195,36 +201,41 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
       {error ? <div className="cat-empty"><LockKeyhole /><h2>{error}</h2>{preview && <a className="cat-primary" href={`/twin?next=${encodeURIComponent(`/catalogue/${slug}?preview=1`)}`}>Sign in</a>}<button className="cat-secondary" onClick={load}>Try again</button></div>
         : !data ? <div className="cat-empty" aria-live="polite">Loading your collection…</div> : <>
         {rewards&&progress&&<section className="cat-rewards" aria-label="Your loyalty rewards">
+          <button className="cat-reward-summary" aria-expanded={rewardsOpen} aria-controls="catalogue-reward-details" onClick={()=>setRewardsOpen(v=>!v)}>
           <div className="cat-reward-heading"><span className="cat-mascot" aria-hidden="true"><DevilIcon /></span><h2>Rewards for Daddy</h2><span className="cat-points">{Math.max(0,rewards.balance).toLocaleString()}<small>points</small></span></div>
           <div className="cat-reward-track"><div className="cat-reward-meter-wrap"><div className="cat-reward-meter" role="progressbar" aria-label="Progress to next reward" aria-valuemin={0} aria-valuemax={rewards.cost} aria-valuenow={Math.min(rewards.cost,Math.max(0,rewards.balance))}><span style={{width:`${progress.percent}%`}}/></div><p>{progress.ready?'Your reward is ready':`${progress.remaining.toLocaleString()} points to your next reward`}</p></div>
-            <button className="cat-reward-stack" aria-label={rewardItems.length?`Browse ${rewardItems.length} reward choices`:'No reward choices available'} disabled={!rewardItems.length} onClick={()=>setRewardsOpen(v=>!v)}>
+            <span className="cat-reward-stack" aria-hidden="true">
               {rewardItems.length ? rewardItems.slice(0,7).map((item,index)=><span className="cat-reward-stack-card" key={`${item.type}:${item.id}`} style={{'--card-index':index,'--card-count':Math.min(7,rewardItems.length)} as CSSProperties}><Preview item={item} blur={renderBlur} call={call} retryable={false}/><span className="cat-stack-lock"><LockKeyhole size={12}/></span></span>) : <Gift size={26}/>}
               {!!rewardItems.length&&<span className="cat-stack-count">{rewardItems.length} choices</span>}
-            </button>
+            </span>
           </div>
-          <button className="cat-secondary cat-reward-cta" disabled={commerceBusy||!rewardItems.length} onClick={()=>setRewardsOpen(v=>!v)}>{rewardItems.length?progress.ready?'Choose your photo or video':`Photo or video · ${rewards.cost.toLocaleString()} points`:'You own all current rewards'}</button>
+          </button>
+          {rewardsOpen&&<div id="catalogue-reward-details">
+          <p className="cat-reward-balance">{Math.max(0,rewards.balance).toLocaleString()} points · {rewards.cost.toLocaleString()} per reward</p>
+          <button className="cat-secondary cat-reward-cta" disabled={commerceBusy||!rewardItems.length} onClick={()=>document.getElementById("catalogue-reward-choices")?.scrollIntoView({behavior:"smooth"})}>{rewardItems.length?progress.ready?'Choose your photo or video':`Photo or video · ${rewards.cost.toLocaleString()} points`:'You own all current rewards'}</button>
           <details><summary>How rewards work</summary><p>Earn 1 point per Star spent on confirmed purchases with {data.name}, in chat or here, from {new Date(rewards.startsAt).toLocaleDateString()}. Redeem {rewards.cost.toLocaleString()} points for a photo or video of your choice from the available rewards you do not own. Points are not Telegram Stars or cash. Refunds reverse points. Payment updates may take a minute.</p>{!rewards.videoIds?.length&&<p>Photo rewards available now. Video rewards will appear when added.</p>}</details>
-          {rewardsOpen&&<div className="cat-reward-choices">{rewardItems.map(item=><article key={`${item.type}:${item.id}`}><Preview item={item} blur={renderBlur} call={call}/><p>{item.description}</p><button className="cat-secondary" disabled={commerceBusy||!progress.ready} onClick={()=>void sendCommerce('reward',item.id,item.type)}>{commerceBusy?'Sending…':progress.ready?`Claim · ${rewards.cost.toLocaleString()} points`:`${progress.remaining.toLocaleString()} more points`}</button></article>)}</div>}
+          <div id="catalogue-reward-choices" className="cat-reward-choices">{rewardItems.map(item=><article key={`${item.type}:${item.id}`}><Preview item={item} blur={renderBlur} call={call}/><p>{item.description}</p><button className="cat-secondary" disabled={commerceBusy||!progress.ready} onClick={()=>void sendCommerce('reward',item.id,item.type)}>{commerceBusy?'Sending…':progress.ready?`Claim · ${rewards.cost.toLocaleString()} points`:`${progress.remaining.toLocaleString()} more points`}</button></article>)}</div>
+          </div>}
         </section>}
-      <section className="cat-intro">
-        <div className="cat-intro-icon" aria-hidden="true"><DevilIcon /></div>
-        <div><h2>I’ve blurred them down just enough for you to see what you’re getting daddy x. ❤️</h2>
-          <p>Once you tap on one you will just double tap and pay then it’s all yours xxx come back to the chat after I want to talk dirty with you 👀 🍑</p></div>
-      </section>
-        {!!data.bundles?.length&&<section className="cat-bundle-section"><div className="cat-section-heading"><h2>‼️ Bundle deal ‼️</h2><span>5 photos each</span></div>
+        {!!data.bundles?.length&&<section className="cat-bundle-section" aria-label="Bundle deals">
           <div className="cat-bundle-grid">{data.bundles.map(bundle=><article className="cat-bundle-card" key={bundle.id}>
             <div className="cat-bundle-top"><h3>{bundle.title.replace(/^Photo collection/i,'Collection')}</h3><div className="cat-bundle-price"><strong><Star size={13}/>{bundle.stars.toLocaleString()}</strong><s>{bundle.regularStars.toLocaleString()}</s></div></div>
             <div className="cat-bundle-mosaic">{bundle.photoIds.map(id=>{const item=data.items.find(p=>p.type==='photo'&&p.id===id);return item?<Preview key={id} item={item} blur={renderBlur} call={call}/>:null;})}<span className="cat-bundle-badge">5 photos · 1 included free</span></div>
             <div className="cat-card-body"><p>{bundleDescription(bundle,data.items)}</p><span className="cat-bundle-saving">Save {(bundle.regularStars-bundle.stars).toLocaleString()} Stars</span>
               <button className="cat-primary" disabled={commerceBusy||bundle.partial} onClick={()=>bundle.owned?backToChat():void sendCommerce('bundle',bundle.id)}>{commerceBusy?'Sending…':bundle.owned?'View in chat':bundle.partial?'Partly owned':'Unlock bundle'}</button></div>
           </article>)}</div></section>}
+      <details className="cat-how-it-works"><summary>How it works</summary><div className="cat-intro">
+        <div className="cat-intro-icon" aria-hidden="true"><DevilIcon /></div>
+        <div><h2>I’ve blurred them down just enough for you to see what you’re getting daddy x. ❤️</h2>
+          <p>Once you tap on one you will just double tap and pay then it’s all yours xxx come back to the chat after I want to talk dirty with you 👀 🍑</p></div>
+      </div></details>
         <nav className="cat-tabs" aria-label="Catalogue categories">{[...(data.items.some(i => i.free) ? ["Free Content"] : []), ...tabs].map(tab =>
           <button key={tab} className={section === tab && !search ? "active" : ""} onClick={() => { setSection(tab); setSearch(""); }}>{tab}</button>)}</nav>
-        <div className="cat-section-heading"><h2>{search ? "Search results" : section}</h2><span>{!search&&section==='Bundles'?`${data.bundles.length} bundles`:`${visible.length} ${visible.length===1?'item':'items'}`}</span></div>
+        <div id="catalogue-items" className="cat-section-heading"><h2>{search ? "Search results" : section}</h2><span>{!search&&section==='Bundles'?`${data.bundles.length} bundles`:`${visible.length} ${visible.length===1?'item':'items'}`}</span></div>
         {section === "My Purchases" && <p className="cat-purchase-note">{data.purchaseNote}</p>}
         {visible.length ? <div className="cat-grid">{visible.slice(0, pageSize).map(item => <article className="cat-card" key={`${item.type}:${item.id}`}>
           <button className="cat-picture-button" onClick={() => { setSelected(item); setNotice(""); }} aria-label={`View ${item.type}: ${item.description.slice(0, 100)}`}><Preview item={item} blur={renderBlur} call={call} /></button>
-          <div className="cat-card-body"><p>{item.description}</p><div className="cat-card-bottom"><span className="cat-price">{item.purchased ? <><Check size={15} /> Purchased</> : item.free ? "Free" : <><Star size={15} fill="currentColor" />{item.stars.toLocaleString()}</>}</span>
+          <div className="cat-card-body"><p>{itemTitle(item)}</p><div className="cat-card-bottom"><span className="cat-price">{item.purchased ? <><Check size={15} /> Purchased</> : item.free ? "Free" : <><Star size={15} fill="currentColor" />{item.stars.toLocaleString()}</>}</span>
             <button onClick={() => { setSelected(item); setNotice(""); }}>{item.purchased||item.received?"View":"Unlock"}</button></div></div></article>)}</div>
           : !search&&section==='Bundles'&&data.bundles.length ? <p className="cat-purchase-note">Choose one of the bundle deals above.</p> : <div className="cat-empty"><ShoppingBag size={30} /><h2>{search ? "No matching items" : section === "My Purchases" ? "No linked purchases yet" : `No ${section.toLowerCase()} available right now`}</h2><button className="cat-secondary" onClick={() => { setSection("New"); setSearch(""); }}>Explore the collection</button></div>}
         {visible.length > pageSize && <button className="cat-load-more" onClick={() => setPageSize(v => v + 12)}>Show more</button>}
