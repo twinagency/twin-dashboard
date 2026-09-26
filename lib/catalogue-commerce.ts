@@ -1,6 +1,6 @@
 import type { CatalogueItem } from './catalogue-core';
 export type CatalogueBundle = { id:string; title:string; photoIds:string[]; stars:number; regularStars:number; owned:boolean; partial:boolean };
-export type CatalogueRewards = { balance:number; earned:number; spent:number; cost:number; startsAt:string; photoIds:string[] };
+export type CatalogueRewards = { balance:number; earned:number; spent:number; cost:number; startsAt:string; photoIds:string[]; videoIds:string[] };
 export function projectBundle(row:any, items:CatalogueItem[]):CatalogueBundle|null {
  if(!Array.isArray(row.photo_ids)||row.photo_ids.length!==5||new Set(row.photo_ids).size!==5) return null;
  const photos=row.photo_ids.map((id:string)=>items.find(p=>p.id===id&&p.type==='photo'));

@@ -85,7 +85,7 @@ return async function POST(request: NextRequest, context: { params: Promise<{ sl
     }
     if (action === "catalogue") {
       const bundleRows = checked(await db.from('catalogue_bundles').select('id,title,photo_ids,price_stars,regular_stars').eq('clone_id',clone.id).eq('enabled',true).order('sort_order')) ?? [];
-      const program = checked(await db.from('catalogue_loyalty_programs').select('points_cost,starts_at,reward_photo_ids').eq('clone_id',clone.id).eq('enabled',true).maybeSingle());
+      const program = checked(await db.from('catalogue_loyalty_programs').select('points_cost,starts_at,reward_photo_ids,reward_video_ids').eq('clone_id',clone.id).eq('enabled',true).maybeSingle());
       const columns = "id,caption,auto_desc,star_value,is_free,created_at";
       const [photos, videos, received, purchases] = await Promise.all([
         clone.photos_enabled ? db.from("photos").select(columns).eq("clone_id", clone.id).order("created_at", { ascending: false }).limit(1000) : Promise.resolve({ data: [], error: null }),
@@ -102,7 +102,8 @@ return async function POST(request: NextRequest, context: { params: Promise<{ sl
       const bundles = clone.bundles_enabled ? bundleRows.map((b:any)=>projectBundle(b,items)).filter(Boolean) : [];
       const points = program && fan ? checked(await db.rpc('catalogue_reward_balance',{p_clone:clone.id,p_user:fan.id})) : null;
       const rewards = program ? { ...(points || {balance:0,earned:0,spent:0,cost:program.points_cost,startsAt:program.starts_at}),
-        photoIds:clone.photos_enabled ? items.filter(p=>p.type==='photo'&&!p.purchased&&!p.received&&program.reward_photo_ids.includes(p.id)).map(p=>p.id) : [] } : null;
+        photoIds:clone.photos_enabled ? items.filter(p=>p.type==='photo'&&!p.purchased&&!p.received&&program.reward_photo_ids.includes(p.id)).map(p=>p.id) : [],
+        videoIds:clone.videos_enabled ? items.filter(p=>p.type==='video'&&!p.purchased&&!p.received&&(program.reward_video_ids??[]).includes(p.id)).map(p=>p.id) : [] } : null;
       const username = String(clone.business_username ?? "").replace(/^@/, "");
       return json({ name: clone.name, items, blur, admin, enabled: settings?.enabled === true,
         canSend: !!fan?.business_connection_id && windowOpen(fan.last_message_received) && clone.status === "active",
@@ -133,8 +134,11 @@ return async function POST(request: NextRequest, context: { params: Promise<{ sl
       if (!['photo', 'video','bundle','reward'].includes(String(body.type)) || typeof body.id !== 'string' || !uuid.test(body.id) ||
         typeof body.requestKey !== 'string' || !uuid.test(body.requestKey)) return json({ error: "Invalid item." }, 400);
       if (body.type === 'reward') {
+        const rewardType=body.rewardType ?? 'photo';
+        if(rewardType!=='photo' && rewardType!=='video') return json({error:'Invalid reward type.'},400);
+        if(rewardType==='photo' ? !clone.photos_enabled : !clone.videos_enabled) return json({error:'Reward unavailable.'},404);
         rateLimit(`send:${fan.id}`,10);
-        const claim=await db.rpc('catalogue_claim_reward',{p_clone:clone.id,p_user:fan.id,p_photo:body.id,p_request:body.requestKey});
+        const claim=await db.rpc(rewardType==='video'?'catalogue_claim_video_reward':'catalogue_claim_reward',{p_clone:clone.id,p_user:fan.id,[rewardType==='video'?'p_video':'p_photo']:body.id,p_request:body.requestKey});
         if(claim.error) return json({error:'Reward not available. Refresh your points and check your chat before trying again.'},409);
         return json(claim.data);
       }

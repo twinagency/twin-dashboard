@@ -128,15 +128,15 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
     } catch (e) { setNotice(e instanceof Error ? e.message : "Please try again."); }
     finally { sending.current = false; if (mounted.current) setBusy(false); }
   }
-  async function sendCommerce(type:'bundle'|'reward',id:string) {
+  async function sendCommerce(type:'bundle'|'reward',id:string,rewardType:'photo'|'video'='photo') {
     if(sending.current) return;
     if(data?.admin){setNotice('Owner preview. No items are sent here.');return;}
     if(!data?.canSend){backToChat();return;}
     sending.current=true;setCommerceBusy(true);setNotice('');
-    const key=`${type}:${id}`;
+    const key=`${type}:${rewardType}:${id}`;
     try {
       if(!requestKeys.current.has(key)) requestKeys.current.set(key,crypto.randomUUID());
-      let result=await read('request',{type,id,requestKey:requestKeys.current.get(key)});
+      let result=await read('request',{type,id,rewardType,requestKey:requestKeys.current.get(key)});
       for(let i=0;i<25&&['pending','sending'].includes(result.status);i++){
         await new Promise(r=>window.setTimeout(r,2000));if(!mounted.current)return;
         result=await read('status',{id:result.id});
@@ -172,7 +172,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
   });
   const rewards=data?.rewards;
   const progress=rewards?rewardProgress(rewards):null;
-  const rewardItems=rewards?data!.items.filter(p=>p.type==='photo'&&rewards.photoIds.includes(p.id)):[];
+  const rewardItems=rewards?data!.items.filter(p=>(p.type==='photo'?rewards.photoIds:rewards.videoIds??[]).includes(p.id)):[];
   return <main className="catalogue">
     <Script src="https://telegram.org/js/telegram-web-app.js" strategy="afterInteractive" onReady={() => setReady(true)} onError={() => { setReady(true); }} />
     <div className="cat-shell">
@@ -201,9 +201,11 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
           <div className="cat-reward-heading"><span className="cat-mascot"><Cat size={27}/></span><div><span className="cat-eyebrow">A LITTLE THANK YOU</span><h2>Your rewards</h2></div><span className="cat-points">{Math.max(0,rewards.balance).toLocaleString()}<small>points</small></span></div>
           <div className="cat-reward-track"><div className="cat-reward-meter-wrap"><div className="cat-reward-meter" role="progressbar" aria-label="Progress to next reward" aria-valuemin={0} aria-valuemax={rewards.cost} aria-valuenow={Math.min(rewards.cost,Math.max(0,rewards.balance))}><span style={{width:`${progress.percent}%`}}/></div><p>{progress.ready?'Your reward is ready':`${progress.remaining.toLocaleString()} points to your next reward`}</p></div>
           <div className="cat-reward-target">{rewardItems[0]?<Preview item={rewardItems[0]} blur={renderBlur} call={call}/>:<Gift size={28}/>}<span><LockKeyhole size={14}/></span></div></div>
-          <button className="cat-secondary" disabled={commerceBusy||!progress.ready||!rewardItems.length} onClick={()=>setRewardsOpen(v=>!v)}>{rewardItems.length?progress.ready?'Choose your bonus photo':'Bonus photo at '+rewards.cost.toLocaleString()+' points':'You own all current rewards'}</button>
-          <details><summary>How rewards work</summary><p>Earn 1 point per Star spent on confirmed purchases with {data.name}, in chat or here, from {new Date(rewards.startsAt).toLocaleDateString()}. Redeem {rewards.cost.toLocaleString()} points for one eligible photo you do not own. Points are not Telegram Stars or cash. Refunds reverse points. Payment updates may take a minute.</p></details>
-          {rewardsOpen&&progress.ready&&<div className="cat-reward-choices">{rewardItems.map(item=><article key={item.id}><Preview item={item} blur={renderBlur} call={call}/><button className="cat-secondary" disabled={commerceBusy} onClick={()=>void sendCommerce('reward',item.id)}>{commerceBusy?'Sending…':'Claim for '+rewards.cost.toLocaleString()+' points'}</button></article>)}</div>}
+          <button className="cat-secondary" disabled={commerceBusy||!progress.ready||!rewardItems.length} onClick={()=>setRewardsOpen(v=>!v)}>{rewardItems.length?progress.ready?'Choose your photo or video':'Photo or video at '+rewards.cost.toLocaleString()+' points':'You own all current rewards'}</button>
+          <details><summary>How rewards work</summary><p>Earn 1 point per Star spent on confirmed purchases with {data.name}, in chat or here, from {new Date(rewards.startsAt).toLocaleDateString()}. Redeem {rewards.cost.toLocaleString()} points for a photo or video of your choice from the available rewards you do not own. Points are not Telegram Stars or cash. Refunds reverse points. Payment updates may take a minute.</p></details>
+          <p>A photo or video of your choice at {rewards.cost.toLocaleString()} points.</p>
+          {rewards.videoIds.length===0&&<p>Photo rewards available now. Video rewards will appear when added.</p>}
+          {rewardsOpen&&progress.ready&&<div className="cat-reward-choices">{rewardItems.map(item=><article key={`${item.type}:${item.id}`}><Preview item={item} blur={renderBlur} call={call}/><p>{item.description}</p><button className="cat-secondary" disabled={commerceBusy} onClick={()=>void sendCommerce('reward',item.id,item.type)}>{commerceBusy?'Sending…':'Claim for '+rewards.cost.toLocaleString()+' points'}</button></article>)}</div>}
         </section>}
         {!!data.bundles?.length&&<section className="cat-bundle-section"><div className="cat-section-heading"><h2>‼️ Bundle deal ‼️</h2><span>5 photos each</span></div>
           <div className="cat-bundle-grid">{data.bundles.map(bundle=><article className="cat-bundle-card" key={bundle.id}>
