@@ -15,3 +15,11 @@ export function rewardProgress(rewards:CatalogueRewards) {
  const balance=Math.max(0,rewards.balance);
  return {percent:Math.min(100,balance/rewards.cost*100),remaining:Math.max(0,rewards.cost-balance),ready:balance>=rewards.cost};
 }
+
+// Summarise only settings explicitly named in the included item metadata.
+export function bundleDescription(bundle:CatalogueBundle,items:CatalogueItem[]):string {
+ const descriptions=items.filter(p=>p.type==='photo'&&bundle.photoIds.includes(p.id)).map(p=>p.description).join(' ').toLowerCase();
+ const settings:Array<[RegExp,string]>=[[/\bshower\b/,'shower'],[/\bbedroom\b/,'bedroom'],[/\bmirror\b/,'mirror'],[/\bpool\b/,'poolside'],[/\bbeach\b/,'beach'],[/\bclose[ -]?up\b/,'close-up']];
+ const names=settings.filter(([pattern])=>pattern.test(descriptions)).map(([,name])=>name).slice(0,3);
+ return names.length ? `${names[0][0].toUpperCase()+names[0].slice(1)}${names.slice(1).map((name,i)=>`${i===names.length-2?' and ':', '}${name}`).join('')} photos.` : 'Five photos from the collection.';
+}
