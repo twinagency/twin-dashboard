@@ -35,6 +35,17 @@ const SELF_AUTHENTICATED_PREFIXES = ["/api/v1/", "/api/admin/"];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+  // Fan catalogue endpoints perform their own Telegram/admin authentication.
+  // This branch precedes agency/creator cookies and never accepts server actions.
+  if (/^\/catalogue\/[a-z0-9-]{1,80}$/.test(pathname) || /^\/api\/catalogue\/[a-z0-9-]{1,80}$/.test(pathname)) {
+    const api = pathname.startsWith("/api/");
+    if (req.headers.has("next-action") || (api ? req.method !== "POST" : !["GET", "HEAD"].includes(req.method)))
+      return new NextResponse("Forbidden", { status: 403 });
+    const response = privateResponse(withPathname(req));
+    response.headers.set("X-Robots-Tag", "noindex, nofollow");
+    return response;
+  }
+
   if (isMarketingPath(pathname)) {
     if (!["GET", "HEAD"].includes(req.method) || req.headers.has("next-action")) return new NextResponse("Forbidden", { status: 403 });
     const response = privateResponse(withPathname(req));

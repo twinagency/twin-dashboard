@@ -37,6 +37,7 @@ const fontClass = cn("font-sans", inter.variable, plexMono.variable, spaceGrotes
 
 export async function generateMetadata(): Promise<Metadata> {
   const pathname = (await headers()).get("x-pathname");
+  if (pathname?.startsWith("/catalogue/")) return { title: "Private collection", robots: { index: false, follow: false } };
   if (isCreatorPath(pathname)) {
     const creator = !isCreatorPublicPath(pathname) ? await getCreatorWorkspace() : null;
     const publicPortal = creatorPublicPortal(pathname);
@@ -62,6 +63,7 @@ export async function generateMetadata(): Promise<Metadata> {
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
   const pathname = (await headers()).get("x-pathname");
+  if (pathname?.startsWith("/catalogue/")) return <html lang="en" className={fontClass}><body>{children}</body></html>;
   // Creator pages never mount the operator shell or fetch its fleet/version.
   // The dedicated creator layout supplies the same earnings geometry with a
   // fixed, verified creator identity. Login/onboarding remain standalone.
