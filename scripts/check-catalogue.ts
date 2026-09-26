@@ -65,9 +65,15 @@ async function main(){
  await call('request',{...request,requestKey:cloneId});assert.equal(rows.catalogue_requests.length,1,'double tap must not enqueue twice');
  rows.catalogue_requests[0].status='uncertain';await call('request',{...request,requestKey:cloneId});assert.equal(rows.catalogue_requests.length,1,'uncertain send must not replay');
  reset();rows.catalogue_requests.push({id:requestId,clone_id:cloneId,user_id:'another-fan',status:'delivered'});assert.equal((await call('status',{id:requestId})).status,404);
- reset();rows.catalogue_loyalty_programs.push({clone_id:cloneId,enabled:true,points_cost:2500,starts_at:new Date().toISOString(),reward_photo_ids:[itemId]});
+ reset();rows.catalogue_loyalty_programs.push({clone_id:cloneId,enabled:true,points_cost:2500,starts_at:new Date().toISOString(),reward_photo_ids:[itemId],reward_video_ids:[requestId]});
  const loyalty=await (await call('catalogue')).json();assert.equal(loyalty.rewards.balance,1890);assert.equal(rpcCall.args.p_user,fanId);assert.equal(rpcCall.args.p_clone,cloneId);assert.equal(rewardProgress(loyalty.rewards).remaining,610);assert.equal(rewardProgress({...loyalty.rewards,balance:-500}).percent,0);assert.equal(rewardProgress({...loyalty.rewards,balance:6000}).percent,100);
  await call('request',{type:'reward',id:itemId,requestKey:requestId,userId:'someone-else',points:0});assert.equal(rpcCall.name,'catalogue_claim_reward');assert.equal(rpcCall.args.p_user,fanId);assert.equal(rpcCall.args.p_photo,itemId);assert.equal(rpcCall.args.points,undefined);
+ rows.clones[0].videos_enabled=true;rows.videos.push({...photo,id:requestId});
+ const videoRewards=await (await call('catalogue')).json();assert.deepEqual(videoRewards.rewards.videoIds,[requestId]);
+ await call('request',{type:'reward',rewardType:'video',id:requestId,requestKey:cloneId,userId:'other',points:1});assert.equal(rpcCall.name,'catalogue_claim_video_reward');assert.equal(rpcCall.args.p_video,requestId);assert.equal(rpcCall.args.p_user,fanId);assert.equal(rpcCall.args.points,undefined);
+ rows.user_received_media.push({clone_id:cloneId,user_id:fanId,media_type:'video',media_id:requestId});assert.deepEqual((await (await call('catalogue')).json()).rewards.videoIds,[]);
+ rows.clones[0].videos_enabled=false;assert.equal((await call('request',{type:'reward',rewardType:'video',id:requestId,requestKey:cloneId})).status,404);
+ assert.equal((await call('request',{type:'reward',rewardType:'other',id:requestId,requestKey:cloneId})).status,400);
  reset();const ids=Array.from({length:5},(_,i)=>`00000000-0000-0000-0000-${String(i+40).padStart(12,'0')}`);rows.photos=ids.map(id=>({...photo,id}));rows.clones[0].bundles_enabled=true;
  const bundle={id:requestId,clone_id:cloneId,enabled:true,title:'Five photo bundle',photo_ids:ids,price_stars:2200,regular_stars:3150};rows.catalogue_bundles.push(bundle);
  const bundleData=await (await call('catalogue')).json();assert.equal(bundleData.bundles.length,1);assert.equal(bundleData.bundles[0].stars,2200);assert.equal(projectBundle({...bundle,price_stars:1},bundleData.items),null);
