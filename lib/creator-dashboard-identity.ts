@@ -76,3 +76,43 @@ export async function creatorDashboardIdentity(token: string | null | undefined)
     return isZaneDemo(identity) ? { ...identity, name: "LYNQ" } : identity;
   } catch { return null; }
 }
+
+// Same identity shape as creatorDashboardIdentity(), keyed directly by
+// creator_accounts.id instead of a signed session token. There is no session
+// to verify here: the ONLY caller is lib/view-as.ts's activeViewAs(), which
+// has already re-verified a live master-admin session before it will look up
+// this id. readOnly is ALWAYS true regardless of the account's own state,
+// because this identity exists only so an admin can look, never so they can
+// act as the creator. Never reachable from anything that accepts an id
+// straight from an untrusted caller.
+export async function creatorDashboardIdentityById(accountId: string): Promise<CreatorDashboardIdentity | null> {
+  try {
+    const db = serviceClient();
+    const account = await db.from("creator_accounts").select("id,auth_user_id,display_name,account_status,source").eq("id", accountId).maybeSingle();
+    if (account.error || !account.data || !creatorAccountStatusAllowsAccess(account.data.account_status)) return null;
+    const [application, assignment, link] = await Promise.all([
+      db.from("creator_applications").select("status").eq("creator_account_id", accountId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+      db.from("creator_agency_assignments").select("agency_id,partner_agencies(name,active)").eq("creator_account_id", accountId).maybeSingle(),
+      db.from("creator_clone_links").select("clone_id,clones(id,name)").eq("creator_account_id", accountId).maybeSingle(),
+    ]);
+    if (application.error || assignment.error || link.error) return null;
+    const relatedAgency = assignment.data?.partner_agencies as unknown as { name: string; active: boolean } | null;
+    if (assignment.data?.agency_id && (!relatedAgency || !relatedAgency.active)) return null;
+    if (account.data.source === "agency_invite" && !assignment.data?.agency_id) return null;
+    const clone = link.data?.clones as unknown as { id: string; name: string } | null;
+    if (link.data?.clone_id && (!clone || clone.id !== link.data.clone_id)) return null;
+    const identity: CreatorDashboardIdentity = {
+      id: `creator:${accountId}`,
+      kind: "creator",
+      accountId,
+      userId: account.data.auth_user_id,
+      name: relatedAgency?.name || "Twin",
+      agencyId: assignment.data?.agency_id || null,
+      creatorName: clone?.name || account.data.display_name || "Your creator account",
+      cloneIds: clone ? [clone.id] : [],
+      onboarded: !!clone || ["submitted", "reviewing", "approved"].includes(application.data?.status || ""),
+      readOnly: true,
+    };
+    return isZaneDemo(identity) ? { ...identity, name: "LYNQ" } : identity;
+  } catch { return null; }
+}
