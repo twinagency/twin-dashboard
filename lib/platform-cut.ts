@@ -81,18 +81,20 @@ function assertRange(pct: number, min: number, max: number, label: string): void
 }
 
 // ── owning agency lookup (for clone override -> agency fallback) ─────────
-async function agencyIdForClone(cloneId: string): Promise<string | null> {
+// A clone can be assigned to more than one agency (e.g. Toochi), so this
+// returns every owner. Callers take the HIGHEST cut across them, which never
+// shows anyone more than any one owner's arrangement allows.
+async function agencyIdsForClone(cloneId: string): Promise<string[]> {
   const cached = fresh(cloneAgencyCache, cloneId);
-  if (cached !== undefined) return cached;
+  if (cached !== undefined) return cached ? cached.split(",") : [];
   const { data, error } = await supabaseAdmin
     .from("agency_creators")
     .select("agency_id")
-    .eq("clone_id", cloneId)
-    .maybeSingle();
+    .eq("clone_id", cloneId);
   if (error) throw new Error(`Could not resolve owning agency for clone ${cloneId}: ${error.message}`);
-  const agencyId = (data?.agency_id as string | undefined) ?? null;
-  setCache(cloneAgencyCache, cloneId, agencyId);
-  return agencyId;
+  const ids = [...new Set((data ?? []).map((r) => String(r.agency_id)))].sort();
+  setCache(cloneAgencyCache, cloneId, ids.length ? ids.join(",") : null);
+  return ids;
 }
 
 /**
@@ -114,8 +116,8 @@ export async function getCutPctForClone(cloneId: string): Promise<number> {
   const cloneRow = data ? Number(data.cut_pct) : null;
   let agencyRow: number | null = null;
   if (cloneRow == null) {
-    const agencyId = await agencyIdForClone(cloneId);
-    agencyRow = agencyId ? await getCutPctForAgency(agencyId) : null;
+    const agencyIds = await agencyIdsForClone(cloneId);
+    agencyRow = agencyIds.length ? Math.max(...(await Promise.all(agencyIds.map((id) => getCutPctForAgency(id))))) : null;
   }
   const pct = resolveClonePlatformPct(cloneRow, agencyRow);
   setCache(cloneCutCache, cloneId, pct);
@@ -151,11 +153,11 @@ export async function getAgencyCreatorCutPct(cloneId: string): Promise<number> {
   const { data, error } = await supabaseAdmin
     .from("agency_creator_cuts")
     .select("cut_pct")
-    .eq("clone_id", cloneId)
-    .maybeSingle();
+    .eq("clone_id", cloneId);
   if (error) throw new Error(`Could not read agency-creator cut for clone ${cloneId}: ${error.message}`);
 
-  const pct = data ? Number(data.cut_pct) : 0;
+  // Several owning agencies may each set a cut; the creator sees the lowest net.
+  const pct = (data ?? []).reduce((max, r) => Math.max(max, Number(r.cut_pct) || 0), 0);
   setCache(agencyCreatorCutCache, cloneId, pct);
   return pct;
 }
