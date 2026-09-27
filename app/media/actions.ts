@@ -69,7 +69,33 @@ const EMPTY_CAPTION: Caption = {
   nsfw: false,
   tags: [],
   auto_desc: "",
+  visual_description: "",
 };
+
+// `visual_description` (migration pending in the bot repo at the time this
+// was written) may not exist on `photos`/`videos` yet. Mirrors the
+// OPTIONAL_COLUMNS / isMissingColumnError retry pattern in
+// app/clones/actions.ts: a save issued before the migration lands strips the
+// column and still succeeds, rather than failing the whole upload.
+const OPTIONAL_MEDIA_COLUMNS = ["visual_description"] as const;
+
+function isMissingColumnError(message: string): boolean {
+  return /schema cache/i.test(message);
+}
+
+function withoutOptionalMediaColumns(row: Record<string, unknown>): Record<string, unknown> {
+  const copy = { ...row };
+  for (const c of OPTIONAL_MEDIA_COLUMNS) delete copy[c];
+  return copy;
+}
+
+async function insertMediaRow(table: "photos" | "videos", row: Record<string, unknown>): Promise<void> {
+  let { error } = await supabaseAdmin.from(table).insert(row);
+  if (error && isMissingColumnError(error.message)) {
+    ({ error } = await supabaseAdmin.from(table).insert(withoutOptionalMediaColumns(row)));
+  }
+  if (error) throw new Error(error.message);
+}
 
 async function bestEffortUploadAnalysis(
   analyse: (signal: AbortSignal) => Promise<Caption>,
@@ -204,7 +230,7 @@ export async function uploadPhoto(cloneId: string, fd: FormData): Promise<MediaU
   const starValue = resolvePrice(fd, cap, guide);
   const imageName = String(fd.get("image_name") ?? "").trim() || file.name;
 
-  const { error: dbErr } = await supabaseAdmin.from("photos").insert({
+  await insertMediaRow("photos", {
     clone_id: cloneId,
     storage_path: path,
     caption: cap.caption || null,
@@ -216,6 +242,9 @@ export async function uploadPhoto(cloneId: string, fd: FormData): Promise<MediaU
     nsfw: cap.nsfw,
     tags: cap.tags,
     auto_desc: cap.auto_desc || null,
+    // Internal-only, factual and explicit; never shown to fans and never used
+    // as the bot's matching ground truth (that's still `caption`).
+    visual_description: cap.visual_description || null,
     star_value: starValue,
     // 0 stars is always free. The bot only ever treats an item as unlocked via
     // is_free (flows/media.ts), never by price, so a 0-priced item must carry
@@ -223,7 +252,6 @@ export async function uploadPhoto(cloneId: string, fd: FormData): Promise<MediaU
     is_free: fd.get("is_free") === "true" || starValue <= 0,
     image_name: imageName,
   });
-  if (dbErr) throw new Error(dbErr.message);
 
   revalidatePath("/media");
     return { ok: true };
@@ -267,7 +295,7 @@ export async function uploadVideo(cloneId: string, fd: FormData): Promise<MediaU
   // Price from the operator's guide via the AI tags (manual price wins if set).
   const starValue = resolvePrice(fd, cap, guide);
 
-  const { error: dbErr } = await supabaseAdmin.from("videos").insert({
+  await insertMediaRow("videos", {
     clone_id: cloneId,
     storage_path: path,
     caption: cap.caption || null,
@@ -277,11 +305,11 @@ export async function uploadVideo(cloneId: string, fd: FormData): Promise<MediaU
     nsfw: cap.nsfw,
     tags: cap.tags,
     auto_desc: cap.auto_desc || null,
+    visual_description: cap.visual_description || null,
     star_value: starValue,
     // 0 stars is always free, see the matching comment in uploadPhoto.
     is_free: fd.get("is_free") === "true" || starValue <= 0,
   });
-  if (dbErr) throw new Error(dbErr.message);
 
   revalidatePath("/media");
     return { ok: true };

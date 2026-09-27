@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { normalizeMediaClassification, VISUAL_EVIDENCE_KEYS } from "../lib/media-classification";
+import { normalizeMediaClassification, stripBannedDashes, VISUAL_EVIDENCE_KEYS } from "../lib/media-classification";
 
 const clearEvidence = Object.fromEntries(VISUAL_EVIDENCE_KEYS.map((key) => [key, false]));
 function metadata(evidence: Record<string, unknown> = {}, changes: Record<string, unknown> = {}) {
@@ -73,4 +73,47 @@ assert.throws(() => normalizeMediaClassification(metadata({ full_nudity_visible:
 assert.throws(() => normalizeMediaClassification(metadata({}, { caption: "" })), /factual descriptions/);
 assert.throws(() => normalizeMediaClassification(null), /Invalid visual metadata/);
 
-console.log("Media classification regression checks passed: cleavage, swimwear, true nudity, tags, contradictions and malformed evidence.");
+// visual_description: parsed and saved onto the Caption, independent of caption/auto_desc.
+const withDescription = normalizeMediaClassification(metadata({}, {
+  visual_description: "She is standing facing the camera. No nipples, anus or vagina are visible. She wears a white shirt.",
+}));
+assert.equal(
+  withDescription.visual_description,
+  "She is standing facing the camera. No nipples, anus or vagina are visible. She wears a white shirt.",
+  "visual_description must be parsed and saved onto the Caption",
+);
+// Explicitly stating absence ("no nipples ... visible") must not trip the
+// caption/auto_desc unsupported-claim check: visual_description is validated
+// separately from that negation-blind regex.
+assert.equal(withDescription.caption, "woman in open white shirt outdoors, cleavage visible, looking at camera");
+
+// Missing visual_description degrades to "" rather than throwing (analysis here is best-effort).
+const withoutDescription = normalizeMediaClassification(metadata());
+assert.equal(withoutDescription.visual_description, "");
+
+// Owner hard rule: no em dash / en dash ever survives into a stored visual_description.
+const emDashed = normalizeMediaClassification(metadata({}, {
+  visual_description: "She is on the bed — legs together. No nipples, anus or vagina are visible.",
+}));
+assert.ok(!/[—–]/.test(emDashed.visual_description), `em dash must never survive into visual_description: ${JSON.stringify(emDashed.visual_description)}`);
+
+const enDashed = normalizeMediaClassification(metadata({}, {
+  visual_description: "She is on the bed – legs together – smiling. No nipples, anus or vagina are visible.",
+}));
+assert.ok(!/[—–]/.test(enDashed.visual_description), `en dash must never survive into visual_description: ${JSON.stringify(enDashed.visual_description)}`);
+
+for (const [input, expected] of [
+  ["I'm on the bed — legs spread for you", "I'm on the bed, legs spread for you"],
+  ["one – two – three", "one, two, three"],
+] as const) {
+  assert.equal(stripBannedDashes(input), expected, `stripBannedDashes(${JSON.stringify(input)})`);
+}
+
+// caption, auto_desc and tags are unaffected by adding visual_description:
+// same factual field, same meaning, same values as before this change.
+const unaffected = normalizeMediaClassification(metadata({}, { visual_description: "Nothing sexual is visible. No nipples, anus or vagina are visible." }));
+assert.equal(unaffected.caption, "woman in open white shirt outdoors, cleavage visible, looking at camera");
+assert.equal(unaffected.auto_desc, "open shirt outdoor");
+assert.deepEqual(unaffected.tags, ["outdoor", "solo"]);
+
+console.log("Media classification regression checks passed: cleavage, swimwear, true nudity, tags, contradictions, malformed evidence, visual_description parsing/dashes and caption stability.");

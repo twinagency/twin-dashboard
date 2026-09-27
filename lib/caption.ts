@@ -19,6 +19,11 @@ export type Caption = {
   nsfw: boolean;            // is it sexually explicit?
   tags: string[];          // subset of MEDIA_TAGS describing what's shown
   auto_desc: string;       // very short description, e.g. "bikini pool"
+  // Factual, explicit, 3-6 sentence visual description saved to its own DB
+  // column (photos.visual_description / videos.visual_description). Never
+  // read by the bot's `caption` matching path; see media-classification.ts
+  // for the exact prompt contract.
+  visual_description: string;
 };
 
 const FALLBACK: Caption = {
@@ -29,17 +34,39 @@ const FALLBACK: Caption = {
   nsfw: false,
   tags: [],
   auto_desc: "",
+  visual_description: "",
 };
+
+// qwen3-vl-32b truncates its JSON response mid-string on the longer payload
+// this analysis now produces (caption + tags + evidence + visual_description),
+// and Gemini sanitises explicit output; qwen2.5-vl-72b-instruct handled full
+// NSFW output cleanly in testing. Force it whenever the clone's configured
+// vision model is one of those two, regardless of the operator's per-clone
+// dial; otherwise use the clone's configured model (falling back to the same
+// default when none is set).
+export const VISION_ANALYSIS_DEFAULT_MODEL = "qwen/qwen2.5-vl-72b-instruct";
+export function resolveVisionAnalysisModel(configuredModel: string | null | undefined): string {
+  const m = (configuredModel || "").toLowerCase();
+  if (m.includes("gemini") || m.includes("qwen3-vl-32b")) return VISION_ANALYSIS_DEFAULT_MODEL;
+  return configuredModel || VISION_ANALYSIS_DEFAULT_MODEL;
+}
 
 async function visionCaption(jpegBytes: Buffer, model: string, signal?: AbortSignal): Promise<Caption> {
   const dataUrl = `data:image/jpeg;base64,${jpegBytes.toString("base64")}`;
+  // Applied here, not by each caller, so every entry point (upload, the
+  // bulk importer, the backfill script) gets the same forced substitution
+  // whenever the clone's configured model is one of the two known to
+  // truncate/sanitise this payload. See resolveVisionAnalysisModel above.
+  const effectiveModel = resolveVisionAnalysisModel(model);
   // Retry contradictory metadata once, under the upload's existing abort
   // deadline. Never save an unsupported topless/nude claim from either attempt.
   for (let attempt = 0; attempt < 2; attempt++) {
     const prompt = MEDIA_CLASSIFICATION_PROMPT + (attempt
       ? "\nThe previous answer was invalid or internally contradictory. Re-examine the image and make every description and evidence field agree."
       : "");
-    const raw = await orVision({ model, dataUrl, prompt, json: true, signal });
+    // The added visual_description field lengthens the JSON payload, so give
+    // it more headroom than orVision's own 1000-token default.
+    const raw = await orVision({ model: effectiveModel, dataUrl, prompt, json: true, signal, maxTokens: 1500 });
     try {
       return normalizeMediaClassification(JSON.parse(raw));
     } catch (error) {

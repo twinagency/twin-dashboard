@@ -8,9 +8,17 @@ export const VISUAL_EVIDENCE_KEYS = [
 ] as const;
 
 export const MEDIA_CLASSIFICATION_PROMPT = `Describe only what is visibly present in this image for an internal media catalogue. Do not guess hidden clothing, anatomy, intent, or actions outside the frame.
-Return JSON with caption (factual, max 24 words), auto_desc (2-5 factual words), teaser_caption (a brief non-explicit first-person line for legacy callers), tags, and visual_evidence.
+Return JSON with caption (factual, max 24 words), auto_desc (2-5 factual words), teaser_caption (a brief non-explicit first-person line for legacy callers), visual_description (see VISUAL DESCRIPTION below), tags, and visual_evidence.
 tags must be a subset of: ${MEDIA_TAGS.join(", ")}.
 visual_evidence must contain ALL these keys with JSON boolean values: ${VISUAL_EVIDENCE_KEYS.join(", ")}.
+
+VISUAL DESCRIPTION:
+- 3 to 6 factual sentences describing everything clearly visible. No flirting, no guessing, no invented detail.
+- State the nudity level plainly.
+- State explicitly whether the pussy/vagina, the anus and the nipples are each visible or not visible. Do not skip any of the three.
+- Describe the pose, the clothing and accessories (including their colours), and any toys or objects and what is happening with them.
+- Describe the camera angle, the facial expression, and the setting.
+- Every claim in visual_description must agree with visual_evidence: only say a body part is visible when the matching evidence key is true.
 
 VISUAL RULES:
 - A value is true only when the feature is clearly visible. Covered, cropped, obscured or uncertain features are false. Describe visible clothing instead of guessing what is underneath.
@@ -25,6 +33,17 @@ VISUAL RULES:
 - caption, auto_desc and tags must agree with visual_evidence. Keep descriptions positive and factual; do not add lists of absent anatomy or nudity disclaimers. Classification flags are derived by code, not by how much cleavage is visible.`;
 
 const TAG_SET = new Set<string>(MEDIA_TAGS);
+
+// Owner rule: no em dash (—) or en dash (–) in visual_description, ever. The
+// prompt asks the model not to use one, but this is the backstop — never
+// rely on the model alone for a hard style rule.
+export function stripBannedDashes(text: string): string {
+  return text
+    .replace(/\s*[—–]\s*/g, ", ")
+    .replace(/ {2,}/g, " ")
+    .replace(/,\s*([.,!?])/g, "$1")
+    .trim();
+}
 
 /** Derive flags from concrete observations so the model cannot independently
  * mark the same item nude, suggestive and non-NSFW. This validates model output;
@@ -70,10 +89,21 @@ export function normalizeMediaClassification(value: unknown): Caption {
     (tag): tag is string => typeof tag === "string" && TAG_SET.has(tag) && requiredEvidence[tag] !== false,
   ))];
   const suggestive = evidence.suggestive_pose_or_clothing || evidence.swimwear_visible || evidence.lingerie_visible;
+  // visual_description deliberately states presence AND absence of nipples/
+  // genitals/anus (per the prompt), so it is NOT run through the `unsupported`
+  // claim check above: that check is caption/auto_desc-only and is blind to
+  // negation, so "no nipples visible" would otherwise be flagged as an
+  // invented claim. Dashes are stripped as a hard style rule (see
+  // stripBannedDashes); a missing/blank value degrades to "" rather than
+  // failing the whole upload, since analysis here is always best-effort.
+  const visual_description = typeof j.visual_description === "string"
+    ? stripBannedDashes(j.visual_description.trim())
+    : "";
   return {
     caption: j.caption.trim(),
     auto_desc: j.auto_desc.trim(),
     teaser_caption: typeof j.teaser_caption === "string" ? j.teaser_caption : "",
+    visual_description,
     is_nude: nude,
     nsfw: explicit,
     explicitness: explicit ? "explicit" : suggestive ? "suggestive" : "none",
