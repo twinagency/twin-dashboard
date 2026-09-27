@@ -8,6 +8,7 @@ import type { CatalogueItem } from "@/lib/catalogue-core";
 import "./catalogue.css";
 import VideoPreview from './VideoPreview';
 import { catalogueDisplayOrder } from '@/lib/catalogue-display-order';
+import { catalogueAppearance } from '@/lib/catalogue-appearance';
 
 type WebApp = { initData: string; ready(): void; expand(): void; close(): void; openTelegramLink(url: string): void; setHeaderColor?(color: string): void; setBackgroundColor?(color: string): void; setBottomBarColor?(color: string): void };
 function app(): WebApp | undefined { return (window as unknown as { Telegram?: { WebApp?: WebApp } }).Telegram?.WebApp; }
@@ -15,11 +16,9 @@ type Data = { name: string; items: CatalogueItem[]; blur: number; admin: boolean
 type Call = (action: string, payload?: Record<string, unknown>) => Promise<Response>;
 const tabs = ["All", "Photos", "Videos", "Bundles"];
 
-// Current creator profile photo, verified from Telegram on 27 September 2026.
-const profilePhotos: Record<string, string> = { "briana-redd": "/brand/catalogue/briana-redd-profile.webp" };
-function ProfilePhoto({ name, slug }: { name: string; slug: string }) {
+function ProfilePhoto({ name, photoUrl }: { name: string; photoUrl?: string }) {
   const [failed, setFailed] = useState(false);
-  const url = profilePhotos[slug];
+  const url = photoUrl;
   return <span className="cat-avatar">{url && !failed ? <img src={url} alt={`${name} Telegram profile photo`} onError={() => setFailed(true)} /> : <span aria-label={name}>{name.split(/\s+/).map(word => word[0]).slice(0, 2).join("")}</span>}</span>;
 }
 
@@ -65,7 +64,8 @@ function PhotoPreview({ item, blur, call, retryable = true }: { item: CatalogueI
 }
 
 export default function Catalogue({ slug, preview }: { slug: string; preview: boolean }) {
-  const refined = slug === 'briana-redd';
+  const appearance = catalogueAppearance(slug);
+  const refined = !!appearance;
   const [ready, setReady] = useState(preview);
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState("");
@@ -203,7 +203,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
     <Script src="https://telegram.org/js/telegram-web-app.js" strategy="afterInteractive" onReady={() => setReady(true)} onError={() => { setReady(true); }} />
     <div className="cat-shell">
       <header className="cat-header"><button className="cat-icon" aria-label="Back to chat" onClick={backToChat}><ArrowLeft size={21} /></button>
-        {data && <ProfilePhoto name={data.name} slug={slug} />}
+        {data && <ProfilePhoto name={data.name} photoUrl={appearance?.profilePhoto} />}
         <div><h1>{data?.name || "Your catalogue"}</h1></div>
         {data?.admin ? <button className="cat-icon" aria-label="Catalogue settings" onClick={() => setSettingsOpen(v => !v)}><SlidersHorizontal size={21} /></button>
           : <button className="cat-icon" aria-label="My purchases" onClick={() => { setSection("My Purchases"); setSearch(""); document.getElementById("catalogue-items")?.scrollIntoView({ behavior: "smooth" }); }}><ShoppingBag size={19} /></button>}</header>
