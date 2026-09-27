@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { dashboardOrigin, trustedFormOrigin } from "./form-origin";
 import { catalogueEligible, catalogueItemVisible, DEFAULT_BLUR, projectItem, safeMiniAppUrl, validBlur, validateTelegramData, windowOpen } from "./catalogue-core";
 import { projectBundle } from './catalogue-commerce';
+import { cataloguePresentation } from './catalogue-presentation';
 export type CatalogueDependencies = {
   db(): SupabaseClient;
   admin(): Promise<boolean>;
@@ -59,7 +60,7 @@ return async function POST(request: NextRequest, context: { params: Promise<{ sl
         .eq("clone_id", clone.id).eq("telegram_id", telegramId).maybeSingle());
       if (!catalogueEligible(fan)) return json({ error: "This catalogue is unavailable for this account." }, 403);
     }
-    const settings = checked(await db.from("creator_catalogue_settings").select("blur_strength,enabled,mini_app_url,display_name,show_verified_badge,featured_bundle_id").eq("clone_id", clone.id).maybeSingle());
+    const settings = checked(await db.from("creator_catalogue_settings").select("blur_strength,enabled,mini_app_url,display_name,show_verified_badge,featured_bundle_id,presentation_variant").eq("clone_id", clone.id).maybeSingle());
     if (!admin && !settings?.enabled) return json({ error: "This catalogue is not open yet." }, 403);
     const blur = validBlur(settings?.blur_strength) ? settings.blur_strength : DEFAULT_BLUR;
     const action = body.action;
@@ -114,6 +115,7 @@ return async function POST(request: NextRequest, context: { params: Promise<{ sl
       const username = String(clone.business_username ?? "").replace(/^@/, "");
       return json({ name: settings?.display_name?.trim() || clone.name, items, blur, admin, enabled: settings?.enabled === true,
         verified: settings?.show_verified_badge === true,
+        presentation: cataloguePresentation(settings?.presentation_variant),
         featuredBundleId: bundles.find(b => b?.id === settings?.featured_bundle_id)?.id ?? null,
         canSend: !!fan?.business_connection_id && windowOpen(fan.last_message_received) && clone.status === "active",
         chatUrl: /^[a-zA-Z0-9_]{5,32}$/.test(username) ? `https://t.me/${username}` : null,
