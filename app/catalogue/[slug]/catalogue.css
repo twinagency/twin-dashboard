@@ -98,3 +98,8 @@
 @media(max-width:360px){.cat-reward-summary{padding:10px;grid-template-columns:minmax(0,1fr) 70px;gap:9px}.cat-reward-heading h2{font-size:13px}.cat-welcome-bonus{font-size:9px;padding:4px 5px;gap:3px}.cat-welcome-bonus svg{width:10px}.cat-reward-heading{gap:4px}.cat-reward-stack{width:70px}.cat-reward-stack-card{width:27px;left:calc(50% - 13px + (var(--card-index) - (var(--card-count) - 1)/2)*13px)}.cat-reward-target>strong{font-size:21px}.cat-reward-target b{font-size:14px}.cat-reward-target>span{font-size:12px}}
 @media(prefers-reduced-motion:no-preference){.cat-reward-meter>span:after{animation:reward-shimmer 4s ease-in-out infinite}}
 @media(prefers-reduced-motion:reduce){.cat-reward-meter>span{transition:none}.cat-reward-meter>span:after{animation:none}}
+
+/* Video-only rules preserve the existing photo previews. */
+.cat-video-preview{background:#241d25}.cat-video-preview>video{display:block;width:100%;height:100%;object-fit:contain}
+.cat-video-loading{position:absolute;inset:0}.cat-video-label{position:absolute;bottom:9px;left:9px;display:flex;align-items:center;gap:5px;padding:5px 8px;border-radius:20px;background:#21171fbb;color:#fff;font-size:10px;pointer-events:none}
+.cat-reward-stack .cat-video-label{display:none}.cat-modal>.cat-video-preview{aspect-ratio:3/4}

@@ -7,6 +7,7 @@ export type CatalogueDependencies = {
   db(): SupabaseClient;
   admin(): Promise<boolean>;
   preview(path: string, blur: number): Promise<Buffer>;
+  videoPreview(path: string, blur: number): Promise<Buffer>;
 };
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const noCache = { "Cache-Control": "private, no-store", "X-Content-Type-Options": "nosniff", "X-Robots-Tag": "noindex, nofollow" };
@@ -117,14 +118,16 @@ return async function POST(request: NextRequest, context: { params: Promise<{ sl
         bundlesAvailable: bundles.length>0, bundles, rewards });
     }
     if (action === "preview") {
-      if (body.type !== "photo" || typeof body.id !== "string" || !uuid.test(body.id) || !clone.photos_enabled)
+      if (!['photo', 'video'].includes(String(body.type)) || typeof body.id !== "string" || !uuid.test(body.id) ||
+        (body.type === 'video' ? !clone.videos_enabled : !clone.photos_enabled))
         return json({ error: "Preview unavailable." }, 404);
       // Requested strength is accepted only for an independently authenticated operator preview.
       const strength = admin && validBlur(body.blur) ? body.blur : blur;
-      const item = checked(await db.from("photos").select("storage_path").eq("clone_id", clone.id).eq("id", body.id).maybeSingle());
+      const video = body.type === 'video';
+      const item = checked(await db.from(video ? 'videos' : 'photos').select("storage_path").eq("clone_id", clone.id).eq("id", body.id).maybeSingle());
       if (!item?.storage_path) return json({ error: "Preview unavailable." }, 404);
-      const bytes = await deps.preview(item.storage_path, strength);
-      return new NextResponse(new Uint8Array(bytes), { headers: { ...noCache, "Content-Type": "image/webp" } });
+      const bytes = await (video ? deps.videoPreview : deps.preview)(item.storage_path, strength);
+      return new NextResponse(new Uint8Array(bytes), { headers: { ...noCache, "Content-Type": video ? 'video/mp4' : 'image/webp' } });
     }
     if (action === "status") {
       if (!fan || typeof body.id !== "string" || !uuid.test(body.id)) return json({ error: "Invalid request." }, 400);
