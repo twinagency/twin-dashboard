@@ -208,6 +208,13 @@ function snapshotAgeLabel(ageSeconds: number) {
 export default function RevenueDashboard({ cloneId }: { cloneId?: string | null } = {}) {
   const { isCreator, isAgency } = useDashboardAccess();
   const scoped = Boolean(cloneId);
+  // AI cost/contribution/margin are OUR figures, not the agency's or creator's.
+  // The API already strips costUsd/profitUsd/margin from every non-admin
+  // response (see app/api/dashboard/route.ts, finding A), so these values
+  // would render as zero here anyway — this flag keeps the UI from showing a
+  // misleading "$0.00 AI margin" row to an audience that was never meant to
+  // see the figure at all.
+  const showCost = !isCreator && !isAgency;
   const [period, setPeriod] = useState<Period>("1M");
   // Custom calendar range (yyyy-mm-dd strings, straight from <input type="date">).
   // When set, it overrides every preset period — the "Custom" pill lights up
@@ -1463,8 +1470,10 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
         </Card>
       )}
 
-      {/* ── AI cost drill-in (click a clone in the sidebar) ─────────── */}
-      {selected && data && (
+      {/* ── AI cost drill-in (click a clone in the sidebar) ───────────
+          Admin only: it is entirely our cost/margin figures, and the API
+          already strips them from every non-admin response (finding A). */}
+      {showCost && selected && data && (
         <AiCostDrillIn
           name={data.clones.find((c) => c.id === selected)?.name ?? ""}
           stats={data.perClone[selected]}
@@ -1655,6 +1664,12 @@ function RevenueReport({
   cursorColor: string;
   onClose: () => void;
 }) {
+  // AI cost/contribution/margin are OUR figures, not the agency's or
+  // creator's. The API already strips costUsd/profitUsd/margin from every
+  // non-admin response (finding A), so this keeps the UI from rendering a
+  // misleading zeroed-out figure to an audience never meant to see it.
+  const { isCreator, isAgency } = useDashboardAccess();
+  const showCost = !isCreator && !isAgency;
   const [selectedMedia, setSelectedMedia] = useState<"photo" | "video" | "bundle" | null>(null);
   // A quiet, predominantly navy scale keeps category comparison legible without
   // turning the operating report into a rainbow. Red stays reserved for the
@@ -1946,7 +1961,7 @@ function RevenueReport({
         {/* Which clone / which flow - fleet view only (scoped = one clone already) */}
         {!scoped && (
           <div className="grid gap-3 lg:grid-cols-[1fr_280px]">
-            <ReportPanel title="By creator" hint="Ranked by revenue. Metered AI contribution is Star revenue at the canonical conversion rate minus recorded AI and voice cost. It excludes all other business costs.">
+            <ReportPanel title="By creator" hint={showCost ? "Ranked by revenue. Metered AI contribution is Star revenue at the canonical conversion rate minus recorded AI and voice cost. It excludes all other business costs." : "Ranked by revenue."}>
               {earningClones.length === 0 ? (
                 <ReportEmpty text="No creator earned in this window." />
               ) : (
@@ -1966,11 +1981,15 @@ function RevenueReport({
                           {money(c.revenueStars)}
                         </span>
                       </div>
-                      <div className="mt-2 grid grid-cols-3 gap-2 text-[10px]">
+                      <div className={`mt-2 grid gap-2 text-[10px] ${showCost ? "grid-cols-3" : "grid-cols-2"}`}>
                         {[
                           { k: "Share", v: totalStars > 0 ? pct(c.revenueStars / totalStars) : "-" },
-                          { k: "AI contribution", v: usd(c.profitUsd), money: true },
-                          { k: "AI margin", v: c.revenueStars > 0 ? pct(c.margin) : "-" },
+                          ...(showCost
+                            ? [
+                                { k: "AI contribution", v: usd(c.profitUsd), money: true },
+                                { k: "AI margin", v: c.revenueStars > 0 ? pct(c.margin) : "-" },
+                              ]
+                            : []),
                           { k: "Sales", v: fmtNum(c.sales) },
                         ].map((cell) => (
                           <span key={cell.k} className="min-w-0">
@@ -1996,8 +2015,8 @@ function RevenueReport({
                       <TableHead>Creator</TableHead>
                       <TableHead className="text-right">Revenue</TableHead>
                       <TableHead className="text-right">Share</TableHead>
-                      <TableHead className="text-right">AI contribution</TableHead>
-                      <TableHead className="text-right">AI margin</TableHead>
+                      {showCost && <TableHead className="text-right">AI contribution</TableHead>}
+                      {showCost && <TableHead className="text-right">AI margin</TableHead>}
                       <TableHead className="text-right">Sales</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -2014,12 +2033,16 @@ function RevenueReport({
                         <TableCell className="text-right font-mono tabular-nums text-muted">
                           {totalStars > 0 ? pct(c.revenueStars / totalStars) : "-"}
                         </TableCell>
-                        <TableCell className="money-value text-right font-mono tabular-nums">
-                          {usd(c.profitUsd)}
-                        </TableCell>
-                        <TableCell className="text-right font-mono tabular-nums text-muted">
-                          {c.revenueStars > 0 ? pct(c.margin) : "-"}
-                        </TableCell>
+                        {showCost && (
+                          <TableCell className="money-value text-right font-mono tabular-nums">
+                            {usd(c.profitUsd)}
+                          </TableCell>
+                        )}
+                        {showCost && (
+                          <TableCell className="text-right font-mono tabular-nums text-muted">
+                            {c.revenueStars > 0 ? pct(c.margin) : "-"}
+                          </TableCell>
+                        )}
                         <TableCell className="text-right font-mono tabular-nums text-muted">{fmtNum(c.sales)}</TableCell>
                       </TableRow>
                     ))}
@@ -2044,7 +2067,7 @@ function RevenueReport({
                       right={money(f.stars)}
                       rightHint={pct(f.share)}
                       sub={`${fmtNum(f.clones)} creator${f.clones === 1 ? "" : "s"} · ${fmtNum(f.sales)} sales`}
-                      subMoney={`AI contribution ${usd(f.profitUsd)}`}
+                      subMoney={showCost ? `AI contribution ${usd(f.profitUsd)}` : undefined}
                     />
                   ))}
                 </div>

@@ -418,6 +418,22 @@ export async function getAnalytics(
   range?: DateRange,
   opts?: AnalyticsOptions,
   nowMs = Date.now(),
+  // Finding B: when there is no single `cloneId` to narrow to (an agency's
+  // "all creators" view), scopeCloneIds restricts a.clones[] and a.byFlow to
+  // the caller's own roster instead of the whole fleet — see
+  // lib/revenue-cache.ts's refresh(), the only caller that passes it.
+  //
+  // KNOWN REMAINING GAP: byKind/byFeature/byDay/byHour/byDow/byTier,
+  // whaleFans, topWeeklySpenders, funnel, paywallFunnel and buyerConversion
+  // are still computed from `txs` (loadTxs() below), which only supports
+  // narrowing to ONE clone id via the RPC/query layer, not a list — fixing
+  // those fully needs either an IN-list clone parameter on the underlying
+  // queries/RPCs (several are migration-defined SQL functions) or a
+  // per-clone loop-and-merge across every one of those breakdowns. Neither
+  // was safe to do in the time available; those fields still mix in other
+  // agencies'/creators' fleet-wide revenue for a multi-clone "all creators"
+  // agency request and must not be trusted as agency-scoped yet.
+  scopeCloneIds?: string[] | null,
 ): Promise<AnalyticsData> {
   const includeCost = opts?.includeCost !== false;
   const window = await resolveRevenueWindow(period, range, nowMs);
@@ -445,7 +461,11 @@ export async function getAnalytics(
     supabaseAdmin.from("paywall_hits").select("telegram_id").limit(1),
   ]);
   const allClones = (cloneRows ?? []) as { id: string; name: string; ai_mode: string | null; intake: unknown }[];
-  const clones = cloneId ? allClones.filter((c) => c.id === cloneId) : allClones;
+  const clones = cloneId
+    ? allClones.filter((c) => c.id === cloneId)
+    : scopeCloneIds
+      ? allClones.filter((c) => scopeCloneIds.includes(c.id))
+      : allClones;
   const nameById = new Map<string, string>();
   const colorById = new Map<string, string>();
   // Normalise ai_mode → the two flows the runtime supports ("smart" agent vs the

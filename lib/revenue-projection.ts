@@ -148,3 +148,32 @@ export function scaleAnalyticsData(data: AnalyticsData, cuts: Map<string, CloneC
     },
   };
 }
+
+// ── cost/profit/margin redaction for non-admin responses ───────────────────
+//
+// costUsd/profitUsd/margin are OUR cost and margin, not the creator's or the
+// agency's. scaleDashboardData/scaleAnalyticsData above scale revenue-shaped
+// fields only and leave cost/profit/margin untouched (see their doc comments)
+// — which means, unscaled, they still carry the GROSS figures. Since gross
+// revenue = profit + cost, exposing both alongside the cut-applied (net)
+// revenue lets the viewer recover the gross figure and back out the exact
+// cut percentage, defeating the whole point of the split. So these fields
+// must never reach a non-admin response at all, scaled or not.
+//
+// Applied as a generic deep redaction, not a per-field allowlist, so any
+// present or future per-clone/per-day/per-flow copy of these keys is caught
+// structurally rather than requiring every call site to remember to omit it.
+const COST_FIELD_NAMES = new Set(["costUsd", "profitUsd", "margin"]);
+
+export function redactCostFields<T>(value: T): T {
+  if (Array.isArray(value)) return value.map((v) => redactCostFields(v)) as unknown as T;
+  if (value !== null && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [key, v] of Object.entries(value as Record<string, unknown>)) {
+      if (COST_FIELD_NAMES.has(key)) continue;
+      out[key] = redactCostFields(v);
+    }
+    return out as T;
+  }
+  return value;
+}

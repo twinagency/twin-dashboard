@@ -1,4 +1,4 @@
-import { getDashboardAccess, withDashboardAccess, accessCacheKey, requireCloneAccess } from "./dashboard-access";
+import { getDashboardAccess, withDashboardAccess, accessCacheKey, requireCloneAccess, type DashboardAccess } from "./dashboard-access";
 // One cache in front of the two slowest reads in this codebase.
 //
 // THE THING THAT SHAPES THIS FILE: getDashboard() + getAnalytics() together take
@@ -86,7 +86,7 @@ function evictIfFull() {
   }
 }
 
-function refresh(key: string, period: Period, cloneId: string | null, range?: DateRange): Promise<Entry> {
+function refresh(key: string, period: Period, cloneId: string | null, range?: DateRange, dashboardCloneIds?: string[] | null): Promise<Entry> {
   const running = inflight.get(key);
   if (running) return running;
 
@@ -97,8 +97,8 @@ function refresh(key: string, period: Period, cloneId: string | null, range?: Da
     const nowMs = Date.now();
     const sharedRange = await resolveRevenueWindow(period, range, nowMs);
     const [dashboard, analytics] = await Promise.all([
-      getDashboard(period, sharedRange, nowMs),
-      getAnalytics(period, cloneId, sharedRange, undefined, nowMs),
+      getDashboard(period, sharedRange, nowMs, dashboardCloneIds),
+      getAnalytics(period, cloneId, sharedRange, undefined, nowMs, dashboardCloneIds),
     ]);
     const entry: Entry = { fetchedAt: Date.now(), value: { dashboard, analytics } };
     if (!cache.has(key)) evictIfFull();
@@ -123,6 +123,21 @@ function refresh(key: string, period: Period, cloneId: string | null, range?: Da
  * Only the first call for a given window awaits Supabase. After that this
  * returns in microseconds unless a caller explicitly requests the fresh copy.
  */
+// Finding B: getDashboard()/getAnalytics() have no access model of their own
+// — they render whatever clone ids they're handed, fleet-wide by default
+// (see getDashboard's doc comment). A real agency/creator (or an admin
+// viewing as one) must narrow to the single requested clone when there is
+// one, else to their WHOLE roster — never the fleet. Only the master admin
+// (access === null) gets an unrestricted (null) scope, which is the existing
+// "always fleet" admin dashboard behavior and is unchanged by this.
+//
+// A pure decision, exported so the fix itself — not just its plumbing — has
+// a direct, offline unit test (scripts/check-platform-cut.ts B-series).
+export function resolveDashboardCloneScope(access: DashboardAccess, cloneId: string | null): string[] | null {
+  if (!access) return null;
+  return cloneId ? [cloneId] : [...access.cloneIds];
+}
+
 export async function getRevenueRollup(
   period: Period,
   cloneId: string | null,
@@ -133,19 +148,20 @@ export async function getRevenueRollup(
   await requireCloneAccess(cloneId);
   const key = `${accessCacheKey(access)}|${keyOf(period, cloneId, range)}`;
   const cached = cache.get(key);
+  const dashboardCloneIds = resolveDashboardCloneScope(access, cloneId);
 
   if (cached) {
     const ageMs = Date.now() - cached.fetchedAt;
     const stale = ageMs > TTL_MS;
     if (options?.force) {
-      const entry = await withDashboardAccess(access, () => refresh(key, period, cloneId, range));
+      const entry = await withDashboardAccess(access, () => refresh(key, period, cloneId, range, dashboardCloneIds));
       return { ...entry.value, cachedAt: entry.fetchedAt, ageSeconds: 0, stale: false };
     }
     if (stale) {
       // Ordinary callers receive the last good snapshot while one refresh is
       // running. The live dashboard opts into awaitFresh so its once-a-minute
       // poll instead waits for that same single-flight refresh to finish.
-      const updating = withDashboardAccess(access, () => refresh(key, period, cloneId, range));
+      const updating = withDashboardAccess(access, () => refresh(key, period, cloneId, range, dashboardCloneIds));
       if (options?.awaitFresh) {
         const entry = await updating;
         return { ...entry.value, cachedAt: entry.fetchedAt, ageSeconds: 0, stale: false };
@@ -159,7 +175,7 @@ export async function getRevenueRollup(
 
   // Cold. Nothing to serve, so this one waits. Errors propagate so the route can
   // return a 500 rather than an empty dashboard that reads as "you earned zero".
-  const entry = await withDashboardAccess(access, () => refresh(key, period, cloneId, range));
+  const entry = await withDashboardAccess(access, () => refresh(key, period, cloneId, range, dashboardCloneIds));
   return { ...entry.value, cachedAt: entry.fetchedAt, ageSeconds: 0, stale: false };
 }
 

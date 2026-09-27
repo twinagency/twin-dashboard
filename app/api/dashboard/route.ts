@@ -9,7 +9,7 @@ import { getDashboardAccess } from "@/lib/dashboard-access";
 import { isZaneDemo, DEMO_CLONE_ID, creatorDemoQueryIds } from "@/lib/creator-demo-policy";
 import { assertCreatorQuery } from "@/lib/creator-dashboard-policy";
 import { creatorDemoData } from "@/lib/creator-demo-data";
-import { resolveCloneCuts, scaleDashboardData, scaleAnalyticsData, type ViewerMode } from "@/lib/revenue-projection";
+import { resolveCloneCuts, scaleDashboardData, scaleAnalyticsData, redactCostFields, type ViewerMode } from "@/lib/revenue-projection";
 import { applyStackedCut } from "@/lib/platform-cut";
 import type { DashboardData } from "@/lib/dashboard-data";
 import type { AnalyticsData } from "@/lib/analytics-data";
@@ -93,10 +93,12 @@ async function read(req: NextRequest) {
       }
       cutMeta = { perCloneCuts };
     }
-    return NextResponse.json(
-      { ...outDashboard, analytics: outAnalytics, balance: outBalance, cachedAt, ageSeconds, stale, ...(cutMeta ?? {}) },
-      { headers: { "Cache-Control": "private, no-store" } },
-    );
+    const body: Record<string, unknown> = { ...outDashboard, analytics: outAnalytics, balance: outBalance, cachedAt, ageSeconds, stale, ...(cutMeta ?? {}) };
+    // Finding A: costUsd/profitUsd/margin are OUR figures, not the agency's or
+    // creator's, and unscaled they still carry gross revenue (profit + cost =
+    // gross), which would let a non-admin viewer back out the exact cut
+    // percentage from a "net" response. Admins (access === null) keep them.
+    return NextResponse.json(access ? redactCostFields(body) : body, { headers: { "Cache-Control": "private, no-store" } });
   } catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : "failed" }, { status: 500 }); }
 }
 export const GET = dashboardReader(read);

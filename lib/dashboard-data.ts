@@ -198,7 +198,16 @@ function buildBuckets(startMs: number, endMs: number, gran: Gran) {
   return { keys, labels, keyFor };
 }
 
-export async function getDashboard(period: Period, range?: DateRange, nowMs = Date.now()): Promise<DashboardData> {
+// Finding B: an agency (or view-as agency) hitting /api/dashboard with no
+// `clone` param must see only ITS OWN roster, not the whole fleet. Every
+// downstream figure here (perClone, the clones summary list, the chart
+// series, totals, recent transactions) is derived from either `clones`
+// (below) or `purchases` (loadPurchases(), below) by iterating one of those
+// two collections — never by scanning the fleet independently — so scoping
+// those two queries is sufficient to scope everything built from them. See
+// lib/revenue-cache.ts's refresh(), which is the only caller that passes a
+// non-null cloneIds (null/undefined = fleet-wide, for the master admin).
+export async function getDashboard(period: Period, range?: DateRange, nowMs = Date.now(), cloneIds?: string[] | null): Promise<DashboardData> {
   const spec = SPEC[period];
   const now = nowMs;
   const window = await resolveRevenueWindow(period, range, now);
@@ -240,12 +249,17 @@ export async function getDashboard(period: Period, range?: DateRange, nowMs = Da
     // moved ahead of the read that has to succeed.
     const probe = await supabaseAdmin.from("star_transactions").select(COLS).limit(1);
     const hasFeature = !probe.error;
+    let query = supabaseAdmin
+      .from("star_transactions")
+      .select(hasFeature ? COLS : COLS_LEGACY)
+      .gte("paid_at", new Date(startMs).toISOString())
+      .lte("paid_at", new Date(windowEnd).toISOString());
+    // Finding B: restrict to the caller's roster before anything else touches
+    // this table. Every money figure on this page (totals, perClone, recent
+    // transactions) traces back to this one query.
+    if (cloneIds) query = query.in("clone_id", cloneIds);
     const paged = await selectAllRows(
-      supabaseAdmin
-        .from("star_transactions")
-        .select(hasFeature ? COLS : COLS_LEGACY)
-        .gte("paid_at", new Date(startMs).toISOString())
-        .lte("paid_at", new Date(windowEnd).toISOString())
+      query
         // ORDER BY id is correctness, not tidiness, and this read is the
         // headline revenue figure itself. selectAllRows walks the table 1,000
         // rows at a time with .range() while star_transactions is being
@@ -276,9 +290,10 @@ export async function getDashboard(period: Period, range?: DateRange, nowMs = Da
   // them multi-second. None of these six depend on another's result, only on
   // `startMs`/`windowEnd` computed above, so they run concurrently instead.
   const [cloneRows, purchases, usage, userStats, fleetStats, reachableStats] = await Promise.all([
-    supabaseAdmin
-      .from("clones")
-      .select("id,slug,name,created_at,intake")
+    (cloneIds
+      ? supabaseAdmin.from("clones").select("id,slug,name,created_at,intake").in("id", cloneIds)
+      : supabaseAdmin.from("clones").select("id,slug,name,created_at,intake")
+    )
       .order("created_at", { ascending: true })
       .then((r) => r.data),
     loadPurchases(),

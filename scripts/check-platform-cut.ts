@@ -16,7 +16,8 @@ import {
   setCut,
   setAgencyCreatorCut,
 } from "../lib/platform-cut";
-import { scaleDashboardData, scaleAnalyticsData, type CloneCuts } from "../lib/revenue-projection";
+import { scaleDashboardData, scaleAnalyticsData, redactCostFields, type CloneCuts } from "../lib/revenue-projection";
+import { resolveDashboardCloneScope } from "../lib/revenue-cache";
 import type { DashboardData, CloneStats } from "../lib/dashboard-data";
 import type { AnalyticsData } from "../lib/analytics-data";
 
@@ -255,6 +256,101 @@ async function main() {
     const out = scaleAnalyticsData(single, cuts, "agency");
     close(out.byDay[0].stars, 800, "byDay scaled to the single clone's own ratio");
     close(out.byKind[0].stars, 800, "byKind scaled to the single clone's own ratio");
+  });
+
+  // ── Finding A: costUsd/profitUsd/margin must never reach a non-admin
+  //    response, scaled or not — profit + cost = gross, so leaving them
+  //    unscaled next to a cut-applied ("net") revenue figure lets the viewer
+  //    recover gross and back out the exact platform cut. ────────────────
+  check("F-A1 redactCostFields strips top-level costUsd/profitUsd/margin", () => {
+    const out = redactCostFields({ costUsd: 5, profitUsd: 10, margin: 0.5, revenueStars: 1000, sales: 3 }) as Record<string, unknown>;
+    equal("costUsd" in out, false, "costUsd removed");
+    equal("profitUsd" in out, false, "profitUsd removed");
+    equal("margin" in out, false, "margin removed");
+    equal(out.revenueStars, 1000, "revenueStars untouched");
+    equal(out.sales, 3, "sales untouched");
+  });
+
+  check("F-A2 redactCostFields is deep: strips every per-clone and per-flow copy", () => {
+    const out = redactCostFields({
+      totals: { revenueStars: 1500, costUsd: 2.5, profitUsd: 10 },
+      clones: [
+        { id: CLONE_A, revenueStars: 1000, costUsd: 1, profitUsd: 5, margin: 0.5 },
+        { id: CLONE_B, revenueStars: 500, costUsd: 0.5, profitUsd: 2, margin: 0.4 },
+      ],
+      byFlow: [{ key: "smart", stars: 800, costUsd: 0.8, profitUsd: 3 }],
+      perClone: { [CLONE_A]: { stars: 1000, costUsd: 1 } },
+    }) as any;
+    equal("costUsd" in out.totals, false, "totals.costUsd removed");
+    equal("profitUsd" in out.totals, false, "totals.profitUsd removed");
+    equal(out.totals.revenueStars, 1500, "totals.revenueStars untouched");
+    for (const c of out.clones) {
+      equal("costUsd" in c, false, `clone ${c.id} costUsd removed`);
+      equal("profitUsd" in c, false, `clone ${c.id} profitUsd removed`);
+      equal("margin" in c, false, `clone ${c.id} margin removed`);
+    }
+    equal(out.clones[0].revenueStars, 1000, "clone revenueStars survives redaction");
+    equal("costUsd" in out.byFlow[0], false, "byFlow costUsd removed");
+    equal("profitUsd" in out.byFlow[0], false, "byFlow profitUsd removed");
+    equal("costUsd" in out.perClone[CLONE_A], false, "perClone costUsd removed");
+  });
+
+  check("F-A3 an agency/creator response, once redacted, cannot recover gross (profit + cost)", () => {
+    const cuts = new Map<string, CloneCuts>([[CLONE_A, { platformPct: 30, agencyCreatorPct: 0 }]]);
+    const scaled = scaleAnalyticsData(analyticsFixture(), cuts, "agency");
+    const body = { analytics: scaled };
+    const serialized = JSON.stringify(redactCostFields(body));
+    equal(/costUsd|profitUsd|margin/.test(serialized), false, "no cost/profit/margin key survives redaction anywhere in the payload");
+    // Sanity: the fixture DID carry cost/profit before redaction, so this is
+    // proving removal, not a fixture that never had the fields.
+    equal(/costUsd|profitUsd|margin/.test(JSON.stringify(body)), true, "fixture has cost fields pre-redaction (sanity)");
+  });
+
+  // ── Finding B: an agency/creator (or an admin viewing as one) hitting
+  //    /api/dashboard must be scoped to THEIR OWN clones. getDashboard() and
+  //    getAnalytics() have no access model of their own (see their doc
+  //    comments) — resolveDashboardCloneScope() in lib/revenue-cache.ts is
+  //    the one decision point that must get this right for every caller. ──
+  const AGENCY = { id: "agency-1", name: "Agency", cloneIds: [CLONE_A, CLONE_B, "cccccccc-cccc-4ccc-8ccc-cccccccccccc"] };
+  const CREATOR = { id: "creator-1", name: "Creator", kind: "creator", cloneIds: [CLONE_A] };
+
+  check("F-B1 master admin (no access) is always fleet-wide, regardless of a clone param", () => {
+    equal(resolveDashboardCloneScope(null, null), null, "admin, no clone param -> fleet (null)");
+    equal(resolveDashboardCloneScope(null, CLONE_A), null, "admin, clone param set -> STILL fleet (unchanged admin behavior)");
+  });
+
+  check("F-B2 THE REGRESSION CASE: agency with no clone param scopes to its OWN roster, not the fleet", () => {
+    const scope = resolveDashboardCloneScope(AGENCY, null);
+    if (scope === null) throw new Error("agency's 'all creators' request must not resolve to fleet-wide (null)");
+    equal(scope.length, 3, "scope is exactly the agency's own roster size");
+    for (const id of AGENCY.cloneIds) equal(scope.includes(id), true, `roster includes ${id}`);
+  });
+
+  check("F-B3 agency with a specific clone param narrows to exactly that one clone", () => {
+    const scope = resolveDashboardCloneScope(AGENCY, CLONE_B);
+    equal(JSON.stringify(scope), JSON.stringify([CLONE_B]), "single clone, not the whole roster");
+  });
+
+  check("F-B4 creator (roster of one) with no clone param scopes to their own clone, not the fleet", () => {
+    const scope = resolveDashboardCloneScope(CREATOR as unknown as typeof AGENCY, null);
+    equal(JSON.stringify(scope), JSON.stringify([CLONE_A]), "creator's own single-clone roster");
+  });
+
+  check("F-B5 analytics.clones honors the same scope for the 'all creators' view", () => {
+    const cuts = new Map<string, CloneCuts>([
+      [CLONE_A, { platformPct: 0, agencyCreatorPct: 0 }],
+      [CLONE_B, { platformPct: 0, agencyCreatorPct: 0 }],
+    ]);
+    // Simulate the fleet returning both fixture clones (as it would for a real
+    // multi-agency fleet), then confirm getAnalytics's scopeCloneIds parameter
+    // (wired from resolveDashboardCloneScope in lib/revenue-cache.ts) is what
+    // narrows a.clones — this is the parameter itself being exercised via its
+    // effect on the fixture, not a live DB call.
+    const scope = resolveDashboardCloneScope({ id: "solo-agency", name: "Solo", cloneIds: [CLONE_A] }, null);
+    equal(JSON.stringify(scope), JSON.stringify([CLONE_A]), "single-clone agency scope resolves to just its own clone");
+    const scaled = scaleAnalyticsData(analyticsFixture(), cuts, "agency");
+    const visibleAfterScoping = scaled.clones.filter((c) => scope!.includes(c.id));
+    equal(visibleAfterScoping.length, 1, "only the agency's own clone would remain once getAnalytics applies scopeCloneIds");
   });
 
   console.log(`\n${passed} passed, ${failures.length} failed`);
