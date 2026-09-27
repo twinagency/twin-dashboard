@@ -32,7 +32,7 @@ const db:any={rpc:async(name:string,args:any)=>{rpcCall={name,args};return {data
     }catch(e){return Promise.reject(e).then(resolve,reject)}
   }};return q;
 }};
-const post=createCatalogueHandler({db:()=>db,admin:async()=>owner,preview:async(path,blur)=>{rendered={path,blur};return Buffer.from('transformed-only')}});
+const post=createCatalogueHandler({db:()=>db,admin:async()=>owner,preview:async(path,blur)=>{rendered={path,blur};return Buffer.from('transformed-only')},videoPreview:async(path,blur)=>{rendered={path,blur};return Buffer.from('protected-video-only')}});
 const origin='http://localhost:3107';
 async function call(action:string,body:Record<string,unknown>={},init=sign(),source=origin){
  const request=new NextRequest(`${origin}/api/catalogue/test-creator`,{method:'POST',headers:{origin:source,'content-type':'application/json','x-telegram-init-data':init},body:JSON.stringify({action,...body})});
@@ -70,6 +70,16 @@ async function main(){
  assert.equal((await call('settings',{blur:4})).status,403);
  assert.equal((await call('preview',{type:'photo',id:itemId,blur:4})).status,200);assert.equal(rendered?.blur,16,'fan cannot lower blur');
  assert.equal((await call('preview',{type:'photo',id:cloneId})).status,404);
+ // Videos share signed identity, creator scope, feature gates and server-enforced blur.
+ assert.equal((await call('preview',{type:'video',id:itemId})).status,404);
+ rows.clones[0].videos_enabled=true;rows.videos.push({...photo,storage_path:'private-video.mp4'});
+ const clip=await call('preview',{type:'video',id:itemId,blur:0,start:100,duration:999});
+ assert.equal(clip.status,200);assert.equal(clip.headers.get('content-type'),'video/mp4');
+ assert.equal(await clip.text(),'protected-video-only');assert.equal(rendered?.blur,16);assert.equal(rendered?.path,'private-video.mp4');
+ assert.equal((await call('preview',{type:'video',id:itemId},'')).status,401);
+ rows.videos[0].clone_id=fanId;assert.equal((await call('preview',{type:'video',id:itemId})).status,404);
+ rows.videos[0].clone_id=cloneId;rows.users[0].minor_flagged_at='flagged';assert.equal((await call('preview',{type:'video',id:itemId})).status,403);rows.users[0].minor_flagged_at=null;
+ rows.clones[0].videos_enabled=false;
  owner=true;assert.equal((await call('preview',{preview:true,type:'photo',id:itemId,blur:6})).status,200);assert.equal(rendered?.blur,6);
  assert.equal((await call('settings',{preview:true,blur:0})).status,400);
  assert.equal((await call('settings',{preview:true,blur:30})).status,200);assert.equal(rows.creator_catalogue_settings[0].enabled,true);
