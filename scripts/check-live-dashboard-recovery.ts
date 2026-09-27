@@ -8,6 +8,10 @@ import { supabaseAdmin } from "../lib/supabase";
 import { GET as dashboard } from "../app/api/dashboard/route";
 import { GET as mediaSign } from "../app/api/media-sign/route";
 import { scopeAgencyWrite } from "../lib/agency-write";
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import RevenueDashboard from "../components/RevenueDashboard";
+import DashboardAccessProvider from "../components/DashboardAccessProvider";
 
 async function main() {
   // Read-only production check. Resolve the live roster and exercise the same
@@ -27,6 +31,14 @@ async function main() {
     assert.ok(data.analytics.clones.every((item: {id:string}) => item.id === clone), "Analytics scope mismatch");
     assert.ok(!("costUsd" in data.totals), "Internal costs exposed");
     console.log(`Live 2W earnings and analytics passed in ${Date.now() - started}ms; creator scope and cost redaction passed`);
+    for (const period of ["2W", "1D", "1M"] as const) {
+      const result = period === "2W" ? response : await dashboard(new NextRequest(`https://dashboard.tgaiclone.xyz/api/dashboard?period=${period}&clone=${clone}&fresh=1`));
+      const snapshot = period === "2W" ? data : await result.json();
+      assert.equal(result.status, 200, `Live ${period} earnings failed: ${snapshot.error ?? "unknown"}`);
+      const markup = renderToStaticMarkup(createElement(DashboardAccessProvider, { audience: "agency", agencyName: identity.name, children: createElement(RevenueDashboard, { cloneId: clone, initialData: snapshot }) }));
+      assert.ok(markup.includes("Net revenue") && markup.includes("Recent ledger activity"), `Live ${period} render incomplete`);
+      console.log(`Live ${period} agency component render passed; ${snapshot.recent.length} transactions`);
+    }
 
     const photos = await supabaseAdmin.from("photos").select("storage_path").eq("clone_id", clone).limit(20);
     assert.ok(!photos.error && photos.data?.length, "Photo inventory unavailable");
@@ -53,5 +65,5 @@ async function main() {
 }
 if (process.env.DASHBOARD_RECOVERY_CHECK_LOAD_ONLY !== "1") {
   const timeout = setTimeout(() => { console.error("Dashboard recovery check timed out"); process.exit(1); }, 120_000);
-  main().catch(error => { console.error(error instanceof assert.AssertionError ? error.message : "Dashboard recovery check failed"); process.exitCode = 1; }).finally(() => clearTimeout(timeout));
+  main().catch(error => { console.error(error instanceof assert.AssertionError ? error.message : error instanceof Error ? `${error.name}: ${error.message}\n${error.stack?.split("\n").slice(1, 6).join("\n")}` : "Dashboard recovery check failed"); process.exitCode = 1; }).finally(() => clearTimeout(timeout));
 }

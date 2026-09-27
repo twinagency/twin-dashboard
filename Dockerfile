@@ -31,7 +31,7 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 RUN ./node_modules/.bin/esbuild scripts/check-live-catalogue-previews.ts --bundle --platform=node --format=cjs --external:sharp --outfile=catalogue-preview-check.cjs
 
-RUN ./node_modules/.bin/esbuild scripts/check-live-dashboard-recovery.ts --bundle --platform=node --format=cjs --external:sharp --outfile=dashboard-recovery-check.cjs
+RUN ./node_modules/.bin/esbuild scripts/check-live-dashboard-recovery.ts --bundle --platform=node --format=cjs --jsx=automatic --external:sharp --outfile=dashboard-recovery-check.cjs
 
 # ── 3. runner: minimal production image ──────────────────────────────────────
 FROM node:22-alpine AS runner

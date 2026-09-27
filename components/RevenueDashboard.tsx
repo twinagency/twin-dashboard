@@ -206,7 +206,7 @@ function snapshotAgeLabel(ageSeconds: number) {
   return `Updated ${minutes}m ago`;
 }
 
-export default function RevenueDashboard({ cloneId }: { cloneId?: string | null } = {}) {
+export default function RevenueDashboard({ cloneId, initialData = null }: { cloneId?: string | null; initialData?: FullData | null }) {
   const { isCreator, isAgency } = useDashboardAccess();
   const scoped = Boolean(cloneId);
   // AI cost/contribution/margin are OUR figures, not the agency's or creator's.
@@ -230,7 +230,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
   const [chartMode, setChartMode] = useState<"total" | "creator">("total");
   const [analysisView, setAnalysisView] = useState<"customers" | "journey">("customers");
   const { currency, rate } = useCurrency();
-  const [data, setData] = useState<FullData | null>(null);
+  const [data, setData] = useState<FullData | null>(initialData);
   // WHY THIS EXISTS. /api/dashboard answers a failure with 500 + {error}, and
   // fetchData used to setData(that object). `data` was then truthy with no
   // `totals` on it, so the first read of data.totals.stars threw and React
@@ -241,7 +241,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
   // Alanna story 10x'd the traffic), so the DEFAULT view white-screened.
   // A failing query must degrade to a message, never to a blank page.
   const [loadError, setLoadError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] = useState(!initialData);
   const [hidden, setHidden] = useState<Set<string>>(new Set());
   const [selected, setSelected] = useState<string | null>(null);
   const [creatorListOpen, setCreatorListOpen] = useState(false);
