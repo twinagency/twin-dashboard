@@ -4,7 +4,8 @@ import { promisify } from 'node:util';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createVideoPreview, createVideoPoster, MAX_VIDEO_PREVIEW_BYTES } from '../lib/catalogue-video-transform';
+import { createVideoPreview, createVideoPoster, probeVideoSource, MAX_VIDEO_PREVIEW_BYTES } from '../lib/catalogue-video-transform';
+import { formatVideoDuration, parseVideoSourceMetadata } from '../lib/catalogue-video-duration';
 import sharp from 'sharp';
 const run=promisify(execFile);
 async function main(){
@@ -14,7 +15,10 @@ async function main(){
   for(const [name,size,seconds] of [['portrait','300x400',24],['landscape','640x360',4]] as const){
    const input=join(dir,`${name}.mp4`),output=join(dir,`${name}-preview.mp4`);
    await run('ffmpeg',['-v','error','-y','-f','lavfi','-i',`testsrc2=size=${size}:rate=12`,'-f','lavfi','-i','sine=frequency=440','-t',String(seconds),'-c:v','libx264','-threads','1','-pix_fmt','yuv420p','-c:a','aac','-metadata','comment=private-original-marker',input]);
-   await createVideoPreview(input,output,11);
+   const originalDuration = await createVideoPreview(input,output,11);
+   assert(Math.abs(originalDuration-seconds)<.1,'return full original duration, not five-second preview length');
+   assert(Math.abs(await probeVideoSource(input)-seconds)<.1,'cached previews can retrieve original length without another encode');
+   assert.equal(formatVideoDuration(originalDuration),name==='portrait'?'0:24':'0:04');
    const probe=JSON.parse((await run('ffprobe',['-v','error','-show_format','-show_streams','-of','json',output])).stdout);
    assert.equal(probe.streams.length,1,'no original audio or extra streams');
    const stream=probe.streams[0];assert.equal(stream.codec_name,'h264');assert.equal(stream.pix_fmt,'yuv420p');
@@ -32,6 +36,13 @@ async function main(){
    await assert.rejects(createVideoPreview(input,output,0));
   }
   await assert.rejects(createVideoPreview(join(dir,'missing'),join(dir,'none.mp4'),11),/Preview unavailable/);
+  assert.deepEqual(parseVideoSourceMetadata({version:1,durationSeconds:124.4}),{version:1,durationSeconds:124.4});
+  for(const duration of [null,undefined,NaN,Infinity,0,-1,'125']) {
+   assert.equal(parseVideoSourceMetadata({version:1,durationSeconds:duration}),null);
+   assert.equal(formatVideoDuration(duration),null);
+  }
+  assert.equal(parseVideoSourceMetadata({version:2,durationSeconds:124}),null);
+  assert.equal(formatVideoDuration(124.4),'2:04');assert.equal(formatVideoDuration(59.9),'1:00');assert.equal(formatVideoDuration(3605),'1:00:05');
   console.log('Video previews passed: moving H.264 excerpts, bounded duration/size, silent, blurred, metadata stripped, portrait/landscape proportions.');
  }finally{await rm(dir,{recursive:true,force:true});}
 }

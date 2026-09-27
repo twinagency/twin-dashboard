@@ -4,13 +4,15 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { serviceClient } from './supabase-service';
 import { validBlur } from './catalogue-core';
-import { createVideoPreview, createVideoPoster, MAX_VIDEO_PREVIEW_BYTES } from './catalogue-video-transform';
+import { createVideoPreview, createVideoPoster, probeVideoSource, MAX_VIDEO_PREVIEW_BYTES } from './catalogue-video-transform';
+import { parseVideoSourceMetadata, type VideoSourceMetadata } from './catalogue-video-duration';
 
 const cache = new Map<string, Buffer>();
+const sourceMetadata = new Map<string, VideoSourceMetadata>();
 const pending = new Map<string, Promise<Buffer>>();
 let active = 0;
 const MAX_SOURCE_BYTES = 50 * 1024 * 1024;
-export type VideoPreviewSources = { url: string; posterUrl: string; seconds: number };
+export type VideoPreviewSources = { url: string; posterUrl: string; seconds: number; durationSeconds?: number };
 function previewKey(path: string, blur: number) {
   return createHash('sha256').update(`video-v2:${path}:${blur}`).digest('hex');
 }
@@ -23,7 +25,7 @@ export async function videoPreviewSources(path: string, blur: number): Promise<V
   const posterUrl = signed.data?.find(item => item.path === `${stem}.webp`)?.signedUrl;
   if (signed.error || !url || !posterUrl) throw new Error('Preview unavailable.');
   // These native HTTP sources support Safari range requests. Both are protected derivatives.
-  return { url, posterUrl, seconds: 5 };
+  return { url, posterUrl, seconds: 5, durationSeconds: sourceMetadata.get(previewKey(path, blur))?.durationSeconds };
 }
 
 export async function renderVideoPreview(path: string, blur: number): Promise<Buffer> {
@@ -38,11 +40,19 @@ export async function renderVideoPreview(path: string, blur: number): Promise<Bu
     const storage = serviceClient().storage.from('media');
     const destination = `catalogue-previews/video-v2/${key}.mp4`;
     const posterDestination = `catalogue-previews/video-v2/${key}.webp`;
+    const metadataDestination = `catalogue-previews/video-v2/${key}.json`;
     // Private derivatives survive restarts. Neither signed original URLs nor storage paths reach fans.
-    const [saved, posterSaved] = await Promise.all([storage.download(destination), storage.download(posterDestination)]);
-    if (saved.data && saved.data.size <= MAX_VIDEO_PREVIEW_BYTES && posterSaved.data) {
-      const bytes = Buffer.from(await saved.data.arrayBuffer());
-      remember(key, bytes); return bytes;
+    const [saved, posterSaved, metadataSaved] = await Promise.all([
+      storage.download(destination), storage.download(posterDestination), storage.download(metadataDestination),
+    ]);
+    let metadata: VideoSourceMetadata | null = null;
+    if (metadataSaved.data && metadataSaved.data.size <= 1024) {
+      try { metadata = parseVideoSourceMetadata(JSON.parse(await metadataSaved.data.text())); } catch { /* Probe the original below. */ }
+    }
+    const savedBytes = saved.data && saved.data.size <= MAX_VIDEO_PREVIEW_BYTES && posterSaved.data
+      ? Buffer.from(await saved.data.arrayBuffer()) : null;
+    if (savedBytes && metadata) {
+      remember(key, savedBytes, metadata); return savedBytes;
     }
     if (active >= 2) throw new Error('Preview busy. Please try again.');
     active++;
@@ -67,7 +77,15 @@ export async function renderVideoPreview(path: string, blur: number): Promise<Bu
           await file.writeFile(chunk.value);
         }
       } finally { await reader.cancel().catch(() => {}); await file.close(); }
-      await createVideoPreview(source, output, blur);
+      // Older cached previews need only a metadata probe, never a replacement encode.
+      // The duration always comes from the original, not the five-second derivative.
+      const durationSeconds = savedBytes
+        ? await probeVideoSource(source)
+        : await createVideoPreview(source, output, blur);
+      metadata = { version: 1, durationSeconds };
+      const metadataUpload = await storage.upload(metadataDestination, JSON.stringify(metadata), { contentType: 'application/json', upsert: true });
+      if (metadataUpload.error) throw new Error('Preview unavailable.');
+      if (savedBytes) { remember(key, savedBytes, metadata); return savedBytes; }
       stage = 'poster';
       await createVideoPoster(output, poster);
       stage = 'upload';
@@ -77,8 +95,11 @@ export async function renderVideoPreview(path: string, blur: number): Promise<Bu
         storage.upload(posterDestination, await readFile(poster), { contentType: 'image/webp', upsert: true }),
       ]);
       if (uploads.some(result => result.error)) throw new Error('Preview unavailable.');
-      remember(key, bytes); return bytes;
+      remember(key, bytes, metadata); return bytes;
     } catch (error) {
+      // A missing/invalid original must not break an already usable protected preview.
+      // Omit unknown length rather than mislabel the five-second preview as the full video.
+      if (savedBytes) { remember(key, savedBytes, metadata); return savedBytes; }
       if (error instanceof Error && error.cause) throw error;
       const reason = error instanceof Error && ['TimeoutError', 'AbortError'].includes(error.name) ? 'timeout' : 'invalid';
       throw new Error('Preview unavailable.', { cause: { stage, reason } });
@@ -88,7 +109,11 @@ export async function renderVideoPreview(path: string, blur: number): Promise<Bu
   try { return await work; } finally { pending.delete(key); }
 }
 
-function remember(key: string, bytes: Buffer) {
-  while (cache.size >= 24) cache.delete(cache.keys().next().value!);
+function remember(key: string, bytes: Buffer, metadata: VideoSourceMetadata | null) {
+  while (cache.size >= 24) {
+    const oldest = cache.keys().next().value!;
+    cache.delete(oldest); sourceMetadata.delete(oldest);
+  }
+  if (metadata) sourceMetadata.set(key, metadata);
   cache.set(key, bytes);
 }
