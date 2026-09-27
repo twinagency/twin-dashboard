@@ -13,10 +13,12 @@ tags must be a subset of: ${MEDIA_TAGS.join(", ")}.
 visual_evidence must contain ALL these keys with JSON boolean values: ${VISUAL_EVIDENCE_KEYS.join(", ")}.
 
 SEND CAPTION (the "caption" field):
-- Written in first person as the woman pictured, sending this photo or video to a fan. Standalone: it is not a reply to anyone, so never say "you asked" or refer to a conversation.
-- Include 1 to 2 GRAPHIC, specific details that are clearly visible: what she is wearing, which body parts are showing, what her hands or a toy are doing, the angle. Raunchy and explicit, but only what visual_evidence supports.
-- It may end with a teasing question about a visible detail. Use 1 to 3 fitting emojis. 2 to 3 short sentences, at most 45 words.
-- Style reference: "mmm right now i'm lying here in my new lingerie set, i may or may not have a finger up my ass 😈 can you see my pussy lips from this angle?"
+- Written as the woman pictured, texting a fan while she sends him this photo or video. She talks TO him, in first person, present tense, about what she's doing and feeling. She never narrates or describes the picture like an observer.
+- Super descriptive: include 2 to 3 sexy details that are clearly visible (what she's wearing, which body parts are out, her pose, what her hands or a toy are doing), said the way a horny girl texts: tits, ass, pussy, bent over, spread, soaking.
+- Never use narrator words: visible, fully, exposed, on display, from this angle, angle, view, reflection, captures, sheen, midriff, front and center, can you see, can you spot. Never mention the room, sink, camera, lighting or jewellery unless it's sexy.
+- Only what visual_evidence supports. Never invent an act (a finger in her ass, being wet, a toy) that is not shown.
+- End with a tease, a dare or a question to him, and vary it. 1 or 2 emojis. Under 40 words. Casual, lowercase is fine, "u" and "baby" are fine.
+- Example: "lying here naked with one leg up, tits out and my hand sliding down right above my pussy 😈 it's already throbbing thinking about u, want me to keep going?" Never copy the example.
 - Never mention OnlyFans, prices, Stars, tipping, tapping, unlocking or paying. Never use em dashes or en dashes.
 
 VISUAL DESCRIPTION:
