@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { normalizeMediaClassification, VISUAL_EVIDENCE_KEYS } from "../lib/media-classification";
+import { normalizeMediaClassification, stripBannedDashes, VISUAL_EVIDENCE_KEYS } from "../lib/media-classification";
 
 const clearEvidence = Object.fromEntries(VISUAL_EVIDENCE_KEYS.map((key) => [key, false]));
 function metadata(evidence: Record<string, unknown> = {}, changes: Record<string, unknown> = {}) {
@@ -73,4 +73,23 @@ assert.throws(() => normalizeMediaClassification(metadata({ full_nudity_visible:
 assert.throws(() => normalizeMediaClassification(metadata({}, { caption: "" })), /factual descriptions/);
 assert.throws(() => normalizeMediaClassification(null), /Invalid visual metadata/);
 
-console.log("Media classification regression checks passed: cleavage, swimwear, true nudity, tags, contradictions and malformed evidence.");
+// Owner hard rule: no em dash / en dash ever survives into a stored caption.
+const emDashed = normalizeMediaClassification(metadata({}, {
+  caption: "woman in open white shirt outdoors — cleavage visible, looking at camera",
+}));
+assert.ok(!/[—–]/.test(emDashed.caption), `em dash must never survive into the stored caption: ${JSON.stringify(emDashed.caption)}`);
+
+const enDashed = normalizeMediaClassification(metadata({}, {
+  caption: "woman in open white shirt outdoors – cleavage visible – looking at camera",
+}));
+assert.ok(!/[—–]/.test(enDashed.caption), `en dash must never survive into the stored caption: ${JSON.stringify(enDashed.caption)}`);
+
+for (const [input, expected] of [
+  ["I'm on the bed — legs spread for you", "I'm on the bed, legs spread for you"],
+  ["Ready for you — Come get me", "Ready for you. Come get me"],
+  ["one – two – three", "one, two, three"],
+] as const) {
+  assert.equal(stripBannedDashes(input), expected, `stripBannedDashes(${JSON.stringify(input)})`);
+}
+
+console.log("Media classification regression checks passed: cleavage, swimwear, true nudity, tags, contradictions, malformed evidence and banned dashes.");

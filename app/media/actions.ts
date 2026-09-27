@@ -199,6 +199,9 @@ export async function uploadPhoto(cloneId: string, fd: FormData): Promise<MediaU
   // Best-effort INTERNAL analysis only. A model outage must not reject a valid
   // upload, and the fan-facing message is generated later from the live chat.
   const cap = await bestEffortUploadAnalysis((signal) => captionPhoto(jpeg, model, signal));
+  // The factual description and any reviewer flag are not persisted (only
+  // `caption` is a DB column); log them so an operator can still see them.
+  if (cap.uncertainty) console.warn(`Caption uncertainty [${path}]: ${cap.uncertainty} (desc: ${cap.description ?? ""})`);
 
   // Price from the operator's guide via the AI tags (manual price wins if set).
   const starValue = resolvePrice(fd, cap, guide);
@@ -264,6 +267,7 @@ export async function uploadVideo(cloneId: string, fd: FormData): Promise<MediaU
 
   // Best-effort INTERNAL analysis only. See the matching photo path above.
   const cap = await bestEffortUploadAnalysis((signal) => captionVideo(bytes, model, signal));
+  if (cap.uncertainty) console.warn(`Caption uncertainty [${path}]: ${cap.uncertainty} (desc: ${cap.description ?? ""})`);
   // Price from the operator's guide via the AI tags (manual price wins if set).
   const starValue = resolvePrice(fd, cap, guide);
 

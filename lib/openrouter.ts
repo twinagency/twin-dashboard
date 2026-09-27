@@ -7,6 +7,7 @@ export async function orVision(opts: {
   prompt: string;
   json?: boolean;
   signal?: AbortSignal;
+  maxTokens?: number;
 }): Promise<string> {
   const key = process.env.OPENROUTER_API_KEY;
   if (!key) throw new Error("OPENROUTER_API_KEY missing");
@@ -24,6 +25,11 @@ export async function orVision(opts: {
           { type: "text", text: opts.prompt },
         ],
       }],
+      // Some OpenRouter providers default to a low completion cap when this is
+      // omitted, which silently truncates a longer JSON response mid-string
+      // (seen with the caption + description + evidence payload). Always set
+      // it explicitly rather than trusting the provider default.
+      max_tokens: opts.maxTokens ?? 1000,
       ...(opts.json ? { response_format: { type: "json_object" } } : {}),
     }),
   });

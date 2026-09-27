@@ -11,14 +11,16 @@ import { MEDIA_CLASSIFICATION_PROMPT, normalizeMediaClassification } from "./med
 const execFileAsync = promisify(execFile);
 
 export type Caption = {
-  caption: string;          // factual description for AI matching
-  teaser_caption: string;   // flirty message shown to the fan (varied emoji)
+  caption: string;          // flirty, explicit, first-person caption for this exact photo (stored)
+  teaser_caption: string;   // legacy flirty message shown to the fan (varied emoji) — unused by new uploads
   is_nude: boolean;
   explicitness: "none" | "suggestive" | "explicit";
   // AI auto-tags — drive both live media matching and category pricing.
   nsfw: boolean;            // is it sexually explicit?
   tags: string[];          // subset of MEDIA_TAGS describing what's shown
   auto_desc: string;       // very short description, e.g. "bikini pool"
+  description?: string;    // factual description of what's visible (not persisted to DB; for review/logging)
+  uncertainty?: string;     // anything unclear that needs human review, "" if none (not persisted to DB)
 };
 
 const FALLBACK: Caption = {
