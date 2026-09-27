@@ -63,14 +63,14 @@ jobs:
           done < <(sudo grep -rl 'dl.google.com/linux/chrome' /etc/apt/sources.list.d 2>/dev/null || true)
           npx playwright install --with-deps chromium
 
+      - name: Alana catalogue responsive and interaction checks
+        run: node scripts/check-alana-catalogue-ui.mjs
+
       - name: Public site responsive and interaction checks
         run: node scripts/check-marketing-site.mjs
 
       - name: Ava responsive and preview integrity checks
         run: node scripts/check-ava-site.mjs
-
-      - name: Alana catalogue responsive and interaction checks
-        run: node scripts/check-alana-catalogue-ui.mjs
 
       - name: Alana catalogue review screenshots
         if: always()
