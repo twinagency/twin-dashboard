@@ -19,6 +19,17 @@ import { getAnalytics, type AnalyticsData } from "./analytics-data";
 import type { Period, DateRange } from "./dashboard-data";
 import { supabaseAdmin } from "./supabase";
 import { STAR_USD, AUD_PER_USD } from "./money";
+import { resolveCloneCuts, scaleAnalyticsData } from "./revenue-projection";
+import { getCutPctForClone, getAgencyCreatorCutPct, applyStackedCut } from "./platform-cut";
+
+// The Twin public API follows the KEY's role, same as every other tenancy
+// decision on this file: never a query parameter. A clone-scope key is
+// creator-facing (issued to one girl/creator for her own dashboard), so it
+// sees gross scaled by BOTH cuts — platform, then the agency's own cut off
+// her. A fleet-scope key is agency-facing (draws every clone on one key), so
+// it sees gross scaled by the platform cut only: the agency-creator cut is
+// what the agency keeps back from a creator, not something taken from the
+// agency's own view of its roster.
 
 // The fan fields a model may see about her OWN fans.
 //
@@ -155,7 +166,10 @@ export async function publicRevenue(
   range?: DateRange,
 ): Promise<PublicRevenue> {
   const analytics = await getAnalytics(period, cloneId, range, { includeCost: false });
-  return projectRevenue(analytics, range ?? null);
+  // Clone-scope key = creator-facing: both cuts, stacked.
+  const cuts = await resolveCloneCuts([cloneId]);
+  const netAnalytics = scaleAnalyticsData(analytics, cuts, "creator");
+  return projectRevenue(netAnalytics, range ?? null);
 }
 
 // ── the fleet projection (migration 127 keys) ────────────────────────────────
@@ -213,7 +227,10 @@ export async function publicFleetRevenue(
   range?: DateRange,
 ): Promise<PublicFleetRevenue> {
   const analytics = await getAnalytics(period, null, range, { includeCost: false });
-  return projectFleetRevenue(analytics, range ?? null);
+  // Fleet-scope key = agency-facing: platform cut only, per clone before summing.
+  const cuts = await resolveCloneCuts(analytics.clones.map((c) => c.id));
+  const netAnalytics = scaleAnalyticsData(analytics, cuts, "agency");
+  return projectFleetRevenue(netAnalytics, range ?? null);
 }
 
 export const MAX_FAN_LIMIT = 500;
@@ -243,7 +260,17 @@ export async function publicFans(cloneId: string, limit: number): Promise<Public
     .limit(capped);
   if (error) throw new Error(error.message);
 
-  const fans = (data ?? []) as unknown as Record<string, unknown>[];
+  const platformPct = await getCutPctForClone(cloneId);
+  const agencyCreatorPct = await getAgencyCreatorCutPct(cloneId);
+  // A clone key is creator-facing: lifetime spend is scaled by both cuts, same
+  // as her revenue above. total_spent_stars is the one money field on this list.
+  const fans = ((data ?? []) as unknown as Record<string, unknown>[]).map((row) => ({
+    ...row,
+    total_spent_stars:
+      typeof row.total_spent_stars === "number"
+        ? applyStackedCut(row.total_spent_stars, platformPct, agencyCreatorPct)
+        : row.total_spent_stars,
+  }));
   return {
     fans,
     rowCount: fans.length,
@@ -273,7 +300,19 @@ export async function publicFleetFans(limit: number): Promise<PublicFans> {
     .limit(capped);
   if (error) throw new Error(error.message);
 
-  const fans = (data ?? []) as unknown as Record<string, unknown>[];
+  const rows = (data ?? []) as unknown as Record<string, unknown>[];
+  // Fleet key is agency-facing: platform cut only, per row's own clone.
+  const cuts = await resolveCloneCuts(rows.map((r) => String(r.clone_id)).filter(Boolean));
+  const fans = rows.map((row) => {
+    const c = cuts.get(String(row.clone_id));
+    return {
+      ...row,
+      total_spent_stars:
+        typeof row.total_spent_stars === "number" && c
+          ? applyStackedCut(row.total_spent_stars, c.platformPct, 0)
+          : row.total_spent_stars,
+    };
+  });
   return {
     fans,
     rowCount: fans.length,

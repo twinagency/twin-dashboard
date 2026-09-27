@@ -1,0 +1,150 @@
+// ── Projects gross DashboardData/AnalyticsData down to what an agency or a
+//    creator may see: gross scaled by the platform cut (agency) or by the
+//    platform cut AND the agency's own further cut (creator). Master admins
+//    never go through this file — they get gross straight from the cache.
+//
+// lib/revenue-cache.ts holds GROSS numbers only, keyed by role (accessCacheKey)
+// but never scaled itself — scaling happens here, per request, downstream of
+// the cache, so the cut can change (an admin edits it) without a stale scaled
+// number surviving in the cache for up to a minute.
+
+import type { DashboardData, CloneStats, CloneSummary, RecentTransaction } from "./dashboard-data";
+import type { AnalyticsData } from "./analytics-data";
+import { getCutPctForClone, getAgencyCreatorCutPct, applyCut, applyStackedCut } from "./platform-cut";
+
+export type CloneCuts = { platformPct: number; agencyCreatorPct: number };
+
+/** "creator": platform cut then the agency's own cut, stacked. "agency": platform cut only. */
+export type ViewerMode = "agency" | "creator";
+
+/** Resolve both cuts for every clone id in one payload, once, before scaling anything. */
+export async function resolveCloneCuts(cloneIds: Iterable<string>): Promise<Map<string, CloneCuts>> {
+  const ids = [...new Set(cloneIds)];
+  const entries = await Promise.all(
+    ids.map(async (id) => {
+      const [platformPct, agencyCreatorPct] = await Promise.all([getCutPctForClone(id), getAgencyCreatorCutPct(id)]);
+      return [id, { platformPct, agencyCreatorPct }] as const;
+    }),
+  );
+  return new Map(entries);
+}
+
+function net(gross: number, cuts: CloneCuts | undefined, mode: ViewerMode): number {
+  if (!cuts) return gross; // unknown clone id (e.g. a null-attributed row) — leave untouched, nothing to cut
+  return mode === "creator" ? applyStackedCut(gross, cuts.platformPct, cuts.agencyCreatorPct) : applyCut(gross, cuts.platformPct);
+}
+
+/**
+ * Scale a gross DashboardData payload for an agency or creator viewer.
+ * Every per-clone money figure (perClone[].stars/grossPaymentStars, the
+ * per-clone chart series, clones[].stars, recent[].stars) is scaled by ITS
+ * OWN clone's cut(s), then the fleet totals are recomputed as the sum of the
+ * already-scaled per-clone figures — never the other way around. Counts
+ * (sales, fans, messages, buyers, reachable24h, newFans, activeUsers,
+ * totalFans) and the AI cost/error fields are left untouched: this cut is
+ * off gross earnings, not off usage.
+ */
+export function scaleDashboardData(data: DashboardData, cuts: Map<string, CloneCuts>, mode: ViewerMode): DashboardData {
+  const perClone: Record<string, CloneStats> = {};
+  let totalStars = 0;
+  let totalGrossPaymentStars = 0;
+  for (const [cloneId, stats] of Object.entries(data.perClone)) {
+    const c = cuts.get(cloneId);
+    const stars = net(stats.stars, c, mode);
+    const grossPaymentStars = net(stats.grossPaymentStars, c, mode);
+    perClone[cloneId] = { ...stats, stars, grossPaymentStars };
+    totalStars += stars;
+    totalGrossPaymentStars += grossPaymentStars;
+  }
+
+  const clones: CloneSummary[] = data.clones.map((c) => ({ ...c, stars: net(c.stars, cuts.get(c.id), mode) }));
+
+  const series = data.series.map((row) => {
+    const out: Record<string, number | string> = { bucket: row.bucket };
+    for (const [key, value] of Object.entries(row)) {
+      if (key === "bucket") continue;
+      out[key] = typeof value === "number" ? net(value, cuts.get(key), mode) : value;
+    }
+    return out;
+  });
+
+  const recent: RecentTransaction[] = data.recent.map((t) => ({ ...t, stars: net(t.stars, cuts.get(t.cloneId), mode) }));
+
+  return {
+    ...data,
+    clones,
+    series,
+    recent,
+    perClone,
+    totals: { ...data.totals, stars: totalStars, grossPaymentStars: totalGrossPaymentStars },
+  };
+}
+
+/**
+ * Scale a gross AnalyticsData payload for an agency or creator viewer.
+ *
+ * EXACT when the payload is scoped to a single clone (the ordinary case: a
+ * creator's own view, or an agency drilled into one creator) — every money
+ * field in the payload belongs to that one clone, so it is scaled by that
+ * clone's own cut(s).
+ *
+ * APPROXIMATE when the payload mixes more than one clone (an agency's "all
+ * creators" view). `totals.revenueStars` and `clones[].revenueStars` ARE
+ * scaled per clone before summing, same as the dashboard payload above. The
+ * remaining breakdowns (byKind/byFeature/byDay/byHour/byDow/byTier,
+ * whaleFans, topWeeklySpenders, funnel, paywallFunnel, buyerConversion)
+ * are NOT broken down per clone by the data layer — getAnalytics() rolls
+ * them up in one pass across whichever clones are in scope. Those are
+ * scaled by a single BLENDED ratio (net revenue / gross revenue across the
+ * clones actually in `clones[]`), which is exact when every clone in scope
+ * shares one cut and an honest approximation otherwise. This is a known,
+ * documented limitation, not a silent gross leak: every scaled figure here
+ * is still <= its gross counterpart.
+ */
+export function scaleAnalyticsData(data: AnalyticsData, cuts: Map<string, CloneCuts>, mode: ViewerMode): AnalyticsData {
+  let grossRevenue = 0;
+  let netRevenue = 0;
+  const clones = data.clones.map((c) => {
+    const scaled = net(c.revenueStars, cuts.get(c.id), mode);
+    grossRevenue += c.revenueStars;
+    netRevenue += scaled;
+    return { ...c, revenueStars: scaled };
+  });
+  // Single-clone scope (the common case): use that clone's own ratio exactly,
+  // rather than a blend that would collapse to the same thing anyway.
+  const blendRatio = grossRevenue > 0 ? netRevenue / grossRevenue : clones.length === 1 ? (netRevenue === 0 && grossRevenue === 0 ? 1 : 0) : 1;
+  const scaleStars = (v: number) => v * blendRatio;
+
+  return {
+    ...data,
+    totals: { ...data.totals, revenueStars: netRevenue },
+    clones,
+    byKind: data.byKind.map((r) => ({ ...r, stars: scaleStars(r.stars) })),
+    byFeature: data.byFeature.map((r) => ({ ...r, stars: scaleStars(r.stars), avgStars: scaleStars(r.avgStars) })),
+    byDay: data.byDay.map((r) => ({ ...r, stars: scaleStars(r.stars) })),
+    byHour: data.byHour.map((r) => ({ ...r, stars: scaleStars(r.stars) })),
+    byDow: data.byDow.map((r) => ({ ...r, stars: scaleStars(r.stars) })),
+    byTier: data.byTier.map((r) => ({ ...r, stars: scaleStars(r.stars) })),
+    byFlow: data.byFlow.map((r) => ({ ...r, stars: scaleStars(r.stars) })),
+    whaleFans: data.whaleFans.map((f) => ({ ...f, stars: scaleStars(f.stars) })),
+    topWeeklySpenders: data.topWeeklySpenders.map((f) => ({ ...f, stars: scaleStars(f.stars) })),
+    weeklySpenderSummary: {
+      ...data.weeklySpenderSummary,
+      stars: scaleStars(data.weeklySpenderSummary.stars),
+      avgStars: scaleStars(data.weeklySpenderSummary.avgStars),
+    },
+    funnel: {
+      ...data.funnel,
+      avgStarsPerBuyer: scaleStars(data.funnel.avgStarsPerBuyer),
+      medianStarsPerBuyer: scaleStars(data.funnel.medianStarsPerBuyer),
+    },
+    paywallFunnel: {
+      ...data.paywallFunnel,
+      paidMessageStars: scaleStars(data.paywallFunnel.paidMessageStars),
+    },
+    buyerConversion: {
+      ...data.buyerConversion,
+      purchaseMix: data.buyerConversion.purchaseMix.map((r) => ({ ...r, stars: scaleStars(r.stars) })),
+    },
+  };
+}
