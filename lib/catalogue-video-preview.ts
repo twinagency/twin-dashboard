@@ -47,12 +47,13 @@ export async function renderVideoPreview(path: string, blur: number): Promise<Bu
     if (active >= 2) throw new Error('Preview busy. Please try again.');
     active++;
     let directory: string | undefined;
+    let stage = 'download';
     try {
       directory = await mkdtemp(join(tmpdir(), 'catalogue-video-'));
       const source = join(directory, 'source'), output = join(directory, 'preview.mp4'), poster = join(directory, 'poster.webp');
       const signed = await storage.createSignedUrl(path, 60);
       if (signed.error || !signed.data) throw new Error('Preview unavailable.');
-      const response = await fetch(signed.data.signedUrl, { signal: AbortSignal.timeout(20_000), cache: 'no-store', redirect: 'error' });
+      const response = await fetch(signed.data.signedUrl, { signal: AbortSignal.timeout(60_000), cache: 'no-store', redirect: 'error' });
       if (!response.ok || !response.body || Number(response.headers.get('content-length')) > MAX_SOURCE_BYTES) {
         await response.body?.cancel(); throw new Error('Preview unavailable.');
       }
@@ -67,7 +68,9 @@ export async function renderVideoPreview(path: string, blur: number): Promise<Bu
         }
       } finally { await reader.cancel().catch(() => {}); await file.close(); }
       await createVideoPreview(source, output, blur);
+      stage = 'poster';
       await createVideoPoster(output, poster);
+      stage = 'upload';
       const bytes = await readFile(output);
       const uploads = await Promise.all([
         storage.upload(destination, bytes, { contentType: 'video/mp4', upsert: true }),
@@ -76,8 +79,9 @@ export async function renderVideoPreview(path: string, blur: number): Promise<Bu
       if (uploads.some(result => result.error)) throw new Error('Preview unavailable.');
       remember(key, bytes); return bytes;
     } catch (error) {
-      if (error instanceof Error && error.message.startsWith('Preview ')) throw error;
-      throw new Error('Preview unavailable.');
+      if (error instanceof Error && error.cause) throw error;
+      const reason = error instanceof Error && ['TimeoutError', 'AbortError'].includes(error.name) ? 'timeout' : 'invalid';
+      throw new Error('Preview unavailable.', { cause: { stage, reason } });
     } finally { active--; if (directory) await rm(directory, { recursive: true, force: true }); }
   })();
   pending.set(key, work);
