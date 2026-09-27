@@ -5,6 +5,7 @@ import { AGENCY_COOKIE } from "@/lib/agency-policy";
 import { CREATOR_SESSION_COOKIE } from "@/lib/creator-session";
 import { createCatalogueHandler } from "@/lib/catalogue-api";
 import { renderPreview } from "@/lib/catalogue-preview";
+import { renderVideoPreview } from "@/lib/catalogue-video-preview";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const POST = createCatalogueHandler({
@@ -14,4 +15,5 @@ export const POST = createCatalogueHandler({
     return !jar.has(AGENCY_COOKIE) && !jar.has(CREATOR_SESSION_COOKIE) && await isAuthed();
   },
   preview: renderPreview,
+  videoPreview: renderVideoPreview,
 });

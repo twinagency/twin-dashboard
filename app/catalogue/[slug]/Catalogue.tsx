@@ -6,6 +6,7 @@ import { rewardProgress, type CatalogueBundle, type CatalogueRewards } from '@/l
 import { openCatalogueChat } from "@/lib/catalogue-navigation";
 import type { CatalogueItem } from "@/lib/catalogue-core";
 import "./catalogue.css";
+import VideoPreview from './VideoPreview';
 
 type WebApp = { initData: string; ready(): void; expand(): void; close(): void; openTelegramLink(url: string): void };
 function app(): WebApp | undefined { return (window as unknown as { Telegram?: { WebApp?: WebApp } }).Telegram?.WebApp; }
@@ -23,7 +24,10 @@ function ProfilePhoto({ name, slug }: { name: string; slug: string }) {
 
 function DevilIcon() { return <svg width="28" height="28" viewBox="0 0 32 32" fill="none"><path d="M6 15C2 12 2 5 4 2c1 5 4 6 8 7M26 15c4-3 4-10 2-13-1 5-4 6-8 7" fill="#e53935" /><path d="M16 8C9 8 5 12 5 19s5 11 11 11 11-4 11-11S23 8 16 8Z" fill="#e53935" /><path d="m10 16 3 2m9-2-3 2M11 23c3 3 7 3 10 0" stroke="#721b24" strokeWidth="2" strokeLinecap="round" /></svg>; }
 
-function Preview({ item, blur, call, retryable = true }: { item: CatalogueItem; blur: number; call: Call; retryable?: boolean }) {
+function Preview(props: { item: CatalogueItem; blur: number; call: Call; retryable?: boolean }) {
+  return props.item.type === 'video' ? <VideoPreview {...props} retryable={props.retryable ?? true} /> : <PhotoPreview {...props} />;
+}
+function PhotoPreview({ item, blur, call, retryable = true }: { item: CatalogueItem; blur: number; call: Call; retryable?: boolean }) {
   const ref = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
   const [url, setUrl] = useState<string | null>(null);
@@ -84,7 +88,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   const call = useCallback<Call>((action, payload = {}) => fetch(`/api/catalogue/${encodeURIComponent(slug)}`, {
-    signal: AbortSignal.timeout(20_000), method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", "x-telegram-init-data": app()?.initData ?? "" },
+    signal: AbortSignal.timeout(action === 'preview' && payload.type === 'video' ? 60_000 : 20_000), method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", "x-telegram-init-data": app()?.initData ?? "" },
     body: JSON.stringify({ ...payload, action, preview }),
   }), [slug, preview]);
   const read = useCallback(async (action: string, payload?: Record<string, unknown>) => {
