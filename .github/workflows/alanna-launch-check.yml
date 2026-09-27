@@ -19,16 +19,16 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ap-southeast-2
-      - name: Read creator launch readiness
+      - name: Verify creator and configure approved catalogue menu
         run: |
           set -euo pipefail
           python3 - <<'PY'
           import base64,json,pathlib
           code=base64.b64encode(pathlib.Path('scripts/check-alanna-launch.cjs').read_bytes()).decode()
-          command="printf '%s' '"+code+"' | base64 -d | sudo docker exec -i next-app node"
+          command="printf '%s' '"+code+"' | base64 -d | sudo docker exec -i -e ALANNA_CONFIGURE_MENU=1 next-app node"
           pathlib.Path('/tmp/alanna-command.json').write_text(json.dumps({'commands':[command]}))
           PY
-          CMD_ID=$(aws ssm send-command --instance-ids i-09a9dd3bd749643a5 --document-name AWS-RunShellScript --comment 'Read-only Alanna catalogue readiness' --parameters file:///tmp/alanna-command.json --query Command.CommandId --output text)
+          CMD_ID=$(aws ssm send-command --instance-ids i-09a9dd3bd749643a5 --document-name AWS-RunShellScript --comment 'Configure approved Alanna catalogue menu' --parameters file:///tmp/alanna-command.json --query Command.CommandId --output text)
           STATUS=Pending
           for attempt in $(seq 1 40); do
             sleep 3

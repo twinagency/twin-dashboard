@@ -1,4 +1,5 @@
-// Read-only launch readiness check for one verified creator. No credentials or fan data are logged.
+// Launch readiness for one verified creator. An explicit flag installs only her menu button.
+// No credentials or fan data are logged. This never enables discovery or sends messages.
 const dns=require('node:dns');const net=require('node:net');
 dns.setDefaultResultOrder('ipv4first');net.setDefaultAutoSelectFamily(false);
 const ID='6ca0782d-b5cf-433d-8329-f3ef7ec5f011';
@@ -11,6 +12,14 @@ async function main(){
  if(!clone||clone.slug!=='alanna-pow'||clone.business_username!=='alannapowofficialx')throw Error('Creator mapping mismatch');
  async function tg(method,body={}){const r=await fetch(`https://api.telegram.org/bot${clone.bot_token}/${method}`,{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(body),signal:AbortSignal.timeout(15000)});const j=await r.json();if(!j.ok)throw Error(`Telegram ${method} failed`);return j.result;}
  const me=await tg('getMe');const menu=await tg('getChatMenuButton');
+ if(process.env.ALANNA_CONFIGURE_MENU==='1'){
+  if(me.username!=='alannapow_bot')throw Error('Creator mapping mismatch');
+  const expectedUrl='https://dashboard.tgaiclone.xyz/catalogue/alanna-pow';
+  await tg('setChatMenuButton',{menu_button:{type:'web_app',text:'Open catalogue',web_app:{url:expectedUrl}}});
+  const configured=await tg('getChatMenuButton');
+  if(configured.type!=='web_app'||configured.web_app?.url!==expectedUrl)throw Error('Menu verification failed');
+  console.log('ALANNA_MENU '+JSON.stringify({verified:true,text:configured.text,url:configured.web_app.url}));
+ }
  console.log('ALANNA_LAUNCH '+JSON.stringify({creatorId:ID,slug:clone.slug,businessUsername:clone.business_username,botUsername:me.username,hasMainApp:me.has_main_web_app===true,menuType:menu.type,menuUrl:menu.web_app?.url??null}));
  const connections=await rows(`users?select=business_connection_id&clone_id=eq.${ID}&business_connection_id=not.is.null&order=last_message_received.desc.nullslast&limit=1`);
  if(!connections.length){console.log('ALANNA_PROFILE unavailable:no-business-connection');return;}
