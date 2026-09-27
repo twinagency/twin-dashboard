@@ -1,6 +1,7 @@
 "use server";
 
 import { getDashboardAccess } from "@/lib/dashboard-access";
+import { guardDashboardAction } from "@/lib/agency-management";
 import { agencyIdentity, type AgencyIdentity } from "@/lib/agency-identity";
 import { agencyCanManage } from "@/lib/agency-management-policy";
 import { setAgencyCreatorCut, invalidateCutCache } from "@/lib/platform-cut";
@@ -8,6 +9,7 @@ import { revalidatePath } from "next/cache";
 import { cookies } from "next/headers";
 
 export async function saveAgencyCreatorCut(cloneId: string, pct: number | null) {
+  await guardDashboardAction("app/agency/creator-split/actions.ts#saveAgencyCreatorCut", [cloneId, pct]);
   const access = await getDashboardAccess();
 
   // Agency-only action with canManage
