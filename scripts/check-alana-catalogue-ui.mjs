@@ -38,6 +38,7 @@ async function main(){
       await page.goto(`${origin}/catalogue/alanna-pow`);
       await page.getByRole('heading',{name:'Daddy’s Daily Reward Sale'}).waitFor();
       await page.locator('.cat-approved-badge').evaluate(image=>image.decode());
+      await page.locator('.cat-compact-bundle .cat-preview img').first().waitFor();
       const metrics=await page.evaluate(()=>{
         const badge=document.querySelector('.cat-approved-badge'),chat=document.querySelector('.cat-message'),primary=document.querySelector('.cat-compact-bundle .cat-primary');
         return {overflow:document.documentElement.scrollWidth-innerWidth,badgeLoaded:badge.complete&&badge.naturalWidth===1254,badgeBox:badge.getBoundingClientRect().width,chatColor:getComputedStyle(chat).color,chatBackground:getComputedStyle(chat).backgroundColor,chatRadius:getComputedStyle(chat).borderRadius,purchaseRadius:getComputedStyle(primary).borderRadius,headerRight:Math.max(...[...document.querySelectorAll('.cat-header button')].map(e=>e.getBoundingClientRect().right))};
@@ -57,6 +58,8 @@ async function main(){
     await page.setViewportSize({width:390,height:850});
     await page.getByRole('button',{name:'Photos',exact:true}).click();
     assert.equal(await page.locator('.cat-card').count(),6,'Free photo stays in Photos');
+    await page.locator('.cat-grid .cat-preview img').first().waitFor();
+    await page.evaluate(async()=>{for(let y=0;y<document.documentElement.scrollHeight;y+=500){window.scrollTo(0,y);await new Promise(resolve=>setTimeout(resolve,180))}window.scrollTo(0,0)});
     await page.screenshot({path:`${output}/photos-390.png`,fullPage:true});
     await page.locator('.cat-picture-button').first().click();
     assert.match(await page.getByRole('dialog',{name:'Item details'}).innerText(),/complete original caption/);
@@ -68,6 +71,7 @@ async function main(){
     await page.getByRole('button',{name:'Bundles',exact:true}).click();
     await page.locator('.cat-bundle-details-button').click();
     assert.equal(await page.locator('.cat-bundle-included>div').count(),5);
+    await page.locator('.cat-bundle-included .cat-preview img').first().waitFor();
     await page.screenshot({path:`${output}/bundle-detail-390.png`,fullPage:true});
     await page.getByRole('button',{name:'Close bundle'}).click();
     await page.getByRole('button',{name:'My purchases'}).click();
