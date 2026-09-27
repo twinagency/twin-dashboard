@@ -34,17 +34,17 @@ export default async function EarningsSplitPage() {
   const clones = cuts.filter((c) => c.kind === "clone");
 
   return (
-    <div className="flex flex-col gap-8 p-6">
+    <div className="dashboard-page flex flex-col gap-8">
       <div>
-        <h1 className="text-3xl font-bold text-white">Earnings split</h1>
-        <p className="mt-2 text-sm text-white/70">
+        <h1 className="text-3xl font-bold text-ink">Earnings split</h1>
+        <p className="mt-2 text-sm text-muted">
           Our cut. Agencies and creators only see earnings after this is taken out. Applies to all-time figures.
         </p>
       </div>
 
       <div>
-        <h2 className="mb-4 text-xl font-semibold text-white">Agencies</h2>
-        <div className="rounded-lg border border-white/10 bg-white/[0.02]">
+        <h2 className="mb-4 text-xl font-semibold text-ink">Agencies</h2>
+        <div className="rounded-lg border border-line bg-white">
           <Table>
             <TableHeader>
               <TableRow>
@@ -57,7 +57,7 @@ export default async function EarningsSplitPage() {
             <TableBody>
               {agencies.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center text-sm text-white/50">
+                  <TableCell colSpan={4} className="text-center text-sm text-muted">
                     No agencies found
                   </TableCell>
                 </TableRow>
@@ -70,8 +70,8 @@ export default async function EarningsSplitPage() {
       </div>
 
       <div>
-        <h2 className="mb-4 text-xl font-semibold text-white">Creators</h2>
-        <div className="rounded-lg border border-white/10 bg-white/[0.02]">
+        <h2 className="mb-4 text-xl font-semibold text-ink">Creators</h2>
+        <div className="rounded-lg border border-line bg-white">
           <Table>
             <TableHeader>
               <TableRow>
@@ -84,7 +84,7 @@ export default async function EarningsSplitPage() {
             <TableBody>
               {clones.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center text-sm text-white/50">
+                  <TableCell colSpan={4} className="text-center text-sm text-muted">
                     No creators found
                   </TableCell>
                 </TableRow>

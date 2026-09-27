@@ -33,16 +33,16 @@ export default async function AgencyCreatorSplitPage() {
   }
 
   return (
-    <div className="flex flex-col gap-8 p-6">
+    <div className="dashboard-page flex flex-col gap-8">
       <div>
-        <h1 className="text-3xl font-bold text-white">Creator earnings split</h1>
-        <p className="mt-2 text-sm text-white/70">
+        <h1 className="text-3xl font-bold text-ink">Creator earnings split</h1>
+        <p className="mt-2 text-sm text-muted">
           Your cut from each creator. The creator sees earnings after our platform fee and your cut.
         </p>
       </div>
 
       <div>
-        <div className="rounded-lg border border-white/10 bg-white/[0.02]">
+        <div className="rounded-lg border border-line bg-white">
           <Table>
             <TableHeader>
               <TableRow>
@@ -55,7 +55,7 @@ export default async function AgencyCreatorSplitPage() {
             <TableBody>
               {cuts.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center text-sm text-white/50">
+                  <TableCell colSpan={4} className="text-center text-sm text-muted">
                     No creators found
                   </TableCell>
                 </TableRow>

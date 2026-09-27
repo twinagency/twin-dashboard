@@ -57,7 +57,7 @@ export default function CutRowForm({ row }: { row: CutRow }) {
           onChange={(e) => setInputValue(e.target.value)}
           placeholder="2-60"
           disabled={isLoading}
-          className="w-20 rounded border border-white/20 bg-white/5 px-2 py-1 text-sm text-white placeholder:text-white/40 focus:border-white/40 focus:outline-none disabled:opacity-50"
+          className="w-20 rounded border border-line bg-white px-2 py-1 text-sm text-ink placeholder:text-muted focus:border-ink focus:outline-none disabled:opacity-50"
         />
       </TableCell>
       <TableCell>
