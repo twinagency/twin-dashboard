@@ -29,6 +29,7 @@ COPY . .
 # that read env vars; real values are injected at container runtime instead.
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
+RUN ./node_modules/.bin/esbuild scripts/check-live-catalogue-previews.ts --bundle --platform=node --format=cjs --packages=external --outfile=catalogue-preview-check.cjs
 
 # ── 3. runner: minimal production image ──────────────────────────────────────
 FROM node:22-alpine AS runner
@@ -52,6 +53,7 @@ RUN addgroup --system --gid 1001 nodejs \
 # Standalone output: a self-contained server.js plus only the node_modules
 # it actually needs (see next.config.mjs `output: "standalone"`).
 COPY --from=builder /app/package.json ./
+COPY --from=builder --chown=nextjs:nodejs /app/catalogue-preview-check.cjs ./catalogue-preview-check.cjs
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static

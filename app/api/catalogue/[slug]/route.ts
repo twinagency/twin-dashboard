@@ -5,7 +5,7 @@ import { AGENCY_COOKIE } from "@/lib/agency-policy";
 import { CREATOR_SESSION_COOKIE } from "@/lib/creator-session";
 import { createCatalogueHandler } from "@/lib/catalogue-api";
 import { renderPreview } from "@/lib/catalogue-preview";
-import { renderVideoPreview } from "@/lib/catalogue-video-preview";
+import { renderVideoPreview, videoPreviewSources } from "@/lib/catalogue-video-preview";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 export const POST = createCatalogueHandler({
@@ -16,4 +16,5 @@ export const POST = createCatalogueHandler({
   },
   preview: renderPreview,
   videoPreview: renderVideoPreview,
+  videoSources: videoPreviewSources,
 });

@@ -32,7 +32,7 @@ const db:any={rpc:async(name:string,args:any)=>{rpcCall={name,args};return {data
     }catch(e){return Promise.reject(e).then(resolve,reject)}
   }};return q;
 }};
-const post=createCatalogueHandler({db:()=>db,admin:async()=>owner,preview:async(path,blur)=>{rendered={path,blur};return Buffer.from('transformed-only')},videoPreview:async(path,blur)=>{rendered={path,blur};return Buffer.from('protected-video-only')}});
+const post=createCatalogueHandler({db:()=>db,admin:async()=>owner,preview:async(path,blur)=>{rendered={path,blur};return Buffer.from('transformed-only')},videoPreview:async(path,blur)=>{rendered={path,blur};return Buffer.from('protected-video-only')},videoSources:async(path,blur)=>{rendered={path,blur};return {url:'https://storage.test/protected.mp4',posterUrl:'https://storage.test/protected.webp',seconds:5}}});
 const origin='http://localhost:3107';
 async function call(action:string,body:Record<string,unknown>={},init=sign(),source=origin){
  const request=new NextRequest(`${origin}/api/catalogue/test-creator`,{method:'POST',headers:{origin:source,'content-type':'application/json','x-telegram-init-data':init},body:JSON.stringify({action,...body})});
@@ -76,6 +76,8 @@ async function main(){
  const clip=await call('preview',{type:'video',id:itemId,blur:0,start:100,duration:999});
  assert.equal(clip.status,200);assert.equal(clip.headers.get('content-type'),'video/mp4');
  assert.equal(await clip.text(),'protected-video-only');assert.equal(rendered?.blur,16);assert.equal(rendered?.path,'private-video.mp4');
+ const native=await call('preview',{type:'video',id:itemId,blur:0,delivery:'native'});
+ assert.equal(native.status,200);assert.deepEqual(await native.json(),{url:'https://storage.test/protected.mp4',posterUrl:'https://storage.test/protected.webp',seconds:5});assert.equal(rendered?.blur,16);
  assert.equal((await call('preview',{type:'video',id:itemId},'')).status,401);
  rows.videos[0].clone_id=fanId;assert.equal((await call('preview',{type:'video',id:itemId})).status,404);
  rows.videos[0].clone_id=cloneId;rows.users[0].minor_flagged_at='flagged';assert.equal((await call('preview',{type:'video',id:itemId})).status,403);rows.users[0].minor_flagged_at=null;

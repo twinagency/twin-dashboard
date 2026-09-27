@@ -19,11 +19,11 @@ export async function createVideoPreview(input: string, output: string, blur: nu
     if (!Number.isFinite(duration) || duration <= 0 || !stream || stream.width * stream.height > 40_000_000)
       throw new Error('Invalid video');
     // Fixed excerpt, never fan-selected offsets: repeated requests cannot reconstruct the full video.
-    // A short upload exposes at most one quarter of its running time, still blurred.
-    const seconds = Math.min(5, duration / 4);
+    // Always five seconds. Very short originals loop, with the same server-side blur.
+    const seconds = 5, start = Math.min(duration * 0.2, Math.max(0, duration - seconds));
     const scale = "scale=w='max(2,if(gt(dar,0.75),420,trunc(560*dar/2)*2))':h='max(2,if(gt(dar,0.75),trunc(420/dar/2)*2,560))',setsar=1";
     await run('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-nostdin', '-y',
-      ...inputOptions, '-threads', '1', '-ss', String(duration * 0.2), '-i', input,
+      ...inputOptions, '-threads', '1', '-stream_loop', '-1', '-ss', String(start), '-i', input,
       '-t', String(seconds), '-map', '0:v:0', '-an', '-sn', '-dn',
       '-map_metadata', '-1', '-map_chapters', '-1', '-filter_threads', '1',
       '-vf', `fps=12,${scale},gblur=sigma=${blur}:steps=2`,
@@ -33,5 +33,14 @@ export async function createVideoPreview(input: string, output: string, blur: nu
       { timeout: 25_000, maxBuffer: 64 * 1024 });
     const result = await stat(output);
     if (result.size < 100 || result.size > MAX_VIDEO_PREVIEW_BYTES) throw new Error('Invalid preview');
+  } catch { throw new Error('Preview unavailable.'); }
+}
+
+export async function createVideoPoster(input: string, output: string): Promise<void> {
+  try {
+    // The poster comes from the already blurred excerpt, never from an original frame.
+    await run('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-nostdin', '-y', ...inputOptions,
+      '-threads', '1', '-i', input, '-frames:v', '1', '-an', '-map_metadata', '-1',
+      '-c:v', 'libwebp', '-quality', '75', '-threads', '1', output], { timeout: 8_000, maxBuffer: 64 * 1024 });
   } catch { throw new Error('Preview unavailable.'); }
 }

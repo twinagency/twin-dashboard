@@ -149,6 +149,25 @@ jobs:
           echo "confirmed: container is running ${{ steps.build.outputs.sha }}"
 
       # Public GETs only. A successful container swap is not proof of URL routing.
+      - name: Warm and verify catalogue video previews
+        timeout-minutes: 10
+        run: |
+          set -euo pipefail
+          CMD_ID=$(aws ssm send-command --instance-ids "$INSTANCE_ID" \
+            --document-name AWS-RunShellScript \
+            --parameters commands="[\"sudo docker exec $CONTAINER node catalogue-preview-check.cjs\"]" \
+            --query 'Command.CommandId' --output text)
+          STATUS=Pending
+          for attempt in $(seq 1 100); do
+            sleep 5
+            STATUS=$(aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" --query Status --output text)
+            case "$STATUS" in Success|Failed|Cancelled|TimedOut) break ;; esac
+          done
+          aws ssm get-command-invocation --command-id "$CMD_ID" --instance-id "$INSTANCE_ID" \
+            --query '{status:Status,out:StandardOutputContent,err:StandardErrorContent}' --output text
+          [ "$STATUS" = "Success" ] || { echo "Catalogue preview verification failed: $STATUS"; exit 1; }
+
+      # Public GETs only. A successful container swap is not proof of URL routing.
       - name: Verify public Ava homepage
         run: node scripts/check-ava-site.mjs --http-only
         env:

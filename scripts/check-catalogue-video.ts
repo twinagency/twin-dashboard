@@ -4,7 +4,8 @@ import { promisify } from 'node:util';
 import { mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { createVideoPreview, MAX_VIDEO_PREVIEW_BYTES } from '../lib/catalogue-video-transform';
+import { createVideoPreview, createVideoPoster, MAX_VIDEO_PREVIEW_BYTES } from '../lib/catalogue-video-transform';
+import sharp from 'sharp';
 const run=promisify(execFile);
 async function main(){
  const dir=await mkdtemp(join(tmpdir(),'catalogue-video-test-'));
@@ -19,9 +20,11 @@ async function main(){
    const stream=probe.streams[0];assert.equal(stream.codec_name,'h264');assert.equal(stream.pix_fmt,'yuv420p');
    assert(stream.width<=420&&stream.height<=560);assert.equal(stream.sample_aspect_ratio,'1:1');
    assert(Math.abs(stream.width/stream.height-(name==='portrait'?.75:16/9))<.02,'keep original proportions');
-   assert(Number(probe.format.duration)<=Math.min(5,seconds/4)+.1,'only the bounded excerpt');
+   assert(Math.abs(Number(probe.format.duration)-5)<.1,'exactly five seconds, including looping shorter sources');
    assert(!JSON.stringify(probe).includes('private-original-marker'),'strip original metadata');
    const bytes=await readFile(output);assert(bytes.length<MAX_VIDEO_PREVIEW_BYTES);assert(bytes.indexOf('moov')<bytes.indexOf('mdat'),'fast-start MP4');
+   const poster=join(dir,`${name}.webp`);await createVideoPoster(output,poster);const posterMeta=await sharp(poster).metadata();
+   assert.equal(posterMeta.format,'webp');assert.equal(posterMeta.width,stream.width);assert.equal(posterMeta.height,stream.height);assert.equal(posterMeta.exif,undefined);
    // Both blur settings render actual moving frames, with different protected pixels.
    const heavy=join(dir,`${name}-heavy.mp4`);await createVideoPreview(input,heavy,30);assert.notDeepEqual(bytes,await readFile(heavy));
    const hashes=(await run('ffmpeg',['-v','error','-i',output,'-f','framemd5','-'])).stdout.split('\n').filter(l=>l&&!l.startsWith('#')).map(l=>l.split(',').pop());
