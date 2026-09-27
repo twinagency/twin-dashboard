@@ -2,14 +2,14 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { stat } from 'node:fs/promises';
 import { validBlur } from './catalogue-core';
+import { validVideoDuration } from './catalogue-video-duration';
 
 const run = promisify(execFile);
 export const MAX_VIDEO_PREVIEW_BYTES = 2 * 1024 * 1024;
 
 // Local files only: uploaded media cannot make ffmpeg fetch another URL or playlist.
 const inputOptions = ['-protocol_whitelist', 'file,pipe', '-format_whitelist', 'mov,matroska,webm,avi'];
-export async function createVideoPreview(input: string, output: string, blur: number): Promise<void> {
-  if (!validBlur(blur)) throw new Error('Preview unavailable.');
+export async function probeVideoSource(input: string): Promise<number> {
   let stage = 'probe';
   try {
     const probe = await run('ffprobe', ['-v', 'error', ...inputOptions, '-select_streams', 'v:0',
@@ -18,8 +18,21 @@ export async function createVideoPreview(input: string, output: string, blur: nu
     stage = 'metadata';
     const metadata = JSON.parse(probe.stdout);
     const duration = Number(metadata.format?.duration), stream = metadata.streams?.[0];
-    if (!Number.isFinite(duration) || duration <= 0 || !stream || stream.width * stream.height > 40_000_000)
+    if (!validVideoDuration(duration) || !stream || stream.width * stream.height > 40_000_000)
       throw new Error('Invalid video');
+    return duration;
+  } catch (error) {
+    const details = error as { killed?: boolean; signal?: string; code?: string };
+    const reason = details.signal === 'SIGKILL' ? 'killed' : details.killed || details.code === 'ETIMEDOUT' ? 'timeout' : 'invalid';
+    throw new Error('Preview unavailable.', { cause: { stage, reason } });
+  }
+}
+
+export async function createVideoPreview(input: string, output: string, blur: number): Promise<number> {
+  if (!validBlur(blur)) throw new Error('Preview unavailable.');
+  let stage = 'probe';
+  try {
+    const duration = await probeVideoSource(input);
     // Fixed excerpt, never fan-selected offsets: repeated requests cannot reconstruct the full video.
     // Always five seconds. Very short originals loop, with the same server-side blur.
     const seconds = 5, start = Math.min(duration * 0.2, Math.max(0, duration - seconds));
@@ -37,7 +50,9 @@ export async function createVideoPreview(input: string, output: string, blur: nu
     stage = 'output';
     const result = await stat(output);
     if (result.size < 100 || result.size > MAX_VIDEO_PREVIEW_BYTES) throw new Error('Invalid preview');
+    return duration;
   } catch (error) {
+    if (error instanceof Error && error.cause) throw error;
     const details = error as { killed?: boolean; signal?: string; code?: string };
     const reason = details.signal === 'SIGKILL' ? 'killed' : details.killed || details.code === 'ETIMEDOUT' ? 'timeout' : 'invalid';
     throw new Error('Preview unavailable.', { cause: { stage, reason } });

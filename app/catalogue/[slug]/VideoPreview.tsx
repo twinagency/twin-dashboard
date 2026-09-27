@@ -2,9 +2,10 @@
 import { useEffect, useRef, useState } from 'react';
 import { Check, LockKeyhole, Play, Video } from 'lucide-react';
 import type { CatalogueItem } from '@/lib/catalogue-core';
+import { formatVideoDuration } from '@/lib/catalogue-video-duration';
 
 type Call = (action: string, payload?: Record<string, unknown>) => Promise<Response>;
-type Sources = { url: string; posterUrl: string; seconds: number };
+type Sources = { url: string; posterUrl: string; seconds: number; durationSeconds?: number };
 let active = 0;
 const waiting: Array<() => void> = [];
 async function previewSlot<T>(work: () => Promise<T>): Promise<T> {
@@ -22,6 +23,7 @@ export default function VideoPreview({ item, blur, call, retryable }: {
   const [sources, setSources] = useState<Sources | null>(null), [error, setError] = useState(false);
   const [retry, setRetry] = useState(0), [playbackError, setPlaybackError] = useState(false);
   const [motionAllowed, setMotionAllowed] = useState(false);
+  const fullDuration = formatVideoDuration(sources?.durationSeconds);
   useEffect(() => {
     if (!container.current) return;
     const observer = new IntersectionObserver(([entry]) => {
@@ -89,6 +91,7 @@ export default function VideoPreview({ item, blur, call, retryable }: {
       {item.purchased || item.received ? <Check size={14} /> : <LockKeyhole size={13} />}
     </span>
     {sources && !retryable && <span className="cat-video-label"><Play size={11} fill="currentColor" /> 5-sec preview</span>}
+    {fullDuration && <span className="cat-video-duration" aria-label={`Full video: ${fullDuration}`}>{fullDuration}</span>}
     {sources && playbackError && retryable && <button type="button" className="cat-video-retry" onClick={() => setRetry(v => v + 1)}><Play size={14} /> Play preview</button>}
   </div>;
 }
