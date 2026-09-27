@@ -28,6 +28,8 @@ import { cn } from "@/lib/utils";
 import { creatorPublicPortal, isCreatorPath, isCreatorPublicPath } from "@/lib/creator-routing";
 import { isCreatorDashboardPath } from "@/lib/creator-dashboard-policy";
 import { getCreatorWorkspace } from "@/lib/creator-dashboard";
+import { getViewAsBannerInfo } from "@/lib/view-as-banner";
+import ViewAsBanner from "@/components/ViewAsBanner";
 
 const inter = Inter({subsets:['latin'],variable:'--font-sans'});
 const plexMono = Inter({subsets:['latin'],variable:'--font-mono'});
@@ -87,15 +89,19 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   const agency = await getDashboardAccess();
   const authed = !!agency || devBypass || await isAuthed();
   if (!authed) return <html lang="en" className={fontClass} style={{colorScheme:"light"}} suppressHydrationWarning><body className="min-h-screen bg-bg">{children}</body></html>;
-  const [twinVersion, clones, activeCloneId] = await Promise.all([
-    agency ? Promise.resolve(null) : getCachedTwinVersion(), getFleetClones(), getCloneScope(),
+  const [twinVersion, clones, activeCloneId, viewAsInfo] = await Promise.all([
+    agency ? Promise.resolve(null) : getCachedTwinVersion(), getFleetClones(), getCloneScope(), getViewAsBannerInfo(),
   ]);
   const allTimeStars = await getHeaderAllTimeStars(activeCloneId);
+  // Viewing as an agency is ALWAYS read-only, regardless of that agency's own
+  // canManage grant: this admin is looking, not administering as them.
+  const canManage = viewAsInfo ? false : agencyCanManage(agency);
   // Path-dependent navigation stays in client components, not frozen here.
   return <html lang="en" data-agency={isMoxy(agency?.name) ? "moxy" : isLynq(agency?.name) ? "lynq" : undefined} data-brand-theme={isLynq(agency?.name) ? "lynq-light" : agency?.name === JESS_KATE_PORTAL.name ? "ivory-cherry" : undefined} className={fontClass} style={{ colorScheme: "light" }} suppressHydrationWarning>
     <body className="min-h-screen bg-bg">
       <script dangerouslySetInnerHTML={{__html:'try{if(localStorage.getItem("blurMedia")==="true")document.documentElement.classList.add("blur-media")}catch(e){}'}} />
-      <DashboardAccessProvider agencyName={agency?.name} canManage={agencyCanManage(agency)}><CurrencyProvider><BlurProvider>
+      {viewAsInfo && <ViewAsBanner info={viewAsInfo} />}
+      <DashboardAccessProvider agencyName={agency?.name} canManage={canManage}><CurrencyProvider><BlurProvider>
         <div className="flex h-screen">
           <Sidebar clones={clones} activeCloneId={activeCloneId} />
           <div className="flex h-screen min-w-0 flex-1 flex-col overflow-hidden">

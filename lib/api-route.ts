@@ -7,7 +7,7 @@
 // withAdmin, which is what stops the next endpoint from being added unguarded.
 
 import { NextResponse } from "next/server";
-import { authenticateRequest, type AuthFailure } from "./api-auth";
+import { authenticateRequest, clientIp, type ActAs, type AuthFailure } from "./api-auth";
 import { supabaseAdmin } from "./supabase";
 import { isQueryError, type QueryError } from "./api-read";
 
@@ -57,6 +57,23 @@ export function logAdminWrite(
     .then(
       () => undefined,
       () => undefined, // fire-and-forget: auditing must never fail the write
+    );
+}
+
+// Audit trail for the admin API's "act as" header. Lives here, not in the
+// route, for the same reason logAdminWrite does: no route file under
+// app/api/admin/v1 may import supabaseAdmin directly (check-admin-api.ts's B4
+// asserts that), so anything that needs a Supabase write goes through this
+// module instead. Best-effort: admin_view_as_log's own migration is owned
+// elsewhere, and losing the audit row must never fail the request.
+export function logActAs(actAs: ActAs, req: Request): void {
+  const ip = clientIp(req.headers.get("x-forwarded-for")) ?? "unknown";
+  void supabaseAdmin
+    .from("admin_view_as_log")
+    .insert({ admin: "twin-api", target_type: actAs.kind, target_id: actAs.id, ip })
+    .then(
+      ({ error }) => { if (error) console.error("admin_view_as_log insert failed:", error.message); },
+      (e) => console.error("admin_view_as_log insert threw:", e instanceof Error ? e.message : e),
     );
 }
 

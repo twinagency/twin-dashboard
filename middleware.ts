@@ -3,16 +3,17 @@ import { isTwinLoginPath, safeAdminNext } from "@/lib/login-routing";
 import { agencyCanManage, agencyManagementRequestAllowed } from "@/lib/agency-management-policy";
 import { dashboardOrigin, trustedFormOrigin } from "@/lib/form-origin";
 import { AGENCY_PORTAL_COOKIE, portalLoginPath } from "@/lib/agency-brand";
-import { agencyIdentity } from "@/lib/agency-identity";
+import { agencyIdentity, agencyIdentityById } from "@/lib/agency-identity";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { SESSION_COOKIE, verifySessionToken } from "@/lib/session";
 import { CREATOR_SESSION_COOKIE } from "@/lib/creator-session";
 import { CREATOR_PORTAL_COOKIE, creatorLoginPath, creatorPortalCookieOptions, creatorPortalForIdentity, creatorPublicPortal, isCreatorAuthPath, isCreatorPath, isCreatorPublicPath, safeCreatorNext, shouldRedirectAuthenticatedCreatorEntry } from "@/lib/creator-routing";
 import { isAgencyPath, agencyRequestAllowed, agencyDashboardPath, AGENCY_COOKIE } from "@/lib/agency-policy";
-import { creatorDashboardIdentity } from "@/lib/creator-dashboard-identity";
+import { creatorDashboardIdentity, creatorDashboardIdentityById } from "@/lib/creator-dashboard-identity";
 import { CREATOR_AUDIENCE_HEADER, isCreatorDashboardPath, creatorApiAllowed, assertCreatorQuery, creatorDashboardAlias } from "@/lib/creator-dashboard-policy";
 import { creatorDemoQueryIds } from "@/lib/creator-demo-policy";
+import { activeViewAs, VIEW_AS_EXIT_PATH } from "@/lib/view-as";
 
 function withPathname(req: NextRequest, creator = false): NextResponse {
   const headers = new Headers(req.headers);
@@ -35,6 +36,26 @@ const SELF_AUTHENTICATED_PREFIXES = ["/api/v1/", "/api/admin/"];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+  // ── Read-only while viewing as someone ──────────────────────────────────
+  // ONE choke point for every mutation while a view-as cookie is live: every
+  // server action (the next-action header) and every non-GET/HEAD API or form
+  // POST/PUT/PATCH/DELETE, repo-wide, since the matcher below covers
+  // everything except static assets. VIEW_AS_EXIT_PATH is the one exemption:
+  // it is a plain (non-server-action) POST so "leave view-as mode" still
+  // works while every other write is blocked.
+  const viewAs = await activeViewAs(req.cookies);
+  if (viewAs && pathname !== VIEW_AS_EXIT_PATH) {
+    const isMutation = req.headers.has("next-action") || !["GET", "HEAD"].includes(req.method);
+    if (isMutation) return NextResponse.json({ ok: false, error: "read-only while viewing as" }, { status: 403 });
+  }
+  // The exit action itself must reach its Route Handler regardless of the
+  // agency/creator identity the view-as cookie resolves to below — it has to
+  // work even while "viewing as" a read-only agency/creator whose own request
+  // policy would otherwise reject a POST to this path.
+  if (pathname === VIEW_AS_EXIT_PATH) {
+    if (req.method !== "POST" || req.headers.has("next-action")) return new NextResponse("Forbidden", { status: 403 });
+    return privateResponse(withPathname(req));
+  }
   // Fan catalogue endpoints perform their own Telegram/admin authentication.
   // This branch precedes agency/creator cookies and never accepts server actions.
   if (/^\/catalogue\/[a-z0-9-]{1,80}$/.test(pathname) || /^\/api\/catalogue\/[a-z0-9-]{1,80}$/.test(pathname)) {
@@ -60,7 +81,7 @@ export async function middleware(req: NextRequest) {
   if (isCreatorPublicPath(pathname)) {
     if (!["GET", "HEAD"].includes(req.method) || req.headers.has("next-action")) return new NextResponse("Forbidden", { status: 403 });
     const creatorToken = req.cookies.get(CREATOR_SESSION_COOKIE)?.value;
-    const creator = await creatorDashboardIdentity(creatorToken);
+    const creator = (await creatorDashboardIdentity(creatorToken)) ?? (viewAs?.targetType === "creator" ? await creatorDashboardIdentityById(viewAs.targetId) : null);
     const requestedPortal = creatorPublicPortal(pathname);
     const switchingPortal = !!creator && requestedPortal !== creatorPortalForIdentity(creator, null);
     const response = shouldRedirectAuthenticatedCreatorEntry(pathname, creator)
@@ -79,7 +100,8 @@ export async function middleware(req: NextRequest) {
   if (isCreatorPath(pathname)) {
     if (!["GET", "HEAD"].includes(req.method) || req.headers.has("next-action")) return new NextResponse("Forbidden", { status: 403 });
     if (!isCreatorDashboardPath(pathname) && pathname !== "/creator/onboarding") return new NextResponse("Creator page not found", { status: 404 });
-    const creator = await creatorDashboardIdentity(req.cookies.get(CREATOR_SESSION_COOKIE)?.value);
+    const creator = (await creatorDashboardIdentity(req.cookies.get(CREATOR_SESSION_COOKIE)?.value))
+      ?? (viewAs?.targetType === "creator" ? await creatorDashboardIdentityById(viewAs.targetId) : null);
     if (!creator) {
       const loginPath = creatorLoginPath(creator, req.cookies.get(CREATOR_PORTAL_COOKIE)?.value);
       const url = new URL(loginPath, dashboardOrigin(req));
@@ -110,9 +132,9 @@ export async function middleware(req: NextRequest) {
     return privateResponse(withPathname(req));
   }
   const creatorToken = req.cookies.get(CREATOR_SESSION_COOKIE)?.value;
-  const useCreator = creatorReferrer(req) || (!!creatorToken && !req.cookies.has(AGENCY_COOKIE) && !req.cookies.has(SESSION_COOKIE));
+  const useCreator = creatorReferrer(req) || (!!creatorToken && !req.cookies.has(AGENCY_COOKIE) && !req.cookies.has(SESSION_COOKIE)) || viewAs?.targetType === "creator";
   if (useCreator) {
-    const creator = await creatorDashboardIdentity(creatorToken);
+    const creator = (await creatorDashboardIdentity(creatorToken)) ?? (viewAs?.targetType === "creator" ? await creatorDashboardIdentityById(viewAs.targetId) : null);
     if (!creator || !creator.onboarded) return privateResponse(NextResponse.json({ error: "Creator access unavailable. Please sign in again." }, { status: 403 }));
     // Demo query IDs are only valid for this account's synthetic earnings API.
     try { assertCreatorQuery(req.nextUrl.searchParams, creatorDemoQueryIds(pathname, creator)); } catch { return new NextResponse("Creator access denied", { status: 403 }); }
@@ -125,9 +147,9 @@ export async function middleware(req: NextRequest) {
   }
   if (SELF_AUTHENTICATED_PREFIXES.some((p) => pathname.startsWith(p))) return withPathname(req);
   const agencyToken = req.cookies.get(AGENCY_COOKIE)?.value;
-  if (agencyToken) {
-    const identity = await agencyIdentity(agencyToken);
-    if (!identity) return NextResponse.redirect(new URL(portalLoginPath(req.cookies.get(AGENCY_PORTAL_COOKIE)?.value),dashboardOrigin(req)));
+  if (agencyToken || viewAs?.targetType === "agency") {
+    const identity = agencyToken ? await agencyIdentity(agencyToken) : await agencyIdentityById(viewAs!.targetId);
+    if (!identity) return agencyToken ? NextResponse.redirect(new URL(portalLoginPath(req.cookies.get(AGENCY_PORTAL_COOKIE)?.value),dashboardOrigin(req))) : NextResponse.redirect(new URL("/admin/view-as", dashboardOrigin(req)));
     const canManage = agencyCanManage(identity);
     const serverAction = req.headers.has("next-action");
     const isWrite = serverAction || !["GET", "HEAD"].includes(req.method);

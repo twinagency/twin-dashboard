@@ -2,11 +2,16 @@ import { cache } from "react";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { CREATOR_SESSION_COOKIE } from "./creator-session";
-import { creatorDashboardIdentity } from "./creator-dashboard-identity";
+import { creatorDashboardIdentity, creatorDashboardIdentityById } from "./creator-dashboard-identity";
 import { CREATOR_PORTAL_COOKIE, creatorLoginPath } from "./creator-routing";
+import { activeViewAs } from "./view-as";
 
 export const getCreatorWorkspace = cache(async () => {
-  return creatorDashboardIdentity((await cookies()).get(CREATOR_SESSION_COOKIE)?.value);
+  const jar = await cookies();
+  const real = await creatorDashboardIdentity(jar.get(CREATOR_SESSION_COOKIE)?.value);
+  if (real) return real;
+  const viewAs = await activeViewAs(jar);
+  return viewAs?.targetType === "creator" ? creatorDashboardIdentityById(viewAs.targetId) : null;
 });
 export async function requireCreatorWorkspace() {
   const identity = await getCreatorWorkspace();

@@ -209,3 +209,17 @@ export function authenticateRequest(req: Request): AuthResult {
     allowPublic: process.env[ALLOW_PUBLIC_ENV] === "true",
   });
 }
+
+// ── "act as" for the admin API ───────────────────────────────────────────────
+// x-twin-act-as: clone:<uuid> | agency:<uuid>. This NEVER replaces the two
+// gates above — a route reads it only after authenticateRequest() has already
+// passed, so acting-as still requires the admin key and the network gate.
+// This header has no meaning on /api/v1/* and must never be read there.
+export type ActAs = { kind: "clone" | "agency"; id: string };
+
+export function parseActAs(headers: Headers): ActAs | null {
+  const raw = headers.get("x-twin-act-as");
+  if (!raw) return null;
+  const m = /^(clone|agency):([0-9a-f-]{36})$/i.exec(raw.trim());
+  return m ? { kind: m[1] as ActAs["kind"], id: m[2] } : null;
+}
