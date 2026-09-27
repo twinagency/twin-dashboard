@@ -1,11 +1,16 @@
 import assert from 'node:assert/strict';
 import {rewardProgress,projectBundle} from '../lib/catalogue-commerce';
+import { catalogueAppearance } from '../lib/catalogue-appearance';
 import { createHmac } from 'node:crypto';
 import sharp from 'sharp';
 import { NextRequest } from 'next/server';
 import { createCatalogueHandler } from '../lib/catalogue-api';
 import { blurPreview } from '../lib/catalogue-preview';
 import { validateTelegramData, projectItem, windowOpen } from '../lib/catalogue-core';
+
+assert.equal(catalogueAppearance('briana-redd')?.profilePhoto, '/brand/catalogue/briana-redd-profile.webp');
+assert.ok(catalogueAppearance('alanna-pow'), 'Alanna uses the same compact catalogue layout');
+assert.equal(catalogueAppearance('unrelated-creator'), null, 'other creators retain their existing layout');
 
 const cloneId='00000000-0000-0000-0000-000000000001', fanId='00000000-0000-0000-0000-000000000002';
 const itemId='00000000-0000-0000-0000-000000000003', requestId='00000000-0000-0000-0000-000000000004';
