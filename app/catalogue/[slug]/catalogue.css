@@ -293,6 +293,7 @@ html:has(.catalogue),body:has(.catalogue){background:#000;color-scheme:dark}
 .catalogue-compact .cat-grid .cat-item-unlock{display:inline-flex;align-items:center;justify-content:center;min-width:52px;min-height:44px;padding:0 8px;border:0;border-radius:9999px;background:#dc2626;color:#fff;font-size:12px;line-height:1.2}
 .catalogue-compact .cat-grid .cat-item-unlock:hover{background:#ef4444;color:#fff}
 .catalogue-compact .cat-grid .cat-type{display:none}
+.catalogue-compact .cat-card-free .cat-lock{display:none}
 .catalogue-compact .cat-grid .cat-video-label,.catalogue-compact .cat-grid .cat-video-duration{display:flex}
 .catalogue-compact .cat-modal,.catalogue-compact .cat-detail{background:#1f1f22;color:#fff}
 .catalogue-compact .cat-modal-backdrop{background:#000b}

@@ -311,7 +311,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
             }}><span/></button>)}<span className="cat-carousel-count" aria-live="polite">{bundleIndex+1} / {browseBundles.length}</span>
           </div>}
         </section>}
-        {visible.length ? <div className="cat-grid">{visible.slice(0, pageSize).map(item => <article className="cat-card" key={`${item.type}:${item.id}`}>
+        {visible.length ? <div className="cat-grid">{visible.slice(0, pageSize).map(item => <article className={`cat-card${compact && item.free ? ' cat-card-free' : ''}`} key={`${item.type}:${item.id}`}>
           <button className="cat-picture-button" onClick={event => openItem(item, event.currentTarget)} aria-label={`View ${item.type}: ${item.description.slice(0, 100)}`}><Preview item={item} blur={renderBlur} call={call} retryable={false} /></button>
           <div className="cat-card-body">
             {refined && <p className="cat-card-description" title={item.description}>{compact ? shortCatalogueTitle(item.description) : item.description}</p>}
