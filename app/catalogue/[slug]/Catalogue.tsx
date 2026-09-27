@@ -180,7 +180,6 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
     <div className="cat-shell">
       <header className="cat-header"><button className="cat-icon" aria-label="Back to chat" onClick={backToChat}><ArrowLeft size={21} /></button>
         <div><h1>{data?.name || "Your catalogue"}</h1></div>
-        <img className="cat-brand-logo" src="/catalogue/flirt-logo.jpg" alt="FLIRT" width={72} height={36} />
         {data?.admin ? <button className="cat-icon" aria-label="Catalogue settings" onClick={() => setSettingsOpen(v => !v)}><SlidersHorizontal size={21} /></button>
           : <button className="cat-icon" aria-label="My purchases" onClick={() => { setSection("My Purchases"); setSearch(""); document.getElementById("catalogue-items")?.scrollIntoView({ behavior: "smooth" }); }}><ShoppingBag size={19} /></button>}</header>
       {data?.admin && <div className="cat-admin-label">Owner preview <span>{data.enabled ? "Catalogue enabled" : "Not live for fans"}</span></div>}
