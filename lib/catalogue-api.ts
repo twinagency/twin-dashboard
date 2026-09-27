@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { dashboardOrigin, trustedFormOrigin } from "./form-origin";
-import { catalogueEligible, DEFAULT_BLUR, projectItem, safeMiniAppUrl, validBlur, validateTelegramData, windowOpen } from "./catalogue-core";
+import { catalogueEligible, catalogueItemVisible, DEFAULT_BLUR, projectItem, safeMiniAppUrl, validBlur, validateTelegramData, windowOpen } from "./catalogue-core";
 import { projectBundle } from './catalogue-commerce';
 export type CatalogueDependencies = {
   db(): SupabaseClient;
@@ -103,8 +103,8 @@ return async function POST(request: NextRequest, context: { params: Promise<{ sl
       const owned = new Set((checked(received) ?? []).map((r: any) => `${r.media_type}:${r.media_id}`));
       const bought = new Set((checked(purchases) ?? []).map((r: any) => `${r.media_type}:${r.media_id}`));
       for (const b of bundleRows) if (bought.has(`bundle:${b.id}`)) for (const id of b.photo_ids) bought.add(`photo:${id}`);
-      const items = [...(checked(photos) ?? []).map((r: any) => projectItem(r, "photo", bought.has(`photo:${r.id}`), owned.has(`photo:${r.id}`))),
-        ...(checked(videos) ?? []).map((r: any) => projectItem(r, "video", bought.has(`video:${r.id}`), owned.has(`video:${r.id}`)))].filter(r => r.free || Number.isInteger(r.stars) && r.stars > 0);
+      const items = [...(checked(photos) ?? []).filter((r: any) => catalogueItemVisible(r, slug)).map((r: any) => projectItem(r, "photo", bought.has(`photo:${r.id}`), owned.has(`photo:${r.id}`))),
+        ...(checked(videos) ?? []).filter((r: any) => catalogueItemVisible(r, slug)).map((r: any) => projectItem(r, "video", bought.has(`video:${r.id}`), owned.has(`video:${r.id}`)))].filter(r => r.free || Number.isInteger(r.stars) && r.stars > 0);
       items.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
       const bundles = clone.bundles_enabled ? bundleRows.map((b:any)=>projectBundle(b,items)).filter(Boolean) : [];
       const points = program && fan ? checked(await db.rpc('catalogue_reward_balance',{p_clone:clone.id,p_user:fan.id})) : null;
@@ -125,8 +125,8 @@ return async function POST(request: NextRequest, context: { params: Promise<{ sl
       // Requested strength is accepted only for an independently authenticated operator preview.
       const strength = admin && validBlur(body.blur) ? body.blur : blur;
       const video = body.type === 'video';
-      const item = checked(await db.from(video ? 'videos' : 'photos').select("storage_path").eq("clone_id", clone.id).eq("id", body.id).maybeSingle());
-      if (!item?.storage_path) return json({ error: "Preview unavailable." }, 404);
+      const item = checked(await db.from(video ? 'videos' : 'photos').select("storage_path,caption").eq("clone_id", clone.id).eq("id", body.id).maybeSingle());
+      if (!item?.storage_path || !catalogueItemVisible(item, slug)) return json({ error: "Preview unavailable." }, 404);
       if (video && body.delivery === 'native') return json(await deps.videoSources(item.storage_path, strength));
       const bytes = await (video ? deps.videoPreview : deps.preview)(item.storage_path, strength);
       return new NextResponse(new Uint8Array(bytes), { headers: { ...noCache, "Content-Type": video ? 'video/mp4' : 'image/webp' } });
@@ -147,6 +147,10 @@ return async function POST(request: NextRequest, context: { params: Promise<{ sl
         const rewardType=body.rewardType ?? 'photo';
         if(rewardType!=='photo' && rewardType!=='video') return json({error:'Invalid reward type.'},400);
         if(rewardType==='photo' ? !clone.photos_enabled : !clone.videos_enabled) return json({error:'Reward unavailable.'},404);
+        if (slug === 'alanna-pow') {
+          const reward = checked(await db.from(rewardType === 'video' ? 'videos' : 'photos').select('caption').eq('clone_id', clone.id).eq('id', body.id).maybeSingle());
+          if (!catalogueItemVisible(reward, slug)) return json({error:'Reward unavailable.'},404);
+        }
         rateLimit(`send:${fan.id}`,10);
         const claim=await db.rpc(rewardType==='video'?'catalogue_claim_video_reward':'catalogue_claim_reward',{p_clone:clone.id,p_user:fan.id,[rewardType==='video'?'p_video':'p_photo']:body.id,p_request:body.requestKey});
         if(claim.error) return json({error:'Reward not available. Refresh your points and check your chat before trying again.'},409);
@@ -156,16 +160,16 @@ return async function POST(request: NextRequest, context: { params: Promise<{ sl
         if(!clone.bundles_enabled || !clone.photos_enabled) return json({error:'Bundle unavailable.'},404);
         const b=checked(await db.from('catalogue_bundles').select('id,title,photo_ids,price_stars,regular_stars').eq('clone_id',clone.id).eq('id',body.id).eq('enabled',true).maybeSingle());
         if(!b) return json({error:'Bundle unavailable.'},404);
-        const p=checked(await db.from('photos').select('id,star_value,is_free').eq('clone_id',clone.id).in('id',b.photo_ids));
-        if(!projectBundle(b,(p??[]).map((r:any)=>projectItem(r,'photo')))) return json({error:'Bundle price or contents changed. Please refresh.'},409);
+        const p=checked(await db.from('photos').select('id,caption,star_value,is_free').eq('clone_id',clone.id).in('id',b.photo_ids));
+        if(!projectBundle(b,(p??[]).filter((r:any)=>catalogueItemVisible(r,slug)).map((r:any)=>projectItem(r,'photo')))) return json({error:'Bundle price or contents changed. Please refresh.'},409);
         const owned=checked(await db.from('user_received_media').select('media_id').eq('clone_id',clone.id).eq('user_id',fan.id).eq('media_type','photo').in('media_id',b.photo_ids));
         const paid=checked(await db.from('star_transactions').select('media_id').eq('clone_id',clone.id).eq('telegram_id',fan.telegram_id).gt('amount_stars',0).in('media_id',[...b.photo_ids,b.id]));
         if(owned?.length||paid?.length) return json({error:'You already own content in this bundle. Choose individual items to avoid duplicates.'},409);
       } else {
       if (body.type === 'photo' ? !clone.photos_enabled : !clone.videos_enabled) return json({ error: "Item unavailable." }, 404);
       const table = body.type === 'photo' ? 'photos' : 'videos';
-      const asset = checked(await db.from(table).select("id,star_value,is_free").eq("clone_id", clone.id).eq("id", body.id).maybeSingle());
-      if (!asset || (!asset.is_free && (!Number.isInteger(asset.star_value) || asset.star_value <= 0))) return json({ error: "Item unavailable." }, 404);
+      const asset = checked(await db.from(table).select("id,caption,star_value,is_free").eq("clone_id", clone.id).eq("id", body.id).maybeSingle());
+      if (!asset || !catalogueItemVisible(asset, slug) || (!asset.is_free && (!Number.isInteger(asset.star_value) || asset.star_value <= 0))) return json({ error: "Item unavailable." }, 404);
       const owned = checked(await db.from("user_received_media").select("id").eq("clone_id", clone.id).eq("user_id", fan.id).eq("media_type", body.type).eq("media_id", body.id).limit(1));
       if (owned?.length) return json({ error: "You already have this item in your chat history." }, 409);
       }

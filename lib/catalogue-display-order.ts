@@ -24,8 +24,16 @@ export function catalogueDisplayOrder(items: CatalogueItem[], slug: string, mixM
   const videos = remaining.filter(item => item.type === 'video');
   const mixed: CatalogueItem[] = [];
   let photoIndex = 0, videoIndex = 0;
-  for (let index = 0; index < remaining.length; index++) {
-    const photoTarget = Math.ceil((index + 1) * photos.length / remaining.length);
+  // Make both formats visible in Alanna's first row, then spread the remaining
+  // videos/photos throughout the grid rather than leaving a single-type tail.
+  if (slug === 'alanna-pow' && photos.length && videos.length) {
+    mixed.push(photos[photoIndex++], videos[videoIndex++]);
+  }
+  const initialPhotos = photoIndex;
+  const remainingPhotos = photos.length - photoIndex;
+  const remainingCount = remaining.length - mixed.length;
+  for (let index = 0; index < remainingCount; index++) {
+    const photoTarget = initialPhotos + Math.ceil((index + 1) * remainingPhotos / remainingCount);
     mixed.push(photoIndex < photoTarget ? photos[photoIndex++] : videos[videoIndex++]);
   }
   return [...first, ...mixed, ...last];
