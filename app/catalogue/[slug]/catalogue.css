@@ -68,3 +68,33 @@
 @media(prefers-reduced-motion:reduce){.cat-reward-chevron,.cat-reward-meter>span{transition:none}.cat-bundle-grid{scroll-behavior:auto}}
 
 .cat-section-heading-default{height:0;margin:0;overflow:hidden}.cat-section-heading-default>*{display:none}
+
+/* A readable reward goal and a real welcome bonus, while keeping the shop compact. */
+.cat-rewards{padding:0;background:linear-gradient(115deg,#fff0f7 15%,#fff7ec);border:1px solid #f5dce7;overflow:hidden}
+.cat-reward-summary{padding:12px;grid-template-columns:minmax(0,1fr) 86px;gap:9px 13px;min-height:0}
+.cat-reward-heading{grid-column:1/-1;grid-row:1;display:flex;align-items:center;flex-wrap:wrap;gap:6px}
+.cat-reward-heading h2{font-size:14px;line-height:1.3;font-weight:750;letter-spacing:-.3px}
+.cat-welcome-bonus{display:inline-flex;align-items:center;gap:4px;margin-left:auto;padding:5px 7px;border-radius:20px;background:#ffe999;color:#664300;font-size:10px;line-height:1.2;font-weight:750;box-shadow:0 2px 8px #eebc2e16}
+.cat-reward-meter-wrap{grid-column:1;grid-row:2;padding:0;min-width:0}
+.cat-reward-target{display:flex;align-items:baseline;gap:5px;margin-bottom:7px;color:#30202b;white-space:nowrap}
+.cat-reward-target>strong{font-size:22px;line-height:1;letter-spacing:-.7px;font-weight:800}
+.cat-reward-target>span{font-size:13px;color:#715965}.cat-reward-target b{font-size:15px;color:#3d2a35;font-weight:750}
+.cat-reward-meter{height:9px;border-radius:20px;background:#e9dce4;overflow:hidden}
+.cat-reward-meter>span{background:linear-gradient(90deg,#f4bc23,#ffdb51);border-radius:inherit;box-shadow:0 0 9px #f6bf3555;transition:width .65s ease;position:relative}
+.cat-reward-meter-wrap p{font-size:11px;line-height:1.4;margin:6px 0 0;color:#654f5c;max-width:none}
+.cat-reward-stack{grid-column:2;grid-row:2;width:86px;height:65px;align-self:center}
+.cat-reward-stack-card{width:31px;height:46px;top:6px;left:calc(50% - 15px + (var(--card-index) - (var(--card-count) - 1)/2)*16px)}
+.cat-stack-count{display:block;font-size:8px;bottom:0;background:#fff;border-color:#ead8e3;color:#704c60}
+.cat-reward-discover{grid-column:1/-1;display:flex;align-items:center;gap:3px;justify-content:flex-end;font-size:10px;font-weight:650;color:#9c1852;line-height:1}
+.cat-reward-chevron{position:static;color:inherit;flex:none}.cat-reward-summary[aria-expanded=true] .cat-reward-chevron{transform:rotate(90deg)}
+.cat-rewards #catalogue-reward-details{padding:12px;border-top:1px solid #eddae3}
+.cat-reward-balance{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:13px 14px;background:#fff;border:1px solid #f1e2e8;border-radius:12px;margin:0 0 10px;color:#2c1b26}
+.cat-reward-balance>div{display:flex;flex-direction:column;gap:4px}.cat-reward-balance>div:last-child{text-align:right}
+.cat-reward-balance span{font-size:12px;color:#6d5864}.cat-reward-balance strong{font-size:26px;line-height:1;font-weight:800;letter-spacing:-.7px}.cat-reward-balance small{font-size:12px;font-weight:600;letter-spacing:0}.cat-reward-balance>div:last-child strong{font-size:21px}
+.cat-reward-earning{font-size:13px;line-height:1.55;color:#56434f;margin:0 0 8px}.cat-reward-earning strong{white-space:nowrap}
+.cat-reward-gift{display:flex;align-items:center;gap:6px;font-size:11px;line-height:1.4;color:#765109;margin:0 0 12px}.cat-reward-gift svg{flex:none;color:#b88212}
+.cat-rewards .cat-reward-cta{font-size:13px;min-height:40px;font-weight:650}.cat-rewards details{font-size:12px;line-height:1.55}.cat-rewards details summary{padding:4px 0;cursor:pointer}
+@media(min-width:601px){.cat-reward-heading h2{font-size:16px}.cat-welcome-bonus{font-size:12px}.cat-reward-summary{grid-template-columns:minmax(0,1fr) 108px;padding:14px 16px}.cat-reward-stack{width:108px}.cat-reward-meter-wrap p{font-size:12px}}
+@media(max-width:360px){.cat-reward-summary{padding:10px;grid-template-columns:minmax(0,1fr) 70px;gap:9px}.cat-reward-heading h2{font-size:13px}.cat-welcome-bonus{font-size:9px;padding:4px 5px;gap:3px}.cat-welcome-bonus svg{width:10px}.cat-reward-heading{gap:4px}.cat-reward-stack{width:70px}.cat-reward-stack-card{width:27px;left:calc(50% - 13px + (var(--card-index) - (var(--card-count) - 1)/2)*13px)}.cat-reward-target>strong{font-size:21px}.cat-reward-target b{font-size:14px}.cat-reward-target>span{font-size:12px}}
+@media(prefers-reduced-motion:no-preference){.cat-reward-meter>span:after{animation:reward-shimmer 4s ease-in-out infinite}}
+@media(prefers-reduced-motion:reduce){.cat-reward-meter>span{transition:none}.cat-reward-meter>span:after{animation:none}}
