@@ -1,0 +1,100 @@
+import { getDashboardAccess } from "@/lib/dashboard-access";
+import { notFound } from "next/navigation";
+import { listCuts } from "@/lib/platform-cut";
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import CutRowForm from "./CutRowForm";
+
+export const dynamic = "force-dynamic";
+
+interface CutRow {
+  kind: "agency" | "clone";
+  id: string;
+  name: string;
+  cutPct: number | null;
+}
+
+export default async function EarningsSplitPage() {
+  const access = await getDashboardAccess();
+
+  // Only admins can access this page
+  if (access !== null) {
+    notFound();
+  }
+
+  let cuts: CutRow[] = [];
+  try {
+    const result = await listCuts();
+    cuts = result || [];
+  } catch (error) {
+    console.error("Error loading cuts:", error);
+    cuts = [];
+  }
+
+  const agencies = cuts.filter((c) => c.kind === "agency");
+  const clones = cuts.filter((c) => c.kind === "clone");
+
+  return (
+    <div className="flex flex-col gap-8 p-6">
+      <div>
+        <h1 className="text-3xl font-bold text-white">Earnings split</h1>
+        <p className="mt-2 text-sm text-white/70">
+          Our cut. Agencies and creators only see earnings after this is taken out. Applies to all-time figures.
+        </p>
+      </div>
+
+      <div>
+        <h2 className="mb-4 text-xl font-semibold text-white">Agencies</h2>
+        <div className="rounded-lg border border-white/10 bg-white/[0.02]">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Current cut</TableHead>
+                <TableHead>New cut</TableHead>
+                <TableHead>Action</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {agencies.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-center text-sm text-white/50">
+                    No agencies found
+                  </TableCell>
+                </TableRow>
+              ) : (
+                agencies.map((row) => <CutRowForm key={`${row.kind}-${row.id}`} row={row} />)
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+
+      <div>
+        <h2 className="mb-4 text-xl font-semibold text-white">Creators</h2>
+        <div className="rounded-lg border border-white/10 bg-white/[0.02]">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Name</TableHead>
+                <TableHead>Current cut</TableHead>
+                <TableHead>New cut</TableHead>
+                <TableHead>Action</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {clones.length === 0 ? (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-center text-sm text-white/50">
+                    No creators found
+                  </TableCell>
+                </TableRow>
+              ) : (
+                clones.map((row) => <CutRowForm key={`${row.kind}-${row.id}`} row={row} />)
+              )}
+            </TableBody>
+          </Table>
+        </div>
+      </div>
+    </div>
+  );
+}
