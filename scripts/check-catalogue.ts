@@ -70,7 +70,12 @@ async function main(){
   assert.equal(rows.creator_catalogue_settings[0].mini_app_url,'https://t.me/test_catalogue_bot?startapp');
   assert.equal(rows.clones[0].browse_enabled,true);assert.equal(rows.creator_catalogue_settings[0].enabled,true);
  } finally {globalThis.fetch=originalFetch;}
+ reset();Object.assign(rows.creator_catalogue_settings[0],{display_name:'Alana Powell',show_verified_badge:true,featured_bundle_id:fanId});
+ const styled=await (await call('catalogue')).json();
+ assert.equal(styled.name,'Alana Powell');assert.equal(styled.verified,true);
+ assert.equal(styled.featuredBundleId,null,'foreign or unavailable featured bundles are not exposed');
  reset();const res=await call('catalogue');assert.equal(res.status,200);const data=await res.json();
+ assert.equal(data.verified,false);assert.equal(data.featuredBundleId,null);assert.equal(data.name,clone.name);
  assert.equal(data.items[0].description,photo.caption);assert.equal(data.items[0].stars,630);assert.equal(data.items[0].purchased,false);
  for(const forbidden of ['bot_token','storage_path','business_connection_id','telegram_id']) assert(!JSON.stringify(data).includes(forbidden));
  assert.equal(projectItem({...photo,caption:'   ',auto_desc:'Fallback'},'photo').description,'Fallback');

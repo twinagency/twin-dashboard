@@ -229,3 +229,12 @@ html:has(.catalogue),body:has(.catalogue){background:#000;color-scheme:dark}
   .catalogue-refined .cat-reward-stack{width:96px}
   .catalogue-refined .cat-card-description{font-size:14px}
 }
+
+/* Creator-configured featured sale uses the existing bundle purchase card. */
+.cat-header h1{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.cat-verified-badge{flex:none;fill:#269fff;color:#fff;stroke-width:2.5}
+.cat-daily-sale{margin:0 0 18px;padding:14px 10px 10px;border:1px solid #282828;border-radius:18px;background:#111}
+.cat-daily-sale>h2{display:flex;align-items:center;justify-content:center;gap:6px;margin:0 0 13px;font-size:17px;line-height:1.35;font-weight:700;letter-spacing:-.4px;color:#fff;text-align:center}
+.cat-daily-sale>h2>span:first-child,.cat-daily-sale>h2>span:last-child{flex:none;font-size:20px}
+.cat-daily-sale .cat-bundle-card{margin:0;border:0;box-shadow:none;padding:0;border-radius:12px}
+@media(max-width:360px){.cat-daily-sale>h2{font-size:15px;gap:4px}.cat-daily-sale>h2>span:first-child,.cat-daily-sale>h2>span:last-child{font-size:17px}}

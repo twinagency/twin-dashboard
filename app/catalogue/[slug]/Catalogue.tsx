@@ -1,7 +1,7 @@
 "use client";
 import Script from "next/script";
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
-import { ArrowLeft, Check, ChevronRight, Gift, ImageIcon, LockKeyhole, Search, ShoppingBag, SlidersHorizontal, Star, Video, X } from "lucide-react";
+import { ArrowLeft, BadgeCheck, Check, ChevronRight, Gift, ImageIcon, LockKeyhole, Search, ShoppingBag, SlidersHorizontal, Star, Video, X } from "lucide-react";
 import { rewardProgress, type CatalogueBundle, type CatalogueRewards } from '@/lib/catalogue-commerce';
 import { openCatalogueChat } from "@/lib/catalogue-navigation";
 import type { CatalogueItem } from "@/lib/catalogue-core";
@@ -12,7 +12,7 @@ import { catalogueAppearance } from '@/lib/catalogue-appearance';
 
 type WebApp = { initData: string; ready(): void; expand(): void; close(): void; openTelegramLink(url: string): void; setHeaderColor?(color: string): void; setBackgroundColor?(color: string): void; setBottomBarColor?(color: string): void };
 function app(): WebApp | undefined { return (window as unknown as { Telegram?: { WebApp?: WebApp } }).Telegram?.WebApp; }
-type Data = { name: string; items: CatalogueItem[]; blur: number; admin: boolean; enabled: boolean; canSend: boolean; chatUrl: string | null; purchaseNote: string; bundles:CatalogueBundle[]; rewards:CatalogueRewards|null };
+type Data = { name: string; verified?: boolean; featuredBundleId?: string | null; items: CatalogueItem[]; blur: number; admin: boolean; enabled: boolean; canSend: boolean; chatUrl: string | null; purchaseNote: string; bundles:CatalogueBundle[]; rewards:CatalogueRewards|null };
 type Call = (action: string, payload?: Record<string, unknown>) => Promise<Response>;
 const tabs = ["All", "Photos", "Videos", "Bundles"];
 
@@ -61,6 +61,20 @@ function PhotoPreview({ item, blur, call, retryable = true }: { item: CatalogueI
     <span className="cat-type">{item.type === "photo" ? "PHOTO" : "VIDEO"}</span>
     <span className="cat-lock" aria-label={item.purchased || item.received ? "Unlocked" : item.free ? "Free" : "Locked preview"}>{(item.purchased || item.received) ? <Check size={14} /> : <LockKeyhole size={13} />}</span>
   </div>;
+}
+
+function BundleCard({ bundle, items, blur, call, busy, onUnlock, label }: {
+  bundle: CatalogueBundle; items: CatalogueItem[]; blur: number; call: Call;
+  busy: boolean; onUnlock: () => void; label?: string;
+}) {
+  return <article className="cat-bundle-card" aria-label={label ?? bundle.title}>
+    <div className="cat-bundle-mosaic">{bundle.photoIds.map(id=>{const item=items.find(p=>p.type==='photo'&&p.id===id);return item?<Preview key={id} item={item} blur={blur} call={call}/>:null;})}</div>
+    <div className="cat-bundle-copy"><span className="cat-featured-label">Photo bundle</span><h3>{bundle.title.replace(/^Photo collection/i,'Bundle')}</h3>
+      <p className="cat-bundle-saving">{bundle.photoIds.length} photos · Save {(bundle.regularStars-bundle.stars).toLocaleString()} Stars</p>
+      <div className="cat-bundle-price"><strong><Star className="cat-stars" size={18} aria-hidden="true"/>{bundle.stars.toLocaleString()} Stars</strong><s>{bundle.regularStars.toLocaleString()}</s></div>
+      <button className="cat-primary" disabled={busy||bundle.partial} onClick={onUnlock}>{busy?'Sending…':bundle.owned?'View in chat':bundle.partial?'Partly owned':`Unlock for ${bundle.stars.toLocaleString()} Stars`}</button>
+    </div>
+  </article>;
 }
 
 export default function Catalogue({ slug, preview }: { slug: string; preview: boolean }) {
@@ -196,6 +210,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
   });
   const visible = !search && (section === 'All' || section === 'Videos')
     ? catalogueDisplayOrder(filteredItems, slug, section === 'All') : filteredItems;
+  const featuredBundle=data?.bundles.find(bundle=>bundle.id===data.featuredBundleId);
   const rewards=data?.rewards;
   const progress=rewards?rewardProgress(rewards):null;
   const rewardItems=rewards?data!.items.filter(p=>(p.type==='photo'?rewards.photoIds:rewards.videoIds??[]).includes(p.id)):[];
@@ -204,7 +219,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
     <div className="cat-shell">
       <header className="cat-header"><button className="cat-icon" aria-label="Back to chat" onClick={backToChat}><ArrowLeft size={21} /></button>
         {data && <ProfilePhoto name={data.name} photoUrl={appearance?.profilePhoto} />}
-        <div><h1>{data?.name || "Your catalogue"}</h1></div>
+        <div><h1>{data?.name || "Your catalogue"}{data?.verified && <BadgeCheck className="cat-verified-badge" size={22} aria-label="Creator verified by Twin" />}</h1></div>
         {data?.admin ? <button className="cat-icon" aria-label="Catalogue settings" onClick={() => setSettingsOpen(v => !v)}><SlidersHorizontal size={21} /></button>
           : <button className="cat-icon" aria-label="My purchases" onClick={() => { setSection("My Purchases"); setSearch(""); document.getElementById("catalogue-items")?.scrollIntoView({ behavior: "smooth" }); }}><ShoppingBag size={19} /></button>}</header>
       {data?.admin && <div className="cat-admin-label">Owner preview <span>{data.enabled ? "Catalogue enabled" : "Not live for fans"}</span></div>}
@@ -219,6 +234,10 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
       </section>}
       {error ? <div className="cat-empty"><LockKeyhole /><h2>{error}</h2>{preview && <a className="cat-primary" href={`/twin?next=${encodeURIComponent(`/catalogue/${slug}?preview=1`)}`}>Sign in</a>}<button className="cat-secondary" onClick={load}>Try again</button></div>
         : !data ? <div className="cat-empty" aria-live="polite">Loading your collection…</div> : <>
+        {featuredBundle && <section className="cat-daily-sale" aria-labelledby="daily-sale-title">
+          <h2 id="daily-sale-title"><span aria-hidden="true">😈</span><span>Daddy’s Daily Reward Sale</span><span aria-hidden="true">😈</span></h2>
+          <BundleCard bundle={featuredBundle} items={data.items} blur={renderBlur} call={call} busy={commerceBusy} onUnlock={()=>featuredBundle.owned?backToChat():void sendCommerce('bundle',featuredBundle.id)} />
+        </section>}
         {rewards&&progress&&<section className="cat-rewards" aria-label="Your loyalty rewards">
           <button className="cat-reward-summary" aria-label="Rewards Daddy" aria-expanded={rewardsOpen} aria-controls="catalogue-reward-details" onClick={()=>setRewardsOpen(v=>!v)}>
           <div className="cat-reward-heading"><span className="cat-mascot" aria-hidden="true"><DevilIcon /></span><h2>Rewards Daddy</h2>{!!rewards.welcomeBonus&&<span className="cat-welcome-bonus" aria-label={`${rewards.welcomeBonus.toLocaleString()} one-time welcome points`}><Gift size={12} aria-hidden="true"/>+{rewards.welcomeBonus.toLocaleString()} {refined ? 'gift' : 'welcome points'}</span>}</div>
@@ -247,14 +266,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
           <div className="cat-bundle-grid" ref={bundleTrack} onScroll={event => {
             const track = event.currentTarget;
             setBundleIndex(Math.min(data.bundles.length - 1, Math.max(0, Math.round(track.scrollLeft / (track.clientWidth + 10)))));
-          }}>{data.bundles.map((bundle,index)=><article className="cat-bundle-card" key={bundle.id} aria-label={`Bundle ${index+1} of ${data.bundles.length}: ${bundle.title}`}>
-            <div className="cat-bundle-mosaic">{bundle.photoIds.map(id=>{const item=data.items.find(p=>p.type==='photo'&&p.id===id);return item?<Preview key={id} item={item} blur={renderBlur} call={call}/>:null;})}</div>
-            <div className="cat-bundle-copy"><span className="cat-featured-label">Photo bundle</span><h3>{bundle.title.replace(/^Photo collection/i,'Bundle')}</h3>
-              <p className="cat-bundle-saving">5 photos · Save {(bundle.regularStars-bundle.stars).toLocaleString()} Stars</p>
-              <div className="cat-bundle-price"><strong><Star className="cat-stars" size={18} aria-hidden="true"/>{bundle.stars.toLocaleString()} Stars</strong><s>{bundle.regularStars.toLocaleString()}</s></div>
-              <button className="cat-primary" disabled={commerceBusy||bundle.partial} onClick={()=>bundle.owned?backToChat():void sendCommerce('bundle',bundle.id)}>{commerceBusy?'Sending…':bundle.owned?'View in chat':bundle.partial?'Partly owned':`Unlock for ${bundle.stars.toLocaleString()} Stars`}</button>
-            </div>
-          </article>)}</div>
+          }}>{data.bundles.map((bundle,index)=><BundleCard key={bundle.id} bundle={bundle} items={data.items} blur={renderBlur} call={call} busy={commerceBusy} label={`Bundle ${index+1} of ${data.bundles.length}: ${bundle.title}`} onUnlock={()=>bundle.owned?backToChat():void sendCommerce('bundle',bundle.id)} />)}</div>
           {data.bundles.length>1&&<div className="cat-carousel-controls" aria-label="Choose bundle">
             {data.bundles.map((bundle,index)=><button key={bundle.id} aria-label={`Show bundle ${index+1}`} aria-current={bundleIndex===index ? 'true' : undefined} onClick={()=>{
               const track=bundleTrack.current;if(track)track.scrollTo({left:index*(track.clientWidth+10),behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});

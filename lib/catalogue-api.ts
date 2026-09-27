@@ -59,7 +59,7 @@ return async function POST(request: NextRequest, context: { params: Promise<{ sl
         .eq("clone_id", clone.id).eq("telegram_id", telegramId).maybeSingle());
       if (!catalogueEligible(fan)) return json({ error: "This catalogue is unavailable for this account." }, 403);
     }
-    const settings = checked(await db.from("creator_catalogue_settings").select("blur_strength,enabled,mini_app_url").eq("clone_id", clone.id).maybeSingle());
+    const settings = checked(await db.from("creator_catalogue_settings").select("blur_strength,enabled,mini_app_url,display_name,show_verified_badge,featured_bundle_id").eq("clone_id", clone.id).maybeSingle());
     if (!admin && !settings?.enabled) return json({ error: "This catalogue is not open yet." }, 403);
     const blur = validBlur(settings?.blur_strength) ? settings.blur_strength : DEFAULT_BLUR;
     const action = body.action;
@@ -112,7 +112,9 @@ return async function POST(request: NextRequest, context: { params: Promise<{ sl
         photoIds:clone.photos_enabled ? items.filter(p=>p.type==='photo'&&!p.purchased&&!p.received&&program.reward_photo_ids.includes(p.id)).map(p=>p.id) : [],
         videoIds:clone.videos_enabled ? items.filter(p=>p.type==='video'&&!p.purchased&&!p.received&&(program.reward_video_ids??[]).includes(p.id)).map(p=>p.id) : [] } : null;
       const username = String(clone.business_username ?? "").replace(/^@/, "");
-      return json({ name: clone.name, items, blur, admin, enabled: settings?.enabled === true,
+      return json({ name: settings?.display_name?.trim() || clone.name, items, blur, admin, enabled: settings?.enabled === true,
+        verified: settings?.show_verified_badge === true,
+        featuredBundleId: bundles.find(b => b?.id === settings?.featured_bundle_id)?.id ?? null,
         canSend: !!fan?.business_connection_id && windowOpen(fan.last_message_received) && clone.status === "active",
         chatUrl: /^[a-zA-Z0-9_]{5,32}$/.test(username) ? `https://t.me/${username}` : null,
         purchaseNote: "Purchases linked to catalogue items appear here. Your unlocked originals remain in your chat history.",
