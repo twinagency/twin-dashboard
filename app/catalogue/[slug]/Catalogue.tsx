@@ -262,8 +262,8 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
         </section>}
         {visible.length ? <div className="cat-grid">{visible.slice(0, pageSize).map(item => <article className="cat-card" key={`${item.type}:${item.id}`}>
           <button className="cat-picture-button" onClick={() => { setSelected(item); setNotice(""); }} aria-label={`View ${item.type}: ${item.description.slice(0, 100)}`}><Preview item={item} blur={renderBlur} call={call} retryable={false} /></button>
-          <div className="cat-card-body"><p>{item.description}</p><div className="cat-card-bottom">
-            <button className="cat-item-unlock" onClick={() => { setSelected(item); setNotice(""); }}>{item.purchased||item.received?<><Check size={14}/> View in chat</>:item.free?'View free item':<>Unlock for {item.stars.toLocaleString()} Stars</>}</button></div></div></article>)}</div>
+          <div className="cat-card-body"><div className="cat-card-bottom">
+            <button className="cat-item-unlock" onClick={() => { setSelected(item); setNotice(""); }}>{item.purchased||item.received?<><Check size={14}/> View in chat</>:item.type==='video'?'Watch now':'View'}</button></div></div></article>)}</div>
           : !search&&section==='Bundles'&&data.bundles.length ? null : <div className="cat-empty"><ShoppingBag size={30} /><h2>{search ? "No matching items" : section === "My Purchases" ? "No linked purchases yet" : `No ${section.toLowerCase()} available right now`}</h2><button className="cat-secondary" onClick={() => { setSection("All"); setSearch(""); }}>Explore the collection</button></div>}
         {visible.length > pageSize && <button className="cat-load-more" onClick={() => setPageSize(v => v + 12)}>Show more</button>}
       <details className="cat-how-it-works"><summary>How it works</summary><div className="cat-intro">
