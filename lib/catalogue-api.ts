@@ -90,7 +90,7 @@ return async function POST(request: NextRequest, context: { params: Promise<{ sl
     }
     if (action === "catalogue") {
       const bundleRows = checked(await db.from('catalogue_bundles').select('id,title,photo_ids,price_stars,regular_stars').eq('clone_id',clone.id).eq('enabled',true).order('sort_order')) ?? [];
-      const program = checked(await db.from('catalogue_loyalty_programs').select('points_cost,starts_at,reward_photo_ids,reward_video_ids').eq('clone_id',clone.id).eq('enabled',true).maybeSingle());
+      const program = checked(await db.from('catalogue_loyalty_programs').select('points_cost,starts_at,reward_photo_ids,reward_video_ids,welcome_bonus_points').eq('clone_id',clone.id).eq('enabled',true).maybeSingle());
       const columns = "id,caption,auto_desc,star_value,is_free,created_at";
       const [photos, videos, received, purchases] = await Promise.all([
         clone.photos_enabled ? db.from("photos").select(columns).eq("clone_id", clone.id).order("created_at", { ascending: false }).limit(1000) : Promise.resolve({ data: [], error: null }),
@@ -106,7 +106,7 @@ return async function POST(request: NextRequest, context: { params: Promise<{ sl
       items.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
       const bundles = clone.bundles_enabled ? bundleRows.map((b:any)=>projectBundle(b,items)).filter(Boolean) : [];
       const points = program && fan ? checked(await db.rpc('catalogue_reward_balance',{p_clone:clone.id,p_user:fan.id})) : null;
-      const rewards = program ? { ...(points || {balance:0,earned:0,spent:0,cost:program.points_cost,startsAt:program.starts_at}),
+      const rewards = program ? { ...(points || {balance:program.welcome_bonus_points ?? 0,earned:0,spent:0,welcomeBonus:program.welcome_bonus_points ?? 0,cost:program.points_cost,startsAt:program.starts_at}),
         photoIds:clone.photos_enabled ? items.filter(p=>p.type==='photo'&&!p.purchased&&!p.received&&program.reward_photo_ids.includes(p.id)).map(p=>p.id) : [],
         videoIds:clone.videos_enabled ? items.filter(p=>p.type==='video'&&!p.purchased&&!p.received&&(program.reward_video_ids??[]).includes(p.id)).map(p=>p.id) : [] } : null;
       const username = String(clone.business_username ?? "").replace(/^@/, "");

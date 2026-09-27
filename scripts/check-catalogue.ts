@@ -22,7 +22,7 @@ const photo={id:itemId,clone_id:cloneId,caption:'A portrait in a blue jacket',au
 let rows:Record<string,any[]>;let owner=false;let rendered:{path:string;blur:number}|undefined;
 function reset(){owner=false;rendered=undefined;rows={clones:[{...clone}],users:[{...fan}],photos:[{...photo}],videos:[],creator_catalogue_settings:[{clone_id:cloneId,enabled:true,blur_strength:16}],user_received_media:[],star_transactions:[],catalogue_requests:[],catalogue_bundles:[],catalogue_loyalty_programs:[]};}
 let rpcCall:any=null;
-const db:any={rpc:async(name:string,args:any)=>{rpcCall={name,args};return {data:{balance:1890,earned:1890,spent:0,cost:2500,startsAt:new Date().toISOString()},error:null};},from(table:string){
+const db:any={rpc:async(name:string,args:any)=>{rpcCall={name,args};return {data:{balance:2290,earned:1890,spent:0,welcomeBonus:400,cost:2500,startsAt:new Date().toISOString()},error:null};},from(table:string){
   const filters:Array<(r:any)=>boolean>=[];let single=false;let take=Infinity;let change:any;let selected='*';let insertion=false;let updating=false;
   const q:any={select(s='*'){selected=s;return q},eq(k:string,v:any){filters.push(r=>r[k]===v);return q},in(k:string,v:any[]){filters.push(r=>v.includes(r[k]));return q},gt(k:string,v:any){filters.push(r=>r[k]>v);return q},gte(k:string,v:any){filters.push(r=>r[k]>=v);return q},not(k:string,_op:string,v:any){filters.push(r=>r[k]!==v);return q},order(){return q},limit(n:number){take=n;return q},maybeSingle(){single=true;return q},single(){single=true;return q},insert(v:any){change=v;insertion=true;return q},upsert(v:any){change=v;return q},update(v:any){change=v;updating=true;return q},then(resolve:any,reject:any){
     try {
@@ -53,7 +53,7 @@ async function main(){
  assert.equal((await call('catalogue',{preview:true})).status,404,'preview flag does not grant operator access');
  owner=true;assert.equal((await call('catalogue',{preview:true})).status,200,'operator can prepare without enabling discovery');
  assert.equal(rows.clones[0].browse_enabled,false);
- const originalFetch=globalThis.fetch;
+  const originalFetch=globalThis.fetch;
  try {
   globalThis.fetch=async()=>Response.json({ok:true,result:{username:'test_catalogue_bot',has_main_web_app:false}});
   assert.equal((await call('activate',{preview:true})).status,409);
@@ -80,8 +80,12 @@ async function main(){
  await call('request',{...request,requestKey:cloneId});assert.equal(rows.catalogue_requests.length,1,'double tap must not enqueue twice');
  rows.catalogue_requests[0].status='uncertain';await call('request',{...request,requestKey:cloneId});assert.equal(rows.catalogue_requests.length,1,'uncertain send must not replay');
  reset();rows.catalogue_requests.push({id:requestId,clone_id:cloneId,user_id:'another-fan',status:'delivered'});assert.equal((await call('status',{id:requestId})).status,404);
- reset();rows.catalogue_loyalty_programs.push({clone_id:cloneId,enabled:true,points_cost:2500,starts_at:new Date().toISOString(),reward_photo_ids:[itemId],reward_video_ids:[requestId]});
- const loyalty=await (await call('catalogue')).json();assert.equal(loyalty.rewards.balance,1890);assert.equal(rpcCall.args.p_user,fanId);assert.equal(rpcCall.args.p_clone,cloneId);assert.equal(rewardProgress(loyalty.rewards).remaining,610);assert.equal(rewardProgress({...loyalty.rewards,balance:-500}).percent,0);assert.equal(rewardProgress({...loyalty.rewards,balance:6000}).percent,100);
+ reset();rows.catalogue_loyalty_programs.push({clone_id:cloneId,enabled:true,points_cost:2500,welcome_bonus_points:400,starts_at:new Date().toISOString(),reward_photo_ids:[itemId],reward_video_ids:[requestId]});
+ const loyalty=await (await call('catalogue')).json();assert.equal(loyalty.rewards.balance,2290);assert.equal(loyalty.rewards.earned,1890);assert.equal(loyalty.rewards.welcomeBonus,400);assert.equal(rpcCall.args.p_user,fanId);assert.equal(rpcCall.args.p_clone,cloneId);assert.equal(rewardProgress(loyalty.rewards).remaining,210);assert.equal(rewardProgress({...loyalty.rewards,balance:-500}).percent,0);assert.equal(rewardProgress({...loyalty.rewards,balance:6000}).percent,100);
+ assert.equal((await (await call('catalogue')).json()).rewards.balance,2290,'reopening must not add another bonus to the server balance');
+ assert.deepEqual(rewardProgress({...loyalty.rewards,balance:400}),{percent:16,remaining:2100,ready:false});
+ assert.equal(rewardProgress({...loyalty.rewards,balance:2499}).ready,false);assert.equal(rewardProgress({...loyalty.rewards,balance:2500}).ready,true);
+ owner=true;const ownerRewards=(await (await call('catalogue',{preview:true})).json()).rewards;assert.equal(ownerRewards.balance,400);assert.equal(ownerRewards.welcomeBonus,400);assert.equal(ownerRewards.earned,0);owner=false;
  await call('request',{type:'reward',id:itemId,requestKey:requestId,userId:'someone-else',points:0});assert.equal(rpcCall.name,'catalogue_claim_reward');assert.equal(rpcCall.args.p_user,fanId);assert.equal(rpcCall.args.p_photo,itemId);assert.equal(rpcCall.args.points,undefined);
  rows.clones[0].videos_enabled=true;rows.videos.push({...photo,id:requestId});
  const videoRewards=await (await call('catalogue')).json();assert.deepEqual(videoRewards.rewards.videoIds,[requestId]);
