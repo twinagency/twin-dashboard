@@ -12,6 +12,50 @@ const sourceMetadata = new Map<string, VideoSourceMetadata>();
 const pending = new Map<string, Promise<Buffer>>();
 let active = 0;
 const MAX_SOURCE_BYTES = 50 * 1024 * 1024;
+const METADATA_BUCKET = 'catalogue-video-metadata';
+const MAX_METADATA_BYTES = 1024;
+let metadataBucketReady: Promise<boolean> | undefined;
+
+// Keep tiny server-only JSON apart from the media bucket's image/video allowlist.
+// Check/create once per process; another instance may win the creation race.
+function ensureMetadataBucket(): Promise<boolean> {
+  return metadataBucketReady ??= (async () => {
+    try {
+      const storage = serviceClient().storage;
+      let bucket = await storage.getBucket(METADATA_BUCKET);
+      if (!bucket.data) {
+        await storage.createBucket(METADATA_BUCKET, {
+          public: false, allowedMimeTypes: ['application/json'], fileSizeLimit: MAX_METADATA_BYTES,
+        });
+        bucket = await storage.getBucket(METADATA_BUCKET);
+      }
+      const data = bucket.data;
+      return !bucket.error && !!data && data.public === false &&
+        Number(data.file_size_limit) === MAX_METADATA_BYTES &&
+        Array.isArray(data.allowed_mime_types) && data.allowed_mime_types.length === 1 &&
+        data.allowed_mime_types[0] === 'application/json';
+    } catch { return false; }
+  })();
+}
+
+async function readSourceMetadata(path: string): Promise<VideoSourceMetadata | null> {
+  try {
+    if (!await ensureMetadataBucket()) return null;
+    const saved = await serviceClient().storage.from(METADATA_BUCKET).download(path);
+    return saved.data && saved.data.size <= MAX_METADATA_BYTES
+      ? parseVideoSourceMetadata(JSON.parse(await saved.data.text())) : null;
+  } catch { return null; }
+}
+
+async function persistSourceMetadata(path: string, metadata: VideoSourceMetadata): Promise<void> {
+  try {
+    if (!await ensureMetadataBucket()) return;
+    await serviceClient().storage.from(METADATA_BUCKET).upload(path, JSON.stringify(metadata), {
+      contentType: 'application/json', upsert: true,
+    });
+  } catch { /* The measured duration remains in memory; preview delivery is independent. */ }
+}
+
 export type VideoPreviewSources = { url: string; posterUrl: string; seconds: number; durationSeconds?: number };
 function previewKey(path: string, blur: number) {
   return createHash('sha256').update(`video-v2:${path}:${blur}`).digest('hex');
@@ -42,13 +86,10 @@ export async function renderVideoPreview(path: string, blur: number): Promise<Bu
     const posterDestination = `catalogue-previews/video-v2/${key}.webp`;
     const metadataDestination = `catalogue-previews/video-v2/${key}.json`;
     // Private derivatives survive restarts. Neither signed original URLs nor storage paths reach fans.
-    const [saved, posterSaved, metadataSaved] = await Promise.all([
-      storage.download(destination), storage.download(posterDestination), storage.download(metadataDestination),
+    const [saved, posterSaved, savedMetadata] = await Promise.all([
+      storage.download(destination), storage.download(posterDestination), readSourceMetadata(metadataDestination),
     ]);
-    let metadata: VideoSourceMetadata | null = null;
-    if (metadataSaved.data && metadataSaved.data.size <= 1024) {
-      try { metadata = parseVideoSourceMetadata(JSON.parse(await metadataSaved.data.text())); } catch { /* Probe the original below. */ }
-    }
+    let metadata = savedMetadata;
     const savedBytes = saved.data && saved.data.size <= MAX_VIDEO_PREVIEW_BYTES && posterSaved.data
       ? Buffer.from(await saved.data.arrayBuffer()) : null;
     if (savedBytes && metadata) {
@@ -83,8 +124,8 @@ export async function renderVideoPreview(path: string, blur: number): Promise<Bu
         ? await probeVideoSource(source)
         : await createVideoPreview(source, output, blur);
       metadata = { version: 1, durationSeconds };
-      const metadataUpload = await storage.upload(metadataDestination, JSON.stringify(metadata), { contentType: 'application/json', upsert: true });
-      if (metadataUpload.error) throw new Error('Preview unavailable.');
+      // Persistence is best-effort: a metadata outage never prevents new video previews.
+      await persistSourceMetadata(metadataDestination, metadata);
       if (savedBytes) { remember(key, savedBytes, metadata); return savedBytes; }
       stage = 'poster';
       await createVideoPoster(output, poster);
