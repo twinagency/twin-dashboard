@@ -23,7 +23,7 @@ function ProfilePhoto({ name, slug }: { name: string; slug: string }) {
   return <span className="cat-avatar">{url && !failed ? <img src={url} alt={`${name} Telegram profile photo`} onError={() => setFailed(true)} /> : <span aria-label={name}>{name.split(/\s+/).map(word => word[0]).slice(0, 2).join("")}</span>}</span>;
 }
 
-function DevilIcon() { return <svg width="28" height="28" viewBox="0 0 32 32" fill="none"><path d="M6 15C2 12 2 5 4 2c1 5 4 6 8 7M26 15c4-3 4-10 2-13-1 5-4 6-8 7" fill="#e53935" /><path d="M16 8C9 8 5 12 5 19s5 11 11 11 11-4 11-11S23 8 16 8Z" fill="#e53935" /><path d="m10 16 3 2m9-2-3 2M11 23c3 3 7 3 10 0" stroke="#721b24" strokeWidth="2" strokeLinecap="round" /></svg>; }
+function DevilIcon() { return <svg width="28" height="28" viewBox="0 0 32 32" fill="none"><path d="M6 15C2 12 2 5 4 2c1 5 4 6 8 7M26 15c4-3 4-10 2-13-1 5-4 6-8 7" fill="var(--cat-pink)" /><path d="M16 8C9 8 5 12 5 19s5 11 11 11 11-4 11-11S23 8 16 8Z" fill="var(--cat-pink)" /><path d="m10 16 3 2m9-2-3 2M11 23c3 3 7 3 10 0" stroke="#111" strokeWidth="2" strokeLinecap="round" /></svg>; }
 
 function Preview(props: { item: CatalogueItem; blur: number; call: Call; retryable?: boolean }) {
   return props.item.type === 'video' ? <VideoPreview {...props} retryable={props.retryable ?? true} /> : <PhotoPreview {...props} />;
@@ -219,8 +219,8 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
       {error ? <div className="cat-empty"><LockKeyhole /><h2>{error}</h2>{preview && <a className="cat-primary" href={`/twin?next=${encodeURIComponent(`/catalogue/${slug}?preview=1`)}`}>Sign in</a>}<button className="cat-secondary" onClick={load}>Try again</button></div>
         : !data ? <div className="cat-empty" aria-live="polite">Loading your collection…</div> : <>
         {rewards&&progress&&<section className="cat-rewards" aria-label="Your loyalty rewards">
-          <button className="cat-reward-summary" aria-label="Rewards for Daddy" aria-expanded={rewardsOpen} aria-controls="catalogue-reward-details" onClick={()=>setRewardsOpen(v=>!v)}>
-          <div className="cat-reward-heading"><span className="cat-mascot" aria-hidden="true"><DevilIcon /></span><h2>Rewards for Daddy</h2>{!!rewards.welcomeBonus&&<span className="cat-welcome-bonus"><Gift size={12} aria-hidden="true"/>+{rewards.welcomeBonus.toLocaleString()} welcome points</span>}</div>
+          <button className="cat-reward-summary" aria-label="Rewards Daddy" aria-expanded={rewardsOpen} aria-controls="catalogue-reward-details" onClick={()=>setRewardsOpen(v=>!v)}>
+          <div className="cat-reward-heading"><span className="cat-mascot" aria-hidden="true"><DevilIcon /></span><h2>Rewards Daddy</h2>{!!rewards.welcomeBonus&&<span className="cat-welcome-bonus"><Gift size={12} aria-hidden="true"/>+{rewards.welcomeBonus.toLocaleString()} welcome points</span>}</div>
           <div className="cat-reward-track"><div className="cat-reward-meter-wrap"><div className="cat-reward-target"><strong>{Math.max(0,rewards.balance).toLocaleString()}</strong><span>/ <b>{rewards.cost.toLocaleString()}</b> points</span></div><div className="cat-reward-meter" role="progressbar" aria-label="Progress to next reward" aria-valuemin={0} aria-valuemax={rewards.cost} aria-valuenow={Math.min(rewards.cost,Math.max(0,rewards.balance))}><span style={{width:`${progress.percent}%`}}/></div><p>{progress.ready?'Your reward is ready':`${progress.remaining.toLocaleString()} points to your next reward`}</p></div>
             <span className="cat-reward-stack" aria-hidden="true">
               {rewardItems.length ? rewardItems.slice(0,4).map((item,index)=><span className="cat-reward-stack-card" key={`${item.type}:${item.id}`} style={{'--card-index':index,'--card-count':Math.min(4,rewardItems.length)} as CSSProperties}><Preview item={item} blur={renderBlur} call={call} retryable={false}/><span className="cat-stack-lock"><LockKeyhole size={12}/></span></span>) : <Gift size={26}/>}
@@ -246,7 +246,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
             <div className="cat-bundle-mosaic">{bundle.photoIds.map(id=>{const item=data.items.find(p=>p.type==='photo'&&p.id===id);return item?<Preview key={id} item={item} blur={renderBlur} call={call}/>:null;})}</div>
             <div className="cat-bundle-copy"><span className="cat-featured-label">Featured bundle</span><h3>{bundle.title.replace(/^Photo collection/i,'Bundle')}</h3>
               <p className="cat-bundle-saving">5 photos · Save {(bundle.regularStars-bundle.stars).toLocaleString()} Stars</p>
-              <div className="cat-bundle-price"><strong><Star size={18} fill="currentColor"/>{bundle.stars.toLocaleString()}</strong><s>{bundle.regularStars.toLocaleString()}</s></div>
+              <div className="cat-bundle-price"><strong><Star className="cat-stars" size={18} fill="currentColor"/>{bundle.stars.toLocaleString()}</strong><s>{bundle.regularStars.toLocaleString()}</s></div>
               <button className="cat-primary" disabled={commerceBusy||bundle.partial} onClick={()=>bundle.owned?backToChat():void sendCommerce('bundle',bundle.id)}>{commerceBusy?'Sending…':bundle.owned?'View in chat':bundle.partial?'Partly owned':'Unlock bundle'}</button>
             </div>
           </article>)}</div>
@@ -263,7 +263,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
         {visible.length ? <div className="cat-grid">{visible.slice(0, pageSize).map(item => <article className="cat-card" key={`${item.type}:${item.id}`}>
           <button className="cat-picture-button" onClick={() => { setSelected(item); setNotice(""); }} aria-label={`View ${item.type}: ${item.description.slice(0, 100)}`}><Preview item={item} blur={renderBlur} call={call} retryable={false} /></button>
           <div className="cat-card-body"><p>{item.description}</p><div className="cat-card-bottom">
-            <button className="cat-item-unlock" onClick={() => { setSelected(item); setNotice(""); }}>{item.purchased||item.received?<><Check size={14}/> View in chat</>:item.free?'View free item':<>Unlock · {item.stars.toLocaleString()} <Star size={14} fill="currentColor"/></>}</button></div></div></article>)}</div>
+            <button className="cat-item-unlock" onClick={() => { setSelected(item); setNotice(""); }}>{item.purchased||item.received?<><Check size={14}/> View in chat</>:item.free?'View free item':<>Unlock · {item.stars.toLocaleString()} <Star className="cat-stars" size={14} fill="currentColor"/></>}</button></div></div></article>)}</div>
           : !search&&section==='Bundles'&&data.bundles.length ? <p className="cat-purchase-note">Choose one of the bundle deals above.</p> : <div className="cat-empty"><ShoppingBag size={30} /><h2>{search ? "No matching items" : section === "My Purchases" ? "No linked purchases yet" : `No ${section.toLowerCase()} available right now`}</h2><button className="cat-secondary" onClick={() => { setSection("All"); setSearch(""); }}>Explore the collection</button></div>}
         {visible.length > pageSize && <button className="cat-load-more" onClick={() => setPageSize(v => v + 12)}>Show more</button>}
       <details className="cat-how-it-works"><summary>How it works</summary><div className="cat-intro">
