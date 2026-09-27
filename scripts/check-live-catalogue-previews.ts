@@ -33,7 +33,13 @@ async function main(){
     if(meta.streams.length!==1||meta.streams[0].codec_name!=='h264'||Math.abs(Number(meta.format.duration)-5)>.1)throw new Error('Invalid preview encoding');
     const image=await sharp(Buffer.from(await poster.arrayBuffer())).metadata();if(image.format!=='webp')throw new Error('Invalid poster');
     passed++;console.log(`Video preview verified ${passed}/${videos.data!.length}: 5s, H.264, poster and HTTP 206`);
-   }catch{failed++;console.error(`Video preview failed for item ${item.id}`);}
+   }catch(error){
+    failed++;
+    const cause=error instanceof Error ? error.cause as {stage?:string;reason?:string}|undefined : undefined;
+    const stage=['download','probe','metadata','encode','output','poster','upload'].includes(cause?.stage||'')?cause!.stage:'verification';
+    const reason=['timeout','killed','invalid'].includes(cause?.reason||'')?cause!.reason:'failed';
+    console.error(`Video preview failed for item ${item.id}: ${stage}/${reason}`);
+   }
    finally{await rm(dir,{recursive:true,force:true});}
   }
  }

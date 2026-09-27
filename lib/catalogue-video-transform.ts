@@ -10,10 +10,12 @@ export const MAX_VIDEO_PREVIEW_BYTES = 2 * 1024 * 1024;
 const inputOptions = ['-protocol_whitelist', 'file,pipe', '-format_whitelist', 'mov,matroska,webm,avi'];
 export async function createVideoPreview(input: string, output: string, blur: number): Promise<void> {
   if (!validBlur(blur)) throw new Error('Preview unavailable.');
+  let stage = 'probe';
   try {
     const probe = await run('ffprobe', ['-v', 'error', ...inputOptions, '-select_streams', 'v:0',
       '-show_entries', 'format=duration:stream=width,height', '-of', 'json', input],
-      { timeout: 8_000, maxBuffer: 64 * 1024 });
+      { timeout: 15_000, maxBuffer: 64 * 1024 });
+    stage = 'metadata';
     const metadata = JSON.parse(probe.stdout);
     const duration = Number(metadata.format?.duration), stream = metadata.streams?.[0];
     if (!Number.isFinite(duration) || duration <= 0 || !stream || stream.width * stream.height > 40_000_000)
@@ -22,6 +24,7 @@ export async function createVideoPreview(input: string, output: string, blur: nu
     // Always five seconds. Very short originals loop, with the same server-side blur.
     const seconds = 5, start = Math.min(duration * 0.2, Math.max(0, duration - seconds));
     const scale = "scale=w='max(2,if(gt(dar,0.75),420,trunc(560*dar/2)*2))':h='max(2,if(gt(dar,0.75),trunc(420/dar/2)*2,560))',setsar=1";
+    stage = 'encode';
     await run('ffmpeg', ['-hide_banner', '-loglevel', 'error', '-nostdin', '-y',
       ...inputOptions, '-threads', '1', '-stream_loop', '-1', '-ss', String(start), '-i', input,
       '-t', String(seconds), '-map', '0:v:0', '-an', '-sn', '-dn',
@@ -30,10 +33,15 @@ export async function createVideoPreview(input: string, output: string, blur: nu
       '-c:v', 'libx264', '-threads', '1', '-preset', 'veryfast', '-crf', '27',
       '-pix_fmt', 'yuv420p', '-profile:v', 'baseline', '-level', '3.0',
       '-movflags', '+faststart', '-fs', String(MAX_VIDEO_PREVIEW_BYTES), output],
-      { timeout: 25_000, maxBuffer: 64 * 1024 });
+      { timeout: 60_000, maxBuffer: 64 * 1024 });
+    stage = 'output';
     const result = await stat(output);
     if (result.size < 100 || result.size > MAX_VIDEO_PREVIEW_BYTES) throw new Error('Invalid preview');
-  } catch { throw new Error('Preview unavailable.'); }
+  } catch (error) {
+    const details = error as { killed?: boolean; signal?: string; code?: string };
+    const reason = details.signal === 'SIGKILL' ? 'killed' : details.killed || details.code === 'ETIMEDOUT' ? 'timeout' : 'invalid';
+    throw new Error('Preview unavailable.', { cause: { stage, reason } });
+  }
 }
 
 export async function createVideoPoster(input: string, output: string): Promise<void> {
