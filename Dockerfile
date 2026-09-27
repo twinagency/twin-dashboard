@@ -29,7 +29,7 @@ COPY . .
 # that read env vars; real values are injected at container runtime instead.
 ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
-RUN ./node_modules/.bin/esbuild scripts/check-live-catalogue-previews.ts --bundle --platform=node --format=cjs --packages=external --outfile=catalogue-preview-check.cjs
+RUN ./node_modules/.bin/esbuild scripts/check-live-catalogue-previews.ts --bundle --platform=node --format=cjs --external:sharp --outfile=catalogue-preview-check.cjs
 
 # ── 3. runner: minimal production image ──────────────────────────────────────
 FROM node:22-alpine AS runner
@@ -62,6 +62,8 @@ COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
 COPY --from=builder --chown=nextjs:nodejs /app/scripts/reset-recent-creator-test-accounts.mjs ./scripts/reset-recent-creator-test-accounts.mjs
 
 USER nextjs
+# Verify that the standalone image includes every dependency before deployment.
+RUN CATALOGUE_PREVIEW_CHECK_LOAD_ONLY=1 node catalogue-preview-check.cjs
 EXPOSE 3001
 
 CMD ["node", "server.js"]

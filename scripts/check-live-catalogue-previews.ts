@@ -40,4 +40,6 @@ async function main(){
  await Promise.all([worker(),worker()]);console.log(`Live video preview check: ${passed} passed, ${failed} failed`);
  if(failed)process.exitCode=1;
 }
-main().catch(()=>{console.error('Live video preview check could not complete');process.exitCode=1;});
+if(process.env.CATALOGUE_PREVIEW_CHECK_LOAD_ONLY!=='1'){
+ main().catch(()=>{console.error('Live video preview check could not complete');process.exitCode=1;});
+}
