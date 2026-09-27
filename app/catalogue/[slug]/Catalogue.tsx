@@ -8,7 +8,7 @@ import type { CatalogueItem } from "@/lib/catalogue-core";
 import "./catalogue.css";
 import VideoPreview from './VideoPreview';
 
-type WebApp = { initData: string; ready(): void; expand(): void; close(): void; openTelegramLink(url: string): void };
+type WebApp = { initData: string; ready(): void; expand(): void; close(): void; openTelegramLink(url: string): void; setHeaderColor?(color: string): void; setBackgroundColor?(color: string): void; setBottomBarColor?(color: string): void };
 function app(): WebApp | undefined { return (window as unknown as { Telegram?: { WebApp?: WebApp } }).Telegram?.WebApp; }
 type Data = { name: string; items: CatalogueItem[]; blur: number; admin: boolean; enabled: boolean; canSend: boolean; chatUrl: string | null; purchaseNote: string; bundles:CatalogueBundle[]; rewards:CatalogueRewards|null };
 type Call = (action: string, payload?: Record<string, unknown>) => Promise<Response>;
@@ -101,7 +101,13 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
     try { const value: Data = await read("catalogue"); setData(value); setBlur(value.blur); setRenderBlur(value.blur); }
     catch (e) { setError(e instanceof Error ? e.message : "Couldn't load the catalogue."); }
   }, [read]);
-  useEffect(() => { if (ready) { app()?.ready(); app()?.expand(); void load(); } }, [ready, load]);
+  useEffect(() => { if (ready) {
+    const telegram = app(); telegram?.ready(); telegram?.expand();
+    for (const method of ['setHeaderColor', 'setBackgroundColor', 'setBottomBarColor'] as const) {
+      try { telegram?.[method]?.('#000000'); } catch { /* Older Telegram versions may not support every colour setter. */ }
+    }
+    void load();
+  } }, [ready, load]);
   useEffect(()=>{
     if(!ready||preview) return;
     const refresh=()=>{if(document.visibilityState==='visible'&&!sending.current) void load();};
