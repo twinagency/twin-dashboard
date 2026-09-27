@@ -22,15 +22,19 @@ export default function VideoPreview({ item, blur, call, retryable }: {
   const [nearby, setNearby] = useState(false), [visible, setVisible] = useState(false);
   const [sources, setSources] = useState<Sources | null>(null), [error, setError] = useState(false);
   const [retry, setRetry] = useState(0), [playbackError, setPlaybackError] = useState(false);
+  const [playing, setPlaying] = useState(false), [posterError, setPosterError] = useState(false);
   const [motionAllowed, setMotionAllowed] = useState(false);
   const fullDuration = formatVideoDuration(sources?.durationSeconds);
   useEffect(() => {
     if (!container.current) return;
     const observer = new IntersectionObserver(([entry]) => {
       setVisible(entry.isIntersecting);
-      if (entry.isIntersecting) setNearby(true);
     }, { threshold: 0.15 });
-    observer.observe(container.current); return () => observer.disconnect();
+    const preload = new IntersectionObserver(([entry]) => {
+      if (entry.isIntersecting) { setNearby(true); preload.disconnect(); }
+    }, { rootMargin: '180px' });
+    observer.observe(container.current); preload.observe(container.current);
+    return () => { observer.disconnect(); preload.disconnect(); };
   }, []);
   useEffect(() => {
     const motion = window.matchMedia('(prefers-reduced-motion: reduce)');
@@ -41,7 +45,7 @@ export default function VideoPreview({ item, blur, call, retryable }: {
   useEffect(() => {
     if (!nearby) return;
     let cancelled = false, timer: number | undefined;
-    setSources(null); setError(false); setPlaybackError(false);
+    setSources(null); setError(false); setPlaybackError(false); setPlaying(false); setPosterError(false);
     const load = async (attempt: number) => {
       try {
         const result = await previewSlot(async () => {
@@ -72,25 +76,27 @@ export default function VideoPreview({ item, blur, call, retryable }: {
   useEffect(() => {
     const element = video.current;
     if (!element) return;
-    if (visible && motionAllowed) void element.play().catch(() => {});
+    if (visible && motionAllowed && !playbackError) void element.play().catch(() => { setPlaying(false); });
     else element.pause();
     return () => element.pause();
-  }, [visible, motionAllowed, sources]);
+  }, [visible, motionAllowed, sources, playbackError]);
   return <div ref={container} className="cat-preview cat-video-preview">
-    {sources && (playbackError ? <img src={sources.posterUrl} alt="Blurred video preview" /> :
+    {sources && <>
       <video ref={video} src={sources.url} poster={sources.posterUrl} muted loop playsInline
         autoPlay={visible && motionAllowed} preload="auto" controls={retryable}
         controlsList="nodownload noremoteplayback" disablePictureInPicture
-        aria-label="Five-second blurred video preview" onError={() => setPlaybackError(true)} />)}
-    {!sources && <div className="cat-placeholder cat-video-loading" role="status">
-      <Video size={32} /><span>{error ? 'Tap to retry video preview' : 'Preparing 5-second preview…'}</span>
-      {error && retryable && <button type="button" onClick={e => { e.stopPropagation(); setRetry(v => v + 1); }}>Retry preview</button>}
+        aria-label="Five-second blurred video preview" onPlaying={() => setPlaying(true)} onPause={() => setPlaying(false)} onError={() => { setPlaybackError(true); setPlaying(false); }} />
+      {!playing && !posterError && <img className="cat-video-poster" src={sources.posterUrl} alt="Blurred video preview" onError={() => setPosterError(true)} />}
+    </>}
+    {(!sources || (posterError && (!playing || playbackError))) && <div className="cat-placeholder cat-video-loading" role="status">
+      <Video size={28} /><span>{error || playbackError || posterError ? 'Preview unavailable' : 'Loading preview…'}</span>
+      {(error || playbackError || posterError) && retryable && <button type="button" onClick={e => { e.stopPropagation(); setRetry(v => v + 1); }}>Retry preview</button>}
     </div>}
     <span className="cat-type">VIDEO</span>
     <span className="cat-lock" aria-label={item.purchased || item.received ? 'Unlocked' : 'Locked preview'}>
       {item.purchased || item.received ? <Check size={14} /> : <LockKeyhole size={13} />}
     </span>
-    {sources && !retryable && <span className="cat-video-label"><Play size={11} fill="currentColor" /> 5-sec preview</span>}
+    {sources && !retryable && !(posterError && !playing) && <span className="cat-video-label"><Play size={11} fill="currentColor" /> {playbackError ? 'Preview unavailable' : '5-sec preview'}</span>}
     {fullDuration && <span className="cat-video-duration" aria-label={`Full video: ${fullDuration}`}>{fullDuration}</span>}
     {sources && playbackError && retryable && <button type="button" className="cat-video-retry" onClick={() => setRetry(v => v + 1)}><Play size={14} /> Play preview</button>}
   </div>;

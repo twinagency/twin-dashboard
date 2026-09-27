@@ -65,6 +65,7 @@ function PhotoPreview({ item, blur, call, retryable = true }: { item: CatalogueI
 }
 
 export default function Catalogue({ slug, preview }: { slug: string; preview: boolean }) {
+  const refined = slug === 'briana-redd';
   const [ready, setReady] = useState(preview);
   const [data, setData] = useState<Data | null>(null);
   const [error, setError] = useState("");
@@ -198,7 +199,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
   const rewards=data?.rewards;
   const progress=rewards?rewardProgress(rewards):null;
   const rewardItems=rewards?data!.items.filter(p=>(p.type==='photo'?rewards.photoIds:rewards.videoIds??[]).includes(p.id)):[];
-  return <main className="catalogue">
+  return <main className={`catalogue${refined ? ' catalogue-refined' : ''}`}>
     <Script src="https://telegram.org/js/telegram-web-app.js" strategy="afterInteractive" onReady={() => setReady(true)} onError={() => { setReady(true); }} />
     <div className="cat-shell">
       <header className="cat-header"><button className="cat-icon" aria-label="Back to chat" onClick={backToChat}><ArrowLeft size={21} /></button>
@@ -220,14 +221,14 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
         : !data ? <div className="cat-empty" aria-live="polite">Loading your collection…</div> : <>
         {rewards&&progress&&<section className="cat-rewards" aria-label="Your loyalty rewards">
           <button className="cat-reward-summary" aria-label="Rewards Daddy" aria-expanded={rewardsOpen} aria-controls="catalogue-reward-details" onClick={()=>setRewardsOpen(v=>!v)}>
-          <div className="cat-reward-heading"><span className="cat-mascot" aria-hidden="true"><DevilIcon /></span><h2>Rewards Daddy</h2>{!!rewards.welcomeBonus&&<span className="cat-welcome-bonus"><Gift size={12} aria-hidden="true"/>+{rewards.welcomeBonus.toLocaleString()} welcome points</span>}</div>
-          <div className="cat-reward-track"><div className="cat-reward-meter-wrap"><div className="cat-reward-target"><strong>{Math.max(0,rewards.balance).toLocaleString()}</strong><span>/ <b>{rewards.cost.toLocaleString()}</b> points</span></div><div className="cat-reward-meter" role="progressbar" aria-label="Progress to next reward" aria-valuemin={0} aria-valuemax={rewards.cost} aria-valuenow={Math.min(rewards.cost,Math.max(0,rewards.balance))}><span style={{width:`${progress.percent}%`}}/></div><p>{progress.ready?'Your reward is ready':`${progress.remaining.toLocaleString()} points to your next reward`}</p></div>
+          <div className="cat-reward-heading"><span className="cat-mascot" aria-hidden="true"><DevilIcon /></span><h2>Rewards Daddy</h2>{!!rewards.welcomeBonus&&<span className="cat-welcome-bonus" aria-label={`${rewards.welcomeBonus.toLocaleString()} one-time welcome points`}><Gift size={12} aria-hidden="true"/>+{rewards.welcomeBonus.toLocaleString()} {refined ? 'gift' : 'welcome points'}</span>}</div>
+          <div className="cat-reward-track"><div className="cat-reward-meter-wrap"><div className="cat-reward-target"><strong>{Math.max(0,rewards.balance).toLocaleString()}</strong><span>/ <b>{rewards.cost.toLocaleString()}</b> points</span></div><div className="cat-reward-meter" role="progressbar" aria-label="Progress to next reward" aria-valuemin={0} aria-valuemax={rewards.cost} aria-valuenow={Math.min(rewards.cost,Math.max(0,rewards.balance))}><span style={{width:`${progress.percent}%`}}/></div><p>{progress.ready?'Your reward is ready':`${progress.remaining.toLocaleString()} ${refined ? 'points to go' : 'points to your next reward'}`}</p></div>
             <span className="cat-reward-stack" aria-hidden="true">
               {rewardItems.length ? rewardItems.slice(0,4).map((item,index)=><span className="cat-reward-stack-card" key={`${item.type}:${item.id}`} style={{'--card-index':index,'--card-count':Math.min(4,rewardItems.length)} as CSSProperties}><Preview item={item} blur={renderBlur} call={call} retryable={false}/><span className="cat-stack-lock"><LockKeyhole size={12}/></span></span>) : <Gift size={26}/>}
               {!!rewardItems.length&&<span className="cat-stack-count">{rewardItems.length} choices</span>}
             </span>
           </div>
-          <span className="cat-reward-discover">{rewardsOpen?'Hide rewards':'Explore your rewards'}<ChevronRight className="cat-reward-chevron" size={15} aria-hidden="true"/></span>
+          <span className="cat-reward-discover"><span>{rewardsOpen?'Hide rewards':'Explore your rewards'}</span><ChevronRight className="cat-reward-chevron" size={18} aria-hidden="true"/></span>
           </button>
           {rewardsOpen&&<div id="catalogue-reward-details">
           <div className="cat-reward-balance"><div><span>Your balance</span><strong>{Math.max(0,rewards.balance).toLocaleString()} <small>points</small></strong></div><div><strong>{rewards.cost.toLocaleString()}</strong><span>per reward</span></div></div>
@@ -262,8 +263,15 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
         </section>}
         {visible.length ? <div className="cat-grid">{visible.slice(0, pageSize).map(item => <article className="cat-card" key={`${item.type}:${item.id}`}>
           <button className="cat-picture-button" onClick={() => { setSelected(item); setNotice(""); }} aria-label={`View ${item.type}: ${item.description.slice(0, 100)}`}><Preview item={item} blur={renderBlur} call={call} retryable={false} /></button>
-          <div className="cat-card-body"><div className="cat-card-bottom">
-            <button className="cat-item-unlock" onClick={() => { setSelected(item); setNotice(""); }}>{item.purchased||item.received?<><Check size={14}/> View in chat</>:item.type==='video'?'Watch now':'View'}</button></div></div></article>)}</div>
+          <div className="cat-card-body">
+            {refined && <p className="cat-card-description">{item.description}</p>}
+            <div className="cat-card-bottom">
+              {refined && <span className={`cat-card-price${item.purchased || item.received ? ' cat-card-owned' : ''}`}>
+                {item.purchased || item.received ? <><Check size={14} aria-hidden="true"/>Owned</> : item.free ? 'Free' : <><Star className="cat-stars" size={15} aria-hidden="true"/><span>{item.stars.toLocaleString()}<span className="cat-sr-only"> Stars</span></span></>}
+              </span>}
+              <button className="cat-item-unlock" aria-label={refined ? `${item.purchased || item.received ? 'View owned' : item.free ? 'View free' : `Unlock for ${item.stars.toLocaleString()} Stars:`} ${item.description}` : undefined} onClick={() => { setSelected(item); setNotice(""); }}>{refined ? item.purchased || item.received ? 'View' : item.free ? 'View' : 'Unlock' : item.purchased||item.received?<><Check size={14}/> View in chat</>:item.type==='video'?'Watch now':'View'}</button>
+            </div>
+          </div></article>)}</div>
           : !search&&section==='Bundles'&&data.bundles.length ? null : <div className="cat-empty"><ShoppingBag size={30} /><h2>{search ? "No matching items" : section === "My Purchases" ? "No linked purchases yet" : `No ${section.toLowerCase()} available right now`}</h2><button className="cat-secondary" onClick={() => { setSection("All"); setSearch(""); }}>Explore the collection</button></div>}
         {visible.length > pageSize && <button className="cat-load-more" onClick={() => setPageSize(v => v + 12)}>Show more</button>}
       <details className="cat-how-it-works"><summary>How it works</summary><div className="cat-intro">
