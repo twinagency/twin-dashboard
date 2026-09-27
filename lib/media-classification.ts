@@ -8,9 +8,16 @@ export const VISUAL_EVIDENCE_KEYS = [
 ] as const;
 
 export const MEDIA_CLASSIFICATION_PROMPT = `Describe only what is visibly present in this image for an internal media catalogue. Do not guess hidden clothing, anatomy, intent, or actions outside the frame.
-Return JSON with caption (factual, max 24 words), auto_desc (2-5 factual words), teaser_caption (a brief non-explicit first-person line for legacy callers), visual_description (see VISUAL DESCRIPTION below), tags, and visual_evidence.
+Return JSON with caption (see SEND CAPTION below), auto_desc (2-5 factual words), teaser_caption (a brief non-explicit first-person line for legacy callers), visual_description (see VISUAL DESCRIPTION below), tags, and visual_evidence.
 tags must be a subset of: ${MEDIA_TAGS.join(", ")}.
 visual_evidence must contain ALL these keys with JSON boolean values: ${VISUAL_EVIDENCE_KEYS.join(", ")}.
+
+SEND CAPTION (the "caption" field):
+- Written in first person as the woman pictured, sending this photo or video to a fan. Standalone: it is not a reply to anyone, so never say "you asked" or refer to a conversation.
+- Include 1 to 2 GRAPHIC, specific details that are clearly visible: what she is wearing, which body parts are showing, what her hands or a toy are doing, the angle. Raunchy and explicit, but only what visual_evidence supports.
+- It may end with a teasing question about a visible detail. Use 1 to 3 fitting emojis. 2 to 3 short sentences, at most 45 words.
+- Style reference: "mmm right now i'm lying here in my new lingerie set, i may or may not have a finger up my ass 😈 can you see my pussy lips from this angle?"
+- Never mention OnlyFans, prices, Stars, tipping, tapping, unlocking or paying. Never use em dashes or en dashes.
 
 VISUAL DESCRIPTION:
 - 3 to 6 factual sentences describing everything clearly visible. No flirting, no guessing, no invented detail.
@@ -30,7 +37,7 @@ VISUAL RULES:
 - mirror_reflection_visible requires an actual visible mirror/reflection. A handheld selfie in a car is not a mirror selfie.
 - Use topless/tits only for visibly uncovered nipples; pussy/anal only for clearly visible corresponding anatomy; full_nude only for visible full nudity. Never infer those tags from cleavage or the shape of clothed anatomy.
 - For this catalogue, swimwear, lingerie, an open shirt showing cleavage or a suggestive pose can be suggestive without being nude or sexually explicit. Do not invent an age rating.
-- caption, auto_desc and tags must agree with visual_evidence. Keep descriptions positive and factual; do not add lists of absent anatomy or nudity disclaimers. Classification flags are derived by code, not by how much cleavage is visible.`;
+- caption, auto_desc and tags must agree with visual_evidence: the caption may only name a body part, act or garment that visual_evidence marks visible. Keep auto_desc and visual_description factual; do not add lists of absent anatomy or nudity disclaimers. Classification flags are derived by code, not by how much cleavage is visible.`;
 
 const TAG_SET = new Set<string>(MEDIA_TAGS);
 
@@ -43,6 +50,16 @@ export function stripBannedDashes(text: string): string {
     .replace(/ {2,}/g, " ")
     .replace(/,\s*([.,!?])/g, "$1")
     .trim();
+}
+
+// The stored caption rides on timed, campaign and catalogue sends, which can be
+// free or locked, so it must never talk about paying. Sentences that do are
+// dropped rather than failing the whole (best-effort) analysis.
+const SALES_TALK = /\b(only ?fans|onlyfans|stars?|price|pay|paid|tip|tipping|unlock\w*|tap)\b/i;
+export function cleanSendCaption(text: string): string {
+  const dashless = stripBannedDashes(text.trim());
+  const sentences = dashless.split(/(?<=[.!?]|\p{Extended_Pictographic})\s+/u).filter((part) => !SALES_TALK.test(part));
+  return sentences.join(" ").trim() || dashless.replace(new RegExp(SALES_TALK.source, "gi"), "").replace(/ {2,}/g, " ").trim();
 }
 
 /** Derive flags from concrete observations so the model cannot independently
@@ -100,7 +117,7 @@ export function normalizeMediaClassification(value: unknown): Caption {
     ? stripBannedDashes(j.visual_description.trim())
     : "";
   return {
-    caption: j.caption.trim(),
+    caption: cleanSendCaption(j.caption),
     auto_desc: j.auto_desc.trim(),
     teaser_caption: typeof j.teaser_caption === "string" ? j.teaser_caption : "",
     visual_description,

@@ -11,7 +11,7 @@ import { MEDIA_CLASSIFICATION_PROMPT, normalizeMediaClassification } from "./med
 const execFileAsync = promisify(execFile);
 
 export type Caption = {
-  caption: string;          // factual description for AI matching
+  caption: string;          // first-person send caption (explicit style), limited to visible evidence; facts live in visual_description
   teaser_caption: string;   // flirty message shown to the fan (varied emoji)
   is_nude: boolean;
   explicitness: "none" | "suggestive" | "explicit";

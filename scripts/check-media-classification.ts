@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { normalizeMediaClassification, stripBannedDashes, VISUAL_EVIDENCE_KEYS } from "../lib/media-classification";
+import { normalizeMediaClassification, stripBannedDashes, cleanSendCaption, MEDIA_CLASSIFICATION_PROMPT, VISUAL_EVIDENCE_KEYS } from "../lib/media-classification";
 
 const clearEvidence = Object.fromEntries(VISUAL_EVIDENCE_KEYS.map((key) => [key, false]));
 function metadata(evidence: Record<string, unknown> = {}, changes: Record<string, unknown> = {}) {
@@ -115,5 +115,15 @@ const unaffected = normalizeMediaClassification(metadata({}, { visual_descriptio
 assert.equal(unaffected.caption, "woman in open white shirt outdoors, cleavage visible, looking at camera");
 assert.equal(unaffected.auto_desc, "open shirt outdoor");
 assert.deepEqual(unaffected.tags, ["outdoor", "solo"]);
+
+// Send-caption style (2026-09-27): the stored caption is an explicit first-person
+// send line, so the prompt must carry its rules and code must strip dashes and sales talk.
+assert.match(MEDIA_CLASSIFICATION_PROMPT, /SEND CAPTION/);
+assert.match(MEDIA_CLASSIFICATION_PROMPT, /first person/i);
+assert.match(MEDIA_CLASSIFICATION_PROMPT, /Never mention OnlyFans, prices, Stars/);
+assert.equal(cleanSendCaption("mmm just for you \u2014 look at my ass 😈"), "mmm just for you, look at my ass 😈");
+assert.equal(cleanSendCaption("look at me bent over 😈 tap to unlock it baby. can you see everything?"), "look at me bent over 😈 can you see everything?");
+assert.equal(normalizeMediaClassification(metadata({}, { caption: "just for you \u2013 bent over, tap to unlock 😈" })).caption.includes("\u2013"), false);
+assert.doesNotMatch(cleanSendCaption("only 200 stars to see it. mmm look"), /stars/i);
 
 console.log("Media classification regression checks passed: cleavage, swimwear, true nudity, tags, contradictions, malformed evidence, visual_description parsing/dashes and caption stability.");
