@@ -6,7 +6,8 @@ import sharp from 'sharp';
 import { NextRequest } from 'next/server';
 import { createCatalogueHandler } from '../lib/catalogue-api';
 import { blurPreview } from '../lib/catalogue-preview';
-import { validateTelegramData, projectItem, windowOpen } from '../lib/catalogue-core';
+import { validateTelegramData, projectItem, windowOpen, catalogueItemVisible } from '../lib/catalogue-core';
+import { catalogueDisplayOrder } from '../lib/catalogue-display-order';
 
 assert.equal(catalogueAppearance('briana-redd')?.profilePhoto, '/brand/catalogue/briana-redd-profile.webp');
 assert.ok(catalogueAppearance('alanna-pow'), 'Alanna uses the same compact catalogue layout');
@@ -40,8 +41,9 @@ const db:any={rpc:async(name:string,args:any)=>{rpcCall={name,args};return {data
 const post=createCatalogueHandler({db:()=>db,admin:async()=>owner,preview:async(path,blur)=>{rendered={path,blur};return Buffer.from('transformed-only')},videoPreview:async(path,blur)=>{rendered={path,blur};return Buffer.from('protected-video-only')},videoSources:async(path,blur)=>{rendered={path,blur};return {url:'https://storage.test/protected.mp4',posterUrl:'https://storage.test/protected.webp',seconds:5}}});
 const origin='http://localhost:3107';
 async function call(action:string,body:Record<string,unknown>={},init=sign(),source=origin){
- const request=new NextRequest(`${origin}/api/catalogue/test-creator`,{method:'POST',headers:{origin:source,'content-type':'application/json','x-telegram-init-data':init},body:JSON.stringify({action,...body})});
- return post(request,{params:Promise.resolve({slug:'test-creator'})});
+ const slug=rows.clones[0]?.slug??'test-creator';
+ const request=new NextRequest(`${origin}/api/catalogue/${slug}`,{method:'POST',headers:{origin:source,'content-type':'application/json','x-telegram-init-data':init},body:JSON.stringify({action,...body})});
+ return post(request,{params:Promise.resolve({slug})});
 }
 async function main(){
  reset();assert.equal((await call('catalogue',{},'')).status,401);
@@ -116,6 +118,43 @@ async function main(){
  assert.equal((await call('request',{type:'bundle',id:requestId,requestKey:itemId,stars:1})).status,200);assert.equal(rows.catalogue_requests[0].media_type,'bundle');
  rows.catalogue_requests[0].status='delivered';rows.catalogue_requests[0].created_at='2020-01-01T00:00:00Z';await call('request',{type:'bundle',id:requestId,requestKey:cloneId});assert.equal(rows.catalogue_requests.length,1,'a delivered bundle never generates a second payable card');
  rows.user_received_media.push({clone_id:cloneId,user_id:fanId,media_type:'photo',media_id:ids[0]});assert.equal((await call('request',{type:'bundle',id:requestId,requestKey:cloneId})).status,409);
+ // Alanna's missing captions are hidden, not deleted, including cached actions.
+ for(const caption of [null,undefined,'','  \n\t',42]) assert.equal(catalogueItemVisible({caption},'alanna-pow'),false);
+ assert.equal(catalogueItemVisible({caption:' Saved caption '},'alanna-pow'),true);
+ assert.equal(catalogueItemVisible({caption:null},'briana-redd'),true,'Bri keeps her existing publishing rules');
+ reset();rows.clones[0].slug='alanna-pow';rows.clones[0].videos_enabled=true;rows.clones[0].bundles_enabled=true;
+ rows.photos=ids.map(id=>({...photo,id}));rows.photos[0].caption=null;rows.photos[0].auto_desc='Imported folder label';rows.photos[0].teaser_caption='A separate teaser is not a saved caption';
+ rows.videos=[{...photo,id:requestId,caption:'   ',auto_desc:'Imported video label'},{...photo,id:cloneId,caption:'A captioned video'}];
+ rows.catalogue_bundles.push({...bundle,photo_ids:ids});
+ rows.catalogue_loyalty_programs.push({clone_id:cloneId,enabled:true,points_cost:2500,welcome_bonus_points:400,starts_at:new Date().toISOString(),reward_photo_ids:ids,reward_video_ids:[requestId,cloneId]});
+ const before=JSON.stringify({photos:rows.photos,videos:rows.videos});
+ const captioned=await (await call('catalogue')).json();
+ assert.equal(captioned.items.length,5);assert(!captioned.items.some((i:any)=>i.id===ids[0]||i.id===requestId));
+ assert.equal(captioned.bundles.length,0,'a bundle cannot advertise a hidden member');
+ assert.deepEqual(captioned.rewards.photoIds,ids.slice(1));assert.deepEqual(captioned.rewards.videoIds,[cloneId]);
+ assert.equal(JSON.stringify({photos:rows.photos,videos:rows.videos}),before,'catalogue filtering never mutates uploads');
+ for(const [type,id] of [['photo',ids[0]],['video',requestId]]) {
+   assert.equal((await call('preview',{type,id})).status,404);
+   assert.equal((await call('request',{type,id,requestKey:itemId})).status,404);
+   assert.equal((await call('request',{type:'reward',rewardType:type,id,requestKey:itemId})).status,404);
+ }
+ assert.equal((await call('request',{type:'bundle',id:requestId,requestKey:itemId})).status,409);
+ assert.equal(rows.catalogue_requests.length,0,'hidden media cannot be queued from a stale page');
+ rows.photos[0].caption='A newly saved caption';rows.videos[0].caption='A newly saved video caption';
+ const restored=await (await call('catalogue')).json();assert.equal(restored.items.length,7);assert.equal(restored.bundles.length,1);
+ // Mixed All grid: both formats in the opening row, spread throughout with no
+ // missing/duplicated items; single-format tabs and Bri's chosen positions stay.
+ for(const [photoCount,videoCount] of [[304,102],[2,20],[20,2],[1,1],[3,0],[0,3],[0,0]]) {
+   const input=[...Array.from({length:photoCount},(_,i)=>projectItem({...photo,id:`p${i}`},'photo')),...Array.from({length:videoCount},(_,i)=>projectItem({...photo,id:`v${i}`},'video'))];
+   const ordered=catalogueDisplayOrder(input,'alanna-pow',true);
+   assert.equal(ordered.length,input.length);assert.equal(new Set(ordered.map(i=>`${i.type}:${i.id}`)).size,input.length);
+   for(const type of ['photo','video']) assert.deepEqual(ordered.filter(i=>i.type===type),input.filter(i=>i.type===type));
+   if(photoCount&&videoCount)assert.deepEqual(ordered.slice(0,2).map(i=>i.type),['photo','video']);
+   if(photoCount===304)for(let start=0;start<ordered.length-12;start+=12)assert.equal(new Set(ordered.slice(start,start+12).map(i=>i.type)).size,2,'each page contains both types');
+   assert.deepEqual(catalogueDisplayOrder(input,'alanna-pow',false),input);
+ }
+ const briIds=['20171234-7d0b-465f-8c6f-3496b509f415','bedb2ff6-bd23-4b21-b329-43ed3284cbd3','other','1be04367-92bf-4f74-aa98-6fd3b86d07b5','3a9c8e5a-f953-4fc2-bf93-ce2a6bce62a6'];
+ assert.deepEqual(catalogueDisplayOrder(briIds.map(id=>projectItem({...photo,id},'video')),'briana-redd',true).map(i=>i.id),[briIds[1],briIds[4],briIds[2],briIds[0],briIds[3]]);
  // Real server transformation: strips metadata, limits size and changes pixels.
  const input=await sharp(Buffer.from('<svg width="840" height="840"><rect width="420" height="840" fill="red"/><rect x="420" width="420" height="840" fill="blue"/></svg>')).jpeg().withMetadata().toBuffer();
  const light=await blurPreview(input,6),heavy=await blurPreview(input,30);const meta=await sharp(heavy).metadata();
