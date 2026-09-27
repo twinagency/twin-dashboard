@@ -7,6 +7,7 @@ import { openCatalogueChat } from "@/lib/catalogue-navigation";
 import type { CatalogueItem } from "@/lib/catalogue-core";
 import "./catalogue.css";
 import VideoPreview from './VideoPreview';
+import { catalogueDisplayOrder } from '@/lib/catalogue-display-order';
 
 type WebApp = { initData: string; ready(): void; expand(): void; close(): void; openTelegramLink(url: string): void; setHeaderColor?(color: string): void; setBackgroundColor?(color: string): void; setBottomBarColor?(color: string): void };
 function app(): WebApp | undefined { return (window as unknown as { Telegram?: { WebApp?: WebApp } }).Telegram?.WebApp; }
@@ -183,7 +184,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
     try { await read("activate"); setNotice("Catalogue enabled. The pinned button updates after the fan's next message."); await load(); }
     catch (e) { setNotice((e as Error).message); } finally { setBusy(false); }
   }
-  const visible = (data?.items ?? []).filter(item => {
+  const filteredItems = (data?.items ?? []).filter(item => {
     if (search) return item.description.toLowerCase().includes(search.toLowerCase());
     if (section === "Free Content") return item.free;
     if (section === "Photos") return item.type === "photo" && !item.free;
@@ -192,6 +193,8 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
     if (section === "Discounted" || section === "Bundles") return false;
     return true;
   });
+  const visible = !search && (section === 'All' || section === 'Videos')
+    ? catalogueDisplayOrder(filteredItems, slug, section === 'All') : filteredItems;
   const rewards=data?.rewards;
   const progress=rewards?rewardProgress(rewards):null;
   const rewardItems=rewards?data!.items.filter(p=>(p.type==='photo'?rewards.photoIds:rewards.videoIds??[]).includes(p.id)):[];
@@ -288,4 +291,3 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
       </div></section></div>}
   </main>;
 }
-
