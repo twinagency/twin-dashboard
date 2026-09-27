@@ -8,7 +8,6 @@ import type { CatalogueItem } from "@/lib/catalogue-core";
 import "./catalogue.css";
 import VideoPreview from './VideoPreview';
 import { catalogueDisplayOrder } from '@/lib/catalogue-display-order';
-import { catalogueUsdEstimate } from '@/lib/catalogue-price';
 
 type WebApp = { initData: string; ready(): void; expand(): void; close(): void; openTelegramLink(url: string): void; setHeaderColor?(color: string): void; setBackgroundColor?(color: string): void; setBottomBarColor?(color: string): void };
 function app(): WebApp | undefined { return (window as unknown as { Telegram?: { WebApp?: WebApp } }).Telegram?.WebApp; }
@@ -241,7 +240,6 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
         </section>}
         <nav className="cat-tabs" aria-label="Catalogue categories">{[...(data.items.some(i => i.free) ? ["Free Content"] : []), ...tabs].map(tab =>
           <button key={tab} className={section === tab && !search ? "active" : ""} aria-current={section === tab && !search ? "page" : undefined} onClick={() => { setSection(tab); setSearch(""); setBundleIndex(0); }}>{tab}</button>)}</nav>
-        <p className="cat-price-note">Prices in USD · Estimates · Pay in Telegram Stars</p>
         <div id="catalogue-items" className={`cat-section-heading${section === "All" && !search ? " cat-section-heading-default" : ""}`}><h2>{search ? "Search results" : section}</h2><span>{!search&&section==='Bundles'?`${data.bundles.length} bundles`:`${visible.length} ${visible.length===1?'item':'items'}`}</span></div>
         {section === "My Purchases" && <p className="cat-purchase-note">{data.purchaseNote}</p>}
         {!search&&section==='Bundles'&&!!data.bundles?.length&&<section className="cat-bundle-section" aria-label="Bundles">
@@ -251,10 +249,9 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
           }}>{data.bundles.map((bundle,index)=><article className="cat-bundle-card" key={bundle.id} aria-label={`Bundle ${index+1} of ${data.bundles.length}: ${bundle.title}`}>
             <div className="cat-bundle-mosaic">{bundle.photoIds.map(id=>{const item=data.items.find(p=>p.type==='photo'&&p.id===id);return item?<Preview key={id} item={item} blur={renderBlur} call={call}/>:null;})}</div>
             <div className="cat-bundle-copy"><span className="cat-featured-label">Photo bundle</span><h3>{bundle.title.replace(/^Photo collection/i,'Bundle')}</h3>
-              <p className="cat-bundle-saving">5 photos · Save ≈{catalogueUsdEstimate(bundle.regularStars-bundle.stars)}</p>
-              <div className="cat-bundle-price"><strong>≈{catalogueUsdEstimate(bundle.stars)}</strong><s>≈{catalogueUsdEstimate(bundle.regularStars)}</s></div>
-              <button className="cat-primary" disabled={commerceBusy||bundle.partial} onClick={()=>bundle.owned?backToChat():void sendCommerce('bundle',bundle.id)}>{commerceBusy?'Sending…':bundle.owned?'View in chat':bundle.partial?'Partly owned':`Unlock · ≈${catalogueUsdEstimate(bundle.stars)}`}</button>
-              <p className="cat-price-equivalent"><Star className="cat-stars" size={11}/>{bundle.stars.toLocaleString()} Stars at checkout</p>
+              <p className="cat-bundle-saving">5 photos · Save {(bundle.regularStars-bundle.stars).toLocaleString()} Stars</p>
+              <div className="cat-bundle-price"><strong><Star className="cat-stars" size={18} aria-hidden="true"/>{bundle.stars.toLocaleString()} Stars</strong><s>{bundle.regularStars.toLocaleString()}</s></div>
+              <button className="cat-primary" disabled={commerceBusy||bundle.partial} onClick={()=>bundle.owned?backToChat():void sendCommerce('bundle',bundle.id)}>{commerceBusy?'Sending…':bundle.owned?'View in chat':bundle.partial?'Partly owned':`Unlock for ${bundle.stars.toLocaleString()} Stars`}</button>
             </div>
           </article>)}</div>
           {data.bundles.length>1&&<div className="cat-carousel-controls" aria-label="Choose bundle">
@@ -266,7 +263,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
         {visible.length ? <div className="cat-grid">{visible.slice(0, pageSize).map(item => <article className="cat-card" key={`${item.type}:${item.id}`}>
           <button className="cat-picture-button" onClick={() => { setSelected(item); setNotice(""); }} aria-label={`View ${item.type}: ${item.description.slice(0, 100)}`}><Preview item={item} blur={renderBlur} call={call} retryable={false} /></button>
           <div className="cat-card-body"><p>{item.description}</p><div className="cat-card-bottom">
-            <button className="cat-item-unlock" onClick={() => { setSelected(item); setNotice(""); }}>{item.purchased||item.received?<><Check size={14}/> View in chat</>:item.free?'View free item':<>Unlock · ≈{catalogueUsdEstimate(item.stars)}</>}</button></div></div></article>)}</div>
+            <button className="cat-item-unlock" onClick={() => { setSelected(item); setNotice(""); }}>{item.purchased||item.received?<><Check size={14}/> View in chat</>:item.free?'View free item':<>Unlock for {item.stars.toLocaleString()} Stars</>}</button></div></div></article>)}</div>
           : !search&&section==='Bundles'&&data.bundles.length ? null : <div className="cat-empty"><ShoppingBag size={30} /><h2>{search ? "No matching items" : section === "My Purchases" ? "No linked purchases yet" : `No ${section.toLowerCase()} available right now`}</h2><button className="cat-secondary" onClick={() => { setSection("All"); setSearch(""); }}>Explore the collection</button></div>}
         {visible.length > pageSize && <button className="cat-load-more" onClick={() => setPageSize(v => v + 12)}>Show more</button>}
       <details className="cat-how-it-works"><summary>How it works</summary><div className="cat-intro">
@@ -276,7 +273,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
       </div></details>
         <footer className="cat-bottom"><button onClick={() => setSearchOpen(v => !v)}><Search size={18} />Search the collection</button>
           {searchOpen && <label className="cat-search"><Search size={18} /><input autoFocus value={search} onChange={e => setSearch(e.target.value)} placeholder="Search descriptions…" aria-label="Search descriptions" />{search && <button aria-label="Clear search" onClick={() => setSearch("")}><X size={16} /></button>}</label>}
-          <p>USD estimates use an approximate mobile purchase price of $0.02 per Star. Your cost of Stars may differ by platform, taxes and pack size. Final payment is confirmed in Telegram Stars.</p></footer>
+          <p>Confirm your Stars payment in Telegram to unlock.</p></footer>
       </>}
       {!selected && notice && <div role="status" className="cat-notice">{notice}<button onClick={() => setNotice("")} aria-label="Dismiss"><X size={16} /></button></div>}
     </div>
@@ -284,8 +281,8 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
       <button className="cat-modal-close" aria-label="Close item" disabled={busy} onClick={() => setSelected(null)}><X size={21} /></button>
       <Preview item={selected} blur={renderBlur} call={call} /><div className="cat-detail"><span className="cat-eyebrow">{selected.type}</span><p>{selected.description}</p>
         {!data?.admin && !data?.canSend && !selected.received && <p className="cat-window">Send a message in the creator's chat first to receive this item.</p>}
-        <button className="cat-primary" disabled={busy} onClick={() => !data?.admin && !data?.canSend ? backToChat() : void sendItem(selected)}>{busy ? "Sending to your chat…" : data?.admin ? "Preview only" : selected.received || selected.purchased ? "View in chat" : delivered.has(`${selected.type}:${selected.id}`) ? selected.free ? "Open item in chat" : "Open payment in chat" : !data?.canSend ? "Open chat" : selected.free ? "Send free item to chat" : `Unlock · ≈${catalogueUsdEstimate(selected.stars)}`}</button>
-        {!selected.free && !selected.received && <p className="cat-payment-note"><Star className="cat-stars" size={12} aria-hidden="true"/> {selected.stars.toLocaleString()} Stars at checkout. USD is an estimate; the cost of Stars varies by platform, taxes and pack size. Confirm payment in Telegram to unlock.</p>}
+        <button className="cat-primary" disabled={busy} onClick={() => !data?.admin && !data?.canSend ? backToChat() : void sendItem(selected)}>{busy ? "Sending to your chat…" : data?.admin ? "Preview only" : selected.received || selected.purchased ? "View in chat" : delivered.has(`${selected.type}:${selected.id}`) ? selected.free ? "Open item in chat" : "Open payment in chat" : !data?.canSend ? "Open chat" : selected.free ? "Send free item to chat" : `Unlock for ${selected.stars.toLocaleString()} Stars`}</button>
+        {!selected.free && !selected.received && <p className="cat-payment-note"><Star className="cat-stars" size={12} aria-hidden="true"/> {selected.stars.toLocaleString()} Stars. Confirm payment in Telegram to unlock.</p>}
         {notice && <div role="status" className="cat-result"><p>{notice}</p>{!data?.admin && <>
           <button className="cat-secondary" onClick={backToChat}>Return to chat</button>
           {data?.chatUrl && <a className="cat-chat-link" href={data.chatUrl} target="_blank" rel="noopener noreferrer">Open {data.name}’s chat</a>}
