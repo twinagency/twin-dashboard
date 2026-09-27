@@ -2,7 +2,7 @@
 import Script from "next/script";
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { ArrowLeft, Check, ChevronRight, Gift, ImageIcon, LockKeyhole, Search, ShoppingBag, SlidersHorizontal, Star, Video, X } from "lucide-react";
-import { rewardProgress, bundleDescription, type CatalogueBundle, type CatalogueRewards } from '@/lib/catalogue-commerce';
+import { rewardProgress, type CatalogueBundle, type CatalogueRewards } from '@/lib/catalogue-commerce';
 import { openCatalogueChat } from "@/lib/catalogue-navigation";
 import type { CatalogueItem } from "@/lib/catalogue-core";
 import "./catalogue.css";
@@ -228,7 +228,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
             setBundleIndex(Math.min(data.bundles.length - 1, Math.max(0, Math.round(track.scrollLeft / (track.clientWidth + 10)))));
           }}>{data.bundles.map((bundle,index)=><article className="cat-bundle-card" key={bundle.id} aria-label={`Bundle ${index+1} of ${data.bundles.length}: ${bundle.title}`}>
             <div className="cat-bundle-mosaic">{bundle.photoIds.map(id=>{const item=data.items.find(p=>p.type==='photo'&&p.id===id);return item?<Preview key={id} item={item} blur={renderBlur} call={call}/>:null;})}</div>
-            <div className="cat-bundle-copy"><span className="cat-featured-label">Featured bundle</span><h3>{bundleDescription(bundle,data.items)==='Five photos from the collection.' ? bundle.title.replace(/^Photo collection/i,'Collection') : bundleDescription(bundle,data.items).replace(/ photos\.$/,'').replace(' and ',' & ')}</h3>
+            <div className="cat-bundle-copy"><span className="cat-featured-label">Featured bundle</span><h3>{bundle.title.replace(/^Photo collection/i,'Collection')}</h3>
               <p className="cat-bundle-saving">5 photos · Save {(bundle.regularStars-bundle.stars).toLocaleString()} Stars</p>
               <div className="cat-bundle-price"><strong><Star size={18} fill="currentColor"/>{bundle.stars.toLocaleString()}</strong><s>{bundle.regularStars.toLocaleString()}</s></div>
               <button className="cat-primary" disabled={commerceBusy||bundle.partial} onClick={()=>bundle.owned?backToChat():void sendCommerce('bundle',bundle.id)}>{commerceBusy?'Sending…':bundle.owned?'View in chat':bundle.partial?'Partly owned':'Unlock bundle'}</button>
