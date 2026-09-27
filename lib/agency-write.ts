@@ -9,8 +9,8 @@ export const AGENCY_PROTECTED_CLONE_FIELDS = ["id","slug","bot_token","created_a
 const WRITABLE: Record<string, {methods:string[];fields:readonly string[]}> = {
   clones: {methods:["PATCH"],fields:AGENCY_COLUMNS.clones.filter(c => !(AGENCY_PROTECTED_CLONE_FIELDS as readonly string[]).includes(c))},
   users: {methods:["PATCH"],fields:["message_credits","total_messages_sent","total_messages_purchased","is_active","blocked","paused"]},
-  photos: {methods:["POST","PATCH","DELETE"],fields:["clone_id","storage_path","caption","teaser_caption","star_value","image_name","is_free","is_nude","explicitness","nsfw","tags","auto_desc"]},
-  videos: {methods:["POST","PATCH","DELETE"],fields:["clone_id","storage_path","caption","teaser_caption","star_value","is_free","is_nude","explicitness","nsfw","tags","auto_desc"]},
+  photos: {methods:["POST","PATCH","DELETE"],fields:["clone_id","storage_path","caption","teaser_caption","star_value","image_name","is_free","is_nude","explicitness","nsfw","tags","auto_desc","visual_description"]},
+  videos: {methods:["POST","PATCH","DELETE"],fields:["clone_id","storage_path","caption","teaser_caption","star_value","is_free","is_nude","explicitness","nsfw","tags","auto_desc","visual_description"]},
   photo_bundles: {methods:["POST","PATCH","DELETE"],fields:["clone_id","name","caption","star_price","is_onboarding"]},
   photo_bundle_items: {methods:["POST","DELETE"],fields:["bundle_id","storage_path","sort_order"]},
   manual_sends: {methods:["POST"],fields:["clone_id","user_id","telegram_id","kind","body","media_id"]},

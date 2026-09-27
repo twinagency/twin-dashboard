@@ -31,11 +31,12 @@ import { getDashboardAccess, withDashboardAccess, accessCacheKey, requireCloneAc
 // deliberately no Redis. Same for the unstable_cache entries in
 // lib/query-cache.ts.
 
-import { getAnalytics, type AnalyticsData } from "./analytics-data";
-import { getDashboard, type DashboardData, type DateRange, type Period } from "./dashboard-data";
+import { readRevenueSections, type RevenueSections } from "./revenue-sections";
+import { getAnalytics } from "./analytics-data";
+import { getDashboard, type DateRange, type Period } from "./dashboard-data";
 import { resolveRevenueWindow } from "./revenue-window";
 
-export type RevenueRollup = { dashboard: DashboardData; analytics: AnalyticsData };
+export type RevenueRollup = RevenueSections;
 
 export type CachedRevenue = RevenueRollup & {
   /** Epoch ms the underlying queries actually ran. */
@@ -96,11 +97,11 @@ function refresh(key: string, period: Period, cloneId: string | null, range?: Da
     // rolling window (or even drift a few milliseconds apart at the end).
     const nowMs = Date.now();
     const sharedRange = await resolveRevenueWindow(period, range, nowMs);
-    const [dashboard, analytics] = await Promise.all([
+    const value = await readRevenueSections(
       getDashboard(period, sharedRange, nowMs, dashboardCloneIds),
       getAnalytics(period, cloneId, sharedRange, undefined, nowMs, dashboardCloneIds),
-    ]);
-    const entry: Entry = { fetchedAt: Date.now(), value: { dashboard, analytics } };
+    );
+    const entry: Entry = { fetchedAt: Date.now(), value };
     if (!cache.has(key)) evictIfFull();
     cache.set(key, entry);
     return entry;

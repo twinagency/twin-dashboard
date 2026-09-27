@@ -31,6 +31,8 @@ ENV NEXT_TELEMETRY_DISABLED=1
 RUN npm run build
 RUN ./node_modules/.bin/esbuild scripts/check-live-catalogue-previews.ts --bundle --platform=node --format=cjs --external:sharp --outfile=catalogue-preview-check.cjs
 
+RUN ./node_modules/.bin/esbuild scripts/check-live-dashboard-recovery.ts --bundle --platform=node --format=cjs --external:sharp --external:next/* --outfile=dashboard-recovery-check.cjs
+
 # ── 3. runner: minimal production image ──────────────────────────────────────
 FROM node:22-alpine AS runner
 WORKDIR /app
@@ -54,6 +56,7 @@ RUN addgroup --system --gid 1001 nodejs \
 # it actually needs (see next.config.mjs `output: "standalone"`).
 COPY --from=builder /app/package.json ./
 COPY --from=builder --chown=nextjs:nodejs /app/catalogue-preview-check.cjs ./catalogue-preview-check.cjs
+COPY --from=builder --chown=nextjs:nodejs /app/dashboard-recovery-check.cjs ./dashboard-recovery-check.cjs
 COPY --from=builder /app/public ./public
 COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
 COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
@@ -64,6 +67,7 @@ COPY --from=builder --chown=nextjs:nodejs /app/scripts/reset-recent-creator-test
 USER nextjs
 # Verify that the standalone image includes every dependency before deployment.
 RUN CATALOGUE_PREVIEW_CHECK_LOAD_ONLY=1 node catalogue-preview-check.cjs
+RUN DASHBOARD_RECOVERY_CHECK_LOAD_ONLY=1 node dashboard-recovery-check.cjs
 EXPOSE 3001
 
 CMD ["node", "server.js"]

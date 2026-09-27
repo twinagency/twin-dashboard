@@ -74,8 +74,8 @@ async function main(){
       await assert.rejects(guardDashboardAction("app/media/actions.ts#removeBundleItem",[a,item,`${a}/photos/wrong.jpg`]));
       for(const path of [`${other}/photos/item.jpg`,`${a}/../secret`,`/${a}/photos/item.jpg`,`${a}/%2e%2e/secret`,`${a}\\photos\\item.jpg`])assert.throws(()=>assignedStoragePath(manager,path));
       for(const [table,method,payload] of [
-        ['clones','PATCH',{status:'paused'}],['users','PATCH',{message_credits:25}],['photos','POST',{clone_id:a,storage_path:`${a}/photos/new.jpg`,star_value:100,nsfw:false}],
-        ['videos','POST',{clone_id:a,storage_path:`${a}/videos/new.mp4`,star_value:100,nsfw:false}],['photo_bundles','POST',{clone_id:a,name:'New',star_price:100}],
+        ['clones','PATCH',{status:'paused'}],['users','PATCH',{message_credits:25}],['photos','POST',{clone_id:a,storage_path:`${a}/photos/new.jpg`,star_value:100,nsfw:false,visual_description:'Generated internal description'}],
+        ['videos','POST',{clone_id:a,storage_path:`${a}/videos/new.mp4`,star_value:100,nsfw:false,visual_description:'Generated internal description'}],['photo_bundles','POST',{clone_id:a,name:'New',star_price:100}],
         ['photo_bundle_items','POST',{bundle_id:bundle,storage_path:`${a}/photos/bundle.jpg`,sort_order:0}],
         ['manual_sends','POST',{clone_id:a,user_id:user,telegram_id:123,kind:'text',body:'Test'}],
       ] as const){
@@ -85,7 +85,8 @@ async function main(){
       for(const [table,method,payload] of [
         ['clones','POST',{name:'Unexpected'}],['clones','DELETE',{}],['clones','PATCH',{bot_token:'injected'}],['clones','PATCH',{strict_minor_gate:false}],
         ['users','PATCH',{clone_id:other}],['users','PATCH',{minor_flagged_at:null}],['users','DELETE',{}],['star_transactions','PATCH',{amount_stars:1}],['app_settings','PATCH',{value:'bad'}],
-        ['photos','POST',{clone_id:other,storage_path:`${other}/photos/item.jpg`}],['photos','PATCH',{storage_path:`${other}/photos/item.jpg`}],
+        ['photos','POST',{clone_id:other,storage_path:`${other}/photos/item.jpg`}],['photos','POST',{clone_id:a,storage_path:`${a}/photos/new.jpg`,unexpected_field:true}],['videos','PATCH',{clone_id:other,visual_description:'test'}],
+        ['photos','PATCH',{storage_path:`${other}/photos/item.jpg`}],
         ['photo_bundle_items','POST',{bundle_id:bundle,storage_path:`${b}/photos/item.jpg`}],
         ['manual_sends','POST',{clone_id:b,user_id:user,telegram_id:123,kind:'text',body:'Wrong clone'}],
         ['manual_sends','POST',{clone_id:a,user_id:user,telegram_id:999,kind:'text',body:'Wrong person'}],

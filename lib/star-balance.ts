@@ -24,7 +24,7 @@ export type StarBalance = {
 
 async function getMyStarBalance(token: string): Promise<number | null> {
   try {
-    const r = await fetch(`https://api.telegram.org/bot${token}/getMyStarBalance`, { method: "POST" });
+    const r = await fetch(`https://api.telegram.org/bot${token}/getMyStarBalance`, { method: "POST", signal: AbortSignal.timeout(8_000) });
     const j = await r.json();
     return j.ok ? (j.result?.amount ?? null) : null;
   } catch {

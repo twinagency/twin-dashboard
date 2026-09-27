@@ -41,7 +41,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 // clone; when absent ("All clones"), everything aggregates across the fleet.
 
 type FullData = DashboardData & {
-  analytics: AnalyticsData;
+  analytics: AnalyticsData | null;
+  analyticsError?: string | null;
   balance: StarBalance | null;
   /** Server snapshot metadata. The API deliberately never serves browser-cached revenue. */
   cachedAt: number;
@@ -256,6 +257,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
   const [reportOpen, setReportOpen] = useState(false);
   const reportRef = useRef<HTMLDivElement | null>(null);
   const newestRequest = useRef(0);
+  const activeRequest = useRef<AbortController | null>(null);
 
   // Recharts colors are inline JS (not CSS classes) so they don't pick up the
   // light-mode constants rather than theme-conditional.
@@ -269,6 +271,10 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
   const fetchData = useCallback(
     async (p: Period, cid?: string | null, range?: { start: string; end: string } | null, force = false) => {
       const request = ++newestRequest.current;
+      activeRequest.current?.abort();
+      const controller = new AbortController();
+      activeRequest.current = controller;
+      const timeout = setTimeout(() => controller.abort(), 45_000);
       const params = new URLSearchParams();
       if (range) {
         // Date picker values are report-calendar dates. Sending them as dates
@@ -286,7 +292,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
       params.set("fresh", force ? "force" : "1");
       let json: (FullData & { error?: string }) | null = null;
       try {
-        const res = await fetch(`/api/dashboard?${params}`, { cache: "no-store" });
+        const res = await fetch(`/api/dashboard?${params}`, { cache: "no-store", signal: controller.signal });
         json = (await res.json()) as FullData & { error?: string };
         // Both halves matter: a 500 carries {error}, but a 200 whose body is
         // missing `totals` is just as unrenderable and must not reach setData.
@@ -298,6 +304,9 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
         setLoadError(e instanceof Error ? e.message : String(e));
         setLoading(false);
         return; // keep the LAST GOOD data on screen rather than blanking it
+      } finally {
+        clearTimeout(timeout);
+        if (activeRequest.current === controller) activeRequest.current = null;
       }
       if (request !== newestRequest.current) return;
       setLoadError(null);
@@ -316,9 +325,15 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
     setLoading(true);
     setTxLimit(10); // new window/scope — collapse the tx list back down
     fetchData(period, cloneId, customRange);
-    if (customRange) return; // a picked range is a fixed window — no live refresh
-    const id = setInterval(() => fetchData(period, cloneId, customRange), REVENUE_REFRESH_MS);
-    return () => clearInterval(id);
+    const id = customRange ? null : setInterval(() => {
+      if (!activeRequest.current) void fetchData(period, cloneId, customRange);
+    }, REVENUE_REFRESH_MS);
+    return () => {
+      if (id) clearInterval(id);
+      ++newestRequest.current;
+      activeRequest.current?.abort();
+      activeRequest.current = null;
+    };
   }, [period, cloneId, customRange, fetchData]);
 
   function applyCustomRange() {
@@ -444,10 +459,10 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
         },
         {
           label: "Messaged → buyer",
-          value: data.analytics.buyerConversion.activeChatBuyerRate === null
+          value: data.analytics?.buyerConversion.activeChatBuyerRate == null
             ? "-"
             : pct(data.analytics.buyerConversion.activeChatBuyerRate),
-          meta: `${fmtNum(data.analytics.buyerConversion.activeChatBuyers)} of ${fmtNum(data.analytics.buyerConversion.activeChatters)}`,
+          meta: data.analytics ? `${fmtNum(data.analytics.buyerConversion.activeChatBuyers)} of ${fmtNum(data.analytics.buyerConversion.activeChatters)}` : "Temporarily unavailable",
           hint: "Of the people who sent a message during the selected dates, the share who also bought during those same dates. This does not prove the message caused the purchase.",
         },
         {
@@ -482,15 +497,15 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
     <div className="pb-6">
       {/* Named on screen, not just in the console. The operator is the person
           who has to decide whether to pick a shorter window or call someone. */}
-      {loadError && !isAgency && (
+      {loadError && (
         <div className="mb-3 flex items-start gap-3 rounded-md border border-[#b4432f]/40 bg-[#fdecea] px-4 py-3 text-sm text-[#7a2b1e]">
           <span aria-hidden className="mt-0.5 text-base leading-none">⚠️</span>
           <div className="min-w-0 flex-1">
             <div className="font-semibold">This window could not be loaded.</div>
             <div className="mt-0.5 text-[12px] text-[#7a2b1e]/90">
-              {data ? "Showing the last window that loaded." : "Try a shorter period. 1D and 1W are much cheaper to compute."}
+              {data ? "Showing the last window that loaded." : "Use Refresh to try again."}
             </div>
-            {!isCreator && <details className="mt-1.5 group">
+            {!isCreator && !isAgency && <details className="mt-1.5 group">
               <summary className="cursor-pointer select-none text-[12px] font-medium text-[#7a2b1e]/80 underline decoration-[#7a2b1e]/30 underline-offset-2 hover:text-[#7a2b1e]">
                 Technical details
               </summary>
@@ -695,7 +710,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
             ))
           ) : (
             Array.from({ length: 5 }).map((_, index) => (
-              <div key={index} className={`h-[70px] animate-pulse bg-elev ${index === 0 ? "col-span-2 sm:col-span-1" : ""}`} />
+              <div key={index} className={`h-[70px] ${loading ? "animate-pulse" : ""} bg-elev ${index === 0 ? "col-span-2 sm:col-span-1" : ""}`} />
             ))
           )}
         </div>
@@ -709,7 +724,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
             <div className="min-w-0">
               <CardTitle className="text-sm font-semibold text-ink">Revenue performance</CardTitle>
               <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[10px] text-muted">
-                <span>{focusName ? <span className="creator-name">{focusName}</span> : chartScopeLabel} · {revenueLabel}</span>
+                <span>{focusName ? <span className="creator-name">{focusName}</span> : scoped ? "Selected creator" : chartScopeLabel} · {revenueLabel}</span>
                 <Info text="Recorded Star payments in this window, after refunds and adjustments. This is not profit, a payout, or the current wallet balance." />
               </div>
             </div>
@@ -735,7 +750,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
                 </div>
               ) : (
                 <Link href={isCreator ? "/creator/info" : "/info"} className="mt-1.5 inline-block text-[10px] font-medium text-accent underline decoration-accent/30 underline-offset-2 hover:text-accent-deep">
-                  {scoped ? "Balance unavailable right now" : "See Total balance per bot"}
+                  {scoped ? (data || !loading ? "Balance unavailable right now" : "Balance loading…") : "See Total balance per bot"}
                 </Link>
               )}
             </div>
@@ -1005,7 +1020,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
           stays above the broad report so it is not buried behind a toggle. */}
       <div className="space-y-3">
         <RevenueDayDrivers cloneId={cloneId} />
-        {data && (
+        {data?.analytics && (
           <CreatorPerformanceRail
             creators={data.analytics.clones}
             totalStars={data.analytics.totals.revenueStars}
@@ -1048,7 +1063,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
             // earner" fact below so the two cannot print different answers on
             // the same screen — they did, "Photos 21%" here against "Media 61%"
             // there, because this one dropped the catch-all buckets first.
-            const topKind = topFeatureRow(data.analytics.byFeature);
+            const topKind = data.analytics ? topFeatureRow(data.analytics.byFeature) : null;
             const periodScope = customRange ? "the selected calendar range" : "the selected reporting period";
             const creatorScope = cloneId ? "this creator" : "all creators";
             const profileScopeNote = cloneId
@@ -1171,7 +1186,8 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
       {/* One analysis workspace replaces three oversized disclosure cards. The
           selected tab changes presentation only; all panels still use the same
           fetched analytics payload, period and creator scope. */}
-      {data && (
+      {data?.analyticsError && <p role="status" className="mt-3 rounded-lg border border-line bg-panel p-4 text-sm text-muted">Performance analysis is temporarily unavailable. Earnings above are available. Use Refresh to retry.</p>}
+      {data?.analytics && (
         <section className="mt-3 overflow-hidden rounded-lg border border-line bg-panel">
           <div className="flex flex-col justify-between gap-2 border-b border-line px-3 pt-2.5 sm:flex-row sm:items-end sm:px-4">
             <div className="pb-2">

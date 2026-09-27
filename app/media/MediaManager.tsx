@@ -3,6 +3,7 @@ import { ManagerOnly, ReadOnlyEditor, useDashboardAccess } from "@/components/Da
 
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import Thumb from "@/components/SignedMediaPreview";
 import StarAmount from "@/components/StarAmount";
 import {
   MEDIA_TAGS,
@@ -89,34 +90,6 @@ type Bundle = {
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-function useSignedUrl(path: string | null) {
-  const [url, setUrl] = useState<string | null>(null);
-  useEffect(() => {
-    if (!path) return;
-    fetch(`/api/media-sign?path=${encodeURIComponent(path)}`)
-      .then((r) => r.json())
-      .then((d) => d.url && setUrl(d.url))
-      .catch(() => {});
-  }, [path]);
-  return url;
-}
-
-// Thumb that fetches a signed URL. Size via className.
-function Thumb({ path, type, className }: { path: string; type: "photo" | "video"; className?: string }) {
-  const [url, setUrl] = useState<string | null>(null);
-  useEffect(() => {
-    fetch(`/api/media-sign?path=${encodeURIComponent(path)}`)
-      .then((r) => r.json())
-      .then((d) => d.url && setUrl(d.url))
-      .catch(() => {});
-  }, [path]);
-
-  const cls = className ?? "h-20 w-20 rounded object-cover";
-  if (!url) return <div className={cls + " bg-muted/10 animate-pulse"} />;
-  if (type === "video") return <video src={url} className={cls} muted preload="metadata" />;
-  return <img src={url} alt="" className={cls} />;
-}
-
 // Full-screen lightbox showing the media large + its full caption / teaser / badges.
 function Lightbox({
   path, type, title, starValue, caption, teaserCaption, isNude, explicitness, onClose,
@@ -672,9 +645,9 @@ function PhotoCard({
           starValue={photo.is_free ? 0 : photo.star_value} caption={photo.caption} teaserCaption={photo.teaser_caption}
           isNude={photo.is_nude} explicitness={photo.explicitness} onClose={() => setViewing(false)} />
       )}
-      <button type="button" onClick={() => setViewing(true)} className="mb-3 block w-full" title="Click to view full size + caption">
-        <Thumb path={photo.storage_path} type="photo" className="aspect-square w-full rounded object-cover hover:opacity-90 transition" />
-      </button>
+      <div className="mb-3">
+        <Thumb onOpen={() => setViewing(true)} path={photo.storage_path} type="photo" className="aspect-square w-full rounded object-cover hover:opacity-90 transition" />
+      </div>
       <div className="mb-3">
         <div className="font-medium text-sm truncate">{photo.image_name ?? "Untitled"}</div>
         <div className="mt-0.5 flex items-center gap-2 text-xs text-muted">
@@ -794,9 +767,9 @@ function VideoCard({
           starValue={video.is_free ? 0 : video.star_value} caption={video.caption} teaserCaption={video.teaser_caption}
           isNude={video.is_nude} explicitness={video.explicitness} onClose={() => setViewing(false)} />
       )}
-      <button type="button" onClick={() => setViewing(true)} className="mb-3 block w-full" title="Click to view full size + caption">
-        <Thumb path={video.storage_path} type="video" className="aspect-square w-full rounded object-cover hover:opacity-90 transition" />
-      </button>
+      <div className="mb-3">
+        <Thumb onOpen={() => setViewing(true)} path={video.storage_path} type="video" className="aspect-square w-full rounded object-cover hover:opacity-90 transition" />
+      </div>
       <div className="mb-3">
         <div className="font-medium text-sm">Video</div>
         <div className="mt-0.5 flex items-center gap-2 text-xs text-muted">

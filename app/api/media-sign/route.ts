@@ -13,7 +13,7 @@ async function read(req: NextRequest) {
     .createSignedUrl(path, 300);
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-  return NextResponse.json({ url: data.signedUrl });
+  return NextResponse.json({ url: data.signedUrl, expiresAt: Date.now() + 300_000 }, { headers: { "Cache-Control": "private, no-store" } });
 }
 
 

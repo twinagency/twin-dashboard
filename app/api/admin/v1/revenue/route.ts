@@ -42,6 +42,8 @@ export const GET = withAdmin(async (req) => {
     window.range,
   );
 
+  if (!analytics) return jsonError("Detailed revenue analytics temporarily unavailable", 503);
+
   return ok({
     period,
     range: window.range ?? null,

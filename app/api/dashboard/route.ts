@@ -50,9 +50,9 @@ async function read(req: NextRequest) {
     // getRevenueRollup/lib/revenue-cache.ts caches GROSS only. Any cut is applied
     // here, downstream of the cache, per request — so a cut edited by an admin
     // is never served stale from a minute-old cached snapshot.
-    const { dashboard, analytics, cachedAt, ageSeconds, stale } = rollup;
+    const { dashboard, analytics, analyticsError, cachedAt, ageSeconds, stale } = rollup;
     let outDashboard: DashboardData = dashboard;
-    let outAnalytics: AnalyticsData = analytics;
+    let outAnalytics: AnalyticsData | null = analytics;
     let outBalance: StarBalance | null = balance;
     let cutMeta: Record<string, unknown> | undefined;
     if (access) {
@@ -60,11 +60,11 @@ async function read(req: NextRequest) {
       // set on a creator identity (see lib/creator-dashboard-identity.ts) — a
       // plain AgencyIdentity has no `kind` field.
       const mode: ViewerMode = (access as { kind?: string }).kind === "creator" ? "creator" : "agency";
-      const cloneIds = new Set<string>([...dashboard.clones.map((c) => c.id), ...analytics.clones.map((c) => c.id)]);
+      const cloneIds = new Set<string>([...dashboard.clones.map((c) => c.id), ...(analytics?.clones.map((c) => c.id) ?? [])]);
       if (clone) cloneIds.add(clone);
       const cuts = await resolveCloneCuts(cloneIds);
       outDashboard = scaleDashboardData(dashboard, cuts, mode);
-      outAnalytics = scaleAnalyticsData(analytics, cuts, mode);
+      outAnalytics = analytics ? scaleAnalyticsData(analytics, cuts, mode) : null;
       // lifetimeStars is a gross all-time earnings figure (see star-balance.ts),
       // so it goes through the same clone-level cut. totalBalanceStars is the
       // actual Telegram wallet balance (custody, not an earnings figure) and is
@@ -93,7 +93,7 @@ async function read(req: NextRequest) {
       }
       cutMeta = { perCloneCuts };
     }
-    const body: Record<string, unknown> = { ...outDashboard, analytics: outAnalytics, balance: outBalance, cachedAt, ageSeconds, stale, ...(cutMeta ?? {}) };
+    const body: Record<string, unknown> = { ...outDashboard, analytics: outAnalytics, analyticsError, balance: outBalance, cachedAt, ageSeconds, stale, ...(cutMeta ?? {}) };
     // Finding A: costUsd/profitUsd/margin are OUR figures, not the agency's or
     // creator's, and unscaled they still carry gross revenue (profit + cost =
     // gross), which would let a non-admin viewer back out the exact cut
