@@ -150,3 +150,7 @@ html:has(.catalogue),body:has(.catalogue){background:#000;color-scheme:dark}
 .cat-price-equivalent svg{flex:none}
 .cat-usd-note{font-size:10px;line-height:1.5;color:var(--cat-muted);margin:9px 0 0}
 .cat-price-note{font-size:10px;line-height:1.5;color:var(--cat-muted);margin:-5px 0 12px}.cat-payment-note .cat-stars{vertical-align:-2px}
+
+/* Grid cards drop the caption; the button sits flush under the image. */
+.cat-grid .cat-card-body{flex:none;padding:9px}
+.cat-grid .cat-card-bottom{margin-top:0}
