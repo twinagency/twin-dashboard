@@ -24,6 +24,8 @@
 // agents) imports this exact API. Do not rename any exported symbol.
 
 import { supabaseAdmin } from "./supabase";
+import { serviceClient } from "./supabase-service";
+import { getDashboardAccess, requireCloneAccess } from "./dashboard-access";
 
 const CACHE_TTL_MS = 60 * 1000;
 
@@ -87,7 +89,7 @@ function assertRange(pct: number, min: number, max: number, label: string): void
 async function agencyIdsForClone(cloneId: string): Promise<string[]> {
   const cached = fresh(cloneAgencyCache, cloneId);
   if (cached !== undefined) return cached ? cached.split(",") : [];
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await serviceClient()
     .from("agency_creators")
     .select("agency_id")
     .eq("clone_id", cloneId);
@@ -103,10 +105,13 @@ async function agencyIdsForClone(cloneId: string): Promise<string[]> {
  * into what they're SHOWN — never skip it on a money path.
  */
 export async function getCutPctForClone(cloneId: string): Promise<number> {
+  // Internal projection metadata is private, but required to calculate net
+  // earnings. Authorize even cached lookups before using the service client.
+  await requireCloneAccess(cloneId);
   const cached = fresh(cloneCutCache, cloneId);
   if (cached !== undefined) return cached;
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await serviceClient()
     .from("platform_cuts")
     .select("cut_pct")
     .eq("clone_id", cloneId)
@@ -117,7 +122,7 @@ export async function getCutPctForClone(cloneId: string): Promise<number> {
   let agencyRow: number | null = null;
   if (cloneRow == null) {
     const agencyIds = await agencyIdsForClone(cloneId);
-    agencyRow = agencyIds.length ? Math.max(...(await Promise.all(agencyIds.map((id) => getCutPctForAgency(id))))) : null;
+    agencyRow = agencyIds.length ? Math.max(...(await Promise.all(agencyIds.map((id) => readAgencyPlatformCut(id))))) : null;
   }
   const pct = resolveClonePlatformPct(cloneRow, agencyRow);
   setCache(cloneCutCache, cloneId, pct);
@@ -126,10 +131,17 @@ export async function getCutPctForClone(cloneId: string): Promise<number> {
 
 /** The PLATFORM cut for one agency: its own row, else 0. */
 export async function getCutPctForAgency(agencyId: string): Promise<number> {
+  if (await getDashboardAccess()) throw new Error("Administrator access required");
+  return readAgencyPlatformCut(agencyId);
+}
+
+// Only called after validating the creator and resolving its actual owners,
+// or by the independently gated admin lookup above. Never a raw agency read.
+async function readAgencyPlatformCut(agencyId: string): Promise<number> {
   const cached = fresh(agencyCutCache, agencyId);
   if (cached !== undefined) return cached;
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await serviceClient()
     .from("platform_cuts")
     .select("cut_pct")
     .eq("agency_id", agencyId)
@@ -147,10 +159,11 @@ export async function getCutPctForAgency(agencyId: string): Promise<number> {
  * set one, both mean "the agency keeps nothing extra back").
  */
 export async function getAgencyCreatorCutPct(cloneId: string): Promise<number> {
+  await requireCloneAccess(cloneId);
   const cached = fresh(agencyCreatorCutCache, cloneId);
   if (cached !== undefined) return cached;
 
-  const { data, error } = await supabaseAdmin
+  const { data, error } = await serviceClient()
     .from("agency_creator_cuts")
     .select("cut_pct")
     .eq("clone_id", cloneId);

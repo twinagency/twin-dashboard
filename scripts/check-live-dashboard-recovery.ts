@@ -19,8 +19,8 @@ async function main() {
   await withDashboardAccess(identity, async () => {
     const started = Date.now();
     const response = await dashboard(new NextRequest(`https://dashboard.tgaiclone.xyz/api/dashboard?period=2W&clone=${clone}&fresh=force`));
-    assert.equal(response.status, 200, "Earnings route failed");
     const data = await response.json();
+    assert.equal(response.status, 200, `Earnings route failed: ${data.error ?? "unknown error"}`);
     assert.ok(Number.isFinite(data.totals?.stars), "Missing earnings total");
     assert.ok(data.analytics && !data.analyticsError, "Detailed analytics failed");
     assert.ok(data.clones.length === 1 && data.clones[0].id === clone, "Earnings scope mismatch");
