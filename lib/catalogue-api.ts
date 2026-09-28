@@ -3,6 +3,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { dashboardOrigin, trustedFormOrigin } from "./form-origin";
 import { catalogueEligible, catalogueItemVisible, DEFAULT_BLUR, projectItem, safeMiniAppUrl, validBlur, validateTelegramData, windowOpen } from "./catalogue-core";
 import { projectBundle } from './catalogue-commerce';
+import { TRENDING_WINDOW_DAYS, tagEmojis, trendingRanks, type TrendingSale } from './catalogue-trending';
 import { cataloguePresentation } from './catalogue-presentation';
 import { beginCatalogueCheckout, catalogueContentPath, catalogueOrderStatus, checkoutMode, CheckoutError, nativeOwnedItems, paidCatalogueItems, type InvoiceTransport } from './catalogue-checkout';
 import { beginTonCheckout, reconcilePendingTonOrders, tonDiscountPercent, tonEnabled, tonOrderStatus } from './catalogue-ton';
@@ -153,7 +154,7 @@ return async function POST(request: NextRequest, context: { params: Promise<{ sl
     if (action === "catalogue") {
       const bundleRows = checked(await db.from('catalogue_bundles').select('id,title,photo_ids,price_stars,regular_stars').eq('clone_id',clone.id).eq('enabled',true).order('sort_order')) ?? [];
       const program = checked(await db.from('catalogue_loyalty_programs').select('points_cost,starts_at,reward_photo_ids,reward_video_ids,welcome_bonus_points').eq('clone_id',clone.id).eq('enabled',true).maybeSingle());
-      const columns = "id,caption,auto_desc,star_value,is_free,created_at";
+      const columns = "id,caption,auto_desc,teaser_caption,tags,star_value,is_free,created_at";
       const [photos, videos, received, purchases, nativePhotos, nativeVideos] = await Promise.all([
         clone.photos_enabled ? db.from("photos").select(columns).eq("clone_id", clone.id).order("created_at", { ascending: false }).limit(1000) : Promise.resolve({ data: [], error: null }),
         clone.videos_enabled ? db.from("videos").select(columns).eq("clone_id", clone.id).order("created_at", { ascending: false }).limit(1000) : Promise.resolve({ data: [], error: null }),
@@ -168,8 +169,26 @@ return async function POST(request: NextRequest, context: { params: Promise<{ sl
       for(const id of nativeVideos)bought.add(`video:${id}`);
       const legacyBundleIds = new Set((checked(purchases) ?? []).filter((r:any)=>!String(r.invoice_payload??'').startsWith('catalogue_order_')).map((r:any)=>r.media_id));
       for (const b of bundleRows) if (bought.has(`bundle:${b.id}`) && legacyBundleIds.has(b.id)) for (const id of b.photo_ids) bought.add(`photo:${id}`);
+      const tagsByKey = new Map<string, unknown>();
+      for (const r of (checked(photos) ?? []) as any[]) tagsByKey.set(`photo:${r.id}`, r.tags);
+      for (const r of (checked(videos) ?? []) as any[]) tagsByKey.set(`video:${r.id}`, r.tags);
       const items = [...(checked(photos) ?? []).filter((r: any) => catalogueItemVisible(r, slug)).map((r: any) => projectItem(r, "photo", bought.has(`photo:${r.id}`), owned.has(`photo:${r.id}`))),
         ...(checked(videos) ?? []).filter((r: any) => catalogueItemVisible(r, slug)).map((r: any) => projectItem(r, "video", bought.has(`video:${r.id}`), owned.has(`video:${r.id}`)))].filter(r => r.free || Number.isInteger(r.stars) && r.stars > 0);
+      // Trending: rank by confirmed paid sales in the last 30 days. Only the rank leaves the server.
+      try {
+        const since = new Date(Date.now() - TRENDING_WINDOW_DAYS * 86_400_000).toISOString();
+        const sales = checked(await db.from('star_transactions').select('id,media_type,media_id,telegram_id')
+          .eq('clone_id', clone.id).eq('kind', 'media').gt('amount_stars', 0).gte('paid_at', since).limit(5000)) ?? [];
+        const refunds = sales.length ? (checked(await db.from('star_transactions').select('id').eq('clone_id', clone.id)
+          .in('id', sales.map((row: any) => `refund:${row.id}`))) ?? []).map((row: any) => row.id) : [];
+        const ranks = trendingRanks(items, sales as TrendingSale[], refunds, bundleRows as any[]);
+        for (const item of items) {
+          const rank = ranks.get(`${item.type}:${item.id}`);
+          if (rank) item.rank = rank;
+          const emojis = tagEmojis(tagsByKey.get(`${item.type}:${item.id}`));
+          if (emojis.length) item.emojis = emojis;
+        }
+      } catch { /* trending is decoration; never block the catalogue on it */ }
       items.sort((a, b) => Date.parse(b.createdAt) - Date.parse(a.createdAt));
       const bundles = clone.bundles_enabled ? bundleRows.map((b:any)=>projectBundle(b,items)).filter(Boolean) : [];
       const points = program && fan ? checked(await db.rpc('catalogue_reward_balance',{p_clone:clone.id,p_user:fan.id})) : null;

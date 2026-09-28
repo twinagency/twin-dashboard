@@ -423,8 +423,13 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
     if (section === "Discounted" || section === "Bundles") return false;
     return true;
   });
-  const visible = !search && (section === 'All' || section === 'Explore' || section === 'Videos')
+  const ownedCount = data ? data.items.filter(item => item.purchased).length : 0;
+  const trendingView = compact && section === 'Explore' && !search;
+  const ordered = !search && (section === 'All' || section === 'Explore' || section === 'Videos')
     ? catalogueDisplayOrder(filteredItems, slug, section === 'All' || section === 'Explore') : filteredItems;
+  const visible = trendingView
+    ? [...ordered.filter(item => item.rank).sort((a, b) => (a.rank ?? 0) - (b.rank ?? 0)), ...ordered.filter(item => !item.rank)]
+    : ordered;
   const featuredBundle=data?.bundles.find(bundle=>bundle.id===data.featuredBundleId);
   const browseBundles = data?.bundles ?? [];
   const rewards=data?.rewards;
@@ -441,7 +446,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
         {compact && <button className="cat-message cat-header-action" aria-label="Message me" title="Message me" onClick={backToChat}><span>Message</span></button>}
         {data?.admin ? <button className="cat-icon" aria-label="Catalogue settings" onClick={() => setSettingsOpen(v => !v)}><SlidersHorizontal size={21} /></button>
           : !compact && <button className="cat-icon" aria-label="My purchases" onClick={() => { setSection("My Purchases"); setSearch(""); document.getElementById("catalogue-items")?.scrollIntoView({ behavior: "smooth" }); }}><ShoppingBag size={19} /></button>}
-        {compact && !data?.admin && <button className="cat-purchases-control cat-header-action" aria-label="My purchases" title="My purchases" onClick={() => { setSection("My Purchases"); setSearch(""); document.getElementById("catalogue-items")?.scrollIntoView({ behavior: "smooth" }); }}><ShoppingBag size={19} aria-hidden="true" /></button>}
+        {compact && !data?.admin && <button className="cat-purchases-control cat-header-action" aria-label="My purchases" title="My purchases" onClick={() => { setSection("My Purchases"); setSearch(""); document.getElementById("catalogue-items")?.scrollIntoView({ behavior: "smooth" }); }}><ShoppingBag size={19} aria-hidden="true" /><span className="cat-purchases-label">My purchases</span>{ownedCount > 0 && <span className="cat-purchases-count">{ownedCount}</span>}</button>}
       </header>
       {data?.admin && <div className="cat-admin-label">Owner preview <span>{data.enabled ? "Catalogue enabled" : "Not live for fans"}</span></div>}
       {settingsOpen && data?.admin && <section className="cat-settings"><h2>Preview blur</h2>
@@ -503,8 +508,11 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
           </div>}
         </section>}
         {visible.length ? <div className="cat-grid">{visible.slice(0, pageSize).map(item => <article className={`cat-card${compact && item.free ? ' cat-card-free' : ''}`} key={`${item.type}:${item.id}`}>
+          {trendingView && item.rank && <span className={`cat-rank cat-rank-${item.rank <= 3 ? item.rank : 'n'}`} aria-label={`Trending number ${item.rank}`}>#{item.rank}</span>}
+          {trendingView && !!item.emojis?.length && <span className="cat-emojis" aria-hidden="true">{item.emojis.join('')}</span>}
           <button className="cat-picture-button" onClick={event => openItem(item, event.currentTarget)} aria-label={`View ${item.type}: ${item.description.slice(0, 100)}${compact ? `, ${item.purchased || item.received ? 'owned' : item.free ? 'free' : `${item.stars.toLocaleString()} Stars`}` : ''}`}><Preview item={item} blur={renderBlur} call={call} retryable={false} /></button>
           <div className="cat-card-body">
+            {item.title && <p className="cat-card-title">{item.title}</p>}
             {refined && <p className="cat-card-description" title={item.description}>{compact ? shortCatalogueTitle(item.description) : item.description}</p>}
             <div className="cat-card-bottom">
               {tonPricing && !item.purchased && !item.received && !item.free ? <CardPrices stars={item.stars} ton={tonPricing} /> : refined && <span className={`cat-card-price${item.purchased || item.received ? ' cat-card-owned' : ''}`}>
@@ -515,7 +523,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
           </div></article>)}</div>
           : !search&&section==='Bundles'&&browseBundles.length ? null : <div className="cat-empty"><ShoppingBag size={30} /><h2>{search ? "No matching items" : section === "My Purchases" ? "No linked purchases yet" : `No ${section.toLowerCase()} available right now`}</h2><button className="cat-secondary" onClick={() => { setSection(compact ? "Explore" : "All"); setSearch(""); }}>{compact ? 'Browse the collection' : 'Explore the collection'}</button></div>}
         {visible.length > pageSize && <button className="cat-load-more" onClick={() => setPageSize(v => v + 12)}>Show more</button>}
-      <details className="cat-how-it-works"><summary>How it works</summary>{compact ? <p>Browse a preview, choose an item, then confirm your Stars payment{data.checkoutMode === 'invoice' ? ' to unlock it here. Your unlocked collection is in My purchases.' : ' in Telegram. Your purchase stays linked to your account.'}</p> : <div className="cat-intro">
+      <details className="cat-how-it-works"><summary>How it works</summary>{compact ? <p>Browse a preview, choose an item, then pay with Telegram Stars{data.tonEnabled ? <> or with TON{data.tonDiscountPercent ? <>, which is <strong>{data.tonDiscountPercent}% off</strong></> : null}</> : null}{data.checkoutMode === 'invoice' ? '. It lands straight in our chat, and your unlocked collection stays in My purchases.' : ' in Telegram. Your purchase stays linked to your account.'}</p> : <div className="cat-intro">
         <div className="cat-intro-icon" aria-hidden="true"><DevilIcon /></div>
         <div><h2>I’ve blurred them down just enough for you to see what you’re getting daddy x. ❤️</h2>
           <p>Once you tap on one you will just double tap and pay then it’s all yours xxx come back to the chat after I want to talk dirty with you 👀 🍑</p></div>
@@ -545,7 +553,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
     {selected && <div className="cat-modal-backdrop" onClick={() => !busy && closeDetails()}><section className="cat-modal" role="dialog" aria-modal="true" aria-label="Item details" onClick={e => e.stopPropagation()}>
       <button className="cat-modal-close" aria-label="Close item" disabled={busy} onClick={closeDetails}><X size={21} /></button>
       {ownedMedia && !contentError ? <div className="cat-owned-media">{ownedMedia.type === 'video' ? <video key={ownedMedia.url} src={ownedMedia.url} controls playsInline autoPlay onError={() => { ownedCache.current.delete(`${selected.type}:${selected.id}`); setContentError('Could not load your video. Please retry.'); }} /> : <img key={ownedMedia.url} src={ownedMedia.url} width={ownedMedia.width} height={ownedMedia.height} alt={selected.description} onError={() => { ownedCache.current.delete(`${selected.type}:${selected.id}`); setContentError('Could not load your photo. Please retry.'); }} />}</div> : <Preview item={selected} blur={renderBlur} call={call} />}
-      <div className="cat-detail"><span className="cat-eyebrow">{selected.type}</span><p>{selected.description}</p>
+      <div className="cat-detail"><span className="cat-eyebrow">{selected.type}</span>{selected.title && <h2 className="cat-detail-title">{selected.title}</h2>}<p>{selected.description}</p>
         {contentBusy && <p role="status">Loading your unlocked item…</p>}
         {contentError && <div className="cat-content-error" role="alert"><p>{contentError}</p><button className="cat-secondary" onClick={() => void loadContent(selected, true)}>Retry loading item</button></div>}
         {data?.checkoutMode === 'invoice' ? <>

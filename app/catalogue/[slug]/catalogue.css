@@ -364,3 +364,51 @@ html:has(.catalogue-compact),body:has(.catalogue-compact){background:#1b1c1e}
 .catalogue:not(.catalogue-compact) .cat-card-bottom:has(>.cat-card-prices){flex-wrap:wrap;row-gap:8px}.catalogue:not(.catalogue-compact) .cat-card-bottom>.cat-card-prices{flex:1 0 100%}
 .catalogue:not(.catalogue-refined):not(.catalogue-compact) .cat-card-bottom>.cat-card-prices{margin-bottom:8px}
 @media(max-width:380px){.cat-card-prices{gap:4px}.cat-card-ton-value,.cat-card-stars{font-size:10px;padding:2px 5px}.cat-card-ton-tag{font-size:8px}.cat-card-prices .cat-ton-mark{width:11px;height:11px}.catalogue .cat-pay-row>.cat-pay-stars,.catalogue .cat-pay-row>.cat-pay-ton{font-size:13px;padding:12px 6px}}
+
+/* ---- 2026-09-28: TON encouraged (green tag + outline, gentle pulse), Stars red outline ---- */
+.catalogue .cat-pay-row>.cat-pay-ton{background:linear-gradient(180deg,#1fb0ff,#0098EA);box-shadow:0 0 0 2px #22c55e,0 0 14px #22c55e66;overflow:visible}
+.catalogue .cat-pay-row>.cat-pay-stars{box-shadow:0 0 0 2px #ef4444}
+.catalogue .cat-pay-row>.cat-pay-ton .cat-ton-tag,.cat-card-ton-tag{background:#16a34a;color:#fff;border:0;font-weight:800;transform:rotate(-6deg);box-shadow:0 2px 6px #0004}
+.catalogue .cat-pay-row>.cat-pay-ton .cat-ton-tag{position:absolute;top:-11px;right:-6px;font-size:11px;padding:3px 9px;border-radius:50px;z-index:1}
+.cat-card-ton{position:relative;padding-top:0}
+.cat-card-ton-tag{position:absolute;top:-10px;left:50%;translate:-50% 0;white-space:nowrap;z-index:1;font-size:9px;padding:1px 6px}
+.cat-card-ton-value{box-shadow:0 0 0 1.5px #22c55e}
+.cat-card-stars{box-shadow:0 0 0 1.5px #ef4444}
+@media (prefers-reduced-motion:no-preference){
+  @keyframes cat-ton-nudge{0%,82%,100%{transform:translateX(0) scale(1)}86%{transform:translateX(-2px) scale(1.03)}90%{transform:translateX(2px) scale(1.03)}94%{transform:translateX(-1px) scale(1.02)}}
+  @keyframes cat-ton-glow{0%,100%{box-shadow:0 0 0 2px #22c55e,0 0 10px #22c55e55}50%{box-shadow:0 0 0 2px #22c55e,0 0 20px #22c55eaa}}
+  .catalogue .cat-pay-row>.cat-pay-ton:not(:disabled){animation:cat-ton-nudge 3.2s ease-in-out infinite,cat-ton-glow 2.4s ease-in-out infinite}
+  .cat-card-ton-value{animation:cat-ton-glow-sm 2.4s ease-in-out infinite}
+  @keyframes cat-ton-glow-sm{0%,100%{box-shadow:0 0 0 1.5px #22c55e}50%{box-shadow:0 0 0 1.5px #22c55e,0 0 8px #22c55e99}}
+}
+
+/* Owned = green */
+.catalogue .cat-card-owned,.catalogue-compact .cat-card-owned,.catalogue-refined .cat-card-owned{color:#22c55e}
+.catalogue .cat-owned-message{color:#16a34a;font-weight:700;display:flex;align-items:center;gap:6px}
+.catalogue .cat-owned-message svg{color:#16a34a}
+
+/* Trending ranks + emoji chips */
+.cat-grid>.cat-card{position:relative}
+.cat-rank{position:absolute;z-index:3;top:8px;left:8px;min-width:30px;height:24px;padding:0 8px;border-radius:50px;display:grid;place-items:center;font-size:12px;font-weight:800;color:#fff;background:linear-gradient(135deg,#f9a8d4,#ec4899);box-shadow:0 2px 8px #0005;pointer-events:none}
+.cat-rank-1{background:linear-gradient(135deg,#ffe38a,#f5b82e);color:#3b2a00}
+.cat-rank-2{background:linear-gradient(135deg,#f1f5f9,#b8c2cc);color:#1f2937}
+.cat-rank-3{background:linear-gradient(135deg,#f4c19b,#c77b43);color:#2b1606}
+.cat-emojis{position:absolute;z-index:3;top:8px;right:8px;padding:2px 7px;border-radius:50px;background:#000a;font-size:14px;line-height:20px;pointer-events:none;letter-spacing:1px}
+.cat-grid>.cat-card .cat-type{left:auto;right:10px;top:auto;bottom:10px}
+
+/* Titles */
+.cat-card-body>.cat-card-title{font-size:13px;font-weight:800;line-height:1.3;margin:0 0 4px;min-height:0;-webkit-line-clamp:1}
+.cat-detail-title{font-size:18px;font-weight:800;margin:6px 0 0;line-height:1.3}
+
+/* My purchases pill */
+.catalogue-compact .cat-purchases-control{display:inline-flex;align-items:center;gap:6px;width:auto;padding:0 12px;border-radius:50px;background:linear-gradient(135deg,#f9a8d4,#ec4899);color:#fff;border:0;font-weight:700;font-size:12px;height:36px}
+.cat-purchases-count{min-width:18px;height:18px;padding:0 5px;border-radius:50px;background:#fff;color:#db2777;font-size:11px;font-weight:800;display:inline-grid;place-items:center}
+@media(max-width:360px){.cat-purchases-label{display:none}}
+
+/* Seductive pink accents on the compact theme (buttons keep their meaning colours) */
+.catalogue-compact{--cat-pink:#f472b6}
+.catalogue-compact .cat-tabs button.active{background:linear-gradient(135deg,#f9a8d4,#ec4899);border-color:#f472b6;color:#fff}
+.catalogue-compact .cat-section-heading h2{background:linear-gradient(90deg,#fbcfe8,#f472b6);-webkit-background-clip:text;background-clip:text;color:transparent}
+.catalogue-compact .cat-grid>.cat-card:focus-within,.catalogue-compact .cat-grid>.cat-card:hover{box-shadow:0 0 0 1.5px #f472b699,0 6px 20px #f472b622}
+.catalogue-compact .cat-how-it-works summary{color:#f9a8d4}
+.catalogue-compact .cat-how-it-works strong{color:#22c55e}
