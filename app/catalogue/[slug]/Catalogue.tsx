@@ -13,7 +13,11 @@ import VideoPreview from './VideoPreview';
 import PhotoPreview from './PhotoPreview';
 import { catalogueDisplayOrder } from '@/lib/catalogue-display-order';
 import { catalogueAppearance } from '@/lib/catalogue-appearance';
-import { formatTonAmount, tonPriceNanoton, TIP_PRESET_USD } from '@/lib/catalogue-ton-price';
+import { formatTonAmount, tonPriceNanoton, TIP_PRESET_USD, type TipPresetUsd } from '@/lib/catalogue-ton-price';
+
+// Which preset the tip sheet opens on and marks "Most popular". Display only: the
+// amount still has to be one of TIP_PRESET_USD, which the server validates.
+const TIP_POPULAR_USD: TipPresetUsd = 25;
 import { compactCategories, compactItems, salePercent, shortCatalogueTitle, type CataloguePresentation } from '@/lib/catalogue-presentation';
 import { parseCatalogueStartParam } from '@/lib/catalogue-start-param';
 
@@ -158,6 +162,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
   const [tipPhase, setTipPhase] = useState<null | 'opening' | 'confirming'>(null);
   const [tipDone, setTipDone] = useState(false);
   const [tipNotice, setTipNotice] = useState('');
+  const [tipPick, setTipPick] = useState<TipPresetUsd>(TIP_POPULAR_USD);
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   useEffect(() => () => ownedCache.current.clear(), []);
@@ -385,7 +390,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
     } catch (e) { setNotice(e instanceof Error ? e.message : 'Could not start TON payment. Please try again.'); }
     finally { sending.current = false; if (mounted.current) { setBusy(false); setCommerceBusy(false); setTonPhase(null); } }
   }
-  function openTip() { setTipDone(false); setTipNotice(''); setTipPhase(null); setTipOpen(true); }
+  function openTip() { setTipDone(false); setTipNotice(''); setTipPhase(null); setTipPick(TIP_POPULAR_USD); setTipOpen(true); }
   function closeTip() { if (tipPhase) return; setTipOpen(false); }
   async function payTip(usd: number) {
     if (sending.current) return;
@@ -666,20 +671,28 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
       </div></section></div>}
     {tipOpen && data && <div className="cat-modal-backdrop" onClick={closeTip}><section className="cat-modal cat-tip-sheet" role="dialog" aria-modal="true" aria-label="Send a tip" onClick={e => e.stopPropagation()}>
       <button className="cat-modal-close" aria-label="Close" disabled={!!tipPhase} onClick={closeTip}><X size={21} /></button>
-      <div className="cat-detail">
-        {tipDone ? <><h2>Thank you <span aria-hidden="true">❤️</span></h2><p>Your tip is on its way.</p></> : <>
-          <h2>Send me a tip <span aria-hidden="true">❤️</span></h2>
-          {tipPhase ? <p role="status" className="cat-tip-status">{tipPhase === 'opening' ? 'Opening wallet…' : 'Confirming on TON…'}</p> : <>
-            <div className="cat-tip-presets">{TIP_PRESET_USD.map(usd => {
+      <div className="cat-tip-head">
+        <span className="cat-tip-hearts" aria-hidden="true"><span>♥</span><span>♥</span><span>♥</span><span>♥</span><span>♥</span></span>
+        <div className="cat-tip-avatar"><ProfilePhoto name={data.name} photoUrl={appearance?.profilePhoto} /><span className="cat-tip-avatar-heart" aria-hidden="true">❤️</span></div>
+        {tipDone ? <><h2>Thank you <span aria-hidden="true">❤️</span></h2><p>Your tip is on its way to {data.name}.</p></>
+          : <><h2>Send {data.name} a tip</h2><p>Every tip goes straight to me. Pick an amount and I will feel it.</p></>}
+      </div>
+      <div className="cat-detail cat-tip-body">
+        {tipDone ? <button type="button" className="cat-tip-send" onClick={closeTip}>Back to the store <span aria-hidden="true">💕</span></button>
+          : tipPhase ? <div role="status" className="cat-tip-status"><span className="cat-tip-spinner" aria-hidden="true" /><strong>{tipPhase === 'opening' ? 'Opening your wallet' : 'Confirming on TON'}</strong><span>Sending ${tipPick.toLocaleString()} with love</span></div> : <>
+            <div className="cat-tip-presets" role="radiogroup" aria-label="Tip amount">{TIP_PRESET_USD.map(usd => {
               const nanoton = data.tonNanotonPerUsd != null ? tonPriceNanoton(usd, data.tonNanotonPerUsd, 0) : null;
-              return <button key={usd} type="button" className="cat-tip-preset" onClick={() => void payTip(usd)}>
+              const picked = usd === tipPick;
+              return <button key={usd} type="button" role="radio" aria-checked={picked} className={`cat-tip-preset${picked ? ' cat-tip-preset-picked' : ''}${usd === TIP_POPULAR_USD ? ' cat-tip-preset-popular' : ''}`} onClick={() => setTipPick(usd)}>
+                {usd === TIP_POPULAR_USD && <span className="cat-tip-badge">Most popular</span>}
                 <span className="cat-tip-preset-usd">${usd.toLocaleString()}</span>
                 {nanoton != null && <span className="cat-tip-preset-ton"><TonMark />{formatTonAmount(nanoton)} TON</span>}
               </button>;
             })}</div>
+            <button type="button" className="cat-tip-send" onClick={() => void payTip(tipPick)}><span aria-hidden="true">❤️</span> Send ${tipPick.toLocaleString()} tip</button>
+            <p className="cat-tip-fine">Paid in TON from your wallet. Thank you for spoiling me.</p>
             {tipNotice && <p role="status" className="cat-payment-status">{tipNotice}</p>}
           </>}
-        </>}
       </div>
     </section></div>}
   </main>;
