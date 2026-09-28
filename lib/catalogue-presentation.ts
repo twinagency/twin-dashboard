@@ -5,7 +5,7 @@ export type CataloguePresentation = 'standard' | 'compact';
 export function cataloguePresentation(value: unknown): CataloguePresentation {
   return value === 'compact' ? 'compact' : 'standard';
 }
-export const compactCategories = ['Bundles', 'Photos', 'Videos'] as const;
+export const compactCategories = ['Explore', 'Photos', 'Videos', 'Bundles'] as const;
 export function remainingBundles(bundles: CatalogueBundle[], featuredId: string | null | undefined) {
   return bundles.filter(bundle => bundle.id !== featuredId);
 }
@@ -22,6 +22,7 @@ export function compactItems(items: CatalogueItem[], section: string, search: st
   if (term) return items.filter(item => item.description.toLowerCase().includes(term));
   if (section === 'Photos') return items.filter(item => item.type === 'photo');
   if (section === 'Videos') return items.filter(item => item.type === 'video');
-  if (section === 'My Purchases') return items.filter(item => item.purchased);
+  if (section === 'My Purchases') return items.filter(item => item.purchased || item.received);
+  if (section === 'Explore') return items;
   return [];
 }
