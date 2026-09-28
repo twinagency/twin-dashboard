@@ -435,3 +435,16 @@ html:has(.catalogue-compact),body:has(.catalogue-compact){background:#1b1c1e}
 .cat-bundle-copy>.cat-card-prices{margin-top:14px}
 .cat-bundle-copy>.cat-bundle-saving{margin-bottom:2px}
 .cat-bundle-copy>.cat-primary{margin-top:10px}
+
+/* Tidy pass: nothing touches */
+.catalogue-compact .cat-grid .cat-card-body{gap:6px}
+.catalogue-compact .cat-grid .cat-card-body>.cat-card-title{margin:0;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.catalogue-compact .cat-grid .cat-card-bottom{margin-top:10px}
+.cat-card-prices{padding-top:4px}
+.cat-card-ton-tag{top:-12px}
+.cat-pay-row{padding-top:12px;margin-top:10px}
+.cat-modal .cat-pay-row{overflow:visible}
+.cat-bundle-copy{display:flex;flex-direction:column;gap:6px}
+.cat-bundle-copy>h3,.cat-bundle-copy>p{margin:0}
+.cat-bundle-copy>.cat-card-prices{margin-top:12px}
+.cat-bundle-copy>.cat-primary{margin-top:6px}
