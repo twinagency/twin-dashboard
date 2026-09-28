@@ -13,7 +13,7 @@ function reset(){
     photos:Array.from({length:5},(_,i)=>({id:id(10+i),clone_id:clone.id,caption:`Photo ${i+1}`,star_value:350,is_free:false,storage_path:`private/${i}.jpg`})),
     videos:[{id:id(20),clone_id:clone.id,caption:'Video',star_value:500,is_free:false,storage_path:'private/video.mp4'}],
     catalogue_bundles:[{id:id(30),clone_id:clone.id,title:'Collection',caption:'Five portraits',enabled:true,photo_ids:Array.from({length:5},(_,i)=>id(10+i)),price_stars:1400,regular_stars:1750}],
-    star_transactions:[],user_received_media:[],catalogue_checkout_orders:[]};
+    star_transactions:[],user_received_media:[],catalogue_checkout_orders:[],catalogue_checkout_attempts:[]};
   invoiceCalls=[];contentCalls=[];owner=false;
 }
 const db:any={rpc:async(name:string,args:any)=>{
@@ -55,6 +55,7 @@ async function main(){
   const request={type:'photo',id:id(10),requestKey:id(100),amount:1,paid:true};
   assert.equal((await api('checkout',request,'')).status,401,'unsigned payer denied');
   assert.equal((await api('content',{type:'photo',id:id(10)})).status,403,'unpaid original denied');
+  assert.equal((await api('request',{type:'photo',id:id(10),requestKey:id(100)})).status,409,'Stale chat UI cannot enqueue paid media after native checkout activation');
   assert.equal(contentCalls.length,0);
   owner=true;assert.equal((await api('checkout',{...request,preview:true})).status,403,'owner cannot buy');owner=false;
   rows.creator_catalogue_settings[0].checkout_mode='chat';assert.equal((await api('checkout',request)).status,403,'other creator legacy flow unchanged');rows.creator_catalogue_settings[0].checkout_mode='invoice';
@@ -86,7 +87,11 @@ async function main(){
   await assert.rejects(()=>beginCatalogueCheckout(context,request,invoice),/not available/,'free item never charged');
   reset();await assert.rejects(()=>beginCatalogueCheckout(context,request,async()=>{throw new Error('transport')}));
   assert.equal(rows.catalogue_checkout_orders.length,1);await beginCatalogueCheckout(context,request,invoice);assert.equal(rows.catalogue_checkout_orders.length,1,'invoice network failure preserves order');
-  rows.catalogue_checkout_orders[0].status='checkout';const confirming=await beginCatalogueCheckout(context,request,invoice);assert.equal(confirming.status,'checkout');assert.equal(invoiceCalls.length,1,'reserved payment does not create another invoice');
+  rows.catalogue_checkout_orders[0].status='checkout';const confirming=await beginCatalogueCheckout(context,request,invoice);assert.equal(confirming.status,'checkout');
+  rows.catalogue_checkout_attempts.push({order_id:request.requestKey,created_at:new Date().toISOString()});
+  assert.ok((await catalogueOrderStatus(context,request.requestKey)).retryAfterSeconds>0);
+  rows.catalogue_checkout_attempts[0].created_at=new Date(Date.now()-61_000).toISOString();
+  assert.equal((await catalogueOrderStatus(context,request.requestKey)).retryAfterSeconds,0,'Failed accepted payment can reopen the same invoice after reconciliation window');assert.equal(invoiceCalls.length,1,'reserved payment does not create another invoice');
   // The server completed the first request, but its response never reached the
   // browser. It knows only its original key when retrying after fifteen minutes.
   reset();await beginCatalogueCheckout(context,request,invoice);

@@ -142,7 +142,13 @@ export async function catalogueOrderStatus({db,clone,fan}:Context,orderId:string
     if(!proof.some(row=>row.id===order.charge_id&&row.invoice_payload===`catalogue_order_${order.id}`))status='refunded';
   }
   if(status==='pending'&&Date.parse(order.expires_at)<=Date.now())status='expired';
-  return {orderId:order.id,status};
+  let retryAfterSeconds = 0;
+  if(status === 'checkout') {
+    const attempts:any[] = checked(await db.from('catalogue_checkout_attempts').select('created_at')
+      .eq('order_id',order.id).order('created_at',{ascending:false}).limit(1)) ?? [];
+    retryAfterSeconds = attempts[0] ? Math.max(0,Math.ceil((Date.parse(attempts[0].created_at)+60_000-Date.now())/1000)) : 60;
+  }
+  return {orderId:order.id,status,retryAfterSeconds};
 }
 
 export async function catalogueContentPath({db,clone,fan}:Context,type:'photo'|'video',id:string):Promise<string> {

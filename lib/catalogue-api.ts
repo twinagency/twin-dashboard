@@ -175,6 +175,7 @@ return async function POST(request: NextRequest, context: { params: Promise<{ sl
       return json(result);
     }
     if (action === "request") {
+      if(invoiceCheckout && body.type !== 'reward') return json({error:'Checkout has changed. Reopen the Mini App to pay and unlock here.'},409);
       if (admin || !fan) return json({ error: "Preview mode cannot send or purchase content." }, 403);
       if (!fan.business_connection_id || !windowOpen(fan.last_message_received) || clone.status !== "active")
         return json({ error: "Send a message in the creator's chat first, then reopen the catalogue." }, 409);
@@ -229,7 +230,7 @@ return async function POST(request: NextRequest, context: { params: Promise<{ sl
         .in("status", ["delivered", "uncertain"]);
       if (body.type !== 'bundle') previous=previous.gte('created_at',new Date(Date.now()-10*60_000).toISOString());
       const existing = checked(await previous.order("created_at", { ascending: false }).limit(1));
-      if (existing?.length) return json(existing[0]);
+      if (existing?.length) return json({...existing[0],reused:true});
       const inserted = await db.from("catalogue_requests").insert({ id: body.requestKey, clone_id: clone.id, user_id: fan.id, media_type: body.type, media_id: body.id }).select("id,status,result").single();
       if (inserted.error?.code === '23505') {
         const prior = checked(await db.from("catalogue_requests").select("id,status,result").eq("clone_id", clone.id).eq("user_id", fan.id).eq("media_type", body.type).eq("media_id", body.id).order("created_at", { ascending: false }).limit(1));

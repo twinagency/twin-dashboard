@@ -182,6 +182,8 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
       if (order) {
         const status = await read('checkout_status', { orderId: order.orderId });
         if (status.status === 'paid') { await finishCheckout(type, id); return; }
+        if (status.status === 'checkout' && status.retryAfterSeconds > 0) resumePending = true;
+        else if (status.status === 'checkout' && status.retryAfterSeconds === 0) resumePending = false;
         if (['expired', 'refunded'].includes(status.status)) {
           checkoutOrders.current.delete(key); requestKeys.current.delete(`checkout:${key}`); order = undefined; resumePending = false;
           setPaymentWaiting(previous => { const next = new Set(previous); next.delete(key); return next; });
@@ -198,6 +200,11 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
         }
         order = { orderId: result.orderId, invoiceUrl: result.invoiceUrl };
         checkoutOrders.current.set(key, order);
+        if (result.status === 'checkout') {
+          const status = await read('checkout_status', { orderId: order.orderId });
+          if (status.status === 'paid') { await finishCheckout(type, id); return; }
+          resumePending = status.retryAfterSeconds > 0;
+        }
       }
       const activeOrder = order;
       const callbackStatus = resumePending ? 'pending' : await new Promise<string>((resolve, reject) => {
@@ -210,8 +217,10 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
       setCheckoutPhase('confirming');
       if (callbackStatus === 'paid' || callbackStatus === 'pending') setPaymentWaiting(previous => new Set(previous).add(key));
       // Telegram's callback is only a hint. Only our server's settled payment grants access.
+      let canRetry = false;
       for (let attempt = 0; attempt < (callbackStatus === 'paid' || callbackStatus === 'pending' ? 32 : 1); attempt++) {
         const result = await read('checkout_status', { orderId: activeOrder.orderId });
+        canRetry = result.status === 'pending' || (result.status === 'checkout' && result.retryAfterSeconds === 0);
         if (result.status === 'paid') { await finishCheckout(type, id); return; }
         if (['expired', 'refunded'].includes(result.status)) {
           checkoutOrders.current.delete(key); requestKeys.current.delete(`checkout:${key}`);
@@ -221,14 +230,15 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
         if (attempt < 31 && callbackStatus !== 'cancelled' && callbackStatus !== 'failed') await new Promise(resolve => window.setTimeout(resolve, 2000));
         if (!mounted.current) return;
       }
-      setNotice(callbackStatus === 'cancelled' ? 'Payment cancelled. You have not unlocked this item.' : callbackStatus === 'failed' ? 'Payment did not complete. Try again.' : 'Payment is still being confirmed. Tap Check payment to refresh.');
+      if (canRetry) setPaymentWaiting(previous => { const next = new Set(previous); next.delete(key); return next; });
+      setNotice(callbackStatus === 'cancelled' ? 'Payment cancelled. You have not unlocked this item.' : callbackStatus === 'failed' ? 'Payment did not complete. You can try again. If Stars were deducted, check My purchases first.' : canRetry ? 'No payment confirmation yet. You can reopen this payment. Any duplicate charge will be refunded.' : 'Payment is still being confirmed. Tap Check payment to refresh.');
     } catch (e) { setNotice(e instanceof Error ? e.message : 'Could not open payment. Please try again.'); }
     finally { sending.current = false; if (mounted.current) { setBusy(false); setCommerceBusy(false); setCheckoutPhase(null); } }
   }
   function unlockBundle(bundle: CatalogueBundle) {
     if (data?.checkoutMode === 'invoice') {
       if (bundle.owned) openBundle(bundle, document.activeElement as HTMLElement);
-      else void checkout('bundle', bundle.id);
+      else { openBundle(bundle, document.activeElement as HTMLElement); void checkout('bundle', bundle.id); }
     } else if (bundle.owned || delivered.has(`bundle:photo:${bundle.id}`)) backToChat();
     else void sendCommerce('bundle', bundle.id);
   }
@@ -255,8 +265,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
       if (["failed", "expired"].includes(result.status)) requestKeys.current.delete(key);
       if (result.status === "delivered") {
         setDelivered(previous => new Set(previous).add(key));
-        setNotice(item.free ? "Sent. Opening your chat…" : `Tap the locked item in the chat to pay ${item.stars.toLocaleString()} Stars. Opening your chat…`);
-        backToChat();
+        setNotice(item.free ? "Your item is ready in chat." : result.reused ? `This payment card is already in your chat. Open it there to pay ${item.stars.toLocaleString()} Stars.` : `Your payment card is ready. Open chat, then tap its ${item.stars.toLocaleString()} Stars button to confirm.`);
       } else {
         setNotice(result.result || "Still processing. Check the chat before trying again.");
       }
@@ -278,7 +287,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
         result=await read('status',{id:result.id});
       }
       if(['failed','expired'].includes(result.status))requestKeys.current.delete(key);
-      if(result.status==='delivered'){setDelivered(previous=>new Set(previous).add(key));setNotice(type==='reward'?'Reward sent. No Stars charged.':'Bundle sent. Confirm payment in your chat.');backToChat();}
+      if(result.status==='delivered'){setDelivered(previous=>new Set(previous).add(key));setNotice(type==='reward'?'Reward sent. No Stars charged.':result.reused?'This bundle payment card is already in your chat. Open it there to confirm payment.':'Your bundle payment card is ready in chat. Open it there to confirm payment.');}
       else setNotice(result.result||'Still processing. Check your chat before trying again.');
       await load();
     }catch(e){setNotice(e instanceof Error?e.message:'Please try again.');}
