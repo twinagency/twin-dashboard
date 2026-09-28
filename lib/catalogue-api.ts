@@ -201,8 +201,9 @@ return async function POST(request: NextRequest, context: { params: Promise<{ sl
         const since = new Date(Date.now() - TRENDING_WINDOW_DAYS * 86_400_000).toISOString();
         const sales = checked(await db.from('star_transactions').select('id,media_type,media_id,telegram_id')
           .eq('clone_id', clone.id).eq('kind', 'media').gt('amount_stars', 0).gte('paid_at', since).limit(5000)) ?? [];
+        // Refund rows are few; fetch them by prefix instead of an IN list of every sale id (too long a URL).
         const refunds = sales.length ? (checked(await db.from('star_transactions').select('id').eq('clone_id', clone.id)
-          .in('id', sales.map((row: any) => `refund:${row.id}`))) ?? []).map((row: any) => row.id) : [];
+          .like('id', 'refund:%').limit(5000)) ?? []).map((row: any) => row.id) : [];
         const ranks = trendingRanks(items, sales as TrendingSale[], refunds, bundleRows as any[]);
         for (const item of items) {
           const rank = ranks.get(`${item.type}:${item.id}`);
