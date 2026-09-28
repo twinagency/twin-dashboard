@@ -575,7 +575,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
       </div>}</details>
         <footer className="cat-bottom">{!compact && <><button onClick={() => setSearchOpen(v => !v)}><Search size={18} />Search the collection</button>
           {searchOpen && <label className="cat-search"><Search size={18} /><input autoFocus value={search} onChange={e => setSearch(e.target.value)} placeholder="Search descriptions…" aria-label="Search descriptions" />{search && <button aria-label="Clear search" onClick={() => setSearch("")}><X size={16} /></button>}</label>}</>}
-          <p>{data.checkoutMode === 'invoice' ? 'Secure checkout with Telegram Stars' : 'Confirm your Stars payment in Telegram to unlock.'}</p></footer>
+          <p>{data.checkoutMode === 'invoice' ? (data.tonEnabled ? `Secure checkout with Telegram Stars or TON${data.tonDiscountPercent ? ` (${data.tonDiscountPercent}% off with TON)` : ''}` : 'Secure checkout with Telegram Stars') : 'Confirm your Stars payment in Telegram to unlock.'}</p></footer>
       </>}
       {!selected && !selectedBundle && notice && <div role="status" className="cat-notice">{notice}<button onClick={() => setNotice("")} aria-label="Dismiss"><X size={16} /></button></div>}
       {paidFallback && <div className="cat-modal-backdrop" onClick={() => setPaidFallback(false)}><section className="cat-modal" role="dialog" aria-modal="true" aria-label="Payment confirmed" onClick={e => e.stopPropagation()}>
