@@ -15,6 +15,7 @@ import { REPORT_TZ, reportInstant } from "./report-time";
 import type { DateRange, Period } from "./dashboard-data";
 import { resolveRevenueWindow } from "./revenue-window";
 import { classifyRevenueLedgerRow } from "./revenue-ledger";
+import { dedupeStarRows } from "./star-dedupe";
 
 // Deep money analytics — WHERE the money comes from. This is the aggregation layer
 // for /analytics. It mirrors the query style in dashboard-data.ts (fetch scoped
@@ -544,9 +545,12 @@ export async function getAnalytics(
     const { rows } = await selectAllRowsParallel(makeQuery, {
       label: "analytics revenue ledger",
     });
-    return hasFeature
+    const txRows: TxRow[] = hasFeature
       ? (rows as TxRow[])
       : (rows as Omit<TxRow, "feature">[]).map((r) => ({ ...r, feature: null }));
+    // See lib/star-dedupe.ts: collapse the same double-recorded-payment bug
+    // here too, before any of the per-feature/per-kind/per-day sums below run.
+    return dedupeStarRows(txRows);
   }
 
   // Older Telegram-imported sales predate star_transactions.feature. Recover
@@ -845,23 +849,30 @@ export async function getAnalytics(
   // preset so "weekly" always means the latest seven complete days in scope.
   let weeklyQ = supabaseAdmin
     .from("star_transactions")
-    .select("clone_id,telegram_id,amount_stars,invoice_payload")
+    .select("id,clone_id,telegram_id,kind,amount_stars,paid_at,invoice_payload")
     .gte("paid_at", iso(windowEnd - 7 * MS_DAY))
     .lte("paid_at", iso(windowEnd));
   if (cloneId) weeklyQ = weeklyQ.eq("clone_id", cloneId);
   // Paged: a busy fleet week outgrows the row cap, and an unpaged read would drop
   // spenders off the leaderboard with no error.
-  const { rows: weeklyRows } = await selectAllRows(weeklyQ, { label: "analytics weekly spenders" });
+  const { rows: weeklyRowsRaw } = await selectAllRows(weeklyQ, { label: "analytics weekly spenders" });
+  // See lib/star-dedupe.ts: same double-recorded-payment collapse before summing.
+  const weeklyRows = dedupeStarRows(
+    (weeklyRowsRaw ?? []) as {
+      id: string;
+      clone_id: string | null;
+      telegram_id: number | null;
+      kind: string | null;
+      amount_stars: number | null;
+      paid_at: string | null;
+      invoice_payload: string | null;
+    }[],
+  );
   const weeklyByBuyer = new Map<
     string,
     { cloneId: string | null; telegramId: number; stars: number; purchases: number }
   >();
-  for (const transaction of (weeklyRows ?? []) as {
-    clone_id: string | null;
-    telegram_id: number | null;
-    amount_stars: number | null;
-    invoice_payload: string | null;
-  }[]) {
+  for (const transaction of weeklyRows) {
     if (transaction.telegram_id == null) continue;
     const key = `${transaction.clone_id ?? "unknown"}:${transaction.telegram_id}`;
     const current = weeklyByBuyer.get(key) ?? {

@@ -6,6 +6,7 @@ import { REPORT_TZ, reportInstant } from "./report-time";
 import { reportDayStartMs, shiftReportDay } from "./revenue-why-changed";
 import { resolveRevenueWindow } from "./revenue-window";
 import { repeatBuyerCount, rollupRevenueLedger } from "./revenue-ledger";
+import { dedupeStarRows } from "./star-dedupe";
 
 export type Period = "ALL" | "1Y" | "6M" | "3M" | "1M" | "2W" | "1W" | "1D" | "CUSTOM";
 type Gran = "hour" | "day" | "week" | "month";
@@ -277,9 +278,13 @@ export async function getDashboard(period: Period, range?: DateRange, nowMs = Da
         .order("id", { ascending: true }),
       { label: "dashboard revenue ledger" },
     );
-    return hasFeature
+    const rows: PurchaseRow[] = hasFeature
       ? (paged.rows as PurchaseRow[])
       : (paged.rows as Omit<PurchaseRow, "feature">[]).map((r) => ({ ...r, feature: null }));
+    // See lib/star-dedupe.ts: a 2026-09 bot bug double-recorded some real
+    // payments. This is the headline revenue number, so collapse duplicates
+    // right after paging, before anything sums or counts these rows.
+    return dedupeStarRows(rows);
   }
 
   // ── independent reads, fired together ───────────────────────────────────────

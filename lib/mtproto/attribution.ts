@@ -27,11 +27,12 @@
 
 import { mtDb } from "./db";
 import { classifyRevenueLedgerRow } from "@/lib/revenue-ledger";
+import { dedupeStarRows } from "@/lib/star-dedupe";
 import { episodeFanKey, isRealSend } from "./episodes";
 import { selectAllRowsMtproto } from "./paging";
 import { ATTRIBUTION_WINDOWS_HOURS, type AttributionWindowHours, type LiftReport, type LiftSide, type ReengageEpisode } from "./types";
 
-export type PurchaseRow = { id: string; user_id: string; clone_id: string; amount_stars: number; invoice_payload: string | null; paid_at: string; created_at: string };
+export type PurchaseRow = { id: string; user_id: string; clone_id: string; telegram_id: number | null; kind: string | null; amount_stars: number; invoice_payload: string | null; paid_at: string; created_at: string };
 export type PaidOrder = { userId: string; cloneId: string; stars: number; paidMs: number };
 export type PurchaseRead = { orders: PaidOrder[]; truncated: boolean };
 
@@ -58,7 +59,7 @@ export async function purchasesForUsers(userIds: string[], earliestMs: number, l
         () =>
           mtDb()
             .from("star_transactions")
-            .select("id,user_id,clone_id,amount_stars,invoice_payload,paid_at,created_at")
+            .select("id,user_id,clone_id,telegram_id,kind,amount_stars,invoice_payload,paid_at,created_at")
             .in("user_id", ids)
             .gte("paid_at", earliestIso)
             .lte("paid_at", latestIso)
@@ -69,7 +70,9 @@ export async function purchasesForUsers(userIds: string[], earliestMs: number, l
   );
   const orders: PaidOrder[] = [];
   for (const r of results) {
-    for (const row of r.rows) {
+    // See lib/star-dedupe.ts: collapse double-recorded payments before
+    // classifying, so a duplicate can't be counted as two "purchases".
+    for (const row of dedupeStarRows(r.rows)) {
       const c = classifyRevenueLedgerRow(row);
       if (!c.paidOrder) continue;
       orders.push({ userId: row.user_id, cloneId: row.clone_id, stars: c.stars, paidMs: new Date(row.paid_at ?? row.created_at).getTime() });

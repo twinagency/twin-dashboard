@@ -3,6 +3,7 @@ import { cloneUserStatsWindow, messagedFanCount } from "./rollup";
 import { REPORT_TZ } from "./report-time";
 import { selectAllRows } from "./select-all";
 import { supabaseAdmin } from "./supabase";
+import { dedupeStarRows } from "./star-dedupe";
 
 // ── Why it changed ──────────────────────────────────────────────────────────
 //
@@ -606,9 +607,11 @@ async function loadPurchases(windows: DayWindow[], cloneId: string | null, hasFe
   if (cloneId) query = query.eq("clone_id", cloneId);
   const result = await selectAllRows<PurchaseRow>(query, { label: "why-changed revenue for 30-day comparison" });
   if (result.truncated) throw new Error("Could not safely read every payment for this 30-day comparison.");
-  const rows = hasFeature
+  const rowsWithFeature = hasFeature
     ? result.rows
     : result.rows.map((row) => ({ ...row, feature: null }));
+  // See lib/star-dedupe.ts: collapse double-recorded payments before diffing days.
+  const rows = dedupeStarRows(rowsWithFeature);
   const purchasesByWindow = windows.map((): DriverPurchase[] => []);
   for (const purchase of toPurchases(rows)) {
     const paidAtMs = new Date(purchase.paidAt).getTime();
