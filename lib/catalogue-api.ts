@@ -154,10 +154,13 @@ return async function POST(request: NextRequest, context: { params: Promise<{ sl
         (body.type === 'video' ? !clone.videos_enabled : !clone.photos_enabled))
         return json({ error: "Preview unavailable." }, 404);
       // Requested strength is accepted only for an independently authenticated operator preview.
-      const strength = admin && validBlur(body.blur) ? body.blur : blur;
+      let strength = admin && validBlur(body.blur) ? body.blur : blur;
       const video = body.type === 'video';
       const item = checked(await db.from(video ? 'videos' : 'photos').select("storage_path,caption").eq("clone_id", clone.id).eq("id", body.id).maybeSingle());
       if (!item?.storage_path || !catalogueItemVisible(item, slug)) return json({ error: "Preview unavailable." }, 404);
+      // A photo the fan has paid for shows clear in the grid; everything else stays blurred.
+      if (!video && !admin && fan && invoiceCheckout &&
+        await catalogueContentPath({db,clone,fan},'photo',body.id).then(()=>true,()=>false)) strength = 0;
       try {
         if (video && body.delivery === 'native') return json(await deps.videoSources(item.storage_path, strength));
         const bytes = await (video ? deps.videoPreview : deps.preview)(item.storage_path, strength);

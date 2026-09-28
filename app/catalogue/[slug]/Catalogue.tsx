@@ -83,6 +83,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
   const detailTrigger = useRef<HTMLElement | null>(null);
   const [blur, setBlur] = useState(16);
   const [renderBlur, setRenderBlur] = useState(16);
+  const [paidFallback, setPaidFallback] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [rewardsOpen,setRewardsOpen]=useState(false);
@@ -172,14 +173,10 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
     setPaymentWaiting(previous => { const next = new Set(previous); next.delete(`${type}:${id}`); return next; });
     const value = await load();
     if (!value) throw new Error('Payment confirmed. Refresh the catalogue to load your unlocked item.');
-    if (type === 'bundle') {
-      const bundle = value?.bundles.find(item => item.id === id);
-      if (bundle) { setSelected(null); setSelectedBundle(bundle); }
-    } else {
-      const item = value?.items.find(item => item.type === type && item.id === id);
-      if (item) { setSelectedBundle(null); setSelected(item); await loadContent(item); }
-    }
-    setNotice('Payment confirmed. Your content is unlocked.');
+    // Delivery goes to the chat, so leave the app. If Telegram keeps it open, offer the chat link.
+    setSelected(null); setSelectedBundle(null);
+    backToChat();
+    window.setTimeout(() => setPaidFallback(true), 1500);
   }
   async function checkout(type: 'photo' | 'video' | 'bundle', id: string) {
     if (sending.current) return;
@@ -427,6 +424,10 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
           <p>{data.checkoutMode === 'invoice' ? 'Secure checkout with Telegram Stars' : 'Confirm your Stars payment in Telegram to unlock.'}</p></footer>
       </>}
       {!selected && !selectedBundle && notice && <div role="status" className="cat-notice">{notice}<button onClick={() => setNotice("")} aria-label="Dismiss"><X size={16} /></button></div>}
+      {paidFallback && <div className="cat-modal-backdrop" onClick={() => setPaidFallback(false)}><section className="cat-modal" role="dialog" aria-modal="true" aria-label="Payment confirmed" onClick={e => e.stopPropagation()}>
+        <div className="cat-detail"><h2>Paid. It&apos;s in your chat</h2>
+          <button className="cat-primary" onClick={() => { setPaidFallback(false); backToChat(); }}>View in chat</button></div>
+      </section></div>}
     </div>
     {selectedBundle && <div className="cat-modal-backdrop" onClick={() => !commerceBusy && closeDetails()}><section className="cat-modal cat-bundle-modal" role="dialog" aria-modal="true" aria-label="Bundle details" onClick={e => e.stopPropagation()}>
       <button className="cat-modal-close" aria-label="Close bundle" disabled={commerceBusy} onClick={closeDetails}><X size={21}/></button>
