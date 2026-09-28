@@ -22,6 +22,8 @@ jobs:
           node-version: '22'
           cache: npm
       - run: npm ci
+      - name: Video preview encoder
+        run: command -v ffmpeg && command -v ffprobe || (sudo apt-get update && sudo apt-get install -y ffmpeg)
       - run: npx tsc --noEmit
       - run: npm run test:catalogue
       - run: npm run build
