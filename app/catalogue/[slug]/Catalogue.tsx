@@ -554,8 +554,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
           {trendingView && !!item.emojis?.length && <span className="cat-emojis" aria-hidden="true">{item.emojis.join('')}</span>}
           <button className="cat-picture-button" onClick={event => openItem(item, event.currentTarget)} aria-label={`View ${item.type}: ${item.description.slice(0, 100)}${compact ? `, ${item.purchased || item.received ? 'owned' : item.free ? 'free' : `${item.stars.toLocaleString()} Stars`}` : ''}`}><Preview item={item} blur={renderBlur} call={call} retryable={false} /></button>
           <div className="cat-card-body">
-            {item.title && <p className="cat-card-title">{item.title}</p>}
-            {refined && !item.title && <p className="cat-card-description" title={item.description}>{compact ? shortCatalogueTitle(item.description) : item.description}</p>}
+            {refined && <p className="cat-card-description" title={item.description}>{compact ? shortCatalogueTitle(item.description) : item.description}</p>}
             <div className="cat-card-bottom">
               {tonPricing && !item.purchased && !item.received && !item.free ? <CardPrices stars={item.stars} ton={tonPricing} /> : refined && <span className={`cat-card-price${item.purchased || item.received ? ' cat-card-owned' : ''}`}>
                 {item.purchased || item.received ? <><Check size={14} aria-hidden="true"/>Owned</> : item.free ? 'Free' : <><Star className="cat-stars" size={15} aria-hidden="true"/><span>{item.stars.toLocaleString()}<span className="cat-sr-only"> Stars</span></span></>}
