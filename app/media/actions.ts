@@ -21,7 +21,8 @@ import { preparePhotoForTelegram } from "@/lib/photo-prepare";
 import { repriceConfirmationPhrase } from "@/lib/reprice-confirmation";
 import { mediaStoragePath } from "@/lib/media-storage-path";
 import { compressPhoto, compressVideo } from "@/lib/media-compress";
-import { makeBlurredPreview, storedPreviewPath } from "@/lib/stored-preview";
+import { makeBlurredPreview, makeStoredVideoPreviewClip, storedPreviewClipPath, storedPreviewPath } from "@/lib/stored-preview";
+import { DEFAULT_BLUR, validBlur } from "@/lib/catalogue-core";
 
 const TAG_SET = new Set<string>(MEDIA_TAGS);
 
@@ -77,7 +78,17 @@ async function uploadOriginalMedia(path: string, bytes: Buffer, contentType: str
 // rather than awaited-and-thrown. Reuses uploadContentAddressedMedia, the
 // same single Storage-write helper as the main file and the original, so
 // there is still exactly one `.upload()` call site.
+async function cloneBlurStrength(cloneId: string): Promise<number> {
+  const { data } = await supabaseAdmin
+    .from("creator_catalogue_settings")
+    .select("blur_strength")
+    .eq("clone_id", cloneId)
+    .maybeSingle();
+  return validBlur(data?.blur_strength) ? (data!.blur_strength as number) : DEFAULT_BLUR;
+}
+
 async function storePreviewBestEffort(
+  cloneId: string,
   path: string,
   bytes: Buffer,
   type: "photo" | "video",
@@ -87,6 +98,18 @@ async function storePreviewBestEffort(
     await uploadContentAddressedMedia(storedPreviewPath(path), preview, "image/jpeg");
   } catch (error) {
     console.warn("Stored preview unavailable; upload continues without it", error);
+  }
+  // Moving clip, video only. Same fire-and-log discipline: never blocks the
+  // upload, and stays a fully separate try/catch from the still preview above
+  // so one failing does not take out the other.
+  if (type === "video") {
+    try {
+      const blur = await cloneBlurStrength(cloneId);
+      const clip = await makeStoredVideoPreviewClip(bytes, blur);
+      await uploadContentAddressedMedia(storedPreviewClipPath(path), clip, "video/mp4");
+    } catch (error) {
+      console.warn("Stored video preview clip unavailable; upload continues without it", error);
+    }
   }
 }
 
@@ -249,7 +272,7 @@ export async function uploadPhoto(cloneId: string, fd: FormData): Promise<MediaU
 
   const storageResult = await uploadContentAddressedMedia(path, jpeg, "image/jpeg");
   if (compressed.changed) await uploadOriginalMedia(path, raw, file.type || "application/octet-stream");
-  await storePreviewBestEffort(path, jpeg, "photo");
+  await storePreviewBestEffort(cloneId, path, jpeg, "photo");
   if (storageResult === "existing") {
     const { data: existingPhoto, error: existingError } = await supabaseAdmin
       .from("photos")
@@ -326,7 +349,7 @@ export async function uploadVideo(cloneId: string, fd: FormData): Promise<MediaU
   const contentType = compressedVideo.changed ? "video/mp4" : (file.type || "video/mp4");
   const storageResult = await uploadContentAddressedMedia(path, bytes, contentType);
   if (compressedVideo.changed) await uploadOriginalMedia(path, raw, file.type || "application/octet-stream");
-  await storePreviewBestEffort(path, bytes, "video");
+  await storePreviewBestEffort(cloneId, path, bytes, "video");
   if (storageResult === "existing") {
     const { data: existingVideo, error: existingError } = await supabaseAdmin
       .from("videos")
