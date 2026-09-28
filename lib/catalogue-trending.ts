@@ -8,7 +8,7 @@ export const TRENDING_WINDOW_DAYS = 30;
 export const TRENDING_EXCLUDED_TELEGRAM_IDS = new Set(['6814483810', '6322723817']);
 
 export type TrendingSale = { id: string; media_type: string | null; media_id: string | null; telegram_id?: number | string | null };
-type Bundle = { id: string; photo_ids?: string[] | null };
+type Bundle = { id: string; photo_ids?: string[] | null; video_ids?: string[] | null; media_kind?: string | null };
 
 // Tag vocabulary as stored on photos/videos.tags (checked live 2026-09-28): solo,
 // lingerie, mirror_selfie, bed, ass, tits, topless, outdoor, feet, bikini, pussy,
@@ -41,7 +41,11 @@ export function trendingRanks(items: CatalogueItem[], sales: TrendingSale[], ref
     if (!sale.media_id || refunded.has(`refund:${sale.id}`)) continue;
     if (sale.telegram_id != null && TRENDING_EXCLUDED_TELEGRAM_IDS.has(String(sale.telegram_id))) continue;
     if (sale.media_type === 'photo' || sale.media_type === 'video') bump(`${sale.media_type}:${sale.media_id}`);
-    else if (sale.media_type === 'bundle') for (const id of bundleById.get(sale.media_id)?.photo_ids ?? []) bump(`photo:${id}`);
+    else if (sale.media_type === 'bundle') {
+      const bundle = bundleById.get(sale.media_id);
+      const kind = bundle?.media_kind === 'video' ? 'video' : 'photo';
+      for (const id of (kind === 'video' ? bundle?.video_ids : bundle?.photo_ids) ?? []) bump(`${kind}:${id}`);
+    }
   }
   const key = (item: CatalogueItem) => `${item.type}:${item.id}`;
   const byPriceThenNewest = (a: CatalogueItem, b: CatalogueItem) =>

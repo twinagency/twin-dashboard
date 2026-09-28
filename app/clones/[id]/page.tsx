@@ -14,7 +14,7 @@ export default async function EditClonePage({
 }) {
   const { id } = await params;
 
-  const [cloneRes, photosRes, videosRes, bundlesRes, cloneOrderRes] = await Promise.all([
+  const [cloneRes, photosRes, videosRes, bundlesRes, catalogueBundlesRes, cloneOrderRes] = await Promise.all([
     supabaseAdmin.from("clones").select("*").eq("id", id).maybeSingle(),
     supabaseAdmin.from("photos").select("*").eq("clone_id", id).order("created_at", { ascending: false }),
     supabaseAdmin.from("videos").select("*").eq("clone_id", id).order("created_at", { ascending: false }),
@@ -23,6 +23,11 @@ export default async function EditClonePage({
       .select("*, photo_bundle_items(*)")
       .eq("clone_id", id)
       .order("created_at", { ascending: true }),
+    supabaseAdmin
+      .from("catalogue_bundles")
+      .select("id,title,caption,media_kind,photo_ids,video_ids,price_stars,regular_stars,enabled")
+      .eq("clone_id", id)
+      .order("sort_order", { ascending: true }),
     supabaseAdmin.from("clones").select("id").order("created_at", { ascending: true }),
   ]);
 
@@ -56,6 +61,7 @@ export default async function EditClonePage({
         photos={photosRes.data ?? []}
         videos={videosRes.data ?? []}
         bundles={bundlesRes.data ?? []}
+        catalogueBundles={catalogueBundlesRes.data ?? []}
         appearanceImageUrl={displayImage?.signedUrl}
         appearanceColor={chartColorForClone(rawClone.intake, cloneIndex)}
       />

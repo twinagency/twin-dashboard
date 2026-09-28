@@ -36,6 +36,13 @@ import {
   type RepricePreview,
   type RepriceTarget,
 } from "./actions";
+import {
+  createCatalogueBundle,
+  setCatalogueBundleEnabled,
+  deleteCatalogueBundle,
+  CATALOGUE_BUNDLE_MIN_ITEMS,
+  CATALOGUE_BUNDLE_MAX_ITEMS,
+} from "./catalogue-bundle-actions";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type Photo = {
@@ -87,6 +94,20 @@ type Bundle = {
   is_onboarding: boolean;
   created_at: string;
   photo_bundle_items: BundleItem[];
+};
+
+// Mini App catalogue bundle (table catalogue_bundles), distinct from the legacy
+// chat Bundle type above.
+type CatalogueBundleRow = {
+  id: string;
+  title: string;
+  caption: string | null;
+  media_kind: "photo" | "video";
+  photo_ids: string[];
+  video_ids: string[];
+  price_stars: number;
+  regular_stars: number;
+  enabled: boolean;
 };
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
@@ -1026,6 +1047,178 @@ function CreateBundleForm({ cloneId }: { cloneId: string }) {
   );
 }
 
+// ── Mini App catalogue bundle row (enable/disable, delete) ───────────────────
+function CatalogueBundleRowCard({ bundle, cloneId }: { bundle: CatalogueBundleRow; cloneId: string }) {
+  const [pending, startTransition] = useTransition();
+  const router = useRouter();
+  const count = bundle.media_kind === "video" ? bundle.video_ids.length : bundle.photo_ids.length;
+
+  return (
+    <div className="flex items-center justify-between gap-3 rounded-lg border border-line bg-panel p-4">
+      <div className="min-w-0">
+        <div className="truncate text-sm font-semibold text-ink">{bundle.title}</div>
+        <div className="text-xs text-muted">
+          {bundle.media_kind === "video" ? "Video" : "Photo"} bundle, {count} items, {bundle.price_stars} Stars (was {bundle.regular_stars})
+        </div>
+        {bundle.caption && <div className="mt-1 truncate text-xs text-muted">{bundle.caption}</div>}
+      </div>
+      <div className="flex shrink-0 items-center gap-2">
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() =>
+            startTransition(async () => {
+              await setCatalogueBundleEnabled(cloneId, bundle.id, !bundle.enabled);
+              router.refresh();
+            })
+          }
+          className={
+            "rounded border px-3 py-1.5 text-xs font-medium disabled:opacity-50 " +
+            (bundle.enabled ? "border-good text-good" : "border-line text-muted")
+          }
+        >
+          {bundle.enabled ? "Enabled" : "Disabled"}
+        </button>
+        <button
+          type="button"
+          disabled={pending}
+          onClick={() => {
+            if (!window.confirm(`Delete "${bundle.title}"? The photos or videos in it are not deleted.`)) return;
+            startTransition(async () => {
+              await deleteCatalogueBundle(cloneId, bundle.id);
+              router.refresh();
+            });
+          }}
+          className="rounded border border-line px-3 py-1.5 text-xs text-muted hover:bg-muted/10 disabled:opacity-50"
+        >
+          Delete
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── Create Mini App catalogue bundle form ─────────────────────────────────────
+// Picks 2-10 existing paid photos or videos (one kind only, no mixing) and
+// creates a catalogue_bundles row. Price is computed here to match the DB
+// trigger's own formula exactly (least(2200, sum - cheapest)); the trigger
+// independently recomputes it and rejects the insert if it does not match.
+function CreateCatalogueBundleForm({ cloneId, photos, videos }: { cloneId: string; photos: Photo[]; videos: Video[] }) {
+  const [open, setOpen] = useState(false);
+  const [kind, setKind] = useState<"photo" | "video">("photo");
+  const [selected, setSelected] = useState<Set<string>>(() => new Set());
+  const [filter, setFilter] = useState("");
+  const [error, setError] = useState<string | null>(null);
+  const [pending, startTransition] = useTransition();
+  const router = useRouter();
+
+  const sellable = (kind === "photo" ? photos : videos).filter((item) => !item.is_free && item.star_value > 0);
+  const term = filter.trim().toLowerCase();
+  const filtered = term ? sellable.filter((item) => (item.caption ?? "").toLowerCase().includes(term)) : sellable;
+
+  function toggle(id: string) {
+    setSelected((current) => {
+      const next = new Set(current);
+      if (next.has(id)) next.delete(id);
+      else if (next.size < CATALOGUE_BUNDLE_MAX_ITEMS) next.add(id);
+      return next;
+    });
+  }
+
+  function changeKind(next: "photo" | "video") {
+    setKind(next);
+    setSelected(new Set());
+  }
+
+  function submit(fd: FormData) {
+    setError(null);
+    for (const id of selected) fd.append("itemIds", id);
+    startTransition(async () => {
+      try {
+        await createCatalogueBundle(cloneId, fd);
+        setOpen(false);
+        setSelected(new Set());
+        setFilter("");
+        router.refresh();
+      } catch (e) {
+        setError(e instanceof Error ? e.message : "Could not create bundle.");
+      }
+    });
+  }
+
+  if (!open) {
+    return (
+      <button
+        onClick={() => setOpen(true)}
+        className="w-fit min-w-[210px] rounded-xl border border-[#06172f] bg-[#06172f] px-5 py-3 text-sm font-bold text-white shadow-[0_10px_28px_rgba(6,23,47,0.2)] transition hover:border-[#4a8ec4] hover:bg-[#082b55] lg:py-2.5"
+      >
+        + New Mini App bundle
+      </button>
+    );
+  }
+
+  return (
+    <form action={submit} className="grid gap-3 rounded-lg border border-line bg-panel p-5">
+      <h3 className="text-sm font-semibold text-muted">New Mini App bundle</h3>
+      <input name="title" required placeholder="Bundle title"
+        className="w-full rounded border border-line bg-bg px-3 py-2 text-sm outline-none focus:border-accent" />
+      <input name="caption" placeholder="Caption (optional)"
+        className="w-full rounded border border-line bg-bg px-3 py-2 text-sm outline-none focus:border-accent" />
+      <div className="flex gap-4 text-sm">
+        <label className="flex items-center gap-1.5">
+          <input type="radio" name="kind" value="photo" checked={kind === "photo"} onChange={() => changeKind("photo")} /> Photo bundle
+        </label>
+        <label className="flex items-center gap-1.5">
+          <input type="radio" name="kind" value="video" checked={kind === "video"} onChange={() => changeKind("video")} /> Video bundle
+        </label>
+      </div>
+      <label className="flex items-center gap-2 text-sm">
+        <input type="checkbox" name="enabled" defaultChecked className="h-4 w-4 accent-good" />
+        Enabled, visible in the catalogue right away
+      </label>
+      <input value={filter} onChange={(e) => setFilter(e.target.value)} placeholder="Search captions"
+        className="w-full rounded border border-line bg-bg px-3 py-2 text-sm outline-none focus:border-accent" />
+      <div className="grid max-h-64 gap-1 overflow-y-auto rounded border border-line p-2">
+        {filtered.length === 0 && (
+          <p className="p-2 text-xs text-muted">No paid {kind === "photo" ? "photos" : "videos"} available. Give one a Star price first.</p>
+        )}
+        {filtered.map((item) => (
+          <label key={item.id} className="flex items-center gap-2 rounded px-2 py-1.5 text-xs hover:bg-muted/10">
+            <input
+              type="checkbox"
+              checked={selected.has(item.id)}
+              onChange={() => toggle(item.id)}
+              disabled={!selected.has(item.id) && selected.size >= CATALOGUE_BUNDLE_MAX_ITEMS}
+            />
+            <span className="flex-1 truncate">{item.caption || item.id}</span>
+            <span className="text-muted">{item.star_value}⭐</span>
+          </label>
+        ))}
+      </div>
+      <p className="text-xs text-muted">
+        {selected.size} of {CATALOGUE_BUNDLE_MIN_ITEMS} to {CATALOGUE_BUNDLE_MAX_ITEMS} selected. Price is set automatically from the selected items.
+      </p>
+      {error && <p className="text-xs text-bad">{error}</p>}
+      <div className="flex gap-2">
+        <button
+          type="submit"
+          disabled={pending || selected.size < CATALOGUE_BUNDLE_MIN_ITEMS || selected.size > CATALOGUE_BUNDLE_MAX_ITEMS}
+          className="flex-1 rounded bg-accent py-2 text-sm font-medium text-accent-ink hover:bg-accent-deep disabled:opacity-50"
+        >
+          Create
+        </button>
+        <button
+          type="button"
+          onClick={() => { setOpen(false); setSelected(new Set()); setError(null); }}
+          className="flex-1 rounded border border-line py-2 text-sm hover:bg-muted/10"
+        >
+          Cancel
+        </button>
+      </div>
+    </form>
+  );
+}
+
 // ── Bulk price / delete controls ─────────────────────────────────────────────
 // This stays closed until an operator asks to edit, so the normal PPV library
 // remains a browse-and-upload screen instead of a wall of checkboxes. When open,
@@ -1184,12 +1377,14 @@ export default function MediaManager({
   photos,
   videos,
   bundles,
+  catalogueBundles,
   categoryPricing,
 }: {
   cloneId: string;
   photos: Photo[];
   videos: Video[];
   bundles: Bundle[];
+  catalogueBundles: CatalogueBundleRow[];
   categoryPricing: Record<string, number> | null;
 }) {
   const [tab, setTab] = useState<Tab>("photos");
@@ -1313,6 +1508,23 @@ export default function MediaManager({
             No bundles yet. Create one above.
           </div>
         )}
+
+        <div className="mt-4 border-t border-line pt-4">
+          <h3 className="mb-3 text-sm font-semibold text-ink">Mini App catalogue bundles</h3>
+          <p className="mb-3 text-xs text-muted">
+            These are the bundles fans see and buy in the Mini App catalogue. Separate from the chat bundles above.
+          </p>
+          <div className="grid gap-3">
+            <ManagerOnly><CreateCatalogueBundleForm cloneId={cloneId} photos={photos} videos={videos} /></ManagerOnly>
+            {catalogueBundles.length > 0 ? (
+              catalogueBundles.map((b) => <CatalogueBundleRowCard key={b.id} bundle={b} cloneId={cloneId} />)
+            ) : (
+              <div className="rounded-lg border border-line bg-panel p-10 text-center text-sm text-muted">
+                No Mini App bundles yet. Create one above.
+              </div>
+            )}
+          </div>
+        </div>
       </div>
 
       <div className={tab === "pricing" ? "grid gap-4" : "hidden"}>

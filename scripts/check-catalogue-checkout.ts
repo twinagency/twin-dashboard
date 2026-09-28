@@ -11,15 +11,17 @@ let rows:Record<string,any[]>, invoiceCalls:any[], contentCalls:string[], owner:
 function reset(){
   rows={clones:[clone],users:[fan],creator_catalogue_settings:[{clone_id:clone.id,enabled:true,checkout_mode:'invoice'}],
     photos:Array.from({length:5},(_,i)=>({id:id(10+i),clone_id:clone.id,caption:`Photo ${i+1}`,star_value:350,is_free:false,storage_path:`private/${i}.jpg`})),
-    videos:[{id:id(20),clone_id:clone.id,caption:'Video',star_value:500,is_free:false,storage_path:'private/video.mp4'}],
-    catalogue_bundles:[{id:id(30),clone_id:clone.id,title:'Collection',caption:'Five portraits',enabled:true,photo_ids:Array.from({length:5},(_,i)=>id(10+i)),price_stars:1400,regular_stars:1750}],
+    videos:[{id:id(20),clone_id:clone.id,caption:'Video',star_value:500,is_free:false,storage_path:'private/video.mp4'},
+      ...Array.from({length:3},(_,i)=>({id:id(40+i),clone_id:clone.id,caption:`Clip ${i+1}`,star_value:400,is_free:false,storage_path:`private/clip-${i}.mp4`}))],
+    catalogue_bundles:[{id:id(30),clone_id:clone.id,title:'Collection',caption:'Five portraits',enabled:true,photo_ids:Array.from({length:5},(_,i)=>id(10+i)),video_ids:[],media_kind:'photo',price_stars:1400,regular_stars:1750},
+      {id:id(35),clone_id:clone.id,title:'Video collection',caption:'Three clips',enabled:true,photo_ids:[],video_ids:Array.from({length:3},(_,i)=>id(40+i)),media_kind:'video',price_stars:800,regular_stars:1200}],
     star_transactions:[],user_received_media:[],catalogue_checkout_orders:[],catalogue_checkout_attempts:[]};
   invoiceCalls=[];contentCalls=[];owner=false;
 }
 const db:any={rpc:async(name:string,args:any)=>{
   assert.equal(name,'catalogue_owned_checkout_assets');
   const assets=rows.catalogue_checkout_orders.filter(o=>o.user_id===args.p_user&&o.status==='paid'&&rows.star_transactions.some(t=>t.id===o.charge_id&&t.invoice_payload===`catalogue_order_${o.id}`)&&!rows.star_transactions.some(t=>t.id===`refund:${o.charge_id}`))
-    .flatMap(o=>args.p_type==='photo'&&o.media_type==='bundle'?o.photo_ids:o.media_type===args.p_type?[o.media_id]:[]);
+    .flatMap(o=>args.p_type==='bundle'?[]:o.media_type==='bundle'?(args.p_type==='photo'?o.photo_ids:args.p_type==='video'?o.video_ids??[]:[]):o.media_type===args.p_type?[o.media_id]:[]);
   return {data:assets,error:null};
 },from(table:string){
   const filters:((r:any)=>boolean)[]=[];let single=false,take=Infinity,selection='*',change:any,insert=false;
@@ -79,6 +81,15 @@ async function main(){
   pay(bundle.orderId);rows.catalogue_bundles[0].photo_ids=[id(50),id(51),id(52),id(53),id(54)];
   assert.equal(await catalogueContentPath(context,'photo',id(14)),'private/4.jpg','bundle entitlement uses paid snapshot');
   await assert.rejects(()=>catalogueContentPath(context,'photo',id(50)),/not found/);
+  // Video bundle: checkout snapshots video_ids, never photo_ids, and content
+  // ownership for the paid items resolves against videos, not photos.
+  reset();const videoBundle=await beginCatalogueCheckout(context,{type:'bundle',id:id(35),requestKey:id(115)},invoice);
+  assert.equal(invoiceCalls[0].prices[0].amount,800,'video bundle price is least(2200, sum - cheapest) over videos.star_value');
+  assert.deepEqual(rows.catalogue_checkout_orders[0].photo_ids,[],'a video bundle order never carries photo ids');
+  assert.deepEqual(rows.catalogue_checkout_orders[0].video_ids,[id(40),id(41),id(42)],'video bundle order snapshots video_ids');
+  pay(videoBundle.orderId);
+  assert.equal(await catalogueContentPath(context,'video',id(40)),'private/clip-0.mp4','paid video bundle entitlement unlocks its videos');
+  await assert.rejects(()=>catalogueContentPath(context,'photo',id(10)),/Purchase/,'a video bundle purchase grants no photo access');
   reset();rows.photos[0].clone_id=id(999);assert.equal((await api('checkout',request)).status,404,'cross creator item denied');
   reset();rows.user_received_media.push({clone_id:clone.id,user_id:fan.id,media_type:'photo',media_id:id(10)});
   await assert.rejects(()=>beginCatalogueCheckout(context,request,invoice),/already own/,'received item cannot be charged twice');

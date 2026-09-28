@@ -92,7 +92,7 @@ function randomMemo(): string {
   return `cc_${body}`;
 }
 
-const orderColumns = 'id,clone_id,user_id,telegram_id,business_connection_id,media_type,media_id,amount_stars,amount_nanoton,photo_ids,memo,status,expires_at';
+const orderColumns = 'id,clone_id,user_id,telegram_id,business_connection_id,media_type,media_id,amount_stars,amount_nanoton,photo_ids,video_ids,memo,status,expires_at';
 function checked<T>(result: { data: T; error: unknown }): T {
   if (result.error) throw new CheckoutError('Could not load checkout. Please try again.', 503);
   return result.data;
@@ -115,7 +115,7 @@ export async function beginTonCheckout(context: Context, body: Record<string, un
     const inserted = await db.from('catalogue_ton_orders').insert({
       clone_id: clone.id, user_id: fan.id, telegram_id: fan.telegram_id,
       business_connection_id: fan.business_connection_id, media_type: product.type, media_id: product.id,
-      photo_ids: product.photoIds, amount_stars: product.stars, amount_nanoton: amountNanoton, memo,
+      photo_ids: product.photoIds, video_ids: product.videoIds, amount_stars: product.stars, amount_nanoton: amountNanoton, memo,
       expires_at: new Date(Date.now() + 30 * 60_000).toISOString(),
     }).select(orderColumns).single();
     if (!inserted.error) {

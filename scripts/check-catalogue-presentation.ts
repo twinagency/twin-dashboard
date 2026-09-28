@@ -7,7 +7,7 @@ const photo = { id:'photo-1',type:'photo',description:'  White outfit  and a lon
 const free:CatalogueItem = { ...photo,id:'free-1',description:'Free introduction',free:true,stars:0 };
 const video:CatalogueItem = { ...photo,id:'video-1',type:'video',description:'A longer video description',received:true };
 const items:CatalogueItem[] = [photo,free,video];
-const bundle = (id:string):CatalogueBundle => ({id,title:'Collection',photoIds:['a','b','c','d','e'],stars:1400,regularStars:1750,owned:false,partial:false});
+const bundle = (id:string):CatalogueBundle => ({id,title:'Collection',kind:'photo',photoIds:['a','b','c','d','e'],videoIds:[],stars:1400,regularStars:1750,owned:false,partial:false});
 const bundles = [bundle('featured'),bundle('other')];
 
 assert.equal(cataloguePresentation('compact'),'compact');

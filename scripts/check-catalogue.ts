@@ -123,6 +123,27 @@ async function main(){
  assert.equal((await call('request',{type:'bundle',id:requestId,requestKey:itemId,stars:1})).status,200);assert.equal(rows.catalogue_requests[0].media_type,'bundle');
  rows.catalogue_requests[0].status='delivered';rows.catalogue_requests[0].created_at='2020-01-01T00:00:00Z';const reusedBundle=await (await call('request',{type:'bundle',id:requestId,requestKey:cloneId})).json();assert.equal(reusedBundle.reused,true,'Old bundle cards are explicitly identified');assert.equal(rows.catalogue_requests.length,1,'a delivered bundle never generates a second payable card');
  rows.user_received_media.push({clone_id:cloneId,user_id:fanId,media_type:'photo',media_id:ids[0]});assert.equal((await call('request',{type:'bundle',id:requestId,requestKey:cloneId})).status,409);
+ // Video bundles: same rules as photo bundles, keyed off media_kind, priced and
+ // validated against videos.star_value instead of photos.
+ reset();rows.clones[0].bundles_enabled=true;rows.clones[0].videos_enabled=true;
+ const videoIds=Array.from({length:3},(_,i)=>`00000000-0000-0000-0000-${String(i+60).padStart(12,'0')}`);
+ rows.videos=videoIds.map(id=>({...photo,id,star_value:400}));
+ const videoBundle={id:requestId,clone_id:cloneId,enabled:true,title:'Three video bundle',media_kind:'video',photo_ids:[],video_ids:videoIds,price_stars:800,regular_stars:1200};
+ rows.catalogue_bundles.push(videoBundle);
+ const videoBundleData=await (await call('catalogue')).json();
+ assert.equal(videoBundleData.bundles.length,1,'video bundle appears in the catalogue payload');
+ assert.equal(videoBundleData.bundles[0].kind,'video');
+ assert.deepEqual(videoBundleData.bundles[0].videoIds,videoIds);
+ assert.deepEqual(videoBundleData.bundles[0].photoIds,[],'a video bundle never carries photo ids');
+ assert.equal(videoBundleData.bundles[0].stars,800,'least(2200, sum - cheapest) mirrors the DB trigger formula');
+ assert.equal(projectBundle({...videoBundle,price_stars:1},videoBundleData.items),null,'a mismatched price is rejected same as a photo bundle');
+ assert.equal((await call('request',{type:'bundle',id:requestId,requestKey:itemId})).status,200,'video bundle chat-mode send succeeds');
+ assert.equal(rows.catalogue_requests[0].media_type,'bundle');
+ rows.user_received_media.push({clone_id:cloneId,user_id:fanId,media_type:'video',media_id:videoIds[0]});
+ assert.equal((await call('request',{type:'bundle',id:requestId,requestKey:cloneId})).status,409,'owning a video already in the bundle blocks a duplicate purchase');
+ rows.clones[0].videos_enabled=false;
+ const videosDisabled=await (await call('catalogue')).json();
+ assert.equal(videosDisabled.bundles.length,0,'a video bundle is hidden once videos are disabled for the clone');
  // Alanna's missing captions are hidden, not deleted, including cached actions.
  for(const caption of [null,undefined,'','  \n\t',42]) assert.equal(catalogueItemVisible({caption},'alanna-pow'),false);
  assert.equal(catalogueItemVisible({caption:' Saved caption '},'alanna-pow'),true);

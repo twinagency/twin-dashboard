@@ -174,7 +174,7 @@ return async function POST(request: NextRequest, context: { params: Promise<{ sl
     }
     if (action === "catalogue") {
       if (fan && !admin) await logCatalogueEvent(db, { cloneId: clone.id, telegramId: fan.telegram_id, event: 'open', startParam });
-      const bundleRows = checked(await db.from('catalogue_bundles').select('id,title,caption,photo_ids,price_stars,regular_stars').eq('clone_id',clone.id).eq('enabled',true).order('sort_order')) ?? [];
+      const bundleRows = checked(await db.from('catalogue_bundles').select('id,title,caption,photo_ids,video_ids,media_kind,price_stars,regular_stars').eq('clone_id',clone.id).eq('enabled',true).order('sort_order')) ?? [];
       const program = checked(await db.from('catalogue_loyalty_programs').select('points_cost,starts_at,reward_photo_ids,reward_video_ids,welcome_bonus_points').eq('clone_id',clone.id).eq('enabled',true).maybeSingle());
       const columns = "id,caption,auto_desc,teaser_caption,tags,star_value,is_free,created_at";
       const [photos, videos, received, purchases, nativePhotos, nativeVideos] = await Promise.all([
@@ -190,7 +190,7 @@ return async function POST(request: NextRequest, context: { params: Promise<{ sl
       for(const id of nativePhotos)bought.add(`photo:${id}`);
       for(const id of nativeVideos)bought.add(`video:${id}`);
       const legacyBundleIds = new Set((checked(purchases) ?? []).filter((r:any)=>!String(r.invoice_payload??'').startsWith('catalogue_order_')).map((r:any)=>r.media_id));
-      for (const b of bundleRows) if (bought.has(`bundle:${b.id}`) && legacyBundleIds.has(b.id)) for (const id of b.photo_ids) bought.add(`photo:${id}`);
+      for (const b of bundleRows) if (bought.has(`bundle:${b.id}`) && legacyBundleIds.has(b.id)) for (const id of (b.media_kind==='video'?b.video_ids:b.photo_ids)) bought.add(`${b.media_kind==='video'?'video':'photo'}:${id}`);
       const tagsByKey = new Map<string, unknown>();
       for (const r of (checked(photos) ?? []) as any[]) tagsByKey.set(`photo:${r.id}`, r.tags);
       for (const r of (checked(videos) ?? []) as any[]) tagsByKey.set(`video:${r.id}`, r.tags);
@@ -286,13 +286,16 @@ return async function POST(request: NextRequest, context: { params: Promise<{ sl
         return json(claim.data);
       }
       if (body.type === 'bundle') {
-        if(!clone.bundles_enabled || !clone.photos_enabled) return json({error:'Bundle unavailable.'},404);
-        const b=checked(await db.from('catalogue_bundles').select('id,title,caption,photo_ids,price_stars,regular_stars').eq('clone_id',clone.id).eq('id',body.id).eq('enabled',true).maybeSingle());
+        if(!clone.bundles_enabled) return json({error:'Bundle unavailable.'},404);
+        const b=checked(await db.from('catalogue_bundles').select('id,title,caption,photo_ids,video_ids,media_kind,price_stars,regular_stars').eq('clone_id',clone.id).eq('id',body.id).eq('enabled',true).maybeSingle());
         if(!b) return json({error:'Bundle unavailable.'},404);
-        const p=checked(await db.from('photos').select('id,caption,star_value,is_free').eq('clone_id',clone.id).in('id',b.photo_ids));
-        if(!projectBundle(b,(p??[]).filter((r:any)=>catalogueItemVisible(r,slug)).map((r:any)=>projectItem(r,'photo')))) return json({error:'Bundle price or contents changed. Please refresh.'},409);
-        const owned=checked(await db.from('user_received_media').select('media_id').eq('clone_id',clone.id).eq('user_id',fan.id).eq('media_type','photo').in('media_id',b.photo_ids));
-        const paid=checked(await db.from('star_transactions').select('media_id').eq('clone_id',clone.id).eq('telegram_id',fan.telegram_id).gt('amount_stars',0).in('media_id',[...b.photo_ids,b.id]));
+        const bundleKind:'photo'|'video' = b.media_kind==='video' ? 'video' : 'photo';
+        if(bundleKind==='video' ? !clone.videos_enabled : !clone.photos_enabled) return json({error:'Bundle unavailable.'},404);
+        const bundleIds:string[] = bundleKind==='video' ? b.video_ids : b.photo_ids;
+        const p=checked(await db.from(bundleKind==='video'?'videos':'photos').select('id,caption,star_value,is_free').eq('clone_id',clone.id).in('id',bundleIds));
+        if(!projectBundle(b,(p??[]).filter((r:any)=>catalogueItemVisible(r,slug)).map((r:any)=>projectItem(r,bundleKind)))) return json({error:'Bundle price or contents changed. Please refresh.'},409);
+        const owned=checked(await db.from('user_received_media').select('media_id').eq('clone_id',clone.id).eq('user_id',fan.id).eq('media_type',bundleKind).in('media_id',bundleIds));
+        const paid=checked(await db.from('star_transactions').select('media_id').eq('clone_id',clone.id).eq('telegram_id',fan.telegram_id).gt('amount_stars',0).in('media_id',[...bundleIds,b.id]));
         if(owned?.length||paid?.length) return json({error:'You already own content in this bundle. Choose individual items to avoid duplicates.'},409);
       } else {
       if (body.type === 'photo' ? !clone.photos_enabled : !clone.videos_enabled) return json({ error: "Item unavailable." }, 404);

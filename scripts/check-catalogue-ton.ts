@@ -17,7 +17,9 @@ function reset() {
     clones: [clone], users: [fan],
     creator_catalogue_settings: [{ clone_id: clone.id, enabled: true, checkout_mode: 'invoice', ton_wallet_address: 'EQtest-wallet-address', ton_nanoton_per_star: RATE }],
     photos: [{ id: id(10), clone_id: clone.id, caption: 'Photo', star_value: 350, is_free: false, storage_path: 'private/0.jpg' }],
-    videos: [], catalogue_bundles: [],
+    videos: [{ id: id(11), clone_id: clone.id, caption: 'Video 1', star_value: 400, is_free: false, storage_path: 'private/0.mp4' },
+      { id: id(12), clone_id: clone.id, caption: 'Video 2', star_value: 400, is_free: false, storage_path: 'private/1.mp4' }],
+    catalogue_bundles: [{ id: id(13), clone_id: clone.id, title: 'Two clips', enabled: true, media_kind: 'video', photo_ids: [], video_ids: [id(11), id(12)], price_stars: 400, regular_stars: 800 }],
     catalogue_checkout_orders: [], catalogue_checkout_deliveries: [], catalogue_ton_orders: [],
     star_transactions: [], user_received_media: [],
   };
@@ -62,7 +64,7 @@ function makeDb() {
         const assets = rows.catalogue_checkout_orders.filter(o => o.user_id === args.p_user && o.status === 'paid'
           && rows.star_transactions.some(t => t.id === o.charge_id && t.invoice_payload === `catalogue_order_${o.id}`)
           && !rows.star_transactions.some(t => t.id === `refund:${o.charge_id}`))
-          .flatMap(o => args.p_type === 'photo' && o.media_type === 'bundle' ? o.photo_ids : o.media_type === args.p_type ? [o.media_id] : []);
+          .flatMap(o => args.p_type === 'bundle' ? [] : o.media_type === 'bundle' ? (args.p_type === 'photo' ? o.photo_ids : args.p_type === 'video' ? (o.video_ids ?? []) : []) : o.media_type === args.p_type ? [o.media_id] : []);
         return { data: assets, error: null };
       }
       assert.equal(name, 'confirm_catalogue_ton_order', 'only these RPCs should be used by the TON path');
@@ -83,7 +85,7 @@ function makeDb() {
         rows.catalogue_checkout_orders.push({
           id: order.id, clone_id: order.clone_id, user_id: order.user_id, telegram_id: order.telegram_id,
           business_connection_id: order.business_connection_id, media_type: order.media_type, media_id: order.media_id,
-          amount_stars: order.amount_stars, photo_ids: order.photo_ids, status: 'paid',
+          amount_stars: order.amount_stars, photo_ids: order.photo_ids, video_ids: order.video_ids, status: 'paid',
           invoice_url: 'ton:' + order.memo, expires_at: new Date().toISOString(), charge_id: charge, paid_at: new Date().toISOString(),
         });
       }
@@ -228,6 +230,25 @@ async function main() {
   assert.equal(settled, 1, 'exactly the matching pending order is confirmed on reconcile');
   assert.equal(rows.catalogue_ton_orders.find(r => r.id === left.orderId).status, 'confirmed');
   assert.equal(rows.catalogue_ton_orders.find(r => r.id === other.orderId).status, 'pending', 'no memo match stays pending');
+
+  // 8b. Video bundle: TON checkout snapshots video_ids not photo_ids, and confirming
+  // on chain copies video_ids into catalogue_checkout_orders (mirrors confirm_catalogue_ton_order).
+  reset();
+  resetTonWalletCacheForTests();
+  const videoBundleBegin = await beginTonCheckout(context, { type: 'bundle', id: id(13) }, settings);
+  assert.equal(videoBundleBegin.amountNanoton, 800_000_000, '400 stars at 0.002 TON/star is 0.8 TON');
+  const videoBundleOrder = rows.catalogue_ton_orders.find(r => r.id === videoBundleBegin.orderId);
+  assert.deepEqual(videoBundleOrder.photo_ids, [], 'a video bundle TON order never carries photo ids');
+  assert.deepEqual(videoBundleOrder.video_ids, [id(11), id(12)], 'video bundle TON order snapshots video_ids');
+  // Reused mock order ids across reset() calls can inherit another scenario's
+  // recent per-order verify timestamp; wait out the throttle like section 5 does.
+  await new Promise(r => setTimeout(r, 3100));
+  const videoBundleConfirmed = await tonOrderStatus(context, videoBundleBegin.orderId, async () =>
+    [tx({ hash: 'hash-video-bundle', comment: videoBundleBegin.memo, valueNanoton: BigInt(videoBundleBegin.amountNanoton) })]);
+  assert.equal(videoBundleConfirmed.status, 'confirmed');
+  const videoBundleCheckoutOrder = rows.catalogue_checkout_orders.find(r => r.id === videoBundleBegin.orderId);
+  assert.deepEqual(videoBundleCheckoutOrder.video_ids, [id(11), id(12)], 'confirm_catalogue_ton_order copies video_ids into catalogue_checkout_orders');
+  assert.deepEqual(videoBundleCheckoutOrder.photo_ids, []);
 
   // 9. TON discount: the server computes the discounted price; junk percentages are ignored.
   assert.equal(starsToNanoton(350, 12_000_000, 50), 2_100_000_000, '50% off halves the TON price');
