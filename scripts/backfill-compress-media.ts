@@ -88,10 +88,18 @@ async function downloadBytes(storagePath: string): Promise<Buffer> {
   return Buffer.from(await data.arrayBuffer());
 }
 
+// The bucket only accepts real media MIME types; without an explicit type the
+// SDK sends text/plain and the upload is rejected.
+function originalContentType(storagePath: string): string {
+  const ext = storagePath.toLowerCase().split(".").pop() ?? "";
+  return ({ mp4: "video/mp4", m4v: "video/mp4", mov: "video/quicktime", webm: "video/webm",
+    jpg: "image/jpeg", jpeg: "image/jpeg", png: "image/png", webp: "image/webp", heic: "image/heic" } as Record<string, string>)[ext] ?? "application/octet-stream";
+}
+
 async function uploadOriginal(storagePath: string, bytes: Buffer): Promise<void> {
   const { error } = await supabaseAdmin.storage
     .from("media")
-    .upload(`originals/${storagePath}`, bytes, { upsert: false });
+    .upload(`originals/${storagePath}`, bytes, { upsert: false, contentType: originalContentType(storagePath) });
   if (error && !/already exists|duplicate/i.test(`${error.message}`)) {
     throw new Error(`upload original ${storagePath} failed: ${error.message}`);
   }
