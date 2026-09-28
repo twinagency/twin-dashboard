@@ -20,6 +20,7 @@ import {
 import { preparePhotoForTelegram } from "@/lib/photo-prepare";
 import { repriceConfirmationPhrase } from "@/lib/reprice-confirmation";
 import { mediaStoragePath } from "@/lib/media-storage-path";
+import { compressPhoto, compressVideo } from "@/lib/media-compress";
 
 const TAG_SET = new Set<string>(MEDIA_TAGS);
 
@@ -55,6 +56,16 @@ async function uploadContentAddressedMedia(
   if (!error) return "created";
   if (isExistingStorageObject(error)) return "existing";
   throw new Error(error.message);
+}
+
+// The un-compressed bytes exactly as the creator uploaded them, kept forever
+// under an `originals/` prefix beside the compressed file that lives at the
+// normal `storage_path`. Nothing is ever lost to a bad compression pass; the
+// bot only ever reads `storage_path`, so this is invisible to fans. Reuses
+// the same create-only helper above rather than a second `.upload()` call
+// site, so there is still exactly one place dashboard writes touch Storage.
+async function uploadOriginalMedia(path: string, bytes: Buffer, contentType: string): Promise<void> {
+  await uploadContentAddressedMedia(`originals/${path}`, bytes, contentType);
 }
 
 // Vision analysis improves matching and automatic pricing, but it must never
@@ -199,7 +210,15 @@ export async function uploadPhoto(cloneId: string, fd: FormData): Promise<MediaU
   // (PHOTO_INVALID_DIMENSIONS), so admitting one would put an item in the
   // library that can never be sold, however it is priced.
   const raw = Buffer.from(await file.arrayBuffer());
-  const jpeg = await preparePhotoForTelegram(raw);
+  // Standardize size/orientation/quality first (lib/media-compress.ts — max
+  // 2560 long side, quality 85, metadata stripped), then run the existing
+  // Telegram-sendability gate on the RESULT. Order matters: preparePhotoForTelegram
+  // is the real gate (assertPhotoSendable) and must be the last thing that
+  // touches the bytes before they're hashed and stored, so a compressed photo
+  // can never bypass it. In the common case the compressed photo is already
+  // well inside Telegram's limits, so this second pass is a no-op re-encode.
+  const compressed = await compressPhoto(raw);
+  const jpeg = await preparePhotoForTelegram(compressed.bytes);
   const { model, guide } = await uploadConfig(cloneId);
   assertUploadPricingReady(fd, guide);
 
@@ -207,6 +226,7 @@ export async function uploadPhoto(cloneId: string, fd: FormData): Promise<MediaU
   const path = storagePath(cloneId, "photos", baseName + ".jpg", jpeg);
 
   const storageResult = await uploadContentAddressedMedia(path, jpeg, "image/jpeg");
+  if (compressed.changed) await uploadOriginalMedia(path, raw, file.type || "application/octet-stream");
   if (storageResult === "existing") {
     const { data: existingPhoto, error: existingError } = await supabaseAdmin
       .from("photos")
@@ -267,14 +287,22 @@ export async function uploadVideo(cloneId: string, fd: FormData): Promise<MediaU
   const file = fd.get("file") as File | null;
   if (!file) throw new Error("no file");
 
-  const bytes = Buffer.from(await file.arrayBuffer());
-  if (bytes.byteLength > VIDEO_MAX_BYTES) throw new Error(`Video too large (${(bytes.byteLength / 1024 / 1024).toFixed(1)} MB). Telegram max is 50 MB.`);
+  const raw = Buffer.from(await file.arrayBuffer());
+  // Compress before the size gate, not after: this is the whole point (a
+  // 45MB 4K phone clip re-encodes to H.264/1280p/CRF23 and easily clears the
+  // cap it would otherwise blow through). See lib/media-compress.ts for the
+  // skip condition that leaves an already-compliant file untouched.
+  const compressedVideo = await compressVideo(raw);
+  const bytes = compressedVideo.bytes;
+  if (bytes.byteLength > VIDEO_MAX_BYTES) throw new Error(`Video too large (${(bytes.byteLength / 1024 / 1024).toFixed(1)} MB) even after compression. Telegram max is 50 MB.`);
   const { model, guide } = await uploadConfig(cloneId);
   assertUploadPricingReady(fd, guide);
 
   const path = storagePath(cloneId, "videos", file.name, bytes);
 
-  const storageResult = await uploadContentAddressedMedia(path, bytes, file.type || "video/mp4");
+  const contentType = compressedVideo.changed ? "video/mp4" : (file.type || "video/mp4");
+  const storageResult = await uploadContentAddressedMedia(path, bytes, contentType);
+  if (compressedVideo.changed) await uploadOriginalMedia(path, raw, file.type || "application/octet-stream");
   if (storageResult === "existing") {
     const { data: existingVideo, error: existingError } = await supabaseAdmin
       .from("videos")
