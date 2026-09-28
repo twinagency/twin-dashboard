@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createCatalogueHandler } from '../lib/catalogue-api';
-import { beginTonCheckout, reconcilePendingTonOrders, tonOrderStatus, tonEnabled, type TonIncomingTx } from '../lib/catalogue-ton';
+import { beginTonCheckout, reconcilePendingTonOrders, starsToNanoton, tonDiscountPercent, tonOrderStatus, tonEnabled, type TonIncomingTx } from '../lib/catalogue-ton';
 import { createHmac } from 'node:crypto';
 import { NextRequest } from 'next/server';
 
@@ -220,6 +220,17 @@ async function main() {
   assert.equal(settled, 1, 'exactly the matching pending order is confirmed on reconcile');
   assert.equal(rows.catalogue_ton_orders.find(r => r.id === left.orderId).status, 'confirmed');
   assert.equal(rows.catalogue_ton_orders.find(r => r.id === other.orderId).status, 'pending', 'no memo match stays pending');
+
+  // 9. TON discount: the server computes the discounted price; junk percentages are ignored.
+  assert.equal(starsToNanoton(350, 12_000_000, 50), 2_100_000_000, '50% off halves the TON price');
+  assert.equal(starsToNanoton(350, 12_000_000), 4_200_000_000, 'no discount by default');
+  assert.equal(tonDiscountPercent({ ton_discount_percent: 50 }), 50);
+  assert.equal(tonDiscountPercent({ ton_discount_percent: 150 }), 0, 'out of range discount is ignored');
+  assert.equal(tonDiscountPercent({ ton_discount_percent: null }), 0);
+  reset();
+  const discounted = await beginTonCheckout(context, { type: 'photo', id: id(10) }, { ...settings, ton_discount_percent: 50 });
+  const full = await beginTonCheckout(context, { type: 'photo', id: id(10) }, settings);
+  assert.equal(discounted.amountNanoton * 2, full.amountNanoton, 'checkout charges the discounted TON price');
 
   console.log('TON checkout checks passed: memo match confirms, wrong memo and underpayment do not, same tx twice is idempotent, expired orders never confirm and skip verification, TON-disabled clones reject checkout, and client-supplied confirmation is ignored end to end. No live toncenter calls.');
 }

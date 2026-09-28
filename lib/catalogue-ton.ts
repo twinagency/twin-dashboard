@@ -3,14 +3,19 @@ import { randomBytes } from 'node:crypto';
 import { Cell } from '@ton/core';
 import { CheckoutError, checkoutType, checkoutUuid, productForCheckout, type Context } from './catalogue-checkout';
 
-export type TonSettings = { ton_wallet_address?: string | null; ton_nanoton_per_star?: number | string | null };
+export type TonSettings = { ton_wallet_address?: string | null; ton_nanoton_per_star?: number | string | null; ton_discount_percent?: number | null };
+
+export function tonDiscountPercent(settings: TonSettings | null | undefined): number {
+  const pct = Number(settings?.ton_discount_percent ?? 0);
+  return Number.isInteger(pct) && pct > 0 && pct <= 90 ? pct : 0;
+}
 
 export function tonEnabled(settings: TonSettings | null | undefined): boolean {
   return !!settings?.ton_wallet_address && Number(settings?.ton_nanoton_per_star ?? 0) > 0;
 }
 
-export function starsToNanoton(stars: number, nanotonPerStar: number | string): number {
-  const amount = Math.round(Number(stars) * Number(nanotonPerStar));
+export function starsToNanoton(stars: number, nanotonPerStar: number | string, discountPercent = 0): number {
+  const amount = Math.round(Number(stars) * Number(nanotonPerStar) * (100 - discountPercent) / 100);
   if (!Number.isFinite(amount) || !Number.isSafeInteger(amount) || amount <= 0)
     throw new CheckoutError('Payment amount is invalid. Please try again.', 503);
   return amount;
@@ -38,7 +43,7 @@ export async function beginTonCheckout(context: Context, body: Record<string, un
     throw new CheckoutError('Invalid checkout request.', 400);
   if (!fan.business_connection_id) throw new CheckoutError('Open the creator’s chat once before your first purchase.');
   const product = await productForCheckout(context, body.type, body.id);
-  const amountNanoton = starsToNanoton(product.stars, settings.ton_nanoton_per_star!);
+  const amountNanoton = starsToNanoton(product.stars, settings.ton_nanoton_per_star!, tonDiscountPercent(settings));
   const toAddress = settings.ton_wallet_address!;
   for (let attempt = 0; attempt < 5; attempt++) {
     const memo = randomMemo();

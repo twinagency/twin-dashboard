@@ -345,3 +345,5 @@ html:has(.catalogue-compact),body:has(.catalogue-compact){background:#1b1c1e}
 @media(prefers-reduced-motion:reduce){.catalogue-compact *{scroll-behavior:auto!important;animation-duration:.01ms!important;transition-duration:.01ms!important}}
 
 .cat-ton-mark{display:inline-block;vertical-align:-4px;margin-right:8px}
+
+.cat-pay-row{display:flex;flex-direction:row-reverse;gap:10px;align-items:stretch;margin-top:14px}.cat-pay-row>*{flex:1;margin:0}.cat-pay-row>.cat-secondary{position:relative;border:2px solid #0098EA;color:#0b6fa8;font-weight:700;background:#f2faff}.cat-ton-tag{position:absolute;top:-10px;right:10px;background:#0098EA;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:50px;letter-spacing:.3px}

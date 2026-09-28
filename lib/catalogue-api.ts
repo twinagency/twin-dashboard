@@ -5,7 +5,7 @@ import { catalogueEligible, catalogueItemVisible, DEFAULT_BLUR, projectItem, saf
 import { projectBundle } from './catalogue-commerce';
 import { cataloguePresentation } from './catalogue-presentation';
 import { beginCatalogueCheckout, catalogueContentPath, catalogueOrderStatus, checkoutMode, CheckoutError, nativeOwnedItems, paidCatalogueItems, type InvoiceTransport } from './catalogue-checkout';
-import { beginTonCheckout, reconcilePendingTonOrders, tonEnabled, tonOrderStatus } from './catalogue-ton';
+import { beginTonCheckout, reconcilePendingTonOrders, tonDiscountPercent, tonEnabled, tonOrderStatus } from './catalogue-ton';
 export type CatalogueDependencies = {
   db(): SupabaseClient;
   invoice?: InvoiceTransport;
@@ -67,7 +67,7 @@ return async function POST(request: NextRequest, context: { params: Promise<{ sl
     const settingsColumns = "blur_strength,enabled,mini_app_url,display_name,show_verified_badge,featured_bundle_id,presentation_variant,checkout_mode";
     // ton_wallet_address/ton_nanoton_per_star land in a migration that may not be applied
     // yet; fall back to the plain select so the catalogue keeps working either way.
-    const settingsWithTon = await db.from("creator_catalogue_settings").select(`${settingsColumns},ton_wallet_address,ton_nanoton_per_star`).eq("clone_id", clone.id).maybeSingle();
+    const settingsWithTon = await db.from("creator_catalogue_settings").select(`${settingsColumns},ton_wallet_address,ton_nanoton_per_star,ton_discount_percent`).eq("clone_id", clone.id).maybeSingle();
     const settings: (Record<string, any> & { ton_wallet_address?: string | null; ton_nanoton_per_star?: number | null }) | null =
       settingsWithTon.error?.code === '42703'
         ? checked(await db.from("creator_catalogue_settings").select(settingsColumns).eq("clone_id", clone.id).maybeSingle())
@@ -183,6 +183,7 @@ return async function POST(request: NextRequest, context: { params: Promise<{ sl
         checkoutMode: checkoutMode(settings?.checkout_mode),
         tonEnabled: tonEnabled(settings),
         tonNanotonPerStar: tonEnabled(settings) ? Number((settings as any).ton_nanoton_per_star) : null,
+        tonDiscountPercent: tonEnabled(settings) ? tonDiscountPercent(settings as any) : 0,
         tonReturnUrl: typeof settings?.mini_app_url === 'string' && /^https:\/\/t\.me\//.test(settings.mini_app_url) ? settings.mini_app_url : null,
         ...(admin ? { tonWalletAddress: (settings as any)?.ton_wallet_address ?? '', tonPerStar: (settings as any)?.ton_nanoton_per_star ? (settings as any).ton_nanoton_per_star / 1_000_000_000 : null } : {}),
         featuredBundleId: bundles.find(b => b?.id === settings?.featured_bundle_id)?.id ?? null,
