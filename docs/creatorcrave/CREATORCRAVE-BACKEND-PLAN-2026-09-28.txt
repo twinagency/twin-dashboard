@@ -19,9 +19,22 @@ INFRA — RECOMMENDATION, NOT DONE
 - Build/test locally first. Only need the real box once we're wiring up the
   Telegram webhook and mini app URL, since those require public HTTPS.
 
+ACCOUNTS MANAGE UP TO 5 CREATOR PROFILES
+- One login (Google, Telegram, or wallet, pick one auth path for v1 — wallet
+  login is simplest since fans already connect a TON wallet, reuse the same
+  mechanism for creators) can own and switch between up to 5 creator profiles.
+- Mirrors how Carter's agency already runs multiple Twin clones under one
+  operator. Same pattern here: one account = up to 5 creators, each with its
+  own handle, content, and TON wallet address.
+- This changes the data model: accounts and creators are no longer 1:1.
+
 DATA MODEL (new Supabase project)
-- creators: handle, display name, profile pic, bio, ton_wallet_address,
-  stars_link (optional fallback), status (pending/approved/rejected), created_at
+- accounts: id, auth_provider (google/telegram/wallet), auth_identifier,
+  created_at
+- creators: account_id (FK, max 5 creators per account_id, enforced in code
+  and with a DB check/trigger), handle, display name, profile pic, bio,
+  ton_wallet_address, stars_link (optional fallback),
+  status (pending/approved/rejected), created_at
 - content: creator_id, type (photo/video), storage_path, price_nanoton (0 for
   free), caption, created_at
 - orders: content_id, buyer_wallet_address, amount_nanoton, memo (order id we
@@ -38,11 +51,15 @@ TELEGRAM SIDE
   also a creator — one account type, not two apps).
 
 CREATOR FLOW
-1. Sign up: handle, pic, bio, TON wallet address (Stars link optional fallback)
-2. Goes into a moderation queue — pending until approved
-3. Once approved: upload content (photo/video), set price in TON, mark free
+1. Log in (one account, up to 5 creator profiles) or create a new profile
+   under an existing account
+2. Per profile: handle, pic, bio, TON wallet address (Stars link optional
+   fallback)
+3. Each new profile goes into a moderation queue — pending until approved
+4. Once approved: upload content (photo/video), set price in TON, mark free
    or paid
-4. Appears in Explore/Trending once live
+5. Appears in Explore/Trending once live
+6. Account switcher lets the same login jump between its up-to-5 profiles
 
 FAN FLOW
 1. Browse Explore/Trending, no login needed for browsing
