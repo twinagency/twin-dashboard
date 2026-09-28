@@ -18,6 +18,7 @@ import LiveFeed from "@/components/users/LiveFeed";
 import PurchaseToasts from "@/components/users/PurchaseToasts";
 import FanLive from "@/components/users/FanLive";
 import DripStrip from "@/components/users/DripStrip";
+import { dedupeStarRows } from "@/lib/star-dedupe";
 import FanDossier from "@/components/users/FanDossier";
 import { toRows, parseEvents, sentenceCase } from "@/lib/fan-dossier";
 import ChatThread, { type ThreadMessage } from "@/components/users/ChatThread";
@@ -367,10 +368,19 @@ export default async function FansPage({
   const mediaBuyRows = (
     await Promise.all(
       idChunks.map((chunk) =>
-        selectAllRows<{ user_id: string; amount_stars: number | null }>(
+        selectAllRows<{
+          id: string;
+          user_id: string;
+          clone_id: string;
+          telegram_id: number | null;
+          kind: string | null;
+          amount_stars: number | null;
+          paid_at: string;
+          invoice_payload: string | null;
+        }>(
           supabaseAdmin
             .from("star_transactions")
-            .select("user_id,amount_stars")
+            .select("id,user_id,clone_id,telegram_id,kind,amount_stars,paid_at,invoice_payload")
             .eq("kind", "media")
             .in("user_id", chunk)
             .order("id", { ascending: true }),
@@ -379,8 +389,9 @@ export default async function FansPage({
       ),
     )
   ).flatMap((r) => r.rows);
+  // See lib/star-dedupe.ts: collapse double-recorded payments before counting unlocks.
   const mediaBuysByFan = new Map<string, { count: number; stars: number }>();
-  for (const row of mediaBuyRows) {
+  for (const row of dedupeStarRows(mediaBuyRows)) {
     const prev = mediaBuysByFan.get(row.user_id) ?? { count: 0, stars: 0 };
     mediaBuysByFan.set(row.user_id, { count: prev.count + 1, stars: prev.stars + (row.amount_stars ?? 0) });
   }
@@ -469,7 +480,8 @@ export default async function FansPage({
         : Promise.resolve({ data: [] as any[] }),
     ]);
     history = ((historyRes.data ?? []) as any[]).slice().reverse();
-    purchases = (purchasesRes.data ?? []) as any[];
+    // See lib/star-dedupe.ts: collapse double-recorded payments before showing this fan's total.
+    purchases = dedupeStarRows((purchasesRes.data ?? []) as any[]);
     profile = (profileRes.data ?? null) as any;
     freePhotos = (freePhotosRes.data ?? []) as any[];
   }

@@ -4,6 +4,7 @@ import { supabaseAdmin } from "./supabase";
 import { AGENCY_COOKIE, scopeAgencyClones } from "./agency-policy";
 import { selectAllRowsParallel } from "./select-all";
 import { rollupRevenueLedger, type RevenueLedgerRow } from "./revenue-ledger";
+import { dedupeStarRows } from "./star-dedupe";
 
 export { agencyIdentity } from "./agency-identity";
 import { agencyIdentity } from "./agency-identity";
@@ -18,8 +19,8 @@ export async function agencyData(requested?: string, days = 7, fan?: string) {
   const [creators, ledger, fans, photos, videos, events] = await Promise.all([
     supabaseAdmin.from("clones").select("id,name,status,photos_enabled,videos_enabled,voice_enabled,intent_classic_promotions_enabled,intent_classic_promotion_version")
       .in("id", ids).order("name"),
-    selectAllRowsParallel<RevenueLedgerRow>(() => supabaseAdmin.from("star_transactions")
-      .select("id,clone_id,telegram_id,amount_stars,invoice_payload")
+    selectAllRowsParallel<RevenueLedgerRow & { id: string; kind: string | null; paid_at: string }>(() => supabaseAdmin.from("star_transactions")
+      .select("id,clone_id,telegram_id,kind,amount_stars,paid_at,invoice_payload")
       .in("clone_id", ids).gte("paid_at", start).lte("paid_at", end).order("id"), { label: "agency revenue" }),
     requested ? supabaseAdmin.from("users").select("id,telegram_id,name")
       .eq("clone_id", requested).order("id").limit(100) : Promise.resolve({ data: [], error: null }),
@@ -41,6 +42,7 @@ export async function agencyData(requested?: string, days = 7, fan?: string) {
     if (chat.error) throw new Error("Conversation temporarily unavailable");
     messages = (chat.data ?? []).reverse();
   }
-  return { identity, creators: creators.data ?? [], revenue: rollupRevenueLedger(ledger.rows),
+  // See lib/star-dedupe.ts: collapse double-recorded payments before the ledger rollup.
+  return { identity, creators: creators.data ?? [], revenue: rollupRevenueLedger(dedupeStarRows(ledger.rows)),
     fans: fans.data ?? [], messages, media: [...(photos.data ?? []).map(p=>({...p,kind:"photo"})),...(videos.data ?? []).map(v=>({...v,kind:"video"}))], events: events.rows, start, end };
 }

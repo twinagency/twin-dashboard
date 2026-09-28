@@ -1,5 +1,6 @@
 import { supabaseAdmin } from "./supabase";
 import { selectAllRows } from "./select-all";
+import { dedupeStarRows } from "./star-dedupe";
 
 // The two Star figures Telegram's Bot API actually gives us, and what each
 // genuinely means. Don't add a matured/pending "21-day hold" split back in -
@@ -38,14 +39,26 @@ export async function getStarBalance(cloneId: string, botToken: string): Promise
   // 2026-08-09 with 5,010 transactions, at which point an unpaged read reported
   // the first thousand of them as her lifetime earnings.
   const [{ rows }, balance] = await Promise.all([
-    selectAllRows<{ amount_stars: number | null }>(
-      supabaseAdmin.from("star_transactions").select("amount_stars").eq("clone_id", cloneId),
+    selectAllRows<{
+      id: string;
+      clone_id: string;
+      telegram_id: number | null;
+      kind: string | null;
+      amount_stars: number | null;
+      paid_at: string;
+      invoice_payload: string | null;
+    }>(
+      supabaseAdmin
+        .from("star_transactions")
+        .select("id,clone_id,telegram_id,kind,amount_stars,paid_at,invoice_payload")
+        .eq("clone_id", cloneId),
       { label: "clone lifetime star total" },
     ),
     getMyStarBalance(botToken),
   ]);
 
-  const lifetimeStars = rows.reduce((s, r) => s + (Number(r.amount_stars) || 0), 0);
+  // See lib/star-dedupe.ts: collapse double-recorded payments before summing.
+  const lifetimeStars = dedupeStarRows(rows).reduce((s, r) => s + (Number(r.amount_stars) || 0), 0);
 
   return { lifetimeStars, totalBalanceStars: balance };
 }

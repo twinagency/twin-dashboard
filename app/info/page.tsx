@@ -8,6 +8,7 @@ import { getCloneScope } from "@/lib/clone-scope";
 import { setCloneScope } from "@/app/actions/clone-scope";
 import { getStarBalance } from "@/lib/star-balance";
 import { selectAllRows } from "@/lib/select-all";
+import { dedupeStarRows } from "@/lib/star-dedupe";
 import BusinessConnectionCard from "./BusinessConnectionCard";
 import { Info } from "@/components/clone/fields";
 import { Card } from "@/components/ui/card";
@@ -51,17 +52,27 @@ async function FleetInfo() {
   // .select() silently truncates at PostgREST's 1000 row cap with no error, so
   // this page's totals were wrong. selectAllRows pages past that cap, see its
   // header for the full failure mode.
-  const [{ data: clones }, { rows: userList }, { rows: txList }] = await Promise.all([
+  const [{ data: clones }, { rows: userList }, { rows: txListRaw }] = await Promise.all([
     supabaseAdmin.from("clones").select("id,name,slug,status").order("created_at", { ascending: true }),
     selectAllRows<{ clone_id: string; total_messages_purchased: number | null }>(
       supabaseAdmin.from("users").select("clone_id,total_messages_purchased"),
       { label: "fleet info users" },
     ),
-    selectAllRows<{ clone_id: string; amount_stars: number | null }>(
-      supabaseAdmin.from("star_transactions").select("clone_id,amount_stars"),
+    selectAllRows<{
+      id: string;
+      clone_id: string;
+      telegram_id: number | null;
+      kind: string | null;
+      amount_stars: number | null;
+      paid_at: string;
+      invoice_payload: string | null;
+    }>(
+      supabaseAdmin.from("star_transactions").select("id,clone_id,telegram_id,kind,amount_stars,paid_at,invoice_payload"),
       { label: "fleet info star_transactions" },
     ),
   ]);
+  // See lib/star-dedupe.ts: collapse double-recorded payments before summing.
+  const txList = dedupeStarRows(txListRaw);
 
   const fansByClone = new Map<string, number>();
   const buyersByClone = new Map<string, number>();

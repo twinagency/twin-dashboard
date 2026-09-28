@@ -7,6 +7,7 @@ import StarAmount from "@/components/StarAmount";
 import SpendTierBadge from "@/components/SpendTierBadge";
 import ConfirmSubmit from "@/components/ConfirmSubmit";
 import { setCredits, resetCounters, toggleActive, deleteUser } from "./actions";
+import { dedupeStarRows } from "@/lib/star-dedupe";
 
 export const dynamic = "force-dynamic";
 
@@ -66,7 +67,8 @@ export default async function FanDetailPage({
     supabaseAdmin.from("fan_profiles").select("*").eq("user_id", userId).maybeSingle(),
   ]);
 
-  const purchases = (purchasesRes.data ?? []) as any[];
+  // See lib/star-dedupe.ts: collapse double-recorded payments before summing/counting.
+  const purchases = dedupeStarRows((purchasesRes.data ?? []) as any[]);
   const history = ((historyRes.data ?? []) as any[]).slice().reverse(); // oldest → newest
   const profile = (profileRes.data ?? null) as any;
   const totalStars = purchases.reduce((s, p) => s + (p.amount_stars ?? 0), 0);
