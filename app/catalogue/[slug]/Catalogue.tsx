@@ -171,12 +171,12 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
   }
   async function finishCheckout(type: 'photo' | 'video' | 'bundle', id: string) {
     setPaymentWaiting(previous => { const next = new Set(previous); next.delete(`${type}:${id}`); return next; });
-    const value = await load();
-    if (!value) throw new Error('Payment confirmed. Refresh the catalogue to load your unlocked item.');
-    // Delivery goes to the chat, so leave the app. If Telegram keeps it open, offer the chat link.
+    // Delivery goes to the chat, so leave the app first; a failed catalogue refresh must not block it.
+    // If Telegram keeps the app open, offer the chat link.
     setSelected(null); setSelectedBundle(null);
     backToChat();
     window.setTimeout(() => setPaidFallback(true), 1500);
+    void load();
   }
   async function checkout(type: 'photo' | 'video' | 'bundle', id: string) {
     if (sending.current) return;
