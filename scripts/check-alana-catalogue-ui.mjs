@@ -64,9 +64,8 @@ async function main(){
     for(const width of [320,375,390,430,760]){
       await page.setViewportSize({width,height:850});
       await page.goto(`${origin}/catalogue/alanna-pow`);
-      await page.getByRole('heading',{name:'Daddy’s Daily Reward Sale'}).waitFor();
+      await page.getByRole('button',{name:'Trending',exact:true}).waitFor();
       await page.locator('.cat-approved-badge').evaluate(image=>image.decode());
-      for (const preview of await page.locator('.cat-compact-bundle .cat-preview').all()) await preview.locator('img').waitFor();
       // The first photo deliberately receives one 503. Await its actual recovery,
       // not whichever later preview happens to resolve first.
       await page.locator('.cat-grid .cat-card').first().locator('.cat-preview > img').waitFor();
@@ -76,27 +75,33 @@ async function main(){
       }
       await page.evaluate(()=>window.scrollTo(0,0));
       const metrics=await page.evaluate(()=>{
-        const badge=document.querySelector('.cat-approved-badge'),primary=document.querySelector('.cat-compact-bundle .cat-primary');
-        return {overflow:document.documentElement.scrollWidth-innerWidth,badgeLoaded:badge.complete&&badge.naturalWidth===1254,headerHeight:document.querySelector('.cat-header').getBoundingClientRect().height,galleryTop:document.querySelector('.cat-grid').getBoundingClientRect().top,offerHeight:document.querySelector('.cat-compact-bundle').getBoundingClientRect().height,purchaseRadius:getComputedStyle(primary).borderRadius,headerRight:Math.max(...[...document.querySelectorAll('.cat-header button')].map(e=>e.getBoundingClientRect().right))};
+        const badge=document.querySelector('.cat-approved-badge'),message=document.querySelector('.cat-message'),pill=message.firstElementChild,card=document.querySelector('.cat-card'),preview=card.querySelector('.cat-preview'),body=card.querySelector('.cat-card-body');
+        return {overflow:document.documentElement.scrollWidth-innerWidth,badgeLoaded:badge.complete&&badge.naturalWidth===1254,headerHeight:document.querySelector('.cat-header').getBoundingClientRect().height,galleryTop:document.querySelector('.cat-grid').getBoundingClientRect().top,messageHeight:message.getBoundingClientRect().height,pillHeight:pill.getBoundingClientRect().height,pillRadius:getComputedStyle(pill).borderRadius,headerRight:Math.max(...[...document.querySelectorAll('.cat-header button')].map(e=>e.getBoundingClientRect().right)),identityRight:document.querySelector('.cat-header h1').getBoundingClientRect().right,messageLeft:message.getBoundingClientRect().left,cardHeight:card.getBoundingClientRect().height,previewHeight:preview.getBoundingClientRect().height,captionOverlay:getComputedStyle(body).position,activeColour:getComputedStyle(document.querySelector('.cat-tabs .active')).color};
       });
       assert.ok(metrics.overflow<=1,`${width}: no horizontal overflow`);
       assert.equal(metrics.badgeLoaded,true,`${width}: badge loads`);
       assert.ok(metrics.headerHeight<=45,`${width}: one compact header row`);
-      assert.ok(metrics.galleryTop<310,`${width}: gallery visible immediately`);
-      assert.ok(metrics.offerHeight<=130,`${width}: shallow offer`);
-      assert.equal(metrics.purchaseRadius,'9999px');
+      assert.ok(metrics.galleryTop<150,`${width}: gallery directly below categories`);
+      assert.ok(metrics.messageHeight>=44&&metrics.pillHeight<=34,`${width}: small Message pill with a full touch target`);
+      assert.equal(metrics.pillRadius,'9999px');
       assert.ok(metrics.headerRight<=width+1,`${width}: header actions fit`);
-      assert.equal(await page.locator('.cat-compact-bundle .cat-preview').count(),5,'All five included photos visible');
-      assert.equal(await page.locator('.cat-card').count(),7,'Explore starts with mixed gallery');
+      assert.ok(metrics.identityRight<=metrics.messageLeft+1,`${width}: name does not overlap Message`);
+      assert.ok(Math.abs(metrics.cardHeight-metrics.previewHeight)<1,`${width}: caption has no separate footer`);
+      assert.equal(metrics.captionOverlay,'absolute');
+      assert.equal(metrics.activeColour,'rgb(67, 184, 255)');
+      assert.equal(await page.locator('.cat-daily-sale').count(),0,'No duplicate offer above the gallery');
+      assert.equal(await page.locator('.cat-item-unlock').count(),0,'Gallery has one detail action per card');
+      assert.equal(await page.locator('.cat-card').count(),7,'Trending retains the existing mixed gallery');
       assert.equal(await page.locator('.cat-card').nth(0).locator('.cat-video-preview').count(),0);
       assert.equal(await page.locator('.cat-card').nth(1).locator('.cat-video-preview').count(),1,'Photo and video share opening row');
-      await page.screenshot({path:`${output}/explore-${width}.png`,fullPage:true,animations:'disabled'});
-      if(width===390)await page.screenshot({path:`${output}/explore-390-viewport.png`,fullPage:false,animations:'disabled'});
+      await page.screenshot({path:`${output}/trending-${width}.png`,fullPage:true,animations:'disabled'});
+      if(width===390)await page.screenshot({path:`${output}/trending-390-viewport.png`,fullPage:false,animations:'disabled'});
       results.push({width,...metrics});
     }
     await page.setViewportSize({width:390,height:850});
     // Preserve the legacy path without forced navigation or repeated payable cards.
-    await page.locator('.cat-grid .cat-picture-button').first().click();
+    const caption=await page.locator('.cat-grid .cat-card-description').first().boundingBox();
+    await page.mouse.click(caption.x+caption.width/2,caption.y+caption.height/2);
     await page.screenshot({path:`${output}/chat-item-detail-390.png`,fullPage:false});
     await page.getByRole('button',{name:'Pay in Telegram · ⭐350',exact:true}).click();
     await page.getByRole('button',{name:'Open payment in chat',exact:true}).waitFor();
@@ -108,6 +113,11 @@ async function main(){
     assert.equal(requests.filter(r=>r.action==='request').length,deliveredCount,'Paid retry never sends another item');
     await page.screenshot({path:`${output}/chat-payment-ready-390.png`,fullPage:false});
     await page.getByRole('button',{name:'Close item'}).click();
+    await page.getByRole('button',{name:'Bundles',exact:true}).click();
+    assert.equal(await page.locator('.cat-bundle-card').count(),1,'Previously featured bundle remains in Bundles');
+    assert.equal(await page.locator('.cat-compact-bundle .cat-preview').count(),5,'All five included photos visible');
+    for(const preview of await page.locator('.cat-compact-bundle .cat-preview').all())await preview.locator('img').waitFor();
+    await page.screenshot({path:`${output}/bundles-390.png`,fullPage:false});
     await page.getByRole('button',{name:'Pay in Telegram for 1,400 Stars',exact:true}).click();
     await page.getByRole('button',{name:'Open payment in chat',exact:true}).waitFor();
     deliveredCount=requests.filter(r=>r.action==='request').length;
@@ -218,7 +228,7 @@ async function main(){
     assert.equal(legacyRequests,nativeRequestBaseline+1);
     assert.deepEqual(errors,[],'No client errors');
     await writeFile(`${output}/checks.json`,JSON.stringify(results,null,2));
-    console.log('Alana UI passed: five widths, full bundle, mixed gallery, scoped style, cancelled retry, confirmed native checkout, owned-media retry, retained captions, no chat delivery and creator isolation. Fixtures only.');
+    console.log('Alana UI passed: five widths, Trending label with unchanged mixed gallery, small Message pill, overlaid captions, full bundle under Bundles, scoped style, cancelled retry, confirmed native checkout, owned-media retry, retained captions, no chat delivery and creator isolation. Fixtures only.');
   }finally{await browser?.close();server?.kill('SIGTERM');if(server)setTimeout(()=>server.kill('SIGKILL'),5000).unref()}
 }
 main().catch(e=>{console.error(e);process.exitCode=1});

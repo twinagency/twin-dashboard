@@ -1,7 +1,7 @@
 "use client";
 import Script from "next/script";
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
-import { ArrowLeft, BadgeCheck, Check, ChevronRight, Gift, LockKeyhole, MessageCircle, Search, ShoppingBag, SlidersHorizontal, Star, X } from "lucide-react";
+import { ArrowLeft, BadgeCheck, Check, ChevronRight, Gift, LockKeyhole, Search, ShoppingBag, SlidersHorizontal, Star, X } from "lucide-react";
 import { rewardProgress, type CatalogueBundle, type CatalogueRewards } from '@/lib/catalogue-commerce';
 import { openCatalogueChat } from "@/lib/catalogue-navigation";
 import type { CatalogueItem } from "@/lib/catalogue-core";
@@ -10,7 +10,7 @@ import VideoPreview from './VideoPreview';
 import PhotoPreview from './PhotoPreview';
 import { catalogueDisplayOrder } from '@/lib/catalogue-display-order';
 import { catalogueAppearance } from '@/lib/catalogue-appearance';
-import { compactCategories, compactItems, remainingBundles, salePercent, shortCatalogueTitle, type CataloguePresentation } from '@/lib/catalogue-presentation';
+import { compactCategories, compactItems, salePercent, shortCatalogueTitle, type CataloguePresentation } from '@/lib/catalogue-presentation';
 
 type WebApp = { initData: string; ready(): void; expand(): void; close(): void; openTelegramLink(url: string): void; openInvoice?(url: string, callback: (status: string) => void): void; setHeaderColor?(color: string): void; setBackgroundColor?(color: string): void; setBottomBarColor?(color: string): void };
 function app(): WebApp | undefined { return (window as unknown as { Telegram?: { WebApp?: WebApp } }).Telegram?.WebApp; }
@@ -319,7 +319,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
   const visible = !search && (section === 'All' || section === 'Explore' || section === 'Videos')
     ? catalogueDisplayOrder(filteredItems, slug, section === 'All' || section === 'Explore') : filteredItems;
   const featuredBundle=data?.bundles.find(bundle=>bundle.id===data.featuredBundleId);
-  const browseBundles = compact ? remainingBundles(data?.bundles ?? [], featuredBundle?.id) : data?.bundles ?? [];
+  const browseBundles = data?.bundles ?? [];
   const rewards=data?.rewards;
   const progress=rewards?rewardProgress(rewards):null;
   const rewardItems=rewards?data!.items.filter(p=>(p.type==='photo'?rewards.photoIds:rewards.videoIds??[]).includes(p.id)):[];
@@ -331,7 +331,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
         <div className="cat-identity"><h1>{data?.name || "Your catalogue"}{data?.verified && (compact
           ? <img className="cat-approved-badge" src="/brand/catalogue/approved-blue-badge.png" width="24" height="24" alt="Verified creator" />
           : <BadgeCheck className="cat-verified-badge" size={22} aria-label="Creator verified by Twin" />)}</h1></div>
-        {compact && <button className="cat-message cat-header-action" aria-label="Message me" title="Message me" onClick={backToChat}><MessageCircle size={20} aria-hidden="true"/></button>}
+        {compact && <button className="cat-message cat-header-action" aria-label="Message me" title="Message me" onClick={backToChat}><span>Message</span></button>}
         {data?.admin ? <button className="cat-icon" aria-label="Catalogue settings" onClick={() => setSettingsOpen(v => !v)}><SlidersHorizontal size={21} /></button>
           : !compact && <button className="cat-icon" aria-label="My purchases" onClick={() => { setSection("My Purchases"); setSearch(""); document.getElementById("catalogue-items")?.scrollIntoView({ behavior: "smooth" }); }}><ShoppingBag size={19} /></button>}
         {compact && !data?.admin && <button className="cat-purchases-control cat-header-action" aria-label="My purchases" title="My purchases" onClick={() => { setSection("My Purchases"); setSearch(""); document.getElementById("catalogue-items")?.scrollIntoView({ behavior: "smooth" }); }}><ShoppingBag size={19} aria-hidden="true" /></button>}
@@ -348,7 +348,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
       </section>}
       {error ? <div className="cat-empty"><LockKeyhole /><h2>{error}</h2>{preview && <a className="cat-primary" href={`/twin?next=${encodeURIComponent(`/catalogue/${slug}?preview=1`)}`}>Sign in</a>}<button className="cat-secondary" onClick={load}>Try again</button></div>
         : !data ? <div className="cat-empty" aria-live="polite">Loading your collection…</div> : <>
-        {featuredBundle && <section className="cat-daily-sale" aria-labelledby="daily-sale-title">
+        {!compact && featuredBundle && <section className="cat-daily-sale" aria-labelledby="daily-sale-title">
           <h2 id="daily-sale-title"><span aria-hidden="true">😈</span><span>Daddy’s Daily Reward Sale</span><span aria-hidden="true">😈</span></h2>
           <BundleCard bundle={featuredBundle} items={data.items} blur={renderBlur} call={call} busy={commerceBusy} owner={compact && data.admin} compact={compact} onDetails={() => openBundle(featuredBundle, document.activeElement as HTMLElement)} actionLabel={paymentWaiting.has(`bundle:${featuredBundle.id}`) ? 'Check payment' : data.checkoutMode !== 'invoice' ? featuredBundle.owned ? 'View in chat' : featuredBundle.partial ? 'Partly owned' : delivered.has(`bundle:photo:${featuredBundle.id}`) ? 'Open payment in chat' : `Pay · ⭐${featuredBundle.stars.toLocaleString()}` : undefined} onUnlock={()=>unlockBundle(featuredBundle)} />
         </section>}
@@ -373,7 +373,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
           </div>}
         </section>}
         <div className="cat-navigation"><nav className="cat-tabs" aria-label="Catalogue categories">{(compact ? [...compactCategories] : [...(data.items.some(i => i.free) ? ["Free Content"] : []), ...tabs]).map(tab =>
-          <button key={tab} className={section === tab && !search ? "active" : ""} aria-current={section === tab && !search ? "page" : undefined} onClick={() => { setSection(tab); setSearch(""); setBundleIndex(0); }}>{tab}</button>)}</nav>
+          <button key={tab} className={section === tab && !search ? "active" : ""} aria-current={section === tab && !search ? "page" : undefined} onClick={() => { setSection(tab); setSearch(""); setBundleIndex(0); }}>{compact && tab === 'Explore' ? 'Trending' : tab}</button>)}</nav>
         {compact && <button className="cat-search-toggle" aria-label="Search collection" title="Search collection" aria-expanded={searchOpen} onClick={() => setSearchOpen(v => !v)}><Search size={18} aria-hidden="true"/></button>}</div>
         {compact && searchOpen && <label className="cat-search"><Search size={18} /><input autoFocus value={search} onChange={e => setSearch(e.target.value)} placeholder="Search descriptions…" aria-label="Search descriptions" />{search && <button aria-label="Clear search" onClick={() => setSearch("")}><X size={16} /></button>}</label>}
         <div id="catalogue-items" className={`cat-section-heading${(section === "All" || section === "Explore") && !search ? " cat-section-heading-default" : ""}`}><h2>{search ? "Search results" : section}</h2><span>{!search&&section==='Bundles'?`${browseBundles.length} ${browseBundles.length === 1 ? 'bundle' : 'bundles'}`:`${visible.length} ${visible.length===1?'item':'items'}`}</span></div>
@@ -390,17 +390,17 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
           </div>}
         </section>}
         {visible.length ? <div className="cat-grid">{visible.slice(0, pageSize).map(item => <article className={`cat-card${compact && item.free ? ' cat-card-free' : ''}`} key={`${item.type}:${item.id}`}>
-          <button className="cat-picture-button" onClick={event => openItem(item, event.currentTarget)} aria-label={`View ${item.type}: ${item.description.slice(0, 100)}`}><Preview item={item} blur={renderBlur} call={call} retryable={false} /></button>
+          <button className="cat-picture-button" onClick={event => openItem(item, event.currentTarget)} aria-label={`View ${item.type}: ${item.description.slice(0, 100)}${compact ? `, ${item.purchased || item.received ? 'owned' : item.free ? 'free' : `${item.stars.toLocaleString()} Stars`}` : ''}`}><Preview item={item} blur={renderBlur} call={call} retryable={false} /></button>
           <div className="cat-card-body">
             {refined && <p className="cat-card-description" title={item.description}>{compact ? shortCatalogueTitle(item.description) : item.description}</p>}
             <div className="cat-card-bottom">
               {refined && <span className={`cat-card-price${item.purchased || item.received ? ' cat-card-owned' : ''}`}>
                 {item.purchased || item.received ? <><Check size={14} aria-hidden="true"/>Owned</> : item.free ? 'Free' : <><Star className="cat-stars" size={15} aria-hidden="true"/><span>{item.stars.toLocaleString()}<span className="cat-sr-only"> Stars</span></span></>}
               </span>}
-              <button className="cat-item-unlock" aria-label={refined ? `${item.purchased || item.received ? 'View owned' : item.free ? 'View free' : `Unlock for ${item.stars.toLocaleString()} Stars:`} ${item.description}` : undefined} onClick={event => openItem(item, event.currentTarget)}>{refined ? item.purchased || item.received ? 'View' : item.free ? 'View' : 'Unlock' : item.purchased||item.received?<><Check size={14}/> View in chat</>:item.type==='video'?'Watch now':'View'}</button>
+              {!compact && <button className="cat-item-unlock" aria-label={refined ? `${item.purchased || item.received ? 'View owned' : item.free ? 'View free' : `Unlock for ${item.stars.toLocaleString()} Stars:`} ${item.description}` : undefined} onClick={event => openItem(item, event.currentTarget)}>{refined ? item.purchased || item.received ? 'View' : item.free ? 'View' : 'Unlock' : item.purchased||item.received?<><Check size={14}/> View in chat</>:item.type==='video'?'Watch now':'View'}</button>}
             </div>
           </div></article>)}</div>
-          : !search&&section==='Bundles'&&(browseBundles.length || (compact && featuredBundle)) ? null : <div className="cat-empty"><ShoppingBag size={30} /><h2>{search ? "No matching items" : section === "My Purchases" ? "No linked purchases yet" : `No ${section.toLowerCase()} available right now`}</h2><button className="cat-secondary" onClick={() => { setSection(compact ? "Explore" : "All"); setSearch(""); }}>Explore the collection</button></div>}
+          : !search&&section==='Bundles'&&browseBundles.length ? null : <div className="cat-empty"><ShoppingBag size={30} /><h2>{search ? "No matching items" : section === "My Purchases" ? "No linked purchases yet" : `No ${section.toLowerCase()} available right now`}</h2><button className="cat-secondary" onClick={() => { setSection(compact ? "Explore" : "All"); setSearch(""); }}>{compact ? 'Browse the collection' : 'Explore the collection'}</button></div>}
         {visible.length > pageSize && <button className="cat-load-more" onClick={() => setPageSize(v => v + 12)}>Show more</button>}
       <details className="cat-how-it-works"><summary>How it works</summary>{compact ? <p>Browse a preview, choose an item, then confirm your Stars payment{data.checkoutMode === 'invoice' ? ' to unlock it here. Your unlocked collection is in My purchases.' : ' in Telegram. Your purchase stays linked to your account.'}</p> : <div className="cat-intro">
         <div className="cat-intro-icon" aria-hidden="true"><DevilIcon /></div>
