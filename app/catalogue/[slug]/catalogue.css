@@ -427,3 +427,6 @@ html:has(.catalogue-compact),body:has(.catalogue-compact){background:#1b1c1e}
 .cat-bundle-grid>.cat-picture-button .cat-preview>img{object-fit:cover}
 .cat-bundle-grid .cat-lock,.cat-bundle-grid .cat-type{display:none}
 .cat-bundle-grid>p{display:none}
+
+/* Ranked video cards: move the preview label clear of the #N badge */
+.cat-card-ranked .cat-video-label{left:auto!important;right:8px;top:auto!important;bottom:8px}
