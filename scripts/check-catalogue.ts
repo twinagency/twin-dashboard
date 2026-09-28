@@ -121,7 +121,7 @@ async function main(){
  const bundle={id:requestId,clone_id:cloneId,enabled:true,title:'Five photo bundle',photo_ids:ids,price_stars:2200,regular_stars:3150};rows.catalogue_bundles.push(bundle);
  const bundleData=await (await call('catalogue')).json();assert.equal(bundleData.bundles.length,1);assert.equal(bundleData.bundles[0].stars,2200);assert.equal(projectBundle({...bundle,price_stars:1},bundleData.items),null);
  assert.equal((await call('request',{type:'bundle',id:requestId,requestKey:itemId,stars:1})).status,200);assert.equal(rows.catalogue_requests[0].media_type,'bundle');
- rows.catalogue_requests[0].status='delivered';rows.catalogue_requests[0].created_at='2020-01-01T00:00:00Z';await call('request',{type:'bundle',id:requestId,requestKey:cloneId});assert.equal(rows.catalogue_requests.length,1,'a delivered bundle never generates a second payable card');
+ rows.catalogue_requests[0].status='delivered';rows.catalogue_requests[0].created_at='2020-01-01T00:00:00Z';const reusedBundle=await (await call('request',{type:'bundle',id:requestId,requestKey:cloneId})).json();assert.equal(reusedBundle.reused,true,'Old bundle cards are explicitly identified');assert.equal(rows.catalogue_requests.length,1,'a delivered bundle never generates a second payable card');
  rows.user_received_media.push({clone_id:cloneId,user_id:fanId,media_type:'photo',media_id:ids[0]});assert.equal((await call('request',{type:'bundle',id:requestId,requestKey:cloneId})).status,409);
  // Alanna's missing captions are hidden, not deleted, including cached actions.
  for(const caption of [null,undefined,'','  \n\t',42]) assert.equal(catalogueItemVisible({caption},'alanna-pow'),false);

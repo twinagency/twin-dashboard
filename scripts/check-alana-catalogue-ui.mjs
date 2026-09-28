@@ -29,7 +29,7 @@ async function main(){
     browser=await chromium.launch(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?{executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH}:{});
     const page=await browser.newPage({viewport:{width:390,height:850},reducedMotion:'reduce'});
     const errors=[];page.on('pageerror',e=>errors.push(e.message));
-    await page.route('https://telegram.org/js/telegram-web-app.js',route=>route.fulfill({contentType:'application/javascript',body:`window.catalogueChatOpens=0;window.catalogueInvoiceOpens=0;window.catalogueInvoiceStatus='cancelled';window.Telegram={WebApp:{initData:'fixture',ready(){},expand(){},close(){},openInvoice(url,callback){window.catalogueInvoiceOpens++;setTimeout(()=>callback(window.catalogueInvoiceStatus),20)},openTelegramLink(){window.catalogueChatOpens++},setHeaderColor(){},setBackgroundColor(){},setBottomBarColor(){}}};`}));
+    await page.route('https://telegram.org/js/telegram-web-app.js',route=>route.fulfill({contentType:'application/javascript',body:`window.catalogueChatOpens=0;window.catalogueInvoiceOpens=0;window.catalogueInvoiceStatus='cancelled';window.Telegram={WebApp:{initData:'fixture',ready(){},expand(){},close(){window.catalogueCloses=(window.catalogueCloses||0)+1},openInvoice(url,callback){window.catalogueInvoiceOpens++;setTimeout(()=>callback(window.catalogueInvoiceStatus),20)},openTelegramLink(){window.catalogueChatOpens++},setHeaderColor(){},setBackgroundColor(){},setBottomBarColor(){}}};`}));
     await page.route('https://catalogue-fixture.test/preview.mp4',route=>route.fulfill({contentType:'video/mp4',body:videoBytes}));
     await page.route('**/api/catalogue/*',async route=>{
       const body=route.request().postDataJSON();requests.push(body);
@@ -47,16 +47,16 @@ async function main(){
         const order=[...orders.values()].find(order=>order.orderId===body.orderId);assert.ok(order);
         order.status=delaySettlement-->0?'pending':settle;
         if(order.status==='paid')for(const id of order.type==='bundle'?ids:[order.id])purchased.add(id);
-        return json({status:order.status});
+        return json({status:order.status,retryAfterSeconds:0});
       }
       if(body.action==='request'){
         assert.ok(fixtureMode==='chat'||route.request().url().includes('briana-redd'),'Invoice checkout may not enqueue chat media');
-        return json({id:'legacy-request',status:'delivered'});
+        return json({id:'legacy-request',status:'delivered',reused:body.type==='bundle'});
       }
       if(body.action==='content'){
         if(!purchased.has(body.id)&&body.id!=='free')originalBeforePaid=true;
         assert.ok(purchased.has(body.id)||body.id==='free','Original requires settled ownership');
-        return contentFails?json({error:'Could not load your item.'},503):json({url:svgUrl,type:body.type});
+        return contentFails?json({error:'Could not load your item.'},503):json({url:body.type==='video'?'https://catalogue-fixture.test/preview.mp4':svgUrl,type:body.type});
       }
       throw new Error(`Unexpected request: ${body.action}`);
     });
@@ -95,12 +95,12 @@ async function main(){
       results.push({width,...metrics});
     }
     await page.setViewportSize({width:390,height:850});
-    // The deployed Alana flow is chat checkout. Exercise this path before the gated invoice fixture.
+    // Preserve the legacy path without forced navigation or repeated payable cards.
     await page.locator('.cat-grid .cat-picture-button').first().click();
     await page.screenshot({path:`${output}/chat-item-detail-390.png`,fullPage:false});
     await page.getByRole('button',{name:'Pay in Telegram · ⭐350',exact:true}).click();
     await page.getByRole('button',{name:'Open payment in chat',exact:true}).waitFor();
-    assert.equal(await page.evaluate(()=>window.catalogueChatOpens),1,'Paid delivery automatically opens chat once');
+    assert.equal(await page.evaluate(()=>window.catalogueChatOpens),0,'Preparing payment never closes the Mini App or opens chat');
     assert.match(await page.getByRole('dialog',{name:'Item details'}).innerText(),/complete original caption/,'Chat payment retains full caption');
     let deliveredCount=requests.filter(r=>r.action==='request').length;
     assert.equal(deliveredCount,1);
@@ -111,7 +111,8 @@ async function main(){
     await page.getByRole('button',{name:'Pay in Telegram for 1,400 Stars',exact:true}).click();
     await page.getByRole('button',{name:'Open payment in chat',exact:true}).waitFor();
     deliveredCount=requests.filter(r=>r.action==='request').length;
-    assert.equal(deliveredCount,2,'Bundle delivered once');
+    assert.equal(deliveredCount,2,'Bundle request made once');
+    assert.match(await page.locator('.cat-notice').innerText(),/already in your chat/,'A previous bundle is explained, not reported as newly sent');
     await page.getByRole('button',{name:'Open payment in chat',exact:true}).click();
     assert.equal(requests.filter(r=>r.action==='request').length,deliveredCount,'Bundle retry never sends another bundle');
     await page.getByRole('button',{name:'Photos',exact:true}).click();
@@ -173,15 +174,31 @@ async function main(){
     await page.locator('.cat-video-preview video').evaluate(video=>video.play());
     assert.ok(await page.locator('.cat-video-preview video').evaluate(video=>!video.paused&&video.readyState>=2),'Synthetic blurred preview actually plays');
     await page.screenshot({path:`${output}/invoice-videos-390.png`,fullPage:true});
+    await page.locator('.cat-grid .cat-picture-button').first().click();
+    await page.getByRole('dialog',{name:'Item details'}).getByRole('button',{name:'Unlock · ⭐800',exact:true}).click();
+    await page.locator('.cat-owned-media video').waitFor();
+    await page.locator('.cat-owned-media video').evaluate(video=>video.play());
+    assert.ok(await page.locator('.cat-owned-media video').evaluate(video=>video.readyState>=2&&!video.paused),'Purchased video plays in the Mini App');
+    assert.equal(await page.evaluate(()=>window.catalogueChatOpens),0);
+    assert.equal(await page.evaluate(()=>window.catalogueCloses||0),0,'Payment never closes Mini App');
+    await page.screenshot({path:`${output}/invoice-video-unlocked-390.png`,fullPage:true});
+    await page.getByRole('button',{name:'Close item'}).click();
+    purchased.clear();orders.clear();
+    await page.reload();
     await page.getByRole('button',{name:'Bundles',exact:true}).click();
     await page.locator('.cat-bundle-details-button').click();
     assert.equal(await page.locator('.cat-bundle-included>div').count(),5);
     await page.locator('.cat-bundle-included .cat-preview img').first().waitFor();
     await page.screenshot({path:`${output}/invoice-bundle-detail-390.png`,fullPage:true});
+    await page.getByRole('dialog',{name:'Bundle details'}).getByRole('button',{name:'Unlock · ⭐1,400',exact:true}).click();
+    await page.getByText('Unlocked. Tap a photo to view it.',{exact:true}).waitFor();
+    assert.equal(purchased.size,5,'Confirmed bundle grants all five photos');
+    assert.equal(requests.filter(r=>r.action==='request').length,nativeRequestBaseline,'Bundle checkout does not send any chat media');
+    await page.screenshot({path:`${output}/invoice-bundle-unlocked-390.png`,fullPage:true});
     await page.getByRole('button',{name:'Close bundle'}).click();
     await page.getByRole('button',{name:'Message me'}).click();
     assert.equal(await page.evaluate(()=>window.catalogueChatOpens),1,'Explicit chat action works');
-    receivedOnly=true;
+    purchased.clear();receivedOnly=true;
     await page.reload();
     const originalReads=requests.filter(r=>r.action==='content').length;
     await page.locator('.cat-grid .cat-picture-button').first().click();
