@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { randomBytes } from 'node:crypto';
 import { Cell } from '@ton/core';
+import { tonPriceNanoton } from './catalogue-ton-price';
 import { CheckoutError, checkoutType, checkoutUuid, productForCheckout, type Context } from './catalogue-checkout';
 
 export type TonSettings = { ton_wallet_address?: string | null; ton_nanoton_per_star?: number | string | null; ton_discount_percent?: number | null };
@@ -15,9 +16,8 @@ export function tonEnabled(settings: TonSettings | null | undefined): boolean {
 }
 
 export function starsToNanoton(stars: number, nanotonPerStar: number | string, discountPercent = 0): number {
-  const amount = Math.round(Number(stars) * Number(nanotonPerStar) * (100 - discountPercent) / 100);
-  if (!Number.isFinite(amount) || !Number.isSafeInteger(amount) || amount <= 0)
-    throw new CheckoutError('Payment amount is invalid. Please try again.', 503);
+  const amount = tonPriceNanoton(stars, nanotonPerStar, discountPercent);
+  if (amount == null) throw new CheckoutError('Payment amount is invalid. Please try again.', 503);
   return amount;
 }
 

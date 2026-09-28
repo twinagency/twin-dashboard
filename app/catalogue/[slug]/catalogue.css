@@ -347,3 +347,20 @@ html:has(.catalogue-compact),body:has(.catalogue-compact){background:#1b1c1e}
 .cat-ton-mark{display:inline-block;vertical-align:-4px;margin-right:8px}
 
 .cat-pay-row{display:flex;flex-direction:row-reverse;gap:10px;align-items:stretch;margin-top:14px}.cat-pay-row>*{flex:1;margin:0}.cat-pay-row>.cat-secondary{position:relative;border:2px solid #0098EA;color:#0b6fa8;font-weight:700;background:#f2faff}.cat-ton-tag{position:absolute;top:-10px;right:10px;background:#0098EA;color:#fff;font-size:10px;font-weight:700;padding:2px 8px;border-radius:50px;letter-spacing:.3px}
+.catalogue .cat-pay-row>.cat-pay-stars,.catalogue .cat-pay-row>.cat-pay-ton{position:relative;display:flex;align-items:center;justify-content:center;min-height:48px;padding:12px 10px;border:0;border-radius:12px;font-size:14px;font-weight:700;line-height:1.2;white-space:nowrap}
+.catalogue .cat-pay-row>.cat-pay-stars{background:linear-gradient(180deg,#f8c84a,#f5b82e);color:#1b1400}
+.catalogue .cat-pay-row>.cat-pay-ton{background:#0098EA;color:#fff}
+.catalogue .cat-pay-row>.cat-pay-stars:hover:not(:disabled),.catalogue .cat-pay-row>.cat-pay-ton:hover:not(:disabled){filter:brightness(1.06)}
+.catalogue-compact .cat-pay-row>.cat-pay-stars,.catalogue-compact .cat-pay-row>.cat-pay-ton{border-radius:9999px}
+.cat-ton-amount{display:inline-flex;align-items:center;gap:5px}.cat-ton-amount .cat-ton-mark{margin:0;vertical-align:0}
+.catalogue .cat-pay-row>.cat-pay-ton .cat-ton-tag{background:#fff;color:#0077b8;border:1px solid #0098EA}
+.cat-card-prices{display:flex;align-items:flex-end;gap:5px;min-width:0;white-space:nowrap}
+.cat-card-ton{display:inline-flex;flex-direction:column;align-items:flex-start;gap:2px}
+.cat-card-ton-tag{font-size:9px;font-weight:700;line-height:1.2;padding:1px 5px;border-radius:50px;background:#e3f4fd;color:#0077b8}
+.cat-card-ton-value,.cat-card-stars{display:inline-flex;align-items:center;gap:3px;border-radius:50px;padding:3px 7px;font-size:11px;font-weight:700;line-height:1.2;font-variant-numeric:tabular-nums}
+.cat-card-ton-value{background:#0098EA;color:#fff}.cat-card-stars{background:linear-gradient(180deg,#f8c84a,#f5b82e);color:#1b1400}
+.cat-card-prices .cat-ton-mark{width:12px;height:12px;margin:0;vertical-align:0;flex:none}
+.cat-bundle-copy>.cat-card-prices{align-self:flex-start}
+.catalogue:not(.catalogue-compact) .cat-card-bottom:has(>.cat-card-prices){flex-wrap:wrap;row-gap:8px}.catalogue:not(.catalogue-compact) .cat-card-bottom>.cat-card-prices{flex:1 0 100%}
+.catalogue:not(.catalogue-refined):not(.catalogue-compact) .cat-card-bottom>.cat-card-prices{margin-bottom:8px}
+@media(max-width:380px){.cat-card-prices{gap:4px}.cat-card-ton-value,.cat-card-stars{font-size:10px;padding:2px 5px}.cat-card-ton-tag{font-size:8px}.cat-card-prices .cat-ton-mark{width:11px;height:11px}.catalogue .cat-pay-row>.cat-pay-stars,.catalogue .cat-pay-row>.cat-pay-ton{font-size:13px;padding:12px 6px}}

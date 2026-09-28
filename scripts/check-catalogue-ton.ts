@@ -1,6 +1,8 @@
 import assert from 'node:assert/strict';
+import { readFileSync } from 'node:fs';
 import { createCatalogueHandler } from '../lib/catalogue-api';
 import { beginTonCheckout, reconcilePendingTonOrders, starsToNanoton, tonDiscountPercent, tonOrderStatus, tonEnabled, type TonIncomingTx } from '../lib/catalogue-ton';
+import { formatTonAmount, tonPriceNanoton, TON_PRICE_STEP_NANOTON } from '../lib/catalogue-ton-price';
 import { createHmac } from 'node:crypto';
 import { NextRequest } from 'next/server';
 
@@ -121,7 +123,7 @@ async function main() {
   assert.equal(tonEnabled(settings), true);
   const begin = await beginTonCheckout(context, { type: 'photo', id: id(10) }, settings);
   assert.equal(begin.toAddress, settings.ton_wallet_address);
-  assert.equal(begin.amountNanoton, 350 * RATE);
+  assert.equal(begin.amountNanoton, 700_000_000, '350 stars at 0.002 TON/star is exactly 0.7 TON, unchanged by rounding');
   assert.equal(begin.comment, begin.memo);
   assert.match(begin.memo, /^cc_[a-z2-7]{12}$/);
   const order = rows.catalogue_ton_orders.find(r => r.id === begin.orderId);
@@ -230,8 +232,39 @@ async function main() {
   reset();
   const discounted = await beginTonCheckout(context, { type: 'photo', id: id(10) }, { ...settings, ton_discount_percent: 50 });
   const full = await beginTonCheckout(context, { type: 'photo', id: id(10) }, settings);
-  assert.equal(discounted.amountNanoton * 2, full.amountNanoton, 'checkout charges the discounted TON price');
+  assert.equal(discounted.amountNanoton, 400_000_000, 'checkout charges the discounted, rounded TON price (0.35 -> 0.4 TON)');
+  assert.equal(full.amountNanoton, 700_000_000, 'full price 0.7 TON is already a whole step');
 
-  console.log('TON checkout checks passed: memo match confirms, wrong memo and underpayment do not, same tx twice is idempotent, expired orders never confirm and skip verification, TON-disabled clones reject checkout, and client-supplied confirmation is ignored end to end. No live toncenter calls.');
+  // 10. Rounding: always UP to the next 0.1 TON, minimum 0.1 TON, exact multiples unchanged.
+  assert.equal(starsToNanoton(350, 12_121_212, 50), 2_200_000_000, '2.1212 TON rounds up to 2.2 TON');
+  assert.equal(starsToNanoton(1, 12_121_212, 50), 100_000_000, '1 star is the 0.1 TON minimum');
+  assert.equal(starsToNanoton(1, 1), 100_000_000, 'a tiny price is still at least 0.1 TON');
+  assert.equal(starsToNanoton(250, 12_000_000), 3_000_000_000, 'an exact multiple is unchanged');
+  assert.equal(starsToNanoton(100, 1_000_000), 100_000_000, 'exactly 0.1 TON is unchanged');
+  assert.equal(starsToNanoton(100, 1_000_001), 200_000_000, 'one nanoton over a step rounds up');
+  assert.equal(starsToNanoton(350, '12121212', 50), 2_200_000_000, 'numeric string rate from Postgres works');
+  assert.throws(() => starsToNanoton(0, 12_000_000), /invalid/, 'zero stars never produces a price');
+  assert.throws(() => starsToNanoton(350, 0), /invalid/);
+  assert.equal(formatTonAmount(2_200_000_000), '2.2');
+  assert.equal(formatTonAmount(3_000_000_000), '3', 'no trailing .0');
+  assert.equal(formatTonAmount(100_000_000), '0.1');
+  assert.equal(formatTonAmount(12_500_000_000), '12.5');
+
+  // 11. The client label helper and the server charge agree across a sweep of prices.
+  for (const rate of [1, 1_000_000, 2_000_000, 12_000_000, 12_121_212, 33_333_333])
+    for (const pct of [0, 10, 33, 50, 90])
+      for (const stars of [1, 7, 50, 99, 350, 1_234, 2_500]) {
+        const charged = starsToNanoton(stars, rate, pct);
+        assert.equal(tonPriceNanoton(stars, rate, pct), charged, `label and charge agree at ${stars}★ ${rate}/★ ${pct}%`);
+        assert.equal(charged % TON_PRICE_STEP_NANOTON, 0, 'every charge is a whole 0.1 TON step');
+        assert.ok(charged >= stars * rate * (100 - pct) / 100, 'rounding never undercharges');
+        assert.ok(charged - stars * rate * (100 - pct) / 100 < TON_PRICE_STEP_NANOTON || charged === TON_PRICE_STEP_NANOTON, 'rounding adds less than one step');
+        assert.equal(Number(formatTonAmount(charged)) * 1_000_000_000, charged, 'the label shows exactly the charged amount');
+      }
+  const clientSource = readFileSync(new URL('../app/catalogue/[slug]/Catalogue.tsx', import.meta.url), 'utf8');
+  assert.match(clientSource, /from '@\/lib\/catalogue-ton-price'/, 'the Mini App label uses the shared price helper');
+  assert.doesNotMatch(clientSource, /1_000_000_000/, 'the Mini App does not compute its own TON price');
+
+  console.log('TON checkout checks passed: memo match confirms, wrong memo and underpayment do not, same tx twice is idempotent, expired orders never confirm and skip verification, TON-disabled clones reject checkout, client-supplied confirmation is ignored end to end, and TON prices round up to 0.1 TON identically in the label and the charge. No live toncenter calls.');
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

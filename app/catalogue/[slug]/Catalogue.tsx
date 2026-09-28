@@ -13,6 +13,7 @@ import VideoPreview from './VideoPreview';
 import PhotoPreview from './PhotoPreview';
 import { catalogueDisplayOrder } from '@/lib/catalogue-display-order';
 import { catalogueAppearance } from '@/lib/catalogue-appearance';
+import { formatTonAmount, tonPriceNanoton } from '@/lib/catalogue-ton-price';
 import { compactCategories, compactItems, salePercent, shortCatalogueTitle, type CataloguePresentation } from '@/lib/catalogue-presentation';
 
 type WebApp = { initData: string; ready(): void; expand(): void; close(): void; openTelegramLink(url: string): void; openInvoice?(url: string, callback: (status: string) => void): void; setHeaderColor?(color: string): void; setBackgroundColor?(color: string): void; setBottomBarColor?(color: string): void };
@@ -29,26 +30,46 @@ function ProfilePhoto({ name, photoUrl }: { name: string; photoUrl?: string }) {
 
 function DevilIcon() { return <svg width="24" height="24" viewBox="0 0 32 32" fill="none"><path d="M6 15C2 12 2 5 4 2c1 5 4 6 8 7M26 15c4-3 4-10 2-13-1 5-4 6-8 7" fill="#f03737" /><path d="M16 8C9 8 5 12 5 19s5 11 11 11 11-4 11-11S23 8 16 8Z" fill="#f03737" /><path d="m10 16 3 2m9-2-3 2M11 23c3 3 7 3 10 0" stroke="#111" strokeWidth="2" strokeLinecap="round" /></svg>; }
 
-function tonLabel(stars: number, nanotonPerStar: number | null | undefined, phase: 'opening' | 'confirming' | null, discountPercent = 0): string {
-  if (phase === 'opening') return 'Opening wallet…';
-  if (phase === 'confirming') return 'Confirming on TON…';
-  if (!nanotonPerStar) return 'Pay with TON';
-  const ton = Math.round(stars * nanotonPerStar * (100 - discountPercent) / 100) / 1_000_000_000;
-  return `Pay ${ton.toLocaleString(undefined, { maximumFractionDigits: 4 })} TON`;
+// Label parts for the TON button. The amount comes from the same helper the server
+// charges with (lib/catalogue-ton-price.ts), so the label can never drift from the charge.
+function tonLabel(stars: number, nanotonPerStar: number | null | undefined, phase: 'opening' | 'confirming' | null, discountPercent = 0): { text: string; amount: string | null } {
+  if (phase === 'opening') return { text: 'Opening wallet…', amount: null };
+  if (phase === 'confirming') return { text: 'Confirming on TON…', amount: null };
+  const nanoton = nanotonPerStar ? tonPriceNanoton(stars, nanotonPerStar, discountPercent) : null;
+  if (nanoton == null) return { text: 'Pay with TON', amount: null };
+  return { text: 'Unlock · ', amount: `${formatTonAmount(nanoton)} TON` };
 }
 
-function TonMark() {
-  return <svg className="cat-ton-mark" width="18" height="18" viewBox="0 0 56 56" aria-hidden="true"><circle cx="28" cy="28" r="28" fill="#0098EA"/><path d="M37.6 15.6H18.4c-3.5 0-5.8 3.8-4 6.9l11.8 20.5c.8 1.3 2.7 1.3 3.5 0l11.9-20.5c1.7-3.1-.5-6.9-4-6.9Zm-11.4 21.3-2.6-5-6.2-11.1c-.4-.7.1-1.6 1-1.6h7.8v17.7Zm12.6-16.1-6.2 11.1-2.6 5V19.2h7.8c.9 0 1.4.9 1 1.6Z" fill="#fff"/></svg>;
+function TonMark({ onBlue = false }: { onBlue?: boolean }) {
+  return <svg className="cat-ton-mark" width="18" height="18" viewBox="0 0 56 56" aria-hidden="true"><circle cx="28" cy="28" r="28" fill={onBlue ? '#fff' : '#0098EA'}/><path d="M37.6 15.6H18.4c-3.5 0-5.8 3.8-4 6.9l11.8 20.5c.8 1.3 2.7 1.3 3.5 0l11.9-20.5c1.7-3.1-.5-6.9-4-6.9Zm-11.4 21.3-2.6-5-6.2-11.1c-.4-.7.1-1.6 1-1.6h7.8v17.7Zm12.6-16.1-6.2 11.1-2.6 5V19.2h7.8c.9 0 1.4.9 1 1.6Z" fill={onBlue ? '#0098EA' : '#fff'}/></svg>;
+}
+
+function TonButtonLabel({ stars, nanotonPerStar, phase, discountPercent }: { stars: number; nanotonPerStar: number | null | undefined; phase: 'opening' | 'confirming' | null; discountPercent?: number }) {
+  const label = tonLabel(stars, nanotonPerStar, phase, discountPercent);
+  return <>{label.text}{label.amount && <span className="cat-ton-amount"><TonMark onBlue />{label.amount}</span>}{!phase && !!discountPercent && <span className="cat-ton-tag">{discountPercent}% off</span>}</>;
+}
+
+type TonPricing = { nanotonPerStar: number; discountPercent: number } | null;
+// Card price row when TON is on: TON pill first (with the discount tag above it), then Stars.
+// Same rounding helper as the server charge, so the card price is the charged price.
+function CardPrices({ stars, ton }: { stars: number; ton: TonPricing }) {
+  const nanoton = ton ? tonPriceNanoton(stars, ton.nanotonPerStar, ton.discountPercent) : null;
+  if (nanoton == null) return null;
+  return <span className="cat-card-prices">
+    <span className="cat-card-ton">{!!ton?.discountPercent && <span className="cat-card-ton-tag">{ton.discountPercent}% off</span>}<span className="cat-card-ton-value"><TonMark onBlue />{formatTonAmount(nanoton)} TON</span></span>
+    <span className="cat-card-stars">⭐{stars.toLocaleString()}<span className="cat-sr-only"> Stars</span></span>
+  </span>;
 }
 
 function Preview(props: { item: CatalogueItem; blur: number; call: Call; retryable?: boolean }) {
   return props.item.type === 'video' ? <VideoPreview {...props} retryable={props.retryable ?? true} /> : <PhotoPreview {...props} />;
 }
 
-function BundleCard({ bundle, items, blur, call, busy, owner = false, onUnlock, onDetails, compact = false, label, actionLabel }: {
+function BundleCard({ bundle, items, blur, call, busy, owner = false, onUnlock, onDetails, compact = false, label, actionLabel, ton = null }: {
   bundle: CatalogueBundle; items: CatalogueItem[]; blur: number; call: Call;
-  busy: boolean; owner?: boolean; onUnlock: () => void; onDetails?: () => void; compact?: boolean; label?: string; actionLabel?: string;
+  busy: boolean; owner?: boolean; onUnlock: () => void; onDetails?: () => void; compact?: boolean; label?: string; actionLabel?: string; ton?: TonPricing;
 }) {
+  const bundleTon = bundle.owned || bundle.partial ? null : ton;
   if (compact) {
     const discount = salePercent(bundle);
     const photos = bundle.photoIds.map(id => items.find(item => item.type === 'photo' && item.id === id)).filter((item): item is CatalogueItem => !!item);
@@ -59,6 +80,7 @@ function BundleCard({ bundle, items, blur, call, busy, owner = false, onUnlock, 
       <div className="cat-bundle-copy">
         <h3>{bundle.title}</h3>
         {discount !== null && <p className="cat-bundle-saving">{discount}% off <span aria-hidden="true">·</span> <s>⭐{bundle.regularStars.toLocaleString()}</s></p>}
+        <CardPrices stars={bundle.stars} ton={bundleTon} />
         <button type="button" className="cat-primary" aria-label={actionLabel?.startsWith('Pay ·') ? `Pay in Telegram for ${bundle.stars.toLocaleString()} Stars` : undefined} disabled={busy || bundle.partial || owner} onClick={onUnlock}>
           {busy ? 'Opening…' : owner ? 'Preview only' : actionLabel ?? (bundle.owned ? 'View bundle' : bundle.partial ? 'Partly owned' : `Unlock · ⭐${bundle.stars.toLocaleString()}`)}
         </button>
@@ -69,7 +91,7 @@ function BundleCard({ bundle, items, blur, call, busy, owner = false, onUnlock, 
     <div className="cat-bundle-mosaic">{bundle.photoIds.map(id=>{const item=items.find(p=>p.type==='photo'&&p.id===id);return item?<Preview key={id} item={item} blur={blur} call={call}/>:null;})}</div>
     <div className="cat-bundle-copy"><span className="cat-featured-label">Photo bundle</span><h3>{bundle.title.replace(/^Photo collection/i,'Bundle')}</h3>
       <p className="cat-bundle-saving">{bundle.photoIds.length} photos · Save {(bundle.regularStars-bundle.stars).toLocaleString()} Stars</p>
-      <div className="cat-bundle-price"><strong><Star className="cat-stars" size={18} aria-hidden="true"/>{bundle.stars.toLocaleString()} Stars</strong><s>{bundle.regularStars.toLocaleString()}</s></div>
+      <div className="cat-bundle-price">{bundleTon ? <CardPrices stars={bundle.stars} ton={bundleTon} /> : <strong><Star className="cat-stars" size={18} aria-hidden="true"/>{bundle.stars.toLocaleString()} Stars</strong>}<s>{bundle.regularStars.toLocaleString()}</s></div>
       <button className="cat-primary" disabled={busy||bundle.partial} onClick={onUnlock}>{busy?'Sending…':bundle.owned?'View in chat':bundle.partial?'Partly owned':`Unlock for ${bundle.stars.toLocaleString()} Stars`}</button>
     </div>
   </article>;
@@ -391,6 +413,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
     catch (e) { setNotice((e as Error).message); } finally { setBusy(false); }
   }
   const compact = data?.presentation === 'compact';
+  const tonPricing: TonPricing = data?.tonEnabled && data.tonNanotonPerStar ? { nanotonPerStar: data.tonNanotonPerStar, discountPercent: data.tonDiscountPercent ?? 0 } : null;
   const filteredItems = compact ? compactItems(data?.items ?? [], section, search) : (data?.items ?? []).filter(item => {
     if (search) return item.description.toLowerCase().includes(search.toLowerCase());
     if (section === "Free Content") return item.free;
@@ -440,7 +463,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
         : !data ? <div className="cat-empty" aria-live="polite">Loading your collection…</div> : <>
         {!compact && featuredBundle && <section className="cat-daily-sale" aria-labelledby="daily-sale-title">
           <h2 id="daily-sale-title"><span aria-hidden="true">😈</span><span>Daddy’s Daily Reward Sale</span><span aria-hidden="true">😈</span></h2>
-          <BundleCard bundle={featuredBundle} items={data.items} blur={renderBlur} call={call} busy={commerceBusy} owner={compact && data.admin} compact={compact} onDetails={() => openBundle(featuredBundle, document.activeElement as HTMLElement)} actionLabel={paymentWaiting.has(`bundle:${featuredBundle.id}`) ? 'Check payment' : data.checkoutMode !== 'invoice' ? featuredBundle.owned ? 'View in chat' : featuredBundle.partial ? 'Partly owned' : delivered.has(`bundle:photo:${featuredBundle.id}`) ? 'Open payment in chat' : `Pay · ⭐${featuredBundle.stars.toLocaleString()}` : undefined} onUnlock={()=>unlockBundle(featuredBundle)} />
+          <BundleCard bundle={featuredBundle} items={data.items} blur={renderBlur} call={call} busy={commerceBusy} owner={compact && data.admin} compact={compact} onDetails={() => openBundle(featuredBundle, document.activeElement as HTMLElement)} actionLabel={paymentWaiting.has(`bundle:${featuredBundle.id}`) ? 'Check payment' : data.checkoutMode !== 'invoice' ? featuredBundle.owned ? 'View in chat' : featuredBundle.partial ? 'Partly owned' : delivered.has(`bundle:photo:${featuredBundle.id}`) ? 'Open payment in chat' : `Pay · ⭐${featuredBundle.stars.toLocaleString()}` : undefined} onUnlock={()=>unlockBundle(featuredBundle)} ton={tonPricing} />
         </section>}
         {rewards&&progress&&<section className="cat-rewards" aria-label="Your loyalty rewards">
           <button className="cat-reward-summary" aria-label="Rewards Daddy" aria-expanded={rewardsOpen} aria-controls="catalogue-reward-details" onClick={()=>setRewardsOpen(v=>!v)}>
@@ -472,7 +495,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
           <div className="cat-bundle-grid" ref={bundleTrack} onScroll={event => {
             const track = event.currentTarget;
             setBundleIndex(Math.min(browseBundles.length - 1, Math.max(0, Math.round(track.scrollLeft / (track.clientWidth + 10)))));
-          }}>{browseBundles.map((bundle,index)=><BundleCard key={bundle.id} bundle={bundle} items={data.items} blur={renderBlur} call={call} busy={commerceBusy} owner={compact && data.admin} compact={compact} onDetails={() => openBundle(bundle, document.activeElement as HTMLElement)} label={`Bundle ${index+1} of ${browseBundles.length}: ${bundle.title}`} actionLabel={paymentWaiting.has(`bundle:${bundle.id}`) ? 'Check payment' : data.checkoutMode !== 'invoice' ? bundle.owned ? 'View in chat' : bundle.partial ? 'Partly owned' : delivered.has(`bundle:photo:${bundle.id}`) ? 'Open payment in chat' : `Pay · ⭐${bundle.stars.toLocaleString()}` : undefined} onUnlock={()=>unlockBundle(bundle)} />)}</div>
+          }}>{browseBundles.map((bundle,index)=><BundleCard key={bundle.id} bundle={bundle} items={data.items} blur={renderBlur} call={call} busy={commerceBusy} owner={compact && data.admin} compact={compact} onDetails={() => openBundle(bundle, document.activeElement as HTMLElement)} label={`Bundle ${index+1} of ${browseBundles.length}: ${bundle.title}`} actionLabel={paymentWaiting.has(`bundle:${bundle.id}`) ? 'Check payment' : data.checkoutMode !== 'invoice' ? bundle.owned ? 'View in chat' : bundle.partial ? 'Partly owned' : delivered.has(`bundle:photo:${bundle.id}`) ? 'Open payment in chat' : `Pay · ⭐${bundle.stars.toLocaleString()}` : undefined} onUnlock={()=>unlockBundle(bundle)} ton={tonPricing} />)}</div>
           {!compact&&browseBundles.length>1&&<div className="cat-carousel-controls" aria-label="Choose bundle">
             {browseBundles.map((bundle,index)=><button key={bundle.id} aria-label={`Show bundle ${index+1}`} aria-current={bundleIndex===index ? 'true' : undefined} onClick={()=>{
               const track=bundleTrack.current;if(track)track.scrollTo({left:index*(track.clientWidth+10),behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});
@@ -484,7 +507,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
           <div className="cat-card-body">
             {refined && <p className="cat-card-description" title={item.description}>{compact ? shortCatalogueTitle(item.description) : item.description}</p>}
             <div className="cat-card-bottom">
-              {refined && <span className={`cat-card-price${item.purchased || item.received ? ' cat-card-owned' : ''}`}>
+              {tonPricing && !item.purchased && !item.received && !item.free ? <CardPrices stars={item.stars} ton={tonPricing} /> : refined && <span className={`cat-card-price${item.purchased || item.received ? ' cat-card-owned' : ''}`}>
                 {item.purchased || item.received ? <><Check size={14} aria-hidden="true"/>Owned</> : item.free ? 'Free' : <><Star className="cat-stars" size={15} aria-hidden="true"/><span>{item.stars.toLocaleString()}<span className="cat-sr-only"> Stars</span></span></>}
               </span>}
               {!compact && <button className="cat-item-unlock" aria-label={refined ? `${item.purchased || item.received ? 'View owned' : item.free ? 'View free' : `Unlock for ${item.stars.toLocaleString()} Stars:`} ${item.description}` : undefined} onClick={event => openItem(item, event.currentTarget)}>{refined ? item.purchased || item.received ? 'View' : item.free ? 'View' : 'Unlock' : item.purchased||item.received?<><Check size={14}/> View in chat</>:item.type==='video'?'Watch now':'View'}</button>}
@@ -513,8 +536,8 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
         <div className="cat-bundle-included">{selectedBundle.photoIds.map(id => { const item = data?.items.find(p => p.type === 'photo' && p.id === id); return item && <div key={id}><button className="cat-picture-button" onClick={event => openItem(item, event.currentTarget)} aria-label={`View included photo: ${item.description}`}><Preview item={item} blur={renderBlur} call={call} retryable={false}/></button><p>{item.description}</p></div>; })}</div>
         {salePercent(selectedBundle) !== null && !selectedBundle.owned && <p className="cat-bundle-saving">{salePercent(selectedBundle)}% off · <s>⭐{selectedBundle.regularStars.toLocaleString()}</s></p>}
         <div className="cat-pay-row">
-        {selectedBundle.owned && data?.checkoutMode === 'invoice' ? <p className="cat-owned-message"><Check size={16}/> Unlocked. Tap a photo to view it.</p> : <button className="cat-primary" disabled={commerceBusy || selectedBundle.partial || data?.admin} onClick={() => unlockBundle(selectedBundle)}>{commerceBusy ? checkoutPhase === 'confirming' ? 'Confirming payment…' : data?.checkoutMode === 'invoice' ? 'Opening payment…' : 'Sending…' : data?.admin ? 'Preview only' : selectedBundle.owned ? 'View in chat' : selectedBundle.partial ? 'Partly owned' : paymentWaiting.has(`bundle:${selectedBundle.id}`) ? 'Check payment' : data?.checkoutMode !== 'invoice' && delivered.has(`bundle:photo:${selectedBundle.id}`) ? 'Open payment in chat' : `${data?.checkoutMode === 'invoice' ? 'Unlock' : 'Pay in Telegram'} · ⭐${selectedBundle.stars.toLocaleString()}`}</button>}
-        {data?.checkoutMode === 'invoice' && data?.tonEnabled && !data?.admin && !selectedBundle.owned && !selectedBundle.partial && <button className="cat-secondary" disabled={busy || commerceBusy} onClick={() => void payWithTon('bundle', selectedBundle.id)}><TonMark />{tonLabel(selectedBundle.stars, data?.tonNanotonPerStar, tonPhase, data?.tonDiscountPercent)}{!!data?.tonDiscountPercent && <span className="cat-ton-tag">{data?.tonDiscountPercent}% off</span>}</button>}
+        {selectedBundle.owned && data?.checkoutMode === 'invoice' ? <p className="cat-owned-message"><Check size={16}/> Unlocked. Tap a photo to view it.</p> : <button className="cat-primary cat-pay-stars" disabled={commerceBusy || selectedBundle.partial || data?.admin} onClick={() => unlockBundle(selectedBundle)}>{commerceBusy ? checkoutPhase === 'confirming' ? 'Confirming payment…' : data?.checkoutMode === 'invoice' ? 'Opening payment…' : 'Sending…' : data?.admin ? 'Preview only' : selectedBundle.owned ? 'View in chat' : selectedBundle.partial ? 'Partly owned' : paymentWaiting.has(`bundle:${selectedBundle.id}`) ? 'Check payment' : data?.checkoutMode !== 'invoice' && delivered.has(`bundle:photo:${selectedBundle.id}`) ? 'Open payment in chat' : `${data?.checkoutMode === 'invoice' ? 'Unlock' : 'Pay in Telegram'} · ⭐${selectedBundle.stars.toLocaleString()}`}</button>}
+        {data?.checkoutMode === 'invoice' && data?.tonEnabled && !data?.admin && !selectedBundle.owned && !selectedBundle.partial && <button className="cat-secondary cat-pay-ton" disabled={busy || commerceBusy} onClick={() => void payWithTon('bundle', selectedBundle.id)}><TonButtonLabel stars={selectedBundle.stars} nanotonPerStar={data?.tonNanotonPerStar} phase={tonPhase} discountPercent={data?.tonDiscountPercent} /></button>}
         </div>
         {data?.checkoutMode !== 'invoice' && !data?.admin && !data?.canSend && <p className="cat-window">Send a message in the creator's chat first to receive this bundle.</p>}
         {notice && <p role="status" className="cat-payment-status">{notice}</p>}
@@ -527,8 +550,8 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
         {contentError && <div className="cat-content-error" role="alert"><p>{contentError}</p><button className="cat-secondary" onClick={() => void loadContent(selected, true)}>Retry loading item</button></div>}
         {data?.checkoutMode === 'invoice' ? <>
           <div className="cat-pay-row">
-          {!ownedMedia && !contentError && !contentBusy && <button className="cat-primary" disabled={busy || data.admin} onClick={() => void sendItem(selected)}>{busy ? checkoutPhase === 'confirming' ? 'Confirming payment…' : 'Opening payment…' : data.admin ? 'Preview only' : selected.received && !selected.purchased && !selected.free ? 'View in chat' : selected.purchased || selected.free ? 'View item' : paymentWaiting.has(`${selected.type}:${selected.id}`) ? 'Check payment' : `Unlock · ⭐${selected.stars.toLocaleString()}`}</button>}
-          {!ownedMedia && !contentError && !contentBusy && !selected.free && !selected.purchased && data.tonEnabled && !data.admin && <button className="cat-secondary" disabled={busy} onClick={() => void payWithTon(selected.type, selected.id)}><TonMark />{tonLabel(selected.stars, data.tonNanotonPerStar, tonPhase, data.tonDiscountPercent)}{!!data.tonDiscountPercent && <span className="cat-ton-tag">{data.tonDiscountPercent}% off</span>}</button>}
+          {!ownedMedia && !contentError && !contentBusy && <button className="cat-primary cat-pay-stars" disabled={busy || data.admin} onClick={() => void sendItem(selected)}>{busy ? checkoutPhase === 'confirming' ? 'Confirming payment…' : 'Opening payment…' : data.admin ? 'Preview only' : selected.received && !selected.purchased && !selected.free ? 'View in chat' : selected.purchased || selected.free ? 'View item' : paymentWaiting.has(`${selected.type}:${selected.id}`) ? 'Check payment' : `Unlock · ⭐${selected.stars.toLocaleString()}`}</button>}
+          {!ownedMedia && !contentError && !contentBusy && !selected.free && !selected.purchased && data.tonEnabled && !data.admin && <button className="cat-secondary cat-pay-ton" disabled={busy} onClick={() => void payWithTon(selected.type, selected.id)}><TonButtonLabel stars={selected.stars} nanotonPerStar={data.tonNanotonPerStar} phase={tonPhase} discountPercent={data.tonDiscountPercent} /></button>}
           </div>
           {ownedMedia && <p className="cat-owned-message"><Check size={16}/> Unlocked</p>}
           {notice && <p role="status" className="cat-payment-status">{notice}</p>}
