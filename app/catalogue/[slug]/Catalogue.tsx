@@ -81,12 +81,14 @@ function BundleCard({ bundle, items, blur, call, busy, owner = false, onUnlock, 
   busy: boolean; owner?: boolean; onUnlock: () => void; onUnlockTon?: () => void; onDetails?: () => void; compact?: boolean; label?: string; actionLabel?: string; ton?: TonPricing;
 }) {
   const bundleTon = bundle.owned || bundle.partial ? null : ton;
+  const bundleItemIds = bundle.kind === 'video' ? bundle.videoIds : bundle.photoIds;
+  const itemNoun = bundle.kind === 'video' ? 'videos' : 'photos';
   if (compact) {
     const discount = salePercent(bundle);
-    const photos = bundle.photoIds.map(id => items.find(item => item.type === 'photo' && item.id === id)).filter((item): item is CatalogueItem => !!item);
+    const media = bundleItemIds.map(id => items.find(item => item.type === bundle.kind && item.id === id)).filter((item): item is CatalogueItem => !!item);
     return <article className="cat-bundle-card cat-compact-bundle" aria-label={label ?? bundle.title}>
-      <button type="button" className="cat-bundle-details-button" onClick={onDetails} aria-label={`View ${bundle.title}, ${bundle.photoIds.length} photos and bundle details`}>
-        <span className="cat-bundle-stack">{photos.slice(0, 4).map((item, index) => <span key={item.id} className="cat-bundle-stack-card" style={{'--stack-index': index} as CSSProperties}><Preview item={item} blur={blur} call={call} retryable={false} /></span>)}<span className="cat-bundle-stack-count">{bundle.photoIds.length} pics</span></span>
+      <button type="button" className="cat-bundle-details-button" onClick={onDetails} aria-label={`View ${bundle.title}, ${bundleItemIds.length} ${itemNoun} and bundle details`}>
+        <span className="cat-bundle-stack">{media.slice(0, 4).map((item, index) => <span key={item.id} className="cat-bundle-stack-card" style={{'--stack-index': index} as CSSProperties}><Preview item={item} blur={blur} call={call} retryable={false} /></span>)}<span className="cat-bundle-stack-count">{bundleItemIds.length} {bundle.kind === 'video' ? 'vids' : 'pics'}</span></span>
       </button>
       <div className="cat-bundle-copy">
         <h3>{bundle.title}</h3>
@@ -104,9 +106,9 @@ function BundleCard({ bundle, items, blur, call, busy, owner = false, onUnlock, 
     </article>;
   }
   return <article className="cat-bundle-card" aria-label={label ?? bundle.title}>
-    <div className="cat-bundle-mosaic">{bundle.photoIds.map(id=>{const item=items.find(p=>p.type==='photo'&&p.id===id);return item?<Preview key={id} item={item} blur={blur} call={call}/>:null;})}</div>
-    <div className="cat-bundle-copy"><span className="cat-featured-label">Photo bundle</span><h3>{bundle.title.replace(/^Photo collection/i,'Bundle')}</h3>
-      <p className="cat-bundle-saving">{bundle.photoIds.length} photos · Save {(bundle.regularStars-bundle.stars).toLocaleString()} Stars</p>
+    <div className="cat-bundle-mosaic">{bundleItemIds.map(id=>{const item=items.find(p=>p.type===bundle.kind&&p.id===id);return item?<Preview key={id} item={item} blur={blur} call={call}/>:null;})}</div>
+    <div className="cat-bundle-copy"><span className="cat-featured-label">{bundle.kind === 'video' ? 'Video bundle' : 'Photo bundle'}</span><h3>{bundle.title.replace(/^Photo collection/i,'Bundle')}</h3>
+      <p className="cat-bundle-saving">{bundleItemIds.length} {itemNoun} · Save {(bundle.regularStars-bundle.stars).toLocaleString()} Stars</p>
       <div className="cat-bundle-price">{bundleTon ? <CardPrices stars={bundle.stars} ton={bundleTon} /> : <strong><Star className="cat-stars" size={18} aria-hidden="true"/>{bundle.stars.toLocaleString()} Stars</strong>}<s>{bundle.regularStars.toLocaleString()}</s></div>
       <button className="cat-primary" disabled={busy||bundle.partial} onClick={onUnlock}>{busy?'Sending…':bundle.owned?'View in chat':bundle.partial?'Partly owned':`Unlock for ${bundle.stars.toLocaleString()} Stars`}</button>
     </div>
@@ -587,7 +589,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
       <button className="cat-modal-close" aria-label="Close bundle" disabled={commerceBusy} onClick={closeDetails}><X size={21}/></button>
       <div className="cat-detail"><h2>{selectedBundle.title}</h2>
         {selectedBundle.caption && <p className="cat-bundle-caption cat-bundle-caption-detail">{selectedBundle.caption}</p>}
-        <div className="cat-bundle-included cat-bundle-grid">{selectedBundle.photoIds.map(id => { const item = data?.items.find(p => p.type === 'photo' && p.id === id); return item && <button key={id} className="cat-picture-button" onClick={event => openItem(item, event.currentTarget)} aria-label={`View included photo: ${item.description}`}><Preview item={item} blur={renderBlur} call={call} retryable={false}/></button>; })}</div>
+        <div className="cat-bundle-included cat-bundle-grid">{(selectedBundle.kind === 'video' ? selectedBundle.videoIds : selectedBundle.photoIds).map(id => { const item = data?.items.find(p => p.type === selectedBundle.kind && p.id === id); return item && <button key={id} className="cat-picture-button" onClick={event => openItem(item, event.currentTarget)} aria-label={`View included item: ${item.description}`}><Preview item={item} blur={renderBlur} call={call} retryable={false}/></button>; })}</div>
         {salePercent(selectedBundle) !== null && !selectedBundle.owned && <p className="cat-bundle-saving">{salePercent(selectedBundle)}% off · <s>⭐{selectedBundle.regularStars.toLocaleString()}</s></p>}
         <div className="cat-pay-row">
         {selectedBundle.owned && data?.checkoutMode === 'invoice' ? <p className="cat-owned-message"><Check size={16}/> Unlocked. Tap a photo to view it.</p> : <button className="cat-primary cat-pay-stars" disabled={commerceBusy || selectedBundle.partial || data?.admin} onClick={() => unlockBundle(selectedBundle)}>{commerceBusy ? checkoutPhase === 'confirming' ? 'Confirming payment…' : data?.checkoutMode === 'invoice' ? 'Opening payment…' : 'Sending…' : data?.admin ? 'Preview only' : selectedBundle.owned ? 'View in chat' : selectedBundle.partial ? 'Partly owned' : paymentWaiting.has(`bundle:${selectedBundle.id}`) ? 'Check payment' : data?.checkoutMode !== 'invoice' && delivered.has(`bundle:photo:${selectedBundle.id}`) ? 'Open payment in chat' : `${data?.checkoutMode === 'invoice' ? 'Unlock' : 'Pay in Telegram'} · ⭐${selectedBundle.stars.toLocaleString()}`}</button>}

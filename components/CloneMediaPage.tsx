@@ -8,11 +8,12 @@ import MediaManager from "@/app/media/MediaManager";
 import DashboardAccessProvider from "@/components/DashboardAccessProvider";
 
 export default async function CloneMediaPage({ cloneId, creatorMode = false }: { cloneId: string; creatorMode?: boolean }) {
-  const [cloneRes, photosRes, videosRes, bundlesRes] = await Promise.all([
+  const [cloneRes, photosRes, videosRes, bundlesRes, catalogueBundlesRes] = await Promise.all([
     supabaseAdmin.from("clones").select("id,name,slug,category_pricing,browse_enabled").eq("id", cloneId).maybeSingle(),
     supabaseAdmin.from("photos").select("*").eq("clone_id", cloneId).order("created_at", { ascending: false }),
     supabaseAdmin.from("videos").select("*").eq("clone_id", cloneId).order("created_at", { ascending: false }),
     supabaseAdmin.from("photo_bundles").select("*, photo_bundle_items(*)").eq("clone_id", cloneId).order("created_at", { ascending: true }),
+    supabaseAdmin.from("catalogue_bundles").select("id,title,caption,media_kind,photo_ids,video_ids,price_stars,regular_stars,enabled").eq("clone_id", cloneId).order("sort_order", { ascending: true }),
   ]);
 
   if (cloneRes.error) throw new Error(cloneRes.error.message);
@@ -38,10 +39,10 @@ export default async function CloneMediaPage({ cloneId, creatorMode = false }: {
       )}
       {creatorMode ? (
         <DashboardAccessProvider audience="admin">
-          <MediaManager cloneId={cloneId} photos={photosRes.data ?? []} videos={videosRes.data ?? []} bundles={bundlesRes.data ?? []} categoryPricing={clone.category_pricing} />
+          <MediaManager cloneId={cloneId} photos={photosRes.data ?? []} videos={videosRes.data ?? []} bundles={bundlesRes.data ?? []} catalogueBundles={catalogueBundlesRes.data ?? []} categoryPricing={clone.category_pricing} />
         </DashboardAccessProvider>
       ) : (
-        <MediaManager cloneId={cloneId} photos={photosRes.data ?? []} videos={videosRes.data ?? []} bundles={bundlesRes.data ?? []} categoryPricing={clone.category_pricing} />
+        <MediaManager cloneId={cloneId} photos={photosRes.data ?? []} videos={videosRes.data ?? []} bundles={bundlesRes.data ?? []} catalogueBundles={catalogueBundlesRes.data ?? []} categoryPricing={clone.category_pricing} />
       )}
     </div>
   );

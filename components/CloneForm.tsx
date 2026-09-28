@@ -142,6 +142,7 @@ export default function CloneForm({
   photos,
   videos,
   bundles,
+  catalogueBundles,
   appearanceImageUrl,
   appearanceColor,
 }: {
@@ -150,6 +151,7 @@ export default function CloneForm({
   photos: MediaProps["photos"];
   videos: MediaProps["videos"];
   bundles: MediaProps["bundles"];
+  catalogueBundles: MediaProps["catalogueBundles"];
   appearanceImageUrl?: string;
   appearanceColor: string;
 }) {
@@ -397,6 +399,7 @@ export default function CloneForm({
               photos={photos}
               videos={videos}
               bundles={bundles}
+              catalogueBundles={catalogueBundles}
               categoryPricing={clone.category_pricing}
             />
           </div>
