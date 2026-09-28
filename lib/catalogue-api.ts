@@ -5,7 +5,7 @@ import { catalogueEligible, catalogueItemVisible, DEFAULT_BLUR, projectItem, saf
 import { projectBundle } from './catalogue-commerce';
 import { cataloguePresentation } from './catalogue-presentation';
 import { beginCatalogueCheckout, catalogueContentPath, catalogueOrderStatus, checkoutMode, CheckoutError, nativeOwnedItems, paidCatalogueItems, type InvoiceTransport } from './catalogue-checkout';
-import { beginTonCheckout, tonEnabled, tonOrderStatus } from './catalogue-ton';
+import { beginTonCheckout, reconcilePendingTonOrders, tonEnabled, tonOrderStatus } from './catalogue-ton';
 export type CatalogueDependencies = {
   db(): SupabaseClient;
   invoice?: InvoiceTransport;
@@ -76,6 +76,9 @@ return async function POST(request: NextRequest, context: { params: Promise<{ sl
     const blur = validBlur(settings?.blur_strength) ? settings.blur_strength : DEFAULT_BLUR;
     const action = body.action;
     const invoiceCheckout = checkoutMode(settings?.checkout_mode) === 'invoice';
+    if (action === 'catalogue' && fan && !admin && invoiceCheckout && tonEnabled(settings)) {
+      try { await reconcilePendingTonOrders({db,clone,fan}); } catch { /* never block the catalogue on chain lookups */ }
+    }
     if (['checkout','checkout_status','content'].includes(String(action))) {
       if (admin || !fan) return json({error:'Owner preview cannot purchase or unlock content.'},403);
       if (!invoiceCheckout) return json({error:'In-app checkout is not enabled for this collection.'},403);
@@ -179,6 +182,8 @@ return async function POST(request: NextRequest, context: { params: Promise<{ sl
         presentation: cataloguePresentation(settings?.presentation_variant),
         checkoutMode: checkoutMode(settings?.checkout_mode),
         tonEnabled: tonEnabled(settings),
+        tonNanotonPerStar: tonEnabled(settings) ? Number((settings as any).ton_nanoton_per_star) : null,
+        tonReturnUrl: typeof settings?.mini_app_url === 'string' && /^https:\/\/t\.me\//.test(settings.mini_app_url) ? settings.mini_app_url : null,
         ...(admin ? { tonWalletAddress: (settings as any)?.ton_wallet_address ?? '', tonPerStar: (settings as any)?.ton_nanoton_per_star ? (settings as any).ton_nanoton_per_star / 1_000_000_000 : null } : {}),
         featuredBundleId: bundles.find(b => b?.id === settings?.featured_bundle_id)?.id ?? null,
         canSend: !!fan?.business_connection_id && windowOpen(fan.last_message_received) && clone.status === "active",

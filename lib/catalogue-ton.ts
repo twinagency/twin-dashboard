@@ -137,3 +137,30 @@ export async function tonOrderStatus({ db, clone, fan }: Context, orderId: strin
   }
   return { orderId, status };
 }
+
+// Fans often get bounced out of the Mini App by their wallet app. Verifying only on the
+// client's ton_status poll would strand a paid order, so the catalogue load also settles
+// any of this fan's pending TON orders with a single chain lookup.
+export async function reconcilePendingTonOrders({ db, clone, fan }: Context, verifier: TonVerifier = defaultTonVerifier): Promise<number> {
+  const key = `fan:${fan.id}`;
+  const now = Date.now();
+  if (now - (lastVerifyAt.get(key) ?? 0) < VERIFY_MIN_INTERVAL_MS) return 0;
+  lastVerifyAt.set(key, now);
+  const orders: any[] = checked(await db.from('catalogue_ton_orders').select('id,memo,amount_nanoton,expires_at')
+    .eq('clone_id', clone.id).eq('user_id', fan.id).eq('status', 'pending').order('created_at', { ascending: false }).limit(10)) ?? [];
+  const live = orders.filter(order => Date.parse(order.expires_at) > now);
+  if (!live.length) return 0;
+  const settings: any = checked(await db.from('creator_catalogue_settings').select('ton_wallet_address').eq('clone_id', clone.id).maybeSingle());
+  if (!settings?.ton_wallet_address) return 0;
+  let confirmed = 0;
+  try {
+    const txs = await verifier(settings.ton_wallet_address);
+    for (const order of live) {
+      const match = txs.find(tx => tx.comment === order.memo && tx.valueNanoton >= BigInt(order.amount_nanoton));
+      if (!match) continue;
+      const result = await db.rpc('confirm_catalogue_ton_order', { p_order: order.id, p_tx_hash: match.hash, p_buyer: match.source });
+      if (!result.error && result.data === 'confirmed') confirmed++;
+    }
+  } catch { /* toncenter hiccup; next load tries again */ }
+  return confirmed;
+}

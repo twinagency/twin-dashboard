@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { createCatalogueHandler } from '../lib/catalogue-api';
-import { beginTonCheckout, tonOrderStatus, tonEnabled, type TonIncomingTx } from '../lib/catalogue-ton';
+import { beginTonCheckout, reconcilePendingTonOrders, tonOrderStatus, tonEnabled, type TonIncomingTx } from '../lib/catalogue-ton';
 import { createHmac } from 'node:crypto';
 import { NextRequest } from 'next/server';
 
@@ -207,6 +207,19 @@ async function main() {
     const body = await response.json();
     assert.equal(body.status, 'pending', 'a client-asserted status/tx_hash must never confirm an order');
   } finally { (global as any).fetch = globalFetch; }
+
+  // 8. A fan who paid but never came back to poll: the catalogue load reconciles their
+  // pending orders from one chain lookup, confirming only the memo+amount match.
+  reset();
+  const left = await beginTonCheckout(context, { type: 'photo', id: id(10) }, settings);
+  const other = await beginTonCheckout(context, { type: 'photo', id: id(10) }, settings);
+  const settled = await reconcilePendingTonOrders(context, async () => [
+    tx({ hash: 'hash-left', comment: left.memo, valueNanoton: BigInt(left.amountNanoton) }),
+    tx({ hash: 'hash-other', comment: 'unrelated', valueNanoton: BigInt(other.amountNanoton) }),
+  ]);
+  assert.equal(settled, 1, 'exactly the matching pending order is confirmed on reconcile');
+  assert.equal(rows.catalogue_ton_orders.find(r => r.id === left.orderId).status, 'confirmed');
+  assert.equal(rows.catalogue_ton_orders.find(r => r.id === other.orderId).status, 'pending', 'no memo match stays pending');
 
   console.log('TON checkout checks passed: memo match confirms, wrong memo and underpayment do not, same tx twice is idempotent, expired orders never confirm and skip verification, TON-disabled clones reject checkout, and client-supplied confirmation is ignored end to end. No live toncenter calls.');
 }

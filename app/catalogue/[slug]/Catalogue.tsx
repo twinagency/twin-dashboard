@@ -17,7 +17,7 @@ import { compactCategories, compactItems, salePercent, shortCatalogueTitle, type
 
 type WebApp = { initData: string; ready(): void; expand(): void; close(): void; openTelegramLink(url: string): void; openInvoice?(url: string, callback: (status: string) => void): void; setHeaderColor?(color: string): void; setBackgroundColor?(color: string): void; setBottomBarColor?(color: string): void };
 function app(): WebApp | undefined { return (window as unknown as { Telegram?: { WebApp?: WebApp } }).Telegram?.WebApp; }
-type Data = { checkoutMode?: 'chat' | 'invoice'; name: string; verified?: boolean; presentation?: CataloguePresentation; featuredBundleId?: string | null; items: CatalogueItem[]; blur: number; admin: boolean; enabled: boolean; canSend: boolean; chatUrl: string | null; purchaseNote: string; bundles:CatalogueBundle[]; rewards:CatalogueRewards|null; tonEnabled?: boolean; tonWalletAddress?: string; tonPerStar?: number | null };
+type Data = { checkoutMode?: 'chat' | 'invoice'; name: string; verified?: boolean; presentation?: CataloguePresentation; featuredBundleId?: string | null; items: CatalogueItem[]; blur: number; admin: boolean; enabled: boolean; canSend: boolean; chatUrl: string | null; purchaseNote: string; bundles:CatalogueBundle[]; rewards:CatalogueRewards|null; tonEnabled?: boolean; tonWalletAddress?: string; tonPerStar?: number | null; tonNanotonPerStar?: number | null; tonReturnUrl?: string | null };
 type Call = (action: string, payload?: Record<string, unknown>) => Promise<Response>;
 const tabs = ["All", "Photos", "Videos", "Bundles"];
 
@@ -28,6 +28,14 @@ function ProfilePhoto({ name, photoUrl }: { name: string; photoUrl?: string }) {
 }
 
 function DevilIcon() { return <svg width="24" height="24" viewBox="0 0 32 32" fill="none"><path d="M6 15C2 12 2 5 4 2c1 5 4 6 8 7M26 15c4-3 4-10 2-13-1 5-4 6-8 7" fill="#f03737" /><path d="M16 8C9 8 5 12 5 19s5 11 11 11 11-4 11-11S23 8 16 8Z" fill="#f03737" /><path d="m10 16 3 2m9-2-3 2M11 23c3 3 7 3 10 0" stroke="#111" strokeWidth="2" strokeLinecap="round" /></svg>; }
+
+function tonLabel(stars: number, nanotonPerStar: number | null | undefined, phase: 'opening' | 'confirming' | null): string {
+  if (phase === 'opening') return 'Opening wallet…';
+  if (phase === 'confirming') return 'Confirming on TON…';
+  if (!nanotonPerStar) return 'Pay with TON';
+  const ton = (stars * nanotonPerStar) / 1_000_000_000;
+  return `Pay ${ton.toLocaleString(undefined, { maximumFractionDigits: 4 })} TON`;
+}
 
 function TonMark() {
   return <svg className="cat-ton-mark" width="18" height="18" viewBox="0 0 56 56" aria-hidden="true"><circle cx="28" cy="28" r="28" fill="#0098EA"/><path d="M37.6 15.6H18.4c-3.5 0-5.8 3.8-4 6.9l11.8 20.5c.8 1.3 2.7 1.3 3.5 0l11.9-20.5c1.7-3.1-.5-6.9-4-6.9Zm-11.4 21.3-2.6-5-6.2-11.1c-.4-.7.1-1.6 1-1.6h7.8v17.7Zm12.6-16.1-6.2 11.1-2.6 5V19.2h7.8c.9 0 1.4.9 1 1.6Z" fill="#fff"/></svg>;
@@ -259,7 +267,11 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
   }
   function tonConnect(): InstanceType<typeof TonConnectUI> {
     // Built lazily on the fan's first tap of "Pay with TON", never on page load.
-    if (!tonConnectRef.current) tonConnectRef.current = new TonConnectUI({ manifestUrl: `${window.location.origin}/tonconnect-manifest.json` });
+    if (!tonConnectRef.current) {
+      tonConnectRef.current = new TonConnectUI({ manifestUrl: `${window.location.origin}/tonconnect-manifest.json` });
+      // Send the fan back into this Mini App after approving in their wallet app.
+      if (data?.tonReturnUrl) tonConnectRef.current.uiOptions = { actionsConfiguration: { twaReturnUrl: data.tonReturnUrl as `${string}://${string}` } };
+    }
     return tonConnectRef.current;
   }
   async function payWithTon(type: 'photo' | 'video' | 'bundle', id: string) {
@@ -501,7 +513,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
         <div className="cat-bundle-included">{selectedBundle.photoIds.map(id => { const item = data?.items.find(p => p.type === 'photo' && p.id === id); return item && <div key={id}><button className="cat-picture-button" onClick={event => openItem(item, event.currentTarget)} aria-label={`View included photo: ${item.description}`}><Preview item={item} blur={renderBlur} call={call} retryable={false}/></button><p>{item.description}</p></div>; })}</div>
         {salePercent(selectedBundle) !== null && !selectedBundle.owned && <p className="cat-bundle-saving">{salePercent(selectedBundle)}% off · <s>⭐{selectedBundle.regularStars.toLocaleString()}</s></p>}
         {selectedBundle.owned && data?.checkoutMode === 'invoice' ? <p className="cat-owned-message"><Check size={16}/> Unlocked. Tap a photo to view it.</p> : <button className="cat-primary" disabled={commerceBusy || selectedBundle.partial || data?.admin} onClick={() => unlockBundle(selectedBundle)}>{commerceBusy ? checkoutPhase === 'confirming' ? 'Confirming payment…' : data?.checkoutMode === 'invoice' ? 'Opening payment…' : 'Sending…' : data?.admin ? 'Preview only' : selectedBundle.owned ? 'View in chat' : selectedBundle.partial ? 'Partly owned' : paymentWaiting.has(`bundle:${selectedBundle.id}`) ? 'Check payment' : data?.checkoutMode !== 'invoice' && delivered.has(`bundle:photo:${selectedBundle.id}`) ? 'Open payment in chat' : `${data?.checkoutMode === 'invoice' ? 'Unlock' : 'Pay in Telegram'} · ⭐${selectedBundle.stars.toLocaleString()}`}</button>}
-        {data?.checkoutMode === 'invoice' && data?.tonEnabled && !data?.admin && !selectedBundle.owned && !selectedBundle.partial && <button className="cat-secondary" disabled={busy || commerceBusy} onClick={() => void payWithTon('bundle', selectedBundle.id)}><TonMark />{tonPhase === 'opening' ? 'Opening wallet…' : tonPhase === 'confirming' ? 'Confirming on TON…' : 'Pay with TON'}</button>}
+        {data?.checkoutMode === 'invoice' && data?.tonEnabled && !data?.admin && !selectedBundle.owned && !selectedBundle.partial && <button className="cat-secondary" disabled={busy || commerceBusy} onClick={() => void payWithTon('bundle', selectedBundle.id)}><TonMark />{tonLabel(selectedBundle.stars, data?.tonNanotonPerStar, tonPhase)}</button>}
         {data?.checkoutMode !== 'invoice' && !data?.admin && !data?.canSend && <p className="cat-window">Send a message in the creator's chat first to receive this bundle.</p>}
         {notice && <p role="status" className="cat-payment-status">{notice}</p>}
       </div></section></div>}
@@ -513,7 +525,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
         {contentError && <div className="cat-content-error" role="alert"><p>{contentError}</p><button className="cat-secondary" onClick={() => void loadContent(selected, true)}>Retry loading item</button></div>}
         {data?.checkoutMode === 'invoice' ? <>
           {!ownedMedia && !contentError && !contentBusy && <button className="cat-primary" disabled={busy || data.admin} onClick={() => void sendItem(selected)}>{busy ? checkoutPhase === 'confirming' ? 'Confirming payment…' : 'Opening payment…' : data.admin ? 'Preview only' : selected.received && !selected.purchased && !selected.free ? 'View in chat' : selected.purchased || selected.free ? 'View item' : paymentWaiting.has(`${selected.type}:${selected.id}`) ? 'Check payment' : `Unlock · ⭐${selected.stars.toLocaleString()}`}</button>}
-          {!ownedMedia && !contentError && !contentBusy && !selected.free && !selected.purchased && data.tonEnabled && !data.admin && <button className="cat-secondary" disabled={busy} onClick={() => void payWithTon(selected.type, selected.id)}><TonMark />{tonPhase === 'opening' ? 'Opening wallet…' : tonPhase === 'confirming' ? 'Confirming on TON…' : 'Pay with TON'}</button>}
+          {!ownedMedia && !contentError && !contentBusy && !selected.free && !selected.purchased && data.tonEnabled && !data.admin && <button className="cat-secondary" disabled={busy} onClick={() => void payWithTon(selected.type, selected.id)}><TonMark />{tonLabel(selected.stars, data.tonNanotonPerStar, tonPhase)}</button>}
           {ownedMedia && <p className="cat-owned-message"><Check size={16}/> Unlocked</p>}
           {notice && <p role="status" className="cat-payment-status">{notice}</p>}
         </> : <>
