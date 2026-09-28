@@ -12,7 +12,7 @@ const bundles = [bundle('featured'),bundle('other')];
 
 assert.equal(cataloguePresentation('compact'),'compact');
 assert.equal(cataloguePresentation('anything else'),'standard');
-assert.deepEqual(compactCategories,['Explore','Photos','Videos','Bundles']);
+assert.deepEqual(compactCategories,['Explore','Videos','Photos','Bundles']);
 assert.deepEqual(remainingBundles(bundles,'featured').map(b=>b.id),['other']);
 assert.deepEqual(remainingBundles([bundles[0]],'featured'),[]);
 assert.deepEqual(remainingBundles(bundles,'missing').map(b=>b.id),['featured','other']);

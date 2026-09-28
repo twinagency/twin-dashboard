@@ -554,6 +554,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
           </div>}
         </section>}
         {visible.length ? <div className="cat-grid">{visible.slice(0, pageSize).map(item => <article className={`cat-card${compact && item.free ? ' cat-card-free' : ''}${trendingView && item.rank ? ' cat-card-ranked' : ''}`} key={`${item.type}:${item.id}`}>
+          {trendingView && item.rank && item.rank <= 3 && <span className={`cat-rank-mini cat-rank-mini-${item.rank}`} aria-label={`Trending number ${item.rank}`}>#{item.rank}</span>}
 
           <button className="cat-picture-button" onClick={event => openItem(item, event.currentTarget)} aria-label={`View ${item.type}: ${item.description.slice(0, 100)}${compact ? `, ${item.purchased || item.received ? 'owned' : item.free ? 'free' : `${item.stars.toLocaleString()} Stars`}` : ''}`}><Preview item={item} blur={renderBlur} call={call} retryable={false} /></button>
           <div className="cat-card-body">

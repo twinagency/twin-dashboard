@@ -5,7 +5,7 @@ export type CataloguePresentation = 'standard' | 'compact';
 export function cataloguePresentation(value: unknown): CataloguePresentation {
   return value === 'compact' ? 'compact' : 'standard';
 }
-export const compactCategories = ['Explore', 'Photos', 'Videos', 'Bundles'] as const;
+export const compactCategories = ['Explore', 'Videos', 'Photos', 'Bundles'] as const;
 export function remainingBundles(bundles: CatalogueBundle[], featuredId: string | null | undefined) {
   return bundles.filter(bundle => bundle.id !== featuredId);
 }
