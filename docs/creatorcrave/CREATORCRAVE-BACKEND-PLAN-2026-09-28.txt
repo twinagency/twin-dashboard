@@ -27,6 +27,18 @@ ACCOUNTS MANAGE UP TO 5 CREATOR PROFILES
   operator. Same pattern here: one account = up to 5 creators, each with its
   own handle, content, and TON wallet address.
 - This changes the data model: accounts and creators are no longer 1:1.
+- LIABILITY WORDING (required, not optional): when adding a 2nd-5th profile,
+  the account holder must explicitly confirm they have that creator's
+  permission to set up and manage their profile and payouts on their behalf.
+  A simple checkbox is not enough on its own — pair it with a short line of
+  copy, e.g. "By adding this profile you confirm you have this creator's
+  permission to manage their account, upload their content, and receive
+  their payment wallet on their behalf. You are responsible for this
+  creator's compliance with our terms." This puts the representation on the
+  account holder (the agency/team), not on us, and gives us something to
+  point to if a creator later disputes who set up their profile.
+- Each additional profile still goes through the same moderation queue as
+  any standalone creator — the multi-profile path is not a fast lane.
 
 DATA MODEL (new Supabase project)
 - accounts: id, auth_provider (google/telegram/wallet), auth_identifier,
