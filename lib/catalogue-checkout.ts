@@ -101,7 +101,12 @@ export async function beginCatalogueCheckout(context:Context,body:Record<string,
     // A lost first response leaves the browser holding this request key without
     // its order id. Return the terminal order so it can discard that key. Never
     // try to insert the same primary key again after marking it expired.
-    if(order&&['expired','refunded'].includes(order.status))return {orderId:order.id,status:order.status};
+    if(order&&['expired','refunded'].includes(order.status)) {
+      if(order.id===body.requestKey)return {orderId:order.id,status:order.status};
+      // A fresh click can discover a stale order from an earlier session. Its
+      // unaccepted invoice was expired atomically, so continue on this new key.
+      order=null;
+    }
     // Reservation/settlement may win the conditional expiry update. Its receipt
     // remains authoritative; do not treat the completed purchase as a new one.
     if(order?.status==='paid')return {orderId:order.id,status:(await catalogueOrderStatus(context,order.id)).status};
