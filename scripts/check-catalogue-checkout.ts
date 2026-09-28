@@ -104,6 +104,18 @@ async function main(){
   const restarted=await beginCatalogueCheckout(context,{...request,requestKey:id(120)},invoice);
   assert.equal(restarted.status,'pending');assert.equal(restarted.orderId,id(120),'fresh key recovers checkout');
   assert.equal(rows.catalogue_checkout_orders.length,2);assert.equal(invoiceCalls.length,2);
+  // Recording: an old 350-Star order was discovered by a fresh session after
+  // the current item price became 1 Star. Recover in the same API call.
+  reset();await beginCatalogueCheckout(context,request,invoice);
+  rows.catalogue_checkout_orders[0].expires_at=new Date(Date.now()-3600_000).toISOString();
+  rows.photos[0].star_value=1;
+  const fresh=await beginCatalogueCheckout(context,{...request,requestKey:id(121)},invoice);
+  assert.equal(fresh.status,'pending');assert.equal(fresh.orderId,id(121));
+  assert.equal(rows.catalogue_checkout_orders[0].status,'expired');
+  assert.deepEqual(invoiceCalls[1].prices,[{label:'Photo',amount:1}],'fresh checkout uses the current server price');
+  pay(fresh.orderId);
+  for(let i=0;i<3;i++)assert.equal(await catalogueContentPath(context,'photo',id(10)),'private/0.jpg','closing and reopening never consumes entitlement');
+  assert.equal(invoiceCalls.length,2,'reopening owned content creates no invoice');
   console.log('Native catalogue checkout checks passed: signed authentication, scope, exact server price, business binding, idempotency, ownership, bundle snapshots, refunds and protected originals. No live payment or fan message.');
 }
 main().catch(error=>{console.error(error);process.exitCode=1});

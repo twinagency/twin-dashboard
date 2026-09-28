@@ -5,6 +5,7 @@ import { ArrowLeft, BadgeCheck, Check, ChevronRight, Gift, LockKeyhole, Search, 
 import { rewardProgress, type CatalogueBundle, type CatalogueRewards } from '@/lib/catalogue-commerce';
 import { openCatalogueChat } from "@/lib/catalogue-navigation";
 import type { CatalogueItem } from "@/lib/catalogue-core";
+import { OwnedMediaCache, type OwnedMedia } from '@/lib/catalogue-owned-media';
 import "./catalogue.css";
 import VideoPreview from './VideoPreview';
 import PhotoPreview from './PhotoPreview';
@@ -70,7 +71,8 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
   const [search, setSearch] = useState("");
   const [searchOpen, setSearchOpen] = useState(false);
   const [selected, setSelected] = useState<CatalogueItem | null>(null);
-  const [ownedMedia, setOwnedMedia] = useState<{ url: string; type: 'photo' | 'video' } | null>(null);
+  const [ownedMedia, setOwnedMedia] = useState<OwnedMedia | null>(null);
+  const ownedCache = useRef(new OwnedMediaCache());
   const [contentBusy, setContentBusy] = useState(false);
   const [contentError, setContentError] = useState('');
   const contentRequest = useRef(0);
@@ -95,6 +97,10 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
   const requestKeys = useRef(new Map<string, string>());
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
+  useEffect(() => () => ownedCache.current.clear(), []);
+  useEffect(() => {
+    if (data) ownedCache.current.retain(new Set(data.items.filter(item => item.purchased || item.free).map(item => `${item.type}:${item.id}`)));
+  }, [data]);
   const call = useCallback<Call>((action, payload = {}) => fetch(`/api/catalogue/${encodeURIComponent(slug)}`, {
     signal: AbortSignal.timeout(action === 'preview' && payload.type === 'video' ? 60_000 : 20_000), method: "POST", credentials: "same-origin", headers: { "Content-Type": "application/json", "x-telegram-init-data": app()?.initData ?? "" },
     body: JSON.stringify({ ...payload, action, preview }),
@@ -146,13 +152,18 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
   function backToChat() {
     openCatalogueChat(data?.chatUrl, app(), url => { window.location.href = url; }, (callback, delay) => window.setTimeout(callback, delay));
   }
-  async function loadContent(item: CatalogueItem) {
+  async function loadContent(item: CatalogueItem, retry = false) {
     if (item.received && !item.purchased && !item.free) { backToChat(); return; }
     const attempt = ++contentRequest.current;
+    const key = `${item.type}:${item.id}`;
+    if (retry) ownedCache.current.delete(key);
+    const cached = (item.purchased || item.free) && ownedCache.current.get(key);
+    if (cached) { setOwnedMedia(cached); setContentError(''); setContentBusy(false); return; }
     setContentBusy(true); setContentError('');
     try {
       const result = await read('content', { type: item.type, id: item.id });
-      if (mounted.current && attempt === contentRequest.current) setOwnedMedia({ url: result.url, type: result.type });
+      const media = await ownedCache.current.prepare(key, { url: result.url, type: result.type });
+      if (mounted.current && attempt === contentRequest.current) setOwnedMedia(media);
     } catch (e) {
       if (mounted.current && attempt === contentRequest.current) setContentError(e instanceof Error ? e.message : 'Could not load your item.');
     } finally { if (mounted.current && attempt === contentRequest.current) setContentBusy(false); }
@@ -189,14 +200,17 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
           setPaymentWaiting(previous => { const next = new Set(previous); next.delete(key); return next; });
         }
       }
-      if (!order) {
+      for (let recovery = 0; !order && recovery < 2; recovery++) {
         if (!requestKeys.current.has(`checkout:${key}`)) requestKeys.current.set(`checkout:${key}`, crypto.randomUUID());
         const result = await read('checkout', { type, id, requestKey: requestKeys.current.get(`checkout:${key}`) });
         if (result.status === 'paid') { await finishCheckout(type, id); return; }
         if (['expired', 'refunded'].includes(result.status)) {
           checkoutOrders.current.delete(key); requestKeys.current.delete(`checkout:${key}`);
           setPaymentWaiting(previous => { const next = new Set(previous); next.delete(key); return next; });
-          setNotice(result.status === 'refunded' ? 'This payment was refunded.' : 'This payment expired. Tap again to start a new payment.'); return;
+          if (result.status === 'refunded') { setNotice('This payment was refunded.'); await load(); return; }
+          // Recover a lost response/expired key inside this click. Never reopen
+          // the terminal invoice or ask the fan to tap Unlock a second time.
+          continue;
         }
         order = { orderId: result.orderId, invoiceUrl: result.invoiceUrl };
         checkoutOrders.current.set(key, order);
@@ -206,6 +220,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
           resumePending = status.retryAfterSeconds > 0;
         }
       }
+      if (!order) throw new Error('Payment could not open. Please try again.');
       const activeOrder = order;
       const callbackStatus = resumePending ? 'pending' : await new Promise<string>((resolve, reject) => {
         let done = false;
@@ -424,10 +439,10 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
       </div></section></div>}
     {selected && <div className="cat-modal-backdrop" onClick={() => !busy && closeDetails()}><section className="cat-modal" role="dialog" aria-modal="true" aria-label="Item details" onClick={e => e.stopPropagation()}>
       <button className="cat-modal-close" aria-label="Close item" disabled={busy} onClick={closeDetails}><X size={21} /></button>
-      {ownedMedia && !contentError ? <div className="cat-owned-media">{ownedMedia.type === 'video' ? <video src={ownedMedia.url} controls playsInline autoPlay onError={() => setContentError('Could not load your video. Please retry.')} /> : <img src={ownedMedia.url} alt={selected.description} onError={() => setContentError('Could not load your photo. Please retry.')} />}</div> : <Preview item={selected} blur={renderBlur} call={call} />}
+      {ownedMedia && !contentError ? <div className="cat-owned-media">{ownedMedia.type === 'video' ? <video key={ownedMedia.url} src={ownedMedia.url} controls playsInline autoPlay onError={() => { ownedCache.current.delete(`${selected.type}:${selected.id}`); setContentError('Could not load your video. Please retry.'); }} /> : <img key={ownedMedia.url} src={ownedMedia.url} width={ownedMedia.width} height={ownedMedia.height} alt={selected.description} onError={() => { ownedCache.current.delete(`${selected.type}:${selected.id}`); setContentError('Could not load your photo. Please retry.'); }} />}</div> : <Preview item={selected} blur={renderBlur} call={call} />}
       <div className="cat-detail"><span className="cat-eyebrow">{selected.type}</span><p>{selected.description}</p>
         {contentBusy && <p role="status">Loading your unlocked item…</p>}
-        {contentError && <div className="cat-content-error" role="alert"><p>{contentError}</p><button className="cat-secondary" onClick={() => void loadContent(selected)}>Retry loading item</button></div>}
+        {contentError && <div className="cat-content-error" role="alert"><p>{contentError}</p><button className="cat-secondary" onClick={() => void loadContent(selected, true)}>Retry loading item</button></div>}
         {data?.checkoutMode === 'invoice' ? <>
           {!ownedMedia && !contentError && !contentBusy && <button className="cat-primary" disabled={busy || data.admin} onClick={() => void sendItem(selected)}>{busy ? checkoutPhase === 'confirming' ? 'Confirming payment…' : 'Opening payment…' : data.admin ? 'Preview only' : selected.received && !selected.purchased && !selected.free ? 'View in chat' : selected.purchased || selected.free ? 'View item' : paymentWaiting.has(`${selected.type}:${selected.id}`) ? 'Check payment' : `Unlock · ⭐${selected.stars.toLocaleString()}`}</button>}
           {ownedMedia && <p className="cat-owned-message"><Check size={16}/> Unlocked</p>}
