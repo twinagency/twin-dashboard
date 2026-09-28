@@ -1741,6 +1741,9 @@ function RevenueReport({
   const tz = reportTzLabel();
   if (bestHour && bestHour.stars > 0) facts.push({ label: "Peak hour", value: `${bestHour.label} ${tz}` });
   if (bestDow && bestDow.stars > 0) facts.push({ label: "Peak day", value: `${bestDow.label} ${tz}` });
+  // Descriptive only, does not change totalStars/totalSales above. Sales made
+  // through the catalogue Mini App's Pay with TON rail (imported_from='ton').
+  if ((a.totals.tonSales ?? 0) > 0) facts.push({ label: "Paid in TON", value: `${a.totals.tonSales} ${a.totals.tonSales === 1 ? "sale" : "sales"}` });
 
   // Every earning clone, not the top 8 of 12. The cut was silent, and a table
   // that drops a third of the fleet reads as the whole fleet.

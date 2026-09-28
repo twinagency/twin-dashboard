@@ -114,6 +114,7 @@ const MORE_LINKS: NavLink[] = [
   { kind: "route", label: "AI", href: "/jarvis", icon: "Sparkle", color: "blue" },
   { kind: "route", label: "Flows", href: "/flows", icon: "Flows", color: "pink", gateOnClone: true },
   { kind: "route", label: "Sequences", href: "/sequences", icon: "Media", color: "red", gateOnClone: true },
+  { kind: "route", label: "Catalogue funnel", href: "/catalogue-funnel", icon: "Flows", color: "pink" },
   // MTProto Campaign (2026-09-22): its own top-level system, not a Flows
   // sub-page (plan section N7) — a laptop-only re-engagement extension, self
   // -contained under app/mtproto-campaign, lib/mtproto, components/mtproto.

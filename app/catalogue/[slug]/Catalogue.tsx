@@ -15,9 +15,20 @@ import { catalogueDisplayOrder } from '@/lib/catalogue-display-order';
 import { catalogueAppearance } from '@/lib/catalogue-appearance';
 import { formatTonAmount, tonPriceNanoton } from '@/lib/catalogue-ton-price';
 import { compactCategories, compactItems, salePercent, shortCatalogueTitle, type CataloguePresentation } from '@/lib/catalogue-presentation';
+import { parseCatalogueStartParam } from '@/lib/catalogue-start-param';
 
-type WebApp = { initData: string; ready(): void; expand(): void; close(): void; openTelegramLink(url: string): void; openInvoice?(url: string, callback: (status: string) => void): void; setHeaderColor?(color: string): void; setBackgroundColor?(color: string): void; setBottomBarColor?(color: string): void };
+type WebApp = { initData: string; initDataUnsafe?: { start_param?: string }; ready(): void; expand(): void; close(): void; openTelegramLink(url: string): void; openInvoice?(url: string, callback: (status: string) => void): void; setHeaderColor?(color: string): void; setBackgroundColor?(color: string): void; setBottomBarColor?(color: string): void };
 function app(): WebApp | undefined { return (window as unknown as { Telegram?: { WebApp?: WebApp } }).Telegram?.WebApp; }
+// Telegram usually surfaces the startapp param on initDataUnsafe; some clients
+// only put it on the page URL as tgWebAppStartParam instead (query or hash).
+function currentStartParam(): string | null {
+  const fromApp = app()?.initDataUnsafe?.start_param;
+  if (fromApp) return fromApp;
+  const search = new URLSearchParams(window.location.search).get("tgWebAppStartParam");
+  if (search) return search;
+  const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : window.location.hash;
+  return new URLSearchParams(hash).get("tgWebAppStartParam");
+}
 type Data = { checkoutMode?: 'chat' | 'invoice'; name: string; verified?: boolean; presentation?: CataloguePresentation; featuredBundleId?: string | null; items: CatalogueItem[]; blur: number; admin: boolean; enabled: boolean; canSend: boolean; chatUrl: string | null; purchaseNote: string; bundles:CatalogueBundle[]; rewards:CatalogueRewards|null; tonEnabled?: boolean; tonWalletAddress?: string; tonPerStar?: number | null; tonNanotonPerStar?: number | null; tonDiscountPercent?: number; tonReturnUrl?: string | null };
 type Call = (action: string, payload?: Record<string, unknown>) => Promise<Response>;
 const tabs = ["All", "Photos", "Videos", "Bundles"];
@@ -152,6 +163,12 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
     if (!response.ok) throw new Error(result.error || "Please try again.");
     return result;
   }, [call]);
+  // Fire-and-forget funnel step. The server no-ops this for owner preview and
+  // never trusts anything from it beyond the event name and item reference.
+  const logEvent = useCallback((event: string, payload: Record<string, unknown> = {}) => {
+    if (preview) return;
+    void call("event", { event, ...payload }).catch(() => {});
+  }, [call, preview]);
   const load = useCallback(async () => {
     setError("");
     try { const value: Data = await read("catalogue"); setData(value); if (value.presentation === 'compact') setSection(current => current === 'All' ? 'Explore' : current); setSelected(current => current ? value.items.find(item => item.id === current.id && item.type === current.type) ?? current : null); setSelectedBundle(current => current ? value.bundles.find(bundle => bundle.id === current.id) ?? current : null); setBlur(value.blur); setRenderBlur(value.blur); if (value.admin) { setTonWalletAddress(value.tonWalletAddress ?? ''); setTonPerStar(value.tonPerStar != null ? String(value.tonPerStar) : ''); } return value; }
@@ -164,6 +181,23 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
     }
     void load();
   } }, [ready, load]);
+  const startParamHandled = useRef(false);
+  useEffect(() => {
+    // Deep link from the bot: https://t.me/<bot>?startapp=item_<photo|video|bundle>_<uuid>.
+    // Only opens something already in the loaded catalogue; junk or an unknown
+    // id is a normal load. Runs once, on the first successful catalogue load.
+    if (!data || startParamHandled.current || preview) return;
+    startParamHandled.current = true;
+    const parsed = parseCatalogueStartParam(currentStartParam());
+    if (!parsed) return;
+    if (parsed.type === 'bundle') {
+      const bundle = data.bundles.find(b => b.id === parsed.id);
+      if (bundle) openBundle(bundle, document.body);
+    } else {
+      const item = data.items.find(i => i.type === parsed.type && i.id === parsed.id);
+      if (item) openItem(item, document.body);
+    }
+  }, [data, preview]);
   useEffect(() => {
     if (data?.presentation !== 'compact') return;
     const telegram = app();
@@ -188,9 +222,10 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
   function closeDetails() { contentRequest.current++; setOwnedMedia(null); setContentError(''); setContentBusy(false); setSelected(null); setSelectedBundle(null); requestAnimationFrame(() => detailTrigger.current?.focus()); }
   function openItem(item: CatalogueItem, trigger: HTMLElement) {
     contentRequest.current++; detailTrigger.current = trigger; setSelectedBundle(null); setSelected(item); setOwnedMedia(null); setContentError(''); setContentBusy(false); setNotice('');
+    logEvent('view_item', { mediaType: item.type, mediaId: item.id });
     if (!data?.admin && data?.checkoutMode === 'invoice' && (item.purchased || item.free)) void loadContent(item);
   }
-  function openBundle(bundle: CatalogueBundle, trigger: HTMLElement) { contentRequest.current++; detailTrigger.current = trigger; setSelected(null); setOwnedMedia(null); setSelectedBundle(bundle); setNotice(""); }
+  function openBundle(bundle: CatalogueBundle, trigger: HTMLElement) { contentRequest.current++; detailTrigger.current = trigger; setSelected(null); setOwnedMedia(null); setSelectedBundle(bundle); setNotice(""); logEvent('view_bundle', { mediaType: 'bundle', mediaId: bundle.id }); }
   function backToChat() {
     openCatalogueChat(data?.chatUrl, app(), url => { window.location.href = url; }, (callback, delay) => window.setTimeout(callback, delay));
   }
@@ -224,6 +259,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
     if (data?.admin) { setNotice('Owner preview. Payments are disabled here.'); return; }
     if (!app()?.openInvoice) { setNotice('Open this catalogue inside Telegram to pay with Stars.'); return; }
     const key = `${type}:${id}`;
+    logEvent('tap_pay_stars', { mediaType: type, mediaId: id, rail: 'stars' });
     sending.current = true; setBusy(true); setCommerceBusy(true); setCheckoutPhase('opening'); setNotice('');
     try {
       let order = checkoutOrders.current.get(key);
@@ -284,6 +320,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
         if (!mounted.current) return;
       }
       if (canRetry) setPaymentWaiting(previous => { const next = new Set(previous); next.delete(key); return next; });
+      if (callbackStatus === 'cancelled') logEvent('pay_cancel', { mediaType: type, mediaId: id, rail: 'stars' });
       setNotice(callbackStatus === 'cancelled' ? 'Payment cancelled. You have not unlocked this item.' : callbackStatus === 'failed' ? 'Payment did not complete. You can try again. If Stars were deducted, check My purchases first.' : canRetry ? 'No payment confirmation yet. You can reopen this payment. Any duplicate charge will be refunded.' : 'Payment is still being confirmed. Tap Check payment to refresh.');
     } catch (e) { setNotice(e instanceof Error ? e.message : 'Could not open payment. Please try again.'); }
     finally { sending.current = false; if (mounted.current) { setBusy(false); setCommerceBusy(false); setCheckoutPhase(null); } }
@@ -300,6 +337,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
   async function payWithTon(type: 'photo' | 'video' | 'bundle', id: string) {
     if (sending.current) return;
     if (data?.admin) { setNotice('Owner preview. Payments are disabled here.'); return; }
+    logEvent('tap_pay_ton', { mediaType: type, mediaId: id, rail: 'ton' });
     sending.current = true; setBusy(true); setCommerceBusy(true); setTonPhase('opening'); setNotice('');
     try {
       const begin = await read('ton_checkout', { type, id });
@@ -307,7 +345,9 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
       try {
         const ui = tonConnect();
         // sendTransaction throws if no wallet is connected; open the wallet picker first.
-        if (!ui.connected) await ui.connectWallet();
+        const alreadyConnected = ui.connected;
+        if (!alreadyConnected) await ui.connectWallet();
+        if (!alreadyConnected) logEvent('wallet_connected', { rail: 'ton' });
         await ui.sendTransaction({
           validUntil: Math.floor(Date.now() / 1000) + 300,
           messages: [{ address: String(begin.toAddress), amount: String(begin.amountNanoton), payload }],
@@ -315,6 +355,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
       } catch {
         // A wallet rejection or cancel never unlocks anything. The order stays
         // pending in the database until it expires; the fan can just retry.
+        logEvent('pay_cancel', { mediaType: type, mediaId: id, rail: 'ton' });
         setNotice('Payment cancelled. You have not unlocked this item.'); return;
       }
       if (!mounted.current) return;

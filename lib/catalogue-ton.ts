@@ -3,6 +3,7 @@ import { randomBytes } from 'node:crypto';
 import { Cell } from '@ton/core';
 import { tonPriceNanoton } from './catalogue-ton-price';
 import { CheckoutError, checkoutType, checkoutUuid, productForCheckout, type Context } from './catalogue-checkout';
+import { catalogueEventLoggedForOrder, logCatalogueEvent } from './catalogue-events';
 
 export type TonSettings = { ton_wallet_address?: string | null; ton_nanoton_per_star?: number | string | null; ton_discount_percent?: number | null };
 
@@ -108,10 +109,19 @@ export const defaultTonVerifier: TonVerifier = async (address) => {
 const lastVerifyAt = new Map<string, number>();
 const VERIFY_MIN_INTERVAL_MS = 3_000;
 
+// Both the fan's own poll (below) and the catalogue-load reconciliation logs
+// pay_success the same way once confirm_catalogue_ton_order actually confirms.
+async function logTonPaySuccess(db: any, clone: any, fan: any, order: any) {
+  if (await catalogueEventLoggedForOrder(db, clone.id, 'pay_success', order.id)) return;
+  await logCatalogueEvent(db, { cloneId: clone.id, telegramId: fan.telegram_id, event: 'pay_success', rail: 'ton',
+    mediaType: order.media_type ?? null, mediaId: order.media_id ?? null, amountNanoton: Number(order.amount_nanoton),
+    detail: { order_id: order.id } });
+}
+
 export type TonOrderStatus = { orderId: string; status: 'pending' | 'confirmed' | 'delivered' | 'expired' };
 export async function tonOrderStatus({ db, clone, fan }: Context, orderId: string, verifier: TonVerifier = defaultTonVerifier): Promise<TonOrderStatus> {
   if (!checkoutUuid.test(orderId)) throw new CheckoutError('Invalid checkout request.', 400);
-  const order: any = checked(await db.from('catalogue_ton_orders').select('id,status,memo,amount_nanoton,expires_at')
+  const order: any = checked(await db.from('catalogue_ton_orders').select('id,status,memo,amount_nanoton,expires_at,media_type,media_id')
     .eq('id', orderId).eq('clone_id', clone.id).eq('user_id', fan.id).maybeSingle());
   if (!order) throw new CheckoutError('Checkout not found.', 404);
   let status: TonOrderStatus['status'] = order.status;
@@ -135,10 +145,13 @@ export async function tonOrderStatus({ db, clone, fan }: Context, orderId: strin
           if (match) {
             const result = await db.rpc('confirm_catalogue_ton_order', { p_order: orderId, p_tx_hash: match.hash, p_buyer: match.source });
             if (!result.error && typeof result.data === 'string') status = result.data as TonOrderStatus['status'];
+            if (status === 'confirmed' || status === 'delivered') await logTonPaySuccess(db, clone, fan, order);
           }
         } catch { /* toncenter hiccup; the fan's next poll tries again */ }
       }
     }
+  } else if (status === 'confirmed' || status === 'delivered') {
+    await logTonPaySuccess(db, clone, fan, order);
   }
   return { orderId, status };
 }
@@ -151,7 +164,7 @@ export async function reconcilePendingTonOrders({ db, clone, fan }: Context, ver
   const now = Date.now();
   if (now - (lastVerifyAt.get(key) ?? 0) < VERIFY_MIN_INTERVAL_MS) return 0;
   lastVerifyAt.set(key, now);
-  const orders: any[] = checked(await db.from('catalogue_ton_orders').select('id,memo,amount_nanoton,expires_at')
+  const orders: any[] = checked(await db.from('catalogue_ton_orders').select('id,memo,amount_nanoton,expires_at,media_type,media_id')
     .eq('clone_id', clone.id).eq('user_id', fan.id).eq('status', 'pending').order('created_at', { ascending: false }).limit(10)) ?? [];
   const live = orders.filter(order => Date.parse(order.expires_at) > now);
   if (!live.length) return 0;
@@ -164,7 +177,7 @@ export async function reconcilePendingTonOrders({ db, clone, fan }: Context, ver
       const match = txs.find(tx => tx.comment === order.memo && tx.valueNanoton >= BigInt(order.amount_nanoton));
       if (!match) continue;
       const result = await db.rpc('confirm_catalogue_ton_order', { p_order: order.id, p_tx_hash: match.hash, p_buyer: match.source });
-      if (!result.error && result.data === 'confirmed') confirmed++;
+      if (!result.error && result.data === 'confirmed') { confirmed++; await logTonPaySuccess(db, clone, fan, order); }
     }
   } catch { /* toncenter hiccup; next load tries again */ }
   return confirmed;
