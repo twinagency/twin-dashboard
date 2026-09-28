@@ -73,6 +73,11 @@ export type CloneConfigState = {
   // migration 147). AND-ed with the bot's VIDEO_SEQUENCES_ENABLED env flag, so
   // turning this on alone cannot switch the feature on.
   videoSequencesEnabled: boolean;
+  // Sell-via-Mini-App switch (clones.sell_via_mini_app, migration
+  // 20260928140000). Off by default: paid photos/videos/bundles are sent as a
+  // Stars-locked original in chat. On: they go out as a blurred preview with an
+  // "Unlock now" button that opens the item in the catalogue Mini App instead.
+  sellViaMiniApp: boolean;
 
   sexualLevel: HeatLevel;
   nsfwLevel: HeatLevel;
@@ -266,6 +271,7 @@ function initial(clone?: Partial<Clone>): CloneConfigState {
     mediaAllowResend: clone?.media_allow_resend ?? false,
     mediaMatchStrict: clone?.media_match_strict ?? false,
     videoSequencesEnabled: clone?.video_sequences_enabled ?? false,
+    sellViaMiniApp: clone?.sell_via_mini_app ?? false,
 
     sexualLevel: heatLevel(clone?.sexual_level),
     nsfwLevel: heatLevel(clone?.nsfw_level),

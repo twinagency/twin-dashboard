@@ -314,6 +314,12 @@ function rowFromForm(fd: FormData) {
     // the column absent the bot's mapClone reads it as false and the feature
     // stays off.
     video_sequences_enabled: fd.get("video_sequences_enabled") === "true",
+    // Sell-via-Mini-App switch (migration 20260928140000). Listed in
+    // MINI_APP_SELL_COLUMNS below so a save against a stack where that
+    // migration has not run yet strips it and still succeeds. Stripping is the
+    // SAFE state: with the column absent the bot's mapClone reads it as false
+    // and paid media keeps going out Stars-locked in chat, the current default.
+    sell_via_mini_app: fd.get("sell_via_mini_app") === "true",
     tips_enabled: fd.get("tips_enabled") === "true",
     // Migration 084, the two tip re-ask brakes.
     //
@@ -925,6 +931,12 @@ const SAFETY_116_COLUMNS = ["strict_minor_gate"] as const;
 // videoSequencesEnabled() in bot/src/intent/sequence.ts fails closed.
 // See bot/db/migrations/147_video_sequences.sql.
 const SEQUENCE_147_COLUMNS = ["video_sequences_enabled"] as const;
+// Migration 20260928140000, the sell-via-Mini-App switch. Listed so a save
+// against a stack where that migration has not run yet strips it and still
+// succeeds. Stripping is the SAFE state: with the column absent the bot's
+// mapClone reads it as false and paid media stays Stars-locked in chat.
+// See bot/db/migrations/20260928140000_clones_sell_via_mini_app.sql.
+const MINI_APP_SELL_COLUMNS = ["sell_via_mini_app"] as const;
 const ELEVENLABS_150_COLUMNS = ["elevenlabs_api_key"] as const;
 // Migration 170: operator's manual note of the Telegram account's phone number. Nothing reads it.
 const ACCOUNT_PHONE_170_COLUMNS = ["account_phone"] as const;
@@ -983,6 +995,7 @@ const OPTIONAL_COLUMNS = [
   ...VARIETY_105_COLUMNS,
   ...SAFETY_116_COLUMNS,
   ...SEQUENCE_147_COLUMNS,
+  ...MINI_APP_SELL_COLUMNS,
   ...ELEVENLABS_150_COLUMNS,
   ...ACCOUNT_PHONE_170_COLUMNS,
 ] as const;
