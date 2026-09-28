@@ -58,7 +58,7 @@ async function productForCheckout({db,clone,fan}:Context,type:CheckoutMediaType,
     if(!bundle)throw new CheckoutError('The bundle changed. Refresh the collection before buying.');
     if(receipts.has(`bundle:${id}`)||bundle.photoIds.some(photoId=>owned.has(photoId)||receipts.has(`photo:${photoId}`)))
       throw new CheckoutError('You already own items in this bundle. Choose individual items to avoid paying twice.');
-    return {type,id,stars:bundle.stars,photoIds:bundle.photoIds,title:`${bundle.photoIds.length}-photo bundle`,description:String(row.caption||row.title||'Photo collection').slice(0,255)};
+    return {type,id,stars:bundle.stars,photoIds:bundle.photoIds,title:String(bundle.title||`${bundle.photoIds.length}-photo bundle`).slice(0,32),description:String(row.caption||row.title||'Photo collection').slice(0,255)};
   }
   const row:any = checked(await db.from(type==='photo'?'photos':'videos').select('id,caption,auto_desc,star_value,is_free')
     .eq('clone_id',clone.id).eq('id',id).maybeSingle());
