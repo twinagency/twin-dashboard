@@ -17,4 +17,9 @@ export const POST = createCatalogueHandler({
   preview: renderPreview,
   videoPreview: renderVideoPreview,
   videoSources: videoPreviewSources,
+  content: async (path) => {
+    const {data,error}=await serviceClient().storage.from('media').createSignedUrl(path,300);
+    if(error||!data?.signedUrl)throw new Error('Original temporarily unavailable.');
+    return data.signedUrl;
+  },
 });

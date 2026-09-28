@@ -53,7 +53,7 @@
     "test:tether-creator-signup": "tsx scripts/check-tether-creator-signup.ts",
     "test:tether-auth-ui": "tsx scripts/check-tether-auth-ui.ts",
     "test:reset-creator-guardrails": "node scripts/check-reset-recent-creator-test-accounts.mjs",
-    "test:catalogue": "node --import tsx scripts/check-catalogue.ts && node --import tsx scripts/check-catalogue-navigation.ts && node --import tsx scripts/check-catalogue-video.ts && node --import tsx scripts/check-catalogue-presentation.ts",
+    "test:catalogue": "node --import tsx scripts/check-catalogue.ts && node --import tsx scripts/check-catalogue-navigation.ts && node --import tsx scripts/check-catalogue-video.ts && node --import tsx scripts/check-catalogue-presentation.ts && node --import tsx scripts/check-catalogue-preview-client.ts && node --import tsx scripts/check-catalogue-checkout.ts",
     "test:recovery": "node --import tsx scripts/check-revenue-sections.ts && node --import tsx scripts/check-cut-access.ts"
   },
   "dependencies": {

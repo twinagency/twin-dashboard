@@ -4,23 +4,14 @@ import { Check, LockKeyhole, Play, Video } from 'lucide-react';
 import type { CatalogueItem } from '@/lib/catalogue-core';
 import { formatVideoDuration } from '@/lib/catalogue-video-duration';
 
-type Call = (action: string, payload?: Record<string, unknown>) => Promise<Response>;
-type Sources = { url: string; posterUrl: string; seconds: number; durationSeconds?: number };
-let active = 0;
-const waiting: Array<() => void> = [];
-async function previewSlot<T>(work: () => Promise<T>): Promise<T> {
-  if (active >= 2) await new Promise<void>(resolve => waiting.push(resolve));
-  else active++;
-  try { return await work(); }
-  finally { const next = waiting.shift(); if (next) next(); else active--; }
-}
+import { cataloguePreviews, PreviewLoadError, type PreviewCall as Call, type VideoPreviewSources as Sources } from '@/lib/catalogue-preview-client';
 
 export default function VideoPreview({ item, blur, call, retryable }: {
   item: CatalogueItem; blur: number; call: Call; retryable: boolean;
 }) {
   const container = useRef<HTMLDivElement>(null), video = useRef<HTMLVideoElement>(null);
   const [nearby, setNearby] = useState(false), [visible, setVisible] = useState(false);
-  const [sources, setSources] = useState<Sources | null>(null), [error, setError] = useState(false);
+  const [sources, setSources] = useState<Sources | null>(null), [error, setError] = useState('');
   const [retry, setRetry] = useState(0), [playbackError, setPlaybackError] = useState(false);
   const [playing, setPlaying] = useState(false), [posterError, setPosterError] = useState(false);
   const [motionAllowed, setMotionAllowed] = useState(false);
@@ -44,34 +35,14 @@ export default function VideoPreview({ item, blur, call, retryable }: {
   }, []);
   useEffect(() => {
     if (!nearby) return;
-    let cancelled = false, timer: number | undefined;
-    setSources(null); setError(false); setPlaybackError(false); setPlaying(false); setPosterError(false);
-    const load = async (attempt: number) => {
-      try {
-        const result = await previewSlot(async () => {
-          if (cancelled) return null;
-          const response = await call('preview', { type: 'video', id: item.id, blur, delivery: 'native' });
-          const data = await response.json();
-          return { ok: response.ok, data };
-        });
-        if (cancelled || !result) return;
-        if (!result.ok) {
-          if (String(result.data.error).startsWith('Preview busy') && attempt < 8) {
-            timer = window.setTimeout(() => void load(attempt + 1), Math.min(12_000, 2_000 * 2 ** attempt));
-            return;
-          }
-          throw new Error('preview');
-        }
-        if (!result.data.url || !result.data.posterUrl) throw new Error('preview');
-        setSources(result.data);
-      } catch {
-        if (cancelled) return;
-        if (attempt < 2) timer = window.setTimeout(() => void load(attempt + 1), 2_000 * (attempt + 1));
-        else setError(true);
-      }
-    };
-    timer = window.setTimeout(() => void load(0), 120);
-    return () => { cancelled = true; window.clearTimeout(timer); };
+    let cancelled = false;
+    setSources(null); setError(''); setPlaybackError(false); setPlaying(false); setPosterError(false);
+    void cataloguePreviews.video(call, item.id, blur, retry > 0).then(value => {
+      if (!cancelled) setSources(value);
+    }).catch(e => {
+      if (!cancelled) setError(e instanceof PreviewLoadError ? e.message : 'Preview unavailable');
+    });
+    return () => { cancelled = true; };
   }, [nearby, item.id, blur, call, retry]);
   useEffect(() => {
     const element = video.current;
@@ -89,7 +60,7 @@ export default function VideoPreview({ item, blur, call, retryable }: {
       {!playing && !posterError && <img className="cat-video-poster" src={sources.posterUrl} alt="Blurred video preview" onError={() => setPosterError(true)} />}
     </>}
     {(!sources || (posterError && (!playing || playbackError))) && <div className="cat-placeholder cat-video-loading" role="status">
-      <Video size={28} /><span>{error || playbackError || posterError ? 'Preview unavailable' : 'Loading preview…'}</span>
+      <Video size={28} /><span>{error || (playbackError || posterError ? 'Preview unavailable' : 'Loading preview…')}</span>
       {(error || playbackError || posterError) && retryable && <button type="button" onClick={e => { e.stopPropagation(); setRetry(v => v + 1); }}>Retry preview</button>}
     </div>}
     <span className="cat-type">VIDEO</span>
@@ -98,6 +69,7 @@ export default function VideoPreview({ item, blur, call, retryable }: {
     </span>
     {sources && !retryable && !(posterError && !playing) && <span className="cat-video-label"><Play size={11} fill="currentColor" /> {playbackError ? 'Preview unavailable' : '5-sec preview'}</span>}
     {fullDuration && <span className="cat-video-duration" aria-label={`Full video: ${fullDuration}`}>{fullDuration}</span>}
-    {sources && playbackError && retryable && <button type="button" className="cat-video-retry" onClick={() => setRetry(v => v + 1)}><Play size={14} /> Play preview</button>}
+    {sources && playbackError && retryable && <button type="button" className="cat-video-retry" onClick={e => { e.stopPropagation(); setRetry(v => v + 1); }}><Play size={14} /> Play preview</button>}
   </div>;
 }
+
