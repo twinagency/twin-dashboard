@@ -9,9 +9,7 @@ import { revalidatePath } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase";
 import { catalogueBundlePricing } from "@/lib/catalogue-bundle-pricing";
 
-export type CatalogueBundleKind = "photo" | "video";
-export const CATALOGUE_BUNDLE_MIN_ITEMS = 2;
-export const CATALOGUE_BUNDLE_MAX_ITEMS = 10;
+import { CATALOGUE_BUNDLE_MIN_ITEMS, CATALOGUE_BUNDLE_MAX_ITEMS, type CatalogueBundleKind } from "@/lib/catalogue-bundle-limits";
 
 // ── Create a Mini App catalogue bundle ───────────────────────────────────────
 export async function createCatalogueBundle(cloneId: string, fd: FormData): Promise<string> {

@@ -40,9 +40,8 @@ import {
   createCatalogueBundle,
   setCatalogueBundleEnabled,
   deleteCatalogueBundle,
-  CATALOGUE_BUNDLE_MIN_ITEMS,
-  CATALOGUE_BUNDLE_MAX_ITEMS,
 } from "./catalogue-bundle-actions";
+import { CATALOGUE_BUNDLE_MIN_ITEMS, CATALOGUE_BUNDLE_MAX_ITEMS } from "@/lib/catalogue-bundle-limits";
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 type Photo = {
