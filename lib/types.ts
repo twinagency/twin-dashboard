@@ -72,6 +72,10 @@ export type Clone = {
   // must be true. Optional so a row read before the migration lands still
   // type-checks; absent reads as off, which is the fail-closed direction.
   video_sequences_enabled?: boolean;
+  // Sell-via-Mini-App switch (migration 20260928140000). Optional so a row
+  // read before the migration lands still type-checks; absent reads as off,
+  // the fail-closed direction (bot's mapClone: `r.sell_via_mini_app ?? false`).
+  sell_via_mini_app?: boolean;
   live_captions_enabled: boolean;
   media_caption_mode: "inline" | "none" | "separate";
   thank_you_enabled: boolean;

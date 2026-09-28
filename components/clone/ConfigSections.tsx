@@ -751,6 +751,22 @@ export default function ConfigSections({
             onChange={(v) => set("videoSequencesEnabled", v)}
           />
         </div>
+        {/* Sell-via-Mini-App switch (clones.sell_via_mini_app, migration
+            20260928140000). Default off, on purpose left off for every clone
+            already running until deploys are unblocked. Off: paid photos,
+            videos and bundles go out as the Stars-locked original in chat,
+            today's behaviour. On: they go out as a blurred preview with an
+            "Unlock now" button that opens the item in the catalogue Mini App. */}
+        <div className="border-t border-line pt-2">
+          <ToggleCard
+            emoji={mode === "edit" ? "" : "🛍"}
+            label="Sell content through the app"
+            title="Paid photos and videos go out as a blurred preview with an Unlock now button that opens this item in the app, instead of a Stars lock in chat."
+            name="sell_via_mini_app"
+            checked={cfg.sellViaMiniApp}
+            onChange={(v) => set("sellViaMiniApp", v)}
+          />
+        </div>
         {/* Strict media-match dial (clones.media_match_strict, migration 104).
             When the AI can't confidently read what item to send (its answer
             comes back unparseable), the code has always had to pick something
