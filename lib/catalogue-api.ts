@@ -291,7 +291,7 @@ return async function POST(request: NextRequest, context: { params: Promise<{ sl
         const rewardType=body.rewardType ?? 'photo';
         if(rewardType!=='photo' && rewardType!=='video') return json({error:'Invalid reward type.'},400);
         if(rewardType==='photo' ? !clone.photos_enabled : !clone.videos_enabled) return json({error:'Reward unavailable.'},404);
-        if (slug === 'alanna-pow') {
+        if (['alanna-pow', 'mrs-callace', 'fit-sid'].includes(slug)) {
           const reward = checked(await db.from(rewardType === 'video' ? 'videos' : 'photos').select('caption').eq('clone_id', clone.id).eq('id', body.id).maybeSingle());
           if (!catalogueItemVisible(reward, slug)) return json({error:'Reward unavailable.'},404);
         }
