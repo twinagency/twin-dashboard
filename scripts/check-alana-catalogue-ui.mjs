@@ -66,8 +66,15 @@ async function main(){
       await page.goto(`${origin}/catalogue/alanna-pow`);
       await page.getByRole('heading',{name:'Daddy’s Daily Reward Sale'}).waitFor();
       await page.locator('.cat-approved-badge').evaluate(image=>image.decode());
-      await page.locator('.cat-compact-bundle .cat-preview img').first().waitFor();
-      await page.locator('.cat-grid .cat-preview img').first().waitFor();
+      for (const preview of await page.locator('.cat-compact-bundle .cat-preview').all()) await preview.locator('img').waitFor();
+      // The first photo deliberately receives one 503. Await its actual recovery,
+      // not whichever later preview happens to resolve first.
+      await page.locator('.cat-grid .cat-card').first().locator('.cat-preview > img').waitFor();
+      for (const card of await page.locator('.cat-grid .cat-card').all()) {
+        await card.scrollIntoViewIfNeeded();
+        if (!await card.locator('.cat-video-preview').count()) await card.locator('.cat-preview > img').waitFor();
+      }
+      await page.evaluate(()=>window.scrollTo(0,0));
       const metrics=await page.evaluate(()=>{
         const badge=document.querySelector('.cat-approved-badge'),primary=document.querySelector('.cat-compact-bundle .cat-primary');
         return {overflow:document.documentElement.scrollWidth-innerWidth,badgeLoaded:badge.complete&&badge.naturalWidth===1254,headerHeight:document.querySelector('.cat-header').getBoundingClientRect().height,galleryTop:document.querySelector('.cat-grid').getBoundingClientRect().top,offerHeight:document.querySelector('.cat-compact-bundle').getBoundingClientRect().height,purchaseRadius:getComputedStyle(primary).borderRadius,headerRight:Math.max(...[...document.querySelectorAll('.cat-header button')].map(e=>e.getBoundingClientRect().right))};
@@ -84,12 +91,13 @@ async function main(){
       assert.equal(await page.locator('.cat-card').nth(0).locator('.cat-video-preview').count(),0);
       assert.equal(await page.locator('.cat-card').nth(1).locator('.cat-video-preview').count(),1,'Photo and video share opening row');
       await page.screenshot({path:`${output}/explore-${width}.png`,fullPage:true,animations:'disabled'});
+      if(width===390)await page.screenshot({path:`${output}/explore-390-viewport.png`,fullPage:false,animations:'disabled'});
       results.push({width,...metrics});
     }
     await page.setViewportSize({width:390,height:850});
     // The deployed Alana flow is chat checkout. Exercise this path before the gated invoice fixture.
     await page.locator('.cat-grid .cat-picture-button').first().click();
-    await page.screenshot({path:`${output}/chat-item-detail-390.png`,fullPage:true});
+    await page.screenshot({path:`${output}/chat-item-detail-390.png`,fullPage:false});
     await page.getByRole('button',{name:'Pay in Telegram · ⭐350',exact:true}).click();
     await page.getByRole('button',{name:'Open payment in chat',exact:true}).waitFor();
     assert.equal(await page.evaluate(()=>window.catalogueChatOpens),1,'Paid delivery automatically opens chat once');
@@ -98,7 +106,7 @@ async function main(){
     assert.equal(deliveredCount,1);
     await page.getByRole('button',{name:'Open payment in chat',exact:true}).click();
     assert.equal(requests.filter(r=>r.action==='request').length,deliveredCount,'Paid retry never sends another item');
-    await page.screenshot({path:`${output}/chat-payment-ready-390.png`,fullPage:true});
+    await page.screenshot({path:`${output}/chat-payment-ready-390.png`,fullPage:false});
     await page.getByRole('button',{name:'Close item'}).click();
     await page.getByRole('button',{name:'Pay in Telegram for 1,400 Stars',exact:true}).click();
     await page.getByRole('button',{name:'Open payment in chat',exact:true}).waitFor();
