@@ -1,7 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createCatalogueHandler } from '../lib/catalogue-api';
-import { beginTonCheckout, reconcilePendingTonOrders, starsToNanoton, tonDiscountPercent, tonOrderStatus, tonEnabled, type TonIncomingTx } from '../lib/catalogue-ton';
+import { beginTonCheckout, effectiveNanotonPerStar, reconcilePendingTonOrders, resetTonUsdPriceCacheForTests, resetTonWalletCacheForTests, starsToNanoton, tonDiscountPercent, tonOrderStatus, tonEnabled, tonUsdPrice, type TonIncomingTx } from '../lib/catalogue-ton';
 import { formatTonAmount, tonPriceNanoton, TON_PRICE_STEP_NANOTON } from '../lib/catalogue-ton-price';
 import { createHmac } from 'node:crypto';
 import { NextRequest } from 'next/server';
@@ -112,6 +112,7 @@ async function main() {
 
   // 1. TON disabled clone rejects ton_checkout.
   reset();
+  resetTonWalletCacheForTests();
   rows.creator_catalogue_settings[0].ton_wallet_address = null;
   assert.equal(tonEnabled(rows.creator_catalogue_settings[0]), false);
   await assert.rejects(() => beginTonCheckout(context, { type: 'photo', id: id(10) }, rows.creator_catalogue_settings[0]), /not available/);
@@ -131,6 +132,7 @@ async function main() {
 
   // 2. Wrong memo does not confirm.
   {
+    resetTonWalletCacheForTests(); // each of 2/3/4 supplies its own fake tx list for the same wallet
     const wrongMemoOrder = await beginTonCheckout(context, { type: 'photo', id: id(10) }, settings);
     const noMatch = await tonOrderStatus(context, wrongMemoOrder.orderId, async () => [tx({ comment: 'not-the-memo', valueNanoton: BigInt(wrongMemoOrder.amountNanoton) })]);
     assert.equal(noMatch.status, 'pending', 'wrong memo must not confirm');
@@ -138,6 +140,7 @@ async function main() {
 
   // 3. Underpayment does not confirm.
   {
+    resetTonWalletCacheForTests();
     const underpaidOrder = await beginTonCheckout(context, { type: 'photo', id: id(10) }, settings);
     const short = await tonOrderStatus(context, underpaidOrder.orderId, async () => [tx({ comment: underpaidOrder.memo, valueNanoton: BigInt(underpaidOrder.amountNanoton - 1) })]);
     assert.equal(short.status, 'pending', 'underpayment must not confirm');
@@ -146,6 +149,7 @@ async function main() {
 
   // 4. Memo match confirms and wires ownership + delivery.
   {
+    resetTonWalletCacheForTests();
     const matched = await tonOrderStatus(context, begin.orderId, async (address) => {
       assert.equal(address, settings.ton_wallet_address);
       return [tx({ hash: 'hash-real', comment: begin.memo, valueNanoton: BigInt(begin.amountNanoton) })];
@@ -190,6 +194,7 @@ async function main() {
   // the action only ever accepts an orderId, and confirmation happens only from a
   // server side, mocked (never live) toncenter lookup that finds nothing.
   reset();
+  resetTonWalletCacheForTests();
   const globalFetch = global.fetch;
   try {
     (global as any).fetch = async () => ({ ok: true, json: async () => ({ transactions: [] }) });
@@ -213,6 +218,7 @@ async function main() {
   // 8. A fan who paid but never came back to poll: the catalogue load reconciles their
   // pending orders from one chain lookup, confirming only the memo+amount match.
   reset();
+  resetTonWalletCacheForTests();
   const left = await beginTonCheckout(context, { type: 'photo', id: id(10) }, settings);
   const other = await beginTonCheckout(context, { type: 'photo', id: id(10) }, settings);
   const settled = await reconcilePendingTonOrders(context, async () => [
@@ -265,6 +271,103 @@ async function main() {
   assert.match(clientSource, /from '@\/lib\/catalogue-ton-price'/, 'the Mini App label uses the shared price helper');
   assert.doesNotMatch(clientSource, /1_000_000_000/, 'the Mini App does not compute its own TON price');
 
-  console.log('TON checkout checks passed: memo match confirms, wrong memo and underpayment do not, same tx twice is idempotent, expired orders never confirm and skip verification, TON-disabled clones reject checkout, client-supplied confirmation is ignored end to end, and TON prices round up to 0.1 TON identically in the label and the charge. No live toncenter calls.');
+  // 12. Live TON/USD rate: ton_star_usd converts through the live rate, cache is
+  // honoured within the window, a fetch failure and an absurd price both fall
+  // back to the stored ton_nanoton_per_star, and the display and charge paths
+  // agree because they call the exact same function.
+  {
+    resetTonUsdPriceCacheForTests();
+    const settingsWithUsd = { ton_wallet_address: 'EQtest-wallet-address', ton_nanoton_per_star: 12_121_212, ton_star_usd: 0.02 };
+
+    // $2.00/TON: 0.02 / 2.00 = 0.01 TON/star = 10_000_000 nanoton/star.
+    let fetchCalls = 0;
+    const fetcher = async () => { fetchCalls++; return 2.0; };
+    const live1 = await effectiveNanotonPerStar(settingsWithUsd, fetcher);
+    assert.equal(live1, 10_000_000, 'ton_star_usd converts through the live TON/USD rate');
+    assert.equal(fetchCalls, 1);
+
+    // Cache honoured: a second call within the 10-minute window does not fetch again,
+    // even though the fetcher would now return a different price.
+    const live2 = await effectiveNanotonPerStar(settingsWithUsd, async () => { fetchCalls++; return 4.0; });
+    assert.equal(live2, 10_000_000, 'the cached TON/USD price is reused, not refetched');
+    assert.equal(fetchCalls, 1, 'a second lookup inside the cache window must not call the fetcher again');
+
+    // Fetch failure falls back to the stored fixed rate.
+    resetTonUsdPriceCacheForTests();
+    const failFallback = await effectiveNanotonPerStar(settingsWithUsd, async () => { throw new Error('network down'); });
+    assert.equal(failFallback, 12_121_212, 'a fetch failure falls back to the stored ton_nanoton_per_star');
+
+    // An absurd price (outside 0.2..50 USD) is rejected, same fallback.
+    resetTonUsdPriceCacheForTests();
+    const absurdLow = await effectiveNanotonPerStar(settingsWithUsd, async () => 0.001);
+    assert.equal(absurdLow, 12_121_212, 'a price below $0.20 is rejected in favour of the stored rate');
+    resetTonUsdPriceCacheForTests();
+    const absurdHigh = await effectiveNanotonPerStar(settingsWithUsd, async () => 9_999);
+    assert.equal(absurdHigh, 12_121_212, 'a price above $50 is rejected in favour of the stored rate');
+    resetTonUsdPriceCacheForTests();
+    assert.equal(await tonUsdPrice(async () => 1.65), 1.65, 'a sane price in range is accepted');
+
+    // No ton_star_usd at all: the stored fixed rate is used directly, no fetch happens.
+    resetTonUsdPriceCacheForTests();
+    let noUsdFetchCalls = 0;
+    const noUsd = await effectiveNanotonPerStar({ ton_wallet_address: 'EQtest-wallet-address', ton_nanoton_per_star: 12_121_212 }, async () => { noUsdFetchCalls++; return 2.0; });
+    assert.equal(noUsd, 12_121_212, 'without ton_star_usd the stored rate is used unchanged');
+    assert.equal(noUsdFetchCalls, 0, 'no live lookup happens when ton_star_usd is not set');
+
+    // Display and charge agree: the catalogue payload's tonNanotonPerStar and
+    // beginTonCheckout's charged amount are computed by the exact same call.
+    resetTonUsdPriceCacheForTests();
+    reset();
+    resetTonWalletCacheForTests();
+    rows.creator_catalogue_settings[0].ton_star_usd = 0.02;
+    const globalFetchForRate = global.fetch;
+    try {
+      (global as any).fetch = async () => ({ ok: true, json: async () => ({ 'the-open-network': { usd: 2.0 } }) });
+      const handler = createCatalogueHandler({
+        db: () => db as any, admin: async () => false,
+        preview: async () => Buffer.from(''), videoPreview: async () => Buffer.from(''),
+        videoSources: async () => ({ url: '', posterUrl: '', seconds: 0 }),
+      });
+      const p = new URLSearchParams({ auth_date: String(Math.floor(Date.now() / 1000)), user: JSON.stringify({ id: 42 }) });
+      const secret = createHmac('sha256', 'WebAppData').update(clone.bot_token).digest();
+      p.set('hash', createHmac('sha256', secret).update([...p].sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => `${k}=${v}`).join('\n')).digest('hex'));
+      const catalogueResponse = await handler(new NextRequest('http://localhost:3001/api/catalogue/fixture', {
+        method: 'POST', headers: { origin: 'http://localhost:3001', 'content-type': 'application/json', 'x-telegram-init-data': p.toString() },
+        body: JSON.stringify({ action: 'catalogue' }),
+      }), { params: Promise.resolve({ slug: 'fixture' }) });
+      const cataloguePayload = await catalogueResponse.json();
+      assert.equal(cataloguePayload.tonNanotonPerStar, 10_000_000, 'the catalogue payload shows the live rate, not the stale stored one');
+      const liveBegin = await beginTonCheckout(context, { type: 'photo', id: id(10) }, rows.creator_catalogue_settings[0]);
+      assert.equal(liveBegin.amountNanoton, 350 * 10_000_000, 'the charge uses the exact same live rate the display just showed');
+    } finally { (global as any).fetch = globalFetchForRate; }
+  }
+
+  // 13. One chain lookup per wallet: 50 concurrent status polls for the same
+  // wallet, across different orders and fans, cost exactly one verifier call.
+  {
+    reset();
+    resetTonWalletCacheForTests();
+    const liveSettings = rows.creator_catalogue_settings[0]; // the actual row tonOrderStatus queries by clone_id
+    const concurrencyOrders = await Promise.all(Array.from({ length: 50 }, () => beginTonCheckout(context, { type: 'photo', id: id(10) }, liveSettings)));
+    let verifierCalls = 0;
+    const slowVerifier = async (address: string) => {
+      verifierCalls++;
+      await new Promise((r) => setTimeout(r, 20)); // simulate real network latency
+      return [] as TonIncomingTx[];
+    };
+    const results = await Promise.all(concurrencyOrders.map((o) => tonOrderStatus(context, o.orderId, slowVerifier)));
+    assert.equal(verifierCalls, 1, '50 concurrent polls for one wallet must coalesce into a single toncenter call');
+    assert.ok(results.every((r) => r.status === 'pending'));
+
+    // A second wallet is unaffected: it gets its own call. Mutate the actual
+    // stored settings row (what tonOrderStatus looks up by clone_id), not a
+    // stale local reference.
+    liveSettings.ton_wallet_address = 'EQanother-wallet-address';
+    const otherOrder = await beginTonCheckout(context, { type: 'photo', id: id(10) }, liveSettings);
+    await tonOrderStatus(context, otherOrder.orderId, slowVerifier);
+    assert.equal(verifierCalls, 2, "a different wallet is not served from the first wallet's cache");
+  }
+
+  console.log('TON checkout checks passed: memo match confirms, wrong memo and underpayment do not, same tx twice is idempotent, expired orders never confirm and skip verification, TON-disabled clones reject checkout, client-supplied confirmation is ignored end to end, TON prices round up to 0.1 TON identically in the label and the charge, the live TON/USD rate is applied with a 10-minute cache and a fallback to the stored rate on failure or an absurd price, display and charge always agree, and concurrent polls for one wallet coalesce into a single toncenter call. No live toncenter calls.');
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

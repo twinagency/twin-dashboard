@@ -6,7 +6,7 @@ import { projectBundle } from './catalogue-commerce';
 import { TRENDING_WINDOW_DAYS, tagEmojis, trendingRanks, type TrendingSale } from './catalogue-trending';
 import { cataloguePresentation } from './catalogue-presentation';
 import { beginCatalogueCheckout, catalogueContentPath, catalogueOrderStatus, checkoutMode, CheckoutError, nativeOwnedItems, paidCatalogueItems, type InvoiceTransport } from './catalogue-checkout';
-import { beginTonCheckout, reconcilePendingTonOrders, tonDiscountPercent, tonEnabled, tonOrderStatus } from './catalogue-ton';
+import { beginTonCheckout, effectiveNanotonPerStar, reconcilePendingTonOrders, tonDiscountPercent, tonEnabled, tonOrderStatus } from './catalogue-ton';
 import { isClientEventName, logCatalogueEvent, validEventMediaType, validEventRail, validEventUuid } from './catalogue-events';
 export type CatalogueDependencies = {
   db(): SupabaseClient;
@@ -70,7 +70,7 @@ return async function POST(request: NextRequest, context: { params: Promise<{ sl
     const settingsColumns = "blur_strength,enabled,mini_app_url,display_name,show_verified_badge,featured_bundle_id,presentation_variant,checkout_mode";
     // ton_wallet_address/ton_nanoton_per_star land in a migration that may not be applied
     // yet; fall back to the plain select so the catalogue keeps working either way.
-    const settingsWithTon = await db.from("creator_catalogue_settings").select(`${settingsColumns},ton_wallet_address,ton_nanoton_per_star,ton_discount_percent`).eq("clone_id", clone.id).maybeSingle();
+    const settingsWithTon = await db.from("creator_catalogue_settings").select(`${settingsColumns},ton_wallet_address,ton_nanoton_per_star,ton_discount_percent,ton_star_usd`).eq("clone_id", clone.id).maybeSingle();
     const settings: (Record<string, any> & { ton_wallet_address?: string | null; ton_nanoton_per_star?: number | null }) | null =
       settingsWithTon.error?.code === '42703'
         ? checked(await db.from("creator_catalogue_settings").select(settingsColumns).eq("clone_id", clone.id).maybeSingle())
@@ -219,12 +219,15 @@ return async function POST(request: NextRequest, context: { params: Promise<{ sl
         photoIds:clone.photos_enabled ? items.filter(p=>p.type==='photo'&&!p.purchased&&!p.received&&program.reward_photo_ids.includes(p.id)).map(p=>p.id) : [],
         videoIds:clone.videos_enabled ? items.filter(p=>p.type==='video'&&!p.purchased&&!p.received&&(program.reward_video_ids??[]).includes(p.id)).map(p=>p.id) : [] } : null;
       const username = String(clone.business_username ?? "").replace(/^@/, "");
+      // Same shared function beginTonCheckout uses for the charge, so the price
+      // shown here can never drift from what a fan is actually billed.
+      const liveTonNanotonPerStar = tonEnabled(settings) ? await effectiveNanotonPerStar(settings as any) : null;
       return json({ name: settings?.display_name?.trim() || clone.name, items, blur, admin, enabled: settings?.enabled === true,
         verified: settings?.show_verified_badge === true,
         presentation: cataloguePresentation(settings?.presentation_variant),
         checkoutMode: checkoutMode(settings?.checkout_mode),
         tonEnabled: tonEnabled(settings),
-        tonNanotonPerStar: tonEnabled(settings) ? Number((settings as any).ton_nanoton_per_star) : null,
+        tonNanotonPerStar: liveTonNanotonPerStar,
         tonDiscountPercent: tonEnabled(settings) ? tonDiscountPercent(settings as any) : 0,
         tonReturnUrl: typeof settings?.mini_app_url === 'string' && /^https:\/\/t\.me\//.test(settings.mini_app_url) ? settings.mini_app_url : null,
         ...(admin ? { tonWalletAddress: (settings as any)?.ton_wallet_address ?? '', tonPerStar: (settings as any)?.ton_nanoton_per_star ? (settings as any).ton_nanoton_per_star / 1_000_000_000 : null } : {}),

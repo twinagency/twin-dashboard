@@ -5,7 +5,69 @@ import { tonPriceNanoton } from './catalogue-ton-price';
 import { CheckoutError, checkoutType, checkoutUuid, productForCheckout, type Context } from './catalogue-checkout';
 import { catalogueEventLoggedForOrder, logCatalogueEvent } from './catalogue-events';
 
-export type TonSettings = { ton_wallet_address?: string | null; ton_nanoton_per_star?: number | string | null; ton_discount_percent?: number | null };
+export type TonSettings = {
+  ton_wallet_address?: string | null;
+  ton_nanoton_per_star?: number | string | null;
+  ton_discount_percent?: number | null;
+  ton_star_usd?: number | string | null;
+};
+
+// Live TON pricing: a star is worth a fixed USD value (ton_star_usd), converted
+// to nanoton at the current TON/USD rate. Both the displayed catalogue price
+// (lib/catalogue-api.ts) and the charged amount (beginTonCheckout below) call
+// this SAME function, so the price a fan sees can never drift from the price
+// they are charged. An order's amount is fixed at creation time regardless.
+export type TonUsdPriceFetcher = () => Promise<number | null>;
+const TON_USD_MIN = 0.2;
+const TON_USD_MAX = 50;
+const TON_USD_CACHE_MS = 10 * 60_000;
+
+export const defaultTonUsdPriceFetcher: TonUsdPriceFetcher = async () => {
+  const response = await fetch('https://api.coingecko.com/api/v3/simple/price?ids=the-open-network&vs_currencies=usd',
+    { signal: AbortSignal.timeout(5_000), cache: 'no-store' });
+  if (!response.ok) return null;
+  const body = await response.json();
+  const price = Number(body?.['the-open-network']?.usd);
+  return Number.isFinite(price) ? price : null;
+};
+
+let tonUsdCache: { value: number; at: number } | null = null;
+// Test-only: clear the in-process TON/USD cache so each check exercises a
+// fresh fetch rather than a previous check's cached price.
+export function resetTonUsdPriceCacheForTests() { tonUsdCache = null; }
+
+// Cached for 10 minutes. A fetch failure, or a price outside a sane band
+// (something is badly wrong with the feed below $0.20 or above $50), falls
+// back to a stale cached value rather than nothing.
+export async function tonUsdPrice(fetcher: TonUsdPriceFetcher = defaultTonUsdPriceFetcher): Promise<number | null> {
+  const now = Date.now();
+  if (tonUsdCache && now - tonUsdCache.at < TON_USD_CACHE_MS) return tonUsdCache.value;
+  let price: number | null = null;
+  try { price = await fetcher(); } catch { price = null; }
+  if (price != null && price >= TON_USD_MIN && price <= TON_USD_MAX) {
+    tonUsdCache = { value: price, at: now };
+    return price;
+  }
+  return tonUsdCache ? tonUsdCache.value : null;
+}
+
+// The single shared rate used for both the displayed price and the charge.
+// When ton_star_usd is set, converts it to nanoton at the live TON/USD rate;
+// otherwise (or if the live rate is unavailable) falls back to the stored,
+// fixed ton_nanoton_per_star.
+export async function effectiveNanotonPerStar(settings: TonSettings, fetcher: TonUsdPriceFetcher = defaultTonUsdPriceFetcher): Promise<number | null> {
+  const starUsd = Number(settings?.ton_star_usd);
+  const stored = settings?.ton_nanoton_per_star != null && Number(settings.ton_nanoton_per_star) > 0
+    ? Number(settings.ton_nanoton_per_star) : null;
+  if (Number.isFinite(starUsd) && starUsd > 0) {
+    const usdPerTon = await tonUsdPrice(fetcher);
+    if (usdPerTon != null) {
+      const nanoton = Math.round((starUsd / usdPerTon) * 1_000_000_000);
+      if (Number.isSafeInteger(nanoton) && nanoton > 0) return nanoton;
+    }
+  }
+  return stored;
+}
 
 export function tonDiscountPercent(settings: TonSettings | null | undefined): number {
   const pct = Number(settings?.ton_discount_percent ?? 0);
@@ -44,7 +106,9 @@ export async function beginTonCheckout(context: Context, body: Record<string, un
     throw new CheckoutError('Invalid checkout request.', 400);
   if (!fan.business_connection_id) throw new CheckoutError('Open the creator’s chat once before your first purchase.');
   const product = await productForCheckout(context, body.type, body.id);
-  const amountNanoton = starsToNanoton(product.stars, settings.ton_nanoton_per_star!, tonDiscountPercent(settings));
+  const nanotonPerStar = await effectiveNanotonPerStar(settings);
+  if (nanotonPerStar == null) throw new CheckoutError('Payment amount is invalid. Please try again.', 503);
+  const amountNanoton = starsToNanoton(product.stars, nanotonPerStar, tonDiscountPercent(settings));
   const toAddress = settings.ton_wallet_address!;
   for (let attempt = 0; attempt < 5; attempt++) {
     const memo = randomMemo();
@@ -109,6 +173,31 @@ export const defaultTonVerifier: TonVerifier = async (address) => {
 const lastVerifyAt = new Map<string, number>();
 const VERIFY_MIN_INTERVAL_MS = 3_000;
 
+// Per-wallet cache of the incoming-transaction list, shared across every order
+// and every fan polling the same creator wallet. Without this, N fans polling
+// their own order each cost their own toncenter call; with it, N fans polling
+// the same wallet within the TTL cost exactly one call, and concurrent polls
+// that land before that one call resolves are coalesced onto its single
+// in-flight promise rather than each starting their own.
+const WALLET_TX_CACHE_MS = 3_000;
+const walletTxCache = new Map<string, { promise: Promise<TonIncomingTx[]>; at: number }>();
+// Test-only: clear the wallet tx cache so each check scenario gets a fresh
+// verifier call instead of a previous scenario's cached (or in-flight) result.
+export function resetTonWalletCacheForTests() { walletTxCache.clear(); }
+
+function walletTxs(address: string, verifier: TonVerifier): Promise<TonIncomingTx[]> {
+  const now = Date.now();
+  const cached = walletTxCache.get(address);
+  if (cached && now - cached.at < WALLET_TX_CACHE_MS) return cached.promise;
+  const promise = verifier(address).catch(err => {
+    // A failed lookup must not poison the cache for the next poll within the TTL.
+    if (walletTxCache.get(address)?.promise === promise) walletTxCache.delete(address);
+    throw err;
+  });
+  walletTxCache.set(address, { promise, at: now });
+  return promise;
+}
+
 // Both the fan's own poll (below) and the catalogue-load reconciliation logs
 // pay_success the same way once confirm_catalogue_ton_order actually confirms.
 async function logTonPaySuccess(db: any, clone: any, fan: any, order: any) {
@@ -138,7 +227,7 @@ export async function tonOrderStatus({ db, clone, fan }: Context, orderId: strin
       const address = settings?.ton_wallet_address;
       if (address) {
         try {
-          const txs = await verifier(address);
+          const txs = await walletTxs(address, verifier);
           const match = txs.find(tx => tx.comment === order.memo && tx.valueNanoton >= BigInt(order.amount_nanoton));
           // Never trust anything the client sends here. Only a transaction we found
           // ourselves on chain, matched by memo and amount, can confirm an order.
@@ -172,7 +261,7 @@ export async function reconcilePendingTonOrders({ db, clone, fan }: Context, ver
   if (!settings?.ton_wallet_address) return 0;
   let confirmed = 0;
   try {
-    const txs = await verifier(settings.ton_wallet_address);
+    const txs = await walletTxs(settings.ton_wallet_address, verifier);
     for (const order of live) {
       const match = txs.find(tx => tx.comment === order.memo && tx.valueNanoton >= BigInt(order.amount_nanoton));
       if (!match) continue;
