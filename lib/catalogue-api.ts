@@ -7,6 +7,7 @@ import { TRENDING_WINDOW_DAYS, tagEmojis, trendingRanks, type TrendingSale } fro
 import { cataloguePresentation } from './catalogue-presentation';
 import { beginCatalogueCheckout, catalogueContentPath, catalogueOrderStatus, checkoutMode, CheckoutError, nativeOwnedItems, paidCatalogueItems, type InvoiceTransport } from './catalogue-checkout';
 import { beginTonCheckout, reconcilePendingTonOrders, tonDiscountPercent, tonEnabled, tonOrderStatus } from './catalogue-ton';
+import { isClientEventName, logCatalogueEvent, validEventMediaType, validEventRail, validEventUuid } from './catalogue-events';
 export type CatalogueDependencies = {
   db(): SupabaseClient;
   invoice?: InvoiceTransport;
@@ -53,12 +54,13 @@ return async function POST(request: NextRequest, context: { params: Promise<{ sl
     // Operators can prepare a catalogue before any discovery messages are enabled.
     if (!admin && !clone.browse_enabled) return json({ error: "Catalogue unavailable." }, 404);
     let fan: any = null;
+    let telegramId: number | null = null;
+    let startParam: string | null = null;
     if (!admin) {
       if (body.preview === true) return json({ error: "Sign in to the operator dashboard to preview." }, 401);
       const initData = request.headers.get("x-telegram-init-data") ?? "";
       if (initData.length > 12_000) return json({ error: "Invalid Telegram session." }, 401);
-      let telegramId: number;
-      try { telegramId = validateTelegramData(initData, clone.bot_token); }
+      try { ({ telegramId, startParam } = validateTelegramData(initData, clone.bot_token)); }
       catch (e) { return json({ error: e instanceof Error ? e.message : "Invalid session." }, 401); }
       rateLimit(`fan:${clone.id}:${telegramId}`, 180);
       fan = checked(await db.from("users").select("id,telegram_id,clone_id,blocked_at,paused,minor_flagged_at,business_connection_id,last_message_received")
@@ -151,7 +153,27 @@ return async function POST(request: NextRequest, context: { params: Promise<{ sl
       checked(await db.from("clones").update({ browse_enabled: true }).eq("id", clone.id));
       return json({ enabled: true, url });
     }
+    if (action === "event") {
+      // Client-reported funnel step. Never trust an amount, media price, or the
+      // two server-only outcomes (open/pay_success/pay_fail) from here.
+      if (admin || !fan) return json({ logged: false });
+      if (!isClientEventName(body.event)) return json({ error: "Unknown event." }, 400);
+      const mediaType = body.mediaType !== undefined ? body.mediaType : null;
+      if (mediaType !== null && !validEventMediaType(mediaType)) return json({ error: "Invalid media type." }, 400);
+      const mediaId = body.mediaId !== undefined ? body.mediaId : null;
+      if (mediaId !== null && !validEventUuid(mediaId)) return json({ error: "Invalid media id." }, 400);
+      const rail = body.rail !== undefined ? body.rail : null;
+      if (rail !== null && !validEventRail(rail)) return json({ error: "Invalid rail." }, 400);
+      try { rateLimit(`event:${clone.id}:${fan.telegram_id}`, 120); }
+      catch { return json({ logged: false }); } // rate limited: drop silently, never error a fire-and-forget call
+      await logCatalogueEvent(db, {
+        cloneId: clone.id, telegramId: fan.telegram_id, event: body.event, rail: rail as 'stars' | 'ton' | null,
+        mediaType: mediaType as 'photo' | 'video' | 'bundle' | null, mediaId: mediaId as string | null, startParam,
+      });
+      return json({ logged: true });
+    }
     if (action === "catalogue") {
+      if (fan && !admin) await logCatalogueEvent(db, { cloneId: clone.id, telegramId: fan.telegram_id, event: 'open', startParam });
       const bundleRows = checked(await db.from('catalogue_bundles').select('id,title,caption,photo_ids,price_stars,regular_stars').eq('clone_id',clone.id).eq('enabled',true).order('sort_order')) ?? [];
       const program = checked(await db.from('catalogue_loyalty_programs').select('points_cost,starts_at,reward_photo_ids,reward_video_ids,welcome_bonus_points').eq('clone_id',clone.id).eq('enabled',true).maybeSingle());
       const columns = "id,caption,auto_desc,teaser_caption,tags,star_value,is_free,created_at";

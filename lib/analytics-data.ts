@@ -84,6 +84,10 @@ export type AnalyticsData = {
     sales: number;
     fans: number;
     buyers: number;
+    // Of `sales`, how many were paid on the TON rail (star_transactions.imported_from='ton').
+    // Optional: several fixture/demo/projection builders construct `totals`
+    // without it, and it is purely descriptive so it is safe to treat as 0 there.
+    tonSales?: number;
   };
   // Ranked best → worst by revenue.
   clones: {
@@ -505,8 +509,8 @@ export async function getAnalytics(
     // because selectAllRows reports a failure as an empty result — which here
     // would render as "no revenue" instead of "column not there yet".
     // `id` is required: the legacy-media inference below keys its map on it.
-    const COLS = "id,clone_id,amount_stars,paid_at,kind,feature,telegram_id,invoice_payload";
-    const COLS_LEGACY = "id,clone_id,amount_stars,paid_at,kind,telegram_id,invoice_payload";
+    const COLS = "id,clone_id,amount_stars,paid_at,kind,feature,telegram_id,invoice_payload,imported_from";
+    const COLS_LEGACY = "id,clone_id,amount_stars,paid_at,kind,telegram_id,invoice_payload,imported_from";
     const probe = await supabaseAdmin.from("star_transactions").select(COLS).limit(1);
     const hasFeature = !probe.error;
     // A FACTORY, not a built query: selectAllRowsParallel fetches several ranges
@@ -644,6 +648,9 @@ export async function getAnalytics(
   let totalSales = 0;
   let paidMessagePurchases = 0;
   let paidMessageStars = 0;
+  // Sales rail is descriptive only, never folded into totalStars/totalSales
+  // math above: a TON sale is already counted there like any other purchase.
+  let tonSales = 0;
 
   const normKind = (k: string | null): KindKey =>
     k === "credits" || k === "media" || k === "tip" ? k : "other";
@@ -652,6 +659,7 @@ export async function getAnalytics(
     const { stars, adjustment, paidOrder } = classifyRevenueLedgerRow(t);
     totalStars += stars;
     if (paidOrder) totalSales += 1;
+    if (paidOrder && (t as { imported_from?: string | null }).imported_from === "ton") tonSales += 1;
     if (paidOrder && t.telegram_id != null) windowPaidBuyerIds.add(Number(t.telegram_id));
 
     if (t.clone_id) {
@@ -1066,6 +1074,9 @@ export async function getAnalytics(
       sales: totalSales,
       fans,
       buyers,
+      // Of `sales` above, how many were paid on the TON rail (imported_from='ton').
+      // Descriptive breakdown only; does not change revenueStars or sales.
+      tonSales,
     },
     clones: cloneOut,
     byKind,

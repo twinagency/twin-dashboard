@@ -4,7 +4,10 @@ export const DEFAULT_BLUR = 16;
 export function validBlur(value: unknown): value is number {
   return typeof value === "number" && Number.isInteger(value) && value >= 4 && value <= 40;
 }
-export function validateTelegramData(raw: string, token: string, now = Date.now()): number {
+export type ValidatedTelegramData = { telegramId: number; startParam: string | null };
+// start_param travels inside the same signed initData string (it is one of the
+// fields the hash covers), so returning it here costs nothing extra to trust.
+export function validateTelegramData(raw: string, token: string, now = Date.now()): ValidatedTelegramData {
   if (!raw || raw.length > 12_000 || !token) throw new Error("Open this catalogue from Telegram.");
   const params = new URLSearchParams(raw);
   const keys = [...params.keys()];
@@ -23,7 +26,8 @@ export function validateTelegramData(raw: string, token: string, now = Date.now(
   let user: { id?: unknown };
   try { user = JSON.parse(params.get("user") ?? "null"); } catch { throw new Error("Invalid Telegram user."); }
   if (!user || !Number.isSafeInteger(user.id) || Number(user.id) <= 0) throw new Error("Invalid Telegram user.");
-  return Number(user.id);
+  const startParam = params.get("start_param");
+  return { telegramId: Number(user.id), startParam: startParam && startParam.length <= 512 ? startParam : null };
 }
 export function catalogueEligible(user: { blocked_at?: unknown; paused?: unknown; minor_flagged_at?: unknown } | null): boolean {
   return !!user && !user.blocked_at && !user.paused && !user.minor_flagged_at;

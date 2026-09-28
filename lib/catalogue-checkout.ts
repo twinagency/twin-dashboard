@@ -1,6 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { catalogueItemVisible, projectItem } from './catalogue-core';
 import { projectBundle } from './catalogue-commerce';
+import { catalogueEventLoggedForOrder, logCatalogueEvent } from './catalogue-events';
 
 export const checkoutUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export type CheckoutMediaType = 'photo' | 'video' | 'bundle';
@@ -140,7 +141,7 @@ export async function beginCatalogueCheckout(context:Context,body:Record<string,
 
 export async function catalogueOrderStatus({db,clone,fan}:Context,orderId:string) {
   if(!checkoutUuid.test(orderId))throw new CheckoutError('Invalid checkout request.',400);
-  const order:any=checked(await db.from('catalogue_checkout_orders').select('id,status,charge_id,expires_at').eq('id',orderId)
+  const order:any=checked(await db.from('catalogue_checkout_orders').select('id,status,charge_id,expires_at,amount_stars,media_type,media_id').eq('id',orderId)
     .eq('clone_id',clone.id).eq('user_id',fan.id).maybeSingle());
   if(!order)throw new CheckoutError('Checkout not found.',404);
   let status=order.status;
@@ -154,6 +155,15 @@ export async function catalogueOrderStatus({db,clone,fan}:Context,orderId:string
     const attempts:any[] = checked(await db.from('catalogue_checkout_attempts').select('created_at')
       .eq('order_id',order.id).order('created_at',{ascending:false}).limit(1)) ?? [];
     retryAfterSeconds = attempts[0] ? Math.max(0,Math.ceil((Date.parse(attempts[0].created_at)+60_000-Date.now())/1000)) : 60;
+  }
+  // Confirmed/rejected here, not by the client. Guarded so a repeated poll
+  // (the fan's browser checks this every couple of seconds) logs it once.
+  if (status === 'paid' && !(await catalogueEventLoggedForOrder(db, clone.id, 'pay_success', order.id))) {
+    await logCatalogueEvent(db, { cloneId: clone.id, telegramId: fan.telegram_id, event: 'pay_success', rail: 'stars',
+      mediaType: order.media_type, mediaId: order.media_id, amountStars: order.amount_stars, detail: { order_id: order.id } });
+  } else if (status === 'refunded' && !(await catalogueEventLoggedForOrder(db, clone.id, 'pay_fail', order.id))) {
+    await logCatalogueEvent(db, { cloneId: clone.id, telegramId: fan.telegram_id, event: 'pay_fail', rail: 'stars',
+      mediaType: order.media_type, mediaId: order.media_id, amountStars: order.amount_stars, detail: { order_id: order.id, reason: 'refunded' } });
   }
   return {orderId:order.id,status,retryAfterSeconds};
 }
