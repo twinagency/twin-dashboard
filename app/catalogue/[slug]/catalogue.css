@@ -430,3 +430,8 @@ html:has(.catalogue-compact),body:has(.catalogue-compact){background:#1b1c1e}
 
 /* Ranked video cards: move the preview label clear of the #N badge */
 .cat-card-ranked .cat-video-label{left:auto!important;right:8px;top:auto!important;bottom:8px}
+
+/* Bundle cards: room for the green % off tag so it does not sit on the saving line */
+.cat-bundle-copy>.cat-card-prices{margin-top:14px}
+.cat-bundle-copy>.cat-bundle-saving{margin-bottom:2px}
+.cat-bundle-copy>.cat-primary{margin-top:10px}
