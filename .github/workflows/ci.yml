@@ -66,6 +66,9 @@ jobs:
       - name: Alana catalogue responsive and interaction checks
         run: node scripts/check-alana-catalogue-ui.mjs
 
+      - name: Mrs Callace and Fit Sid mobile fixture review
+        run: node scripts/check-callace-fit-sid-catalogue-ui.mjs
+
       - name: Purchased media reopening and expiry in Chromium and WebKit
         run: node scripts/check-catalogue-ownership-ui.mjs
 
@@ -83,6 +86,15 @@ jobs:
           path: test-results/alana-catalogue
           if-no-files-found: ignore
           retention-days: 3
+
+      - name: Mrs Callace and Fit Sid fixture screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: callace-fit-sid-catalogue-fixtures
+          path: test-results/callace-fit-sid-catalogue
+          if-no-files-found: ignore
+          retention-days: 7
 
       - name: Purchased media regression screenshots
         if: always()
