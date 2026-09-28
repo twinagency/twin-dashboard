@@ -53,6 +53,7 @@ async function main() {
     await page.route('**/api/catalogue/*',async route=>{
       const body=route.request().postDataJSON();actions.push(body.action);
       if(body.action==='catalogue')return route.fulfill({contentType:'application/json',body:JSON.stringify(payload(creator,purchased))});
+      if(body.action==='event')return route.fulfill({contentType:'application/json',body:'{"ok":true}'});
       if(body.action==='preview')return body.type==='video'
         ? route.fulfill({contentType:'application/json',body:JSON.stringify({url:'https://catalogue-fixture.test/protected.mp4',posterUrl:poster,seconds:5,durationSeconds:62})})
         : route.fulfill({contentType:'image/svg+xml',body:svg});
@@ -88,7 +89,7 @@ async function main() {
       reports.push({creator:target.slug,width:390,overflow,fixture:true});
     }
     assert.deepEqual(errors,[]);
-    assert.ok(actions.every(action=>['catalogue','preview'].includes(action)),
+    assert.ok(actions.every(action=>['catalogue','preview','event'].includes(action)),
       'Fixture must not charge, deliver, claim, or message');
     await writeFile(`${output}/checks.json`,JSON.stringify(reports,null,2));
     console.log('Mrs Callace and Fit Sid mobile fixture views passed. No payment, claim or message request.');
