@@ -21,6 +21,7 @@ import { preparePhotoForTelegram } from "@/lib/photo-prepare";
 import { repriceConfirmationPhrase } from "@/lib/reprice-confirmation";
 import { mediaStoragePath } from "@/lib/media-storage-path";
 import { compressPhoto, compressVideo } from "@/lib/media-compress";
+import { makeBlurredPreview, storedPreviewPath } from "@/lib/stored-preview";
 
 const TAG_SET = new Set<string>(MEDIA_TAGS);
 
@@ -66,6 +67,27 @@ async function uploadContentAddressedMedia(
 // site, so there is still exactly one place dashboard writes touch Storage.
 async function uploadOriginalMedia(path: string, bytes: Buffer, contentType: string): Promise<void> {
   await uploadContentAddressedMedia(`originals/${path}`, bytes, contentType);
+}
+
+// Best-effort: the bot has no ffmpeg/sharp of its own, so it cannot blur a
+// preview at send time (see lib/stored-preview.ts). This stores a ready-made
+// one at upload time so the bot can just send it. A blur failure (bad ffmpeg
+// build, corrupt-but-still-Telegram-sendable file, transient error) must
+// never block the actual media upload, which is why this is fire-and-log
+// rather than awaited-and-thrown. Reuses uploadContentAddressedMedia, the
+// same single Storage-write helper as the main file and the original, so
+// there is still exactly one `.upload()` call site.
+async function storePreviewBestEffort(
+  path: string,
+  bytes: Buffer,
+  type: "photo" | "video",
+): Promise<void> {
+  try {
+    const preview = await makeBlurredPreview(bytes, type);
+    await uploadContentAddressedMedia(storedPreviewPath(path), preview, "image/jpeg");
+  } catch (error) {
+    console.warn("Stored preview unavailable; upload continues without it", error);
+  }
 }
 
 // Vision analysis improves matching and automatic pricing, but it must never
@@ -227,6 +249,7 @@ export async function uploadPhoto(cloneId: string, fd: FormData): Promise<MediaU
 
   const storageResult = await uploadContentAddressedMedia(path, jpeg, "image/jpeg");
   if (compressed.changed) await uploadOriginalMedia(path, raw, file.type || "application/octet-stream");
+  await storePreviewBestEffort(path, jpeg, "photo");
   if (storageResult === "existing") {
     const { data: existingPhoto, error: existingError } = await supabaseAdmin
       .from("photos")
@@ -303,6 +326,7 @@ export async function uploadVideo(cloneId: string, fd: FormData): Promise<MediaU
   const contentType = compressedVideo.changed ? "video/mp4" : (file.type || "video/mp4");
   const storageResult = await uploadContentAddressedMedia(path, bytes, contentType);
   if (compressedVideo.changed) await uploadOriginalMedia(path, raw, file.type || "application/octet-stream");
+  await storePreviewBestEffort(path, bytes, "video");
   if (storageResult === "existing") {
     const { data: existingVideo, error: existingError } = await supabaseAdmin
       .from("videos")
