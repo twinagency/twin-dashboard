@@ -67,7 +67,7 @@ function CardPrices({ stars, ton }: { stars: number; ton: TonPricing }) {
   const nanoton = ton ? tonPriceNanoton(stars, ton.nanotonPerStar, ton.discountPercent) : null;
   if (nanoton == null) return null;
   return <span className="cat-card-prices">
-    <span className="cat-card-ton">{!!ton?.discountPercent && <span className="cat-card-ton-tag">{ton.discountPercent}% off</span>}<span className="cat-card-ton-value"><TonMark onBlue />{formatTonAmount(nanoton)} TON</span></span>
+    <span className="cat-card-ton"><span className="cat-card-ton-value"><TonMark onBlue />{formatTonAmount(nanoton)} TON</span></span>
     <span className="cat-card-stars">⭐{stars.toLocaleString()}<span className="cat-sr-only"> Stars</span></span>
   </span>;
 }
@@ -492,7 +492,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
         {compact && <button className="cat-message cat-header-action" aria-label="Message me" title="Message me" onClick={backToChat}><span>Message</span></button>}
         {data?.admin ? <button className="cat-icon" aria-label="Catalogue settings" onClick={() => setSettingsOpen(v => !v)}><SlidersHorizontal size={21} /></button>
           : !compact && <button className="cat-icon" aria-label="My purchases" onClick={() => { setSection("My Purchases"); setSearch(""); document.getElementById("catalogue-items")?.scrollIntoView({ behavior: "smooth" }); }}><ShoppingBag size={19} /></button>}
-        {compact && !data?.admin && <button className="cat-purchases-control cat-header-action" aria-label="My purchases" title="My purchases" onClick={() => { setSection("My Purchases"); setSearch(""); document.getElementById("catalogue-items")?.scrollIntoView({ behavior: "smooth" }); }}><ShoppingBag size={19} aria-hidden="true" /><span className="cat-purchases-label">My purchases</span>{ownedCount > 0 && <span className="cat-purchases-count">{ownedCount}</span>}</button>}
+        {compact && !data?.admin && <button className="cat-purchases-control cat-header-action" aria-label="My purchases" title="My purchases" onClick={() => { setSection("My Purchases"); setSearch(""); document.getElementById("catalogue-items")?.scrollIntoView({ behavior: "smooth" }); }}><ShoppingBag size={19} aria-hidden="true" />{ownedCount > 0 && <span className="cat-purchases-count">{ownedCount}</span>}</button>}
       </header>
       {data?.admin && <div className="cat-admin-label">Owner preview <span>{data.enabled ? "Catalogue enabled" : "Not live for fans"}</span></div>}
       {settingsOpen && data?.admin && <section className="cat-settings"><h2>Preview blur</h2>
@@ -554,8 +554,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
           </div>}
         </section>}
         {visible.length ? <div className="cat-grid">{visible.slice(0, pageSize).map(item => <article className={`cat-card${compact && item.free ? ' cat-card-free' : ''}${trendingView && item.rank ? ' cat-card-ranked' : ''}`} key={`${item.type}:${item.id}`}>
-          {trendingView && item.rank && <span className={`cat-rank cat-rank-${item.rank <= 3 ? item.rank : 'n'}`} aria-label={`Trending number ${item.rank}`}>#{item.rank}</span>}
-          {trendingView && !!item.emojis?.length && <span className="cat-emojis" aria-hidden="true">{item.emojis.join('')}</span>}
+
           <button className="cat-picture-button" onClick={event => openItem(item, event.currentTarget)} aria-label={`View ${item.type}: ${item.description.slice(0, 100)}${compact ? `, ${item.purchased || item.received ? 'owned' : item.free ? 'free' : `${item.stars.toLocaleString()} Stars`}` : ''}`}><Preview item={item} blur={renderBlur} call={call} retryable={false} /></button>
           <div className="cat-card-body">
             {refined && <p className="cat-card-description" title={item.description}>{compact ? shortCatalogueTitle(item.description) : item.description}</p>}
