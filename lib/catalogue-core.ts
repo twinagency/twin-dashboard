@@ -41,10 +41,11 @@ export type CatalogueItem = {
   free: boolean; purchased: boolean; received: boolean; createdAt: string;
   title?: string; rank?: number; emojis?: string[];
 };
-// Alanna's catalogue only lists media with an actual saved caption. Imported
-// descriptions, filenames and teaser captions do not satisfy that requirement.
+// These compact creator catalogues list only media with a saved caption.
+// Imported descriptions, filenames and teasers do not satisfy that requirement.
+const captionRequiredSlugs = new Set(['alanna-pow', 'mrs-callace', 'fit-sid']);
 export function catalogueItemVisible(row: { caption?: unknown } | null | undefined, slug: string): boolean {
-  return !!row && (slug !== 'alanna-pow' || typeof row.caption === 'string' && row.caption.trim().length > 0);
+  return !!row && (!captionRequiredSlugs.has(slug) || typeof row.caption === 'string' && row.caption.trim().length > 0);
 }
 export function projectItem(row: Record<string, any>, type: "photo" | "video", purchased = false, received = false): CatalogueItem {
   return { id: row.id, type, description: [row.caption, row.auto_desc].find(value => typeof value === "string" && value.trim())?.trim() || (type === "photo" ? "Photo" : "Video"),
