@@ -1,0 +1,40 @@
+name: Mrs Callace and Fit Sid catalogue review
+on:
+  push:
+    branches: [feat/callace-fit-sid-catalogue-review]
+  pull_request:
+    branches: [main]
+    paths:
+      - 'lib/catalogue-*.ts'
+      - 'scripts/check-callace-fit-sid-catalogue-ui.mjs'
+      - 'scripts/check-catalogue.ts'
+      - '.github/workflows/callace-fit-sid-review.yml'
+permissions:
+  contents: read
+jobs:
+  fixtures:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run test:catalogue
+      - run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'
+      - run: npx playwright install --with-deps chromium
+      - name: Capture isolated mobile fixture views
+        run: node scripts/check-callace-fit-sid-catalogue-ui.mjs
+      - name: Upload explicitly labelled fixture screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: callace-fit-sid-catalogue-fixtures
+          path: test-results/callace-fit-sid-catalogue
+          if-no-files-found: ignore
+          retention-days: 7
