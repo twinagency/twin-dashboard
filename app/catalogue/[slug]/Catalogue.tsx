@@ -13,7 +13,7 @@ import VideoPreview from './VideoPreview';
 import PhotoPreview from './PhotoPreview';
 import { catalogueDisplayOrder } from '@/lib/catalogue-display-order';
 import { catalogueAppearance } from '@/lib/catalogue-appearance';
-import { formatTonAmount, tonPriceNanoton } from '@/lib/catalogue-ton-price';
+import { formatTonAmount, tonPriceNanoton, TIP_PRESET_USD } from '@/lib/catalogue-ton-price';
 import { compactCategories, compactItems, salePercent, shortCatalogueTitle, type CataloguePresentation } from '@/lib/catalogue-presentation';
 import { parseCatalogueStartParam } from '@/lib/catalogue-start-param';
 
@@ -29,7 +29,7 @@ function currentStartParam(): string | null {
   const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : window.location.hash;
   return new URLSearchParams(hash).get("tgWebAppStartParam");
 }
-type Data = { checkoutMode?: 'chat' | 'invoice'; name: string; verified?: boolean; presentation?: CataloguePresentation; featuredBundleId?: string | null; items: CatalogueItem[]; blur: number; admin: boolean; enabled: boolean; canSend: boolean; chatUrl: string | null; purchaseNote: string; bundles:CatalogueBundle[]; rewards:CatalogueRewards|null; tonEnabled?: boolean; tonWalletAddress?: string; tonPerStar?: number | null; tonNanotonPerStar?: number | null; tonDiscountPercent?: number; tonReturnUrl?: string | null };
+type Data = { checkoutMode?: 'chat' | 'invoice'; name: string; verified?: boolean; presentation?: CataloguePresentation; featuredBundleId?: string | null; items: CatalogueItem[]; blur: number; admin: boolean; enabled: boolean; canSend: boolean; chatUrl: string | null; purchaseNote: string; bundles:CatalogueBundle[]; rewards:CatalogueRewards|null; tonEnabled?: boolean; tonWalletAddress?: string; tonPerStar?: number | null; tonNanotonPerStar?: number | null; tonNanotonPerUsd?: number | null; tonDiscountPercent?: number; tonReturnUrl?: string | null };
 type Call = (action: string, payload?: Record<string, unknown>) => Promise<Response>;
 const tabs = ["All", "Photos", "Videos", "Bundles"];
 
@@ -154,6 +154,10 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
   const [tonPhase, setTonPhase] = useState<null | 'opening' | 'confirming'>(null);
   const [tonWalletAddress, setTonWalletAddress] = useState('');
   const [tonPerStar, setTonPerStar] = useState('');
+  const [tipOpen, setTipOpen] = useState(false);
+  const [tipPhase, setTipPhase] = useState<null | 'opening' | 'confirming'>(null);
+  const [tipDone, setTipDone] = useState(false);
+  const [tipNotice, setTipNotice] = useState('');
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   useEffect(() => () => ownedCache.current.clear(), []);
@@ -381,6 +385,44 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
     } catch (e) { setNotice(e instanceof Error ? e.message : 'Could not start TON payment. Please try again.'); }
     finally { sending.current = false; if (mounted.current) { setBusy(false); setCommerceBusy(false); setTonPhase(null); } }
   }
+  function openTip() { setTipDone(false); setTipNotice(''); setTipPhase(null); setTipOpen(true); }
+  function closeTip() { if (tipPhase) return; setTipOpen(false); }
+  async function payTip(usd: number) {
+    if (sending.current) return;
+    if (data?.admin) return;
+    logEvent('tap_tip', { rail: 'ton' });
+    sending.current = true; setTipPhase('opening'); setTipNotice('');
+    try {
+      const begin = await read('ton_tip', { usd });
+      const payload = beginCell().storeUint(0, 32).storeStringTail(String(begin.comment)).endCell().toBoc().toString('base64');
+      try {
+        const ui = tonConnect();
+        const alreadyConnected = ui.connected;
+        if (!alreadyConnected) await ui.connectWallet();
+        if (!alreadyConnected) logEvent('wallet_connected', { rail: 'ton' });
+        await ui.sendTransaction({
+          validUntil: Math.floor(Date.now() / 1000) + 300,
+          messages: [{ address: String(begin.toAddress), amount: String(begin.amountNanoton), payload }],
+        });
+      } catch {
+        logEvent('pay_cancel', { rail: 'ton' });
+        setTipNotice('Payment cancelled.'); return;
+      }
+      if (!mounted.current) return;
+      setTipPhase('confirming');
+      const deadline = Date.now() + 5 * 60_000;
+      while (Date.now() < deadline) {
+        if (!mounted.current) return;
+        const status = await read('ton_status', { orderId: begin.orderId });
+        if (status.status === 'confirmed' || status.status === 'delivered') { setTipDone(true); return; }
+        if (status.status === 'expired') { setTipNotice('This payment expired. You can try again.'); return; }
+        await new Promise(resolve => window.setTimeout(resolve, 3000));
+        if (!mounted.current) return;
+      }
+      setTipNotice('Still confirming on TON. Check back in a moment.');
+    } catch (e) { setTipNotice(e instanceof Error ? e.message : 'Could not start payment. Please try again.'); }
+    finally { sending.current = false; if (mounted.current) setTipPhase(null); }
+  }
   async function saveTon() {
     setBusy(true);
     try {
@@ -461,6 +503,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
     catch (e) { setNotice((e as Error).message); } finally { setBusy(false); }
   }
   const compact = data?.presentation === 'compact';
+  const showTipBar = !!data && data.tonEnabled === true && !data.admin && data.checkoutMode === 'invoice' && data.tonNanotonPerUsd != null && !selected && !selectedBundle;
   const tonPricing: TonPricing = data?.tonEnabled && data.tonNanotonPerStar ? { nanotonPerStar: data.tonNanotonPerStar, discountPercent: data.tonDiscountPercent ?? 0 } : null;
   const filteredItems = compact ? compactItems(data?.items ?? [], section, search) : (data?.items ?? []).filter(item => {
     if (search) return item.description.toLowerCase().includes(search.toLowerCase());
@@ -483,7 +526,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
   const rewards=data?.rewards;
   const progress=rewards?rewardProgress(rewards):null;
   const rewardItems=rewards?data!.items.filter(p=>(p.type==='photo'?rewards.photoIds:rewards.videoIds??[]).includes(p.id)):[];
-  return <main className={`catalogue${refined ? ' catalogue-refined' : ''}${compact ? ' catalogue-compact' : ''}`}>
+  return <main className={`catalogue${refined ? ' catalogue-refined' : ''}${compact ? ' catalogue-compact' : ''}${showTipBar ? ' catalogue-has-tip-bar' : ''}`}>
     <Script src="https://telegram.org/js/telegram-web-app.js" strategy="afterInteractive" onReady={() => setReady(true)} onError={() => { setReady(true); }} />
     <div className="cat-shell">
       <header className="cat-header">{!compact && <button className="cat-icon" aria-label="Back to chat" onClick={backToChat}><ArrowLeft size={21} /></button>}
@@ -584,6 +627,9 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
         <div className="cat-detail"><h2>Paid. It&apos;s in your chat</h2>
           <button className="cat-primary" onClick={() => { setPaidFallback(false); backToChat(); }}>View in chat</button></div>
       </section></div>}
+      {showTipBar && (
+        <div className="cat-tip-bar"><button type="button" className="cat-tip-bar-button" onClick={openTip}>Send me a tip <span aria-hidden="true">❤️</span></button></div>
+      )}
     </div>
     {selectedBundle && <div className="cat-modal-backdrop" onClick={() => !commerceBusy && closeDetails()}><section className="cat-modal cat-bundle-modal" role="dialog" aria-modal="true" aria-label="Bundle details" onClick={e => e.stopPropagation()}>
       <button className="cat-modal-close" aria-label="Close bundle" disabled={commerceBusy} onClick={closeDetails}><X size={21}/></button>
@@ -618,5 +664,23 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
           {notice && <p role="status" className="cat-payment-status">{notice}</p>}
         </>}
       </div></section></div>}
+    {tipOpen && data && <div className="cat-modal-backdrop" onClick={closeTip}><section className="cat-modal cat-tip-sheet" role="dialog" aria-modal="true" aria-label="Send a tip" onClick={e => e.stopPropagation()}>
+      <button className="cat-modal-close" aria-label="Close" disabled={!!tipPhase} onClick={closeTip}><X size={21} /></button>
+      <div className="cat-detail">
+        {tipDone ? <><h2>Thank you <span aria-hidden="true">❤️</span></h2><p>Your tip is on its way.</p></> : <>
+          <h2>Send me a tip <span aria-hidden="true">❤️</span></h2>
+          {tipPhase ? <p role="status" className="cat-tip-status">{tipPhase === 'opening' ? 'Opening wallet…' : 'Confirming on TON…'}</p> : <>
+            <div className="cat-tip-presets">{TIP_PRESET_USD.map(usd => {
+              const nanoton = data.tonNanotonPerUsd != null ? tonPriceNanoton(usd, data.tonNanotonPerUsd, 0) : null;
+              return <button key={usd} type="button" className="cat-tip-preset" onClick={() => void payTip(usd)}>
+                <span className="cat-tip-preset-usd">${usd.toLocaleString()}</span>
+                {nanoton != null && <span className="cat-tip-preset-ton"><TonMark />{formatTonAmount(nanoton)} TON</span>}
+              </button>;
+            })}</div>
+            {tipNotice && <p role="status" className="cat-payment-status">{tipNotice}</p>}
+          </>}
+        </>}
+      </div>
+    </section></div>}
   </main>;
 }

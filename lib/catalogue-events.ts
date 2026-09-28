@@ -13,6 +13,7 @@ export const CLIENT_EVENT_NAMES = [
   "view_bundle",
   "tap_pay_stars",
   "tap_pay_ton",
+  "tap_tip",
   "wallet_connected",
   "pay_cancel",
 ] as const;
@@ -24,6 +25,7 @@ export const ALL_EVENT_NAMES = [
   "view_bundle",
   "tap_pay_stars",
   "tap_pay_ton",
+  "tap_tip",
   "wallet_connected",
   "pay_success",
   "pay_cancel",

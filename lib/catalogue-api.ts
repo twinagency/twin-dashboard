@@ -6,7 +6,7 @@ import { projectBundle } from './catalogue-commerce';
 import { TRENDING_WINDOW_DAYS, tagEmojis, trendingRanks, type TrendingSale } from './catalogue-trending';
 import { cataloguePresentation } from './catalogue-presentation';
 import { beginCatalogueCheckout, catalogueContentPath, catalogueOrderStatus, checkoutMode, CheckoutError, nativeOwnedItems, paidCatalogueItems, type InvoiceTransport } from './catalogue-checkout';
-import { beginTonCheckout, effectiveNanotonPerStar, reconcilePendingTonOrders, tonDiscountPercent, tonEnabled, tonOrderStatus } from './catalogue-ton';
+import { beginTonCheckout, beginTonTipCheckout, effectiveNanotonPerStar, reconcilePendingTonOrders, tonDiscountPercent, tonEnabled, tonOrderStatus } from './catalogue-ton';
 import { isClientEventName, logCatalogueEvent, validEventMediaType, validEventRail, validEventUuid } from './catalogue-events';
 export type CatalogueDependencies = {
   db(): SupabaseClient;
@@ -111,6 +111,14 @@ return async function POST(request: NextRequest, context: { params: Promise<{ sl
       }
       if (typeof body.orderId !== 'string') return json({error:'Invalid checkout request.'},400);
       const result = await tonOrderStatus(checkoutContext,body.orderId);
+      return json({ tonEnabled: true, ...result });
+    }
+    if (action === 'ton_tip') {
+      if (admin || !fan) return json({error:'Owner preview cannot purchase or unlock content.'},403);
+      if (!invoiceCheckout) return json({error:'In-app checkout is not enabled for this collection.'},403);
+      if (!tonEnabled(settings)) return json({error:'Pay with TON is not available for this collection.'},403);
+      rateLimit(`checkout:${fan.id}`,20);
+      const result = await beginTonTipCheckout({db,clone,fan},body,settings!);
       return json({ tonEnabled: true, ...result });
     }
     if (action === "settings") {
@@ -222,12 +230,19 @@ return async function POST(request: NextRequest, context: { params: Promise<{ sl
       // Same shared function beginTonCheckout uses for the charge, so the price
       // shown here can never drift from what a fan is actually billed.
       const liveTonNanotonPerStar = tonEnabled(settings) ? await effectiveNanotonPerStar(settings as any) : null;
+      // Tips are priced in USD, not Stars, so the Mini App needs nanoton-per-dollar too.
+      // Only available when the creator has pegged a Star to a USD value; otherwise tips
+      // stay hidden (see beginTonTipCheckout, which refuses without ton_star_usd).
+      const starUsdForTip = Number((settings as any)?.ton_star_usd);
+      const tonNanotonPerUsd = tonEnabled(settings) && liveTonNanotonPerStar != null && Number.isFinite(starUsdForTip) && starUsdForTip > 0
+        ? liveTonNanotonPerStar / starUsdForTip : null;
       return json({ name: settings?.display_name?.trim() || clone.name, items, blur, admin, enabled: settings?.enabled === true,
         verified: settings?.show_verified_badge === true,
         presentation: cataloguePresentation(settings?.presentation_variant),
         checkoutMode: checkoutMode(settings?.checkout_mode),
         tonEnabled: tonEnabled(settings),
         tonNanotonPerStar: liveTonNanotonPerStar,
+        tonNanotonPerUsd,
         tonDiscountPercent: tonEnabled(settings) ? tonDiscountPercent(settings as any) : 0,
         tonReturnUrl: typeof settings?.mini_app_url === 'string' && /^https:\/\/t\.me\//.test(settings.mini_app_url) ? settings.mini_app_url : null,
         ...(admin ? { tonWalletAddress: (settings as any)?.ton_wallet_address ?? '', tonPerStar: (settings as any)?.ton_nanoton_per_star ? (settings as any).ton_nanoton_per_star / 1_000_000_000 : null } : {}),
