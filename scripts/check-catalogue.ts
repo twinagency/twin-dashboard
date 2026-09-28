@@ -170,6 +170,17 @@ async function main(){
  assert.equal(rows.catalogue_requests.length,0,'hidden media cannot be queued from a stale page');
  rows.photos[0].caption='A newly saved caption';rows.videos[0].caption='A newly saved video caption';
  const restored=await (await call('catalogue')).json();assert.equal(restored.items.length,7);assert.equal(restored.bundles.length,1);
+ // The actual catalogue and stale-item routes enforce the same rule for both targets.
+ for(const slug of ['mrs-callace','fit-sid']) {
+   reset();rows.clones[0].slug=slug;rows.clones[0].videos_enabled=true;
+   rows.photos[0].caption=null;rows.photos[0].auto_desc='Imported label';
+   rows.videos.push({...photo,id:requestId,caption:'A saved video caption'});
+   const scoped=await (await call('catalogue')).json();
+   assert.deepEqual(scoped.items.map((i:any)=>i.id),[requestId],`${slug} shows its captioned video only`);
+   assert.equal((await call('preview',{type:'photo',id:itemId})).status,404);
+   assert.equal((await call('request',{type:'photo',id:itemId,requestKey:requestId})).status,404);
+   assert.equal(rows.catalogue_requests.length,0);
+ }
  // Mixed All grid: both formats in the opening row, spread throughout with no
  // missing/duplicated items; single-format tabs and Bri's chosen positions stay.
  for(const [photoCount,videoCount] of [[304,102],[2,20],[20,2],[1,1],[3,0],[0,3],[0,0]]) {
