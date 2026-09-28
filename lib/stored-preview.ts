@@ -20,6 +20,8 @@ import { writeFile, readFile, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import sharp from "sharp";
+import { createVideoPreview } from "./catalogue-video-transform";
+import { DEFAULT_BLUR, validBlur } from "./catalogue-core";
 
 const execFileAsync = promisify(execFile);
 
@@ -127,4 +129,40 @@ export async function makeBlurredPreview(bytes: Buffer, type: StoredPreviewType)
 // where a preview lives.
 export function storedPreviewPath(storagePath: string): string {
   return `previews/${storagePath}.jpg`;
+}
+
+// Same convention, moving-clip flavour: `previews/${storage_path}.mp4`. The
+// bot's Mini App offer has no ffmpeg of its own (same reasoning as the still
+// JPEG above), so this ready-made clip lets a chat "Unlock now" offer show
+// the exact same moving blurred preview the Mini App catalogue renders live,
+// instead of a still frame.
+export function storedPreviewClipPath(storagePath: string): string {
+  return `previews/${storagePath}.mp4`;
+}
+
+/**
+ * Build the stored, ready-to-send blurred MOVING preview clip for a video's
+ * ORIGINAL bytes, using the exact same transform (lib/catalogue-video-
+ * transform.ts's createVideoPreview) the Mini App catalogue calls live at
+ * lib/catalogue-video-preview.ts's renderVideoPreview: a fixed ~5s excerpt,
+ * 12fps, gaussian blur at the given sigma, no audio, H.264 baseline, faststart,
+ * capped at MAX_VIDEO_PREVIEW_BYTES. `blur` should be the creator's own
+ * `creator_catalogue_settings.blur_strength` (falls back to DEFAULT_BLUR if
+ * invalid) so the chat offer and the Mini App preview look identical.
+ *
+ * Never throws on unrecoverable input; callers (upload actions, the backfill
+ * script) treat this as best-effort, same discipline as makeBlurredPreview.
+ */
+export async function makeStoredVideoPreviewClip(bytes: Buffer, blur: number): Promise<Buffer> {
+  const sigma = validBlur(blur) ? blur : DEFAULT_BLUR;
+  const dir = await mkdtemp(path.join(tmpdir(), "stored-preview-clip-"));
+  try {
+    const inputPath = path.join(dir, "in");
+    const outputPath = path.join(dir, "out.mp4");
+    await writeFile(inputPath, bytes);
+    await createVideoPreview(inputPath, outputPath, sigma);
+    return await readFile(outputPath);
+  } finally {
+    await rm(dir, { recursive: true, force: true }).catch(() => {});
+  }
 }

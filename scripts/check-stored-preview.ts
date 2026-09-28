@@ -10,11 +10,12 @@
 import { strict as assert } from "node:assert";
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { mkdtemp, rm } from "node:fs/promises";
+import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import sharp from "sharp";
-import { makeBlurredPreview, storedPreviewPath, PREVIEW_MAX_LONG_SIDE } from "../lib/stored-preview";
+import { makeBlurredPreview, makeStoredVideoPreviewClip, storedPreviewPath, storedPreviewClipPath, PREVIEW_MAX_LONG_SIDE } from "../lib/stored-preview";
+import { MAX_VIDEO_PREVIEW_BYTES } from "../lib/catalogue-video-transform";
 
 const run = promisify(execFile);
 
@@ -89,6 +90,10 @@ async function main(): Promise<void> {
   check("path: exactly previews/${storage_path}.jpg", () => {
     assert.equal(storedPreviewPath("abc-123/photos/deadbeef-file.jpg"), "previews/abc-123/photos/deadbeef-file.jpg.jpg");
     assert.equal(storedPreviewPath("clone/videos/x.mp4"), "previews/clone/videos/x.mp4.jpg");
+  });
+  check("path: exactly previews/${storage_path}.mp4 for the moving clip", () => {
+    assert.equal(storedPreviewClipPath("clone/videos/x.mp4"), "previews/clone/videos/x.mp4.mp4");
+    assert.equal(storedPreviewClipPath("abc-123/photos/deadbeef-file.jpg"), "previews/abc-123/photos/deadbeef-file.jpg.mp4");
   });
 
   // ── Photo blur strength + output shape ──────────────────────────────────
@@ -180,6 +185,33 @@ async function main(): Promise<void> {
     check("video: a clip shorter than 1s still produces a valid preview (seeks to 0s)", () => {
       assert.equal(shortMeta.format, "jpeg");
       assert.ok(shortMeta.width! > 0 && shortMeta.height! > 0);
+    });
+
+    // ── Moving preview clip (H.264, faststart, silent, ~5s, small) ──────────
+    // Same source clip as the frame-extraction checks above, run through
+    // makeStoredVideoPreviewClip instead — this is the artifact the chat
+    // "Unlock now" offer actually sends, and it must look exactly like the
+    // Mini App's own live preview (same transform, same shape guarantees).
+    const movingClip = await makeStoredVideoPreviewClip(clipBytes, 16);
+    const movingClipPath = path.join(dir, "movingclip.mp4");
+    await writeFile(movingClipPath, movingClip);
+    const clipProbe = await run("ffprobe", [
+      "-v", "error", "-show_entries", "format=duration:stream=codec_type,codec_name",
+      "-of", "json", movingClipPath,
+    ]);
+    const clipInfo = JSON.parse(clipProbe.stdout) as {
+      format?: { duration?: string };
+      streams?: { codec_type?: string; codec_name?: string }[];
+    };
+    const clipDuration = Number(clipInfo.format?.duration);
+    const clipVideoStream = clipInfo.streams?.find((s) => s.codec_type === "video");
+    check("clip: <= 6s, small, H.264, faststart, silent", () => {
+      assert.ok(clipDuration > 0 && clipDuration <= 6, `expected <= 6s, got ${clipDuration}`);
+      assert.equal(clipVideoStream?.codec_name, "h264", "must be H.264");
+      assert.ok(!clipInfo.streams?.some((s) => s.codec_type === "audio"), "must be silent, no audio stream");
+      assert.ok(movingClip.length <= MAX_VIDEO_PREVIEW_BYTES, `expected a small clip, got ${(movingClip.length / 1024 / 1024).toFixed(2)}MB`);
+      // Same fast-start check as scripts/check-catalogue-video.ts: moov before mdat.
+      assert.ok(movingClip.indexOf("moov") < movingClip.indexOf("mdat"), "fast-start MP4 (moov before mdat)");
     });
 
     console.log(`\n${passed} stored-preview checks passed`);
