@@ -172,4 +172,5 @@ export async function middleware(req: NextRequest) {
   }
   return withPathname(req);
 }
-export const config = { matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.png).*)"] };
+// tonconnect-manifest.json is fetched unauthenticated by fans' TON wallets; it must never redirect to login.
+export const config = { matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.png|tonconnect-manifest.json).*)"] };
