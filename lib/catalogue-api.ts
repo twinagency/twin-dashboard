@@ -5,6 +5,7 @@ import { catalogueEligible, catalogueItemVisible, DEFAULT_BLUR, projectItem, saf
 import { projectBundle } from './catalogue-commerce';
 import { cataloguePresentation } from './catalogue-presentation';
 import { beginCatalogueCheckout, catalogueContentPath, catalogueOrderStatus, checkoutMode, CheckoutError, nativeOwnedItems, paidCatalogueItems, type InvoiceTransport } from './catalogue-checkout';
+import { beginTonCheckout, tonEnabled, tonOrderStatus } from './catalogue-ton';
 export type CatalogueDependencies = {
   db(): SupabaseClient;
   invoice?: InvoiceTransport;
@@ -63,7 +64,14 @@ return async function POST(request: NextRequest, context: { params: Promise<{ sl
         .eq("clone_id", clone.id).eq("telegram_id", telegramId).maybeSingle());
       if (!catalogueEligible(fan)) return json({ error: "This catalogue is unavailable for this account." }, 403);
     }
-    const settings = checked(await db.from("creator_catalogue_settings").select("blur_strength,enabled,mini_app_url,display_name,show_verified_badge,featured_bundle_id,presentation_variant,checkout_mode").eq("clone_id", clone.id).maybeSingle());
+    const settingsColumns = "blur_strength,enabled,mini_app_url,display_name,show_verified_badge,featured_bundle_id,presentation_variant,checkout_mode";
+    // ton_wallet_address/ton_nanoton_per_star land in a migration that may not be applied
+    // yet; fall back to the plain select so the catalogue keeps working either way.
+    const settingsWithTon = await db.from("creator_catalogue_settings").select(`${settingsColumns},ton_wallet_address,ton_nanoton_per_star`).eq("clone_id", clone.id).maybeSingle();
+    const settings: (Record<string, any> & { ton_wallet_address?: string | null; ton_nanoton_per_star?: number | null }) | null =
+      settingsWithTon.error?.code === '42703'
+        ? checked(await db.from("creator_catalogue_settings").select(settingsColumns).eq("clone_id", clone.id).maybeSingle())
+        : checked(settingsWithTon);
     if (!admin && !settings?.enabled) return json({ error: "This catalogue is not open yet." }, 403);
     const blur = validBlur(settings?.blur_strength) ? settings.blur_strength : DEFAULT_BLUR;
     const action = body.action;
@@ -85,10 +93,37 @@ return async function POST(request: NextRequest, context: { params: Promise<{ sl
       const path=await catalogueContentPath(checkoutContext,body.type as 'photo'|'video',body.id);
       return json({type:body.type,url:await deps.content(path)});
     }
+    if (['ton_checkout','ton_status'].includes(String(action))) {
+      if (admin || !fan) return json({error:'Owner preview cannot purchase or unlock content.'},403);
+      if (!invoiceCheckout) return json({error:'In-app checkout is not enabled for this collection.'},403);
+      if (!tonEnabled(settings)) return json({error:'Pay with TON is not available for this collection.'},403);
+      const checkoutContext = {db,clone,fan};
+      if (action === 'ton_checkout') {
+        rateLimit(`checkout:${fan.id}`,20);
+        const result = await beginTonCheckout(checkoutContext,body,settings!);
+        return json({ tonEnabled: true, ...result });
+      }
+      if (typeof body.orderId !== 'string') return json({error:'Invalid checkout request.'},400);
+      const result = await tonOrderStatus(checkoutContext,body.orderId);
+      return json({ tonEnabled: true, ...result });
+    }
     if (action === "settings") {
       if (!admin) return json({ error: "Administrator access required." }, 403);
       if (!validBlur(body.blur)) return json({ error: "Blur must be an integer from 4 to 40." }, 400);
-      checked(await db.from("creator_catalogue_settings").upsert({ clone_id: clone.id, blur_strength: body.blur }, { onConflict: "clone_id" }));
+      const update: Record<string, unknown> = { clone_id: clone.id, blur_strength: body.blur };
+      if (body.tonWalletAddress !== undefined) {
+        const addr = typeof body.tonWalletAddress === 'string' ? body.tonWalletAddress.trim() : '';
+        if (addr && !/^[A-Za-z0-9_-]{40,68}$/.test(addr)) return json({ error: "That does not look like a TON wallet address." }, 400);
+        update.ton_wallet_address = addr || null;
+      }
+      if (body.tonPerStar !== undefined) {
+        const raw = body.tonPerStar;
+        const blank = raw === '' || raw === null;
+        const n = Number(raw);
+        if (!blank && (!Number.isFinite(n) || n <= 0)) return json({ error: "TON per Star must be a positive number." }, 400);
+        update.ton_nanoton_per_star = blank ? null : Math.round(n * 1_000_000_000);
+      }
+      checked(await db.from("creator_catalogue_settings").upsert(update, { onConflict: "clone_id" }));
       return json({ blur: body.blur, saved: true });
     }
     if (action === "setup") {
@@ -143,6 +178,8 @@ return async function POST(request: NextRequest, context: { params: Promise<{ sl
         verified: settings?.show_verified_badge === true,
         presentation: cataloguePresentation(settings?.presentation_variant),
         checkoutMode: checkoutMode(settings?.checkout_mode),
+        tonEnabled: tonEnabled(settings),
+        ...(admin ? { tonWalletAddress: (settings as any)?.ton_wallet_address ?? '', tonPerStar: (settings as any)?.ton_nanoton_per_star ? (settings as any).ton_nanoton_per_star / 1_000_000_000 : null } : {}),
         featuredBundleId: bundles.find(b => b?.id === settings?.featured_bundle_id)?.id ?? null,
         canSend: !!fan?.business_connection_id && windowOpen(fan.last_message_received) && clone.status === "active",
         chatUrl: /^[a-zA-Z0-9_]{5,32}$/.test(username) ? `https://t.me/${username}` : null,

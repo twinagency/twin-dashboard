@@ -2,6 +2,8 @@
 import Script from "next/script";
 import { useCallback, useEffect, useRef, useState, type CSSProperties } from "react";
 import { ArrowLeft, BadgeCheck, Check, ChevronRight, Gift, LockKeyhole, Search, ShoppingBag, SlidersHorizontal, Star, X } from "lucide-react";
+import { TonConnectUI } from "@tonconnect/ui-react";
+import { beginCell } from "@ton/core";
 import { rewardProgress, type CatalogueBundle, type CatalogueRewards } from '@/lib/catalogue-commerce';
 import { openCatalogueChat } from "@/lib/catalogue-navigation";
 import type { CatalogueItem } from "@/lib/catalogue-core";
@@ -15,7 +17,7 @@ import { compactCategories, compactItems, salePercent, shortCatalogueTitle, type
 
 type WebApp = { initData: string; ready(): void; expand(): void; close(): void; openTelegramLink(url: string): void; openInvoice?(url: string, callback: (status: string) => void): void; setHeaderColor?(color: string): void; setBackgroundColor?(color: string): void; setBottomBarColor?(color: string): void };
 function app(): WebApp | undefined { return (window as unknown as { Telegram?: { WebApp?: WebApp } }).Telegram?.WebApp; }
-type Data = { checkoutMode?: 'chat' | 'invoice'; name: string; verified?: boolean; presentation?: CataloguePresentation; featuredBundleId?: string | null; items: CatalogueItem[]; blur: number; admin: boolean; enabled: boolean; canSend: boolean; chatUrl: string | null; purchaseNote: string; bundles:CatalogueBundle[]; rewards:CatalogueRewards|null };
+type Data = { checkoutMode?: 'chat' | 'invoice'; name: string; verified?: boolean; presentation?: CataloguePresentation; featuredBundleId?: string | null; items: CatalogueItem[]; blur: number; admin: boolean; enabled: boolean; canSend: boolean; chatUrl: string | null; purchaseNote: string; bundles:CatalogueBundle[]; rewards:CatalogueRewards|null; tonEnabled?: boolean; tonWalletAddress?: string; tonPerStar?: number | null };
 type Call = (action: string, payload?: Record<string, unknown>) => Promise<Response>;
 const tabs = ["All", "Photos", "Videos", "Bundles"];
 
@@ -96,6 +98,10 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
   const [setup, setSetup] = useState<{ username: string; hasMainApp: boolean; appUrl: string } | null>(null);
   const [pageSize, setPageSize] = useState(12);
   const requestKeys = useRef(new Map<string, string>());
+  const tonConnectRef = useRef<InstanceType<typeof TonConnectUI> | null>(null);
+  const [tonPhase, setTonPhase] = useState<null | 'opening' | 'confirming'>(null);
+  const [tonWalletAddress, setTonWalletAddress] = useState('');
+  const [tonPerStar, setTonPerStar] = useState('');
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
   useEffect(() => () => ownedCache.current.clear(), []);
@@ -113,7 +119,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
   }, [call]);
   const load = useCallback(async () => {
     setError("");
-    try { const value: Data = await read("catalogue"); setData(value); if (value.presentation === 'compact') setSection(current => current === 'All' ? 'Explore' : current); setSelected(current => current ? value.items.find(item => item.id === current.id && item.type === current.type) ?? current : null); setSelectedBundle(current => current ? value.bundles.find(bundle => bundle.id === current.id) ?? current : null); setBlur(value.blur); setRenderBlur(value.blur); return value; }
+    try { const value: Data = await read("catalogue"); setData(value); if (value.presentation === 'compact') setSection(current => current === 'All' ? 'Explore' : current); setSelected(current => current ? value.items.find(item => item.id === current.id && item.type === current.type) ?? current : null); setSelectedBundle(current => current ? value.bundles.find(bundle => bundle.id === current.id) ?? current : null); setBlur(value.blur); setRenderBlur(value.blur); if (value.admin) { setTonWalletAddress(value.tonWalletAddress ?? ''); setTonPerStar(value.tonPerStar != null ? String(value.tonPerStar) : ''); } return value; }
     catch (e) { setError(e instanceof Error ? e.message : "Couldn't load the catalogue."); }
   }, [read]);
   useEffect(() => { if (ready) {
@@ -247,6 +253,53 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
     } catch (e) { setNotice(e instanceof Error ? e.message : 'Could not open payment. Please try again.'); }
     finally { sending.current = false; if (mounted.current) { setBusy(false); setCommerceBusy(false); setCheckoutPhase(null); } }
   }
+  function tonConnect(): InstanceType<typeof TonConnectUI> {
+    // Built lazily on the fan's first tap of "Pay with TON", never on page load.
+    if (!tonConnectRef.current) tonConnectRef.current = new TonConnectUI({ manifestUrl: `${window.location.origin}/tonconnect-manifest.json` });
+    return tonConnectRef.current;
+  }
+  async function payWithTon(type: 'photo' | 'video' | 'bundle', id: string) {
+    if (sending.current) return;
+    if (data?.admin) { setNotice('Owner preview. Payments are disabled here.'); return; }
+    sending.current = true; setBusy(true); setCommerceBusy(true); setTonPhase('opening'); setNotice('');
+    try {
+      const begin = await read('ton_checkout', { type, id });
+      const payload = beginCell().storeUint(0, 32).storeStringTail(String(begin.comment)).endCell().toBoc().toString('base64');
+      try {
+        await tonConnect().sendTransaction({
+          validUntil: Math.floor(Date.now() / 1000) + 300,
+          messages: [{ address: String(begin.toAddress), amount: String(begin.amountNanoton), payload }],
+        });
+      } catch {
+        // A wallet rejection or cancel never unlocks anything. The order stays
+        // pending in the database until it expires; the fan can just retry.
+        setNotice('Payment cancelled. You have not unlocked this item.'); return;
+      }
+      if (!mounted.current) return;
+      setTonPhase('confirming');
+      const deadline = Date.now() + 5 * 60_000;
+      while (Date.now() < deadline) {
+        if (!mounted.current) return;
+        const status = await read('ton_status', { orderId: begin.orderId });
+        // Only a confirmed status from our server unlocks anything, never the
+        // sendTransaction promise resolving.
+        if (status.status === 'confirmed' || status.status === 'delivered') { await finishCheckout(type, id); return; }
+        if (status.status === 'expired') { setNotice('This payment expired. You can try again.'); return; }
+        await new Promise(resolve => window.setTimeout(resolve, 3000));
+        if (!mounted.current) return;
+      }
+      setNotice('Still confirming on TON. Reopen this item in a moment to check again.');
+    } catch (e) { setNotice(e instanceof Error ? e.message : 'Could not start TON payment. Please try again.'); }
+    finally { sending.current = false; if (mounted.current) { setBusy(false); setCommerceBusy(false); setTonPhase(null); } }
+  }
+  async function saveTon() {
+    setBusy(true);
+    try {
+      await read('settings', { blur, tonWalletAddress: tonWalletAddress.trim(), tonPerStar: tonPerStar === '' ? '' : tonPerStar });
+      setData(v => v && ({ ...v, tonWalletAddress: tonWalletAddress.trim(), tonPerStar: tonPerStar === '' ? null : Number(tonPerStar) }));
+      setNotice('TON settings saved.');
+    } catch (e) { setNotice(String((e as Error).message)); } finally { setBusy(false); }
+  }
   function unlockBundle(bundle: CatalogueBundle) {
     if (data?.checkoutMode === 'invoice') {
       if (bundle.owned) openBundle(bundle, document.activeElement as HTMLElement);
@@ -357,6 +410,12 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
         {setup && <div className="cat-setup"><p>Bot: @{setup.username}</p><p>In BotFather, set the Main Mini App URL to:</p><code>{setup.appUrl}</code>
           <p>{setup.hasMainApp ? "A Main Mini App is configured. Confirm its URL matches above before enabling." : "The Main Mini App still needs to be configured."}</p>
           <button className="cat-primary" disabled={busy || !setup.hasMainApp} onClick={activate}>URL checked, enable catalogue</button></div>}
+        <h2>Pay with TON</h2>
+        <label htmlFor="ton-wallet">TON wallet address <span title="Fans send TON straight to this wallet address. Leave both fields blank to keep Pay with TON hidden for this collection.">ⓘ</span></label>
+        <input id="ton-wallet" type="text" value={tonWalletAddress} onChange={e => setTonWalletAddress(e.target.value)} placeholder="UQ..." />
+        <label htmlFor="ton-rate">TON per Star <span title="Sets every item's TON price from its Stars price. For example, 0.002 means 1 Star costs 0.002 TON. Both this and the wallet address must be set to turn Pay with TON on.">ⓘ</span></label>
+        <input id="ton-rate" type="number" step="0.000000001" min="0" value={tonPerStar} onChange={e => setTonPerStar(e.target.value)} placeholder="0.002" />
+        <button className="cat-primary" disabled={busy} onClick={saveTon}>Save TON settings</button>
       </section>}
       {error ? <div className="cat-empty"><LockKeyhole /><h2>{error}</h2>{preview && <a className="cat-primary" href={`/twin?next=${encodeURIComponent(`/catalogue/${slug}?preview=1`)}`}>Sign in</a>}<button className="cat-secondary" onClick={load}>Try again</button></div>
         : !data ? <div className="cat-empty" aria-live="polite">Loading your collection…</div> : <>
@@ -435,6 +494,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
         <div className="cat-bundle-included">{selectedBundle.photoIds.map(id => { const item = data?.items.find(p => p.type === 'photo' && p.id === id); return item && <div key={id}><button className="cat-picture-button" onClick={event => openItem(item, event.currentTarget)} aria-label={`View included photo: ${item.description}`}><Preview item={item} blur={renderBlur} call={call} retryable={false}/></button><p>{item.description}</p></div>; })}</div>
         {salePercent(selectedBundle) !== null && !selectedBundle.owned && <p className="cat-bundle-saving">{salePercent(selectedBundle)}% off · <s>⭐{selectedBundle.regularStars.toLocaleString()}</s></p>}
         {selectedBundle.owned && data?.checkoutMode === 'invoice' ? <p className="cat-owned-message"><Check size={16}/> Unlocked. Tap a photo to view it.</p> : <button className="cat-primary" disabled={commerceBusy || selectedBundle.partial || data?.admin} onClick={() => unlockBundle(selectedBundle)}>{commerceBusy ? checkoutPhase === 'confirming' ? 'Confirming payment…' : data?.checkoutMode === 'invoice' ? 'Opening payment…' : 'Sending…' : data?.admin ? 'Preview only' : selectedBundle.owned ? 'View in chat' : selectedBundle.partial ? 'Partly owned' : paymentWaiting.has(`bundle:${selectedBundle.id}`) ? 'Check payment' : data?.checkoutMode !== 'invoice' && delivered.has(`bundle:photo:${selectedBundle.id}`) ? 'Open payment in chat' : `${data?.checkoutMode === 'invoice' ? 'Unlock' : 'Pay in Telegram'} · ⭐${selectedBundle.stars.toLocaleString()}`}</button>}
+        {data?.checkoutMode === 'invoice' && data?.tonEnabled && !data?.admin && !selectedBundle.owned && !selectedBundle.partial && <button className="cat-secondary" disabled={busy || commerceBusy} onClick={() => void payWithTon('bundle', selectedBundle.id)}>{tonPhase === 'opening' ? 'Opening wallet…' : tonPhase === 'confirming' ? 'Confirming on TON…' : 'Pay with TON'}</button>}
         {data?.checkoutMode !== 'invoice' && !data?.admin && !data?.canSend && <p className="cat-window">Send a message in the creator's chat first to receive this bundle.</p>}
         {notice && <p role="status" className="cat-payment-status">{notice}</p>}
       </div></section></div>}
@@ -446,6 +506,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
         {contentError && <div className="cat-content-error" role="alert"><p>{contentError}</p><button className="cat-secondary" onClick={() => void loadContent(selected, true)}>Retry loading item</button></div>}
         {data?.checkoutMode === 'invoice' ? <>
           {!ownedMedia && !contentError && !contentBusy && <button className="cat-primary" disabled={busy || data.admin} onClick={() => void sendItem(selected)}>{busy ? checkoutPhase === 'confirming' ? 'Confirming payment…' : 'Opening payment…' : data.admin ? 'Preview only' : selected.received && !selected.purchased && !selected.free ? 'View in chat' : selected.purchased || selected.free ? 'View item' : paymentWaiting.has(`${selected.type}:${selected.id}`) ? 'Check payment' : `Unlock · ⭐${selected.stars.toLocaleString()}`}</button>}
+          {!ownedMedia && !contentError && !contentBusy && !selected.free && !selected.purchased && data.tonEnabled && !data.admin && <button className="cat-secondary" disabled={busy} onClick={() => void payWithTon(selected.type, selected.id)}>{tonPhase === 'opening' ? 'Opening wallet…' : tonPhase === 'confirming' ? 'Confirming on TON…' : 'Pay with TON'}</button>}
           {ownedMedia && <p className="cat-owned-message"><Check size={16}/> Unlocked</p>}
           {notice && <p role="status" className="cat-payment-status">{notice}</p>}
         </> : <>

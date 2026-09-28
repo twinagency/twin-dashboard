@@ -1,0 +1,213 @@
+import assert from 'node:assert/strict';
+import { createCatalogueHandler } from '../lib/catalogue-api';
+import { beginTonCheckout, tonOrderStatus, tonEnabled, type TonIncomingTx } from '../lib/catalogue-ton';
+import { createHmac } from 'node:crypto';
+import { NextRequest } from 'next/server';
+
+const id = (n: number) => `00000000-0000-0000-0000-${String(n).padStart(12, '0')}`;
+const clone = { id: id(1), slug: 'fixture', name: 'Creator', bot_token: '1234:fixture', status: 'active', browse_enabled: true, photos_enabled: true, videos_enabled: true, bundles_enabled: true };
+const fan = { id: id(2), clone_id: clone.id, telegram_id: 42, business_connection_id: 'creator-business', paused: false, blocked_at: null, minor_flagged_at: null };
+const RATE = 2_000_000; // nanoton per star, i.e. 0.002 TON/star
+
+let rows: Record<string, any[]>;
+function reset() {
+  rows = {
+    clones: [clone], users: [fan],
+    creator_catalogue_settings: [{ clone_id: clone.id, enabled: true, checkout_mode: 'invoice', ton_wallet_address: 'EQtest-wallet-address', ton_nanoton_per_star: RATE }],
+    photos: [{ id: id(10), clone_id: clone.id, caption: 'Photo', star_value: 350, is_free: false, storage_path: 'private/0.jpg' }],
+    videos: [], catalogue_bundles: [],
+    catalogue_checkout_orders: [], catalogue_checkout_deliveries: [], catalogue_ton_orders: [],
+    star_transactions: [], user_received_media: [],
+  };
+}
+
+function makeDb() {
+  function builder(table: string) {
+    const filters: ((r: any) => boolean)[] = [];
+    let single = false, selection = '*', change: any, insert = false;
+    const q: any = {
+      select(s = '*') { selection = s; return q; },
+      eq(k: string, v: any) { filters.push(r => r[k] === v); return q; },
+      in(k: string, v: any[]) { filters.push(r => v.includes(r[k])); return q; },
+      gt(k: string, v: any) { filters.push(r => r[k] > v); return q; },
+      not(k: string, _op: string, v: any) { filters.push(r => r[k] !== v); return q; },
+      order() { return q; }, limit() { return q; },
+      maybeSingle() { single = true; return q; }, single() { single = true; return q; },
+      insert(v: any) { change = v; insert = true; return q; },
+      update(v: any) { change = v; return q; },
+      then(resolve: any, reject: any) {
+        try {
+          if (insert) {
+            const row = { id: id(900 + rows[table].length), status: 'pending', ...change };
+            rows[table].push(row);
+            filters.push(r => r === row);
+          } else if (change) {
+            rows[table].filter(r => filters.every(f => f(r))).forEach(r => Object.assign(r, change));
+          }
+          const data = (rows[table] ?? []).filter(r => filters.every(f => f(r)))
+            .map(r => selection === '*' ? { ...r } : Object.fromEntries(selection.split(',').map(k => [k, r[k]])));
+          resolve({ data: single ? (data[0] ?? null) : data, error: null });
+        } catch (e) { reject(e); }
+      },
+    };
+    return q;
+  }
+  return {
+    from: builder,
+    async rpc(name: string, args: any) {
+      if (name === 'catalogue_owned_checkout_assets') {
+        // The real function this mirrors: unchanged by this migration (see its header).
+        const assets = rows.catalogue_checkout_orders.filter(o => o.user_id === args.p_user && o.status === 'paid'
+          && rows.star_transactions.some(t => t.id === o.charge_id && t.invoice_payload === `catalogue_order_${o.id}`)
+          && !rows.star_transactions.some(t => t.id === `refund:${o.charge_id}`))
+          .flatMap(o => args.p_type === 'photo' && o.media_type === 'bundle' ? o.photo_ids : o.media_type === args.p_type ? [o.media_id] : []);
+        return { data: assets, error: null };
+      }
+      assert.equal(name, 'confirm_catalogue_ton_order', 'only these RPCs should be used by the TON path');
+      const order = rows.catalogue_ton_orders.find(r => r.id === args.p_order);
+      if (!order) return { data: null, error: { message: 'not found' } };
+      if (order.status === 'confirmed' || order.status === 'delivered') return { data: order.status, error: null };
+      if (order.status === 'expired' || Date.parse(order.expires_at) <= Date.now()) {
+        order.status = 'expired';
+        return { data: 'expired', error: null };
+      }
+      const charge = 'ton:' + args.p_tx_hash;
+      const payload = 'catalogue_order_' + order.id;
+      const alreadySettled = rows.star_transactions.some(t => t.id === charge);
+      order.status = 'confirmed'; order.tx_hash = args.p_tx_hash; order.buyer_wallet = args.p_buyer;
+      order.confirmed_at = order.confirmed_at ?? new Date().toISOString();
+      if (alreadySettled) return { data: 'confirmed', error: null };
+      if (!rows.catalogue_checkout_orders.some(r => r.id === order.id)) {
+        rows.catalogue_checkout_orders.push({
+          id: order.id, clone_id: order.clone_id, user_id: order.user_id, telegram_id: order.telegram_id,
+          business_connection_id: order.business_connection_id, media_type: order.media_type, media_id: order.media_id,
+          amount_stars: order.amount_stars, photo_ids: order.photo_ids, status: 'paid',
+          invoice_url: 'ton:' + order.memo, expires_at: new Date().toISOString(), charge_id: charge, paid_at: new Date().toISOString(),
+        });
+      }
+      if (!rows.star_transactions.some(t => t.id === charge)) {
+        rows.star_transactions.push({
+          id: charge, clone_id: order.clone_id, user_id: order.user_id, telegram_id: order.telegram_id,
+          kind: 'media', amount_stars: order.amount_stars, media_type: order.media_type, media_id: order.media_id,
+          invoice_payload: payload, imported_from: 'ton', paid_at: new Date().toISOString(),
+        });
+      }
+      if (!rows.catalogue_checkout_deliveries.some(d => d.order_id === order.id)) {
+        rows.catalogue_checkout_deliveries.push({ order_id: order.id, status: 'pending' });
+      }
+      return { data: 'confirmed', error: null };
+    },
+  };
+}
+
+function tx(overrides: Partial<TonIncomingTx>): TonIncomingTx {
+  return { hash: 'hash-a', comment: null, valueNanoton: BigInt(0), source: 'buyer-wallet', ...overrides };
+}
+
+async function main() {
+  const db = makeDb();
+  const context = { db, clone, fan } as any;
+
+  // 1. TON disabled clone rejects ton_checkout.
+  reset();
+  rows.creator_catalogue_settings[0].ton_wallet_address = null;
+  assert.equal(tonEnabled(rows.creator_catalogue_settings[0]), false);
+  await assert.rejects(() => beginTonCheckout(context, { type: 'photo', id: id(10) }, rows.creator_catalogue_settings[0]), /not available/);
+
+  // Begin real orders for the remaining tests. Each check uses its own order so the
+  // per-order 3s verification throttle never masks a different test's assertion.
+  reset();
+  const settings = rows.creator_catalogue_settings[0];
+  assert.equal(tonEnabled(settings), true);
+  const begin = await beginTonCheckout(context, { type: 'photo', id: id(10) }, settings);
+  assert.equal(begin.toAddress, settings.ton_wallet_address);
+  assert.equal(begin.amountNanoton, 350 * RATE);
+  assert.equal(begin.comment, begin.memo);
+  assert.match(begin.memo, /^cc_[a-z2-7]{12}$/);
+  const order = rows.catalogue_ton_orders.find(r => r.id === begin.orderId);
+  assert.ok(order, 'order row created');
+
+  // 2. Wrong memo does not confirm.
+  {
+    const wrongMemoOrder = await beginTonCheckout(context, { type: 'photo', id: id(10) }, settings);
+    const noMatch = await tonOrderStatus(context, wrongMemoOrder.orderId, async () => [tx({ comment: 'not-the-memo', valueNanoton: BigInt(wrongMemoOrder.amountNanoton) })]);
+    assert.equal(noMatch.status, 'pending', 'wrong memo must not confirm');
+  }
+
+  // 3. Underpayment does not confirm.
+  {
+    const underpaidOrder = await beginTonCheckout(context, { type: 'photo', id: id(10) }, settings);
+    const short = await tonOrderStatus(context, underpaidOrder.orderId, async () => [tx({ comment: underpaidOrder.memo, valueNanoton: BigInt(underpaidOrder.amountNanoton - 1) })]);
+    assert.equal(short.status, 'pending', 'underpayment must not confirm');
+  }
+  assert.equal(rows.catalogue_checkout_orders.length, 0, 'no ownership granted yet');
+
+  // 4. Memo match confirms and wires ownership + delivery.
+  {
+    const matched = await tonOrderStatus(context, begin.orderId, async (address) => {
+      assert.equal(address, settings.ton_wallet_address);
+      return [tx({ hash: 'hash-real', comment: begin.memo, valueNanoton: BigInt(begin.amountNanoton) })];
+    });
+    assert.equal(matched.status, 'confirmed');
+  }
+  const paidOrder = rows.catalogue_checkout_orders.find(r => r.id === begin.orderId);
+  assert.ok(paidOrder, 'catalogue_checkout_orders row created on confirm');
+  assert.equal(paidOrder.status, 'paid');
+  assert.equal(paidOrder.charge_id, 'ton:hash-real');
+  const receipt = rows.star_transactions.find(t => t.id === 'ton:hash-real');
+  assert.ok(receipt, 'star_transactions receipt created');
+  assert.equal(receipt.imported_from, 'ton');
+  assert.equal(receipt.invoice_payload, `catalogue_order_${begin.orderId}`);
+  assert.equal(receipt.amount_stars, 350);
+  assert.ok(rows.catalogue_checkout_deliveries.some(d => d.order_id === begin.orderId), 'delivery queued exactly like the Stars path');
+
+  // 5. Same tx twice is idempotent: confirming again with the same tx_hash changes nothing further.
+  await new Promise(r => setTimeout(r, 3100));
+  {
+    const again = await tonOrderStatus(context, begin.orderId, async () => [tx({ hash: 'hash-real', comment: begin.memo, valueNanoton: BigInt(begin.amountNanoton) })]);
+    assert.equal(again.status, 'confirmed');
+  }
+  assert.equal(rows.star_transactions.filter(t => t.id === 'ton:hash-real').length, 1, 'no duplicate receipt');
+  assert.equal(rows.catalogue_checkout_orders.filter(r => r.id === begin.orderId).length, 1, 'no duplicate checkout order');
+  assert.equal(rows.catalogue_checkout_deliveries.filter(d => d.order_id === begin.orderId).length, 1, 'no duplicate delivery row');
+
+  // 6. Expired order never confirms, and never even calls the verifier.
+  reset();
+  const expiredBegin = await beginTonCheckout(context, { type: 'photo', id: id(10) }, settings);
+  const expiredOrder = rows.catalogue_ton_orders.find(r => r.id === expiredBegin.orderId);
+  expiredOrder.expires_at = new Date(Date.now() - 1000).toISOString();
+  let verifierCalled = false;
+  const expired = await tonOrderStatus(context, expiredBegin.orderId, async () => { verifierCalled = true; return [tx({ comment: expiredBegin.memo, valueNanoton: BigInt(expiredBegin.amountNanoton) })]; });
+  assert.equal(expired.status, 'expired');
+  assert.equal(verifierCalled, false, 'an expired order must never be checked on chain');
+  const stillExpired = await tonOrderStatus(context, expiredBegin.orderId, async () => { verifierCalled = true; return []; });
+  assert.equal(stillExpired.status, 'expired', 'expired stays expired');
+  assert.equal(verifierCalled, false);
+
+  // 7. Client-supplied "confirmed" is ignored end to end through the HTTP handler:
+  // the action only ever accepts an orderId, and confirmation happens only from a
+  // server side, mocked (never live) toncenter lookup that finds nothing.
+  reset();
+  const globalFetch = global.fetch;
+  try {
+    (global as any).fetch = async () => ({ ok: true, json: async () => ({ transactions: [] }) });
+    const httpBegin = await beginTonCheckout(context, { type: 'photo', id: id(10) }, settings);
+    const handler = createCatalogueHandler({
+      db: () => db as any, admin: async () => false,
+      preview: async () => Buffer.from(''), videoPreview: async () => Buffer.from(''),
+      videoSources: async () => ({ url: '', posterUrl: '', seconds: 0 }),
+    });
+    const p = new URLSearchParams({ auth_date: String(Math.floor(Date.now() / 1000)), user: JSON.stringify({ id: 42 }) });
+    const secret = createHmac('sha256', 'WebAppData').update(clone.bot_token).digest();
+    p.set('hash', createHmac('sha256', secret).update([...p].sort(([a], [b]) => a.localeCompare(b)).map(([k, v]) => `${k}=${v}`).join('\n')).digest('hex'));
+    const response = await handler(new NextRequest('http://localhost:3001/api/catalogue/fixture', {
+      method: 'POST', headers: { origin: 'http://localhost:3001', 'content-type': 'application/json', 'x-telegram-init-data': p.toString() },
+      body: JSON.stringify({ action: 'ton_status', orderId: httpBegin.orderId, status: 'confirmed', tx_hash: 'hash-fake', preview: false }),
+    }), { params: Promise.resolve({ slug: 'fixture' }) });
+    const body = await response.json();
+    assert.equal(body.status, 'pending', 'a client-asserted status/tx_hash must never confirm an order');
+  } finally { (global as any).fetch = globalFetch; }
+
+  console.log('TON checkout checks passed: memo match confirms, wrong memo and underpayment do not, same tx twice is idempotent, expired orders never confirm and skip verification, TON-disabled clones reject checkout, and client-supplied confirmation is ignored end to end. No live toncenter calls.');
+}
+main().catch(error => { console.error(error); process.exitCode = 1; });

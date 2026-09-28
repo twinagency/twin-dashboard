@@ -32,9 +32,11 @@ export async function nativeOwnedItems(db:SupabaseClient, userId:string, type:Ch
   return Array.isArray(ids) ? ids.filter((id:unknown):id is string=>typeof id==='string'&&checkoutUuid.test(id)) : [];
 }
 
-type Context = {db:SupabaseClient; clone:any; fan:any};
-type Product = {type:CheckoutMediaType;id:string;stars:number;photoIds:string[];title:string;description:string};
-async function productForCheckout({db,clone,fan}:Context,type:CheckoutMediaType,id:string):Promise<Product> {
+export type Context = {db:SupabaseClient; clone:any; fan:any};
+export type Product = {type:CheckoutMediaType;id:string;stars:number;photoIds:string[];title:string;description:string};
+// Shared by the Stars invoice flow and lib/catalogue-ton.ts's TON flow, so price and
+// ownership are resolved identically regardless of payment rail.
+export async function productForCheckout({db,clone,fan}:Context,type:CheckoutMediaType,id:string):Promise<Product> {
   if ((type==='video'&&!clone.videos_enabled)||(type!=='video'&&!clone.photos_enabled)||(type==='bundle'&&!clone.bundles_enabled))
     throw new CheckoutError('This item is not available.',404);
   const paid = await paidCatalogueItems(db,clone.id,fan.id);
