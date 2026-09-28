@@ -24,9 +24,9 @@ export function catalogueDisplayOrder(items: CatalogueItem[], slug: string, mixM
   const videos = remaining.filter(item => item.type === 'video');
   const mixed: CatalogueItem[] = [];
   let photoIndex = 0, videoIndex = 0;
-  // Make both formats visible in Alanna's first row, then spread the remaining
-  // videos/photos throughout the grid rather than leaving a single-type tail.
-  if (slug === 'alanna-pow' && photos.length && videos.length) {
+  // Show both formats in the first row for the opted-in compact catalogues,
+  // then spread the remaining media across the grid.
+  if (['alanna-pow', 'mrs-callace', 'fit-sid'].includes(slug) && photos.length && videos.length) {
     mixed.push(photos[photoIndex++], videos[videoIndex++]);
   }
   const initialPhotos = photoIndex;
