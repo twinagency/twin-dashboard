@@ -1,0 +1,56 @@
+MINI APP ROLLOUT, PER GIRL
+2026-09-28
+
+Reference: Alanna Pow (clone_id 6ca0782d-b5cf-433d-8329-f3ef7ec5f011). Her
+setup is what "fully on" means. Check any girl's status any time at
+/miniapp-rollout, or run:
+  npx tsx --env-file=.env --tsconfig scripts/tsconfig.json \
+    scripts/miniapp-readiness.ts --clone <slug>
+
+LOW LEVEL
+
+1. [SCRIPT] Media prep, run with --fix:
+   npx tsx --env-file=.env --tsconfig scripts/tsconfig.json \
+     scripts/miniapp-readiness.ts --clone <slug> --fix
+   Runs, in order: backfill-stored-previews.ts (blurred preview JPEGs),
+   backfill-compress-media.ts (shrinks oversize video/photo, keeps original
+   under originals/). Both idempotent, safe to re-run. Add --dry-run first
+   to preview without writing.
+
+2. [HUMAN] Caption anything the script lists as missing a caption, in the
+   Media page. Uncaptioned items do not sell in the app for any clone whose
+   catalogue hides them (see lib/catalogue-core.ts catalogueItemVisible).
+
+3. [HUMAN] Build/enable bundles for any theme the script lists as missing,
+   from the six allowed themes only: Anal, Titty, BG, GG, Solo, Gangbang.
+   Title exactly "<Theme> Photos" (bundles are photo-only right now). Needs
+   at least 2 non-free priced photos in that theme; thin themes stay off.
+
+4. [HUMAN] BotFather: register the Mini App on the clone's bot (/newapp),
+   get the t.me/<bot>?startapp link, save it as mini_app_url in
+   creator_catalogue_settings for that clone (no dashboard field for this
+   yet, ask whoever owns the migration to set it, or set it directly).
+   Also set checkout_mode = 'invoice' and enabled = true on the same row.
+
+5. [HUMAN] TON: create/assign a TON wallet address for the clone, set
+   creator_catalogue_settings.ton_wallet_address, a rate (ton_star_usd is
+   the live-pegged option, ton_nanoton_per_star is the fixed one), and
+   ton_discount_percent (Alanna runs 50).
+
+6. [HUMAN] In the clone's dashboard settings (/clones/<id>), turn on
+   "Sell content through the app" (sell_via_mini_app). Never flip this or
+   any TON field from the script or the rollout page, only from here.
+
+7. [HUMAN] Test buy: one real purchase on Stars, one real purchase on TON,
+   before telling anyone this girl is live.
+
+8. [SCRIPT] Re-check: scripts/miniapp-readiness.ts --clone <slug>, confirm
+   every line is green, or check /miniapp-rollout shows her fully on.
+
+HIGH LEVEL
+
+- Script handles: previews, compression backfill, the readiness report.
+- Human handles: BotFather registration, TON wallet + rate + discount,
+  sell_via_mini_app toggle, captioning, bundle building, final test buys.
+- /miniapp-rollout is the always-current dashboard of who is on, who is
+  partial, who has not started.
