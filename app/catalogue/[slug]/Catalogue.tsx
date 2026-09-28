@@ -76,9 +76,9 @@ function Preview(props: { item: CatalogueItem; blur: number; call: Call; retryab
   return props.item.type === 'video' ? <VideoPreview {...props} retryable={props.retryable ?? true} /> : <PhotoPreview {...props} />;
 }
 
-function BundleCard({ bundle, items, blur, call, busy, owner = false, onUnlock, onDetails, compact = false, label, actionLabel, ton = null }: {
+function BundleCard({ bundle, items, blur, call, busy, owner = false, onUnlock, onUnlockTon, onDetails, compact = false, label, actionLabel, ton = null }: {
   bundle: CatalogueBundle; items: CatalogueItem[]; blur: number; call: Call;
-  busy: boolean; owner?: boolean; onUnlock: () => void; onDetails?: () => void; compact?: boolean; label?: string; actionLabel?: string; ton?: TonPricing;
+  busy: boolean; owner?: boolean; onUnlock: () => void; onUnlockTon?: () => void; onDetails?: () => void; compact?: boolean; label?: string; actionLabel?: string; ton?: TonPricing;
 }) {
   const bundleTon = bundle.owned || bundle.partial ? null : ton;
   if (compact) {
@@ -92,10 +92,14 @@ function BundleCard({ bundle, items, blur, call, busy, owner = false, onUnlock, 
         <h3>{bundle.title}</h3>
         {bundle.caption && <p className="cat-bundle-caption">{bundle.caption}</p>}
         {discount !== null && <p className="cat-bundle-saving">{discount}% off <span aria-hidden="true">·</span> <s>⭐{bundle.regularStars.toLocaleString()}</s></p>}
-        <CardPrices stars={bundle.stars} ton={bundleTon} />
-        <button type="button" className="cat-primary" aria-label={actionLabel?.startsWith('Pay ·') ? `Pay in Telegram for ${bundle.stars.toLocaleString()} Stars` : undefined} disabled={busy || bundle.partial || owner} onClick={onUnlock}>
-          {busy ? 'Opening…' : owner ? 'Preview only' : actionLabel ?? (bundle.owned ? 'View bundle' : bundle.partial ? 'Partly owned' : `Unlock · ⭐${bundle.stars.toLocaleString()}`)}
-        </button>
+        <div className="cat-pay-row cat-bundle-pay-row">
+          <button type="button" className="cat-primary cat-pay-stars" aria-label={actionLabel?.startsWith('Pay ·') ? `Pay in Telegram for ${bundle.stars.toLocaleString()} Stars` : undefined} disabled={busy || bundle.partial || owner} onClick={onUnlock}>
+            {busy ? 'Opening…' : owner ? 'Preview only' : actionLabel ?? (bundle.owned ? 'View bundle' : bundle.partial ? 'Partly owned' : `⭐${bundle.stars.toLocaleString()}`)}
+          </button>
+          {bundleTon && onUnlockTon && !owner && <button type="button" className="cat-secondary cat-pay-ton" disabled={busy} onClick={onUnlockTon}>
+            <TonButtonLabel stars={bundle.stars} nanotonPerStar={bundleTon.nanotonPerStar} phase={null} discountPercent={bundleTon.discountPercent} />
+          </button>}
+        </div>
       </div>
     </article>;
   }
@@ -510,7 +514,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
         : !data ? <div className="cat-empty" aria-live="polite">Loading your collection…</div> : <>
         {!compact && featuredBundle && <section className="cat-daily-sale" aria-labelledby="daily-sale-title">
           <h2 id="daily-sale-title"><span aria-hidden="true">😈</span><span>Daddy’s Daily Reward Sale</span><span aria-hidden="true">😈</span></h2>
-          <BundleCard bundle={featuredBundle} items={data.items} blur={renderBlur} call={call} busy={commerceBusy} owner={compact && data.admin} compact={compact} onDetails={() => openBundle(featuredBundle, document.activeElement as HTMLElement)} actionLabel={paymentWaiting.has(`bundle:${featuredBundle.id}`) ? 'Check payment' : data.checkoutMode !== 'invoice' ? featuredBundle.owned ? 'View in chat' : featuredBundle.partial ? 'Partly owned' : delivered.has(`bundle:photo:${featuredBundle.id}`) ? 'Open payment in chat' : `Pay · ⭐${featuredBundle.stars.toLocaleString()}` : undefined} onUnlock={()=>unlockBundle(featuredBundle)} ton={tonPricing} />
+          <BundleCard bundle={featuredBundle} items={data.items} blur={renderBlur} call={call} busy={commerceBusy} owner={compact && data.admin} compact={compact} onDetails={() => openBundle(featuredBundle, document.activeElement as HTMLElement)} actionLabel={paymentWaiting.has(`bundle:${featuredBundle.id}`) ? 'Check payment' : data.checkoutMode !== 'invoice' ? featuredBundle.owned ? 'View in chat' : featuredBundle.partial ? 'Partly owned' : delivered.has(`bundle:photo:${featuredBundle.id}`) ? 'Open payment in chat' : `Pay · ⭐${featuredBundle.stars.toLocaleString()}` : undefined} onUnlock={()=>unlockBundle(featuredBundle)} onUnlockTon={data.checkoutMode === 'invoice' && data.tonEnabled && !data.admin ? () => { openBundle(featuredBundle, document.activeElement as HTMLElement); void payWithTon('bundle', featuredBundle.id); } : undefined} ton={tonPricing} />
         </section>}
         {rewards&&progress&&<section className="cat-rewards" aria-label="Your loyalty rewards">
           <button className="cat-reward-summary" aria-label="Rewards Daddy" aria-expanded={rewardsOpen} aria-controls="catalogue-reward-details" onClick={()=>setRewardsOpen(v=>!v)}>
@@ -542,7 +546,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
           <div className="cat-bundle-grid" ref={bundleTrack} onScroll={event => {
             const track = event.currentTarget;
             setBundleIndex(Math.min(browseBundles.length - 1, Math.max(0, Math.round(track.scrollLeft / (track.clientWidth + 10)))));
-          }}>{browseBundles.map((bundle,index)=><BundleCard key={bundle.id} bundle={bundle} items={data.items} blur={renderBlur} call={call} busy={commerceBusy} owner={compact && data.admin} compact={compact} onDetails={() => openBundle(bundle, document.activeElement as HTMLElement)} label={`Bundle ${index+1} of ${browseBundles.length}: ${bundle.title}`} actionLabel={paymentWaiting.has(`bundle:${bundle.id}`) ? 'Check payment' : data.checkoutMode !== 'invoice' ? bundle.owned ? 'View in chat' : bundle.partial ? 'Partly owned' : delivered.has(`bundle:photo:${bundle.id}`) ? 'Open payment in chat' : `Pay · ⭐${bundle.stars.toLocaleString()}` : undefined} onUnlock={()=>unlockBundle(bundle)} ton={tonPricing} />)}</div>
+          }}>{browseBundles.map((bundle,index)=><BundleCard key={bundle.id} bundle={bundle} items={data.items} blur={renderBlur} call={call} busy={commerceBusy} owner={compact && data.admin} compact={compact} onDetails={() => openBundle(bundle, document.activeElement as HTMLElement)} label={`Bundle ${index+1} of ${browseBundles.length}: ${bundle.title}`} actionLabel={paymentWaiting.has(`bundle:${bundle.id}`) ? 'Check payment' : data.checkoutMode !== 'invoice' ? bundle.owned ? 'View in chat' : bundle.partial ? 'Partly owned' : delivered.has(`bundle:photo:${bundle.id}`) ? 'Open payment in chat' : `Pay · ⭐${bundle.stars.toLocaleString()}` : undefined} onUnlock={()=>unlockBundle(bundle)} onUnlockTon={data.checkoutMode === 'invoice' && data.tonEnabled && !data.admin ? () => { openBundle(bundle, document.activeElement as HTMLElement); void payWithTon('bundle', bundle.id); } : undefined} ton={tonPricing} />)}</div>
           {!compact&&browseBundles.length>1&&<div className="cat-carousel-controls" aria-label="Choose bundle">
             {browseBundles.map((bundle,index)=><button key={bundle.id} aria-label={`Show bundle ${index+1}`} aria-current={bundleIndex===index ? 'true' : undefined} onClick={()=>{
               const track=bundleTrack.current;if(track)track.scrollTo({left:index*(track.clientWidth+10),behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});

@@ -448,3 +448,8 @@ html:has(.catalogue-compact),body:has(.catalogue-compact){background:#1b1c1e}
 .cat-bundle-copy>h3,.cat-bundle-copy>p{margin:0}
 .cat-bundle-copy>.cat-card-prices{margin-top:12px}
 .cat-bundle-copy>.cat-primary{margin-top:6px}
+
+/* Bundle card: TON + Stars buttons only, no duplicate price pills */
+.cat-bundle-copy>.cat-bundle-pay-row{margin-top:14px;gap:8px}
+.catalogue .cat-bundle-pay-row>.cat-pay-stars,.catalogue .cat-bundle-pay-row>.cat-pay-ton{min-height:42px;padding:8px 6px;font-size:13px;white-space:nowrap}
+.cat-bundle-pay-row .cat-ton-tag{font-size:10px!important;top:-12px!important}
