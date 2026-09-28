@@ -1,0 +1,61 @@
+VIDEO DELIVERY FIX — PLAN 2026-09-28 (handoff, any agent)
+Catalogue videos arrive in chat stretched and as 40+ MB originals. Two separate causes.
+
+LOW LEVEL
+
+STATE OF THE REPOS (all pushed)
+- twin-dashboard main f568fed: Pay with TON live next to Stars in the Mini App
+  (lib/catalogue-ton.ts, lib/catalogue-api.ts, app/catalogue/[slug]/Catalogue.tsx,
+  public/tonconnect-manifest.json, middleware.ts exemption, scripts/check-catalogue-ton.ts).
+  Tested end to end on Alanna 2026-09-28: 0.01 TON confirmed in 26s, delivered to chat.
+- twin-bot main 5399e06: migration 20260928120000_catalogue_ton_checkout.sql (applied to
+  aouaenqayfltoqrmpitg). Alanna config: ton_wallet_address set, ton_nanoton_per_star=10000000.
+- CreatorCrave standalone marketplace: PARKED. Plans in twin-dashboard/docs/creatorcrave/.
+  Leftovers: empty repo ronan-com/creatorcrave, Supabase project niugrarxlyfhewcdpbff
+  (paid tier, could not pause, delete in the Supabase dashboard if not wanted). AWS box removed.
+
+BUG 1 — STRETCHED VIDEO (small fix, bot repo)
+- Where: twin-bot src/catalogue-paid-delivery.ts, the sendVideo / sendMediaGroup calls
+  (~lines 62-66 on main). When the video has no telegram_file_id, or on a retry, it uploads
+  raw bytes from storage with NO width/height/duration, so Telegram guesses the frame shape.
+- Fix: the bot already has src/services/mp4-dims.ts (readMp4Dims, pure MP4 header walk, no
+  ffprobe on the box, handles the 90/270 rotation matrix). Commit b5b7477 used it for paid
+  sequence videos via src/services/telegram-messenger.ts. Do the same here: when uploading
+  bytes for a video, read dims from the bytes and pass width, height, duration,
+  supports_streaming:true to sendVideo (and to each video item in sendMediaGroup).
+- Check: add src/dev/check-catalogue-delivery-dims.ts asserting the sendVideo payload carries
+  width/height/duration for a bytes upload (plant the bug back, watch it go red). npm test green.
+- Rollout: push to twin-bot main (auto deploys). No migration.
+
+BUG 2 — 40+ MB ORIGINALS (bigger, dashboard upload pipeline)
+- Where: originals are stored as uploaded (phone 4K/60fps). Delivery sends the original bytes.
+- Fix: transcode at upload in twin-dashboard (ffmpeg already used for catalogue previews, see
+  lib/catalogue-video-transform.ts): H.264, max 1080p long side, CRF ~23, AAC, faststart.
+  Store the compressed file as the delivery asset, keep the original in storage untouched.
+  Backfill existing videos with a one-off script (scripts/tmp-*.ts pattern), per clone, with
+  a dry run first; 193 Alanna videos alone.
+- Also refresh telegram_file_id after the first successful send of the compressed file so later
+  deliveries are instant (most videos have no file_id: Alanna 37/193, Dan 7/150, Hazey 7/146).
+- Check: a transform check asserting output <= 1080p, H.264, faststart; plus a size assertion.
+
+ORDER
+1. Bug 1 first (30 min, ships alone, fixes the stretch everywhere immediately)
+2. Bug 2 transform on new uploads
+3. Backfill per clone, Alanna first
+4. Revisit photos: Ronan says some look low quality too; check whether delivery sends the
+   original or a downscaled copy before touching anything
+
+DO NOT
+- do not rely on ffprobe on the bot box, it is not installed; use mp4-dims.ts
+- do not delete or overwrite originals in storage during backfill
+- do not touch the Stars or TON checkout paths for this; it is delivery only
+- Supabase target is only aouaenqayfltoqrmpitg
+
+HIGH LEVEL
+
+Videos bought in the Mini App arrive looking stretched and take ages to load. The stretch is
+because the bot uploads the raw file without telling Telegram its shape; the bot already has
+the code to read that shape and uses it elsewhere, so this is a small, safe fix. The slow load
+is because fans get the phone's original multi-gigabit file; the fix is compressing on upload
+and backfilling the library, which is a real job but a well-trodden one. Everything from tonight
+(TON checkout, migration, plans) is pushed; nothing is in flight.
