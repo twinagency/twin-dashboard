@@ -1,0 +1,93 @@
+PAYMENTS-TONPAY-RESEARCH-2026-09-28
+=====================================
+
+1. TON PAY SPECIFICS
+| web | TON Pay launched 2026-02-09 by TON Foundation as a native payments SDK for Telegram Mini Apps
+| web | Accepts Toncoin (TON) and Tether USD Stablecoin (USDt) — wallet-agnostic
+| web | Target: sub-second settlement with fees below 1 cent average, aiming for near-instant crypto transfers on TON blockchain
+| web | No official published settlement/payout time — TON blockchain confirms transfers in ~5 seconds, but developer account crediting unknown
+| web | Reach: 1.1 billion+ monthly active Telegram users as potential payment base
+| web | Designed as "crypto checkout layer" — integrates directly into Mini App checkout flow, users stay in Telegram
+| web | Roadmap includes fiat on/off-ramps (not yet live as of 09-28), local currency options to come 2026-Q4
+| unverified | GitHub repo is code-only (Apache 2.0 license), contains no merchant terms, content policy, or AUP documentation
+
+2. MERCHANT POLICIES & ADULT CONTENT RESTRICTIONS ON TON PAY
+| web | TON Pay official documentation (ton.org, GitHub) contains NO explicit merchant verification, content guidelines, or acceptable-use policy
+| web | USDTonPay (separate TON-based payment service, not official TON Pay) AUP prohibits "illegal activity, fraud, sanctions evasion, deceptive practices, exploitation, or sale of prohibited goods/services" — deliberately does NOT mention adult content
+| web | USDTonPay's AUP vagueness on adult = likely permissible IF content is legal in operating jurisdiction (no blanket ban like Stripe/PayPal)
+| unverified | CryptoBot (@CryptoBot, official Telegram bot by Telegram team) accepts crypto payments but has no published policy on adult content — used by some adult mini apps (uhoney.ai uses CryptoBot as fallback)
+| unverified | TON Foundation has not publicly stated position on adult content merchants; silence suggests no blanket restriction, but compliance team contact required for certainty
+
+3. TELEGRAM'S DIGITAL-GOODS POLICY ENFORCEMENT
+| web | Core.telegram.org/bots/payments-stars: "Payments for digital goods and services must be carried out exclusively in Telegram Stars"
+| web | Non-Stars payment methods for digital goods inside Telegram apps/mini apps = violation of Terms of Service, risks platform removal
+| web | Apple/Google app store compliance requirement: Telegram must enforce Stars-only for digital goods to stay on iOS/Android
+| web | Exception only for physical goods or offline services — crypto for digital subscriptions/content is explicitly prohibited in Mini Apps
+| web | TON Pay marketing ("crypto checkout for Mini Apps") is misleading: TON Pay integrates INTO Mini Apps but does NOT bypass Stars requirement for digital content
+| web | Policy enforced since early 2025: crypto assets must be on TON, and enforcement against Ethereum/BNB-based mini apps shows active policing
+| web | CRITICAL: TON Pay cannot legally replace Stars for selling digital content (messages, photo packs, character interactions, etc.) inside Mini Apps — policy risk, not technical risk
+
+4. COMPETITOR NSFW MINI APPS & THEIR PAYMENT METHODS
+| web | uhoney.ai: Telegram Stars + CryptoBot (TON/BTC/ETH/USDT) on web version; uses both in-app + external paths
+| web | HoneyChat: Telegram Stars + CryptoBot; GitHub confirms "on-chain TON payments" as fallback
+| web | Luna (18+) / GoSpicy: Telegram Stars primary; some use CryptoBot as external link-out
+| web | Telescope, Anychars: Limited public info; follow uhoney/HoneyChat pattern (Stars + CryptoBot for web revenue split)
+| web | Payment stack pattern: ALL use Stars inside Mini App (Telegram mandatory); CryptoBot or external web portal (stripe/paddle) for PC/web users, bypassing app store rules
+| web | No competitor successfully monetizes digital NSFW content via TON Pay inside Mini Apps — all defaulting to Stars or external web
+| web | Implication: CryptoBot's popularity is for user convenience (lower gas, no KYC) NOT because it's allowed for Mini App digital content
+
+5. OTHER CRYPTO/FIAT PAYMENT RAILS FOR ADULT PLATFORMS (NON-TELEGRAM)
+| web | NOWPayments: Accepts adult merchants, low KYC, crypto-only (no fiat on-ramp), used by 2026 adult creator platforms
+| web | Segpay: Crypto legitimacy for adult content — cryptocurrency structural eliminates deplatforming risk vs. Stripe/PayPal
+| web | NexaPay, others: Fiat-to-crypto gateways for adult, higher fees but faster to fiat than crypto exchanges
+| web | USDT direct: Some platforms accept USDT wallets directly (no intermediary), but custody/regulatory risk on merchant side
+| web | Adult token models: Competitor platforms outside Telegram (not here, but context): proprietary tokens funded via presale, traded externally, payment friction
+| unverified | Zero mainstream processors (Stripe, PayPal, Square) support adult digital content in 2026; crypto is effectively the only rail
+
+6. LEGAL & POLICY RISK: CRYPTO FOR ADULT CONTENT
+| web | Adult + crypto intersection = regulatory gray zone: FinCEN (US) and EU anti-money laundering scrutiny on crypto + adult content correlation
+| web | Chargeback/fraud: Crypto's irreversibility removes chargeback risk (primary reason Stripe blocks adult). TON blockchain irreversible = cleaner settlement than Stars (which allow refunds)
+| web | Age verification: Adult platforms now required by law in 12+ US states (expanding 2026). Crypto does NOT enforce KYC/age verification unless merchant adds it manually
+| web | Sanctions risk: OFAC SDN list, Iran, North Korea, crypto transfers to/from sanctioned entities = felony. TON Pay does not mention sanctions screening
+| web | Payment processor liability: If using NOWPayments or small crypto gateway for adult, merchant assumes full liability for criminal content (CSAM, trafficking). Telegram/official TON Pay may offload this
+| web | Telegram's position: Technically tolerates adult bots/mini apps today (many live). Policy change could kill ecosystem overnight (happened with OnlyFans payment suspension scares in 2021-2022)
+
+7. TELEGRAM STARS WITHDRAWAL PAIN POINT (21-DAY HOLD)
+| web | Timeline: New Stars locked 21 days (fraud buffer for chargebacks/disputes), then 1-3 min on-chain to Fragment (TON bridge), then 1-7 days to bank via exchange = 22-27 days total
+| web | Root cause: Telegram's chargeback buffer. Apple/Google App Store can refund Stars purchases up to 21 days, forcing Telegram to hold creator earnings
+| web | Minimum withdrawal: 1,000 Stars only (filters out small creators, concentrates liquidity)
+| web | Fragment exchange: Intermediate step, not owned by Telegram, adds another vector for delays/fees
+| web | TON Pay settlement: If cryptographically immediate (blockchain confirms ~5 sec), could be 100x faster IF used. But cannot be used for Mini App digital content.
+| web | Real fix: Telegram would need to 1) shorten chargeback window or 2) allow non-Stars digital goods payments (violates Apple/Google). Neither likely.
+
+=====================================
+
+BOTTOM LINE
+===========
+
+TON Pay is NOT a viable replacement for Telegram Stars for adult NSFW mini app digital content sales. Here's why:
+
+- Telegram's policy (enforced by Apple/Google) MANDATES Stars for all digital goods in Mini Apps — no exceptions, no workarounds
+- TON Pay can be integrated into Mini Apps, but using it to replace Stars = Terms of Service violation = app removal
+- No competitor NSFW platform has successfully monetized digital content via TON Pay or any crypto inside Mini Apps; all use Stars or external payment rails
+- TON Pay lacks published merchant policies on adult content (unlike Stars, which silently allows it), creating compliance uncertainty
+
+The 21-day Stars withdrawal cycle is genuinely painful, but:
+1. It's baked into Apple/Google's chargeback policies, not a Telegram choice
+2. TON Pay's faster settlement (if real) doesn't apply to digital goods inside Mini Apps
+3. The only real escapes are:
+   - Sell outside Telegram (web versions, external links) and use crypto directly, bypassing app store rules — but kills in-app revenue concentration
+   - Shorten ad load time by taking 50% of revenue outside Telegram (web monetization, CryptoBot external links, etc.) and redirecting users to web at checkout
+   - Accept the 21-day hold as cost of App Store distribution; it's the same for OnlyFans creators
+
+REGULATORY RISK SUMMARY:
+- Crypto for adult content is legal in most jurisdictions but face FinCEN/AML scrutiny and sanctions screening gaps
+- Telegram/TON doesn't enforce age verification; adult merchants must add this manually (required in 12+ US states as of 2026)
+- Choosing a small crypto processor (NOWPayments) vs. TON Pay = merchant assumes full legal liability for content classification
+- Telegram policy could change overnight (no SLA); building entire business on their platform tolerance is high-risk
+
+RECOMMENDATION:
+- Stay on Telegram Stars for Mini App digital goods (no policy risk, industry standard)
+- Run parallel monetization: external web version (Stripe/PayPal if not NSFW, or crypto via NOWPayments/CryptoBot) for faster cash-out and risk diversification
+- Monitor TON Pay's merchant policy development; if they add explicit adult support + KYC/AML + age verification, re-evaluate
+- Do not build business assumption around TON Pay replacing Stars; treat it as upside if Telegram policy loosens, not core path

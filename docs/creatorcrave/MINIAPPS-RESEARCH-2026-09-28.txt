@@ -1,0 +1,124 @@
+MINI APPS / CHANNELS / NSFW COMPETITOR RESEARCH 2026-09-28
+competitor updates and new market entrants since 09-10, with deep monetization and policy audit.
+builds on prior doc, skips known facts, adds verification and new data with source tags.
+
+LOW LEVEL
+
+VERIFIED — COMPETITOR USER COUNTS (findmini/minitelegram snapshots as of late sept)
+- lucid dreams (18+): 1.1M monthly users, photo-first, Plus tier 349 stars/month | aichatmates/honeychat blogs
+- spicytalks: 211,606 monthly users, english-first adult roleplay, tagged character catalog | aichatmates
+- gospicy: 141,641 monthly users (jun 2026), premium dating with swipe, rewards | toptonapp
+- darkgpt: ~100,000 MAU, uncensored anonymous AI chats | findmini
+- blabber.live: 80.1K monthly users, +13.2% growth, character creation tool | findmini
+- honeychat: strong 4.5/5 ratings jul 2026, 100+ characters, voice in 15 langs | aixploria/aiapps reviews
+- uhoney: 10,673 monthly users (aug 17 2026), AI tools category | telgrapp/findmini
+- kissme: "create role" feature noted as less flexible than competitors, user count not public | honeychat blog
+- luna ai: separate from blabber.live, user count not found in directory search | findmini
+- honey bunny: listed on minitelegram, no monthly user data available | minitelegram
+
+NEW COMPETITORS NOT IN OLD LIST
+- aera (18+): realistic + anime characters, airgifts currency, character browser | findmini/minitelegram
+- hot chat (18+): swipe mechanics for virtual AI girlfriends, nsfw images/video generation | minitelegram
+- secret stars: swipe-to-chat dating format, gems for gifts/private photos, 40 gems = 100 stars unlock fee | aichatmates review
+- softie.chat: energy-based model (1 msg = 1 energy, pic = 3), $10-55/month tiers (2700-12600 energy), male+female characters | aichatmates
+- reverie: characters with memory/thoughts/minds, listed on findmini | findmini
+- ai girlfriends (18+): character catalog browser, listed on minitelegram | minitelegram
+- mira: general-purpose telegram ai agent (not nsfw-focused), on findmini | findmini
+
+MARKET SIZE BENCHMARKS (no change from 09-10 on big numbers)
+- telegram mini app ecosystem: $2.5B valued, 950M+ monthly active users (vs 500M in sept per ronan) | voxbooster/grambase
+- AI companion market growth: 31% annually (2026 report) | aichatmates reports
+- telegram-native mini app market peaked 1.44B in sept 2024, settled 150-190M mid-2025 | voxbooster
+
+MONETIZATION — AFFILIATE PROGRAMS (deep dive confirms ronan's prior findings)
+- typical commission rate: 10-20% optimal range, 50%+ attracts spammers and brand damage | inviitemember/teleclaw guides
+- no fixed telegram rate: developer sets % and commission period before joining | core.telegram.org/api/bots/referrals
+- start_param mechanics: 512-char limit, only alphanumeric/_/- chars, user auth passed via initData + verified hash | core.telegram.org/api/links
+- deep link entry: user starts mini app via referral link, counts as referral, earns commission on star spend for set duration | core.telegram.org/api/bots/referrals
+- commission period settable: can be 30 days, 60 days, lifetime — once set, can only increase not decrease | inviitemember guide
+- affiliate star balance credited in real-time, conversion via Fragment to TON ~1000 stars = $13 | tribute/starsearn guides
+
+MONETIZATION — AD NETWORKS (updated CPM from prior findings)
+- adsgram: 74-country reach, 15M+ daily impressions, payouts already processed | adsgram announcement aug 2026
+- monetag: rewarded interstitial CPM $2+, rewarded popup $5-6 (fluctuates by geo/app quality) | monetag blog
+- richads: publishers earn $0.012-$0.02 per click, no minimum user requirement | richads blog
+
+MONETIZATION — STAR VALUE (locked since prior research)
+- 1 star = $0.013-$0.015 usd (early-mid 2026) | tribute/block guides
+- apple/google 30% cut on mobile, effective payout ~$0.009 after fees | block guide
+- fragment: ~1000 earned stars = $13 equivalent on gram conversion | starsearn
+
+MONETIZATION — CREATOR ECONOMICS (platforms collecting creators)
+- onlychat ai (parallel creator platform, NOT mini app): $2M+ monthly revenue from creators, 900+ active creators, 2600+ total accounts | only-chat.ai
+- onlychat ai pricing: $20-70/month base + 10% commission on generated revenue | only-chat.ai
+- onlychat ai scope: connects creator telegram business accounts, sells photos/videos via stars or droppfans links, dashboard shared with onlyfans | only-chat.ai
+- honeychat pricing: free tier 20 msgs/day, $4.99/$9.99/$19.99/$39.99/month tiers, accepts stars + crypto | github/aiapps
+- softie.chat pricing: $10-25-55/month for 2700-4500-12600 energy, memory system, male+female bots | aichatmates
+- secret stars pricing: gems currency, 40 gems + fees = 100 stars for private photo unlock, premium sub 499 stars/week + gems | aichatmates
+
+POLICY — ADULT CONTENT AND AGE (no enforcement gap found since 09-10)
+- telegram marks sensitive: channels/groups/msgs flagged 18+ to protect minors, zero tolerance on csam since 2018 | telegram.org/moderation
+- eu digital services act: telegram adjusts per-country content filters | telegram.org/tos/eu-dsa
+- mobile vs desktop: 18+ toggle on desktop/web, stripped from mobile to comply with app store policies | turrit guides
+- age verification available: official telegram mini app for on-device face scan verification, emits web_app_verify_age event on success/fail | core.telegram.org/api/age-verification
+- enforcement reality: users self-declare 18+, no real identity check, verification NOT required for mini app access | mmguardian/turrit guides
+- no new policy announcements september 2026: adult content stance unchanged from prior research | telegram.org/moderation review
+
+DIRECTORIES AND LISTINGS (updated with free vs paid options)
+- findmini.app: 227 apps in "AI characters for chat" category alone, featured trending placement + newsletter ads available (pricing not published) | findmini.app
+- minitelegram: curated collections including "sexwife telegram bots", listed top 100 mini apps by ranking | minitelegram.com
+- tapps.center: community-run Telegram Apps Center, features games/fintech/nft/creator tools | tapps.center
+- all three directories: free listing available, paid featured placement options mentioned but exact pricing not disclosed | tapps/findmini/merge blogs
+- findmini quote: "1000+ high-intent users per week" from featured trending placement (from 09-10 doc, pricing not updated in 2026 sources) | ronan
+
+BOT VS MINI APP ARCHITECTURE (confirms prior finding on attribution advantage)
+- mini app always sits on bot: bot is entry/notification layer, mini app is ui (best strategy uses both) | innowise/redigix/cimpleo guides
+- frictionless auth: mini app receives initData + telegram id + name + username + verified hash, no login form needed | innowise guide
+- conversion lift: direct outreach with mini app demo link shows 3-5x higher conversion than linkedin/cold email | innowise guide
+- combined strategy win: bot says "check catalog", mini app opens for order placement = max conversion | innowise guide
+
+FOUND — ONLYCHAT AI IS A SEPARATE LAYER (NOT DIRECT COMPETITOR TO TWIN MODEL)
+- business connection vs mini app: onlychat ai connects CREATOR's telegram business account (like twin does) but layers an AI agent + monetization platform on top
+- creator supply: 900+ creators on onlychat ai platform = ronan has ~18 clones (if each is a "creator"), onlychat is a platform for many creators
+- revenue model different: onlychat takes 10% + $20-70/month, does NOT use affiliate or directory model, creators pay them instead
+- relevance to twin: shows creator AI agent monetization market exists and is pulling $2M+/month, but via different supply chain (creator-owned accounts, not single operator)
+
+TO DO — RECON EXPANDED (from 09-10, still valid, added updates)
+- install and run through the 13 main apps again (old list: uhoney, onlychats, gospicy, honeychat, lucid dreams, anychars, telescope, kissme, blabber.live, luna ai, honey bunny, darkgpt, spicytalks; new: aera, hot chat, secret stars, softie.chat)
+- for each: verify current user counts from findmini/minitelegram (many are stale), test free-to-paywall flow, screenshot first 20 msgs, extract affiliate % if visible
+- telescope: did not find public 1.68M user figure in 2026 sources despite ronan's prior screenshot — verify if still active or if data is proprietary
+- directory strategy: test paid featured placement on findmini/minitelegram/tapps.center with tracked start_param to measure cost per buyer at 2.23% conversion
+
+HIGH LEVEL
+
+MARKET SNAPSHOT
+
+Market is hot and crowded. Lucid Dreams' 1.1M monthly users dwarfs uhoney's 10.6K — a 100x gap where uhoney was 21x us nine weeks ago. That means either lucid dreams' user count inflated or the market consolidated downward in early sept 2026. The new entrants (AERA, Hot Chat, Secret Stars, Softie) add noise but no mega-player emerged since 09-10. No exits, no funding announcements, no regulatory changes announced in september 2026.
+
+MONETIZATION LAYERS ARE LOCKED
+
+Affiliate programs top out at 10-20% to avoid spam. Star value is frozen at $0.013-0.015. Ad networks pay $0.012-0.02 CPM or $2-6 per rewarded unit depending on format. Onlychat AI proves there's a 900-creator market where agencies pay 10% + $70/month to automate their telegram monetization, pulling $2M+/month revenue — but that's a separate business (creator-owned accounts, not clone operator scale).
+
+ATTRIBUTION IS STILL BROKEN FOR BUSINESS CONNECTIONS
+
+Start_param and affiliate deep links exist in the API and work fine for mini apps, but mini apps need a bot front door. Our clones are business connections with no bot, no mini app, no /start. That structural fact hasn't changed and explains why users.source is still null on all 78k+ fans.
+
+AGE VERIFICATION EXISTS BUT DOES NOT SHIP
+
+Telegram ships an official age-verification mini app with on-device face scan and web_app_verify_age event, but competitors do not use it. All 18+ mini apps gate with a self-tap and call themselves verified. Telegram's own policy does not enforce the check during signup, so it's advisory only. This is unchanged from 09-10.
+
+DIRECTORIES OFFER FREE LISTINGS, PAID FEATURED PLACEMENTS EXIST BUT ARE OPAQUE
+
+FindMini (227 AI character apps), MiniTelegram, and Tapps.Center all list apps free. Featured trending and newsletter ads are available on FindMini but pricing is not published online — it's a sales ask. Ronan's prior figure of "1000+ high-intent users per week" for featured placement hasn't been updated or verified in 2026 sources.
+
+ONLYCHAT AI IS NOT A DIRECT COMPETITOR
+
+It's a separate platform for creators (not clone operators) who connect their own telegram business accounts, and Onlychat adds the AI agent and takes 10% + $20-70/month. They've pulled $2M+/month with 900 creators, which proves the creator-monetization market exists. But it runs parallel to our funnel, not through it.
+
+TO DO REMAINS UNCHANGED FROM 09-10
+
+1. Bot front door per clone so start_param works.
+2. Our own mini app (Explore grid for 18 clones).
+3. Free listings on the three directories + one test channel buy.
+4. 30-40% affiliate program.
+5. Verify lucid dreams' 1.1M MAU claim and telescope's 1.68M status.

@@ -1,0 +1,104 @@
+MARKETPLACE MINI APP — PLAN 2026-09-28
+Open PPV marketplace inside Telegram. Anyone signs up, uploads, sells, we're the bridge.
+Name pending (not "TonTok" — TON Foundation trademark risk, "Tok" too close to TikTok's).
+Candidates: Velvet, Driply, Nectar, Honeyroll, Glowreel. Pick before any public listing.
+
+LOW LEVEL
+
+WHAT IT IS
+- Separate mini app, separate bot, separate brand. Not a twin-bot feature.
+- Anyone makes an account, uploads content, sets a price, sells it.
+- We are a bridge only: list content, route payment to the creator's own wallet
+  or link, deliver content once payment is confirmed. We never hold money.
+- Direct competitor to Telescope (1.6M MAU, #5 top-grossing Telegram mini app,
+  see TELESCOPE-RESEARCH-2026-09-28.txt).
+
+3 PAGES, NOT MORE
+1. EXPLORE — infinite scroll feed, mixed photos/videos, mixed free/paid, all
+   creators together. TikTok-style single-column scroll.
+2. TRENDING — leaderboard of creators, ranked by sales/activity. Telescope's
+   discovery-layer model.
+3. ACCOUNT — the fan's own tab: purchases, saved items, and (if they're also
+   a creator) their own upload/pricing dashboard. One account type, not two
+   separate apps — same login can browse and sell.
+
+PAYMENTS — THE BRIDGE MODEL (DECIDED)
+- Every creator (ours and external, no difference) provides ONE thing at
+  signup: a TON wallet address, or a Stars bot link if they'd rather start
+  there. No special treatment for our own creators (Alanna etc.) — same form,
+  same fields, same flow.
+- Fan flow: connect TON wallet once (TON Connect, Telegram's native wallet
+  picker) -> browse -> tap buy -> TON Connect sends payment directly to the
+  creator's wallet, tagged with a comment/memo identifying the purchase.
+- We never touch the money. No payout job, no ledger, no KYC on our side.
+- Stars path (simpler, ship first): creator gives a link (their own bot or
+  Twin's existing bot). Fan taps buy, link opens, they pay there. We don't
+  create invoices or call webhooks — just open the link.
+
+THE ONE HARD TECHNICAL PART — PAYMENT CONFIRMATION (verified against TON docs)
+- TON Connect's sendTransaction call does NOT confirm payment. It resolves as
+  soon as the wallet signs and broadcasts — before the transaction reaches
+  finality. TON's own guidelines say explicitly: "You should never use
+  external message tracking for payment processing purposes."
+- Correct flow: tag every transaction with a comment/memo (order id) using
+  the payload field. Our backend polls the creator's wallet address via a TON
+  API (TonAPI or toncenter), matches the incoming transaction by comment +
+  amount, and only delivers content once that transaction is confirmed
+  on-chain — not when the frontend promise resolves.
+- Typical finality: ~1 second per transaction, but poll with a few seconds of
+  margin. This is a genuinely new piece of backend code (a small poller/
+  matcher service), not something TON Connect gives us for free.
+- Get this wrong and a fan could screenshot "payment sent" while the transfer
+  never lands, and we'd hand over content for nothing. This is the one place
+  actual engineering care matters, not vibes.
+
+WHAT TO REUSE FROM TWIN (BUILD NOTHING TWICE)
+- Mini app shell, grid/feed UI, blur/unlock pattern: app/catalogue/[slug]
+- Delivery mechanics: same "confirm paid, then deliver" shape as
+  lib/catalogue-checkout.ts, just swapping the payment source (TON tx
+  confirmation instead of a Stars charge_id)
+
+WHAT'S NEW, NOT A TWIN FEATURE
+1. Self-serve creator signup: handle, profile pic, TON wallet address (or
+   Stars link), no wallet needed if Stars-only for now
+2. Multi-tenant Explore/Trending feed across all creators
+3. TON transaction poller + matcher (new backend piece, see above)
+4. Content moderation / who's allowed to sign up — still our call as the
+   platform host, doesn't disappear just because payment is decentralized
+5. Anonymous ops structure (LLC/shell, no personal names) before any public
+   directory listing — same as Telescope and everyone else in this niche
+
+TO DO — ORDERED
+1. Pick the real name (not TonTok), check it's not trademarked either
+2. Decide moderation/signup policy (invite-only first) BEFORE opening it up
+3. Build creator signup (handle, pic, TON wallet or Stars link)
+4. Build Explore + Trending + Account (3 pages, reuse Twin's grid/blur UI)
+5. Ship Stars-only first: buy = open creator's link, nothing else
+6. Add TON: wallet connect, send-with-memo, backend poller/matcher, then
+   deliver on confirmed match
+7. Sign up Alanna + a few trusted creators tonight, test end to end, promote
+   to your own audience before opening publicly
+8. List on findmini/minitelegram/tapps.center once stable
+9. Anonymous shell entity before any public directory listing
+
+DO NOT
+- do not trust the TON Connect send callback as proof of payment — confirmed
+  finding, verified against TON's own docs
+- do not give your own creators (Alanna etc.) a different signup path than
+  external creators — same form, same fields, for fairness and trust
+- do not open signup publicly before moderation policy is decided
+- do not build a payout ledger — the whole point of this model is that
+  creators own their wallet/bot, money never touches us
+
+HIGH LEVEL
+
+A lean, 3-page Telegram mini app (Explore, Trending, Account) where anyone
+signs up, lists content, and gets paid directly to their own TON wallet or
+via their own Stars link. We are purely a bridge: host the listing, route the
+buy click, and deliver content once payment is independently confirmed. No
+payout system, no KYC, no money held on our side, same rules for our own
+creators as for anyone else who signs up. The one real engineering piece is
+verifying TON payments correctly — the wallet SDK's "sent" signal is not the
+same as "confirmed," and skipping that check is the one way this could
+actually lose money. Ship Stars-only first (it's just an outbound link),
+add TON once the confirmation poller is built and tested.
