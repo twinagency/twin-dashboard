@@ -1,7 +1,7 @@
 import type { SupabaseClient } from '@supabase/supabase-js';
 import { randomBytes } from 'node:crypto';
 import { Cell } from '@ton/core';
-import { tonPriceNanoton } from './catalogue-ton-price';
+import { TIP_PRESET_USD, tonPriceNanoton, type TipPresetUsd } from './catalogue-ton-price';
 import { CheckoutError, checkoutType, checkoutUuid, productForCheckout, type Context } from './catalogue-checkout';
 import { catalogueEventLoggedForOrder, logCatalogueEvent } from './catalogue-events';
 
@@ -127,6 +127,50 @@ export async function beginTonCheckout(context: Context, body: Record<string, un
   throw new CheckoutError('Payment could not open. Please try again.', 503);
 }
 
+// The server rejects any tip amount not exactly one of TIP_PRESET_USD; the amount
+// is never trusted from the client beyond picking one of these numbers.
+export function validTipUsd(value: unknown): value is TipPresetUsd {
+  return typeof value === 'number' && Number.isFinite(value) && (TIP_PRESET_USD as readonly number[]).includes(value);
+}
+
+export type BeginTonTipResult = { orderId: string; memo: string; toAddress: string; amountNanoton: number; comment: string };
+// A tip is priced straight in USD, at the live TON/USD rate, never discounted. It
+// reuses effectiveNanotonPerStar for the live-rate-with-fallback plumbing (same
+// source and same fallback as a media checkout), then divides out ton_star_usd to
+// get nanoton-per-dollar. Without ton_star_usd configured there is no USD peg to
+// convert from, so tips refuse rather than guess a rate.
+export async function beginTonTipCheckout(context: Context, body: Record<string, unknown>, settings: TonSettings): Promise<BeginTonTipResult> {
+  const { db, clone, fan } = context;
+  if (!tonEnabled(settings)) throw new CheckoutError('Pay with TON is not available for this collection.', 403);
+  if (!validTipUsd(body.usd)) throw new CheckoutError('Invalid tip amount.', 400);
+  if (!fan.business_connection_id) throw new CheckoutError('Open the creator’s chat once before your first purchase.');
+  const starUsd = Number(settings.ton_star_usd);
+  if (!Number.isFinite(starUsd) || starUsd <= 0) throw new CheckoutError('Tips are not available for this collection.', 503);
+  const nanotonPerStar = await effectiveNanotonPerStar(settings);
+  if (nanotonPerStar == null) throw new CheckoutError('Payment amount is invalid. Please try again.', 503);
+  const nanotonPerUsd = nanotonPerStar / starUsd;
+  const amountNanoton = tonPriceNanoton(body.usd, nanotonPerUsd, 0); // no discount, ever, on a tip
+  if (amountNanoton == null) throw new CheckoutError('Payment amount is invalid. Please try again.', 503);
+  // Stars-equivalent kept only for revenue reporting; a tip is never charged in Stars.
+  const amountStars = Math.max(1, Math.round(body.usd / starUsd));
+  const toAddress = settings.ton_wallet_address!;
+  for (let attempt = 0; attempt < 5; attempt++) {
+    const memo = randomMemo();
+    const inserted = await db.from('catalogue_ton_orders').insert({
+      clone_id: clone.id, user_id: fan.id, telegram_id: fan.telegram_id,
+      business_connection_id: fan.business_connection_id, media_type: 'tip', media_id: null,
+      photo_ids: [], video_ids: [], amount_stars: amountStars, amount_nanoton: amountNanoton, memo,
+      expires_at: new Date(Date.now() + 30 * 60_000).toISOString(),
+    }).select(orderColumns).single();
+    if (!inserted.error) {
+      const row: any = inserted.data;
+      return { orderId: row.id, memo: row.memo, toAddress, amountNanoton: Number(row.amount_nanoton), comment: row.memo };
+    }
+    if ((inserted.error as any).code !== '23505') break; // only retry a memo collision
+  }
+  throw new CheckoutError('Payment could not open. Please try again.', 503);
+}
+
 export type TonIncomingTx = { hash: string; comment: string | null; valueNanoton: bigint; source: string | null };
 export type TonVerifier = (address: string) => Promise<TonIncomingTx[]>;
 
@@ -202,15 +246,19 @@ function walletTxs(address: string, verifier: TonVerifier): Promise<TonIncomingT
 // pay_success the same way once confirm_catalogue_ton_order actually confirms.
 async function logTonPaySuccess(db: any, clone: any, fan: any, order: any) {
   if (await catalogueEventLoggedForOrder(db, clone.id, 'pay_success', order.id)) return;
+  // 'tip' is not a media type catalogue_events accepts (it never has one); log it
+  // as a plain rail:'ton' event with the tip flag in detail instead.
+  const isTip = order.media_type === 'tip';
   await logCatalogueEvent(db, { cloneId: clone.id, telegramId: fan.telegram_id, event: 'pay_success', rail: 'ton',
-    mediaType: order.media_type ?? null, mediaId: order.media_id ?? null, amountNanoton: Number(order.amount_nanoton),
-    detail: { order_id: order.id } });
+    mediaType: isTip ? null : order.media_type ?? null, mediaId: isTip ? null : order.media_id ?? null,
+    amountNanoton: Number(order.amount_nanoton), amountStars: isTip ? Number(order.amount_stars) : null,
+    detail: { order_id: order.id, ...(isTip ? { tip: true } : {}) } });
 }
 
 export type TonOrderStatus = { orderId: string; status: 'pending' | 'confirmed' | 'delivered' | 'expired' };
 export async function tonOrderStatus({ db, clone, fan }: Context, orderId: string, verifier: TonVerifier = defaultTonVerifier): Promise<TonOrderStatus> {
   if (!checkoutUuid.test(orderId)) throw new CheckoutError('Invalid checkout request.', 400);
-  const order: any = checked(await db.from('catalogue_ton_orders').select('id,status,memo,amount_nanoton,expires_at,media_type,media_id')
+  const order: any = checked(await db.from('catalogue_ton_orders').select('id,status,memo,amount_nanoton,amount_stars,expires_at,media_type,media_id')
     .eq('id', orderId).eq('clone_id', clone.id).eq('user_id', fan.id).maybeSingle());
   if (!order) throw new CheckoutError('Checkout not found.', 404);
   let status: TonOrderStatus['status'] = order.status;
@@ -253,7 +301,7 @@ export async function reconcilePendingTonOrders({ db, clone, fan }: Context, ver
   const now = Date.now();
   if (now - (lastVerifyAt.get(key) ?? 0) < VERIFY_MIN_INTERVAL_MS) return 0;
   lastVerifyAt.set(key, now);
-  const orders: any[] = checked(await db.from('catalogue_ton_orders').select('id,memo,amount_nanoton,expires_at,media_type,media_id')
+  const orders: any[] = checked(await db.from('catalogue_ton_orders').select('id,memo,amount_nanoton,amount_stars,expires_at,media_type,media_id')
     .eq('clone_id', clone.id).eq('user_id', fan.id).eq('status', 'pending').order('created_at', { ascending: false }).limit(10)) ?? [];
   const live = orders.filter(order => Date.parse(order.expires_at) > now);
   if (!live.length) return 0;

@@ -1,8 +1,8 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createCatalogueHandler } from '../lib/catalogue-api';
-import { beginTonCheckout, effectiveNanotonPerStar, reconcilePendingTonOrders, resetTonUsdPriceCacheForTests, resetTonWalletCacheForTests, starsToNanoton, tonDiscountPercent, tonOrderStatus, tonEnabled, tonUsdPrice, type TonIncomingTx } from '../lib/catalogue-ton';
-import { formatTonAmount, tonPriceNanoton, TON_PRICE_STEP_NANOTON } from '../lib/catalogue-ton-price';
+import { beginTonCheckout, beginTonTipCheckout, effectiveNanotonPerStar, reconcilePendingTonOrders, resetTonUsdPriceCacheForTests, resetTonWalletCacheForTests, starsToNanoton, tonDiscountPercent, tonOrderStatus, tonEnabled, tonUsdPrice, validTipUsd, type TonIncomingTx } from '../lib/catalogue-ton';
+import { formatTonAmount, tonPriceNanoton, TON_PRICE_STEP_NANOTON, TIP_PRESET_USD } from '../lib/catalogue-ton-price';
 import { createHmac } from 'node:crypto';
 import { NextRequest } from 'next/server';
 
@@ -76,11 +76,23 @@ function makeDb() {
         return { data: 'expired', error: null };
       }
       const charge = 'ton:' + args.p_tx_hash;
-      const payload = 'catalogue_order_' + order.id;
       const alreadySettled = rows.star_transactions.some(t => t.id === charge);
       order.status = 'confirmed'; order.tx_hash = args.p_tx_hash; order.buyer_wallet = args.p_buyer;
       order.confirmed_at = order.confirmed_at ?? new Date().toISOString();
       if (alreadySettled) return { data: 'confirmed', error: null };
+      if (order.media_type === 'tip') {
+        // A tip writes ONLY a star_transactions row (kind='tip'), never a
+        // catalogue_checkout_orders row or a delivery: mirrors confirm_catalogue_ton_order.
+        if (!rows.star_transactions.some(t => t.id === charge)) {
+          rows.star_transactions.push({
+            id: charge, clone_id: order.clone_id, user_id: order.user_id, telegram_id: order.telegram_id,
+            kind: 'tip', amount_stars: order.amount_stars, media_type: null, media_id: null,
+            invoice_payload: 'catalogue_tip_' + order.id, imported_from: 'ton', paid_at: new Date().toISOString(),
+          });
+        }
+        return { data: 'confirmed', error: null };
+      }
+      const payload = 'catalogue_order_' + order.id;
       if (!rows.catalogue_checkout_orders.some(r => r.id === order.id)) {
         rows.catalogue_checkout_orders.push({
           id: order.id, clone_id: order.clone_id, user_id: order.user_id, telegram_id: order.telegram_id,
@@ -389,6 +401,92 @@ async function main() {
     assert.equal(verifierCalls, 2, "a different wallet is not served from the first wallet's cache");
   }
 
-  console.log('TON checkout checks passed: memo match confirms, wrong memo and underpayment do not, same tx twice is idempotent, expired orders never confirm and skip verification, TON-disabled clones reject checkout, client-supplied confirmation is ignored end to end, TON prices round up to 0.1 TON identically in the label and the charge, the live TON/USD rate is applied with a 10-minute cache and a fallback to the stored rate on failure or an absurd price, display and charge always agree, and concurrent polls for one wallet coalesce into a single toncenter call. No live toncenter calls.');
+  // 14. Tips: fixed USD presets, paid in TON, with no discount, no media, and no delivery.
+
+  // 14a. Preset validation: only the exact listed dollar amounts are accepted.
+  for (const usd of TIP_PRESET_USD) assert.equal(validTipUsd(usd), true, `${usd} is a listed preset`);
+  assert.equal(validTipUsd(13), false, 'not a listed preset');
+  assert.equal(validTipUsd(-5), false, 'negative amount rejected');
+  assert.equal(validTipUsd(0), false, 'zero rejected');
+  assert.equal(validTipUsd('25' as unknown), false, 'a string amount is rejected even if numeric-looking');
+  assert.equal(validTipUsd(NaN), false);
+  assert.equal(validTipUsd(undefined), false);
+
+  // 14b. Without ton_star_usd configured there is no USD peg, so a tip refuses
+  // even though the fixed per-Star rate works fine for ordinary media checkout.
+  reset();
+  await assert.rejects(() => beginTonTipCheckout(context, { usd: 25 }, rows.creator_catalogue_settings[0]), /not available/);
+
+  // 14c. An invalid amount is rejected even once ton_star_usd is configured.
+  reset();
+  rows.creator_catalogue_settings[0].ton_star_usd = 0.02;
+  await assert.rejects(() => beginTonTipCheckout(context, { usd: 13 }, rows.creator_catalogue_settings[0]), /Invalid tip amount/);
+  await assert.rejects(() => beginTonTipCheckout(context, { usd: -5 }, rows.creator_catalogue_settings[0]), /Invalid tip amount/);
+  await assert.rejects(() => beginTonTipCheckout(context, { usd: '25' }, rows.creator_catalogue_settings[0]), /Invalid tip amount/);
+
+  // 14d/14e. USD -> TON math (rounded up to 0.1 TON, same as every other TON charge),
+  // the Stars-equivalent kept for revenue reporting, and confirming a tip writes
+  // ONLY a star_transactions row (kind='tip', no media, no delivery), idempotently.
+  {
+    reset();
+    resetTonWalletCacheForTests();
+    resetTonUsdPriceCacheForTests();
+    rows.creator_catalogue_settings[0].ton_star_usd = 0.02;
+    const globalFetchForTip = global.fetch;
+    try {
+      // $3.00/TON: a rate that does not divide evenly, to exercise the rounding.
+      (global as any).fetch = async () => ({ ok: true, json: async () => ({ 'the-open-network': { usd: 3.0 } }) });
+      const tipBegin = await beginTonTipCheckout(context, { usd: 10 }, rows.creator_catalogue_settings[0]);
+      assert.equal(tipBegin.amountNanoton, 3_400_000_000, '$10 at $3/TON with ton_star_usd=0.02 rounds up to 3.4 TON');
+      assert.equal(tipBegin.amountNanoton % TON_PRICE_STEP_NANOTON, 0, 'a tip charge is always a whole 0.1 TON step');
+      const tipOrder = rows.catalogue_ton_orders.find(r => r.id === tipBegin.orderId);
+      assert.ok(tipOrder, 'tip order row created');
+      assert.equal(tipOrder.media_type, 'tip');
+      assert.equal(tipOrder.media_id, null, 'a tip carries no media id');
+      assert.equal(tipOrder.amount_stars, 500, '$10 / 0.02 = 500 Stars equivalent, for revenue reporting only');
+
+      // A second amount at the same (non-evenly-dividing) rate rounds up too.
+      const secondTip = await beginTonTipCheckout(context, { usd: 25 }, rows.creator_catalogue_settings[0]);
+      assert.equal(secondTip.amountNanoton, 8_400_000_000, '$25 at $3/TON with ton_star_usd=0.02 rounds up to 8.4 TON');
+    } finally { (global as any).fetch = globalFetchForTip; }
+
+    resetTonWalletCacheForTests();
+    const globalFetchForTip2 = global.fetch;
+    try {
+      // $2.00/TON: 0.02 star_usd / 2.00 = 0.01 TON/star; $25 / 0.02 = 1250 Stars-equivalent.
+      resetTonUsdPriceCacheForTests();
+      (global as any).fetch = async () => ({ ok: true, json: async () => ({ 'the-open-network': { usd: 2.0 } }) });
+      const tipBegin = await beginTonTipCheckout(context, { usd: 25 }, rows.creator_catalogue_settings[0]);
+      assert.equal(tipBegin.amountNanoton, 12_500_000_000, '$25 at $2/TON is exactly 12.5 TON');
+      assert.equal(tipBegin.orderId && rows.catalogue_ton_orders.find(r => r.id === tipBegin.orderId)?.amount_stars, 1250,
+        "$25 / 0.02 ton_star_usd = 1250 Stars equivalent, matching the spec's own example");
+
+      // Reused mock order ids across reset()/resetTonWalletCacheForTests() calls can
+      // inherit another scenario's recent per-order verify timestamp; wait it out
+      // like section 5 and 8b do.
+      await new Promise(r => setTimeout(r, 3100));
+      const confirmed = await tonOrderStatus(context, tipBegin.orderId, async () =>
+        [tx({ hash: 'hash-tip', comment: tipBegin.memo, valueNanoton: BigInt(tipBegin.amountNanoton) })]);
+      assert.equal(confirmed.status, 'confirmed');
+      const receipt = rows.star_transactions.find(t => t.id === 'ton:hash-tip');
+      assert.ok(receipt, 'tip receipt created');
+      assert.equal(receipt.kind, 'tip');
+      assert.equal(receipt.media_type, null);
+      assert.equal(receipt.media_id, null);
+      assert.equal(receipt.invoice_payload, `catalogue_tip_${tipBegin.orderId}`);
+      assert.equal(receipt.amount_stars, 1250);
+      assert.ok(!rows.catalogue_checkout_orders.some(r => r.id === tipBegin.orderId), 'a tip never creates a catalogue_checkout_orders row');
+      assert.ok(!rows.catalogue_checkout_deliveries.some(d => d.order_id === tipBegin.orderId), 'a tip never queues a delivery: there is nothing to deliver');
+
+      // Idempotent: confirming the same tx_hash again changes nothing further.
+      await new Promise(r => setTimeout(r, 3100));
+      const confirmedAgain = await tonOrderStatus(context, tipBegin.orderId, async () =>
+        [tx({ hash: 'hash-tip', comment: tipBegin.memo, valueNanoton: BigInt(tipBegin.amountNanoton) })]);
+      assert.equal(confirmedAgain.status, 'confirmed');
+      assert.equal(rows.star_transactions.filter(t => t.id === 'ton:hash-tip').length, 1, 'no duplicate tip receipt');
+    } finally { (global as any).fetch = globalFetchForTip2; }
+  }
+
+  console.log('TON checkout checks passed: memo match confirms, wrong memo and underpayment do not, same tx twice is idempotent, expired orders never confirm and skip verification, TON-disabled clones reject checkout, client-supplied confirmation is ignored end to end, TON prices round up to 0.1 TON identically in the label and the charge, the live TON/USD rate is applied with a 10-minute cache and a fallback to the stored rate on failure or an absurd price, display and charge always agree, concurrent polls for one wallet coalesce into a single toncenter call, and tips validate their fixed USD presets, price correctly off the live rate with no discount, and confirm to a kind=\'tip\' star_transactions row only (no media, no delivery), idempotently. No live toncenter calls.');
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

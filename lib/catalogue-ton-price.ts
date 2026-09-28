@@ -4,6 +4,11 @@
 
 export const TON_PRICE_STEP_NANOTON = 100_000_000; // 0.1 TON
 
+// Fixed tip presets in USD, shared by the client sheet and the server, which rejects
+// any tip amount not exactly one of these.
+export const TIP_PRESET_USD = [10, 25, 50, 100, 250, 500, 1000] as const;
+export type TipPresetUsd = (typeof TIP_PRESET_USD)[number];
+
 // Stars price to nanoton, discounted, rounded UP to the next 0.1 TON, minimum 0.1 TON.
 // Returns null when the inputs cannot produce a positive price.
 export function tonPriceNanoton(stars: number, nanotonPerStar: number | string, discountPercent = 0): number | null {
