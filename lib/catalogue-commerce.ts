@@ -1,5 +1,5 @@
 import type { CatalogueItem } from './catalogue-core';
-export type CatalogueBundle = { id:string; title:string; photoIds:string[]; stars:number; regularStars:number; owned:boolean; partial:boolean };
+export type CatalogueBundle = { id:string; title:string; caption?:string; photoIds:string[]; stars:number; regularStars:number; owned:boolean; partial:boolean };
 export type CatalogueRewards = { balance:number; earned:number; spent:number; welcomeBonus?:number; cost:number; startsAt:string; photoIds:string[]; videoIds:string[] };
 export function projectBundle(row:any, items:CatalogueItem[]):CatalogueBundle|null {
  const n=Array.isArray(row.photo_ids)?row.photo_ids.length:0;
@@ -10,7 +10,7 @@ export function projectBundle(row:any, items:CatalogueItem[]):CatalogueBundle|nu
  const regularStars=prices.reduce((a:number,b:number)=>a+b,0);
  if(row.price_stars!==Math.min(2200,regularStars-Math.min(...prices))) return null;
  const count=photos.filter((p:CatalogueItem)=>p.purchased||p.received).length;
- return {id:row.id,title:row.title,photoIds:row.photo_ids,stars:row.price_stars,regularStars,owned:count===n,partial:count>0&&count<n};
+ return {id:row.id,title:row.title,...(typeof row.caption==='string'&&row.caption.trim()?{caption:row.caption.trim().slice(0,300)}:{}),photoIds:row.photo_ids,stars:row.price_stars,regularStars,owned:count===n,partial:count>0&&count<n};
 }
 export function rewardProgress(rewards:CatalogueRewards) {
  const balance=Math.max(0,rewards.balance);

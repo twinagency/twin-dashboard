@@ -152,7 +152,7 @@ return async function POST(request: NextRequest, context: { params: Promise<{ sl
       return json({ enabled: true, url });
     }
     if (action === "catalogue") {
-      const bundleRows = checked(await db.from('catalogue_bundles').select('id,title,photo_ids,price_stars,regular_stars').eq('clone_id',clone.id).eq('enabled',true).order('sort_order')) ?? [];
+      const bundleRows = checked(await db.from('catalogue_bundles').select('id,title,caption,photo_ids,price_stars,regular_stars').eq('clone_id',clone.id).eq('enabled',true).order('sort_order')) ?? [];
       const program = checked(await db.from('catalogue_loyalty_programs').select('points_cost,starts_at,reward_photo_ids,reward_video_ids,welcome_bonus_points').eq('clone_id',clone.id).eq('enabled',true).maybeSingle());
       const columns = "id,caption,auto_desc,teaser_caption,tags,star_value,is_free,created_at";
       const [photos, videos, received, purchases, nativePhotos, nativeVideos] = await Promise.all([
@@ -261,7 +261,7 @@ return async function POST(request: NextRequest, context: { params: Promise<{ sl
       }
       if (body.type === 'bundle') {
         if(!clone.bundles_enabled || !clone.photos_enabled) return json({error:'Bundle unavailable.'},404);
-        const b=checked(await db.from('catalogue_bundles').select('id,title,photo_ids,price_stars,regular_stars').eq('clone_id',clone.id).eq('id',body.id).eq('enabled',true).maybeSingle());
+        const b=checked(await db.from('catalogue_bundles').select('id,title,caption,photo_ids,price_stars,regular_stars').eq('clone_id',clone.id).eq('id',body.id).eq('enabled',true).maybeSingle());
         if(!b) return json({error:'Bundle unavailable.'},404);
         const p=checked(await db.from('photos').select('id,caption,star_value,is_free').eq('clone_id',clone.id).in('id',b.photo_ids));
         if(!projectBundle(b,(p??[]).filter((r:any)=>catalogueItemVisible(r,slug)).map((r:any)=>projectItem(r,'photo')))) return json({error:'Bundle price or contents changed. Please refresh.'},409);

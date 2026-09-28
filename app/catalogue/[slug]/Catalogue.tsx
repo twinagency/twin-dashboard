@@ -75,10 +75,11 @@ function BundleCard({ bundle, items, blur, call, busy, owner = false, onUnlock, 
     const photos = bundle.photoIds.map(id => items.find(item => item.type === 'photo' && item.id === id)).filter((item): item is CatalogueItem => !!item);
     return <article className="cat-bundle-card cat-compact-bundle" aria-label={label ?? bundle.title}>
       <button type="button" className="cat-bundle-details-button" onClick={onDetails} aria-label={`View ${bundle.title}, ${bundle.photoIds.length} photos and bundle details`}>
-        <span className="cat-bundle-mosaic" style={{'--bundle-columns': Math.max(2, Math.ceil((photos.length + 1) / 2))} as CSSProperties}>{photos.map(item => <Preview key={item.id} item={item} blur={blur} call={call} retryable={false} />)}</span>
+        <span className="cat-bundle-stack">{photos.slice(0, 4).map((item, index) => <span key={item.id} className="cat-bundle-stack-card" style={{'--stack-index': index} as CSSProperties}><Preview item={item} blur={blur} call={call} retryable={false} /></span>)}<span className="cat-bundle-stack-count">{bundle.photoIds.length} pics</span></span>
       </button>
       <div className="cat-bundle-copy">
         <h3>{bundle.title}</h3>
+        {bundle.caption && <p className="cat-bundle-caption">{bundle.caption}</p>}
         {discount !== null && <p className="cat-bundle-saving">{discount}% off <span aria-hidden="true">·</span> <s>⭐{bundle.regularStars.toLocaleString()}</s></p>}
         <CardPrices stars={bundle.stars} ton={bundleTon} />
         <button type="button" className="cat-primary" aria-label={actionLabel?.startsWith('Pay ·') ? `Pay in Telegram for ${bundle.stars.toLocaleString()} Stars` : undefined} disabled={busy || bundle.partial || owner} onClick={onUnlock}>
@@ -541,7 +542,8 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
     {selectedBundle && <div className="cat-modal-backdrop" onClick={() => !commerceBusy && closeDetails()}><section className="cat-modal cat-bundle-modal" role="dialog" aria-modal="true" aria-label="Bundle details" onClick={e => e.stopPropagation()}>
       <button className="cat-modal-close" aria-label="Close bundle" disabled={commerceBusy} onClick={closeDetails}><X size={21}/></button>
       <div className="cat-detail"><h2>{selectedBundle.title}</h2>
-        <div className="cat-bundle-included">{selectedBundle.photoIds.map(id => { const item = data?.items.find(p => p.type === 'photo' && p.id === id); return item && <div key={id}><button className="cat-picture-button" onClick={event => openItem(item, event.currentTarget)} aria-label={`View included photo: ${item.description}`}><Preview item={item} blur={renderBlur} call={call} retryable={false}/></button><p>{item.description}</p></div>; })}</div>
+        {selectedBundle.caption && <p className="cat-bundle-caption cat-bundle-caption-detail">{selectedBundle.caption}</p>}
+        <div className="cat-bundle-included cat-bundle-grid">{selectedBundle.photoIds.map(id => { const item = data?.items.find(p => p.type === 'photo' && p.id === id); return item && <button key={id} className="cat-picture-button" onClick={event => openItem(item, event.currentTarget)} aria-label={`View included photo: ${item.description}`}><Preview item={item} blur={renderBlur} call={call} retryable={false}/></button>; })}</div>
         {salePercent(selectedBundle) !== null && !selectedBundle.owned && <p className="cat-bundle-saving">{salePercent(selectedBundle)}% off · <s>⭐{selectedBundle.regularStars.toLocaleString()}</s></p>}
         <div className="cat-pay-row">
         {selectedBundle.owned && data?.checkoutMode === 'invoice' ? <p className="cat-owned-message"><Check size={16}/> Unlocked. Tap a photo to view it.</p> : <button className="cat-primary cat-pay-stars" disabled={commerceBusy || selectedBundle.partial || data?.admin} onClick={() => unlockBundle(selectedBundle)}>{commerceBusy ? checkoutPhase === 'confirming' ? 'Confirming payment…' : data?.checkoutMode === 'invoice' ? 'Opening payment…' : 'Sending…' : data?.admin ? 'Preview only' : selectedBundle.owned ? 'View in chat' : selectedBundle.partial ? 'Partly owned' : paymentWaiting.has(`bundle:${selectedBundle.id}`) ? 'Check payment' : data?.checkoutMode !== 'invoice' && delivered.has(`bundle:photo:${selectedBundle.id}`) ? 'Open payment in chat' : `${data?.checkoutMode === 'invoice' ? 'Unlock' : 'Pay in Telegram'} · ⭐${selectedBundle.stars.toLocaleString()}`}</button>}
