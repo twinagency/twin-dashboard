@@ -145,8 +145,10 @@ async function main(){
  const videosDisabled=await (await call('catalogue')).json();
  assert.equal(videosDisabled.bundles.length,0,'a video bundle is hidden once videos are disabled for the clone');
  // Alanna's missing captions are hidden, not deleted, including cached actions.
- for(const caption of [null,undefined,'','  \n\t',42]) assert.equal(catalogueItemVisible({caption},'alanna-pow'),false);
- assert.equal(catalogueItemVisible({caption:' Saved caption '},'alanna-pow'),true);
+ for(const slug of ['alanna-pow','mrs-callace','fit-sid']) {
+   for(const caption of [null,undefined,'','  \n\t',42]) assert.equal(catalogueItemVisible({caption},slug),false,`${slug} requires a saved caption`);
+   assert.equal(catalogueItemVisible({caption:' Saved caption '},slug),true);
+ }
  assert.equal(catalogueItemVisible({caption:null},'briana-redd'),true,'Bri keeps her existing publishing rules');
  reset();rows.clones[0].slug='alanna-pow';rows.clones[0].videos_enabled=true;rows.clones[0].bundles_enabled=true;
  rows.photos=ids.map(id=>({...photo,id}));rows.photos[0].caption=null;rows.photos[0].auto_desc='Imported folder label';rows.photos[0].teaser_caption='A separate teaser is not a saved caption';
@@ -177,6 +179,13 @@ async function main(){
    for(const type of ['photo','video']) assert.deepEqual(ordered.filter(i=>i.type===type),input.filter(i=>i.type===type));
    if(photoCount&&videoCount)assert.deepEqual(ordered.slice(0,2).map(i=>i.type),['photo','video']);
    if(photoCount===304)for(let start=0;start<ordered.length-12;start+=12)assert.equal(new Set(ordered.slice(start,start+12).map(i=>i.type)).size,2,'each page contains both types');
+   for(const slug of ['mrs-callace','fit-sid']) {
+     const creatorOrder=catalogueDisplayOrder(input,slug,true);
+     assert.equal(creatorOrder.length,input.length);
+     assert.equal(new Set(creatorOrder.map(i=>`${i.type}:${i.id}`)).size,input.length);
+     if(photoCount&&videoCount) assert.deepEqual(creatorOrder.slice(0,2).map(i=>i.type),['photo','video']);
+     for(const type of ['photo','video']) assert.deepEqual(creatorOrder.filter(i=>i.type===type),input.filter(i=>i.type===type));
+   }
    assert.deepEqual(catalogueDisplayOrder(input,'alanna-pow',false),input);
  }
  const briIds=['20171234-7d0b-465f-8c6f-3496b509f415','bedb2ff6-bd23-4b21-b329-43ed3284cbd3','other','1be04367-92bf-4f74-aa98-6fd3b86d07b5','3a9c8e5a-f953-4fc2-bf93-ce2a6bce62a6'];
