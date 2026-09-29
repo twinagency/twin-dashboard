@@ -8,6 +8,8 @@ import { cataloguePresentation } from './catalogue-presentation';
 import { beginCatalogueCheckout, catalogueContentPath, catalogueOrderStatus, checkoutMode, CheckoutError, nativeOwnedItems, paidCatalogueItems, type InvoiceTransport } from './catalogue-checkout';
 import { beginTonCheckout, beginTonTipCheckout, effectiveNanotonPerStar, reconcilePendingTonOrders, tonDiscountPercent, tonEnabled, tonOrderStatus } from './catalogue-ton';
 import { isClientEventName, logCatalogueEvent, validEventMediaType, validEventRail, validEventUuid } from './catalogue-events';
+import { beginCatalogueStarTip, catalogueStarTipStatus } from './catalogue-star-tip';
+import { TIP_PRESET_USD, tipStarsForUsd } from './catalogue-ton-price';
 export type CatalogueDependencies = {
   db(): SupabaseClient;
   invoice?: InvoiceTransport;
@@ -71,10 +73,13 @@ return async function POST(request: NextRequest, context: { params: Promise<{ sl
     // ton_wallet_address/ton_nanoton_per_star land in a migration that may not be applied
     // yet; fall back to the plain select so the catalogue keeps working either way.
     const settingsWithTon = await db.from("creator_catalogue_settings").select(`${settingsColumns},ton_wallet_address,ton_nanoton_per_star,ton_discount_percent,ton_star_usd`).eq("clone_id", clone.id).maybeSingle();
-    const settings: (Record<string, any> & { ton_wallet_address?: string | null; ton_nanoton_per_star?: number | null }) | null =
+    let settings: (Record<string, any> & { ton_wallet_address?: string | null; ton_nanoton_per_star?: number | null; stars_tips_enabled?: boolean; ton_star_usd?: number | string | null }) | null =
       settingsWithTon.error?.code === '42703'
         ? checked(await db.from("creator_catalogue_settings").select(settingsColumns).eq("clone_id", clone.id).maybeSingle())
         : checked(settingsWithTon);
+    const storefront = await db.from('creator_catalogue_settings').select('simple_unlock_cards,stars_tips_enabled').eq('clone_id', clone.id).maybeSingle();
+    if (!storefront.error) settings = { ...settings, ...storefront.data };
+    else if (storefront.error.code !== '42703' && storefront.error.code !== 'PGRST204') checked(storefront);
     if (!admin && !settings?.enabled) return json({ error: "This catalogue is not open yet." }, 403);
     const blur = validBlur(settings?.blur_strength) ? settings.blur_strength : DEFAULT_BLUR;
     const action = body.action;
@@ -112,6 +117,13 @@ return async function POST(request: NextRequest, context: { params: Promise<{ sl
       if (typeof body.orderId !== 'string') return json({error:'Invalid checkout request.'},400);
       const result = await tonOrderStatus(checkoutContext,body.orderId);
       return json({ tonEnabled: true, ...result });
+    }
+    if (action === 'stars_tip' || action === 'stars_tip_status') {
+      if (admin || !fan) return json({error:'Owner preview cannot send tips.'},403);
+      if (!invoiceCheckout) return json({error:'In-app checkout is not enabled for this collection.'},403);
+      if (action === 'stars_tip_status') return json(await catalogueStarTipStatus({db,clone,fan},body,settings ?? {}));
+      rateLimit(`checkout:${fan.id}`,20);
+      return json(await beginCatalogueStarTip({db,clone,fan},body,settings ?? {},deps.invoice));
     }
     if (action === 'ton_tip') {
       if (admin || !fan) return json({error:'Owner preview cannot purchase or unlock content.'},403);
@@ -240,6 +252,9 @@ return async function POST(request: NextRequest, context: { params: Promise<{ sl
         verified: settings?.show_verified_badge === true,
         presentation: cataloguePresentation(settings?.presentation_variant),
         checkoutMode: checkoutMode(settings?.checkout_mode),
+        simpleUnlockCards: settings?.simple_unlock_cards === true,
+        starTipAmounts: settings?.stars_tips_enabled === true && invoiceCheckout
+          ? Object.fromEntries(TIP_PRESET_USD.map(usd => [usd, tipStarsForUsd(usd, settings?.ton_star_usd)]).filter(([, stars]) => stars !== null)) : null,
         tonEnabled: tonEnabled(settings),
         tonNanotonPerStar: liveTonNanotonPerStar,
         tonNanotonPerUsd,

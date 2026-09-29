@@ -33,7 +33,7 @@ function currentStartParam(): string | null {
   const hash = window.location.hash.startsWith("#") ? window.location.hash.slice(1) : window.location.hash;
   return new URLSearchParams(hash).get("tgWebAppStartParam");
 }
-type Data = { checkoutMode?: 'chat' | 'invoice'; name: string; verified?: boolean; presentation?: CataloguePresentation; featuredBundleId?: string | null; items: CatalogueItem[]; blur: number; admin: boolean; enabled: boolean; canSend: boolean; chatUrl: string | null; purchaseNote: string; bundles:CatalogueBundle[]; rewards:CatalogueRewards|null; tonEnabled?: boolean; tonWalletAddress?: string; tonPerStar?: number | null; tonNanotonPerStar?: number | null; tonNanotonPerUsd?: number | null; tonDiscountPercent?: number; tonReturnUrl?: string | null };
+type Data = { checkoutMode?: 'chat' | 'invoice'; name: string; verified?: boolean; presentation?: CataloguePresentation; featuredBundleId?: string | null; items: CatalogueItem[]; blur: number; admin: boolean; enabled: boolean; canSend: boolean; chatUrl: string | null; purchaseNote: string; bundles:CatalogueBundle[]; rewards:CatalogueRewards|null; tonEnabled?: boolean; tonWalletAddress?: string; tonPerStar?: number | null; tonNanotonPerStar?: number | null; tonNanotonPerUsd?: number | null; tonDiscountPercent?: number; tonReturnUrl?: string | null; simpleUnlockCards?: boolean; starTipAmounts?: Record<string, number> | null };
 type Call = (action: string, payload?: Record<string, unknown>) => Promise<Response>;
 const tabs = ["All", "Photos", "Videos", "Bundles"];
 
@@ -80,9 +80,9 @@ function Preview(props: { item: CatalogueItem; blur: number; call: Call; retryab
   return props.item.type === 'video' ? <VideoPreview {...props} retryable={props.retryable ?? true} /> : <PhotoPreview {...props} />;
 }
 
-function BundleCard({ bundle, items, blur, call, busy, owner = false, onUnlock, onUnlockTon, onDetails, compact = false, label, actionLabel, ton = null }: {
+function BundleCard({ bundle, items, blur, call, busy, owner = false, onUnlock, onUnlockTon, onDetails, compact = false, label, actionLabel, ton = null, simpleUnlock = false }: {
   bundle: CatalogueBundle; items: CatalogueItem[]; blur: number; call: Call;
-  busy: boolean; owner?: boolean; onUnlock: () => void; onUnlockTon?: () => void; onDetails?: () => void; compact?: boolean; label?: string; actionLabel?: string; ton?: TonPricing;
+  busy: boolean; owner?: boolean; onUnlock: () => void; onUnlockTon?: () => void; onDetails?: () => void; compact?: boolean; label?: string; actionLabel?: string; ton?: TonPricing; simpleUnlock?: boolean;
 }) {
   const bundleTon = bundle.owned || bundle.partial ? null : ton;
   const bundleItemIds = bundle.kind === 'video' ? bundle.videoIds : bundle.photoIds;
@@ -97,15 +97,17 @@ function BundleCard({ bundle, items, blur, call, busy, owner = false, onUnlock, 
       <div className="cat-bundle-copy">
         <h3>{bundle.title}</h3>
         {bundle.caption && <p className="cat-bundle-caption">{bundle.caption}</p>}
-        {discount !== null && <p className="cat-bundle-saving">{discount}% off <span aria-hidden="true">·</span> <s>⭐{bundle.regularStars.toLocaleString()}</s></p>}
-        <div className="cat-pay-row cat-bundle-pay-row">
+        {discount !== null && <p className="cat-bundle-saving">{discount}% off{!simpleUnlock && <> <span aria-hidden="true">·</span> <s>⭐{bundle.regularStars.toLocaleString()}</s></>}</p>}
+        {simpleUnlock ? <button type="button" className="cat-unlock-now cat-bundle-unlock-now" onClick={onDetails} disabled={busy}>
+          {bundle.owned ? 'View bundle' : bundle.partial ? 'View bundle' : 'Unlock Now'}
+        </button> : <div className="cat-pay-row cat-bundle-pay-row">
           <button type="button" className="cat-primary cat-pay-stars" aria-label={actionLabel?.startsWith('Pay ·') ? `Pay in Telegram for ${bundle.stars.toLocaleString()} Stars` : undefined} disabled={busy || bundle.partial || owner} onClick={onUnlock}>
             {busy ? 'Opening…' : owner ? 'Preview only' : actionLabel ?? (bundle.owned ? 'View bundle' : bundle.partial ? 'Partly owned' : `⭐${bundle.stars.toLocaleString()}`)}
           </button>
           {bundleTon && onUnlockTon && !owner && <button type="button" className="cat-secondary cat-pay-ton" disabled={busy} onClick={onUnlockTon}>
             <TonButtonLabel stars={bundle.stars} nanotonPerStar={bundleTon.nanotonPerStar} phase={null} discountPercent={bundleTon.discountPercent} />
           </button>}
-        </div>
+        </div>}
       </div>
     </article>;
   }
@@ -162,6 +164,9 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
   const [tipPhase, setTipPhase] = useState<null | 'opening' | 'confirming'>(null);
   const [tipDone, setTipDone] = useState(false);
   const [tipNotice, setTipNotice] = useState('');
+  const [tipRail, setTipRail] = useState<'ton' | 'stars'>('ton');
+  const [starTipPending, setStarTipPending] = useState(false);
+  const starTipAttempt = useRef<{ usd: number; requestKey: string; invoiceUrl?: string; pending: boolean } | null>(null);
   const [tipPick, setTipPick] = useState<TipPresetUsd>(TIP_POPULAR_USD);
   const mounted = useRef(true);
   useEffect(() => { mounted.current = true; return () => { mounted.current = false; }; }, []);
@@ -390,7 +395,67 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
     } catch (e) { setNotice(e instanceof Error ? e.message : 'Could not start TON payment. Please try again.'); }
     finally { sending.current = false; if (mounted.current) { setBusy(false); setCommerceBusy(false); setTonPhase(null); } }
   }
-  function openTip() { setTipDone(false); setTipNotice(''); setTipPhase(null); setTipPick(TIP_POPULAR_USD); setTipOpen(true); }
+  function openTip() {
+    if (tipDone) { starTipAttempt.current = null; setStarTipPending(false); }
+    const pending = !tipDone && starTipAttempt.current?.pending;
+    setTipDone(false); setTipNotice(''); setTipPhase(null);
+    setTipPick(pending ? starTipAttempt.current!.usd as TipPresetUsd : TIP_POPULAR_USD);
+    setTipRail(pending || !data?.tonEnabled || data.tonNanotonPerUsd == null ? 'stars' : 'ton'); setTipOpen(true);
+  }
+  async function payStarTip(usd: number) {
+    if (sending.current || data?.admin) return;
+    if (!app()?.openInvoice) { setTipNotice('Open this catalogue inside Telegram to tip with Stars.'); return; }
+    sending.current = true; setTipPhase('opening'); setTipNotice('');
+    try {
+      let attempt = starTipAttempt.current;
+      if (!attempt || (!attempt.pending && attempt.usd !== usd)) {
+        attempt = { usd, requestKey: crypto.randomUUID(), pending: false }; starTipAttempt.current = attempt;
+      }
+      const request = { usd: attempt.usd, requestKey: attempt.requestKey };
+      const existing = await read('stars_tip_status', request);
+      if (existing.status === 'paid') { attempt.pending = false; setStarTipPending(false); setTipDone(true); return; }
+      if (existing.status === 'refunded') {
+        starTipAttempt.current = null; setStarTipPending(false); setTipNotice('This tip was refunded. Choose an amount to send a new tip.'); return;
+      }
+      let result = 'pending';
+      if (!attempt.pending) {
+        if (!attempt.invoiceUrl) {
+          const begin = await read('stars_tip', request);
+          if (begin.status === 'paid') { setTipDone(true); return; }
+          if (!begin.invoiceUrl) throw new Error('Could not open your tip. Please try again.');
+          attempt.invoiceUrl = begin.invoiceUrl;
+        }
+        logEvent('tap_tip', { rail: 'stars' });
+        // Block repeat invoices even if Telegram closes without a callback.
+        attempt.pending = true; setStarTipPending(true);
+        result = await new Promise<string>((resolve, reject) => {
+          let done = false;
+          const timer = window.setTimeout(() => { if (!done) { done = true; resolve('pending'); } }, 90_000);
+          try { app()!.openInvoice!(attempt!.invoiceUrl!, status => { if (!done) { done = true; window.clearTimeout(timer); resolve(status); } }); }
+          catch (error) { window.clearTimeout(timer); reject(error); }
+        });
+        if (result === 'cancelled' || result === 'failed') {
+          attempt.pending = false; setStarTipPending(false); logEvent('pay_cancel', { rail: 'stars' });
+        }
+      }
+      if (!mounted.current) return;
+      setTipPhase('confirming');
+      for (let poll = 0; poll < (attempt.pending ? 32 : 1); poll++) {
+        const status = await read('stars_tip_status', request);
+        if (!mounted.current) return;
+        if (status.status === 'paid') {
+          attempt.pending = false; setStarTipPending(false); setTipDone(true); return;
+        }
+        if (status.status === 'refunded') {
+          starTipAttempt.current = null; setStarTipPending(false); setTipNotice('This tip was refunded.'); return;
+        }
+        if (attempt.pending && poll < 31) await new Promise(resolve => window.setTimeout(resolve, 2000));
+        if (!mounted.current) return;
+      }
+      setTipNotice(attempt.pending ? 'Your tip is still being confirmed. Tap Check tip to refresh, without paying again.' : result === 'cancelled' ? 'Payment cancelled. No tip was confirmed.' : 'Payment did not complete. Please try again.');
+    } catch (error) { setTipNotice(error instanceof Error ? error.message : 'Could not send your tip. Please try again.'); }
+    finally { sending.current = false; if (mounted.current) setTipPhase(null); }
+  }
   function closeTip() { if (tipPhase) return; setTipOpen(false); }
   async function payTip(usd: number) {
     if (sending.current) return;
@@ -508,7 +573,8 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
     catch (e) { setNotice((e as Error).message); } finally { setBusy(false); }
   }
   const compact = data?.presentation === 'compact';
-  const showTipBar = !!data && data.tonEnabled === true && !data.admin && data.checkoutMode === 'invoice' && data.tonNanotonPerUsd != null && !selected && !selectedBundle;
+  const starsTips = !!data?.starTipAmounts && Object.keys(data.starTipAmounts).length > 0;
+  const showTipBar = !!data && !data.admin && data.checkoutMode === 'invoice' && ((data.tonEnabled === true && data.tonNanotonPerUsd != null) || starsTips) && !selected && !selectedBundle;
   const tonPricing: TonPricing = data?.tonEnabled && data.tonNanotonPerStar ? { nanotonPerStar: data.tonNanotonPerStar, discountPercent: data.tonDiscountPercent ?? 0 } : null;
   const filteredItems = compact ? compactItems(data?.items ?? [], section, search) : (data?.items ?? []).filter(item => {
     if (search) return item.description.toLowerCase().includes(search.toLowerCase());
@@ -564,7 +630,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
         : !data ? <div className="cat-empty" aria-live="polite">Loading your collection…</div> : <>
         {!compact && featuredBundle && <section className="cat-daily-sale" aria-labelledby="daily-sale-title">
           <h2 id="daily-sale-title"><span aria-hidden="true">😈</span><span>Daddy’s Daily Reward Sale</span><span aria-hidden="true">😈</span></h2>
-          <BundleCard bundle={featuredBundle} items={data.items} blur={renderBlur} call={call} busy={commerceBusy} owner={compact && data.admin} compact={compact} onDetails={() => openBundle(featuredBundle, document.activeElement as HTMLElement)} actionLabel={paymentWaiting.has(`bundle:${featuredBundle.id}`) ? 'Check payment' : data.checkoutMode !== 'invoice' ? featuredBundle.owned ? 'View in chat' : featuredBundle.partial ? 'Partly owned' : delivered.has(`bundle:photo:${featuredBundle.id}`) ? 'Open payment in chat' : `Pay · ⭐${featuredBundle.stars.toLocaleString()}` : undefined} onUnlock={()=>unlockBundle(featuredBundle)} onUnlockTon={data.checkoutMode === 'invoice' && data.tonEnabled && !data.admin ? () => { openBundle(featuredBundle, document.activeElement as HTMLElement); void payWithTon('bundle', featuredBundle.id); } : undefined} ton={tonPricing} />
+          <BundleCard bundle={featuredBundle} items={data.items} blur={renderBlur} call={call} busy={commerceBusy} owner={compact && data.admin} compact={compact} simpleUnlock={data.simpleUnlockCards} onDetails={() => openBundle(featuredBundle, document.activeElement as HTMLElement)} actionLabel={paymentWaiting.has(`bundle:${featuredBundle.id}`) ? 'Check payment' : data.checkoutMode !== 'invoice' ? featuredBundle.owned ? 'View in chat' : featuredBundle.partial ? 'Partly owned' : delivered.has(`bundle:photo:${featuredBundle.id}`) ? 'Open payment in chat' : `Pay · ⭐${featuredBundle.stars.toLocaleString()}` : undefined} onUnlock={()=>unlockBundle(featuredBundle)} onUnlockTon={data.checkoutMode === 'invoice' && data.tonEnabled && !data.admin ? () => { openBundle(featuredBundle, document.activeElement as HTMLElement); void payWithTon('bundle', featuredBundle.id); } : undefined} ton={tonPricing} />
         </section>}
         {rewards&&progress&&<section className="cat-rewards" aria-label="Your loyalty rewards">
           <button className="cat-reward-summary" aria-label="Rewards Daddy" aria-expanded={rewardsOpen} aria-controls="catalogue-reward-details" onClick={()=>setRewardsOpen(v=>!v)}>
@@ -596,24 +662,24 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
           <div className="cat-bundle-grid" ref={bundleTrack} onScroll={event => {
             const track = event.currentTarget;
             setBundleIndex(Math.min(browseBundles.length - 1, Math.max(0, Math.round(track.scrollLeft / (track.clientWidth + 10)))));
-          }}>{browseBundles.map((bundle,index)=><BundleCard key={bundle.id} bundle={bundle} items={data.items} blur={renderBlur} call={call} busy={commerceBusy} owner={compact && data.admin} compact={compact} onDetails={() => openBundle(bundle, document.activeElement as HTMLElement)} label={`Bundle ${index+1} of ${browseBundles.length}: ${bundle.title}`} actionLabel={paymentWaiting.has(`bundle:${bundle.id}`) ? 'Check payment' : data.checkoutMode !== 'invoice' ? bundle.owned ? 'View in chat' : bundle.partial ? 'Partly owned' : delivered.has(`bundle:photo:${bundle.id}`) ? 'Open payment in chat' : `Pay · ⭐${bundle.stars.toLocaleString()}` : undefined} onUnlock={()=>unlockBundle(bundle)} onUnlockTon={data.checkoutMode === 'invoice' && data.tonEnabled && !data.admin ? () => { openBundle(bundle, document.activeElement as HTMLElement); void payWithTon('bundle', bundle.id); } : undefined} ton={tonPricing} />)}</div>
+          }}>{browseBundles.map((bundle,index)=><BundleCard key={bundle.id} bundle={bundle} items={data.items} blur={renderBlur} call={call} busy={commerceBusy} owner={compact && data.admin} compact={compact} simpleUnlock={data.simpleUnlockCards} onDetails={() => openBundle(bundle, document.activeElement as HTMLElement)} label={`Bundle ${index+1} of ${browseBundles.length}: ${bundle.title}`} actionLabel={paymentWaiting.has(`bundle:${bundle.id}`) ? 'Check payment' : data.checkoutMode !== 'invoice' ? bundle.owned ? 'View in chat' : bundle.partial ? 'Partly owned' : delivered.has(`bundle:photo:${bundle.id}`) ? 'Open payment in chat' : `Pay · ⭐${bundle.stars.toLocaleString()}` : undefined} onUnlock={()=>unlockBundle(bundle)} onUnlockTon={data.checkoutMode === 'invoice' && data.tonEnabled && !data.admin ? () => { openBundle(bundle, document.activeElement as HTMLElement); void payWithTon('bundle', bundle.id); } : undefined} ton={tonPricing} />)}</div>
           {!compact&&browseBundles.length>1&&<div className="cat-carousel-controls" aria-label="Choose bundle">
             {browseBundles.map((bundle,index)=><button key={bundle.id} aria-label={`Show bundle ${index+1}`} aria-current={bundleIndex===index ? 'true' : undefined} onClick={()=>{
               const track=bundleTrack.current;if(track)track.scrollTo({left:index*(track.clientWidth+10),behavior:window.matchMedia('(prefers-reduced-motion: reduce)').matches?'instant':'smooth'});
             }}><span/></button>)}<span className="cat-carousel-count" aria-live="polite">{bundleIndex+1} / {browseBundles.length}</span>
           </div>}
         </section>}
-        {visible.length ? <div className="cat-grid">{visible.slice(0, pageSize).map(item => <article className={`cat-card${compact && item.free ? ' cat-card-free' : ''}${trendingView && item.rank ? ' cat-card-ranked' : ''}`} key={`${item.type}:${item.id}`}>
+        {visible.length ? <div className="cat-grid">{visible.slice(0, pageSize).map(item => <article className={`cat-card${data.simpleUnlockCards ? ' cat-card-simple-unlock' : ''}${compact && item.free ? ' cat-card-free' : ''}${trendingView && item.rank ? ' cat-card-ranked' : ''}`} key={`${item.type}:${item.id}`}>
           {trendingView && item.rank && item.rank <= 3 && <span className={`cat-rank-mini cat-rank-mini-${item.rank}`} aria-label={`Trending number ${item.rank}`}>#{item.rank}</span>}
 
           <button className="cat-picture-button" onClick={event => openItem(item, event.currentTarget)} aria-label={`View ${item.type}: ${item.description.slice(0, 100)}${compact ? `, ${item.purchased || item.received ? 'owned' : item.free ? 'free' : `${item.stars.toLocaleString()} Stars`}` : ''}`}><Preview item={item} blur={renderBlur} call={call} retryable={false} /></button>
           <div className="cat-card-body">
             {refined && <p className="cat-card-description" title={item.description}>{compact ? shortCatalogueTitle(item.description) : item.description}</p>}
             <div className="cat-card-bottom">
-              {tonPricing && !item.purchased && !item.received && !item.free ? <CardPrices stars={item.stars} ton={tonPricing} /> : refined && <span className={`cat-card-price${item.purchased || item.received ? ' cat-card-owned' : ''}`}>
+              {data.simpleUnlockCards && !item.purchased && !item.received && !item.free ? <button type="button" className="cat-unlock-now" onClick={event => openItem(item, event.currentTarget)}>Unlock Now</button> : tonPricing && !item.purchased && !item.received && !item.free ? <CardPrices stars={item.stars} ton={tonPricing} /> : refined && <span className={`cat-card-price${item.purchased || item.received ? ' cat-card-owned' : ''}`}>
                 {item.purchased || item.received ? <><Check size={14} aria-hidden="true"/>Owned</> : item.free ? 'Free' : <><Star className="cat-stars" size={15} aria-hidden="true"/><span>{item.stars.toLocaleString()}<span className="cat-sr-only"> Stars</span></span></>}
               </span>}
-              {!compact && <button className="cat-item-unlock" aria-label={refined ? `${item.purchased || item.received ? 'View owned' : item.free ? 'View free' : `Unlock for ${item.stars.toLocaleString()} Stars:`} ${item.description}` : undefined} onClick={event => openItem(item, event.currentTarget)}>{refined ? item.purchased || item.received ? 'View' : item.free ? 'View' : 'Unlock' : item.purchased||item.received?<><Check size={14}/> View in chat</>:item.type==='video'?'Watch now':'View'}</button>}
+              {!compact && !data.simpleUnlockCards && <button className="cat-item-unlock" aria-label={refined ? `${item.purchased || item.received ? 'View owned' : item.free ? 'View free' : `Unlock for ${item.stars.toLocaleString()} Stars:`} ${item.description}` : undefined} onClick={event => openItem(item, event.currentTarget)}>{refined ? item.purchased || item.received ? 'View' : item.free ? 'View' : 'Unlock' : item.purchased||item.received?<><Check size={14}/> View in chat</>:item.type==='video'?'Watch now':'View'}</button>}
             </div>
           </div></article>)}</div>
           : !search&&section==='Bundles'&&browseBundles.length ? null : <div className="cat-empty"><ShoppingBag size={30} /><h2>{search ? "No matching items" : section === "My Purchases" ? "No linked purchases yet" : `No ${section.toLowerCase()} available right now`}</h2><button className="cat-secondary" onClick={() => { setSection(compact ? "Explore" : "All"); setSearch(""); }}>{compact ? 'Browse the collection' : 'Explore the collection'}</button></div>}
@@ -679,18 +745,24 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
       </div>
       <div className="cat-detail cat-tip-body">
         {tipDone ? <button type="button" className="cat-tip-send" onClick={closeTip}>Back to the store <span aria-hidden="true">💕</span></button>
-          : tipPhase ? <div role="status" className="cat-tip-status"><span className="cat-tip-spinner" aria-hidden="true" /><strong>{tipPhase === 'opening' ? 'Opening your wallet' : 'Confirming on TON'}</strong><span>Sending ${tipPick.toLocaleString()} with love</span></div> : <>
+          : tipPhase ? <div role="status" className="cat-tip-status"><span className="cat-tip-spinner" aria-hidden="true" /><strong>{tipPhase === 'opening' ? tipRail === 'stars' ? 'Opening Telegram Stars' : 'Opening your wallet' : tipRail === 'stars' ? 'Confirming your tip' : 'Confirming on TON'}</strong><span>Sending ${tipPick.toLocaleString()} with love</span></div> : <>
+            {starsTips && <div className="cat-tip-rails" role="group" aria-label="Tip payment method">
+              {data.tonEnabled && data.tonNanotonPerUsd != null && <button type="button" aria-pressed={tipRail === 'ton'} disabled={starTipPending} onClick={() => setTipRail('ton')}><TonMark /> TON</button>}
+              <button type="button" aria-pressed={tipRail === 'stars'} disabled={starTipPending} onClick={() => setTipRail('stars')}><Star size={16} fill="currentColor" /> Stars</button>
+            </div>}
             <div className="cat-tip-presets" role="radiogroup" aria-label="Tip amount">{TIP_PRESET_USD.map(usd => {
               const nanoton = data.tonNanotonPerUsd != null ? tonPriceNanoton(usd, data.tonNanotonPerUsd, 0) : null;
               const picked = usd === tipPick;
-              return <button key={usd} type="button" role="radio" aria-checked={picked} className={`cat-tip-preset${picked ? ' cat-tip-preset-picked' : ''}${usd === TIP_POPULAR_USD ? ' cat-tip-preset-popular' : ''}`} onClick={() => setTipPick(usd)}>
+              return <button key={usd} type="button" role="radio" aria-checked={picked} className={`cat-tip-preset${picked ? ' cat-tip-preset-picked' : ''}${usd === TIP_POPULAR_USD ? ' cat-tip-preset-popular' : ''}`} disabled={starTipPending} onClick={() => setTipPick(usd)}>
                 {usd === TIP_POPULAR_USD && <span className="cat-tip-badge">Most popular</span>}
                 <span className="cat-tip-preset-usd">${usd.toLocaleString()}</span>
-                {nanoton != null && <span className="cat-tip-preset-ton"><TonMark />{formatTonAmount(nanoton)} TON</span>}
+                {tipRail === 'stars' ? <span className="cat-tip-preset-ton">⭐{data.starTipAmounts?.[usd]?.toLocaleString()} Stars</span> : nanoton != null && <span className="cat-tip-preset-ton"><TonMark />{formatTonAmount(nanoton)} TON</span>}
               </button>;
             })}</div>
-            <button type="button" className="cat-tip-send" onClick={() => void payTip(tipPick)}><span aria-hidden="true">❤️</span> Send ${tipPick.toLocaleString()} tip</button>
-            <p className="cat-tip-fine">Paid in TON from your wallet. Thank you for spoiling me.</p>
+            <button type="button" className={`cat-tip-send${tipRail === 'stars' ? ' cat-tip-send-stars' : ''}`} onClick={() => void (tipRail === 'stars' ? payStarTip(tipPick) : payTip(tipPick))}>
+              {starTipPending ? 'Check tip' : tipRail === 'stars' ? `Send tip · ⭐${data.starTipAmounts?.[tipPick]?.toLocaleString()} Stars` : <><span aria-hidden="true">❤️</span> Send ${tipPick.toLocaleString()} tip</>}
+            </button>
+            <p className="cat-tip-fine">{tipRail === 'stars' ? 'Confirm your tip with Telegram Stars.' : 'Paid in TON from your wallet. Thank you for spoiling me.'}</p>
             {tipNotice && <p role="status" className="cat-payment-status">{tipNotice}</p>}
           </>}
       </div>

@@ -1,0 +1,54 @@
+name: Catalogue unlock and tipping
+
+on:
+  push:
+    paths:
+      - 'app/catalogue/**'
+      - 'lib/catalogue-*.ts'
+      - 'scripts/check-catalogue*'
+      - 'package*.json'
+      - '.github/workflows/catalogue-unlock.yml'
+  pull_request:
+    paths:
+      - 'app/catalogue/**'
+      - 'lib/catalogue-*.ts'
+      - 'scripts/check-catalogue*'
+      - 'package*.json'
+      - '.github/workflows/catalogue-unlock.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  catalogue:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - run: npm run build
+        env:
+          NEXT_TELEMETRY_DISABLED: '1'
+      - name: Catalogue, pricing, ownership and tip API checks
+        run: npm run test:catalogue
+      - name: Install mobile browsers
+        run: |
+          sudo mkdir -p /tmp/ci-unused-chrome-feed
+          while IFS= read -r source; do
+            sudo mv "$source" "/tmp/ci-unused-chrome-feed/${source##*/}"
+          done < <(sudo grep -rl 'dl.google.com/linux/chrome' /etc/apt/sources.list.d 2>/dev/null || true)
+          npx playwright install --with-deps chromium webkit
+      - name: Unlock cards and Stars tips in Chromium and WebKit
+        run: node scripts/check-catalogue-unlock-ui.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: catalogue-unlock-review
+          path: test-results/catalogue-unlock
+          if-no-files-found: ignore
+          retention-days: 7

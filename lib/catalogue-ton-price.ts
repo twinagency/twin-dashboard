@@ -9,6 +9,15 @@ export const TON_PRICE_STEP_NANOTON = 100_000_000; // 0.1 TON
 export const TIP_PRESET_USD = [10, 25, 50, 100, 250, 500, 1000] as const;
 export type TipPresetUsd = (typeof TIP_PRESET_USD)[number];
 
+// Match the existing USD tip presets to the creator's configured Star value.
+// Tips never inherit the content-only TON discount.
+export function tipStarsForUsd(usd: number, starUsd: unknown): number | null {
+  const rate = Number(starUsd);
+  if (!TIP_PRESET_USD.some(value => value === usd) || !Number.isFinite(rate) || rate <= 0) return null;
+  const stars = Math.max(1, Math.round(usd / rate));
+  return Number.isSafeInteger(stars) && stars <= 1_000_000 ? stars : null;
+}
+
 // Stars price to nanoton, discounted, rounded UP to the next 0.1 TON, minimum 0.1 TON.
 // Returns null when the inputs cannot produce a positive price.
 export function tonPriceNanoton(stars: number, nanotonPerStar: number | string, discountPercent = 0): number | null {
