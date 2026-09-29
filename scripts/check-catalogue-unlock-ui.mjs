@@ -92,6 +92,13 @@ try {
       const tip = page.getByRole('dialog', { name: 'Send a tip' });
       assert.equal(await tip.getByRole('radio').count(), 7);
       await tip.getByRole('button', { name: 'Send tip · ⭐1,250 Stars', exact: true }).waitFor();
+      await page.waitForFunction(() => {
+        const button = document.querySelector('.cat-tip-send-stars');
+        const rail = document.querySelector('.cat-tip-rails button:last-child');
+        return rail?.getAttribute('aria-pressed') === 'true' && button && getComputedStyle(button).backgroundColor === 'rgb(248, 200, 74)';
+      });
+      // WebKit can capture the previous paint immediately after React changes the rail.
+      await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
       await page.screenshot({ path: `${output}/${name}-stars-tip-390.png`, fullPage: true });
       await page.evaluate(() => { window.invoiceResult = 'throw'; });
       await tip.getByRole('button', { name: 'Send tip · ⭐1,250 Stars', exact: true }).click();
