@@ -760,8 +760,8 @@ export default function ConfigSections({
         <div className="border-t border-line pt-2">
           <ToggleCard
             emoji={mode === "edit" ? "" : "🛍"}
-            label="Sell content through the app"
-            title="Paid photos and videos go out as a blurred preview with an Unlock now button that opens this item in the app, instead of a Stars lock in chat."
+            label="Redirect chat purchases to Mini App"
+            title="When on, chat purchases use a preview and an Unlock now button in the Mini App. Leave off to keep native Telegram chat checkout. The pinned Mini App catalogue stays available either way."
             name="sell_via_mini_app"
             checked={cfg.sellViaMiniApp}
             onChange={(v) => set("sellViaMiniApp", v)}
