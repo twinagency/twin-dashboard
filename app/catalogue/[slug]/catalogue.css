@@ -486,9 +486,9 @@ html:has(.catalogue-compact),body:has(.catalogue-compact){background:#1b1c1e}
 .cat-tip-spinner{width:34px;height:34px;border-radius:50%;border:3px solid #ff2d7a33;border-top-color:#ff5fa2;margin-bottom:4px}
 @media(prefers-reduced-motion:no-preference){.cat-tip-spinner{animation:cat-tip-spin .9s linear infinite}.cat-tip-hearts>span{animation:cat-tip-float 4s ease-in-out infinite}.cat-tip-hearts>span:nth-child(2n){animation-delay:-2s}}
 @keyframes cat-tip-spin{to{transform:rotate(360deg)}}
-.catalogue .cat-unlock-now{position:relative;pointer-events:auto;display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:9px 15px;border:0;border-radius:9999px;background:#0077b8;color:#fff;font-size:12px;font-weight:700;line-height:1.2;white-space:nowrap;box-shadow:none}
-.catalogue .cat-unlock-now:hover:not(:disabled){background:#006ca7}
-.catalogue .cat-unlock-now:focus-visible{outline:2px solid #fff;outline-offset:2px}
+.catalogue button.cat-unlock-now{position:relative;pointer-events:auto;display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:9px 15px;border:0;border-radius:9999px;background:#0077b8;color:#fff;font-size:12px;font-weight:700;line-height:1.2;white-space:nowrap;box-shadow:none}
+.catalogue button.cat-unlock-now:hover:not(:disabled){background:#006ca7}
+.catalogue button.cat-unlock-now:focus-visible{outline:2px solid #fff;outline-offset:2px}
 .catalogue .cat-bundle-unlock-now{align-self:flex-start;margin-top:8px}
 .cat-tip-rails{display:flex;gap:8px;margin:0 0 18px}
 .catalogue .cat-tip-rails button{display:flex;align-items:center;justify-content:center;gap:6px;flex:1;min-height:44px;border:1px solid #ffffff40;border-radius:9999px;background:#ffffff0d;color:#fff;font-weight:700}
