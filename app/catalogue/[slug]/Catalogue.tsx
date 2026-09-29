@@ -617,8 +617,8 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
           <summary>How to pay with Telegram Stars</summary>
           <ol>
             <li>{data.simpleUnlockCards ? <>Tap <strong>Unlock Now</strong></> : <>Open the item</>}, then choose the <strong>⭐ Stars</strong> option.</li>
-            <li>Need Stars? Follow Telegram’s top-up prompt to buy a pack.</li>
-            <li>Confirm your payment to unlock your content.</li>
+            <li>Need Stars? Open the content you want to see and tap the yellow unlock button. Telegram will prompt you to buy some.</li>
+            <li>Once unlocked, your content will be available here and sent to our chat, so you can view it anytime x.</li>
           </ol>
         </details>
       </section>}
