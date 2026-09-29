@@ -34,15 +34,16 @@ jobs:
       - run: npm run build
         env:
           NEXT_TELEMETRY_DISABLED: '1'
-      - name: Catalogue, pricing, ownership and tip API checks
-        run: npm run test:catalogue
       - name: Install mobile browsers
         run: |
           sudo mkdir -p /tmp/ci-unused-chrome-feed
           while IFS= read -r source; do
             sudo mv "$source" "/tmp/ci-unused-chrome-feed/${source##*/}"
           done < <(sudo grep -rl 'dl.google.com/linux/chrome' /etc/apt/sources.list.d 2>/dev/null || true)
+          sudo apt-get update && sudo apt-get install -y ffmpeg
           npx playwright install --with-deps chromium webkit
+      - name: Catalogue, pricing, ownership and tip API checks
+        run: npm run test:catalogue
       - name: Unlock cards and Stars tips in Chromium and WebKit
         run: node scripts/check-catalogue-unlock-ui.mjs
       - uses: actions/upload-artifact@v4

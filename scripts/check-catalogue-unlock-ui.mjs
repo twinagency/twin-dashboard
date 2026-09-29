@@ -11,7 +11,7 @@ const svgUrl = 'data:image/svg+xml,' + encodeURIComponent(svg);
 const existingFixture = await readFile('scripts/check-alana-catalogue-ui.mjs', 'utf8');
 const videoBytes = Buffer.from(existingFixture.match(/const videoBytes=Buffer.from\('([^']+)'/)[1], 'base64');
 const item = (id, type, extra = {}) => ({ id, type, description: `${type} ${id}, complete caption shown inside the detail view`, stars: 350, free: false, purchased: false, received: false, createdAt: '2026-09-29', ...extra });
-const items = [item('p1', 'photo'), item('v1', 'video'), item('p2', 'photo'), item('v2', 'video'), item('owned', 'photo', { purchased: true }), item('free', 'photo', { free: true, stars: 0 })];
+const items = [item('p1', 'photo', { rank: 1 }), item('v1', 'video', { rank: 2 }), item('p2', 'photo'), item('v2', 'video'), item('owned', 'photo', { purchased: true }), item('free', 'photo', { free: true, stars: 0 })];
 const bundle = (kind, ids) => ({ id: kind + '-bundle', title: `Two ${kind}s`, kind, caption: 'A complete two-item collection', photoIds: kind === 'photo' ? ids : [], videoIds: kind === 'video' ? ids : [], stars: 500, regularStars: 700, owned: false, partial: false });
 const data = { name: 'Alanna Pow', verified: true, presentation: 'compact', checkoutMode: 'invoice', simpleUnlockCards: true, items, blur: 11, admin: false, enabled: true, canSend: true, chatUrl: 'https://t.me/alannapowofficialx', purchaseNote: 'Your linked purchases', bundles: [bundle('photo', ['p1', 'p2']), bundle('video', ['v1', 'v2'])], rewards: null, tonEnabled: true, tonNanotonPerStar: 2000000, tonNanotonPerUsd: 100000000, tonDiscountPercent: 50, starTipAmounts: { 10: 500, 25: 1250, 50: 2500, 100: 5000, 250: 12500, 500: 25000, 1000: 50000 } };
 await mkdir(output, { recursive: true });
@@ -52,6 +52,16 @@ try {
         const metrics = await button.evaluate(element => ({ colour: getComputedStyle(element).color, background: getComputedStyle(element).backgroundColor, radius: getComputedStyle(element).borderRadius, height: element.getBoundingClientRect().height, overflow: document.documentElement.scrollWidth - innerWidth }));
         assert.equal(metrics.colour, 'rgb(255, 255, 255)'); assert.equal(metrics.background, 'rgb(0, 119, 184)'); assert.equal(metrics.radius, '9999px'); assert.ok(metrics.height >= 44); assert.ok(metrics.overflow <= 1);
         await page.locator('.cat-grid .cat-preview > img').first().waitFor();
+        const rankedVideo = page.locator('.cat-card-ranked').filter({ has: page.locator('.cat-video-preview') });
+        await rankedVideo.locator('.cat-video-duration').waitFor();
+        const overlap = await rankedVideo.evaluate(card => {
+          const button = card.querySelector('.cat-unlock-now').getBoundingClientRect();
+          return [...card.querySelectorAll('.cat-video-label,.cat-video-duration')].some(badge => {
+            const box = badge.getBoundingClientRect();
+            return box.left < button.right && box.right > button.left && box.top < button.bottom && box.bottom > button.top;
+          });
+        });
+        assert.equal(overlap, false, 'preview and duration badges never cover Unlock Now');
         await page.screenshot({ path: `${output}/${name}-gallery-${width}.png`, fullPage: true });
         results.push({ engine: name, width, ...metrics });
       }

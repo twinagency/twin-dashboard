@@ -499,3 +499,4 @@ html:has(.catalogue-compact),body:has(.catalogue-compact){background:#1b1c1e}
 @media(max-width:360px){.cat-tip-head{padding:26px 16px 18px}.cat-tip-head h2{font-size:19px}.catalogue .cat-tip-body{padding:16px 14px calc(16px + env(safe-area-inset-bottom))}.cat-tip-presets{gap:8px}.cat-tip-preset-usd{font-size:22px}}
 
 .catalogue-compact .cat-card-simple-unlock .cat-video-duration{bottom:auto;top:44px;right:8px}
+.catalogue-compact .cat-card-simple-unlock.cat-card-ranked .cat-video-label{top:44px!important;bottom:auto!important;left:8px!important;right:auto!important;max-width:calc(100% - 50px)}
