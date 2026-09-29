@@ -5,8 +5,9 @@
  * compression) so a re-run of this script shows the improved numbers.
  *
  * Never flips sell_via_mini_app or any TON setting (ton_wallet_address,
- * ton_star_usd, ton_nanoton_per_star, ton_discount_percent) — those are
- * printed as "needs a human" with the exact dashboard place to set them.
+ * ton_star_usd, ton_nanoton_per_star, ton_discount_percent). The chat route
+ * is independent of catalogue readiness; missing TON settings are listed
+ * as human steps with the exact dashboard place to set them.
  * BotFather Mini App registration and thin bundle themes are also reported
  * as human steps; there is nothing here that could safely automate them.
  *
@@ -54,7 +55,7 @@ function printRow(row: CloneRolloutRow): void {
   console.log(`\n=== ${row.clone.name} (${row.clone.slug}) ===`);
   console.log(`Mini App live:     [${r.miniApp.chip.toUpperCase()}] ${r.miniApp.label}`);
   console.log(`TON:               [${r.ton.chip.toUpperCase()}] ${r.ton.label}`);
-  console.log(`Sell via chat app: [${r.sellViaMiniApp.chip.toUpperCase()}] ${r.sellViaMiniApp.label}`);
+  console.log(`Chat checkout:    [${r.sellViaMiniApp.chip.toUpperCase()}] ${r.sellViaMiniApp.label}`);
   console.log(`Captions:          [${r.media.captionChip.toUpperCase()}] ${r.media.captionPct}% (${m.photo.captioned + m.video.captioned}/${total})`);
   console.log(`Stored previews:   [${r.media.previewChip.toUpperCase()}] ${r.media.previewPct}% (${m.photo.previewed + m.video.previewed}/${total})`);
   console.log(`Compressed:        [${r.media.compressedChip.toUpperCase()}] ${r.media.compressedPct}% (${m.photo.compressed + m.video.compressed}/${total})`);
@@ -80,9 +81,6 @@ function printHumanSteps(row: CloneRolloutRow): void {
   }
   if (!settings || !settings.mini_app_url) {
     console.log(`- Register the Mini App with BotFather (/newapp on the clone's bot) and set mini_app_url: ${clonePath}`);
-  }
-  if (!row.clone.sell_via_mini_app) {
-    console.log(`- Turn on "Sell via Mini App" in chat: ${clonePath} (clone settings, sell_via_mini_app toggle)`);
   }
   const enabledTitles = new Set(row.bundles.filter((b) => b.enabled).map((b) => b.title));
   const missingThemes = ALLOWED_BUNDLE_THEMES.filter((theme) => !enabledTitles.has(`${theme} Photos`));
