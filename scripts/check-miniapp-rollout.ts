@@ -88,11 +88,11 @@ check("tonStatus is amber when only some pieces are set", () => {
 
 // ---- sell via mini app ----
 
-check("sellViaMiniAppStatus reads the clone toggle, fails closed", () => {
-  assert.equal(sellViaMiniAppStatus({ sell_via_mini_app: true }).chip, "green");
-  assert.equal(sellViaMiniAppStatus({ sell_via_mini_app: false }).chip, "amber");
-  assert.equal(sellViaMiniAppStatus({ sell_via_mini_app: null }).chip, "amber");
-  assert.equal(sellViaMiniAppStatus(null).chip, "amber");
+check("chat checkout status names both intentional routes without marking native chat incomplete", () => {
+  assert.deepEqual(sellViaMiniAppStatus({ sell_via_mini_app: true }), { chip: "green", label: "Mini App" });
+  assert.deepEqual(sellViaMiniAppStatus({ sell_via_mini_app: false }), { chip: "green", label: "Native chat" });
+  assert.deepEqual(sellViaMiniAppStatus({ sell_via_mini_app: null }), { chip: "amber", label: "Unknown" });
+  assert.deepEqual(sellViaMiniAppStatus(null), { chip: "amber", label: "Unknown" });
 });
 
 // ---- pct / chip thresholds ----
@@ -156,8 +156,14 @@ function fullyOnRollout(): CloneRollout {
   };
 }
 
-check("isFullyOn requires every piece green (or bundles/media not red)", () => {
+check("isFullyOn depends on catalogue readiness, independently of chat checkout", () => {
   assert.equal(isFullyOn(fullyOnRollout()), true);
+  const nativeChat = fullyOnRollout();
+  nativeChat.sellViaMiniApp = sellViaMiniAppStatus({ sell_via_mini_app: false });
+  assert.equal(isFullyOn(nativeChat), true, "native chat checkout must not block Mini App readiness");
+  const unknownChat = fullyOnRollout();
+  unknownChat.sellViaMiniApp = sellViaMiniAppStatus(null);
+  assert.equal(isFullyOn(unknownChat), true, "unknown chat route does not change catalogue readiness");
   const missingTon = fullyOnRollout();
   missingTon.ton = { chip: "red", label: "Not set up" };
   assert.equal(isFullyOn(missingTon), false);

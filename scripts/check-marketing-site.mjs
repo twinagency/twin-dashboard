@@ -25,17 +25,26 @@ try{
     const context=await browser.newContext({viewport:{width,height},reducedMotion:'no-preference'}); await context.addCookies([{name:'twin_agency_access',value:'stale',url:local},{name:'twin_agency_portal',value:'moxy',url:local}]); const page=await context.newPage();
     page.on('pageerror',e=>report.pageErrors.push(String(e))); page.on('request',r=>{const u=new URL(r.url());if(r.method()!=='GET'||u.pathname.startsWith('/api/'))report.backendRequests.push(r.method()+' '+r.url())});
     await page.route('**/*',route=>{const u=new URL(route.request().url()); if(u.origin===local||u.hostname==='upload.wikimedia.org')return route.continue(); return route.abort()});
+    // Account pages have their own integration suite. Here, verify the public
+    // buttons reach the intended routes without submitting forms or hitting APIs.
+    for(const destination of ['signup','login'])await page.route(local+'/creator/'+destination,route=>route.fulfill({status:200,contentType:'text/html',body:'<!doctype html><title>Account route fixture</title><main>Account page fixture</main>'}));
     await page.goto(local+'/twin-agency',{waitUntil:'networkidle'}); await page.getByRole('heading',{level:1}).waitFor();
     assert.equal(await page.title(),'Twin - Your AI voice twin that never sleeps'); assert.ok(await page.evaluate(()=>document.documentElement.scrollWidth<=window.innerWidth+1),`No horizontal overflow at ${width}`);
     assert.ok(await page.getByText('Charge per message',{exact:true}).first().isVisible());
     assert.equal(await page.getByText('Amber',{exact:true}).count(),1); assert.equal(await page.getByText('Mia',{exact:true}).count(),1); assert.equal(await page.getByText('Sasha',{exact:true}).count(),1);
     const globe=page.getByRole('heading',{name:'Fans paying right now across the globe',exact:true}); await globe.scrollIntoViewIfNeeded(); assert.ok(await globe.isVisible());
     assert.ok((await page.getByText('Tokyo',{exact:true}).count())>0); assert.ok((await page.getByText('Dubai',{exact:true}).count())>0); assert.ok(await page.getByText(/fans paying now/).isVisible());
-    await page.getByRole('button',{name:'Sign up',exact:true}).click(); assert.ok(await page.getByRole('dialog').isVisible()); assert.ok(await page.getByRole('heading',{name:'Creator signup is next.',exact:true}).isVisible()); assert.equal(await page.getByRole('dialog').locator('input,form').count(),0); await page.keyboard.press('Escape');
-    if(width>=640){await page.getByRole('button',{name:'Sign in',exact:true}).click();assert.ok(await page.getByRole('heading',{name:'Creator login is next.',exact:true}).isVisible());await page.keyboard.press('Escape')}
+    await Promise.all([page.waitForURL(local+'/creator/signup'),page.getByRole('button',{name:'Sign up',exact:true}).click()]);
+    assert.equal(new URL(page.url()).pathname,'/creator/signup');
+    await page.goto(local+'/twin-agency',{waitUntil:'networkidle'});
+    if(width>=640){
+      await Promise.all([page.waitForURL(local+'/creator/login'),page.getByRole('button',{name:'Sign in',exact:true}).click()]);
+      assert.equal(new URL(page.url()).pathname,'/creator/login');
+      await page.goto(local+'/twin-agency',{waitUntil:'networkidle'});
+    }
     await page.screenshot({path:`test-results/twin-public/${name}.png`,fullPage:true}); await page.screenshot({path:`test-results/twin-public/${name}-top.png`});
     await globe.scrollIntoViewIfNeeded(); await page.screenshot({path:`test-results/twin-public/${name}-globe.png`});
-    if(name==='desktop')await writeFile('test-results/twin-public/rendered.html',await page.content()); report.viewports.push({name,width,height,liveHero:true,telegramPhones:true,globe:true,phaseTwoDialog:true,horizontalOverflow:false}); await context.close();
+    if(name==='desktop')await writeFile('test-results/twin-public/rendered.html',await page.content()); report.viewports.push({name,width,height,liveHero:true,telegramPhones:true,globe:true,creatorAuthLinks:true,horizontalOverflow:false}); await context.close();
   }
-  assert.deepEqual(report.pageErrors,[]); assert.deepEqual(report.backendRequests,[],'Marketing interactions must not access backend APIs or write data'); await writeFile('test-results/twin-public/report.json',JSON.stringify(report,null,2)); console.log('Exact live Twin Agency port checks passed: hero/marquee, three animated phones, rotating globe markers/counters, responsive layouts, phase-two auth notice, no private API traffic.');
+  assert.deepEqual(report.pageErrors,[]); assert.deepEqual(report.backendRequests,[],'Marketing interactions must not access backend APIs or write data'); await writeFile('test-results/twin-public/report.json',JSON.stringify(report,null,2)); console.log('Exact live Twin Agency port checks passed: hero/marquee, three animated phones, rotating globe markers/counters, responsive layouts, creator signup/login links, no private API traffic.');
 }catch(error){console.error(error,output);process.exitCode=1}finally{if(browser)await browser.close();server.kill('SIGTERM');setTimeout(()=>server.kill('SIGKILL'),5000).unref()}

@@ -162,7 +162,7 @@ check("C11 the per-fan unlock counts are read with paging", () => {
   // red. scripts/check-paged-call-sites.ts only scans lib/, so it does not
   // cover this call site and cannot be relied on here.
   assert(
-    /selectAllRows<\{ user_id: string; amount_stars: number \| null \}>/.test(page),
+    /idChunks\.map\(\(chunk\)\s*=>\s*selectAllRows<\{[\s\S]*?user_id: string;[\s\S]*?amount_stars: number \| null;[\s\S]*?\}>\([\s\S]*?\.in\("user_id", chunk\)/.test(page),
     "the media-unlock read is no longer paged, so the counts beside each fan name truncate at 1000 rows",
   );
 });

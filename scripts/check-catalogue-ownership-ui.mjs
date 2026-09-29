@@ -22,7 +22,7 @@ try {
       let paid=false,checkoutCalls=0,invoiceOpens=0,originalReads=0,originalDownloads=0,failImage=false;
       const keys=[];let releaseImage;let imageGate=Promise.resolve();
       const errors=[];page.on('pageerror',e=>errors.push(e.message));
-      await page.route('https://telegram.org/js/telegram-web-app.js',route=>route.fulfill({contentType:'application/javascript',body:`window.Telegram={WebApp:{initData:'offline',ready(){},expand(){},setHeaderColor(){},setBackgroundColor(){},setBottomBarColor(){},openInvoice(url,cb){window.invoiceOpened=true;setTimeout(()=>cb('paid'),10)}}};`}));
+      await page.route('https://telegram.org/js/telegram-web-app.js',route=>route.fulfill({contentType:'application/javascript',body:`window.chatOpens=0;window.appCloses=0;window.Telegram={WebApp:{initData:'offline',ready(){},expand(){},setHeaderColor(){},setBackgroundColor(){},setBottomBarColor(){},openTelegramLink(){if(!window.receiptConfirmed)window.prematureHandoff=true;window.chatOpens++},close(){if(!window.receiptConfirmed)window.prematureHandoff=true;window.appCloses++},openInvoice(url,cb){window.invoiceOpened=true;setTimeout(()=>cb('paid'),10)}}};`}));
       await page.route('**/owned-photo.svg*',async route=>{
         originalDownloads++;await imageGate;
         return route.fulfill({status:failImage?503:200,contentType:failImage?'text/plain':'image/svg+xml',body:failImage?'unavailable':svg('#166a8f')});
@@ -31,6 +31,7 @@ try {
         const body=route.request().postDataJSON();
         const json=value=>route.fulfill({contentType:'application/json',body:JSON.stringify(value)});
         if(body.action==='catalogue')return json({name:'Alanna Pow',verified:true,presentation:'compact',checkoutMode:'invoice',items:[{...item,purchased:paid}],blur:11,admin:false,enabled:true,canSend:true,chatUrl:'https://t.me/alannapowofficialx',bundles:[],rewards:null,purchaseNote:'Your purchases appear here.'});
+        if(body.action==='event')return json({ok:true});
         if(body.action==='preview')return route.fulfill({contentType:'image/svg+xml',body:svg('#313337')});
         if(body.action==='checkout'){
           checkoutCalls++;keys.push(body.requestKey);
@@ -40,7 +41,8 @@ try {
         }
         if(body.action==='checkout_status'){
           assert.equal(await page.evaluate(()=>window.invoiceOpened),true);invoiceOpens++;
-          paid=true;return json({orderId:'current',status:'paid'});
+          paid=true;await page.evaluate(()=>window.receiptConfirmed=true);
+          return json({orderId:'current',status:'paid'});
         }
         if(body.action==='content'){
           assert.equal(paid,true,'Originals require a real server receipt in the fixture');originalReads++;
@@ -54,10 +56,14 @@ try {
       await page.goto(`${origin}/catalogue/alanna-pow`);await open();
       imageGate=new Promise(resolve=>{releaseImage=resolve});
       await page.getByRole('button',{name:'Unlock · ⭐1',exact:true}).click();
-      await page.getByText('Loading your unlocked item…',{exact:true}).waitFor();
+      await page.waitForFunction(()=>window.chatOpens===1&&window.appCloses===1);
+      assert.equal(await page.evaluate(()=>window.prematureHandoff||false),false,'Chat handoff requires server-confirmed payment');
+      assert.equal(originalReads,0,'Checkout hands off before any owned-image request');
       await page.waitForFunction(()=>window.invoiceOpened===true);
       assert.equal(checkoutCalls,2);assert.notEqual(keys[0],keys[1]);assert.equal(invoiceOpens,1);
       assert.equal(await page.getByText('This payment expired. Tap again to start a new payment.',{exact:true}).count(),0);
+      await page.reload();await page.getByRole('button',{name:'My purchases'}).click();await open();
+      await page.getByText('Loading your unlocked item…',{exact:true}).waitFor();
       assert.equal(await image().count(),0,'Do not replace the preview with an empty original before loading finishes');
       assert.equal(await page.getByText('Unlocked',{exact:true}).count(),0,'Do not claim the image is displayed before it loads');
       releaseImage();await decoded();
@@ -69,6 +75,7 @@ try {
       assert.equal(originalReads,reads,'Reopening uses the already-authorized session image');
       assert.equal(originalDownloads,downloads,'Closing a paid photo does not throw away its loaded image');
       assert.equal(checkoutCalls,2,'Viewing ownership never creates another checkout');
+      assert.equal(await page.evaluate(()=>window.chatOpens),0,'Reopening owned photos does not hand off to chat again');
       await page.screenshot({path:`${output}/${name}-owned-reopened.png`,fullPage:false});
       await page.reload();await page.getByRole('button',{name:'My purchases'}).click();await open();await decoded();
       assert.equal(originalReads,reads+1,'A fresh session revalidates access and fetches a new signed original');
@@ -81,9 +88,10 @@ try {
       failImage=false;await page.getByRole('button',{name:'Retry loading item'}).click();await decoded();
       assert.equal(checkoutCalls,2,'Image recovery cannot charge for owned content');
       assert.deepEqual(errors,[]);
-      results.push({browser:name,expiredRecoveredInOneClick:true,reopenCount:3,reloadOwned:true,realImageFailureRecovered:true,extraCheckouts:0});
+      results.push({browser:name,expiredRecoveredInOneClick:true,confirmedChatHandoff:true,reopenCount:3,reloadOwned:true,realImageFailureRecovered:true,extraCheckouts:0});
     }finally{await browser.close();}
   }
   await writeFile(`${output}/checks.json`,JSON.stringify(results,null,2));
-  console.log('Chromium and WebKit: expired checkout recovers on one click; owned image loads, reopens three times, survives reload and recovers an actual image failure without another payment. Fixtures only.');
+  console.log('Chromium and WebKit: expired checkout recovers on one click and hands off after settlement; reopened owned image loads, reopens three times, survives reload and recovers an actual image failure without another payment. Fixtures only.');
 }finally{server.kill('SIGTERM');setTimeout(()=>server.kill('SIGKILL'),5000).unref();}
+

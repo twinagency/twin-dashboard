@@ -2,7 +2,8 @@ MINI APP ROLLOUT, PER GIRL
 2026-09-28
 
 Reference: Alanna Pow (clone_id 6ca0782d-b5cf-433d-8329-f3ef7ec5f011). Her
-setup is what "fully on" means. Check any girl's status any time at
+catalogue setup is what "fully on" means. Chat checkout stays native and does
+not count toward Mini App readiness. Check any girl's status any time at
 /miniapp-rollout, or run:
   npx tsx --env-file=.env --tsconfig scripts/tsconfig.json \
     scripts/miniapp-readiness.ts --clone <slug>
@@ -37,20 +38,22 @@ LOW LEVEL
    the live-pegged option, ton_nanoton_per_star is the fixed one), and
    ton_discount_percent (Alanna runs 50).
 
-6. [HUMAN] In the clone's dashboard settings (/clones/<id>), turn on
-   "Sell content through the app" (sell_via_mini_app). Never flip this or
-   any TON field from the script or the rollout page, only from here.
+6. [HUMAN] In the clone's dashboard settings (/clones/<id>), leave
+   "Redirect chat purchases to Mini App" (sell_via_mini_app) off to keep
+   native Telegram checkout. The pinned Mini App catalogue works separately.
+   The readiness script and rollout page never change this setting.
 
 7. [HUMAN] Test buy: one real purchase on Stars, one real purchase on TON,
    before telling anyone this girl is live.
 
 8. [SCRIPT] Re-check: scripts/miniapp-readiness.ts --clone <slug>, confirm
-   every line is green, or check /miniapp-rollout shows her fully on.
+   the catalogue readiness lines are green, or check /miniapp-rollout shows
+   her fully on. Chat checkout is displayed for information only.
 
 HIGH LEVEL
 
 - Script handles: previews, compression backfill, the readiness report.
 - Human handles: BotFather registration, TON wallet + rate + discount,
-  sell_via_mini_app toggle, captioning, bundle building, final test buys.
+  verification of native chat checkout, captioning, bundle building, final test buys.
 - /miniapp-rollout is the always-current dashboard of who is on, who is
   partial, who has not started.

@@ -42,7 +42,7 @@ export default async function MiniAppRolloutPage() {
       <Card size="sm" className="w-fit gap-1">
         <div className="text-[11px] font-semibold uppercase tracking-wide text-muted">Fully on</div>
         <div className="text-2xl font-semibold text-ink">{fullyOnCount} / {rows.length}</div>
-        <div className="text-xs text-muted">Mini App live, TON priced, chat selling on, media and bundles ready</div>
+        <div className="text-xs text-muted">Mini App live, TON priced, media and bundles ready</div>
       </Card>
 
       <Card>
@@ -53,7 +53,7 @@ export default async function MiniAppRolloutPage() {
                 <th className="py-2 pr-3">Creator</th>
                 <th className="px-2">Mini App</th>
                 <th className="px-2">TON</th>
-                <th className="px-2">Sell in chat</th>
+                <th className="px-2" title="Chat checkout is independent of Mini App catalogue readiness. Native chat keeps purchases in Telegram.">Chat checkout</th>
                 <th className="px-2">Captions</th>
                 <th className="px-2">Previews</th>
                 <th className="px-2">Compressed</th>

@@ -61,12 +61,13 @@ export function tonStatus(settings: CatalogueSettingsRow): TonStatus {
   return { chip: "red", label: "Not set up" };
 }
 
-// ---- Chat selling toggle -------------------------------------------------
+// ---- Chat checkout route (independent of Mini App readiness) ------------
 
 export function sellViaMiniAppStatus(clone: { sell_via_mini_app?: boolean | null } | null): { chip: Chip; label: string } {
-  return clone?.sell_via_mini_app
-    ? { chip: "green", label: "On" }
-    : { chip: "amber", label: "Off" };
+  if (!clone || clone.sell_via_mini_app == null) return { chip: "amber", label: "Unknown" };
+  return clone.sell_via_mini_app
+    ? { chip: "green", label: "Mini App" }
+    : { chip: "green", label: "Native chat" };
 }
 
 // ---- Media readiness ----------------------------------------------------
@@ -168,7 +169,6 @@ export type CloneRollout = {
 export function isFullyOn(row: CloneRollout): boolean {
   return row.miniApp.chip === "green" &&
     row.ton.chip === "green" &&
-    row.sellViaMiniApp.chip === "green" &&
     row.bundles.chip !== "red" &&
     row.media.captionChip !== "red" &&
     row.media.previewChip !== "red" &&
