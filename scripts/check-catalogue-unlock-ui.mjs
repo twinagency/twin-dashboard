@@ -14,6 +14,7 @@ const item = (id, type, extra = {}) => ({ id, type, description: `${type} ${id},
 const items = [item('p1', 'photo', { rank: 1 }), item('v1', 'video', { rank: 2 }), item('p2', 'photo'), item('v2', 'video'), item('owned', 'photo', { purchased: true }), item('free', 'photo', { free: true, stars: 0 })];
 const bundle = (kind, ids) => ({ id: kind + '-bundle', title: `Two ${kind}s`, kind, caption: 'A complete two-item collection', photoIds: kind === 'photo' ? ids : [], videoIds: kind === 'video' ? ids : [], stars: 500, regularStars: 700, owned: false, partial: false });
 const data = { name: 'Alanna Pow', verified: true, presentation: 'compact', checkoutMode: 'invoice', simpleUnlockCards: true, items, blur: 11, admin: false, enabled: true, canSend: true, chatUrl: 'https://t.me/alannapowofficialx', purchaseNote: 'Your linked purchases', bundles: [bundle('photo', ['p1', 'p2']), bundle('video', ['v1', 'v2'])], rewards: null, tonEnabled: true, tonNanotonPerStar: 2000000, tonNanotonPerUsd: 100000000, tonDiscountPercent: 50, starTipAmounts: { 10: 500, 25: 1250, 50: 2500, 100: 5000, 250: 12500, 500: 25000, 1000: 50000 } };
+const otherCreators = { 'briana-redd': 'Briana Redd', 'dan-dangler': 'Dan Dangler', 'fit-sid': 'Fit Sid', 'mrs-callace': 'Mrs Callace' };
 await mkdir(output, { recursive: true });
 const server = process.env.CATALOGUE_TEST_ORIGIN ? null : spawn(process.execPath, ['node_modules/next/dist/bin/next', 'start', '-H', '127.0.0.1', '-p', String(port)], { env: { ...process.env, NODE_ENV: 'production', DASHBOARD_PASSWORD: 'offline-fixture-only' }, stdio: ['ignore', 'pipe', 'pipe'] });
 let logs = ''; if (server) for (const stream of [server.stdout, server.stderr]) stream.on('data', value => { logs = (logs + value).slice(-5000); });
@@ -34,7 +35,10 @@ try {
       await page.route('**/api/catalogue/*', async route => {
         const request = route.request().postDataJSON(); requests.push(request);
         const json = body => route.fulfill({ contentType: 'application/json', body: JSON.stringify(body) });
-        if (request.action === 'catalogue') return json(route.request().url().includes('briana-redd') ? { ...data, name: 'Briana Redd', simpleUnlockCards: false, starTipAmounts: null } : data);
+        if (request.action === 'catalogue') {
+          const creator = Object.entries(otherCreators).find(([slug]) => route.request().url().includes(slug));
+          return json(creator ? { ...data, name: creator[1], featuredBundleId: null, starTipAmounts: null } : data);
+        }
         if (request.action === 'preview') return request.type === 'video' ? json({ url: 'https://catalogue-fixture.test/preview.mp4', posterUrl: svgUrl, durationSeconds: 62 }) : route.fulfill({ contentType: 'image/svg+xml', body: svg });
         if (request.action === 'content') return json({ type: 'photo', url: 'https://catalogue-fixture.test/original.svg' });
         if (request.action === 'event') return json({ ok: true });
@@ -130,15 +134,28 @@ try {
       await tip.getByRole('button', { name: /Send \$25 tip/ }).click();
       await tip.getByText('Offline wallet fixture', { exact: true }).waitFor();
       assert.equal(requests.filter(r => r.action === 'ton_tip').length, 1, 'TON tip dispatch still works');
-      await page.goto(origin + '/catalogue/briana-redd');
-      await page.locator('.cat-card-prices').first().waitFor();
-      assert.equal(await page.locator('.cat-unlock-now').count(), 0, 'another compact creator retains the existing prices');
-      await page.getByRole('region', { name: 'About this collection' }).getByText('Hey baby, explore my content below x', { exact: true }).waitFor();
-      await page.getByRole('button', { name: 'Send me a tip' }).click();
-      assert.equal(await page.locator('.cat-tip-rails').count(), 0, 'another creator keeps TON-only tips');
+      for (const [slug, creatorName] of Object.entries(otherCreators)) {
+        await page.goto(origin + '/catalogue/' + slug);
+        await page.getByRole('heading', { name: creatorName }).waitFor();
+        await page.getByRole('region', { name: 'About this collection' }).getByText('Hey baby, explore my content below x', { exact: true }).waitFor();
+        assert.equal(await page.locator('.cat-grid .cat-unlock-now').count(), 4, `${creatorName} has Alanna's card layout`);
+        assert.equal(await page.locator('.cat-grid .cat-card-prices').count(), 0, `${creatorName} has no currency pills on cards`);
+        const creatorColours = await page.evaluate(() => [getComputedStyle(document.querySelector('.cat-message>span')).backgroundColor, getComputedStyle(document.querySelector('.cat-unlock-now')).backgroundColor]);
+        assert.deepEqual(creatorColours, ['rgb(21, 158, 233)', 'rgb(21, 158, 233)']);
+        await page.locator('.cat-grid .cat-unlock-now').first().click();
+        const creatorDetail = page.getByRole('dialog', { name: 'Item details' });
+        await creatorDetail.locator('.cat-pay-stars').waitFor();
+        await creatorDetail.locator('.cat-pay-ton').waitFor();
+        await page.getByRole('button', { name: 'Close item' }).click();
+        await page.getByRole('button', { name: 'Bundles', exact: true }).click();
+        assert.equal(await page.locator('.cat-bundle-section .cat-unlock-now').count(), 2);
+        await page.getByRole('button', { name: 'Send me a tip' }).click();
+        assert.equal(await page.locator('.cat-tip-rails').count(), 0, `${creatorName} keeps its TON-only tip configuration`);
+        await page.screenshot({ path: `${output}/${name}-${slug}-390.png`, fullPage: true });
+      }
       assert.deepEqual(errors, []);
     } finally { await browser.close(); }
   }
   await writeFile(`${output}/checks.json`, JSON.stringify(results, null, 2));
-  console.log('Unlock cards and Stars tips passed in Chromium and WebKit: mobile layout, details-only payment choices, receipt confirmation, cancellation, TON dispatch and creator isolation.');
+  console.log('All five creator layouts and Alanna Stars tips passed in Chromium and WebKit: mobile layout, details-only payment choices, receipt confirmation, cancellation, and TON dispatch.');
 } finally { if (server) server.kill('SIGTERM'); }
