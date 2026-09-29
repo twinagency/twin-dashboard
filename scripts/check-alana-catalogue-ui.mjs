@@ -29,7 +29,7 @@ async function main(){
     browser=await chromium.launch(process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?{executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH}:{});
     const page=await browser.newPage({viewport:{width:390,height:850},reducedMotion:'reduce'});
     const errors=[];page.on('pageerror',e=>errors.push(e.message));
-    await page.route('https://telegram.org/js/telegram-web-app.js',route=>route.fulfill({contentType:'application/javascript',body:`window.catalogueChatOpens=0;window.catalogueInvoiceOpens=0;window.catalogueInvoiceStatus='cancelled';window.Telegram={WebApp:{initData:'fixture',ready(){},expand(){},close(){window.catalogueCloses=(window.catalogueCloses||0)+1},openInvoice(url,callback){window.catalogueInvoiceOpens++;setTimeout(()=>callback(window.catalogueInvoiceStatus),20)},openTelegramLink(){window.catalogueChatOpens++},setHeaderColor(){},setBackgroundColor(){},setBottomBarColor(){}}};`}));
+    await page.route('https://telegram.org/js/telegram-web-app.js',route=>route.fulfill({contentType:'application/javascript',body:`window.catalogueChatOpens=0;window.catalogueInvoiceOpens=0;window.catalogueInvoiceStatus='cancelled';window.Telegram={WebApp:{initData:'fixture',ready(){},expand(){},close(){if(window.cataloguePaymentGuard&&!window.catalogueServerSettled)window.cataloguePrematureHandoff=true;window.catalogueCloses=(window.catalogueCloses||0)+1},openInvoice(url,callback){window.catalogueInvoiceOpens++;setTimeout(()=>callback(window.catalogueInvoiceStatus),20)},openTelegramLink(){if(window.cataloguePaymentGuard&&!window.catalogueServerSettled)window.cataloguePrematureHandoff=true;window.catalogueChatOpens++},setHeaderColor(){},setBackgroundColor(){},setBottomBarColor(){}}};`}));
     await page.route('https://catalogue-fixture.test/preview.mp4',route=>route.fulfill({contentType:'video/mp4',body:videoBytes}));
     await page.route('**/api/catalogue/*',async route=>{
       const body=route.request().postDataJSON();requests.push(body);
@@ -47,7 +47,10 @@ async function main(){
       if(body.action==='checkout_status'){
         const order=[...orders.values()].find(order=>order.orderId===body.orderId);assert.ok(order);
         order.status=delaySettlement-->0?'pending':settle;
-        if(order.status==='paid')for(const id of order.type==='bundle'?ids:[order.id])purchased.add(id);
+        if(order.status==='paid'){
+          for(const id of order.type==='bundle'?ids:[order.id])purchased.add(id);
+          await page.evaluate(()=>window.catalogueServerSettled=true);
+        }
         return json({status:order.status,retryAfterSeconds:0});
       }
       if(body.action==='request'){
@@ -61,6 +64,13 @@ async function main(){
       }
       throw new Error(`Unexpected request: ${body.action}`);
     });
+    const expectPaidHandoff=async label=>{
+      await page.waitForFunction(()=>window.catalogueChatOpens===1&&window.catalogueCloses===1);
+      assert.equal(await page.evaluate(()=>window.catalogueServerSettled),true,`${label}: server confirms payment before handoff`);
+      assert.equal(await page.evaluate(()=>window.cataloguePrematureHandoff||false),false,`${label}: callback alone never opens or closes chat`);
+      assert.equal(await page.getByRole('dialog',{name:'Item details'}).count(),0,`${label}: paid item detail closes for chat handoff`);
+      assert.equal(await page.getByRole('dialog',{name:'Bundle details'}).count(),0,`${label}: paid bundle detail closes for chat handoff`);
+    };
     const results=[];
     for(const width of [320,375,390,430,760]){
       await page.setViewportSize({width,height:850});
@@ -79,7 +89,7 @@ async function main(){
       assert.equal(await page.locator('.cat-stars-help').getAttribute('open'),null,`${width}: Stars help starts collapsed`);
       const metrics=await page.evaluate(()=>{
         const badge=document.querySelector('.cat-approved-badge'),message=document.querySelector('.cat-message'),pill=message.firstElementChild,card=document.querySelector('.cat-card'),preview=card.querySelector('.cat-preview'),body=card.querySelector('.cat-card-body');
-        return {overflow:document.documentElement.scrollWidth-innerWidth,badgeLoaded:badge.complete&&badge.naturalWidth===1254,headerHeight:document.querySelector('.cat-header').getBoundingClientRect().height,galleryTop:document.querySelector('.cat-grid').getBoundingClientRect().top,galleryGap:document.querySelector('.cat-grid').getBoundingClientRect().top-document.querySelector('.cat-navigation').getBoundingClientRect().bottom,messageHeight:message.getBoundingClientRect().height,pillHeight:pill.getBoundingClientRect().height,pillRadius:getComputedStyle(pill).borderRadius,headerRight:Math.max(...[...document.querySelectorAll('.cat-header button')].map(e=>e.getBoundingClientRect().right)),identityRight:document.querySelector('.cat-header h1').getBoundingClientRect().right,messageLeft:message.getBoundingClientRect().left,cardHeight:card.getBoundingClientRect().height,previewHeight:preview.getBoundingClientRect().height,captionOverlay:getComputedStyle(body).position,activeColour:getComputedStyle(document.querySelector('.cat-tabs .active')).color};
+        return {overflow:document.documentElement.scrollWidth-innerWidth,badgeLoaded:badge.complete&&badge.naturalWidth===1254,headerHeight:document.querySelector('.cat-header').getBoundingClientRect().height,galleryTop:document.querySelector('.cat-grid').getBoundingClientRect().top,galleryGap:document.querySelector('.cat-grid').getBoundingClientRect().top-document.querySelector('.cat-navigation').getBoundingClientRect().bottom,messageHeight:message.getBoundingClientRect().height,pillHeight:pill.getBoundingClientRect().height,pillRadius:getComputedStyle(pill).borderRadius,headerRight:Math.max(...[...document.querySelectorAll('.cat-header button')].map(e=>e.getBoundingClientRect().right)),identityRight:document.querySelector('.cat-header h1').getBoundingClientRect().right,messageLeft:message.getBoundingClientRect().left,cardHeight:card.getBoundingClientRect().height,previewHeight:preview.getBoundingClientRect().height,captionOverlay:getComputedStyle(body).position,activeColour:getComputedStyle(document.querySelector('.cat-tabs .active')).color,activeIndicatorColour:getComputedStyle(document.querySelector('.cat-tabs .active'),'::after').backgroundColor};
       });
       assert.ok(metrics.overflow<=1,`${width}: no horizontal overflow`);
       assert.equal(metrics.badgeLoaded,true,`${width}: badge loads`);
@@ -91,7 +101,8 @@ async function main(){
       assert.ok(metrics.identityRight<=metrics.messageLeft+1,`${width}: name does not overlap Message`);
       assert.ok(Math.abs(metrics.cardHeight-metrics.previewHeight)<1,`${width}: caption has no separate footer`);
       assert.equal(metrics.captionOverlay,'absolute');
-      assert.equal(metrics.activeColour,'rgb(67, 184, 255)');
+      assert.equal(metrics.activeColour,'rgb(255, 255, 255)','Active category retains white text');
+      assert.equal(metrics.activeIndicatorColour,'rgb(67, 184, 255)','Active category retains the blue underline');
       assert.equal(await page.locator('.cat-daily-sale').count(),0,'No duplicate offer above the gallery');
       assert.equal(await page.locator('.cat-item-unlock').count(),0,'Gallery has one detail action per card');
       assert.equal(await page.locator('.cat-card').count(),7,'Trending retains the existing mixed gallery');
@@ -165,9 +176,17 @@ async function main(){
     assert.equal(orders.size,1,'Cancelled retry reuses order');
     assert.equal(requests.filter(r=>r.action==='checkout').length,1,'Cancelled retry does not create another invoice');
     // An invoice callback alone is insufficient. Server must first confirm payment.
-    await page.evaluate(()=>window.catalogueInvoiceStatus='paid');
+    assert.equal(await page.evaluate(()=>window.catalogueChatOpens),0,'Cancellation does not open chat');
+    assert.equal(await page.evaluate(()=>window.catalogueCloses||0),0,'Cancellation does not close the Mini App');
+    await page.evaluate(()=>{window.catalogueInvoiceStatus='paid';window.cataloguePaymentGuard=true;window.catalogueServerSettled=false;});
     settle='paid';delaySettlement=3;contentFails=true;
     await unlock().click();
+    await expectPaidHandoff('Photo checkout');
+    assert.equal(requests.filter(r=>r.action==='content').length,0,'Paid checkout hands off without fetching protected originals');
+    await page.reload();
+    await page.getByRole('button',{name:'My purchases',exact:true}).click();
+    assert.equal(await page.locator('.cat-card').count(),1,'Confirmed purchase survives reopening the Mini App');
+    await page.locator('.cat-grid .cat-picture-button').first().click();
     await page.getByRole('button',{name:'Retry loading item',exact:true}).waitFor();
     assert.equal(orders.size,1);
     assert.equal(originalBeforePaid,false,'Telegram paid callback does not grant original access before server settlement');
@@ -176,8 +195,8 @@ async function main(){
     await page.getByRole('button',{name:'Retry loading item',exact:true}).click();
     await page.locator('.cat-owned-media img').waitFor();
     assert.match(await page.getByRole('dialog',{name:'Item details'}).innerText(),/complete original caption/,'Caption remains with owned media');
-    assert.equal(await page.evaluate(()=>window.catalogueChatOpens),0,'Invoice checkout stays in Mini App');
-    assert.equal(requests.filter(r=>r.action==='request').length,nativeRequestBaseline,'Invoice checkout never enqueues chat delivery');
+    assert.equal(await page.evaluate(()=>window.catalogueChatOpens),0,'Reopening owned media does not trigger another chat handoff');
+    assert.equal(requests.filter(r=>r.action==='request').length,nativeRequestBaseline,'Invoice UI never enqueues unpaid chat offers');
     await page.screenshot({path:`${output}/invoice-unlocked-390.png`,fullPage:true});
     await page.getByRole('button',{name:'Close item'}).click();
     await page.getByRole('button',{name:'My purchases',exact:true}).click();
@@ -189,12 +208,19 @@ async function main(){
     assert.ok(await page.locator('.cat-video-preview video').evaluate(video=>!video.paused&&video.readyState>=2),'Synthetic blurred preview actually plays');
     await page.screenshot({path:`${output}/invoice-videos-390.png`,fullPage:true});
     await page.locator('.cat-grid .cat-picture-button').first().click();
+    await page.evaluate(()=>{window.catalogueInvoiceStatus='paid';window.cataloguePaymentGuard=true;window.catalogueServerSettled=false;});
+    const videoOriginalBaseline=requests.filter(r=>r.action==='content').length;
     await page.getByRole('dialog',{name:'Item details'}).getByRole('button',{name:'Unlock · ⭐800',exact:true}).click();
+    await expectPaidHandoff('Video checkout');
+    assert.equal(requests.filter(r=>r.action==='content').length,videoOriginalBaseline,'Video checkout hands off without fetching protected originals');
+    await page.reload();
+    await page.getByRole('button',{name:'Videos',exact:true}).click();
+    await page.locator('.cat-grid .cat-picture-button').first().click();
     await page.locator('.cat-owned-media video').waitFor();
     await page.locator('.cat-owned-media video').evaluate(video=>video.play());
     assert.ok(await page.locator('.cat-owned-media video').evaluate(video=>video.readyState>=2&&!video.paused),'Purchased video plays in the Mini App');
     assert.equal(await page.evaluate(()=>window.catalogueChatOpens),0);
-    assert.equal(await page.evaluate(()=>window.catalogueCloses||0),0,'Payment never closes Mini App');
+    assert.equal(await page.evaluate(()=>window.catalogueCloses||0),0,'Reopening owned video does not close the Mini App');
     await page.screenshot({path:`${output}/invoice-video-unlocked-390.png`,fullPage:true});
     await page.getByRole('button',{name:'Close item'}).click();
     purchased.clear();orders.clear();
@@ -204,7 +230,15 @@ async function main(){
     assert.equal(await page.locator('.cat-bundle-included > .cat-picture-button').count(),5,'Bundle details show all five included photos');
     await page.locator('.cat-bundle-included .cat-preview img').first().waitFor();
     await page.screenshot({path:`${output}/invoice-bundle-detail-390.png`,fullPage:true});
+    await page.evaluate(()=>{window.catalogueInvoiceStatus='paid';window.cataloguePaymentGuard=true;window.catalogueServerSettled=false;});
+    const bundleOriginalBaseline=requests.filter(r=>r.action==='content').length;
     await page.getByRole('dialog',{name:'Bundle details'}).getByRole('button',{name:'Unlock · ⭐1,400',exact:true}).click();
+    await expectPaidHandoff('Bundle checkout');
+    assert.equal(requests.filter(r=>r.action==='content').length,bundleOriginalBaseline,'Bundle checkout hands off without fetching protected originals');
+    await page.reload();
+    await page.getByRole('button',{name:'Bundles',exact:true}).click();
+    await page.locator('.cat-bundle-details-button').click();
+    assert.equal(await page.locator('.cat-bundle-included > .cat-picture-button').count(),5,'Reopened owned bundle retains all five photos');
     await page.getByText('Unlocked. Tap a photo to view it.',{exact:true}).waitFor();
     assert.equal(purchased.size,5,'Confirmed bundle grants all five photos');
     assert.equal(requests.filter(r=>r.action==='request').length,nativeRequestBaseline,'Bundle UI does not enqueue unpaid chat offers');
@@ -232,8 +266,7 @@ async function main(){
     assert.equal(legacyRequests,nativeRequestBaseline+1);
     assert.deepEqual(errors,[],'No client errors');
     await writeFile(`${output}/checks.json`,JSON.stringify(results,null,2));
-    console.log('Alana UI passed: five widths, Trending label with unchanged mixed gallery, small Message pill, overlaid captions, full bundle under Bundles, scoped style, cancelled retry, confirmed native checkout, owned-media retry, retained captions, no unpaid chat offers and creator isolation. Fixtures only.');
+    console.log('Alana UI passed: five widths, Trending label with unchanged mixed gallery, small Message pill, overlaid captions, full bundle under Bundles, scoped style, cancelled retry, server-confirmed chat handoff, reopened owned-media retry, retained captions, no unpaid chat offers and creator isolation. Fixtures only.');
   }finally{await browser?.close();server?.kill('SIGTERM');if(server)setTimeout(()=>server.kill('SIGKILL'),5000).unref()}
 }
 main().catch(e=>{console.error(e);process.exitCode=1});
-
