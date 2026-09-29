@@ -486,9 +486,19 @@ html:has(.catalogue-compact),body:has(.catalogue-compact){background:#1b1c1e}
 .cat-tip-spinner{width:34px;height:34px;border-radius:50%;border:3px solid #ff2d7a33;border-top-color:#ff5fa2;margin-bottom:4px}
 @media(prefers-reduced-motion:no-preference){.cat-tip-spinner{animation:cat-tip-spin .9s linear infinite}.cat-tip-hearts>span{animation:cat-tip-float 4s ease-in-out infinite}.cat-tip-hearts>span:nth-child(2n){animation-delay:-2s}}
 @keyframes cat-tip-spin{to{transform:rotate(360deg)}}
-.catalogue button.cat-unlock-now{position:relative;pointer-events:auto;display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:9px 15px;border:0;border-radius:9999px;background:#0077b8;color:#fff;font-size:12px;font-weight:700;line-height:1.2;white-space:nowrap;box-shadow:none}
-.catalogue button.cat-unlock-now:hover:not(:disabled){background:#006ca7}
+.catalogue button.cat-unlock-now{position:relative;pointer-events:auto;display:inline-flex;align-items:center;justify-content:center;min-height:44px;padding:9px 15px;border:0;border-radius:9999px;background:#159ee9;color:#fff;font-size:12px;font-weight:700;line-height:1.2;white-space:nowrap;box-shadow:none}
+.catalogue button.cat-unlock-now:hover:not(:disabled){background:#46b5f5}
 .catalogue button.cat-unlock-now:focus-visible{outline:2px solid #fff;outline-offset:2px}
+.cat-profile-bio{margin:0 0 16px;color:var(--cat-ink);font-size:14px;line-height:1.5}
+.catalogue-compact .cat-profile-bio{color:#ededee}
+.cat-profile-bio>p{margin:0 0 7px;overflow-wrap:anywhere}
+.cat-profile-bio strong{font-weight:700}
+.cat-stars-help{margin-top:2px;font-size:12px;line-height:1.5}
+.cat-stars-help>summary{width:fit-content;max-width:100%;min-height:32px;display:list-item;align-content:center;cursor:pointer;color:#43b8ff;padding:6px 0;text-underline-offset:3px}
+.cat-stars-help>summary:hover{text-decoration:underline}
+.cat-stars-help>summary:focus-visible{outline:2px solid #43b8ff;outline-offset:3px;border-radius:3px}
+.cat-stars-help>ol{margin:3px 0 0;padding-left:21px}
+.cat-stars-help li{padding-left:2px;margin:0 0 5px}
 .catalogue .cat-bundle-unlock-now{align-self:flex-start;margin-top:8px}
 .cat-tip-rails{display:flex;gap:8px;margin:0 0 18px}
 .catalogue .cat-tip-rails button{display:flex;align-items:center;justify-content:center;gap:6px;flex:1;min-height:44px;border:1px solid #ffffff40;border-radius:9999px;background:#ffffff0d;color:#fff;font-weight:700}
