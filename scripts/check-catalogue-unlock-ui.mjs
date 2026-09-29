@@ -151,9 +151,11 @@ try {
         await page.getByRole('button', { name: 'Close item' }).click();
         await page.getByRole('button', { name: 'Bundles', exact: true }).click();
         assert.equal(await page.locator('.cat-bundle-section .cat-unlock-now').count(), 2);
+        await page.getByRole('button', { name: 'Trending', exact: true }).click();
+        await page.locator('.cat-grid .cat-preview > img').first().waitFor();
+        await page.screenshot({ path: `${output}/${name}-${slug}-390.png`, fullPage: true });
         await page.getByRole('button', { name: 'Send me a tip' }).click();
         assert.equal(await page.locator('.cat-tip-rails').count(), 0, `${creatorName} keeps its TON-only tip configuration`);
-        await page.screenshot({ path: `${output}/${name}-${slug}-390.png`, fullPage: true });
       }
       assert.deepEqual(errors, []);
     } finally { await browser.close(); }
