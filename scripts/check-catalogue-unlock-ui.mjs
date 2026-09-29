@@ -50,7 +50,7 @@ try {
         assert.equal(await page.locator('.cat-grid .cat-card-prices').count(), 0, 'no TON or Stars pills on gallery cards');
         const button = page.locator('.cat-grid .cat-unlock-now').first();
         const metrics = await button.evaluate(element => ({ colour: getComputedStyle(element).color, background: getComputedStyle(element).backgroundColor, radius: getComputedStyle(element).borderRadius, height: element.getBoundingClientRect().height, overflow: document.documentElement.scrollWidth - innerWidth }));
-        assert.equal(metrics.colour, 'rgb(255, 255, 255)'); assert.equal(metrics.background, 'rgb(0, 119, 184)'); assert.equal(metrics.radius, '9999px'); assert.ok(metrics.height >= 44); assert.ok(metrics.overflow <= 1);
+        assert.equal(metrics.colour, 'rgb(255, 255, 255)'); assert.equal(metrics.background, 'rgb(21, 158, 233)'); assert.equal(metrics.radius, '9999px'); assert.ok(metrics.height >= 44); assert.ok(metrics.overflow <= 1);
         await page.locator('.cat-grid .cat-preview > img').first().waitFor();
         const rankedVideo = page.locator('.cat-card-ranked').filter({ has: page.locator('.cat-video-preview') });
         await rankedVideo.locator('.cat-video-duration').waitFor();
@@ -66,6 +66,17 @@ try {
         results.push({ engine: name, width, ...metrics });
       }
       await page.setViewportSize({ width: 390, height: 850 });
+      const bio = page.getByRole('region', { name: 'About this collection' });
+      await bio.getByText('Hey baby, explore my content below x', { exact: true }).waitFor();
+      assert.equal(await bio.locator('details').getAttribute('open'), null, 'Stars help starts collapsed');
+      await bio.locator('summary').click();
+      assert.equal(await bio.locator('li').count(), 3);
+      assert.equal(await bio.locator('li').first().isVisible(), true);
+      assert.equal(requests.filter(r => ['checkout', 'ton_checkout', 'request'].includes(r.action)).length, 0, 'help never starts payment');
+      await page.screenshot({ path: `${output}/${name}-bio-help-390.png`, fullPage: true });
+      await bio.locator('summary').click();
+      const colours = await page.evaluate(() => [getComputedStyle(document.querySelector('.cat-message>span')).backgroundColor, getComputedStyle(document.querySelector('.cat-unlock-now')).backgroundColor]);
+      assert.equal(colours[0], colours[1], 'Unlock Now matches Message blue');
       for (const tab of ['Photos', 'Videos']) {
         await page.getByRole('button', { name: tab, exact: true }).click();
         await page.locator('.cat-grid .cat-unlock-now').first().click();
@@ -122,6 +133,7 @@ try {
       await page.goto(origin + '/catalogue/briana-redd');
       await page.locator('.cat-card-prices').first().waitFor();
       assert.equal(await page.locator('.cat-unlock-now').count(), 0, 'another compact creator retains the existing prices');
+      await page.getByRole('region', { name: 'About this collection' }).getByText('Hey baby, explore my content below x', { exact: true }).waitFor();
       await page.getByRole('button', { name: 'Send me a tip' }).click();
       assert.equal(await page.locator('.cat-tip-rails').count(), 0, 'another creator keeps TON-only tips');
       assert.deepEqual(errors, []);

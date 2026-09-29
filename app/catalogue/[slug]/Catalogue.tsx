@@ -610,6 +610,18 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
           : !compact && <button className="cat-icon" aria-label="My purchases" onClick={() => { setSection("My Purchases"); setSearch(""); document.getElementById("catalogue-items")?.scrollIntoView({ behavior: "smooth" }); }}><ShoppingBag size={19} /></button>}
         {compact && !data?.admin && <button className="cat-purchases-control cat-header-action" aria-label="My purchases" title="My purchases" onClick={() => { setSection("My Purchases"); setSearch(""); document.getElementById("catalogue-items")?.scrollIntoView({ behavior: "smooth" }); }}><ShoppingBag size={19} aria-hidden="true" />{ownedCount > 0 && <span className="cat-purchases-count">{ownedCount}</span>}</button>}
       </header>
+      {data && <section className="cat-profile-bio" aria-label="About this collection">
+        <p>Hey baby, explore my content below x</p>
+        <p>Tap {data.simpleUnlockCards ? <><strong>Unlock Now</strong> on anything you like</> : <>anything you like</>}, then pay with Telegram Stars{data.tonEnabled ? ' or crypto' : ''} ❤️</p>
+        <details className="cat-stars-help">
+          <summary>How to pay with Telegram Stars</summary>
+          <ol>
+            <li>{data.simpleUnlockCards ? <>Tap <strong>Unlock Now</strong></> : <>Open the item</>}, then choose the <strong>⭐ Stars</strong> option.</li>
+            <li>Need Stars? Follow Telegram’s top-up prompt to buy a pack.</li>
+            <li>Confirm your payment to unlock your content.</li>
+          </ol>
+        </details>
+      </section>}
       {data?.admin && <div className="cat-admin-label">Owner preview <span>{data.enabled ? "Catalogue enabled" : "Not live for fans"}</span></div>}
       {settingsOpen && data?.admin && <section className="cat-settings"><h2>Preview blur</h2>
         <div className="cat-presets">{[[6, "Light"], [16, "Medium"], [30, "Heavy"]].map(([n, label]) => <button key={n} onClick={() => setBlur(Number(n))} className={blur === n ? "active" : ""}>{label}</button>)}</div>
