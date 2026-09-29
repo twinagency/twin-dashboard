@@ -432,7 +432,7 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
           let done = false;
           const timer = window.setTimeout(() => { if (!done) { done = true; resolve('pending'); } }, 90_000);
           try { app()!.openInvoice!(attempt!.invoiceUrl!, status => { if (!done) { done = true; window.clearTimeout(timer); resolve(status); } }); }
-          catch (error) { window.clearTimeout(timer); reject(error); }
+          catch (error) { window.clearTimeout(timer); attempt!.pending = false; setStarTipPending(false); reject(error); }
         });
         if (result === 'cancelled' || result === 'failed') {
           attempt.pending = false; setStarTipPending(false); logEvent('pay_cancel', { rail: 'stars' });

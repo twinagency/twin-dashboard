@@ -28,7 +28,7 @@ try {
       const page = await browser.newPage({ viewport: { width: 390, height: 850 }, reducedMotion: 'reduce' });
       const requests = [], errors = []; let receiptPaid = false;
       page.on('pageerror', error => errors.push(error.message));
-      await page.route('https://telegram.org/js/telegram-web-app.js', route => route.fulfill({ contentType: 'application/javascript', body: `window.invoiceCount=0;window.invoiceResult='cancelled';window.Telegram={WebApp:{initData:'fixture',ready(){},expand(){},close(){throw Error('Unexpected close')},openTelegramLink(){throw Error('Unexpected chat navigation')},openInvoice(url,callback){window.invoiceCount++;setTimeout(()=>callback(window.invoiceResult),20)},setHeaderColor(){},setBackgroundColor(){},setBottomBarColor(){}}};` }));
+      await page.route('https://telegram.org/js/telegram-web-app.js', route => route.fulfill({ contentType: 'application/javascript', body: `window.invoiceCount=0;window.invoiceResult='cancelled';window.Telegram={WebApp:{initData:'fixture',ready(){},expand(){},close(){throw Error('Unexpected close')},openTelegramLink(){throw Error('Unexpected chat navigation')},openInvoice(url,callback){window.invoiceCount++;if(window.invoiceResult==='throw')throw Error('Invoice unavailable');setTimeout(()=>callback(window.invoiceResult),20)},setHeaderColor(){},setBackgroundColor(){},setBottomBarColor(){}}};` }));
       await page.route('https://catalogue-fixture.test/preview.mp4', route => route.fulfill({ contentType: 'video/mp4', body: videoBytes }));
       await page.route('https://catalogue-fixture.test/original.svg', route => route.fulfill({ contentType: 'image/svg+xml', body: svg }));
       await page.route('**/api/catalogue/*', async route => {
@@ -93,6 +93,10 @@ try {
       assert.equal(await tip.getByRole('radio').count(), 7);
       await tip.getByRole('button', { name: 'Send tip · ⭐1,250 Stars', exact: true }).waitFor();
       await page.screenshot({ path: `${output}/${name}-stars-tip-390.png`, fullPage: true });
+      await page.evaluate(() => { window.invoiceResult = 'throw'; });
+      await tip.getByRole('button', { name: 'Send tip · ⭐1,250 Stars', exact: true }).click();
+      await tip.getByText('Invoice unavailable', { exact: true }).waitFor();
+      await page.evaluate(() => { window.invoiceResult = 'cancelled'; });
       await tip.getByRole('button', { name: 'Send tip · ⭐1,250 Stars', exact: true }).click();
       await tip.getByText('Payment cancelled. No tip was confirmed.', { exact: true }).waitFor();
       assert.equal(await tip.getByRole('heading', { name: /Thank you/ }).count(), 0);
