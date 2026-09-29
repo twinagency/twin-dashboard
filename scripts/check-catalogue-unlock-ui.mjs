@@ -37,7 +37,8 @@ try {
         const json = body => route.fulfill({ contentType: 'application/json', body: JSON.stringify(body) });
         if (request.action === 'catalogue') {
           const creator = Object.entries(otherCreators).find(([slug]) => route.request().url().includes(slug));
-          return json(creator ? { ...data, name: creator[1], featuredBundleId: null, starTipAmounts: null } : data);
+          return json(creator ? { ...data, name: creator[1], featuredBundleId: null, starTipAmounts: null,
+            rewards: creator[0] === 'briana-redd' ? { balance: 400, earned: 0, spent: 0, welcomeBonus: 400, cost: 2500, startsAt: '2026-09-26', photoIds: ['p1'], videoIds: [] } : null } : data);
         }
         if (request.action === 'preview') return request.type === 'video' ? json({ url: 'https://catalogue-fixture.test/preview.mp4', posterUrl: svgUrl, durationSeconds: 62 }) : route.fulfill({ contentType: 'image/svg+xml', body: svg });
         if (request.action === 'content') return json({ type: 'photo', url: 'https://catalogue-fixture.test/original.svg' });
@@ -138,6 +139,7 @@ try {
         await page.goto(origin + '/catalogue/' + slug);
         await page.getByRole('heading', { name: creatorName }).waitFor();
         await page.getByRole('region', { name: 'About this collection' }).getByText('Hey baby, explore my content below x', { exact: true }).waitFor();
+        if (slug === 'briana-redd') await page.getByRole('region', { name: 'Your loyalty rewards' }).waitFor();
         assert.equal(await page.locator('.cat-grid .cat-unlock-now').count(), 4, `${creatorName} has Alanna's card layout`);
         assert.equal(await page.locator('.cat-grid .cat-card-prices').count(), 0, `${creatorName} has no currency pills on cards`);
         const creatorColours = await page.evaluate(() => [getComputedStyle(document.querySelector('.cat-message>span')).backgroundColor, getComputedStyle(document.querySelector('.cat-unlock-now')).backgroundColor]);
