@@ -37,8 +37,8 @@ check("the mini app sell toggle is wired from the form to the column", () => {
   const ui = readFileSync(resolve(root, "components/clone/ConfigSections.tsx"), "utf8");
   assert.ok(/name="sell_via_mini_app"/.test(ui), "there is no control for the mini app sell toggle");
   assert.ok(/checked={cfg\.sellViaMiniApp}/.test(ui), "the control does not show the saved value");
-  assert.ok(/label="Sell content through the app"/.test(ui), "the control label does not match the requested copy");
-  assert.ok(/opens this item in the app, instead of a Stars lock in chat/.test(ui),
+  assert.ok(/label="Redirect chat purchases to Mini App"/.test(ui), "the control label does not match the requested copy");
+  assert.ok(/Leave off to keep native Telegram chat checkout/.test(ui),
     "the ⓘ hint copy does not match the requested wording");
   assert.ok(!/—/.test(ui.slice(ui.indexOf('name="sell_via_mini_app"') - 800, ui.indexOf('name="sell_via_mini_app"') + 400)),
     "no em dashes in the toggle's own copy block");
