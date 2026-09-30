@@ -80,6 +80,7 @@ async function FleetInfo() {
     fansByClone.set(u.clone_id, (fansByClone.get(u.clone_id) ?? 0) + 1);
     if ((u.total_messages_purchased ?? 0) > 0) buyersByClone.set(u.clone_id, (buyersByClone.get(u.clone_id) ?? 0) + 1);
   }
+  // amount_stars arrives already net for agencies/creators (lib/agency-fetch.ts).
   const starsByClone = new Map<string, number>();
   for (const t of txList) {
     starsByClone.set(t.clone_id, (starsByClone.get(t.clone_id) ?? 0) + (Number(t.amount_stars) || 0));
@@ -190,7 +191,7 @@ async function CloneInfo({ cloneId }: { cloneId: string }) {
       label: "Lifetime proceeds",
       value: `${lifetimeStars} ⭐`,
       accent: "money",
-      hint: "Every Star this bot has ever been paid, gross, forever. This number never goes down, it is not a balance and not what can be withdrawn today.",
+      hint: "Every Star this bot has ever been paid, forever. This number never goes down, it is not a balance and not what can be withdrawn today.",
     },
     { label: "Fans", value: String(userList.length) },
     { label: "Buyers", value: String(buyers) },

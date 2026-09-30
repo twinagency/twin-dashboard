@@ -1,17 +1,19 @@
 "use client";
 
 import { createContext, useContext, useEffect, useState } from "react";
-import { AUD_PER_USD, type Currency } from "@/lib/money";
+import { AUD_PER_USD, STAR_USD, type Currency } from "@/lib/money";
 
 type Ctx = {
   currency: Currency;
   rate: number; // live USD→AUD
+  usdPerStar: number; // this account's star→USD rate (default 0.013)
   setCurrency: (c: Currency) => void;
 };
 
 const CurrencyContext = createContext<Ctx>({
   currency: "AUD",
   rate: AUD_PER_USD,
+  usdPerStar: STAR_USD,
   setCurrency: () => {},
 });
 
@@ -19,7 +21,7 @@ export function useCurrency() {
   return useContext(CurrencyContext);
 }
 
-export default function CurrencyProvider({ children }: { children: React.ReactNode }) {
+export default function CurrencyProvider({ children, usdPerStar = STAR_USD }: { children: React.ReactNode; usdPerStar?: number }) {
   const [currency, setCurrencyState] = useState<Currency>("AUD"); // AUD default
   const [rate, setRate] = useState(AUD_PER_USD);
 
@@ -38,7 +40,7 @@ export default function CurrencyProvider({ children }: { children: React.ReactNo
   }
 
   return (
-    <CurrencyContext.Provider value={{ currency, rate, setCurrency }}>
+    <CurrencyContext.Provider value={{ currency, rate, usdPerStar, setCurrency }}>
       {children}
     </CurrencyContext.Provider>
   );

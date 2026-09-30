@@ -114,7 +114,7 @@ function SmallSignal({ label, value, detail, positive }: { label: string; value:
 }
 
 export default function RevenueDayDrivers({ cloneId }: { cloneId?: string | null }) {
-  const { currency, rate } = useCurrency();
+  const { currency, rate, usdPerStar } = useCurrency();
   const today = useMemo(() => reportDayKey(), []);
   const yesterday = useMemo(() => shiftDay(today, -1), [today]);
   // Start on today so both quick actions have an observable outcome: tapping
@@ -127,7 +127,7 @@ export default function RevenueDayDrivers({ cloneId }: { cloneId?: string | null
   const [data, setData] = useState<RevenueWhyChanged | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-  const money = (stars: number) => fmtMoney(starsToMoneyRate(stars, currency, rate), currency);
+  const money = (stars: number) => fmtMoney(starsToMoneyRate(stars, currency, rate, usdPerStar), currency);
   const selectedDayHeading = day === today ? "Earnings today so far" : `Earnings for ${formatDay(day)}`;
 
   function selectDay(nextDay: string) {

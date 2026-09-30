@@ -1,6 +1,7 @@
 import { supabaseAdmin } from "./supabase";
 import { selectAllRows } from "./select-all";
 import { dedupeStarRows } from "./star-dedupe";
+import { getViewerTerms } from "./platform-cut";
 
 // The two Star figures Telegram's Bot API actually gives us, and what each
 // genuinely means. Don't add a matured/pending "21-day hold" split back in -
@@ -58,7 +59,11 @@ export async function getStarBalance(cloneId: string, botToken: string): Promise
   ]);
 
   // See lib/star-dedupe.ts: collapse double-recorded payments before summing.
+  // (Already NET for agencies/creators: the rows came through lib/agency-fetch.ts.)
   const lifetimeStars = dedupeStarRows(rows).reduce((s, r) => s + (Number(r.amount_stars) || 0), 0);
 
-  return { lifetimeStars, totalBalanceStars: balance };
+  // The Telegram wallet is the one money read that bypasses that wrapper, so it
+  // is scaled here. Admin terms are {starMult: 1}. A failed cut lookup throws.
+  const { starMult } = await getViewerTerms();
+  return { lifetimeStars, totalBalanceStars: balance == null ? null : balance * starMult };
 }

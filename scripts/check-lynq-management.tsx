@@ -11,6 +11,8 @@ import { withDashboardAccess } from "../lib/dashboard-access";
 import { agencyCanManage, LYNQ_MANAGEMENT_AGENCY_ID, agencyManagementRequestAllowed } from "../lib/agency-management-policy";
 import { assignedStoragePath, guardDashboardAction, requireManagedClone } from "../lib/agency-management";
 import { dashboardFetch } from "../lib/agency-fetch";
+import { __setViewerTermsOverrideForTests } from "../lib/platform-cut";
+__setViewerTermsOverrideForTests(async () => ({ starMult: 1, usdPerStar: 0.013 }));
 import Access, {AdminOnly,ManagerOnly,MutationForm,ReadOnlyFields} from "../components/DashboardAccessProvider";
 
 const a="aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa",b="bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb",other="cccccccc-cccc-cccc-cccc-cccccccccccc";

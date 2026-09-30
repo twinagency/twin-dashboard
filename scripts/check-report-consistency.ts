@@ -302,8 +302,8 @@ check("C16 an odd-length intra-period trend compares average buckets, not unequa
 
 check("C17 creator drill-in uses the canonical Star conversion", () => {
   assert(
-    /stats\.stars \* STAR_USD - stats\.costUsd/.test(DASH),
-    "creator AI contribution must convert Stars with STAR_USD",
+    /stats\.stars \* usdPerStar - stats\.costUsd/.test(DASH) && /usdPerStar\s*\}\s*=\s*useCurrency\(\)/.test(DASH),
+    "creator AI contribution must convert Stars with the viewer's usdPerStar (context, default STAR_USD 0.013)",
   );
   assert(!/stats\.stars \/ 50/.test(DASH), "the obsolete $0.02 per Star conversion must not return");
 });

@@ -1,3 +1,4 @@
+import { __setViewerTermsOverrideForTests } from "../lib/platform-cut";
 import assert from "node:assert/strict";
 import { scopeReadUrl, scopedSelection, AGENCY_ROLLUPS } from "../lib/agency-query";
 import { withDashboardAccess, getDashboardAccess, accessCacheKey } from "../lib/dashboard-access";
@@ -18,6 +19,7 @@ async function main(){
   for(const table of ["app_settings","api_keys","agency_memberships","tracker_items","photo_bundle_items"]){assert.throws(()=>scopeReadUrl(new URL(base+table),a));}
   assert.notEqual(accessCacheKey(a),accessCacheKey(b));assert.notEqual(accessCacheKey(a),accessCacheKey(null));assert.notEqual(accessCacheKey(a),accessCacheKey({...a,cloneIds:[]}));
   await Promise.all([a,b].map(access=>withDashboardAccess(access,async()=>{await new Promise(r=>setTimeout(r,5));assert.equal(await getDashboardAccess(),access);}))); 
+  __setViewerTermsOverrideForTests(async()=>({starMult:0.5,usdPerStar:0.013}));
   const original=globalThis.fetch;const seen:{url:string;init?:RequestInit}[]=[];
   globalThis.fetch=async(input:any,init?:RequestInit)=>{seen.push({url:String(input),init});return new Response(JSON.stringify([{id:"safe",bot_token:"must-not-leak"}]),{headers:{"content-type":"application/json"}})};
   try{

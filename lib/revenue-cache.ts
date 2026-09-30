@@ -1,4 +1,5 @@
-import { getDashboardAccess, withDashboardAccess, accessCacheKey, requireCloneAccess, type DashboardAccess } from "./dashboard-access";
+import { getDashboardAccess, withDashboardAccess, requireCloneAccess, type DashboardAccess } from "./dashboard-access";
+import { viewerCacheKey } from "./platform-cut";
 // One cache in front of the two slowest reads in this codebase.
 //
 // THE THING THAT SHAPES THIS FILE: getDashboard() + getAnalytics() together take
@@ -147,7 +148,7 @@ export async function getRevenueRollup(
 ): Promise<CachedRevenue> {
   const access = await getDashboardAccess();
   await requireCloneAccess(cloneId);
-  const key = `${accessCacheKey(access)}|${keyOf(period, cloneId, range)}`;
+  const key = `${await viewerCacheKey(access)}|${keyOf(period, cloneId, range)}`;
   const cached = cache.get(key);
   const dashboardCloneIds = resolveDashboardCloneScope(access, cloneId);
 

@@ -29,6 +29,7 @@ export default function CreatorWorkspaceShell({
   activeCloneId,
   connected,
   allTimeStars,
+  usdPerStar,
   children,
 }: {
   agencyName: string;
@@ -37,12 +38,13 @@ export default function CreatorWorkspaceShell({
   activeCloneId: string | null;
   connected: boolean;
   allTimeStars: number;
+  usdPerStar?: number;
   children: ReactNode;
 }) {
   const wordmarkAgency = agencyName === "Twin" ? undefined : agencyName;
   return (
     <DashboardAccessProvider agencyName={agencyName} audience="creator">
-      <CurrencyProvider>
+      <CurrencyProvider usdPerStar={usdPerStar}>
         <BlurProvider>
           <div className="flex h-screen" data-creator-workspace-shell="true">
             <Sidebar clones={clones} activeCloneId={activeCloneId} />

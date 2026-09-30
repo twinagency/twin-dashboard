@@ -3,6 +3,8 @@ import { assignedStoragePath } from "./agency-management";
 import { scopeAgencyWrite, scopeBundleItems } from "./agency-write";
 import { getDashboardAccess } from "./dashboard-access";
 import { AGENCY_ROLLUPS, scopeReadUrl, redactAgencyData } from "./agency-query";
+import { isMappedRollup, scaleRpcBody, scaleTableBody } from "./agency-scale";
+import { getViewerTermsFor } from "./platform-cut";
 import { serviceClient } from "./supabase-service";
 import { profileImagePathForClone } from "./colors";
 import type { AgencyIdentity } from "./agency-identity";
@@ -38,25 +40,34 @@ export async function dashboardFetch(input: RequestInfo | URL, init?: RequestIni
     if (input instanceof Request && init?.body == null) return input.clone().json();
     return {};
   };
-  const safeResponse = async (res: Response) => {
+  // Earned stars are scaled to this viewer's NET here, at the source. If the
+  // terms cannot be resolved this throws and the catch below refuses: never gross.
+  const safeResponse = async (res: Response, table: string) => {
     if (!res.ok || method === "HEAD" || res.status === 204) return res;
     const text=await res.text();
+    const mult=(await getViewerTermsFor(agency)).starMult;
     const safeHeaders=new Headers(res.headers);safeHeaders.delete("content-length");safeHeaders.delete("content-encoding");
-    return new Response(text ? JSON.stringify(redactAgencyData(JSON.parse(text))) : null,{status:res.status,headers:safeHeaders});
+    return new Response(text ? JSON.stringify(scaleTableBody(table,redactAgencyData(JSON.parse(text)),mult)) : null,{status:res.status,headers:safeHeaders});
   };
   try {
     // This service-key client only admits the public schema, never a caller-selected profile.
     if ([headers.get("content-profile"),headers.get("accept-profile")].some(p=>p && p!=="public")) return denied();
     if (url.pathname.startsWith("/rest/v1/rpc/")) {
       const fn = url.pathname.split("/").pop()!;
-      if (method !== "POST" || !AGENCY_ROLLUPS.has(fn)) return denied();
+      if (method !== "POST" || !AGENCY_ROLLUPS.has(fn) || !isMappedRollup(fn)) return denied();
       const args = await jsonBody();
       if (args.p_clone && !agency.cloneIds.includes(args.p_clone)) return denied("Creator access denied");
       url.pathname = url.pathname.replace(`/rpc/${fn}`,`/rpc/agency_${fn}`);
-      return fetch(url,{...init,cache:"no-store",body:JSON.stringify({...args,p_clones:agency.cloneIds})});
+      const mult=(await getViewerTermsFor(agency)).starMult;
+      const res=await fetch(url,{...init,cache:"no-store",body:JSON.stringify({...args,p_clones:agency.cloneIds})});
+      if (!res.ok || res.status===204) return res;
+      const text=await res.text();
+      const rpcHeaders=new Headers(res.headers);rpcHeaders.delete("content-length");rpcHeaders.delete("content-encoding");
+      return new Response(text ? JSON.stringify(scaleRpcBody(fn,JSON.parse(text),mult)) : null,{status:res.status,headers:rpcHeaders});
     }
     if (url.pathname.startsWith("/rest/v1/")) {
       let scoped: URL;
+      const table = url.pathname.split("/").pop()!;
       if (["GET","HEAD"].includes(method)) {
         scoped = agencyCanManage(agency) && url.pathname === "/rest/v1/photo_bundle_items"
           ? await scopeBundleItems(url,agency)
@@ -65,7 +76,7 @@ export async function dashboardFetch(input: RequestInfo | URL, init?: RequestIni
         if (headers.get("prefer")?.includes("resolution=")) return denied("Agency upserts are not allowed");
         scoped=await scopeAgencyWrite(url,method,await jsonBody(),agency);
       }
-      return await safeResponse(await fetch(scoped,{...init,cache:"no-store"}));
+      return await safeResponse(await fetch(scoped,{...init,cache:"no-store"}),table);
     }
     if (url.pathname.startsWith("/storage/v1/object/sign/media") && method === "POST") {
       const prefix = "/storage/v1/object/sign/media";

@@ -1,4 +1,5 @@
-import { getDashboardAccess, withDashboardAccess, accessCacheKey, requireCloneAccess } from "./dashboard-access";
+import { getDashboardAccess, withDashboardAccess, requireCloneAccess } from "./dashboard-access";
+import { viewerCacheKey } from "./platform-cut";
 import { cloneUserStatsWindow, messagedFanCount } from "./rollup";
 import { REPORT_TZ } from "./report-time";
 import { selectAllRows } from "./select-all";
@@ -830,7 +831,7 @@ function evictOldInsights() {
 export async function getCachedRevenueWhyChanged(dayKey: string, cloneId: string | null = null): Promise<RevenueWhyChanged> {
   const access = await getDashboardAccess();
   await requireCloneAccess(cloneId);
-  const key = `${accessCacheKey(access)}|${insightCacheKey(dayKey, cloneId)}`;
+  const key = `${await viewerCacheKey(access)}|${insightCacheKey(dayKey, cloneId)}`;
   const cached = insightCache.get(key);
   if (cached && Date.now() - cached.fetchedAt < INSIGHT_CACHE_TTL_MS) return cached.value;
 

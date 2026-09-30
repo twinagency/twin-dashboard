@@ -4,6 +4,7 @@ import CreatorDemoBanner from "@/components/CreatorDemoBanner";
 import { requireCreatorWorkspace } from "@/lib/creator-dashboard";
 import { isCreatorDashboardPath } from "@/lib/creator-dashboard-policy";
 import { withDashboardAccess } from "@/lib/dashboard-access";
+import { getViewerTerms } from "@/lib/platform-cut";
 import { getFleetClones, getHeaderAllTimeStars } from "@/lib/query-cache";
 import { isZaneDemo } from "@/lib/creator-demo-policy";
 import { creatorDemoData } from "@/lib/creator-demo-data";
@@ -23,6 +24,7 @@ export default async function CreatorLayout({ children }: { children: React.Reac
         getFleetClones(),
         cloneId ? getHeaderAllTimeStars(cloneId) : Promise.resolve(0),
       ]));
+  const { usdPerStar } = await withDashboardAccess(creator, () => getViewerTerms());
   return (
     <CreatorWorkspaceShell
       agencyName={creator.name}
@@ -31,6 +33,7 @@ export default async function CreatorLayout({ children }: { children: React.Reac
       activeCloneId={cloneId}
       connected={!!cloneId || demo}
       allTimeStars={allTimeStars}
+      usdPerStar={usdPerStar}
     >
       {demo && <CreatorDemoBanner />}
       {viewAsInfo && <ViewAsBanner info={viewAsInfo} />}

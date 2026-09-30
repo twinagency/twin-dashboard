@@ -19,6 +19,7 @@ import MainShell from "@/components/MainShell";
 import TwinWordmark from "@/components/TwinWordmark";
 import TwinUpdatePopup from "@/components/TwinVersionBadge";
 import { getCachedTwinVersion, getFleetClones, getHeaderAllTimeStars } from "@/lib/query-cache";
+import { getViewerTerms } from "@/lib/platform-cut";
 import { isAuthed } from "@/lib/auth";
 import { isAgencyPath } from "@/lib/agency-policy";
 import { isLynq, isMoxy, pathAgencyName } from "@/lib/agency-brand";
@@ -93,6 +94,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     agency ? Promise.resolve(null) : getCachedTwinVersion(), getFleetClones(), getCloneScope(), getViewAsBannerInfo(),
   ]);
   const allTimeStars = await getHeaderAllTimeStars(activeCloneId);
+  const { usdPerStar } = await getViewerTerms();
   // Viewing as an agency is ALWAYS read-only, regardless of that agency's own
   // canManage grant: this admin is looking, not administering as them.
   const canManage = viewAsInfo ? false : agencyCanManage(agency);
@@ -101,7 +103,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <body className="min-h-screen bg-bg">
       <script dangerouslySetInnerHTML={{__html:'try{if(localStorage.getItem("blurMedia")==="true")document.documentElement.classList.add("blur-media")}catch(e){}'}} />
       {viewAsInfo && <ViewAsBanner info={viewAsInfo} />}
-      <DashboardAccessProvider agencyName={agency?.name} canManage={canManage}><CurrencyProvider><BlurProvider>
+      <DashboardAccessProvider agencyName={agency?.name} canManage={canManage}><CurrencyProvider usdPerStar={usdPerStar}><BlurProvider>
         <div className="flex h-screen">
           <Sidebar clones={clones} activeCloneId={activeCloneId} />
           <div className="flex h-screen min-w-0 flex-1 flex-col overflow-hidden">

@@ -34,7 +34,7 @@ export default function TopBar({
   creatorName?: string;
 }) {
   const {isAgency,isCreator}=useDashboardAccess();
-  const { currency, rate } = useCurrency();
+  const { currency, rate, usdPerStar } = useCurrency();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const pageMeta = getPageMeta(pathname, clones, activeCloneId);
@@ -71,7 +71,7 @@ export default function TopBar({
         <span className="hidden items-baseline gap-1 px-1.5 sm:flex">
           <span className="text-xs">💵</span>
           <span className="font-mono text-xs font-semibold tabular-nums text-ink">
-            {fmtMoney(starsToMoneyRate(allTimeStars, currency, rate), currency)}
+            {fmtMoney(starsToMoneyRate(allTimeStars, currency, rate, usdPerStar), currency)}
           </span>
         </span>
         <div className="hidden h-5 w-px shrink-0 bg-line sm:block" />
