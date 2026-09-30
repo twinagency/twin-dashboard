@@ -3,7 +3,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { NextRequest } from "next/server";
 import { configureFlirtOfflineEnv } from "./flirt-offline-env";
-import { flirtOnboardingOptional } from "../lib/flirt-onboarding";
+import { creatorVoiceOnboardingEnabled, flirtOnboardingOptional } from "../lib/flirt-onboarding";
 import { CREATOR_QUESTIONNAIRE_PAGES, questionnairePageQuestions } from "../lib/creator-questionnaire-draft";
 import { CREATOR_SESSION_COOKIE, signCreatorSession } from "../lib/creator-session";
 
@@ -12,6 +12,9 @@ async function main() {
   assert.equal(flirtOnboardingOptional({ FLIRT_BACKEND_ENABLED: "true", FLIRT_SUPABASE_PROJECT_REF: "other" }), false);
   assert.equal(flirtOnboardingOptional({ FLIRT_BACKEND_ENABLED: "false", FLIRT_SUPABASE_PROJECT_REF: "lkmfwpqegjluirfusnaw" }), false);
   assert.equal(flirtOnboardingOptional({ FLIRT_BACKEND_ENABLED: "true", FLIRT_SUPABASE_PROJECT_REF: "lkmfwpqegjluirfusnaw" }), true);
+  assert.equal(creatorVoiceOnboardingEnabled({}), true, "Other onboarding flows retain voice");
+  assert.equal(creatorVoiceOnboardingEnabled({ FLIRT_BACKEND_ENABLED: "true", FLIRT_SUPABASE_PROJECT_REF: "other" }), true);
+  assert.equal(creatorVoiceOnboardingEnabled({ FLIRT_BACKEND_ENABLED: "true", FLIRT_SUPABASE_PROJECT_REF: "lkmfwpqegjluirfusnaw" }), false, "FLIRT voice onboarding is temporarily hidden");
 
   // JSX in existing components may use the classic runtime under tsx.
   (globalThis as typeof globalThis & { React: typeof React }).React = React;
@@ -114,14 +117,13 @@ async function main() {
     await post("consent", { agreed: "on" });
     assert.equal(consents.length, 0, "Blank or partial consent cannot fabricate a signature");
 
-    const voice = await post("skip_voice");
-    assert.equal(location(voice).searchParams.get("step"), "consent");
     const submitted = await post("submit", { creator_account_id: "foreign-account" });
     assert.equal(location(submitted).pathname, "/creator");
     assert.equal(application?.status, "submitted");
     assert.deepEqual(application?.answers, {});
     assert.equal(consents.length, 0);
     assert.equal(progress?.content_completed, undefined, "No fabricated uploaded-content completion");
+    assert.equal(progress?.voice_completed, undefined, "Hidden voice must neither block submission nor invent voice completion");
     const insertsBefore = applicationInserts;
     await post("submit");
     assert.equal(applicationInserts, insertsBefore, "Repeated submission must be idempotent");

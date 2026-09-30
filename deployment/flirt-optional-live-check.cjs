@@ -79,14 +79,15 @@ async function main() {
   const contentHtml = await content.text();
   assert(content.status === 200, 'Content page failed');
   noRequired(contentHtml, 'content');
-  assert(contentHtml.includes('data-onboarding-continue="voice"'), 'Content needs a no-upload continue path');
+  assert(contentHtml.includes('data-onboarding-continue="consent"'), 'Content must continue directly to consent without uploads');
+  assert(!contentHtml.includes('data-onboarding-continue="voice"'), 'Content must not link to hidden voice');
   const voice = await page('/creator/onboarding?step=voice', a);
-  noRequired(await voice.text(), 'voice');
-  const skippedVoice = await post(a, 'skip_voice');
-  assert(location(skippedVoice).searchParams.get('step') === 'consent', 'Voice skip could not continue');
+  assert([303,307,308].includes(voice.status) && location(voice).pathname === '/creator/onboarding' && location(voice).searchParams.get('step') === 'consent', 'Old voice links must redirect to consent');
   const consentPage = await page('/creator/onboarding?step=consent', a);
   const consentHtml = await consentPage.text();
   noRequired(consentHtml, 'consent');
+  assert(!consentHtml.includes('data-readiness-item="voice"'), 'Final checklist must hide voice');
+  assert(/Step\s+3\s+·\s+Optional/.test(consentHtml.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ')), 'Consent must be step 3');
   const finishButton = consentHtml.match(/(<button\b[^>]*>)Finish onboarding<\/button>/);
   assert(finishButton, 'Final action missing');
   assert(!buttonDisabled(finishButton[1]), 'Final action remains blocked');
@@ -102,11 +103,16 @@ async function main() {
   assert(Object.keys(submittedRows[0].answers || {}).length === 0, 'Blank walkthrough invented answers');
   for (const table of ['creator_consents','creator_files','creator_clone_links']) assert((await rows(table, a, 'creator_account_id')).length === 0, `Walkthrough invented ${table}`);
   assert((await accountRows(a.email))[0].account_status === a.account_status, 'Intake silently changed creator approval');
-  checks.push('Empty questionnaire, no uploads, skipped voice/consent and final workspace entry');
+  assert((await rows('creator_onboarding_progress', a, 'voice_completed')).every(row => !row.voice_completed), 'Hidden voice must not invent completion');
+  checks.push('Three-step onboarding: content goes directly to consent, old voice links redirect, and submission succeeds without a voice action');
   checks.push('No fabricated answers, consent, files, clone links or creator approval');
 
   const hub = await page('/creator/onboarding', b);
   const hubHtml = await hub.text();
+  const hubSteps = [...hubHtml.matchAll(/data-onboarding-step-card="([^"]+)"/g)].map(match => match[1]);
+  assert(JSON.stringify(hubSteps) === JSON.stringify(['questionnaire','content','consent']), 'Onboarding hub must show exactly the three visible steps in order');
+  assert(!hubHtml.includes('?step=voice'), 'Onboarding hub must not link to voice');
+  assert(/Step\s+3\s+·\s+Optional/.test(hubHtml.replace(/<[^>]*>/g, ' ').replace(/\s+/g, ' ')), 'Hub consent card must be step 3');
   assert(hubHtml.includes('data-onboarding-skip-all'), 'Skip-all action missing');
   assert((await rows('creator_applications', b, 'status')).every(row => row.status === 'draft'), 'Another creator submission leaked to this account');
   const skipAll = await post(b, 'submit', { creator_account_id: a.id });

@@ -26,7 +26,7 @@ import { TETHER_PORTAL } from "@/lib/partner-portals";
 import IntelligenceCoreIcon from "@/components/IntelligenceCoreIcon";
 import { CREATOR_PORTAL_COOKIE, creatorLoginPath } from "@/lib/creator-routing";
 import { isLynq } from "@/lib/agency-brand";
-import { flirtOnboardingOptional } from "@/lib/flirt-onboarding";
+import { creatorVoiceOnboardingEnabled, flirtOnboardingOptional } from "@/lib/flirt-onboarding";
 import { ArrowLeft, Check, CheckCircle2, ChevronRight, Circle, FileText, Images, Mic2, ShieldCheck } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -208,7 +208,13 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
   const link = isLynq(creator.name);
   const brandName = tether ? "Tether" : link ? "LYNQ" : "Twin";
   const optional = flirtOnboardingOptional();
+  const voiceEnabled = creatorVoiceOnboardingEnabled();
+  const visibleSteps = onboardingSteps.filter((item) => item !== "voice" || voiceEnabled);
+  const totalSteps = visibleSteps.length;
+  const consentStepNumber = visibleSteps.indexOf("consent") + 1;
+  const afterContent = voiceEnabled ? "voice" : "consent";
   const { status, step, section } = await searchParams;
+  if (step === "voice" && !voiceEnabled) redirect("/creator/onboarding?step=consent");
   const activeStep = isOnboardingStep(step) ? step : null;
   const questionnairePage = creatorQuestionnairePage(section);
 
@@ -235,8 +241,8 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
     voice: !!progress?.voice_completed || voiceFiles.length > 0,
     consent: !!consent,
   } satisfies Record<OnboardingStep, boolean>;
-  const steps = Object.values(complete).filter(Boolean).length;
-  const readyToSubmit = optional || Object.values(complete).every(Boolean);
+  const steps = visibleSteps.filter((item) => complete[item]).length;
+  const readyToSubmit = optional || visibleSteps.every((item) => complete[item]);
   const saved =
     (activeStep === "questionnaire" && status === "questionnaire_saved" && complete.questionnaire) ||
     (activeStep === "content" && status === "content_saved" && complete.content) ||
@@ -256,9 +262,9 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent-2">{tether ? "Tether creator onboarding" : link ? "LYNQ creator onboarding" : "Creator onboarding"}</p>
         <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
           <div><h1 className="font-heading text-4xl font-semibold tracking-[-0.04em] text-ink">Build your {brandName === "Twin" ? "FLIRT" : brandName} digital clone</h1><p className="mt-2 text-muted">{optional ? "Nothing is required. Explore each step, continue with blank fields, or skip straight to the dashboard." : "Complete the steps below. Your answers and media stay attached to this creator account."}</p></div>
-          <div className="rounded-full border border-border bg-white px-4 py-2 text-sm font-medium text-ink" aria-label={submitted ? "Application submitted" : optional ? "All onboarding steps optional" : `${steps} of 4 onboarding steps complete`}>{submitted ? "Submitted" : optional ? "All steps optional" : `${steps}/4 complete`}</div>
+          <div className="rounded-full border border-border bg-white px-4 py-2 text-sm font-medium text-ink" aria-label={submitted ? "Application submitted" : optional ? "All onboarding steps optional" : `${steps} of ${totalSteps} onboarding steps complete`}>{submitted ? "Submitted" : optional ? "All steps optional" : `${steps}/${totalSteps} complete`}</div>
         </div>
-        {!optional && <div className="mt-5 h-2 overflow-hidden rounded-full bg-border" role="progressbar" aria-label="Onboarding progress" aria-valuemin={0} aria-valuemax={4} aria-valuenow={steps}><div className="h-full rounded-full bg-accent transition-[width]" style={{ width: `${steps * 25}%` }} /></div>}
+        {!optional && <div className="mt-5 h-2 overflow-hidden rounded-full bg-border" role="progressbar" aria-label="Onboarding progress" aria-valuemin={0} aria-valuemax={totalSteps} aria-valuenow={steps}><div className="h-full rounded-full bg-accent transition-[width]" style={{ width: `${(steps / totalSteps) * 100}%` }} /></div>}
 
         {status && errorStatuses.has(status) && <div id="step-result" role="alert" className="mt-6 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">{statusCopy[status]}</div>}
 
@@ -267,8 +273,8 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
             <div className="mt-8 grid gap-5 md:grid-cols-2" data-onboarding-hub>
               <StepCard step="questionnaire" number={1} title="Questionnaire" description="Tell us about you, your style, personality and boundaries." complete={complete.questionnaire} optional={optional} icon={FileText} />
               <StepCard step="content" number={2} title="Content" description="Upload the image and video library for your digital clone." complete={complete.content} optional={optional} icon={Images} />
-              <StepCard step="voice" number={3} title="Voice" description="Upload voice recordings now, or record your choice to skip and activate voice later." complete={complete.voice} optional icon={Mic2} />
-              <StepCard step="consent" number={4} title="Consent & submit" description={optional ? "Review consent or leave it blank, then finish onboarding." : "Confirm permission and submit your completed onboarding."} complete={complete.consent} optional={optional} icon={ShieldCheck} />
+              {voiceEnabled && <StepCard step="voice" number={3} title="Voice" description="Upload voice recordings now, or record your choice to skip and activate voice later." complete={complete.voice} optional icon={Mic2} />}
+              <StepCard step="consent" number={consentStepNumber} title="Consent & submit" description={optional ? "Review consent or leave it blank, then finish onboarding." : "Confirm permission and submit your completed onboarding."} complete={complete.consent} optional={optional} icon={ShieldCheck} />
             </div>
             {optional && !applicationLocked && <form action="/creator-auth/onboarding" method="post" className="mt-6">
               <input type="hidden" name="action" value="submit" />
@@ -302,16 +308,16 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
                 <div className="grid gap-3 rounded-2xl border border-border bg-muted/10 p-5 text-sm leading-6 text-ink">
                   {optional ? <p>All uploads are optional. No photos or videos are needed to continue.</p> : <><p>Upload minimum 20 SFW images and 30 NSFW images.</p><p>Upload 15 SFW videos and 30 NSFW videos.</p></>}
                 </div>
-                {optional && <div><ContinueToStep step="voice">Continue without uploading</ContinueToStep></div>}
+                {optional && <div><ContinueToStep step={afterContent}>Continue without uploading</ContinueToStep></div>}
                 <div className="grid gap-4 md:grid-cols-2">
                   {CREATOR_CONTENT_REQUIREMENTS.map((requirement) => <ContentUploadCard key={requirement.kind} {...requirement} count={contentCounts[requirement.kind]} complete={contentCounts[requirement.kind] >= requirement.minimum} locked={applicationLocked} optional={optional} />)}
                 </div>
                 {legacyContentFiles > 0 && <p className="rounded-xl border border-border bg-muted/10 px-4 py-3 text-sm leading-6 text-muted">{legacyContentFiles} earlier verified upload{legacyContentFiles === 1 ? " is" : "s are"} still safely stored. They are not guessed into SFW or NSFW categories.</p>}
-                <div className="flex flex-col gap-3 sm:flex-row"><ReturnToOnboarding />{optional && <ContinueToStep step="voice">Continue to voice</ContinueToStep>}</div>
+                <div className="flex flex-col gap-3 sm:flex-row"><ReturnToOnboarding />{optional && <ContinueToStep step={afterContent}>{voiceEnabled ? "Continue to voice" : "Continue to final step"}</ContinueToStep>}</div>
               </CardContent>
             </Card>}
 
-            {activeStep === "voice" && <Card className="border border-border bg-white">
+            {voiceEnabled && activeStep === "voice" && <Card className="border border-border bg-white">
               <StepHeader number={3} title="Voice" complete={complete.voice} optional />
               <CardContent className="grid gap-6 pt-2">
                 {saved && <SavedConfirmation title={status === "voice_skipped" ? "Voice step saved" : "Voice samples saved"} detail={statusCopy[status!]} />}
@@ -326,7 +332,7 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
             </Card>}
 
             {activeStep === "consent" && <Card className="border border-border bg-white">
-              <StepHeader number={4} title="Consent & submit" complete={complete.consent} optional={optional} />
+              <StepHeader number={consentStepNumber} title="Consent & submit" complete={complete.consent} optional={optional} />
               <CardContent className="grid gap-6 pt-2">
                 {saved && <SavedConfirmation title="Consent saved" detail={optional ? "Your consent has been recorded." : "Your consent has been recorded. You can now submit onboarding when every step is complete."} />}
                 {optional && status === "consent_skipped" && <SavedConfirmation title="Consent skipped" detail={statusCopy.consent_skipped} />}
@@ -339,11 +345,11 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
                 </form> : <div className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"><CheckCircle2 className="mt-0.5 size-4 shrink-0" aria-hidden="true" /><span>Consent signed by {consent.legal_name}.</span></div>}
 
                 <section aria-labelledby="readiness-heading" className="rounded-2xl border border-border bg-muted/10 p-5">
-                  <div className="flex flex-wrap items-end justify-between gap-3"><div><h3 id="readiness-heading" className="text-lg font-semibold text-ink">{optional ? "Ready to finish?" : "Ready to submit?"}</h3><p className="mt-1 text-sm text-muted">{optional ? "Everything below is optional. You can finish with every field blank and no uploads." : "Complete every item below. Voice recordings are optional, but you must upload samples or choose to skip."}</p></div><span className="text-sm font-semibold text-ink">{optional ? "No required steps" : `${steps} of 4 complete`}</span></div>
+                  <div className="flex flex-wrap items-end justify-between gap-3"><div><h3 id="readiness-heading" className="text-lg font-semibold text-ink">{optional ? "Ready to finish?" : "Ready to submit?"}</h3><p className="mt-1 text-sm text-muted">{optional ? "Everything below is optional. You can finish with every field blank and no uploads." : voiceEnabled ? "Complete every item below. Voice recordings are optional, but you must upload samples or choose to skip." : "Complete every item below."}</p></div><span className="text-sm font-semibold text-ink">{optional ? "No required steps" : `${steps} of ${totalSteps} complete`}</span></div>
                   <ul className="mt-4 grid gap-3">
                     <ReadinessItem step="questionnaire" complete={complete.questionnaire} optional={optional} title="Questionnaire" detail={optional ? "Answers are optional." : complete.questionnaire ? "Required answers are saved." : "Finish and save the questionnaire."} href="/creator/onboarding?step=questionnaire" />
                     <ReadinessItem step="content" complete={complete.content} optional={optional} title="Content library" detail={optional ? "No photos or videos are required." : complete.content ? (categorizedContentComplete ? "Every image and video minimum is verified." : "Your earlier verified content remains accepted.") : CREATOR_CONTENT_REQUIREMENTS.map(({ kind, shortLabel, minimum }) => `${shortLabel} ${contentCounts[kind]}/${minimum}`).join(" · ")} href="/creator/onboarding?step=content" />
-                    <ReadinessItem step="voice" complete={complete.voice} optional={optional} title="Voice choice" detail={optional ? "Voice recordings are optional." : complete.voice ? (voiceFiles.length ? `${voiceFiles.length} voice sample${voiceFiles.length === 1 ? " is" : "s are"} verified.` : "Voice recordings skipped for now.") : "Upload voice samples or choose Skip for now."} href="/creator/onboarding?step=voice" />
+                    {voiceEnabled && <ReadinessItem step="voice" complete={complete.voice} optional={optional} title="Voice choice" detail={optional ? "Voice recordings are optional." : complete.voice ? (voiceFiles.length ? `${voiceFiles.length} voice sample${voiceFiles.length === 1 ? " is" : "s are"} verified.` : "Voice recordings skipped for now.") : "Upload voice samples or choose Skip for now."} href="/creator/onboarding?step=voice" />}
                     <ReadinessItem step="consent" complete={complete.consent} optional={optional} title="Consent" detail={complete.consent ? `Consent signed by ${consent?.legal_name}.` : optional ? "Optional. No consent recorded." : "Enter your legal name and save consent."} href="/creator/onboarding?step=consent" />
                   </ul>
                 </section>
