@@ -23,9 +23,11 @@
 // Other code (this dashboard's routes, the public Twin API projections, other
 // agents) imports this exact API. Do not rename any exported symbol.
 
+import { cache } from "react";
 import { supabaseAdmin } from "./supabase";
 import { serviceClient } from "./supabase-service";
-import { getDashboardAccess, requireCloneAccess } from "./dashboard-access";
+import { getDashboardAccess, requireCloneAccess, accessCacheKey, type DashboardAccess } from "./dashboard-access";
+import { STAR_USD } from "./money";
 
 const CACHE_TTL_MS = 60 * 1000;
 
@@ -75,6 +77,18 @@ const PLATFORM_MIN = 2;
 const PLATFORM_MAX = 60;
 const AGENCY_CREATOR_MIN = 0;
 const AGENCY_CREATOR_MAX = 80;
+
+/** Default star -> USD rate (what one Star pays out). Null in the DB means this. */
+export const DEFAULT_USD_PER_STAR = STAR_USD;
+export const USD_PER_STAR_MIN = 0.001;
+export const USD_PER_STAR_MAX = 0.09;
+
+/** A stored/typed rate becomes a usable one: null, junk or out-of-range falls back to the default. */
+export function normalizeUsdPerStar(v: unknown): number {
+  const n = typeof v === "string" ? Number(v) : (v as number);
+  if (v == null || v === "" || !Number.isFinite(n) || n < USD_PER_STAR_MIN || n > USD_PER_STAR_MAX) return DEFAULT_USD_PER_STAR;
+  return n;
+}
 
 function assertRange(pct: number, min: number, max: number, label: string): void {
   if (!Number.isFinite(pct) || pct < min || pct > max) {
@@ -190,16 +204,104 @@ export function applyStackedCut(value: number, platformPct: number, agencyCreato
   return applyCut(applyCut(value, platformPct), agencyCreatorPct);
 }
 
+// ── viewer terms: ONE multiplier + ONE star rate per logged-in account ────
+//
+// starMult is what fraction of gross earnings this viewer keeps
+// ((1-platform/100) * (1-agencyCreator/100)); usdPerStar is the rate their
+// star figures convert to money at. Admins are {1, 0.013}. The multiplier is
+// applied at the data layer (lib/agency-fetch.ts) so gross never reaches a
+// non-admin browser; a cut lookup failure THROWS, it never falls back to gross.
+
+export type ViewerTerms = { starMult: number; usdPerStar: number };
+
+export function computeStarMult(platformPct: number, agencyCreatorPct: number): number {
+  return (1 - platformPct / 100) * (1 - agencyCreatorPct / 100);
+}
+
+type CutRowLite = { cut_pct: number | string | null; usd_per_star: number | string | null };
+
+async function readCutRows(column: "agency_id" | "clone_id", ids: string[]): Promise<CutRowLite[]> {
+  if (!ids.length) return [];
+  const { data, error } = await serviceClient().from("platform_cuts").select("cut_pct,usd_per_star").in(column, ids);
+  if (error) throw new Error(`Could not read platform cut: ${error.message}`);
+  return (data ?? []) as CutRowLite[];
+}
+
+/** Of several rows (multiple owning agencies) take the highest cut; its rate goes with it. */
+function pickRow(rows: CutRowLite[]): { pct: number; usdPerStar: number } | null {
+  let best: { pct: number; usdPerStar: number } | null = null;
+  for (const r of rows) {
+    const pct = Number(r.cut_pct) || 0;
+    if (!best || pct > best.pct) best = { pct, usdPerStar: normalizeUsdPerStar(r.usd_per_star) };
+  }
+  return best;
+}
+
+async function creatorTerms(cloneId: string): Promise<ViewerTerms> {
+  const cloneRow = pickRow(await readCutRows("clone_id", [cloneId]));
+  let base = cloneRow;
+  if (!base) {
+    const owners = await agencyIdsForClone(cloneId);
+    base = pickRow(await readCutRows("agency_id", owners));
+  }
+  const { data, error } = await serviceClient().from("agency_creator_cuts").select("cut_pct").eq("clone_id", cloneId);
+  if (error) throw new Error(`Could not read agency-creator cut for clone ${cloneId}: ${error.message}`);
+  const acPct = (data ?? []).reduce((max, r) => Math.max(max, Number(r.cut_pct) || 0), 0);
+  return {
+    starMult: computeStarMult(base?.pct ?? 0, acPct),
+    usdPerStar: base?.usdPerStar ?? DEFAULT_USD_PER_STAR,
+  };
+}
+
+async function termsForAccess(access: NonNullable<DashboardAccess>): Promise<ViewerTerms> {
+  if ((access as { kind?: string }).kind === "creator") {
+    if (!access.cloneIds.length) throw new Error("No creator assigned to resolve an earnings split");
+    // Several assigned clones: show the one with the lowest net, never more than any allows.
+    const all = await Promise.all(access.cloneIds.map(creatorTerms));
+    return all.reduce((lo, t) => (t.starMult < lo.starMult ? t : lo));
+  }
+  const row = pickRow(await readCutRows("agency_id", [access.id]));
+  return { starMult: computeStarMult(row?.pct ?? 0, 0), usdPerStar: row?.usdPerStar ?? DEFAULT_USD_PER_STAR };
+}
+
+// React cache() keys on primitive args, so it is per request AND per identity.
+const termsMemo = cache(async (id: string, kind: string, cloneIdsCsv: string): Promise<ViewerTerms> =>
+  termsForAccess({ id, kind, cloneIds: cloneIdsCsv ? cloneIdsCsv.split(",") : [] } as unknown as NonNullable<DashboardAccess>));
+
+// Test seam only (offline checks have no database). null = real lookup.
+let termsOverride: ((access: NonNullable<DashboardAccess>) => Promise<ViewerTerms>) | null = null;
+export function __setViewerTermsOverrideForTests(fn: typeof termsOverride): void { termsOverride = fn; }
+
+/** Terms for an access identity (null = admin). Throws if the cut cannot be resolved. */
+export async function getViewerTermsFor(access: DashboardAccess): Promise<ViewerTerms> {
+  if (access && termsOverride) return termsOverride(access);
+  if (!access) return { starMult: 1, usdPerStar: DEFAULT_USD_PER_STAR };
+  return termsMemo(access.id, (access as { kind?: string }).kind ?? "agency", [...access.cloneIds].sort().join(","));
+}
+
+/** Terms for the current viewer. Works inside withDashboardAccess / unstable_cache. */
+export async function getViewerTerms(): Promise<ViewerTerms> {
+  return getViewerTermsFor(await getDashboardAccess());
+}
+
+/** accessCacheKey + the viewer's terms, so a cached NET value can never outlive a cut change. */
+export async function viewerCacheKey(access: DashboardAccess): Promise<string> {
+  const base = accessCacheKey(access);
+  if (!access) return base;
+  const t = await getViewerTermsFor(access);
+  return `${base}|m${t.starMult}|r${t.usdPerStar}`;
+}
+
 // ── admin listing/editing (platform cuts) ─────────────────────────────────
 
-export type CutRow = { kind: "agency" | "clone"; id: string; name: string; cutPct: number | null };
+export type CutRow = { kind: "agency" | "clone"; id: string; name: string; cutPct: number | null; usdPerStar: number | null };
 
 /** Every agency and every clone, each with its platform_cuts row if one exists. */
 export async function listCuts(): Promise<CutRow[]> {
   const [agenciesRes, clonesRes, cutsRes] = await Promise.all([
     supabaseAdmin.from("partner_agencies").select("id,name").order("name", { ascending: true }),
     supabaseAdmin.from("clones").select("id,name").order("name", { ascending: true }),
-    supabaseAdmin.from("platform_cuts").select("agency_id,clone_id,cut_pct"),
+    supabaseAdmin.from("platform_cuts").select("agency_id,clone_id,cut_pct,usd_per_star"),
   ]);
   if (agenciesRes.error) throw new Error(`Could not list agencies: ${agenciesRes.error.message}`);
   if (clonesRes.error) throw new Error(`Could not list clones: ${clonesRes.error.message}`);
@@ -207,17 +309,20 @@ export async function listCuts(): Promise<CutRow[]> {
 
   const cutByAgency = new Map<string, number>();
   const cutByClone = new Map<string, number>();
+  const rateByAgency = new Map<string, number>();
+  const rateByClone = new Map<string, number>();
   for (const row of cutsRes.data ?? []) {
-    if (row.agency_id) cutByAgency.set(row.agency_id, Number(row.cut_pct));
-    if (row.clone_id) cutByClone.set(row.clone_id, Number(row.cut_pct));
+    const rate = row.usd_per_star == null ? null : Number(row.usd_per_star);
+    if (row.agency_id) { cutByAgency.set(row.agency_id, Number(row.cut_pct)); if (rate != null) rateByAgency.set(row.agency_id, rate); }
+    if (row.clone_id) { cutByClone.set(row.clone_id, Number(row.cut_pct)); if (rate != null) rateByClone.set(row.clone_id, rate); }
   }
 
   const rows: CutRow[] = [];
   for (const a of agenciesRes.data ?? []) {
-    rows.push({ kind: "agency", id: a.id, name: a.name, cutPct: cutByAgency.get(a.id) ?? null });
+    rows.push({ kind: "agency", id: a.id, name: a.name, cutPct: cutByAgency.get(a.id) ?? null, usdPerStar: rateByAgency.get(a.id) ?? null });
   }
   for (const c of clonesRes.data ?? []) {
-    rows.push({ kind: "clone", id: c.id, name: c.name, cutPct: cutByClone.get(c.id) ?? null });
+    rows.push({ kind: "clone", id: c.id, name: c.name, cutPct: cutByClone.get(c.id) ?? null, usdPerStar: rateByClone.get(c.id) ?? null });
   }
   return rows;
 }
@@ -231,6 +336,7 @@ export async function setCut(
   target: { agencyId?: string; cloneId?: string },
   pct: number | null,
   by: string,
+  usdPerStar: number | null = null,
 ): Promise<void> {
   const { agencyId, cloneId } = target;
   if ((agencyId == null) === (cloneId == null)) {
@@ -246,10 +352,12 @@ export async function setCut(
   }
 
   assertRange(pct, PLATFORM_MIN, PLATFORM_MAX, "Platform cut");
+  // null = "use the default 0.013"; anything else must be in range (no silent clamping).
+  if (usdPerStar !== null) assertRange(usdPerStar, USD_PER_STAR_MIN, USD_PER_STAR_MAX, "Dollars per star");
 
-  const row: { agency_id: string | null; clone_id: string | null; cut_pct: number; updated_at: string; updated_by: string } = agencyId
-    ? { agency_id: agencyId, clone_id: null, cut_pct: pct, updated_at: new Date().toISOString(), updated_by: by }
-    : { agency_id: null, clone_id: cloneId!, cut_pct: pct, updated_at: new Date().toISOString(), updated_by: by };
+  const row: { agency_id: string | null; clone_id: string | null; cut_pct: number; usd_per_star: number | null; updated_at: string; updated_by: string } = agencyId
+    ? { agency_id: agencyId, clone_id: null, cut_pct: pct, usd_per_star: usdPerStar, updated_at: new Date().toISOString(), updated_by: by }
+    : { agency_id: null, clone_id: cloneId!, cut_pct: pct, usd_per_star: usdPerStar, updated_at: new Date().toISOString(), updated_by: by };
   const { error } = await supabaseAdmin
     .from("platform_cuts")
     .upsert(row, { onConflict: agencyId ? "agency_id" : "clone_id" });

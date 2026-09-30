@@ -1,4 +1,5 @@
-import { getDashboardAccess, withDashboardAccess, accessCacheKey } from "./dashboard-access";
+import { getDashboardAccess, withDashboardAccess } from "./dashboard-access";
+import { viewerCacheKey } from "./platform-cut";
 import { cache } from "react";
 import { unstable_cache, revalidateTag } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase";
@@ -70,7 +71,7 @@ const TTL = {
  */
 async function cached<T>(keyParts: string[], tags: string[], ttlSeconds: number, fn: () => Promise<T>): Promise<T> {
   const access = await getDashboardAccess();
-  return unstable_cache(() => withDashboardAccess(access, fn), [...keyParts, accessCacheKey(access)], { revalidate: ttlSeconds, tags })();
+  return unstable_cache(() => withDashboardAccess(access, fn), [...keyParts, await viewerCacheKey(access)], { revalidate: ttlSeconds, tags })();
 }
 
 // ── Clones ───────────────────────────────────────────────────────────────────

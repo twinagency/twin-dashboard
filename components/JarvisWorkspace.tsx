@@ -254,7 +254,7 @@ function shuffled<T>(items: T[], random: () => number) {
 
 export default function JarvisWorkspace({ cloneId }: { cloneId: string | null }) {
   const router = useRouter();
-  const { currency, rate } = useCurrency();
+  const { currency, rate, usdPerStar } = useCurrency();
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const phaseRef = useRef<Phase>("idle");
   const activeDomainRef = useRef<DomainId | null>(null);
@@ -903,7 +903,7 @@ export default function JarvisWorkspace({ cloneId }: { cloneId: string | null })
     };
   }, []);
 
-  const money = useCallback((stars: number) => fmtMoney(starsToMoneyRate(stars, currency, rate), currency), [currency, rate]);
+  const money = useCallback((stars: number) => fmtMoney(starsToMoneyRate(stars, currency, rate, usdPerStar), currency), [currency, rate, usdPerStar]);
   const activeClone = useMemo(() => (cloneId ? data?.clones.find((clone) => clone.id === cloneId) ?? null : null), [cloneId, data]);
   const journeyCards = useMemo(() => {
     const clones = data?.clones ?? [];

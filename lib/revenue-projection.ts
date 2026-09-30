@@ -1,3 +1,9 @@
+// NOTE: the dashboard, the info pages and the wallet no longer use this file:
+// non-admin reads arrive NET from lib/agency-fetch.ts (see lib/agency-scale.ts),
+// and scaling them again would double-cut. scaleDashboardData/scaleAnalyticsData
+// remain ONLY for the public Twin API (lib/api-public.ts), whose model keys are
+// not an agency identity and so never pass through that wrapper.
+//
 // ── Projects gross DashboardData/AnalyticsData down to what an agency or a
 //    creator may see: gross scaled by the platform cut (agency) or by the
 //    platform cut AND the agency's own further cut (creator). Master admins

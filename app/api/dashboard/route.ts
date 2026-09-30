@@ -9,8 +9,7 @@ import { getDashboardAccess } from "@/lib/dashboard-access";
 import { isZaneDemo, DEMO_CLONE_ID, creatorDemoQueryIds } from "@/lib/creator-demo-policy";
 import { assertCreatorQuery } from "@/lib/creator-dashboard-policy";
 import { creatorDemoData } from "@/lib/creator-demo-data";
-import { resolveCloneCuts, scaleDashboardData, scaleAnalyticsData, redactCostFields, type ViewerMode } from "@/lib/revenue-projection";
-import { applyStackedCut } from "@/lib/platform-cut";
+import { resolveCloneCuts, redactCostFields } from "@/lib/revenue-projection";
 import type { DashboardData } from "@/lib/dashboard-data";
 import type { AnalyticsData } from "@/lib/analytics-data";
 export const dynamic = "force-dynamic";
@@ -47,36 +46,15 @@ async function read(req: NextRequest) {
     }
     if (clone === DEMO_CLONE_ID) return NextResponse.json({ error: "Demo data is unavailable for this account" }, { status: 403 });
     const [rollup, balance] = await Promise.all([getRevenueRollup(period, clone, range, { awaitFresh: freshness === "1" || freshness === "force", force: freshness === "force" }), getScopedBalance(clone)]);
-    // getRevenueRollup/lib/revenue-cache.ts caches GROSS only. Any cut is applied
-    // here, downstream of the cache, per request — so a cut edited by an admin
-    // is never served stale from a minute-old cached snapshot.
+    // Non-admin data arrives NET already: lib/agency-fetch.ts scales every
+    // earned-star field at the source (and revenue-cache keys by the viewer's
+    // terms), so nothing is scaled again here. Scaling here would double-cut.
     const { dashboard, analytics, analyticsError, cachedAt, ageSeconds, stale } = rollup;
-    let outDashboard: DashboardData = dashboard;
-    let outAnalytics: AnalyticsData | null = analytics;
-    let outBalance: StarBalance | null = balance;
+    const outDashboard: DashboardData = dashboard;
+    const outAnalytics: AnalyticsData | null = analytics;
+    const outBalance: StarBalance | null = balance;
     let cutMeta: Record<string, unknown> | undefined;
-    if (access) {
-      // Agency or creator: gross must never reach this response. `kind` is only
-      // set on a creator identity (see lib/creator-dashboard-identity.ts) — a
-      // plain AgencyIdentity has no `kind` field.
-      const mode: ViewerMode = (access as { kind?: string }).kind === "creator" ? "creator" : "agency";
-      const cloneIds = new Set<string>([...dashboard.clones.map((c) => c.id), ...(analytics?.clones.map((c) => c.id) ?? [])]);
-      if (clone) cloneIds.add(clone);
-      const cuts = await resolveCloneCuts(cloneIds);
-      outDashboard = scaleDashboardData(dashboard, cuts, mode);
-      outAnalytics = analytics ? scaleAnalyticsData(analytics, cuts, mode) : null;
-      // lifetimeStars is a gross all-time earnings figure (see star-balance.ts),
-      // so it goes through the same clone-level cut. totalBalanceStars is the
-      // actual Telegram wallet balance (custody, not an earnings figure) and is
-      // deliberately left untouched — payout/custody is a separate concern from
-      // the earnings split this feature reports.
-      if (balance && clone) {
-        const c = cuts.get(clone);
-        outBalance = c
-          ? { ...balance, lifetimeStars: applyStackedCut(balance.lifetimeStars, c.platformPct, mode === "creator" ? c.agencyCreatorPct : 0) }
-          : balance;
-      }
-    } else {
+    if (!access) {
       // Master admin: stays gross. Add cutPct/net next to the gross figures
       // for the clones already in this payload — cheap, since the fleet is a
       // handful of clones and the cuts are 60s-cached.

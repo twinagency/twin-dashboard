@@ -11,8 +11,9 @@ export function starsToMoney(stars: number, c: Currency): number {
 }
 
 // Same, but with a live USD→AUD rate (from /api/fx) instead of the static fallback.
-export function starsToMoneyRate(stars: number, c: Currency, audPerUsd: number): number {
-  const usd = stars * STAR_USD;
+// usdPerStar is the viewer's own rate (CurrencyProvider context); defaults to STAR_USD.
+export function starsToMoneyRate(stars: number, c: Currency, audPerUsd: number, usdPerStar: number = STAR_USD): number {
+  const usd = stars * usdPerStar;
   return c === "AUD" ? usd * audPerUsd : usd;
 }
 

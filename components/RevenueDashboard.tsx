@@ -19,7 +19,7 @@ import type { AnalyticsData } from "@/lib/analytics-data";
 import type { StarBalance } from "@/lib/star-balance";
 import { reportFeatureRows, topFeatureRow } from "@/lib/report-features";
 import { reportTzLabel } from "@/lib/report-time";
-import { fmtMoney, fmtNum, STAR_USD, starsToMoneyRate, usdToMoneyRate } from "@/lib/money";
+import { fmtMoney, fmtNum, starsToMoneyRate, usdToMoneyRate } from "@/lib/money";
 import { intraPeriodTrendPct } from "@/lib/revenue-trend";
 import { useCurrency } from "@/components/CurrencyProvider";
 import { useDashboardAccess } from "@/components/DashboardAccessProvider";
@@ -229,7 +229,7 @@ export default function RevenueDashboard({ cloneId, initialData = null }: { clon
   const [chartType, setChartType] = useState<"bar" | "line">("bar");
   const [chartMode, setChartMode] = useState<"total" | "creator">("total");
   const [analysisView, setAnalysisView] = useState<"customers" | "journey">("customers");
-  const { currency, rate } = useCurrency();
+  const { currency, rate, usdPerStar } = useCurrency();
   const [data, setData] = useState<FullData | null>(initialData);
   // WHY THIS EXISTS. /api/dashboard answers a failure with 500 + {error}, and
   // fetchData used to setData(that object). `data` was then truthy with no
@@ -371,7 +371,7 @@ export default function RevenueDashboard({ cloneId, initialData = null }: { clon
     setTxSort({ key, direction: key === "amount" || key === "date" ? "desc" : "asc" });
   }
 
-  const money = (stars: number) => fmtMoney(starsToMoneyRate(stars, currency, rate), currency);
+  const money = (stars: number) => fmtMoney(starsToMoneyRate(stars, currency, rate, usdPerStar), currency);
   // AI contribution/cost arrive in USD; revenue arrives in Stars. Both are rendered in
   // the operator's selected currency so a table never puts "A$8,295 revenue"
   // beside "$4,102 AI contribution" and invites the wrong ratio. Was a bare "$" + toLocaleString.
@@ -2653,9 +2653,10 @@ function AiCostDrillIn({
   stats: import("@/lib/dashboard-data").CloneStats;
   onClose: () => void;
 }) {
+  const { usdPerStar } = useCurrency();
   const tiles: { label: string; value: string; money?: boolean }[] = [
     { label: "AI cost", value: `$${stats.costUsd.toFixed(2)}`, money: true },
-    { label: "Metered AI contribution (USD)", value: `$${(stats.stars * STAR_USD - stats.costUsd).toFixed(2)}`, money: true },
+    { label: "Metered AI contribution (USD)", value: `$${(stats.stars * usdPerStar - stats.costUsd).toFixed(2)}`, money: true },
     { label: "AI calls", value: fmtNum(stats.aiCalls) },
     { label: "AI errors", value: fmtNum(stats.aiErrors) },
   ];

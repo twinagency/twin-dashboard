@@ -102,7 +102,7 @@ export type PublicRevenue = {
 };
 
 // The projection itself. Every field is named; `a` is never spread.
-export function projectRevenue(a: AnalyticsData, range: DateRange | null): PublicRevenue {
+export function projectRevenue(a: AnalyticsData, range: DateRange | null, usdPerStar: number = STAR_USD): PublicRevenue {
   return {
     period: a.period,
     range,
@@ -111,8 +111,8 @@ export function projectRevenue(a: AnalyticsData, range: DateRange | null): Publi
       // Static STAR_USD/AUD_PER_USD conversion (lib/money.ts), not a live FX
       // rate. This is revenue only, not cost or profit, so it does not touch
       // the "our margin never leaves the building" boundary above.
-      revenueUsd: a.totals.revenueStars * STAR_USD,
-      revenueAud: a.totals.revenueStars * STAR_USD * AUD_PER_USD,
+      revenueUsd: a.totals.revenueStars * usdPerStar,
+      revenueAud: a.totals.revenueStars * usdPerStar * AUD_PER_USD,
       sales: a.totals.sales,
       fans: a.totals.fans,
       buyers: a.totals.buyers,
@@ -201,9 +201,9 @@ export type PublicFleetRevenue = PublicRevenue & {
   models: PublicFleetModel[];
 };
 
-export function projectFleetRevenue(a: AnalyticsData, range: DateRange | null): PublicFleetRevenue {
+export function projectFleetRevenue(a: AnalyticsData, range: DateRange | null, usdPerStar: number = STAR_USD): PublicFleetRevenue {
   return {
-    ...projectRevenue(a, range),
+    ...projectRevenue(a, range, usdPerStar),
     scope: "fleet",
     // a.clones is already ranked best → worst by revenue upstream; the order is
     // part of what makes this useful, so it is preserved rather than re-sorted.
@@ -211,8 +211,8 @@ export function projectFleetRevenue(a: AnalyticsData, range: DateRange | null): 
       id: c.id,
       name: c.name,
       revenueStars: c.revenueStars,
-      revenueUsd: c.revenueStars * STAR_USD,
-      revenueAud: c.revenueStars * STAR_USD * AUD_PER_USD,
+      revenueUsd: c.revenueStars * usdPerStar,
+      revenueAud: c.revenueStars * usdPerStar * AUD_PER_USD,
       sales: c.sales,
       // c.costUsd, c.profitUsd and c.margin are deliberately absent.
     })),

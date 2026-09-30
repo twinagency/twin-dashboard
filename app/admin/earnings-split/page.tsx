@@ -11,6 +11,7 @@ interface CutRow {
   id: string;
   name: string;
   cutPct: number | null;
+  usdPerStar: number | null;
 }
 
 export default async function EarningsSplitPage() {
@@ -38,7 +39,7 @@ export default async function EarningsSplitPage() {
       <div>
         <h1 className="text-3xl font-bold text-ink">Earnings split</h1>
         <p className="mt-2 text-sm text-muted">
-          Our cut. Agencies and creators only see earnings after this is taken out. Applies to all-time figures.
+          Cut % and $ per star apply only to that account's own view. Agencies and creators see earnings after the cut, converted at their $ per star (blank means the default 0.013, allowed 0.001 to 0.090). Admins always see gross. Applies to all-time figures and takes effect immediately.
         </p>
       </div>
 
@@ -51,13 +52,14 @@ export default async function EarningsSplitPage() {
                 <TableHead>Name</TableHead>
                 <TableHead>Current cut</TableHead>
                 <TableHead>New cut</TableHead>
+                <TableHead>$ per star</TableHead>
                 <TableHead>Action</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {agencies.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center text-sm text-muted">
+                  <TableCell colSpan={5} className="text-center text-sm text-muted">
                     No agencies found
                   </TableCell>
                 </TableRow>
@@ -78,13 +80,14 @@ export default async function EarningsSplitPage() {
                 <TableHead>Name</TableHead>
                 <TableHead>Current cut</TableHead>
                 <TableHead>New cut</TableHead>
+                <TableHead>$ per star</TableHead>
                 <TableHead>Action</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {clones.length === 0 ? (
                 <TableRow>
-                  <TableCell colSpan={4} className="text-center text-sm text-muted">
+                  <TableCell colSpan={5} className="text-center text-sm text-muted">
                     No creators found
                   </TableCell>
                 </TableRow>
