@@ -12,7 +12,9 @@ export async function POST(req: NextRequest) {
     return new NextResponse("Forbidden", { status: 403 });
   }
   const fd = await req.formData();
-  const email = String(fd.get("email") ?? "").trim();
+  const login = String(fd.get("email") ?? "").trim();
+  // A bare username signs in as <username>@dashboard.tgaiclone.xyz.
+  const email = login.includes("@") ? login : `${login.toLowerCase()}@dashboard.tgaiclone.xyz`;
   const password = String(fd.get("password") ?? "");
   if (email.length > 254 || password.length > 256) return new NextResponse("Invalid input", { status: 400 });
   // A new client per login: never replace the shared admin client's session.
