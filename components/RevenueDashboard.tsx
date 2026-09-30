@@ -388,7 +388,11 @@ export default function RevenueDashboard({ cloneId, initialData = null }: { clon
   };
 
   const visibleClones = useMemo(() => {
-    const all = data?.clones ?? [];
+    // Keep creator keys and values intact; CSS supplies Moxy-only series tones.
+    const all = (data?.clones ?? []).map((clone, index) => ({
+      ...clone,
+      color: `var(--moxy-revenue-series-${index % 6 + 1}, ${clone.color})`,
+    }));
     if (cloneId) return all.filter((c) => c.id === cloneId);
     return all.filter((c) => !hidden.has(c.id));
   }, [data, hidden, cloneId]);
@@ -494,7 +498,7 @@ export default function RevenueDashboard({ cloneId, initialData = null }: { clon
       : `${txSort.key === "fan" ? "Fan" : txSort.key === "creator" ? "Creator" : "Type"} ${txSort.direction === "asc" ? "A–Z" : "Z–A"}`;
 
   return (
-    <div className="pb-6">
+    <div className="revenue-dashboard pb-6">
       {/* Named on screen, not just in the console. The operator is the person
           who has to decide whether to pick a shorter window or call someone. */}
       {loadError && (
@@ -805,11 +809,11 @@ export default function RevenueDashboard({ cloneId, initialData = null }: { clon
                         content={<ChartTooltip clones={visibleClones} money={money} totalOnly={chartMode === "total"} totalLabel={focusName ?? "Total revenue"} />}
                       />
                       {chartMode === "total" ? (
-                        <Bar dataKey="__total" fill="#172b3d" radius={[3, 3, 0, 0]}>
+                        <Bar dataKey="__total" fill="var(--moxy-revenue-total, #172b3d)" radius={[3, 3, 0, 0]}>
                           {totalChartSeries.map((_, idx) => (
                             <Cell
                               key={idx}
-                              fill="#172b3d"
+                              fill="var(--moxy-revenue-total, #172b3d)"
                               fillOpacity={!customRange && idx === totalChartSeries.length - 1 ? 0.52 : 1}
                             />
                           ))}
@@ -871,7 +875,7 @@ export default function RevenueDashboard({ cloneId, initialData = null }: { clon
                         <Line
                           type="monotone"
                           dataKey="__total"
-                          stroke="#172b3d"
+                          stroke="var(--moxy-revenue-total, #172b3d)"
                           strokeWidth={2}
                           dot={false}
                           activeDot={{ r: 3 }}
@@ -1631,7 +1635,7 @@ function ChartTooltip({
             <span className="flex items-center gap-2 text-muted">
               <span
                 className="h-2 w-2 rounded-full"
-                style={{ background: totalOnly && p.value < 0 ? "#b4432f" : totalOnly ? "#172b3d" : c?.color }}
+                style={{ background: totalOnly && p.value < 0 ? "#b4432f" : totalOnly ? "var(--moxy-revenue-total, #172b3d)" : c?.color }}
               />
               <span className={totalOnly ? "" : "creator-name"}>{totalOnly ? totalLabel : c?.name ?? p.dataKey}</span>
             </span>
@@ -1687,10 +1691,16 @@ function RevenueReport({
   const { isCreator, isAgency } = useDashboardAccess();
   const showCost = !isCreator && !isAgency;
   const [selectedMedia, setSelectedMedia] = useState<"photo" | "video" | "bundle" | null>(null);
-  // A quiet, predominantly navy scale keeps category comparison legible without
-  // turning the operating report into a rainbow. Red stays reserved for the
-  // genuinely signed adjustment bucket.
-  const CAT = { blue: "#172b3d", aqua: "#526578", yellow: "#7f8b96", violet: "#2e465d", red: "#9a4d43", pink: "#697785" };
+  // Moxy uses green report tones; other portals retain their existing palette.
+  // Red stays reserved for the genuinely signed adjustment bucket.
+  const CAT = {
+    blue: "var(--moxy-revenue-blue, #172b3d)",
+    aqua: "var(--moxy-revenue-aqua, #526578)",
+    yellow: "var(--moxy-revenue-yellow, #7f8b96)",
+    violet: "var(--moxy-revenue-violet, #2e465d)",
+    red: "#9a4d43",
+    pink: "var(--moxy-revenue-pink, #697785)",
+  };
 
   const featureColor = (k: string) =>
     k === "credits"
@@ -2683,3 +2693,4 @@ function AiCostDrillIn({
     </Card>
   );
 }
+

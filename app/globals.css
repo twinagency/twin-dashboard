@@ -152,6 +152,26 @@ html[data-agency="moxy"] .dashboard-main::before,
 html[data-agency="moxy"] .canvas-glow { background-image: none; }
 html[data-agency="moxy"] .moxy-login { background: #080808; color: white; }
 
+/* Moxy's revenue palette stays inside the existing earnings page. */
+html[data-agency="moxy"] .revenue-dashboard {
+  --color-good: #0f766e;
+  --moxy-revenue-total: #0f766e;
+  --moxy-revenue-blue: #0f766e;
+  --moxy-revenue-aqua: #0d9488;
+  --moxy-revenue-yellow: #4c8b75;
+  --moxy-revenue-violet: #115e59;
+  --moxy-revenue-pink: #538f83;
+  --moxy-revenue-series-1: #0f766e;
+  --moxy-revenue-series-2: #14b8a6;
+  --moxy-revenue-series-3: #115e59;
+  --moxy-revenue-series-4: #0d9488;
+  --moxy-revenue-series-5: #4c8b75;
+  --moxy-revenue-series-6: #538f83;
+}
+html[data-agency="moxy"] .revenue-dashboard .money-value-primary {
+  color: var(--color-good);
+}
+
 html,
 body {
   background: var(--color-bg);
@@ -1039,3 +1059,4 @@ html.blur-media .creator-name {
   font-weight: 600;
   white-space: nowrap;
 }
+
