@@ -6,6 +6,7 @@ import ClonesGrid, { type CloneCard } from "@/components/ClonesGrid";
 import { chartColorForClone, profileImagePathForClone } from "@/lib/colors";
 import { cloneCohortFromPromotionFlag } from "@/lib/clone-cohort";
 import { Button } from "@/components/ui/button";
+import AgencyApplicantList from "@/components/AgencyApplicantList";
 
 export const dynamic = "force-dynamic";
 
@@ -99,6 +100,7 @@ export default async function ClonesPage() {
       ) : (
         <ClonesGrid clones={cards} />
       )}
+      <AgencyApplicantList />
     </div>
   );
 }

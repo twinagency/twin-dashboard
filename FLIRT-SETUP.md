@@ -1,5 +1,19 @@
 # FLIRT white label on Twin services
 
+## Current onboarding boundary, 1 October 2026
+
+The operator dashboard connects to exactly four authorised Twin creators using the existing `flirt-live-twin.cjs` scope. That connection is an explicit exception to the original independent-database plan below. This onboarding fix does not replace or rotate that pre-existing connection.
+
+Invitations, creator accounts, questionnaires, consent, uploads and agency assignments use the local FLIRT project `lkmfwpqegjluirfusnaw`. The verified FLIRT agency is `66263f7f-77c6-4d9b-a828-e7c9d1ce3597`. Operator intake pages resolve that local agency and its local clone grants independently of the four Twin clone IDs.
+
+Use **Invite creator** (`/agency/creator-invites`). The former `/agency-admin/creator-codes` operator entry redirects to this same flow. New accounts appear in **Creators**, underneath the existing connected bots, and in **Accounts** (`/agency/creators`). **Review profile** opens their questionnaire, upload status and application status, and permits a display-name edit. Only accounts currently assigned to the signed-in agency can be opened or edited.
+
+Completing onboarding submits an application; it does not create or activate a Telegram bot, approve an account, fabricate consent, merge reporting or move any existing Twin creator. The temporary hidden Voice step is preserved. No schema migration is required.
+
+Verification: `scripts/check-flirt-invites.ts` checks local database routing, agency validation, code generation/revocation, CSRF and foreign-account protection. `deployment/flirt-invites-live-check.py` runs the full invitation, sign-up, onboarding, listing, profile-edit, rejection and cleanup journey against a revision-verified FLIRT container. The existing runner also confirms Twin's container is unchanged.
+
+The historical provisioning notes below describe earlier checkpoints and are not a claim that the current operator dashboard never connects to Twin.
+
 Status: FLIRT database and private upload storage provisioned and verified. Existing Twin AWS deployment access and shared-provider configuration confirmed. The user explicitly approved storing the FLIRT key in GitHub encrypted Actions secrets and protected configuration on the existing AWS servers. Both repository secrets are saved. Application deployment, recovery-email setup and live acceptance remain pending.
 
 ## Confirmed scope, 20 September 2026

@@ -139,6 +139,17 @@ export async function middleware(req: NextRequest) {
     return NextResponse.redirect(url);
   }
   if (liveTwinEnabled()) {
+    // Old bookmarks must use the local, agency-scoped invitation handler.
+    // Redirect only after authenticating the operator; never execute the old
+    // supabaseAdmin-backed handler, which would select Twin production.
+    if (!req.headers.has("next-action")) {
+      if (pathname === "/agency-admin/creator-codes" && ["GET", "HEAD"].includes(req.method))
+        return privateResponse(NextResponse.redirect(new URL("/agency/creator-invites", dashboardOrigin(req)), 307));
+      if (pathname === "/agency-admin/creator-codes/manage" && req.method === "POST") {
+        if (!trustedFormOrigin(req)) return new NextResponse("Untrusted request origin", {status:403});
+        return privateResponse(NextResponse.redirect(new URL("/agency/creator-invites/manage", dashboardOrigin(req)), 307));
+      }
+    }
     const identity = liveTwinIdentity();
     const serverAction = req.headers.has("next-action");
     const isWrite = serverAction || !["GET", "HEAD"].includes(req.method);

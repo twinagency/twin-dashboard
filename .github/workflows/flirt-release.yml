@@ -40,6 +40,8 @@ jobs:
       - run: npx tsc --noEmit
       - name: Selected live creators and retained local database routing
         run: npx tsx scripts/check-flirt-live-twin.ts
+      - name: Invitation routing and local account authorization
+        run: npx tsx scripts/check-flirt-invites.ts
       - name: Empty onboarding and retained authentication boundaries
         run: npx tsx scripts/check-flirt-optional-onboarding.tsx
       - name: Existing application checks
@@ -82,3 +84,5 @@ jobs:
         run: python3 deployment/flirt-optional-live-check.py
       - name: Verify all four live creators, existing media and denied unassigned access
         run: python3 deployment/flirt-live-creators-check.py
+      - name: Verify invite, signup, onboarding, listing and profile editing with disposable FLIRT fixtures
+        run: python3 deployment/flirt-invites-live-check.py

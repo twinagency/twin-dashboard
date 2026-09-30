@@ -1,5 +1,5 @@
 import { redirect } from "next/navigation";
-import { getDashboardAccess } from "@/lib/dashboard-access";
+import { getAgencyOnboardingAccess } from "@/lib/agency-onboarding-access";
 import { dashboardOrigin } from "@/lib/form-origin";
 import { headers } from "next/headers";
 import CopyField from "./CopyField";
@@ -27,7 +27,7 @@ type CodeRow = {
 const dateOnly = (value: string | null) => (value ? value.slice(0, 10) : null);
 
 export default async function AgencyCreatorInvites({ searchParams }: { searchParams: Promise<{ result?: string; created?: string }> }) {
-  const access = await getDashboardAccess();
+  const access = await getAgencyOnboardingAccess();
   if (!access) redirect("/creator-management");
   const { result, created } = await searchParams;
   const newCode = created && INVITE_CODE_PATTERN.test(created) ? created : null;

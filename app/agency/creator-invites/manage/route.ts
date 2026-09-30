@@ -1,6 +1,6 @@
 import { dashboardOrigin, trustedFormOrigin } from "@/lib/form-origin";
 import { NextRequest, NextResponse } from "next/server";
-import { getDashboardAccess } from "@/lib/dashboard-access";
+import { getAgencyOnboardingAccess } from "@/lib/agency-onboarding-access";
 import { hashInviteCode, randomInviteCode } from "@/lib/creator-invite-codes";
 // serviceClient, not supabaseAdmin: supabaseAdmin's fetch is intercepted for
 // agency sessions and force-scoped by clone_id, which these agency_id-scoped
@@ -9,7 +9,7 @@ import { serviceClient } from "@/lib/supabase-service";
 
 export async function POST(req: NextRequest) {
   if (!trustedFormOrigin(req)) return new NextResponse("Forbidden", { status: 403 });
-  const access = await getDashboardAccess();
+  const access = await getAgencyOnboardingAccess();
   if (!access) return new NextResponse("Agency sign in required", { status: 401 });
 
   const fd = await req.formData();
