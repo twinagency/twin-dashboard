@@ -5,7 +5,7 @@ import { createClient } from "@supabase/supabase-js";
 import { NextRequest, NextResponse } from "next/server";
 import { agencyIdentity } from "@/lib/agency-identity";
 import { AGENCY_COOKIE } from "@/lib/agency-policy";
-import { AGENCY_PORTAL_COOKIE, isMoxy } from "@/lib/agency-brand";
+import { AGENCY_PORTAL_COOKIE, isMoxy, isLynq } from "@/lib/agency-brand";
 
 export async function POST(req: NextRequest) {
   if (!trustedFormOrigin(req)) {
@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
     sameSite: "strict", path: "/", maxAge: Math.min(data.session?.expires_in ?? 3600, 3600) });
   response.cookies.delete(SESSION_COOKIE);
   response.cookies.delete(CLONE_SCOPE_COOKIE);
-  response.cookies.set(AGENCY_PORTAL_COOKIE,isMoxy(identity.name) ? "moxy" : "lynq",{httpOnly:true,secure:process.env.NODE_ENV === "production",sameSite:"strict",path:"/",maxAge:60*60*24*30});
+  response.cookies.set(AGENCY_PORTAL_COOKIE,isMoxy(identity.name) ? "moxy" : isLynq(identity.name) ? "lynq" : "twin",{httpOnly:true,secure:process.env.NODE_ENV === "production",sameSite:"strict",path:"/",maxAge:60*60*24*30});
   response.headers.set("Cache-Control", "no-store");
   return response;
 }
