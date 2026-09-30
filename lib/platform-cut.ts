@@ -1,6 +1,6 @@
 // ── Platform cut: the master admin's percentage off gross earnings ──────────
 //
-// The platform (us) takes 2-60% of gross earnings, applied ALL-TIME at the
+// The platform (us) takes 0-60% of gross earnings, applied ALL-TIME at the
 // CURRENT percentage — there is no dated history, no per-period rate. No row
 // for a clone/agency means 0% (today's behaviour, unchanged until an admin
 // sets one). Agencies and creators must only ever see NET (gross scaled by
@@ -73,7 +73,7 @@ export function resolveClonePlatformPct(cloneRow: number | null, agencyRow: numb
 }
 
 // ── validation ────────────────────────────────────────────────────────────
-const PLATFORM_MIN = 2;
+const PLATFORM_MIN = 0;
 const PLATFORM_MAX = 60;
 const AGENCY_CREATOR_MIN = 0;
 const AGENCY_CREATOR_MAX = 80;
@@ -322,7 +322,7 @@ export async function listCuts(): Promise<CutRow[]> {
 /**
  * Set (or clear, with pct null) the PLATFORM cut for one agency or one clone.
  * Exactly one of agencyId/cloneId must be given. Validated server-side
- * against the 2-60 range regardless of what the caller already checked.
+ * against the 0-60 range regardless of what the caller already checked.
  */
 export async function setCut(
   target: { agencyId?: string; cloneId?: string },

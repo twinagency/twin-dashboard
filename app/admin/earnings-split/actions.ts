@@ -18,9 +18,9 @@ export async function saveCut(target: { agencyId?: string; cloneId?: string }, p
   // Never trust a client-supplied author label.
   const by = "master-admin";
 
-  // Validate percentage: must be null (clear) or between 2 and 60
-  if (pct !== null && (typeof pct !== "number" || pct < 2 || pct > 60)) {
-    throw new Error("Percentage must be between 2 and 60, or empty to clear");
+  // Validate percentage: must be null (clear) or between 0 and 60
+  if (pct !== null && (typeof pct !== "number" || pct < 0 || pct > 60)) {
+    throw new Error("Percentage must be between 0 and 60, or empty to clear");
   }
 
   // null = default 0.013; otherwise 0.001 to 0.090. setCut validates again.

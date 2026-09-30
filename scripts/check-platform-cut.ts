@@ -169,12 +169,12 @@ async function main() {
     equal(resolveClonePlatformPct(null, null), 0, "0% default — unchanged behaviour");
   });
 
-  // ── 2-60 / 0-80 validation, both offline: assertRange throws before any
+  // ── 0-60 / 0-80 validation, both offline: assertRange throws before any
   //    network call, and setAgencyCreatorCut was reordered so its range check
   //    runs before the agency-ownership lookup for exactly this reason. ──────
-  await checkAsync("V1 platform cut rejects below 2%", () => rejects(() => setCut({ cloneId: "c1" }, 1, "test"), /between 2 and 60/));
-  await checkAsync("V2 platform cut rejects above 60%", () => rejects(() => setCut({ cloneId: "c1" }, 61, "test"), /between 2 and 60/));
-  await checkAsync("V3 platform cut rejects NaN", () => rejects(() => setCut({ agencyId: "a1" }, NaN, "test"), /between 2 and 60/));
+  await checkAsync("V1 platform cut rejects below 0%", () => rejects(() => setCut({ cloneId: "c1" }, -1, "test"), /between 0 and 60/));
+  await checkAsync("V2 platform cut rejects above 60%", () => rejects(() => setCut({ cloneId: "c1" }, 61, "test"), /between 0 and 60/));
+  await checkAsync("V3 platform cut rejects NaN", () => rejects(() => setCut({ agencyId: "a1" }, NaN, "test"), /between 0 and 60/));
   await checkAsync("V4 setCut rejects both or neither of agencyId/cloneId", () =>
     rejects(() => setCut({}, 10, "test"), /exactly one/),
   );
