@@ -16,10 +16,10 @@ release = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(release)
 
 
-def main():
+def main(check_file="flirt-optional-live-check.cjs"):
     if release.aws(["sts", "get-caller-identity"])["Account"] != release.ACCOUNT:
         raise RuntimeError("Unexpected AWS account")
-    source = base64.b64encode((ROOT / "flirt-optional-live-check.cjs").read_bytes()).decode()
+    source = base64.b64encode((ROOT / check_file).read_bytes()).decode()
     expected = os.environ.get("FLIRT_EXPECTED_COMMIT") or os.environ.get("GITHUB_SHA", "")
     if not re.fullmatch(r"[a-f0-9]{40}", expected):
         raise RuntimeError("An exact deployed revision is required for verification")
@@ -51,7 +51,7 @@ raise SystemExit(0 if result.returncode==0 and report.get('passed') and report['
 '''.replace("SOURCE", repr(source)).replace("EXPECTED", repr(expected))
     request = {
         "InstanceIds": [release.INSTANCE], "DocumentName": "AWS-RunShellScript",
-        "Comment": "Verify FLIRT optional onboarding over HTTPS and preserve Twin",
+        "Comment": "Verify FLIRT over HTTPS and preserve Twin",
         "TimeoutSeconds": 60,
         "Parameters": {"commands": ["python3 -c " + shlex.quote(host)], "executionTimeout": ["480"]},
     }
@@ -63,9 +63,9 @@ raise SystemExit(0 if result.returncode==0 and report.get('passed') and report['
             continue
         print(state.get("StandardOutputContent", ""), flush=True)
         if state["Status"] != "Success":
-            raise RuntimeError("FLIRT optional onboarding verification failed; see structured report")
+            raise RuntimeError("FLIRT verification failed; see structured report")
         return
-    raise RuntimeError("FLIRT optional onboarding verification timed out")
+    raise RuntimeError("FLIRT verification timed out")
 
 
 if __name__ == "__main__":

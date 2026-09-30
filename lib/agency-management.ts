@@ -1,6 +1,6 @@
 import { getDashboardAccess } from "./dashboard-access";
 import { agencyCanManage } from "./agency-management-policy";
-import { serviceClient } from "./supabase-service";
+import { serviceClientForAccess } from "./supabase-service";
 import type { AgencyIdentity } from "./agency-identity";
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -23,7 +23,7 @@ export async function requireManagedClone(cloneId: unknown): Promise<void> {
 export async function ownedResource(agency: AgencyIdentity, table: "users" | "photos" | "videos" | "photo_bundles", id: unknown, cloneId?: string) {
   if (typeof id !== "string" || !UUID.test(id)) throw new Error("Resource access denied");
   const columns = table === "users" ? "id,clone_id,telegram_id,paused" : table === "photo_bundles" ? "id,clone_id" : "id,clone_id,storage_path,is_free";
-  const {data, error} = await serviceClient().from(table).select(columns).eq("id", id).in("clone_id", agency.cloneIds).maybeSingle();
+  const {data, error} = await serviceClientForAccess(agency).from(table).select(columns).eq("id", id).in("clone_id", agency.cloneIds).maybeSingle();
   if (error || !data) throw new Error("Resource access denied");
   const row = data as unknown as {id:string;clone_id:string;telegram_id?:number;paused?:boolean;storage_path?:string;is_free?:boolean};
   assignedClone(agency, row.clone_id);
@@ -32,7 +32,7 @@ export async function ownedResource(agency: AgencyIdentity, table: "users" | "ph
 }
 export async function ownedBundleItem(agency: AgencyIdentity, id: unknown, cloneId: string) {
   if (typeof id !== "string" || !UUID.test(id)) throw new Error("Media access denied");
-  const {data,error} = await serviceClient().from("photo_bundle_items").select("id,bundle_id,storage_path").eq("id",id).maybeSingle();
+  const {data,error} = await serviceClientForAccess(agency).from("photo_bundle_items").select("id,bundle_id,storage_path").eq("id",id).maybeSingle();
   if (error || !data) throw new Error("Media access denied");
   await ownedResource(agency,"photo_bundles",data.bundle_id,cloneId);
   return data;
@@ -114,7 +114,7 @@ export async function guardDashboardAction(action: string, args: unknown[]): Pro
       if (args[1] !== "photos" && args[1] !== "videos") throw new Error("Invalid media type");
       if (!Array.isArray(args[2]) || !args[2].length || args[2].length > 1000 || args[2].some(id => typeof id !== "string" || !UUID.test(id))) throw new Error("Invalid media selection");
       const ids=[...new Set(args[2])];
-      const {data,error}=await serviceClient().from(args[1]).select("id").eq("clone_id",cloneId).in("id",ids);
+      const {data,error}=await serviceClientForAccess(access).from(args[1]).select("id").eq("clone_id",cloneId).in("id",ids);
       if (error || data?.length !== ids.length) throw new Error("Media selection includes inaccessible items");
     }
     return;

@@ -2,7 +2,7 @@ import { AGENCY_COLUMNS } from "./agency-columns";
 import { scopedSelection } from "./agency-query";
 import { agencyCanManage } from "./agency-management-policy";
 import { assignedClone, assignedStoragePath, ownedResource } from "./agency-management";
-import { serviceClient } from "./supabase-service";
+import { serviceClientForAccess } from "./supabase-service";
 import type { AgencyIdentity } from "./agency-identity";
 
 export const AGENCY_PROTECTED_CLONE_FIELDS = ["id","slug","bot_token","created_at","deployed_at","uses_default_config","strict_minor_gate"] as const;
@@ -18,7 +18,7 @@ const WRITABLE: Record<string, {methods:string[];fields:readonly string[]}> = {
 
 export async function agencyBundleIds(agency: AgencyIdentity): Promise<string[]> {
   if (!agency.cloneIds.length) return [];
-  const {data,error}=await serviceClient().from("photo_bundles").select("id").in("clone_id",agency.cloneIds);
+  const {data,error}=await serviceClientForAccess(agency).from("photo_bundles").select("id").in("clone_id",agency.cloneIds);
   if (error) throw new Error("Bundle access unavailable");
   return (data??[]).map(row=>String(row.id));
 }

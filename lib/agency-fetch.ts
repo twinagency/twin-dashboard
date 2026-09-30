@@ -3,7 +3,7 @@ import { assignedStoragePath } from "./agency-management";
 import { scopeAgencyWrite, scopeBundleItems } from "./agency-write";
 import { getDashboardAccess } from "./dashboard-access";
 import { AGENCY_ROLLUPS, scopeReadUrl, redactAgencyData } from "./agency-query";
-import { serviceClient } from "./supabase-service";
+import { serviceClientForAccess } from "./supabase-service";
 import { profileImagePathForClone } from "./colors";
 import type { AgencyIdentity } from "./agency-identity";
 function denied(message = "Read-only agency access") {
@@ -12,7 +12,7 @@ function denied(message = "Read-only agency access") {
 async function ownsMedia(agency: AgencyIdentity, paths: string[]): Promise<boolean> {
   if (!paths.length || paths.length > 1000 || !agency.cloneIds.length) return false;
   if (paths.some(p=>!p || p.includes("..") || p.startsWith("/") || p.includes("\\"))) return false;
-  const db = serviceClient();
+  const db = serviceClientForAccess(agency);
   const [photos,videos,bundles,clones] = await Promise.all([
     db.from("photos").select("storage_path").in("clone_id",agency.cloneIds).in("storage_path",paths),
     db.from("videos").select("storage_path").in("clone_id",agency.cloneIds).in("storage_path",paths),

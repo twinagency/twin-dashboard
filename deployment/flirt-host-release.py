@@ -11,6 +11,7 @@ PROJECT = "lkmfwpqegjluirfusnaw"
 ORIGIN = "https://dashboard.lynqai.co"
 ROOT = Path("/etc/flirt")
 REGISTRY = "323149985112.dkr.ecr.ap-southeast-2.amazonaws.com"
+TWIN_PROJECT = "aouaenqayfltoqrmpitg"
 PROVIDERS = ("OPENROUTER_API_KEY", "ELEVENLABS_API_KEY", "DEEPGRAM_API_KEY")
 
 
@@ -131,6 +132,13 @@ def configure(encoded):
         "OPENROUTER_APP_NAME": "FLIRT", "OPENROUTER_APP_URL": "", **providers,
     }
     if payload["kind"] == "dashboard":
+        # User-authorised live management of exactly four creators. Credentials
+        # stay on this same host; neither Actions nor SSM history receives them.
+        live_script = "console.log(JSON.stringify({url:process.env.SUPABASE_URL,key:process.env.SUPABASE_SERVICE_KEY}));"
+        live = json.loads(command(["docker", "exec", "next-app", "node", "-e", live_script], timeout=20))
+        if live.get("url", "").rstrip("/") != "https://" + TWIN_PROJECT + ".supabase.co" or not live.get("key"):
+            raise RuntimeError("The existing Twin live connection could not be verified")
+        env.update({"FLIRT_LIVE_TWIN_ENABLED": "true", "FLIRT_LIVE_TWIN_URL": live["url"].rstrip("/"), "FLIRT_LIVE_TWIN_SERVICE_KEY": live["key"]})
         env["DASHBOARD_PUBLIC_ORIGIN"] = ORIGIN
         for name in ("DASHBOARD_SESSION_SECRET", "CREATOR_SESSION_SECRET", "DASHBOARD_PASSWORD"):
             env[name] = previous.get(name) or secrets.token_hex(32)

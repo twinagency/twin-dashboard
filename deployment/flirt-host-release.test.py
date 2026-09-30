@@ -1,4 +1,5 @@
-import importlib.util, io, unittest
+import importlib.util, io, unittest, base64, json
+from contextlib import redirect_stdout
 from unittest.mock import patch
 from urllib.error import HTTPError
 from pathlib import Path
@@ -7,6 +8,31 @@ release = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(release)
 
 class ReleaseBoundaryTests(unittest.TestCase):
+    def test_only_dashboard_receives_live_access_without_copying_bot_configuration(self):
+        for kind in ("dashboard", "bot"):
+            payload = {**self.payload(), "kind": kind}
+            def fake_command(args, data=None, timeout=180):
+                if args[0] == "openssl": return json.dumps(payload).encode()
+                if "url:process.env" in args[-1]: return json.dumps({"url": "https://" + release.TWIN_PROJECT + ".supabase.co", "key": "sb_secret_" + "t"*32}).encode()
+                return json.dumps(dict.fromkeys(release.PROVIDERS, "synthetic-provider")).encode()
+            previous = {"FLIRT_SUPABASE_PROJECT_REF": release.PROJECT, "DASHBOARD_PASSWORD": "keep-password", "DASHBOARD_SESSION_SECRET": "keep-admin-session", "CREATOR_SESSION_SECRET": "keep-creator-session"}
+            output = io.StringIO()
+            with patch.object(release, "secured_directory"), patch.object(release, "check_private_file"), patch.object(release, "verify_database"), patch.object(release, "read_env", return_value=previous), patch.object(release, "command", side_effect=fake_command) as commands, patch.object(release, "private_write") as saved, redirect_stdout(output):
+                release.configure(base64.b64encode(bytes(512)).decode())
+            env = dict(line.split("=", 1) for line in saved.call_args.args[1].splitlines())
+            self.assertEqual(env["SUPABASE_URL"], "https://" + release.PROJECT + ".supabase.co")
+            self.assertEqual(env["SUPABASE_SERVICE_KEY"], payload["key"])
+            self.assertNotIn(payload["key"], output.getvalue())
+            self.assertNotIn("sb_secret_", output.getvalue())
+            self.assertTrue(all(c.args[0][0] != "docker" or c.args[0][1:3] == ["exec", "next-app"] for c in commands.call_args_list))
+            if kind == "dashboard":
+                self.assertEqual(env["FLIRT_LIVE_TWIN_ENABLED"], "true")
+                self.assertEqual(env["DASHBOARD_PASSWORD"], previous["DASHBOARD_PASSWORD"])
+                self.assertNotIn("BOT_TOKEN", env)
+            else:
+                self.assertNotIn("FLIRT_LIVE_TWIN_ENABLED", env)
+                self.assertNotIn("FLIRT_LIVE_TWIN_SERVICE_KEY", env)
+                self.assertEqual(env["BOT_TOKEN"], "")
     def test_database_errors_never_disclose_response_or_key(self):
         for body, expected in [(b'{"code":"PGRST205","message":"secret-value"}', "PGRST205"), (b'{"code":"sb_secret_do_not_log","message":"secret-value"}', "unavailable")]:
             error = HTTPError("https://example.invalid", 404, "secret-value", {}, io.BytesIO(body))

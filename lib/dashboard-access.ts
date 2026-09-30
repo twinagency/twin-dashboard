@@ -1,3 +1,5 @@
+import { enabled as liveTwinEnabled, identity as liveTwinIdentity } from "../deployment/flirt-live-twin.cjs";
+import { SESSION_COOKIE, verifySessionToken } from "./session";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { cache } from "react";
 import { cookies, headers } from "next/headers";
@@ -5,6 +7,8 @@ import { agencyIdentity, type AgencyIdentity } from "./agency-identity";
 import { AGENCY_COOKIE } from "./agency-policy";
 import { CREATOR_SESSION_COOKIE } from "./creator-session";
 import { creatorDashboardIdentity } from "./creator-dashboard-identity";
+import { isCreatorPath, isCreatorAuthPath } from "./creator-routing";
+import { isAgencyPath } from "./agency-policy";
 import { CREATOR_AUDIENCE_HEADER, isCreatorDashboardPath } from "./creator-dashboard-policy";
 
 export type DashboardAccess = AgencyIdentity | null; // null = independently gated internal admin/bearer/CLI
@@ -29,7 +33,11 @@ const requestAccess = cache(async (): Promise<DashboardAccess> => {
     return creator;
   }
   const token = jar.get(AGENCY_COOKIE)?.value;
-  if (!token) return null;
+  if (!token) {
+    const path = requestHeaders.get("x-pathname");
+    if (!liveTwinEnabled() || !path || isCreatorPath(path) || isCreatorAuthPath(path) || (isAgencyPath(path) && path !== "/agency/clone-scope")) return null;
+    return await verifySessionToken(jar.get(SESSION_COOKIE)?.value) ? liveTwinIdentity() : null;
+  }
   const agency = await agencyIdentity(token);
   if (!agency) throw new Error("Agency session expired. Please sign in again.");
   return agency;
@@ -39,7 +47,7 @@ export function getDashboardAccess(): Promise<DashboardAccess> {
   return active ? Promise.resolve(active.access) : requestAccess();
 }
 export function accessCacheKey(access: DashboardAccess): string {
-  return access ? `agency:${access.id}:${[...access.cloneIds].sort().join(",")}` : "admin";
+  return access ? `agency:${access.dataSource || "local"}:${access.id}:${[...access.cloneIds].sort().join(",")}` : "admin";
 }
 export async function requireCloneAccess(id: string | null | undefined): Promise<void> {
   const access = await getDashboardAccess();

@@ -1,5 +1,5 @@
 import { serviceClient } from "./supabase-service";
-export type AgencyIdentity = { id: string; name: string; cloneIds: string[] };
+export type AgencyIdentity = { id: string; name: string; cloneIds: string[]; dataSource?: "twin-live" };
 export async function agencyIdentity(token: string | undefined): Promise<AgencyIdentity | null> {
   if (!token) return null;
   const db = serviceClient();

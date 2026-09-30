@@ -31,11 +31,15 @@ jobs:
       - name: FLIRT database, provider and release boundaries
         run: |
           npm run test:flirt-isolation
+          node --test deployment/flirt-live-twin.test.cjs
           python3 deployment/flirt-host-release.test.py
           python3 -m py_compile deployment/flirt-host-release.py deployment/flirt-release.py deployment/flirt-optional-live-check.py
           node --check deployment/flirt-optional-live-check.cjs
+          node --check deployment/flirt-live-creators-check.cjs
       - run: npm ci
       - run: npx tsc --noEmit
+      - name: Selected live creators and retained local database routing
+        run: npx tsx scripts/check-flirt-live-twin.ts
       - name: Empty onboarding and retained authentication boundaries
         run: npx tsx scripts/check-flirt-optional-onboarding.tsx
       - name: Existing application checks
@@ -76,3 +80,5 @@ jobs:
         run: python3 deployment/flirt-release.py dashboard "$FLIRT_IMAGE" "$GITHUB_SHA"
       - name: Verify public blank onboarding and unchanged Twin with disposable fixtures
         run: python3 deployment/flirt-optional-live-check.py
+      - name: Verify all four live creators, existing media and denied unassigned access
+        run: python3 deployment/flirt-live-creators-check.py

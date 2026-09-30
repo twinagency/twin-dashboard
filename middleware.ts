@@ -1,3 +1,4 @@
+import { enabled as liveTwinEnabled, identity as liveTwinIdentity } from "./deployment/flirt-live-twin.cjs";
 import { isMarketingPath } from "@/lib/marketing-routing";
 import { isTwinLoginPath, safeAdminNext } from "@/lib/login-routing";
 import { agencyCanManage, agencyManagementRequestAllowed } from "@/lib/agency-management-policy";
@@ -136,6 +137,19 @@ export async function middleware(req: NextRequest) {
     if (req.cookies.get(AGENCY_PORTAL_COOKIE)?.value === "moxy") return NextResponse.redirect(new URL("/moxy", dashboardOrigin(req)));
     const url = new URL("/twin", dashboardOrigin(req)); url.searchParams.set("next", pathname);
     return NextResponse.redirect(url);
+  }
+  if (liveTwinEnabled()) {
+    const identity = liveTwinIdentity();
+    const serverAction = req.headers.has("next-action");
+    const isWrite = serverAction || !["GET", "HEAD"].includes(req.method);
+    // Local creator onboarding is already handled above; this gate is only
+    // for the independently authenticated Flirt operator's live workspace.
+    if (isWrite && pathname !== "/logout" && !agencyManagementRequestAllowed(pathname, req.method, serverAction)) return new NextResponse("Administrator access required", {status: 403});
+    if (isWrite && !trustedFormOrigin(req)) return new NextResponse("Untrusted request origin", {status: 403});
+    if (!["/logout"].includes(pathname) && !agencyDashboardPath(pathname, identity.name, true)) return new NextResponse("Administrator access required", {status: 403});
+    const requested = pathname.match(/^\/clones\/([0-9a-f-]{36})/i)?.[1] || req.nextUrl.searchParams.get("clone") || req.nextUrl.searchParams.get("cloneId");
+    if (requested && !identity.cloneIds.includes(requested)) return new NextResponse("Creator access denied", {status: 403});
+    return privateResponse(withPathname(req));
   }
   return withPathname(req);
 }
