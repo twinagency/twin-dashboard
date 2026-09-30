@@ -17,10 +17,12 @@ export function scopeAgencyClones(allowed: readonly string[], requested?: string
 // creator list only. Enforced here, so middleware 403s everything else too.
 export const PARTNER_PREVIEW_AGENCY = "Twin Technologies";
 export const isPartnerPreview = (agencyName?: string) => agencyName === PARTNER_PREVIEW_AGENCY;
-const PREVIEW_PATHS = ["/", "/revenue", "/clones", "/api/dashboard", "/api/dashboard/day-insight", "/api/users/live", "/api/fx", "/api/avatar", "/api/media-sign"];
+// Edit (creator config, read only) was added back 2026-10-01: GET only, since
+// agencyRequestAllowed blocks every server action for agency sessions.
+const PREVIEW_PATHS = ["/", "/revenue", "/clones", "/api/dashboard", "/api/dashboard/day-insight", "/api/users/live", "/api/fx", "/api/avatar", "/api/media-sign", "/api/models", "/api/voice", "/api/business-account", "/api/business-connection"];
 
 export function agencyDashboardPath(path: string, agencyName?: string, canManage = false): boolean {
-  if (isPartnerPreview(agencyName)) return PREVIEW_PATHS.includes(path);
+  if (isPartnerPreview(agencyName)) return PREVIEW_PATHS.includes(path) || /^\/clones\/[0-9a-f-]{36}$/i.test(path);
   if (isMoxy(agencyName) && path === "/api/models") return false;
   if (canManage && (Object.hasOwn(AGENCY_LIVE_CRM_ROUTES,path) || ["/api/caption","/api/compile"].includes(path))) return true;
   if (["/", "/revenue", "/analytics", "/sales-health", "/clones", "/users", "/media", "/sequences", "/info", "/flows", "/drip", "/messages", "/logs", "/business", "/agency/creators", "/agency/creator-invites"].includes(path)) return true;

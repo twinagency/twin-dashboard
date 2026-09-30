@@ -252,6 +252,8 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
   const usesBrandedCore = isCreator || isJessKate || isTether;
   const primaryLinks = isCreator
     ? CREATOR_LINKS
+    : isPreview
+    ? [...NAV_LINKS, ...MORE_LINKS.filter(item => item.kind === "tab" && item.tab === "identity")]
     : NAV_LINKS.flatMap(link => expandedMoxyNavigation && link.kind === "tab" && link.tab === "ppvs" ? [link, ...MORE_LINKS.filter(item => item.kind === "tab" && item.tab === "identity")] : [link]);
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -276,7 +278,7 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
     const rowClass = "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold transition";
     if (isAgency && link.kind === "route" && !agencyDashboardPath(link.href, agencyName, canManage)) return null;
     if (link.kind === "tab") {
-      if (isPreview) return null;
+      if (isPreview && link.tab !== "identity") return null;
       const active = onConfigurePage && activeTab === link.tab;
       if (!activeCloneId) return <button type="button" onClick={pickClone} title="Pick a creator first" className={rowClass + " " + colors.idle}>{navLabel(link, colors)}</button>;
       return <Link href={`/clones/${activeCloneId}?tab=${link.tab}`} onClick={onNavigate} className={rowClass + " " + (active ? colors.active : colors.idle)}>{navLabel(link, colors)}</Link>;
