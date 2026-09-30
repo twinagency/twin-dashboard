@@ -21,7 +21,8 @@ export default function CutRowForm({ row }: { row: CutRow }) {
   const handleSave = async () => {
     setIsLoading(true);
     try {
-      const pct = inputValue === "" ? null : parseInt(inputValue, 10);
+      // A rate with no cut typed = 0% cut (full earnings) at that rate.
+      const pct = inputValue === "" ? (rateValue === "" ? null : 0) : parseInt(inputValue, 10);
       const target = row.kind === "agency" ? { agencyId: row.id } : { cloneId: row.id };
       const rate = rateValue === "" ? null : Number(rateValue);
       await saveCut(target, pct, "manual", rate);
@@ -55,11 +56,11 @@ export default function CutRowForm({ row }: { row: CutRow }) {
       <TableCell>
         <input
           type="number"
-          min="2"
+          min="0"
           max="60"
           value={inputValue}
           onChange={(e) => setInputValue(e.target.value)}
-          placeholder="2-60"
+          placeholder="0-60"
           disabled={isLoading}
           className="w-20 rounded border border-line bg-white px-2 py-1 text-sm text-ink placeholder:text-muted focus:border-ink focus:outline-none disabled:opacity-50"
         />
