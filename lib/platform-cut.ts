@@ -207,7 +207,7 @@ export function applyStackedCut(value: number, platformPct: number, agencyCreato
 // ── viewer terms: ONE multiplier + ONE star rate per logged-in account ────
 //
 // starMult is what fraction of gross earnings this viewer keeps
-// ((1-platform/100) * (1-agencyCreator/100)); usdPerStar is the rate their
+// (1 - cut/100, from that login's own row only); usdPerStar is the rate their
 // star figures convert to money at. Admins are {1, 0.013}. The multiplier is
 // applied at the data layer (lib/agency-fetch.ts) so gross never reaches a
 // non-admin browser; a cut lookup failure THROWS, it never falls back to gross.
@@ -237,20 +237,12 @@ function pickRow(rows: CutRowLite[]): { pct: number; usdPerStar: number } | null
   return best;
 }
 
+// Each login uses ONLY its own row: a creator login its clone's row, an agency
+// login its agency's row. No fallback to an owning agency, no stacked
+// agency-creator cut, so one account's setting can never change another's.
 async function creatorTerms(cloneId: string): Promise<ViewerTerms> {
-  const cloneRow = pickRow(await readCutRows("clone_id", [cloneId]));
-  let base = cloneRow;
-  if (!base) {
-    const owners = await agencyIdsForClone(cloneId);
-    base = pickRow(await readCutRows("agency_id", owners));
-  }
-  const { data, error } = await serviceClient().from("agency_creator_cuts").select("cut_pct").eq("clone_id", cloneId);
-  if (error) throw new Error(`Could not read agency-creator cut for clone ${cloneId}: ${error.message}`);
-  const acPct = (data ?? []).reduce((max, r) => Math.max(max, Number(r.cut_pct) || 0), 0);
-  return {
-    starMult: computeStarMult(base?.pct ?? 0, acPct),
-    usdPerStar: base?.usdPerStar ?? DEFAULT_USD_PER_STAR,
-  };
+  const row = pickRow(await readCutRows("clone_id", [cloneId]));
+  return { starMult: computeStarMult(row?.pct ?? 0, 0), usdPerStar: row?.usdPerStar ?? DEFAULT_USD_PER_STAR };
 }
 
 async function termsForAccess(access: NonNullable<DashboardAccess>): Promise<ViewerTerms> {

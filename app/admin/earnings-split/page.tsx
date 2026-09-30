@@ -39,12 +39,12 @@ export default async function EarningsSplitPage() {
       <div>
         <h1 className="text-3xl font-bold text-ink">Earnings split</h1>
         <p className="mt-2 text-sm text-muted">
-          Cut % and $ per star apply only to that account's own view. Agencies and creators see earnings after the cut, converted at their $ per star (blank means the default 0.013, allowed 0.001 to 0.090). Admins always see gross. Applies to all-time figures and takes effect immediately.
+          One cut % and one $ per star per login. Each login uses only its own row: an agency login sees every creator it is assigned at gross minus ITS cut, a creator login sees its own earnings minus ITS cut. Rows never combine. $ per star blank = default 0.013 (allowed 0.001 to 0.090). Admins always see gross. Takes effect immediately.
         </p>
       </div>
 
       <div>
-        <h2 className="mb-4 text-xl font-semibold text-ink">Agencies</h2>
+        <h2 className="mb-4 text-xl font-semibold text-ink">Agency logins</h2>
         <div className="rounded-lg border border-line bg-white">
           <Table>
             <TableHeader>
@@ -72,7 +72,7 @@ export default async function EarningsSplitPage() {
       </div>
 
       <div>
-        <h2 className="mb-4 text-xl font-semibold text-ink">Creators</h2>
+        <h2 className="mb-4 text-xl font-semibold text-ink">Creator logins</h2>
         <div className="rounded-lg border border-line bg-white">
           <Table>
             <TableHeader>
