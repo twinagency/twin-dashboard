@@ -1,5 +1,6 @@
 "use client";
 import { useDashboardAccess } from "./DashboardAccessProvider";
+import { isPartnerPreview } from "@/lib/agency-policy";
 
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
@@ -39,7 +40,9 @@ const COHORT_OPTIONS: { value: CloneCohortFilter; label: string }[] = [
 ];
 
 export default function ClonesGrid({ clones }: { clones: CloneCard[] }) {
-  const {readOnly}=useDashboardAccess();
+  const {readOnly,isAgency,agencyName}=useDashboardAccess();
+  // Prospect preview login may not open creator config; cards go to Earnings.
+  const preview = isAgency && isPartnerPreview(agencyName);
   const [query, setQuery] = useState("");
   const [cohortFilter, setCohortFilter] = useState<CloneCohortFilter>("all");
   const router = useRouter();
@@ -120,7 +123,7 @@ export default function ClonesGrid({ clones }: { clones: CloneCard[] }) {
           {filtered.map((c) => (
             <Link
               key={c.id}
-              href={`/clones/${c.id}`}
+              href={preview ? "/revenue" : `/clones/${c.id}`}
               className="group rounded-[22px] border border-line bg-panel p-5 shadow-[var(--shadow-card)] transition duration-200 hover:-translate-y-0.5 hover:border-accent-2/60 hover:shadow-[0_24px_54px_rgb(6_23_47/0.1)]"
             >
               {/* Header: avatar (ringed in the clone color) + name + status + features */}
