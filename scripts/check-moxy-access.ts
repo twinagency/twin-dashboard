@@ -108,9 +108,8 @@ async function main() {
   assert.notEqual(accessCacheKey(moxy),accessCacheKey({...moxy,id:lynqId}));
   assert.equal(pathAgencyName("/moxy/auth"),"Moxy");assert.equal(isMoxy("Moxy"),true);assert.equal(isMoxy("LYNQ"),false);assert.equal(portalLoginPath("https://evil.example"),"/link");
   const sidebar=readFileSync("components/Sidebar.tsx","utf8");
-  assert.match(sidebar,/aria-disabled="true"/);assert.match(sidebar,/Not available/);assert.match(sidebar,/!readOnly \|\| showUnavailable/);
-  assert.match(sidebar,/showUnavailable \? <div/);
-  assert.match(sidebar,/MORE_LINKS\.filter\(link => link.kind !== "route" \|\| !\["\/jarvis", "\/agency-admin", "\/agency-admin\/creator-codes"\]\.includes\(link.href\)\)/);
+  assert.doesNotMatch(sidebar,/Not available|aria-disabled="true"/, "Unavailable navigation entries are hidden");
+  assert.match(sidebar,/primaryLinks\.filter\(availableLink\)/);
   assert.match(sidebar,/AI Intelligence Core/);
   assert.match(sidebar,/<IntelligenceCoreIcon size=\{64\} \/>/);
   assert.ok(sidebar.indexOf("<IntelligenceCoreIcon size={64}") < sidebar.indexOf("<nav "),"Core sits above the navigation");

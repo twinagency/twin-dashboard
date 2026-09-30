@@ -69,10 +69,18 @@ for (const mobile of [false, true]) {
   assert.match(kate, /<canvas[^>]*width="128"[^>]*height="128"[^>]*style="width:64px;height:64px"/);
   if (mobile) assert.match(kate, /aria-label="Close navigation"/);
 }
-const moxy = render("Moxy");
-assert.match(moxy, />CRM</); assert.match(moxy, /AI Intelligence Core/); assert.match(moxy, /Not available/);
-assert.doesNotMatch(moxy, /aria-expanded/);
-assert.equal(moxy.match(/<canvas[^>]*><\/canvas>/)?.[0], render(portals.JESS_KATE_PORTAL.name, true).match(/<canvas[^>]*><\/canvas>/)?.[0], "Reuse Moxy's exact animated globe component and size");
+for (const mobile of [false, true]) {
+  const moxy = render("Moxy", false, clone, mobile);
+  assert.doesNotMatch(moxy, /Not available|aria-disabled|AI Intelligence Core|>CRM</, "Hide unavailable sections, including the empty CRM group and core");
+  assert.doesNotMatch(moxy, /aria-expanded/, "Keep available secondary links expanded");
+  for (const href of ["/revenue", "/sales-health", "/clones", "/users", "/business", "/flows", "/sequences", "/info", "/logs", "/agency/creators", "/agency/creator-invites", `/clones/${clone}?tab=ppvs`, `/clones/${clone}?tab=identity`]) {
+    assert.ok(moxy.includes(`href="${href}"`), `Keep accessible Moxy link ${href}`);
+  }
+  for (const label of ["Storage", "Catalogue funnel", "Mini App rollout", "MTProto Campaign", "Tracker", "API", "Settings", "Inbox", "Fan CRM", "Campaigns", "Team", "Platforms"]) {
+    assert.ok(!moxy.includes(`>${label}<`), `Hide unavailable Moxy section ${label}`);
+  }
+  if (mobile) assert.match(moxy, /aria-label="Close navigation"/);
+}
 for (const [name, manage] of [["LYNQ", true], [undefined, false]] as const) {
   const html = render(name, manage);
   assert.match(html, />CRM</); assert.match(html, /aria-expanded="false"/);
