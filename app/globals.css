@@ -1,6 +1,7 @@
 @import "tailwindcss";
 @import "tw-animate-css";
 @import "shadcn/tailwind.css";
+@import "./moxy-earnings.css";
 
 /* Day mode only — there is no theme toggle and no `.dark` class is ever
    applied. `@custom-variant dark` is kept class-scoped (not the default
@@ -1059,4 +1060,3 @@ html.blur-media .creator-name {
   font-weight: 600;
   white-space: nowrap;
 }
-

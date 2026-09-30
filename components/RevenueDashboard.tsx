@@ -387,15 +387,16 @@ export default function RevenueDashboard({ cloneId, initialData = null }: { clon
     return v > 0 && v < 10 ? `${v.toFixed(1)}%` : `${Math.round(v)}%`;
   };
 
+  // One presentation palette for the chart, tooltips and creator chooser.
+  const chartClones = useMemo(() => (data?.clones ?? []).map((clone, index) => ({
+    ...clone,
+    color: `var(--moxy-revenue-series-${index % 6 + 1}, ${clone.color})`,
+  })), [data]);
   const visibleClones = useMemo(() => {
-    // Keep creator keys and values intact; CSS supplies Moxy-only series tones.
-    const all = (data?.clones ?? []).map((clone, index) => ({
-      ...clone,
-      color: `var(--moxy-revenue-series-${index % 6 + 1}, ${clone.color})`,
-    }));
+    const all = chartClones;
     if (cloneId) return all.filter((c) => c.id === cloneId);
     return all.filter((c) => !hidden.has(c.id));
-  }, [data, hidden, cloneId]);
+  }, [chartClones, hidden, cloneId]);
 
   // When scoped to one clone, every headline/stat reflects just that clone's totals.
   const focusStats = cloneId && data ? data.perClone[cloneId] : null;
@@ -520,8 +521,8 @@ export default function RevenueDashboard({ cloneId, initialData = null }: { clon
           </div>
         </div>
       )}
-      <div className="mb-3 overflow-hidden rounded-lg border border-line bg-panel">
-        <div className="flex flex-col justify-between gap-3 border-b border-line px-3 py-3 sm:flex-row sm:items-center sm:px-4">
+      <div className="revenue-command mb-3 overflow-hidden rounded-lg border border-line bg-panel">
+        <div className="revenue-page-heading flex flex-col justify-between gap-3 border-b border-line px-3 py-3 sm:flex-row sm:items-center sm:px-4">
           <div className="min-w-0">
             <div className="mb-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">Finance operations</div>
             <h2 className="flex items-center gap-1.5 font-heading text-xl font-semibold tracking-[-0.025em] text-ink sm:text-2xl">
@@ -529,7 +530,7 @@ export default function RevenueDashboard({ cloneId, initialData = null }: { clon
               <Info text={isCreator ? "Revenue, buyer activity and conversion performance for your creator account." : "Revenue, buyer activity and conversion performance across your active creators. In All creators, buyers are unique people across creators; audience and message totals count each creator-fan relationship."} />
             </h2>
           </div>
-          <div className="flex items-center gap-2 text-[11px] text-muted">
+          <div className="revenue-refresh flex items-center gap-2 text-[11px] text-muted">
             {data && (
               <span className="inline-flex items-center gap-1.5">
                 <span className={`h-1.5 w-1.5 rounded-full ${data.stale ? "bg-[#b7791f]" : "bg-good"}`} />
@@ -548,9 +549,10 @@ export default function RevenueDashboard({ cloneId, initialData = null }: { clon
         </div>
 
         {/* One compact command surface for time window, aggregation and mark. */}
-        <div className="flex flex-wrap items-center gap-1.5 px-2 py-2 sm:px-3">
+        <div className="revenue-toolbar flex flex-wrap items-center gap-1.5 px-2 py-2 sm:px-3">
+          <div className="revenue-window-controls contents">
           <span className="px-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-muted">Window</span>
-          <div role="group" aria-label="Reporting window" className="inline-flex min-w-0 flex-wrap gap-0.5 rounded-md border border-line bg-elev p-0.5">
+          <div role="group" aria-label="Reporting window" className="revenue-window-options inline-flex min-w-0 flex-wrap gap-0.5 rounded-md border border-line bg-elev p-0.5">
           {PERIODS.map((p) => (
             <button
               key={p.key}
@@ -593,10 +595,11 @@ export default function RevenueDashboard({ cloneId, initialData = null }: { clon
             {customRange ? `${customRange.start} → ${customRange.end}` : "Custom"}
           </button>
         </div>
-
+          </div>
+          <div className="revenue-view-controls contents">
           {!scoped && !isCreator && (
-            <>
-              <span className="mx-0.5 h-5 w-px bg-line" />
+            <div className="revenue-series-controls contents">
+              <span className="revenue-control-divider mx-0.5 h-5 w-px bg-line" />
               <span className="px-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-muted">Series</span>
               <div role="group" aria-label="Revenue series" className="inline-flex shrink-0 gap-0.5 rounded-md border border-line bg-elev p-0.5">
                 <button
@@ -616,10 +619,11 @@ export default function RevenueDashboard({ cloneId, initialData = null }: { clon
                   By creator
                 </button>
               </div>
-            </>
+            </div>
           )}
 
-          <span className="mx-0.5 h-5 w-px bg-line" />
+          <div className="revenue-chart-controls contents">
+          <span className="revenue-control-divider mx-0.5 h-5 w-px bg-line" />
           <span className="px-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-muted">Chart</span>
           <div role="group" aria-label="Chart type" className="inline-flex shrink-0 gap-0.5 rounded-md border border-line bg-elev p-0.5">
           <button
@@ -653,6 +657,8 @@ export default function RevenueDashboard({ cloneId, initialData = null }: { clon
             </svg>
           </button>
         </div>
+          </div>
+          </div>
         </div>
       </div>
 
@@ -684,20 +690,20 @@ export default function RevenueDashboard({ cloneId, initialData = null }: { clon
         </DialogContent>
       </Dialog>
 
-      <section aria-label="Earnings summary" className="mb-3 overflow-hidden rounded-lg border border-line bg-panel">
-        <div className="grid grid-cols-2 gap-px bg-line sm:grid-cols-5">
+      <section aria-label="Earnings summary" className="revenue-summary mb-3 overflow-hidden rounded-lg border border-line bg-panel">
+        <div className="revenue-kpi-grid grid grid-cols-2 gap-px bg-line sm:grid-cols-5">
           {primaryKpis.length > 0 ? (
             primaryKpis.map((metric, index) => (
               <div
                 key={metric.label}
-                className={`min-w-0 bg-panel px-3 py-2.5 sm:px-3.5 ${index === 0 ? "col-span-2 sm:col-span-1" : ""}`}
+                className={`revenue-kpi ${index === 0 ? "revenue-kpi-primary" : ""} min-w-0 bg-panel px-3 py-2.5 sm:px-3.5 ${index === 0 ? "col-span-2 sm:col-span-1" : ""}`}
               >
-                <div className="flex items-center gap-1 text-[9px] font-semibold uppercase tracking-[0.11em] text-muted">
+                <div className="revenue-kpi-label flex items-center gap-1 text-[9px] font-semibold uppercase tracking-[0.11em] text-muted">
                   <span>{metric.label}</span>
                   <Info text={metric.hint} />
                 </div>
                 <div
-                  className={`mt-1 break-words font-mono text-lg font-semibold leading-none tabular-nums sm:text-xl ${
+                  className={`revenue-kpi-value mt-1 break-words font-mono text-lg font-semibold leading-none tabular-nums sm:text-xl ${
                     metric.primary
                       ? displayStars > 0
                         ? "money-value-primary text-good"
@@ -709,7 +715,7 @@ export default function RevenueDashboard({ cloneId, initialData = null }: { clon
                 >
                   {metric.value}
                 </div>
-                <div className="mt-1 truncate text-[9px] text-muted">{metric.meta}</div>
+                <div className="revenue-kpi-meta mt-1 truncate text-[9px] text-muted">{metric.meta}</div>
               </div>
             ))
           ) : (
@@ -720,11 +726,11 @@ export default function RevenueDashboard({ cloneId, initialData = null }: { clon
         </div>
       </section>
 
-      <div className="grid items-start gap-3 xl:grid-cols-[minmax(0,1.7fr)_minmax(320px,0.75fr)]">
+      <div className="revenue-main-grid grid items-start gap-3 xl:grid-cols-[minmax(0,1.7fr)_minmax(320px,0.75fr)]">
         <div className="space-y-2">
         {/* ── Chart card ───────────────────────────────────────────── */}
-        <Card size="sm" className="rounded-lg border border-line bg-panel shadow-none">
-          <CardHeader className="flex-row items-start justify-between gap-4 space-y-0 border-b border-line pb-3">
+        <Card size="sm" className="revenue-chart-card rounded-lg border border-line bg-panel shadow-none">
+          <CardHeader className="revenue-chart-heading flex-row items-start justify-between gap-4 space-y-0 border-b border-line pb-3">
             <div className="min-w-0">
               <CardTitle className="text-sm font-semibold text-ink">Revenue performance</CardTitle>
               <div className="mt-0.5 flex flex-wrap items-center gap-1.5 text-[10px] text-muted">
@@ -732,9 +738,9 @@ export default function RevenueDashboard({ cloneId, initialData = null }: { clon
                 <Info text="Recorded Star payments in this window, after refunds and adjustments. This is not profit, a payout, or the current wallet balance." />
               </div>
             </div>
-            <div className="shrink-0 text-right">
+            <div className="revenue-chart-context shrink-0 text-right">
               {trendPct !== null && (
-                <div className="inline-flex items-center gap-1 rounded border border-line bg-elev px-2 py-1 text-[10px]">
+                <div className="revenue-trend inline-flex items-center gap-1 rounded border border-line bg-elev px-2 py-1 text-[10px]">
                   <span className={`font-mono font-semibold tabular-nums ${trendPct > 0 ? "text-good" : trendPct < 0 ? "text-[#b4432f]" : "text-ink"}`}>
                     {trendPct >= 0 ? "+" : ""}{trendPct}%
                   </span>
@@ -761,7 +767,7 @@ export default function RevenueDashboard({ cloneId, initialData = null }: { clon
           </CardHeader>
           <CardContent>
             <div
-              className="h-[190px] sm:h-[250px]"
+              className="revenue-chart-canvas h-[190px] sm:h-[250px]"
               role="img"
               aria-label={
                 data
@@ -952,7 +958,7 @@ export default function RevenueDashboard({ cloneId, initialData = null }: { clon
                   />
                 </div>
                 <div className="max-h-[min(30rem,60vh)] divide-y divide-line overflow-y-auto overscroll-contain">
-                  {(data?.clones ?? [])
+                  {chartClones
                     .filter((c) => c.name.toLowerCase().includes(creatorQuery.trim().toLowerCase()))
                     .map((c) => {
                       const checked = !hidden.has(c.id);
@@ -1039,7 +1045,7 @@ export default function RevenueDashboard({ cloneId, initialData = null }: { clon
           detached dashboard cards. Every measure still follows its original
           scope/window semantics. ───────────────────────────────────────── */}
       {data && (
-        <section className="mt-3 overflow-hidden rounded-lg border border-line bg-panel">
+        <section className="revenue-detail-section mt-3 overflow-hidden rounded-lg border border-line bg-panel">
           <div className="flex items-center justify-between gap-3 border-b border-line px-3 py-2.5 sm:px-4">
             <div>
               <h3 className="text-xs font-semibold uppercase tracking-[0.1em] text-ink">Operating metrics</h3>
@@ -1192,7 +1198,7 @@ export default function RevenueDashboard({ cloneId, initialData = null }: { clon
           fetched analytics payload, period and creator scope. */}
       {data?.analyticsError && <p role="status" className="mt-3 rounded-lg border border-line bg-panel p-4 text-sm text-muted">Performance analysis is temporarily unavailable. Earnings above are available. Use Refresh to retry.</p>}
       {data?.analytics && (
-        <section className="mt-3 overflow-hidden rounded-lg border border-line bg-panel">
+        <section className="revenue-detail-section mt-3 overflow-hidden rounded-lg border border-line bg-panel">
           <div className="flex flex-col justify-between gap-2 border-b border-line px-3 pt-2.5 sm:flex-row sm:items-end sm:px-4">
             <div className="pb-2">
               <h3 className="text-xs font-semibold uppercase tracking-[0.1em] text-ink">Performance analysis</h3>
@@ -1272,7 +1278,7 @@ export default function RevenueDashboard({ cloneId, initialData = null }: { clon
           Server sends up to 300 (fleet-wide, most recent first); scoping to
           one clone filters client-side. Shows 10, "Show more" → 50 → 100. ── */}
       {data && (
-        <Card size="sm" className="mt-3 gap-0 overflow-hidden rounded-lg border border-line bg-panel py-0 shadow-none">
+        <Card size="sm" className="revenue-ledger mt-3 gap-0 overflow-hidden rounded-lg border border-line bg-panel py-0 shadow-none">
           <CardHeader className="flex-row items-center justify-between gap-3 space-y-0 border-b border-line px-3 py-2.5 sm:px-4">
             <div>
               <CardTitle className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.1em] text-ink">
@@ -1521,7 +1527,7 @@ function CreatorPerformanceRail({
   const visible = ranked.slice(0, 6);
 
   return (
-    <section aria-label="Creator performance" className="overflow-hidden rounded-lg border border-line bg-panel">
+    <section aria-label="Creator performance" className="revenue-creator-rail overflow-hidden rounded-lg border border-line bg-panel">
       <div className="border-b border-line px-3 py-2.5">
         <h3 className="text-xs font-semibold uppercase tracking-[0.1em] text-ink">Creator performance</h3>
         <p className="mt-0.5 text-[10px] text-muted">Revenue rank in the selected window</p>
@@ -1546,7 +1552,7 @@ function CreatorPerformanceRail({
                     {totalStars > 0 ? pct(creator.revenueStars / totalStars) : "-"} share
                   </span>
                 </span>
-                <span className="font-mono font-semibold tabular-nums text-ink">{money(creator.revenueStars)}</span>
+                <span className="revenue-creator-amount font-mono font-semibold tabular-nums text-ink">{money(creator.revenueStars)}</span>
                 <span className="text-right font-mono tabular-nums text-muted">{fmtNum(creator.sales)}</span>
               </li>
             ))}
