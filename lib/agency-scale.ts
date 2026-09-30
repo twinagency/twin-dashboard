@@ -15,6 +15,9 @@
 export const EARNED_TABLE_FIELDS: Record<string, readonly string[]> = {
   star_transactions: ["amount_stars"],
   users: ["total_spent_stars"],
+  // Offer price per event; /flows sums it over purchased events as revenue, so
+  // leaving it gross would let an agency rebuild the gross total.
+  intent_offer_events: ["price_stars"],
 };
 
 /**
