@@ -67,6 +67,14 @@ export async function middleware(req: NextRequest) {
     return response;
   }
 
+  // T-Social Mini App endpoints are public by design (the Mini App is hosted on
+  // CloudFront). Exact paths only; the event route verifies Telegram initData itself.
+  if (pathname === "/api/tsocial/feed" || pathname === "/api/tsocial/event") {
+    const method = pathname.endsWith("/feed") ? "GET" : "POST";
+    if (req.headers.has("next-action") || (req.method !== method && req.method !== "OPTIONS")) return new NextResponse("Forbidden", { status: 403 });
+    return withPathname(req);
+  }
+
   if (isMarketingPath(pathname)) {
     if (!["GET", "HEAD"].includes(req.method) || req.headers.has("next-action")) return new NextResponse("Forbidden", { status: 403 });
     const response = privateResponse(withPathname(req));
