@@ -60,6 +60,12 @@ async function main(){
   assert((await post('/agency/creator-invites/manage',cookie,{action:'generate'},{Origin:'https://dashboard.lynqai.co'})).status===403,'Retired FLIRT origin allowed a write');
   checks.push('Old invitation URLs preserve their code; retired-origin writes remain denied');
   const creator=await signup('invited',invite.code);
+  // Generate an unsent recovery link only for this disposable test account.
+  // Report the URL configuration without exposing the token or sending email.
+  const recovery=await api('/auth/v1/admin/generate_link',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({type:'recovery',email:creator.email,redirect_to:ORIGIN+'/creator/reset-password'})});
+  const recoveryTarget=recovery.redirect_to||new URL(recovery.action_link).searchParams.get('redirect_to');
+  checks.push(recoveryTarget===ORIGIN+'/creator/reset-password'?'Password recovery accepts the new dashboard return address':'Password recovery redirect still needs FLIRT Supabase URL Configuration');
+
   const assignment=await api('/rest/v1/creator_agency_assignments?select=agency_id&creator_account_id=eq.'+creator.id);
   assert(assignment.length===1&&assignment[0].agency_id===ID,'Invited account not assigned to FLIRT');
   const used=await api('/rest/v1/creator_agency_codes?select=uses&id=eq.'+invite.id);

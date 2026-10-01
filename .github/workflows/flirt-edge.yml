@@ -4,6 +4,7 @@ on:
     branches: ["flirt/independent-backend-2026-09-19"]
     paths:
       - .github/workflows/flirt-edge.yml
+      - deployment/flirt-invites-live-check.cjs
   workflow_dispatch:
 
 concurrency:
