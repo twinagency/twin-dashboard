@@ -1,3 +1,4 @@
+import { parseMediaBundleCampaign, mediaCampaignReviewKey, type MediaBundleCampaign } from "./media-campaign";
 // lib/mtproto/runs.ts
 //
 // reengage_runs CRUD + the lifecycle transitions the prompt's UI walkthrough
@@ -24,6 +25,8 @@ import {
 } from "./types";
 
 type RunRow = {
+  allow_recontact?: boolean;
+  photo_campaign?: MediaBundleCampaign | null;
   id: string;
   created_at: string;
   created_by: string;
@@ -45,6 +48,8 @@ type RunRow = {
 function fromRow(r: RunRow): ReengageRun {
   return {
     id: r.id,
+    allowRecontact: r.allow_recontact === true,
+    photoCampaign: r.photo_campaign ?? null,
     createdAt: r.created_at,
     createdBy: r.created_by,
     status: r.status,
@@ -64,6 +69,9 @@ function fromRow(r: RunRow): ReengageRun {
 }
 
 export type CreateRunInput = {
+  id?: string;
+  photoCampaign?: MediaBundleCampaign;
+  allowRecontact?: boolean;
   createdBy: string;
   cloneIds: string[];
   filters: RunFilters;
@@ -81,6 +89,12 @@ export { RunValidationError };
  *  10-20% hold-out policy), applied before any write so a bad request 400s
  *  with a clear message instead of a raw Postgres constraint string. */
 export function validateCreateRunInput(input: CreateRunInput): void {
+  if (input.allowRecontact !== undefined && typeof input.allowRecontact !== "boolean") throw new RunValidationError("Invalid recontact option");
+  if (input.id) requireUuid(input.id, "campaign");
+  if (input.photoCampaign) {
+    if (input.cloneIds.length !== 1) throw new RunValidationError("Media campaigns require one creator");
+    parseMediaBundleCampaign(input.photoCampaign, input.cloneIds[0]);
+  }
   if (input.cloneIds.length === 0) throw new RunValidationError("pick at least one creator");
   if (input.cloneIds.length > 100) throw new RunValidationError("too many creators in one run");
   for (const id of input.cloneIds) requireUuid(id, "cloneIds");
@@ -117,6 +131,9 @@ export async function createDryRun(input: CreateRunInput): Promise<ReengageRun> 
   const { data, error } = await mtDb()
     .from("reengage_runs")
     .insert({
+      ...(input.id ? { id: input.id } : {}),
+      ...(input.photoCampaign ? { photo_campaign: parseMediaBundleCampaign(input.photoCampaign, cloneIds[0]) } : {}),
+      allow_recontact: input.allowRecontact === true,
       created_by: input.createdBy,
       status: "draft",
       dry_run: true,
@@ -139,7 +156,7 @@ export async function createDryRun(input: CreateRunInput): Promise<ReengageRun> 
     episodeId: null,
     eventType: "config_change",
     actor: input.createdBy,
-    detail: { action: "run_created", dryRun: true, cloneIds, filters, dailyCap: input.dailyCap, runCap: input.runCap, holdoutPct: input.holdoutPct, messageVariants },
+    detail: { action: "run_created", dryRun: true, allowRecontact: input.allowRecontact === true, cloneIds, filters, dailyCap: input.dailyCap, runCap: input.runCap, holdoutPct: input.holdoutPct, messageVariants },
   });
   return run;
 }
@@ -223,6 +240,7 @@ export async function recordDryRunReview(id: string, actor: string): Promise<Dry
       episode_count: summary.episodeCount,
       excluded_total: summary.excludedTotal,
       audience_size: audienceSize,
+      ...(mediaCampaignReviewKey(run) ? { media_campaign_key: mediaCampaignReviewKey(run) } : {}),
     },
   });
   return summary;
@@ -337,3 +355,4 @@ export async function stopRun(id: string, actor: string, reason?: string): Promi
 }
 
 export { DEFAULT_DAILY_CAP, DEFAULT_HOLDOUT_PCT };
+

@@ -75,6 +75,7 @@ export type ClassifyContext = {
   // be keyed, so these answer false and the no_chat_id rule excludes the fan.
   isOptedOut: (cloneId: string, telegramId: number | null) => boolean;
   isAlreadyContacted: (cloneId: string, telegramId: number | null, episodeStartIso: string) => boolean;
+  isWithinContactCooldown?: (cloneId: string, telegramId: number | null) => boolean;
   /** run.filters.includeLegacy (types.ts). When true, a fan is not excluded
    *  for legacy_import. Mirrors twin-userbot/src/policy.ts matchesFilters. */
   includeLegacy: boolean;
@@ -96,6 +97,7 @@ export function classifyFan(row: CandidateRow, ctx: ClassifyContext): PreviewExc
   if (row.is_active === false) return "inactive";
   if (ctx.isOptedOut(row.clone_id, row.telegram_id)) return "opt_out";
   if (!row.last_message_received) return "within_24h"; // never messaged in = no episode to open yet
+  if (ctx.isWithinContactCooldown?.(row.clone_id, row.telegram_id)) return "within_24h";
   if (ctx.isAlreadyContacted(row.clone_id, row.telegram_id, row.last_message_received)) return "already_contacted";
   // Exclude when unsure: any non-null legacy_id (even "") marks an import.
   // includeLegacy (an explicit operator opt-in on the run) is the one escape
@@ -189,6 +191,25 @@ async function alreadyContactedSet(cloneIds: string[]): Promise<{ keys: Set<stri
   }
 }
 
+/** Same real-attempt states and rolling 24h clock as the worker. */
+async function recontactCooldownSet(cloneIds: string[]): Promise<Set<string>> {
+  const cutoff = new Date(Date.now() - 24 * 3600_000).toISOString();
+  const { rows, truncated } = await selectAllRowsMtproto<{ clone_id: string; telegram_id: number; sent_at: string | null; claimed_at: string | null }>(
+    () => mtDb().from("reengage_episodes").select("clone_id,telegram_id,sent_at,claimed_at")
+      .in("clone_id", cloneIds).eq("dry_run", false)
+      .or("and(state.eq.acked,tg_message_id.not.is.null),and(state.eq.replied,tg_message_id.not.is.null),state.eq.sent,state.eq.uncertain")
+      .or(`sent_at.gte.${cutoff},claimed_at.gte.${cutoff}`)
+      .order("id", { ascending: true }) as any,
+    { label: "reengage_episodes (recontact cooldown)", maxRows: 200_000, throwOnError: true },
+  );
+  if (truncated) throw new Error("Recontact cooldown read was incomplete");
+  const after = Date.parse(cutoff);
+  return new Set(rows.filter(r => {
+    const time = Date.parse(r.sent_at ?? r.claimed_at ?? "");
+    return !Number.isFinite(time) || time > after;
+  }).map(r => fanKey(r.clone_id, r.telegram_id)));
+}
+
 /** Mirrors twin-userbot/src/policy.ts matchesSegment/matchesFilters so the
  *  preview counts the same audience the worker will scan. lapsed_buyers is
  *  the worker's purchase_count > 0. never_bought is deliberately STRICTER
@@ -220,7 +241,7 @@ export function isMissingIsTestColumn(e: unknown): boolean {
 
 export async function computeAudiencePreview(
   filters: RunFilters,
-  opts: { dailyCap: number; runCap: number | null; holdoutPct: number; seed?: string },
+  opts: { dailyCap: number; runCap: number | null; holdoutPct: number; seed?: string; allowRecontact?: boolean },
 ): Promise<AudiencePreview> {
   const cloneIds = uuidList(filters.cloneIds ?? filters.creatorIds ?? [], "cloneIds", 100);
   validateCaps({ dailyCap: opts.dailyCap, runCap: opts.runCap, holdoutPct: opts.holdoutPct });
@@ -283,7 +304,11 @@ export async function computeAudiencePreview(
   const connections = await listConnections();
   const pausedConn = new Map(connections.filter((c) => c.paused && cloneIds.includes(c.cloneId)).map((c) => [c.cloneId, c]));
 
-  const [optOuts, contactedRead] = await Promise.all([optedOutSet(cloneIds), alreadyContactedSet(cloneIds)]);
+  const [optOuts, contactedRead, recentContacts] = await Promise.all([
+    optedOutSet(cloneIds),
+    opts.allowRecontact ? Promise.resolve({ keys: new Set<string>(), truncated: false }) : alreadyContactedSet(cloneIds),
+    opts.allowRecontact ? recontactCooldownSet(cloneIds) : Promise.resolve(new Set<string>()),
+  ]);
   const contacted = contactedRead.keys;
 
   const nowMs = Date.now();
@@ -292,6 +317,7 @@ export async function computeAudiencePreview(
     nowMs,
     minSilenceHours,
     isOptedOut: (c, t) => t != null && optOuts.has(fanKey(c, t)),
+    isWithinContactCooldown: (c, t) => t != null && recentContacts.has(fanKey(c, t)),
     isAlreadyContacted: (c, t, iso) => t != null && contacted.has(`${fanKey(c, t)}:${tsKey(iso)}`),
     includeLegacy: filters.includeLegacy === true,
   };
@@ -357,3 +383,4 @@ export async function computeAudiencePreview(
   const pausedNotSent = pausedCreators.reduce((a, p) => a + p.notSent, 0);
   return { candidatePool: poolRows, pausedCreators, pausedNotSent, eligible, holdout: holdoutCount, excluded, excludedTotal, sample, truncated: truncated || contactedRead.truncated };
 }
+

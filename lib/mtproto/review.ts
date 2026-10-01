@@ -14,6 +14,7 @@
 // Every read here is strict: an unreadable table throws (the gate then
 // refuses), it never degrades to "0 rows, nothing changed".
 
+import { mediaCampaignReviewKey } from "./media-campaign";
 import { mtDb } from "./db";
 import { computeAudiencePreview } from "./audience";
 import { listEvents } from "./events";
@@ -168,13 +169,14 @@ export function countsOf(s: DryRunCounts): DryRunCounts {
 export async function currentAudienceSize(run: ReengageRun): Promise<number> {
   const p = await computeAudiencePreview(
     { ...run.filters, cloneIds: run.cloneIds },
-    { dailyCap: run.dailyCap, runCap: run.runCap, holdoutPct: run.holdoutPct },
+    { dailyCap: run.dailyCap, runCap: run.runCap, holdoutPct: run.holdoutPct, allowRecontact: run.allowRecontact },
   );
   if (p.truncated) throw new Error("audience read was incomplete (row ceiling); cannot compare it to the reviewed dry run");
   return p.eligible + p.holdout + p.excluded.cap_reached;
 }
 
 export type ReviewRecord = {
+  mediaCampaignKey?: string;
   eventId: number;
   reviewedAt: string;
   reviewedBy: string;
@@ -196,7 +198,7 @@ export async function latestReview(runId: string): Promise<ReviewRecord | null> 
     const x = num(d.excluded_total);
     const a = num(d.audience_size);
     if (w === null || h === null || n === null || x === null || a === null) continue; // malformed: not a valid review
-    return { eventId: e.id, reviewedAt: e.ts, reviewedBy: e.actor, counts: { wouldSendCount: w, holdoutCount: h, episodeCount: n, excludedTotal: x }, audienceSize: a };
+    return { ...(typeof d.media_campaign_key === "string" ? { mediaCampaignKey: d.media_campaign_key } : {}), eventId: e.id, reviewedAt: e.ts, reviewedBy: e.actor, counts: { wouldSendCount: w, holdoutCount: h, episodeCount: n, excludedTotal: x }, audienceSize: a };
   }
   return null;
 }
@@ -213,6 +215,11 @@ export async function checkReviewGate(run: ReengageRun): Promise<ReviewVerdict> 
     return { ok: false, reason: `cannot confirm live: review record unreadable (${e instanceof Error ? e.message : e})` };
   }
   if (!review) return { ok: false, reason: 'cannot go live: nobody has reviewed this dry run. Open the run and press "I reviewed this dry run" first' };
+
+  try {
+    const key = mediaCampaignReviewKey(run);
+    if (key && key !== review.mediaCampaignKey) return { ok: false, reason: "Campaign content or delivery choices changed. Review this dry run again" };
+  } catch { return { ok: false, reason: "Campaign content is invalid. Cannot confirm live" }; }
 
   let now: DryRunSummary;
   try {
@@ -283,3 +290,4 @@ export async function computeSendPlan(run: ReengageRun, summary: DryRunSummary):
   const runTotal = Math.min(perClone.reduce((a, r) => a + (r.paused ? 0 : r.wouldSend), 0), runCap);
   return { perClone, firstDayTotal, runTotal, runCap: run.runCap };
 }
+
