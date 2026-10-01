@@ -6,6 +6,10 @@ on:
       - .github/workflows/flirt-edge.yml
   workflow_dispatch:
 
+concurrency:
+  group: flirt-dashboard-edge
+  cancel-in-progress: false
+
 permissions:
   contents: read
 
@@ -39,11 +43,16 @@ jobs:
           test "$(docker inspect -f '{{.State.Running}}' flirt-dashboard)" = "true"
           curl -fsS http://127.0.0.1:3101/creator/login | grep -q "FLIRT"
 
-          test -n "$(getent ahostsv4 dashboard.lynqai.co | awk 'NR==1{print $1}')"
+          if ! getent ahostsv4 dashboard.flirtaiagency.com | awk '{print $1}' | grep -Fxq '15.135.97.139'; then
+              echo 'DNS pending: add GoDaddy A record dashboard -> 15.135.97.139 for flirtaiagency.com.'
+              exit 1
+          fi
 
-          cat > /etc/apache2/sites-available/dashboard.lynqai.co.conf <<'APACHE'
+          cat > /etc/apache2/sites-available/dashboard.flirtaiagency.com.conf <<'APACHE'
           <VirtualHost *:80>
-              ServerName dashboard.lynqai.co
+              ServerName dashboard.flirtaiagency.com
+              LimitRequestBody 0
+              ProxyTimeout 600
               ProxyPreserveHost On
               ProxyPass / http://127.0.0.1:3101/
               ProxyPassReverse / http://127.0.0.1:3101/
@@ -53,16 +62,16 @@ jobs:
           APACHE
 
           a2enmod proxy proxy_http ssl headers rewrite >/dev/null
-          a2ensite dashboard.lynqai.co.conf >/dev/null
+          a2ensite dashboard.flirtaiagency.com.conf >/dev/null
           apache2ctl configtest
           systemctl reload apache2
 
-          certbot --apache -d dashboard.lynqai.co --non-interactive --redirect --keep-until-expiring
+          certbot --apache -d dashboard.flirtaiagency.com --non-interactive --redirect --keep-until-expiring
 
           apache2ctl configtest
           systemctl reload apache2
 
-          curl -fsS https://dashboard.lynqai.co/creator/login | grep -q "FLIRT"
+          curl -fsS https://dashboard.flirtaiagency.com/creator/login | grep -q "FLIRT"
           echo "FLIRT edge route and HTTPS verified."
           SCRIPT
 
@@ -92,3 +101,4 @@ jobs:
 
           aws ssm get-command-invocation --command-id "$command_id" --instance-id "$INSTANCE_ID" --query '{status:Status,out:StandardOutputContent,err:StandardErrorContent}' --output json
           test "$(aws ssm get-command-invocation --command-id "$command_id" --instance-id "$INSTANCE_ID" --query Status --output text)" = "Success"
+

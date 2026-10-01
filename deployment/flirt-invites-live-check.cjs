@@ -1,7 +1,7 @@
 /* Disposable FLIRT-only invitation journey. Never log credentials or customer data. */
 const {randomBytes,createHash}=require('node:crypto');
 const {CLONES,ID}=require('./deployment/flirt-live-twin.cjs');
-const ORIGIN='https://dashboard.lynqai.co';
+const ORIGIN='https://dashboard.flirtaiagency.com';
 const API='https://lkmfwpqegjluirfusnaw.supabase.co';
 const checks=[],fixtures=[],codes=[];
 const stamp='flirt-invite-check-'+Date.now()+'-'+randomBytes(6).toString('hex');
@@ -55,6 +55,10 @@ async function main(){
   const invite=await makeInvite(cookie,'redeem');
   const landing=await page('/creator/signup?code='+invite.code,null);
   assert(landing.status===200&&(await landing.text()).includes(invite.code),'Invite signup link lost its code');
+  const retired=await request('https://dashboard.lynqai.co/creator/signup?code='+invite.code);
+  assert(retired.status===308&&retired.headers.get('location')===ORIGIN+'/creator/signup?code='+invite.code,'Old FLIRT invite must preserve its code on the new hostname');
+  assert((await post('/agency/creator-invites/manage',cookie,{action:'generate'},{Origin:'https://dashboard.lynqai.co'})).status===403,'Retired FLIRT origin allowed a write');
+  checks.push('Old invitation URLs preserve their code; retired-origin writes remain denied');
   const creator=await signup('invited',invite.code);
   const assignment=await api('/rest/v1/creator_agency_assignments?select=agency_id&creator_account_id=eq.'+creator.id);
   assert(assignment.length===1&&assignment[0].agency_id===ID,'Invited account not assigned to FLIRT');
@@ -112,3 +116,4 @@ async function cleanup(){
   console.log(JSON.stringify({passed:!failure,checks,...(failure?{error:failure}:{synthetic_fixtures_removed:true}),credentials_logged:false}));
   if(failure)process.exitCode=1;
 })();
+

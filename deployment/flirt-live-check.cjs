@@ -1,7 +1,7 @@
 /* Run only inside the labelled FLIRT dashboard. No credentials or customer data logged. */
 const { randomBytes, randomUUID } = require('node:crypto');
 const PROJECT = 'lkmfwpqegjluirfusnaw';
-const ORIGIN = 'https://dashboard.lynqai.co';
+const ORIGIN = 'https://dashboard.flirtaiagency.com';
 const BASE = 'http://127.0.0.1:3001';
 const API = `https://${PROJECT}.supabase.co`;
 const key = process.env.SUPABASE_SERVICE_KEY;
@@ -123,3 +123,4 @@ async function cleanup() {
   if(failure) { console.log(JSON.stringify({passed:false,checks,error:failure,credentials_logged:false}));process.exitCode=1; }
   else console.log(JSON.stringify({passed:true,checks,synthetic_fixtures_removed:true,credentials_logged:false}));
 })();
+

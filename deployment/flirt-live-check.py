@@ -25,7 +25,7 @@ try: report=json.loads(result.stdout)
 except Exception: report={'passed':False,'error':'Live check did not return a structured report','exit_status':result.returncode}
 print(json.dumps({'application':report}),flush=True)
 meta={}
-for host in ['lynqai.co','dashboard.lynqai.co']:
+for host in ['lynqai.co','dashboard.flirtaiagency.com']:
     try: meta[host]=sorted(set(item[4][0] for item in socket.getaddrinfo(host,None)))
     except OSError: meta[host]=[]
 try:
@@ -61,3 +61,4 @@ if __name__=='__main__':
     except Exception as error:
         print(str(error) if isinstance(error,RuntimeError) else type(error).__name__,file=sys.stderr)
         sys.exit(1)
+

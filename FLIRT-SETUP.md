@@ -1,5 +1,15 @@
 # FLIRT white label on Twin services
 
+## Domain migration, 1 October 2026
+
+The website is `https://flirtaiagency.com` on Lovable. The dashboard's new canonical origin is `https://dashboard.flirtaiagency.com` on the existing AWS host, `15.135.97.139`. Add an `A` record named `dashboard` to this IP in GoDaddy; keep the Lovable root and `www` records.
+
+Run **FLIRT dashboard edge route** after DNS resolves to that host. It creates the new FLIRT Apache virtual host and HTTPS certificate, retaining the original host and Twin virtual hosts. The release refuses to switch the dashboard origin until the new HTTPS login loads. Re-run failed release jobs after the edge route succeeds. Existing FLIRT passwords, signing secrets, account assignments and data are retained. Old dashboard GET/HEAD navigation redirects to the new origin with its path/query intact once released; old-domain POST requests do not bypass origin protection.
+
+In the local FLIRT Supabase project `lkmfwpqegjluirfusnaw`, set Authentication → URL Configuration → Site URL to `https://dashboard.flirtaiagency.com` and add the exact recovery redirect `https://dashboard.flirtaiagency.com/creator/reset-password`. Do not alter Twin Auth. Existing SMTP limitations documented below remain a separate issue. No recovery email was sent to a real creator during this domain migration.
+
+Publish the updated marketing project only after the dashboard release's live acceptance succeeds. The website signup/sign-in URLs, canonical URL, and social images use the new domain. The established contact mailbox remains `hello@lynq.ai` until a working replacement mailbox is supplied.
+
 ## Current onboarding boundary, 1 October 2026
 
 The operator dashboard connects to exactly four authorised Twin creators using the existing `flirt-live-twin.cjs` scope. That connection is an explicit exception to the original independent-database plan below. This onboarding fix does not replace or rotate that pre-existing connection.
@@ -29,7 +39,7 @@ Shared provider-account administrators can still see provider usage and may acce
 - Branch: `flirt/independent-backend-2026-09-19`. The historical branch name remains for continuity; the supported operation is a white label using shared Twin services.
 - The full source is inherited. Preserve Twin's page layouts, workflows and behaviour, with FLIRT logos and colours.
 - This is a FLIRT deployment track. Do not merge its database restrictions or deployment settings into Twin main.
-- Marketing remains `jesse98/fan-voice-flow` at `https://lynqai.co`. Change its signup/sign-in destination only after live acceptance passes.
+- Marketing remains `jesse98/fan-voice-flow` at `https://flirtaiagency.com`. Change its signup/sign-in destination only after live acceptance passes.
 
 ## Shared services
 - `OPENROUTER_API_KEY`, `ELEVENLABS_API_KEY` and `DEEPGRAM_API_KEY` can be the authorised existing Twin keys. Existing environment injection continues to work.
@@ -93,7 +103,7 @@ These match the recorded remote migration versions and are already applied. The 
 1. Run the gated FLIRT release workflows on the dedicated branch. The credential transfer is approved and both encrypted GitHub secrets are saved. Public project identifiers are pinned in `deployment/flirt-project.json`; Twin database keys must not be reused.
 2. Inject the FLIRT database/login environment and the authorised existing Twin provider keys. Generate separate creator/operator signing secrets and a new operator password on the protected host. Run `npm run flirt:preflight` and `node deployment/flirt-provision-storage.cjs --check`. Storage is already provisioned; do not recreate or make buckets public.
 3. Build verified immutable FLIRT images and deploy separate dashboard/bot containers on suitable existing Twin hosting. Both hosts are reachable. Initially run both separate FLIRT containers on the existing dashboard host (`i-09a9dd3bd749643a5`), which has 21 GiB free, instead of adding images to the nearly full bot host. Set hard memory limits of 512 MiB for dashboard and 384 MiB for worker, and rotate their Docker logs. Reassess capacity as FLIRT traffic grows. Keep Twin's containers, image tags and ports unchanged. Do not use the production `next-app` replacement workflow.
-4. Configure the FLIRT HTTPS application hostname, DNS and reverse proxy to dashboard port 3101. The runtime is prepared for `https://dashboard.lynqai.co`; DNS/TLS/proxy setup is still pending and this is not yet a public preview link. Update the FLIRT Auth recovery redirect allowlist for that exact origin.
+4. Configure the FLIRT HTTPS application hostname, DNS and reverse proxy to dashboard port 3101. The runtime is prepared for `https://dashboard.flirtaiagency.com`; DNS/TLS/proxy setup is still pending and this is not yet a public preview link. Update the FLIRT Auth recovery redirect allowlist for that exact origin.
 5. Configure recovery-email SMTP with the authorised existing email provider and verified sender. No new email subscription is required. Twin has no configured Auth SMTP values available to copy.
 6. Test live signup, recovery, agency invites, onboarding, uploads, two-account isolation, chat, voice and test payments with FLIRT-only accounts. Compare desktop/mobile pages against Twin, then connect the marketing login. Neither a GitHub build nor database checks prove these flows work live.
 7. Retire the old LYNQ backend only after acceptance. No deletion or automatic customer migration is part of this setup.
@@ -113,3 +123,4 @@ References: [Docker project separation](https://docs.docker.com/compose/how-tos/
 - Removed embedded Twin project credentials from both recovery screens. Recovery receives validated public credentials from server pages at request time. `SUPABASE_PUBLISHABLE_KEY` must belong to the same independent project. No service key is sent to the browser.
 - Added recovery isolation checks and enabled the existing creator login/routing/onboarding regression checks in branch CI.
 - Public and authenticated visual review, email delivery and end-to-end signup still require the independent FLIRT deployment. A successful offline build is not evidence of working live accounts or payments.
+

@@ -1,7 +1,7 @@
 /* Runs inside FLIRT only. No credentials, cookies or customer records are logged. */
 const { randomBytes } = require('node:crypto');
 const PROJECT = 'lkmfwpqegjluirfusnaw';
-const ORIGIN = 'https://dashboard.lynqai.co';
+const ORIGIN = 'https://dashboard.flirtaiagency.com';
 const API = `https://${PROJECT}.supabase.co`;
 const fixtures = [];
 const checks = [];
@@ -169,3 +169,4 @@ async function cleanup() {
   console.log(JSON.stringify({ passed: !failure, checks, ...(failure ? { error: failure } : { synthetic_fixtures_removed: true }), credentials_logged: false }));
   if (failure) process.exitCode = 1;
 })();
+

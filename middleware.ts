@@ -36,6 +36,15 @@ const SELF_AUTHENTICATED_PREFIXES = ["/api/v1/", "/api/admin/"];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+  // Retain old invitations/bookmarks without weakening the trusted form origin.
+  // Only redirect safe navigation on the retired FLIRT hostname; never Twin.
+  if (process.env.FLIRT_BACKEND_ENABLED === "true"
+    && process.env.DASHBOARD_PUBLIC_ORIGIN === "https://dashboard.flirtaiagency.com"
+    && req.nextUrl.hostname === "dashboard.lynqai.co"
+    && ["GET", "HEAD"].includes(req.method)
+    && !req.headers.has("next-action")) {
+    return privateResponse(NextResponse.redirect(new URL(pathname + req.nextUrl.search, dashboardOrigin(req)), 308));
+  }
   if (isMarketingPath(pathname)) {
     if (!["GET", "HEAD"].includes(req.method) || req.headers.has("next-action")) return new NextResponse("Forbidden", { status: 403 });
     const response = privateResponse(withPathname(req));
@@ -165,3 +174,4 @@ export async function middleware(req: NextRequest) {
   return withPathname(req);
 }
 export const config = { matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.png).*)"] };
+

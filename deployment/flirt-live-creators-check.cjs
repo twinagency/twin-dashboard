@@ -1,6 +1,6 @@
 /* Runs inside FLIRT. Only check labels and selected creator names are logged. */
 const { configuration, CLONES, PROJECT } = require('./deployment/flirt-live-twin.cjs');
-const ORIGIN = 'https://dashboard.lynqai.co';
+const ORIGIN = 'https://dashboard.flirtaiagency.com';
 const LOCAL = 'lkmfwpqegjluirfusnaw';
 const checks = [];
 function assert(ok, label) { if (!ok) throw new Error(label); }
@@ -59,3 +59,4 @@ async function main() {
   console.log(JSON.stringify({ passed: true, creators: expected.map(row => row.name).sort(), checks, credentials_logged: false, database_records_copied: false }));
 }
 main().catch(error => { console.log(JSON.stringify({ passed: false, error: error.message, checks, credentials_logged: false })); process.exitCode = 1; });
+

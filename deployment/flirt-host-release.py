@@ -8,7 +8,7 @@ from urllib.request import Request, urlopen
 from urllib.error import HTTPError
 
 PROJECT = "lkmfwpqegjluirfusnaw"
-ORIGIN = "https://dashboard.lynqai.co"
+ORIGIN = "https://dashboard.flirtaiagency.com"
 ROOT = Path("/etc/flirt")
 REGISTRY = "323149985112.dkr.ecr.ap-southeast-2.amazonaws.com"
 TWIN_PROJECT = "aouaenqayfltoqrmpitg"
@@ -263,3 +263,4 @@ if __name__ == "__main__":
         # Neither service credentials nor provider responses may enter SSM logs.
         print("FLIRT host operation failed: " + (str(error) if isinstance(error, RuntimeError) else type(error).__name__) + ". No credentials logged.", file=sys.stderr)
         sys.exit(1)
+
