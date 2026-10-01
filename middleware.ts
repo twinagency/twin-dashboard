@@ -40,7 +40,7 @@ export async function middleware(req: NextRequest) {
   // Only redirect safe navigation on the retired FLIRT hostname; never Twin.
   if (process.env.FLIRT_BACKEND_ENABLED === "true"
     && process.env.DASHBOARD_PUBLIC_ORIGIN === "https://dashboard.flirtaiagency.com"
-    && req.nextUrl.hostname === "dashboard.lynqai.co"
+    && req.headers.get("host")?.toLowerCase() === "dashboard.lynqai.co"
     && ["GET", "HEAD"].includes(req.method)
     && !req.headers.has("next-action")) {
     return privateResponse(NextResponse.redirect(new URL(pathname + req.nextUrl.search, dashboardOrigin(req)), 308));

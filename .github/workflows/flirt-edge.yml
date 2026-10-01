@@ -22,6 +22,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
+      - uses: actions/checkout@v4
       - name: Existing authorised AWS connection
         uses: aws-actions/configure-aws-credentials@v4
         with:
@@ -72,6 +73,33 @@ jobs:
           systemctl reload apache2
 
           curl -fsS https://dashboard.flirtaiagency.com/creator/login | grep -q "FLIRT"
+          # Retired FLIRT GET/HEAD links retain their path and invitation code.
+          # Keep all write requests behind the application's strict origin check.
+          if docker exec flirt-dashboard printenv DASHBOARD_PUBLIC_ORIGIN | grep -Fxq 'https://dashboard.flirtaiagency.com'; then
+              python3 - <<'REDIRECT'
+          import re, subprocess
+          from pathlib import Path
+          paths = [Path('/etc/apache2/sites-available') / name for name in ('dashboard.lynqai.co.conf', 'dashboard.lynqai.co-le-ssl.conf')]
+          originals = {}
+          for path in paths:
+              if not path.is_file(): continue
+              content = path.read_text()
+              if '# FLIRT legacy domain' in content: continue
+              rule = ('    # FLIRT legacy domain\n    RewriteEngine On\n'
+                      '    RewriteCond %{REQUEST_METHOD} ^(GET|HEAD)$\n'
+                      '    RewriteRule ^ https://dashboard.flirtaiagency.com%{REQUEST_URI} [R=308,L,NE]\n')
+              changed, count = re.subn(r'(\s*ServerName dashboard\.lynqai\.co[^\n]*\n)', lambda match: match.group(1) + rule, content)
+              if count != 1: raise SystemExit('Legacy FLIRT proxy does not match expected hostname')
+              originals[path] = content
+              backup = path.with_suffix('.conf.before-flirtai-migration')
+              if not backup.exists(): backup.write_text(content)
+              path.write_text(changed)
+          if subprocess.run(['apache2ctl', 'configtest']).returncode:
+              for path, content in originals.items(): path.write_text(content)
+              raise SystemExit('Restored legacy FLIRT proxy after validation failure')
+          subprocess.run(['systemctl', 'reload', 'apache2'], check=True)
+          REDIRECT
+          fi
           echo "FLIRT edge route and HTTPS verified."
           SCRIPT
 
@@ -102,3 +130,7 @@ jobs:
           aws ssm get-command-invocation --command-id "$command_id" --instance-id "$INSTANCE_ID" --query '{status:Status,out:StandardOutputContent,err:StandardErrorContent}' --output json
           test "$(aws ssm get-command-invocation --command-id "$command_id" --instance-id "$INSTANCE_ID" --query Status --output text)" = "Success"
 
+      - name: Verify new-domain invitations and retired-domain redirects
+        env:
+          FLIRT_EXPECTED_COMMIT: b484bc8f9b3f5e9b3a02b041eb2fd900db7d4d43
+        run: python3 deployment/flirt-invites-live-check.py
