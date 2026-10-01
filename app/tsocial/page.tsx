@@ -19,6 +19,10 @@ type Post = {
   purpose: string; price_ton: number | null; status: string; created_at: string;
 };
 type ChatPost = { id: string; account_id: string; text: string; status: string };
+type Viewer = { tg: number; first: string; last: string; opens: number; views: number; profiles: number; chats: number };
+
+const MAX_VIEWER_ROWS = 300;
+const VIEWER_DAYS = 30;
 
 const MAX_ACCOUNT_ROWS = 100;
 
@@ -72,8 +76,47 @@ export default async function TSocialPage() {
     supabaseAdmin.from("tsocial_settings").select("key,value"),
   ]);
 
+  // Viewers: everyone the app could identify in the last VIEWER_DAYS, account or not.
+  const sinceViewers = new Date(Date.now() - VIEWER_DAYS * 864e5).toISOString();
+  const [eventsRes, girlsRes, staffRes] = await Promise.all([
+    selectAllRows<{ telegram_id: number | null; kind: string; at: string }>(supabaseAdmin.from("tsocial_events").select("telegram_id,kind,at").eq("verified", true).gte("at", sinceViewers).order("id"), { label: "tsocial viewers" }),
+    supabaseAdmin.from("userbot_connections").select("tg_user_id"),
+    supabaseAdmin.from("tsocial_accounts").select("tg_user_id").not("legacy_clone_id", "is", null),
+  ]);
+  const viewerMap = new Map<number, Viewer>();
+  for (const e of eventsRes.rows) {
+    if (e.telegram_id == null) continue;
+    const v = viewerMap.get(e.telegram_id) ?? { tg: e.telegram_id, first: e.at, last: e.at, opens: 0, views: 0, profiles: 0, chats: 0 };
+    if (e.at < v.first) v.first = e.at;
+    if (e.at > v.last) v.last = e.at;
+    if (e.kind === "open") v.opens++;
+    else if (e.kind === "view") v.views++;
+    else if (e.kind === "profile") v.profiles++;
+    else if (e.kind === "message") v.chats++;
+    viewerMap.set(e.telegram_id, v);
+  }
+  const viewers = [...viewerMap.values()].sort((a, b) => b.last.localeCompare(a.last));
+  const viewerIds = viewers.map((v) => v.tg);
+  const fanRows: { telegram_id: number; name: string | null; username: string | null; is_test: boolean | null }[] = [];
+  for (let i = 0; i < viewerIds.length; i += 200) {
+    const { data } = await supabaseAdmin.from("users").select("telegram_id,name,username,is_test").in("telegram_id", viewerIds.slice(i, i + 200));
+    fanRows.push(...((data ?? []) as typeof fanRows));
+  }
+  const fanByTg = new Map<number, { name: string | null; username: string | null; test: boolean }>();
+  for (const f of fanRows) {
+    const prev = fanByTg.get(f.telegram_id);
+    fanByTg.set(f.telegram_id, { name: prev?.name || f.name, username: prev?.username || f.username, test: !!prev?.test || !!f.is_test });
+  }
+  const girlTg = new Set<number>([
+    ...((girlsRes.data ?? []) as { tg_user_id: number | null }[]).map((r) => r.tg_user_id).filter((v): v is number => v != null),
+    ...((staffRes.data ?? []) as { tg_user_id: number | null }[]).map((r) => r.tg_user_id).filter((v): v is number => v != null),
+  ]);
+  const viewerTag = (tg: number) => (girlTg.has(tg) ? "girl" : fanByTg.get(tg)?.test ? "test" : null);
+  const realViewers = viewers.filter((v) => !viewerTag(v.tg)).length;
+
   const accounts = accountsRes.rows;
   const accById = new Map(accounts.map((a) => [a.id, a]));
+  const accByTg = new Map(accounts.map((a) => [a.tg_user_id, a]));
   const postStats = new Map<string, { posts: number; views: number }>();
   for (const p of postsRes.rows) {
     if (!p.account_id) continue;
@@ -221,6 +264,44 @@ export default async function TSocialPage() {
         </CardContent>
       </Card>
 
+      <Card>
+        <CardContent>
+          <h2 className="mb-3 flex items-center gap-1 text-lg font-semibold text-ink">Viewers ({fmtNum(realViewers)} real, {fmtNum(viewers.length)} total)<Info text={`Everyone who opened the Mini App in the last ${VIEWER_DAYS} days, with or without an account, newest first. Tagged girl or test rows are not counted as real. Showing the latest ${MAX_VIEWER_ROWS}.`} /></h2>
+          {viewers.length === 0 ? <p className="text-sm text-ink">Nobody yet.</p> : (
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[900px] text-left text-sm">
+                <thead className="text-xs text-muted">
+                  <tr><th className="py-2 pr-3">Viewer</th><th className="px-2">Account</th><th className="px-2">First seen</th><th className="px-2">Last seen</th><th className="px-2">Opens</th><th className="px-2">Clips viewed</th><th className="px-2">Profiles</th><th className="px-2">Chat taps</th></tr>
+                </thead>
+                <tbody className="divide-y divide-line">
+                  {viewers.slice(0, MAX_VIEWER_ROWS).map((v) => {
+                    const a = accByTg.get(v.tg);
+                    const f = fanByTg.get(v.tg);
+                    const tag = viewerTag(v.tg);
+                    const name = a?.display_name || f?.name || "No name";
+                    const handle = a?.username || f?.username;
+                    return (
+                      <tr key={v.tg} className={tag ? "opacity-60" : ""}>
+                        <td className="py-2 pr-3">
+                          <div className="truncate font-medium text-ink">{name}{tag ? ` (${tag})` : ""}</div>
+                          <div className="truncate text-xs text-muted">{handle ? `@${handle} · ` : ""}{v.tg}</div>
+                        </td>
+                        <td className="px-2">{a ? "Yes" : "No"}</td>
+                        <td className="px-2">{new Date(v.first).toLocaleString("en-GB", { dateStyle: "short", timeStyle: "short" })}</td>
+                        <td className="px-2">{new Date(v.last).toLocaleString("en-GB", { dateStyle: "short", timeStyle: "short" })}</td>
+                        <td className="px-2">{fmtNum(v.opens)}</td>
+                        <td className="px-2">{fmtNum(v.views)}</td>
+                        <td className="px-2">{fmtNum(v.profiles)}</td>
+                        <td className="px-2">{fmtNum(v.chats)}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </CardContent>
+      </Card>
       <Card>
         <CardContent>
           <h2 className="mb-3 flex items-center gap-1 text-lg font-semibold text-ink">Settings<Info text="Live values the Mini App reads. Price and percentage changes ask you to confirm first." /></h2>
