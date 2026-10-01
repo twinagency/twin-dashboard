@@ -48,6 +48,8 @@ jobs:
           account=$(aws sts get-caller-identity --query Account --output text)
           test "$account" = '323149985112'
           echo 'Existing Twin AWS account verified.'
+      - name: Report public DNS target for the existing host
+        run: aws ec2 describe-instances --instance-ids "$INSTANCE_ID" --query 'Reservations[].Instances[].{instance:InstanceId,public_ip:PublicIpAddress,public_dns:PublicDnsName}' --output json
       - name: Inspect the existing host without changing it
         run: |
           set -euo pipefail
