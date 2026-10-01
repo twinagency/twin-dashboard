@@ -6,6 +6,9 @@ const nextConfig = {
   // The bot and dashboard each have their own lockfile; pin the trace root to this app.
   outputFileTracingRoot: import.meta.dirname,
   experimental: {
+    // Middleware clones the multipart body before the Server Action reads it.
+    // Match the existing action limit so videos above Next's 10 MB default survive.
+    middlewareClientMaxBodySize: "50mb",
     serverActions: {
       bodySizeLimit: "50mb",
     },
@@ -13,3 +16,4 @@ const nextConfig = {
 };
 
 export default nextConfig;
+
