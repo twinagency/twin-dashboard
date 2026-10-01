@@ -188,6 +188,8 @@ export interface RunFilters {
 }
 
 export interface ReengageRun {
+  allowRecontact?: boolean;
+  photoCampaign?: import("./media-campaign").MediaBundleCampaign | null;
   id: string;
   createdAt: string;
   createdBy: string;
@@ -547,3 +549,4 @@ export interface SendRow {
    *  { includeDry: true } (its default excludes dry rows entirely). */
   dryRun: boolean;
 }
+

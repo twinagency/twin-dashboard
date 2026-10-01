@@ -112,6 +112,25 @@ export default async function RunDetailPage({ params }: { params: Promise<{ id: 
         </div>
       )}
 
+      {run.photoCampaign?.bundle && (
+        <Card className="mb-6">
+          <CardHeader><CardTitle>Campaign content</CardTitle></CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex flex-wrap gap-3 text-sm">
+              <span>{run.photoCampaign.assets.length} free video(s)</span>
+              <span>{run.photoCampaign.bundle.itemPaths.length} locked item(s)</span>
+              <strong>{run.photoCampaign.bundle.starPrice.toLocaleString()} Stars total</strong>
+              <span>{run.filters.segment === "lapsed_buyers" ? "Previous buyers" : "All existing silent fans"}</span>
+              <span>{run.allowRecontact ? "Previous contacts included after cooldown" : "Previously contacted fans excluded"}</span>
+            </div>
+            <div className="grid gap-4 lg:grid-cols-2">
+              <div><h3 className="mb-2 text-sm font-semibold">Free caption</h3><div className="whitespace-pre-wrap rounded-xl border border-line p-3 text-sm">{run.photoCampaign.caption}</div></div>
+              <div><h3 className="mb-2 text-sm font-semibold">Paid caption</h3><div className="whitespace-pre-wrap rounded-xl border border-line p-3 text-sm">{run.photoCampaign.bundle.caption}</div></div>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+
       {reviewCard}
 
       <FunnelCard title="Funnel" funnel={truncated ? { ...funnel, partial: true } : funnel} optOuts={optOuts} />
@@ -180,3 +199,4 @@ export default async function RunDetailPage({ params }: { params: Promise<{ id: 
     </div>
   );
 }
+
