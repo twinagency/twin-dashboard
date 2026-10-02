@@ -1,4 +1,4 @@
 {
-  "reason": "Fix FLIRT uploads after optional onboarding, allow returning to finish intake, add dashboard and step navigation, and make choose/upload controls red.",
+  "reason": "Complete FLIRT return-to-onboarding fix by aligning middleware with optional dashboard access; retain authentication and owner-scoped data checks.",
   "requested_at": "2026-10-02T04:45:00Z"
 }

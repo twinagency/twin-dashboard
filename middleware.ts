@@ -1,3 +1,4 @@
+import { flirtOnboardingOptional } from "@/lib/flirt-onboarding";
 import { enabled as liveTwinEnabled, identity as liveTwinIdentity } from "./deployment/flirt-live-twin.cjs";
 import { isMarketingPath } from "@/lib/marketing-routing";
 import { isTwinLoginPath, safeAdminNext } from "@/lib/login-routing";
@@ -88,7 +89,7 @@ export async function middleware(req: NextRequest) {
       return response;
     }
     try { assertCreatorQuery(req.nextUrl.searchParams, creator.cloneIds); } catch { return new NextResponse("Creator access denied", { status: 403 }); }
-    if (isCreatorDashboardPath(pathname) && !creator.onboarded) return privateResponse(NextResponse.redirect(new URL("/creator/onboarding", dashboardOrigin(req))));
+    if (isCreatorDashboardPath(pathname) && !creator.onboarded && !flirtOnboardingOptional()) return privateResponse(NextResponse.redirect(new URL("/creator/onboarding", dashboardOrigin(req))));
     return privateResponse(withPathname(req, isCreatorDashboardPath(pathname)));
   }
   if (pathname === "/admin-auth") {
@@ -112,7 +113,7 @@ export async function middleware(req: NextRequest) {
   const useCreator = creatorReferrer(req) || (!!creatorToken && !req.cookies.has(AGENCY_COOKIE) && !req.cookies.has(SESSION_COOKIE));
   if (useCreator) {
     const creator = await creatorDashboardIdentity(creatorToken);
-    if (!creator || !creator.onboarded) return privateResponse(NextResponse.json({ error: "Creator access unavailable. Please sign in again." }, { status: 403 }));
+    if (!creator || (!creator.onboarded && !flirtOnboardingOptional())) return privateResponse(NextResponse.json({ error: "Creator access unavailable. Please sign in again." }, { status: 403 }));
     // Demo query IDs are only valid for this account's synthetic earnings API.
     try { assertCreatorQuery(req.nextUrl.searchParams, creatorDemoQueryIds(pathname, creator)); } catch { return new NextResponse("Creator access denied", { status: 403 }); }
     if (creatorApiAllowed(pathname, req.method, req.headers.has("next-action"))) return privateResponse(withPathname(req, true));
@@ -174,4 +175,5 @@ export async function middleware(req: NextRequest) {
   return withPathname(req);
 }
 export const config = { matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.png).*)"] };
+
 

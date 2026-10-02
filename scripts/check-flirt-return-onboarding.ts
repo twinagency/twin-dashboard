@@ -57,6 +57,12 @@ async function main() {
     const { POST: upload } = await import("../app/creator-auth/upload/route");
     const { POST: draft } = await import("../app/creator-auth/onboarding/draft/route");
     const token = await signCreatorSession(accountId, userId);
+    const { middleware } = await import("../middleware");
+    const dashboardRequest = () => new NextRequest(`${origin}/creator`, { headers: { cookie: `${CREATOR_SESSION_COOKIE}=${token}` } });
+    application.status = "draft";
+    assert.equal((await middleware(dashboardRequest())).headers.get("x-middleware-next"), "1", "FLIRT routing must allow draft creators to their own dashboard");
+    const anonymousDashboard = await middleware(new NextRequest(`${origin}/creator`));
+    assert.ok(anonymousDashboard.headers.get("location")?.includes("/creator/login"), "Draft access still requires authentication");
     const photo = Buffer.from("iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAIAAAD91JpzAAAAFklEQVR4nGOs1nVmYGBgYmBgYGBgAAALZgDvHS4cXQAAAABJRU5ErkJggg==", "base64");
     const postUpload = async (authenticated = true, bytes = photo, accept = "application/json") => {
       const form = new FormData();
@@ -87,6 +93,8 @@ async function main() {
     application.status = "rejected";
     assert.equal((await postUpload()).status, 409);
     Object.assign(process.env, { FLIRT_SUPABASE_PROJECT_REF: "abcdefghijklmnopqrst", SUPABASE_URL: "https://abcdefghijklmnopqrst.supabase.co" });
+    application.status = "draft";
+    assert.ok((await middleware(dashboardRequest())).headers.get("location")?.includes("/creator/onboarding"), "Strict runtimes still require onboarding before dashboard access");
     application.status = "submitted";
     assert.equal((await postUpload()).status, 409, "Strict runtimes keep submitted uploads locked");
     assert.equal(files.length, 5);
