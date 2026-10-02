@@ -115,7 +115,7 @@ assert.match(uploadRoute, /boundedFormData/);
 assert.match(uploadRoute, /MAX_ACTIVE_UPLOADS = 1/);
 assert.match(uploadRoute, /mediaToolPath\("ffprobe"\)/);
 assert.match(uploadRoute, /mediaToolPath\("ffmpeg"\)/);
-assert.match(uploadRoute, /application\.status !== "draft"/);
+assert.match(uploadRoute, /creatorOnboardingEditable\(application\?\.status\)/);
 assert.doesNotMatch(uploadRoute, /kind !== "content" && kind !== "voice"/);
 const submitRoute = readFileSync("app/creator-auth/onboarding/route.ts", "utf8");
 assert.match(submitRoute, /creatorContentCompleted\(files \|\| \[\], !!progress\?\.content_completed\)/);
@@ -129,3 +129,4 @@ const dockerSource = readFileSync("Dockerfile", "utf8");
 assert.match(dockerSource, /apk add --no-cache ffmpeg/);
 
 console.log("CREATOR ONBOARDING V2 PASSED: 83 questions in 17 short autosave parts, strict category counts, verified-only content requirements, and gated final submission.");
+

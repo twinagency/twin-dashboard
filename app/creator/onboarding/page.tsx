@@ -26,7 +26,7 @@ import { TETHER_PORTAL } from "@/lib/partner-portals";
 import IntelligenceCoreIcon from "@/components/IntelligenceCoreIcon";
 import { CREATOR_PORTAL_COOKIE, creatorLoginPath } from "@/lib/creator-routing";
 import { isLynq } from "@/lib/agency-brand";
-import { creatorVoiceOnboardingEnabled, flirtOnboardingOptional } from "@/lib/flirt-onboarding";
+import { creatorOnboardingEditable, creatorVoiceOnboardingEnabled, flirtOnboardingOptional } from "@/lib/flirt-onboarding";
 import { ArrowLeft, Check, CheckCircle2, ChevronRight, Circle, FileText, Images, Mic2, ShieldCheck } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -155,6 +155,22 @@ function ContinueToStep({ step, children }: { step: OnboardingStep; children: st
   return <Link href={`/creator/onboarding?step=${step}`} className={buttonVariants({ size: "lg", className: "min-h-11 w-full sm:w-auto" })} data-onboarding-continue={step}>{children}</Link>;
 }
 
+
+function StepNavigation({ step, steps }: { step: OnboardingStep; steps: OnboardingStep[] }) {
+  const index = steps.indexOf(step);
+  const previous = steps[index - 1];
+  const next = steps[index + 1];
+  const labels = { questionnaire: "Questionnaire", content: "Content", voice: "Voice", consent: "Consent & submit" };
+  return <nav aria-label="Onboarding step navigation" className="flex flex-col gap-3 sm:flex-row sm:justify-between">
+    <a href={previous ? `/creator/onboarding?step=${previous}` : "/creator/onboarding"} className={returnToOnboardingClass()} data-onboarding-back={previous || "hub"}>
+      <ArrowLeft className="size-4" aria-hidden="true" /> Back{previous ? `: ${labels[previous]}` : " to onboarding"}
+    </a>
+    {next ? <a href={`/creator/onboarding?step=${next}`} className={buttonVariants({ size: "lg", className: "min-h-11 w-full sm:w-auto" })} data-onboarding-next={next}>
+      Next: {labels[next]} <ChevronRight className="size-4" aria-hidden="true" />
+    </a> : <a href="/creator" className={returnToOnboardingClass()}>Dashboard <ChevronRight className="size-4" aria-hidden="true" /></a>}
+  </nav>;
+}
+
 function ContentUploadCard({ kind, count, minimum, label, accept, formatHint, complete, locked, optional = false }: {
   kind: CreatorContentKind;
   count: number;
@@ -229,7 +245,7 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
   if (!account) redirect("/creator-auth/logout");
   const answers = (application?.answers || {}) as Record<string,string>;
   const submitted = application?.status === "submitted" || application?.status === "reviewing" || application?.status === "approved";
-  const applicationLocked = !!application && application.status !== "draft";
+  const applicationLocked = creator.readOnly || !creatorOnboardingEditable(application?.status, optional);
   const voiceFiles = (files || []).filter((f) => f.kind === "voice" && f.storage_transfer_status === "verified");
   const contentCounts = creatorContentCounts(files || []);
   const categorizedContentComplete = CREATOR_CONTENT_REQUIREMENTS.every(({ kind, minimum }) => contentCounts[kind] >= minimum);
@@ -252,19 +268,21 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
   return (
     <div className={`min-h-screen bg-bg ${link ? "canvas-glow" : ""}`} data-creator-onboarding-brand={tether ? "tether" : link ? "link" : "twin"} data-onboarding-optional={optional ? "true" : "false"}>
       <header className={tether ? "border-b border-white/10 bg-[#06080c] text-white shadow-[0_8px_30px_rgba(0,0,0,0.16)]" : "border-b border-border bg-white/90 backdrop-blur"}>
-        <div className="mx-auto flex max-w-5xl items-center justify-between px-5 py-4">
+        <div className="mx-auto flex max-w-5xl flex-wrap items-center justify-between gap-3 px-5 py-4">
           <div className="flex min-w-0 items-center gap-3">{tether && <IntelligenceCoreIcon size={34} />}<TwinWordmark inverse={tether} agencyName={brandName === "Twin" ? undefined : brandName} />{tether && <span className="hidden text-xs font-bold uppercase tracking-[0.18em] text-sky-300 sm:inline">Creator</span>}</div>
-          <div className="flex items-center gap-4"><a href="/creator" className={tether ? "text-sm font-medium text-white/65 hover:text-white" : "text-sm font-medium text-muted hover:text-ink"}>Dashboard</a><form action="/creator-auth/logout" method="post"><button className={tether ? "text-sm font-medium text-white/65 hover:text-white" : "text-sm font-medium text-muted hover:text-ink"}>Sign out</button></form></div>
+          <div className="flex items-center gap-2"><a href="/creator" className={buttonVariants({ variant: "outline", className: "min-h-11" })} data-onboarding-dashboard>Dashboard <ChevronRight className="size-4" aria-hidden="true" /></a><form action="/creator-auth/logout" method="post"><button className={tether ? "text-sm font-medium text-white/65 hover:text-white" : "text-sm font-medium text-muted hover:text-ink"}>Sign out</button></form></div>
         </div>
       </header>
 
       <main className="mx-auto max-w-5xl px-5 py-10">
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent-2">{tether ? "Tether creator onboarding" : link ? "LYNQ creator onboarding" : "Creator onboarding"}</p>
         <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
-          <div><h1 className="font-heading text-4xl font-semibold tracking-[-0.04em] text-ink">Build your {brandName === "Twin" ? "FLIRT" : brandName} digital clone</h1><p className="mt-2 text-muted">{optional ? "Nothing is required. Explore each step, continue with blank fields, or skip straight to the dashboard." : "Complete the steps below. Your answers and media stay attached to this creator account."}</p></div>
+          <div><h1 className="font-heading text-4xl font-semibold tracking-[-0.04em] text-ink">Build your {brandName === "Twin" ? "FLIRT" : brandName} digital clone</h1><p className="mt-2 text-muted">{optional ? "All steps are optional. Add what you can now, and return from your dashboard whenever you’re ready." : "Complete the steps below. Your answers and media stay attached to this creator account."}</p></div>
           <div className="rounded-full border border-border bg-white px-4 py-2 text-sm font-medium text-ink" aria-label={submitted ? "Application submitted" : optional ? "All onboarding steps optional" : `${steps} of ${totalSteps} onboarding steps complete`}>{submitted ? "Submitted" : optional ? "All steps optional" : `${steps}/${totalSteps} complete`}</div>
         </div>
         {!optional && <div className="mt-5 h-2 overflow-hidden rounded-full bg-border" role="progressbar" aria-label="Onboarding progress" aria-valuemin={0} aria-valuemax={totalSteps} aria-valuenow={steps}><div className="h-full rounded-full bg-accent transition-[width]" style={{ width: `${(steps / totalSteps) * 100}%` }} /></div>}
+
+        {optional && submitted && <p className="mt-5 rounded-xl border border-border bg-white p-4 text-sm text-ink">Your onboarding has been submitted. You can still update your answers and upload more content here.</p>}
 
         {status && errorStatuses.has(status) && <div id="step-result" role="alert" className="mt-6 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">{statusCopy[status]}</div>}
 
@@ -276,14 +294,14 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
               {voiceEnabled && <StepCard step="voice" number={3} title="Voice" description="Upload voice recordings now, or record your choice to skip and activate voice later." complete={complete.voice} optional icon={Mic2} />}
               <StepCard step="consent" number={consentStepNumber} title="Consent & submit" description={optional ? "Review consent or leave it blank, then finish onboarding." : "Confirm permission and submit your completed onboarding."} complete={complete.consent} optional={optional} icon={ShieldCheck} />
             </div>
-            {optional && !applicationLocked && <form action="/creator-auth/onboarding" method="post" className="mt-6">
+            {optional && !submitted && !applicationLocked && <form action="/creator-auth/onboarding" method="post" className="mt-6">
               <input type="hidden" name="action" value="submit" />
               <Button type="submit" size="lg" className="min-h-11 w-full sm:w-auto" data-onboarding-skip-all>Skip all and open dashboard</Button>
             </form>}
           </>
         ) : (
           <div className="mt-8 grid gap-5" data-onboarding-active-step={activeStep}>
-            {activeStep !== "questionnaire" && <div><ReturnToOnboarding /></div>}
+            {activeStep !== "questionnaire" && <StepNavigation step={activeStep} steps={visibleSteps} />}
 
             {activeStep === "questionnaire" && <Card className="border border-border bg-white">
               <StepHeader number={1} title="Questionnaire" complete={complete.questionnaire} optional={optional} />
@@ -313,7 +331,7 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
                   {CREATOR_CONTENT_REQUIREMENTS.map((requirement) => <ContentUploadCard key={requirement.kind} {...requirement} count={contentCounts[requirement.kind]} complete={contentCounts[requirement.kind] >= requirement.minimum} locked={applicationLocked} optional={optional} />)}
                 </div>
                 {legacyContentFiles > 0 && <p className="rounded-xl border border-border bg-muted/10 px-4 py-3 text-sm leading-6 text-muted">{legacyContentFiles} earlier verified upload{legacyContentFiles === 1 ? " is" : "s are"} still safely stored. They are not guessed into SFW or NSFW categories.</p>}
-                <div className="flex flex-col gap-3 sm:flex-row"><ReturnToOnboarding />{optional && <ContinueToStep step={afterContent}>{voiceEnabled ? "Continue to voice" : "Continue to final step"}</ContinueToStep>}</div>
+                <StepNavigation step="content" steps={visibleSteps} />
               </CardContent>
             </Card>}
 
@@ -327,7 +345,7 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
                   <form action="/creator-auth/onboarding" method="post" className="self-end"><input type="hidden" name="action" value="skip_voice" /><Button type="submit" variant="outline" size="lg" disabled={applicationLocked} className="min-h-11">Skip for now</Button></form>
                 </div>
                 {voiceFiles.length > 0 && <p className="text-sm text-muted">{voiceFiles.length} voice file{voiceFiles.length === 1 ? "" : "s"} verified.</p>}
-                <div className="flex flex-col gap-3 sm:flex-row"><ReturnToOnboarding />{optional && <ContinueToStep step="consent">Continue to final step</ContinueToStep>}</div>
+                <StepNavigation step="voice" steps={visibleSteps} />
               </CardContent>
             </Card>}
 
@@ -356,10 +374,10 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
 
                 <form action="/creator-auth/onboarding" method="post">
                   <input type="hidden" name="action" value="submit" />
-                  <Button type="submit" size="lg" disabled={!readyToSubmit || applicationLocked} aria-describedby={!readyToSubmit && !applicationLocked ? "submit-help" : undefined} className="min-h-11 w-full sm:w-auto">{submitted ? "Application submitted" : applicationLocked ? "Application locked" : optional ? "Finish onboarding" : "Submit onboarding"}</Button>
+                  <Button type="submit" size="lg" disabled={!readyToSubmit || applicationLocked} aria-describedby={!readyToSubmit && !applicationLocked ? "submit-help" : undefined} className="min-h-11 w-full sm:w-auto">{submitted ? "Return to dashboard" : applicationLocked ? "Application locked" : optional ? "Finish onboarding" : "Submit onboarding"}</Button>
                 </form>
                 {!readyToSubmit && !applicationLocked && <p id="submit-help" className="text-sm text-muted">Complete the items above before submitting.</p>}
-                <div><ReturnToOnboarding /></div>
+                <StepNavigation step="consent" steps={visibleSteps} />
               </CardContent>
             </Card>}
           </div>
@@ -368,3 +386,4 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
     </div>
   );
 }
+

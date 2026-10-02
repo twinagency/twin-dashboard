@@ -3,7 +3,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { NextRequest } from "next/server";
 import { configureFlirtOfflineEnv } from "./flirt-offline-env";
-import { creatorVoiceOnboardingEnabled, flirtOnboardingOptional } from "../lib/flirt-onboarding";
+import { creatorOnboardingEditable, creatorVoiceOnboardingEnabled, flirtOnboardingOptional } from "../lib/flirt-onboarding";
 import { CREATOR_QUESTIONNAIRE_PAGES, questionnairePageQuestions } from "../lib/creator-questionnaire-draft";
 import { CREATOR_SESSION_COOKIE, signCreatorSession } from "../lib/creator-session";
 
@@ -15,6 +15,13 @@ async function main() {
   assert.equal(creatorVoiceOnboardingEnabled({}), true, "Other onboarding flows retain voice");
   assert.equal(creatorVoiceOnboardingEnabled({ FLIRT_BACKEND_ENABLED: "true", FLIRT_SUPABASE_PROJECT_REF: "other" }), true);
   assert.equal(creatorVoiceOnboardingEnabled({ FLIRT_BACKEND_ENABLED: "true", FLIRT_SUPABASE_PROJECT_REF: "lkmfwpqegjluirfusnaw" }), false, "FLIRT voice onboarding is temporarily hidden");
+
+  for (const status of ["submitted", "reviewing", "approved"]) {
+    assert.equal(creatorOnboardingEditable(status, true), true);
+    assert.equal(creatorOnboardingEditable(status, false), false);
+  }
+  assert.equal(creatorOnboardingEditable("rejected", true), false);
+  assert.equal(creatorOnboardingEditable("draft", false), true);
 
   // JSX in existing components may use the classic runtime under tsx.
   (globalThis as typeof globalThis & { React: typeof React }).React = React;
@@ -127,9 +134,13 @@ async function main() {
     const insertsBefore = applicationInserts;
     await post("submit");
     assert.equal(applicationInserts, insertsBefore, "Repeated submission must be idempotent");
-    const locked = await post("consent", { legal_name: "Late update", agreed: "on" });
-    assert.equal(location(locked).searchParams.get("status"), "application_locked");
-    assert.equal(consents.length, 0);
+    const lateConsent = await post("consent", { legal_name: "Late update", agreed: "on" });
+    assert.equal(location(lateConsent).searchParams.get("status"), "consent_saved", "FLIRT can complete consent after skipping intake");
+    assert.equal(consents.length, 1);
+    assert.equal(application?.status, "submitted", "Returning must not change approval status");
+    await post("consent", { legal_name: "Do not replace", agreed: "on" });
+    assert.equal(consents.length, 1, "Existing consent is not overwritten or duplicated");
+    consents.length = 0;
 
     application = null as Row | null;
     progress = null as Row | null;
@@ -156,3 +167,4 @@ async function main() {
   }
 }
 main().catch((error) => { console.error(error); process.exitCode = 1; });
+

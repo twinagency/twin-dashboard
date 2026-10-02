@@ -5,12 +5,15 @@ import { CREATOR_SESSION_COOKIE } from "./creator-session";
 import { creatorDashboardIdentity } from "./creator-dashboard-identity";
 import { CREATOR_PORTAL_COOKIE, creatorLoginPath } from "./creator-routing";
 
+import { flirtOnboardingOptional } from "./flirt-onboarding";
+
 export const getCreatorWorkspace = cache(async () => {
   return creatorDashboardIdentity((await cookies()).get(CREATOR_SESSION_COOKIE)?.value);
 });
 export async function requireCreatorWorkspace() {
   const identity = await getCreatorWorkspace();
   if (!identity) redirect(creatorLoginPath(identity, (await cookies()).get(CREATOR_PORTAL_COOKIE)?.value));
-  if (!identity.onboarded) redirect("/creator/onboarding");
+  if (!identity.onboarded && !flirtOnboardingOptional()) redirect("/creator/onboarding");
   return identity;
 }
+

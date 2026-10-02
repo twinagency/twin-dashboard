@@ -135,13 +135,13 @@ export default function CreatorQuestionnaireWizard({
     saveTimerRef.current = setTimeout(() => { void flushDraft(); }, 1000);
   };
 
-  const goTo = async (target: number | "finish" | "hub") => {
+  const goTo = async (target: number | "finish" | "hub" | "dashboard") => {
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     if (!locked && (target === "finish" || (typeof target === "number" && target > currentIndex)) && !formRef.current?.reportValidity()) return;
     const saved = await flushDraft();
     if (!saved) return;
-    if (target === "hub") {
-      window.location.assign("/creator/onboarding");
+    if (target === "hub" || target === "dashboard") {
+      window.location.assign(target === "dashboard" ? "/creator" : "/creator/onboarding");
       return;
     }
     if (target === "finish") {
@@ -216,6 +216,7 @@ export default function CreatorQuestionnaireWizard({
             <ArrowLeft className="size-4" aria-hidden="true" /> {locked ? "Return to onboarding" : "Save and return to onboarding"}
           </Button>
           <div className="flex flex-col-reverse gap-3 sm:flex-row sm:flex-wrap">
+            {optional && <Button type="button" variant="outline" size="lg" disabled={saveState === "saving"} onClick={() => void goTo("dashboard")} className="min-h-11 w-full sm:w-auto">{locked ? "Dashboard" : "Save and go to dashboard"}</Button>}
             {optional && !locked && currentIndex < CREATOR_QUESTIONNAIRE_PAGES.length - 1 && <Button type="button" variant="outline" size="lg" disabled={saveState === "saving"} onClick={() => void goTo("finish")} className="min-h-11 w-full sm:w-auto">Skip questionnaire</Button>}
             {currentIndex > 0 && <Button type="button" variant="outline" size="lg" disabled={saveState === "saving"} onClick={() => void goTo(currentIndex - 1)} className="min-h-11 w-full sm:w-auto">
               <ArrowLeft className="size-4" aria-hidden="true" /> {locked ? "Previous part" : "Save and go back"}
@@ -235,3 +236,4 @@ export default function CreatorQuestionnaireWizard({
     </form>
   );
 }
+

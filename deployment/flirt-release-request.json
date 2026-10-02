@@ -1,4 +1,4 @@
 {
-  "reason": "Fix FLIRT creator invitations and local account onboarding review while preserving the four connected Twin creators and hidden Voice step.",
-  "requested_at": "2026-10-01T04:11:15+10:00"
+  "reason": "Fix FLIRT uploads after optional onboarding, allow returning to finish intake, add dashboard and step navigation, and make choose/upload controls red.",
+  "requested_at": "2026-10-02T04:45:00Z"
 }

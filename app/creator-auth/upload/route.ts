@@ -17,11 +17,18 @@ import {
   isCreatorContentKind,
 } from "@/lib/creator-content-requirements";
 import { creatorImageDecodes } from "@/lib/creator-image-validation";
-import { flirtOnboardingOptional } from "@/lib/flirt-onboarding";
+import { creatorOnboardingEditable } from "@/lib/flirt-onboarding";
 
 export const runtime = "nodejs";
 
 function back(req: Request, status: string, step?: "content" | "voice") {
+  if (req.headers.get("accept")?.includes("application/json")) {
+    const success = status === "content_saved" || status === "voice_saved";
+    return NextResponse.json({ status }, {
+      status: success ? 200 : status === "upload_busy" ? 429 : status === "application_locked" ? 409 : 400,
+      headers: { "Cache-Control": "private, no-store", ...(status === "upload_busy" ? { "Retry-After": "5" } : {}) },
+    });
+  }
   const url = creatorRequestUrl(req, "/creator/onboarding");
   url.searchParams.set("status", status);
   if (step) url.searchParams.set("step", step);
@@ -223,7 +230,10 @@ async function contentSignatureMatches(bytes: Uint8Array, mime: string): Promise
 
 export async function POST(req: NextRequest) {
   const creator = await creatorDashboardIdentity(req.cookies.get(CREATOR_SESSION_COOKIE)?.value);
-  if (!creator) return NextResponse.redirect(creatorRequestUrl(req, creatorLoginPath(null, req.cookies.get(CREATOR_PORTAL_COOKIE)?.value)), 303);
+  if (!creator) {
+    if (req.headers.get("accept")?.includes("application/json")) return NextResponse.json({ status: "session_expired" }, { status: 401 });
+    return NextResponse.redirect(creatorRequestUrl(req, creatorLoginPath(null, req.cookies.get(CREATOR_PORTAL_COOKIE)?.value)), 303);
+  }
   if (creator.readOnly) return new NextResponse("Creator demo is read-only", { status: 403 });
   const accountId = creator.accountId;
 
@@ -247,12 +257,10 @@ export async function POST(req: NextRequest) {
   const kind = String(form.get("kind") || "");
   const contentRequirement = creatorContentRequirement(kind);
   if (kind !== "voice" && !isCreatorContentKind(kind)) return back(req, "upload_error");
-  // FLIRT's optional intake tells creators they can add voice later. Keep
-  // content locked after submission; only voice can be added afterward.
-  if (application && application.status !== "draft" && !(kind === "voice" && flirtOnboardingOptional())) {
-    return new NextResponse("This onboarding application is locked", { status: 409 });
-  }
   const step = kind === "voice" ? "voice" : "content";
+  // Finishing optional FLIRT intake must not prevent later content uploads.
+  // Ownership, read-only demos, rejected applications and strict runtimes stay protected.
+  if (!creatorOnboardingEditable(application?.status)) return back(req, "application_locked", step);
   const files = form.getAll("files").filter((value): value is File => value instanceof File && value.size > 0);
   if (!files.length) return back(req, "upload_empty", step);
   if (files.length > 25) return back(req, "upload_too_many", step);

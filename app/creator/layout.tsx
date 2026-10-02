@@ -7,6 +7,7 @@ import { withDashboardAccess } from "@/lib/dashboard-access";
 import { getFleetClones, getHeaderAllTimeStars } from "@/lib/query-cache";
 import { isZaneDemo } from "@/lib/creator-demo-policy";
 import { creatorDemoData } from "@/lib/creator-demo-data";
+import { flirtOnboardingOptional } from "@/lib/flirt-onboarding";
 export const dynamic = "force-dynamic";
 export default async function CreatorLayout({ children }: { children: React.ReactNode }) {
   const pathname = (await headers()).get("x-pathname");
@@ -27,6 +28,7 @@ export default async function CreatorLayout({ children }: { children: React.Reac
       clones={clones}
       activeCloneId={cloneId}
       connected={!!cloneId || demo}
+      onboardingEditable={flirtOnboardingOptional() && !creator.readOnly}
       allTimeStars={allTimeStars}
     >
       {demo && <CreatorDemoBanner />}
@@ -34,3 +36,4 @@ export default async function CreatorLayout({ children }: { children: React.Reac
     </CreatorWorkspaceShell>
   );
 }
+

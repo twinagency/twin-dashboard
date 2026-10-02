@@ -1,5 +1,6 @@
 /* Runs inside FLIRT only. No credentials, cookies or customer records are logged. */
 const { randomBytes } = require('node:crypto');
+const { execFileSync } = require('node:child_process');
 const PROJECT = 'lkmfwpqegjluirfusnaw';
 const ORIGIN = 'https://dashboard.flirtaiagency.com';
 const API = `https://${PROJECT}.supabase.co`;
@@ -35,11 +36,11 @@ async function signup(suffix) {
   fixture.cookie = cookie.split(';')[0];
   return fixture;
 }
-async function upload(fixture, kind, name, bytes, mime) {
+async function upload(fixture, kind, name, bytes, mime, jsonResponse = false) {
   const form = new FormData();
   form.set('kind', kind);
   form.append('files', new Blob([bytes], { type: mime }), name);
-  return page('/creator-auth/upload', fixture, { method: 'POST', body: form });
+  return page('/creator-auth/upload', fixture, { method: 'POST', body: form, ...(jsonResponse ? { headers: { Accept: 'application/json' } } : {}) });
 }
 async function post(fixture, action, fields = {}) {
   return page('/creator-auth/onboarding', fixture, { method: 'POST', body: new URLSearchParams({ action, ...fields }) });
@@ -66,6 +67,8 @@ async function main() {
   checks.push('Unauthenticated submission denied over public HTTPS');
   const a = await signup('walkthrough');
   const b = await signup('skip-all');
+  const draftDashboard = await page('/creator', a);
+  assert(draftDashboard.status === 200 && (await draftDashboard.text()).includes('data-return-to-onboarding'), 'Draft creators must be able to move from dashboard back to onboarding');
   for (const section of sections) {
     const response = await page(`/creator/onboarding?step=questionnaire&section=${section}`, a);
     assert(response.status === 200, 'Questionnaire page did not load');
@@ -79,6 +82,10 @@ async function main() {
   const contentHtml = await content.text();
   assert(content.status === 200, 'Content page failed');
   noRequired(contentHtml, 'content');
+  assert(contentHtml.includes('data-onboarding-back="questionnaire"') && contentHtml.includes('data-onboarding-next="consent"'), 'Content Back/Next navigation missing');
+  const chooseButtons = [...contentHtml.matchAll(/<button\b[^>]*data-choose-content[^>]*>/g)];
+  assert(chooseButtons.length === 4 && chooseButtons.every(match => !buttonDisabled(match[0]) && match[0].includes('bg-[#dc2626]')), 'Four red Choose content buttons must be enabled');
+  assert((contentHtml.match(/data-upload-content/g) || []).length === 4, 'Upload content buttons missing');
   assert(contentHtml.includes('data-onboarding-continue="consent"'), 'Content must continue directly to consent without uploads');
   assert(!contentHtml.includes('data-onboarding-continue="voice"'), 'Content must not link to hidden voice');
   const voice = await page('/creator/onboarding?step=voice', a);
@@ -133,12 +140,31 @@ async function main() {
   assert(photos.length === 2 && photos.every(file => file.kind === 'content_sfw_image' && file.storage_transfer_status === 'verified'), 'Sequential images were not verified');
   const submittedUpload = await post(uploadFixture, 'submit');
   assert(submittedUpload.status === 303 && location(submittedUpload).pathname === '/creator', 'Upload fixture could not finish onboarding');
+  const returnedContent = await page('/creator/onboarding?step=content', uploadFixture);
+  const returnedHtml = await returnedContent.text();
+  assert(returnedContent.status === 200, 'Returning to content failed');
+  assert([...returnedHtml.matchAll(/<button\b[^>]*data-choose-content[^>]*>/g)].length === 4, 'Returned content pickers missing');
+  assert([...returnedHtml.matchAll(/<button\b[^>]*data-choose-content[^>]*>/g)].every(match => !buttonDisabled(match[0])), 'Submitted creator cannot choose content');
+  const video = execFileSync('/usr/bin/ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=blue:s=64x64:r=10', '-t', '1', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-movflags', 'frag_keyframe+empty_moov', '-f', 'mp4', 'pipe:1'], { timeout: 15000, maxBuffer: 1024 * 1024 });
+  for (const kind of ['content_sfw_image', 'content_nsfw_image', 'content_sfw_video', 'content_nsfw_video']) {
+    const isVideo = kind.endsWith('_video');
+    const result = await upload(uploadFixture, kind, isVideo ? 'return-test.mp4' : 'return-test.png', isVideo ? video : photo, isVideo ? 'video/mp4' : 'image/png', true);
+    assert(result.status === 200 && (await result.json()).status === 'content_saved', 'Verified JSON upload after submission failed for ' + kind);
+  }
+  const beforeEdit = (await rows('creator_applications', uploadFixture, 'updated_at,status'))[0];
+  const answerUpdate = await page('/creator-auth/onboarding/draft', uploadFixture, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ section: 'personal-contact', answers: { full_name: 'Disposable return-flow fixture' }, revision: beforeEdit.updated_at }) });
+  assert(answerUpdate.status === 200, 'Returning creator could not autosave answers');
+  const afterEdit = (await rows('creator_applications', uploadFixture, 'answers,status'))[0];
+  assert(afterEdit.status === 'submitted' && afterEdit.answers.full_name === 'Disposable return-flow fixture', 'Returned answers not saved or approval changed');
+  const invalidImage = await upload(uploadFixture, 'content_sfw_image', 'invalid.png', Buffer.from('not an image'), 'image/png', true);
+  assert(invalidImage.status === 400 && (await invalidImage.json()).status === 'upload_wrong_type', 'Invalid media must still be rejected');
+  checks.push('Dashboard return link, Back/Next navigation, red enabled pickers, all four image/video categories after submission and saved returning answers');
   const memo = Buffer.from('524946462400000057415645666d74201000000001000100401f0000803e0000020010006461746100000000', 'hex');
   const voiceUpload = await upload(uploadFixture, 'voice', 'sample-memo.wav', memo, 'audio/wav');
   assert(voiceUpload.status === 303 && location(voiceUpload).searchParams.get('status') === 'voice_saved', 'Voice upload after optional onboarding failed');
   const saved = await rows('creator_files', uploadFixture, 'kind,storage_transfer_status,bucket,storage_path');
-  assert(saved.length === 3 && saved.some(file => file.kind === 'voice' && file.storage_transfer_status === 'verified'), 'Voice sample was not verified');
-  checks.push('Sequential photo uploads and voice memo after optional onboarding');
+  assert(saved.length === 7 && saved.some(file => file.kind === 'voice' && file.storage_transfer_status === 'verified'), 'Voice sample was not verified');
+  checks.push('Sequential photo uploads, post-submission photo/video uploads, invalid media rejection and retained voice memo support');
   const twin = await request('https://dashboard.tgaiclone.xyz');
   assert(twin.status === 200 && (await twin.text()).includes('Twin'), 'Existing Twin login stopped responding');
   checks.push('Existing Twin HTTPS login still responds');
@@ -169,4 +195,5 @@ async function cleanup() {
   console.log(JSON.stringify({ passed: !failure, checks, ...(failure ? { error: failure } : { synthetic_fixtures_removed: true }), credentials_logged: false }));
   if (failure) process.exitCode = 1;
 })();
+
 

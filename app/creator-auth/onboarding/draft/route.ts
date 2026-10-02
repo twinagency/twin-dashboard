@@ -3,6 +3,7 @@ import { CREATOR_SESSION_COOKIE } from "@/lib/creator-session";
 import { creatorDashboardIdentity } from "@/lib/creator-dashboard-identity";
 import { trustedFormOrigin } from "@/lib/form-origin";
 import { supabaseAdmin } from "@/lib/supabase";
+import { creatorOnboardingEditable } from "@/lib/flirt-onboarding";
 import {
   creatorQuestionnairePage,
   nextQuestionnaireRevision,
@@ -39,7 +40,7 @@ export async function POST(req: NextRequest) {
       .limit(1)
       .maybeSingle();
     if (readError) return reply({ error: "Questionnaire could not be loaded" }, 503);
-    if (existing && existing.status !== "draft") return reply({ error: "This application is locked" }, 409);
+    if (!creatorOnboardingEditable(existing?.status)) return reply({ error: "This application is locked" }, 409);
     if (!existing && body.revision) return reply({ error: "Questionnaire changed in another window. Refresh before saving." }, 409);
     if (existing && (!body.revision || body.revision !== existing.updated_at)) {
       return reply({ error: "Questionnaire changed in another window. Refresh before saving." }, 409);
@@ -63,7 +64,7 @@ export async function POST(req: NextRequest) {
       .update({ answers: merged, updated_at: now })
       .eq("id", existing.id)
       .eq("creator_account_id", creator.accountId)
-      .eq("status", "draft")
+      .eq("status", existing.status)
       .eq("updated_at", existing.updated_at)
       .select("updated_at")
       .maybeSingle();

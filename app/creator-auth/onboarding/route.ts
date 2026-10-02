@@ -12,7 +12,7 @@ import {
   questionnaireRequiredMissing,
 } from "@/lib/creator-questionnaire-draft";
 import { creatorContentCompleted } from "@/lib/creator-content-requirements";
-import { flirtOnboardingOptional } from "@/lib/flirt-onboarding";
+import { creatorOnboardingEditable, flirtOnboardingOptional } from "@/lib/flirt-onboarding";
 
 function back(req: Request, status: string, step?: "questionnaire" | "content" | "voice" | "consent", section?: string) {
   const url = creatorRequestUrl(req, "/creator/onboarding");
@@ -54,8 +54,8 @@ export async function POST(req: NextRequest) {
     const loaded = await latestApplication(accountId);
     if (loaded.error) return back(req, "error", "questionnaire");
     let existing = loaded.data;
-    if (existing && CREATOR_QUESTIONNAIRE_TERMINAL_STATUSES.has(existing.status)) return back(req, "questionnaire_saved", "questionnaire");
-    if (existing && existing.status !== "draft") return back(req, "application_locked", "questionnaire");
+    if (!optional && existing && CREATOR_QUESTIONNAIRE_TERMINAL_STATUSES.has(existing.status)) return back(req, "questionnaire_saved", "questionnaire");
+    if (!creatorOnboardingEditable(existing?.status, optional)) return back(req, "application_locked", "questionnaire");
     let revision = String(form.get("revision") || "");
     // A creator who clicks through without typing has not triggered autosave.
     // Create only their empty draft; never manufacture questionnaire answers.
@@ -80,7 +80,7 @@ export async function POST(req: NextRequest) {
       .update({ updated_at: sealedAt })
       .eq("id", existing.id)
       .eq("creator_account_id", accountId)
-      .eq("status", "draft")
+      .eq("status", existing.status)
       .eq("updated_at", revision)
       .select("updated_at")
       .maybeSingle();
@@ -97,7 +97,7 @@ export async function POST(req: NextRequest) {
   if (action === "skip_voice" || action === "consent") {
     const { data: existing, error } = await latestApplication(accountId);
     if (error) return back(req, "error", action === "consent" ? "consent" : "voice");
-    if (existing && existing.status !== "draft") return back(req, "application_locked", action === "consent" ? "consent" : "voice");
+    if (!creatorOnboardingEditable(existing?.status, optional)) return back(req, "application_locked", action === "consent" ? "consent" : "voice");
   }
 
   if (action === "skip_voice") {
