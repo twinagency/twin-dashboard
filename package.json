@@ -67,7 +67,7 @@
     "test:creator-video-upload": "node scripts/check-creator-video-upload.cjs",
     "test:creator-upload-stream": "tsx scripts/check-creator-upload-stream.ts",
     "test:creator-upload-picker": "node scripts/check-creator-upload-picker.cjs",
-    "test:creator-upload": "npm run test:creator-video-upload && npm run test:creator-upload-stream && npm run test:creator-upload-picker && npm run test:creator-onboarding && npm run test:creator-routing && npm run test:creator-login && npm run test:view-as && npm run test:middleware-upload-body"
+    "test:creator-upload": "npm run test:creator-video-upload && npm run test:creator-upload-stream && npm run test:creator-upload-picker && npm run test:creator-onboarding && npm run test:creator-routing && npm run test:creator-login && npm run test:view-as && npm run test:middleware-upload-body && node --import tsx scripts/check-creator-workspace.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

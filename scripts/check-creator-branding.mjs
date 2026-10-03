@@ -177,7 +177,7 @@ import React from 'react';
 export default function Link({children,href,...props}){return <a {...props} href={String(href)}>{children}</a>}
 `;
 const headersMock = `export async function cookies(){return {get(){return {value:'local-creator-session'}}}}`;
-const navigationMock = `export function redirect(path){throw new Error('Unexpected redirect to '+path)}`;
+const navigationMock = `export function redirect(path){throw new Error('Unexpected redirect to '+path)} export function useRouter(){return {refresh(){}}}`;
 const identityMock = `
 export async function creatorDashboardIdentity(){
   const brand=new URLSearchParams(location.search).get('fixture_brand');
@@ -445,12 +445,16 @@ try {
               assert.deepEqual(acceptedTypes, [
                 "image/jpeg,image/png,image/webp,image/gif",
                 "image/jpeg,image/png,image/webp,image/gif",
-                "video/mp4,video/quicktime,video/webm",
-                "video/mp4,video/quicktime,video/webm",
+                "application/octet-stream",
+                "video/*",
+                "application/octet-stream",
+                "video/*",
               ]);
+              assert.equal(await page.locator("[data-content-category] input[type='file']").evaluateAll((inputs) => inputs.every((input) => input.multiple && !input.disabled)), true, `${brand} draft content pickers must allow multiple files`);
+              assert.equal(await page.getByText("Choose videos from Files", { exact: true }).count(), 2, `${brand} video categories must offer the Files bypass`);
               assert.doesNotMatch(`${contentText} ${acceptedTypes.join(" ")}`, /heic|heif/i, `${brand} must not advertise unsupported HEIC uploads`);
               assert.match(contentText, /JPG, PNG, WebP or GIF · max 25 MP and 15 MB each/);
-              assert.match(contentText, /MP4, MOV or WebM · max 30 minutes/);
+              assert.match(contentText, /MP4, MOV or WebM · max 512 MB, 30 minutes and 4K per file/);
             }
             await page.screenshot({ path: path.join(out, `${brand}-onboarding-${step}-${viewport}.png`), fullPage: true });
           }

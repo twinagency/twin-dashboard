@@ -305,7 +305,19 @@ async function main() {
       headers: { cookie: `${CREATOR_SESSION_COOKIE}=${token}`, origin },
       body: invalidUploadForm,
     })));
-    assert.equal(lockedUpload.status, 409);
+    assert.equal(lockedUpload.status, 303, "locked browser uploads return to onboarding with a visible error");
+    const lockedUploadReturn = new URL(lockedUpload.headers.get("location")!);
+    assert.equal(lockedUploadReturn.origin, origin);
+    assert.equal(lockedUploadReturn.pathname, "/creator/onboarding");
+    assert.equal(lockedUploadReturn.searchParams.get("status"), "application_locked");
+    assert.deepEqual(writes, [], "a submitted application must not accept direct upload mutations");
+    const lockedJsonUpload = await withDashboardAccess(null, () => uploadCreatorOnboarding(new NextRequest(origin + "/creator-auth/upload", {
+      method: "POST",
+      headers: { cookie: `${CREATOR_SESSION_COOKIE}=${token}`, origin, Accept: "application/json" },
+      body: invalidUploadForm,
+    })));
+    assert.equal(lockedJsonUpload.status, 409, "locked uploads must retain the explicit JSON denial");
+    assert.deepEqual(await lockedJsonUpload.json(), { status: "application_locked" });
     assert.deepEqual(writes, [], "a submitted application must not accept direct upload mutations");
 
     async function assertStaleSessionCannotWrite(label: string) {
@@ -384,4 +396,3 @@ async function main() {
   } finally { globalThis.fetch = oldFetch; }
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });
-
