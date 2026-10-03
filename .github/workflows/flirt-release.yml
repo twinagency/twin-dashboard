@@ -38,6 +38,11 @@ jobs:
           node --check deployment/flirt-live-creators-check.cjs
       - run: npm ci
       - run: npx tsc --noEmit
+      - name: Streaming creator video upload regressions
+        run: |
+          command -v ffmpeg >/dev/null || (sudo apt-get update && sudo apt-get install -y ffmpeg)
+          node scripts/check-creator-video-upload.cjs
+          node --import tsx scripts/check-creator-upload-stream.ts
       - name: Selected live creators and retained local database routing
         run: npx tsx scripts/check-flirt-live-twin.ts
       - name: Invitation routing and local account authorization
@@ -93,5 +98,6 @@ jobs:
         run: python3 deployment/flirt-live-creators-check.py
       - name: Verify invite, signup, onboarding, listing and profile editing with disposable FLIRT fixtures
         run: python3 deployment/flirt-invites-live-check.py
+
 
 

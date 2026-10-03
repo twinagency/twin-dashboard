@@ -44,9 +44,13 @@ const statusCopy: Record<string,string> = {
   consent_skipped: "Consent skipped. No consent has been recorded.",
   upload_empty: "Choose at least one file.",
   upload_too_many: "Upload up to 25 files at a time.",
-  upload_too_large: "Keep each file under 64 MB. Images must be under 15 MB each.",
+  upload_too_large: "Videos can be up to 512 MB, images up to 15 MB, and voice recordings up to 64 MB each. File size is separate from video length.",
   upload_busy: "Another upload is still being checked. Wait for it to finish, then try again.",
   upload_quota: "This account has reached its onboarding upload limit. Contact support before adding more files.",
+  upload_video_too_long: "This video is longer than 30 minutes. Choose a shorter video.",
+  upload_video_resolution: "This video is above 4K resolution. Export it at 4K or lower.",
+  upload_interrupted: "The connection was interrupted. Please retry your upload.",
+  upload_timeout: "The upload timed out. Check your connection and retry.",
   upload_wrong_type: "Use JPG, PNG, WebP or GIF for images, and MP4, MOV or WebM for videos. Upload each file to the matching category.",
   upload_error: "That upload did not finish. Review the verified-file count, then try the remaining files.",
   consent_missing: "Enter your legal name and confirm consent.",
@@ -54,7 +58,7 @@ const statusCopy: Record<string,string> = {
   error: "Something went wrong. Please try again.",
 };
 
-const errorStatuses = new Set(["questionnaire_missing", "questionnaire_conflict", "application_locked", "upload_empty", "upload_too_many", "upload_too_large", "upload_busy", "upload_quota", "upload_wrong_type", "upload_error", "consent_missing", "not_ready", "error"]);
+const errorStatuses = new Set(["questionnaire_missing", "questionnaire_conflict", "application_locked", "upload_empty", "upload_too_many", "upload_too_large", "upload_busy", "upload_quota", "upload_wrong_type", "upload_video_too_long", "upload_video_resolution", "upload_interrupted", "upload_timeout", "upload_error", "consent_missing", "not_ready", "error"]);
 const onboardingSteps = ["questionnaire", "content", "voice", "consent"] as const;
 type OnboardingStep = (typeof onboardingSteps)[number];
 
@@ -385,4 +389,5 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
     </div>
   );
 }
+
 

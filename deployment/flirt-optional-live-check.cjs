@@ -39,8 +39,8 @@ async function signup(suffix) {
 async function upload(fixture, kind, name, bytes, mime, jsonResponse = false) {
   const form = new FormData();
   form.set('kind', kind);
-  form.append('files', new Blob([bytes], { type: mime }), name);
-  return page('/creator-auth/upload', fixture, { method: 'POST', body: form, ...(jsonResponse ? { headers: { Accept: 'application/json' } } : {}) });
+  form.append('files', bytes instanceof Blob ? bytes : new Blob([bytes], { type: mime }), name);
+  return page('/creator-auth/upload', fixture, { method: 'POST', body: form, signal: AbortSignal.timeout(120000), ...(jsonResponse ? { headers: { Accept: 'application/json' } } : {}) });
 }
 async function post(fixture, action, fields = {}) {
   return page('/creator-auth/onboarding', fixture, { method: 'POST', body: new URLSearchParams({ action, ...fields }) });
@@ -83,8 +83,8 @@ async function main() {
   assert(content.status === 200, 'Content page failed');
   noRequired(contentHtml, 'content');
   assert(contentHtml.includes('data-onboarding-back="questionnaire"') && contentHtml.includes('data-onboarding-next="consent"'), 'Content Back/Next navigation missing');
-  const chooseButtons = [...contentHtml.matchAll(/<button\b[^>]*data-choose-content[^>]*>/g)];
-  assert(chooseButtons.length === 4 && chooseButtons.every(match => !buttonDisabled(match[0]) && match[0].includes('bg-[#dc2626]')), 'Four red Choose content buttons must be enabled');
+  const chooseControls = [...contentHtml.matchAll(/<label\b[^>]*data-choose-content[^>]*>[\s\S]*?<\/label>/g)];
+  assert(chooseControls.length === 4 && chooseControls.every(match => !buttonDisabled(match[0]) && match[0].includes('bg-[#dc2626]')), 'Four red native Choose content controls must be enabled');
   assert((contentHtml.match(/data-upload-content/g) || []).length === 4, 'Upload content buttons missing');
   assert(contentHtml.includes('data-onboarding-continue="consent"'), 'Content must continue directly to consent without uploads');
   assert(!contentHtml.includes('data-onboarding-continue="voice"'), 'Content must not link to hidden voice');
@@ -143,8 +143,8 @@ async function main() {
   const returnedContent = await page('/creator/onboarding?step=content', uploadFixture);
   const returnedHtml = await returnedContent.text();
   assert(returnedContent.status === 200, 'Returning to content failed');
-  assert([...returnedHtml.matchAll(/<button\b[^>]*data-choose-content[^>]*>/g)].length === 4, 'Returned content pickers missing');
-  assert([...returnedHtml.matchAll(/<button\b[^>]*data-choose-content[^>]*>/g)].every(match => !buttonDisabled(match[0])), 'Submitted creator cannot choose content');
+  assert([...returnedHtml.matchAll(/<label\b[^>]*data-choose-content[^>]*>[\s\S]*?<\/label>/g)].length === 4, 'Returned content pickers missing');
+  assert([...returnedHtml.matchAll(/<label\b[^>]*data-choose-content[^>]*>[\s\S]*?<\/label>/g)].every(match => !buttonDisabled(match[0])), 'Submitted creator cannot choose content');
   const video = execFileSync('/usr/bin/ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=blue:s=64x64:r=10', '-t', '1', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-movflags', 'frag_keyframe+empty_moov', '-f', 'mp4', 'pipe:1'], { timeout: 15000, maxBuffer: 1024 * 1024 });
   for (const kind of ['content_sfw_image', 'content_nsfw_image', 'content_sfw_video', 'content_nsfw_video']) {
     const isVideo = kind.endsWith('_video');
@@ -165,6 +165,24 @@ async function main() {
   const saved = await rows('creator_files', uploadFixture, 'kind,storage_transfer_status,bucket,storage_path');
   assert(saved.length === 7 && saved.some(file => file.kind === 'voice' && file.storage_transfer_status === 'verified'), 'Voice sample was not verified');
   checks.push('Sequential photo uploads, post-submission photo/video uploads, invalid media rejection and retained voice memo support');
+  // Real public HTTPS + private storage regression above the old 64 MB cap.
+  // Keep the fixture on disk so the check also fits the 512 MB app container.
+  const fs = require('node:fs');
+  const staged = fs.mkdtempSync(require('node:path').join(require('node:os').tmpdir(), 'flirt-large-check-'));
+  try {
+    const path = require('node:path').join(staged, 'short-large.mp4');
+    fs.writeFileSync(path, video);
+    const size = 80 * 1024 * 1024;
+    const free = Buffer.alloc(8); free.writeUInt32BE(size - video.length); free.write('free', 4);
+    const fd = fs.openSync(path, 'r+');
+    try { fs.writeSync(fd, free, 0, free.length, video.length); fs.writeSync(fd, Buffer.alloc(1), 0, 1, size - 1); } finally { fs.closeSync(fd); }
+    const result = await upload(uploadFixture, 'content_sfw_video', 'short-large.mp4', await fs.openAsBlob(path, { type: 'video/mp4' }), 'video/mp4', true);
+    assert(result.status === 200 && (await result.json()).status === 'content_saved', 'Short video above 64 MB failed over public HTTPS');
+    const stored = await rows('creator_files', uploadFixture, 'original_name,size_bytes,storage_transfer_status');
+    assert(stored.some(file => file.original_name === 'short-large.mp4' && Number(file.size_bytes) === size && file.storage_transfer_status === 'verified'), 'Large video was not saved and verified');
+    checks.push('80 MB short video uploaded over public HTTPS and verified in private storage');
+  } finally { fs.rmSync(staged, { recursive: true, force: true }); }
+
   const twin = await request('https://dashboard.tgaiclone.xyz');
   assert(twin.status === 200 && (await twin.text()).includes('Twin'), 'Existing Twin login stopped responding');
   checks.push('Existing Twin HTTPS login still responds');
@@ -195,5 +213,6 @@ async function cleanup() {
   console.log(JSON.stringify({ passed: !failure, checks, ...(failure ? { error: failure } : { synthetic_fixtures_removed: true }), credentials_logged: false }));
   if (failure) process.exitCode = 1;
 })();
+
 
 

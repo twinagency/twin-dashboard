@@ -1,4 +1,4 @@
 {
-  "reason": "Complete FLIRT return-to-onboarding fix by aligning middleware with optional dashboard access; retain authentication and owner-scoped data checks.",
-  "requested_at": "2026-10-02T04:45:00Z"
+  "reason": "Fix FLIRT iPhone video selection, stream uploads to disk with a 512 MB video limit, distinguish duration errors, and show upload progress.",
+  "requested_at": "2026-10-03T18:08:37.329022+00:00"
 }
