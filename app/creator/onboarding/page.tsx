@@ -6,6 +6,8 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button, buttonVariants } from "@/components/ui/button";
 import CreatorQuestionnaireWizard from "@/components/CreatorQuestionnaireWizard";
+import CreatorUploadForm from "@/components/CreatorUploadForm";
+import { creatorUploadsEditable } from "@/lib/creator-upload-policy";
 import { supabaseAdmin } from "@/lib/supabase";
 import { CREATOR_SESSION_COOKIE } from "@/lib/creator-session";
 import { creatorDashboardIdentity } from "@/lib/creator-dashboard-identity";
@@ -25,7 +27,7 @@ import { TETHER_PORTAL } from "@/lib/partner-portals";
 import IntelligenceCoreIcon from "@/components/IntelligenceCoreIcon";
 import { CREATOR_PORTAL_COOKIE, creatorLoginPath } from "@/lib/creator-routing";
 import { isLynq, isMoxy } from "@/lib/agency-brand";
-import { ArrowLeft, Check, CheckCircle2, ChevronRight, Circle, FileText, Images, Mic2, ShieldCheck, Upload } from "lucide-react";
+import { ArrowLeft, Check, CheckCircle2, ChevronRight, Circle, FileText, Images, Mic2, ShieldCheck } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -40,17 +42,21 @@ const statusCopy: Record<string,string> = {
   consent_saved: "Consent saved.",
   upload_empty: "Choose at least one file.",
   upload_too_many: "Upload up to 25 files at a time.",
-  upload_too_large: "Keep each upload batch under 64 MB. Images must be under 15 MB each.",
+  upload_too_large: "Videos can be up to 512 MB, images up to 15 MB, and voice recordings up to 64 MB each.",
+  upload_video_too_long: "This video is longer than 30 minutes. Choose a shorter video.",
+  upload_video_resolution: "This video is above 4K resolution. Export it at 4K or lower, then retry.",
+  upload_interrupted: "The connection was interrupted. Keep this page open and retry the remaining files.",
+  upload_timeout: "The upload timed out. Check your connection and retry the remaining files.",
   upload_busy: "Another upload is still being checked. Wait for it to finish, then try again.",
   upload_quota: "This account has reached its onboarding upload limit. Contact support before adding more files.",
-  upload_wrong_type: "Use JPG, PNG, WebP or GIF for images, and MP4, MOV or WebM for videos. Upload each file to the matching category.",
+  upload_wrong_type: "This file could not be verified. Use JPG, PNG, WebP or GIF images (up to 25 MP), MP4, MOV or WebM video, or an audio recording for voice. Export HEIC photos as JPG first.",
   upload_error: "That upload did not finish. Review the verified-file count, then try the remaining files.",
   consent_missing: "Enter your legal name and confirm consent.",
   not_ready: "Finish the required onboarding steps before submitting.",
   error: "Something went wrong. Please try again.",
 };
 
-const errorStatuses = new Set(["questionnaire_missing", "questionnaire_conflict", "application_locked", "upload_empty", "upload_too_many", "upload_too_large", "upload_busy", "upload_quota", "upload_wrong_type", "upload_error", "consent_missing", "not_ready", "error"]);
+const errorStatuses = new Set(["questionnaire_missing", "questionnaire_conflict", "application_locked", "upload_empty", "upload_too_many", "upload_too_large", "upload_video_too_long", "upload_video_resolution", "upload_interrupted", "upload_timeout", "upload_busy", "upload_quota", "upload_wrong_type", "upload_error", "consent_missing", "not_ready", "error"]);
 const onboardingSteps = ["questionnaire", "content", "voice", "consent"] as const;
 type OnboardingStep = (typeof onboardingSteps)[number];
 
@@ -171,18 +177,7 @@ function ContentUploadCard({ kind, count, minimum, label, accept, formatHint, co
       <div className="mt-4 h-2 overflow-hidden rounded-full bg-border" role="progressbar" aria-label={`${label} upload progress`} aria-valuemin={0} aria-valuemax={minimum} aria-valuenow={Math.min(count, minimum)}>
         <div className={`h-full rounded-full transition-[width] ${complete ? "bg-emerald-600" : "bg-accent"}`} style={{ width: `${percent}%` }} />
       </div>
-      <form action="/creator-auth/upload" method="post" encType="multipart/form-data" className="mt-5 grid gap-3">
-        <input type="hidden" name="kind" value={kind} />
-        <label>
-          <span className="mb-1.5 block text-sm font-medium text-ink">Choose {label.toLowerCase()}</span>
-          <Input name="files" type="file" accept={accept} multiple required disabled={locked} className="h-auto min-h-11 border-[#7b8798] py-2 text-sm" />
-          <span className="mt-1.5 block text-xs text-muted">{formatHint}</span>
-        </label>
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <span className="text-xs text-muted">Up to 25 files and 64 MB per batch.</span>
-          <Button type="submit" size="lg" disabled={locked} className="min-h-11"><Upload className="size-4" aria-hidden="true" /> Upload</Button>
-        </div>
-      </form>
+      <CreatorUploadForm kind={kind} label={label} accept={accept} formatHint={formatHint} locked={locked} />
     </section>
   );
 }
@@ -227,6 +222,7 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
   const answers = (application?.answers || {}) as Record<string,string>;
   const submitted = application?.status === "submitted" || application?.status === "reviewing" || application?.status === "approved";
   const applicationLocked = !!application && application.status !== "draft";
+  const uploadsLocked = !creatorUploadsEditable(application?.status, creator);
   const voiceFiles = (files || []).filter((f) => f.kind === "voice" && f.storage_transfer_status === "verified");
   const contentCounts = creatorContentCounts(files || []);
   const categorizedContentComplete = CREATOR_CONTENT_REQUIREMENTS.every(({ kind, minimum }) => contentCounts[kind] >= minimum);
@@ -299,13 +295,13 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
               <CardContent className="grid gap-6 pt-2">
                 {status === "content_saved" && <SavedConfirmation title="Content saved" detail="Your uploaded files were verified and the category totals have been updated." />}
                 <div className="grid gap-3 rounded-2xl border border-border bg-muted/10 p-5 text-sm leading-6 text-ink">
-                  {moxy ? <p>This step is optional. Upload what you have now, or skip it and add content later.</p> : <>
+                  {moxy ? <p>This step is optional. Upload what you have now, or skip it and add content later, including after submitting onboarding.</p> : <>
                   <p>Upload minimum 20 SFW images and 30 NSFW images.</p>
                   <p>Upload 15 SFW videos and 30 NSFW videos.</p>
                   </>}
                 </div>
                 <div className="grid gap-4 md:grid-cols-2">
-                  {CREATOR_CONTENT_REQUIREMENTS.map((requirement) => <ContentUploadCard key={requirement.kind} {...requirement} count={contentCounts[requirement.kind]} complete={contentCounts[requirement.kind] >= requirement.minimum} locked={applicationLocked} />)}
+                  {CREATOR_CONTENT_REQUIREMENTS.map((requirement) => <ContentUploadCard key={requirement.kind} {...requirement} count={contentCounts[requirement.kind]} complete={contentCounts[requirement.kind] >= requirement.minimum} locked={uploadsLocked} />)}
                 </div>
                 {legacyContentFiles > 0 && <p className="rounded-xl border border-border bg-muted/10 px-4 py-3 text-sm leading-6 text-muted">{legacyContentFiles} earlier verified upload{legacyContentFiles === 1 ? " is" : "s are"} still safely stored. They are not guessed into SFW or NSFW categories.</p>}
                 <div><ReturnToOnboarding /></div>
@@ -318,11 +314,7 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
                 {saved && <SavedConfirmation title={status === "voice_skipped" ? "Voice step saved" : "Voice samples saved"} detail={statusCopy[status!]} />}
                 <p className="text-sm leading-6 text-muted">Voice is not required to get onboarded. Add samples now or skip it and activate voice later.</p>
                 <div className="grid gap-3 md:grid-cols-[1fr_auto]">
-                  <form action="/creator-auth/upload" method="post" encType="multipart/form-data" className="flex flex-col gap-3 sm:flex-row sm:items-end">
-                    <input type="hidden" name="kind" value="voice" />
-                    <label className="flex-1"><span className="mb-1 block text-sm text-muted">Voice recordings</span><Input name="files" type="file" accept="audio/*,video/*" multiple disabled={applicationLocked} className="h-auto border-[#7b8798] py-2" /></label>
-                    <Button type="submit" variant="outline" size="lg" disabled={applicationLocked} className="min-h-11">Upload voice</Button>
-                  </form>
+                  <CreatorUploadForm kind="voice" label="Voice recordings" accept="audio/*,video/*" locked={uploadsLocked} voice />
                   <form action="/creator-auth/onboarding" method="post" className="self-end"><input type="hidden" name="action" value="skip_voice" /><Button type="submit" variant="outline" size="lg" disabled={applicationLocked} className="min-h-11">Skip for now</Button></form>
                 </div>
                 {voiceFiles.length > 0 && <p className="text-sm text-muted">{voiceFiles.length} voice file{voiceFiles.length === 1 ? "" : "s"} verified.</p>}

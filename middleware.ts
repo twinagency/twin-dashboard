@@ -198,5 +198,6 @@ export async function middleware(req: NextRequest) {
   }
   return withPathname(req);
 }
+// Only the exact upload route bypasses body buffering; it enforces origin, creator auth and view-as itself.
 // tonconnect-manifest.json is fetched unauthenticated by fans' TON wallets; it must never redirect to login.
-export const config = { matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.png|tonconnect-manifest.json).*)"] };
+export const config = { matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.png|tonconnect-manifest.json|creator-auth/upload/?$).*)"] };

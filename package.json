@@ -63,7 +63,11 @@
     "test:catalogue": "node --import tsx scripts/check-catalogue.ts && node --import tsx scripts/check-catalogue-navigation.ts && node --import tsx scripts/check-catalogue-video.ts && node --import tsx scripts/check-catalogue-presentation.ts && node --import tsx scripts/check-catalogue-preview-client.ts && node --import tsx scripts/check-catalogue-checkout.ts && node --import tsx scripts/check-catalogue-owned-media.ts && node --import tsx scripts/check-catalogue-ton.ts && node --import tsx scripts/check-catalogue-events.ts && node --import tsx scripts/check-catalogue-star-tip.ts",
     "test:recovery": "node --import tsx scripts/check-revenue-sections.ts && node --import tsx scripts/check-cut-access.ts",
     "test:media-campaign": "node --import tsx lib/mtproto/tests/check-media-campaign.ts",
-    "test:middleware-upload-body": "node scripts/check-middleware-upload-body.mjs"
+    "test:middleware-upload-body": "node scripts/check-middleware-upload-body.mjs",
+    "test:creator-video-upload": "node scripts/check-creator-video-upload.cjs",
+    "test:creator-upload-stream": "tsx scripts/check-creator-upload-stream.ts",
+    "test:creator-upload-picker": "node scripts/check-creator-upload-picker.cjs",
+    "test:creator-upload": "npm run test:creator-video-upload && npm run test:creator-upload-stream && npm run test:creator-upload-picker && npm run test:creator-onboarding && npm run test:creator-routing && npm run test:creator-login && npm run test:view-as && npm run test:middleware-upload-body"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
@@ -71,6 +75,7 @@
     "@ton/core": "^0.63.1",
     "@tonconnect/ui-react": "^3.0.2",
     "@xyflow/react": "^12.11.2",
+    "busboy": "1.6.0",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "lucide-react": "^1.24.0",
@@ -86,9 +91,11 @@
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.0.0",
+    "@types/busboy": "1.5.4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
+    "jsdom": "26.1.0",
     "playwright": "^1.61.1",
     "tailwindcss": "^4.0.0",
     "tsx": "4.23.13",

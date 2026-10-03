@@ -112,10 +112,10 @@ assert.match(uploadRoute, /creatorContentCompleted\(verifiedFiles \|\| \[\], !!p
 assert.match(uploadRoute, /contentSignatureMatches/);
 assert.match(uploadRoute, /creatorImageDecodes/);
 assert.match(uploadRoute, /boundedFormData/);
-assert.match(uploadRoute, /MAX_ACTIVE_UPLOADS = 1/);
+assert.match(uploadRoute, /MAX_ACTIVE_UPLOADS = 4/);
 assert.match(uploadRoute, /mediaToolPath\("ffprobe"\)/);
 assert.match(uploadRoute, /mediaToolPath\("ffmpeg"\)/);
-assert.match(uploadRoute, /application\.status !== "draft"/);
+assert.match(uploadRoute, /creatorUploadsEditable\(application\?\.status, creator\)/);
 assert.doesNotMatch(uploadRoute, /kind !== "content" && kind !== "voice"/);
 const submitRoute = readFileSync("app/creator-auth/onboarding/route.ts", "utf8");
 assert.match(submitRoute, /creatorContentCompleted\(files \|\| \[\], !!progress\?\.content_completed\)/);

@@ -55,6 +55,7 @@ RUN addgroup --system --gid 1001 nodejs \
 # Standalone output: a self-contained server.js plus only the node_modules
 # it actually needs (see next.config.mjs `output: "standalone"`).
 COPY --from=builder /app/package.json ./
+COPY --from=builder --chown=nextjs:nodejs /app/scripts/check-live-moxy-upload.cjs ./moxy-upload-check.cjs
 COPY --from=builder --chown=nextjs:nodejs /app/catalogue-preview-check.cjs ./catalogue-preview-check.cjs
 COPY --from=builder --chown=nextjs:nodejs /app/dashboard-recovery-check.cjs ./dashboard-recovery-check.cjs
 COPY --from=builder /app/public ./public
