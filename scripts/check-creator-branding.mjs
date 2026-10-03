@@ -107,7 +107,7 @@ assert.doesNotMatch(onboardingSource, /Twin\/Lovable|Lovable/,
   "Creator onboarding must not expose the implementation platform");
 assert.match(onboardingSource, /const link = isLynq\(creator\.name\)/,
   "Creator onboarding must derive Link branding from verified identity");
-assert.match(onboardingSource, /data-creator-onboarding-brand=\{tether \? ["']tether["'] : link \? ["']link["'] : ["']twin["']\}/);
+assert.match(onboardingSource, /data-creator-onboarding-brand=\{tether \? ["']tether["'] : link \? ["']link["'] : moxy \? ["']moxy["'] : ["']twin["']\}/);
 assert.match(onboardingSource, /link \? ["']LYNQ creator onboarding["']/);
 assert.doesNotMatch(onboardingSource, /export const metadata\s*=/,
   "Onboarding must inherit verified-session creator metadata from the root layout");
