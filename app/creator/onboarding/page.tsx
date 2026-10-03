@@ -289,6 +289,7 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
                   initialAnswers={Object.fromEntries(questionnairePageQuestions(questionnairePage).map((question) => [question.id, answers[question.id] || (question.id === "preferred_name" ? account.display_name || "" : question.id === "email_address" ? account.email || "" : "")]))}
                   initialRevision={application?.updated_at || ""}
                   locked={applicationLocked}
+                  optional={moxy}
                 />}
               </CardContent>
             </Card>}

@@ -55,10 +55,13 @@ export async function POST(req: NextRequest) {
     if (existing && CREATOR_QUESTIONNAIRE_TERMINAL_STATUSES.has(existing.status)) return back(req, "questionnaire_saved", "questionnaire");
     if (existing && existing.status !== "draft") return back(req, "application_locked", "questionnaire");
     const revision = String(form.get("revision") || "");
+    // Every question is optional for Moxy creators (Ronan, 2026-10-03).
+    const moxy = isMoxy(creator.name);
+    if (moxy && !existing?.id) return back(req, "questionnaire_saved", "questionnaire");
     if (!existing?.id || !revision) return back(req, "questionnaire_missing", "questionnaire");
     if (existing.updated_at !== revision) return back(req, "questionnaire_conflict", "questionnaire");
     const answers = (existing.answers || {}) as Record<string, string>;
-    const missing = questionnaireRequiredMissing(answers);
+    const missing = moxy ? [] : questionnaireRequiredMissing(answers);
     if (missing.length) return back(req, "questionnaire_missing", "questionnaire", creatorQuestionnairePageForQuestion(missing[0]).slug);
 
     const sealedAt = nextQuestionnaireRevision(existing.updated_at);

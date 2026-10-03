@@ -23,8 +23,8 @@ function selectClass() {
   return "h-11 w-full rounded-md border border-[#7b8798] bg-transparent px-3 text-base text-ink outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 }
 
-function QuestionField({ question, value, locked }: { question: CreatorQuestion; value: string; locked: boolean }) {
-  const required = CREATOR_QUESTIONNAIRE_REQUIRED_IDS.includes(question.id as (typeof CREATOR_QUESTIONNAIRE_REQUIRED_IDS)[number]);
+function QuestionField({ question, value, locked, optional = false }: { question: CreatorQuestion; value: string; locked: boolean; optional?: boolean }) {
+  const required = !optional && CREATOR_QUESTIONNAIRE_REQUIRED_IDS.includes(question.id as (typeof CREATOR_QUESTIONNAIRE_REQUIRED_IDS)[number]);
   const label = <span className="mb-1.5 block text-sm font-medium text-ink">{question.label}{required ? " *" : ""}</span>;
   const help = question.help ? <span className="mt-1.5 block text-sm leading-relaxed text-muted">{question.help}</span> : null;
 
@@ -55,11 +55,14 @@ export default function CreatorQuestionnaireWizard({
   initialAnswers,
   initialRevision,
   locked = false,
+  optional = false,
 }: {
   page: CreatorQuestionnairePage;
   initialAnswers: Record<string, string>;
   initialRevision: string;
   locked?: boolean;
+  /** Every question optional (Moxy creators, Ronan 2026-10-03). */
+  optional?: boolean;
 }) {
   const formRef = useRef<HTMLFormElement>(null);
   const revisionRef = useRef(initialRevision);
@@ -197,7 +200,7 @@ export default function CreatorQuestionnaireWizard({
           <div className="mt-5 grid gap-5 md:grid-cols-2">
             {group.questions.map((question) => (
               <div key={question.id} className={question.type === "textarea" || question.type === "radio" ? "md:col-span-2" : ""}>
-                <QuestionField question={question} value={initialAnswers[question.id] || ""} locked={locked} />
+                <QuestionField question={question} value={initialAnswers[question.id] || ""} locked={locked} optional={optional} />
               </div>
             ))}
           </div>
