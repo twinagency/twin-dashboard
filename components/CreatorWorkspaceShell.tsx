@@ -71,7 +71,7 @@ export default function CreatorWorkspaceShell({
               <MainShell>
                 {!connected && (
                   <div role="status" className="mb-5 rounded-xl border border-line bg-panel px-4 py-3 text-sm text-muted">
-                    Your onboarding is complete. Your dashboard will show live earnings and content once your AI creator profile is connected.
+                    Your dashboard will show live earnings and content once your AI creator profile is connected. You can finish or update your onboarding any time. <a href="/creator/onboarding" className="font-semibold text-ink underline underline-offset-4">Go to onboarding</a>
                   </div>
                 )}
                 {children}
