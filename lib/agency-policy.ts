@@ -6,7 +6,7 @@ export const isAgencyPath = (path: string) => path === "/agency" || path.startsW
 export function agencyRequestAllowed(path: string, method: string, serverAction: boolean): boolean {
   if (!isAgencyPath(path) || serverAction) return false;
   if (method === "GET" || method === "HEAD") return true;
-  return method === "POST" && ["/agency/auth", "/agency/logout", "/agency/clone-scope", "/agency/creator-invites/manage", "/agency/creators/link", "/agency/creators/manage", "/agency/creators/review", "/lynq/auth", "/link/auth", "/moxy/auth", "/jess-and-kate-ai/auth", "/tether/auth"].includes(path);
+  return method === "POST" && ["/agency/auth", "/agency/logout", "/agency/clone-scope", "/agency/creator-invites/manage", "/agency/creators/link", "/agency/creators/manage", "/agency/creators/review", "/agency/creators/build-clone", "/lynq/auth", "/link/auth", "/moxy/auth", "/jess-and-kate-ai/auth", "/tether/auth"].includes(path);
 }
 export function scopeAgencyClones(allowed: readonly string[], requested?: string): string[] {
   if (requested && !allowed.includes(requested)) throw new Error("Creator access denied");

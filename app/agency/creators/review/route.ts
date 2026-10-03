@@ -2,9 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAgencyOnboardingAccess, assignedCreatorAccount } from "@/lib/agency-onboarding-access";
 import { dashboardOrigin, trustedFormOrigin } from "@/lib/form-origin";
 import { serviceClient } from "@/lib/supabase-service";
+import { buildCloneForCreator } from "@/lib/flirt-clone-pipeline-server";
+import { outcomeResult } from "@/lib/flirt-clone-outcome";
 
-// Operator decision on a submitted FLIRT application. Approving only records the
-// decision: it does not create a clone or a bot (that is a separate, manual step).
+// Operator decision on a submitted FLIRT application. Approving records the decision.
+// With FLIRT_CLONE_PIPELINE_ENABLED=true it then also builds the paused Twin clone
+// (see lib/flirt-clone-pipeline.ts). With the flag off, approving does nothing more.
 const DECISIONS = {
   reviewing: { account: "applicant", application: "reviewing" },
   approve: { account: "approved", application: "approved" },
@@ -32,5 +35,11 @@ export async function POST(req: NextRequest) {
   const app = await db.from("creator_applications").update({ status: decision.application, updated_at: now }).eq("id", application.data.id).select("id");
   if (app.error || !app.data?.length) return back("error");
   const acct = await db.from("creator_accounts").update({ account_status: decision.account, updated_at: now }).eq("id", id).select("id");
-  return back(acct.error || !acct.data?.length ? "error" : "reviewed");
+  if (acct.error || !acct.data?.length) return back("error");
+  if (decision === DECISIONS.approve) {
+    // The decision is already saved. A refusal or failure here never undoes it.
+    const outcome = await buildCloneForCreator(id);
+    if (outcome.kind !== "disabled") return back(outcomeResult(outcome));
+  }
+  return back("reviewed");
 }
