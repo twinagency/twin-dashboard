@@ -1,4 +1,4 @@
 {
-  "reason": "Fix FLIRT iPhone video selection, stream uploads to disk with a 512 MB video limit, distinguish duration errors, and show upload progress.",
-  "requested_at": "2026-10-03T18:08:37.329022+00:00"
+  "reason": "Complete video upload release with Node 22-safe multipart limit cancellation.",
+  "requested_at": "2026-10-03T18:24:29.736763+00:00"
 }

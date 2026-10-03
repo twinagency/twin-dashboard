@@ -25,7 +25,13 @@ export async function boundedFormData(request: Request, options: { maxBytes?: nu
   const writes: Promise<void>[] = [];
   let failure: Error | undefined;
   let total = 0;
-  const fail = (error: Error) => { failure ??= error; controller.abort(); };
+  const fail = (error: Error) => {
+    failure ??= error;
+    // Busboy emits limit events while updating its current file. Destroying it
+    // synchronously in that callback is re-entrant on Node 22. Defer cancellation
+    // until the parser has completed the current callback; bounds still apply.
+    queueMicrotask(() => controller.abort());
+  };
   const aborted = () => fail(new CreatorUploadError("upload_interrupted"));
   const timer = setTimeout(() => fail(new CreatorUploadError("upload_timeout")), options.timeoutMs ?? 20 * 60 * 1000);
   request.signal.addEventListener("abort", aborted, { once: true });
