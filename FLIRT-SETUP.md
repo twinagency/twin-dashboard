@@ -10,6 +10,14 @@ In the local FLIRT Supabase project `lkmfwpqegjluirfusnaw`, set Authentication â
 
 Publish the updated marketing project only after the dashboard release's live acceptance succeeds. The website signup/sign-in URLs, canonical URL, and social images use the new domain. The established contact mailbox remains `hello@lynq.ai` until a working replacement mailbox is supplied.
 
+## Approved applicant to Twin clone, 3 October 2026 (off by default)
+
+FLIRT builds no bot of its own. A FLIRT creator's clone is a row in Twin's `clones` table, served by Twin's live bot runtime. With `FLIRT_CLONE_PIPELINE_ENABLED=true` (plus the existing live Twin connection), approving an applicant on **Review profile** also creates that row: paused, with a placeholder bot token (`PENDING-BOTFATHER-<account id>`), typed facts and persona prose copied from her questionnaire, and `intake.flirt_creator_account_id` set. The link is saved as `creator_clone_links.twin_slug` (`clone_id` stays null because it is a foreign key to FLIRT's own empty `clones` table). **Build clone** on the same page retries it; running it twice never makes a second clone.
+
+Refused (nothing is written): no signed consent in `creator_consents`, application or account not approved, empty questionnaire, no readable birthday, under 18. Her phone, email and social links are never copied into the row or prompts. The only write the FLIRT dashboard makes into Twin is one paused placeholder-token insert into `clones`, enforced by `lib/flirt-twin-writer.ts`. With the flag off nothing here runs.
+
+Still by hand, in Twin's dashboard (the Clone build card lists them): create the bot in BotFather and paste the token; upload her photos and videos on the clone's Media page (Twin captions and prices them, the hand-off packet at `/agency/creators/build-packet?id=...` has download links); Compile persona; push fleet defaults; test; set Active. Voice cloning is never automatic. Adding the clone to FLIRT's live-Twin allowlist (`deployment/flirt-live-twin.cjs`) is a separate decision and is not done here.
+
 ## Current onboarding boundary, 1 October 2026
 
 The operator dashboard connects to exactly four authorised Twin creators using the existing `flirt-live-twin.cjs` scope. That connection is an explicit exception to the original independent-database plan below. This onboarding fix does not replace or rotate that pre-existing connection.
