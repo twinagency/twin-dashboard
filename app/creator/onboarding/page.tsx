@@ -24,7 +24,7 @@ import {
 import { TETHER_PORTAL } from "@/lib/partner-portals";
 import IntelligenceCoreIcon from "@/components/IntelligenceCoreIcon";
 import { CREATOR_PORTAL_COOKIE, creatorLoginPath } from "@/lib/creator-routing";
-import { isLynq } from "@/lib/agency-brand";
+import { isLynq, isMoxy } from "@/lib/agency-brand";
 import { ArrowLeft, Check, CheckCircle2, ChevronRight, Circle, FileText, Images, Mic2, ShieldCheck, Upload } from "lucide-react";
 
 export const dynamic = "force-dynamic";
@@ -209,7 +209,8 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
   const session = { accountId: creator.accountId };
   const tether = creator.name === TETHER_PORTAL.name;
   const link = isLynq(creator.name);
-  const brandName = tether ? "Tether" : link ? "LYNQ" : "Twin";
+  const moxy = isMoxy(creator.name);
+  const brandName = tether ? "Tether" : link ? "LYNQ" : moxy ? "Moxy" : "Twin";
   const { status, step, section } = await searchParams;
   const activeStep = isOnboardingStep(step) ? step : null;
   const questionnairePage = creatorQuestionnairePage(section);
@@ -246,7 +247,7 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
     (activeStep === "consent" && status === "consent_saved" && complete.consent);
 
   return (
-    <div className={`min-h-screen bg-bg ${link ? "canvas-glow" : ""}`} data-creator-onboarding-brand={tether ? "tether" : link ? "link" : "twin"}>
+    <div className={`min-h-screen bg-bg ${link ? "canvas-glow" : ""}`} data-creator-onboarding-brand={tether ? "tether" : link ? "link" : moxy ? "moxy" : "twin"}>
       <header className={tether ? "border-b border-white/10 bg-[#06080c] text-white shadow-[0_8px_30px_rgba(0,0,0,0.16)]" : "border-b border-border bg-white/90 backdrop-blur"}>
         <div className="mx-auto flex max-w-5xl items-center justify-between px-5 py-4">
           <div className="flex min-w-0 items-center gap-3">{tether && <IntelligenceCoreIcon size={34} />}<TwinWordmark inverse={tether} agencyName={brandName === "Twin" ? undefined : brandName} />{tether && <span className="hidden text-xs font-bold uppercase tracking-[0.18em] text-sky-300 sm:inline">Creator</span>}</div>
@@ -255,7 +256,7 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
       </header>
 
       <main className="mx-auto max-w-5xl px-5 py-10">
-        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#1d4ed8]">{tether ? "Tether creator onboarding" : link ? "LYNQ creator onboarding" : "Creator onboarding"}</p>
+        <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#1d4ed8]">{tether ? "Tether creator onboarding" : link ? "LYNQ creator onboarding" : moxy ? "Moxy creator onboarding" : "Creator onboarding"}</p>
         <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
           <div><h1 className="font-heading text-4xl font-semibold tracking-[-0.04em] text-ink">Build your {brandName} digital clone</h1><p className="mt-2 text-muted">Complete the steps below. Your answers and media stay attached to this creator account.</p></div>
           <div className="rounded-full border border-border bg-white px-4 py-2 text-sm font-medium text-ink" aria-label={submitted ? "Application submitted" : `${steps} of 4 onboarding steps complete`}>{submitted ? "Submitted" : `${steps}/4 complete`}</div>
