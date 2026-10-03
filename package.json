@@ -50,7 +50,7 @@
     "test:sequence": "tsx scripts/check-sequence-render.ts",
     "test:sequence-ui": "tsx scripts/check-sequence-ui.ts",
     "test:nsfw-field": "tsx scripts/check-flirt-nsfw-field.ts",
-    "test:agency": "npm run test:tether && tsx scripts/check-agency-access.ts && tsx scripts/check-agency-queries.ts && tsx scripts/check-lynq-login.ts && tsx scripts/check-moxy-access.ts && tsx scripts/check-lynq-host.ts && tsx scripts/check-lynq-management.tsx && tsx scripts/check-login-routing.ts && tsx scripts/check-jess-kate-access.ts && TEST_JESS_KATE=1 tsx scripts/check-lynq-management.tsx && tsx scripts/check-sidebar-layout.tsx",
+    "test:agency": "npm run test:tether && tsx scripts/check-agency-access.ts && tsx scripts/check-agency-queries.ts && tsx scripts/check-lynq-login.ts && tsx scripts/check-moxy-access.ts && tsx scripts/check-lynq-host.ts && tsx scripts/check-lynq-signup.ts && tsx scripts/check-lynq-management.tsx && tsx scripts/check-login-routing.ts && tsx scripts/check-jess-kate-access.ts && TEST_JESS_KATE=1 tsx scripts/check-lynq-management.tsx && tsx scripts/check-sidebar-layout.tsx",
     "test:tether": "tsx scripts/check-tether-access.ts",
     "test:creator-routing": "tsx scripts/check-creator-routing.ts",
     "test:creator-login": "tsx scripts/check-creator-login.ts",

@@ -10,6 +10,7 @@ import CreatorAuthFrame, {
   tetherAuthLinkClass,
   type CreatorAuthBrand,
 } from "@/components/CreatorAuthFrame";
+export const MOXY_GET_STARTED_URL = "https://lynqai.co/get-started";
 import type { InviteAgency } from "@/lib/creator-invite-agency";
 
 export default async function CreatorLoginScreen({ searchParams, brand, agencyBrand }: { searchParams: Promise<{ next?: string; error?: string }>; brand: CreatorAuthBrand; agencyBrand?: InviteAgency | null }) {
@@ -33,7 +34,10 @@ export default async function CreatorLoginScreen({ searchParams, brand, agencyBr
       eyebrow="Creator workspace"
       title={tether ? "Sign in to Tether" : link ? "Sign in to LYNQ" : invited ? `Sign in to ${invited.name}` : "Sign in"}
       description={tether ? "Private creator access. Agency operator access remains separate." : link ? "Access your LYNQ creator account." : invited ? `Access your ${invited.name} creator account.` : "Access your Twin creator account."}
-      footer={<span>New here? <Link href={paths.signup} className={authLinkClass}>Create creator account</Link></span>}
+      footer={<span>New here? {invited?.slug === "moxy"
+        // Moxy creators need an invitation, and the Moxy site is where it is entered.
+        ? <a href={MOXY_GET_STARTED_URL} className={authLinkClass}>Create creator account</a>
+        : <Link href={paths.signup} className={authLinkClass}>Create creator account</Link>}</span>}
     >
       <form action="/creator-auth/login" method="post" className={darkForm ? "space-y-5" : "grid gap-4"}>
         <input type="hidden" name="next" value={safeNext} />

@@ -1,6 +1,9 @@
 import type { Metadata } from "next";
 import CreatorSignupScreen from "@/components/CreatorSignupScreen";
+import { headers } from "next/headers";
+import { redirect } from "next/navigation";
 import { agencyForInviteCode } from "@/lib/creator-invite-agency";
+import { creatorSignupForward } from "@/lib/creator-invite-forward";
 
 export const dynamic = "force-dynamic";
 
@@ -27,5 +30,10 @@ export default async function CreatorSignupPage(props: { searchParams: Promise<{
   // Someone arriving on an agency's invite link is joining that agency, not
   // Twin directly, so the page presents itself as theirs.
   const inviteAgency = await agencyForInviteCode(initialAgencyCode);
+  // Old tgaiclone Moxy invite links land on the Moxy host; a non-Moxy invite
+  // opened on the Moxy host goes back to the canonical host. Generic and
+  // other-agency signups on tgaiclone are untouched.
+  const forward = creatorSignupForward({ url: "https://dashboard.tgaiclone.xyz/creator/signup", headers: await headers() }, inviteAgency?.slug, initialAgencyCode);
+  if (forward) redirect(forward.toString());
   return <CreatorSignupScreen {...props} brand="twin" initialAgencyCode={initialAgencyCode || undefined} inviteAgency={inviteAgency} />;
 }
