@@ -28,11 +28,19 @@ export default async function CreatorAccount({params, searchParams}: {
   return <main className="dashboard-page max-w-4xl space-y-6 text-ink">
     <Link href="/agency/creators" className="text-sm text-accent">← Creator accounts</Link>
     <div><h1 className="creator-name text-2xl font-semibold">{creator.display_name || "New creator"}</h1><p className="mt-1 text-sm text-muted">{creator.email}</p></div>
-    {result && <p role="status">{result === "saved" ? "Creator profile saved." : result === "conflict" ? "This profile changed. Reload and try again." : "Unable to save this profile."}</p>}
+    {result && <p role="status">{result === "reviewed" ? "Decision recorded." : result === "saved" ? "Creator profile saved." : result === "conflict" ? "This profile changed. Reload and try again." : "Unable to save this profile."}</p>}
     <form action="/agency/creators/manage" method="post" className="space-y-3 rounded-xl border border-line bg-panel p-5">
       <input type="hidden" name="creator_account_id" value={id}/><input type="hidden" name="revision" value={creator.updated_at}/>
       <label className="block text-sm font-medium">Display name<input name="display_name" required maxLength={120} defaultValue={creator.display_name || ""} className="mt-2 block w-full rounded-lg border border-line p-3"/></label>
       <button className="rounded-lg bg-accent px-4 py-2 text-white">Save profile</button>
+    </form>
+    <form action="/agency/creators/review" method="post" className="flex flex-wrap items-center gap-3 rounded-xl border border-line bg-panel p-5">
+      <input type="hidden" name="creator_account_id" value={id}/>
+      <span className="mr-2 text-sm font-medium">Application decision</span>
+      <button name="decision" value="reviewing" className="rounded-lg border border-line px-4 py-2">Mark reviewing</button>
+      <button name="decision" value="approve" className="rounded-lg bg-accent px-4 py-2 text-white">Approve</button>
+      <button name="decision" value="reject" className="rounded-lg border border-line px-4 py-2">Reject</button>
+      <p className="basis-full text-xs text-muted">Approving records the decision only. It does not create a bot or activate the creator. Rejecting blocks their sign-in.</p>
     </form>
     <section className="rounded-xl border border-line bg-panel p-5"><h2 className="mb-3 font-semibold">Onboarding status</h2><dl className="grid gap-3 text-sm sm:grid-cols-3"><div><dt className="text-muted">Account</dt><dd className="capitalize">{creator.account_status}</dd></div><div><dt className="text-muted">Application</dt><dd className="capitalize">{application.data?.status || "Not started"}</dd></div><div><dt className="text-muted">Consent</dt><dd>{consent.data ? "Recorded" : "Not provided"}</dd></div></dl><p className="mt-4 text-sm text-muted">Submitting onboarding creates an application. Bot setup and activation are separate.</p></section>
     <section className="rounded-xl border border-line bg-panel p-5"><h2 className="mb-3 font-semibold">Questionnaire</h2>{Object.keys(answers).length ? <dl className="space-y-4">{Object.entries(answers).map(([key,value])=><div key={key}><dt className="text-sm font-medium capitalize">{key.replace(/_/g," ")}</dt><dd className="mt-1 whitespace-pre-wrap break-words text-sm text-muted">{typeof value === "string" ? value : JSON.stringify(value)}</dd></div>)}</dl> : <p className="text-sm text-muted">No answers provided yet.</p>}</section>
