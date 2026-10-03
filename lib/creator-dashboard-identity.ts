@@ -14,6 +14,8 @@ export type CreatorDashboardIdentity = AgencyIdentity & {
   userId: string;
   creatorName: string;
   onboarded: boolean;
+  /** Application submitted (or later). False for Moxy creators who skipped onboarding. */
+  applicationSubmitted?: boolean;
   /** Live-data preview accounts can read their one scoped clone but cannot mutate it. */
   readOnly: boolean;
   /** Current server-verified assignment. Never copy a portal hint here. */
@@ -72,6 +74,7 @@ export async function creatorDashboardIdentity(token: string | null | undefined)
       // Onboarding stays for new accounts that have no clone yet.
       // Moxy creators may skip onboarding and use the dashboard before submitting (Ronan, 2026-10-03).
       onboarded: !!clone || isMoxy(relatedAgency?.name) || ["submitted", "reviewing", "approved"].includes(application.data?.status || ""),
+      applicationSubmitted: ["submitted", "reviewing", "approved"].includes(application.data?.status || ""),
       readOnly: briLiveDemo,
     };
     // Branding only, not an assignment, permission or real-account status change.

@@ -32,6 +32,7 @@ export default async function CreatorLayout({ children }: { children: React.Reac
       clones={clones}
       activeCloneId={cloneId}
       connected={!!cloneId || demo}
+      onboardingFinished={creator.applicationSubmitted !== false}
       allTimeStars={allTimeStars}
       usdPerStar={usdPerStar}
     >

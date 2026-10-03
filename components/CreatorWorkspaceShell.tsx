@@ -28,6 +28,7 @@ export default function CreatorWorkspaceShell({
   clones,
   activeCloneId,
   connected,
+  onboardingFinished = true,
   allTimeStars,
   usdPerStar,
   children,
@@ -37,6 +38,7 @@ export default function CreatorWorkspaceShell({
   clones: CreatorClone[];
   activeCloneId: string | null;
   connected: boolean;
+  onboardingFinished?: boolean;
   allTimeStars: number;
   usdPerStar?: number;
   children: ReactNode;
@@ -71,7 +73,9 @@ export default function CreatorWorkspaceShell({
               <MainShell>
                 {!connected && (
                   <div role="status" className="mb-5 rounded-xl border border-line bg-panel px-4 py-3 text-sm text-muted">
-                    Your dashboard will show live earnings and content once your AI creator profile is connected. You can finish or update your onboarding any time. <a href="/creator/onboarding" className="font-semibold text-ink underline underline-offset-4">Go to onboarding</a>
+                    {onboardingFinished
+                      ? "Your onboarding is complete. Your dashboard will show live earnings and content once your AI creator profile is connected."
+                      : <>You haven&apos;t finished onboarding yet. <a href="/creator/onboarding" className="font-semibold text-ink underline underline-offset-4">Finish onboarding here</a></>}
                   </div>
                 )}
                 {children}
