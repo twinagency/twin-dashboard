@@ -127,22 +127,36 @@ export async function POST(req: NextRequest) {
     if (applicationError) return back(req, "error", "consent");
     if (existing && CREATOR_QUESTIONNAIRE_TERMINAL_STATUSES.has(existing.status)) return NextResponse.redirect(creatorRequestUrl(req, "/creator"), 303);
     if (existing && existing.status !== "draft") return back(req, "application_locked", "consent");
-    const questionnaireComplete = !!progress?.questionnaire_completed && !!existing && questionnaireRequiredMissing((existing.answers || {}) as Record<string, string>).length === 0;
-    // Content is optional for Moxy creators (Ronan, 2026-10-03).
-    const contentComplete = isMoxy(creator.name) || creatorContentCompleted(files || [], !!progress?.content_completed);
-    const voiceComplete = !!progress?.voice_completed || (files || []).some((file) => file.kind === "voice" && file.storage_transfer_status === "verified");
-    if (!questionnaireComplete || !contentComplete || !voiceComplete || !consent) {
+    // Every step is optional for Moxy creators (Ronan, 2026-10-03): they can submit without filling anything in.
+    const moxy = isMoxy(creator.name);
+    const questionnaireComplete = moxy || (!!progress?.questionnaire_completed && !!existing && questionnaireRequiredMissing((existing.answers || {}) as Record<string, string>).length === 0);
+    const contentComplete = moxy || creatorContentCompleted(files || [], !!progress?.content_completed);
+    const voiceComplete = moxy || !!progress?.voice_completed || (files || []).some((file) => file.kind === "voice" && file.storage_transfer_status === "verified");
+    if (!questionnaireComplete || !contentComplete || !voiceComplete || (!consent && !moxy)) {
       return back(req, "not_ready", "consent");
     }
 
-    const submittedAt = nextQuestionnaireRevision(existing.updated_at);
+    let application = existing;
+    if (!application) {
+      // A Moxy creator who never opened the questionnaire has no draft yet; start an empty one to submit.
+      const { data: created, error: createError } = await supabaseAdmin
+        .from("creator_applications")
+        .insert({ id: accountId, creator_account_id: accountId, answers: {}, status: "draft", updated_at: now })
+        .select("id,status,answers,updated_at")
+        .single();
+      if (createError?.code === "23505") return back(req, "questionnaire_conflict", "consent");
+      if (createError || !created) return back(req, "error", "consent");
+      application = created;
+    }
+
+    const submittedAt = nextQuestionnaireRevision(application.updated_at);
     const { data: submittedApplication, error } = await supabaseAdmin
       .from("creator_applications")
       .update({ status: "submitted", submitted_at: now, updated_at: submittedAt })
-      .eq("id", existing.id)
+      .eq("id", application.id)
       .eq("creator_account_id", accountId)
       .eq("status", "draft")
-      .eq("updated_at", existing.updated_at)
+      .eq("updated_at", application.updated_at)
       .select("id")
       .maybeSingle();
     if (error) return back(req, "error", "consent");
