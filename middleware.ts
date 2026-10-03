@@ -1,3 +1,4 @@
+import { flirtForeignBrandDecision } from "@/lib/flirt-brand-policy";
 import { flirtOnboardingOptional } from "@/lib/flirt-onboarding";
 import { enabled as liveTwinEnabled, identity as liveTwinIdentity } from "./deployment/flirt-live-twin.cjs";
 import { isMarketingPath } from "@/lib/marketing-routing";
@@ -37,6 +38,9 @@ const SELF_AUTHENTICATED_PREFIXES = ["/api/v1/", "/api/admin/"];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+  const foreignBrand = flirtForeignBrandDecision(pathname, req.method);
+  if (foreignBrand?.action === "notfound") return privateResponse(new NextResponse("Not found", { status: 404 }));
+  if (foreignBrand?.action === "redirect") return privateResponse(NextResponse.redirect(new URL(foreignBrand.path + req.nextUrl.search, dashboardOrigin(req)), 308));
   if (isMarketingPath(pathname)) {
     if (!["GET", "HEAD"].includes(req.method) || req.headers.has("next-action")) return new NextResponse("Forbidden", { status: 403 });
     const response = privateResponse(withPathname(req));
