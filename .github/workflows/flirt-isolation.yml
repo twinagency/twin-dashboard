@@ -27,3 +27,5 @@ jobs:
         run: npm run test:offline
       - name: Creator signup and onboarding regression checks
         run: npm run test:creator-routing && npm run test:creator-login && npm run test:creator-onboarding
+      - name: FLIRT fixes (direct signup agency, brand policy, approve and reject, clone pipeline)
+        run: npm run test:flirt-fixes

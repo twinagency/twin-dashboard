@@ -48,6 +48,10 @@
     "test:reset-creator-guardrails": "node scripts/check-reset-recent-creator-test-accounts.mjs",
     "test:flirt-isolation": "node --test deployment/flirt-environment.test.cjs deployment/flirt-public-auth.test.cjs deployment/flirt-shared-services.test.cjs deployment/flirt-provision-storage.test.cjs",
     "test:flirt-direct-signup": "tsx scripts/check-flirt-direct-signup.ts",
+    "test:flirt-brand-policy": "tsx scripts/check-flirt-brand-policy.ts",
+    "test:flirt-review": "tsx scripts/check-flirt-review.ts",
+    "test:flirt-clone-pipeline": "tsx scripts/check-flirt-clone-pipeline.ts",
+    "test:flirt-fixes": "npm run test:flirt-direct-signup && npm run test:flirt-brand-policy && npm run test:flirt-review && npm run test:flirt-clone-pipeline",
     "flirt:preflight": "node deployment/flirt-preflight.cjs dashboard"
   },
   "dependencies": {
