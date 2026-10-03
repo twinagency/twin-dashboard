@@ -140,6 +140,10 @@ def configure(encoded):
             raise RuntimeError("The existing Twin live connection could not be verified")
         env.update({"FLIRT_LIVE_TWIN_ENABLED": "true", "FLIRT_LIVE_TWIN_URL": live["url"].rstrip("/"), "FLIRT_LIVE_TWIN_SERVICE_KEY": live["key"]})
         env["DASHBOARD_PUBLIC_ORIGIN"] = ORIGIN
+        # Operator-set switch for the approved-applicant -> paused Twin clone pipeline.
+        # Off unless it was already turned on in this protected file; a release never enables it.
+        if previous.get("FLIRT_CLONE_PIPELINE_ENABLED") == "true":
+            env["FLIRT_CLONE_PIPELINE_ENABLED"] = "true"
         for name in ("DASHBOARD_SESSION_SECRET", "CREATOR_SESSION_SECRET", "DASHBOARD_PASSWORD"):
             env[name] = previous.get(name) or secrets.token_hex(32)
     else:

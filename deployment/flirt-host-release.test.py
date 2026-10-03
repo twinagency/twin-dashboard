@@ -15,7 +15,7 @@ class ReleaseBoundaryTests(unittest.TestCase):
                 if args[0] == "openssl": return json.dumps(payload).encode()
                 if "url:process.env" in args[-1]: return json.dumps({"url": "https://" + release.TWIN_PROJECT + ".supabase.co", "key": "sb_secret_" + "t"*32}).encode()
                 return json.dumps(dict.fromkeys(release.PROVIDERS, "synthetic-provider")).encode()
-            previous = {"FLIRT_SUPABASE_PROJECT_REF": release.PROJECT, "DASHBOARD_PASSWORD": "keep-password", "DASHBOARD_SESSION_SECRET": "keep-admin-session", "CREATOR_SESSION_SECRET": "keep-creator-session"}
+            previous = {"FLIRT_CLONE_PIPELINE_ENABLED": "true", "FLIRT_SUPABASE_PROJECT_REF": release.PROJECT, "DASHBOARD_PASSWORD": "keep-password", "DASHBOARD_SESSION_SECRET": "keep-admin-session", "CREATOR_SESSION_SECRET": "keep-creator-session"}
             output = io.StringIO()
             with patch.object(release, "secured_directory"), patch.object(release, "check_private_file"), patch.object(release, "verify_database"), patch.object(release, "read_env", return_value=previous), patch.object(release, "command", side_effect=fake_command) as commands, patch.object(release, "private_write") as saved, redirect_stdout(output):
                 release.configure(base64.b64encode(bytes(512)).decode())
@@ -28,9 +28,11 @@ class ReleaseBoundaryTests(unittest.TestCase):
             if kind == "dashboard":
                 self.assertEqual(env["FLIRT_LIVE_TWIN_ENABLED"], "true")
                 self.assertEqual(env["DASHBOARD_PASSWORD"], previous["DASHBOARD_PASSWORD"])
+                self.assertEqual(env["FLIRT_CLONE_PIPELINE_ENABLED"], "true")
                 self.assertNotIn("BOT_TOKEN", env)
             else:
                 self.assertNotIn("FLIRT_LIVE_TWIN_ENABLED", env)
+                self.assertNotIn("FLIRT_CLONE_PIPELINE_ENABLED", env)
                 self.assertNotIn("FLIRT_LIVE_TWIN_SERVICE_KEY", env)
                 self.assertEqual(env["BOT_TOKEN"], "")
     def test_database_errors_never_disclose_response_or_key(self):
