@@ -31,6 +31,9 @@ export default function CreatorUploadForm({ kind, label, accept, formatHint, loc
   const router = useRouter();
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
+  const photosInputRef = useRef<HTMLInputElement>(null);
+  const pickerAttempt = useRef<{ source: "files" | "photos"; id: number } | null>(null);
+  const pickerSequence = useRef(0);
   const itemsRef = useRef<UploadItem[]>([]);
   const nextId = useRef(0);
   const running = useRef(false);
@@ -38,8 +41,13 @@ export default function CreatorUploadForm({ kind, label, accept, formatHint, loc
   const [working, setWorking] = useState(false);
   const [message, setMessage] = useState("");
   const [failed, setFailed] = useState(false);
+  const [pickerNotice, setPickerNotice] = useState("");
   const isVideo = kind.endsWith("_video");
-  const pickerAccept = isVideo ? "video/*" : accept;
+  // application/octet-stream maps to UTTypeData on iOS. It opens the Files
+  // document picker without routing videos through Photos' export/transcode
+  // step, which can silently return cancel for an entire selection.
+  // This is only a picker hint; the server still validates actual video bytes.
+  const pickerAccept = isVideo ? "application/octet-stream" : accept;
   const remaining = items.filter(item => item.state !== "saved");
   const saved = items.length - remaining.length;
 
@@ -47,10 +55,29 @@ export default function CreatorUploadForm({ kind, label, accept, formatHint, loc
   function updateItem(id: number, patch: Partial<UploadItem>) {
     replaceItems(itemsRef.current.map(item => item.id === id ? { ...item, ...patch } : item));
   }
+  function beginPicker(source: "files" | "photos") {
+    if (running.current || locked) return;
+    pickerAttempt.current = { source, id: ++pickerSequence.current };
+    // A previous success must never look like the result of this new attempt.
+    if (itemsRef.current.every(item => item.state === "saved")) replaceItems([]);
+    setMessage(""); setFailed(false); setPickerNotice("");
+  }
+  function noFilesReceived(source: "files" | "photos") {
+    pickerAttempt.current = null;
+    setMessage("");
+    setPickerNotice(source === "photos" && isVideo
+      ? "No new videos were received from Photos. If you selected videos and tapped Done, use Choose videos from Files below. Your previous uploads are still saved."
+      : "No new files were added. Choose files stored on your device, then tap Open or Done. Your previous uploads are still saved.");
+  }
   function selectFiles(event: SyntheticEvent<HTMLInputElement>) {
     if (running.current || locked) return;
     const files = Array.from(event.currentTarget.files || []);
-    if (!files.length) return;
+    if (!files.length) {
+      if (pickerAttempt.current) noFilesReceived(pickerAttempt.current.source);
+      return;
+    }
+    pickerAttempt.current = null;
+    setPickerNotice("");
     const current = itemsRef.current.some(item => item.state !== "saved") ? itemsRef.current : [];
     const next = [...current];
     for (const file of files) {
@@ -95,13 +122,36 @@ export default function CreatorUploadForm({ kind, label, accept, formatHint, loc
     });
   }
   useEffect(() => {
-    const input = inputRef.current;
-    const cancelled = () => {
-      if (!itemsRef.current.length) setMessage("No file was added. If Photos closes without adding your videos, save them to Files, then use Choose Files. You can select several or add them to your list in separate selections.");
+    const input = inputRef.current, photosInput = photosInputRef.current;
+    const cancelled = () => noFilesReceived(pickerAttempt.current?.source || (isVideo ? "files" : "photos"));
+    const photosCancelled = () => noFilesReceived("photos");
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const returned = () => {
+      const attempt = pickerAttempt.current;
+      if (!attempt || document.visibilityState === "hidden") return;
+      clearTimeout(timer);
+      timer = setTimeout(() => {
+        if (pickerAttempt.current?.id === attempt.id) {
+          // Some Safari releases return focus without change/cancel. Do not
+          // discard a pending selection; late-arriving files still clear this.
+          setPickerNotice(attempt.source === "photos"
+            ? "Your phone has not supplied any new videos yet. If Photos closed without adding them, use Choose videos from Files below."
+            : "Your phone has not supplied any new files yet. If it is still downloading them, save them to On My iPhone and choose them again.");
+        }
+      }, 1500);
     };
     input?.addEventListener("cancel", cancelled);
-    return () => input?.removeEventListener("cancel", cancelled);
-  }, []);
+    photosInput?.addEventListener("cancel", photosCancelled);
+    window.addEventListener("focus", returned);
+    document.addEventListener("visibilitychange", returned);
+    return () => {
+      clearTimeout(timer);
+      input?.removeEventListener("cancel", cancelled);
+      photosInput?.removeEventListener("cancel", photosCancelled);
+      window.removeEventListener("focus", returned);
+      document.removeEventListener("visibilitychange", returned);
+    };
+  }, [isVideo]);
   useEffect(() => {
     if (!working) return;
     const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
@@ -135,6 +185,7 @@ export default function CreatorUploadForm({ kind, label, accept, formatHint, loc
     if (running.current || locked) return;
     const queue = itemsRef.current.filter(item => item.state !== "saved");
     if (!queue.length) return;
+    setPickerNotice("");
     running.current = true;
     setWorking(true); setFailed(false);
     setMessage("Uploading your selection. Up to two files upload together; keep this page open.");
@@ -167,12 +218,22 @@ export default function CreatorUploadForm({ kind, label, accept, formatHint, loc
     className="mt-5 grid gap-3" aria-label={`Upload ${label.toLowerCase()}`}>
     <input type="hidden" name="kind" value={kind} />
     <label htmlFor={inputId} className="text-sm font-medium text-ink">{label}</label>
+    {pickerNotice && <p role="status" aria-live="polite" className="rounded-lg border border-amber-300 bg-amber-50 p-3 text-sm text-amber-950" data-picker-notice>{pickerNotice}</p>}
     <label className={`${buttonVariants({ size: "lg" })} ${RED_BUTTON} relative w-full overflow-hidden focus-within:ring-2 focus-within:ring-red-500 ${working || locked ? "pointer-events-none opacity-50" : "cursor-pointer"}`} data-choose-content>
-      <Upload className="size-4" aria-hidden="true" /> {remaining.length ? "Add more files" : voice ? "Choose voice recordings" : isVideo ? "Choose videos" : "Choose photos"}
+      <Upload className="size-4" aria-hidden="true" /> {isVideo ? remaining.length ? "Add more videos from Files" : "Choose videos from Files" : remaining.length ? "Add more files" : voice ? "Choose voice recordings" : "Choose photos"}
       <input ref={inputRef} id={inputId} name="files" type="file" accept={pickerAccept} multiple disabled={working || locked}
         className="absolute inset-0 h-full w-full cursor-pointer opacity-0" aria-describedby={`${inputId}-hint`}
-        aria-label={`Choose multiple ${label.toLowerCase()}`} onChange={selectFiles} onInput={selectFiles} />
+        aria-label={`Choose multiple ${label.toLowerCase()}${isVideo ? " from Files" : ""}`} onClick={() => beginPicker(isVideo ? "files" : "photos")} onChange={selectFiles} onInput={selectFiles} />
     </label>
+    {isVideo && <>
+      <p className="text-sm leading-5 text-ink">On iPhone: open Photos, select your videos, tap Share → Save to Files → On My iPhone. Then choose them here.</p>
+      <label className={`${buttonVariants({ size: "lg", variant: "outline" })} relative w-full overflow-hidden focus-within:ring-2 focus-within:ring-red-500 ${working || locked ? "pointer-events-none opacity-50" : "cursor-pointer"}`} data-choose-photos>
+        Or choose from Photo Library
+        <input ref={photosInputRef} name="files" type="file" accept="video/*" multiple disabled={working || locked}
+          className="absolute inset-0 h-full w-full cursor-pointer opacity-0" aria-label={`Choose multiple ${label.toLowerCase()} from Photo Library`}
+          onClick={() => beginPicker("photos")} onChange={selectFiles} onInput={selectFiles} />
+      </label>
+    </>}
     <p id={`${inputId}-hint`} className="text-xs leading-5 text-muted">{formatHint || "Voice or video recordings · up to 64 MB each"}. Select several files, then upload them together. You can add more files to your selection.</p>
     {items.length > 0 && <>
       <p className="text-sm text-ink" aria-live="polite">{items.length} file{items.length === 1 ? "" : "s"} selected · {saved} saved</p>

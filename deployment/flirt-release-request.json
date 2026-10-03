@@ -1,4 +1,4 @@
 {
-  "reason": "Enable cumulative multi-video selection and two concurrent uploads, remove full packet scans, preserve bounded processing and account quotas.",
-  "requested_at": "2026-10-03T18:45:33.757182+00:00"
+  "reason": "Bypass failed iPhone Photos exports with a direct Files video picker, and show missing-file feedback even after a previous successful upload.",
+  "requested_at": "2026-10-03T19:22:17.740833+00:00"
 }

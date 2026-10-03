@@ -146,6 +146,9 @@ async function main() {
   assert([...returnedHtml.matchAll(/<label\b[^>]*data-choose-content[^>]*>[\s\S]*?<\/label>/g)].length === 4, 'Returned content pickers missing');
   assert([...returnedHtml.matchAll(/<label\b[^>]*data-choose-content[^>]*>[\s\S]*?<\/label>/g)].every(match => !buttonDisabled(match[0])), 'Submitted creator cannot choose content');
   assert([...returnedHtml.matchAll(/<input\b[^>]*type="file"[^>]*>/g)].every(match => /\smultiple(?:=|\s|>)/.test(match[0])), 'Every content picker must support multiple files');
+  assert((returnedHtml.match(/accept="application\/octet-stream"/g) || []).length === 2, 'Both video categories must offer the direct Files picker');
+  assert((returnedHtml.match(/data-choose-photos/g) || []).length === 2, 'Photo Library must remain available as a secondary option');
+  assert(returnedHtml.includes('On My iPhone'), 'Video upload instructions must explain the local Files route');
   const video = execFileSync('/usr/bin/ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=blue:s=64x64:r=10', '-t', '1', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-movflags', 'frag_keyframe+empty_moov', '-f', 'mp4', 'pipe:1'], { timeout: 15000, maxBuffer: 1024 * 1024 });
   for (const kind of ['content_sfw_image', 'content_nsfw_image', 'content_sfw_video', 'content_nsfw_video']) {
     const isVideo = kind.endsWith('_video');
@@ -217,5 +220,4 @@ async function cleanup() {
   console.log(JSON.stringify({ passed: !failure, checks, ...(failure ? { error: failure } : { synthetic_fixtures_removed: true }), credentials_logged: false }));
   if (failure) process.exitCode = 1;
 })();
-
 
