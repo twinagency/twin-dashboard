@@ -8,6 +8,8 @@ import { AGENCY_PORTAL_COOKIE } from "@/lib/agency-brand";
 import { SESSION_COOKIE } from "@/lib/session";
 import { CLONE_SCOPE_COOKIE } from "@/lib/clone-scope";
 import { TETHER_PORTAL } from "@/lib/partner-portals";
+import { flirtOnboardingOptional } from "@/lib/flirt-onboarding";
+import { ID as FLIRT_AGENCY_ID } from "../../../deployment/flirt-live-twin.cjs";
 import { TETHER_CREATOR_SIGNUP_PATH } from "@/lib/creator-routing";
 
 function redirectWithError(req: Request, code: string, portal: "twin" | "tether") {
@@ -83,6 +85,10 @@ export async function POST(req: Request) {
       const first = Array.isArray(claim) ? claim[0] : null;
       if (claimError || !first?.agency_id) throw new Error("agency_code_unavailable");
       agencyId = first.agency_id as string;
+    } else if (portal === "twin" && flirtOnboardingOptional()) {
+      // FLIRT direct signups ("joining FLIRT directly") belong to the FLIRT
+      // agency, otherwise no operator screen can ever list or review them.
+      agencyId = FLIRT_AGENCY_ID as string;
     }
 
     if (accountId) {
@@ -110,7 +116,7 @@ export async function POST(req: Request) {
       const { error } = await db.from("creator_agency_assignments").upsert({
         creator_account_id: accountId,
         agency_id: agencyId,
-        assignment_source: "invite",
+        assignment_source: agencyCodeHash ? "invite" : "direct",
         assigned_at: new Date().toISOString(),
       }, { onConflict: "creator_account_id" });
       if (error) throw error;
