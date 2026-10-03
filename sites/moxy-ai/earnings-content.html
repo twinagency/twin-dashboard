@@ -1,0 +1,42 @@
+<main id="main" class="moxy-earnings">
+  <div class="earnings-inner">
+    <p class="ending-eyebrow">YOUR EARNING POTENTIAL</p>
+    <h1 id="earnings-title" class="earnings-title">See what your<br>audience could earn.</h1>
+    <section class="earning-card" aria-label="Monthly AI revenue calculator">
+      <div class="earning-controls">
+    <div class="earning-field">
+      <div class="earning-field-top"><label for="social-followers">How many followers do you have across social media?</label><input id="social-followers" type="text" inputmode="numeric" value="100,000" autocomplete="off" maxlength="12" aria-label="Number of social media followers"></div>
+      <input class="earning-slider" id="social-slider" type="range" min="0" max="900" step="1" value="300" aria-label="Adjust social media followers" aria-valuetext="100,000 followers">
+      <div class="slider-limits"><span>0</span><span>10 million</span></div>
+    </div>
+    <div class="earning-field">
+      <div class="earning-field-top"><label for="of-income">How much do you make on OnlyFans each month? <span>(Fanvue, Fansly)</span></label><div class="earning-money-input"><span>US$</span><input id="of-income" type="text" inputmode="numeric" value="0" autocomplete="off" maxlength="12" aria-label="Monthly platform income in US dollars"></div></div>
+      <input class="earning-slider" id="of-income-slider" type="range" min="0" max="900" step="1" value="0" aria-label="Adjust monthly platform income" aria-valuetext="0 US dollars per month">
+      <div class="slider-limits"><span>US$0</span><span>US$1 million</span></div>
+    </div>
+    <div class="earning-field">
+      <div class="earning-field-top"><label for="of-fans">How many total subscribers do you have on OnlyFans? <span>(Fanvue, Fansly · free + paid)</span></label><input id="of-fans" type="text" inputmode="numeric" value="0" autocomplete="off" maxlength="12" aria-label="Number of total platform subscribers, including free and paid"></div>
+      <input class="earning-slider" id="of-fans-slider" type="range" min="0" max="900" step="1" value="0" aria-label="Adjust total platform subscribers, including free and paid" aria-valuetext="0 subscribers">
+      <div class="slider-limits"><span>0</span><span>250,000</span></div>
+    </div>
+
+      </div>
+      <div class="earning-result">
+        <p id="estimate-label">Estimated monthly AI revenue</p>
+        <div class="earning-total" aria-labelledby="estimate-label"><span>US$</span><output id="estimate-value" aria-live="polite" aria-atomic="true">15,000</output></div>
+        <p class="earning-period">/ month</p>
+        <p class="earning-note" id="estimate-note">This is an estimate only.</p>
+        <p class="earning-comparison" id="income-comparison" hidden></p>
+        <a class="earning-cta" href="get-started.html">Create my AI</a>
+      <details class="earning-method">
+        <summary>How it’s calculated</summary>
+        <p>Assumes 3% of social followers or 15% of platform subscribers join your AI each month. We use the larger estimate, without adding the two audiences together. Then 10% purchase, spending US$50 per buyer that month.</p>
+        <p>These are optimistic planning assumptions selected for this calculator, not measured averages. Actual revenue may be lower or zero. Amounts are in USD, before fees and revenue splits.</p>
+        <p>Your current income is used only for comparison. Results depend on promotion, engagement and spending; this models new fans joining that month.</p>
+      </details>
+      </div>
+    </section>
+    <ul class="earning-channels" aria-label="Ways to earn"><li>Paid messages</li><li>Content unlocks</li><li>Tips</li></ul>
+    <noscript><p>Enable JavaScript to use the calculator.</p></noscript>
+  </div>
+</main>

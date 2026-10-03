@@ -1,0 +1,22 @@
+{
+  "name": "Moxy AI",
+  "short_name": "Moxy AI",
+  "start_url": "/",
+  "display": "browser",
+  "background_color": "#050908",
+  "theme_color": "#087d72",
+  "icons": [
+    {
+      "src": "/icon-192.png?v=moxy-logo-20261002",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any"
+    },
+    {
+      "src": "/icon-512.png?v=moxy-logo-20261002",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any"
+    }
+  ]
+}
