@@ -145,6 +145,7 @@ async function main() {
   assert(returnedContent.status === 200, 'Returning to content failed');
   assert([...returnedHtml.matchAll(/<label\b[^>]*data-choose-content[^>]*>[\s\S]*?<\/label>/g)].length === 4, 'Returned content pickers missing');
   assert([...returnedHtml.matchAll(/<label\b[^>]*data-choose-content[^>]*>[\s\S]*?<\/label>/g)].every(match => !buttonDisabled(match[0])), 'Submitted creator cannot choose content');
+  assert([...returnedHtml.matchAll(/<input\b[^>]*type="file"[^>]*>/g)].every(match => /\smultiple(?:=|\s|>)/.test(match[0])), 'Every content picker must support multiple files');
   const video = execFileSync('/usr/bin/ffmpeg', ['-v', 'error', '-f', 'lavfi', '-i', 'color=c=blue:s=64x64:r=10', '-t', '1', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-movflags', 'frag_keyframe+empty_moov', '-f', 'mp4', 'pipe:1'], { timeout: 15000, maxBuffer: 1024 * 1024 });
   for (const kind of ['content_sfw_image', 'content_nsfw_image', 'content_sfw_video', 'content_nsfw_video']) {
     const isVideo = kind.endsWith('_video');
@@ -176,11 +177,14 @@ async function main() {
     const free = Buffer.alloc(8); free.writeUInt32BE(size - video.length); free.write('free', 4);
     const fd = fs.openSync(path, 'r+');
     try { fs.writeSync(fd, free, 0, free.length, video.length); fs.writeSync(fd, Buffer.alloc(1), 0, 1, size - 1); } finally { fs.closeSync(fd); }
-    const result = await upload(uploadFixture, 'content_sfw_video', 'short-large.mp4', await fs.openAsBlob(path, { type: 'video/mp4' }), 'video/mp4', true);
-    assert(result.status === 200 && (await result.json()).status === 'content_saved', 'Short video above 64 MB failed over public HTTPS');
+    const names = ['batch-large-a.mp4', 'batch-large-b.mp4'];
+    const started = Date.now();
+    const results = await Promise.all(names.map(async name => upload(uploadFixture, 'content_sfw_video', name, await fs.openAsBlob(path, { type: 'video/mp4' }), 'video/mp4', true)));
+    for (const result of results) assert(result.status === 200 && (await result.json()).status === 'content_saved', 'Two concurrent videos above 64 MB must save over public HTTPS without upload_busy');
+    const seconds = ((Date.now() - started) / 1000).toFixed(1);
     const stored = await rows('creator_files', uploadFixture, 'original_name,size_bytes,storage_transfer_status');
-    assert(stored.some(file => file.original_name === 'short-large.mp4' && Number(file.size_bytes) === size && file.storage_transfer_status === 'verified'), 'Large video was not saved and verified');
-    checks.push('80 MB short video uploaded over public HTTPS and verified in private storage');
+    for (const name of names) assert(stored.filter(file => file.original_name === name && Number(file.size_bytes) === size && file.storage_transfer_status === 'verified').length === 1, 'Each concurrent video must be saved exactly once');
+    checks.push(`Two 80 MB short videos uploaded concurrently over public HTTPS and verified in private storage in ${seconds} seconds (server test connection)`);
   } finally { fs.rmSync(staged, { recursive: true, force: true }); }
 
   const twin = await request('https://dashboard.tgaiclone.xyz');
@@ -213,6 +217,5 @@ async function cleanup() {
   console.log(JSON.stringify({ passed: !failure, checks, ...(failure ? { error: failure } : { synthetic_fixtures_removed: true }), credentials_logged: false }));
   if (failure) process.exitCode = 1;
 })();
-
 
 

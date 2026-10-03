@@ -4,6 +4,7 @@ import { useEffect, useId, useRef, useState, type FormEvent, type SyntheticEvent
 import { useRouter } from "next/navigation";
 import { Upload } from "lucide-react";
 import { creatorUploadMaxBytes, creatorUploadSizeError } from "@/lib/creator-upload-limits";
+import { CREATOR_UPLOAD_CONCURRENCY, inCreatorUploadSlot } from "@/lib/creator-upload-queue";
 import { Button, buttonVariants } from "@/components/ui/button";
 
 const RED_BUTTON = "min-h-11 bg-[#dc2626] text-white hover:bg-[#b91c1c] focus-visible:ring-red-500/40";
@@ -22,60 +23,69 @@ const uploadErrors: Record<string, string> = {
   upload_error: "The upload did not finish. Please retry the remaining files.",
 };
 
-export default function CreatorUploadForm({
-  kind, label, accept, formatHint, locked, voice = false,
-}: {
-  kind: string;
-  label: string;
-  accept: string;
-  formatHint?: string;
-  locked: boolean;
-  voice?: boolean;
+type UploadItem = { id: number; file: File; state: "queued" | "uploading" | "saving" | "saved" | "failed"; percent: number; error?: string };
+
+export default function CreatorUploadForm({ kind, label, accept, formatHint, locked, voice = false }: {
+  kind: string; label: string; accept: string; formatHint?: string; locked: boolean; voice?: boolean;
 }) {
   const router = useRouter();
   const inputId = useId();
   const inputRef = useRef<HTMLInputElement>(null);
-  // Only retry files that have not been confirmed by the server.
-  const pending = useRef<File[]>([]);
-  const [selected, setSelected] = useState<File[]>([]);
-  const [uploaded, setUploaded] = useState(0);
+  const itemsRef = useRef<UploadItem[]>([]);
+  const nextId = useRef(0);
+  const running = useRef(false);
+  const [items, setItems] = useState<UploadItem[]>([]);
   const [working, setWorking] = useState(false);
   const [message, setMessage] = useState("");
   const [failed, setFailed] = useState(false);
-  const [percent, setPercent] = useState<number | null>(null);
   const isVideo = kind.endsWith("_video");
-  // Let iOS offer its native video picker without a restrictive MIME conversion request.
-  // File signatures, container, codec, duration and size are still checked on the server.
   const pickerAccept = isVideo ? "video/*" : accept;
+  const remaining = items.filter(item => item.state !== "saved");
+  const saved = items.length - remaining.length;
 
-  function selectFiles(event: SyntheticEvent<HTMLInputElement>) {
-    const files = Array.from(event.currentTarget.files || []);
-    // Safari may emit an empty event when Photos is cancelled or cannot export a video.
-    // Never discard the existing queue on that event.
-    if (!files.length) return;
-    pending.current = files;
-    setSelected(files);
-    setUploaded(0);
-    setPercent(null);
-    const invalid = files.find(file => file.size === 0 || file.size > creatorUploadMaxBytes(kind));
-    setFailed(!!invalid);
-    setMessage(invalid ? invalid.size === 0
-      ? `${invalid.name} was not loaded from your device. Download the original video to your phone and select it again.`
-      : `${invalid.name} is ${(invalid.size / 1024 / 1024).toFixed(1)} MB. ${creatorUploadSizeError(kind)}` : "");
+  function replaceItems(next: UploadItem[]) { itemsRef.current = next; setItems(next); }
+  function updateItem(id: number, patch: Partial<UploadItem>) {
+    replaceItems(itemsRef.current.map(item => item.id === id ? { ...item, ...patch } : item));
   }
-
-  function send(form: FormData): Promise<{ status: number; url: string; result: { status?: string } | null }> {
+  function selectFiles(event: SyntheticEvent<HTMLInputElement>) {
+    if (running.current || locked) return;
+    const files = Array.from(event.currentTarget.files || []);
+    if (!files.length) return;
+    const current = itemsRef.current.some(item => item.state !== "saved") ? itemsRef.current : [];
+    const next = [...current];
+    for (const file of files) {
+      if (!next.some(item => item.file.name === file.name && item.file.size === file.size && item.file.lastModified === file.lastModified)) {
+        next.push({ id: nextId.current++, file, state: "queued", percent: 0 });
+      }
+    }
+    replaceItems(next);
+    // Preserve the File objects in our queue; allow picking additional files (or
+    // the same file after removing it), without replacing earlier selections.
+    event.currentTarget.value = "";
+    const invalid = next.find(item => item.file.size === 0 || item.file.size > creatorUploadMaxBytes(kind));
+    setFailed(!!invalid);
+    setMessage(invalid ? fileError(invalid.file) : "");
+  }
+  function fileError(file: File) {
+    return file.size === 0 ? `${file.name} was not loaded from your device. Download it to your phone and select it again.`
+      : `${file.name} is ${(file.size / 1024 / 1024).toFixed(1)} MB. ${creatorUploadSizeError(kind)}`;
+  }
+  function send(item: UploadItem, form: FormData): Promise<{ status: number; url: string; result: { status?: string } | null }> {
     return new Promise((resolve, reject) => {
       const request = new XMLHttpRequest();
       request.open("POST", "/creator-auth/upload");
       request.setRequestHeader("Accept", "application/json");
       request.timeout = 20 * 60 * 1000;
       request.upload.onprogress = (event) => {
-        if (event.lengthComputable) setPercent(Math.min(100, Math.round(event.loaded / event.total * 100)));
+        if (event.lengthComputable) {
+          const percent = Math.min(100, Math.round(event.loaded / event.total * 100));
+          updateItem(item.id, { percent, state: percent === 100 ? "saving" : "uploading" });
+        }
       };
+      request.upload.onload = () => updateItem(item.id, { percent: 100, state: "saving" });
       request.onload = () => {
         let result = null;
-        try { result = JSON.parse(request.responseText); } catch { /* Handle proxy HTML errors by status below. */ }
+        try { result = JSON.parse(request.responseText); } catch { /* Proxy errors are handled by HTTP status. */ }
         resolve({ status: request.status, url: request.responseURL || window.location.href, result });
       };
       request.onerror = () => reject(new Error(uploadErrors.upload_interrupted));
@@ -84,16 +94,14 @@ export default function CreatorUploadForm({
       request.send(form);
     });
   }
-
   useEffect(() => {
     const input = inputRef.current;
     const cancelled = () => {
-      if (!pending.current.length) setMessage("No file was added. If Photos closes without adding your video, save the video to Files, then choose it using Choose Files.");
+      if (!itemsRef.current.length) setMessage("No file was added. If Photos closes without adding your videos, save them to Files, then use Choose Files. You can select several or add them to your list in separate selections.");
     };
     input?.addEventListener("cancel", cancelled);
     return () => input?.removeEventListener("cancel", cancelled);
   }, []);
-
   useEffect(() => {
     if (!working) return;
     const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
@@ -101,20 +109,19 @@ export default function CreatorUploadForm({
     return () => window.removeEventListener("beforeunload", warn);
   }, [working]);
 
-  async function uploadOne(file: File): Promise<void> {
+  async function uploadOne(item: UploadItem): Promise<void> {
+    if (!item.file.size || item.file.size > creatorUploadMaxBytes(kind)) throw new Error(fileError(item.file));
     const form = new FormData();
     form.set("kind", kind);
-    form.append("files", file);
+    form.append("files", item.file);
     for (let attempt = 0; ; attempt++) {
-      setPercent(0);
-      const response = await send(form);
-      const result = response.result;
+      updateItem(item.id, { state: "uploading", percent: 0, error: undefined });
+      const response = await send(item, form);
       const url = new URL(response.url);
-      const status = result?.status || (url.origin === window.location.origin && url.pathname === "/creator/onboarding"
-        ? url.searchParams.get("status") : null);
+      const status = response.result?.status || (url.origin === window.location.origin && url.pathname === "/creator/onboarding" ? url.searchParams.get("status") : null);
       if (status === "upload_busy" && attempt < 24) {
-        setMessage(`Waiting for an upload slot for ${file.name}… Keep this page open.`);
-        await new Promise<void>((resolve) => setTimeout(resolve, 5000));
+        updateItem(item.id, { state: "queued", percent: 0 });
+        await new Promise<void>(resolve => setTimeout(resolve, 5000));
         continue;
       }
       if (response.status >= 200 && response.status < 300 && (status === "content_saved" || status === "voice_saved")) return;
@@ -123,71 +130,70 @@ export default function CreatorUploadForm({
       throw new Error(uploadErrors[status || ""] || uploadErrors.upload_error);
     }
   }
-
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    if (working || locked) return;
-    const queue = pending.current;
-    setFailed(false);
-    if (!queue.length) { setFailed(true); return setMessage(uploadErrors.upload_empty); }
-    const max = creatorUploadMaxBytes(kind);
-    const tooLarge = queue.find((file) => file.size > max);
-    if (tooLarge) { setFailed(true); return setMessage(`${tooLarge.name} is ${(tooLarge.size / 1024 / 1024).toFixed(1)} MB. ${creatorUploadSizeError(kind)}`); }
-    if (queue.some(file => file.size === 0)) { setFailed(true); return setMessage("A selected file is empty. Download it to your device and select it again."); }
-    setWorking(true);
-    let complete = uploaded;
-    try {
-      for (const file of queue) {
-        setMessage(`Uploading ${file.name} · ${complete + 1} of ${selected.length}. Keep this page open.`);
-        await uploadOne(file);
-        pending.current = pending.current.slice(1);
-        complete += 1;
-        setUploaded(complete);
+    if (running.current || locked) return;
+    const queue = itemsRef.current.filter(item => item.state !== "saved");
+    if (!queue.length) return;
+    running.current = true;
+    setWorking(true); setFailed(false);
+    setMessage("Uploading your selection. Up to two files upload together; keep this page open.");
+    replaceItems(itemsRef.current.map(item => item.state === "saved" ? item : { ...item, state: "queued", percent: 0, error: undefined }));
+    let cursor = 0;
+    let completed = 0;
+    async function worker() {
+      while (cursor < queue.length) {
+        const item = queue[cursor++];
+        try {
+          await inCreatorUploadSlot(() => uploadOne(item));
+          updateItem(item.id, { state: "saved", percent: 100 });
+          completed += 1;
+        } catch (error) {
+          updateItem(item.id, { state: "failed", error: error instanceof Error ? error.message : uploadErrors.upload_error });
+        }
       }
-      if (inputRef.current) inputRef.current.value = "";
-      setSelected([]);
-      setUploaded(0);
-      setMessage(`${complete} file${complete === 1 ? "" : "s"} uploaded and verified. You can choose more content or continue.`);
-      // Refresh counts without discarding files selected in the other categories.
-      router.refresh();
-    } catch (error) {
-      setFailed(true);
-      setMessage(`${error instanceof Error ? error.message : uploadErrors.upload_error} ${pending.current.length} file${pending.current.length === 1 ? "" : "s"} remaining.`);
-      if (complete > uploaded) router.refresh();
-    } finally {
-      setWorking(false);
-      setPercent(null);
     }
+    try {
+      await Promise.all(Array.from({ length: Math.min(CREATOR_UPLOAD_CONCURRENCY, queue.length) }, worker));
+      const left = itemsRef.current.filter(item => item.state !== "saved").length;
+      const total = itemsRef.current.length - left;
+      setFailed(left > 0);
+      setMessage(left ? `${total} saved. ${left} file${left === 1 ? "" : "s"} remaining. Retry the remaining files; saved files will not upload again.`
+        : `${total} file${total === 1 ? "" : "s"} uploaded and verified. You can choose more content or continue.`);
+      if (completed) router.refresh();
+    } finally { running.current = false; setWorking(false); }
   }
-
   return <form action="/creator-auth/upload" method="post" encType="multipart/form-data" onSubmit={submit}
     className="mt-5 grid gap-3" aria-label={`Upload ${label.toLowerCase()}`}>
     <input type="hidden" name="kind" value={kind} />
     <label htmlFor={inputId} className="text-sm font-medium text-ink">{label}</label>
     <label className={`${buttonVariants({ size: "lg" })} ${RED_BUTTON} relative w-full overflow-hidden focus-within:ring-2 focus-within:ring-red-500 ${working || locked ? "pointer-events-none opacity-50" : "cursor-pointer"}`} data-choose-content>
-      <Upload className="size-4" aria-hidden="true" /> {voice ? "Choose voice recordings" : "Choose content"}
+      <Upload className="size-4" aria-hidden="true" /> {remaining.length ? "Add more files" : voice ? "Choose voice recordings" : isVideo ? "Choose videos" : "Choose photos"}
       <input ref={inputRef} id={inputId} name="files" type="file" accept={pickerAccept} multiple disabled={working || locked}
         className="absolute inset-0 h-full w-full cursor-pointer opacity-0" aria-describedby={`${inputId}-hint`}
-        aria-label={`Choose ${label.toLowerCase()}`} onChange={selectFiles} onInput={selectFiles}
-        />
+        aria-label={`Choose multiple ${label.toLowerCase()}`} onChange={selectFiles} onInput={selectFiles} />
     </label>
-    <p id={`${inputId}-hint`} className="text-xs leading-5 text-muted">{formatHint || "Voice or video recordings · up to 64 MB each"}. Select multiple files; they upload one at a time.</p>
-    {selected.length > 0 && <p className="break-words text-sm text-ink" aria-live="polite">
-      {selected.length} file{selected.length === 1 ? "" : "s"} selected{uploaded > 0 ? ` · ${uploaded} uploaded` : ""}: {selected.slice(uploaded, uploaded + 3).map(file => file.name).join(", ")}{selected.length - uploaded > 3 ? "…" : ""}
-    </p>}
-    <Button type="submit" size="lg" disabled={working || locked || selected.length === 0} className={`${RED_BUTTON} w-full`} data-upload-content>
-      {working ? "Uploading…" : failed && pending.current.length ? "Retry remaining files" : voice ? "Upload voice" : "Upload content"}
+    <p id={`${inputId}-hint`} className="text-xs leading-5 text-muted">{formatHint || "Voice or video recordings · up to 64 MB each"}. Select several files, then upload them together. You can add more files to your selection.</p>
+    {items.length > 0 && <>
+      <p className="text-sm text-ink" aria-live="polite">{items.length} file{items.length === 1 ? "" : "s"} selected · {saved} saved</p>
+      <ul className="max-h-72 space-y-3 overflow-y-auto rounded-lg border border-line p-3" aria-label="Selected files">
+        {items.map(item => <li key={item.id} className="text-sm">
+          <div className="flex items-start justify-between gap-2">
+            <span className="min-w-0 break-words text-ink">{item.file.name} <span className="text-muted">({(item.file.size / 1024 / 1024).toFixed(1)} MB)</span></span>
+            {!working && item.state !== "saved" && <button type="button" className="shrink-0 underline" aria-label={`Remove ${item.file.name}`} onClick={() => replaceItems(itemsRef.current.filter(other => other.id !== item.id))}>Remove</button>}
+          </div>
+          <span className={item.state === "failed" ? "text-red-700" : "text-muted"}>
+            {item.state === "saved" ? "Saved ✓" : item.state === "saving" ? "Verifying and saving…" : item.state === "uploading" ? `${item.percent}% uploaded` : item.state === "failed" ? item.error : working ? "Waiting…" : "Ready to upload"}
+          </span>
+          {(item.state === "uploading" || item.state === "saving") && <progress value={item.percent} max={100} className="h-2 w-full accent-red-600" aria-label={`Upload progress for ${item.file.name}`} />}
+        </li>)}
+      </ul>
+    </>}
+    <Button type="submit" size="lg" disabled={working || locked || !remaining.length} className={`${RED_BUTTON} w-full`} data-upload-content>
+      {working ? `Uploading · ${saved} of ${items.length} saved` : failed && remaining.length ? `Retry ${remaining.length} remaining file${remaining.length === 1 ? "" : "s"}` : remaining.length ? `Upload ${remaining.length} file${remaining.length === 1 ? "" : "s"}` : voice ? "Upload voice" : "Upload content"}
     </Button>
-    {working && percent !== null && <div role="status" aria-live="polite" className="text-sm text-ink">
-      <progress value={percent} max={100} className="h-2 w-full accent-red-600" aria-label="Current file upload progress" />
-      {percent < 100 ? `${percent}% uploaded` : "Upload received. Verifying and saving your file…"}
-    </div>}
-    {selected.length > 0 && !working && <button type="button" className="text-sm underline" onClick={() => {
-      pending.current = []; setSelected([]); setUploaded(0); setFailed(false); setMessage("");
-      if (inputRef.current) inputRef.current.value = "";
-    }}>Clear selection</button>}
+    {items.length > 0 && !working && <button type="button" className="text-sm underline" onClick={() => { replaceItems([]); setFailed(false); setMessage(""); }}>Clear selection</button>}
     {locked && <p className="text-sm text-muted">Uploads are unavailable for this application. Please contact support.</p>}
     {message && <p role={failed ? "alert" : "status"} aria-live="polite" className={`break-words text-sm ${failed ? "text-red-700" : "text-ink"}`}>{message}</p>}
   </form>;
 }
-

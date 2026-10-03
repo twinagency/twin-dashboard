@@ -1,4 +1,4 @@
 {
-  "reason": "Complete video upload release with Node 22-safe multipart limit cancellation.",
-  "requested_at": "2026-10-03T18:24:29.736763+00:00"
+  "reason": "Enable cumulative multi-video selection and two concurrent uploads, remove full packet scans, preserve bounded processing and account quotas.",
+  "requested_at": "2026-10-03T18:45:33.757182+00:00"
 }

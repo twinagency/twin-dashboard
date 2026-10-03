@@ -112,7 +112,8 @@ assert.match(uploadRoute, /creatorContentCompleted\(verifiedFiles \|\| \[\], !!p
 assert.match(uploadRoute, /contentSignatureMatches/);
 assert.match(uploadRoute, /creatorImageDecodes/);
 assert.match(uploadRoute, /boundedFormData/);
-assert.match(uploadRoute, /MAX_ACTIVE_UPLOADS = 1/);
+assert.match(uploadRoute, /MAX_ACTIVE_UPLOADS = 4/);
+assert.match(uploadRoute, /MAX_ACCOUNT_UPLOADS = 2/);
 assert.match(uploadRoute, /mediaToolPath\("ffprobe"\)/);
 assert.match(uploadRoute, /mediaToolPath\("ffmpeg"\)/);
 assert.match(uploadRoute, /creatorOnboardingEditable\(application\?\.status\)/);

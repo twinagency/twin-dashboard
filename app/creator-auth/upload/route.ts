@@ -55,10 +55,35 @@ const MAX_ACCOUNT_FILES = 5000;
 const MAX_VIDEO_DURATION_SECONDS = 30 * 60;
 const MAX_VIDEO_PIXELS = 4096 * 2160;
 const MAX_VIDEO_EDGE = 4096;
-const MAX_ACTIVE_UPLOADS = 1;
-const activeUploadAccounts = new Set<string>();
+// Transfers stream to disk, so they can overlap without holding whole videos in RAM.
+const MAX_ACTIVE_UPLOADS = 4;
+const MAX_ACCOUNT_UPLOADS = 2;
+const activeUploadAccounts = new Map<string, number>();
+const accountSaves = new Map<string, Promise<void>>();
+let mediaValidation = Promise.resolve();
 let activeUploadRequests = 0;
 const execFileAsync = promisify(execFile);
+
+async function lockAccountSave(accountId: string) {
+  const previous = accountSaves.get(accountId) || Promise.resolve();
+  let unlock!: () => void;
+  const current = new Promise<void>(resolve => { unlock = resolve; });
+  accountSaves.set(accountId, current);
+  await previous;
+  return () => {
+    if (accountSaves.get(accountId) === current) accountSaves.delete(accountId);
+    unlock();
+  };
+}
+
+async function validateMedia(file: StagedCreatorFile, mime: string) {
+  const previous = mediaValidation;
+  let unlock!: () => void;
+  mediaValidation = new Promise<void>(resolve => { unlock = resolve; });
+  await previous;
+  try { return await contentSignatureMatches(file, mime); }
+  finally { unlock(); }
+}
 
 function mediaToolPath(tool: "ffmpeg" | "ffprobe") {
   return process.platform === "win32" ? `${tool}.exe` : `/usr/bin/${tool}`;
@@ -108,23 +133,23 @@ async function videoProbeMatches(file: StagedCreatorFile, mime: string): Promise
     const { stdout, stderr } = await execFileAsync(mediaToolPath("ffprobe"), [
       "-v", "error",
       "-protocol_whitelist", "file",
-      "-count_packets",
       "-select_streams", "v:0",
-      "-show_entries", "format=format_name,duration,size:stream=codec_type,codec_name,width,height,duration,nb_read_packets:stream_disposition=attached_pic",
+      // Read container metadata, then decode a real frame below. Counting every
+      // packet needlessly scans the entire video before storage can begin.
+      "-show_entries", "format=format_name,duration,size:stream=codec_type,codec_name,width,height,duration:stream_disposition=attached_pic",
       "-of", "json",
       filePath,
     ], mediaToolOptions(60_000));
     if (String(stderr).trim()) return false;
     const probe = JSON.parse(String(stdout)) as {
       format?: { format_name?: string; duration?: string; size?: string };
-      streams?: Array<{ codec_type?: string; codec_name?: string; width?: number; height?: number; duration?: string; nb_read_packets?: string; disposition?: { attached_pic?: number } }>;
+      streams?: Array<{ codec_type?: string; codec_name?: string; width?: number; height?: number; duration?: string; disposition?: { attached_pic?: number } }>;
     };
     const formats = new Set(String(probe.format?.format_name || "").split(","));
     const expectedContainer = mime === "video/webm"
       ? formats.has("webm") || formats.has("matroska")
       : ["mov", "mp4", "m4a", "3gp", "3g2", "mj2"].some((format) => formats.has(format));
     const stream = probe.streams?.[0];
-    const packets = Number(stream?.nb_read_packets);
     const width = Number(stream?.width);
     const height = Number(stream?.height);
     const streamDuration = Number(stream?.duration);
@@ -137,7 +162,6 @@ async function videoProbeMatches(file: StagedCreatorFile, mime: string): Promise
     const probeValid = expectedContainer && stream?.codec_type === "video" && !!stream.codec_name
       && supportedCodecs.has(stream.codec_name)
       && stream.disposition?.attached_pic !== 1
-      && Number.isFinite(packets) && packets > 0
       && Number.isFinite(width) && width > 0 && width <= MAX_VIDEO_EDGE
       && Number.isFinite(height) && height > 0 && height <= MAX_VIDEO_EDGE
       && width * height <= MAX_VIDEO_PIXELS
@@ -211,11 +235,13 @@ async function uploadForCreator(req: NextRequest) {
 
   const contentLength = Number(req.headers.get("content-length") || 0);
   if (contentLength > MAX_REQUEST_BYTES) return back(req, "upload_too_large");
-  if (activeUploadRequests >= MAX_ACTIVE_UPLOADS || activeUploadAccounts.has(accountId)) return back(req, "upload_busy");
-  activeUploadAccounts.add(accountId);
+  const accountUploads = activeUploadAccounts.get(accountId) || 0;
+  if (activeUploadRequests >= MAX_ACTIVE_UPLOADS || accountUploads >= MAX_ACCOUNT_UPLOADS) return back(req, "upload_busy");
+  activeUploadAccounts.set(accountId, accountUploads + 1);
   activeUploadRequests += 1;
 
   let staged: Awaited<ReturnType<typeof boundedFormData>> | undefined;
+  let releaseSave: (() => void) | undefined;
   try {
   const [{ data: application, error: applicationError }, uploadUsage] = await Promise.all([
     supabaseAdmin.from("creator_applications").select("status").eq("creator_account_id", accountId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
@@ -247,10 +273,22 @@ async function uploadForCreator(req: NextRequest) {
     if (file.size > maxBytes) return back(req, "upload_too_large", step);
     if (contentRequirement) {
       const mime = normalizedContentMime(file, contentRequirement.accept.split(","));
-      if (!mime || !mime.startsWith(`${contentRequirement.media}/`) || !(await contentSignatureMatches(file, mime))) return back(req, "upload_wrong_type", step);
+      if (!mime || !mime.startsWith(`${contentRequirement.media}/`) || !(await validateMedia(file, mime))) return back(req, "upload_wrong_type", step);
       normalizedMimes.set(file, mime);
     }
   }
+
+  // Only saves for the same account serialize. The second file can transfer and
+  // validate while the first is stored. Re-read quotas inside this lock so two
+  // simultaneous requests cannot both spend the same remaining allowance.
+  releaseSave = await lockAccountSave(accountId);
+  const [latestUsage, { data: latestApplication, error: latestApplicationError }] = await Promise.all([
+    existingUploadUsage(accountId),
+    supabaseAdmin.from("creator_applications").select("status").eq("creator_account_id", accountId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+  ]);
+  if (latestUsage.error || latestApplicationError) return back(req, "upload_error", step);
+  if (!creatorOnboardingEditable(latestApplication?.status)) return back(req, "application_locked", step);
+  if (latestUsage.bytes + aggregateBytes > MAX_ACCOUNT_BYTES || latestUsage.count + files.length > MAX_ACCOUNT_FILES) return back(req, "upload_quota", step);
 
   const uploadedPaths: string[] = [];
   const insertedPaths: string[] = [];
@@ -320,9 +358,11 @@ async function uploadForCreator(req: NextRequest) {
   } catch (error) {
     return back(req, error instanceof CreatorUploadError ? error.status : "upload_error", staged?.fields.get("kind") === "voice" ? "voice" : "content");
   } finally {
+    releaseSave?.();
     await staged?.dispose().catch(() => undefined);
-    activeUploadAccounts.delete(accountId);
+    const remaining = (activeUploadAccounts.get(accountId) || 1) - 1;
+    if (remaining) activeUploadAccounts.set(accountId, remaining);
+    else activeUploadAccounts.delete(accountId);
     activeUploadRequests = Math.max(0, activeUploadRequests - 1);
   }
 }
-

@@ -69,12 +69,13 @@ function stagingDirs() { return readdirSync(tmpdir()).filter(name => name.starts
   const tooLarge = join(temp, 'too-large.mp4'); paddedVideo(short, tooLarge, 512 * 1024 * 1024 + 1);
   const long = join(temp, 'too-long.mp4'); video(long, 1801);
   const mov = join(temp, 'iphone.mov'); video(mov, 1);
-  async function upload(path, name, mime = 'video/mp4', headers = {}, kind = 'content_sfw_video') {
+  async function upload(path, name, mime = 'video/mp4', headers = {}, kind = 'content_sfw_video', parallel = false) {
     // A real HTTP request is a byte stream, not undici's in-process FormData producer.
     // Use streamed multipart bytes so rejecting an oversized body cannot trigger
     // the Node 24 FormData cancellation bug in the test producer itself.
     const boundary = 'flirt-regression-boundary';
     const body = Readable.toWeb(Readable.from((async function* () {
+      if (parallel) await new Promise(resolve => setTimeout(resolve, 50));
       yield Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="kind"\r\n\r\n${kind}\r\n--${boundary}\r\nContent-Disposition: form-data; name="files"; filename="${name}"\r\nContent-Type: ${mime}\r\n\r\n`);
       for await (const chunk of createReadStream(path)) yield chunk;
       yield Buffer.from(`\r\n--${boundary}--\r\n`);
@@ -83,7 +84,7 @@ function stagingDirs() { return readdirSync(tmpdir()).filter(name => name.starts
     const response = await POST(request);
     if (!request.bodyUsed) await request.body.cancel();
     const result = response.headers.get('content-type')?.includes('application/json') ? await response.json() : null;
-    assert.deepEqual(stagingDirs(), before, 'Temporary upload files must be removed');
+    if (!parallel) assert.deepEqual(stagingDirs(), before, 'Temporary upload files must be removed');
     return { code: response.status, status: result?.status };
   }
   assert.deepEqual(await upload(short, 'short.mp4'), { code: 200, status: 'content_saved' });
@@ -105,5 +106,16 @@ function stagingDirs() { return readdirSync(tmpdir()).filter(name => name.starts
   assert.equal((await upload(short, 'short.mp4', 'video/mp4', { 'x-pathname': '/agency', 'x-twin-audience': 'creator' })).code, 200);
   const count = state.stored.length; state.failInsert = true;
   assert.equal((await upload(short, 'short.mp4')).status, 'upload_error'); assert.equal(state.stored.length, count, 'Failed DB insert must remove the new object');
+  state.failInsert = false;
+  const simultaneous = [upload(short, 'parallel-a.mp4', 'video/mp4', {}, 'content_sfw_video', true), upload(short, 'parallel-b.mp4', 'video/mp4', {}, 'content_sfw_video', true)];
+  const excess = await upload(short, 'parallel-c.mp4', 'video/mp4', {}, 'content_sfw_video', true);
+  assert.equal(excess.status, 'upload_busy', 'A third transfer for the same account must wait');
+  assert.deepEqual(await Promise.all(simultaneous), [{ code: 200, status: 'content_saved' }, { code: 200, status: 'content_saved' }], 'Two videos must upload together');
+  assert.deepEqual(stagingDirs(), before, 'Concurrent staging must be cleaned');
+  state.rows = [{ size_bytes: 10 * 1024 * 1024 * 1024 - statSync(short).size }];
+  const quotaRace = await Promise.all([upload(short, 'quota-a.mp4', 'video/mp4', {}, 'content_sfw_video', true), upload(short, 'quota-b.mp4', 'video/mp4', {}, 'content_sfw_video', true)]);
+  assert.deepEqual(quotaRace.map(result => result.status).sort(), ['content_saved', 'upload_quota'], 'Concurrent uploads must not overspend account quota');
+  assert.deepEqual(stagingDirs(), before);
+  console.log('BATCH UPLOAD REGRESSIONS PASSED: two concurrent transfers, third transfer bounded, concurrent quota enforcement and cleanup.');
   console.log('VIDEO UPLOAD REGRESSIONS PASSED: 46-second videos at 80 MB and 512 MB, MOV fallback, distinct size/duration errors, content validation, origin/auth/read-only/lock checks, rollback and temporary-file cleanup.');
 })().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => { rmSync(temp, { recursive: true, force: true }); rmSync(bundle, { force: true }); });
