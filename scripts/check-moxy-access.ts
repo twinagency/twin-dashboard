@@ -71,8 +71,11 @@ async function main() {
     memberActive=true;active=false;
     assert.equal((await login(request())).status,503,"Disabled portal fails closed");
     active=true;
+    // Old canonical Moxy URL moves to the Moxy host; the Moxy host serves it.
+    const moved=await middleware(new NextRequest(origin+"/moxy?x=1"));
+    assert.equal(moved.status,308);assert.equal(moved.headers.get("location"),"https://dashboard.lynqai.co/moxy?x=1");
     for(const path of ["/moxy","/moxy/auth","/moxy/logo.png","/moxy/icon.svg"]){
-      assert.equal((await middleware(new NextRequest(origin+path))).status,200);
+      assert.equal((await middleware(new NextRequest("https://dashboard.lynqai.co"+path,{headers:{host:"dashboard.lynqai.co"}}))).status,200,path);
       assert.equal(agencyRequestAllowed(path,"POST",true),false);
     }
     for(const path of ["/revenue","/analytics","/clones","/users","/media","/flows","/logs","/business",`/clones/${creator}`,`/clones/${secondCreator}`]) {

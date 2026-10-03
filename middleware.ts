@@ -1,7 +1,7 @@
 import { isMarketingPath } from "@/lib/marketing-routing";
 import { isTwinLoginPath, safeAdminNext } from "@/lib/login-routing";
 import { agencyCanManage, agencyManagementRequestAllowed } from "@/lib/agency-management-policy";
-import { canonicalDashboardOrigin, dashboardOrigin, isLynqHost, trustedFormOrigin } from "@/lib/form-origin";
+import { canonicalDashboardOrigin, dashboardOrigin, isLynqHost, LYNQ_DASHBOARD_ORIGIN, trustedFormOrigin } from "@/lib/form-origin";
 import { AGENCY_PORTAL_COOKIE, portalLoginPath } from "@/lib/agency-brand";
 import { agencyIdentity, agencyIdentityById } from "@/lib/agency-identity";
 import { NextResponse } from "next/server";
@@ -40,6 +40,12 @@ export async function middleware(req: NextRequest) {
   // Same app, Moxy branding only. Redirects stay on the host the user came
   // from (dashboardOrigin honours only allowlisted Host headers); the Twin
   // admin surface lives on the canonical host.
+  // Old Moxy URLs on the canonical host move to the Moxy host (GET/HEAD only, so form posts never break).
+  if (process.env.NODE_ENV === "production" && !isLynqHost(req) && ["GET", "HEAD"].includes(req.method)
+    && !req.headers.has("next-action") && (pathname === "/moxy" || pathname.startsWith("/creator/moxy/"))) {
+    const url = new URL(pathname + req.nextUrl.search, LYNQ_DASHBOARD_ORIGIN);
+    return privateResponse(NextResponse.redirect(url, 308));
+  }
   if (isLynqHost(req) && ["GET", "HEAD"].includes(req.method) && !req.headers.has("next-action")) {
     if (pathname === "/") return privateResponse(NextResponse.redirect(new URL("/moxy", dashboardOrigin(req))));
     if (pathname === "/creator/login") {

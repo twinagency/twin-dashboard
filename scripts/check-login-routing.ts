@@ -36,7 +36,10 @@ async function main() {
     assert.equal(calls, 0);
     for (const path of ["/moxy", "/link", "/lynq"]) {
       assert.equal(isAgencyPath(path), true);
-      assert.equal((await middleware(new NextRequest(origin + path, {headers:{cookie:`${AGENCY_COOKIE}=stale; ${AGENCY_PORTAL_COOKIE}=moxy`}}))).status, 200);
+      // /moxy on the canonical host moves to the Moxy host (308); there it serves normally.
+      const served = path === "/moxy" ? new NextRequest("https://dashboard.lynqai.co/moxy", {headers:{host:"dashboard.lynqai.co",cookie:`${AGENCY_COOKIE}=stale; ${AGENCY_PORTAL_COOKIE}=moxy`}}) : new NextRequest(origin + path, {headers:{cookie:`${AGENCY_COOKIE}=stale; ${AGENCY_PORTAL_COOKIE}=moxy`}});
+      assert.equal((await middleware(served)).status, 200, path);
+      if (path === "/moxy") assert.equal((await middleware(new NextRequest(origin + path))).status, 308);
       assert.equal(agencyRequestAllowed(path,"POST",true),false);
       assert.equal(agencyRequestAllowed(path + "/auth","POST",false),true);
     }
