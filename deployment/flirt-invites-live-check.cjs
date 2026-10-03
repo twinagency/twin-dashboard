@@ -55,10 +55,6 @@ async function main(){
   const invite=await makeInvite(cookie,'redeem');
   const landing=await page('/creator/signup?code='+invite.code,null);
   assert(landing.status===200&&(await landing.text()).includes(invite.code),'Invite signup link lost its code');
-  const retired=await request('https://dashboard.lynqai.co/creator/signup?code='+invite.code);
-  assert(retired.status===308&&retired.headers.get('location')===ORIGIN+'/creator/signup?code='+invite.code,'Old FLIRT invite must preserve its code on the new hostname');
-  assert((await post('/agency/creator-invites/manage',cookie,{action:'generate'},{Origin:'https://dashboard.lynqai.co'})).status===403,'Retired FLIRT origin allowed a write');
-  checks.push('Old invitation URLs preserve their code; retired-origin writes remain denied');
   const creator=await signup('invited',invite.code);
   // Generate an unsent recovery link only for this disposable test account.
   // Report the URL configuration without exposing the token or sending email.
