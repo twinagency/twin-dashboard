@@ -247,7 +247,9 @@ async function creatorTerms(cloneId: string): Promise<ViewerTerms> {
 
 async function termsForAccess(access: NonNullable<DashboardAccess>): Promise<ViewerTerms> {
   if ((access as { kind?: string }).kind === "creator") {
-    if (!access.cloneIds.length) throw new Error("No creator assigned to resolve an earnings split");
+    // Not linked to a twin yet (just submitted onboarding): no earnings to split, so
+    // show nothing-yet defaults instead of crashing the whole creator workspace.
+    if (!access.cloneIds.length) return { starMult: 0, usdPerStar: DEFAULT_USD_PER_STAR };
     // Several assigned clones: show the one with the lowest net, never more than any allows.
     const all = await Promise.all(access.cloneIds.map(creatorTerms));
     return all.reduce((lo, t) => (t.starMult < lo.starMult ? t : lo));
