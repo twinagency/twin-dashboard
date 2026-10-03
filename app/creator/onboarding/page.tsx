@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button, buttonVariants } from "@/components/ui/button";
 import CreatorQuestionnaireWizard from "@/components/CreatorQuestionnaireWizard";
 import CreatorUploadForm from "@/components/CreatorUploadForm";
+import { SkipToDashboard } from "@/components/FlirtOnboardingLinks";
 import { supabaseAdmin } from "@/lib/supabase";
 import { CREATOR_SESSION_COOKIE } from "@/lib/creator-session";
 import { creatorDashboardIdentity } from "@/lib/creator-dashboard-identity";
@@ -282,6 +283,8 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
         </div>
         {!optional && <div className="mt-5 h-2 overflow-hidden rounded-full bg-border" role="progressbar" aria-label="Onboarding progress" aria-valuemin={0} aria-valuemax={totalSteps} aria-valuenow={steps}><div className="h-full rounded-full bg-accent transition-[width]" style={{ width: `${(steps / totalSteps) * 100}%` }} /></div>}
 
+        {optional && !submitted && !applicationLocked && <SkipToDashboard />}
+
         {optional && submitted && <p className="mt-5 rounded-xl border border-border bg-white p-4 text-sm text-ink">Your onboarding has been submitted. You can still update your answers and upload more content here.</p>}
 
         {status && errorStatuses.has(status) && <div id="step-result" role="alert" className="mt-6 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">{statusCopy[status]}</div>}
@@ -294,10 +297,6 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
               {voiceEnabled && <StepCard step="voice" number={3} title="Voice" description="Upload voice recordings now, or record your choice to skip and activate voice later." complete={complete.voice} optional icon={Mic2} />}
               <StepCard step="consent" number={consentStepNumber} title="Consent & submit" description={optional ? "Review consent or leave it blank, then finish onboarding." : "Confirm permission and submit your completed onboarding."} complete={complete.consent} optional={optional} icon={ShieldCheck} />
             </div>
-            {optional && !submitted && !applicationLocked && <form action="/creator-auth/onboarding" method="post" className="mt-6">
-              <input type="hidden" name="action" value="submit" />
-              <Button type="submit" size="lg" className="min-h-11 w-full sm:w-auto" data-onboarding-skip-all>Skip all and open dashboard</Button>
-            </form>}
           </>
         ) : (
           <div className="mt-8 grid gap-5" data-onboarding-active-step={activeStep}>

@@ -29,6 +29,7 @@ export default async function CreatorLayout({ children }: { children: React.Reac
       activeCloneId={cloneId}
       connected={!!cloneId || demo}
       onboardingEditable={flirtOnboardingOptional() && !creator.readOnly}
+      onboardingFinished={creator.onboarded}
       allTimeStars={allTimeStars}
     >
       {demo && <CreatorDemoBanner />}

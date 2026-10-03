@@ -10,6 +10,7 @@ import MobileMenu from "./MobileMenu";
 import Sidebar from "./Sidebar";
 import TopBar from "./TopBar";
 import TwinWordmark from "./TwinWordmark";
+import { OnboardingBanner } from "./FlirtOnboardingLinks";
 
 type CreatorClone = { id: string; name: string; color: string; photoUrl?: string };
 
@@ -29,6 +30,7 @@ export default function CreatorWorkspaceShell({
   activeCloneId,
   connected,
   onboardingEditable = false,
+  onboardingFinished = true,
   allTimeStars,
   children,
 }: {
@@ -38,6 +40,8 @@ export default function CreatorWorkspaceShell({
   activeCloneId: string | null;
   connected: boolean;
   onboardingEditable?: boolean;
+  /** False while the creator has skipped onboarding without submitting. */
+  onboardingFinished?: boolean;
   allTimeStars: number;
   children: ReactNode;
 }) {
@@ -69,10 +73,7 @@ export default function CreatorWorkspaceShell({
                 creatorName={creatorName}
               />
               <MainShell>
-                {onboardingEditable && <section className="mb-5 flex flex-col gap-3 rounded-xl border border-line bg-panel p-4 sm:flex-row sm:items-center sm:justify-between" aria-label="Creator onboarding">
-                  <div><p className="font-semibold text-ink">Your onboarding</p><p className="mt-1 text-sm text-muted">Update your answers or add more photos and videos at any time.</p></div>
-                  <Link href="/creator/onboarding" className="inline-flex min-h-11 shrink-0 items-center justify-center rounded-lg bg-[#dc2626] px-4 py-2 text-sm font-semibold text-white hover:bg-[#b91c1c]" data-return-to-onboarding>Return to onboarding</Link>
-                </section>}
+                {onboardingEditable && <OnboardingBanner finished={onboardingFinished} />}
                 {!connected && (
                   <div role="status" className="mb-5 rounded-xl border border-line bg-panel px-4 py-3 text-sm text-muted">
                     Your dashboard will show live earnings and content once your AI creator profile is connected.

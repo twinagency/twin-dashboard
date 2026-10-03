@@ -51,7 +51,8 @@
     "test:flirt-brand-policy": "tsx scripts/check-flirt-brand-policy.ts",
     "test:flirt-review": "tsx scripts/check-flirt-review.ts",
     "test:flirt-clone-pipeline": "tsx scripts/check-flirt-clone-pipeline.ts",
-    "test:flirt-fixes": "npm run test:flirt-direct-signup && npm run test:flirt-brand-policy && npm run test:flirt-review && npm run test:flirt-clone-pipeline",
+    "test:flirt-skip-dashboard": "tsx scripts/check-flirt-skip-to-dashboard.tsx",
+    "test:flirt-fixes": "npm run test:flirt-skip-dashboard && npm run test:flirt-direct-signup && npm run test:flirt-brand-policy && npm run test:flirt-review && npm run test:flirt-clone-pipeline",
     "flirt:preflight": "node deployment/flirt-preflight.cjs dashboard"
   },
   "dependencies": {
