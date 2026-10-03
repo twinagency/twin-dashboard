@@ -2,6 +2,7 @@ import { verifyCreatorSession } from "./creator-session";
 import { serviceClient } from "./supabase-service";
 import type { AgencyIdentity } from "./agency-identity";
 import { isZaneDemo } from "./creator-demo-policy";
+import { isMoxy } from "./agency-brand";
 import {
   BRI_LIVE_DEMO_AGENCY_ID,
   BRI_LIVE_DEMO_CLONE_ID,
@@ -69,7 +70,8 @@ export async function creatorDashboardIdentity(token: string | null | undefined)
       // A live clone link IS onboarding: the twin exists and its intake is done,
       // so the questionnaire would ask this creator to rebuild what they have.
       // Onboarding stays for new accounts that have no clone yet.
-      onboarded: !!clone || ["submitted", "reviewing", "approved"].includes(application.data?.status || ""),
+      // Moxy creators may skip onboarding and use the dashboard before submitting (Ronan, 2026-10-03).
+      onboarded: !!clone || isMoxy(relatedAgency?.name) || ["submitted", "reviewing", "approved"].includes(application.data?.status || ""),
       readOnly: briLiveDemo,
     };
     // Branding only, not an assignment, permission or real-account status change.
