@@ -128,7 +128,8 @@ export async function POST(req: Request) {
     jar.delete(AGENCY_PORTAL_COOKIE);
     jar.delete(SESSION_COOKIE);
     jar.delete(CLONE_SCOPE_COOKIE);
-    return NextResponse.redirect(creatorRequestUrl(req, "/creator"), 303);
+    // New creators always land on onboarding first; Moxy creators can skip it from there (Ronan, 2026-10-03).
+    return NextResponse.redirect(creatorRequestUrl(req, "/creator/onboarding"), 303);
   } catch (error) {
     await db.auth.admin.deleteUser(created.user.id).catch(() => undefined);
     console.error("creator signup failed", error);
