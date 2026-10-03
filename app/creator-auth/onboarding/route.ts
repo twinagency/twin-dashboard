@@ -12,6 +12,7 @@ import {
   questionnaireRequiredMissing,
 } from "@/lib/creator-questionnaire-draft";
 import { creatorContentCompleted } from "@/lib/creator-content-requirements";
+import { isMoxy } from "@/lib/agency-brand";
 
 function back(req: Request, status: string, step?: "questionnaire" | "voice" | "consent", section?: string) {
   const url = creatorRequestUrl(req, "/creator/onboarding");
@@ -127,7 +128,8 @@ export async function POST(req: NextRequest) {
     if (existing && CREATOR_QUESTIONNAIRE_TERMINAL_STATUSES.has(existing.status)) return NextResponse.redirect(creatorRequestUrl(req, "/creator"), 303);
     if (existing && existing.status !== "draft") return back(req, "application_locked", "consent");
     const questionnaireComplete = !!progress?.questionnaire_completed && !!existing && questionnaireRequiredMissing((existing.answers || {}) as Record<string, string>).length === 0;
-    const contentComplete = creatorContentCompleted(files || [], !!progress?.content_completed);
+    // Content is optional for Moxy creators (Ronan, 2026-10-03).
+    const contentComplete = isMoxy(creator.name) || creatorContentCompleted(files || [], !!progress?.content_completed);
     const voiceComplete = !!progress?.voice_completed || (files || []).some((file) => file.kind === "voice" && file.storage_transfer_status === "verified");
     if (!questionnaireComplete || !contentComplete || !voiceComplete || !consent) {
       return back(req, "not_ready", "consent");
