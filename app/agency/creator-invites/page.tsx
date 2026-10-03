@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { getDashboardAccess } from "@/lib/dashboard-access";
-import { dashboardOrigin } from "@/lib/form-origin";
+import { dashboardOrigin, LYNQ_DASHBOARD_ORIGIN } from "@/lib/form-origin";
+import { isMoxy } from "@/lib/agency-brand";
 import { headers } from "next/headers";
 import CopyField from "./CopyField";
 import { INVITE_CODE_PATTERN, inviteUrl } from "@/lib/creator-invite-codes";
@@ -41,7 +42,8 @@ export default async function AgencyCreatorInvites({ searchParams }: { searchPar
   const rows = (codes.data ?? []) as CodeRow[];
 
   const requestHeaders = await headers();
-  const origin = dashboardOrigin({ url: `https://${requestHeaders.get("host") || "dashboard.tgaiclone.xyz"}` });
+  // Moxy invite links use the Moxy host; dashboardOrigin only honours allowlisted Host headers.
+  const origin = isMoxy(access.name) ? LYNQ_DASHBOARD_ORIGIN : dashboardOrigin({ url: "https://dashboard.tgaiclone.xyz", headers: requestHeaders });
   const now = Date.now();
 
   const banner = result === "revoked"

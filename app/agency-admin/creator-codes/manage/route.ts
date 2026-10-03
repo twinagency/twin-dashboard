@@ -53,7 +53,7 @@ export async function POST(req: NextRequest) {
 
   const agency = await supabaseAdmin
     .from("partner_agencies")
-    .select("id")
+    .select("id,slug")
     .eq("id", agencyId)
     .eq("active", true)
     .maybeSingle();
@@ -73,5 +73,7 @@ export async function POST(req: NextRequest) {
 
   // The plaintext never reaches the database, so this redirect is the only
   // chance the operator gets to read it.
-  return back(`created=${encodeURIComponent(code)}`);
+  // "for" lets the page build a Moxy-hosted invite link; it is validated again on read.
+  const slug = typeof agency.data.slug === "string" && /^[a-z0-9-]{1,60}$/.test(agency.data.slug) ? agency.data.slug : "";
+  return back(`created=${encodeURIComponent(code)}${slug ? `&for=${slug}` : ""}`);
 }

@@ -1,7 +1,7 @@
 import { isMarketingPath } from "@/lib/marketing-routing";
 import { isTwinLoginPath, safeAdminNext } from "@/lib/login-routing";
 import { agencyCanManage, agencyManagementRequestAllowed } from "@/lib/agency-management-policy";
-import { dashboardOrigin, trustedFormOrigin } from "@/lib/form-origin";
+import { canonicalDashboardOrigin, dashboardOrigin, isLynqHost, trustedFormOrigin } from "@/lib/form-origin";
 import { AGENCY_PORTAL_COOKIE, portalLoginPath } from "@/lib/agency-brand";
 import { agencyIdentity, agencyIdentityById } from "@/lib/agency-identity";
 import { NextResponse } from "next/server";
@@ -36,6 +36,23 @@ const SELF_AUTHENTICATED_PREFIXES = ["/api/v1/", "/api/admin/"];
 
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl;
+  // ── Moxy white-label host (dashboard.lynqai.co) ─────────────────────────
+  // Same app, Moxy branding only. Redirects stay on the host the user came
+  // from (dashboardOrigin honours only allowlisted Host headers); the Twin
+  // admin surface lives on the canonical host.
+  if (isLynqHost(req) && ["GET", "HEAD"].includes(req.method) && !req.headers.has("next-action")) {
+    if (pathname === "/") return privateResponse(NextResponse.redirect(new URL("/moxy", dashboardOrigin(req))));
+    if (pathname === "/creator/login") {
+      const url = new URL("/creator/moxy/login", dashboardOrigin(req));
+      for (const key of ["next", "error"]) { const v = req.nextUrl.searchParams.get(key); if (v !== null) url.searchParams.set(key, v); }
+      return privateResponse(NextResponse.redirect(url));
+    }
+    if (pathname === "/twin" || pathname === "/login") {
+      const url = new URL(pathname, canonicalDashboardOrigin(req));
+      req.nextUrl.searchParams.forEach((v, k) => url.searchParams.set(k, v));
+      return privateResponse(NextResponse.redirect(url));
+    }
+  }
   // ── Read-only while viewing as someone ──────────────────────────────────
   // ONE choke point for every mutation while a view-as cookie is live: every
   // server action (the next-action header) and every non-GET/HEAD API or form
@@ -103,7 +120,8 @@ export async function middleware(req: NextRequest) {
     const creator = (await creatorDashboardIdentity(req.cookies.get(CREATOR_SESSION_COOKIE)?.value))
       ?? (viewAs?.targetType === "creator" ? await creatorDashboardIdentityById(viewAs.targetId) : null);
     if (!creator) {
-      const loginPath = creatorLoginPath(creator, req.cookies.get(CREATOR_PORTAL_COOKIE)?.value);
+      let loginPath = creatorLoginPath(creator, req.cookies.get(CREATOR_PORTAL_COOKIE)?.value);
+      if (isLynqHost(req) && loginPath === "/creator/login") loginPath = "/creator/moxy/login";
       const url = new URL(loginPath, dashboardOrigin(req));
       url.searchParams.set("next", safeCreatorNext(pathname + req.nextUrl.search));
       const response = privateResponse(NextResponse.redirect(url));
@@ -167,6 +185,8 @@ export async function middleware(req: NextRequest) {
   const authed = await verifySessionToken(token);
   if (!authed) {
     if (req.cookies.get(AGENCY_PORTAL_COOKIE)?.value === "moxy") return NextResponse.redirect(new URL("/moxy", dashboardOrigin(req)));
+    // Moxy host is Moxy-only: unauthenticated visitors there never see Twin admin login.
+    if (isLynqHost(req)) return NextResponse.redirect(new URL("/moxy", dashboardOrigin(req)));
     const url = new URL("/twin", dashboardOrigin(req)); url.searchParams.set("next", pathname);
     return NextResponse.redirect(url);
   }

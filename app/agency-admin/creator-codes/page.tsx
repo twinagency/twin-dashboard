@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import { redirect } from "next/navigation";
 import { isAuthed } from "@/lib/auth";
 import { INVITE_CODE_PATTERN, inviteUrl } from "@/lib/creator-invite-codes";
+import { LYNQ_DASHBOARD_ORIGIN } from "@/lib/form-origin";
 import { supabaseAdmin } from "@/lib/supabase";
 
 export const metadata = { title: "Creator invites · Twin" };
@@ -22,7 +23,9 @@ type CodeRow = {
 
 // Mirrors lib/form-origin.ts. The request Host header is only trusted outside
 // production, where there is no configured public origin to use instead.
-async function pageOrigin(): Promise<string> {
+async function pageOrigin(agencySlug?: string): Promise<string> {
+  // Moxy creators sign up on the Moxy-branded host.
+  if (agencySlug === "moxy") return LYNQ_DASHBOARD_ORIGIN;
   const configured = process.env.DASHBOARD_PUBLIC_ORIGIN;
   if (configured) return new URL(configured).origin;
   if (process.env.NODE_ENV === "production") return "https://dashboard.tgaiclone.xyz";
@@ -32,9 +35,9 @@ async function pageOrigin(): Promise<string> {
 
 const dateOnly = (value: string | null) => (value ? value.slice(0, 10) : null);
 
-export default async function CreatorCodes({ searchParams }: { searchParams: Promise<{ result?: string; created?: string }> }) {
+export default async function CreatorCodes({ searchParams }: { searchParams: Promise<{ result?: string; created?: string; for?: string }> }) {
   if (!await isAuthed()) redirect("/login");
-  const { result, created } = await searchParams;
+  const { result, created, for: forSlug } = await searchParams;
   // Reflected only when it is shaped like a code this app mints.
   const newCode = created && INVITE_CODE_PATTERN.test(created) ? created : null;
 
@@ -56,7 +59,7 @@ export default async function CreatorCodes({ searchParams }: { searchParams: Pro
     .map((agency) => ({ agency, rows: rows.filter((row) => row.agency_id === agency.id) }))
     .filter((group) => group.rows.length > 0);
   const orphans = rows.filter((row) => !names.has(row.agency_id));
-  const origin = await pageOrigin();
+  const origin = await pageOrigin(forSlug);
   const now = Date.now();
 
   const banner = result === "revoked"

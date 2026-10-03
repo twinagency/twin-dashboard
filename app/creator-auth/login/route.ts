@@ -12,7 +12,7 @@ import {
   safeCreatorNext,
   type CreatorPublicPortal,
 } from "@/lib/creator-routing";
-import { dashboardOrigin } from "@/lib/form-origin";
+import { dashboardOrigin, isLynqHost } from "@/lib/form-origin";
 import { AGENCY_COOKIE } from "@/lib/agency-policy";
 import { AGENCY_PORTAL_COOKIE } from "@/lib/agency-brand";
 import { SESSION_COOKIE } from "@/lib/session";
@@ -26,7 +26,9 @@ function withCreatorPortal(response: NextResponse, portal: CreatorPublicPortal):
 }
 
 function redirectWithError(req: Request, next: string, portal: CreatorPublicPortal) {
-  const url = new URL(creatorPublicLoginPath(portal), dashboardOrigin(req));
+  // On the Moxy host an error returns to the Moxy-branded creator login.
+  const loginPath = portal === "twin" && isLynqHost(req) ? "/creator/moxy/login" : creatorPublicLoginPath(portal);
+  const url = new URL(loginPath, dashboardOrigin(req));
   url.searchParams.set("error", "1");
   url.searchParams.set("next", next);
   return withCreatorPortal(NextResponse.redirect(url, 303), portal);
