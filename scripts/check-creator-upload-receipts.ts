@@ -55,6 +55,7 @@ async function main() {
     await helper.saveIdempotentCreatorUpload(owner,id,"content_sfw_video",file,"video/mp4");
     assert.equal(uploads,1,"Existing private storage must not be uploaded again");
     claimState="saved"; await helper.saveIdempotentCreatorUpload(owner,id,"content_sfw_video",file,"video/mp4"); assert.equal(uploads,1);
+    claimState="removed"; await assert.rejects(helper.saveIdempotentCreatorUpload(owner,id,"content_sfw_video",file,"video/mp4"), (e:any)=>e.status==="upload_removed");
     claimState="busy"; await assert.rejects(helper.saveIdempotentCreatorUpload(owner,id,"content_sfw_video",file,"video/mp4"), (e:any)=>e.status==="upload_busy");
     claimState="uploading"; finalizeFailures=2;
     await assert.rejects(helper.saveIdempotentCreatorUpload(owner,id,"content_sfw_video",file,"video/mp4"),(e:any)=>e.status==="upload_metadata_error");
