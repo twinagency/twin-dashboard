@@ -7,8 +7,10 @@ import { Input } from "@/components/ui/input";
 import { Button, buttonVariants } from "@/components/ui/button";
 import CreatorOnboardingActionForm from "@/components/CreatorOnboardingActionForm";
 import CreatorQuestionnaireWizard from "@/components/CreatorQuestionnaireWizard";
+import CreatorContentGallery from "@/components/CreatorContentGallery";
 import CreatorUploadForm from "@/components/CreatorUploadForm";
 import { SkipToDashboard } from "@/components/FlirtOnboardingLinks";
+import { creatorApplicationState } from "@/lib/creator-application-state";
 import { supabaseAdmin } from "@/lib/supabase";
 import { CREATOR_SESSION_COOKIE } from "@/lib/creator-session";
 import { creatorDashboardIdentity } from "@/lib/creator-dashboard-identity";
@@ -45,7 +47,7 @@ const statusCopy: Record<string,string> = {
   consent_skipped: "Consent skipped. No consent has been recorded.",
   upload_empty: "Choose at least one file.",
   upload_too_many: "Upload up to 25 files at a time.",
-  upload_too_large: "Videos can be up to 512 MB, images up to 15 MB, and voice recordings up to 64 MB each. File size is separate from video length.",
+  upload_too_large: "Videos can be up to 512 MiB, images up to 15 MiB, and voice recordings up to 64 MiB each. File size is separate from video length.",
   upload_busy: "Another upload is still being checked. Wait for it to finish, then try again.",
   upload_quota: "This account has reached its onboarding upload limit. Contact support before adding more files.",
   upload_video_too_long: "This video is longer than 30 minutes. Choose a shorter video.",
@@ -55,11 +57,12 @@ const statusCopy: Record<string,string> = {
   upload_wrong_type: "Use JPG, PNG, WebP or GIF for images, and MP4, MOV or WebM for videos. Upload each file to the matching category.",
   upload_error: "That upload did not finish. Review the verified-file count, then try the remaining files.",
   consent_missing: "Enter your legal name and confirm consent.",
+  file_removal_pending: "Finish removing your pending file in Saved content, then submit again.",
   not_ready: "Finish the required onboarding steps before submitting.",
   error: "Something went wrong. Please try again.",
 };
 
-const errorStatuses = new Set(["questionnaire_missing", "questionnaire_conflict", "application_locked", "upload_empty", "upload_too_many", "upload_too_large", "upload_busy", "upload_quota", "upload_wrong_type", "upload_video_too_long", "upload_video_resolution", "upload_interrupted", "upload_timeout", "upload_error", "consent_missing", "not_ready", "error"]);
+const errorStatuses = new Set(["questionnaire_missing", "questionnaire_conflict", "application_locked", "upload_empty", "upload_too_many", "upload_too_large", "upload_busy", "upload_quota", "upload_wrong_type", "upload_video_too_long", "upload_video_resolution", "upload_interrupted", "upload_timeout", "upload_error", "consent_missing", "file_removal_pending", "not_ready", "error"]);
 const onboardingSteps = ["questionnaire", "content", "voice", "consent"] as const;
 type OnboardingStep = (typeof onboardingSteps)[number];
 
@@ -177,7 +180,7 @@ function StepNavigation({ step, steps }: { step: OnboardingStep; steps: Onboardi
   </nav>;
 }
 
-function ContentUploadCard({ kind, count, minimum, label, accept, formatHint, complete, locked, optional = false }: {
+function ContentUploadCard({ kind, count, minimum, label, accept, formatHint, complete, locked, accountId, loginPath, optional = false }: {
   kind: CreatorContentKind;
   count: number;
   minimum: number;
@@ -187,6 +190,8 @@ function ContentUploadCard({ kind, count, minimum, label, accept, formatHint, co
   complete: boolean;
   locked: boolean;
   optional?: boolean;
+  accountId: string;
+  loginPath: string;
 }) {
   const percent = Math.min(100, Math.round((count / minimum) * 100));
   return (
@@ -201,7 +206,8 @@ function ContentUploadCard({ kind, count, minimum, label, accept, formatHint, co
       {!optional && <div className="mt-4 h-2 overflow-hidden rounded-full bg-border" role="progressbar" aria-label={`${label} upload progress`} aria-valuemin={0} aria-valuemax={minimum} aria-valuenow={Math.min(count, minimum)}>
         <div className={`h-full rounded-full transition-[width] ${complete ? "bg-emerald-600" : "bg-accent"}`} style={{ width: `${percent}%` }} />
       </div>}
-      <CreatorUploadForm kind={kind} label={label} accept={accept} formatHint={formatHint} locked={locked} />
+      <CreatorUploadForm accountId={accountId} loginPath={loginPath} kind={kind} label={label} accept={accept} formatHint={formatHint} locked={locked} />
+      <CreatorContentGallery kind={kind} revision={String(count)} loginPath={loginPath} />
     </section>
   );
 }
@@ -225,7 +231,6 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
   const jar = await cookies();
   const creator = await creatorDashboardIdentity(jar.get(CREATOR_SESSION_COOKIE)?.value);
   if (!creator) redirect(creatorLoginPath(creator, jar.get(CREATOR_PORTAL_COOKIE)?.value));
-  const loginPath = creatorLoginPath(creator, jar.get(CREATOR_PORTAL_COOKIE)?.value);
   const session = { accountId: creator.accountId };
   const tether = creator.name === TETHER_PORTAL.name;
   const link = isLynq(creator.name);
@@ -236,6 +241,7 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
   const totalSteps = visibleSteps.length;
   const consentStepNumber = visibleSteps.indexOf("consent") + 1;
   const afterContent = voiceEnabled ? "voice" : "consent";
+  const loginPath = creatorLoginPath(creator, jar.get(CREATOR_PORTAL_COOKIE)?.value);
   const { status, step, section } = await searchParams;
   if (step === "voice" && !voiceEnabled) redirect("/creator/onboarding?step=consent");
   const activeStep = isOnboardingStep(step) ? step : null;
@@ -244,14 +250,16 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
   const [{ data: account }, { data: progress }, { data: application }, { data: files }, { data: consent }] = await Promise.all([
     supabaseAdmin.from("creator_accounts").select("display_name,email").eq("id", session.accountId).single(),
     supabaseAdmin.from("creator_onboarding_progress").select("questionnaire_completed,content_completed,voice_completed").eq("creator_account_id", session.accountId).maybeSingle(),
-    supabaseAdmin.from("creator_applications").select("id,status,answers,updated_at").eq("creator_account_id", session.accountId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+    supabaseAdmin.from("creator_applications").select("id,status,submitted_at,answers,updated_at").eq("creator_account_id", session.accountId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
     supabaseAdmin.from("creator_files").select("id,kind,original_name,size_bytes,mime_type,storage_transfer_status").eq("creator_account_id", session.accountId).order("created_at", { ascending: false }),
     supabaseAdmin.from("creator_consents").select("id,legal_name,signed_at").eq("creator_account_id", session.accountId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
   ]);
 
   if (!account) redirect("/creator-auth/logout");
   const answers = (application?.answers || {}) as Record<string,string>;
+  const applicationState = creatorApplicationState(application?.status, application?.submitted_at);
   const submitted = application?.status === "submitted" || application?.status === "reviewing" || application?.status === "approved";
+  const hasApplicationState = !!application && application.status !== "draft";
   const applicationLocked = creator.readOnly || !creatorOnboardingEditable(application?.status, optional);
   const voiceFiles = (files || []).filter((f) => f.kind === "voice" && f.storage_transfer_status === "verified");
   const contentCounts = creatorContentCounts(files || []);
@@ -285,15 +293,15 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent-2">{tether ? "Tether creator onboarding" : link ? "LYNQ creator onboarding" : "Creator onboarding"}</p>
         <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
           <div><h1 className="font-heading text-4xl font-semibold tracking-[-0.04em] text-ink">Build your {brandName === "Twin" ? "FLIRT" : brandName} digital clone</h1><p className="mt-2 text-muted">{optional ? "All steps are optional. Add what you can now, and return from your dashboard whenever you’re ready." : "Complete the steps below. Your answers and media stay attached to this creator account."}</p></div>
-          <div className="rounded-full border border-border bg-white px-4 py-2 text-sm font-medium text-ink" aria-label={submitted ? "Application submitted" : optional ? "All onboarding steps optional" : `${steps} of ${totalSteps} onboarding steps complete`}>{submitted ? "Submitted" : optional ? "All steps optional" : `${steps}/${totalSteps} complete`}</div>
+          <div className="rounded-full border border-border bg-white px-4 py-2 text-sm font-medium text-ink" data-onboarding-application-state={applicationState.label} aria-label={hasApplicationState ? `Onboarding status: ${applicationState.label}` : optional ? "All onboarding steps optional" : `${steps} of ${totalSteps} onboarding steps complete`}>{hasApplicationState ? applicationState.label : optional ? "All steps optional" : `${steps}/${totalSteps} complete`}</div>
         </div>
         {!optional && <div className="mt-5 h-2 overflow-hidden rounded-full bg-border" role="progressbar" aria-label="Onboarding progress" aria-valuemin={0} aria-valuemax={totalSteps} aria-valuenow={steps}><div className="h-full rounded-full bg-accent transition-[width]" style={{ width: `${(steps / totalSteps) * 100}%` }} /></div>}
 
         {optional && !submitted && !applicationLocked && <SkipToDashboard />}
 
-        {optional && submitted && <p className="mt-5 rounded-xl border border-border bg-white p-4 text-sm text-ink">Your onboarding has been submitted. You can still update your answers and upload more content here.</p>}
+        {optional && submitted && <p className="mt-5 rounded-xl border border-border bg-white p-4 text-sm text-ink">{applicationState.description} {applicationLocked ? "Contact your agency if you need to change this application." : "You can still update your answers and upload more content here."}</p>}
 
-        {status && errorStatuses.has(status) && <div id="step-result" role="alert" className="mt-6 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">{statusCopy[status]}</div>}
+        {status && errorStatuses.has(status) && <div id="step-result" role="alert" className="mt-6 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">{statusCopy[status]}{status === "file_removal_pending" && <> <Link href="/creator/onboarding?step=content" className="font-semibold underline">Open Saved content</Link></>}</div>}
 
         {!activeStep ? (
           <>
@@ -333,8 +341,9 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
                 </div>
                 {optional && <div><ContinueToStep step={afterContent}>Continue without uploading</ContinueToStep></div>}
                 <div className="grid gap-4 md:grid-cols-2">
-                  {CREATOR_CONTENT_REQUIREMENTS.map((requirement) => <ContentUploadCard key={requirement.kind} {...requirement} count={contentCounts[requirement.kind]} complete={contentCounts[requirement.kind] >= requirement.minimum} locked={applicationLocked} optional={optional} />)}
+                  {CREATOR_CONTENT_REQUIREMENTS.map((requirement) => <ContentUploadCard accountId={session.accountId} loginPath={loginPath} key={requirement.kind} {...requirement} count={contentCounts[requirement.kind]} complete={contentCounts[requirement.kind] >= requirement.minimum} locked={applicationLocked} optional={optional} />)}
                 </div>
+                {legacyContentFiles > 0 && <CreatorContentGallery kind="content" revision={String(legacyContentFiles)} loginPath={loginPath} />}
                 {legacyContentFiles > 0 && <p className="rounded-xl border border-border bg-muted/10 px-4 py-3 text-sm leading-6 text-muted">{legacyContentFiles} earlier verified upload{legacyContentFiles === 1 ? " is" : "s are"} still safely stored. They are not guessed into SFW or NSFW categories.</p>}
                 <StepNavigation step="content" steps={visibleSteps} />
               </CardContent>
@@ -346,9 +355,10 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
                 {saved && <SavedConfirmation title={status === "voice_skipped" ? "Voice step saved" : "Voice samples saved"} detail={statusCopy[status!]} />}
                 <p className="text-sm leading-6 text-muted">Voice is not required to get onboarded. Add samples now or skip it and activate voice later.</p>
                 <div className="grid gap-3 md:grid-cols-[1fr_auto]">
-                  <CreatorUploadForm kind="voice" label="Voice recordings" accept="audio/*,video/*" locked={applicationLocked && !optional} voice />
+                  <CreatorUploadForm accountId={session.accountId} loginPath={loginPath} kind="voice" label="Voice recordings" accept="audio/*,video/*" locked={applicationLocked && !optional} voice />
                   <CreatorOnboardingActionForm className="self-end" pendingLabel="Saving your voice choice…" successStatuses={["voice_skipped"]} loginPath={loginPath}><input type="hidden" name="action" value="skip_voice" /><Button type="submit" variant="outline" size="lg" disabled={applicationLocked} className="min-h-11">Skip for now</Button></CreatorOnboardingActionForm>
                 </div>
+                <CreatorContentGallery kind="voice" revision={String(voiceFiles.length)} loginPath={loginPath} />
                 {voiceFiles.length > 0 && <p className="text-sm text-muted">{voiceFiles.length} voice file{voiceFiles.length === 1 ? "" : "s"} verified.</p>}
                 <StepNavigation step="voice" steps={visibleSteps} />
               </CardContent>

@@ -6,6 +6,7 @@ import { safeCreatorNext } from "@/lib/creator-routing";
 const errors: Record<string, string> = {
   consent_missing: "Enter your legal name and confirm consent before saving.",
   application_locked: "This application can no longer be changed. Your entries have been kept here.",
+  file_removal_pending: "Finish removing your pending file in Saved content, then submit again.",
   not_ready: "Finish the required steps before submitting. Your saved information has not been lost.",
   questionnaire_conflict: "Your application changed in another window. Refresh to review the latest saved information.",
 };
@@ -30,6 +31,7 @@ export default function CreatorOnboardingActionForm({ children, className, pendi
   }, []);
   const [pending, setPending] = useState(false);
   const [error, setError] = useState("");
+  const [pendingRemoval, setPendingRemoval] = useState(false);
   const [signIn, setSignIn] = useState("");
 
   async function submit(event: FormEvent<HTMLFormElement>) {
@@ -42,6 +44,7 @@ export default function CreatorOnboardingActionForm({ children, className, pendi
     setPending(true);
     setError("");
     setSignIn("");
+    setPendingRemoval(false);
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 45_000);
     try {
@@ -61,6 +64,7 @@ export default function CreatorOnboardingActionForm({ children, className, pendi
         window.location.assign(destination.href);
         return;
       }
+      setPendingRemoval(status === "file_removal_pending");
       setError(errors[status] || "We could not confirm the save. Your entries are still here. Please try again.");
     } catch {
       setError("The connection was interrupted. Your entries are still here. Please try again.");
@@ -74,6 +78,6 @@ export default function CreatorOnboardingActionForm({ children, className, pendi
   return <form action="/creator-auth/onboarding" method="post" onSubmit={submit} onInput={() => { dirty.current = true; }} onChange={() => { dirty.current = true; }} aria-busy={pending}>
     <fieldset disabled={pending} className={className}>{children}</fieldset>
     {pending && <p role="status" className="mt-3 text-sm text-muted">{pendingLabel}</p>}
-    {error && <p role="alert" className="mt-3 text-sm text-rose-700">{error}{signIn && <> <a href={signIn} className="font-semibold underline">Sign in and return</a></>}</p>}
+    {error && <p role="alert" className="mt-3 text-sm text-rose-700">{error}{pendingRemoval && <> <a href="/creator/onboarding?step=content" className="font-semibold underline">Open Saved content</a></>}{signIn && <> <a href={signIn} className="font-semibold underline">Sign in and return</a></>}</p>}
   </form>;
 }

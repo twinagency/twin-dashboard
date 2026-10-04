@@ -23,6 +23,10 @@ function back(req: Request, status: string, step?: "questionnaire" | "content" |
   return NextResponse.redirect(url, 303);
 }
 
+function submissionErrorStatus(error: { message?: string } | null | undefined) {
+  return error?.message === "creator_file_removal_pending" ? "file_removal_pending" : "error";
+}
+
 async function getCreator(req: NextRequest) {
   return {
     creator: await creatorDashboardIdentity(req.cookies.get(CREATOR_SESSION_COOKIE)?.value),
@@ -162,7 +166,7 @@ export async function POST(req: NextRequest) {
       const { error } = await supabaseAdmin.from("creator_applications")
         .insert({ id: accountId, creator_account_id: accountId, answers: {}, status: "submitted", submitted_at: now, updated_at: submittedAt });
       if (error?.code === "23505") return back(req, "questionnaire_conflict", "consent");
-      if (error) return back(req, "error", "consent");
+      if (error) return back(req, submissionErrorStatus(error), "consent");
       return NextResponse.redirect(creatorRequestUrl(req, "/creator?submitted=1"), 303);
     }
     const { data: submittedApplication, error } = await supabaseAdmin
@@ -174,7 +178,7 @@ export async function POST(req: NextRequest) {
       .eq("updated_at", existing.updated_at)
       .select("id")
       .maybeSingle();
-    if (error) return back(req, "error", "consent");
+    if (error) return back(req, submissionErrorStatus(error), "consent");
     if (!submittedApplication) return back(req, "questionnaire_conflict", "consent");
     return NextResponse.redirect(creatorRequestUrl(req, "/creator?submitted=1"), 303);
   }
