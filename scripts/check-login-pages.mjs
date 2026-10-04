@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { request as httpRequest } from 'node:http';
 import { setTimeout as delay } from 'node:timers/promises';
 
 // Exercise the production build without production credentials or database writes.
@@ -12,7 +13,28 @@ const server = spawn(process.execPath, ['node_modules/next/dist/bin/next', 'star
 });
 let output = '';
 for (const stream of [server.stdout, server.stderr]) stream.on('data', chunk => { output = (output + chunk).slice(-10000); });
-const request = (path, init = {}) => fetch(local + path, { redirect: 'manual', signal: AbortSignal.timeout(5000), ...init });
+// Node fetch overwrites a supplied Host header, which would never exercise
+// Moxy's allowed production host. Native HTTP preserves it without leaving
+// the local test server or following any production redirect.
+const request = (path, init = {}) => new Promise((resolve, reject) => {
+  const headers = { ...init.headers };
+  const body = init.body instanceof URLSearchParams ? init.body.toString() : init.body;
+  if (init.body instanceof URLSearchParams) headers['content-type'] = 'application/x-www-form-urlencoded;charset=UTF-8';
+  if (body != null) headers['content-length'] = String(Buffer.byteLength(body));
+  const req = httpRequest(local + path, { method: init.method || 'GET', headers }, res => {
+    const chunks = [];
+    res.on('data', chunk => chunks.push(chunk));
+    res.on('error', reject);
+    res.on('end', () => {
+      const responseHeaders = new Headers();
+      for (const [key, value] of Object.entries(res.headers)) for (const item of Array.isArray(value) ? value : [value]) if (item !== undefined) responseHeaders.append(key, item);
+      resolve(new Response(Buffer.concat(chunks), { status: res.statusCode, headers: responseHeaders }));
+    });
+  });
+  req.setTimeout(5000, () => req.destroy(new Error('Local production request timed out')));
+  req.on('error', reject);
+  req.end(body);
+});
 try {
   let ready = false;
   for (let attempt = 0; attempt < 60; attempt++) {
