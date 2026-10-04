@@ -1,3 +1,4 @@
+import { tracedCreatorUpload, uploadStage, uploadDiagnostic } from "@/lib/creator-upload-diagnostics";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { execFile } from "node:child_process";
@@ -28,8 +29,8 @@ export const runtime = "nodejs";
 function back(req: Request, status: string, step?: "content" | "voice") {
   if (req.headers.get("accept")?.includes("application/json")) {
     const success = status === "content_saved" || status === "voice_saved";
-    return NextResponse.json({ status }, {
-      status: success ? 200 : status === "upload_busy" ? 429 : status === "application_locked" ? 409 : 400,
+    return NextResponse.json({ status, ...uploadDiagnostic() }, {
+      status: success ? 200 : status === "upload_busy" ? 429 : status === "application_locked" ? 409 : ["upload_error", "upload_storage_error", "upload_metadata_error", "upload_staging_error", "upload_staging_full"].includes(status) ? 503 : 400,
       headers: { "Cache-Control": "private, no-store", ...(status === "upload_busy" ? { "Retry-After": "5" } : {}) },
     });
   }
@@ -221,7 +222,7 @@ export async function POST(req: NextRequest) {
   // Middleware normally sanitizes audience/path headers. Do not consult any of
   // those caller-controlled headers or a separate operator cookie on this route.
   // The validated creator account below owns every row and the FLIRT-local client.
-  return withDashboardAccess(null, () => uploadForCreator(req));
+  return tracedCreatorUpload(() => withDashboardAccess(null, () => uploadForCreator(req)));
 }
 
 async function uploadForCreator(req: NextRequest) {
@@ -249,7 +250,9 @@ async function uploadForCreator(req: NextRequest) {
   ]);
   if (applicationError || uploadUsage.error) return back(req, "upload_error");
   if (uploadUsage.count >= MAX_ACCOUNT_FILES) return back(req, "upload_quota");
+  uploadStage("receiving");
   staged = await boundedFormData(req);
+  uploadStage("validating");
   const kind = staged.fields.get("kind") || "";
   const contentRequirement = creatorContentRequirement(kind);
   if (kind !== "voice" && !isCreatorContentKind(kind)) return back(req, "upload_error");
@@ -309,6 +312,7 @@ async function uploadForCreator(req: NextRequest) {
   for (const file of files) {
     const mime = normalizedMimes.get(file) || file.type || "application/octet-stream";
     const objectPath = `creators/${accountId}/${kind}/${Date.now()}-${randomUUID()}-${safeName(file.name)}`;
+    uploadStage("storage");
     const body = await openAsBlob(file.path, { type: mime });
     const { error: uploadError } = await supabaseAdmin.storage.from(bucket).upload(objectPath, body, {
       contentType: mime,
@@ -316,11 +320,13 @@ async function uploadForCreator(req: NextRequest) {
       upsert: false,
     });
     if (uploadError) {
+      uploadStage("storage", String((uploadError as { statusCode?: string }).statusCode || "provider_error"));
       await rollbackBatch();
-      return back(req, "upload_error", step);
+      return back(req, "upload_storage_error", step);
     }
     uploadedPaths.push(objectPath);
 
+    uploadStage("metadata");
     const { error: rowError } = await supabaseAdmin.from("creator_files").insert({
       creator_account_id: accountId,
       kind,
@@ -335,12 +341,14 @@ async function uploadForCreator(req: NextRequest) {
       source_object_checked_at: now,
     });
     if (rowError) {
+      uploadStage("metadata", rowError.code);
       await rollbackBatch();
-      return back(req, "upload_error", step);
+      return back(req, "upload_metadata_error", step);
     }
     insertedPaths.push(objectPath);
   }
 
+  uploadStage("progress");
   let patch: { content_completed?: boolean; voice_completed?: boolean; updated_at: string };
   if (kind === "voice") {
     patch = { voice_completed: true, updated_at: now };

@@ -87,6 +87,7 @@ function stagingDirs() { return readdirSync(tmpdir()).filter(name => name.starts
     if (!parallel) assert.deepEqual(stagingDirs(), before, 'Temporary upload files must be removed');
     return { code: response.status, status: result?.status };
   }
+  if (process.env.CREATOR_UPLOAD_BOUNDARY_FIXTURE) assert.deepEqual(await upload(process.env.CREATOR_UPLOAD_BOUNDARY_FIXTURE, 'audit-boundary.mp4'), { code: 200, status: 'content_saved' });
   assert.deepEqual(await upload(short, 'short.mp4'), { code: 200, status: 'content_saved' });
   assert.deepEqual(await upload(large, 'short-large.mp4'), { code: 200, status: 'content_saved' });
   assert.equal(state.stored.at(-1).size, 80 * 1024 * 1024);
@@ -105,7 +106,7 @@ function stagingDirs() { return readdirSync(tmpdir()).filter(name => name.starts
   state.status = 'submitted'; assert.equal((await upload(short, 'short.mp4')).code, 200);
   assert.equal((await upload(short, 'short.mp4', 'video/mp4', { 'x-pathname': '/agency', 'x-twin-audience': 'creator' })).code, 200);
   const count = state.stored.length; state.failInsert = true;
-  assert.equal((await upload(short, 'short.mp4')).status, 'upload_error'); assert.equal(state.stored.length, count, 'Failed DB insert must remove the new object');
+  assert.equal((await upload(short, 'short.mp4')).status, 'upload_metadata_error'); assert.equal(state.stored.length, count, 'Failed DB insert must remove the new object');
   state.failInsert = false;
   const simultaneous = [upload(short, 'parallel-a.mp4', 'video/mp4', {}, 'content_sfw_video', true), upload(short, 'parallel-b.mp4', 'video/mp4', {}, 'content_sfw_video', true)];
   const excess = await upload(short, 'parallel-c.mp4', 'video/mp4', {}, 'content_sfw_video', true);

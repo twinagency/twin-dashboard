@@ -7,7 +7,7 @@ export function creatorUploadMaxBytes(kind: string): number {
   return kind.endsWith("_image") ? MAX_CREATOR_IMAGE_BYTES : kind === "voice" ? MAX_CREATOR_VOICE_BYTES : MAX_CREATOR_VIDEO_BYTES;
 }
 export function creatorUploadSizeError(kind: string): string {
-  return kind.endsWith("_image") ? "Images can be up to 15 MB each."
-    : kind === "voice" ? "Voice recordings can be up to 64 MB each."
-    : "Videos can be up to 512 MB each. File size is separate from video length.";
+  return kind.endsWith("_image") ? "Images can be up to 15 MiB each."
+    : kind === "voice" ? "Voice recordings can be up to 64 MiB each."
+    : "Videos can be up to 512 MiB each. File size is separate from video length.";
 }

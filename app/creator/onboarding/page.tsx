@@ -44,7 +44,7 @@ const statusCopy: Record<string,string> = {
   consent_skipped: "Consent skipped. No consent has been recorded.",
   upload_empty: "Choose at least one file.",
   upload_too_many: "Upload up to 25 files at a time.",
-  upload_too_large: "Videos can be up to 512 MB, images up to 15 MB, and voice recordings up to 64 MB each. File size is separate from video length.",
+  upload_too_large: "Videos can be up to 512 MiB, images up to 15 MiB, and voice recordings up to 64 MiB each. File size is separate from video length.",
   upload_busy: "Another upload is still being checked. Wait for it to finish, then try again.",
   upload_quota: "This account has reached its onboarding upload limit. Contact support before adding more files.",
   upload_video_too_long: "This video is longer than 30 minutes. Choose a shorter video.",

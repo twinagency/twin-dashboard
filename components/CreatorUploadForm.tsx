@@ -11,7 +11,7 @@ const RED_BUTTON = "min-h-11 bg-[#dc2626] text-white hover:bg-[#b91c1c] focus-vi
 const uploadErrors: Record<string, string> = {
   upload_busy: "Uploads are busy right now. Your files are still selected; please retry in a moment.",
   upload_empty: "Choose at least one file.",
-  upload_too_large: "Images can be up to 15 MB, videos up to 512 MB, and voice recordings up to 64 MB each.",
+  upload_too_large: "Images can be up to 15 MiB, videos up to 512 MiB, and voice recordings up to 64 MiB each.",
   upload_wrong_type: "This file could not be verified. Use JPG, PNG, WebP or GIF images (up to 25 MP), MP4, MOV or WebM video, or an audio recording for voice. Export HEIC photos as JPG first.",
   upload_video_too_long: "This video is longer than 30 minutes. Choose a shorter video.",
   upload_video_resolution: "This video is above 4K resolution. Export it at 4K or lower, then retry.",
@@ -20,6 +20,10 @@ const uploadErrors: Record<string, string> = {
   upload_quota: "This account has reached its upload limit. Contact support.",
   application_locked: "Uploads are unavailable for this application. Please contact support.",
   session_expired: "Your session expired. Sign in again, then choose the remaining files.",
+  upload_storage_error: "The file reached the server, but private storage did not finish. Retry this file. If it fails again, share the upload reference with support.",
+  upload_metadata_error: "The file could not be saved to your gallery. Retry this file and share its reference if it fails again.",
+  upload_staging_full: "The upload server is temporarily out of staging space. Your file is still selected; retry shortly.",
+  upload_staging_error: "The server could not stage this file. Your selection is still here; retry shortly.",
   upload_error: "The upload did not finish. Please retry the remaining files.",
 };
 
@@ -95,7 +99,7 @@ export default function CreatorUploadForm({ kind, label, accept, formatHint, loc
   }
   function fileError(file: File) {
     return file.size === 0 ? `${file.name} was not loaded from your device. Download it to your phone and select it again.`
-      : `${file.name} is ${(file.size / 1024 / 1024).toFixed(1)} MB. ${creatorUploadSizeError(kind)}`;
+      : `${file.name} is ${(file.size / 1024 / 1024).toFixed(1)} MiB. ${creatorUploadSizeError(kind)}`;
   }
   function send(item: UploadItem, form: FormData): Promise<{ status: number; url: string; result: { status?: string } | null }> {
     return new Promise((resolve, reject) => {
@@ -234,13 +238,13 @@ export default function CreatorUploadForm({ kind, label, accept, formatHint, loc
           onClick={() => beginPicker("photos")} onChange={selectFiles} onInput={selectFiles} />
       </label>
     </>}
-    <p id={`${inputId}-hint`} className="text-xs leading-5 text-muted">{formatHint || "Voice or video recordings · up to 64 MB each"}. Select several files, then upload them together. You can add more files to your selection.</p>
+    <p id={`${inputId}-hint`} className="text-xs leading-5 text-muted">{formatHint || "Voice or video recordings · up to 64 MiB each"}. Select several files, then upload them together. You can add more files to your selection.</p>
     {items.length > 0 && <>
       <p className="text-sm text-ink" aria-live="polite">{items.length} file{items.length === 1 ? "" : "s"} selected · {saved} saved</p>
       <ul className="max-h-72 space-y-3 overflow-y-auto rounded-lg border border-line p-3" aria-label="Selected files">
         {items.map(item => <li key={item.id} className="text-sm">
           <div className="flex items-start justify-between gap-2">
-            <span className="min-w-0 break-words text-ink">{item.file.name} <span className="text-muted">({(item.file.size / 1024 / 1024).toFixed(1)} MB)</span></span>
+            <span className="min-w-0 break-words text-ink">{item.file.name} <span className="text-muted">({(item.file.size / 1024 / 1024).toFixed(1)} MiB)</span></span>
             {!working && item.state !== "saved" && <button type="button" className="shrink-0 underline" aria-label={`Remove ${item.file.name}`} onClick={() => replaceItems(itemsRef.current.filter(other => other.id !== item.id))}>Remove</button>}
           </div>
           <span className={item.state === "failed" ? "text-red-700" : "text-muted"}>
