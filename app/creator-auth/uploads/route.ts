@@ -21,7 +21,7 @@ export async function GET(req: NextRequest) {
   const verified = new Set((saved.data || []).filter(row => row.storage_transfer_status === "verified").map(row => row.id));
   return reply({ uploads: ids.map(id => {
     const receipt = receipts.data?.find(row => row.id === id);
-    const state = receipt?.state === "removed" || (receipt?.state === "saved" && !receipt.file_id) ? "removed" : verified.has(id) ? "saved"
+    const state = ["removed", "removing"].includes(receipt?.state || "") || (receipt?.state === "saved" && !receipt.file_id) ? "removed" : verified.has(id) ? "saved"
       : receipt && Date.parse(receipt.lease_until) > Date.now() ? "processing" : "needs_file";
     return { id, state };
   }) });
