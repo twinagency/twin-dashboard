@@ -28,3 +28,5 @@ jobs:
           aws-region: ap-southeast-2
       - name: Remove the identified synthetic audit media and account through Storage and Auth APIs
         run: python3 deployment/flirt-audit-cleanup.py
+
+# Apply exact verified disposable manifest after successful dry run.
