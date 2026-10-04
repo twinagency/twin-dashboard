@@ -8,6 +8,7 @@ import { getViewerTermsFor } from "./platform-cut";
 import { serviceClient } from "./supabase-service";
 import { profileImagePathForClone } from "./colors";
 import type { AgencyIdentity } from "./agency-identity";
+import { creatorStorageFetch } from "./creator-storage-fetch";
 function denied(message = "Read-only agency access") {
   return new Response(JSON.stringify({message,code:"42501"}),{status:403,headers:{"content-type":"application/json"}});
 }
@@ -31,7 +32,7 @@ async function ownsMedia(agency: AgencyIdentity, paths: string[]): Promise<boole
 }
 export async function dashboardFetch(input: RequestInfo | URL, init?: RequestInit): Promise<Response> {
   const agency = await getDashboardAccess();
-  if (!agency) return fetch(input,init);
+  if (!agency) return creatorStorageFetch(input,init);
   const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
   const method = (init?.method ?? (input instanceof Request ? input.method : "GET")).toUpperCase();
   const headers = new Headers(init?.headers ?? (input instanceof Request ? input.headers : undefined));
