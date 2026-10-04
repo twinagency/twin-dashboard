@@ -1,4 +1,4 @@
-name: Verify both live creator galleries with actual-duration and boundary videos
+name: Investigate and repeat interrupted FLIRT realistic upload check
 on:
   push:
     branches: ["fix/creator-runtime-diagnostics-2026-10-04"]
@@ -11,39 +11,18 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 35
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Validate isolated fixture cleanup and runtime guards
-        run: |
-          command -v ffmpeg >/dev/null || (sudo apt-get update && sudo apt-get install -y ffmpeg)
-          node deployment/creator-flow-live-check.test.cjs
-          node deployment/creator-flow-cleanup.test.cjs
-          node deployment/creator-flow-upload-memory.test.cjs
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ap-southeast-2
-      - name: Moxy actual duration and codec upload persistence
-        id: moxy_real
-        continue-on-error: true
-        run: python3 deployment/creator-flow-live-check.py --brand=moxy --expected-sha=dbd085f7846af12bcad7fd9ebdcf9af854183aa3 --mode=realistic --removal-guards
-      - name: FLIRT actual duration and codec upload persistence
-        id: flirt_real
-        continue-on-error: true
+      - name: Read safe server-stage diagnostics for the interrupted test window
+        run: python3 deployment/creator-runtime-diagnostics.py
+      - name: Repeat actual FLIRT video duration and codec persistence
         run: python3 deployment/creator-flow-live-check.py --brand=flirt --expected-sha=e528eb6066477d33a50b68d58d4fea1de5cff681 --mode=realistic --removal-guards
-      - name: Moxy final route byte boundaries and private retrieval
-        id: moxy_large
-        continue-on-error: true
-        run: python3 deployment/creator-flow-live-check.py --brand=moxy --expected-sha=dbd085f7846af12bcad7fd9ebdcf9af854183aa3 --mode=large --removal-guards
-      - name: FLIRT final route byte boundaries and private retrieval
-        id: flirt_large
-        continue-on-error: true
-        run: python3 deployment/creator-flow-live-check.py --brand=flirt --expected-sha=e528eb6066477d33a50b68d58d4fea1de5cff681 --mode=large --removal-guards
-      - name: Retain blocked or failed acceptance status
-        if: steps.moxy_real.outcome != 'success' || steps.flirt_real.outcome != 'success' || steps.moxy_large.outcome != 'success' || steps.flirt_large.outcome != 'success'
-        run: exit 1

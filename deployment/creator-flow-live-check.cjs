@@ -233,7 +233,7 @@ async function run(config, env = process.env) {
   if (!cleanupManifest) fs.chmodSync(directory, 0o700);
   const manifestPath = path.join(directory, 'cleanup-manifest.json');
   const fixtures = cleanupManifest?.fixtures || [], invitations = cleanupManifest?.invitations || [], checks = [], blocked = [], unverified = [], uploads = [], uploadAttempts = cleanupManifest?.uploads || [], cleanupIssues = [], mediaFixtures = [];
-  let operatorCookie = '', agencyId = brand.agency, failure, cleanupFailure, recoveryRedirect;
+  let operatorCookie = '', agencyId = brand.agency, failure, cleanupFailure, recoveryRedirect, failureDetail;
   function checkpoint() {
     fs.writeFileSync(manifestPath, JSON.stringify({ brand: config.brand, stamp, expected_sha: cleanupManifest?.expected_sha || config.sha,
       fixtures: fixtures.map(({ email, name, id, auth_user_id }) => ({ email, name, id, auth_user_id })),
@@ -664,7 +664,11 @@ async function run(config, env = process.env) {
     }
   } catch (error) {
     if (error instanceof BlockedError) blocked.push(error.message);
-    else failure = error instanceof CheckError ? error.message : 'Unexpected runtime/transport failure; raw details suppressed';
+    else {
+      failure = error instanceof CheckError ? error.message : 'Unexpected runtime/transport failure; raw details suppressed';
+      const safeCode = value => typeof value === 'string' && /^[A-Za-z_]{1,64}$/.test(value) ? value : undefined;
+      failureDetail = { type: safeCode(error?.name), code: safeCode(error?.code), cause_code: safeCode(error?.cause?.code) };
+    }
   }
   try { await cleanup(); if (cleanupManifest) passed('Exact interrupted-run manifest cleanup completed without signup or upload actions'); } catch (error) { cleanupFailure = error instanceof CheckError ? error.message : 'Fixture cleanup unavailable'; }
   if (!cleanupFailure) fs.rmSync(directory, { recursive: true, force: true });
@@ -673,7 +677,7 @@ async function run(config, env = process.env) {
     ...(mediaFixtures.length ? { media_fixtures: mediaFixtures } : {}),
     ...(recoveryRedirect ? { recovery_redirect: recoveryRedirect } : {}),
     ...(cleanupManifest ? { cleanup_source_commit: cleanupManifest.expected_sha } : {}),
-    ...(failure ? { failure } : {}), ...(cleanupFailure ? { cleanup_failure: cleanupFailure, cleanup_manifest: manifestPath, cleanup_issues: [...new Set(cleanupIssues)] } : { identified_fixtures_removed: true }),
+    ...(failure ? { failure, failure_detail: failureDetail } : {}), ...(cleanupFailure ? { cleanup_failure: cleanupFailure, cleanup_manifest: manifestPath, cleanup_issues: [...new Set(cleanupIssues)] } : { identified_fixtures_removed: true }),
     browser_journey_verified: false, physical_iphone_verified: false, speed_claim: 'Runtime/server connection only; not representative of creator phones', credentials_logged: false };
   console.log(JSON.stringify(result)); return result;
 }
