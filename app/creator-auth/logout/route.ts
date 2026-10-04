@@ -3,7 +3,7 @@ import { cookies } from "next/headers";
 import { CREATOR_SESSION_COOKIE } from "@/lib/creator-session";
 import { creatorRequestUrl } from "@/lib/creator-origin";
 import { creatorDashboardIdentity } from "@/lib/creator-dashboard-identity";
-import { CREATOR_PORTAL_COOKIE, creatorLoginPath } from "@/lib/creator-routing";
+import { CREATOR_PORTAL_COOKIE, creatorLoginPath, safeCreatorNext } from "@/lib/creator-routing";
 
 async function clearCreatorSession() {
   (await cookies()).set(CREATOR_SESSION_COOKIE, "", {
@@ -26,11 +26,17 @@ async function creatorLoginDestination() {
 export async function GET(req: Request) {
   const destination = await creatorLoginDestination();
   await clearCreatorSession();
-  return NextResponse.redirect(creatorRequestUrl(req, destination), 303);
+  const url = creatorRequestUrl(req, destination);
+  const next = new URL(req.url).searchParams.get("next");
+  if (next) url.searchParams.set("next", safeCreatorNext(next));
+  return NextResponse.redirect(url, 303);
 }
 
 export async function POST(req: Request) {
   const destination = await creatorLoginDestination();
   await clearCreatorSession();
-  return NextResponse.redirect(creatorRequestUrl(req, destination), 303);
+  const url = creatorRequestUrl(req, destination);
+  const next = new URL(req.url).searchParams.get("next");
+  if (next) url.searchParams.set("next", safeCreatorNext(next));
+  return NextResponse.redirect(url, 303);
 }

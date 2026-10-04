@@ -5,6 +5,7 @@ import TwinWordmark from "@/components/TwinWordmark";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button, buttonVariants } from "@/components/ui/button";
+import CreatorOnboardingActionForm from "@/components/CreatorOnboardingActionForm";
 import CreatorQuestionnaireWizard from "@/components/CreatorQuestionnaireWizard";
 import CreatorUploadForm from "@/components/CreatorUploadForm";
 import { creatorUploadsEditable } from "@/lib/creator-upload-policy";
@@ -154,6 +155,21 @@ function ReturnToOnboarding() {
   return <Link href="/creator/onboarding" className={returnToOnboardingClass()}><ArrowLeft className="size-4" aria-hidden="true" /> Return to onboarding</Link>;
 }
 
+function StepNavigation({ step }: { step: OnboardingStep }) {
+  const index = onboardingSteps.indexOf(step);
+  const previous = onboardingSteps[index - 1];
+  const next = onboardingSteps[index + 1];
+  const labels = { questionnaire: "Questionnaire", content: "Content", voice: "Voice", consent: "Consent & submit" };
+  return <nav aria-label="Onboarding step navigation" className="flex flex-col gap-3 sm:flex-row sm:justify-between">
+    <a href={previous ? `/creator/onboarding?step=${previous}` : "/creator/onboarding"} className={returnToOnboardingClass()} data-onboarding-back={previous || "hub"}>
+      <ArrowLeft className="size-4" aria-hidden="true" /> Back{previous ? `: ${labels[previous]}` : " to onboarding"}
+    </a>
+    {next ? <a href={`/creator/onboarding?step=${next}`} className={buttonVariants({ size: "lg", className: "min-h-11 w-full sm:w-auto" })} data-onboarding-next={next}>
+      Next: {labels[next]} <ChevronRight className="size-4" aria-hidden="true" />
+    </a> : <a href="/creator" className={returnToOnboardingClass()}>Dashboard <ChevronRight className="size-4" aria-hidden="true" /></a>}
+  </nav>;
+}
+
 function ContentUploadCard({ kind, count, minimum, label, accept, formatHint, complete, locked }: {
   kind: CreatorContentKind;
   count: number;
@@ -182,14 +198,14 @@ function ContentUploadCard({ kind, count, minimum, label, accept, formatHint, co
   );
 }
 
-function ReadinessItem({ step, complete, title, detail, href }: { step: OnboardingStep; complete: boolean; title: string; detail: string; href: string }) {
+function ReadinessItem({ step, complete, title, detail, href, optional = false }: { step: OnboardingStep; complete: boolean; title: string; detail: string; href: string; optional?: boolean }) {
   return (
     <li className="flex items-start gap-3 rounded-xl border border-border bg-white p-4" data-readiness-item={step}>
       <span className={`mt-0.5 grid size-7 shrink-0 place-items-center rounded-full ${complete ? "bg-emerald-100 text-emerald-700" : "bg-muted/20 text-muted"}`}>
         {complete ? <Check className="size-4" aria-hidden="true" /> : <Circle className="size-3.5" aria-hidden="true" />}
       </span>
       <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center justify-between gap-2"><p className="font-semibold text-ink">{title}</p><span className={`text-xs font-semibold ${complete ? "text-emerald-700" : "text-amber-700"}`}>{complete ? "Complete" : "Action needed"}</span></div>
+        <div className="flex flex-wrap items-center justify-between gap-2"><p className="font-semibold text-ink">{title}</p><span className={`text-xs font-semibold ${complete ? "text-emerald-700" : "text-amber-700"}`}>{complete ? "Complete" : optional ? "Optional — not completed" : "Action needed"}</span></div>
         <p className="mt-1 text-sm leading-6 text-muted">{detail}</p>
         {!complete && <Link href={href} className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-accent">Open step <ChevronRight className="size-4" aria-hidden="true" /></Link>}
       </div>
@@ -201,6 +217,7 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
   const jar = await cookies();
   const creator = await creatorDashboardIdentity(jar.get(CREATOR_SESSION_COOKIE)?.value);
   if (!creator) redirect(creatorLoginPath(creator, jar.get(CREATOR_PORTAL_COOKIE)?.value));
+  const loginPath = creatorLoginPath(creator, jar.get(CREATOR_PORTAL_COOKIE)?.value);
   const session = { accountId: creator.accountId };
   const tether = creator.name === TETHER_PORTAL.name;
   const link = isLynq(creator.name);
@@ -272,14 +289,14 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
           </div>
         ) : (
           <div className="mt-8 grid gap-5" data-onboarding-active-step={activeStep}>
-            {activeStep !== "questionnaire" && <div><ReturnToOnboarding /></div>}
+            {activeStep !== "questionnaire" && <StepNavigation step={activeStep} />}
 
             {activeStep === "questionnaire" && <Card className="border border-border bg-white">
               <StepHeader number={1} title="Questionnaire" complete={complete.questionnaire} optional={moxy} />
               <CardContent className="grid gap-6 pt-2">
                 {saved ? <>
                   <SavedConfirmation title="Questionnaire saved" detail="Your answers have been saved to your creator account." />
-                  <div className="flex flex-col gap-3 sm:flex-row"><ReturnToOnboarding /><Link href={`/creator/onboarding?step=questionnaire&section=${questionnairePage.slug}`} className={returnToOnboardingClass()}>Review answers</Link></div>
+                  <div className="flex flex-col gap-3 sm:flex-row"><ReturnToOnboarding /><Link href={`/creator/onboarding?step=questionnaire&section=${questionnairePage.slug}`} className={returnToOnboardingClass()}>Review answers</Link></div><StepNavigation step="questionnaire" />
                 </> : <CreatorQuestionnaireWizard
                   page={questionnairePage}
                   initialAnswers={Object.fromEntries(questionnairePageQuestions(questionnairePage).map((question) => [question.id, answers[question.id] || (question.id === "preferred_name" ? account.display_name || "" : question.id === "email_address" ? account.email || "" : "")]))}
@@ -304,7 +321,7 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
                   {CREATOR_CONTENT_REQUIREMENTS.map((requirement) => <ContentUploadCard key={requirement.kind} {...requirement} count={contentCounts[requirement.kind]} complete={contentCounts[requirement.kind] >= requirement.minimum} locked={uploadsLocked} />)}
                 </div>
                 {legacyContentFiles > 0 && <p className="rounded-xl border border-border bg-muted/10 px-4 py-3 text-sm leading-6 text-muted">{legacyContentFiles} earlier verified upload{legacyContentFiles === 1 ? " is" : "s are"} still safely stored. They are not guessed into SFW or NSFW categories.</p>}
-                <div><ReturnToOnboarding /></div>
+                <StepNavigation step="content" />
               </CardContent>
             </Card>}
 
@@ -315,40 +332,40 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
                 <p className="text-sm leading-6 text-muted">Voice is not required to get onboarded. Add samples now or skip it and activate voice later.</p>
                 <div className="grid gap-3 md:grid-cols-[1fr_auto]">
                   <CreatorUploadForm kind="voice" label="Voice recordings" accept="audio/*,video/*" locked={uploadsLocked} voice />
-                  <form action="/creator-auth/onboarding" method="post" className="self-end"><input type="hidden" name="action" value="skip_voice" /><Button type="submit" variant="outline" size="lg" disabled={applicationLocked} className="min-h-11">Skip for now</Button></form>
+                  <CreatorOnboardingActionForm className="self-end" pendingLabel="Saving your voice choice…" successStatuses={["voice_skipped"]} loginPath={loginPath}><input type="hidden" name="action" value="skip_voice" /><Button type="submit" variant="outline" size="lg" disabled={applicationLocked} className="min-h-11">Skip for now</Button></CreatorOnboardingActionForm>
                 </div>
                 {voiceFiles.length > 0 && <p className="text-sm text-muted">{voiceFiles.length} voice file{voiceFiles.length === 1 ? "" : "s"} verified.</p>}
-                <div><ReturnToOnboarding /></div>
+                <StepNavigation step="voice" />
               </CardContent>
             </Card>}
 
             {activeStep === "consent" && <Card className="border border-border bg-white">
               <StepHeader number={4} title="Consent & submit" complete={complete.consent} optional={moxy} />
               <CardContent className="grid gap-6 pt-2">
-                {saved && <SavedConfirmation title="Consent saved" detail="Your consent has been recorded. You can now submit onboarding when every step is complete." />}
-                {!consent ? <form action="/creator-auth/onboarding" method="post" className="grid gap-4">
+                {saved && <SavedConfirmation title="Consent saved" detail={moxy ? "Your consent has been recorded. You can submit your saved information when ready." : "Your consent has been recorded. You can now submit onboarding when every step is complete."} />}
+                {!consent ? <CreatorOnboardingActionForm className="grid gap-4" pendingLabel="Saving consent…" successStatuses={["consent_saved", "consent_skipped"]} loginPath={loginPath}>
                   <input type="hidden" name="action" value="consent" />
                   <label><span className="mb-1 block text-sm text-muted">Legal name</span><Input name="legal_name" required disabled={applicationLocked} className="border-[#7b8798]" /></label>
                   <label className="flex items-start gap-3 text-sm text-ink"><input name="agreed" type="checkbox" required disabled={applicationLocked} className="mt-1" /><span>I confirm the information and media I submit are mine or I have permission to provide them, and I authorize {brandName} to use them to build and operate my AI creator profile under my agreement.</span></label>
                   <div><Button type="submit" variant="outline" size="lg" disabled={applicationLocked} className="min-h-11">Save consent</Button></div>
-                </form> : <div className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"><CheckCircle2 className="mt-0.5 size-4 shrink-0" aria-hidden="true" /><span>Consent signed by {consent.legal_name}.</span></div>}
+                </CreatorOnboardingActionForm> : <div className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"><CheckCircle2 className="mt-0.5 size-4 shrink-0" aria-hidden="true" /><span>Consent signed by {consent.legal_name}.</span></div>}
 
                 <section aria-labelledby="readiness-heading" className="rounded-2xl border border-border bg-muted/10 p-5">
-                  <div className="flex flex-wrap items-end justify-between gap-3"><div><h3 id="readiness-heading" className="text-lg font-semibold text-ink">Ready to submit?</h3><p className="mt-1 text-sm text-muted">Complete every item below. Voice recordings are optional, but you must upload samples or choose to skip.</p></div><span className="text-sm font-semibold text-ink">{steps} of 4 complete</span></div>
+                  <div className="flex flex-wrap items-end justify-between gap-3"><div><h3 id="readiness-heading" className="text-lg font-semibold text-ink">Ready to submit?</h3><p className="mt-1 text-sm text-muted">{moxy ? "These onboarding steps are optional. You can submit your saved information now or return to your dashboard and finish later. Skipping does not record consent." : "Complete every item below. Voice recordings are optional, but you must upload samples or choose to skip."}</p></div><span className="text-sm font-semibold text-ink">{steps} of 4 complete</span></div>
                   <ul className="mt-4 grid gap-3">
-                    <ReadinessItem step="questionnaire" complete={done.questionnaire} title="Questionnaire" detail={moxy && !complete.questionnaire ? "Optional, you can fill it in later." : complete.questionnaire ? "Required answers are saved." : "Finish and save the questionnaire."} href="/creator/onboarding?step=questionnaire" />
-                    <ReadinessItem step="content" complete={done.content} title="Content library" detail={moxy && !complete.content ? "Optional, you can add content later." : complete.content ? (categorizedContentComplete ? "Every image and video minimum is verified." : "Your earlier verified content remains accepted.") : CREATOR_CONTENT_REQUIREMENTS.map(({ kind, shortLabel, minimum }) => `${shortLabel} ${contentCounts[kind]}/${minimum}`).join(" · ")} href="/creator/onboarding?step=content" />
-                    <ReadinessItem step="voice" complete={done.voice} title="Voice choice" detail={moxy && !complete.voice ? "Optional, you can add it later." : complete.voice ? (voiceFiles.length ? `${voiceFiles.length} voice sample${voiceFiles.length === 1 ? " is" : "s are"} verified.` : "Voice recordings skipped for now.") : "Upload voice samples or choose Skip for now."} href="/creator/onboarding?step=voice" />
-                    <ReadinessItem step="consent" complete={done.consent} title="Consent" detail={moxy && !complete.consent ? "Optional for now." : complete.consent ? `Consent signed by ${consent?.legal_name}.` : "Enter your legal name and save consent."} href="/creator/onboarding?step=consent" />
+                    <ReadinessItem step="questionnaire" complete={complete.questionnaire} optional={moxy} title="Questionnaire" detail={moxy && !complete.questionnaire ? "Optional, you can fill it in later." : complete.questionnaire ? "Required answers are saved." : "Finish and save the questionnaire."} href="/creator/onboarding?step=questionnaire" />
+                    <ReadinessItem step="content" complete={complete.content} optional={moxy} title="Content library" detail={moxy && !complete.content ? "Optional, you can add content later." : complete.content ? (categorizedContentComplete ? "Every image and video minimum is verified." : "Your earlier verified content remains accepted.") : CREATOR_CONTENT_REQUIREMENTS.map(({ kind, shortLabel, minimum }) => `${shortLabel} ${contentCounts[kind]}/${minimum}`).join(" · ")} href="/creator/onboarding?step=content" />
+                    <ReadinessItem step="voice" complete={complete.voice} optional={moxy} title="Voice choice" detail={moxy && !complete.voice ? "Optional, you can add it later." : complete.voice ? (voiceFiles.length ? `${voiceFiles.length} voice sample${voiceFiles.length === 1 ? " is" : "s are"} verified.` : "Voice recordings skipped for now.") : "Upload voice samples or choose Skip for now."} href="/creator/onboarding?step=voice" />
+                    <ReadinessItem step="consent" complete={complete.consent} optional={moxy} title="Consent" detail={moxy && !complete.consent ? "Optional for now." : complete.consent ? `Consent signed by ${consent?.legal_name}.` : "Enter your legal name and save consent."} href="/creator/onboarding?step=consent" />
                   </ul>
                 </section>
 
-                <form action="/creator-auth/onboarding" method="post">
+                <CreatorOnboardingActionForm pendingLabel="Submitting your saved information…" successStatuses={["submitted"]} loginPath={loginPath}>
                   <input type="hidden" name="action" value="submit" />
                   <Button type="submit" size="lg" disabled={!readyToSubmit || applicationLocked} aria-describedby={!readyToSubmit && !applicationLocked ? "submit-help" : undefined} className="min-h-11 w-full sm:w-auto">{submitted ? "Application submitted" : applicationLocked ? "Application locked" : "Submit onboarding"}</Button>
-                </form>
+                </CreatorOnboardingActionForm>
                 {!readyToSubmit && !applicationLocked && <p id="submit-help" className="text-sm text-muted">Complete the items above before submitting.</p>}
-                <div><ReturnToOnboarding /></div>
+                <StepNavigation step="consent" />
               </CardContent>
             </Card>}
           </div>

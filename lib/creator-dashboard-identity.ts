@@ -1,3 +1,4 @@
+import { creatorApplicationState } from "./creator-application-state";
 import { verifyCreatorSession } from "./creator-session";
 import { serviceClient } from "./supabase-service";
 import type { AgencyIdentity } from "./agency-identity";
@@ -14,6 +15,8 @@ export type CreatorDashboardIdentity = AgencyIdentity & {
   userId: string;
   creatorName: string;
   onboarded: boolean;
+  applicationState?: ReturnType<typeof creatorApplicationState>;
+  submittedAt?: string | null;
   /** Application submitted (or later). False for Moxy creators who skipped onboarding. */
   applicationSubmitted?: boolean;
   /** Live-data preview accounts can read their one scoped clone but cannot mutate it. */
@@ -37,7 +40,7 @@ export async function creatorDashboardIdentity(token: string | null | undefined)
     const account = await db.from("creator_accounts").select("id,auth_user_id,display_name,account_status,source").eq("id", session.accountId).maybeSingle();
     if (account.error || !account.data || account.data.auth_user_id !== session.userId || !creatorAccountStatusAllowsAccess(account.data.account_status)) return null;
     const [application, assignment, link] = await Promise.all([
-      db.from("creator_applications").select("status").eq("creator_account_id", session.accountId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+      db.from("creator_applications").select("status,submitted_at").eq("creator_account_id", session.accountId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
       db.from("creator_agency_assignments").select("agency_id,partner_agencies(name,active)").eq("creator_account_id", session.accountId).maybeSingle(),
       db.from("creator_clone_links").select("clone_id,clones(id,name)").eq("creator_account_id", session.accountId).maybeSingle(),
     ]);
@@ -75,6 +78,8 @@ export async function creatorDashboardIdentity(token: string | null | undefined)
       // Moxy creators may skip onboarding and use the dashboard before submitting (Ronan, 2026-10-03).
       onboarded: !!clone || isMoxy(relatedAgency?.name) || ["submitted", "reviewing", "approved"].includes(application.data?.status || ""),
       applicationSubmitted: ["submitted", "reviewing", "approved"].includes(application.data?.status || ""),
+      applicationState: creatorApplicationState(application.data?.status, application.data?.submitted_at),
+      submittedAt: application.data?.submitted_at || null,
       readOnly: briLiveDemo,
     };
     // Branding only, not an assignment, permission or real-account status change.
@@ -96,7 +101,7 @@ export async function creatorDashboardIdentityById(accountId: string): Promise<C
     const account = await db.from("creator_accounts").select("id,auth_user_id,display_name,account_status,source").eq("id", accountId).maybeSingle();
     if (account.error || !account.data || !creatorAccountStatusAllowsAccess(account.data.account_status)) return null;
     const [application, assignment, link] = await Promise.all([
-      db.from("creator_applications").select("status").eq("creator_account_id", accountId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+      db.from("creator_applications").select("status,submitted_at").eq("creator_account_id", accountId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
       db.from("creator_agency_assignments").select("agency_id,partner_agencies(name,active)").eq("creator_account_id", accountId).maybeSingle(),
       db.from("creator_clone_links").select("clone_id,clones(id,name)").eq("creator_account_id", accountId).maybeSingle(),
     ]);
@@ -116,6 +121,8 @@ export async function creatorDashboardIdentityById(accountId: string): Promise<C
       creatorName: clone?.name || account.data.display_name || "Your creator account",
       cloneIds: clone ? [clone.id] : [],
       onboarded: !!clone || ["submitted", "reviewing", "approved"].includes(application.data?.status || ""),
+      applicationState: creatorApplicationState(application.data?.status, application.data?.submitted_at),
+      submittedAt: application.data?.submitted_at || null,
       readOnly: true,
     };
     return isZaneDemo(identity) ? { ...identity, name: "LYNQ" } : identity;
