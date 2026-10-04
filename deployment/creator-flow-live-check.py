@@ -63,7 +63,7 @@ try:
     for line in lines:
         try: value=json.loads(line)
         except Exception: continue
-        if value.get('event') in ('upload_result','fixture_manifest'): print(json.dumps(value),flush=True)
+        if value.get('event') in ('upload_result','fixture_manifest','media_fixture'): print(json.dumps(value),flush=True)
         elif 'passed' in value: report=value
     if report is None:
         error_type=re.search(r'\b(SyntaxError|ReferenceError|TypeError|RangeError|Error):',result.stderr.decode(errors='replace'))
@@ -83,7 +83,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--brand", required=True, choices=("flirt", "moxy"))
     parser.add_argument("--expected-sha", required=True)
-    parser.add_argument("--mode", required=True, choices=("flow-only", "small-only", "large", "cleanup-only"))
+    parser.add_argument("--mode", required=True, choices=("flow-only", "small-only", "large", "realistic", "cleanup-only"))
     parser.add_argument("--removal-guards", action="store_true")
     parser.add_argument("--allow-missing-gallery", action="store_true")
     parser.add_argument("--cleanup-manifest")

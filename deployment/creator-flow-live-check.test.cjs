@@ -5,7 +5,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { randomUUID, createHash } = require('node:crypto');
 const { spawnSync } = require('node:child_process');
-const { parseArgs, runtimeGuard, readCleanupManifest, optionForMoxy, padMp4, safeUploadResult, run, BRANDS } = require('./creator-flow-live-check.cjs');
+const { parseArgs, runtimeGuard, readCleanupManifest, optionForMoxy, padMp4, safeUploadResult, recoveryRedirectOutcome, run, BRANDS } = require('./creator-flow-live-check.cjs');
 const SHA = 'a'.repeat(40);
 const args = ['--run', '--brand=flirt', `--expected-sha=${SHA}`, '--flow-only'];
 const stdinInvocation = spawnSync(process.execPath, ['-', ...args], { input: fs.readFileSync(path.join(__dirname, 'creator-flow-live-check.cjs')), env: {}, encoding: 'utf8', timeout: 10000 });
@@ -40,9 +40,16 @@ try {
 } finally { fs.rmSync(temporary, { recursive: true, force: true }); }
 const safe = safeUploadResult(new Response('{}', { status: 503 }), { status: 'https://private/signed?token=secret', requestId: 'secret-cookie', stage: 'bad\nprivate' }, 20, 'fixture.mp4');
 assert.deepEqual(safe, { fixture: 'fixture.mp4', http_status: 503, outcome: 'unclassified', total_request_ms: 20 });
+const resetTarget = BRANDS.flirt.origin + '/creator/reset-password?next=%2Fcreator%2Fonboarding%3Fstep%3Dcontent';
+assert.deepEqual(recoveryRedirectOutcome({ redirect_to: resetTarget }, resetTarget), { accepted: true, response_recognized: true });
+assert.deepEqual(recoveryRedirectOutcome({ action_link: 'https://auth.invalid/verify?token=private-do-not-log&redirect_to=' + encodeURIComponent(resetTarget) }, resetTarget), { accepted: true, response_recognized: true });
+assert.deepEqual(recoveryRedirectOutcome({ redirect_to: 'https://default.invalid/' }, resetTarget), { accepted: false, response_recognized: true });
+for (const generated of [{}, { data: { properties: { redirect_to: resetTarget } } }, { redirect_to: 'invalid' }, { redirect_to: resetTarget, action_link: 'https://auth.invalid/verify?redirect_to=https%3A%2F%2Fdifferent.invalid' }]) {
+  assert.deepEqual(recoveryRedirectOutcome(generated, resetTarget), { accepted: false, response_recognized: false });
+}
 
 // Complete runner executes against a deterministic network double; no live calls.
-async function mockedFlow(brand, uploadMode = false, missingGallery = false, wrongLogout = false, cleanupRetry = false, orphanBlock = null) {
+async function mockedFlow(brand, uploadMode = false, missingGallery = false, wrongLogout = false, cleanupRetry = false, orphanBlock = null, rejectRecoveryQuery = false, leakGallery = false) {
   const config = { run: true, brand, sha: SHA, mode: uploadMode ? 'small-only' : 'flow-only', ...(uploadMode ? missingGallery ? { allowMissingGallery: true } : { removalGuards: true } : {}) };
   const env = envFor(brand), accounts = new Map(), auth = new Map(), invites = new Map(), applications = new Map(), files = new Map(), objects = new Map(), reservations = new Map(), requests = [];
   const agency = brand === 'flirt' ? BRANDS.flirt.agency : moxyId;
@@ -102,7 +109,11 @@ async function mockedFlow(brand, uploadMode = false, missingGallery = false, wro
         }
         return json({ status: 'content_saved', requestId: randomUUID(), stage: 'progress', elapsedMs: 1 });
       }
-      if (url.pathname === '/creator-auth/files') return missingGallery ? json({ error: 'not_deployed' }, 404) : json({ files: [...files.values()].filter(file => file.creator_account_id === owner.id) });
+      if (url.pathname === '/creator-auth/files' && leakGallery && files.size) return json({ files: [{ id: randomUUID(), name: 'foreign.mp4' }], hasMore: false });
+      if (url.pathname === '/creator-auth/files') return missingGallery ? json({ error: 'not_deployed' }, 404) : json({ files: [...files.values()]
+        .filter(file => file.creator_account_id === owner.id && file.kind === url.searchParams.get('kind'))
+        .map(file => ({ id: file.id, name: file.original_name, bytes: file.size_bytes, status: reservations.get(file.id)?.state === 'removing' ? 'removing' : 'verified',
+          previewAvailable: reservations.get(file.id)?.state !== 'removing', removalAvailable: reservations.get(file.id)?.state === 'removing' || applications.get(owner.id).status === 'draft' })), hasMore: false });
       if (url.pathname.startsWith('/creator-auth/files/')) {
         const id = url.pathname.split('/')[3], file = files.get(id);
         if (method === 'DELETE') {
@@ -141,10 +152,12 @@ async function mockedFlow(brand, uploadMode = false, missingGallery = false, wro
       return json([...children.values()].sort((a,b) => a.name.localeCompare(b.name)).slice(offset, offset + limit));
     }
     if (url.pathname === '/auth/v1/admin/generate_link') {
-      const payload = JSON.parse(body), target = BRANDS[brand].origin + '/creator/reset-password';
+      const payload = JSON.parse(body), base = BRANDS[brand].origin + '/creator/reset-password', target = url.searchParams.get('redirect_to');
       assert.equal(payload.type, 'recovery'); assert.equal(payload.redirect_to, undefined);
+      assert.equal(headers.get('x-supabase-api-version'), '2024-01-01');
       assert.ok([...accounts.values()].some(account => account.email === payload.email));
-      assert.equal(url.searchParams.get('redirect_to'), target);
+      assert.ok([base, base + '?next=%2Fcreator', base + '?next=%2Fcreator%2Fonboarding%3Fstep%3Dcontent'].includes(target));
+      if (rejectRecoveryQuery && target !== base) return json({ redirect_to: 'https://default.invalid/', action_link: 'https://private.test/verify?token=private-do-not-log' });
       return json({ redirect_to: target, action_link: 'https://private.test/verify?token=private-do-not-log', hashed_token: 'private-do-not-log' });
     }
     if (url.pathname.startsWith('/storage/v1/object/info/onboarding-content/')) {
@@ -230,7 +243,8 @@ async function mockedFlow(brand, uploadMode = false, missingGallery = false, wro
     }
   }
   finally { global.fetch = originalFetch; console.log = originalLog; }
-  assert.equal(result.passed, !wrongLogout && !orphanBlock, JSON.stringify(result));
+  assert.equal(result.passed, !wrongLogout && !orphanBlock && !rejectRecoveryQuery && !leakGallery, JSON.stringify(result));
+  if (leakGallery) assert.match(result.failure, /Gallery listing includes another owner\/category or omits saved fixture/);
   if (orphanBlock) {
     assert.ok(result.cleanup_failure, 'Unexpected or referenced orphan must block cleanup');
     assert.ok(objects.has(orphanPath), 'Blocked cleanup must retain the stored object');
@@ -246,7 +260,12 @@ async function mockedFlow(brand, uploadMode = false, missingGallery = false, wro
   }
   assert.equal(result.identified_fixtures_removed, true); assert.equal(result.browser_journey_verified, false);
   assert.equal(result.unverified.length > 0, missingGallery, 'Missing-gallery allowance must retain explicit unverified evidence');
-  if (!cleanupRetry) assert.deepEqual(result.recovery_redirect, { accepted: true, brand, path: '/creator/reset-password', email_sent: false });
+  if (!cleanupRetry) assert.deepEqual(result.recovery_redirect, { accepted: !rejectRecoveryQuery, brand, path: '/creator/reset-password', email_sent: false,
+    cases: ['base', 'default_return', 'upload_return'].map(name => ({ case: name, accepted: !rejectRecoveryQuery || name === 'base', response_recognized: true })) });
+  if (rejectRecoveryQuery) {
+    assert.ok(result.blocked.some(label => label.includes('intended brand reset targets')));
+    assert.ok(result.uploads.length >= 3, 'Rejected recovery configuration must not stop independent upload checks');
+  }
   assert.equal(accounts.size, 0); assert.equal(auth.size, 0); assert.equal(invites.size, 0);
   assert.equal(files.size, 0); assert.equal(objects.size, 0);
   assert.ok(requests.filter(request => request.path === '/creator-auth/signup' && request.method === 'POST').length >= 4);
@@ -255,4 +274,4 @@ async function mockedFlow(brand, uploadMode = false, missingGallery = false, wro
   const rendered = outputs.join('\n');
   assert.ok(!rendered.includes(env.SUPABASE_SERVICE_KEY) && !rendered.includes(env.DASHBOARD_PASSWORD) && !rendered.includes('normal-auth-token') && !rendered.includes('private-do-not-log'));
 }
-(async () => { await mockedFlow('flirt'); await mockedFlow('moxy'); await mockedFlow('flirt', true); await mockedFlow('moxy', true, true); await mockedFlow('moxy', true, true, true); await mockedFlow('flirt', false, false, false, true); for (const block of ['unknown','downstream','foreign']) await mockedFlow('flirt', false, false, false, false, block); console.log('Creator live runner: stdin invocation, runtime isolation, normal signup/invites, correct-query unsent recovery, upload persistence/private ranges, removal guards, explicit missing-gallery/logout-regression scope, interrupted/orphan manifest cleanup, unknown/reference guards, Storage-first cleanup and redacted output tests pass; no live requests made.'); })().catch(error => { console.error(error); process.exitCode = 1; });
+(async () => { await mockedFlow('flirt'); await mockedFlow('moxy'); await mockedFlow('flirt', true); await mockedFlow('moxy', true, true); await mockedFlow('moxy', true, true, true); await mockedFlow('flirt', false, false, false, true); await mockedFlow('flirt', true, false, false, false, null, true); await mockedFlow('flirt', true, false, false, false, null, false, true); for (const block of ['unknown','downstream','foreign']) await mockedFlow('flirt', false, false, false, false, block); console.log('Creator live runner: stdin invocation, runtime isolation, normal signup/invites, correct-query unsent recovery with actual return queries, upload persistence/private ranges, gallery ownership/removal states, explicit missing-gallery/logout-regression scope, interrupted/orphan manifest cleanup, unknown/reference guards, Storage-first cleanup and redacted output tests pass; no live requests made.'); })().catch(error => { console.error(error); process.exitCode = 1; });

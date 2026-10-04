@@ -1,4 +1,4 @@
-name: Clean exact interrupted fixtures and verify corrected FLIRT upload transport
+name: Verify both live creator galleries with actual-duration and boundary videos
 on:
   push:
     branches: ["fix/creator-runtime-diagnostics-2026-10-04"]
@@ -11,14 +11,16 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - name: Verify fixture cleanup guards and bounded client memory
+      - name: Validate isolated fixture cleanup and runtime guards
         run: |
+          command -v ffmpeg >/dev/null || (sudo apt-get update && sudo apt-get install -y ffmpeg)
+          node deployment/creator-flow-live-check.test.cjs
           node deployment/creator-flow-cleanup.test.cjs
           node deployment/creator-flow-upload-memory.test.cjs
       - uses: aws-actions/configure-aws-credentials@v4
@@ -26,11 +28,22 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ap-southeast-2
-      - name: Preserve exact manifests from retained original containers
-        run: python3 deployment/creator-runtime-diagnostics.py
-      - name: Verify first interrupted fixture prefixes are empty
-        run: python3 deployment/creator-flow-live-check.py --brand=flirt --expected-sha=30989771efd5fac85ca387fbe739c1552594c166 --mode=cleanup-only --cleanup-manifest=/tmp/creator-flow-flirt-gKoiGn/cleanup-manifest.json
-      - name: Clean second interrupted fixture with orphan checks
-        run: python3 deployment/creator-flow-live-check.py --brand=flirt --expected-sha=30989771efd5fac85ca387fbe739c1552594c166 --mode=cleanup-only --cleanup-manifest=/tmp/creator-flow-flirt-IGAmiF/cleanup-manifest.json
-      - name: Verify corrected live FLIRT transport at byte boundaries
-        run: python3 deployment/creator-flow-live-check.py --brand=flirt --expected-sha=30989771efd5fac85ca387fbe739c1552594c166 --mode=large --allow-missing-gallery
+      - name: Moxy actual duration and codec upload persistence
+        id: moxy_real
+        continue-on-error: true
+        run: python3 deployment/creator-flow-live-check.py --brand=moxy --expected-sha=dbd085f7846af12bcad7fd9ebdcf9af854183aa3 --mode=realistic --removal-guards
+      - name: FLIRT actual duration and codec upload persistence
+        id: flirt_real
+        continue-on-error: true
+        run: python3 deployment/creator-flow-live-check.py --brand=flirt --expected-sha=e528eb6066477d33a50b68d58d4fea1de5cff681 --mode=realistic --removal-guards
+      - name: Moxy final route byte boundaries and private retrieval
+        id: moxy_large
+        continue-on-error: true
+        run: python3 deployment/creator-flow-live-check.py --brand=moxy --expected-sha=dbd085f7846af12bcad7fd9ebdcf9af854183aa3 --mode=large --removal-guards
+      - name: FLIRT final route byte boundaries and private retrieval
+        id: flirt_large
+        continue-on-error: true
+        run: python3 deployment/creator-flow-live-check.py --brand=flirt --expected-sha=e528eb6066477d33a50b68d58d4fea1de5cff681 --mode=large --removal-guards
+      - name: Retain blocked or failed acceptance status
+        if: steps.moxy_real.outcome != 'success' || steps.flirt_real.outcome != 'success' || steps.moxy_large.outcome != 'success' || steps.flirt_large.outcome != 'success'
+        run: exit 1

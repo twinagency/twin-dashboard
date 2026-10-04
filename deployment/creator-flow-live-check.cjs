@@ -14,12 +14,21 @@ const BRANDS = Object.freeze({
 });
 const LIMIT = 536870912;
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+const REALISTIC_FIXTURES = Object.freeze([
+  { name: 'realistic-45s-landscape-1080p-h264.mp4', seconds: 45, width: 1920, height: 1080, codec: 'h264', bitrate: '4M', kind: 'content_sfw_video' },
+  { name: 'realistic-5min-portrait-1080p-h264.mp4', seconds: 300, width: 1080, height: 1920, codec: 'h264', bitrate: '4M', kind: 'content_nsfw_video' },
+  { name: 'realistic-10min-landscape-1080p-h264.mov', seconds: 600, width: 1920, height: 1080, codec: 'h264', bitrate: '4M', kind: 'content_sfw_video' },
+  { name: 'realistic-12s-portrait-1080p-hevc.mov', seconds: 12, width: 1080, height: 1920, codec: 'hevc', bitrate: '4M', kind: 'content_nsfw_video' },
+  { name: 'realistic-8s-landscape-4k-h264.mp4', seconds: 8, width: 3840, height: 2160, codec: 'h264', bitrate: '16M', kind: 'content_sfw_video' },
+]);
 const FIXTURE_FILES = Object.freeze({
   'moving-one.mp4': { kind: 'content_sfw_video' }, 'moving-two.mp4': { kind: 'content_nsfw_video' },
   'near-limit-padded.mp4': { kind: 'content_sfw_video', bytes: LIMIT - 1024 },
   'exact-limit-padded.mp4': { kind: 'content_sfw_video', bytes: LIMIT },
   'over-limit-padded.mp4': { kind: 'content_sfw_video', bytes: LIMIT + 1 },
   'additional-after-submit.mp4': { kind: 'content_sfw_video' }, 'removal-guard-fixture.mp4': { kind: 'content_sfw_video' },
+  ...Object.fromEntries(REALISTIC_FIXTURES.map(file => [file.name, { kind: file.kind, realistic: true,
+    minBytes: Math.floor(file.seconds * (file.width === 3840 ? 8e6 : 2e6) / 8), maxBytes: Math.min(LIMIT, Math.ceil(file.seconds * (file.width === 3840 ? 24e6 : 8e6) / 8)) }])),
 });
 class CheckError extends Error {}
 class BlockedError extends CheckError {}
@@ -29,7 +38,7 @@ function parseArgs(argv) {
   for (const arg of argv) {
     if (arg.startsWith('--brand=')) config.brand = arg.slice(8);
     else if (arg.startsWith('--expected-sha=')) config.sha = arg.slice(15);
-    else if (arg === '--flow-only' || arg === '--small-only' || arg === '--large') {
+    else if (arg === '--flow-only' || arg === '--small-only' || arg === '--large' || arg === '--realistic') {
       assert(!config.mode, 'Specify one run mode'); config.mode = arg.slice(2);
     } else if (arg === '--run') config.run = true;
     else if (arg === '--removal-guards') config.removalGuards = true;
@@ -94,7 +103,10 @@ function runnerFixtureObjectAllowed(fixture, object, startedAt, knownRows = [], 
   if (!Number.isSafeInteger(expectedSize) || expectedSize <= 0) return false;
   function allowedName(name, bytes) {
     const rule = FIXTURE_FILES[name];
-    return rule?.kind === kind && (rule.bytes ? expectedSize === rule.bytes : expectedSize < 2 * 1024 * 1024)
+    const sizeAllowed = rule?.realistic ? expectedSize >= rule.minBytes && expectedSize <= rule.maxBytes
+      && attempts.some(attempt => attempt.creator_account_id === fixture.id && attempt.name === name && attempt.kind === kind && attempt.bytes === expectedSize)
+      : rule?.bytes ? expectedSize === rule.bytes : expectedSize < 2 * 1024 * 1024;
+    return rule?.kind === kind && sizeAllowed
       && (bytes == null || Number(bytes) === expectedSize);
   }
   const legacy = basename.match(/^(\d{13})-([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})-(.+)$/i);
@@ -167,6 +179,50 @@ function safeUploadResult(response, body, durationMs, fixture) {
     ...(Number.isFinite(body?.elapsedMs) ? { server_elapsed_ms: body.elapsedMs } : {}),
   };
 }
+function recoveryRedirectOutcome(generated, target) {
+  // Raw Auth REST returns these fields at the top level. The JS SDK wraps
+  // them in data.properties only after its _generateLinkResponse transform.
+  const direct = typeof generated?.redirect_to === 'string' && generated.redirect_to ? generated.redirect_to : null;
+  let linked = null;
+  if (typeof generated?.action_link === 'string') {
+    try { linked = new URL(generated.action_link).searchParams.get('redirect_to'); } catch { /* Unrecognized link is not configuration evidence. */ }
+  }
+  const actual = direct || linked;
+  let recognized = false;
+  try { recognized = !!actual && ['http:', 'https:'].includes(new URL(actual).protocol) && (!direct || !linked || direct === linked); } catch { /* No raw link leaves this function. */ }
+  return { accepted: recognized && actual === target, response_recognized: recognized };
+}
+function realisticSeedArguments(fixture, output) {
+  const common = ['-hide_banner', '-loglevel', 'error', '-nostdin', '-filter_threads', '1', '-f', 'lavfi', '-i',
+    `testsrc2=size=${fixture.width}x${fixture.height}:rate=24`, '-t', '1', '-an', '-threads', '1',
+    '-pix_fmt', 'yuv420p', '-preset', 'ultrafast', '-g', '24', '-bf', '0', '-b:v', fixture.bitrate];
+  const codec = fixture.codec === 'hevc'
+    ? ['-c:v', 'libx265', '-tag:v', 'hvc1', '-x265-params', 'pools=none:frame-threads=1:wpp=0:keyint=24:min-keyint=24:scenecut=0:vbv-maxrate=4000:vbv-bufsize=4000:strict-cbr=1:log-level=error']
+    : ['-c:v', 'libx264', '-tune', 'zerolatency', '-minrate', fixture.bitrate, '-maxrate', fixture.bitrate,
+      '-bufsize', fixture.bitrate, '-keyint_min', '24', '-sc_threshold', '0', '-x264-params', 'nal-hrd=cbr:force-cfr=1:filler=1'];
+  return [...common, ...codec, '-movflags', '+faststart', '-y', output];
+}
+function generateRealisticFixture(fixture, directory) {
+  const seed = path.join(directory, 'realistic-seed.mp4'), output = path.join(directory, fixture.name);
+  const ffmpeg = args => execFileSync('/usr/bin/ffmpeg', args, { timeout: 90000, maxBuffer: 65536, stdio: ['ignore', 'pipe', 'ignore'] });
+  try {
+    ffmpeg(realisticSeedArguments(fixture, seed));
+    ffmpeg(['-hide_banner', '-loglevel', 'error', '-nostdin', '-stream_loop', '-1', '-i', seed, '-t', String(fixture.seconds),
+      '-map', '0:v:0', '-c:v', 'copy', '-an', '-movflags', '+faststart', '-y', output]);
+    const info = JSON.parse(execFileSync('/usr/bin/ffprobe', ['-v', 'error', '-select_streams', 'v:0', '-show_entries',
+      'stream=codec_name,width,height,r_frame_rate,nb_frames,codec_tag_string:format=duration,size,bit_rate', '-of', 'json', output], { timeout: 10000, maxBuffer: 65536, stdio: ['ignore', 'pipe', 'ignore'] }).toString());
+    const video = info.streams?.[0], size = fs.statSync(output).size, rule = FIXTURE_FILES[fixture.name];
+    assert(video?.codec_name === fixture.codec && video.width === fixture.width && video.height === fixture.height && video.r_frame_rate === '24/1'
+      && Number(video.nb_frames) === fixture.seconds * 24 && Math.abs(Number(info.format.duration) - fixture.seconds) <= 1 / 24
+      && Number(info.format.size) === size && size >= rule.minBytes && size <= rule.maxBytes, 'Realistic fixture metadata does not match planned media');
+    assert(fixture.codec !== 'hevc' || video.codec_tag_string === 'hvc1', 'HEVC fixture requires hvc1 container tag');
+    const hashes = [0.125, 0.625, fixture.seconds - 0.375].map(position => ffmpeg(['-hide_banner', '-loglevel', 'error', '-nostdin', '-threads', '1',
+      '-ss', String(position), '-i', output, '-filter_threads', '1', '-vf', 'scale=64:36', '-frames:v', '1', '-f', 'md5', '-']).toString().trim());
+    assert(hashes.every(hash => /^MD5=[a-f0-9]{32}$/.test(hash)) && hashes[0] !== hashes[1] && hashes[1] === hashes[2], 'Realistic fixture changing frames or final-second decoding failed');
+    return { file: output, metadata: { fixture: fixture.name, duration_seconds: Number(info.format.duration), bytes: size, width: video.width,
+      height: video.height, codec: video.codec_name, bitrate_bits_per_second: Number(info.format.bit_rate), repeated_synthetic_seed_seconds: 1, final_second_decoded: true } };
+  } finally { fs.rmSync(seed, { force: true }); }
+}
 async function run(config, env = process.env) {
   const brand = runtimeGuard(config, env);
   const apiOrigin = `https://${brand.project}.supabase.co`;
@@ -176,7 +232,7 @@ async function run(config, env = process.env) {
   const directory = cleanupManifest ? path.dirname(config.cleanupManifest) : fs.mkdtempSync(path.join(os.tmpdir(), `creator-flow-${config.brand}-`));
   if (!cleanupManifest) fs.chmodSync(directory, 0o700);
   const manifestPath = path.join(directory, 'cleanup-manifest.json');
-  const fixtures = cleanupManifest?.fixtures || [], invitations = cleanupManifest?.invitations || [], checks = [], blocked = [], unverified = [], uploads = [], uploadAttempts = cleanupManifest?.uploads || [], cleanupIssues = [];
+  const fixtures = cleanupManifest?.fixtures || [], invitations = cleanupManifest?.invitations || [], checks = [], blocked = [], unverified = [], uploads = [], uploadAttempts = cleanupManifest?.uploads || [], cleanupIssues = [], mediaFixtures = [];
   let operatorCookie = '', agencyId = brand.agency, failure, cleanupFailure, recoveryRedirect;
   function checkpoint() {
     fs.writeFileSync(manifestPath, JSON.stringify({ brand: config.brand, stamp, expected_sha: cleanupManifest?.expected_sha || config.sha,
@@ -286,21 +342,23 @@ async function run(config, env = process.env) {
     assert(info.includes('Draft / unfinished') && !info.includes('Onboarding submitted'), 'Draft Info has misleading submission wording');
   }
   async function recoveryConfiguration(fixture) {
-    const target = brand.origin + '/creator/reset-password';
     // Match the installed Auth SDK: redirect_to is a query parameter, not a
     // JSON body property. This generates an unsent recovery link for this
     // normally registered disposable user only; never print or follow tokens.
-    const generated = await backend('/auth/v1/admin/generate_link?redirect_to=' + encodeURIComponent(target), {
-      method: 'POST', headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ type: 'recovery', email: fixture.email }),
-    });
-    let actual = generated?.redirect_to;
-    if (!actual && typeof generated?.action_link === 'string') {
-      try { actual = new URL(generated.action_link).searchParams.get('redirect_to'); } catch { actual = null; }
+    const cases = [];
+    for (const [name, next] of [['base', null], ['default_return', '/creator'], ['upload_return', '/creator/onboarding?step=content']]) {
+      // creatorRecoveryPath uses encodeURIComponent(safeCreatorNext(next)).
+      const target = brand.origin + '/creator/reset-password' + (next ? '?next=' + encodeURIComponent(next) : '');
+      const generated = await backend('/auth/v1/admin/generate_link?redirect_to=' + encodeURIComponent(target), {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'X-Supabase-Api-Version': '2024-01-01' },
+        body: JSON.stringify({ type: 'recovery', email: fixture.email }),
+      });
+      cases.push({ case: name, ...recoveryRedirectOutcome(generated, target) });
     }
-    recoveryRedirect = { accepted: actual === target, brand: config.brand, path: '/creator/reset-password', email_sent: false };
-    if (recoveryRedirect.accepted) passed('Correct-query unsent recovery link accepts this brand reset path; email delivery and browser reset remain unverified');
-    else blocked.push('Correct-query recovery link did not retain the intended brand reset path; investigate Auth URL allowlist before claiming recovery works');
+    recoveryRedirect = { accepted: cases.every(item => item.accepted), brand: config.brand, path: '/creator/reset-password', email_sent: false, cases };
+    if (recoveryRedirect.accepted) passed('Correct-query unsent recovery links accept brand reset path and actual default/upload return queries; email delivery and browser reset remain unverified');
+    else if (cases.some(item => !item.response_recognized)) blocked.push('Recovery configuration check returned an unrecognized redirect response; configuration acceptance remains unverified');
+    else blocked.push('Correct-query recovery link did not retain one or more intended brand reset targets; investigate Auth URL allowlist before claiming recovery works');
   }
   async function loginAgain(fixture) {
     const logout = await post('/creator-auth/logout', fixture, {});
@@ -338,7 +396,7 @@ async function run(config, env = process.env) {
       uploadAttempts.push({ id: uploadId, creator_account_id: fixture.id, kind, name, bytes: fs.statSync(file).size }); checkpoint();
     }
     const form = new FormData(); form.set('kind', kind);
-    form.append('files', await fs.openAsBlob(file, { type: name.endsWith('.mp4') ? 'video/mp4' : 'image/png' }), name);
+    form.append('files', await fs.openAsBlob(file, { type: name.endsWith('.mov') ? 'video/quicktime' : name.endsWith('.mp4') ? 'video/mp4' : 'image/png' }), name);
     const started = performance.now();
     const response = await app('/creator-auth/upload', fixture, { method: 'POST', body: form, redirect: 'error', headers: { Accept: 'application/json', 'X-Creator-Upload-Id': uploadId }, signal: AbortSignal.timeout(600000) });
     let body; try { body = await response.json(); } catch { body = {}; }
@@ -347,7 +405,7 @@ async function run(config, env = process.env) {
     return { response, body, uploadId };
   }
   async function savedFile(fixture, name, bytes) {
-    const files = await ownRows('creator_files', fixture, 'id,creator_account_id,bucket,storage_path,original_name,size_bytes,storage_transfer_status');
+    const files = await ownRows('creator_files', fixture, 'id,creator_account_id,kind,bucket,storage_path,original_name,size_bytes,storage_transfer_status');
     const found = files.filter(item => item.original_name === name);
     assert(found.length === 1 && Number(found[0].size_bytes) === bytes && found[0].storage_transfer_status === 'verified', 'Expected exactly one persisted verified file');
     const file = found[0];
@@ -356,7 +414,23 @@ async function run(config, env = process.env) {
     assert(Number(info.size ?? info.metadata?.size) === bytes, 'Stored object missing or wrong byte count');
     return file;
   }
+  async function galleryRows(fixture, kind) {
+    const response = await app('/creator-auth/files?kind=' + encodeURIComponent(kind), fixture, { headers: { Accept: 'application/json' } });
+    assert(response.status === 200, 'Persisted gallery listing unavailable');
+    const payload = await response.json();
+    assert(Array.isArray(payload.files) && payload.hasMore === false, 'Unexpected disposable gallery pagination or response');
+    const owned = (await ownRows('creator_files', fixture, 'id,kind')).filter(file => file.kind === kind);
+    assert(payload.files.length === owned.length && new Set(payload.files.map(file => file.id)).size === owned.length
+      && payload.files.every(file => owned.some(row => row.id === file.id)), 'Gallery listing includes another owner/category or omits saved fixture');
+    return payload.files;
+  }
   async function privateRetrieval(fixture, other, file) {
+    const listed = (await galleryRows(fixture, file.kind)).filter(row => row.id === file.id);
+    assert(listed.length === 1 && listed[0].name === file.original_name && Number(listed[0].bytes) === Number(file.size_bytes)
+      && listed[0].status === 'verified' && listed[0].previewAvailable === true, 'Gallery does not accurately identify the saved verified file');
+    assert(!(await galleryRows(other, file.kind)).some(row => row.id === file.id), 'Foreign gallery lists private fixture');
+    const anonymousList = await app('/creator-auth/files?kind=' + encodeURIComponent(file.kind), null);
+    assert([401, 403].includes(anonymousList.status), 'Signed-out user can list private gallery'); await anonymousList.body?.cancel();
     const access = await app(`/creator-auth/files/${file.id}/access`, fixture);
     assert(access.status === 200, 'Owner playback access unavailable'); const payload = await access.json();
     assert(typeof payload.url === 'string' && new URL(payload.url).origin === apiOrigin, 'Unexpected private playback origin');
@@ -385,6 +459,8 @@ async function run(config, env = process.env) {
     await savedFile(a, name, fs.statSync(source).size);
     const reserved = await rpc(a.id, file.id);
     assert(reserved?.state === 'removing' && reserved.creator_account_id === a.id && reserved.file_id === file.id, 'Own removal reservation failed');
+    const removing = (await galleryRows(a, file.kind)).find(row => row.id === file.id);
+    assert(removing?.status === 'removing' && removing.previewAvailable === false && removing.removalAvailable === true, 'Gallery does not show recoverable pending removal accurately');
     const premature = await post('/creator-auth/onboarding', a, { action: 'submit' });
     assert(premature.status === 303 && location(premature).searchParams.get('status') === 'file_removal_pending', 'Pending removal did not block submission with a useful state');
     await premature.body?.cancel(); await draftState(a);
@@ -393,6 +469,7 @@ async function run(config, env = process.env) {
     assert((await ownRows('creator_files', a, 'id')).every(row => row.id !== file.id), 'Removed fixture metadata remains');
     const absent = await backend(`/storage/v1/object/info/${file.bucket}/${file.storage_path.split('/').map(encodeURIComponent).join('/')}`, {}, [404]);
     assert(absent?.allowedStatus === 404, 'Removed fixture object remains');
+    assert(!(await galleryRows(a, file.kind)).some(row => row.id === file.id), 'Removed fixture remains in persisted gallery');
     // The normal main flow submits immediately after this and proves it unlocks.
     passed('Supplemental internal removal guard: foreign-owner reservation hides existence; own pending removal blocks HTTP submission; creator DELETE retry removes actual object and metadata');
   }
@@ -431,8 +508,28 @@ async function run(config, env = process.env) {
       }
       passed('Padded MP4 byte boundaries: 536869888 and 536870912 accepted and persisted; 536870913 rejected');
     }
+    if (config.mode === 'realistic') {
+      const encoders = execFileSync('/usr/bin/ffmpeg', ['-hide_banner', '-encoders'], { timeout: 10000, maxBuffer: 1024 * 1024, stdio: ['ignore', 'pipe', 'ignore'] }).toString();
+      assert(/\blibx264\b/.test(encoders), 'Realistic video encoder unavailable');
+      for (const fixture of REALISTIC_FIXTURES) {
+        if (fixture.codec === 'hevc' && !/\blibx265\b/.test(encoders)) { unverified.push('HEVC realistic fixture unavailable because the runtime has no libx265 encoder'); continue; }
+        const disk = fs.statfsSync(directory);
+        assert(disk.bavail * disk.bsize > 1200 * 1024 * 1024, 'Insufficient temporary disk for sequential realistic fixture and upload staging');
+        const generated = generateRealisticFixture(fixture, directory);
+        mediaFixtures.push(generated.metadata);
+        console.log(JSON.stringify({ event: 'media_fixture', ...generated.metadata }));
+        try {
+          const result = await upload(a, generated.file, fixture.kind, fixture.name);
+          assert(result.response.status === 200 && result.body.status === 'content_saved', 'Actual-duration synthetic moving video failed to upload');
+          const saved = await savedFile(a, fixture.name, generated.metadata.bytes);
+          if (gallery) await privateRetrieval(a, b, saved);
+        } finally { fs.rmSync(generated.file, { force: true }); }
+      }
+      passed('Actual 45-second, five-minute and ten-minute repeated-motion videos upload and persist; available HEVC/4K fixtures tested separately; no natural-camera or browser-playback claim');
+    }
     await loginAgain(a);
     for (const name of names) { const file = await savedFile(a, name, fs.statSync(source).size); if (gallery) await privateRetrieval(a, b, file); }
+    for (const fixture of mediaFixtures) { const file = await savedFile(a, fixture.fixture, fixture.bytes); if (gallery) await privateRetrieval(a, b, file); }
     passed('Saved records, actual objects and available private retrieval survive fresh creator login');
     return source;
   }
@@ -573,13 +670,14 @@ async function run(config, env = process.env) {
   if (!cleanupFailure) fs.rmSync(directory, { recursive: true, force: true });
   const result = { passed: !failure && !cleanupFailure && blocked.length === 0, brand: config.brand, mode: config.mode,
     expected_commit: config.sha, method: 'normal public HTTPS plus fixture-scoped persistence checks; supplements browser audit', checks, blocked: [...new Set(blocked)], unverified: [...new Set(unverified)], uploads,
+    ...(mediaFixtures.length ? { media_fixtures: mediaFixtures } : {}),
     ...(recoveryRedirect ? { recovery_redirect: recoveryRedirect } : {}),
     ...(cleanupManifest ? { cleanup_source_commit: cleanupManifest.expected_sha } : {}),
     ...(failure ? { failure } : {}), ...(cleanupFailure ? { cleanup_failure: cleanupFailure, cleanup_manifest: manifestPath, cleanup_issues: [...new Set(cleanupIssues)] } : { identified_fixtures_removed: true }),
     browser_journey_verified: false, physical_iphone_verified: false, speed_claim: 'Runtime/server connection only; not representative of creator phones', credentials_logged: false };
   console.log(JSON.stringify(result)); return result;
 }
-module.exports = { parseArgs, runtimeGuard, readCleanupManifest, runnerFixtureObjectAllowed, enumerateFixtureStorage, optionForMoxy, padMp4, safeUploadResult, run, BRANDS, LIMIT };
+module.exports = { parseArgs, runtimeGuard, readCleanupManifest, runnerFixtureObjectAllowed, enumerateFixtureStorage, optionForMoxy, padMp4, safeUploadResult, recoveryRedirectOutcome, realisticSeedArguments, generateRealisticFixture, REALISTIC_FIXTURES, run, BRANDS, LIMIT };
 // `node -` intentionally has no require.main. The SSM wrapper pipes this file
 // through stdin, while require() by the offline tests must stay side-effect free.
 if (require.main === module || (process.argv[1] === '-' && module.id === '[stdin]')) {
