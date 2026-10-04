@@ -53,6 +53,11 @@ jobs:
         run: npx tsx scripts/check-flirt-live-twin.ts
       - name: Invitation routing and local account authorization
         run: npx tsx scripts/check-flirt-invites.ts
+      - name: Creator upload review and safe bot selection
+        run: |
+          node --import tsx scripts/check-flirt-account-linking.ts
+          node --import tsx scripts/check-creator-account-files.ts
+          node --import tsx scripts/check-creator-upload-gallery.tsx
       - name: Empty onboarding and retained authentication boundaries
         run: |
           npx tsx scripts/check-flirt-optional-onboarding.tsx
@@ -103,5 +108,4 @@ jobs:
         run: python3 deployment/creator-flow-live-check.py --brand=flirt --expected-sha="$GITHUB_SHA" --mode=small-only --allow-missing-gallery
       - name: Verify all four live creators, existing media and denied unassigned access
         run: python3 deployment/flirt-live-creators-check.py
-
 
