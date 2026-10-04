@@ -36,7 +36,7 @@ global.__moxyUploadTest = {
   viewAs: () => state.viewAs,
   db: { from: query, storage: { from: bucket => ({
     async upload(path, body, options) {
-      assert.equal(bucket, 'onboarding-content'); assert.equal(options.upsert, false);
+      assert.ok(['onboarding-content','voice-samples'].includes(bucket)); assert.equal(options.upsert, false);
       let size = 0;
       for await (const chunk of body.stream()) size += chunk.byteLength;
       state.stored.push({ path, size }); return { error: null };
@@ -90,11 +90,16 @@ function stagingDirs() { return readdirSync(tmpdir()).filter(name => name.starts
     if (!parallel) assert.deepEqual(stagingDirs(), before, 'Temporary upload files must be removed');
     return { code: response.status, status: result?.status };
   }
+  if (process.env.CREATOR_UPLOAD_BOUNDARY_FIXTURE) assert.deepEqual(await upload(process.env.CREATOR_UPLOAD_BOUNDARY_FIXTURE, 'audit-boundary.mp4'), { code: 200, status: 'content_saved' });
   assert.deepEqual(await upload(short, 'short.mp4'), { code: 200, status: 'content_saved' });
   assert.deepEqual(await upload(large, 'short-large.mp4'), { code: 200, status: 'content_saved' });
   assert.equal(state.stored.at(-1).size, 80 * 1024 * 1024);
   assert.deepEqual(await upload(maximum, 'maximum.mp4'), { code: 200, status: 'content_saved' });
   assert.equal(state.stored.at(-1).size, 512 * 1024 * 1024);
+  const audio = join(temp, 'voice.wav');
+  execFileSync('/usr/bin/ffmpeg', ['-v','error','-f','lavfi','-i','sine=frequency=440:duration=2','-y',audio], { timeout:15000 });
+  assert.equal((await upload(audio, 'voice.wav', 'audio/wav', {}, 'voice')).status, 'voice_saved');
+  assert.equal((await upload(short, 'fake-voice.wav', 'audio/wav', {}, 'voice')).status, 'upload_wrong_type');
   assert.deepEqual(await upload(mov, 'iPhone.MOV', 'application/octet-stream'), { code: 200, status: 'content_saved' });
   assert.deepEqual(await upload(long, 'too-long.mp4'), { code: 400, status: 'upload_video_too_long' });
   assert.deepEqual(await upload(tooLarge, 'too-large.mp4'), { code: 400, status: 'upload_too_large' });
@@ -114,7 +119,7 @@ function stagingDirs() { return readdirSync(tmpdir()).filter(name => name.starts
   state.identity = { ...moxyIdentity };
   assert.equal((await upload(short, 'short.mp4', 'video/mp4', { 'x-pathname': '/agency', 'x-twin-audience': 'creator' })).code, 200);
   const count = state.stored.length; state.failInsert = true;
-  assert.equal((await upload(short, 'short.mp4')).status, 'upload_error'); assert.equal(state.stored.length, count, 'Failed DB insert must remove the new object');
+  assert.equal((await upload(short, 'short.mp4')).status, 'upload_metadata_error'); assert.equal(state.stored.length, count, 'Failed DB insert must remove the new object');
   state.failInsert = false;
   const simultaneous = [upload(short, 'parallel-a.mp4', 'video/mp4', {}, 'content_sfw_video', true), upload(short, 'parallel-b.mp4', 'video/mp4', {}, 'content_sfw_video', true)];
   const excess = await upload(short, 'parallel-c.mp4', 'video/mp4', {}, 'content_sfw_video', true);
