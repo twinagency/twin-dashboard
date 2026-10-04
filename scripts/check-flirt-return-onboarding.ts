@@ -77,7 +77,13 @@ async function main() {
       application.status = status;
       const result = await postUpload();
       assert.equal(result.status, 200, `Upload after ${status}`);
-      assert.deepEqual(await result.json(), { status: "content_saved" });
+      const saved = await result.json();
+      assert.equal(saved.status, "content_saved");
+      assert.match(saved.requestId, /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i, "Diagnostics expose only a generated request identifier");
+      assert.equal(result.headers.get("X-Upload-Request-Id"), saved.requestId, "Response and logs use the same request identifier");
+      assert.equal(saved.stage, "progress", "Saved response follows storage and metadata completion");
+      assert.ok(Number.isSafeInteger(saved.elapsedMs) && saved.elapsedMs >= 0, "Elapsed time is a finite non-negative duration, not a fixed timing expectation");
+      assert.deepEqual(Object.keys(saved).sort(), ["elapsedMs", "requestId", "stage", "status"], "Public diagnostics must not disclose account IDs, object paths or storage errors");
       const revision = application.updated_at;
       const save = await draft(new NextRequest(`${origin}/creator-auth/onboarding/draft`, { method: "POST", headers: { origin, cookie: `${CREATOR_SESSION_COOKIE}=${token}`, "content-type": "application/json" }, body: JSON.stringify({ section: "personal-contact", answers: { full_name: "Returned creator" }, revision, creator_account_id: "foreign-account" }) }));
       assert.equal(save.status, 200, `Autosave after ${status}`);
