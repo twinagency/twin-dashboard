@@ -465,8 +465,8 @@ try {
               assert.equal(await page.locator("[data-content-category] input[type='file']").evaluateAll((inputs) => inputs.every((input) => input.multiple && !input.disabled)), true, `${brand} draft content pickers must allow multiple files`);
               assert.equal(await page.getByText("Choose videos from Files", { exact: true }).count(), 2, `${brand} video categories must offer the Files bypass`);
               assert.doesNotMatch(`${contentText} ${acceptedTypes.join(" ")}`, /heic|heif/i, `${brand} must not advertise unsupported HEIC uploads`);
-              assert.match(contentText, /JPG, PNG, WebP or GIF · max 25 MP and 15 MB each/);
-              assert.match(contentText, /MP4, MOV or WebM · max 512 MB, 30 minutes and 4K per file/);
+              assert.match(contentText, /JPG, PNG, WebP or GIF · max 25 MP and 15 MiB each/);
+              assert.match(contentText, /MP4, MOV or WebM · max 512 MiB \(536,870,912 bytes\), 30 minutes and 4K per file; all limits apply together/);
             }
             await page.screenshot({ path: path.join(out, `${brand}-onboarding-${step}-${viewport}.png`), fullPage: true });
           }
