@@ -40,7 +40,7 @@ const safe = safeUploadResult(new Response('{}', { status: 503 }), { status: 'ht
 assert.deepEqual(safe, { fixture: 'fixture.mp4', http_status: 503, outcome: 'unclassified', total_request_ms: 20 });
 
 // Complete runner executes against a deterministic network double; no live calls.
-async function mockedFlow(brand, uploadMode = false, missingGallery = false) {
+async function mockedFlow(brand, uploadMode = false, missingGallery = false, wrongLogout = false) {
   const config = { run: true, brand, sha: SHA, mode: uploadMode ? 'small-only' : 'flow-only', ...(uploadMode ? missingGallery ? { allowMissingGallery: true } : { removalGuards: true } : {}) };
   const env = envFor(brand), accounts = new Map(), auth = new Map(), invites = new Map(), applications = new Map(), files = new Map(), objects = new Map(), reservations = new Map(), requests = [];
   const agency = brand === 'flirt' ? BRANDS.flirt.agency : moxyId;
@@ -82,7 +82,7 @@ async function mockedFlow(brand, uploadMode = false, missingGallery = false) {
         const account = [...accounts.values()].find(item => item.email === body.get('email')); assert.ok(account);
         return redirect(body.get('next'), `twin_creator_session=${account.id}; HttpOnly; Secure`);
       }
-      if (url.pathname === '/creator-auth/logout') return redirect(BRANDS[brand].login, 'twin_creator_session=; Max-Age=0; HttpOnly; Secure');
+      if (url.pathname === '/creator-auth/logout') return redirect(wrongLogout ? '/creator/wrong-login' : BRANDS[brand].login, 'twin_creator_session=; Max-Age=0; HttpOnly; Secure');
       if (!owner) return url.pathname.startsWith('/creator-auth/files') ? json({ error: 'session_expired' }, 401) : redirect(BRANDS[brand].login);
       if (url.pathname === '/creator-auth/onboarding') {
         if ([...reservations.values()].some(item => item.creator_account_id === owner.id && item.state === 'removing')) return redirect('/creator/onboarding?step=consent&status=file_removal_pending');
@@ -182,7 +182,12 @@ async function mockedFlow(brand, uploadMode = false, missingGallery = false) {
   let result;
   try { result = await run(config, env); }
   finally { global.fetch = originalFetch; console.log = originalLog; }
-  assert.equal(result.passed, true, JSON.stringify(result));
+  assert.equal(result.passed, !wrongLogout, JSON.stringify(result));
+  if (wrongLogout) {
+    assert.ok(result.blocked.some(item => item.includes('Logout redirects within the same brand')));
+    assert.ok(result.uploads.length >= 3, 'Wrong logout landing must not hide independent upload verification');
+    assert.ok(result.checks.some(item => item.startsWith('Additional normal upload after final submission')));
+  }
   assert.equal(result.identified_fixtures_removed, true); assert.equal(result.browser_journey_verified, false);
   assert.equal(result.unverified.length > 0, missingGallery, 'Missing-gallery allowance must retain explicit unverified evidence');
   assert.deepEqual(result.recovery_redirect, { accepted: true, brand, path: '/creator/reset-password', email_sent: false });
@@ -194,4 +199,4 @@ async function mockedFlow(brand, uploadMode = false, missingGallery = false) {
   const rendered = outputs.join('\n');
   assert.ok(!rendered.includes(env.SUPABASE_SERVICE_KEY) && !rendered.includes(env.DASHBOARD_PASSWORD) && !rendered.includes('normal-auth-token') && !rendered.includes('private-do-not-log'));
 }
-(async () => { await mockedFlow('flirt'); await mockedFlow('moxy'); await mockedFlow('flirt', true); await mockedFlow('moxy', true, true); console.log('Creator live runner: stdin invocation, runtime isolation, normal signup/invites, correct-query unsent recovery, upload persistence/private ranges, removal guards, explicit missing-gallery scope, Storage-first cleanup and redacted output tests pass; no live requests made.'); })().catch(error => { console.error(error); process.exitCode = 1; });
+(async () => { await mockedFlow('flirt'); await mockedFlow('moxy'); await mockedFlow('flirt', true); await mockedFlow('moxy', true, true); await mockedFlow('moxy', true, true, true); console.log('Creator live runner: stdin invocation, runtime isolation, normal signup/invites, correct-query unsent recovery, upload persistence/private ranges, removal guards, explicit missing-gallery/logout-regression scope, Storage-first cleanup and redacted output tests pass; no live requests made.'); })().catch(error => { console.error(error); process.exitCode = 1; });
