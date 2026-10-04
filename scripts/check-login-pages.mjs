@@ -23,7 +23,14 @@ try {
   assert.equal(ready, true, 'Production login page must start');
   for (const cookie of ['', 'twin_agency_access=stale; twin_agency_portal=moxy', 'twin_agency_access=stale; twin_agency_portal=lynq', 'twin_agency_access=stale; twin_agency_portal=jess-and-kate-ai']) {
     for (const [path, action, brand] of [['/', '/admin-auth', 'Admin sign in'], ['/twin', '/admin-auth', 'Admin sign in'], ['/moxy', '/moxy/auth', 'Moxy'], ['/link', '/link/auth', 'Link'], ['/lynq', '/lynq/auth', 'LYNQ'], ['/jess-and-kate-ai', '/jess-and-kate-ai/auth', 'Ava']]) {
-      const response = await request(path, { headers: { cookie } });
+      let response = await request(path, { headers: { cookie } });
+      if (path === '/moxy') {
+        assert.equal(response.status, 308, 'Old Moxy login must move permanently to its canonical brand host');
+        assert.equal(response.headers.get('location'), 'https://dashboard.lynqai.co/moxy');
+        // Exercise the same local production server under the exact allowed
+        // Moxy Host header; do not follow the redirect onto a live website.
+        response = await request('/moxy', { headers: { cookie, host: 'dashboard.lynqai.co' } });
+      }
       assert.equal(response.status, 200, path);
       assert.equal(response.headers.get('location'), null, `${path} must not redirect to another login`);
       const html = await response.text();
@@ -32,6 +39,9 @@ try {
       if (path === '/' || path === '/twin') assert.ok(!html.includes('data-agency="moxy"'), 'Twin must not inherit partner branding');
     }
   }
+  const movedQuery = await request('/moxy?next=%2Frevenue');
+  assert.equal(movedQuery.status, 308);
+  assert.equal(movedQuery.headers.get('location'), 'https://dashboard.lynqai.co/moxy?next=%2Frevenue');
   for (const path of ['/', '/twin', '/link', '/moxy', '/jess-and-kate-ai']) assert.equal((await request(path, {method:'POST', headers:{'next-action':'not-authorized'}})).status, 403);
   const denied = await request('/settings');
   assert.equal(denied.status, 307);

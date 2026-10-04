@@ -67,6 +67,7 @@ jobs:
       - name: Normal signup runner safety and cleanup regressions
         run: |
           node deployment/creator-flow-live-check.test.cjs
+          node deployment/creator-flow-upload-memory.test.cjs
           python3 -m py_compile deployment/creator-flow-live-check.py
       - name: Owner authentication and existing master access
         run: node --import tsx scripts/check-owner-auth.ts
@@ -188,7 +189,7 @@ jobs:
 
       - name: Verify normal Moxy signup, optional flow and small uploads with exact cleanup
         timeout-minutes: 15
-        run: python3 deployment/creator-flow-live-check.py --brand=moxy --expected-sha="${{ steps.build.outputs.sha }}" --mode=small-only --allow-missing-gallery
+        run: python3 deployment/creator-flow-live-check.py --brand=moxy --expected-sha="${{ steps.build.outputs.sha }}" --mode=small-only --removal-guards
 
       # Public GETs only. A successful container swap is not proof of URL routing.
       - name: Warm and verify catalogue video previews

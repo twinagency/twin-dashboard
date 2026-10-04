@@ -74,7 +74,9 @@ export async function boundedFormData(request: Request, options: { maxBytes?: nu
     controller.abort();
     await Promise.all(writes);
     await dispose();
-    throw failure instanceof CreatorUploadError ? failure : error instanceof CreatorUploadError ? error : new CreatorUploadError("upload_error");
+    const cause = failure || error;
+    const code = cause && typeof cause === "object" && "code" in cause ? String(cause.code) : "";
+    throw failure instanceof CreatorUploadError ? failure : error instanceof CreatorUploadError ? error : new CreatorUploadError(code === "ENOSPC" ? "upload_staging_full" : ["EIO", "EACCES", "EMFILE"].includes(code) ? "upload_staging_error" : "upload_error");
   } finally {
     clearTimeout(timer);
     request.signal.removeEventListener("abort", aborted);

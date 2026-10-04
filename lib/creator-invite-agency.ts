@@ -4,6 +4,12 @@ import { serviceClient } from "./supabase-service";
 
 export type InviteAgency = { name: string; slug: string; logo: string | null; icon: string | null; dark: boolean };
 
+// Trusted public Moxy host/path fallback. This object never assigns an agency
+// or authorizes an account; current server-owned records still decide access.
+export const MOXY_CREATOR_PRESENTATION: InviteAgency = {
+  name: "Moxy", slug: "moxy", logo: "/moxy/logo.png", icon: "/moxy/icon.svg", dark: true,
+};
+
 // Slugs with a brand asset in public/. An agency without one is presented by
 // name rather than a broken image, so a new agency needs no code change.
 const INVITE_LOGOS: Record<string, string> = { moxy: "/moxy/logo.png" };
