@@ -50,7 +50,7 @@
     "test:sequence": "tsx scripts/check-sequence-render.ts",
     "test:sequence-ui": "tsx scripts/check-sequence-ui.ts",
     "test:nsfw-field": "tsx scripts/check-flirt-nsfw-field.ts",
-    "test:agency": "npm run test:internal-admin && npm run test:tether && tsx scripts/check-agency-access.ts && tsx scripts/check-agency-queries.ts && tsx scripts/check-lynq-login.ts && tsx scripts/check-moxy-access.ts && tsx scripts/check-lynq-host.ts && tsx scripts/check-lynq-signup.ts && tsx scripts/check-lynq-management.tsx && tsx scripts/check-login-routing.ts && tsx scripts/check-jess-kate-access.ts && TEST_JESS_KATE=1 tsx scripts/check-lynq-management.tsx && tsx scripts/check-sidebar-layout.tsx",
+    "test:agency": "npm run test:creator-registration && npm run test:internal-admin && npm run test:tether && tsx scripts/check-agency-access.ts && tsx scripts/check-agency-queries.ts && tsx scripts/check-lynq-login.ts && tsx scripts/check-moxy-access.ts && tsx scripts/check-lynq-host.ts && tsx scripts/check-lynq-signup.ts && tsx scripts/check-lynq-management.tsx && tsx scripts/check-login-routing.ts && tsx scripts/check-jess-kate-access.ts && TEST_JESS_KATE=1 tsx scripts/check-lynq-management.tsx && tsx scripts/check-sidebar-layout.tsx",
     "test:tether": "tsx scripts/check-tether-access.ts",
     "test:creator-routing": "tsx scripts/check-creator-routing.ts",
     "test:creator-login": "tsx scripts/check-creator-login.ts",
@@ -68,7 +68,8 @@
     "test:creator-upload-stream": "tsx scripts/check-creator-upload-stream.ts",
     "test:creator-upload-picker": "node scripts/check-creator-upload-picker.cjs",
     "test:creator-upload": "npm run test:creator-video-upload && npm run test:creator-upload-stream && npm run test:creator-upload-picker && npm run test:creator-onboarding && npm run test:creator-routing && npm run test:creator-login && npm run test:view-as && npm run test:middleware-upload-body && node --import tsx scripts/check-creator-workspace.ts",
-    "test:internal-admin": "node --import tsx scripts/check-internal-admin.ts"
+    "test:internal-admin": "node --import tsx scripts/check-internal-admin.ts",
+    "test:creator-registration": "node --import tsx scripts/check-creator-registration.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

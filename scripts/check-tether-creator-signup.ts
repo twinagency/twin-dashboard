@@ -16,7 +16,7 @@ const genericRoute = readFileSync("app/creator-auth/signup/route.ts", "utf8");
 assert.equal(TETHER_CREATOR_SIGNUP_ACTION, "/creator-auth/tether/signup");
 assert.match(component, /const directAgencySignup = tether \|\| link;/);
 assert.match(component, /const signupAction = tether \? TETHER_CREATOR_SIGNUP_ACTION : link \? LINK_CREATOR_SIGNUP_ACTION : "\/creator-auth\/signup";/);
-assert.match(component, /<form action=\{signupAction\} method="post"/);
+assert.match(component, /<CreatorSignupForm action=\{signupAction\} enhanced=\{!directAgencySignup\}/);
 // Still gated behind !directAgencySignup. Inside that gate the field now
 // branches on whether the visitor arrived on a resolved agency invite.
 assert.match(component, /\{!directAgencySignup && \(invited[\s\S]*?name="agency_code"/);
@@ -30,7 +30,7 @@ assert.doesNotMatch(route, /email_confirm\s*:\s*true|auth\.admin\.createUser/);
 assert.match(route, /created\.user\.identities\?\.length === 0/);
 assert.match(route, /if \(existing\) return redirectWithError\(req, "exists"\)/);
 assert.match(route, /\.ilike\("email", exactCaseInsensitiveEmailPattern\(input\.email\)\)/);
-assert.match(genericRoute, /claim_creator_agency_code/);
+assert.match(genericRoute, /provision_creator_registration/);
 assert.equal(exactCaseInsensitiveEmailPattern("creator%_box@example.com"), "creator\\%\\_box@example.com");
 
 const form = new FormData();
