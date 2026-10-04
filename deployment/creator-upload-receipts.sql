@@ -48,7 +48,7 @@ begin
   select coalesce(sum(size_bytes),0),count(*) into reserved_bytes,reserved_count
     from public.creator_upload_receipts where creator_account_id=p_creator_id and id<>p_upload_id
       and file_id is null and state in ('stored','uploading','removing');
-  if used_bytes+reserved_bytes+p_bytes > 10737418240 or used_count+reserved_count >= 5000
+  if used_bytes+reserved_bytes+p_bytes > 107374182400 or used_count+reserved_count >= 5000
     then raise exception 'upload_quota'; end if;
   bucket_name := case when p_kind='voice' then 'voice-samples' else 'onboarding-content' end;
   if receipt.id is null then
