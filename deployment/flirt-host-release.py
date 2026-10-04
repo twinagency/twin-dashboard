@@ -165,6 +165,16 @@ def validate_release(kind, image, sha):
         raise ValueError("Image must be an immutable digest from the approved ECR repository")
 
 
+def rollback_archive_name(name, old_sha):
+    # The same commit can be deployed more than once. Keep every previous
+    # archive and give this stopped rollback its own available name.
+    for _ in range(10):
+        candidate = name + "-archive-" + old_sha[:12] + "-" + secrets.token_hex(8)
+        if not inspect(candidate):
+            return candidate
+    raise RuntimeError("Could not reserve a distinct FLIRT rollback archive name")
+
+
 def deploy(kind, image, sha):
     validate_release(kind, image, sha)
     secured_directory()
@@ -192,9 +202,7 @@ def deploy(kind, image, sha):
         old_sha = labels.get("io.flirt.commit", "")
         if labels.get("io.flirt.project") != PROJECT or not re.fullmatch(r"[a-f0-9]{40}", old_sha) or older["State"]["Running"]:
             raise RuntimeError("An earlier FLIRT rollback container needs review")
-        archived = name + "-archive-" + old_sha[:12]
-        if inspect(archived):
-            raise RuntimeError("A FLIRT rollback archive already uses the expected name")
+        archived = rollback_archive_name(name, old_sha)
     password = command(["aws", "ecr", "get-login-password", "--region", "ap-southeast-2"])
     command(["docker", "login", "--username", "AWS", "--password-stdin", REGISTRY], password)
     command(["docker", "pull", image], timeout=480)
@@ -263,4 +271,3 @@ if __name__ == "__main__":
         # Neither service credentials nor provider responses may enter SSM logs.
         print("FLIRT host operation failed: " + (str(error) if isinstance(error, RuntimeError) else type(error).__name__) + ". No credentials logged.", file=sys.stderr)
         sys.exit(1)
-
