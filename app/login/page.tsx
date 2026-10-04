@@ -10,9 +10,9 @@ export const metadata = {
 export default async function LoginPage({
   searchParams,
 }: {
-  searchParams: Promise<{ next?: string; error?: string }>;
+  searchParams: Promise<{ next?: string; error?: string; owner?: string }>;
 }) {
-  const { next, error } = await searchParams;
+  const { next, error, owner } = await searchParams;
   return (
     <div className="grid min-h-screen bg-white lg:grid-cols-[1.12fr_0.88fr]">
       <section className="relative hidden overflow-hidden flirt-auth-dark p-12 text-white lg:flex lg:flex-col lg:justify-between">
@@ -38,13 +38,14 @@ export default async function LoginPage({
             <div className="mb-5 lg:hidden"><TwinWordmark /></div>
             <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent-2">FLIRT Console</p>
             <h2 className="font-heading text-3xl font-semibold tracking-[-0.035em] text-ink">Admin sign in</h2>
-            <p className="text-sm text-muted">Use your dashboard admin password.</p>
+            <p className="text-sm text-muted">{owner === "1" ? "Use your owner username and password." : "Use your dashboard admin password."}</p>
           </CardHeader>
           <CardContent className="px-7 pb-7">
-            <LoginForm error={!!error} next={safeAdminNext(next)} />
+            <LoginForm error={!!error} next={safeAdminNext(next)} owner={owner === "1"} />
           </CardContent>
         </Card>
       </section>
     </div>
   );
 }
+
