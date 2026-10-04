@@ -1,3 +1,4 @@
+import { isUploadId, saveIdempotentCreatorUpload } from "@/lib/creator-upload-receipts";
 import { tracedCreatorUpload, uploadStage, uploadDiagnostic } from "@/lib/creator-upload-diagnostics";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
@@ -233,6 +234,8 @@ async function uploadForCreator(req: NextRequest) {
   }
   if (creator.readOnly) return new NextResponse("Creator demo is read-only", { status: 403 });
   const accountId = creator.accountId;
+  const uploadId = req.headers.get("x-creator-upload-id");
+  if (uploadId && !isUploadId(uploadId)) return back(req, "upload_conflict");
 
   const contentLength = Number(req.headers.get("content-length") || 0);
   if (contentLength > MAX_REQUEST_BYTES) return back(req, "upload_too_large");
@@ -249,7 +252,7 @@ async function uploadForCreator(req: NextRequest) {
     existingUploadUsage(accountId),
   ]);
   if (applicationError || uploadUsage.error) return back(req, "upload_error");
-  if (uploadUsage.count >= MAX_ACCOUNT_FILES) return back(req, "upload_quota");
+  if (!uploadId && uploadUsage.count >= MAX_ACCOUNT_FILES) return back(req, "upload_quota");
   uploadStage("receiving");
   staged = await boundedFormData(req);
   uploadStage("validating");
@@ -261,13 +264,14 @@ async function uploadForCreator(req: NextRequest) {
   // Ownership, read-only demos, rejected applications and strict runtimes stay protected.
   if (!creatorOnboardingEditable(application?.status)) return back(req, "application_locked", step);
   const files = staged.files;
+  if (uploadId && files.length !== 1) return back(req, "upload_conflict", step);
   if (!files.length) return back(req, "upload_empty", step);
   if (files.length > 25) return back(req, "upload_too_many", step);
 
   const maxBytes = creatorUploadMaxBytes(kind);
   const aggregateBytes = files.reduce((total, file) => total + file.size, 0);
   if (aggregateBytes > MAX_BATCH_BYTES) return back(req, "upload_too_large", step);
-  if (uploadUsage.bytes + aggregateBytes > MAX_ACCOUNT_BYTES) return back(req, "upload_quota", step);
+  if (!uploadId && uploadUsage.bytes + aggregateBytes > MAX_ACCOUNT_BYTES) return back(req, "upload_quota", step);
   const bucket = kind === "voice" ? "voice-samples" : "onboarding-content";
   const now = new Date().toISOString();
   const normalizedMimes = new Map<StagedCreatorFile, string>();
@@ -291,7 +295,7 @@ async function uploadForCreator(req: NextRequest) {
   ]);
   if (latestUsage.error || latestApplicationError) return back(req, "upload_error", step);
   if (!creatorOnboardingEditable(latestApplication?.status)) return back(req, "application_locked", step);
-  if (latestUsage.bytes + aggregateBytes > MAX_ACCOUNT_BYTES || latestUsage.count + files.length > MAX_ACCOUNT_FILES) return back(req, "upload_quota", step);
+  if (!uploadId && (latestUsage.bytes + aggregateBytes > MAX_ACCOUNT_BYTES || latestUsage.count + files.length > MAX_ACCOUNT_FILES)) return back(req, "upload_quota", step);
 
   const uploadedPaths: string[] = [];
   const insertedPaths: string[] = [];
@@ -311,6 +315,10 @@ async function uploadForCreator(req: NextRequest) {
 
   for (const file of files) {
     const mime = normalizedMimes.get(file) || file.type || "application/octet-stream";
+    if (uploadId) {
+      await saveIdempotentCreatorUpload(accountId, uploadId, kind, file, mime);
+      continue;
+    }
     const objectPath = `creators/${accountId}/${kind}/${Date.now()}-${randomUUID()}-${safeName(file.name)}`;
     uploadStage("storage");
     const body = await openAsBlob(file.path, { type: mime });

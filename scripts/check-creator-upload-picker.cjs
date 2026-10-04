@@ -6,24 +6,27 @@ const requireApp = createRequire(resolve('package.json'));
 const { JSDOM } = requireApp('jsdom');
 const { build } = requireApp('esbuild');
 const dom = new JSDOM('<div id="root"></div>', { url: 'https://dashboard.flirtaiagency.com/creator/onboarding?step=content' });
-for(const name of ['window','document','HTMLElement','HTMLInputElement','Event','MouseEvent','File','Blob','FormData']) global[name] = dom.window[name];
+for(const name of ['window','document','HTMLElement','HTMLInputElement','Event','MouseEvent','File','Blob','FormData','sessionStorage']) global[name] = dom.window[name];
 Object.defineProperty(global, 'navigator', { value: dom.window.navigator, configurable: true });
 global.IS_REACT_ACT_ENVIRONMENT = true;
-let refreshes = 0, calls = [], fail = false, active = 0, peak = 0;
+let refreshes = 0, calls = [], fail = false, active = 0, peak = 0, delay = false, lost = false, expired = false;
+const savedIds = new Set();
+global.fetch = async url => ({ ok: !expired, status: expired ? 401 : 200, json: async () => ({ uploads: new URL(url,window.location.href).searchParams.get('ids').split(',').map(id => ({id,state:savedIds.has(id)?'saved':'needs_file'})) }) });
 global.__flirtRouter = { refresh: () => refreshes++ };
 class XHR {
   upload = {};
   responseURL = 'https://dashboard.flirtaiagency.com/creator-auth/upload';
   open(method, url) { assert.equal(method, 'POST'); assert.equal(url, '/creator-auth/upload'); }
-  setRequestHeader() {}
+  setRequestHeader(name,value) { if(name==='X-Creator-Upload-Id') this.id=value; }
   send(form) {
     const name = form.get('files').name; calls.push(name); active++; peak = Math.max(peak, active);
     this.upload.onprogress?.({ lengthComputable: true, loaded: 50, total: 100 });
     setTimeout(() => {
       active--; this.status = fail && name === "b.mp4" ? 400 : 200;
       this.responseText = JSON.stringify({ status: this.status === 400 ? 'upload_error' : 'content_saved' });
-      this.onload();
-    }, name === "a.mp4" ? 30 : 10);
+      if(this.status===200) savedIds.add(this.id);
+      if(lost) { lost=false; this.onerror(); } else this.onload();
+    }, delay ? 120 : name === "a.mp4" ? 30 : 10);
   }
 }
 global.XMLHttpRequest = XHR;
@@ -96,6 +99,45 @@ global.XMLHttpRequest = XHR;
   await act(async () => { document.querySelectorAll('form').forEach(form=>form.dispatchEvent(new Event('submit',{bubbles:true,cancelable:true}))); });
   await act(async () => { await new Promise(r=>setTimeout(r,150)); });
   assert.equal(peak,2,'All category forms must share the two-transfer limit'); assert.equal(calls.length,4); assert.equal(active,0);
+  // Append to a single active transfer: the spare worker must start the new file.
+  calls=[]; peak=0; delay=true;
+  const recoveryProps={kind:'content_sfw_video',label:'Recovery video',accept:'video/*',locked:false,accountId:'test-recovery',loginPath:'/creator/moxy/login'};
+  await act(async () => root.render(React.createElement(Upload,{...recoveryProps,key:'recovery'})));
+  const recoveryInput=document.querySelector('[data-choose-content] input');
+  function selectRecovery(list) { Object.defineProperty(recoveryInput,'files',{value:list,configurable:true}); recoveryInput.dispatchEvent(new Event('change',{bubbles:true})); }
+  const original=new File(['video'],'active.mp4',{type:'video/mp4',lastModified:42});
+  await act(async () => selectRecovery([original]));
+  await act(async () => document.querySelector('form').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
+  await act(async () => selectRecovery([new File(['video'],'appended.mp4',{type:'video/mp4'})]));
+  await act(async () => { await new Promise(r=>setTimeout(r,280)); });
+  assert.deepEqual([...calls].sort(),['active.mp4','appended.mp4']); assert.equal(peak,2,'Appending must use the spare worker');
+  delay=false;
+  // Losing the HTTP response after save must reconcile, rather than upload twice.
+  calls=[]; lost=true;
+  await act(async () => selectRecovery([new File(['video'],'lost-response.mp4',{type:'video/mp4'})]));
+  await act(async () => document.querySelector('form').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
+  await act(async () => { await new Promise(r=>setTimeout(r,70)); });
+  assert.match(document.body.textContent,/connection was interrupted/i);
+  await act(async () => document.querySelector('form').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
+  await act(async () => { await new Promise(r=>setTimeout(r,50)); });
+  assert.deepEqual(calls,['lost-response.mp4']); assert.match(document.body.textContent,/uploaded and verified/);
+  // Restore an interrupted selection without preserving bytes or a false Saved state.
+  const key='creator-upload-queue:test-recovery:content_sfw_video';
+  const remembered=JSON.parse(sessionStorage.getItem(key));
+  remembered[0].state='uploading'; savedIds.delete(remembered[0].id);
+  sessionStorage.setItem(key,JSON.stringify(remembered));
+  await act(async () => root.render(React.createElement(Upload,{...recoveryProps,key:'restored'})));
+  await act(async () => { await new Promise(r=>setTimeout(r,20)); });
+  assert.match(document.body.textContent,/Reselect this original file/); assert.equal(document.querySelector('[data-upload-content]').disabled,true);
+  const restoredInput=document.querySelector('[data-choose-content] input');
+  const retryFile=new File(['video'],'lost-response.mp4',{type:'video/mp4',lastModified:remembered[0].lastModified});
+  await act(async () => { Object.defineProperty(restoredInput,'files',{value:[retryFile],configurable:true}); restoredInput.dispatchEvent(new Event('change',{bubbles:true})); });
+  assert.equal(JSON.parse(sessionStorage.getItem(key))[0].id,remembered[0].id,'Reselection retains the original idempotency key');
+  expired=true;
+  await act(async () => document.querySelector('form').dispatchEvent(new Event('submit',{bubbles:true,cancelable:true})));
+  await act(async () => { await new Promise(r=>setTimeout(r,50)); });
+  assert.match(document.querySelector('a').getAttribute('href'),/^\/creator\/moxy\/login\?next=/);
+  expired=false;
   await act(async () => root.unmount());
   rmSync(outfile,{force:true});
   console.log('VIDEO PICKER UI PASSED: Files bypass, stale-success reset, native Photos cancellation after a saved upload, focus-only return, late file delivery, multiple selection, append/deduplication, cancel preservation, exactly two parallel transfers, out-of-order completion, continue after failure, retry only the failed file, per-file size/removal and confirmed-save refresh.');

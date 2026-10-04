@@ -55,7 +55,9 @@
     "test:flirt-fixes": "npm run test:flirt-skip-dashboard && npm run test:flirt-direct-signup && npm run test:flirt-brand-policy && npm run test:flirt-review && npm run test:flirt-clone-pipeline",
     "flirt:preflight": "node deployment/flirt-preflight.cjs dashboard",
     "test:internal-admin": "node --import tsx scripts/check-internal-admin.ts",
-    "test:creator-registration": "node --import tsx scripts/check-creator-registration.ts"
+    "test:creator-registration": "node --import tsx scripts/check-creator-registration.ts",
+    "test:creator-upload-receipts": "node --import tsx scripts/check-creator-upload-receipts.ts",
+    "test:creator-upload-picker": "npm run test:creator-upload-receipts && node scripts/check-creator-upload-picker.cjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

@@ -176,7 +176,7 @@ function StepNavigation({ step, steps }: { step: OnboardingStep; steps: Onboardi
   </nav>;
 }
 
-function ContentUploadCard({ kind, count, minimum, label, accept, formatHint, complete, locked, optional = false }: {
+function ContentUploadCard({ kind, count, minimum, label, accept, formatHint, complete, locked, accountId, loginPath, optional = false }: {
   kind: CreatorContentKind;
   count: number;
   minimum: number;
@@ -186,6 +186,8 @@ function ContentUploadCard({ kind, count, minimum, label, accept, formatHint, co
   complete: boolean;
   locked: boolean;
   optional?: boolean;
+  accountId: string;
+  loginPath: string;
 }) {
   const percent = Math.min(100, Math.round((count / minimum) * 100));
   return (
@@ -200,7 +202,7 @@ function ContentUploadCard({ kind, count, minimum, label, accept, formatHint, co
       {!optional && <div className="mt-4 h-2 overflow-hidden rounded-full bg-border" role="progressbar" aria-label={`${label} upload progress`} aria-valuemin={0} aria-valuemax={minimum} aria-valuenow={Math.min(count, minimum)}>
         <div className={`h-full rounded-full transition-[width] ${complete ? "bg-emerald-600" : "bg-accent"}`} style={{ width: `${percent}%` }} />
       </div>}
-      <CreatorUploadForm kind={kind} label={label} accept={accept} formatHint={formatHint} locked={locked} />
+      <CreatorUploadForm accountId={accountId} loginPath={loginPath} kind={kind} label={label} accept={accept} formatHint={formatHint} locked={locked} />
     </section>
   );
 }
@@ -234,6 +236,7 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
   const totalSteps = visibleSteps.length;
   const consentStepNumber = visibleSteps.indexOf("consent") + 1;
   const afterContent = voiceEnabled ? "voice" : "consent";
+  const loginPath = creatorLoginPath(creator, jar.get(CREATOR_PORTAL_COOKIE)?.value);
   const { status, step, section } = await searchParams;
   if (step === "voice" && !voiceEnabled) redirect("/creator/onboarding?step=consent");
   const activeStep = isOnboardingStep(step) ? step : null;
@@ -331,7 +334,7 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
                 </div>
                 {optional && <div><ContinueToStep step={afterContent}>Continue without uploading</ContinueToStep></div>}
                 <div className="grid gap-4 md:grid-cols-2">
-                  {CREATOR_CONTENT_REQUIREMENTS.map((requirement) => <ContentUploadCard key={requirement.kind} {...requirement} count={contentCounts[requirement.kind]} complete={contentCounts[requirement.kind] >= requirement.minimum} locked={applicationLocked} optional={optional} />)}
+                  {CREATOR_CONTENT_REQUIREMENTS.map((requirement) => <ContentUploadCard accountId={session.accountId} loginPath={loginPath} key={requirement.kind} {...requirement} count={contentCounts[requirement.kind]} complete={contentCounts[requirement.kind] >= requirement.minimum} locked={applicationLocked} optional={optional} />)}
                 </div>
                 {legacyContentFiles > 0 && <p className="rounded-xl border border-border bg-muted/10 px-4 py-3 text-sm leading-6 text-muted">{legacyContentFiles} earlier verified upload{legacyContentFiles === 1 ? " is" : "s are"} still safely stored. They are not guessed into SFW or NSFW categories.</p>}
                 <StepNavigation step="content" steps={visibleSteps} />
@@ -344,7 +347,7 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
                 {saved && <SavedConfirmation title={status === "voice_skipped" ? "Voice step saved" : "Voice samples saved"} detail={statusCopy[status!]} />}
                 <p className="text-sm leading-6 text-muted">Voice is not required to get onboarded. Add samples now or skip it and activate voice later.</p>
                 <div className="grid gap-3 md:grid-cols-[1fr_auto]">
-                  <CreatorUploadForm kind="voice" label="Voice recordings" accept="audio/*,video/*" locked={applicationLocked && !optional} voice />
+                  <CreatorUploadForm accountId={session.accountId} loginPath={loginPath} kind="voice" label="Voice recordings" accept="audio/*,video/*" locked={applicationLocked && !optional} voice />
                   <form action="/creator-auth/onboarding" method="post" className="self-end"><input type="hidden" name="action" value="skip_voice" /><Button type="submit" variant="outline" size="lg" disabled={applicationLocked} className="min-h-11">Skip for now</Button></form>
                 </div>
                 {voiceFiles.length > 0 && <p className="text-sm text-muted">{voiceFiles.length} voice file{voiceFiles.length === 1 ? "" : "s"} verified.</p>}
