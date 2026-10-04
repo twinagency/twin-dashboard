@@ -1,3 +1,4 @@
+import { creatorApplicationState } from "./creator-application-state";
 import { verifyCreatorSession } from "./creator-session";
 import { serviceClient } from "./supabase-service";
 import type { AgencyIdentity } from "./agency-identity";
@@ -13,6 +14,8 @@ export type CreatorDashboardIdentity = AgencyIdentity & {
   userId: string;
   creatorName: string;
   onboarded: boolean;
+  applicationState?: ReturnType<typeof creatorApplicationState>;
+  submittedAt?: string | null;
   /** Live-data preview accounts can read their one scoped clone but cannot mutate it. */
   readOnly: boolean;
   /** Current server-verified assignment. Never copy a portal hint here. */
@@ -34,7 +37,7 @@ export async function creatorDashboardIdentity(token: string | null | undefined)
     const account = await db.from("creator_accounts").select("id,auth_user_id,display_name,account_status,source").eq("id", session.accountId).maybeSingle();
     if (account.error || !account.data || account.data.auth_user_id !== session.userId || !creatorAccountStatusAllowsAccess(account.data.account_status)) return null;
     const [application, assignment, link] = await Promise.all([
-      db.from("creator_applications").select("status").eq("creator_account_id", session.accountId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
+      db.from("creator_applications").select("status,submitted_at").eq("creator_account_id", session.accountId).order("created_at", { ascending: false }).limit(1).maybeSingle(),
       db.from("creator_agency_assignments").select("agency_id,partner_agencies(name,active)").eq("creator_account_id", session.accountId).maybeSingle(),
       db.from("creator_clone_links").select("clone_id,clones(id,name)").eq("creator_account_id", session.accountId).maybeSingle(),
     ]);
@@ -70,6 +73,8 @@ export async function creatorDashboardIdentity(token: string | null | undefined)
       // so the questionnaire would ask this creator to rebuild what they have.
       // Onboarding stays for new accounts that have no clone yet.
       onboarded: !!clone || ["submitted", "reviewing", "approved"].includes(application.data?.status || ""),
+      applicationState: creatorApplicationState(application.data?.status, application.data?.submitted_at),
+      submittedAt: application.data?.submitted_at || null,
       readOnly: briLiveDemo,
     };
     // Branding only, not an assignment, permission or real-account status change.

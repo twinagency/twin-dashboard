@@ -36,7 +36,7 @@
     "test:videos": "tsx scripts/check-video-import.ts",
     "test:sequence": "tsx scripts/check-sequence-render.ts",
     "test:sequence-ui": "tsx scripts/check-sequence-ui.ts",
-    "test:agency": "npm run test:internal-admin && npm run test:tether && tsx scripts/check-agency-access.ts && tsx scripts/check-agency-queries.ts && tsx scripts/check-lynq-login.ts && tsx scripts/check-moxy-access.ts && tsx scripts/check-lynq-management.tsx && tsx scripts/check-login-routing.ts && tsx scripts/check-jess-kate-access.ts && TEST_JESS_KATE=1 tsx scripts/check-lynq-management.tsx && tsx scripts/check-sidebar-layout.tsx",
+    "test:agency": "npm run test:creator-registration && npm run test:internal-admin && npm run test:tether && tsx scripts/check-agency-access.ts && tsx scripts/check-agency-queries.ts && tsx scripts/check-lynq-login.ts && tsx scripts/check-moxy-access.ts && tsx scripts/check-lynq-management.tsx && tsx scripts/check-login-routing.ts && tsx scripts/check-jess-kate-access.ts && TEST_JESS_KATE=1 tsx scripts/check-lynq-management.tsx && tsx scripts/check-sidebar-layout.tsx",
     "test:tether": "tsx scripts/check-tether-access.ts",
     "test:creator-routing": "tsx scripts/check-creator-routing.ts",
     "test:creator-login": "tsx scripts/check-creator-login.ts",
@@ -54,7 +54,8 @@
     "test:flirt-skip-dashboard": "tsx scripts/check-flirt-skip-to-dashboard.tsx",
     "test:flirt-fixes": "npm run test:flirt-skip-dashboard && npm run test:flirt-direct-signup && npm run test:flirt-brand-policy && npm run test:flirt-review && npm run test:flirt-clone-pipeline",
     "flirt:preflight": "node deployment/flirt-preflight.cjs dashboard",
-    "test:internal-admin": "node --import tsx scripts/check-internal-admin.ts"
+    "test:internal-admin": "node --import tsx scripts/check-internal-admin.ts",
+    "test:creator-registration": "node --import tsx scripts/check-creator-registration.ts"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
