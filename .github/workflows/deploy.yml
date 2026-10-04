@@ -64,6 +64,8 @@ jobs:
         run: command -v ffmpeg && command -v ffprobe || (sudo apt-get update && sudo apt-get install -y ffmpeg)
       - name: Creator upload, picker and access regressions
         run: npm run test:creator-upload
+      - name: Owner authentication and existing master access
+        run: node --import tsx scripts/check-owner-auth.ts
 
   test:
     runs-on: ubuntu-latest

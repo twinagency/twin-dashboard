@@ -1,5 +1,6 @@
 // Edge-safe session token signing/verification (Web Crypto only — no next/headers,
 // so this can be imported from both middleware.ts and server components/actions).
+import { verifyOwnerSession } from "./owner-auth";
 export const SESSION_COOKIE = "allie_admin_session";
 const SESSION_TTL_MS = 30 * 24 * 60 * 60 * 1000; // 30 days
 
@@ -44,6 +45,7 @@ export async function signSession(): Promise<string> {
 
 export async function verifySessionToken(token: string | undefined | null): Promise<boolean> {
   if (!token) return false;
+  if (token.startsWith("owner_")) return verifyOwnerSession(token);
   const [payload, sig] = token.split(".");
   if (!payload || !sig) return false;
   const exp = Number(payload);
