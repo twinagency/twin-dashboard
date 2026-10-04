@@ -1,4 +1,4 @@
-name: Creator upload runtime diagnostics
+name: Creator live flow acceptance
 on:
   push:
     branches: ["fix/creator-runtime-diagnostics-2026-10-04"]
@@ -8,7 +8,7 @@ permissions:
 jobs:
   inspect:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: aws-actions/configure-aws-credentials@v4
@@ -16,7 +16,16 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ap-southeast-2
-      - name: Read-only capacity and upload failure evidence
-        run: python3 deployment/creator-runtime-diagnostics.py
+      - name: Moxy normal signup and return flow
+        id: moxy
+        continue-on-error: true
+        run: python3 deployment/creator-flow-live-check.py --brand=moxy --expected-sha=b9f37145767bff4303d0d7a7ee78fb025074c40b --mode=flow-only
+      - name: FLIRT normal signup and return flow
+        id: flirt
+        continue-on-error: true
+        run: python3 deployment/creator-flow-live-check.py --brand=flirt --expected-sha=93f3598292c8625c9c8f94061517ef88d0bf40d6 --mode=flow-only
+      - name: Require both outcomes
+        if: steps.moxy.outcome != 'success' || steps.flirt.outcome != 'success'
+        run: exit 1
 
 # Correlate the retained rollback container and bounded OOM metadata.
