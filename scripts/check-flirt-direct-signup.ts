@@ -22,7 +22,7 @@ async function main() {
     calls.push({ path: url.pathname, method, body });
     let result: unknown = [];
     if (url.pathname === "/auth/v1/admin/users") result = { id: "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb", email: body?.email, user_metadata: {}, app_metadata: {}, aud: "authenticated", created_at: new Date().toISOString() };
-    else if (url.pathname === "/rest/v1/creator_accounts" && method === "POST") result = [{ id: account }];
+    else if (url.pathname === "/rest/v1/rpc/provision_creator_registration") result = account;
     else if (url.pathname === "/rest/v1/creator_accounts") result = [];
     return new Response(JSON.stringify(result), { status: method === "POST" && url.pathname !== "/rest/v1/creator_onboarding_progress" ? 201 : 200, headers: { "content-type": "application/json" } });
   };
@@ -34,10 +34,13 @@ async function main() {
     // next/headers cookies() has no request scope in an offline script, so the
     // route fails (and rolls back) right after the writes asserted below.
     assert.equal(res.status, 303);
-    const assignment = calls.find((c) => c.path === "/rest/v1/creator_agency_assignments");
-    assert.ok(assignment, "direct signup must create an agency assignment");
-    assert.equal(assignment!.body.agency_id, ID);
-    assert.equal(assignment!.body.assignment_source, "direct");
+    const provision = calls.find((c) => c.path === "/rest/v1/rpc/provision_creator_registration");
+    assert.ok(provision, "direct signup must provision account and agency atomically");
+    assert.equal(provision.method, "POST");
+    assert.equal(provision.body.p_direct_agency_id, ID);
+    assert.equal(provision.body.p_code_hash, null);
+    assert.equal(provision.body.p_user_id, "bbbbbbbb-bbbb-bbbb-bbbb-bbbbbbbbbbbb");
+    assert.equal(calls.some((c) => c.path === "/rest/v1/creator_agency_assignments" && c.method === "POST"), false, "Agency assignment belongs to the atomic registration transaction");
   } finally { globalThis.fetch = original; console.error = quiet; }
   console.log("FLIRT DIRECT SIGNUP PASSED: code-less signup is assigned to the FLIRT agency");
 }
