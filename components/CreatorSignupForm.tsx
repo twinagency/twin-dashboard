@@ -20,7 +20,7 @@ export default function CreatorSignupForm({ action, className, children, enhance
       const messages: Record<string, string> = {
         invalid: "Check your name, email and password. Passwords must be at least 8 characters.",
         exists: "An account already exists for this email. Sign in to continue.",
-        incomplete: "We couldn't confirm account setup. Try signing in; if that fails, contact your agency with the reference shown below.",
+        incomplete: "We couldn't confirm account setup. Try signing in; if that fails, contact your agency for help completing setup.",
       };
       const invitation = String(result.error || "").replace(/^invite_/, "") as CreatorInvitationStatus;
       setError(messages[result.error] || invitationMessages[invitation] || "We couldn't create your account. Please try again.");
