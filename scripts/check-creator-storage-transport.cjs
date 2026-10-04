@@ -12,7 +12,7 @@ async function sender() {
   const [bundle, fixture, port, count] = process.argv.slice(3);
   const { createClient } = require('@supabase/supabase-js');
   const { creatorStorageFetch } = require(bundle);
-  const db = createClient(`http://127.0.0.1:${port}`, 'synthetic-transport-key', {
+  const db = createClient(`http://127.0.0.1:${port}`, 'sb_secret_synthetic_transport_only', {
     auth: { persistSession: false, autoRefreshToken: false }, global: { fetch: creatorStorageFetch },
   });
   let peak = process.memoryUsage().rss;
@@ -32,6 +32,56 @@ async function sender() {
     assert(peak < 384 * MiB, `Upload transport retained too much memory: ${peak} bytes`);
     process.send({ count: Number(count), peakRssBytes: peak, node: process.version });
   } finally { clearInterval(timer); }
+}
+
+// Exercise the real clients used by the legacy upload route and receipt path.
+// Only the network destination is intercepted; SDK/client/permission code is real.
+async function actualClientWiring(base) {
+  const syntheticOrigin = "https://abcdefghijklmnopqrst.supabase.co";
+  const previousFetch = globalThis.fetch;
+  const environment = {
+    SUPABASE_URL: syntheticOrigin, SUPABASE_SERVICE_KEY: "sb_secret_synthetic_transport_only",
+    FLIRT_BACKEND_ENABLED: "true", FLIRT_SUPABASE_PROJECT_REF: "abcdefghijklmnopqrst",
+    DASHBOARD_PUBLIC_ORIGIN: "https://dashboard.flirt.example",
+    DASHBOARD_SESSION_SECRET: "synthetic-operator-secret-for-offline-checks-only",
+    CREATOR_SESSION_SECRET: "synthetic-creator-secret-for-offline-checks-only",
+    DASHBOARD_PASSWORD: "synthetic-transport-password",
+    DATABASE_URL: undefined, NEXT_PUBLIC_SUPABASE_URL: undefined, VITE_SUPABASE_URL: undefined,
+    SUPABASE_PUBLISHABLE_KEY: undefined, NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY: undefined,
+  };
+  const previous = Object.fromEntries(Object.keys(environment).map(key => [key, process.env[key]]));
+  for (const [key, value] of Object.entries(environment)) {
+    if (value === undefined) delete process.env[key]; else process.env[key] = value;
+  }
+  const checked = [];
+  globalThis.fetch = (input, init) => {
+    const url = new URL(typeof input === "string" ? input : input instanceof URL ? input.href : input.url);
+    assert.equal(url.origin, syntheticOrigin, "Wiring test must never contact a real backend");
+    assert.match(url.pathname, /^\/storage\/v1\/object\/onboarding-content\/creators\/synthetic-wiring\//);
+    assert.equal(init?.redirect, "error", "Actual serviceClient/dashboardFetch binding omitted creatorStorageFetch");
+    checked.push(url.pathname);
+    return previousFetch(base + url.pathname + url.search, init);
+  };
+  try {
+    require("tsx/cjs");
+    const { serviceClient } = require(resolve("lib/supabase-service.ts"));
+    const { withDashboardAccess } = require(resolve("lib/dashboard-access.ts"));
+    const { supabaseAdmin } = require(resolve("lib/supabase.ts"));
+    for (const [name, client] of [["service", serviceClient()], ["dashboard", supabaseAdmin]]) {
+      await withDashboardAccess(null, async () => {
+        const result = await client.storage.from("onboarding-content").upload(`creators/synthetic-wiring/${name}/1024.mp4`, new Blob([Buffer.alloc(1024)], { type: "video/mp4" }), {
+          contentType: "video/mp4", upsert: false, cacheControl: "3600",
+        });
+        assert.equal(result.error, null, `${name} actual client must use the bounded transport`);
+      });
+    }
+    assert.equal(checked.length, 2, "Both real production client paths must reach the isolated receiver");
+  } finally {
+    globalThis.fetch = previousFetch;
+    for (const [key, value] of Object.entries(previous)) {
+      if (value === undefined) delete process.env[key]; else process.env[key] = value;
+    }
+  }
 }
 
 async function main() {
@@ -58,8 +108,8 @@ async function main() {
       }
       if (request.url === '/ordinary-target') { response.end('ordinary redirect preserved'); return; }
       assert.equal(request.method, 'POST');
-      assert.equal(request.headers.authorization, 'Bearer synthetic-transport-key');
-      assert.equal(request.headers.apikey, 'synthetic-transport-key');
+      assert.equal(request.headers.authorization, 'Bearer sb_secret_synthetic_transport_only');
+      assert.equal(request.headers.apikey, 'sb_secret_synthetic_transport_only');
       assert.equal(request.headers['x-upsert'], 'false');
       assert.match(request.headers['content-type'], /^multipart\/form-data;/);
       const parser = require('busboy')({ headers: request.headers });
@@ -78,6 +128,7 @@ async function main() {
     await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
     const port = server.address().port;
     const base = `http://127.0.0.1:${port}`;
+    await actualClientWiring(base);
     // The same transport policy covers SDK string URLs, URL objects and Requests.
     for (const method of ['POST', 'PUT']) {
       await assert.rejects(creatorStorageFetch(`${base}/storage/v1/object/onboarding-content/redirect-write`, { method, body: 'synthetic', redirect: 'follow' }));
@@ -100,8 +151,8 @@ async function main() {
       results.push({ ...metrics, elapsedMs: Date.now() - started });
     }
     assert.deepEqual(failures, []);
-    assert.deepEqual(received.sort((a, b) => a - b), [512 * MiB - 1024, 512 * MiB - 1024, 512 * MiB]);
-    console.log(JSON.stringify({ passed: true, test: 'actual SDK to isolated local HTTP receiver; synthetic byte boundaries, not media/playback', received, results, redirectsRejected: true }));
+    assert.deepEqual(received.sort((a, b) => a - b), [1024, 1024, 512 * MiB - 1024, 512 * MiB - 1024, 512 * MiB]);
+    console.log(JSON.stringify({ passed: true, test: 'actual SDK to isolated local HTTP receiver; synthetic byte boundaries, not media/playback', received, results, actualClientWiring: ["serviceClient", "supabaseAdmin via dashboardFetch"], redirectsRejected: true }));
   } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); rmSync(directory, { recursive: true, force: true }); }
 }
 (process.argv[2] === '--sender' ? sender() : main()).catch(error => { console.error(error); process.exitCode = 1; });
