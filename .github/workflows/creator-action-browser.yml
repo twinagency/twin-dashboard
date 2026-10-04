@@ -1,0 +1,26 @@
+name: Creator action browser regression
+on:
+  push:
+    branches: ["fix/moxy-submit-button-2026-10-04", "fix/flirt-submit-button-2026-10-04"]
+  pull_request:
+    paths:
+      - components/CreatorOnboardingActionForm.tsx
+      - scripts/check-creator-action-browser.cjs
+      - .github/workflows/creator-action-browser.yml
+permissions:
+  contents: read
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: "22", cache: npm}
+      - run: npm ci
+      - name: Actual form submission in Chromium and WebKit
+        run: |
+          npx playwright install --with-deps chromium webkit
+          node scripts/check-creator-action-browser.cjs
+      - name: Existing flow and presentation regressions
+        run: npm run test:creator-flow

@@ -28,8 +28,10 @@ global.__flowAuth={auth:{
  const click=async(label)=>act(async()=>{const b=[...document.querySelectorAll('button')].find(x=>x.textContent.trim()===label);assert.ok(b,label);b.click();});
  const Action=require(stem+'/Action.js').default;
  let resolveRequest,calls=0,payload;
- global.fetch=async(url,init)=>{calls++;payload=init.body;return new Promise(r=>resolveRequest=r);};
+ global.fetch=async(url,init)=>{assert.equal(url,'/creator-auth/onboarding','named action input must not replace the POST destination');calls++;payload=init.body;return new Promise(r=>resolveRequest=r);};
  await render(Action,{pendingLabel:'Saving consent…',successStatuses:['consent_saved'],loginPath:'/creator/moxy/login'},[h('input',{key:'a',name:'action',type:'hidden',value:'consent'}),h('input',{key:'n',name:'legal_name',defaultValue:'Synthetic Test'}),h('input',{key:'c',name:'agreed',type:'checkbox',defaultChecked:true}),h('button',{key:'b',type:'submit'},'Save consent')]);
+ // JSDOM does not implement named form-property shadowing; reproduce the browser behavior explicitly.
+ Object.defineProperty(document.querySelector('form'),'action',{value:document.querySelector('[name="action"]'),configurable:true});
  await submit();assert.equal(document.querySelector('fieldset').disabled,true);assert.match(document.body.textContent,/Saving consent/);assert.equal(payload.get('legal_name'),'Synthetic Test');await submit();assert.equal(calls,1);
  await act(async()=>resolveRequest({ok:false,status:503,url:'https://creator.example/creator/onboarding?step=consent&status=error'}));assert.equal(document.querySelector('fieldset').disabled,false);assert.equal(document.querySelector('[name="legal_name"]').value,'Synthetic Test');assert.match(document.body.textContent,/entries are still here/);
  global.fetch=async()=>({ok:true,status:200,url:'https://creator.example/creator/onboarding?step=consent&status=file_removal_pending'});await submit();assert.match(document.body.textContent,/Finish removing your pending file in Saved content, then submit again/);assert.equal(document.querySelector('a').getAttribute('href'),'/creator/onboarding?step=content');assert.equal(document.querySelector('fieldset').disabled,false);
@@ -71,3 +73,4 @@ global.__flowAuth={auth:{
  await act(async()=>root.unmount());rmSync(stem,{recursive:true,force:true});
  console.log('Creator flow UI passed: pending/double-submit protection, preserved consent input, expired-session return, failed Finish recovery, saved optional skip without submission, recovery next across email/logout and honest reset errors. Controlled-inbox delivery and live journeys remain separate checks.');
 })().catch(e=>{console.error(e);process.exitCode=1;});
+
