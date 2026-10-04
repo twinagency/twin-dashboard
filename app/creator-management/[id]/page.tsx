@@ -1,3 +1,4 @@
+import { hasInternalAdminAccess } from "@/lib/internal-admin";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { supabaseAdmin } from "@/lib/supabase";
@@ -45,6 +46,7 @@ function accountForApplication(status: string) {
 }
 
 export default async function CreatorDetailPage({ params }: { params: Promise<{ id: string }> }) {
+  if (!await hasInternalAdminAccess()) redirect("/login?next=%2Fcreator-management");
   const agencyAccess = await getDashboardAccess();
   if (agencyAccess) redirect("/revenue");
   const { id } = await params;

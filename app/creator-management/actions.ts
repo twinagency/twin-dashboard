@@ -1,5 +1,6 @@
 "use server";
 
+import { requireInternalAdmin } from "@/lib/internal-admin";
 import { revalidatePath } from "next/cache";
 import { guardDashboardAction } from "@/lib/agency-management";
 import { supabaseAdmin } from "@/lib/supabase";
@@ -14,6 +15,7 @@ const APPLICATION_STATUSES = new Set(["draft", "submitted", "reviewing", "approv
 
 export async function updateCreatorReviewStatus(fd: FormData) {
   await guardDashboardAction("app/creator-management/actions.ts#updateCreatorReviewStatus", [fd]);
+  await requireInternalAdmin();
   const creatorAccountId = value(fd, "creator_account_id");
   const applicationId = value(fd, "application_id");
   const accountStatus = value(fd, "account_status");
@@ -46,6 +48,7 @@ export async function updateCreatorReviewStatus(fd: FormData) {
 
 export async function linkCreatorClone(fd: FormData) {
   await guardDashboardAction("app/creator-management/actions.ts#linkCreatorClone", [fd]);
+  await requireInternalAdmin();
   const creatorAccountId = value(fd, "creator_account_id");
   const cloneId = value(fd, "clone_id");
   if (!creatorAccountId) throw new Error("Creator account is required.");
@@ -75,6 +78,7 @@ export async function linkCreatorClone(fd: FormData) {
 
 export async function assignCreatorAgency(fd: FormData) {
   await guardDashboardAction("app/creator-management/actions.ts#assignCreatorAgency", [fd]);
+  await requireInternalAdmin();
   const creatorAccountId = value(fd, "creator_account_id");
   const agencyId = value(fd, "agency_id");
   if (!creatorAccountId) throw new Error("Creator account is required.");

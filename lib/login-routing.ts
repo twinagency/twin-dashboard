@@ -3,7 +3,7 @@
 // in the internal admin shell. Creator auth itself is enforced separately by
 // middleware.ts before this helper is consulted there.
 export function isTwinLoginPath(path: string | null | undefined): boolean {
-  return path === "/" || path === "/twin" || path === "/login" || (!!path && path.startsWith("/creator"));
+  return path === "/" || path === "/twin" || path === "/login" || (path === "/creator" || !!path?.startsWith("/creator/"));
 }
 
 export function safeAdminNext(value: string | null | undefined): string {

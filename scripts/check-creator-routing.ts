@@ -65,6 +65,10 @@ async function main() {
     const token = await signCreatorSession(accountId, userId);
     const request = (path: string, cookie = "") => new NextRequest(origin + path, { headers: cookie ? { cookie } : undefined });
 
+    for (const path of ["/creator-management", "/creator-management/disposable-fixture"]) {
+      const denied = await middleware(request(path, `${CREATOR_SESSION_COOKIE}=${token}`));
+      assert.equal(denied.status, 403, "creator-only sessions cannot enter management list/detail");
+    }
     const tetherEntry = await middleware(request("/creator/tether/login"));
     assert.equal(tetherEntry.status, 200);
     assert.equal(tetherEntry.cookies.get(CREATOR_PORTAL_COOKIE)?.value, "tether");
