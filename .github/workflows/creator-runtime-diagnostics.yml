@@ -1,4 +1,4 @@
-name: Read-only interrupted test inventory
+name: Clean interrupted fixtures and verify full video size limits
 on:
   push:
     branches: ["fix/creator-runtime-diagnostics-2026-10-04"]
@@ -11,15 +11,31 @@ concurrency:
 jobs:
   verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+      - name: Prove bounded actual multipart test-client memory
+        run: node deployment/creator-flow-upload-memory.test.cjs
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ap-southeast-2
-      - name: Identify only disposable test manifests and memory counters
+      - name: Preserve exact disposable identifiers from the stopped test container
         run: python3 deployment/creator-runtime-diagnostics.py
-
-# Inspect retained stopped containers as well; another release may advance.
+      - name: Complete interrupted disposable cleanup before more testing
+        run: python3 deployment/creator-flow-live-check.py --brand=flirt --expected-sha=263055e8aa0c706df653743ba66459f145c01588 --mode=cleanup-only --cleanup-manifest=/tmp/creator-flow-flirt-gKoiGn/cleanup-manifest.json
+      - name: FLIRT real public transfer and persisted byte boundaries
+        id: flirt
+        continue-on-error: true
+        run: python3 deployment/creator-flow-live-check.py --brand=flirt --expected-sha=263055e8aa0c706df653743ba66459f145c01588 --mode=large --allow-missing-gallery
+      - name: Moxy real public transfer and persisted byte boundaries
+        id: moxy
+        continue-on-error: true
+        run: python3 deployment/creator-flow-live-check.py --brand=moxy --expected-sha=4adc4d6065a26540fe5a5f43f1a327a31edeb2a6 --mode=large --allow-missing-gallery
+      - name: Retain any blocked or failed acceptance outcome
+        if: steps.flirt.outcome != 'success' || steps.moxy.outcome != 'success'
+        run: exit 1

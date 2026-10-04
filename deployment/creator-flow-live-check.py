@@ -29,8 +29,8 @@ def aws(arguments):
     return json.loads(result.stdout)
 
 
-def host_program(brand, expected, mode, removal_guards, encoded_source, allow_missing_gallery=False):
-    configuration = repr({"brand": brand, "expected": expected, "mode": mode, "removal_guards": removal_guards, "allow_missing_gallery": allow_missing_gallery, "source": encoded_source})
+def host_program(brand, expected, mode, removal_guards, encoded_source, allow_missing_gallery=False, cleanup_manifest=None):
+    configuration = repr({"brand": brand, "expected": expected, "mode": mode, "removal_guards": removal_guards, "allow_missing_gallery": allow_missing_gallery, "cleanup_manifest": cleanup_manifest, "source": encoded_source})
     return "CONFIG = " + configuration + r'''
 import base64,json,re,subprocess
 target = 'flirt-dashboard' if CONFIG['brand']=='flirt' else 'next-app'
@@ -52,7 +52,9 @@ try:
         project=run(['docker','inspect','--format','{{index .Config.Labels "io.flirt.project"}}',target])
         if project.returncode or project.stdout.decode().strip()!='lkmfwpqegjluirfusnaw':
             raise RuntimeError('Refusing non-FLIRT container')
-    args=['docker','exec','-i',target,'node','-','--run','--brand='+CONFIG['brand'],'--expected-sha='+CONFIG['expected'],'--'+CONFIG['mode']]
+    args=['docker','exec','-i',target,'node','-','--run','--brand='+CONFIG['brand'],'--expected-sha='+CONFIG['expected']]
+    if CONFIG['mode']=='cleanup-only': args.append('--cleanup-manifest='+CONFIG['cleanup_manifest'])
+    else: args.append('--'+CONFIG['mode'])
     if CONFIG['removal_guards']: args.append('--removal-guards')
     if CONFIG['allow_missing_gallery']: args.append('--allow-missing-gallery')
     result=run(args,base64.b64decode(CONFIG['source']),2400)
@@ -61,7 +63,7 @@ try:
     for line in lines:
         try: value=json.loads(line)
         except Exception: continue
-        if value.get('event')=='upload_result': print(json.dumps(value),flush=True)
+        if value.get('event') in ('upload_result','fixture_manifest'): print(json.dumps(value),flush=True)
         elif 'passed' in value: report=value
     if report is None:
         error_type=re.search(r'\b(SyntaxError|ReferenceError|TypeError|RangeError|Error):',result.stderr.decode(errors='replace'))
@@ -81,18 +83,24 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--brand", required=True, choices=("flirt", "moxy"))
     parser.add_argument("--expected-sha", required=True)
-    parser.add_argument("--mode", required=True, choices=("flow-only", "small-only", "large"))
+    parser.add_argument("--mode", required=True, choices=("flow-only", "small-only", "large", "cleanup-only"))
     parser.add_argument("--removal-guards", action="store_true")
     parser.add_argument("--allow-missing-gallery", action="store_true")
+    parser.add_argument("--cleanup-manifest")
     options = parser.parse_args()
     if not re.fullmatch(r"[a-f0-9]{40}", options.expected_sha) or (options.removal_guards and options.mode == "flow-only"):
         raise RuntimeError("Invalid expected commit or test mode")
     if options.allow_missing_gallery and (options.removal_guards or options.mode == "flow-only"):
         raise RuntimeError("Missing-gallery allowance requires upload mode without removal guards")
+    if options.mode == "cleanup-only":
+        if options.removal_guards or options.allow_missing_gallery or not re.fullmatch(r"/tmp/creator-flow-" + options.brand + r"-[A-Za-z0-9]+/cleanup-manifest[.]json", options.cleanup_manifest or ""):
+            raise RuntimeError("Cleanup-only requires one exact private manifest path and no test options")
+    elif options.cleanup_manifest:
+        raise RuntimeError("Manifest cleanup cannot be combined with normal signup/upload tests")
     if aws(["sts", "get-caller-identity"])["Account"] != ACCOUNT:
         raise RuntimeError("Unexpected AWS account")
     encoded = base64.b64encode((ROOT / "creator-flow-live-check.cjs").read_bytes()).decode()
-    host = host_program(options.brand, options.expected_sha, options.mode, options.removal_guards, encoded, options.allow_missing_gallery)
+    host = host_program(options.brand, options.expected_sha, options.mode, options.removal_guards, encoded, options.allow_missing_gallery, options.cleanup_manifest)
     command = {"InstanceIds": [INSTANCE], "DocumentName": "AWS-RunShellScript", "Comment": "Normal signup and isolated creator regression: " + options.brand,
                "TimeoutSeconds": 60, "Parameters": {"commands": ["python3 -c " + shlex.quote(host)], "executionTimeout": ["2460"]}}
     command_id = aws(["ssm", "send-command", "--cli-input-json", json.dumps(command)])["Command"]["CommandId"]
