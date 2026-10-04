@@ -102,7 +102,7 @@ export async function POST(req: NextRequest) {
     const agreed = form.get("agreed") === "on";
     if (!legalName || !agreed) return back(req, "consent_missing", "consent");
 
-    const { data: existing } = await supabaseAdmin
+    const { data: existing, error: readError } = await supabaseAdmin
       .from("creator_consents")
       .select("id")
       .eq("creator_account_id", accountId)
@@ -111,6 +111,7 @@ export async function POST(req: NextRequest) {
       .limit(1)
       .maybeSingle();
 
+    if (readError) return back(req, "error", "consent");
     if (!existing) {
       const { error } = await supabaseAdmin
         .from("creator_consents")
@@ -121,13 +122,17 @@ export async function POST(req: NextRequest) {
   }
 
   if (action === "submit") {
-    const [{ data: progress }, { data: consent }, { data: files }, { data: existing, error: applicationError }] = await Promise.all([
+    const [progressResult, consentResult, filesResult, applicationResult] = await Promise.all([
       supabaseAdmin.from("creator_onboarding_progress").select("questionnaire_completed,content_completed,voice_completed").eq("creator_account_id", accountId).maybeSingle(),
       supabaseAdmin.from("creator_consents").select("id").eq("creator_account_id", accountId).limit(1).maybeSingle(),
       supabaseAdmin.from("creator_files").select("kind,storage_transfer_status").eq("creator_account_id", accountId),
       latestApplication(accountId),
     ]);
-    if (applicationError) return back(req, "error", "consent");
+    if (progressResult.error || consentResult.error || filesResult.error || applicationResult.error) return back(req, "error", "consent");
+    const progress = progressResult.data;
+    const consent = consentResult.data;
+    const files = filesResult.data;
+    const existing = applicationResult.data;
     if (existing && CREATOR_QUESTIONNAIRE_TERMINAL_STATUSES.has(existing.status)) return NextResponse.redirect(creatorRequestUrl(req, "/creator"), 303);
     if (existing && existing.status !== "draft") return back(req, "application_locked", "consent");
     // Every step is optional for Moxy creators (Ronan, 2026-10-03): they can submit without filling anything in.

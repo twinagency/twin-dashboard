@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
+import { creatorRecoveryPath } from "@/lib/creator-recovery";
 import { safeCreatorNext } from "@/lib/creator-routing";
 import CreatorAuthFrame, {
   creatorAuthPaths,
@@ -43,7 +44,7 @@ export default async function CreatorLoginScreen({ searchParams, brand, agencyBr
         <input type="hidden" name="next" value={safeNext} />
         <input type="hidden" name="portal" value={brand} />
         <label className="block"><span className={darkForm ? "mb-2 block text-sm font-medium text-white/82" : "mb-1 block text-sm text-muted"}>Email address</span><Input name="email" type="email" autoComplete="email" required autoFocus className={darkForm ? tetherAuthInputClass : undefined} /></label>
-        <label className="block"><span className={darkForm ? "mb-2 flex items-center justify-between gap-3 text-sm font-medium text-white/82" : "mb-1 flex items-center justify-between gap-3 text-sm text-muted"}><span>Password</span><Link href={paths.forgot} className={authLinkClass}>Forgot password?</Link></span><Input name="password" type="password" autoComplete="current-password" required className={darkForm ? tetherAuthInputClass : undefined} /></label>
+        <label className="block"><span className={darkForm ? "mb-2 flex items-center justify-between gap-3 text-sm font-medium text-white/82" : "mb-1 flex items-center justify-between gap-3 text-sm text-muted"}><span>Password</span><Link href={creatorRecoveryPath(paths.forgot, safeNext)} className={authLinkClass}>Forgot password?</Link></span><Input name="password" type="password" autoComplete="current-password" required className={darkForm ? tetherAuthInputClass : undefined} /></label>
         {error && <p role="alert" className={darkForm ? "rounded-xl border border-red-400/20 bg-red-400/10 px-4 py-3 text-sm text-red-100" : "text-sm text-crit"}>Unable to sign in. Check your details and try again.</p>}
         {darkForm ? <button type="submit" className={tetherAuthButtonClass}>Sign in</button> : <Button type="submit" className="w-full">Sign in</Button>}
       </form>
