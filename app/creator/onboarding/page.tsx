@@ -42,7 +42,7 @@ const statusCopy: Record<string,string> = {
   consent_saved: "Consent saved.",
   upload_empty: "Choose at least one file.",
   upload_too_many: "Upload up to 25 files at a time.",
-  upload_too_large: "Videos can be up to 512 MB, images up to 15 MB, and voice recordings up to 64 MB each.",
+  upload_too_large: "Videos can be up to 512 MiB, images up to 15 MiB, and voice recordings up to 64 MiB each.",
   upload_video_too_long: "This video is longer than 30 minutes. Choose a shorter video.",
   upload_video_resolution: "This video is above 4K resolution. Export it at 4K or lower, then retry.",
   upload_interrupted: "The connection was interrupted. Keep this page open and retry the remaining files.",

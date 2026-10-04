@@ -82,7 +82,7 @@ global.XMLHttpRequest = XHR;
   assert.deepEqual(calls,['a.mp4','b.mp4','c.mp4','d.mp4','b.mp4']);
   assert.match(document.body.textContent,/4 files uploaded and verified/); assert.equal(button.disabled,true);
   const oversize = new File(['test'],'oversize.mov',{type:'video/quicktime'}); Object.defineProperty(oversize,'size',{value:513*1024*1024});
-  await act(async () => select([oversize])); assert.match(document.body.textContent,/513.0 MB/);
+  await act(async () => select([oversize])); assert.match(document.body.textContent,/513.0 MiB/);
   await act(async () => document.querySelector('[aria-label="Remove oversize.mov"]').click());
   assert.equal(button.disabled,true);
   calls=[]; peak=0;
