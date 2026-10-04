@@ -5,7 +5,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { randomUUID, createHash } = require('node:crypto');
 const { spawnSync } = require('node:child_process');
-const { parseArgs, runtimeGuard, optionForMoxy, padMp4, safeUploadResult, run, BRANDS } = require('./creator-flow-live-check.cjs');
+const { parseArgs, runtimeGuard, readCleanupManifest, optionForMoxy, padMp4, safeUploadResult, run, BRANDS } = require('./creator-flow-live-check.cjs');
 const SHA = 'a'.repeat(40);
 const args = ['--run', '--brand=flirt', `--expected-sha=${SHA}`, '--flow-only'];
 const stdinInvocation = spawnSync(process.execPath, ['-', ...args], { input: fs.readFileSync(path.join(__dirname, 'creator-flow-live-check.cjs')), env: {}, encoding: 'utf8', timeout: 10000 });
@@ -16,6 +16,8 @@ assert.throws(() => parseArgs(args.concat('--large')));
 assert.throws(() => parseArgs(args.filter(arg => arg !== '--run')));
 assert.throws(() => parseArgs(args.concat('--removal-guards')));
 assert.throws(() => parseArgs(args.concat('--allow-missing-gallery')));
+assert.throws(() => parseArgs(args.concat('--cleanup-manifest=/tmp/creator-flow-flirt-x/cleanup-manifest.json')));
+assert.equal(parseArgs(args.filter(arg => arg !== '--flow-only').concat('--cleanup-manifest=/tmp/creator-flow-flirt-x/cleanup-manifest.json')).mode, 'cleanup-only');
 const envFor = brand => ({ GIT_SHA: SHA, SUPABASE_URL: `https://${BRANDS[brand].project}.supabase.co`, SUPABASE_SERVICE_KEY: 'runtime-secret-do-not-log',
   DASHBOARD_PASSWORD: 'runtime-password-do-not-log', DASHBOARD_PUBLIC_ORIGIN: brand === 'flirt' ? BRANDS.flirt.origin : 'https://dashboard.tgaiclone.xyz',
   ...(brand === 'flirt' ? { FLIRT_BACKEND_ENABLED: 'true', FLIRT_SUPABASE_PROJECT_REF: BRANDS.flirt.project } : {}),
@@ -40,18 +42,19 @@ const safe = safeUploadResult(new Response('{}', { status: 503 }), { status: 'ht
 assert.deepEqual(safe, { fixture: 'fixture.mp4', http_status: 503, outcome: 'unclassified', total_request_ms: 20 });
 
 // Complete runner executes against a deterministic network double; no live calls.
-async function mockedFlow(brand, uploadMode = false, missingGallery = false, wrongLogout = false) {
+async function mockedFlow(brand, uploadMode = false, missingGallery = false, wrongLogout = false, cleanupRetry = false) {
   const config = { run: true, brand, sha: SHA, mode: uploadMode ? 'small-only' : 'flow-only', ...(uploadMode ? missingGallery ? { allowMissingGallery: true } : { removalGuards: true } : {}) };
   const env = envFor(brand), accounts = new Map(), auth = new Map(), invites = new Map(), applications = new Map(), files = new Map(), objects = new Map(), reservations = new Map(), requests = [];
   const agency = brand === 'flirt' ? BRANDS.flirt.agency : moxyId;
   const json = (value, status = 200) => new Response(JSON.stringify(value), { status, headers: { 'Content-Type': 'application/json' } });
   const redirect = (url, cookie) => new Response(null, { status: 303, headers: { Location: BRANDS[brand].origin + url, ...(cookie ? { 'Set-Cookie': cookie } : {}) } });
   const originalFetch = global.fetch, originalLog = console.log, outputs = [];
+  let failCleanupOnce = cleanupRetry;
   console.log = value => outputs.push(value);
   global.fetch = async (input, options) => {
     const url = new URL(input), method = options.method || 'GET', headers = new Headers(options.headers), body = options.body;
     requests.push({ host: url.host, path: url.pathname, method, redirect: options.redirect });
-    assert.equal(options.redirect, 'manual');
+    assert.equal(options.redirect, url.pathname === '/creator-auth/upload' ? 'error' : 'manual');
     const owner = [...accounts.values()].find(account => headers.get('cookie') === `twin_creator_session=${account.id}`);
     if (url.origin === BRANDS[brand].origin) {
       assert.equal(headers.get('apikey'), null); assert.equal(headers.get('authorization'), null);
@@ -148,7 +151,10 @@ async function mockedFlow(brand, uploadMode = false, missingGallery = false, wro
     if (table === 'creator_accounts') {
       const email = url.searchParams.get('email')?.slice(3);
       const rows = [...accounts.values()].filter(item => item.email === email);
-      if (method === 'DELETE') { rows.forEach(item => accounts.delete(item.id)); return new Response(null, { status: 204 }); }
+      if (method === 'DELETE') {
+        if (failCleanupOnce) { failCleanupOnce = false; return json({ error: 'temporary_metadata_failure' }, 503); }
+        rows.forEach(item => accounts.delete(item.id)); return new Response(null, { status: 204 });
+      }
       return json(rows);
     }
     if (table === 'partner_agencies') return json([{ id: agency, slug: 'moxy', name: 'Moxy', active: true }]);
@@ -180,7 +186,25 @@ async function mockedFlow(brand, uploadMode = false, missingGallery = false, wro
     throw new Error('Unexpected backend request');
   };
   let result;
-  try { result = await run(config, env); }
+  try {
+    result = await run(config, env);
+    if (cleanupRetry) {
+      assert.equal(result.passed, false); assert.ok(result.cleanup_failure);
+      const normalSignupCalls = requests.filter(request => request.path === '/creator-auth/signup').length;
+      const cleanupConfig = { run: true, brand, sha: 'b'.repeat(40), mode: 'cleanup-only', cleanupManifest: result.cleanup_manifest };
+      const manifest = readCleanupManifest(cleanupConfig);
+      assert.equal(manifest.expected_sha, SHA, 'Preserve original manifest revision after deployment advances');
+      const unsafe = JSON.parse(fs.readFileSync(result.cleanup_manifest, 'utf8'));
+      unsafe.fixtures[0].email = 'customer@example.com';
+      fs.writeFileSync(result.cleanup_manifest, JSON.stringify(unsafe), { mode: 0o600 });
+      assert.throws(() => readCleanupManifest(cleanupConfig), /outside the recorded run/);
+      fs.writeFileSync(result.cleanup_manifest, JSON.stringify(manifest), { mode: 0o600 });
+      result = await run(cleanupConfig, { ...env, GIT_SHA: cleanupConfig.sha });
+      assert.equal(requests.filter(request => request.path === '/creator-auth/signup').length, normalSignupCalls, 'Cleanup-only must not sign up new accounts');
+      assert.equal(result.cleanup_source_commit, SHA);
+      assert.equal(result.mode, 'cleanup-only');
+    }
+  }
   finally { global.fetch = originalFetch; console.log = originalLog; }
   assert.equal(result.passed, !wrongLogout, JSON.stringify(result));
   if (wrongLogout) {
@@ -190,7 +214,7 @@ async function mockedFlow(brand, uploadMode = false, missingGallery = false, wro
   }
   assert.equal(result.identified_fixtures_removed, true); assert.equal(result.browser_journey_verified, false);
   assert.equal(result.unverified.length > 0, missingGallery, 'Missing-gallery allowance must retain explicit unverified evidence');
-  assert.deepEqual(result.recovery_redirect, { accepted: true, brand, path: '/creator/reset-password', email_sent: false });
+  if (!cleanupRetry) assert.deepEqual(result.recovery_redirect, { accepted: true, brand, path: '/creator/reset-password', email_sent: false });
   assert.equal(accounts.size, 0); assert.equal(auth.size, 0); assert.equal(invites.size, 0);
   assert.equal(files.size, 0); assert.equal(objects.size, 0);
   assert.ok(requests.filter(request => request.path === '/creator-auth/signup' && request.method === 'POST').length >= 4);
@@ -199,4 +223,4 @@ async function mockedFlow(brand, uploadMode = false, missingGallery = false, wro
   const rendered = outputs.join('\n');
   assert.ok(!rendered.includes(env.SUPABASE_SERVICE_KEY) && !rendered.includes(env.DASHBOARD_PASSWORD) && !rendered.includes('normal-auth-token') && !rendered.includes('private-do-not-log'));
 }
-(async () => { await mockedFlow('flirt'); await mockedFlow('moxy'); await mockedFlow('flirt', true); await mockedFlow('moxy', true, true); await mockedFlow('moxy', true, true, true); console.log('Creator live runner: stdin invocation, runtime isolation, normal signup/invites, correct-query unsent recovery, upload persistence/private ranges, removal guards, explicit missing-gallery/logout-regression scope, Storage-first cleanup and redacted output tests pass; no live requests made.'); })().catch(error => { console.error(error); process.exitCode = 1; });
+(async () => { await mockedFlow('flirt'); await mockedFlow('moxy'); await mockedFlow('flirt', true); await mockedFlow('moxy', true, true); await mockedFlow('moxy', true, true, true); await mockedFlow('flirt', false, false, false, true); console.log('Creator live runner: stdin invocation, runtime isolation, normal signup/invites, correct-query unsent recovery, upload persistence/private ranges, removal guards, explicit missing-gallery/logout-regression scope, interrupted-manifest cleanup-only, Storage-first cleanup and redacted output tests pass; no live requests made.'); })().catch(error => { console.error(error); process.exitCode = 1; });
