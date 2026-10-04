@@ -182,14 +182,14 @@ function ContentUploadCard({ kind, count, minimum, label, accept, formatHint, co
   );
 }
 
-function ReadinessItem({ step, complete, title, detail, href }: { step: OnboardingStep; complete: boolean; title: string; detail: string; href: string }) {
+function ReadinessItem({ step, complete, title, detail, href, optional = false }: { step: OnboardingStep; complete: boolean; title: string; detail: string; href: string; optional?: boolean }) {
   return (
     <li className="flex items-start gap-3 rounded-xl border border-border bg-white p-4" data-readiness-item={step}>
       <span className={`mt-0.5 grid size-7 shrink-0 place-items-center rounded-full ${complete ? "bg-emerald-100 text-emerald-700" : "bg-muted/20 text-muted"}`}>
         {complete ? <Check className="size-4" aria-hidden="true" /> : <Circle className="size-3.5" aria-hidden="true" />}
       </span>
       <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center justify-between gap-2"><p className="font-semibold text-ink">{title}</p><span className={`text-xs font-semibold ${complete ? "text-emerald-700" : "text-amber-700"}`}>{complete ? "Complete" : "Action needed"}</span></div>
+        <div className="flex flex-wrap items-center justify-between gap-2"><p className="font-semibold text-ink">{title}</p><span className={`text-xs font-semibold ${complete ? "text-emerald-700" : "text-amber-700"}`}>{complete ? "Complete" : optional ? "Optional — not completed" : "Action needed"}</span></div>
         <p className="mt-1 text-sm leading-6 text-muted">{detail}</p>
         {!complete && <Link href={href} className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-accent">Open step <ChevronRight className="size-4" aria-hidden="true" /></Link>}
       </div>
@@ -325,7 +325,7 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
             {activeStep === "consent" && <Card className="border border-border bg-white">
               <StepHeader number={4} title="Consent & submit" complete={complete.consent} optional={moxy} />
               <CardContent className="grid gap-6 pt-2">
-                {saved && <SavedConfirmation title="Consent saved" detail="Your consent has been recorded. You can now submit onboarding when every step is complete." />}
+                {saved && <SavedConfirmation title="Consent saved" detail={moxy ? "Your consent has been recorded. You can submit your saved information when ready." : "Your consent has been recorded. You can now submit onboarding when every step is complete."} />}
                 {!consent ? <form action="/creator-auth/onboarding" method="post" className="grid gap-4">
                   <input type="hidden" name="action" value="consent" />
                   <label><span className="mb-1 block text-sm text-muted">Legal name</span><Input name="legal_name" required disabled={applicationLocked} className="border-[#7b8798]" /></label>
@@ -334,12 +334,12 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
                 </form> : <div className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"><CheckCircle2 className="mt-0.5 size-4 shrink-0" aria-hidden="true" /><span>Consent signed by {consent.legal_name}.</span></div>}
 
                 <section aria-labelledby="readiness-heading" className="rounded-2xl border border-border bg-muted/10 p-5">
-                  <div className="flex flex-wrap items-end justify-between gap-3"><div><h3 id="readiness-heading" className="text-lg font-semibold text-ink">Ready to submit?</h3><p className="mt-1 text-sm text-muted">Complete every item below. Voice recordings are optional, but you must upload samples or choose to skip.</p></div><span className="text-sm font-semibold text-ink">{steps} of 4 complete</span></div>
+                  <div className="flex flex-wrap items-end justify-between gap-3"><div><h3 id="readiness-heading" className="text-lg font-semibold text-ink">Ready to submit?</h3><p className="mt-1 text-sm text-muted">{moxy ? "These onboarding steps are optional. You can submit your saved information now or return to your dashboard and finish later. Skipping does not record consent." : "Complete every item below. Voice recordings are optional, but you must upload samples or choose to skip."}</p></div><span className="text-sm font-semibold text-ink">{steps} of 4 complete</span></div>
                   <ul className="mt-4 grid gap-3">
-                    <ReadinessItem step="questionnaire" complete={done.questionnaire} title="Questionnaire" detail={moxy && !complete.questionnaire ? "Optional, you can fill it in later." : complete.questionnaire ? "Required answers are saved." : "Finish and save the questionnaire."} href="/creator/onboarding?step=questionnaire" />
-                    <ReadinessItem step="content" complete={done.content} title="Content library" detail={moxy && !complete.content ? "Optional, you can add content later." : complete.content ? (categorizedContentComplete ? "Every image and video minimum is verified." : "Your earlier verified content remains accepted.") : CREATOR_CONTENT_REQUIREMENTS.map(({ kind, shortLabel, minimum }) => `${shortLabel} ${contentCounts[kind]}/${minimum}`).join(" · ")} href="/creator/onboarding?step=content" />
-                    <ReadinessItem step="voice" complete={done.voice} title="Voice choice" detail={moxy && !complete.voice ? "Optional, you can add it later." : complete.voice ? (voiceFiles.length ? `${voiceFiles.length} voice sample${voiceFiles.length === 1 ? " is" : "s are"} verified.` : "Voice recordings skipped for now.") : "Upload voice samples or choose Skip for now."} href="/creator/onboarding?step=voice" />
-                    <ReadinessItem step="consent" complete={done.consent} title="Consent" detail={moxy && !complete.consent ? "Optional for now." : complete.consent ? `Consent signed by ${consent?.legal_name}.` : "Enter your legal name and save consent."} href="/creator/onboarding?step=consent" />
+                    <ReadinessItem step="questionnaire" complete={complete.questionnaire} optional={moxy} title="Questionnaire" detail={moxy && !complete.questionnaire ? "Optional, you can fill it in later." : complete.questionnaire ? "Required answers are saved." : "Finish and save the questionnaire."} href="/creator/onboarding?step=questionnaire" />
+                    <ReadinessItem step="content" complete={complete.content} optional={moxy} title="Content library" detail={moxy && !complete.content ? "Optional, you can add content later." : complete.content ? (categorizedContentComplete ? "Every image and video minimum is verified." : "Your earlier verified content remains accepted.") : CREATOR_CONTENT_REQUIREMENTS.map(({ kind, shortLabel, minimum }) => `${shortLabel} ${contentCounts[kind]}/${minimum}`).join(" · ")} href="/creator/onboarding?step=content" />
+                    <ReadinessItem step="voice" complete={complete.voice} optional={moxy} title="Voice choice" detail={moxy && !complete.voice ? "Optional, you can add it later." : complete.voice ? (voiceFiles.length ? `${voiceFiles.length} voice sample${voiceFiles.length === 1 ? " is" : "s are"} verified.` : "Voice recordings skipped for now.") : "Upload voice samples or choose Skip for now."} href="/creator/onboarding?step=voice" />
+                    <ReadinessItem step="consent" complete={complete.consent} optional={moxy} title="Consent" detail={moxy && !complete.consent ? "Optional for now." : complete.consent ? `Consent signed by ${consent?.legal_name}.` : "Enter your legal name and save consent."} href="/creator/onboarding?step=consent" />
                   </ul>
                 </section>
 
