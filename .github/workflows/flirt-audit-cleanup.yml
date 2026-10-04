@@ -1,4 +1,4 @@
-name: FLIRT identified audit cleanup
+name: FLIRT identified audit cleanup verification
 on:
   push:
     branches: ["fix/flirt-audit-cleanup-2026-10-04"]
