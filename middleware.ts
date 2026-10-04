@@ -1,3 +1,4 @@
+import { isCreatorUploadApiPath, creatorUploadApiAllowed } from "@/lib/creator-upload-api-policy";
 import { isMarketingPath } from "@/lib/marketing-routing";
 import { isTwinLoginPath, safeAdminNext } from "@/lib/login-routing";
 import { agencyCanManage, agencyManagementRequestAllowed } from "@/lib/agency-management-policy";
@@ -95,6 +96,12 @@ export async function middleware(req: NextRequest) {
     const response = privateResponse(withPathname(req));
     response.headers.set("X-Robots-Tag", "noindex, nofollow");
     return response;
+  }
+  if (isCreatorUploadApiPath(pathname)) {
+    if (!creatorUploadApiAllowed(pathname, req.method, req.headers.has("next-action")) || (req.method === "DELETE" && !trustedFormOrigin(req))) return new NextResponse("Forbidden", { status: 403 });
+    // Handlers independently verify the current creator and each owned record,
+    // including unfinished accounts that do not yet have a clone.
+    return privateResponse(withPathname(req));
   }
   if (pathname === "/creator-auth/logout" && ["GET", "HEAD"].includes(req.method) && !req.headers.has("next-action")) return privateResponse(withPathname(req));
   if (isCreatorAuthPath(pathname)) {

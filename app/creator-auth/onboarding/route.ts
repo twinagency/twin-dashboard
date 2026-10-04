@@ -23,6 +23,10 @@ function back(req: Request, status: string, step?: "questionnaire" | "voice" | "
   return NextResponse.redirect(url, 303);
 }
 
+function submissionErrorStatus(error: { message?: string } | null | undefined) {
+  return error?.message === "creator_file_removal_pending" ? "file_removal_pending" : "error";
+}
+
 async function getCreator(req: NextRequest) {
   return {
     creator: await creatorDashboardIdentity(req.cookies.get(CREATOR_SESSION_COOKIE)?.value),
@@ -153,7 +157,7 @@ export async function POST(req: NextRequest) {
         .select("id,status,answers,updated_at")
         .single();
       if (createError?.code === "23505") return back(req, "questionnaire_conflict", "consent");
-      if (createError || !created) return back(req, "error", "consent");
+      if (createError || !created) return back(req, submissionErrorStatus(createError), "consent");
       application = created;
     }
 
@@ -167,7 +171,7 @@ export async function POST(req: NextRequest) {
       .eq("updated_at", application.updated_at)
       .select("id")
       .maybeSingle();
-    if (error) return back(req, "error", "consent");
+    if (error) return back(req, submissionErrorStatus(error), "consent");
     if (!submittedApplication) return back(req, "questionnaire_conflict", "consent");
     return NextResponse.redirect(creatorRequestUrl(req, "/creator?submitted=1"), 303);
   }

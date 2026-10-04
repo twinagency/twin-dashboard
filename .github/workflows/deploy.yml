@@ -188,7 +188,7 @@ jobs:
 
       - name: Verify normal Moxy signup, optional flow and small uploads with exact cleanup
         timeout-minutes: 15
-        run: python3 deployment/creator-flow-live-check.py --brand=moxy --expected-sha="${{ steps.build.outputs.sha }}" --mode=small-only --allow-missing-gallery
+        run: python3 deployment/creator-flow-live-check.py --brand=moxy --expected-sha="${{ steps.build.outputs.sha }}" --mode=small-only --removal-guards
 
       # Public GETs only. A successful container swap is not proof of URL routing.
       - name: Warm and verify catalogue video previews
