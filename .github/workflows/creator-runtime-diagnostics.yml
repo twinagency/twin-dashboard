@@ -19,9 +19,11 @@ jobs:
           node-version: "22"
       - name: Validate fixture cleanup guards
         run: |
+          command -v ffmpeg >/dev/null || (sudo apt-get update && sudo apt-get install -y ffmpeg)
           node deployment/creator-flow-live-check.test.cjs
           node deployment/creator-flow-cleanup.test.cjs
       - uses: aws-actions/configure-aws-credentials@v4
+        id: runtime_auth
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
@@ -29,5 +31,5 @@ jobs:
       - name: Verify Moxy recovery redirects and normal flow with exact cleanup
         run: python3 deployment/creator-flow-live-check.py --brand=moxy --expected-sha=a5c7f1cf1f84d478639a522eb64339d591d8ff77 --mode=flow-only
       - name: Verify FLIRT recovery redirects and normal flow with exact cleanup
-        if: always()
+        if: always() && steps.runtime_auth.outcome == 'success'
         run: python3 deployment/creator-flow-live-check.py --brand=flirt --expected-sha=e528eb6066477d33a50b68d58d4fea1de5cff681 --mode=flow-only
