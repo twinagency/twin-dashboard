@@ -42,7 +42,7 @@ const safe = safeUploadResult(new Response('{}', { status: 503 }), { status: 'ht
 assert.deepEqual(safe, { fixture: 'fixture.mp4', http_status: 503, outcome: 'unclassified', total_request_ms: 20 });
 
 // Complete runner executes against a deterministic network double; no live calls.
-async function mockedFlow(brand, uploadMode = false, missingGallery = false, wrongLogout = false, cleanupRetry = false) {
+async function mockedFlow(brand, uploadMode = false, missingGallery = false, wrongLogout = false, cleanupRetry = false, orphanBlock = null) {
   const config = { run: true, brand, sha: SHA, mode: uploadMode ? 'small-only' : 'flow-only', ...(uploadMode ? missingGallery ? { allowMissingGallery: true } : { removalGuards: true } : {}) };
   const env = envFor(brand), accounts = new Map(), auth = new Map(), invites = new Map(), applications = new Map(), files = new Map(), objects = new Map(), reservations = new Map(), requests = [];
   const agency = brand === 'flirt' ? BRANDS.flirt.agency : moxyId;
@@ -50,6 +50,7 @@ async function mockedFlow(brand, uploadMode = false, missingGallery = false, wro
   const redirect = (url, cookie) => new Response(null, { status: 303, headers: { Location: BRANDS[brand].origin + url, ...(cookie ? { 'Set-Cookie': cookie } : {}) } });
   const originalFetch = global.fetch, originalLog = console.log, outputs = [];
   let failCleanupOnce = cleanupRetry;
+  let insertedOrphan = false, orphanPath = null;
   console.log = value => outputs.push(value);
   global.fetch = async (input, options) => {
     const url = new URL(input), method = options.method || 'GET', headers = new Headers(options.headers), body = options.body;
@@ -95,7 +96,7 @@ async function mockedFlow(brand, uploadMode = false, missingGallery = false, wro
         const id = headers.get('x-creator-upload-id'), blob = body.get('files');
         assert.ok(id);
         if (!files.has(id)) {
-          const storagePath = `creators/${owner.id}/${body.get('kind')}/${id}.mp4`, bytes = Buffer.from(await blob.arrayBuffer());
+          const storagePath = `creators/${owner.id}/${body.get('kind')}/${id}`, bytes = Buffer.from(await blob.arrayBuffer());
           files.set(id, { id, creator_account_id: owner.id, kind: body.get('kind'), original_name: blob.name, size_bytes: bytes.length, storage_transfer_status: 'verified', bucket: 'onboarding-content', storage_path: storagePath });
           objects.set(storagePath, bytes);
         }
@@ -122,6 +123,23 @@ async function mockedFlow(brand, uploadMode = false, missingGallery = false, wro
       return new Response(object.subarray(0, 1024), { status: 206, headers: { 'Content-Range': `bytes 0-1023/${object.length}` } });
     }
     assert.equal(headers.get('apikey'), env.SUPABASE_SERVICE_KEY);
+    if (url.pathname.startsWith('/storage/v1/object/list/')) {
+      const bucket = url.pathname.split('/').pop(), { prefix, offset, limit } = JSON.parse(body);
+      if (bucket === 'voice-samples') return json([]);
+      if (orphanBlock && !insertedOrphan) {
+        insertedOrphan = true;
+        const name = orphanBlock === 'unknown' ? 'customer-upload.mp4' : 'moving-one.mp4';
+        orphanPath = prefix + '/content_sfw_video/' + Date.now() + '-' + randomUUID() + '-' + name;
+        objects.set(orphanPath, Buffer.alloc(1024));
+      }
+      const children = new Map();
+      for (const [key, value] of objects) {
+        if (!key.startsWith(prefix + '/')) continue;
+        const rest = key.slice(prefix.length + 1), pieces = rest.split('/');
+        children.set(pieces[0], pieces.length > 1 ? { name: pieces[0], id: null, metadata: null } : { name: pieces[0], id: randomUUID(), metadata: { size: value.length } });
+      }
+      return json([...children.values()].sort((a,b) => a.name.localeCompare(b.name)).slice(offset, offset + limit));
+    }
     if (url.pathname === '/auth/v1/admin/generate_link') {
       const payload = JSON.parse(body), target = BRANDS[brand].origin + '/creator/reset-password';
       assert.equal(payload.type, 'recovery'); assert.equal(payload.redirect_to, undefined);
@@ -150,7 +168,8 @@ async function mockedFlow(brand, uploadMode = false, missingGallery = false, wro
     const table = url.pathname.split('/').pop(), id = url.searchParams.get('creator_account_id')?.slice(3);
     if (table === 'creator_accounts') {
       const email = url.searchParams.get('email')?.slice(3);
-      const rows = [...accounts.values()].filter(item => item.email === email);
+      const accountId = url.searchParams.get('id')?.slice(3);
+      const rows = [...accounts.values()].filter(item => (!email || item.email === email) && (!accountId || item.id === accountId));
       if (method === 'DELETE') {
         if (failCleanupOnce) { failCleanupOnce = false; return json({ error: 'temporary_metadata_failure' }, 503); }
         rows.forEach(item => accounts.delete(item.id)); return new Response(null, { status: 204 });
@@ -166,13 +185,14 @@ async function mockedFlow(brand, uploadMode = false, missingGallery = false, wro
       if (method === 'DELETE') { rows.forEach(item => invites.delete(item.id)); return new Response(null, { status: 204 }); }
       return json(rows);
     }
-    if (['photos', 'videos', 'photo_bundle_items', 'video_sequence_jobs'].includes(table)) return json([]);
+    if (['photos', 'videos', 'photo_bundle_items', 'video_sequence_jobs'].includes(table)) return json(orphanBlock === 'downstream' && table === 'photos' && url.searchParams.get('storage_path') === 'eq.' + orphanPath ? [{ id: randomUUID() }] : []);
     if (table === 'creator_files') {
       let rows = [...files.values()];
       const ownerFilter = url.searchParams.get('creator_account_id');
       if (ownerFilter?.startsWith('eq.')) rows = rows.filter(file => file.creator_account_id === ownerFilter.slice(3));
       if (ownerFilter?.startsWith('neq.')) rows = rows.filter(file => file.creator_account_id !== ownerFilter.slice(4));
       if (url.searchParams.get('storage_path')) rows = rows.filter(file => file.storage_path === url.searchParams.get('storage_path').slice(3));
+      if (orphanBlock === 'foreign' && ownerFilter?.startsWith('neq.') && url.searchParams.get('storage_path') === 'eq.' + orphanPath) rows = [{ id: randomUUID() }];
       if (method === 'DELETE') {
         for (const file of rows) { assert.equal(objects.has(file.storage_path), false, 'Metadata removal must follow verified Storage removal'); files.delete(file.id); }
         return new Response(null, { status: 204 });
@@ -199,6 +219,10 @@ async function mockedFlow(brand, uploadMode = false, missingGallery = false, wro
       fs.writeFileSync(result.cleanup_manifest, JSON.stringify(unsafe), { mode: 0o600 });
       assert.throws(() => readCleanupManifest(cleanupConfig), /outside the recorded run/);
       fs.writeFileSync(result.cleanup_manifest, JSON.stringify(manifest), { mode: 0o600 });
+      // Reproduce a prior interrupted cleanup: account/Auth are already gone,
+      // while an unrecorded known synthetic Storage object remains in its prefix.
+      accounts.delete(manifest.fixtures[0].id); auth.delete(manifest.fixtures[0].auth_user_id);
+      objects.set(`creators/${manifest.fixtures[0].id}/content_sfw_video/${manifest.startedAt}-${randomUUID()}-moving-one.mp4`, Buffer.alloc(1024));
       result = await run(cleanupConfig, { ...env, GIT_SHA: cleanupConfig.sha });
       assert.equal(requests.filter(request => request.path === '/creator-auth/signup').length, normalSignupCalls, 'Cleanup-only must not sign up new accounts');
       assert.equal(result.cleanup_source_commit, SHA);
@@ -206,7 +230,15 @@ async function mockedFlow(brand, uploadMode = false, missingGallery = false, wro
     }
   }
   finally { global.fetch = originalFetch; console.log = originalLog; }
-  assert.equal(result.passed, !wrongLogout, JSON.stringify(result));
+  assert.equal(result.passed, !wrongLogout && !orphanBlock, JSON.stringify(result));
+  if (orphanBlock) {
+    assert.ok(result.cleanup_failure, 'Unexpected or referenced orphan must block cleanup');
+    assert.ok(objects.has(orphanPath), 'Blocked cleanup must retain the stored object');
+    assert.ok(accounts.size > 0 && auth.size > 0, 'Blocked cleanup must retain its disposable identity');
+    assert.equal(requests.some(request => request.path.startsWith('/storage/v1/object/') && request.method === 'DELETE'), false, 'Preflight must finish before deleting any object');
+    fs.rmSync(path.dirname(result.cleanup_manifest), { recursive: true, force: true });
+    return;
+  }
   if (wrongLogout) {
     assert.ok(result.blocked.some(item => item.includes('Logout redirects within the same brand')));
     assert.ok(result.uploads.length >= 3, 'Wrong logout landing must not hide independent upload verification');
@@ -223,4 +255,4 @@ async function mockedFlow(brand, uploadMode = false, missingGallery = false, wro
   const rendered = outputs.join('\n');
   assert.ok(!rendered.includes(env.SUPABASE_SERVICE_KEY) && !rendered.includes(env.DASHBOARD_PASSWORD) && !rendered.includes('normal-auth-token') && !rendered.includes('private-do-not-log'));
 }
-(async () => { await mockedFlow('flirt'); await mockedFlow('moxy'); await mockedFlow('flirt', true); await mockedFlow('moxy', true, true); await mockedFlow('moxy', true, true, true); await mockedFlow('flirt', false, false, false, true); console.log('Creator live runner: stdin invocation, runtime isolation, normal signup/invites, correct-query unsent recovery, upload persistence/private ranges, removal guards, explicit missing-gallery/logout-regression scope, interrupted-manifest cleanup-only, Storage-first cleanup and redacted output tests pass; no live requests made.'); })().catch(error => { console.error(error); process.exitCode = 1; });
+(async () => { await mockedFlow('flirt'); await mockedFlow('moxy'); await mockedFlow('flirt', true); await mockedFlow('moxy', true, true); await mockedFlow('moxy', true, true, true); await mockedFlow('flirt', false, false, false, true); for (const block of ['unknown','downstream','foreign']) await mockedFlow('flirt', false, false, false, false, block); console.log('Creator live runner: stdin invocation, runtime isolation, normal signup/invites, correct-query unsent recovery, upload persistence/private ranges, removal guards, explicit missing-gallery/logout-regression scope, interrupted/orphan manifest cleanup, unknown/reference guards, Storage-first cleanup and redacted output tests pass; no live requests made.'); })().catch(error => { console.error(error); process.exitCode = 1; });

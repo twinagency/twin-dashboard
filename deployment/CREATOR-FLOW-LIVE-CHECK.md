@@ -52,6 +52,10 @@ Output contains pass/failure labels and safe HTTP status, upload outcome, durati
 
 Cleanup verifies each disposable account's unique email, exact display label, creation window and IDs; refuses a connected profile or downstream object references; removes exact objects using the authorized Storage API and verifies absence **before** removing file references; then removes Auth through its admin API and the exact creator row. Only this run's uniquely labelled invitations are deleted. Cleanup never alters shared invitation counters or deletes Storage metadata with SQL.
 
+Cleanup also enumerates each exact `creators/<disposable UUID>/` prefix in onboarding-content and voice-samples through the Storage API, with category-only depth, 100-item pages and a 500-entry bound. This finds a Storage object written before a crashed process saved its database record. Unrecorded legacy objects must have the exact known fixture category, timestamp/UUID/filename structure, run-time window and expected byte range; bare-UUID objects require a known receipt or a pre-upload manifest record. All candidates and downstream/foreign references are checked before any removal. An unexpected object blocks cleanup and preserves the disposable identity. Both prefixes must be empty before account deletion. The same guarded prefix scan works for an older manifest whose account and Auth record are already absent.
+
+Run `node deployment/creator-flow-cleanup.test.cjs` for standalone orphan-authorization, pagination, path, size and scope tests; the main runner regression additionally covers unknown objects and downstream/foreign references blocking deletion.
+
 For an interrupted process, perform **cleanup only** using the exact recorded manifest, without any new signup or upload:
 
 ```sh
