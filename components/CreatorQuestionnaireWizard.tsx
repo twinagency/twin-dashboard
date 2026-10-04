@@ -69,6 +69,8 @@ export default function CreatorQuestionnaireWizard({
   const savePromiseRef = useRef<Promise<boolean> | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [saveState, setSaveState] = useState<SaveState>(locked ? "locked" : "idle");
+  const [navigating, setNavigating] = useState(false);
+  const [navigationError, setNavigationError] = useState("");
   const [answered, setAnswered] = useState(() => Object.values(initialAnswers).filter((value) => value.trim()).length);
   const currentIndex = creatorQuestionnairePageIndex(page.slug);
   const questions = useMemo(() => questionnairePageQuestions(page), [page]);
@@ -136,10 +138,14 @@ export default function CreatorQuestionnaireWizard({
   };
 
   const goTo = async (target: number | "finish" | "hub" | "dashboard") => {
+    if (navigating) return;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     if (!locked && (target === "finish" || (typeof target === "number" && target > currentIndex)) && !formRef.current?.reportValidity()) return;
-    const saved = await flushDraft();
-    if (!saved) return;
+    setNavigating(true); setNavigationError("");
+    try {
+    let saved = await flushDraft();
+    while (saved && dirtyRef.current) saved = await flushDraft();
+    if (!saved) { setNavigating(false); return; }
     if (target === "hub" || target === "dashboard") {
       window.location.assign(target === "dashboard" ? "/creator" : "/creator/onboarding");
       return;
@@ -151,12 +157,15 @@ export default function CreatorQuestionnaireWizard({
           body: new URLSearchParams({ action: "questionnaire", revision: revisionRef.current }),
         });
         if (!response.ok) { setSaveState("error"); return; }
-        window.location.assign(response.url);
+        const destination = new URL(response.url, window.location.origin);
+      if (!response.ok || destination.searchParams.get("status") !== "questionnaire_saved") { setNavigationError("The questionnaire could not be finished. Your saved answers are still here. Please try again."); setNavigating(false); return; }
+      window.location.assign(response.url);
       } catch { setSaveState("error"); }
       return;
     }
     const next = CREATOR_QUESTIONNAIRE_PAGES[target];
     window.location.assign(`/creator/onboarding?step=questionnaire&section=${encodeURIComponent(next.slug)}`);
+    } catch { setNavigationError("The save could not be confirmed. Please try again before leaving this page."); setNavigating(false); }
   };
 
   useEffect(() => {
@@ -210,23 +219,24 @@ export default function CreatorQuestionnaireWizard({
         </section>
       ))}
 
+      {navigationError && <p role="alert" className="text-sm text-rose-700">{navigationError}</p>}
       <div className="sticky bottom-4 z-10 rounded-2xl border border-border bg-white/95 p-4 shadow-lg backdrop-blur">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <Button type="button" variant="outline" size="lg" disabled={saveState === "saving"} onClick={() => void goTo("hub")} className="min-h-11 w-full sm:w-auto">
+          <Button type="button" variant="outline" size="lg" disabled={navigating || saveState === "saving"} onClick={() => void goTo("hub")} className="min-h-11 w-full sm:w-auto">
             <ArrowLeft className="size-4" aria-hidden="true" /> {locked ? "Return to onboarding" : "Save and return to onboarding"}
           </Button>
           <div className="flex flex-col-reverse gap-3 sm:flex-row sm:flex-wrap">
-            {optional && <Button type="button" variant="outline" size="lg" disabled={saveState === "saving"} onClick={() => void goTo("dashboard")} className="min-h-11 w-full sm:w-auto">{locked ? "Dashboard" : "Save and go to dashboard"}</Button>}
-            {optional && !locked && currentIndex < CREATOR_QUESTIONNAIRE_PAGES.length - 1 && <Button type="button" variant="outline" size="lg" disabled={saveState === "saving"} onClick={() => void goTo("finish")} className="min-h-11 w-full sm:w-auto">Skip questionnaire</Button>}
-            {currentIndex > 0 && <Button type="button" variant="outline" size="lg" disabled={saveState === "saving"} onClick={() => void goTo(currentIndex - 1)} className="min-h-11 w-full sm:w-auto">
+            {optional && <Button type="button" variant="outline" size="lg" disabled={navigating || saveState === "saving"} onClick={() => void goTo("dashboard")} className="min-h-11 w-full sm:w-auto">{locked ? "Dashboard" : "Save and go to dashboard"}</Button>}
+            {optional && !locked && currentIndex < CREATOR_QUESTIONNAIRE_PAGES.length - 1 && <Button type="button" variant="outline" size="lg" disabled={navigating || saveState === "saving"} onClick={() => void goTo("finish")} className="min-h-11 w-full sm:w-auto">Skip questionnaire</Button>}
+            {currentIndex > 0 && <Button type="button" variant="outline" size="lg" disabled={navigating || saveState === "saving"} onClick={() => void goTo(currentIndex - 1)} className="min-h-11 w-full sm:w-auto">
               <ArrowLeft className="size-4" aria-hidden="true" /> {locked ? "Previous part" : "Save and go back"}
             </Button>}
             {currentIndex < CREATOR_QUESTIONNAIRE_PAGES.length - 1 ? (
-              <Button type="button" size="lg" disabled={saveState === "saving"} onClick={() => void goTo(currentIndex + 1)} className="min-h-11 w-full sm:w-auto">
+              <Button type="button" size="lg" disabled={navigating || saveState === "saving"} onClick={() => void goTo(currentIndex + 1)} className="min-h-11 w-full sm:w-auto">
                 {locked ? "Next part" : "Save and continue"} <ArrowRight className="size-4" aria-hidden="true" />
               </Button>
             ) : !locked ? (
-              <Button type="button" size="lg" disabled={saveState === "saving"} onClick={() => void goTo("finish")} className="min-h-11 w-full sm:w-auto">
+              <Button type="button" size="lg" disabled={navigating || saveState === "saving"} onClick={() => void goTo("finish")} className="min-h-11 w-full sm:w-auto">
                 {optional ? "Continue to content" : "Finish questionnaire"} <Check className="size-4" aria-hidden="true" />
               </Button>
             ) : null}
