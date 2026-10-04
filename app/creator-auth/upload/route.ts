@@ -1,3 +1,5 @@
+import { isUploadId, saveIdempotentCreatorUpload } from "@/lib/creator-upload-receipts";
+import { tracedCreatorUpload, uploadStage, uploadDiagnostic } from "@/lib/creator-upload-diagnostics";
 import { NextResponse } from "next/server";
 import type { NextRequest } from "next/server";
 import { execFile } from "node:child_process";
@@ -28,8 +30,8 @@ export const runtime = "nodejs";
 function back(req: Request, status: string, step?: "content" | "voice") {
   if (req.headers.get("accept")?.includes("application/json")) {
     const success = status === "content_saved" || status === "voice_saved";
-    return NextResponse.json({ status }, {
-      status: success ? 200 : status === "upload_busy" ? 429 : status === "application_locked" ? 409 : 400,
+    return NextResponse.json({ status, ...uploadDiagnostic() }, {
+      status: success ? 200 : status === "upload_busy" ? 429 : status === "application_locked" ? 409 : ["upload_error", "upload_storage_error", "upload_metadata_error", "upload_staging_error", "upload_staging_full"].includes(status) ? 503 : 400,
       headers: { "Cache-Control": "private, no-store", ...(status === "upload_busy" ? { "Retry-After": "5" } : {}) },
     });
   }
@@ -189,6 +191,16 @@ async function videoProbeMatches(file: StagedCreatorFile, mime: string): Promise
   }
 }
 
+async function voiceProbeMatches(file: StagedCreatorFile): Promise<boolean> {
+  try {
+    const { stdout, stderr } = await execFileAsync(mediaToolPath("ffprobe"), ["-v", "error", "-protocol_whitelist", "file", "-select_streams", "a:0", "-show_entries", "format=duration,size:stream=codec_type,codec_name", "-of", "json", file.path], mediaToolOptions(30_000));
+    const probe = JSON.parse(String(stdout));
+    if (String(stderr).trim() || probe.streams?.[0]?.codec_type !== "audio" || !probe.streams[0].codec_name || !(Number(probe.format?.duration) > 0) || Number(probe.format?.size) !== file.size) return false;
+    const decoded = await execFileAsync(mediaToolPath("ffmpeg"), ["-v", "error", "-xerror", "-nostdin", "-threads", "1", "-protocol_whitelist", "file", "-i", file.path, "-map", "0:a:0", "-t", "1", "-f", "null", "-"], mediaToolOptions(15_000));
+    return !String(decoded.stderr).trim();
+  } catch { return false; }
+}
+
 async function contentSignatureMatches(file: StagedCreatorFile, mime: string): Promise<boolean> {
   if (file.size < 32) return false;
   const handle = await open(file.path, "r");
@@ -221,7 +233,7 @@ export async function POST(req: NextRequest) {
   // Middleware normally sanitizes audience/path headers. Do not consult any of
   // those caller-controlled headers or a separate operator cookie on this route.
   // The validated creator account below owns every row and the FLIRT-local client.
-  return withDashboardAccess(null, () => uploadForCreator(req));
+  return tracedCreatorUpload(() => withDashboardAccess(null, () => uploadForCreator(req)), req.headers.get("x-creator-upload-id"));
 }
 
 async function uploadForCreator(req: NextRequest) {
@@ -232,6 +244,8 @@ async function uploadForCreator(req: NextRequest) {
   }
   if (creator.readOnly) return new NextResponse("Creator demo is read-only", { status: 403 });
   const accountId = creator.accountId;
+  const uploadId = req.headers.get("x-creator-upload-id");
+  if (uploadId && !isUploadId(uploadId)) return back(req, "upload_conflict");
 
   const contentLength = Number(req.headers.get("content-length") || 0);
   if (contentLength > MAX_REQUEST_BYTES) return back(req, "upload_too_large");
@@ -248,8 +262,10 @@ async function uploadForCreator(req: NextRequest) {
     existingUploadUsage(accountId),
   ]);
   if (applicationError || uploadUsage.error) return back(req, "upload_error");
-  if (uploadUsage.count >= MAX_ACCOUNT_FILES) return back(req, "upload_quota");
+  if (!uploadId && uploadUsage.count >= MAX_ACCOUNT_FILES) return back(req, "upload_quota");
+  uploadStage("receiving");
   staged = await boundedFormData(req);
+  uploadStage("validating");
   const kind = staged.fields.get("kind") || "";
   const contentRequirement = creatorContentRequirement(kind);
   if (kind !== "voice" && !isCreatorContentKind(kind)) return back(req, "upload_error");
@@ -258,19 +274,23 @@ async function uploadForCreator(req: NextRequest) {
   // Ownership, read-only demos, rejected applications and strict runtimes stay protected.
   if (!creatorOnboardingEditable(application?.status)) return back(req, "application_locked", step);
   const files = staged.files;
+  if (uploadId && files.length !== 1) return back(req, "upload_conflict", step);
   if (!files.length) return back(req, "upload_empty", step);
   if (files.length > 25) return back(req, "upload_too_many", step);
 
   const maxBytes = creatorUploadMaxBytes(kind);
   const aggregateBytes = files.reduce((total, file) => total + file.size, 0);
   if (aggregateBytes > MAX_BATCH_BYTES) return back(req, "upload_too_large", step);
-  if (uploadUsage.bytes + aggregateBytes > MAX_ACCOUNT_BYTES) return back(req, "upload_quota", step);
+  if (!uploadId && uploadUsage.bytes + aggregateBytes > MAX_ACCOUNT_BYTES) return back(req, "upload_quota", step);
   const bucket = kind === "voice" ? "voice-samples" : "onboarding-content";
   const now = new Date().toISOString();
   const normalizedMimes = new Map<StagedCreatorFile, string>();
 
   for (const file of files) {
     if (file.size > maxBytes) return back(req, "upload_too_large", step);
+    if (kind === "voice") {
+      if (!(file.type.startsWith("audio/") || file.type.startsWith("video/") || file.type === "application/octet-stream") || !(await voiceProbeMatches(file))) return back(req, "upload_wrong_type", step);
+    }
     if (contentRequirement) {
       const mime = normalizedContentMime(file, contentRequirement.accept.split(","));
       if (!mime || !mime.startsWith(`${contentRequirement.media}/`) || !(await validateMedia(file, mime))) return back(req, "upload_wrong_type", step);
@@ -288,7 +308,7 @@ async function uploadForCreator(req: NextRequest) {
   ]);
   if (latestUsage.error || latestApplicationError) return back(req, "upload_error", step);
   if (!creatorOnboardingEditable(latestApplication?.status)) return back(req, "application_locked", step);
-  if (latestUsage.bytes + aggregateBytes > MAX_ACCOUNT_BYTES || latestUsage.count + files.length > MAX_ACCOUNT_FILES) return back(req, "upload_quota", step);
+  if (!uploadId && (latestUsage.bytes + aggregateBytes > MAX_ACCOUNT_BYTES || latestUsage.count + files.length > MAX_ACCOUNT_FILES)) return back(req, "upload_quota", step);
 
   const uploadedPaths: string[] = [];
   const insertedPaths: string[] = [];
@@ -308,7 +328,12 @@ async function uploadForCreator(req: NextRequest) {
 
   for (const file of files) {
     const mime = normalizedMimes.get(file) || file.type || "application/octet-stream";
+    if (uploadId) {
+      await saveIdempotentCreatorUpload(accountId, uploadId, kind, file, mime);
+      continue;
+    }
     const objectPath = `creators/${accountId}/${kind}/${Date.now()}-${randomUUID()}-${safeName(file.name)}`;
+    uploadStage("storage");
     const body = await openAsBlob(file.path, { type: mime });
     const { error: uploadError } = await supabaseAdmin.storage.from(bucket).upload(objectPath, body, {
       contentType: mime,
@@ -316,11 +341,13 @@ async function uploadForCreator(req: NextRequest) {
       upsert: false,
     });
     if (uploadError) {
+      uploadStage("storage", String((uploadError as { statusCode?: string }).statusCode || "provider_error"));
       await rollbackBatch();
-      return back(req, "upload_error", step);
+      return back(req, "upload_storage_error", step);
     }
     uploadedPaths.push(objectPath);
 
+    uploadStage("metadata");
     const { error: rowError } = await supabaseAdmin.from("creator_files").insert({
       creator_account_id: accountId,
       kind,
@@ -335,12 +362,14 @@ async function uploadForCreator(req: NextRequest) {
       source_object_checked_at: now,
     });
     if (rowError) {
+      uploadStage("metadata", rowError.code);
       await rollbackBatch();
-      return back(req, "upload_error", step);
+      return back(req, "upload_metadata_error", step);
     }
     insertedPaths.push(objectPath);
   }
 
+  uploadStage("progress");
   let patch: { content_completed?: boolean; voice_completed?: boolean; updated_at: string };
   if (kind === "voice") {
     patch = { voice_completed: true, updated_at: now };
@@ -356,6 +385,7 @@ async function uploadForCreator(req: NextRequest) {
   if (progressError) return back(req, kind === "voice" ? "voice_saved" : "content_saved", step);
   return back(req, kind === "voice" ? "voice_saved" : "content_saved", step);
   } catch (error) {
+    if (error instanceof CreatorUploadError && ["upload_staging_full", "upload_staging_error"].includes(error.status)) uploadStage("staging", error.status);
     return back(req, error instanceof CreatorUploadError ? error.status : "upload_error", staged?.fields.get("kind") === "voice" ? "voice" : "content");
   } finally {
     releaseSave?.();

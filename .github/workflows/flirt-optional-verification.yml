@@ -35,4 +35,4 @@ jobs:
       - name: Normal signup, optional onboarding, small uploads and exact cleanup
         env:
           EXPECTED_SHA: ${{ inputs.expected_sha }}
-        run: python3 deployment/creator-flow-live-check.py --brand=flirt --expected-sha="$EXPECTED_SHA" --mode=small-only --allow-missing-gallery
+        run: python3 deployment/creator-flow-live-check.py --brand=flirt --expected-sha="$EXPECTED_SHA" --mode=small-only --removal-guards

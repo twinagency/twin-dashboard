@@ -14,6 +14,13 @@ const BRANDS = Object.freeze({
 });
 const LIMIT = 536870912;
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
+const FIXTURE_FILES = Object.freeze({
+  'moving-one.mp4': { kind: 'content_sfw_video' }, 'moving-two.mp4': { kind: 'content_nsfw_video' },
+  'near-limit-padded.mp4': { kind: 'content_sfw_video', bytes: LIMIT - 1024 },
+  'exact-limit-padded.mp4': { kind: 'content_sfw_video', bytes: LIMIT },
+  'over-limit-padded.mp4': { kind: 'content_sfw_video', bytes: LIMIT + 1 },
+  'additional-after-submit.mp4': { kind: 'content_sfw_video' }, 'removal-guard-fixture.mp4': { kind: 'content_sfw_video' },
+});
 class CheckError extends Error {}
 class BlockedError extends CheckError {}
 function assert(ok, label) { if (!ok) throw new CheckError(label); }
@@ -27,9 +34,12 @@ function parseArgs(argv) {
     } else if (arg === '--run') config.run = true;
     else if (arg === '--removal-guards') config.removalGuards = true;
     else if (arg === '--allow-missing-gallery') config.allowMissingGallery = true;
+    else if (arg.startsWith('--cleanup-manifest=')) config.cleanupManifest = arg.slice(19);
     else throw new CheckError('Unknown runner argument');
   }
+  if (config.cleanupManifest) { assert(!config.mode, 'Cleanup-only cannot be combined with signup/upload mode'); config.mode = 'cleanup-only'; }
   assert(config.run && BRANDS[config.brand] && /^[a-f0-9]{40}$/i.test(config.sha || '') && config.mode, 'Require --run, --brand, --expected-sha and exactly one run mode');
+  assert(config.mode !== 'cleanup-only' || (!config.removalGuards && !config.allowMissingGallery), 'Cleanup-only cannot change verification options');
   assert(!config.removalGuards || config.mode !== 'flow-only', '--removal-guards requires an upload mode');
   assert(!config.allowMissingGallery || (!config.removalGuards && config.mode !== 'flow-only'), '--allow-missing-gallery requires an upload mode without removal guards');
   return config;
@@ -46,6 +56,85 @@ function runtimeGuard(config, env) {
     assert(!env.DASHBOARD_PUBLIC_ORIGIN || ['https://dashboard.tgaiclone.xyz', brand.origin].includes(env.DASHBOARD_PUBLIC_ORIGIN), 'Unexpected shared-runtime canonical origin');
   }
   return brand;
+}
+function readCleanupManifest(config) {
+  const location = config.cleanupManifest;
+  assert(new RegExp(`^/tmp/creator-flow-${config.brand}-[A-Za-z0-9]+/cleanup-manifest[.]json$`).test(location || ''), 'Cleanup manifest must be an exact private runner manifest path');
+  const directory = path.dirname(location), fileStat = fs.lstatSync(location), directoryStat = fs.lstatSync(directory);
+  assert(fileStat.isFile() && !fileStat.isSymbolicLink() && directoryStat.isDirectory() && !directoryStat.isSymbolicLink()
+    && fileStat.size < 1024 * 1024 && (fileStat.mode & 0o777) === 0o600 && (directoryStat.mode & 0o777) === 0o700
+    && fileStat.uid === process.getuid() && directoryStat.uid === process.getuid() && fs.realpathSync(location) === location, 'Unsafe cleanup manifest file');
+  const manifest = JSON.parse(fs.readFileSync(location, 'utf8'));
+  // The serving version may have advanced after the interrupted run. The
+  // current runtime still has its independent exact SHA guard; preserve the
+  // original manifest revision as evidence instead of requiring a rollback.
+  assert(manifest.brand === config.brand && /^[a-f0-9]{40}$/.test(manifest.expected_sha || '') && /^\d{13}-[a-f0-9]{12}$/.test(manifest.stamp || ''), 'Cleanup manifest brand or original revision is invalid');
+  const startedAt = Number(manifest.stamp.split('-')[0]);
+  assert(Number.isSafeInteger(startedAt) && startedAt <= Date.now() + 5000, 'Invalid cleanup creation window');
+  assert(Array.isArray(manifest.fixtures) && manifest.fixtures.length <= 4 && Array.isArray(manifest.invitations) && manifest.invitations.length <= 4, 'Unexpected cleanup manifest scope');
+  for (const fixture of manifest.fixtures) {
+    const suffix = ['complete', 'skip'].find(value => fixture.email === `contact+creator-audit-${manifest.stamp}-${config.brand}-${value}@twinagency.co`);
+    assert(suffix && fixture.name === `Disposable creator audit ${config.brand} ${suffix} ${manifest.stamp}`
+      && (!fixture.id || UUID.test(fixture.id)) && (!fixture.auth_user_id || UUID.test(fixture.auth_user_id)), 'Cleanup fixture identity is outside the recorded run');
+  }
+  for (const invitation of manifest.invitations) assert(UUID.test(invitation.agency_id || '') && (!invitation.id || UUID.test(invitation.id))
+    && ['complete', 'skip', 'duplicate-validation'].some(suffix => invitation.label === `Creator audit ${manifest.stamp} ${suffix}`)
+    && (config.brand !== 'flirt' || invitation.agency_id === BRANDS.flirt.agency), 'Cleanup invitation is outside the recorded run');
+  assert(!manifest.uploads || (Array.isArray(manifest.uploads) && manifest.uploads.length <= 100), 'Unexpected manifest upload scope');
+  for (const upload of manifest.uploads || []) assert(UUID.test(upload.id || '') && manifest.fixtures.some(fixture => fixture.id === upload.creator_account_id)
+    && FIXTURE_FILES[upload.name]?.kind === upload.kind && Number.isSafeInteger(upload.bytes) && upload.bytes > 0 && upload.bytes <= LIMIT + 1, 'Manifest upload is outside known fixture scope');
+  return { ...manifest, startedAt };
+}
+function runnerFixtureObjectAllowed(fixture, object, startedAt, knownRows = [], attempts = []) {
+  if (!UUID.test(fixture.id || '') || object.bucket !== 'onboarding-content') return false;
+  const parts = object.storage_path?.split('/') || [];
+  if (parts.length !== 4 || parts[0] !== 'creators' || parts[1] !== fixture.id || parts.some(part => !part || part === '.' || part === '..')) return false;
+  const [, , kind, basename] = parts;
+  const expectedSize = Number(object.size_bytes);
+  if (!Number.isSafeInteger(expectedSize) || expectedSize <= 0) return false;
+  function allowedName(name, bytes) {
+    const rule = FIXTURE_FILES[name];
+    return rule?.kind === kind && (rule.bytes ? expectedSize === rule.bytes : expectedSize < 2 * 1024 * 1024)
+      && (bytes == null || Number(bytes) === expectedSize);
+  }
+  const legacy = basename.match(/^(\d{13})-([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})-(.+)$/i);
+  if (legacy) return Number(legacy[1]) >= startedAt - 5000 && Number(legacy[1]) <= startedAt + 2 * 60 * 60 * 1000 && allowedName(legacy[3]);
+  if (!UUID.test(basename)) return false;
+  const proof = knownRows.find(row => row.bucket === object.bucket && row.storage_path === object.storage_path && row.kind === kind && allowedName(row.original_name, row.size_bytes))
+    || attempts.find(attempt => attempt.creator_account_id === fixture.id && attempt.id === basename && attempt.kind === kind && allowedName(attempt.name, attempt.bytes));
+  return !!proof;
+}
+async function enumerateFixtureStorage(backend, fixture) {
+  assert(UUID.test(fixture.id || ''), 'Cannot enumerate unresolved fixture storage');
+  const rootPrefix = `creators/${fixture.id}`, found = [];
+  let entries = 0;
+  const allowedKinds = new Set(['content', 'content_sfw_image', 'content_nsfw_image', 'content_sfw_video', 'content_nsfw_video', 'voice']);
+  for (const bucket of ['onboarding-content', 'voice-samples']) {
+    const queue = [{ prefix: rootPrefix, depth: 0 }];
+    while (queue.length) {
+      const item = queue.shift();
+      let complete = false;
+      for (let page = 0; page < 6; page++) {
+        const rows = await backend(`/storage/v1/object/list/${bucket}`, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ prefix: item.prefix, limit: 100, offset: page * 100, sortBy: { column: 'name', order: 'asc' } }) });
+        assert(Array.isArray(rows) && rows.length <= 100, 'Unexpected fixture Storage listing');
+        for (const row of rows) {
+          entries++; assert(entries <= 500, 'Fixture storage enumeration exceeded bounded scope');
+          assert(typeof row.name === 'string' && row.name.length <= 240 && !/[\\/%\x00-\x1f]/.test(row.name) && !['.', '..', ''].includes(row.name), 'Cleanup stopped: stored name contains an unsafe path');
+          if (row.id == null && row.metadata == null) {
+            assert(item.depth === 0 && allowedKinds.has(row.name) && (bucket !== 'voice-samples' || row.name === 'voice'), 'Cleanup stopped: unexpected storage folder or depth');
+            queue.push({ prefix: item.prefix + '/' + row.name, depth: item.depth + 1 });
+          } else {
+            assert(item.depth === 1 && UUID.test(row.id || '') && Number.isSafeInteger(Number(row.metadata?.size)) && Number(row.metadata?.size) > 0, 'Cleanup stopped: unexpected stored object location or size');
+            found.push({ bucket, storage_path: item.prefix + '/' + row.name, size_bytes: Number(row.metadata?.size) });
+          }
+        }
+        if (rows.length < 100) { complete = true; break; }
+      }
+      assert(complete, 'Fixture storage enumeration did not finish within bounded scope');
+    }
+  }
+  return found;
 }
 function cookieFrom(response, name) {
   const found = response.headers.getSetCookie().find(value => value.startsWith(`${name}=`));
@@ -81,24 +170,27 @@ function safeUploadResult(response, body, durationMs, fixture) {
 async function run(config, env = process.env) {
   const brand = runtimeGuard(config, env);
   const apiOrigin = `https://${brand.project}.supabase.co`;
-  const stamp = `${Date.now()}-${randomBytes(6).toString('hex')}`;
-  const startedAt = Date.now();
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), `creator-flow-${config.brand}-`));
-  fs.chmodSync(directory, 0o700);
+  const cleanupManifest = config.cleanupManifest ? readCleanupManifest(config) : null;
+  const stamp = cleanupManifest?.stamp || `${Date.now()}-${randomBytes(6).toString('hex')}`;
+  const startedAt = cleanupManifest?.startedAt || Date.now();
+  const directory = cleanupManifest ? path.dirname(config.cleanupManifest) : fs.mkdtempSync(path.join(os.tmpdir(), `creator-flow-${config.brand}-`));
+  if (!cleanupManifest) fs.chmodSync(directory, 0o700);
   const manifestPath = path.join(directory, 'cleanup-manifest.json');
-  const fixtures = [], invitations = [], checks = [], blocked = [], unverified = [], uploads = [];
+  const fixtures = cleanupManifest?.fixtures || [], invitations = cleanupManifest?.invitations || [], checks = [], blocked = [], unverified = [], uploads = [], uploadAttempts = cleanupManifest?.uploads || [], cleanupIssues = [];
   let operatorCookie = '', agencyId = brand.agency, failure, cleanupFailure, recoveryRedirect;
   function checkpoint() {
-    fs.writeFileSync(manifestPath, JSON.stringify({ brand: config.brand, stamp, expected_sha: config.sha,
+    fs.writeFileSync(manifestPath, JSON.stringify({ brand: config.brand, stamp, expected_sha: cleanupManifest?.expected_sha || config.sha,
       fixtures: fixtures.map(({ email, name, id, auth_user_id }) => ({ email, name, id, auth_user_id })),
       invitations: invitations.map(({ label, id, agency_id }) => ({ label, id, agency_id })),
+      uploads: uploadAttempts,
     }), { mode: 0o600 });
   }
   function passed(label) { checks.push(label); }
   async function request(url, options = {}) {
-    // Explicit manual is essential: fetch's default redirect-follow mode can
-    // buffer a file-backed multipart body for replay and OOM the test client.
-    return fetch(url, { ...options, redirect: 'manual', signal: options.signal || AbortSignal.timeout(45000) });
+    // Ordinary requests never follow redirects across an authentication boundary.
+    // Multipart uploads explicitly request 'error': Node can retain replay data
+    // even in 'manual' mode, defeating a file-backed body's bounded memory.
+    return fetch(url, { ...options, redirect: options.redirect === 'error' ? 'error' : 'manual', signal: options.signal || AbortSignal.timeout(45000) });
   }
   async function backend(resource, options = {}, allowed = []) {
     const response = await request(apiOrigin + resource, { ...options, headers: {
@@ -212,7 +304,11 @@ async function run(config, env = process.env) {
   }
   async function loginAgain(fixture) {
     const logout = await post('/creator-auth/logout', fixture, {});
-    assert(logout.status === 303 && location(logout).pathname === brand.login, 'Logout lost brand login');
+    assert(logout.status === 303, 'Logout did not return its required redirect');
+    // A wrong same-brand landing page is a reported regression, but it must
+    // not hide independent upload results when the session is actually cleared
+    // and the normal login route remains usable. External redirects still fail.
+    if (location(logout).pathname !== brand.login) blocked.push('Logout redirects within the same brand to an incorrect login page; normal fresh-login checks continued');
     assert(logout.headers.getSetCookie().some(value => value.startsWith('twin_creator_session=;') && /Max-Age=0/i.test(value)), 'Logout did not expire creator cookie');
     await logout.body?.cancel(); fixture.cookie = '';
     const direct = await app('/creator/onboarding?step=content', fixture);
@@ -238,10 +334,13 @@ async function run(config, env = process.env) {
     return enabled;
   }
   async function upload(fixture, file, kind, name, uploadId = randomUUID()) {
+    if (!uploadAttempts.some(attempt => attempt.id === uploadId)) {
+      uploadAttempts.push({ id: uploadId, creator_account_id: fixture.id, kind, name, bytes: fs.statSync(file).size }); checkpoint();
+    }
     const form = new FormData(); form.set('kind', kind);
     form.append('files', await fs.openAsBlob(file, { type: name.endsWith('.mp4') ? 'video/mp4' : 'image/png' }), name);
     const started = performance.now();
-    const response = await app('/creator-auth/upload', fixture, { method: 'POST', body: form, headers: { Accept: 'application/json', 'X-Creator-Upload-Id': uploadId }, signal: AbortSignal.timeout(600000) });
+    const response = await app('/creator-auth/upload', fixture, { method: 'POST', body: form, redirect: 'error', headers: { Accept: 'application/json', 'X-Creator-Upload-Id': uploadId }, signal: AbortSignal.timeout(600000) });
     let body; try { body = await response.json(); } catch { body = {}; }
     const result = safeUploadResult(response, body, Math.round(performance.now() - started), name);
     uploads.push(result); console.log(JSON.stringify({ event: 'upload_result', ...result }));
@@ -337,44 +436,77 @@ async function run(config, env = process.env) {
     passed('Saved records, actual objects and available private retrieval survive fresh creator login');
     return source;
   }
+  async function cleanupFixtureStorage(fixture) {
+    assert((await ownRows('creator_clone_links', fixture, 'creator_account_id')).length === 0, 'Cleanup stopped: disposable account gained a connected profile');
+    const files = await ownRows('creator_files', fixture, 'id,bucket,storage_path,kind,original_name,size_bytes');
+    const receiptResponse = await backend(`/rest/v1/creator_upload_receipts?select=bucket,storage_path,kind,original_name,size_bytes&creator_account_id=eq.${fixture.id}`, {}, [404]);
+    const receipts = Array.isArray(receiptResponse) ? receiptResponse : [];
+    const known = [...files, ...receipts];
+    const stored = await enumerateFixtureStorage(backend, fixture);
+    const all = new Map([...known, ...stored].map(file => [`${file.bucket}/${file.storage_path}`, file]));
+    const toRemove = [];
+    // Preflight the complete bounded prefix before removing anything. An unknown
+    // object or downstream reference preserves the account and all its objects.
+    for (const file of all.values()) {
+      assert(['onboarding-content', 'voice-samples'].includes(file.bucket) && file.storage_path?.startsWith(`creators/${fixture.id}/`)
+        && !file.storage_path.split('/').some(part => ['.', '..', ''].includes(part)), 'Cleanup object prefix mismatch');
+      const resource = `/storage/v1/object/info/${file.bucket}/${file.storage_path.split('/').map(encodeURIComponent).join('/')}`;
+      const info = await backend(resource, {}, [404]);
+      if (info?.allowedStatus !== 404) {
+        const actual = { ...file, size_bytes: Number(info.size ?? info.metadata?.size) };
+        assert(runnerFixtureObjectAllowed(fixture, actual, startedAt, known, uploadAttempts), 'Cleanup stopped: unexpected stored object under disposable prefix');
+        assert(stored.some(item => item.bucket === file.bucket && item.storage_path === file.storage_path), 'Cleanup stopped: Storage listing changed during verification');
+        toRemove.push(actual);
+      }
+      for (const [table, column] of [['photos', 'storage_path'], ['videos', 'storage_path'], ['photo_bundle_items', 'storage_path'], ['video_sequence_jobs', 'source_storage_path']]) {
+        const references = await backend(`/rest/v1/${table}?select=id&${column}=eq.${encodeURIComponent(file.storage_path)}&limit=1`);
+        assert(references.length === 0, 'Cleanup stopped: downstream content reference appeared');
+      }
+      const duplicate = await backend(`/rest/v1/creator_files?select=id&storage_path=eq.${encodeURIComponent(file.storage_path)}&creator_account_id=neq.${fixture.id}&limit=1`);
+      assert(duplicate.length === 0, 'Cleanup stopped: foreign file references object');
+    }
+    for (const file of toRemove) {
+      await backend(`/storage/v1/object/${file.bucket}`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prefixes: [file.storage_path] }) });
+      const absent = await backend(`/storage/v1/object/info/${file.bucket}/${file.storage_path.split('/').map(encodeURIComponent).join('/')}`, {}, [404]);
+      assert(absent?.allowedStatus === 404, 'Cleanup object remains; retaining database references');
+    }
+    assert((await enumerateFixtureStorage(backend, fixture)).length === 0, 'Cleanup stopped: disposable storage prefix is not empty');
+    // All durable references remain until both known and orphaned objects are absent.
+    await backend(`/rest/v1/creator_files?creator_account_id=eq.${fixture.id}`, { method: 'DELETE' });
+  }
   async function cleanup() {
     let errors = 0;
     for (const fixture of fixtures) {
       try {
         const current = await account(fixture.email);
-        if (!current) continue;
-        assert(current.display_name === fixture.name && Date.parse(current.created_at) >= startedAt - 5000, 'Cleanup account identity or creation window mismatch');
-        if (fixture.id) assert(current.id === fixture.id, 'Cleanup account identity changed');
-        Object.assign(fixture, current); checkpoint();
-        assert((await ownRows('creator_clone_links', fixture, 'creator_account_id')).length === 0, 'Cleanup stopped: disposable account gained a connected profile');
-        const files = await ownRows('creator_files', fixture, 'id,bucket,storage_path');
-        const receiptResponse = await backend(`/rest/v1/creator_upload_receipts?select=bucket,storage_path&creator_account_id=eq.${fixture.id}`, {}, [404]);
-        const receipts = Array.isArray(receiptResponse) ? receiptResponse : [];
-        const objects = new Map([...files, ...receipts].map(file => [`${file.bucket}/${file.storage_path}`, file]));
-        for (const file of objects.values()) {
-          assert(['onboarding-content', 'voice-samples'].includes(file.bucket) && file.storage_path?.startsWith(`creators/${fixture.id}/`) && !file.storage_path.split('/').includes('..'), 'Cleanup object prefix mismatch');
-          for (const [table, column] of [['photos', 'storage_path'], ['videos', 'storage_path'], ['photo_bundle_items', 'storage_path'], ['video_sequence_jobs', 'source_storage_path']]) {
-            const references = await backend(`/rest/v1/${table}?select=id&${column}=eq.${encodeURIComponent(file.storage_path)}&limit=1`);
-            assert(references.length === 0, 'Cleanup stopped: downstream content reference appeared');
-          }
-          const duplicate = await backend(`/rest/v1/creator_files?select=id&storage_path=eq.${encodeURIComponent(file.storage_path)}&creator_account_id=neq.${fixture.id}&limit=1`);
-          assert(duplicate.length === 0, 'Cleanup stopped: foreign file references object');
-          await backend(`/storage/v1/object/${file.bucket}`, { method: 'DELETE', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ prefixes: [file.storage_path] }) });
-          const absent = await backend(`/storage/v1/object/info/${file.bucket}/${file.storage_path.split('/').map(encodeURIComponent).join('/')}`, {}, [404]);
-          assert(absent?.allowedStatus === 404, 'Cleanup object remains; retaining database references');
+        if (current) {
+          assert(current.display_name === fixture.name && Date.parse(current.created_at) >= startedAt - 5000 && Date.parse(current.created_at) <= startedAt + 2 * 60 * 60 * 1000, 'Cleanup account identity or creation window mismatch');
+          if (fixture.id) assert(current.id === fixture.id, 'Cleanup account identity changed');
+          const expectedAuthId = fixture.auth_user_id;
+          if (expectedAuthId && current.auth_user_id) assert(current.auth_user_id === expectedAuthId, 'Cleanup Auth identity changed');
+          Object.assign(fixture, current, { auth_user_id: expectedAuthId || current.auth_user_id }); checkpoint();
+        } else if (fixture.id) {
+          const collision = await backend(`/rest/v1/creator_accounts?select=id&id=eq.${fixture.id}`);
+          assert(collision.length === 0, 'Cleanup stopped: recorded account ID has a different email');
         }
-        // All references remain until every known object was removed through Storage.
-        await backend(`/rest/v1/creator_files?creator_account_id=eq.${fixture.id}`, { method: 'DELETE' });
+        // A previously removed account can still have an orphaned private
+        // object. Validate its original manifest IDs and Auth identity first,
+        // then inspect exactly that prefix without recreating an account.
+        let authAbsent = true;
         if (fixture.auth_user_id) {
-          const auth = await backend(`/auth/v1/admin/users/${fixture.auth_user_id}`);
-          assert(auth.id === fixture.auth_user_id && auth.email?.toLowerCase() === fixture.email.toLowerCase(), 'Cleanup Auth identity mismatch');
-          await backend(`/auth/v1/admin/users/${fixture.auth_user_id}`, { method: 'DELETE' });
-          const absentAuth = await backend(`/auth/v1/admin/users/${fixture.auth_user_id}`, {}, [404]);
-          assert(absentAuth?.allowedStatus === 404, 'Disposable Auth account remains after cleanup');
+          const auth = await backend(`/auth/v1/admin/users/${fixture.auth_user_id}`, {}, [404]);
+          authAbsent = auth?.allowedStatus === 404;
+          if (!authAbsent) assert(auth.id === fixture.auth_user_id && auth.email?.toLowerCase() === fixture.email.toLowerCase(), 'Cleanup Auth identity mismatch');
         }
-        await backend(`/rest/v1/creator_accounts?id=eq.${fixture.id}&email=eq.${encodeURIComponent(fixture.email)}`, { method: 'DELETE' });
+        if (fixture.id) await cleanupFixtureStorage(fixture);
+        if (fixture.auth_user_id && !authAbsent) await backend(`/auth/v1/admin/users/${fixture.auth_user_id}`, { method: 'DELETE' });
+        if (fixture.auth_user_id) assert((await backend(`/auth/v1/admin/users/${fixture.auth_user_id}`, {}, [404]))?.allowedStatus === 404, 'Disposable Auth account remains after cleanup');
+        if (current) await backend(`/rest/v1/creator_accounts?id=eq.${fixture.id}&email=eq.${encodeURIComponent(fixture.email)}`, { method: 'DELETE' });
         assert(!await account(fixture.email), 'Disposable creator remains after cleanup');
-      } catch { errors++; }
+      } catch (error) {
+        errors++;
+        cleanupIssues.push(error instanceof CheckError ? error.message : 'Cleanup backend unavailable; raw details suppressed');
+      }
     }
     // Only labels allocated by this process, never shared invitation counters.
     for (const invitation of invitations) {
@@ -390,7 +522,10 @@ async function run(config, env = process.env) {
     }
     assert(!errors, 'Exact fixture cleanup incomplete; private runtime manifest retained');
   }
+  checkpoint();
+  console.log(JSON.stringify({ event: 'fixture_manifest', brand: config.brand, path: manifestPath, expected_commit: config.sha }));
   try {
+    if (!cleanupManifest) {
     const invalid = await post('/creator-auth/signup', null, { display_name: '', email: 'invalid', password: 'short' }, { Accept: 'application/json' });
     assert(invalid.status === 400 && (await invalid.json()).error === 'invalid', 'Invalid signup input not rejected');
     const firstInvite = config.brand === 'moxy' ? await normalInvite('complete') : null;
@@ -429,20 +564,22 @@ async function run(config, env = process.env) {
       if (await galleryAvailable(a)) await privateRetrieval(a, b, saved);
       passed('Additional normal upload after final submission persists with actual stored object');
     }
+    }
   } catch (error) {
     if (error instanceof BlockedError) blocked.push(error.message);
     else failure = error instanceof CheckError ? error.message : 'Unexpected runtime/transport failure; raw details suppressed';
   }
-  try { await cleanup(); } catch (error) { cleanupFailure = error instanceof CheckError ? error.message : 'Fixture cleanup unavailable'; }
+  try { await cleanup(); if (cleanupManifest) passed('Exact interrupted-run manifest cleanup completed without signup or upload actions'); } catch (error) { cleanupFailure = error instanceof CheckError ? error.message : 'Fixture cleanup unavailable'; }
   if (!cleanupFailure) fs.rmSync(directory, { recursive: true, force: true });
   const result = { passed: !failure && !cleanupFailure && blocked.length === 0, brand: config.brand, mode: config.mode,
     expected_commit: config.sha, method: 'normal public HTTPS plus fixture-scoped persistence checks; supplements browser audit', checks, blocked: [...new Set(blocked)], unverified: [...new Set(unverified)], uploads,
     ...(recoveryRedirect ? { recovery_redirect: recoveryRedirect } : {}),
-    ...(failure ? { failure } : {}), ...(cleanupFailure ? { cleanup_failure: cleanupFailure, cleanup_manifest: manifestPath } : { identified_fixtures_removed: true }),
+    ...(cleanupManifest ? { cleanup_source_commit: cleanupManifest.expected_sha } : {}),
+    ...(failure ? { failure } : {}), ...(cleanupFailure ? { cleanup_failure: cleanupFailure, cleanup_manifest: manifestPath, cleanup_issues: [...new Set(cleanupIssues)] } : { identified_fixtures_removed: true }),
     browser_journey_verified: false, physical_iphone_verified: false, speed_claim: 'Runtime/server connection only; not representative of creator phones', credentials_logged: false };
   console.log(JSON.stringify(result)); return result;
 }
-module.exports = { parseArgs, runtimeGuard, optionForMoxy, padMp4, safeUploadResult, run, BRANDS, LIMIT };
+module.exports = { parseArgs, runtimeGuard, readCleanupManifest, runnerFixtureObjectAllowed, enumerateFixtureStorage, optionForMoxy, padMp4, safeUploadResult, run, BRANDS, LIMIT };
 // `node -` intentionally has no require.main. The SSM wrapper pipes this file
 // through stdin, while require() by the offline tests must stay side-effect free.
 if (require.main === module || (process.argv[1] === '-' && module.id === '[stdin]')) {

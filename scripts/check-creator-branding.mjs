@@ -1,6 +1,7 @@
 // Renders the real creator auth and onboarding components with local-only
 // dependencies. No production account, session, database or network is used.
 import assert from "node:assert/strict";
+import { execFileSync } from "node:child_process";
 import { createServer } from "node:http";
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import path from "node:path";
@@ -34,8 +35,10 @@ for (const file of screenFiles) {
   assert.doesNotMatch(text, /brand\?\s*:\s*CreatorAuthBrand/, `${file} must require an explicit brand`);
   assert.match(text, /brand\s*:\s*CreatorAuthBrand/, `${file} must type brand as required`);
 }
-assert.match(source("components/CreatorResetPasswordScreen.tsx"), /window\.location\.replace\(["']\/creator-auth\/logout["']\)/,
-  "Password recovery must clear the separate HttpOnly creator dashboard session");
+// Execute the recovery client and logout handler, including safe return URLs,
+// rather than requiring a specific spelling of window.location.replace.
+execFileSync(process.execPath, ["scripts/check-creator-flow-ui.cjs"], { stdio: "inherit" });
+execFileSync(process.execPath, ["scripts/check-creator-onboarding-failures.cjs"], { stdio: "inherit" });
 
 const wrappers = new Map([
   ["app/creator/login/page.tsx", ["CreatorLoginScreen", "twin"]],
@@ -390,7 +393,10 @@ try {
             await page.getByText("Check your email for the password reset link.", { exact: true }).waitFor();
             const resetRequest = await page.evaluate(() => globalThis.__creatorResetRequest);
             assert.equal(resetRequest.email, `${brand}@example.test`);
-            assert.equal(resetRequest.redirectTo, `${origin}${expectation.authBase}/reset-password`, `${brand} recovery must return to the matching branded reset page`);
+            const resetDestination = new URL(resetRequest.redirectTo);
+            assert.equal(resetDestination.origin, origin, `${brand} recovery must stay on the current origin`);
+            assert.equal(resetDestination.pathname, `${expectation.authBase}/reset-password`, `${brand} recovery must return to the matching branded reset page`);
+            assert.equal(resetDestination.search, "?next=%2Fcreator", `${brand} recovery must preserve the safe default creator destination`);
           }
 
           if (brand === "tether") {
@@ -407,7 +413,13 @@ try {
             await page.goto(`${origin}/creator/onboarding?fixture_brand=${brand}&step=${step}`, { waitUntil: "networkidle" });
             assert.equal(await page.locator(`[data-onboarding-active-step='${step}']`).count(), 1, `${brand} must open only the requested ${step} step`);
             if (step === "questionnaire") assert.equal(await page.getByRole("button", { name: "Save and return to onboarding", exact: true }).count(), 1, `${brand} questionnaire must save before returning to the hub`);
-            else assert.equal(await page.getByRole("link", { name: "Return to onboarding", exact: true }).count() > 0, true, `${brand} ${step} must return to the hub`);
+            else {
+              const previous = { content: "questionnaire", voice: "content", consent: "voice" }[step];
+              const next = { content: "voice", voice: "consent" }[step];
+              assert.equal(await page.locator(`[data-onboarding-back='${previous}']`).first().getAttribute("href"), `/creator/onboarding?step=${previous}`, `${brand} ${step} must navigate to the previous step`);
+              if (next) assert.equal(await page.locator(`[data-onboarding-next='${next}']`).first().getAttribute("href"), `/creator/onboarding?step=${next}`, `${brand} ${step} must navigate to the next step`);
+              else assert.ok(await page.locator('a[href="/creator"]').count() > 0, `${brand} final step must offer the dashboard`);
+            }
             const actions = new Set(await page.locator("form").evaluateAll((forms) => forms.map((form) => form.getAttribute("action")).filter(Boolean)));
             if (step === "questionnaire") {
               const questionnaire = page.locator("[data-questionnaire-page='personal-contact']");
@@ -449,7 +461,7 @@ try {
                 "video/mp4,video/quicktime,video/webm",
               ]);
               assert.doesNotMatch(`${contentText} ${acceptedTypes.join(" ")}`, /heic|heif/i, `${brand} must not advertise unsupported HEIC uploads`);
-              assert.match(contentText, /JPG, PNG, WebP or GIF · max 25 MP and 15 MB each/);
+              assert.match(contentText, /JPG, PNG, WebP or GIF · max 25 MP and 15 MiB each/);
               assert.match(contentText, /MP4, MOV or WebM · max 30 minutes/);
             }
             await page.screenshot({ path: path.join(out, `${brand}-onboarding-${step}-${viewport}.png`), fullPage: true });

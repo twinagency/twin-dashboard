@@ -11,7 +11,7 @@ const { NextRequest } = require('next/server');
 const temp = mkdtempSync(join(tmpdir(), 'flirt-upload-regression-'));
 const bundle = resolve('node_modules/.cache/flirt-upload-regression.cjs');
 const accountId = '00000000-0000-4000-8000-000000000001';
-const state = { rows: [], stored: [], identity: { accountId, readOnly: false }, status: 'draft', failInsert: false };
+const state = { rows: [], stored: [], identity: { accountId, readOnly: false }, status: 'draft', failInsert: false, requestBarrier: null };
 function query(table) {
   let operation = 'select', values;
   const q = {
@@ -19,7 +19,8 @@ function query(table) {
     order() { return q; }, limit() { return q; }, range() { return q; }, maybeSingle() { return q; }, in() { return q; },
     insert(value) { operation = 'insert'; values = value; return q; },
     delete() { operation = 'delete'; return q; }, upsert() { return q; },
-    then(yes, no) { return Promise.resolve().then(() => {
+    then(yes, no) { return Promise.resolve().then(async () => {
+      if (table === 'creator_applications' && state.requestBarrier) await state.requestBarrier.enter();
       if (table === 'creator_applications') return { data: { status: state.status }, error: null };
       if (table === 'creator_files' && operation === 'insert') {
         if (state.failInsert) return { error: { message: 'Synthetic row failure' } };
@@ -34,7 +35,7 @@ global.__flirtUploadTest = {
   identity: () => state.identity,
   db: { from: query, storage: { from: bucket => ({
     async upload(path, body, options) {
-      assert.equal(bucket, 'onboarding-content'); assert.equal(options.upsert, false);
+      assert.ok(['onboarding-content','voice-samples'].includes(bucket)); assert.equal(options.upsert, false);
       let size = 0;
       for await (const chunk of body.stream()) size += chunk.byteLength;
       state.stored.push({ path, size }); return { error: null };
@@ -87,11 +88,16 @@ function stagingDirs() { return readdirSync(tmpdir()).filter(name => name.starts
     if (!parallel) assert.deepEqual(stagingDirs(), before, 'Temporary upload files must be removed');
     return { code: response.status, status: result?.status };
   }
+  if (process.env.CREATOR_UPLOAD_BOUNDARY_FIXTURE) assert.deepEqual(await upload(process.env.CREATOR_UPLOAD_BOUNDARY_FIXTURE, 'audit-boundary.mp4'), { code: 200, status: 'content_saved' });
   assert.deepEqual(await upload(short, 'short.mp4'), { code: 200, status: 'content_saved' });
   assert.deepEqual(await upload(large, 'short-large.mp4'), { code: 200, status: 'content_saved' });
   assert.equal(state.stored.at(-1).size, 80 * 1024 * 1024);
   assert.deepEqual(await upload(maximum, 'maximum.mp4'), { code: 200, status: 'content_saved' });
   assert.equal(state.stored.at(-1).size, 512 * 1024 * 1024);
+  const audio = join(temp, 'voice.wav');
+  execFileSync('/usr/bin/ffmpeg', ['-v','error','-f','lavfi','-i','sine=frequency=440:duration=2','-y',audio], { timeout:15000 });
+  assert.equal((await upload(audio, 'voice.wav', 'audio/wav', {}, 'voice')).status, 'voice_saved');
+  assert.equal((await upload(short, 'fake-voice.wav', 'audio/wav', {}, 'voice')).status, 'upload_wrong_type');
   assert.deepEqual(await upload(mov, 'iPhone.MOV', 'application/octet-stream'), { code: 200, status: 'content_saved' });
   assert.deepEqual(await upload(long, 'too-long.mp4'), { code: 400, status: 'upload_video_too_long' });
   assert.deepEqual(await upload(tooLarge, 'too-large.mp4'), { code: 400, status: 'upload_too_large' });
@@ -105,12 +111,29 @@ function stagingDirs() { return readdirSync(tmpdir()).filter(name => name.starts
   state.status = 'submitted'; assert.equal((await upload(short, 'short.mp4')).code, 200);
   assert.equal((await upload(short, 'short.mp4', 'video/mp4', { 'x-pathname': '/agency', 'x-twin-audience': 'creator' })).code, 200);
   const count = state.stored.length; state.failInsert = true;
-  assert.equal((await upload(short, 'short.mp4')).status, 'upload_error'); assert.equal(state.stored.length, count, 'Failed DB insert must remove the new object');
+  assert.equal((await upload(short, 'short.mp4')).status, 'upload_metadata_error'); assert.equal(state.stored.length, count, 'Failed DB insert must remove the new object');
   state.failInsert = false;
+  // Hold both application reads after the route has reserved its two slots.
+  // Short fixture duration or runner scheduling must not decide which request
+  // is active when the third request arrives.
+  let entered = 0, signalEntered, releaseRequests;
+  const bothEntered = new Promise(resolve => { signalEntered = resolve; });
+  const release = new Promise(resolve => { releaseRequests = resolve; });
+  state.requestBarrier = { async enter() { if (++entered === 2) signalEntered(); await release; } };
   const simultaneous = [upload(short, 'parallel-a.mp4', 'video/mp4', {}, 'content_sfw_video', true), upload(short, 'parallel-b.mp4', 'video/mp4', {}, 'content_sfw_video', true)];
-  const excess = await upload(short, 'parallel-c.mp4', 'video/mp4', {}, 'content_sfw_video', true);
-  assert.equal(excess.status, 'upload_busy', 'A third transfer for the same account must wait');
-  assert.deepEqual(await Promise.all(simultaneous), [{ code: 200, status: 'content_saved' }, { code: 200, status: 'content_saved' }], 'Two videos must upload together');
+  let deadline;
+  try {
+    const expired = new Promise((_, reject) => { deadline = setTimeout(() => reject(new Error('Concurrent request barrier did not settle')), 5000); });
+    await Promise.race([bothEntered, expired]);
+    assert.equal(entered, 2, 'Both transfers must hold their account slots');
+    const excess = await Promise.race([upload(short, 'parallel-c.mp4', 'video/mp4', {}, 'content_sfw_video', true), expired]);
+    assert.deepEqual(excess, { code: 429, status: 'upload_busy' }, 'A third transfer must be rejected while two slots are held');
+  } finally {
+    clearTimeout(deadline);
+    state.requestBarrier = null;
+    releaseRequests();
+  }
+  assert.deepEqual(await Promise.all(simultaneous), [{ code: 200, status: 'content_saved' }, { code: 200, status: 'content_saved' }], 'Two videos must upload together after releasing the barrier');
   assert.deepEqual(stagingDirs(), before, 'Concurrent staging must be cleaned');
   state.rows = [{ size_bytes: 10 * 1024 * 1024 * 1024 - statSync(short).size }];
   const quotaRace = await Promise.all([upload(short, 'quota-a.mp4', 'video/mp4', {}, 'content_sfw_video', true), upload(short, 'quota-b.mp4', 'video/mp4', {}, 'content_sfw_video', true)]);

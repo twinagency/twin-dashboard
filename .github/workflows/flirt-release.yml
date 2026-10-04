@@ -49,6 +49,8 @@ jobs:
           node --import tsx scripts/check-creator-upload-stream.ts
           node scripts/check-creator-upload-picker.cjs
           node deployment/creator-flow-live-check.test.cjs
+          node deployment/creator-flow-upload-memory.test.cjs
+          node deployment/creator-flow-cleanup.test.cjs
       - name: Selected live creators and retained local database routing
         run: npx tsx scripts/check-flirt-live-twin.ts
       - name: Invitation routing and local account authorization
@@ -105,7 +107,6 @@ jobs:
         run: python3 deployment/flirt-release.py dashboard "$FLIRT_IMAGE" "$GITHUB_SHA"
       - name: Verify normal FLIRT signup, optional flow and small uploads with exact cleanup
         timeout-minutes: 15
-        run: python3 deployment/creator-flow-live-check.py --brand=flirt --expected-sha="$GITHUB_SHA" --mode=small-only --allow-missing-gallery
+        run: python3 deployment/creator-flow-live-check.py --brand=flirt --expected-sha="$GITHUB_SHA" --mode=small-only --removal-guards
       - name: Verify all four live creators, existing media and denied unassigned access
         run: python3 deployment/flirt-live-creators-check.py
-
