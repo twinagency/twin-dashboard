@@ -5,6 +5,7 @@ import TwinWordmark from "@/components/TwinWordmark";
 import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button, buttonVariants } from "@/components/ui/button";
+import CreatorOnboardingActionForm from "@/components/CreatorOnboardingActionForm";
 import CreatorQuestionnaireWizard from "@/components/CreatorQuestionnaireWizard";
 import CreatorUploadForm from "@/components/CreatorUploadForm";
 import { SkipToDashboard } from "@/components/FlirtOnboardingLinks";
@@ -224,6 +225,7 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
   const jar = await cookies();
   const creator = await creatorDashboardIdentity(jar.get(CREATOR_SESSION_COOKIE)?.value);
   if (!creator) redirect(creatorLoginPath(creator, jar.get(CREATOR_PORTAL_COOKIE)?.value));
+  const loginPath = creatorLoginPath(creator, jar.get(CREATOR_PORTAL_COOKIE)?.value);
   const session = { accountId: creator.accountId };
   const tether = creator.name === TETHER_PORTAL.name;
   const link = isLynq(creator.name);
@@ -345,7 +347,7 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
                 <p className="text-sm leading-6 text-muted">Voice is not required to get onboarded. Add samples now or skip it and activate voice later.</p>
                 <div className="grid gap-3 md:grid-cols-[1fr_auto]">
                   <CreatorUploadForm kind="voice" label="Voice recordings" accept="audio/*,video/*" locked={applicationLocked && !optional} voice />
-                  <form action="/creator-auth/onboarding" method="post" className="self-end"><input type="hidden" name="action" value="skip_voice" /><Button type="submit" variant="outline" size="lg" disabled={applicationLocked} className="min-h-11">Skip for now</Button></form>
+                  <CreatorOnboardingActionForm className="self-end" pendingLabel="Saving your voice choice…" successStatuses={["voice_skipped"]} loginPath={loginPath}><input type="hidden" name="action" value="skip_voice" /><Button type="submit" variant="outline" size="lg" disabled={applicationLocked} className="min-h-11">Skip for now</Button></CreatorOnboardingActionForm>
                 </div>
                 {voiceFiles.length > 0 && <p className="text-sm text-muted">{voiceFiles.length} voice file{voiceFiles.length === 1 ? "" : "s"} verified.</p>}
                 <StepNavigation step="voice" steps={visibleSteps} />
@@ -358,12 +360,12 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
                 {saved && <SavedConfirmation title="Consent saved" detail={optional ? "Your consent has been recorded." : "Your consent has been recorded. You can now submit onboarding when every step is complete."} />}
                 {optional && status === "consent_skipped" && <SavedConfirmation title="Consent skipped" detail={statusCopy.consent_skipped} />}
                 {optional && <p className="text-sm leading-6 text-muted">Legal name and consent are optional for this walkthrough. Leaving them blank does not grant consent or activate an AI clone.</p>}
-                {!consent ? <form action="/creator-auth/onboarding" method="post" className="grid gap-4">
+                {!consent ? <CreatorOnboardingActionForm className="grid gap-4" pendingLabel="Saving consent…" successStatuses={["consent_saved", "consent_skipped"]} loginPath={loginPath}>
                   <input type="hidden" name="action" value="consent" />
                   <label><span className="mb-1 block text-sm text-muted">Legal name</span><Input name="legal_name" required={!optional} disabled={applicationLocked} className="border-[#7b8798]" /></label>
                   <label className="flex items-start gap-3 text-sm text-ink"><input name="agreed" type="checkbox" required={!optional} disabled={applicationLocked} className="mt-1" /><span>I confirm the information and media I submit are mine or I have permission to provide them, and I authorize {optional && brandName === "Twin" ? "FLIRT" : brandName} to use them to build and operate my AI creator profile under my agreement.</span></label>
                   <div><Button type="submit" variant="outline" size="lg" disabled={applicationLocked} className="min-h-11">{optional ? "Save or skip consent" : "Save consent"}</Button></div>
-                </form> : <div className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"><CheckCircle2 className="mt-0.5 size-4 shrink-0" aria-hidden="true" /><span>Consent signed by {consent.legal_name}.</span></div>}
+                </CreatorOnboardingActionForm> : <div className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"><CheckCircle2 className="mt-0.5 size-4 shrink-0" aria-hidden="true" /><span>Consent signed by {consent.legal_name}.</span></div>}
 
                 <section aria-labelledby="readiness-heading" className="rounded-2xl border border-border bg-muted/10 p-5">
                   <div className="flex flex-wrap items-end justify-between gap-3"><div><h3 id="readiness-heading" className="text-lg font-semibold text-ink">{optional ? "Ready to finish?" : "Ready to submit?"}</h3><p className="mt-1 text-sm text-muted">{optional ? "Everything below is optional. You can finish with every field blank and no uploads." : voiceEnabled ? "Complete every item below. Voice recordings are optional, but you must upload samples or choose to skip." : "Complete every item below."}</p></div><span className="text-sm font-semibold text-ink">{optional ? "No required steps" : `${steps} of ${totalSteps} complete`}</span></div>
@@ -375,10 +377,10 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
                   </ul>
                 </section>
 
-                <form action="/creator-auth/onboarding" method="post">
+                <CreatorOnboardingActionForm pendingLabel="Submitting your saved information…" successStatuses={["submitted"]} loginPath={loginPath}>
                   <input type="hidden" name="action" value="submit" />
                   <Button type="submit" size="lg" disabled={!readyToSubmit || applicationLocked} aria-describedby={!readyToSubmit && !applicationLocked ? "submit-help" : undefined} className="min-h-11 w-full sm:w-auto">{submitted ? "Return to dashboard" : applicationLocked ? "Application locked" : optional ? "Finish onboarding" : "Submit onboarding"}</Button>
-                </form>
+                </CreatorOnboardingActionForm>
                 {!readyToSubmit && !applicationLocked && <p id="submit-help" className="text-sm text-muted">Complete the items above before submitting.</p>}
                 <StepNavigation step="consent" steps={visibleSteps} />
               </CardContent>

@@ -69,6 +69,8 @@ export default function CreatorQuestionnaireWizard({
   const savePromiseRef = useRef<Promise<boolean> | null>(null);
   const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [saveState, setSaveState] = useState<SaveState>(locked ? "locked" : "idle");
+  const [navigating, setNavigating] = useState(false);
+  const [navigationError, setNavigationError] = useState("");
   const [answered, setAnswered] = useState(() => Object.values(initialAnswers).filter((value) => value.trim()).length);
   const currentIndex = creatorQuestionnairePageIndex(page.slug);
   const questions = useMemo(() => questionnairePageQuestions(page), [page]);
@@ -135,28 +137,41 @@ export default function CreatorQuestionnaireWizard({
     saveTimerRef.current = setTimeout(() => { void flushDraft(); }, 1000);
   };
 
-  const goTo = async (target: number | "finish" | "hub" | "dashboard") => {
+  const goTo = async (target: number | "finish" | "hub" | "dashboard" | "content") => {
+    if (navigating) return;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     if (!locked && (target === "finish" || (typeof target === "number" && target > currentIndex)) && !formRef.current?.reportValidity()) return;
-    const saved = await flushDraft();
-    if (!saved) return;
-    if (target === "hub" || target === "dashboard") {
-      window.location.assign(target === "dashboard" ? "/creator" : "/creator/onboarding");
-      return;
-    }
-    if (target === "finish") {
-      try {
+    setNavigating(true);
+    setNavigationError("");
+    try {
+      let saved = await flushDraft();
+      while (saved && dirtyRef.current) saved = await flushDraft();
+      if (!saved) return;
+      if (target === "hub" || target === "dashboard" || target === "content") {
+        window.location.assign(target === "dashboard" ? "/creator" : target === "content" ? "/creator/onboarding?step=content" : "/creator/onboarding");
+        return;
+      }
+      if (target === "finish") {
         const response = await fetch("/creator-auth/onboarding", {
           method: "POST",
           body: new URLSearchParams({ action: "questionnaire", revision: revisionRef.current }),
         });
-        if (!response.ok) { setSaveState("error"); return; }
-        window.location.assign(response.url);
-      } catch { setSaveState("error"); }
-      return;
+        const destination = new URL(response.url, window.location.origin);
+        if (!response.ok || destination.origin !== window.location.origin || destination.pathname !== "/creator/onboarding" || destination.searchParams.get("status") !== "questionnaire_saved") {
+          setNavigationError("The questionnaire could not be finished. Your saved answers are still here. Please try again.");
+          return;
+        }
+        window.location.assign(optional ? "/creator/onboarding?step=content" : destination.href);
+        return;
+      }
+      const next = CREATOR_QUESTIONNAIRE_PAGES[target];
+      window.location.assign(`/creator/onboarding?step=questionnaire&section=${encodeURIComponent(next.slug)}`);
+    } catch {
+      setNavigationError("The save could not be confirmed. Please try again before leaving this page.");
+    } finally {
+      // Failed finish/save requests must never leave all navigation disabled.
+      setNavigating(false);
     }
-    const next = CREATOR_QUESTIONNAIRE_PAGES[target];
-    window.location.assign(`/creator/onboarding?step=questionnaire&section=${encodeURIComponent(next.slug)}`);
   };
 
   useEffect(() => {
@@ -177,7 +192,7 @@ export default function CreatorQuestionnaireWizard({
   const progress = Math.round(((currentIndex + 1) / CREATOR_QUESTIONNAIRE_PAGES.length) * 100);
 
   return (
-    <form ref={formRef} onInput={markDirty} className="grid gap-6" data-questionnaire-page={page.slug} data-onboarding-optional={optional ? "true" : "false"}>
+    <form ref={formRef} onSubmit={(event) => event.preventDefault()} onInput={markDirty} className="grid gap-6" data-questionnaire-page={page.slug} data-onboarding-optional={optional ? "true" : "false"}>
       <div id="questionnaire-top" className="rounded-2xl border border-border bg-muted/10 p-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
@@ -210,23 +225,24 @@ export default function CreatorQuestionnaireWizard({
         </section>
       ))}
 
+      {navigationError && <p role="alert" className="text-sm text-rose-700">{navigationError}</p>}
       <div className="sticky bottom-4 z-10 rounded-2xl border border-border bg-white/95 p-4 shadow-lg backdrop-blur">
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-          <Button type="button" variant="outline" size="lg" disabled={saveState === "saving"} onClick={() => void goTo("hub")} className="min-h-11 w-full sm:w-auto">
+          <Button type="button" variant="outline" size="lg" disabled={navigating || saveState === "saving"} onClick={() => void goTo("hub")} className="min-h-11 w-full sm:w-auto">
             <ArrowLeft className="size-4" aria-hidden="true" /> {locked ? "Return to onboarding" : "Save and return to onboarding"}
           </Button>
           <div className="flex flex-col-reverse gap-3 sm:flex-row sm:flex-wrap">
-            {optional && <Button type="button" variant="outline" size="lg" disabled={saveState === "saving"} onClick={() => void goTo("dashboard")} className="min-h-11 w-full sm:w-auto">{locked ? "Dashboard" : "Save and go to dashboard"}</Button>}
-            {optional && !locked && currentIndex < CREATOR_QUESTIONNAIRE_PAGES.length - 1 && <Button type="button" variant="outline" size="lg" disabled={saveState === "saving"} onClick={() => void goTo("finish")} className="min-h-11 w-full sm:w-auto">Skip questionnaire</Button>}
-            {currentIndex > 0 && <Button type="button" variant="outline" size="lg" disabled={saveState === "saving"} onClick={() => void goTo(currentIndex - 1)} className="min-h-11 w-full sm:w-auto">
+            {optional && <Button type="button" variant="outline" size="lg" disabled={navigating || saveState === "saving"} onClick={() => void goTo("dashboard")} className="min-h-11 w-full sm:w-auto">{locked ? "Dashboard" : "Save and go to dashboard"}</Button>}
+            {optional && !locked && currentIndex < CREATOR_QUESTIONNAIRE_PAGES.length - 1 && <Button type="button" variant="outline" size="lg" disabled={navigating || saveState === "saving"} onClick={() => void goTo("content")} className="min-h-11 w-full sm:w-auto">Skip questionnaire</Button>}
+            {currentIndex > 0 && <Button type="button" variant="outline" size="lg" disabled={navigating || saveState === "saving"} onClick={() => void goTo(currentIndex - 1)} className="min-h-11 w-full sm:w-auto">
               <ArrowLeft className="size-4" aria-hidden="true" /> {locked ? "Previous part" : "Save and go back"}
             </Button>}
             {currentIndex < CREATOR_QUESTIONNAIRE_PAGES.length - 1 ? (
-              <Button type="button" size="lg" disabled={saveState === "saving"} onClick={() => void goTo(currentIndex + 1)} className="min-h-11 w-full sm:w-auto">
+              <Button type="button" size="lg" disabled={navigating || saveState === "saving"} onClick={() => void goTo(currentIndex + 1)} className="min-h-11 w-full sm:w-auto">
                 {locked ? "Next part" : "Save and continue"} <ArrowRight className="size-4" aria-hidden="true" />
               </Button>
             ) : !locked ? (
-              <Button type="button" size="lg" disabled={saveState === "saving"} onClick={() => void goTo("finish")} className="min-h-11 w-full sm:w-auto">
+              <Button type="button" size="lg" disabled={navigating || saveState === "saving"} onClick={() => void goTo("finish")} className="min-h-11 w-full sm:w-auto">
                 {optional ? "Continue to content" : "Finish questionnaire"} <Check className="size-4" aria-hidden="true" />
               </Button>
             ) : null}

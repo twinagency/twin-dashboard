@@ -1,4 +1,5 @@
 import { INVITE_CODE_PATTERN, hashInviteCode } from "./creator-invite-codes";
+import { invitationStatus, type CreatorInvitationStatus } from "./creator-invitation-state";
 import { serviceClient } from "./supabase-service";
 
 export type InviteAgency = { name: string; slug: string; logo: string | null; icon: string | null; dark: boolean };
@@ -20,25 +21,26 @@ const INVITE_DARK = new Set(["moxy"]);
  * grants anything: /creator-auth/signup re-validates and claims the code, and
  * the assignment is written there from the code's own row.
  */
-export async function agencyForInviteCode(code: string | undefined): Promise<InviteAgency | null> {
+export type CreatorInvitation = { status: CreatorInvitationStatus; agency: InviteAgency | null };
+function presentation(agency: { name: string; slug: string }): InviteAgency {
+  return { name: agency.name, slug: agency.slug, logo: INVITE_LOGOS[agency.slug] ?? null, icon: INVITE_ICONS[agency.slug] ?? null, dark: INVITE_DARK.has(agency.slug) };
+}
+export async function lookupCreatorInvitation(code: string | undefined): Promise<CreatorInvitation> {
   const candidate = (code ?? "").trim().toUpperCase();
-  if (!INVITE_CODE_PATTERN.test(candidate)) return null;
+  if (!candidate) return { status: "required", agency: null };
+  if (!INVITE_CODE_PATTERN.test(candidate)) return { status: "invalid", agency: null };
   try {
-    const db = serviceClient();
-    const row = await db
-      .from("creator_agency_codes")
+    const row = await serviceClient().from("creator_agency_codes")
       .select("active,max_uses,uses,expires_at,partner_agencies(name,slug,active)")
-      .eq("code_hash", hashInviteCode(candidate))
-      .maybeSingle();
-    if (row.error || !row.data) return null;
-    const agency = row.data.partner_agencies as unknown as { name: string; slug: string; active: boolean } | null;
-    const expired = !!row.data.expires_at && Date.parse(row.data.expires_at as string) <= Date.now();
-    const exhausted = row.data.max_uses != null && (row.data.uses as number) >= (row.data.max_uses as number);
-    if (!row.data.active || expired || exhausted || !agency?.active) return null;
-    return { name: agency.name, slug: agency.slug, logo: INVITE_LOGOS[agency.slug] ?? null, icon: INVITE_ICONS[agency.slug] ?? null, dark: INVITE_DARK.has(agency.slug) };
-  } catch {
-    return null;
-  }
+      .eq("code_hash", hashInviteCode(candidate)).maybeSingle();
+    const agency = row.data?.partner_agencies as unknown as { name: string; slug: string; active: boolean } | null;
+    return { status: invitationStatus(row.data, !!agency?.active, !!row.error), agency: agency ? presentation(agency) : null };
+  } catch { return { status: "unavailable", agency: null }; }
+}
+// Existing callers that need only a usable invitation retain their original contract.
+export async function agencyForInviteCode(code: string | undefined): Promise<InviteAgency | null> {
+  const invitation = await lookupCreatorInvitation(code);
+  return invitation.status === "valid" ? invitation.agency : null;
 }
 
 /**

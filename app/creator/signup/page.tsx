@@ -1,6 +1,6 @@
 import type { Metadata } from "next";
 import CreatorSignupScreen from "@/components/CreatorSignupScreen";
-import { agencyForInviteCode } from "@/lib/creator-invite-agency";
+import { lookupCreatorInvitation } from "@/lib/creator-invite-agency";
 
 export const dynamic = "force-dynamic";
 
@@ -10,7 +10,8 @@ export const dynamic = "force-dynamic";
 // the page content does, so the two can never say something different again.
 export async function generateMetadata({ searchParams }: { searchParams: Promise<{ code?: string }> }): Promise<Metadata> {
   const { code } = await searchParams;
-  const agency = await agencyForInviteCode(typeof code === "string" ? code.trim().toUpperCase().slice(0, 64) : undefined);
+  const invitation = await lookupCreatorInvitation(typeof code === "string" ? code.trim().toUpperCase().slice(0, 64) : undefined);
+  const agency = invitation.agency;
   return {
     title: agency ? `Create creator account · ${agency.name}` : "Create creator account · FLIRT",
     // Only set when the invite has its own icon; leaving it out for every
@@ -26,6 +27,7 @@ export default async function CreatorSignupPage(props: { searchParams: Promise<{
   const initialAgencyCode = typeof code === "string" ? code.trim().toUpperCase().slice(0, 64) : undefined;
   // Someone arriving on an agency's invite link is joining that agency, not
   // Twin directly, so the page presents itself as theirs.
-  const inviteAgency = await agencyForInviteCode(initialAgencyCode);
-  return <CreatorSignupScreen {...props} brand="twin" initialAgencyCode={initialAgencyCode || undefined} inviteAgency={inviteAgency} />;
+  const invitation = await lookupCreatorInvitation(initialAgencyCode);
+  let inviteAgency = invitation.agency;
+  return <CreatorSignupScreen {...props} brand="twin" initialAgencyCode={initialAgencyCode || undefined} inviteAgency={inviteAgency} invitationStatus={initialAgencyCode ? invitation.status : undefined} />;
 }
