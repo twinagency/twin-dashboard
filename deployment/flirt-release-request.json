@@ -1,4 +1,4 @@
 {
-  "reason": "Release verified FLIRT-local owner authentication, preserving its isolated backend modules.",
-  "requested_at": "2026-10-04T03:32:44.045Z"
+  "reason": "Release verified Stage 2 creator invitation, persisted status, navigation and recovery fixes; preserve existing owner login and isolated backend.",
+  "requested_at": "2026-10-04T03:44:00Z"
 }
