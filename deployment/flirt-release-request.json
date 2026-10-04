@@ -1,4 +1,4 @@
 {
-  "reason": "Stage 1: close creator-prefix admin exposure and require verified internal admin before creator management reads/actions.",
-  "requested_at": "2026-10-04T00:55:08.460895+00:00"
+  "reason": "Deploy named full-owner accounts for Jesse and Ronan; preserve existing master login redirects and clear prior scoped sessions.",
+  "requestedAt": "2026-10-04T03:30:16.318Z"
 }
