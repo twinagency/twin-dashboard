@@ -137,35 +137,41 @@ export default function CreatorQuestionnaireWizard({
     saveTimerRef.current = setTimeout(() => { void flushDraft(); }, 1000);
   };
 
-  const goTo = async (target: number | "finish" | "hub" | "dashboard") => {
+  const goTo = async (target: number | "finish" | "hub" | "dashboard" | "content") => {
     if (navigating) return;
     if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
     if (!locked && (target === "finish" || (typeof target === "number" && target > currentIndex)) && !formRef.current?.reportValidity()) return;
-    setNavigating(true); setNavigationError("");
+    setNavigating(true);
+    setNavigationError("");
     try {
-    let saved = await flushDraft();
-    while (saved && dirtyRef.current) saved = await flushDraft();
-    if (!saved) { setNavigating(false); return; }
-    if (target === "hub" || target === "dashboard") {
-      window.location.assign(target === "dashboard" ? "/creator" : "/creator/onboarding");
-      return;
-    }
-    if (target === "finish") {
-      try {
+      let saved = await flushDraft();
+      while (saved && dirtyRef.current) saved = await flushDraft();
+      if (!saved) return;
+      if (target === "hub" || target === "dashboard" || target === "content") {
+        window.location.assign(target === "dashboard" ? "/creator" : target === "content" ? "/creator/onboarding?step=content" : "/creator/onboarding");
+        return;
+      }
+      if (target === "finish") {
         const response = await fetch("/creator-auth/onboarding", {
           method: "POST",
           body: new URLSearchParams({ action: "questionnaire", revision: revisionRef.current }),
         });
-        if (!response.ok) { setSaveState("error"); return; }
         const destination = new URL(response.url, window.location.origin);
-      if (!response.ok || destination.searchParams.get("status") !== "questionnaire_saved") { setNavigationError("The questionnaire could not be finished. Your saved answers are still here. Please try again."); setNavigating(false); return; }
-      window.location.assign(response.url);
-      } catch { setSaveState("error"); }
-      return;
+        if (!response.ok || destination.origin !== window.location.origin || destination.pathname !== "/creator/onboarding" || destination.searchParams.get("status") !== "questionnaire_saved") {
+          setNavigationError("The questionnaire could not be finished. Your saved answers are still here. Please try again.");
+          return;
+        }
+        window.location.assign(optional ? "/creator/onboarding?step=content" : destination.href);
+        return;
+      }
+      const next = CREATOR_QUESTIONNAIRE_PAGES[target];
+      window.location.assign(`/creator/onboarding?step=questionnaire&section=${encodeURIComponent(next.slug)}`);
+    } catch {
+      setNavigationError("The save could not be confirmed. Please try again before leaving this page.");
+    } finally {
+      // Failed finish/save requests must never leave all navigation disabled.
+      setNavigating(false);
     }
-    const next = CREATOR_QUESTIONNAIRE_PAGES[target];
-    window.location.assign(`/creator/onboarding?step=questionnaire&section=${encodeURIComponent(next.slug)}`);
-    } catch { setNavigationError("The save could not be confirmed. Please try again before leaving this page."); setNavigating(false); }
   };
 
   useEffect(() => {
@@ -186,7 +192,7 @@ export default function CreatorQuestionnaireWizard({
   const progress = Math.round(((currentIndex + 1) / CREATOR_QUESTIONNAIRE_PAGES.length) * 100);
 
   return (
-    <form ref={formRef} onInput={markDirty} className="grid gap-6" data-questionnaire-page={page.slug} data-onboarding-optional={optional ? "true" : "false"}>
+    <form ref={formRef} onSubmit={(event) => event.preventDefault()} onInput={markDirty} className="grid gap-6" data-questionnaire-page={page.slug} data-onboarding-optional={optional ? "true" : "false"}>
       <div id="questionnaire-top" className="rounded-2xl border border-border bg-muted/10 p-5">
         <div className="flex flex-wrap items-start justify-between gap-4">
           <div>
@@ -227,7 +233,7 @@ export default function CreatorQuestionnaireWizard({
           </Button>
           <div className="flex flex-col-reverse gap-3 sm:flex-row sm:flex-wrap">
             {optional && <Button type="button" variant="outline" size="lg" disabled={navigating || saveState === "saving"} onClick={() => void goTo("dashboard")} className="min-h-11 w-full sm:w-auto">{locked ? "Dashboard" : "Save and go to dashboard"}</Button>}
-            {optional && !locked && currentIndex < CREATOR_QUESTIONNAIRE_PAGES.length - 1 && <Button type="button" variant="outline" size="lg" disabled={navigating || saveState === "saving"} onClick={() => void goTo("finish")} className="min-h-11 w-full sm:w-auto">Skip questionnaire</Button>}
+            {optional && !locked && currentIndex < CREATOR_QUESTIONNAIRE_PAGES.length - 1 && <Button type="button" variant="outline" size="lg" disabled={navigating || saveState === "saving"} onClick={() => void goTo("content")} className="min-h-11 w-full sm:w-auto">Skip questionnaire</Button>}
             {currentIndex > 0 && <Button type="button" variant="outline" size="lg" disabled={navigating || saveState === "saving"} onClick={() => void goTo(currentIndex - 1)} className="min-h-11 w-full sm:w-auto">
               <ArrowLeft className="size-4" aria-hidden="true" /> {locked ? "Previous part" : "Save and go back"}
             </Button>}
