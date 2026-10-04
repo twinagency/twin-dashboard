@@ -48,7 +48,9 @@ export default function CreatorOnboardingActionForm({ children, className, pendi
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 45_000);
     try {
-      const response = await fetch(form.action, { method: "POST", body, signal: controller.signal });
+      // A hidden input named "action" shadows form.action in real browsers.
+      // Read the attribute so consent/submit/skip always POST to our handler.
+      const response = await fetch(form.getAttribute("action")!, { method: "POST", body, signal: controller.signal });
       const destination = new URL(response.url, window.location.origin);
       if (response.status === 401 || destination.pathname.endsWith("/login")) {
         setError("Your session expired. Sign in again to continue; this action has not been confirmed.");
