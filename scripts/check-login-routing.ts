@@ -70,7 +70,7 @@ async function main() {
       assert.equal(await verifySessionToken(response.cookies.get(SESSION_COOKIE)?.value),true);
       for (const key of [AGENCY_COOKIE,AGENCY_PORTAL_COOKIE,"clone_scope"]) assert.equal(response.cookies.get(key)?.value,"");
     }
-    assert.equal((await adminLogin(request("wrong","/"))).headers.get("location"),origin + "/twin?error=1");
+    assert.equal((await adminLogin(request("wrong","/"))).headers.get("location"),origin + "/twin?error=1&next=%2Frevenue");
     assert.equal((await adminLogin(request("offline-routing-password","/","https://evil.example"))).status,403);
     assert.equal(calls,0);
   } finally { globalThis.fetch = previous; }
