@@ -29,3 +29,5 @@ jobs:
         run: exit 1
 
 # Correlate the retained rollback container and bounded OOM metadata.
+
+# Execute explicit stdin main and verify recovery redirect configuration.

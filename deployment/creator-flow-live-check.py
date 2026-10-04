@@ -29,10 +29,10 @@ def aws(arguments):
     return json.loads(result.stdout)
 
 
-def host_program(brand, expected, mode, removal_guards, encoded_source):
-    configuration = repr({"brand": brand, "expected": expected, "mode": mode, "removal_guards": removal_guards, "source": encoded_source})
+def host_program(brand, expected, mode, removal_guards, encoded_source, allow_missing_gallery=False):
+    configuration = repr({"brand": brand, "expected": expected, "mode": mode, "removal_guards": removal_guards, "allow_missing_gallery": allow_missing_gallery, "source": encoded_source})
     return "CONFIG = " + configuration + r'''
-import base64,json,subprocess
+import base64,json,re,subprocess
 target = 'flirt-dashboard' if CONFIG['brand']=='flirt' else 'next-app'
 other = 'next-app' if CONFIG['brand']=='flirt' else 'flirt-dashboard'
 def run(args, data=None, timeout=30):
@@ -54,6 +54,7 @@ try:
             raise RuntimeError('Refusing non-FLIRT container')
     args=['docker','exec','-i',target,'node','-','--run','--brand='+CONFIG['brand'],'--expected-sha='+CONFIG['expected'],'--'+CONFIG['mode']]
     if CONFIG['removal_guards']: args.append('--removal-guards')
+    if CONFIG['allow_missing_gallery']: args.append('--allow-missing-gallery')
     result=run(args,base64.b64decode(CONFIG['source']),2400)
     lines=result.stdout.decode(errors='replace').splitlines()
     report=None
@@ -63,7 +64,8 @@ try:
         if value.get('event')=='upload_result': print(json.dumps(value),flush=True)
         elif 'passed' in value: report=value
     if report is None:
-        report={'passed':False,'failure':'Runtime returned no structured final report; inspect exact disposable manifest before rerunning','credentials_logged':False}
+        error_type=re.search(r'\b(SyntaxError|ReferenceError|TypeError|RangeError|Error):',result.stderr.decode(errors='replace'))
+        report={'passed':False,'failure':'Runtime returned no structured final report; inspect exact disposable manifest before rerunning','runtime_exit_code':result.returncode,'stdout_line_count':len(lines),'stderr_error_type':error_type.group(1) if error_type else 'unclassified','credentials_logged':False}
     report['other_dashboard_unchanged']=snapshot(other)==other_before
     report['target_dashboard_unchanged']=snapshot(target)==target_before
     report['serving_commit_verified']=CONFIG['expected']
@@ -81,13 +83,16 @@ def main():
     parser.add_argument("--expected-sha", required=True)
     parser.add_argument("--mode", required=True, choices=("flow-only", "small-only", "large"))
     parser.add_argument("--removal-guards", action="store_true")
+    parser.add_argument("--allow-missing-gallery", action="store_true")
     options = parser.parse_args()
     if not re.fullmatch(r"[a-f0-9]{40}", options.expected_sha) or (options.removal_guards and options.mode == "flow-only"):
         raise RuntimeError("Invalid expected commit or test mode")
+    if options.allow_missing_gallery and (options.removal_guards or options.mode == "flow-only"):
+        raise RuntimeError("Missing-gallery allowance requires upload mode without removal guards")
     if aws(["sts", "get-caller-identity"])["Account"] != ACCOUNT:
         raise RuntimeError("Unexpected AWS account")
     encoded = base64.b64encode((ROOT / "creator-flow-live-check.cjs").read_bytes()).decode()
-    host = host_program(options.brand, options.expected_sha, options.mode, options.removal_guards, encoded)
+    host = host_program(options.brand, options.expected_sha, options.mode, options.removal_guards, encoded, options.allow_missing_gallery)
     command = {"InstanceIds": [INSTANCE], "DocumentName": "AWS-RunShellScript", "Comment": "Normal signup and isolated creator regression: " + options.brand,
                "TimeoutSeconds": 60, "Parameters": {"commands": ["python3 -c " + shlex.quote(host)], "executionTimeout": ["2460"]}}
     command_id = aws(["ssm", "send-command", "--cli-input-json", json.dumps(command)])["Command"]["CommandId"]

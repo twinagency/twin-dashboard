@@ -26,10 +26,12 @@ function parseArgs(argv) {
       assert(!config.mode, 'Specify one run mode'); config.mode = arg.slice(2);
     } else if (arg === '--run') config.run = true;
     else if (arg === '--removal-guards') config.removalGuards = true;
+    else if (arg === '--allow-missing-gallery') config.allowMissingGallery = true;
     else throw new CheckError('Unknown runner argument');
   }
   assert(config.run && BRANDS[config.brand] && /^[a-f0-9]{40}$/i.test(config.sha || '') && config.mode, 'Require --run, --brand, --expected-sha and exactly one run mode');
   assert(!config.removalGuards || config.mode !== 'flow-only', '--removal-guards requires an upload mode');
+  assert(!config.allowMissingGallery || (!config.removalGuards && config.mode !== 'flow-only'), '--allow-missing-gallery requires an upload mode without removal guards');
   return config;
 }
 function runtimeGuard(config, env) {
@@ -84,8 +86,8 @@ async function run(config, env = process.env) {
   const directory = fs.mkdtempSync(path.join(os.tmpdir(), `creator-flow-${config.brand}-`));
   fs.chmodSync(directory, 0o700);
   const manifestPath = path.join(directory, 'cleanup-manifest.json');
-  const fixtures = [], invitations = [], checks = [], blocked = [], uploads = [];
-  let operatorCookie = '', agencyId = brand.agency, failure, cleanupFailure;
+  const fixtures = [], invitations = [], checks = [], blocked = [], unverified = [], uploads = [];
+  let operatorCookie = '', agencyId = brand.agency, failure, cleanupFailure, recoveryRedirect;
   function checkpoint() {
     fs.writeFileSync(manifestPath, JSON.stringify({ brand: config.brand, stamp, expected_sha: config.sha,
       fixtures: fixtures.map(({ email, name, id, auth_user_id }) => ({ email, name, id, auth_user_id })),
@@ -191,6 +193,23 @@ async function run(config, env = process.env) {
     const info = await page200('/creator/info', fixture);
     assert(info.includes('Draft / unfinished') && !info.includes('Onboarding submitted'), 'Draft Info has misleading submission wording');
   }
+  async function recoveryConfiguration(fixture) {
+    const target = brand.origin + '/creator/reset-password';
+    // Match the installed Auth SDK: redirect_to is a query parameter, not a
+    // JSON body property. This generates an unsent recovery link for this
+    // normally registered disposable user only; never print or follow tokens.
+    const generated = await backend('/auth/v1/admin/generate_link?redirect_to=' + encodeURIComponent(target), {
+      method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ type: 'recovery', email: fixture.email }),
+    });
+    let actual = generated?.redirect_to;
+    if (!actual && typeof generated?.action_link === 'string') {
+      try { actual = new URL(generated.action_link).searchParams.get('redirect_to'); } catch { actual = null; }
+    }
+    recoveryRedirect = { accepted: actual === target, brand: config.brand, path: '/creator/reset-password', email_sent: false };
+    if (recoveryRedirect.accepted) passed('Correct-query unsent recovery link accepts this brand reset path; email delivery and browser reset remain unverified');
+    else blocked.push('Correct-query recovery link did not retain the intended brand reset path; investigate Auth URL allowlist before claiming recovery works');
+  }
   async function loginAgain(fixture) {
     const logout = await post('/creator-auth/logout', fixture, {});
     assert(logout.status === 303 && location(logout).pathname === brand.login, 'Logout lost brand login');
@@ -215,7 +234,7 @@ async function run(config, env = process.env) {
     const response = await app('/creator-auth/files?kind=content_sfw_video', fixture, { headers: { Accept: 'application/json' } });
     const enabled = response.status === 200 && (response.headers.get('content-type') || '').includes('application/json');
     await response.body?.cancel();
-    if (!enabled) blocked.push('Gallery API is not deployed or not available; browser playback and gallery isolation were not established');
+    if (!enabled) (config.allowMissingGallery ? unverified : blocked).push('Gallery API is not deployed or not available; browser playback and gallery isolation were not established');
     return enabled;
   }
   async function upload(fixture, file, kind, name, uploadId = randomUUID()) {
@@ -378,6 +397,7 @@ async function run(config, env = process.env) {
     const a = await signup('complete', firstInvite);
     const secondInvite = await normalInvite('skip');
     const b = await signup('skip', secondInvite);
+    await recoveryConfiguration(a);
     passed('Two fresh disposable accounts registered through normal signup with correct agency assignment; invitation generated through normal authorized interface');
     const duplicate = await post('/creator-auth/signup', null, { display_name: a.name, email: a.email, password: a.password, ...(firstInvite ? { agency_code: (await normalInvite('duplicate-validation')).code } : {}) }, { Accept: 'application/json' });
     assert(duplicate.status === 409 && (await duplicate.json()).error === 'exists', 'Duplicate signup not rejected correctly');
@@ -416,13 +436,16 @@ async function run(config, env = process.env) {
   try { await cleanup(); } catch (error) { cleanupFailure = error instanceof CheckError ? error.message : 'Fixture cleanup unavailable'; }
   if (!cleanupFailure) fs.rmSync(directory, { recursive: true, force: true });
   const result = { passed: !failure && !cleanupFailure && blocked.length === 0, brand: config.brand, mode: config.mode,
-    expected_commit: config.sha, method: 'normal public HTTPS plus fixture-scoped persistence checks; supplements browser audit', checks, blocked: [...new Set(blocked)], uploads,
+    expected_commit: config.sha, method: 'normal public HTTPS plus fixture-scoped persistence checks; supplements browser audit', checks, blocked: [...new Set(blocked)], unverified: [...new Set(unverified)], uploads,
+    ...(recoveryRedirect ? { recovery_redirect: recoveryRedirect } : {}),
     ...(failure ? { failure } : {}), ...(cleanupFailure ? { cleanup_failure: cleanupFailure, cleanup_manifest: manifestPath } : { identified_fixtures_removed: true }),
     browser_journey_verified: false, physical_iphone_verified: false, speed_claim: 'Runtime/server connection only; not representative of creator phones', credentials_logged: false };
   console.log(JSON.stringify(result)); return result;
 }
 module.exports = { parseArgs, runtimeGuard, optionForMoxy, padMp4, safeUploadResult, run, BRANDS, LIMIT };
-if (require.main === module) {
+// `node -` intentionally has no require.main. The SSM wrapper pipes this file
+// through stdin, while require() by the offline tests must stay side-effect free.
+if (require.main === module || (process.argv[1] === '-' && module.id === '[stdin]')) {
   let config;
   try { config = parseArgs(process.argv.slice(2)); runtimeGuard(config, process.env); }
   catch (error) { console.log(JSON.stringify({ passed: false, error: error instanceof CheckError ? error.message : 'Runner configuration invalid', credentials_logged: false })); process.exitCode = 1; }
