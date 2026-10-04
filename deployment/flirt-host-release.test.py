@@ -1,4 +1,5 @@
-import importlib.util, io, unittest, base64, json
+import importlib.util, io, unittest, base64, json, copy
+from types import SimpleNamespace
 from contextlib import redirect_stdout
 from unittest.mock import patch
 from urllib.error import HTTPError
@@ -8,6 +9,71 @@ release = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(release)
 
 class ReleaseBoundaryTests(unittest.TestCase):
+    def test_archive_name_retains_prior_archives_and_retries_collisions(self):
+        sha = "a" * 40
+        first = "flirt-dashboard-archive-" + sha[:12] + "-" + "1" * 16
+        second = "flirt-dashboard-archive-" + sha[:12] + "-" + "2" * 16
+        existing = {first: {"Id": "old-archive"}}
+        with patch.object(release, "inspect", side_effect=lambda name: existing.get(name)) as inspected, patch.object(release.secrets, "token_hex", side_effect=["1" * 16, "2" * 16]), patch.object(release, "command") as commands:
+            self.assertEqual(release.rollback_archive_name("flirt-dashboard", sha), second)
+        self.assertEqual([call.args[0] for call in inspected.call_args_list], [first, second])
+        self.assertEqual(existing, {first: {"Id": "old-archive"}})
+        commands.assert_not_called()
+
+    def test_archive_name_exhaustion_fails_before_container_mutation(self):
+        with patch.object(release, "inspect", return_value={"Id": "occupied"}) as inspected, patch.object(release.secrets, "token_hex", return_value="1" * 16), patch.object(release, "command") as commands:
+            with self.assertRaisesRegex(RuntimeError, "distinct FLIRT rollback archive"):
+                release.rollback_archive_name("flirt-dashboard", "a" * 40)
+        self.assertEqual(inspected.call_count, 10)
+        commands.assert_not_called()
+
+    def test_repeated_commit_archive_is_preserved_on_success_and_failed_startup(self):
+        for startup_succeeds in (True, False):
+            with self.subTest(startup_succeeds=startup_succeeds):
+                new_sha, previous_sha, older_sha = "c" * 40, "b" * 40, "a" * 40
+                def container(identifier, sha, running):
+                    return {"Id": identifier, "Config": {"Labels": {"io.flirt.project": release.PROJECT, "io.flirt.commit": sha}}, "State": {"Running": running, "StartedAt": "unchanged-start"}, "RestartCount": 0}
+                legacy = "flirt-dashboard-archive-" + older_sha[:12]
+                unique = legacy + "-" + "d" * 16
+                state = {"next-app": container("twin", "e" * 40, True), "flirt-dashboard": container("previous", previous_sha, True), "flirt-dashboard-rollback": container("older", older_sha, False), legacy: container("prior-same-commit-archive", older_sha, False)}
+                before = copy.deepcopy(state)
+                commands = []
+                def fake_command(args, data=None, timeout=180):
+                    commands.append(args)
+                    if args[:3] == ["aws", "ecr", "get-login-password"]: return b"temporary-login-not-logged"
+                    if args[:3] == ["docker", "run", "--rm"]:
+                        return new_sha.encode() if "process.stdout.write" in args[-1] else b""
+                    if args[:3] == ["docker", "run", "-d"]:
+                        state["flirt-dashboard"] = container("new", new_sha, True)
+                    elif args[:2] == ["docker", "rename"]:
+                        self.assertNotIn(args[3], state)
+                        state[args[3]] = state.pop(args[2])
+                    elif args[:2] == ["docker", "stop"]:
+                        state[args[-1]]["State"]["Running"] = False
+                    elif args[:2] == ["docker", "start"]:
+                        state[args[-1]]["State"]["Running"] = True
+                    elif args[:2] == ["docker", "rm"]:
+                        del state[args[-1]]
+                    elif args[:2] == ["docker", "exec"]: return new_sha.encode()
+                    return b""
+                response = SimpleNamespace(status=200, read=lambda: b"FLIRT")
+                from contextlib import nullcontext
+                with patch.object(release, "secured_directory"), patch.object(release, "read_env", return_value={"FLIRT_SUPABASE_PROJECT_REF": release.PROJECT, "FLIRT_BACKEND_ENABLED": "true"}), patch.object(release.shutil, "disk_usage", return_value=SimpleNamespace(free=10 * 1024**3)), patch.object(release.Path, "read_text", return_value="MemAvailable: 2097152 kB"), patch.object(release, "inspect", side_effect=lambda name: copy.deepcopy(state.get(name))), patch.object(release, "command", side_effect=fake_command), patch.object(release.secrets, "token_hex", return_value="d" * 16), patch.object(release.time, "sleep"), patch.object(release, "urlopen", side_effect=(lambda *args, **kwargs: nullcontext(response)) if startup_succeeds else OSError("startup unavailable")), redirect_stdout(io.StringIO()):
+                    if startup_succeeds:
+                        release.deploy("dashboard", release.REGISTRY + "/twin-dashboard@sha256:" + "f" * 64, new_sha)
+                    else:
+                        with self.assertRaisesRegex(RuntimeError, "startup check failed"):
+                            release.deploy("dashboard", release.REGISTRY + "/twin-dashboard@sha256:" + "f" * 64, new_sha)
+                self.assertEqual(state[legacy], before[legacy])
+                self.assertEqual(state["next-app"], before["next-app"])
+                self.assertFalse(any(args[:2] == ["docker", "rm"] and args[-1] == legacy for args in commands))
+                if startup_succeeds:
+                    self.assertEqual(state[unique], before["flirt-dashboard-rollback"])
+                    self.assertEqual(state["flirt-dashboard-rollback"]["Id"], "previous")
+                    self.assertEqual(state["flirt-dashboard"]["Id"], "new")
+                else:
+                    self.assertEqual(state, before)
+
     def test_only_dashboard_receives_live_access_without_copying_bot_configuration(self):
         for kind in ("dashboard", "bot"):
             payload = {**self.payload(), "kind": kind}
