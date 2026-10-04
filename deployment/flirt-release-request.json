@@ -1,5 +1,5 @@
 {
-  "reason": "Release verified creator gallery, private retrieval/removal and upload recovery after corrected return-onboarding response gate.",
-  "source_commit": "2b1105f0edc1ba386d00975a7cf79b18d61ef8e1",
-  "requested_at": "2026-10-04T05:42:00Z"
+  "reason": "Release creator consent and submit button fix verified in Chromium and WebKit; preserve isolated FLIRT backend and existing upload policy.",
+  "source_commit": "f956ea15383fde6b1ef17acc412c37b0c33c9563",
+  "requested_at": "2026-10-04T11:56:05.596Z"
 }
