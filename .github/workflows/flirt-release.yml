@@ -33,19 +33,22 @@ jobs:
           npm run test:flirt-isolation
           node --test deployment/flirt-live-twin.test.cjs
           python3 deployment/flirt-host-release.test.py
-          python3 -m py_compile deployment/flirt-host-release.py deployment/flirt-release.py deployment/flirt-optional-live-check.py
-          node --check deployment/flirt-optional-live-check.cjs
+          python3 -m py_compile deployment/flirt-host-release.py deployment/flirt-release.py deployment/creator-flow-live-check.py
+          node --check deployment/creator-flow-live-check.cjs
           node --check deployment/flirt-live-creators-check.cjs
       - run: npm ci
       - run: npx tsc --noEmit
       - name: Owner authentication and existing master access
         run: node --import tsx scripts/check-owner-auth.ts
+      - name: Creator flow and recoverable form regressions
+        run: npm run test:creator-flow
       - name: Streaming creator video upload regressions
         run: |
           command -v ffmpeg >/dev/null || (sudo apt-get update && sudo apt-get install -y ffmpeg)
           node scripts/check-creator-video-upload.cjs
           node --import tsx scripts/check-creator-upload-stream.ts
           node scripts/check-creator-upload-picker.cjs
+          node deployment/creator-flow-live-check.test.cjs
       - name: Selected live creators and retained local database routing
         run: npx tsx scripts/check-flirt-live-twin.ts
       - name: Invitation routing and local account authorization
@@ -95,11 +98,10 @@ jobs:
           FLIRT_SUPABASE_SERVICE_KEY: ${{ secrets.FLIRT_SUPABASE_SERVICE_KEY }}
           FLIRT_IMAGE: ${{ steps.image.outputs.digest }}
         run: python3 deployment/flirt-release.py dashboard "$FLIRT_IMAGE" "$GITHUB_SHA"
-      - name: Verify public blank onboarding and unchanged Twin with disposable fixtures
-        run: python3 deployment/flirt-optional-live-check.py
+      - name: Verify normal FLIRT signup, optional flow and small uploads with exact cleanup
+        timeout-minutes: 15
+        run: python3 deployment/creator-flow-live-check.py --brand=flirt --expected-sha="$GITHUB_SHA" --mode=small-only --allow-missing-gallery
       - name: Verify all four live creators, existing media and denied unassigned access
         run: python3 deployment/flirt-live-creators-check.py
-      - name: Verify invite, signup, onboarding, listing and profile editing with disposable FLIRT fixtures
-        run: python3 deployment/flirt-invites-live-check.py
 
 
