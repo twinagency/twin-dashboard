@@ -1,3 +1,4 @@
+import { activeViewAs } from "@/lib/view-as";
 import { NextRequest, NextResponse } from "next/server";
 import { CREATOR_SESSION_COOKIE } from "@/lib/creator-session";
 import { creatorDashboardIdentity } from "@/lib/creator-dashboard-identity";
@@ -6,6 +7,7 @@ import { isUploadId } from "@/lib/creator-upload-receipts";
 
 const reply = (data: unknown, status = 200) => NextResponse.json(data, { status, headers: { "Cache-Control": "private, no-store", Vary: "Cookie" } });
 export async function GET(req: NextRequest) {
+  if (await activeViewAs(req.cookies)) return reply({ error: "read_only" }, 403);
   const creator = await creatorDashboardIdentity(req.cookies.get(CREATOR_SESSION_COOKIE)?.value);
   if (!creator || creator.readOnly) return reply({ error: "session_expired" }, 401);
   const ids = (req.nextUrl.searchParams.get("ids") || "").split(",").filter(Boolean);
@@ -19,7 +21,7 @@ export async function GET(req: NextRequest) {
   const verified = new Set((saved.data || []).filter(row => row.storage_transfer_status === "verified").map(row => row.id));
   return reply({ uploads: ids.map(id => {
     const receipt = receipts.data?.find(row => row.id === id);
-    const state = verified.has(id) ? "saved" : receipt?.state === "removed" || (receipt?.state === "saved" && !receipt.file_id) ? "removed"
+    const state = receipt?.state === "removed" || (receipt?.state === "saved" && !receipt.file_id) ? "removed" : verified.has(id) ? "saved"
       : receipt && Date.parse(receipt.lease_until) > Date.now() ? "processing" : "needs_file";
     return { id, state };
   }) });

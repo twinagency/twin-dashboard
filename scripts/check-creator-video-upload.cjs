@@ -36,7 +36,7 @@ global.__moxyUploadTest = {
   viewAs: () => state.viewAs,
   db: { from: query, storage: { from: bucket => ({
     async upload(path, body, options) {
-      assert.equal(bucket, 'onboarding-content'); assert.equal(options.upsert, false);
+      assert.ok(['onboarding-content','voice-samples'].includes(bucket)); assert.equal(options.upsert, false);
       let size = 0;
       for await (const chunk of body.stream()) size += chunk.byteLength;
       state.stored.push({ path, size }); return { error: null };
@@ -96,6 +96,10 @@ function stagingDirs() { return readdirSync(tmpdir()).filter(name => name.starts
   assert.equal(state.stored.at(-1).size, 80 * 1024 * 1024);
   assert.deepEqual(await upload(maximum, 'maximum.mp4'), { code: 200, status: 'content_saved' });
   assert.equal(state.stored.at(-1).size, 512 * 1024 * 1024);
+  const audio = join(temp, 'voice.wav');
+  execFileSync('/usr/bin/ffmpeg', ['-v','error','-f','lavfi','-i','sine=frequency=440:duration=2','-y',audio], { timeout:15000 });
+  assert.equal((await upload(audio, 'voice.wav', 'audio/wav', {}, 'voice')).status, 'voice_saved');
+  assert.equal((await upload(short, 'fake-voice.wav', 'audio/wav', {}, 'voice')).status, 'upload_wrong_type');
   assert.deepEqual(await upload(mov, 'iPhone.MOV', 'application/octet-stream'), { code: 200, status: 'content_saved' });
   assert.deepEqual(await upload(long, 'too-long.mp4'), { code: 400, status: 'upload_video_too_long' });
   assert.deepEqual(await upload(tooLarge, 'too-large.mp4'), { code: 400, status: 'upload_too_large' });

@@ -69,7 +69,7 @@ async function main() {
       const chain:any={select:()=>chain,eq:(key:string,value:string)=>{assert.equal(key,"creator_account_id");assert.equal(value,owner);scoped=true;return chain;},in:()=>chain,
         then:(yes:any,no:any)=>{assert.ok(scoped,"All status reads must be creator-scoped");return Promise.resolve({data:table==="creator_files"?[{id,storage_transfer_status:"verified"}]:[],error:null}).then(yes,no);}}; return chain;
     }};
-    const api=compile("app/creator-auth/uploads/route.ts",{"next/server":{NextResponse},"@/lib/creator-session":{CREATOR_SESSION_COOKIE:"creator"},"@/lib/creator-dashboard-identity":{creatorDashboardIdentity:async()=>identity},"@/lib/supabase-service":{serviceClient:()=>statusDb},"@/lib/creator-upload-receipts":{isUploadId:helper.isUploadId}});
+    const api=compile("app/creator-auth/uploads/route.ts",{"@/lib/view-as":{activeViewAs:async()=>null},"next/server":{NextResponse},"@/lib/creator-session":{CREATOR_SESSION_COOKIE:"creator"},"@/lib/creator-dashboard-identity":{creatorDashboardIdentity:async()=>identity},"@/lib/supabase-service":{serviceClient:()=>statusDb},"@/lib/creator-upload-receipts":{isUploadId:helper.isUploadId}});
     const req=()=>new NextRequest(`https://test.example/creator-auth/uploads?ids=${id}`);
     identity=null; assert.equal((await api.GET(req())).status,401);assert.equal(queried,0);
     identity={accountId:owner,readOnly:true};assert.equal((await api.GET(req())).status,401);assert.equal(queried,0);
