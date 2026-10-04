@@ -1,0 +1,107 @@
+/* Actual installed Supabase SDK + HTTP transport. Synthetic byte fixtures only;
+ * this does not replace real-media validation or production Storage tests. */
+const assert = require('node:assert/strict');
+const { openAsBlob, openSync, ftruncateSync, closeSync, mkdtempSync, rmSync } = require('node:fs');
+const { tmpdir } = require('node:os');
+const { join, resolve } = require('node:path');
+const { fork } = require('node:child_process');
+const { createServer } = require('node:http');
+const MiB = 1024 * 1024;
+
+async function sender() {
+  const [bundle, fixture, port, count] = process.argv.slice(3);
+  const { createClient } = require('@supabase/supabase-js');
+  const { creatorStorageFetch } = require(bundle);
+  const db = createClient(`http://127.0.0.1:${port}`, 'synthetic-transport-key', {
+    auth: { persistSession: false, autoRefreshToken: false }, global: { fetch: creatorStorageFetch },
+  });
+  let peak = process.memoryUsage().rss;
+  const timer = setInterval(() => { peak = Math.max(peak, process.memoryUsage().rss); }, 5);
+  try {
+    await Promise.all(Array.from({ length: Number(count) }, async (_, index) => {
+      const bytes = index === 0 ? 512 * MiB - 1024 : 512 * MiB;
+      const blob = (await openAsBlob(fixture, { type: 'video/mp4' })).slice(0, bytes);
+      const result = await db.storage.from('onboarding-content').upload(`creators/synthetic/${bytes}.mp4`, blob, {
+        contentType: 'video/mp4', upsert: false, cacheControl: '3600',
+      });
+      assert.equal(result.error, null, 'Actual SDK object transfer must succeed');
+    }));
+    peak = Math.max(peak, process.memoryUsage().rss);
+    // A former single file retained >512 MiB in fetch's redirect replay branch.
+    // This leaves meaningful room for the rest of a 512 MiB production process.
+    assert(peak < 384 * MiB, `Upload transport retained too much memory: ${peak} bytes`);
+    process.send({ count: Number(count), peakRssBytes: peak, node: process.version });
+  } finally { clearInterval(timer); }
+}
+
+async function main() {
+  const directory = mkdtempSync(join(tmpdir(), 'creator-storage-transport-'));
+  const fixture = join(directory, 'synthetic-zero-byte-boundary.mp4');
+  const bundle = join(directory, 'creator-storage-fetch.cjs');
+  const fd = openSync(fixture, 'wx');
+  try { ftruncateSync(fd, 512 * MiB); } finally { closeSync(fd); }
+  require('esbuild').buildSync({ entryPoints: ['lib/creator-storage-fetch.ts'], outfile: bundle, bundle: true, platform: 'node', format: 'cjs' });
+  const { creatorStorageFetch } = require(bundle);
+  const received = [];
+  let redirectTargetHits = 0;
+  const failures = [];
+  const server = createServer(async (request, response) => {
+    try {
+      if (request.url.includes('redirect-write')) {
+        request.resume(); response.writeHead(307, { Location: '/redirect-target' }); response.end(); return;
+      }
+      if (request.url === '/redirect-target') {
+        redirectTargetHits++; request.resume(); response.end('unexpected'); return;
+      }
+      if (request.url.includes('redirect-read') || request.url.includes('redirect-other')) {
+        request.resume(); response.writeHead(303, { Location: '/ordinary-target' }); response.end(); return;
+      }
+      if (request.url === '/ordinary-target') { response.end('ordinary redirect preserved'); return; }
+      assert.equal(request.method, 'POST');
+      assert.equal(request.headers.authorization, 'Bearer synthetic-transport-key');
+      assert.equal(request.headers.apikey, 'synthetic-transport-key');
+      assert.equal(request.headers['x-upsert'], 'false');
+      assert.match(request.headers['content-type'], /^multipart\/form-data;/);
+      const parser = require('busboy')({ headers: request.headers });
+      let bytes = 0, files = 0, cacheControl;
+      parser.on('field', (name, value) => { if (name === 'cacheControl') cacheControl = value; });
+      parser.on('file', (_name, file) => { files++; file.on('data', chunk => { bytes += chunk.length; }); });
+      await new Promise((resolve, reject) => { parser.once('close', resolve); parser.once('error', reject); request.once('error', reject); request.pipe(parser); });
+      assert.equal(files, 1); assert.equal(cacheControl, '3600');
+      assert.equal(bytes, Number(request.url.match(/\/(\d+)\.mp4$/)[1]));
+      received.push(bytes);
+      response.writeHead(200, { 'Content-Type': 'application/json' });
+      response.end(JSON.stringify({ Id: '00000000-0000-4000-8000-000000000001', Key: 'synthetic-local-only' }));
+    } catch (error) { failures.push(error); response.writeHead(500); response.end('{}'); }
+  });
+  try {
+    await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
+    const port = server.address().port;
+    const base = `http://127.0.0.1:${port}`;
+    // The same transport policy covers SDK string URLs, URL objects and Requests.
+    for (const method of ['POST', 'PUT']) {
+      await assert.rejects(creatorStorageFetch(`${base}/storage/v1/object/onboarding-content/redirect-write`, { method, body: 'synthetic', redirect: 'follow' }));
+      await assert.rejects(creatorStorageFetch(new Request(`${base}/storage/v1/object/voice-samples/redirect-write`, { method, body: 'synthetic' })));
+    }
+    assert.equal(redirectTargetHits, 0, 'No upload bytes or authentication may follow a redirect');
+    assert.equal(await (await creatorStorageFetch(new URL(`${base}/storage/v1/object/onboarding-content/redirect-read`))).text(), 'ordinary redirect preserved');
+    assert.equal(await (await creatorStorageFetch(`${base}/storage/v1/object/media/redirect-other`, { method: 'POST', body: 'synthetic' })).text(), 'ordinary redirect preserved');
+    const results = [];
+    for (const count of [1, 2]) {
+      const started = Date.now();
+      const metrics = await new Promise((resolve, reject) => {
+        const child = fork(__filename, ['--sender', bundle, fixture, String(port), String(count)], { stdio: ['ignore', 'ignore', 'inherit', 'ipc'] });
+        let report;
+        const timer = setTimeout(() => { child.kill(); reject(new Error('Local upload transport test timed out')); }, 120000);
+        child.once('message', value => { report = value; });
+        child.once('error', reject);
+        child.once('exit', code => { clearTimeout(timer); code === 0 && report ? resolve(report) : reject(new Error(`Upload sender exited ${code}`)); });
+      });
+      results.push({ ...metrics, elapsedMs: Date.now() - started });
+    }
+    assert.deepEqual(failures, []);
+    assert.deepEqual(received.sort((a, b) => a - b), [512 * MiB - 1024, 512 * MiB - 1024, 512 * MiB]);
+    console.log(JSON.stringify({ passed: true, test: 'actual SDK to isolated local HTTP receiver; synthetic byte boundaries, not media/playback', received, results, redirectsRejected: true }));
+  } finally { server.closeAllConnections(); await new Promise(resolve => server.close(resolve)); rmSync(directory, { recursive: true, force: true }); }
+}
+(process.argv[2] === '--sender' ? sender() : main()).catch(error => { console.error(error); process.exitCode = 1; });
