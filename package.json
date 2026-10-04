@@ -57,7 +57,8 @@
     "test:internal-admin": "node --import tsx scripts/check-internal-admin.ts",
     "test:creator-registration": "node --import tsx scripts/check-creator-registration.ts",
     "test:creator-upload-receipts": "node --import tsx scripts/check-creator-upload-receipts.ts",
-    "test:creator-upload-picker": "npm run test:creator-upload-receipts && node scripts/check-creator-upload-picker.cjs"
+    "test:creator-upload-picker": "npm run test:creator-gallery && npm run test:creator-upload-receipts && node scripts/check-creator-upload-picker.cjs",
+    "test:creator-gallery": "node --import tsx scripts/check-creator-gallery.ts && node scripts/check-creator-gallery-ui.cjs"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

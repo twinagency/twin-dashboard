@@ -191,6 +191,16 @@ async function videoProbeMatches(file: StagedCreatorFile, mime: string): Promise
   }
 }
 
+async function voiceProbeMatches(file: StagedCreatorFile): Promise<boolean> {
+  try {
+    const { stdout, stderr } = await execFileAsync(mediaToolPath("ffprobe"), ["-v", "error", "-protocol_whitelist", "file", "-select_streams", "a:0", "-show_entries", "format=duration,size:stream=codec_type,codec_name", "-of", "json", file.path], mediaToolOptions(30_000));
+    const probe = JSON.parse(String(stdout));
+    if (String(stderr).trim() || probe.streams?.[0]?.codec_type !== "audio" || !probe.streams[0].codec_name || !(Number(probe.format?.duration) > 0) || Number(probe.format?.size) !== file.size) return false;
+    const decoded = await execFileAsync(mediaToolPath("ffmpeg"), ["-v", "error", "-xerror", "-nostdin", "-threads", "1", "-protocol_whitelist", "file", "-i", file.path, "-map", "0:a:0", "-t", "1", "-f", "null", "-"], mediaToolOptions(15_000));
+    return !String(decoded.stderr).trim();
+  } catch { return false; }
+}
+
 async function contentSignatureMatches(file: StagedCreatorFile, mime: string): Promise<boolean> {
   if (file.size < 32) return false;
   const handle = await open(file.path, "r");
@@ -223,7 +233,7 @@ export async function POST(req: NextRequest) {
   // Middleware normally sanitizes audience/path headers. Do not consult any of
   // those caller-controlled headers or a separate operator cookie on this route.
   // The validated creator account below owns every row and the FLIRT-local client.
-  return tracedCreatorUpload(() => withDashboardAccess(null, () => uploadForCreator(req)));
+  return tracedCreatorUpload(() => withDashboardAccess(null, () => uploadForCreator(req)), req.headers.get("x-creator-upload-id"));
 }
 
 async function uploadForCreator(req: NextRequest) {
@@ -278,6 +288,9 @@ async function uploadForCreator(req: NextRequest) {
 
   for (const file of files) {
     if (file.size > maxBytes) return back(req, "upload_too_large", step);
+    if (kind === "voice") {
+      if (!(file.type.startsWith("audio/") || file.type.startsWith("video/") || file.type === "application/octet-stream") || !(await voiceProbeMatches(file))) return back(req, "upload_wrong_type", step);
+    }
     if (contentRequirement) {
       const mime = normalizedContentMime(file, contentRequirement.accept.split(","));
       if (!mime || !mime.startsWith(`${contentRequirement.media}/`) || !(await validateMedia(file, mime))) return back(req, "upload_wrong_type", step);
@@ -372,6 +385,7 @@ async function uploadForCreator(req: NextRequest) {
   if (progressError) return back(req, kind === "voice" ? "voice_saved" : "content_saved", step);
   return back(req, kind === "voice" ? "voice_saved" : "content_saved", step);
   } catch (error) {
+    if (error instanceof CreatorUploadError && ["upload_staging_full", "upload_staging_error"].includes(error.status)) uploadStage("staging", error.status);
     return back(req, error instanceof CreatorUploadError ? error.status : "upload_error", staged?.fields.get("kind") === "voice" ? "voice" : "content");
   } finally {
     releaseSave?.();

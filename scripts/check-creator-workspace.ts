@@ -103,6 +103,13 @@ async function main() {
 
     const token = await signCreatorSession(account, user);
     const request = (path: string, method = "GET", extra: Record<string, string> = {}, cookie = `${CREATOR_SESSION_COOKIE}=${token}`) => new NextRequest(origin + path, { method, headers: { cookie, ...extra } });
+    for (const path of ["/creator-auth/uploads", "/creator-auth/files", `/creator-auth/files/${account}/access`]) {
+      const allowed = await middleware(request(path));
+      assert.equal(allowed.headers.get("x-middleware-next"), "1", "Gallery/status handlers must run their own creator check, including unfinished accounts");
+      assert.equal((await middleware(request(path, "POST", { origin }))).status, 403);
+    }
+    assert.equal((await middleware(request(`/creator-auth/files/${account}`, "DELETE", { origin }))).headers.get("x-middleware-next"), "1");
+    assert.equal((await middleware(request(`/creator-auth/files/${account}`, "DELETE", { origin: "https://attacker.invalid" }))).status, 403);
     const identity = await creatorDashboardIdentity(token);
     assert.ok(identity);
     assert.deepEqual(identity.cloneIds, [own]);

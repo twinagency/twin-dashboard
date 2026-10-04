@@ -44,6 +44,8 @@ jobs:
           node scripts/check-creator-video-upload.cjs
           node --import tsx scripts/check-creator-upload-stream.ts
           node scripts/check-creator-upload-picker.cjs
+          node --import tsx scripts/check-creator-upload-receipts.ts
+          node --import tsx scripts/check-creator-gallery.ts
       - name: Selected live creators and retained local database routing
         run: npx tsx scripts/check-flirt-live-twin.ts
       - name: Invitation routing and local account authorization

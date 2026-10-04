@@ -1,0 +1,27 @@
+import { NextRequest, NextResponse } from "next/server";
+import { CREATOR_SESSION_COOKIE } from "@/lib/creator-session";
+import { creatorDashboardIdentity } from "@/lib/creator-dashboard-identity";
+import { serviceClient } from "@/lib/supabase-service";
+import { isUploadId } from "@/lib/creator-upload-receipts";
+import { CREATOR_FILE_FIELDS, ownedPrivateFile, type CreatorGalleryFile } from "@/lib/creator-file-gallery";
+export const dynamic = "force-dynamic";
+const headers = { "Cache-Control": "private, no-store", "Referrer-Policy": "no-referrer", Vary: "Cookie" };
+const reply = (body: unknown, status = 200) => NextResponse.json(body, { status, headers });
+export async function GET(req: NextRequest, context: { params: Promise<{ id: string }> }) {
+  const creator = await creatorDashboardIdentity(req.cookies.get(CREATOR_SESSION_COOKIE)?.value);
+  if (!creator || creator.readOnly) return reply({ error: "session_expired" }, 401);
+  const { id } = await context.params;
+  if (!isUploadId(id)) return reply({ error: "file_not_found" }, 404);
+  const db = serviceClient();
+  const result = await db.from("creator_files").select(CREATOR_FILE_FIELDS).eq("creator_account_id", creator.accountId).eq("id", id).maybeSingle();
+  if (result.error) return reply({ error: "playback_unavailable" }, 503);
+  const file = result.data as CreatorGalleryFile | null;
+  if (!file || !ownedPrivateFile(file, creator.accountId)) return reply({ error: "file_not_found" }, 404);
+  if (file.storage_transfer_status !== "verified") return reply({ error: "file_not_verified" }, 409);
+  const bucket = db.storage.from(file.bucket);
+  const stored = await bucket.info(file.storage_path);
+  if (stored.error || !stored.data || Number(stored.data.size) !== Number(file.size_bytes)) return reply({ error: "stored_file_unavailable" }, 503);
+  const signed = await bucket.createSignedUrl(file.storage_path, 3600, req.nextUrl.searchParams.get("download") === "1" ? { download: file.original_name.replace(/[\r\n]/g, "").slice(0, 255) } : {});
+  if (signed.error || !signed.data?.signedUrl) return reply({ error: "playback_unavailable" }, 503);
+  return reply({ url: signed.data.signedUrl, expiresIn: 3600 });
+}

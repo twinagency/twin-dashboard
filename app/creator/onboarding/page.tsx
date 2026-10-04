@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button, buttonVariants } from "@/components/ui/button";
 import CreatorQuestionnaireWizard from "@/components/CreatorQuestionnaireWizard";
+import CreatorContentGallery from "@/components/CreatorContentGallery";
 import CreatorUploadForm from "@/components/CreatorUploadForm";
 import { SkipToDashboard } from "@/components/FlirtOnboardingLinks";
 import { supabaseAdmin } from "@/lib/supabase";
@@ -203,6 +204,7 @@ function ContentUploadCard({ kind, count, minimum, label, accept, formatHint, co
         <div className={`h-full rounded-full transition-[width] ${complete ? "bg-emerald-600" : "bg-accent"}`} style={{ width: `${percent}%` }} />
       </div>}
       <CreatorUploadForm accountId={accountId} loginPath={loginPath} kind={kind} label={label} accept={accept} formatHint={formatHint} locked={locked} />
+      <CreatorContentGallery kind={kind} revision={String(count)} loginPath={loginPath} />
     </section>
   );
 }
@@ -336,6 +338,7 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
                 <div className="grid gap-4 md:grid-cols-2">
                   {CREATOR_CONTENT_REQUIREMENTS.map((requirement) => <ContentUploadCard accountId={session.accountId} loginPath={loginPath} key={requirement.kind} {...requirement} count={contentCounts[requirement.kind]} complete={contentCounts[requirement.kind] >= requirement.minimum} locked={applicationLocked} optional={optional} />)}
                 </div>
+                {legacyContentFiles > 0 && <CreatorContentGallery kind="content" revision={String(legacyContentFiles)} loginPath={loginPath} />}
                 {legacyContentFiles > 0 && <p className="rounded-xl border border-border bg-muted/10 px-4 py-3 text-sm leading-6 text-muted">{legacyContentFiles} earlier verified upload{legacyContentFiles === 1 ? " is" : "s are"} still safely stored. They are not guessed into SFW or NSFW categories.</p>}
                 <StepNavigation step="content" steps={visibleSteps} />
               </CardContent>
@@ -350,6 +353,7 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
                   <CreatorUploadForm accountId={session.accountId} loginPath={loginPath} kind="voice" label="Voice recordings" accept="audio/*,video/*" locked={applicationLocked && !optional} voice />
                   <form action="/creator-auth/onboarding" method="post" className="self-end"><input type="hidden" name="action" value="skip_voice" /><Button type="submit" variant="outline" size="lg" disabled={applicationLocked} className="min-h-11">Skip for now</Button></form>
                 </div>
+                <CreatorContentGallery kind="voice" revision={String(voiceFiles.length)} loginPath={loginPath} />
                 {voiceFiles.length > 0 && <p className="text-sm text-muted">{voiceFiles.length} voice file{voiceFiles.length === 1 ? "" : "s"} verified.</p>}
                 <StepNavigation step="voice" steps={visibleSteps} />
               </CardContent>
