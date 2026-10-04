@@ -246,7 +246,10 @@ async function run(config, env = process.env) {
     // Ordinary requests never follow redirects across an authentication boundary.
     // Multipart uploads explicitly request 'error': Node can retain replay data
     // even in 'manual' mode, defeating a file-backed body's bounded memory.
-    return fetch(url, { ...options, redirect: options.redirect === 'error' ? 'error' : 'manual', signal: options.signal || AbortSignal.timeout(45000) });
+    // The fixture generator deliberately blocks this Node test process. Do not
+    // reuse a socket whose close event could wait behind ffmpeg generation.
+    // This is a test-client transport setting, not a website upload change.
+    return fetch(url, { ...options, headers: { ...options.headers, Connection: 'close' }, redirect: options.redirect === 'error' ? 'error' : 'manual', signal: options.signal || AbortSignal.timeout(45000) });
   }
   async function backend(resource, options = {}, allowed = []) {
     const response = await request(apiOrigin + resource, { ...options, headers: {
