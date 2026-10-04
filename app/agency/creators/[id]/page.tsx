@@ -4,8 +4,27 @@ import { getAgencyOnboardingAccess, assignedCreatorAccount } from "@/lib/agency-
 import { serviceClient } from "@/lib/supabase-service";
 import { flirtClonePipelineEnabled } from "@/lib/flirt-clone-build";
 import { RESULT_MESSAGES } from "@/lib/flirt-clone-outcome";
+import type { CreatorUpload } from "@/lib/creator-upload-display";
+import UploadedContent from "./UploadedContent";
 
 export const dynamic = "force-dynamic";
+
+async function accountUploads(accountId: string): Promise<CreatorUpload[]> {
+  const files: CreatorUpload[] = [];
+  const db = serviceClient();
+  // Read metadata in pages so larger submissions are not silently truncated by
+  // the database's default row limit. Media bytes load only when viewed.
+  for (let start = 0; ; start += 500) {
+    const { data, error } = await db.from("creator_files")
+      .select("id,kind,original_name,mime_type,size_bytes,storage_transfer_status")
+      .eq("creator_account_id", accountId)
+      .order("created_at", { ascending: false }).order("id", { ascending: false })
+      .range(start, start + 499);
+    if (error) throw new Error("Creator uploads are unavailable");
+    files.push(...(data ?? []));
+    if (!data || data.length < 500) return files;
+  }
+}
 
 export default async function CreatorAccount({params, searchParams}: {
   params: Promise<{id:string}>;
@@ -19,11 +38,11 @@ export default async function CreatorAccount({params, searchParams}: {
   const [account, application, files, consent, link] = await Promise.all([
     db.from("creator_accounts").select("id,display_name,email,account_status,updated_at").eq("id",id).maybeSingle(),
     db.from("creator_applications").select("status,answers,submitted_at").eq("creator_account_id",id).order("created_at",{ascending:false}).limit(1).maybeSingle(),
-    db.from("creator_files").select("id,kind,original_name,storage_transfer_status").eq("creator_account_id",id),
+    accountUploads(id),
     db.from("creator_consents").select("signed_at,consent_version").eq("creator_account_id",id).order("created_at",{ascending:false}).limit(1).maybeSingle(),
     db.from("creator_clone_links").select("twin_slug").eq("creator_account_id",id).maybeSingle(),
   ]);
-  if ([account,application,files,consent,link].some(result=>result.error)) throw new Error("Creator onboarding details are unavailable");
+  if ([account,application,consent,link].some(result=>result.error)) throw new Error("Creator onboarding details are unavailable");
   if (!account.data) notFound();
   const creator = account.data;
   const {result} = await searchParams;
@@ -35,10 +54,12 @@ export default async function CreatorAccount({params, searchParams}: {
     <Link href="/agency/creators" className="text-sm text-accent">← Creator accounts</Link>
     <div><h1 className="creator-name text-2xl font-semibold">{creator.display_name || "New creator"}</h1><p className="mt-1 text-sm text-muted">{creator.email}</p></div>
     {result && <p role="status">{RESULT_MESSAGES[result] ?? "Unable to save this profile."}</p>}
+    <UploadedContent accountId={id} files={files} />
     <form action="/agency/creators/manage" method="post" className="space-y-3 rounded-xl border border-line bg-panel p-5">
       <input type="hidden" name="creator_account_id" value={id}/><input type="hidden" name="revision" value={creator.updated_at}/>
       <label className="block text-sm font-medium">Display name<input name="display_name" required maxLength={120} defaultValue={creator.display_name || ""} className="mt-2 block w-full rounded-lg border border-line p-3"/></label>
       <button className="rounded-lg bg-accent px-4 py-2 text-white">Save profile</button>
+      <p className="text-xs text-muted">Saves the display name only. You do not need to save or approve this account to view its uploads.</p>
     </form>
     <form action="/agency/creators/review" method="post" className="flex flex-wrap items-center gap-3 rounded-xl border border-line bg-panel p-5">
       <input type="hidden" name="creator_account_id" value={id}/>
@@ -65,6 +86,5 @@ export default async function CreatorAccount({params, searchParams}: {
     </section>}
     <section className="rounded-xl border border-line bg-panel p-5"><h2 className="mb-3 font-semibold">Onboarding status</h2><dl className="grid gap-3 text-sm sm:grid-cols-3"><div><dt className="text-muted">Account</dt><dd className="capitalize">{creator.account_status}</dd></div><div><dt className="text-muted">Application</dt><dd className="capitalize">{application.data?.status || "Not started"}</dd></div><div><dt className="text-muted">Consent</dt><dd>{consent.data ? "Recorded" : "Not provided"}</dd></div></dl><p className="mt-4 text-sm text-muted">Submitting onboarding creates an application. Bot setup and activation are separate.</p></section>
     <section className="rounded-xl border border-line bg-panel p-5"><h2 className="mb-3 font-semibold">Questionnaire</h2>{Object.keys(answers).length ? <dl className="space-y-4">{Object.entries(answers).map(([key,value])=><div key={key}><dt className="text-sm font-medium capitalize">{key.replace(/_/g," ")}</dt><dd className="mt-1 whitespace-pre-wrap break-words text-sm text-muted">{typeof value === "string" ? value : JSON.stringify(value)}</dd></div>)}</dl> : <p className="text-sm text-muted">No answers provided yet.</p>}</section>
-    <section className="rounded-xl border border-line bg-panel p-5"><h2 className="mb-3 font-semibold">Uploaded files</h2>{files.data?.length ? <ul className="space-y-2 text-sm">{files.data.map(file=><li key={file.id} className="flex justify-between gap-4"><span className="break-all">{file.original_name || file.kind}</span><span className="text-muted">{file.storage_transfer_status}</span></li>)}</ul> : <p className="text-sm text-muted">No files uploaded yet.</p>}</section>
   </main>;
 }

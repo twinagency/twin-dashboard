@@ -461,7 +461,7 @@ try {
                 "video/mp4,video/quicktime,video/webm",
               ]);
               assert.doesNotMatch(`${contentText} ${acceptedTypes.join(" ")}`, /heic|heif/i, `${brand} must not advertise unsupported HEIC uploads`);
-              assert.match(contentText, /JPG, PNG, WebP or GIF · max 25 MP and 15 MB each/);
+              assert.match(contentText, /JPG, PNG, WebP or GIF · max 25 MP and 15 MiB each/);
               assert.match(contentText, /MP4, MOV or WebM · max 30 minutes/);
             }
             await page.screenshot({ path: path.join(out, `${brand}-onboarding-${step}-${viewport}.png`), fullPage: true });
