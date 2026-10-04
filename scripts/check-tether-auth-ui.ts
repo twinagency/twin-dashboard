@@ -17,7 +17,8 @@ for (const file of [
   "components/CreatorResetPasswordScreen.tsx",
 ]) {
   const source = readFileSync(file, "utf8");
-  assert.match(source, /className=\{tether \? tetherAuthInputClass : undefined\}/, `${file} must use the shared Tether input treatment`);
+  assert.match(source, /const dark = tether \|\| !!agencyBrand\?\.dark;/, `${file} must retain Tether in the dark recovery treatment`);
+  assert.match(source, /className=\{dark \? tetherAuthInputClass : undefined\}/, `${file} must use the shared Tether input treatment for dark recovery`);
 }
 // CreatorSignupScreen.tsx and CreatorLoginScreen.tsx also offer this
 // treatment to a dark-brand agency invite/login (Moxy), so their gate is
