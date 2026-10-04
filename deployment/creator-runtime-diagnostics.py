@@ -8,12 +8,13 @@ import subprocess,json,re,pathlib,collections,datetime
 report={'read_only':True,'containers':[]}
 def run(args):
  r=subprocess.run(args,capture_output=True,text=True,timeout=45);return r.returncode,r.stdout
-for name in ['flirt-dashboard','next-app']:
+for name in ['flirt-dashboard','flirt-dashboard-rollback','next-app']:
  rc,raw=run(['docker','inspect',name]);assert rc==0
  d=json.loads(raw)[0];state=d['State']; c={'name':name,'running':state['Running'],'oom_killed':state['OOMKilled'],'started_at':state['StartedAt'],'restart_count':d['RestartCount'],'memory_limit_bytes':d['HostConfig']['Memory']}
  rc,v=run(['docker','exec',name,'printenv','GIT_SHA']);c['commit']=v.strip() if not rc and re.fullmatch('[a-f0-9]{40}',v.strip()) else 'unavailable'
  rc,v=run(['docker','exec',name,'cat','/sys/fs/cgroup/memory.events']);c['memory_events']={line.split()[0]:int(line.split()[1]) for line in v.splitlines() if len(line.split())==2 and line.split()[1].isdigit()}
  rc,v=run(['docker','exec',name,'cat','/sys/fs/cgroup/memory.peak']);c['memory_peak_bytes']=int(v.strip()) if v.strip().isdigit() else None
+ rc,v=run(['docker','exec',name,'node','--version']);c['node_version']=v.strip() if not rc else 'unavailable'
  report['containers'].append(c)
 counts=collections.Counter()
 for f in pathlib.Path('/var/log/apache2').glob('*access.log'):
@@ -31,7 +32,7 @@ for root in ['/etc/apache2/sites-enabled','/etc/apache2/conf-enabled']:
     if re.match(r'^\s*(LimitRequestBody|ProxyTimeout|Timeout)\s+[0-9]+\s*$',line):limits.append(line.strip())
 report['proxy_limits']=sorted(set(limits))
 rc,v=run(['journalctl','-k','--since','2026-10-03 20:00:00 UTC','--until','2026-10-04 03:40:00 UTC','--no-pager','-o','short-iso'])
-report['kernel_oom_events']=[{'timestamp':line.split()[0],'event':'oom_kill'} for line in v.splitlines() if re.search(r'Out of memory: Killed process|Memory cgroup out of memory',line)]
+report['kernel_oom_events']=[{'timestamp':line.split()[0],'event':'oom_kill','node_process':bool(re.search(r'node|next-server',line)),'anonymous_rss_kib':(re.search(r'anon-rss:([0-9]+)kB',line).group(1) if re.search(r'anon-rss:([0-9]+)kB',line) else None)} for line in v.splitlines() if re.search(r'Out of memory: Killed process|Memory cgroup out of memory',line)]
 print(json.dumps(report))
 '''
 request={'InstanceIds':[release.INSTANCE],'DocumentName':'AWS-RunShellScript','Comment':'Read-only creator upload capacity diagnostics','TimeoutSeconds':60,'Parameters':{'commands':['python3 -c '+shlex.quote(source)],'executionTimeout':['180']}}

@@ -18,3 +18,5 @@ jobs:
           aws-region: ap-southeast-2
       - name: Read-only capacity and upload failure evidence
         run: python3 deployment/creator-runtime-diagnostics.py
+
+# Correlate the retained rollback container and bounded OOM metadata.
