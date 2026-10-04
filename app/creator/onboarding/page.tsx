@@ -72,14 +72,14 @@ function returnToOnboardingClass() {
   return buttonVariants({ variant: "outline", size: "lg", className: "min-h-11 w-full sm:w-auto" });
 }
 
-function CompletionMark({ complete }: { complete: boolean }) {
+function CompletionMark({ complete, optional = false }: { complete: boolean; optional?: boolean }) {
   return complete ? (
     <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-emerald-50 px-3 py-1.5 text-xs font-semibold text-emerald-700">
       <CheckCircle2 className="size-4" aria-hidden="true" /> Complete
     </span>
   ) : (
     <span className="inline-flex shrink-0 items-center gap-1.5 rounded-full bg-muted/30 px-3 py-1.5 text-xs font-semibold text-muted">
-      <Circle className="size-3.5" aria-hidden="true" /> Not complete
+      <Circle className="size-3.5" aria-hidden="true" /> {optional ? "Optional" : "Not complete"}
     </span>
   );
 }
@@ -113,7 +113,7 @@ function StepCard({
             <span className="grid size-11 shrink-0 place-items-center rounded-xl bg-accent/10 text-accent">
               <Icon className="size-5" aria-hidden="true" />
             </span>
-            <CompletionMark complete={complete} />
+            <CompletionMark complete={complete} optional={optional} />
           </div>
           <div>
             <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#1d4ed8]">Step {number}{optional ? " · Optional" : ""}</p>
@@ -137,7 +137,7 @@ function StepHeader({ number, title, complete, optional = false }: { number: num
           <p className="text-xs font-semibold uppercase tracking-[0.16em] text-[#1d4ed8]">Step {number}{optional ? " · Optional" : ""}</p>
           <h2 className="mt-1 font-heading text-3xl font-semibold text-ink">{title}</h2>
         </div>
-        <CompletionMark complete={complete} />
+        <CompletionMark complete={complete} optional={optional} />
       </div>
     </CardHeader>
   );
@@ -173,7 +173,7 @@ function StepNavigation({ step }: { step: OnboardingStep }) {
   </nav>;
 }
 
-function ContentUploadCard({ kind, count, minimum, label, accept, formatHint, complete, locked, accountId, loginPath }: {
+function ContentUploadCard({ kind, count, minimum, label, accept, formatHint, complete, locked, accountId, loginPath, optional = false }: {
   kind: CreatorContentKind;
   count: number;
   minimum: number;
@@ -184,6 +184,7 @@ function ContentUploadCard({ kind, count, minimum, label, accept, formatHint, co
   locked: boolean;
   accountId: string;
   loginPath: string;
+  optional?: boolean;
 }) {
   const percent = Math.min(100, Math.round((count / minimum) * 100));
   return (
@@ -191,13 +192,13 @@ function ContentUploadCard({ kind, count, minimum, label, accept, formatHint, co
       <div className="flex items-start justify-between gap-4">
         <div>
           <h3 className="text-lg font-semibold text-ink">{label}</h3>
-          <p className="mt-1 text-sm text-muted">{count} of {minimum} verified</p>
+          <p className="mt-1 text-sm text-muted">{optional ? `${count} saved` : `${count} of ${minimum} verified`}</p>
         </div>
-        {complete ? <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-emerald-700"><CheckCircle2 className="size-4" aria-hidden="true" /> Minimum reached</span> : <span className="text-sm font-semibold text-muted">{minimum - count} remaining</span>}
+        {optional ? <span className="text-sm font-semibold text-muted">Optional</span> : complete ? <span className="inline-flex items-center gap-1.5 text-sm font-semibold text-emerald-700"><CheckCircle2 className="size-4" aria-hidden="true" /> Minimum reached</span> : <span className="text-sm font-semibold text-muted">{minimum - count} remaining</span>}
       </div>
-      <div className="mt-4 h-2 overflow-hidden rounded-full bg-border" role="progressbar" aria-label={`${label} upload progress`} aria-valuemin={0} aria-valuemax={minimum} aria-valuenow={Math.min(count, minimum)}>
+      {!optional && <div className="mt-4 h-2 overflow-hidden rounded-full bg-border" role="progressbar" aria-label={`${label} upload progress`} aria-valuemin={0} aria-valuemax={minimum} aria-valuenow={Math.min(count, minimum)}>
         <div className={`h-full rounded-full transition-[width] ${complete ? "bg-emerald-600" : "bg-accent"}`} style={{ width: `${percent}%` }} />
-      </div>
+      </div>}
       <CreatorUploadForm accountId={accountId} loginPath={loginPath} kind={kind} label={label} accept={accept} formatHint={formatHint} locked={locked} />
       <CreatorContentGallery kind={kind} revision={String(count)} loginPath={loginPath} />
     </section>
@@ -211,7 +212,7 @@ function ReadinessItem({ step, complete, title, detail, href, optional = false }
         {complete ? <Check className="size-4" aria-hidden="true" /> : <Circle className="size-3.5" aria-hidden="true" />}
       </span>
       <div className="min-w-0 flex-1">
-        <div className="flex flex-wrap items-center justify-between gap-2"><p className="font-semibold text-ink">{title}</p><span className={`text-xs font-semibold ${complete ? "text-emerald-700" : "text-amber-700"}`}>{complete ? "Complete" : optional ? "Optional — not completed" : "Action needed"}</span></div>
+        <div className="flex flex-wrap items-center justify-between gap-2"><p className="font-semibold text-ink">{title}</p><span className={`text-xs font-semibold ${complete ? "text-emerald-700" : "text-amber-700"}`}>{complete ? optional && step === "content" ? "Saved" : "Complete" : optional ? "Optional" : "Action needed"}</span></div>
         <p className="mt-1 text-sm leading-6 text-muted">{detail}</p>
         {!complete && <Link href={href} className="mt-2 inline-flex items-center gap-1 text-sm font-semibold text-accent">Open step <ChevronRight className="size-4" aria-hidden="true" /></Link>}
       </div>
@@ -251,8 +252,9 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
   const voiceFiles = (files || []).filter((f) => f.kind === "voice" && f.storage_transfer_status === "verified");
   const contentCounts = creatorContentCounts(files || []);
   const categorizedContentComplete = CREATOR_CONTENT_REQUIREMENTS.every(({ kind, minimum }) => contentCounts[kind] >= minimum);
-  const contentComplete = creatorContentCompleted(files || [], !!progress?.content_completed);
   const legacyContentFiles = creatorLegacyContentCount(files || []);
+  const savedContentCount = Object.values(contentCounts).reduce((total, count) => total + count, 0) + legacyContentFiles;
+  const contentComplete = moxy ? savedContentCount > 0 : creatorContentCompleted(files || [], !!progress?.content_completed);
   const complete = {
     questionnaire: !!progress?.questionnaire_completed && questionnaireRequiredMissing(answers).length === 0,
     content: contentComplete,
@@ -282,9 +284,9 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-[#1d4ed8]">{tether ? "Tether creator onboarding" : link ? "LYNQ creator onboarding" : moxy ? "Moxy creator onboarding" : "Creator onboarding"}</p>
         <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
           <div><h1 className="font-heading text-4xl font-semibold tracking-[-0.04em] text-ink">Build your {brandName} digital clone</h1><p className="mt-2 text-muted">{moxy ? "Every step is optional. Fill in what you can now, or skip to your dashboard and come back any time to finish." : "Complete the steps below."} Your answers and media stay attached to this creator account.</p>{moxy && !submitted && <a href="/creator" className="mt-4 inline-flex min-h-11 items-center rounded-xl bg-ink px-5 text-sm font-semibold text-white hover:opacity-90">Skip to dashboard</a>}</div>
-          <div className="rounded-full border border-border bg-white px-4 py-2 text-sm font-medium text-ink" data-onboarding-application-state={applicationState.label} aria-label={hasApplicationState ? `Onboarding status: ${applicationState.label}` : `${steps} of 4 onboarding steps complete`}>{hasApplicationState ? applicationState.label : `${steps}/4 complete`}</div>
+          <div className="rounded-full border border-border bg-white px-4 py-2 text-sm font-medium text-ink" data-onboarding-application-state={applicationState.label} aria-label={hasApplicationState ? `Onboarding status: ${applicationState.label}` : moxy ? "All onboarding steps optional" : `${steps} of 4 onboarding steps complete`}>{hasApplicationState ? applicationState.label : moxy ? "All steps optional" : `${steps}/4 complete`}</div>
         </div>
-        <div className="mt-5 h-2 overflow-hidden rounded-full bg-border" role="progressbar" aria-label="Onboarding progress" aria-valuemin={0} aria-valuemax={4} aria-valuenow={steps}><div className="h-full rounded-full bg-accent transition-[width]" style={{ width: `${steps * 25}%` }} /></div>
+        {!moxy && <div className="mt-5 h-2 overflow-hidden rounded-full bg-border" role="progressbar" aria-label="Onboarding progress" aria-valuemin={0} aria-valuemax={4} aria-valuenow={steps}><div className="h-full rounded-full bg-accent transition-[width]" style={{ width: `${steps * 25}%` }} /></div>}
 
         {status && errorStatuses.has(status) && <div id="step-result" role="alert" className="mt-6 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">{statusCopy[status]}{status === "file_removal_pending" && <> <Link href="/creator/onboarding?step=content" className="font-semibold underline">Open Saved content</Link></>}</div>}
 
@@ -326,7 +328,7 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
                   </>}
                 </div>
                 <div className="grid gap-4 md:grid-cols-2">
-                  {CREATOR_CONTENT_REQUIREMENTS.map((requirement) => <ContentUploadCard accountId={session.accountId} loginPath={loginPath} key={requirement.kind} {...requirement} count={contentCounts[requirement.kind]} complete={contentCounts[requirement.kind] >= requirement.minimum} locked={uploadsLocked} />)}
+                  {CREATOR_CONTENT_REQUIREMENTS.map((requirement) => <ContentUploadCard accountId={session.accountId} loginPath={loginPath} key={requirement.kind} {...requirement} count={contentCounts[requirement.kind]} complete={contentCounts[requirement.kind] >= requirement.minimum} locked={uploadsLocked} optional={moxy} />)}
                 </div>
                 {legacyContentFiles > 0 && <CreatorContentGallery kind="content" revision={String(legacyContentFiles)} loginPath={loginPath} />}
                 {legacyContentFiles > 0 && <p className="rounded-xl border border-border bg-muted/10 px-4 py-3 text-sm leading-6 text-muted">{legacyContentFiles} earlier verified upload{legacyContentFiles === 1 ? " is" : "s are"} still safely stored. They are not guessed into SFW or NSFW categories.</p>}
@@ -361,10 +363,10 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
                 </CreatorOnboardingActionForm> : <div className="flex items-start gap-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-900"><CheckCircle2 className="mt-0.5 size-4 shrink-0" aria-hidden="true" /><span>Consent signed by {consent.legal_name}.</span></div>}
 
                 <section aria-labelledby="readiness-heading" className="rounded-2xl border border-border bg-muted/10 p-5">
-                  <div className="flex flex-wrap items-end justify-between gap-3"><div><h3 id="readiness-heading" className="text-lg font-semibold text-ink">Ready to submit?</h3><p className="mt-1 text-sm text-muted">{moxy ? "These onboarding steps are optional. You can submit your saved information now or return to your dashboard and finish later. Skipping does not record consent." : "Complete every item below. Voice recordings are optional, but you must upload samples or choose to skip."}</p></div><span className="text-sm font-semibold text-ink">{steps} of 4 complete</span></div>
+                  <div className="flex flex-wrap items-end justify-between gap-3"><div><h3 id="readiness-heading" className="text-lg font-semibold text-ink">Ready to submit?</h3><p className="mt-1 text-sm text-muted">{moxy ? "These onboarding steps are optional. You can submit your saved information now or return to your dashboard and finish later. Skipping does not record consent." : "Complete every item below. Voice recordings are optional, but you must upload samples or choose to skip."}</p></div><span className="text-sm font-semibold text-ink">{moxy ? "No required steps" : `${steps} of 4 complete`}</span></div>
                   <ul className="mt-4 grid gap-3">
                     <ReadinessItem step="questionnaire" complete={complete.questionnaire} optional={moxy} title="Questionnaire" detail={moxy && !complete.questionnaire ? "Optional, you can fill it in later." : complete.questionnaire ? "Required answers are saved." : "Finish and save the questionnaire."} href="/creator/onboarding?step=questionnaire" />
-                    <ReadinessItem step="content" complete={complete.content} optional={moxy} title="Content library" detail={moxy && !complete.content ? "Optional, you can add content later." : complete.content ? (categorizedContentComplete ? "Every image and video minimum is verified." : "Your earlier verified content remains accepted.") : CREATOR_CONTENT_REQUIREMENTS.map(({ kind, shortLabel, minimum }) => `${shortLabel} ${contentCounts[kind]}/${minimum}`).join(" · ")} href="/creator/onboarding?step=content" />
+                    <ReadinessItem step="content" complete={complete.content} optional={moxy} title="Content library" detail={moxy ? `${savedContentCount} saved file${savedContentCount === 1 ? "" : "s"}. ${CREATOR_CONTENT_REQUIREMENTS.map(({ kind, shortLabel }) => `${shortLabel}: ${contentCounts[kind]}`).join(" · ")}${legacyContentFiles ? ` · Earlier uploads: ${legacyContentFiles}` : ""}. You can add more later.` : complete.content ? (categorizedContentComplete ? "Every image and video minimum is verified." : "Your earlier verified content remains accepted.") : CREATOR_CONTENT_REQUIREMENTS.map(({ kind, shortLabel, minimum }) => `${shortLabel} ${contentCounts[kind]}/${minimum}`).join(" · ")} href="/creator/onboarding?step=content" />
                     <ReadinessItem step="voice" complete={complete.voice} optional={moxy} title="Voice choice" detail={moxy && !complete.voice ? "Optional, you can add it later." : complete.voice ? (voiceFiles.length ? `${voiceFiles.length} voice sample${voiceFiles.length === 1 ? " is" : "s are"} verified.` : "Voice recordings skipped for now.") : "Upload voice samples or choose Skip for now."} href="/creator/onboarding?step=voice" />
                     <ReadinessItem step="consent" complete={complete.consent} optional={moxy} title="Consent" detail={moxy && !complete.consent ? "Optional for now." : complete.consent ? `Consent signed by ${consent?.legal_name}.` : "Enter your legal name and save consent."} href="/creator/onboarding?step=consent" />
                   </ul>
