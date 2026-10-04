@@ -144,7 +144,14 @@ function stagingDirs() { return readdirSync(tmpdir()).filter(name => name.starts
   }
   assert.deepEqual(await Promise.all(simultaneous), [{ code: 200, status: 'content_saved' }, { code: 200, status: 'content_saved' }], 'Two videos must upload together after releasing the barrier');
   assert.deepEqual(stagingDirs(), before, 'Concurrent staging must be cleaned');
-  state.rows = [{ size_bytes: 10 * 1024 * 1024 * 1024 - statSync(short).size }];
+  // Reproduce the real account-wide failure at the old hidden 10 GiB cap.
+  state.rows = [{ size_bytes: 10 * 1024 * 1024 * 1024 }];
+  assert.deepEqual(await upload(short, 'above-old-account-cap.mp4'), { code: 200, status: 'content_saved' }, 'Creators must be able to add valid files beyond 10 GiB total');
+  // Check the independently enforced SQL cap stays aligned with the route.
+  const quotaSql = require('node:fs').readFileSync('deployment/creator-upload-receipts.sql', 'utf8');
+  assert.ok(quotaSql.includes("used_bytes+reserved_bytes+p_bytes > 107374182400 or used_count+reserved_count >= 5000"), "SQL and route must enforce the same account allowance");
+  assert.match(quotaSql, /revoke all on function public\.claim_creator_upload[^;]+from public,anon,authenticated/);
+  state.rows = [{ size_bytes: 100 * 1024 * 1024 * 1024 - statSync(short).size }];
   const quotaRace = await Promise.all([upload(short, 'quota-a.mp4', 'video/mp4', {}, 'content_sfw_video', true), upload(short, 'quota-b.mp4', 'video/mp4', {}, 'content_sfw_video', true)]);
   assert.deepEqual(quotaRace.map(result => result.status).sort(), ['content_saved', 'upload_quota'], 'Concurrent uploads must not overspend account quota');
   assert.deepEqual(stagingDirs(), before);

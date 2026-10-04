@@ -24,7 +24,7 @@ import { activeViewAs } from "@/lib/view-as";
 import { withDashboardAccess } from "@/lib/dashboard-access";
 import { trustedFormOrigin } from "@/lib/form-origin";
 import { boundedFormData, CreatorUploadError, type StagedCreatorFile } from "@/lib/creator-upload-stream";
-import { creatorUploadMaxBytes, MAX_CREATOR_REQUEST_BYTES, MAX_CREATOR_VIDEO_BYTES } from "@/lib/creator-upload-limits";
+import { creatorUploadMaxBytes, MAX_CREATOR_REQUEST_BYTES, MAX_CREATOR_VIDEO_BYTES, MAX_CREATOR_ACCOUNT_BYTES, MAX_CREATOR_ACCOUNT_FILES } from "@/lib/creator-upload-limits";
 
 export const runtime = "nodejs";
 
@@ -53,8 +53,8 @@ const extensionMime: Record<string, string> = {
 };
 const MAX_REQUEST_BYTES = MAX_CREATOR_REQUEST_BYTES;
 const MAX_BATCH_BYTES = MAX_CREATOR_VIDEO_BYTES;
-const MAX_ACCOUNT_BYTES = 10 * 1024 * 1024 * 1024;
-const MAX_ACCOUNT_FILES = 5000;
+const MAX_ACCOUNT_BYTES = MAX_CREATOR_ACCOUNT_BYTES;
+const MAX_ACCOUNT_FILES = MAX_CREATOR_ACCOUNT_FILES;
 const MAX_VIDEO_DURATION_SECONDS = 30 * 60;
 const MAX_VIDEO_PIXELS = 4096 * 2160;
 const MAX_VIDEO_EDGE = 4096;
