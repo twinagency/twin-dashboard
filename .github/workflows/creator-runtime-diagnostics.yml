@@ -1,4 +1,4 @@
-name: Verify and release pinned FLIRT transport image
+name: FLIRT live upload size boundaries
 on:
   push:
     branches: ["fix/creator-runtime-diagnostics-2026-10-04"]
@@ -9,28 +9,15 @@ concurrency:
   group: flirt-release-dashboard
   cancel-in-progress: false
 jobs:
-  release:
+  verify:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
-      - name: Verify archive preservation and rollback behavior
-        run: python3 deployment/flirt-host-release.test.py
       - uses: aws-actions/configure-aws-credentials@v4
         with:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ap-southeast-2
-      - name: Release previously built and verified immutable transport image
-        run: |
-          python3 - <<'PY'
-          import importlib.util, json
-          spec = importlib.util.spec_from_file_location("release", "deployment/flirt-release.py")
-          module = importlib.util.module_from_spec(spec)
-          spec.loader.exec_module(module)
-          if module.aws(["sts","get-caller-identity"])["Account"] != "323149985112":
-              raise RuntimeError("Unexpected AWS account")
-          print(json.dumps(module.host("deploy", "dashboard", "323149985112.dkr.ecr.ap-southeast-2.amazonaws.com/twin-dashboard@sha256:2f6ca53cedc9b6cae4b09b58dc2b384d581415a7407124e143de103ac73171ab", "ae3fab46068cd9c7ecefb6014d82c3be2342e867")))
-          PY
-      - name: Normal signup and small upload checks on exact deployed commit
-        run: python3 deployment/creator-flow-live-check.py --brand=flirt --expected-sha=ae3fab46068cd9c7ecefb6014d82c3be2342e867 --mode=small-only --allow-missing-gallery
+      - name: Real public transfer and persisted object byte boundaries
+        run: python3 deployment/creator-flow-live-check.py --brand=flirt --expected-sha=ae3fab46068cd9c7ecefb6014d82c3be2342e867 --mode=large --allow-missing-gallery
