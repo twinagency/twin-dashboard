@@ -14,7 +14,14 @@ try{
   for(const cookie of ['', 'twin_agency_access=stale; twin_agency_portal=moxy','twin_agency_access=stale; twin_agency_portal=jess-and-kate-ai']){
     const response=await request('/twin-agency',{headers:{cookie}}); assert.equal(response.status,200); assert.match(response.headers.get('x-robots-tag'),/noindex/); const html=await response.text();
     assert.ok(html.includes('Let your')); assert.ok(html.includes('Fans paying right now across the globe')); assert.ok(!html.includes('dashboard-sidebar')); assert.ok(!html.includes('data-agency="moxy"'));
-    for(const [path,action] of [['/','/admin-auth'],['/twin','/admin-auth'],['/moxy','/moxy/auth'],['/link','/link/auth'],['/jess-and-kate-ai','/jess-and-kate-ai/auth']]){const r=await request(path,{headers:{cookie}});assert.equal(r.status,200,path);assert.ok((await r.text()).includes(`action="${action}"`),path)}
+    for(const [path,action] of [['/','/admin-auth'],['/twin','/admin-auth'],['/moxy','/moxy/auth'],['/link','/link/auth'],['/jess-and-kate-ai','/jess-and-kate-ai/auth']]){
+      const r=await request(path,{headers:{cookie}});
+      if(path==='/moxy'){
+        assert.equal(r.status,308,'Moxy entry on Twin host canonicalizes to its own brand');
+        assert.equal(r.headers.get('location'),'https://dashboard.lynqai.co/moxy');
+        await r.body?.cancel();
+      }else{assert.equal(r.status,200,path);assert.ok((await r.text()).includes(`action="${action}"`),path)}
+    }
   }
   report.loginRoutes=['/','/twin','/moxy','/link','/jess-and-kate-ai'];
   for(const method of ['POST','PUT','PATCH','DELETE']) assert.equal((await request('/twin-agency',{method,headers:{'next-action':'not-allowed'}})).status,403);
