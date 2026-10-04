@@ -67,6 +67,7 @@ jobs:
       - name: Normal signup runner safety and cleanup regressions
         run: |
           node deployment/creator-flow-live-check.test.cjs
+          node deployment/creator-flow-upload-memory.test.cjs
           python3 -m py_compile deployment/creator-flow-live-check.py
       - name: Owner authentication and existing master access
         run: node --import tsx scripts/check-owner-auth.ts

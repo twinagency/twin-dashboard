@@ -27,9 +27,12 @@ function parseArgs(argv) {
     } else if (arg === '--run') config.run = true;
     else if (arg === '--removal-guards') config.removalGuards = true;
     else if (arg === '--allow-missing-gallery') config.allowMissingGallery = true;
+    else if (arg.startsWith('--cleanup-manifest=')) config.cleanupManifest = arg.slice(19);
     else throw new CheckError('Unknown runner argument');
   }
+  if (config.cleanupManifest) { assert(!config.mode, 'Cleanup-only cannot be combined with signup/upload mode'); config.mode = 'cleanup-only'; }
   assert(config.run && BRANDS[config.brand] && /^[a-f0-9]{40}$/i.test(config.sha || '') && config.mode, 'Require --run, --brand, --expected-sha and exactly one run mode');
+  assert(config.mode !== 'cleanup-only' || (!config.removalGuards && !config.allowMissingGallery), 'Cleanup-only cannot change verification options');
   assert(!config.removalGuards || config.mode !== 'flow-only', '--removal-guards requires an upload mode');
   assert(!config.allowMissingGallery || (!config.removalGuards && config.mode !== 'flow-only'), '--allow-missing-gallery requires an upload mode without removal guards');
   return config;
@@ -46,6 +49,31 @@ function runtimeGuard(config, env) {
     assert(!env.DASHBOARD_PUBLIC_ORIGIN || ['https://dashboard.tgaiclone.xyz', brand.origin].includes(env.DASHBOARD_PUBLIC_ORIGIN), 'Unexpected shared-runtime canonical origin');
   }
   return brand;
+}
+function readCleanupManifest(config) {
+  const location = config.cleanupManifest;
+  assert(new RegExp(`^/tmp/creator-flow-${config.brand}-[A-Za-z0-9]+/cleanup-manifest[.]json$`).test(location || ''), 'Cleanup manifest must be an exact private runner manifest path');
+  const directory = path.dirname(location), fileStat = fs.lstatSync(location), directoryStat = fs.lstatSync(directory);
+  assert(fileStat.isFile() && !fileStat.isSymbolicLink() && directoryStat.isDirectory() && !directoryStat.isSymbolicLink()
+    && fileStat.size < 1024 * 1024 && (fileStat.mode & 0o777) === 0o600 && (directoryStat.mode & 0o777) === 0o700
+    && fileStat.uid === process.getuid() && directoryStat.uid === process.getuid() && fs.realpathSync(location) === location, 'Unsafe cleanup manifest file');
+  const manifest = JSON.parse(fs.readFileSync(location, 'utf8'));
+  // The serving version may have advanced after the interrupted run. The
+  // current runtime still has its independent exact SHA guard; preserve the
+  // original manifest revision as evidence instead of requiring a rollback.
+  assert(manifest.brand === config.brand && /^[a-f0-9]{40}$/.test(manifest.expected_sha || '') && /^\d{13}-[a-f0-9]{12}$/.test(manifest.stamp || ''), 'Cleanup manifest brand or original revision is invalid');
+  const startedAt = Number(manifest.stamp.split('-')[0]);
+  assert(Number.isSafeInteger(startedAt) && startedAt <= Date.now() + 5000, 'Invalid cleanup creation window');
+  assert(Array.isArray(manifest.fixtures) && manifest.fixtures.length <= 4 && Array.isArray(manifest.invitations) && manifest.invitations.length <= 4, 'Unexpected cleanup manifest scope');
+  for (const fixture of manifest.fixtures) {
+    const suffix = ['complete', 'skip'].find(value => fixture.email === `contact+creator-audit-${manifest.stamp}-${config.brand}-${value}@twinagency.co`);
+    assert(suffix && fixture.name === `Disposable creator audit ${config.brand} ${suffix} ${manifest.stamp}`
+      && (!fixture.id || UUID.test(fixture.id)) && (!fixture.auth_user_id || UUID.test(fixture.auth_user_id)), 'Cleanup fixture identity is outside the recorded run');
+  }
+  for (const invitation of manifest.invitations) assert(UUID.test(invitation.agency_id || '') && (!invitation.id || UUID.test(invitation.id))
+    && ['complete', 'skip', 'duplicate-validation'].some(suffix => invitation.label === `Creator audit ${manifest.stamp} ${suffix}`)
+    && (config.brand !== 'flirt' || invitation.agency_id === BRANDS.flirt.agency), 'Cleanup invitation is outside the recorded run');
+  return { ...manifest, startedAt };
 }
 function cookieFrom(response, name) {
   const found = response.headers.getSetCookie().find(value => value.startsWith(`${name}=`));
@@ -81,24 +109,26 @@ function safeUploadResult(response, body, durationMs, fixture) {
 async function run(config, env = process.env) {
   const brand = runtimeGuard(config, env);
   const apiOrigin = `https://${brand.project}.supabase.co`;
-  const stamp = `${Date.now()}-${randomBytes(6).toString('hex')}`;
-  const startedAt = Date.now();
-  const directory = fs.mkdtempSync(path.join(os.tmpdir(), `creator-flow-${config.brand}-`));
-  fs.chmodSync(directory, 0o700);
+  const cleanupManifest = config.cleanupManifest ? readCleanupManifest(config) : null;
+  const stamp = cleanupManifest?.stamp || `${Date.now()}-${randomBytes(6).toString('hex')}`;
+  const startedAt = cleanupManifest?.startedAt || Date.now();
+  const directory = cleanupManifest ? path.dirname(config.cleanupManifest) : fs.mkdtempSync(path.join(os.tmpdir(), `creator-flow-${config.brand}-`));
+  if (!cleanupManifest) fs.chmodSync(directory, 0o700);
   const manifestPath = path.join(directory, 'cleanup-manifest.json');
-  const fixtures = [], invitations = [], checks = [], blocked = [], unverified = [], uploads = [];
+  const fixtures = cleanupManifest?.fixtures || [], invitations = cleanupManifest?.invitations || [], checks = [], blocked = [], unverified = [], uploads = [];
   let operatorCookie = '', agencyId = brand.agency, failure, cleanupFailure, recoveryRedirect;
   function checkpoint() {
-    fs.writeFileSync(manifestPath, JSON.stringify({ brand: config.brand, stamp, expected_sha: config.sha,
+    fs.writeFileSync(manifestPath, JSON.stringify({ brand: config.brand, stamp, expected_sha: cleanupManifest?.expected_sha || config.sha,
       fixtures: fixtures.map(({ email, name, id, auth_user_id }) => ({ email, name, id, auth_user_id })),
       invitations: invitations.map(({ label, id, agency_id }) => ({ label, id, agency_id })),
     }), { mode: 0o600 });
   }
   function passed(label) { checks.push(label); }
   async function request(url, options = {}) {
-    // Explicit manual is essential: fetch's default redirect-follow mode can
-    // buffer a file-backed multipart body for replay and OOM the test client.
-    return fetch(url, { ...options, redirect: 'manual', signal: options.signal || AbortSignal.timeout(45000) });
+    // Ordinary requests never follow redirects across an authentication boundary.
+    // Multipart uploads explicitly request 'error': Node can retain replay data
+    // even in 'manual' mode, defeating a file-backed body's bounded memory.
+    return fetch(url, { ...options, redirect: options.redirect === 'error' ? 'error' : 'manual', signal: options.signal || AbortSignal.timeout(45000) });
   }
   async function backend(resource, options = {}, allowed = []) {
     const response = await request(apiOrigin + resource, { ...options, headers: {
@@ -245,7 +275,7 @@ async function run(config, env = process.env) {
     const form = new FormData(); form.set('kind', kind);
     form.append('files', await fs.openAsBlob(file, { type: name.endsWith('.mp4') ? 'video/mp4' : 'image/png' }), name);
     const started = performance.now();
-    const response = await app('/creator-auth/upload', fixture, { method: 'POST', body: form, headers: { Accept: 'application/json', 'X-Creator-Upload-Id': uploadId }, signal: AbortSignal.timeout(600000) });
+    const response = await app('/creator-auth/upload', fixture, { method: 'POST', body: form, redirect: 'error', headers: { Accept: 'application/json', 'X-Creator-Upload-Id': uploadId }, signal: AbortSignal.timeout(600000) });
     let body; try { body = await response.json(); } catch { body = {}; }
     const result = safeUploadResult(response, body, Math.round(performance.now() - started), name);
     uploads.push(result); console.log(JSON.stringify({ event: 'upload_result', ...result }));
@@ -346,10 +376,22 @@ async function run(config, env = process.env) {
     for (const fixture of fixtures) {
       try {
         const current = await account(fixture.email);
-        if (!current) continue;
-        assert(current.display_name === fixture.name && Date.parse(current.created_at) >= startedAt - 5000, 'Cleanup account identity or creation window mismatch');
+        if (!current) {
+          if (fixture.auth_user_id) {
+            const auth = await backend(`/auth/v1/admin/users/${fixture.auth_user_id}`, {}, [404]);
+            if (auth?.allowedStatus !== 404) {
+              assert(auth.id === fixture.auth_user_id && auth.email?.toLowerCase() === fixture.email.toLowerCase(), 'Cleanup orphan Auth identity mismatch');
+              await backend(`/auth/v1/admin/users/${fixture.auth_user_id}`, { method: 'DELETE' });
+              assert((await backend(`/auth/v1/admin/users/${fixture.auth_user_id}`, {}, [404]))?.allowedStatus === 404, 'Disposable orphan Auth account remains');
+            }
+          }
+          continue;
+        }
+        assert(current.display_name === fixture.name && Date.parse(current.created_at) >= startedAt - 5000 && Date.parse(current.created_at) <= startedAt + 2 * 60 * 60 * 1000, 'Cleanup account identity or creation window mismatch');
         if (fixture.id) assert(current.id === fixture.id, 'Cleanup account identity changed');
-        Object.assign(fixture, current); checkpoint();
+        const expectedAuthId = fixture.auth_user_id;
+        if (expectedAuthId && current.auth_user_id) assert(current.auth_user_id === expectedAuthId, 'Cleanup Auth identity changed');
+        Object.assign(fixture, current, { auth_user_id: expectedAuthId || current.auth_user_id }); checkpoint();
         assert((await ownRows('creator_clone_links', fixture, 'creator_account_id')).length === 0, 'Cleanup stopped: disposable account gained a connected profile');
         const files = await ownRows('creator_files', fixture, 'id,bucket,storage_path');
         const receiptResponse = await backend(`/rest/v1/creator_upload_receipts?select=bucket,storage_path&creator_account_id=eq.${fixture.id}`, {}, [404]);
@@ -370,9 +412,11 @@ async function run(config, env = process.env) {
         // All references remain until every known object was removed through Storage.
         await backend(`/rest/v1/creator_files?creator_account_id=eq.${fixture.id}`, { method: 'DELETE' });
         if (fixture.auth_user_id) {
-          const auth = await backend(`/auth/v1/admin/users/${fixture.auth_user_id}`);
-          assert(auth.id === fixture.auth_user_id && auth.email?.toLowerCase() === fixture.email.toLowerCase(), 'Cleanup Auth identity mismatch');
-          await backend(`/auth/v1/admin/users/${fixture.auth_user_id}`, { method: 'DELETE' });
+          const auth = await backend(`/auth/v1/admin/users/${fixture.auth_user_id}`, {}, [404]);
+          if (auth?.allowedStatus !== 404) {
+            assert(auth.id === fixture.auth_user_id && auth.email?.toLowerCase() === fixture.email.toLowerCase(), 'Cleanup Auth identity mismatch');
+            await backend(`/auth/v1/admin/users/${fixture.auth_user_id}`, { method: 'DELETE' });
+          }
           const absentAuth = await backend(`/auth/v1/admin/users/${fixture.auth_user_id}`, {}, [404]);
           assert(absentAuth?.allowedStatus === 404, 'Disposable Auth account remains after cleanup');
         }
@@ -394,7 +438,10 @@ async function run(config, env = process.env) {
     }
     assert(!errors, 'Exact fixture cleanup incomplete; private runtime manifest retained');
   }
+  checkpoint();
+  console.log(JSON.stringify({ event: 'fixture_manifest', brand: config.brand, path: manifestPath, expected_commit: config.sha }));
   try {
+    if (!cleanupManifest) {
     const invalid = await post('/creator-auth/signup', null, { display_name: '', email: 'invalid', password: 'short' }, { Accept: 'application/json' });
     assert(invalid.status === 400 && (await invalid.json()).error === 'invalid', 'Invalid signup input not rejected');
     const firstInvite = config.brand === 'moxy' ? await normalInvite('complete') : null;
@@ -433,20 +480,22 @@ async function run(config, env = process.env) {
       if (await galleryAvailable(a)) await privateRetrieval(a, b, saved);
       passed('Additional normal upload after final submission persists with actual stored object');
     }
+    }
   } catch (error) {
     if (error instanceof BlockedError) blocked.push(error.message);
     else failure = error instanceof CheckError ? error.message : 'Unexpected runtime/transport failure; raw details suppressed';
   }
-  try { await cleanup(); } catch (error) { cleanupFailure = error instanceof CheckError ? error.message : 'Fixture cleanup unavailable'; }
+  try { await cleanup(); if (cleanupManifest) passed('Exact interrupted-run manifest cleanup completed without signup or upload actions'); } catch (error) { cleanupFailure = error instanceof CheckError ? error.message : 'Fixture cleanup unavailable'; }
   if (!cleanupFailure) fs.rmSync(directory, { recursive: true, force: true });
   const result = { passed: !failure && !cleanupFailure && blocked.length === 0, brand: config.brand, mode: config.mode,
     expected_commit: config.sha, method: 'normal public HTTPS plus fixture-scoped persistence checks; supplements browser audit', checks, blocked: [...new Set(blocked)], unverified: [...new Set(unverified)], uploads,
     ...(recoveryRedirect ? { recovery_redirect: recoveryRedirect } : {}),
+    ...(cleanupManifest ? { cleanup_source_commit: cleanupManifest.expected_sha } : {}),
     ...(failure ? { failure } : {}), ...(cleanupFailure ? { cleanup_failure: cleanupFailure, cleanup_manifest: manifestPath } : { identified_fixtures_removed: true }),
     browser_journey_verified: false, physical_iphone_verified: false, speed_claim: 'Runtime/server connection only; not representative of creator phones', credentials_logged: false };
   console.log(JSON.stringify(result)); return result;
 }
-module.exports = { parseArgs, runtimeGuard, optionForMoxy, padMp4, safeUploadResult, run, BRANDS, LIMIT };
+module.exports = { parseArgs, runtimeGuard, readCleanupManifest, optionForMoxy, padMp4, safeUploadResult, run, BRANDS, LIMIT };
 // `node -` intentionally has no require.main. The SSM wrapper pipes this file
 // through stdin, while require() by the offline tests must stay side-effect free.
 if (require.main === module || (process.argv[1] === '-' && module.id === '[stdin]')) {
