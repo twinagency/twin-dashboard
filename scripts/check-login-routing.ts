@@ -53,6 +53,16 @@ async function main() {
     for (const value of [undefined,"/","/twin","/login","//evil.example","/\\evil.example","/\t/evil.example","https://evil.example"]) assert.equal(safeAdminNext(value),"/revenue");
     assert.equal(safeAdminNext("/clones?tab=settings"),"/clones?tab=settings");
     assert.equal(isTwinLoginPath("/twins"),false);
+    for (const path of ["/creator-management", "/creator-management/fixture", "/creator-other"]) {
+      assert.equal(isTwinLoginPath(path), false, "prefix lookalikes are not public creator entries");
+      const denied = await middleware(new NextRequest(origin + path));
+      assert.notEqual(denied.status, 200, "signed-out management must never reach the data page");
+    }
+    for (const path of ["/creator", "/creator/login"]) assert.equal(isTwinLoginPath(path), true);
+    for (const path of ["/creator-management", "/creator-management/fixture"]) {
+      const allowed = await middleware(new NextRequest(origin + path, { headers: { cookie: `${SESSION_COOKIE}=${admin}` } }));
+      assert.equal(allowed.status, 200, "verified administrator keeps its existing route access");
+    }
     const request = (password:string,next:string,source=origin) => new NextRequest(origin + "/admin-auth", {method:"POST",headers:{origin:source,cookie:`${AGENCY_COOKIE}=stale; ${AGENCY_PORTAL_COOKIE}=moxy; clone_scope=other`},body:new URLSearchParams({password,next})});
     for (const next of ["/", "/twin", "//evil.example"]) {
       const response = await adminLogin(request("offline-routing-password",next));
