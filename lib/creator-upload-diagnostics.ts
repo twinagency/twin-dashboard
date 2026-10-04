@@ -4,7 +4,7 @@ import { statfs } from "node:fs/promises";
 import { tmpdir } from "node:os";
 
 type Stage = "authorizing" | "receiving" | "validating" | "storage" | "metadata" | "progress";
-type Trace = { requestId: string; stage: Stage; started: number; changed: number; durations: Partial<Record<Stage, number>>; code?: string; tempFreeBytes?: number };
+type Trace = { requestId: string; stage: Stage; started: number; changed: number; durations: Partial<Record<Stage, number>>; code?: string; tempFreeBytes?: number; httpStatus?: number };
 const traces = new AsyncLocalStorage<Trace>();
 export function uploadDiagnostic() {
   const trace = traces.getStore();
@@ -25,13 +25,14 @@ export async function tracedCreatorUpload(run: () => Promise<Response>) {
       const disk = await statfs(tmpdir()).catch(() => null);
       if (disk) trace.tempFreeBytes = disk.bavail * disk.bsize;
       const response = await run();
+      trace.httpStatus = response.status;
       response.headers.set("X-Upload-Request-Id", trace.requestId);
       return response;
     } finally {
       uploadStage(trace.stage);
       const memory = process.memoryUsage();
       // No names, account IDs, media paths, keys, cookies or raw provider errors.
-      console.info("creator_upload", JSON.stringify({ ...uploadDiagnostic(), durationsMs: trace.durations, safeCode: trace.code, tempFreeBytes: trace.tempFreeBytes, rssBytes: memory.rss, externalBytes: memory.external }));
+      console.info("creator_upload", JSON.stringify({ ...uploadDiagnostic(), httpStatus: trace.httpStatus, durationsMs: trace.durations, safeCode: trace.code, tempFreeBytes: trace.tempFreeBytes, rssBytes: memory.rss, externalBytes: memory.external }));
     }
   });
 }
