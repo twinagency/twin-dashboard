@@ -14,7 +14,10 @@ has no public policies: anonymous users and ordinary authenticated users have no
 table or function privileges. The security advisor's no-policy information is
 expected for these server-only tables.
 
-Passwords use bcrypt cost 12, with a maximum of 72 UTF-8 bytes. Provision a unique
+Passwords use bcrypt cost 12, with a maximum of 72 UTF-8 bytes. Use the
+Postgres-supported `$2a$` format (`extensions.gen_salt('bf', 12)`, or explicitly
+select the `2a` prefix in the password-hashing library). The installed pgcrypto
+does not verify Python bcrypt's default `$2b$` format. Provision a unique
 lowercase username and a cryptographically random password through an authorized
 server operation; store only the hash. There is no public owner-signup endpoint.
 Five failed attempts lock an account for 15 minutes. A successful login resets
