@@ -15,7 +15,7 @@ async function run(env = process.env, request = fetch, brand = 'flirt') {
   async function call(resource, method = 'GET', body, extra = {}) {
     const response = await request(base + resource, { method, redirect: 'error', signal: AbortSignal.timeout(20000), headers: { apikey: env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${env.SUPABASE_SERVICE_KEY}`, 'Content-Type': 'application/json', ...extra }, ...(body === undefined ? {} : { body: JSON.stringify(body) }) });
     const text = await response.text(); let data; try { data = text ? JSON.parse(text) : null; } catch { throw new Error('Unrecognized provider response'); }
-    if (response.status === 404 && resource.startsWith('/auth/v1/admin/users/') && data?.code === 'user_not_found') return null;
+    if (response.status === 404 && method === 'GET' && resource === '/auth/v1/admin/users/' + target.auth) return null;
     check(response.ok, `Provider operation failed (${response.status}); details suppressed`); return data;
   }
   const rows = (table, query) => call(`/rest/v1/${table}?${query}`);
