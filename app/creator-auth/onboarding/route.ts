@@ -13,6 +13,7 @@ import {
 } from "@/lib/creator-questionnaire-draft";
 import { creatorContentCompleted } from "@/lib/creator-content-requirements";
 import { isMoxy } from "@/lib/agency-brand";
+import { creatorOnboardingEditable } from "@/lib/creator-onboarding-policy";
 
 function back(req: Request, status: string, step?: "questionnaire" | "voice" | "consent", section?: string) {
   const url = creatorRequestUrl(req, "/creator/onboarding");
@@ -56,8 +57,8 @@ export async function POST(req: NextRequest) {
   if (action === "questionnaire") {
     const { data: existing, error: readError } = await latestApplication(accountId);
     if (readError) return back(req, "error", "questionnaire");
-    if (existing && CREATOR_QUESTIONNAIRE_TERMINAL_STATUSES.has(existing.status)) return back(req, "questionnaire_saved", "questionnaire");
-    if (existing && existing.status !== "draft") return back(req, "application_locked", "questionnaire");
+    if (existing && CREATOR_QUESTIONNAIRE_TERMINAL_STATUSES.has(existing.status) && !creatorOnboardingEditable(existing.status, creator)) return back(req, "questionnaire_saved", "questionnaire");
+    if (!creatorOnboardingEditable(existing?.status, creator)) return back(req, "application_locked", "questionnaire");
     const revision = String(form.get("revision") || "");
     // Every question is optional for Moxy creators (Ronan, 2026-10-03).
     const moxy = isMoxy(creator.name);
@@ -74,6 +75,7 @@ export async function POST(req: NextRequest) {
       .update({ updated_at: sealedAt })
       .eq("id", existing.id)
       .eq("creator_account_id", accountId)
+      .eq("status", existing.status)
       .eq("updated_at", revision)
       .select("updated_at")
       .maybeSingle();
@@ -90,7 +92,7 @@ export async function POST(req: NextRequest) {
   if (action === "skip_voice" || action === "consent") {
     const { data: existing, error } = await latestApplication(accountId);
     if (error) return back(req, "error", action === "consent" ? "consent" : "voice");
-    if (existing && existing.status !== "draft") return back(req, "application_locked", action === "consent" ? "consent" : "voice");
+    if (!creatorOnboardingEditable(existing?.status, creator)) return back(req, "application_locked", action === "consent" ? "consent" : "voice");
   }
 
   if (action === "skip_voice") {

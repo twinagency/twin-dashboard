@@ -10,6 +10,7 @@ import CreatorQuestionnaireWizard from "@/components/CreatorQuestionnaireWizard"
 import CreatorContentGallery from "@/components/CreatorContentGallery";
 import CreatorUploadForm from "@/components/CreatorUploadForm";
 import { creatorUploadsEditable } from "@/lib/creator-upload-policy";
+import { creatorOnboardingEditable } from "@/lib/creator-onboarding-policy";
 import { creatorApplicationState } from "@/lib/creator-application-state";
 import { supabaseAdmin } from "@/lib/supabase";
 import { CREATOR_SESSION_COOKIE } from "@/lib/creator-session";
@@ -247,7 +248,7 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
   const applicationState = creatorApplicationState(application?.status, application?.submitted_at);
   const submitted = application?.status === "submitted" || application?.status === "reviewing" || application?.status === "approved";
   const hasApplicationState = !!application && application.status !== "draft";
-  const applicationLocked = !!application && application.status !== "draft";
+  const applicationLocked = !creatorOnboardingEditable(application?.status, creator);
   const uploadsLocked = !creatorUploadsEditable(application?.status, creator);
   const voiceFiles = (files || []).filter((f) => f.kind === "voice" && f.storage_transfer_status === "verified");
   const contentCounts = creatorContentCounts(files || []);
@@ -374,7 +375,7 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
 
                 <CreatorOnboardingActionForm pendingLabel="Submitting your saved information…" successStatuses={["submitted"]} loginPath={loginPath}>
                   <input type="hidden" name="action" value="submit" />
-                  <Button type="submit" size="lg" disabled={!readyToSubmit || applicationLocked} aria-describedby={!readyToSubmit && !applicationLocked ? "submit-help" : undefined} className="min-h-11 w-full sm:w-auto">{submitted ? "Application submitted" : applicationLocked ? "Application locked" : "Submit onboarding"}</Button>
+                  <Button type="submit" size="lg" disabled={submitted || !readyToSubmit || applicationLocked} aria-describedby={!readyToSubmit && !applicationLocked ? "submit-help" : undefined} className="min-h-11 w-full sm:w-auto">{submitted ? "Application submitted" : applicationLocked ? "Application locked" : "Submit onboarding"}</Button>
                 </CreatorOnboardingActionForm>
                 {!readyToSubmit && !applicationLocked && <p id="submit-help" className="text-sm text-muted">Complete the items above before submitting.</p>}
                 <StepNavigation step="consent" />
