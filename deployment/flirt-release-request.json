@@ -1,5 +1,5 @@
 {
-  "reason": "Release creator consent and submit button fix verified in Chromium and WebKit; preserve isolated FLIRT backend and existing upload policy.",
-  "source_commit": "f956ea15383fde6b1ef17acc412c37b0c33c9563",
-  "requested_at": "2026-10-04T11:56:05.596Z"
+  "reason": "Release visible saved-content and onboarding access on every creator dashboard page, including unconnected Pay Per View.",
+  "source_commit": "a37f8a6d501f0b1e1780f895e2d61cbbcfaedc62",
+  "requested_at": "2026-10-05T08:40:29.375Z"
 }

@@ -1,0 +1,35 @@
+name: Creator saved-content access
+on:
+  push:
+    branches: ["fix/moxy-saved-content-access-20261005", "fix/flirt-saved-content-access-20261005"]
+  pull_request:
+    paths:
+      - components/CreatorWorkspaceShell.tsx
+      - components/CreatorContentAccess.tsx
+      - app/creator/ppvs/page.tsx
+      - scripts/check-creator-content-access.cjs
+      - .github/workflows/creator-content-access.yml
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: "22", cache: npm}
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - name: Existing creator flow and gallery checks
+        run: npm run test:creator-flow && npm run test:creator-gallery
+      - name: Chromium and WebKit mobile/desktop navigation
+        run: |
+          npx playwright install --with-deps chromium webkit
+          node scripts/check-creator-content-access.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: creator-content-access
+          path: test-results/creator-content-access
+          retention-days: 3

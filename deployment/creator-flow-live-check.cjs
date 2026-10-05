@@ -321,6 +321,16 @@ async function run(config, env = process.env) {
   async function page200(resource, fixture) {
     const response = await app(resource, fixture); assert(response.status === 200, `Creator page failed: ${resource}`); return response.text();
   }
+  async function savedContentNavigation(fixture) {
+    for (const route of ['/creator', '/creator/ppvs', '/creator/edit']) {
+      const html = await page200(route, fixture);
+      assert(html.includes('data-creator-content-access') && html.includes('href="/creator/onboarding?step=content"'), 'Saved-content navigation missing on ' + route);
+      assert(html.includes('data-creator-onboarding-access'), 'Onboarding details navigation missing on ' + route);
+      assert(!html.includes('Your onboarding is complete.'), 'Optional onboarding wrongly marked complete');
+    }
+    const content = await page200('/creator/onboarding?step=content', fixture);
+    assert(content.includes('Saved content') && content.includes('data-upload-content'), 'Saved gallery or additional upload controls missing');
+  }
   async function draftState(fixture) {
     const applications = await ownRows('creator_applications', fixture, 'status,submitted_at');
     assert(applications.every(item => item.status === 'draft' && !item.submitted_at), 'Skip or navigation submitted onboarding');
@@ -622,7 +632,7 @@ async function run(config, env = process.env) {
     for (const fixture of [a, b]) {
       await page200('/creator/onboarding', fixture); const dashboard = await page200('/creator', fixture);
       assert(dashboard.includes('data-return-to-onboarding') || /Return to onboarding|Finish onboarding|Continue onboarding/i.test(dashboard), 'Dashboard has no return-to-onboarding action');
-      await page200('/creator/onboarding?step=content', fixture); await draftState(fixture); await adminDenied(fixture);
+      await page200('/creator/onboarding?step=content', fixture); await draftState(fixture); await savedContentNavigation(fixture); await adminDenied(fixture);
     }
     passed('GET skip-to-dashboard and return preserve draft state and absence of consent; creator and signed-out management list/detail denied');
     await loginAgain(b); await draftState(b); passed('Fresh login retains skip/unfinished state and intended upload destination');
@@ -636,6 +646,8 @@ async function run(config, env = process.env) {
     assert((await page200('/creator/info', a)).includes('Submitted'), 'Submitted Info wording missing');
     await page200('/creator/onboarding?step=content', a); await loginAgain(a);
     assert((await ownRows('creator_applications', a, 'status'))[0].status === 'submitted', 'Fresh login lost submitted state');
+    await savedContentNavigation(a);
+    passed('Saved-content and onboarding navigation is available on Earnings, Pay Per View and Edit before AI connection, including after submission and fresh login');
     await draftState(b); passed('Explicit optional submission persists without fabricated consent; second creator remains unfinished; submitted account returns and signs in freshly');
     if (source) {
       const additional = await upload(a, source, 'content_sfw_video', 'additional-after-submit.mp4');

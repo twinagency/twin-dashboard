@@ -10,6 +10,7 @@ import MobileMenu from "./MobileMenu";
 import Sidebar from "./Sidebar";
 import TopBar from "./TopBar";
 import TwinWordmark from "./TwinWordmark";
+import CreatorContentAccess from "./CreatorContentAccess";
 import { OnboardingBanner } from "./FlirtOnboardingLinks";
 
 type CreatorClone = { id: string; name: string; color: string; photoUrl?: string };
@@ -73,10 +74,11 @@ export default function CreatorWorkspaceShell({
                 creatorName={creatorName}
               />
               <MainShell>
+                <CreatorContentAccess />
                 {onboardingEditable && <OnboardingBanner finished={onboardingFinished} />}
                 {!connected && (
                   <div role="status" className="mb-5 rounded-xl border border-line bg-panel px-4 py-3 text-sm text-muted">
-                    Your dashboard will show live earnings and content once your AI creator profile is connected.
+                    Live earnings and your Pay Per View catalogue will become available when your AI creator profile is connected.
                   </div>
                 )}
                 {children}
