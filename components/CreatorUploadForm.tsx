@@ -4,7 +4,7 @@ import { useEffect, useId, useRef, useState, type FormEvent, type SyntheticEvent
 import { recoverableUploadQueue } from "@/lib/creator-upload-recovery";
 import { useRouter } from "next/navigation";
 import { Upload } from "lucide-react";
-import { creatorUploadMaxBytes, creatorUploadSizeError } from "@/lib/creator-upload-limits";
+import { creatorUploadMaxBytes, creatorUploadSizeError, CREATOR_ACCOUNT_UPLOAD_HINT } from "@/lib/creator-upload-limits";
 import { CREATOR_UPLOAD_CONCURRENCY, inCreatorUploadSlot } from "@/lib/creator-upload-queue";
 import { Button, buttonVariants } from "@/components/ui/button";
 
@@ -12,13 +12,13 @@ const RED_BUTTON = "min-h-11 bg-[#dc2626] text-white hover:bg-[#b91c1c] focus-vi
 const uploadErrors: Record<string, string> = {
   upload_busy: "Uploads are busy right now. Your files are still selected; please retry in a moment.",
   upload_empty: "Choose at least one file.",
-  upload_too_large: "Images can be up to 15 MiB, videos up to 512 MiB, and voice recordings up to 64 MiB each.",
+  upload_too_large: "Images can be up to 75 MiB, videos up to 512 MiB, and voice recordings up to 64 MiB each.",
   upload_wrong_type: "This file could not be verified. Use JPG, PNG, WebP or GIF images (up to 25 MP), MP4, MOV or WebM video, or an audio recording for voice. Export HEIC photos as JPG first.",
   upload_video_too_long: "This video is longer than 30 minutes. Choose a shorter video.",
   upload_video_resolution: "This video is above 4K resolution. Export it at 4K or lower, then retry.",
   upload_interrupted: "The connection was interrupted. Keep this page open and retry the remaining files.",
   upload_timeout: "The upload timed out. Check your connection and retry the remaining files.",
-  upload_quota: "This account has reached its upload limit. Contact support.",
+  upload_quota: `This upload would exceed your account allowance. ${CREATOR_ACCOUNT_UPLOAD_HINT} Your saved files are safe. Contact support for more capacity.`,
   application_locked: "Uploads are unavailable for this application. Please contact support.",
   session_expired: "Your session expired. Sign in again, then choose the remaining files.",
   upload_storage_error: "The file reached the server, but private storage did not finish. Retry this file. If it fails again, share the upload reference with support.",
@@ -288,6 +288,7 @@ export default function CreatorUploadForm({ kind, label, accept, formatHint, loc
       </label>
     </>}
     <p id={`${inputId}-hint`} className="text-xs leading-5 text-muted">{formatHint || "Voice or video recordings · up to 64 MiB each"}. Select several files, then upload them together. You can add more files to your selection.</p>
+    <p className="text-xs leading-5 text-muted" data-account-upload-allowance>{CREATOR_ACCOUNT_UPLOAD_HINT}</p>
     {items.length > 0 && <>
       <p className="text-sm text-ink" aria-live="polite">{items.length} file{items.length === 1 ? "" : "s"} selected · {saved} saved</p>
       <ul className="max-h-72 space-y-3 overflow-y-auto rounded-lg border border-line p-3" aria-label="Selected files">
@@ -312,3 +313,4 @@ export default function CreatorUploadForm({ kind, label, accept, formatHint, loc
     {message && <p role={failed ? "alert" : "status"} aria-live="polite" className={`break-words text-sm ${failed ? "text-red-700" : "text-ink"}`}>{message}</p>}
   </form>;
 }
+

@@ -1,5 +1,6 @@
 /* Regression tests use synthetic local media and an in-memory storage/DB double. */
 const assert = require('node:assert/strict');
+const { paddedPhoto, PHOTO_LIMIT } = require('../deployment/creator-flow-live-check.cjs');
 const { build } = require('esbuild');
 const { execFileSync } = require('node:child_process');
 const { mkdtempSync, rmSync, openAsBlob, copyFileSync, openSync, writeSync, closeSync, statSync, existsSync, readdirSync } = require('node:fs');
@@ -94,6 +95,19 @@ function stagingDirs() { return readdirSync(tmpdir()).filter(name => name.starts
   assert.equal(state.stored.at(-1).size, 80 * 1024 * 1024);
   assert.deepEqual(await upload(maximum, 'maximum.mp4'), { code: 200, status: 'content_saved' });
   assert.equal(state.stored.at(-1).size, 512 * 1024 * 1024);
+  // Real PNG structure/decoding with labelled ancillary padding for byte boundaries.
+  const photo = join(temp, 'photo-exact.png'), photoNear = join(temp, 'photo-near.png'), photoOver = join(temp, 'photo-over.png');
+  paddedPhoto(photo, PHOTO_LIMIT); paddedPhoto(photoNear, PHOTO_LIMIT - 1024); paddedPhoto(photoOver, PHOTO_LIMIT + 1);
+  const photoResults = await Promise.all([
+    upload(photo, 'photo-exact.png', 'image/png', {}, 'content_sfw_image', true),
+    upload(photoNear, 'photo-near.png', 'image/png', {}, 'content_nsfw_image', true),
+  ]);
+  assert.deepEqual(photoResults, [{ code: 200, status: 'content_saved' }, { code: 200, status: 'content_saved' }]);
+  assert.deepEqual(state.stored.slice(-2).map(row => row.size).sort((a, b) => a - b), [PHOTO_LIMIT - 1024, PHOTO_LIMIT]);
+  for (const kind of ['content_sfw_image', 'content_nsfw_image']) assert.deepEqual(await upload(photoOver, 'photo-over.png', 'image/png', {}, kind), { code: 400, status: 'upload_too_large' });
+  const photoSql = require('node:fs').readFileSync('deployment/creator-upload-receipts.sql', 'utf8');
+  assert.ok(photoSql.includes("p_kind like '%_image' and p_bytes > 78643200"), 'Receipt and route photo limits must match');
+  console.log('PHOTO UPLOAD REGRESSIONS PASSED: valid padded PNGs at 75 MiB and 75 MiB minus 1024 saved in both image categories, concurrent transfers, one byte over rejected.');
   const audio = join(temp, 'voice.wav');
   execFileSync('/usr/bin/ffmpeg', ['-v','error','-f','lavfi','-i','sine=frequency=440:duration=2','-y',audio], { timeout:15000 });
   assert.equal((await upload(audio, 'voice.wav', 'audio/wav', {}, 'voice')).status, 'voice_saved');
@@ -135,10 +149,18 @@ function stagingDirs() { return readdirSync(tmpdir()).filter(name => name.starts
   }
   assert.deepEqual(await Promise.all(simultaneous), [{ code: 200, status: 'content_saved' }, { code: 200, status: 'content_saved' }], 'Two videos must upload together after releasing the barrier');
   assert.deepEqual(stagingDirs(), before, 'Concurrent staging must be cleaned');
-  state.rows = [{ size_bytes: 10 * 1024 * 1024 * 1024 - statSync(short).size }];
+  // Reproduce the real account-wide failure at the old hidden 10 GiB cap.
+  state.rows = [{ size_bytes: 10 * 1024 * 1024 * 1024 }];
+  assert.deepEqual(await upload(short, 'above-old-account-cap.mp4'), { code: 200, status: 'content_saved' }, 'Creators must be able to add valid files beyond 10 GiB total');
+  // Check the independently enforced SQL cap stays aligned with the route.
+  const quotaSql = require('node:fs').readFileSync('deployment/creator-upload-receipts.sql', 'utf8');
+  assert.ok(quotaSql.includes("used_bytes+reserved_bytes+p_bytes > 107374182400 or used_count+reserved_count >= 5000"), "SQL and route must enforce the same account allowance");
+  assert.match(quotaSql, /revoke all on function public\.claim_creator_upload[^;]+from public,anon,authenticated/);
+  state.rows = [{ size_bytes: 100 * 1024 * 1024 * 1024 - statSync(short).size }];
   const quotaRace = await Promise.all([upload(short, 'quota-a.mp4', 'video/mp4', {}, 'content_sfw_video', true), upload(short, 'quota-b.mp4', 'video/mp4', {}, 'content_sfw_video', true)]);
   assert.deepEqual(quotaRace.map(result => result.status).sort(), ['content_saved', 'upload_quota'], 'Concurrent uploads must not overspend account quota');
   assert.deepEqual(stagingDirs(), before);
   console.log('BATCH UPLOAD REGRESSIONS PASSED: two concurrent transfers, third transfer bounded, concurrent quota enforcement and cleanup.');
   console.log('VIDEO UPLOAD REGRESSIONS PASSED: 46-second videos at 80 MB and 512 MB, MOV fallback, distinct size/duration errors, content validation, origin/auth/read-only/lock checks, rollback and temporary-file cleanup.');
 })().catch(error => { console.error(error); process.exitCode = 1; }).finally(() => { rmSync(temp, { recursive: true, force: true }); rmSync(bundle, { force: true }); });
+

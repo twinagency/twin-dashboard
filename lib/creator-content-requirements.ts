@@ -1,6 +1,6 @@
 export const CREATOR_CONTENT_REQUIREMENTS = [
-  { kind: "content_sfw_image", label: "SFW images", shortLabel: "SFW images", media: "image", minimum: 20, accept: "image/jpeg,image/png,image/webp,image/gif", formatHint: "JPG, PNG, WebP or GIF · max 25 MP and 15 MiB each" },
-  { kind: "content_nsfw_image", label: "NSFW images", shortLabel: "NSFW images", media: "image", minimum: 30, accept: "image/jpeg,image/png,image/webp,image/gif", formatHint: "JPG, PNG, WebP or GIF · max 25 MP and 15 MiB each" },
+  { kind: "content_sfw_image", label: "SFW images", shortLabel: "SFW images", media: "image", minimum: 20, accept: "image/jpeg,image/png,image/webp,image/gif", formatHint: "JPG, PNG, WebP or GIF · max 25 MP and 75 MiB each" },
+  { kind: "content_nsfw_image", label: "NSFW images", shortLabel: "NSFW images", media: "image", minimum: 30, accept: "image/jpeg,image/png,image/webp,image/gif", formatHint: "JPG, PNG, WebP or GIF · max 25 MP and 75 MiB each" },
   { kind: "content_sfw_video", label: "SFW videos", shortLabel: "SFW videos", media: "video", minimum: 15, accept: "video/mp4,video/quicktime,video/webm", formatHint: "MP4, MOV or WebM · max 512 MiB (536,870,912 bytes), 30 minutes and 4K per file; all limits apply together" },
   { kind: "content_nsfw_video", label: "NSFW videos", shortLabel: "NSFW videos", media: "video", minimum: 30, accept: "video/mp4,video/quicktime,video/webm", formatHint: "MP4, MOV or WebM · max 512 MiB (536,870,912 bytes), 30 minutes and 4K per file; all limits apply together" },
 ] as const;
@@ -46,5 +46,6 @@ export function creatorLegacyContentCount(files: CreatorContentFile[]): number {
 export function creatorContentCompleted(files: CreatorContentFile[], previouslyCompleted = false): boolean {
   return creatorContentRequirementsMet(files) || (previouslyCompleted && creatorLegacyContentCount(files) > 0);
 }
+
 
 
