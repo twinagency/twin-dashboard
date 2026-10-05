@@ -22,5 +22,7 @@ jobs:
         run: node scripts/check-moxy-post-submit-edit.cjs
       - name: Existing creator flow, draft and optional onboarding
         run: npm run test:creator-flow && npm run test:creator-onboarding
+      - name: Install fixture media tools
+        run: command -v ffmpeg && command -v ffprobe || (sudo apt-get update && sudo apt-get install -y ffmpeg)
       - name: Normal HTTP fixture runner safety
         run: node deployment/creator-flow-live-check.test.cjs
