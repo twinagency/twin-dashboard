@@ -124,7 +124,7 @@ assert.match(submitRoute, /CREATOR_QUESTIONNAIRE_TERMINAL_STATUSES/);
 const pageSource = readFileSync("app/creator/onboarding/page.tsx", "utf8");
 assert.match(pageSource, /<CreatorQuestionnaireWizard/);
 assert.match(pageSource, /<ReadinessItem/);
-assert.match(pageSource, /disabled=\{!readyToSubmit \|\| applicationLocked\}/);
+assert.match(pageSource, /disabled=\{submitted \|\| !readyToSubmit \|\| applicationLocked\}/);
 const dockerSource = readFileSync("Dockerfile", "utf8");
 assert.match(dockerSource, /apk add --no-cache ffmpeg/);
 
