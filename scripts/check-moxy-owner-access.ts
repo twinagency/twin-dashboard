@@ -74,6 +74,19 @@ async function main() {
     assert.equal((await middleware(new NextRequest(origin + `/clones/${other}`, { headers: { cookie: headers.cookie } }))).status, 403);
     assert.equal((await middleware(new NextRequest(origin + "/api/models", { headers: { cookie: headers.cookie } }))).status, 403, "Moxy private-model restriction remains");
 
+    // Every Moxy membership is denied the whole CRM subtree, on either host.
+    for (const permission of [false, true]) {
+      canManage = permission;
+      for (const host of ["https://dashboard.lynqai.co", "https://dashboard.tgaiclone.xyz"]) {
+        for (const path of ["/crm", "/crm/inbox", "/crm/fans", "/crm/campaigns", "/crm/team", "/crm/platforms", "/crm/future"]) {
+          for (const method of ["GET", "HEAD", "POST"]) {
+            assert.equal((await middleware(new NextRequest(host + path, { method, headers: { cookie: headers.cookie } }))).status, 403, `Moxy CRM denied: ${permission} ${method} ${path}`);
+          }
+        }
+      }
+    }
+    canManage = true;
+
     await withDashboardAccess(owner, async () => {
       await requireManagedClone(assigned);
       await assert.rejects(requireManagedClone(other));

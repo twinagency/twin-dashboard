@@ -1,0 +1,25 @@
+name: Moxy CRM visibility
+on:
+  push:
+    branches: ["fix/moxy-hide-crm-20261005"]
+  pull_request:
+    paths:
+      - lib/agency-policy.ts
+      - components/Sidebar.tsx
+      - scripts/check-moxy-owner-access.ts
+      - scripts/check-sidebar-layout.tsx
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: "22", cache: npm}
+      - run: npm ci
+      - run: npx tsc --noEmit
+      - name: Moxy direct CRM access and retained owner permissions
+        run: node --import tsx scripts/check-moxy-owner-access.ts
+      - name: Shared mobile and desktop navigation
+        run: node --import tsx scripts/check-sidebar-layout.tsx

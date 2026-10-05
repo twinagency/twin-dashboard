@@ -87,7 +87,7 @@ for (const mobile of [false, true]) {
   const owner = render("Moxy", true, clone, mobile);
   assert.match(owner, /Moxy · Owner/, "The verified management grant is visible on desktop and mobile");
   assert.doesNotMatch(owner, /Moxy · Read only/);
-  assert.match(owner, />CRM</);
+  assert.doesNotMatch(owner, />CRM<|href="\/crm\//, "Moxy owners cannot see CRM on desktop or mobile");
   for (const href of ["/revenue", "/clones", "/users", `/clones/${clone}?tab=ppvs`]) {
     assert.ok(owner.includes(`href="${href}"`), `Keep owner operating link ${href}`);
   }
