@@ -56,7 +56,7 @@
     "flirt:preflight": "node deployment/flirt-preflight.cjs dashboard",
     "test:internal-admin": "node --import tsx scripts/check-internal-admin.ts",
     "test:creator-registration": "node --import tsx scripts/check-creator-registration.ts",
-    "test:creator-flow": "node scripts/check-creator-flow-ui.cjs && node scripts/check-creator-onboarding-failures.cjs && node scripts/check-creator-flow-presentation.cjs",
+    "test:creator-flow": "node scripts/check-creator-flow-ui.cjs && node scripts/check-creator-onboarding-failures.cjs && node scripts/check-creator-flow-presentation.cjs && node scripts/check-creator-questionnaire-compact.cjs",
     "test:creator-storage-transport": "node scripts/check-creator-storage-transport.cjs",
     "test:creator-gallery": "node --import tsx scripts/check-creator-gallery.ts && node scripts/check-creator-gallery-ui.cjs",
     "test:creator-upload-picker": "npm run test:creator-gallery && npm run test:creator-upload-receipts && node scripts/check-creator-upload-picker.cjs",
