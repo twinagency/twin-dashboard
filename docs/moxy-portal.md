@@ -19,14 +19,29 @@ for the partner's confirmed email. Do not reuse a LYNQ member: memberships are
 one agency per Auth user. Share `/moxy` and credentials through an approved
 secure channel. No account or password is created by a code deploy.
 
+Moxy team owners use the same `/moxy` email/password entry point. Apply
+`deployment/moxy-owner-access.sql` before deploying owner support. An internal
+operator can grant a specific active Moxy membership `can_manage = true` through
+the service role. The default is false; existing reader accounts are unchanged.
+The application only honours this flag for the verified Moxy agency ID and never
+reads it from user metadata or browser inputs. Revoke by clearing the membership
+flag or deactivating the membership.
+
+Owners can manage assigned creators' supported bot settings, media and CRM tools.
+Application approval, new bot creation and platform-wide settings remain internal
+administrator functions. This is not a Twin platform administrator account.
+
 ## Security and presentation
 
 - Login verifies Supabase Auth, active membership and active agency, then
   requires that identity to match the server-resolved `moxy` agency.
 - All data reads retain mandatory creator filters and per-agency cache keys.
-- All writes remain blocked by middleware and the scoped data client.
-- CRM, AI, Tracker, API, Agency access and other administrator-only entries
-  are visible as non-interactive `Not available` items. Direct routes stay 403.
+- Reader accounts cannot write. Owners use the existing management allowlist;
+  every mutation is constrained to the agency's currently assigned creators.
+- Owner and reader data caches are separate. Membership and agency status are
+  verified for each authenticated request.
+- Global settings, Tracker, API, Agency access and other administrator-only
+  routes stay blocked for both roles. Owner navigation enables supported CRM.
 - Bot token is a static locked placeholder; the token is never projected.
 - AI Models is not rendered. Its selected model columns are removed from
   Moxy's clone projection, and `/api/models` is blocked for Moxy.

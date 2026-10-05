@@ -71,6 +71,8 @@ for (const mobile of [false, true]) {
 }
 for (const mobile of [false, true]) {
   const moxy = render("Moxy", false, clone, mobile);
+  assert.match(moxy, /Moxy · Read only/, "Existing Moxy reader labels stay unchanged");
+  assert.doesNotMatch(moxy, /Moxy · Owner/);
   assert.doesNotMatch(moxy, /Not available|aria-disabled|AI Intelligence Core|>CRM</, "Hide unavailable sections, including the empty CRM group and core");
   assert.doesNotMatch(moxy, /aria-expanded/, "Keep available secondary links expanded");
   for (const href of ["/revenue", "/sales-health", "/clones", "/users", "/business", "/flows", "/sequences", "/info", "/logs", "/agency/creators", "/agency/creator-invites", `/clones/${clone}?tab=ppvs`, `/clones/${clone}?tab=identity`]) {
@@ -80,6 +82,19 @@ for (const mobile of [false, true]) {
     assert.ok(!moxy.includes(`>${label}<`), `Hide unavailable Moxy section ${label}`);
   }
   if (mobile) assert.match(moxy, /aria-label="Close navigation"/);
+}
+for (const mobile of [false, true]) {
+  const owner = render("Moxy", true, clone, mobile);
+  assert.match(owner, /Moxy · Owner/, "The verified management grant is visible on desktop and mobile");
+  assert.doesNotMatch(owner, /Moxy · Read only/);
+  assert.match(owner, />CRM</);
+  for (const href of ["/revenue", "/clones", "/users", `/clones/${clone}?tab=ppvs`]) {
+    assert.ok(owner.includes(`href="${href}"`), `Keep owner operating link ${href}`);
+  }
+  for (const href of ["/agency-admin", "/api-access", "/clones/new", "/settings"]) {
+    assert.ok(!owner.includes(`href="${href}"`), `Scoped owner has no master navigation ${href}`);
+  }
+  if (mobile) assert.match(owner, /aria-label="Close navigation"/);
 }
 for (const [name, manage] of [["LYNQ", true], [undefined, false]] as const) {
   const html = render(name, manage);

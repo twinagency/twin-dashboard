@@ -2,8 +2,10 @@ import { JESS_KATE_PORTAL, TETHER_PORTAL } from "./partner-portals";
 
 /** Server-verified agency IDs, never the branding cookie or a submitted name. */
 export const LYNQ_MANAGEMENT_AGENCY_ID = "74b03b70-397e-49ab-841f-8adb8241d87d";
-export function agencyCanManage(identity: { id: string } | null | undefined): boolean {
-  return identity?.id === LYNQ_MANAGEMENT_AGENCY_ID || identity?.id === JESS_KATE_PORTAL.id || identity?.id === TETHER_PORTAL.id;
+export const MOXY_MANAGEMENT_AGENCY_ID = "bc670215-110b-4ea0-8f5c-af3dfe21d253";
+export function agencyCanManage(identity: { id: string; canManage?: boolean } | null | undefined): boolean {
+  return identity?.id === LYNQ_MANAGEMENT_AGENCY_ID || identity?.id === JESS_KATE_PORTAL.id || identity?.id === TETHER_PORTAL.id
+    || (identity?.id === MOXY_MANAGEMENT_AGENCY_ID && identity.canManage === true);
 }
 
 // Existing live tools, not the separate CRM product preview.

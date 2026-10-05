@@ -46,7 +46,7 @@ export function getDashboardAccess(): Promise<DashboardAccess> {
   return active ? Promise.resolve(active.access) : requestAccess();
 }
 export function accessCacheKey(access: DashboardAccess): string {
-  return access ? `agency:${access.id}:${[...access.cloneIds].sort().join(",")}` : "admin";
+  return access ? `agency:${access.id}:${[...access.cloneIds].sort().join(",")}${access.canManage === true ? ":manage" : ""}` : "admin";
 }
 export async function requireCloneAccess(id: string | null | undefined): Promise<void> {
   const access = await getDashboardAccess();

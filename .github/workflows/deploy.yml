@@ -71,6 +71,10 @@ jobs:
           python3 -m py_compile deployment/creator-flow-live-check.py
       - name: Owner authentication and existing master access
         run: node --import tsx scripts/check-owner-auth.ts
+      - name: Moxy owner scope and retained partner permissions
+        run: |
+          node --import tsx scripts/check-moxy-owner-access.ts
+          node --import tsx scripts/check-sidebar-layout.tsx
 
   test:
     runs-on: ubuntu-latest
@@ -218,4 +222,3 @@ jobs:
         run: node scripts/check-ava-site.mjs --http-only
         env:
           AVA_CHECK_ORIGIN: https://dashboard.tgaiclone.xyz
-
