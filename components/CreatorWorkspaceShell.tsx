@@ -10,6 +10,7 @@ import MobileMenu from "./MobileMenu";
 import Sidebar from "./Sidebar";
 import TopBar from "./TopBar";
 import TwinWordmark from "./TwinWordmark";
+import CreatorContentAccess from "./CreatorContentAccess";
 
 type CreatorClone = { id: string; name: string; color: string; photoUrl?: string };
 
@@ -71,10 +72,11 @@ export default function CreatorWorkspaceShell({
                 creatorName={creatorName}
               />
               <MainShell>
+                <CreatorContentAccess />
                 {!connected && (
                   <div role="status" className="mb-5 rounded-xl border border-line bg-panel px-4 py-3 text-sm text-muted">
                     {onboardingFinished
-                      ? "Your onboarding is complete. Your dashboard will show live earnings and content once your AI creator profile is connected."
+                      ? "Your onboarding has been submitted. Live earnings and your Pay Per View catalogue will become available when your AI creator profile is connected."
                       : <>You haven&apos;t finished onboarding yet. <a href="/creator/onboarding" className="font-semibold text-ink underline underline-offset-4">Finish onboarding here</a></>}
                   </div>
                 )}
