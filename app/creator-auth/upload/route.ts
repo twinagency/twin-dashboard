@@ -5,7 +5,7 @@ import type { NextRequest } from "next/server";
 import { execFile } from "node:child_process";
 import { randomUUID } from "crypto";
 import { openAsBlob } from "node:fs";
-import { open, readFile } from "node:fs/promises";
+import { open } from "node:fs/promises";
 import { promisify } from "node:util";
 import { supabaseAdmin } from "@/lib/supabase";
 import { CREATOR_SESSION_COOKIE } from "@/lib/creator-session";
@@ -207,7 +207,7 @@ async function contentSignatureMatches(file: StagedCreatorFile, mime: string): P
   const handle = await open(file.path, "r");
   const header = Buffer.alloc(32);
   try { await handle.read(header, 0, header.length, 0); } finally { await handle.close(); }
-  const bytes = mime.startsWith("image/") ? await readFile(file.path) : header;
+  const bytes = header;
   const headerMatches =
     (mime === "image/jpeg" && bytes[0] === 0xff && bytes[1] === 0xd8 && bytes[2] === 0xff) ||
     (mime === "image/png" && [0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a].every((byte, index) => bytes[index] === byte)) ||
@@ -219,7 +219,7 @@ async function contentSignatureMatches(file: StagedCreatorFile, mime: string): P
   const brand = ascii(bytes, 8, 4);
   const nonVideoIsoBmffBrands = new Set(["heic", "heix", "hevc", "hevx", "heim", "heis", "mif1", "msf1", "avif", "avis"]);
 
-  if (mime.startsWith("image/")) return creatorImageDecodes(bytes, mime);
+  if (mime.startsWith("image/")) return creatorImageDecodes(file.path, mime);
 
   if (file.size < 1024) return false;
   if ((mime === "video/mp4" || mime === "video/quicktime") && box === "ftyp" && nonVideoIsoBmffBrands.has(brand)) return false;
@@ -399,3 +399,4 @@ async function uploadForCreator(req: NextRequest) {
     activeUploadRequests = Math.max(0, activeUploadRequests - 1);
   }
 }
+
