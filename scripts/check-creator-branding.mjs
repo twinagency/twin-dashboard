@@ -412,7 +412,7 @@ try {
           for (const step of ["questionnaire", "content", "voice", "consent"]) {
             await page.goto(`${origin}/creator/onboarding?fixture_brand=${brand}&step=${step}`, { waitUntil: "networkidle" });
             assert.equal(await page.locator(`[data-onboarding-active-step='${step}']`).count(), 1, `${brand} must open only the requested ${step} step`);
-            if (step === "questionnaire") assert.equal(await page.getByRole("button", { name: "Save and return to onboarding", exact: true }).count(), 1, `${brand} questionnaire must save before returning to the hub`);
+            if (step === "questionnaire") assert.equal(await page.getByRole("button", { name: brand === "twin" ? "Back" : "Save and return to onboarding", exact: true }).count(), 1, `${brand} questionnaire must offer a save-aware return to the hub`);
             else {
               const previous = { content: "questionnaire", voice: "content", consent: "voice" }[step];
               const next = { content: "voice", voice: "consent" }[step];
@@ -422,19 +422,22 @@ try {
             }
             const actions = new Set(await page.locator("form").evaluateAll((forms) => forms.map((form) => form.getAttribute("action")).filter(Boolean)));
             if (step === "questionnaire") {
-              const questionnaire = page.locator("[data-questionnaire-page='personal-contact']");
+              const sectionSlug = brand === "twin" ? "quick-about" : "personal-contact";
+              const questionnaire = page.locator(`[data-questionnaire-page='${sectionSlug}']`);
               await questionnaire.waitFor();
               const questionNames = await questionnaire.locator("input[name]:not([type='hidden']), textarea[name]").evaluateAll((fields) => [...new Set(fields.map((field) => field.getAttribute("name")))]);
-              assert.ok(questionNames.length > 0 && questionNames.length <= 8, `${brand} questionnaire parts must remain short`);
-              assert.match(await questionnaire.innerText(), /Part 1 of 17/i);
-              assert.match(await questionnaire.innerText(), /Changes save automatically/);
-              assert.equal(await page.getByRole("button", { name: "Save and continue", exact: true }).count(), 1);
+              const visibleFields = await questionnaire.locator("input[name]:not([type='hidden']):visible, textarea[name]:visible").count();
+              assert.ok(visibleFields > 0 && visibleFields <= 8, `${brand} questionnaire must keep the initial visible questions short`);
+              if (brand === "twin") assert.equal(await questionnaire.locator("details:not([open])").count(), 3, "Twin extra details stay collapsed");
+              assert.match(await questionnaire.innerText(), brand === "twin" ? /Section 1 of 5/i : /Part 1 of 17/i);
+              assert.match(await questionnaire.innerText(), brand === "twin" ? /Autosave on/ : /Changes save automatically/);
+              assert.equal(await page.getByRole("button", { name: brand === "twin" ? "Continue" : "Save and continue", exact: true }).count(), 1);
               if (brand === "twin" && width === 390) {
                 await questionnaire.locator("input[name='full_name']").fill("Autosaved Creator");
                 await questionnaire.getByRole("status").getByText("Saved", { exact: true }).waitFor({ timeout: 5000 });
                 const requests = await page.evaluate(() => globalThis.__creatorDraftRequests);
                 assert.equal(requests.length, 1, "questionnaire edits must produce one debounced autosave");
-                assert.equal(requests[0].section, "personal-contact");
+                assert.equal(requests[0].section, sectionSlug);
                 assert.equal(requests[0].answers.full_name, "Autosaved Creator");
                 assert.deepEqual(Object.keys(requests[0].answers).sort(), questionNames.sort(), "autosave must send only the current questionnaire part");
               }
@@ -442,13 +445,18 @@ try {
             if (step === "consent") {
               assert.ok(actions.has("/creator-auth/onboarding"), `${brand} consent must retain the onboarding server action`);
               assert.equal(await page.getByRole("heading", { name: "Ready to submit?", exact: true }).count(), 1);
-              assert.equal(await page.getByRole("button", { name: "Submit onboarding", exact: true }).isDisabled(), true, `${brand} incomplete onboarding must not submit`);
+              assert.equal(await page.getByRole("button", { name: "Submit onboarding", exact: true }).isDisabled(), brand !== "twin", `${brand} submission availability must match its optional intake policy`);
             }
             if (step === "content" || step === "voice") assert.ok(actions.has("/creator-auth/upload"), `${brand} ${step} must retain the upload server action`);
             if (step === "content") {
               const contentText = await page.locator("body").innerText();
-              assert.match(contentText, /Upload minimum 20 SFW images and 30 NSFW images\./);
-              assert.match(contentText, /Upload 15 SFW videos and 30 NSFW videos\./);
+              if (brand === "twin") {
+                assert.match(contentText, /This step is optional/);
+                assert.doesNotMatch(contentText, /Upload minimum/);
+              } else {
+                assert.match(contentText, /Upload minimum 20 SFW images and 30 NSFW images\./);
+                assert.match(contentText, /Upload 15 SFW videos and 30 NSFW videos\./);
+              }
               assert.doesNotMatch(contentText, /separate from PPV content/i);
               assert.equal(await page.locator("[data-content-category]").count(), 4, `${brand} content must expose four explicit upload categories`);
               const categoryKinds = await page.locator("[data-content-category] input[name='kind']").evaluateAll((inputs) => inputs.map((input) => input.getAttribute("value")));
@@ -473,7 +481,8 @@ try {
 
           for (const section of ["personal-contact", "appearance", "relationships"]) {
             await page.goto(`${origin}/creator/onboarding?fixture_brand=${brand}&step=questionnaire&section=${section}`, { waitUntil: "networkidle" });
-            assert.equal(await page.locator(`[data-questionnaire-page='${section}']`).count(), 1, `${brand} must render questionnaire section ${section}`);
+            const targetSection = brand === "twin" ? (section === "relationships" ? "quick-boundaries" : "quick-about") : section;
+            assert.equal(await page.locator(`[data-questionnaire-page='${targetSection}']`).count(), 1, `${brand} must preserve bookmarked questionnaire section ${section}`);
           }
 
           await page.goto(`${origin}/creator/onboarding?fixture_brand=${brand}&fixture_complete=1`, { waitUntil: "networkidle" });
