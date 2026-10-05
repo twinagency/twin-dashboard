@@ -7,6 +7,8 @@ const CLONES = Object.freeze([
   "bfaf6235-6c3b-4369-8d5c-c7068b08bea2", // Toochi
   "2e5eb05f-cc88-4ba6-870a-924948d4b09a", // Mrs Callace
   "dd1869c2-d1e2-490f-9fae-45200232cc30", // Sania Mallory
+  "e0464c19-d5b7-4154-ba46-a60a2ed2a8a3", // Allison Parker
+  "4fff7866-c7e9-4af2-926a-36e727c0a77f", // Zoey Foxx
 ]);
 function enabled(env = process.env) { return env.FLIRT_LIVE_TWIN_ENABLED === "true"; }
 function identity() { return { id: ID, name: "FLIRT", cloneIds: [...CLONES], dataSource: "twin-live" }; }

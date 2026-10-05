@@ -111,6 +111,6 @@ jobs:
       - name: Verify normal FLIRT signup, optional flow and 75 MiB photo boundaries with exact cleanup
         timeout-minutes: 15
         run: python3 deployment/creator-flow-live-check.py --brand=flirt --expected-sha="$GITHUB_SHA" --mode=photo-boundaries --removal-guards
-      - name: Verify all four live creators, existing media and denied unassigned access
+      - name: Verify all selected live creators, existing media and denied unassigned access
         run: python3 deployment/flirt-live-creators-check.py
 

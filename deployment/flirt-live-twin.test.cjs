@@ -4,10 +4,18 @@ const live = require('./flirt-live-twin.cjs');
 const { deferredClient } = require('./deferred-client.cjs');
 test('live access requires the complete verified assignment', () => {
   const access = live.identity();
+  assert.deepEqual(access.cloneIds, [
+    '0328e7b3-a1e5-465a-9a30-c9cf6519cba1',
+    'bfaf6235-6c3b-4369-8d5c-c7068b08bea2',
+    '2e5eb05f-cc88-4ba6-870a-924948d4b09a',
+    'dd1869c2-d1e2-490f-9fae-45200232cc30',
+    'e0464c19-d5b7-4154-ba46-a60a2ed2a8a3',
+    '4fff7866-c7e9-4af2-926a-36e727c0a77f',
+  ]);
   assert.equal(live.isLiveAccess(access), true);
-  for (const invalid of [null, { ...access, id: 'other' }, { ...access, dataSource: undefined }, { ...access, cloneIds: access.cloneIds.slice(1) }, { ...access, cloneIds: Array(4).fill(access.cloneIds[0]) }]) assert.equal(live.isLiveAccess(invalid), false);
+  for (const invalid of [null, { ...access, id: 'other' }, { ...access, dataSource: undefined }, { ...access, cloneIds: access.cloneIds.slice(1) }, { ...access, cloneIds: [...access.cloneIds.slice(1), '11111111-1111-1111-1111-111111111111'] }, { ...access, cloneIds: Array(access.cloneIds.length).fill(access.cloneIds[0]) }]) assert.equal(live.isLiveAccess(invalid), false);
   access.cloneIds.length = 0;
-  assert.equal(live.identity().cloneIds.length, 4);
+  assert.equal(live.identity().cloneIds.length, 6);
 });
 test('configuration cannot connect to another project or an anonymous key', () => {
   const env = { FLIRT_LIVE_TWIN_ENABLED: 'true', FLIRT_SUPABASE_PROJECT_REF: 'lkmfwpqegjluirfusnaw', FLIRT_LIVE_TWIN_URL: `https://${live.PROJECT}.supabase.co`, FLIRT_LIVE_TWIN_SERVICE_KEY: 'sb_secret_' + 'x'.repeat(32) };

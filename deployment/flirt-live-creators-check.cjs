@@ -14,7 +14,7 @@ async function main() {
   assert(process.env.FLIRT_BACKEND_ENABLED === 'true' && process.env.FLIRT_SUPABASE_PROJECT_REF === LOCAL && process.env.SUPABASE_URL === `https://${LOCAL}.supabase.co` && process.env.DASHBOARD_PUBLIC_ORIGIN === ORIGIN, 'Refusing a non-FLIRT runtime');
   const live = configuration();
   const expected = await rows(live.url, live.key, `clones?select=id,name,status&id=in.(${CLONES.join(',')})`);
-  assert(expected.length === 4 && expected.every(row => row.status === 'active'), 'Selected live creators must all exist and stay active');
+  assert(expected.length === CLONES.length && new Set(expected.map(row => row.id)).size === CLONES.length && expected.every(row => CLONES.includes(row.id) && row.status === 'active'), 'Selected live creators must all exist and stay active');
   const outside = (await rows(live.url, live.key, `clones?select=id&id=not.in.(${CLONES.join(',')})&limit=1`))[0]?.id;
   assert(outside, 'An unselected creator is required for isolation verification');
   const login = await request(ORIGIN + '/admin-auth', { method: 'POST', headers: { Origin: ORIGIN }, body: new URLSearchParams({ password: process.env.DASHBOARD_PASSWORD, next: '/clones' }) });
@@ -24,17 +24,19 @@ async function main() {
   const page = (path, options = {}) => request(ORIGIN + path, { ...options, headers: { Cookie: cookie, Origin: ORIGIN, ...options.headers } });
   const listing = await page('/clones');
   const html = await listing.text();
-  assert(listing.status === 200 && expected.every(row => html.includes(row.name)), 'FLIRT must render all four live creators');
+  assert(listing.status === 200 && expected.every(row => html.includes(row.name)), 'FLIRT must render all selected live creators');
   const stats = await page('/api/dashboard?period=1D&fresh=1');
   assert(stats.status === 200, 'Live dashboard statistics failed');
   const data = await stats.json();
-  assert(data.clones?.length === 4 && data.clones.every(row => CLONES.includes(row.id)), 'Live statistics must contain exactly the selected creators');
+  assert(data.clones?.length === CLONES.length && new Set(data.clones.map(row => row.id)).size === CLONES.length && data.clones.every(row => CLONES.includes(row.id)), 'Live statistics must contain exactly the selected creators');
   assert(Array.isArray(data.recent) && data.recent.every(row => CLONES.includes(row.cloneId)), 'Live payments must stay in the selected scope');
-  checks.push('Authenticated FLIRT renders exactly the four existing live creators and their live statistics');
+  checks.push('Authenticated FLIRT renders exactly the selected existing live creators and their live statistics');
   for (const id of CLONES) assert((await page(`/clones/${id}`)).status === 200, 'Selected creator settings failed to open');
-  checks.push('All four live creator settings pages open');
-  const selection = await page('/agency/clone-scope', { method: 'POST', body: new URLSearchParams({ clone: CLONES[0], next: '/revenue' }) });
-  assert(selection.status === 303 && selection.headers.getSetCookie().some(value => value.startsWith('clone_scope=' + CLONES[0])), 'Creator selector must work with the FLIRT operator session');
+  checks.push('All selected live creator settings pages open');
+  for (const id of CLONES) {
+    const selection = await page('/agency/clone-scope', { method: 'POST', body: new URLSearchParams({ clone: id, next: '/revenue' }) });
+    assert(selection.status === 303 && selection.headers.getSetCookie().some(value => value.startsWith('clone_scope=' + id)), 'Creator selector must work for every selected creator with the FLIRT operator session');
+  }
   assert((await page('/agency/clone-scope', { method: 'POST', body: new URLSearchParams({ clone: outside }) })).status === 403, 'Creator selector must deny unassigned creators');
   checks.push('Creator selector accepts assigned creators and rejects other creators');
   for (const path of [`/clones/${outside}`, `/api/dashboard?clone=${outside}`]) assert((await page(path)).status === 403, 'Unselected creator read was not denied');
