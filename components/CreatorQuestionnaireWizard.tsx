@@ -1,16 +1,16 @@
 "use client";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, ArrowRight, Check, Cloud, CloudOff, LoaderCircle } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, ChevronDown, Cloud, CloudOff, LoaderCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
   CREATOR_QUESTIONNAIRE_PAGES,
   CREATOR_QUESTIONNAIRE_REQUIRED_IDS,
-  creatorQuestionnairePageIndex,
   questionnairePageQuestions,
   type CreatorQuestionnairePage,
 } from "@/lib/creator-questionnaire-draft";
+import { COMPACT_QUESTIONNAIRE_PAGES } from "@/lib/creator-questionnaire-compact";
 import type { CreatorQuestion } from "@/lib/creator-questionnaire";
 
 type SaveState = "idle" | "dirty" | "saving" | "saved" | "error" | "conflict" | "locked";
@@ -23,13 +23,13 @@ function selectClass() {
   return "h-11 w-full rounded-md border border-[#7b8798] bg-transparent px-3 text-base text-ink outline-none focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/50";
 }
 
-function QuestionField({ question, value, locked, optional = false }: { question: CreatorQuestion; value: string; locked: boolean; optional?: boolean }) {
+function QuestionField({ question, value, locked, optional = false, compact = false }: { question: CreatorQuestion; value: string; locked: boolean; optional?: boolean; compact?: boolean }) {
   const required = !optional && CREATOR_QUESTIONNAIRE_REQUIRED_IDS.includes(question.id as (typeof CREATOR_QUESTIONNAIRE_REQUIRED_IDS)[number]);
   const label = <span className="mb-1.5 block text-sm font-medium text-ink">{question.label}{required ? " *" : ""}</span>;
-  const help = question.help ? <span className="mt-1.5 block text-sm leading-relaxed text-muted">{question.help}</span> : null;
+  const help = compact ? null : question.help ? <span className="mt-1.5 block text-sm leading-relaxed text-muted">{question.help}</span> : null;
 
   if (question.type === "textarea") {
-    return <label className="block">{label}<textarea name={question.id} className={textAreaClass()} placeholder={question.placeholder} defaultValue={value} required={required} disabled={locked} />{help}</label>;
+    return <label className="block">{label}<textarea name={question.id} rows={compact ? 2 : undefined} className={compact ? textAreaClass().replace("min-h-28", "min-h-20") : textAreaClass()} placeholder={question.placeholder} defaultValue={value} required={required} disabled={locked} />{help}</label>;
   }
   if (question.type === "select") {
     return <label className="block">{label}<select name={question.id} className={selectClass()} defaultValue={value} required={required} disabled={locked}><option value="">Select...</option>{(question.options || []).map((option) => <option key={option} value={option}>{option}</option>)}</select>{help}</label>;
@@ -73,7 +73,9 @@ export default function CreatorQuestionnaireWizard({
   const [navigating, setNavigating] = useState(false);
   const [navigationError, setNavigationError] = useState("");
   const [answered, setAnswered] = useState(() => Object.values(initialAnswers).filter((value) => value.trim()).length);
-  const currentIndex = creatorQuestionnairePageIndex(page.slug);
+  const compact = page.slug.startsWith("quick-");
+  const pages = compact ? COMPACT_QUESTIONNAIRE_PAGES : CREATOR_QUESTIONNAIRE_PAGES;
+  const currentIndex = Math.max(0, pages.findIndex((item) => item.slug === page.slug));
   const questions = useMemo(() => questionnairePageQuestions(page), [page]);
 
   const snapshot = useCallback(() => {
@@ -165,7 +167,7 @@ export default function CreatorQuestionnaireWizard({
         window.location.assign(optional ? "/creator/onboarding?step=content" : destination.href);
         return;
       }
-      const next = CREATOR_QUESTIONNAIRE_PAGES[target];
+      const next = pages[target];
       window.location.assign(`/creator/onboarding?step=questionnaire&section=${encodeURIComponent(next.slug)}`);
     } catch {
       setNavigationError("The save could not be confirmed. Please try again before leaving this page.");
@@ -191,6 +193,39 @@ export default function CreatorQuestionnaireWizard({
   const saved = saveLabel(saveState);
   const SaveIcon = saved.icon;
   const progress = Math.round(((currentIndex + 1) / CREATOR_QUESTIONNAIRE_PAGES.length) * 100);
+
+  if (compact) return (
+    <form ref={formRef} onSubmit={(event) => event.preventDefault()} onInput={markDirty} className="grid gap-4" data-questionnaire-page={page.slug} data-onboarding-optional={optional ? "true" : "false"}>
+      <div id="questionnaire-top" className="space-y-3">
+        <div className="flex items-center justify-between gap-3 text-xs">
+          <span className="font-semibold text-accent">Section {currentIndex + 1} of {pages.length}</span>
+          <span role="status" aria-live="polite" className={`inline-flex items-center gap-1.5 ${saved.className}`}><SaveIcon className={`size-3.5 shrink-0 ${saveState === "saving" ? "animate-spin" : ""}`} aria-hidden="true" />{saveState === "idle" ? "Autosave on" : saved.text}</span>
+        </div>
+        <div className="flex gap-1.5" role="progressbar" aria-label="Questionnaire section" aria-valuemin={1} aria-valuemax={pages.length} aria-valuenow={currentIndex + 1}>
+          {pages.map((item, index) => <span key={item.slug} className={`h-1.5 flex-1 rounded-full ${index <= currentIndex ? "bg-accent" : "bg-border"}`} />)}
+        </div>
+        <div><h2 className="font-heading text-2xl font-semibold text-ink">{page.title}</h2><p className="mt-1 text-sm text-muted">{page.description}</p></div>
+        <p className="text-xs text-muted">{optional ? "All answers are optional. Add what you can." : "Fields marked * are required."}</p>
+      </div>
+      {page.sections.map((group) => {
+        const fields = <div className="grid gap-4 sm:grid-cols-2">{group.questions.map((question) => <div key={question.id} className={question.type === "textarea" || question.type === "radio" ? "sm:col-span-2" : ""}><QuestionField question={question} value={initialAnswers[question.id] || ""} locked={locked} optional={optional} compact /></div>)}</div>;
+        return group.optionalDetails ? <details key={group.title} className="group rounded-xl border border-border bg-white px-4" data-optional-details>
+          <summary className="flex min-h-12 cursor-pointer list-none items-center justify-between gap-3 py-3 text-sm font-medium text-ink"><span>{group.title} <span className="font-normal text-muted">(optional)</span></span><ChevronDown className="size-4 shrink-0 transition-transform group-open:rotate-180" aria-hidden="true" /></summary>
+          <div className="pb-4 pt-1">{fields}</div>
+        </details> : <section key={group.title} aria-label={group.title} className="py-1">{fields}</section>;
+      })}
+      {navigationError && <p role="alert" className="text-sm text-rose-700">{navigationError}</p>}
+      {(saveState === "error" || saveState === "conflict") && <p role="alert" className="text-sm text-rose-700">{saveState === "conflict" ? "Your answers changed in another window. Refresh before continuing." : "Your latest changes have not saved. Try Continue again."}</p>}
+      <div className="flex flex-wrap justify-between gap-x-4 gap-y-1 text-sm">
+        <button type="button" disabled={navigating || saveState === "saving"} onClick={() => void goTo("dashboard")} className="min-h-11 text-muted underline underline-offset-4 disabled:opacity-50">{locked ? "Dashboard" : "Save and finish later"}</button>
+        {optional && !locked && <button type="button" disabled={navigating || saveState === "saving"} onClick={() => void goTo("content")} className="min-h-11 text-muted underline underline-offset-4 disabled:opacity-50">Skip questions</button>}
+      </div>
+      <div className="sticky bottom-0 z-10 -mx-1 grid grid-cols-[auto_1fr] gap-3 border-t border-border bg-white/95 px-1 pt-3 pb-[max(0.75rem,env(safe-area-inset-bottom))] backdrop-blur" data-questionnaire-navigation>
+        <Button type="button" variant="outline" disabled={navigating || saveState === "saving"} onClick={() => void goTo(currentIndex > 0 ? currentIndex - 1 : "hub")} className="min-h-11 px-4"><ArrowLeft className="size-4" aria-hidden="true" /> Back</Button>
+        <Button type="button" disabled={navigating || saveState === "saving"} onClick={() => void goTo(currentIndex < pages.length - 1 ? currentIndex + 1 : locked ? "content" : "finish")} className="min-h-11">{navigating ? "Saving…" : currentIndex < pages.length - 1 ? "Continue" : "Continue to content"}<ArrowRight className="size-4" aria-hidden="true" /></Button>
+      </div>
+    </form>
+  );
 
   return (
     <form ref={formRef} onSubmit={(event) => event.preventDefault()} onInput={markDirty} className="grid gap-6" data-questionnaire-page={page.slug}>
