@@ -1,7 +1,7 @@
 const assert=require('node:assert/strict');const {createRequire}=require('node:module');const {resolve,basename}=require('node:path');const {rmSync}=require('node:fs');
 const app=createRequire(resolve('package.json'));const {build}=app('esbuild');
 const account='11111111-1111-4111-8111-111111111111';let failedTable='',writes=[],writeFailure=null,applicationExists=true;
-global.__flowIdentity={accountId:account,name:'Moxy',readOnly:false};global.__flowCookieWrites=[];
+global.__flowIdentity={accountId:account,name:'Moxy',agencyId:'bc670215-110b-4ea0-8f5c-af3dfe21d253',readOnly:false};global.__flowCookieWrites=[];
 global.__flowDatabase={from(table){let mutation=null;const q={select(){return q;},eq(){return q;},order(){return q;},limit(){return q;},insert(values){mutation=values;writes.push(table);return q;},update(values){mutation=values;writes.push(table);return q;},upsert(){writes.push(table);return q;},maybeSingle(){return Promise.resolve(result());},single(){return Promise.resolve(result());},then(resolve){return Promise.resolve(result()).then(resolve);}};
  function result(){if(table==='creator_applications'&&mutation?.status==='submitted'&&writeFailure)return{data:null,error:writeFailure};if(table===failedTable)return{data:null,error:{code:'TEST_UNAVAILABLE'}};return{data:table==='creator_applications'?(applicationExists||mutation?{id:account,status:'draft',answers:{},updated_at:'2026-10-04T00:00:00Z'}:null):table==='creator_files'?[]:table==='creator_consents'?{id:account}:null,error:null};}return q;}};
 (async()=>{

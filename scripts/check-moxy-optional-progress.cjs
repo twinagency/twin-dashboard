@@ -5,7 +5,7 @@ const { rmSync } = require('node:fs');
 const { renderToStaticMarkup } = require('react-dom/server');
 
 let files = [], name = 'Moxy';
-global.__optionalIdentity = () => ({ accountId: '11111111-1111-4111-8111-111111111111', name, readOnly: false });
+global.__optionalIdentity = () => ({ accountId: '11111111-1111-4111-8111-111111111111', name, agencyId: name === 'Moxy' ? 'bc670215-110b-4ea0-8f5c-af3dfe21d253' : null, readOnly: false });
 global.__optionalDatabase = { from(table) {
   const result = () => ({ error: null, data: table === 'creator_accounts' ? { display_name: 'Synthetic Creator', email: 'synthetic@example.invalid' } : table === 'creator_files' ? files : null });
   const query = { select() { return query; }, eq() { return query; }, order() { return query; }, limit() { return query; },
@@ -50,7 +50,9 @@ global.__optionalDatabase = { from(table) {
     files = [{ kind: 'content', storage_transfer_status: 'verified' }];
     html = await render('consent'); assert.match(contentRow(html), /1 saved file\./); assert.match(contentRow(html), /Earlier uploads: 1/);
     name = 'Twin'; files = [{ kind: 'content_sfw_image', storage_transfer_status: 'verified' }];
+    html = await render('content'); assert.match(html, /1 saved/); assert.doesNotMatch(html, /of 20 verified/);
+    name = 'Tether';
     html = await render('content'); assert.match(html, /1 of 20 verified/); assert.match(html, /19(?:<!-- -->)? remaining/);
-    console.log('Moxy optional progress: 26 saved files remain visible below legacy quotas; pending files excluded; legacy saved content included; required Twin quotas preserved.');
+    console.log('Moxy optional progress: 26 saved files remain visible below legacy quotas; pending files excluded; legacy saved content included; direct Twin optional intake and other agency quotas preserved.');
   } finally { rmSync(outfile, { force: true }); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
