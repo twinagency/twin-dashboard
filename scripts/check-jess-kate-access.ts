@@ -29,11 +29,15 @@ async function main(){
     else if(url.pathname===`/auth/v1/admin/users/${user}`){passwordUpdates++;assert.equal(init?.method,"PUT");body={user:{id:user}};}
     else if(url.pathname==="/rest/v1/agency_memberships"){
       assert.equal(url.searchParams.get("active"),"eq.true");
-      if(url.searchParams.get("select")!=="agency_id"){
+      if(!url.searchParams.has("user_id")){
         assert.equal(url.searchParams.get("agency_id"),`eq.${portal.id}`);
         assert.equal(url.searchParams.get("email"),`eq.${portal.loginEmail}`);
         body=active?{user_id:user,email:portal.loginEmail}:null;
-      }else body=active?{agency_id:wrongAgency?"different-agency":portal.id}:null;
+      }else {
+        assert.equal(url.searchParams.get("select"),"agency_id,can_manage");
+        assert.equal(url.searchParams.get("user_id"),`eq.${user}`);
+        body=active?{agency_id:wrongAgency?"different-agency":portal.id,can_manage:false}:null;
+      }
     }else if(url.pathname==="/rest/v1/partner_agencies")body=agencyActive?{id:wrongAgency?"different-agency":portal.id,name:portal.name}:null;
     else if(url.pathname==="/rest/v1/agency_creators")body=emptyScope?[]:[{clone_id:kate}];
     else throw new Error(`Unexpected request ${url.pathname}`);
