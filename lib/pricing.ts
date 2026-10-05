@@ -90,7 +90,7 @@ export const MIN_PAID_MEDIA_PRICE_STARS = 250;
 // Photo bundles have their own commercial ceiling. Keep this separate from
 // individual photo/video category pricing, whose higher tiers are intentional.
 export const DEFAULT_PHOTO_BUNDLE_PRICE_STARS = 99;
-export const MAX_PHOTO_BUNDLE_PRICE_STARS = 4400;
+export const MAX_PHOTO_BUNDLE_PRICE_STARS = 8500;
 
 export function requirePhotoBundlePrice(raw: unknown): number {
   const value = typeof raw === "string" && raw.trim() === "" ? Number.NaN : Number(raw);

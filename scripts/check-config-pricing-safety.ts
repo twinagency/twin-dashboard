@@ -128,12 +128,12 @@ check("the corruption floor stays below current catalogue prices", () => {
 
 check("photo bundle prices have a strict bundle-only ceiling", () => {
   assert.equal(DEFAULT_PHOTO_BUNDLE_PRICE_STARS, 99);
-  assert.equal(MAX_PHOTO_BUNDLE_PRICE_STARS, 4400);
-  for (const [raw, expected] of [[1, 1], ["99", 99], [900, 900], [901, 901], ["2200", 2200], ["4400", 4400]] as const) {
+  assert.equal(MAX_PHOTO_BUNDLE_PRICE_STARS, 8500);
+  for (const [raw, expected] of [[1, 1], ["99", 99], [900, 900], [901, 901], ["2200", 2200], ["4400", 4400], ["8500", 8500]] as const) {
     assert.equal(requirePhotoBundlePrice(raw), expected);
   }
-  for (const raw of [0, -1, 4401, 4400.5, Number.NaN, Number.POSITIVE_INFINITY, "", "nope", null]) {
-    assert.throws(() => requirePhotoBundlePrice(raw), /whole number from 1 to 4400 Stars/);
+  for (const raw of [0, -1, 8501, 8500.5, Number.NaN, Number.POSITIVE_INFINITY, "", "nope", null]) {
+    assert.throws(() => requirePhotoBundlePrice(raw), /whole number from 1 to 8500 Stars/);
   }
 
   // The cap belongs only to photo bundles. High individual-media categories
