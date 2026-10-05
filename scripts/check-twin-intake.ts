@@ -3,6 +3,7 @@ import { NextRequest } from "next/server";
 import { middleware } from "../middleware";
 import { creatorDashboardIdentity } from "../lib/creator-dashboard-identity";
 import { creatorIntakeOptional } from "../lib/creator-intake-policy";
+import { creatorQuestionnairePage } from "../lib/creator-questionnaire-draft";
 import { CREATOR_SESSION_COOKIE, signCreatorSession } from "../lib/creator-session";
 const account="11111111-1111-4111-8111-111111111111",user="22222222-2222-4222-8222-222222222222";
 Object.assign(process.env,{NODE_ENV:"production",SUPABASE_URL:"https://twin-intake-test.supabase.co",SUPABASE_SERVICE_KEY:"offline",CREATOR_SESSION_SECRET:"offline-twin-intake-secret"});
@@ -26,6 +27,7 @@ async function main(){
  const twin=await creatorDashboardIdentity(token);
  assert.ok(twin);assert.equal(twin.name,"Twin");assert.equal(twin.agencyId,null);assert.equal(twin.onboarded,true);
  assert.equal(twin.applicationSubmitted,false);assert.deepEqual(twin.cloneIds,[]);
+ assert.equal(creatorQuestionnairePage(undefined,creatorIntakeOptional(twin)).slug,"quick-about");
  assert.equal((await middleware(req("/creator"))).headers.get("location"),null);
  assert.equal((await middleware(req("/creator/onboarding"))).headers.get("location"),null);
  assert.equal((await middleware(req("/agency-admin"))).status,403);

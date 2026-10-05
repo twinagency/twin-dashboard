@@ -235,8 +235,8 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
   const loginPath = moxy ? "/creator/moxy/login" : creatorLoginPath(creator, jar.get(CREATOR_PORTAL_COOKIE)?.value);
   const { status, step, section } = await searchParams;
   const activeStep = isOnboardingStep(step) ? step : null;
-  const compactQuestionnaire = moxy && activeStep === "questionnaire";
-  const questionnairePage = creatorQuestionnairePage(section, moxy);
+  const compactQuestionnaire = optionalIntake && activeStep === "questionnaire";
+  const questionnairePage = creatorQuestionnairePage(section, optionalIntake);
 
   const [{ data: account }, { data: progress }, { data: application }, { data: files }, { data: consent }] = await Promise.all([
     supabaseAdmin.from("creator_accounts").select("display_name,email").eq("id", session.accountId).single(),
