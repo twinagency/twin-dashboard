@@ -1,0 +1,22 @@
+name: Create authorized Moxy live test invitation
+on:
+  push:
+    branches: ['ops/moxy-live-test-invite-20261005-1805']
+permissions:
+  contents: read
+concurrency:
+  group: moxy-live-test-invite-20261005
+  cancel-in-progress: false
+jobs:
+  invitation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-southeast-2
+      - name: Create and verify invitation through normal application handler
+        run: python3 deployment/moxy-live-test-invite.py
