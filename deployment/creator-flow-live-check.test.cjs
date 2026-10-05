@@ -77,7 +77,7 @@ async function mockedFlow(brand, uploadMode = false, missingGallery = false, wro
         const id = randomUUID(), authId = randomUUID();
         const record = { id, auth_user_id: authId, email: body.get('email'), display_name: body.get('display_name'), created_at: new Date().toISOString(), account_status: 'applicant' };
         accounts.set(id, record); auth.set(authId, { id: authId, email: record.email, email_confirmed_at: new Date().toISOString() });
-        applications.set(id, { status: 'draft', submitted_at: null });
+        applications.set(id, { status: 'draft', submitted_at: null, updated_at: new Date().toISOString(), answers: {} });
         return redirect('/creator/onboarding', `twin_creator_session=${id}; HttpOnly; Secure`);
       }
       if (url.pathname === '/creator/signup') return new Response('This invitation has no places left.');
@@ -88,9 +88,15 @@ async function mockedFlow(brand, uploadMode = false, missingGallery = false, wro
       }
       if (url.pathname === '/creator-auth/logout') return redirect(wrongLogout ? '/creator/wrong-login' : BRANDS[brand].login, 'twin_creator_session=; Max-Age=0; HttpOnly; Secure');
       if (!owner) return url.pathname.startsWith('/creator-auth/files') ? json({ error: 'session_expired' }, 401) : redirect(BRANDS[brand].login);
+      if (url.pathname === '/creator-auth/onboarding/draft') {
+        const input = JSON.parse(body), application = applications.get(owner.id);
+        assert.equal(input.revision, application.updated_at);
+        Object.assign(application, { answers: { ...application.answers, ...input.answers }, updated_at: new Date().toISOString() });
+        return json({ ok: true, revision: application.updated_at });
+      }
       if (url.pathname === '/creator-auth/onboarding') {
         if ([...reservations.values()].some(item => item.creator_account_id === owner.id && item.state === 'removing')) return redirect('/creator/onboarding?step=consent&status=file_removal_pending');
-        applications.set(owner.id, { status: 'submitted', submitted_at: new Date().toISOString() }); return redirect('/creator');
+        applications.set(owner.id, { ...applications.get(owner.id), status: 'submitted', submitted_at: new Date().toISOString(), updated_at: new Date().toISOString() }); return redirect('/creator');
       }
       if (url.pathname === '/creator-auth/upload') {
         const id = headers.get('x-creator-upload-id'), blob = body.get('files');

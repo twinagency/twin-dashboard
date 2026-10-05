@@ -648,6 +648,18 @@ async function run(config, env = process.env) {
     assert((await ownRows('creator_applications', a, 'status'))[0].status === 'submitted', 'Fresh login lost submitted state');
     await savedContentNavigation(a);
     passed('Saved-content and onboarding navigation is available on Earnings, Pay Per View and Edit before AI connection, including after submission and fresh login');
+    if (config.brand === 'moxy') {
+      const beforeEdit = (await ownRows('creator_applications', a, 'status,submitted_at,updated_at,answers'))[0];
+      const editedName = 'Disposable post-submission edit';
+      const autosave = await app('/creator-auth/onboarding/draft', a, { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ section: 'personal-contact', revision: beforeEdit.updated_at, answers: { preferred_name: editedName } }) });
+      assert(autosave.status === 200 && (await autosave.json()).ok, 'Submitted Moxy questionnaire autosave failed');
+      await loginAgain(a);
+      const afterEdit = (await ownRows('creator_applications', a, 'status,submitted_at,answers'))[0];
+      assert(afterEdit.answers.preferred_name === editedName && afterEdit.status === beforeEdit.status && afterEdit.submitted_at === beforeEdit.submitted_at, 'Moxy edit lost answers or changed submission state');
+      assert((await ownRows('creator_consents', a, 'id')).length === 0, 'Questionnaire edit fabricated consent');
+      passed('Moxy questionnaire edits after submission persist through fresh login without changing submission status/time or recording consent');
+    }
     await draftState(b); passed('Explicit optional submission persists without fabricated consent; second creator remains unfinished; submitted account returns and signs in freshly');
     if (source) {
       const additional = await upload(a, source, 'content_sfw_video', 'additional-after-submit.mp4');
