@@ -1,3 +1,4 @@
+import { COMPACT_QUESTIONNAIRE_PAGES, COMPACT_QUESTIONNAIRE_ALIASES } from "@/lib/creator-questionnaire-compact";
 import {
   CREATOR_QUESTIONNAIRE,
   CREATOR_QUESTIONNAIRE_SECTIONS,
@@ -12,7 +13,7 @@ export type CreatorQuestionnairePage = {
   slug: string;
   title: string;
   description: string;
-  sections: CreatorQuestionSection[];
+  sections: (CreatorQuestionSection & { optionalDetails?: boolean })[];
 };
 
 function section(index: number, start = 0, end?: number, title?: string): CreatorQuestionSection {
@@ -44,7 +45,11 @@ export const CREATOR_QUESTIONNAIRE_PAGES: CreatorQuestionnairePage[] = [
   { slug: "relationships", title: "Relationship persona", description: "Set the intimate and relationship context your AI is allowed to use.", sections: [section(20)] },
 ];
 
-export function creatorQuestionnairePage(slug: string | null | undefined): CreatorQuestionnairePage {
+export function creatorQuestionnairePage(slug: string | null | undefined, compact = false): CreatorQuestionnairePage {
+  const compactSlug = compact && slug ? COMPACT_QUESTIONNAIRE_ALIASES[slug] || slug : slug;
+  const shortPage = COMPACT_QUESTIONNAIRE_PAGES.find((page) => page.slug === compactSlug);
+  if (shortPage) return shortPage;
+  if (compact) return COMPACT_QUESTIONNAIRE_PAGES[0];
   return CREATOR_QUESTIONNAIRE_PAGES.find((page) => page.slug === slug) || CREATOR_QUESTIONNAIRE_PAGES[0];
 }
 

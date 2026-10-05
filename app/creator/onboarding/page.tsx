@@ -245,7 +245,8 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
   const { status, step, section } = await searchParams;
   if (step === "voice" && !voiceEnabled) redirect("/creator/onboarding?step=consent");
   const activeStep = isOnboardingStep(step) ? step : null;
-  const questionnairePage = creatorQuestionnairePage(section);
+  const compactQuestionnaire = activeStep === "questionnaire";
+  const questionnairePage = creatorQuestionnairePage(section, true);
 
   const [{ data: account }, { data: progress }, { data: application }, { data: files }, { data: consent }] = await Promise.all([
     supabaseAdmin.from("creator_accounts").select("display_name,email").eq("id", session.accountId).single(),
@@ -289,7 +290,8 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
         </div>
       </header>
 
-      <main className="mx-auto max-w-5xl px-5 py-10">
+      <main className={`mx-auto max-w-5xl px-4 sm:px-5 ${compactQuestionnaire ? "py-5" : "py-10"}`}>
+        {compactQuestionnaire ? <div className="mb-4"><p className="text-xs font-semibold uppercase tracking-wider text-accent">Creator setup</p><h1 className="mt-1 text-lg font-semibold text-ink">Make your AI feel like you</h1></div> : <>
         <p className="text-xs font-semibold uppercase tracking-[0.2em] text-accent-2">{tether ? "Tether creator onboarding" : link ? "LYNQ creator onboarding" : "Creator onboarding"}</p>
         <div className="mt-2 flex flex-wrap items-end justify-between gap-4">
           <div><h1 className="font-heading text-4xl font-semibold tracking-[-0.04em] text-ink">Build your {brandName === "Twin" ? "FLIRT" : brandName} digital clone</h1><p className="mt-2 text-muted">{optional ? "All steps are optional. Add what you can now, and return from your dashboard whenever you’re ready." : "Complete the steps below. Your answers and media stay attached to this creator account."}</p></div>
@@ -300,6 +302,8 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
         {optional && !submitted && !applicationLocked && <SkipToDashboard />}
 
         {optional && submitted && <p className="mt-5 rounded-xl border border-border bg-white p-4 text-sm text-ink">{applicationState.description} {applicationLocked ? "Contact your agency if you need to change this application." : "You can still update your answers and upload more content here."}</p>}
+
+        </>}
 
         {status && errorStatuses.has(status) && <div id="step-result" role="alert" className="mt-6 rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">{statusCopy[status]}{status === "file_removal_pending" && <> <Link href="/creator/onboarding?step=content" className="font-semibold underline">Open Saved content</Link></>}</div>}
 
@@ -313,12 +317,12 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
             </div>
           </>
         ) : (
-          <div className="mt-8 grid gap-5" data-onboarding-active-step={activeStep}>
+          <div className={compactQuestionnaire ? "grid gap-4" : "mt-8 grid gap-5"} data-onboarding-active-step={activeStep}>
             {activeStep !== "questionnaire" && <StepNavigation step={activeStep} steps={visibleSteps} />}
 
-            {activeStep === "questionnaire" && <Card className="border border-border bg-white">
-              <StepHeader number={1} title="Questionnaire" complete={complete.questionnaire} optional={optional} />
-              <CardContent className="grid gap-6 pt-2">
+            {activeStep === "questionnaire" && <Card className={compactQuestionnaire ? "overflow-visible border border-border bg-white py-0" : "border border-border bg-white"}>
+              {!compactQuestionnaire && <StepHeader number={1} title="Questionnaire" complete={complete.questionnaire} optional={optional} />}
+              <CardContent className={compactQuestionnaire ? "grid gap-4 p-4 sm:p-6" : "grid gap-6 pt-2"}>
                 {saved ? <>
                   <SavedConfirmation title="Questionnaire saved" detail="Your answers have been saved to your creator account." />
                   <div className="flex flex-col gap-3 sm:flex-row"><ReturnToOnboarding /><Link href={`/creator/onboarding?step=questionnaire&section=${questionnairePage.slug}`} className={returnToOnboardingClass()}>Review answers</Link>{optional && <ContinueToStep step="content">Continue to content</ContinueToStep>}</div>
@@ -401,6 +405,3 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
     </div>
   );
 }
-
-
-
