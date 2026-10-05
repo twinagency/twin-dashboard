@@ -23,3 +23,7 @@ jobs:
           node scripts/check-creator-upload-picker.cjs
           npm run test:creator-upload-receipts
           npm run test:creator-flow
+
+          node deployment/creator-flow-live-check.test.cjs
+          node deployment/creator-flow-cleanup.test.cjs
+          node deployment/creator-flow-upload-memory.test.cjs

@@ -12,7 +12,7 @@ const RED_BUTTON = "min-h-11 bg-[#dc2626] text-white hover:bg-[#b91c1c] focus-vi
 const uploadErrors: Record<string, string> = {
   upload_busy: "Uploads are busy right now. Your files are still selected; please retry in a moment.",
   upload_empty: "Choose at least one file.",
-  upload_too_large: "Images can be up to 15 MiB, videos up to 512 MiB, and voice recordings up to 64 MiB each.",
+  upload_too_large: "Images can be up to 75 MiB, videos up to 512 MiB, and voice recordings up to 64 MiB each.",
   upload_wrong_type: "This file could not be verified. Use JPG, PNG, WebP or GIF images (up to 25 MP), MP4, MOV or WebM video, or an audio recording for voice. Export HEIC photos as JPG first.",
   upload_video_too_long: "This video is longer than 30 minutes. Choose a shorter video.",
   upload_video_resolution: "This video is above 4K resolution. Export it at 4K or lower, then retry.",
@@ -313,3 +313,4 @@ export default function CreatorUploadForm({ kind, label, accept, formatHint, loc
     {message && <p role={failed ? "alert" : "status"} aria-live="polite" className={`break-words text-sm ${failed ? "text-red-700" : "text-ink"}`}>{message}</p>}
   </form>;
 }
+
