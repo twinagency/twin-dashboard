@@ -113,7 +113,8 @@ async function mockedFlow(brand, uploadMode = false, missingGallery = false, wro
         return json({ url: env.SUPABASE_URL + '/storage/v1/object/sign/' + file.storage_path + '?token=private-do-not-log' });
       }
       if (url.pathname === '/creator/info') return new Response(applications.get(owner.id).status === 'draft' ? 'Draft / unfinished' : 'Submitted');
-      if (url.pathname === '/creator' || url.pathname === '/creator/onboarding') return new Response('<a data-return-to-onboarding>Return to onboarding</a>');
+      if (['/creator', '/creator/ppvs', '/creator/edit'].includes(url.pathname)) return new Response('<a data-return-to-onboarding>Return to onboarding</a><a data-creator-content-access href="/creator/onboarding?step=content">My uploaded content</a><a data-creator-onboarding-access href="/creator/onboarding">Onboarding details</a>');
+      if (url.pathname === '/creator/onboarding') return new Response('<a data-return-to-onboarding>Return to onboarding</a><section>Saved content</section><button data-upload-content>Upload content</button>');
       throw new Error('Unexpected application request');
     }
     assert.equal(url.origin, env.SUPABASE_URL);
