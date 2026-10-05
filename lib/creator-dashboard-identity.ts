@@ -3,7 +3,7 @@ import { verifyCreatorSession } from "./creator-session";
 import { serviceClient } from "./supabase-service";
 import type { AgencyIdentity } from "./agency-identity";
 import { isZaneDemo } from "./creator-demo-policy";
-import { isMoxy } from "./agency-brand";
+import { creatorIntakeOptional } from "./creator-intake-policy";
 import {
   BRI_LIVE_DEMO_AGENCY_ID,
   BRI_LIVE_DEMO_CLONE_ID,
@@ -17,7 +17,7 @@ export type CreatorDashboardIdentity = AgencyIdentity & {
   onboarded: boolean;
   applicationState?: ReturnType<typeof creatorApplicationState>;
   submittedAt?: string | null;
-  /** Application submitted (or later). False for Moxy creators who skipped onboarding. */
+  /** Application submitted (or later). False for Twin and Moxy creators who skipped onboarding. */
   applicationSubmitted?: boolean;
   /** Live-data preview accounts can read their one scoped clone but cannot mutate it. */
   readOnly: boolean;
@@ -75,8 +75,8 @@ export async function creatorDashboardIdentity(token: string | null | undefined)
       // A live clone link IS onboarding: the twin exists and its intake is done,
       // so the questionnaire would ask this creator to rebuild what they have.
       // Onboarding stays for new accounts that have no clone yet.
-      // Moxy creators may skip onboarding and use the dashboard before submitting (Ronan, 2026-10-03).
-      onboarded: !!clone || isMoxy(relatedAgency?.name) || ["submitted", "reviewing", "approved"].includes(application.data?.status || ""),
+      // Twin and Moxy creators can use their own dashboard before submitting intake.
+      onboarded: !!clone || creatorIntakeOptional({ name: relatedAgency?.name || "Twin", agencyId: assignment.data?.agency_id || null }) || ["submitted", "reviewing", "approved"].includes(application.data?.status || ""),
       applicationSubmitted: ["submitted", "reviewing", "approved"].includes(application.data?.status || ""),
       applicationState: creatorApplicationState(application.data?.status, application.data?.submitted_at),
       submittedAt: application.data?.submitted_at || null,

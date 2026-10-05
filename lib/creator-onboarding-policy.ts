@@ -1,7 +1,7 @@
 import { creatorUploadsEditable } from "./creator-upload-policy";
 import type { CreatorDashboardIdentity } from "./creator-dashboard-identity";
 
-/** Optional Moxy intake remains editable after submission, like its uploads.
+/** Optional Twin and Moxy intake remains editable after submission, like its uploads.
  * This never resets application status, approval, consent or submission time.
  * Other agencies keep their existing draft-only rules.
  */

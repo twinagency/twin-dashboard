@@ -12,7 +12,7 @@ import {
   questionnaireRequiredMissing,
 } from "@/lib/creator-questionnaire-draft";
 import { creatorContentCompleted } from "@/lib/creator-content-requirements";
-import { isMoxy } from "@/lib/agency-brand";
+import { creatorIntakeOptional } from "@/lib/creator-intake-policy";
 import { creatorOnboardingEditable } from "@/lib/creator-onboarding-policy";
 
 function back(req: Request, status: string, step?: "questionnaire" | "voice" | "consent", section?: string) {
@@ -60,13 +60,13 @@ export async function POST(req: NextRequest) {
     if (existing && CREATOR_QUESTIONNAIRE_TERMINAL_STATUSES.has(existing.status) && !creatorOnboardingEditable(existing.status, creator)) return back(req, "questionnaire_saved", "questionnaire");
     if (!creatorOnboardingEditable(existing?.status, creator)) return back(req, "application_locked", "questionnaire");
     const revision = String(form.get("revision") || "");
-    // Every question is optional for Moxy creators (Ronan, 2026-10-03).
-    const moxy = isMoxy(creator.name);
-    if (moxy && !existing?.id) return back(req, "questionnaire_saved", "questionnaire");
+    // Twin and Moxy use the same optional intake.
+    const optionalIntake = creatorIntakeOptional(creator);
+    if (optionalIntake && !existing?.id) return back(req, "questionnaire_saved", "questionnaire");
     if (!existing?.id || !revision) return back(req, "questionnaire_missing", "questionnaire");
     if (existing.updated_at !== revision) return back(req, "questionnaire_conflict", "questionnaire");
     const answers = (existing.answers || {}) as Record<string, string>;
-    const missing = moxy ? [] : questionnaireRequiredMissing(answers);
+    const missing = optionalIntake ? [] : questionnaireRequiredMissing(answers);
     if (missing.length) return back(req, "questionnaire_missing", "questionnaire", creatorQuestionnairePageForQuestion(missing[0]).slug);
 
     const sealedAt = nextQuestionnaireRevision(existing.updated_at);
@@ -141,18 +141,18 @@ export async function POST(req: NextRequest) {
     const existing = applicationResult.data;
     if (existing && CREATOR_QUESTIONNAIRE_TERMINAL_STATUSES.has(existing.status)) return NextResponse.redirect(creatorRequestUrl(req, "/creator"), 303);
     if (existing && existing.status !== "draft") return back(req, "application_locked", "consent");
-    // Every step is optional for Moxy creators (Ronan, 2026-10-03): they can submit without filling anything in.
-    const moxy = isMoxy(creator.name);
-    const questionnaireComplete = moxy || (!!progress?.questionnaire_completed && !!existing && questionnaireRequiredMissing((existing.answers || {}) as Record<string, string>).length === 0);
-    const contentComplete = moxy || creatorContentCompleted(files || [], !!progress?.content_completed);
-    const voiceComplete = moxy || !!progress?.voice_completed || (files || []).some((file) => file.kind === "voice" && file.storage_transfer_status === "verified");
-    if (!questionnaireComplete || !contentComplete || !voiceComplete || (!consent && !moxy)) {
+    // Optional intake may be submitted with saved information; no consent is inferred.
+    const optionalIntake = creatorIntakeOptional(creator);
+    const questionnaireComplete = optionalIntake || (!!progress?.questionnaire_completed && !!existing && questionnaireRequiredMissing((existing.answers || {}) as Record<string, string>).length === 0);
+    const contentComplete = optionalIntake || creatorContentCompleted(files || [], !!progress?.content_completed);
+    const voiceComplete = optionalIntake || !!progress?.voice_completed || (files || []).some((file) => file.kind === "voice" && file.storage_transfer_status === "verified");
+    if (!questionnaireComplete || !contentComplete || !voiceComplete || (!consent && !optionalIntake)) {
       return back(req, "not_ready", "consent");
     }
 
     let application = existing;
     if (!application) {
-      // A Moxy creator who never opened the questionnaire has no draft yet; start an empty one to submit.
+      // A creator with optional intake who never opened the questionnaire has no draft yet; start an empty one to submit.
       const { data: created, error: createError } = await supabaseAdmin
         .from("creator_applications")
         .insert({ id: accountId, creator_account_id: accountId, answers: {}, status: "draft", updated_at: now })

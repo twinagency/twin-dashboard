@@ -5,8 +5,8 @@ const account='11111111-1111-4111-8111-111111111111';
 const agency='bc670215-110b-4ea0-8f5c-af3dfe21d253';
 const revision='2026-10-05T00:00:00.000Z',submittedAt='2026-10-04T00:00:00.000Z';
 let state,identity,writes,race;
-function reset(status='submitted'){
- identity={accountId:account,name:'Moxy',agencyId:agency,readOnly:false};
+function reset(status='submitted',twin=false){
+ identity={accountId:account,name:twin?'Twin':'Moxy',agencyId:twin?null:agency,readOnly:false};
  state={application:{id:account,creator_account_id:account,status,answers:{preferred_name:'Before'},updated_at:revision,submitted_at:submittedAt},consents:[],progress:null};
  writes=[];race=false;
  global.__editIdentity=()=>identity;
@@ -58,8 +58,8 @@ const request=(body,json=false)=>({headers:new Headers({'content-type':json?'app
  assert.equal(editable('submitted',{...identity,agencyId:'other'}),false);
  assert.equal(editable('submitted',{...identity,name:'Twin'}),false);
  assert.equal(editable('draft',{...identity,readOnly:true}),false);
- for(const status of ['submitted','reviewing','approved']){
-  reset(status);
+ for(const twin of [false,true]) for(const status of ['submitted','reviewing','approved']){
+  reset(status,twin);
   const response=await draft(request({section:'personal-contact',revision,answers:{preferred_name:'Updated'}},true));
   assert.equal(response.status,200);assert.equal(state.application.answers.preferred_name,'Updated');
   assert.equal(state.application.status,status);assert.equal(state.application.submitted_at,submittedAt);
@@ -85,6 +85,12 @@ const request=(body,json=false)=>({headers:new Headers({'content-type':json?'app
  const before=JSON.stringify(state.application);
  const repeat=await save(request({action:'submit'}));
  assert.equal(new URL(repeat.headers.get('location')).pathname,'/creator');assert.equal(JSON.stringify(state.application),before);
- console.log('Moxy post-submission editing passed: persisted answers and completion, status/timestamp preservation, stale/racing updates denied, agency/read-only isolation, explicit consent only and no duplicate consent or resubmission.');
+ reset('draft',true);
+ const submitted=await save(request({action:'submit'}));
+ assert.equal(new URL(submitted.headers.get('location')).pathname,'/creator');
+ assert.equal(state.application.status,'submitted');assert.equal(state.consents.length,0,'Optional submission must not manufacture consent');
+ assert.equal(editable('submitted',{...identity,agencyId:'other'}),false,'Twin branding cannot authorize a different agency');
+ assert.equal(editable('submitted',{...identity,agencyId:undefined}),false,'Incomplete identity must not grant Twin permissions');
+ console.log('Twin and Moxy post-submission editing passed: persisted answers and completion, status/timestamp preservation, stale/racing updates denied, agency/read-only isolation, explicit consent only and no duplicate consent or resubmission.');
  fs.rmSync(out,{recursive:true,force:true});
 })().catch(e=>{console.error(e);process.exitCode=1;});
