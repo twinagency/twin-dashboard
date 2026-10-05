@@ -22,15 +22,17 @@ const expectedFormat: Record<string, string> = {
   "image/webp": "webp",
 };
 
-export async function creatorImageDecodes(bytes: Uint8Array, mime: string): Promise<boolean> {
+// Uploads pass a server-owned staged path, avoiding a whole-file RAM copy.
+// Pixel, channel, format and decoder-time limits still apply independently.
+export async function creatorImageDecodes(input: Uint8Array | string, mime: string): Promise<boolean> {
   try {
-    const metadata = await sharp(bytes, imageInputOptions).metadata();
+    const metadata = await sharp(input, imageInputOptions).metadata();
     if (!metadata.width || !metadata.height || metadata.format !== expectedFormat[mime]) return false;
     if (metadata.width > CREATOR_IMAGE_MAX_EDGE || metadata.height > CREATOR_IMAGE_MAX_EDGE) return false;
     if (metadata.width * metadata.height > CREATOR_IMAGE_MAX_PIXELS) return false;
     if (!metadata.channels || metadata.channels > CREATOR_IMAGE_MAX_CHANNELS) return false;
 
-    const { data, info } = await sharp(bytes, imageInputOptions)
+    const { data, info } = await sharp(input, imageInputOptions)
       .rotate()
       .resize({
         width: CREATOR_IMAGE_PROBE_EDGE,
@@ -51,3 +53,4 @@ export async function creatorImageDecodes(bytes: Uint8Array, mime: string): Prom
     return false;
   }
 }
+

@@ -83,7 +83,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--brand", required=True, choices=("flirt", "moxy"))
     parser.add_argument("--expected-sha", required=True)
-    parser.add_argument("--mode", required=True, choices=("flow-only", "small-only", "large", "cleanup-only"))
+    parser.add_argument("--mode", required=True, choices=("flow-only", "small-only", "large", "photo-boundaries", "cleanup-only"))
     parser.add_argument("--removal-guards", action="store_true")
     parser.add_argument("--allow-missing-gallery", action="store_true")
     parser.add_argument("--cleanup-manifest")
@@ -129,3 +129,4 @@ if __name__ == "__main__":
     except Exception as error:
         print(str(error) if isinstance(error, RuntimeError) else "Runner configuration or AWS operation failed", file=sys.stderr)
         sys.exit(1)
+

@@ -134,6 +134,9 @@ jobs:
           echo "sha=$SHA"       >> "$GITHUB_OUTPUT"
           echo "will deploy $DIGEST"
 
+      - name: Wait for creator uploads before restart
+        run: python3 deployment/creator-upload-idle.py --brand=moxy
+
       - name: Tell the box to pull that digest and restart
         id: deploy
         run: |
@@ -187,9 +190,9 @@ jobs:
             --query '{status:Status,out:StandardOutputContent,err:StandardErrorContent}' --output text
           [ "$STATUS" = "Success" ] || { echo "Dashboard recovery verification failed: $STATUS"; exit 1; }
 
-      - name: Verify normal Moxy signup, optional flow and small uploads with exact cleanup
+      - name: Verify normal Moxy signup, optional flow and 75 MiB photo boundaries with exact cleanup
         timeout-minutes: 15
-        run: python3 deployment/creator-flow-live-check.py --brand=moxy --expected-sha="${{ steps.build.outputs.sha }}" --mode=small-only --removal-guards
+        run: python3 deployment/creator-flow-live-check.py --brand=moxy --expected-sha="${{ steps.build.outputs.sha }}" --mode=photo-boundaries --removal-guards
 
       # Public GETs only. A successful container swap is not proof of URL routing.
       - name: Warm and verify catalogue video previews
@@ -215,3 +218,4 @@ jobs:
         run: node scripts/check-ava-site.mjs --http-only
         env:
           AVA_CHECK_ORIGIN: https://dashboard.tgaiclone.xyz
+

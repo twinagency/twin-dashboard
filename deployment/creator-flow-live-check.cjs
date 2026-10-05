@@ -13,8 +13,12 @@ const BRANDS = Object.freeze({
   moxy: { project: 'aouaenqayfltoqrmpitg', origin: 'https://dashboard.lynqai.co', login: '/creator/moxy/login' },
 });
 const LIMIT = 536870912;
+const PHOTO_LIMIT = 78643200;
 const UUID = /^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i;
 const FIXTURE_FILES = Object.freeze({
+  'photo-near-limit.png': { kind: 'content_nsfw_image', bytes: PHOTO_LIMIT - 1024 },
+  'photo-exact-limit.png': { kind: 'content_sfw_image', bytes: PHOTO_LIMIT },
+  'photo-over-limit.png': { kind: 'content_sfw_image', bytes: PHOTO_LIMIT + 1 },
   'moving-one.mp4': { kind: 'content_sfw_video' }, 'moving-two.mp4': { kind: 'content_nsfw_video' },
   'near-limit-padded.mp4': { kind: 'content_sfw_video', bytes: LIMIT - 1024 },
   'exact-limit-padded.mp4': { kind: 'content_sfw_video', bytes: LIMIT },
@@ -29,7 +33,7 @@ function parseArgs(argv) {
   for (const arg of argv) {
     if (arg.startsWith('--brand=')) config.brand = arg.slice(8);
     else if (arg.startsWith('--expected-sha=')) config.sha = arg.slice(15);
-    else if (arg === '--flow-only' || arg === '--small-only' || arg === '--large') {
+    else if (arg === '--flow-only' || arg === '--small-only' || arg === '--large' || arg === '--photo-boundaries') {
       assert(!config.mode, 'Specify one run mode'); config.mode = arg.slice(2);
     } else if (arg === '--run') config.run = true;
     else if (arg === '--removal-guards') config.removalGuards = true;
@@ -158,6 +162,45 @@ function padMp4(source, destination, size) {
   finally { fs.closeSync(fd); }
   assert(fs.statSync(destination).size === size, 'Padded fixture has wrong bytes');
 }
+// Synthetic 320x180 RGB PNG with valid private ancillary chunks. Padding tests
+// byte handling only; it is not representative of a normal camera photo.
+function paddedPhoto(destination, size) {
+  assert(Number.isSafeInteger(size) && size >= 65536 && size <= PHOTO_LIMIT + 1, 'Invalid photo fixture size');
+  const table = new Uint32Array(256);
+  for (let n = 0; n < 256; n++) { let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xedb88320 ^ (c >>> 1) : c >>> 1; table[n] = c >>> 0; }
+  function chunk(type, data) {
+    const result = Buffer.alloc(data.length + 12);
+    result.writeUInt32BE(data.length); result.write(type, 4); data.copy(result, 8);
+    let crc = 0xffffffff;
+    for (let i = 4; i < result.length - 4; i++) crc = table[(crc ^ result[i]) & 255] ^ (crc >>> 8);
+    result.writeUInt32BE((crc ^ 0xffffffff) >>> 0, result.length - 4);
+    return result;
+  }
+  const width = 320, height = 180, raw = Buffer.alloc((width * 3 + 1) * height);
+  for (let y = 0; y < height; y++) for (let x = 0; x < width; x++) {
+    const p = y * (width * 3 + 1) + 1 + x * 3;
+    raw[p] = x % 256; raw[p + 1] = y; raw[p + 2] = 120;
+  }
+  const ihdr = Buffer.alloc(13); ihdr.writeUInt32BE(width); ihdr.writeUInt32BE(height, 4); ihdr[8] = 8; ihdr[9] = 2;
+  const head = Buffer.concat([Buffer.from([137,80,78,71,13,10,26,10]), chunk('IHDR', ihdr), chunk('IDAT', require('node:zlib').deflateSync(raw))]);
+  const end = chunk('IEND', Buffer.alloc(0));
+  let remaining = size - head.length - end.length;
+  assert(remaining >= 12, 'Photo fixture too small');
+  const fd = fs.openSync(destination, 'w', 0o600);
+  try {
+    fs.writeSync(fd, head);
+    const full = chunk('npAd', Buffer.alloc(1024 * 1024));
+    while (remaining > 0) {
+      let payload = Math.min(1024 * 1024, remaining - 12);
+      if (remaining > payload + 12 && remaining - payload - 12 < 12) payload -= 12;
+      const part = payload === 1024 * 1024 ? full : chunk('npAd', Buffer.alloc(payload));
+      fs.writeSync(fd, part); remaining -= part.length;
+    }
+    fs.writeSync(fd, end);
+  } finally { fs.closeSync(fd); }
+  assert(fs.statSync(destination).size === size, 'Photo fixture byte count mismatch');
+}
+
 function safeUploadResult(response, body, durationMs, fixture) {
   const tag = typeof body?.status === 'string' && /^[a-z_]{1,60}$/.test(body.status) ? body.status : 'unclassified';
   const requestId = body?.requestId || response.headers.get('x-upload-request-id');
@@ -396,6 +439,42 @@ async function run(config, env = process.env) {
     // The normal main flow submits immediately after this and proves it unlocks.
     passed('Supplemental internal removal guard: foreign-owner reservation hides existence; own pending removal blocks HTTP submission; creator DELETE retry removes actual object and metadata');
   }
+  async function photoBoundaryChecks(a, b) {
+    assert(await galleryAvailable(a), 'Photo acceptance requires the persisted gallery');
+    const cases = [
+      { name: 'photo-near-limit.png', kind: 'content_nsfw_image', bytes: PHOTO_LIMIT - 1024 },
+      { name: 'photo-exact-limit.png', kind: 'content_sfw_image', bytes: PHOTO_LIMIT },
+    ];
+    for (const item of cases) { item.path = path.join(directory, item.name); paddedPhoto(item.path, item.bytes); }
+    const outcomes = await Promise.all(cases.map(item => upload(a, item.path, item.kind, item.name)));
+    for (let index = 0; index < cases.length; index++) {
+      assert(outcomes[index].response.status === 200 && outcomes[index].body.status === 'content_saved', 'At/below 75 MiB valid photo failed');
+      const item = cases[index]; await savedFile(a, item.name, item.bytes);
+    }
+    const over = path.join(directory, 'photo-over-limit.png'); paddedPhoto(over, PHOTO_LIMIT + 1);
+    const rejected = await upload(a, over, 'content_sfw_image', 'photo-over-limit.png');
+    assert(rejected.response.status === 400 && ['upload_too_large', 'upload_size'].includes(rejected.body.status), 'Photo over 75 MiB must have a distinct size error');
+    assert(!(await ownRows('creator_files', a, 'original_name')).some(row => row.original_name === 'photo-over-limit.png'), 'Rejected photo acquired a saved record');
+    await loginAgain(a);
+    for (const item of cases) {
+      const file = await savedFile(a, item.name, item.bytes);
+      await privateRetrieval(a, b, file);
+      const gallery = await app('/creator-auth/files?kind=' + item.kind, a, { headers: { Accept: 'application/json' } });
+      assert(gallery.status === 200 && (await gallery.text()).includes(file.id), 'Saved photo missing from its gallery category');
+      const access = await app(`/creator-auth/files/${file.id}/access`, a);
+      assert(access.status === 200, 'Saved photo download unavailable');
+      const { url } = await access.json(); assert(new URL(url).origin === apiOrigin, 'Unexpected photo download origin');
+      const downloaded = await request(url);
+      assert(downloaded.status === 200 && downloaded.body, 'Saved photo download failed');
+      const actual = createHash('sha256'); let count = 0;
+      for await (const part of downloaded.body) { actual.update(part); count += part.byteLength; }
+      const expected = createHash('sha256');
+      for await (const part of fs.createReadStream(item.path)) expected.update(part);
+      assert(count === item.bytes && actual.digest('hex') === expected.digest('hex'), 'Saved photo full-download bytes differ from uploaded fixture');
+    }
+    passed('Photo bytes: 78642176 and 78643200 accepted simultaneously in both image categories; 78643201 rejected; persisted private objects and complete SHA-256-matched retrieval verified after fresh login. Synthetic padded PNGs are 320x180 RGB, not camera-speed tests.');
+  }
+
   async function uploadChecks(a, b) {
     const source = path.join(directory, 'moving-1s.mp4');
     execFileSync('/usr/bin/ffmpeg', ['-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', 'testsrc2=size=320x180:rate=10', '-t', '1', '-c:v', 'libx264', '-threads', '1', '-pix_fmt', 'yuv420p', '-movflags', '+faststart', '-y', source], { timeout: 30000, stdio: 'ignore' });
@@ -415,6 +494,7 @@ async function run(config, env = process.env) {
       assert(replay.response.status === 200, 'Idempotent saved retry failed'); await savedFile(a, names[0], fs.statSync(source).size);
       passed('Saved upload retry returns one persisted record; owner range retrieval and cross-account playback/removal denial pass');
     }
+    if (config.mode === 'photo-boundaries') await photoBoundaryChecks(a, b);
     if (config.mode === 'large') {
       const disk = fs.statfsSync(directory);
       assert(disk.bavail * disk.bsize > 1200 * 1024 * 1024, 'Insufficient temporary disk for client and server boundary fixtures');
@@ -579,7 +659,7 @@ async function run(config, env = process.env) {
     browser_journey_verified: false, physical_iphone_verified: false, speed_claim: 'Runtime/server connection only; not representative of creator phones', credentials_logged: false };
   console.log(JSON.stringify(result)); return result;
 }
-module.exports = { parseArgs, runtimeGuard, readCleanupManifest, runnerFixtureObjectAllowed, enumerateFixtureStorage, optionForMoxy, padMp4, safeUploadResult, run, BRANDS, LIMIT };
+module.exports = { parseArgs, runtimeGuard, readCleanupManifest, runnerFixtureObjectAllowed, enumerateFixtureStorage, optionForMoxy, padMp4, paddedPhoto, safeUploadResult, run, BRANDS, LIMIT, PHOTO_LIMIT };
 // `node -` intentionally has no require.main. The SSM wrapper pipes this file
 // through stdin, while require() by the offline tests must stay side-effect free.
 if (require.main === module || (process.argv[1] === '-' && module.id === '[stdin]')) {
@@ -588,3 +668,4 @@ if (require.main === module || (process.argv[1] === '-' && module.id === '[stdin
   catch (error) { console.log(JSON.stringify({ passed: false, error: error instanceof CheckError ? error.message : 'Runner configuration invalid', credentials_logged: false })); process.exitCode = 1; }
   if (config && !process.exitCode) run(config).then(result => { if (!result.passed) process.exitCode = 1; }).catch(() => { console.log(JSON.stringify({ passed: false, error: 'Runner initialization failed; raw details suppressed', credentials_logged: false })); process.exitCode = 1; });
 }
+
