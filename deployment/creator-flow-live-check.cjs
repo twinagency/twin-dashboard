@@ -652,7 +652,7 @@ async function run(config, env = process.env) {
       const beforeEdit = (await ownRows('creator_applications', a, 'status,submitted_at,updated_at,answers'))[0];
       const editedName = 'Disposable post-submission edit';
       const autosave = await app('/creator-auth/onboarding/draft', a, { method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ section: 'personal-contact', revision: beforeEdit.updated_at, answers: { preferred_name: editedName } }) });
+        body: JSON.stringify({ section: 'quick-identity', revision: beforeEdit.updated_at, answers: { preferred_name: editedName } }) });
       assert(autosave.status === 200 && (await autosave.json()).ok, 'Submitted Moxy questionnaire autosave failed');
       await loginAgain(a);
       const afterEdit = (await ownRows('creator_applications', a, 'status,submitted_at,answers'))[0];
@@ -692,4 +692,5 @@ if (require.main === module || (process.argv[1] === '-' && module.id === '[stdin
   catch (error) { console.log(JSON.stringify({ passed: false, error: error instanceof CheckError ? error.message : 'Runner configuration invalid', credentials_logged: false })); process.exitCode = 1; }
   if (config && !process.exitCode) run(config).then(result => { if (!result.passed) process.exitCode = 1; }).catch(() => { console.log(JSON.stringify({ passed: false, error: 'Runner initialization failed; raw details suppressed', credentials_logged: false })); process.exitCode = 1; });
 }
+
 

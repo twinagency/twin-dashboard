@@ -4,6 +4,8 @@ import { creatorDashboardIdentity } from "@/lib/creator-dashboard-identity";
 import { trustedFormOrigin } from "@/lib/form-origin";
 import { supabaseAdmin } from "@/lib/supabase";
 import { creatorOnboardingEditable } from "@/lib/creator-onboarding-policy";
+import { creatorIntakeOptional } from "@/lib/creator-intake-policy";
+import { COMPACT_QUESTIONNAIRE_ALIASES } from "@/lib/creator-questionnaire-compact";
 import {
   creatorQuestionnairePage,
   nextQuestionnaireRevision,
@@ -27,8 +29,10 @@ export async function POST(req: NextRequest) {
     if (contentLength > 100_000) return reply({ error: "Questionnaire section is too large" }, 413);
     const body = await req.json() as { section?: unknown; answers?: unknown; revision?: unknown };
     if (typeof body.section !== "string" || typeof body.revision !== "string") return reply({ error: "Invalid autosave request" }, 400);
-    const page = creatorQuestionnairePage(body.section);
-    if (page.slug !== body.section) return reply({ error: "Invalid questionnaire section" }, 400);
+    const profile = creatorIntakeOptional(creator);
+    const page = creatorQuestionnairePage(body.section, profile);
+    const expectedSection = profile ? COMPACT_QUESTIONNAIRE_ALIASES[body.section] || body.section : body.section;
+    if (page.slug !== expectedSection || (!profile && page.slug.startsWith("quick-"))) return reply({ error: "Invalid questionnaire section" }, 400);
     const patch = parseQuestionnairePagePatch(page, body.answers);
     if (!Object.keys(patch).length) return reply({ error: "No questionnaire answers supplied" }, 400);
 
@@ -75,3 +79,4 @@ export async function POST(req: NextRequest) {
     return reply({ error: error instanceof Error ? error.message : "Questionnaire could not be saved" }, 400);
   }
 }
+

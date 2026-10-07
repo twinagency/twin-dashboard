@@ -428,8 +428,8 @@ try {
               const questionNames = await questionnaire.locator("input[name]:not([type='hidden']), textarea[name]").evaluateAll((fields) => [...new Set(fields.map((field) => field.getAttribute("name")))]);
               const visibleFields = await questionnaire.locator("input[name]:not([type='hidden']):visible, textarea[name]:visible").count();
               assert.ok(visibleFields > 0 && visibleFields <= 8, `${brand} questionnaire must keep the initial visible questions short`);
-              if (brand === "twin") assert.equal(await questionnaire.locator("details:not([open])").count(), 3, "Twin extra details stay collapsed");
-              assert.match(await questionnaire.innerText(), brand === "twin" ? /Section 1 of 5/i : /Part 1 of 17/i);
+              if (brand === "twin") assert.equal(await questionnaire.locator("details").count(), 0, "Twin account fields have their own page");
+              assert.match(await questionnaire.innerText(), brand === "twin" ? /Section 1 of 8/i : /Part 1 of 17/i);
               assert.match(await questionnaire.innerText(), brand === "twin" ? /Autosave on/ : /Changes save automatically/);
               assert.equal(await page.getByRole("button", { name: brand === "twin" ? "Continue" : "Save and continue", exact: true }).count(), 1);
               if (brand === "twin" && width === 390) {
@@ -481,7 +481,7 @@ try {
 
           for (const section of ["personal-contact", "appearance", "relationships"]) {
             await page.goto(`${origin}/creator/onboarding?fixture_brand=${brand}&step=questionnaire&section=${section}`, { waitUntil: "networkidle" });
-            const targetSection = brand === "twin" ? (section === "relationships" ? "quick-boundaries" : "quick-about") : section;
+            const targetSection = brand === "twin" ? ({"personal-contact":"quick-about",appearance:"quick-family",relationships:"quick-relationships"}[section]) : section;
             assert.equal(await page.locator(`[data-questionnaire-page='${targetSection}']`).count(), 1, `${brand} must preserve bookmarked questionnaire section ${section}`);
           }
 
@@ -530,4 +530,5 @@ try {
   await browser.close();
   await new Promise((resolve) => server.close(resolve));
 }
+
 

@@ -11,6 +11,7 @@ import CreatorContentGallery from "@/components/CreatorContentGallery";
 import CreatorUploadForm from "@/components/CreatorUploadForm";
 import { creatorUploadsEditable } from "@/lib/creator-upload-policy";
 import { creatorIntakeOptional } from "@/lib/creator-intake-policy";
+import { creatorProfileAnswers } from "@/lib/creator-questionnaire-profile";
 import { creatorOnboardingEditable } from "@/lib/creator-onboarding-policy";
 import { creatorApplicationState } from "@/lib/creator-application-state";
 import { supabaseAdmin } from "@/lib/supabase";
@@ -248,6 +249,7 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
 
   if (!account) redirect("/creator-auth/logout");
   const answers = (application?.answers || {}) as Record<string,string>;
+  const questionnaireAnswers = optionalIntake ? creatorProfileAnswers(answers) : answers;
   const applicationState = creatorApplicationState(application?.status, application?.submitted_at);
   const submitted = application?.status === "submitted" || application?.status === "reviewing" || application?.status === "approved";
   const hasApplicationState = !!application && application.status !== "draft";
@@ -299,7 +301,7 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
 
         {!activeStep ? (
           <div className="mt-8 grid gap-5 md:grid-cols-2" data-onboarding-hub>
-            <StepCard step="questionnaire" number={1} title="Questionnaire" description="Tell us about you, your style, personality and boundaries." complete={complete.questionnaire} optional={optionalIntake} icon={FileText} />
+            <StepCard step="questionnaire" number={1} title="Questionnaire" description={optionalIntake ? "Add your account details and answer 38 creator profile questions." : "Tell us about you, your style, personality and boundaries."} complete={complete.questionnaire} optional={optionalIntake} icon={FileText} />
             <StepCard step="content" number={2} title="Content" description={optionalIntake ? "Optional. Upload your image and video library now, or add it later." : "Upload the image and video library for your digital clone."} complete={complete.content} optional={optionalIntake} icon={Images} />
             <StepCard step="voice" number={3} title="Voice" description="Upload voice recordings now, or record your choice to skip and activate voice later." complete={complete.voice} optional icon={Mic2} />
             <StepCard step="consent" number={4} title="Consent & submit" description="Confirm permission and submit your completed onboarding." complete={complete.consent} optional={optionalIntake} icon={ShieldCheck} />
@@ -316,7 +318,10 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
                   <div className="flex flex-col gap-3 sm:flex-row"><ReturnToOnboarding /><Link href={`/creator/onboarding?step=questionnaire&section=${questionnairePage.slug}`} className={returnToOnboardingClass()}>Review answers</Link></div><StepNavigation step="questionnaire" />
                 </> : <CreatorQuestionnaireWizard
                   page={questionnairePage}
-                  initialAnswers={Object.fromEntries(questionnairePageQuestions(questionnairePage).map((question) => [question.id, answers[question.id] || (question.id === "preferred_name" ? account.display_name || "" : question.id === "email_address" ? account.email || "" : "")]))}
+                  initialAnswers={Object.fromEntries(questionnairePageQuestions(questionnairePage).map((question) => {
+                    const fallback = question.id === "preferred_name" ? account.display_name || "" : question.id === "email_address" ? account.email || "" : "";
+                    return [question.id, questionnaireAnswers[question.id] ?? fallback];
+                  }))}
                   initialRevision={application?.updated_at || ""}
                   locked={applicationLocked}
                   optional={optionalIntake}
@@ -393,3 +398,4 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
     </div>
   );
 }
+

@@ -60,7 +60,7 @@ const request=(body,json=false)=>({headers:new Headers({'content-type':json?'app
  assert.equal(editable('draft',{...identity,readOnly:true}),false);
  for(const twin of [false,true]) for(const status of ['submitted','reviewing','approved']){
   reset(status,twin);
-  const response=await draft(request({section:'personal-contact',revision,answers:{preferred_name:'Updated'}},true));
+  const response=await draft(request({section:'quick-identity',revision,answers:{preferred_name:'Updated'}},true));
   assert.equal(response.status,200);assert.equal(state.application.answers.preferred_name,'Updated');
   assert.equal(state.application.status,status);assert.equal(state.application.submitted_at,submittedAt);
   assert.equal(state.consents.length,0);
@@ -68,8 +68,22 @@ const request=(body,json=false)=>({headers:new Headers({'content-type':json?'app
   assert.equal(new URL(finish.headers.get('location')).searchParams.get('status'),'questionnaire_saved');
   assert.equal(state.progress.questionnaire_completed,true);assert.equal(state.application.status,status);
  }
- reset();const stale=await draft(request({section:'personal-contact',revision:'old',answers:{preferred_name:'Lost'}},true));assert.equal(stale.status,409);assert.equal(writes.length,0);
- reset();race=true;const racing=await draft(request({section:'personal-contact',revision,answers:{preferred_name:'Lost'}},true));assert.equal(racing.status,409);assert.equal(writes.length,0);
+ reset();const stale=await draft(request({section:'quick-identity',revision:'old',answers:{preferred_name:'Lost'}},true));assert.equal(stale.status,409);assert.equal(writes.length,0);
+ for(const twin of [false,true]) {
+  reset('draft',twin);
+  state.application.answers={tattoos:'Legacy tattoo',piercings:'Legacy piercing',pets:'Retained pet'};
+  const merged=await draft(request({section:'quick-family',revision,answers:{tattoos_piercings:'Updated appearance'}},true));
+  assert.equal(merged.status,200);
+  assert.equal(state.application.answers.tattoos_piercings,'Updated appearance');
+  assert.equal(state.application.answers.pets,'Retained pet','saving a profile page preserves other saved fields');
+  assert.equal(state.application.answers.piercings,'Legacy piercing','historical answers are preserved');
+  for(const [section,answers] of [['quick-style',{texting_style:'Old instructions'}],['goals-replies',{reply_goodnight:'Old reply'}],['collaboration-boundaries',{monetisation:'Old pricing'}],['quick-family',{wardrobe_sizes:'Old size'}]]) {
+   writes=[];
+   assert.equal((await draft(request({section,revision:state.application.updated_at,answers},true))).status,400,'removed fields cannot be saved through old section names');
+   assert.equal(writes.length,0);
+  }
+ }
+ reset();race=true;const racing=await draft(request({section:'quick-identity',revision,answers:{preferred_name:'Lost'}},true));assert.equal(racing.status,409);assert.equal(writes.length,0);
  reset();identity={...identity,agencyId:'different'};
  assert.equal((await draft(request({section:'personal-contact',revision,answers:{preferred_name:'Denied'}},true))).status,409);assert.equal(writes.length,0);
  reset();identity={...identity,readOnly:true};
@@ -94,3 +108,4 @@ const request=(body,json=false)=>({headers:new Headers({'content-type':json?'app
  console.log('Twin and Moxy post-submission editing passed: persisted answers and completion, status/timestamp preservation, stale/racing updates denied, agency/read-only isolation, explicit consent only and no duplicate consent or resubmission.');
  fs.rmSync(out,{recursive:true,force:true});
 })().catch(e=>{console.error(e);process.exitCode=1;});
+
