@@ -1,0 +1,30 @@
+name: Clear completed deployment queue blocker
+on:
+  push:
+    branches: [codex/clear-stalled-deploy-37673063342]
+permissions:
+  actions: write
+  contents: read
+jobs:
+  clear-stalled-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const run_id = 37673063342;
+            const { data: run } = await github.rest.actions.getWorkflowRun({ owner, repo, run_id });
+            if (run.head_sha !== '71ac319e63e4d8b4fc997d9e8e56cb050e865fbf' || run.name !== 'deploy-dashboard') throw new Error('Unexpected run identity');
+            if (run.status === 'completed') { core.info('Run already complete'); return; }
+            const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, { owner, repo, run_id, filter: 'latest' });
+            const deploy = jobs.find(job => job.name === 'build-and-deploy');
+            if (!deploy || deploy.status !== 'completed') throw new Error('Deployment is still active; refusing cancellation');
+            const active = jobs.filter(job => job.status !== 'completed');
+            if (active.length !== 1 || active[0].name !== 'test') throw new Error('Unexpected active jobs');
+            const step = active[0].steps.find(step => step.status === 'in_progress');
+            if (!step || step.name !== 'Video preview encoder' || Date.now() - Date.parse(step.started_at) < 3600000) throw new Error('Setup job is not the verified stale blocker');
+            await github.rest.actions.cancelWorkflowRun({ owner, repo, run_id });
+            core.info('Cancelled stale setup job after confirming deployment has finished.');
