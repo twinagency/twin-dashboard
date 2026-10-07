@@ -30,7 +30,6 @@ export default function CreatorWorkspaceShell({
   clones,
   activeCloneId,
   connected,
-  readOnly = false,
   onboardingEditable = false,
   onboardingFinished = true,
   allTimeStars,
@@ -41,7 +40,6 @@ export default function CreatorWorkspaceShell({
   clones: CreatorClone[];
   activeCloneId: string | null;
   connected: boolean;
-  readOnly?: boolean;
   onboardingEditable?: boolean;
   /** False while the creator has skipped onboarding without submitting. */
   onboardingFinished?: boolean;
@@ -76,8 +74,8 @@ export default function CreatorWorkspaceShell({
                 creatorName={creatorName}
               />
               <MainShell>
-                {!readOnly && <CreatorContentAccess />}
-                {!readOnly && onboardingEditable && <OnboardingBanner finished={onboardingFinished} />}
+                <CreatorContentAccess />
+                {onboardingEditable && <OnboardingBanner finished={onboardingFinished} />}
                 {!connected && (
                   <div role="status" className="mb-5 rounded-xl border border-line bg-panel px-4 py-3 text-sm text-muted">
                     Live earnings and your Pay Per View catalogue will become available when your AI creator profile is connected.

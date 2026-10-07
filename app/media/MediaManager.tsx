@@ -102,7 +102,7 @@ function useSignedUrl(path: string | null) {
 }
 
 // Thumb that fetches a signed URL. Size via className.
-function Thumb({ path, type, className, controls = false }: { path: string; type: "photo" | "video"; className?: string; controls?: boolean }) {
+function Thumb({ path, type, className }: { path: string; type: "photo" | "video"; className?: string }) {
   const [url, setUrl] = useState<string | null>(null);
   useEffect(() => {
     fetch(`/api/media-sign?path=${encodeURIComponent(path)}`)
@@ -113,7 +113,7 @@ function Thumb({ path, type, className, controls = false }: { path: string; type
 
   const cls = className ?? "h-20 w-20 rounded object-cover";
   if (!url) return <div className={cls + " bg-muted/10 animate-pulse"} />;
-  if (type === "video") return <video src={url} className={cls} muted playsInline controls={controls} preload={controls ? "auto" : "metadata"} />;
+  if (type === "video") return <video src={url} className={cls} muted preload="metadata" />;
   return <img src={url} alt="" className={cls} />;
 }
 
@@ -133,7 +133,7 @@ function Lightbox({
           <span className="font-medium">{title}</span>
           <button onClick={onClose} className="text-muted hover:text-ink">✕</button>
         </div>
-        <Thumb path={path} type={type} controls={type === "video"} className="max-h-[55vh] w-full rounded object-contain bg-ink" />
+        <Thumb path={path} type={type} className="max-h-[55vh] w-full rounded object-contain bg-ink" />
         <div className="mt-3 flex items-center gap-2 text-sm text-muted">
           <StarAmount stars={starValue} />
           <ExplicitBadge isNude={isNude} explicitness={explicitness} />
@@ -906,11 +906,6 @@ function VideoCard({
 }
 
 // ── Bundle card ───────────────────────────────────────────────────────────────
-function bundleMediaType(path: string): "photo" | "video" {
-  const cleanPath = path.split(/[?#]/, 1)[0];
-  return /(?:^|\/)videos\//i.test(cleanPath) || /\.(?:mp4|mov|m4v|webm|mpeg|mpg|mkv|avi)$/i.test(cleanPath) ? "video" : "photo";
-}
-
 function BundleCard({ bundle, cloneId }: { bundle: Bundle; cloneId: string }) {
   const [pending, startTransition] = useTransition();
   const {readOnly}=useDashboardAccess();
@@ -1014,7 +1009,7 @@ function BundleCard({ bundle, cloneId }: { bundle: Bundle; cloneId: string }) {
           .sort((a, b) => a.sort_order - b.sort_order)
           .map((item) => (
             <div key={item.id} className="group relative">
-              <Thumb path={item.storage_path} type={bundleMediaType(item.storage_path)} />
+              <Thumb path={item.storage_path} type="photo" />
               <button
                 disabled={readOnly} onClick={() => removeItem(item.id, item.storage_path)}
                 className="absolute right-0.5 top-0.5 hidden rounded-full bg-black/70 px-1 text-xs text-crit group-hover:flex"
@@ -1042,11 +1037,7 @@ function BundleCard({ bundle, cloneId }: { bundle: Bundle; cloneId: string }) {
           +
         </label>
       </div>
-      <div className="text-xs text-muted">{(() => {
-        const videos = bundle.photo_bundle_items.filter(item => bundleMediaType(item.storage_path) === "video").length;
-        const photos = bundle.photo_bundle_items.length - videos;
-        return [photos ? `${photos} photo${photos === 1 ? "" : "s"}` : "", videos ? `${videos} video${videos === 1 ? "" : "s"}` : ""].filter(Boolean).join(" and ") || "No content yet";
-      })()}</div>
+      <div className="text-xs text-muted">{bundle.photo_bundle_items.length} photo{bundle.photo_bundle_items.length !== 1 ? "s" : ""}</div>
     </div>
   );
 }
@@ -1273,7 +1264,6 @@ export default function MediaManager({
   bundles: Bundle[];
   categoryPricing: Record<string, number> | null;
 }) {
-  const { isCreator, readOnly } = useDashboardAccess();
   const [tab, setTab] = useState<Tab>("photos");
   const [editingPhotos, setEditingPhotos] = useState(false);
   const [editingVideos, setEditingVideos] = useState(false);
@@ -1302,7 +1292,7 @@ export default function MediaManager({
       {/* Tab bar — same shape as the Edit page's strip so the two pages read
           as one system (this IS the page's top bar; there is no title above). */}
       <div className="mb-4 flex gap-1 rounded-xl bg-muted/10 p-1">
-        {tabs.filter((t) => !(isCreator && readOnly && t.key === "pricing")).map((t) => (
+        {tabs.map((t) => (
           <button
             key={t.key}
             type="button"

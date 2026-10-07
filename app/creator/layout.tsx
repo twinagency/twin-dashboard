@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import CreatorWorkspaceShell from "@/components/CreatorWorkspaceShell";
 import CreatorDemoBanner from "@/components/CreatorDemoBanner";
 import { requireCreatorWorkspace } from "@/lib/creator-dashboard";
+import { creatorShare } from "@/lib/creator-share";
 import { isCreatorDashboardPath } from "@/lib/creator-dashboard-policy";
 import { withDashboardAccess } from "@/lib/dashboard-access";
 import { getFleetClones, getHeaderAllTimeStars } from "@/lib/query-cache";
@@ -28,10 +29,9 @@ export default async function CreatorLayout({ children }: { children: React.Reac
       clones={clones}
       activeCloneId={cloneId}
       connected={!!cloneId || demo}
-      readOnly={creator.readOnly}
       onboardingEditable={flirtOnboardingOptional() && !creator.readOnly}
       onboardingFinished={creator.onboarded}
-      allTimeStars={allTimeStars}
+      allTimeStars={Math.round(allTimeStars * creatorShare(creator))}
     >
       {demo && <CreatorDemoBanner />}
       {children}

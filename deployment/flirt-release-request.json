@@ -1,5 +1,5 @@
 {
-  "reason": "Finish client dashboard QA: remove individual transactions and buyer identities, retain aggregate earnings, and correct mixed photo/video bundle previews and video playback controls.",
-  "source_commit": "713fc8b3a7dcfa467d557e4fe041c9601a5ada5a",
-  "requested_at": "2026-10-07T01:12:20.886Z"
+  "reason": "Limit the requested change to Earnings: confirm and consistently display the existing 70% creator share, including the all-time header, and remove individual purchase history. Restore unrelated PPV, profile, onboarding and logs UI changes.",
+  "source_commit": "1f4123eab19fbea6739be094f44e22641a18e818",
+  "requested_at": "2026-10-07T01:15:53.439Z"
 }

@@ -4,7 +4,7 @@ import { Button } from "@/components/ui/button";
 import MediaManager from "@/app/media/MediaManager";
 import DashboardAccessProvider from "@/components/DashboardAccessProvider";
 
-export default async function CloneMediaPage({ cloneId, creatorMode = false, creatorReadOnly = false }: { cloneId: string; creatorMode?: boolean; creatorReadOnly?: boolean }) {
+export default async function CloneMediaPage({ cloneId, creatorMode = false }: { cloneId: string; creatorMode?: boolean }) {
   const [cloneRes, photosRes, videosRes, bundlesRes] = await Promise.all([
     supabaseAdmin.from("clones").select("id,name,slug,category_pricing").eq("id", cloneId).maybeSingle(),
     supabaseAdmin.from("photos").select("*").eq("clone_id", cloneId).order("created_at", { ascending: false }),
@@ -21,7 +21,7 @@ export default async function CloneMediaPage({ cloneId, creatorMode = false, cre
       {creatorMode ? (
         <div className="mb-5">
           <h1 className="text-2xl font-semibold text-ink">Pay Per View</h1>
-          <p className="mt-1 text-sm text-muted">{creatorReadOnly ? "Your photos, videos, bundles and current prices. Your agency manages uploads and changes." : "Your photos, videos, bundles and current prices. Upload new content below."}</p>
+          <p className="mt-1 text-sm text-muted">Your photos, videos, bundles and current prices. Upload new content below.</p>
         </div>
       ) : (
         <div className="mb-2 flex items-center justify-end">
@@ -31,7 +31,7 @@ export default async function CloneMediaPage({ cloneId, creatorMode = false, cre
         </div>
       )}
       {creatorMode ? (
-        <DashboardAccessProvider audience={creatorReadOnly ? "creator" : "admin"}>
+        <DashboardAccessProvider audience="admin">
           <MediaManager cloneId={cloneId} photos={photosRes.data ?? []} videos={videosRes.data ?? []} bundles={bundlesRes.data ?? []} categoryPricing={clone.category_pricing} />
         </DashboardAccessProvider>
       ) : (
