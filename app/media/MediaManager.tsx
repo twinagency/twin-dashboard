@@ -1264,6 +1264,7 @@ export default function MediaManager({
   bundles: Bundle[];
   categoryPricing: Record<string, number> | null;
 }) {
+  const { isCreator, readOnly } = useDashboardAccess();
   const [tab, setTab] = useState<Tab>("photos");
   const [editingPhotos, setEditingPhotos] = useState(false);
   const [editingVideos, setEditingVideos] = useState(false);
@@ -1292,7 +1293,7 @@ export default function MediaManager({
       {/* Tab bar — same shape as the Edit page's strip so the two pages read
           as one system (this IS the page's top bar; there is no title above). */}
       <div className="mb-4 flex gap-1 rounded-xl bg-muted/10 p-1">
-        {tabs.map((t) => (
+        {tabs.filter((t) => !(isCreator && readOnly && t.key === "pricing")).map((t) => (
           <button
             key={t.key}
             type="button"
