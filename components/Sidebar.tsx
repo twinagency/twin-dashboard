@@ -140,7 +140,6 @@ const MORE_LINKS: NavLink[] = [
 // Labels and ordering never depend on write permissions.
 const MOXY_LINKS: NavLink[] = [
   { kind: "route", label: "Earnings", href: "/revenue", icon: "EarningsCombo", color: "good" },
-  { kind: "route", label: "Sales Health", href: "/sales-health", icon: "ListChecks", color: "blue" },
   { kind: "route", label: "Creators", href: "/clones", icon: "Clones", color: "blue" },
   { kind: "route", label: "Accounts", href: "/agency/creators", icon: "Users", color: "gray" },
   { kind: "route", label: "Invite Creator", href: "/agency/creator-invites", icon: "Users", color: "gray" },
