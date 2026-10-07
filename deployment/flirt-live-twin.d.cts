@@ -5,3 +5,6 @@ export function enabled(env?: NodeJS.ProcessEnv): boolean;
 export function identity(): { id: string; name: string; cloneIds: string[]; dataSource: "twin-live" };
 export function isLiveAccess(access: unknown): boolean;
 export function configuration(env?: NodeJS.ProcessEnv): { url: string; key: string };
+export function scopedCreator(accountId: string): { cloneId: string; name: string } | null;
+export function isScopedLiveCreator(access: unknown): boolean;
+export function isLiveData(access: unknown): boolean;

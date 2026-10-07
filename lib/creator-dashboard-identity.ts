@@ -2,6 +2,7 @@ import { creatorApplicationState } from "./creator-application-state";
 import { verifyCreatorSession } from "./creator-session";
 import { serviceClient } from "./supabase-service";
 import type { AgencyIdentity } from "./agency-identity";
+import { ID as FLIRT_AGENCY_ID, enabled as liveTwinEnabled, scopedCreator } from "../deployment/flirt-live-twin.cjs";
 import { isZaneDemo } from "./creator-demo-policy";
 import {
   BRI_LIVE_DEMO_AGENCY_ID,
@@ -60,6 +61,14 @@ export async function creatorDashboardIdentity(token: string | null | undefined)
       if (demoClone.error || demoClone.data?.clone_id !== BRI_LIVE_DEMO_CLONE_ID || relatedClone?.id !== BRI_LIVE_DEMO_CLONE_ID) return null;
       clone = relatedClone;
     }
+    // Read-only view of one live Twin clone. Exact account id, FLIRT assignment and no local clone link.
+    const scoped = scopedCreator(session.accountId);
+    let liveScope = false;
+    if (scoped) {
+      if (!liveTwinEnabled() || account.data.source !== "admin" || assignment.data?.agency_id !== FLIRT_AGENCY_ID || link.data?.clone_id) return null;
+      clone = { id: scoped.cloneId, name: scoped.name };
+      liveScope = true;
+    }
     const identity: CreatorDashboardIdentity = {
       id: `creator:${session.accountId}`,
       kind: "creator",
@@ -75,7 +84,8 @@ export async function creatorDashboardIdentity(token: string | null | undefined)
       onboarded: !!clone || ["submitted", "reviewing", "approved"].includes(application.data?.status || ""),
       applicationState: creatorApplicationState(application.data?.status, application.data?.submitted_at),
       submittedAt: application.data?.submitted_at || null,
-      readOnly: briLiveDemo,
+      readOnly: briLiveDemo || liveScope,
+      ...(liveScope ? { dataSource: "twin-live" as const } : {}),
     };
     // Branding only, not an assignment, permission or real-account status change.
     return isZaneDemo(identity) ? { ...identity, name: "LYNQ" } : identity;

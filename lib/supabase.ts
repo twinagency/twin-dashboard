@@ -1,5 +1,5 @@
 import { deferredClient } from "../deployment/deferred-client.cjs";
-import { configuration, isLiveAccess } from "../deployment/flirt-live-twin.cjs";
+import { configuration, isLiveData } from "../deployment/flirt-live-twin.cjs";
 import { getDashboardAccess } from "./dashboard-access";
 import { assertStartup } from "../deployment/flirt-environment.cjs";
 import { dashboardFetch } from "./agency-fetch";
@@ -14,7 +14,7 @@ let liveClient: SupabaseClient | undefined;
 // need SUPABASE_URL/SUPABASE_SERVICE_KEY — they're only read at request time.
 async function getClient(): Promise<SupabaseClient> {
   const access = await getDashboardAccess();
-  if (isLiveAccess(access)) {
+  if (isLiveData(access)) {
     assertStartup("dashboard");
     const { url, key } = configuration();
     return liveClient ??= createClient(url, key, {

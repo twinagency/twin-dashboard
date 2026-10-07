@@ -1,4 +1,4 @@
-import { configuration, isLiveAccess } from "../deployment/flirt-live-twin.cjs";
+import { configuration, isLiveData } from "../deployment/flirt-live-twin.cjs";
 import type { AgencyIdentity } from "./agency-identity";
 import { assertStartup } from "../deployment/flirt-environment.cjs";
 import { createClient, type SupabaseClient } from "@supabase/supabase-js";
@@ -18,7 +18,7 @@ export function serviceClient(): SupabaseClient {
 // Only server-side, previously verified creator-scoped ownership/credential checks.
 let liveClient: SupabaseClient | undefined;
 export function serviceClientForAccess(access: AgencyIdentity | null): SupabaseClient {
-  if (!isLiveAccess(access)) return serviceClient();
+  if (!isLiveData(access)) return serviceClient();
   assertStartup("dashboard");
   const { url, key } = configuration();
   return liveClient ??= createClient(url, key, {auth: {persistSession: false, autoRefreshToken: false}});
