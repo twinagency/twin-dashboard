@@ -41,7 +41,9 @@ jobs:
       - name: Owner authentication and existing master access
         run: node --import tsx scripts/check-owner-auth.ts
       - name: Creator flow and recoverable form regressions
-        run: npm run test:creator-flow
+        run: |
+          npm run test:creator-flow
+          npx tsx scripts/check-creator-dashboard-privacy.ts
       - name: Streaming creator video upload regressions
         run: |
           command -v ffmpeg >/dev/null || (sudo apt-get update && sudo apt-get install -y ffmpeg)

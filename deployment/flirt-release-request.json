@@ -1,5 +1,5 @@
 {
-  "reason": "Complete creator dashboard QA: retain view-only interface cleanup and hide the daily-detail control where the existing creator-share policy denies that data.",
-  "source_commit": "38e29ec91e92b094bd3146c08e11a99cc388dbf4",
-  "requested_at": "2026-10-07T01:01:45.180Z"
+  "reason": "Remove all individual purchase history and buyer identities from client dashboards and creator responses. Retain aggregate earnings, view-only cleanup and existing account permissions.",
+  "source_commit": "0ff3445ef093b138c6e6f2af0198c52a7bb881c5",
+  "requested_at": "2026-10-07T01:06:22.146Z"
 }

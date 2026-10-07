@@ -1225,6 +1225,7 @@ export default function RevenueDashboard({ cloneId, dayDetailAvailable = true }:
                   scoped={scoped}
                   cloneName={focusName ?? "Selected creator"}
                   transactions={cloneId ? data.recent.filter((transaction) => transaction.cloneId === cloneId) : data.recent}
+                  purchaseHistoryVisible={!isCreator}
                   money={money}
                   usd={usd}
                   pct={pct}
@@ -1244,7 +1245,7 @@ export default function RevenueDashboard({ cloneId, dayDetailAvailable = true }:
       {/* ── Recent ledger activity - same scope/window as everything above it.
           Server sends up to 300 (fleet-wide, most recent first); scoping to
           one clone filters client-side. Shows 10, "Show more" → 50 → 100. ── */}
-      {data && (
+      {!isCreator && data && (
         <Card size="sm" className="mt-3 gap-0 overflow-hidden rounded-lg border border-line bg-panel py-0 shadow-none">
           <CardHeader className="flex-row items-center justify-between gap-3 space-y-0 border-b border-line px-3 py-2.5 sm:px-4">
             <div>
@@ -1637,6 +1638,7 @@ function RevenueReport({
   scoped,
   cloneName,
   transactions,
+  purchaseHistoryVisible,
   money,
   usd,
   pct,
@@ -1648,6 +1650,7 @@ function RevenueReport({
   scoped: boolean;
   cloneName: string;
   transactions: DashboardData["recent"];
+  purchaseHistoryVisible: boolean;
   money: (stars: number) => string;
   usd: (n: number) => string;
   pct: (n: number) => string;
@@ -1760,7 +1763,7 @@ function RevenueReport({
             ) : (
               <div className="flex flex-col gap-3">
                 {reportFeatures.map((f) => {
-                  const drillable = scoped && (f.key === "photo" || f.key === "video" || f.key === "bundle");
+                  const drillable = purchaseHistoryVisible && scoped && (f.key === "photo" || f.key === "video" || f.key === "bundle");
                   const categoryClassName =
                     "rounded-md border border-line bg-panel p-3 text-left transition hover:border-[#7f8b96] hover:bg-elev";
                   const row = (
@@ -1794,9 +1797,9 @@ function RevenueReport({
             )}
           </ReportPanel>
 
-          <ReportPanel title="Who pays" hint="Top spenders from the last 7 days, followed by lifetime spend tiers.">
+          <ReportPanel title={purchaseHistoryVisible ? "Who pays" : "Buyer value"} hint={purchaseHistoryVisible ? "Top spenders from the last 7 days, followed by lifetime spend tiers." : "Aggregate lifetime spend tiers."}>
             <div className="flex flex-col gap-4">
-              <div>
+              {purchaseHistoryVisible && <div>
                 <div className="mb-2 flex items-end justify-between gap-3">
                   <div>
                     <h4 className="text-[10px] font-semibold uppercase tracking-[0.1em] text-ink">Top 5 weekly spenders</h4>
@@ -1860,7 +1863,7 @@ function RevenueReport({
                     />
                   </div>
                 )}
-              </div>
+              </div>}
 
               <div className="border-t border-line pt-3">
                 <h4 className="mb-1 text-[10px] font-semibold uppercase tracking-[0.1em] text-ink">Lifetime spend tiers</h4>
@@ -1883,7 +1886,7 @@ function RevenueReport({
 
                       // Only Whale profiles are shown. The other tiers remain a
                       // compact overview, even when the fleet becomes large.
-                      if (t.key !== "whale") return <div key={t.key}>{tierRow}</div>;
+                      if (t.key !== "whale" || !purchaseHistoryVisible) return <div key={t.key}>{tierRow}</div>;
 
                       return (
                         <details key={t.key} className="rounded-md border border-line bg-surface/55 px-2.5 py-2.5 sm:px-3">
@@ -2179,7 +2182,7 @@ function RevenueReport({
           </ReportPanel>
         </div>
 
-        <Dialog open={selectedMedia !== null} onOpenChange={(open) => !open && setSelectedMedia(null)}>
+        {purchaseHistoryVisible && <Dialog open={selectedMedia !== null} onOpenChange={(open) => !open && setSelectedMedia(null)}>
           <DialogContent className="w-[min(880px,calc(100vw-2rem))] max-w-none sm:max-w-none">
             <DialogHeader>
               <DialogTitle>
@@ -2237,7 +2240,7 @@ function RevenueReport({
               </div>
             )}
           </DialogContent>
-        </Dialog>
+        </Dialog>}
       </CardContent>
     </Card>
   );

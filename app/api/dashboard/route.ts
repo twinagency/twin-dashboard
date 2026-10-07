@@ -3,6 +3,7 @@ import { dashboardReader } from "@/lib/dashboard-reader";
 import { NextRequest, NextResponse } from "next/server";
 import { type Period } from "@/lib/dashboard-data";
 import { applyCreatorShare, creatorShare } from "@/lib/creator-share";
+import { withoutCreatorPurchaseHistory } from "@/lib/creator-dashboard-privacy";
 import { getRevenueRollup } from "@/lib/revenue-cache";
 import { getStarBalance, type StarBalance } from "@/lib/star-balance";
 import { reportDayStartMs, shiftReportDay } from "@/lib/revenue-why-changed";
@@ -40,12 +41,12 @@ async function read(req: NextRequest) {
     if (isZaneDemo(access)) {
       assertCreatorQuery(req.nextUrl.searchParams, creatorDemoQueryIds("/api/dashboard", access!));
       // Return before live rollups, Telegram reads or shared financial caches.
-      return NextResponse.json(creatorDemoData(period, range), { headers: { "Cache-Control": "private, no-store", "X-Data-Mode": "synthetic-demo" } });
+      return NextResponse.json(withoutCreatorPurchaseHistory(creatorDemoData(period, range), access), { headers: { "Cache-Control": "private, no-store", "X-Data-Mode": "synthetic-demo" } });
     }
     if (clone === DEMO_CLONE_ID) return NextResponse.json({ error: "Demo data is unavailable for this account" }, { status: 403 });
     const [rollup, balance] = await Promise.all([getRevenueRollup(period, clone, range, { awaitFresh: freshness === "1" || freshness === "force", force: freshness === "force" }), getScopedBalance(clone)]);
     const { dashboard, analytics, cachedAt, ageSeconds, stale } = rollup;
-    return NextResponse.json(applyCreatorShare({ ...dashboard, analytics, balance, cachedAt, ageSeconds, stale }, creatorShare(access)), { headers: { "Cache-Control": "private, no-store" } });
+    return NextResponse.json(withoutCreatorPurchaseHistory(applyCreatorShare({ ...dashboard, analytics, balance, cachedAt, ageSeconds, stale }, creatorShare(access)), access), { headers: { "Cache-Control": "private, no-store" } });
   } catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : "failed" }, { status: 500 }); }
 }
 export const GET = dashboardReader(read);
