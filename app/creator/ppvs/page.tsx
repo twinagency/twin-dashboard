@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { redirect } from "next/navigation";
 import CloneMediaPage from "@/components/CloneMediaPage";
 import { requireCreatorWorkspace } from "@/lib/creator-dashboard";
 import { Card } from "@/components/ui/card";
@@ -6,6 +7,7 @@ export const dynamic = "force-dynamic";
 
 export default async function CreatorPpvsPage() {
   const creator = await requireCreatorWorkspace();
+  if (creator.name.trim().toLowerCase() === "flirt") redirect("/creator");
   const id = creator.cloneIds[0];
   if (!id) return <Card className="space-y-3 p-6 text-sm text-muted">
     <h1 className="text-lg font-semibold text-ink">Pay Per View</h1>

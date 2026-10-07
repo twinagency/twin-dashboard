@@ -1,5 +1,5 @@
 {
-  "reason": "Limit the requested change to Earnings: confirm and consistently display the existing 70% creator share, including the all-time header, and remove individual purchase history. Restore unrelated PPV, profile, onboarding and logs UI changes.",
-  "source_commit": "1f4123eab19fbea6739be094f44e22641a18e818",
-  "requested_at": "2026-10-07T01:15:53.439Z"
+  "reason": "Remove Pay Per View from the FLIRT client dashboard navigation and redirect its page to Earnings. Preserve the verified 70% creator earnings display and hide all individual purchase history.",
+  "source_commit": "0c29daa00da67af47ae0f9f862fcc1a6a2a75825",
+  "requested_at": "2026-10-07T01:21:49.428Z"
 }

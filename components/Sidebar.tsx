@@ -234,7 +234,7 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
   // narrows navigation and authority; it does not fork the Tether design.
   const usesBrandedCore = isCreator || isJessKate || isTether;
   const primaryLinks = isCreator
-    ? CREATOR_LINKS
+    ? CREATOR_LINKS.filter(link => agencyName?.trim().toLowerCase() !== "flirt" || link.kind !== "route" || link.href !== "/creator/ppvs")
     : NAV_LINKS.flatMap(link => showUnavailable && link.kind === "tab" && link.tab === "ppvs" ? [link, ...MORE_LINKS.filter(item => item.kind === "tab" && item.tab === "identity")] : [link]);
   const pathname = usePathname();
   const searchParams = useSearchParams();
