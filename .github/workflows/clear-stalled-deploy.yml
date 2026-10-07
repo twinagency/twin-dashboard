@@ -1,0 +1,57 @@
+name: Clear completed Moxy deployment queue blocker
+on:
+  push:
+    branches: [codex/clear-stalled-deploy-37690525407]
+permissions:
+  actions: write
+  contents: read
+jobs:
+  clear-stalled-check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const run_id = 37690525407;
+            async function guard(initial) {
+              const { data: run } = await github.rest.actions.getWorkflowRun({ owner, repo, run_id });
+              if (run.head_sha !== '5b58ebfa419b06dcd6a3647982ae1f64cadbe162' || run.name !== 'deploy-dashboard' || run.head_branch !== 'main') throw new Error('Unexpected run identity');
+              if (run.status === 'completed') { core.info('Run already complete'); return false; }
+              if (run.status !== 'in_progress') throw new Error('Unexpected run status');
+              const jobs = await github.paginate(github.rest.actions.listJobsForWorkflowRun, { owner, repo, run_id, filter: 'latest' });
+              const deploy = jobs.find(job => job.name === 'build-and-deploy');
+              if (!deploy || deploy.status !== 'completed') throw new Error('Deployment is still active; refusing cancellation');
+              const proof = deploy.steps.find(step => step.name === 'Prove what is actually running');
+              if (!proof || proof.status !== 'completed' || proof.conclusion !== 'success') throw new Error('Runtime proof missing');
+              const uploads = jobs.find(job => job.name === 'creator-uploads');
+              if (!uploads || uploads.status !== 'completed' || uploads.conclusion !== 'success') throw new Error('Creator checks have not passed');
+              const active = jobs.filter(job => job.status !== 'completed');
+              if (active.length !== 1 || active[0].name !== 'test' || active[0].id !== 113029237239) throw new Error('Unexpected active jobs');
+              const test = active[0];
+              const encoder = test.steps.find(step => step.name === 'Video preview encoder');
+              if (!encoder || !encoder.started_at || Date.now() - Date.parse(encoder.started_at) <= 1200000) throw new Error('Setup has not been stalled twenty minutes');
+              const nextNames = ['Typecheck', 'Build', 'Checks'];
+              for (const name of nextNames) {
+                const step = test.steps.find(step => step.name === name);
+                if (!step || step.started_at || (initial ? step.status !== 'pending' : !['pending', 'completed'].includes(step.status))) throw new Error('Downstream checks have begun or changed unexpectedly');
+                if (!initial && step.status === 'completed' && !['skipped', 'cancelled'].includes(step.conclusion)) throw new Error('Downstream check unexpectedly completed');
+              }
+              const activeSteps = test.steps.filter(step => step.status === 'in_progress');
+              if (initial && (activeSteps.length !== 1 || activeSteps[0].name !== 'Video preview encoder')) throw new Error('Setup is not the verified blocker');
+              if (!initial && activeSteps.some(step => !['Video preview encoder', 'Post Run actions/setup-node@v4', 'Post Run actions/checkout@v4'].includes(step.name))) throw new Error('Unexpected cancellation activity');
+              return true;
+            }
+            if (!(await guard(true))) return;
+            await github.rest.actions.cancelWorkflowRun({ owner, repo, run_id });
+            core.info('Requested normal cancellation of the verified stale setup job.');
+            for (let attempt = 0; attempt < 6; attempt += 1) {
+              await new Promise(resolve => setTimeout(resolve, 10000));
+              const { data: run } = await github.rest.actions.getWorkflowRun({ owner, repo, run_id });
+              if (run.status === 'completed') { core.info('Stale run completed after normal cancellation.'); return; }
+            }
+            if (!(await guard(false))) return;
+            await github.request('POST /repos/{owner}/{repo}/actions/runs/{run_id}/force-cancel', { owner, repo, run_id });
+            core.info('Requested force cancellation after rechecking deployment completed and only stale setup/cleanup remains.');
