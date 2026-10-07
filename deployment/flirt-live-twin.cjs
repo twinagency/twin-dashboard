@@ -21,13 +21,17 @@ function isLiveAccess(access) {
 // Exact creator accounts that may read ONE live Twin clone, read-only. Never match by name or email.
 const SCOPED_CREATORS = Object.freeze({
   "c9c6d09d-71e4-424d-9150-07147c9bd5d2": Object.freeze({ cloneId: "2e5eb05f-cc88-4ba6-870a-924948d4b09a", name: "Mrs Callace" }), // Mrs Callace
+  "eb46dd1c-2d5b-4a6e-a848-3154b5c7fc0a": Object.freeze({ cloneId: "0328e7b3-a1e5-465a-9a30-c9cf6519cba1", name: "Briana Redd" }), // Briana Redd
+  "f003afbf-d57a-4a24-8376-234e2abfb4fb": Object.freeze({ cloneId: "3484f7d9-0cda-4f52-84de-e104c238ce5e", name: "trashy", source: "twin" }), // trashy, her own signup login (trashybagqueen)
 });
+// Clones only a scoped creator login may read. Kept out of CLONES so the FLIRT agency view does not widen.
+const SCOPED_ONLY_CLONES = Object.freeze(["3484f7d9-0cda-4f52-84de-e104c238ce5e"]); // trashy
 function scopedCreator(accountId) { return Object.prototype.hasOwnProperty.call(SCOPED_CREATORS, accountId) ? SCOPED_CREATORS[accountId] : null; }
 // Data routing only. Management and onboarding gates keep using isLiveAccess.
 function isScopedLiveCreator(access) {
   const scoped = access && access.kind === "creator" ? scopedCreator(access.accountId) : null;
   return !!scoped && access.dataSource === "twin-live" && access.id === `creator:${access.accountId}`
-    && Array.isArray(access.cloneIds) && access.cloneIds.length === 1 && access.cloneIds[0] === scoped.cloneId && CLONES.includes(scoped.cloneId);
+    && Array.isArray(access.cloneIds) && access.cloneIds.length === 1 && access.cloneIds[0] === scoped.cloneId && (CLONES.includes(scoped.cloneId) || SCOPED_ONLY_CLONES.includes(scoped.cloneId));
 }
 function isLiveData(access) { return isLiveAccess(access) || isScopedLiveCreator(access); }
 function configuration(env = process.env) {

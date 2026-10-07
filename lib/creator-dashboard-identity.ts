@@ -65,7 +65,7 @@ export async function creatorDashboardIdentity(token: string | null | undefined)
     const scoped = scopedCreator(session.accountId);
     let liveScope = false;
     if (scoped) {
-      if (!liveTwinEnabled() || account.data.source !== "admin" || assignment.data?.agency_id !== FLIRT_AGENCY_ID || link.data?.clone_id) return null;
+      if (!liveTwinEnabled() || account.data.source !== (scoped.source || "admin") || assignment.data?.agency_id !== FLIRT_AGENCY_ID || link.data?.clone_id) return null;
       clone = { id: scoped.cloneId, name: scoped.name };
       liveScope = true;
     }
