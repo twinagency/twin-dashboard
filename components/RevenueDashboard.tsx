@@ -207,7 +207,8 @@ function snapshotAgeLabel(ageSeconds: number) {
 }
 
 export default function RevenueDashboard({ cloneId, initialData = null }: { cloneId?: string | null; initialData?: FullData | null }) {
-  const { isCreator, isAgency } = useDashboardAccess();
+  const { isCreator, isAgency, agencyName } = useDashboardAccess();
+  const moxyOverview = isAgency && agencyName?.trim().toLowerCase() === "moxy";
   const scoped = Boolean(cloneId);
   // AI cost/contribution/margin are OUR figures, not the agency's or creator's.
   // The API already strips costUsd/profitUsd/margin from every non-admin
@@ -452,14 +453,14 @@ export default function RevenueDashboard({ cloneId, initialData = null }: { clon
         {
           label: "Net revenue",
           value: money(displayStars),
-          meta: `⭐ ${fmtNum(displayStars)} after adjustments`,
+          meta: moxyOverview ? `${fmtNum(displayStars)} Stars · after adjustments` : `⭐ ${fmtNum(displayStars)} after adjustments`,
           hint: "Recorded Star payments in this window after refunds and adjustments. This is not profit, a payout, or the current wallet balance.",
           primary: true,
         },
         {
           label: cloneId ? "Buyers" : "Unique buyers",
           value: fmtNum(summaryStats.buyers),
-          meta: "positive paid orders",
+          meta: moxyOverview ? "Paid this period" : "positive paid orders",
           hint: "People with at least one positive paid order during the selected period.",
         },
         {
@@ -498,8 +499,76 @@ export default function RevenueDashboard({ cloneId, initialData = null }: { clon
       ? txSort.direction === "desc" ? "Highest amount first" : "Lowest amount first"
       : `${txSort.key === "fan" ? "Fan" : txSort.key === "creator" ? "Creator" : "Type"} ${txSort.direction === "asc" ? "A–Z" : "Z–A"}`;
 
+  const periodNames: Record<Period, string> = { ALL: "All time", CUSTOM: "Custom range", "1Y": "Last year", "6M": "Last 6 months", "3M": "Last 3 months", "1M": "Last month", "2W": "Last 2 weeks", "1W": "Last 7 days", "1D": "Last 24 hours" };
+  const windowLabel = customRange ? `${customRange.start} – ${customRange.end}` : periodNames[period];
+  const chartControls = (
+    <div className="revenue-view-controls contents">
+          {!scoped && !isCreator && (
+            <div className="revenue-series-controls contents">
+              <span className="revenue-control-divider mx-0.5 h-5 w-px bg-line" />
+              <span className="px-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-muted">Series</span>
+              <div role="group" aria-label="Revenue series" className="inline-flex shrink-0 gap-0.5 rounded-md border border-line bg-elev p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setChartMode("total")}
+                  aria-pressed={chartMode === "total"}
+                  className={`h-6 rounded-[3px] px-2 text-[10px] font-medium transition sm:text-[11px] ${chartMode === "total" ? "bg-[#172b3d] text-white" : "text-muted hover:bg-panel hover:text-ink"}`}
+                >
+                  Total
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setChartMode("creator")}
+                  aria-pressed={chartMode === "creator"}
+                  className={`h-6 rounded-[3px] px-2 text-[10px] font-medium transition sm:text-[11px] ${chartMode === "creator" ? "bg-[#172b3d] text-white" : "text-muted hover:bg-panel hover:text-ink"}`}
+                >
+                  By creator
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div className="revenue-chart-controls contents">
+          <span className="revenue-control-divider mx-0.5 h-5 w-px bg-line" />
+          <span className="px-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-muted">Chart</span>
+          <div role="group" aria-label="Chart type" className="inline-flex shrink-0 gap-0.5 rounded-md border border-line bg-elev p-0.5">
+          <button
+            type="button"
+            onClick={() => setChartType("bar")}
+            aria-label="Bar chart"
+            aria-pressed={chartType === "bar"}
+            className={
+              "grid h-6 w-7 place-items-center rounded-[3px] transition " +
+              (chartType === "bar" ? "bg-[#172b3d] text-white" : "text-muted hover:bg-panel hover:text-ink")
+            }
+          >
+            {moxyOverview ? <span>Bar</span> : (<svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2}>
+              <path d="M4 20V10M12 20V4M20 20v-7" strokeLinecap="round" />
+            </svg>)}
+          </button>
+          <button
+            type="button"
+            onClick={() => setChartType("line")}
+            aria-label="Line chart"
+            aria-pressed={chartType === "line"}
+            className={
+              "grid h-6 w-7 place-items-center rounded-[3px] transition " +
+              (chartType === "line" ? "bg-[#172b3d] text-white" : "text-muted hover:bg-panel hover:text-ink")
+            }
+          >
+            {/* The polyline's ink spans y 7..16, so its bounding box centre is not
+                the viewBox centre. Nudged down to sit level in the circle. */}
+            {moxyOverview ? <span>Line</span> : (<svg viewBox="0 0 24 24" className="h-3.5 w-3.5 translate-y-[1px]" fill="none" stroke="currentColor" strokeWidth={2}>
+              <path d="M4 16l5-6 4 3 7-9" strokeLinecap="round" strokeLinejoin="round" />
+            </svg>)}
+          </button>
+        </div>
+          </div>
+          </div>
+  );
+
   return (
-    <div className="revenue-dashboard pb-6">
+    <div className={`revenue-dashboard pb-6${moxyOverview ? " revenue-dashboard--moxy" : ""}`}>
       {/* Named on screen, not just in the console. The operator is the person
           who has to decide whether to pick a shorter window or call someone. */}
       {loadError && (
@@ -524,11 +593,12 @@ export default function RevenueDashboard({ cloneId, initialData = null }: { clon
       <div className="revenue-command mb-3 overflow-hidden rounded-lg border border-line bg-panel">
         <div className="revenue-page-heading flex flex-col justify-between gap-3 border-b border-line px-3 py-3 sm:flex-row sm:items-center sm:px-4">
           <div className="min-w-0">
-            <div className="mb-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">Finance operations</div>
+            {!moxyOverview && <div className="mb-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">Finance operations</div>}
             <h2 className="flex items-center gap-1.5 font-heading text-xl font-semibold tracking-[-0.025em] text-ink sm:text-2xl">
               Earnings overview
               <Info text={isCreator ? "Revenue, buyer activity and conversion performance for your creator account." : "Revenue, buyer activity and conversion performance across your active creators. In All creators, buyers are unique people across creators; audience and message totals count each creator-fan relationship."} />
             </h2>
+            {moxyOverview && <p className="moxy-reporting-caption">{windowLabel} · {currency} · {reportTzLabel()}</p>}
           </div>
           <div className="revenue-refresh flex items-center gap-2 text-[11px] text-muted">
             {data && (
@@ -550,6 +620,24 @@ export default function RevenueDashboard({ cloneId, initialData = null }: { clon
 
         {/* One compact command surface for time window, aggregation and mark. */}
         <div className="revenue-toolbar flex flex-wrap items-center gap-1.5 px-2 py-2 sm:px-3">
+          {moxyOverview && <select
+            className="moxy-mobile-window"
+            aria-label="Reporting window"
+            value={customRange ? "CUSTOM" : period}
+            onChange={(event) => {
+              if (event.target.value === "CUSTOM") {
+                setDraftStart(customRange?.start ?? "");
+                setDraftEnd(customRange?.end ?? "");
+                setCustomOpen(true);
+              } else {
+                setCustomRange(null);
+                setPeriod(event.target.value as Period);
+              }
+            }}
+          >
+            {PERIODS.map((item) => <option key={item.key} value={item.key}>{periodNames[item.key]}</option>)}
+            <option value="CUSTOM">{customRange ? windowLabel : "Custom range…"}</option>
+          </select>}
           <div className="revenue-window-controls contents">
           <span className="px-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-muted">Window</span>
           <div role="group" aria-label="Reporting window" className="revenue-window-options inline-flex min-w-0 flex-wrap gap-0.5 rounded-md border border-line bg-elev p-0.5">
@@ -596,69 +684,7 @@ export default function RevenueDashboard({ cloneId, initialData = null }: { clon
           </button>
         </div>
           </div>
-          <div className="revenue-view-controls contents">
-          {!scoped && !isCreator && (
-            <div className="revenue-series-controls contents">
-              <span className="revenue-control-divider mx-0.5 h-5 w-px bg-line" />
-              <span className="px-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-muted">Series</span>
-              <div role="group" aria-label="Revenue series" className="inline-flex shrink-0 gap-0.5 rounded-md border border-line bg-elev p-0.5">
-                <button
-                  type="button"
-                  onClick={() => setChartMode("total")}
-                  aria-pressed={chartMode === "total"}
-                  className={`h-6 rounded-[3px] px-2 text-[10px] font-medium transition sm:text-[11px] ${chartMode === "total" ? "bg-[#172b3d] text-white" : "text-muted hover:bg-panel hover:text-ink"}`}
-                >
-                  Total
-                </button>
-                <button
-                  type="button"
-                  onClick={() => setChartMode("creator")}
-                  aria-pressed={chartMode === "creator"}
-                  className={`h-6 rounded-[3px] px-2 text-[10px] font-medium transition sm:text-[11px] ${chartMode === "creator" ? "bg-[#172b3d] text-white" : "text-muted hover:bg-panel hover:text-ink"}`}
-                >
-                  By creator
-                </button>
-              </div>
-            </div>
-          )}
-
-          <div className="revenue-chart-controls contents">
-          <span className="revenue-control-divider mx-0.5 h-5 w-px bg-line" />
-          <span className="px-1 text-[9px] font-semibold uppercase tracking-[0.12em] text-muted">Chart</span>
-          <div role="group" aria-label="Chart type" className="inline-flex shrink-0 gap-0.5 rounded-md border border-line bg-elev p-0.5">
-          <button
-            type="button"
-            onClick={() => setChartType("bar")}
-            aria-label="Bar chart"
-            aria-pressed={chartType === "bar"}
-            className={
-              "grid h-6 w-7 place-items-center rounded-[3px] transition " +
-              (chartType === "bar" ? "bg-[#172b3d] text-white" : "text-muted hover:bg-panel hover:text-ink")
-            }
-          >
-            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={2}>
-              <path d="M4 20V10M12 20V4M20 20v-7" strokeLinecap="round" />
-            </svg>
-          </button>
-          <button
-            type="button"
-            onClick={() => setChartType("line")}
-            aria-label="Line chart"
-            aria-pressed={chartType === "line"}
-            className={
-              "grid h-6 w-7 place-items-center rounded-[3px] transition " +
-              (chartType === "line" ? "bg-[#172b3d] text-white" : "text-muted hover:bg-panel hover:text-ink")
-            }
-          >
-            {/* The polyline's ink spans y 7..16, so its bounding box centre is not
-                the viewBox centre. Nudged down to sit level in the circle. */}
-            <svg viewBox="0 0 24 24" className="h-3.5 w-3.5 translate-y-[1px]" fill="none" stroke="currentColor" strokeWidth={2}>
-              <path d="M4 16l5-6 4 3 7-9" strokeLinecap="round" strokeLinejoin="round" />
-            </svg>
-          </button>
-        </div>
-          </div>
-          </div>
+          {!moxyOverview && chartControls}
         </div>
       </div>
 
@@ -765,6 +791,7 @@ export default function RevenueDashboard({ cloneId, initialData = null }: { clon
               )}
             </div>
           </CardHeader>
+          {moxyOverview && <div className="moxy-chart-controls">{chartControls}</div>}
           <CardContent>
             <div
               className="revenue-chart-canvas h-[190px] sm:h-[250px]"
@@ -905,13 +932,14 @@ export default function RevenueDashboard({ cloneId, initialData = null }: { clon
               )}
             </div>
           </CardContent>
+          {moxyOverview && <div className="moxy-chart-drivers"><RevenueDayDrivers cloneId={cloneId} /></div>}
         </Card>
 
         {/* Keep the full creator chooser out of the default page flow. On a
             phone this sits below the graph, and a large roster must never turn
             the earnings overview into hundreds of checked rows. */}
         {!scoped && !isCreator && (
-          <Card size="sm" className="gap-0 overflow-hidden rounded-lg border border-line bg-panel py-0 shadow-none">
+          <Card size="sm" className="revenue-creator-picker gap-0 overflow-hidden rounded-lg border border-line bg-panel py-0 shadow-none">
             <button
               type="button"
               aria-expanded={creatorListOpen}
@@ -1029,7 +1057,7 @@ export default function RevenueDashboard({ cloneId, initialData = null }: { clon
           did one unusually large payment move the entire day? It deliberately
           stays above the broad report so it is not buried behind a toggle. */}
       <div className="space-y-3">
-        <RevenueDayDrivers cloneId={cloneId} />
+        {!moxyOverview && <RevenueDayDrivers cloneId={cloneId} />}
         {data?.analytics && (
           <CreatorPerformanceRail
             creators={data.analytics.clones}
@@ -1053,7 +1081,7 @@ export default function RevenueDashboard({ cloneId, initialData = null }: { clon
             </div>
             <span className="shrink-0 text-[10px] text-muted">{customRange ? "Custom range" : PERIODS.find((item) => item.key === period)?.label}</span>
           </div>
-          <div className="grid grid-cols-2 gap-px bg-line sm:grid-cols-3">
+          <div className="revenue-operating-grid grid grid-cols-2 gap-px bg-line sm:grid-cols-3">
           {(() => {
             const s = focusStats ?? data.totals;
             // This ratio uses the same selected-period cohort on both sides:
@@ -1090,11 +1118,13 @@ export default function RevenueDashboard({ cloneId, initialData = null }: { clon
               // period. The windowed count is "New" beside it.
               {
                 label: "All-time users",
+                scope: moxyOverview ? "Lifetime fan profiles" : undefined,
                 value: fmtNum(s.totalFans),
                 hint: `All fan profiles for ${creatorScope}, ever. This audience-size number does not change when you change the date filter.${profileScopeNote}`,
               },
               {
                 label: "New users",
+                scope: moxyOverview ? "Selected period" : undefined,
                 value: fmtNum(s.newFans),
                 hint: `Fan profiles first seen during ${periodScope}. Historical import rows are excluded.${profileScopeNote}`,
               },
@@ -1102,11 +1132,13 @@ export default function RevenueDashboard({ cloneId, initialData = null }: { clon
               // means “messaged sometime in that window”, not “active now”.
               {
                 label: "Users who messaged",
+                scope: moxyOverview ? "Selected period" : undefined,
                 value: fmtNum(s.activeUsers),
                 hint: `Fans who sent an inbound message during ${periodScope}.${profileScopeNote}`,
               },
               {
                 label: "Revenue / user who messaged",
+                scope: moxyOverview ? "Selected period" : undefined,
                 value: revenuePerMessagedUser === null ? "-" : money(revenuePerMessagedUser),
                 money: revenuePerMessagedUser !== null,
                 hint: s.activeUsers > 0
@@ -1130,6 +1162,7 @@ export default function RevenueDashboard({ cloneId, initialData = null }: { clon
               },
               {
                 label: "Messages",
+                scope: moxyOverview ? "Selected period" : undefined,
                 value: fmtNum(s.messages),
                 hint: `All recorded conversation messages during ${periodScope} for ${creatorScope}, including fan messages and creator replies.${profileScopeNote}`,
               },
@@ -1149,6 +1182,7 @@ export default function RevenueDashboard({ cloneId, initialData = null }: { clon
               },
               {
                 label: "Avg paid order",
+                scope: moxyOverview ? "Positive paid orders" : undefined,
                 value: avgOrder === null ? "-" : money(avgOrder),
                 money: avgOrder !== null,
                 hint: s.sales > 0
@@ -1168,6 +1202,7 @@ export default function RevenueDashboard({ cloneId, initialData = null }: { clon
               // "photos are our product" and "we are not recording what we sell".
               {
                 label: "Top revenue type",
+                scope: moxyOverview ? "Selected period" : undefined,
                 value: topKind ? `${topKind.label} ${pct(topKind.share)}` : "-",
                 hint: `The payment type contributing the largest share of recorded Star revenue, after refunds and adjustments, during ${periodScope}.`,
               },
@@ -1182,7 +1217,7 @@ export default function RevenueDashboard({ cloneId, initialData = null }: { clon
                       <span className="min-w-0 break-words leading-tight">{t.label}</span>
                       {t.hint && <Info text={t.hint} />}
                     </div>
-                    {t.scope && <div className="mt-0.5 break-words text-[9px] font-medium leading-tight text-muted/85">{t.scope}</div>}
+                    {t.scope && <div className="revenue-operating-scope mt-0.5 break-words text-[9px] font-medium leading-tight text-muted/85">{t.scope}</div>}
                     <div className={"mt-1 break-words font-mono text-base font-semibold leading-tight tabular-nums text-ink"}>{t.value}</div>
                   </div>
                 ))}
@@ -1198,7 +1233,7 @@ export default function RevenueDashboard({ cloneId, initialData = null }: { clon
           fetched analytics payload, period and creator scope. */}
       {data?.analyticsError && <p role="status" className="mt-3 rounded-lg border border-line bg-panel p-4 text-sm text-muted">Performance analysis is temporarily unavailable. Earnings above are available. Use Refresh to retry.</p>}
       {data?.analytics && (
-        <section className="revenue-detail-section mt-3 overflow-hidden rounded-lg border border-line bg-panel">
+        <section className="revenue-analysis-section revenue-detail-section mt-3 overflow-hidden rounded-lg border border-line bg-panel">
           <div className="flex flex-col justify-between gap-2 border-b border-line px-3 pt-2.5 sm:flex-row sm:items-end sm:px-4">
             <div className="pb-2">
               <h3 className="text-xs font-semibold uppercase tracking-[0.1em] text-ink">Performance analysis</h3>
@@ -1422,7 +1457,7 @@ export default function RevenueDashboard({ cloneId, initialData = null }: { clon
                     </div>
                   ))}
                 </div>
-                <div className="hidden max-h-[520px] overflow-y-auto sm:block">
+                <div className="revenue-ledger-table hidden max-h-[520px] overflow-y-auto sm:block">
                 <Table className="text-xs">
                   <TableHeader className="sticky top-0 z-10 bg-elev shadow-[0_1px_0_var(--color-line)]">
                     <TableRow>
@@ -1547,7 +1582,7 @@ function CreatorPerformanceRail({
               <li key={creator.id} className="grid grid-cols-[22px_minmax(0,1fr)_auto_42px] items-center gap-2 px-3 py-2 text-[11px]">
                 <span className="font-mono tabular-nums text-muted">{index + 1}</span>
                 <span className="min-w-0">
-                  <span className="creator-name block truncate font-medium text-ink">{creator.name}</span>
+                  <span className="revenue-ranked-name creator-name block truncate font-medium text-ink">{creator.name}</span>
                   <span className="block text-[9px] tabular-nums text-muted">
                     {totalStars > 0 ? pct(creator.revenueStars / totalStars) : "-"} share
                   </span>
@@ -2433,7 +2468,7 @@ function BuyerConversionPanel({
         </p>
       </div>
 
-          <div className="mt-3 grid grid-cols-2 gap-px overflow-hidden rounded-md border border-line bg-line lg:grid-cols-3">
+          <div className="revenue-customer-metrics mt-3 grid grid-cols-2 gap-px overflow-hidden rounded-md border border-line bg-line lg:grid-cols-3">
             {metrics.map((metric) => (
               <div key={metric.label} className="min-w-0 bg-panel px-3 py-2.5 last:col-span-2 lg:last:col-span-1">
                 <div className="flex min-w-0 items-start gap-0.5 text-[9px] font-semibold uppercase tracking-[0.08em] text-muted">
@@ -2699,4 +2734,5 @@ function AiCostDrillIn({
     </Card>
   );
 }
+
 

@@ -33,7 +33,7 @@ export default function TopBar({
   /** Verified creator identity. Supplying it locks the shared clone chip. */
   creatorName?: string;
 }) {
-  const {isAgency,isCreator}=useDashboardAccess();
+  const {isAgency,isCreator,agencyName}=useDashboardAccess();
   const { currency, rate, usdPerStar } = useCurrency();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -43,6 +43,21 @@ export default function TopBar({
     : pathname?.startsWith("/clones/") && searchParams.get("tab") === "ppvs" ? "PPVs" : pageMeta.pageLabel;
   const scopeLabel = isCreator ? creatorName || clones.find((clone) => clone.id === activeCloneId)?.name || "Creator" : pageMeta.scopeLabel;
   const scopeIsCreator = isCreator || pageMeta.scopeIsCreator;
+  if (isAgency && agencyName?.trim().toLowerCase() === "moxy" && pathname === "/revenue") {
+    return <div className="dashboard-topbar moxy-overview-topbar">
+      <div className="moxy-overview-breadcrumb"><span>Moxy</span> / Earnings</div>
+      <div className="moxy-overview-account-controls">
+        <div className="moxy-overview-creator"><CloneSwitcher clones={clones} activeCloneId={activeCloneId} /></div>
+        <div className="moxy-overview-lifetime">
+          <span>All-time revenue</span>
+          <strong className="tabular-nums">{fmtMoney(starsToMoneyRate(allTimeStars, currency, rate, usdPerStar), currency)}</strong>
+        </div>
+        <div className="moxy-overview-currency"><CurrencyToggle compact /></div>
+        <div className="moxy-overview-blur"><BlurToggle /></div>
+        <form action="/agency/logout" method="post" className="moxy-overview-signout"><button type="submit">Sign out</button></form>
+      </div>
+    </div>;
+  }
   return (
     // 3-col grid so the controls sit dead-center of the bar regardless of
     // how wide the breadcrumb text is; right column is an empty balancer.
@@ -111,3 +126,4 @@ export default function TopBar({
     </div>
   );
 }
+
