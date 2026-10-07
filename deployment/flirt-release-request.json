@@ -1,5 +1,5 @@
 {
-  "reason": "Hide payment values and individual buyer activity still exposed in the FLIRT creator Logs page. Retain aggregate activity counts, the requested PPV-page removal and 70% Earnings display.",
-  "source_commit": "22f7dbbf3afc0dee30eacc2e121c70f0fbb54a1e",
-  "requested_at": "2026-10-07T01:26:37.048Z"
+  "reason": "Align FLIRT live acceptance with requested PPV removal: verify redirect to Earnings and absence of PPV navigation. Preserve 70% Earnings, removal of individual purchase history and aggregate-only FLIRT creator Logs.",
+  "source_commit": "05889c3cf7ec819905526572f4f4ee45d292e031",
+  "requested_at": "2026-10-07T01:33:39.683Z"
 }

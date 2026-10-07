@@ -322,8 +322,15 @@ async function run(config, env = process.env) {
     const response = await app(resource, fixture); assert(response.status === 200, `Creator page failed: ${resource}`); return response.text();
   }
   async function savedContentNavigation(fixture) {
-    for (const route of ['/creator', '/creator/ppvs', '/creator/edit']) {
+    const routes = config.brand === 'flirt' ? ['/creator', '/creator/edit'] : ['/creator', '/creator/ppvs', '/creator/edit'];
+    if (config.brand === 'flirt') {
+      const response = await app('/creator/ppvs', fixture);
+      assert(response.status === 307 && location(response).pathname === '/creator', 'Removed FLIRT PPV page must redirect to Earnings');
+      await response.body?.cancel();
+    }
+    for (const route of routes) {
       const html = await page200(route, fixture);
+      if (config.brand === 'flirt') assert(!html.includes('href="/creator/ppvs"'), 'Removed FLIRT PPV navigation is still visible');
       assert(html.includes('data-creator-content-access') && html.includes('href="/creator/onboarding?step=content"'), 'Saved-content navigation missing on ' + route);
       assert(html.includes('data-creator-onboarding-access'), 'Onboarding details navigation missing on ' + route);
       assert(!html.includes('Your onboarding is complete.'), 'Optional onboarding wrongly marked complete');
@@ -647,7 +654,9 @@ async function run(config, env = process.env) {
     await page200('/creator/onboarding?step=content', a); await loginAgain(a);
     assert((await ownRows('creator_applications', a, 'status'))[0].status === 'submitted', 'Fresh login lost submitted state');
     await savedContentNavigation(a);
-    passed('Saved-content and onboarding navigation is available on Earnings, Pay Per View and Edit before AI connection, including after submission and fresh login');
+    passed(config.brand === 'flirt'
+      ? 'Removed PPV page redirects to Earnings; saved-content and onboarding navigation remains available on Earnings and Edit'
+      : 'Saved-content and onboarding navigation is available on Earnings, Pay Per View and Edit before AI connection, including after submission and fresh login');
     await draftState(b); passed('Explicit optional submission persists without fabricated consent; second creator remains unfinished; submitted account returns and signs in freshly');
     if (source) {
       const additional = await upload(a, source, 'content_sfw_video', 'additional-after-submit.mp4');
