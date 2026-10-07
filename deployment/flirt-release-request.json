@@ -1,5 +1,5 @@
 {
-  "reason": "Remove Pay Per View from the FLIRT client dashboard navigation and redirect its page to Earnings. Preserve the verified 70% creator earnings display and hide all individual purchase history.",
-  "source_commit": "0c29daa00da67af47ae0f9f862fcc1a6a2a75825",
-  "requested_at": "2026-10-07T01:21:49.428Z"
+  "reason": "Hide payment values and individual buyer activity still exposed in the FLIRT creator Logs page. Retain aggregate activity counts, the requested PPV-page removal and 70% Earnings display.",
+  "source_commit": "22f7dbbf3afc0dee30eacc2e121c70f0fbb54a1e",
+  "requested_at": "2026-10-07T01:26:37.048Z"
 }
