@@ -89,6 +89,14 @@ async function main() {
       assert.equal(save.status, 200, `Autosave after ${status}`);
       assert.equal(application.status, status);
       assert.equal(application.answers.full_name, "Returned creator");
+      const merged = await draft(new NextRequest(`${origin}/creator-auth/onboarding/draft`, { method: "POST", headers: { origin, cookie: `${CREATOR_SESSION_COOKIE}=${token}`, "content-type": "application/json" }, body: JSON.stringify({ section: "quick-family", answers: { tattoos_piercings: "Returned appearance" }, revision: application.updated_at }) }));
+      assert.equal(merged.status, 200, `Merged profile autosave after ${status}`);
+      assert.equal(application.answers.tattoos_piercings, "Returned appearance");
+      assert.equal(application.answers.full_name, "Returned creator", "Other pages remain saved");
+      for (const [section, answers] of [["quick-style", { texting_style: "Removed style" }], ["goals-replies", { reply_goodnight: "Removed reply" }], ["collaboration-boundaries", { monetisation: "Removed pricing" }]] as const) {
+        const removed = await draft(new NextRequest(`${origin}/creator-auth/onboarding/draft`, { method: "POST", headers: { origin, cookie: `${CREATOR_SESSION_COOKIE}=${token}`, "content-type": "application/json" }, body: JSON.stringify({ section, answers, revision: application.updated_at }) }));
+        assert.equal(removed.status, 400, "Removed fields cannot return through old section names");
+      }
     }
     assert.equal(files.length, 4);
     assert.ok(files.every(file => file.storage_transfer_status === "verified"));
@@ -108,3 +116,4 @@ async function main() {
   } finally { globalThis.fetch = oldFetch; }
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });
+

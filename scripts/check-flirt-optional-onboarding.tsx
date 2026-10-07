@@ -5,6 +5,7 @@ import { NextRequest } from "next/server";
 import { configureFlirtOfflineEnv } from "./flirt-offline-env";
 import { creatorOnboardingEditable, creatorVoiceOnboardingEnabled, flirtOnboardingOptional } from "../lib/flirt-onboarding";
 import { CREATOR_QUESTIONNAIRE_PAGES, questionnairePageQuestions } from "../lib/creator-questionnaire-draft";
+import { COMPACT_QUESTIONNAIRE_PAGES } from "../lib/creator-questionnaire-compact";
 import { CREATOR_SESSION_COOKIE, signCreatorSession } from "../lib/creator-session";
 
 async function main() {
@@ -33,6 +34,12 @@ async function main() {
     assert.match(html, /Every answer is optional/);
   }
   const strictHtml = renderToStaticMarkup(<Wizard page={CREATOR_QUESTIONNAIRE_PAGES[0]} initialAnswers={{}} initialRevision="" />);
+  for (const page of COMPACT_QUESTIONNAIRE_PAGES) {
+    const html = renderToStaticMarkup(<Wizard page={page} initialAnswers={{}} initialRevision="" optional />);
+    assert.doesNotMatch(html, /\srequired(?:=|\s|>)/, `${page.slug} must remain optional`);
+    assert.match(html, /data-onboarding-optional="true"/);
+    assert.match(html, /All answers are optional/);
+  }
   assert.match(strictHtml, /\srequired(?:=|\s|>)/, "Default questionnaire validation must remain unchanged");
 
   configureFlirtOfflineEnv();
@@ -167,4 +174,5 @@ async function main() {
   }
 }
 main().catch((error) => { console.error(error); process.exitCode = 1; });
+
 

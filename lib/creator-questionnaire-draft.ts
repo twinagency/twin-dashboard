@@ -47,7 +47,7 @@ export const CREATOR_QUESTIONNAIRE_PAGES: CreatorQuestionnairePage[] = [
 
 export function creatorQuestionnairePage(slug: string | null | undefined, compact = false): CreatorQuestionnairePage {
   const compactSlug = compact && slug ? COMPACT_QUESTIONNAIRE_ALIASES[slug] || slug : slug;
-  const shortPage = COMPACT_QUESTIONNAIRE_PAGES.find((page) => page.slug === compactSlug);
+  const shortPage = compact ? COMPACT_QUESTIONNAIRE_PAGES.find((page) => page.slug === compactSlug) : undefined;
   if (shortPage) return shortPage;
   if (compact) return COMPACT_QUESTIONNAIRE_PAGES[0];
   return CREATOR_QUESTIONNAIRE_PAGES.find((page) => page.slug === slug) || CREATOR_QUESTIONNAIRE_PAGES[0];
@@ -107,3 +107,4 @@ export function questionnaireAnswersFromForm(form: FormData): Record<string, str
   }
   return answers;
 }
+
