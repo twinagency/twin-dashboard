@@ -2,6 +2,7 @@ import { cloneBotToken } from "@/lib/clone-credentials";
 import { dashboardReader } from "@/lib/dashboard-reader";
 import { NextRequest, NextResponse } from "next/server";
 import { type Period } from "@/lib/dashboard-data";
+import { applyCreatorShare, creatorShare } from "@/lib/creator-share";
 import { getRevenueRollup } from "@/lib/revenue-cache";
 import { getStarBalance, type StarBalance } from "@/lib/star-balance";
 import { reportDayStartMs, shiftReportDay } from "@/lib/revenue-why-changed";
@@ -44,7 +45,7 @@ async function read(req: NextRequest) {
     if (clone === DEMO_CLONE_ID) return NextResponse.json({ error: "Demo data is unavailable for this account" }, { status: 403 });
     const [rollup, balance] = await Promise.all([getRevenueRollup(period, clone, range, { awaitFresh: freshness === "1" || freshness === "force", force: freshness === "force" }), getScopedBalance(clone)]);
     const { dashboard, analytics, cachedAt, ageSeconds, stale } = rollup;
-    return NextResponse.json({ ...dashboard, analytics, balance, cachedAt, ageSeconds, stale }, { headers: { "Cache-Control": "private, no-store" } });
+    return NextResponse.json(applyCreatorShare({ ...dashboard, analytics, balance, cachedAt, ageSeconds, stale }, creatorShare(access)), { headers: { "Cache-Control": "private, no-store" } });
   } catch (e) { return NextResponse.json({ error: e instanceof Error ? e.message : "failed" }, { status: 500 }); }
 }
 export const GET = dashboardReader(read);
