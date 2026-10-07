@@ -1,5 +1,5 @@
 {
-  "reason": "Align FLIRT live acceptance with requested PPV removal: verify redirect to Earnings and absence of PPV navigation. Preserve 70% Earnings, removal of individual purchase history and aggregate-only FLIRT creator Logs.",
-  "source_commit": "05889c3cf7ec819905526572f4f4ee45d292e031",
-  "requested_at": "2026-10-07T01:33:39.683Z"
+  "reason": "Publish the requested FLIRT owner sidebar: Flirt Creator Management, Earnings, Creators, Live Telegram, Pay Per Views, Post Stories, Accounts, Invite Creator, Edit, Flows, Logs, Sequences, Info. Remove CRM and the More dropdown for FLIRT operators; keep every tool directly visible.",
+  "source_commit": "9fcfc4e7075eee8e59f28c9518cc9643984e3973",
+  "requested_at": "2026-10-07T01:58:38.974Z"
 }
