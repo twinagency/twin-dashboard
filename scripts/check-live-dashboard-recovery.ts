@@ -4,6 +4,7 @@ import sharp from "sharp";
 import { agencyIdentityById } from "../lib/agency-identity";
 import { withDashboardAccess } from "../lib/dashboard-access";
 import { JESS_KATE_PORTAL } from "../lib/partner-portals";
+import { MOXY_MANAGEMENT_AGENCY_ID } from "../lib/agency-management-policy";
 import { supabaseAdmin } from "../lib/supabase";
 import { GET as dashboard } from "../app/api/dashboard/route";
 import { GET as mediaSign } from "../app/api/media-sign/route";
@@ -14,6 +15,36 @@ import RevenueDashboard from "../components/RevenueDashboard";
 import DashboardAccessProvider from "../components/DashboardAccessProvider";
 
 async function main() {
+
+  const moxy = await agencyIdentityById(MOXY_MANAGEMENT_AGENCY_ID);
+  assert.ok(moxy && moxy.cloneIds.length, "Moxy creator assignments unavailable");
+  await withDashboardAccess(moxy, async () => {
+    for (const cloneId of moxy.cloneIds) {
+      const sequences = await supabaseAdmin.from("video_sequences")
+        .select("id,title,created_at,source_video_id,video_sequence_revisions(id,revision_no,state)")
+        .eq("clone_id", cloneId).order("created_at", { ascending: false });
+      assert.ok(!sequences.error, `Moxy Sequences list failed: ${sequences.error?.code ?? ""}`);
+      const videos = await supabaseAdmin.from("videos").select("id,caption,storage_path")
+        .eq("clone_id", cloneId).order("created_at", { ascending: false }).limit(200);
+      assert.ok(!videos.error, `Moxy Sequences source list failed: ${videos.error?.code ?? ""}`);
+      for (const sequence of sequences.data ?? []) {
+        for (const item of sequence.video_sequence_revisions ?? []) {
+          const revision = await supabaseAdmin.from("video_sequence_revisions")
+            .select("id,revision_no,state,approved_by,approved_at,published_at,video_sequences!inner(id,clone_id,title,source_video_id)")
+            .eq("id", item.id).maybeSingle();
+          assert.ok(!revision.error && revision.data, "Moxy sequence revision unavailable");
+          const parent = revision.data.video_sequences as unknown as { clone_id: string };
+          assert.equal(parent.clone_id, cloneId, "Sequence revision escaped creator scope");
+          const parts = await supabaseAdmin.from("video_sequence_parts")
+            .select("position,is_preview,caption,price_stars,source_start_seconds,source_end_seconds,requires_position")
+            .eq("revision_id", item.id).order("position");
+          assert.ok(!parts.error, "Moxy sequence parts unavailable");
+        }
+      }
+    }
+    console.log(`Live Moxy Sequences list, source recordings and available revisions passed for ${moxy.cloneIds.length} assigned creators`);
+  });
+
   // Read-only production check. Resolve the live roster and exercise the same
   // scoped routes used by the agency. No session, credential, or URL is logged.
   const identity = await agencyIdentityById(JESS_KATE_PORTAL.id);
