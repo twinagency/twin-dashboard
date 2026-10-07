@@ -1,5 +1,5 @@
 {
-  "reason": "Publish the requested FLIRT owner sidebar: Flirt Creator Management, Earnings, Creators, Live Telegram, Pay Per Views, Post Stories, Accounts, Invite Creator, Edit, Flows, Logs, Sequences, Info. Remove CRM and the More dropdown for FLIRT operators; keep every tool directly visible.",
-  "source_commit": "9fcfc4e7075eee8e59f28c9518cc9643984e3973",
-  "requested_at": "2026-10-07T01:58:38.974Z"
+  "reason": "Publish read-only earnings dashboards for FLIRT creators Briana Redd and trashy, each scoped to her own live Twin clone, alongside Mrs Callace.",
+  "source_commit": "d0517345346b1422f41e54d53c3a28d3da790948",
+  "requested_at": "2026-10-07T19:11:44.000Z"
 }
