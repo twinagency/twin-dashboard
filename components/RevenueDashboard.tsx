@@ -205,7 +205,7 @@ function snapshotAgeLabel(ageSeconds: number) {
   return `Updated ${minutes}m ago`;
 }
 
-export default function RevenueDashboard({ cloneId }: { cloneId?: string | null } = {}) {
+export default function RevenueDashboard({ cloneId, dayDetailAvailable = true }: { cloneId?: string | null; dayDetailAvailable?: boolean } = {}) {
   const { isCreator, isAgency } = useDashboardAccess();
   const scoped = Boolean(cloneId);
   const [period, setPeriod] = useState<Period>("1M");
@@ -997,7 +997,7 @@ export default function RevenueDashboard({ cloneId }: { cloneId?: string | null 
           did one unusually large payment move the entire day? It deliberately
           stays above the broad report so it is not buried behind a toggle. */}
       <div className="space-y-3">
-        <RevenueDayDrivers cloneId={cloneId} />
+        {dayDetailAvailable && <RevenueDayDrivers cloneId={cloneId} />}
         {data && (
           <CreatorPerformanceRail
             creators={data.analytics.clones}

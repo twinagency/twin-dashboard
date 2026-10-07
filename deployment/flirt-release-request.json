@@ -1,5 +1,5 @@
 {
-  "reason": "Correct the view-only Mrs Callace creator dashboard: remove misleading upload, price-edit and onboarding controls and replace demo wording; retain existing one-creator permissions and revenue shares.",
-  "source_commit": "7be3fd11da03e7b9020eb165333b353b185eaaff",
-  "requested_at": "2026-10-07T00:55:18.620Z"
+  "reason": "Complete creator dashboard QA: retain view-only interface cleanup and hide the daily-detail control where the existing creator-share policy denies that data.",
+  "source_commit": "38e29ec91e92b094bd3146c08e11a99cc388dbf4",
+  "requested_at": "2026-10-07T01:01:45.180Z"
 }
