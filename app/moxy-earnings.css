@@ -387,6 +387,7 @@ html[data-agency="moxy"]:has(.revenue-dashboard--moxy) .dashboard-main { padding
   html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-kpi-primary .revenue-kpi-value { font-size: 34px; }
   html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-kpi-label { font-size: 13px; }
   html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-chart-heading { padding: 16px 16px 12px; }
+  html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-chart-heading > :first-child { flex: 0 1 auto; }
   html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-chart-context { flex-direction: row; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
   html[data-agency="moxy"] .revenue-dashboard--moxy .moxy-chart-controls { padding: 0 16px 14px; }
   html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-view-controls { justify-content: space-between; gap: 8px; }
