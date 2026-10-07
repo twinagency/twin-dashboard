@@ -1,5 +1,5 @@
 {
-  "reason": "Complete creator transaction-history removal with a type-safe audience check. Retain aggregate earnings, view-only cleanup and existing account permissions.",
-  "source_commit": "99a7f617c57788f986c3e99608400eaec7fcce2f",
-  "requested_at": "2026-10-07T01:10:49.486Z"
+  "reason": "Finish client dashboard QA: remove individual transactions and buyer identities, retain aggregate earnings, and correct mixed photo/video bundle previews and video playback controls.",
+  "source_commit": "713fc8b3a7dcfa467d557e4fe041c9601a5ada5a",
+  "requested_at": "2026-10-07T01:12:20.886Z"
 }
