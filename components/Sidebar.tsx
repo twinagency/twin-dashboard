@@ -144,7 +144,6 @@ const MOXY_LINKS: NavLink[] = [
   { kind: "route", label: "Creators", href: "/clones", icon: "Clones", color: "blue" },
   { kind: "route", label: "Accounts", href: "/agency/creators", icon: "Users", color: "gray" },
   { kind: "route", label: "Invite Creator", href: "/agency/creator-invites", icon: "Users", color: "gray" },
-  { kind: "route", label: "Live Telegram Chat", href: "/users", icon: "FansCombo", color: "purple" },
   { kind: "tab", label: "Content", tab: "ppvs", icon: "Media", color: "red" },
   { kind: "route", label: "Telegram Stories", href: "/business", icon: "Bot", color: "purple", gateOnClone: true },
   { kind: "route", label: "Flows", href: "/flows", icon: "Flows", color: "pink", gateOnClone: true },

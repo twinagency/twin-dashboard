@@ -75,7 +75,8 @@ for (const mobile of [false, true]) {
   assert.doesNotMatch(moxy, /Moxy · Owner/);
   assert.doesNotMatch(moxy, /Not available|aria-disabled|AI Intelligence Core|>CRM</, "Hide unavailable sections, including the empty CRM group and core");
   assert.doesNotMatch(moxy, /aria-expanded/, "Keep available secondary links expanded");
-  for (const href of ["/revenue", "/sales-health", "/clones", "/users", "/business", "/flows", "/sequences", "/info", "/logs", "/agency/creators", "/agency/creator-invites", `/clones/${clone}?tab=ppvs`, `/clones/${clone}?tab=identity`]) {
+  assert.doesNotMatch(moxy, /Live Telegram Chat|href="\/users"/, "Live Telegram Chat is absent from the Moxy reader sidebar");
+  for (const href of ["/revenue", "/sales-health", "/clones", "/business", "/flows", "/sequences", "/info", "/logs", "/agency/creators", "/agency/creator-invites", `/clones/${clone}?tab=ppvs`, `/clones/${clone}?tab=identity`]) {
     assert.ok(moxy.includes(`href="${href}"`), `Keep accessible Moxy link ${href}`);
   }
   for (const label of ["Storage", "Catalogue funnel", "Mini App rollout", "MTProto Campaign", "Tracker", "API", "Settings", "Inbox", "Fan CRM", "Campaigns", "Team", "Platforms"]) {
@@ -88,7 +89,8 @@ for (const mobile of [false, true]) {
   assert.match(owner, /Moxy · Owner/, "The verified management grant is visible on desktop and mobile");
   assert.doesNotMatch(owner, /Moxy · Read only/);
   assert.doesNotMatch(owner, />CRM<|href="\/crm\//, "Moxy owners cannot see CRM on desktop or mobile");
-  for (const href of ["/revenue", "/clones", "/users", `/clones/${clone}?tab=ppvs`]) {
+  assert.doesNotMatch(owner, /Live Telegram Chat|href="\/users"/, "Live Telegram Chat is absent from the Moxy owner sidebar");
+  for (const href of ["/revenue", "/clones", `/clones/${clone}?tab=ppvs`]) {
     assert.ok(owner.includes(`href="${href}"`), `Keep owner operating link ${href}`);
   }
   for (const href of ["/agency-admin", "/api-access", "/clones/new", "/settings"]) {
