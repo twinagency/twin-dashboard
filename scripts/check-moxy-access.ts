@@ -115,7 +115,9 @@ async function main() {
   assert.match(sidebar,/primaryLinks\.filter\(availableLink\)/);
   assert.match(sidebar,/AI Intelligence Core/);
   assert.match(sidebar,/<IntelligenceCoreIcon size=\{64\} \/>/);
-  assert.ok(sidebar.indexOf("<IntelligenceCoreIcon size={64}") < sidebar.indexOf("<nav "),"Core sits above the navigation");
+  const brandedNavIndex=sidebar.indexOf('<nav aria-label={isCreator ?');
+  assert.ok(brandedNavIndex>=0,"Shared branded navigation is present");
+  assert.ok(sidebar.indexOf("<IntelligenceCoreIcon size={64}") < brandedNavIndex,"Core sits above the shared branded navigation");
   assert.doesNotMatch(readFileSync("app/moxy/page.tsx","utf8"),/read.only/i);
   const core=readFileSync("components/IntelligenceCoreIcon.tsx","utf8");
   assert.match(core,/prefers-reduced-motion/);assert.match(core,/cancelAnimationFrame/);
