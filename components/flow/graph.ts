@@ -11,7 +11,7 @@ import type { Node, Edge } from "@xyflow/react";
 
 // The subset of a clone's config the graph cares about (snake_case from Supabase).
 export type CloneCfg = {
-  ai_mode: "classic" | "smart";
+  ai_mode: "classic" | "smart" | "beta";
   smart_split: boolean;
   charge_messages: boolean;
   photos_enabled: boolean;
@@ -236,6 +236,26 @@ function modifiers(c: CloneCfg): string[] {
   return m;
 }
 
-export function buildGraph(mode: "classic" | "smart", c: CloneCfg): BuiltGraph {
-  return mode === "smart" ? buildSmart(c) : buildClassic(c);
+export function buildGraph(mode: "classic" | "smart" | "beta", c: CloneCfg): BuiltGraph {
+  return mode === "smart" ? buildSmart(c) : mode === "beta" ? buildBeta(c) : buildClassic(c);
+}
+
+// ── Beta ─────────────────────────────────────────────────────────────────────
+// twin-bot src/flows/beta.ts: one pinned AI call writes her text and picks the
+// item by tag; code sends it. No sorter, no decider, no tools.
+export function buildBeta(c: CloneCfg): BuiltGraph {
+  const nodes: Node<FlowData>[] = [];
+  const edges: Edge[] = [];
+  nodes.push(n("input", 0, 3, { label: "Fan message", emoji: "📩", kind: "input" }));
+  nodes.push(n("guard", 1, 3, { label: "Safety + help gates", sub: "same as Classic", emoji: "🛡️", kind: "process" }));
+  nodes.push(n("reply", 2, 3, { label: "One AI call", sub: "DeepSeek flash · DeepInfra pinned · Beta prompt", emoji: "🧪", kind: "lane" }));
+  nodes.push(n("charge", 3, 3, { label: c.charge_messages ? "Charge 1 credit" : "No charge", emoji: c.charge_messages ? "✅" : "🆓", kind: "meter" }));
+  edges.push(e("e-in-guard", "input", "guard"));
+  edges.push(e("e-guard-reply", "guard", "reply"));
+  edges.push(e("e-reply-charge", "reply", "charge"));
+  if (c.photos_enabled || c.videos_enabled) {
+    nodes.push(n("sale", 3, 5, { label: "Tagged item sent", sub: "locked at its Stars price, or a free item", emoji: "💸", kind: "sale" }));
+    edges.push(e("e-reply-sale", "reply", "sale", "[photo 1] tag"));
+  }
+  return { nodes, edges, hidden: ["Bundles", "Voice", "Tips", "VIP", "Vision"], active: modifiers(c) };
 }

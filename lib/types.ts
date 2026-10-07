@@ -36,7 +36,8 @@ export type Clone = {
   /** Migration 170. Operator-typed note of the Telegram account's phone number. Display only, nothing reads it. */
   account_phone?: string | null;
   status: "active" | "paused";
-  ai_mode: "classic" | "smart";
+  ai_mode: "classic" | "smart" | "beta";
+  beta_prompt?: string | null;
   smart_split: boolean;
   // Migration 138. This is the authoritative New System vs Control cohort
   // flag for the Classic conversion rollout. Optional so pre-migration rows

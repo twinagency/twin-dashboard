@@ -156,6 +156,24 @@ export async function saveCloneDefaults(fd: FormData): Promise<{ appliedFollower
 async function applyConfigToClones(cloneIds: string[], fields: Record<string, unknown>): Promise<void> {
   const update = filterCloneDefaultCascade(fields);
   if (!Object.keys(update).length || !cloneIds.length) return;
+  // A clone switched to the Beta engine stays on Beta: the fleet default only
+  // offers Classic/Smart, and pushing it must never silently pull her off.
+  if ("ai_mode" in update) {
+    const { ai_mode, ...rest } = update;
+    const { data: onBeta, error: betaError } = await supabaseAdmin.from("clones").select("id").in("id", cloneIds).eq("ai_mode", "beta");
+    if (betaError) throw new Error(betaError.message);
+    const betaIds = new Set((onBeta ?? []).map((r) => (r as { id: string }).id));
+    const others = cloneIds.filter((id) => !betaIds.has(id));
+    if (others.length) {
+      const { error } = await supabaseAdmin.from("clones").update({ ...rest, ai_mode }).in("id", others);
+      if (error) throw new Error(error.message);
+    }
+    if (betaIds.size && Object.keys(rest).length) {
+      const { error } = await supabaseAdmin.from("clones").update(rest).in("id", [...betaIds]);
+      if (error) throw new Error(error.message);
+    }
+    return;
+  }
   const { error } = await supabaseAdmin.from("clones").update(update).in("id", cloneIds);
   if (error) throw new Error(error.message);
 }

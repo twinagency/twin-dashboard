@@ -308,7 +308,7 @@ function ConfigRuntimeOverview({
     cfg.bundlesEnabled ? "Bundles" : null,
     cfg.voice ? "Voice" : null,
   ].filter(Boolean).join(" · ");
-  const orchestration = cfg.aiMode === "classic" ? "Classic orchestration" : "Smart orchestration";
+  const orchestration = cfg.aiMode === "classic" ? "Classic orchestration" : cfg.aiMode === "beta" ? "Beta engine (one call)" : "Smart orchestration";
   const modelPath = cfg.aiMode === "smart"
     ? (cfg.smartSplit ? "Writer + routing model" : "Single-model execution")
     : "Task-specific model roles";
@@ -665,7 +665,7 @@ export default function ConfigSections({
           <FieldLabel
             label={mode === "edit" ? "Decision engine" : "🧠 AI mode"}
             hint={
-              "How she decides what to do with each message. Classic follows fixed rules; Smart lets one AI figure it out. Money rules stay the same either way." +
+              "How she decides what to do with each message. Classic follows fixed rules; Smart lets one AI figure it out; Beta is the new one-call engine that runs only on her Beta prompt below. Money rules stay the same either way." +
               (cfg.aiMode === "smart"
                 ? " The model split (one model vs. writer + decider) lives under the 🛠 Advanced tab."
                 : "")
@@ -674,7 +674,7 @@ export default function ConfigSections({
         <input type="hidden" name="ai_mode" value={cfg.aiMode} />
         <input type="hidden" name="smart_split" value={cfg.smartSplit ? "true" : "false"} />
         <div className="inline-flex rounded-lg border border-line p-0.5">
-          {(["classic", "smart"] as const).map((m) => (
+          {(["classic", "smart", "beta"] as const).map((m) => (
             <button
               key={m}
               type="button"
@@ -685,9 +685,26 @@ export default function ConfigSections({
                 (cfg.aiMode === m ? "bg-accent/12 text-accent" : "text-muted hover:text-ink")
               }
             >
-              {mode === "edit" ? (m === "classic" ? "Classic / rule-directed" : "Smart / AI-directed") : (m === "classic" ? "🧭 classic" : "🧠 smart")}
+              {mode === "edit" ? (m === "classic" ? "Classic / rule-directed" : m === "smart" ? "Smart / AI-directed" : "Beta / one call") : (m === "classic" ? "🧭 classic" : m === "smart" ? "🧠 smart" : "🧪 beta")}
             </button>
           ))}
+        </div>
+        {/* Always rendered (hidden unless Beta) so a save never wipes the prompt. */}
+        <div className={cfg.aiMode === "beta" ? "grid gap-1.5" : "hidden"}>
+          <FieldLabel
+            label="Beta prompt"
+            hint="Her whole system prompt on the Beta engine, written by hand from her own answers. Beta does nothing without it: a Beta clone with an empty prompt keeps running Classic. Photos and videos are added by code, so keep the PHOTOS AND VIDEOS and HARD LIMITS sections from the template."
+          />
+          <textarea
+            name="beta_prompt"
+            defaultValue={clone?.beta_prompt ?? ""}
+            rows={14}
+            className="w-full rounded-lg border border-line bg-panel px-3 py-2 font-mono text-xs text-ink"
+            placeholder="You are ... texting one-on-one on Telegram with a fan who has confirmed he is over 18 ..."
+          />
+          {cfg.aiMode === "beta" && !(clone?.beta_prompt ?? "").trim() && (
+            <p className="text-xs text-warn">No Beta prompt saved yet. She stays on Classic until one is saved.</p>
+          )}
         </div>
         {/* The two-model split toggle itself moved to Advanced (power-user
             routing decision, not something touched setting up a fresh clone).

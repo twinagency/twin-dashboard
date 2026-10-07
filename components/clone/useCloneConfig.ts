@@ -55,7 +55,7 @@ type ImperfectionLevel = "never" | "sometimes" | "often" | "always";
 // forms render the exact same settings. Uncontrolled fields (name, token, credits,
 // models, …) submit straight from the DOM and are seeded from `clone` where present.
 export type CloneConfigState = {
-  aiMode: "classic" | "smart";
+  aiMode: "classic" | "smart" | "beta";
   smartSplit: boolean;
 
   photosEnabled: boolean;

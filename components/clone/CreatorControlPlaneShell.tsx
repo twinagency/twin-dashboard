@@ -107,6 +107,7 @@ function initials(name: string) {
 
 function modeLabel(cfg: CloneConfigState) {
   if (cfg.aiMode === "classic") return "Classic";
+  if (cfg.aiMode === "beta") return "Beta";
   return cfg.smartSplit ? "Smart split" : "Smart single-model";
 }
 
@@ -287,7 +288,7 @@ export function ControlPlaneInspector({
       { label: "Delivery", value: enabledDelivery.length ? enabledDelivery.join(", ") : "All delivery types disabled", tone: enabledDelivery.length ? "neutral" : "warn" },
       { label: "Configuration", value: (clone.uses_default_config ?? true) ? "Fleet default" : "Custom configuration" },
     ];
-    path = ["Telegram", cfg.aiMode === "smart" ? "Smart router" : "Classic handler", cfg.smartSplit && cfg.aiMode === "smart" ? "Writer model" : "Response model", "Delivery"];
+    path = ["Telegram", cfg.aiMode === "smart" ? "Smart router" : cfg.aiMode === "beta" ? "Beta engine" : "Classic handler", cfg.smartSplit && cfg.aiMode === "smart" ? "Writer model" : "Response model", "Delivery"];
   } else if (tab === "money") {
     title = "Revenue path";
     rows = [

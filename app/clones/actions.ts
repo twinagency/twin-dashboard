@@ -289,7 +289,9 @@ function rowFromForm(fd: FormData) {
     name: str(fd, "name"),
     bot_token: str(fd, "bot_token"),
     status: str(fd, "status") ?? "paused",
-    ai_mode: str(fd, "ai_mode") === "smart" ? "smart" : "classic",
+    ai_mode: str(fd, "ai_mode") === "smart" ? "smart" : str(fd, "ai_mode") === "beta" ? "beta" : "classic",
+    // Beta engine prompt (twin-bot src/flows/beta.ts). Only written when the form carries the field.
+    ...(fd.has("beta_prompt") ? { beta_prompt: str(fd, "beta_prompt") } : {}),
     smart_split: fd.get("smart_split") !== "false",
 
     photos_enabled: fd.get("photos_enabled") === "true",
@@ -968,6 +970,7 @@ const ADVANCED_099_COLUMNS = [
 // longer written by this form at all, so they cannot appear in the row that
 // the missing-column retry path strips.
 const OPTIONAL_COLUMNS = [
+  "beta_prompt", // Beta engine (bot migration 20261008120000_beta_engine.sql)
   ...PERSONA_FACT_COLUMNS,
   ...RESPONSE_LENGTH_COLUMNS,
   ...IDENTITY_CANON_COLUMNS,

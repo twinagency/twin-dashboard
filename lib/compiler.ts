@@ -92,7 +92,7 @@ export async function assembleClonePrompts(
 // - availableActions() → src/flows/actions.ts
 
 type PreviewClone = {
-  ai_mode: "classic" | "smart";
+  ai_mode: "classic" | "smart" | "beta";
   smart_split: boolean;
   photos_enabled: boolean;
   videos_enabled: boolean;
@@ -119,7 +119,7 @@ type PreviewClone = {
 
 export type PromptBlock = { key: string; label: string; hint: string; content: string };
 export type PromptPreview = {
-  mode: "classic" | "smart";
+  mode: "classic" | "smart" | "beta";
   smartSplit: boolean;
   blocks: PromptBlock[];
 };
@@ -317,6 +317,10 @@ export async function assemblePromptPreview(
   const smartSplit = clone.smart_split;
   const empty = "(empty - add her answers and Save to generate)";
   const withNudge = (s: string) => (s ? s + nudge : empty);
+  if (mode === "beta") {
+    // The Beta engine sends ONLY this prompt (+ a code-built list of her unsent items).
+    return { mode, smartSplit, blocks: [{ key: "beta", label: "Beta prompt (the whole prompt)", hint: "Exactly what the Beta engine sends, plus a list of her unsent photos/videos added by code.", content: (clone as PreviewClone & { beta_prompt?: string | null }).beta_prompt?.trim() || "(empty - write her Beta prompt on the Config tab)" }] };
+  }
 
   const blocks: PromptBlock[] = [];
 
