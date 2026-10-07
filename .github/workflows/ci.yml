@@ -31,7 +31,8 @@ jobs:
         run: npm ci
 
       - name: Video preview encoder
-        run: command -v ffmpeg && command -v ffprobe || (sudo apt-get update && sudo apt-get install -y ffmpeg)
+        timeout-minutes: 7
+        run: bash scripts/install-ci-video-tools.sh
 
       - name: Type check
         run: npx tsc --noEmit
@@ -101,3 +102,4 @@ jobs:
           path: test-results/twin-public
           if-no-files-found: ignore
           retention-days: 3
+

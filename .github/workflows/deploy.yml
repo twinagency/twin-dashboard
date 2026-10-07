@@ -61,7 +61,13 @@ jobs:
         with: { node-version: 22, cache: npm }
       - run: npm ci
       - name: Video validation tools
-        run: command -v ffmpeg && command -v ffprobe || (sudo apt-get update && sudo apt-get install -y ffmpeg)
+        timeout-minutes: 7
+        run: |
+          if [ -f scripts/install-ci-video-tools.sh ]; then
+            bash scripts/install-ci-video-tools.sh
+          else
+            command -v ffmpeg && command -v ffprobe || (sudo timeout --kill-after=10s 150s apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 -o DPkg::Lock::Timeout=30 update && sudo timeout --kill-after=10s 210s apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 -o DPkg::Lock::Timeout=30 install -y --no-install-recommends ffmpeg)
+          fi
       - name: Creator upload, picker and access regressions
         run: npm run test:creator-upload
       - name: Normal signup runner safety and cleanup regressions
@@ -87,7 +93,13 @@ jobs:
         with: { node-version: 22, cache: npm }
       - run: npm ci
       - name: Video preview encoder
-        run: command -v ffmpeg && command -v ffprobe || (sudo apt-get update && sudo apt-get install -y ffmpeg)
+        timeout-minutes: 7
+        run: |
+          if [ -f scripts/install-ci-video-tools.sh ]; then
+            bash scripts/install-ci-video-tools.sh
+          else
+            command -v ffmpeg && command -v ffprobe || (sudo timeout --kill-after=10s 150s apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 -o DPkg::Lock::Timeout=30 update && sudo timeout --kill-after=10s 210s apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 -o DPkg::Lock::Timeout=30 install -y --no-install-recommends ffmpeg)
+          fi
       - name: Typecheck
         run: npx tsc --noEmit
       - name: Build
@@ -224,3 +236,4 @@ jobs:
         run: node scripts/check-ava-site.mjs --http-only
         env:
           AVA_CHECK_ORIGIN: https://dashboard.tgaiclone.xyz
+

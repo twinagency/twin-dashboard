@@ -69,8 +69,41 @@ for (const mobile of [false, true]) {
   assert.match(kate, /<canvas[^>]*width="128"[^>]*height="128"[^>]*style="width:64px;height:64px"/);
   if (mobile) assert.match(kate, /aria-label="Close navigation"/);
 }
+const moxyDestinations = [
+  ["Invite creator", "/agency/creator-invites"],
+  ["Earnings", "/revenue"],
+  ["Creators", "/clones"],
+  ["Creator onboarding", "/agency/creators"],
+  ["Content", `/clones/${clone}?tab=ppvs`],
+  ["Video sequences", "/sequences"],
+  ["Telegram Stories", "/business"],
+  ["Flows", "/flows"],
+  ["Creator settings", `/clones/${clone}?tab=identity`],
+  ["Connection details", "/info"],
+  ["Activity logs", "/logs"],
+];
+const renderedLinks = (html: string) => Array.from(html.matchAll(/<a\b([^>]*)>([\s\S]*?)<\/a>/g), ([, attributes, content]) => ({
+  label: content.replace(/<[^>]*>/g, "").trim(),
+  href: attributes.match(/\bhref="([^"]*)"/)?.[1],
+  attributes,
+}));
+function checkMoxyLayout(html: string) {
+  const links = renderedLinks(html).filter(link => link.label);
+  assert.deepEqual(links.map(({ label, href }) => [label, href]), moxyDestinations, "Keep all eleven Moxy destinations in the approved shared order");
+  assert.equal((html.match(/href="\/agency\/creator-invites"/g) || []).length, 1, "Invite creator appears once, as the prominent top action");
+  assert.match(links[0].attributes, /class="[^"]*\bmoxy-invite-button\b/);
+  assert.match(html, /<h2[^>]*>Workspace<\/h2>/, "Workspace is an always-visible heading");
+  assert.match(html, /<h2[^>]*>Creator tools<\/h2>/, "Creator tools is an always-visible heading");
+  assert.ok(html.indexOf("moxy-invite-button") < html.indexOf(">Workspace</h2>"), "The invite action sits above Workspace");
+  assert.ok(html.indexOf(">Workspace</h2>") < html.indexOf(">Creator onboarding<"));
+  assert.ok(html.indexOf(">Creator onboarding<") < html.indexOf(">Creator tools</h2>"));
+  assert.ok(html.indexOf(">Creator tools</h2>") < html.indexOf(">Content<"));
+  assert.doesNotMatch(html, /aria-expanded|<details\b/, "Moxy navigation has no dropdown groups");
+  assert.deepEqual(links.filter(link => /aria-current="page"/.test(link.attributes)).map(link => link.label), ["Earnings"], "Exactly the current page is marked active");
+}
 for (const mobile of [false, true]) {
   const moxy = render("Moxy", false, clone, mobile);
+  checkMoxyLayout(moxy);
   assert.match(moxy, /Moxy · Read only/, "Existing Moxy reader labels stay unchanged");
   assert.doesNotMatch(moxy, /Moxy · Owner/);
   assert.doesNotMatch(moxy, /Not available|aria-disabled|AI Intelligence Core|>CRM</, "Hide unavailable sections, including the empty CRM group and core");
@@ -87,6 +120,7 @@ for (const mobile of [false, true]) {
 }
 for (const mobile of [false, true]) {
   const owner = render("Moxy", true, clone, mobile);
+  checkMoxyLayout(owner);
   assert.match(owner, /Moxy · Owner/, "The verified management grant is visible on desktop and mobile");
   assert.doesNotMatch(owner, /Moxy · Read only/);
   assert.doesNotMatch(owner, />CRM<|href="\/crm\//, "Moxy owners cannot see CRM on desktop or mobile");
@@ -100,6 +134,32 @@ for (const mobile of [false, true]) {
   }
   if (mobile) assert.match(owner, /aria-label="Close navigation"/);
 }
+for (const mobile of [false, true]) {
+  for (const manage of [false, true]) {
+    const noClone = render("Moxy", manage, null, mobile);
+    const links = renderedLinks(noClone);
+    for (const label of ["Content", "Video sequences", "Telegram Stories", "Flows", "Creator settings"]) {
+      assert.ok(!links.some(link => link.label === label), `${label} still requires selecting a creator`);
+      const button = Array.from(noClone.matchAll(/<button\b([^>]*)>([\s\S]*?)<\/button>/g)).find(([, , content]) => content.replace(/<[^>]*>/g, "").trim() === label);
+      assert.ok(button, `${label} remains available as a creator-picker button`);
+      assert.match(button[1], /title="Pick a creator first"/);
+    }
+    for (const [label, href] of moxyDestinations.filter(([label]) => !["Content", "Video sequences", "Telegram Stories", "Flows", "Creator settings"].includes(label))) {
+      assert.ok(links.some(link => link.label === label && link.href === href), `Keep ${label} available without a selected creator`);
+    }
+    for (const [route, search, expectedLabel] of [
+      ["/sequences", "", "Video sequences"],
+      ["/agency/creator-invites", "", "Invite creator"],
+      [`/clones/${clone}`, "tab=ppvs", "Content"],
+      [`/clones/${clone}`, "tab=identity", "Creator settings"],
+    ]) {
+      pathname = route; query = new URLSearchParams(search);
+      const current = renderedLinks(render("Moxy", manage, clone, mobile)).filter(link => /aria-current="page"/.test(link.attributes));
+      assert.deepEqual(current.map(link => link.label), [expectedLabel], `Only ${expectedLabel} is active for ${route}?${search}`);
+    }
+  }
+}
+pathname = "/revenue"; query = new URLSearchParams();
 for (const [name, manage] of [["LYNQ", true], [undefined, false]] as const) {
   const html = render(name, manage);
   assert.match(html, /href="\/sales-health"/, "Sales Health remains in other dashboards");
@@ -137,4 +197,4 @@ assert.match(render(portals.JESS_KATE_PORTAL.name, true, null), /Pick a creator 
 pathname = `/clones/${clone}`; query = new URLSearchParams("tab=identity");
 assert.match(render(portals.JESS_KATE_PORTAL.name, true), /href="[^\"]+tab=identity"[^>]*bg-white\/12/);
 assert.match(readFileSync("components/MobileMenu.tsx", "utf8"), /<SidebarContent/);
-console.log("Sidebar: original LYNQ particle core retained, fake sphere and dark overrides removed, mobile/desktop and other portals preserved");
+console.log("Sidebar: Moxy grouped navigation, prominent invite, eleven destinations, creator gates and single active page verified for owners/readers on desktop/mobile; other portals preserved");
