@@ -1,5 +1,5 @@
 {
-  "reason": "Publish read-only earnings dashboards for FLIRT creators Briana Redd and trashy, each scoped to her own live Twin clone, alongside Mrs Callace.",
-  "source_commit": "d0517345346b1422f41e54d53c3a28d3da790948",
-  "requested_at": "2026-10-07T19:11:44.000Z"
+  "reason": "Apply the approved onboarding questionnaire: 38 creator profile questions with full name, date of birth, email and phone separate. Remove the rejected style, scripted replies, monetisation, health and other fields; preserve saved answers and Flirt permissions.",
+  "source_commit": "a0b5d98eb420f5b8f1398cd9a947bf0da42f2a1b",
+  "requested_at": "2026-10-07T19:15:11.418Z"
 }
