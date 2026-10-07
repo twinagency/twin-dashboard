@@ -259,3 +259,155 @@ html[data-agency="moxy"] .revenue-dashboard .revenue-ledger tbody tr:hover {
   html[data-agency="moxy"]:has(.revenue-dashboard) .dashboard-topbar { height: 64px; padding-inline: 12px; }
   html[data-agency="moxy"]:has(.revenue-dashboard) .dashboard-main { padding-top: 16px; padding-inline: 12px; }
 }
+
+
+/* Approved owner overview. Scoped to Moxy operators and this page only. */
+html[data-agency="moxy"] .revenue-dashboard--moxy { --color-accent: #087f78; --color-accent-deep: #076b65; --color-ink: #151817; --color-muted: #697078; --color-line: #e4e7e9; --color-elev: #f7f8f9; }
+html[data-agency="moxy"] .revenue-dashboard--moxy :is(h3,[data-slot="card-title"]) { font-size: 18px; font-weight: 650; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-command { border: 0; background: transparent; border-radius: 0; overflow: visible; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-page-heading { padding: 0 0 16px; border: 0; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-page-heading h2 { font-size: 30px; font-weight: 650; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .moxy-reporting-caption { margin-top: 5px; color: var(--color-muted); font-size: 14px; line-height: 1.5; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-refresh button { background: white; border-radius: 7px; min-height: 38px; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-toolbar { padding: 0; gap: 0; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-window-controls { flex: 0 1 auto; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-window-controls > span { display: none; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-window-options { border: 1px solid var(--color-line) !important; background: white; padding: 0 !important; gap: 0 !important; overflow: hidden; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-window-options button { min-width: 48px; border-radius: 0; border-right: 1px solid var(--color-line); }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-window-options button:last-child { border-right: 0; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-window-options button[aria-pressed="true"] { background: #e0f1ef; color: #086d67; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .moxy-mobile-window { display: none; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-summary { border-radius: 9px; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-kpi-grid { gap: 0; background: white; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-kpi { position: relative; padding: 22px 20px; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-kpi + .revenue-kpi::before { content: ""; position: absolute; top: 20px; bottom: 20px; left: 0; width: 1px; background: var(--color-line); }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-kpi-label { font-size: 14px; color: #4e5660; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-kpi-value { font-size: 30px; font-weight: 650; color: #111514; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-kpi-primary .revenue-kpi-value { font-size: 36px; color: #111514; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-kpi-meta { font-size: 13px; line-height: 1.4; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-main-grid { grid-template-columns: minmax(0,1fr); align-items: start; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-chart-card { padding: 0; gap: 0; overflow: hidden; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-chart-heading { padding: 20px 20px 12px; border-bottom: 0; gap: 12px; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-chart-heading > :first-child { flex: 1 1 170px; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-chart-context { flex: 0 1 auto; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-trend { background: #e6f6f2; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .moxy-chart-controls { padding: 0 20px 14px; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-view-controls { display: flex; justify-content: flex-end; gap: 12px; flex-wrap: wrap; }
+html[data-agency="moxy"] .revenue-dashboard--moxy :is(.revenue-series-controls,.revenue-chart-controls) { display: flex; }
+html[data-agency="moxy"] .revenue-dashboard--moxy :is(.revenue-series-controls,.revenue-chart-controls) > span { display: none; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-view-controls [role="group"] { display: flex; padding: 0; gap: 0; overflow: hidden; background: white; border-radius: 6px; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-view-controls button { width: auto; height: 34px; padding: 0 14px; font-size: 13px; border-radius: 0; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-view-controls button[aria-pressed="true"] { background: #087f78; color: white; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-chart-canvas { height: 260px; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-chart-card > [data-slot="card-content"] { padding: 0 14px 14px 8px; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .moxy-chart-drivers { border-top: 1px solid var(--color-line); }
+html[data-agency="moxy"] .revenue-dashboard--moxy .moxy-chart-drivers > [data-slot="card"] { border: 0; border-radius: 0; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .moxy-chart-drivers > [data-slot="card"] > button { padding: 16px 20px; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .moxy-chart-drivers > [data-slot="card"] > button > span:last-child { color: var(--color-accent); }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-creator-picker { border-color: var(--color-line); }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-creator-picker > button { padding: 10px 16px; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-creator-rail { border-radius: 9px; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-creator-rail > :first-child { padding: 20px 18px 14px; border: 0; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-creator-rail > .grid { font-size: 12px; padding: 10px 18px; background: transparent; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-creator-rail li { padding: 20px 18px; font-size: 14px; align-items: center; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-ranked-name { white-space: normal; overflow: visible; overflow-wrap: anywhere; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-creator-amount { color: #151817; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-detail-section { border-radius: 9px; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-detail-section > :first-child { padding: 18px 20px; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-operating-grid { background: white; gap: 0; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-operating-grid > div { display: flex; flex-direction: column; padding: 18px 20px; border-bottom: 1px solid var(--color-line); border-right: 1px solid var(--color-line); }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-operating-grid > div > :first-child { font-size: 14px; font-weight: 500; color: #4e5660; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-operating-grid > div > .font-mono { order: 1; margin-top: 6px; font-size: 26px; line-height: 1.25; font-weight: 650; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-operating-grid .revenue-operating-scope { order: 2; margin-top: 4px; font-size: 13px; font-weight: 400; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-operating-grid > div:nth-child(3n) { border-right: 0; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-operating-grid > div:nth-last-child(-n+3) { border-bottom: 0; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-analysis-section > :first-child { align-items: flex-start; flex-direction: column; gap: 12px; padding-bottom: 0; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-analysis-section [role="tablist"] { gap: 12px; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-analysis-section [role="tab"] { padding: 10px 12px; font-size: 14px; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-analysis-section [role="tab"][aria-selected="true"] { color: #087f78; border-color: #087f78; }
+html[data-agency="moxy"] .revenue-dashboard--moxy #earnings-analysis-panel { padding: 18px 20px; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-customer-metrics > div { padding: 16px; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-customer-metrics > div > :first-child { font-size: 13px; font-weight: 500; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-customer-metrics .font-mono { font-size: 26px; line-height: 1.25; margin-top: 6px; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-ledger { border-radius: 9px; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-ledger :is(th,td) { font-size: 14px; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-ledger th { height: 42px; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-ledger td { padding-block: 12px; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-ledger-table { max-height: none; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-ledger tbody tr:nth-child(even) { background: white; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-ledger tbody tr:hover { background: #f7f9f9; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-ledger input { font-size: 14px; background: white; }
+html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-ledger .money-value { color: #151817; }
+html[data-agency="moxy"] .dashboard-topbar.moxy-overview-topbar { display: flex; align-items: center; justify-content: space-between; gap: 20px; height: 68px; padding: 12px 24px; border-bottom: 1px solid #e4e7e9; background: #fafbfc; flex-shrink: 0; }
+.moxy-overview-breadcrumb { font-size: 13px; color: #697078; white-space: nowrap; }
+.moxy-overview-breadcrumb > span { color: #087f78; }
+.moxy-overview-account-controls { display: flex; align-items: center; gap: 16px; min-width: 0; }
+.moxy-overview-creator > button { border: 1px solid #e4e7e9; border-radius: 6px; background: white; min-height: 38px; }
+.moxy-overview-lifetime { display: flex; flex-direction: column; gap: 1px; white-space: nowrap; }
+.moxy-overview-lifetime > span { color: #697078; font-size: 12px; }
+.moxy-overview-lifetime > strong { color: #151817; font-size: 16px; line-height: 1.2; }
+.moxy-overview-blur > button { border: 1px solid #e4e7e9; border-radius: 6px; background: white; min-height: 38px; min-width: 38px; }
+.moxy-overview-signout button { min-height: 38px; font-size: 13px; padding: 6px 8px; white-space: nowrap; }
+html[data-agency="moxy"]:has(.revenue-dashboard--moxy) .dashboard-main { padding: 24px; }
+@media (min-width: 1200px) {
+  html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-main-grid { grid-template-columns: minmax(0,1.8fr) minmax(330px,1fr); }
+}
+@media (max-width: 1099px) and (min-width: 640px) {
+  html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-kpi-grid { grid-template-columns: minmax(0,1.4fr) repeat(4,minmax(0,1fr)); }
+  html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-kpi-primary { grid-column: auto; }
+  html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-kpi { padding: 18px 12px; }
+  html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-kpi-value { font-size: 24px; }
+  html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-kpi-primary .revenue-kpi-value { font-size: 28px; }
+}
+@media (max-width: 767px) {
+  .moxy-overview-breadcrumb { display: none; }
+  html[data-agency="moxy"] .dashboard-topbar.moxy-overview-topbar { height: auto; min-height: 72px; padding: 12px; }
+  .moxy-overview-account-controls { width: 100%; gap: 10px; flex-wrap: wrap; }
+  .moxy-overview-creator { flex: 1; min-width: 0; }
+  .moxy-overview-creator > button { width: 100%; max-width: 100%; min-height: 44px; }
+  .moxy-overview-currency { order: 1; }
+  .moxy-overview-lifetime { order: 2; margin-left: auto; }
+  .moxy-overview-lifetime > strong { font-size: 15px; }
+  .moxy-overview-blur { order: 3; }
+  .moxy-overview-signout { display: none; }
+}
+@media (max-width: 639px) {
+  html[data-agency="moxy"]:has(.revenue-dashboard--moxy) .dashboard-main { padding: 16px 12px 32px; }
+  html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-page-heading { padding: 0 0 14px; flex-direction: row; flex-wrap: wrap; align-items: flex-start; }
+  html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-page-heading h2 { font-size: 25px; }
+  html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-refresh { width: 100%; justify-content: space-between; }
+  html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-toolbar { display: block; padding: 0; }
+  html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-window-controls { display: none; }
+  html[data-agency="moxy"] .revenue-dashboard--moxy .moxy-mobile-window { display: block; min-height: 44px; max-width: 100%; border: 1px solid var(--color-line); border-radius: 7px; background: white; padding: 8px 36px 8px 12px; font-size: 16px; color: var(--color-ink); }
+  html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-kpi { padding: 18px 16px; border-bottom: 1px solid var(--color-line); }
+  html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-kpi:nth-last-child(-n+2) { border-bottom: 0; }
+  html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-kpi::before { display: none; }
+  html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-kpi:nth-child(2n) { border-right: 1px solid var(--color-line); }
+  html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-kpi-value { font-size: 27px; }
+  html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-kpi-primary .revenue-kpi-value { font-size: 34px; }
+  html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-kpi-label { font-size: 13px; }
+  html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-chart-heading { padding: 16px 16px 12px; }
+  html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-chart-context { flex-direction: row; align-items: center; justify-content: space-between; gap: 10px; flex-wrap: wrap; }
+  html[data-agency="moxy"] .revenue-dashboard--moxy .moxy-chart-controls { padding: 0 16px 14px; }
+  html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-view-controls { justify-content: space-between; gap: 8px; }
+  html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-view-controls button { height: 44px; padding-inline: 12px; }
+  html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-chart-canvas { height: 220px; }
+  html[data-agency="moxy"] .revenue-dashboard--moxy .moxy-chart-drivers > [data-slot="card"] > button { padding: 14px 16px; }
+  html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-creator-rail li { padding: 16px 12px; }
+  html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-creator-rail > :first-child { padding: 16px 12px 10px; }
+  html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-detail-section > :first-child { padding: 16px; }
+  html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-operating-grid > div { padding: 16px; border-bottom: 1px solid var(--color-line); border-right: 1px solid var(--color-line); }
+  html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-operating-grid > div:nth-child(3n) { border-right: 1px solid var(--color-line); }
+  html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-operating-grid > div:nth-child(2n) { border-right: 0; }
+  html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-operating-grid > div:nth-last-child(-n+3) { border-bottom: 1px solid var(--color-line); }
+  html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-operating-grid > div:last-child { border: 0; }
+  html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-operating-grid > div > .font-mono { font-size: 24px; }
+  html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-operating-grid > div > :first-child { font-size: 13px; }
+  html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-analysis-section [role="tablist"] { gap: 0; width: 100%; }
+  html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-analysis-section [role="tab"] { padding: 12px 8px; font-size: 13px; }
+  html[data-agency="moxy"] .revenue-dashboard--moxy #earnings-analysis-panel { padding: 16px; }
+  html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-customer-metrics { grid-template-columns: minmax(0,1fr); }
+  html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-customer-metrics > div:last-child { grid-column: auto; }
+  html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-ledger > [data-slot="card-header"] { padding: 16px; }
+  html[data-agency="moxy"] .revenue-dashboard--moxy .revenue-ledger input { font-size: 16px; }
+}
