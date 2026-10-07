@@ -4,7 +4,8 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { requireCloneAccess } from "@/lib/dashboard-access";
 import { Card } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
-import { Info, inputCls } from "@/components/clone/fields";
+import { Info } from "@/components/clone/fields";
+import { inputCls } from "@/lib/clone-field-styles";
 import RevisionStateBadge from "@/components/sequence/RevisionStateBadge";
 import SequenceEditor from "@/components/sequence/SequenceEditor";
 import {

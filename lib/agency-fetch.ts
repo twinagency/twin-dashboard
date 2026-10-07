@@ -1,3 +1,4 @@
+import { isAgencySequenceTable, scopeSequenceRead, scopeSequenceWrite, sequenceVideoSelection, scopeSequenceVideoFamily } from "./agency-sequence";
 import { agencyCanManage } from "./agency-management-policy";
 import { assignedStoragePath } from "./agency-management";
 import { scopeAgencyWrite, scopeBundleItems } from "./agency-write";
@@ -70,12 +71,21 @@ export async function dashboardFetch(input: RequestInfo | URL, init?: RequestIni
       let scoped: URL;
       const table = url.pathname.split("/").pop()!;
       if (["GET","HEAD"].includes(method)) {
-        scoped = agencyCanManage(agency) && url.pathname === "/rest/v1/photo_bundle_items"
-          ? await scopeBundleItems(url,agency)
-          : scopeReadUrl(url,agency).url;
+        scoped = isAgencySequenceTable(table)
+          ? await scopeSequenceRead(url, agency)
+          : table === "videos" && (url.searchParams.get("select") || "").split(",").some(field => field.trim() === "content_family_id")
+            ? sequenceVideoSelection(url, agency)
+            : agencyCanManage(agency) && url.pathname === "/rest/v1/photo_bundle_items"
+              ? await scopeBundleItems(url,agency)
+              : scopeReadUrl(url,agency).url;
       } else {
         if (headers.get("prefer")?.includes("resolution=")) return denied("Agency upserts are not allowed");
-        scoped=await scopeAgencyWrite(url,method,await jsonBody(),agency);
+        const body = await jsonBody();
+        scoped = isAgencySequenceTable(table)
+          ? await scopeSequenceWrite(url, method, body, agency)
+          : table === "videos" && method === "PATCH" && body && Object.hasOwn(body, "content_family_id")
+            ? await scopeSequenceVideoFamily(url, body, agency)
+            : await scopeAgencyWrite(url,method,body,agency);
       }
       return await safeResponse(await fetch(scoped,{...init,cache:"no-store"}),table);
     }
@@ -102,3 +112,4 @@ export async function dashboardFetch(input: RequestInfo | URL, init?: RequestIni
   } catch { return denied("Agency permission or resource validation failed"); }
   return denied();
 }
+
