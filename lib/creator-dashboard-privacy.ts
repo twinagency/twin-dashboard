@@ -11,9 +11,12 @@ type RevenuePayload = {
  * or buyer identities. Project after reading the shared revenue cache, without
  * mutating it or changing any aggregate revenue, count or conversion measure.
  */
+export function isCreatorDashboardAccess(access: unknown): boolean {
+  return !!access && typeof access === "object" && (access as { kind?: string }).kind === "creator";
+}
+
 export function withoutCreatorPurchaseHistory<T extends RevenuePayload>(payload: T, access: unknown): T {
-  const isCreator = !!access && typeof access === "object" && (access as { kind?: string }).kind === "creator";
-  if (!isCreator) return payload;
+  if (!isCreatorDashboardAccess(access)) return payload;
   return {
     ...payload,
     recent: [],

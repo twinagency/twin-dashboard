@@ -1,5 +1,5 @@
 {
-  "reason": "Remove all individual purchase history and buyer identities from client dashboards and creator responses. Retain aggregate earnings, view-only cleanup and existing account permissions.",
-  "source_commit": "0ff3445ef093b138c6e6f2af0198c52a7bb881c5",
-  "requested_at": "2026-10-07T01:06:22.146Z"
+  "reason": "Complete creator transaction-history removal with a type-safe audience check. Retain aggregate earnings, view-only cleanup and existing account permissions.",
+  "source_commit": "99a7f617c57788f986c3e99608400eaec7fcce2f",
+  "requested_at": "2026-10-07T01:10:49.486Z"
 }
