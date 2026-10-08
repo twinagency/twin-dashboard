@@ -6,8 +6,17 @@ import ClonesGrid, { type CloneCard } from "@/components/ClonesGrid";
 import { chartColorForClone, profileImagePathForClone } from "@/lib/colors";
 import { cloneCohortFromPromotionFlag } from "@/lib/clone-cohort";
 import { Button } from "@/components/ui/button";
+import { getDashboardAccess } from "@/lib/dashboard-access";
+import { isMoxy } from "@/lib/agency-brand";
 
 export const dynamic = "force-dynamic";
+
+// Presentation-only roster for the Moxy Creators page. Existing agency
+// assignments, bot status, earnings and the creator switcher stay unchanged.
+const MOXY_VISIBLE_CREATOR_IDS = new Set([
+  "20ef9407-83f2-4351-8d3c-48cc0ed54e0b", // Riley Mae Lewis
+  "d2678dce-6a4e-4f1c-b54a-86057bba427c", // Kyla Yesenosky
+]);
 
 export default async function ClonesPage() {
   const { data, error } = await supabaseAdmin
@@ -23,7 +32,10 @@ export default async function ClonesPage() {
     );
   }
 
-  const clones = (data ?? []) as Partial<Clone>[];
+  const access = await getDashboardAccess();
+  const clones = ((data ?? []) as Partial<Clone>[]).filter(
+    (clone) => !isMoxy(access?.name) || (clone.id !== undefined && MOXY_VISIBLE_CREATOR_IDS.has(clone.id)),
+  );
   const cloneIds = clones.map((c) => c.id).filter(Boolean) as string[];
 
   const avatarUrlByCloneId = new Map<string, string>();
