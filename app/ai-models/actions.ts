@@ -145,6 +145,31 @@ export async function uploadAiMedia(modelId: string, fd: FormData) {
   return { uploaded: done };
 }
 
+/** One photo straight in as her profile pic: approved, Free (public copy made), set as profile_image_id. */
+export async function uploadProfilePhoto(modelId: string, fd: FormData) {
+  await guardDashboardAction("app/ai-models/actions.ts#uploadProfilePhoto", [modelId, fd]);
+  await requireAdmin();
+  uuid(modelId);
+  const file = fd.get("file");
+  if (!(file instanceof File) || file.size === 0) throw new Error("Choose a photo");
+  const k = uploadKind(file.type, file.name);
+  if (!k || k.kind !== "photo") throw new Error("Profile photo must be a jpg, png, webp or heic");
+  if (file.size > IMAGE_MAX_MB * 1024 * 1024) throw new Error(`Too big (max ${IMAGE_MAX_MB} MB)`);
+  const sb = serviceClient();
+  const { data: model, error: merr } = await sb.from("ai_models").select("id").eq("id", modelId).maybeSingle();
+  if (merr || !model) throw new Error(nice(merr ?? {}));
+  const bytes = Buffer.from((await compressPhoto(Buffer.from(await file.arrayBuffer()))).bytes);
+  const id = randomUUID();
+  const path = `${modelId}/${id}.${k.ext}`;
+  await putObject(PRIVATE, path, bytes, k.contentType);
+  const { error } = await sb.from("ai_model_images").insert({ id, model_id: modelId, kind: "photo", storage_path: path, status: "approved", access: "free", price_stars: null });
+  if (error) { await removeObjects(PRIVATE, [path]); throw new Error(nice(error)); }
+  await syncPublic({ id, model_id: modelId, kind: "photo", storage_path: path, public_path: null, status: "approved", access: "free", price_stars: null });
+  const { error: perr } = await sb.from("ai_models").update({ profile_image_id: id }).eq("id", modelId);
+  if (perr) throw new Error(nice(perr));
+  refresh(modelId);
+}
+
 export async function setImageStatus(imageId: string, status: "approved" | "rejected" | "pending") {
   await guardDashboardAction("app/ai-models/actions.ts#setImageStatus", [imageId, status]);
   await requireAdmin();

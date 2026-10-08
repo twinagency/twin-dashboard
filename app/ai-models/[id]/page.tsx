@@ -4,7 +4,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Info } from "@/components/clone/fields";
 import { getDashboardAccess } from "@/lib/dashboard-access";
 import { supabaseAdmin } from "@/lib/supabase";
-import { ImageCard, PersonaForm, ShowSwitch, UploadForm, type GalleryImage } from "../Controls";
+import { ImageCard, PersonaForm, ProfilePhotoForm, ShowSwitch, UploadForm, type GalleryImage } from "../Controls";
 
 export const dynamic = "force-dynamic";
 
@@ -39,6 +39,11 @@ export default async function AiModelPage({ params }: { params: Promise<{ id: st
       <Card><CardContent className="flex flex-col gap-2">
         <ShowSwitch id={model.id} enabled={model.tsocial_enabled} />
         <p className="text-xs text-muted">{counts.free} Free approved, {counts.locked} Locked approved, {counts.pending} pending.</p>
+      </CardContent></Card>
+
+      <Card><CardContent>
+        <h2 className="mb-3 text-lg font-semibold text-ink">Profile photo</h2>
+        <ProfilePhotoForm id={model.id} current={gallery.find((g) => g.isProfile)?.url ?? null} />
       </CardContent></Card>
 
       <Card><CardContent>

@@ -5,7 +5,7 @@ import { useRef, useState, useTransition } from "react";
 import { Button } from "@/components/ui/button";
 import { FieldLabel, Toggle, inputCls, selectCls } from "@/components/clone/fields";
 import { PERSONA_FIELDS } from "@/lib/ai-models";
-import { createAiModel, deleteAiImage, savePersona, setImageAccess, setImageStatus, setProfilePic, setShowInTSocial, uploadAiMedia } from "./actions";
+import { createAiModel, deleteAiImage, savePersona, setImageAccess, setImageStatus, setProfilePic, setShowInTSocial, uploadAiMedia, uploadProfilePhoto } from "./actions";
 
 function useRun() {
   const [pending, start] = useTransition();
@@ -86,6 +86,25 @@ export function UploadForm({ id }: { id: string }) {
       <Button type="submit" disabled={pending}>{pending ? "Uploading" : "Upload"}</Button>
       <Msg error={error} ok={ok} />
     </form>
+  );
+}
+
+export function ProfilePhotoForm({ id, current }: { id: string; current: string | null }) {
+  const { pending, error, ok, run } = useRun();
+  const ref = useRef<HTMLFormElement>(null);
+  const router = useRouter();
+  return (
+    <div className="flex flex-wrap items-end gap-4">
+      <div className="size-24 shrink-0 overflow-hidden rounded-full bg-panel">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        {current ? <img alt="" src={current} className="size-full object-cover" /> : <div className="flex size-full items-center justify-center text-xs text-muted">No photo</div>}
+      </div>
+      <form ref={ref} className="flex flex-wrap items-end gap-3" action={(fd) => run(async () => { await uploadProfilePhoto(id, fd); ref.current?.reset(); router.refresh(); }, "Profile photo set")}>
+        <label className="block min-w-0"><FieldLabel label="Profile photo" hint="Shown on her AI card. Goes live as an approved Free photo, so keep it non-explicit." /><input name="file" type="file" required accept="image/*" className="text-sm text-ink" /></label>
+        <Button type="submit" disabled={pending}>{pending ? "Uploading" : current ? "Replace" : "Upload"}</Button>
+        <Msg error={error} ok={ok} />
+      </form>
+    </div>
   );
 }
 
