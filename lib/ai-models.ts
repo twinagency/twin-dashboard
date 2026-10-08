@@ -6,6 +6,7 @@
 export type PersonaField = { key: string; label: string; hint: string; rows: number; max: number; group: "Basics" | "Voice" | "Chat rules" };
 
 export const PERSONA_FIELDS: PersonaField[] = [
+  { key: "VIBE", label: "VIBE", hint: "ONE word shown on her T-Social AI card: Bratty, Playful, Sweet, Shy, Dominant. Not a Bot V2 variable, only the card uses it.", rows: 1, max: 16, group: "Basics" },
   { key: "BIRTH_DATE", label: "BIRTH_DATE", hint: "YYYY-MM-DD. Her age is worked out from this. She must be 18 or older, and must clearly look it.", rows: 1, max: 10, group: "Basics" },
   { key: "LOOKS", label: "LOOKS", hint: "Height, body, hair, eyes, tattoos. Keep it the same as her image prompt so chat and pics agree.", rows: 2, max: 400, group: "Basics" },
   { key: "LIKES", label: "LIKES", hint: "Hobbies, music, food, games, colours.", rows: 2, max: 400, group: "Basics" },

@@ -64,7 +64,7 @@ export function ShowSwitch({ id, enabled }: { id: string; enabled: boolean }) {
   const [on, setOn] = useState(enabled);
   return (
     <div className="flex flex-col gap-1">
-      <Toggle label="Show in T-Social" name="tsocial_enabled" checked={on} disabled={pending} hint="On: she appears in the T-Social feed and Trending, her profile gets a Message button and fans can chat with her. Needs a birth date (18+) and at least one approved Free pic."
+      <Toggle label="Show in T-Social" name="tsocial_enabled" checked={on} disabled={pending} hint="On: she appears as a card in the T-Social AI tab and fans can chat with her. She is not in Clips or Trending. Needs a birth date (18+) and at least one approved Free pic."
         onChange={(v) => { const prev = on; setOn(v); run(async () => { try { await setShowInTSocial(id, v); } catch (e) { setOn(prev); throw e; } }); }} />
       <Msg error={error} ok={null} />
     </div>

@@ -12,7 +12,9 @@ const NOW = new Date("2026-10-08T00:00:00Z");
 (async () => {
   await check("persona fields reuse the Bot V2 variable names", () => {
     const v2 = readFileSync("../twin-sexbot/src/girls/template.ts", "utf8");
-    for (const f of PERSONA_FIELDS) assert.ok(new RegExp(`\\b${f.key}: string`).test(v2), `${f.key} is a V2 GirlVars name`);
+    for (const f of PERSONA_FIELDS.filter((x) => x.key !== "VIBE")) assert.ok(new RegExp(`\\b${f.key}: string`).test(v2), `${f.key} is a V2 GirlVars name`);
+    assert.ok(PERSONA_FIELDS.some((f) => f.key === "VIBE" && f.rows === 1), "VIBE is the one non-V2 field: the T-Social AI card word");
+    assert.equal(validatePersona({ name: "L", VIBE: "  Bratty  " }, NOW).ok && (validatePersona({ name: "L", VIBE: "  Bratty  " }, NOW) as { vars: Record<string, string> }).vars.VIBE, "Bratty");
     assert.equal(new Set(PERSONA_FIELDS.map((f) => f.key)).size, PERSONA_FIELDS.length);
   });
   await check("adult only: under 18, future and fake dates refused, exactly 18 allowed", () => {
