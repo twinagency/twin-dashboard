@@ -143,7 +143,6 @@ const MOXY_LINKS: NavLink[] = [
   { kind: "route", label: "Creators", href: "/clones", icon: "Clones", color: "blue" },
   { kind: "route", label: "Creator onboarding", href: "/agency/creators", icon: "ListChecks", color: "gray" },
   { kind: "tab", label: "Content", tab: "ppvs", icon: "Media", color: "red" },
-  { kind: "route", label: "Video sequences", href: "/sequences", icon: "Media", color: "red", gateOnClone: true },
   { kind: "route", label: "Telegram Stories", href: "/business", icon: "Bot", color: "purple", gateOnClone: true },
   { kind: "route", label: "Flows", href: "/flows", icon: "Flows", color: "pink", gateOnClone: true },
   { kind: "tab", label: "Creator settings", tab: "identity", icon: "Dials", color: "blue" },
@@ -360,11 +359,11 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
       </section>
       <section className="moxy-sidebar-group" aria-label="Creator tools">
         <h2 className="moxy-sidebar-heading">Creator tools</h2>
-        {MOXY_LINKS.slice(3, 8).filter(availableLink).map(link => <div key={linkKey(link)}>{renderLink(link)}</div>)}
+        {MOXY_LINKS.slice(3, 7).filter(availableLink).map(link => <div key={linkKey(link)}>{renderLink(link)}</div>)}
       </section>
     </nav>
     <nav aria-label="Utilities" className="moxy-sidebar-utilities"><div>
-      {MOXY_LINKS.slice(8).filter(availableLink).map(link => <div key={linkKey(link)}>{renderLink(link)}</div>)}
+      {MOXY_LINKS.slice(7).filter(availableLink).map(link => <div key={linkKey(link)}>{renderLink(link)}</div>)}
     </div></nav>
   </>;
 
