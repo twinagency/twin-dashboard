@@ -75,7 +75,6 @@ const moxyDestinations = [
   ["Creators", "/clones"],
   ["Creator onboarding", "/agency/creators"],
   ["Content", `/clones/${clone}?tab=ppvs`],
-  ["Video sequences", "/sequences"],
   ["Telegram Stories", "/business"],
   ["Flows", "/flows"],
   ["Creator settings", `/clones/${clone}?tab=identity`],
@@ -89,7 +88,7 @@ const renderedLinks = (html: string) => Array.from(html.matchAll(/<a\b([^>]*)>([
 }));
 function checkMoxyLayout(html: string) {
   const links = renderedLinks(html).filter(link => link.label);
-  assert.deepEqual(links.map(({ label, href }) => [label, href]), moxyDestinations, "Keep all eleven Moxy destinations in the approved shared order");
+  assert.deepEqual(links.map(({ label, href }) => [label, href]), moxyDestinations, "Keep all ten Moxy destinations in the approved shared order");
   assert.equal((html.match(/href="\/agency\/creator-invites"/g) || []).length, 1, "Invite creator appears once, as the prominent top action");
   assert.match(links[0].attributes, /class="[^"]*\bmoxy-invite-button\b/);
   assert.match(html, /<h2[^>]*>Workspace<\/h2>/, "Workspace is an always-visible heading");
@@ -109,8 +108,9 @@ for (const mobile of [false, true]) {
   assert.doesNotMatch(moxy, /Not available|aria-disabled|AI Intelligence Core|>CRM</, "Hide unavailable sections, including the empty CRM group and core");
   assert.doesNotMatch(moxy, /aria-expanded/, "Keep available secondary links expanded");
   assert.doesNotMatch(moxy, /Sales Health|href="\/sales-health"/, "Sales Health is hidden from Moxy reader navigation");
+  assert.doesNotMatch(moxy, /Video sequences|href="\/sequences"/, "Video sequences is hidden from Moxy reader navigation");
   assert.doesNotMatch(moxy, /Live Telegram Chat|href="\/users"/, "Live Telegram Chat is absent from the Moxy reader sidebar");
-  for (const href of ["/revenue", "/clones", "/business", "/flows", "/sequences", "/info", "/logs", "/agency/creators", "/agency/creator-invites", `/clones/${clone}?tab=ppvs`, `/clones/${clone}?tab=identity`]) {
+  for (const href of ["/revenue", "/clones", "/business", "/flows", "/info", "/logs", "/agency/creators", "/agency/creator-invites", `/clones/${clone}?tab=ppvs`, `/clones/${clone}?tab=identity`]) {
     assert.ok(moxy.includes(`href="${href}"`), `Keep accessible Moxy link ${href}`);
   }
   for (const label of ["Storage", "Catalogue funnel", "Mini App rollout", "MTProto Campaign", "Tracker", "API", "Settings", "Inbox", "Fan CRM", "Campaigns", "Team", "Platforms"]) {
@@ -125,6 +125,7 @@ for (const mobile of [false, true]) {
   assert.doesNotMatch(owner, /Moxy · Read only/);
   assert.doesNotMatch(owner, />CRM<|href="\/crm\//, "Moxy owners cannot see CRM on desktop or mobile");
   assert.doesNotMatch(owner, /Sales Health|href="\/sales-health"/, "Sales Health is hidden from Moxy owner navigation");
+  assert.doesNotMatch(owner, /Video sequences|href="\/sequences"/, "Video sequences is hidden from Moxy owner navigation");
   assert.doesNotMatch(owner, /Live Telegram Chat|href="\/users"/, "Live Telegram Chat is absent from the Moxy owner sidebar");
   for (const href of ["/revenue", "/clones", `/clones/${clone}?tab=ppvs`]) {
     assert.ok(owner.includes(`href="${href}"`), `Keep owner operating link ${href}`);
@@ -138,17 +139,16 @@ for (const mobile of [false, true]) {
   for (const manage of [false, true]) {
     const noClone = render("Moxy", manage, null, mobile);
     const links = renderedLinks(noClone);
-    for (const label of ["Content", "Video sequences", "Telegram Stories", "Flows", "Creator settings"]) {
+    for (const label of ["Content", "Telegram Stories", "Flows", "Creator settings"]) {
       assert.ok(!links.some(link => link.label === label), `${label} still requires selecting a creator`);
       const button = Array.from(noClone.matchAll(/<button\b([^>]*)>([\s\S]*?)<\/button>/g)).find(([, , content]) => content.replace(/<[^>]*>/g, "").trim() === label);
       assert.ok(button, `${label} remains available as a creator-picker button`);
       assert.match(button[1], /title="Pick a creator first"/);
     }
-    for (const [label, href] of moxyDestinations.filter(([label]) => !["Content", "Video sequences", "Telegram Stories", "Flows", "Creator settings"].includes(label))) {
+    for (const [label, href] of moxyDestinations.filter(([label]) => !["Content", "Telegram Stories", "Flows", "Creator settings"].includes(label))) {
       assert.ok(links.some(link => link.label === label && link.href === href), `Keep ${label} available without a selected creator`);
     }
     for (const [route, search, expectedLabel] of [
-      ["/sequences", "", "Video sequences"],
       ["/agency/creator-invites", "", "Invite creator"],
       [`/clones/${clone}`, "tab=ppvs", "Content"],
       [`/clones/${clone}`, "tab=identity", "Creator settings"],
@@ -197,4 +197,4 @@ assert.match(render(portals.JESS_KATE_PORTAL.name, true, null), /Pick a creator 
 pathname = `/clones/${clone}`; query = new URLSearchParams("tab=identity");
 assert.match(render(portals.JESS_KATE_PORTAL.name, true), /href="[^\"]+tab=identity"[^>]*bg-white\/12/);
 assert.match(readFileSync("components/MobileMenu.tsx", "utf8"), /<SidebarContent/);
-console.log("Sidebar: Moxy grouped navigation, prominent invite, eleven destinations, creator gates and single active page verified for owners/readers on desktop/mobile; other portals preserved");
+console.log("Sidebar: Moxy grouped navigation, prominent invite, ten destinations, creator gates and single active page verified for owners/readers on desktop/mobile; other portals preserved");
