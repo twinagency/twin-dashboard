@@ -191,6 +191,7 @@ const CRM_LINKS: NavLink[] = [
 
 const ADMIN_LINKS: NavLink[] = [
   { kind: "route", label: "T-Social", href: "/tsocial", icon: "Users", color: "pink" },
+  { kind: "route", label: "AI Models", href: "/ai-models", icon: "Sparkle", color: "pink" },
   { kind: "route", label: "Earnings split", href: "/admin/earnings-split", icon: "Dollar", color: "orange" },
   { kind: "route", label: "View as", href: "/admin/view-as", icon: "Users", color: "gray" },
 ];

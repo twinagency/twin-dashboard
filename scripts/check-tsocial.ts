@@ -81,6 +81,13 @@ async function check(name: string, fn: () => void | Promise<void>) {
       assert.ok(r.status === 307 || r.status === 308);
       assert.match(r.headers.get("location") ?? "", /\/twin\?next=%2Ftsocial/);
     });
+    await check("middleware: /tsocial/earnings, /tsocial/bot-sends and /ai-models need the admin login", async () => {
+      for (const p of ["/tsocial/earnings", "/tsocial/bot-sends", "/ai-models", "/ai-models/11111111-1111-4111-8111-111111111111"]) {
+        const r = await mw(p);
+        assert.ok(r.status === 307 || r.status === 308, `${p} -> ${r.status}`);
+        assert.match(r.headers.get("location") ?? "", /\/twin\?next=/);
+      }
+    });
   } finally {
     (process.env as Record<string, string | undefined>).NODE_ENV = prev;
   }
@@ -90,6 +97,7 @@ async function check(name: string, fn: () => void | Promise<void>) {
       for (const manage of [false, true]) {
         assert.equal(agencyDashboardPath("/tsocial", name, manage), false);
         assert.equal(agencyDashboardPath("/api/tsocial/feed", name, manage), false);
+        for (const p of ["/tsocial/earnings", "/tsocial/bot-sends", "/ai-models", "/ai-models/11111111-1111-4111-8111-111111111111"]) assert.equal(agencyDashboardPath(p, name, manage), false, p);
       }
   });
 

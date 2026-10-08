@@ -8,7 +8,7 @@
     "start": "next start -p 3001",
     "lint": "next lint",
     "test:api": "tsx scripts/check-admin-api.ts",
-    "test:tsocial": "tsx scripts/check-tsocial.ts",
+    "test:tsocial": "tsx scripts/check-tsocial.ts && tsx scripts/check-ai-models.ts",
     "test:view-as": "tsx scripts/check-view-as.ts",
     "test:mtproto": "tsx lib/mtproto/tests/check-mtproto.ts",
     "test:login-phone": "tsx lib/mtproto/tests/check-login-phone.ts",

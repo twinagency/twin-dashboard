@@ -6,6 +6,7 @@ import { supabaseAdmin } from "@/lib/supabase";
 import { selectAllRows } from "@/lib/select-all";
 import { fmtNum } from "@/lib/money";
 import { groupReports, tablesMissing, tsocialMediaUrl, type ReportRow } from "@/lib/tsocial";
+import TSocialTabs from "./TSocialTabs";
 import { AccountControls, ReportControls, ReviewControls, SettingRow } from "./Controls";
 
 export const dynamic = "force-dynamic";
@@ -162,7 +163,7 @@ export default async function TSocialPage() {
 
   return (
     <main className="dashboard-page flex flex-col gap-6">
-      <h1 className="text-3xl font-bold text-ink">T-Social</h1>
+      <TSocialTabs active="overview" />
 
       <div className="grid grid-cols-2 gap-3 md:grid-cols-3 xl:grid-cols-5">
         {stats.map(([label, value, tip]) => (
