@@ -100,6 +100,7 @@ const NAV_LINKS: NavLink[] = [
   { kind: "tab", label: "PPVs", tab: "ppvs", icon: "Media", color: "red" },
   { kind: "route", label: "Storage", href: "/storage", icon: "Database", color: "blue" },
   { kind: "route", label: "Business", href: "/business", icon: "Bot", color: "purple", gateOnClone: true },
+  { kind: "route", label: "Bot V2", href: "/bot-v2", icon: "Bot", color: "blue" },
 ];
 
 const CREATOR_LINKS: NavLink[] = CREATOR_DASHBOARD_NAV.map((item) => ({
