@@ -32,7 +32,7 @@ function Uploader({ kind }: { kind: "photo" | "video" }) {
           try {
             const fd = new FormData();
             fd.append("kind", kind);
-            fd.append("file", files[i]);
+            fd.append("files", files[i]);
             const res = await fetch("/creator-auth/ppv-upload", { method: "POST", body: fd, credentials: "same-origin" });
             const result = await res.json().catch(() => ({ ok: false }));
             if (result.ok) ok = true;
