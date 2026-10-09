@@ -3,7 +3,7 @@
 // No prices, captions, editing, deleting or moving. Uploads post to
 // /creator-auth/ppv-upload, which runs the operator uploadPhoto/uploadVideo with
 // the file only, priced from the creator's pricing guide.
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Thumb from "@/components/SignedMediaPreview";
 
@@ -76,6 +76,28 @@ function Uploader({ kind }: { kind: "photo" | "video" }) {
   );
 }
 
+// iOS Safari only runs a handful of <video> elements at once; a grid of 30+
+// makes most of them fail. Mount a video thumbnail only while it is on screen.
+function LazyVideoThumb({ path, onOpen }: { path: string; onOpen: () => void }) {
+  const ref = useRef<HTMLDivElement>(null);
+  const [visible, setVisible] = useState(false);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const io = new IntersectionObserver(([entry]) => setVisible(entry.isIntersecting), { rootMargin: "100px" });
+    io.observe(el);
+    return () => io.disconnect();
+  }, []);
+  return (
+    <div ref={ref} className="relative aspect-square w-full overflow-hidden rounded bg-[#06172f]">
+      {visible
+        ? <Thumb path={path} type="video" className="aspect-square w-full rounded object-cover" onOpen={onOpen} />
+        : <button type="button" onClick={onOpen} className="block aspect-square w-full" aria-label="Play video" />}
+      <span aria-hidden className="pointer-events-none absolute inset-0 flex items-center justify-center text-2xl text-white drop-shadow">▶</span>
+    </div>
+  );
+}
+
 function VideoPlayer({ path, onClose }: { path: string; onClose: () => void }) {
   const [url, setUrl] = useState<string | null>(null);
   const [failed, setFailed] = useState(false);
@@ -121,12 +143,7 @@ export default function CreatorPpvUploads({ photos, videos }: { cloneId: string;
           <Uploader kind="video" />
         </div>
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 lg:grid-cols-8">
-          {videos.map((v) => (
-            <div key={v.id} className="relative">
-              <Thumb path={v.storage_path} type="video" className="aspect-square w-full rounded object-cover" onOpen={() => setPlaying(v.storage_path)} />
-              <span aria-hidden className="pointer-events-none absolute inset-0 flex items-center justify-center text-2xl text-white drop-shadow">▶</span>
-            </div>
-          ))}
+          {videos.map((v) => <LazyVideoThumb key={v.id} path={v.storage_path} onOpen={() => setPlaying(v.storage_path)} />)}
         </div>
       </section>
       {playing && <VideoPlayer path={playing} onClose={() => setPlaying(null)} />}
