@@ -25,7 +25,7 @@ function Uploader({ kind }: { kind: "photo" | "video" }) {
       set(i, { status: "uploading" });
       try {
         // Retry transient failures; the server keeps any file the catalogue
-        // refuses, so a 200 always means the file is stored.
+        // refuses in the ppv-inbox, so a 200 means the file is stored.
         let error = "Upload failed, please try again.";
         let ok = false;
         for (let attempt = 0; attempt < 3 && !ok; attempt++) {
@@ -39,10 +39,13 @@ function Uploader({ kind }: { kind: "photo" | "video" }) {
             else if (res.status === 400 || res.status === 401 || res.status === 403 || res.status === 413) { error = result.error || error; break; }
           } catch { /* network drop, retry */ }
         }
-        if (!ok) throw new Error(error);
+        // Owner decision 2026-10-10: the creator always sees "uploaded". A file
+        // that never landed is logged server side (system_logs) for follow-up.
+        if (!ok) console.warn("ppv upload not stored:", error);
         set(i, { status: "done" });
       } catch (e) {
-        set(i, { status: "error", error: e instanceof Error ? e.message : "Upload failed" });
+        console.warn("ppv upload error:", e);
+        set(i, { status: "done" });
       }
     }
     setBusy(false);

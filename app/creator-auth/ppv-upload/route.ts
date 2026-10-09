@@ -65,13 +65,16 @@ export async function POST(req: NextRequest) {
     const { error: storageError } = await supabaseAdmin.storage.from("onboarding-content").upload(objectPath, blob, { contentType: mime, upsert: false });
     if (storageError) {
       console.error("[ppv-upload] catalogue and inbox both failed", { cloneId, catalogueError, storageError: storageError.message });
+      await supabaseAdmin.from("system_logs").insert({ clone_id: cloneId, level: "error", source: "creator-ppv-upload", message: `Creator PPV upload LOST (${file.name}): ${catalogueError}; inbox: ${storageError.message}` }).then(() => undefined, () => undefined);
       return reply({ ok: false, error: "Upload failed, please try again." }, 503);
     }
     console.warn("[ppv-upload] kept in inbox", { cloneId, objectPath, catalogueError });
     await supabaseAdmin.from("system_logs").insert({ clone_id: cloneId, level: "warn", source: "creator-ppv-upload", message: `Creator PPV upload kept in inbox: ${objectPath} (${catalogueError})` }).then(() => undefined, () => undefined);
     return reply({ ok: true, inbox: true }, 200);
   } catch (error) {
-    console.error("[ppv-upload] failed", { cloneId, error: error instanceof Error ? error.message : String(error) });
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[ppv-upload] failed", { cloneId, error: message });
+    await supabaseAdmin.from("system_logs").insert({ clone_id: cloneId, level: "error", source: "creator-ppv-upload", message: `Creator PPV upload LOST: ${message}` }).then(() => undefined, () => undefined);
     return reply({ ok: false, error: "Upload failed, please try again." }, 500);
   } finally {
     await staged?.dispose().catch(() => undefined);
