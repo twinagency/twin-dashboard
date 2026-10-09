@@ -8,6 +8,7 @@ import * as fanModel from '../components/fans/model';
 import * as ledger from '../components/fans/brianna-ledger';
 import * as library from '../components/content-library/model';
 import * as model from '../components/inbox/model';
+import {mirrorCampaigns,seedCampaigns} from '../components/campaigns/model';
 const nativeRequire=createRequire(import.meta.url);
 function compile(path:string,imports:Record<string,unknown>){const js=ts.transpileModule(readFileSync(path,'utf8'),{fileName:path,compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText;const result={exports:{} as any};new Function('require','module','exports',js)((name:string)=>{if(Object.hasOwn(imports,name))return imports[name];if(['react','react-dom','react/jsx-runtime','lucide-react'].includes(name))return nativeRequire(name);throw Error(`Unexpected dependency: ${name}`);},result,result.exports);return result.exports;}
 async function main(){
@@ -58,6 +59,12 @@ async function main(){
  await input('[aria-label="Inbox creator"]','kyla');assert.match(find('.activeFan').textContent!,/Kyla/);await button('Add content');assert.ok(!document.querySelector('[aria-label="Select Original photo"]'));await click('[aria-label="Close inbox dialog"]');
  await input('[aria-label="Inbox creator"]','riley');assert.equal(document.querySelectorAll('[aria-label="Inbox platforms"] button').length,3,'Only all-platforms, OnlyFans and Telegram filters remain');assert.doesNotMatch(document.body.textContent!,/Fansly|Fanvue/);
  await act(async()=>root.unmount());root=createRoot(document.getElementById('root')!);await render();await click('[aria-label="View Ben on Telegram"]');assert.equal((find('[aria-label="Conversation handling mode"]') as HTMLSelectElement).value,'Human');assert.equal((find('[aria-label="Assigned operator"]') as HTMLSelectElement).value,'Sarah');assert.match(find('[aria-label="Message history"]').textContent!,/Awaiting purchase/);assert.match((find('[aria-label="Reply to Ben on Telegram"]') as HTMLTextAreaElement).value,/No rush/);
+ await act(async()=>root.unmount());root=createRoot(document.getElementById('root')!);
+ const campaignBase=library.buildLibrary(fans),campaignContext={fans,items:campaignBase.items,sales:campaignBase.sales,workspace:fanModel.restoreState(localStorage.getItem(fanModel.STORAGE_KEY),fans),inbox:model.restoreInbox(localStorage.getItem(model.INBOX_STORAGE),fans)};
+ const campaignMirror=mirrorCampaigns(seedCampaigns(campaignContext).campaigns,campaignContext);
+ localStorage.setItem(fanModel.STORAGE_KEY,JSON.stringify(campaignMirror.workspace));localStorage.setItem(model.INBOX_STORAGE,JSON.stringify(campaignMirror.inbox));
+ await act(async()=>root.render(<Component creators={creators} fans={authoredFans} mediaItems={mediaItems} initialSource='campaign:briana-october-release:briana-ben:onlyfans'/>));
+ assert.equal(find('.offerCard small').textContent,'Purchased · 2 Oct 2026','Historical campaign offer reconciles with its completed purchase');
  assert.equal(JSON.stringify(fans),original,'Shared purchase ledger and relationship fixtures unchanged');assert.equal(requests,0,'No send or payment operation calls a live service');await act(async()=>root.unmount());globalThis.fetch=oldFetch;dom.window.close();console.log('Unified Inbox: access guards, linked accounts, channel-isolated drafts/messages, history, ownership, offer validation, follow-up pause, modes, assignment, queues, voice drafts, creator isolation and persistence passed');
 }
 main().catch(e=>{console.error(e);process.exitCode=1;});
