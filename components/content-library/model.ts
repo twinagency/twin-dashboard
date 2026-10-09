@@ -62,7 +62,7 @@ export function restoreLibrary(raw:string|null,base:LibraryItem[]):LibraryItem[]
     for(const item of saved.items){if(!item||typeof item.id!=='string'||typeof item.title!=='string'||typeof item.description!=='string'||!Array.isArray(item.members)||!Array.isArray(item.tags)||!Array.isArray(item.activity)||!['Photo','Video','Bundle'].includes(item.kind)||!['Draft','Published','Archived'].includes(item.status)||!base.some(b=>b.creatorId===item.creatorId))continue;
       const index=result.findIndex(b=>b.id===item.id);const original=index<0?undefined:result[index];
       if(original&&(original.creatorId!==item.creatorId||original.kind!==item.kind))continue;
-      const safe={...item,preview:undefined,originalTitle:original?.originalTitle||'',members:item.members.filter((m:unknown)=>typeof m==='string'),activity:item.activity.filter((e:any)=>typeof e?.text==='string'&&typeof e?.at==='string').slice(-100)} as LibraryItem;
+      const safe={...item,preview:original?.preview,originalTitle:original?.originalTitle||'',members:item.members.filter((m:unknown)=>typeof m==='string'),activity:item.activity.filter((e:any)=>typeof e?.text==='string'&&typeof e?.at==='string').slice(-100)} as LibraryItem;
       if(!safe.listings||validateItem(safe,[...result,...saved.items]))continue;
       if(index<0)result.push(safe);else result[index]=safe;
     }return result;
