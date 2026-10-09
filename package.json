@@ -75,11 +75,12 @@
     "test:creator-gallery": "node --import tsx scripts/check-creator-gallery.ts && node scripts/check-creator-gallery-ui.cjs",
     "test:creator-upload-receipts": "node --import tsx scripts/check-creator-upload-receipts.ts",
     "test:agency-sequences": "node --import tsx scripts/check-agency-sequences.ts",
-    "test:fan-workspace": "tsx scripts/check-fan-workspace.tsx && npm run test:creator-dashboard && npm run test:content-library && npm run test:inbox && npm run test:campaigns",
+    "test:fan-workspace": "tsx scripts/check-fan-workspace.tsx && npm run test:creator-dashboard && npm run test:content-library && npm run test:inbox && npm run test:campaigns && npm run test:intelligence-controls",
     "test:creator-dashboard": "tsx scripts/check-creator-dashboard.tsx",
     "test:content-library": "tsx scripts/check-content-library.tsx",
     "test:inbox": "tsx scripts/check-unified-inbox.tsx",
-    "test:campaigns": "tsx scripts/check-campaigns.tsx"
+    "test:campaigns": "tsx scripts/check-campaigns.tsx",
+    "test:intelligence-controls": "node --import tsx scripts/check-intelligence-controls.tsx"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
