@@ -174,6 +174,8 @@ for (const mobile of [false, true]) {
   }
   for (const tab of ["ppvs", "identity"]) assert.ok(admin.includes(`href="/clones/${clone}?tab=${tab}"`));
   assert.doesNotMatch(admin, /AI Intelligence Core/);
+  assert.ok(admin.includes('href="/fans"'), "Admin fan workspace is reachable on desktop and mobile");
+  assert.match(admin, /Fan profiles/);
 }
 const palette = readFileSync("app/lynq-theme.css", "utf8");
 assert.match(palette, /html\[data-brand-theme="lynq-light"\]/);
@@ -207,3 +209,4 @@ pathname = `/clones/${clone}`; query = new URLSearchParams("tab=identity");
 assert.match(render(portals.JESS_KATE_PORTAL.name, true), /href="[^\"]+tab=identity"[^>]*bg-white\/12/);
 assert.match(readFileSync("components/MobileMenu.tsx", "utf8"), /<SidebarContent/);
 console.log("Sidebar: Moxy grouped navigation, prominent invite, ten destinations, creator gates and single active page verified for owners/readers on desktop/mobile; other portals preserved");
+

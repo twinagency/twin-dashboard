@@ -1,0 +1,13 @@
+export const PLATFORMS = ["onlyfans", "telegram", "fanvue", "fansly"] as const;
+export type Platform = typeof PLATFORMS[number];
+export type PlatformFilter = Platform | "all";
+export type ProfileTab = "summary" | "conversation" | "memory" | "purchases" | "accounts";
+export type Handling = "Human" | "Copilot" | "Autonomous";
+export type Creator = { id: string; name: string; initials: string; color: string };
+export type Account = { platform: Platform; username: string; linkedAt: string };
+export type Message = { id: string; platform: Platform; direction: "in" | "out"; text: string; at: string };
+export type Purchase = { id: string; platform: Platform; title: string; kind: "Photo" | "Video" | "Bundle"; amount: number; currency: "USD" | "Stars"; at: string };
+export type Memory = { id: string; category: string; label: string; value: string; source: Platform; updatedAt: string };
+export type Fan = { id: string; creatorId: string; name: string; initials: string; color: string; firstSeen: string; unread: number; summary: string; accounts: Account[]; messages: Message[]; purchases: Purchase[]; memories: Memory[] };
+export type Note = { id: string; text: string; at: string };
+export type WorkspaceState = { version: 1; notes: Record<string, Note[]>; messages: Record<string, Message[]>; memories: Record<string, Record<string, string>>; modes: Record<string, Handling>; drafts: Record<string, string> };

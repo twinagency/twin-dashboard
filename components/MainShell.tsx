@@ -15,7 +15,7 @@ import { useDashboardAccess } from "./DashboardAccessProvider";
 export default function MainShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const {isAgency, isCreator} = useDashboardAccess();
-  const fullBleed = pathname === "/users" || pathname === "/jarvis";
+  const fullBleed = pathname === "/users" || pathname === "/jarvis" || pathname === "/fans";
   return (
     <main
       className={
@@ -25,7 +25,8 @@ export default function MainShell({ children }: { children: React.ReactNode }) {
       }
     >
       {children}
-      {!isAgency && !isCreator && pathname !== "/jarvis" ? <TwinAssistant variant="mobile-dock" /> : null}
+      {!isAgency && !isCreator && pathname !== "/jarvis" && pathname !== "/fans" ? <TwinAssistant variant="mobile-dock" /> : null}
     </main>
   );
 }
+
