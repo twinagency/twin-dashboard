@@ -138,6 +138,30 @@ async function main() {
   assert.equal((await route({ platform: "telegram", window: "all" })).props.initialFilters.platform, "telegram");
   assert.equal((await route({ creator: ["kyla", "briana"] })).props.initialFilters.creatorId, "briana");
 
+  let headerPath = "/users", headerParams = new URLSearchParams("relationship=briana-ledger-1");
+  const headerAudience = { isAgency: false, isCreator: false, agencyName: "" };
+  const Header = compile("components/TopBar.tsx", {
+    "./DashboardAccessProvider": { useDashboardAccess: () => headerAudience },
+    "next/navigation": { usePathname: () => headerPath, useSearchParams: () => headerParams },
+    "@/components/CloneSwitcher": { __esModule: true, default: () => <span>Live creator selector</span> },
+    "@/components/CurrencyToggle": { __esModule: true, default: () => <span>Live currency selector</span> },
+    "@/components/CurrencyProvider": { useCurrency: () => ({ currency: "USD", rate: 1.4, usdPerStar: .013 }) },
+    "@/components/BlurToggle": { __esModule: true, default: () => <span>Blur media</span> },
+    "@/app/login/actions": { logout: async () => {} },
+    "@/lib/money": { fmtMoney: () => "LIVE_BALANCE", starsToMoneyRate: () => 1 },
+    "@/lib/page-meta": { getPageMeta: () => ({ scopeLabel: "Brianna Redd", pageLabel: "Earnings", scopeIsCreator: true }) },
+    "@/lib/creator-dashboard-policy": { CREATOR_DASHBOARD_NAV: [] },
+  }).default;
+  const { renderToStaticMarkup } = nativeRequire("react-dom/server");
+  const header = () => renderToStaticMarkup(<Header clones={[]} activeCloneId={null} allTimeStars={100} />);
+  assert.match(header(), /Live Telegram Window/);
+  assert.doesNotMatch(header(), /LIVE_BALANCE|Live creator selector|Live currency selector/);
+  headerParams = new URLSearchParams(); assert.match(header(), /LIVE_BALANCE/);
+  headerPath = "/revenue"; assert.match(header(), /LIVE_BALANCE/);
+  headerPath = "/users"; headerParams = new URLSearchParams("relationship=briana-ledger-1");
+  headerAudience.isAgency = true; assert.match(header(), /LIVE_BALANCE/);
+  headerAudience.isAgency = false; headerAudience.isCreator = true; assert.match(header(), /LIVE_BALANCE/);
+
   // Execute the real component with the existing shell's currency context
   // isolated. Any new network request or global currency mutation is a failure.
   const { JSDOM } = nativeRequire("jsdom");
