@@ -27,7 +27,6 @@ const order=(key:string,label:string,value:string[]):Field=>({key,label,kind:"or
 const c=(id:number,key:string,title:string,domain:Domain,group:string,description:string,fields:Field[],visual?:Control["visual"]):Control=>({id,key,title,domain,group,description,fields,visual});
 const authority=["Automatic","Approval required","Human only"];
 const disclosure=["May volunteer","Only when asked","Keep private"];
-const yesNo=["Enabled","Disabled"];
 export const CONTROLS: Control[] = [
  c(1,"adaptation","Personality adaptation limits","identity","Personality precision","Set the permitted range for each adaptive trait. Fixed traits retain their selected value.",[
   rows("traits","Trait boundaries",[{trait:"Warmth",mode:"Adaptive",min:60,max:85},{trait:"Curiosity",mode:"Adaptive",min:35,max:70},{trait:"Playfulness",mode:"Adaptive",min:40,max:80},{trait:"Directness",mode:"Fixed",min:65,max:65}],[text("trait","Trait","New trait"),choice("mode","Mode","Adaptive",["Fixed","Adaptive"]),number("min","Minimum",35,0,100,"%"),number("max","Maximum",75,0,100,"%")])]),
@@ -114,7 +113,8 @@ export function clampValue(value:unknown,field:Field):Value {
    const expected=(field.value as Row[]).map(r=>r.label);const labels=value.map(r=>r&&typeof r==="object"?r.label:null);
    return labels.length===expected.length&&new Set(labels).size===expected.length&&labels.every(l=>expected.includes(l))?labels.map(label=>({label})):structuredClone(field.value);
   }
-  return value.slice(0,50).filter(r=>r&&typeof r==="object").map(r=>Object.fromEntries((field.columns??[]).map(col=>[col.key,clampValue(r[col.key],col) as Scalar])));
+  const restored=value.slice(0,50).filter(r=>r&&typeof r==="object").map(r=>Object.fromEntries((field.columns??[]).map(col=>[col.key,clampValue(r[col.key],col) as Scalar])));
+  return restored.length?restored:structuredClone(field.value);
  }
  if(field.kind==="toggle")return typeof value==="boolean"?value:field.value;
  if(field.kind==="number"||field.kind==="range")return typeof value==="number"&&Number.isFinite(value)?Math.min(field.max??999,Math.max(field.min??0,value)):field.value;
@@ -142,7 +142,7 @@ export function issues(values:Values):{id:number;message:string}[]{
  for(const c of CONTROLS)for(const f of c.fields){const value=values[fieldKey(c,f)];if(!Array.isArray(value))continue;
   value.forEach((r,i)=>{
    if("min"in r&&"max"in r&&Number(r.min)>Number(r.max))result.push({id:c.id,message:`${r.trait}: minimum exceeds maximum.`});
-   if(typeof r.start==="string"&&typeof r.end==="string"&&r.start>r.end)result.push({id:c.id,message:`Row ${i+1}: expiry must follow its start date.`});
+   if(typeof r.start==="string"&&typeof r.end==="string"&&(!r.start||!r.end||r.start>r.end))result.push({id:c.id,message:`Row ${i+1}: enter valid start and expiry dates in order.`});
    if(c.id===52&&Number(r.end)<=Number(r.start))result.push({id:c.id,message:`${r.label}: scene end must follow its start.`});
   });
  }

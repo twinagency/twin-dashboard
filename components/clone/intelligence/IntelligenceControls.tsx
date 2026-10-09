@@ -28,7 +28,7 @@ function ReorderEditor({field,value,onChange,prefix}:EditorProps){
 
 function RowsEditor({field,value,onChange,prefix}:EditorProps){
  const entries=value as Row[];const columns=field.columns??[];
- function edit(index:number,key:string,next:Value){onChange(entries.map((row,i)=>i===index?{...row,[key]:next as Scalar}:row));}
+ function edit(index:number,key:string,next:Value){onChange(entries.map((row,i)=>{if(i!==index)return row;const updated={...row,[key]:next as Scalar};if(updated.mode==="Fixed"&&"min"in updated&&"max"in updated){if(key==="max")updated.min=updated.max;else updated.max=updated.min;}return updated;}));}
  return <div className={styles.full}><div className={styles.fieldHeading}><p className={styles.subLabel}>{field.label}</p><span className={styles.muted}>{entries.length} {entries.length===1?"entry":"entries"}</span></div><div className={styles.rowList}>{entries.map((row,index)=><div className={styles.dataRow} key={index}>{columns.map(column=><ScalarEditor key={column.key} field={column} value={row[column.key]} prefix={`${prefix}-${index}`} onChange={next=>edit(index,column.key,next)}/>)}{field.addable?<button type="button" className={styles.remove} aria-label={`Remove ${field.label} row ${index+1}`} disabled={entries.length<=1} onClick={()=>onChange(entries.filter((_,i)=>i!==index))}><Trash2 size={15}/></button>:null}</div>)}</div>{field.addable?<button type="button" disabled={entries.length>=50} className={styles.secondary} onClick={()=>onChange([...entries,Object.fromEntries(columns.map(col=>[col.key,col.value as Scalar]))])}><Plus size={14}/>Add {field.label==="Conditional policies"?"rule":"entry"}</button>:null}</div>;
 }
 
