@@ -97,7 +97,7 @@ const TWIN_ADMIN_NAV_LABELS: Record<string, string> = {
   "/users": "Live Telegram Window",
   "/business": "Upload Telegram Story",
   identity: "Creator Configuration",
-  ppvs: "Pay-per-views",
+  ppvs: "PPVs",
   "/jarvis": "Core Intelligence",
 };
 
