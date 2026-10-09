@@ -3,7 +3,10 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import ts from "typescript";
 import React, { act } from "react";
-import { creators, fans } from "../components/fans/data";
+import { creators, fans as sharedFans } from "../components/fans/data";
+// Keep the authored Ben/Oliver and existing creators' regression cases stable.
+import * as ledger from "../components/fans/brianna-ledger";
+const fans = sharedFans.filter(f => !f.id.startsWith("briana-ledger-"));
 import * as model from "../components/fans/model";
 import * as types from "../components/fans/types";
 
@@ -29,7 +32,7 @@ async function main() {
     "@/lib/internal-admin": { hasInternalAdminAccess: async () => admin },
     "@/lib/view-as": { activeViewAs: async () => viewAs },
     "@/components/fans/FanWorkspace": { __esModule: true, default: () => null },
-    "@/components/fans/data": { creators, fans },
+    "@/components/fans/data": { creators, fans, authoredFans: fans },
   }).default;
   await assert.rejects(page(), /redirect:\/twin/);
   admin = true;
@@ -50,7 +53,7 @@ async function main() {
     "@/lib/view-as": { activeViewAs:async()=>viewAs },
     "@/lib/clone-scope": { getCloneScope:async()=>{throw new Error("existing-live-route");} },
     "@/lib/supabase": { supabaseAdmin:{from:()=>{throw new Error("Unexpected real data access");}} },
-    "@/components/fans/data": { creators,fans },
+    "@/components/fans/data": { creators,fans,authoredFans:fans },
     "@/components/users/FanConversationWindow": { __esModule:true, default:()=>null },
   });
   const inboxPage = compile("app/users/page.tsx",inboxImports).default;
@@ -127,7 +130,7 @@ async function main() {
   const { createRoot } = require("react-dom/client");
   const css = new Proxy({}, { get: (_, key) => String(key) });
   let navigation = "";
-  const Workspace = compile("components/fans/FanWorkspace.tsx", { "next/navigation": { useRouter: () => ({ push: (href:string) => { navigation = href; } }) }, "./model":model, "./types":types, "./FanWorkspace.module.css":{ __esModule:true, default:css } }).default;
+  const Workspace = compile("components/fans/FanWorkspace.tsx", { "next/navigation": { useRouter: () => ({ push: (href:string) => { navigation = href; } }) }, "./brianna-ledger":ledger, "./model":model, "./types":types, "./FanWorkspace.module.css":{ __esModule:true, default:css } }).default;
   let root = createRoot(document.getElementById("root")!);
   await act(async () => { root.render(<Workspace creators={creators} fans={fans}/>); });
   const find = (selector:string) => { const element=document.querySelector(selector); assert.ok(element,selector); return element as HTMLElement; };
@@ -217,7 +220,7 @@ async function main() {
   }}).default;
   const Conversation = compile("components/users/FanConversationWindow.tsx", {
     "next/link": { __esModule:true, default: ({children,...props}:React.ComponentProps<"a">) => <a {...props}>{children}</a> },
-    "./ChatThread": { __esModule:true, default:ChatThread }, "../fans/model":model, "../fans/types":types,
+    "./ChatThread": { __esModule:true, default:ChatThread }, "../fans/model":model, "../fans/types":types, "../fans/brianna-ledger":ledger,
     "./FanConversationWindow.module.css": { __esModule:true, default:css },
   }).default;
   window.history.replaceState(null,"",navigation);
@@ -257,6 +260,27 @@ async function main() {
   assert.equal(document.querySelector('[data-source-message="true"]'),null,"Another fan's message cannot be a source");
   assert.match(find('.tg-thread').textContent||"",/OnlyFans local reply/);
   assert.equal(new URLSearchParams(window.location.search).get("source"),null);
+  await act(async()=>root.unmount());
+  const expandedFan=sharedFans.find(f=>f.id==="briana-ledger-1")!;
+  const expandedPurchase=expandedFan.purchases.at(-1)!;
+  window.history.replaceState(null,"",model.profileHref(expandedFan));
+  root=createRoot(document.getElementById("root")!);
+  await act(async()=>root.render(<Workspace creators={creators} fans={fans} includeBriannaLedger/>));
+  assert.equal(document.querySelectorAll('.fanRow').length,514);
+  assert.match(find('.profileHeader').textContent||"",/Adam Parker/);
+  await click('#fan-tab-memory');
+  assert.equal(document.querySelectorAll('.memoryEntryValue').length,expandedFan.memories.length);
+  await click('#fan-tab-purchases');
+  assert.equal(document.querySelectorAll('.purchaseRow').length,expandedFan.purchases.length);
+  assert.match(find('#fan-tab-panel').textContent||"",new RegExp(expandedPurchase.title));
+  await act(async()=>root.unmount());
+  window.history.replaceState(null,"",model.conversationHref(expandedFan,expandedPurchase.platform,expandedPurchase.sourceMessageId));
+  root=createRoot(document.getElementById("root")!);
+  await act(async()=>root.render(<Conversation creators={creators} fans={fans} includeBriannaLedger initialFanId={expandedFan.id} initialSourceId={expandedPurchase.sourceMessageId}/>));
+  assert.match(find('.chatHeader').textContent||"",/Adam Parker/);
+  assert.equal(find('[data-source-message="true"]').getAttribute('data-message-id'),expandedPurchase.sourceMessageId);
+  assert.match(find('.tg-thread').textContent||"",new RegExp(expandedPurchase.title));
+  assert.equal(new URLSearchParams(window.location.search).get("platform"),expandedPurchase.platform);
   await act(async()=>root.unmount());
   globalThis.fetch=fetchBefore;dom.window.close();
   console.log("Fan workspace passed: admin/view-as gate; creator and fan isolation; separate profiles and inbox; sourced navigation; linked platforms; purchases; notes; memory; local-only inbox messages, drafts and handling; persistence and reset.");

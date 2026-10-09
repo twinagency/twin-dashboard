@@ -1,13 +1,14 @@
 "use client";
 
-import { useEffect, useRef, useState, type ReactNode } from "react";
+import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
 import { ArrowDownLeft, ArrowUpRight, Check, ChevronRight, CircleHelp, DollarSign, ImageIcon, Link2, MessageCircle, NotebookPen, Package, Repeat2, Search, Send, ShoppingBag, Users, Video, X } from "lucide-react";
 import { useCurrency } from "../CurrencyProvider";
 import { STAR_USD } from "../../lib/money";
 import { conversationHref, emptyState, platformNames, profileHref, restoreState, STORAGE_KEY } from "../fans/model";
 import { type Creator, type Fan, type Platform, type WorkspaceState } from "../fans/types";
-import { buildDashboard, dayAt, displayMoney, FILTER_STORAGE_KEY, filterParams, originalMoney, parseFilters, platformOrder, REPORT_DAY, validDay, valueCents, type Activity, type Filters, type LedgerEntry } from "./model";
+import { withBriannaLedger } from "../fans/brianna-ledger";
+import { buildDashboard, dayAt, displayMoney, FILTER_STORAGE_KEY, filterParams, originalMoney, parseFilters, platformOrder, REPORT_DAY, REPORT_START, validDay, valueCents, type Activity, type Filters, type LedgerEntry } from "./model";
 import styles from "./CreatorDashboard.module.css";
 
 const short: Record<Platform, string> = { onlyfans: "OF", telegram: "TG", fansly: "FS", fanvue: "FV" };
@@ -47,7 +48,8 @@ function Dialog({ title, children, close }: { title: string; children: ReactNode
   return <div className={styles.backdrop} onMouseDown={event => { if (event.target === event.currentTarget) close(); }}><div className={styles.dialog} ref={ref} tabIndex={-1} role="dialog" aria-modal="true" aria-label={title}><div className={styles.dialogHeading}><h2>{title}</h2><button className={styles.iconButton} aria-label="Close details" onClick={close}><X size={20} /></button></div>{children}</div></div>;
 }
 
-export default function CreatorDashboard({ creators, fans, initialFilters }: { creators: Creator[]; fans: Fan[]; initialFilters: Filters }) {
+export default function CreatorDashboard({ creators, fans: seedFans, initialFilters, includeBriannaLedger = false }: { creators: Creator[]; fans: Fan[]; initialFilters: Filters; includeBriannaLedger?: boolean }) {
+  const fans = includeBriannaLedger ? withBriannaLedger(seedFans) : seedFans;
   const { rate: audRate } = useCurrency();
   const [filters, setFilters] = useState(initialFilters);
   const [workspace, setWorkspace] = useState<WorkspaceState>(emptyState);
@@ -60,6 +62,8 @@ export default function CreatorDashboard({ creators, fans, initialFilters }: { c
   const [query, setQuery] = useState(""), [kind, setKind] = useState("all");
   const [purchaseLimit, setPurchaseLimit] = useState(8), [activityLimit, setActivityLimit] = useState(6), [contentLimit, setContentLimit] = useState(5);
   const [fanView, setFanView] = useState<FanView>("all");
+  const [fanQuery, setFanQuery] = useState("");
+  const [fanLimit, setFanLimit] = useState(12);
   const [detail, setDetail] = useState<Detail | null>(null);
 
   useEffect(() => {
@@ -87,7 +91,7 @@ export default function CreatorDashboard({ creators, fans, initialFilters }: { c
     window.history.replaceState(window.history.state, "", `/dashboard?${params}`);
   }, [filters, ready]);
 
-  const dashboard = buildDashboard(fans, filters, audRate, workspace);
+  const dashboard = useMemo(() => buildDashboard(fans, filters, audRate, workspace), [fans, filters, audRate, workspace]);
   const creator = creators.find(c => c.id === filters.creatorId)!;
   const money = (cents: number) => displayMoney(cents, filters.currency);
   const platform = filters.platform === "all" ? "All platforms" : platformNames[filters.platform];
@@ -98,17 +102,18 @@ export default function CreatorDashboard({ creators, fans, initialFilters }: { c
     && (kind === "all" || p.kind === kind)
     && `${p.title} ${p.fan.name} ${platformNames[p.platform]}`.toLocaleLowerCase().includes(query.trim().toLocaleLowerCase()));
   const activities = dashboard.activities.filter(a => !focusDay || dayAt(a.at) === focusDay);
-  const relationships = dashboard.relationships.filter(r => fanView === "all" || (fanView === "paying" ? r.paying : fanView === "active" ? r.active : fanView === "repeat" ? r.purchases >= 2 : r.accounts.length > 1));
+  const relationships = dashboard.relationships.filter(r => (fanView === "all" || (fanView === "paying" ? r.paying : fanView === "active" ? r.active : fanView === "repeat" ? r.purchases >= 2 : r.accounts.length > 1))
+    && `${r.fan.name} ${r.accounts.map(a => a.username).join(" ")}`.toLocaleLowerCase().includes(fanQuery.trim().toLocaleLowerCase()));
   const contentDetail = detail?.kind === "content" ? dashboard.content.find(c => c.title === detail.title) : null;
   const change = (patch: Partial<Filters>) => {
     setFilters(current => ({ ...current, ...patch, day: patch.day ?? "" }));
-    setPurchaseLimit(8); setActivityLimit(6); setContentLimit(5); setHoverDay(""); setRangeError(""); setDetail(null); setQuery(""); setKind("all"); setFanView("all");
+    setPurchaseLimit(8); setActivityLimit(6); setContentLimit(5); setHoverDay(""); setRangeError(""); setDetail(null); setQuery(""); setKind("all"); setFanView("all"); setFanQuery(""); setFanLimit(12);
   };
-  const inspectFans = (view: FanView) => { setFanView(view); document.getElementById("dashboard-relationships")?.scrollIntoView({ behavior: "smooth", block: "start" }); };
+  const inspectFans = (view: FanView) => { setFanView(view); setFanQuery(""); setFanLimit(12); document.getElementById("dashboard-relationships")?.scrollIntoView({ behavior: "smooth", block: "start" }); };
   const inspectPurchases = () => { setFanView("all"); document.getElementById("dashboard-purchases")?.scrollIntoView({ behavior: "smooth", block: "start" }); };
   const applyRange = () => {
-    if (!validDay(from) || !validDay(to) || from < "2026-08-01" || from > to || to > REPORT_DAY) {
-      setRangeError("Choose a valid range from 1 August to 9 October 2026, with the start before the end."); return;
+    if (!validDay(from) || !validDay(to) || from < REPORT_START || from > to || to > REPORT_DAY) {
+      setRangeError("Choose a valid range from 10 April to 9 October 2026, with the start before the end."); return;
     }
     change({ window: "custom", from, to });
   };
@@ -130,9 +135,9 @@ export default function CreatorDashboard({ creators, fans, initialFilters }: { c
 
     <div className={styles.filters}>
       <div className={styles.platformFilters} role="group" aria-label="Dashboard platform"><button className={filters.platform === "all" ? styles.activeFilter : ""} aria-pressed={filters.platform === "all"} onClick={() => change({ platform: "all" })}>All platforms</button>{platformOrder.map(p => <button key={p} className={filters.platform === p ? styles.activeFilter : ""} aria-pressed={filters.platform === p} onClick={() => change({ platform: p })}><PlatformBadge platform={p} /></button>)}</div>
-      <div className={styles.windows} role="group" aria-label="Dashboard reporting period">{([['7d', '7 days'], ['30d', '30 days'], ['all', 'All time']] as const).map(([window, label]) => <button key={window} aria-pressed={filters.window === window && !showCustom} className={filters.window === window && !showCustom ? styles.activeWindow : ""} onClick={() => { setShowCustom(false); change({ window }); }}>{label}</button>)}<button aria-pressed={showCustom} className={showCustom ? styles.activeWindow : ""} onClick={() => setShowCustom(open => !open)}>Custom</button></div>
+      <div className={styles.windows} role="group" aria-label="Dashboard reporting period">{([['7d', '7 days'], ['30d', '30 days'], ['6m', '6 months'], ['all', 'All time']] as const).map(([window, label]) => <button key={window} aria-pressed={filters.window === window && !showCustom} className={filters.window === window && !showCustom ? styles.activeWindow : ""} onClick={() => { setShowCustom(false); change({ window }); }}>{label}</button>)}<button aria-pressed={showCustom} className={showCustom ? styles.activeWindow : ""} onClick={() => setShowCustom(open => !open)}>Custom</button></div>
     </div>
-    {showCustom && <div className={styles.customRange}><label>From<input aria-label="Dashboard start date" type="date" min="2026-08-01" max={REPORT_DAY} value={from} onChange={e => setFrom(e.target.value)} /></label><label>To<input aria-label="Dashboard end date" type="date" min="2026-08-01" max={REPORT_DAY} value={to} onChange={e => setTo(e.target.value)} /></label><button className={styles.primaryButton} onClick={applyRange}>Apply dates</button>{rangeError && <p role="alert">{rangeError}</p>}</div>}
+    {showCustom && <div className={styles.customRange}><label>From<input aria-label="Dashboard start date" type="date" min={REPORT_START} max={REPORT_DAY} value={from} onChange={e => setFrom(e.target.value)} /></label><label>To<input aria-label="Dashboard end date" type="date" min={REPORT_START} max={REPORT_DAY} value={to} onChange={e => setTo(e.target.value)} /></label><button className={styles.primaryButton} onClick={applyRange}>Apply dates</button>{rangeError && <p role="alert">{rangeError}</p>}</div>}
     <div className={styles.scopeLine}><span>{date(dashboard.range.from)} – {date(dashboard.range.to, true)}<span className={styles.headerDot} />{platform}</span><span>Brisbane time · {filters.currency}</span></div>
 
     <section className={styles.metrics} aria-label="Dashboard summary">
@@ -154,9 +159,11 @@ export default function CreatorDashboard({ creators, fans, initialFilters }: { c
     </div>
 
     <Panel title="Fan relationships" subtitle={`${dashboard.metrics.fans} unique relationships · ${dashboard.metrics.accounts} linked accounts · spend in the selected period`} id="dashboard-relationships" action={<Link className={styles.textLink} href={`/fans?creator=${creator.id}`}>View fan profiles<ArrowUpRight size={14} /></Link>}>
-      <div className={styles.fanView} role="group" aria-label="Relationship view">{([['all', 'All fans'], ['paying', 'Paying'], ['active', 'Active'], ['repeat', 'Repeat buyers'], ['linked', 'Linked across platforms']] as const).map(([view, label]) => <button key={view} aria-pressed={fanView === view} onClick={() => setFanView(view)}>{label}</button>)}</div>
-      <div className={styles.tableWrap}><table className={styles.relationshipTable}><thead><tr><th>Fan</th><th>Linked platforms</th><th>Spend</th><th>Purchases</th><th>Last conversation</th><th><span className={styles.srOnly}>Actions</span></th></tr></thead><tbody>{relationships.map(r => <tr key={r.fan.id} data-fan={r.fan.id}><td><Link className={styles.fanIdentity} href={profileHref(r.fan)}><span style={{ color: r.fan.color, background: `${r.fan.color}16` }}>{r.fan.initials}</span><div><strong>{r.fan.name}</strong><small>{r.memories} remembered details</small></div></Link></td><td><div className={styles.accountBadges}>{r.accounts.map(a => <PlatformBadge key={a.platform} platform={a.platform} compact />)}</div><small>{r.accounts.length === 1 ? "One platform" : `${r.accounts.length} accounts · one fan`}</small></td><td className={styles.numeric}>{money(r.cents)}</td><td>{r.purchases}</td><td><div>{r.lastMessage ? date(dayAt(r.lastMessage.at)) : "No conversation"}</div><small>{r.lastMessage ? `${time(r.lastMessage.at)} · ${platformNames[r.lastMessage.platform]}` : "—"}</small></td><td><div className={styles.rowActions}><Link href={profileHref(r.fan)} aria-label={`Open ${r.fan.name}'s fan profile`}>Profile<ArrowUpRight size={12} /></Link><Link href={conversationHref(r.fan, filters.platform)} aria-label={`Open ${r.fan.name}'s conversation`}><MessageCircle size={15} /></Link></div></td></tr>)}</tbody></table></div>
-      {!relationships.length && <div className={styles.empty}><Users size={23} /><p>No fans match this relationship view.</p><button className={styles.textButton} onClick={() => setFanView("all")}>Show all relationships</button></div>}
+      <div className={styles.fanView} role="group" aria-label="Relationship view">{([['all', 'All fans'], ['paying', 'Paying'], ['active', 'Active'], ['repeat', 'Repeat buyers'], ['linked', 'Linked across platforms']] as const).map(([view, label]) => <button key={view} aria-pressed={fanView === view} onClick={() => { setFanView(view); setFanLimit(12); }}>{label}</button>)}</div>
+      <div className={styles.purchaseControls}><div className={styles.search}><Search size={15} /><input aria-label="Search dashboard fans" placeholder="Search fan name or account" value={fanQuery} onChange={e => { setFanQuery(e.target.value); setFanLimit(12); }} />{fanQuery && <button aria-label="Clear fan search" onClick={() => setFanQuery("")}><X size={14} /></button>}</div></div>
+      <div className={styles.tableWrap}><table className={styles.relationshipTable}><thead><tr><th>Fan</th><th>Linked platforms</th><th>Spend</th><th>Purchases</th><th>Last conversation</th><th><span className={styles.srOnly}>Actions</span></th></tr></thead><tbody>{relationships.slice(0, fanLimit).map(r => <tr key={r.fan.id} data-fan={r.fan.id}><td><Link className={styles.fanIdentity} href={profileHref(r.fan)}><span style={{ color: r.fan.color, background: `${r.fan.color}16` }}>{r.fan.initials}</span><div><strong>{r.fan.name}</strong><small>{r.memories} remembered details</small></div></Link></td><td><div className={styles.accountBadges}>{r.accounts.map(a => <PlatformBadge key={a.platform} platform={a.platform} compact />)}</div><small>{r.accounts.length === 1 ? "One platform" : `${r.accounts.length} accounts · one fan`}</small></td><td className={styles.numeric}>{money(r.cents)}</td><td>{r.purchases}</td><td><div>{r.lastMessage ? date(dayAt(r.lastMessage.at)) : "No conversation"}</div><small>{r.lastMessage ? `${time(r.lastMessage.at)} · ${platformNames[r.lastMessage.platform]}` : "—"}</small></td><td><div className={styles.rowActions}><Link href={profileHref(r.fan)} aria-label={`Open ${r.fan.name}'s fan profile`}>Profile<ArrowUpRight size={12} /></Link><Link href={conversationHref(r.fan, filters.platform)} aria-label={`Open ${r.fan.name}'s conversation`}><MessageCircle size={15} /></Link></div></td></tr>)}</tbody></table></div>
+      {!relationships.length && <div className={styles.empty}><Users size={23} /><p>No fans match this relationship view.</p><button className={styles.textButton} onClick={() => { setFanView("all"); setFanQuery(""); setFanLimit(12); }}>Show all relationships</button></div>}
+      <div className={styles.tableFooter}><span>{Math.min(relationships.length, fanLimit)} of {relationships.length} relationships</span>{relationships.length > fanLimit && <button className={styles.textButton} onClick={() => setFanLimit(n => n + 12)}>Show more fans<ChevronRight size={14} /></button>}</div>
     </Panel>
 
     <Panel title="Recent purchases" subtitle={focusDay ? `Purchases on ${date(focusDay, true)} · ${platform}` : `Completed purchases · ${platform}`} id="dashboard-purchases" action={focusDay ? <button className={styles.textButton} onClick={() => change({ day: "" })}>Show full period<X size={13} /></button> : <span className={styles.panelCount}>{dashboard.metrics.purchases} purchases</span>}>

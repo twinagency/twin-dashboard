@@ -6,9 +6,10 @@ import { PLATFORMS, type Creator, type Fan, type Platform, type PlatformFilter, 
 // no database, payment, platform or delivery clients. Keep real /revenue data
 // independent. Dates are pinned to the authored histories for repeatable tours.
 export const REPORT_DAY = "2026-10-09";
+export const REPORT_START = "2026-04-10";
 export const FILTER_STORAGE_KEY = "twin-creator-dashboard-filters-v1";
 export const platformOrder: Platform[] = ["onlyfans", "telegram", "fansly", "fanvue"];
-export type Window = "7d" | "30d" | "all" | "custom";
+export type Window = "7d" | "30d" | "6m" | "all" | "custom";
 export type DisplayCurrency = "USD" | "AUD";
 export type Filters = { creatorId: string; platform: PlatformFilter; window: Window; currency: DisplayCurrency; from: string; to: string; day: string };
 export type LedgerEntry = Purchase & { fan: Fan; status: "Completed" };
@@ -26,14 +27,14 @@ export function shiftDay(day: string, by: number): string {
 export function parseFilters(query: URLSearchParams, creators: Creator[]): Filters {
   const creatorId = creators.some(c => c.id === query.get("creator")) ? query.get("creator")! : "briana";
   const platform = (PLATFORMS as readonly string[]).includes(query.get("platform") || "") ? query.get("platform") as Platform : "all";
-  const window = ["7d", "30d", "all", "custom"].includes(query.get("window") || "") ? query.get("window") as Window : "30d";
+  const window = ["7d", "30d", "6m", "all", "custom"].includes(query.get("window") || "") ? query.get("window") as Window : "30d";
   const from = query.get("from") || shiftDay(REPORT_DAY, -29), to = query.get("to") || REPORT_DAY;
-  const safeRange = validDay(from) && validDay(to) && from >= "2026-08-01" && from <= to && to <= REPORT_DAY;
+  const safeRange = validDay(from) && validDay(to) && from >= REPORT_START && from <= to && to <= REPORT_DAY;
   const day = query.get("day") || "";
   return { creatorId, platform, window: window === "custom" && !safeRange ? "30d" : window,
     currency: query.get("currency") === "AUD" ? "AUD" : "USD",
     from: safeRange ? from : shiftDay(REPORT_DAY, -29), to: safeRange ? to : REPORT_DAY,
-    day: validDay(day) && day >= "2026-08-01" && day <= REPORT_DAY ? day : "" };
+    day: validDay(day) && day >= REPORT_START && day <= REPORT_DAY ? day : "" };
 }
 export function filterParams(filters: Filters): URLSearchParams {
   const params = new URLSearchParams({ creator: filters.creatorId, platform: filters.platform, window: filters.window, currency: filters.currency });
@@ -44,7 +45,7 @@ export function filterParams(filters: Filters): URLSearchParams {
 export function rangeFor(filters: Filters, fans: Fan[]) {
   const creatorFans = fans.filter(f => f.creatorId === filters.creatorId);
   const firstDay = creatorFans.map(f => dayAt(f.firstSeen)).sort()[0] || REPORT_DAY;
-  const from = filters.window === "custom" ? filters.from : filters.window === "all" ? firstDay : shiftDay(REPORT_DAY, filters.window === "7d" ? -6 : -29);
+  const from = filters.window === "custom" ? filters.from : filters.window === "all" ? firstDay : filters.window === "6m" ? REPORT_START : shiftDay(REPORT_DAY, filters.window === "7d" ? -6 : -29);
   const to = filters.window === "custom" ? filters.to : REPORT_DAY;
   const days: string[] = [];
   for (let day = from; day <= to; day = shiftDay(day, 1)) days.push(day);

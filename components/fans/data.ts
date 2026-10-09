@@ -1,5 +1,6 @@
 import type { Account, Creator, Fan, Memory, Message, Platform, Purchase } from "./types";
 import { briannaFans } from "./brianna-data";
+import { withBriannaLedger } from "./brianna-ledger";
 
 // Isolated presentation fixtures. Only imported by the guarded server page.
 // Mark/Kyla's three Telegram purchases and four non-sensitive memory fields
@@ -53,7 +54,7 @@ function otherFan(id: string, creatorId: string, name: string, channels: Platfor
     memories: [memory(`${id}-interest`, topic, value, "Interests", platform), memory(`${id}-language`, "Language", "English", "Personal details", platform)],
   };
 }
-export const fans: Fan[] = [
+export const authoredFans: Fan[] = [
   { id: "kyla-mark", creatorId: "kyla", name: "Mark", initials: "M", color: "#4d78db", firstSeen: "2026-09-19T22:19:02Z", unread: 2,
     summary: "Mark follows Kyla across four linked accounts. He enjoys travel and late-night conversations. His relationship context stays together while each platform keeps its own conversation and purchases.",
     accounts: accounts("mark", ["onlyfans", "telegram", "fanvue", "fansly"]), messages: markMessages, purchases: markPurchases,
@@ -66,3 +67,4 @@ export const fans: Fan[] = [
   otherFan("riley-mark", "riley", "Mark", ["telegram"], "Interests", "Enjoys cooking and live music"),
   ...briannaFans,
 ];
+export const fans = withBriannaLedger(authoredFans);

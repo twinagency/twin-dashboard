@@ -6,6 +6,7 @@ import { conversationHref, emptyState, messagesFor, platformNames, restoreState,
 import { PLATFORMS, type Creator, type Fan, type Memory, type Platform, type PlatformFilter, type ProfileTab, type Purchase, type WorkspaceState } from "./types";
 import styles from "./FanWorkspace.module.css";
 import { useRouter } from "next/navigation";
+import { withBriannaLedger } from "./brianna-ledger";
 
 const tabs: { id: ProfileTab; label: string }[] = [{id:"summary",label:"Summary"},{id:"memory",label:"Memory"},{id:"history",label:"History"},{id:"purchases",label:"Purchases"},{id:"accounts",label:"Accounts"}];
 const platformShort: Record<Platform,string> = { onlyfans:"OF", telegram:"TG", fanvue:"FV", fansly:"FS" };
@@ -85,7 +86,8 @@ function RelationshipMemory({fan, creator, value, edited, onEdit, onSource}: {
 }
 type Dialog = {kind:"note"}|{kind:"memory";memory:Memory}|{kind:"purchase";purchase:Purchase}|{kind:"account";platform:Platform}|{kind:"reset"}|null;
 
-export default function FanWorkspace({creators,fans}:{creators:Creator[];fans:Fan[]}) {
+export default function FanWorkspace({creators,fans:seedFans,includeBriannaLedger=false}:{creators:Creator[];fans:Fan[];includeBriannaLedger?:boolean}) {
+  const fans=includeBriannaLedger?withBriannaLedger(seedFans):seedFans;
   const router=useRouter();
   const [creatorId,setCreatorId]=useState("briana");
   const [selectedId,setSelectedId]=useState("briana-ben");
