@@ -2,7 +2,7 @@ import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import ts from "typescript";
-import React from "react";
+import React, { act } from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import Access, * as accessModule from "../components/DashboardAccessProvider";
 import * as agencyPolicy from "../lib/agency-policy";
@@ -168,25 +168,39 @@ assert.doesNotMatch(lynqNavigation, /AI Intelligence Core|href="\/info"/);
 for (const mobile of [false, true]) {
   const admin = render(undefined, false, clone, mobile);
   assert.doesNotMatch(admin, />CRM<|href="\/crm\//, "Internal admin navigation has no CRM group");
-  assert.doesNotMatch(admin, /aria-expanded|>More</, "Internal admin tools are always visible");
+  assert.match(admin, /data-admin-navigation="grouped"/);
+  assert.match(admin, /data-nav-group="More"/);
+  assert.match(admin, /aria-expanded="false"[^>]*aria-controls="admin-more-/);
+  assert.match(admin, /id="admin-more-(desktop|mobile)" hidden=""/);
+  assert.match(admin, /Show full navigation/);
   for (const href of ["/sales-health", "/tsocial", "/jarvis", "/flows", "/sequences", "/catalogue-funnel", "/miniapp-rollout", "/mtproto-campaign", "/tracker", "/info", "/logs", "/sim", "/agency-admin", "/agency-admin/creator-codes", "/agency/creators", "/agency/creator-invites", "/api-access", "/settings"]) {
     assert.ok(admin.includes(`href="${href}"`), `Keep admin tool ${href} visible without expanding a group`);
   }
   for (const tab of ["ppvs", "identity"]) assert.ok(admin.includes(`href="/clones/${clone}?tab=${tab}"`));
   assert.doesNotMatch(admin, /AI Intelligence Core/);
   assert.ok(admin.includes('href="/fans"'), "Admin fan workspace is reachable on desktop and mobile");
-  assert.match(admin, /Fan profiles/);
+  assert.match(admin, /Fan Profiles/);
   const nav = admin.slice(admin.indexOf('<nav aria-label="Main navigation"'));
-  const orderedLabels = ["Dashboard", "Overview", "Creators", "Fan profiles", "Unified Inbox", "Live Telegram Window", "Upload Telegram Story", "PPVs", "Content Library", "Creator Configuration", "Agency access", "Earnings split", "Catalogue funnel", "Accounts", "Invite creator"];
-  let previous = -1;
-  for (const label of orderedLabels) {
-    const index = nav.indexOf(`>${label}<`);
-    assert.ok(index > previous, `${mobile ? "mobile" : "desktop"}: ${label} follows the requested sidebar order`);
-    assert.equal((nav.match(new RegExp(`>${label}<`,"g")) || []).length, 1, `${label} appears once`);
-    previous = index;
-  }
-  assert.ok(nav.indexOf('>Sales Health<') > previous, "All other tools follow Accounts and Invite creator");
-  assert.ok(admin.includes('href="/dashboard"'), "The separate Dashboard is reachable without replacing Overview");
+  const orderedLabels = ["Dashboard", "Creators", "Fan Profiles", "Unified Inbox", "Content Library", "Campaigns", "Automations", "Performance", "Agency Access", "Core Intelligence", "Settings", "More"];
+  assert.deepEqual(Array.from(nav.matchAll(/data-nav-group="([^"]+)"/g), match => match[1]), orderedLabels);
+  const { JSDOM } = nativeRequire("jsdom");
+  const document = new JSDOM(admin).window.document;
+  const group = (name: string) => document.querySelector(`[data-nav-group="${name}"]`)!;
+  for (const [name, hrefs] of Object.entries({
+    Creators: [`/clones/${clone}?tab=identity`, "/agency-admin/creator-codes", "/agency/creator-invites", "/clones/new"],
+    "Unified Inbox": ["/inbox", "/users"],
+    "Content Library": ["/content-library", `/clones/${clone}?tab=ppvs`, "/business"],
+    Automations: ["/flows", "/sequences"],
+    Performance: ["/revenue", "/sales-health", "/catalogue-funnel"],
+    "Agency Access": ["/agency-admin", "/agency/creators"],
+    "Core Intelligence": ["/jarvis", "/ai-models"],
+    Settings: ["/settings", "/admin/earnings-split"],
+    More: ["/storage", "/logs", "/api-access", "/sim", "/bot-v2", "/miniapp-rollout", "/mtproto-campaign", "/tracker", "/info", "/tsocial", "/admin/view-as"],
+  })) for (const href of hrefs) assert.ok(Array.from(group(name).querySelectorAll("a")).some((a: any) => a.getAttribute("href") === href), `${href} belongs to ${name}`);
+  const hrefs = Array.from(document.querySelectorAll('nav[aria-label="Main navigation"] a')).map((a: any) => a.getAttribute("href"));
+  assert.equal(new Set(hrefs).size, hrefs.length, "Each destination appears once");
+  assert.deepEqual(renderedLinks(admin).filter(link => /aria-current="page"/.test(link.attributes)).map(link => link.label), ["Earnings"]);
+  assert.ok(admin.includes('href="/dashboard"'), "Dashboard stays separate from the existing earnings page");
 
 }
 for (const agencyName of ["Moxy", "LYNQ", portals.JESS_KATE_PORTAL.name, portals.TETHER_PORTAL.name]) {
@@ -226,5 +240,44 @@ assert.match(render(portals.JESS_KATE_PORTAL.name, true, null), /Pick a creator 
 pathname = `/clones/${clone}`; query = new URLSearchParams("tab=identity");
 assert.match(render(portals.JESS_KATE_PORTAL.name, true), /href="[^\"]+tab=identity"[^>]*bg-white\/12/);
 assert.match(readFileSync("components/MobileMenu.tsx", "utf8"), /<SidebarContent/);
-console.log("Sidebar: Moxy grouped navigation, prominent invite, ten destinations, creator gates and single active page verified for owners/readers on desktop/mobile; other portals preserved");
+console.log("Sidebar: grouped admin navigation, collapsed More, destination coverage and uniqueness; agency/creator layouts preserved on desktop and mobile");
 
+
+
+async function checkAdminInteractions() {
+  const { JSDOM } = nativeRequire("jsdom");
+  const dom = new JSDOM("<!doctype html><div id='root'></div>", { url: "https://dashboard.example.test" });
+  const win = dom.window;
+  for (const key of ["window", "document", "HTMLElement", "Event", "MouseEvent", "Node"]) Object.defineProperty(globalThis, key, { value: win[key], configurable: true });
+  Object.defineProperty(globalThis, "IS_REACT_ACT_ENVIRONMENT", { value: true, configurable: true });
+  const { createRoot } = await import("react-dom/client");
+  const root = createRoot(document.getElementById("root")!);
+  pathname = "/dashboard"; query = new URLSearchParams();
+  const mount = async (key = "first") => { await act(async () => root.render(<Access key={key}><Content activeCloneId={clone} showAssistant={false}/></Access>)); };
+  const button = (text: string) => Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find(el => el.textContent?.trim() === text)!;
+  const click = async (el: HTMLElement) => { assert.ok(el); await act(async () => el.click()); };
+  await mount();
+  const more = document.getElementById("admin-more-desktop")!;
+  assert.equal(more.hidden, true);
+  await click(button("More")); assert.equal(more.hidden, false);
+  await click(button("More")); assert.equal(more.hidden, true);
+  await click(document.querySelector<HTMLButtonElement>("button[aria-label='Expand Creators']")!);
+  assert.equal(document.getElementById("admin-nav-creators-desktop")!.hidden, false);
+  await click(button("More")); await click(button("Show full navigation"));
+  assert.equal(document.querySelector("[data-admin-navigation='grouped']"), null);
+  assert.equal(win.localStorage.getItem("twin:admin-full-navigation:v1"), "true");
+  await mount("remount");
+  assert.equal(document.querySelector("[data-admin-navigation='grouped']"), null, "Layout choice survives remount");
+  await click(button("Use grouped navigation"));
+  assert.ok(document.querySelector("[data-admin-navigation='grouped']"));
+  assert.equal(document.getElementById("admin-more-desktop")!.hidden, true);
+  pathname = `/clones/${clone}`; query = new URLSearchParams("tab=advanced");
+  await mount("advanced");
+  assert.equal(document.getElementById("admin-nav-creators-desktop")!.hidden, false);
+  assert.deepEqual(Array.from(document.querySelectorAll("a[aria-current='page']")).map(a => a.textContent?.trim()), ["Creator Configuration"]);
+  pathname = "/agency-admin/creator-codes"; query = new URLSearchParams(); await mount("invites");
+  assert.deepEqual(Array.from(document.querySelectorAll("a[aria-current='page']")).map(a => a.textContent?.trim()), ["Invitations"]);
+  await act(async () => root.unmount()); dom.window.close();
+  console.log("Sidebar interactions: More and creator groups, full-layout restore and persistence, active configuration/invitation links passed");
+}
+checkAdminInteractions().catch(error => { console.error(error); process.exitCode = 1; });

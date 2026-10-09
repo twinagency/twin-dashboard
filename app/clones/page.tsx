@@ -98,10 +98,18 @@ export default async function ClonesPage() {
         <div className="flex items-center gap-3">
           <AdminOnly>
             <Button nativeButton={false} variant="outline" render={<Link href="/creator-management" />}>Review onboarding</Button>
+            <Button nativeButton={false} render={<Link href="/agency/creator-invites" />}>Invite creator</Button>
           </AdminOnly>
           <span className="text-sm font-medium text-muted">{clones.length} total</span>
         </div>
       </div>
+
+      <AdminOnly>
+        <nav aria-label="Creator directory" className="mb-6 flex gap-5 border-b border-line text-sm">
+          <Link href="/clones" aria-current="page" className="border-b-2 border-accent pb-3 font-semibold text-ink">Creators</Link>
+          <Link href="/agency-admin/creator-codes" className="pb-3 text-muted hover:text-ink">Invitations</Link>
+        </nav>
+      </AdminOnly>
 
       {clones.length === 0 ? (
         <div className="rounded-xl border border-dashed border-line bg-panel p-12 text-center">
@@ -114,3 +122,4 @@ export default async function ClonesPage() {
     </div>
   );
 }
+
