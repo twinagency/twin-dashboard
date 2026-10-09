@@ -4,7 +4,7 @@ import { hasInternalAdminAccess } from "@/lib/internal-admin";
 import { activeViewAs } from "@/lib/view-as";
 import CreatorDashboard from "@/components/dashboard/CreatorDashboard";
 import { parseFilters } from "@/components/dashboard/model";
-import { creators, fans } from "@/components/fans/data";
+import { creators, authoredFans } from "@/components/fans/data";
 
 export const dynamic = "force-dynamic";
 
@@ -17,5 +17,5 @@ export default async function DashboardPage({ searchParams }: {
   for (const [key, value] of Object.entries(await searchParams)) {
     if (typeof value === "string") query.set(key, value);
   }
-  return <CreatorDashboard creators={creators} fans={fans} initialFilters={parseFilters(query, creators)} />;
+  return <CreatorDashboard creators={creators} fans={authoredFans} includeBriannaLedger initialFilters={parseFilters(query, creators)} />;
 }

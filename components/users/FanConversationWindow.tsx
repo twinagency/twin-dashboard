@@ -7,6 +7,7 @@ import ChatThread, { type ThreadMessage } from "./ChatThread";
 import { channelKey, conversationHref, conversationPlatform, emptyState, messagesFor, platformNames, profileHref, restoreState, STORAGE_KEY, totalsFor, visibleFans } from "../fans/model";
 import { PLATFORMS, type Creator, type Fan, type Handling, type Platform, type PlatformFilter, type WorkspaceState } from "../fans/types";
 import styles from "./FanConversationWindow.module.css";
+import { withBriannaLedger } from "../fans/brianna-ledger";
 
 const dateLabel = (at: string) => new Intl.DateTimeFormat("en-AU", { day: "numeric", month: "short", year: "numeric", timeZone: "Australia/Brisbane" }).format(new Date(at));
 const timeLabel = (at: string) => new Intl.DateTimeFormat("en-AU", { hour: "numeric", minute: "2-digit", timeZone: "Australia/Brisbane" }).format(new Date(at));
@@ -17,9 +18,10 @@ function Channel({ platform }: { platform: Platform }) {
 }
 
 /** Local relationship histories inside the existing /users inbox. No real-user actions or feed are mounted. */
-export default function FanConversationWindow({ creators, fans, initialFanId, initialPlatform, initialSourceId }: {
-  creators: Creator[]; fans: Fan[]; initialFanId: string; initialPlatform?: string; initialSourceId?: string;
+export default function FanConversationWindow({ creators, fans: seedFans, initialFanId, initialPlatform, initialSourceId, includeBriannaLedger = false }: {
+  creators: Creator[]; fans: Fan[]; initialFanId: string; initialPlatform?: string; initialSourceId?: string; includeBriannaLedger?: boolean;
 }) {
+  const fans = includeBriannaLedger ? withBriannaLedger(seedFans) : seedFans;
   const initialFan = fans.find(fan => fan.id === initialFanId)!;
   const initialSource = initialFan.messages.find(message => message.id === initialSourceId);
   const [creatorId, setCreatorId] = useState(initialFan.creatorId);

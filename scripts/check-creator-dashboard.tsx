@@ -3,7 +3,10 @@ import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
 import ts from "typescript";
 import React, { act } from "react";
-import { creators, fans } from "../components/fans/data";
+import { creators, fans as sharedFans } from "../components/fans/data";
+// Keep the authored Ben/Oliver and existing creators' regression cases stable.
+import * as ledger from "../components/fans/brianna-ledger";
+const fans = sharedFans.filter(f => !f.id.startsWith("briana-ledger-"));
 import * as dashboardModel from "../components/dashboard/model";
 import * as fanModel from "../components/fans/model";
 import * as money from "../lib/money";
@@ -20,6 +23,66 @@ function compile(path: string, imports: Record<string, unknown>) {
   return result.exports;
 }
 async function main() {
+  const sharedSnapshot = JSON.stringify(sharedFans);
+  const fullFilters = dashboardModel.parseFilters(new URLSearchParams(), creators);
+  const full = dashboardModel.buildDashboard(sharedFans, fullFilters);
+  assert.equal(full.metrics.revenueCents, 4_618_600);
+  assert.equal(full.metrics.payingFans, 386);
+  assert.equal(full.metrics.purchases, 924);
+  assert.equal(full.metrics.repeatBuyers, 252);
+  assert.equal(full.metrics.linkedFans, 233);
+  assert.equal(full.metrics.accounts, 835);
+  assert.equal(full.metrics.activeFans, 498);
+  const sixMonths = dashboardModel.buildDashboard(sharedFans, { ...fullFilters, window: "6m" });
+  assert.equal(sixMonths.range.from, "2026-04-10");
+  assert.equal(sixMonths.metrics.revenueCents, 27_500_356);
+  assert.equal(sixMonths.metrics.purchases, 5446);
+  assert.equal(sixMonths.metrics.payingFans, 501);
+  assert.equal(JSON.stringify(ledger.withBriannaLedger(fans)), sharedSnapshot, "Seed reconstruction must reproduce identical IDs, amounts, conversations and memory");
+  for (const period of ledger.briannaPeriods) {
+    const monthly = dashboardModel.buildDashboard(sharedFans, { ...fullFilters, window: "custom", from: period.from, to: period.to });
+    assert.equal(monthly.metrics.revenueCents, period.revenueCents);
+    assert.ok(Math.abs(period.revenueCents - 4_618_600) <= 1_000_000);
+    for (const currency of ["USD", "AUD"] as const) {
+      const total = dashboardModel.buildDashboard(sharedFans, { ...fullFilters, window: "custom", from: period.from, to: period.to, currency }, 1.4);
+      for (const parts of [total.chart, total.platforms, total.content, total.relationships]) assert.equal(parts.reduce((s, x) => s + x.cents, 0), total.metrics.revenueCents);
+      for (const platform of dashboardModel.platformOrder) {
+        const scoped = dashboardModel.buildDashboard(sharedFans, { ...fullFilters, window: "custom", from: period.from, to: period.to, currency, platform }, 1.4);
+        assert.equal(scoped.metrics.revenueCents, total.platforms.find(p => p.platform === platform)!.cents);
+        assert.equal(scoped.chart.reduce((s, x) => s + x.cents, 0), scoped.metrics.revenueCents);
+      }
+    }
+  }
+  const generated = sharedFans.filter(f => f.id.startsWith("briana-ledger-"));
+  assert.equal(generated.length, 512);
+  assert.equal(new Set(generated.map(f => f.name)).size, 512);
+  const ids = generated.flatMap(f => [...f.messages, ...f.memories, ...f.purchases, ...f.history!, ...f.notes!].map(x => x.id));
+  assert.equal(new Set(ids).size, ids.length);
+  for (const fan of generated) {
+    assert.ok(fan.memories.length >= 20);
+    assert.equal(new Set(fan.memories.map(m => m.category)).size, 6);
+    assert.equal(new Set(fan.purchases.map(p => p.title)).size, fan.purchases.length, "No duplicate owned content across platforms");
+    const sourceById = new Map(fan.messages.map(m => [m.id, m]));
+    for (const message of fan.messages) {
+      const account = fan.accounts.find(a => a.platform === message.platform)!;
+      assert.ok(account && message.at >= account.linkedAt && account.linkedAt >= fan.firstSeen);
+      assert.ok(message.at <= "2026-10-09T09:00:00Z");
+    }
+    for (const item of [...fan.memories, ...fan.purchases, ...fan.history!]) {
+      const source = sourceById.get(item.sourceMessageId!);
+      assert.ok(source, `${item.id}: source belongs to this fan`);
+      assert.equal(source.platform, "source" in item ? item.source : item.platform);
+      assert.equal(source.at, "updatedAt" in item ? item.updatedAt : item.at);
+      if ("amount" in item) {
+        assert.ok(item.amount > 0);
+        assert.ok(source.text.includes(item.title));
+        const amount = item.amount.toLocaleString("en-US", item.currency === "USD" ? { minimumFractionDigits: 2, maximumFractionDigits: 2 } : undefined);
+        assert.ok(source.text.includes(amount), `${item.id}: amount agrees with the source`);
+        assert.equal(item.currency, item.platform === "telegram" ? "Stars" : "USD");
+      }
+    }
+    for (const account of fan.accounts) assert.ok(fan.suggestedReplies?.[account.platform]);
+  }
   const originalFans = JSON.stringify(fans);
   const filters = dashboardModel.parseFilters(new URLSearchParams(), creators);
   assert.equal(filters.creatorId, "briana");
@@ -64,7 +127,7 @@ async function main() {
     "@/lib/view-as": { activeViewAs: async () => viewAs },
     "@/components/dashboard/CreatorDashboard": { __esModule: true, default: () => null },
     "@/components/dashboard/model": dashboardModel,
-    "@/components/fans/data": { creators, fans },
+    "@/components/fans/data": { creators, fans, authoredFans: fans },
   }).default;
   const route = (search: Record<string, string | string[]> = {}) => Page({ searchParams: Promise.resolve(search) });
   await assert.rejects(route(), /redirect:\/twin/);
@@ -74,6 +137,30 @@ async function main() {
   assert.equal((await route()).props.initialFilters.creatorId, "briana");
   assert.equal((await route({ platform: "telegram", window: "all" })).props.initialFilters.platform, "telegram");
   assert.equal((await route({ creator: ["kyla", "briana"] })).props.initialFilters.creatorId, "briana");
+
+  let headerPath = "/users", headerParams = new URLSearchParams("relationship=briana-ledger-1");
+  const headerAudience = { isAgency: false, isCreator: false, agencyName: "" };
+  const Header = compile("components/TopBar.tsx", {
+    "./DashboardAccessProvider": { useDashboardAccess: () => headerAudience },
+    "next/navigation": { usePathname: () => headerPath, useSearchParams: () => headerParams },
+    "@/components/CloneSwitcher": { __esModule: true, default: () => <span>Live creator selector</span> },
+    "@/components/CurrencyToggle": { __esModule: true, default: () => <span>Live currency selector</span> },
+    "@/components/CurrencyProvider": { useCurrency: () => ({ currency: "USD", rate: 1.4, usdPerStar: .013 }) },
+    "@/components/BlurToggle": { __esModule: true, default: () => <span>Blur media</span> },
+    "@/app/login/actions": { logout: async () => {} },
+    "@/lib/money": { fmtMoney: () => "LIVE_BALANCE", starsToMoneyRate: () => 1 },
+    "@/lib/page-meta": { getPageMeta: () => ({ scopeLabel: "Brianna Redd", pageLabel: "Earnings", scopeIsCreator: true }) },
+    "@/lib/creator-dashboard-policy": { CREATOR_DASHBOARD_NAV: [] },
+  }).default;
+  const { renderToStaticMarkup } = nativeRequire("react-dom/server");
+  const header = () => renderToStaticMarkup(<Header clones={[]} activeCloneId={null} allTimeStars={100} />);
+  assert.match(header(), /Live Telegram Window/);
+  assert.doesNotMatch(header(), /LIVE_BALANCE|Live creator selector|Live currency selector/);
+  headerParams = new URLSearchParams(); assert.match(header(), /LIVE_BALANCE/);
+  headerPath = "/revenue"; assert.match(header(), /LIVE_BALANCE/);
+  headerPath = "/users"; headerParams = new URLSearchParams("relationship=briana-ledger-1");
+  headerAudience.isAgency = true; assert.match(header(), /LIVE_BALANCE/);
+  headerAudience.isAgency = false; headerAudience.isCreator = true; assert.match(header(), /LIVE_BALANCE/);
 
   // Execute the real component with the existing shell's currency context
   // isolated. Any new network request or global currency mutation is a failure.
@@ -87,6 +174,7 @@ async function main() {
   const css = new Proxy({}, { get: (_, key) => String(key) });
   const Component = compile("components/dashboard/CreatorDashboard.tsx", {
     "next/link": { __esModule: true, default: ({ children, ...props }: React.ComponentProps<"a">) => <a {...props}>{children}</a> },
+    "../fans/brianna-ledger": ledger,
     "../CurrencyProvider": { useCurrency: () => ({ rate: 1.4, currency: "AUD", setCurrency: () => { throw new Error("The ordinary Overview's currency must stay unchanged"); } }) },
     "../../lib/money": money, "../fans/model": fanModel, "./model": dashboardModel,
     "./CreatorDashboard.module.css": { __esModule: true, default: css },
@@ -173,6 +261,29 @@ async function main() {
   assert.equal(find('[data-creator-dashboard]').getAttribute("data-platform"), "fanvue");
   assert.equal(JSON.stringify(fans), originalFans, "All existing profile data remains unchanged");
   assert.equal(localStorage.getItem(fanModel.STORAGE_KEY), null, "Dashboard never overwrites relationship memory or messages");
+  assert.equal(requests, 0);
+  await act(async () => { root.unmount(); });
+  window.history.replaceState(null, "", "/dashboard"); localStorage.removeItem(dashboardModel.FILTER_STORAGE_KEY);
+  root = createRoot(document.getElementById("root")!);
+  await act(async () => root.render(<Component creators={creators} fans={fans} includeBriannaLedger initialFilters={filters} />));
+  assert.equal(metric("revenue"), "US$46,186.00");
+  assert.equal(metric("purchases"), "924");
+  assert.equal(document.querySelectorAll('.relationshipTable tbody tr').length, 12);
+  await textButton("Show more fans"); assert.equal(document.querySelectorAll('.relationshipTable tbody tr').length, 24);
+  await input('[aria-label="Search dashboard fans"]', "Ben");
+  assert.ok(document.querySelector('[data-fan="briana-ben"]'));
+  await input('[aria-label="Search dashboard fans"]', "ben_coast_tg");
+  assert.equal(document.querySelectorAll('.relationshipTable tbody tr').length, 1);
+  await textButton("6 months", '[aria-label="Dashboard reporting period"]');
+  assert.equal(metric("revenue"), "US$275,003.56");
+  assert.equal(document.querySelectorAll('.dayBar').length, 183);
+  await input('[aria-label="Search dashboard purchases"]', generated[0].name);
+  const purchase = generated[0].purchases.at(-1)!;
+  await input('[aria-label="Search dashboard purchases"]', `${purchase.title} ${generated[0].name}`);
+  await click(`[aria-label="Inspect ${purchase.title} purchase by ${generated[0].name}"]`);
+  assert.ok(find('[role="dialog"] a[href*="relationship="]').getAttribute("href")!.includes(purchase.sourceMessageId!));
+  await click('[aria-label="Close details"]');
+  assert.equal(JSON.stringify(sharedFans), sharedSnapshot, "Expanded records remain read-only");
   assert.equal(requests, 0);
   await act(async () => { root.unmount(); });
   globalThis.fetch = fetchBefore; dom.window.close();

@@ -51,11 +51,12 @@ export default function TopBar({
       <div className="flex items-center gap-3"><span className="hidden text-xs text-muted sm:inline">Creator workspace</span><BlurToggle /></div>
     </div>;
   }
-  // The fan workspace has a local creator selector over isolated presentation
-  // relationships. Do not display an unrelated live creator or revenue total.
-  if (!isAgency && !isCreator && pathname === "/fans") {
+  // The guarded relationship pages share the creator workspace header, so
+  // their records cannot inherit an unrelated production earnings balance.
+  const relationshipConversation = pathname === "/users" && searchParams.has("relationship");
+  if (!isAgency && !isCreator && (pathname === "/fans" || relationshipConversation)) {
     return <div className="dashboard-topbar flex h-16 shrink-0 items-center justify-between gap-3 border-b border-line px-5 lg:px-8">
-      <div className="text-sm font-semibold text-ink">Twin <span className="font-normal text-muted">/ Fan profiles</span></div>
+      <div className="text-sm font-semibold text-ink">Twin <span className="font-normal text-muted">/ {relationshipConversation ? "Live Telegram Window" : "Fan profiles"}</span></div>
       <div className="flex items-center gap-3"><span className="hidden text-xs text-muted sm:inline">Creator relationships</span><BlurToggle /></div>
     </div>;
   }

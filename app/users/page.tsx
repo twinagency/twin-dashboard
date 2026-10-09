@@ -235,11 +235,11 @@ export default async function FansPage({
   if (params.relationship !== undefined) {
     if (!await hasInternalAdminAccess()) redirect("/twin");
     if (await activeViewAs(await cookies())) redirect("/revenue");
-    const { creators, fans } = await import("@/components/fans/data");
+    const { creators, fans, authoredFans } = await import("@/components/fans/data");
     const fan = fans.find(item => item.id === params.relationship);
     if (!fan || (params.creator && params.creator !== fan.creatorId)) redirect("/fans");
     const { default: FanConversationWindow } = await import("@/components/users/FanConversationWindow");
-    return <FanConversationWindow creators={creators} fans={fans} initialFanId={fan.id} initialPlatform={params.platform} initialSourceId={params.source} />;
+    return <FanConversationWindow creators={creators} fans={authoredFans} includeBriannaLedger initialFanId={fan.id} initialPlatform={params.platform} initialSourceId={params.source} />;
   }
   const cloneId = await getCloneScope();
   const {
