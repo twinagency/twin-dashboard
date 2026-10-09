@@ -1,37 +1,79 @@
-// Live creator PPV upload. A plain POST (not a server action), because creator
-// pages refuse server actions in middleware. Accepts ONE file and nothing else:
-// price, caption and free flag all come from the clone's own pricing guide, the
-// same path the operator upload uses. The clone is the signed-in creator's own
-// link, never a request parameter. View-as stays read-only (middleware 403s it).
+// Live creator PPV upload. A plain POST, excluded from middleware like the
+// onboarding upload so files up to the onboarding limits (75 MiB photo,
+// 512 MiB video) stream to disk instead of hitting the 50 MB action cap.
+// This handler authenticates itself: same-origin form, a real creator session
+// (never view-as) and the clone from that creator's own link.
+// The file goes into the PPV catalogue through the operator uploadPhoto /
+// uploadVideo with the file only (price from the clone's guide). If that path
+// refuses it (too large for Telegram, decode failure, provider error) the raw
+// file is kept in storage under creators/<account>/ppv-inbox/ for an operator
+// to add by hand, and the creator still sees it as received.
+import { randomUUID } from "crypto";
+import { openAsBlob } from "node:fs";
 import { NextResponse, type NextRequest } from "next/server";
 import { CREATOR_SESSION_COOKIE } from "@/lib/creator-session";
 import { creatorDashboardIdentity } from "@/lib/creator-dashboard-identity";
 import { withDashboardAccess } from "@/lib/dashboard-access";
 import { trustedFormOrigin } from "@/lib/form-origin";
+import { boundedFormData } from "@/lib/creator-upload-stream";
+import { MAX_CREATOR_IMAGE_BYTES, MAX_CREATOR_VIDEO_BYTES } from "@/lib/creator-upload-limits";
+import { supabaseAdmin } from "@/lib/supabase";
 import { uploadPhoto, uploadVideo } from "@/app/media/actions";
 
 export const runtime = "nodejs";
-export const maxDuration = 300;
+export const maxDuration = 900;
 
-function fail(error: string, status: number) {
-  return NextResponse.json({ ok: false, error }, { status, headers: { "Cache-Control": "private, no-store" } });
+const NO_STORE = { "Cache-Control": "private, no-store" };
+function reply(body: Record<string, unknown>, status: number) {
+  return NextResponse.json(body, { status, headers: NO_STORE });
+}
+function safeName(name: string) {
+  return name.replace(/[^a-zA-Z0-9._-]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 120) || "upload";
 }
 
 export async function POST(req: NextRequest) {
-  if (!trustedFormOrigin(req)) return fail("Forbidden", 403);
+  if (!trustedFormOrigin(req)) return reply({ ok: false, error: "Forbidden" }, 403);
   const creator = await creatorDashboardIdentity(req.cookies.get(CREATOR_SESSION_COOKIE)?.value);
-  if (!creator || creator.readOnly) return fail("Please sign in again.", 401);
+  if (!creator || creator.readOnly) return reply({ ok: false, error: "Please sign in again." }, 401);
   const cloneId = creator.cloneIds[0];
-  if (!cloneId || creator.cloneIds.length !== 1) return fail("Your profile is not connected yet.", 403);
+  if (!cloneId || creator.cloneIds.length !== 1) return reply({ ok: false, error: "Your profile is not connected yet." }, 403);
 
-  let form: FormData;
-  try { form = await req.formData(); } catch { return fail("Upload failed, please try again.", 400); }
-  const files = form.getAll("file");
-  const kind = form.get("kind");
-  if (files.length !== 1 || !(files[0] instanceof File) || (kind !== "photo" && kind !== "video")) return fail("Upload one file at a time.", 400);
-  const clean = new FormData();
-  clean.append("file", files[0]);
+  let staged: Awaited<ReturnType<typeof boundedFormData>> | undefined;
+  try {
+    staged = await boundedFormData(req, { timeoutMs: 15 * 60_000 });
+    const kind = staged.fields.get("kind");
+    const file = staged.files[0];
+    if (staged.files.length !== 1 || !file || (kind !== "photo" && kind !== "video")) return reply({ ok: false, error: "Upload one file at a time." }, 400);
+    if (file.size > (kind === "photo" ? MAX_CREATOR_IMAGE_BYTES : MAX_CREATOR_VIDEO_BYTES))
+      return reply({ ok: false, error: kind === "photo" ? "Photos can be up to 75 MB each." : "Videos can be up to 512 MB each." }, 413);
+    const mime = file.type || (kind === "photo" ? "image/jpeg" : "video/mp4");
+    const blob = await openAsBlob(file.path, { type: mime });
 
-  const result = await withDashboardAccess(creator, () => kind === "video" ? uploadVideo(cloneId, clean) : uploadPhoto(cloneId, clean));
-  return NextResponse.json(result, { status: result.ok ? 200 : 422, headers: { "Cache-Control": "private, no-store" } });
+    let catalogueError = "";
+    try {
+      const fd = new FormData();
+      fd.append("file", new File([blob], file.name, { type: mime }));
+      const result = await withDashboardAccess(creator, () => kind === "video" ? uploadVideo(cloneId, fd) : uploadPhoto(cloneId, fd));
+      if (result.ok) return reply({ ok: true }, 200);
+      catalogueError = result.error || "catalogue refused";
+    } catch (error) {
+      catalogueError = error instanceof Error ? error.message : "catalogue upload threw";
+    }
+
+    // Keep the original so nothing the creator sends is lost.
+    const objectPath = `creators/${creator.accountId}/ppv-inbox/${kind}/${Date.now()}-${randomUUID()}-${safeName(file.name)}`;
+    const { error: storageError } = await supabaseAdmin.storage.from("onboarding-content").upload(objectPath, blob, { contentType: mime, upsert: false });
+    if (storageError) {
+      console.error("[ppv-upload] catalogue and inbox both failed", { cloneId, catalogueError, storageError: storageError.message });
+      return reply({ ok: false, error: "Upload failed, please try again." }, 503);
+    }
+    console.warn("[ppv-upload] kept in inbox", { cloneId, objectPath, catalogueError });
+    await supabaseAdmin.from("system_logs").insert({ clone_id: cloneId, level: "warn", source: "creator-ppv-upload", message: `Creator PPV upload kept in inbox: ${objectPath} (${catalogueError})` }).then(() => undefined, () => undefined);
+    return reply({ ok: true, inbox: true }, 200);
+  } catch (error) {
+    console.error("[ppv-upload] failed", { cloneId, error: error instanceof Error ? error.message : String(error) });
+    return reply({ ok: false, error: "Upload failed, please try again." }, 500);
+  } finally {
+    await staged?.dispose().catch(() => undefined);
+  }
 }

@@ -24,12 +24,22 @@ function Uploader({ kind }: { kind: "photo" | "video" }) {
     for (let i = 0; i < files.length; i++) {
       set(i, { status: "uploading" });
       try {
-        const fd = new FormData();
-        fd.append("kind", kind);
-        fd.append("file", files[i]);
-        const res = await fetch("/creator-auth/ppv-upload", { method: "POST", body: fd, credentials: "same-origin" });
-        const result = await res.json().catch(() => ({ ok: false, error: "Upload failed, please try again." }));
-        if (!result.ok) throw new Error(result.error === "read-only while viewing as" ? "preview mode, uploads only work on her own login" : result.error || "Upload failed");
+        // Retry transient failures; the server keeps any file the catalogue
+        // refuses, so a 200 always means the file is stored.
+        let error = "Upload failed, please try again.";
+        let ok = false;
+        for (let attempt = 0; attempt < 3 && !ok; attempt++) {
+          try {
+            const fd = new FormData();
+            fd.append("kind", kind);
+            fd.append("file", files[i]);
+            const res = await fetch("/creator-auth/ppv-upload", { method: "POST", body: fd, credentials: "same-origin" });
+            const result = await res.json().catch(() => ({ ok: false }));
+            if (result.ok) ok = true;
+            else if (res.status === 400 || res.status === 401 || res.status === 403 || res.status === 413) { error = result.error || error; break; }
+          } catch { /* network drop, retry */ }
+        }
+        if (!ok) throw new Error(error);
         set(i, { status: "done" });
       } catch (e) {
         set(i, { status: "error", error: e instanceof Error ? e.message : "Upload failed" });
