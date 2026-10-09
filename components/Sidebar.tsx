@@ -7,7 +7,7 @@ import { CREATOR_DASHBOARD_NAV } from "@/lib/creator-dashboard-policy";
 
 // Left sidebar app shell (desktop). "Create new clone" is always the first
 // thing in it, followed by the operating views. Internal admin tools are
-// always visible in the scrollable sidebar, with no collapsed More group.
+// grouped for the internal presentation, with the full layout available in More.
 // Partner navigation keeps its approved structure. Each page type appears ONCE, scoped
 // by the clone switcher in the header (components/CloneSwitcher.tsx, "All
 // clones" by default). Picking/managing a clone lives in the header switcher
@@ -20,7 +20,7 @@ import { CREATOR_DASHBOARD_NAV } from "@/lib/creator-dashboard-policy";
 
 import Link from "next/link";
 import { usePathname, useSearchParams } from "next/navigation";
-import { useState, type ReactNode } from "react";
+import { useEffect, useState, type ReactNode } from "react";
 import { openCloneSwitcher } from "@/lib/clone-switcher-bus";
 import TwinAssistant from "@/components/TwinAssistant";
 import TwinWordmark from "@/components/TwinWordmark";
@@ -221,6 +221,28 @@ const adminLinkKey = (link: NavLink) => link.kind === "route" ? link.href : link
 const TWIN_ADMIN_PRIMARY = TWIN_ADMIN_ORDER.map(key => TWIN_ADMIN_LINKS.find(link => adminLinkKey(link) === key)!);
 const TWIN_ADMIN_REMAINDER = TWIN_ADMIN_LINKS.filter(link => !TWIN_ADMIN_ORDER.includes(adminLinkKey(link)));
 
+// Presentation navigation reuses existing destinations; it grants no access.
+const ADMIN_NAV_STORAGE_KEY = "twin:admin-full-navigation:v1";
+type AdminGroup = { label: string; icon: string; href?: string; children?: string[] };
+const TWIN_ADMIN_GROUPS: AdminGroup[] = [
+  { label: "Dashboard", icon: "Clones", href: "/dashboard" },
+  { label: "Creators", icon: "Clones", href: "/clones", children: ["identity", "/agency-admin/creator-codes", "/agency/creator-invites", "/clones/new"] },
+  { label: "Fan Profiles", icon: "Users", href: "/fans" },
+  { label: "Unified Inbox", icon: "Inbox", href: "/inbox", children: ["/users"] },
+  { label: "Content Library", icon: "Media", href: "/content-library", children: ["ppvs", "/business"] },
+  { label: "Campaigns", icon: "Bell", href: "/campaigns" },
+  { label: "Automations", icon: "Flows", children: ["/flows", "/sequences"] },
+  { label: "Performance", icon: "Revenue", children: ["/revenue", "/sales-health", "/catalogue-funnel"] },
+  { label: "Agency Access", icon: "Users", href: "/agency-admin", children: ["/agency/creators"] },
+  { label: "Core Intelligence", icon: "Sparkle", href: "/jarvis", children: ["/ai-models"] },
+  { label: "Settings", icon: "Settings", href: "/settings", children: ["/admin/earnings-split"] },
+];
+const TWIN_ADMIN_MORE = ["/storage", "/logs", "/api-access", "/sim", "/bot-v2", "/miniapp-rollout", "/mtproto-campaign", "/tracker", "/info", "/tsocial", "/admin/view-as"];
+const presentationLink = (key: string): NavLink => key === "/clones/new"
+  ? { kind: "route", href: key, label: "Create new creator", icon: "Plus", color: "neutral" }
+  : TWIN_ADMIN_LINKS.find(link => adminLinkKey(link) === key)!;
+
+
 const TETHER_SIDEBAR_THEME = `
 .dashboard-sidebar,
 .dashboard-mobile-header {
@@ -335,11 +357,23 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [moreOpen, setMoreOpen] = useState(false);
+  const [fullNavigation, setFullNavigation] = useState(false);
+  const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
+  useEffect(() => {
+    if (!isAdmin) return;
+    try { setFullNavigation(window.localStorage.getItem(ADMIN_NAV_STORAGE_KEY) === "true"); } catch { /* Keep the grouped default. */ }
+  }, [isAdmin]);
+  const setNavigationLayout = (full: boolean) => {
+    setFullNavigation(full);
+    setMoreOpen(false);
+    try { window.localStorage.setItem(ADMIN_NAV_STORAGE_KEY, String(full)); } catch { /* Session-only preference. */ }
+  };
   const activeTab = searchParams.get("tab") ?? "config";
   // /creator is the creator Earnings page, not a parent navigation section.
   // Exact matching prevents Earnings staying highlighted on all five child
   // routes at the same time as their own item.
   const isGlobalActive = (href: string) => {
+    if (isAdmin && ["/clones", "/agency-admin"].includes(href)) return pathname === href;
     if (moxyNavigation && href === "/clones" && pathname.startsWith("/clones/") && ["ppvs", "identity"].includes(activeTab)) return false;
     return pathname === href || (!isCreator && href !== "/" && pathname.startsWith(href + "/"));
   };
@@ -347,7 +381,9 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
   const pickClone = () => { onNavigate?.(); window.setTimeout(() => openCloneSwitcher(), 0); };
 
   const navLabel = (link: NavLink, colors: (typeof LINK_COLOR_CLASSES)[LinkColor]) => {
-    const label = isAdmin ? TWIN_ADMIN_NAV_LABELS[link.kind === "route" ? link.href : link.tab] ?? link.label : link.label;
+    const key = link.kind === "route" ? link.href : link.tab;
+    const presentationLabels: Record<string, string> = { "/revenue": "Earnings", "/agency-admin/creator-codes": "Invitations", "/fans": "Fan Profiles", "/agency-admin": "Agency Access" };
+    const label = isAdmin ? (!fullNavigation ? presentationLabels[key] : undefined) ?? TWIN_ADMIN_NAV_LABELS[key] ?? link.label : link.label;
     if (link.icon === "FansCombo") return <><Icon d={PATHS.Users} className={"h-[18px] w-[18px] " + colors.icon} /><span className="flex-1">{label}</span><Icon d={PATHS.Messages} className="h-4 w-4 text-current opacity-45" /></>;
     if (link.icon === "EarningsCombo") return <><Icon d={PATHS.Dollar} className={"h-[18px] w-[18px] " + colors.icon} /><span className="flex-1">{label}</span></>;
     return <><Icon d={PATHS[link.icon]} className={"h-[18px] w-[18px] " + colors.icon} />{label}</>;
@@ -362,13 +398,43 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
     if (isAgency && link.kind === "route" && !agencyDashboardPath(link.href, agencyName, canManage)) return null;
     if (link.kind === "tab") {
       if (isPreview && link.tab !== "identity") return null;
-      const active = onConfigurePage && activeTab === link.tab;
+      const active = onConfigurePage && (isAdmin && link.tab === "identity" ? activeTab !== "ppvs" : activeTab === link.tab);
       if (!activeCloneId) return <button type="button" onClick={pickClone} title="Pick a creator first" className={rowClass + " " + colors.idle}>{navLabel(link, colors)}</button>;
       return <Link href={`/clones/${activeCloneId}?tab=${link.tab}`} onClick={onNavigate} aria-current={active ? "page" : undefined} className={rowClass + " " + (active ? colors.active : colors.idle)}>{navLabel(link, colors)}</Link>;
     }
     if (link.gateOnClone && !activeCloneId) return <button type="button" onClick={pickClone} title="Pick a creator first" className={rowClass + " " + colors.idle}>{navLabel(link, colors)}</button>;
     return <Link href={link.href} onClick={onNavigate} aria-current={isGlobalActive(link.href) ? "page" : undefined} className={rowClass + " " + (isGlobalActive(link.href) ? colors.active : colors.idle)}>{navLabel(link, colors)}</Link>;
   };
+
+  const isAdminLinkActive = (key: string) => {
+    const link = presentationLink(key);
+    return link.kind === "tab"
+      ? onConfigurePage && (link.tab === "identity" ? activeTab !== "ppvs" : activeTab === link.tab)
+      : isGlobalActive(link.href);
+  };
+  const chevron = (open: boolean) => <svg aria-hidden="true" className={(open ? "rotate-180 " : "") + "h-4 w-4 shrink-0 transition-transform"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg>;
+  const adminNavigation = <div className="space-y-1" data-admin-navigation="grouped">
+    {TWIN_ADMIN_GROUPS.map(group => {
+      const selected = Boolean(group.href && isAdminLinkActive(group.href)) || Boolean(group.children?.some(isAdminLinkActive));
+      const expanded = openGroups[group.label] ?? Boolean(group.children?.some(isAdminLinkActive));
+      const id = `admin-nav-${group.label.toLowerCase().replaceAll(" ", "-")}${headerAction ? "-mobile" : "-desktop"}`;
+      const toggle = () => setOpenGroups(current => ({ ...current, [group.label]: !expanded }));
+      return <div key={group.label} data-nav-group={group.label}>
+        <div className="flex items-center gap-1">
+          {group.href ? <div className="min-w-0 flex-1">{renderLink(presentationLink(group.href))}</div> : <button type="button" onClick={toggle} aria-expanded={expanded} aria-controls={id} className={"flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold transition " + (selected ? LINK_COLOR_CLASSES.neutral.active : LINK_COLOR_CLASSES.neutral.idle)}><Icon d={PATHS[group.icon]} className="h-[18px] w-[18px] text-[#9cbad3]"/><span className="flex-1">{group.label}</span>{chevron(expanded)}</button>}
+          {group.href && group.children ? <button type="button" onClick={toggle} aria-label={`${expanded ? "Collapse" : "Expand"} ${group.label}`} aria-expanded={expanded} aria-controls={id} className="flex h-9 w-8 shrink-0 items-center justify-center rounded-lg text-white/60 transition hover:bg-white/10 hover:text-white">{chevron(expanded)}</button> : null}
+        </div>
+        {group.children ? <div id={id} hidden={!expanded} className="ml-5 mt-1 space-y-1 border-l border-white/14 pl-2 [&_a]:text-xs [&_button]:text-xs">{group.children.map(key => <div key={key}>{renderLink(presentationLink(key))}</div>)}</div> : null}
+      </div>;
+    })}
+    <div className="mt-3 border-t border-white/14 pt-2" data-nav-group="More">
+      <button type="button" onClick={() => setMoreOpen(open => !open)} aria-expanded={moreOpen} aria-controls={headerAction ? "admin-more-mobile" : "admin-more-desktop"} className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold text-white/62 transition hover:bg-white/10 hover:text-white"><Icon d={PATHS.More} className="h-[18px] w-[18px] text-white/50"/><span className="flex-1">More</span>{chevron(moreOpen)}</button>
+      <div id={headerAction ? "admin-more-mobile" : "admin-more-desktop"} hidden={!moreOpen} className="ml-5 mt-1 space-y-1 border-l border-white/14 pl-2 [&_a]:text-xs">
+        {TWIN_ADMIN_MORE.map(key => <div key={key}>{renderLink(presentationLink(key))}</div>)}
+        <button type="button" onClick={() => setNavigationLayout(true)} className="mt-2 w-full border-t border-white/14 px-3 py-3 text-left text-xs text-white/60 hover:text-white">Show full navigation</button>
+      </div>
+    </div>
+  </div>;
 
   if (moxyNavigation) return <>
     <style dangerouslySetInnerHTML={{ __html: MOXY_SIDEBAR_THEME }} />
@@ -399,13 +465,14 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
 
   return <>
     {isTether ? <style dangerouslySetInnerHTML={{__html:TETHER_SIDEBAR_THEME}} /> : null}
-    <div className="flex h-20 shrink-0 items-center justify-between border-b border-white/14 px-5"><Link href={isCreator ? "/creator" : "/revenue"} className="min-w-0" aria-label={agencyName || "Twin Technologies"} onClick={onNavigate}><TwinWordmark inverse agencyName={agencyName === "Twin" ? undefined : agencyName} /></Link>{headerAction}</div>
-    {usesBrandedCore ? <div className="shrink-0 px-4 pb-2 pt-4" data-creator-core={isCreator ? "hero" : undefined}><div className="flex items-center gap-3 rounded-xl border border-sky-400/20 bg-sky-400/[0.05] px-3 py-3"><IntelligenceCoreIcon size={64} /><div className="min-w-0 flex-1"><span className="block text-sm font-semibold leading-5 text-[#38bdf8]">AI Intelligence Core</span></div></div></div> : isAgency ? <div className="px-7 py-4 text-sm text-white/75">{agencyName} · {readOnly ? "Read only" : isMoxy(agencyName) && canManage ? "Owner" : "Creator management"}</div> : <div className="shrink-0 px-4 pb-3 pt-4"><Link href="/clones/new" onClick={onNavigate} className="sidebar-create-button flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition"><Icon d={PATHS.Plus} className="h-4 w-4" />Create new creator</Link></div>}
-    <nav aria-label={isCreator ? "Creator navigation" : "Main navigation"} className="flex flex-1 flex-col overflow-y-auto px-4 py-2"><div className="space-y-1">{primaryLinks.filter(availableLink).map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}{!isAdmin && !isCreator && !usesBrandedCore && !readOnly && !isMoxy(agencyName) && <><div className="mb-2 mt-3 border-t border-white/14 pt-3 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">CRM</div>{CRM_LINKS.map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}</>}{isCreator || isPreview ? null : isAdmin ? <div className="mt-3 space-y-1 border-t border-white/14 pt-2">{TWIN_ADMIN_REMAINDER.map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}</div> : moxyNavigation ? null : expandedMoxyNavigation ? <div className="mt-3 space-y-1 border-t border-white/14 pt-2">{MORE_LINKS.filter(link => link.kind !== "route" || !["/jarvis", "/agency-admin", "/agency-admin/creator-codes"].includes(link.href)).filter(link => link.kind !== "tab" || link.tab !== "identity").filter(availableLink).map(link => <div key={linkKey(link)}>{renderLink(link)}</div>)}</div> : usesBrandedCore ? <div className="mt-3 border-t border-white/14 pt-3"><h2 className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">More</h2><div className="space-y-1">{MORE_LINKS.filter(link => link.kind === "tab" || agencyDashboardPath(link.href, agencyName, canManage)).map(link => <div key={linkKey(link)}>{renderLink(link)}</div>)}</div></div> : <div className="mt-3 border-t border-white/14 pt-2"><button type="button" onClick={() => setMoreOpen((open) => !open)} aria-expanded={moreOpen} className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold text-white/62 transition hover:bg-white/10 hover:text-white"><Icon d={PATHS.More} className="h-[18px] w-[18px] text-white/50" /><span className="flex-1">More</span><svg className={(moreOpen ? "rotate-180 " : "") + "h-4 w-4 transition-transform"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg></button>{moreOpen ? <div className="mt-1 space-y-1">{MORE_LINKS.filter(link => !isAgency || link.kind === "tab" || agencyDashboardPath(link.href, agencyName, canManage)).map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}</div> : null}</div>}</div>{showAssistant && !isAgency && !isCreator ? <div className="mt-auto pt-4 [@media(max-height:850px)]:pt-2"><TwinAssistant /></div> : null}</nav>
+    <div className="flex h-20 shrink-0 items-center justify-between border-b border-white/14 px-5"><Link href={isCreator ? "/creator" : isAdmin && !fullNavigation ? "/dashboard" : "/revenue"} className="min-w-0" aria-label={agencyName || "Twin Technologies"} onClick={onNavigate}><TwinWordmark inverse agencyName={agencyName === "Twin" ? undefined : agencyName} /></Link>{headerAction}</div>
+    {usesBrandedCore ? <div className="shrink-0 px-4 pb-2 pt-4" data-creator-core={isCreator ? "hero" : undefined}><div className="flex items-center gap-3 rounded-xl border border-sky-400/20 bg-sky-400/[0.05] px-3 py-3"><IntelligenceCoreIcon size={64} /><div className="min-w-0 flex-1"><span className="block text-sm font-semibold leading-5 text-[#38bdf8]">AI Intelligence Core</span></div></div></div> : isAgency ? <div className="px-7 py-4 text-sm text-white/75">{agencyName} · {readOnly ? "Read only" : isMoxy(agencyName) && canManage ? "Owner" : "Creator management"}</div> : isAdmin && !fullNavigation ? null : <div className="shrink-0 px-4 pb-3 pt-4"><Link href="/clones/new" onClick={onNavigate} className="sidebar-create-button flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition"><Icon d={PATHS.Plus} className="h-4 w-4" />Create new creator</Link></div>}
+    <nav aria-label={isCreator ? "Creator navigation" : "Main navigation"} className="flex flex-1 flex-col overflow-y-auto px-4 py-2">{isAdmin && !fullNavigation ? adminNavigation : <div className="space-y-1">{primaryLinks.filter(availableLink).map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}{!isAdmin && !isCreator && !usesBrandedCore && !readOnly && !isMoxy(agencyName) && <><div className="mb-2 mt-3 border-t border-white/14 pt-3 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">CRM</div>{CRM_LINKS.map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}</>}{isCreator || isPreview ? null : isAdmin ? <div className="mt-3 space-y-1 border-t border-white/14 pt-2">{TWIN_ADMIN_REMAINDER.map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}</div> : moxyNavigation ? null : expandedMoxyNavigation ? <div className="mt-3 space-y-1 border-t border-white/14 pt-2">{MORE_LINKS.filter(link => link.kind !== "route" || !["/jarvis", "/agency-admin", "/agency-admin/creator-codes"].includes(link.href)).filter(link => link.kind !== "tab" || link.tab !== "identity").filter(availableLink).map(link => <div key={linkKey(link)}>{renderLink(link)}</div>)}</div> : usesBrandedCore ? <div className="mt-3 border-t border-white/14 pt-3"><h2 className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">More</h2><div className="space-y-1">{MORE_LINKS.filter(link => link.kind === "tab" || agencyDashboardPath(link.href, agencyName, canManage)).map(link => <div key={linkKey(link)}>{renderLink(link)}</div>)}</div></div> : <div className="mt-3 border-t border-white/14 pt-2"><button type="button" onClick={() => setMoreOpen((open) => !open)} aria-expanded={moreOpen} className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold text-white/62 transition hover:bg-white/10 hover:text-white"><Icon d={PATHS.More} className="h-[18px] w-[18px] text-white/50" /><span className="flex-1">More</span><svg className={(moreOpen ? "rotate-180 " : "") + "h-4 w-4 transition-transform"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg></button>{moreOpen ? <div className="mt-1 space-y-1">{MORE_LINKS.filter(link => !isAgency || link.kind === "tab" || agencyDashboardPath(link.href, agencyName, canManage)).map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}</div> : null}</div>}</div>}{isAdmin && fullNavigation ? <button type="button" onClick={() => setNavigationLayout(false)} className="mt-3 border-t border-white/14 px-3 py-3 text-left text-xs text-white/60 hover:text-white">Use grouped navigation</button> : null}{showAssistant && !isAgency && !isCreator ? <div className="mt-auto pt-4 [@media(max-height:850px)]:pt-2"><TwinAssistant /></div> : null}</nav>
   </>;
 }
 
 export default function Sidebar({ clones: _clones, activeCloneId }: { clones: CloneLite[]; activeCloneId: string | null }) {
   return <aside className="dashboard-sidebar sticky top-0 hidden h-screen w-72 shrink-0 flex-col lg:flex"><SidebarContent activeCloneId={activeCloneId} /></aside>;
 }
+
 
