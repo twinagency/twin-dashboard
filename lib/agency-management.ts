@@ -42,9 +42,24 @@ export async function ownedBundleItem(agency: AgencyIdentity, id: unknown, clone
  * Next action IDs are callable from other pages, so route filtering alone is
  * insufficient. Unlisted actions (keys, fleet defaults, deletion, tracker,
  * safety overrides, administration) remain internal even with a known ID. */
+// Live creators (creator session linked to their clone): the PPV page is upload-only. They may add a
+// photo/video file to their OWN clone through the normal upload pipeline (priced from the operator's
+// pricing guide) and load their own previews. Every other action, and every other form field, is refused.
+function creatorUploadOnly(access: AgencyIdentity & { readOnly?: boolean }, action: string, args: unknown[]): void {
+  if (access.readOnly) throw new Error("Read-only creator access");
+  if (action === "app/media/actions.ts#getSignedUrl") { assignedStoragePath(access, args[0]); return; }
+  if (action !== "app/media/actions.ts#uploadPhoto" && action !== "app/media/actions.ts#uploadVideo") throw new Error("Creator access is upload-only");
+  assignedClone(access, args[0]);
+  const fd = args[1];
+  if (!(fd instanceof FormData)) throw new Error("Invalid upload form");
+  const files = fd.getAll("file");
+  if (files.length !== 1 || !(files[0] instanceof File)) throw new Error("Upload one file at a time");
+  for (const key of [...new Set(fd.keys())]) if (key !== "file") fd.delete(key); // no price, free flag, caption or name from a creator
+}
 export async function guardDashboardAction(action: string, args: unknown[]): Promise<void> {
   const access = await getDashboardAccess();
   if (!access) return;
+  if ((access as { kind?: string }).kind === "creator") { creatorUploadOnly(access as AgencyIdentity & { readOnly?: boolean }, action, args); return; }
   if (!agencyCanManage(access)) throw new Error("Read-only agency access");
   if (action === "app/actions/clone-scope.ts#setCloneScope") {
     if (args[0] !== null) assignedClone(access,args[0]);

@@ -1,5 +1,6 @@
 import Link from "next/link";
-import CloneMediaPage from "@/components/CloneMediaPage";
+import CreatorPpvUploads from "./CreatorPpvUploads";
+import { supabaseAdmin } from "@/lib/supabase";
 import { requireCreatorWorkspace } from "@/lib/creator-dashboard";
 import { Card } from "@/components/ui/card";
 export const dynamic = "force-dynamic";
@@ -13,5 +14,12 @@ export default async function CreatorPpvsPage() {
     <p>Your onboarding uploads are already available separately. You can review saved files and add more content there.</p>
     <Link href="/creator/onboarding?step=content" className="inline-flex min-h-11 items-center font-semibold text-ink underline underline-offset-4">Open saved uploads</Link>
   </Card>;
-  return <CloneMediaPage cloneId={id} creatorMode />;
+  // Barebones live-creator view: previews only (no prices/captions), upload-only.
+  const [photos, videos] = await Promise.all([
+    supabaseAdmin.from("photos").select("id,storage_path").eq("clone_id", id).order("created_at", { ascending: false }),
+    supabaseAdmin.from("videos").select("id,storage_path").eq("clone_id", id).order("created_at", { ascending: false }),
+  ]);
+  if (photos.error) throw new Error(photos.error.message);
+  if (videos.error) throw new Error(videos.error.message);
+  return <CreatorPpvUploads cloneId={id} photos={photos.data ?? []} videos={videos.data ?? []} />;
 }
