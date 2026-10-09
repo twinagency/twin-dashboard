@@ -45,9 +45,9 @@ export default function TopBar({
   const scopeIsCreator = isCreator || pageMeta.scopeIsCreator;
   // The new Dashboard owns its creator and currency controls. Its isolated
   // relationships must not inherit the ordinary Overview's live cash chip.
-  if (!isAgency && !isCreator && (pathname === "/dashboard" || pathname === "/content-library" || pathname === "/inbox")) {
+  if (!isAgency && !isCreator && (pathname === "/dashboard" || pathname === "/content-library" || pathname === "/inbox" || pathname === "/campaigns")) {
     return <div className="dashboard-topbar flex h-16 shrink-0 items-center justify-between gap-3 border-b border-line px-5 lg:px-8">
-      <div className="text-sm font-semibold text-ink">Twin <span className="font-normal text-muted">/ {pathname === "/inbox" ? "Unified Inbox" : pathname === "/content-library" ? "Content Library" : "Dashboard"}</span></div>
+      <div className="text-sm font-semibold text-ink">Twin <span className="font-normal text-muted">/ {pathname === "/campaigns" ? "Campaigns" : pathname === "/inbox" ? "Unified Inbox" : pathname === "/content-library" ? "Content Library" : "Dashboard"}</span></div>
       <div className="flex items-center gap-3"><span className="hidden text-xs text-muted sm:inline">Creator workspace</span><BlurToggle /></div>
     </div>;
   }
