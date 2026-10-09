@@ -14,8 +14,8 @@ export const briannaPeriods = [
 
 const firstNames = ["Adam", "Adrian", "Aaron", "Andrew", "Anthony", "Austin", "Blake", "Brandon", "Caleb", "Cameron", "Carter", "Charles", "Connor", "Dylan", "Edward", "Elliot", "Ethan", "Felix", "Finn", "Gabriel", "George", "Harry", "Henry", "Hugo", "Isaac", "Jack", "Jacob", "James", "Jason", "Jasper", "Joel", "Jonah", "Jordan", "Joseph", "Julian", "Kai", "Liam", "Logan", "Louis", "Luke", "Mason", "Matthew", "Max", "Michael", "Miles", "Nathan", "Nicholas", "Noah", "Oscar", "Owen", "Patrick", "Peter", "Reece", "Ryan", "Samuel", "Scott", "Sean", "Sebastian", "Simon", "Theo", "Thomas", "Toby", "Tyler", "William"];
 const surnames = ["Parker", "Hayes", "Bennett", "Morgan", "Ellis", "Reed", "Brooks", "Walker"];
-const platforms: Platform[] = ["onlyfans", "telegram", "fansly", "fanvue"];
-const platformLabels = { onlyfans: "OnlyFans", telegram: "Telegram", fansly: "Fansly", fanvue: "Fanvue" };
+const platforms: Platform[] = ["onlyfans", "telegram"];
+const platformLabels = { onlyfans: "OnlyFans", telegram: "Telegram" };
 const colors = ["#4d78db", "#718ba6", "#8b719e", "#5c9183", "#aa825c", "#697dae", "#987780", "#568eaa"];
 const personas = [
   { city: "Melbourne", job: "architect", hobby: "weekend hiking", music: "acoustic playlists", coffee: "a flat white", project: "a coastal walking weekend", progress: "the walking route", routine: "after dinner", collection: "natural outdoor photos" },
@@ -41,12 +41,12 @@ function makeFan(index: number): Fan {
   const firstDay = shift(briannaPeriods[phase].from, index % 8);
   const name = `${firstNames[index % firstNames.length]} ${surnames[Math.floor(index / firstNames.length)]}`;
   const id = `briana-ledger-${index + 1}`;
-  const primary = platforms[index % 20 < 10 ? 0 : index % 20 < 15 ? 1 : index % 20 < 18 ? 2 : 3];
-  const channels = index % 12 === 0 ? [primary, ...platforms.filter(p => p !== primary)]
-    : index % 5 < 2 ? [primary, platforms[(platforms.indexOf(primary) + 1 + index % 3) % 4]] : [primary];
+  const primary = platforms[index % 20 < 15 ? 0 : 1];
+  const channels = index % 12 === 0 || index % 5 < 2
+    ? [primary, ...platforms.filter(p => p !== primary)] : [primary];
   const persona = personas[index % personas.length];
   const username = name.toLowerCase().replace(" ", "_");
-  const accounts = channels.map((platform, i) => ({ platform, username: `${username}_${platform === "telegram" ? "tg" : platform === "onlyfans" ? "of" : platform === "fansly" ? "fs" : "fv"}`, linkedAt: at(shift(firstDay, i), 2) }));
+  const accounts = channels.map((platform, i) => ({ platform, username: `${username}_${platform === "telegram" ? "tg" : "of"}`, linkedAt: at(shift(firstDay, i), 2) }));
   const messages: Message[] = [];
   const add = (key: string, platform: Platform, day: string, text: string, reply: string, minute = 2) => {
     const incoming: Message = { id: `${id}-${key}-in`, platform, direction: "in", at: at(day, minute), text };

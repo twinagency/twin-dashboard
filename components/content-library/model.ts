@@ -1,4 +1,5 @@
 import type { Fan, Platform, Purchase } from '../fans/types';
+import { normalizePlatformText } from '../fans/model';
 import { dayAt, platformOrder, valueCents, type Filters } from '../dashboard/model';
 export type Listing = { enabled: boolean; price: number };
 export type LibraryItem = { id: string; creatorId: string; title: string; originalTitle: string; kind: Purchase['kind']; description: string; collection: string; tags: string[]; status: 'Published' | 'Draft' | 'Archived'; addedAt: string; listings: Record<Platform, Listing>; members: string[]; duration?: number; preview?: string; fileName?: string; activity: { at: string; text: string }[] };
@@ -62,7 +63,13 @@ export function restoreLibrary(raw:string|null,base:LibraryItem[]):LibraryItem[]
     for(const item of saved.items){if(!item||typeof item.id!=='string'||typeof item.title!=='string'||typeof item.description!=='string'||!Array.isArray(item.members)||!Array.isArray(item.tags)||!Array.isArray(item.activity)||!['Photo','Video','Bundle'].includes(item.kind)||!['Draft','Published','Archived'].includes(item.status)||!base.some(b=>b.creatorId===item.creatorId))continue;
       const index=result.findIndex(b=>b.id===item.id);const original=index<0?undefined:result[index];
       if(original&&(original.creatorId!==item.creatorId||original.kind!==item.kind))continue;
-      const safe={...item,preview:original?.preview,originalTitle:original?.originalTitle||'',members:item.members.filter((m:unknown)=>typeof m==='string'),activity:item.activity.filter((e:any)=>typeof e?.text==='string'&&typeof e?.at==='string').slice(-100)} as LibraryItem;
+      const oldListings=item.listings;
+      if(!oldListings||typeof oldListings!=='object')continue;
+      const legacyOnlyFans=oldListings.onlyfans?.enabled?oldListings.onlyfans:[oldListings.fansly,oldListings.fanvue].find(listing=>listing?.enabled)||oldListings.onlyfans||original?.listings.onlyfans;
+      const telegram=oldListings.telegram||original?.listings.telegram;
+      if(!legacyOnlyFans||!telegram)continue;
+      const listings:Record<Platform,Listing>={onlyfans:{enabled:!!legacyOnlyFans.enabled,price:legacyOnlyFans.price},telegram:{enabled:!!telegram.enabled,price:telegram.price}};
+      const safe={...item,title:normalizePlatformText(item.title),description:normalizePlatformText(item.description),listings,preview:original?.preview,originalTitle:original?.originalTitle||'',members:item.members.filter((m:unknown)=>typeof m==='string'),activity:item.activity.filter((e:any)=>typeof e?.text==='string'&&typeof e?.at==='string').slice(-100).map((e:any)=>({...e,text:normalizePlatformText(e.text)}))} as LibraryItem;
       if(!safe.listings||validateItem(safe,[...result,...saved.items]))continue;
       if(index<0)result.push(safe);else result[index]=safe;
     }return result;

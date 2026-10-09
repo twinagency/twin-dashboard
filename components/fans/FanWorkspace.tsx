@@ -2,14 +2,14 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ArrowUpRight, Check, ChevronRight, CircleHelp, Clock3, Edit3, Globe2, ImageIcon, Link2, MessageCircle, MoreHorizontal, NotebookPen, Package, Search, Send, ShieldCheck, Users, Video, X } from "lucide-react";
-import { conversationHref, emptyState, messagesFor, platformNames, restoreState, STORAGE_KEY, totalsFor, visibleFans } from "./model";
+import { conversationHref, emptyState, messagesFor, normalizePlatform, platformNames, restoreState, STORAGE_KEY, totalsFor, visibleFans } from "./model";
 import { PLATFORMS, type Creator, type Fan, type Memory, type Platform, type PlatformFilter, type ProfileTab, type Purchase, type WorkspaceState } from "./types";
 import styles from "./FanWorkspace.module.css";
 import { useRouter } from "next/navigation";
 import { withBriannaLedger } from "./brianna-ledger";
 
 const tabs: { id: ProfileTab; label: string }[] = [{id:"summary",label:"Summary"},{id:"memory",label:"Memory"},{id:"history",label:"History"},{id:"purchases",label:"Purchases"},{id:"accounts",label:"Accounts"}];
-const platformShort: Record<Platform,string> = { onlyfans:"OF", telegram:"TG", fanvue:"FV", fansly:"FS" };
+const platformShort: Record<Platform,string> = { onlyfans:"OF", telegram:"TG" };
 const date = (at: string) => new Intl.DateTimeFormat("en-AU", {day:"numeric",month:"short",year:"numeric",timeZone:"Australia/Brisbane"}).format(new Date(at));
 const time = (at: string) => new Intl.DateTimeFormat("en-AU", {hour:"numeric",minute:"2-digit",timeZone:"Australia/Brisbane"}).format(new Date(at));
 const money = (value: number, currency: "USD"|"Stars") => currency === "Stars" ? `${value.toLocaleString("en-US")} Stars` : `US$${value.toFixed(2)}`;
@@ -122,7 +122,7 @@ export default function FanWorkspace({creators,fans:seedFans,includeBriannaLedge
     if(initialCreator==="all"||creators.some(c=>c.id===initialCreator))setCreatorId(initialCreator!);
     else if(initialFan)setCreatorId(initialFan.creatorId);
     if(initialFan)setSelectedId(initialFan.id);
-    const initialPlatform=params.get("platform");if(PLATFORMS.includes(initialPlatform as Platform))setPlatform(initialPlatform as Platform);
+    const initialPlatform=normalizePlatform(params.get("platform"));if(initialPlatform)setPlatform(initialPlatform);
     const initialTab=params.get("view");if(tabs.some(t=>t.id===initialTab)&&(initialTab!=="history"||initialFan?.history?.length))setTab(initialTab as ProfileTab);
     setReady(true);
   },[creators,fans]);

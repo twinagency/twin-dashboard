@@ -71,25 +71,25 @@ const benMessages = conversations([
     "Yes, if the weather holds. One thing: I like a quick description of what's included before buying, especially if a set overlaps something I already own.",
     "That makes sense. I'll be clear about the contents and flag overlap with anything you've already picked up.",
   ]],
-  ["ben-fansly", "fansly", "2026-08-27", [
-    "Ben from OnlyFans and Telegram here, using ben_coast_fs. Trying Fansly on my tablet. Same person, same cafe-editing chaos.",
+  ["ben-fansly", "onlyfans", "2026-08-27", [
+    "Back on OnlyFans on my tablet between edits. Same cafe-editing chaos, but I have a little time to browse your collections.",
     "Welcome, Ben. Are you still planning that laptop-free Noosa weekend?",
-    "Definitely. I like being able to pick up our conversation without explaining the trip again. I use Telegram for quick replies and the other apps when I'm browsing collections.",
+    "Definitely. I like being able to pick up our conversation without explaining the trip again. I use Telegram for quick replies and OnlyFans when I'm browsing collections.",
     "Then we can keep the Noosa thread going wherever you happen to be browsing.",
   ]],
-  ["ben-studio", "fansly", "2026-08-29", [
+  ["ben-studio", "onlyfans", "2026-08-29", [
     "Bought Studio diary for $32. Loved seeing the setup before the finished shots. Keep the behind-the-scenes bits coming.",
     "Happy you liked that side of it. Do you prefer the setup clips or the final edit comparisons?",
     "Both, but a little explanation of the lighting is my favourite. I spend enough time on edit timelines to appreciate a good simple setup.",
     "Lighting notes it is. Sometimes one window does more than a whole bag of equipment.",
   ]],
-  ["ben-fanvue", "fanvue", "2026-09-02", [
-    "Found you here too. It's Ben, ben_coast_fv, the same one on OF, Telegram and Fansly. Curious to see the collection layout here.",
-    "Hi Ben. All four now! Noosa must be getting close.",
+  ["ben-fanvue", "onlyfans", "2026-09-02", [
+    "Back browsing your OnlyFans collections. It's Ben, ben_coast, the same one chatting with you on Telegram. Curious about the new collection.",
+    "Hi Ben. Good to see you back here! Noosa must be getting close.",
     "Next week. Also, I'd rather browse in my own time than get lots of repeated reminders. One message about a genuinely new set is plenty.",
     "Understood. I'll keep updates occasional and make it clear when something is new.",
   ]],
-  ["ben-coastal", "fanvue", "2026-09-04", [
+  ["ben-coastal", "onlyfans", "2026-09-04", [
     "Bought Coastal afternoon for $54. That muted colour palette is really nice, a bit like the film photos I take on beach trips.",
     "Thank you. Are you taking the film camera to Noosa?",
     "Yes, my old 35 mm camera and just two rolls. It makes me think about each frame instead of taking hundreds. I like indie and acoustic playlists when I'm editing those scans later.",
@@ -113,13 +113,13 @@ const benMessages = conversations([
     "Straight in. A restaurant launch film is due October 10. I enjoy the work, but short voice notes or a few lines are easier than big walls of text when I'm on deadline.",
     "A few lines while you're busy, then. How did the first cut go?",
   ]],
-  ["ben-film-result", "fansly", "2026-09-22", [
+  ["ben-film-result", "onlyfans", "2026-09-22", [
     "Picked up Afterglow portraits for $38. Also, the Noosa film came back! The sunrise photo at Tea Tree Bay is the one I want to print.",
     "The sunrise plan paid off. Have you decided how big to print it?",
     "Probably A3 for the desk wall. Please ask me about that print next time, otherwise I'll leave it sitting in a folder for months.",
     "A3 for the desk wall. I'll check whether the photo has escaped the folder yet.",
   ]],
-  ["ben-sunday", "fanvue", "2026-09-28", [
+  ["ben-sunday", "onlyfans", "2026-09-28", [
     "Bought Slow Sunday for $62. A quieter set was exactly the mood I wanted. My restaurant edit is finally in a good place too.",
     "That sounds like progress on both fronts. Has the client seen the new cut?",
     "Yes, only small changes. I booked an acoustic gig for October 17 as a reward once the launch is done. Going with the same friends from Noosa.",
@@ -143,7 +143,7 @@ const benMessages = conversations([
     "Just above the monitor. It'll be a reminder to leave the house between projects. Ask me next week if it's arrived, please.",
     "I will. Hope the print looks as good on paper as it did in the scan.",
   ]],
-  ["ben-evening", "fansly", "2026-10-08", [
+  ["ben-evening", "onlyfans", "2026-10-08", [
     "Bought Evening edits for $44. I checked the contents and it's different from Studio diary, so that's all good.",
     "Yes, different footage and photos. Is your own evening full of edits too?",
     "Final sound pass tonight. Keeping tomorrow quiet so I can deliver on Saturday. After that I can actually enjoy the October 17 gig without thinking about work.",
@@ -158,97 +158,97 @@ const benMessages = conversations([
 ]);
 
 const oliverMessages = conversations([
-  ["oliver-intro", "fanvue", "2026-08-17", [
+  ["oliver-intro", "onlyfans", "2026-08-17", [
     "Hi Brianna, I'm Oliver from Bristol. I work in live sound, mostly small venues. Found your studio clip while winding down after a gig.",
     "Hi Oliver. A late night at a venue sounds busy. Was it a good show?",
     "Really good jazz trio. I speak English and Oliver is what everyone calls me. I often read messages after shifts, but there's no need to reply straight away.",
     "Lovely to meet you. A jazz trio sounds like a nice way to end the weekend, even from behind the mixing desk.",
   ]],
-  ["oliver-first", "fanvue", "2026-08-20", [
+  ["oliver-first", "onlyfans", "2026-08-20", [
     "Bought Studio afternoon for $28. I liked the quieter feel and the little details in the background, especially the record player.",
     "Thank you. Do you collect records yourself?",
     "A modest pile of soul and jazz vinyl. I go to a record shop on Gloucester Road when I have a free afternoon. No rare collection, just things I actually listen to.",
     "Records that get played are the best kind. What was the last one you picked up?",
   ]],
-  ["oliver-routine", "fanvue", "2026-08-24", [
+  ["oliver-routine", "onlyfans", "2026-08-24", [
     "A used Bill Withers album. Sunday mornings are usually records, a filter coffee and absolutely no soundcheck.",
     "That sounds like a proper day off. Do you ever get tired of listening to music after a week of shows?",
     "Sometimes I go for a quiet walk with my 35 mm camera instead. I like old signs, shopfronts and rainy streets. Nothing very polished.",
     "Those everyday details make interesting photos. Bristol must give you plenty to work with.",
   ]],
-  ["oliver-window", "fanvue", "2026-08-28", [
+  ["oliver-window", "onlyfans", "2026-08-28", [
     "Picked up Rainy window for $24. Natural window light is my favourite. I tend to choose photos over longer videos.",
     "Thank you. I'll keep the photo preference in mind. Have you taken the camera out this week?",
-    "Only one roll, between shifts. I'm using Fanvue only for this, by the way. I'm not on your Telegram, OnlyFans or Fansly, so please keep our chat here.",
-    "Of course, Oliver. We can keep everything here on Fanvue.",
+    "Only one roll, between shifts. I'm using OnlyFans only for this, by the way. I'm not on your Telegram, so please keep our chat here.",
+    "Of course, Oliver. We can keep everything here on OnlyFans.",
   ]],
-  ["oliver-bath-plan", "fanvue", "2026-09-01", [
+  ["oliver-bath-plan", "onlyfans", "2026-09-01", [
     "Booked a day in Bath for September 6. Bringing the camera, walking by the river and hoping to find a good bookshop.",
     "A camera and a bookshop sounds like a good day. Is it a work trip or completely your own time?",
     "Completely off. I like short train trips where I don't have to make a huge itinerary. I'll tell you whether the weather cooperates.",
     "Please do. Even a rainy street can make a good photograph, from what you've told me.",
   ]],
-  ["oliver-weekend", "fanvue", "2026-09-04", [
+  ["oliver-weekend", "onlyfans", "2026-09-04", [
     "Bought Weekend notes for $36. A small mixed bundle works for me if most of it is photos and the video is short.",
     "That one has the photo set and a short diary clip. Are you all set for Bath on Sunday?",
     "Train booked. I appreciate knowing the exact contents first. I don't want to buy the same photos twice if they appear in a later bundle.",
     "I'll flag any overlap clearly. Have a good train ride on Sunday.",
   ]],
-  ["oliver-bath-return", "fanvue", "2026-09-08", [
+  ["oliver-bath-return", "onlyfans", "2026-09-08", [
     "Bath was lovely. Walked along the river, found a second-hand bookshop and took a whole roll around the old shopfronts. Only one short shower.",
     "That sounds like the day you had in mind. Did the bookshop win you over?",
     "Yes, came home with a photography book I didn't plan to buy. Waiting for the film scans now. The frame of a blue bookshop door might be the keeper.",
     "An unplanned photography book feels very on theme. Let me know how the door photo comes out.",
   ]],
-  ["oliver-soft-light", "fanvue", "2026-09-12", [
+  ["oliver-soft-light", "onlyfans", "2026-09-12", [
     "Bought Soft light portraits for $30. These are exactly the sort of relaxed portraits I like, without lots of effects.",
     "Thank you, Oliver. Has your own film come back yet?",
     "Not yet. A busy run of shows until the 20th, so replies might be slow. Please don't chase me if I'm quiet, I'll catch up on my day off.",
     "No problem. Hope the run goes well. We can catch up when you have some breathing room.",
   ]],
-  ["oliver-boundaries", "fanvue", "2026-09-18", [
+  ["oliver-boundaries", "onlyfans", "2026-09-18", [
     "Quick hello between soundchecks. I enjoy the small everyday updates here, like what you're reading or a photo from a walk.",
     "It's nice to hear that. Are you nearly through the busy run?",
     "Two more nights. I prefer straightforward messages and one question at a time, not a big list to answer. A quiet chat is better than constant sales reminders.",
     "Understood. One question for now: what's the first thing you're doing on your day off?",
   ]],
-  ["oliver-film", "fanvue", "2026-09-22", [
+  ["oliver-film", "onlyfans", "2026-09-22", [
     "Bought Sunday contact sheet for $42. Also, my Bath scans arrived. The blue door photo worked, but my favourite is a rainy reflection by the river.",
     "A surprise favourite. What made that frame stand out?",
     "The reflection makes the buildings look like a watercolour. I'm choosing six pictures for a small printed album, not posting the whole roll online.",
     "Six favourites sounds like a thoughtful little record of the day. I'd love to hear which ones make the final cut.",
   ]],
-  ["oliver-autumn", "fanvue", "2026-09-27", [
+  ["oliver-autumn", "onlyfans", "2026-09-27", [
     "Picked up Autumn window for $26. I like that you listed it as a new set, separate from Rainy window.",
     "Yes, all new photos. How is the six-picture album coming together?",
     "Down to eight, so two still need to go. Work is calmer this week. I usually check this app around 9 or 10 pm UK time, except when a show runs late.",
     "Good to know. No hurry on the last two choices; sometimes leaving it a day makes the favourites clearer.",
   ]],
-  ["oliver-gig", "fanvue", "2026-09-30", [
+  ["oliver-gig", "onlyfans", "2026-09-30", [
     "Going to a small acoustic show on October 16 as an audience member for once. Determined not to spend the whole night judging the sound mix.",
     "That might be harder than it sounds. Are you going with anyone?",
     "A friend from work. We've promised not to stand next to the mixing desk. Ask me afterwards if we managed it.",
     "Deal. After the 16th, I want to know whether you actually watched from the audience.",
   ]],
-  ["oliver-october", "fanvue", "2026-10-02", [
+  ["oliver-october", "onlyfans", "2026-10-02", [
     "Bought October stills for $38. Thanks for saying there aren't any repeats from Sunday contact sheet.",
     "You're welcome. I know keeping the sets distinct matters to you. Did you finish narrowing down the album?",
     "Six chosen, finally. The river reflection goes first and the blue door second. I want to order a small square print book over the weekend.",
     "That sounds like a strong opening pair. Let me know how the print order goes.",
   ]],
-  ["oliver-album", "fanvue", "2026-10-05", [
+  ["oliver-album", "onlyfans", "2026-10-05", [
     "Album ordered yesterday, delivery estimate October 12. I went with matte paper because the scans felt too shiny on gloss.",
     "That seems right for those rainy street photos. Are you happy with the final sequence?",
     "Yes. Six pictures was a useful limit. Please ask about it next week once it's arrived. I'm curious whether the reflection survives being printed small.",
     "I will. Hope the printed version keeps the detail you liked in the scan.",
   ]],
-  ["oliver-studio-notes", "fanvue", "2026-10-08", [
+  ["oliver-studio-notes", "onlyfans", "2026-10-08", [
     "Picked up Studio notes for $44. The photo-heavy mix and short clip suit me. I read the contents before buying, so no surprises.",
     "Thank you, Oliver. Is this week giving you some time away from the venue?",
     "One more Friday show, then a free Sunday. Record shop and coffee if it's dry. I haven't picked a new record yet.",
     "A free Sunday sounds well timed. I'll be interested to hear what you find in the shop.",
   ]],
-  ["oliver-current", "fanvue", "2026-10-09", [
+  ["oliver-current", "onlyfans", "2026-10-09", [
     "Morning check-in before loading equipment. Print book should still arrive on Monday. I'll tell you if that river reflection looks any good on paper.",
     "Hope the load-in goes smoothly. Monday is close now. Is tonight's show a big setup?",
     "A four-piece band, so manageable. I might be slow replying until tomorrow. After that it's the record shop on Sunday and the acoustic show next Friday.",
@@ -260,12 +260,10 @@ export const briannaFans: Fan[] = [
   {
     id: "briana-ben", creatorId: "briana", name: "Ben", initials: "B", color: "#417fa1",
     firstSeen: benMessages[0].at, unread: 0,
-    summary: "Ben is a Brisbane video editor who first connected with Brianna in August. The same relationship now continues across OnlyFans, Telegram, Fansly and Fanvue, with Telegram his preferred place for quick chats. Shared threads include his Noosa trip, film photography and the restaurant launch film due on 10 October. His final export is running; the next natural follow-ups are the client review, his Tea Tree Bay print and the 17 October acoustic gig.",
+    summary: "Ben is a Brisbane video editor who first connected with Brianna in August. The same relationship now continues across OnlyFans and Telegram, with Telegram his preferred place for quick chats. Shared threads include his Noosa trip, film photography and the restaurant launch film due on 10 October. His final export is running; the next natural follow-ups are the client review, his Tea Tree Bay print and the 17 October acoustic gig.",
     accounts: [
       { platform: "onlyfans", username: "ben_coast", linkedAt: benMessages[0].at },
       { platform: "telegram", username: "ben_coast_tg", linkedAt: source(benMessages, "ben-telegram-0").at },
-      { platform: "fansly", username: "ben_coast_fs", linkedAt: source(benMessages, "ben-fansly-0").at },
-      { platform: "fanvue", username: "ben_coast_fv", linkedAt: source(benMessages, "ben-fanvue-0").at },
     ],
     messages: benMessages,
     memories: memories(benMessages, [
@@ -277,17 +275,17 @@ export const briannaFans: Fan[] = [
       ["Interests & routines", "Surfing", "Enjoys casual surfing on the Sunshine Coast. Describes himself as a beginner and celebrated the cafe film delivery with a surf.", "ben-walk-2"],
       ["Interests & routines", "Film photography", "Uses an older 35 mm camera and took only two rolls to Noosa. Likes the slower, more deliberate process of choosing each frame.", "ben-coastal-2"],
       ["Interests & routines", "Music", "Listens to indie and acoustic playlists while editing film scans. Music is a useful conversational link alongside photography and work.", "ben-coastal-2"],
-      ["Conversation preferences", "Channel habits", "Uses Telegram for quick replies. Browses collections on the other platforms and appreciates continuing the same conversation without repeating personal context.", "ben-fansly-2"],
+      ["Conversation preferences", "Channel habits", "Uses Telegram for quick replies. Browses collections on OnlyFans and appreciates continuing the same conversation without repeating personal context.", "ben-fansly-2"],
       ["Conversation preferences", "Message length", "During deadlines, prefers short voice notes or a few lines instead of long messages. This preference came up when the restaurant film entered its busy phase.", "ben-window-2"],
       ["Conversation preferences", "Frequency of updates", "Prefers browsing at his own pace. One update about a genuinely new set is enough; avoid repeating reminders across his linked accounts.", "ben-fanvue-2"],
       ["Conversation preferences", "Room during deadlines", "Asked for space while finishing the colour grade and sound mix. Appreciates the project being remembered, but does not want daily check-ins.", "ben-quick-note-2"],
       ["Shared history", "Cafe film delivered", "Delivered the local cafe film on 11 August and reported that the client loved it. Celebrated with a surf the following day.", "ben-walk-2"],
       ["Shared history", "Noosa weekend", "Returned from the 12–14 September trip with friends. Managed a Sunday sunrise at Tea Tree Bay; the camera stayed safe despite wet shoes from a wave.", "ben-noosa-return-0"],
       ["Shared history", "Coastal track and tacos", "Walked the Noosa coastal track and had fish tacos afterwards. Promised to report back on the film once it was developed.", "ben-noosa-return-2"],
-      ["Shared history", "Favourite Noosa frame", "The film scans came back successfully. Chose the Tea Tree Bay sunrise for an A3 print above his desk, carrying the trip conversation into Fansly.", "ben-film-result-0"],
+      ["Shared history", "Favourite Noosa frame", "The film scans came back successfully. Chose the Tea Tree Bay sunrise for an A3 print above his desk, carrying the trip conversation into OnlyFans.", "ben-film-result-0"],
       ["Content preferences", "Natural outdoor photos", "Likes warm, natural outdoor light more than heavily staged sets. Mentioned this after purchasing Rooftop golden hour.", "ben-rooftop-0"],
       ["Content preferences", "Behind the scenes", "Enjoys seeing the setup as well as the final result. Especially interested in a simple explanation of lighting choices.", "ben-studio-2"],
-      ["Content preferences", "Clear contents and ownership", "Wants a brief contents description before buying and a warning if material overlaps an earlier purchase. Check ownership across all four platforms.", "ben-weekend-2"],
+      ["Content preferences", "Clear contents and ownership", "Wants a brief contents description before buying and a warning if material overlaps an earlier purchase. Check ownership across OnlyFans and Telegram.", "ben-weekend-2"],
       ["Content preferences", "Relevant recommendations", "Prefers one thoughtful recommendation over a long offer list. October journal was chosen after confirming it did not repeat Weekend light.", "ben-october-2"],
       ["Open follow-ups", "Client review on 10 October", "At the next conversation, ask how the restaurant film's client review went. Ben explicitly asked to pick this up after the final export.", "ben-current-2"],
       ["Open follow-ups", "A3 print arrival", "Tea Tree Bay A3 print was ordered by 7 October and is expected the following week. Ask whether it has arrived and how it looks above the monitor.", "ben-print-2"],
@@ -306,16 +304,16 @@ export const briannaFans: Fan[] = [
       ["First conversation", "Met on OnlyFans through an interest in behind-the-scenes production. Introduced himself as a Brisbane video editor.", "ben-intro-0"],
       ["Telegram added to the relationship", "Identified his OnlyFans and Telegram usernames; continued the cafe film conversation on the new channel.", "ben-telegram-0"],
       ["First project followed through", "Cafe film delivered and approved. Celebrated with a surf, providing continuity beyond the initial introduction.", "ben-walk-2"],
-      ["Fansly account connected", "Recognised the same relationship from OnlyFans and Telegram. Noosa plans carried into the new conversation.", "ben-fansly-0"],
-      ["Fourth account connected", "Introduced his Fanvue username and confirmed he was the same Ben already chatting on the other three platforms.", "ben-fanvue-0"],
+      ["Channel preferences confirmed", "Uses Telegram for quick replies and OnlyFans to browse collections. Noosa plans continued across the same relationship.", "ben-fansly-2"],
+      ["Content update preferences saved", "Asked for occasional updates about new collections while browsing at his own pace.", "ben-fanvue-2"],
       ["Noosa trip completed", "Reported back on the Sunday sunrise at Tea Tree Bay and the camera's close encounter with a wave.", "ben-noosa-return-0"],
-      ["Film scans returned", "Chose the sunrise photograph as the frame worth printing. The trip story continued on Fansly.", "ben-film-result-0"],
+      ["Film scans returned", "Chose the sunrise photograph as the frame worth printing. The trip story continued on OnlyFans.", "ben-film-result-0"],
       ["October collection added", "Bought October journal after checking it did not overlap the Weekend light bundle already owned.", "ben-october-0"],
       ["Print ordered", "Ordered the Tea Tree Bay photograph at A3, following through on the earlier conversation about printing it.", "ben-print-0"],
       ["Restaurant film enters final review", "Final export running with the client review scheduled for 10 October. Next follow-up is the delivery outcome.", "ben-current-0"],
     ]),
     notes: [
-      { id: "ben-note-channels", at: "2026-09-02T23:00:00Z", text: "Same Ben across all four accounts. Keep the creator relationship together, while replying within the channel he used. Telegram is his usual quick-chat channel." },
+      { id: "ben-note-channels", at: "2026-09-02T23:00:00Z", text: "Same Ben across OnlyFans and Telegram. Keep the creator relationship together, while replying within the channel he used. Telegram is his usual quick-chat channel." },
       { id: "ben-note-ownership", at: "2026-10-02T23:00:00Z", text: "Check combined purchase history before suggesting a collection. He explicitly checks for overlap and prefers one relevant suggestion with a clear contents description." },
       { id: "ben-note-print", at: "2026-10-07T23:00:00Z", text: "Noosa sunrise thread has progressed from trip planning to film scans to an A3 print order. Follow up on delivery next week, not on choosing a photo again." },
       { id: "ben-note-current", at: "2026-10-09T08:08:00Z", text: "Current context: restaurant film review on 10 October. Keep replies brief while he finishes. Next week: print arrival, then the acoustic gig on 17 October." },
@@ -323,24 +321,22 @@ export const briannaFans: Fan[] = [
     suggestedReplies: {
       telegram: "Hope tomorrow's client review goes smoothly, Ben. Let me know how it lands when you get a breather, and we'll catch up about the print next week.",
       onlyfans: "Hope the final restaurant edit is coming together, Ben. I'll keep any collection suggestions specific and check them against what you already have.",
-      fansly: "Hope the sound pass went smoothly, Ben. Enjoy Evening edits when you get a quiet moment after delivery.",
-      fanvue: "That October 17 gig sounds like a lovely reward after the restaurant launch. Hope you and your Noosa friends have a great night.",
     },
   },
   {
     id: "briana-oliver", creatorId: "briana", name: "Oliver", initials: "O", color: "#8b719e",
     firstSeen: oliverMessages[0].at, unread: 0,
-    summary: "Oliver is a Bristol live-sound engineer who has been chatting with Brianna on Fanvue since August. He enjoys jazz and soul records, filter coffee and unpolished film photography. Their ongoing story follows his September day trip to Bath and the six-photo book now due on 12 October. He has a venue shift tonight, a record-shop visit planned for Sunday and an acoustic show as an audience member on 16 October.",
-    accounts: [{ platform: "fanvue", username: "oliver_bristol", linkedAt: oliverMessages[0].at }],
+    summary: "Oliver is a Bristol live-sound engineer who has been chatting with Brianna on OnlyFans since August. He enjoys jazz and soul records, filter coffee and unpolished film photography. Their ongoing story follows his September day trip to Bath and the six-photo book now due on 12 October. He has a venue shift tonight, a record-shop visit planned for Sunday and an acoustic show as an audience member on 16 October.",
+    accounts: [{ platform: "onlyfans", username: "oliver_bristol", linkedAt: oliverMessages[0].at }],
     messages: oliverMessages,
     memories: memories(oliverMessages, [
       ["Personal details", "Home and occupation", "Lives in Bristol and works in live sound, mainly at small venues. First found Brianna's studio clip while winding down after a jazz trio's show.", "oliver-intro-0"],
       ["Personal details", "Name and language", "Uses Oliver and speaks English. Often reads messages after venue shifts; explicitly says there is no expectation of an immediate reply.", "oliver-intro-2"],
-      ["Personal details", "Local routine", "Usually checks Fanvue around 9–10 pm UK time, except when a show runs late. His work schedule changes with the venue programme.", "oliver-autumn-2"],
+      ["Personal details", "Local routine", "Usually checks OnlyFans around 9–10 pm UK time, except when a show runs late. His work schedule changes with the venue programme.", "oliver-autumn-2"],
       ["Interests & routines", "Record collecting", "Keeps a modest soul and jazz vinyl collection and visits a Gloucester Road record shop. Values records he will play rather than collecting rarities.", "oliver-first-2"],
       ["Interests & routines", "Sunday coffee and music", "Enjoys filter coffee and records on a free Sunday morning. Last mentioned finding a used Bill Withers album.", "oliver-routine-0"],
       ["Interests & routines", "Street photography", "Takes a 35 mm camera on quiet walks. Likes old signs, shopfronts and rainy streets, with an everyday rather than polished feel.", "oliver-routine-2"],
-      ["Conversation preferences", "Fanvue only", "Explicitly uses Fanvue for this relationship and is not connected to Brianna on Telegram, OnlyFans or Fansly. Keep this conversation on Fanvue.", "oliver-window-2"],
+      ["Conversation preferences", "OnlyFans only", "Explicitly uses OnlyFans for this relationship and is not connected to Brianna on Telegram. Keep this conversation on OnlyFans.", "oliver-window-2"],
       ["Conversation preferences", "No chasing during shows", "Asked not to be chased when work makes replies slow. Catches up on days off; a quiet period is not an invitation to send repeated reminders.", "oliver-soft-light-2"],
       ["Conversation preferences", "Straightforward conversation", "Prefers one question at a time and ordinary everyday updates. Enjoys a quiet chat more than a list of questions or constant sales reminders.", "oliver-boundaries-2"],
       ["Shared history", "Bath day trip", "Visited Bath on 6 September. Walked by the river, explored old shopfronts and found a second-hand bookshop; only one brief shower interrupted the day.", "oliver-bath-return-0"],
@@ -362,9 +358,9 @@ export const briannaFans: Fan[] = [
       ["October stills", "Photo", 38, "oliver-october-0"], ["Studio notes", "Bundle", 44, "oliver-studio-notes-0"],
     ]),
     history: milestones(oliverMessages, [
-      ["First Fanvue conversation", "Introduced himself after a jazz trio's show. Shared his Bristol home and work in live sound.", "oliver-intro-0"],
+      ["First OnlyFans conversation", "Introduced himself after a jazz trio's show. Shared his Bristol home and work in live sound.", "oliver-intro-0"],
       ["Music becomes a recurring topic", "First purchase led into a discussion of soul and jazz records and his local record shop.", "oliver-first-2"],
-      ["Single-channel preference confirmed", "Confirmed he wants to keep the relationship on Fanvue, with no accounts on Brianna's other platforms.", "oliver-window-2"],
+      ["Single-channel preference confirmed", "Confirmed he wants to keep the relationship on OnlyFans, with no accounts on Brianna's other platforms.", "oliver-window-2"],
       ["Bath day trip completed", "Returned with a roll of river and shopfront photographs and a bookshop discovery.", "oliver-bath-return-0"],
       ["Film scans inspire a print project", "A rainy reflection became the favourite image. Began selecting six photos for a small album.", "oliver-film-2"],
       ["An evening in the audience planned", "Booked a 16 October acoustic show as a listener, with a promise to avoid the mixing desk.", "oliver-gig-0"],
@@ -372,11 +368,11 @@ export const briannaFans: Fan[] = [
       ["Current plans confirmed", "Friday's venue shift, Sunday's record-shop visit and next Friday's acoustic show set the context for the next conversations.", "oliver-current-2"],
     ]),
     notes: [
-      { id: "oliver-note-platform", at: "2026-08-28T23:00:00Z", text: "Fanvue only, by his explicit preference. Do not imply there are linked accounts elsewhere or continue a conversation on another platform." },
+      { id: "oliver-note-platform", at: "2026-08-28T23:00:00Z", text: "OnlyFans only, by his explicit preference. Do not imply there are linked accounts elsewhere or continue a conversation on another platform." },
       { id: "oliver-note-tone", at: "2026-09-18T23:00:00Z", text: "Keep messages straightforward and ask one question at a time. Venue shifts explain slow replies; he asked for space rather than repeated check-ins." },
       { id: "oliver-note-album", at: "2026-10-05T23:00:00Z", text: "Bath story is now at the printed-book stage. Six photos chosen, matte paper ordered, due 12 October. Ask about the finished book rather than whether scans have returned." },
       { id: "oliver-note-next", at: "2026-10-09T08:08:00Z", text: "Upcoming topics: Sunday record shop, Monday print-book delivery and 16 October acoustic show. He and his friend promised to stay away from the mixing desk." },
     ],
-    suggestedReplies: { fanvue: "Hope tonight's show goes smoothly, Oliver. Catch up when you're free, and I'll be interested to hear how the river reflection looks when the book arrives on Monday." },
+    suggestedReplies: { onlyfans: "Hope tonight's show goes smoothly, Oliver. Catch up when you're free, and I'll be interested to hear how the river reflection looks when the book arrives on Monday." },
   },
 ];

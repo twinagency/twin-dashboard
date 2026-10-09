@@ -11,7 +11,7 @@ import { withBriannaLedger } from "../fans/brianna-ledger";
 import { buildDashboard, dayAt, displayMoney, FILTER_STORAGE_KEY, filterParams, originalMoney, parseFilters, platformOrder, REPORT_DAY, REPORT_START, validDay, valueCents, type Activity, type Filters, type LedgerEntry } from "./model";
 import styles from "./CreatorDashboard.module.css";
 
-const short: Record<Platform, string> = { onlyfans: "OF", telegram: "TG", fansly: "FS", fanvue: "FV" };
+const short: Record<Platform, string> = { onlyfans: "OF", telegram: "TG" };
 const date = (day: string, long = false) => new Intl.DateTimeFormat("en-AU", { day: "numeric", month: "short", ...(long ? { year: "numeric" as const } : {}), timeZone: "Australia/Brisbane" }).format(new Date(`${day.slice(0, 10)}T02:00:00Z`));
 const time = (at: string) => new Intl.DateTimeFormat("en-AU", { hour: "numeric", minute: "2-digit", timeZone: "Australia/Brisbane" }).format(new Date(at));
 type Detail = { kind: "purchase"; purchase: LedgerEntry } | { kind: "content"; title: string } | { kind: "rates" };

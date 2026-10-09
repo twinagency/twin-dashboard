@@ -28,8 +28,6 @@
 .channel{display:inline-flex;align-items:center;gap:4px;border-radius:5px;font-size:9px;font-weight:650;padding:3px 5px;background:#eff4fb;color:#4d6788;white-space:nowrap}
 .channel[data-platform=telegram]{background:#e8f5ff;color:#2783bb}
 .channel[data-platform=onlyfans]{background:#e9f8fd;color:#2998bd}
-.channel[data-platform=fanvue]{background:#e8f7ee;color:#338660}
-.channel[data-platform=fansly]{background:#edf0ff;color:#5875c5}
 .chatHeader{display:flex;align-items:center;gap:10px;padding:17px 14px 12px}
 .chatHeader>div{min-width:0;flex:1}
 .chatHeader h2{font-size:17px;font-weight:700;margin:0 0 3px}
