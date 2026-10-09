@@ -177,7 +177,7 @@ for (const mobile of [false, true]) {
   assert.ok(admin.includes('href="/fans"'), "Admin fan workspace is reachable on desktop and mobile");
   assert.match(admin, /Fan profiles/);
   const nav = admin.slice(admin.indexOf('<nav aria-label="Main navigation"'));
-  const orderedLabels = ["Dashboard", "Overview", "Creators", "Fan profiles", "Live Telegram Window", "Upload Telegram Story", "Pay-per-views", "Creator Configuration", "Agency access", "Earnings split", "Catalogue funnel", "Accounts", "Invite creator"];
+  const orderedLabels = ["Dashboard", "Overview", "Creators", "Fan profiles", "Live Telegram Window", "Upload Telegram Story", "Pay-per-views", "Content Library", "Creator Configuration", "Agency access", "Earnings split", "Catalogue funnel", "Accounts", "Invite creator"];
   let previous = -1;
   for (const label of orderedLabels) {
     const index = nav.indexOf(`>${label}<`);
@@ -190,7 +190,7 @@ for (const mobile of [false, true]) {
 
 }
 for (const agencyName of ["Moxy", "LYNQ", portals.JESS_KATE_PORTAL.name, portals.TETHER_PORTAL.name]) {
-  assert.ok(!render(agencyName, true).includes('href="/dashboard"'), "The new internal Dashboard does not widen partner navigation");
+  assert.ok(!render(agencyName, true).includes('href="/dashboard"') && !render(agencyName, true).includes('href="/content-library"'), "The new internal Dashboard does not widen partner navigation");
 }
 pathname = "/dashboard";
 assert.deepEqual(renderedLinks(render()).filter(link => /aria-current="page"/.test(link.attributes)).map(link => link.label), ["Dashboard"]);
