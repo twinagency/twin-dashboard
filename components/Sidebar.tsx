@@ -312,6 +312,8 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
     ? CREATOR_LINKS
     : isPreview
     ? [...NAV_LINKS, ...MORE_LINKS.filter(item => item.kind === "tab" && item.tab === "identity")]
+    : isAdmin
+    ? NAV_LINKS.flatMap(link => link.kind === "route" && link.href === "/users" ? [{ kind: "route", label: "Fan profiles", href: "/fans", icon: "Users", color: "blue" } as NavLink, link] : [link])
     : NAV_LINKS.flatMap(link => expandedMoxyNavigation && link.kind === "tab" && link.tab === "ppvs" ? [link, ...MORE_LINKS.filter(item => item.kind === "tab" && item.tab === "identity")] : [link]);
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -389,3 +391,4 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
 export default function Sidebar({ clones: _clones, activeCloneId }: { clones: CloneLite[]; activeCloneId: string | null }) {
   return <aside className="dashboard-sidebar sticky top-0 hidden h-screen w-72 shrink-0 flex-col lg:flex"><SidebarContent activeCloneId={activeCloneId} /></aside>;
 }
+
