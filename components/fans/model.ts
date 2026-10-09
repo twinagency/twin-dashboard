@@ -1,8 +1,22 @@
-import { PLATFORMS, type Fan, type Handling, type Message, type Platform, type PlatformFilter, type WorkspaceState } from "./types";
+import { PLATFORMS, type Fan, type Handling, type Message, type Platform, type PlatformFilter, type ProfileTab, type WorkspaceState } from "./types";
 export const STORAGE_KEY = "twin-fan-workspace-v1";
 export const platformNames: Record<Platform, string> = { onlyfans: "OnlyFans", telegram: "Telegram", fanvue: "Fanvue", fansly: "Fansly" };
 export const emptyState = (): WorkspaceState => ({ version: 1, notes: {}, messages: {}, memories: {}, modes: {}, drafts: {} });
 export const channelKey = (fanId: string, platform: Platform) => `${fanId}:${platform}`;
+export function conversationPlatform(fan: Fan, preferred?: string | null): Platform {
+  return fan.accounts.find(account => account.platform === preferred)?.platform
+    ?? fan.accounts.find(account => account.platform === "telegram")?.platform
+    ?? fan.accounts[0].platform;
+}
+export function conversationHref(fan: Fan, preferred?: string | null, sourceId?: string): string {
+  const source = fan.messages.find(message => message.id === sourceId);
+  const params = new URLSearchParams({ relationship: fan.id, creator: fan.creatorId, platform: source?.platform ?? conversationPlatform(fan, preferred) });
+  if (source) params.set("source", source.id);
+  return `/users?${params}`;
+}
+export function profileHref(fan: Fan, view: ProfileTab = "summary"): string {
+  return `/fans?${new URLSearchParams({ creator: fan.creatorId, fan: fan.id, platform: "all", view })}`;
+}
 export function visibleFans(fans: Fan[], creatorId: string, query: string, platform: PlatformFilter = "all"): Fan[] {
   const term = query.trim().toLocaleLowerCase();
   return fans.filter(fan => (creatorId === "all" || fan.creatorId === creatorId) && (platform === "all" || fan.accounts.some(a => a.platform === platform)) && (!term || [fan.name, ...fan.accounts.map(a => a.username)].some(s => s.toLocaleLowerCase().includes(term))));

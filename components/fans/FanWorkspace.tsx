@@ -2,11 +2,12 @@
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ArrowUpRight, Check, ChevronRight, CircleHelp, Clock3, Edit3, Globe2, ImageIcon, Link2, MessageCircle, MoreHorizontal, NotebookPen, Package, Search, Send, ShieldCheck, Users, Video, X } from "lucide-react";
-import { channelKey, emptyState, messagesFor, platformNames, restoreState, STORAGE_KEY, totalsFor, visibleFans } from "./model";
-import { PLATFORMS, type Creator, type Fan, type Handling, type Memory, type Platform, type PlatformFilter, type ProfileTab, type Purchase, type WorkspaceState } from "./types";
+import { conversationHref, emptyState, messagesFor, platformNames, restoreState, STORAGE_KEY, totalsFor, visibleFans } from "./model";
+import { PLATFORMS, type Creator, type Fan, type Memory, type Platform, type PlatformFilter, type ProfileTab, type Purchase, type WorkspaceState } from "./types";
 import styles from "./FanWorkspace.module.css";
+import { useRouter } from "next/navigation";
 
-const tabs: { id: ProfileTab; label: string }[] = [{id:"summary",label:"Summary"},{id:"conversation",label:"Conversation"},{id:"memory",label:"Memory"},{id:"history",label:"History"},{id:"purchases",label:"Purchases"},{id:"accounts",label:"Accounts"}];
+const tabs: { id: ProfileTab; label: string }[] = [{id:"summary",label:"Summary"},{id:"memory",label:"Memory"},{id:"history",label:"History"},{id:"purchases",label:"Purchases"},{id:"accounts",label:"Accounts"}];
 const platformShort: Record<Platform,string> = { onlyfans:"OF", telegram:"TG", fanvue:"FV", fansly:"FS" };
 const date = (at: string) => new Intl.DateTimeFormat("en-AU", {day:"numeric",month:"short",year:"numeric",timeZone:"Australia/Brisbane"}).format(new Date(at));
 const time = (at: string) => new Intl.DateTimeFormat("en-AU", {hour:"numeric",minute:"2-digit",timeZone:"Australia/Brisbane"}).format(new Date(at));
@@ -85,6 +86,7 @@ function RelationshipMemory({fan, creator, value, edited, onEdit, onSource}: {
 type Dialog = {kind:"note"}|{kind:"memory";memory:Memory}|{kind:"purchase";purchase:Purchase}|{kind:"account";platform:Platform}|{kind:"reset"}|null;
 
 export default function FanWorkspace({creators,fans}:{creators:Creator[];fans:Fan[]}) {
+  const router=useRouter();
   const [creatorId,setCreatorId]=useState("briana");
   const [selectedId,setSelectedId]=useState("briana-ben");
   const [query,setQuery]=useState("");
@@ -97,10 +99,7 @@ export default function FanWorkspace({creators,fans}:{creators:Creator[];fans:Fa
   const [mobileList,setMobileList]=useState(true);
   const [dialog,setDialog]=useState<Dialog>(null);
   const [editor,setEditor]=useState("");
-  const [messageSearch,setMessageSearch]=useState("");
   const [purchaseSearch,setPurchaseSearch]=useState("");
-  const [sourceMessageId,setSourceMessageId]=useState<string|null>(null);
-  const messageListRef=useRef<HTMLDivElement>(null);
   const [toast,setToast]=useState("");
   const toastTimer=useRef<ReturnType<typeof setTimeout>|null>(null);
   const filtered=visibleFans(fans,creatorId,query,listPlatform);
@@ -111,9 +110,6 @@ export default function FanWorkspace({creators,fans}:{creators:Creator[];fans:Fa
   const messages=fan?messagesFor(fan,state,activePlatform):[];
   const lastMessage=messages[messages.length-1];
   const notes=fan?[...(fan.notes||[]),...(state.notes[fan.id]||[])].sort((a,b)=>a.at.localeCompare(b.at)):[];
-  const draftKey=fan&&activePlatform!=="all"?channelKey(fan.id,activePlatform):"";
-  const mode=state.modes[draftKey]||"Copilot";
-  const draft=state.drafts[draftKey]||"";
   const flash=(text:string)=>{setToast(text);if(toastTimer.current)clearTimeout(toastTimer.current);toastTimer.current=setTimeout(()=>setToast(""),3200);};
   useEffect(()=>()=>{if(toastTimer.current)clearTimeout(toastTimer.current);},[]);
   useEffect(()=>{
@@ -135,25 +131,10 @@ export default function FanWorkspace({creators,fans}:{creators:Creator[];fans:Fa
     window.history.replaceState(window.history.state,"",`${window.location.pathname}?${params}`);
   },[ready,creatorId,fan,activePlatform,tab]);
   useEffect(()=>{if(tab==="history"&&!fan?.history?.length)setTab("summary");},[fan,tab]);
-  const selectFan=(next:Fan)=>{setSelectedId(next.id);setPlatform("all");setTab("summary");setDialog(null);setMessageSearch("");setPurchaseSearch("");setMobileList(false);};
+  const selectFan=(next:Fan)=>{setSelectedId(next.id);setPlatform("all");setTab("summary");setDialog(null);setPurchaseSearch("");setMobileList(false);};
   const selectCreator=(id:string)=>{setCreatorId(id);setQuery("");setListPlatform("all");setPlatform("all");setDialog(null);setTab("summary");setSelectedId((id==="all"?fans[0]:fans.find(f=>f.creatorId===id))?.id||"");};
-  const openConversation=(channel?:Platform,sourceId?:string)=>{if(!fan)return;setSourceMessageId(sourceId||null);setPlatform(channel||(activePlatform!=="all"?activePlatform:fan.accounts[0].platform));setTab("conversation");setMessageSearch("");setDialog(null);};
-  useEffect(()=>{
-    if(tab!=="conversation"||!messageListRef.current)return;
-    const list=messageListRef.current;
-    const target=sourceMessageId?document.getElementById(`fan-message-${sourceMessageId}`):null;
-    list.scrollTop=target?Math.max(0,list.scrollTop+target.getBoundingClientRect().top-list.getBoundingClientRect().top-20):messageSearch?0:list.scrollHeight;
-    if(target)list.scrollIntoView?.({block:"nearest",behavior:"auto"});
-  },[tab,fan?.id,activePlatform,messages.length,sourceMessageId,messageSearch]);
+  const openConversation=(channel?:Platform,sourceId?:string)=>{if(fan)router.push(conversationHref(fan,channel||(activePlatform!=="all"?activePlatform:undefined),sourceId));};
   const openNote=()=>{setEditor("");setDialog({kind:"note"});};
-  const updateDraft=(text:string)=>{if(draftKey)setState(previous=>({...previous,drafts:{...previous.drafts,[draftKey]:text}}));};
-  const sendMessage=()=>{
-    if(!fan||activePlatform==="all"||!draft.trim())return;
-    const message={id:uid(),platform:activePlatform,direction:"out" as const,text:draft.trim(),at:new Date().toISOString()};
-    setState(previous=>({...previous,messages:{...previous.messages,[fan.id]:[...(previous.messages[fan.id]||[]),message].slice(-200)},drafts:{...previous.drafts,[draftKey]:""}}));
-    setMessageSearch("");flash("Message added to conversation");
-    setSourceMessageId(null);
-  };
   const saveEditor=()=>{
     if(!fan||!dialog||!editor.trim())return;
     if(dialog.kind==="note")setState(previous=>({...previous,notes:{...previous.notes,[fan.id]:[...(previous.notes[fan.id]||[]),{id:uid(),text:editor.trim(),at:new Date().toISOString()}].slice(-100)}}));
@@ -187,12 +168,11 @@ export default function FanWorkspace({creators,fans}:{creators:Creator[];fans:Fa
         {tab==="summary"&&<div className={styles.summaryGrid}>
           <Card title="Relationship summary" icon={<Users size={17}/>}><p className={styles.summaryText}>{fan.summary}</p><div className={styles.detailGrid}><div><span>Creator</span><strong>{creator.name}</strong></div><div><span>First seen</span><strong>{date(fan.firstSeen)}</strong></div><div><span>Viewing</span><strong>{activePlatform==="all"?"All platforms":platformNames[activePlatform]}</strong></div><div><span>Relationship</span><strong>{fan.accounts.length} linked accounts</strong></div></div></Card>
           <Card title="Remembered details"  action={<button className={styles.textButton} onClick={()=>setTab("memory")}>View all {fan.memories.length} details</button>}><dl className={`${styles.memoryQuick} ${fan.history?styles.memoryPreview:""}`}>{fan.memories.slice(0,4).map(m=><div key={m.id}><dt>{m.label}</dt><dd>{fieldValue(m)}</dd></div>)}</dl></Card>
-          <Card title="Recent activity" icon={<Clock3 size={17}/>} action={<button className={styles.textButton} onClick={()=>{setPlatform("all");setTab("conversation");}}>View conversations</button>}><div className={styles.timeline}>{[...messages.slice(-4).map(m=>({id:m.id,at:m.at,platform:m.platform,label:m.direction==="in"?"Incoming message":"Reply",text:m.text,purchase:null as Purchase|null})),...totals.purchases.slice(-4).map(p=>({id:p.id,at:p.at,platform:p.platform,label:`${p.kind} purchased`,text:money(p.amount,p.currency),purchase:p}))].sort((a,b)=>b.at.localeCompare(a.at)).slice(0,5).map(event=><button key={event.id} className={styles.timelineRow} onClick={()=>event.purchase?setDialog({kind:"purchase",purchase:event.purchase}):openConversation(event.platform)}><span className={styles.timelineDot}/><span><span className={styles.timelineMeta}>{date(event.at)}<PlatformBadge platform={event.platform}/></span><strong>{event.label}</strong><span className={styles.timelinePreview}>{event.text}</span></span><ChevronRight size={14}/></button>)}</div></Card>
+          <Card title="Recent activity" icon={<Clock3 size={17}/>} action={<button className={styles.textButton} onClick={()=>openConversation()}>View conversations</button>}><div className={styles.timeline}>{[...messages.slice(-4).map(m=>({id:m.id,at:m.at,platform:m.platform,label:m.direction==="in"?"Incoming message":"Reply",text:m.text,purchase:null as Purchase|null})),...totals.purchases.slice(-4).map(p=>({id:p.id,at:p.at,platform:p.platform,label:`${p.kind} purchased`,text:money(p.amount,p.currency),purchase:p}))].sort((a,b)=>b.at.localeCompare(a.at)).slice(0,5).map(event=><button key={event.id} className={styles.timelineRow} onClick={()=>event.purchase?setDialog({kind:"purchase",purchase:event.purchase}):openConversation(event.platform)}><span className={styles.timelineDot}/><span><span className={styles.timelineMeta}>{date(event.at)}<PlatformBadge platform={event.platform}/></span><strong>{event.label}</strong><span className={styles.timelinePreview}>{event.text}</span></span><ChevronRight size={14}/></button>)}</div></Card>
           <Card title="Platform accounts" icon={<Link2 size={17}/>} action={<button className={styles.textButton} onClick={()=>{setPlatform("all");setTab("accounts");}}>Manage</button>}><div className={styles.accountsQuick}>{PLATFORMS.map(p=>{const account=fan.accounts.find(a=>a.platform===p);return <button key={p} disabled={!account} onClick={()=>{setPlatform(p);setTab("accounts");}}><PlatformBadge platform={p}/><span className={account?styles.linked:styles.notLinked}>{account?<><Check size={12}/>Linked</>:"Not linked"}</span><ChevronRight size={14}/></button>;})}</div><div className={styles.cardFoot}><ShieldCheck size={14}/>Linked within {creator.name}’s workspace</div></Card>
           <Card title="Purchased content" action={<button className={styles.textButton} onClick={()=>setTab("purchases")}>View all purchases</button>} className={styles.contentCard}>{[...totals.purchases].sort((a,b)=>b.at.localeCompare(a.at)).slice(0,3).map(purchaseRow)}</Card>
           <Card title="Notes" icon={<NotebookPen size={17}/>} action={<button className={styles.textButton} onClick={openNote}>Add note</button>}>{notes.length?<div className={styles.notes}>{[...notes].reverse().map(note=><div key={note.id}><p>{note.text}</p><small>{date(note.at)} · Team note</small></div>)}</div>:<button className={styles.notePlaceholder} onClick={openNote}>Add a note about {fan.name}…<NotebookPen size={18}/></button>}</Card>
         </div>}
-        {tab==="conversation"&&<div className={styles.conversationLayout}><section className={styles.conversationCard}><div className={styles.conversationHeading}><div><h3>{activePlatform==="all"?"All conversations":`${platformNames[activePlatform]} conversation`}</h3><span>{fan.name} with {creator.name}</span></div>{activePlatform!=="all"&&<select aria-label="Conversation handling" className={styles.modeSelect} value={mode} onChange={e=>setState(previous=>({...previous,modes:{...previous.modes,[draftKey]:e.target.value as Handling}}))}><option>Human</option><option>Copilot</option><option>Autonomous</option></select>}</div><div className={`${styles.search} ${styles.conversationSearch}`}><Search size={15}/><input aria-label="Search conversation" placeholder="Search this conversation" value={messageSearch} onChange={e=>setMessageSearch(e.target.value)}/></div><div className={styles.messageList} ref={messageListRef}>{messages.filter(m=>m.text.toLowerCase().includes(messageSearch.toLowerCase())).map(m=><div key={m.id} id={`fan-message-${m.id}`} data-message-id={m.id} className={`${styles.message} ${m.direction==="out"?styles.outgoing:""} ${sourceMessageId===m.id?styles.sourceMessage:""}`}><div className={styles.messageMeta}><span>{m.direction==="in"?fan.name:creator.name}</span><PlatformBadge platform={m.platform}/><time dateTime={m.at}>{date(m.at)} · {time(m.at)}</time></div><p>{m.text}</p></div>)}{!messages.some(m=>m.text.toLowerCase().includes(messageSearch.toLowerCase()))&&<p className={styles.empty}>No messages match your search.</p>}</div>{activePlatform==="all"?<div className={styles.channelChooser}><strong>Choose a channel to reply</strong><div className={styles.badges}>{fan.accounts.map(a=><button key={a.platform} className={styles.secondaryButton} onClick={()=>setPlatform(a.platform)}><PlatformBadge platform={a.platform}/><ArrowUpRight size={13}/></button>)}</div></div>:<div className={styles.composer}><div className={styles.composerMeta}><span>Reply on <strong>{platformNames[activePlatform]}</strong></span>{mode!=="Human"&&<button className={styles.textButton} onClick={()=>{setState(previous=>({...previous,modes:{...previous.modes,[draftKey]:"Human"}}));flash("Human handling selected");}}>Take over</button>}</div><textarea aria-label={`Reply on ${platformNames[activePlatform]}`} placeholder={`Message ${fan.name} on ${platformNames[activePlatform]}…`} value={draft} maxLength={4000} onChange={e=>updateDraft(e.target.value)}/><div className={styles.composerFooter}><button className={styles.secondaryButton} onClick={()=>updateDraft(fan.suggestedReplies?.[activePlatform]||(fan.id==="kyla-mark"?"Hey Mark! Both Lisbon and Porto sound lovely. What are you most looking forward to on the trip?":`Hey ${fan.name}! It is lovely to hear from you. What have you been up to this week?`))}>Suggest reply</button><button className={styles.primaryButton} disabled={!draft.trim()||!ready} onClick={sendMessage}><Send size={15}/>Send</button></div></div>}</section><div className={styles.conversationContext}><Card title="Shared relationship memory" action={<button className={styles.textButton} onClick={()=>setTab("memory")}>View all {fan.memories.length}</button>}><dl className={`${styles.memoryQuick} ${styles.memoryPreview}`}>{fan.memories.filter(m=>!fan.history||m.category==="Open follow-ups").slice(0,4).map(m=><div key={m.id}><dt>{m.label}</dt><dd>{fieldValue(m)}</dd></div>)}</dl></Card><Card title="Content ownership"><strong className={styles.bigNumber}>{totals.purchases.length} items</strong><button className={styles.textButton} onClick={()=>setTab("purchases")}>View purchases<ChevronRight size={14}/></button></Card></div></div>}
         {tab==="memory"&&<RelationshipMemory key={fan.id} fan={fan} creator={creator} value={fieldValue} edited={m=>state.memories[fan.id]?.[m.id]!==undefined} onEdit={m=>{setEditor(fieldValue(m));setDialog({kind:"memory",memory:m});}} onSource={openConversation}/>}
         {tab==="history"&&fan.history&&<>
           <div className={styles.sectionIntro}><div><h3>Relationship history</h3><span>{date(fan.firstSeen)} to {date(fan.messages[fan.messages.length-1].at)} · {fan.name} with {creator.name}</span></div><span className={styles.linkCount}>{fan.history.filter(e=>activePlatform==="all"||e.platform===activePlatform).length} milestones</span></div>

@@ -36,6 +36,35 @@ async function main() {
   for (const targetType of ["creator", "agency"]) { viewAs = { targetType }; await assert.rejects(page(), /redirect:\/revenue/); }
   viewAs = null; assert.ok(await page());
 
+  // Exercise the actual /users server branch. Fixture links must exit before
+  // clone scope/database queries, and cannot expose histories to other audiences.
+  const inboxImports: Record<string, unknown> = {};
+  const inboxSource = ts.createSourceFile("app/users/page.tsx",readFileSync("app/users/page.tsx","utf8"),ts.ScriptTarget.Latest,true,ts.ScriptKind.TSX);
+  for (const statement of inboxSource.statements) if (ts.isImportDeclaration(statement) && ts.isStringLiteral(statement.moduleSpecifier)) {
+    inboxImports[statement.moduleSpecifier.text] = { __esModule:true, default:() => null };
+  }
+  Object.assign(inboxImports, {
+    "next/headers": { cookies:async()=>({}) },
+    "next/navigation": { redirect:(path:string)=>{throw new Error(`redirect:${path}`);} },
+    "@/lib/internal-admin": { hasInternalAdminAccess:async()=>admin },
+    "@/lib/view-as": { activeViewAs:async()=>viewAs },
+    "@/lib/clone-scope": { getCloneScope:async()=>{throw new Error("existing-live-route");} },
+    "@/lib/supabase": { supabaseAdmin:{from:()=>{throw new Error("Unexpected real data access");}} },
+    "@/components/fans/data": { creators,fans },
+    "@/components/users/FanConversationWindow": { __esModule:true, default:()=>null },
+  });
+  const inboxPage = compile("app/users/page.tsx",inboxImports).default;
+  const inbox = (params:Record<string,string | undefined> = {}) => inboxPage({searchParams:Promise.resolve(params)});
+  admin=false;await assert.rejects(inbox({relationship:"briana-ben"}),/redirect:\/twin/);
+  admin=true;
+  for (const targetType of ["agency","creator"]) {viewAs={targetType};await assert.rejects(inbox({relationship:"briana-ben"}),/redirect:\/revenue/);}
+  viewAs=null;
+  for (const params of [{relationship:"unknown"},{relationship:""},{relationship:"briana-ben",creator:"kyla"}]) await assert.rejects(inbox(params),/redirect:\/fans/);
+  const inboxElement=await inbox({relationship:"briana-ben",creator:"briana",platform:"telegram",source:"ben-print-2"});
+  assert.equal(inboxElement.props.initialFanId,"briana-ben");
+  assert.equal(inboxElement.props.initialSourceId,"ben-print-2");
+  await assert.rejects(inbox(),/existing-live-route/,"The ordinary inbox still follows its original real-user path");
+
   const mark = fans.find(f => f.id === "kyla-mark")!;
   assert.equal(model.totalsFor(mark, "telegram").stars, 16250);
   assert.equal(model.totalsFor(mark, "telegram").purchases.length, 3);
@@ -97,7 +126,8 @@ async function main() {
   globalThis.fetch = async () => { throw new Error("Fan interactions must not use a network client"); };
   const { createRoot } = require("react-dom/client");
   const css = new Proxy({}, { get: (_, key) => String(key) });
-  const Workspace = compile("components/fans/FanWorkspace.tsx", { "./model":model, "./types":types, "./FanWorkspace.module.css":{ __esModule:true, default:css } }).default;
+  let navigation = "";
+  const Workspace = compile("components/fans/FanWorkspace.tsx", { "next/navigation": { useRouter: () => ({ push: (href:string) => { navigation = href; } }) }, "./model":model, "./types":types, "./FanWorkspace.module.css":{ __esModule:true, default:css } }).default;
   let root = createRoot(document.getElementById("root")!);
   await act(async () => { root.render(<Workspace creators={creators} fans={fans}/>); });
   const find = (selector:string) => { const element=document.querySelector(selector); assert.ok(element,selector); return element as HTMLElement; };
@@ -115,6 +145,10 @@ async function main() {
   assert.match(profile(),/5,400 Stars/);
   assert.equal(document.querySelectorAll(".notes>div").length,4);
   assert.equal(document.querySelectorAll(".lucide-sparkles").length,0);
+  assert.equal(document.querySelector('#fan-tab-conversation'),null);
+  assert.equal(document.querySelector('textarea[aria-label^="Reply on"]'),null);
+  await buttonText("Open conversation", ".headerActions");
+  assert.equal(navigation, "/users?relationship=briana-ben&creator=briana&platform=telegram");
   await click('#fan-tab-memory');
   assert.equal(document.querySelectorAll(".memoryGroup").length,6);
   assert.equal(document.querySelectorAll(".memoryEntryValue").length,24);
@@ -123,22 +157,19 @@ async function main() {
   await input('[aria-label="Search relationship memory"]',"print");
   assert.equal(document.querySelectorAll(".memoryEntryValue").length,1);
   await click('[aria-label="View source for A3 print arrival"]');
-  assert.equal(find('.sourceMessage').getAttribute('data-message-id'),"ben-print-2");
-  assert.match(find('.messageList').textContent||"",/Tea Tree Bay print is finally ordered/);
-  assert.ok(find('textarea[aria-label="Reply on Telegram"]'));
-  await buttonText("Suggest reply");
-  assert.match((find('textarea') as HTMLTextAreaElement).value,/client review/);
+  assert.equal(navigation, "/users?relationship=briana-ben&creator=briana&platform=telegram&source=ben-print-2");
+  assert.equal(document.querySelector('.tg-thread'),null);
   await click('#fan-tab-history');
-  assert.equal(document.querySelectorAll('.historyEvent').length,5);
+  assert.equal(document.querySelectorAll('.historyEvent').length,10);
   await click('[aria-label="Profile platform filter"] button:first-child');
   assert.equal(document.querySelectorAll('.historyEvent').length,10);
   await click('[aria-label="View conversation for Fourth account connected"]');
-  assert.equal(find('.sourceMessage').getAttribute('data-message-id'),"ben-fanvue-0");
+  assert.equal(navigation, "/users?relationship=briana-ben&creator=briana&platform=fanvue&source=ben-fanvue-0");
   await click('#fan-tab-purchases');
   await click('[aria-label="View Coastal afternoon purchase on Fanvue"]');
   assert.match(find('[role="dialog"]').textContent||"",/US\$54.00/);
   await buttonText("Open conversation",'[role="dialog"]');
-  assert.equal(find('.sourceMessage').getAttribute('data-message-id'),"ben-coastal-0");
+  assert.equal(navigation, "/users?relationship=briana-ben&creator=briana&platform=fanvue&source=ben-coastal-0");
   await click('[aria-label="Oliver, Brianna Redd"]');
   assert.match(profile(),/US\$268.00/);
   assert.doesNotMatch(profile(),/Noosa|restaurant launch|5,400/);
@@ -146,9 +177,7 @@ async function main() {
   await click('#fan-tab-memory');
   assert.equal(document.querySelectorAll('.memoryEntryValue').length,20);
   await click('[aria-label="View source for Print book due 12 October"]');
-  assert.equal(find('.sourceMessage').getAttribute('data-message-id'),"oliver-album-0");
-  await buttonText("Suggest reply");
-  assert.match((find('textarea') as HTMLTextAreaElement).value,/river reflection/);
+  assert.equal(navigation, "/users?relationship=briana-oliver&creator=briana&platform=fanvue&source=oliver-album-0");
   await click('#fan-tab-memory');await click('[aria-label="Edit Home and occupation"]');
   await input('#fan-editor',"Bristol sound engineer, reviewed");await buttonText("Save memory");
   await click('[aria-label="Ben, Brianna Redd"]');await click('#fan-tab-memory');
@@ -163,20 +192,13 @@ async function main() {
   await click('#fan-tab-purchases');
   assert.equal(document.querySelectorAll(".purchaseRow").length,3);
   await click('.purchaseRow');assert.match(find('[role="dialog"]').textContent||"",/Kyla Yesenosky/);await click('[aria-label="Close dialog"]');
-  await click('#fan-tab-conversation');
-  await input('textarea[aria-label="Reply on Telegram"]',"Telegram draft only");
-  await click('[aria-label="Profile platform filter"] button:nth-child(2)');
-  assert.equal((find('textarea[aria-label="Reply on OnlyFans"]') as HTMLTextAreaElement).value,"");
-  await input('textarea[aria-label="Reply on OnlyFans"]',"OnlyFans local reply");await buttonText("Send");
-  assert.match(find(".messageList").textContent||"",/OnlyFans local reply/);
-  await click('[aria-label="Profile platform filter"] button:nth-child(3)');
-  assert.equal((find('textarea[aria-label="Reply on Telegram"]') as HTMLTextAreaElement).value,"Telegram draft only");
-  assert.doesNotMatch(find(".messageList").textContent||"",/OnlyFans local reply/);
-  await buttonText("Take over");assert.equal((find('[aria-label="Conversation handling"]') as HTMLSelectElement).value,"Human");
+  await buttonText("Open conversation", ".headerActions");
+  assert.equal(navigation, "/users?relationship=kyla-mark&creator=kyla&platform=telegram");
   await buttonText("Add note");await input('#fan-editor',"Kyla relationship note");await buttonText("Save note");
   await click('#fan-tab-memory');await click('[aria-label="Edit Location"]');await input('#fan-editor',"Arizona, reviewed");await buttonText("Save memory");assert.match(profile(),/Arizona, reviewed/);
   await input('#fan-creator',"riley");await click('[aria-label="Mark, Riley Mae Lewis"]');assert.doesNotMatch(profile(),/Kyla relationship note|Arizona, reviewed|16,250/);
-  await click('#fan-tab-conversation');await click('[aria-label="Profile platform filter"] button:nth-child(3)');assert.equal((find('textarea[aria-label="Reply on Telegram"]') as HTMLTextAreaElement).value,"");
+  await buttonText("Open conversation", ".headerActions");
+  assert.equal(navigation, "/users?relationship=riley-mark&creator=riley&platform=telegram");
   await input('#fan-creator',"kyla");assert.match(profile(),/Kyla relationship note|Arizona, reviewed/);
   await input('[aria-label="Search fans"]',"does-not-exist");assert.match(profile(),/No matching fans/);await click('[aria-label="Clear fan search"]');
   await click('[aria-label="James, Kyla Yesenosky"]');assert.equal((find('[aria-label="Profile platform filter"] button:nth-child(2)') as HTMLButtonElement).disabled,true);
@@ -188,7 +210,55 @@ async function main() {
   assert.match(profile(),/Arizona, reviewed/);
   await click('[aria-label="Reset workspace"]');await buttonText("Reset workspace",'[role="dialog"]');assert.match(profile(),/Fan of Brianna Redd/);await input("#fan-creator","kyla");assert.doesNotMatch(profile(),/Arizona, reviewed|Kyla relationship note/);
   await act(async()=>{root.unmount();});
+  // Render the actual existing thread and the inbox's isolated relationship view.
+  const ChatThread = compile("components/users/ChatThread.tsx", { "@/lib/live-bus": {
+    onLive: () => { throw new Error("Illustrative relationships must not subscribe to live events"); },
+    isTyping: () => { throw new Error("Illustrative relationships must not use live typing"); },
+  }}).default;
+  const Conversation = compile("components/users/FanConversationWindow.tsx", {
+    "next/link": { __esModule:true, default: ({children,...props}:React.ComponentProps<"a">) => <a {...props}>{children}</a> },
+    "./ChatThread": { __esModule:true, default:ChatThread }, "../fans/model":model, "../fans/types":types,
+    "./FanConversationWindow.module.css": { __esModule:true, default:css },
+  }).default;
+  window.history.replaceState(null,"",navigation);
+  root=createRoot(document.getElementById("root")!);
+  await act(async()=>{root.render(<Conversation creators={creators} fans={fans} initialFanId="briana-ben" initialPlatform="telegram" initialSourceId="ben-print-2"/>);});
+  assert.equal(find('[data-source-message="true"]').getAttribute('data-message-id'),"ben-print-2");
+  assert.match(find('.tg-thread').textContent||"",/Tea Tree Bay print is finally ordered/);
+  assert.equal(find('[aria-label="Conversation platform"] button[aria-pressed="true"]').textContent?.trim(),"Telegram");
+  assert.equal(find('.chatHeader a').getAttribute('href'),"/fans?creator=briana&fan=briana-ben&platform=all&view=summary");
+  await buttonText("Suggest reply");assert.match((find('textarea') as HTMLTextAreaElement).value,/client review/);
+  await input('textarea[aria-label="Reply on Telegram"]',"Telegram draft only");
+  await click('[aria-label="Conversation platform"] button:first-child');
+  assert.equal((find('textarea[aria-label="Reply on OnlyFans"]') as HTMLTextAreaElement).value,"");
+  await input('textarea[aria-label="Reply on OnlyFans"]',"OnlyFans local reply");await buttonText("Send");
+  assert.match(find('.tg-thread').textContent||"",/OnlyFans local reply/);
+  assert.equal(window.location.pathname,"/users");
+  assert.equal(new URLSearchParams(window.location.search).get("platform"),"onlyfans");
+  await click('[aria-label="Conversation platform"] button:nth-child(2)');
+  assert.equal((find('textarea[aria-label="Reply on Telegram"]') as HTMLTextAreaElement).value,"Telegram draft only");
+  assert.doesNotMatch(find('.tg-thread').textContent||"",/OnlyFans local reply/);
+  await buttonText("Take over");assert.equal((find('[aria-label="Conversation handling"]') as HTMLSelectElement).value,"Human");
+  await click('[aria-label="Open Oliver conversation with Brianna Redd"]');
+  assert.equal((find('[aria-label="Conversation platform"] button:nth-child(2)') as HTMLButtonElement).disabled,true);
+  assert.ok(find('textarea[aria-label="Reply on Fanvue"]'));
+  assert.doesNotMatch(find('.chat').textContent||"",/ben_coast|OnlyFans local reply|5,400|5400/);
+  await buttonText("Suggest reply");assert.match((find('textarea') as HTMLTextAreaElement).value,/river reflection/);
+  await input('#conversation-creator',"riley");await click('[aria-label="Open Mark conversation with Riley Mae Lewis"]');
+  assert.equal((find('textarea[aria-label="Reply on Telegram"]') as HTMLTextAreaElement).value,"");
+  await input('#conversation-creator',"briana");
+  assert.equal((find('textarea[aria-label="Reply on Telegram"]') as HTMLTextAreaElement).value,"Telegram draft only");
+  assert.equal((find('[aria-label="Conversation handling"]') as HTMLSelectElement).value,"Human");
+  await input('[aria-label="Search conversation"]',"not-found-in-conversation");assert.match(find('.chat').textContent||"",/No messages match/);
+  await input('[aria-label="Search conversation"]',"");
+  await act(async()=>root.unmount());
+  root=createRoot(document.getElementById("root")!);
+  await act(async()=>root.render(<Conversation creators={creators} fans={fans} initialFanId="briana-ben" initialPlatform="onlyfans" initialSourceId="oliver-album-0"/>));
+  assert.equal(document.querySelector('[data-source-message="true"]'),null,"Another fan's message cannot be a source");
+  assert.match(find('.tg-thread').textContent||"",/OnlyFans local reply/);
+  assert.equal(new URLSearchParams(window.location.search).get("source"),null);
+  await act(async()=>root.unmount());
   globalThis.fetch=fetchBefore;dom.window.close();
-  console.log("Fan workspace passed: admin/view-as gate; creator and fan isolation; all four channels; currency separation; search; purchases; notes; memory edits; handling; per-channel drafts; local-only messages; persistence and reset.");
+  console.log("Fan workspace passed: admin/view-as gate; creator and fan isolation; separate profiles and inbox; sourced navigation; linked platforms; purchases; notes; memory; local-only inbox messages, drafts and handling; persistence and reset.");
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

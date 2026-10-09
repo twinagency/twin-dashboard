@@ -90,12 +90,18 @@ export default function ChatThread({
   lastActiveLabel,
   spentStars,
   purchasedCount,
+  live = true,
+  sourceMessageId,
+  spentLabel,
 }: {
   fanId: string;
   messages: ThreadMessage[];
   lastActiveLabel: string;
   spentStars: number;
   purchasedCount: number;
+  live?: boolean;
+  sourceMessageId?: string;
+  spentLabel?: string;
 }) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [typing, setTyping] = useState(false);
@@ -110,12 +116,23 @@ export default function ChatThread({
     if (el) el.scrollTop = el.scrollHeight;
   }, [fanId, messages.length]);
 
+  // A relationship-memory link deliberately opens at its source, after the
+  // normal newest-message positioning above. Leaving context returns below.
   useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    const target = sourceMessageId ? Array.from(el.querySelectorAll<HTMLElement>("[data-message-id]")).find(node => node.dataset.messageId === sourceMessageId) : undefined;
+    if (target) el.scrollTop = Math.max(0, el.scrollTop + target.getBoundingClientRect().top - el.getBoundingClientRect().top - 20);
+    else el.scrollTop = el.scrollHeight;
+  }, [fanId, messages.length, sourceMessageId]);
+
+  useEffect(() => {
+    if (!live) { setTyping(false); return; }
     setTyping(isTyping(fanId));
     return onLive((event) => {
       if (event.t === "typing" && event.fanId === fanId) setTyping(event.typing);
     });
-  }, [fanId]);
+  }, [fanId, live]);
 
   const lastIndex = messages.length - 1;
 
@@ -131,7 +148,7 @@ export default function ChatThread({
             const isText = m.kind === "text";
 
             return (
-              <div key={m.id}>
+              <div key={m.id} data-message-id={m.id} data-source-message={sourceMessageId === m.id ? "true" : undefined} className={sourceMessageId === m.id ? "rounded-xl ring-2 ring-sky-400 ring-offset-2" : undefined}>
                 {m.dayLabel && (
                   <div className="my-3 flex justify-center">
                     <span className="tg-daypill">{m.dayLabel}</span>
@@ -330,9 +347,10 @@ export default function ChatThread({
         )}
         <span className="ml-auto flex items-center gap-2.5 tabular-nums">
           {purchasedCount > 0 && <span>{purchasedCount} bought</span>}
-          <span className={spentStars > 0 ? "font-semibold text-good" : ""}>{spentStars.toLocaleString()}★ spent</span>
+          <span className={spentStars > 0 || spentLabel ? "font-semibold text-good" : ""}>{spentLabel ?? `${spentStars.toLocaleString()}★ spent`}</span>
         </span>
       </div>
     </>
   );
 }
+

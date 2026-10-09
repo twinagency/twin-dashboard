@@ -1,7 +1,7 @@
 export const PLATFORMS = ["onlyfans", "telegram", "fanvue", "fansly"] as const;
 export type Platform = typeof PLATFORMS[number];
 export type PlatformFilter = Platform | "all";
-export type ProfileTab = "summary" | "conversation" | "memory" | "history" | "purchases" | "accounts";
+export type ProfileTab = "summary" | "memory" | "history" | "purchases" | "accounts";
 export type Handling = "Human" | "Copilot" | "Autonomous";
 export type Creator = { id: string; name: string; initials: string; color: string };
 export type Account = { platform: Platform; username: string; linkedAt: string };
