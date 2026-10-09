@@ -57,6 +57,10 @@ async function main() {
   }
   const generated = sharedFans.filter(f => f.id.startsWith("briana-ledger-"));
   assert.equal(generated.length, 512);
+  for (let index=0;index<generated.length;index++) {
+    const formerPrimary=index%20>=10&&index%20<15?"telegram":"onlyfans";
+    assert.equal(generated[index].accounts[0].platform,formerPrimary,"Telegram-primary relationships stay on Telegram; USD channels consolidate into OnlyFans");
+  }
   assert.equal(new Set(generated.map(f => f.name)).size, 512);
   const ids = generated.flatMap(f => [...f.messages, ...f.memories, ...f.purchases, ...f.history!, ...f.notes!].map(x => x.id));
   assert.equal(new Set(ids).size, ids.length);

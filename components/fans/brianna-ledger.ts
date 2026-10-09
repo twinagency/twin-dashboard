@@ -41,7 +41,7 @@ function makeFan(index: number): Fan {
   const firstDay = shift(briannaPeriods[phase].from, index % 8);
   const name = `${firstNames[index % firstNames.length]} ${surnames[Math.floor(index / firstNames.length)]}`;
   const id = `briana-ledger-${index + 1}`;
-  const primary = platforms[index % 20 < 15 ? 0 : 1];
+  const primary = platforms[index % 20 >= 10 && index % 20 < 15 ? 1 : 0];
   const channels = index % 12 === 0 || index % 5 < 2
     ? [primary, ...platforms.filter(p => p !== primary)] : [primary];
   const persona = personas[index % personas.length];
