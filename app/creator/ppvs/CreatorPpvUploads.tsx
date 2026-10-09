@@ -1,17 +1,16 @@
 "use client";
 // Live creator PPV page: their real photos and videos (previews only) plus upload.
-// No prices, captions, editing, deleting or moving. Uploads go through the same
-// uploadPhoto/uploadVideo actions as the operator page; the server guard limits a
-// creator session to uploading the file only, priced from the creator's pricing guide.
+// No prices, captions, editing, deleting or moving. Uploads post to
+// /creator-auth/ppv-upload, which runs the operator uploadPhoto/uploadVideo with
+// the file only, priced from the creator's pricing guide.
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Thumb from "@/components/SignedMediaPreview";
-import { uploadPhoto, uploadVideo } from "@/app/media/actions";
 
 type Item = { id: string; storage_path: string };
 type Job = { name: string; status: "waiting" | "uploading" | "done" | "error"; error?: string };
 
-function Uploader({ cloneId, kind }: { cloneId: string; kind: "photo" | "video" }) {
+function Uploader({ kind }: { kind: "photo" | "video" }) {
   const [jobs, setJobs] = useState<Job[]>([]);
   const [busy, setBusy] = useState(false);
   const router = useRouter();
@@ -26,9 +25,11 @@ function Uploader({ cloneId, kind }: { cloneId: string; kind: "photo" | "video" 
       set(i, { status: "uploading" });
       try {
         const fd = new FormData();
+        fd.append("kind", kind);
         fd.append("file", files[i]);
-        const result = kind === "photo" ? await uploadPhoto(cloneId, fd) : await uploadVideo(cloneId, fd);
-        if (!result.ok) throw new Error(result.error);
+        const res = await fetch("/creator-auth/ppv-upload", { method: "POST", body: fd, credentials: "same-origin" });
+        const result = await res.json().catch(() => ({ ok: false, error: "Upload failed, please try again." }));
+        if (!result.ok) throw new Error(result.error === "read-only while viewing as" ? "preview mode, uploads only work on her own login" : result.error || "Upload failed");
         set(i, { status: "done" });
       } catch (e) {
         set(i, { status: "error", error: e instanceof Error ? e.message : "Upload failed" });
@@ -69,7 +70,7 @@ export default function CreatorPpvUploads({ cloneId, photos, videos }: { cloneId
       <section className="grid gap-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-lg font-semibold text-ink">Photos ({photos.length})</h2>
-          <Uploader cloneId={cloneId} kind="photo" />
+          <Uploader kind="photo" />
         </div>
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 lg:grid-cols-8">
           {photos.map((p) => <Thumb key={p.id} path={p.storage_path} type="photo" className="aspect-square w-full rounded object-cover" />)}
@@ -78,7 +79,7 @@ export default function CreatorPpvUploads({ cloneId, photos, videos }: { cloneId
       <section className="grid gap-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h2 className="text-lg font-semibold text-ink">Videos ({videos.length})</h2>
-          <Uploader cloneId={cloneId} kind="video" />
+          <Uploader kind="video" />
         </div>
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 lg:grid-cols-8">
           {videos.map((v) => <Thumb key={v.id} path={v.storage_path} type="video" className="aspect-square w-full rounded object-cover" />)}
