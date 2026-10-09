@@ -3,7 +3,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Info } from "@/components/clone/fields";
 import { getDashboardAccess } from "@/lib/dashboard-access";
 import { supabaseAdmin } from "@/lib/supabase";
-import { selectAllRows } from "@/lib/select-all";
+import { selectAllRowsParallel } from "@/lib/select-all";
 import { fmtNum } from "@/lib/money";
 import { groupReports, tablesMissing, tsocialMediaUrl, type ReportRow } from "@/lib/tsocial";
 import TSocialTabs from "./TSocialTabs";
@@ -68,19 +68,19 @@ export default async function TSocialPage() {
     count("message", d7),
     supabaseAdmin.from("tsocial_accounts").select("id", { count: "exact", head: true }).gte("created_at", d7).then((r) => r.count ?? 0),
     supabaseAdmin.from("tsocial_accounts").select("id", { count: "exact", head: true }).eq("plan", "paid").gt("plan_until", nowIso).then((r) => r.count ?? 0),
-    selectAllRows<{ telegram_id: number }>(supabaseAdmin.from("tsocial_events").select("telegram_id").eq("verified", true).gte("at", d7).order("id"), { label: "tsocial verified" }),
-    selectAllRows<{ method: string; amount: number }>(supabaseAdmin.from("tsocial_payments").select("method,amount").eq("status", "paid").gte("created_at", d7).order("id"), { label: "tsocial payments" }),
+    selectAllRowsParallel<{ telegram_id: number }>(() => supabaseAdmin.from("tsocial_events").select("telegram_id").eq("verified", true).gte("at", d7).order("id"), { label: "tsocial verified" }),
+    selectAllRowsParallel<{ method: string; amount: number }>(() => supabaseAdmin.from("tsocial_payments").select("method,amount").eq("status", "paid").gte("created_at", d7).order("id"), { label: "tsocial payments" }),
     supabaseAdmin.from("tsocial_posts").select("id,account_id,type,src,poster,caption,purpose,price_ton,status,created_at").eq("status", "review").order("created_at", { ascending: false }).limit(60),
     supabaseAdmin.from("tsocial_reports").select("id,post_id,chat_post_id,tg_user_id,reason,created_at").order("created_at", { ascending: false }).limit(1000),
-    selectAllRows<Account>(supabaseAdmin.from("tsocial_accounts").select("id,tg_user_id,username,display_name,avatar_path,plan,plan_until,verified,banned,followers").order("id"), { label: "tsocial accounts" }),
-    selectAllRows<{ account_id: string | null; views: number }>(supabaseAdmin.from("tsocial_posts").select("account_id,views").not("account_id", "is", null).neq("status", "rejected").order("id"), { label: "tsocial posts" }),
+    selectAllRowsParallel<Account>(() => supabaseAdmin.from("tsocial_accounts").select("id,tg_user_id,username,display_name,avatar_path,plan,plan_until,verified,banned,followers").order("id"), { label: "tsocial accounts" }),
+    selectAllRowsParallel<{ account_id: string | null; views: number }>(() => supabaseAdmin.from("tsocial_posts").select("account_id,views").not("account_id", "is", null).neq("status", "rejected").order("id"), { label: "tsocial posts" }),
     supabaseAdmin.from("tsocial_settings").select("key,value"),
   ]);
 
   // Viewers: everyone the app could identify in the last VIEWER_DAYS, account or not.
   const sinceViewers = new Date(Date.now() - VIEWER_DAYS * 864e5).toISOString();
   const [eventsRes, girlsRes, staffRes] = await Promise.all([
-    selectAllRows<{ telegram_id: number | null; kind: string; at: string }>(supabaseAdmin.from("tsocial_events").select("telegram_id,kind,at").eq("verified", true).gte("at", sinceViewers).order("id"), { label: "tsocial viewers" }),
+    selectAllRowsParallel<{ telegram_id: number | null; kind: string; at: string }>(() => supabaseAdmin.from("tsocial_events").select("telegram_id,kind,at").eq("verified", true).gte("at", sinceViewers).order("id"), { label: "tsocial viewers" }),
     supabaseAdmin.from("userbot_connections").select("tg_user_id"),
     supabaseAdmin.from("tsocial_accounts").select("tg_user_id").not("legacy_clone_id", "is", null),
   ]);
