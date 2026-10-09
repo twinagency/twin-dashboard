@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type ReactNode } from "react";
 import { onLive, isTyping } from "@/lib/live-bus";
 
 // The Fans inbox message thread, rebuilt 2026-08-18 to Ronan's brief: match
@@ -33,6 +33,8 @@ export type ThreadMessage = {
   /** true = the fan wrote it (left, white). false = she sent it (right, green). */
   fan: boolean;
   content: string;
+  /** Optional content cards supplied by the unified inbox; ordinary Telegram rows are unchanged. */
+  customContent?: ReactNode;
   /** Formatted on the SERVER. See the hydration note in the header. */
   timeLabel: string;
   /** Set only on the first message of a day, already formatted. */
@@ -194,7 +196,7 @@ export default function ChatThread({
                         (m.endsRun ? (m.fan ? "tg-tail-in" : "tg-tail-out") : "")
                       }
                     >
-                      {m.kind === "voice" && m.voiceUrl ? (
+                      {m.customContent != null ? m.customContent : m.kind === "voice" && m.voiceUrl ? (
                         <>
                           <audio controls preload="none" className="h-9 w-60 max-w-full" src={m.voiceUrl} />
                           {m.transcript && (
@@ -353,4 +355,5 @@ export default function ChatThread({
     </>
   );
 }
+
 

@@ -1,7 +1,8 @@
 'use client';
 
-import { useId, useState, type ReactNode } from 'react';
-import { ArrowUpRight, ChevronDown } from 'lucide-react';
+import { useState, type ReactNode } from 'react';
+import { ArrowUpRight } from 'lucide-react';
+import { Collapse } from '../clone/fields';
 import type { Fan, Memory, Platform } from '../fans/types';
 import { platformNames } from '../fans/model';
 import styles from './UnifiedInbox.module.css';
@@ -53,17 +54,7 @@ export function memoryGroups(memories: Memory[]): MemoryGroup[] {
 function Dropdown({ label, summary, stored, group = false, forceOpen, children }: {
   label: string; summary: string; stored: boolean; group?: boolean; forceOpen: boolean; children: ReactNode;
 }) {
-  const [expanded, setExpanded] = useState(false);
-  const id = useId();
-  const open = expanded || forceOpen;
-  return <section className={`${styles.dossierDropdown} ${group ? styles.dossierGroup : ''}`} data-stored={stored}>
-    <button type="button" aria-label={label} aria-expanded={open} aria-controls={id} onClick={() => setExpanded(!expanded)}>
-      <span className={styles.dossierHeading}><strong>{label}</strong><small>{summary}</small></span>
-      <span className={styles.storedDot} aria-label={stored ? 'Stored information' : 'No stored information'} />
-      <ChevronDown size={14} aria-hidden style={{ transform: open ? 'rotate(180deg)' : undefined }} />
-    </button>
-    <div id={id} hidden={!open} className={styles.dossierContents}>{children}</div>
-  </section>;
+  return <Collapse key={`${label}:${forceOpen}`} label={label} ariaLabel={label} summary={summary} filled={stored} accent={group ? (label==='Personal details'?'purple':'cyan') : stored?'blue':'neutral'} defaultOpen={forceOpen} className={styles.nativeDisclosure}>{children}</Collapse>;
 }
 
 export default function MemoryDossier({ fan, overrides, showSource }: {

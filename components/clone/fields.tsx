@@ -162,6 +162,7 @@ export function GroupHeader({ label, hint }: { label: string; hint?: string }) {
 // ConfigSections.tsx:330.
 export function Collapse({
   label,
+  ariaLabel,
   hint,
   summary,
   emoji,
@@ -172,6 +173,7 @@ export function Collapse({
   children,
 }: {
   label: React.ReactNode;
+  ariaLabel?: string;
   // Longer explainer, shown as a hoverable ⓘ next to the title (same
   // convention as Section/FieldLabel — never a grey paragraph).
   hint?: string;
@@ -196,6 +198,7 @@ export function Collapse({
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
+        aria-label={ariaLabel}
         aria-expanded={open}
         className="flex w-full items-center gap-2 px-3 py-3 text-left transition hover:bg-muted/5 [.creator-control-plane_.identity-console-scope_&]:px-3.5 [.creator-control-plane_.identity-console-scope_&]:py-2.5 [.creator-control-plane_.identity-console-scope_&]:hover:bg-[#f5f3ee]"
       >
@@ -1357,4 +1360,5 @@ export const REC_TIER_BADGE: Record<RecTier, { label: string; cls: string }> = {
     cls: "bg-accent/15 text-accent",
   },
 };
+
 
