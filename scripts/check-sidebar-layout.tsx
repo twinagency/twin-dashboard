@@ -176,6 +176,17 @@ for (const mobile of [false, true]) {
   assert.doesNotMatch(admin, /AI Intelligence Core/);
   assert.ok(admin.includes('href="/fans"'), "Admin fan workspace is reachable on desktop and mobile");
   assert.match(admin, /Fan profiles/);
+  const nav = admin.slice(admin.indexOf('<nav aria-label="Main navigation"'));
+  const orderedLabels = ["Overview", "Creators", "Fan profiles", "Live Telegram Window", "Upload Telegram Story", "Pay-per-views", "Creator Configuration", "Agency access", "Earnings split", "Catalogue funnel", "Accounts", "Invite creator"];
+  let previous = -1;
+  for (const label of orderedLabels) {
+    const index = nav.indexOf(`>${label}<`);
+    assert.ok(index > previous, `${mobile ? "mobile" : "desktop"}: ${label} follows the requested sidebar order`);
+    assert.equal((nav.match(new RegExp(`>${label}<`,"g")) || []).length, 1, `${label} appears once`);
+    previous = index;
+  }
+  assert.ok(nav.indexOf('>Sales Health<') > previous, "All other tools follow Accounts and Invite creator");
+
 }
 const palette = readFileSync("app/lynq-theme.css", "utf8");
 assert.match(palette, /html\[data-brand-theme="lynq-light"\]/);

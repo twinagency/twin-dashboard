@@ -1,5 +1,9 @@
 import { MutationForm } from "@/components/DashboardAccessProvider";
 import Link from "next/link";
+import { cookies } from "next/headers";
+import { redirect } from "next/navigation";
+import { hasInternalAdminAccess } from "@/lib/internal-admin";
+import { activeViewAs } from "@/lib/view-as";
 import { supabaseAdmin } from "@/lib/supabase";
 import { fmtNum } from "@/lib/money";
 import { getCloneScope } from "@/lib/clone-scope";
@@ -222,8 +226,21 @@ const REACHABLE_MS = 24 * 3600 * 1000;
 export default async function FansPage({
   searchParams,
 }: {
-  searchParams: Promise<{ fan?: string; q?: string; status?: string; sort?: string; dir?: string; show?: string }>;
+  searchParams: Promise<{ fan?: string; q?: string; status?: string; sort?: string; dir?: string; show?: string; relationship?: string; creator?: string; platform?: string; source?: string }>;
 }) {
+  const params = await searchParams;
+  // Illustrated relationships stay in the existing inbox route without ever
+  // entering a real-user query, action or live feed. Partner sessions cannot
+  // load this data even when they supply the URL themselves.
+  if (params.relationship !== undefined) {
+    if (!await hasInternalAdminAccess()) redirect("/twin");
+    if (await activeViewAs(await cookies())) redirect("/revenue");
+    const { creators, fans } = await import("@/components/fans/data");
+    const fan = fans.find(item => item.id === params.relationship);
+    if (!fan || (params.creator && params.creator !== fan.creatorId)) redirect("/fans");
+    const { default: FanConversationWindow } = await import("@/components/users/FanConversationWindow");
+    return <FanConversationWindow creators={creators} fans={fans} initialFanId={fan.id} initialPlatform={params.platform} initialSourceId={params.source} />;
+  }
   const cloneId = await getCloneScope();
   const {
     fan: fanParam,
@@ -232,7 +249,7 @@ export default async function FansPage({
     sort = "last_message_received",
     dir = "",
     show = "",
-  } = await searchParams;
+  } = params;
   const sortKey = SORTS.some((s) => s.key === sort) ? sort : "last_message_received";
   const asc = dir === "asc";
   const showCount = Math.min(Math.max(Number(show) || FAN_PAGE, FAN_PAGE), FAN_MAX);
@@ -1711,4 +1728,5 @@ export default async function FansPage({
     </div>
   );
 }
+
 
