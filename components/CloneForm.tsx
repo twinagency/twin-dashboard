@@ -16,6 +16,7 @@ import MediaManager from "@/app/media/MediaManager";
 import FlowGraph from "./flow/FlowGraph";
 import type { CloneCfg } from "./flow/graph";
 import ConfigSections from "./clone/ConfigSections";
+import IntelligenceControls from "./clone/intelligence/IntelligenceControls";
 import { FieldLabel, Modal, Section } from "./clone/fields";
 import { useCloneConfig } from "./clone/useCloneConfig";
 import { updateClone, deleteClone } from "@/app/clones/actions";
@@ -156,7 +157,7 @@ export default function CloneForm({
   appearanceColor: string;
 }) {
   const router = useRouter();
-  const {agencyName, isAgency, readOnly} = useDashboardAccess();
+  const {agencyName, isAgency, readOnly, audience} = useDashboardAccess();
   const searchParams = useSearchParams();
   const formRef = useRef<HTMLFormElement>(null);
   const baselineRef = useRef<FormSnapshot>({});
@@ -297,6 +298,16 @@ export default function CloneForm({
       <div className="grid min-w-0 gap-4 2xl:grid-cols-[minmax(0,1fr)_17rem]">
         <main className="min-w-0">
           <ControlPlaneWorkspaceHeader tab={tab} />
+
+          {/* Browser-local presentation policies are outside the operational
+              form: they cannot enter FormData or update the live creator. */}
+          <IntelligenceControls
+            tab={tab}
+            cloneId={clone.id}
+            creatorName={clone.name}
+            audience={audience}
+            onTabChange={setTab}
+          />
 
           {/* Identity, Configuration, Monetization and Advanced remain one
               mounted form. Hiding a domain is CSS-only because updateClone
@@ -503,3 +514,4 @@ export default function CloneForm({
     </div>
   );
 }
+
