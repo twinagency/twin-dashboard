@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1
+# Use BuildKit's bundled parser: no Docker Hub frontend download is required.
 #
 # KNOWN LIMITATION: the /test page (app/test, lib/test-runs.ts) spawns
 # `npx tsx src/dev/test-run.ts` in a SIBLING "../bot" checkout — that only
@@ -9,8 +9,12 @@
 # instead of a broken spawn. See dashboard/DOCKER.md, "Test page limitation",
 # for what it would take to support it in a container deployment.
 
+# Official Docker Node image, distributed by Docker through Amazon ECR Public.
+# Override NODE_IMAGE at build time if a different approved registry is needed.
+ARG NODE_IMAGE=public.ecr.aws/docker/library/node:22-alpine
+
 # ── 1. deps: install dependencies with a cached layer ────────────────────────
-FROM node:22-alpine AS deps
+FROM ${NODE_IMAGE} AS deps
 WORKDIR /app
 COPY package.json package-lock.json ./
 RUN npm config set fetch-retries 5 \
@@ -21,7 +25,7 @@ RUN npm config set fetch-retries 5 \
   && npm ci
 
 # ── 2. builder: compile the Next.js app ──────────────────────────────────────
-FROM node:22-alpine AS builder
+FROM ${NODE_IMAGE} AS builder
 WORKDIR /app
 COPY --from=deps /app/node_modules ./node_modules
 COPY . .
@@ -34,7 +38,7 @@ RUN ./node_modules/.bin/esbuild scripts/check-live-catalogue-previews.ts --bundl
 RUN ./node_modules/.bin/esbuild scripts/check-live-dashboard-recovery.ts --bundle --platform=node --format=cjs --jsx=automatic --external:sharp --outfile=dashboard-recovery-check.cjs
 
 # ── 3. runner: minimal production image ──────────────────────────────────────
-FROM node:22-alpine AS runner
+FROM ${NODE_IMAGE} AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
