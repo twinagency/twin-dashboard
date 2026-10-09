@@ -177,7 +177,7 @@ for (const mobile of [false, true]) {
   assert.ok(admin.includes('href="/fans"'), "Admin fan workspace is reachable on desktop and mobile");
   assert.match(admin, /Fan profiles/);
   const nav = admin.slice(admin.indexOf('<nav aria-label="Main navigation"'));
-  const orderedLabels = ["Dashboard", "Overview", "Creators", "Fan profiles", "Live Telegram Window", "Upload Telegram Story", "Pay-per-views", "Content Library", "Creator Configuration", "Agency access", "Earnings split", "Catalogue funnel", "Accounts", "Invite creator"];
+  const orderedLabels = ["Dashboard", "Overview", "Creators", "Fan profiles", "Live Telegram Window", "Upload Telegram Story", "PPVs", "Content Library", "Creator Configuration", "Agency access", "Earnings split", "Catalogue funnel", "Accounts", "Invite creator"];
   let previous = -1;
   for (const label of orderedLabels) {
     const index = nav.indexOf(`>${label}<`);
