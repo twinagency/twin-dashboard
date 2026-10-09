@@ -160,11 +160,20 @@ for (const mobile of [false, true]) {
   }
 }
 pathname = "/revenue"; query = new URLSearchParams();
-for (const [name, manage] of [["LYNQ", true], [undefined, false]] as const) {
-  const html = render(name, manage);
-  assert.match(html, /href="\/sales-health"/, "Sales Health remains in other dashboards");
-  assert.match(html, />CRM</); assert.match(html, /aria-expanded="false"/);
-  assert.doesNotMatch(html, /AI Intelligence Core|href="\/info"/);
+const lynqNavigation = render("LYNQ", true);
+assert.match(lynqNavigation, /href="\/sales-health"/);
+assert.match(lynqNavigation, />CRM</);
+assert.match(lynqNavigation, /aria-expanded="false"/);
+assert.doesNotMatch(lynqNavigation, /AI Intelligence Core|href="\/info"/);
+for (const mobile of [false, true]) {
+  const admin = render(undefined, false, clone, mobile);
+  assert.doesNotMatch(admin, />CRM<|href="\/crm\//, "Internal admin navigation has no CRM group");
+  assert.doesNotMatch(admin, /aria-expanded|>More</, "Internal admin tools are always visible");
+  for (const href of ["/sales-health", "/tsocial", "/jarvis", "/flows", "/sequences", "/catalogue-funnel", "/miniapp-rollout", "/mtproto-campaign", "/tracker", "/info", "/logs", "/sim", "/agency-admin", "/agency-admin/creator-codes", "/agency/creators", "/agency/creator-invites", "/api-access", "/settings"]) {
+    assert.ok(admin.includes(`href="${href}"`), `Keep admin tool ${href} visible without expanding a group`);
+  }
+  for (const tab of ["ppvs", "identity"]) assert.ok(admin.includes(`href="/clones/${clone}?tab=${tab}"`));
+  assert.doesNotMatch(admin, /AI Intelligence Core/);
 }
 const palette = readFileSync("app/lynq-theme.css", "utf8");
 assert.match(palette, /html\[data-brand-theme="lynq-light"\]/);
