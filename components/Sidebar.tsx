@@ -92,6 +92,14 @@ const LINK_COLOR_CLASSES: Record<LinkColor, { icon: string; active: string; idle
   gray: { icon: "text-[#9cbad3]", active: "bg-white/12 text-white ring-1 ring-white/12", idle: "text-white/68 hover:bg-white/[0.07] hover:text-white" },
 };
 
+const TWIN_ADMIN_NAV_LABELS: Record<string, string> = {
+  "/revenue": "Overview",
+  "/users": "Live Telegram Window",
+  "/business": "Upload Telegram Story",
+  identity: "Creator Configuration",
+  "/jarvis": "Core Intelligence",
+};
+
 const NAV_LINKS: NavLink[] = [
   { kind: "route", label: "Earnings", href: "/revenue", icon: "EarningsCombo", color: "good" },
   { kind: "route", label: "Sales Health", href: "/sales-health", icon: "ListChecks", color: "blue" },
@@ -320,9 +328,10 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
   const pickClone = () => { onNavigate?.(); window.setTimeout(() => openCloneSwitcher(), 0); };
 
   const navLabel = (link: NavLink, colors: (typeof LINK_COLOR_CLASSES)[LinkColor]) => {
-    if (link.icon === "FansCombo") return <><Icon d={PATHS.Users} className={"h-[18px] w-[18px] " + colors.icon} /><span className="flex-1">{link.label}</span><Icon d={PATHS.Messages} className="h-4 w-4 text-current opacity-45" /></>;
-    if (link.icon === "EarningsCombo") return <><Icon d={PATHS.Dollar} className={"h-[18px] w-[18px] " + colors.icon} /><span className="flex-1">{link.label}</span></>;
-    return <><Icon d={PATHS[link.icon]} className={"h-[18px] w-[18px] " + colors.icon} />{link.label}</>;
+    const label = isAdmin ? TWIN_ADMIN_NAV_LABELS[link.kind === "route" ? link.href : link.tab] ?? link.label : link.label;
+    if (link.icon === "FansCombo") return <><Icon d={PATHS.Users} className={"h-[18px] w-[18px] " + colors.icon} /><span className="flex-1">{label}</span><Icon d={PATHS.Messages} className="h-4 w-4 text-current opacity-45" /></>;
+    if (link.icon === "EarningsCombo") return <><Icon d={PATHS.Dollar} className={"h-[18px] w-[18px] " + colors.icon} /><span className="flex-1">{label}</span></>;
+    return <><Icon d={PATHS[link.icon]} className={"h-[18px] w-[18px] " + colors.icon} />{label}</>;
   };
   const availableLink = (link: NavLink) => !isAgency || link.kind === "tab" || agencyDashboardPath(link.href, agencyName, canManage);
   const linkKey = (link: NavLink) => link.kind === "route" ? link.href : link.tab;
