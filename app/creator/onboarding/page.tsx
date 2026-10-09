@@ -228,7 +228,7 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
   const creator = await creatorDashboardIdentity(jar.get(CREATOR_SESSION_COOKIE)?.value);
   if (!creator) redirect(creatorLoginPath(creator, jar.get(CREATOR_PORTAL_COOKIE)?.value));
   // A creator whose account is linked to a live clone is already live: no onboarding, straight to PPVs.
-  if (creator.cloneIds.length > 0) redirect("/creator/ppvs");
+  if ((creator.cloneIds?.length ?? 0) > 0) redirect("/creator/ppvs");
   const session = { accountId: creator.accountId };
   const tether = creator.name === TETHER_PORTAL.name;
   const link = isLynq(creator.name);
