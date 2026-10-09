@@ -70,7 +70,9 @@ export default function SignedMediaPreview({ path, type, className, onOpen }: {
   );
   if (!preview || preview.path !== path) return <div aria-label="Loading preview" className={cls + " bg-muted/10 animate-pulse"} />;
   const media = type === "video"
-    ? <video src={preview.url} className={cls} muted preload="metadata" onError={onError} />
+    // iOS Safari paints no frame for preload="metadata" until a start time is
+    // given; #t=0.1 makes it render the first frame as the thumbnail.
+    ? <video src={`${preview.url}#t=0.1`} className={cls} muted playsInline preload="metadata" onError={onError} />
     : <img src={preview.url} alt="" className={cls} onError={onError} />;
   return onOpen ? <button type="button" onClick={onOpen} className="block w-full" aria-label="View full size and caption">{media}</button> : media;
 }
