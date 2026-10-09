@@ -3,7 +3,7 @@
 // No prices, captions, editing, deleting or moving. Uploads post to
 // /creator-auth/ppv-upload, which runs the operator uploadPhoto/uploadVideo with
 // the file only, priced from the creator's pricing guide.
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import Thumb from "@/components/SignedMediaPreview";
 
@@ -49,7 +49,10 @@ function Uploader({ kind }: { kind: "photo" | "video" }) {
       }
     }
     setBusy(false);
+    // Uploads are compressed and priced after the reply, so new items land a
+    // few seconds later. Refresh a few times so they appear without a reload.
     router.refresh();
+    for (const ms of [4000, 10000, 20000, 40000, 75000]) setTimeout(() => router.refresh(), ms);
   }
 
   return (
@@ -73,7 +76,30 @@ function Uploader({ kind }: { kind: "photo" | "video" }) {
   );
 }
 
-export default function CreatorPpvUploads({ cloneId, photos, videos }: { cloneId: string; photos: Item[]; videos: Item[] }) {
+function VideoPlayer({ path, onClose }: { path: string; onClose: () => void }) {
+  const [url, setUrl] = useState<string | null>(null);
+  const [failed, setFailed] = useState(false);
+  useEffect(() => {
+    let live = true;
+    fetch(`/api/media-sign?path=${encodeURIComponent(path)}`, { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => { if (live) { if (typeof data.url === "string") setUrl(data.url); else setFailed(true); } })
+      .catch(() => { if (live) setFailed(true); });
+    return () => { live = false; };
+  }, [path]);
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/85 p-4" onClick={onClose} role="dialog" aria-modal="true">
+      <button type="button" onClick={onClose} className="absolute right-4 top-4 rounded-lg bg-white/15 px-3 py-2 text-sm font-semibold text-white">Close</button>
+      <div onClick={(e) => e.stopPropagation()} className="max-h-full max-w-full">
+        {url ? <video src={url} controls autoPlay playsInline className="max-h-[85vh] max-w-full rounded-lg" />
+          : <p className="text-sm text-white/80">{failed ? "Video unavailable, please try again." : "Loading video…"}</p>}
+      </div>
+    </div>
+  );
+}
+
+export default function CreatorPpvUploads({ photos, videos }: { cloneId: string; photos: Item[]; videos: Item[] }) {
+  const [playing, setPlaying] = useState<string | null>(null);
   return (
     <div className="dashboard-page grid gap-8">
       <div>
@@ -95,9 +121,15 @@ export default function CreatorPpvUploads({ cloneId, photos, videos }: { cloneId
           <Uploader kind="video" />
         </div>
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 lg:grid-cols-8">
-          {videos.map((v) => <Thumb key={v.id} path={v.storage_path} type="video" className="aspect-square w-full rounded object-cover" />)}
+          {videos.map((v) => (
+            <div key={v.id} className="relative">
+              <Thumb path={v.storage_path} type="video" className="aspect-square w-full rounded object-cover" onOpen={() => setPlaying(v.storage_path)} />
+              <span aria-hidden className="pointer-events-none absolute inset-0 flex items-center justify-center text-2xl text-white drop-shadow">▶</span>
+            </div>
+          ))}
         </div>
       </section>
+      {playing && <VideoPlayer path={playing} onClose={() => setPlaying(null)} />}
     </div>
   );
 }
