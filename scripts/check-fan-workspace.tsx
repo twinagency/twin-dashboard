@@ -44,6 +44,53 @@ async function main() {
   assert.deepEqual(model.restoreState("invalid",fans),model.emptyState());
   assert.deepEqual(model.restoreState(JSON.stringify({version:1,messages:{"kyla-mark":[{id:"bad",direction:"out",platform:"instagram",text:"wrong channel",at:"bad"}]}}),fans).messages["kyla-mark"],[]);
 
+  // Rich relationship contract: coherent timelines, traceable facts, no cross-fan sources.
+  const briannaFans = fans.filter(f => f.creatorId === "briana");
+  assert.equal(briannaFans.length, 2);
+  for (const fan of briannaFans) {
+    assert.ok(fan.messages.length >= 64, `${fan.name}: extensive conversation history`);
+    assert.equal(new Set(fan.messages.map(m => m.text)).size, fan.messages.length);
+    assert.equal(new Set(fan.memories.map(m => m.category)).size, 6);
+    assert.ok(fan.memories.length >= 20);
+    assert.ok(fan.purchases.length >= 8);
+    assert.ok(fan.history!.length >= 8);
+    assert.equal(fan.notes!.length, 4);
+    assert.ok(new Date(fan.messages.at(-1)!.at).getTime() - new Date(fan.firstSeen).getTime() > 45 * 86400000);
+    const ids = [...fan.messages, ...fan.memories, ...fan.purchases, ...fan.history!, ...fan.notes!].map(x => x.id);
+    assert.equal(new Set(ids).size, ids.length);
+    for (const m of fan.messages) {
+      const account = fan.accounts.find(a => a.platform === m.platform)!;
+      assert.ok(account, `${m.id}: account exists`);
+      assert.ok(m.at >= account.linkedAt && account.linkedAt >= fan.firstSeen, `${m.id}: account chronology`);
+      assert.ok(m.at <= "2026-10-09T09:00:00Z", `${m.id}: no future transcript`);
+    }
+    for (const item of [...fan.memories, ...fan.purchases, ...fan.history!]) {
+      const source = fan.messages.find(m => m.id === item.sourceMessageId);
+      assert.ok(source, `${item.id}: source belongs to this relationship`);
+      assert.equal(source.platform, "source" in item ? item.source : item.platform);
+      assert.equal(source.at, "updatedAt" in item ? item.updatedAt : item.at);
+      if ("amount" in item) {
+        assert.ok(source.text.includes(item.title), `${item.id}: purchase title grounded in conversation`);
+        assert.ok(source.text.includes(item.amount.toLocaleString("en-US")), `${item.id}: amount agrees with transcript`);
+        assert.equal(item.currency, item.platform === "telegram" ? "Stars" : "USD");
+      }
+    }
+    for (const account of fan.accounts) {
+      assert.ok(fan.messages.filter(m => m.platform === account.platform).length >= 8);
+      assert.ok(fan.suggestedReplies?.[account.platform]);
+    }
+  }
+  const ben = briannaFans.find(f => f.name === "Ben")!;
+  const oliver = briannaFans.find(f => f.name === "Oliver")!;
+  assert.equal(ben.accounts.length, 4);
+  assert.equal(oliver.accounts.length, 1);
+  assert.equal(model.totalsFor(ben,"all").usd,471);
+  assert.equal(model.totalsFor(ben,"all").stars,5400);
+  assert.equal(model.totalsFor(oliver,"all").usd,268);
+  assert.ok(ben.messages.some(m=>m.platform==="telegram" && m.text.includes("Tea Tree Bay print is finally ordered")));
+  assert.ok(ben.messages.some(m=>m.platform==="fansly" && m.text.includes("Noosa film came back")));
+  assert.ok(oliver.memories.some(m=>m.label==="Fanvue only" && m.value.includes("not connected")));
+
   const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', { url: "https://twin.invalid/fans" });
   Object.assign(globalThis, { window: dom.window, document: dom.window.document, HTMLElement: dom.window.HTMLElement, localStorage: dom.window.localStorage, IS_REACT_ACT_ENVIRONMENT: true });
   const fetchBefore = globalThis.fetch;
@@ -63,6 +110,52 @@ async function main() {
   });
   const buttonText = async (text:string,scope="body") => act(async()=>{const button=Array.from(document.querySelectorAll(`${scope} button`)).find(b=>b.textContent?.trim()===text) as HTMLButtonElement|undefined;assert.ok(button,`button: ${text}`);assert.equal(button.disabled,false);button.click();});
   const profile=()=>find(".profilePane").textContent||"";
+  assert.match(profile(),/Fan of Brianna Redd/);
+  assert.match(profile(),/US\$471.00/);
+  assert.match(profile(),/5,400 Stars/);
+  assert.equal(document.querySelectorAll(".notes>div").length,4);
+  assert.equal(document.querySelectorAll(".lucide-sparkles").length,0);
+  await click('#fan-tab-memory');
+  assert.equal(document.querySelectorAll(".memoryGroup").length,6);
+  assert.equal(document.querySelectorAll(".memoryEntryValue").length,24);
+  await input('[aria-label="Memory category"]',"Open follow-ups");
+  assert.equal(document.querySelectorAll(".memoryEntryValue").length,4);
+  await input('[aria-label="Search relationship memory"]',"print");
+  assert.equal(document.querySelectorAll(".memoryEntryValue").length,1);
+  await click('[aria-label="View source for A3 print arrival"]');
+  assert.equal(find('.sourceMessage').getAttribute('data-message-id'),"ben-print-2");
+  assert.match(find('.messageList').textContent||"",/Tea Tree Bay print is finally ordered/);
+  assert.ok(find('textarea[aria-label="Reply on Telegram"]'));
+  await buttonText("Suggest reply");
+  assert.match((find('textarea') as HTMLTextAreaElement).value,/client review/);
+  await click('#fan-tab-history');
+  assert.equal(document.querySelectorAll('.historyEvent').length,5);
+  await click('[aria-label="Profile platform filter"] button:first-child');
+  assert.equal(document.querySelectorAll('.historyEvent').length,10);
+  await click('[aria-label="View conversation for Fourth account connected"]');
+  assert.equal(find('.sourceMessage').getAttribute('data-message-id'),"ben-fanvue-0");
+  await click('#fan-tab-purchases');
+  await click('[aria-label="View Coastal afternoon purchase on Fanvue"]');
+  assert.match(find('[role="dialog"]').textContent||"",/US\$54.00/);
+  await buttonText("Open conversation",'[role="dialog"]');
+  assert.equal(find('.sourceMessage').getAttribute('data-message-id'),"ben-coastal-0");
+  await click('[aria-label="Oliver, Brianna Redd"]');
+  assert.match(profile(),/US\$268.00/);
+  assert.doesNotMatch(profile(),/Noosa|restaurant launch|5,400/);
+  assert.equal((find('[aria-label="Profile platform filter"] button:nth-child(3)') as HTMLButtonElement).disabled,true);
+  await click('#fan-tab-memory');
+  assert.equal(document.querySelectorAll('.memoryEntryValue').length,20);
+  await click('[aria-label="View source for Print book due 12 October"]');
+  assert.equal(find('.sourceMessage').getAttribute('data-message-id'),"oliver-album-0");
+  await buttonText("Suggest reply");
+  assert.match((find('textarea') as HTMLTextAreaElement).value,/river reflection/);
+  await click('#fan-tab-memory');await click('[aria-label="Edit Home and occupation"]');
+  await input('#fan-editor',"Bristol sound engineer, reviewed");await buttonText("Save memory");
+  await click('[aria-label="Ben, Brianna Redd"]');await click('#fan-tab-memory');
+  assert.doesNotMatch(profile(),/Bristol sound engineer, reviewed/);
+  await click('[aria-label="Oliver, Brianna Redd"]');await click('#fan-tab-memory');
+  assert.match(profile(),/Bristol sound engineer, reviewed/);
+  await input('#fan-creator',"kyla");
   assert.match(profile(),/Fan of Kyla Yesenosky/);
   assert.match(profile(),/US\$411.00/);
   await click('[aria-label="Profile platform filter"] button:nth-child(3)');
@@ -88,12 +181,12 @@ async function main() {
   await input('[aria-label="Search fans"]',"does-not-exist");assert.match(profile(),/No matching fans/);await click('[aria-label="Clear fan search"]');
   await click('[aria-label="James, Kyla Yesenosky"]');assert.equal((find('[aria-label="Profile platform filter"] button:nth-child(2)') as HTMLButtonElement).disabled,true);
   await input('#fan-creator',"all");assert.equal(document.querySelectorAll(".fanRow").length,8);
-  await input('[aria-label="Filter fan list by platform"]',"fanvue");assert.equal(document.querySelectorAll(".fanRow").length,3);
+  await input('[aria-label="Filter fan list by platform"]',"fanvue");assert.equal(document.querySelectorAll(".fanRow").length,4);
   await input('#fan-creator',"kyla");await click('#fan-tab-memory');
   await act(async()=>{root.unmount();});
   root=createRoot(document.getElementById("root")!);await act(async()=>{root.render(<Workspace creators={creators} fans={fans}/>);});
   assert.match(profile(),/Arizona, reviewed/);
-  await click('[aria-label="Reset workspace"]');await buttonText("Reset workspace",'[role="dialog"]');assert.doesNotMatch(profile(),/Arizona, reviewed|Kyla relationship note/);
+  await click('[aria-label="Reset workspace"]');await buttonText("Reset workspace",'[role="dialog"]');assert.match(profile(),/Fan of Brianna Redd/);await input("#fan-creator","kyla");assert.doesNotMatch(profile(),/Arizona, reviewed|Kyla relationship note/);
   await act(async()=>{root.unmount();});
   globalThis.fetch=fetchBefore;dom.window.close();
   console.log("Fan workspace passed: admin/view-as gate; creator and fan isolation; all four channels; currency separation; search; purchases; notes; memory edits; handling; per-channel drafts; local-only messages; persistence and reset.");
