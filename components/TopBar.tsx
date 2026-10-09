@@ -43,6 +43,14 @@ export default function TopBar({
     : pathname?.startsWith("/clones/") && searchParams.get("tab") === "ppvs" ? "PPVs" : pageMeta.pageLabel;
   const scopeLabel = isCreator ? creatorName || clones.find((clone) => clone.id === activeCloneId)?.name || "Creator" : pageMeta.scopeLabel;
   const scopeIsCreator = isCreator || pageMeta.scopeIsCreator;
+  // The new Dashboard owns its creator and currency controls. Its isolated
+  // relationships must not inherit the ordinary Overview's live cash chip.
+  if (!isAgency && !isCreator && pathname === "/dashboard") {
+    return <div className="dashboard-topbar flex h-16 shrink-0 items-center justify-between gap-3 border-b border-line px-5 lg:px-8">
+      <div className="text-sm font-semibold text-ink">Twin <span className="font-normal text-muted">/ Dashboard</span></div>
+      <div className="flex items-center gap-3"><span className="hidden text-xs text-muted sm:inline">Creator workspace</span><BlurToggle /></div>
+    </div>;
+  }
   // The fan workspace has a local creator selector over isolated presentation
   // relationships. Do not display an unrelated live creator or revenue total.
   if (!isAgency && !isCreator && pathname === "/fans") {
