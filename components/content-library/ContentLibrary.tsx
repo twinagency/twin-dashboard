@@ -10,7 +10,7 @@ import type { Creator, Fan, Platform } from '../fans/types';
 import { displayMoney, originalMoney, parseFilters, platformOrder, rangeFor, type Filters } from '../dashboard/model';
 import { buildLibrary, defaultListings, itemStats, LIBRARY_STORAGE, ownership, restoreLibrary, scopedSales, validateItem, type LibraryItem, type Sale } from './model';
 import styles from './ContentLibrary.module.css';
-const short={onlyfans:'OF',telegram:'TG',fansly:'FS',fanvue:'FV'};
+const short={onlyfans:'OF',telegram:'TG'};
 const date=(at:string)=>new Intl.DateTimeFormat('en-AU',{day:'numeric',month:'short',year:'numeric',timeZone:'Australia/Brisbane'}).format(new Date(at));
 const price=(item:LibraryItem,p:Platform)=>p==='telegram'?`${item.listings[p].price.toLocaleString()} Stars`:displayMoney(Math.round(item.listings[p].price*100),'USD');
 function Badge({platform}:{platform:Platform}){return <span className={`${styles.badge} ${styles[platform]}`}>{short[platform]} <span>{platformNames[platform]}</span></span>;}

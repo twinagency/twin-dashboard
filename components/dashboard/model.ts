@@ -1,6 +1,6 @@
 import { AUD_PER_USD, STAR_USD } from "../../lib/money";
-import { emptyState, messagesFor } from "../fans/model";
-import { PLATFORMS, type Creator, type Fan, type Platform, type PlatformFilter, type Purchase, type WorkspaceState } from "../fans/types";
+import { emptyState, messagesFor, normalizePlatform } from "../fans/model";
+import { type Creator, type Fan, type Platform, type PlatformFilter, type Purchase, type WorkspaceState } from "../fans/types";
 
 // This page only reads the existing isolated relationship fixtures. It has
 // no database, payment, platform or delivery clients. Keep real /revenue data
@@ -8,7 +8,7 @@ import { PLATFORMS, type Creator, type Fan, type Platform, type PlatformFilter, 
 export const REPORT_DAY = "2026-10-09";
 export const REPORT_START = "2026-04-10";
 export const FILTER_STORAGE_KEY = "twin-creator-dashboard-filters-v1";
-export const platformOrder: Platform[] = ["onlyfans", "telegram", "fansly", "fanvue"];
+export const platformOrder: Platform[] = ["onlyfans", "telegram"];
 export type Window = "7d" | "30d" | "6m" | "all" | "custom";
 export type DisplayCurrency = "USD" | "AUD";
 export type Filters = { creatorId: string; platform: PlatformFilter; window: Window; currency: DisplayCurrency; from: string; to: string; day: string };
@@ -26,7 +26,7 @@ export function shiftDay(day: string, by: number): string {
 }
 export function parseFilters(query: URLSearchParams, creators: Creator[]): Filters {
   const creatorId = creators.some(c => c.id === query.get("creator")) ? query.get("creator")! : "briana";
-  const platform = (PLATFORMS as readonly string[]).includes(query.get("platform") || "") ? query.get("platform") as Platform : "all";
+  const platform = normalizePlatform(query.get("platform")) ?? "all";
   const window = ["7d", "30d", "6m", "all", "custom"].includes(query.get("window") || "") ? query.get("window") as Window : "30d";
   const from = query.get("from") || shiftDay(REPORT_DAY, -29), to = query.get("to") || REPORT_DAY;
   const safeRange = validDay(from) && validDay(to) && from >= REPORT_START && from <= to && to <= REPORT_DAY;

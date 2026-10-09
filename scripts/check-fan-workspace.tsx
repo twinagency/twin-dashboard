@@ -114,14 +114,33 @@ async function main() {
   }
   const ben = briannaFans.find(f => f.name === "Ben")!;
   const oliver = briannaFans.find(f => f.name === "Oliver")!;
-  assert.equal(ben.accounts.length, 4);
+  assert.deepEqual(types.PLATFORMS, ["onlyfans", "telegram"]);
+  for (const fan of sharedFans) {
+    assert.ok(fan.accounts.length <= 2 && new Set(fan.accounts.map(a=>a.platform)).size === fan.accounts.length);
+    assert.ok(fan.accounts.every(a=>types.PLATFORMS.includes(a.platform)));
+    const visibleText=[fan.summary,...fan.messages.map(m=>m.text),...fan.memories.map(m=>`${m.label} ${m.value}`),...(fan.history||[]).map(h=>`${h.title} ${h.summary}`),...(fan.notes||[]).map(n=>n.text),...Object.values(fan.suggestedReplies||{})].join(" ");
+    assert.doesNotMatch(visibleText,/Fansly|Fanvue|all four (platforms|accounts)|four linked accounts/i);
+  }
+  assert.deepEqual(ben.accounts.map(a=>a.platform),["onlyfans","telegram"]);
   assert.equal(oliver.accounts.length, 1);
   assert.equal(model.totalsFor(ben,"all").usd,471);
   assert.equal(model.totalsFor(ben,"all").stars,5400);
   assert.equal(model.totalsFor(oliver,"all").usd,268);
   assert.ok(ben.messages.some(m=>m.platform==="telegram" && m.text.includes("Tea Tree Bay print is finally ordered")));
-  assert.ok(ben.messages.some(m=>m.platform==="fansly" && m.text.includes("Noosa film came back")));
-  assert.ok(oliver.memories.some(m=>m.label==="Fanvue only" && m.value.includes("not connected")));
+  assert.ok(ben.messages.some(m=>m.platform==="onlyfans" && m.text.includes("Noosa film came back")));
+  assert.ok(oliver.memories.some(m=>m.label==="OnlyFans only" && m.value.includes("not connected")));
+
+  const legacy = model.restoreState(JSON.stringify({version:1,
+    notes:{[ben.id]:[{id:"legacy-note",text:"Same Ben across all four accounts on OnlyFans, Telegram, Fansly and Fanvue.",at:"2026-10-09T08:00:00Z"}]},
+    messages:{[ben.id]:[{id:"legacy-reply",direction:"out",platform:"fansly",text:"Your Fanvue collection.",at:"2026-10-09T08:00:00Z"}]},
+    drafts:{[ben.id+":fanvue"]:"OnlyFans draft migration"},modes:{[ben.id+":fanvue"]:"Human"}
+  }),fans);
+  assert.equal(legacy.messages[ben.id][0].platform,"onlyfans");
+  assert.equal(legacy.drafts[ben.id+":onlyfans"],"OnlyFans draft migration");
+  assert.equal(legacy.modes[ben.id+":onlyfans"],"Human");
+  assert.doesNotMatch(legacy.notes[ben.id][0].text,/Fansly|Fanvue|all four/);
+  const nativeDraft=model.restoreState(JSON.stringify({version:1,drafts:{[ben.id+":onlyfans"]:"Current draft",[ben.id+":fanvue"]:"Legacy draft"}}),fans);
+  assert.equal(nativeDraft.drafts[ben.id+":onlyfans"],"Current draft","Existing OnlyFans settings take precedence");
 
   const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', { url: "https://twin.invalid/fans" });
   Object.assign(globalThis, { window: dom.window, document: dom.window.document, HTMLElement: dom.window.HTMLElement, localStorage: dom.window.localStorage, IS_REACT_ACT_ENVIRONMENT: true });
@@ -166,13 +185,13 @@ async function main() {
   assert.equal(document.querySelectorAll('.historyEvent').length,10);
   await click('[aria-label="Profile platform filter"] button:first-child');
   assert.equal(document.querySelectorAll('.historyEvent').length,10);
-  await click('[aria-label="View conversation for Fourth account connected"]');
-  assert.equal(navigation, "/users?relationship=briana-ben&creator=briana&platform=fanvue&source=ben-fanvue-0");
+  await click('[aria-label="View conversation for Content update preferences saved"]');
+  assert.equal(navigation, "/users?relationship=briana-ben&creator=briana&platform=onlyfans&source=ben-fanvue-2");
   await click('#fan-tab-purchases');
-  await click('[aria-label="View Coastal afternoon purchase on Fanvue"]');
+  await click('[aria-label="View Coastal afternoon purchase on OnlyFans"]');
   assert.match(find('[role="dialog"]').textContent||"",/US\$54.00/);
   await buttonText("Open conversation",'[role="dialog"]');
-  assert.equal(navigation, "/users?relationship=briana-ben&creator=briana&platform=fanvue&source=ben-coastal-0");
+  assert.equal(navigation, "/users?relationship=briana-ben&creator=briana&platform=onlyfans&source=ben-coastal-0");
   await click('[aria-label="Oliver, Brianna Redd"]');
   assert.match(profile(),/US\$268.00/);
   assert.doesNotMatch(profile(),/Noosa|restaurant launch|5,400/);
@@ -180,7 +199,7 @@ async function main() {
   await click('#fan-tab-memory');
   assert.equal(document.querySelectorAll('.memoryEntryValue').length,20);
   await click('[aria-label="View source for Print book due 12 October"]');
-  assert.equal(navigation, "/users?relationship=briana-oliver&creator=briana&platform=fanvue&source=oliver-album-0");
+  assert.equal(navigation, "/users?relationship=briana-oliver&creator=briana&platform=onlyfans&source=oliver-album-0");
   await click('#fan-tab-memory');await click('[aria-label="Edit Home and occupation"]');
   await input('#fan-editor',"Bristol sound engineer, reviewed");await buttonText("Save memory");
   await click('[aria-label="Ben, Brianna Redd"]');await click('#fan-tab-memory');
@@ -206,7 +225,7 @@ async function main() {
   await input('[aria-label="Search fans"]',"does-not-exist");assert.match(profile(),/No matching fans/);await click('[aria-label="Clear fan search"]');
   await click('[aria-label="James, Kyla Yesenosky"]');assert.equal((find('[aria-label="Profile platform filter"] button:nth-child(2)') as HTMLButtonElement).disabled,true);
   await input('#fan-creator',"all");assert.equal(document.querySelectorAll(".fanRow").length,8);
-  await input('[aria-label="Filter fan list by platform"]',"fanvue");assert.equal(document.querySelectorAll(".fanRow").length,4);
+  await input('[aria-label="Filter fan list by platform"]',"onlyfans");assert.equal(document.querySelectorAll(".fanRow").length,6);
   await input('#fan-creator',"kyla");await click('#fan-tab-memory');
   await act(async()=>{root.unmount();});
   root=createRoot(document.getElementById("root")!);await act(async()=>{root.render(<Workspace creators={creators} fans={fans}/>);});
@@ -244,7 +263,7 @@ async function main() {
   await buttonText("Take over");assert.equal((find('[aria-label="Conversation handling"]') as HTMLSelectElement).value,"Human");
   await click('[aria-label="Open Oliver conversation with Brianna Redd"]');
   assert.equal((find('[aria-label="Conversation platform"] button:nth-child(2)') as HTMLButtonElement).disabled,true);
-  assert.ok(find('textarea[aria-label="Reply on Fanvue"]'));
+  assert.ok(find('textarea[aria-label="Reply on OnlyFans"]'));
   assert.doesNotMatch(find('.chat').textContent||"",/ben_coast|OnlyFans local reply|5,400|5400/);
   await buttonText("Suggest reply");assert.match((find('textarea') as HTMLTextAreaElement).value,/river reflection/);
   await input('#conversation-creator',"riley");await click('[aria-label="Open Mark conversation with Riley Mae Lewis"]');
