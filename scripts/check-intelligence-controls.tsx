@@ -49,28 +49,32 @@ async function main(){
  await render("admin","another-creator");assert.equal(document.querySelector("[data-intelligence-workspace]"),null);
  await render();
  const live=document.getElementById("live") as HTMLFormElement;const before=Array.from(new win.FormData(live).entries());
- for(const domain of Object.keys(model.DOMAIN_LABELS) as model.Domain[]){tab=domain;await render();await click(button("Expand all"));
-  const cards=document.querySelectorAll("[data-intelligence-control]");assert.equal(cards.length,model.CONTROLS.filter(c=>c.domain===domain).length);
-  for(const c of model.CONTROLS.filter(c=>c.domain===domain)){const card=document.querySelector(`[data-intelligence-control='${c.id}']`)!;assert.ok(card.textContent?.includes(c.title));assert.ok(card.querySelectorAll("input,select,button[role='switch'],ol").length>0,`${c.id} has interactive controls`);}
-  for(const b of document.querySelectorAll<HTMLButtonElement>("[data-intelligence-workspace] button"))assert.equal(b.type,"button");
-  assert.equal(document.querySelectorAll("[data-intelligence-workspace] [name]").length,0,"Policies cannot enter a submitted FormData payload");
+ for(const domain of Object.keys(model.DOMAIN_LABELS) as model.Domain[]){
+  tab=domain;await render();
+  assert.equal(document.querySelectorAll("[data-intelligence-control]").length,domain==="advanced"?56:0);
  }
- tab="config";await render();await click(button("Expand all"));
+ tab="advanced";await render();
+ for(const heading of Array.from(document.querySelectorAll<HTMLButtonElement>("[data-intelligence-control] > button[aria-expanded='false']")))await click(heading);
+ for(const c of model.CONTROLS){const card=document.querySelector(`[data-intelligence-control='${c.id}']`)!;assert.ok(card.textContent?.includes(c.title));assert.ok(card.querySelectorAll("input,select,button[role='switch'],ol").length>0,`${c.id} has interactive controls`);}
+ for(const b of document.querySelectorAll<HTMLButtonElement>("[data-intelligence-workspace] button"))assert.equal(b.type,"button");
+ assert.equal(document.querySelectorAll("[data-intelligence-workspace] [name]").length,0);
+ assert.ok(!document.querySelector("[data-intelligence-workspace]")!.textContent!.includes("CREATOR INTELLIGENCE"));
+ assert.equal(document.querySelector(".controlNumber"),null);
  const firstSharing=document.querySelector<HTMLButtonElement>("[data-intelligence-control='9'] button[role='switch']")!;
  assert.equal(firstSharing.getAttribute("aria-checked"),"true");await click(firstSharing);assert.equal(firstSharing.getAttribute("aria-checked"),"false");
  await click(button("Save controls"));const stored=JSON.parse(win.localStorage.getItem(model.storageKey(model.BRIANNA_CONTROL_ID))!);assert.equal(stored.values["platform-context.sharing"][0].of_tg,false);
  const move=document.querySelector<HTMLButtonElement>("button[aria-label='Move Present offer up']")!;await click(move);assert.ok(document.querySelector("[data-intelligence-control='20'] ol")?.textContent?.indexOf("Present offer")!<document.querySelector("[data-intelligence-control='20'] ol")?.textContent?.indexOf("Confirm format")!);
- tab="view";await render();await click(button("Expand all"));
+
  const addRule=button("Add rule");const prior=document.querySelectorAll("[data-intelligence-control='46'] .dataRow").length;await click(addRule);assert.equal(document.querySelectorAll("[data-intelligence-control='46'] .dataRow").length,prior+1);
- tab="advanced";await render();await click(button("Expand all"));
+
  const memory=document.querySelector<HTMLInputElement>("input[aria-label='Relationship memory']")!;
  await act(async()=>{const setter=Object.getOwnPropertyDescriptor(win.HTMLInputElement.prototype,"value")!.set!;setter.call(memory,"60");memory.dispatchEvent(new win.Event("input",{bubbles:true}));memory.dispatchEvent(new win.Event("change",{bubbles:true}));});
  const allocations=Array.from(document.querySelectorAll<HTMLInputElement>("[data-intelligence-control='30'] input[type='range']")).map(i=>Number(i.value));assert.equal(allocations.reduce((a,b)=>a+b,0),100);assert.ok(allocations.includes(60));
  await click(button("Save controls"));
  await render("agency");await render();assert.equal(document.querySelector<HTMLInputElement>("input[aria-label='Relationship memory']")!.value,"60","Saved policies survive remount");
  assert.deepEqual(Array.from(new win.FormData(live).entries()),before);assert.equal(networkCalls,0,"No send, payment, model, or configuration APIs called");
- const source=readFileSync("components/CloneForm.tsx","utf8");assert.ok(source.indexOf("<IntelligenceControls")<source.indexOf("<form"),"New controls live outside the active creator form");
+ const source=readFileSync("components/CloneForm.tsx","utf8");assert.ok(source.indexOf("<IntelligenceControls")>source.indexOf("</form>"),"New controls live outside the active creator form");
  await act(async()=>root.unmount());dom.window.close();
- console.log("PASS: 56 controls, domain counts, creator/admin isolation, all tab rendering, switches, rules, ordering, allocation, persistence, and zero production writes.");
+ console.log("PASS: 56 controls, Advanced-only placement, creator/admin isolation, native layout, switches, rules, ordering, allocation, persistence, and zero production writes.");
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

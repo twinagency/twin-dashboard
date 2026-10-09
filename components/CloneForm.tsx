@@ -299,16 +299,6 @@ export default function CloneForm({
         <main className="min-w-0">
           <ControlPlaneWorkspaceHeader tab={tab} />
 
-          {/* Browser-local presentation policies are outside the operational
-              form: they cannot enter FormData or update the live creator. */}
-          <IntelligenceControls
-            tab={tab}
-            cloneId={clone.id}
-            creatorName={clone.name}
-            audience={audience}
-            onTabChange={setTab}
-          />
-
           {/* Identity, Configuration, Monetization and Advanced remain one
               mounted form. Hiding a domain is CSS-only because updateClone
               expects the complete FormData shape on every save. */}
@@ -391,6 +381,17 @@ export default function CloneForm({
               </Section>
             </div>
           </form>
+
+          {/* Browser-local presentation policies are outside the operational
+              form: they cannot enter FormData or update the live creator. */}
+          <IntelligenceControls
+            tab={tab}
+            cloneId={clone.id}
+            creatorName={clone.name}
+            audience={audience}
+            onTabChange={setTab}
+          />
+
 
           <AdminOnly>
             <section className={tab === "advanced" ? "mt-4 flex flex-col gap-4 rounded-[3px] border border-crit/30 bg-panel p-4 sm:flex-row sm:items-center sm:justify-between" : "hidden"}>

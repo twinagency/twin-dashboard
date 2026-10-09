@@ -6,3 +6,18 @@
 @media(min-width:1500px){.dataRow{grid-template-columns:repeat(auto-fit,minmax(135px,1fr))}.fields{gap:18px 28px}}
 @media(max-width:700px){.cardBody{padding:0 12px 15px}.cardHead{padding:12px;gap:8px}.headBadge{display:none}.workspaceHead h2{font-size:17px}.toolbar{gap:6px;flex-wrap:wrap}.search{flex-basis:100%;padding:3px 0 8px;border-bottom:1px solid var(--border)}.fields{grid-template-columns:1fr;gap:14px}.dataRow{grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.saveBar{align-items:flex-start;flex-direction:column}.saveBar .inlineActions{width:100%}.saveBar .primary{flex:1}.resetConfirm{flex-wrap:wrap}.resetConfirm>span{flex-basis:100%}.graph{grid-template-columns:minmax(0,1fr) 24px minmax(0,1fr);padding:10px}.node{padding:9px 6px;gap:5px}.node>svg{display:none}.node small{font-size:8px}.stage{padding:12px 5px}.ruleFlow{grid-template-columns:1fr}.finding{align-items:flex-start;flex-direction:column}.controlNumber{width:23px;height:23px}.cardTitle b{font-size:11px}}
 @media(prefers-reduced-motion:reduce){.root *{transition:none!important;scroll-behavior:auto!important}}
+
+/* Continue the native Advanced settings grid without a workspace shell. */
+.root{margin:16px 0 0;font-size:12px}
+.controlSet{display:grid;grid-template-columns:minmax(0,1fr);gap:16px;align-items:start}
+.card{margin:0;border-radius:4px;border-color:var(--border);box-shadow:none}
+.expanded{border-color:var(--border);box-shadow:none;grid-column:1/-1}
+.cardHead{padding:12px;gap:8px}
+.cardHead:hover{background:color-mix(in srgb,var(--muted) 5%,transparent)}
+.cardTitle b{font-size:12px;font-weight:600;text-transform:uppercase;letter-spacing:.025em}
+.cardTitle>span{font-size:11px}
+.cardBody{padding:12px;border-top:1px solid var(--border)}
+.description{border:0;padding:0;margin:0 0 12px}
+.field input,.field select,.primary,.secondary,.dataRow,.orderList li{border-radius:3px}
+.saveBar{margin-top:16px;border:0;border-radius:0;padding:0;background:transparent}
+@media(min-width:1280px){.controlSet{grid-template-columns:repeat(2,minmax(0,1fr))}}

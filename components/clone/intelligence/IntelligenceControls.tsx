@@ -1,8 +1,8 @@
 "use client";
 
 import {useEffect, useId, useMemo, useRef, useState} from "react";
-import {ChevronDown, ChevronUp, Check, CheckCheck, RotateCcw, Search, SlidersHorizontal, LockKeyhole, Network, Plus, Trash2, ArrowUp, ArrowDown, GripVertical, Save, X, Layers, ArrowRight} from "lucide-react";
-import {CONTROLS, DOMAIN_LABELS, allocate, canShowIntelligence, defaultValues, fieldKey, issues, restoreValues, storageKey, type Control, type Domain, type Field, type Row, type Scalar, type Value, type Values} from "./model";
+import {ChevronDown, ChevronUp, Check, CheckCheck, RotateCcw, Network, Plus, Trash2, ArrowUp, ArrowDown, GripVertical, Save, Layers, ArrowRight} from "lucide-react";
+import {CONTROLS, allocate, canShowIntelligence, defaultValues, fieldKey, issues, restoreValues, storageKey, type Control, type Domain, type Field, type Row, type Scalar, type Value, type Values} from "./model";
 import styles from "./IntelligenceControls.module.css";
 
 type Props={tab:Domain;cloneId:string;audience:string;creatorName:string;onTabChange:(tab:Domain)=>void};
@@ -85,46 +85,41 @@ export default function IntelligenceControls(props:Props){
  return <Workspace key={props.cloneId} {...props}/>;
 }
 
-function Workspace({tab,cloneId,creatorName,onTabChange}:Props){
+function Workspace({tab,cloneId,onTabChange}:Props){
  const instance=useId().replace(/:/g,"");
  const [values,setValues]=useState<Values>(defaultValues);
  const [saved,setSaved]=useState<Values>(defaultValues);
  const [loaded,setLoaded]=useState(false);
  const [status,setStatus]=useState("");
- const [query,setQuery]=useState("");
- const [open,setOpen]=useState<number[]>([1,9,21,30,44,48]);
+ const [open,setOpen]=useState<number[]>([30]);
  const [resetOpen,setResetOpen]=useState(false);
- const root=useRef<HTMLElement>(null);
+ const root=useRef<HTMLDivElement>(null);
  useEffect(()=>{
   try{const next=restoreValues(window.localStorage.getItem(storageKey(cloneId)));setValues(next);setSaved(structuredClone(next));}
   catch{setStatus("Browser storage is unavailable. Changes remain available for this session.");}
   setLoaded(true);
  },[cloneId]);
- useEffect(()=>{setQuery("");setResetOpen(false);},[tab]);
- const controls=CONTROLS.filter(c=>c.domain===tab);
- const filtered=controls.filter(c=>`${c.title} ${c.description} ${c.group}`.toLowerCase().includes(query.toLowerCase()));
- const groups=[...new Set(filtered.map(c=>c.group))];
+ useEffect(()=>{setResetOpen(false);},[tab]);
+ const controls=CONTROLS;
  const problems=useMemo(()=>issues(values),[values]);
  const changed=CONTROLS.filter(c=>c.fields.some(f=>JSON.stringify(values[fieldKey(c,f)])!==JSON.stringify(saved[fieldKey(c,f)])));
  function change(key:string,value:Value){setValues(current=>key.startsWith("context-budget.")?allocate(current,key,Number(value)):{...current,[key]:value});setStatus("");}
  function save(){if(problems.length){setStatus("Resolve the highlighted policy conflicts before saving.");return;}try{window.localStorage.setItem(storageKey(cloneId),JSON.stringify({version:1,values}));setSaved(structuredClone(values));setStatus("Controls saved.");}catch{setStatus("Could not save in this browser. Your changes are still here.");}}
  function reset(){const defaults=defaultValues();setValues(current=>({...current,...Object.fromEntries(controls.flatMap(c=>c.fields.map(f=>[fieldKey(c,f),defaults[fieldKey(c,f)]])))}));setResetOpen(false);setStatus("Page controls reset. Save to keep these values.");}
- function navigate(id:number){const c=CONTROLS.find(c=>c.id===id)!;setOpen(current=>current.includes(id)?current:[...current,id]);setQuery("");onTabChange(c.domain);window.setTimeout(()=>root.current?.querySelector(`[data-intelligence-control="${id}"]`)?.scrollIntoView({behavior:"smooth",block:"center"}),100);}
- return <section ref={root} className={styles.root} aria-label={`${DOMAIN_LABELS[tab]} intelligence controls`} data-intelligence-workspace>
-  <div className={styles.workspaceHead}><div className={styles.titleIcon}><SlidersHorizontal size={20}/></div><div><p className={styles.eyebrow}>CREATOR INTELLIGENCE</p><h2>{DOMAIN_LABELS[tab]} controls</h2><p>{creatorName} · {controls.length} controls in this tab · 56 across the workspace</p></div><div className={styles.headBadge}><LockKeyhole size={13}/>Creator policy</div></div>
-  <div className={styles.toolbar}><label className={styles.search}><Search size={15}/><input aria-label={`Search ${DOMAIN_LABELS[tab]} controls`} placeholder={`Search ${DOMAIN_LABELS[tab].toLowerCase()} controls`} value={query} onChange={e=>setQuery(e.target.value)}/>{query?<button type="button" aria-label="Clear control search" onClick={()=>setQuery("")}><X size={14}/></button>:null}</label><button type="button" className={styles.textButton} onClick={()=>setOpen(current=>[...new Set([...current,...filtered.map(c=>c.id)])])}>Expand all</button><button type="button" className={styles.textButton} onClick={()=>setOpen(current=>current.filter(id=>!controls.some(c=>c.id===id)))}>Collapse all</button></div>
-  {!filtered.length?<div className={styles.empty}>No matching controls in {DOMAIN_LABELS[tab]}.<button type="button" className={styles.textButton} onClick={()=>setQuery("")}>Clear search</button></div>:null}
-  <fieldset disabled={!loaded} className={styles.controlSet}>{groups.map(group=><div key={group} className={styles.group}><div className={styles.groupTitle}><h3>{group}</h3><span>{filtered.filter(c=>c.group===group).length} controls</span></div>{filtered.filter(c=>c.group===group).map(control=>{
-   const expanded=open.includes(control.id)||Boolean(query);const findings=problems.filter(p=>p.id===control.id);
-   return <article className={`${styles.card} ${expanded?styles.expanded:""}`} key={control.id} data-intelligence-control={control.id}><button type="button" className={styles.cardHead} aria-expanded={expanded} aria-controls={`${instance}-control-${control.id}`} onClick={()=>setOpen(current=>current.includes(control.id)?current.filter(id=>id!==control.id):[...current,control.id])}><span className={styles.controlNumber}>{String(control.id).padStart(2,"0")}</span><span className={styles.cardTitle}><b>{control.title}</b><span>{summary(control,values)}</span></span>{findings.length?<span className={styles.issueBadge}>{findings.length} to review</span>:null}{expanded?<ChevronUp size={16}/>:<ChevronDown size={16}/>}</button>
+ function navigate(id:number){const c=CONTROLS.find(c=>c.id===id)!;setOpen(current=>current.includes(id)?current:[...current,id]);onTabChange("advanced");window.setTimeout(()=>root.current?.querySelector(`[data-intelligence-control="${id}"]`)?.scrollIntoView({behavior:"smooth",block:"center"}),100);}
+ if(tab!=="advanced")return null;
+ return <div ref={root} className={styles.root} aria-label="Advanced settings" data-intelligence-workspace>
+  <fieldset disabled={!loaded} className={styles.controlSet}>{controls.map(control=>{
+   const expanded=open.includes(control.id);const findings=problems.filter(p=>p.id===control.id);
+   return <article className={`${styles.card} ${expanded?styles.expanded:""}`} key={control.id} data-intelligence-control={control.id}><button type="button" className={styles.cardHead} aria-expanded={expanded} aria-controls={`${instance}-control-${control.id}`} onClick={()=>setOpen(current=>current.includes(control.id)?current.filter(id=>id!==control.id):[...current,control.id])}><span className={styles.cardTitle}><b>{control.title}</b><span>{summary(control,values)}</span></span>{findings.length?<span className={styles.issueBadge}>{findings.length} to review</span>:null}{expanded?<ChevronUp size={16}/>:<ChevronDown size={16}/>}</button>
     {expanded?<div className={styles.cardBody} id={`${instance}-control-${control.id}`}><p className={styles.description}>{control.description}</p><div className={styles.fields}>
      {control.visual&&!["layers","impact","conflicts","caption"].includes(control.visual)?<Visual control={control} values={values} onChange={change} onNavigate={navigate}/>:null}
      {control.fields.map(field=>{const props={field,value:values[fieldKey(control,field)],onChange:(next:Value)=>change(fieldKey(control,field),next),prefix:`${instance}-${control.key}`};return field.kind==="rows"?<RowsEditor key={field.key} {...props}/>:field.kind==="order"?<ReorderEditor key={field.key} {...props}/>:<ScalarEditor key={field.key} {...props}/>;})}
      {control.visual&&["layers","impact","conflicts","caption"].includes(control.visual)?<Visual control={control} values={values} onChange={change} onNavigate={navigate}/>:null}
     </div>{findings.map((finding,i)=><p key={i} role="alert" className={styles.validation}>{finding.message}</p>)}</div>:null}
    </article>;
-  })}</div>)}</fieldset>
+  })}</fieldset>
   {resetOpen?<div className={styles.resetConfirm} role="group" aria-label="Reset page controls"><span>Restore the initial values for these {controls.length} controls?</span><button type="button" className={styles.secondary} onClick={()=>setResetOpen(false)}>Cancel</button><button type="button" className={styles.primary} onClick={reset}>Reset this tab</button></div>:null}
-  <div className={styles.saveBar}><div><b>{changed.length?`${changed.length} ${changed.length===1?"control":"controls"} changed`:"Controls up to date"}</b><p role="status" aria-live="polite">{status||`${controls.length} available here · ${CONTROLS.length} across six tabs`}</p></div><div className={styles.inlineActions}><button type="button" className={styles.secondary} disabled={!loaded} onClick={()=>setResetOpen(!resetOpen)}><RotateCcw size={14}/>Reset tab</button><button type="button" className={styles.primary} disabled={!loaded||!changed.length||Boolean(problems.length)} onClick={save}>{changed.length?<Save size={14}/>:<Check size={14}/>}Save controls</button></div></div>
- </section>;
+  <div className={styles.saveBar}><div><b>{changed.length?`${changed.length} ${changed.length===1?"control":"controls"} changed`:"Controls up to date"}</b><p role="status" aria-live="polite">{status}</p></div><div className={styles.inlineActions}><button type="button" className={styles.secondary} disabled={!loaded} onClick={()=>setResetOpen(!resetOpen)}><RotateCcw size={14}/>Reset tab</button><button type="button" className={styles.primary} disabled={!loaded||!changed.length||Boolean(problems.length)} onClick={save}>{changed.length?<Save size={14}/>:<Check size={14}/>}Save controls</button></div></div>
+ </div>;
 }
