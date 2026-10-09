@@ -1,4 +1,5 @@
 import type { Account, Creator, Fan, Memory, Message, Platform, Purchase } from "./types";
+import { briannaFans } from "./brianna-data";
 
 // Isolated presentation fixtures. Only imported by the guarded server page.
 // Mark/Kyla's three Telegram purchases and four non-sensitive memory fields
@@ -8,7 +9,7 @@ import type { Account, Creator, Fan, Memory, Message, Platform, Purchase } from 
 export const creators: Creator[] = [
   { id: "kyla", name: "Kyla Yesenosky", initials: "KY", color: "#637bea" },
   { id: "riley", name: "Riley Mae Lewis", initials: "RL", color: "#ad69a8" },
-  { id: "briana", name: "Briana Redd", initials: "BR", color: "#cf8c48" },
+  { id: "briana", name: "Brianna Redd", initials: "BR", color: "#cf8c48" },
 ];
 const linkedAt = "2026-10-01T04:00:00Z";
 function accounts(name: string, channels: Platform[]): Account[] {
@@ -63,6 +64,5 @@ export const fans: Fan[] = [
   otherFan("kyla-daniel", "kyla", "Daniel", ["onlyfans", "fanvue", "fansly"], "Interests", "Follows new collections and creator updates", 1),
   otherFan("riley-chris", "riley", "Chris", ["onlyfans", "fansly"], "Interests", "Enjoys fitness and photography", 1),
   otherFan("riley-mark", "riley", "Mark", ["telegram"], "Interests", "Enjoys cooking and live music"),
-  otherFan("briana-oliver", "briana", "Oliver", ["fanvue"], "Interests", "Enjoys music and travel"),
-  otherFan("briana-ben", "briana", "Ben", ["onlyfans", "telegram", "fansly"], "Interests", "Enjoys beach trips and new videos", 2),
+  ...briannaFans,
 ];
