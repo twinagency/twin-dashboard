@@ -31,6 +31,7 @@ const PAGE_LABELS: Record<string, string> = {
   "/crm/inbox": "Inbox",
   "/crm/fans": "Fan CRM",
   "/crm/campaigns": "Campaigns",
+  "/campaigns": "Campaigns",
   "/crm/team": "Team",
   "/crm/platforms": "Platforms",
   "/admin/submissions": "New Form Submissions",
@@ -71,4 +72,5 @@ export function getPageMeta(
     scopeIsCreator: globalScope != null,
   };
 }
+
 
