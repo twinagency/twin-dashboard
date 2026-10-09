@@ -142,7 +142,7 @@ export default function FanWorkspace({creators,fans}:{creators:Creator[];fans:Fa
     if(tab!=="conversation"||!messageListRef.current)return;
     const list=messageListRef.current;
     const target=sourceMessageId?document.getElementById(`fan-message-${sourceMessageId}`):null;
-    list.scrollTop=target?Math.max(0,target.offsetTop-list.offsetTop-20):messageSearch?0:list.scrollHeight;
+    list.scrollTop=target?Math.max(0,list.scrollTop+target.getBoundingClientRect().top-list.getBoundingClientRect().top-20):messageSearch?0:list.scrollHeight;
   },[tab,fan?.id,activePlatform,messages.length,sourceMessageId,messageSearch]);
   const openNote=()=>{setEditor("");setDialog({kind:"note"});};
   const updateDraft=(text:string)=>{if(draftKey)setState(previous=>({...previous,drafts:{...previous.drafts,[draftKey]:text}}));};
