@@ -1,6 +1,7 @@
 import Link from "next/link";
 import CreatorPpvUploads from "./CreatorPpvUploads";
 import { supabaseAdmin } from "@/lib/supabase";
+import { withDashboardAccess } from "@/lib/dashboard-access";
 import { requireCreatorWorkspace } from "@/lib/creator-dashboard";
 import { Card } from "@/components/ui/card";
 export const dynamic = "force-dynamic";
@@ -21,5 +22,15 @@ export default async function CreatorPpvsPage() {
   ]);
   if (photos.error) throw new Error(photos.error.message);
   if (videos.error) throw new Error(videos.error.message);
-  return <CreatorPpvUploads cloneId={id} photos={photos.data ?? []} videos={videos.data ?? []} />;
+  // Sign every thumbnail in one batch instead of one request per tile; a
+  // 228-photo catalogue otherwise fires 230 sign requests on load.
+  const items = [...(photos.data ?? []), ...(videos.data ?? [])];
+  // Paths come only from this creator's own clone rows above, so sign as the
+  // system (the agency-scoped client has no batch-sign rule).
+  const signed = items.length
+    ? await withDashboardAccess(null, () => supabaseAdmin.storage.from("media").createSignedUrls(items.map((i) => i.storage_path), 3600))
+    : { data: [] };
+  const urls = new Map((signed.data ?? []).filter((s) => s.signedUrl && s.path).map((s) => [s.path as string, s.signedUrl]));
+  const withUrl = (rows: { id: string; storage_path: string }[] | null) => (rows ?? []).map((r) => ({ ...r, url: urls.get(r.storage_path) ?? null }));
+  return <CreatorPpvUploads cloneId={id} photos={withUrl(photos.data)} videos={withUrl(videos.data)} />;
 }

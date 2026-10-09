@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import Thumb from "@/components/SignedMediaPreview";
 
-type Item = { id: string; storage_path: string };
+type Item = { id: string; storage_path: string; url: string | null };
 type Job = { name: string; status: "waiting" | "uploading" | "done" | "error"; error?: string };
 
 function Uploader({ kind }: { kind: "photo" | "video" }) {
@@ -78,9 +78,10 @@ function Uploader({ kind }: { kind: "photo" | "video" }) {
 
 // iOS Safari only runs a handful of <video> elements at once; a grid of 30+
 // makes most of them fail. Mount a video thumbnail only while it is on screen.
-function LazyVideoThumb({ path, onOpen }: { path: string; onOpen: () => void }) {
+function LazyVideoThumb({ item, onOpen }: { item: Item; onOpen: () => void }) {
   const ref = useRef<HTMLDivElement>(null);
   const [visible, setVisible] = useState(false);
+  const [failed, setFailed] = useState(false);
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
@@ -90,12 +91,24 @@ function LazyVideoThumb({ path, onOpen }: { path: string; onOpen: () => void }) 
   }, []);
   return (
     <div ref={ref} className="relative aspect-square w-full overflow-hidden rounded bg-[#06172f]">
-      {visible
-        ? <Thumb path={path} type="video" className="aspect-square w-full rounded object-cover" onOpen={onOpen} />
-        : <button type="button" onClick={onOpen} className="block aspect-square w-full" aria-label="Play video" />}
+      {visible && (item.url && !failed
+        ? <button type="button" onClick={onOpen} className="block h-full w-full" aria-label="Play video">
+            <video src={`${item.url}#t=0.1`} className="aspect-square w-full rounded object-cover" muted playsInline preload="metadata" onError={() => setFailed(true)} />
+          </button>
+        : <Thumb path={item.storage_path} type="video" className="aspect-square w-full rounded object-cover" onOpen={onOpen} />)}
+      {!visible && <button type="button" onClick={onOpen} className="block aspect-square w-full" aria-label="Play video" />}
       <span aria-hidden className="pointer-events-none absolute inset-0 flex items-center justify-center text-2xl text-white drop-shadow">▶</span>
     </div>
   );
+}
+
+// Batch-signed photo with native lazy loading; falls back to self-signing if
+// the batch link has expired or failed.
+function PhotoTile({ item }: { item: Item }) {
+  const [failed, setFailed] = useState(false);
+  if (!item.url || failed) return <Thumb path={item.storage_path} type="photo" className="aspect-square w-full rounded object-cover" />;
+  // eslint-disable-next-line @next/next/no-img-element
+  return <img src={item.url} alt="" loading="lazy" decoding="async" className="aspect-square w-full rounded bg-muted/10 object-cover" onError={() => setFailed(true)} />;
 }
 
 function VideoPlayer({ path, onClose }: { path: string; onClose: () => void }) {
@@ -134,7 +147,7 @@ export default function CreatorPpvUploads({ photos, videos }: { cloneId: string;
           <Uploader kind="photo" />
         </div>
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 lg:grid-cols-8">
-          {photos.map((p) => <Thumb key={p.id} path={p.storage_path} type="photo" className="aspect-square w-full rounded object-cover" />)}
+          {photos.map((p) => <PhotoTile key={p.id} item={p} />)}
         </div>
       </section>
       <section className="grid gap-3">
@@ -143,7 +156,7 @@ export default function CreatorPpvUploads({ photos, videos }: { cloneId: string;
           <Uploader kind="video" />
         </div>
         <div className="grid grid-cols-3 gap-2 sm:grid-cols-5 lg:grid-cols-8">
-          {videos.map((v) => <LazyVideoThumb key={v.id} path={v.storage_path} onOpen={() => setPlaying(v.storage_path)} />)}
+          {videos.map((v) => <LazyVideoThumb key={v.id} item={v} onOpen={() => setPlaying(v.storage_path)} />)}
         </div>
       </section>
       {playing && <VideoPlayer path={playing} onClose={() => setPlaying(null)} />}
