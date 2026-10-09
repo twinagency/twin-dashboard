@@ -206,8 +206,9 @@ const ADMIN_LINKS: NavLink[] = [
 ];
 
 // Internal Twin ordering is shared by the desktop sidebar and mobile menu.
-const TWIN_ADMIN_ORDER = ["/revenue", "/clones", "/fans", "/users", "/business", "ppvs", "identity", "/agency-admin", "/admin/earnings-split", "/catalogue-funnel", "/agency/creators", "/agency/creator-invites"];
+const TWIN_ADMIN_ORDER = ["/dashboard", "/revenue", "/clones", "/fans", "/users", "/business", "ppvs", "identity", "/agency-admin", "/admin/earnings-split", "/catalogue-funnel", "/agency/creators", "/agency/creator-invites"];
 const TWIN_ADMIN_LINKS: NavLink[] = [
+  { kind: "route", label: "Dashboard", href: "/dashboard", icon: "Clones", color: "blue" },
   ...NAV_LINKS,
   { kind: "route", label: "Fan profiles", href: "/fans", icon: "Users", color: "blue" },
   ...MORE_LINKS,

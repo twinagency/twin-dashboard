@@ -75,7 +75,8 @@
     "test:creator-gallery": "node --import tsx scripts/check-creator-gallery.ts && node scripts/check-creator-gallery-ui.cjs",
     "test:creator-upload-receipts": "node --import tsx scripts/check-creator-upload-receipts.ts",
     "test:agency-sequences": "node --import tsx scripts/check-agency-sequences.ts",
-    "test:fan-workspace": "tsx scripts/check-fan-workspace.tsx"
+    "test:fan-workspace": "tsx scripts/check-fan-workspace.tsx && npm run test:creator-dashboard",
+    "test:creator-dashboard": "tsx scripts/check-creator-dashboard.tsx"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
