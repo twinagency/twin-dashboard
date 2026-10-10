@@ -40,7 +40,7 @@ import {
 import type { CloneConfigState, SetConfig } from "./useCloneConfig";
 import { DIAL_CONFLICT_RULES } from "@/lib/dial-conflicts";
 import { SpoilMenuEditor } from "./editors";
-import { IdentityLifeCard, IdentityBoundaryLink, MoneyJourney, PaywallPreview, StudioHeading, StudioLink, isStudioTab } from "./CreatorStudio";
+import { IdentityLifeCard, IdentityBoundaryLink, ConfigurationMore, MoneyJourney, PaywallPreview, StudioHeading, StudioLink, isStudioTab } from "./CreatorStudio";
 import studioStyles from "./CreatorStudio.module.css";
 import { MediaPicker, type MediaRow, type BundleRow } from "./MediaPicker";
 // New dedicated file (migration 056 monetization sequence) — kept out of this
@@ -1261,6 +1261,7 @@ export default function ConfigSections({
         )}
         </ConfigModule>
       </div>
+      {studio && <ConfigurationMore onChange={onStudioPanelChange} />}
       </div>
 
       {/* ── ADVANCED - power-user settings, nobody touches these configuring

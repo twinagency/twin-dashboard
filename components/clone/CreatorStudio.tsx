@@ -33,6 +33,9 @@ export function IdentityLifeCard({ onChange }: { onChange?: (panel: string) => v
 export function IdentityBoundaryLink({ onChange }: { onChange?: (panel: string) => void }) {
   return <div className={styles.boundaryStrip} data-studio-identity="boundary-summary"><LockKeyhole size={20} /><b>Boundaries & privacy</b><span>Name sharing, personal details and hard limits.</span><StudioLink panel="boundaries" onChange={onChange}>Review boundaries</StudioLink></div>;
 }
+export function ConfigurationMore({ onChange }: { onChange?: (panel: string) => void }) {
+  return <div className={styles.configLinks}><button type="button" onClick={() => onChange?.("delivery")}><Send size={21} /><span><b>Delivery & timing</b><small>Read receipts, pacing and response timing.</small></span><ChevronRight size={17} /></button><button type="button" onClick={() => onChange?.("models")}><Settings2 size={21} /><span><b>Models & routing</b><small>Model assignments and configuration.</small></span><ChevronRight size={17} /></button></div>;
+}
 
 // This is a view of the mounted form, not a second set of submitted controls.
 // Listening to ordinary input events also keeps uncontrolled price edits visible
