@@ -248,7 +248,7 @@ export function clampFanLimit(v: unknown): number {
 // ALREADY carries its tenancy filter, so it can narrow a result and never widen
 // one. Ties break on telegram_id so offset paging is stable.
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-function withFanOptions(q: any, opts: FanQuery | undefined, limit: number) {
+function withFanOptions(q: any, opts: FanQuery | undefined) {
   const o = opts;
   if (o) {
     if (o.activeSince) q = q.gte("last_message_received", o.activeSince);
@@ -258,9 +258,7 @@ function withFanOptions(q: any, opts: FanQuery | undefined, limit: number) {
     if (o.buyersOnly) q = q.gt("purchase_count", 0);
   }
   const col = o ? FAN_SORT_COLUMN[o.sort] : "total_spent_stars";
-  q = q.order(col, { ascending: false, nullsFirst: false }).order("telegram_id", { ascending: true });
-  const from = o?.offset ?? 0;
-  return q.range(from, from + limit - 1);
+  return q.order(col, { ascending: false, nullsFirst: false }).order("telegram_id", { ascending: true });
 }
 
 export type PublicFans = {
@@ -279,8 +277,7 @@ export async function publicFans(cloneId: string, limit: number, opts?: FanQuery
       // The tenancy boundary. Not optional, not derived from a parameter.
       .eq("clone_id", cloneId),
     opts,
-    capped,
-  );
+  ).range(opts?.offset ?? 0, (opts?.offset ?? 0) + capped - 1);
   if (error) throw new Error(error.message);
 
   const platformPct = await getCutPctForClone(cloneId);
@@ -322,8 +319,7 @@ export async function publicFleetFans(limit: number, opts?: FanQuery): Promise<P
       // that has already proved tenant.scope === "fleet".
     ,
     opts,
-    capped,
-  );
+  ).range(opts?.offset ?? 0, (opts?.offset ?? 0) + capped - 1);
   if (error) throw new Error(error.message);
 
   const rows = (data ?? []) as unknown as Record<string, unknown>[];

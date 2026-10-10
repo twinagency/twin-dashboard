@@ -84,7 +84,9 @@ async function readPayments(cloneId: string | null, q: PaymentQuery, mode: Mode)
     .from("star_transactions")
     .select(PAYMENT_COLUMNS)
     .gte("paid_at", q.since)
-    .lte("paid_at", q.until);
+    .lte("paid_at", q.until)
+    // one extra row tells us whether another page exists
+    .limit(q.limit + 1);
   // The tenancy boundary for the per-clone read. The fleet read passes null and
   // is reached only from a route that proved tenant.scope === "fleet".
   if (cloneId !== null) query = query.eq("clone_id", cloneId);
@@ -100,8 +102,7 @@ async function readPayments(cloneId: string | null, q: PaymentQuery, mode: Mode)
   // Fetch one extra row to know whether another page exists.
   const { data, error } = await query
     .order("paid_at", { ascending: false })
-    .order("id", { ascending: false })
-    .limit(q.limit + 1);
+    .order("id", { ascending: false });
   if (error) throw new Error(error.message);
 
   const raw = (data ?? []) as unknown as RawPayment[];
@@ -117,7 +118,7 @@ async function readPayments(cloneId: string | null, q: PaymentQuery, mode: Mode)
   const cloneIds = [...new Set(rows.map((r) => r.clone_id).filter((v): v is string => !!v))];
   const names = new Map<string, { name: string | null; username: string | null }>();
   if (tgIds.length && cloneIds.length) {
-    const u = await supabaseAdmin.from("users").select("clone_id,telegram_id,name,username").in("clone_id", cloneIds).in("telegram_id", tgIds);
+    const u = await supabaseAdmin.from("users").select("clone_id,telegram_id,name,username").in("clone_id", cloneIds).in("telegram_id", tgIds).limit(1000);
     for (const f of (u.data ?? []) as { clone_id: string; telegram_id: number; name: string | null; username: string | null }[]) {
       names.set(`${f.clone_id}:${f.telegram_id}`, { name: f.name, username: f.username });
     }
