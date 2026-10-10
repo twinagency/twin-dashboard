@@ -2,7 +2,7 @@
 No credentials, signed URLs or private photo bytes are printed to Actions logs.
 The photos remain a one-day private repository artifact.
 """
-import json,pathlib,shlex,subprocess,time,urllib.request
+import json,pathlib,shlex,subprocess,time,urllib.request,urllib.parse
 def aws(*args):
     r=subprocess.run(['aws','--region','ap-southeast-2',*args,'--output','json'],capture_output=True,text=True,timeout=45)
     if r.returncode:
@@ -23,7 +23,10 @@ photos=json.loads(result['StandardOutputContent'])
 root=pathlib.Path('/tmp/flirt-overview-review');root.mkdir(exist_ok=True)
 for p in photos:
     if not p['url'].startswith('https://aouaenqayfltoqrmpitg.supabase.co/storage/v1/object/sign/media/'):raise RuntimeError('Unexpected photo host')
-    with urllib.request.urlopen(p['url'],timeout=40) as source:
-        (root/(p['id']+'.jpg')).write_bytes(source.read())
+    try:
+        with urllib.request.urlopen(urllib.parse.quote(p['url'],safe=':/?=&%'),timeout=40) as source:
+            (root/(p['id']+'.jpg')).write_bytes(source.read())
+    except Exception:
+        raise RuntimeError('Photo download failed; private URL suppressed') from None
 (root/'manifest.json').write_text(json.dumps([{'id':p['id'],'name':p['name']} for p in photos],indent=2))
 print(json.dumps({'photos_saved':len(photos),'private_artifact_only':True,'database_writes':False}))

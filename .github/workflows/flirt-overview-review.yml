@@ -18,6 +18,8 @@ jobs:
           aws-region: ap-southeast-2
       - name: Read the selected creator's existing photos for the approved dashboard
         run: python3 deployment/flirt-overview-review.py
+      - name: Include exact source for the approved local build
+        run: git archive --format=tar.gz HEAD > /tmp/flirt-overview-review/source.tar.gz
       - uses: actions/upload-artifact@v4
         with:
           name: flirt-overview-photo-review
