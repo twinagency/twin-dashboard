@@ -5,11 +5,13 @@ import { activeViewAs } from '@/lib/view-as';
 import { loadBriannaLibraryMedia } from '@/lib/content-library-media';
 import { creators, authoredFans } from '@/components/fans/data';
 import UnifiedInbox from '@/components/inbox/UnifiedInbox';
+import MovieNightDemo from '@/components/inbox/MovieNightDemo';
 export const dynamic = 'force-dynamic';
 export default async function InboxPage({searchParams}:{searchParams:Promise<Record<string,string|string[]|undefined>>}){
  if(!await hasInternalAdminAccess())redirect('/twin');
  if(await activeViewAs(await cookies()))redirect('/revenue');
  const params=await searchParams;
+ if(params.presentation==='movie-night'&&(!params.creator||params.creator==='briana'))return <MovieNightDemo/>;
  let mediaItems:Awaited<ReturnType<typeof loadBriannaLibraryMedia>>=[];let mediaError=false;
  try{mediaItems=await loadBriannaLibraryMedia();}catch{mediaError=true;}
  return <UnifiedInbox creators={creators} fans={authoredFans} mediaItems={mediaItems} mediaError={mediaError}
