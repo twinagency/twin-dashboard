@@ -1,7 +1,7 @@
 // Bot V2 admin page. The V2 bot (separate app on the bot box) serves its own page and API on the
 // box's private address only; this route proxies it so it sits behind the dashboard login
 // (middleware covers /bot-v2 like every other admin route) and is never exposed to the internet.
-import { engineSwitchGate, type GuardDb } from "@/lib/engine-switch-guard";
+import { engineSwitchGate, upstreamTimeoutMs, type GuardDb } from "@/lib/engine-switch-guard";
 import { supabaseAdmin } from "@/lib/supabase";
 
 export const dynamic = "force-dynamic";
@@ -22,7 +22,7 @@ async function proxy(req: Request, ctx: { params: Promise<{ path?: string[] }> }
       headers: { "content-type": req.headers.get("content-type") ?? "application/json" },
       body,
       cache: "no-store",
-      signal: AbortSignal.timeout(20_000),
+      signal: AbortSignal.timeout(upstreamTimeoutMs(req.method, path)),
     });
     return new Response(res.body, { status: res.status, headers: { "content-type": res.headers.get("content-type") ?? "text/plain", "cache-control": "no-store" } });
   } catch {

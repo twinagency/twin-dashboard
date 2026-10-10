@@ -3,7 +3,7 @@
 // the switch exactly as before when the schema is not applied. Fake Supabase, no network.
 import fs from "node:fs";
 import path from "node:path";
-import { engineSwitchGate, guardEngineSwitch, MSG_ENABLED, type GuardDb } from "../lib/engine-switch-guard";
+import { engineSwitchGate, guardEngineSwitch, MSG_ENABLED, upstreamTimeoutMs, UPSTREAM_TIMEOUT_MS, ENGINE_SWITCH_TIMEOUT_MS, type GuardDb } from "../lib/engine-switch-guard";
 
 let passed = 0;
 const failures: string[] = [];
@@ -31,7 +31,7 @@ async function main() {
   let r = await guardEngineSwitch(fake(colMissing, rpcMissing), "c1");
   ok("allows when feature not installed (column and rpc missing)", r.allow === true);
   r = await guardEngineSwitch(fake(rowOk(false), rpcMissing), "c1");
-  ok("allows when column exists but rpc missing", r.allow === true);
+  ok("refuses when column exists but rpc missing (fail closed)", !r.allow && r.status === 409);
   r = await guardEngineSwitch(fake(rowOk(false), work(0)), "c1");
   ok("allows when disabled and 0 open", r.allow === true);
   const f = fake(rowOk(true), work(0));
@@ -54,6 +54,36 @@ async function main() {
   const thrower = { from: () => { throw new Error("net"); }, rpc: async () => work(0) } as unknown as GuardDb;
   r = await guardEngineSwitch(thrower, "c1");
   ok("fails closed when the client throws", !r.allow);
+
+  // corrections: fail closed on installed columns
+  const rpc42883: R = { data: null, error: { code: "42883", message: "function public.v2credit_open_work(uuid) does not exist" } };
+  const rpc404: R = { data: null, error: { status: 404, message: "Not Found" } };
+  r = await guardEngineSwitch(fake(rowOk(false), rpc404), "c1");
+  ok("(a) columns installed + open_work 404 -> refuse", !r.allow && r.status === 409);
+  r = await guardEngineSwitch(fake(rowOk(false), rpc42883), "c1");
+  ok("(b) columns installed + open_work 42883 -> refuse", !r.allow && r.status === 409);
+  for (const [name, e] of [["500", http500], ["network error", { data: null, error: { message: "fetch failed" } }], ["timeout", { data: null, error: { code: "57014", message: "canceling statement due to statement timeout" } }], ["bare 404", { data: null, error: { status: 404, message: "Not Found" } }]] as [string, R][]) {
+    const f2 = fake(e, work(0));
+    r = await guardEngineSwitch(f2, "c1");
+    ok(`(c) column read ${name} -> refuse, open_work not consulted`, !r.allow && r.status === 409 && !f2.calls.some((c) => c.startsWith("rpc:")));
+  }
+  const thrower2 = { from: () => ({ select: () => ({ eq: () => ({ maybeSingle: () => Promise.reject(new Error("ETIMEDOUT")) }) }) }), rpc: async () => work(0) } as unknown as GuardDb;
+  r = await guardEngineSwitch(thrower2, "c1");
+  ok("(c) column read rejects (timeout) -> refuse", !r.allow);
+  r = await guardEngineSwitch(fake(colMissing, rpc404), "c1");
+  ok("(d) columns absent (42703) + rpc 404 -> allow", r.allow === true);
+  r = await guardEngineSwitch(fake({ data: null, error: { code: "PGRST204", message: "Could not find the 'v2_credits_enabled' column of 'clones' in the schema cache" } }, rpc404), "c1");
+  ok("(d) columns absent (PGRST204) + rpc 404 -> allow", r.allow === true);
+  r = await guardEngineSwitch(fake(colMissing, work(2)), "c1");
+  ok("(e) columns absent + rpc reserved_turns>0 -> refuse", !r.allow && r.status === 409);
+  r = await guardEngineSwitch(fake(colMissing, work(0)), "c1");
+  ok("columns absent + rpc 0 open -> allow", r.allow === true);
+  r = await guardEngineSwitch(fake(colMissing, http500), "c1");
+  ok("columns absent + rpc 500 -> refuse", !r.allow);
+  ok("(f) engine switch gets 100 s", upstreamTimeoutMs("POST", ["api", "girls", "engine"]) === 100_000 && ENGINE_SWITCH_TIMEOUT_MS === 100_000);
+  ok("(f) other paths keep 20 s", upstreamTimeoutMs("POST", ["api", "girls", "details"]) === 20_000 && upstreamTimeoutMs("GET", ["api", "girls", "engine"]) === 20_000 && UPSTREAM_TIMEOUT_MS === 20_000);
+  const routeSrc = fs.readFileSync(path.join(__dirname, "../app/bot-v2/[[...path]]/route.ts"), "utf8");
+  ok("(f) route uses upstreamTimeoutMs", /AbortSignal\.timeout\(upstreamTimeoutMs\(req\.method, path\)\)/.test(routeSrc));
 
   // proxy gate, both directions
   for (const to of ["v2", "live"]) {
