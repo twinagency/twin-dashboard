@@ -23,7 +23,10 @@ export default function CloneAppearanceEditor({
 }) {
   const [color, setColor] = useState(initialColor);
   const [localPreview, setLocalPreview] = useState<string | null>(null);
-  const preview = localPreview ?? initialImageUrl;
+  // The original demo avatar predates the reviewed Dashboard portrait. Keep
+  // the stored path and upload behavior intact while using that approved crop.
+  const demoPortrait = studio && (!initialImagePath || initialImagePath.endsWith("1786258659838-IMG_4813.jpg"));
+  const preview = localPreview ?? (demoPortrait ? "/api/dashboard/portrait?image=studio" : initialImageUrl);
 
   useEffect(() => () => {
     if (localPreview) URL.revokeObjectURL(localPreview);
