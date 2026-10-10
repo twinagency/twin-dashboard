@@ -1,5 +1,6 @@
-import { platformNames } from '../fans/model';
 "use client";
+import { platformNames } from '../fans/model';
+
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { ArrowRight, Megaphone } from "lucide-react";

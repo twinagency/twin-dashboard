@@ -1,5 +1,6 @@
-import { platformNames } from '../fans/model';
 'use client';
+import { platformNames } from '../fans/model';
+
 import { useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, ArrowUpRight, Check, Clock3, Copy, Edit3, MessageCircle, Pause, Play, Search, Send, Users } from 'lucide-react';
