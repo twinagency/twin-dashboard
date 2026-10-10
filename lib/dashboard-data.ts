@@ -94,6 +94,8 @@ export type CloneStats = {
   aiErrors: number;
 };
 
+import { loadV2BundleSales, v2BundleLabel, type V2BundleSale } from "./v2-bundle-sales";
+
 export type RecentTransaction = {
   cloneId: string;
   cloneName: string;
@@ -106,6 +108,8 @@ export type RecentTransaction = {
   mediaType: "photo" | "video" | "bundle" | null;
   mediaUrl: string | null;
   mediaName: string | null;
+  /** Twin V2 bundle card: the real bundle, the immutable offer and the number of files quoted. Absent for every other sale. */
+  bundle?: V2BundleSale;
   paidAt: string;
 };
 
@@ -544,6 +548,10 @@ export async function getDashboard(period: Period, range?: DateRange, nowMs = Da
     }
   }
 
+  // Twin V2 bundle cards name their bundle and offer on the charge itself, so they need no guess from chat history (V2 keeps no V1 chat rows).
+  const v2BundleSales = await loadV2BundleSales(supabaseAdmin, mediaPurchases.map((p) => p.id));
+  for (const [chargeId, sale] of v2BundleSales) if (sale.bundleId) mediaRefByTransaction.set(chargeId, { type: "bundle", id: sale.bundleId });
+
   const mediaAssetByKey = new Map<string, { path: string | null; name: string | null }>();
   const refs = [...mediaRefByTransaction.values()];
   const photoIds = [...new Set(refs.filter((r) => r.type === "photo").map((r) => r.id))];
@@ -636,6 +644,7 @@ export async function getDashboard(period: Period, range?: DateRange, nowMs = Da
     const mediaRef = p.adjustment ? undefined : mediaRefByTransaction.get(p.id);
     const mediaType = p.adjustment ? null : mediaRef?.type ?? (isMediaType(p.feature) ? p.feature : null);
     const asset = mediaRef ? mediaAssetByKey.get(`${mediaRef.type}:${mediaRef.id}`) : null;
+    const v2Bundle = p.adjustment ? undefined : v2BundleSales.get(p.id);
     return {
       cloneId: p.clone_id,
       cloneName: cloneNameById.get(p.clone_id) ?? "-",
@@ -647,7 +656,8 @@ export async function getDashboard(period: Period, range?: DateRange, nowMs = Da
       kind: p.adjustment ? "refund" : mediaType || p.feature || p.kind || "other",
       mediaType,
       mediaUrl: asset?.path ? signedUrlByPath.get(asset.path) ?? null : null,
-      mediaName: asset?.name ?? null,
+      mediaName: v2Bundle ? v2BundleLabel(v2Bundle) : asset?.name ?? null,
+      ...(v2Bundle ? { bundle: v2Bundle } : {}),
       paidAt: p.paid_at,
     };
   });
