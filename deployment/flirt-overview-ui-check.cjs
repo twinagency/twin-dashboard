@@ -2,7 +2,7 @@
 const fs=require('fs'),path=require('path'),assert=require('assert/strict');
 (async()=>{
 const root=process.cwd(), out='/tmp/flirt-overview-review/ui'; fs.mkdirSync(out,{recursive:true});
-const config={enabled:true,hero:{id:'710d8abd-042a-4c28-8ed0-f06cadfac6b3',position:'50% 14%'},avatar:{id:'5a0f635e-7b6b-46ca-a7f3-cb9f87af30e4',position:'38% 25%'},library:[{id:'260a835f-583e-4b2e-9dc1-64bb9f522749',position:'50% 29%',label:'Getting ready'},{id:'b4345072-1f64-4fdd-b1e0-21f2fbc83ac4',position:'50% 33%',label:'Afternoon sunshine'},{id:'b7822b10-7907-410d-bc66-0286298ce5bd',position:'50% 43%',label:'Out on the deck'}],campaign:{id:'20adb126-3da0-468c-b16d-30057b337941',position:'50% 35%',label:'Movie-night mood'}};
+const config={enabled:true,hero:{id:'710d8abd-042a-4c28-8ed0-f06cadfac6b3',position:'50% 1%'},avatar:{id:'5a0f635e-7b6b-46ca-a7f3-cb9f87af30e4',position:'38% 25%'},library:[{id:'260a835f-583e-4b2e-9dc1-64bb9f522749',position:'50% 29%',label:'Getting ready'},{id:'b4345072-1f64-4fdd-b1e0-21f2fbc83ac4',position:'50% 33%',label:'Afternoon sunshine'},{id:'b7822b10-7907-410d-bc66-0286298ce5bd',position:'50% 43%',label:'Out on the deck'}],campaign:{id:'20adb126-3da0-468c-b16d-30057b337941',position:'50% 25%',label:'Movie-night mood'}};
 fs.writeFileSync(out+'/config.json',JSON.stringify(config,null,2));
 const photo=p=>({...p,url:'/photos/'+p.id+'.jpg',label:p.label||'Portrait',stars:999});
 const presentation={id:'2e5eb05f-cc88-4ba6-870a-924948d4b09a',name:'Mrs Callace',hero:photo(config.hero),avatar:photo(config.avatar),library:config.library.map(photo),campaign:photo(config.campaign)};
