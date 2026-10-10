@@ -49,6 +49,7 @@ function Icon({ d, className = "h-5 w-5" }: { d: string; className?: string }) {
 }
 
 const PATHS: Record<string, string> = {
+  Dashboard: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="5" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="12" width="7" height="9" rx="1.5"/>',
   Revenue: '<path d="M3 17l6-6 4 4 7-7"/><path d="M14 7h5v5"/>',
   Clones: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
   Edit: '<path d="M12 20h9"/><path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"/>',
@@ -128,10 +129,10 @@ const MORE_LINKS: NavLink[] = [
 
 // FLIRT operators use the requested fixed order on desktop and mobile.
 const FLIRT_OWNER_LINKS: NavLink[] = [
-  { kind: "route", label: "Earnings", href: "/revenue", icon: "EarningsCombo", color: "good" },
+  { kind: "route", label: "Overview", href: "/revenue", icon: "Dashboard", color: "good" },
   { kind: "route", label: "Creators", href: "/clones", icon: "Clones", color: "blue" },
   { kind: "route", label: "Live Telegram", href: "/users", icon: "FansCombo", color: "purple" },
-  { kind: "tab", label: "Pay Per Views", tab: "ppvs", icon: "Media", color: "red" },
+  { kind: "tab", label: "Content", tab: "ppvs", icon: "Media", color: "red" },
   { kind: "route", label: "Post Stories", href: "/business", icon: "Bot", color: "purple", gateOnClone: true },
   { kind: "route", label: "Accounts", href: "/agency/creators", icon: "Users", color: "gray" },
   { kind: "route", label: "Invite Creator", href: "/agency/creator-invites", icon: "Users", color: "gray" },
@@ -280,10 +281,10 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
     if (link.kind === "tab") {
       const active = onConfigurePage && activeTab === link.tab;
       if (!activeCloneId) return <button type="button" onClick={pickClone} title="Pick a creator first" className={rowClass + " " + colors.idle}>{navLabel(link, colors)}</button>;
-      return <Link href={`/clones/${activeCloneId}?tab=${link.tab}`} onClick={onNavigate} className={rowClass + " " + (active ? colors.active : colors.idle)}>{navLabel(link, colors)}</Link>;
+      return <Link href={`/clones/${activeCloneId}?tab=${link.tab}`} onClick={onNavigate} aria-current={active ? "page" : undefined} className={rowClass + " " + (active ? colors.active : colors.idle)}>{navLabel(link, colors)}</Link>;
     }
     if (link.gateOnClone && !activeCloneId) return <button type="button" onClick={pickClone} title="Pick a creator first" className={rowClass + " " + colors.idle}>{navLabel(link, colors)}</button>;
-    return <Link href={link.href} onClick={onNavigate} className={rowClass + " " + (isGlobalActive(link.href) ? colors.active : colors.idle)}>{navLabel(link, colors)}</Link>;
+    return <Link href={link.href} onClick={onNavigate} aria-current={isGlobalActive(link.href) ? "page" : undefined} className={rowClass + " " + (isGlobalActive(link.href) ? colors.active : colors.idle)}>{navLabel(link, colors)}</Link>;
   };
 
   return <>
@@ -297,3 +298,4 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
 export default function Sidebar({ clones: _clones, activeCloneId }: { clones: CloneLite[]; activeCloneId: string | null }) {
   return <aside className="dashboard-sidebar sticky top-0 hidden h-screen w-72 shrink-0 flex-col lg:flex"><SidebarContent activeCloneId={activeCloneId} /></aside>;
 }
+

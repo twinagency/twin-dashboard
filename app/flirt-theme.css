@@ -1,6 +1,29 @@
 /* FLIRT presentation layer over the original Twin layouts.
    Geometry, typography, responsive rules and financial/status colours stay
    with the source components. Only platform branding is changed here. */
+
+/* The photographic Overview supplies its own creator header. These rules
+   follow the rendered page, including client-side navigation away from it. */
+html[data-app-brand="flirt"]:has([data-creator-overview]) .dashboard-topbar { display: none; }
+html[data-app-brand="flirt"]:has([data-creator-overview]) .dashboard-main { max-width: none; padding: 22px 25px 35px; background: #faf9fc; }
+html[data-app-brand="flirt"]:has([data-creator-overview]) .dashboard-main::before,
+html[data-app-brand="flirt"]:has([data-creator-overview]) .dashboard-main::after { display: none; }
+html[data-app-brand="flirt"]:has([data-creator-overview]) .dashboard-sidebar { width: 245px; background: linear-gradient(150deg,#2d1728,#17121d 65%,#21151f); box-shadow: 4px 0 20px #25132809; }
+html[data-app-brand="flirt"]:has([data-creator-overview]) .dashboard-sidebar > div:first-child { height: 95px; border: 0; padding: 23px 29px 12px; }
+html[data-app-brand="flirt"]:has([data-creator-overview]) .dashboard-sidebar > div:first-child img { height: 54px; }
+html[data-app-brand="flirt"]:has([data-creator-overview]) .dashboard-sidebar > div:nth-child(2) { padding: 3px 30px 24px; font-size: 10px; color: #b9a9b9; letter-spacing: .015em; }
+html[data-app-brand="flirt"]:has([data-creator-overview]) .dashboard-sidebar nav { padding: 0 16px 24px; }
+html[data-app-brand="flirt"]:has([data-creator-overview]) .dashboard-sidebar nav a,
+html[data-app-brand="flirt"]:has([data-creator-overview]) .dashboard-sidebar nav button { min-height: 43px; padding: 11px 14px; gap: 13px; border-radius: 9px; color: #c9bdcc; font-size: 12px; font-weight: 480; }
+html[data-app-brand="flirt"]:has([data-creator-overview]) .dashboard-sidebar nav svg { color: #b6a4bb; width: 18px; height: 18px; stroke-width: 1.65; }
+html[data-app-brand="flirt"]:has([data-creator-overview]) .dashboard-sidebar nav a[aria-current="page"] { color: white; background: linear-gradient(110deg,#ee217a,#cd075c); box-shadow: 0 5px 16px #e8136330; font-weight: 600; }
+html[data-app-brand="flirt"]:has([data-creator-overview]) .dashboard-sidebar nav a[aria-current="page"] svg { color: white; }
+html[data-app-brand="flirt"]:has([data-creator-overview]) .dashboard-sidebar nav a:not([aria-current="page"]):hover { color: white; background: #ffffff09; }
+html[data-app-brand="flirt"]:has([data-creator-overview]) .dashboard-sidebar nav > div > div:nth-child(3),
+html[data-app-brand="flirt"]:has([data-creator-overview]) .dashboard-sidebar nav > div > div:nth-child(6),
+html[data-app-brand="flirt"]:has([data-creator-overview]) .dashboard-sidebar nav > div > div:nth-child(9) { margin-top: 12px; }
+@media(max-width:1100px){html[data-app-brand="flirt"]:has([data-creator-overview]) .dashboard-sidebar{width:220px}html[data-app-brand="flirt"]:has([data-creator-overview]) .dashboard-main{padding:18px}}
+@media(max-width:700px){html[data-app-brand="flirt"]:has([data-creator-overview]) .dashboard-main{padding:16px 12px 34px}}
 html[data-app-brand="flirt"],
 html[data-app-brand="flirt"] .creator-control-plane {
   --color-bg: #fffafc;
@@ -83,3 +106,4 @@ html[data-app-brand="flirt"] .jarvis-stage {
 html[data-app-brand="flirt"] canvas[aria-label^="FLIRT intelligence core"] {
   filter: hue-rotate(108deg) saturate(.88);
 }
+

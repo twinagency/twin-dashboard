@@ -60,7 +60,7 @@ export default function TwinWordmark({
       </span>
     );
   }
-  if (!agencyName || agencyName === "Twin") return (
+  if (!agencyName || agencyName === "Twin" || agencyName.trim().toLowerCase() === "flirt") return (
     <img
       src="/brand/flirt-logo.webp"
       alt="FLIRT"
@@ -85,3 +85,4 @@ export default function TwinWordmark({
     </span>
   );
 }
+

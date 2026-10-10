@@ -50,6 +50,28 @@ async function main() {
   const mediaUrl = new URL((await media.json()).url);
   assert(mediaUrl.hostname === `${PROJECT}.supabase.co` && (await request(mediaUrl)).ok, 'Live media URL must read the existing Twin object');
   checks.push('Existing live media signs and loads from its original storage');
+  // The approved first creator Overview is enabled by the creator's stored
+  // appearance configuration. Verify its real records after every release.
+  const overviewId = '2e5eb05f-cc88-4ba6-870a-924948d4b09a';
+  const overviewResponse = await page('/api/creator-overview?clone=' + overviewId);
+  assert(overviewResponse.status === 200, 'Configured creator Overview must load');
+  const overview = await overviewResponse.json();
+  assert(overview.presentation?.id === overviewId, 'Overview must use the selected creator');
+  const slots = [overview.presentation.hero, overview.presentation.avatar, ...overview.presentation.library, overview.presentation.campaign];
+  assert(slots.length === 6 && new Set(slots.map(p => p.id)).size === 6, 'Every Overview photo placement must be different');
+  const fanCountResponse = await request(live.url + '/rest/v1/users?select=id&clone_id=eq.' + overviewId + '&or=(is_test.is.null,is_test.eq.false)', {method:'HEAD',headers:{apikey:live.key,Authorization:`Bearer ${live.key}`,Prefer:'count=exact'}});
+  assert(fanCountResponse.ok, 'All-time audience readback failed');
+  const actualFans = Number(fanCountResponse.headers.get('content-range')?.split('/')[1]);
+  assert(Number.isFinite(actualFans) && actualFans === overview.audience.total, 'Overview must show all recorded fans excluding test records');
+  const selectedOverview = await page('/revenue',{headers:{Cookie:cookie+'; clone_scope='+overviewId}});
+  const selectedHtml = await selectedOverview.text();
+  assert(selectedOverview.status === 200 && selectedHtml.includes('data-creator-overview="'+overviewId+'"') && selectedHtml.includes('Total fans') && selectedHtml.includes('Not connected'), 'Selected Overview must render the new layout and disconnected channels');
+  assert((await page('/api/creator-overview?clone='+outside)).status === 403, 'Overview must reject an unassigned creator');
+  for (const slot of slots) {
+    const url = new URL(slot.url);
+    assert(url.hostname === `${PROJECT}.supabase.co` && (await request(url,{method:'HEAD'})).ok, 'Each Overview photo must load from existing private media');
+  }
+  checks.push('Selected Overview, six different private photos, all-time fans and creator isolation verified live');
   const localClones = await rows(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY, 'clones?select=id&limit=1');
   assert(localClones.length === 0, 'FLIRT must not copy or run duplicate bot records');
   checks.push('No duplicate bot records were created in FLIRT');
@@ -61,4 +83,5 @@ async function main() {
   console.log(JSON.stringify({ passed: true, creators: expected.map(row => row.name).sort(), checks, credentials_logged: false, database_records_copied: false }));
 }
 main().catch(error => { console.log(JSON.stringify({ passed: false, error: error.message, checks, credentials_logged: false })); process.exitCode = 1; });
+
 

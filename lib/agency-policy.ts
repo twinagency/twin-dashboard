@@ -19,5 +19,6 @@ export function agencyDashboardPath(path: string, agencyName?: string, canManage
   if (["/", "/revenue", "/analytics", "/clones", "/users", "/media", "/sequences", "/info", "/flows", "/drip", "/messages", "/logs", "/business", "/agency/creators", "/agency/creator-invites"].includes(path)) return true;
   if (/^\/clones\/[0-9a-f-]{36}(\/fans\/[0-9a-f-]{36})?$/i.test(path)) return true;
   if (/^\/sequences\/[0-9a-f-]{36}$/i.test(path)) return true;
-  return ["/api/dashboard", "/api/dashboard/day-insight", "/api/users/live", "/api/media-sign", "/api/fx", "/api/models", "/api/avatar", "/api/voice", "/api/business-account", "/api/business-connection"].includes(path);
+  return ["/api/dashboard", "/api/dashboard/day-insight", "/api/creator-overview", "/api/users/live", "/api/media-sign", "/api/fx", "/api/models", "/api/avatar", "/api/voice", "/api/business-account", "/api/business-connection"].includes(path);
 }
+
