@@ -109,8 +109,11 @@ async function main() {
     "./sections": intelligenceSections,
     "./IntelligenceControls.module.css": { __esModule: true, default: css },
   }).default;
+  const studio = compile("components/clone/CreatorStudio.tsx", { "./CreatorStudio.module.css": { __esModule: true, default: css } });
   const Component = compile("components/CloneForm.tsx", {
     "./DashboardAccessProvider": access,
+    "./clone/CreatorStudio": studio,
+    "./clone/CreatorStudio.module.css": { __esModule: true, default: css },
     "./clone/intelligence/model": intelligenceModel,
     "./clone/intelligence/sections": intelligenceSections,
     "./clone/intelligence/IntelligenceControls.module.css": { __esModule: true, default: css },

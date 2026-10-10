@@ -9,7 +9,7 @@ import BlurToggle from "@/components/BlurToggle";
 import { logout } from "@/app/login/actions";
 import { fmtMoney, starsToMoneyRate } from "@/lib/money";
 import { getPageMeta } from "@/lib/page-meta";
-import { isBriannaAdvancedRoute } from "@/lib/dashboard-creator-route";
+import { isBriannaStudioRoute } from "@/lib/dashboard-creator-route";
 import { CREATOR_DASHBOARD_NAV } from "@/lib/creator-dashboard-policy";
 
 // Straight, full-width top bar — replaces the old floating/overlay pill.
@@ -44,7 +44,7 @@ export default function TopBar({
     : pathname?.startsWith("/clones/") && searchParams.get("tab") === "ppvs" ? "PPVs" : pageMeta.pageLabel;
   const scopeLabel = isCreator ? creatorName || clones.find((clone) => clone.id === activeCloneId)?.name || "Creator" : pageMeta.scopeLabel;
   const scopeIsCreator = isCreator || pageMeta.scopeIsCreator;
-  if (!isAgency && !isCreator && (pathname === "/dashboard" || isBriannaAdvancedRoute(pathname, searchParams.get("tab"), searchParams.get("sub")))) return null;
+  if (!isAgency && !isCreator && (pathname === "/dashboard" || isBriannaStudioRoute(pathname, searchParams.get("tab"), searchParams.get("sub")))) return null;
   // The new Dashboard owns its creator and currency controls. Its isolated
   // relationships must not inherit the ordinary Overview's live cash chip.
   if (!isAgency && !isCreator && (pathname === "/dashboard" || pathname === "/content-library" || pathname === "/inbox" || pathname === "/campaigns")) {

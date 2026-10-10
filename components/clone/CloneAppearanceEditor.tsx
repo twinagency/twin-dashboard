@@ -3,6 +3,8 @@
 import { useEffect, useMemo, useState } from "react";
 import { FieldLabel, Section } from "@/components/clone/fields";
 import { initials } from "@/lib/colors";
+import { Camera, LockKeyhole } from "lucide-react";
+import studioStyles from "./CreatorStudio.module.css";
 
 const COLORS = ["#06172f", "#0a2540", "#1a4d85", "#4a8ec4", "#78b6df", "#087a61", "#f05a9d", "#c9364f"];
 
@@ -11,11 +13,13 @@ export default function CloneAppearanceEditor({
   initialColor,
   initialImagePath,
   initialImageUrl,
+  studio = false,
 }: {
   cloneName: string;
   initialColor: string;
   initialImagePath: string | null;
   initialImageUrl?: string;
+  studio?: boolean;
 }) {
   const [color, setColor] = useState(initialColor);
   const [localPreview, setLocalPreview] = useState<string | null>(null);
@@ -26,6 +30,18 @@ export default function CloneAppearanceEditor({
   }, [localPreview]);
 
   const previewBars = useMemo(() => [42, 68, 53, 86, 64, 94, 72], []);
+
+  if (studio) return <section className={studioStyles.appearance} aria-label="Creator profile appearance">
+    <input type="hidden" name="dashboard_profile_image_path" value={initialImagePath ?? ""} />
+    <input type="hidden" name="dashboard_chart_color" value={color} />
+    <div className={studioStyles.profileStrip}>
+      <span className={studioStyles.profilePhoto}>{preview ? <img src={preview} alt={`${cloneName} display`} className="creator-avatar" /> : <span className="creator-name">{initials(cloneName)}</span>}</span>
+      <div><h2 className="creator-name">{cloneName}</h2><p>Creator profile</p></div>
+      <span className={studioStyles.profileBadge}><LockKeyhole size={14} />Identity & appearance</span>
+      <label className={studioStyles.photoButton}><Camera size={16} />Change photo<input type="file" name="dashboard_profile_image" accept="image/jpeg,image/png,image/webp,image/gif" className="sr-only" onChange={event => { const file = event.target.files?.[0]; if (!file) return; setLocalPreview(current => { if (current) URL.revokeObjectURL(current); return URL.createObjectURL(file); }); }} /></label>
+    </div>
+    <details className={studioStyles.chartAppearance}><summary>Revenue chart colour</summary><div>{COLORS.map(option => <button key={option} type="button" aria-label={`Use chart colour ${option}`} aria-pressed={color === option} style={{ backgroundColor: option }} onClick={() => setColor(option)} />)}<label>Custom<input type="color" aria-label="Choose a custom chart colour" value={color} onChange={event => setColor(event.target.value)} /></label></div></details>
+  </section>;
 
   return (
     <Section
@@ -127,3 +143,4 @@ export default function CloneAppearanceEditor({
     </Section>
   );
 }
+

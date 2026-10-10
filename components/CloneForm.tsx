@@ -20,6 +20,8 @@ import IntelligenceControls from "./clone/intelligence/IntelligenceControls";
 import { canShowIntelligence } from "./clone/intelligence/model";
 import { resolveAdvancedView, type AdvancedView } from "./clone/intelligence/sections";
 import advancedStyles from "./clone/intelligence/IntelligenceControls.module.css";
+import { STUDIO_PAGES, StudioNavigation, isStudioTab, resolveStudioPanel } from "./clone/CreatorStudio";
+import studioStyles from "./clone/CreatorStudio.module.css";
 import BlurToggle from "./BlurToggle";
 import { FieldLabel, Modal, Section } from "./clone/fields";
 import { useCloneConfig } from "./clone/useCloneConfig";
@@ -171,6 +173,17 @@ export default function CloneForm({
   const subParam = searchParams.get("sub");
   const tab = resolveTab(tabParam, subParam);
   const briannaAdvanced = canShowIntelligence(audience, clone.id) && tab === "advanced";
+  const briannaForms = canShowIntelligence(audience, clone.id) && isStudioTab(tab);
+  const briannaStudio = briannaAdvanced || briannaForms;
+  const studioPanel = resolveStudioPanel(tab, searchParams.get("panel"));
+  const changeStudioPanel = (panel: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", tab);
+    params.delete("sub");
+    params.delete("section");
+    if (panel === "overview") params.delete("panel"); else params.set("panel", panel);
+    window.history.pushState(null, "", `${pathname}?${params.toString()}`);
+  };
   const advancedView = resolveAdvancedView(searchParams.get("section"));
   const changeAdvancedSection = (section: AdvancedView) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -185,6 +198,7 @@ export default function CloneForm({
     const params = new URLSearchParams(searchParams.toString());
     params.set("tab", nextTab);
     params.delete("sub");
+    if (nextTab !== tab) { params.delete("panel"); params.delete("section"); }
     const href = `${pathname}?${params.toString()}`;
     if (href === `${pathname}?${searchParams.toString()}`) return;
     // Next synchronizes native history with useSearchParams. Query-only
@@ -305,8 +319,8 @@ export default function CloneForm({
   const formId = "creator-control-plane-form";
 
   return (
-    <div data-brianna-advanced={briannaAdvanced || undefined} className={`creator-control-plane grid min-w-0 gap-4 font-sans ${briannaAdvanced ? advancedStyles.page : ""}`}>
-      {briannaAdvanced ? <header className={advancedStyles.pageHeader}><div><p><span className="creator-name">{clone.stage_name || clone.name}</span> / Creator configuration</p><h1>Advanced</h1><small>56 extended controls · 7 sections</small></div><BlurToggle /></header> : <CreatorControlPlaneHeader
+    <div data-brianna-advanced={briannaAdvanced || undefined} data-brianna-studio={briannaForms ? tab : undefined} className={`creator-control-plane grid min-w-0 gap-4 font-sans ${briannaStudio ? advancedStyles.page : ""} ${briannaForms ? studioStyles.page : ""}`}>
+      {briannaStudio ? <header className={advancedStyles.pageHeader}><div><p><span className="creator-name">{clone.stage_name || clone.name}</span> / Creator configuration</p><h1>{briannaForms && isStudioTab(tab) ? STUDIO_PAGES[tab].title : "Advanced"}</h1><small>{briannaForms && isStudioTab(tab) ? STUDIO_PAGES[tab].subtitle : "56 extended controls · 7 sections"}</small></div><BlurToggle /></header> : <CreatorControlPlaneHeader
         clone={clone}
         cfg={cfg}
         imageUrl={appearanceImageUrl}
@@ -314,9 +328,10 @@ export default function CloneForm({
 
       <ControlPlaneNavigation tab={tab} onTabChange={changeTab} />
 
-      <div className={briannaAdvanced ? "min-w-0" : "grid min-w-0 gap-4 2xl:grid-cols-[minmax(0,1fr)_17rem]"}>
+      <div className={briannaStudio ? "min-w-0" : "grid min-w-0 gap-4 2xl:grid-cols-[minmax(0,1fr)_17rem]"}>
         <main className={briannaAdvanced ? advancedStyles.pageMain : "min-w-0"}>
-          {!briannaAdvanced && <ControlPlaneWorkspaceHeader tab={tab} />}
+          {!briannaStudio && <ControlPlaneWorkspaceHeader tab={tab} />}
+          {briannaForms && isStudioTab(tab) && <StudioNavigation tab={tab} panel={studioPanel} onChange={changeStudioPanel} />}
 
           {/* Identity, Configuration, Monetization and Advanced remain one
               mounted form. Hiding a domain is CSS-only because updateClone
@@ -342,6 +357,9 @@ export default function CloneForm({
                   clone={clone}
                   models={models}
                   mode="edit"
+                  studio={canShowIntelligence(audience, clone.id)}
+                  studioPanel={studioPanel}
+                  onStudioPanelChange={changeStudioPanel}
                   tab={tab}
                   onTabChange={(nextTab) => changeTab(nextTab as Tab)}
                   extraTabs={EXTRA_TABS}
@@ -351,24 +369,25 @@ export default function CloneForm({
                   identityWhoSlot={
                     <>
                       <CloneAppearanceEditor
+                        studio={canShowIntelligence(audience, clone.id)}
                         cloneName={clone.name}
                         initialColor={appearanceColor}
                         initialImagePath={clone.intake?.appearance?.profile_image_path ?? null}
                         initialImageUrl={appearanceImageUrl}
                       />
-                      <PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="who" cfg={cfg} set={set} />
+                      <PersonaFactsFields studio={canShowIntelligence(audience, clone.id)} clone={clone} legacyFields={clone.intake?.fields} part="who" cfg={cfg} set={set} />
                     </>
                   }
-                  identityCreatorSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="creator" cfg={cfg} set={set} />}
-                  identityPhysicalSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="physical" cfg={cfg} set={set} />}
-                  identitySocialsSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="socials" cfg={cfg} set={set} />}
-                  identityVibeSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="vibe" cfg={cfg} set={set} />}
-                  identityBehaviourSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="behaviour" cfg={cfg} set={set} />}
-                  identityRhythmSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="rhythm" cfg={cfg} set={set} />}
-                  identityLifeSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="life" cfg={cfg} set={set} />}
-                  identityContentSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="content" cfg={cfg} set={set} />}
-                  identityImperfectionSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="imperfection" cfg={cfg} set={set} />}
-                  identityLimitsSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="limits" cfg={cfg} set={set} />}
+                  identityCreatorSlot={<PersonaFactsFields studio={canShowIntelligence(audience, clone.id)} clone={clone} legacyFields={clone.intake?.fields} part="creator" cfg={cfg} set={set} />}
+                  identityPhysicalSlot={<PersonaFactsFields studio={canShowIntelligence(audience, clone.id)} clone={clone} legacyFields={clone.intake?.fields} part="physical" cfg={cfg} set={set} />}
+                  identitySocialsSlot={<PersonaFactsFields studio={canShowIntelligence(audience, clone.id)} clone={clone} legacyFields={clone.intake?.fields} part="socials" cfg={cfg} set={set} />}
+                  identityVibeSlot={<PersonaFactsFields studio={canShowIntelligence(audience, clone.id)} clone={clone} legacyFields={clone.intake?.fields} part="vibe" cfg={cfg} set={set} />}
+                  identityBehaviourSlot={<PersonaFactsFields studio={canShowIntelligence(audience, clone.id)} clone={clone} legacyFields={clone.intake?.fields} part="behaviour" cfg={cfg} set={set} />}
+                  identityRhythmSlot={<PersonaFactsFields studio={canShowIntelligence(audience, clone.id)} clone={clone} legacyFields={clone.intake?.fields} part="rhythm" cfg={cfg} set={set} />}
+                  identityLifeSlot={<PersonaFactsFields studio={canShowIntelligence(audience, clone.id)} clone={clone} legacyFields={clone.intake?.fields} part="life" cfg={cfg} set={set} />}
+                  identityContentSlot={<PersonaFactsFields studio={canShowIntelligence(audience, clone.id)} clone={clone} legacyFields={clone.intake?.fields} part="content" cfg={cfg} set={set} />}
+                  identityImperfectionSlot={<PersonaFactsFields studio={canShowIntelligence(audience, clone.id)} clone={clone} legacyFields={clone.intake?.fields} part="imperfection" cfg={cfg} set={set} />}
+                  identityLimitsSlot={<PersonaFactsFields studio={canShowIntelligence(audience, clone.id)} clone={clone} legacyFields={clone.intake?.fields} part="limits" cfg={cfg} set={set} />}
                   identityQuestionnaireSlot={
                     <Section
                       title="Her own words"
@@ -446,7 +465,7 @@ export default function CloneForm({
           </div>
         </main>
 
-        {!briannaAdvanced && <ControlPlaneInspector
+        {!briannaStudio && <ControlPlaneInspector
           tab={tab}
           clone={clone}
           cfg={cfg}
@@ -459,7 +478,7 @@ export default function CloneForm({
       <ManagerOnly>
         <div
           data-control-plane-save-bar
-          className={editableTab && !briannaAdvanced ? "pointer-events-none mt-4 lg:sticky lg:bottom-4 lg:z-40" : "hidden"}
+          className={editableTab && !briannaAdvanced ? `pointer-events-none mt-4 lg:sticky lg:bottom-4 lg:z-40 ${briannaForms ? studioStyles.saveDock : ""}` : "hidden"}
         >
           <div className="pointer-events-auto grid gap-2 rounded-[3px] border border-ink/25 bg-panel px-3 py-3 sm:px-4 lg:flex lg:items-center lg:justify-between lg:bg-panel/95 lg:py-2.5 lg:shadow-[0_8px_24px_rgb(21_32_51/0.1)] lg:backdrop-blur-xl">
             <div className="hidden min-w-0 items-center gap-3 lg:flex">
@@ -480,7 +499,7 @@ export default function CloneForm({
               {step === "done" && <span className="col-span-2 text-xs font-medium text-good lg:col-auto">Saved</span>}
               {step === "save-error" && <span className="col-span-2 truncate text-xs text-crit lg:col-auto lg:max-w-64">{errorMsg}</span>}
               <Button type="button" variant="outline" onClick={openReview} disabled={!changedFields.length || busy} className="w-full lg:w-auto">
-                Review
+                {briannaForms ? "Review changes" : "Review"}
               </Button>
               <Button type="submit" form={formId} disabled={busy} className="w-full lg:w-auto">
                 {isPaused ? "Save paused" : "Save changes"}
