@@ -381,6 +381,9 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
     : NAV_LINKS.flatMap(link => expandedMoxyNavigation && link.kind === "tab" && link.tab === "ppvs" ? [link, ...MORE_LINKS.filter(item => item.kind === "tab" && item.tab === "identity")] : [link]);
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  // A profile opened from Dashboard may differ from the global scope cookie.
+  // Keep its configuration links on the creator actually displayed.
+  const configurationCloneId = pathname.match(/^\/clones\/([0-9a-f-]{36})(?:\/|$)/i)?.[1] ?? activeCloneId;
   const [moreOpen, setMoreOpen] = useState(false);
   const [fullNavigation, setFullNavigation] = useState(false);
   const studioNavigation = isAdmin && pathname === "/dashboard" && !fullNavigation;
@@ -403,7 +406,7 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
     if (moxyNavigation && href === "/clones" && pathname.startsWith("/clones/") && ["ppvs", "identity"].includes(activeTab)) return false;
     return pathname === href || (!isCreator && href !== "/" && pathname.startsWith(href + "/"));
   };
-  const onConfigurePage = activeCloneId ? pathname === `/clones/${activeCloneId}` : false;
+  const onConfigurePage = configurationCloneId ? pathname === `/clones/${configurationCloneId}` : false;
   const pickClone = () => { onNavigate?.(); window.setTimeout(() => openCloneSwitcher(), 0); };
 
   const navLabel = (link: NavLink, colors: (typeof LINK_COLOR_CLASSES)[LinkColor]) => {
@@ -428,8 +431,8 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
       // Use its selected creator, never a stale scope cookie or an unhandled event.
       if (isAdmin && pathname === "/dashboard") return <Link href={dashboardCreatorHref(searchParams.get("creator"), link.tab)} onClick={onNavigate} className={rowClass + " " + colors.idle}>{navLabel(link, colors)}</Link>;
       const active = onConfigurePage && (isAdmin && link.tab === "identity" ? activeTab !== "ppvs" : activeTab === link.tab);
-      if (!activeCloneId) return <button type="button" onClick={pickClone} title="Pick a creator first" className={rowClass + " " + colors.idle}>{navLabel(link, colors)}</button>;
-      return <Link href={`/clones/${activeCloneId}?tab=${link.tab}`} onClick={onNavigate} aria-current={active ? "page" : undefined} className={rowClass + " " + (active ? colors.active : colors.idle)}>{navLabel(link, colors)}</Link>;
+      if (!configurationCloneId) return <button type="button" onClick={pickClone} title="Pick a creator first" className={rowClass + " " + colors.idle}>{navLabel(link, colors)}</button>;
+      return <Link href={`/clones/${configurationCloneId}?tab=${link.tab}`} onClick={onNavigate} aria-current={active ? "page" : undefined} className={rowClass + " " + (active ? colors.active : colors.idle)}>{navLabel(link, colors)}</Link>;
     }
     if (link.gateOnClone && !activeCloneId) return <button type="button" onClick={pickClone} title="Pick a creator first" className={rowClass + " " + colors.idle}>{navLabel(link, colors)}</button>;
     return <Link href={link.href} onClick={onNavigate} aria-current={isGlobalActive(link.href) ? "page" : undefined} className={rowClass + " " + (isGlobalActive(link.href) ? colors.active : colors.idle)}>{navLabel(link, colors)}</Link>;

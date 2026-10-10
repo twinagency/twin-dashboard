@@ -139,6 +139,7 @@ for (const mobile of [false, true]) {
 }
 for (const mobile of [false, true]) {
   for (const manage of [false, true]) {
+    pathname = "/revenue"; query = new URLSearchParams();
     const noClone = render("Moxy", manage, null, mobile);
     const links = renderedLinks(noClone);
     for (const label of ["Content", "Telegram Stories", "Flows", "Creator settings"]) {
@@ -221,6 +222,24 @@ for (const mobile of [false, true]) {
   }
 }
 query = new URLSearchParams();
+// Opening a profile must not send configuration/PPV links back to a stale
+// global scope, on either the desktop or mobile navigation.
+const brianna = "0328e7b3-a1e5-465a-9a30-c9cf6519cba1";
+pathname = `/clones/${brianna}`;
+query = new URLSearchParams("tab=advanced");
+for (const mobile of [false, true]) {
+  for (const scope of [null, clone]) {
+    const links = renderedLinks(render(undefined, false, scope, mobile));
+    const configuration = links.find(link => link.label === "Creator Configuration")!;
+    assert.equal(configuration.href, `/clones/${brianna}?tab=identity`);
+    assert.match(configuration.attributes, /aria-current="page"/);
+    assert.ok(links.some(link => link.href === `/clones/${brianna}?tab=ppvs`));
+    assert.ok(!links.some(link => link.href?.startsWith(`/clones/${clone}?`)), "Current profile wins over unrelated scope");
+  }
+}
+pathname = "/clones/new";
+query = new URLSearchParams();
+assert.equal(renderedLinks(render(undefined, false, clone)).find(link => link.label === "Creator Configuration")!.href, `/clones/${clone}?tab=identity`, "Create-new is not a creator ID");
 pathname = "/revenue";
 const palette = readFileSync("app/lynq-theme.css", "utf8");
 assert.match(palette, /html\[data-brand-theme="lynq-light"\]/);

@@ -3,7 +3,7 @@ import { AdminOnly, ManagerOnly, ReadOnlyEditor, useDashboardAccess } from "./Da
 import { isMoxy } from "@/lib/agency-brand";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { LoaderCircle } from "lucide-react";
 import type { Clone } from "@/lib/types";
 import type { PromptPreview } from "@/lib/compiler";
@@ -56,13 +56,13 @@ const LEGACY_TAB: Record<string, Tab> = {
   config: "identity",
   media: "ppvs",
   monetization: "money",
-  advanced: "config",
+  advanced: "advanced",
 };
 const LEGACY_SUB: Record<string, Tab> = {
   persona: "identity",
   media: "identity",
   engagement: "identity",
-  advanced: "config",
+  advanced: "advanced",
   prompts: "view",
   flow: "view",
 };
@@ -157,6 +157,7 @@ export default function CloneForm({
   appearanceColor: string;
 }) {
   const router = useRouter();
+  const pathname = usePathname();
   const {agencyName, isAgency, readOnly, audience} = useDashboardAccess();
   const searchParams = useSearchParams();
   const formRef = useRef<HTMLFormElement>(null);
@@ -164,7 +165,17 @@ export default function CloneForm({
   const dirtyFrameRef = useRef<number | null>(null);
   const tabParam = searchParams.get("tab");
   const subParam = searchParams.get("sub");
-  const [tab, setTab] = useState<Tab>(resolveTab(tabParam, subParam));
+  const tab = resolveTab(tabParam, subParam);
+  const changeTab = (nextTab: Tab) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", nextTab);
+    params.delete("sub");
+    const href = `${pathname}?${params.toString()}`;
+    if (href === `${pathname}?${searchParams.toString()}`) return;
+    // Next synchronizes native history with useSearchParams. Query-only
+    // navigation preserves this mounted form and its unsaved fields.
+    window.history.pushState(null, "", href);
+  };
   const [models, setModels] = useState<OrModel[]>([]);
   const [step, setStep] = useState<Step>("idle");
   const [errorMsg, setErrorMsg] = useState("");
@@ -178,13 +189,6 @@ export default function CloneForm({
     if (isMoxy(agencyName)) return;
     fetch("/api/models").then((r) => r.json()).then((d) => Array.isArray(d) && setModels(d)).catch(() => {});
   }, [agencyName]);
-
-  // The sidebar deep-links via ?tab= — clicking one doesn't remount CloneForm
-  // (same route, just a query change), so pick the change up here.
-  useEffect(() => {
-    const next = resolveTab(tabParam, subParam);
-    if (next !== tab) setTab(next);
-  }, [tabParam, subParam]);
 
   const refreshDirtyState = useCallback(() => {
     const current = snapshotForm(formRef.current);
@@ -293,7 +297,7 @@ export default function CloneForm({
         imageUrl={appearanceImageUrl}
       />
 
-      <ControlPlaneNavigation tab={tab} onTabChange={setTab} />
+      <ControlPlaneNavigation tab={tab} onTabChange={changeTab} />
 
       <div className="grid min-w-0 gap-4 2xl:grid-cols-[minmax(0,1fr)_17rem]">
         <main className="min-w-0">
@@ -323,7 +327,7 @@ export default function CloneForm({
                   models={models}
                   mode="edit"
                   tab={tab}
-                  onTabChange={(nextTab) => setTab(nextTab as Tab)}
+                  onTabChange={(nextTab) => changeTab(nextTab as Tab)}
                   extraTabs={EXTRA_TABS}
                   photos={photos}
                   videos={videos}
@@ -389,7 +393,7 @@ export default function CloneForm({
             cloneId={clone.id}
             creatorName={clone.name}
             audience={audience}
-            onTabChange={setTab}
+            onTabChange={changeTab}
           />
 
 
@@ -515,4 +519,5 @@ export default function CloneForm({
     </div>
   );
 }
+
 
