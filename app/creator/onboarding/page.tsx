@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Button, buttonVariants } from "@/components/ui/button";
 import CreatorOnboardingActionForm from "@/components/CreatorOnboardingActionForm";
 import CreatorQuestionnaireWizard from "@/components/CreatorQuestionnaireWizard";
+import CreatorSetupLayout from "@/components/CreatorSetupLayout";
 import { creatorProfileAnswers } from "@/lib/creator-questionnaire-profile";
 import CreatorContentGallery from "@/components/CreatorContentGallery";
 import CreatorUploadForm from "@/components/CreatorUploadForm";
@@ -32,7 +33,7 @@ import IntelligenceCoreIcon from "@/components/IntelligenceCoreIcon";
 import { CREATOR_PORTAL_COOKIE, creatorLoginPath } from "@/lib/creator-routing";
 import { isLynq } from "@/lib/agency-brand";
 import { creatorOnboardingEditable, creatorVoiceOnboardingEnabled, flirtOnboardingOptional } from "@/lib/flirt-onboarding";
-import { ArrowLeft, Check, CheckCircle2, ChevronRight, Circle, FileText, Images, Mic2, ShieldCheck } from "lucide-react";
+import { ArrowLeft, Check, CheckCircle2, ChevronDown, ChevronRight, Circle, FileText, Images, Mic2, ShieldCheck } from "lucide-react";
 
 export const dynamic = "force-dynamic";
 
@@ -181,7 +182,7 @@ function StepNavigation({ step, steps }: { step: OnboardingStep; steps: Onboardi
   </nav>;
 }
 
-function ContentUploadCard({ kind, count, minimum, label, accept, formatHint, complete, locked, accountId, loginPath, optional = false }: {
+function ContentUploadCard({ kind, count, minimum, label, accept, formatHint, complete, locked, accountId, loginPath, optional = false, collapsible = false }: {
   kind: CreatorContentKind;
   count: number;
   minimum: number;
@@ -191,10 +192,23 @@ function ContentUploadCard({ kind, count, minimum, label, accept, formatHint, co
   complete: boolean;
   locked: boolean;
   optional?: boolean;
+  collapsible?: boolean;
   accountId: string;
   loginPath: string;
 }) {
   const percent = Math.min(100, Math.round((count / minimum) * 100));
+  if (collapsible) {
+    return <details className="group rounded-2xl border border-border bg-white" data-content-category={kind} open={kind === CREATOR_CONTENT_REQUIREMENTS[0].kind}>
+      <summary className="flex min-h-16 cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 [&::-webkit-details-marker]:hidden">
+        <span className="text-sm font-semibold text-ink">{label}</span>
+        <span className="flex items-center gap-3 text-xs text-muted">{count} saved <ChevronDown className="size-4 transition-transform group-open:rotate-180" aria-hidden="true" /></span>
+      </summary>
+      <div className="border-t border-border px-5 pb-5">
+        <CreatorUploadForm accountId={accountId} loginPath={loginPath} kind={kind} label={label} accept={accept} formatHint={formatHint} locked={locked} />
+        <CreatorContentGallery kind={kind} revision={String(count)} loginPath={loginPath} />
+      </div>
+    </details>;
+  }
   return (
     <section className="rounded-2xl border border-border bg-white p-5" data-content-category={kind}>
       <div className="flex items-start justify-between gap-4">
@@ -244,7 +258,7 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
   const afterContent = voiceEnabled ? "voice" : "consent";
   const loginPath = creatorLoginPath(creator, jar.get(CREATOR_PORTAL_COOKIE)?.value);
   const { status, step, section } = await searchParams;
-  if (step === "voice" && !voiceEnabled) redirect("/creator/onboarding?step=consent");
+  if (!optional && step === "voice" && !voiceEnabled) redirect("/creator/onboarding?step=consent");
   const activeStep = isOnboardingStep(step) ? step : null;
   const compactQuestionnaire = activeStep === "questionnaire";
   const questionnairePage = creatorQuestionnairePage(section, true);
@@ -282,6 +296,58 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
     (activeStep === "content" && status === "content_saved" && complete.content) ||
     (activeStep === "voice" && (status === "voice_saved" || status === "voice_skipped") && complete.voice) ||
     (activeStep === "consent" && status === "consent_saved" && complete.consent);
+
+  if (optional) {
+    const activeSection = step === "content" || step === "voice" || step === "consent" ? "content" : "questionnaire";
+    return <CreatorSetupLayout
+      brand="flirt"
+      logoSrc="/brand/flirt-logo.webp"
+      activeSection={activeSection}
+      applicationStatus={applicationState.label}
+    >
+      {applicationLocked && <p role="status" className="rounded-xl border border-border bg-white px-4 py-3 text-sm text-muted">This application is locked. You can review your answers and content, or go to your dashboard.</p>}
+      {submitted && !applicationLocked && <p className="text-sm text-muted">{applicationState.description} You can still update your answers and upload more content here.</p>}
+      {status && errorStatuses.has(status) && <div id="step-result" role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">{status === "upload_too_large" ? "Videos can be up to 512 MiB and images up to 75 MiB each. File size is separate from video length." : statusCopy[status]}{status === "file_removal_pending" && <> <Link href="/creator/onboarding?step=content" className="font-semibold underline">Open Saved content</Link></>}</div>}
+
+      {activeSection === "questionnaire" ? <section data-creator-setup-panel>
+        <div data-creator-setup-panel-heading><h2>About you</h2><span>Answers are optional</span></div>
+        {status === "questionnaire_saved" && complete.questionnaire && <div className="mb-5"><SavedConfirmation title="Questionnaire saved" detail="Your answers have been saved to your creator account." /></div>}
+        <CreatorQuestionnaireWizard
+          page={questionnairePage}
+          initialAnswers={Object.fromEntries(questionnairePageQuestions(questionnairePage).map((question) => {
+            const fallback = question.id === "preferred_name" ? account.display_name || "" : question.id === "email_address" ? account.email || "" : "";
+            return [question.id, questionnaireAnswers[question.id] ?? fallback];
+          }))}
+          initialRevision={application?.updated_at || ""}
+          locked={applicationLocked}
+          optional={optional}
+        />
+      </section> : <section data-creator-setup-panel>
+        <div data-creator-setup-panel-heading><h2>Your content</h2><span>Photos &amp; videos</span></div>
+        <p className="mb-5 text-sm leading-6 text-muted">Add photos and videos for your AI creator profile. All uploads are optional, and you can add more later.</p>
+        {status === "content_saved" && <div className="mb-5"><SavedConfirmation title="Content saved" detail="Your uploaded files were verified and the category totals have been updated." /></div>}
+        <div className="grid gap-3">
+          {CREATOR_CONTENT_REQUIREMENTS.map((requirement) => <ContentUploadCard accountId={session.accountId} loginPath={loginPath} key={requirement.kind} {...requirement} count={contentCounts[requirement.kind]} complete={contentCounts[requirement.kind] >= requirement.minimum} locked={applicationLocked} optional collapsible />)}
+        </div>
+        {legacyContentFiles > 0 && <div className="mt-5"><CreatorContentGallery kind="content" revision={String(legacyContentFiles)} loginPath={loginPath} /><p className="mt-2 text-xs leading-5 text-muted">{legacyContentFiles} earlier verified upload{legacyContentFiles === 1 ? " is" : "s are"} still safely stored.</p></div>}
+
+        <div data-creator-setup-submit>
+          <CreatorOnboardingActionForm className="grid gap-4" pendingLabel="Submitting your saved information…" successStatuses={["submitted"]} loginPath={loginPath} consentBeforeSubmit={!consent}>
+            <input type="hidden" name="action" value="submit" />
+            {!consent ? <>
+              <label className="block"><span className="mb-2 block text-sm font-medium text-ink">Legal name <span className="font-normal text-muted">(optional)</span></span><Input name="legal_name" autoComplete="name" disabled={applicationLocked} placeholder="Your full legal name" className="max-w-md" /></label>
+              <label className="flex items-start gap-3 text-sm leading-6 text-ink"><input name="agreed" type="checkbox" disabled={applicationLocked} className="mt-1.5 size-4 shrink-0 accent-[#e8444b]" /><span>I confirm the information and media I submit are mine or I have permission to provide them, and I authorize FLIRT to use them to build and operate my AI creator profile under my agreement.</span></label>
+              <p className="text-xs leading-5 text-muted">Consent is optional for this walkthrough. Leaving both fields blank does not grant consent or activate an AI clone.</p>
+            </> : <p className="flex items-center gap-2 text-sm text-emerald-800"><CheckCircle2 className="size-4 shrink-0" aria-hidden="true" /> Consent signed by {consent.legal_name}.</p>}
+            <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+              <p className="text-xs text-muted">You can return to your profile whenever you like.</p>
+              <Button type="submit" size="lg" disabled={applicationLocked} className="min-h-11 w-full sm:w-auto">{applicationLocked ? "Application locked" : "Submit onboarding"}</Button>
+            </div>
+          </CreatorOnboardingActionForm>
+        </div>
+      </section>}
+    </CreatorSetupLayout>;
+  }
 
   return (
     <div className={`min-h-screen bg-bg ${link ? "canvas-glow" : ""}`} data-creator-onboarding-brand={tether ? "tether" : link ? "link" : "twin"} data-onboarding-optional={optional ? "true" : "false"}>
@@ -410,4 +476,5 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
     </div>
   );
 }
+
 
