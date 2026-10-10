@@ -25,6 +25,7 @@ export default function MovieNightDemo() {
   const pending = scene?.events[state.cursor];
   const complete = state.scene === DEMO_SCENES.length - 1 && state.cursor === scene.events.length;
   const typing = state.playing && (pending?.kind === 'creator' || pending?.kind === 'offer');
+  const recalling = state.playing && pending?.kind === 'context';
   const totals = demoTotals(state);
   const reset = () => { dispatch({ type: 'reset' }); setDraft(''); setSource(null); setTab('Context'); };
 
@@ -74,7 +75,7 @@ export default function MovieNightDemo() {
         <select aria-label="Demo playback speed" value={speed} onChange={event => setSpeed(Number(event.target.value))}><option value={1}>Natural pace</option><option value={0.55}>Quick rehearsal</option></select>
         <button aria-label="Hide presenter controls" onClick={() => setPresenter(false)}><X size={16}/></button>
       </div>
-      <p>{scene?.cue || 'Press N to start. Each scene runs its replies automatically.'}<span><kbd>N</kbd> Next scene <kbd>Space</kbd> Pause <kbd>P</kbd> Hide controls</span></p>
+      <p>{scene?.cue || 'Press N to start. Pauses after context and purchase updates give you time to speak.'}<span><kbd>N</kbd> Continue <kbd>Space</kbd> Pause <kbd>P</kbd> Hide controls</span></p>
     </section>}
 
     <div className={styles.workspace}>
@@ -107,7 +108,7 @@ export default function MovieNightDemo() {
           {typing && <div className={styles.typing} role="status"><span/><span/><span/><small>Brianna is typing</small></div>}
           {complete && presenter && <div className={styles.completed}><CheckCheck size={14}/>Conversation complete. Ready for another take.</div>}
         </div>
-        <div className={styles.responseStatus}><Sparkles size={15}/><span>{state.mode === 'Human' ? 'You are in control. Demo replies are paused.' : typing ? 'Preparing the next reply using conversation context' : state.purchased ? 'Purchase remembered. Conversation continues naturally.' : state.messages.length ? 'Conversation history and creator style are in context' : 'Ready with 3 remembered details and 4 previous purchases'}</span></div>
+        <div className={styles.responseStatus}><Sparkles size={15}/><span>{state.mode === 'Human' ? 'You are in control. Demo replies are paused.' : recalling ? 'Retrieving relevant details from earlier conversations' : typing ? 'Preparing the next reply using conversation context' : state.purchased ? 'Purchase remembered. Conversation continues naturally.' : state.messages.length ? 'Conversation history and creator style are in context' : 'Ready with 3 remembered details and 4 previous purchases'}</span></div>
         <form className={styles.composer} data-chat-composer onSubmit={event => { event.preventDefault(); dispatch({ type: 'manual', text: draft }); setDraft(''); }}><textarea aria-label="Demo reply to Ben" value={draft} disabled={state.mode === 'Autonomous'} onChange={event => setDraft(event.target.value)} maxLength={2000} placeholder={state.mode === 'Autonomous' ? 'Autonomous handling is on. Take over to write a reply.' : 'Write a reply to Ben…'}/><button type="submit" className={styles.primary} disabled={state.mode === 'Autonomous' || !draft.trim()}><Send size={15}/>Send</button></form>
       </main>
 
@@ -117,7 +118,7 @@ export default function MovieNightDemo() {
         <nav className={styles.tabs} aria-label="Demo context sections">{(['Context','Fan record'] as const).map(value => <button key={value} aria-pressed={tab === value} onClick={() => setTab(value)}>{value}</button>)}</nav>
         <div className={styles.contextBody}>
           {tab === 'Context' ? <>
-            <div className={styles.contextStatus}><i className={state.playing ? styles.pulse : ''}/><span>{state.context}</span></div>
+            <div className={styles.contextStatus}><i className={state.playing ? styles.pulse : ''}/><span>{recalling ? 'Retrieving relevant conversation context…' : state.context}</span></div>
             <h3>Context used</h3>
             {DEMO_MEMORIES.filter(memory => !scene || scene.memories.includes(memory.id)).map(memory => <div className={styles.memory} key={memory.id}><div><MessageCircle size={13}/><strong>{memory.label}</strong><span>Remembered</span></div><p>{memory.value}</p><button onClick={() => setSource(memory.source)}>View source message<ArrowUpRight size={11}/></button></div>)}
             <div className={styles.creatorStyle}><span><Bot size={14}/>Creator style</span><p>Playful, warm, short replies. Light teasing. Let him set the pace.</p></div>

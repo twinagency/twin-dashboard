@@ -20,7 +20,10 @@ export async function checkMovieNightDemo() {
   state = model.newMovieDemo();
   for (const scene of model.DEMO_SCENES) {
     state = model.movieDemoReducer(state, { type: 'start' });
-    for (const _event of scene.events) state = model.movieDemoReducer(state, { type: 'tick' });
+    for (const _event of scene.events) {
+      if (!state.playing) state = model.movieDemoReducer(state, { type: 'start' });
+      state = model.movieDemoReducer(state, { type: 'tick' });
+    }
   }
   assert.equal(state.purchased, true); assert.equal(state.memorySaved, true);
   assert.deepEqual(model.demoTotals(state), { purchases: 5, spent: 144 });
@@ -75,6 +78,8 @@ export async function checkMovieNightDemo() {
   await click('Toggle presenter controls');
   assert.ok(document.querySelector('[aria-label="Presenter controls"]'), 'Prototype badge opens optional presenter controls');
   await click('Continue scene'); await tick();
+  assert.equal(timers.size, 0, 'Memory reveal waits for the presenter before a reply');
+  assert.equal(document.querySelectorAll('[data-demo-message]').length, 1, 'No reply appears while the presenter explains memory');
   await click('Reset demo'); assert.equal(timers.size, 0, 'Reset cancels pending timers');
   assert.equal(document.querySelectorAll('[data-demo-message]').length, 0);
   await click('Play all');
