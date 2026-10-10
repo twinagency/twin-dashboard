@@ -1,5 +1,5 @@
 {
-  "reason": "Apply the approved onboarding questionnaire: 38 creator profile questions with full name, date of birth, email and phone separate. Remove the rejected style, scripted replies, monetisation, health and other fields; preserve saved answers and Flirt permissions.",
-  "source_commit": "a0b5d98eb420f5b8f1398cd9a947bf0da42f2a1b",
-  "requested_at": "2026-10-07T19:15:11.418Z"
+  "reason": "Release the approved two-section FLIRT creator onboarding layout with the real FLIRT logo, free About you and Your content navigation, dashboard access and inline consent. Preserve questionnaire autosave, uploads, saved records, optional intake and backend isolation.",
+  "source_commit": "6ccec5b80d24a0344d0ea31cc764c9ead062a1b8",
+  "requested_at": "2026-10-10T03:35:23.760Z"
 }
