@@ -17,7 +17,7 @@ check("an offer record that cannot be read leaves the product (bundle id) and dr
 
 // fake PostgREST-style builder
 const builder = (table: string, tables: Record<string, any>) => {
-  const q: any = { select: () => q, in: () => q, not: () => q, then: (res: any) => res(tables[table] ?? { data: null, error: { message: "relation does not exist" } }) };
+  const q: any = { select: () => q, in: () => q, not: () => q, limit: () => q, then: (res: any) => res(tables[table] ?? { data: null, error: { message: "relation does not exist" } }) };
   return q;
 };
 const db = (tables: Record<string, any>) => ({ from: (t: string) => builder(t, tables) });

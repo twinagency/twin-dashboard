@@ -41,7 +41,7 @@ type Db = { from: (t: string) => any };
 export async function loadV2BundleSales(db: Db, chargeIds: string[]): Promise<Map<string, V2BundleSale>> {
   if (!chargeIds.length) return new Map();
   try {
-    const tx = await db.from("star_transactions").select("id,media_id,v2_offer_id").in("id", chargeIds.slice(0, 300)).not("v2_offer_id", "is", null);
+    const tx = await db.from("star_transactions").select("id,media_id,v2_offer_id").in("id", chargeIds.slice(0, 300)).not("v2_offer_id", "is", null).limit(300);
     if (tx.error || !Array.isArray(tx.data) || !tx.data.length) return new Map();
     const ids = [...new Set((tx.data as TxRef[]).map((t) => t.v2_offer_id as string))];
     const off = await db.from("v2_bundle_offers").select("id,bundle_id,bundle_name,manifest,quoted_stars,stored_stars").in("id", ids);
