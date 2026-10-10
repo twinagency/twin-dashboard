@@ -2,6 +2,31 @@
 // Only link records with an established production configuration mapping.
 export const BRIANNA_CLONE_ID = "0328e7b3-a1e5-465a-9a30-c9cf6519cba1";
 
+const WORKSPACE_PAGE_LABELS: Record<string, string> = {
+  "/dashboard": "Dashboard", "/clones": "Creators", "/fans": "Fan Profiles",
+  "/inbox": "Inbox", "/content-library": "Content Library", "/campaigns": "Campaigns",
+  "/users": "Live Telegram Window", "/business": "Telegram Stories",
+  "/flows": "Flows", "/sequences": "Sequences", "/revenue": "Earnings",
+  "/sales-health": "Sales Health", "/catalogue-funnel": "Catalogue Funnel",
+  "/agency-admin": "Agency Access", "/agency-admin/creator-codes": "Invitations",
+  "/agency/creators": "Creator Onboarding", "/agency/creator-invites": "Creator Invitations",
+  "/creator-management": "Creator Onboarding", "/jarvis": "Core Intelligence",
+  "/ai-models": "AI Models", "/settings": "Settings", "/admin/earnings-split": "Earnings Split",
+  "/storage": "Storage", "/logs": "Activity Logs", "/api-access": "API Access",
+  "/sim": "Simulator", "/bot-v2": "Bot V2", "/miniapp-rollout": "Mini App Rollout",
+  "/mtproto-campaign": "MTProto Campaigns", "/mtproto-campaign/new": "New Campaign",
+  "/mtproto-campaign/connections": "Campaign Connections", "/mtproto-campaign/media": "Campaign Media",
+  "/mtproto-campaign/settings": "Campaign Settings", "/tracker": "Tracker",
+  "/info": "Connection Details", "/tsocial": "Telegram Social", "/admin/view-as": "View As",
+};
+
+export function briannaWorkspacePageLabel(pathname: string): string | null {
+  const exact = WORKSPACE_PAGE_LABELS[pathname];
+  if (exact) return exact;
+  const parent = Object.keys(WORKSPACE_PAGE_LABELS).sort((a, b) => b.length - a.length).find(path => pathname.startsWith(path + "/"));
+  return parent ? WORKSPACE_PAGE_LABELS[parent] : null;
+}
+
 // The demo pages own their creator query. Operational pages use the real
 // selected-creator scope. Never carry Brianna's presentation into another
 // creator's profile or infer access from this presentation-only decision.

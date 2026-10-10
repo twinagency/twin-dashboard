@@ -54,6 +54,8 @@
 [data-studio-workspace="true"] .dashboard-topbar > .backdrop-blur-xl { background: white; border-color: var(--color-line); box-shadow: none; border-radius: 10px; }
 [data-studio-workspace="true"] .dashboard-topbar > .sm\:block:last-child { display: none; }
 [data-studio-workspace="true"] .dashboard-mobile-header { background: #111f34; box-shadow: none; }
+.studio-sidebar-nav { scrollbar-width: thin; scrollbar-color: #ffffff35 transparent; }
+.studio-sidebar-nav [data-nav-group] > div:first-child > div > a { white-space: nowrap; }
 
 .studio-workspace-main .dashboard-page { padding-top: 0; }
 .studio-workspace-main .dashboard-page::before { display: none; }
