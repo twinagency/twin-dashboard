@@ -154,6 +154,7 @@ async function main() {
   let headerPath = "/users", headerParams = new URLSearchParams("relationship=briana-ledger-1");
   const headerAudience = { isAgency: false, isCreator: false, agencyName: "" };
   const Header = compile("components/TopBar.tsx", {
+    "@/lib/dashboard-creator-route": dashboardCreatorRoute,
     "./DashboardAccessProvider": { useDashboardAccess: () => headerAudience },
     "next/navigation": { usePathname: () => headerPath, useSearchParams: () => headerParams },
     "@/components/CloneSwitcher": { __esModule: true, default: () => <span>Live creator selector</span> },
