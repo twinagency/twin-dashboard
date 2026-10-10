@@ -2,7 +2,7 @@
 
 import { useEffect, useReducer, useRef, useState } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, ArrowUpRight, Bot, Check, CheckCheck, ChevronRight, Clock3, Film, ImageIcon, LockKeyhole, MessageCircle, Pause, Play, RotateCcw, Send, Settings2, ShieldCheck, Sparkles, UserRound, X } from 'lucide-react';
+import { ArrowLeft, ArrowUpRight, Bot, Check, CheckCheck, ChevronRight, Clock3, Film, ImageIcon, LockKeyhole, MessageCircle, Pause, Play, RotateCcw, Send, ShieldCheck, Sparkles, UserRound, X } from 'lucide-react';
 import PlatformMark from '../fans/PlatformMark';
 import { portraitUrl } from '../dashboard/portraits';
 import { fanAvatarUrl } from '../dashboard/fan-avatars';
@@ -13,7 +13,7 @@ const dollars = (value: number) => `US$${value.toFixed(2)}`;
 
 export default function MovieNightDemo() {
   const [state, dispatch] = useReducer(movieDemoReducer, undefined, newMovieDemo);
-  const [presenter, setPresenter] = useState(true);
+  const [presenter, setPresenter] = useState(false);
   const [tab, setTab] = useState<'Context' | 'Fan record'>('Context');
   const [source, setSource] = useState<string | null>(null);
   const [draft, setDraft] = useState('');
@@ -63,8 +63,7 @@ export default function MovieNightDemo() {
 
   return <div className={styles.page} data-movie-demo="true">
     <div className={styles.previewBar}>
-      <div><span className={styles.previewBadge}>Interactive prototype</span><span className={styles.disclosure}>Scripted conversation · Simulated purchase</span></div>
-      <button aria-label="Toggle presenter controls" aria-expanded={presenter} onClick={() => setPresenter(!presenter)}><Settings2 size={15}/>Presenter</button>
+      <div><button className={styles.previewBadge} aria-label="Toggle presenter controls" aria-expanded={presenter} onClick={() => setPresenter(!presenter)}>Interactive prototype</button><span className={styles.disclosure}>Scripted conversation · Simulated purchase</span></div>
     </div>
     {presenter && <section className={styles.presenter} aria-label="Presenter controls">
       <div className={styles.presenterTitle}><Film size={19}/><div><strong>Movie night</strong><span>{scene ? `${state.scene + 1} / ${DEMO_SCENES.length} · ${scene.title}` : 'Ready for a fresh take'}</span></div></div>
@@ -85,7 +84,7 @@ export default function MovieNightDemo() {
         <div className={styles.platform}><PlatformMark platform="onlyfans" size={22}/><span>OnlyFans</span><span className={styles.channelLabel}>Demo channel</span></div>
         <div className={styles.conversationRow} aria-current="true"><img src={fanAvatarUrl('briana-ben')} alt=""/><div><strong>Ben<span>{state.messages.length ? 'Now' : 'Ready'}</span></strong><p>{state.messages.at(-1)?.text || 'Friday night, a film and a familiar face.'}</p><small><i/>{state.mode === 'Autonomous' ? 'Autonomous' : 'Human handling'}</small></div></div>
         <div className={styles.relationship}><span>RELATIONSHIP SNAPSHOT</span><strong>A familiar Friday night</strong><p>Ben likes thrillers, playful conversation and candid photos.</p><button onClick={() => setSource('all')}><MessageCircle size={14}/>Earlier conversation<ArrowUpRight size={13}/></button></div>
-        <div className={styles.sessionProgress}><span>CONVERSATION PROGRESS</span>{DEMO_SCENES.map((item, index) => <div key={item.title} data-active={state.scene === index} data-complete={state.scene > index || state.scene === index && !state.playing && state.cursor === item.events.length}><b>{state.scene > index ? <Check size={11}/> : index + 1}</b><span>{item.title}</span></div>)}</div>
+        {presenter && <div className={styles.sessionProgress}><span>CONVERSATION PROGRESS</span>{DEMO_SCENES.map((item, index) => <div key={item.title} data-active={state.scene === index} data-complete={state.scene > index || state.scene === index && !state.playing && state.cursor === item.events.length}><b>{state.scene > index ? <Check size={11}/> : index + 1}</b><span>{item.title}</span></div>)}</div>}
         <footer><ShieldCheck size={13}/>Isolated demo session</footer>
       </aside>
 
@@ -106,7 +105,7 @@ export default function MovieNightDemo() {
             </div>
           </div>)}
           {typing && <div className={styles.typing} role="status"><span/><span/><span/><small>Brianna is typing</small></div>}
-          {complete && <div className={styles.completed}><CheckCheck size={14}/>Conversation complete. Ready for another take.</div>}
+          {complete && presenter && <div className={styles.completed}><CheckCheck size={14}/>Conversation complete. Ready for another take.</div>}
         </div>
         <div className={styles.responseStatus}><Sparkles size={15}/><span>{state.mode === 'Human' ? 'You are in control. Demo replies are paused.' : typing ? 'Preparing the next reply using conversation context' : state.purchased ? 'Purchase remembered. Conversation continues naturally.' : state.messages.length ? 'Conversation history and creator style are in context' : 'Ready with 3 remembered details and 4 previous purchases'}</span></div>
         <form className={styles.composer} data-chat-composer onSubmit={event => { event.preventDefault(); dispatch({ type: 'manual', text: draft }); setDraft(''); }}><textarea aria-label="Demo reply to Ben" value={draft} disabled={state.mode === 'Autonomous'} onChange={event => setDraft(event.target.value)} maxLength={2000} placeholder={state.mode === 'Autonomous' ? 'Autonomous handling is on. Take over to write a reply.' : 'Write a reply to Ben…'}/><button type="submit" className={styles.primary} disabled={state.mode === 'Autonomous' || !draft.trim()}><Send size={15}/>Send</button></form>
