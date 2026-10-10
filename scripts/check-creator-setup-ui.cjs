@@ -54,7 +54,9 @@ global.__setupDatabase = { from(table) {
     assert.match(html, /data-fixture-questionnaire="quick-about"/);
     assert.match(html, /Go to dashboard/);
     assert.match(html, /href="\/creator"/);
-    assert.match(html, /Complete these sections in any order/);
+    assert.match(html, /Make it yours\./);
+    assert.match(html, /Set up your AI, in your own time\./);
+    assert.match(html, /Choose either section to get started/);
     assert.doesNotMatch(html, /data-onboarding-step-card|Voice|Consent &amp; submit|Step 1/);
 
     files = [{ kind: 'content_sfw_image', storage_transfer_status: 'verified' }, { kind: 'content_sfw_image', storage_transfer_status: 'pending' }, { kind: 'content', storage_transfer_status: 'verified' }];

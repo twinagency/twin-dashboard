@@ -45,9 +45,9 @@ export default function CreatorSetupLayout({ brand, logoSrc, activeSection, appl
       <main className={styles.main}>
         <div className={styles.intro}>
           <div>
-            <p className={styles.eyebrow}>Creator setup</p>
-            <h1>Make your AI feel like you.</h1>
-            <p className={styles.subtitle}>Complete these sections in any order. You can come back whenever you like.</p>
+            {brand !== "moxy" && <p className={styles.eyebrow}>Creator setup</p>}
+            <h1>{brand === "moxy" ? "Make it yours." : "Make your AI feel like you."}</h1>
+            <p className={styles.subtitle}>{brand === "moxy" ? "Set up your AI, in your own time." : "Complete these sections in any order. You can come back whenever you like."}</p>
           </div>
           {applicationStatus && <span className={styles.applicationStatus} data-onboarding-application-state={applicationStatus} aria-label={`Onboarding status: ${applicationStatus}`}>{applicationStatus}</span>}
         </div>
@@ -56,14 +56,15 @@ export default function CreatorSetupLayout({ brand, logoSrc, activeSection, appl
           <a href="/creator/onboarding?step=questionnaire" className={`${styles.tab} ${activeSection === "questionnaire" ? styles.activeTab : ""}`}
             aria-current={activeSection === "questionnaire" ? "page" : undefined} data-creator-setup-tab="questionnaire"
             onClick={(event) => navigate(event, "/creator/onboarding?step=questionnaire", activeSection === "questionnaire")}>
-            <FileText size={18} aria-hidden="true" /> About you
+            {brand !== "moxy" && <FileText size={18} aria-hidden="true" />} About you
           </a>
           <a href="/creator/onboarding?step=content" className={`${styles.tab} ${activeSection === "content" ? styles.activeTab : ""}`}
             aria-current={activeSection === "content" ? "page" : undefined} data-creator-setup-tab="content"
             onClick={(event) => navigate(event, "/creator/onboarding?step=content", activeSection === "content")}>
-            <Images size={18} aria-hidden="true" /> Your content
+            {brand !== "moxy" && <Images size={18} aria-hidden="true" />} {brand === "moxy" ? "Content" : "Your content"}
           </a>
         </nav>
+        {brand === "moxy" && <p className={styles.sectionHint}>Choose either section to get started.</p>}
 
         <div className={styles.content} data-onboarding-active-step={activeSection}>{children}</div>
         <footer className={styles.footer}>Your profile, your pace.</footer>
@@ -71,3 +72,4 @@ export default function CreatorSetupLayout({ brand, logoSrc, activeSection, appl
     </div>
   );
 }
+
