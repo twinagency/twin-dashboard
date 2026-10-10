@@ -25,7 +25,7 @@ jobs:
           node-version: "22"
           cache: npm
       - run: npm ci
-      - run: npm run build
+      - run: npx tsc --noEmit
       - run: npx playwright install --with-deps chromium
       - name: Check creator isolation, filters, unique photos and responsive layout
         run: node deployment/flirt-overview-ui-check.cjs
