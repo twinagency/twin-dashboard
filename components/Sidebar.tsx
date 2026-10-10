@@ -4,6 +4,7 @@ import { agencyDashboardPath, isPartnerPreview } from "@/lib/agency-policy";
 import { isMoxy } from "@/lib/agency-brand";
 import { JESS_KATE_PORTAL, TETHER_PORTAL } from "@/lib/partner-portals";
 import { CREATOR_DASHBOARD_NAV } from "@/lib/creator-dashboard-policy";
+import { dashboardCreatorHref } from "@/lib/dashboard-creator-route";
 
 // Left sidebar app shell (desktop). "Create new clone" is always the first
 // thing in it, followed by the operating views. Internal admin tools are
@@ -423,6 +424,9 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
     if (isAgency && link.kind === "route" && !agencyDashboardPath(link.href, agencyName, canManage)) return null;
     if (link.kind === "tab") {
       if (isPreview && link.tab !== "identity") return null;
+      // The Dashboard owns its creator selection and has no global picker.
+      // Use its selected creator, never a stale scope cookie or an unhandled event.
+      if (isAdmin && pathname === "/dashboard") return <Link href={dashboardCreatorHref(searchParams.get("creator"), link.tab)} onClick={onNavigate} className={rowClass + " " + colors.idle}>{navLabel(link, colors)}</Link>;
       const active = onConfigurePage && (isAdmin && link.tab === "identity" ? activeTab !== "ppvs" : activeTab === link.tab);
       if (!activeCloneId) return <button type="button" onClick={pickClone} title="Pick a creator first" className={rowClass + " " + colors.idle}>{navLabel(link, colors)}</button>;
       return <Link href={`/clones/${activeCloneId}?tab=${link.tab}`} onClick={onNavigate} aria-current={active ? "page" : undefined} className={rowClass + " " + (active ? colors.active : colors.idle)}>{navLabel(link, colors)}</Link>;
@@ -504,5 +508,6 @@ export default function Sidebar({ clones: _clones, activeCloneId }: { clones: Cl
   const studio = !isAgency && !isCreator && pathname === "/dashboard";
   return <aside data-studio-sidebar={studio || undefined} className="dashboard-sidebar sticky top-0 hidden h-screen w-72 shrink-0 flex-col lg:flex"><SidebarContent activeCloneId={activeCloneId} /></aside>;
 }
+
 
 

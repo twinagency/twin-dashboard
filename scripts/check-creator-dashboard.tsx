@@ -16,6 +16,7 @@ import * as campaignModel from "../components/campaigns/model";
 import * as libraryModel from "../components/content-library/model";
 import * as inboxModel from "../components/inbox/model";
 import * as fanAvatars from "../components/dashboard/fan-avatars";
+import * as dashboardCreatorRoute from "../lib/dashboard-creator-route";
 
 const nativeRequire = createRequire(import.meta.url);
 function compile(path: string, imports: Record<string, unknown>) {
@@ -196,6 +197,7 @@ async function main() {
     "../BlurToggle": { __esModule: true, default: () => <button aria-label="Blur all media">Blur</button> },
     "./DashboardCampaign": { __esModule: true, default: Campaign }, "./portraits": portraits,
     "./fan-avatars": fanAvatars,
+    "../../lib/dashboard-creator-route": dashboardCreatorRoute,
     "../CurrencyProvider": { useCurrency: () => ({ rate: 1.4, currency: "AUD", setCurrency: () => { throw new Error("The ordinary Overview's currency must stay unchanged"); } }) },
     "../../lib/money": money, "../fans/model": fanModel, "./model": dashboardModel,
     "./CreatorDashboard.module.css": { __esModule: true, default: css },
@@ -321,3 +323,4 @@ async function main() {
   console.log("Creator Dashboard passed: isolated admin route; Brianna default; Brisbane date boundaries; deduplicated fans; reconciled charts, platforms and content; independent currency; period/platform/creator/search filters; chart-day inspection; purchase ownership and source links; dialogs; returning filter state; no production calls or changes to profile data.");
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });
+

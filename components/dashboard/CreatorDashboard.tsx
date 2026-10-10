@@ -14,6 +14,7 @@ import BlurToggle from "../BlurToggle";
 import DashboardCampaign from "./DashboardCampaign";
 import { dashboardPortraits, portraitUrl } from "./portraits";
 import { fanAvatarUrl } from "./fan-avatars";
+import { dashboardCreatorHref } from "../../lib/dashboard-creator-route";
 
 const date = (day: string, long = false) => new Intl.DateTimeFormat("en-AU", { day: "numeric", month: "short", ...(long ? { year: "numeric" as const } : {}), timeZone: "Australia/Brisbane" }).format(new Date(`${day.slice(0, 10)}T02:00:00Z`));
 const time = (at: string) => new Intl.DateTimeFormat("en-AU", { hour: "numeric", minute: "2-digit", timeZone: "Australia/Brisbane" }).format(new Date(at));
@@ -112,7 +113,9 @@ export default function CreatorDashboard({ creators, fans: seedFans, initialFilt
     if (!ready) return;
     const params = filterParams(filters).toString();
     try { localStorage.setItem(FILTER_STORAGE_KEY, params); } catch { /* Do not block navigation when storage is unavailable. */ }
-    window.history.replaceState(window.history.state, "", `/dashboard?${params}`);
+    // Let Next.js synchronize useSearchParams in the shared sidebar. Passing
+    // its internal history state back would mark this as a router-only update.
+    window.history.replaceState(null, "", `/dashboard?${params}`);
   }, [filters, ready]);
 
   const dashboard = useMemo(() => buildDashboard(fans, filters, audRate, workspace), [fans, filters, audRate, workspace]);
@@ -126,7 +129,7 @@ export default function CreatorDashboard({ creators, fans: seedFans, initialFilt
   const compactMoney = (cents: number) => `${filters.currency === "AUD" ? "A$" : "$"}${(cents / 100).toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
   const hasPortrait = creator.id === "briana";
   const portrait = portraitUrl("outdoor");
-  const creatorProfile = creator.id === "briana" ? "/clones/0328e7b3-a1e5-465a-9a30-c9cf6519cba1?tab=identity" : "/clones";
+  const creatorProfile = dashboardCreatorHref(creator.id);
   const recent = dashboard.activities.filter((activity, index, all) => all.findIndex(item => item.fan.id === activity.fan.id) === index).slice(0, 3);
   const latestActivityTime = Math.max(...dashboard.activities.map(activity => new Date(activity.at).getTime()), 0);
   const relativeActivityTime = (at: string) => {
@@ -182,7 +185,7 @@ export default function CreatorDashboard({ creators, fans: seedFans, initialFilt
     <section className={`${styles.creatorHero} ${!hasPortrait || failedImages.hero ? styles.heroWithoutPhoto : ""}`} aria-label={`${creator.name}'s creator workspace`}>
       {hasPortrait && !failedImages.hero && <img className={styles.heroPhoto} src={portrait} alt="Brianna Redd relaxing outdoors in a colourful hammock, wearing a white top" fetchPriority="high" onError={() => setFailedImages(current => ({ ...current, hero: true }))} />}
       <div className={styles.heroShade} />
-      <div className={styles.heroCopy}><span className={styles.heroEyebrow}>YOUR CREATOR WORKSPACE</span><h1 className="creator-name">{creator.name}</h1><p>Your content. Your community.</p><Link href={creatorProfile} className={styles.heroButton}>View profile<ArrowRight size={17} /></Link></div>
+      <div className={styles.heroCopy}><span className={styles.heroEyebrow}>YOUR CREATOR WORKSPACE</span><h1 className="creator-name">{creator.name}</h1><Link href={creatorProfile} className={styles.heroButton}>View profile<ArrowRight size={17} /></Link></div>
     </section>
 
     <section className={styles.summaryCards} aria-label="Dashboard summary">
@@ -274,3 +277,4 @@ export default function CreatorDashboard({ creators, fans: seedFans, initialFilt
     </Dialog>}
   </div>;
 }
+

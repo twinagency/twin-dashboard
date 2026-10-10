@@ -9,6 +9,7 @@ import * as agencyPolicy from "../lib/agency-policy";
 import * as agencyBrand from "../lib/agency-brand";
 import * as portals from "../lib/partner-portals";
 import * as creatorPolicy from "../lib/creator-dashboard-policy";
+import * as dashboardCreatorRoute from "../lib/dashboard-creator-route";
 
 // Render the actual shared desktop/mobile content with isolated navigation.
 // No credentials, database calls or messages are used by these fixtures.
@@ -43,6 +44,7 @@ const components = compile("components/Sidebar.tsx", {
   "@/lib/agency-brand": agencyBrand,
   "@/lib/partner-portals": portals,
   "@/lib/creator-dashboard-policy": creatorPolicy,
+  "@/lib/dashboard-creator-route": dashboardCreatorRoute,
   "next/link": { __esModule: true, default: ({ children, ...props }: React.ComponentProps<"a">) => React.createElement("a", props, children) },
   "next/navigation": { usePathname: () => pathname, useSearchParams: () => query },
   "@/lib/clone-switcher-bus": { openCloneSwitcher: () => undefined },
@@ -208,6 +210,17 @@ for (const agencyName of ["Moxy", "LYNQ", portals.JESS_KATE_PORTAL.name, portals
 }
 pathname = "/dashboard";
 assert.deepEqual(renderedLinks(render()).filter(link => /aria-current="page"/.test(link.attributes)).map(link => link.label), ["Dashboard"]);
+for (const mobile of [false, true]) {
+  for (const scope of [null, clone]) {
+    for (const selected of [null, "briana", "riley", "kyla"]) {
+      query = new URLSearchParams(selected ? `creator=${selected}` : "");
+      const configuration = renderedLinks(render(undefined, false, scope, mobile)).find(link => link.label === "Creator Configuration");
+      assert.ok(configuration, "Configuration is a working link even without the unmounted global creator picker");
+      assert.equal(configuration.href, selected === "riley" || selected === "kyla" ? "/clones" : "/clones/0328e7b3-a1e5-465a-9a30-c9cf6519cba1?tab=identity", "Dashboard selection wins over empty or unrelated live scope");
+    }
+  }
+}
+query = new URLSearchParams();
 pathname = "/revenue";
 const palette = readFileSync("app/lynq-theme.css", "utf8");
 assert.match(palette, /html\[data-brand-theme="lynq-light"\]/);
