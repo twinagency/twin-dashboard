@@ -15,6 +15,7 @@ import * as portraits from "../components/dashboard/portraits";
 import * as campaignModel from "../components/campaigns/model";
 import * as libraryModel from "../components/content-library/model";
 import * as inboxModel from "../components/inbox/model";
+import * as fanAvatars from "../components/dashboard/fan-avatars";
 
 const nativeRequire = createRequire(import.meta.url);
 function compile(path: string, imports: Record<string, unknown>) {
@@ -194,6 +195,7 @@ async function main() {
     "../fans/brianna-ledger": ledger,
     "../BlurToggle": { __esModule: true, default: () => <button aria-label="Blur all media">Blur</button> },
     "./DashboardCampaign": { __esModule: true, default: Campaign }, "./portraits": portraits,
+    "./fan-avatars": fanAvatars,
     "../CurrencyProvider": { useCurrency: () => ({ rate: 1.4, currency: "AUD", setCurrency: () => { throw new Error("The ordinary Overview's currency must stay unchanged"); } }) },
     "../../lib/money": money, "../fans/model": fanModel, "./model": dashboardModel,
     "./CreatorDashboard.module.css": { __esModule: true, default: css },
@@ -212,9 +214,13 @@ async function main() {
   });
   const metric = (name: string) => find(`[data-metric="${name}"]`).textContent;
   await render();
-  assert.equal(metric("revenue"), "US$504.00");
+  assert.equal(metric("revenue"), "$504");
   assert.equal(metric("purchases"), "12");
   assert.equal(document.querySelectorAll('.summaryCard').length, 4);
+  assert.equal(document.querySelectorAll('.sparkline').length, 4);
+  assert.equal(document.querySelectorAll('.summaryValue em').length, 4);
+  assert.equal(document.querySelectorAll('.recentAvatar[src^="/dashboard/fans/"]').length, document.querySelectorAll('.recentRow').length);
+  assert.ok(document.querySelector('.fanIdentity img[src^="/dashboard/fans/"]'));
   assert.equal(find('.heroPhoto').getAttribute('src'), '/api/dashboard/portrait?image=outdoor');
   assert.equal(document.querySelectorAll('.libraryTile').length, 3);
   assert.equal(document.querySelectorAll('img[src="/api/dashboard/portrait?image=outdoor"]').length, 1, "Use the hammock photo only in the hero");
@@ -225,9 +231,9 @@ async function main() {
   assert.equal(find('[aria-label="Open Ben\'s fan profile"]').getAttribute("href"), fanModel.profileHref(fans.find(f => f.id === "briana-ben")!));
   assert.equal(find('[aria-label="Open Oliver\'s conversation"]').getAttribute("href"), "/users?relationship=briana-oliver&creator=briana&platform=onlyfans");
   await textButton("All time", '[aria-label="Dashboard reporting period"]');
-  assert.equal(metric("revenue"), "US$809.20"); assert.equal(metric("purchases"), "20");
+  assert.equal(metric("revenue"), "$809"); assert.equal(metric("purchases"), "20");
   await textButton("Telegram", '[aria-label="Dashboard platform"]');
-  assert.equal(metric("revenue"), "US$70.20"); assert.equal(metric("paying"), "1"); assert.equal(metric("purchases"), "3");
+  assert.equal(metric("revenue"), "$70"); assert.equal(metric("paying"), "1"); assert.equal(metric("purchases"), "3");
   assert.equal(document.querySelector('[data-fan="briana-oliver"]'), null);
   await click('[aria-label="Inspect Coffee break diary purchase by Ben"]');
   assert.match(find('[role="dialog"]').textContent || "", /2,100 Stars/);
@@ -235,7 +241,7 @@ async function main() {
   assert.equal(find('[role="dialog"] a[href*="source="]').getAttribute("href"), "/users?relationship=briana-ben&creator=briana&platform=telegram&source=ben-quick-note-0");
   await act(async () => { document.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
   assert.equal(document.querySelector('[role="dialog"]'), null);
-  await input('[aria-label="Dashboard currency"]', "AUD"); assert.equal(metric("revenue"), "A$98.28");
+  await input('[aria-label="Dashboard currency"]', "AUD"); assert.equal(metric("revenue"), "A$98");
   assert.equal(localStorage.getItem("currency"), null, "The new page does not write the old Overview's currency preference");
   await click('[aria-label="Dashboard platform"] button[aria-label="All platforms"]');
   await input('[aria-label="Dashboard currency"]', "USD");
@@ -246,10 +252,10 @@ async function main() {
   await input('[aria-label="Dashboard start date"]', "2026-10-02");
   await input('[aria-label="Dashboard end date"]', "2026-10-02");
   await textButton("Apply dates");
-  assert.equal(metric("revenue"), "US$79.00"); assert.equal(metric("purchases"), "1"); assert.equal(metric("repeat"), "0%");
+  assert.equal(metric("revenue"), "$79"); assert.equal(metric("purchases"), "1"); assert.equal(metric("repeat"), "0%");
   await click('[aria-label="Inspect repeat buyers"]'); assert.equal(document.querySelectorAll('.relationshipTable tbody tr').length, 0);
   await input('[aria-label="Dashboard start date"]', "2026-10-09"); await input('[aria-label="Dashboard end date"]', "2026-10-01");
-  await textButton("Apply dates"); assert.ok(document.querySelector('[role="alert"]')); assert.equal(metric("revenue"), "US$79.00");
+  await textButton("Apply dates"); assert.ok(document.querySelector('[role="alert"]')); assert.equal(metric("revenue"), "$79");
   await textButton("30 days", '[aria-label="Dashboard reporting period"]');
   await click('.dayBar[aria-label^="2 Oct 2026:"]');
   assert.equal(new URLSearchParams(window.location.search).get("day"), "2026-10-02");
@@ -291,7 +297,7 @@ async function main() {
   window.history.replaceState(null, "", "/dashboard"); localStorage.removeItem(dashboardModel.FILTER_STORAGE_KEY);
   root = createRoot(document.getElementById("root")!);
   await act(async () => root.render(<Component creators={creators} fans={fans} includeBriannaLedger initialFilters={filters} />));
-  assert.equal(metric("revenue"), "US$46,186.00");
+  assert.equal(metric("revenue"), "$46,186");
   assert.equal(metric("purchases"), "924");
   assert.equal(document.querySelectorAll('.relationshipTable tbody tr').length, 12);
   await textButton("Show more fans"); assert.equal(document.querySelectorAll('.relationshipTable tbody tr').length, 24);
@@ -300,7 +306,7 @@ async function main() {
   await input('[aria-label="Search dashboard fans"]', "ben_coast_tg");
   assert.equal(document.querySelectorAll('.relationshipTable tbody tr').length, 1);
   await textButton("6 months", '[aria-label="Dashboard reporting period"]');
-  assert.equal(metric("revenue"), "US$275,003.56");
+  assert.equal(metric("revenue"), "$275,004");
   assert.equal(document.querySelectorAll('.dayBar').length, 183);
   await input('[aria-label="Search dashboard purchases"]', generated[0].name);
   const purchase = generated[0].purchases.at(-1)!;

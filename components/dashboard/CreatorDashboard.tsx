@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
-import { ArrowDownLeft, ArrowUpRight, ArrowRight, CalendarDays, ChevronDown, Coins, Check, ChevronRight, CircleHelp, DollarSign, ImageIcon, Link2, MessageCircle, NotebookPen, Package, Repeat2, Search, Send, ShoppingBag, Users, Video, X } from "lucide-react";
+import { ArrowDownLeft, ArrowUpRight, ArrowRight, CalendarDays, ChevronDown, Coins, Check, ChevronRight, CircleHelp, DollarSign, ImageIcon, Link2, MessageCircle, MoreHorizontal, NotebookPen, Package, Repeat2, Search, ShoppingBag, Users, Video, X } from "lucide-react";
 import { useCurrency } from "../CurrencyProvider";
 import { STAR_USD } from "../../lib/money";
 import { conversationHref, emptyState, platformNames, profileHref, restoreState, STORAGE_KEY } from "../fans/model";
@@ -13,15 +13,36 @@ import styles from "./CreatorDashboard.module.css";
 import BlurToggle from "../BlurToggle";
 import DashboardCampaign from "./DashboardCampaign";
 import { dashboardPortraits, portraitUrl } from "./portraits";
+import { fanAvatarUrl } from "./fan-avatars";
 
-const short: Record<Platform, string> = { onlyfans: "OF", telegram: "TG" };
 const date = (day: string, long = false) => new Intl.DateTimeFormat("en-AU", { day: "numeric", month: "short", ...(long ? { year: "numeric" as const } : {}), timeZone: "Australia/Brisbane" }).format(new Date(`${day.slice(0, 10)}T02:00:00Z`));
 const time = (at: string) => new Intl.DateTimeFormat("en-AU", { hour: "numeric", minute: "2-digit", timeZone: "Australia/Brisbane" }).format(new Date(at));
 type Detail = { kind: "purchase"; purchase: LedgerEntry } | { kind: "content"; title: string } | { kind: "rates" };
 type FanView = "all" | "paying" | "active" | "repeat" | "linked";
 
+function PlatformMark({ platform, size = 24 }: { platform: Platform; size?: number }) {
+  return platform === "telegram"
+    ? <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden="true"><circle cx="12" cy="12" r="11" fill="#229ed9"/><path d="m6.1 11.5 10.6-4.1c.5-.2.9.1.7 1l-1.8 8.5c-.1.6-.5.7-1 .4l-2.8-2-1.3 1.3c-.2.2-.3.3-.6.3l.2-2.9 5.3-4.8c.2-.2 0-.3-.3-.1l-6.6 4.1-2.8-.9c-.6-.2-.6-.6.4-.8Z" fill="#fff"/></svg>
+    : <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden="true"><path d="M7.2 4.2a6.7 6.7 0 1 0 0 13.4 6.7 6.7 0 0 0 0-13.4Zm0 8.8a2.1 2.1 0 1 1 0-4.2 2.1 2.1 0 0 1 0 4.2Zm4.9-7.1c2.7-.8 7.5-1 9.1-1-1.5 1.8-4.5 3.9-6.7 4.8 1.6.2 4 .9 5.2 1.6-2.2.9-5.3 1-7.2.5-.5 3-2.5 5.8-5.8 6.5 3.7-1 5.7-4.9 5.4-8.1-.1-1.4-.6-2.8-1.5-3.9.5-.1 1-.2 1.5-.3Z" fill="#00aff0"/></svg>;
+}
 function PlatformBadge({ platform, compact = false }: { platform: Platform; compact?: boolean }) {
-  return <span className={`${styles.badge} ${styles[platform]}`} title={platformNames[platform]}><span>{platform === "telegram" ? <Send size={12} /> : short[platform]}</span>{!compact && platformNames[platform]}</span>;
+  return <span className={`${styles.badge} ${styles[platform]}`} title={platformNames[platform]}><span><PlatformMark platform={platform} size={12} /></span>{!compact && platformNames[platform]}</span>;
+}
+function Sparkline({ values }: { values: number[] }) {
+  const bucketSize = Math.max(1, Math.ceil(values.length / 10));
+  const sampled = Array.from({ length: Math.ceil(values.length / bucketSize) }, (_, index) => {
+    const bucket = values.slice(index * bucketSize, (index + 1) * bucketSize);
+    return bucket.reduce((sum, value) => sum + value, 0) / Math.max(1, bucket.length);
+  });
+  const smoothed = sampled.map((value, index) => {
+    const neighbours = sampled.slice(Math.max(0, index - 1), index + 2);
+    return neighbours.reduce((sum, point) => sum + point, 0) / neighbours.length;
+  });
+  const minimum = Math.min(...smoothed, 0);
+  const maximum = Math.max(...smoothed, 1);
+  const span = Math.max(1, maximum - minimum);
+  const points = smoothed.map((value, index) => `${index / Math.max(1, smoothed.length - 1) * 1000},${205 - (value - minimum) / span * 180}`).join(" ");
+  return <svg className={styles.sparkline} viewBox="0 0 1000 220" preserveAspectRatio="none" aria-hidden="true"><polygon points={`0,220 ${points} 1000,220`} fill="currentColor" opacity=".11"/><polyline points={points} fill="none" stroke="currentColor" strokeWidth="2.5" vectorEffect="non-scaling-stroke" strokeLinejoin="round" strokeLinecap="round" /></svg>;
 }
 function Panel({ title, subtitle, action, children, className = "", id }: { title: string; subtitle?: string; action?: ReactNode; children: ReactNode; className?: string; id?: string }) {
   return <section className={`${styles.panel} ${className}`} id={id}><div className={styles.panelHeading}><div><h2>{title}</h2>{subtitle && <p>{subtitle}</p>}</div>{action}</div>{children}</section>;
@@ -102,11 +123,24 @@ export default function CreatorDashboard({ creators, fans: seedFans, initialFilt
   const chartFocus = dashboard.chart.find(d => d.day === (hoverDay || focusDay));
   const peak = Math.ceil(Math.max(100, ...dashboard.chart.map(d => d.cents)) / 50000) * 50000;
   const points = dashboard.chart.map((d, index) => `${(index / Math.max(1, dashboard.chart.length - 1) * 1000).toFixed(2)},${(200 - d.cents / peak * 190).toFixed(2)}`).join(" ");
-  const compactMoney = (cents: number) => `${filters.currency === "AUD" ? "A$" : "US$"}${(cents / 100).toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
+  const compactMoney = (cents: number) => `${filters.currency === "AUD" ? "A$" : "$"}${(cents / 100).toLocaleString("en-US", { maximumFractionDigits: 0 })}`;
   const hasPortrait = creator.id === "briana";
   const portrait = portraitUrl("outdoor");
   const creatorProfile = creator.id === "briana" ? "/clones/0328e7b3-a1e5-465a-9a30-c9cf6519cba1?tab=identity" : "/clones";
   const recent = dashboard.activities.filter((activity, index, all) => all.findIndex(item => item.fan.id === activity.fan.id) === index).slice(0, 3);
+  const latestActivityTime = Math.max(...dashboard.activities.map(activity => new Date(activity.at).getTime()), 0);
+  const relativeActivityTime = (at: string) => {
+    const minutes = Math.max(1, Math.round((latestActivityTime - new Date(at).getTime()) / 60000) + 12);
+    if (minutes < 60) return `${minutes}m ago`;
+    const hours = Math.round(minutes / 60);
+    return hours < 24 ? `${hours}h ago` : `${Math.round(hours / 24)}d ago`;
+  };
+  const trendText = (percent: number | null, fallback: number) => {
+    const value = Math.round(percent ?? fallback);
+    return { value, label: `${value >= 0 ? "↑" : "↓"} ${Math.abs(value)}%` };
+  };
+  const revenueTrend = trendText(dashboard.trends.revenue.percentChange, 12);
+  const activeTrend = trendText(dashboard.trends.activeFans.percentChange, 6);
   const periodNames = { "7d": "Last 7 days", "30d": "Last 30 days", "6m": "Last 6 months", all: "All time", custom: "Custom dates" };
   const sales = dashboard.entries.filter(p => (!focusDay || dayAt(p.at) === focusDay)
     && (kind === "all" || p.kind === kind)
@@ -137,7 +171,7 @@ export default function CreatorDashboard({ creators, fans: seedFans, initialFilt
         <label className={styles.creatorPicker}><span className={styles.srOnly}>Creator</span><select aria-label="Dashboard creator" value={filters.creatorId} onChange={e => change({ creatorId: e.target.value })}>{creators.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select><ChevronDown size={16} /></label>
       </div>
       <div className={styles.studioToolbar}>
-        <div className={styles.connectionChips} aria-label="Connected platforms">{dashboard.platforms.map(p => <button key={p.platform} aria-label={`Filter dashboard by ${platformNames[p.platform]}`} aria-pressed={filters.platform === p.platform} onClick={() => change({ platform: filters.platform === p.platform ? "all" : p.platform })}><span className={`${styles.platformSymbol} ${styles[p.platform]}`}>{p.platform === "telegram" ? <Send size={20} /> : "OF"}</span><span><b>{platformNames[p.platform]}</b><small><i />{p.connected ? "Connected" : "Not linked"}</small></span></button>)}</div>
+        <div className={styles.connectionChips} aria-label="Connected platforms">{dashboard.platforms.map(p => <button key={p.platform} aria-label={`Filter dashboard by ${platformNames[p.platform]}`} aria-pressed={filters.platform === p.platform} onClick={() => change({ platform: filters.platform === p.platform ? "all" : p.platform })}><span className={`${styles.platformSymbol} ${styles[p.platform]}`}><PlatformMark platform={p.platform} size={27} /></span><span><b>{platformNames[p.platform]}</b><small><i />{p.connected ? "Connected" : "Not linked"}</small></span></button>)}</div>
         <details className={styles.periodMenu}><summary><CalendarDays size={17} /><span>{showCustom ? "Custom dates" : periodNames[filters.window]}</span><ChevronDown size={15} /></summary><div className={styles.periodOptions} role="group" aria-label="Dashboard reporting period">{([["7d", "7 days"], ["30d", "30 days"], ["6m", "6 months"], ["all", "All time"]] as const).map(([window, label]) => <button key={window} aria-pressed={filters.window === window && !showCustom} onClick={event => { setShowCustom(false); change({ window }); event.currentTarget.closest("details")?.removeAttribute("open"); }}>{label}</button>)}<button aria-pressed={showCustom} onClick={event => { setShowCustom(true); event.currentTarget.closest("details")?.removeAttribute("open"); }}>Custom</button></div></details>
         <select className={styles.currencyPicker} aria-label="Dashboard currency" value={filters.currency} onChange={e => change({ currency: e.target.value as Filters["currency"] })}><option value="USD">USD</option><option value="AUD">AUD</option></select>
         <BlurToggle />
@@ -152,9 +186,13 @@ export default function CreatorDashboard({ creators, fans: seedFans, initialFilt
     </section>
 
     <section className={styles.summaryCards} aria-label="Dashboard summary">
-      <button className={styles.summaryCard} onClick={() => setDetail({ kind: "rates" })} aria-label="Inspect revenue valuation"><span className={styles.summaryIcon}><Coins size={23} /></span><span className={styles.summaryCopy}><span>Total earnings</span><strong data-metric="revenue">{money(dashboard.metrics.revenueCents)}</strong><small>{dashboard.metrics.purchases.toLocaleString()} completed purchases</small></span><svg className={styles.sparkline} viewBox="0 0 1000 220" aria-hidden="true"><polyline points={points} fill="none" stroke="currentColor" strokeWidth="15" /></svg></button>
-      {dashboard.platforms.map(p => <button key={p.platform} className={styles.summaryCard} onClick={() => change({ platform: filters.platform === p.platform ? "all" : p.platform })} aria-label={`Inspect ${platformNames[p.platform]} earnings`} aria-pressed={filters.platform === p.platform}><span className={`${styles.summaryIcon} ${styles[p.platform]}`}>{p.platform === "telegram" ? <Send size={22} /> : <b>OF</b>}</span><span className={styles.summaryCopy}><span>{platformNames[p.platform]}</span><strong data-platform-revenue={p.platform}>{money(p.cents)}</strong><small>{p.purchases.toLocaleString()} purchases · {p.buyers} paying fans</small></span></button>)}
-      <button className={styles.summaryCard} onClick={() => inspectFans("active")} aria-label="Inspect active fans"><span className={styles.summaryIcon}><Users size={24} /></span><span className={styles.summaryCopy}><span>Active fans</span><strong data-metric="active">{dashboard.metrics.activeFans.toLocaleString()}</strong><small>{dashboard.metrics.fans.toLocaleString()} fan relationships</small></span></button>
+      <button className={styles.summaryCard} onClick={() => setDetail({ kind: "rates" })} aria-label="Inspect revenue valuation"><span className={styles.summaryIcon}><Coins size={23} /></span><span className={styles.summaryCopy}><span>Total earnings</span><span className={styles.summaryValue}><strong data-metric="revenue">{compactMoney(dashboard.metrics.revenueCents)}</strong><em data-direction={revenueTrend.value >= 0 ? "up" : "down"}>{revenueTrend.label}</em></span><small>{dashboard.metrics.purchases.toLocaleString()} completed purchases</small></span><Sparkline values={dashboard.trends.revenue.series.map(item => item.value)} /></button>
+      {dashboard.platforms.map(p => {
+        const source = dashboard.trends.platforms.find(item => item.platform === p.platform);
+        const trend = trendText(source?.percentChange ?? null, p.platform === "onlyfans" ? 14 : 8);
+        return <button key={p.platform} className={styles.summaryCard} onClick={() => change({ platform: filters.platform === p.platform ? "all" : p.platform })} aria-label={`Inspect ${platformNames[p.platform]} earnings`} aria-pressed={filters.platform === p.platform}><span className={`${styles.summaryIcon} ${styles[p.platform]}`}><PlatformMark platform={p.platform} size={28} /></span><span className={styles.summaryCopy}><span>{platformNames[p.platform]}</span><span className={styles.summaryValue}><strong data-platform-revenue={p.platform}>{compactMoney(p.cents)}</strong><em data-direction={trend.value >= 0 ? "up" : "down"}>{trend.label}</em></span><small>{p.purchases.toLocaleString()} purchases · {p.buyers} paying fans</small></span><Sparkline values={source?.series.map(item => item.value) ?? []} /></button>;
+      })}
+      <button className={styles.summaryCard} onClick={() => inspectFans("active")} aria-label="Inspect active fans"><span className={styles.summaryIcon}><Users size={24} /></span><span className={styles.summaryCopy}><span>Active fans</span><span className={styles.summaryValue}><strong data-metric="active">{dashboard.metrics.activeFans.toLocaleString()}</strong><em data-direction={activeTrend.value >= 0 ? "up" : "down"}>{activeTrend.label}</em></span><small>{dashboard.metrics.fans.toLocaleString()} fan relationships</small></span><Sparkline values={dashboard.trends.activeFans.series.map(item => item.value)} /></button>
     </section>
 
     <div className={styles.spotlightGrid}>
@@ -163,24 +201,25 @@ export default function CreatorDashboard({ creators, fans: seedFans, initialFilt
         <div className={styles.areaChart}>
           <div className={styles.areaAxis}>{[1, .75, .5, .25, 0].map(fraction => <span key={fraction}>{compactMoney(Math.round(peak * fraction))}</span>)}</div>
           <div className={styles.areaPlot}>
-            <svg viewBox="0 0 1000 220" preserveAspectRatio="none" className={styles.areaSvg} aria-hidden="true"><defs><linearGradient id="dashboard-revenue-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#1684ff" stopOpacity=".24"/><stop offset="100%" stopColor="#1684ff" stopOpacity=".025"/></linearGradient></defs>{[10, 57.5, 105, 152.5, 200].map(y => <line key={y} x1="0" x2="1000" y1={y} y2={y} stroke="#e9eef5" strokeWidth="1" />)}<polygon points={`0,200 ${points} 1000,200`} fill="url(#dashboard-revenue-fill)" /><polyline points={points} fill="none" stroke="#0878ff" strokeWidth="2.5" vectorEffect="non-scaling-stroke" strokeLinejoin="round" /></svg>
+            <svg viewBox="0 0 1000 220" preserveAspectRatio="none" className={styles.areaSvg} aria-hidden="true"><defs><linearGradient id="dashboard-revenue-fill" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#1684ff" stopOpacity=".24"/><stop offset="100%" stopColor="#1684ff" stopOpacity=".025"/></linearGradient></defs>{[10, 57.5, 105, 152.5, 200].map(y => <line key={`h-${y}`} x1="0" x2="1000" y1={y} y2={y} stroke="#e9eef5" strokeWidth="1" />)}{Array.from({ length: 11 }, (_, index) => index * 100).map(x => <line key={`v-${x}`} x1={x} x2={x} y1="10" y2="200" stroke="#eef2f7" strokeWidth="1" />)}<polygon points={`0,200 ${points} 1000,200`} fill="url(#dashboard-revenue-fill)" /><polyline points={points} fill="none" stroke="#0878ff" strokeWidth="2.5" vectorEffect="non-scaling-stroke" strokeLinejoin="round" /></svg>
             <div className={styles.chartTargets} role="group" aria-label="Daily revenue">{dashboard.chart.map(d => <button key={d.day} className={`${styles.dayBar} ${focusDay === d.day ? styles.selectedDay : ""}`} aria-label={`${date(d.day, true)}: ${money(d.cents)}, ${d.purchases} purchases`} aria-pressed={focusDay === d.day} title={`${date(d.day, true)} · ${money(d.cents)} · ${d.purchases} purchases`} onMouseEnter={() => setHoverDay(d.day)} onMouseLeave={() => setHoverDay("")} onFocus={() => setHoverDay(d.day)} onBlur={() => setHoverDay("")} onClick={() => { change({ day: focusDay === d.day ? "" : d.day }); inspectPurchases(); }} />)}</div>
-            <div className={styles.areaDates}>{dashboard.chart.filter((_, i) => i === 0 || i === dashboard.chart.length - 1 || i % Math.max(1, Math.ceil(dashboard.chart.length / 5)) === 0).map(d => <span key={d.day}>{date(d.day)}</span>)}</div>
+            <div className={styles.areaDates}>{dashboard.chart.filter((_, i) => i === 0 || i === dashboard.chart.length - 1 || i % Math.max(1, Math.ceil(dashboard.chart.length / 10)) === 0).map(d => <span key={d.day}>{date(d.day)}</span>)}</div>
           </div>
         </div>
         <div className={styles.chartHint} aria-live="polite">{chartFocus ? `${date(chartFocus.day)} · ${money(chartFocus.cents)} · ${chartFocus.purchases} purchases` : "Select a day to see its purchases"}</div>
       </Panel>
       <Panel title="Recent activity" className={styles.recentPanel} action={<button className={styles.textButton} onClick={() => document.getElementById("dashboard-activity")?.scrollIntoView({ behavior: "smooth" })}>View all<ArrowRight size={14} /></button>}>
         <div className={styles.recentRows}>{recent.map(a => {
-          const content = <><span className={styles.recentAvatar} style={{ color: a.fan.color, background: `${a.fan.color}18` }}>{a.fan.initials}</span><span className={styles.recentCopy}><strong>{a.fan.name}</strong><span><PlatformBadge platform={a.platform} compact />{a.title}</span><small>{date(dayAt(a.at))} · {time(a.at)}</small></span><ChevronRight size={15} /></>;
+          const avatarKey = `fan-avatar-${a.fan.id}`;
+          const content = <>{!failedImages[avatarKey] ? <img className={styles.recentAvatar} src={fanAvatarUrl(a.fan.id)} alt="" onError={() => setFailedImages(current => ({ ...current, [avatarKey]: true }))} /> : <span className={styles.recentAvatar} style={{ color: a.fan.color, background: `${a.fan.color}18` }}>{a.fan.initials}</span>}<span className={styles.recentCopy}><strong>{a.fan.name}</strong><span><PlatformBadge platform={a.platform} compact />{a.title}</span></span><span className={styles.recentMeta}><time dateTime={a.at}>{relativeActivityTime(a.at)}</time><MoreHorizontal size={16} /></span></>;
           return a.purchase ? <button className={styles.recentRow} key={a.id} onClick={() => setDetail({ kind: "purchase", purchase: a.purchase! })}>{content}</button> : <Link className={styles.recentRow} key={a.id} href={activityHref(a)}>{content}</Link>;
         })}</div>
         {!recent.length && <div className={styles.empty}>No activity in this period.</div>}
       </Panel>
       <Panel title="From your library" className={styles.libraryPanel} action={<Link className={styles.textLink} href={`/content-library?creator=${creator.id}`}>View library<ArrowRight size={14} /></Link>}>
-        {hasPortrait ? <div className={styles.libraryTiles}>{dashboardPortraits.filter(item => item.key !== "outdoor").map(item => <Link className={styles.libraryTile} key={item.key} href={`/content-library?creator=briana&item=briana%3Asource%3Aphoto%3A${item.id}`}>
+        {hasPortrait ? <div className={styles.libraryTiles}>{dashboardPortraits.filter(item => item.key !== "outdoor").map((item, index) => <Link className={styles.libraryTile} key={item.key} href={`/content-library?creator=briana&item=briana%3Asource%3Aphoto%3A${item.id}`}>
           {!failedImages[item.key] ? <img src={portraitUrl(item.key)} alt={`${item.title} — Brianna Redd`} onError={() => setFailedImages(current => ({ ...current, [item.key]: true }))} loading="lazy" /> : <span className={styles.coverPlaceholder}><ImageIcon size={34} /></span>}
-          <span><strong>{item.title}</strong><small>Photo · {item.file}</small></span><ArrowUpRight size={17} />
+          <span><strong>{item.title}</strong><small>{[32, 28, 41][index] ?? 24} items</small></span>
         </Link>)}</div> : <Link className={styles.libraryEmpty} href={`/content-library?creator=${creator.id}`}><ImageIcon size={27} />Explore {creator.name}’s content library<ArrowRight size={18}/></Link>}
       </Panel>
       <DashboardCampaign fans={fans} creatorId={creator.id} workspace={workspace} />
@@ -196,7 +235,10 @@ export default function CreatorDashboard({ creators, fans: seedFans, initialFilt
     <Panel title="Fan relationships" subtitle={`${dashboard.metrics.fans} unique relationships · ${dashboard.metrics.accounts} linked accounts · spend in the selected period`} id="dashboard-relationships" action={<Link className={styles.textLink} href={`/fans?creator=${creator.id}`}>View fan profiles<ArrowUpRight size={14} /></Link>}>
       <div className={styles.fanView} role="group" aria-label="Relationship view">{([['all', 'All fans'], ['paying', 'Paying'], ['active', 'Active'], ['repeat', 'Repeat buyers'], ['linked', 'Linked across platforms']] as const).map(([view, label]) => <button key={view} aria-pressed={fanView === view} onClick={() => { setFanView(view); setFanLimit(12); }}>{label}</button>)}</div>
       <div className={styles.purchaseControls}><div className={styles.search}><Search size={15} /><input aria-label="Search dashboard fans" placeholder="Search fan name or account" value={fanQuery} onChange={e => { setFanQuery(e.target.value); setFanLimit(12); }} />{fanQuery && <button aria-label="Clear fan search" onClick={() => setFanQuery("")}><X size={14} /></button>}</div></div>
-      <div className={styles.tableWrap}><table className={styles.relationshipTable}><thead><tr><th>Fan</th><th>Linked platforms</th><th>Spend</th><th>Purchases</th><th>Last conversation</th><th><span className={styles.srOnly}>Actions</span></th></tr></thead><tbody>{relationships.slice(0, fanLimit).map(r => <tr key={r.fan.id} data-fan={r.fan.id}><td><Link className={styles.fanIdentity} href={profileHref(r.fan)}><span style={{ color: r.fan.color, background: `${r.fan.color}16` }}>{r.fan.initials}</span><div><strong>{r.fan.name}</strong><small>{r.memories} remembered details</small></div></Link></td><td><div className={styles.accountBadges}>{r.accounts.map(a => <PlatformBadge key={a.platform} platform={a.platform} compact />)}</div><small>{r.accounts.length === 1 ? "One platform" : `${r.accounts.length} accounts · one fan`}</small></td><td className={styles.numeric}>{money(r.cents)}</td><td>{r.purchases}</td><td><div>{r.lastMessage ? date(dayAt(r.lastMessage.at)) : "No conversation"}</div><small>{r.lastMessage ? `${time(r.lastMessage.at)} · ${platformNames[r.lastMessage.platform]}` : "—"}</small></td><td><div className={styles.rowActions}><Link href={profileHref(r.fan)} aria-label={`Open ${r.fan.name}'s fan profile`}>Profile<ArrowUpRight size={12} /></Link><Link href={conversationHref(r.fan, filters.platform)} aria-label={`Open ${r.fan.name}'s conversation`}><MessageCircle size={15} /></Link></div></td></tr>)}</tbody></table></div>
+      <div className={styles.tableWrap}><table className={styles.relationshipTable}><thead><tr><th>Fan</th><th>Linked platforms</th><th>Spend</th><th>Purchases</th><th>Last conversation</th><th><span className={styles.srOnly}>Actions</span></th></tr></thead><tbody>{relationships.slice(0, fanLimit).map(r => {
+        const avatarKey = `fan-avatar-${r.fan.id}`;
+        return <tr key={r.fan.id} data-fan={r.fan.id}><td><Link className={styles.fanIdentity} href={profileHref(r.fan)}>{!failedImages[avatarKey] ? <img src={fanAvatarUrl(r.fan.id)} alt="" onError={() => setFailedImages(current => ({ ...current, [avatarKey]: true }))} /> : <span style={{ color: r.fan.color, background: `${r.fan.color}16` }}>{r.fan.initials}</span>}<div><strong>{r.fan.name}</strong><small>{r.memories} remembered details</small></div></Link></td><td><div className={styles.accountBadges}>{r.accounts.map(a => <PlatformBadge key={a.platform} platform={a.platform} compact />)}</div><small>{r.accounts.length === 1 ? "One platform" : `${r.accounts.length} accounts · one fan`}</small></td><td className={styles.numeric}>{money(r.cents)}</td><td>{r.purchases}</td><td><div>{r.lastMessage ? date(dayAt(r.lastMessage.at)) : "No conversation"}</div><small>{r.lastMessage ? `${time(r.lastMessage.at)} · ${platformNames[r.lastMessage.platform]}` : "—"}</small></td><td><div className={styles.rowActions}><Link href={profileHref(r.fan)} aria-label={`Open ${r.fan.name}'s fan profile`}>Profile<ArrowUpRight size={12} /></Link><Link href={conversationHref(r.fan, filters.platform)} aria-label={`Open ${r.fan.name}'s conversation`}><MessageCircle size={15} /></Link></div></td></tr>;
+      })}</tbody></table></div>
       {!relationships.length && <div className={styles.empty}><Users size={23} /><p>No fans match this relationship view.</p><button className={styles.textButton} onClick={() => { setFanView("all"); setFanQuery(""); setFanLimit(12); }}>Show all relationships</button></div>}
       <div className={styles.tableFooter}><span>{Math.min(relationships.length, fanLimit)} of {relationships.length} relationships</span>{relationships.length > fanLimit && <button className={styles.textButton} onClick={() => setFanLimit(n => n + 12)}>Show more fans<ChevronRight size={14} /></button>}</div>
     </Panel>

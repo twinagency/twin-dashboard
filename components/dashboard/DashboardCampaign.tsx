@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
-import { ArrowRight, CalendarDays, Megaphone } from "lucide-react";
+import { ArrowRight, Megaphone } from "lucide-react";
 import { buildLibrary, restoreLibrary, LIBRARY_STORAGE } from "../content-library/model";
 import { emptyInbox, restoreInbox, INBOX_STORAGE } from "../inbox/model";
 import { CAMPAIGN_STORAGE, campaignHref, restoreCampaigns, seedCampaigns } from "../campaigns/model";
@@ -31,7 +31,7 @@ export default function DashboardCampaign({ fans, creatorId, workspace }: { fans
   const campaign = campaigns.filter(c => c.status === "Scheduled").sort((a, b) => a.scheduledAt.localeCompare(b.scheduledAt))[0]
     || campaigns.find(c => c.status === "Active") || campaigns.find(c => c.status === "Draft");
   return <section className={`${styles.panel} ${styles.campaignPanel}`} aria-label="Campaign spotlight">
-    <div className={styles.panelHeading}><h2>{campaign?.status === "Scheduled" ? "Next campaign" : "Campaign spotlight"}</h2><CalendarDays size={16} /></div>
+    <div className={styles.panelHeading}><h2>{campaign?.status === "Scheduled" ? "Next campaign" : "Campaign spotlight"}</h2></div>
     <Link className={styles.campaignCover} href={campaignHref(creatorId, campaign?.id)}>
       {creatorId === "briana" && !imageFailed ? <img src={portraitUrl("portrait")} alt="Relaxed portrait of Brianna Redd" onError={() => setImageFailed(true)} loading="lazy" /> : <span className={styles.coverPlaceholder}><Megaphone size={36} /></span>}
       <span className={styles.campaignCaption}><strong>{campaign?.name || "Your next release"}</strong><small>{campaign ? `${campaign.status} · ${campaign.platforms.map(p => p === "onlyfans" ? "OnlyFans" : "Telegram").join(" + ")}` : "Plan a new campaign"}</small>{campaign?.status === "Scheduled" && <small>{new Intl.DateTimeFormat("en-AU", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: "Australia/Brisbane" }).format(new Date(campaign.scheduledAt))} AEST</small>}</span>

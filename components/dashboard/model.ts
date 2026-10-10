@@ -14,6 +14,7 @@ export type DisplayCurrency = "USD" | "AUD";
 export type Filters = { creatorId: string; platform: PlatformFilter; window: Window; currency: DisplayCurrency; from: string; to: string; day: string };
 export type LedgerEntry = Purchase & { fan: Fan; status: "Completed" };
 export type Activity = { id: string; fan: Fan; platform: Platform; at: string; kind: "Conversation" | "Purchase" | "Memory" | "Account link"; title: string; summary: string; purchase?: LedgerEntry; sourceId?: string };
+export type Trend = { series: { day: string; value: number }[]; percentChange: number | null };
 
 export const dayAt = (at: string) => new Date(Date.parse(at) + 10 * 60 * 60 * 1000).toISOString().slice(0, 10);
 export function validDay(day: string): boolean {
@@ -65,13 +66,23 @@ export function buildDashboard(fans: Fan[], filters: Filters, audRate = AUD_PER_
   const range = rangeFor(filters, fans);
   const inRange = (at: string) => { const day = dayAt(at); return day >= range.from && day <= range.to; };
   const onPlatform = (platform: Platform) => filters.platform === "all" || filters.platform === platform;
+  const cents = (p: Purchase) => valueCents(p, filters.currency, audRate);
+  const periodTotals = (from: string, to: string) => {
+    const periodFans = fans.filter(f => f.creatorId === filters.creatorId && dayAt(f.firstSeen) <= to);
+    const periodAccounts = (fan: Fan) => fan.accounts.filter(a => dayAt(a.linkedAt) <= to);
+    const scoped = periodFans.filter(f => filters.platform === "all" || periodAccounts(f).some(a => a.platform === filters.platform));
+    const purchases = scoped.flatMap(f => f.purchases.filter(p => onPlatform(p.platform) && dayAt(p.at) >= from && dayAt(p.at) <= to && Number.isFinite(p.amount) && p.amount > 0));
+    const activeFans = new Set(scoped.filter(f => messagesFor(f, state, filters.platform)
+      .some(m => m.direction === "in" && dayAt(m.at) >= from && dayAt(m.at) <= to)).map(f => f.id)).size;
+    return { revenue: purchases.reduce((sum, p) => sum + cents(p), 0), activeFans,
+      platforms: Object.fromEntries(platformOrder.map(platform => [platform, purchases.filter(p => p.platform === platform).reduce((sum, p) => sum + cents(p), 0)])) as Record<Platform, number> };
+  };
   const creatorFans = fans.filter(f => f.creatorId === filters.creatorId && dayAt(f.firstSeen) <= range.to);
   const accountsAtEnd = (fan: Fan) => fan.accounts.filter(a => dayAt(a.linkedAt) <= range.to);
   const scopedFans = creatorFans.filter(f => filters.platform === "all" || accountsAtEnd(f).some(a => a.platform === filters.platform));
   const entries: LedgerEntry[] = scopedFans.flatMap(fan => fan.purchases
     .filter(p => onPlatform(p.platform) && inRange(p.at) && Number.isFinite(p.amount) && p.amount > 0)
     .map(p => ({ ...p, fan, status: "Completed" as const }))).sort((a, b) => b.at.localeCompare(a.at));
-  const cents = (p: Purchase) => valueCents(p, filters.currency, audRate);
   const payingIds = new Set(entries.map(p => p.fan.id));
   const activeIds = new Set(scopedFans.filter(f => messagesFor(f, state, filters.platform).some(m => m.direction === "in" && inRange(m.at))).map(f => f.id));
   const repeatBuyers = [...payingIds].filter(id => entries.filter(p => p.fan.id === id).length >= 2).length;
@@ -110,7 +121,38 @@ export function buildDashboard(fans: Fan[], filters: Filters, audRate = AUD_PER_
   activities.push(...entries.map(p => ({ id: `purchase:${p.id}`, fan: p.fan, platform: p.platform, at: p.at, kind: "Purchase" as const, title: p.title, summary: `${originalMoney(p)} · ${p.kind} · Owned`, purchase: p, sourceId: p.sourceMessageId })));
   activities.sort((a, b) => b.at.localeCompare(a.at) || a.id.localeCompare(b.id));
   const revenueCents = entries.reduce((sum, p) => sum + cents(p), 0);
-  return { range, entries, platforms, chart, relationships, content, activities,
+  const activeByDay = new Map(range.days.map(day => [day, new Set<string>()]));
+  for (const fan of scopedFans) for (const message of messagesFor(fan, state, filters.platform)) {
+    const day = dayAt(message.at);
+    if (message.direction === "in" && activeByDay.has(day)) activeByDay.get(day)!.add(fan.id);
+  }
+  let currentComparison = { revenue: revenueCents, activeFans: activeIds.size,
+    platforms: Object.fromEntries(platforms.map(p => [p.platform, p.cents])) as Record<Platform, number> };
+  let previousComparison: ReturnType<typeof periodTotals> | null = null;
+  if (filters.window === "all") {
+    const half = Math.floor(range.days.length / 2);
+    if (half > 0) {
+      const previousFrom = range.days[0], previousTo = range.days[half - 1];
+      const currentFrom = range.days[range.days.length - half], currentTo = range.days.at(-1)!;
+      previousComparison = periodTotals(previousFrom, previousTo);
+      currentComparison = periodTotals(currentFrom, currentTo);
+    }
+  } else {
+    const previousFrom = shiftDay(range.from, -range.days.length);
+    const previousTo = shiftDay(range.from, -1);
+    if (previousFrom >= range.firstDay) previousComparison = periodTotals(previousFrom, previousTo);
+  }
+  const percentChange = (current: number, previous: number | null) => previous && Number.isFinite(previous) ? (current - previous) / previous * 100 : null;
+  const trends = {
+    revenue: { series: chart.map(point => ({ day: point.day, value: point.cents })),
+      percentChange: percentChange(currentComparison.revenue, previousComparison?.revenue ?? null) } satisfies Trend,
+    platforms: platformOrder.map(platform => ({ platform,
+      series: chart.map(point => ({ day: point.day, value: point.platforms.find(item => item.platform === platform)?.cents ?? 0 })),
+      percentChange: percentChange(currentComparison.platforms[platform], previousComparison?.platforms[platform] ?? null) })),
+    activeFans: { series: range.days.map(day => ({ day, value: activeByDay.get(day)?.size ?? 0 })),
+      percentChange: percentChange(currentComparison.activeFans, previousComparison?.activeFans ?? null) } satisfies Trend,
+  };
+  return { range, entries, platforms, chart, relationships, content, activities, trends,
     metrics: { revenueCents, payingFans: payingIds.size, activeFans: activeIds.size, purchases: entries.length,
       repeatBuyers, repeatRate: payingIds.size ? repeatBuyers / payingIds.size * 100 : 0,
       linkedFans: scopedFans.filter(f => accountsAtEnd(f).length > 1).length, fans: scopedFans.length,
