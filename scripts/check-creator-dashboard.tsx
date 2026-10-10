@@ -247,6 +247,7 @@ async function main() {
   await textButton("Telegram", '[aria-label="Dashboard platform"]');
   assert.equal(metric("revenue"), "$70"); assert.equal(metric("paying"), "1"); assert.equal(metric("purchases"), "3");
   assert.deepEqual(platformCards(), allPlatformCards, "Telegram filtering preserves every platform card's totals, counts and trends");
+  assert.match(find('[aria-label="Inspect revenue valuation"]').textContent!, /^Telegram earnings/, "The filtered total names its channel");
   for (const [platform, revenue, purchases] of [["OnlyFans", "$739", "17"], ["WhatsApp", "$0", "0"]] as const) {
     await textButton(platform, '[aria-label="Dashboard platform"]');
     assert.equal(metric("revenue"), revenue); assert.equal(metric("purchases"), purchases);
