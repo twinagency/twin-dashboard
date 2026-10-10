@@ -1,4 +1,5 @@
 "use client";
+import PlatformMark from '../fans/PlatformMark';
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
@@ -14,7 +15,7 @@ const timeLabel = (at: string) => new Intl.DateTimeFormat("en-AU", { hour: "nume
 const money = (amount: number, currency: "USD" | "Stars") => currency === "Stars" ? `${amount.toLocaleString("en-US")} Stars` : `US$${amount.toFixed(2)}`;
 
 function Channel({ platform }: { platform: Platform }) {
-  return <span className={styles.channel} data-platform={platform}>{platform === "telegram" && <Send size={12}/>} {platformNames[platform]}</span>;
+  return <span className={styles.channel} data-platform={platform}><PlatformMark platform={platform} size={14}/> {platformNames[platform]}</span>;
 }
 
 /** Local relationship histories inside the existing /users inbox. No real-user actions or feed are mounted. */
@@ -90,7 +91,7 @@ export default function FanConversationWindow({ creators, fans: seedFans, initia
     setSourceId(undefined); setMessageSearch(""); setNotice("Message added to conversation");
   };
   return <div className={`users-workspace ${styles.workspace}`} data-fan-conversation-window="true">
-    <div className={styles.heading}><div><span className={styles.eyebrow}>CONVERSATIONS</span><h1>Live Telegram Window</h1></div><Link href="/users" className={styles.textLink}>Live Telegram chats<ArrowUpRight size={14}/></Link></div>
+    <div className={styles.heading}><div><span className={styles.eyebrow}>CONVERSATIONS</span><h1>Conversations</h1></div><Link href="/users" className={styles.textLink}>Live Telegram chats<ArrowUpRight size={14}/></Link></div>
     <button className={styles.mobileBrowse} onClick={() => setMobileList(value => !value)}><Users size={16}/>{mobileList ? "Hide fan list" : "Browse fans"}</button>
     <div className={styles.columns}>
       <aside className={`users-panel users-panel-list ${styles.fanList} ${mobileList ? styles.mobileVisible : ""}`} aria-label="Conversation fan browser">
@@ -105,16 +106,16 @@ export default function FanConversationWindow({ creators, fans: seedFans, initia
         </button>)}</div>
       </aside>
       {fan && creator ? <>
-        <section className={`users-panel users-panel-chat ${styles.chat}`} aria-label={`${platformNames[activePlatform]} conversation with ${fan.name}`}>
-          <div className={styles.chatHeader}><span className={styles.avatar} style={{ color: fan.color, background: `${fan.color}16` }}>{fan.initials}</span><div><h2>{fan.name}</h2><p>@{fan.accounts.find(account => account.platform === activePlatform)?.username} · {creator.name}</p></div><Link href={profileHref(fan)} className={styles.textLink}>Fan profile<ArrowUpRight size={14}/></Link></div>
-          <div className={styles.platforms} aria-label="Conversation platform">{PLATFORMS.map(item => <button key={item} disabled={!fan.accounts.some(account => account.platform === item)} aria-pressed={activePlatform === item} onClick={() => { setPlatform(item); setSourceId(undefined); setMessageSearch(""); setNotice(""); }}><Channel platform={item}/></button>)}</div>
+        <section data-chat-platform={activePlatform} className={`users-panel users-panel-chat ${styles.chat}`} aria-label={`${platformNames[activePlatform]} conversation with ${fan.name}`}>
+          <div data-chat-header className={styles.chatHeader}><span className={styles.avatar} style={{ color: fan.color, background: `${fan.color}16` }}>{fan.initials}</span><div><h2>{fan.name}</h2><p>@{fan.accounts.find(account => account.platform === activePlatform)?.username} · {creator.name}</p></div><Link href={profileHref(fan)} className={styles.textLink}>Fan profile<ArrowUpRight size={14}/></Link></div>
+          <div data-chat-tabs className={styles.platforms} aria-label="Conversation platform">{PLATFORMS.map(item => <button key={item} disabled={!fan.accounts.some(account => account.platform === item)} aria-pressed={activePlatform === item} onClick={() => { setPlatform(item); setSourceId(undefined); setMessageSearch(""); setNotice(""); }}><Channel platform={item}/></button>)}</div>
           <div className={styles.threadToolbar}><div className={styles.search}><Search size={14}/><input aria-label="Search conversation" placeholder="Search this conversation" value={messageSearch} onChange={event => { setMessageSearch(event.target.value); setSourceId(undefined); }}/></div><select aria-label="Conversation handling" value={mode} onChange={event => setState(previous => ({ ...previous, modes: { ...previous.modes, [key]: event.target.value as Handling } }))}><option>Human</option><option>Copilot</option><option>Autonomous</option></select></div>
           {selectedSource && <div className={styles.contextNotice}>Conversation context<button onClick={() => setSourceId(undefined)}>Latest messages</button></div>}
-          <ChatThread fanId={`${fan.id}:${activePlatform}`} messages={thread} live={false} sourceMessageId={selectedSource} lastActiveLabel={latest ? `${dateLabel(latest.at)} · ${timeLabel(latest.at)}` : "unknown"} spentStars={totals.stars} spentLabel={money(activePlatform === "telegram" ? totals.stars : totals.usd, activePlatform === "telegram" ? "Stars" : "USD")} purchasedCount={totals.purchases.length}/>
+          <ChatThread appearance={activePlatform} fanId={`${fan.id}:${activePlatform}`} messages={thread} live={false} sourceMessageId={selectedSource} lastActiveLabel={latest ? `${dateLabel(latest.at)} · ${timeLabel(latest.at)}` : "unknown"} spentStars={totals.stars} spentLabel={money(activePlatform === "telegram" ? totals.stars : totals.usd, activePlatform === "telegram" ? "Stars" : "USD")} purchasedCount={totals.purchases.length}/>
           {messageSearch && !matching.length && <p className={styles.empty}>No messages match your search.</p>}
-          <div className={styles.composer}><div className={styles.composerHeading}><span>Reply on <strong>{platformNames[activePlatform]}</strong></span>{mode !== "Human" && <button className={styles.textLink} onClick={() => setState(previous => ({ ...previous, modes: { ...previous.modes, [key]: "Human" } }))}>Take over</button>}</div>
+          <div data-chat-composer className={styles.composer}><div className={styles.composerHeading}><span>Reply on <strong>{platformNames[activePlatform]}</strong></span>{mode !== "Human" && <button className={styles.textLink} onClick={() => setState(previous => ({ ...previous, modes: { ...previous.modes, [key]: "Human" } }))}>Take over</button>}</div>
             <textarea aria-label={`Reply on ${platformNames[activePlatform]}`} placeholder={`Message ${fan.name} on ${platformNames[activePlatform]}…`} value={draft} maxLength={4000} onChange={event => updateDraft(event.target.value)}/>
-            <div className={styles.composerActions}><button className={styles.secondaryButton} onClick={() => updateDraft(fan.suggestedReplies?.[activePlatform] ?? `Hey ${fan.name}! What have you been up to this week?`)}>Suggest reply</button><button className={styles.primaryButton} disabled={!draft.trim() || !ready} onClick={send}><Send size={14}/>Send</button></div>
+            <div className={styles.composerActions}><button className={styles.secondaryButton} onClick={() => updateDraft(fan.suggestedReplies?.[activePlatform] ?? `Hey ${fan.name}! What have you been up to this week?`)}>Suggest reply</button><button className={styles.primaryButton} disabled={!draft.trim() || !ready} onClick={send} data-chat-send><Send size={14}/>Send</button></div>
             <span className={styles.notice} role="status">{notice}{!storageAvailable && " Browser saving is unavailable."}</span>
           </div>
         </section>

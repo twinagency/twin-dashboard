@@ -35,7 +35,7 @@ export function buildLibrary(fans: Fan[]): { items: LibraryItem[]; sales: Sale[]
   for(const creator of [...new Set(fans.map(f=>f.creatorId))])for(let n=0;n<6;n++){
     const title=['Morning light','Coastal walk','Studio journal','Weekend collection','Quiet afternoon','Next chapter'][n];
     const kind=n%2?'Video':'Photo';const listings=defaultListings(kind);
-    if(n<3){listings.onlyfans.enabled=true;listings.telegram.enabled=true;}
+    if(n<3){listings.onlyfans.enabled=true;listings.telegram.enabled=true;if(creator==='briana')listings.whatsapp.enabled=true;}
     map.set(`${creator}:new:${n}`,{id:`${creator}:new:${n}`,creatorId:creator,title,originalTitle:'',kind,description:`A new addition to the ${title.toLowerCase()} collection.`,collection:'Upcoming releases',tags:['new',kind.toLowerCase()],status:n<3?'Published':'Draft',addedAt:'2026-10-09T07:00:00Z',listings,members:[],activity:[]});
   }
   for (const sale of sales) sale.includedItemIds=[...(map.get(sale.itemId)?.members||[])];
@@ -68,7 +68,7 @@ export function restoreLibrary(raw:string|null,base:LibraryItem[]):LibraryItem[]
       const legacyOnlyFans=oldListings.onlyfans?.enabled?oldListings.onlyfans:[oldListings.fansly,oldListings.fanvue].find(listing=>listing?.enabled)||oldListings.onlyfans||original?.listings.onlyfans;
       const telegram=oldListings.telegram||original?.listings.telegram;
       if(!legacyOnlyFans||!telegram)continue;
-      const listings:Record<Platform,Listing>={onlyfans:{enabled:!!legacyOnlyFans.enabled,price:legacyOnlyFans.price},telegram:{enabled:!!telegram.enabled,price:telegram.price}};
+      const listings:Record<Platform,Listing>={onlyfans:{enabled:!!legacyOnlyFans.enabled,price:legacyOnlyFans.price},telegram:{enabled:!!telegram.enabled,price:telegram.price},whatsapp:item.listings.whatsapp||original?.listings.whatsapp||defaultListings(item.kind).whatsapp};
       const safe={...item,title:normalizePlatformText(item.title),description:normalizePlatformText(item.description),listings,preview:original?.preview,originalTitle:original?.originalTitle||'',members:item.members.filter((m:unknown)=>typeof m==='string'),activity:item.activity.filter((e:any)=>typeof e?.text==='string'&&typeof e?.at==='string').slice(-100).map((e:any)=>({...e,text:normalizePlatformText(e.text)}))} as LibraryItem;
       if(!safe.listings||validateItem(safe,[...result,...saved.items]))continue;
       if(index<0)result.push(safe);else result[index]=safe;

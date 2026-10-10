@@ -1,4 +1,4 @@
-import { channelKey, emptyState, messagesFor } from '../fans/model';
+import { channelKey, emptyState, messagesFor, platformNames } from '../fans/model';
 import type { Fan, Message, Platform, WorkspaceState } from '../fans/types';
 import { effectiveMode, emptyInbox, type InboxState } from '../inbox/model';
 import { ownership, type LibraryItem, type Sale } from '../content-library/model';
@@ -35,7 +35,7 @@ export type Context = { fans: Fan[]; items: LibraryItem[]; sales: Sale[]; worksp
 export const freshConfig = (creatorId: string, id: string): Config => ({
   id, creatorId, name: '', goal: 'New content', platforms: ['onlyfans', 'telegram'],
   segment: 'All fans', days: 30, spend: 100, fanIds: [], bothChannels: false, itemId: '',
-  messages: { onlyfans: { text: 'Hey {first_name}, I have something new to share with you. Have a look when you get a quiet moment x', price: 29 }, telegram: { text: 'Hey {first_name}, I have something new to share with you. Have a look when you get a quiet moment x', price: 2000 } },
+  messages: { onlyfans: { text: 'Hey {first_name}, I have something new to share with you. Have a look when you get a quiet moment x', price: 29 }, telegram: { text: 'Hey {first_name}, I have something new to share with you. Have a look when you get a quiet moment x', price: 2000 }, whatsapp: { text: 'Hi {first_name}, how has your week been? Hope your plans are coming together.', price: 29 } },
   followUp: { enabled: false, hours: 48, text: 'Hey {first_name}, leaving this here for when you have a quiet moment. No rush x' }, scheduledAt: '',
 });
 export const emptyCampaigns = (): CampaignStore => ({ version: 1, campaigns: [] });
@@ -94,13 +94,13 @@ export function audience(config: Config, ctx: Context, at: string) {
     // A fan is counted once. Platform-level exclusions do not subtract him again.
   }
   return { recipients, excluded, matchingFans, fans: new Set(recipients.map(r => r.fanId)).size, deliveries: recipients.length,
-    platforms: { onlyfans: recipients.filter(r => r.platform === 'onlyfans').length, telegram: recipients.filter(r => r.platform === 'telegram').length } };
+    platforms: { onlyfans: recipients.filter(r => r.platform === 'onlyfans').length, telegram: recipients.filter(r => r.platform === 'telegram').length, whatsapp: recipients.filter(r => r.platform === 'whatsapp').length } };
 }
 
 export function validateConfig(config: Config, ctx: Context, at: string, complete = true): string {
   if (!ctx.fans.some(f => f.creatorId === config.creatorId)) return 'Choose a creator.';
   if (!config.name.trim() || config.name.length > 140) return 'Enter a campaign name of up to 140 characters.';
-  if (!config.platforms.length || new Set(config.platforms).size !== config.platforms.length || config.platforms.some(p => !['onlyfans', 'telegram'].includes(p))) return 'Choose at least one platform.';
+  if (!config.platforms.length || new Set(config.platforms).size !== config.platforms.length || config.platforms.some(p => !['onlyfans', 'telegram', 'whatsapp'].includes(p))) return 'Choose at least one platform.';
   if (!segments.includes(config.segment) || !goals.includes(config.goal)) return 'Choose a valid purpose and audience.';
   if (!Number.isInteger(config.days) || config.days < 1 || config.days > 365 || !Number.isFinite(config.spend) || config.spend < 0 || config.spend > 1_000_000) return 'Check the audience period and spending threshold.';
   if (!complete) return '';
@@ -109,9 +109,9 @@ export function validateConfig(config: Config, ctx: Context, at: string, complet
   if (config.itemId && (!item || item.status !== 'Published')) return 'Select published content from this creator’s library.';
   for (const platform of config.platforms) {
     const message = config.messages[platform];
-    if (!message?.text.trim() || message.text.length > 2000) return `Add a message of up to 2,000 characters for ${platform === 'telegram' ? 'Telegram' : 'OnlyFans'}.`;
+    if (!message?.text.trim() || message.text.length > 2000) return `Add a message of up to 2,000 characters for ${platformNames[platform]}.`;
     if (item && (!Number.isFinite(message.price) || message.price <= 0 || message.price > 1_000_000 || platform === 'telegram' && !Number.isInteger(message.price))) return 'Use a positive USD price and a whole-Star Telegram price.';
-    if (item && !item.listings[platform].enabled) return `This content is not listed on ${platform === 'telegram' ? 'Telegram' : 'OnlyFans'}. Choose another item or deselect this platform.`;
+    if (item && !item.listings[platform].enabled) return `This content is not listed on ${platformNames[platform]}. Choose another item or deselect this platform.`;
   }
   if (config.followUp.enabled && (!config.followUp.text.trim() || config.followUp.text.length > 2000 || !Number.isInteger(config.followUp.hours) || config.followUp.hours < 1 || config.followUp.hours > 168)) return 'Set a follow-up message and a delay from 1 to 168 hours.';
   if (config.scheduledAt && (!isDate(config.scheduledAt) || ms(config.scheduledAt) <= ms(at))) return 'Choose a future schedule in Brisbane time.';
@@ -207,7 +207,7 @@ export function mirrorCampaigns(campaigns: Campaign[], ctx: Context) {
     append({ id: r.messageId, at: r.sentAt, platform: r.platform, direction: 'out', text: personalized(campaign.messages[r.platform].text, fan) });
     if (r.followUpState === 'Sent' && r.followUpSentAt) append({ id: `${r.messageId}:followup`, at: r.followUpSentAt, platform: r.platform, direction: 'out', text: personalized(campaign.followUp.text, fan) });
     workspace.messages[fan.id] = extras.sort((a, b) => a.at.localeCompare(b.at)).slice(-200);
-    if (item && !offers.some(o => o.messageId === r.messageId)) offers.push({ id: `${r.messageId}:offer`, messageId: r.messageId, fanId: r.fanId, platform: r.platform, itemId: item.id, title: item.title, amount: campaign.messages[r.platform].price, currency: r.platform === 'telegram' ? 'Stars' : 'USD', at: r.sentAt });
+    if (item && r.platform !== 'whatsapp' && !offers.some(o => o.messageId === r.messageId)) offers.push({ id: `${r.messageId}:offer`, messageId: r.messageId, fanId: r.fanId, platform: r.platform, itemId: item.id, title: item.title, amount: campaign.messages[r.platform].price, currency: r.platform === 'telegram' ? 'Stars' : 'USD', at: r.sentAt });
   }
   return { workspace, inbox: { ...ctx.inbox, offers: offers.slice(-200) } };
 }
@@ -219,7 +219,7 @@ export function seedCampaigns(ctx: Context): CampaignStore {
     if (id === 'briana-recent-buyers') config.segment = 'Recent buyers';
     const item = ctx.items.find(i => i.id === itemId);
     if (item) for (const p of platforms) config.messages[p] = { text: `Hey {first_name}, ${item.title} is ready. I have kept the contents clear so you can check it against your library. Have a look when you get a moment x`, price: item.listings[p].price };
-    if (goal === 'Reconnect') for (const p of platforms) config.messages[p].text = 'Hey {first_name}, it has been a little while. How has your week been? I have added a few new collections if you feel like a browse x';
+    if (goal === 'Reconnect') for (const p of platforms) config.messages[p].text = p === 'whatsapp' ? 'Hi {first_name}, hope your week is going well. How are your plans coming together?' : 'Hey {first_name}, it has been a little while. How has your week been? I have added a few new collections if you feel like a browse x';
     const preview = audience(config, { ...ctx, workspace: emptyState(), inbox: emptyInbox() }, at);
     const chosen = [...new Set(preview.recipients.map(r => r.fanId))].slice(0, cap);
     config.segment = 'Selected fans'; config.fanIds = chosen;
@@ -236,6 +236,7 @@ export function seedCampaigns(ctx: Context): CampaignStore {
   const journal = ctx.items.find(i => i.creatorId === 'briana' && i.title === 'October journal');
   seed('briana-october-release', 'October collection release', '2026-09-30T07:00:00Z', 'Paid offer', ['onlyfans'], 'Completed', 180, journal?.id || '');
   seed('briana-returning-fans', 'Returning fans', '2026-09-12T06:00:00Z', 'Reconnect', ['telegram'], 'Completed', 220);
+  seed('briana-whatsapp-catchups', 'WhatsApp catch-ups', '2026-10-06T07:00:00Z', 'Reconnect', ['whatsapp'], 'Completed', 24);
   seed('briana-recent-buyers', 'Recent buyers', '2026-10-09T06:00:00Z', 'New content', ['onlyfans', 'telegram'], 'Active', 120);
   const morning = ctx.items.find(i => i.creatorId === 'briana' && i.title === 'Morning light');
   const weekend = { ...freshConfig('briana', 'briana-weekend-release'), name: 'Weekend content release', itemId: morning?.id || '', scheduledAt: '2026-10-10T09:00:00Z' };
@@ -254,10 +255,11 @@ export function restoreCampaigns(raw: string | null, fallback: CampaignStore, ct
     if (value?.version !== 1 || !Array.isArray(value.campaigns) || value.campaigns.length > 100) return fallback;
     const ids = new Set<string>();
     const campaigns: Campaign[] = [];
-    for (const c of value.campaigns) {
+    for (const saved of value.campaigns) {
+      const c = saved?.messages ? { ...saved, messages: { ...freshConfig(saved.creatorId, saved.id).messages, ...saved.messages } } : saved;
       if (!c || typeof c.id !== 'string' || c.id.length > 150 || ids.has(c.id) || typeof c.name !== 'string' || !isDate(c.createdAt) || !statuses.includes(c.status) || !Array.isArray(c.platforms) || !Array.isArray(c.fanIds) || !Array.isArray(c.recipients) || !Array.isArray(c.exclusions) || !Array.isArray(c.activity) || !c.messages?.onlyfans || !c.messages?.telegram || !c.followUp) continue;
       if (typeof c.itemId !== 'string' || typeof c.bothChannels !== 'boolean' || typeof c.followUp.enabled !== 'boolean' || typeof c.followUp.text !== 'string' || c.followUp.text.length > 2000 || !Number.isInteger(c.followUp.hours) || c.followUp.hours < 1 || c.followUp.hours > 168 || typeof c.scheduledAt !== 'string' || c.scheduledAt && !isDate(c.scheduledAt) || c.startedAt && !isDate(c.startedAt) || c.completedAt && !isDate(c.completedAt)) continue;
-      if (['onlyfans', 'telegram'].some(p => typeof c.messages[p].text !== 'string' || c.messages[p].text.length > 2000 || !Number.isFinite(c.messages[p].price) || c.messages[p].price <= 0 || c.messages[p].price > 1_000_000 || p === 'telegram' && !Number.isInteger(c.messages[p].price))) continue;
+      if (['onlyfans', 'telegram', 'whatsapp'].some(p => typeof c.messages[p].text !== 'string' || c.messages[p].text.length > 2000 || !Number.isFinite(c.messages[p].price) || c.messages[p].price <= 0 || c.messages[p].price > 1_000_000 || p === 'telegram' && !Number.isInteger(c.messages[p].price))) continue;
       if (validateConfig(c, ctx, c.createdAt, false)) continue;
       const creatorFans = ctx.fans.filter(f => f.creatorId === c.creatorId);
       const fanIds = new Set(creatorFans.map(f => f.id));

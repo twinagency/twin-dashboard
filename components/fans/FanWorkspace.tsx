@@ -1,4 +1,5 @@
 "use client";
+import PlatformMark from './PlatformMark';
 
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ArrowUpRight, Check, ChevronRight, CircleHelp, Clock3, Edit3, Globe2, ImageIcon, Link2, MessageCircle, MoreHorizontal, NotebookPen, Package, Search, Send, ShieldCheck, Users, Video, X } from "lucide-react";
@@ -9,14 +10,14 @@ import { useRouter } from "next/navigation";
 import { withBriannaLedger } from "./brianna-ledger";
 
 const tabs: { id: ProfileTab; label: string }[] = [{id:"summary",label:"Summary"},{id:"memory",label:"Memory"},{id:"history",label:"History"},{id:"purchases",label:"Purchases"},{id:"accounts",label:"Accounts"}];
-const platformShort: Record<Platform,string> = { onlyfans:"OF", telegram:"TG" };
+const platformShort: Record<Platform,string> = { onlyfans:"OF", telegram:"TG", whatsapp:"WhatsApp" };
 const date = (at: string) => new Intl.DateTimeFormat("en-AU", {day:"numeric",month:"short",year:"numeric",timeZone:"Australia/Brisbane"}).format(new Date(at));
 const time = (at: string) => new Intl.DateTimeFormat("en-AU", {hour:"numeric",minute:"2-digit",timeZone:"Australia/Brisbane"}).format(new Date(at));
 const money = (value: number, currency: "USD"|"Stars") => currency === "Stars" ? `${value.toLocaleString("en-US")} Stars` : `US$${value.toFixed(2)}`;
 const uid = () => typeof crypto !== "undefined" && typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
 
 function PlatformBadge({platform, compact=false}:{platform:Platform;compact?:boolean}) {
-  return <span className={`${styles.platformBadge} ${styles[platform]}`} title={platformNames[platform]}><span className={styles.platformIcon}>{platform === "telegram" ? <Send size={12}/> : platformShort[platform]}</span>{!compact && platformNames[platform]}</span>;
+  return <span className={`${styles.platformBadge} ${styles[platform]}`} title={platformNames[platform]}><span className={styles.platformIcon}>{platform === "whatsapp" ? <PlatformMark platform={platform} size={14}/> : platform === "telegram" ? <Send size={12}/> : platformShort[platform]}</span>{!compact && platformNames[platform]}</span>;
 }
 function Avatar({name,color,small=false}:{name:string;color:string;small?:boolean}) {
   return <span className={`${styles.avatar} ${small?styles.avatarSmall:""}`} style={{color,background:`${color}16`}} aria-hidden="true">{name}</span>;

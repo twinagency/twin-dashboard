@@ -1,3 +1,4 @@
+import PlatformMark from "../components/fans/PlatformMark";
 import assert from "node:assert/strict";
 import {readFileSync} from "node:fs";
 import {createRequire} from "node:module";
@@ -12,6 +13,7 @@ function compile(path:string,imports:Record<string,unknown>){
  const javascript=ts.transpileModule(source,{fileName:path,compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText;
  const result={exports:{} as any};new Function("require","module","exports",javascript)((name:string)=>{
   if(Object.hasOwn(imports,name))return imports[name];
+  if(name==="../../fans/PlatformMark")return {__esModule:true,default:PlatformMark};
   if(["react","react/jsx-runtime","lucide-react"].includes(name))return nativeRequire(name);
   throw Error(`Unexpected runtime dependency: ${name}`);
  },result,result.exports);return result.exports;
@@ -71,7 +73,9 @@ async function main(){
  assert.equal(document.querySelector(".controlNumber"),null);
  const firstSharing=document.querySelector<HTMLButtonElement>("[data-intelligence-control='9'] button[role='switch']")!;
  assert.equal(firstSharing.getAttribute("aria-checked"),"true");await click(firstSharing);assert.equal(firstSharing.getAttribute("aria-checked"),"false");
- await click(button("Save controls"));const stored=JSON.parse(win.localStorage.getItem(model.storageKey(model.BRIANNA_CONTROL_ID))!);assert.equal(stored.values["platform-context.sharing"][0].of_tg,false);
+ const whatsappPair=Array.from(document.querySelectorAll<HTMLButtonElement>("[data-intelligence-control='9'] button")).find(b=>b.textContent?.trim()==='OnlyFans  WhatsApp')!;await click(whatsappPair);
+ const whatsappSharing=document.querySelector<HTMLButtonElement>("button[aria-label='Relationship memories: OnlyFans to WhatsApp']")!;assert.equal(whatsappSharing.getAttribute('aria-checked'),'true');await click(whatsappSharing);assert.equal(whatsappSharing.getAttribute('aria-checked'),'false');
+ await click(button("Save controls"));const stored=JSON.parse(win.localStorage.getItem(model.storageKey(model.BRIANNA_CONTROL_ID))!);assert.equal(stored.values["platform-context.sharing"][0].of_tg,false);assert.equal(stored.values["platform-context.sharing"][0].of_wa,false);
  const move=document.querySelector<HTMLButtonElement>("button[aria-label='Move Present offer up']")!;await click(move);assert.ok(document.querySelector("[data-intelligence-control='20'] ol")?.textContent?.indexOf("Present offer")!<document.querySelector("[data-intelligence-control='20'] ol")?.textContent?.indexOf("Confirm format")!);
 
  const addRule=button("Add rule");const prior=document.querySelectorAll("[data-intelligence-control='46'] .dataRow").length;await click(addRule);assert.equal(document.querySelectorAll("[data-intelligence-control='46'] .dataRow").length,prior+1);

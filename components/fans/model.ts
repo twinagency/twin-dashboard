@@ -1,10 +1,10 @@
 import { type Fan, type Handling, type Message, type Platform, type PlatformFilter, type ProfileTab, type WorkspaceState } from "./types";
 export const STORAGE_KEY = "twin-fan-workspace-v1";
-export const platformNames: Record<Platform, string> = { onlyfans: "OnlyFans", telegram: "Telegram" };
+export const platformNames: Record<Platform, string> = { onlyfans: "OnlyFans", telegram: "Telegram", whatsapp: "WhatsApp" };
 // Older browser records are folded into the remaining USD channel once on restore.
 // These legacy identifiers are never offered as visible platform choices.
 export function normalizePlatform(value: unknown): Platform | undefined {
-  if (value === "telegram") return "telegram";
+  if (value === "telegram" || value === "whatsapp") return value;
   if (value === "onlyfans" || value === "fansly" || value === "fanvue") return "onlyfans";
 }
 export function normalizePlatformText(text: string): string {
@@ -16,7 +16,7 @@ export function normalizePlatformText(text: string): string {
     .replace(/Telegram, OnlyFans or OnlyFans/g, "Telegram");
 }
 export const compatibleChannelKeys = (fanId: string, platform: Platform) =>
-  platform === "onlyfans" ? [`${fanId}:onlyfans`, `${fanId}:fansly`, `${fanId}:fanvue`] : [`${fanId}:telegram`];
+  platform === "onlyfans" ? [`${fanId}:onlyfans`, `${fanId}:fansly`, `${fanId}:fanvue`] : [`${fanId}:${platform}`];
 export const emptyState = (): WorkspaceState => ({ version: 1, notes: {}, messages: {}, memories: {}, modes: {}, drafts: {} });
 export const channelKey = (fanId: string, platform: Platform) => `${fanId}:${platform}`;
 export function conversationPlatform(fan: Fan, preferred?: string | null): Platform {

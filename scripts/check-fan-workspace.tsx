@@ -1,3 +1,4 @@
+import PlatformMark from '../components/fans/PlatformMark';
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -16,7 +17,7 @@ function compile(path: string, imports: Record<string, unknown>) {
   const js = ts.transpileModule(readFileSync(path, "utf8"), { fileName: path, compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2020, esModuleInterop: true } }).outputText;
   const result = { exports: {} as Record<string, any> };
   new Function("require", "module", "exports", js)((name: string) => {
-    if (Object.hasOwn(imports, name)) return imports[name];
+    if (Object.hasOwn(imports, name)) return imports[name];if (name === '../fans/PlatformMark' || name === './PlatformMark') return { __esModule: true, default: PlatformMark };
     if (["react", "react/jsx-runtime", "lucide-react"].includes(name)) return require(name);
     throw new Error(`Unexpected fan workspace dependency: ${name}`);
   }, result, result.exports);
@@ -114,14 +115,14 @@ async function main() {
   }
   const ben = briannaFans.find(f => f.name === "Ben")!;
   const oliver = briannaFans.find(f => f.name === "Oliver")!;
-  assert.deepEqual(types.PLATFORMS, ["onlyfans", "telegram"]);
+  assert.deepEqual(types.PLATFORMS, ["onlyfans", "telegram", "whatsapp"]);
   for (const fan of sharedFans) {
-    assert.ok(fan.accounts.length <= 2 && new Set(fan.accounts.map(a=>a.platform)).size === fan.accounts.length);
+    assert.ok(fan.accounts.length <= types.PLATFORMS.length && new Set(fan.accounts.map(a=>a.platform)).size === fan.accounts.length);
     assert.ok(fan.accounts.every(a=>types.PLATFORMS.includes(a.platform)));
     const visibleText=[fan.summary,...fan.messages.map(m=>m.text),...fan.memories.map(m=>`${m.label} ${m.value}`),...(fan.history||[]).map(h=>`${h.title} ${h.summary}`),...(fan.notes||[]).map(n=>n.text),...Object.values(fan.suggestedReplies||{})].join(" ");
     assert.doesNotMatch(visibleText,/Fansly|Fanvue|all four (platforms|accounts)|four linked accounts/i);
   }
-  assert.deepEqual(ben.accounts.map(a=>a.platform),["onlyfans","telegram"]);
+  assert.deepEqual(ben.accounts.map(a=>a.platform),["onlyfans","telegram","whatsapp"]);
   assert.equal(oliver.accounts.length, 1);
   assert.equal(model.totalsFor(ben,"all").usd,471);
   assert.equal(model.totalsFor(ben,"all").stars,5400);
@@ -173,7 +174,7 @@ async function main() {
   assert.equal(navigation, "/users?relationship=briana-ben&creator=briana&platform=telegram");
   await click('#fan-tab-memory');
   assert.equal(document.querySelectorAll(".memoryGroup").length,6);
-  assert.equal(document.querySelectorAll(".memoryEntryValue").length,24);
+  assert.equal(document.querySelectorAll(".memoryEntryValue").length,25);
   await input('[aria-label="Memory category"]',"Open follow-ups");
   assert.equal(document.querySelectorAll(".memoryEntryValue").length,4);
   await input('[aria-label="Search relationship memory"]',"print");
@@ -182,9 +183,9 @@ async function main() {
   assert.equal(navigation, "/users?relationship=briana-ben&creator=briana&platform=telegram&source=ben-print-2");
   assert.equal(document.querySelector('.tg-thread'),null);
   await click('#fan-tab-history');
-  assert.equal(document.querySelectorAll('.historyEvent').length,10);
+  assert.equal(document.querySelectorAll('.historyEvent').length,11);
   await click('[aria-label="Profile platform filter"] button:first-child');
-  assert.equal(document.querySelectorAll('.historyEvent').length,10);
+  assert.equal(document.querySelectorAll('.historyEvent').length,11);
   await click('[aria-label="View conversation for Content update preferences saved"]');
   assert.equal(navigation, "/users?relationship=briana-ben&creator=briana&platform=onlyfans&source=ben-fanvue-2");
   await click('#fan-tab-purchases');

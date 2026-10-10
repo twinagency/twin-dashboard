@@ -1,3 +1,4 @@
+import PlatformMark from '../fans/PlatformMark';
 import { useEffect, useRef, type ReactNode } from 'react';
 import { Check, ImageIcon, LockKeyhole, Send, X } from 'lucide-react';
 import { platformNames } from '../fans/model';
@@ -11,7 +12,7 @@ export const date = (at?: string) => at ? new Intl.DateTimeFormat('en-AU', { day
 export const time = (at?: string) => at ? new Intl.DateTimeFormat('en-AU', { hour: 'numeric', minute: '2-digit', timeZone: 'Australia/Brisbane' }).format(new Date(at)) : '—';
 export const originalPrice = (n: number, platform: Platform) => platform === 'telegram' ? `${n.toLocaleString('en-US')} Stars` : displayMoney(Math.round(n * 100), 'USD');
 export function Badge({ platform, compact = false }: { platform: Platform; compact?: boolean }) {
-  return <span className={`${styles.badge} ${styles[platform]}`} title={platformNames[platform]}><span>{platform === 'telegram' ? 'TG' : 'OF'}</span>{!compact && platformNames[platform]}</span>;
+  return <span className={`${styles.badge} ${styles[platform]}`} title={platformNames[platform]}><span>{platform === 'whatsapp' ? <PlatformMark platform={platform} size={15}/> : platform === 'telegram' ? 'TG' : 'OF'}</span>{!compact && platformNames[platform]}</span>;
 }
 export function Avatar({ fan }: { fan: Fan }) { return <span className={styles.avatar} style={{ background: `${fan.color}18`, color: fan.color }}>{fan.initials}</span>; }
 export function StatusBadge({ status }: { status: Status }) { return <span className={`${styles.status} ${styles[status.toLowerCase()]}`}><i />{status}</span>; }
@@ -45,5 +46,5 @@ export function ContentCover({ item, blurred }: { item: LibraryItem; blurred: bo
   return item.preview ? <img className={blurred ? styles.blurred : ''} src={item.preview} alt={item.title} /> : <div className={styles.cover}><ImageIcon size={23} /><span>{item.kind}</span><strong>{item.title}</strong></div>;
 }
 export function MessagePreview({ config, platform, fan, item, blurred }: { config: Config; platform: Platform; fan: Fan; item?: LibraryItem; blurred: boolean }) {
-  return <section className={styles.messagePreview} aria-label={`${platformNames[platform]} message preview`}><header><Avatar fan={fan} /><div><strong>{fan.name}</strong><small>{platformNames[platform]} · Creator conversation</small></div><Badge platform={platform} compact /></header><div className={styles.previewBody}><div className={styles.messageBubble}>{personalized(config.messages[platform].text, fan)}{item && <div className={styles.offerPreview}><ContentCover item={item} blurred={blurred} /><div><span><LockKeyhole size={13} />{item.kind}</span><strong>{item.title}</strong><b>{originalPrice(config.messages[platform].price, platform)}</b></div></div>}<small>Campaign message <Check size={12} /></small></div></div><footer><Send size={12} />Preview for {fan.name}</footer></section>;
+  return <section className={styles.messagePreview} data-preview-platform={platform} aria-label={`${platformNames[platform]} message preview`}><header><Avatar fan={fan} /><div><strong>{fan.name}</strong><small>{platformNames[platform]} · Creator conversation</small></div><Badge platform={platform} compact /></header><div className={styles.previewBody}><div className={styles.messageBubble}>{personalized(config.messages[platform].text, fan)}{item && <div className={styles.offerPreview}><ContentCover item={item} blurred={blurred} /><div><span>{platform !== 'whatsapp' && <LockKeyhole size={13} />}{item.kind}</span><strong>{item.title}</strong><b>{platform === 'whatsapp' ? 'View content' : originalPrice(config.messages[platform].price, platform)}</b></div></div>}<small>Campaign message <Check size={12} /></small></div></div><footer><Send size={12} />Preview for {fan.name}</footer></section>;
 }

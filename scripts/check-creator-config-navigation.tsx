@@ -1,3 +1,4 @@
+import PlatformMark from "../components/fans/PlatformMark";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -23,6 +24,7 @@ function compile(path: string, imports: Record<string, unknown>) {
   const result = { exports: {} as Record<string, any> };
   new Function("require", "module", "exports", javascript)((name: string) => {
     if (Object.hasOwn(imports, name)) return imports[name];
+    if(name === "../../fans/PlatformMark") return { __esModule: true, default: PlatformMark };
     if (["react", "react/jsx-runtime", "lucide-react"].includes(name)) return nativeRequire(name);
     throw new Error(`Unexpected configuration navigation dependency: ${name}`);
   }, result, result.exports);

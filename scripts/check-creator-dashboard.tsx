@@ -1,3 +1,4 @@
+import PlatformMark from '../components/fans/PlatformMark';
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { createRequire } from "node:module";
@@ -23,7 +24,7 @@ function compile(path: string, imports: Record<string, unknown>) {
   const js = ts.transpileModule(readFileSync(path, "utf8"), { fileName: path, compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;
   const result = { exports: {} as Record<string, any> };
   new Function("require", "module", "exports", js)((name: string) => {
-    if (Object.hasOwn(imports, name)) return imports[name];
+    if (Object.hasOwn(imports, name)) return imports[name];if (name === '../fans/PlatformMark' || name === './PlatformMark') return { __esModule: true, default: PlatformMark };
     if (["react", "react/jsx-runtime", "lucide-react"].includes(name)) return nativeRequire(name);
     throw new Error(`Unexpected Dashboard dependency: ${name}`);
   }, result, result.exports);
@@ -33,14 +34,16 @@ async function main() {
   const sharedSnapshot = JSON.stringify(sharedFans);
   const fullFilters = dashboardModel.parseFilters(new URLSearchParams(), creators);
   const full = dashboardModel.buildDashboard(sharedFans, fullFilters);
-  assert.deepEqual(dashboardModel.platformOrder, ["onlyfans","telegram"]);
+  assert.deepEqual(dashboardModel.platformOrder, ["onlyfans","telegram","whatsapp"]);
   assert.equal(dashboardModel.parseFilters(new URLSearchParams("platform=fanvue"),creators).platform,"onlyfans");
   assert.equal(full.metrics.revenueCents, 4_618_600);
   assert.equal(full.metrics.payingFans, 386);
   assert.equal(full.metrics.purchases, 924);
   assert.equal(full.metrics.repeatBuyers, 252);
-  assert.equal(full.metrics.linkedFans, 233);
-  assert.equal(full.metrics.accounts, 747);
+  assert.equal(full.metrics.linkedFans, 269);
+  assert.equal(full.metrics.accounts, 812);
+  assert.equal(full.platforms.find(p => p.platform === 'whatsapp')!.accounts, 65);
+  assert.equal(full.platforms.find(p => p.platform === 'whatsapp')!.cents, 0);
   assert.equal(full.metrics.activeFans, 498);
   const sixMonths = dashboardModel.buildDashboard(sharedFans, { ...fullFilters, window: "6m" });
   assert.equal(sixMonths.range.from, "2026-04-10");
@@ -105,7 +108,7 @@ async function main() {
   assert.equal(all.metrics.revenueCents, 80920);
   assert.equal(all.metrics.purchases, 20);
   assert.equal(all.metrics.payingFans, 2, "Ben's two accounts count as one fan");
-  assert.equal(all.metrics.accounts, 3);
+  assert.equal(all.metrics.accounts, 4);
   assert.equal(all.metrics.linkedFans, 1, "Oliver has only OnlyFans");
   assert.deepEqual(all.relationships.find(r => r.fan.name === "Oliver")!.accounts.map(a => a.platform), ["onlyfans"]);
   assert.equal(all.platforms.reduce((sum, p) => sum + p.cents, 0), all.metrics.revenueCents);
@@ -219,9 +222,9 @@ async function main() {
   await render();
   assert.equal(metric("revenue"), "$504");
   assert.equal(metric("purchases"), "12");
-  assert.equal(document.querySelectorAll('.summaryCard').length, 4);
-  assert.equal(document.querySelectorAll('.sparkline').length, 4);
-  assert.equal(document.querySelectorAll('.summaryValue em').length, 4);
+  assert.equal(document.querySelectorAll('.summaryCard').length, 5);
+  assert.equal(document.querySelectorAll('.sparkline').length, 5);
+  assert.equal(document.querySelectorAll('.summaryValue em').length, 5);
   assert.equal(document.querySelectorAll('.recentAvatar[src^="/dashboard/fans/"]').length, document.querySelectorAll('.recentRow').length);
   assert.ok(document.querySelector('.fanIdentity img[src^="/dashboard/fans/"]'));
   assert.equal(find('.heroPhoto').getAttribute('src'), '/api/dashboard/portrait?image=outdoor');

@@ -1,4 +1,5 @@
 import type { Fan, Memory, Message, Platform, Purchase } from "./types";
+import { withWhatsAppDemo } from "./whatsapp-demo";
 
 // Owner-requested presentation records, kept separate from production revenue.
 // The same deterministic records drive Dashboard, profiles, ownership and chats.
@@ -15,7 +16,7 @@ export const briannaPeriods = [
 const firstNames = ["Adam", "Adrian", "Aaron", "Andrew", "Anthony", "Austin", "Blake", "Brandon", "Caleb", "Cameron", "Carter", "Charles", "Connor", "Dylan", "Edward", "Elliot", "Ethan", "Felix", "Finn", "Gabriel", "George", "Harry", "Henry", "Hugo", "Isaac", "Jack", "Jacob", "James", "Jason", "Jasper", "Joel", "Jonah", "Jordan", "Joseph", "Julian", "Kai", "Liam", "Logan", "Louis", "Luke", "Mason", "Matthew", "Max", "Michael", "Miles", "Nathan", "Nicholas", "Noah", "Oscar", "Owen", "Patrick", "Peter", "Reece", "Ryan", "Samuel", "Scott", "Sean", "Sebastian", "Simon", "Theo", "Thomas", "Toby", "Tyler", "William"];
 const surnames = ["Parker", "Hayes", "Bennett", "Morgan", "Ellis", "Reed", "Brooks", "Walker"];
 const platforms: Platform[] = ["onlyfans", "telegram"];
-const platformLabels = { onlyfans: "OnlyFans", telegram: "Telegram" };
+const platformLabels: Record<Platform, string> = { onlyfans: "OnlyFans", telegram: "Telegram", whatsapp: "WhatsApp" };
 const colors = ["#4d78db", "#718ba6", "#8b719e", "#5c9183", "#aa825c", "#697dae", "#987780", "#568eaa"];
 const personas = [
   { city: "Melbourne", job: "architect", hobby: "weekend hiking", music: "acoustic playlists", coffee: "a flat white", project: "a coastal walking weekend", progress: "the walking route", routine: "after dinner", collection: "natural outdoor photos" },
@@ -172,7 +173,7 @@ export function withBriannaLedger(seed: Fan[]): Fan[] {
   if (seed.some(f => f.id.startsWith("briana-ledger-"))) return seed;
   const cached = expanded.get(seed);
   if (cached) return cached;
-  const result = [...seed, ...buildBriannaLedger(seed.filter(f => f.creatorId === "briana"))];
+  const result = withWhatsAppDemo([...seed, ...buildBriannaLedger(seed.filter(f => f.creatorId === "briana"))]);
   expanded.set(seed, result);
   return result;
 }

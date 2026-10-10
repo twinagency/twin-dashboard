@@ -1,4 +1,5 @@
 "use client";
+import PlatformMark from '../fans/PlatformMark';
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import Link from "next/link";
@@ -21,11 +22,6 @@ const time = (at: string) => new Intl.DateTimeFormat("en-AU", { hour: "numeric",
 type Detail = { kind: "purchase"; purchase: LedgerEntry } | { kind: "content"; title: string } | { kind: "rates" };
 type FanView = "all" | "paying" | "active" | "repeat" | "linked";
 
-function PlatformMark({ platform, size = 24 }: { platform: Platform; size?: number }) {
-  return platform === "telegram"
-    ? <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden="true"><circle cx="12" cy="12" r="11" fill="#229ed9"/><path d="m6.1 11.5 10.6-4.1c.5-.2.9.1.7 1l-1.8 8.5c-.1.6-.5.7-1 .4l-2.8-2-1.3 1.3c-.2.2-.3.3-.6.3l.2-2.9 5.3-4.8c.2-.2 0-.3-.3-.1l-6.6 4.1-2.8-.9c-.6-.2-.6-.6.4-.8Z" fill="#fff"/></svg>
-    : <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden="true"><path d="M7.2 4.2a6.7 6.7 0 1 0 0 13.4 6.7 6.7 0 0 0 0-13.4Zm0 8.8a2.1 2.1 0 1 1 0-4.2 2.1 2.1 0 0 1 0 4.2Zm4.9-7.1c2.7-.8 7.5-1 9.1-1-1.5 1.8-4.5 3.9-6.7 4.8 1.6.2 4 .9 5.2 1.6-2.2.9-5.3 1-7.2.5-.5 3-2.5 5.8-5.8 6.5 3.7-1 5.7-4.9 5.4-8.1-.1-1.4-.6-2.8-1.5-3.9.5-.1 1-.2 1.5-.3Z" fill="#00aff0"/></svg>;
-}
 function PlatformBadge({ platform, compact = false }: { platform: Platform; compact?: boolean }) {
   return <span className={`${styles.badge} ${styles[platform]}`} title={platformNames[platform]}><span><PlatformMark platform={platform} size={12} /></span>{!compact && platformNames[platform]}</span>;
 }
@@ -193,7 +189,7 @@ export default function CreatorDashboard({ creators, fans: seedFans, initialFilt
       {dashboard.platforms.map(p => {
         const source = dashboard.trends.platforms.find(item => item.platform === p.platform);
         const trend = trendText(source?.percentChange ?? null, p.platform === "onlyfans" ? 14 : 8);
-        return <button key={p.platform} className={styles.summaryCard} onClick={() => change({ platform: filters.platform === p.platform ? "all" : p.platform })} aria-label={`Inspect ${platformNames[p.platform]} earnings`} aria-pressed={filters.platform === p.platform}><span className={`${styles.summaryIcon} ${styles[p.platform]}`}><PlatformMark platform={p.platform} size={28} /></span><span className={styles.summaryCopy}><span>{platformNames[p.platform]}</span><span className={styles.summaryValue}><strong data-platform-revenue={p.platform}>{compactMoney(p.cents)}</strong><em data-direction={trend.value >= 0 ? "up" : "down"}>{trend.label}</em></span><small>{p.purchases.toLocaleString()} purchases · {p.buyers} paying fans</small></span><Sparkline values={source?.series.map(item => item.value) ?? []} /></button>;
+        return <button key={p.platform} className={styles.summaryCard} onClick={() => change({ platform: filters.platform === p.platform ? "all" : p.platform })} aria-label={`Inspect ${platformNames[p.platform]} ${p.platform === "whatsapp" ? "conversations" : "earnings"}`} aria-pressed={filters.platform === p.platform}><span className={`${styles.summaryIcon} ${styles[p.platform]}`}><PlatformMark platform={p.platform} size={28} /></span><span className={styles.summaryCopy}><span>{platformNames[p.platform]}</span><span className={styles.summaryValue}><strong data-platform-revenue={p.platform === "whatsapp" ? undefined : p.platform} data-platform-conversations={p.platform === "whatsapp" ? p.platform : undefined}>{p.platform === "whatsapp" ? p.conversations.toLocaleString() : compactMoney(p.cents)}</strong><em data-direction={trend.value >= 0 ? "up" : "down"}>{p.platform === "whatsapp" ? "Chats" : trend.label}</em></span><small>{p.platform === "whatsapp" ? `${p.accounts.toLocaleString()} linked accounts` : `${p.purchases.toLocaleString()} purchases · ${p.buyers} paying fans`}</small></span><Sparkline values={source?.series.map(item => item.value) ?? []} /></button>;
       })}
       <button className={styles.summaryCard} onClick={() => inspectFans("active")} aria-label="Inspect active fans"><span className={styles.summaryIcon}><Users size={24} /></span><span className={styles.summaryCopy}><span>Active fans</span><span className={styles.summaryValue}><strong data-metric="active">{dashboard.metrics.activeFans.toLocaleString()}</strong><em data-direction={activeTrend.value >= 0 ? "up" : "down"}>{activeTrend.label}</em></span><small>{dashboard.metrics.fans.toLocaleString()} fan relationships</small></span><Sparkline values={dashboard.trends.activeFans.series.map(item => item.value)} /></button>
     </section>

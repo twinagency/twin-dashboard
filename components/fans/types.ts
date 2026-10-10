@@ -1,4 +1,4 @@
-export const PLATFORMS = ["onlyfans", "telegram"] as const;
+export const PLATFORMS = ["onlyfans", "telegram", "whatsapp"] as const;
 export type Platform = typeof PLATFORMS[number];
 export type PlatformFilter = Platform | "all";
 export type ProfileTab = "summary" | "memory" | "history" | "purchases" | "accounts";

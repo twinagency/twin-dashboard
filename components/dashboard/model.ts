@@ -8,7 +8,7 @@ import { type Creator, type Fan, type Platform, type PlatformFilter, type Purcha
 export const REPORT_DAY = "2026-10-09";
 export const REPORT_START = "2026-04-10";
 export const FILTER_STORAGE_KEY = "twin-creator-dashboard-filters-v1";
-export const platformOrder: Platform[] = ["onlyfans", "telegram"];
+export const platformOrder: Platform[] = ["onlyfans", "telegram", "whatsapp"];
 export type Window = "7d" | "30d" | "6m" | "all" | "custom";
 export type DisplayCurrency = "USD" | "AUD";
 export type Filters = { creatorId: string; platform: PlatformFilter; window: Window; currency: DisplayCurrency; from: string; to: string; day: string };
@@ -91,6 +91,7 @@ export function buildDashboard(fans: Fan[], filters: Filters, audRate = AUD_PER_
     return { platform, cents: sales.reduce((sum, p) => sum + cents(p), 0), purchases: sales.length,
       buyers: new Set(sales.map(p => p.fan.id)).size,
       accounts: scopedFans.filter(f => accountsAtEnd(f).some(a => a.platform === platform)).length,
+      conversations: scopedFans.filter(f => messagesFor(f, state, platform).some(m => m.direction === "in" && inRange(m.at))).length,
       connected: creatorFans.some(f => accountsAtEnd(f).some(a => a.platform === platform)) };
   });
   const chart = range.days.map(day => {
@@ -147,7 +148,7 @@ export function buildDashboard(fans: Fan[], filters: Filters, audRate = AUD_PER_
     revenue: { series: chart.map(point => ({ day: point.day, value: point.cents })),
       percentChange: percentChange(currentComparison.revenue, previousComparison?.revenue ?? null) } satisfies Trend,
     platforms: platformOrder.map(platform => ({ platform,
-      series: chart.map(point => ({ day: point.day, value: point.platforms.find(item => item.platform === platform)?.cents ?? 0 })),
+      series: chart.map(point => ({ day: point.day, value: platform === "whatsapp" ? scopedFans.reduce((n, f) => n + messagesFor(f, state, platform).filter(m => m.direction === "in" && dayAt(m.at) === point.day).length, 0) : point.platforms.find(item => item.platform === platform)?.cents ?? 0 })),
       percentChange: percentChange(currentComparison.platforms[platform], previousComparison?.platforms[platform] ?? null) })),
     activeFans: { series: range.days.map(day => ({ day, value: activeByDay.get(day)?.size ?? 0 })),
       percentChange: percentChange(currentComparison.activeFans, previousComparison?.activeFans ?? null) } satisfies Trend,

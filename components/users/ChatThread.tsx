@@ -78,10 +78,11 @@ export type ThreadMessage = {
 // Telegram's double tick. Nothing here knows whether a fan actually read a
 // message (the Bot API never tells us), so this is "delivered", one tick, and
 // there is deliberately no blue read tick to invent.
-function Tick() {
+function Tick({ double = false }: { double?: boolean }) {
   return (
     <svg viewBox="0 0 16 11" className="h-3 w-3.5 shrink-0" fill="none" stroke="currentColor" strokeWidth={1.6}>
       <path d="M1 6.2 4.2 9.4 10.6 2" strokeLinecap="round" strokeLinejoin="round" />
+      {double && <path d="M6 7.4 8 9.4 14.6 2" strokeLinecap="round" strokeLinejoin="round" />}
     </svg>
   );
 }
@@ -95,6 +96,7 @@ export default function ChatThread({
   live = true,
   sourceMessageId,
   spentLabel,
+  appearance,
 }: {
   fanId: string;
   messages: ThreadMessage[];
@@ -104,6 +106,7 @@ export default function ChatThread({
   live?: boolean;
   sourceMessageId?: string;
   spentLabel?: string;
+  appearance?: "onlyfans" | "telegram" | "whatsapp";
 }) {
   const scrollRef = useRef<HTMLDivElement | null>(null);
   const [typing, setTyping] = useState(false);
@@ -140,7 +143,7 @@ export default function ChatThread({
 
   return (
     <>
-      <div ref={scrollRef} className="tg-thread flex-1 overflow-y-auto px-3 py-3">
+      <div ref={scrollRef} data-thread-appearance={appearance} className="tg-thread flex-1 overflow-y-auto px-3 py-3">
         {messages.length === 0 ? (
           <div className="flex h-full items-center justify-center">
             <span className="tg-daypill">No messages yet</span>
@@ -292,7 +295,7 @@ export default function ChatThread({
 
                       <span className="tg-meta">
                         {m.timeLabel}
-                        {!m.fan && <Tick />}
+                        {!m.fan && <Tick double={!live && !!appearance} />}
                       </span>
                       {/* Clears the floated meta so a one-line message still
                           reserves height for its own clock. */}
@@ -334,7 +337,7 @@ export default function ChatThread({
       </div>
 
       {/* Live status, at the newest end of the thread where Ronan asked for it. */}
-      <div className="flex items-center gap-2 border-t border-line bg-panel px-3 py-1.5 text-[11px] text-muted">
+      <div data-thread-status className="flex items-center gap-2 border-t border-line bg-panel px-3 py-1.5 text-[11px] text-muted">
         {typing ? (
           <span className="flex items-center gap-1.5 font-medium text-accent">
             <span className="typing-dots" aria-hidden="true">
@@ -347,10 +350,10 @@ export default function ChatThread({
         ) : (
           <span>last active {lastActiveLabel}</span>
         )}
-        <span className="ml-auto flex items-center gap-2.5 tabular-nums">
+        {appearance !== 'whatsapp' && <span className="ml-auto flex items-center gap-2.5 tabular-nums">
           {purchasedCount > 0 && <span>{purchasedCount} bought</span>}
           <span className={spentStars > 0 || spentLabel ? "font-semibold text-good" : ""}>{spentLabel ?? `${spentStars.toLocaleString()}★ spent`}</span>
-        </span>
+        </span>}
       </div>
     </>
   );

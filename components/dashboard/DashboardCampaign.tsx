@@ -1,3 +1,4 @@
+import { platformNames } from '../fans/model';
 "use client";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
@@ -34,7 +35,7 @@ export default function DashboardCampaign({ fans, creatorId, workspace }: { fans
     <div className={styles.panelHeading}><h2>{campaign?.status === "Scheduled" ? "Next campaign" : "Campaign spotlight"}</h2></div>
     <Link className={styles.campaignCover} href={campaignHref(creatorId, campaign?.id)}>
       {creatorId === "briana" && !imageFailed ? <img src={portraitUrl("portrait")} alt="Relaxed portrait of Brianna Redd" onError={() => setImageFailed(true)} loading="lazy" /> : <span className={styles.coverPlaceholder}><Megaphone size={36} /></span>}
-      <span className={styles.campaignCaption}><strong>{campaign?.name || "Your next release"}</strong><small>{campaign ? `${campaign.status} · ${campaign.platforms.map(p => p === "onlyfans" ? "OnlyFans" : "Telegram").join(" + ")}` : "Plan a new campaign"}</small>{campaign?.status === "Scheduled" && <small>{new Intl.DateTimeFormat("en-AU", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: "Australia/Brisbane" }).format(new Date(campaign.scheduledAt))} AEST</small>}</span>
+      <span className={styles.campaignCaption}><strong>{campaign?.name || "Your next release"}</strong><small>{campaign ? `${campaign.status} · ${campaign.platforms.map(p => platformNames[p]).join(" + ")}` : "Plan a new campaign"}</small>{campaign?.status === "Scheduled" && <small>{new Intl.DateTimeFormat("en-AU", { day: "numeric", month: "short", hour: "numeric", minute: "2-digit", timeZone: "Australia/Brisbane" }).format(new Date(campaign.scheduledAt))} AEST</small>}</span>
     </Link>
     <Link className={styles.campaignButton} href={campaignHref(creatorId, campaign?.id)}>{campaign ? "Open campaign" : "Explore campaigns"}<ArrowRight size={16} /></Link>
   </section>;

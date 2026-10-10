@@ -1,3 +1,4 @@
+import PlatformMark from '../components/fans/PlatformMark';
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
 import {createRequire} from 'node:module';
@@ -9,7 +10,7 @@ import * as dashboard from '../components/dashboard/model';
 import * as fanModel from '../components/fans/model';
 import * as ledger from '../components/fans/brianna-ledger';
 const nativeRequire=createRequire(import.meta.url);
-function compile(path:string,imports:Record<string,unknown>){const js=ts.transpileModule(readFileSync(path,'utf8'),{fileName:path,compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText;const result={exports:{} as any};new Function('require','module','exports',js)((name:string)=>{if(Object.hasOwn(imports,name))return imports[name];if(['react','react/jsx-runtime','lucide-react'].includes(name))return nativeRequire(name);throw new Error(`Unexpected dependency: ${name}`);},result,result.exports);return result.exports;}
+function compile(path:string,imports:Record<string,unknown>){const js=ts.transpileModule(readFileSync(path,'utf8'),{fileName:path,compilerOptions:{module:ts.ModuleKind.CommonJS,jsx:ts.JsxEmit.ReactJSX,target:ts.ScriptTarget.ES2022,esModuleInterop:true}}).outputText;const result={exports:{} as any};new Function('require','module','exports',js)((name:string)=>{if(Object.hasOwn(imports,name))return imports[name];if (name === '../fans/PlatformMark' || name === './PlatformMark') return { __esModule: true, default: PlatformMark };if(['react','react/jsx-runtime','lucide-react'].includes(name))return nativeRequire(name);throw new Error(`Unexpected dependency: ${name}`);},result,result.exports);return result.exports;}
 async function main(){
  const snapshot=JSON.stringify(fans);const base=model.buildLibrary(fans);assert.equal(new Set(base.items.map(i=>i.id)).size,base.items.length);assert.equal(base.sales.length,fans.reduce((n,f)=>n+f.purchases.length,0));
  const filters=dashboard.parseFilters(new URLSearchParams(),creators);
@@ -22,7 +23,7 @@ async function main(){
 
  const legacyItem={...bundle,listings:{onlyfans:{enabled:false,price:79},telegram:bundle.listings.telegram,fansly:{enabled:true,price:44},fanvue:{enabled:true,price:54}},activity:[{at:'2026-10-09T08:00:00Z',text:'Published on Fanvue'}]};
  const migrated=model.restoreLibrary(JSON.stringify({version:1,items:[legacyItem]}),base.items).find(i=>i.id===bundle.id)!;
- assert.deepEqual(Object.keys(migrated.listings).sort(),['onlyfans','telegram']);
+ assert.deepEqual(Object.keys(migrated.listings).sort(),['onlyfans','telegram','whatsapp']);
  assert.equal(migrated.listings.onlyfans.enabled,true);assert.equal(migrated.listings.onlyfans.price,44);
  assert.doesNotMatch(migrated.activity[0].text,/Fansly|Fanvue/);
  const sourceRows=Array.from({length:18},(_,n)=>({id:`photo-${n}`,image_name:`IMG_${n}.jpg`,storage_path:`0328e7b3-a1e5-465a-9a30-c9cf6519cba1/photos/${n}.jpg`,star_value:250,created_at:'2026-09-27T02:00:00Z'}));
@@ -53,9 +54,9 @@ async function main(){
  await act(async()=>root.unmount());root=createRoot(document.getElementById('root')!);await render();await input('[aria-label="Search library"]','Weekend favourites');assert.equal(document.querySelectorAll('.card').length,1,'Saved bundle survives reload');await input('[aria-label="Search library"]','Coffee break diary');await click('[aria-label="Open Coffee break diary"]');await button('Platforms & pricing','[role="dialog"]');assert.match(find('[role="dialog"]').textContent!,/3,200 Stars/);
 
  await act(async()=>root.unmount());root=createRoot(document.getElementById('root')!);await act(async()=>root.render(<Component creators={creators} fans={authoredFans} initialFilters={filters} mediaItems={mediaItems}/>));
- assert.equal(document.querySelectorAll('.card img').length,12,'First twelve cards show actual uploads');assert.equal(find('[aria-label="Sort content"]').getAttribute('aria-label'),'Sort content');assert.equal((find('[aria-label="Sort content"]') as HTMLSelectElement).value,'featured');
- await button('Show more content');assert.equal(document.querySelectorAll('.card img').length,18);assert.equal(find('[data-library-metric="revenue"]').textContent,'US$46,186.00');assert.ok(!localStorage.getItem(model.LIBRARY_STORAGE)?.includes('signed=temporary'),'Signed URLs are never persisted');
- await input('[aria-label="Library creator"]','kyla');assert.equal(document.querySelectorAll('.card img').length,0,'Real uploads stay scoped to Brianna');
+ assert.equal(document.querySelectorAll('.card .cover img').length,12,'First twelve cards show actual uploads');assert.equal(find('[aria-label="Sort content"]').getAttribute('aria-label'),'Sort content');assert.equal((find('[aria-label="Sort content"]') as HTMLSelectElement).value,'featured');
+ await button('Show more content');assert.equal(document.querySelectorAll('.card .cover img').length,18);assert.equal(find('[data-library-metric="revenue"]').textContent,'US$46,186.00');assert.ok(!localStorage.getItem(model.LIBRARY_STORAGE)?.includes('signed=temporary'),'Signed URLs are never persisted');
+ await input('[aria-label="Library creator"]','kyla');assert.equal(document.querySelectorAll('.card .cover img').length,0,'Real uploads stay scoped to Brianna');
  await act(async()=>root.unmount());root=createRoot(document.getElementById('root')!);await act(async()=>root.render(<Component creators={creators} fans={authoredFans} initialFilters={filters} mediaItems={olderItems} initialItem={`briana:source:photo:${olderId}`}/>));
  assert.match(find('[role="dialog"]').textContent!,/IMG 3536/,'A Dashboard deep link opens the actual older photo details');assert.equal(find('[role="dialog"] img').getAttribute('src'),olderItems[0].preview);
  assert.equal(requests,0);assert.equal(JSON.stringify(fans),snapshot,'Shared source ledger is immutable');await act(async()=>root.unmount());globalThis.fetch=previousFetch;dom.window.close();console.log('Content Library: totals, creator isolation, historical ownership, access guards, filtering, pricing, bundle builder, validation, persistence and no production writes passed');

@@ -1,3 +1,4 @@
+import PlatformMark from '../components/fans/PlatformMark';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
@@ -15,7 +16,7 @@ function compile(path: string, imports: Record<string, unknown>) {
   const js = ts.transpileModule(readFileSync(path, 'utf8'), { fileName: path, compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;
   const result = { exports: {} as any };
   new Function('require', 'module', 'exports', js)((name: string) => {
-    if (Object.hasOwn(imports, name)) return imports[name];
+    if (Object.hasOwn(imports, name)) return imports[name];if (name === '../fans/PlatformMark' || name === './PlatformMark') return { __esModule: true, default: PlatformMark };
     if (['react', 'react/jsx-runtime', 'lucide-react'].includes(name)) return nativeRequire(name);
     throw new Error(`Unexpected dependency: ${name}`);
   }, result, result.exports);
@@ -25,10 +26,13 @@ async function main() {
   const snapshot = JSON.stringify(fans), base = library.buildLibrary(fans);
   const ctx: model.Context = { fans, items: base.items, sales: base.sales, workspace: fanModel.emptyState(), inbox: inboxModel.emptyInbox() };
   const at = '2026-10-09T17:00:00Z', ben = fans.find(f => f.id === 'briana-ben')!;
-  assert.deepEqual(ben.accounts.map(a => a.platform).sort(), ['onlyfans', 'telegram']);
+  assert.deepEqual(ben.accounts.map(a => a.platform).sort(), ['onlyfans', 'telegram', 'whatsapp']);
   let config: model.Config = { ...model.freshConfig('briana', 'checks'), name: 'Campaign checks', segment: 'Selected fans', fanIds: [ben.id] };
   assert.equal(model.audience(config, ctx, at).fans, 1); assert.equal(model.audience(config, ctx, at).deliveries, 1);
   assert.equal(model.audience({ ...config, bothChannels: true }, ctx, at).fans, 1); assert.equal(model.audience({ ...config, bothChannels: true }, ctx, at).deliveries, 2);
+  const allChannels = model.audience({ ...config, platforms: ['onlyfans','telegram','whatsapp'], bothChannels: true }, ctx, at);assert.equal(allChannels.deliveries,3);assert.equal(allChannels.platforms.whatsapp,1);
+  const whatsapp = model.tickCampaign(model.createCampaign({ ...config, platforms:['whatsapp'] },ctx,at),ctx,at);
+  const whatsappMirror = model.mirrorCampaigns([whatsapp],ctx);assert.ok(whatsappMirror.workspace.messages[ben.id].some(m=>m.platform==='whatsapp'));assert.equal(whatsappMirror.inbox.offers.length,0);
   assert.ok(model.audience({ ...config, creatorId: 'kyla' }, ctx, at).fans === 0, 'Recipients remain scoped to their creator');
   const coffee = base.items.find(i => i.creatorId === 'briana' && i.title === 'Coffee break diary')!;
   assert.equal(model.audience({ ...config, itemId: coffee.id }, ctx, at).excluded[0].reason, 'Already owns content');
@@ -60,7 +64,7 @@ async function main() {
   assert.equal(model.tickCampaign(scheduled, ctx, at), scheduled); assert.equal(model.tickCampaign(scheduled, ctx, '2026-10-10T09:00:00Z').recipients[0].state, 'Sent');
   assert.equal(model.tickCampaign(scheduled, human, '2026-10-10T09:00:00Z').status, 'Paused', 'Schedule reevaluates eligibility');
 
-  const seeds = model.seedCampaigns(ctx); assert.equal(seeds.campaigns.length, 5);
+  const seeds = model.seedCampaigns(ctx); assert.equal(seeds.campaigns.length, 6);
   const attributed = model.attributeSales(seeds.campaigns, base.sales);
   assert.equal(new Set(attributed.map(a => a.sale.id)).size, attributed.length);
   const benSale = attributed.find(a => a.sale.fan.id === ben.id && a.campaignId === 'briana-october-release')!;
@@ -73,7 +77,8 @@ async function main() {
   assert.deepEqual(mirroredTwice, mirrored, 'Mirrored messages and offers are idempotent');
   assert.ok(mirrored.workspace.messages[ben.id].some(m => m.id === benSale.recipient.messageId));
   assert.equal(mirrored.inbox.offers.find(o => o.fanId === ben.id)?.amount, 79);
-  assert.equal(model.restoreCampaigns('bad json', seeds, ctx), seeds); assert.equal(model.restoreCampaigns(JSON.stringify(seeds), seeds, ctx).campaigns.length, 5);
+  assert.equal(model.restoreCampaigns('bad json', seeds, ctx), seeds); assert.equal(model.restoreCampaigns(JSON.stringify(seeds), seeds, ctx).campaigns.length, 6);
+  const legacy = structuredClone(seeds) as any;for(const campaign of legacy.campaigns)delete campaign.messages.whatsapp;const migrated = model.restoreCampaigns(JSON.stringify(legacy),seeds,ctx);assert.equal(migrated.campaigns.length,6);assert.ok(migrated.campaigns.every(c=>c.messages.whatsapp.text));
   const corrupted = structuredClone(seeds); corrupted.campaigns[0].recipients[0].fanId = 'missing';
   assert.ok(!model.restoreCampaigns(JSON.stringify(corrupted), seeds, ctx).campaigns[0].recipients.some(r => r.fanId === 'missing'));
 
@@ -100,14 +105,14 @@ async function main() {
   const click = async (selector: string) => act(async () => find(selector).click());
   const button = async (text: string) => act(async () => { const b = [...document.querySelectorAll<HTMLButtonElement>('button')].find(e => e.textContent?.trim() === text); assert.ok(b, text); b.click(); });
   const input = async (selector: string, value: string) => act(async () => { const e = find(selector); const proto = e.tagName === 'SELECT' ? dom.window.HTMLSelectElement.prototype : e.tagName === 'TEXTAREA' ? dom.window.HTMLTextAreaElement.prototype : dom.window.HTMLInputElement.prototype; Object.getOwnPropertyDescriptor(proto, 'value')!.set!.call(e, value); e.dispatchEvent(new dom.window.Event(e.tagName === 'SELECT' ? 'change' : 'input', { bubbles: true })); });
-  await render(); assert.equal(document.querySelectorAll('.campaignTable tbody tr').length, 5); assert.doesNotMatch(document.body.textContent!, /Fansly|Fanvue/);
+  await render(); assert.equal(document.querySelectorAll('.campaignTable tbody tr').length, 6); assert.doesNotMatch(document.body.textContent!, /Fansly|Fanvue/);
   await click('[aria-label="Open campaign October collection release"]'); await button('Audience'); assert.match(find('tbody tr').textContent!, /Ben/); assert.ok([...document.querySelectorAll('a')].some(a => a.href.includes('source=campaign%3Abriana-october-release%3Abriana-ben%3Aonlyfans')));
   await button('Results'); assert.match(document.body.textContent!, /US\$79\.00/); await button('Messages'); assert.match(document.body.textContent!, /October journal/); await button('Activity'); assert.match(document.body.textContent!, /Campaign message sent/); await button('All campaigns');
   await click('[aria-label="Open campaign Weekend content release"]'); await button('Audience'); assert.ok(document.querySelectorAll('tbody tr').length > 0, 'Scheduled audience is inspectable'); assert.match(document.body.textContent!, /Planned recipients/); await button('All campaigns');
   await click('[aria-label="Open campaign Recent buyers"]'); await button('Pause campaign'); assert.match(document.body.textContent!, /Resume campaign/); await button('Resume campaign'); await button('All campaigns');
   await input('[aria-label="Campaigns creator"]', 'kyla'); assert.match(document.body.textContent!, /Create your first campaign/); await input('[aria-label="Campaigns creator"]', 'briana');
-  await button('Create campaign'); await button('Continue'); assert.match(find('[role="alert"]').textContent!, /name/); await input('[aria-label="Campaign name"]', 'Saved campaign checks'); await button('Continue'); await click('[aria-label="Audience: Selected fans"]'); await input('[aria-label="Search campaign audience"]', 'Ben'); await click('[aria-label="Select Ben"]'); assert.equal(find('[data-audience="fans"]').textContent, '1'); await click('[aria-label="Contact both linked channels"]'); assert.equal(find('[data-audience="messages"]').textContent, '2'); await button('Continue'); await button('Choose content'); await input('[aria-label="Search campaign content"]', 'Morning light'); await click('[aria-label="Select campaign content Morning light"]'); await button('Continue'); await click('[aria-label="Schedule campaign"]'); await button('Save draft'); assert.match(find('[role="status"]').textContent!, /draft saved/);
-  const saved = JSON.parse(localStorage.getItem(model.CAMPAIGN_STORAGE)!); assert.equal(saved.campaigns.length, 6); assert.equal(saved.campaigns.find((c: model.Campaign) => c.name === 'Saved campaign checks').status, 'Draft');
+  await button('Create campaign'); await button('Continue'); assert.match(find('[role="alert"]').textContent!, /name/); await input('[aria-label="Campaign name"]', 'Saved campaign checks'); await button('Continue'); await click('[aria-label="Audience: Selected fans"]'); await input('[aria-label="Search campaign audience"]', 'Ben'); await click('[aria-label="Select Ben"]'); assert.equal(find('[data-audience="fans"]').textContent, '1'); await click('[aria-label="Contact all selected linked channels"]'); assert.equal(find('[data-audience="messages"]').textContent, '2'); await button('Continue'); await button('Choose content'); await input('[aria-label="Search campaign content"]', 'Morning light'); await click('[aria-label="Select campaign content Morning light"]'); await button('Continue'); await click('[aria-label="Schedule campaign"]'); await button('Save draft'); assert.match(find('[role="status"]').textContent!, /draft saved/);
+  const saved = JSON.parse(localStorage.getItem(model.CAMPAIGN_STORAGE)!); assert.equal(saved.campaigns.length, 7); assert.equal(saved.campaigns.find((c: model.Campaign) => c.name === 'Saved campaign checks').status, 'Draft');
   await act(async () => root.unmount()); root = createRoot(document.getElementById('root')!); await render(); assert.match(document.body.textContent!, /Saved campaign checks/, 'Draft survives reload');
   assert.equal(requests, 0); assert.equal(JSON.stringify(fans), snapshot, 'Shared source ledger stays immutable'); assert.equal(dashboard.buildDashboard(fans, filters).metrics.revenueCents, 4618600);
   await act(async () => root.unmount()); globalThis.fetch = previousFetch; dom.window.close();
