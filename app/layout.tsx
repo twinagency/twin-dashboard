@@ -27,6 +27,7 @@ import { isAuthed } from "@/lib/auth";
 import { isAgencyPath } from "@/lib/agency-policy";
 import { isLynq, isMoxy, pathAgencyName } from "@/lib/agency-brand";
 import { getCloneScope } from "@/lib/clone-scope";
+import { isBriannaWorkspaceRoute } from "@/lib/dashboard-creator-route";
 import { Inter, Inter_Tight, Space_Grotesk } from "next/font/google";
 import { cn } from "@/lib/utils";
 import { creatorPublicPortal, isCreatorPath, isCreatorPublicPath } from "@/lib/creator-routing";
@@ -61,10 +62,11 @@ export async function generateMetadata(): Promise<Metadata> {
     icons: { icon: { url: "/icon.png", type: "image/png" } },
   };
   const agencyName = pathname && isAgencyPath(pathname) ? pathAgencyName(pathname) : isTwinLoginPath(pathname) ? undefined : (await getDashboardAccess())?.name;
+  const unbranded = !agencyName && !isTwinLoginPath(pathname) && !!pathname && isBriannaWorkspaceRoute(pathname, null, await getCloneScope());
   return agencyName ? {
     title: `${agencyName} Dashboard`, description: `${agencyName} creator dashboard`,
     icons: { icon: { url: isMoxy(agencyName) ? "/moxy/icon.svg" : "/agency/icon.svg", type: "image/svg+xml" } },
-  } : { title: "Twin Console", description: "Intelligence infrastructure operations console", icons: { icon: { url: "/icon.png", type: "image/png" } } };
+  } : { title: unbranded ? "Creator workspace" : "Twin Console", description: "Intelligence infrastructure operations console", icons: { icon: { url: "/icon.png", type: "image/png" } } };
 }
 
 export default async function RootLayout({ children }: { children: React.ReactNode }) {
