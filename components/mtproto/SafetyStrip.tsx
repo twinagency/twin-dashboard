@@ -128,11 +128,11 @@ export default async function SafetyStrip() {
               <StatusPill tone="good" dot>None</StatusPill>
             ) : (
               <>
-                <div className={`font-heading text-lg font-semibold tabular-nums ${autoHalted > 0 ? "text-crit" : "text-warn"}`}>{autoHalted + pausedByHand}</div>
+                <div className={`font-heading text-lg font-semibold tabular-nums ${autoHalted > 0 ? "text-crit" : "text-warn"}`}>Paused</div>
                 <Sub>
-                  {autoHalted > 0 ? `${autoHalted} auto-halted` : ""}
+                  {autoHalted > 0 ? "Auto-halted" : ""}
                   {autoHalted > 0 && pausedByHand > 0 ? ", " : ""}
-                  {pausedByHand > 0 ? `${pausedByHand} paused by hand` : ""}{" "}
+                  {pausedByHand > 0 ? "Paused by hand" : ""}{" "}
                   <Link href="/mtproto-campaign/connections" className="font-semibold text-accent-2 underline-offset-2 hover:underline">See who</Link>
                 </Sub>
               </>

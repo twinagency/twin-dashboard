@@ -100,7 +100,6 @@ export default async function ClonesPage() {
             <Button nativeButton={false} variant="outline" render={<Link href="/creator-management" />}>Review onboarding</Button>
             <Button nativeButton={false} render={<Link href="/agency/creator-invites" />}>Invite creator</Button>
           </AdminOnly>
-          <span className="text-sm font-medium text-muted">{clones.length} total</span>
         </div>
       </div>
 

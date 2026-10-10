@@ -101,7 +101,7 @@ export default async function TSocialEarningsPage() {
 
       <Card>
         <CardContent>
-          <h2 className="mb-3 flex items-center gap-1 text-lg font-semibold text-ink">By creator ({e.byCreator.length})<Info text="VIP bundles and paid clips are credited to the creator who owns the post. AI girls and posting plans have their own rows." /></h2>
+          <h2 className="mb-3 flex items-center gap-1 text-lg font-semibold text-ink">By creator<Info text="VIP bundles and paid clips are credited to the creator who owns the post. AI girls and posting plans have their own rows." /></h2>
           {e.byCreator.length === 0 ? <p className="text-sm text-ink">0 Stars. Nothing paid yet.</p> : (
             <div className="overflow-x-auto">
               <table className="w-full min-w-[520px] text-left text-sm">

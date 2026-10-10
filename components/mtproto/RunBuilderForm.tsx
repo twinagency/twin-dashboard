@@ -186,7 +186,7 @@ export default function RunBuilderForm({ creators }: { creators: CreatorLite[] }
             })}
           </div>
         )}
-        <div className="text-xs text-muted">{selected.size === 0 ? "None picked yet." : `${selected.size} creator${selected.size === 1 ? "" : "s"} picked.`}</div>
+        <div className="text-xs text-muted">{selected.size === 0 ? "None picked yet." : "Creators selected."}</div>
       </StepCard>
 
       <StepCard>
@@ -298,7 +298,7 @@ export default function RunBuilderForm({ creators }: { creators: CreatorLite[] }
             <span className="text-muted">Pick a creator to see what these limits mean.</span>
           ) : capOk && holdOk ? (
             <>
-              At most <span className="font-semibold">{num(capN * selected.size)}</span> messages on day one ({capN} for each of {selected.size} creator{selected.size === 1 ? "" : "s"}). About{" "}
+              At most <span className="font-semibold">{num(capN * selected.size)}</span> messages on day one ({capN} per creator). About{" "}
               <span className="font-semibold">{holdN}%</span> of chosen fans are held back to compare against.
             </>
           ) : (

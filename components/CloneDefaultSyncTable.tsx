@@ -55,7 +55,7 @@ export default function CloneDefaultSyncTable({ clones }: { clones: CloneDefault
     startPush(async () => {
       try {
         await pushDefaultsToClones(ids);
-        setMsg(`Pushed the operational default onto ${ids.length} creator${ids.length === 1 ? "" : "s"}.`);
+        setMsg("Applied the operational default to the selected creators.");
         setSelected(new Set());
         router.refresh();
       } catch (error) {
@@ -65,18 +65,16 @@ export default function CloneDefaultSyncTable({ clones }: { clones: CloneDefault
     });
   }
 
-  const followingCount = clones.filter((c) => c.usesDefault).length;
-
   return (
     <div className="grid gap-3">
       <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted">
         <span>
-          {followingCount} of {clones.length} following the fleet default. Saving the template above pushes to every
+          Saving the template above pushes to every
           &quot;Default&quot; clone automatically; use the button below to push to a &quot;Custom&quot; clone on demand without
           switching it.
         </span>
         <Button type="button" size="sm" disabled={selected.size === 0 || pushing} onClick={pushSelected}>
-          {pushing ? "Pushing…" : `Push to selected (${selected.size})`}
+          {pushing ? "Pushing…" : "Push to selected"}
         </Button>
       </div>
 

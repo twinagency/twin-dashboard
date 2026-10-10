@@ -489,10 +489,10 @@ export default function RevenueDashboard({ cloneId, initialData = null }: { clon
   const chartScopeLabel = chartMode === "creator"
     ? visibleClones.length === creatorCount
       ? "Creator breakdown"
-      : `Creator breakdown (${visibleClones.length} of ${creatorCount})`
+      : "Selected creator breakdown"
     : visibleClones.length === creatorCount
       ? "All creators"
-      : `${visibleClones.length} of ${creatorCount} creators`;
+      : "Selected creators";
   const txSortSummary = txSort.key === "date"
     ? txSort.direction === "desc" ? "Newest first" : "Oldest first"
     : txSort.key === "amount"
@@ -950,7 +950,7 @@ export default function RevenueDashboard({ cloneId, initialData = null }: { clon
               <span className="min-w-0">
                 <span className="block text-sm font-medium text-ink">{creatorListOpen ? "Hide creators" : "View all creators"}</span>
                 <span className="block truncate text-[11px] text-muted">
-                  {visibleClones.length} of {(data?.clones ?? []).length} creators shown in the chart
+                  Choose creators shown in the chart
                 </span>
               </span>
               <svg
@@ -2136,7 +2136,7 @@ function RevenueReport({
                       share={f.share}
                       right={money(f.stars)}
                       rightHint={pct(f.share)}
-                      sub={`${fmtNum(f.clones)} creator${f.clones === 1 ? "" : "s"} · ${fmtNum(f.sales)} sales`}
+                      sub={`${fmtNum(f.sales)} sales`}
                       subMoney={showCost ? `AI contribution ${usd(f.profitUsd)}` : undefined}
                     />
                   ))}

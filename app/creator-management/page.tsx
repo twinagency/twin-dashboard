@@ -72,10 +72,6 @@ export default async function CreatorManagementPage() {
     else c.content += 1;
   }
 
-  const submitted = creators.filter((c) => ["submitted", "reviewing"].includes(latestApplication.get(c.id)?.status ?? "")).length;
-  const approved = creators.filter((c) => ["approved", "active"].includes(c.account_status)).length;
-  const unmapped = creators.filter((c) => !linkByCreator.get(c.id)?.clone_id).length;
-
   return (
     <div className="dashboard-page text-ink">
       <div className="mb-6 flex flex-wrap items-end justify-between gap-3">
@@ -84,13 +80,6 @@ export default async function CreatorManagementPage() {
           <h1 className="mt-1 text-2xl font-semibold">Creator management</h1>
           <p className="mt-1 text-sm text-muted">Review onboarding, approve creators, assign agencies and link live clones.</p>
         </div>
-      </div>
-
-      <div className="mb-6 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <Card className="p-4"><div className="text-xs text-muted">Creators</div><div className="mt-1 text-2xl font-semibold">{creators.length}</div></Card>
-        <Card className="p-4"><div className="text-xs text-muted">Awaiting review</div><div className="mt-1 text-2xl font-semibold">{submitted}</div></Card>
-        <Card className="p-4"><div className="text-xs text-muted">Approved / active</div><div className="mt-1 text-2xl font-semibold">{approved}</div></Card>
-        <Card className="p-4"><div className="text-xs text-muted">No clone linked</div><div className="mt-1 text-2xl font-semibold">{unmapped}</div></Card>
       </div>
 
       <div className="grid gap-3">

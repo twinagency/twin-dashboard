@@ -65,17 +65,6 @@ export default function ClonesGrid({ clones }: { clones: CloneCard[] }) {
     });
   }, [query, cohortFilter, clones]);
 
-  const cohortCounts = useMemo(
-    () => ({
-      all: clones.length,
-      "new-system-v3": clones.filter((c) => c.cohort === "new-system-v3").length,
-      "new-system-v2": clones.filter((c) => c.cohort === "new-system-v2").length,
-      "new-system-v1": clones.filter((c) => c.cohort === "new-system-v1").length,
-      control: clones.filter((c) => c.cohort === "control").length,
-    }),
-    [clones],
-  );
-
   return (
     <div>
       <div className="mb-5 flex flex-wrap items-center gap-3">
@@ -105,9 +94,6 @@ export default function ClonesGrid({ clones }: { clones: CloneCard[] }) {
                 }
               >
                 {option.label}
-                <span className={"font-mono text-[10px] tabular-nums " + (selected ? "text-white/75" : "text-muted")}>
-                  {cohortCounts[option.value]}
-                </span>
               </button>
             );
           })}
