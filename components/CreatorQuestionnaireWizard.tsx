@@ -190,6 +190,19 @@ export default function CreatorQuestionnaireWizard({
     };
   }, []);
 
+  // The two-section header uses the same revision-checked save path as the wizard.
+  useEffect(() => {
+    const navigate = (event: Event) => {
+      const href = (event as CustomEvent<{ href: string }>).detail?.href;
+      const target = href === "/creator" ? "dashboard" : href === "/creator/onboarding?step=content" ? "content" : null;
+      if (!target) return;
+      event.preventDefault();
+      void goTo(target);
+    };
+    window.addEventListener("creator-setup:navigate", navigate);
+    return () => window.removeEventListener("creator-setup:navigate", navigate);
+  });
+
   const saved = saveLabel(saveState);
   const SaveIcon = saved.icon;
   const progress = Math.round(((currentIndex + 1) / CREATOR_QUESTIONNAIRE_PAGES.length) * 100);
@@ -287,3 +300,4 @@ export default function CreatorQuestionnaireWizard({
     </form>
   );
 }
+

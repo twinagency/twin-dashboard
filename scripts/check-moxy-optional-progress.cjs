@@ -32,23 +32,21 @@ global.__optionalDatabase = { from(table) {
   try {
     const Page = require(outfile).default;
     const render = async step => renderToStaticMarkup(await Page({ searchParams: Promise.resolve({ step }) }));
-    const contentRow = html => html.match(/<li[^>]*data-readiness-item="content"[\s\S]*?<\/li>/)[0];
     for (const [kind, count] of [['content_sfw_image',12],['content_nsfw_image',6],['content_sfw_video',3],['content_nsfw_video',5]]) {
       for (let i=0;i<count;i++) files.push({ kind, storage_transfer_status: 'verified' });
     }
     let html = await render('consent');
-    assert.match(contentRow(html), /26 saved files/);
-    assert.match(contentRow(html), />Saved</);
-    assert.match(html, /No required steps/);
+    assert.match(html, /26 saved files/);
+    assert.match(html, /You can submit now and add more later/);
     assert.doesNotMatch(html, /of 4 complete|Optional — not completed/);
     html = await render('content');
     for (const count of [12,6,3,5]) assert.match(html, new RegExp('>' + count + ' saved<'));
     assert.doesNotMatch(html, /Minimum reached|remaining<|of 20 verified|of 30 verified|of 15 verified/);
     files = [{ kind: 'content_sfw_video', storage_transfer_status: 'pending' }];
     html = await render('consent');
-    assert.match(contentRow(html), /0 saved files/); assert.doesNotMatch(contentRow(html), />Saved</);
+    assert.match(html, /0 saved files/);
     files = [{ kind: 'content', storage_transfer_status: 'verified' }];
-    html = await render('consent'); assert.match(contentRow(html), /1 saved file\./); assert.match(contentRow(html), /Earlier uploads: 1/);
+    html = await render('consent'); assert.match(html, /1 saved file</); assert.match(html, /1 earlier verified upload/);
     name = 'Twin'; files = [{ kind: 'content_sfw_image', storage_transfer_status: 'verified' }];
     html = await render('content'); assert.match(html, /1 saved/); assert.doesNotMatch(html, /of 20 verified/);
     name = 'Tether';
@@ -56,3 +54,4 @@ global.__optionalDatabase = { from(table) {
     console.log('Moxy optional progress: 26 saved files remain visible below legacy quotas; pending files excluded; legacy saved content included; direct Twin optional intake and other agency quotas preserved.');
   } finally { rmSync(outfile, { force: true }); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
+

@@ -76,7 +76,30 @@ const { rmSync } = require('node:fs');
  await reset();await render(pages[0]);
  global.fetch=async()=>{throw Error('blank optional skip must not submit');};
  await click('Skip questions');assert.equal(navigations.pop(),'/creator/onboarding?step=content');
+ // Header navigation must use the same save-before-leaving path as wizard buttons.
+ await reset();await render(pages[0]);
+ let resolveDraft, headerCalls=0;
+ global.fetch=async()=>{headerCalls++;return new Promise(resolve=>resolveDraft=resolve);};
+ const headerInput=document.querySelector('[name="full_name"]');
+ await act(async()=>{headerInput.value='Header navigation answer';headerInput.dispatchEvent(new Event('input',{bubbles:true}));});
+ const headerNavigate=async href=>act(async()=>{
+  const event=new dom.window.CustomEvent('creator-setup:navigate',{cancelable:true,detail:{href}});
+  assert.equal(window.dispatchEvent(event),false,'wizard intercepts shared header navigation');
+ });
+ await headerNavigate('/creator/onboarding?step=content');
+ assert.equal(headerCalls,1);assert.equal(navigations.length,0,'tab waits for draft save');
+ await act(async()=>resolveDraft({ok:false,status:503,json:async()=>({})}));
+ assert.equal(navigations.length,0,'failed save keeps the questionnaire open');
+ assert.equal(headerInput.value,'Header navigation answer');
+ await headerNavigate('/creator');
+ assert.equal(navigations.length,0,'dashboard waits for retry');
+ await act(async()=>resolveDraft({ok:true,status:200,json:async()=>({revision:'header-revision'})}));
+ assert.equal(navigations.pop(),'/creator','dashboard becomes available after confirmed save');
+ await reset();await render(pages[0]);
+ global.fetch=async()=>{throw Error('blank optional dashboard exit must not submit');};
+ await headerNavigate('/creator');assert.equal(navigations.pop(),'/creator');
  await act(async()=>root.unmount());rmSync(stem,{recursive:true,force:true});
  console.log('Creator profile onboarding passed: 38 profile questions, 4 separate account fields, 8 short sections, legacy answer hydration without stale resurrection, removed fields absent, save failure/retry and next/finish/skip navigation.');
 })().catch(error=>{console.error(error);process.exitCode=1;});
+
 

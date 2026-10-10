@@ -9,6 +9,7 @@ import CreatorOnboardingActionForm from "@/components/CreatorOnboardingActionFor
 import CreatorQuestionnaireWizard from "@/components/CreatorQuestionnaireWizard";
 import CreatorContentGallery from "@/components/CreatorContentGallery";
 import CreatorUploadForm from "@/components/CreatorUploadForm";
+import CreatorSetupLayout from "@/components/CreatorSetupLayout";
 import { creatorUploadsEditable } from "@/lib/creator-upload-policy";
 import { creatorIntakeOptional } from "@/lib/creator-intake-policy";
 import { creatorProfileAnswers } from "@/lib/creator-questionnaire-profile";
@@ -237,7 +238,9 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
   const brandName = tether ? "Tether" : link ? "LYNQ" : moxy ? "Moxy" : "Twin";
   const loginPath = moxy ? "/creator/moxy/login" : creatorLoginPath(creator, jar.get(CREATOR_PORTAL_COOKIE)?.value);
   const { status, step, section } = await searchParams;
-  const activeStep = isOnboardingStep(step) ? step : null;
+  const activeStep = moxy
+    ? step === "content" || step === "voice" || step === "consent" ? "content" : "questionnaire"
+    : isOnboardingStep(step) ? step : null;
   const compactQuestionnaire = optionalIntake && activeStep === "questionnaire";
   const questionnairePage = creatorQuestionnairePage(section, optionalIntake);
 
@@ -278,6 +281,60 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
     (activeStep === "content" && status === "content_saved" && complete.content) ||
     (activeStep === "voice" && (status === "voice_saved" || status === "voice_skipped") && complete.voice) ||
     (activeStep === "consent" && status === "consent_saved" && complete.consent);
+
+  if (moxy) return (
+    <CreatorSetupLayout brand="moxy" logoSrc="/moxy/logo.png" activeSection={activeStep === "content" ? "content" : "questionnaire"} applicationStatus={applicationState.label}>
+      {status && errorStatuses.has(status) && <div id="step-result" role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">{status === "upload_too_large" ? "Videos can be up to 512 MiB and images up to 75 MiB each." : status === "upload_wrong_type" ? "This file could not be verified. Use JPG, PNG, WebP or GIF images (up to 25 MP), or MP4, MOV or WebM video. Export HEIC photos as JPG first." : statusCopy[status]}{status === "file_removal_pending" && <> <Link href="/creator/onboarding?step=content" className="font-semibold underline">Open Saved content</Link></>}</div>}
+
+      {activeStep === "questionnaire" ? <section data-creator-setup-panel>
+        <div data-creator-setup-panel-heading><h2>About you</h2><span>Questionnaire</span></div>
+        {status === "questionnaire_saved" && <div className="mb-5"><SavedConfirmation title="Questionnaire saved" detail="Your answers have been saved to your creator account." /></div>}
+        <CreatorQuestionnaireWizard
+          page={questionnairePage}
+          initialAnswers={Object.fromEntries(questionnairePageQuestions(questionnairePage).map((question) => {
+            const fallback = question.id === "preferred_name" ? account.display_name || "" : question.id === "email_address" ? account.email || "" : "";
+            return [question.id, questionnaireAnswers[question.id] ?? fallback];
+          }))}
+          initialRevision={application?.updated_at || ""}
+          locked={applicationLocked}
+          optional={optionalIntake}
+        />
+      </section> : <section data-creator-setup-panel>
+        <div data-creator-setup-panel-heading><h2>Your content</h2><span>{savedContentCount} saved file{savedContentCount === 1 ? "" : "s"}</span></div>
+        {status === "content_saved" && <div className="mb-5"><SavedConfirmation title="Content saved" detail="Your uploaded files were verified and the category totals have been updated." /></div>}
+        {status === "consent_saved" && <div className="mb-5"><SavedConfirmation title="Consent saved" detail="Your consent has been recorded." /></div>}
+        <p className="mb-5 text-sm text-muted">{optionalIntake ? "Add photos and videos now, or return later. Your content stays saved to your account." : "Add the photos and videos for your AI creator profile."}</p>
+        <div className="grid items-start gap-4 md:grid-cols-2">
+          {CREATOR_CONTENT_REQUIREMENTS.map((requirement, index) => <details key={requirement.kind} open={index === 0} className="group overflow-hidden rounded-xl border border-border bg-white" data-content-category={requirement.kind}>
+            <summary className="flex min-h-16 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4">
+              <span className="font-semibold text-ink">{requirement.label}</span>
+              <span className="flex items-center gap-3 text-xs text-muted"><span>{optionalIntake ? `${contentCounts[requirement.kind]} saved` : `${contentCounts[requirement.kind]} of ${requirement.minimum}`}</span><ChevronRight className="size-4 transition-transform group-open:rotate-90" aria-hidden="true" /></span>
+            </summary>
+            <div className="border-t border-border px-5 pb-5">
+              <CreatorUploadForm accountId={session.accountId} loginPath={loginPath} kind={requirement.kind} label={requirement.label} accept={requirement.accept} formatHint={requirement.formatHint} locked={uploadsLocked} />
+              <CreatorContentGallery kind={requirement.kind} revision={String(contentCounts[requirement.kind])} loginPath={loginPath} />
+            </div>
+          </details>)}
+        </div>
+        {legacyContentFiles > 0 && <div className="mt-5"><CreatorContentGallery kind="content" revision={String(legacyContentFiles)} loginPath={loginPath} /><p className="mt-3 text-sm text-muted">{legacyContentFiles} earlier verified upload{legacyContentFiles === 1 ? " is" : "s are"} still safely stored.</p></div>}
+
+        <div data-creator-setup-submit>
+          <CreatorOnboardingActionForm className="grid gap-4" pendingLabel={submitted ? "Saving consent…" : "Submitting your saved information…"} successStatuses={submitted ? ["consent_saved"] : ["submitted"]} loginPath={loginPath} consentBeforeSubmit={!consent && !submitted}>
+            <input type="hidden" name="action" value={submitted && !consent ? "consent" : "submit"} />
+            {!consent ? <>
+              <label className="block max-w-md"><span className="mb-1.5 block text-sm font-medium text-ink">Legal name</span><Input name="legal_name" autoComplete="name" required={!optionalIntake || submitted} disabled={applicationLocked} /></label>
+              <label className="flex items-start gap-3 text-sm leading-6 text-ink"><input name="agreed" type="checkbox" required={!optionalIntake || submitted} disabled={applicationLocked} className="mt-1.5 size-4 shrink-0 accent-[var(--color-accent)]" /><span>I confirm the information and media I submit are mine or I have permission to provide them, and I authorize {brandName} to use them to build and operate my AI creator profile under my agreement.</span></label>
+            </> : <p className="flex items-center gap-2 text-sm text-emerald-700"><CheckCircle2 className="size-4 shrink-0" aria-hidden="true" /> Consent signed by {consent.legal_name}.</p>}
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <span className="text-xs text-muted">{optionalIntake ? "You can submit now and add more later." : "Submit when your information and content are ready."}</span>
+              <Button type="submit" size="lg" disabled={(submitted && !!consent) || (!submitted && !readyToSubmit) || applicationLocked} className="min-h-11 w-full sm:w-auto">{applicationLocked ? "Application locked" : submitted ? consent ? "Application submitted" : "Save consent" : "Submit onboarding"}<ChevronRight className="size-4" aria-hidden="true" /></Button>
+            </div>
+          </CreatorOnboardingActionForm>
+          {!readyToSubmit && !applicationLocked && <p className="mt-3 text-sm text-muted">Complete the required information before submitting.</p>}
+        </div>
+      </section>}
+    </CreatorSetupLayout>
+  );
 
   return (
     <div className={`min-h-screen bg-bg ${link ? "canvas-glow" : ""}`} data-creator-onboarding-brand={tether ? "tether" : link ? "link" : moxy ? "moxy" : "twin"}>
@@ -400,4 +457,5 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
     </div>
   );
 }
+
 
