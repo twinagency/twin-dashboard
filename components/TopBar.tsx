@@ -43,6 +43,7 @@ export default function TopBar({
     : pathname?.startsWith("/clones/") && searchParams.get("tab") === "ppvs" ? "PPVs" : pageMeta.pageLabel;
   const scopeLabel = isCreator ? creatorName || clones.find((clone) => clone.id === activeCloneId)?.name || "Creator" : pageMeta.scopeLabel;
   const scopeIsCreator = isCreator || pageMeta.scopeIsCreator;
+  if (!isAgency && !isCreator && pathname === "/dashboard") return null;
   // The new Dashboard owns its creator and currency controls. Its isolated
   // relationships must not inherit the ordinary Overview's live cash chip.
   if (!isAgency && !isCreator && (pathname === "/dashboard" || pathname === "/content-library" || pathname === "/inbox" || pathname === "/campaigns")) {

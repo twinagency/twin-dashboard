@@ -15,17 +15,18 @@ import { useDashboardAccess } from "./DashboardAccessProvider";
 export default function MainShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const {isAgency, isCreator} = useDashboardAccess();
+  const studioDashboard = !isAgency && !isCreator && pathname === "/dashboard";
   const fullBleed = pathname === "/users" || pathname === "/inbox" || pathname === "/jarvis" || pathname === "/fans";
   return (
     <main
       className={
-        fullBleed
+        studioDashboard ? "dashboard-main creator-studio-main min-h-0 w-full flex-1 overflow-y-auto" : fullBleed
           ? "dashboard-main min-h-0 flex-1 overflow-y-auto pb-28 canvas-glow lg:pb-0"
           : "dashboard-main mx-auto min-h-0 w-full max-w-[1480px] flex-1 overflow-y-auto p-4 pb-32 sm:p-6 sm:pb-32 lg:p-8 canvas-glow"
       }
     >
       {children}
-      {!isAgency && !isCreator && pathname !== "/jarvis" && pathname !== "/fans" ? <TwinAssistant variant="mobile-dock" /> : null}
+      {!isAgency && !isCreator && pathname !== "/jarvis" && pathname !== "/fans" && !studioDashboard ? <TwinAssistant variant="mobile-dock" /> : null}
     </main>
   );
 }

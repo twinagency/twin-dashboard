@@ -181,14 +181,14 @@ for (const mobile of [false, true]) {
   assert.ok(admin.includes('href="/fans"'), "Admin fan workspace is reachable on desktop and mobile");
   assert.match(admin, /Fan Profiles/);
   const nav = admin.slice(admin.indexOf('<nav aria-label="Main navigation"'));
-  const orderedLabels = ["Dashboard", "Creators", "Fan Profiles", "Unified Inbox", "Content Library", "Campaigns", "Automations", "Performance", "Agency Access", "Core Intelligence", "Settings", "More"];
+  const orderedLabels = ["Dashboard", "Creators", "Fan Profiles", "Inbox", "Content Library", "Campaigns", "Automations", "Performance", "Agency Access", "Core Intelligence", "Settings", "More"];
   assert.deepEqual(Array.from(nav.matchAll(/data-nav-group="([^"]+)"/g), match => match[1]), orderedLabels);
   const { JSDOM } = nativeRequire("jsdom");
   const document = new JSDOM(admin).window.document;
   const group = (name: string) => document.querySelector(`[data-nav-group="${name}"]`)!;
   for (const [name, hrefs] of Object.entries({
     Creators: [`/clones/${clone}?tab=identity`, "/agency-admin/creator-codes", "/agency/creator-invites", "/clones/new"],
-    "Unified Inbox": ["/inbox", "/users"],
+    "Inbox": ["/inbox", "/users"],
     "Content Library": ["/content-library", `/clones/${clone}?tab=ppvs`, "/business"],
     Automations: ["/flows", "/sequences"],
     Performance: ["/revenue", "/sales-health", "/catalogue-funnel"],

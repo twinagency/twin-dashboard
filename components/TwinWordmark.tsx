@@ -7,11 +7,13 @@ export default function TwinWordmark({
   descriptor = "Technologies",
   inverse = false,
   agencyName,
+  studio = false,
 }: {
   className?: string;
   descriptor?: string;
   inverse?: boolean;
   agencyName?: string;
+  studio?: boolean;
 }) {
   if (isMoxy(agencyName)) return <img src="/moxy/logo.png" alt="Moxy, Los Angeles and Miami" width={1100} height={400} className={`block h-auto w-40 max-w-full ${inverse ? "" : "invert"} ${className}`} />;
   if (isLynq(agencyName)) {
@@ -60,6 +62,7 @@ export default function TwinWordmark({
       </span>
     );
   }
+  if (studio && !agencyName) return <span className="studio-wordmark" aria-label="Twin Technologies"><strong>Twin</strong><span>TECHNOLOGIES</span></span>;
   return (
     <span
       className={`inline-flex items-baseline gap-2 ${agencyName ? "whitespace-normal" : "whitespace-nowrap"} leading-none ${inverse ? "text-white" : "text-black"} ${className}`}
@@ -68,7 +71,7 @@ export default function TwinWordmark({
         className="text-[20px] font-bold tracking-[-0.025em]"
         style={{ fontFamily: "var(--font-display), var(--font-sans), sans-serif" }}
       >
-        {agencyName || "Twin."}
+        {agencyName || "Twin"}
       </span>
       {!agencyName && <span className={`text-[13px] font-bold uppercase tracking-[0.28em] ${inverse ? "text-white/72" : "text-black/70"}`}>
         {descriptor}

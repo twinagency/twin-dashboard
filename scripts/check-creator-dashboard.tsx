@@ -10,6 +10,11 @@ const fans = sharedFans.filter(f => !f.id.startsWith("briana-ledger-"));
 import * as dashboardModel from "../components/dashboard/model";
 import * as fanModel from "../components/fans/model";
 import * as money from "../lib/money";
+import "./check-dashboard-portrait";
+import * as portraits from "../components/dashboard/portraits";
+import * as campaignModel from "../components/campaigns/model";
+import * as libraryModel from "../components/content-library/model";
+import * as inboxModel from "../components/inbox/model";
 
 const nativeRequire = createRequire(import.meta.url);
 function compile(path: string, imports: Record<string, unknown>) {
@@ -178,9 +183,17 @@ async function main() {
   let requests = 0;
   globalThis.fetch = async () => { requests++; throw new Error("Dashboard must not call production services"); };
   const css = new Proxy({}, { get: (_, key) => String(key) });
+  const Campaign = compile("components/dashboard/DashboardCampaign.tsx", {
+    "next/link": { __esModule: true, default: ({ children, ...props }: React.ComponentProps<"a">) => <a {...props}>{children}</a> },
+    "../content-library/model": libraryModel, "../inbox/model": inboxModel, "../campaigns/model": campaignModel,
+    "../fans/model": fanModel, "./portraits": portraits,
+    "./CreatorDashboard.module.css": { __esModule: true, default: css },
+  }).default;
   const Component = compile("components/dashboard/CreatorDashboard.tsx", {
     "next/link": { __esModule: true, default: ({ children, ...props }: React.ComponentProps<"a">) => <a {...props}>{children}</a> },
     "../fans/brianna-ledger": ledger,
+    "../BlurToggle": { __esModule: true, default: () => <button aria-label="Blur all media">Blur</button> },
+    "./DashboardCampaign": { __esModule: true, default: Campaign }, "./portraits": portraits,
     "../CurrencyProvider": { useCurrency: () => ({ rate: 1.4, currency: "AUD", setCurrency: () => { throw new Error("The ordinary Overview's currency must stay unchanged"); } }) },
     "../../lib/money": money, "../fans/model": fanModel, "./model": dashboardModel,
     "./CreatorDashboard.module.css": { __esModule: true, default: css },
@@ -201,6 +214,11 @@ async function main() {
   await render();
   assert.equal(metric("revenue"), "US$504.00");
   assert.equal(metric("purchases"), "12");
+  assert.equal(document.querySelectorAll('.summaryCard').length, 4);
+  assert.equal(find('.heroPhoto').getAttribute('src'), '/api/dashboard/portrait?image=outdoor');
+  assert.equal(document.querySelectorAll('.libraryTile').length, 3);
+  assert.ok(find('.campaignButton').getAttribute('href')!.includes('briana-weekend-release'));
+  assert.equal(localStorage.getItem(campaignModel.CAMPAIGN_STORAGE), null, 'Dashboard cannot start or update a campaign');
   assert.equal(find('[data-creator-dashboard]').getAttribute("data-creator"), "briana");
   assert.equal(document.querySelectorAll(".dayBar").length, 30);
   assert.equal(find('[aria-label="Open Ben\'s fan profile"]').getAttribute("href"), fanModel.profileHref(fans.find(f => f.id === "briana-ben")!));
@@ -218,7 +236,7 @@ async function main() {
   assert.equal(document.querySelector('[role="dialog"]'), null);
   await input('[aria-label="Dashboard currency"]', "AUD"); assert.equal(metric("revenue"), "A$98.28");
   assert.equal(localStorage.getItem("currency"), null, "The new page does not write the old Overview's currency preference");
-  await textButton("All platforms", '[aria-label="Dashboard platform"]');
+  await click('[aria-label="Dashboard platform"] button[aria-label="All platforms"]');
   await input('[aria-label="Dashboard currency"]', "USD");
   await click('[aria-label="Inspect linked fans"]');
   assert.equal(document.querySelectorAll('.relationshipTable tbody tr').length, 1);
