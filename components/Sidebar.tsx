@@ -4,7 +4,7 @@ import { agencyDashboardPath, isPartnerPreview } from "@/lib/agency-policy";
 import { isMoxy } from "@/lib/agency-brand";
 import { JESS_KATE_PORTAL, TETHER_PORTAL } from "@/lib/partner-portals";
 import { CREATOR_DASHBOARD_NAV } from "@/lib/creator-dashboard-policy";
-import { dashboardCreatorHref } from "@/lib/dashboard-creator-route";
+import { dashboardCreatorHref, isBriannaAdvancedRoute } from "@/lib/dashboard-creator-route";
 
 // Left sidebar app shell (desktop). "Create new clone" is always the first
 // thing in it, followed by the operating views. Internal admin tools are
@@ -386,7 +386,8 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
   const configurationCloneId = pathname.match(/^\/clones\/([0-9a-f-]{36})(?:\/|$)/i)?.[1] ?? activeCloneId;
   const [moreOpen, setMoreOpen] = useState(false);
   const [fullNavigation, setFullNavigation] = useState(false);
-  const studioNavigation = isAdmin && pathname === "/dashboard" && !fullNavigation;
+  const studioRoute = pathname === "/dashboard" || isBriannaAdvancedRoute(pathname, searchParams.get("tab"), searchParams.get("sub"));
+  const studioNavigation = isAdmin && studioRoute && !fullNavigation;
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   useEffect(() => {
     if (!isAdmin) return;
@@ -402,6 +403,7 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
   // Exact matching prevents Earnings staying highlighted on all five child
   // routes at the same time as their own item.
   const isGlobalActive = (href: string) => {
+    if (isAdmin && href === "/clones" && isBriannaAdvancedRoute(pathname, searchParams.get("tab"), searchParams.get("sub"))) return true;
     if (isAdmin && ["/clones", "/agency-admin"].includes(href)) return pathname === href;
     if (moxyNavigation && href === "/clones" && pathname.startsWith("/clones/") && ["ppvs", "identity"].includes(activeTab)) return false;
     return pathname === href || (!isCreator && href !== "/" && pathname.startsWith(href + "/"));
@@ -496,7 +498,7 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
   </>;
 
   return <>
-    {isAdmin && pathname === "/dashboard" && <style dangerouslySetInnerHTML={{__html:STUDIO_SIDEBAR_THEME}} />}
+    {isAdmin && studioRoute && <style dangerouslySetInnerHTML={{__html:STUDIO_SIDEBAR_THEME}} />}
     {isTether ? <style dangerouslySetInnerHTML={{__html:TETHER_SIDEBAR_THEME}} /> : null}
     <div className={studioNavigation ? "studio-brand-row" : "flex h-20 shrink-0 items-center justify-between border-b border-white/14 px-5"}><Link href={isCreator ? "/creator" : isAdmin && !fullNavigation ? "/dashboard" : "/revenue"} className="min-w-0" aria-label={agencyName || "Twin Technologies"} onClick={onNavigate}><TwinWordmark inverse studio={studioNavigation} agencyName={agencyName === "Twin" ? undefined : agencyName} /></Link>{headerAction}</div>
     {usesBrandedCore ? <div className="shrink-0 px-4 pb-2 pt-4" data-creator-core={isCreator ? "hero" : undefined}><div className="flex items-center gap-3 rounded-xl border border-sky-400/20 bg-sky-400/[0.05] px-3 py-3"><IntelligenceCoreIcon size={64} /><div className="min-w-0 flex-1"><span className="block text-sm font-semibold leading-5 text-[#38bdf8]">AI Intelligence Core</span></div></div></div> : isAgency ? <div className="px-7 py-4 text-sm text-white/75">{agencyName} · {readOnly ? "Read only" : isMoxy(agencyName) && canManage ? "Owner" : "Creator management"}</div> : isAdmin && !fullNavigation ? null : <div className="shrink-0 px-4 pb-3 pt-4"><Link href="/clones/new" onClick={onNavigate} className="sidebar-create-button flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition"><Icon d={PATHS.Plus} className="h-4 w-4" />Create new creator</Link></div>}
@@ -508,7 +510,8 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
 export default function Sidebar({ clones: _clones, activeCloneId }: { clones: CloneLite[]; activeCloneId: string | null }) {
   const pathname = usePathname();
   const { isAgency, isCreator } = useDashboardAccess();
-  const studio = !isAgency && !isCreator && pathname === "/dashboard";
+  const searchParams = useSearchParams();
+  const studio = !isAgency && !isCreator && (pathname === "/dashboard" || isBriannaAdvancedRoute(pathname, searchParams.get("tab"), searchParams.get("sub")));
   return <aside data-studio-sidebar={studio || undefined} className="dashboard-sidebar sticky top-0 hidden h-screen w-72 shrink-0 flex-col lg:flex"><SidebarContent activeCloneId={activeCloneId} /></aside>;
 }
 

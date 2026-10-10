@@ -5,6 +5,7 @@ import ts from "typescript";
 import React, { act } from "react";
 import { dashboardCreatorHref } from "../lib/dashboard-creator-route";
 import * as intelligenceModel from "../components/clone/intelligence/model";
+import * as intelligenceSections from "../components/clone/intelligence/sections";
 
 const nativeRequire = createRequire(import.meta.url);
 
@@ -105,10 +106,15 @@ async function main() {
   const css = new Proxy({}, { get: (_, key) => String(key) });
   const IntelligenceControls = compile("components/clone/intelligence/IntelligenceControls.tsx", {
     "./model": intelligenceModel,
+    "./sections": intelligenceSections,
     "./IntelligenceControls.module.css": { __esModule: true, default: css },
   }).default;
   const Component = compile("components/CloneForm.tsx", {
     "./DashboardAccessProvider": access,
+    "./clone/intelligence/model": intelligenceModel,
+    "./clone/intelligence/sections": intelligenceSections,
+    "./clone/intelligence/IntelligenceControls.module.css": { __esModule: true, default: css },
+    "./BlurToggle": { __esModule: true, default: noOp },
     "@/lib/agency-brand": { isMoxy: () => false },
     "next/navigation": navigation,
     "./IntakeFields": { __esModule: true, default: noOp },
@@ -187,6 +193,24 @@ async function main() {
   assert.equal(canonical.get("filter"), "retained", "Unrelated query state survives");
   assert.equal(document.querySelector("input[name='fixture_note']"), draft, "Section navigation does not remount uncontrolled creator fields");
   assert.deepEqual(Array.from(new win.FormData(document.getElementById("creator-control-plane-form") as HTMLFormElement).entries()), payload);
+  const sectionButton = (label:string) => Array.from(document.querySelectorAll<HTMLButtonElement>("nav[aria-label='Advanced sections'] button")).find(b=>b.textContent?.startsWith(label))!;
+  const liveForm = document.getElementById("creator-control-plane-form") as HTMLFormElement;
+  assert.equal(liveForm.hidden, true, "Operational fields stay mounted behind Live settings");
+  await act(async()=>sectionButton("Memory").click());
+  assert.equal(new URLSearchParams(win.location.search).get("section"), "memory");
+  await act(async()=>sectionButton("Rules").click());
+  assert.equal(new URLSearchParams(win.location.search).get("section"), "rules");
+  await traverseHistory("back");
+  assert.equal(document.querySelector("[data-intelligence-workspace]")?.getAttribute("data-advanced-view"), "memory");
+  await traverseHistory("forward");
+  assert.equal(document.querySelector("[data-intelligence-workspace]")?.getAttribute("data-advanced-view"), "rules");
+  const liveButton = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find(b=>b.textContent==="Open creator configuration")!;
+  await act(async()=>liveButton.click());
+  assert.equal(liveForm.hidden, false);
+  assert.equal(liveForm.querySelector("input[name='fixture_note']"), draft);
+  assert.deepEqual(Array.from(new win.FormData(liveForm).entries()), payload, "All seven pages and Live settings preserve the full native form payload");
+  await act(async()=>sectionButton("Creator").click());
+  assert.equal(liveForm.hidden, true);
   await clickTab("Configuration");
   assert.equal(visibleAdvancedIds().length, 0);
   await traverseHistory("back");
@@ -207,11 +231,13 @@ async function main() {
     audience = restrictedAudience;
     await render();
     assert.equal(document.querySelector("[data-intelligence-workspace]"), null, `${restrictedAudience} does not gain admin policies`);
+    assert.equal(document.querySelector("[data-brianna-advanced]"), null);
     assert.equal(visibleAdvancedIds().length, 0);
   }
   audience = "admin";
   await render("unrelated-creator");
   assert.equal(document.querySelector("[data-intelligence-workspace]"), null, "Extended controls do not leak to another creator");
+  assert.equal(document.querySelector("[data-brianna-advanced]"), null);
   await render();
   assertExtendedAdvanced();
   assert.equal(productionActions, 0, "Navigation never saves or deletes creator configuration");

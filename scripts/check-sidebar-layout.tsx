@@ -71,6 +71,14 @@ for (const mobile of [false, true]) {
   assert.match(kate, /<canvas[^>]*width="128"[^>]*height="128"[^>]*style="width:64px;height:64px"/);
   if (mobile) assert.match(kate, /aria-label="Close navigation"/);
 }
+for (const route of ["tab=advanced", "tab=identity&sub=advanced"]) {
+ pathname = "/clones/0328e7b3-a1e5-465a-9a30-c9cf6519cba1"; query = new URLSearchParams(route);
+ assert.match(render(), /studio-brand-row/, "Brianna Advanced uses the approved Dashboard shell");
+ assert.doesNotMatch(render("Moxy",true), /studio-brand-row/, "Partner branding is unchanged");
+}
+pathname = `/clones/${clone}`; query = new URLSearchParams("tab=advanced");
+assert.doesNotMatch(render(), /studio-brand-row/, "Other creators keep their existing shell");
+pathname = "/revenue"; query = new URLSearchParams();
 const moxyDestinations = [
   ["Invite creator", "/agency/creator-invites"],
   ["Earnings", "/revenue"],

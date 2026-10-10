@@ -4,6 +4,7 @@ import {createRequire} from "node:module";
 import ts from "typescript";
 import React,{act} from "react";
 import * as model from "../components/clone/intelligence/model";
+import * as sections from "../components/clone/intelligence/sections";
 
 const nativeRequire=createRequire(import.meta.url);
 function compile(path:string,imports:Record<string,unknown>){
@@ -17,6 +18,7 @@ function compile(path:string,imports:Record<string,unknown>){
 }
 async function main(){
  assert.equal(model.CONTROLS.length,56);
+ assert.deepEqual(sections.ADVANCED_SECTIONS.flatMap(s=>[...s.ids]).sort((a,b)=>a-b),model.CONTROLS.map(c=>c.id),"Seven sections contain every control once");
  assert.deepEqual(model.CONTROLS.map(c=>c.id),Array.from({length:56},(_,i)=>i+1));
  assert.equal(new Set(model.CONTROLS.map(c=>c.key)).size,56);
  assert.deepEqual(Object.keys(model.DOMAIN_LABELS).map(d=>model.CONTROLS.filter(c=>c.domain===d).length),[8,12,9,14,4,9]);
@@ -39,7 +41,7 @@ async function main(){
  let networkCalls=0;Object.defineProperty(globalThis,"fetch",{value:()=>{networkCalls++;throw Error("Unexpected network request");},configurable:true});
  const {createRoot}=await import("react-dom/client");const root=createRoot(document.getElementById("root")!);
  const css=new Proxy({},{get:(_,key)=>String(key)});
- const Component=compile("components/clone/intelligence/IntelligenceControls.tsx",{"./model":model,"./IntelligenceControls.module.css":{__esModule:true,default:css}}).default;
+ const Component=compile("components/clone/intelligence/IntelligenceControls.tsx",{"./model":model,"./sections":sections,"./IntelligenceControls.module.css":{__esModule:true,default:css}}).default;
  let tab:model.Domain="identity";
  const render=async(audience="admin",cloneId=model.BRIANNA_CONTROL_ID)=>{await act(async()=>root.render(<Component tab={tab} audience={audience} cloneId={cloneId} creatorName="Brianna Redd" onTabChange={(next:model.Domain)=>{tab=next;}}/>));};
  const button=(label:string)=>Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find(b=>b.textContent?.trim()===label)!;
@@ -54,6 +56,13 @@ async function main(){
   assert.equal(document.querySelectorAll("[data-intelligence-control]").length,domain==="advanced"?56:0);
  }
  tab="advanced";await render();
+ for(const section of sections.ADVANCED_SECTIONS){
+  const nav=document.querySelector("nav[aria-label='Advanced sections']")!;
+  const target=Array.from(nav.querySelectorAll<HTMLButtonElement>('button')).find(b=>b.textContent===`${section.label}${section.ids.length}`)!;
+  await click(target);
+  assert.deepEqual(Array.from(document.querySelectorAll<HTMLElement>('[data-intelligence-control]')).filter(el=>!el.hidden).map(el=>Number(el.dataset.intelligenceControl)).sort((a,b)=>a-b),[...section.ids].sort((a,b)=>a-b));
+  assert.equal(target.getAttribute('aria-current'),'page');
+ }
  for(const heading of Array.from(document.querySelectorAll<HTMLButtonElement>("[data-intelligence-control] > button[aria-expanded='false']")))await click(heading);
  for(const c of model.CONTROLS){const card=document.querySelector(`[data-intelligence-control='${c.id}']`)!;assert.ok(card.textContent?.includes(c.title));assert.ok(card.querySelectorAll("input,select,button[role='switch'],ol").length>0,`${c.id} has interactive controls`);}
  for(const b of document.querySelectorAll<HTMLButtonElement>("[data-intelligence-workspace] button"))assert.equal(b.type,"button");
@@ -75,6 +84,6 @@ async function main(){
  assert.deepEqual(Array.from(new win.FormData(live).entries()),before);assert.equal(networkCalls,0,"No send, payment, model, or configuration APIs called");
  const source=readFileSync("components/CloneForm.tsx","utf8");assert.ok(source.indexOf("<IntelligenceControls")>source.indexOf("</form>"),"New controls live outside the active creator form");
  await act(async()=>root.unmount());dom.window.close();
- console.log("PASS: 56 controls, Advanced-only placement, creator/admin isolation, native layout, switches, rules, ordering, allocation, persistence, and zero production writes.");
+ console.log("PASS: 56 controls, Advanced-only placement, creator/admin isolation, seven sections, switches, rules, ordering, allocation, persistence, and zero production writes.");
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});

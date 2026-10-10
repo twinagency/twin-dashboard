@@ -1,6 +1,7 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
+import { isBriannaAdvancedRoute } from "@/lib/dashboard-creator-route";
 import TwinAssistant from "@/components/TwinAssistant";
 import { useDashboardAccess } from "./DashboardAccessProvider";
 
@@ -15,7 +16,8 @@ import { useDashboardAccess } from "./DashboardAccessProvider";
 export default function MainShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const {isAgency, isCreator} = useDashboardAccess();
-  const studioDashboard = !isAgency && !isCreator && pathname === "/dashboard";
+  const searchParams = useSearchParams();
+  const studioDashboard = !isAgency && !isCreator && (pathname === "/dashboard" || isBriannaAdvancedRoute(pathname, searchParams.get("tab"), searchParams.get("sub")));
   const fullBleed = pathname === "/users" || pathname === "/inbox" || pathname === "/jarvis" || pathname === "/fans";
   return (
     <main
