@@ -86,12 +86,20 @@ export function buildDashboard(fans: Fan[], filters: Filters, audRate = AUD_PER_
   const payingIds = new Set(entries.map(p => p.fan.id));
   const activeIds = new Set(scopedFans.filter(f => messagesFor(f, state, filters.platform).some(m => m.direction === "in" && inRange(m.at))).map(f => f.id));
   const repeatBuyers = [...payingIds].filter(id => entries.filter(p => p.fan.id === id).length >= 2).length;
+  const messageCounts = new Map(platformOrder.map(platform => [platform, new Map<string, number>()]));
+  for (const fan of scopedFans) for (const message of messagesFor(fan, state, "all")) {
+    const day = dayAt(message.at);
+    if (day < range.from || day > range.to) continue;
+    const counts = messageCounts.get(message.platform)!;
+    counts.set(day, (counts.get(day) ?? 0) + 1);
+  }
   const platforms = platformOrder.map(platform => {
     const sales = entries.filter(p => p.platform === platform);
     return { platform, cents: sales.reduce((sum, p) => sum + cents(p), 0), purchases: sales.length,
       buyers: new Set(sales.map(p => p.fan.id)).size,
       accounts: scopedFans.filter(f => accountsAtEnd(f).some(a => a.platform === platform)).length,
       conversations: scopedFans.filter(f => messagesFor(f, state, platform).some(m => m.direction === "in" && inRange(m.at))).length,
+      messages: [...messageCounts.get(platform)!.values()].reduce((sum, count) => sum + count, 0),
       connected: creatorFans.some(f => accountsAtEnd(f).some(a => a.platform === platform)) };
   });
   const chart = range.days.map(day => {
@@ -148,7 +156,7 @@ export function buildDashboard(fans: Fan[], filters: Filters, audRate = AUD_PER_
     revenue: { series: chart.map(point => ({ day: point.day, value: point.cents })),
       percentChange: percentChange(currentComparison.revenue, previousComparison?.revenue ?? null) } satisfies Trend,
     platforms: platformOrder.map(platform => ({ platform,
-      series: chart.map(point => ({ day: point.day, value: platform === "whatsapp" ? scopedFans.reduce((n, f) => n + messagesFor(f, state, platform).filter(m => m.direction === "in" && dayAt(m.at) === point.day).length, 0) : point.platforms.find(item => item.platform === platform)?.cents ?? 0 })),
+      series: chart.map(point => ({ day: point.day, value: platform === "whatsapp" ? messageCounts.get(platform)!.get(point.day) ?? 0 : point.platforms.find(item => item.platform === platform)?.cents ?? 0 })),
       percentChange: percentChange(currentComparison.platforms[platform], previousComparison?.platforms[platform] ?? null) })),
     activeFans: { series: range.days.map(day => ({ day, value: activeByDay.get(day)?.size ?? 0 })),
       percentChange: percentChange(currentComparison.activeFans, previousComparison?.activeFans ?? null) } satisfies Trend,
