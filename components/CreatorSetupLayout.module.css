@@ -124,7 +124,9 @@
 .root[data-creator-setup-brand="moxy"] .content :global([data-choose-content]),
 .root[data-creator-setup-brand="moxy"] .content :global([data-choose-photos]) { min-height: 46px; border-radius: 10px; }
 .root[data-creator-setup-brand="moxy"] .content :global(.text-accent) { color: #ee9abb; }
-.root[data-creator-setup-brand="moxy"] .content :global(.text-emerald-700) { color: #7ddab2; }
+.root[data-creator-setup-brand="moxy"] .content :global(.text-emerald-700),
+.root[data-creator-setup-brand="moxy"] .content :global(.text-emerald-800) { color: #7ddab2; }
+.root[data-creator-setup-brand="moxy"] .content :global(.text-amber-800) { color: #fde68a; }
 .root[data-creator-setup-brand="moxy"] .content :global(.text-rose-700),
 .root[data-creator-setup-brand="moxy"] .content :global(.text-red-700) { color: #fda4af; }
 .root[data-creator-setup-brand="moxy"] .content :global(.bg-rose-50) { background-color: #351c25; border-color: #794257; color: #fecdd3; }
