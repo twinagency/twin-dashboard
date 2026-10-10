@@ -126,7 +126,13 @@ export function clampValue(value:unknown,field:Field):Value {
 export function restoreValues(raw:string|null):Values {
  const defaults=defaultValues(); if(!raw)return defaults;
  try {const parsed=JSON.parse(raw);if(parsed.version!==1||!parsed.values||typeof parsed.values!=="object")return defaults;
- for(const c of CONTROLS)for(const f of c.fields){const k=fieldKey(c,f);defaults[k]=clampValue(parsed.values[k],f);}return defaults;
+ for(const c of CONTROLS)for(const f of c.fields){
+  const k=fieldKey(c,f);defaults[k]=clampValue(parsed.values[k],f);
+  if(k==='releases.windows'||k==='delivery.profiles'){
+   const restored=defaults[k] as Row[];const whatsapp=(f.value as Row[]).find(row=>row.platform==='WhatsApp');
+   if(whatsapp&&!restored.some(row=>row.platform==='WhatsApp'))defaults[k]=[...restored,structuredClone(whatsapp)];
+  }
+ }return defaults;
  }catch{return defaults;}
 }
 // Proportional redistribution keeps the allocation usable after every drag.

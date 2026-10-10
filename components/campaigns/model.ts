@@ -274,6 +274,11 @@ export function restoreCampaigns(raw: string | null, fallback: CampaignStore, ct
         exclusions: c.exclusions.filter((e: Exclusion) => fanIds.has(e?.fanId) && typeof e.reason === 'string').map((e: Exclusion) => ({ fanId: e.fanId, reason: e.reason.slice(0, 200) })),
         activity: c.activity.filter((a: Campaign['activity'][number]) => typeof a?.id === 'string' && isDate(a.at) && typeof a.text === 'string').slice(-150).map((a: Campaign['activity'][number]) => ({ ...a, text: a.text.slice(0, 1000) })) });
     }
+    // Introduce the third-channel showcase without replacing saved campaigns.
+    if (value.campaigns.length && !ids.has('briana-whatsapp-catchups')) {
+      const showcase = fallback.campaigns.find(c => c.id === 'briana-whatsapp-catchups');
+      if (showcase) campaigns.push(structuredClone(showcase));
+    }
     return campaigns.length || !value.campaigns.length ? { version: 1, campaigns } : fallback;
   } catch { return fallback; }
 }

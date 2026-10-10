@@ -30,6 +30,7 @@ async function main(){
  const defaults=model.defaultValues();assert.deepEqual(model.issues(defaults),[]);
  assert.deepEqual(model.restoreValues("malformed"),defaults);
  assert.deepEqual(model.restoreValues(JSON.stringify({version:99,values:defaults})),defaults);
+ const twoChannelSaved={...defaults,'releases.windows':(defaults['releases.windows'] as model.Row[]).filter(r=>r.platform!=='WhatsApp'),'delivery.profiles':(defaults['delivery.profiles'] as model.Row[]).filter(r=>r.platform!=='WhatsApp')};const threeChannelSaved=model.restoreValues(JSON.stringify({version:1,values:twoChannelSaved}));assert.equal((threeChannelSaved['releases.windows'] as model.Row[]).length,3);assert.equal((threeChannelSaved['delivery.profiles'] as model.Row[]).length,3);
  const bad=model.restoreValues(JSON.stringify({version:1,values:{"fingerprint.vocabulary":9999,"concurrent.policy":"unknown","platform-context.confirmed":"false","authority.actions":[null],"sequence.steps":[{label:"Invalid action"}]}}));
  assert.equal(bad["fingerprint.vocabulary"],100);assert.equal(bad["concurrent.policy"],defaults["concurrent.policy"]);assert.equal(bad["platform-context.confirmed"],true);assert.deepEqual(bad["sequence.steps"],defaults["sequence.steps"]);
  for(const target of [0,1,37,99,100]){const next=model.allocate(defaults,"context-budget.memory",target);assert.equal(next["context-budget.memory"],target);assert.equal(Object.entries(next).filter(([k])=>k.startsWith("context-budget.")).reduce((s,[,v])=>s+Number(v),0),100);}

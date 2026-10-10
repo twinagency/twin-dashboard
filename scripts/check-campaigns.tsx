@@ -79,6 +79,7 @@ async function main() {
   assert.equal(mirrored.inbox.offers.find(o => o.fanId === ben.id)?.amount, 79);
   assert.equal(model.restoreCampaigns('bad json', seeds, ctx), seeds); assert.equal(model.restoreCampaigns(JSON.stringify(seeds), seeds, ctx).campaigns.length, 6);
   const legacy = structuredClone(seeds) as any;for(const campaign of legacy.campaigns)delete campaign.messages.whatsapp;const migrated = model.restoreCampaigns(JSON.stringify(legacy),seeds,ctx);assert.equal(migrated.campaigns.length,6);assert.ok(migrated.campaigns.every(c=>c.messages.whatsapp.text));
+  const previousDemo={...seeds,campaigns:seeds.campaigns.filter(c=>c.id!=='briana-whatsapp-catchups')};assert.equal(model.restoreCampaigns(JSON.stringify(previousDemo),seeds,ctx).campaigns.length,6,'Saved campaigns gain the WhatsApp showcase without losing edits');
   const corrupted = structuredClone(seeds); corrupted.campaigns[0].recipients[0].fanId = 'missing';
   assert.ok(!model.restoreCampaigns(JSON.stringify(corrupted), seeds, ctx).campaigns[0].recipients.some(r => r.fanId === 'missing'));
 
