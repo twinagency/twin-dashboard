@@ -219,6 +219,11 @@ async function main() {
     element.dispatchEvent(new dom.window.Event(element.tagName === "SELECT" ? "change" : "input", { bubbles: true }));
   });
   const metric = (name: string) => find(`[data-metric="${name}"]`).textContent;
+  const platformCards = () => dashboardModel.platformOrder.map(platform => {
+    const value = find(platform === "whatsapp" ? '[data-platform-conversations="whatsapp"]' : `[data-platform-revenue="${platform}"]`);
+    const card = value.closest("button")!;
+    return { platform, text: card.textContent, sparkline: card.querySelector(".sparkline")?.outerHTML };
+  });
   await render();
   assert.equal(metric("revenue"), "$504");
   assert.equal(metric("purchases"), "12");
@@ -238,8 +243,16 @@ async function main() {
   assert.equal(find('[aria-label="Open Oliver\'s conversation"]').getAttribute("href"), "/users?relationship=briana-oliver&creator=briana&platform=onlyfans");
   await textButton("All time", '[aria-label="Dashboard reporting period"]');
   assert.equal(metric("revenue"), "$809"); assert.equal(metric("purchases"), "20");
+  const allPlatformCards = platformCards();
   await textButton("Telegram", '[aria-label="Dashboard platform"]');
   assert.equal(metric("revenue"), "$70"); assert.equal(metric("paying"), "1"); assert.equal(metric("purchases"), "3");
+  assert.deepEqual(platformCards(), allPlatformCards, "Telegram filtering preserves every platform card's totals, counts and trends");
+  for (const [platform, revenue, purchases] of [["OnlyFans", "$739", "17"], ["WhatsApp", "$0", "0"]] as const) {
+    await textButton(platform, '[aria-label="Dashboard platform"]');
+    assert.equal(metric("revenue"), revenue); assert.equal(metric("purchases"), purchases);
+    assert.deepEqual(platformCards(), allPlatformCards, `${platform} filtering preserves the platform overview`);
+  }
+  await textButton("Telegram", '[aria-label="Dashboard platform"]');
   assert.equal(document.querySelector('[data-fan="briana-oliver"]'), null);
   await click('[aria-label="Inspect Coffee break diary purchase by Ben"]');
   assert.match(find('[role="dialog"]').textContent || "", /2,100 Stars/);
@@ -248,6 +261,7 @@ async function main() {
   await act(async () => { document.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
   assert.equal(document.querySelector('[role="dialog"]'), null);
   await input('[aria-label="Dashboard currency"]', "AUD"); assert.equal(metric("revenue"), "A$98");
+  assert.equal(find('[data-platform-revenue="onlyfans"]').textContent, "A$1,035", "Unselected platform cards still follow the chosen currency");
   assert.equal(localStorage.getItem("currency"), null, "The new page does not write the old Overview's currency preference");
   await click('[aria-label="Dashboard platform"] button[aria-label="All platforms"]');
   await input('[aria-label="Dashboard currency"]', "USD");
@@ -259,6 +273,7 @@ async function main() {
   await input('[aria-label="Dashboard end date"]', "2026-10-02");
   await textButton("Apply dates");
   assert.equal(metric("revenue"), "$79"); assert.equal(metric("purchases"), "1"); assert.equal(metric("repeat"), "0%");
+  assert.equal(find('[data-platform-revenue="onlyfans"]').textContent, "$79", "Platform cards still follow the reporting period");
   await click('[aria-label="Inspect repeat buyers"]'); assert.equal(document.querySelectorAll('.relationshipTable tbody tr').length, 0);
   await input('[aria-label="Dashboard start date"]', "2026-10-09"); await input('[aria-label="Dashboard end date"]', "2026-10-01");
   await textButton("Apply dates"); assert.ok(document.querySelector('[role="alert"]')); assert.equal(metric("revenue"), "$79");

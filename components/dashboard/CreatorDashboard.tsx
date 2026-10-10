@@ -115,6 +115,8 @@ export default function CreatorDashboard({ creators, fans: seedFans, initialFilt
   }, [filters, ready]);
 
   const dashboard = useMemo(() => buildDashboard(fans, filters, audRate, workspace), [fans, filters, audRate, workspace]);
+  // Platform cards retain their period totals while the detail views filter by channel.
+  const platformOverview = useMemo(() => filters.platform === "all" ? dashboard : buildDashboard(fans, { ...filters, platform: "all" }, audRate, workspace), [fans, filters, audRate, workspace, dashboard]);
   const creator = creators.find(c => c.id === filters.creatorId)!;
   const money = (cents: number) => displayMoney(cents, filters.currency);
   const platform = filters.platform === "all" ? "All platforms" : platformNames[filters.platform];
@@ -186,8 +188,8 @@ export default function CreatorDashboard({ creators, fans: seedFans, initialFilt
 
     <section className={styles.summaryCards} aria-label="Dashboard summary">
       <button className={styles.summaryCard} onClick={() => setDetail({ kind: "rates" })} aria-label="Inspect revenue valuation"><span className={styles.summaryIcon}><Coins size={23} /></span><span className={styles.summaryCopy}><span>Total earnings</span><span className={styles.summaryValue}><strong data-metric="revenue">{compactMoney(dashboard.metrics.revenueCents)}</strong><em data-direction={revenueTrend.value >= 0 ? "up" : "down"}>{revenueTrend.label}</em></span><small>{dashboard.metrics.purchases.toLocaleString()} completed purchases</small></span><Sparkline values={dashboard.trends.revenue.series.map(item => item.value)} /></button>
-      {dashboard.platforms.map(p => {
-        const source = dashboard.trends.platforms.find(item => item.platform === p.platform);
+      {platformOverview.platforms.map(p => {
+        const source = platformOverview.trends.platforms.find(item => item.platform === p.platform);
         const trend = trendText(source?.percentChange ?? null, p.platform === "onlyfans" ? 14 : 8);
         return <button key={p.platform} className={styles.summaryCard} onClick={() => change({ platform: filters.platform === p.platform ? "all" : p.platform })} aria-label={`Inspect ${platformNames[p.platform]} ${p.platform === "whatsapp" ? "conversations" : "earnings"}`} aria-pressed={filters.platform === p.platform}><span className={`${styles.summaryIcon} ${styles[p.platform]}`}><PlatformMark platform={p.platform} size={28} /></span><span className={styles.summaryCopy}><span>{platformNames[p.platform]}</span><span className={styles.summaryValue}><strong data-platform-revenue={p.platform === "whatsapp" ? undefined : p.platform} data-platform-conversations={p.platform === "whatsapp" ? p.platform : undefined}>{p.platform === "whatsapp" ? p.conversations.toLocaleString() : compactMoney(p.cents)}</strong><em data-direction={trend.value >= 0 ? "up" : "down"}>{p.platform === "whatsapp" ? "Chats" : trend.label}</em></span><small>{p.platform === "whatsapp" ? `${p.accounts.toLocaleString()} linked accounts` : `${p.purchases.toLocaleString()} purchases · ${p.buyers} paying fans`}</small></span><Sparkline values={source?.series.map(item => item.value) ?? []} /></button>;
       })}
