@@ -76,10 +76,30 @@ export function ApiDocs() {
             <code className="font-mono">revenueStars</code> and <code className="font-mono">sales</code> per girl.
           </Endpoint>
           <Endpoint method="GET" path="/api/v1/fans?limit=100">
-            Fans, highest lifetime spend first. Max 500 per call. One model key returns that girl&apos;s fans; an All
+            Fans, highest lifetime spend first. Max 1000 per call. One model key returns that girl&apos;s fans; an All
             models key returns the top spenders across the fleet, each row carrying its{" "}
             <code className="font-mono">clone_id</code>. The <code className="font-mono">fields</code> array in the
-            response names the columns you actually got.
+            response names the columns you actually got. Optional:{" "}
+            <code className="font-mono">sort</code> (spend, recent, joined, messages),{" "}
+            <code className="font-mono">offset</code> to page, <code className="font-mono">active_since</code> and{" "}
+            <code className="font-mono">joined_since</code> (like 24h, 7d or an ISO date),{" "}
+            <code className="font-mono">min_spent</code>, <code className="font-mono">tier</code> and{" "}
+            <code className="font-mono">buyers=1</code>.
+          </Endpoint>
+          <Endpoint method="GET" path="/api/v1/payments?since=24h&amp;limit=200">
+            Every Star payment in a window, newest first: who paid, what for, how many Stars, when. Max 1000 per call;
+            page with <code className="font-mono">nextCursor</code>. Optional:{" "}
+            <code className="font-mono">since</code> and <code className="font-mono">until</code> (like 30m, 6h, 7d or
+            an ISO date, up to 90 days back), <code className="font-mono">feature</code>,{" "}
+            <code className="font-mono">kind</code>, <code className="font-mono">min_stars</code> and{" "}
+            <code className="font-mono">refunds=0</code>. The sum of a window here equals that window&apos;s revenue
+            above. An All models key gets <code className="font-mono">cloneId</code> on each row.
+          </Endpoint>
+          <Endpoint method="GET" path="/api/v1/stats">
+            One snapshot of how things are right now: revenue, sales and buyers for the last hour, day, week and month;
+            fan counts (total, active, new, buyers); today&apos;s sales by feature and by hour; and, for an All models
+            key, one row per girl. Rebuilt at most every 15 seconds, so polling faster returns the same numbers. Every
+            response carries <code className="font-mono">generatedAt</code>.
           </Endpoint>
         </div>
       </section>

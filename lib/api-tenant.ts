@@ -88,7 +88,7 @@ export function digestsEqual(a: string, b: string): boolean {
 //
 // LIMIT: a caller polling a chart every few seconds stays well under this; a
 // render loop does not.
-export const RATE_LIMIT_PER_MINUTE = 60;
+export const RATE_LIMIT_PER_MINUTE = 120;
 const WINDOW_MS = 60_000;
 const hits = new Map<string, { count: number; resetAt: number }>();
 

@@ -94,7 +94,9 @@ export function withModelKey(handler: PublicHandler): (req: Request) => Promise<
 
 export function publicOk(payload: Record<string, unknown>): NextResponse {
   return NextResponse.json(
-    { ok: true, version: PUBLIC_API_VERSION, ...payload },
-    { headers: { "X-RateLimit-Limit": String(RATE_LIMIT_PER_MINUTE) } },
+    { ok: true, version: PUBLIC_API_VERSION, generatedAt: new Date().toISOString(), ...payload },
+    // no-store: this is live money. A shared cache between the caller and us
+    // must never serve one key's numbers to another, or an old number as new.
+    { headers: { "X-RateLimit-Limit": String(RATE_LIMIT_PER_MINUTE), "Cache-Control": "private, no-store" } },
   );
 }

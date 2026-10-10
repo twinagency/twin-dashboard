@@ -21,6 +21,7 @@ import { supabaseAdmin } from "./supabase";
 import { STAR_USD, AUD_PER_USD } from "./money";
 import { resolveCloneCuts, scaleAnalyticsData } from "./revenue-projection";
 import { getCutPctForClone, getAgencyCreatorCutPct, applyStackedCut } from "./platform-cut";
+import { FAN_SORT_COLUMN, type FanQuery } from "./api-public-query";
 
 // The Twin public API follows the KEY's role, same as every other tenancy
 // decision on this file: never a query parameter. A clone-scope key is
@@ -233,13 +234,33 @@ export async function publicFleetRevenue(
   return projectFleetRevenue(netAnalytics, range ?? null);
 }
 
-export const MAX_FAN_LIMIT = 500;
+export const MAX_FAN_LIMIT = 1000;
 export const DEFAULT_FAN_LIMIT = 100;
 
 export function clampFanLimit(v: unknown): number {
   const n = Number(v);
   if (!Number.isFinite(n) || n <= 0) return DEFAULT_FAN_LIMIT;
   return Math.min(MAX_FAN_LIMIT, Math.floor(n));
+}
+
+// Sort/filter/offset for the fan list. The options arrive already parsed and
+// bounded (lib/api-public-query.ts); this only applies them to a builder that
+// ALREADY carries its tenancy filter, so it can narrow a result and never widen
+// one. Ties break on telegram_id so offset paging is stable.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function withFanOptions(q: any, opts: FanQuery | undefined, limit: number) {
+  const o = opts;
+  if (o) {
+    if (o.activeSince) q = q.gte("last_message_received", o.activeSince);
+    if (o.joinedSince) q = q.gte("first_seen_at", o.joinedSince);
+    if (o.minSpent > 0) q = q.gte("total_spent_stars", o.minSpent);
+    if (o.tier) q = q.eq("spend_tier", o.tier);
+    if (o.buyersOnly) q = q.gt("purchase_count", 0);
+  }
+  const col = o ? FAN_SORT_COLUMN[o.sort] : "total_spent_stars";
+  q = q.order(col, { ascending: false, nullsFirst: false }).order("telegram_id", { ascending: true });
+  const from = o?.offset ?? 0;
+  return q.range(from, from + limit - 1);
 }
 
 export type PublicFans = {
@@ -249,15 +270,17 @@ export type PublicFans = {
   truncated: boolean;
 };
 
-export async function publicFans(cloneId: string, limit: number): Promise<PublicFans> {
+export async function publicFans(cloneId: string, limit: number, opts?: FanQuery): Promise<PublicFans> {
   const capped = clampFanLimit(limit);
-  const { data, error } = await supabaseAdmin
-    .from("users")
-    .select(PUBLIC_FAN_COLUMNS.join(","))
-    // The tenancy boundary. Not optional, not derived from a parameter.
-    .eq("clone_id", cloneId)
-    .order("total_spent_stars", { ascending: false })
-    .limit(capped);
+  const { data, error } = await withFanOptions(
+    supabaseAdmin
+      .from("users")
+      .select(PUBLIC_FAN_COLUMNS.join(","))
+      // The tenancy boundary. Not optional, not derived from a parameter.
+      .eq("clone_id", cloneId),
+    opts,
+    capped,
+  );
   if (error) throw new Error(error.message);
 
   const platformPct = await getCutPctForClone(cloneId);
@@ -289,15 +312,18 @@ export async function publicFans(cloneId: string, limit: number): Promise<Public
 // ordering between the ten results would still have to be redone here.
 export const PUBLIC_FLEET_FAN_COLUMNS = ["clone_id", ...PUBLIC_FAN_COLUMNS] as const;
 
-export async function publicFleetFans(limit: number): Promise<PublicFans> {
+export async function publicFleetFans(limit: number, opts?: FanQuery): Promise<PublicFans> {
   const capped = clampFanLimit(limit);
-  const { data, error } = await supabaseAdmin
-    .from("users")
-    .select(PUBLIC_FLEET_FAN_COLUMNS.join(","))
-    // No .eq() — that IS the fleet scope, and it is reached only from a route
-    // that has already proved tenant.scope === "fleet".
-    .order("total_spent_stars", { ascending: false })
-    .limit(capped);
+  const { data, error } = await withFanOptions(
+    supabaseAdmin
+      .from("users")
+      .select(PUBLIC_FLEET_FAN_COLUMNS.join(","))
+      // No .eq() — that IS the fleet scope, and it is reached only from a route
+      // that has already proved tenant.scope === "fleet".
+    ,
+    opts,
+    capped,
+  );
   if (error) throw new Error(error.message);
 
   const rows = (data ?? []) as unknown as Record<string, unknown>[];

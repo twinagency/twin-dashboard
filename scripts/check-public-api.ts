@@ -32,6 +32,17 @@ import { validateKeyRequest } from "../lib/api-keys-admin";
 import { simRevenue, simFans, seedFrom } from "../lib/api-sim";
 import { generateKey } from "../lib/api-keys-admin";
 import type { AnalyticsData } from "../lib/analytics-data";
+import {
+  parsePaymentQuery,
+  parseFanQuery,
+  parseInstant,
+  encodeCursor,
+  decodeCursor,
+  isQueryError,
+  MAX_PAYMENT_LIMIT,
+  MAX_PAYMENT_WINDOW_DAYS,
+  MAX_FAN_OFFSET,
+} from "../lib/api-public-query";
 
 let passed = 0;
 const failures: string[] = [];
@@ -599,6 +610,100 @@ check("G10 the public revenue path never runs the cost rollup it cannot return",
   for (const c of calls) {
     assert(/includeCost:\s*false/.test(c), `a public getAnalytics call does not pass includeCost:false: ${c}`);
   }
+});
+
+// ─────────────────────────────────────────────────────────────────────────────
+// H. PAYMENTS, STATS AND FAN OPTIONS (2026-10-10) — more detail, same boundary
+// ─────────────────────────────────────────────────────────────────────────────
+
+const NOW = Date.parse("2026-10-10T12:00:00Z");
+
+check("H1 payments: defaults are a 24 hour window and 200 rows, and the caps hold", () => {
+  const q = parsePaymentQuery(new URLSearchParams(), NOW);
+  assert(!isQueryError(q), "defaults must parse");
+  if (isQueryError(q)) return;
+  eq(q.limit, 200, "default limit");
+  eq(Date.parse(q.until) - Date.parse(q.since), 86_400_000, "default window");
+  const big = parsePaymentQuery(new URLSearchParams("limit=999999&since=2020-01-01"), NOW);
+  assert(!isQueryError(big), "big limit still parses");
+  if (isQueryError(big)) return;
+  eq(big.limit, MAX_PAYMENT_LIMIT, "limit cap");
+  eq(Math.round((NOW - Date.parse(big.since)) / 86_400_000), MAX_PAYMENT_WINDOW_DAYS, "window floor");
+});
+
+check("H2 payments: relative and ISO instants parse, garbage is refused with a sentence", () => {
+  eq(parseInstant("6h", NOW), new Date(NOW - 6 * 3_600_000).toISOString(), "6h");
+  eq(parseInstant("2026-10-09", NOW), "2026-10-09T00:00:00.000Z", "date");
+  eq(parseInstant("yesterday", NOW), null, "word");
+  eq(parseInstant("1; drop table", NOW), null, "injection");
+  const bad = parsePaymentQuery(new URLSearchParams("since=nonsense"), NOW);
+  assert(isQueryError(bad) && /since/.test(bad.error), "a bad since must say which parameter");
+  const inverted = parsePaymentQuery(new URLSearchParams("since=1h&until=6h"), NOW);
+  assert(isQueryError(inverted), "since after until must be refused");
+});
+
+check("H3 payments: a cursor round-trips and a forged one is refused", () => {
+  // real Telegram charge ids are ~150 characters of base64url
+  const c = { t: "2026-10-09T01:02:03.456+00:00", i: "stx6DPhqd_GohngyEYkbOcNM8pTCZRH3uqKu1tBW6NT2cWWk-9qIv55upkPFhO0HUubatkie_AI30XEE2V8Pj-EvrUrO8Ujsu1uti3VBzmMdE2Pq738uiN1B3yltBF6wFB1BATd_qLJlU0z3rKw6rrwpg" };
+  const back = decodeCursor(encodeCursor(c));
+  eq(back?.t, c.t, "t"); eq(back?.i, c.i, "i");
+  const evil = Buffer.from(JSON.stringify({ t: "2026-10-09", i: "x),clone_id.neq.0,(y" })).toString("base64url");
+  eq(decodeCursor(evil), null, "a cursor that would splice into the filter");
+  eq(decodeCursor("not base64 json"), null, "garbage");
+  const q = parsePaymentQuery(new URLSearchParams(`cursor=${evil}`), NOW);
+  assert(isQueryError(q), "a forged cursor must be a 400");
+});
+
+check("H4 payments: feature and kind are plain words, never filter syntax", () => {
+  for (const bad of ["photo,or=(x)", "a b", "Photo", "a".repeat(41)]) {
+    const q = parsePaymentQuery(new URLSearchParams({ feature: bad }), NOW);
+    assert(isQueryError(q), `feature ${JSON.stringify(bad)} must be refused`);
+  }
+  const ok = parsePaymentQuery(new URLSearchParams("feature=photo&kind=media&min_stars=100&refunds=0"), NOW);
+  assert(!isQueryError(ok) && ok.feature === "photo" && ok.kind === "media" && ok.minStars === 100 && ok.includeRefunds === false, "valid options");
+});
+
+check("H5 fans: sort, offset and filters are validated and capped", () => {
+  const ok = parseFanQuery(new URLSearchParams("sort=recent&offset=50&active_since=24h&min_spent=100&tier=whale&buyers=1"), NOW);
+  assert(!isQueryError(ok), "valid fan query");
+  if (!isQueryError(ok)) { eq(ok.sort, "recent", "sort"); eq(ok.offset, 50, "offset"); eq(ok.buyersOnly, true, "buyers"); eq(ok.tier, "whale", "tier"); }
+  assert(isQueryError(parseFanQuery(new URLSearchParams("sort=password"), NOW)), "unknown sort refused");
+  assert(isQueryError(parseFanQuery(new URLSearchParams("tier=chat_history"), NOW)), "unknown tier refused");
+  assert(isQueryError(parseFanQuery(new URLSearchParams("offset=-5"), NOW)), "negative offset refused");
+  const huge = parseFanQuery(new URLSearchParams("offset=99999999"), NOW);
+  assert(!isQueryError(huge) && huge.offset === MAX_FAN_OFFSET, "offset capped");
+  eq(clampFanLimit(5000), MAX_FAN_LIMIT, "fan limit cap");
+  eq(MAX_FAN_LIMIT, 1000, "fan limit is 1000");
+});
+
+check("H6 the new modules never reach cost, margin, chat or credentials", () => {
+  for (const f of ["../lib/api-public-v2.ts", "../lib/api-public-query.ts", "../app/api/v1/payments/route.ts", "../app/api/v1/stats/route.ts"]) {
+    const src = sourceCode(new URL(f, import.meta.url));
+    for (const banned of ["usage_events", "revenue_usage_rollup", "usageRollup", "costUsd", "profitUsd", "chat_history", "bot_token", "app_settings", "intent_attempt_id", "getAnalytics("]) {
+      assert(!src.includes(banned), `${f} mentions ${banned}`);
+    }
+    // the payload is read to tell a refund from a sale, but it is never part of an outbound row
+    const outRow = src.includes("const out: PublicPayment") ? src.slice(src.indexOf("const out: PublicPayment"), src.indexOf("return out;")) : "";
+    assert(!/invoice_payload/.test(outRow), `${f} puts invoice_payload on an outbound row`);
+  }
+});
+
+check("H7 payments and stats reads are filtered by the key's clone or reached only behind the fleet scope", () => {
+  const src = sourceCode(new URL("../lib/api-public-v2.ts", import.meta.url));
+  assert(src.includes('query.eq("clone_id", cloneId)'), "the payments read lost its clone filter");
+  assert(src.includes('tq.eq("clone_id", cloneId)'), "the stats payments read lost its clone filter");
+  assert(src.includes('.eq("id", cloneId)'), "the stats clone list lost its filter");
+  for (const r of ["payments", "stats"]) {
+    const route = sourceCode(new URL(`../app/api/v1/${r}/route.ts`, import.meta.url));
+    assert(/tenant\.scope === "fleet"/.test(route), `the ${r} route must branch on tenant.scope`);
+    assert(!/params\.get\(\s*["']scope["']/.test(route), `${r}: scope must never be read from the request`);
+  }
+});
+
+check("H8 every response is stamped and uncacheable by a shared cache", () => {
+  const src = sourceCode(new URL("../lib/api-public-route.ts", import.meta.url));
+  assert(/generatedAt/.test(src), "responses must carry generatedAt");
+  assert(/no-store/.test(src), "responses must be no-store");
 });
 
 check("G11 the docs on the page describe both kinds of key", () => {

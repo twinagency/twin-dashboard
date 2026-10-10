@@ -25,7 +25,8 @@ export const GET = withModelKey(async ({ tenant }) => {
     models: fleet ? rows : null,
     key: { label: tenant.label },
     reads: fleet
-      ? "Revenue and fan data for every model. Read only."
-      : "Revenue and fan data for this model only. Read only.",
+      ? "Revenue, payments, stats and fan data for every model. Read only."
+      : "Revenue, payments, stats and fan data for this model only. Read only.",
+    endpoints: ["/api/v1/me", "/api/v1/revenue", "/api/v1/fans", "/api/v1/payments", "/api/v1/stats"],
   });
 });
