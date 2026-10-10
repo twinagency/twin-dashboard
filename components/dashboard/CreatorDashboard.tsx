@@ -133,7 +133,7 @@ export default function CreatorDashboard({ creators, fans: seedFans, initialFilt
   return <div className={styles.dashboard} data-creator-dashboard data-creator={creator.id} data-platform={filters.platform}>
     <header className={styles.studioHeader}>
       <div className={styles.studioCreator}>
-        {hasPortrait && !failedImages.avatar ? <img src={portrait} alt="Brianna Redd" onError={() => setFailedImages(current => ({ ...current, avatar: true }))} /> : <span className={styles.studioInitials}>{creator.initials}</span>}
+        {hasPortrait && !failedImages.avatar ? <img src={portraitUrl("studio")} alt="Brianna Redd" onError={() => setFailedImages(current => ({ ...current, avatar: true }))} /> : <span className={styles.studioInitials}>{creator.initials}</span>}
         <label className={styles.creatorPicker}><span className={styles.srOnly}>Creator</span><select aria-label="Dashboard creator" value={filters.creatorId} onChange={e => change({ creatorId: e.target.value })}>{creators.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}</select><ChevronDown size={16} /></label>
       </div>
       <div className={styles.studioToolbar}>
@@ -178,7 +178,7 @@ export default function CreatorDashboard({ creators, fans: seedFans, initialFilt
         {!recent.length && <div className={styles.empty}>No activity in this period.</div>}
       </Panel>
       <Panel title="From your library" className={styles.libraryPanel} action={<Link className={styles.textLink} href={`/content-library?creator=${creator.id}`}>View library<ArrowRight size={14} /></Link>}>
-        {hasPortrait ? <div className={styles.libraryTiles}>{dashboardPortraits.map(item => <Link className={styles.libraryTile} key={item.key} href={`/content-library?creator=briana&item=briana%3Asource%3Aphoto%3A${item.id}`}>
+        {hasPortrait ? <div className={styles.libraryTiles}>{dashboardPortraits.filter(item => item.key !== "outdoor").map(item => <Link className={styles.libraryTile} key={item.key} href={`/content-library?creator=briana&item=briana%3Asource%3Aphoto%3A${item.id}`}>
           {!failedImages[item.key] ? <img src={portraitUrl(item.key)} alt={`${item.title} — Brianna Redd`} onError={() => setFailedImages(current => ({ ...current, [item.key]: true }))} loading="lazy" /> : <span className={styles.coverPlaceholder}><ImageIcon size={34} /></span>}
           <span><strong>{item.title}</strong><small>Photo · {item.file}</small></span><ArrowUpRight size={17} />
         </Link>)}</div> : <Link className={styles.libraryEmpty} href={`/content-library?creator=${creator.id}`}><ImageIcon size={27} />Explore {creator.name}’s content library<ArrowRight size={18}/></Link>}

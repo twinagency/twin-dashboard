@@ -217,6 +217,7 @@ async function main() {
   assert.equal(document.querySelectorAll('.summaryCard').length, 4);
   assert.equal(find('.heroPhoto').getAttribute('src'), '/api/dashboard/portrait?image=outdoor');
   assert.equal(document.querySelectorAll('.libraryTile').length, 3);
+  assert.equal(document.querySelectorAll('img[src="/api/dashboard/portrait?image=outdoor"]').length, 1, "Use the hammock photo only in the hero");
   assert.ok(find('.campaignButton').getAttribute('href')!.includes('briana-weekend-release'));
   assert.equal(localStorage.getItem(campaignModel.CAMPAIGN_STORAGE), null, 'Dashboard cannot start or update a campaign');
   assert.equal(find('[data-creator-dashboard]').getAttribute("data-creator"), "briana");
