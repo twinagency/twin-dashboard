@@ -117,7 +117,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
             <TopBar clones={clones} activeCloneId={activeCloneId} allTimeStars={allTimeStars} /><MainShell activeCloneId={activeCloneId}>{children}</MainShell>
           </div>
         </WorkspaceShell>
-        {!agency && <TwinUpdatePopup version={twinVersion?.version ?? null} name={twinVersion?.name ?? ""} summary={twinVersion?.summary ?? ""} changes={twinVersion?.changes ?? []} />}
+        {!agency && <TwinUpdatePopup activeCloneId={activeCloneId} version={twinVersion?.version ?? null} name={twinVersion?.name ?? ""} summary={twinVersion?.summary ?? ""} changes={twinVersion?.changes ?? []} />}
       </BlurProvider></CurrencyProvider></DashboardAccessProvider>
     </body>
   </html>;

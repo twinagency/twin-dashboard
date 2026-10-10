@@ -23,6 +23,8 @@
 // written silently, and the popup waits for a real CHANGE of version.
 
 import { useEffect, useState } from "react";
+import { usePathname, useSearchParams } from "next/navigation";
+import { isBriannaWorkspaceRoute } from "@/lib/dashboard-creator-route";
 import { openTwinUpdate, onOpenTwinUpdate } from "@/lib/twin-update-bus";
 
 const SEEN_KEY = "twin.version.seen";
@@ -64,13 +66,18 @@ export default function TwinUpdatePopup({
   name,
   summary,
   changes = [],
+  activeCloneId = null,
 }: {
   version: string | null;
   name: string;
   summary: string;
   changes?: TwinChange[];
+  activeCloneId?: string | null;
 }) {
   const [show, setShow] = useState(false);
+  const pathname = usePathname();
+  const query = useSearchParams();
+  const studio = isBriannaWorkspaceRoute(pathname, query.get("creator"), activeCloneId);
 
   useEffect(() => {
     if (!version) return;
@@ -99,7 +106,7 @@ export default function TwinUpdatePopup({
     }
   }
 
-  if (!show || !version) return null;
+  if (studio || !show || !version) return null;
 
   const features = changes.filter((c) => c.kind === "feature");
   const fixes = changes.filter((c) => c.kind !== "feature");

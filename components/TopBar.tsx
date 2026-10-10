@@ -50,7 +50,7 @@ export default function TopBar({
   // relationships must not inherit the ordinary Overview's live cash chip.
   if (!isAgency && !isCreator && (pathname === "/dashboard" || pathname === "/content-library" || pathname === "/inbox" || pathname === "/campaigns")) {
     return <div className="dashboard-topbar flex h-16 shrink-0 items-center justify-between gap-3 border-b border-line px-5 lg:px-8">
-      <div className="text-sm font-semibold text-ink">Twin <span className="font-normal text-muted">/ {pathname === "/campaigns" ? "Campaigns" : pathname === "/inbox" ? "Inbox" : pathname === "/content-library" ? "Content Library" : "Dashboard"}</span></div>
+      <div className="text-sm font-semibold text-ink"><span className="font-normal text-muted">{pathname === "/campaigns" ? "Campaigns" : pathname === "/inbox" ? "Inbox" : pathname === "/content-library" ? "Content Library" : "Dashboard"}</span></div>
       <div className="flex items-center gap-3"><span className="hidden text-xs text-muted sm:inline">Creator workspace</span><BlurToggle /></div>
     </div>;
   }
@@ -59,7 +59,7 @@ export default function TopBar({
   const relationshipConversation = pathname === "/users" && searchParams.has("relationship");
   if (!isAgency && !isCreator && (pathname === "/fans" || relationshipConversation)) {
     return <div className="dashboard-topbar flex h-16 shrink-0 items-center justify-between gap-3 border-b border-line px-5 lg:px-8">
-      <div className="text-sm font-semibold text-ink">Twin <span className="font-normal text-muted">/ {relationshipConversation ? "Live Telegram Window" : "Fan Profiles"}</span></div>
+      <div className="text-sm font-semibold text-ink"><span className="font-normal text-muted">{relationshipConversation ? "Live Telegram Window" : "Fan Profiles"}</span></div>
       <div className="flex items-center gap-3"><span className="hidden text-xs text-muted sm:inline">Creator relationships</span><BlurToggle /></div>
     </div>;
   }
@@ -94,7 +94,7 @@ export default function TopBar({
     // (and lg+) renders exactly as before.
     <div className="dashboard-topbar sticky top-0 z-40 flex h-20 shrink-0 justify-center items-center gap-3 border-b border-line px-5 sm:grid sm:grid-cols-[1fr_auto_1fr] lg:px-8">
       <h1 className="hidden min-w-0 truncate font-heading text-sm font-semibold tracking-[-0.02em] text-ink sm:block">
-        <span className={scopeIsCreator ? "creator-name" : undefined}>{scopeLabel}</span>
+        <span className={scopeIsCreator ? "creator-name" : undefined}>{workspaceLabel && /twin/i.test(scopeLabel) ? "Workspace" : scopeLabel}</span>
         {pageLabel != null && <span className="text-muted"> / {pageLabel}</span>}
       </h1>
 

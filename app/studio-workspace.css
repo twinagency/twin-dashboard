@@ -119,3 +119,6 @@
   .studio-workspace-main .dashboard-page > h1,
   .studio-workspace-main .dashboard-page > div:first-child h1 { font-size: 26px; }
 }
+
+/* Hide the product wordmark in the Brianna demo mobile header. */
+[data-studio-workspace="true"] .dashboard-mobile-header > a:first-child { visibility: hidden; }
