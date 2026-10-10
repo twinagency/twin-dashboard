@@ -44,6 +44,8 @@ async function main() {
   assert.equal(full.metrics.accounts, 812);
   assert.equal(full.platforms.find(p => p.platform === 'whatsapp')!.accounts, 65);
   assert.equal(full.platforms.find(p => p.platform === 'whatsapp')!.cents, 0);
+  assert.equal(full.platforms.find(p => p.platform === 'whatsapp')!.messages, 5_495);
+  assert.equal(full.trends.platforms.find(p => p.platform === 'whatsapp')!.series.reduce((sum, point) => sum + point.value, 0), 5_495, "WhatsApp trend counts sent and received messages, matching its card");
   assert.equal(full.metrics.activeFans, 498);
   const sixMonths = dashboardModel.buildDashboard(sharedFans, { ...fullFilters, window: "6m" });
   assert.equal(sixMonths.range.from, "2026-04-10");
@@ -220,7 +222,7 @@ async function main() {
   });
   const metric = (name: string) => find(`[data-metric="${name}"]`).textContent;
   const platformCards = () => dashboardModel.platformOrder.map(platform => {
-    const value = find(platform === "whatsapp" ? '[data-platform-conversations="whatsapp"]' : `[data-platform-revenue="${platform}"]`);
+    const value = find(platform === "whatsapp" ? '[data-platform-messages="whatsapp"]' : `[data-platform-revenue="${platform}"]`);
     const card = value.closest("button")!;
     return { platform, text: card.textContent, sparkline: card.querySelector(".sparkline")?.outerHTML };
   });
@@ -244,15 +246,22 @@ async function main() {
   await textButton("All time", '[aria-label="Dashboard reporting period"]');
   assert.equal(metric("revenue"), "$809"); assert.equal(metric("purchases"), "20");
   const allPlatformCards = platformCards();
+  const combinedEarnings = find('[aria-label="Inspect revenue valuation"]').innerHTML;
   await textButton("Telegram", '[aria-label="Dashboard platform"]');
-  assert.equal(metric("revenue"), "$70"); assert.equal(metric("paying"), "1"); assert.equal(metric("purchases"), "3");
+  assert.equal(metric("revenue"), "$809"); assert.equal(metric("paying"), "1"); assert.equal(metric("purchases"), "3");
   assert.deepEqual(platformCards(), allPlatformCards, "Telegram filtering preserves every platform card's totals, counts and trends");
-  assert.match(find('[aria-label="Inspect revenue valuation"]').textContent!, /^Telegram earnings/, "The filtered total names its channel");
-  for (const [platform, revenue, purchases] of [["OnlyFans", "$739", "17"], ["WhatsApp", "$0", "0"]] as const) {
+  assert.equal(find('[aria-label="Inspect revenue valuation"]').innerHTML, combinedEarnings, "Total earnings, purchase count and trend remain combined");
+  for (const [platform, purchases] of [["OnlyFans", "17"], ["WhatsApp", "0"]] as const) {
     await textButton(platform, '[aria-label="Dashboard platform"]');
-    assert.equal(metric("revenue"), revenue); assert.equal(metric("purchases"), purchases);
+    assert.equal(metric("revenue"), "$809"); assert.equal(metric("purchases"), purchases);
+    assert.equal(find('[aria-label="Inspect revenue valuation"]').innerHTML, combinedEarnings);
     assert.deepEqual(platformCards(), allPlatformCards, `${platform} filtering preserves the platform overview`);
   }
+  await click('[aria-label="Inspect revenue valuation"]');
+  assert.match(find('[role="dialog"]').textContent || "", /US\$739.00/);
+  assert.match(find('[role="dialog"]').textContent || "", /5,400 Stars/);
+  assert.match(find('[role="dialog"]').textContent || "", /US\$809.20/);
+  await click('[aria-label="Close details"]');
   await textButton("Telegram", '[aria-label="Dashboard platform"]');
   assert.equal(document.querySelector('[data-fan="briana-oliver"]'), null);
   await click('[aria-label="Inspect Coffee break diary purchase by Ben"]');
@@ -261,7 +270,7 @@ async function main() {
   assert.equal(find('[role="dialog"] a[href*="source="]').getAttribute("href"), "/users?relationship=briana-ben&creator=briana&platform=telegram&source=ben-quick-note-0");
   await act(async () => { document.dispatchEvent(new dom.window.KeyboardEvent("keydown", { key: "Escape", bubbles: true })); });
   assert.equal(document.querySelector('[role="dialog"]'), null);
-  await input('[aria-label="Dashboard currency"]', "AUD"); assert.equal(metric("revenue"), "A$98");
+  await input('[aria-label="Dashboard currency"]', "AUD"); assert.equal(metric("revenue"), "A$1,133");
   assert.equal(find('[data-platform-revenue="onlyfans"]').textContent, "A$1,035", "Unselected platform cards still follow the chosen currency");
   assert.equal(localStorage.getItem("currency"), null, "The new page does not write the old Overview's currency preference");
   await click('[aria-label="Dashboard platform"] button[aria-label="All platforms"]');
@@ -320,6 +329,8 @@ async function main() {
   root = createRoot(document.getElementById("root")!);
   await act(async () => root.render(<Component creators={creators} fans={fans} includeBriannaLedger initialFilters={filters} />));
   assert.equal(metric("revenue"), "$46,186");
+  assert.equal(find('[data-platform-messages="whatsapp"]').textContent, "5,495");
+  assert.match(find('[aria-label="Inspect WhatsApp messages"]').textContent!, /Messages/);
   assert.equal(metric("purchases"), "924");
   assert.equal(document.querySelectorAll('.relationshipTable tbody tr').length, 12);
   await textButton("Show more fans"); assert.equal(document.querySelectorAll('.relationshipTable tbody tr').length, 24);
