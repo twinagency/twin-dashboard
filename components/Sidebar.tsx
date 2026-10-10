@@ -4,7 +4,7 @@ import { agencyDashboardPath, isPartnerPreview } from "@/lib/agency-policy";
 import { isMoxy } from "@/lib/agency-brand";
 import { JESS_KATE_PORTAL, TETHER_PORTAL } from "@/lib/partner-portals";
 import { CREATOR_DASHBOARD_NAV } from "@/lib/creator-dashboard-policy";
-import { dashboardCreatorHref, isBriannaStudioRoute } from "@/lib/dashboard-creator-route";
+import { dashboardCreatorHref, isBriannaStudioRoute, isBriannaWorkspaceRoute } from "@/lib/dashboard-creator-route";
 
 // Left sidebar app shell (desktop). "Create new clone" is always the first
 // thing in it, followed by the operating views. Internal admin tools are
@@ -386,7 +386,7 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
   const configurationCloneId = pathname.match(/^\/clones\/([0-9a-f-]{36})(?:\/|$)/i)?.[1] ?? activeCloneId;
   const [moreOpen, setMoreOpen] = useState(false);
   const [fullNavigation, setFullNavigation] = useState(false);
-  const studioRoute = pathname === "/dashboard" || isBriannaStudioRoute(pathname, searchParams.get("tab"), searchParams.get("sub"));
+  const studioRoute = isBriannaWorkspaceRoute(pathname, searchParams.get("creator"), activeCloneId);
   const studioNavigation = isAdmin && studioRoute && !fullNavigation;
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   useEffect(() => {
@@ -511,7 +511,7 @@ export default function Sidebar({ clones: _clones, activeCloneId }: { clones: Cl
   const pathname = usePathname();
   const { isAgency, isCreator } = useDashboardAccess();
   const searchParams = useSearchParams();
-  const studio = !isAgency && !isCreator && (pathname === "/dashboard" || isBriannaStudioRoute(pathname, searchParams.get("tab"), searchParams.get("sub")));
+  const studio = !isAgency && !isCreator && isBriannaWorkspaceRoute(pathname, searchParams.get("creator"), activeCloneId);
   return <aside data-studio-sidebar={studio || undefined} className="dashboard-sidebar sticky top-0 hidden h-screen w-72 shrink-0 flex-col lg:flex"><SidebarContent activeCloneId={activeCloneId} /></aside>;
 }
 

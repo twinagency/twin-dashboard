@@ -78,6 +78,32 @@ for (const route of ["tab=advanced", "tab=identity&sub=advanced"]) {
 }
 pathname = `/clones/${clone}`; query = new URLSearchParams("tab=advanced");
 assert.doesNotMatch(render(), /studio-brand-row/, "Other creators keep their existing shell");
+// Brianna's scope now carries the design through every existing destination.
+// An explicit creator selection/profile always wins over the scope cookie.
+for (const route of ["/clones", "/fans", "/inbox", "/content-library", "/campaigns", "/flows", "/sequences", "/revenue", "/sales-health", "/agency-admin", "/jarvis", "/settings", "/storage", "/logs", "/api-access"]) {
+ pathname = route; query = new URLSearchParams();
+ assert.match(render(undefined, false, dashboardCreatorRoute.BRIANNA_CLONE_ID), /studio-brand-row/, `Brianna shell on ${route}`);
+ assert.doesNotMatch(render("Moxy", true, dashboardCreatorRoute.BRIANNA_CLONE_ID), /studio-brand-row/, `Agency appearance stays isolated on ${route}`);
+}
+for (const route of ["/fans", "/inbox", "/content-library", "/campaigns"]) {
+ pathname = route; query = new URLSearchParams("creator=kyla");
+ assert.doesNotMatch(render(undefined, false, dashboardCreatorRoute.BRIANNA_CLONE_ID), /studio-brand-row/, "An explicit other creator keeps their design");
+}
+pathname = `/clones/${clone}`;
+assert.doesNotMatch(render(undefined, false, dashboardCreatorRoute.BRIANNA_CLONE_ID), /studio-brand-row/, "Another profile overrides Brianna's scope");
+const mainShell = compile("components/MainShell.tsx", {
+ "./DashboardAccessProvider": accessModule,
+ "@/lib/dashboard-creator-route": dashboardCreatorRoute,
+ "next/navigation": { usePathname: () => pathname, useSearchParams: () => query },
+ "@/components/TwinAssistant": { __esModule: true, default: () => null },
+}).default as React.ComponentType<{activeCloneId: string; children: React.ReactNode}>;
+for (const [route, edge] of [["/inbox",true],["/fans",true],["/content-library",true],["/campaigns",true],["/revenue",false],["/settings",false]] as const) {
+ pathname = route; query = new URLSearchParams();
+ const html = renderToStaticMarkup(React.createElement(mainShell, {activeCloneId:dashboardCreatorRoute.BRIANNA_CLONE_ID,children:<div>Page content</div>}));
+ assert.match(html, /studio-workspace-main/);
+ assert.equal(html.includes("studio-workspace-edge"), edge, `Avoid double padding and preserve workspace height on ${route}`);
+ assert.match(html, /Page content/);
+}
 pathname = "/revenue"; query = new URLSearchParams();
 const moxyDestinations = [
   ["Invite creator", "/agency/creator-invites"],

@@ -29,3 +29,15 @@
 .toast{position:fixed;right:20px;bottom:20px;max-width:420px;z-index:80;font-size:12px;box-shadow:var(--shadow-card)}
 @media(min-width:1024px){.context{position:relative;right:auto;top:auto;bottom:auto;width:auto;box-shadow:var(--shadow-card);z-index:auto}.workspace.withContext{grid-template-columns:repeat(3,minmax(0,1fr))}.workspace{grid-template-columns:minmax(280px,1fr) minmax(0,2fr)}}
 @media(max-width:1023px){.page{height:calc(100dvh - 128px);min-height:640px;padding:10px}.workspace,.workspace.withContext{grid-template-columns:minmax(0,1fr)}.page[data-mobile-chat=false] .conversation,.page[data-mobile-chat=false] .context{display:none}.page[data-mobile-chat=true] .list{display:none}.page .backButton{display:inline-flex}.context{position:fixed;top:75px;right:10px;bottom:20px;width:min(350px,calc(100vw - 20px));z-index:60;box-shadow:0 10px 40px #18364f33}.nativeThread{min-height:180px}}
+
+/* Match the approved navy/blue workspace while preserving chat height. */
+:global([data-studio-workspace="true"]) .page{padding:20px 28px 24px 22px;height:100%;min-height:0;color:#17263e}
+:global([data-studio-workspace="true"]) :is(.list,.conversation,.context){border:1px solid #e6ebf2;border-radius:13px;box-shadow:0 2px 8px #14294404}
+:global([data-studio-workspace="true"]) .workspace{gap:16px}
+:global([data-studio-workspace="true"]) .inboxTitle{font-family:var(--font-display),var(--font-sans),sans-serif;font-weight:650}
+:global([data-studio-workspace="true"]) .primary{background:linear-gradient(135deg,#2489ff,#0872f5);border-color:#0878ff;border-radius:9px}
+:global([data-studio-workspace="true"]) .contextTabs button[aria-pressed=true]{color:#0878ff;border-color:#0878ff}
+:global([data-studio-workspace="true"]) .channelTabs button[aria-pressed=true]{background:#edf5ff;color:#0878ff}
+:global([data-studio-workspace="true"]) .page :is(input,select,textarea){border-color:#e6ebf2}
+@media(max-width:1023px){:global([data-studio-workspace="true"]) .page{padding:16px 18px 24px;min-height:640px}}
+@media(max-width:600px){:global([data-studio-workspace="true"]) .page{padding:12px}}

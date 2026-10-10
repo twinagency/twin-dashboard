@@ -13,3 +13,16 @@
 @media(min-width:1200px) and (max-width:1450px){.richProfile .metrics{grid-template-columns:repeat(4,minmax(0,1fr))}.richProfile .metrics>div{padding:14px 12px}.richProfile .metrics strong{font-size:21px}.richProfile .metrics strong.dateMetric{font-size:17px}}
 @media(max-width:1023px){.memoryOverview{grid-template-columns:repeat(2,minmax(0,1fr))}.memoryToolbar{flex-wrap:wrap}.memoryToolbar>.search{min-width:180px}.memoryToolbar>.select{width:100%}}
 @media(max-width:760px){.memoryGrid{grid-template-columns:1fr}.historyEvent{grid-template-columns:1fr;gap:10px;padding:17px}.historyDate{flex-direction:row;align-items:center}.memoryOverview{padding:15px;gap:12px}.memoryOverview strong{font-size:20px}.memoryToolbar>.search{flex-basis:100%}.memoryToolbar>.select{width:100%}.memoryOverview>div:last-child strong{font-size:14px}}
+
+/* The fan browser keeps its own scrolling and mobile profile navigation. */
+:global([data-studio-workspace="true"]) .workspace{--blue:#0878ff;--border:#e6ebf2;--muted:#6b7890;background:transparent;color:#17263e;padding:20px 28px 24px 22px;gap:18px}
+:global([data-studio-workspace="true"]) .fanRail{border:1px solid var(--border);border-radius:13px;overflow:hidden;background:white;box-shadow:0 2px 8px #14294404}
+:global([data-studio-workspace="true"]) .profilePane{padding:0;background:transparent}
+:global([data-studio-workspace="true"]) .profileHeader{border:1px solid var(--border);border-radius:13px;background:white;box-shadow:0 2px 8px #14294404}
+:global([data-studio-workspace="true"]) :is(.card,.metrics>div){border-radius:13px;border-color:var(--border);box-shadow:0 2px 8px #14294404}
+:global([data-studio-workspace="true"]) .primaryButton{background:linear-gradient(135deg,#2489ff,#0872f5);border-color:#0878ff;border-radius:9px}
+:global([data-studio-workspace="true"]) .cardHeading>h3>svg{color:#0878ff;background:#edf5ff;padding:5px;box-sizing:content-box;border-radius:7px}
+:global([data-studio-workspace="true"]) .selectedFan{background:#edf5ff;border-color:#dbeaff;box-shadow:inset 3px 0 #0878ff}
+:global([data-studio-workspace="true"]) .railHeader h1{font-family:var(--font-display),var(--font-sans),sans-serif;font-weight:650}
+@media(max-width:1023px){:global([data-studio-workspace="true"]) .workspace{padding:16px 18px 24px;gap:14px}}
+@media(max-width:700px){:global([data-studio-workspace="true"]) .workspace{padding:12px;gap:12px}:global([data-studio-workspace="true"]) .fanRail{overflow:visible}:global([data-studio-workspace="true"]) .profilePane{padding:0}}

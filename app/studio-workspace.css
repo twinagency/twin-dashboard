@@ -1,0 +1,119 @@
+/* Brianna's internal demo workspace. This attribute is owned by the client
+   shell, so navigation and creator changes cannot leave a stale theme behind.
+   Agency and creator portals never receive it. */
+[data-studio-workspace="true"] {
+  --color-bg: #f9fbfd;
+  --color-panel: #fff;
+  --color-elev: #f3f6fa;
+  --color-ink: #17263e;
+  --color-muted: #6b7890;
+  --color-line: #e6ebf2;
+  --color-accent: #0878ff;
+  --color-accent-2: #0878ff;
+  --color-accent-deep: #0864db;
+  --color-accent-soft: #8bbcff;
+  --color-accent-tint: #eaf3ff;
+  --color-brand: #0878ff;
+  --color-brand-light: #2d8aff;
+  --background: var(--color-bg);
+  --foreground: var(--color-ink);
+  --card: #fff;
+  --card-foreground: var(--color-ink);
+  --primary: var(--color-accent);
+  --primary-foreground: #fff;
+  --secondary: var(--color-elev);
+  --secondary-foreground: var(--color-ink);
+  --muted: var(--color-elev);
+  --muted-foreground: var(--color-muted);
+  --border: var(--color-line);
+  --input: var(--color-line);
+  --ring: var(--color-accent);
+  --shadow-card: 0 2px 8px #14294404;
+  --font-heading: var(--font-display), var(--font-sans), sans-serif;
+  background: linear-gradient(120deg,#fcfbf9,#fbfcfe 55%,#f9fbfd);
+  color: var(--color-ink);
+}
+
+[data-studio-workspace="true"] .dashboard-main::before,
+[data-studio-workspace="true"] .dashboard-main::after { display: none; }
+.studio-workspace-main { max-width: none; padding: 26px 28px 36px 22px; background: transparent; scrollbar-gutter: stable; }
+.studio-workspace-main.studio-workspace-edge { padding: 0; scrollbar-gutter: auto; }
+
+[data-studio-workspace="true"] .dashboard-topbar {
+  height: 64px;
+  min-height: 64px;
+  display: flex;
+  justify-content: space-between;
+  padding: 0 28px 0 22px;
+  border-bottom: 1px solid var(--color-line);
+  background: #ffffffd9;
+  box-shadow: none;
+  font-size: 12px;
+}
+[data-studio-workspace="true"] .dashboard-topbar > h1 { font-family: var(--font-sans); font-size: 12px; font-weight: 550; letter-spacing: 0; }
+[data-studio-workspace="true"] .dashboard-topbar > .backdrop-blur-xl { background: white; border-color: var(--color-line); box-shadow: none; border-radius: 10px; }
+[data-studio-workspace="true"] .dashboard-topbar > .sm\:block:last-child { display: none; }
+[data-studio-workspace="true"] .dashboard-mobile-header { background: #111f34; box-shadow: none; }
+
+.studio-workspace-main .dashboard-page { padding-top: 0; }
+.studio-workspace-main .dashboard-page::before { display: none; }
+.studio-workspace-main .dashboard-page > h1,
+.studio-workspace-main .dashboard-page > div:first-child h1 {
+  font-family: var(--font-display), var(--font-sans), sans-serif;
+  font-size: 30px;
+  line-height: 1.2;
+  font-weight: 650;
+  letter-spacing: -.035em;
+  color: var(--color-ink);
+}
+.studio-workspace-main [data-slot="card"] { border: 1px solid var(--color-line); border-radius: 13px; background: white; box-shadow: var(--shadow-card); }
+.studio-workspace-main [data-slot="card-title"] { font-size: 16px; font-weight: 600; letter-spacing: -.015em; }
+.studio-workspace-main [data-slot="card-header"] { border-color: var(--color-line); }
+.studio-workspace-main [data-slot="button"] { border-radius: 9px; font-size: 12px; }
+.studio-workspace-main [data-slot="button"].h-8 { height: 38px; padding-inline: 14px; }
+.studio-workspace-main [data-slot="button"].bg-primary { background: linear-gradient(135deg,#2489ff,#0872f5); box-shadow: 0 3px 8px #0878ff14; }
+.studio-workspace-main [data-slot="button"].bg-primary:hover { background: #086be8; }
+.studio-workspace-main :is([data-slot="input"],[data-slot="select-trigger"]) { border-radius: 9px; border-color: var(--color-line); background: white; box-shadow: none; }
+.studio-workspace-main .dashboard-page table { font-size: 12px; }
+.studio-workspace-main .dashboard-page thead { background: #f7f9fc; color: var(--color-muted); }
+.studio-workspace-main .dashboard-page th { font-weight: 500; }
+.studio-workspace-main .dashboard-page :is(th,td) { border-color: var(--color-line); }
+.studio-workspace-main .dashboard-page nav[aria-label="Creator directory"] { gap: 24px; font-size: 12px; }
+.studio-workspace-main .dashboard-page nav[aria-label="Creator directory"] [aria-current="page"] { color: var(--color-accent); }
+.studio-workspace-main .dashboard-page a.group[href^="/clones/"] { border-radius: 13px; box-shadow: var(--shadow-card); }
+.studio-workspace-main .dashboard-page a.group[href^="/clones/"]:hover { box-shadow: 0 6px 20px #1429440a; }
+
+/* The remaining PPV/prompt/flow tabs still use the original editor. Keep its
+   fields and actions intact while bringing its surfaces into the workspace. */
+.studio-workspace-main .creator-control-plane {
+  --color-bg: #f9fbfd;
+  --color-elev: #f3f6fa;
+  --color-ink: #17263e;
+  --color-muted: #6b7890;
+  --color-line: #e6ebf2;
+  --color-accent: #0878ff;
+  --color-accent-2: #0878ff;
+  --color-accent-deep: #0864db;
+  --color-accent-tint: #eaf3ff;
+  background: transparent;
+}
+.studio-workspace-main .creator-control-plane :is(input,select,textarea) { border-radius: 9px; }
+.studio-workspace-main .creator-control-plane .rounded-\[3px\] { border-radius: 13px; border-color: var(--color-line); }
+
+/* The phone drawer is portalled outside WorkspaceShell. SidebarContent
+   supplies the same theme; give it touch-sized rows and its own width. */
+@media(max-width:1023px) {
+  .dashboard-sidebar#mobile-sidebar[data-studio-sidebar="true"] { width: min(88vw,280px); }
+  .dashboard-sidebar#mobile-sidebar[data-studio-sidebar="true"] .studio-sidebar-nav [data-nav-group] > div:first-child > div > a,
+  .dashboard-sidebar#mobile-sidebar[data-studio-sidebar="true"] .studio-sidebar-nav [data-nav-group] > div:first-child > button:first-child,
+  .dashboard-sidebar#mobile-sidebar[data-studio-sidebar="true"] .studio-sidebar-nav [data-nav-group="More"] > button { min-height: 44px; }
+  [data-studio-workspace="true"] .dashboard-topbar { padding-inline: 18px; }
+  .studio-workspace-main { padding: 22px 18px 32px; }
+}
+@media(max-width:600px) {
+  [data-studio-workspace="true"] .dashboard-topbar { padding-inline: 12px; gap: 8px; }
+  [data-studio-workspace="true"] .dashboard-topbar:has(> h1) { justify-content: center; }
+  .studio-workspace-main { padding: 20px 12px 28px; }
+  .studio-workspace-main .dashboard-page > h1,
+  .studio-workspace-main .dashboard-page > div:first-child h1 { font-size: 26px; }
+}

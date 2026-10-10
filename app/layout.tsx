@@ -6,6 +6,7 @@ import { getDashboardAccess } from "@/lib/dashboard-access";
 import "./globals.css";
 import "./jess-kate-theme.css";
 import "./creator-workspace.css";
+import "./studio-workspace.css";
 import { JESS_KATE_PORTAL, TETHER_PORTAL } from "@/lib/partner-portals";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -16,6 +17,7 @@ import Sidebar from "@/components/Sidebar";
 import MobileMenu from "@/components/MobileMenu";
 import TopBar from "@/components/TopBar";
 import MainShell from "@/components/MainShell";
+import WorkspaceShell from "@/components/WorkspaceShell";
 import TwinWordmark from "@/components/TwinWordmark";
 import TwinUpdatePopup from "@/components/TwinVersionBadge";
 import { getCachedTwinVersion, getFleetClones, getHeaderAllTimeStars } from "@/lib/query-cache";
@@ -104,16 +106,16 @@ export default async function RootLayout({ children }: { children: React.ReactNo
       <script dangerouslySetInnerHTML={{__html:'try{if(localStorage.getItem("blurMedia")==="true")document.documentElement.classList.add("blur-media")}catch(e){}'}} />
       {viewAsInfo && <ViewAsBanner info={viewAsInfo} />}
       <DashboardAccessProvider agencyName={agency?.name} canManage={canManage}><CurrencyProvider usdPerStar={usdPerStar}><BlurProvider>
-        <div className="flex h-screen">
+        <WorkspaceShell activeCloneId={activeCloneId}>
           <Sidebar clones={clones} activeCloneId={activeCloneId} />
           <div className="flex h-screen min-w-0 flex-1 flex-col overflow-hidden">
             <header className="dashboard-mobile-header flex shrink-0 items-center justify-between border-b border-white/12 px-4 py-3 lg:hidden">
               <Link href="/revenue" aria-label={agency?.name || "Twin Technologies"}><TwinWordmark inverse agencyName={agency?.name} /></Link>
               <div className="flex items-center gap-1">{agency && <form action="/agency/logout" method="post"><button type="submit" className="rounded-lg px-3 py-2 text-sm font-medium text-white/80 hover:bg-white/10">Sign out</button></form>}<MobileMenu activeCloneId={activeCloneId} /></div>
             </header>
-            <TopBar clones={clones} activeCloneId={activeCloneId} allTimeStars={allTimeStars} /><MainShell>{children}</MainShell>
+            <TopBar clones={clones} activeCloneId={activeCloneId} allTimeStars={allTimeStars} /><MainShell activeCloneId={activeCloneId}>{children}</MainShell>
           </div>
-        </div>
+        </WorkspaceShell>
         {!agency && <TwinUpdatePopup version={twinVersion?.version ?? null} name={twinVersion?.name ?? ""} summary={twinVersion?.summary ?? ""} changes={twinVersion?.changes ?? []} />}
       </BlurProvider></CurrencyProvider></DashboardAccessProvider>
     </body>
