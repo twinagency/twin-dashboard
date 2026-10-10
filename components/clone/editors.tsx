@@ -6,7 +6,8 @@
 // carrying the money-safe JSON the server actions parse.
 
 import { CATEGORY_LABELS, DEFAULT_CATEGORY_PRICING, MIN_PAID_MEDIA_PRICE_STARS, PRICING_CATEGORIES } from "@/lib/pricing";
-import { DEFAULT_SPOIL_OPTIONS, SubCard, inputCls } from "./fields";
+import { DEFAULT_SPOIL_OPTIONS, FieldLabel, SubCard, inputCls } from "./fields";
+import { V2_SPOIL_HINT, V2_SPOIL_LABEL } from "@/lib/v2-tips";
 import type { CloneConfigState, SetConfig } from "./useCloneConfig";
 
 // ── Category pricing (⭐ price per content type) ───────────────────────────────
@@ -66,6 +67,7 @@ export function CategoryPricingEditor({ cfg, set }: { cfg: CloneConfigState; set
 export function SpoilMenuEditor({ cfg, set }: { cfg: CloneConfigState; set: SetConfig }) {
   return (
     <SubCard>
+      {cfg.engineV2 && <FieldLabel label={V2_SPOIL_LABEL} hint={V2_SPOIL_HINT} />}
       <input type="hidden" name="spoil_options" value={JSON.stringify(cfg.spoilOptions.filter((o) => o.stars >= 1))} />
       <div className="grid gap-1.5">
         {cfg.spoilOptions.map((o, i) => (
