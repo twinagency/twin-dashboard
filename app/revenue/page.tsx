@@ -1,11 +1,23 @@
 import RevenueDashboard from "@/components/RevenueDashboard";
 import RevenueTooltipFix from "@/components/RevenueTooltipFix";
 import { getCloneScope } from "@/lib/clone-scope";
+import { getDashboardAccess } from "@/lib/dashboard-access";
+import { getCreatorOverview, getOverviewAudience } from "@/lib/creator-overview";
+import { getFleetClones } from "@/lib/query-cache";
+import CreatorOverview from "@/components/overview/CreatorOverview";
 
 export const dynamic = "force-dynamic";
 
 export default async function RevenuePage() {
   const cloneId = await getCloneScope();
+  const access = await getDashboardAccess();
+  if (cloneId && access?.name.trim().toLowerCase() === "flirt") {
+    const presentation = await getCreatorOverview(cloneId);
+    if (presentation) {
+      const [audience, creators] = await Promise.all([getOverviewAudience(cloneId), getFleetClones()]);
+      return <CreatorOverview key={cloneId} initialPresentation={presentation} initialAudience={audience} creators={creators.map(({id,name})=>({id,name}))} />;
+    }
+  }
   return (
     <>
       <RevenueTooltipFix />
@@ -13,3 +25,4 @@ export default async function RevenuePage() {
     </>
   );
 }
+

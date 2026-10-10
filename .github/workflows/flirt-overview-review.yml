@@ -2,13 +2,13 @@ name: FLIRT overview photo review
 on:
   push:
     branches: ["codex/flirt-callace-overview-20261011"]
-    paths: [".github/workflows/flirt-overview-review.yml", "deployment/flirt-overview-review.py"]
+    paths: [".github/workflows/flirt-overview-review.yml", "deployment/flirt-overview-review.py", "deployment/flirt-overview-ui-check.cjs", "components/overview/**"]
 permissions:
   contents: read
 jobs:
   review:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 12
     steps:
       - uses: actions/checkout@v4
       - uses: aws-actions/configure-aws-credentials@v4
@@ -20,7 +20,17 @@ jobs:
         run: python3 deployment/flirt-overview-review.py
       - name: Include exact source for the approved local build
         run: git archive --format=tar.gz HEAD > /tmp/flirt-overview-review/source.tar.gz
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+      - run: npm ci
+      - run: npm run build
+      - run: npx playwright install --with-deps chromium
+      - name: Check creator isolation, filters, unique photos and responsive layout
+        run: node deployment/flirt-overview-ui-check.cjs
       - uses: actions/upload-artifact@v4
+        if: always()
         with:
           name: flirt-overview-photo-review
           path: /tmp/flirt-overview-review
