@@ -192,7 +192,7 @@ export const DEMO_SCENES: DemoScene[] = [
       },
       {
         "kind": "offer",
-        "text": "this is exactly what you'd be looking up at baby 😘",
+        "text": "this is exactly what you'd be looking up at baby 😈",
         "delay": 3200
       }
     ]
