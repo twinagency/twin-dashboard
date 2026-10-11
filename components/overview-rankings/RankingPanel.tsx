@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { UserRound, ImageIcon, X, ArrowUpRight, Info } from 'lucide-react';
 import type { OverviewRankings, RankedFan, RankedContent } from '@/lib/overview-rankings-model';
 import styles from './RankingPanel.module.css';
-function Avatar({fan}:{fan:RankedFan}){const [failed,setFailed]=useState(false);return <span className={styles.avatar}>{failed?<UserRound size={21}/>:<img src={`/api/avatar?clone=${encodeURIComponent(fan.cloneId)}&tg=${fan.telegramId}`} alt={`${fan.name}'s profile`} onError={()=>setFailed(true)}/>}</span>}
+function Avatar({fan}:{fan:RankedFan}){const [failed,setFailed]=useState(false);return <span className={styles.avatar}>{failed?<UserRound size={21} aria-label="Default profile image"/>:<img src={`/api/avatar?clone=${encodeURIComponent(fan.cloneId)}&tg=${fan.telegramId}`} alt={`${fan.name}'s profile`} onError={()=>setFailed(true)}/>}</span>}
 function Media({item,large=false}:{item:RankedContent;large?:boolean}){const[failed,setFailed]=useState(false);return <span className={large?styles.large:styles.thumbnail}>{item.url&&!failed?(item.type==='video'?<video src={item.url} preload="metadata" muted playsInline controls={large} onError={()=>setFailed(true)}/>:<img src={item.url} alt={item.name} onError={()=>setFailed(true)}/>):<ImageIcon size={23}/>}</span>}
 export default function RankingPanel({kind,rankings,cloneIds,agency,money,error,loading}:{kind:'fans'|'content';rankings?:OverviewRankings;cloneIds:string[];agency:boolean;money:(stars:number)=>string;error?:string;loading:boolean}){
  const[expanded,setExpanded]=useState(false),[detail,setDetail]=useState<RankedFan|RankedContent|null>(null);
