@@ -1,3 +1,4 @@
+import './moxy-overview.css';
 import { isMarketingPath } from "@/lib/marketing-routing";
 import { isTwinLoginPath } from "@/lib/login-routing";
 import { agencyCanManage } from "@/lib/agency-management-policy";

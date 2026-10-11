@@ -107,7 +107,7 @@ for (const [route, edge] of [["/inbox",true],["/fans",true],["/content-library",
 pathname = "/revenue"; query = new URLSearchParams();
 const moxyDestinations = [
   ["Invite creator", "/agency/creator-invites"],
-  ["Earnings", "/revenue"],
+  ["Overview", "/revenue"],
   ["Creators", "/clones"],
   ["Creator onboarding", "/agency/creators"],
   ["Content", `/clones/${clone}?tab=ppvs`],
@@ -134,7 +134,7 @@ function checkMoxyLayout(html: string) {
   assert.ok(html.indexOf(">Creator onboarding<") < html.indexOf(">Creator tools</h2>"));
   assert.ok(html.indexOf(">Creator tools</h2>") < html.indexOf(">Content<"));
   assert.doesNotMatch(html, /aria-expanded|<details\b/, "Moxy navigation has no dropdown groups");
-  assert.deepEqual(links.filter(link => /aria-current="page"/.test(link.attributes)).map(link => link.label), ["Earnings"], "Exactly the current page is marked active");
+  assert.deepEqual(links.filter(link => /aria-current="page"/.test(link.attributes)).map(link => link.label), ["Overview"], "Exactly the current page is marked active");
 }
 for (const mobile of [false, true]) {
   const moxy = render("Moxy", false, clone, mobile);

@@ -1,0 +1,3 @@
+html[data-agency="moxy"]:has([data-moxy-overview]) .dashboard-topbar{display:none}
+html[data-agency="moxy"]:has([data-moxy-overview]) .dashboard-main{padding:0;max-width:none;width:100%;background:#fafafa}
+html[data-agency="moxy"]:has([data-moxy-overview]) .dashboard-main::before{display:none}
