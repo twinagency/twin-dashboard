@@ -88,7 +88,7 @@ async function main() {
   assert(new Set(agencyPhotos.map(p=>p.id)).size===agencyPhotos.length,'Agency photos must all be different');
   for(const photo of agencyPhotos) assert(new URL(photo.url).hostname===`${PROJECT}.supabase.co` && (await request(photo.url,{method:'HEAD'})).ok,'Every agency portrait must load from its original private storage');
   const agencyPage = await page('/revenue'); const agencyHtml = await agencyPage.text();
-  assert(agencyPage.ok && agencyHtml.includes('data-agency-overview="flirt"') && agencyHtml.includes('Agency overview') && agencyHtml.includes('Compare creators') && agencyHtml.includes('data-agency-brand="flirt"') && expected.every(c=>agencyHtml.includes(c.name)), 'Live All creators Overview must render its agency layout');
+  assert(agencyPage.ok && agencyHtml.includes('data-agency-overview="flirt"') && agencyHtml.includes('Agency overview') && agencyHtml.includes('Compare creators') && CLONES.every(id=>agencyHtml.includes('data-agency-hero-creator="'+id+'"')) && expected.every(c=>agencyHtml.includes(c.name)), 'Live All creators Overview must render its agency layout');
   const monthResponse=await page('/api/dashboard?period=1M&fresh=1');
   assert(monthResponse.ok,'Default 30-day agency earnings must load');
   const month=await monthResponse.json();
