@@ -1,16 +1,28 @@
 // Minimal OpenRouter chat helper (server-only).
 const URL = "https://openrouter.ai/api/v1/chat/completions";
 
-export async function orVision(opts: {
+export type VisionCallMeta = {
+  model: string;            // the model OpenRouter reports it served
+  provider: string | null;  // the upstream provider that served it
+  latencyMs: number;
+  costUsd: number | null;   // OpenRouter's own usage.cost when reported
+  finishReason: string | null;
+};
+export type VisionOptions = {
   model: string;
-  dataUrl: string;
+  dataUrl?: string;
   prompt: string;
   json?: boolean;
   signal?: AbortSignal;
   maxTokens?: number;
-}): Promise<string> {
+  temperature?: number;     // defaults to 0: cataloguing must be repeatable
+};
+
+export async function orVisionDetailed(opts: VisionOptions): Promise<{ content: string; meta: VisionCallMeta }> {
   const key = process.env.OPENROUTER_API_KEY;
   if (!key) throw new Error("OPENROUTER_API_KEY missing");
+  if (!opts.dataUrl) throw new Error("orVision: no image");
+  const started = Date.now();
 
   const res = await fetch(URL, {
     method: "POST",
@@ -26,10 +38,11 @@ export async function orVision(opts: {
         ],
       }],
       // Some OpenRouter providers default to a low completion cap when this is
-      // omitted, which silently truncates a longer JSON response mid-string
-      // (seen with the caption + description + evidence payload). Always set
-      // it explicitly rather than trusting the provider default.
+      // omitted, which silently truncates a longer JSON response mid-string.
+      // Always set it explicitly rather than trusting the provider default.
       max_tokens: opts.maxTokens ?? 1000,
+      temperature: opts.temperature ?? 0,
+      usage: { include: true },
       ...(opts.json ? { response_format: { type: "json_object" } } : {}),
     }),
   });
@@ -38,7 +51,20 @@ export async function orVision(opts: {
   const j = await res.json();
   const content = j.choices?.[0]?.message?.content;
   if (typeof content !== "string") throw new Error("OpenRouter: no content");
-  return content;
+  return {
+    content,
+    meta: {
+      model: typeof j.model === "string" ? j.model : opts.model,
+      provider: typeof j.provider === "string" ? j.provider : null,
+      latencyMs: Date.now() - started,
+      costUsd: typeof j.usage?.cost === "number" ? j.usage.cost : null,
+      finishReason: typeof j.choices?.[0]?.finish_reason === "string" ? j.choices[0].finish_reason : null,
+    },
+  };
+}
+
+export async function orVision(opts: VisionOptions): Promise<string> {
+  return (await orVisionDetailed(opts)).content;
 }
 
 // Multi-turn chat — like orChat but carries a short conversation history. Used by
