@@ -1,4 +1,5 @@
 import { isCreatorUploadApiPath, creatorUploadApiAllowed } from "@/lib/creator-upload-api-policy";
+import { FLIRT_OVERVIEW_SCOPE_HEADER } from "@/lib/flirt-overview-routing";
 import { flirtForeignBrandDecision } from "@/lib/flirt-brand-policy";
 import { flirtOnboardingOptional } from "@/lib/flirt-onboarding";
 import { enabled as liveTwinEnabled, identity as liveTwinIdentity } from "./deployment/flirt-live-twin.cjs";
@@ -21,6 +22,12 @@ import { creatorDemoQueryIds } from "@/lib/creator-demo-policy";
 function withPathname(req: NextRequest, creator = false): NextResponse {
   const headers = new Headers(req.headers);
   headers.delete(CREATOR_AUDIENCE_HEADER);
+  // Replace caller-supplied scope headers with the requested Overview URL.
+  headers.delete(FLIRT_OVERVIEW_SCOPE_HEADER);
+  if (req.nextUrl.pathname === "/revenue") {
+    const clone = req.nextUrl.searchParams.get("clone");
+    headers.set(FLIRT_OVERVIEW_SCOPE_HEADER, clone && /^[0-9a-f-]{36}$/i.test(clone) ? clone : "");
+  }
   headers.set("x-pathname", req.nextUrl.pathname);
   if (creator) headers.set(CREATOR_AUDIENCE_HEADER, "creator");
   return NextResponse.next({ request: { headers } });

@@ -23,6 +23,8 @@ jobs:
       - uses: actions/setup-node@v4
         with: { node-version: "22", cache: npm }
       - run: npm ci
+      - name: Default agency homepage and creator navigation
+        run: node --import tsx scripts/check-flirt-overview-navigation.tsx
       - name: Submitted fields and draft retention
         run: node --import tsx scripts/check-creator-studio.tsx
       - name: Retained sidebar and partner access

@@ -1,7 +1,9 @@
 "use client";
 import { useDashboardAccess } from "./DashboardAccessProvider";
 
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
+import { useEffect } from "react";
+import { isFlirtOverviewPath } from "@/lib/flirt-overview-routing";
 import CloneSwitcher from "@/components/CloneSwitcher";
 import CurrencyToggle from "@/components/CurrencyToggle";
 import { useCurrency } from "@/components/CurrencyProvider";
@@ -34,11 +36,21 @@ export default function TopBar({
   /** Verified creator identity. Supplying it locks the shared clone chip. */
   creatorName?: string;
 }) {
-  const {isAgency,isCreator}=useDashboardAccess();
+  const {isAgency,isCreator,agencyName}=useDashboardAccess();
+  const router = useRouter();
   const { currency, rate } = useCurrency();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const pageMeta = getPageMeta(pathname, clones, activeCloneId);
+  const isFlirtOverview = isAgency && isFlirtOverviewPath(pathname, agencyName);
+  const requestedCloneId = searchParams.get("clone");
+  const overviewCloneId = requestedCloneId && clones.some(clone => clone.id === requestedCloneId) ? requestedCloneId : null;
+  const displayedCloneId = isFlirtOverview ? overviewCloneId : activeCloneId;
+  // Shared layouts survive client navigation. Refresh stale totals and nav
+  // scope when returning home, without displaying another creator's cash.
+  useEffect(() => {
+    if (isFlirtOverview && displayedCloneId !== activeCloneId) router.refresh();
+  }, [isFlirtOverview, displayedCloneId, activeCloneId, router]);
+  const pageMeta = getPageMeta(pathname, clones, displayedCloneId);
   const workspaceLabel = !isCreator && isDashboardWorkspaceRoute(pathname) ? dashboardWorkspacePageLabel(pathname) : null;
   const pageLabel = isCreator
     ? CREATOR_DASHBOARD_NAV.find((item) => item.href === pathname)?.label ?? "Earnings"
@@ -66,14 +78,14 @@ export default function TopBar({
       </h1>
 
       <div className="workspace-account-controls flex shrink-0 items-center gap-1.5 rounded-xl border border-line/80 bg-white/82 px-2 py-1.5 shadow-[0_8px_26px_rgb(6_23_47/0.06)] backdrop-blur-xl">
-        <CloneSwitcher clones={clones} activeCloneId={activeCloneId} locked={isCreator} fallbackName={creatorName} />
+        <CloneSwitcher clones={clones} activeCloneId={displayedCloneId} locked={isCreator} fallbackName={creatorName} />
         <div className="h-5 w-px shrink-0 bg-line" />
         {/* All-time cash made, scoped to the clone switcher above - not
             time-windowed like the Revenue page's period toggle. */}
         <span className="hidden items-baseline gap-1 px-1.5 sm:flex">
           <span className="text-xs">💵</span>
           <span className="font-mono text-xs font-semibold tabular-nums text-ink">
-            {fmtMoney(starsToMoneyRate(allTimeStars, currency, rate), currency)}
+            {displayedCloneId === activeCloneId ? fmtMoney(starsToMoneyRate(allTimeStars, currency, rate), currency) : "…"}
           </span>
         </span>
         <div className="hidden h-5 w-px shrink-0 bg-line sm:block" />

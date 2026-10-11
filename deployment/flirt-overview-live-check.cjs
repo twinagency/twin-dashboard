@@ -26,8 +26,12 @@ async function request(path,options={}){return fetch(origin+path,{redirect:'manu
  const chartStars=monthly.series.reduce((sum,row)=>sum+(Number(row[id])||0),0);
  assert(Math.abs(chartStars-stats.stars)<.001,'Chart and earnings total must agree');
  checks.push('Default 30-day chart and selected creator earnings agree');
- const response=await read('/revenue');const html=await response.text();
+ const home=await read('/revenue');const homeHtml=await home.text();
+ assert(home.ok&&homeHtml.includes('data-agency-overview="flirt"')&&homeHtml.includes('data-creator-overview="all"'),'Homepage must default to All creators even with a saved creator cookie');
+ checks.push('Default All creators homepage ignores the last selected creator');
+ const response=await read('/revenue?clone='+id);const html=await response.text();
  assert(response.ok&&html.includes('data-creator-overview="'+id+'"'),'Live Overview page failed');
+ assert(html.includes('All creators overview'),'Individual Overview must expose its return to All creators');
  assert((html.match(/data-photo-id="/g)||[]).length===5,'Live page must render the portrait, banner and three library photos');
  assert(html.includes('Top fans')&&html.includes('Best-selling content'),'Live ranking panels missing');
  assert(!monthly.rankingsError&&monthly.rankings?.fans.length&&monthly.rankings?.content.length,'Live payment rankings unavailable');

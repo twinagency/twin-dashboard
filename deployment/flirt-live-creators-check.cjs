@@ -64,7 +64,7 @@ async function main() {
     else assert(overview.presentation.hero && overview.presentation.library.length === 3, 'Reviewed creator photos must be available');
     const fanCountResponse = await request(live.url + '/rest/v1/users?select=id&clone_id=eq.' + overviewId + '&or=(is_test.is.null,is_test.eq.false)', {method:'HEAD',headers:{apikey:live.key,Authorization:`Bearer ${live.key}`,Prefer:'count=exact'}});
     assert(fanCountResponse.ok && Number(fanCountResponse.headers.get('content-range')?.split('/')[1]) === overview.audience.total, 'Overview must show all recorded fans excluding test records');
-    const selectedOverview = await page('/revenue',{headers:{Cookie:cookie+'; clone_scope='+overviewId}});
+    const selectedOverview = await page('/revenue?clone='+overviewId,{headers:{Cookie:cookie+'; clone_scope='+overviewId}});
     const selectedHtml = await selectedOverview.text();
     assert(selectedOverview.ok && selectedHtml.includes('data-creator-overview="'+overviewId+'"') && selectedHtml.includes('Total fans') && selectedHtml.includes('Not connected') && selectedHtml.includes('Content library'), 'Every selected Overview must render the shared layout');
     for (const slot of slots) {

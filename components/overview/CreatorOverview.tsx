@@ -1,11 +1,12 @@
 "use client";
 import RankingPanel from '@/components/overview-rankings/RankingPanel';
 import { flirtOverviewPhotos } from '@/lib/flirt-overview-photos';
+import { flirtOverviewHref } from '@/lib/flirt-overview-routing';
 
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowRight, ArrowUpRight, CalendarDays, ChevronDown, DollarSign, ImageIcon, MoreHorizontal, RefreshCw, Users, X } from 'lucide-react';
+import { ArrowLeft, ArrowRight, ArrowUpRight, CalendarDays, ChevronDown, DollarSign, ImageIcon, MoreHorizontal, RefreshCw, Users, X } from 'lucide-react';
 import { useCurrency } from '../CurrencyProvider';
 import BlurToggle from '../BlurToggle';
 import PlatformMark from './PlatformMark';
@@ -135,13 +136,16 @@ export default function CreatorOverview({initialPresentation,initialAudience,cre
     try {
       const response = await fetch('/agency/clone-scope',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({clone:next || null})});
       if (!response.ok) throw new Error('Could not switch creator. Please try again.');
+      router.push(flirtOverviewHref(next));
       router.refresh();
-    } catch (e) { setError(e instanceof Error ? e.message : 'Could not switch creator.'); setSwitching(false); }
+    } catch (e) { setError(e instanceof Error ? e.message : 'Could not switch creator.'); }
+    finally { setSwitching(false); }
   }
   const viewCreators = () => document.getElementById('overview-creators')?.scrollIntoView({behavior:'smooth',block:'start'});
   const purchases = () => document.getElementById('overview-purchases')?.scrollIntoView({behavior:'smooth',block:'start'});
   const trendBadge = trend === null ? null : <em data-direction={trend<0?'down':'up'} title="Average earnings per interval in the second half of this range compared with the first half">{trend<0?'↓':'↑'} {Math.abs(trend)}%</em>;
   return <div className={`${styles.dashboard} ${isAgency?styles.agencyDashboard:''}`} data-creator-overview={id||'all'} data-agency-overview={isAgency?'flirt':undefined}>
+    {!isAgency&&<button type="button" className={styles.allCreatorsButton} disabled={switching} onClick={()=>void chooseCreator('')}><ArrowLeft size={16}/>All creators overview</button>}
     <header className={styles.header}>
       <div className={styles.identity}><>{presentation?<Photo photo={presentation.avatar} alt={`${presentation.name} profile`} fallback={initials(presentation.name)} />:<span className={styles.agencyIcon}><Users size={24}/></span>}</><label className={styles.creatorPicker}><span className={styles.srOnly}>Creator</span><select aria-label="Overview creator" value={id} disabled={switching} onChange={e=>void chooseCreator(e.target.value)}><option value="">All creators</option>{creators.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select><ChevronDown size={15}/></label></div>
       <div className={styles.toolbar}><div className={styles.connections}>{(['telegram','onlyfans','imessage','whatsapp'] as const).map(platform=><div key={platform} className={platform==='telegram'?'':styles.disconnectedChip}><PlatformMark platform={platform} size={27}/><span><b>{platform==='onlyfans'?'OnlyFans':platform==='imessage'?'iMessage':platform==='whatsapp'?'WhatsApp':'Telegram'}</b><small><i/>{platform==='telegram'?'Connected':'Not connected'}</small></span></div>)}</div>
