@@ -7,10 +7,10 @@ export async function getOverviewRankings(rows: readonly RankingRow[], clones: {
  const excluded=new Set(tests.rows.map(u=>`${u.clone_id}:${u.telegram_id}`));
  const result=rankOverviewRows(rows.filter(r=>!excluded.has(`${r.clone_id}:${r.telegram_id}`)),clones);
  if(result.fans.length){
-  const users=await selectAllRows<{clone_id:string;telegram_id:number;name:string|null;stated_name:string|null;is_test:boolean|null}>(supabaseAdmin.from('users').select('clone_id,telegram_id,name,stated_name,is_test').in('clone_id',clones.map(c=>c.id)).in('telegram_id',[...new Set(result.fans.map(f=>f.telegramId))]).order('id'),{label:'Overview top fan names'});
+  const users=await selectAllRows<{clone_id:string;telegram_id:number;name:string|null;stated_name:string|null}>(supabaseAdmin.from('users').select('clone_id,telegram_id,name,stated_name').in('clone_id',clones.map(c=>c.id)).in('telegram_id',[...new Set(result.fans.map(f=>f.telegramId))]).order('id'),{label:'Overview top fan names'});
   if(users.truncated)throw Error('Top fan profiles could not be loaded');
   const profiles=new Map(users.rows.map(u=>[`${u.clone_id}:${u.telegram_id}`,u]));
-  result.fans=result.fans.filter(f=>!profiles.get(`${f.cloneId}:${f.telegramId}`)?.is_test).map(f=>({...f,name:profiles.get(`${f.cloneId}:${f.telegramId}`)?.stated_name||profiles.get(`${f.cloneId}:${f.telegramId}`)?.name||f.name}));
+  result.fans=result.fans.map(f=>({...f,name:profiles.get(`${f.cloneId}:${f.telegramId}`)?.stated_name||profiles.get(`${f.cloneId}:${f.telegramId}`)?.name||f.name}));
  }
  for(const type of ['photo','video','bundle'] as const){
   const items=result.content.filter(c=>c.type===type);if(!items.length)continue;
