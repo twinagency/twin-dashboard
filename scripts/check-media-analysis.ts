@@ -298,7 +298,7 @@ const guide = Object.fromEntries(PRICING_CATEGORIES.map((c) => [c, c === "sfw" |
       assert.match(g.error ?? "", /review/i, `${name}: reason recorded`);
       assert.ok(g.fields && g.fields.tags.length > 0, `${name}: the model's fields are kept for the reviewer`);
       assert.equal(g.fields?.caption, null, `${name}: no send caption`);
-      assert.equal(priceForAnalysis({ ...Object.fromEntries(PRICING_CATEGORIES.map((c) => [c, 100])), ...{ [PRICING_CATEGORIES[0]]: 400 } }, g), 400, `${name}: priced at the guide maximum like any non-analysed item`);
+      assert.equal(priceForAnalysis(guide, g), 2000, `${name}: priced at the guide maximum like any non-analysed item`);
     }
     // c13: nipple missed, everything "no": stays analysed. This is the documented residual risk of the gate.
     const c13 = await gate(mock({ swimwear: "yes", suggestive_pose: "yes" }, ["solo", "bikini"], "A woman in a yellow bikini poses on a couch.", "She sits on a grey couch."));
@@ -338,6 +338,15 @@ const guide = Object.fromEntries(PRICING_CATEGORIES.map((c) => [c, c === "sfw" |
   assert.match(actions, /analyseVideo\(bytes, model\)/);
   assert.equal((actions.match(/\.\.\.analysisRowFields\(analysis\)/g) ?? []).length, 2, "photo and video inserts both write the analysis state");
   assert.equal((actions.match(/await markIfFactsEdited\(/g) ?? []).length, 2, "updatePhoto and updateVideo both read before they write");
+  // every new-video path analyses through analyseVideo, where the video review gate lives (videoReviewReason in observe)
+  const caption = readFileSync(new URL("../lib/caption.ts", import.meta.url), "utf8");
+  assert.match(caption, /kind === "video" \? videoReviewReason\(/, "the gate sits inside the shared analyser");
+  for (const f of ["import-videos.ts", "import-video-media.ts"]) {
+    const src = readFileSync(new URL(`./${f}`, import.meta.url), "utf8");
+    assert.match(src, /analyseVideo\(/, `${f} analyses through analyseVideo`);
+    assert.match(src, /\.\.\.analysisRowFields\(analysis\)/, `${f} writes the analysis state`);
+    assert.doesNotMatch(src, /status: "analysed"|analysis_status: "analysed"/, `${f} never forces analysed`);
+  }
   assert.match(actions, /priceForAnalysis/, "pricing goes through the conservative rule");
   assert.doesNotMatch(actions, /captionPhoto|captionVideo|EMPTY_CAPTION|UPLOAD_ANALYSIS_TIMEOUT_MS/);
   assert.match(actions, /visual_description/, "the photo-flow editable visual_description is preserved");

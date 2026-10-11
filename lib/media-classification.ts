@@ -71,6 +71,21 @@ export function applySecondLook(value: unknown, keys: readonly FactKey[], answer
   return { value: { ...j, evidence: ev }, downgraded };
 }
 
+// ---- video review gate ---------------------------------------------------------------------------------------------------
+// Shared by every path that analyses a NEW video (dashboard upload, import-videos, import-video-media all go through analyseVideo).
+// A contact sheet of 5 frames over-claims explicit keys (eval c19 worn thong as genitals, c21 clothed read as unclothed, c01 false
+// anus) and misses real ones. The model's fields are kept for the reviewer, but a video that shows or may show any of these never
+// ends "analysed": it waits for the operator's explicit completeReview. RESIDUAL RISK: a miss answered "no" (c13: a visible nipple
+// reported as "no") looks exactly like a clean clip and cannot be detected by code; only a person looking at it can.
+export const VIDEO_GATE_KEYS = ["nipples", "genitals", "anus", "bare_buttocks", "full_nudity", "sexual_activity", "sex_toy"] as const satisfies readonly FactKey[];
+
+/** A reason string when a video's evidence must wait for human review, else null (all gate keys "no"). Pure. */
+export function videoReviewReason(ev: Record<FactKey, Tri>): string | null {
+  const hit = VIDEO_GATE_KEYS.filter((k) => ev[k] !== "no");
+  if (!hit.length) return null;
+  return `video review required: ${hit.map((k) => `${k} ${ev[k]}`).join(", ")}; confirm before it is sold`;
+}
+
 const TAG_SET = new Set<string>(MEDIA_TAGS);
 const TRI = new Set<string>(["yes", "no", "unclear"]);
 

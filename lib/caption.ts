@@ -9,7 +9,7 @@ import { orVisionDetailed, type VisionCallMeta } from "./openrouter";
 import { withRetry } from "./retry";
 import {
   MEDIA_CLASSIFICATION_PROMPT, normalizeMediaClassification, videoClassificationPrompt, secondLookKeys, secondLookPrompt,
-  applySecondLook, type NormalizedMedia,
+  applySecondLook, videoReviewReason, type NormalizedMedia,
 } from "./media-classification";
 import { VISION_ANALYSIS_DEFAULT_MODEL, resolveVisionAnalysisModel } from "./vision-model";
 import { generateSendCaption } from "./send-caption";
@@ -112,11 +112,13 @@ async function observe(
   }
   if (!normalized) return failed(model, lastError, latencyMs, costUsd, provider);
   const fields = { ...normalized.fields };
-  const status = secondLookNote ? "needs_review" : normalized.status;
+  // Video only: explicit or uncertain content never ends "analysed" (see videoReviewReason). Photos are not gated.
+  const gate = kind === "video" ? videoReviewReason(fields.visual_facts.evidence) : null;
+  const status = secondLookNote || gate ? "needs_review" : normalized.status;
   // The legacy send caption only for rows that analysed cleanly. needs_review rows never get one (null = V1 uses auto_desc).
   const caption = status === "analysed" ? await generateSendCaption(fields, kind, deps.writeCaption) : null;
   const error = status === "needs_review"
-    ? (secondLookNote ?? normalized.contradictions[0] ?? normalized.issues[0] ?? "needs review")
+    ? (secondLookNote ?? normalized.contradictions[0] ?? normalized.issues[0] ?? gate ?? "needs review")
     : undefined;
   return {
     status, fields: { ...fields, caption }, model, provider, latencyMs, costUsd,
