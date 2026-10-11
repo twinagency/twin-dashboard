@@ -1,7 +1,8 @@
 import React from 'react';
-type Platform = 'telegram' | 'onlyfans' | 'whatsapp';
+type Platform = 'telegram' | 'onlyfans' | 'imessage' | 'whatsapp';
 
 export default function PlatformMark({ platform, size = 18 }: { platform: Platform; size?: number }) {
+  if (platform === 'imessage') return <img src="/brand/platforms/imessage.svg" alt="" aria-hidden="true" width={size} height={size} style={{ display: 'inline-block', flexShrink: 0, objectFit: 'contain' }} />;
   if (platform === 'whatsapp') return <img src="/brand/platforms/whatsapp.svg" alt="" aria-hidden="true" width={size} height={size} style={{ display: 'inline-block', flexShrink: 0, objectFit: 'contain' }} />;
   return platform === 'telegram'
     ? <svg viewBox="0 0 24 24" width={size} height={size} aria-hidden="true"><circle cx="12" cy="12" r="11" fill="#229ed9"/><path d="m6.1 11.5 10.6-4.1c.5-.2.9.1.7 1l-1.8 8.5c-.1.6-.5.7-1 .4l-2.8-2-1.3 1.3c-.2.2-.3.3-.6.3l.2-2.9 5.3-4.8c.2-.2 0-.3-.3-.1l-6.6 4.1-2.8-.9c-.6-.2-.6-.6.4-.8Z" fill="#fff"/></svg>

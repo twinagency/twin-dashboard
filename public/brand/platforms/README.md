@@ -1,0 +1,1 @@
+iMessage uses the same Apple Messages artwork as Moxy and Twin. Source: https://apps.apple.com/us/app/messages/id1146560473, retrieved 11 October 2026 via Apple's iTunes lookup API. The original PNG bytes are embedded in imessage.svg with rounded app-icon corners. The shared icon stays green while disconnected cards retain their muted background and Not connected label.
