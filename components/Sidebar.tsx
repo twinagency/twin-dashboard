@@ -150,7 +150,7 @@ const MORE_LINKS: NavLink[] = [
 // Moxy agency sessions share expanded groups on desktop and mobile.
 // Labels and ordering never depend on write permissions.
 const MOXY_LINKS: NavLink[] = [
-  { kind: "route", label: "Earnings", href: "/revenue", icon: "EarningsCombo", color: "good" },
+  { kind: "route", label: "Overview", href: "/revenue", icon: "EarningsCombo", color: "good" },
   { kind: "route", label: "Creators", href: "/clones", icon: "Clones", color: "blue" },
   { kind: "route", label: "Creator onboarding", href: "/agency/creators", icon: "ListChecks", color: "gray" },
   { kind: "tab", label: "Content", tab: "ppvs", icon: "Media", color: "red" },
@@ -162,7 +162,7 @@ const MOXY_LINKS: NavLink[] = [
 ];
 
 const MOXY_SIDEBAR_THEME = `
-html[data-agency="moxy"] .dashboard-sidebar { width: 280px; background: #080808; }
+html[data-agency="moxy"] .dashboard-sidebar { width: 245px; background: #080808; }
 html[data-agency="moxy"] #mobile-sidebar { width: min(88vw, 280px); }
 .moxy-sidebar-brand { flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; padding: 22px 24px 10px; }
 .moxy-sidebar-brand img { width: 160px; }
@@ -177,8 +177,8 @@ html[data-agency="moxy"] #mobile-sidebar { width: min(88vw, 280px); }
 .moxy-sidebar-row { position: relative; display: flex; width: 100%; min-height: 46px; align-items: center; gap: 13px; margin: 2px 0; padding: 10px 12px; border-radius: 7px; text-align: left; font-size: 15px; line-height: 22px; font-weight: 400; transition: background-color .15s, color .15s; }
 .moxy-sidebar-row--idle { color: #bec7c2; }
 .moxy-sidebar-row--idle:hover { background: #1b211e; color: #ffffff; }
-.moxy-sidebar-row--active { background: #15312b; color: #79e1c2; font-weight: 500; }
-.moxy-sidebar-row--active::before { position: absolute; top: 12px; bottom: 12px; left: 0; width: 3px; border-radius: 3px; background: #60dcb6; content: ""; }
+.moxy-sidebar-row--active { background: #292929; color: #ffffff; font-weight: 500; }
+.moxy-sidebar-row--active::before { position: absolute; top: 12px; bottom: 12px; left: 0; width: 3px; border-radius: 3px; background: transparent; content: ""; }
 .moxy-sidebar-row:focus-visible, .moxy-invite-button:focus-visible { outline: 2px solid #79e1c2; outline-offset: 3px; }
 .moxy-sidebar-utilities { flex-shrink: 0; padding: 0 16px 16px; }
 .moxy-sidebar-utilities > div { border-top: 1px solid #272e2a; padding-top: 12px; }

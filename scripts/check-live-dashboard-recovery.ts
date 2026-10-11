@@ -1,3 +1,4 @@
+import { getAgencyOverview } from "../lib/agency-overview";
 import assert from "node:assert/strict";
 import { NextRequest } from "next/server";
 import sharp from "sharp";
@@ -19,6 +20,25 @@ async function main() {
   const moxy = await agencyIdentityById(MOXY_MANAGEMENT_AGENCY_ID);
   assert.ok(moxy && moxy.cloneIds.length, "Moxy creator assignments unavailable");
   await withDashboardAccess(moxy, async () => {
+    const overview = await getAgencyOverview();
+    assert.deepEqual(overview.map(c => c.id).sort(), [...moxy.cloneIds].sort(), "Overview roster must match authorized creators");
+    for (const creator of overview) {
+      assert.ok(Number.isInteger(creator.fans) && creator.fans >= 0, "Real audience count missing");
+      if (creator.photoId) {
+        assert.ok(creator.photoUrl, "Configured portrait could not be signed");
+        const image = await fetch(creator.photoUrl!, { signal: AbortSignal.timeout(15000) });
+        assert.ok(image.ok, "Private creator portrait unavailable");
+        const metadata = await sharp(Buffer.from(await image.arrayBuffer())).metadata();
+        assert.ok(metadata.width && metadata.height, "Invalid creator portrait");
+      }
+    }
+    const earnings = await dashboard(new NextRequest("https://dashboard.lynqai.co/api/dashboard?period=1M&fresh=1"));
+    const snapshot = await earnings.json();
+    assert.equal(earnings.status, 200, "Moxy overview earnings failed");
+    assert.ok(snapshot.clones.every((c: {id:string}) => moxy.cloneIds.includes(c.id)), "Overview earnings escaped agency scope");
+    const total = overview.reduce((sum, c) => sum + (snapshot.perClone[c.id]?.stars ?? 0), 0);
+    assert.ok(Math.abs(total - snapshot.totals.stars) < 0.01, "Overview creator totals disagree with ledger");
+    console.log("Live Moxy Overview roster, private portraits, audience counts and earnings reconciliation passed");
     for (const cloneId of moxy.cloneIds) {
       const sequences = await supabaseAdmin.from("video_sequences")
         .select("id,title,created_at,source_video_id,video_sequence_revisions(id,revision_no,state)")

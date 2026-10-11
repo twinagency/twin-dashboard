@@ -15,7 +15,7 @@ export default function TwinWordmark({
   agencyName?: string;
   studio?: boolean;
 }) {
-  if (isMoxy(agencyName)) return <img src="/moxy/logo.png" alt="Moxy, Los Angeles and Miami" width={1100} height={400} className={`block h-auto w-40 max-w-full ${inverse ? "" : "invert"} ${className}`} />;
+  if (isMoxy(agencyName)) return <img src={inverse ? "/moxy/moxy-ai-light.svg" : "/moxy/moxy-ai-dark.svg"} alt="Moxy AI, Los Angeles and Miami" width={1176} height={447} className={`block h-auto w-40 max-w-full ${className}`} />;
   if (isLynq(agencyName)) {
     return (
       <span className={`lynq-wordmark inline-flex items-center gap-2.5 leading-none ${className}`} aria-label="LYNQ">

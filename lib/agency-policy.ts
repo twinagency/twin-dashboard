@@ -22,6 +22,7 @@ export const isPartnerPreview = (agencyName?: string) => agencyName === PARTNER_
 const PREVIEW_PATHS = ["/", "/revenue", "/clones", "/api/dashboard", "/api/dashboard/day-insight", "/api/users/live", "/api/fx", "/api/avatar", "/api/media-sign", "/api/models", "/api/voice", "/api/business-account", "/api/business-connection"];
 
 export function agencyDashboardPath(path: string, agencyName?: string, canManage = false): boolean {
+  if (path === '/api/agency-overview') return isMoxy(agencyName);
   if (isPartnerPreview(agencyName)) return PREVIEW_PATHS.includes(path) || /^\/clones\/[0-9a-f-]{36}$/i.test(path);
   if (isMoxy(agencyName) && (path === "/api/models" || path === "/crm" || path.startsWith("/crm/"))) return false;
   if (canManage && (Object.hasOwn(AGENCY_LIVE_CRM_ROUTES,path) || ["/api/caption","/api/compile"].includes(path))) return true;
