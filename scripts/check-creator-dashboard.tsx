@@ -229,7 +229,12 @@ async function main() {
   await render();
   assert.equal(metric("revenue"), "$504");
   assert.equal(metric("purchases"), "12");
-  assert.equal(document.querySelectorAll('.summaryCard').length, 5);
+  assert.equal(document.querySelectorAll('.summaryCard').length, 6);
+  assert.equal(document.querySelectorAll('[aria-label="iMessage, not connected"]').length, 2);
+  assert.equal(document.querySelectorAll('button[aria-label*="iMessage"]').length, 0, "Unconnected iMessage cannot filter or imply a working integration");
+  assert.ok(find('.disconnectedCard').textContent?.includes('Not connected'));
+  assert.equal(find('.disconnectedCard img').getAttribute('src'), '/brand/platforms/imessage.svg');
+  assert.deepEqual(Array.from(document.querySelectorAll('.connectionChips b')).map(el => el.textContent), ['Telegram', 'OnlyFans', 'iMessage', 'WhatsApp']);
   assert.equal(document.querySelectorAll('.sparkline').length, 5);
   assert.equal(document.querySelectorAll('.summaryValue em').length, 5);
   assert.equal(document.querySelectorAll('.recentAvatar[src^="/dashboard/fans/"]').length, document.querySelectorAll('.recentRow').length);
