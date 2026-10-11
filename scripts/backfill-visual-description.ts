@@ -38,6 +38,23 @@
 import { supabaseAdmin } from "@/lib/supabase";
 import { captionPhoto, captionVideo } from "@/lib/caption";
 import { stripBannedDashes } from "@/lib/media-classification";
+import { execFileSync } from "node:child_process";
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import pathMod from "node:path";
+
+// Cheap mode: every item is reduced to ONE 768px JPEG (a photo resized, or a single
+// video frame at ~2s) and described through the photo path. Far fewer image tokens.
+function toSmallJpeg(bytes: Buffer, isVideo: boolean): Buffer {
+  const dir = mkdtempSync(pathMod.join(tmpdir(), "vd-"));
+  try {
+    const src = pathMod.join(dir, isVideo ? "in.mp4" : "in.img"); const out = pathMod.join(dir, "out.jpg");
+    writeFileSync(src, bytes);
+    const args = ["-loglevel", "error", "-y", ...(isVideo ? ["-ss", "2"] : []), "-i", src, "-frames:v", "1", "-vf", "scale='if(gt(iw,ih),min(768,iw),-2)':'if(gt(iw,ih),-2,min(768,ih))'", "-q:v", "4", out];
+    try { execFileSync("ffmpeg", args); } catch { if (isVideo) execFileSync("ffmpeg", args.filter((a, i) => !(a === "-ss" || args[i - 1] === "-ss"))); else throw new Error("ffmpeg could not read image"); }
+    return readFileSync(out);
+  } finally { rmSync(dir, { recursive: true, force: true }); }
+}
 
 // ── args ─────────────────────────────────────────────────────────────────────
 function arg(flag: string): string | undefined {
@@ -49,7 +66,7 @@ const LIMIT = arg("--limit") ? Number(arg("--limit")) : undefined;
 const DRY = process.argv.includes("--dry-run");
 
 const BATCH_SIZE = 200; // rows fetched per round trip
-const CONCURRENCY = 6; // items described in flight at once
+const CONCURRENCY = Number(process.env.BACKFILL_CONCURRENCY || 6); // items described in flight at once
 
 // Rough OpenRouter pricing for qwen/qwen2.5-vl-72b-instruct at the time this
 // was written (see https://openrouter.ai/qwen/qwen2.5-vl-72b-instruct):
@@ -148,12 +165,30 @@ async function cachedVisionModelFor(cloneId: string): Promise<string> {
   return model;
 }
 
+const FALLBACK_VISION_MODEL = process.env.BACKFILL_FALLBACK_MODEL || "qwen/qwen3-vl-235b-a22b-instruct";
+
 async function describeOne(table: "photos" | "videos", row: MediaRow): Promise<{ ok: true } | { ok: false; error: string }> {
   try {
     const bytes = await downloadBytes(row.storage_path);
-    const model = await cachedVisionModelFor(row.clone_id);
-    const cap = table === "photos" ? await captionPhoto(bytes, model) : await captionVideo(bytes, model);
-    const description = stripBannedDashes(cap.visual_description || "");
+    const small = toSmallJpeg(bytes, table === "videos");
+    const model = process.env.BACKFILL_PRIMARY_MODEL || await cachedVisionModelFor(row.clone_id);
+    // Rate limits and empty replies are retried with backoff instead of failing the row,
+    // and a second attempt switches to a fallback vision route so one saturated provider
+    // does not stall the whole catalogue.
+    let description = "";
+    let lastErr: unknown = null;
+    for (let attempt = 0; attempt < 4 && !description; attempt++) {
+      const useModel = attempt >= 2 ? FALLBACK_VISION_MODEL : model;
+      try {
+        const cap = await captionPhoto(small, useModel);
+        description = stripBannedDashes(cap.visual_description || "");
+      } catch (e) {
+        lastErr = e;
+        if (!/429|5\d\d|fetch failed|timeout|ECONN|EAI_AGAIN|empty/i.test(String((e as Error)?.message ?? e))) break;
+      }
+      if (!description) await new Promise((r) => setTimeout(r, 2000 * 2 ** attempt + Math.random() * 1000));
+    }
+    if (!description && lastErr) throw lastErr;
     if (!description) return { ok: false, error: "model returned an empty visual_description" };
     // Write ONLY visual_description — nothing else on the row is touched.
     const { error } = await supabaseAdmin.from(table).update({ visual_description: description }).eq("id", row.id);
