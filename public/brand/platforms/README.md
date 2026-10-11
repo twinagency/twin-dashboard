@@ -1,1 +1,3 @@
 WhatsApp glyph: Meta Brand Resource Center, Digital_Glyph_Green_RGB_2026.svg, downloaded 10 October 2026 from https://www.meta.com/en-gb/brand/resources/whatsapp/whatsapp-brand/. The supplied SVG is unchanged. The chat background is an original neutral pattern used for the channel demo.
+
+iMessage: an SVG illustration matching the familiar Messages app icon, used for the disconnected dashboard placeholder.
