@@ -312,6 +312,8 @@ function readJsonl<T>(f: string): T[] {
   return readFileSync(f, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l) as T);
 }
 
+/** `conflict` marks a backup line whose guarded write matched 0 rows: nothing was written, so rollback skips it silently. */
+type ConflictRec = { kind: "conflict"; table: string; id: string; run: string; at: string };
 type BackupRec = { kind: "row" | "item"; table: MediaTable | "photo_bundle_items"; id: string; clone_id: string; storage_path: string; before: Record<string, unknown>; after: Record<string, unknown>; run: string; at: string };
 
 // ── row processing ───────────────────────────────────────────────────────────
@@ -378,7 +380,9 @@ async function applyProposal(ctx: Ctx, p: Proposal, sum: RunSummary): Promise<"a
   q = guardOld(q, guardFields).select("id");
   const { data, error } = await withRetry(async () => { const r = await q; if (r.error && TRANSIENT_ERROR.test(r.error.message)) throw new Error(r.error.message); return r; }, ctx.retries + 1, { baseMs: ctx.retryBaseMs });
   if (error) throw new Error(`update ${p.table}/${p.id}: ${error.message}`);
-  return (data ?? []).length === 1 ? "applied" : "conflict";
+  if ((data ?? []).length === 1) return "applied";
+  append(file(ctx, "backup.jsonl"), { kind: "conflict", table: p.table, id: p.id, run: ctx.runId, at: new Date().toISOString() } satisfies ConflictRec);
+  return "conflict";
 }
 
 /** Copies the corrected values onto photo_bundle_items with the same storage_path (same clone), guarded on each item's current values. */
@@ -400,7 +404,11 @@ async function syncItems(ctx: Ctx, rec: { clone_id: string; storage_path: string
     q = guardOld(q, before).select("id");
     const r = await q;
     if (r.error) throw new Error(`update photo_bundle_items/${it.id}: ${r.error.message}`);
-    if ((r.data ?? []).length === 1) sum.itemsUpdated++; else sum.itemConflicts++;
+    if ((r.data ?? []).length === 1) sum.itemsUpdated++;
+    else {
+      sum.itemConflicts++;
+      append(file(ctx, "backup.jsonl"), { kind: "conflict", table: "photo_bundle_items", id: it.id, run: ctx.runId, at: new Date().toISOString() } satisfies ConflictRec);
+    }
   }
 }
 
@@ -494,7 +502,10 @@ export type RollbackSummary = { restored: number; alreadyRestored: number; chang
 
 export async function rollbackRun(ctx: Pick<Ctx, "db" | "log" | "stateDir" | "retries" | "retryBaseMs">, backupFile?: string): Promise<RollbackSummary> {
   const sum: RollbackSummary = { restored: 0, alreadyRestored: 0, changedSince: 0, itemsRestored: 0, errors: [] };
-  const recs = readJsonl<BackupRec>(backupFile ?? path.join(ctx.stateDir, "backup.jsonl"));
+  const lines = readJsonl<BackupRec | ConflictRec>(backupFile ?? path.join(ctx.stateDir, "backup.jsonl"));
+  // a write that matched 0 rows left the row untouched: its backup line is not a change to undo
+  const conflicted = new Set(lines.filter((l): l is ConflictRec => l.kind === "conflict").map((l) => `${l.run}:${l.table}:${l.id}`));
+  const recs = lines.filter((l): l is BackupRec => l.kind !== "conflict" && !conflicted.has(`${l.run}:${l.table}:${l.id}`));
   for (const b of recs.reverse()) {
     const isItem = b.kind === "item";
     try {

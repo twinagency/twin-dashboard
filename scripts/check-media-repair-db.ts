@@ -239,6 +239,12 @@ async function main() {
   eq(sql(`select tags from photos where id='${id(2)}'`), "{edited,mid,run}", "concurrent edit: the person's tags survive");
   eq(sql(`select caption||analysis_status from photos where id='${id(3)}'`), "new hand captionlegacy", "concurrent edit: metadata_edited_at set mid-run blocks the write");
   eq(sql(`select tags from photo_bundle_items where id='${id(31)}'`), "{solo}", "concurrent edit: the other rows still repaired");
+  // the two conflicted rows were never written: rollback must not report them as "changed since apply"
+  const crb = await rollbackRun(cc);
+  eq(crb.errors, [], "conflict rollback: no errors");
+  eq(crb.changedSince, 0, "conflict rollback: a conflicted row's backup line is skipped silently (never 'changed since apply')");
+  eq(sql(`select tags from photos where id='${id(2)}'`), "{edited,mid,run}", "conflict rollback: the person's edit is still there");
+  eq(crb.restored + crb.alreadyRestored >= 1, true, "conflict rollback: the rows that were applied are still handled");
 
   // ── 8. failed / transient / invalid / needs_review analyses never write ─────────────────────────────────
   seed(); await wait(100);
