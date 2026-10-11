@@ -8,7 +8,7 @@ import { analysePhoto, analyseVideo } from "@/lib/caption";
 import type { AnalysisResult } from "@/lib/media-analysis-contract";
 import {
   analysisRowFields,
-  factFieldsChanged,
+  applyFactEdit,
   insertMediaRowWithFallback,
   isMissingColumnError,
   priceForAnalysis,
@@ -157,7 +157,7 @@ async function markIfFactsEdited(table: "photos" | "videos", id: string, cloneId
   let { data, error } = await select("caption, tags, auto_desc, visual_description, explicitness, is_nude, nsfw");
   if (error && isMissingColumnError(error.message)) ({ data, error } = await select("caption, tags, auto_desc, explicitness, is_nude, nsfw"));
   if (error) throw new Error(error.message);
-  if (factFieldsChanged(data as unknown as Record<string, unknown> | null, update)) update.metadata_edited_at = new Date().toISOString();
+  applyFactEdit(data as unknown as Record<string, unknown> | null, update);
 }
 
 // Parse a comma-joined tags field from the edit form into a clean, deduped array

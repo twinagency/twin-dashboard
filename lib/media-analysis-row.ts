@@ -66,6 +66,13 @@ export function factFieldsChanged(stored: Record<string, unknown> | null, update
   return FACT_FIELDS.some((k) => Object.hasOwn(update, k) && !same(stored[k], update[k]));
 }
 
+/** The ONE place a manual edit becomes row state. `stored` is the row before the edit, `update` the columns about to be written
+ * (mutated). A real change to a fact field stamps metadata_edited_at (protects the row from batch repair). */
+export function applyFactEdit(stored: Record<string, unknown> | null, update: Record<string, unknown>, now = new Date().toISOString()): void {
+  if (!factFieldsChanged(stored, update)) return;
+  update.metadata_edited_at = now;
+}
+
 type InsertClient = { from: (table: string) => { insert: (row: Record<string, unknown>) => PromiseLike<{ error: { message: string } | null }> } };
 
 /** Insert a photos/videos row; if the analysis columns are not migrated yet, retry without them (see OPTIONAL_MEDIA_COLUMNS). */

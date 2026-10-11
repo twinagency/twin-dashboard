@@ -16,6 +16,11 @@ export type VisualFacts = {
   evidence: Record<FactKey, Tri>;
   visible: string[]; // short confirmed phrases: garments with colours, setting, objects, pose
   frames?: number; // videos: how many sampled frames the facts come from
+  // Written ONLY by the dashboard when a person acts on the row (additive; V2 ignores unknown keys):
+  edited?: boolean; // an operator changed a fact field after the analysis; `evidence` was brought in line with the correction
+  edited_at?: string; // ISO time of the last such correction
+  reviewed?: boolean; // an operator pressed "mark reviewed" (completeReview): needs_review -> analysed
+  reviewed_at?: string;
 };
 
 export type AnalysisStatus = "legacy" | "pending" | "analysed" | "needs_review" | "failed";
