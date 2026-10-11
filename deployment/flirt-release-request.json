@@ -1,5 +1,5 @@
 {
-  "reason": "Give every FLIRT creator the same personalised Overview with clear, hand-reviewed portrait crops and own live data",
-  "source_commit": "d6b8ef5cfee1ea6084d45d930f28f50a0676d32e",
-  "requested_at": "2026-10-11T06:38:11.978Z"
+  "reason": "Allow the authenticated, creator-scoped portrait route and verify the agency middleware path",
+  "source_commit": "e741030f7fc9054b7790dc716566543cec723173",
+  "requested_at": "2026-10-11T06:45:10.945Z"
 }

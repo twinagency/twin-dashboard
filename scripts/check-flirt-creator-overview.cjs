@@ -8,6 +8,9 @@ function load(file, mocks) {
   vm.runInNewContext(`(function(require,module,exports){${js}\n})`, { Buffer, Response, Date, Map, Set, URL })(name => { if (!(name in mocks)) throw new Error(`Unexpected dependency ${name}`); return mocks[name]; }, module, module.exports);
   return module.exports;
 }
+const policy = load('lib/agency-policy.ts', {'./partner-portals':{portalForPath:()=>null},'./agency-brand':{isMoxy:name=>name==='moxy'},'./agency-management-policy':{AGENCY_LIVE_CRM_ROUTES:{}}});
+assert.equal(policy.agencyDashboardPath('/api/creator-overview/photo','flirt',true),true);
+assert.equal(policy.agencyDashboardPath('/api/creator-overview/photo/other','flirt',true),false);
 const config = load('lib/flirt-overview-photos.ts', {});
 const ids = Object.keys(config.flirtOverviewPhotos);
 const emptyId = 'e0464c19-d5b7-4154-ba46-a60a2ed2a8a3';
