@@ -45,6 +45,18 @@ jobs:
       - name: Shared operator workspace desktop and mobile checks
         run: node scripts/check-operator-workspace-ui.mjs
 
+      - name: Creator profile mobile and save navigation checks
+        run: node scripts/check-creator-profile-ui.mjs
+
+      - name: Creator profile review screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: creator-profile-preview
+          path: test-results/creator-profile/*.png
+          if-no-files-found: ignore
+          retention-days: 3
+
       - name: Shared operator workspace screenshots
         if: always()
         uses: actions/upload-artifact@v4
@@ -128,4 +140,5 @@ jobs:
           path: test-results/twin-public
           if-no-files-found: ignore
           retention-days: 3
+
 

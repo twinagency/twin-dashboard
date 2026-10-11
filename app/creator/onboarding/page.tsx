@@ -12,7 +12,7 @@ import CreatorUploadForm from "@/components/CreatorUploadForm";
 import CreatorSetupLayout from "@/components/CreatorSetupLayout";
 import { creatorUploadsEditable } from "@/lib/creator-upload-policy";
 import { creatorIntakeOptional } from "@/lib/creator-intake-policy";
-import { creatorProfileAnswers } from "@/lib/creator-questionnaire-profile";
+import { creatorProfileAnswers, CREATOR_PROFILE_QUESTIONNAIRE } from "@/lib/creator-questionnaire-profile";
 import { creatorOnboardingEditable } from "@/lib/creator-onboarding-policy";
 import { creatorApplicationState } from "@/lib/creator-application-state";
 import { supabaseAdmin } from "@/lib/supabase";
@@ -238,7 +238,7 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
   const brandName = tether ? "Tether" : link ? "LYNQ" : moxy ? "Moxy" : "Twin";
   const loginPath = moxy ? "/creator/moxy/login" : creatorLoginPath(creator, jar.get(CREATOR_PORTAL_COOKIE)?.value);
   const { status, step, section } = await searchParams;
-  const activeStep = moxy
+  const activeStep = optionalIntake
     ? step === "content" || step === "voice" || step === "consent" ? "content" : "questionnaire"
     : isOnboardingStep(step) ? step : null;
   const compactQuestionnaire = optionalIntake && activeStep === "questionnaire";
@@ -282,16 +282,15 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
     (activeStep === "voice" && (status === "voice_saved" || status === "voice_skipped") && complete.voice) ||
     (activeStep === "consent" && status === "consent_saved" && complete.consent);
 
-  if (moxy) return (
-    <CreatorSetupLayout brand="moxy" logoSrc="/moxy/logo.png" activeSection={activeStep === "content" ? "content" : "questionnaire"} applicationStatus={applicationState.label}>
+  if (optionalIntake) return (
+    <CreatorSetupLayout brand={moxy ? "moxy" : "twin"} logoSrc="/moxy/logo.png" activeSection={activeStep === "content" ? "content" : "questionnaire"} applicationStatus={applicationState.label}>
       {status && errorStatuses.has(status) && <div id="step-result" role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">{status === "upload_too_large" ? "Videos can be up to 512 MiB and images up to 75 MiB each." : status === "upload_wrong_type" ? "This file could not be verified. Use JPG, PNG, WebP or GIF images (up to 25 MP), or MP4, MOV or WebM video. Export HEIC photos as JPG first." : statusCopy[status]}{status === "file_removal_pending" && <> <Link href="/creator/onboarding?step=content" className="font-semibold underline">Open Saved content</Link></>}</div>}
 
       {activeStep === "questionnaire" ? <section data-creator-setup-panel>
-        <div data-creator-setup-panel-heading><h2>About you</h2><span>Questionnaire</span></div>
         {status === "questionnaire_saved" && <div className="mb-5"><SavedConfirmation title="Questionnaire saved" detail="Your answers have been saved to your creator account." /></div>}
         <CreatorQuestionnaireWizard
           page={questionnairePage}
-          initialAnswers={Object.fromEntries(questionnairePageQuestions(questionnairePage).map((question) => {
+          initialAnswers={Object.fromEntries(CREATOR_PROFILE_QUESTIONNAIRE.map((question) => {
             const fallback = question.id === "preferred_name" ? account.display_name || "" : question.id === "email_address" ? account.email || "" : "";
             return [question.id, questionnaireAnswers[question.id] ?? fallback];
           }))}
@@ -377,7 +376,7 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
                   <div className="flex flex-col gap-3 sm:flex-row"><ReturnToOnboarding /><Link href={`/creator/onboarding?step=questionnaire&section=${questionnairePage.slug}`} className={returnToOnboardingClass()}>Review answers</Link></div><StepNavigation step="questionnaire" />
                 </> : <CreatorQuestionnaireWizard
                   page={questionnairePage}
-                  initialAnswers={Object.fromEntries(questionnairePageQuestions(questionnairePage).map((question) => {
+                  initialAnswers={Object.fromEntries((optionalIntake ? CREATOR_PROFILE_QUESTIONNAIRE : questionnairePageQuestions(questionnairePage)).map((question) => {
                     const fallback = question.id === "preferred_name" ? account.display_name || "" : question.id === "email_address" ? account.email || "" : "";
                     return [question.id, questionnaireAnswers[question.id] ?? fallback];
                   }))}
@@ -457,5 +456,6 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
     </div>
   );
 }
+
 
 

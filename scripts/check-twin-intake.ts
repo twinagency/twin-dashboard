@@ -27,7 +27,7 @@ async function main(){
  const twin=await creatorDashboardIdentity(token);
  assert.ok(twin);assert.equal(twin.name,"Twin");assert.equal(twin.agencyId,null);assert.equal(twin.onboarded,true);
  assert.equal(twin.applicationSubmitted,false);assert.deepEqual(twin.cloneIds,[]);
- assert.equal(creatorQuestionnairePage(undefined,creatorIntakeOptional(twin)).slug,"quick-about");
+ assert.equal(creatorQuestionnairePage(undefined,creatorIntakeOptional(twin)).slug,"quick-v2-introduction");
  assert.equal((await middleware(req("/creator"))).headers.get("location"),null);
  assert.equal((await middleware(req("/creator/onboarding"))).headers.get("location"),null);
  assert.equal((await middleware(req("/agency-admin"))).status,403);
@@ -44,3 +44,4 @@ async function main(){
  }finally{globalThis.fetch=previous;}
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});
+
