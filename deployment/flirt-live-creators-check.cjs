@@ -84,6 +84,12 @@ async function main() {
   for(const photo of agencyPhotos) assert(new URL(photo.url).hostname===`${PROJECT}.supabase.co` && (await request(photo.url,{method:'HEAD'})).ok,'Every agency portrait must load from its original private storage');
   const agencyPage = await page('/revenue'); const agencyHtml = await agencyPage.text();
   assert(agencyPage.ok && agencyHtml.includes('data-agency-overview="flirt"') && agencyHtml.includes('Agency overview') && agencyHtml.includes('Compare creators') && expected.every(c=>agencyHtml.includes(c.name)), 'Live All creators Overview must render its agency layout');
+  const monthResponse=await page('/api/dashboard?period=1M&fresh=1');
+  assert(monthResponse.ok,'Default 30-day agency earnings must load');
+  const month=await monthResponse.json();
+  assert(month.clones.length===CLONES.length && month.clones.every(c=>CLONES.includes(c.id)), 'Monthly agency report must stay scoped');
+  assert(Math.abs(month.totals.stars-Object.values(month.perClone).reduce((sum,c)=>sum+c.stars,0))<.001,'Monthly combined earnings must equal creator earnings');
+  assert(Math.abs(month.totals.stars-month.series.reduce((sum,row)=>sum+CLONES.reduce((n,id)=>n+(Number(row[id])||0),0),0))<.001,'Monthly chart must equal total earnings');
   assert(Math.abs(data.totals.stars-Object.values(data.perClone).reduce((sum,c)=>sum+c.stars,0))<.001,'Combined earnings must equal selected creator earnings');
   assert(Math.abs(data.totals.stars-data.series.reduce((sum,row)=>sum+CLONES.reduce((n,id)=>n+(Number(row[id])||0),0),0))<.001,'Combined chart must match total earnings');
   checks.push('Agency Overview: assigned creators, exact all-time fans, distinct private photos, and reconciled combined earnings verified live');

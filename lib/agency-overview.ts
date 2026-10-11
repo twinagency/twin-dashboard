@@ -39,7 +39,7 @@ export async function getAgencyOverview(): Promise<AgencyOverviewPresentation> {
   if (signingError) throw new Error('Creator portraits could not be refreshed.');
   const image = (path?: string, id?: string) => {
     const url = path ? signed?.[paths.indexOf(path)]?.signedUrl : undefined;
-    return url && id ? { id, url, position: '50% 20%' } : null;
+    return url && id ? { id, url, position: '50% 0%' } : null;
   };
   const creators = rows.map(r => ({ id: r.id, name: r.name, color: r.color, totalFans: r.totalFans,
     portrait: image(r.portraitPath, r.portraitId), cardPhoto: image(r.cardPath, r.cardId) }));

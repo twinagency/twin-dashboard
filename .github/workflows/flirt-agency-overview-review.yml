@@ -26,6 +26,12 @@ jobs:
       - run: npx playwright install --with-deps chromium
       - name: Verify Overview interactions, data scoping and responsive layout
         run: node deployment/flirt-agency-ui-check.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: flirt-agency-visual-review
+          path: /tmp/flirt-agency-review
+          retention-days: 1
       - name: Build the production source
         run: npm run build
         env:

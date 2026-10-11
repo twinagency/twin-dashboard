@@ -12,7 +12,7 @@ js=r"""
 const {configuration,CLONES}=require('./deployment/flirt-live-twin.cjs');
 if(process.env.FLIRT_SUPABASE_PROJECT_REF!=='lkmfwpqegjluirfusnaw')throw Error('Unexpected runtime');
 const live=configuration(),headers={apikey:live.key,Authorization:'Bearer '+live.key};
-const ids=['746b4bc1-7f59-4d3a-bb4e-c4f713a2c5b8','5a0f635e-7b6b-46ca-a7f3-cb9f87af30e4','710d8abd-042a-4c28-8ed0-f06cadfac6b3','4a425102-8148-407c-a5f2-c9ca77347b2e','b8258ae3-6d91-4ecf-8a4a-a53c7803a72b','37ee27aa-d91f-4bcf-ac91-38d42f320fe3','df4c2960-e3d1-423d-8c3d-631d793b83a8','ff76f955-19c7-4d3d-84ea-e36b0dfe11dd','b342ff24-7945-481c-8fde-4263566086ff'];
+const ids=['365c9bee-f5ba-4bc3-8dc6-2193a42f7c8a','f55a58c4-0cd0-4d7c-9b18-29be42dd7a9d','746b4bc1-7f59-4d3a-bb4e-c4f713a2c5b8','5a0f635e-7b6b-46ca-a7f3-cb9f87af30e4','710d8abd-042a-4c28-8ed0-f06cadfac6b3','961065a1-49dd-4805-93a3-76239e915a93','b8258ae3-6d91-4ecf-8a4a-a53c7803a72b','37ee27aa-d91f-4bcf-ac91-38d42f320fe3','df4c2960-e3d1-423d-8c3d-631d793b83a8','ff76f955-19c7-4d3d-84ea-e36b0dfe11dd','b342ff24-7945-481c-8fde-4263566086ff'];
 (async()=>{
 const r=await fetch(live.url+'/rest/v1/photos?select=id,clone_id,storage_path&clone_id=in.('+CLONES.join(',')+')&id=in.('+ids.join(',')+')',{headers});
 if(!r.ok)throw Error('Photo read failed');const photos=await r.json();
