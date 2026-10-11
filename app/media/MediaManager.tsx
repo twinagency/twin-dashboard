@@ -60,6 +60,10 @@ type Photo = {
   tags: string[] | null;
   auto_desc: string | null;
   visual_description?: string | null;
+  analysis_status?: string | null;
+  analysis_model?: string | null;
+  analysis_provider?: string | null;
+  analysis_error?: string | null;
   created_at: string;
 };
 
@@ -77,6 +81,10 @@ type Video = {
   tags: string[] | null;
   auto_desc: string | null;
   visual_description?: string | null;
+  analysis_status?: string | null;
+  analysis_model?: string | null;
+  analysis_provider?: string | null;
+  analysis_error?: string | null;
   created_at: string;
 };
 
@@ -542,6 +550,22 @@ function ExplicitBadge({ isNude, explicitness }: { isNude: boolean | null; expli
   );
 }
 
+// Analysis state and the model/provider that actually answered. Hidden on rows from before the state columns existed.
+function AnalysisBadge({ status, model, provider, error }: { status?: string | null; model?: string | null; provider?: string | null; error?: string | null }) {
+  if (!status) return null;
+  const cls =
+    status === "failed" ? "bg-crit/10 text-crit" :
+    status === "needs_review" || status === "pending" ? "bg-warn/15 text-warn" :
+    "bg-muted/10 text-muted";
+  const label = status === "needs_review" ? "needs review" : status;
+  const who = model ? ` · ${model.split("/").pop()}${provider ? ` via ${provider}` : ""}` : "";
+  return (
+    <span className={`rounded-full px-2 py-0.5 text-[10px] ${cls}`} title={error ?? undefined}>
+      {label}{who}
+    </span>
+  );
+}
+
 // Editable nudity + explicitness controls (shared by photo/video edit forms).
 function NudityFields({ isNude, explicitness }: { isNude: boolean | null; explicitness: string | null }) {
   return (
@@ -679,6 +703,9 @@ function PhotoCard({
           <StarAmount stars={photo.is_free ? 0 : photo.star_value} />
           <ExplicitBadge isNude={photo.is_nude} explicitness={photo.explicitness} />
         </div>
+        <div className="mt-1">
+          <AnalysisBadge status={photo.analysis_status} model={photo.analysis_model} provider={photo.analysis_provider} error={photo.analysis_error} />
+        </div>
         {photo.teaser_caption && (
           <div className="text-xs text-muted mt-1 line-clamp-2">"{photo.teaser_caption}"</div>
         )}
@@ -806,6 +833,9 @@ function VideoCard({
         <div className="mt-0.5 flex items-center gap-2 text-xs text-muted">
           <StarAmount stars={video.is_free ? 0 : video.star_value} />
           <ExplicitBadge isNude={video.is_nude} explicitness={video.explicitness} />
+        </div>
+        <div className="mt-1">
+          <AnalysisBadge status={video.analysis_status} model={video.analysis_model} provider={video.analysis_provider} error={video.analysis_error} />
         </div>
         {video.teaser_caption && (
           <div className="text-xs text-muted mt-1 line-clamp-2">"{video.teaser_caption}"</div>
