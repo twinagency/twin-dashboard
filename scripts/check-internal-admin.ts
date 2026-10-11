@@ -1,3 +1,4 @@
+import * as contentIntake from "../lib/creator-content-intake";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import vm from "node:vm";
@@ -26,6 +27,7 @@ async function main() {
   });
   const db = { from: () => { queries++; throw new Error("query-reached"); }, storage: { from: () => { queries++; throw new Error("query-reached"); } } };
   const pageDependencies = {
+    "@/lib/creator-content-intake": contentIntake,
     "react/jsx-runtime": { jsx: () => null, jsxs: () => null }, "next/link": { default: () => null },
     "next/navigation": { redirect: () => { throw new Error("redirect-denied"); }, notFound: () => { throw new Error("not-found"); } },
     "@/lib/internal-admin": guard, "@/lib/dashboard-access": { getDashboardAccess: async () => null },
@@ -55,3 +57,4 @@ async function main() {
   console.log("Internal-admin boundaries passed: signed-out, creator, agency, malformed and mixed sessions stop before private queries/actions; verified admin remains allowed");
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });
+
