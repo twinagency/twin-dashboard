@@ -6,13 +6,18 @@ on:
 permissions:
   contents: read
 jobs:
-  source:
+  review:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - run: git archive HEAD -o /tmp/moxy-source.tar.gz
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-southeast-2
+      - run: python3 deployment/moxy-overview-photos.py
       - uses: actions/upload-artifact@v4
         with:
-          name: moxy-overview-source
-          path: /tmp/moxy-source.tar.gz
+          name: moxy-overview-photos
+          path: /tmp/moxy-review
           retention-days: 1
