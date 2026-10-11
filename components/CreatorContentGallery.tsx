@@ -54,7 +54,7 @@ export default function CreatorContentGallery({ kind, revision, loginPath }: { k
   }
   return <section aria-label="Saved content" className="mt-6 border-t border-border pt-5">
     <h4 className="font-semibold text-ink">Saved content</h4>
-    {loading ? <p role="status" className="mt-3 text-sm text-muted">Loading saved files…</p> : !files.length && !error ? <p className="mt-3 text-sm text-muted">No saved files in this category yet.</p> : null}
+    {loading ? <p role="status" className="mt-3 text-sm text-muted">Loading saved files…</p> : !files.length && !error ? <p className="mt-3 text-sm text-muted">No saved files yet.</p> : null}
     {error && <div role="alert" className="mt-3 break-words text-sm text-red-700">{error} <button type="button" className="min-h-11 underline" onClick={() => setReload(value => value + 1)}>Retry</button></div>}
     {sessionExpired && <a className="inline-flex min-h-11 items-center underline" href={`${loginPath}?next=${encodeURIComponent(`/creator/onboarding?step=${kind === "voice" ? "voice" : "content"}`)}`}>Sign in and return to saved content</a>}
     {!loading && <ul className="mt-3 grid gap-4">
@@ -83,3 +83,4 @@ export default function CreatorContentGallery({ kind, revision, loginPath }: { k
     {!loading && (page > 0 || hasMore) && <nav aria-label="Saved content pages" className="mt-3 flex justify-between gap-3"><Button variant="outline" type="button" className="min-h-11" disabled={!page} onClick={() => setPage(value => value - 1)}>Previous</Button><span className="self-center text-sm">Page {page + 1}</span><Button variant="outline" type="button" className="min-h-11" disabled={!hasMore} onClick={() => setPage(value => value + 1)}>Next</Button></nav>}
   </section>;
 }
+
