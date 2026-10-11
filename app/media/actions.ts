@@ -5,6 +5,7 @@ import { guardDashboardAction } from "@/lib/agency-management";
 import { revalidatePath } from "next/cache";
 import { supabaseAdmin } from "@/lib/supabase";
 import { captionPhoto, captionVideo, type Caption } from "@/lib/caption";
+import { stripBannedDashes } from "@/lib/media-classification";
 import {
   buildSafeRepricePlan,
   requirePhotoBundlePrice,
@@ -415,6 +416,8 @@ export async function updatePhoto(
   // Manual tag edits overwrite the AI auto-tags (empty string clears them).
   if (fd.has("tags")) update.tags = parseTags(fd.get("tags"));
   if (fd.has("auto_desc")) update.auto_desc = String(fd.get("auto_desc") ?? "").trim() || null;
+  // The operator's correction of the facts the bots read (same dash rule as the upload); only sent when the row has the column.
+  if (fd.has("visual_description")) update.visual_description = stripBannedDashes(String(fd.get("visual_description") ?? "")) || null;
   const { error } = await supabaseAdmin
     .from("photos")
     .update(update)
@@ -445,6 +448,7 @@ export async function updateVideo(
   // Manual tag edits overwrite the AI auto-tags (empty string clears them).
   if (fd.has("tags")) update.tags = parseTags(fd.get("tags"));
   if (fd.has("auto_desc")) update.auto_desc = String(fd.get("auto_desc") ?? "").trim() || null;
+  if (fd.has("visual_description")) update.visual_description = stripBannedDashes(String(fd.get("visual_description") ?? "")) || null;
   const { error } = await supabaseAdmin
     .from("videos")
     .update(update)
