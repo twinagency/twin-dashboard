@@ -13,7 +13,8 @@ async function main(){
     if(table==="clones")assert.ok(!url.searchParams.get("select")!.split(",").includes("bot_token"));
   }
   assert.match(scopeReadUrl(new URL(base+"users"),{...a,cloneIds:[]}).url.searchParams.get("and")!,/00000000-0000-0000-0000-000000000000/);
-  assert.match(scopedSelection("photo_bundles","*, photo_bundle_items(*)"),/photo_bundle_items\(id,bundle_id,storage_path,sort_order\)/);
+  assert.match(scopedSelection("photo_bundles","*, photo_bundle_items(*)"),/photo_bundle_items\(id,bundle_id,storage_path,sort_order,visual_description\)/);
+  for(const table of ["photos","videos","photo_bundle_items"]){assert.ok(scopedSelection(table,"*").split(",").includes("visual_description"), `${table} exposes the saved AI description`);}
   for(const select of ["*,clones(*)","secret:bot_token","unknown_column","*,users(*)"]){assert.throws(()=>scopedSelection("clones",select));}
   for(const table of ["app_settings","api_keys","agency_memberships","tracker_items","photo_bundle_items"]){assert.throws(()=>scopeReadUrl(new URL(base+table),a));}
   assert.notEqual(accessCacheKey(a),accessCacheKey(b));assert.notEqual(accessCacheKey(a),accessCacheKey(null));assert.notEqual(accessCacheKey(a),accessCacheKey({...a,cloneIds:[]}));
