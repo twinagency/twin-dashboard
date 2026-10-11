@@ -13,12 +13,15 @@ import json,subprocess,shutil
 
 def run(args):
  r=subprocess.run(args,capture_output=True,text=True,timeout=60)
- if r.returncode:raise RuntimeError('Read-only disk check failed')
+ if r.returncode:raise RuntimeError('Archive read failed')
  return r.stdout
-state=run(['docker','ps','-a','--format','{{json .}}'])
-containers=[{k:r.get(k) for k in ('ID','Names','Image','State','Status')} for r in map(json.loads,state.splitlines())]
-usage=shutil.disk_usage('/')
-print(json.dumps({'disk_gib':{'total':round(usage.total/1024**3,2),'free':round(usage.free/1024**3,2)},'docker_disk':run(['docker','system','df']),'dangling_images':run(['docker','images','--filter','dangling=true','--format','{{json .}}']),'containers':containers,'read_only':True}))
+names=['flirt-dashboard-archive-08e25649e2d0','flirt-dashboard-archive-c1ae46e04a96','flirt-dashboard-archive-2a350a1c0687','flirt-dashboard-archive-c5797c987106']
+result=[]
+for name in names:
+ c=json.loads(run(['docker','inspect','--size',name]))[0]
+ im=json.loads(run(['docker','image','inspect',c['Image']]))[0]
+ result.append({'name':name,'id':c['Id'],'state':c['State']['Status'],'finished':c['State']['FinishedAt'],'mounts':c['Mounts'],'image':c['Image'],'image_ref':c['Config']['Image'],'labels':c['Config'].get('Labels'),'image_bytes':im['Size'],'writable_bytes':c.get('SizeRw'),'repo_digests':im.get('RepoDigests'),'changes':run(['docker','diff',name])})
+print(json.dumps({'archives':result,'free_gib':shutil.disk_usage('/').free/1024**3,'read_only':True}))
 '''
 job=aws('ssm','send-command','--cli-input-json',json.dumps({'InstanceIds':['i-09a9dd3bd749643a5'],'DocumentName':'AWS-RunShellScript','Comment':'Read-only capacity diagnosis for FLIRT deployment','Parameters':{'commands':['sudo python3 -c '+shlex.quote(code)],'executionTimeout':['180']}}))['Command']['CommandId']
 for _ in range(90):
