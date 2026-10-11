@@ -40,6 +40,8 @@ import {
 import type { CloneConfigState, SetConfig } from "./useCloneConfig";
 import { DIAL_CONFLICT_RULES } from "@/lib/dial-conflicts";
 import { SpoilMenuEditor } from "./editors";
+import { IdentityLifeCard, IdentityBoundaryLink, ConfigurationMore, MoneyJourney, PaywallPreview, StudioHeading, StudioLink, isStudioTab } from "./CreatorStudio";
+import studioStyles from "./CreatorStudio.module.css";
 import { MediaPicker, type MediaRow, type BundleRow } from "./MediaPicker";
 // New dedicated file (migration 056 monetization sequence) — kept out of this
 // file's own card definitions so it doesn't collide with concurrent edits here.
@@ -252,11 +254,13 @@ function controlOptions<T extends string>(
 
 function ConfigModule({
   editMode,
+  studio = false,
   id,
   title,
   children,
 }: {
   editMode: boolean;
+  studio?: boolean;
   id: string;
   title: string;
   children: React.ReactNode;
@@ -264,10 +268,10 @@ function ConfigModule({
   if (!editMode) return <>{children}</>;
 
   return (
-    <section id={id} className="scroll-mt-24 overflow-hidden rounded-[4px] border border-line bg-panel">
-      <header className="border-b border-line px-4 py-3 sm:px-5">
+    <section id={id} className={`scroll-mt-24 overflow-hidden rounded-[4px] border border-line bg-panel ${studio ? studioStyles.module : ""}`}>
+      {studio ? <StudioHeading icon={id === "config-runtime" ? "connection" : id === "config-capabilities" ? "capabilities" : id === "config-calibration" ? "behaviour" : id === "config-policy" ? "boundaries" : id === "config-delivery" ? "delivery" : "models"} title={id === "config-runtime" ? "Connection & runtime" : id === "config-capabilities" ? "Media & delivery" : title} /> : <header className="border-b border-line px-4 py-3 sm:px-5">
         <h3 className="text-[13px] font-semibold tracking-[-0.01em] text-ink">{title}</h3>
-      </header>
+      </header>}
       <div className="grid gap-3 p-4 sm:p-5 [&_button]:rounded-[3px] [&_input]:rounded-[3px] [&_select]:rounded-[3px] [&_textarea]:rounded-[3px] [&_.clone-segmented]:rounded-[3px] [&_.clone-segmented>button]:rounded-[2px]">
         {children}
       </div>
@@ -385,6 +389,9 @@ export default function ConfigSections({
   clone,
   models,
   mode,
+  studio = false,
+  studioPanel = "overview",
+  onStudioPanelChange,
   showMoney = true,
   tab: tabProp,
   onTabChange,
@@ -411,6 +418,9 @@ export default function ConfigSections({
   clone?: Partial<Clone>;
   models: OrModel[];
   mode: "create" | "edit";
+  studio?: boolean;
+  studioPanel?: string;
+  onStudioPanelChange?: (panel: string) => void;
   // Edit mode pulls money out to the page-level Monetization tab — pass false
   // there so the group + its tab disappear here (MonetizationSections renders
   // them instead, still inside the same <form>).
@@ -509,7 +519,7 @@ export default function ConfigSections({
   const spendTierConflict = useDialConflict(cfg, [byId("spend-tier-order")]);
 
   return (
-    <div className="grid min-w-0 gap-4">
+    <div className={`grid min-w-0 gap-4 ${studio && isStudioTab(tab) ? studioStyles.form : ""}`} data-studio-tab={studio ? tab : undefined} data-studio-panel={studio ? studioPanel : undefined}>
       {/* ── Tab bar ─────────────────────────────────────────────── */}
       <div
         data-readonly-navigation
@@ -543,30 +553,32 @@ export default function ConfigSections({
           Personality & style (flirt/nsfw/push dials, emoji, realism, language)
           moved OUT to Config 2026-07-26: those are operator dials for HOW she
           behaves, not facts about her, so they don't belong in this tab. */}
-      <div className={`${show("identity")} identity-tab-scope`}>
+      <div className={`${show("identity")} identity-tab-scope ${studio ? studioStyles.identity : ""}`}>
         {/* Columns are hand-balanced to end at the same height. */}
         <div className="grid content-start gap-3">
-          {identityWhoSlot}
-          {identityPhysicalSlot}
-          {identitySocialsSlot}
-          {identityQuestionnaireSlot}
+          <div className="contents" data-studio-identity="who">{identityWhoSlot}</div>
+          <div className="contents" data-studio-identity="physical">{identityPhysicalSlot}</div>
+          <div className="contents" data-studio-identity="socials">{identitySocialsSlot}</div>
+          <div className="contents" data-studio-identity="words">{identityQuestionnaireSlot}</div>
         </div>
         <div className="grid content-start gap-3">
-          {identityCreatorSlot}
-          {identityBehaviourSlot}
-          {identityRhythmSlot}
-          {identityLifeSlot}
-          {identityContentSlot}
-          {identityVibeSlot}
-          {identityLimitsSlot}
+          <div className="contents" data-studio-identity="creator">{identityCreatorSlot}</div>
+          <div className="contents" data-studio-identity="behaviour">{identityBehaviourSlot}</div>
+          <div className="contents" data-studio-identity="rhythm">{identityRhythmSlot}</div>
+          <div className="contents" data-studio-identity="life">{identityLifeSlot}</div>
+          <div className="contents" data-studio-identity="content">{identityContentSlot}</div>
+          <div className="contents" data-studio-identity="vibe">{identityVibeSlot}</div>
+          <div className="contents" data-studio-identity="limits">{identityLimitsSlot}</div>
         </div>
+        {studio && <><IdentityLifeCard onChange={onStudioPanelChange} /><IdentityBoundaryLink onChange={onStudioPanelChange} /></>}
       </div>
 
       {/* ── CONFIG ──────────────────────────────────────────────── */}
-      <div className={show("config")}>
+      <div className={`${show("config")} ${studio ? studioStyles.configuration : ""}`}>
       {mode === "edit" && <ConfigRuntimeOverview cfg={cfg} clone={clone} isAgency={isAgency} readOnly={readOnly} />}
       <div className={mode === "edit" ? "grid min-w-0 gap-4" : "contents"}>
       <ConfigModule
+        studio={studio}
         editMode={mode === "edit"}
         id="config-runtime"
         title="Runtime & connection"
@@ -603,7 +615,7 @@ export default function ConfigSections({
             this column exists to remove. NULL until a business connection has
             been observed, so create mode never shows it. */}
         {mode === "edit" && (
-          <div className="block">
+          <div className="block" data-studio-field="account">
             <FieldLabel
               label="Business account"
               hint="The @handle fans actually message, read from the Telegram business connection itself. This is not the bot's own @username and it is not typed here, so it cannot drift from the real one. Blank means no business connection has been seen yet; it fills in on the next inbound fan message."
@@ -689,11 +701,13 @@ export default function ConfigSections({
             "AI mode" label above, shown only when Smart is selected. */}
         </div>
       </Section>
+      {studio && <StudioLink panel="connection" onChange={onStudioPanelChange}>Connection settings & credentials</StudioLink>}
       </ConfigModule>
 
       {/* Media types, the voice ID and the AI-disclosure toggle used to be a
           whole separate tab holding three thin cards. It's one card. */}
       <ConfigModule
+        studio={studio}
         editMode={mode === "edit"}
         id="config-capabilities"
         title="Media & delivery capabilities"
@@ -847,6 +861,7 @@ export default function ConfigSections({
           is an operator dial for HOW she behaves, not a fact a fan could ask
           about, so it's Config. */}
       <ConfigModule
+        studio={studio}
         editMode={mode === "edit"}
         id="config-calibration"
         title="Response calibration"
@@ -976,6 +991,7 @@ export default function ConfigSections({
           to "tone dials" above) matches this file's one-card-per-topic
           convention without inventing a taxonomy per field. */}
       <ConfigModule
+        studio={studio}
         editMode={mode === "edit"}
         id="config-policy"
         title="Interaction policy"
@@ -1077,6 +1093,7 @@ export default function ConfigSections({
         {/* Timing (memory window moved to Advanced — not something touched
             setting up a fresh clone). */}
         <ConfigModule
+        studio={studio}
           editMode={mode === "edit"}
           id="config-delivery"
           title="Delivery mechanics"
@@ -1169,6 +1186,7 @@ export default function ConfigSections({
         </ConfigModule>
 
         <ConfigModule
+        studio={studio}
           editMode={mode === "edit"}
           id="config-models"
           title="Model routing"
@@ -1219,6 +1237,7 @@ export default function ConfigSections({
         )}
         </ConfigModule>
       </div>
+      {studio && <ConfigurationMore onChange={onStudioPanelChange} />}
       </div>
 
       {/* ── ADVANCED - power-user settings, nobody touches these configuring
@@ -1951,7 +1970,7 @@ export default function ConfigSections({
           tab instead, inside the same <form>. Create mode keeps them here. */}
       {showMoney && (
         <div className={show("money")}>
-          <MonetizationSections cfg={cfg} set={set} clone={clone} photos={photos} videos={videos} bundles={bundles} editMode={mode === "edit"} />
+          <MonetizationSections cfg={cfg} set={set} clone={clone} photos={photos} videos={videos} bundles={bundles} editMode={mode === "edit"} studio={studio} onStudioPanelChange={onStudioPanelChange} />
           {/* The monetization-sequence cards (tease/locked bundle & re-warm,
               proactive PPV, discount trigger gating, paywall warmup & unlock
               bonus, pre-lock tease, post-lock re-engagement) were removed on
@@ -1978,6 +1997,8 @@ export function MonetizationSections({
   videos = [],
   bundles = [],
   editMode = false,
+  studio = false,
+  onStudioPanelChange,
 }: {
   cfg: CloneConfigState;
   set: SetConfig;
@@ -1989,9 +2010,12 @@ export function MonetizationSections({
   videos?: MediaRow[];
   bundles?: BundleRow[];
   editMode?: boolean;
+  studio?: boolean;
+  onStudioPanelChange?: (panel: string) => void;
 }) {
   return (
-    <div className={editMode ? "contents [&>section]:rounded-[4px] [&>section]:border-l [&>section]:shadow-none [&>div]:rounded-[4px] [&>div]:border-l [&_button]:rounded-[3px] [&_input]:rounded-[3px] [&_select]:rounded-[3px] [&_textarea]:rounded-[3px] [&_.clone-segmented]:rounded-[3px] [&_.clone-segmented>button]:rounded-[2px]" : "contents"}>
+    <div data-studio-money-root={studio || undefined} className={editMode ? "contents [&>section]:rounded-[4px] [&>section]:border-l [&>section]:shadow-none [&>div]:rounded-[4px] [&>div]:border-l [&_button]:rounded-[3px] [&_input]:rounded-[3px] [&_select]:rounded-[3px] [&_textarea]:rounded-[3px] [&_.clone-segmented]:rounded-[3px] [&_.clone-segmented>button]:rounded-[2px]" : "contents"}>
+      {studio && <MoneyJourney clone={clone} cfg={cfg} />}
       {/* ── 💬 Credits & paywall ─────────────────────────────────── */}
       <Section
         icon={editMode ? undefined : "💬"}
@@ -2002,6 +2026,8 @@ export function MonetizationSections({
       >
         {/* Charge toggle and the three price fields on one row instead of four
             stacked rows. */}
+        <div data-studio-money="pricing" className="contents">
+        {studio && <StudioHeading icon="tips" title="Message credits & pricing" description="Configure message credits and what they cost." />}
         <div className="grid grid-cols-1 gap-2 sm:grid-cols-4">
           <Toggle label={cfg.charge ? "Charge for messages" : "Messages are free"} name="charge_messages" checked={cfg.charge} onChange={(v) => set("charge", v)} accent="soft" />
           {cfg.charge ? (
@@ -2033,7 +2059,7 @@ export function MonetizationSections({
             would then rewrite the mode on every save made with charging off. */}
         <div className="border-t border-line pt-2">
           <Segmented
-            label="If she invents a price"
+            label={studio ? "Unrecognised prices" : "If she invents a price"}
             name="price_guard_mode"
             value={cfg.priceGuardMode}
             onChange={(v) => set("priceGuardMode", v)}
@@ -2042,6 +2068,10 @@ export function MonetizationSections({
             hint="Every price on a Pay button is computed in code and is always correct. This is about the prices she TYPES in chat. On 2026-07-31 she was measured telling a fan photos 'start at 1000 stars' when they are 40 to 90, and quoting a video price for a creator with no videos. Telling her not to, in her prompt, did not work. This is the code check that does. Leave it on Block. Hover a step to see exactly what each one does."
           />
         </div>
+        </div>
+        {studio && <PaywallPreview clone={clone} cfg={cfg} onChange={onStudioPanelChange} />}
+        <div data-studio-money="message" className="contents">
+        {studio && <StudioHeading icon="messages" title="Out-of-messages experience" />}
         <div className="border-t border-line pt-2">
           <SubHead
             emoji={editMode ? "" : "🚧"}
@@ -2111,8 +2141,11 @@ export function MonetizationSections({
           </div>
         </div>
 
+        </div>
+        <div data-studio-money="journey" className="contents">
+        {studio && <StudioHeading icon="connection" title="Paywall journey" description="Control the flow before and after a purchase." />}
         {/* ── Warmup before the wall (pre-lock prime, migration 069) ──────── */}
-        <div className="border-t border-line pt-2">
+        <div className="border-t border-line pt-2" data-studio-phase="warmup">
           <SubHead
             emoji={editMode ? "" : "🔥"}
             label="Warmup before the wall"
@@ -2171,7 +2204,7 @@ export function MonetizationSections({
         </div>
 
         {/* ── Pick up after they pay (post-lock resume, migration 069) ────── */}
-        <div className="border-t border-line pt-2">
+        <div className="border-t border-line pt-2" data-studio-phase="resume">
           <SubHead
             emoji={editMode ? "" : "💝"}
             label="Pick up after they pay"
@@ -2238,16 +2271,20 @@ export function MonetizationSections({
             </div>
           )}
         </div>
+        {studio && <StudioLink panel="messages" onChange={onStudioPanelChange}>Edit journey messages</StudioLink>}
+        </div>
       </Section>
 
       {/* Category pricing moved to the Advanced tab 2026-07-26 — sensible
           defaults ship out of the box, so it's a power-user override, not
           something touched configuring a fresh clone. */}
 
+      <div data-studio-money="tips" className="contents">
       {/* ── 🎁 Tips (own box) ────────────────────────────────────── */}
       <Collapse
         emoji={editMode ? "" : "🎁"}
-        label="Tips"
+        label={studio ? "Tips & appreciation" : "Tips"}
+        defaultOpen={studio}
         accent={editMode ? "neutral" : "amber"}
         filled={cfg.tips}
         hint="She can ask to be spoiled with Stars. Always recorded as tip revenue. It can also give him message credits back, at the rate you set below, which is off until you set it. The spoil menu is what he sees when he wants to tip but names no amount."
@@ -2271,7 +2308,7 @@ export function MonetizationSections({
           min={0}
           step={1}
           defaultValue={clone?.tip_credits_per_100_stars ?? 0}
-          hint="What a tip gives him back in message credits. 0 means a tip gives no credits, which is the default and what every creator did before this field existed. At 5, a 1000 star tip gives him 50 messages. The amount is always computed from this number, never decided by the AI, and it is rounded DOWN so a tip too small to earn a credit earns none. This is deliberately NOT tied to your pack price: it is a separate rate you control."
+          hint=") + "
         />
         {/* Migration 084, the two tip re-ask brakes. Rendered unconditionally,
             NOT behind cfg.tips like the spoil menu below: a hidden Toggle posts
@@ -2310,7 +2347,8 @@ export function MonetizationSections({
           as a single card. */}
       <Collapse
         emoji={editMode ? "" : "💌"}
-        label="Extras"
+        label={studio ? "After purchase" : "Extras"}
+        defaultOpen={studio}
         accent={editMode ? "neutral" : "cyan"}
         filled={cfg.thankYou}
         hint="Automatic follow-ups after money changes hands."
@@ -2324,8 +2362,10 @@ export function MonetizationSections({
           onChange={(v) => set("thankYou", v)}
         />
       </Collapse>
+      </div>
 
     </div>
   );
 }
+
 

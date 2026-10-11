@@ -1,0 +1,45 @@
+name: FLIRT shared workspace verification
+on:
+  push:
+    branches: ["codex/flirt-shared-operator-workspace", "flirt/independent-backend-2026-09-19"]
+    paths:
+      - "components/**"
+      - "app/**"
+      - "lib/**"
+      - "scripts/check-creator-studio.tsx"
+      - "scripts/check-operator-workspace-ui.mjs"
+      - ".github/workflows/flirt-workspace-ui.yml"
+  pull_request:
+    branches: ["flirt/independent-backend-2026-09-19"]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  workspace:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: "22", cache: npm }
+      - run: npm ci
+      - name: Submitted fields and draft retention
+        run: node --import tsx scripts/check-creator-studio.tsx
+      - name: Retained sidebar and partner access
+        run: node --import tsx scripts/check-sidebar-layout.tsx
+      - name: Install browser for interface verification
+        run: npx playwright install --with-deps chromium
+      - name: FLIRT desktop and mobile configuration checks
+        run: node scripts/check-operator-workspace-ui.mjs
+      - name: Configuration review screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: flirt-shared-workspace-preview
+          path: test-results/operator-workspace
+          retention-days: 3
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Build
+        run: npm run build
+        env: { NEXT_TELEMETRY_DISABLED: "1" }

@@ -1,5 +1,5 @@
 {
-  "reason": "Use each creator's existing reviewed face crop in the agency shortcuts",
-  "source_commit": "3d482fdf24fe371536e03468cfd00859f112ad1b",
-  "requested_at": "2026-10-11T08:48:05.503Z"
+  "reason": "Apply the shared Twin workspace layout to FLIRT creator configuration, flows and remaining operator pages, with FLIRT branding and retained navigation, fields and access boundaries.",
+  "source_commit": "92fad5072717e0bfc29ae983cfe22c43cc5857f3",
+  "requested_at": "2026-10-11T13:44:44.059Z"
 }

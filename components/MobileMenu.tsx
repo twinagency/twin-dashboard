@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useDashboardAccess } from "./DashboardAccessProvider";
+import { isDashboardWorkspaceRoute } from "@/lib/dashboard-creator-route";
 import { usePathname } from "next/navigation";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
@@ -11,6 +13,8 @@ import { SidebarContent } from "@/components/Sidebar";
 // clone-gated behavior identical at every breakpoint.
 export default function MobileMenu({ activeCloneId }: { activeCloneId: string | null }) {
   const pathname = usePathname();
+  const { isCreator } = useDashboardAccess();
+  const studio = !isCreator && isDashboardWorkspaceRoute(pathname);
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -60,6 +64,7 @@ export default function MobileMenu({ activeCloneId }: { activeCloneId: string | 
           />
           <aside
             id="mobile-sidebar"
+            data-studio-sidebar={studio || undefined}
             role="dialog"
             aria-modal="true"
             aria-label="Main navigation"

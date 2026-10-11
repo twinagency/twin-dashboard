@@ -1,4 +1,5 @@
 "use client";
+import { isDashboardWorkspaceRoute, isCreatorStudioRoute } from "@/lib/dashboard-creator-route";
 import { useDashboardAccess } from "./DashboardAccessProvider";
 import { agencyDashboardPath } from "@/lib/agency-policy";
 import { isMoxy } from "@/lib/agency-brand";
@@ -261,8 +262,8 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
   // /creator is the creator Earnings page, not a parent navigation section.
   // Exact matching prevents Earnings staying highlighted on all five child
   // routes at the same time as their own item.
-  const isGlobalActive = (href: string) => pathname === href || (!isCreator && href !== "/" && pathname.startsWith(href + "/"));
-  const onConfigurePage = activeCloneId ? pathname === `/clones/${activeCloneId}` : false;
+  const isGlobalActive = (href: string) => (pathname === href || (!isCreator && href !== "/" && pathname.startsWith(href + "/"))) && !(href === "/clones" && isCreatorStudioRoute(pathname));
+  const onConfigurePage = isCreatorStudioRoute(pathname);
   const pickClone = () => { onNavigate?.(); window.setTimeout(() => openCloneSwitcher(), 0); };
 
   const navLabel = (link: NavLink, colors: (typeof LINK_COLOR_CLASSES)[LinkColor]) => {
@@ -279,12 +280,12 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
       return <div aria-disabled="true" className={rowClass + " cursor-not-allowed text-white/45"}><Icon d={PATHS[link.icon]} className="h-[18px] w-[18px] text-white/35" /><span className="flex-1">{link.label}</span><span className="whitespace-nowrap rounded border border-white/15 px-1.5 py-0.5 text-[9px] font-medium text-white/60">Not available</span></div>;
     }
     if (link.kind === "tab") {
-      const active = onConfigurePage && activeTab === link.tab;
+      const active = onConfigurePage && (isFlirtOwner && link.tab === "identity" ? activeTab !== "ppvs" : activeTab === link.tab);
       if (!activeCloneId) return <button type="button" onClick={pickClone} title="Pick a creator first" className={rowClass + " " + colors.idle}>{navLabel(link, colors)}</button>;
       return <Link href={`/clones/${activeCloneId}?tab=${link.tab}`} onClick={onNavigate} aria-current={active ? "page" : undefined} className={rowClass + " " + (active ? colors.active : colors.idle)}>{navLabel(link, colors)}</Link>;
     }
     if (link.gateOnClone && !activeCloneId) return <button type="button" onClick={pickClone} title="Pick a creator first" className={rowClass + " " + colors.idle}>{navLabel(link, colors)}</button>;
-    return <Link href={link.href} onClick={onNavigate} aria-current={isGlobalActive(link.href) ? "page" : undefined} className={rowClass + " " + (isGlobalActive(link.href) ? colors.active : colors.idle)}>{navLabel(link, colors)}</Link>;
+    return <Link href={link.href} onClick={onNavigate} aria-current={isGlobalActive(link.href) && !(link.href === "/clones" && onConfigurePage) ? "page" : undefined} className={rowClass + " " + (isGlobalActive(link.href) ? colors.active : colors.idle)}>{navLabel(link, colors)}</Link>;
   };
 
   return <>
@@ -296,6 +297,8 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
 }
 
 export default function Sidebar({ clones: _clones, activeCloneId }: { clones: CloneLite[]; activeCloneId: string | null }) {
-  return <aside className="dashboard-sidebar sticky top-0 hidden h-screen w-72 shrink-0 flex-col lg:flex"><SidebarContent activeCloneId={activeCloneId} /></aside>;
+  const { isCreator } = useDashboardAccess();
+  const studio = !isCreator && isDashboardWorkspaceRoute(usePathname());
+  return <aside data-studio-sidebar={studio || undefined} className="dashboard-sidebar sticky top-0 hidden h-screen w-72 shrink-0 flex-col lg:flex"><SidebarContent activeCloneId={activeCloneId} /></aside>;
 }
 

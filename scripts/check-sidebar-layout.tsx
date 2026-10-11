@@ -9,6 +9,7 @@ import * as agencyPolicy from "../lib/agency-policy";
 import * as agencyBrand from "../lib/agency-brand";
 import * as portals from "../lib/partner-portals";
 import * as creatorPolicy from "../lib/creator-dashboard-policy";
+import * as workspaceRoutes from "../lib/dashboard-creator-route";
 
 // Render the actual shared desktop/mobile content with isolated navigation.
 // No credentials, database calls or messages are used by these fixtures.
@@ -38,6 +39,7 @@ const wordmark = compile("components/TwinWordmark.tsx", {
   "@/components/IntelligenceCoreIcon": core,
 });
 const components = compile("components/Sidebar.tsx", {
+  "@/lib/dashboard-creator-route": workspaceRoutes,
   "./DashboardAccessProvider": accessModule,
   "@/lib/agency-policy": agencyPolicy,
   "@/lib/agency-brand": agencyBrand,

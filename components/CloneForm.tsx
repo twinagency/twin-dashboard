@@ -3,7 +3,7 @@ import { AdminOnly, ManagerOnly, ReadOnlyEditor, useDashboardAccess } from "./Da
 import { isMoxy } from "@/lib/agency-brand";
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
+import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { LoaderCircle } from "lucide-react";
 import type { Clone } from "@/lib/types";
 import type { PromptPreview } from "@/lib/compiler";
@@ -16,15 +16,16 @@ import MediaManager from "@/app/media/MediaManager";
 import FlowGraph from "./flow/FlowGraph";
 import type { CloneCfg } from "./flow/graph";
 import ConfigSections from "./clone/ConfigSections";
+import { STUDIO_PAGES, StudioNavigation, isStudioTab, resolveStudioPanel } from "./clone/CreatorStudio";
+import studioStyles from "./clone/CreatorStudio.module.css";
+import BlurToggle from "./BlurToggle";
 import { FieldLabel, Modal, Section } from "./clone/fields";
 import { useCloneConfig } from "./clone/useCloneConfig";
 import { updateClone, deleteClone } from "@/app/clones/actions";
 import { Button } from "./ui/button";
 import {
-  ControlPlaneInspector,
   ControlPlaneNavigation,
-  ControlPlaneWorkspaceHeader,
-  CreatorControlPlaneHeader,
+  CreatorStudioStatus,
   ReadOnlyControlPlaneNotice,
   type ControlPlaneTab,
 } from "./clone/CreatorControlPlaneShell";
@@ -154,14 +155,31 @@ export default function CloneForm({
   appearanceColor: string;
 }) {
   const router = useRouter();
-  const {agencyName, isAgency, readOnly} = useDashboardAccess();
+  const pathname = usePathname();
+  const {agencyName, readOnly} = useDashboardAccess();
   const searchParams = useSearchParams();
   const formRef = useRef<HTMLFormElement>(null);
   const baselineRef = useRef<FormSnapshot>({});
   const dirtyFrameRef = useRef<number | null>(null);
   const tabParam = searchParams.get("tab");
   const subParam = searchParams.get("sub");
-  const [tab, setTab] = useState<Tab>(resolveTab(tabParam, subParam));
+  const tab = resolveTab(tabParam, subParam);
+  const studioPanel = resolveStudioPanel(tab, searchParams.get("panel"));
+  const changeStudioPanel = (panel: string) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", tab);
+    params.delete("sub");
+    if (panel === "overview") params.delete("panel"); else params.set("panel", panel);
+    window.history.pushState(null, "", `${pathname}?${params.toString()}`);
+  };
+  const changeTab = (nextTab: Tab) => {
+    const params = new URLSearchParams(searchParams.toString());
+    params.set("tab", nextTab);
+    params.delete("sub");
+    if (nextTab !== tab) params.delete("panel");
+    const href = `${pathname}?${params.toString()}`;
+    if (href !== `${pathname}?${searchParams.toString()}`) window.history.pushState(null, "", href);
+  };
   const [models, setModels] = useState<OrModel[]>([]);
   const [step, setStep] = useState<Step>("idle");
   const [errorMsg, setErrorMsg] = useState("");
@@ -176,12 +194,6 @@ export default function CloneForm({
     fetch("/api/models").then((r) => r.json()).then((d) => Array.isArray(d) && setModels(d)).catch(() => {});
   }, [agencyName]);
 
-  // The sidebar deep-links via ?tab= — clicking one doesn't remount CloneForm
-  // (same route, just a query change), so pick the change up here.
-  useEffect(() => {
-    const next = resolveTab(tabParam, subParam);
-    if (next !== tab) setTab(next);
-  }, [tabParam, subParam]);
 
   const refreshDirtyState = useCallback(() => {
     const current = snapshotForm(formRef.current);
@@ -283,18 +295,15 @@ export default function CloneForm({
   const formId = "creator-control-plane-form";
 
   return (
-    <div className="creator-control-plane grid min-w-0 gap-4 font-sans">
-      <CreatorControlPlaneHeader
-        clone={clone}
-        cfg={cfg}
-        imageUrl={appearanceImageUrl}
-      />
+    <div data-creator-studio={tab} className={`creator-control-plane grid min-w-0 gap-4 font-sans ${studioStyles.page}`}>
+      <header className={studioStyles.pageHeader}><div><p><span className="creator-name">{clone.stage_name || clone.name}</span> / Creator configuration</p><h1>{isStudioTab(tab) ? STUDIO_PAGES[tab].title : tab === "ppvs" ? "PPV library" : tab === "view" ? "System view" : "Advanced"}</h1><small>{isStudioTab(tab) ? STUDIO_PAGES[tab].subtitle : tab === "ppvs" ? "Manage this creator’s photos, videos and bundles." : tab === "view" ? "Flow map and compiled prompts for this creator." : "Runtime, delivery and advanced creator settings."}</small></div><BlurToggle /></header>
+      <CreatorStudioStatus clone={clone} cfg={cfg} />
 
-      <ControlPlaneNavigation tab={tab} onTabChange={setTab} />
+      <ControlPlaneNavigation tab={tab} onTabChange={changeTab} />
 
-      <div className="grid min-w-0 gap-4 2xl:grid-cols-[minmax(0,1fr)_17rem]">
+      <div className="min-w-0">
         <main className="min-w-0">
-          <ControlPlaneWorkspaceHeader tab={tab} />
+          {isStudioTab(tab) && <StudioNavigation tab={tab} panel={studioPanel} onChange={changeStudioPanel} />}
 
           {/* Identity, Configuration, Monetization and Advanced remain one
               mounted form. Hiding a domain is CSS-only because updateClone
@@ -319,8 +328,11 @@ export default function CloneForm({
                   clone={clone}
                   models={models}
                   mode="edit"
+                  studio
+                  studioPanel={studioPanel}
+                  onStudioPanelChange={changeStudioPanel}
                   tab={tab}
-                  onTabChange={(nextTab) => setTab(nextTab as Tab)}
+                  onTabChange={(nextTab) => changeTab(nextTab as Tab)}
                   extraTabs={EXTRA_TABS}
                   photos={photos}
                   videos={videos}
@@ -328,24 +340,25 @@ export default function CloneForm({
                   identityWhoSlot={
                     <>
                       <CloneAppearanceEditor
+                        studio
                         cloneName={clone.name}
                         initialColor={appearanceColor}
                         initialImagePath={clone.intake?.appearance?.profile_image_path ?? null}
                         initialImageUrl={appearanceImageUrl}
                       />
-                      <PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="who" cfg={cfg} set={set} />
+                      <PersonaFactsFields studio clone={clone} legacyFields={clone.intake?.fields} part="who" cfg={cfg} set={set} />
                     </>
                   }
-                  identityCreatorSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="creator" cfg={cfg} set={set} />}
-                  identityPhysicalSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="physical" cfg={cfg} set={set} />}
-                  identitySocialsSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="socials" cfg={cfg} set={set} />}
-                  identityVibeSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="vibe" cfg={cfg} set={set} />}
-                  identityBehaviourSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="behaviour" cfg={cfg} set={set} />}
-                  identityRhythmSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="rhythm" cfg={cfg} set={set} />}
-                  identityLifeSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="life" cfg={cfg} set={set} />}
-                  identityContentSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="content" cfg={cfg} set={set} />}
-                  identityImperfectionSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="imperfection" cfg={cfg} set={set} />}
-                  identityLimitsSlot={<PersonaFactsFields clone={clone} legacyFields={clone.intake?.fields} part="limits" cfg={cfg} set={set} />}
+                  identityCreatorSlot={<PersonaFactsFields studio clone={clone} legacyFields={clone.intake?.fields} part="creator" cfg={cfg} set={set} />}
+                  identityPhysicalSlot={<PersonaFactsFields studio clone={clone} legacyFields={clone.intake?.fields} part="physical" cfg={cfg} set={set} />}
+                  identitySocialsSlot={<PersonaFactsFields studio clone={clone} legacyFields={clone.intake?.fields} part="socials" cfg={cfg} set={set} />}
+                  identityVibeSlot={<PersonaFactsFields studio clone={clone} legacyFields={clone.intake?.fields} part="vibe" cfg={cfg} set={set} />}
+                  identityBehaviourSlot={<PersonaFactsFields studio clone={clone} legacyFields={clone.intake?.fields} part="behaviour" cfg={cfg} set={set} />}
+                  identityRhythmSlot={<PersonaFactsFields studio clone={clone} legacyFields={clone.intake?.fields} part="rhythm" cfg={cfg} set={set} />}
+                  identityLifeSlot={<PersonaFactsFields studio clone={clone} legacyFields={clone.intake?.fields} part="life" cfg={cfg} set={set} />}
+                  identityContentSlot={<PersonaFactsFields studio clone={clone} legacyFields={clone.intake?.fields} part="content" cfg={cfg} set={set} />}
+                  identityImperfectionSlot={<PersonaFactsFields studio clone={clone} legacyFields={clone.intake?.fields} part="imperfection" cfg={cfg} set={set} />}
+                  identityLimitsSlot={<PersonaFactsFields studio clone={clone} legacyFields={clone.intake?.fields} part="limits" cfg={cfg} set={set} />}
                   identityQuestionnaireSlot={
                     <Section
                       title="Her own words"
@@ -402,20 +415,12 @@ export default function CloneForm({
           </div>
         </main>
 
-        <ControlPlaneInspector
-          tab={tab}
-          clone={clone}
-          cfg={cfg}
-          promptBlocks={promptPreview.blocks}
-          mediaCounts={mediaCounts}
-          showModelDetails={!isAgency && !readOnly}
-        />
       </div>
 
       <ManagerOnly>
         <div
           data-control-plane-save-bar
-          className={editableTab ? "pointer-events-none mt-4 lg:sticky lg:bottom-4 lg:z-40" : "hidden"}
+          className={editableTab ? `pointer-events-none mt-4 lg:sticky lg:bottom-4 lg:z-40 ${studioStyles.saveDock}` : "hidden"}
         >
           <div className="pointer-events-auto grid gap-2 rounded-[3px] border border-ink/25 bg-panel px-3 py-3 sm:px-4 lg:flex lg:items-center lg:justify-between lg:bg-panel/95 lg:py-2.5 lg:shadow-[0_8px_24px_rgb(21_32_51/0.1)] lg:backdrop-blur-xl">
             <div className="hidden min-w-0 items-center gap-3 lg:flex">
@@ -436,7 +441,7 @@ export default function CloneForm({
               {step === "done" && <span className="col-span-2 text-xs font-medium text-good lg:col-auto">Saved</span>}
               {step === "save-error" && <span className="col-span-2 truncate text-xs text-crit lg:col-auto lg:max-w-64">{errorMsg}</span>}
               <Button type="button" variant="outline" onClick={openReview} disabled={!changedFields.length || busy} className="w-full lg:w-auto">
-                Review
+                Review changes
               </Button>
               <Button type="submit" form={formId} disabled={busy} className="w-full lg:w-auto">
                 {isPaused ? "Save paused" : "Save changes"}

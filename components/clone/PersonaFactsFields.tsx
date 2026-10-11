@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { MessageCircle, UserRound } from "lucide-react";
 import type { Clone, SocialRow } from "@/lib/types";
 import { Area, Collapse, Field, FieldLabel, Segmented, SubHead, TagInput, Toggle, MultiSelect, inputCls, selectCls } from "./fields";
 import { VIBE_PRESETS } from "@/lib/vibes";
@@ -466,10 +467,12 @@ export default function PersonaFactsFields({
   clone,
   legacyFields,
   part = "all",
+  studio = false,
   cfg,
   set,
 }: {
   clone?: Partial<Clone> | null;
+  studio?: boolean;
   legacyFields?: Record<string, string> | null;
   // Only the "imperfection" part reads these — the four level dials are
   // controlled state (same Level pattern as sexualLevel/nsfwLevel/etc in
@@ -596,7 +599,7 @@ export default function PersonaFactsFields({
     cfg.doubleTextLevel !== "never";
 
   return (
-    <div className="identity-console-scope contents">
+    <div className="identity-console-scope contents" data-persona-part={part}>
       {/* Marker: tells the save action the typed widgets were on this form.
           Only the facts pass renders it, so it is never duplicated. */}
       {showWho && <input type="hidden" name="persona_facts" value="1" />}
@@ -604,7 +607,7 @@ export default function PersonaFactsFields({
       {showWho && (
       <Collapse
         emoji="🪪"
-        label="Who she is"
+        label={studio ? <><UserRound size={22} />Who she is</> : "Who she is"}
         accent="cyan"
         defaultOpen
         filled={whoFilled}
@@ -916,7 +919,7 @@ export default function PersonaFactsFields({
       {showVibe && (
       <Collapse
         emoji="✨"
-        label="Vibe & nicknames"
+        label={studio ? <><MessageCircle size={22} />Personality & expression</> : "Vibe & nicknames"}
         accent="pink"
         defaultOpen
         filled={vibeFilled}
@@ -1213,3 +1216,4 @@ export default function PersonaFactsFields({
     </div>
   );
 }
+
