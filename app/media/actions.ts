@@ -9,6 +9,7 @@ import type { AnalysisResult } from "@/lib/media-analysis-contract";
 import {
   analysisRowFields,
   applyFactEdit,
+  completeReviewUpdate,
   insertMediaRowWithFallback,
   isMissingColumnError,
   priceForAnalysis,
@@ -150,11 +151,13 @@ async function updateMediaRow(table: "photos" | "videos", id: string, cloneId: s
   if (error) throw new Error(error.message);
 }
 
-// A manual edit of any fact field protects the row from automatic repair (metadata_edited_at). Only a value that actually
-// changed counts, so re-saving an untouched form does not, hence the read before the write.
+// A manual edit of any fact field protects the row from automatic repair (metadata_edited_at) and carries the correction into
+// visual_facts, which the bots match on (applyFactEdit). Only a value that actually changed counts, so re-saving an untouched form
+// does not, hence the read before the write. analysis_status is never written by an edit: see completeReview.
 async function markIfFactsEdited(table: "photos" | "videos", id: string, cloneId: string, update: Record<string, unknown>): Promise<void> {
   const select = (cols: string) => supabaseAdmin.from(table).select(cols).eq("id", id).eq("clone_id", cloneId).maybeSingle();
-  let { data, error } = await select("caption, tags, auto_desc, visual_description, explicitness, is_nude, nsfw");
+  let { data, error } = await select("caption, tags, auto_desc, visual_description, explicitness, is_nude, nsfw, visual_facts, analysis_status");
+  if (error && isMissingColumnError(error.message)) ({ data, error } = await select("caption, tags, auto_desc, visual_description, explicitness, is_nude, nsfw"));
   if (error && isMissingColumnError(error.message)) ({ data, error } = await select("caption, tags, auto_desc, explicitness, is_nude, nsfw"));
   if (error) throw new Error(error.message);
   applyFactEdit(data as unknown as Record<string, unknown> | null, update);
@@ -426,6 +429,25 @@ export async function updateVideo(
   if (fd.has("visual_description")) update.visual_description = stripBannedDashes(String(fd.get("visual_description") ?? "")) || null;
   await markIfFactsEdited("videos", videoId, cloneId, update);
   await updateMediaRow("videos", videoId, cloneId, update);
+  revalidatePath("/media");
+}
+
+// ── Mark a needs_review item as reviewed ─────────────────────────────────────
+// The ONLY way a needs_review item becomes analysed (so matchable and trusted by the bots). Edits never do it. Deliberately has no
+// missing-column fallback: if the analysis columns are not migrated there is nothing to approve, and a silent no-op would lie.
+export async function completeReview(cloneId: string, id: string, kind: "photo" | "video") {
+  await guardDashboardAction("app/media/actions.ts#completeReview", [cloneId, id, kind]);
+  const table = kind === "photo" ? "photos" : kind === "video" ? "videos" : null;
+  if (!table) throw new Error("Invalid media type");
+  const { data, error } = await supabaseAdmin.from(table).select("analysis_status, visual_facts").eq("id", id).eq("clone_id", cloneId).maybeSingle();
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error("Item not found");
+  const update = completeReviewUpdate(data as unknown as Record<string, unknown>);
+  // Guarded on the status read above: a concurrent change makes this a no-op error rather than an approval of something else.
+  const { data: done, error: writeError } = await supabaseAdmin.from(table).update(update).eq("id", id).eq("clone_id", cloneId)
+    .eq("analysis_status", "needs_review").select("id");
+  if (writeError) throw new Error(writeError.message);
+  if (!done?.length) throw new Error("The item changed while you were reviewing it. Reload and try again.");
   revalidatePath("/media");
 }
 

@@ -114,12 +114,16 @@ export async function guardDashboardAction(action: string, args: unknown[]): Pro
   }
   if (file === "app/media/actions.ts") {
     if (name === "getSignedUrl") { assignedStoragePath(access,args[0]); return; }
-    const allowed=["uploadPhoto","uploadVideo","updatePhoto","updateVideo","deletePhoto","deleteVideo","bulkSetMediaPrice","bulkDeleteMedia","createBundle","updateBundle","deleteBundle","addBundleItem","removeBundleItem","updateCategoryPricing","previewRepriceMedia","repriceMedia"];
+    const allowed=["uploadPhoto","uploadVideo","updatePhoto","updateVideo","completeReview","deletePhoto","deleteVideo","bulkSetMediaPrice","bulkDeleteMedia","createBundle","updateBundle","deleteBundle","addBundleItem","removeBundleItem","updateCategoryPricing","previewRepriceMedia","repriceMedia"];
     if (!allowed.includes(name)) throw new Error("Administrator access required");
     const cloneId=assignedClone(access,args[name === "addBundleItem" ? 1 : 0]);
     if (["updatePhoto","deletePhoto","updateVideo","deleteVideo"].includes(name)) {
       const row=await ownedResource(access,name.endsWith("Photo") ? "photos" : "videos",args[1],cloneId);
       if (name.startsWith("delete") && args[2] !== row.storage_path) throw new Error("Media path does not match the selected item");
+    }
+    if (name === "completeReview") {
+      if (args[2] !== "photo" && args[2] !== "video") throw new Error("Invalid media type");
+      await ownedResource(access,args[2] === "photo" ? "photos" : "videos",args[1],cloneId);
     }
     if (["updateBundle","deleteBundle","addBundleItem"].includes(name)) await ownedResource(access,"photo_bundles",args[name === "addBundleItem" ? 0 : 1],cloneId);
     if (name === "removeBundleItem") {

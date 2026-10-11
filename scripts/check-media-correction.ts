@@ -91,7 +91,7 @@ const ev = (u: Record<string, unknown>) => {
 
 // ---- 6. needs_review stays needs_review until completeReview ----
 {
-  const row = stored({ analysis_status: "needs_review", visual_facts: facts({ nipples: "unclear", genitals: "yes" }) });
+  const row = stored({ analysis_status: "needs_review", visual_facts: facts({ nipples: "yes", genitals: "unclear" }) });
   const u = edit(row, { tags: ["solo", "bed"] });
   assert.equal("analysis_status" in u, false);
   assert.equal(evidenceOf(after(row, u)).trusted, false, "V2 still ignores the row");
@@ -128,7 +128,7 @@ const ev = (u: Record<string, unknown>) => {
   const actions = readFileSync(new URL("../app/media/actions.ts", import.meta.url), "utf8");
   assert.match(actions, /export async function completeReview\(/);
   assert.match(actions, /visual_facts, analysis_status/, "the pre-edit read includes the facts and status");
-  const upd = actions.slice(actions.indexOf("export async function updatePhoto"), actions.indexOf("export async function deletePhoto"));
+  const upd = actions.slice(actions.indexOf("export async function updatePhoto"), actions.indexOf("export async function completeReview"));
   assert.doesNotMatch(upd, /analysis_status/, "updatePhoto/updateVideo never write the status");
   const ui = readFileSync(new URL("../app/media/MediaManager.tsx", import.meta.url), "utf8");
   assert.match(ui, /completeReview/, "the manager offers the review action");

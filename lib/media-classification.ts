@@ -184,6 +184,31 @@ const TAGS_FROM_YES: [FactKey, string[]][] = [
   ["swimwear", ["bikini"]], ["lingerie", ["lingerie"]], ["mirror_reflection", ["mirror_selfie"]],
 ];
 
+/** The fact key each tag speaks for (inverse of TAGS_FROM_YES, plus full_nude). Used to carry an operator's tag correction into the facts. */
+export const TAG_FACT_KEY: Record<string, FactKey> = {
+  ...Object.fromEntries(TAGS_FROM_YES.flatMap(([k, tags]) => tags.map((t) => [t, k] as const))),
+  full_nude: "full_nudity",
+};
+
+const DENIAL_WORDS: [FactKey, RegExp][] = [
+  ["nipples", /\b(?:nipples?|areolas?|topless|breasts?|boobs?|tits)\b/i],
+  ["genitals", /\b(?:genitals?|genitalia|vulva|vagina|pussy|labia)\b/i],
+  ["anus", /\b(?:anus|anal|asshole)\b/i],
+  ["bare_buttocks", /\b(?:buttocks?|bare (?:ass|bum|butt)|ass)\b/i],
+];
+
+/** Anatomy keys an operator's description DENIES (a negated or covered clause that names the part: "nipples are not visible"). */
+export function deniedFactKeys(text: string): FactKey[] {
+  const denied = new Set<FactKey>();
+  const listed = text.match(/\bnot visible:\s*([^.]*)/i)?.[1] ?? ""; // the "Not visible: nipples, genitals." line the analysis itself writes
+  for (const [k, re] of DENIAL_WORDS) if (listed && re.test(listed)) denied.add(k);
+  for (const clause of text.split(CLAUSE_SPLIT).map((c) => c.trim()).filter(Boolean)) {
+    if (!NEGATED.test(clause)) continue;
+    for (const [k, re] of DENIAL_WORDS) if (re.test(clause)) denied.add(k);
+  }
+  return [...denied];
+}
+
 // anus=yes must be backed by the prose actually naming the anus (or a plug / insertion). A "yes" the description never mentions is an
 // unsupported claim: it goes to review instead of being saved as analysed (eval #40: anus=yes + 'anal' tag with silent prose).
 const ANUS_MENTIONED = /\b(?:anus|anal|asshole|butt ?plug|plug|inserted|insertion|penetrat\w*)\b/i;

@@ -1,6 +1,7 @@
 // Shared by the dashboard actions, the import scripts and the backfill: how an AnalysisResult becomes columns on photos/videos,
 // how a failed analysis is priced, and how a manual edit is detected. No server-only imports so scripts can use it.
-import { ANALYSIS_COLUMNS, FACT_FIELDS, type AnalysisResult } from "./media-analysis-contract";
+import { ANALYSIS_COLUMNS, FACT_FIELDS, type AnalysisResult, type FactKey, type VisualFacts } from "./media-analysis-contract";
+import { TAG_FACT_KEY, deniedFactKeys, descriptionProblems } from "./media-classification";
 import { normalizeSafeCategoryGuide, priceFromGuide } from "./pricing";
 
 /** Columns that may not exist yet (deploy order: dashboard can ship before the migration). A write that hits a
@@ -66,11 +67,59 @@ export function factFieldsChanged(stored: Record<string, unknown> | null, update
   return FACT_FIELDS.some((k) => Object.hasOwn(update, k) && !same(stored[k], update[k]));
 }
 
+const NUDE_KEYS: readonly FactKey[] = ["nipples", "genitals", "anus", "bare_buttocks", "full_nudity"];
+const isFactsObject = (f: unknown): f is VisualFacts =>
+  !!f && typeof f === "object" && (f as VisualFacts).v === 2 && !!(f as VisualFacts).evidence && typeof (f as VisualFacts).evidence === "object";
+
+/** The facts after an operator's correction, or null when the row has none (legacy rows: description and tags are then the only truth).
+ * Only the operator's change is applied: a tag removed that was the last one speaking for a key makes that key "no", a tag added makes
+ * it "yes", is_nude turned off makes the nudity keys "no", and a changed description that denies a part ("nipples are not visible")
+ * makes that key "no". Visible phrases that now claim a denied part are dropped. Marks the facts edited. Never touches analysis_status. */
+export function correctedFacts(stored: Record<string, unknown>, update: Record<string, unknown>, now: string): VisualFacts | null {
+  const facts = stored.visual_facts;
+  if (!isFactsObject(facts)) return null;
+  const ev = { ...facts.evidence };
+  const forKey = (tags: unknown, k: FactKey) => (Array.isArray(tags) ? tags : []).filter((t) => typeof t === "string" && TAG_FACT_KEY[t] === k);
+  if (Object.hasOwn(update, "tags")) {
+    for (const k of new Set(Object.values(TAG_FACT_KEY))) {
+      const before = forKey(stored.tags, k), afterTags = forKey(update.tags, k);
+      if (before.length && !afterTags.length && ev[k] === "yes") ev[k] = "no";
+      else if (afterTags.some((t) => !before.includes(t)) && ev[k] !== "yes") ev[k] = "yes";
+    }
+  }
+  if (update.is_nude === false && stored.is_nude !== false) {
+    for (const k of NUDE_KEYS) if (ev[k] === "yes") ev[k] = "no";
+  }
+  for (const col of ["auto_desc", "visual_description"] as const) {
+    if (!Object.hasOwn(update, col) || same(stored[col], update[col])) continue;
+    for (const k of deniedFactKeys(String(update[col] ?? ""))) if (ev[k] === "yes") ev[k] = "no";
+  }
+  const visible = (facts.visible ?? []).filter((p) => descriptionProblems(p, ev, facts.frames !== undefined).length === 0);
+  return { ...facts, evidence: ev, visible, edited: true, edited_at: now };
+}
+
 /** The ONE place a manual edit becomes row state. `stored` is the row before the edit, `update` the columns about to be written
- * (mutated). A real change to a fact field stamps metadata_edited_at (protects the row from batch repair). */
+ * (mutated). A real change to a fact field stamps metadata_edited_at (protects the row from batch repair) and brings visual_facts
+ * (what the bots match on) in line with the correction. analysis_status is never written here: an edit does not approve a row,
+ * only completeReviewUpdate does. */
 export function applyFactEdit(stored: Record<string, unknown> | null, update: Record<string, unknown>, now = new Date().toISOString()): void {
-  if (!factFieldsChanged(stored, update)) return;
+  if (!stored || !factFieldsChanged(stored, update)) return;
   update.metadata_edited_at = now;
+  const facts = correctedFacts(stored, update, now);
+  if (facts) update.visual_facts = facts;
+}
+
+/** The explicit review-complete step: needs_review -> analysed, with the facts exactly as they stand (including any correction).
+ * Throws for any other state or when there are no facts to approve. metadata_edited_at protects the approved row from batch repair. */
+export function completeReviewUpdate(stored: Record<string, unknown>, now = new Date().toISOString()): Record<string, unknown> {
+  if (stored.analysis_status !== "needs_review") throw new Error("Only an item that needs review can be marked reviewed");
+  if (!isFactsObject(stored.visual_facts)) throw new Error("This item has no analysis facts to approve");
+  return {
+    analysis_status: "analysed",
+    analysis_error: null,
+    metadata_edited_at: now,
+    visual_facts: { ...stored.visual_facts, reviewed: true, reviewed_at: now },
+  };
 }
 
 type InsertClient = { from: (table: string) => { insert: (row: Record<string, unknown>) => PromiseLike<{ error: { message: string } | null }> } };

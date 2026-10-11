@@ -21,6 +21,7 @@ import {
   uploadPhoto,
   uploadVideo,
   updatePhoto,
+  completeReview,
   updateVideo,
   deletePhoto,
   deleteVideo,
@@ -566,6 +567,29 @@ function AnalysisBadge({ status, model, provider, error }: { status?: string | n
   );
 }
 
+// Explicit approval of a needs_review item. Editing tags or text never approves; only this does (completeReview).
+function ReviewButton({ cloneId, id, kind, status }: { cloneId: string; id: string; kind: "photo" | "video"; status?: string | null }) {
+  const { readOnly } = useDashboardAccess();
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+  const router = useRouter();
+  if (status !== "needs_review" || readOnly) return null;
+  return (
+    <span className="ml-2 inline-flex items-center gap-1">
+      <button type="button" disabled={pending}
+        title="Confirms the tags and description are correct. Items waiting for review are not offered to fans until you do."
+        onClick={() => startTransition(async () => {
+          try { setError(null); await completeReview(cloneId, id, kind); router.refresh(); }
+          catch (e) { setError(String((e as Error)?.message ?? e)); }
+        })}
+        className="rounded border border-line px-2 py-0.5 text-[10px] hover:bg-muted/10 disabled:opacity-50">
+        {pending ? "Saving..." : "Mark reviewed"}
+      </button>
+      {error && <span className="text-[10px] text-crit">{error}</span>}
+    </span>
+  );
+}
+
 // Editable nudity + explicitness controls (shared by photo/video edit forms).
 function NudityFields({ isNude, explicitness }: { isNude: boolean | null; explicitness: string | null }) {
   return (
@@ -705,6 +729,7 @@ function PhotoCard({
         </div>
         <div className="mt-1">
           <AnalysisBadge status={photo.analysis_status} model={photo.analysis_model} provider={photo.analysis_provider} error={photo.analysis_error} />
+          <ReviewButton cloneId={cloneId} id={photo.id} kind="photo" status={photo.analysis_status} />
         </div>
         {photo.teaser_caption && (
           <div className="text-xs text-muted mt-1 line-clamp-2">"{photo.teaser_caption}"</div>
@@ -836,6 +861,7 @@ function VideoCard({
         </div>
         <div className="mt-1">
           <AnalysisBadge status={video.analysis_status} model={video.analysis_model} provider={video.analysis_provider} error={video.analysis_error} />
+          <ReviewButton cloneId={cloneId} id={video.id} kind="video" status={video.analysis_status} />
         </div>
         {video.teaser_caption && (
           <div className="text-xs text-muted mt-1 line-clamp-2">"{video.teaser_caption}"</div>
