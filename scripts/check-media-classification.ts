@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import {
   normalizeMediaClassification, stripBannedDashes, cleanSendCaption, descriptionProblems, notVisibleLine,
-  MEDIA_CLASSIFICATION_PROMPT, videoClassificationPrompt,
+  MEDIA_CLASSIFICATION_PROMPT, videoClassificationPrompt, sentencesUpTo,
 } from "../lib/media-classification";
 import { FACT_KEYS } from "../lib/media-analysis-contract";
-import { acceptCaption } from "../lib/send-caption";
+import { acceptCaption, inventedWords } from "../lib/send-caption";
 
 // Every key "no" = a fully clothed, plainly covered subject. Overrides turn keys on/unclear.
 const allNo = Object.fromEntries(FACT_KEYS.map((k) => [k, "no"]));
@@ -172,5 +172,66 @@ assert.equal(acceptCaption("mmm check out my ass 😈 want more?", shirt.fields.
 assert.equal(acceptCaption("my nipples are out for you 😈 want a taste?", shirt.fields.visual_facts), null, "a caption may not claim what the facts do not confirm");
 assert.equal(acceptCaption("my nipples are out for you 😈 want a taste?", nude.fields.visual_facts) !== null, true);
 assert.equal(acceptCaption("only 200 stars to unlock this one baby"), null);
+
+// ---- round 3 ----
+const evAll = (o: Record<string, string> = {}) => ({ ...allNo, ...o }) as Parameters<typeof descriptionProblems>[1];
+// thong: allowed when swimwear OR lingerie is yes, still a contradiction when neither is
+assert.deepEqual(descriptionProblems("A woman in red thong bikini bottoms.", evAll({ swimwear: "yes" })), []);
+assert.deepEqual(descriptionProblems("A woman in a black thong.", evAll({ lingerie: "yes" })), []);
+assert.ok(descriptionProblems("A woman in a black thong.", evAll()).length > 0);
+assert.ok(descriptionProblems("She wears a lace bodysuit.", evAll({ swimwear: "yes" })).length > 0, "lingerie words still need lingerie yes");
+// mirror: an object is not a claim, being in it is
+assert.deepEqual(descriptionProblems("mirror", evAll()), []);
+assert.deepEqual(descriptionProblems("A mirror hangs on the wall behind the bed.", evAll()), []);
+assert.deepEqual(descriptionProblems("There is no mirror in frame.", evAll()), []);
+for (const t of ["A mirror selfie.", "She poses in the mirror.", "She stands in front of a large mirror.", "Her reflection shows her back."]) {
+  assert.ok(descriptionProblems(t, evAll()).length > 0, t);
+  assert.deepEqual(descriptionProblems(t, evAll({ mirror_reflection: "yes" })), [], t);
+}
+// video clip narration: static camera claims
+for (const t of ["The camera is static.", "The camera angle is static.", "A static shot."]) {
+  assert.ok(descriptionProblems(t, evAll(), true).length > 0, t);
+  assert.deepEqual(descriptionProblems(t, evAll(), false), [], `${t} (photo)`);
+}
+assert.deepEqual(descriptionProblems("The camera angle is low.", evAll(), true), []);
+// headline cut: no fragment, no period glued onto one
+const c08 = "A woman with light skin and no visible hair lies on a bed in bright pink lingerie, holding her breasts in a suggestive pose across three";
+const c14 = "A woman with long dark hair and arm tattoos, wearing a white crop top and red shorts, seated and looking over her shoulder in a red-walled";
+assert.equal(sentencesUpTo(c14 + " room.", 140), "A woman with long dark hair and arm tattoos, wearing a white crop top and red shorts.");
+assert.equal(sentencesUpTo(c08 + " frames of the clip.", 140), "A woman with light skin and no visible hair lies on a bed in bright pink lingerie.");
+// no comma to cut at: word boundary, dangling words dropped, NO period glued onto the fragment
+const noComma = "A tattooed woman with long dark hair stands in a bedroom and looks over her shoulder at the camera while sitting in a red-walled room.";
+const frag = sentencesUpTo(noComma + " Extra detail follows here to be long enough.", 130);
+assert.ok(frag.length <= 130 && !/[.!?]$/.test(frag) && !/\b(in|a|the|at|of|and|across)$/.test(frag), frag);
+assert.equal(sentencesUpTo("Short one.", 140), "Short one.");
+{
+  const r = norm({}, { identifying: c14 + " room. She waits.", details: "" });
+  assert.ok(!/red-walled\./.test(r.fields.visual_description), r.fields.visual_description);
+  assert.ok(r.fields.visual_description.startsWith("A woman with long dark hair and arm tattoos, wearing a white crop top and red shorts."));
+}
+// full_nudity with a worn garment on the body
+{
+  const r = norm({ full_nudity: "yes", genitals: "yes" }, { identifying: "A red-haired woman lies on a bed.", details: "A pink top is bunched on her torso.", short_label: "bed", visible: ["pink top bunched on torso"], tags: ["full_nude"] });
+  assert.equal(r.status, "needs_review");
+  assert.ok(!r.fields.tags.includes("full_nude"));
+  assert.match(r.issues.join(" "), /worn garment/);
+  const fine = norm({ full_nudity: "yes", genitals: "yes" }, { identifying: "A red-haired woman lies nude on a bed.", details: "Her top is pulled off and lies beside her.", short_label: "bed", visible: ["bed"], tags: [] });
+  assert.equal(fine.fields.tags.includes("full_nude"), true);
+  assert.ok(descriptionProblems("She is fully nude.", evAll({ genitals: "yes" })).length > 0, "'fully nude' needs full_nudity yes");
+}
+// send caption: words the facts do not support, wrong persona
+{
+  const ev = evAll({ genitals: "yes", lingerie: "yes", suggestive_pose: "yes" });
+  const facts = "A woman lies on a bed in a black thong, legs spread. Not visible: anus.";
+  assert.equal(acceptCaption("laying here in my thong, legs open for you 😈 like what you see?", { evidence: ev }, facts) !== null, true);
+  for (const bad of ["so wet and damp through my thong 😈 want a look?", "two fingers deep for you 😈 like it?", "i just came, cum everywhere 😈 look", "this loose shirt is coming off 😈 wanna see?"]) {
+    assert.equal(acceptCaption(bad, { evidence: ev }, facts), null, bad);
+  }
+  assert.deepEqual(inventedWords("so wet and deep", "she is wet"), ["deep"]);
+  const man = "A man with short hair lies on a bed, stroking his penis.";
+  assert.equal(acceptCaption("look at my pussy and my tits spread for you 😈 like it?", undefined, man), null, "no female persona on a clip of a man");
+  assert.equal(acceptCaption("mmm my pussy is on show for you 😈 like it?", undefined, "A woman shows her pussy on a bed."), "mmm my pussy is on show for you 😈 like it?");
+  assert.equal(acceptCaption("mmm my tits are out for you 😈 like it?", undefined, "A woman lies on a bed in a thong."), null, "a body part the facts do not name");
+}
 
 console.log("Media classification checks passed: yes-only tags and flags, unclear never clean, contract facts, description rules, negation-aware validation, retryable malformed answers, factual-only prompts.");
