@@ -1,3 +1,4 @@
+import { contentFolders, CONTENT_FOLDER_KEY } from "@/lib/creator-content-intake";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
 import { getAgencyOnboardingAccess, assignedCreatorAccount } from "@/lib/agency-onboarding-access";
@@ -85,6 +86,8 @@ export default async function CreatorAccount({params, searchParams}: {
         </ol></>}
     </section>}
     <section className="rounded-xl border border-line bg-panel p-5"><h2 className="mb-3 font-semibold">Onboarding status</h2><dl className="grid gap-3 text-sm sm:grid-cols-3"><div><dt className="text-muted">Account</dt><dd className="capitalize">{creator.account_status}</dd></div><div><dt className="text-muted">Application</dt><dd className="capitalize">{application.data?.status || "Not started"}</dd></div><div><dt className="text-muted">Consent</dt><dd>{consent.data ? "Recorded" : "Not provided"}</dd></div></dl><p className="mt-4 text-sm text-muted">Submitting onboarding creates an application. Bot setup and activation are separate.</p></section>
-    <section className="rounded-xl border border-line bg-panel p-5"><h2 className="mb-3 font-semibold">Questionnaire</h2>{Object.keys(answers).length ? <dl className="space-y-4">{Object.entries(answers).map(([key,value])=><div key={key}><dt className="text-sm font-medium capitalize">{key.replace(/_/g," ")}</dt><dd className="mt-1 whitespace-pre-wrap break-words text-sm text-muted">{typeof value === "string" ? value : JSON.stringify(value)}</dd></div>)}</dl> : <p className="text-sm text-muted">No answers provided yet.</p>}</section>
+    {contentFolders(answers).length > 0 && <div className="mb-5 rounded-xl border border-border p-4"><h3 className="font-semibold">Folders awaiting import</h3><p className="mt-1 text-sm text-muted">Review and import these into this creator’s private content. Folder links are not verified uploads.</p><ul className="mt-3 space-y-2">{contentFolders(answers).map(folder => <li key={folder.url}><a href={folder.url} target="_blank" rel="noopener noreferrer" className="break-all text-sm text-accent underline">{folder.provider}: {folder.url}</a></li>)}</ul></div>}
+    <section className="rounded-xl border border-line bg-panel p-5"><h2 className="mb-3 font-semibold">Questionnaire</h2>{Object.keys(answers).length ? <dl className="space-y-4">{Object.entries(answers).filter(([key]) => key !== CONTENT_FOLDER_KEY).map(([key,value])=><div key={key}><dt className="text-sm font-medium capitalize">{key.replace(/_/g," ")}</dt><dd className="mt-1 whitespace-pre-wrap break-words text-sm text-muted">{typeof value === "string" ? value : JSON.stringify(value)}</dd></div>)}</dl> : <p className="text-sm text-muted">No answers provided yet.</p>}</section>
   </main>;
 }
+

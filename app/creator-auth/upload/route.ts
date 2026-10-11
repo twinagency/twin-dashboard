@@ -16,6 +16,7 @@ import {
   creatorContentCompleted,
   creatorContentRequirement,
   isCreatorContentKind,
+  CREATOR_CONTENT_REQUIREMENTS,
 } from "@/lib/creator-content-requirements";
 import { creatorImageDecodes } from "@/lib/creator-image-validation";
 import { creatorOnboardingEditable } from "@/lib/flirt-onboarding";
@@ -23,7 +24,7 @@ import { creatorOnboardingEditable } from "@/lib/flirt-onboarding";
 import { withDashboardAccess } from "@/lib/dashboard-access";
 import { trustedFormOrigin } from "@/lib/form-origin";
 import { boundedFormData, CreatorUploadError, type StagedCreatorFile } from "@/lib/creator-upload-stream";
-import { creatorUploadMaxBytes, MAX_CREATOR_REQUEST_BYTES, MAX_CREATOR_VIDEO_BYTES, MAX_CREATOR_ACCOUNT_BYTES, MAX_CREATOR_ACCOUNT_FILES } from "@/lib/creator-upload-limits";
+import { creatorUploadMaxBytes, MAX_CREATOR_REQUEST_BYTES, MAX_CREATOR_IMAGE_BYTES, MAX_CREATOR_VIDEO_BYTES, MAX_CREATOR_ACCOUNT_BYTES, MAX_CREATOR_ACCOUNT_FILES } from "@/lib/creator-upload-limits";
 
 export const runtime = "nodejs";
 
@@ -268,7 +269,7 @@ async function uploadForCreator(req: NextRequest) {
   uploadStage("validating");
   const kind = staged.fields.get("kind") || "";
   const contentRequirement = creatorContentRequirement(kind);
-  if (kind !== "voice" && !isCreatorContentKind(kind)) return back(req, "upload_error");
+  if (kind !== "voice" && kind !== "content" && !isCreatorContentKind(kind)) return back(req, "upload_error");
   const step = kind === "voice" ? "voice" : "content";
   // Finishing optional FLIRT intake must not prevent later content uploads.
   // Ownership, read-only demos, rejected applications and strict runtimes stay protected.
@@ -290,6 +291,13 @@ async function uploadForCreator(req: NextRequest) {
     if (file.size > maxBytes) return back(req, "upload_too_large", step);
     if (kind === "voice") {
       if (!(file.type.startsWith("audio/") || file.type.startsWith("video/") || file.type === "application/octet-stream") || !(await voiceProbeMatches(file))) return back(req, "upload_wrong_type", step);
+    }
+    if (kind === "content") {
+      const mime = normalizedContentMime(file, [...new Set(CREATOR_CONTENT_REQUIREMENTS.flatMap(item => item.accept.split(",")))]);
+      if (!mime || !(mime.startsWith("image/") || mime.startsWith("video/"))) return back(req, "upload_wrong_type", step);
+      if (mime.startsWith("image/") && file.size > MAX_CREATOR_IMAGE_BYTES) return back(req, "upload_too_large", step);
+      if (!(await validateMedia(file, mime))) return back(req, "upload_wrong_type", step);
+      normalizedMimes.set(file, mime);
     }
     if (contentRequirement) {
       const mime = normalizedContentMime(file, contentRequirement.accept.split(","));
@@ -396,4 +404,5 @@ async function uploadForCreator(req: NextRequest) {
     activeUploadRequests = Math.max(0, activeUploadRequests - 1);
   }
 }
+
 

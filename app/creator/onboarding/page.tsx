@@ -1,3 +1,5 @@
+import CreatorContentIntake from "@/components/CreatorContentIntake";
+import { contentFolders } from "@/lib/creator-content-intake";
 import Link from "next/link";
 import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
@@ -324,12 +326,10 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
         />
       </section> : <section data-creator-setup-panel>
         <div data-creator-setup-panel-heading><h2>Your content</h2><span>Photos &amp; videos</span></div>
-        <p className="mb-5 text-sm leading-6 text-muted">Add photos and videos for your AI creator profile. All uploads are optional, and you can add more later.</p>
-        {status === "content_saved" && <div className="mb-5"><SavedConfirmation title="Content saved" detail="Your uploaded files were verified and the category totals have been updated." /></div>}
-        <div className="grid gap-3">
-          {CREATOR_CONTENT_REQUIREMENTS.map((requirement) => <ContentUploadCard accountId={session.accountId} loginPath={loginPath} key={requirement.kind} {...requirement} count={contentCounts[requirement.kind]} complete={contentCounts[requirement.kind] >= requirement.minimum} locked={applicationLocked} optional collapsible />)}
-        </div>
-        {legacyContentFiles > 0 && <div className="mt-5"><CreatorContentGallery kind="content" revision={String(legacyContentFiles)} loginPath={loginPath} /><p className="mt-2 text-xs leading-5 text-muted">{legacyContentFiles} earlier verified upload{legacyContentFiles === 1 ? " is" : "s are"} still safely stored.</p></div>}
+        <CreatorContentIntake locked={applicationLocked} loginPath={loginPath}
+          savedPhotos={(files || []).filter(file => file.storage_transfer_status === "verified" && file.kind !== "voice" && file.mime_type?.startsWith("image/")).length}
+          savedVideos={(files || []).filter(file => file.storage_transfer_status === "verified" && file.kind !== "voice" && file.mime_type?.startsWith("video/")).length}
+          initialFolders={contentFolders(answers)} />
 
         <div data-creator-setup-submit>
           <CreatorOnboardingActionForm className="grid gap-4" pendingLabel="Submitting your saved information…" successStatuses={["submitted"]} loginPath={loginPath} consentBeforeSubmit={!consent}>
@@ -476,5 +476,6 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
     </div>
   );
 }
+
 
 

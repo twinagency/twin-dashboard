@@ -4,7 +4,7 @@ import { readFileSync } from "node:fs";
 import vm from "node:vm";
 import ts from "typescript";
 import { NextRequest, NextResponse } from "next/server";
-import { creatorContentCompleted, isAnyCreatorContentKind } from "../lib/creator-content-requirements";
+import { creatorContentCompleted, isAnyCreatorContentKind, CREATOR_CONTENT_REQUIREMENTS } from "../lib/creator-content-requirements";
 import { creatorUploadApiAllowed } from "../lib/creator-upload-api-policy";
 
 const owner=randomUUID(), other=randomUUID(), id=randomUUID(), otherId=randomUUID();
@@ -65,7 +65,8 @@ const helper=compile("lib/creator-file-gallery.ts",{
  "./creator-content-requirements":{creatorContentCompleted,isAnyCreatorContentKind},"./supabase-service":{serviceClient:()=>db},
  "./creator-upload-policy":{creatorUploadsEditable:(status:string)=>status==="draft"},"./flirt-onboarding":{creatorOnboardingEditable:(status:string)=>status==="draft"},
 });
-const deps={"next/server":{NextResponse},"@/lib/creator-session":{CREATOR_SESSION_COOKIE:"creator"},"@/lib/creator-dashboard-identity":{creatorDashboardIdentity:async()=>identity},"@/lib/supabase-service":{serviceClient:()=>db},"@/lib/view-as":{activeViewAs:async()=>viewAs?{}:null},"@/lib/creator-upload-receipts":{isUploadId:(s:string)=>/^[a-f0-9-]{36}$/i.test(s)},"@/lib/form-origin":{trustedFormOrigin:(req:Request)=>req.headers.get("origin")==="https://test.example"},"@/lib/creator-file-gallery":helper};
+const deps:Record<string,any>={"next/server":{NextResponse},"@/lib/creator-session":{CREATOR_SESSION_COOKIE:"creator"},"@/lib/creator-dashboard-identity":{creatorDashboardIdentity:async()=>identity},"@/lib/supabase-service":{serviceClient:()=>db},"@/lib/view-as":{activeViewAs:async()=>viewAs?{}:null},"@/lib/creator-upload-receipts":{isUploadId:(s:string)=>/^[a-f0-9-]{36}$/i.test(s)},"@/lib/form-origin":{trustedFormOrigin:(req:Request)=>req.headers.get("origin")==="https://test.example"},"@/lib/creator-file-gallery":helper};
+deps["@/lib/creator-content-requirements"]={CREATOR_CONTENT_REQUIREMENTS};
 const list=compile("app/creator-auth/files/route.ts",deps), access=compile("app/creator-auth/files/[id]/access/route.ts",deps), removal=compile("app/creator-auth/files/[id]/route.ts",deps);
 const request=(path:string,method="GET",origin="https://test.example")=>new NextRequest(`https://test.example${path}`,{method,headers:{origin}});
 const context=(requested=id)=>({params:Promise.resolve({id:requested})});
@@ -78,6 +79,7 @@ async function main(){
  reset();identity.readOnly=true;assert.equal((await access.GET(request("/creator-auth/files/any/access"),context())).status,401);assert.equal(signed,0);
  reset();const listed=await (await list.GET(request("/creator-auth/files?kind=content_sfw_video"))).json();
  assert.equal(listed.files.length,1);assert.equal(listed.files[0].previewAvailable,true);assert.equal(listed.files[0].removalAvailable,true);assert.equal("storage_path" in listed.files[0],false);assert.equal("bucket" in listed.files[0],false);
+ const combined=await (await list.GET(request("/creator-auth/files?kind=all_content"))).json();assert.equal(combined.files.length,1);
  const playback=await access.GET(request("/creator-auth/files/any/access"),context());assert.equal(playback.status,200);assert.equal(signed,1);assert.equal((await playback.json()).expiresIn,3600);
  assert.equal((await access.GET(request("/creator-auth/files/any/access"),context(otherId))).status,404);assert.equal(signed,1,"Foreign records cannot obtain playback URLs");
  const deletes=stored;await removal.DELETE(request("/creator-auth/files/any","DELETE"),context(otherId));assert.equal(stored,deletes,"Foreign records cannot reach Storage deletion");
@@ -100,3 +102,4 @@ async function main(){
  console.log("Private gallery passed: pre-clone list, actual record ownership, signed playback scope, origin/read-only guards, reference protection, private path validation, transactional removal reservation, Storage absence before metadata finalization, pending-state playback denial, partial-failure retry and explicit middleware methods.");
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});
+

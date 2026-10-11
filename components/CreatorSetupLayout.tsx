@@ -1,6 +1,8 @@
 "use client";
 
-import type { MouseEvent, ReactNode } from "react";
+import { useContext, type MouseEvent, type ReactNode } from "react";
+import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
+import { CreatorUploadActivity } from "./CreatorContentUploadProvider";
 import { ArrowUpRight, FileText, Images } from "lucide-react";
 import styles from "./CreatorSetupLayout.module.css";
 
@@ -15,7 +17,7 @@ type CreatorSetupLayoutProps = {
 };
 
 /** Both sections stay open. A mounted questionnaire can flush its draft first. */
-function navigate(event: MouseEvent<HTMLAnchorElement>, href: string, current = false) {
+function navigate(event: MouseEvent<HTMLAnchorElement>, href: string, current = false, push?: (href: string) => void) {
   if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
   event.preventDefault();
   if (current) return;
@@ -23,10 +25,11 @@ function navigate(event: MouseEvent<HTMLAnchorElement>, href: string, current = 
     cancelable: true,
     detail: { href },
   });
-  if (window.dispatchEvent(request)) window.location.assign(href);
+  if (window.dispatchEvent(request)) { if (push && href.startsWith("/creator/onboarding")) push(href); else window.location.assign(href); }
 }
 
 export default function CreatorSetupLayout({ brand, logoSrc, activeSection, applicationStatus, children }: CreatorSetupLayoutProps) {
+  const router = useContext(AppRouterContext);
   const brandName = brand === "moxy" ? "Moxy" : "FLIRT";
   return (
     <div className={styles.root} data-creator-setup-brand={brand} data-creator-onboarding-brand={brand}>
@@ -34,7 +37,7 @@ export default function CreatorSetupLayout({ brand, logoSrc, activeSection, appl
         <div className={styles.headerInner}>
           <img src={logoSrc} alt={brandName} className={styles.logo} />
           <div className={styles.headerActions}>
-            <a href="/creator" onClick={(event) => navigate(event, "/creator")} className={styles.dashboard} data-creator-setup-dashboard data-onboarding-dashboard data-onboarding-skip-to-dashboard data-onboarding-skip-all>
+            <a href="/creator" onClick={(event) => navigate(event, "/creator", false, router?.push)} className={styles.dashboard} data-creator-setup-dashboard data-onboarding-dashboard data-onboarding-skip-to-dashboard data-onboarding-skip-all>
               Go to dashboard <ArrowUpRight size={16} aria-hidden="true" />
             </a>
             <form action="/creator-auth/logout" method="post"><button className={styles.signOut}>Sign out</button></form>
@@ -55,19 +58,20 @@ export default function CreatorSetupLayout({ brand, logoSrc, activeSection, appl
         <nav className={styles.tabs} aria-label="Creator setup sections">
           <a href="/creator/onboarding?step=questionnaire" className={`${styles.tab} ${activeSection === "questionnaire" ? styles.activeTab : ""}`}
             aria-current={activeSection === "questionnaire" ? "page" : undefined} data-creator-setup-tab="questionnaire"
-            onClick={(event) => navigate(event, "/creator/onboarding?step=questionnaire", activeSection === "questionnaire")}>
+            onClick={(event) => navigate(event, "/creator/onboarding?step=questionnaire", activeSection === "questionnaire", router?.push)}>
             <FileText size={18} aria-hidden="true" /> About you
           </a>
           <a href="/creator/onboarding?step=content" className={`${styles.tab} ${activeSection === "content" ? styles.activeTab : ""}`}
             aria-current={activeSection === "content" ? "page" : undefined} data-creator-setup-tab="content"
-            onClick={(event) => navigate(event, "/creator/onboarding?step=content", activeSection === "content")}>
+            onClick={(event) => navigate(event, "/creator/onboarding?step=content", activeSection === "content", router?.push)}>
             <Images size={18} aria-hidden="true" /> Your content
           </a>
         </nav>
 
-        <div className={styles.content} data-onboarding-active-step={activeSection}>{children}</div>
+        <div className={styles.content} data-onboarding-active-step={activeSection}><CreatorUploadActivity />{children}</div>
         <footer className={styles.footer}>Your profile, your pace.</footer>
       </main>
     </div>
   );
 }
+

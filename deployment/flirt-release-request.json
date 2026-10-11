@@ -1,5 +1,5 @@
 {
-  "reason": "Make the FLIRT operator homepage default to All creators even with a saved creator selection, keep individual Overviews explicit, and add a clear return to the agency overview.",
-  "source_commit": "d7cfeace05b7630a557b5bc9a01e64db8eacd092",
-  "requested_at": "2026-10-11T14:22:57.181Z"
+  "reason": "Release combined automatic creator content uploads, minimum-50 copy, persistent onboarding transfers and saved agency folder links.",
+  "source_commit": "9e984cbca8e148761b0e651e7edb4757e8d606a6",
+  "requested_at": "2026-10-11T23:54:21.887815+00:00"
 }

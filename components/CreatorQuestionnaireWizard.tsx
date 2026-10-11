@@ -1,6 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
+import { useContext, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, Check, ChevronDown, Cloud, CloudOff, LoaderCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -63,6 +64,8 @@ export default function CreatorQuestionnaireWizard({
   locked?: boolean;
   optional?: boolean;
 }) {
+  const appRouter = useContext(AppRouterContext);
+  const navigateTo = (href: string) => { if (appRouter && href.startsWith("/creator/onboarding")) appRouter.push(href); else window.location.assign(href); };
   const formRef = useRef<HTMLFormElement>(null);
   const revisionRef = useRef(initialRevision);
   const dirtyRef = useRef(false);
@@ -150,7 +153,7 @@ export default function CreatorQuestionnaireWizard({
       while (saved && dirtyRef.current) saved = await flushDraft();
       if (!saved) return;
       if (target === "hub" || target === "dashboard" || target === "content") {
-        window.location.assign(target === "dashboard" ? "/creator" : target === "content" ? "/creator/onboarding?step=content" : "/creator/onboarding");
+        navigateTo(target === "dashboard" ? "/creator" : target === "content" ? "/creator/onboarding?step=content" : "/creator/onboarding");
         return;
       }
       if (target === "finish") {
@@ -163,11 +166,11 @@ export default function CreatorQuestionnaireWizard({
           setNavigationError("The questionnaire could not be finished. Your saved answers are still here. Please try again.");
           return;
         }
-        window.location.assign(optional ? "/creator/onboarding?step=content" : destination.href);
+        navigateTo(optional ? "/creator/onboarding?step=content" : destination.href);
         return;
       }
       const next = pages[target];
-      window.location.assign(`/creator/onboarding?step=questionnaire&section=${encodeURIComponent(next.slug)}`);
+      navigateTo(`/creator/onboarding?step=questionnaire&section=${encodeURIComponent(next.slug)}`);
     } catch {
       setNavigationError("The save could not be confirmed. Please try again before leaving this page.");
     } finally {
@@ -300,4 +303,5 @@ export default function CreatorQuestionnaireWizard({
     </form>
   );
 }
+
 

@@ -1,3 +1,4 @@
+import { CREATOR_CONTENT_REQUIREMENTS } from "@/lib/creator-content-requirements";
 import { NextRequest, NextResponse } from "next/server";
 import { CREATOR_SESSION_COOKIE } from "@/lib/creator-session";
 import { creatorDashboardIdentity } from "@/lib/creator-dashboard-identity";
@@ -10,9 +11,10 @@ export async function GET(req: NextRequest) {
   if (!creator || creator.readOnly) return reply({ error: "session_expired" }, 401);
   const kind = req.nextUrl.searchParams.get("kind") || "";
   const page = Number(req.nextUrl.searchParams.get("page") || 0);
-  if (!galleryKind(kind) || !Number.isSafeInteger(page) || page < 0 || page > 100) return reply({ error: "invalid_category" }, 400);
-  const result = await serviceClient().from("creator_files").select(CREATOR_FILE_FIELDS).eq("creator_account_id", creator.accountId).eq("kind", kind)
-    .order("created_at", { ascending: false }).order("id", { ascending: false }).range(page * 50, page * 50 + 50);
+  if ((kind !== "all_content" && !galleryKind(kind)) || !Number.isSafeInteger(page) || page < 0 || page > 100) return reply({ error: "invalid_category" }, 400);
+  let query = serviceClient().from("creator_files").select(CREATOR_FILE_FIELDS).eq("creator_account_id", creator.accountId);
+  query = kind === "all_content" ? query.in("kind", ["content", ...CREATOR_CONTENT_REQUIREMENTS.map(item => item.kind)]) : query.eq("kind", kind);
+  const result = await query.order("created_at", { ascending: false }).order("id", { ascending: false }).range(page * 50, page * 50 + 50);
   if (result.error) return reply({ error: "gallery_unavailable" }, 503);
   const files = ((result.data || []) as CreatorGalleryFile[]).slice(0, 50).filter(file => file.creator_account_id === creator.accountId);
   const removals = await creatorFileRemovalStates(creator.accountId, files.map(file => file.id));
@@ -24,3 +26,4 @@ export async function GET(req: NextRequest) {
     removalAvailable: (removals.states.get(file.id) === "removing" || (!creator.cloneIds.length && !creator.applicationState?.submitted)) && ownedPrivateFile(file, creator.accountId),
   })), hasMore: (result.data?.length || 0) > 50 });
 }
+
