@@ -4,6 +4,7 @@ import { createRequire } from 'node:module';
 import ts from 'typescript';
 import React, { act } from 'react';
 import * as model from '../components/inbox/movie-night-model';
+import * as fanPhoto from '../components/inbox/useDemoFanAvatar';
 import { checkRonanDemoProfile } from './check-ronan-demo-profile';
 
 const requireLocal = createRequire(import.meta.url);
@@ -52,6 +53,7 @@ export async function checkMovieNightDemo() {
     '../dashboard/portraits': { portraitUrl: (key: string) => `/api/dashboard/portrait?image=${key}` },
     '../dashboard/fan-avatars': { fanAvatarUrl: () => '/dashboard/fans/fan-01.webp' },
     './movie-night-model': model,
+    './useDemoFanAvatar': fanPhoto,
     './MovieNightDemo.module.css': { __esModule: true, default: new Proxy({}, {get: (_, key) => String(key)}) },
   };
   const js = ts.transpileModule(readFileSync('components/inbox/MovieNightDemo.tsx','utf8'), { fileName: 'MovieNightDemo.tsx', compilerOptions: { module: ts.ModuleKind.CommonJS, jsx: ts.JsxEmit.ReactJSX, target: ts.ScriptTarget.ES2022, esModuleInterop: true }}).outputText;
@@ -66,6 +68,13 @@ export async function checkMovieNightDemo() {
   });
   const tick = async () => act(async () => { const item = timers.entries().next().value; assert.ok(item, 'pending timer'); timers.delete(item[0]); item[1](); });
   await act(async () => root.render(<Demo/>));
+  const avatarSources = () => [...document.querySelectorAll<HTMLImageElement>('.conversationRow img,.chatHeader img')].map(img=>img.getAttribute('src'));
+  assert.deepEqual(avatarSources(),[fanPhoto.DEMO_UPLOADED_FAN_PHOTO,fanPhoto.DEMO_UPLOADED_FAN_PHOTO]);
+  await act(async()=>document.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'m',bubbles:true})));
+  assert.deepEqual(avatarSources(),['/dashboard/fans/fan-01.webp','/dashboard/fans/fan-01.webp']);
+  await act(async()=>document.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'M',bubbles:true})));
+  assert.deepEqual(avatarSources(),[fanPhoto.DEMO_UPLOADED_FAN_PHOTO,fanPhoto.DEMO_UPLOADED_FAN_PHOTO]);
+  assert.equal(document.querySelectorAll('[data-demo-message]').length,0,'Changing avatar cannot start the conversation');
   assert.match(document.body.textContent!, /Scripted conversation.*Simulated purchase/);
   assert.match(document.body.textContent!, /Bri/);
   assert.match(document.body.textContent!, /Ronan/);
@@ -77,9 +86,19 @@ export async function checkMovieNightDemo() {
   await act(async () => document.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'n',bubbles:true})));
   await tick();
   assert.equal(document.querySelectorAll('[data-demo-message]').length, 1);
+  const timersBeforePhoto=timers.size;
+  await act(async()=>document.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'m',bubbles:true})));
+  assert.equal(timers.size,timersBeforePhoto,'Changing avatar preserves the pending reply');
+  assert.equal(document.querySelectorAll('[data-demo-message]').length,1,'Changing avatar preserves message progress');
+  assert.deepEqual(avatarSources(),['/dashboard/fans/fan-01.webp','/dashboard/fans/fan-01.webp']);
   await click('Take over'); assert.equal(timers.size, 0, 'Takeover cancels pending reply');
   assert.equal((document.querySelector('textarea') as HTMLTextAreaElement).disabled, false);
   await act(async () => { document.querySelector('textarea')!.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'n',bubbles:true})); });
+  await act(async () => { document.querySelector('textarea')!.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'m',bubbles:true})); });
+  assert.deepEqual(avatarSources(),['/dashboard/fans/fan-01.webp','/dashboard/fans/fan-01.webp'],'Typing M does not change the photo');
+  await act(async()=>document.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'m',bubbles:true,ctrlKey:true})));
+  await act(async()=>document.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'m',bubbles:true,repeat:true})));
+  assert.deepEqual(avatarSources(),['/dashboard/fans/fan-01.webp','/dashboard/fans/fan-01.webp'],'Modifiers and held keys cannot switch photos');
   assert.equal(timers.size, 0, 'Typing in composer cannot trigger a scene');
   await click('Return to autonomous');
   await click('Toggle presenter controls');
@@ -117,6 +136,7 @@ export async function checkMovieNightDemo() {
   assert.equal(timers.size,0,'Opening the profile pauses the sequence');
   assert.equal(new URLSearchParams(window.location.search).get('step'),'1','Browser Back also has the checkpoint');
   await act(async()=>root.render(<Demo key="return" initialStep={model.DEMO_EVENT_COUNT}/>));
+  assert.deepEqual(avatarSources(),['/dashboard/fans/fan-01.webp','/dashboard/fans/fan-01.webp'],'Photo preference survives navigation');
   assert.equal(document.querySelector('[data-demo-spend]')?.textContent,'US$144.00');
   assert.equal(timers.size,0,'Returning to the completed chat never restarts it');
   assert.equal(document.querySelectorAll('[data-offer-status="purchased"]').length,1);
