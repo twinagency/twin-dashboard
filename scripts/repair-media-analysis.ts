@@ -11,6 +11,10 @@
  *               bound to row id / clone / table / storage_path / analysis version / previous values; anything changed = conflict, no write.
  *               Backup (fsynced) before each guarded UPDATE, read-back reconciliation of lost responses, bundle-item copy, status holds.
  *   pilot       --clone SLUG [--expect N]: inventory + preview of that clone's photos only, writes PILOT-PLAN.txt and rows-before.json
+ *   hold-list   --preview FILE --in REVIEW.json --out HOLDLIST.json: binds reviewer entries [{table,id,reason,reviewer?}] to the sha256 of that preview
+ *               (offline, no database). Then: apply ... --hold-list HOLDLIST.json  holds those rows (status-only, reason recorded, metadata kept)
+ *               instead of applying their proposals; refused if the list was bound to a different preview.
+ *   pilot       ... --preview FILE --hold-list FILE: no model call; prints the plan of that saved preview with applied vs held (reasons)
  *   rollback    restore rows from <state>/backup.jsonl (or --backup FILE) that still hold the values this run wrote
  *
  * flags
@@ -26,8 +30,9 @@
 import { createClient } from "@supabase/supabase-js";
 import { mkdirSync, writeFileSync } from "node:fs";
 import path from "node:path";
+import { readFileSync } from "node:fs";
 import {
-  assertSafeSupabaseUrl, readOnlyFetch, buildInventory, formatInventory, runRepair, runPilot, rollbackRun, formatSummary, fakeAnalyser, BUCKET,
+  planPilotFromPreview, bindHoldList, assertSafeSupabaseUrl, readOnlyFetch, buildInventory, formatInventory, runRepair, runPilot, rollbackRun, formatSummary, fakeAnalyser, BUCKET,
   type Analyser, type Ctx, type MediaTable,
 } from "../lib/media-repair";
 
@@ -46,9 +51,17 @@ async function realAnalyser(): Promise<Analyser> {
 }
 
 async function main() {
-  if (!["inventory", "preview", "apply", "rollback", "pilot"].includes(mode ?? "")) {
-    console.error("usage: repair-media-analysis.ts inventory|preview|apply|rollback|pilot [flags]  (see the header of this file)");
+  if (!["inventory", "preview", "apply", "rollback", "pilot", "hold-list"].includes(mode ?? "")) {
+    console.error("usage: repair-media-analysis.ts inventory|preview|apply|rollback|pilot|hold-list [flags]  (see the header of this file)");
     process.exit(2);
+  }
+  if (mode === "hold-list") {
+    if (!opt("preview") || !opt("in") || !opt("out")) throw new Error("hold-list needs --preview FILE --in REVIEW.json --out FILE");
+    const entries = JSON.parse(readFileSync(opt("in")!, "utf8"));
+    const bound = bindHoldList(path.resolve(opt("preview")!), entries);
+    writeFileSync(opt("out")!, JSON.stringify(bound, null, 1) + "\n");
+    console.log(`wrote ${bound.length} entries bound to preview sha256 ${bound[0]?.preview_sha256}`);
+    return;
   }
   const url = assertSafeSupabaseUrl(process.env.SUPABASE_URL);
   const key = process.env.SUPABASE_SERVICE_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
@@ -87,10 +100,19 @@ async function main() {
   if (mode === "apply") {
     const pv = opt("preview")!;
     const previewFile = pv.includes("/") || pv.endsWith(".jsonl") ? path.resolve(pv) : path.join(stateRoot, pv, "preview.jsonl");
-    const summary = await runRepair(ctx, { mode: "apply", cloneSlug: clone, table, scope: "all", limit: opt("limit") ? Number(opt("limit")) : undefined, preview: previewFile });
+    const summary = await runRepair(ctx, { mode: "apply", cloneSlug: clone, table, scope: "all", limit: opt("limit") ? Number(opt("limit")) : undefined, preview: previewFile, holdList: opt("hold-list") ? path.resolve(opt("hold-list")!) : undefined });
     console.log(formatSummary(summary));
     console.log(`state dir: ${stateDir}`);
     if (summary.conflictReasons.length) console.log(`conflicts (${summary.conflictReasons.length}), listed in ${path.join(stateDir, "report.txt")}: run a fresh preview for those rows`);
+    return;
+  }
+  if (mode === "pilot" && opt("hold-list")) {
+    if (!clone) throw new Error("pilot needs --clone SLUG");
+    if (!opt("preview")) throw new Error("pilot --hold-list needs --preview FILE (the saved reviewed preview the list is bound to)");
+    const r = await planPilotFromPreview(ctx, clone, path.resolve(opt("preview")!), path.resolve(opt("hold-list")!));
+    console.log(r.plan);
+    console.log(`plan: ${r.planFile}\npreview sha256 ${r.previewSha256}\nhold list sha256 ${r.holdListSha256}`);
+    if (opt("out")) writeFileSync(opt("out")!, r.plan + "\n");
     return;
   }
   const analyserKind = opt("analyser") ?? "real";

@@ -352,16 +352,20 @@ export type RunOpts = {
   skipFailed?: boolean;
   /** apply only: the reviewed preview.jsonl to apply (holds.jsonl is read from the same folder). Apply never calls the model. */
   preview?: string;
+  /** apply only: reviewed operator hold list (bound by sha256 to the preview). Listed rows get a status-only hold instead of their proposal. */
+  holdList?: string;
 };
 export type RunSummary = {
   mode: Mode; migrated: boolean; selected: number; skippedDone: number;
   proposed: number; applied: number; unchanged: number; conflicts: number; failed: number; needsReview: number; itemsUpdated: number; itemConflicts: number;
   holds: number; holdsApplied: number; recovered: number; alreadyApplied: number; conflictReasons: string[];
+  /** apply: sha256 of the reviewed preview and of the operator hold list used (null when none); operatorHolds = list entries accepted */
+  previewSha256: string | null; holdListSha256: string | null; operatorHolds: number;
   costUsd: number; errors: string[]; notes: string[];
 };
 const newSummary = (mode: Mode, migrated: boolean): RunSummary => ({
   mode, migrated, selected: 0, skippedDone: 0, proposed: 0, applied: 0, unchanged: 0, conflicts: 0, failed: 0, needsReview: 0, itemsUpdated: 0, itemConflicts: 0,
-  holds: 0, holdsApplied: 0, recovered: 0, alreadyApplied: 0, conflictReasons: [], costUsd: 0, errors: [], notes: [],
+  holds: 0, holdsApplied: 0, recovered: 0, alreadyApplied: 0, conflictReasons: [], previewSha256: null, holdListSha256: null, operatorHolds: 0, costUsd: 0, errors: [], notes: [],
 });
 
 function selectRows(rows: { table: MediaTable; row: Row; slug: string }[], opts: RunOpts) {
@@ -415,12 +419,12 @@ const holdsValues = (row: Record<string, unknown>, vals: Record<string, unknown>
  *    landed, only the answer got lost); holds neither the old nor the new values -> "conflict"; still holds the old values after a
  *    transport error -> the error is rethrown (nothing landed; a resume retries from the same proposal).
  */
-async function writeGuarded(ctx: Ctx, rec: { table: MediaTable; id: string; clone_id: string; storage_path: string; before: Record<string, unknown>; after: Record<string, unknown> }, key: string, hold = false): Promise<"applied" | "recovered" | "conflict"> {
+async function writeGuarded(ctx: Ctx, rec: { table: MediaTable; id: string; clone_id: string; storage_path: string; before: Record<string, unknown>; after: Record<string, unknown>; guard?: Record<string, unknown> }, key: string, hold = false): Promise<"applied" | "recovered" | "conflict"> {
   assertWritable(Object.keys(rec.after));
   append(file(ctx, "backup.jsonl"), { kind: "row", table: rec.table, id: rec.id, clone_id: rec.clone_id, storage_path: rec.storage_path, before: rec.before, after: rec.after, run: ctx.runId, at: new Date().toISOString(), ...(hold ? { hold: true as const } : {}) } satisfies BackupRec);
   await ctx.step?.("after_backup", key);
   // guard on every changed content field's old value + the status + the version; stamp timestamps/model need not match
-  const guardFields = Object.fromEntries(Object.entries(rec.before).filter(([k]) => (CONTENT_FIELDS as readonly string[]).includes(k) || k === "analysis_status" || k === "analysis_version"));
+  const guardFields = Object.fromEntries(Object.entries(rec.guard ?? rec.before).filter(([k]) => (CONTENT_FIELDS as readonly string[]).includes(k) || k === "analysis_status" || k === "analysis_version"));
   let q: any = ctx.db.from(rec.table).update(rec.after).eq("id", rec.id).eq("clone_id", rec.clone_id).eq("storage_path", rec.storage_path).is("metadata_edited_at", null);
   q = guardOld(q, guardFields).select("id");
   let matched = 0, err: Error | null = null;
@@ -492,7 +496,74 @@ export function loadPreview(f: string): LoadedPreview {
   return { proposals: [...proposals.values()], holds: [...holds.values()], file: f, sha256: hash.digest("hex") };
 }
 
-type Item = { kind: "proposal" | "hold"; table: MediaTable; id: string; clone_id: string; clone_slug: string; storage_path: string; before: Record<string, unknown>; after: Record<string, unknown>; code_version?: number };
+// ── operator hold list ───────────────────────────────────────────────────────
+/** A reviewer's decision to hold a known-incorrect proposal. preview_sha256 binds the entry to the exact preview it was reviewed against. */
+export type HoldListEntry = { table: MediaTable; id: string; reason: string; reviewer?: string; preview_sha256: string };
+export type LoadedHoldList = { entries: HoldListEntry[]; file: string; sha256: string };
+export const OPERATOR_HOLD_PREFIX = "operator hold: ";
+
+/** Adds the preview hash to review entries ({table,id,reason,reviewer?}); the preview file itself is only read. */
+export function bindHoldList(previewFile: string, entries: { table: string; id: string; reason: string; reviewer?: string }[]): HoldListEntry[] {
+  const sha = loadPreview(previewFile).sha256;
+  return entries.map((e) => ({ table: e.table as MediaTable, id: e.id, reason: e.reason, ...(e.reviewer ? { reviewer: e.reviewer } : {}), preview_sha256: sha }));
+}
+
+/** JSON array or JSONL. Refuses (throws, before anything is written) a list that is malformed, has duplicates, or was reviewed against another preview. */
+export function loadHoldList(f: string, previewSha256: string): LoadedHoldList {
+  if (!existsSync(f)) throw new Error(`hold list not found: ${f}`);
+  const raw = readFileSync(f);
+  const text = raw.toString("utf8").trim();
+  let list: any[];
+  try { list = text.startsWith("[") ? JSON.parse(text) : text.split("\n").filter(Boolean).map((l) => JSON.parse(l)); }
+  catch (e) { throw new Error(`hold list is not valid JSON/JSONL: ${(e as Error).message}`); }
+  if (!Array.isArray(list) || !list.length) throw new Error("hold list is empty");
+  const seen = new Set<string>();
+  for (const e of list) {
+    if (!e || !(MEDIA_TABLES as string[]).includes(e.table) || typeof e.id !== "string" || !e.id) throw new Error(`hold list entry has no valid table/id: ${JSON.stringify(e)}`);
+    if (typeof e.reason !== "string" || !e.reason.trim()) throw new Error(`hold list entry ${e.table}:${e.id} has no reason`);
+    if (typeof e.preview_sha256 !== "string" || !e.preview_sha256) throw new Error(`hold list entry ${e.table}:${e.id} is not bound to a preview (no preview_sha256)`);
+    if (e.preview_sha256 !== previewSha256) throw new Error(`hold list refused: ${e.table}:${e.id} was reviewed against preview ${e.preview_sha256.slice(0, 12)}, this preview is ${previewSha256.slice(0, 12)}`);
+    const k = `${e.table}:${e.id}`;
+    if (seen.has(k)) throw new Error(`hold list names ${k} twice`);
+    seen.add(k);
+  }
+  return { entries: list as HoldListEntry[], file: f, sha256: createHash("sha256").update(raw).digest("hex") };
+}
+
+/**
+ * Turns the reviewed preview (+ optional hold list) into the items apply will write. A listed id becomes a status-only hold in place of its
+ * proposal; an id that is in neither the proposals nor the preview holds is returned in `unknown` (reported as a conflict, never skipped).
+ * The hold's before = the row's status + error as the reviewer saw them (from the proposal), guard = the proposal's whole before snapshot.
+ */
+export function resolveItems(pv: LoadedPreview, hl?: LoadedHoldList): { items: Item[]; unknown: HoldListEntry[]; operatorHolds: number } {
+  const map = new Map<string, Item>();
+  for (const p of pv.proposals) map.set(`${p.table}:${p.id}`, { kind: "proposal", table: p.table, id: p.id, clone_id: p.clone_id, clone_slug: p.clone_slug, storage_path: p.storage_path, before: p.before, after: p.after, code_version: p.code_version });
+  const hkey = (t: string, i: string) => `${t}:${i}#hold`;
+  for (const h of pv.holds) map.set(hkey(h.table, h.id), { kind: "hold", table: h.table, id: h.id, clone_id: h.clone_id, clone_slug: h.clone_slug, storage_path: h.storage_path, before: h.before, after: h.after, code_version: h.code_version });
+  const unknown: HoldListEntry[] = [];
+  let operatorHolds = 0;
+  for (const e of hl?.entries ?? []) {
+    const reason = (OPERATOR_HOLD_PREFIX + e.reason.trim()).slice(0, 500);
+    const prop = map.get(`${e.table}:${e.id}`), ph = map.get(hkey(e.table, e.id));
+    const src = prop ?? ph;
+    if (!src) { unknown.push(e); continue; }
+    const cur = src.before;
+    if (!("analysis_status" in cur)) { unknown.push({ ...e, reason: `${e.reason} (reviewed proposal carries no analysis_status)` }); continue; }
+    map.delete(`${e.table}:${e.id}`);
+    map.set(hkey(e.table, e.id), {
+      kind: "hold", operator: true, table: src.table, id: src.id, clone_id: src.clone_id, clone_slug: src.clone_slug, storage_path: src.storage_path,
+      before: { analysis_status: cur.analysis_status, analysis_error: cur.analysis_error ?? null },
+      guard: prop ? prop.before : ph!.before,
+      after: { analysis_status: "needs_review", analysis_error: reason }, code_version: src.code_version,
+    });
+    operatorHolds++;
+  }
+  return { items: [...map.values()], unknown, operatorHolds };
+}
+
+export type Item = { kind: "proposal" | "hold"; table: MediaTable; id: string; clone_id: string; clone_slug: string; storage_path: string; before: Record<string, unknown>; after: Record<string, unknown>; code_version?: number;
+  /** operator hold only: the reviewed proposal's full "before" snapshot. The row must still equal it (conflict otherwise); the hold's own before is only status+error. */
+  guard?: Record<string, unknown>; operator?: true };
 
 /** Why a reviewed item may NOT be written now (null = still exactly what was reviewed). Nothing is written for a row that returns a reason. */
 export function bindConflict(it: Item, row: Row | undefined, clone: CloneInfo | undefined): string | null {
@@ -505,9 +576,11 @@ export function bindConflict(it: Item, row: Row | undefined, clone: CloneInfo | 
   if (row.metadata_edited_at) return "row was manually edited since the preview";
   try { assertWritable(Object.keys(it.after), it.kind === "hold" ? HOLD_FIELDS : WRITABLE_FIELDS); } catch (e) { return `invalid proposal: ${(e as Error).message}`; }
   if (!classify(row).eligible) return `row status is now ${row.analysis_status}`;
-  for (const [k, v] of Object.entries(it.before)) if (!same((row as any)[k], v)) return `${k} changed since the preview`;
+  for (const [k, v] of Object.entries(it.guard ?? it.before)) if (!same((row as any)[k], v)) return `${k} changed since the preview`;
   if (it.kind === "hold") {
-    if (row.analysis_status !== "legacy") return `row status is now ${row.analysis_status} (a hold only applies to a legacy row)`;
+    // an operator hold applies to any eligible row still in the status the reviewer saw (legacy, pending or failed; never analysed/manual);
+    // a preview-generated hold keeps its original rule: legacy only.
+    if (!it.operator && row.analysis_status !== "legacy") return `row status is now ${row.analysis_status} (a hold only applies to a legacy row)`;
     if (!["needs_review", "failed"].includes(String(it.after.analysis_status))) return "invalid hold: bad status";
     if (typeof it.after.analysis_error !== "string" || !it.after.analysis_error) return "invalid hold: no reason";
     return null;
@@ -608,6 +681,8 @@ export async function runRepair(ctx: Ctx, opts: RunOpts): Promise<RunSummary> {
  */
 async function applyPreview(ctx: Ctx, opts: RunOpts, migrated: boolean): Promise<RunSummary> {
   const pv = loadPreview(opts.preview ?? "");
+  // operator hold list: bound to THIS preview's hash; a mismatch refuses the whole apply before anything is written
+  const hl = opts.holdList ? loadHoldList(opts.holdList, pv.sha256) : undefined;
   const sum = newSummary("apply", migrated);
   const clones = await fetchClones(ctx.db);
   const bySlug = new Map(clones.map((c) => [c.slug, c]));
@@ -622,10 +697,17 @@ async function applyPreview(ctx: Ctx, opts: RunOpts, migrated: boolean): Promise
   const doneKeys = new Set(state.filter((s) => TERMINAL.has(s.status)).map((s) => s.key));
   const mark = (key: string, status: string, detail?: string) => append(stateFile, { key, status, at: new Date().toISOString(), detail } satisfies StateEntry);
 
-  let items: Item[] = [
-    ...pv.proposals.map((p): Item => ({ kind: "proposal", table: p.table, id: p.id, clone_id: p.clone_id, clone_slug: p.clone_slug, storage_path: p.storage_path, before: p.before, after: p.after, code_version: p.code_version })),
-    ...pv.holds.map((h): Item => ({ kind: "hold", table: h.table, id: h.id, clone_id: h.clone_id, clone_slug: h.clone_slug, storage_path: h.storage_path, before: h.before, after: h.after, code_version: h.code_version })),
-  ].filter((it) => (!opts.table || it.table === opts.table) && (!opts.cloneSlug || it.clone_slug === opts.cloneSlug));
+  const resolved = resolveItems(pv, hl);
+  sum.previewSha256 = pv.sha256; sum.holdListSha256 = hl?.sha256 ?? null; sum.operatorHolds = resolved.operatorHolds;
+  if (hl) {
+    writeFileSync(file(ctx, "hold-list.used.json"), readFileSync(hl.file));
+    sum.notes.push(`operator hold list ${hl.file} sha256 ${hl.sha256}: ${hl.entries.length} entries, ${resolved.operatorHolds} accepted, ${resolved.unknown.length} unknown`);
+  }
+  for (const u of resolved.unknown) {
+    const why = `operator hold ${u.table}:${u.id}: not in the reviewed preview (unknown id), nothing written (${u.reason})`;
+    sum.conflicts++; sum.conflictReasons.push(why); ctx.log(`conflict ${why}`);
+  }
+  let items: Item[] = resolved.items.filter((it) => (!opts.table || it.table === opts.table) && (!opts.cloneSlug || it.clone_slug === opts.cloneSlug));
   items.sort((a, b) => (a.table + a.id < b.table + b.id ? -1 : 1));
   if (opts.limit !== undefined) items = items.slice(0, opts.limit);
   const stateKey = (it: Item) => `${it.table}:${it.id}${it.kind === "hold" ? "#hold" : ""}`;
@@ -705,12 +787,46 @@ export async function runPilot(ctx: Ctx, cloneSlug: string, expect?: number): Pr
   return { summary, plan, planFile };
 }
 
-export function formatPilotPlan(slug: string, photos: Row[], proposals: Proposal[], holds: Hold[], inventoryText: string, runId: string, sum: RunSummary): string {
+/** What an operator hold list does to a pilot plan: ids held (with the reviewer's reason), unknown ids, and the two hashes it is bound by. */
+export type PlanHolds = { held: Map<string, string>; unknown: { table: string; id: string; reason: string }[]; previewSha256: string; holdListSha256: string; conflicts?: Map<string, string> };
+
+/**
+ * Plan from a SAVED reviewed preview + an operator hold list: no model call, no write (reads rows only). Prints exactly which proposals apply
+ * and which are held with their reasons, and flags anything that would conflict against the rows as they are now.
+ */
+export async function planPilotFromPreview(ctx: Ctx, cloneSlug: string, previewFile: string, holdListFile: string): Promise<{ plan: string; planFile: string; previewSha256: string; holdListSha256: string }> {
+  ensureDir(ctx);
+  const clones = await fetchClones(ctx.db);
+  const clone = clones.find((c) => c.slug === cloneSlug);
+  if (!clone) throw new Error(`no clone with slug ${cloneSlug}`);
+  const migrated = await isMigrated(ctx.db);
+  const photos = await fetchRows(ctx, "photos", migrated, clone.id);
+  const pv = loadPreview(previewFile);
+  const hl = loadHoldList(holdListFile, pv.sha256);
+  const { items, unknown } = resolveItems(pv, hl);
+  const rowBy = new Map(photos.map((r) => [r.id, r]));
+  const conflicts = new Map<string, string>();
+  for (const it of items) { const why = bindConflict(it, rowBy.get(it.id), clone); if (why) conflicts.set(it.id, why); }
+  const held = new Map(items.filter((i) => i.operator).map((i) => [i.id, String(i.after.analysis_error).slice(OPERATOR_HOLD_PREFIX.length)]));
+  const inv = await buildInventory(ctx, clone.id);
+  const sum = newSummary("preview", migrated);
+  const plan = formatPilotPlan(cloneSlug, photos, pv.proposals.filter((p) => p.clone_id === clone.id), pv.holds.filter((h) => h.clone_id === clone.id), formatInventory(inv, ctx.costPhoto, ctx.costVideo), ctx.runId, sum,
+    { held, unknown, previewSha256: pv.sha256, holdListSha256: hl.sha256, conflicts });
+  const planFile = file(ctx, "PILOT-PLAN.txt");
+  writeFileSync(planFile, plan + "\n");
+  return { plan, planFile, previewSha256: pv.sha256, holdListSha256: hl.sha256 };
+}
+
+export function formatPilotPlan(slug: string, photos: Row[], proposals: Proposal[], holds: Hold[], inventoryText: string, runId: string, sum: RunSummary, op?: PlanHolds): string {
   const pBy = new Map(proposals.map((p) => [p.id, p])), hBy = new Map(holds.map((h) => [h.id, h]));
   const L: string[] = [
     `PILOT PLAN: clone ${slug}, photos only (${photos.length}), run ${runId}`,
     "PREVIEW ONLY. Nothing has been written. Apply uses these exact proposals (no second model call) and refuses any row that changed.",
     "",
+    ...(op ? [
+      `OPERATOR HOLD LIST: ${op.held.size} proposals HELD (not applied), ${proposals.filter((p) => !op.held.has(p.id)).length} proposals APPLIED, ${op.unknown.length} unknown ids`,
+      `preview sha256 ${op.previewSha256}`, `hold list sha256 ${op.holdListSha256}`, "",
+    ] : []),
     `proposals ${proposals.length}  holds ${holds.length}  failed ${sum.failed}  needs_review ${sum.needsReview}  model cost reported ${sum.costUsd.toFixed(4)} USD`,
     "",
     "INVENTORY", inventoryText.split("\n").slice(0, 8).join("\n"), "",
@@ -719,8 +835,18 @@ export function formatPilotPlan(slug: string, photos: Row[], proposals: Proposal
   for (const r of photos) {
     const p = pBy.get(r.id), h = hBy.get(r.id);
     L.push(`PHOTO ${r.id}  ${r.storage_path}  status ${r.analysis_status}${r.metadata_edited_at ? "  MANUALLY EDITED (never touched)" : ""}`);
-    if (p) {
-      L.push(`  PROPOSED (model ${p.model})`);
+    if (p && op?.held.has(r.id)) {
+      L.push(`  HELD BY OPERATOR (the proposal below is NOT applied): ${op.held.get(r.id)}`);
+      L.push(`    analysis_status ${p.before.analysis_status} -> needs_review; analysis_error "${OPERATOR_HOLD_PREFIX}${op.held.get(r.id)}"; every metadata field kept as it is`);
+      if (op.conflicts?.has(r.id)) L.push(`    WOULD CONFLICT NOW: ${op.conflicts.get(r.id)}`);
+      L.push("  WITHHELD PROPOSAL (for the record)");
+      for (const k of p.changed) {
+        if (k === "analysed_at") continue;
+        L.push(`    ${k}:`, `      current : ${show(p.before[k])}`, `      withheld: ${show(p.after[k])}`);
+      }
+    } else if (p) {
+      if (op?.conflicts?.has(r.id)) L.push(`  WOULD CONFLICT NOW: ${op.conflicts.get(r.id)}`);
+      L.push(`  PROPOSED (model ${p.model})${op ? "  -> APPLIED" : ""}`);
       for (const k of p.changed) {
         if (k === "analysed_at") continue;
         L.push(`    ${k}:`, `      current : ${show(p.before[k])}`, `      proposed: ${show(p.after[k])}`);
@@ -736,6 +862,12 @@ export function formatPilotPlan(slug: string, photos: Row[], proposals: Proposal
   L.push("HOLDS (status-only; stop these items being offered):");
   if (!holds.length) L.push("  none");
   for (const h of holds) L.push(`  ${h.id}  ${h.before.analysis_status} -> ${h.after.analysis_status}  reason: ${h.reason}`);
+  if (op) {
+    L.push("", "OPERATOR HOLDS (reviewer-selected; status-only, proposal not applied):");
+    if (!op.held.size) L.push("  none");
+    for (const [id, reason] of op.held) L.push(`  ${id}  -> needs_review  reason: ${reason}`);
+    if (op.unknown.length) { L.push("UNKNOWN ids on the hold list (not in the preview; apply reports each as a conflict and writes nothing for it):"); for (const u of op.unknown) L.push(`  ${u.table}:${u.id}  ${u.reason}`); }
+  }
   return L.join("\n");
 }
 
@@ -747,6 +879,8 @@ export function formatSummary(s: RunSummary): string {
     `holds ${s.holds} previewed  ${s.holdsApplied} applied`,
     `bundle items updated ${s.itemsUpdated}  item conflicts ${s.itemConflicts}`,
     `model cost reported ${s.costUsd.toFixed(4)} USD`,
+    ...(s.previewSha256 ? [`preview sha256 ${s.previewSha256}`] : []),
+    ...(s.holdListSha256 ? [`hold list sha256 ${s.holdListSha256}  operator holds accepted ${s.operatorHolds}`] : []),
   ].join("\n");
 }
 
