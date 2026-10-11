@@ -4,6 +4,7 @@ import { useEffect, useReducer, useRef, useState } from 'react';
 import Link from 'next/link';
 import { ArrowLeft, ArrowUpRight, Bot, Check, CheckCheck, ChevronRight, Clock3, Film, ImageIcon, LockKeyhole, MessageCircle, Pause, Play, RotateCcw, Send, ShieldCheck, Sparkles, UserRound, X } from 'lucide-react';
 import PlatformMark from '../fans/PlatformMark';
+import IntelligenceCoreIcon from '../IntelligenceCoreIcon';
 import { portraitUrl } from '../dashboard/portraits';
 import { fanAvatarUrl } from '../dashboard/fan-avatars';
 import { DEMO_HISTORY, DEMO_MEMORIES, DEMO_OWNED, DEMO_PRICE, DEMO_SCENES, demoTotals, movieDemoReducer, newMovieDemo } from './movie-night-model';
@@ -113,7 +114,7 @@ export default function MovieNightDemo() {
       </main>
 
       <aside className={styles.context} aria-label="Demo fan context">
-        <header><span className={styles.contextIcon}><Sparkles size={19}/></span><div><h2>Conversation intelligence</h2><span>History, relevance and continuity</span></div></header>
+        <header><span className={styles.contextIcon} data-conversation-core><IntelligenceCoreIcon size={40}/></span><div><h2>Conversation intelligence</h2><span>History, relevance and continuity</span></div></header>
         <div className={styles.stats}><div><span>Relationship spend</span><strong data-demo-spend>{dollars(totals.spent)}</strong></div><div><span>Purchases</span><strong data-demo-purchases>{totals.purchases}</strong></div></div>
         <nav className={styles.tabs} aria-label="Demo context sections">{(['Context','Fan record'] as const).map(value => <button key={value} aria-pressed={tab === value} onClick={() => setTab(value)}>{value}</button>)}</nav>
         <div className={styles.contextBody}>

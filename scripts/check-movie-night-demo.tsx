@@ -45,6 +45,7 @@ export async function checkMovieNightDemo() {
   let requests = 0; const savedFetch = globalThis.fetch;
   globalThis.fetch = async () => { requests++; throw Error('No external services in the movie demo'); };
   const imports: Record<string, unknown> = {
+    '../IntelligenceCoreIcon': { __esModule: true, default: ({size}: {size: number}) => <canvas width={size * 2} height={size * 2} aria-hidden="true"/> },
     'next/link': { __esModule: true, default: ({children, ...props}: React.ComponentProps<'a'>) => <a {...props}>{children}</a> },
     '../fans/PlatformMark': { __esModule: true, default: () => <span>OnlyFans</span> },
     '../dashboard/portraits': { portraitUrl: (key: string) => `/api/dashboard/portrait?image=${key}` },
