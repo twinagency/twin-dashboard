@@ -6,7 +6,7 @@ def aws(args):
   raise RuntimeError('AWS inspection failed')
  return json.loads(r.stdout)
 assert aws(['sts','get-caller-identity'])['Account']=='323149985112'
-commands=['df -h /','docker system df','docker ps -a --format "{{.Names}} | {{.Image}} | {{.Status}}"','docker image ls --format "{{.ID}} | {{.Size}} | {{.CreatedAt}} | {{.Repository}}:{{.Tag}}"']
+commands=['du -xhd1 /var/log /var/cache /tmp /var/tmp /root/.cache 2>/dev/null || true','journalctl --disk-usage','docker system df -v']
 request={'InstanceIds':['i-09a9dd3bd749643a5'],'DocumentName':'AWS-RunShellScript','Comment':'Read-only disk inspection for FLIRT deployment','Parameters':{'commands':commands,'executionTimeout':['120']}}
 id=aws(['ssm','send-command','--cli-input-json',json.dumps(request)])['Command']['CommandId']
 for _ in range(40):
