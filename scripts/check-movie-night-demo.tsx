@@ -65,6 +65,11 @@ export async function checkMovieNightDemo() {
   const tick = async () => act(async () => { const item = timers.entries().next().value; assert.ok(item, 'pending timer'); timers.delete(item[0]); item[1](); });
   await act(async () => root.render(<Demo/>));
   assert.match(document.body.textContent!, /Scripted conversation.*Simulated purchase/);
+  assert.match(document.body.textContent!, /Bri/);
+  assert.match(document.body.textContent!, /Ronan/);
+  assert.doesNotMatch(document.body.textContent!, /Anastasia|Ben|popcorn|thriller|Friday/i);
+  assert.equal(model.DEMO_SCENES[0].events[0].text, 'you still awake?');
+  for (const memory of model.DEMO_MEMORIES) assert.ok(model.DEMO_HISTORY.some(item => item.id === memory.source), 'Every memory has a visible source record');
   assert.equal(document.querySelector('[aria-label="Presenter controls"]'),null, 'Recording view hides playback controls by default');
   assert.doesNotMatch(document.body.textContent!, /Play all|Reset demo|CONVERSATION PROGRESS|Next scene/);
   await act(async () => document.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'n',bubbles:true})));
@@ -89,6 +94,9 @@ export async function checkMovieNightDemo() {
   assert.equal(document.querySelector('[data-demo-purchases]')?.textContent, '5');
   assert.equal(document.querySelector('[data-offer-status]')?.getAttribute('data-offer-status'),'purchased');
   await click('Fan record'); assert.match(document.body.textContent!, /Just purchased/);
+  assert.match(document.body.textContent!, /Shower video/);
+  assert.match(document.body.textContent!, /now get some sleep, you earned it/);
+  assert.doesNotMatch(document.body.textContent!, /800 Stars/);
   await click('View earlier conversation'); assert.ok(document.querySelector('dialog[open]'));
   await click('Close earlier conversation'); assert.equal(document.querySelector('dialog[open]'),null);
   await act(async () => document.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'p',bubbles:true})));

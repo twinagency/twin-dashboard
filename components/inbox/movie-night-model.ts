@@ -1,66 +1,227 @@
 // Presentation fixtures only. Never sent to a platform or persisted to the CRM.
 export const MOVIE_DEMO_HREF = '/inbox?creator=briana&platform=onlyfans&presentation=movie-night';
+// Preserve the existing OnlyFans demo price; no Telegram Stars conversion is implied.
 export const DEMO_PRICE = 18;
 export type DemoMessage = { id: string; role: 'fan' | 'creator' | 'system'; text: string; offer?: boolean; manual?: boolean };
 export const DEMO_HISTORY: DemoMessage[] = [
-  { id: 'history-films', role: 'fan', text: 'Thrillers every time. I always try to guess the ending. No spoilers though 😂' },
-  { id: 'history-popcorn', role: 'fan', text: 'Friday movie nights are my thing. Salted popcorn, obviously.' },
-  { id: 'history-reply', role: 'creator', text: 'Okay, thriller guy. I expect your best theory before the ending 😉' },
-  { id: 'history-photos', role: 'fan', text: 'Your natural close-up photos are my favourites. The little smile gets me every time.' },
+  {
+    "id": "history-work",
+    "role": "system",
+    "text": "Earlier context: Ronan may need to stay back at work tonight."
+  },
+  {
+    "id": "history-video",
+    "role": "system",
+    "text": "Previous purchase: Shower video, last week."
+  }
 ];
 export const DEMO_MEMORIES = [
-  { id: 'films', label: 'Movie taste', value: 'Thrillers. Likes guessing the ending. No spoilers.', source: 'history-films' },
-  { id: 'popcorn', label: 'Friday ritual', value: 'A film and salted popcorn on a quiet night in.', source: 'history-popcorn' },
-  { id: 'photos', label: 'Photo preference', value: 'Natural close-ups and candid smiles.', source: 'history-photos' },
+  {
+    "id": "work",
+    "label": "Earlier work plans",
+    "value": "Ronan may need to stay back tonight.",
+    "source": "history-work"
+  },
+  {
+    "id": "video",
+    "label": "Previous purchase",
+    "value": "Shower video purchased last week.",
+    "source": "history-video"
+  }
 ];
 export const DEMO_OWNED = [
-  { id: 'outdoor', title: 'Outdoor moments', amount: 29 },
-  { id: 'mirror', title: 'Behind the scenes', amount: 29 },
-  { id: 'coffee', title: 'Coffee break diary', amount: 24 },
-  { id: 'weekend', title: 'Weekend notes', amount: 44 },
+  {
+    "id": "outdoor",
+    "title": "Outdoor moments",
+    "amount": 29
+  },
+  {
+    "id": "shower",
+    "title": "Shower video",
+    "amount": 29
+  },
+  {
+    "id": "coffee",
+    "title": "Coffee break diary",
+    "amount": 24
+  },
+  {
+    "id": "weekend",
+    "title": "Weekend notes",
+    "amount": 44
+  }
 ];
 type Event = { kind: 'fan' | 'creator' | 'context' | 'offer' | 'purchase' | 'memory'; text: string; delay: number };
 export type DemoScene = { title: string; cue: string; memories: string[]; events: Event[] };
+// Dialogue supplied by the owner. Do not generate or embellish these messages.
 export const DEMO_SCENES: DemoScene[] = [
-  { title: 'A familiar Friday', cue: 'Show how the reply draws on his earlier movie-night ritual.', memories: ['films', 'popcorn'], events: [
-    { kind: 'fan', text: 'Finally on the sofa. Thriller or comedy tonight? You choose 😏', delay: 2000 },
-    { kind: 'context', text: 'Retrieved his film preference and Friday-night ritual.', delay: 4500 },
-    { kind: 'creator', text: 'Thriller, obviously. You love trying to guess the ending 😂', delay: 6500 },
-    { kind: 'creator', text: 'Tell me you remembered the salted popcorn though.', delay: 4500 },
-  ] },
-  { title: 'She remembers the details', cue: 'Let the remembered detail land before advancing.', memories: ['popcorn'], events: [
-    { kind: 'fan', text: 'You remembered that? 😂 Yeah, got it. Just missing some company.', delay: 2000 },
-    { kind: 'context', text: 'Kept the remembered detail and matched his playful tone.', delay: 4500 },
-    { kind: 'creator', text: 'Of course I remembered. You were very passionate about the sweet popcorn being wrong 😌', delay: 7500 },
-    { kind: 'creator', text: 'Although I feel like I’d be terrible company for actually paying attention to the film 😉', delay: 6000 },
-  ] },
-  { title: 'A playful reply', cue: 'The conversation follows what he actually says next.', memories: ['films', 'photos'], events: [
-    { kind: 'fan', text: 'Oh yeah? What would you do? 😉', delay: 2000 },
-    { kind: 'context', text: 'Continued the movie-night conversation with light teasing.', delay: 4500 },
-    { kind: 'creator', text: 'Steal the best spot on the sofa. Give you that little smile you said you liked.', delay: 6500 },
-    { kind: 'creator', text: 'Then act completely innocent when you ask to rewind 😇', delay: 4500 },
-  ] },
-  { title: 'He asks to see it', cue: 'The request comes naturally from the conversation.', memories: ['photos'], events: [
-    { kind: 'fan', text: 'That smile is unfair 😂 Have you got a photo for me?', delay: 2000 },
-    { kind: 'context', text: 'Matched his request to his preference for candid close-ups.', delay: 4500 },
-    { kind: 'creator', text: 'I have a little close-up that fits this conversation perfectly. Very much your kind of photo 😉', delay: 7500 },
-    { kind: 'creator', text: 'Want to see it?', delay: 3500 },
-  ] },
-  { title: 'A relevant, unseen photo', cue: 'Show the selected photo and the ownership check in the right panel.', memories: ['photos'], events: [
-    { kind: 'fan', text: 'Go on then. Something I haven’t already seen 😏', delay: 2000 },
-    { kind: 'context', text: 'Checked four previous purchases. In the moment is not owned.', delay: 4500 },
-    { kind: 'offer', text: 'This is the smile I meant. Try not to lose your place in the film 😉', delay: 7000 },
-  ] },
-  { title: 'Purchase and continuity', cue: 'Watch the offer, purchase count and fan record update together.', memories: ['photos', 'films'], events: [
-    { kind: 'fan', text: 'Okay, you win. Unlocking it now 😂', delay: 2000 },
-    { kind: 'purchase', text: 'In the moment unlocked. US$18.00 added to this demo relationship.', delay: 5500 },
-    { kind: 'creator', text: 'There you go 😌 Now press play. I still want your theory before the ending.', delay: 6000 },
-    { kind: 'memory', text: 'Tonight: thriller night. In the moment purchased. Follow up about his ending prediction.', delay: 3500 },
-  ] },
-  { title: 'The conversation continues', cue: 'Finish on a reply that brings the conversation back to him.', memories: ['films'], events: [
-    { kind: 'fan', text: 'The movie has some serious competition now 😂', delay: 2000 },
-    { kind: 'creator', text: 'I’ll take that compliment 😉 But no pretending you guessed the twist if you spent the whole film messaging me.', delay: 7500 },
-  ] },
+  {
+    "title": "After the late shift",
+    "cue": "Show the earlier work plan before Bri asks whether he stayed back.",
+    "memories": [
+      "work"
+    ],
+    "events": [
+      {
+        "kind": "fan",
+        "text": "you still awake?",
+        "delay": 1800
+      },
+      {
+        "kind": "context",
+        "text": "Retrieved the earlier work plan from this demo’s prepared history.",
+        "delay": 2500
+      },
+      {
+        "kind": "creator",
+        "text": "always for you baby. did you end up staying back?",
+        "delay": 3300
+      },
+      {
+        "kind": "fan",
+        "text": "just walked in the door. i'm wrecked yeah James had to leave so I covered",
+        "delay": 4200
+      },
+      {
+        "kind": "creator",
+        "text": "aww my poor baby. come lie down and talk to me, i'll make you feel better 🥺",
+        "delay": 4700
+      },
+      {
+        "kind": "fan",
+        "text": "you always do",
+        "delay": 2200
+      }
+    ]
+  },
+  {
+    "title": "A remembered purchase",
+    "cue": "Open the prior purchase record to show where the video reference comes from.",
+    "memories": [
+      "video"
+    ],
+    "events": [
+      {
+        "kind": "context",
+        "text": "Retrieved last week’s video purchase from the prepared fan record.",
+        "delay": 2200
+      },
+      {
+        "kind": "creator",
+        "text": "did you ever end up rewatching that shower video from last week? 🙈",
+        "delay": 3600
+      },
+      {
+        "kind": "fan",
+        "text": "more than once if i'm honest lol that shit crazy",
+        "delay": 3000
+      },
+      {
+        "kind": "creator",
+        "text": "hehe i knew it. i was thinking about you while i filmed it",
+        "delay": 3500
+      }
+    ]
+  },
+  {
+    "title": "The conversation develops",
+    "cue": "Let the supplied exchange play through at a comfortable reading pace.",
+    "memories": [
+      "work",
+      "video"
+    ],
+    "events": [
+      {
+        "kind": "fan",
+        "text": "don't say that, i'm already getting hard",
+        "delay": 2500
+      },
+      {
+        "kind": "creator",
+        "text": "good. you deserve a reward after tonight. i'd climb on top of you and slowly sink down onto your cock",
+        "delay": 5800
+      },
+      {
+        "kind": "fan",
+        "text": "fuck yes, my hands on your hips",
+        "delay": 2200
+      },
+      {
+        "kind": "creator",
+        "text": "you still think about me riding you, don't you? 😏",
+        "delay": 3000
+      },
+      {
+        "kind": "fan",
+        "text": "every single night baby",
+        "delay": 2200
+      },
+      {
+        "kind": "creator",
+        "text": "mmm i'd ride you slow and deep until you can't hold it anymore",
+        "delay": 3600
+      },
+      {
+        "kind": "fan",
+        "text": "you're killing me right now",
+        "delay": 2200
+      }
+    ]
+  },
+  {
+    "title": "The paid offer",
+    "cue": "Show his request, the prepared content card and the ownership check.",
+    "memories": [
+      "video"
+    ],
+    "events": [
+      {
+        "kind": "creator",
+        "text": "want to see what i look like on top, from your view? 😈",
+        "delay": 3500
+      },
+      {
+        "kind": "fan",
+        "text": "yes. please. show me",
+        "delay": 2200
+      },
+      {
+        "kind": "context",
+        "text": "Checked four prior demo purchases. Private photo is not already owned.",
+        "delay": 2000
+      },
+      {
+        "kind": "offer",
+        "text": "this is exactly what you'd be looking up at baby 😘",
+        "delay": 3200
+      }
+    ]
+  },
+  {
+    "title": "Purchase and follow-up",
+    "cue": "Pause on the purchase update, then continue to Bri’s final reply.",
+    "memories": [
+      "work",
+      "video"
+    ],
+    "events": [
+      {
+        "kind": "purchase",
+        "text": "Private photo unlocked. US$18.00 added to this demo relationship.",
+        "delay": 3500
+      },
+      {
+        "kind": "creator",
+        "text": "now get some sleep, you earned it. dream about me 🥰",
+        "delay": 3500
+      },
+      {
+        "kind": "memory",
+        "text": "Ronan covered for James and came home tired. Private photo purchased. Follow up after he has rested.",
+        "delay": 1800
+      }
+    ]
+  }
 ];
 export type DemoState = {
   scene: number; cursor: number; playing: boolean; auto: boolean; mode: 'Autonomous' | 'Human';
@@ -95,8 +256,8 @@ export function movieDemoReducer(state: DemoState, action: DemoAction): DemoStat
   const id = `movie-${state.scene}-${state.cursor}`;
   if (event.kind === 'fan' || event.kind === 'creator') next.messages = [...state.messages, { id, role: event.kind, text: event.text }];
   if (event.kind === 'context') { next.context = event.text; next.activity = [...state.activity, event.text]; }
-  if (event.kind === 'offer' && !state.offered) { next.offered = true; next.messages = [...state.messages, { id, role: 'creator', text: event.text, offer: true }]; next.activity = [...state.activity, 'In the moment offered for US$18.00. Awaiting simulated purchase.']; }
-  if (event.kind === 'purchase' && state.offered && !state.purchased) { next.purchased = true; next.messages = [...state.messages, { id, role: 'system', text: 'Purchased In the moment · US$18.00' }]; next.activity = [...state.activity, event.text]; next.context = 'Purchase recorded. Ownership and relationship totals updated.'; }
+  if (event.kind === 'offer' && !state.offered) { next.offered = true; next.messages = [...state.messages, { id, role: 'creator', text: event.text, offer: true }]; next.activity = [...state.activity, 'Private photo offered for US$18.00. Awaiting simulated purchase.']; }
+  if (event.kind === 'purchase' && state.offered && !state.purchased) { next.purchased = true; next.messages = [...state.messages, { id, role: 'system', text: 'Purchased Private photo · US$18.00' }]; next.activity = [...state.activity, event.text]; next.context = 'Purchase recorded. Ownership and relationship totals updated.'; }
   if (event.kind === 'memory') { next.memorySaved = true; next.activity = [...state.activity, event.text]; next.context = 'Saved the new purchase and the next natural follow-up.'; }
   return next;
 }
