@@ -16,7 +16,7 @@ import {
   withoutOptionalMediaColumns, OPTIONAL_MEDIA_COLUMNS,
 } from "../lib/media-analysis-row";
 import { withRetry } from "../lib/retry";
-import { PRICING_CATEGORIES } from "../lib/pricing";
+import { PRICING_CATEGORIES, priceFromGuide } from "../lib/pricing";
 
 const meta = (over: Record<string, unknown> = {}) => ({ model: "qwen/qwen2.5-vl-72b-instruct", provider: "DeepInfra", latencyMs: 1200, costUsd: 0.0004, finishReason: "stop", ...over });
 const allNo = Object.fromEntries(FACT_KEYS.map((k) => [k, "no"]));
@@ -125,6 +125,54 @@ assert.equal(resolveVisionAnalysisModel("mistralai/mistral-small-3.2-24b-instruc
   assert.equal(res.fields?.caption, null);
   const fixed = replying(contradicted, answer());
   assert.equal((await analysePhoto(photo, null, undefined, { call: fixed.call, writeCaption: captionOk })).status, "analysed", "a corrected second answer is accepted");
+}
+// ---- round 5 (Jesse's decisions) through the whole pipeline with mocked model answers ----
+{
+  const guide = Object.fromEntries(PRICING_CATEGORIES.map((c) => [c, 500])) as Record<string, number>;
+  const run = async (ev: Record<string, unknown>, over: Record<string, unknown>) =>
+    analysePhoto(photo, null, undefined, { call: replying(answer(ev, over)).call, writeCaption: captionOk });
+  // thong back view with the cheeks visible: ass tag, suggestive, not nude, analysed
+  const thong = await run({ bare_buttocks: "yes", lingerie: "yes", suggestive_pose: "yes" }, {
+    identifying: "A brunette woman in a black thong is seen from behind on a bed.", details: "She wears a black thong and her bare buttocks are visible.",
+    short_label: "black thong rear", visible: ["black thong", "bed"], tags: ["ass", "lingerie", "bed"],
+  });
+  assert.equal(thong.status, "analysed");
+  assert.equal(thong.fields?.explicitness, "suggestive");
+  assert.equal(thong.fields?.is_nude, false);
+  assert.equal(thong.fields?.nsfw, false);
+  assert.ok(thong.fields?.tags.includes("ass"));
+  assert.equal(thong.fields?.visual_facts.evidence.bare_buttocks, "yes");
+  // pricing semantics unchanged: ass is nude-only, so with nsfw false it is ignored and the item prices by its other tags (lingerie)
+  const lingeriePrice = priceFromGuide({ ...guide, lingerie: 650, ass: 1800, sfw: 300 }, thong.fields!.tags, thong.fields!.nsfw);
+  assert.equal(lingeriePrice, 650, "thong back view prices as lingerie (ass is ignored while nsfw is false)");
+  // nothing worn: explicit as before
+  const naked = await run({ bare_buttocks: "yes" }, {
+    identifying: "A nude brunette woman is seen from behind on a bed.", details: "Her bare buttocks are visible.", short_label: "nude rear", visible: ["bed"], tags: ["ass"],
+  });
+  assert.equal(naked.status, "analysed");
+  assert.equal(naked.fields?.is_nude, true);
+  assert.equal(naked.fields?.nsfw, true);
+  assert.equal(naked.fields?.explicitness, "explicit");
+  assert.equal(priceFromGuide({ ...guide, ass: 1800, sfw: 300 }, naked.fields!.tags, naked.fields!.nsfw), 1800);
+  // sheer: discernible vs outline
+  const sheer = await run({ nipples: "yes", lingerie: "yes" }, { identifying: "A woman in a sheer black bodysuit stands in a hallway.", details: "Her nipples are clearly visible through the sheer mesh.", visible: ["sheer black bodysuit"], tags: [] });
+  assert.equal(sheer.status, "analysed");
+  assert.equal(sheer.fields?.is_nude, true);
+  const outline = await run({ nipples: "yes", lingerie: "yes" }, { identifying: "A woman in a sheer black bodysuit stands in a hallway.", details: "Only the faint outline of her nipples shows through the mesh.", visible: ["sheer black bodysuit"], tags: [] });
+  assert.equal(outline.status, "needs_review");
+  // hand over the nipple
+  const hand = await run({ nipples: "no", suggestive_pose: "yes" }, { identifying: "A woman covers her breasts with her hand and wears white jeans.", details: "Her hand covers her nipples.", visible: ["white jeans"], tags: ["topless", "tits"] });
+  assert.equal(hand.status, "analysed");
+  assert.deepEqual(hand.fields?.tags.filter((t) => t === "topless" || t === "tits"), []);
+  assert.equal(hand.fields?.is_nude, false);
+  // paint is not a bikini
+  const paint = await run({ swimwear: "yes" }, { identifying: "A woman with a bikini pattern painted on her skin stands on a beach.", details: "The paint is red.", visible: ["body paint", "beach"], tags: ["bikini"] });
+  assert.equal(paint.status, "needs_review");
+  assert.ok(!paint.fields?.tags.includes("bikini"));
+  // background mirror is not a mirror selfie
+  const bg = await run({ mirror_reflection: "yes" }, { identifying: "A woman in a grey dress stands beside a large mirror on the wall.", details: "She looks at the camera.", visible: ["grey dress", "mirror on the wall"], tags: ["mirror_selfie"] });
+  assert.equal(bg.status, "needs_review");
+  assert.ok(!bg.fields?.tags.includes("mirror_selfie"));
 }
 // timeouts: each call has its own deadline and the total is bounded
 assert.ok(VISION_CALL_TIMEOUT_MS >= 30_000 && ANALYSIS_TOTAL_BUDGET_MS > 2 * VISION_CALL_TIMEOUT_MS, "per-attempt timeout is sane and the retry fits inside the total");

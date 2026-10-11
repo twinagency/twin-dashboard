@@ -72,21 +72,89 @@ assert.equal(tooMuch.status, "needs_review");
 assert.notEqual(tooMuch.fields.explicitness, "none", "unclear nipples must not read as explicitness none");
 assert.match(tooMuch.issues[0], /nipples/);
 
-// ---- worn garments are not bare buttocks (round 2) ----
-const thong = norm({ lingerie: "yes", suggestive_pose: "yes" }, { identifying: "A woman in a red thong is seen from behind on a bed.", details: "She wears a red thong, buttocks visible from behind.", short_label: "red thong rear", visible: ["red thong", "bed"], tags: ["ass", "lingerie", "bed"] });
-assert.equal(thong.fields.is_nude, false, "a worn thong is not nudity");
-assert.equal(thong.fields.nsfw, false);
-assert.equal(thong.fields.explicitness, "suggestive");
-assert.ok(!thong.fields.tags.includes("ass"), "no ass tag without bare_buttocks yes");
-assert.ok(thong.fields.tags.includes("lingerie"));
-assert.equal(thong.status, "analysed");
-// backstop: the model says bare_buttocks yes while the prose names a worn thong -> review, never a silent nude flag write
-const thongYes = norm({ lingerie: "yes", bare_buttocks: "yes" }, { identifying: "A woman in a pink thong kneels on a bed.", details: "She wears a pink thong.", short_label: "pink thong", visible: ["pink thong", "bed"], tags: [] });
-assert.equal(thongYes.status, "needs_review");
-assert.match(thongYes.issues.join(" "), /thong/);
+// ---- round 5, decision 1: visible cheeks with a worn thong are bare_buttocks yes, but a worn thong alone is not nudity ----
+const thongBack = norm({ bare_buttocks: "yes", lingerie: "yes", suggestive_pose: "yes" }, { identifying: "A woman in a red thong is seen from behind on a bed.", details: "She wears a red thong, her bare buttocks visible from behind.", short_label: "red thong rear", visible: ["red thong", "bed"], tags: ["ass", "lingerie", "bed"] });
+assert.equal(thongBack.fields.is_nude, false, "a worn thong alone is not nudity");
+assert.equal(thongBack.fields.nsfw, false);
+assert.equal(thongBack.fields.explicitness, "suggestive");
+assert.ok(thongBack.fields.tags.includes("ass"), "visible cheeks license the ass tag even with a thong");
+assert.ok(thongBack.fields.tags.includes("lingerie"));
+assert.equal(thongBack.fields.visual_facts.evidence.bare_buttocks, "yes");
+assert.equal(thongBack.status, "analysed", "no contradiction: not needs_review");
+assert.deepEqual(thongBack.contradictions, []);
+// the same frame with the model answering bare_buttocks "no" (cheeks not visible) gets no ass tag
+const thongCovered = norm({ lingerie: "yes", suggestive_pose: "yes" }, { identifying: "A woman in a red thong is seen from behind on a bed.", details: "She wears a red thong.", short_label: "red thong rear", visible: ["red thong", "bed"], tags: ["ass", "lingerie", "bed"] });
+assert.ok(!thongCovered.fields.tags.includes("ass"));
+assert.equal(thongCovered.fields.is_nude, false);
+// thong plus another nudity key stays nude/explicit (other evidence)
+const thongNipples = norm({ bare_buttocks: "yes", nipples: "yes", lingerie: "yes" }, { identifying: "A topless woman in a pink thong kneels on a bed.", details: "Her nipples are visible and she wears a pink thong.", short_label: "topless thong", visible: ["pink thong", "bed"], tags: [] });
+assert.equal(thongNipples.fields.is_nude, true);
+assert.equal(thongNipples.fields.explicitness, "explicit");
+// nothing worn: buttocks yes keeps nude/explicit
+const nakedBack = norm({ bare_buttocks: "yes" }, { identifying: "A nude woman is seen from behind on a bed.", details: "Her bare buttocks are visible. She kneels on white sheets.", short_label: "nude from behind", visible: ["bed"], tags: ["ass"] });
+assert.equal(nakedBack.fields.is_nude, true);
+assert.equal(nakedBack.fields.nsfw, true);
+assert.equal(nakedBack.fields.explicitness, "explicit");
+assert.ok(nakedBack.fields.tags.includes("ass"));
+// a thong pulled down/aside leaves the buttocks bare: nude/explicit as before
 const pulled = norm({ lingerie: "yes", bare_buttocks: "yes" }, { identifying: "A woman bends over with her thong pulled down.", details: "The thong is pulled down to her thighs.", short_label: "thong pulled down", visible: ["thong pulled down"], tags: [] });
 assert.equal(pulled.status, "analysed", "a garment pulled down leaves the buttocks bare");
 assert.equal(pulled.fields.is_nude, true);
+assert.equal(pulled.fields.explicitness, "explicit");
+// a worn thong alone must not allow full_nudity
+const thongFull = norm({ full_nudity: "yes", bare_buttocks: "yes", lingerie: "yes" }, { identifying: "A woman in a black thong stands on a bed.", details: "She wears a black thong.", short_label: "black thong", visible: ["black thong", "bed"], tags: ["full_nude"] });
+assert.equal(thongFull.status, "needs_review");
+assert.ok(!thongFull.fields.tags.includes("full_nude"));
+// nude words are not licensed by thong-only buttocks
+const thongNaked = norm({ bare_buttocks: "yes", lingerie: "yes" }, { identifying: "A naked woman in a thong stands on a bed.", details: "She wears a thong.", short_label: "thong", visible: ["thong"], tags: [] });
+assert.ok(thongNaked.contradictions.some((c) => /nudity/.test(c)), "'naked' is not licensed by thong-only cheeks");
+
+// ---- round 5, decision 2: anatomy through sheer fabric is yes only when clearly discernible; an outline is not ----
+const sheerYes = norm({ nipples: "yes", lingerie: "yes" }, { identifying: "A woman in a sheer white bodysuit stands in a bedroom.", details: "Her nipples are clearly visible through the transparent mesh.", short_label: "sheer bodysuit", visible: ["sheer white bodysuit", "bedroom"], tags: ["topless"] });
+assert.equal(sheerYes.status, "analysed", "a discernible nipple through sheer fabric is not a contradiction");
+assert.equal(sheerYes.fields.is_nude, true);
+assert.ok(sheerYes.fields.tags.includes("topless"));
+const sheerOutline = norm({ nipples: "yes", lingerie: "yes" }, { identifying: "A woman in a sheer white bodysuit stands in a bedroom.", details: "The faint outline of her nipples shows through the fabric.", short_label: "sheer bodysuit", visible: ["sheer white bodysuit"], tags: [] });
+assert.equal(sheerOutline.status, "needs_review", "an outline answered yes is not accepted");
+assert.match(sheerOutline.issues.join(" "), /outline/);
+const sheerUnclear = norm({ nipples: "unclear", lingerie: "yes" }, { identifying: "A woman in a sheer white bodysuit stands.", details: "Her chest shows through the mesh.", short_label: "sheer bodysuit", visible: ["sheer white bodysuit"], tags: ["topless"] });
+assert.equal(sheerUnclear.status, "needs_review");
+assert.ok(!sheerUnclear.fields.tags.includes("topless"));
+
+// ---- round 5, decision 3: a hand over the nipple means nipples no and no topless/tits tag ----
+const handOver = norm({ nipples: "no", suggestive_pose: "yes" }, { identifying: "A woman covers her breasts with one hand and wears white shorts.", details: "Her hand covers her nipples. She stands in a bedroom.", short_label: "hand over chest", visible: ["white shorts", "bedroom"], tags: ["topless", "tits"] });
+assert.ok(!handOver.fields.tags.includes("topless") && !handOver.fields.tags.includes("tits"));
+assert.equal(handOver.fields.is_nude, false);
+assert.equal(handOver.status, "analysed");
+assert.match(handOver.fields.visual_description, /Not visible: nipples/);
+const between = norm({ nipples: "yes" }, { identifying: "A woman covers her breasts with her hand.", details: "A nipple shows between her fingers.", short_label: "hand on chest", visible: ["hand"], tags: [] });
+assert.ok(between.fields.tags.includes("topless"), "a nipple actually seen between fingers stays yes");
+// the invented-exposure claim is a contradiction
+const invented = norm({ nipples: "no" }, { identifying: "A topless woman covers herself with her hand.", details: "She stands.", short_label: "topless hand", visible: ["hand"], tags: [] });
+assert.ok(invented.contradictions.length > 0 && invented.status === "needs_review");
+
+// ---- round 5, decision 4: body paint is not a garment ----
+const paint = norm({ swimwear: "yes" }, { identifying: "A woman with a red and blue painted bikini design stands on a beach.", details: "The paint covers her chest and hips.", short_label: "painted bikini", visible: ["body paint"], tags: ["bikini", "outdoor"] });
+assert.ok(!paint.fields.tags.includes("bikini"), "paint licenses no bikini tag");
+assert.equal(paint.status, "needs_review");
+assert.match(paint.issues.join(" "), /paint/);
+const paintNo = norm({ swimwear: "no", nipples: "unclear" }, { identifying: "A woman wearing only red body paint on her chest stands on a beach.", details: "Red paint covers her chest and hips.", short_label: "body paint beach", visible: ["red body paint", "beach"], tags: ["bikini"] });
+assert.ok(!paintNo.fields.tags.includes("bikini"));
+assert.deepEqual(paintNo.contradictions, [], "describing paint as paint is not a swimwear claim");
+const realBikini = norm({ swimwear: "yes" }, { identifying: "A woman in a red bikini stands on a beach with painted nails.", details: "She has painted nails.", short_label: "red bikini", visible: ["red bikini"], tags: ["bikini"] });
+assert.ok(realBikini.fields.tags.includes("bikini"));
+assert.equal(realBikini.status, "analysed");
+
+// ---- round 5, decision 5: a mirror in the background is not a mirror selfie ----
+const bgMirror = norm({ mirror_reflection: "yes" }, { identifying: "A woman in a grey dress stands in a room with a large mirror in the background.", details: "She looks at the camera.", short_label: "grey dress room", visible: ["grey dress", "mirror in the background"], tags: ["mirror_selfie"] });
+assert.ok(!bgMirror.fields.tags.includes("mirror_selfie"));
+assert.equal(bgMirror.status, "needs_review");
+const bgMirrorNo = norm({ mirror_reflection: "no" }, { identifying: "A woman in a grey dress stands in a room with a large mirror in the background.", details: "She looks at the camera.", short_label: "grey dress room", visible: ["grey dress", "mirror in the background"], tags: ["mirror_selfie"] });
+assert.ok(!bgMirrorNo.fields.tags.includes("mirror_selfie"));
+assert.equal(bgMirrorNo.status, "analysed", "a plain mirror object is a fact, not a claim");
+const realMirror = norm({ mirror_reflection: "yes" }, { identifying: "A woman takes a mirror selfie holding her phone.", details: "A second mirror hangs in the background.", short_label: "mirror selfie", visible: ["phone", "mirror"], tags: [] });
+assert.ok(realMirror.fields.tags.includes("mirror_selfie"));
+assert.equal(realMirror.status, "analysed");
 
 // ---- anus yes contradicted by the prose -> review; male genitals never get the pussy tag ----
 const anusNo = norm({ anus: "yes", genitals: "yes", nipples: "no" }, { identifying: "A nude woman lies on a bed.", details: "Her anus is not visible.", short_label: "nude bed", visible: ["bed"], tags: [] });
@@ -99,7 +167,10 @@ const femGen = norm({ genitals: "yes" }, { identifying: "A nude woman lies on a 
 assert.ok(femGen.fields.tags.includes("pussy"));
 
 // ---- prompt wording ----
-assert.match(MEDIA_CLASSIFICATION_PROMPT, /thong, G-string, bikini bottom/);
+assert.match(MEDIA_CLASSIFICATION_PROMPT, /thong or G-string/);
+assert.match(MEDIA_CLASSIFICATION_PROMPT, /outline or ambiguous shape is "unclear"/);
+assert.match(MEDIA_CLASSIFICATION_PROMPT, /Body paint is not a garment/);
+assert.match(MEDIA_CLASSIFICATION_PROMPT, /mirror in the background/);
 assert.match(MEDIA_CLASSIFICATION_PROMPT, /photographing herself in a mirror/);
 assert.match(MEDIA_CLASSIFICATION_PROMPT, /nipple or areola itself \(the darker disc\) can be seen/);
 

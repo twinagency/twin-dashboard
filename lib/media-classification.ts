@@ -18,18 +18,19 @@ evidence: an object with ALL these keys, each "yes", "no" or "unclear": ${FACT_K
 - "yes": clearly visible, uncovered, unmistakable.
 - "no": that part of the body, garment or object would be in frame and is plainly not there, or is plainly covered.
 - "unclear": cropped out, hidden, blurred, too small, ambiguous or only guessed. Never answer "no" for something you cannot actually see; never answer "yes" for something you infer.
-- nipples needs a visibly uncovered nipple or areola. Cleavage, underboob, a low neckline, an open shirt or a covered outline is "no". A hand, arm or fabric over the breasts is "no" when it covers the nipple and areola, and so is a lifted top that shows only the underside or lower curve of the breast. Answer "yes" only when the nipple or areola itself (the darker disc) can be seen, for example around or between the fingers or above a pulled-down cup. Judge each breast separately.
+- nipples needs a visibly uncovered nipple or areola. Cleavage, underboob, a low neckline, an open shirt or a covered outline is "no". A hand, arm or fabric over the breasts is "no" when it covers the nipple and areola, and so is a lifted top that shows only the underside or lower curve of the breast; describe the actual clothing and coverage, never an exposure you cannot see. Answer "yes" only when the nipple or areola itself (the darker disc) can be seen, for example around or between the fingers or above a pulled-down cup. Judge each breast separately.
+- sheer, mesh or transparent fabric: a garment being worn neither proves that anatomy is hidden nor that it is visible. nipples, genitals and bare_buttocks are "yes" through sheer fabric only when the nipple/areola or the anatomy itself is clearly discernible; an outline or ambiguous shape is "unclear" (not "yes", not "no"). Say in details that it is seen through the fabric.
 - genitals and anus need the actual uncovered anatomy, not its covered outline. anus is "yes" only when the anal opening itself can be seen; buttocks, a spread pose or a rear view alone are not enough. Never write that the anus is not visible while answering "yes".
-- bare_buttocks is "yes" only when NO garment covers the buttocks (nothing worn, or the garment is pulled down or aside). A thong, G-string, bikini bottom, briefs or other underwear that is worn counts as covering them even when the cheeks are mostly visible from behind: answer "no" and name the garment in visible. Check every body part that is in frame before answering.
+- bare_buttocks is "yes" when the buttock cheeks themselves are visible and uncovered, including from behind with a thong or G-string worn (the strip does not cover the cheeks); name the garment in visible and details. It is "no" when briefs, shorts, a bikini bottom or other fabric covers the cheeks, and "unclear" when they are cropped out, hidden or too small to judge. A worn thong or other garment is never a reason to answer "yes" for full_nudity or genitals. Check every body part that is in frame before answering.
 - full_nudity needs a clearly unclothed body: if ANY garment (a top bunched on the torso, a skirt, shorts, a bikini piece, a robe) is on the torso or lower body in the frame, full_nudity is "no" and the garment goes in visible. sexual_activity needs a visible sexual act or a toy in use, not a pose or an expression. sex_toy needs a visible sex toy.
-- swimwear and lingerie are different garments; use both only if two separate garments are visible. mirror_reflection is "yes" when a mirror or reflective surface is visible and she or her phone is seen in it, including a person photographing herself in a mirror with the phone visible in the reflection. A selfie taken directly at arm's length with no mirror in frame is "no".
+- swimwear and lingerie are different garments; use both only if two separate garments are visible. Body paint is not a garment: colour painted or drawn on skin never makes swimwear or lingerie "yes" and is never described as a bikini, bra or underwear; write "body paint" in visible. mirror_reflection is "yes" only when she (or her phone) is seen reflected in a mirror or reflective surface, including a person photographing herself in a mirror with the phone visible in the reflection. A mirror in the background, on a wall or behind her that does not show her reflection is "no", and a selfie taken directly at arm's length with no mirror in frame is "no".
 - suggestive_pose: a provocative pose or clothing, with no uncovered anatomy required.
 
 identifying: ONE factual sentence, at most 140 characters, that identifies this exact item: the woman (hair, build), the main garment or its absence, and the pose or setting. It is used as the label for this item in later conversation, so it must be specific. Example: "A blonde woman in a grey sweatshirt and sweatpants takes a mirror selfie on a wooden floor."
 details: 1 to 4 more factual sentences, at most 420 characters: clothing and colours, objects and their state, camera angle, facial expression, setting. Say what is in frame, not what is absent: the evidence object already records absence. Do not infer anything hidden, and do not describe movement or intent that a still cannot show (no "is sliding", "about to", "teasing"); describe the pose and visible state instead.
 short_label: 2 to 5 factual words, for example "grey sweatshirt mirror selfie".
 visible: array of up to 10 short phrases (garment with colour, setting, objects, pose), each confirmed visible.
-tags: array that is a subset of: ${MEDIA_TAGS.join(", ")}. Use topless/tits only when nipples is yes, pussy only when genitals is yes, anal only when anus is yes, ass only when bare_buttocks is yes, full_nude only when full_nudity is yes, bikini only when swimwear is yes, lingerie only when lingerie is yes, mirror_selfie only when mirror_reflection is yes. bed, pool, shower and outdoor only when she is on, in or at that place, not when it is only in the background.
+tags: array that is a subset of: ${MEDIA_TAGS.join(", ")}. Use topless/tits only when nipples is yes (a hand or fabric over the nipple means no such tag), pussy only when genitals is yes, anal only when anus is yes, ass only when bare_buttocks is yes (a worn thong with the cheeks visible is yes), full_nude only when full_nudity is yes, bikini only when swimwear is yes, lingerie only when lingerie is yes, mirror_selfie only when mirror_reflection is yes. bed, pool, shower and outdoor only when she is on, in or at that place, not when it is only in the background.
 Never claim a body part, act, garment, toy or mirror whose evidence key is not "yes".`;
 
 export const MEDIA_CLASSIFICATION_PROMPT = `${OBSERVATION_TASK}
@@ -124,10 +125,38 @@ const CLIP_NARRATION = /\b(throughout|the whole (?:video|clip)|entire (?:video|c
 // Claims that she (or her phone) is IN a mirror. The bare word "mirror" naming an object on the wall is not one.
 const MIRROR_CLAIM = /\b(?:mirror[- ]?(?:selfies?|reflections?|shots?|pics?|photos?|images?)|reflections?|reflected|(?:in|into|at|before|toward|towards|facing|via|using) (?:a|an|the|her|his) (?:[\w-]+ ){0,2}mirror|in front of (?:a|an|the|her|his) (?:[\w-]+ ){0,2}mirror|selfie (?:in|with|using))\b/i;
 
+// Round 5. Visible, uncovered cheeks are bare_buttocks "yes" even with a thong worn, but a worn bottom garment alone is not nudity:
+// bare_buttocks drives is_nude/explicit only when no worn bottom garment is named in the prose (or it is pulled down/aside).
+const WORN_BOTTOM_RE = /\b(?:thong|g-?string|bikini (?:bottoms?|briefs?)|bikini bottom|panties|underwear|briefs|knickers|lingerie bottoms?)\b/i;
+const PULLED_DOWN_RE = /\b(?:pulled|pushed|moved|slid|tugged|yanked) (?:down|aside|off|to the side)|\b(?:down|aside|off) (?:around|at) (?:her )?(?:thighs|knees|ankles)\b|\bwithout (?:a )?(?:thong|underwear|panties)\b/i;
+/** True when the prose names a bottom garment that is worn (in place), as opposed to pulled down, aside or absent. Pure. */
+export function wornBottomIn(prose: string): boolean {
+  return WORN_BOTTOM_RE.test(prose) && !PULLED_DOWN_RE.test(prose);
+}
+/** The ONE nude derivation: any nudity key yes, except bare_buttocks alone does not count while a bottom garment is worn. */
+function isNude(ev: Record<FactKey, Tri>, wornBottom: boolean): boolean {
+  return ev.nipples === "yes" || ev.genitals === "yes" || ev.anus === "yes" || ev.full_nudity === "yes" ||
+    (ev.bare_buttocks === "yes" && !wornBottom);
+}
+// Body paint is not a garment (round 5): paint on skin, never a bikini/bra/underwear fact. Painted nails do not count.
+const NAILS = /\b(?:painted|polished) (?:finger|toe)?nails?\b|\bnail (?:paint|polish)\b|\bpainted (?:lips|toenails|fingernails)\b/gi;
+const PAINT = /\b(?:body ?paint\w*|(?:face|skin) ?paint\w*|airbrush\w*|paint(?:ed|ing)?|painted[- ]on)\b/i;
+function isPaint(clause: string): boolean { return PAINT.test(clause.replace(NAILS, "")); }
+const PAINT_GARMENT = /\b(?:bikini|swimsuit|swimwear|lingerie|bra|thong|g-?string|bodysuit|underwear|panties|top|bottoms?|outfit|dress|garment|clothing|clothes)\b/i;
+// A mirror that is only part of the scene ("mirror in the background") does not put her in it.
+const BACKGROUND_MIRROR = /\bmirrors?\b[^.;]*\b(?:background|behind|on the wall|wall[- ]mounted|nearby|beside|next to|leaning|hang(?:s|ing)?)\b|\b(?:background|behind|nearby|beside)\b[^.;]*\bmirrors?\b/i;
+// An outline, silhouette or faint shape is not the anatomy itself (round 5, sheer fabric).
+const OUTLINE_ONLY = /\b(?:outlines?|silhouettes?|impressions?|faint(?:ly)?|vague(?:ly)?|hints? of|suggest\w*|shapes?|bulges?|barely|seems? to|appears? to|possibly|perhaps|might|may be)\b/i;
+const FEATURE_WORDS: [FactKey, RegExp][] = [
+  ["nipples", /\b(?:nipples?|areolas?)\b/i],
+  ["genitals", /\b(?:genitals?|genitalia|vulva|vagina|pussy|labia)\b/i],
+  ["bare_buttocks", /\b(?:buttocks?|cheeks|ass|bum|butt)\b/i],
+];
+
 /** Pure: problems in one block of descriptive text against the evidence it must agree with. Only "yes" licenses a claim. */
-export function descriptionProblems(text: string, ev: Record<FactKey, Tri>, video = false): string[] {
+export function descriptionProblems(text: string, ev: Record<FactKey, Tri>, video = false, wornBottom = false): string[] {
   const problems: string[] = [];
-  const nude = ev.nipples === "yes" || ev.genitals === "yes" || ev.anus === "yes" || ev.bare_buttocks === "yes" || ev.full_nudity === "yes";
+  const nude = isNude(ev, wornBottom);
   const rules: [boolean, RegExp, string][] = [
     [ev.nipples !== "yes", /\b(topless|tits|exposed (?:breasts?|chest)|bare (?:breasts?|chest)|uncovered (?:breasts?|chest)|nipples?|areolas?)\b/i, "breasts/nipples"],
     [ev.genitals !== "yes", /\b(genitals?|genitalia|vulva|vagina|pussy|penis|labia)\b/i, "genitals"],
@@ -146,6 +175,8 @@ export function descriptionProblems(text: string, ev: Record<FactKey, Tri>, vide
   ];
   for (const clause of affirmativeClauses(text)) {
     for (const [absent, pattern, label] of rules) {
+      // colour painted on skin described AS paint is a plain fact, not a swimwear/lingerie claim (the paint backstop handles yes)
+      if ((label === "swimwear" || label === "lingerie") && isPaint(clause)) continue;
       if (absent && pattern.test(clause)) problems.push(`claims ${label} without a "yes" observation: "${clause.slice(0, 80)}"`);
     }
   }
@@ -228,11 +259,9 @@ export function deniedFactKeys(text: string): FactKey[] {
 // unsupported claim: it goes to review instead of being saved as analysed (eval #40: anus=yes + 'anal' tag with silent prose).
 const ANUS_MENTIONED = /\b(?:anus|anal|asshole|butt ?plug|plug|inserted|insertion|penetrat\w*)\b/i;
 const ANUS_NOT_VISIBLE = /\b(?:anus|anal|asshole)\b[^.]*\b(?:not|isn'?t|no longer|barely)\b[^.]*\b(?:visible|seen|shown)\b|\b(?:not|no|nor)\b[^.]*\b(?:visible|seen)\b[^.]*\b(?:anus|asshole)\b|\bno (?:visible )?(?:anus|asshole)\b/i;
-const WORN_BOTTOM = /\b(?:thong|g-?string|bikini (?:bottoms?|briefs?)|bikini bottom|panties|underwear|briefs|knickers|lingerie bottoms?)\b/i;
-const PULLED_DOWN = /\b(?:pulled|pushed|moved|slid|tugged|yanked) (?:down|aside|off|to the side)|\b(?:down|aside|off) (?:around|at) (?:her )?(?:thighs|knees|ankles)\b|\bwithout (?:a )?(?:thong|underwear|panties)\b/i;
 // The tag vocabulary has no male-genital tag, and "pussy" on a man's genitals is wrong.
 // A garment named as worn/on the body contradicts full_nudity=yes ("pink top bunched on her torso"). Pulled off/down/aside is not worn.
-const WORN_GARMENT = /\b(?:wears?|wearing|dressed in|in an?|bunched|pulled up|rolled up|draped|covers?|covering)\b[^.;]*\b(?:top|shirt|t-?shirt|tank|dress|bra|bodysuit|skirt|shorts|jeans|pants|leggings|robe|hoodie|sweater|jacket|crop top|bikini|swimsuit|lingerie|garment|clothing|nightie|camisole|corset)\b|\b(?:top|shirt|t-?shirt|tank|dress|bra|bodysuit|skirt|shorts|jeans|pants|leggings|robe|hoodie|sweater|jacket|crop top|bikini|swimsuit|lingerie|garment|clothing|nightie|camisole|corset)\b[^.;]*\b(?:bunched|rolled up|worn|on (?:her|his|the) (?:torso|body|chest|hips|waist|stomach)|around (?:her|his|the) (?:waist|hips|torso|chest)|covers?|covering)\b/i;
+const WORN_GARMENT = /\b(?:wears?|wearing|dressed in|in an?|bunched|pulled up|rolled up|draped|covers?|covering)\b[^.;]*\b(?:top|shirt|t-?shirt|tank|dress|bra|bodysuit|skirt|shorts|jeans|pants|leggings|robe|hoodie|sweater|jacket|crop top|bikini|swimsuit|lingerie|garment|clothing|nightie|camisole|corset|thong|g-?string|panties|underwear|briefs)\b|\b(?:top|shirt|t-?shirt|tank|dress|bra|bodysuit|skirt|shorts|jeans|pants|leggings|robe|hoodie|sweater|jacket|crop top|bikini|swimsuit|lingerie|garment|clothing|nightie|camisole|corset|thong|g-?string|panties|underwear|briefs)\b[^.;]*\b(?:bunched|rolled up|worn|on (?:her|his|the) (?:torso|body|chest|hips|waist|stomach)|around (?:her|his|the) (?:waist|hips|torso|chest)|covers?|covering)\b/i;
 const GARMENT_REMOVED = /\b(?:pulled|pushed|slid|taken|tugged|yanked) (?:down|aside|off)|\bremoved\b|\bwithout (?:a |any )?(?:top|shirt|clothes|clothing|garment)/i;
 const MALE_WORDS = /\b(?:man|men|male|guy|boy|penis|cock|dick|him|his)\b/i;
 
@@ -264,12 +293,14 @@ export function normalizeMediaClassification(value: unknown, opts: NormalizeOpti
     throw new Error("Visual metadata needs factual descriptions");
   }
 
-  const nude = evidence.nipples === "yes" || evidence.genitals === "yes" || evidence.anus === "yes" ||
-    evidence.bare_buttocks === "yes" || evidence.full_nudity === "yes";
+  // Prose as the model wrote it: a worn bottom garment named here decides whether visible cheeks make the item nude (see isNude).
+  const rawProse = `${j.identifying} ${typeof j.details === "string" ? j.details : ""} ${(Array.isArray(j.visible) ? j.visible : []).filter((x) => typeof x === "string").join(". ")}`;
+  const wornBottom = wornBottomIn(rawProse);
+  const nude = isNude(evidence, wornBottom);
   const explicit = nude || evidence.sexual_activity === "yes";
   const unclear = NUDITY_KEYS.filter((k) => evidence[k] === "unclear");
   const suggestive = evidence.suggestive_pose === "yes" || evidence.swimwear === "yes" || evidence.lingerie === "yes" ||
-    evidence.sex_toy === "yes" || unclear.length > 0; // unclear nudity must never read as "none"
+    evidence.sex_toy === "yes" || evidence.bare_buttocks === "yes" || unclear.length > 0; // unclear nudity must never read as "none"
 
   let identifying = sentencesUpTo(stripBannedDashes(j.identifying.trim()), 140);
   let details = sentencesUpTo(stripBannedDashes(typeof j.details === "string" ? j.details.trim() : ""), 420);
@@ -277,14 +308,14 @@ export function normalizeMediaClassification(value: unknown, opts: NormalizeOpti
   let visible = cleanList(j.visible, 10);
 
   const contradictions = [
-    ...descriptionProblems(`${identifying} ${details}`, evidence, video),
-    ...descriptionProblems(autoDesc, evidence, video),
-    ...descriptionProblems(visible.join(". "), evidence, video),
+    ...descriptionProblems(`${identifying} ${details}`, evidence, video, wornBottom),
+    ...descriptionProblems(autoDesc, evidence, video, wornBottom),
+    ...descriptionProblems(visible.join(". "), evidence, video, wornBottom),
   ];
   const contradicted = contradictions.length > 0;
   if (contradicted) {
     // Facts-only fallback: keep only phrases that pass, never the contradicted prose.
-    visible = visible.filter((p) => descriptionProblems(p, evidence, video).length === 0);
+    visible = visible.filter((p) => descriptionProblems(p, evidence, video, wornBottom).length === 0);
     identifying = visible.length ? sentencesUpTo(`Shows ${visible.join(", ")}.`, 140) : "Description needs review.";
     details = "";
     autoDesc = visible[0]?.slice(0, 60) || "needs review";
@@ -300,8 +331,24 @@ export function normalizeMediaClassification(value: unknown, opts: NormalizeOpti
   if (evidence.anus === "yes" && !ANUS_MENTIONED.test(proseAll)) {
     issuesExtra.push("anus is yes but the description never mentions it");
   }
-  if (evidence.bare_buttocks === "yes" && WORN_BOTTOM.test(proseAll) && !PULLED_DOWN.test(proseAll)) {
-    issuesExtra.push("bare_buttocks is yes but a worn thong/bottom/underwear is described");
+  // Round 5: yes is only ever as good as the prose backing it. An outline through fabric, paint read as a garment and a
+  // background mirror are not evidence; each goes to review and drops the tag it would have licensed.
+  const clauses = affirmativeClauses(proseAll);
+  for (const [k, re] of FEATURE_WORDS) {
+    if (evidence[k] !== "yes") continue;
+    const outline = clauses.find((c) => re.test(c) && OUTLINE_ONLY.test(c));
+    if (outline) issuesExtra.push(`${k} is yes but the description gives only an outline or faint shape: "${outline.slice(0, 60)}"`);
+  }
+  if (evidence.swimwear === "yes" || evidence.lingerie === "yes") {
+    const paint = clauses.find((c) => isPaint(c) && PAINT_GARMENT.test(c));
+    if (paint) {
+      issuesExtra.push(`swimwear/lingerie is yes but the description is body paint, not a garment: "${paint.slice(0, 60)}"`);
+      blocked.add("bikini"); blocked.add("lingerie");
+    }
+  }
+  if (evidence.mirror_reflection === "yes" && clauses.some((c) => BACKGROUND_MIRROR.test(c)) && !clauses.some((c) => MIRROR_CLAIM.test(c))) {
+    issuesExtra.push("mirror_reflection is yes but the mirror is only described as part of the background");
+    blocked.add("mirror_selfie");
   }
   let fullNudeBlocked = false;
   if (evidence.full_nudity === "yes") {
