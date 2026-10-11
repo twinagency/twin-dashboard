@@ -15,6 +15,7 @@
     "test:public": "tsx scripts/check-public-api.ts",
     "test:paging": "tsx scripts/check-select-all.ts",
     "test:media": "tsx scripts/check-media-limits.ts && tsx scripts/check-media-classification.ts",
+    "test:media-repair-db": "tsx --tsconfig scripts/tsconfig.json scripts/check-media-repair-db.ts",
     "test:media-paths": "tsx scripts/check-media-storage-paths.ts",
     "test:media-upload-resilience": "tsx scripts/check-media-upload-resilience.ts",
     "test:media-compress": "tsx --tsconfig scripts/tsconfig.json scripts/check-media-compress.ts",
