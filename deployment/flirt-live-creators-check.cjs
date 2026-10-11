@@ -72,6 +72,21 @@ async function main() {
     assert(url.hostname === `${PROJECT}.supabase.co` && (await request(url,{method:'HEAD'})).ok, 'Each Overview photo must load from existing private media');
   }
   checks.push('Selected Overview, six different private photos, all-time fans and creator isolation verified live');
+  const agencyResponse = await page('/api/creator-overview');
+  assert(agencyResponse.ok, 'Agency overview data must load');
+  const agency = await agencyResponse.json();
+  assert(agency.creators.length === CLONES.length && agency.creators.every(c => CLONES.includes(c.id)), 'Agency overview must use exactly assigned creators');
+  assert(agency.audience.total === agency.creators.reduce((sum,c)=>sum+c.totalFans,0), 'Agency fan total must equal per-creator all-time fans');
+  const agencyCountResponse = await request(live.url+'/rest/v1/users?select=id&clone_id=in.('+CLONES.join(',')+')&or=(is_test.is.null,is_test.eq.false)',{method:'HEAD',headers:{apikey:live.key,Authorization:`Bearer ${live.key}`,Prefer:'count=exact'}});
+  assert(agencyCountResponse.ok && Number(agencyCountResponse.headers.get('content-range')?.split('/')[1]) === agency.audience.total, 'Agency fan count must match the database including imports and excluding tests');
+  const agencyPhotos = agency.creators.flatMap(c=>[c.portrait,c.cardPhoto]).filter(Boolean);
+  assert(new Set(agencyPhotos.map(p=>p.id)).size===agencyPhotos.length,'Agency photos must all be different');
+  for(const photo of agencyPhotos) assert(new URL(photo.url).hostname===`${PROJECT}.supabase.co` && (await request(photo.url,{method:'HEAD'})).ok,'Every agency portrait must load from its original private storage');
+  const agencyPage = await page('/revenue'); const agencyHtml = await agencyPage.text();
+  assert(agencyPage.ok && agencyHtml.includes('data-agency-overview="flirt"') && agencyHtml.includes('Agency overview') && agencyHtml.includes('Compare creators') && expected.every(c=>agencyHtml.includes(c.name)), 'Live All creators Overview must render its agency layout');
+  assert(Math.abs(data.totals.stars-Object.values(data.perClone).reduce((sum,c)=>sum+c.stars,0))<.001,'Combined earnings must equal selected creator earnings');
+  assert(Math.abs(data.totals.stars-data.series.reduce((sum,row)=>sum+CLONES.reduce((n,id)=>n+(Number(row[id])||0),0),0))<.001,'Combined chart must match total earnings');
+  checks.push('Agency Overview: assigned creators, exact all-time fans, distinct private photos, and reconciled combined earnings verified live');
   const localClones = await rows(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY, 'clones?select=id&limit=1');
   assert(localClones.length === 0, 'FLIRT must not copy or run duplicate bot records');
   checks.push('No duplicate bot records were created in FLIRT');
@@ -83,5 +98,3 @@ async function main() {
   console.log(JSON.stringify({ passed: true, creators: expected.map(row => row.name).sort(), checks, credentials_logged: false, database_records_copied: false }));
 }
 main().catch(error => { console.log(JSON.stringify({ passed: false, error: error.message, checks, credentials_logged: false })); process.exitCode = 1; });
-
-

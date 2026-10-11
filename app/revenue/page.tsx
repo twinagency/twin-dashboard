@@ -5,12 +5,17 @@ import { getDashboardAccess } from "@/lib/dashboard-access";
 import { getCreatorOverview, getOverviewAudience } from "@/lib/creator-overview";
 import { getFleetClones } from "@/lib/query-cache";
 import CreatorOverview from "@/components/overview/CreatorOverview";
+import { getAgencyOverview } from "@/lib/agency-overview";
 
 export const dynamic = "force-dynamic";
 
 export default async function RevenuePage() {
   const cloneId = await getCloneScope();
   const access = await getDashboardAccess();
+  if (!cloneId && access?.name.trim().toLowerCase() === "flirt" && !access.id.startsWith('creator:')) {
+    const agency = await getAgencyOverview();
+    return <CreatorOverview key="all" initialPresentation={null} initialAudience={agency.audience} creators={agency.creators} initialAgency={agency} />;
+  }
   if (cloneId && access?.name.trim().toLowerCase() === "flirt") {
     const presentation = await getCreatorOverview(cloneId);
     if (presentation) {
@@ -25,4 +30,3 @@ export default async function RevenuePage() {
     </>
   );
 }
-
