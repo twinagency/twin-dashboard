@@ -5,97 +5,161 @@ import { writeFile, readFile, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import sharp from "sharp";
-import { orVision } from "./openrouter";
-import { MEDIA_CLASSIFICATION_PROMPT, normalizeMediaClassification } from "./media-classification";
+import { orVisionDetailed, type VisionCallMeta } from "./openrouter";
+import { withRetry } from "./retry";
+import {
+  MEDIA_CLASSIFICATION_PROMPT, normalizeMediaClassification, videoClassificationPrompt, type NormalizedMedia,
+} from "./media-classification";
+import { VISION_ANALYSIS_DEFAULT_MODEL, resolveVisionAnalysisModel } from "./vision-model";
+import { generateSendCaption } from "./send-caption";
+import { ANALYSIS_VERSION, type AnalysisResult } from "./media-analysis-contract";
 
 const execFileAsync = promisify(execFile);
 
-export type Caption = {
-  caption: string;          // first-person send caption (explicit style), limited to visible evidence; facts live in visual_description
-  teaser_caption: string;   // flirty message shown to the fan (varied emoji)
-  is_nude: boolean;
-  explicitness: "none" | "suggestive" | "explicit";
-  // AI auto-tags — drive both live media matching and category pricing.
-  nsfw: boolean;            // is it sexually explicit?
-  tags: string[];          // subset of MEDIA_TAGS describing what's shown
-  auto_desc: string;       // very short description, e.g. "bikini pool"
-  // Factual, explicit, 3-6 sentence visual description saved to its own DB
-  // column (photos.visual_description / videos.visual_description). Never
-  // read by the bot's `caption` matching path; see media-classification.ts
-  // for the exact prompt contract.
-  visual_description: string;
+export { VISION_ANALYSIS_DEFAULT_MODEL, resolveVisionAnalysisModel };
+
+// Timeouts. Each vision call gets its own deadline; the whole analysis (calls, retries, backoff) gets a hard ceiling. The
+// old code let one 12s timer cover the call AND its retry, so the retry never had time to run.
+export const VISION_CALL_TIMEOUT_MS = 40_000;
+export const ANALYSIS_TOTAL_BUDGET_MS = 110_000;
+const MAX_ATTEMPTS = 2; // one extra look for a malformed or self-contradictory answer
+const MAX_TOKENS = 1500;
+
+export type VisionCall = (a: { model: string; dataUrl: string; prompt: string; signal: AbortSignal }) => Promise<{ content: string; meta: VisionCallMeta }>;
+/** Test seams only; production passes nothing. */
+export type AnalysisDeps = {
+  call?: VisionCall;
+  writeCaption?: (user: string) => Promise<string>;
 };
 
-const FALLBACK: Caption = {
-  caption: "",
-  teaser_caption: "",
-  is_nude: false,
-  explicitness: "none",
-  nsfw: false,
-  tags: [],
-  auto_desc: "",
-  visual_description: "",
-};
+const realCall: VisionCall = (a) =>
+  orVisionDetailed({ model: a.model, dataUrl: a.dataUrl, prompt: a.prompt, json: true, signal: a.signal, maxTokens: MAX_TOKENS, temperature: 0 });
 
-// qwen3-vl-32b truncates its JSON response mid-string on the longer payload
-// this analysis now produces (caption + tags + evidence + visual_description),
-// and Gemini sanitises explicit output; qwen2.5-vl-72b-instruct handled full
-// NSFW output cleanly in testing. Force it whenever the clone's configured
-// vision model is one of those two, regardless of the operator's per-clone
-// dial; otherwise use the clone's configured model (falling back to the same
-// default when none is set).
-export const VISION_ANALYSIS_DEFAULT_MODEL = "qwen/qwen2.5-vl-72b-instruct";
-export function resolveVisionAnalysisModel(configuredModel: string | null | undefined): string {
-  const m = (configuredModel || "").toLowerCase();
-  if (m.includes("gemini") || m.includes("qwen3-vl-32b")) return VISION_ANALYSIS_DEFAULT_MODEL;
-  return configuredModel || VISION_ANALYSIS_DEFAULT_MODEL;
+function parseJson(raw: string): unknown {
+  return JSON.parse(raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, ""));
 }
 
-async function visionCaption(jpegBytes: Buffer, model: string, signal?: AbortSignal): Promise<Caption> {
-  const dataUrl = `data:image/jpeg;base64,${jpegBytes.toString("base64")}`;
-  // Applied here, not by each caller, so every entry point (upload, the
-  // bulk importer, the backfill script) gets the same forced substitution
-  // whenever the clone's configured model is one of the two known to
-  // truncate/sanitise this payload. See resolveVisionAnalysisModel above.
-  const effectiveModel = resolveVisionAnalysisModel(model);
-  // Retry contradictory metadata once, under the upload's existing abort
-  // deadline. Never save an unsupported topless/nude claim from either attempt.
-  for (let attempt = 0; attempt < 2; attempt++) {
-    const prompt = MEDIA_CLASSIFICATION_PROMPT + (attempt
-      ? "\nThe previous answer was invalid or internally contradictory. Re-examine the image and make every description and evidence field agree."
-      : "");
-    // The added visual_description field lengthens the JSON payload, so give
-    // it more headroom than orVision's own 1000-token default.
-    const raw = await orVision({ model: effectiveModel, dataUrl, prompt, json: true, signal, maxTokens: 1500 });
+function failed(model: string, error: string, latencyMs = 0, costUsd: number | null = null, provider: string | null = null): AnalysisResult {
+  return { status: "failed", model, provider, latencyMs, costUsd, error: error.slice(0, 300), version: ANALYSIS_VERSION };
+}
+
+async function observe(
+  dataUrl: string,
+  basePrompt: string,
+  kind: "photo" | "video",
+  frames: number | undefined,
+  configuredModel: string | null | undefined,
+  signal: AbortSignal | undefined,
+  deps: AnalysisDeps,
+): Promise<AnalysisResult> {
+  const model = resolveVisionAnalysisModel(configuredModel);
+  const call = deps.call ?? realCall;
+  const total = AbortSignal.timeout(ANALYSIS_TOTAL_BUDGET_MS);
+  const overall = signal ? AbortSignal.any([signal, total]) : total;
+
+  let latencyMs = 0, costUsd: number | null = null, provider: string | null = null;
+  let lastError = "analysis did not run";
+  let normalized: NormalizedMedia | null = null;
+
+  for (let attempt = 1; attempt <= MAX_ATTEMPTS && !overall.aborted; attempt++) {
+    const prompt = attempt === 1 ? basePrompt
+      : `${basePrompt}\nYour previous answer was rejected: ${lastError}. Look again and answer every evidence key with "yes", "no" or "unclear", and make identifying, details, short_label, visible and tags agree with the evidence.`;
     try {
-      return normalizeMediaClassification(JSON.parse(raw));
-    } catch (error) {
-      if (attempt === 1 || signal?.aborted) throw error;
+      const { content, meta } = await withRetry(
+        () => call({ model, dataUrl, prompt, signal: AbortSignal.any([overall, AbortSignal.timeout(VISION_CALL_TIMEOUT_MS)]) }),
+        2, { baseMs: 1000, signal: overall },
+      );
+      latencyMs += meta.latencyMs;
+      if (meta.costUsd !== null) costUsd = (costUsd ?? 0) + meta.costUsd;
+      provider = meta.provider ?? provider;
+      normalized = normalizeMediaClassification(parseJson(content), { frames });
+      if (!normalized.contradictions.length) break;
+      lastError = `the text claimed things the evidence does not support (${normalized.contradictions[0]})`;
+    } catch (e) {
+      normalized = null;
+      lastError = String((e as Error)?.message ?? e).slice(0, 240);
+      if (overall.aborted) { lastError = "analysis timed out"; break; }
+      if (/OpenRouter (400|401|402|403|404)/.test(lastError)) break; // credits, auth or a dead model: a second call cannot help
     }
   }
-  throw new Error("Unable to validate visual metadata");
+  if (!normalized) return failed(model, lastError, latencyMs, costUsd, provider);
+
+  const fields = { ...normalized.fields };
+  const status = normalized.status;
+  // The legacy send caption only for rows that analysed cleanly. needs_review rows never get one (null = V1 uses auto_desc).
+  const caption = status === "analysed" ? await generateSendCaption(fields, kind, deps.writeCaption) : null;
+  const error = status === "needs_review"
+    ? (normalized.contradictions[0] ?? normalized.issues[0] ?? "needs review")
+    : undefined;
+  return {
+    status, fields: { ...fields, caption }, model, provider, latencyMs, costUsd,
+    ...(error ? { error: error.slice(0, 300) } : {}), version: ANALYSIS_VERSION,
+  };
 }
 
-// Caption a photo: downscale to 768px, then vision.
-export async function captionPhoto(bytes: Buffer, model: string, signal?: AbortSignal): Promise<Caption> {
-  const resized = await sharp(bytes).resize({ width: 768, withoutEnlargement: true }).jpeg({ quality: 80 }).toBuffer();
-  return visionCaption(resized, model, signal);
+/** Analyse a photo: downscale to 768px, one vision call (plus at most one corrective retry).
+ * To force a model (eval), pass it as `configuredModel`; resolveVisionAnalysisModel is the only place that may rewrite it. */
+export async function analysePhoto(bytes: Buffer, configuredModel: string | null | undefined, signal?: AbortSignal, deps: AnalysisDeps = {}): Promise<AnalysisResult> {
+  const model = resolveVisionAnalysisModel(configuredModel);
+  try {
+    const resized = await sharp(bytes).resize({ width: 768, withoutEnlargement: true }).jpeg({ quality: 80 }).toBuffer();
+    return await observe(`data:image/jpeg;base64,${resized.toString("base64")}`, MEDIA_CLASSIFICATION_PROMPT, "photo", undefined, configuredModel, signal, deps);
+  } catch (e) {
+    return failed(model, `photo unreadable: ${String((e as Error)?.message ?? e)}`);
+  }
 }
 
-// Caption a video: pull one frame ~1s in via ffmpeg, then vision on that frame.
-export async function captionVideo(bytes: Buffer, model: string, signal?: AbortSignal): Promise<Caption> {
+// ---- video: bounded representative sampling ------------------------------------------------------------------------------
+export const VIDEO_SAMPLE_FRAMES = 5;
+const SHEET_COLUMNS = 3;
+const SHEET_CELL = 448;
+
+/** Evenly spaced offsets across the clip, away from the first/last instant (fades, black frames). */
+export function sampleOffsets(durationSeconds: number, frames = VIDEO_SAMPLE_FRAMES): number[] {
+  if (!(durationSeconds > 0)) return [0];
+  const n = Math.max(1, Math.min(frames, Math.floor(durationSeconds) + 1));
+  return Array.from({ length: n }, (_, i) => +(durationSeconds * (n === 1 ? 0.5 : 0.1 + (0.8 * i) / (n - 1))).toFixed(2));
+}
+
+/** Tile frames left to right, top to bottom into ONE jpeg contact sheet (one vision call sees separate frames). */
+export async function contactSheet(frames: Buffer[]): Promise<Buffer> {
+  const cols = Math.min(SHEET_COLUMNS, frames.length);
+  const rows = Math.ceil(frames.length / SHEET_COLUMNS);
+  const cells = await Promise.all(frames.map((f) =>
+    sharp(f).resize(SHEET_CELL, SHEET_CELL, { fit: "contain", background: "#000" }).jpeg({ quality: 80 }).toBuffer()));
+  return sharp({ create: { width: cols * SHEET_CELL, height: rows * SHEET_CELL, channels: 3, background: "#000" } })
+    .composite(cells.map((input, i) => ({ input, left: (i % SHEET_COLUMNS) * SHEET_CELL, top: Math.floor(i / SHEET_COLUMNS) * SHEET_CELL })))
+    .jpeg({ quality: 80 }).toBuffer();
+}
+
+async function probeDuration(inPath: string): Promise<number> {
+  const { stdout } = await execFileAsync("ffprobe", ["-v", "error", "-show_entries", "format=duration", "-of", "default=nw=1:nk=1", inPath]);
+  return Number.parseFloat(stdout.trim());
+}
+
+/** Analyse a video from 5 evenly spaced frames tiled in ONE contact sheet and ONE call. The facts are about those frames only. */
+export async function analyseVideo(bytes: Buffer, configuredModel: string | null | undefined, signal?: AbortSignal, deps: AnalysisDeps = {}): Promise<AnalysisResult> {
+  const model = resolveVisionAnalysisModel(configuredModel);
   const stamp = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
   const inPath = path.join(tmpdir(), `cap-${stamp}.mp4`);
-  const outPath = path.join(tmpdir(), `cap-${stamp}.jpg`);
+  const outs: string[] = [];
+  let sheet: Buffer, count: number;
   try {
     await writeFile(inPath, bytes);
-    await execFileAsync("ffmpeg", ["-y", "-ss", "00:00:01", "-i", inPath, "-vframes", "1", "-vf", "scale=768:-1", outPath]);
-    const frame = await readFile(outPath);
-    return await visionCaption(frame, model, signal);
-  } catch {
-    return FALLBACK;
+    const offsets = sampleOffsets(await probeDuration(inPath));
+    const frames: Buffer[] = [];
+    for (const [i, t] of offsets.entries()) {
+      const out = path.join(tmpdir(), `cap-${stamp}-${i}.jpg`);
+      outs.push(out);
+      await execFileAsync("ffmpeg", ["-y", "-ss", String(t), "-i", inPath, "-vframes", "1", "-vf", "scale=640:-1", out]);
+      frames.push(await readFile(out));
+    }
+    count = frames.length;
+    sheet = await contactSheet(frames);
+  } catch (e) {
+    return failed(model, `video frames unavailable: ${String((e as Error)?.message ?? e).slice(0, 200)}`);
   } finally {
-    await unlink(inPath).catch(() => {});
-    await unlink(outPath).catch(() => {});
+    await Promise.all([inPath, ...outs].map((p) => unlink(p).catch(() => {})));
   }
+  return observe(`data:image/jpeg;base64,${sheet.toString("base64")}`, videoClassificationPrompt(count), "video", count, configuredModel, signal, deps);
 }
