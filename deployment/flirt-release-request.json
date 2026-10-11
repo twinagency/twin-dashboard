@@ -1,5 +1,5 @@
 {
-  "reason": "Verify the full-colour agency logo hero and clear creator banners during live release.",
-  "source_commit": "e65638b5b380cabfd9feccd8a39f7f3f549a6b16",
-  "requested_at": "2026-10-11T04:41:47.671Z"
+  "reason": "Remove the oversized white logo panel; use a compact integrated FLIRT wordmark and phone banner so earnings remain in view.",
+  "source_commit": "a589da641079c2acd5564cb38e78e30922035790",
+  "requested_at": "2026-10-11T05:51:25.240Z"
 }
