@@ -5,7 +5,7 @@
 #   rig.sh down    stop and REMOVE both containers
 # Ports 55445 (postgres) / 55444 (postgrest). 55433 is not used.
 set -euo pipefail
-PG=media-repair-pg17; REST=media-repair-postgrest; PGPORT=${MR_PG_PORT:-55445}; RESTPORT=${MR_REST_PORT:-55444}
+PG=${MR_PG_NAME:-media-repair-pg17}; REST=${MR_REST_NAME:-media-repair-postgrest}; PGPORT=${MR_PG_PORT:-55445}; RESTPORT=${MR_REST_PORT:-55444}
 HERE="$(cd "$(dirname "$0")" && pwd)"
 SECRET="media-repair-local-secret-0123456789abcdef0123"
 psqlx() { docker exec -i "$PG" psql -U postgres -v ON_ERROR_STOP=1 -q "$@"; }

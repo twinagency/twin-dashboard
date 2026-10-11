@@ -18,7 +18,7 @@ import {
 } from "../lib/media-repair";
 import { ANALYSIS_VERSION, type AnalysisResult } from "../lib/media-analysis-contract";
 
-const REST = "http://127.0.0.1:55444";
+const REST = `http://127.0.0.1:${process.env.MR_REST_PORT ?? "55444"}`;
 const b64 = (o: object) => Buffer.from(JSON.stringify(o)).toString("base64url");
 const h = `${b64({ alg: "HS256", typ: "JWT" })}.${b64({ role: "service_role" })}`;
 const KEY = `${h}.${createHmac("sha256", "media-repair-local-secret-0123456789abcdef0123").update(h).digest("base64url")}`;
@@ -26,7 +26,7 @@ const MIGRATION = path.resolve(__dirname, "../../twin-bot-wt-vision/db/migration
 const ROLLBACK = path.resolve(__dirname, "../../twin-bot-wt-vision/db/manual/ROLLBACK_20261012000000_media_analysis_state.sql");
 
 function sql(text: string): string {
-  return execFileSync("docker", ["exec", "-i", "media-repair-pg17", "psql", "-U", "postgres", "-v", "ON_ERROR_STOP=1", "-tA", "-q"], { input: text, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] }).trim();
+  return execFileSync("docker", ["exec", "-i", (process.env.MR_PG_NAME ?? "media-repair-pg17"), "psql", "-U", "postgres", "-v", "ON_ERROR_STOP=1", "-tA", "-q"], { input: text, encoding: "utf8", stdio: ["pipe", "pipe", "pipe"] }).trim();
 }
 const rows = (q: string) => JSON.parse(sql(`select coalesce(json_agg(t), '[]') from (${q}) t`));
 const wait = (ms: number) => new Promise((r) => setTimeout(r, ms));
@@ -277,6 +277,15 @@ async function main() {
   assert.throws(() => assertSafeSupabaseUrl("https://example.supabase.co")); assert.throws(() => assertSafeSupabaseUrl("https://aouaenqayfltoqrmpitg.evil.com.attacker.io/x")); assert.throws(() => assertSafeSupabaseUrl(undefined));
   checks += 3;
   ok(captionContradictsFacts("show you my pussy", fakeFacts()) && !captionContradictsFacts("show you my pussy", fakeFacts({ genitals: "unclear" })) && !captionContradictsFacts("hi there", fakeFacts()), "caption rule: only an explicit 'no' contradicts");
+
+  // ── round 2: repair never writes caption = null ─────────────────────────────────────────────────────────
+  seed(); await wait(100);
+  const noCap: Analyser = async (t, b, m) => { const r = await fakeAnalyser(t, b, m); return { ...r, fields: { ...r.fields!, caption: null } }; };
+  const ncRun = await runRepair(mkCtx({ analyse: noCap }), { ...OPTS, table: "photos" });
+  eq(sql(`select caption from photos where id='${id(1)}'`), "mmm look at my nipples", "no-null caption: contradicting caption is KEPT when the analysis produced none");
+  ok(ncRun.notes.some((n) => n.includes(id(1)) && /old caption kept/.test(n)), "no-null caption: the kept caption is reported");
+  eq(sql(`select count(*) from photos where caption is null and id<>'${id(3)}'`), "0", "no-null caption: no row anywhere had its caption nulled");
+  eq(sql(`select analysis_status from photos where id='${id(1)}'`), "analysed", "no-null caption: the row is still repaired otherwise");
 
   seed(); await wait(100);
   let inflight = 0, peak = 0;

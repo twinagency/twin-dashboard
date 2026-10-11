@@ -245,7 +245,7 @@ export type Proposal = {
   outcome: "proposed" | "unchanged" | "needs_review" | "failed";
   model: string; provider: string | null; costUsd: number | null; latencyMs: number;
   before: Record<string, unknown>; after: Record<string, unknown>; changed: string[];
-  error?: string; premigration?: boolean;
+  error?: string; premigration?: boolean; notes?: string[];
 };
 
 export function buildProposal(ctx: Pick<Ctx, "runId" | "now">, table: MediaTable, row: Row, slug: string, res: AnalysisResult, migrated: boolean): Proposal {
@@ -266,7 +266,13 @@ export function buildProposal(ctx: Pick<Ctx, "runId" | "now">, table: MediaTable
   const mapped = analysisRowFields(res);
   const after: Record<string, unknown> = {};
   for (const k of CONTENT_FIELDS) if (k !== "caption") after[k] = mapped[k];
-  if (captionContradictsFacts(row.caption, f.visual_facts)) after.caption = f.caption?.trim() ? f.caption : null;
+  // A contradicting stored caption is replaced only by a real new caption. If the analysis produced none, the OLD caption is
+  // kept (never null) and the proposal says so: a contradicting caption is better than wiping the sales text.
+  const notes: string[] = [];
+  if (captionContradictsFacts(row.caption, f.visual_facts)) {
+    if (f.caption?.trim()) after.caption = f.caption;
+    else notes.push("caption contradicts the facts but no replacement caption was produced: old caption kept");
+  }
   const changedContent = Object.keys(after).filter((k) => !same((row as any)[k], after[k]));
   const stamp: Record<string, unknown> = {};
   for (const k of STAMP_FIELDS) stamp[k] = mapped[k];
@@ -274,7 +280,7 @@ export function buildProposal(ctx: Pick<Ctx, "runId" | "now">, table: MediaTable
   const changed = [...changedContent, ...STAMP_FIELDS];
   const out: Record<string, unknown> = {}, prev: Record<string, unknown> = {};
   for (const k of changed) { out[k] = k in stamp ? (stamp as any)[k] : after[k]; prev[k] = (row as any)[k] ?? null; }
-  return { ...base, outcome: "proposed", before: prev, after: out, changed };
+  return { ...base, outcome: "proposed", before: prev, after: out, changed, ...(notes.length ? { notes } : {}) };
 }
 
 // ── guarded writes ───────────────────────────────────────────────────────────
@@ -318,7 +324,7 @@ export type RunOpts = {
 export type RunSummary = {
   mode: Mode; migrated: boolean; selected: number; skippedDone: number;
   proposed: number; applied: number; unchanged: number; conflicts: number; failed: number; needsReview: number; itemsUpdated: number; itemConflicts: number;
-  costUsd: number; errors: string[];
+  costUsd: number; errors: string[]; notes: string[];
 };
 
 function selectRows(rows: { table: MediaTable; row: Row; slug: string }[], opts: RunOpts) {
@@ -405,7 +411,7 @@ export async function runRepair(ctx: Ctx, opts: RunOpts): Promise<RunSummary> {
   if (opts.mode === "apply" && !migrated) {
     throw new Error("refusing to apply: migration 20261012000000 (analysis columns, incl. the metadata_edited_at manual-edit guard) is not applied on this database");
   }
-  const sum: RunSummary = { mode: opts.mode, migrated, selected: 0, skippedDone: 0, proposed: 0, applied: 0, unchanged: 0, conflicts: 0, failed: 0, needsReview: 0, itemsUpdated: 0, itemConflicts: 0, costUsd: 0, errors: [] };
+  const sum: RunSummary = { mode: opts.mode, migrated, selected: 0, skippedDone: 0, proposed: 0, applied: 0, unchanged: 0, conflicts: 0, failed: 0, needsReview: 0, itemsUpdated: 0, itemConflicts: 0, costUsd: 0, errors: [], notes: [] };
 
   const clones = await fetchClones(ctx.db);
   const bySlug = new Map(clones.map((c) => [c.slug, c]));
@@ -445,6 +451,7 @@ export async function runRepair(ctx: Ctx, opts: RunOpts): Promise<RunSummary> {
     const res = await analyseRow(ctx, table, row, model);
     const p = buildProposal(ctx, table, row, slug, res, migrated);
     sum.costUsd += p.costUsd ?? 0;
+    for (const note of p.notes ?? []) sum.notes.push(`${key}: ${note}`);
     if (p.outcome === "failed") {
       sum.failed++; sum.errors.push(`${key}: ${p.error}`);
       append(file(ctx, "failed.jsonl"), { key, clone: slug, storage_path: row.storage_path, error: p.error, at: new Date().toISOString() });
@@ -468,7 +475,7 @@ export async function runRepair(ctx: Ctx, opts: RunOpts): Promise<RunSummary> {
     await ctx.afterRow?.(n);
   });
 
-  writeFileSync(file(ctx, "report.txt"), formatSummary(sum) + (sum.errors.length ? "\n\nFAILURES\n" + sum.errors.join("\n") : "") + "\n");
+  writeFileSync(file(ctx, "report.txt"), formatSummary(sum) + (sum.errors.length ? "\n\nFAILURES\n" + sum.errors.join("\n") : "") + (sum.notes.length ? "\n\nNOTES\n" + sum.notes.join("\n") : "") + "\n");
   return sum;
 }
 
