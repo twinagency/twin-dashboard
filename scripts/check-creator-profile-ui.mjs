@@ -19,7 +19,7 @@ createRoot(document.getElementById('root')).render(<Layout brand={brand} logoSrc
 await build({ stdin: { contents: fixture, resolveDir: root, sourcefile: 'creator-profile-fixture.tsx', loader: 'tsx' }, outfile: path.join(out, 'bundle.js'), bundle: true, platform: 'browser', jsx: 'automatic' });
 const css = await postcss([tailwind()]).process('@import "./app/globals.css";', { from: path.join(root, 'creator-profile-check.css') });
 writeFileSync(path.join(out, 'globals.css'), css.css);
-const html = '<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/globals.css"><link rel="stylesheet" href="/bundle.css"><style>body{margin:0;font-family:Arial,sans-serif}</style></head><body><div id="root"></div><script src="/bundle.js"></script></body></html>';
+const html = '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/globals.css"><link rel="stylesheet" href="/bundle.css"><style>body{margin:0;font-family:Arial,sans-serif}</style></head><body><div id="root"></div><script src="/bundle.js"></script></body></html>';
 let revision = 0;
 const server = createServer(async (req, res) => {
   const url = new URL(req.url, 'http://localhost');
@@ -33,9 +33,9 @@ const server = createServer(async (req, res) => {
     res.end(existsSync(localLogo) ? readFileSync(localLogo) : '<svg xmlns="http://www.w3.org/2000/svg" width="180" height="70"><text x="4" y="49" fill="white" font-family="Arial" font-size="44" font-weight="bold">moxy</text></svg>');return;
   }
   if (['/bundle.js','/bundle.css','/globals.css'].includes(url.pathname)) {
-    res.writeHead(200, { 'content-type': url.pathname.endsWith('.js') ? 'text/javascript' : 'text/css' });res.end(readFileSync(path.join(out, url.pathname.slice(1))));return;
+    res.writeHead(200, { 'content-type': url.pathname.endsWith('.js') ? 'text/javascript; charset=utf-8' : 'text/css; charset=utf-8' });res.end(readFileSync(path.join(out, url.pathname.slice(1))));return;
   }
-  res.writeHead(200, { 'content-type': 'text/html' });res.end(html);
+  res.writeHead(200, { 'content-type': 'text/html; charset=utf-8' });res.end(html);
 });
 await new Promise(resolve => server.listen(0, '127.0.0.1', resolve));
 const origin = 'http://127.0.0.1:' + server.address().port;
