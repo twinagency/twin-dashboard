@@ -1,7 +1,7 @@
 name: FLIRT deployment capacity check
 on:
   push:
-    branches: ["codex/flirt-agency-overview-20261011"]
+    branches: ["codex/flirt-capacity-recovery-20261011"]
     paths: [".github/workflows/flirt-capacity-check.yml", "deployment/flirt-capacity-check.py"]
 permissions:
   contents: read
