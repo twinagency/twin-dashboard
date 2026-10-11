@@ -1,5 +1,5 @@
 {
-  "reason": "Replace Overview activity and sequence cards with live top-fan and best-selling-content rankings, scoped to the selected creator and date range.",
-  "source_commit": "3b067f914555fd7dd5c415819cbb66894fb48559",
-  "requested_at": "2026-10-11T02:04:58.482684+00:00"
+  "reason": "Correct live Overview fan-name lookup to use permitted profile columns and verify live rankings.",
+  "source_commit": "fd914605a6b695ae58d2b1d2da98b4bf3cce069b",
+  "requested_at": "2026-10-11T02:17:03.025Z"
 }
