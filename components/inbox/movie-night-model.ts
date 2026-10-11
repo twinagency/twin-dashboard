@@ -79,12 +79,12 @@ export const DEMO_SCENES: DemoScene[] = [
       },
       {
         "kind": "fan",
-        "text": "just walked in the door. i'm wrecked yeah James had to leave so I covered",
+        "text": "just walked in the door. i’m wrecked yeah James had to leave so I covered",
         "delay": 4200
       },
       {
         "kind": "creator",
-        "text": "aww my poor baby. come lie down and talk to me, i'll make you feel better 🥺",
+        "text": "aww my poor baby. come lie down and talk to me, i’ll make you feel better 🥺",
         "delay": 4700
       },
       {
@@ -113,7 +113,7 @@ export const DEMO_SCENES: DemoScene[] = [
       },
       {
         "kind": "fan",
-        "text": "more than once if i'm honest lol that shit crazy",
+        "text": "more than once if i’m honest lol that shit crazy",
         "delay": 3000
       },
       {
@@ -133,12 +133,12 @@ export const DEMO_SCENES: DemoScene[] = [
     "events": [
       {
         "kind": "fan",
-        "text": "don't say that, i'm already getting hard",
+        "text": "don’t say that, i’m already getting turned on",
         "delay": 2500
       },
       {
         "kind": "creator",
-        "text": "good. you deserve a reward after tonight. i'd climb on top of you and slowly sink down onto your cock",
+        "text": "good. you deserve a reward after tonight. i’d climb on top of you and slowly …",
         "delay": 5800
       },
       {
@@ -148,7 +148,7 @@ export const DEMO_SCENES: DemoScene[] = [
       },
       {
         "kind": "creator",
-        "text": "you still think about me riding you, don't you? 😏",
+        "text": "you still think about me being on my knees for you daddy?",
         "delay": 3000
       },
       {
@@ -158,12 +158,12 @@ export const DEMO_SCENES: DemoScene[] = [
       },
       {
         "kind": "creator",
-        "text": "mmm i'd ride you slow and deep until you can't hold it anymore",
+        "text": "mmm I’d tease you at first,  watching you grow …",
         "delay": 3600
       },
       {
         "kind": "fan",
-        "text": "you're killing me right now",
+        "text": "you’re killing me right now",
         "delay": 2200
       }
     ]
@@ -177,7 +177,7 @@ export const DEMO_SCENES: DemoScene[] = [
     "events": [
       {
         "kind": "creator",
-        "text": "want to see what i look like on top, from your view? 😈",
+        "text": "want to see what you would be looking down at? 😏",
         "delay": 3500
       },
       {
@@ -192,7 +192,7 @@ export const DEMO_SCENES: DemoScene[] = [
       },
       {
         "kind": "offer",
-        "text": "this is exactly what you'd be looking up at baby 😈",
+        "text": "hehe have a look bby I can’t wait to be begging for more",
         "delay": 3200
       }
     ]
