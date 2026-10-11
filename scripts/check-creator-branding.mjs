@@ -307,7 +307,7 @@ const browser = await chromium.launch({ headless: true, ...(executablePath ? { e
 const expectations = {
   twin: {
     name: "Twin",
-    headings: { login: "Sign in", signup: "Create account", "forgot-password": "Reset password", "reset-password": "New password", onboarding: "Build your Twin digital clone" },
+    headings: { login: "Sign in", signup: "Create account", "forgot-password": "Reset password", "reset-password": "New password", onboarding: "A quick introduction" },
     authBase: "/creator",
     signupAction: "/creator-auth/signup",
   },
@@ -403,6 +403,27 @@ try {
             const desktopHero = page.locator("main > div.relative.z-10 > section").first();
             assert.equal(await desktopHero.isVisible(), width >= 1024, `${route} must preserve the Tether desktop hero breakpoint`);
           }
+        } else if (brand === "twin") {
+          assert.equal(await page.locator('[data-creator-setup-tab]').count(), 2, 'Twin uses Questionnaire and Content');
+          assert.equal(await page.locator('[data-onboarding-hub]').count(), 0, 'the profile opens directly');
+          assert.equal(await page.getByRole('link', { name: 'Save & exit' }).getAttribute('href'), '/creator');
+          const questionnaire = page.locator('[data-questionnaire-page="quick-v2-introduction"]');
+          await questionnaire.waitFor();
+          assert.doesNotMatch(await questionnaire.innerText(), /Section \d of/);
+          await questionnaire.locator('[name="preferred_name"]').fill('Autosaved Creator');
+          await questionnaire.locator('[data-save-state="saved"]').waitFor();
+          const requests = await page.evaluate(() => globalThis.__creatorDraftRequests);
+          assert.equal(requests.at(-1).answers.preferred_name, 'Autosaved Creator');
+          assert.deepEqual(Object.keys(requests.at(-1).answers), ['preferred_name'], 'save only edited fields');
+          await questionnaire.getByRole('button', { name: 'Continue', exact: true }).click();
+          await page.locator('[data-questionnaire-page="quick-v2-personal"]').waitFor();
+          for (const [section, targetSection] of Object.entries({ 'personal-contact': 'quick-v2-account', appearance: 'quick-v2-personal', relationships: 'quick-v2-preferences' })) {
+            await page.goto(`${origin}/creator/onboarding?fixture_brand=twin&step=questionnaire&section=${section}`, { waitUntil: 'networkidle' });
+            assert.equal(await page.locator(`[data-questionnaire-page='${targetSection}']`).count(), 1);
+          }
+          await page.goto(`${origin}/creator/onboarding?fixture_brand=twin&step=content`, { waitUntil: 'networkidle' });
+          assert.equal(await page.locator('[data-content-category]').count(), 4);
+          assert.equal(await page.getByRole('button', { name: 'Submit onboarding', exact: true }).isEnabled(), true);
         } else {
           assert.equal(await page.locator("[data-onboarding-hub]").count(), 1, `${brand} onboarding must open on the compact hub`);
           assert.equal(await page.locator("[data-onboarding-step-card]").count(), 4, `${brand} onboarding hub must show four step cards`);
@@ -530,5 +551,6 @@ try {
   await browser.close();
   await new Promise((resolve) => server.close(resolve));
 }
+
 
 

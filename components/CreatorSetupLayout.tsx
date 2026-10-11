@@ -7,7 +7,7 @@ import styles from "./CreatorSetupLayout.module.css";
 export const CREATOR_SETUP_NAVIGATE_EVENT = "creator-setup:navigate";
 
 type CreatorSetupLayoutProps = {
-  brand: "moxy" | "flirt";
+  brand: "moxy" | "flirt" | "twin";
   logoSrc: string;
   activeSection: "questionnaire" | "content";
   applicationStatus?: string;
@@ -27,15 +27,15 @@ function navigate(event: MouseEvent<HTMLAnchorElement>, href: string, current = 
 }
 
 export default function CreatorSetupLayout({ brand, logoSrc, activeSection, applicationStatus, children }: CreatorSetupLayoutProps) {
-  const brandName = brand === "moxy" ? "Moxy" : "FLIRT";
+  const brandName = brand === "moxy" ? "Moxy" : brand === "twin" ? "Twin" : "FLIRT";
   return (
-    <div className={styles.root} data-creator-setup-brand={brand} data-creator-onboarding-brand={brand}>
+    <div className={styles.root} data-creator-setup-brand={brand} data-creator-onboarding-brand={brand} data-creator-setup-section={activeSection}>
       <header className={styles.header}>
         <div className={styles.headerInner}>
-          <img src={logoSrc} alt={brandName} className={styles.logo} />
+          {brand === "twin" ? <span className={styles.twinWordmark} aria-label="Twin Technologies"><strong>Twin</strong><span>TECHNOLOGIES</span></span> : <img src={logoSrc} alt={brandName} className={styles.logo} />}
           <div className={styles.headerActions}>
             <a href="/creator" onClick={(event) => navigate(event, "/creator")} className={styles.dashboard} data-creator-setup-dashboard data-onboarding-dashboard data-onboarding-skip-to-dashboard data-onboarding-skip-all>
-              Go to dashboard <ArrowUpRight size={16} aria-hidden="true" />
+              {activeSection === "questionnaire" ? "Save & exit" : "Go to dashboard"} <ArrowUpRight size={16} aria-hidden="true" />
             </a>
             <form action="/creator-auth/logout" method="post"><button className={styles.signOut}>Sign out</button></form>
           </div>
@@ -56,7 +56,7 @@ export default function CreatorSetupLayout({ brand, logoSrc, activeSection, appl
           <a href="/creator/onboarding?step=questionnaire" className={`${styles.tab} ${activeSection === "questionnaire" ? styles.activeTab : ""}`}
             aria-current={activeSection === "questionnaire" ? "page" : undefined} data-creator-setup-tab="questionnaire"
             onClick={(event) => navigate(event, "/creator/onboarding?step=questionnaire", activeSection === "questionnaire")}>
-            {brand !== "moxy" && <FileText size={18} aria-hidden="true" />} About you
+            {brand !== "moxy" && <FileText size={18} aria-hidden="true" />} Questionnaire
           </a>
           <a href="/creator/onboarding?step=content" className={`${styles.tab} ${activeSection === "content" ? styles.activeTab : ""}`}
             aria-current={activeSection === "content" ? "page" : undefined} data-creator-setup-tab="content"
@@ -72,4 +72,5 @@ export default function CreatorSetupLayout({ brand, logoSrc, activeSection, appl
     </div>
   );
 }
+
 

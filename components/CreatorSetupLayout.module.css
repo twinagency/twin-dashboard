@@ -39,6 +39,22 @@
   --color-accent-tint: #fff0f1;
 }
 
+.root[data-creator-setup-brand="twin"] {
+  --color-bg: #f6f8fc;
+  --color-panel: #fff;
+  --color-elev: #f4f7fc;
+  --color-ink: #14213a;
+  --color-muted: #65718a;
+  --color-line: #dfe5f0;
+  --color-accent: #2563eb;
+  --color-accent-2: #1d4ed8;
+  --color-accent-tint: #edf3ff;
+}
+.root[data-creator-setup-brand="twin"] .header { background: #101c33; }
+.twinWordmark { display: flex; flex-direction: column; gap: 4px; line-height: 1; }
+.twinWordmark strong { font-size: 28px; letter-spacing: -.04em; }
+.twinWordmark span { font-size: 8px; letter-spacing: .2em; }
+
 .header { background: #511b35; color: #fff; }
 .headerInner { max-width: 1120px; min-height: 88px; margin: 0 auto; padding: 17px 30px; display: flex; align-items: center; justify-content: space-between; gap: 20px; }
 .logo { display: block; width: 148px; height: 52px; object-fit: contain; object-position: left center; }
@@ -114,7 +130,7 @@
 .root[data-creator-setup-brand="moxy"] .content :global(input[type="radio"]) { accent-color: var(--color-accent); }
 .root[data-creator-setup-brand="moxy"] .content :global(.bg-white) { background-color: var(--color-panel); }
 .root[data-creator-setup-brand="moxy"] .content :global(.bg-white\/95),
-.root[data-creator-setup-brand="moxy"] .content :global([data-questionnaire-navigation]) { background-color: #1b1d21f5; }
+.root[data-creator-setup-brand="moxy"] .content :global([data-questionnaire-navigation]) { background-color: var(--color-panel); }
 .root[data-creator-setup-brand="moxy"] .content :global([data-content-category]) { background-color: #17191d; }
 .root[data-creator-setup-brand="moxy"] .content :global([data-content-category] > summary:hover) { background-color: var(--color-elev); }
 .root[data-creator-setup-brand="moxy"] .content :global([data-creator-setup-submit]) { padding: 22px; border: 1px solid var(--color-line); border-radius: 13px; background: #17191d; }
@@ -157,4 +173,20 @@
   .root[data-creator-setup-brand="moxy"] .content :global([data-creator-setup-panel]) { padding: 18px; border-radius: 16px; }
   .root[data-creator-setup-brand="moxy"] .content :global([data-creator-setup-submit]) { padding: 16px; }
 }
+
+/* The questionnaire has one heading per screen; keep the surrounding chrome
+   small so answers and the quiet progress line lead on mobile. */
+.root[data-creator-setup-section="questionnaire"] .intro,
+.root[data-creator-setup-section="questionnaire"] .sectionHint { display: none; }
+.root[data-creator-setup-section="questionnaire"] .main { max-width: 860px; padding-top: 20px; }
+.root[data-creator-setup-section="questionnaire"] .headerInner { min-height: 76px; }
+.root[data-creator-setup-section="questionnaire"] .tabs { margin-top: 0; margin-bottom: 20px; }
+.root[data-creator-setup-section="questionnaire"] .content :global([data-creator-setup-panel]) { padding: 26px 30px 0; background: var(--color-panel); }
+@media (max-width: 640px) {
+  .root[data-creator-setup-section="questionnaire"] .main { padding: 16px 14px 12px; }
+  .root[data-creator-setup-section="questionnaire"] .headerInner { min-height: 68px; padding-block: 8px; }
+  .root[data-creator-setup-section="questionnaire"] .tabs { margin-bottom: 14px; }
+  .root[data-creator-setup-section="questionnaire"] .content :global([data-creator-setup-panel]) { padding: 16px 16px 0; }
+}
+
 

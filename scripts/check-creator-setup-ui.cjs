@@ -51,8 +51,8 @@ global.__setupDatabase = { from(table) {
     assert.match(html, /src="\/moxy\/logo.png"/);
     assert.equal((html.match(/data-creator-setup-tab=/g) || []).length, 2);
     assert.match(html, /data-onboarding-active-step="questionnaire"/);
-    assert.match(html, /data-fixture-questionnaire="quick-about"/);
-    assert.match(html, /Go to dashboard/);
+    assert.match(html, /data-fixture-questionnaire="quick-v2-introduction"/);
+    assert.match(html, /Save &amp; exit/);
     assert.match(html, /href="\/creator"/);
     assert.match(html, /Make it yours\./);
     assert.match(html, /Set up your AI, in your own time\./);
@@ -98,10 +98,15 @@ global.__setupDatabase = { from(table) {
 
     brand = 'Twin'; application = null; consent = null; readOnly = false;
     html = await render();
-    assert.doesNotMatch(html, /data-creator-setup-brand/);
+    assert.match(html, /data-creator-setup-brand="twin"/);
+    assert.equal((html.match(/data-creator-setup-tab=/g) || []).length, 2);
+    assert.doesNotMatch(html, /data-onboarding-step-card="voice"|data-onboarding-step-card="consent"/);
+    html = await render({ step: 'voice' });
+    assert.match(html, /data-onboarding-active-step="content"/);
+    assert.doesNotMatch(html, /data-fixture-upload="voice"/);
+    brand = 'Tether';
+    html = await render();
     assert.equal((html.match(/data-onboarding-step-card=/g) || []).length, 4);
-    assert.match(html, /data-onboarding-step-card="voice"/);
-    assert.match(html, /data-onboarding-step-card="consent"/);
     html = await render({ step: 'voice' });
     assert.match(html, /data-fixture-upload="voice"/);
     brand = 'Moxy'; cloneIds = ['live-clone'];
@@ -109,3 +114,4 @@ global.__setupDatabase = { from(table) {
     console.log('Creator setup UI passed: Moxy has two free sections, legacy URLs map to content, inline consent preserves optional and post-submission behaviour, uploads and other-brand flows remain available.');
   } finally { rmSync(outfile, { force: true }); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
+

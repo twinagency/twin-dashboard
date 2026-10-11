@@ -12,6 +12,11 @@ import {
 } from "@/lib/creator-questionnaire-draft";
 import { COMPACT_QUESTIONNAIRE_PAGES } from "@/lib/creator-questionnaire-compact";
 import type { CreatorQuestion } from "@/lib/creator-questionnaire";
+import CreatorProfileQuestionnaire, { type CreatorProfileQuestionnaireProps } from "./CreatorProfileQuestionnaire";
+
+export default function CreatorQuestionnaireWizard(props: CreatorProfileQuestionnaireProps) {
+  return props.page.slug.startsWith("quick-") ? <CreatorProfileQuestionnaire {...props} /> : <LegacyCreatorQuestionnaireWizard {...props} />;
+}
 
 type SaveState = "idle" | "dirty" | "saving" | "saved" | "error" | "conflict" | "locked";
 
@@ -50,7 +55,7 @@ function saveLabel(state: SaveState) {
   return { icon: Cloud, text: "Changes save automatically", className: "text-muted" };
 }
 
-export default function CreatorQuestionnaireWizard({
+function LegacyCreatorQuestionnaireWizard({
   page,
   initialAnswers,
   initialRevision,
@@ -300,4 +305,5 @@ export default function CreatorQuestionnaireWizard({
     </form>
   );
 }
+
 
