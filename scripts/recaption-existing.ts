@@ -122,7 +122,7 @@ async function main() {
     console.log(`${rows.length} rows to ${DRY ? "preview" : "recaption"} (est. cost ~$${(rows.length * 0.0002).toFixed(2)})`);
     if (rows.length) { idleSince = Date.now(); await pool(rows, CONCURRENCY, (r) => processRow(r, stats)); }
     if (!FOLLOW || DRY) break;
-    if (Date.now() - idleSince > 5 * 60_000) break;
+    if (Date.now() - idleSince > 30 * 60_000) break;
     await new Promise((r) => setTimeout(r, 60_000));
   }
   console.log(`done: ${stats.ok} ok, ${stats.rejected} rejected by guard, ${stats.failed} failed (see ${FAIL_FILE}); re-run to retry failures`);
