@@ -21,7 +21,7 @@ evidence: an object with ALL these keys, each "yes", "no" or "unclear": ${FACT_K
 - nipples needs a visibly uncovered nipple or areola. Cleavage, underboob, a low neckline, an open shirt or a covered outline is "no". A hand or arm over the breasts is "no" only when the hand or fabric really hides the nipple and areola; if any nipple or areola can be seen around, between or under the fingers, or the breast is lifted out of a cup with the nipple showing, it is "yes". Judge each breast separately.
 - genitals and anus need the actual uncovered anatomy, not its covered outline. anus is "yes" only when the anal opening itself can be seen; buttocks, a spread pose or a rear view alone are not enough. Never write that the anus is not visible while answering "yes".
 - bare_buttocks is "yes" only when NO garment covers the buttocks (nothing worn, or the garment is pulled down or aside). A thong, G-string, bikini bottom, briefs or other underwear that is worn counts as covering them even when the cheeks are mostly visible from behind: answer "no" and name the garment in visible. Check every body part that is in frame before answering.
-- full_nudity needs a clearly unclothed body. sexual_activity needs a visible sexual act or a toy in use, not a pose or an expression. sex_toy needs a visible sex toy.
+- full_nudity needs a clearly unclothed body: if ANY garment (a top bunched on the torso, a skirt, shorts, a bikini piece, a robe) is on the torso or lower body in the frame, full_nudity is "no" and the garment goes in visible. sexual_activity needs a visible sexual act or a toy in use, not a pose or an expression. sex_toy needs a visible sex toy.
 - swimwear and lingerie are different garments; use both only if two separate garments are visible. mirror_reflection is "yes" when a mirror or reflective surface is visible and she or her phone is seen in it, including a person photographing herself in a mirror with the phone visible in the reflection. A selfie taken directly at arm's length with no mirror in frame is "no".
 - suggestive_pose: a provocative pose or clothing, with no uncovered anatomy required.
 
@@ -38,7 +38,37 @@ This is a single photo.`;
 /** Video variant: ONE contact sheet of N frames tiled in order, so the model sees separate frames and never the motion. */
 export function videoClassificationPrompt(frames: number): string {
   return `${OBSERVATION_TASK}
-The image is a contact sheet of ${frames} separate frames sampled at even intervals from ONE video clip, tiled left to right, top to bottom. You are NOT seeing the whole clip, only these still frames. Describe only what these frames show. A key is "yes" if any frame clearly shows it. Answer "no" only if the frames show that part of the body or garment in frame and plainly absent or covered in every frame; otherwise "unclear". Make no claims about motion, actions between frames, what happens before, after or throughout the clip, or what the clip is "doing". Do not use words like "then", "later", "throughout" or "continues".`;
+The image is a contact sheet of ${frames} separate frames sampled at even intervals from ONE video clip, tiled left to right, top to bottom. You are NOT seeing the whole clip, only these still frames. Describe only what these frames show. A key is "yes" if any frame clearly shows it. genitals and anus are "yes" only if the skin or opening itself is plainly seen uncovered in at least one frame; a nude body seen from a distance, a blur, a hand over the area, or a garment that could be pulled aside is not enough. A garment in view forbids full_nudity "yes" and words like "unclothed". Answer "no" only if the frames show that part of the body or garment in frame and plainly absent or covered in every frame; otherwise "unclear". Make no claims about motion, actions between frames, what happens before, after or throughout the clip, or what the clip is "doing". Do not use words like "then", "later", "throughout", "continues" or "static", and do not describe what the camera does.`;
+}
+
+// ---- video second look -------------------------------------------------------------------------------------------------
+// A contact sheet makes any-frame-yes cheap, which over-claims the keys with the worst cost of being wrong. When one of the
+// TRIGGER keys is "yes", ONE more call re-asks only the keys that were yes; whatever is not re-confirmed becomes "unclear".
+export const SECOND_LOOK_TRIGGERS = ["genitals", "anus", "sexual_activity", "sex_toy"] as const satisfies readonly FactKey[];
+export const SECOND_LOOK_KEYS = [...SECOND_LOOK_TRIGGERS, "full_nudity"] as const satisfies readonly FactKey[];
+
+/** The keys to re-ask for a first-pass evidence set, or [] when no trigger key is "yes". */
+export function secondLookKeys(ev: Record<FactKey, Tri>): FactKey[] {
+  if (!SECOND_LOOK_TRIGGERS.some((k) => ev[k] === "yes")) return [];
+  return SECOND_LOOK_KEYS.filter((k) => ev[k] === "yes");
+}
+
+export function secondLookPrompt(frames: number, keys: readonly FactKey[]): string {
+  return `The image is a contact sheet of ${frames} separate still frames from one video, tiled left to right, top to bottom. Look at each frame again, carefully, and answer ONLY these keys: ${keys.join(", ")}.
+Return JSON with exactly these keys, each "yes", "no" or "unclear". Answer "yes" only if the skin, opening or toy is plainly seen, uncovered, in at least one frame. A covered outline, a thong or bottom that is in place (even if it could be pulled aside), hands covering the area, a blur, a small or distant body, or a pose alone is "no" or "unclear". full_nudity is "yes" only if no garment is on the torso or lower body in any frame. sexual_activity is "yes" only if a sexual act or a toy in use is plainly visible. Do not infer; do not describe.`;
+}
+
+/** Apply a second-look answer to the first pass's raw value: any asked key not answered "yes" becomes "unclear".
+ * `answer` null means the second look could not run, so nothing is confirmed. Pure. */
+export function applySecondLook(value: unknown, keys: readonly FactKey[], answer: unknown): { value: unknown; downgraded: FactKey[] } {
+  const j = value as Record<string, unknown>;
+  const ev = { ...(j.evidence as Record<string, unknown>) };
+  const ans = answer && typeof answer === "object" && !Array.isArray(answer) ? (answer as Record<string, unknown>) : {};
+  const downgraded: FactKey[] = [];
+  for (const k of keys) {
+    if (ans[k] !== "yes") { ev[k] = "unclear"; downgraded.push(k); }
+  }
+  return { value: { ...j, evidence: ev }, downgraded };
 }
 
 const TAG_SET = new Set<string>(MEDIA_TAGS);
@@ -75,7 +105,9 @@ export function affirmativeClauses(text: string): string[] {
 
 // Words that describe motion or intent (a still shows neither) and clip-wide narration (a few frames cannot support it).
 const MOTION = /\b(is|are|was|were)\s+(moving|sliding|rubbing|stroking|thrusting|bouncing|dancing|walking|running|jumping|touching herself|teasing|pleasuring|grinding|twerking|swaying|waving)\b|\b(about to|going to|starts? to|begins? to|just (?:took|put|pulled|finished))\b|\bin motion\b/i;
-const CLIP_NARRATION = /\b(throughout|the whole (?:video|clip)|entire (?:video|clip)|then|later|afterwards?|eventually|continues?)\b/i;
+const CLIP_NARRATION = /\b(throughout|the whole (?:video|clip)|entire (?:video|clip)|then|later|afterwards?|eventually|continues?|static|the camera (?:is|stays|remains|moves|pans|follows|zooms|holds))\b/i;
+// Claims that she (or her phone) is IN a mirror. The bare word "mirror" naming an object on the wall is not one.
+const MIRROR_CLAIM = /\b(?:mirror[- ]?(?:selfies?|reflections?|shots?|pics?|photos?|images?)|reflections?|reflected|(?:in|into|at|before|toward|towards|facing|via|using) (?:a|an|the|her|his) (?:[\w-]+ ){0,2}mirror|in front of (?:a|an|the|her|his) (?:[\w-]+ ){0,2}mirror|selfie (?:in|with|using))\b/i;
 
 /** Pure: problems in one block of descriptive text against the evidence it must agree with. Only "yes" licenses a claim. */
 export function descriptionProblems(text: string, ev: Record<FactKey, Tri>, video = false): string[] {
@@ -87,9 +119,13 @@ export function descriptionProblems(text: string, ev: Record<FactKey, Tri>, vide
     [ev.anus !== "yes", /\b(anus|anal|asshole)\b/i, "anus"],
     [ev.bare_buttocks !== "yes" && ev.genitals !== "yes" && ev.anus !== "yes", /\b(bare|naked|uncovered|exposed) (?:buttocks?|ass|bum|butt)\b/i, "bare buttocks"],
     [!nude, /\b(nude|naked|nudity|unclothed|undressed)\b/i, "nudity"],
-    [ev.mirror_reflection !== "yes", /\bmirror\b/i, "mirror"],
+    [ev.full_nudity !== "yes", /\b(?:(?:fully|completely|totally|entirely) (?:nude|naked|unclothed|undressed)|unclothed)\b/i, "full nudity"],
+    // A mirror OBJECT in the scene is a plain fact; the claim that needs mirror_reflection=yes is her (or her phone) being in it.
+    [ev.mirror_reflection !== "yes", MIRROR_CLAIM, "mirror"],
     [ev.swimwear !== "yes", /\b(bikini|swimsuit|swimwear|swim ?suit)\b/i, "swimwear"],
-    [ev.lingerie !== "yes", /\b(lingerie|thong|negligee|bodysuit)\b/i, "lingerie"],
+    [ev.lingerie !== "yes", /\b(lingerie|negligee|bodysuit)\b/i, "lingerie"],
+    // a thong is lingerie OR a bikini cut: either answer licenses the word
+    [ev.lingerie !== "yes" && ev.swimwear !== "yes", /\b(thong|g-?string)\b/i, "lingerie"],
     [ev.sex_toy !== "yes", /\b(vibrator|dildo|sex toy|butt plug|toy)\b/i, "sex toy"],
     [ev.sexual_activity !== "yes", /\b(masturbat\w+|penetrat\w+|having sex|fingering|sex act|oral sex|blowjob|handjob)\b/i, "sexual act"],
   ];
@@ -115,12 +151,21 @@ function cleanList(value: unknown, max: number): string[] {
     .slice(0, max);
 }
 
-/** Whole sentences up to `max` characters. */
-function sentencesUpTo(text: string, max: number): string {
+const DANGLING = /\s+(?:a|an|the|in|on|at|of|to|for|with|by|from|across|over|under|into|onto|and|or|but|her|his|their|its|while|as|near|against|toward|towards|some|three|two|four|five|several|both|each)$/i;
+
+/** Whole sentences up to `max` characters. When the first sentence alone is longer, cut at the last clause comma (a complete
+ * clause, closed with a period) or else at a word boundary with dangling prepositions/articles dropped (a fragment gets NO period). */
+export function sentencesUpTo(text: string, max: number): string {
   const t = text.replace(/\s+/g, " ").trim();
   if (t.length <= max) return t;
-  const m = t.slice(0, max + 1).match(/^.*[.!?](?=\s)/);
-  return m ? m[0] : t.slice(0, max).replace(/\s+\S*$/, "").replace(/[,;:]+$/, "") + ".";
+  const window = t.slice(0, max + 1);
+  const m = window.match(/^.*[.!?](?=\s)/);
+  if (m) return m[0];
+  const comma = window.slice(0, max).lastIndexOf(",");
+  if (comma >= Math.min(40, max / 2)) return window.slice(0, comma).replace(/[,;:\s]+$/, "") + ".";
+  let cut = window.slice(0, max).replace(/\s+\S*$/, "").replace(/[,;:\s]+$/, "");
+  for (let i = 0; i < 4 && DANGLING.test(cut); i++) cut = cut.replace(DANGLING, "").replace(/[,;:\s]+$/, "");
+  return cut;
 }
 
 const ANATOMY_LABEL: [FactKey, string][] = [
@@ -143,6 +188,9 @@ const ANUS_NOT_VISIBLE = /\b(?:anus|anal|asshole)\b[^.]*\b(?:not|isn'?t|no longe
 const WORN_BOTTOM = /\b(?:thong|g-?string|bikini (?:bottoms?|briefs?)|bikini bottom|panties|underwear|briefs|knickers|lingerie bottoms?)\b/i;
 const PULLED_DOWN = /\b(?:pulled|pushed|moved|slid|tugged|yanked) (?:down|aside|off|to the side)|\b(?:down|aside|off) (?:around|at) (?:her )?(?:thighs|knees|ankles)\b|\bwithout (?:a )?(?:thong|underwear|panties)\b/i;
 // The tag vocabulary has no male-genital tag, and "pussy" on a man's genitals is wrong.
+// A garment named as worn/on the body contradicts full_nudity=yes ("pink top bunched on her torso"). Pulled off/down/aside is not worn.
+const WORN_GARMENT = /\b(?:wears?|wearing|dressed in|in an?|bunched|pulled up|rolled up|draped|covers?|covering)\b[^.;]*\b(?:top|shirt|t-?shirt|tank|dress|bra|bodysuit|skirt|shorts|jeans|pants|leggings|robe|hoodie|sweater|jacket|crop top|bikini|swimsuit|lingerie|garment|clothing|nightie|camisole|corset)\b|\b(?:top|shirt|t-?shirt|tank|dress|bra|bodysuit|skirt|shorts|jeans|pants|leggings|robe|hoodie|sweater|jacket|crop top|bikini|swimsuit|lingerie|garment|clothing|nightie|camisole|corset)\b[^.;]*\b(?:bunched|rolled up|worn|on (?:her|his|the) (?:torso|body|chest|hips|waist|stomach)|around (?:her|his|the) (?:waist|hips|torso|chest)|covers?|covering)\b/i;
+const GARMENT_REMOVED = /\b(?:pulled|pushed|slid|taken|tugged|yanked) (?:down|aside|off)|\bremoved\b|\bwithout (?:a |any )?(?:top|shirt|clothes|clothing|garment)/i;
 const MALE_WORDS = /\b(?:man|men|male|guy|boy|penis|cock|dick|him|his)\b/i;
 
 export type NormalizeOptions = { frames?: number };
@@ -209,18 +257,25 @@ export function normalizeMediaClassification(value: unknown, opts: NormalizeOpti
   if (evidence.bare_buttocks === "yes" && WORN_BOTTOM.test(proseAll) && !PULLED_DOWN.test(proseAll)) {
     issuesExtra.push("bare_buttocks is yes but a worn thong/bottom/underwear is described");
   }
+  let fullNudeBlocked = false;
+  if (evidence.full_nudity === "yes") {
+    const worn = affirmativeClauses(proseAll).find((c) => WORN_GARMENT.test(c) && !GARMENT_REMOVED.test(c));
+    if (worn) { issuesExtra.push(`full_nudity is yes but a worn garment is described: "${worn.slice(0, 60)}"`); fullNudeBlocked = true; }
+  }
   if (evidence.genitals === "yes" && MALE_WORDS.test(`${identifying} ${visible.join(". ")}`)) blocked.add("pussy");
 
   const proposed = (Array.isArray(j.tags) ? j.tags : []).filter((t): t is string => typeof t === "string" && TAG_SET.has(t));
   const licensed = new Set<string>(TAGS_FROM_YES.filter(([k]) => evidence[k] === "yes").flatMap(([, t]) => t));
   const needsEvidence = new Set<string>(TAGS_FROM_YES.flatMap(([, t]) => t));
-  if (evidence.full_nudity === "yes" && nude) licensed.add("full_nude");
+  if (evidence.full_nudity === "yes" && nude && !fullNudeBlocked) licensed.add("full_nude");
   needsEvidence.add("full_nude");
   for (const t of blocked) licensed.delete(t);
   const tags = [...new Set([...proposed.filter((t) => !needsEvidence.has(t)), ...licensed])];
 
   const tail = [video ? `Based on ${opts.frames} sampled frames.` : "", notVisibleLine(evidence)].filter(Boolean);
-  const visual_description = [identifying, details, ...tail].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
+  // a word-boundary cut (sentencesUpTo adds no period to a fragment) is closed here so the stored text still reads as sentences
+  const headline = identifying && !/[.!?]$/.test(identifying) ? `${identifying}.` : identifying;
+  const visual_description = [headline, details, ...tail].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
 
   const facts: VisualFacts = { v: ANALYSIS_VERSION, evidence, visible, ...(video ? { frames: opts.frames } : {}) };
   const issues = [...(unclear.length ? [`unclear: ${unclear.join(", ")}`] : []), ...issuesExtra];

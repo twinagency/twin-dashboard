@@ -239,6 +239,50 @@ const guide = Object.fromEntries(PRICING_CATEGORIES.map((c) => [c, c === "sfw" |
     const broken = await analyseVideo(Buffer.from("not a video"), null, undefined, { call: replying(answer()).call });
     assert.equal(broken.status, "failed");
     assert.match(broken.error ?? "", /video frames unavailable/);
+
+    // second look (video only): a trigger key "yes" costs ONE more call, and whatever is not re-confirmed becomes "unclear"
+    const bare = { identifying: "A woman lies on a bed.", details: "She lies on a white sheet.", short_label: "woman on bed", visible: ["white sheet"], tags: ["pussy", "solo"] };
+    const sl1 = replying(answer({ genitals: "yes" }, bare), JSON.stringify({ genitals: "no" }));
+    const s1 = await analyseVideo(readFileSync(clip), null, undefined, { call: sl1.call, writeCaption: captionOk });
+    assert.equal(sl1.calls.length, 2, "genitals yes on a video makes exactly one second-look call");
+    assert.match(sl1.calls[1].prompt, /ONLY these keys: genitals\./);
+    assert.equal(sl1.calls[1].dataUrl, sl1.calls[0].dataUrl, "same sheet");
+    assert.equal(s1.status, "needs_review");
+    assert.equal(s1.fields?.visual_facts.evidence.genitals, "unclear");
+    assert.ok(!s1.fields?.tags.includes("pussy"));
+    assert.equal(s1.fields?.is_nude, false);
+    assert.match(s1.error ?? "", /second look did not confirm genitals/);
+    assert.equal(s1.fields?.caption, null, "needs_review rows get no send caption");
+    assert.equal(s1.latencyMs, 2400, "second call latency is accounted");
+    assert.equal(s1.costUsd, 0.0008, "second call cost is accounted");
+
+    const sl2 = replying(answer({ genitals: "yes", sexual_activity: "yes" }, bare), JSON.stringify({ genitals: "yes", sexual_activity: "yes" }));
+    const s2 = await analyseVideo(readFileSync(clip), null, undefined, { call: sl2.call, writeCaption: captionOk });
+    assert.equal(sl2.calls.length, 2);
+    assert.equal(s2.status, "analysed", "confirmed keys stay yes");
+    assert.equal(s2.fields?.visual_facts.evidence.genitals, "yes");
+
+    const sl3 = replying(answer({ anus: "yes", full_nudity: "yes" }, { ...bare, tags: [] }), JSON.stringify({ anus: "yes", full_nudity: "no" }));
+    const s3 = await analyseVideo(readFileSync(clip), null, undefined, { call: sl3.call, writeCaption: captionOk });
+    assert.match(sl3.calls[1].prompt, /ONLY these keys: anus, full_nudity\./);
+    assert.equal(s3.status, "needs_review", "a partial downgrade still goes to review");
+    assert.deepEqual([s3.fields?.visual_facts.evidence.anus, s3.fields?.visual_facts.evidence.full_nudity], ["yes", "unclear"]);
+
+    // the second look itself failing confirms nothing
+    let n = 0;
+    const flaky: VisionCall = async (a) => { if (n++ === 0) return { content: answer({ sex_toy: "yes" }, bare), meta: meta() }; throw new Error("OpenRouter 500: boom"); };
+    const s4 = await analyseVideo(readFileSync(clip), null, undefined, { call: flaky, writeCaption: captionOk });
+    assert.equal(s4.status, "needs_review");
+    assert.equal(s4.fields?.visual_facts.evidence.sex_toy, "unclear");
+
+    // no trigger key, no extra call; and photos never pay for one
+    const sl5 = replying(answer({ nipples: "yes" }, { ...bare, tags: [] }));
+    await analyseVideo(readFileSync(clip), null, undefined, { call: sl5.call, writeCaption: captionOk });
+    assert.equal(sl5.calls.length, 1, "nipples yes is not a trigger");
+    const sl6 = replying(answer({ genitals: "yes" }, bare));
+    const p6 = await analysePhoto(photo, null, undefined, { call: sl6.call, writeCaption: captionOk });
+    assert.equal(sl6.calls.length, 1, "photos have no second look");
+    assert.equal(p6.status, "analysed");
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }

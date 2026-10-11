@@ -8,7 +8,8 @@ import sharp from "sharp";
 import { orVisionDetailed, type VisionCallMeta } from "./openrouter";
 import { withRetry } from "./retry";
 import {
-  MEDIA_CLASSIFICATION_PROMPT, normalizeMediaClassification, videoClassificationPrompt, type NormalizedMedia,
+  MEDIA_CLASSIFICATION_PROMPT, normalizeMediaClassification, videoClassificationPrompt, secondLookKeys, secondLookPrompt,
+  applySecondLook, type NormalizedMedia,
 } from "./media-classification";
 import { VISION_ANALYSIS_DEFAULT_MODEL, resolveVisionAnalysisModel } from "./vision-model";
 import { generateSendCaption } from "./send-caption";
@@ -21,7 +22,9 @@ export { VISION_ANALYSIS_DEFAULT_MODEL, resolveVisionAnalysisModel };
 // Timeouts. Each vision call gets its own deadline; the whole analysis (calls, retries, backoff) gets a hard ceiling. The
 // old code let one 12s timer cover the call AND its retry, so the retry never had time to run.
 export const VISION_CALL_TIMEOUT_MS = 40_000;
-export const ANALYSIS_TOTAL_BUDGET_MS = 110_000;
+// Budget: 2 first-pass attempts (40s each) + the video second look (40s) with a little backoff slack.
+export const SECOND_LOOK_TIMEOUT_MS = 40_000;
+export const ANALYSIS_TOTAL_BUDGET_MS = 150_000;
 const MAX_ATTEMPTS = 2; // one extra look for a malformed or self-contradictory answer
 const MAX_TOKENS = 1500;
 
@@ -60,6 +63,7 @@ async function observe(
   let latencyMs = 0, costUsd: number | null = null, provider: string | null = null;
   let lastError = "analysis did not run";
   let normalized: NormalizedMedia | null = null;
+  let parsed: unknown = null;
 
   for (let attempt = 1; attempt <= MAX_ATTEMPTS && !overall.aborted; attempt++) {
     const prompt = attempt === 1 ? basePrompt
@@ -72,7 +76,8 @@ async function observe(
       latencyMs += meta.latencyMs;
       if (meta.costUsd !== null) costUsd = (costUsd ?? 0) + meta.costUsd;
       provider = meta.provider ?? provider;
-      normalized = normalizeMediaClassification(parseJson(content), { frames });
+      parsed = parseJson(content);
+      normalized = normalizeMediaClassification(parsed, { frames });
       if (!normalized.contradictions.length) break;
       lastError = `the text claimed things the evidence does not support (${normalized.contradictions[0]})`;
     } catch (e) {
@@ -84,12 +89,34 @@ async function observe(
   }
   if (!normalized) return failed(model, lastError, latencyMs, costUsd, provider);
 
+  // Video only: one bounded second look at the high-stakes keys. Anything not re-confirmed becomes "unclear" (needs_review).
+  let secondLookNote: string | null = null;
+  const lookKeys = kind === "video" && frames !== undefined ? secondLookKeys(normalized.fields.visual_facts.evidence) : [];
+  if (lookKeys.length && !overall.aborted) {
+    let answer: unknown = null, why = "second look did not run";
+    try {
+      const { content, meta } = await call({
+        model, dataUrl, prompt: secondLookPrompt(frames!, lookKeys),
+        signal: AbortSignal.any([overall, AbortSignal.timeout(SECOND_LOOK_TIMEOUT_MS)]),
+      });
+      latencyMs += meta.latencyMs;
+      if (meta.costUsd !== null) costUsd = (costUsd ?? 0) + meta.costUsd;
+      provider = meta.provider ?? provider;
+      answer = parseJson(content); why = "";
+    } catch (e) { why = `second look failed: ${String((e as Error)?.message ?? e).slice(0, 100)}`; }
+    const { value, downgraded } = applySecondLook(parsed, lookKeys, answer);
+    if (downgraded.length) {
+      normalized = normalizeMediaClassification(value, { frames });
+      secondLookNote = `second look did not confirm ${downgraded.join(", ")}${why ? ` (${why})` : ""}`;
+    }
+  }
+  if (!normalized) return failed(model, lastError, latencyMs, costUsd, provider);
   const fields = { ...normalized.fields };
-  const status = normalized.status;
+  const status = secondLookNote ? "needs_review" : normalized.status;
   // The legacy send caption only for rows that analysed cleanly. needs_review rows never get one (null = V1 uses auto_desc).
   const caption = status === "analysed" ? await generateSendCaption(fields, kind, deps.writeCaption) : null;
   const error = status === "needs_review"
-    ? (normalized.contradictions[0] ?? normalized.issues[0] ?? "needs review")
+    ? (secondLookNote ?? normalized.contradictions[0] ?? normalized.issues[0] ?? "needs review")
     : undefined;
   return {
     status, fields: { ...fields, caption }, model, provider, latencyMs, costUsd,
