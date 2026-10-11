@@ -6,7 +6,7 @@ import { ArrowLeft, ArrowUpRight, Bot, Check, CheckCheck, ChevronRight, Clock3, 
 import PlatformMark from '../fans/PlatformMark';
 import IntelligenceCoreIcon from '../IntelligenceCoreIcon';
 import { portraitUrl } from '../dashboard/portraits';
-import { fanAvatarUrl } from '../dashboard/fan-avatars';
+import { useDemoFanAvatar } from './useDemoFanAvatar';
 import { DEMO_HISTORY, DEMO_MEMORIES, DEMO_OWNED, DEMO_PRICE, DEMO_SCENES, demoTotals, movieDemoReducer, restoreDemoProgress, demoConversationHref, demoProfileHref } from './movie-night-model';
 import styles from './MovieNightDemo.module.css';
 
@@ -14,6 +14,7 @@ const dollars = (value: number) => `US$${value.toFixed(2)}`;
 
 export default function MovieNightDemo({initialStep=0,initialMode}: {initialStep?: string | number; initialMode?: string} = {}) {
   const [state, dispatch] = useReducer(movieDemoReducer, {initialStep,initialMode}, value => restoreDemoProgress(value.initialStep,value.initialMode));
+  const fanPhoto = useDemoFanAvatar();
   const [presenter, setPresenter] = useState(false);
   const [tab, setTab] = useState<'Context' | 'Fan record'>('Context');
   const [source, setSource] = useState<string | null>(null);
@@ -80,7 +81,7 @@ export default function MovieNightDemo({initialStep=0,initialMode}: {initialStep
         <select aria-label="Demo playback speed" value={speed} onChange={event => setSpeed(Number(event.target.value))}><option value={1}>Natural pace</option><option value={0.55}>Quick rehearsal</option></select>
         <button aria-label="Hide presenter controls" onClick={() => setPresenter(false)}><X size={16}/></button>
       </div>
-      <p>{scene?.cue || 'Press N to start. Pauses after context and purchase updates give you time to speak.'}<span><kbd>N</kbd> Continue <kbd>Space</kbd> Pause <kbd>P</kbd> Hide controls</span></p>
+      <p>{scene?.cue || 'Press N to start. Pauses after context and purchase updates give you time to speak.'}<span><kbd>N</kbd> Continue <kbd>Space</kbd> Pause <kbd>P</kbd> Hide controls <kbd>M</kbd> Switch fan photo</span></p>
     </section>}
 
     <div className={styles.workspace}>
@@ -88,14 +89,14 @@ export default function MovieNightDemo({initialStep=0,initialMode}: {initialStep
         <div className={styles.listHeader}><h1>Inbox</h1><Link href="/inbox?creator=briana&platform=onlyfans" aria-label="Exit presentation mode"><ArrowLeft size={16}/></Link></div>
         <div className={styles.creator}><img src={portraitUrl('studio')} alt="Bri"/><div><strong>Bri</strong><span>Creator workspace</span></div><ShieldCheck size={15}/></div>
         <div className={styles.platform}><PlatformMark platform="onlyfans" size={22}/><span>OnlyFans</span><span className={styles.channelLabel}>Demo channel</span></div>
-        <div className={styles.conversationRow} aria-current="true"><img src={fanAvatarUrl('briana-ben')} alt=""/><div><strong>Ronan<span>{state.messages.length ? 'Now' : 'Ready'}</span></strong><p>{state.messages.at(-1)?.text || 'A late shift and a familiar conversation.'}</p><small><i/>{state.mode === 'Autonomous' ? 'Autonomous' : 'Human handling'}</small></div></div>
+        <div className={styles.conversationRow} aria-current="true"><img src={fanPhoto} alt=""/><div><strong>Ronan<span>{state.messages.length ? 'Now' : 'Ready'}</span></strong><p>{state.messages.at(-1)?.text || 'A late shift and a familiar conversation.'}</p><small><i/>{state.mode === 'Autonomous' ? 'Autonomous' : 'Human handling'}</small></div></div>
         <div className={styles.relationship}><span>RELATIONSHIP SNAPSHOT</span><strong>After the late shift</strong><p>Earlier work plans and last week’s purchase are in context.</p><button onClick={() => setSource('all')}><MessageCircle size={14}/>Earlier conversation<ArrowUpRight size={13}/></button></div>
         {presenter && <div className={styles.sessionProgress}><span>CONVERSATION PROGRESS</span>{DEMO_SCENES.map((item, index) => <div key={item.title} data-active={state.scene === index} data-complete={state.scene > index || state.scene === index && !state.playing && state.cursor === item.events.length}><b>{state.scene > index ? <Check size={11}/> : index + 1}</b><span>{item.title}</span></div>)}</div>}
         <footer><ShieldCheck size={13}/>Isolated demo session</footer>
       </aside>
 
       <main className={styles.chat} data-chat-platform="onlyfans" aria-label="After-hours conversation with Ronan">
-        <header className={styles.chatHeader} data-chat-header><img src={fanAvatarUrl('briana-ben')} alt=""/><div><h2>Ronan <ShieldCheck size={15}/></h2><span>@ronan · OnlyFans</span></div><span className={styles.status}><i/>{state.mode}</span><Link className={styles.profileLink} href={demoProfileHref(state)} onClick={pauseForProfile} aria-label="View Ronan’s profile"><UserRound size={14}/><span>View profile</span></Link></header>
+        <header className={styles.chatHeader} data-chat-header><img src={fanPhoto} alt=""/><div><h2>Ronan <ShieldCheck size={15}/></h2><span>@ronan · OnlyFans</span></div><span className={styles.status}><i/>{state.mode}</span><Link className={styles.profileLink} href={demoProfileHref(state)} onClick={pauseForProfile} aria-label="View Ronan’s profile"><UserRound size={14}/><span>View profile</span></Link></header>
         <div className={styles.handling}><span><Bot size={15}/>{state.mode === 'Autonomous' ? 'Bri’s conversation style' : 'Automated replies paused'}</span>{state.mode === 'Autonomous' ? <button onClick={() => dispatch({ type: 'takeover' })}><UserRound size={13}/>Take over</button> : <button onClick={() => dispatch({ type: 'resume' })}><Bot size={13}/>Return to autonomous</button>}</div>
         <div ref={thread} className={styles.thread} aria-label="Demo message history" aria-live="polite" aria-relevant="additions text">
           <button className={styles.earlier} onClick={() => setSource('all')}><Clock3 size={12}/>View earlier conversation</button>

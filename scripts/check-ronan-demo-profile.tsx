@@ -5,6 +5,7 @@ import ts from 'typescript';
 import React, { act } from 'react';
 import * as demo from '../components/inbox/movie-night-model';
 import * as profile from '../components/inbox/ronan-profile-model';
+import * as fanPhoto from '../components/inbox/useDemoFanAvatar';
 import * as fanModel from '../components/fans/model';
 import * as fanTypes from '../components/fans/types';
 
@@ -67,6 +68,7 @@ export async function checkRonanDemoProfile() {
     '../fans/FanWorkspace':{__esModule:true,default:Workspace},
     '../dashboard/fan-avatars':{fanAvatarUrl:()=>'/dashboard/fans/fan-01.webp'},
     './movie-night-model':demo,'./ronan-profile-model':profile,
+    './useDemoFanAvatar':fanPhoto,
   });
   const {createRoot}=requireLocal('react-dom/client');
   const root=createRoot(document.getElementById('profile-root')!);
@@ -74,7 +76,11 @@ export async function checkRonanDemoProfile() {
   await act(async()=>root.render(<Profile step={demo.DEMO_EVENT_COUNT}/>));
   assert.match(document.body.textContent!,/Fictional demo profile/);
   assert.match(document.querySelector('.metrics')!.textContent!,/US\$144.00/);
-  assert.equal(document.querySelector('.profileHeader img')?.getAttribute('src'),'/dashboard/fans/fan-01.webp');
+  assert.equal(document.querySelector('.profileHeader img')?.getAttribute('src'),fanPhoto.DEMO_UPLOADED_FAN_PHOTO);
+  await act(async()=>document.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'m',bubbles:true})));
+  for(const img of document.querySelectorAll('.profileHeader img,.fanRow img')) assert.equal(img.getAttribute('src'),'/dashboard/fans/fan-01.webp');
+  await act(async()=>document.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'m',bubbles:true})));
+  for(const img of document.querySelectorAll('.profileHeader img,.fanRow img')) assert.equal(img.getAttribute('src'),fanPhoto.DEMO_UPLOADED_FAN_PHOTO);
   assert.ok(document.querySelector('.railMobileHidden'),'Phone opens the profile immediately');
   await click('#fan-tab-memory');
   assert.equal(document.querySelectorAll('.memoryEntryValue').length,fan.memories.length);
