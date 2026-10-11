@@ -2,7 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import { NextResponse } from "next/server";
 import { serviceClient } from "@/lib/supabase-service";
 import { CREATOR_SESSION_COOKIE, creatorCookieOptions, signCreatorSession } from "@/lib/creator-session";
-import { AGENCY_COOKIE } from "@/lib/agency-policy";
+import { clearAgencySession } from "@/lib/agency-session";
 import { AGENCY_PORTAL_COOKIE } from "@/lib/agency-brand";
 import { SESSION_COOKIE } from "@/lib/session";
 import { CLONE_SCOPE_COOKIE } from "@/lib/clone-scope";
@@ -110,7 +110,7 @@ export async function POST(req: Request) {
   const response = NextResponse.redirect(creatorUrl(req, "/creator"), 303);
   response.cookies.set(CREATOR_SESSION_COOKIE, creatorToken!, creatorCookieOptions());
   // Creator and operator sessions remain mutually exclusive in one browser.
-  response.cookies.delete(AGENCY_COOKIE);
+  clearAgencySession(response.cookies);
   response.cookies.delete(AGENCY_PORTAL_COOKIE);
   response.cookies.delete(SESSION_COOKIE);
   response.cookies.delete(CLONE_SCOPE_COOKIE);

@@ -13,7 +13,7 @@ import {
   type CreatorPublicPortal,
 } from "@/lib/creator-routing";
 import { dashboardOrigin, isLynqHost } from "@/lib/form-origin";
-import { AGENCY_COOKIE } from "@/lib/agency-policy";
+import { clearAgencySession } from "@/lib/agency-session";
 import { AGENCY_PORTAL_COOKIE } from "@/lib/agency-brand";
 import { SESSION_COOKIE } from "@/lib/session";
 import { CLONE_SCOPE_COOKIE } from "@/lib/clone-scope";
@@ -67,7 +67,7 @@ export async function POST(req: Request) {
   const verifiedPortal = creatorPortalForIdentity(identity, portal);
   const response = withCreatorPortal(NextResponse.redirect(new URL(next, dashboardOrigin(req)), 303), verifiedPortal);
   response.cookies.set(CREATOR_SESSION_COOKIE, token, creatorCookieOptions());
-  response.cookies.delete(AGENCY_COOKIE);
+  clearAgencySession(response.cookies);
   response.cookies.delete(AGENCY_PORTAL_COOKIE);
   response.cookies.delete(SESSION_COOKIE);
   response.cookies.delete(CLONE_SCOPE_COOKIE);

@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { serviceClient } from "@/lib/supabase-service";
 import { agencyIdentity } from "@/lib/agency-identity";
-import { AGENCY_COOKIE } from "@/lib/agency-policy";
+import { setAgencySession } from "@/lib/agency-session";
 import { AGENCY_PORTAL_COOKIE } from "@/lib/agency-brand";
 import { SESSION_COOKIE } from "@/lib/session";
 import { CLONE_SCOPE_COOKIE } from "@/lib/clone-scope";
@@ -46,8 +46,7 @@ export async function POST(req: NextRequest) {
   const identity = token ? await agencyIdentity(token) : null;
   if (error || !token || data.user?.id !== member.data.user_id || identity?.id !== LYNQ_AGENCY_ID) return failed();
   const response = json ? NextResponse.json({ ok: true }) : NextResponse.redirect(new URL("/revenue", dashboardOrigin(req)), 303);
-  response.cookies.set(AGENCY_COOKIE, token, { httpOnly: true, secure: process.env.NODE_ENV === "production",
-    sameSite: "strict", path: "/", maxAge: Math.min(data.session?.expires_in ?? 3600, 3600) });
+  setAgencySession(response, data.session!);
   response.cookies.delete(SESSION_COOKIE);
   response.cookies.delete(CLONE_SCOPE_COOKIE);
   response.cookies.set(AGENCY_PORTAL_COOKIE,"lynq",{httpOnly:true,secure:process.env.NODE_ENV === "production",sameSite:"strict",path:"/",maxAge:60*60*24*30});

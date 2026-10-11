@@ -1,5 +1,5 @@
 import { safeAdminNext } from "@/lib/login-routing";
-import { AGENCY_COOKIE } from "@/lib/agency-policy";
+import { clearAgencySession } from "@/lib/agency-session";
 import { AGENCY_PORTAL_COOKIE } from "@/lib/agency-brand";
 import { CLONE_SCOPE_COOKIE } from "@/lib/clone-scope";
 import { dashboardOrigin, trustedFormOrigin } from "@/lib/form-origin";
@@ -30,7 +30,7 @@ export async function POST(req: NextRequest) {
   response.cookies.set(SESSION_COOKIE,token,{httpOnly:true,secure:process.env.NODE_ENV==="production",sameSite:"lax",path:"/",maxAge:60*60*24*30});
   response.cookies.delete(CREATOR_SESSION_COOKIE);
   response.cookies.delete(VIEW_AS_COOKIE);
-  response.cookies.delete(AGENCY_COOKIE);
+  clearAgencySession(response.cookies);
   response.cookies.delete(AGENCY_PORTAL_COOKIE);
   response.cookies.delete(CLONE_SCOPE_COOKIE);
   response.headers.set("Cache-Control", "private, no-store");

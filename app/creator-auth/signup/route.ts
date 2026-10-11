@@ -7,7 +7,7 @@ import { cookies } from "next/headers";
 import { serviceClient } from "@/lib/supabase-service";
 import { CREATOR_SESSION_COOKIE, creatorCookieOptions, signCreatorSession } from "@/lib/creator-session";
 import { creatorRequestUrl } from "@/lib/creator-origin";
-import { AGENCY_COOKIE } from "@/lib/agency-policy";
+import { clearAgencySession } from "@/lib/agency-session";
 import { AGENCY_PORTAL_COOKIE } from "@/lib/agency-brand";
 import { SESSION_COOKIE } from "@/lib/session";
 import { CLONE_SCOPE_COOKIE } from "@/lib/clone-scope";
@@ -107,7 +107,7 @@ export async function POST(req: Request) {
     // A browser can be an agency operator OR a creator for this app session,
     // not both. Clearing the operator state prevents the creator pages from
     // inheriting agency-scoped data access after signup.
-    jar.delete(AGENCY_COOKIE);
+    clearAgencySession(jar);
     jar.delete(AGENCY_PORTAL_COOKIE);
     jar.delete(SESSION_COOKIE);
     jar.delete(CLONE_SCOPE_COOKIE);

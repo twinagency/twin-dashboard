@@ -15,6 +15,7 @@ import { creatorDashboardIdentity, creatorDashboardIdentityById } from "@/lib/cr
 import { CREATOR_AUDIENCE_HEADER, isCreatorDashboardPath, creatorApiAllowed, assertCreatorQuery, creatorDashboardAlias } from "@/lib/creator-dashboard-policy";
 import { creatorDemoQueryIds } from "@/lib/creator-demo-policy";
 import { activeViewAs, VIEW_AS_EXIT_PATH } from "@/lib/view-as";
+import { agencySessionNeedsRefresh, clearAgencySession, refreshAgencySession, setAgencySession } from "@/lib/agency-session";
 
 function withPathname(req: NextRequest, creator = false): NextResponse {
   const headers = new Headers(req.headers);
@@ -35,7 +36,17 @@ function creatorReferrer(req: NextRequest): boolean {
 }
 const SELF_AUTHENTICATED_PREFIXES = ["/api/v1/", "/api/admin/"];
 
+// Renews an agency session that is about to expire before any route logic
+// reads it, then writes the new tokens onto whatever response comes back.
 export async function middleware(req: NextRequest) {
+  const refreshed = agencySessionNeedsRefresh(req) ? await refreshAgencySession(req) : null;
+  const response = await route(req);
+  if (refreshed === "expired") clearAgencySession(response.cookies);
+  else if (refreshed) setAgencySession(response, refreshed);
+  return response;
+}
+
+async function route(req: NextRequest): Promise<NextResponse> {
   const { pathname } = req.nextUrl;
   // ── Moxy white-label host (dashboard.lynqai.co) ─────────────────────────
   // Same app, Moxy branding only. Redirects stay on the host the user came
