@@ -42,6 +42,12 @@ for (const key of ["genitals", "anus", "bare_buttocks"]) {
   assert.equal(r.fields.is_nude, true, key);
   assert.equal(r.fields.explicitness, "explicit", key);
 }
+// anus=yes needs the prose to name it (or a plug / insertion): a silent "yes" is an unsupported claim and goes to review, not "analysed".
+const silentAnus = norm({ anus: "yes", bare_buttocks: "yes" }, { identifying: "A woman poses on a bed.", details: "She lies face down on a bed.", short_label: "bed pose", visible: ["bed"], tags: ["anal"] });
+assert.equal(silentAnus.status, "needs_review", "anus yes with no mention of it must not be saved as analysed");
+const namedAnus = norm({ anus: "yes", bare_buttocks: "yes" }, { identifying: "A woman lies face down with a pink plug inserted.", details: "Her anus is visible on a bed.", short_label: "plug bed", visible: ["bed", "pink plug"], tags: ["anal"] });
+assert.equal(namedAnus.status, "analysed", "anus yes backed by the prose stays analysed");
+
 const act = norm({ sexual_activity: "yes" }, { identifying: "A woman uses a toy.", details: "She sits on a bed.", short_label: "toy use", visible: ["bed"], tags: [] });
 assert.equal(act.fields.is_nude, false, "a sexual act and visible nudity are separate observations");
 assert.equal(act.fields.nsfw, true);

@@ -184,6 +184,9 @@ const TAGS_FROM_YES: [FactKey, string[]][] = [
   ["swimwear", ["bikini"]], ["lingerie", ["lingerie"]], ["mirror_reflection", ["mirror_selfie"]],
 ];
 
+// anus=yes must be backed by the prose actually naming the anus (or a plug / insertion). A "yes" the description never mentions is an
+// unsupported claim: it goes to review instead of being saved as analysed (eval #40: anus=yes + 'anal' tag with silent prose).
+const ANUS_MENTIONED = /\b(?:anus|anal|asshole|butt ?plug|plug|inserted|insertion|penetrat\w*)\b/i;
 const ANUS_NOT_VISIBLE = /\b(?:anus|anal|asshole)\b[^.]*\b(?:not|isn'?t|no longer|barely)\b[^.]*\b(?:visible|seen|shown)\b|\b(?:not|no|nor)\b[^.]*\b(?:visible|seen)\b[^.]*\b(?:anus|asshole)\b|\bno (?:visible )?(?:anus|asshole)\b/i;
 const WORN_BOTTOM = /\b(?:thong|g-?string|bikini (?:bottoms?|briefs?)|bikini bottom|panties|underwear|briefs|knickers|lingerie bottoms?)\b/i;
 const PULLED_DOWN = /\b(?:pulled|pushed|moved|slid|tugged|yanked) (?:down|aside|off|to the side)|\b(?:down|aside|off) (?:around|at) (?:her )?(?:thighs|knees|ankles)\b|\bwithout (?:a )?(?:thong|underwear|panties)\b/i;
@@ -253,6 +256,9 @@ export function normalizeMediaClassification(value: unknown, opts: NormalizeOpti
   const blocked = new Set<string>();
   if (evidence.anus === "yes" && ANUS_NOT_VISIBLE.test(`${j.identifying} ${typeof j.details === "string" ? j.details : ""} ${(Array.isArray(j.visible) ? j.visible : []).join(". ")}`)) {
     issuesExtra.push("anus is yes but the description says it is not visible");
+  }
+  if (evidence.anus === "yes" && !ANUS_MENTIONED.test(proseAll)) {
+    issuesExtra.push("anus is yes but the description never mentions it");
   }
   if (evidence.bare_buttocks === "yes" && WORN_BOTTOM.test(proseAll) && !PULLED_DOWN.test(proseAll)) {
     issuesExtra.push("bare_buttocks is yes but a worn thong/bottom/underwear is described");
