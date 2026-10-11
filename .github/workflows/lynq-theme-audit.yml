@@ -1,5 +1,14 @@
 name: LYNQ visual regression
 on:
+  pull_request:
+    branches: [main]
+    paths:
+      - app/**
+      - components/**
+      - lib/dashboard-creator-route.ts
+      - scripts/check-lynq-theme.mjs
+      - scripts/check-sidebar-layout.tsx
+      - .github/workflows/lynq-theme-audit.yml
   push:
     branches: [main, fix/lynq-theme-override-and-core]
     paths:
