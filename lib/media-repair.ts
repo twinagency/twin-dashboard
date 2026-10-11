@@ -16,6 +16,7 @@ import path from "node:path";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ANALYSIS_COLUMNS, ANALYSIS_VERSION, FACT_KEYS, type AnalysisResult, type VisualFacts } from "./media-analysis-contract";
 import { withRetry, TRANSIENT_ERROR } from "./retry";
+import { analysisRowFields } from "./media-analysis-row";
 
 export type MediaTable = "photos" | "videos";
 export const MEDIA_TABLES: MediaTable[] = ["photos", "videos"];
@@ -259,17 +260,17 @@ export function buildProposal(ctx: Pick<Ctx, "runId" | "now">, table: MediaTable
   if (res.status === "needs_review") return { ...base, outcome: "needs_review", error: res.error ?? "analysis contradicts itself" };
 
   const f = res.fields;
-  const after: Record<string, unknown> = {
-    auto_desc: f.auto_desc, tags: f.tags, visual_description: f.visual_description, visual_facts: f.visual_facts,
-    explicitness: f.explicitness, is_nude: f.is_nude, nsfw: f.nsfw,
-  };
-  // The legacy sales caption is only replaced when it contradicts the facts; otherwise the person-facing wording stays.
+  // The field set and the state stamp come from the SAME helper the dashboard upload/import path uses (lib/media-analysis-row.ts),
+  // so a repaired row is indistinguishable from a freshly uploaded one. Caption is the one exception: the stored sales caption is
+  // kept unless it contradicts the facts.
+  const mapped = analysisRowFields(res);
+  const after: Record<string, unknown> = {};
+  for (const k of CONTENT_FIELDS) if (k !== "caption") after[k] = mapped[k];
   if (captionContradictsFacts(row.caption, f.visual_facts)) after.caption = f.caption?.trim() ? f.caption : null;
   const changedContent = Object.keys(after).filter((k) => !same((row as any)[k], after[k]));
-  const stamp = {
-    analysis_status: "analysed", analysis_version: res.version, analysis_model: res.model, analysis_provider: res.provider,
-    analysis_error: null, analysed_at: (ctx.now?.() ?? new Date()).toISOString(),
-  };
+  const stamp: Record<string, unknown> = {};
+  for (const k of STAMP_FIELDS) stamp[k] = mapped[k];
+  stamp.analysed_at = (ctx.now?.() ?? new Date()).toISOString();
   const changed = [...changedContent, ...STAMP_FIELDS];
   const out: Record<string, unknown> = {}, prev: Record<string, unknown> = {};
   for (const k of changed) { out[k] = k in stamp ? (stamp as any)[k] : after[k]; prev[k] = (row as any)[k] ?? null; }
