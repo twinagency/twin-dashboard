@@ -1,3 +1,4 @@
+import { fetchMediaDescription } from "./media-description-read";
 import { agencyCanManage } from "./agency-management-policy";
 import { assignedStoragePath } from "./agency-management";
 import { scopeAgencyWrite, scopeBundleItems } from "./agency-write";
@@ -66,7 +67,7 @@ export async function dashboardFetch(input: RequestInfo | URL, init?: RequestIni
         if (headers.get("prefer")?.includes("resolution=")) return denied("Agency upserts are not allowed");
         scoped=await scopeAgencyWrite(url,method,await jsonBody(),agency);
       }
-      return await safeResponse(await fetch(scoped,{...init,cache:"no-store"}));
+      return await safeResponse(await fetchMediaDescription(scoped,{...init,method,cache:"no-store"}));
     }
     if (url.pathname.startsWith("/storage/v1/object/sign/media") && method === "POST") {
       const prefix = "/storage/v1/object/sign/media";

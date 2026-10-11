@@ -1,5 +1,5 @@
 {
-  "reason": "Allow the authenticated, creator-scoped portrait route and verify the agency middleware path",
-  "source_commit": "e741030f7fc9054b7790dc716566543cec723173",
-  "requested_at": "2026-10-11T06:45:10.945Z"
+  "reason": "Expose full saved AI visual descriptions on all content cards and previews, with compatibility for the independent content database",
+  "source_commit": "e1f417a6d30f3f8108d3f98638a4217f3d6ee5a6",
+  "requested_at": "2026-10-11T07:38:23.591Z"
 }
