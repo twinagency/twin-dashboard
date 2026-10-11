@@ -259,7 +259,7 @@ const guide = Object.fromEntries(PRICING_CATEGORIES.map((c) => [c, c === "sfw" |
     const sl2 = replying(answer({ genitals: "yes", sexual_activity: "yes" }, bare), JSON.stringify({ genitals: "yes", sexual_activity: "yes" }));
     const s2 = await analyseVideo(readFileSync(clip), null, undefined, { call: sl2.call, writeCaption: captionOk });
     assert.equal(sl2.calls.length, 2);
-    assert.equal(s2.status, "analysed", "confirmed keys stay yes");
+    assert.equal(s2.status, "needs_review", "confirmed explicit keys stay yes, but a new video waits for completeReview (video gate)");
     assert.equal(s2.fields?.visual_facts.evidence.genitals, "yes");
 
     const sl3 = replying(answer({ anus: "yes", full_nudity: "yes" }, { ...bare, tags: [] }), JSON.stringify({ anus: "yes", full_nudity: "no" }));
@@ -274,6 +274,49 @@ const guide = Object.fromEntries(PRICING_CATEGORIES.map((c) => [c, c === "sfw" |
     const s4 = await analyseVideo(readFileSync(clip), null, undefined, { call: flaky, writeCaption: captionOk });
     assert.equal(s4.status, "needs_review");
     assert.equal(s4.fields?.visual_facts.evidence.sex_toy, "unclear");
+
+    // ---- conservative video gate: a NEW video never ends "analysed" with a nudity/sexual key yes or unclear ----
+    // The evidence below is the round-3 eval output for the clips named (video-eval/results.json), mocked as model answers.
+    // Residual risk (c13): a missed nipple answered "no" is indistinguishable from a clean clip; no code can detect it.
+    const mock = (ev: Record<string, string>, tags: string[], identifying: string, details: string, confirm: string[] = []) => {
+      const answers = [answer(ev, { identifying, details, short_label: "eval clip", visible: ["bed"], tags })];
+      if (confirm.length) answers.push(JSON.stringify(Object.fromEntries(confirm.map((k) => [k, "yes"]))));
+      return replying(...answers);
+    };
+    const gate = async (r: ReturnType<typeof replying>) => analyseVideo(readFileSync(clip), null, undefined, { call: r.call, writeCaption: captionOk });
+    const known: [string, ReturnType<typeof replying>][] = [
+      ["c19 worn thong read as genitals+pussy", mock({ nipples: "yes", genitals: "yes", bare_buttocks: "yes", swimwear: "yes", lingerie: "yes", suggestive_pose: "yes" },
+        ["outdoor", "solo", "topless", "tits", "pussy", "ass", "bikini", "lingerie"], "A red haired woman in a pink bikini poses outdoors.", "She stands beside a garden wall in sunlight.", ["genitals"])],
+      ["c21 explicit clip read as fully unclothed", mock({ nipples: "yes", genitals: "yes", anus: "yes", bare_buttocks: "yes", full_nudity: "yes", suggestive_pose: "yes" },
+        ["bed", "solo", "topless", "tits", "pussy", "anal", "ass", "full_nude"], "A red haired nude woman lies on a bed.", "Her anus is visible between her legs.", ["genitals", "anus", "full_nudity"])],
+      ["c01 false anal tag", mock({ nipples: "yes", genitals: "yes", anus: "yes", bare_buttocks: "yes", full_nudity: "yes", suggestive_pose: "yes" },
+        ["solo", "topless", "tits", "pussy", "anal", "ass", "full_nude"], "A tattooed nude woman stands in a bedroom.", "The anal area is visible from behind.", ["genitals", "anus", "full_nudity"])],
+    ];
+    for (const [name, r] of known) {
+      const g = await gate(r);
+      assert.equal(g.status, "needs_review", `${name}: not analysed`);
+      assert.match(g.error ?? "", /review/i, `${name}: reason recorded`);
+      assert.ok(g.fields && g.fields.tags.length > 0, `${name}: the model's fields are kept for the reviewer`);
+      assert.equal(g.fields?.caption, null, `${name}: no send caption`);
+      assert.equal(priceForAnalysis({ ...Object.fromEntries(PRICING_CATEGORIES.map((c) => [c, 100])), ...{ [PRICING_CATEGORIES[0]]: 400 } }, g), 400, `${name}: priced at the guide maximum like any non-analysed item`);
+    }
+    // c13: nipple missed, everything "no": stays analysed. This is the documented residual risk of the gate.
+    const c13 = await gate(mock({ swimwear: "yes", suggestive_pose: "yes" }, ["solo", "bikini"], "A woman in a yellow bikini poses on a couch.", "She sits on a grey couch."));
+    assert.equal(c13.status, "analysed", "all gate keys no: cannot be detected by code");
+    // each gate key alone: yes or unclear -> needs_review
+    for (const k of ["nipples", "genitals", "anus", "bare_buttocks", "full_nudity", "sexual_activity", "sex_toy"]) {
+      for (const v of ["yes", "unclear"]) {
+        const tagless = { identifying: "A woman sits on a bed.", details: "She sits on a white sheet.", short_label: "woman on bed", visible: ["white sheet"], tags: [] };
+        const r = replying(answer({ [k]: v }, tagless), JSON.stringify({ [k]: "yes" }));
+        const g = await gate(r);
+        assert.notEqual(g.status, "analysed", `video ${k}=${v} must not be analysed`);
+      }
+    }
+    // a clearly clean video and a merely suggestive one stay analysed; photos are not gated
+    assert.equal((await gate(replying(answer()))).status, "analysed");
+    assert.equal((await gate(replying(answer({ lingerie: "yes", suggestive_pose: "yes" }, { tags: ["lingerie"], identifying: "A woman in black lingerie sits on a bed.", details: "She sits on a white sheet." })))).status, "analysed");
+    const ph = await analysePhoto(photo, null, undefined, { call: replying(answer({ nipples: "yes" }, { tags: ["topless"], identifying: "A topless woman sits on a bed.", details: "She sits on a white sheet.", visible: ["white sheet"] })).call, writeCaption: captionOk });
+    assert.equal(ph.status, "analysed", "photos keep their behaviour");
 
     // no trigger key, no extra call; and photos never pay for one
     const sl5 = replying(answer({ nipples: "yes" }, { ...bare, tags: [] }));
