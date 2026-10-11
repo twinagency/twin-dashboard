@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useId, useRef, useState } from 'react';
+import { useEffect, useId, useRef, useState, useSyncExternalStore } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { ArrowRight, ArrowUpRight, CalendarDays, DollarSign, ImageIcon, MessageCircle, Sparkles, RefreshCw, UserRound, Users, X } from 'lucide-react';
@@ -39,19 +39,32 @@ function elapsed(value: string) {
   if (minutes < 1440) return `${Math.floor(minutes / 60)}h ago`;
   return `${Math.floor(minutes / 1440)}d ago`;
 }
+function subscribeCompactChart(onChange: () => void) {
+  const query = window.matchMedia('(max-width: 600px)');
+  query.addEventListener('change', onChange);
+  return () => query.removeEventListener('change', onChange);
+}
+const isCompactChart = () => window.matchMedia('(max-width: 600px)').matches;
+const serverCompactChart = () => false;
+
 function Series({ values, small = false, labels = [], money }: { values: number[]; small?: boolean; labels?: string[]; money: (n: number) => string }) {
   const id = useId().replace(/:/g, '');
+  const compact = useSyncExternalStore(subscribeCompactChart, isCompactChart, serverCompactChart);
   const min = Math.min(0, ...values), max = Math.max(1, ...values), span = max - min;
-  const w = small ? 110 : 760, h = small ? 34 : 210;
+  const w = small ? 110 : compact ? 420 : 760, h = small ? 34 : compact ? 240 : 210;
   const left = small ? 0 : 70, top = small ? 2 : 12, right = w - 10, bottom = h - (small ? 2 : 28);
   const y = (v: number) => bottom - (v - min) / span * (bottom - top);
   const points = values.map((v, i) => `${left + i / Math.max(1, values.length - 1) * (right - left)},${y(v)}`);
   return <svg className={small ? styles.spark : styles.chart} viewBox={`0 0 ${w} ${h}`} role="img" aria-label={small ? 'Earnings trend' : 'Telegram earnings for the selected period'}>
-    <defs><linearGradient id={id} x1="0" y1="0" x2="0" y2="1"><stop stopColor="#171717" stopOpacity=".14" /><stop offset="1" stopColor="#171717" stopOpacity="0" /></linearGradient></defs>
+    <defs><linearGradient id={id} x1="0" y1="0" x2="0" y2="1"><stop stopColor="currentColor" stopOpacity=".14" /><stop offset="1" stopColor="currentColor" stopOpacity="0" /></linearGradient></defs>
     {!small && [0, 1, 2, 3, 4].map(i => { const v = min + span * i / 4; return <g key={i}><line x1={left} x2={right} y1={y(v)} y2={y(v)} stroke="#ebebef" strokeDasharray="2 4" /><text x={left - 12} y={y(v) + 4} textAnchor="end">{money(v)}</text></g>; })}
-    {!!points.length && <><path d={`M${left},${y(0)} L${points.join(' L')} L${right},${y(0)} Z`} fill={`url(#${id})`} /><polyline points={points.join(' ')} fill="none" stroke="#181818" strokeWidth={small ? 2 : 2.2} strokeLinejoin="round" strokeLinecap="round" /></>}
+    {!!points.length && <><path d={`M${left},${y(0)} L${points.join(' L')} L${right},${y(0)} Z`} fill={`url(#${id})`} /><polyline points={points.join(' ')} fill="none" stroke="currentColor" strokeWidth={small ? 2 : 2.2} strokeLinejoin="round" strokeLinecap="round" /></>}
     {!small && values.map((v, i) => <circle key={i} cx={left + i / Math.max(1, values.length - 1) * (right - left)} cy={y(v)} r="7" fill="transparent"><title>{labels[i]}: {money(v)}</title></circle>)}
-    {!small && labels.map((label, i) => i % Math.max(1, Math.ceil(labels.length / 7)) === 0 || i === labels.length - 1 ? <text key={i} x={left + i / Math.max(1, labels.length - 1) * (right - left)} y={h - 5} textAnchor={i === labels.length - 1 ? 'end' : 'middle'}>{label}</text> : null)}
+    {!small && labels.map((label, i) => {
+      const step = Math.max(1, Math.ceil(labels.length / (compact ? 4 : 7)));
+      const last = labels.length - 1;
+      return i === last || (i % step === 0 && last - i >= step * .65) ? <text key={i} x={left + i / Math.max(1, last) * (right - left)} y={h - 5} textAnchor={i === last ? 'end' : 'middle'}>{label}</text> : null;
+    })}
   </svg>;
 }
 

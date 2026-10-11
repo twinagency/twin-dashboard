@@ -133,18 +133,21 @@
 /* Moxy's own monochrome shell. Financial/status colours keep their meaning.
    The attribute is rendered from the verified agency, never local storage. */
 html[data-agency="moxy"] {
+  --moxy-overview-accent: #752638;
+  --moxy-overview-accent-deep: #572030;
+  --moxy-overview-accent-tint: #F4E9EC;
   --color-bg: #f6f6f6;
   --color-elev: #efefef;
   --color-ink: #181818;
   --color-muted: #686868;
   --color-line: #e4e4e4;
-  --color-accent: #171717;
-  --color-accent-2: #343434;
-  --color-accent-deep: #080808;
-  --color-accent-soft: #777777;
-  --color-accent-tint: #e9e9e9;
-  --color-brand: #171717;
-  --color-brand-light: #343434;
+  --color-accent: #752638;
+  --color-accent-2: #8D394D;
+  --color-accent-deep: #572030;
+  --color-accent-soft: #CE8E9F;
+  --color-accent-tint: #F4E9EC;
+  --color-brand: #752638;
+  --color-brand-light: #8D394D;
 }
 html[data-agency="moxy"] .dashboard-sidebar,
 html[data-agency="moxy"] .dashboard-mobile-header { background: #080808; }
@@ -155,19 +158,19 @@ html[data-agency="moxy"] .moxy-login { background: #080808; color: white; }
 
 /* Moxy's revenue palette stays inside the existing earnings page. */
 html[data-agency="moxy"] .revenue-dashboard {
-  --color-good: #0f766e;
-  --moxy-revenue-total: #0f766e;
-  --moxy-revenue-blue: #0f766e;
-  --moxy-revenue-aqua: #0d9488;
-  --moxy-revenue-yellow: #4c8b75;
-  --moxy-revenue-violet: #115e59;
-  --moxy-revenue-pink: #538f83;
-  --moxy-revenue-series-1: #0f766e;
-  --moxy-revenue-series-2: #14b8a6;
-  --moxy-revenue-series-3: #115e59;
-  --moxy-revenue-series-4: #0d9488;
-  --moxy-revenue-series-5: #4c8b75;
-  --moxy-revenue-series-6: #538f83;
+  --color-good: #752638;
+  --moxy-revenue-total: #752638;
+  --moxy-revenue-blue: #752638;
+  --moxy-revenue-aqua: #9C5265;
+  --moxy-revenue-yellow: #AF7D8B;
+  --moxy-revenue-violet: #572030;
+  --moxy-revenue-pink: #8C6975;
+  --moxy-revenue-series-1: #752638;
+  --moxy-revenue-series-2: #C08091;
+  --moxy-revenue-series-3: #572030;
+  --moxy-revenue-series-4: #9C5265;
+  --moxy-revenue-series-5: #AF7D8B;
+  --moxy-revenue-series-6: #8C6975;
 }
 html[data-agency="moxy"] .revenue-dashboard .money-value-primary {
   color: var(--color-good);

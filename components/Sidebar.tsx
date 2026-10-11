@@ -166,22 +166,22 @@ html[data-agency="moxy"] .dashboard-sidebar { width: 245px; background: #080808;
 html[data-agency="moxy"] #mobile-sidebar { width: min(88vw, 280px); }
 .moxy-sidebar-brand { flex-shrink: 0; display: flex; align-items: center; justify-content: space-between; padding: 22px 24px 10px; }
 .moxy-sidebar-brand img { width: 160px; }
-.moxy-sidebar-access { margin: 4px 0 0; color: #a1aaa5; font-size: 12px; line-height: 18px; }
+.moxy-sidebar-access { margin: 4px 0 0; color: #a8a5a6; font-size: 12px; line-height: 18px; }
 .moxy-sidebar-action { flex-shrink: 0; padding: 12px 16px 24px; }
-.moxy-invite-button { display: flex; min-height: 48px; width: 100%; align-items: center; justify-content: center; gap: 10px; border: 1px solid #97edd3; border-radius: 10px; background: #79e1c2; color: #08271d; box-shadow: 0 3px 12px rgb(0 0 0 / .16); font-size: 15px; line-height: 22px; font-weight: 650; transition: background-color .15s, box-shadow .15s; }
-.moxy-invite-button:hover { background: #9aedd4; box-shadow: 0 4px 16px rgb(121 225 194 / .15); }
-.moxy-invite-button[aria-current="page"] { box-shadow: 0 0 0 2px #080808, 0 0 0 3px #79e1c2; }
+.moxy-invite-button { display: flex; min-height: 48px; width: 100%; align-items: center; justify-content: center; gap: 10px; border: 1px solid #944258; border-radius: 10px; background: #752638; color: #ffffff; box-shadow: 0 3px 12px rgb(0 0 0 / .16); font-size: 15px; line-height: 22px; font-weight: 650; transition: background-color .15s, box-shadow .15s; }
+.moxy-invite-button:hover { background: #8D394D; box-shadow: 0 4px 16px rgb(117 38 56 / .22); }
+.moxy-invite-button[aria-current="page"] { box-shadow: 0 0 0 2px #080808, 0 0 0 3px #CE8E9F; }
 .moxy-sidebar-nav { flex: 1 1 auto; min-height: 0; overflow-y: auto; overscroll-behavior: contain; padding: 0 16px 12px; }
 .moxy-sidebar-group + .moxy-sidebar-group { margin-top: 26px; }
-.moxy-sidebar-heading { margin: 0 0 8px; padding: 0 12px; color: #939e98; font-size: 11px; line-height: 16px; font-weight: 500; letter-spacing: .13em; text-transform: uppercase; }
+.moxy-sidebar-heading { margin: 0 0 8px; padding: 0 12px; color: #a39c9f; font-size: 11px; line-height: 16px; font-weight: 500; letter-spacing: .13em; text-transform: uppercase; }
 .moxy-sidebar-row { position: relative; display: flex; width: 100%; min-height: 46px; align-items: center; gap: 13px; margin: 2px 0; padding: 10px 12px; border-radius: 7px; text-align: left; font-size: 15px; line-height: 22px; font-weight: 400; transition: background-color .15s, color .15s; }
-.moxy-sidebar-row--idle { color: #bec7c2; }
-.moxy-sidebar-row--idle:hover { background: #1b211e; color: #ffffff; }
-.moxy-sidebar-row--active { background: #292929; color: #ffffff; font-weight: 500; }
-.moxy-sidebar-row--active::before { position: absolute; top: 12px; bottom: 12px; left: 0; width: 3px; border-radius: 3px; background: transparent; content: ""; }
-.moxy-sidebar-row:focus-visible, .moxy-invite-button:focus-visible { outline: 2px solid #79e1c2; outline-offset: 3px; }
+.moxy-sidebar-row--idle { color: #c5bec1; }
+.moxy-sidebar-row--idle:hover { background: #21191c; color: #ffffff; }
+.moxy-sidebar-row--active { background: #301c23; color: #ffffff; font-weight: 500; }
+.moxy-sidebar-row--active::before { position: absolute; top: 12px; bottom: 12px; left: 0; width: 3px; border-radius: 3px; background: #CE8E9F; content: ""; }
+.moxy-sidebar-row:focus-visible, .moxy-invite-button:focus-visible { outline: 2px solid #CE8E9F; outline-offset: 3px; }
 .moxy-sidebar-utilities { flex-shrink: 0; padding: 0 16px 16px; }
-.moxy-sidebar-utilities > div { border-top: 1px solid #272e2a; padding-top: 12px; }
+.moxy-sidebar-utilities > div { border-top: 1px solid #2b2528; padding-top: 12px; }
 @media (max-height: 560px) {
   .moxy-sidebar-brand { padding-top: 12px; padding-bottom: 4px; }
   .moxy-sidebar-brand img { width: 126px; }
@@ -514,6 +514,3 @@ export default function Sidebar({ clones: _clones, activeCloneId }: { clones: Cl
   const studio = !isAgency && !isCreator && isBriannaWorkspaceRoute(pathname, searchParams.get("creator"), activeCloneId);
   return <aside data-studio-sidebar={studio || undefined} className="dashboard-sidebar sticky top-0 hidden h-screen w-72 shrink-0 flex-col lg:flex"><SidebarContent activeCloneId={activeCloneId} /></aside>;
 }
-
-
-
