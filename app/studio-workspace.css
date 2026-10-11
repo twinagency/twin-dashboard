@@ -1,0 +1,172 @@
+/* Shared operator workspace. Brand values resolve on html before the client
+   shell overrides component tokens, so Moxy and partner palettes are inherited
+   without coupling presentation to creator scope or demo permissions. */
+html {
+  --workspace-bg: var(--color-bg);
+  --workspace-elev: var(--color-elev);
+  --workspace-ink: var(--color-ink);
+  --workspace-muted: var(--color-muted);
+  --workspace-line: var(--color-line);
+  --workspace-accent: var(--color-accent);
+  --workspace-accent-deep: var(--color-accent-deep);
+  --workspace-accent-light: var(--color-accent-2);
+  --workspace-accent-tint: var(--color-accent-tint);
+  --workspace-accent-soft: var(--color-accent-soft);
+  --workspace-accent-border: color-mix(in srgb, var(--color-accent) 22%, white);
+}
+[data-workspace-brand="twin"] {
+  --workspace-bg: #f9fbfd;
+  --workspace-elev: #f3f6fa;
+  --workspace-ink: #17263e;
+  --workspace-muted: #6b7890;
+  --workspace-line: #e6ebf2;
+  --workspace-accent: #0878ff;
+  --workspace-accent-deep: #0864db;
+  --workspace-accent-light: #2d8aff;
+  --workspace-accent-tint: #eaf3ff;
+  --workspace-accent-soft: #8bbcff;
+  --workspace-accent-border: #d3e6ff;
+}
+[data-studio-workspace="true"] {
+  --color-bg: var(--workspace-bg, #f9fbfd);
+  --color-panel: #fff;
+  --color-elev: var(--workspace-elev, #f3f6fa);
+  --color-ink: var(--workspace-ink, #17263e);
+  --color-muted: var(--workspace-muted, #6b7890);
+  --color-line: var(--workspace-line, #e6ebf2);
+  --color-accent: var(--workspace-accent, #0878ff);
+  --color-accent-2: var(--workspace-accent-light, #0878ff);
+  --color-accent-deep: var(--workspace-accent-deep, #0864db);
+  --color-accent-soft: var(--workspace-accent-soft, #8bbcff);
+  --color-accent-tint: var(--workspace-accent-tint, #eaf3ff);
+  --color-brand: var(--workspace-accent, #0878ff);
+  --color-brand-light: var(--workspace-accent-light, #2d8aff);
+  --background: var(--color-bg);
+  --foreground: var(--color-ink);
+  --card: #fff;
+  --card-foreground: var(--color-ink);
+  --primary: var(--color-accent);
+  --primary-foreground: #fff;
+  --secondary: var(--color-elev);
+  --secondary-foreground: var(--color-ink);
+  --muted: var(--color-elev);
+  --muted-foreground: var(--color-muted);
+  --border: var(--color-line);
+  --input: var(--color-line);
+  --ring: var(--color-accent);
+  --shadow-card: 0 2px 8px #14294404;
+  --font-heading: var(--font-display), var(--font-sans), sans-serif;
+  background: var(--workspace-bg, #f9fbfd);
+  color: var(--color-ink);
+}
+
+[data-studio-workspace="true"] .dashboard-main::before,
+[data-studio-workspace="true"] .dashboard-main::after { display: none; }
+.studio-workspace-main { max-width: none; padding: 26px 28px 36px 22px; background: transparent; scrollbar-gutter: stable; }
+.studio-workspace-main.studio-workspace-edge { padding: 0; scrollbar-gutter: auto; }
+
+[data-studio-workspace="true"] .dashboard-topbar {
+  height: 64px;
+  min-height: 64px;
+  display: flex;
+  justify-content: space-between;
+  padding: 0 28px 0 22px;
+  border-bottom: 1px solid var(--color-line);
+  background: #ffffffd9;
+  box-shadow: none;
+  font-size: 12px;
+}
+[data-studio-workspace="true"] .dashboard-topbar > h1 { font-family: var(--font-sans); font-size: 12px; font-weight: 550; letter-spacing: 0; }
+[data-studio-workspace="true"] .dashboard-topbar > .backdrop-blur-xl { background: white; border-color: var(--color-line); box-shadow: none; border-radius: 10px; }
+[data-studio-workspace="true"] .dashboard-topbar > .sm\:block:last-child { display: none; }
+[data-workspace-brand="twin"] .dashboard-mobile-header { background: #111f34; box-shadow: none; }
+.studio-sidebar-nav { scrollbar-width: thin; scrollbar-color: #ffffff35 transparent; }
+.studio-sidebar-nav [data-nav-group] > div:first-child > div > a { white-space: nowrap; }
+
+.studio-workspace-main .dashboard-page { padding-top: 0; }
+.studio-workspace-main .dashboard-page::before { display: none; }
+.studio-workspace-main .dashboard-page > h1,
+.studio-workspace-main .dashboard-page > div:first-child h1 {
+  font-family: var(--font-display), var(--font-sans), sans-serif;
+  font-size: 30px;
+  line-height: 1.2;
+  font-weight: 650;
+  letter-spacing: -.035em;
+  color: var(--color-ink);
+}
+.studio-workspace-main [data-slot="card"] { border: 1px solid var(--color-line); border-radius: 13px; background: white; box-shadow: var(--shadow-card); }
+.studio-workspace-main [data-slot="card-title"] { font-size: 16px; font-weight: 600; letter-spacing: -.015em; }
+.studio-workspace-main [data-slot="card-header"] { border-color: var(--color-line); }
+.studio-workspace-main [data-slot="button"] { border-radius: 9px; font-size: 12px; }
+.studio-workspace-main [data-slot="button"].h-8 { height: 38px; padding-inline: 14px; }
+.studio-workspace-main [data-slot="button"].bg-primary { background: linear-gradient(135deg,var(--workspace-accent-light, #2489ff),var(--workspace-accent, #0872f5)); box-shadow: 0 3px 8px color-mix(in srgb, var(--workspace-accent, #0878ff) 8%, transparent); }
+.studio-workspace-main [data-slot="button"].bg-primary:hover { background: var(--workspace-accent-deep, #086be8); }
+.studio-workspace-main :is([data-slot="input"],[data-slot="select-trigger"]) { border-radius: 9px; border-color: var(--color-line); background: white; box-shadow: none; }
+.studio-workspace-main .dashboard-page table { font-size: 12px; }
+.studio-workspace-main .dashboard-page thead { background: #f7f9fc; color: var(--color-muted); }
+.studio-workspace-main .dashboard-page th { font-weight: 500; }
+.studio-workspace-main .dashboard-page :is(th,td) { border-color: var(--color-line); }
+.studio-workspace-main .dashboard-page nav[aria-label="Creator directory"] { gap: 24px; font-size: 12px; }
+.studio-workspace-main .dashboard-page nav[aria-label="Creator directory"] [aria-current="page"] { color: var(--color-accent); }
+.studio-workspace-main .dashboard-page a.group[href^="/clones/"] { border-radius: 13px; box-shadow: var(--shadow-card); }
+.studio-workspace-main .dashboard-page a.group[href^="/clones/"]:hover { box-shadow: 0 6px 20px #1429440a; }
+
+/* Specialized editors share surfaces and spacing with the operational forms. */
+.studio-workspace-main .creator-control-plane {
+  --color-bg: var(--workspace-bg, #f9fbfd);
+  --color-elev: var(--workspace-elev, #f3f6fa);
+  --color-ink: var(--workspace-ink, #17263e);
+  --color-muted: var(--workspace-muted, #6b7890);
+  --color-line: var(--workspace-line, #e6ebf2);
+  --color-accent: var(--workspace-accent, #0878ff);
+  --color-accent-2: var(--workspace-accent-light, #0878ff);
+  --color-accent-deep: var(--workspace-accent-deep, #0864db);
+  --color-accent-tint: var(--workspace-accent-tint, #eaf3ff);
+  background: transparent;
+}
+.studio-workspace-main .creator-control-plane :is(input,select,textarea) { border-radius: 9px; }
+.studio-workspace-main .creator-control-plane .rounded-\[3px\] { border-radius: 13px; border-color: var(--color-line); }
+
+/* The phone drawer is portalled outside WorkspaceShell. SidebarContent
+   supplies the same theme; give it touch-sized rows and its own width. */
+@media(max-width:1023px) {
+  .dashboard-sidebar#mobile-sidebar[data-studio-sidebar="true"] { width: min(88vw,280px); }
+  .dashboard-sidebar#mobile-sidebar[data-studio-sidebar="true"] .studio-sidebar-nav [data-nav-group] > div:first-child > div > a,
+  .dashboard-sidebar#mobile-sidebar[data-studio-sidebar="true"] .studio-sidebar-nav [data-nav-group] > div:first-child > button:first-child,
+  .dashboard-sidebar#mobile-sidebar[data-studio-sidebar="true"] .studio-sidebar-nav [data-nav-group="More"] > button { min-height: 44px; }
+  [data-studio-workspace="true"] .dashboard-topbar { padding-inline: 18px; }
+  .studio-workspace-main { padding: 22px 18px 32px; }
+}
+@media(max-width:600px) {
+  [data-studio-workspace="true"] .dashboard-topbar { padding-inline: 12px; gap: 8px; }
+  [data-studio-workspace="true"] .dashboard-topbar:has(> h1) { justify-content: center; }
+  .studio-workspace-main { padding: 20px 12px 28px; }
+  .studio-workspace-main .dashboard-page > h1,
+  .studio-workspace-main .dashboard-page > div:first-child h1 { font-size: 26px; }
+}
+
+/* Hide the product wordmark in the Brianna demo mobile header. */
+[data-workspace-unbranded="true"] .dashboard-mobile-header > a:first-child { visibility: hidden; }
+
+
+/* Creator pages own their title and tab navigation at every brand. */
+.creator-studio-main { max-width: none; padding: 10px 28px 32px 22px; background: transparent; scrollbar-gutter: stable; }
+:is(.studio-workspace-main,.creator-studio-main) .creator-control-plane :is(input,select,textarea) { border-radius: 9px; }
+:is(.studio-workspace-main,.creator-studio-main) .creator-control-plane .rounded-\[3px\] { border-radius: 13px; }
+[data-studio-workspace="true"] .dashboard-sidebar[data-studio-sidebar="true"] { width: 232px; }
+[data-studio-workspace="true"] .dashboard-sidebar nav a { font-size: 12px; font-weight: 500; min-height: 40px; border-radius: 10px; }
+[data-studio-workspace="true"] .dashboard-sidebar:has(.studio-brand-row) { width: 212px; }
+@media(max-width:1023px) {
+  .creator-studio-main { padding: 16px 18px 35px; }
+  [data-studio-workspace="true"] .dashboard-mobile-header { min-height: 64px; padding-block: 6px; }
+  [data-studio-workspace="true"] .dashboard-mobile-header > a > img { width: 120px; }
+}
+@media(max-width:600px) {
+  .creator-studio-main { padding: 12px 12px 28px; }
+  [data-studio-workspace="true"] .dashboard-topbar:has(> h1) { height: 56px; min-height: 56px; }
+  [data-studio-workspace="true"] .dashboard-topbar > .workspace-account-controls { width: 100%; min-width: 0; justify-content: center; gap: 4px; border: 0; padding: 0; background: transparent; }
+  [data-studio-workspace="true"] .workspace-account-controls > :first-child { min-width: 0; flex: 1; gap: 6px; padding-inline: 6px; }
+  [data-studio-workspace="true"] .workspace-account-controls > :first-child > :nth-child(2) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  [data-studio-workspace="true"] .workspace-account-controls > :first-child > svg { flex-shrink: 0; }
+  [data-studio-workspace="true"] .workspace-account-controls > :not(:first-child) { flex-shrink: 0; }
+}

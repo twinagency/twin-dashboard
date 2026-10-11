@@ -9,6 +9,7 @@ import BlurToggle from "@/components/BlurToggle";
 import { logout } from "@/app/login/actions";
 import { fmtMoney, starsToMoneyRate } from "@/lib/money";
 import { getPageMeta } from "@/lib/page-meta";
+import { isDashboardWorkspaceRoute, dashboardWorkspacePageLabel } from "@/lib/dashboard-creator-route";
 import { CREATOR_DASHBOARD_NAV } from "@/lib/creator-dashboard-policy";
 
 // Straight, full-width top bar — replaces the old floating/overlay pill.
@@ -38,9 +39,10 @@ export default function TopBar({
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const pageMeta = getPageMeta(pathname, clones, activeCloneId);
+  const workspaceLabel = !isCreator && isDashboardWorkspaceRoute(pathname) ? dashboardWorkspacePageLabel(pathname) : null;
   const pageLabel = isCreator
     ? CREATOR_DASHBOARD_NAV.find((item) => item.href === pathname)?.label ?? "Earnings"
-    : pathname?.startsWith("/clones/") && searchParams.get("tab") === "ppvs" ? "PPVs" : pageMeta.pageLabel;
+    : pathname?.startsWith("/clones/") && searchParams.get("tab") === "ppvs" ? "PPVs" : workspaceLabel ?? pageMeta.pageLabel;
   const scopeLabel = isCreator ? creatorName || clones.find((clone) => clone.id === activeCloneId)?.name || "Creator" : pageMeta.scopeLabel;
   const scopeIsCreator = isCreator || pageMeta.scopeIsCreator;
   return (
@@ -63,7 +65,7 @@ export default function TopBar({
         {pageLabel != null && <span className="text-muted"> / {pageLabel}</span>}
       </h1>
 
-      <div className="flex shrink-0 items-center gap-1.5 rounded-xl border border-line/80 bg-white/82 px-2 py-1.5 shadow-[0_8px_26px_rgb(6_23_47/0.06)] backdrop-blur-xl">
+      <div className="workspace-account-controls flex shrink-0 items-center gap-1.5 rounded-xl border border-line/80 bg-white/82 px-2 py-1.5 shadow-[0_8px_26px_rgb(6_23_47/0.06)] backdrop-blur-xl">
         <CloneSwitcher clones={clones} activeCloneId={activeCloneId} locked={isCreator} fallbackName={creatorName} />
         <div className="h-5 w-px shrink-0 bg-line" />
         {/* All-time cash made, scoped to the clone switcher above - not

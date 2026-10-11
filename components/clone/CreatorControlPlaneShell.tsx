@@ -171,6 +171,16 @@ export function CreatorControlPlaneHeader({
   );
 }
 
+export function CreatorStudioStatus({ clone, cfg }: { clone: Clone; cfg: CloneConfigState }) {
+  return <div data-creator-studio-status className="flex min-w-0 flex-wrap items-center gap-x-4 gap-y-2 px-1 text-[11px] text-muted">
+    <span className={clone.status === "active" ? "text-good" : "text-warn"}>{clone.status === "active" ? "Live" : "Paused"}</span>
+    <span>{modeLabel(cfg)}</span>
+    <span>{(clone.uses_default_config ?? true) ? "Fleet default" : "Custom configuration"}</span>
+    {clone.business_username && <span className="creator-name">@{clone.business_username}</span>}
+    <span>Saved {savedAtLabel(clone.updated_at)}</span>
+  </div>;
+}
+
 function HeaderDatum({
   label,
   value,
@@ -377,3 +387,4 @@ export function ReadOnlyControlPlaneNotice() {
     </div>
   );
 }
+
