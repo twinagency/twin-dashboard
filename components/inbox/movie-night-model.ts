@@ -264,3 +264,20 @@ export function movieDemoReducer(state: DemoState, action: DemoAction): DemoStat
 export function demoTotals(state: DemoState) {
   return { purchases: DEMO_OWNED.length + Number(state.purchased), spent: DEMO_OWNED.reduce((sum, item) => sum + item.amount, 0) + (state.purchased ? DEMO_PRICE : 0) };
 }
+
+// A bounded script checkpoint travels with the profile link. Restoring never
+// starts playback, charges money, or reads/writes a live fan record.
+export const DEMO_EVENT_COUNT = DEMO_SCENES.reduce((sum, scene) => sum + scene.events.length, 0);
+export const demoProgress = (state: DemoState) => state.scene < 0 ? 0 : DEMO_SCENES.slice(0, state.scene).reduce((sum, scene) => sum + scene.events.length, 0) + state.cursor;
+export function restoreDemoProgress(step: unknown, mode?: unknown): DemoState {
+  const value = typeof step === 'string' || typeof step === 'number' ? Number(step) : 0;
+  const count = Number.isFinite(value) ? Math.max(0, Math.min(DEMO_EVENT_COUNT, Math.floor(value))) : 0;
+  let state = newMovieDemo();
+  for (let index = 0; index < count; index++) {
+    if (!state.playing) state = movieDemoReducer(state, { type: 'start', auto: true });
+    state = movieDemoReducer(state, { type: 'tick' });
+  }
+  return { ...state, playing: false, auto: false, mode: mode === 'Human' ? 'Human' : 'Autonomous' };
+}
+export const demoConversationHref = (state: DemoState) => `${MOVIE_DEMO_HREF}&step=${demoProgress(state)}&mode=${state.mode}`;
+export const demoProfileHref = (state: DemoState) => `/fans?${new URLSearchParams({creator:'briana',fan:'briana-ronan-demo',platform:'onlyfans',presentation:'movie-night',step:String(demoProgress(state)),mode:state.mode})}`;

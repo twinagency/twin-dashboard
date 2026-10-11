@@ -4,7 +4,7 @@ import PlatformMark from './PlatformMark';
 import { useEffect, useRef, useState, type ReactNode } from "react";
 import { ArrowUpRight, Check, ChevronRight, CircleHelp, Clock3, Edit3, Globe2, ImageIcon, Link2, MessageCircle, MoreHorizontal, NotebookPen, Package, Search, Send, ShieldCheck, Users, Video, X } from "lucide-react";
 import { conversationHref, emptyState, messagesFor, normalizePlatform, platformNames, restoreState, STORAGE_KEY, totalsFor, visibleFans } from "./model";
-import { PLATFORMS, type Creator, type Fan, type Memory, type Platform, type PlatformFilter, type ProfileTab, type Purchase, type WorkspaceState } from "./types";
+import { PLATFORMS, type Creator, type Fan, type Memory, type Message, type Platform, type PlatformFilter, type ProfileTab, type Purchase, type WorkspaceState } from "./types";
 import styles from "./FanWorkspace.module.css";
 import { useRouter } from "next/navigation";
 import { withBriannaLedger } from "./brianna-ledger";
@@ -19,8 +19,8 @@ const uid = () => typeof crypto !== "undefined" && typeof crypto.randomUUID === 
 function PlatformBadge({platform, compact=false}:{platform:Platform;compact?:boolean}) {
   return <span className={`${styles.platformBadge} ${styles[platform]}`} title={platformNames[platform]}><span className={styles.platformIcon}>{platform === "whatsapp" ? <PlatformMark platform={platform} size={14}/> : platform === "telegram" ? <Send size={12}/> : platformShort[platform]}</span>{!compact && platformNames[platform]}</span>;
 }
-function Avatar({name,color,small=false}:{name:string;color:string;small?:boolean}) {
-  return <span className={`${styles.avatar} ${small?styles.avatarSmall:""}`} style={{color,background:`${color}16`}} aria-hidden="true">{name}</span>;
+function Avatar({name,color,small=false,photo}:{name:string;color:string;small?:boolean;photo?:string}) {
+  return <span className={`${styles.avatar} ${small?styles.avatarSmall:""}`} style={{color,background:`${color}16`}} aria-hidden="true">{name}{photo&&<img className={styles.avatarPhoto} src={photo} alt="" onError={event=>{event.currentTarget.style.display="none";}}/>}</span>;
 }
 function Card({title,icon,action,children,className=""}:{title:string;icon?:ReactNode;action?:ReactNode;children:ReactNode;className?:string}) {
   return <section className={`${styles.card} ${className}`}><div className={styles.cardHeading}><h3>{icon}{title}</h3>{action}</div>{children}</section>;
@@ -59,7 +59,7 @@ function RelationshipMemory({fan, creator, value, edited, onEdit, onSource}: {
   return <>
     <div className={styles.sectionIntro}>
       <div><h3>Relationship memory</h3><span>{fan.name} with {creator.name}</span></div>
-      <span className={styles.linkCount}><Link2 size={13}/>Shared across linked channels</span>
+      <span className={styles.linkCount}><Link2 size={13}/>{fan.accounts.length>1?"Shared across linked channels":"OnlyFans relationship context"}</span>
     </div>
     <div className={styles.memoryOverview}>
       <div><strong>{fan.memories.length}</strong><span>Remembered details</span></div>
@@ -85,9 +85,11 @@ function RelationshipMemory({fan, creator, value, edited, onEdit, onSource}: {
     {!matching.length && <div className={styles.empty}>No memory matches these filters. <button className={styles.textButton} onClick={() => {setQuery("");setCategory("all");}}>Clear memory filters</button></div>}
   </>;
 }
-type Dialog = {kind:"note"}|{kind:"memory";memory:Memory}|{kind:"purchase";purchase:Purchase}|{kind:"account";platform:Platform}|{kind:"reset"}|null;
+type Dialog = {kind:"note"}|{kind:"memory";memory:Memory}|{kind:"purchase";purchase:Purchase}|{kind:"account";platform:Platform}|{kind:"reset"}|{kind:"source";message:Message}|null;
 
-export default function FanWorkspace({creators,fans:seedFans,includeBriannaLedger=false}:{creators:Creator[];fans:Fan[];includeBriannaLedger?:boolean}) {
+export type FanPresentation = { conversationHref: string; storageKey: string; avatarUrl: string; query: Record<string,string> };
+export default function FanWorkspace({creators,fans:seedFans,includeBriannaLedger=false,presentation}:{creators:Creator[];fans:Fan[];includeBriannaLedger?:boolean;presentation?:FanPresentation}) {
+  const storageKey=presentation?.storageKey||STORAGE_KEY;
   const fans=includeBriannaLedger?withBriannaLedger(seedFans):seedFans;
   const router=useRouter();
   const [creatorId,setCreatorId]=useState("briana");
@@ -99,7 +101,7 @@ export default function FanWorkspace({creators,fans:seedFans,includeBriannaLedge
   const [state,setState]=useState<WorkspaceState>(emptyState);
   const [ready,setReady]=useState(false);
   const [storageAvailable,setStorageAvailable]=useState(true);
-  const [mobileList,setMobileList]=useState(true);
+  const [mobileList,setMobileList]=useState(!presentation);
   const [dialog,setDialog]=useState<Dialog>(null);
   const [editor,setEditor]=useState("");
   const [purchaseSearch,setPurchaseSearch]=useState("");
@@ -116,7 +118,7 @@ export default function FanWorkspace({creators,fans:seedFans,includeBriannaLedge
   const flash=(text:string)=>{setToast(text);if(toastTimer.current)clearTimeout(toastTimer.current);toastTimer.current=setTimeout(()=>setToast(""),3200);};
   useEffect(()=>()=>{if(toastTimer.current)clearTimeout(toastTimer.current);},[]);
   useEffect(()=>{
-    try{setState(restoreState(localStorage.getItem(STORAGE_KEY),fans));}catch{setStorageAvailable(false);}
+    try{setState(restoreState(localStorage.getItem(storageKey),fans));}catch{setStorageAvailable(false);}
     const params=new URLSearchParams(window.location.search);
     const initialFan=fans.find(f=>f.id===params.get("fan"));
     const initialCreator=params.get("creator");
@@ -126,17 +128,25 @@ export default function FanWorkspace({creators,fans:seedFans,includeBriannaLedge
     const initialPlatform=normalizePlatform(params.get("platform"));if(initialPlatform)setPlatform(initialPlatform);
     const initialTab=params.get("view");if(tabs.some(t=>t.id===initialTab)&&(initialTab!=="history"||initialFan?.history?.length))setTab(initialTab as ProfileTab);
     setReady(true);
-  },[creators,fans]);
-  useEffect(()=>{if(!ready)return;try{localStorage.setItem(STORAGE_KEY,JSON.stringify(state));}catch{setStorageAvailable(false);}},[state,ready]);
+  },[creators,fans,storageKey]);
+  useEffect(()=>{if(!ready)return;try{localStorage.setItem(storageKey,JSON.stringify(state));}catch{setStorageAvailable(false);}},[state,ready,storageKey]);
   useEffect(()=>{
     if(!ready||!fan)return;
-    const params=new URLSearchParams({creator:creatorId,fan:fan.id,platform:activePlatform,view:tab});
+    const params=new URLSearchParams({...presentation?.query,creator:creatorId,fan:fan.id,platform:activePlatform,view:tab});
     window.history.replaceState(window.history.state,"",`${window.location.pathname}?${params}`);
-  },[ready,creatorId,fan,activePlatform,tab]);
+  },[ready,creatorId,fan,activePlatform,tab,presentation]);
   useEffect(()=>{if(tab==="history"&&!fan?.history?.length)setTab("summary");},[fan,tab]);
   const selectFan=(next:Fan)=>{setSelectedId(next.id);setPlatform("all");setTab("summary");setDialog(null);setPurchaseSearch("");setMobileList(false);};
   const selectCreator=(id:string)=>{setCreatorId(id);setQuery("");setListPlatform("all");setPlatform("all");setDialog(null);setTab("summary");setSelectedId((id==="all"?fans[0]:fans.find(f=>f.creatorId===id))?.id||"");};
-  const openConversation=(channel?:Platform,sourceId?:string)=>{if(fan)router.push(conversationHref(fan,channel||(activePlatform!=="all"?activePlatform:undefined),sourceId));};
+  const openConversation=(channel?:Platform,sourceId?:string)=>{
+    if(!fan)return;
+    if(presentation){
+      const message=sourceId?fan.messages.find(item=>item.id===sourceId):undefined;
+      if(message){setDialog({kind:"source",message});return;}
+      router.push(presentation.conversationHref);return;
+    }
+    router.push(conversationHref(fan,channel||(activePlatform!=="all"?activePlatform:undefined),sourceId));
+  };
   const openNote=()=>{setEditor("");setDialog({kind:"note"});};
   const saveEditor=()=>{
     if(!fan||!dialog||!editor.trim())return;
@@ -156,14 +166,14 @@ export default function FanWorkspace({creators,fans:seedFans,includeBriannaLedge
         <select className={styles.select} aria-label="Filter fan list by platform" value={listPlatform} onChange={e=>{setListPlatform(e.target.value as PlatformFilter);setDialog(null);}}><option value="all">Any platform</option>{PLATFORMS.map(p=><option key={p} value={p}>{platformNames[p]}</option>)}</select>
       </div>
       <div className={styles.listLabel}><span>{filtered.length} relationships</span><span>Recent activity</span></div>
-      <div className={styles.fanList}>{filtered.map(item=>{const owner=creators.find(c=>c.id===item.creatorId);return <button key={item.id} className={`${styles.fanRow} ${fan?.id===item.id?styles.selectedFan:""}`} aria-label={`${item.name}, ${owner?.name}`} aria-pressed={fan?.id===item.id} onClick={()=>selectFan(item)}><Avatar name={item.initials} color={item.color} small/><span className={styles.fanRowBody}><span className={styles.fanRowName}><strong>{item.name}</strong>{item.unread>0&&<span className={styles.unread}>{item.unread}</span>}</span><span className={styles.fanOwner}>{owner?.name}</span><span className={styles.badges}>{item.accounts.map(a=><PlatformBadge key={a.platform} platform={a.platform} compact/>)}</span><span className={styles.fanPreview}>{item.accounts.length} {item.accounts.length===1?"linked account":"linked accounts"}</span></span></button>;})}{filtered.length===0&&<div className={styles.railEmpty}>No fans match these filters.<button className={styles.textButton} onClick={()=>{setQuery("");setListPlatform("all");}}>Clear filters</button></div>}</div>
+      <div className={styles.fanList}>{filtered.map(item=>{const owner=creators.find(c=>c.id===item.creatorId);return <button key={item.id} className={`${styles.fanRow} ${fan?.id===item.id?styles.selectedFan:""}`} aria-label={`${item.name}, ${owner?.name}`} aria-pressed={fan?.id===item.id} onClick={()=>selectFan(item)}><Avatar name={item.initials} color={item.color} small photo={presentation?.avatarUrl}/><span className={styles.fanRowBody}><span className={styles.fanRowName}><strong>{item.name}</strong>{item.unread>0&&<span className={styles.unread}>{item.unread}</span>}</span><span className={styles.fanOwner}>{owner?.name}</span><span className={styles.badges}>{item.accounts.map(a=><PlatformBadge key={a.platform} platform={a.platform} compact/>)}</span><span className={styles.fanPreview}>{item.accounts.length} {item.accounts.length===1?"linked account":"linked accounts"}</span></span></button>;})}{filtered.length===0&&<div className={styles.railEmpty}>No fans match these filters.<button className={styles.textButton} onClick={()=>{setQuery("");setListPlatform("all");}}>Clear filters</button></div>}</div>
       <div className={styles.railFooter}><Link2 size={15}/><span>One relationship, connected channels</span></div>
     </aside>
     <div className={`${styles.profilePane} ${fan?.history?styles.richProfile:""}`}>
       <button className={`${styles.textButton} ${styles.mobileBrowse}`} onClick={()=>setMobileList(!mobileList)}><Users size={16}/>{mobileList?"Hide fan list":"Browse fans"}</button>
       {fan&&creator?<>
-        <div className={styles.breadcrumb}><span>{creator.name}</span><ChevronRight size={13}/><span>Fans</span><ChevronRight size={13}/><strong>{fan.name}</strong><button className={styles.iconButton} title="Reset workspace" aria-label="Reset workspace" onClick={()=>setDialog({kind:"reset"})}><MoreHorizontal size={20}/></button></div>
-        <section className={styles.profileHeader}><Avatar name={fan.initials} color={fan.color}/><div className={styles.identity}><h2>{fan.name}<span className={styles.linkCount}><Link2 size={12}/>{fan.accounts.length} linked {fan.accounts.length===1?"account":"accounts"}</span></h2><p>Fan of <strong>{creator.name}</strong></p><div className={styles.badges}>{fan.accounts.map(a=><PlatformBadge platform={a.platform} key={a.platform}/>)}</div></div><div className={styles.headerActions}><button className={styles.primaryButton} onClick={()=>openConversation()}><MessageCircle size={16}/>Open conversation</button><button className={styles.secondaryButton} onClick={openNote}><NotebookPen size={16}/>Add note</button></div></section>
+        <div className={styles.breadcrumb}><span>{creator.name}</span><ChevronRight size={13}/><span>Fans</span><ChevronRight size={13}/><strong>{fan.name}</strong>{presentation&&<span className={styles.demoLabel}>Fictional demo profile</span>}<button className={styles.iconButton} title="Reset workspace" aria-label="Reset workspace" onClick={()=>setDialog({kind:"reset"})}><MoreHorizontal size={20}/></button></div>
+        <section className={styles.profileHeader}><Avatar name={fan.initials} color={fan.color} photo={presentation?.avatarUrl}/><div className={styles.identity}><h2>{fan.name}<span className={styles.linkCount}><Link2 size={12}/>{fan.accounts.length} linked {fan.accounts.length===1?"account":"accounts"}</span></h2><p>Fan of <strong>{creator.name}</strong></p><div className={styles.badges}>{fan.accounts.map(a=><PlatformBadge platform={a.platform} key={a.platform}/>)}</div></div><div className={styles.headerActions}><button className={styles.primaryButton} onClick={()=>openConversation()}><MessageCircle size={16}/>{presentation?"Back to conversation":"Open conversation"}</button><button className={styles.secondaryButton} onClick={openNote}><NotebookPen size={16}/>Add note</button></div></section>
         <div className={styles.platformBar} aria-label="Profile platform filter"><button aria-pressed={activePlatform==="all"} className={activePlatform==="all"?styles.platformActive:""} onClick={()=>setPlatform("all")}><Globe2 size={16}/>All platforms</button>{PLATFORMS.map(p=>{const linked=fan.accounts.some(a=>a.platform===p);return <button key={p} aria-pressed={activePlatform===p} disabled={!linked} title={linked?`View ${platformNames[p]} relationship`:"No linked account"} className={activePlatform===p?styles.platformActive:""} onClick={()=>setPlatform(p)}><PlatformBadge platform={p}/>{linked&&<span className={styles.linkDot}/>}</button>;})}</div>
         <div className={styles.metrics}><div><span>Total paid <CircleHelp size={12} aria-label="Amounts stay in their original currency"/></span><strong>{totals.usd?money(totals.usd,"USD"):money(totals.stars,"Stars")}</strong>{totals.usd>0&&totals.stars>0&&<small>+ {money(totals.stars,"Stars")}</small>}</div><div><span>Purchases</span><strong>{totals.purchases.length}</strong><small>{activePlatform==="all"?"Across linked platforms":platformNames[activePlatform]}</small></div><div><span>Content owned</span><strong>{totals.purchases.length} items</strong><small>{totals.purchases.filter(p=>p.kind==="Photo").length} photos · {totals.purchases.filter(p=>p.kind==="Video").length} videos · {totals.purchases.filter(p=>p.kind==="Bundle").length} bundles</small></div><div><span>Last message</span><strong className={styles.dateMetric}>{lastMessage?date(lastMessage.at):"No messages"}</strong><small>{lastMessage?`${time(lastMessage.at)} AEST · ${platformNames[lastMessage.platform]}`:""}</small></div></div>
         <div className={styles.tabBar} role="tablist" aria-label="Fan profile sections">{tabs.filter(item=>item.id!=="history"||fan.history?.length).map(item=><button key={item.id} id={`fan-tab-${item.id}`} role="tab" aria-controls="fan-tab-panel" aria-selected={tab===item.id} className={tab===item.id?styles.activeTab:""} onClick={()=>setTab(item.id)}>{item.label}</button>)}</div>
@@ -191,10 +201,11 @@ export default function FanWorkspace({creators,fans:seedFans,includeBriannaLedge
       {!storageAvailable&&<div className={styles.storageNotice} role="status">Browser storage is unavailable. Changes will last until you leave this page.</div>}
     </div>
     {toast&&<div className={styles.toast} role="status"><Check size={16}/>{toast}</div>}
-    {dialog&&fan&&creator&&<Modal key={dialog.kind} title={dialog.kind==="note"?`Add note for ${fan.name}`:dialog.kind==="memory"?`Edit ${dialog.memory.label}`:dialog.kind==="purchase"?"Purchase details":dialog.kind==="reset"?"Reset workspace":"Account details"} onClose={()=>setDialog(null)}>
+    {dialog&&fan&&creator&&<Modal key={dialog.kind} title={dialog.kind==="note"?`Add note for ${fan.name}`:dialog.kind==="memory"?`Edit ${dialog.memory.label}`:dialog.kind==="purchase"?"Purchase details":dialog.kind==="reset"?"Reset workspace":dialog.kind==="source"?"Conversation context":"Account details"} onClose={()=>setDialog(null)}>
       {(dialog.kind==="note"||dialog.kind==="memory")&&<form onSubmit={e=>{e.preventDefault();saveEditor();}}><label className={styles.label} htmlFor="fan-editor">{dialog.kind==="note"?"Note":dialog.memory.label}</label><textarea id="fan-editor" className={styles.editor} value={editor} onChange={e=>setEditor(e.target.value)} maxLength={dialog.kind==="note"?2000:500} rows={5}/><div className={styles.modalActions}><button type="button" className={styles.secondaryButton} onClick={()=>setDialog(null)}>Cancel</button><button className={styles.primaryButton} disabled={!editor.trim()||!ready}>Save {dialog.kind==="note"?"note":"memory"}</button></div></form>}
-      {dialog.kind==="purchase"&&<><div className={styles.receiptHero}><Package size={30}/><h3>{dialog.purchase.title}</h3><strong>{money(dialog.purchase.amount,dialog.purchase.currency)}</strong><span className={styles.owned}><Check size={13}/>Owned</span></div><dl className={styles.memoryQuick}><div><dt>Creator</dt><dd>{creator.name}</dd></div><div><dt>Fan</dt><dd>{fan.name}</dd></div><div><dt>Platform</dt><dd><PlatformBadge platform={dialog.purchase.platform}/></dd></div><div><dt>Content</dt><dd>{dialog.purchase.kind}</dd></div><div><dt>Purchased</dt><dd>{date(dialog.purchase.at)}</dd></div></dl><div className={styles.modalActions}><button className={styles.secondaryButton} onClick={()=>router.push(`/content-library?${new URLSearchParams({creator:fan.creatorId,item:`${fan.creatorId}:${dialog.purchase.kind}:${dialog.purchase.title}`,fan:fan.id})}`)}>Open in Content Library<ArrowUpRight size={15}/></button><button className={styles.primaryButton} onClick={()=>openConversation(dialog.purchase.platform,dialog.purchase.sourceMessageId)}>Open conversation<ArrowUpRight size={15}/></button></div></>}
-      {dialog.kind==="account"&&<><div className={styles.receiptHero}><PlatformBadge platform={dialog.platform}/><h3>@{fan.accounts.find(a=>a.platform===dialog.platform)?.username}</h3><span className={styles.linked}><Link2 size={13}/>Linked to {fan.name}</span></div><dl className={styles.memoryQuick}><div><dt>Creator</dt><dd>{creator.name}</dd></div><div><dt>Relationship memory</dt><dd>Shared across linked accounts</dd></div><div><dt>Messages and purchases</dt><dd>{platformNames[dialog.platform]}</dd></div></dl><div className={styles.modalActions}><button className={styles.primaryButton} onClick={()=>openConversation(dialog.platform)}>Open conversation</button></div></>}
+      {dialog.kind==="purchase"&&<><div className={styles.receiptHero}><Package size={30}/><h3>{dialog.purchase.title}</h3><strong>{money(dialog.purchase.amount,dialog.purchase.currency)}</strong><span className={styles.owned}><Check size={13}/>Owned</span></div><dl className={styles.memoryQuick}><div><dt>Creator</dt><dd>{creator.name}</dd></div><div><dt>Fan</dt><dd>{fan.name}</dd></div><div><dt>Platform</dt><dd><PlatformBadge platform={dialog.purchase.platform}/></dd></div><div><dt>Content</dt><dd>{dialog.purchase.kind}</dd></div><div><dt>Purchased</dt><dd>{date(dialog.purchase.at)}</dd></div></dl><div className={styles.modalActions}>{!presentation&&<button className={styles.secondaryButton} onClick={()=>router.push(`/content-library?${new URLSearchParams({creator:fan.creatorId,item:`${fan.creatorId}:${dialog.purchase.kind}:${dialog.purchase.title}`,fan:fan.id})}`)}>Open in Content Library<ArrowUpRight size={15}/></button>}<button className={styles.primaryButton} onClick={()=>openConversation(dialog.purchase.platform,dialog.purchase.sourceMessageId)}>Open conversation<ArrowUpRight size={15}/></button></div></>}
+      {dialog.kind==="source"&&<><p className={styles.sourceRecordLabel}>Fictional demo history · {date(dialog.message.at)} · {time(dialog.message.at)} AEST</p><div className={styles.sourceRecord}><strong>{dialog.message.direction==="in"?fan.name:dialog.message.id==="movie-4-0"?"Purchase record":dialog.message.id.startsWith("movie-")?creator.name:"Prepared record"}</strong><p>{dialog.message.text}</p></div><div className={styles.modalActions}><button className={styles.secondaryButton} onClick={()=>setDialog(null)}>Back to profile</button><button className={styles.primaryButton} onClick={()=>openConversation()}>Back to conversation<ArrowUpRight size={15}/></button></div></>}
+      {dialog.kind==="account"&&<><div className={styles.receiptHero}><PlatformBadge platform={dialog.platform}/><h3>@{fan.accounts.find(a=>a.platform===dialog.platform)?.username}</h3><span className={styles.linked}><Link2 size={13}/>Linked to {fan.name}</span></div><dl className={styles.memoryQuick}><div><dt>Creator</dt><dd>{creator.name}</dd></div><div><dt>Relationship memory</dt><dd>{fan.accounts.length>1?"Shared across linked accounts":"OnlyFans relationship context"}</dd></div><div><dt>Messages and purchases</dt><dd>{platformNames[dialog.platform]}</dd></div></dl><div className={styles.modalActions}><button className={styles.primaryButton} onClick={()=>openConversation(dialog.platform)}>Open conversation</button></div></>}
       {dialog.kind==="reset"&&<><p className={styles.summaryText}>Clear the notes, memory edits, drafts and messages added in this browser and return to the starting workspace?</p><div className={styles.modalActions}><button className={styles.secondaryButton} onClick={()=>setDialog(null)}>Cancel</button><button className={styles.primaryButton} onClick={()=>{setState(emptyState());selectCreator("briana");setSelectedId("briana-ben");setDialog(null);flash("Workspace reset");}}>Reset workspace</button></div></>}
     </Modal>}
   </div>;

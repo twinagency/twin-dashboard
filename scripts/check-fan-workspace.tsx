@@ -33,6 +33,7 @@ async function main() {
     "@/lib/internal-admin": { hasInternalAdminAccess: async () => admin },
     "@/lib/view-as": { activeViewAs: async () => viewAs },
     "@/components/fans/FanWorkspace": { __esModule: true, default: () => null },
+    "@/components/inbox/RonanDemoProfile": { __esModule: true, default: () => null },
     "@/components/fans/data": { creators, fans, authoredFans: fans },
   }).default;
   await assert.rejects(page(), /redirect:\/twin/);
@@ -54,6 +55,7 @@ async function main() {
     "@/lib/view-as": { activeViewAs:async()=>viewAs },
     "@/lib/clone-scope": { getCloneScope:async()=>{throw new Error("existing-live-route");} },
     "@/lib/supabase": { supabaseAdmin:{from:()=>{throw new Error("Unexpected real data access");}} },
+    "@/components/inbox/RonanDemoProfile": { __esModule: true, default: () => null },
     "@/components/fans/data": { creators,fans,authoredFans:fans },
     "@/components/users/FanConversationWindow": { __esModule:true, default:()=>null },
   });

@@ -7,13 +7,13 @@ import PlatformMark from '../fans/PlatformMark';
 import IntelligenceCoreIcon from '../IntelligenceCoreIcon';
 import { portraitUrl } from '../dashboard/portraits';
 import { fanAvatarUrl } from '../dashboard/fan-avatars';
-import { DEMO_HISTORY, DEMO_MEMORIES, DEMO_OWNED, DEMO_PRICE, DEMO_SCENES, demoTotals, movieDemoReducer, newMovieDemo } from './movie-night-model';
+import { DEMO_HISTORY, DEMO_MEMORIES, DEMO_OWNED, DEMO_PRICE, DEMO_SCENES, demoTotals, movieDemoReducer, restoreDemoProgress, demoConversationHref, demoProfileHref } from './movie-night-model';
 import styles from './MovieNightDemo.module.css';
 
 const dollars = (value: number) => `US$${value.toFixed(2)}`;
 
-export default function MovieNightDemo() {
-  const [state, dispatch] = useReducer(movieDemoReducer, undefined, newMovieDemo);
+export default function MovieNightDemo({initialStep=0,initialMode}: {initialStep?: string | number; initialMode?: string} = {}) {
+  const [state, dispatch] = useReducer(movieDemoReducer, {initialStep,initialMode}, value => restoreDemoProgress(value.initialStep,value.initialMode));
   const [presenter, setPresenter] = useState(false);
   const [tab, setTab] = useState<'Context' | 'Fan record'>('Context');
   const [source, setSource] = useState<string | null>(null);
@@ -28,6 +28,10 @@ export default function MovieNightDemo() {
   const typing = state.playing && (pending?.kind === 'creator' || pending?.kind === 'offer');
   const recalling = state.playing && pending?.kind === 'context';
   const totals = demoTotals(state);
+  const pauseForProfile = () => {
+    dispatch({ type: 'pause' });
+    window.history.replaceState(window.history.state, '', demoConversationHref(state));
+  };
   const reset = () => { dispatch({ type: 'reset' }); setDraft(''); setSource(null); setTab('Context'); };
 
   useEffect(() => {
@@ -91,7 +95,7 @@ export default function MovieNightDemo() {
       </aside>
 
       <main className={styles.chat} data-chat-platform="onlyfans" aria-label="After-hours conversation with Ronan">
-        <header className={styles.chatHeader} data-chat-header><img src={fanAvatarUrl('briana-ben')} alt=""/><div><h2>Ronan <ShieldCheck size={15}/></h2><span>@ronan · OnlyFans</span></div><span className={styles.status}><i/>{state.mode}</span></header>
+        <header className={styles.chatHeader} data-chat-header><img src={fanAvatarUrl('briana-ben')} alt=""/><div><h2>Ronan <ShieldCheck size={15}/></h2><span>@ronan · OnlyFans</span></div><span className={styles.status}><i/>{state.mode}</span><Link className={styles.profileLink} href={demoProfileHref(state)} onClick={pauseForProfile} aria-label="View Ronan’s profile"><UserRound size={14}/><span>View profile</span></Link></header>
         <div className={styles.handling}><span><Bot size={15}/>{state.mode === 'Autonomous' ? 'Bri’s conversation style' : 'Automated replies paused'}</span>{state.mode === 'Autonomous' ? <button onClick={() => dispatch({ type: 'takeover' })}><UserRound size={13}/>Take over</button> : <button onClick={() => dispatch({ type: 'resume' })}><Bot size={13}/>Return to autonomous</button>}</div>
         <div ref={thread} className={styles.thread} aria-label="Demo message history" aria-live="polite" aria-relevant="additions text">
           <button className={styles.earlier} onClick={() => setSource('all')}><Clock3 size={12}/>View earlier conversation</button>

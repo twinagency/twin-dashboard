@@ -4,6 +4,7 @@ import { createRequire } from 'node:module';
 import ts from 'typescript';
 import React, { act } from 'react';
 import * as model from '../components/inbox/movie-night-model';
+import { checkRonanDemoProfile } from './check-ronan-demo-profile';
 
 const requireLocal = createRequire(import.meta.url);
 
@@ -108,8 +109,20 @@ export async function checkMovieNightDemo() {
   assert.equal(document.querySelector('[aria-label="Presenter controls"]'),null);
   await act(async () => document.dispatchEvent(new dom.window.KeyboardEvent('keydown',{key:'n',bubbles:true})));
   await tick(); assert.equal(document.querySelectorAll('[data-demo-message]').length, 1, 'Hidden controls still accept next-scene shortcut');
+  const profileLink=document.querySelector<HTMLAnchorElement>('a[aria-label="View Ronan’s profile"]');
+  assert.ok(profileLink,'Profile button is visible with presenter controls hidden');
+  assert.equal(new URL(profileLink.href).searchParams.get('step'),'1');
+  profileLink.addEventListener('click',event=>event.preventDefault());
+  await act(async()=>profileLink.click());
+  assert.equal(timers.size,0,'Opening the profile pauses the sequence');
+  assert.equal(new URLSearchParams(window.location.search).get('step'),'1','Browser Back also has the checkpoint');
+  await act(async()=>root.render(<Demo key="return" initialStep={model.DEMO_EVENT_COUNT}/>));
+  assert.equal(document.querySelector('[data-demo-spend]')?.textContent,'US$144.00');
+  assert.equal(timers.size,0,'Returning to the completed chat never restarts it');
+  assert.equal(document.querySelectorAll('[data-offer-status="purchased"]').length,1);
   await act(async () => root.unmount()); assert.equal(timers.size, 0, 'Leaving the demo cancels scheduled replies');
   assert.equal(requests, 0); assert.equal(dom.window.localStorage.length, 0, 'Demo does not alter saved inbox or ledger');
   globalThis.fetch = savedFetch; dom.window.close();
+  await checkRonanDemoProfile();
   console.log('Movie-night presentation: replay, pause, takeover, reset, keyboard controls, ownership and single purchase update passed; no external operations or saved-state changes');
 }

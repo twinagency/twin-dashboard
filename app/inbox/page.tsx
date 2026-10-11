@@ -11,7 +11,7 @@ export default async function InboxPage({searchParams}:{searchParams:Promise<Rec
  if(!await hasInternalAdminAccess())redirect('/twin');
  if(await activeViewAs(await cookies()))redirect('/revenue');
  const params=await searchParams;
- if(params.presentation==='movie-night'&&(!params.creator||params.creator==='briana'))return <MovieNightDemo/>;
+ if(params.presentation==='movie-night'&&(!params.creator||params.creator==='briana'))return <MovieNightDemo initialStep={typeof params.step==='string'?params.step:0} initialMode={typeof params.mode==='string'?params.mode:undefined}/>;
  let mediaItems:Awaited<ReturnType<typeof loadBriannaLibraryMedia>>=[];let mediaError=false;
  try{mediaItems=await loadBriannaLibraryMedia();}catch{mediaError=true;}
  return <UnifiedInbox creators={creators} fans={authoredFans} mediaItems={mediaItems} mediaError={mediaError}
