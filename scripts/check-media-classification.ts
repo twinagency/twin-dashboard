@@ -101,7 +101,7 @@ assert.ok(femGen.fields.tags.includes("pussy"));
 // ---- prompt wording ----
 assert.match(MEDIA_CLASSIFICATION_PROMPT, /thong, G-string, bikini bottom/);
 assert.match(MEDIA_CLASSIFICATION_PROMPT, /photographing herself in a mirror/);
-assert.match(MEDIA_CLASSIFICATION_PROMPT, /nipple or areola can be seen around, between or under the fingers/);
+assert.match(MEDIA_CLASSIFICATION_PROMPT, /nipple or areola itself \(the darker disc\) can be seen/);
 
 // ---- facts shape (the contract) ----
 const f = shirt.fields.visual_facts;
