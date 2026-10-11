@@ -11,7 +11,7 @@ js="""
 const url=process.env.SUPABASE_URL,key=process.env.SUPABASE_SERVICE_KEY;
 if(url!=='https://aouaenqayfltoqrmpitg.supabase.co')throw Error('Unexpected runtime');
 const headers={apikey:key,Authorization:'Bearer '+key};
-const ids=['31b2a7d1-b24e-4951-8580-b4a7cb8cc8b0','7151626f-f4a4-47f3-8678-9f5590ef60c3','294519cb-4ef4-4418-8e59-48c8d8d1c85a','899e73bb-e8ee-48e7-902d-2ff1429f735c','b504a0a7-c991-4ace-a8cd-8593ebb678f8'];
+const ids=['31b2a7d1-b24e-4951-8580-b4a7cb8cc8b0','7151626f-f4a4-47f3-8678-9f5590ef60c3','294519cb-4ef4-4418-8e59-48c8d8d1c85a','899e73bb-e8ee-48e7-902d-2ff1429f735c','b504a0a7-c991-4ace-a8cd-8593ebb678f8','dd7af552-2c48-410d-a4ce-23cfba0c8bec','4d974dd1-4eef-4798-b6aa-034d97d824c4','5b26b3f1-46ed-4942-9419-7ac6f1ce245e','d2f9676d-8a4d-403a-9682-073a0f3f598e','e46422e2-08fa-42e0-ae6c-616f62917530','06669d97-e40f-4ad4-8d02-f38e7aac888e'];
 (async()=>{
  const r=await fetch(url+'/rest/v1/photos?select=id,clone_id,storage_path,image_name&id=in.('+ids.join(',')+')',{headers});
  if(!r.ok)throw Error('Photo read failed');

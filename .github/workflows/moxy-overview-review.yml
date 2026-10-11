@@ -28,3 +28,9 @@ jobs:
           name: moxy-overview-ui
           path: /tmp/moxy-ui
           retention-days: 1
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: moxy-private-photo-review
+          path: /tmp/moxy-review
+          retention-days: 1
