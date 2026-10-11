@@ -51,12 +51,15 @@ function ConditionalDetail({ id, value, onChange, disabled }: { id: string; valu
   const negative = pets ? "No pets" : "I don’t drink";
   const positive = pets ? "Yes" : "I drink";
   const prefix = pets ? "Yes — " : "Drink — ";
-  const mode = !value ? "" : value === negative ? negative : positive;
-  const detail = value === positive || value === negative ? "" : value.startsWith(prefix) ? value.slice(prefix.length) : value;
+  const knownNegative = (pets ? /^(?:no|none|no pets|i (?:don't|don’t|do not) have (?:any )?pets)[.!]?$/i : /^(?:no|none|non[- ]?drinker|i (?:don't|don’t|do not) drink(?: alcohol)?|(?:don't|don’t|do not) drink|sober)[.!]?$/i).test(value.trim());
+  // Earlier answers were free text. Keep unrecognised answers verbatim without
+  // claiming that a creator has pets or drinks alcohol on their behalf.
+  const mode = knownNegative ? negative : value === positive || value.startsWith(prefix) ? positive : "";
+  const detail = value === positive || knownNegative ? "" : value.startsWith(prefix) ? value.slice(prefix.length) : value;
   return <>
     <Choices label={pets ? "Pets" : "Alcohol preference"} value={mode} options={[negative, positive]} onChange={next => onChange(next === positive && detail ? `${prefix}${detail}` : next)} disabled={disabled} />
-    {mode === positive && <label className={styles.followUp}><span className={styles.subLabel}>{pets ? "What’s their name and breed?" : "What’s your favourite drink?"}</span>
-      <input className={styles.input} aria-label={pets ? "Pet name and breed" : "Favourite drink"} value={detail} disabled={disabled} maxLength={4950} onChange={event => onChange(event.target.value ? `${prefix}${event.target.value}` : positive)} />
+    {(mode === positive || Boolean(detail)) && <label className={styles.followUp}><span className={styles.subLabel}>{!mode ? "Your answer" : pets ? "What’s their name and breed?" : "What’s your favourite drink?"}</span>
+      <input className={styles.input} aria-label={pets ? "Pet name and breed" : "Favourite drink"} value={detail} disabled={disabled} maxLength={4950} onChange={event => onChange(!mode ? event.target.value : event.target.value ? `${prefix}${event.target.value}` : positive)} />
     </label>}
   </>;
 }
