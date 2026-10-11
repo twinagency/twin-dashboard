@@ -21,6 +21,25 @@ function obs(evidence: Record<string, unknown> = {}, changes: Record<string, unk
 }
 const norm = (e?: Record<string, unknown>, c?: Record<string, unknown>) => normalizeMediaClassification(obs(e, c));
 
+// A positive genital flag must be supported by an affirmative factual description,
+// just as an anus flag already requires support. Sheer fabric alone is not anatomy.
+for (const details of [
+  "She wears a black sheer thong and a mesh top.",
+  "Her genitals are not visible through the fabric.",
+]) {
+  const r = norm({ genitals: "yes", lingerie: "yes" }, {
+    identifying: "A woman in a sheer lingerie set kneels on a couch.",
+    details, short_label: "sheer lingerie couch", visible: ["black sheer thong", "mesh top"], tags: [],
+  });
+  assert.equal(r.status, "needs_review", "unsubstantiated positive genital flag must be held");
+  assert.ok(r.issues.some(p => /genitals.*affirm/.test(p)));
+}
+const supportedGenitals = norm({ genitals: "yes" }, {
+  identifying: "A woman poses on a bed.", details: "The external genital anatomy is clearly visible.",
+  short_label: "pose on bed", visible: ["bed"], tags: [],
+});
+assert.equal(supportedGenitals.status, "analysed", "affirmative named anatomy preserves an otherwise consistent observation");
+
 // ---- flags and tags come from "yes" evidence only ----
 const shirt = norm({ suggestive_pose: "yes" });
 assert.equal(shirt.fields.is_nude, false, "open shirt and cleavage are not visible nudity");
@@ -321,3 +340,4 @@ assert.equal(sentencesUpTo("Short one.", 140), "Short one.");
 }
 
 console.log("Media classification checks passed: yes-only tags and flags, unclear never clean, contract facts, description rules, negation-aware validation, retryable malformed answers, factual-only prompts.");
+

@@ -284,6 +284,7 @@ export function deniedFactKeys(text: string): FactKey[] {
 // anus=yes must be backed by the prose actually naming the anus (or a plug / insertion). A "yes" the description never mentions is an
 // unsupported claim: it goes to review instead of being saved as analysed (eval #40: anus=yes + 'anal' tag with silent prose).
 const ANUS_MENTIONED = /\b(?:anus|anal|asshole|butt ?plug|plug|inserted|insertion|penetrat\w*)\b/i;
+const GENITALS_MENTIONED = /\b(?:genitals?|genitalia|genital anatomy|vulva|vagina|pussy|labia|penis|scrotum)\b/i;
 const ANUS_NOT_VISIBLE = /\b(?:anus|anal|asshole)\b[^.]*\b(?:not|isn'?t|no longer|barely)\b[^.]*\b(?:visible|seen|shown)\b|\b(?:not|no|nor)\b[^.]*\b(?:visible|seen)\b[^.]*\b(?:anus|asshole)\b|\bno (?:visible )?(?:anus|asshole)\b/i;
 // The tag vocabulary has no male-genital tag, and "pussy" on a man's genitals is wrong.
 // A garment named as worn/on the body contradicts full_nudity=yes ("pink top bunched on her torso"). Pulled off/down/aside is not worn.
@@ -357,6 +358,12 @@ export function normalizeMediaClassification(value: unknown, opts: NormalizeOpti
   if (evidence.anus === "yes" && !ANUS_MENTIONED.test(proseAll)) {
     issuesExtra.push("anus is yes but the description never mentions it");
   }
+  // A garment (including sheer fabric) does not substantiate a genital flag.
+  // Check the original factual prose, before any generated absence line. This
+  // is an internal-consistency hold, not independent verification of the pixels.
+  if (evidence.genitals === "yes" && !affirmativeClauses(rawProse).some(c => GENITALS_MENTIONED.test(c))) {
+    issuesExtra.push("genitals is yes but the factual description never affirms it; review required");
+  }
   // Round 5: yes is only ever as good as the prose backing it. An outline through fabric, paint read as a garment and a
   // background mirror are not evidence; each goes to review and drops the tag it would have licensed.
   const clauses = affirmativeClauses(proseAll);
@@ -413,3 +420,4 @@ export function normalizeMediaClassification(value: unknown, opts: NormalizeOpti
     issues,
   };
 }
+

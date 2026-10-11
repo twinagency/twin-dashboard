@@ -203,8 +203,14 @@ const guide = Object.fromEntries(PRICING_CATEGORIES.map((c) => [c, c === "sfw" |
 {
   const ok = await analysePhoto(photo, null, undefined, { call: replying(answer()).call, writeCaption: captionOk });
   assert.equal(priceForAnalysis(guide, ok), 700, "an analysed SFW item prices from its tags");
-  const nudeRes = await analysePhoto(photo, null, undefined, { call: replying(answer({ genitals: "yes" }, { identifying: "A woman sits.", details: "A woman sits on a bed.", short_label: "sitting", visible: ["bed"], tags: [] })).call, writeCaption: captionOk });
+  const nudeRes = await analysePhoto(photo, null, undefined, { call: replying(answer({ genitals: "yes" }, { identifying: "A woman sits.", details: "A woman sits on a bed. Her external genital anatomy is clearly visible.", short_label: "sitting", visible: ["bed"], tags: [] })).call, writeCaption: captionOk });
+  assert.equal(nudeRes.status, "analysed", "pricing control has affirmative factual support");
   assert.equal(priceForAnalysis(guide, nudeRes), 900, "pussy price");
+  let heldCaptionCalls = 0;
+  const unsupported = await analysePhoto(photo, null, undefined, { call: replying(answer({ genitals: "yes", lingerie: "yes" }, { identifying: "A woman in sheer lingerie kneels.", details: "She wears a sheer top and thong.", short_label: "sheer lingerie", visible: ["sheer top", "thong"], tags: [] })).call, writeCaption: async () => { heldCaptionCalls++; return "Neutral catalogue caption."; } });
+  assert.equal(unsupported.status, "needs_review", "a confirming second look does not override missing factual support");
+  assert.equal(heldCaptionCalls, 0, "held observation never reaches caption generation");
+  assert.equal(analysisRowFields(unsupported).analysis_status, "needs_review", "stored status preserves the hold");
   const failedRes = await analysePhoto(photo, null, undefined, { call: async () => { throw new Error("boom"); } });
   assert.equal(priceForAnalysis(guide, failedRes), 2000, "failed => the guide's highest category, not the SFW price");
   const review = await analysePhoto(photo, null, undefined, { call: replying(answer({ anus: "unclear" })).call });
@@ -388,7 +394,7 @@ const guide = Object.fromEntries(PRICING_CATEGORIES.map((c) => [c, c === "sfw" |
   const bare = { identifying: "A woman lies on a bed.", details: "She lies on a white sheet.", short_label: "woman on bed", visible: ["white sheet"], tags: ["pussy", "solo"] };
   const go = (r: ReturnType<typeof replying>) => analysePhoto(photo, null, undefined, { call: r.call, writeCaption: captionOk });
   // confirmed: analysed, exactly +1 call, photo wording, same image, cost and latency summed
-  const c1 = replying(answer({ genitals: "yes" }, bare), JSON.stringify({ genitals: "yes" }));
+  const c1 = replying(answer({ genitals: "yes" }, { ...bare, details: "Her external genital anatomy is clearly visible." }), JSON.stringify({ genitals: "yes" }));
   const p1 = await go(c1);
   assert.equal(c1.calls.length, 2, "genitals yes on a photo makes exactly one second-look call");
   assert.match(c1.calls[1].prompt, /ONLY these keys: genitals\./);
@@ -457,3 +463,4 @@ console.log("Media analysis checks passed: status, failure, retries, timeouts, c
 }
 
 main().catch((e) => { console.error(e); process.exit(1); });
+
