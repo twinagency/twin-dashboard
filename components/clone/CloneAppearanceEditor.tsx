@@ -14,18 +14,20 @@ export default function CloneAppearanceEditor({
   initialImagePath,
   initialImageUrl,
   studio = false,
+  useStudioPortrait = false,
 }: {
   cloneName: string;
   initialColor: string;
   initialImagePath: string | null;
   initialImageUrl?: string;
   studio?: boolean;
+  useStudioPortrait?: boolean;
 }) {
   const [color, setColor] = useState(initialColor);
   const [localPreview, setLocalPreview] = useState<string | null>(null);
   // The original demo avatar predates the reviewed Dashboard portrait. Keep
   // the stored path and upload behavior intact while using that approved crop.
-  const demoPortrait = studio && (!initialImagePath || initialImagePath.endsWith("1786258659838-IMG_4813.jpg"));
+  const demoPortrait = useStudioPortrait && (!initialImagePath || initialImagePath.endsWith("1786258659838-IMG_4813.jpg"));
   const preview = localPreview ?? (demoPortrait ? "/api/dashboard/portrait?image=studio" : initialImageUrl);
 
   useEffect(() => () => {

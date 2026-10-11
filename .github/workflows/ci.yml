@@ -30,6 +30,30 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install browsers for interface verification
+        run: |
+          # Playwright downloads its pinned browser separately. Its OS libraries
+          # come from Ubuntu, not the runner's unrelated Chrome apt feed, which
+          # can publish inconsistent index hashes during an update. Isolate that
+          # feed in this disposable runner; retain all signature/hash checks.
+          sudo mkdir -p /tmp/ci-unused-chrome-feed
+          while IFS= read -r source; do
+            sudo mv "$source" "/tmp/ci-unused-chrome-feed/${source##*/}"
+          done < <(sudo grep -rl 'dl.google.com/linux/chrome' /etc/apt/sources.list.d 2>/dev/null || true)
+          npx playwright install --with-deps chromium webkit
+
+      - name: Shared operator workspace desktop and mobile checks
+        run: node scripts/check-operator-workspace-ui.mjs
+
+      - name: Shared operator workspace screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: operator-workspace-preview
+          path: test-results/operator-workspace
+          if-no-files-found: ignore
+          retention-days: 3
+
       - name: Video preview encoder
         timeout-minutes: 7
         run: bash scripts/install-ci-video-tools.sh
@@ -51,18 +75,6 @@ jobs:
 
       - name: Public marketing access checks
         run: npx tsx scripts/check-marketing-access.ts
-
-      - name: Install browser for public site verification
-        run: |
-          # Playwright downloads its pinned browser separately. Its OS libraries
-          # come from Ubuntu, not the runner's unrelated Chrome apt feed, which
-          # can publish inconsistent index hashes during an update. Isolate that
-          # feed in this disposable runner; retain all signature/hash checks.
-          sudo mkdir -p /tmp/ci-unused-chrome-feed
-          while IFS= read -r source; do
-            sudo mv "$source" "/tmp/ci-unused-chrome-feed/${source##*/}"
-          done < <(sudo grep -rl 'dl.google.com/linux/chrome' /etc/apt/sources.list.d 2>/dev/null || true)
-          npx playwright install --with-deps chromium webkit
 
       - name: Moxy overview responsive and interaction checks
         run: node scripts/check-moxy-overview-ui.mjs
@@ -116,3 +128,4 @@ jobs:
           path: test-results/twin-public
           if-no-files-found: ignore
           retention-days: 3
+

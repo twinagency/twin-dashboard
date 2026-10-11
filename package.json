@@ -83,7 +83,7 @@
     "test:content-library": "tsx scripts/check-content-library.tsx",
     "test:inbox": "tsx scripts/check-unified-inbox.tsx",
     "test:campaigns": "tsx scripts/check-campaigns.tsx",
-    "test:intelligence-controls": "node --import tsx scripts/check-intelligence-controls.tsx && node --import tsx scripts/check-creator-config-navigation.tsx"
+    "test:intelligence-controls": "node --import tsx scripts/check-intelligence-controls.tsx && node --import tsx scripts/check-creator-config-navigation.tsx && node --import tsx scripts/check-creator-studio.tsx"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
@@ -118,3 +118,4 @@
     "typescript": "^5"
   }
 }
+

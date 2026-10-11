@@ -1,7 +1,7 @@
 "use client";
 
-import { usePathname, useSearchParams } from "next/navigation";
-import { isBriannaStudioRoute, isBriannaWorkspaceRoute } from "@/lib/dashboard-creator-route";
+import { usePathname } from "next/navigation";
+import { isCreatorStudioRoute, isDashboardWorkspaceRoute } from "@/lib/dashboard-creator-route";
 import TwinAssistant from "@/components/TwinAssistant";
 import { useDashboardAccess } from "./DashboardAccessProvider";
 
@@ -13,13 +13,12 @@ import { useDashboardAccess } from "./DashboardAccessProvider";
 // mode on whatever page you first loaded, so switching Revenue→Fans kept the
 // narrow column (squashed inbox) and Fans→Revenue leaked full-bleed. This is
 // the bug behind "pages break when switching between them".
-export default function MainShell({ children, activeCloneId = null }: { children: React.ReactNode; activeCloneId?: string | null }) {
+export default function MainShell({ children }: { children: React.ReactNode; activeCloneId?: string | null }) {
   const pathname = usePathname();
   const {isAgency, isCreator} = useDashboardAccess();
-  const searchParams = useSearchParams();
-  const studioDashboard = !isAgency && !isCreator && (pathname === "/dashboard" || isBriannaStudioRoute(pathname, searchParams.get("tab"), searchParams.get("sub")));
+  const studioDashboard = !isCreator && ((!isAgency && pathname === "/dashboard") || isCreatorStudioRoute(pathname));
   const fullBleed = pathname === "/users" || pathname === "/inbox" || pathname === "/jarvis" || pathname === "/fans";
-  const studioWorkspace = !isAgency && !isCreator && isBriannaWorkspaceRoute(pathname, searchParams.get("creator"), activeCloneId);
+  const studioWorkspace = !isCreator && isDashboardWorkspaceRoute(pathname);
   const ownsPageSpacing = ["/content-library", "/campaigns"].includes(pathname);
   return (
     <main
@@ -35,5 +34,6 @@ export default function MainShell({ children, activeCloneId = null }: { children
     </main>
   );
 }
+
 
 

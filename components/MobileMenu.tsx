@@ -1,21 +1,20 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { usePathname, useSearchParams } from "next/navigation";
+import { usePathname } from "next/navigation";
 import { createPortal } from "react-dom";
 import { X } from "lucide-react";
 import { SidebarContent } from "@/components/Sidebar";
 import { useDashboardAccess } from "./DashboardAccessProvider";
-import { isBriannaWorkspaceRoute } from "@/lib/dashboard-creator-route";
+import { isDashboardWorkspaceRoute } from "@/lib/dashboard-creator-route";
 
 // The phone menu is the desktop sidebar's real content in a touch-friendly
 // drawer. Sharing SidebarContent keeps the links, icons, active states and
 // clone-gated behavior identical at every breakpoint.
 export default function MobileMenu({ activeCloneId }: { activeCloneId: string | null }) {
   const pathname = usePathname();
-  const query = useSearchParams();
   const { audience } = useDashboardAccess();
-  const studio = audience === "admin" && isBriannaWorkspaceRoute(pathname, query.get("creator"), activeCloneId);
+  const studio = audience !== "creator" && isDashboardWorkspaceRoute(pathname);
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -93,4 +92,5 @@ export default function MobileMenu({ activeCloneId }: { activeCloneId: string | 
     </div>
   );
 }
+
 
