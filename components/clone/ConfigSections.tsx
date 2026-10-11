@@ -42,6 +42,7 @@ import { DIAL_CONFLICT_RULES } from "@/lib/dial-conflicts";
 import { SpoilMenuEditor } from "./editors";
 import { IdentityLifeCard, IdentityBoundaryLink, ConfigurationMore, MoneyJourney, PaywallPreview, StudioHeading, StudioLink, isStudioTab } from "./CreatorStudio";
 import studioStyles from "./CreatorStudio.module.css";
+import { V2_TIP_CREDITS_HINT_PREFIX, V2_TIP_CREDITS_LABEL, V2_TIPS_SECTION_HINT } from "@/lib/v2-tips";
 import { MediaPicker, type MediaRow, type BundleRow } from "./MediaPicker";
 // New dedicated file (migration 056 monetization sequence) — kept out of this
 // file's own card definitions so it doesn't collide with concurrent edits here.
@@ -2311,7 +2312,7 @@ export function MonetizationSections({
         defaultOpen={studio}
         accent={editMode ? "neutral" : "amber"}
         filled={cfg.tips}
-        hint="She can ask to be spoiled with Stars. Always recorded as tip revenue. It can also give him message credits back, at the rate you set below, which is off until you set it. The spoil menu is what he sees when he wants to tip but names no amount."
+        hint={cfg.engineV2 ? V2_TIPS_SECTION_HINT : "She can ask to be spoiled with Stars. Always recorded as tip revenue. It can also give him message credits back, at the rate you set below, which is off until you set it. The spoil menu is what he sees when he wants to tip but names no amount."}
       >
         <Toggle
           label={cfg.tips ? "She can ask for tips" : "No tips"}
@@ -2326,13 +2327,13 @@ export function MonetizationSections({
             num(fd, ..., 0) would then silently reset a configured rate to 0 on
             every save made with tips switched off. */}
         <Field
-          label="Credits per 100 stars tipped"
+          label={cfg.engineV2 ? V2_TIP_CREDITS_LABEL : "Credits per 100 stars tipped"}
           name="tip_credits_per_100_stars"
           type="number"
           min={0}
           step={1}
           defaultValue={clone?.tip_credits_per_100_stars ?? 0}
-          hint="What a tip gives him back in message credits. 0 means a tip gives no credits, which is the default and what every creator did before this field existed. At 5, a 1000 star tip gives him 50 messages. The amount is always computed from this number, never decided by the AI, and it is rounded DOWN so a tip too small to earn a credit earns none. This is deliberately NOT tied to your pack price: it is a separate rate you control."
+          hint={(cfg.engineV2 ? V2_TIP_CREDITS_HINT_PREFIX : "") + "What a tip gives him back in message credits. 0 means a tip gives no credits, which is the default and what every creator did before this field existed. At 5, a 1000 star tip gives him 50 messages. The amount is always computed from this number, never decided by the AI, and it is rounded DOWN so a tip too small to earn a credit earns none. This is deliberately NOT tied to your pack price: it is a separate rate you control."}
         />
         {/* Migration 084, the two tip re-ask brakes. Rendered unconditionally,
             NOT behind cfg.tips like the spoil menu below: a hidden Toggle posts
