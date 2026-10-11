@@ -2,6 +2,7 @@
 
 import { useCallback, useState } from "react";
 import type { Clone } from "@/lib/types";
+import { isV2Engine } from "@/lib/v2-tips";
 import { DEFAULT_PAYWALL_BUTTON, DEFAULT_PAYWALL_MESSAGE, DEFAULT_SPOIL_OPTIONS } from "./fields";
 import { DEFAULT_CATEGORY_PRICING, type CategoryPricing } from "@/lib/pricing";
 
@@ -135,6 +136,8 @@ export type CloneConfigState = {
   offerDeclineCap: number;
 
   tips: boolean;
+  // clones.engine = 'v2'. Display only (never posted): V2 tips are pure tips and an empty amount list is real.
+  engineV2: boolean;
   // Migration 084 (clones.tip_reask_after_paid). Money brake, opt-in only.
   // The cooldown that pairs with it is an uncontrolled number field, seeded
   // straight from the clone row the way voice_cooldown_turns is.
@@ -318,8 +321,10 @@ function initial(clone?: Partial<Clone>): CloneConfigState {
     offerDeclineCap: clone?.offer_decline_cap ?? 3,
 
     tips: clone?.tips_enabled ?? false,
+    engineV2: isV2Engine(clone),
     tipReaskAfterPaid: clone?.tip_reask_after_paid ?? false,
-    spoilOptions: clone?.spoil_options && clone.spoil_options.length ? clone.spoil_options : DEFAULT_SPOIL_OPTIONS,
+    // V2 asks the fan for an amount when the list is empty, so an empty V2 list is shown empty and never silently filled with the V1 menu.
+    spoilOptions: clone?.spoil_options && clone.spoil_options.length ? clone.spoil_options : isV2Engine(clone) ? [] : DEFAULT_SPOIL_OPTIONS,
     categoryPricing:
       clone?.category_pricing && Object.keys(clone.category_pricing).length
         ? { ...DEFAULT_CATEGORY_PRICING, ...clone.category_pricing }

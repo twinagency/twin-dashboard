@@ -60,8 +60,13 @@ const kindToFeature = (k: string | null): FeatureKey =>
     : k === "subscription"
       ? "subscription"
       : "other";
-const normFeature = (feature: string | null, kind: string | null): FeatureKey =>
+export const normFeature = (feature: string | null, kind: string | null): FeatureKey =>
   feature && (FEATURE_KEYS as string[]).includes(feature) ? (feature as FeatureKey) : kindToFeature(kind);
+
+// Coarse bucket from star_transactions.kind. Keyed on kind/feature only, never on invoice_payload, so a V2 tip (kind 'tip', payload v2tip:<quote>)
+// is a tip exactly like a legacy tip_/spoil_ one.
+export const normKind = (k: string | null): KindKey =>
+  k === "credits" || k === "media" || k === "tip" ? k : "other";
 
 // Lifetime spend tiers — must match src/data/*-store.ts recordSpend().
 export const TIERS: { key: string; label: string }[] = [
@@ -655,9 +660,6 @@ export async function getAnalytics(
   // Sales rail is descriptive only, never folded into totalStars/totalSales
   // math above: a TON sale is already counted there like any other purchase.
   let tonSales = 0;
-
-  const normKind = (k: string | null): KindKey =>
-    k === "credits" || k === "media" || k === "tip" ? k : "other";
 
   for (const t of txs) {
     const { stars, adjustment, paidOrder } = classifyRevenueLedgerRow(t);
