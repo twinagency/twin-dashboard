@@ -11,7 +11,8 @@
 //  - A backup line (before + after) is appended and flushed BEFORE each write. Rollback restores a row only while it still holds
 //    exactly the values this run wrote.
 //  - A failed or contradictory analysis never writes metadata: the old values stay and the row goes to the failure report.
-import { appendFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
+import { closeSync, existsSync, fsyncSync, mkdirSync, openSync, readFileSync, writeFileSync, writeSync } from "node:fs";
+import { createHash } from "node:crypto";
 import path from "node:path";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ANALYSIS_COLUMNS, ANALYSIS_VERSION, FACT_KEYS, type AnalysisResult, type VisualFacts } from "./media-analysis-contract";
@@ -56,6 +57,8 @@ export type Ctx = {
   now?: () => Date;
   /** test hook: called after each processed row; throwing aborts the run like a crash */
   afterRow?: (n: number) => void | Promise<void>;
+  /** test hook: called at each crash point of a write (after_backup, after_write, after_ack, before_items, item_after_backup, after_items) */
+  step?: (point: string, key: string) => void | Promise<void>;
 };
 export const MAX_CONCURRENCY = 8;
 
@@ -238,7 +241,17 @@ export function captionContradictsFacts(caption: string | null, facts: VisualFac
   return false;
 }
 
-const same = (a: unknown, b: unknown) => JSON.stringify(a ?? null) === JSON.stringify(b ?? null);
+/** Key-order independent JSON (jsonb comes back with its keys reordered) with timestamps normalised (timestamptz comes back as +00:00). */
+function canon(v: unknown): string {
+  const norm = (x: any): any => {
+    if (Array.isArray(x)) return x.map(norm);
+    if (x && typeof x === "object") return Object.fromEntries(Object.keys(x).sort().map((k) => [k, norm(x[k])]));
+    if (typeof x === "string" && /^\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d(\.\d+)?(Z|[+-]\d\d:?\d\d)$/.test(x)) { const t = Date.parse(x); if (!Number.isNaN(t)) return new Date(t).toISOString(); }
+    return x;
+  };
+  return JSON.stringify(norm(v ?? null));
+}
+const same = (a: unknown, b: unknown) => canon(a) === canon(b);
 
 export type Proposal = {
   run: string; table: MediaTable; id: string; clone_id: string; clone_slug: string; storage_path: string;
@@ -246,12 +259,23 @@ export type Proposal = {
   model: string; provider: string | null; costUsd: number | null; latencyMs: number;
   before: Record<string, unknown>; after: Record<string, unknown>; changed: string[];
   error?: string; premigration?: boolean; notes?: string[];
+  /** ANALYSIS_VERSION of the code that made this proposal: apply refuses it if the code has moved on. */
+  code_version?: number;
 };
+
+/** Status-only hold for a row whose repair stayed needs_review / failed: it stops being offered, every metadata field is kept. */
+export type Hold = {
+  run: string; table: MediaTable; id: string; clone_id: string; clone_slug: string; storage_path: string;
+  outcome: "needs_review" | "failed"; reason: string; model: string; code_version: number;
+  before: { analysis_status: string; analysis_error: string | null }; after: { analysis_status: "needs_review" | "failed"; analysis_error: string };
+};
+export const HOLD_FIELDS = ["analysis_status", "analysis_error"] as const;
 
 export function buildProposal(ctx: Pick<Ctx, "runId" | "now">, table: MediaTable, row: Row, slug: string, res: AnalysisResult, migrated: boolean): Proposal {
   const base = {
     run: ctx.runId, table, id: row.id, clone_id: row.clone_id, clone_slug: slug, storage_path: row.storage_path,
     model: res.model, provider: res.provider, costUsd: res.costUsd, latencyMs: res.latencyMs, before: {}, after: {}, changed: [] as string[],
+    code_version: ANALYSIS_VERSION,
     ...(migrated ? {} : { premigration: true }),
   };
   if (res.status === "failed" || !res.fields) return { ...base, outcome: "failed", error: res.error ?? "analysis failed" };
@@ -306,15 +330,19 @@ export function guardOld(q: any, old: Record<string, unknown>): any {
 type StateEntry = { key: string; status: string; at: string; detail?: string };
 const file = (ctx: Pick<Ctx, "stateDir">, n: string) => path.join(ctx.stateDir, n);
 function ensureDir(ctx: Pick<Ctx, "stateDir">) { mkdirSync(ctx.stateDir, { recursive: true }); }
-function append(f: string, obj: unknown) { appendFileSync(f, JSON.stringify(obj) + "\n"); }
+/** Appends one line and fsyncs it, so a backup / intent / state line has reached the disk before the caller goes on. */
+function append(f: string, obj: unknown) {
+  const fd = openSync(f, "a");
+  try { writeSync(fd, JSON.stringify(obj) + "\n"); fsyncSync(fd); } finally { closeSync(fd); }
+}
 function readJsonl<T>(f: string): T[] {
   if (!existsSync(f)) return [];
   return readFileSync(f, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l) as T);
 }
 
-/** `conflict` marks a backup line whose guarded write matched 0 rows: nothing was written, so rollback skips it silently. */
+/** `conflict` marks a backup line whose guarded write matched 0 rows AND the row held neither the old nor the new values. */
 type ConflictRec = { kind: "conflict"; table: string; id: string; run: string; at: string };
-type BackupRec = { kind: "row" | "item"; table: MediaTable | "photo_bundle_items"; id: string; clone_id: string; storage_path: string; before: Record<string, unknown>; after: Record<string, unknown>; run: string; at: string };
+type BackupRec = { kind: "row" | "item"; table: MediaTable | "photo_bundle_items"; id: string; clone_id: string; storage_path: string; before: Record<string, unknown>; after: Record<string, unknown>; run: string; at: string; hold?: true };
 
 // ── row processing ───────────────────────────────────────────────────────────
 export type Mode = "preview" | "apply";
@@ -322,12 +350,19 @@ export type RunOpts = {
   mode: Mode; cloneSlug?: string; table?: MediaTable; scope: "all" | "problem"; statuses?: string[]; limit?: number; spread?: boolean;
   /** on resume, do not retry rows that failed earlier in this run (default: retry them) */
   skipFailed?: boolean;
+  /** apply only: the reviewed preview.jsonl to apply (holds.jsonl is read from the same folder). Apply never calls the model. */
+  preview?: string;
 };
 export type RunSummary = {
   mode: Mode; migrated: boolean; selected: number; skippedDone: number;
   proposed: number; applied: number; unchanged: number; conflicts: number; failed: number; needsReview: number; itemsUpdated: number; itemConflicts: number;
+  holds: number; holdsApplied: number; recovered: number; alreadyApplied: number; conflictReasons: string[];
   costUsd: number; errors: string[]; notes: string[];
 };
+const newSummary = (mode: Mode, migrated: boolean): RunSummary => ({
+  mode, migrated, selected: 0, skippedDone: 0, proposed: 0, applied: 0, unchanged: 0, conflicts: 0, failed: 0, needsReview: 0, itemsUpdated: 0, itemConflicts: 0,
+  holds: 0, holdsApplied: 0, recovered: 0, alreadyApplied: 0, conflictReasons: [], costUsd: 0, errors: [], notes: [],
+});
 
 function selectRows(rows: { table: MediaTable; row: Row; slug: string }[], opts: RunOpts) {
   const keep = rows.filter(({ row }) => {
@@ -370,23 +405,45 @@ async function analyseRow(ctx: Ctx, table: MediaTable, row: Row, model: string |
   return res;
 }
 
-async function applyProposal(ctx: Ctx, p: Proposal, sum: RunSummary): Promise<"applied" | "conflict"> {
-  assertWritable(Object.keys(p.after));
-  // backup first, flushed by appendFileSync before the write is attempted
-  append(file(ctx, "backup.jsonl"), { kind: "row", table: p.table, id: p.id, clone_id: p.clone_id, storage_path: p.storage_path, before: p.before, after: p.after, run: ctx.runId, at: new Date().toISOString() } satisfies BackupRec);
-  // guard on every changed content field's old value + the status; stamp timestamps/model need not match
-  const guardFields = Object.fromEntries(Object.entries(p.before).filter(([k]) => (CONTENT_FIELDS as readonly string[]).includes(k) || k === "analysis_status"));
-  let q: any = ctx.db.from(p.table).update(p.after).eq("id", p.id).eq("clone_id", p.clone_id).is("metadata_edited_at", null);
+const holdsValues = (row: Record<string, unknown>, vals: Record<string, unknown>) => Object.entries(vals).every(([k, v]) => same(row[k], v));
+
+/**
+ * One guarded row write with a durable intent/backup line first and read-back reconciliation after:
+ *  - the backup line (before + after) is fsynced BEFORE the write, so it doubles as the write-intent record;
+ *  - 1 row matched                     -> "applied"
+ *  - 0 rows, or the response was lost  -> the row is READ BACK: already holds the proposed values (+ stamp) -> "recovered" (the write
+ *    landed, only the answer got lost); holds neither the old nor the new values -> "conflict"; still holds the old values after a
+ *    transport error -> the error is rethrown (nothing landed; a resume retries from the same proposal).
+ */
+async function writeGuarded(ctx: Ctx, rec: { table: MediaTable; id: string; clone_id: string; storage_path: string; before: Record<string, unknown>; after: Record<string, unknown> }, key: string, hold = false): Promise<"applied" | "recovered" | "conflict"> {
+  assertWritable(Object.keys(rec.after));
+  append(file(ctx, "backup.jsonl"), { kind: "row", table: rec.table, id: rec.id, clone_id: rec.clone_id, storage_path: rec.storage_path, before: rec.before, after: rec.after, run: ctx.runId, at: new Date().toISOString(), ...(hold ? { hold: true as const } : {}) } satisfies BackupRec);
+  await ctx.step?.("after_backup", key);
+  // guard on every changed content field's old value + the status + the version; stamp timestamps/model need not match
+  const guardFields = Object.fromEntries(Object.entries(rec.before).filter(([k]) => (CONTENT_FIELDS as readonly string[]).includes(k) || k === "analysis_status" || k === "analysis_version"));
+  let q: any = ctx.db.from(rec.table).update(rec.after).eq("id", rec.id).eq("clone_id", rec.clone_id).eq("storage_path", rec.storage_path).is("metadata_edited_at", null);
   q = guardOld(q, guardFields).select("id");
-  const { data, error } = await withRetry(async () => { const r = await q; if (r.error && TRANSIENT_ERROR.test(r.error.message)) throw new Error(r.error.message); return r; }, ctx.retries + 1, { baseMs: ctx.retryBaseMs });
-  if (error) throw new Error(`update ${p.table}/${p.id}: ${error.message}`);
-  if ((data ?? []).length === 1) return "applied";
-  append(file(ctx, "backup.jsonl"), { kind: "conflict", table: p.table, id: p.id, run: ctx.runId, at: new Date().toISOString() } satisfies ConflictRec);
+  let matched = 0, err: Error | null = null;
+  try {
+    const r = await withRetry(async () => { const x = await q; if (x.error && TRANSIENT_ERROR.test(x.error.message)) throw new Error(x.error.message); return x; }, ctx.retries + 1, { baseMs: ctx.retryBaseMs });
+    if (r.error) err = new Error(`update ${rec.table}/${rec.id}: ${r.error.message}`); else matched = (r.data ?? []).length;
+  } catch (e) { err = e as Error; }
+  await ctx.step?.("after_write", key);
+  if (!err && matched === 1) { await ctx.step?.("after_ack", key); return "applied"; }
+  // ambiguous (lost response) or 0 rows: look at the row instead of guessing
+  const cols = [...new Set(["id", "clone_id", "storage_path", "metadata_edited_at", ...Object.keys(rec.after), ...Object.keys(guardFields)])].join(",");
+  const rb = await withRetry(async () => { const x: any = await ctx.db.from(rec.table).select(cols).eq("id", rec.id); if (x.error) throw new Error(x.error.message); return x; }, ctx.retries + 1, { baseMs: ctx.retryBaseMs }).catch(() => null);
+  const cur = rb ? ((rb.data ?? [])[0] as Record<string, unknown> | undefined) : undefined;
+  if (rb === null && err) throw err;
+  if (cur && holdsValues(cur, rec.after)) return "recovered";
+  if (err && cur && !cur.metadata_edited_at && holdsValues(cur, guardFields)) throw err; // nothing landed
+  if (err && !cur) throw err;
+  append(file(ctx, "backup.jsonl"), { kind: "conflict", table: rec.table, id: rec.id, run: ctx.runId, at: new Date().toISOString() } satisfies ConflictRec);
   return "conflict";
 }
 
 /** Copies the corrected values onto photo_bundle_items with the same storage_path (same clone), guarded on each item's current values. */
-async function syncItems(ctx: Ctx, rec: { clone_id: string; storage_path: string; after: Record<string, unknown> }, sum: RunSummary) {
+async function syncItems(ctx: Ctx, rec: { clone_id: string; storage_path: string; after: Record<string, unknown> }, sum: RunSummary, key = "") {
   const patch = Object.fromEntries(Object.entries(rec.after).filter(([k]) => (ITEM_FIELDS as readonly string[]).includes(k)));
   if (!Object.keys(patch).length) return;
   assertWritable(Object.keys(patch), ITEM_FIELDS);
@@ -400,16 +457,82 @@ async function syncItems(ctx: Ctx, rec: { clone_id: string; storage_path: string
     const before = Object.fromEntries(changed.map((k) => [k, it[k] ?? null]));
     const after = Object.fromEntries(changed.map((k) => [k, patch[k]]));
     append(file(ctx, "backup.jsonl"), { kind: "item", table: "photo_bundle_items", id: it.id, clone_id: rec.clone_id, storage_path: rec.storage_path, before, after, run: ctx.runId, at: new Date().toISOString() } satisfies BackupRec);
+    await ctx.step?.("item_after_backup", key);
     let q: any = ctx.db.from("photo_bundle_items").update(after).eq("id", it.id);
     q = guardOld(q, before).select("id");
-    const r = await q;
-    if (r.error) throw new Error(`update photo_bundle_items/${it.id}: ${r.error.message}`);
-    if ((r.data ?? []).length === 1) sum.itemsUpdated++;
-    else {
-      sum.itemConflicts++;
-      append(file(ctx, "backup.jsonl"), { kind: "conflict", table: "photo_bundle_items", id: it.id, run: ctx.runId, at: new Date().toISOString() } satisfies ConflictRec);
-    }
+    let matched = 0, err: Error | null = null;
+    try { const r = await q; if (r.error) err = new Error(`update photo_bundle_items/${it.id}: ${r.error.message}`); else matched = (r.data ?? []).length; } catch (e) { err = e as Error; }
+    if (!err && matched === 1) { sum.itemsUpdated++; continue; }
+    // lost response or 0 rows: read the item back; already holding the corrected values means the write landed
+    const cur: any = await ctx.db.from("photo_bundle_items").select(Object.keys(after).join(",")).eq("id", it.id).then((x: any) => (x.error ? null : (x.data ?? [])[0]), () => null);
+    if (cur && holdsValues(cur, after)) { sum.itemsUpdated++; continue; }
+    if (err && cur && holdsValues(cur, before)) throw err;
+    if (err && !cur) throw err;
+    sum.itemConflicts++;
+    append(file(ctx, "backup.jsonl"), { kind: "conflict", table: "photo_bundle_items", id: it.id, run: ctx.runId, at: new Date().toISOString() } satisfies ConflictRec);
   }
+}
+
+// ── preview file (the reviewed proposals an apply is allowed to write) ───────
+export type LoadedPreview = { proposals: Proposal[]; holds: Hold[]; file: string; sha256: string };
+export function loadPreview(f: string): LoadedPreview {
+  if (!f || !existsSync(f)) throw new Error(`apply needs a reviewed preview: ${f ? `file not found: ${f}` : "pass --preview <run id or preview.jsonl>"}`);
+  const proposals = new Map<string, Proposal>();
+  for (const p of readJsonl<Proposal>(f)) {
+    if (p.outcome !== "proposed") continue;
+    const key = `${p.table}:${p.id}`;
+    if (proposals.has(key)) throw new Error(`preview is ambiguous: two proposals for ${key}`);
+    proposals.set(key, p);
+  }
+  const holds = new Map<string, Hold>();
+  for (const h of readJsonl<Hold>(path.join(path.dirname(f), "holds.jsonl"))) holds.set(`${h.table}:${h.id}`, h); // a re-run of a failed row: last line wins
+  for (const k of proposals.keys()) holds.delete(k); // a row that later got a real proposal is not held
+  const hash = createHash("sha256");
+  hash.update(readFileSync(f));
+  return { proposals: [...proposals.values()], holds: [...holds.values()], file: f, sha256: hash.digest("hex") };
+}
+
+type Item = { kind: "proposal" | "hold"; table: MediaTable; id: string; clone_id: string; clone_slug: string; storage_path: string; before: Record<string, unknown>; after: Record<string, unknown>; code_version?: number };
+
+/** Why a reviewed item may NOT be written now (null = still exactly what was reviewed). Nothing is written for a row that returns a reason. */
+export function bindConflict(it: Item, row: Row | undefined, clone: CloneInfo | undefined): string | null {
+  if (!(MEDIA_TABLES as string[]).includes(it.table)) return `unknown table ${it.table}`;
+  if (!row) return "row no longer exists";
+  if (it.code_version !== ANALYSIS_VERSION) return `processing version changed (preview ${it.code_version ?? "unknown"}, code ${ANALYSIS_VERSION}): fresh preview needed`;
+  if (row.clone_id !== it.clone_id) return "creator mismatch: the row belongs to another clone than the preview";
+  if (!clone || clone.id !== it.clone_id || clone.slug !== it.clone_slug) return `creator mismatch: clone ${it.clone_slug} is not the clone of this row`;
+  if (row.storage_path !== it.storage_path) return "file changed: storage_path differs from the preview";
+  if (row.metadata_edited_at) return "row was manually edited since the preview";
+  try { assertWritable(Object.keys(it.after), it.kind === "hold" ? HOLD_FIELDS : WRITABLE_FIELDS); } catch (e) { return `invalid proposal: ${(e as Error).message}`; }
+  if (!classify(row).eligible) return `row status is now ${row.analysis_status}`;
+  for (const [k, v] of Object.entries(it.before)) if (!same((row as any)[k], v)) return `${k} changed since the preview`;
+  if (it.kind === "hold") {
+    if (row.analysis_status !== "legacy") return `row status is now ${row.analysis_status} (a hold only applies to a legacy row)`;
+    if (!["needs_review", "failed"].includes(String(it.after.analysis_status))) return "invalid hold: bad status";
+    if (typeof it.after.analysis_error !== "string" || !it.after.analysis_error) return "invalid hold: no reason";
+    return null;
+  }
+  if (it.after.analysis_status !== "analysed") return "invalid proposal: not an analysed result";
+  if (it.after.analysis_version !== ANALYSIS_VERSION) return `proposal version ${String(it.after.analysis_version)} is not the code's ${ANALYSIS_VERSION}`;
+  if ("caption" in it.after && (it.after.caption === null || typeof it.after.caption !== "string")) return "invalid proposal: caption would be nulled";
+  const merged: any = { ...row, ...it.after };
+  const bad = validateFields({ ...merged, auto_desc: merged.auto_desc ?? "" });
+  if (bad) return `invalid proposal: ${bad}`;
+  return null;
+}
+
+async function fetchByIds(ctx: Pick<Ctx, "db" | "retries" | "retryBaseMs">, table: MediaTable, ids: string[]): Promise<Row[]> {
+  const out: Row[] = [];
+  for (let i = 0; i < ids.length; i += 50) {
+    const chunk = ids.slice(i, i + 50);
+    const { data } = await withRetry(async () => { const r = await ctx.db.from(table).select(selectList(true)).in("id", chunk); if (r.error) throw new Error(`read ${table}: ${r.error.message}`); return r; }, ctx.retries + 1, { baseMs: ctx.retryBaseMs });
+    for (const r of (data ?? []) as any[]) out.push(normaliseRow(r));
+  }
+  return out;
+}
+
+function finish(ctx: Ctx, sum: RunSummary) {
+  writeFileSync(file(ctx, "report.txt"), formatSummary(sum) + (sum.errors.length ? "\n\nFAILURES\n" + sum.errors.join("\n") : "") + (sum.conflictReasons.length ? "\n\nCONFLICTS (nothing written for these; run a fresh preview)\n" + sum.conflictReasons.join("\n") : "") + (sum.notes.length ? "\n\nNOTES\n" + sum.notes.join("\n") : "") + "\n");
 }
 
 export async function runRepair(ctx: Ctx, opts: RunOpts): Promise<RunSummary> {
@@ -419,7 +542,8 @@ export async function runRepair(ctx: Ctx, opts: RunOpts): Promise<RunSummary> {
   if (opts.mode === "apply" && !migrated) {
     throw new Error("refusing to apply: migration 20261012000000 (analysis columns, incl. the metadata_edited_at manual-edit guard) is not applied on this database");
   }
-  const sum: RunSummary = { mode: opts.mode, migrated, selected: 0, skippedDone: 0, proposed: 0, applied: 0, unchanged: 0, conflicts: 0, failed: 0, needsReview: 0, itemsUpdated: 0, itemConflicts: 0, costUsd: 0, errors: [], notes: [] };
+  if (opts.mode === "apply") return applyPreview(ctx, opts, migrated);
+  const sum = newSummary(opts.mode, migrated);
 
   const clones = await fetchClones(ctx.db);
   const bySlug = new Map(clones.map((c) => [c.slug, c]));
@@ -429,19 +553,8 @@ export async function runRepair(ctx: Ctx, opts: RunOpts): Promise<RunSummary> {
 
   const stateFile = file(ctx, "state.jsonl");
   const state = readJsonl<StateEntry>(stateFile);
-  const doneKeys = new Set(state.filter((s) => ["applied", "unchanged", "conflict", "needs_review", "proposed", ...(opts.skipFailed ? ["failed"] : [])].includes(s.status) && (opts.mode === "apply" ? s.status !== "proposed" : true)).map((s) => s.key));
+  const doneKeys = new Set(state.filter((s) => ["needs_review", "proposed", ...(opts.skipFailed ? ["failed"] : [])].includes(s.status)).map((s) => s.key));
   const mark = (key: string, status: string, detail?: string) => append(stateFile, { key, status, at: new Date().toISOString(), detail } satisfies StateEntry);
-
-  // resume: rows applied by an interrupted earlier run whose bundle-item copy did not finish
-  if (opts.mode === "apply") {
-    const itemsDone = new Set(state.filter((s) => s.status === "items_done").map((s) => s.key));
-    for (const b of readJsonl<BackupRec>(file(ctx, "backup.jsonl"))) {
-      const key = `${b.table}:${b.id}`;
-      if (b.kind === "row" && b.table === "photos" && state.some((s) => s.key === key && s.status === "applied") && !itemsDone.has(key)) {
-        await syncItems(ctx, b, sum); mark(key, "items_done"); itemsDone.add(key);
-      }
-    }
-  }
 
   const all: { table: MediaTable; row: Row; slug: string }[] = [];
   for (const table of opts.table ? [opts.table] : MEDIA_TABLES) {
@@ -460,38 +573,178 @@ export async function runRepair(ctx: Ctx, opts: RunOpts): Promise<RunSummary> {
     const p = buildProposal(ctx, table, row, slug, res, migrated);
     sum.costUsd += p.costUsd ?? 0;
     for (const note of p.notes ?? []) sum.notes.push(`${key}: ${note}`);
-    if (p.outcome === "failed") {
-      sum.failed++; sum.errors.push(`${key}: ${p.error}`);
-      append(file(ctx, "failed.jsonl"), { key, clone: slug, storage_path: row.storage_path, error: p.error, at: new Date().toISOString() });
-      mark(key, "failed", p.error);
-    } else if (p.outcome === "needs_review") {
-      sum.needsReview++;
-      append(file(ctx, "failed.jsonl"), { key, clone: slug, storage_path: row.storage_path, error: `needs_review: ${p.error}`, at: new Date().toISOString() });
-      mark(key, "needs_review", p.error);
-    } else if (opts.mode === "preview") {
+    if (p.outcome === "failed" || p.outcome === "needs_review") {
+      if (p.outcome === "failed") { sum.failed++; sum.errors.push(`${key}: ${p.error}`); } else sum.needsReview++;
+      append(file(ctx, "failed.jsonl"), { key, clone: slug, storage_path: row.storage_path, error: p.outcome === "failed" ? p.error : `needs_review: ${p.error}`, at: new Date().toISOString() });
+      // an unresolved LEGACY row gets a status-only hold so it stops being offered; its metadata is never part of the hold
+      if (row.analysis_status === "legacy") {
+        const reason = String(p.error ?? p.outcome).slice(0, 500) || p.outcome;
+        const hold: Hold = {
+          run: ctx.runId, table, id: row.id, clone_id: row.clone_id, clone_slug: slug, storage_path: row.storage_path, outcome: p.outcome, reason, model: p.model,
+          code_version: ANALYSIS_VERSION, before: { analysis_status: row.analysis_status, analysis_error: row.analysis_error },
+          after: { analysis_status: p.outcome, analysis_error: reason },
+        };
+        append(file(ctx, "holds.jsonl"), hold);
+        sum.holds++;
+      }
+      mark(key, p.outcome, p.error);
+    } else {
       sum.proposed++;
       append(file(ctx, "preview.jsonl"), p);
       mark(key, "proposed");
-    } else {
-      const r = await applyProposal(ctx, p, sum);
-      if (r === "applied") {
-        sum.applied++; mark(key, "applied");
-        if (table === "photos") { await syncItems(ctx, { clone_id: p.clone_id, storage_path: p.storage_path, after: p.after }, sum); mark(key, "items_done"); }
-      } else { sum.conflicts++; mark(key, "conflict", "row changed since it was read"); ctx.log(`conflict ${key}: row changed, left untouched`); }
     }
     n++;
     await ctx.afterRow?.(n);
   });
 
-  writeFileSync(file(ctx, "report.txt"), formatSummary(sum) + (sum.errors.length ? "\n\nFAILURES\n" + sum.errors.join("\n") : "") + (sum.notes.length ? "\n\nNOTES\n" + sum.notes.join("\n") : "") + "\n");
+  finish(ctx, sum);
   return sum;
+}
+
+/**
+ * Apply = write exactly what the reviewed preview says, and nothing else. No download, no model call. Each proposal is bound to its
+ * row id, clone, table, storage_path, processing version and the previous values; if any moved the row is a conflict and nothing is
+ * written for it (a fresh preview is needed). The old guards (allow-list, metadata_edited_at is null, old-value guards) still apply.
+ */
+async function applyPreview(ctx: Ctx, opts: RunOpts, migrated: boolean): Promise<RunSummary> {
+  const pv = loadPreview(opts.preview ?? "");
+  const sum = newSummary("apply", migrated);
+  const clones = await fetchClones(ctx.db);
+  const bySlug = new Map(clones.map((c) => [c.slug, c]));
+  const byId = new Map(clones.map((c) => [c.id, c]));
+  if (opts.cloneSlug && !bySlug.has(opts.cloneSlug)) throw new Error(`no clone with slug ${opts.cloneSlug}`);
+  writeFileSync(file(ctx, "preview.used.jsonl"), readFileSync(pv.file));
+  sum.notes.push(`applied preview ${pv.file} sha256 ${pv.sha256}: ${pv.proposals.length} proposals, ${pv.holds.length} holds`);
+
+  const stateFile = file(ctx, "state.jsonl");
+  const state = readJsonl<StateEntry>(stateFile);
+  const TERMINAL = new Set(["applied", "recovered", "conflict", "already_applied"]);
+  const doneKeys = new Set(state.filter((s) => TERMINAL.has(s.status)).map((s) => s.key));
+  const mark = (key: string, status: string, detail?: string) => append(stateFile, { key, status, at: new Date().toISOString(), detail } satisfies StateEntry);
+
+  let items: Item[] = [
+    ...pv.proposals.map((p): Item => ({ kind: "proposal", table: p.table, id: p.id, clone_id: p.clone_id, clone_slug: p.clone_slug, storage_path: p.storage_path, before: p.before, after: p.after, code_version: p.code_version })),
+    ...pv.holds.map((h): Item => ({ kind: "hold", table: h.table, id: h.id, clone_id: h.clone_id, clone_slug: h.clone_slug, storage_path: h.storage_path, before: h.before, after: h.after, code_version: h.code_version })),
+  ].filter((it) => (!opts.table || it.table === opts.table) && (!opts.cloneSlug || it.clone_slug === opts.cloneSlug));
+  items.sort((a, b) => (a.table + a.id < b.table + b.id ? -1 : 1));
+  if (opts.limit !== undefined) items = items.slice(0, opts.limit);
+  const stateKey = (it: Item) => `${it.table}:${it.id}${it.kind === "hold" ? "#hold" : ""}`;
+
+  const rowsOf = new Map<string, Row>();
+  for (const table of MEDIA_TABLES) {
+    for (const r of await fetchByIds(ctx, table, items.filter((i) => i.table === table).map((i) => i.id))) rowsOf.set(`${table}:${r.id}`, r);
+  }
+
+  // resume: rows whose intent line exists but whose outcome was never recorded (crash after backup / after write / before ack)
+  const backups = readJsonl<BackupRec | ConflictRec>(file(ctx, "backup.jsonl"));
+  const lastRow = new Map<string, BackupRec>();
+  for (const b of backups) if (b.kind === "row") lastRow.set(`${b.table}:${b.id}${b.hold ? "#hold" : ""}`, b);
+  for (const [key, b] of lastRow) {
+    if (doneKeys.has(key)) continue;
+    const cur = rowsOf.get(key.replace("#hold", ""));
+    if (cur && holdsValues(cur as any, b.after)) { sum.recovered++; mark(key, "recovered", "found written after an interruption"); doneKeys.add(key); ctx.log(`recovered ${key}: write had landed`); }
+  }
+  // resume: rows applied/recovered whose bundle-item copy did not finish (items are copied again, guarded, so it is idempotent)
+  const st2 = readJsonl<StateEntry>(stateFile);
+  const itemsDone = new Set(st2.filter((s) => s.status === "items_done").map((s) => s.key));
+  const wrote = new Set(st2.filter((s) => s.status === "applied" || s.status === "recovered").map((s) => s.key));
+  for (const [key, b] of lastRow) {
+    if (b.table === "photos" && !b.hold && wrote.has(key) && !itemsDone.has(key)) {
+      await syncItems(ctx, b, sum, key); mark(key, "items_done"); itemsDone.add(key);
+    }
+  }
+
+  const todo = items.filter((it) => { const d = doneKeys.has(stateKey(it)); if (d) sum.skippedDone++; return !d; });
+  sum.selected = todo.length;
+  ctx.log(`apply: ${todo.length} reviewed rows (${sum.skippedDone} already done in this run), concurrency ${ctx.concurrency}, preview ${pv.sha256.slice(0, 12)}`);
+  let n = 0;
+  await pool(todo, ctx.concurrency, async (it) => {
+    const key = stateKey(it), rowKey = `${it.table}:${it.id}`;
+    const row = rowsOf.get(rowKey);
+    if (row && holdsValues(row as any, it.after) && (it.kind === "hold" || row.analysis_status === "analysed")) {
+      sum.alreadyApplied++; mark(key, "already_applied"); // a repeat apply of the same preview is a no-op
+    } else {
+      const why = bindConflict(it, row, byId.get(it.clone_id));
+      if (why) {
+        sum.conflicts++; sum.conflictReasons.push(`${key}: ${why}`); mark(key, "conflict", why); ctx.log(`conflict ${key}: ${why}`);
+      } else {
+        const r = await writeGuarded(ctx, it, key, it.kind === "hold");
+        if (r === "conflict") { sum.conflicts++; sum.conflictReasons.push(`${key}: row changed while writing`); mark(key, "conflict", "row changed while writing"); ctx.log(`conflict ${key}: row changed, left untouched`); }
+        else {
+          if (r === "applied") { it.kind === "hold" ? sum.holdsApplied++ : sum.applied++; } else sum.recovered++;
+          mark(key, r);
+          await ctx.step?.("before_items", key);
+          if (it.table === "photos" && it.kind === "proposal") { await syncItems(ctx, it, sum, key); await ctx.step?.("after_items", key); mark(key, "items_done"); }
+        }
+      }
+    }
+    n++;
+    await ctx.afterRow?.(n);
+  });
+  finish(ctx, sum);
+  return sum;
+}
+
+// ── tammy-style pilot: inventory + preview for ONE clone's photos, with a plan a person can read ───────────────
+export async function runPilot(ctx: Ctx, cloneSlug: string, expect?: number): Promise<{ summary: RunSummary; plan: string; planFile: string }> {
+  ensureDir(ctx);
+  const clones = await fetchClones(ctx.db);
+  const clone = clones.find((c) => c.slug === cloneSlug);
+  if (!clone) throw new Error(`no clone with slug ${cloneSlug}`);
+  const migrated = await isMigrated(ctx.db);
+  const photos = await fetchRows(ctx, "photos", migrated, clone.id);
+  if (expect !== undefined && photos.length !== expect) throw new Error(`pilot: ${cloneSlug} has ${photos.length} photos, expected ${expect}: refusing to preview a different set`);
+  const inv = await buildInventory(ctx, clone.id);
+  const summary = await runRepair(ctx, { mode: "preview", cloneSlug, table: "photos", scope: "all" });
+  const proposals = readJsonl<Proposal>(file(ctx, "preview.jsonl")).filter((p) => p.outcome === "proposed");
+  const holds = readJsonl<Hold>(file(ctx, "holds.jsonl"));
+  const plan = formatPilotPlan(cloneSlug, photos, proposals, holds, formatInventory(inv, ctx.costPhoto, ctx.costVideo), ctx.runId, summary);
+  const planFile = file(ctx, "PILOT-PLAN.txt");
+  writeFileSync(planFile, plan + "\n");
+  writeFileSync(file(ctx, "rows-before.json"), JSON.stringify(photos, null, 1));
+  return { summary, plan, planFile };
+}
+
+export function formatPilotPlan(slug: string, photos: Row[], proposals: Proposal[], holds: Hold[], inventoryText: string, runId: string, sum: RunSummary): string {
+  const pBy = new Map(proposals.map((p) => [p.id, p])), hBy = new Map(holds.map((h) => [h.id, h]));
+  const L: string[] = [
+    `PILOT PLAN: clone ${slug}, photos only (${photos.length}), run ${runId}`,
+    "PREVIEW ONLY. Nothing has been written. Apply uses these exact proposals (no second model call) and refuses any row that changed.",
+    "",
+    `proposals ${proposals.length}  holds ${holds.length}  failed ${sum.failed}  needs_review ${sum.needsReview}  model cost reported ${sum.costUsd.toFixed(4)} USD`,
+    "",
+    "INVENTORY", inventoryText.split("\n").slice(0, 8).join("\n"), "",
+  ];
+  const show = (v: unknown) => (v === null || v === undefined ? "(empty)" : typeof v === "string" ? JSON.stringify(v) : JSON.stringify(v));
+  for (const r of photos) {
+    const p = pBy.get(r.id), h = hBy.get(r.id);
+    L.push(`PHOTO ${r.id}  ${r.storage_path}  status ${r.analysis_status}${r.metadata_edited_at ? "  MANUALLY EDITED (never touched)" : ""}`);
+    if (p) {
+      L.push(`  PROPOSED (model ${p.model})`);
+      for (const k of p.changed) {
+        if (k === "analysed_at") continue;
+        L.push(`    ${k}:`, `      current : ${show(p.before[k])}`, `      proposed: ${show(p.after[k])}`);
+      }
+      for (const n of p.notes ?? []) L.push(`    note: ${n}`);
+    } else if (h) {
+      L.push(`  HOLD (${h.outcome}): ${h.reason}`);
+      L.push(`    analysis_status ${h.before.analysis_status} -> ${h.after.analysis_status}; analysis_error set; every metadata field kept as it is`);
+    } else if (!classify(r).eligible) L.push(`  NOT SELECTED: status ${r.analysis_status}${r.metadata_edited_at ? ", manually edited" : ""}`);
+    else L.push("  NO RESULT (not analysed in this run)");
+    L.push("");
+  }
+  L.push("HOLDS (status-only; stop these items being offered):");
+  if (!holds.length) L.push("  none");
+  for (const h of holds) L.push(`  ${h.id}  ${h.before.analysis_status} -> ${h.after.analysis_status}  reason: ${h.reason}`);
+  return L.join("\n");
 }
 
 export function formatSummary(s: RunSummary): string {
   return [
     `mode ${s.mode}  migrated ${s.migrated}`,
     `selected ${s.selected}  skipped-already-done ${s.skippedDone}`,
-    `proposed ${s.proposed}  applied ${s.applied}  conflicts ${s.conflicts}  failed ${s.failed}  needs_review ${s.needsReview}`,
+    `proposed ${s.proposed}  applied ${s.applied}  recovered ${s.recovered}  already-applied ${s.alreadyApplied}  conflicts ${s.conflicts}  failed ${s.failed}  needs_review ${s.needsReview}`,
+    `holds ${s.holds} previewed  ${s.holdsApplied} applied`,
     `bundle items updated ${s.itemsUpdated}  item conflicts ${s.itemConflicts}`,
     `model cost reported ${s.costUsd.toFixed(4)} USD`,
   ].join("\n");
@@ -503,9 +756,10 @@ export type RollbackSummary = { restored: number; alreadyRestored: number; chang
 export async function rollbackRun(ctx: Pick<Ctx, "db" | "log" | "stateDir" | "retries" | "retryBaseMs">, backupFile?: string): Promise<RollbackSummary> {
   const sum: RollbackSummary = { restored: 0, alreadyRestored: 0, changedSince: 0, itemsRestored: 0, errors: [] };
   const lines = readJsonl<BackupRec | ConflictRec>(backupFile ?? path.join(ctx.stateDir, "backup.jsonl"));
-  // a write that matched 0 rows left the row untouched: its backup line is not a change to undo
+  // A "conflict" line means the row held neither the old nor the new values when it was read back, so nothing of ours is expected there.
+  // It is still tried (guarded on the exact written values, so it can only match a row we wrote) and a miss is silent, never "changed since apply".
   const conflicted = new Set(lines.filter((l): l is ConflictRec => l.kind === "conflict").map((l) => `${l.run}:${l.table}:${l.id}`));
-  const recs = lines.filter((l): l is BackupRec => l.kind !== "conflict" && !conflicted.has(`${l.run}:${l.table}:${l.id}`));
+  const recs = lines.filter((l): l is BackupRec => l.kind !== "conflict");
   for (const b of recs.reverse()) {
     const isItem = b.kind === "item";
     try {
@@ -522,6 +776,7 @@ export async function rollbackRun(ctx: Pick<Ctx, "db" | "log" | "stateDir" | "re
       const cur = await r;
       const row = (cur.data ?? [])[0];
       if (row && Object.keys(b.before).every((k) => same(row[k], b.before[k]))) sum.alreadyRestored++;
+      else if (conflicted.has(`${b.run}:${b.table}:${b.id}`)) continue;
       else { sum.changedSince++; ctx.log(`not rolled back (changed since apply): ${b.table}/${b.id}`); }
     } catch (e) { sum.errors.push(`${b.table}/${b.id}: ${(e as Error).message}`); }
   }
