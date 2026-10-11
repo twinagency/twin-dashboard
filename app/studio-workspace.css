@@ -164,5 +164,9 @@ html {
 @media(max-width:600px) {
   .creator-studio-main { padding: 12px 12px 28px; }
   [data-studio-workspace="true"] .dashboard-topbar:has(> h1) { height: 56px; min-height: 56px; }
-  [data-studio-workspace="true"] .dashboard-topbar > .backdrop-blur-xl { width: 100%; justify-content: center; border: 0; padding: 0; background: transparent; }
+  [data-studio-workspace="true"] .dashboard-topbar > .workspace-account-controls { width: 100%; min-width: 0; justify-content: center; gap: 4px; border: 0; padding: 0; background: transparent; }
+  [data-studio-workspace="true"] .workspace-account-controls > :first-child { min-width: 0; flex: 1; gap: 6px; padding-inline: 6px; }
+  [data-studio-workspace="true"] .workspace-account-controls > :first-child > :nth-child(2) { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  [data-studio-workspace="true"] .workspace-account-controls > :first-child > svg { flex-shrink: 0; }
+  [data-studio-workspace="true"] .workspace-account-controls > :not(:first-child) { flex-shrink: 0; }
 }

@@ -34,7 +34,7 @@ status:params.has("paused")?"paused":"active",updated_at:"2026-10-11T00:00:00Z",
 business_username:"fixture_creator",ai_mode:"classic",charge_messages:true,starting_credits:10,credit_pack_size:30,
 credit_pack_price_stars:299,paywall_prime_enabled:true,paywall_prime_before:3,intake:{fields:{},answers:""},
 photos_enabled:true,videos_enabled:true,bundles_enabled:true,voice_enabled:false};
-const clones=[{id:clone.id,name:clone.name,color:"#768296"}];
+const clones=[{id:clone.id,name:params.get("longname")==="true"?"Fixture Creator With A Very Long Display Name":clone.name,color:"#768296"}];
 function App(){const pathname=usePathname();return <Access agencyName={agencyName} canManage={canManage}><Currency usdPerStar={.02}><Blur>
 <Workspace activeCloneId={clone.id}><Sidebar clones={clones} activeCloneId={clone.id}/><div className="flex h-screen min-w-0 flex-1 flex-col overflow-hidden">
 <header className="dashboard-mobile-header flex shrink-0 items-center justify-between border-b border-white/12 px-4 py-3 lg:hidden">
@@ -92,7 +92,12 @@ const origin=`http://127.0.0.1:${server.address().port}`,external=[],snapshots=[
 const domains=["Identity","Configuration","Monetization","Advanced","System view","PPV library"];
 const payload=page=>page.evaluate(()=>Array.from(new FormData(document.getElementById("creator-control-plane-form"))).map(([k,v])=>[k,typeof v==="string"?v:"[file]"]).sort((a,b)=>a[0].localeCompare(b[0])));
 const noOverflow=async(page,label)=>{const size=await page.evaluate(()=>({document:document.documentElement.scrollWidth,viewport:innerWidth,main:document.querySelector("main.dashboard-main").scrollWidth,client:document.querySelector("main.dashboard-main").clientWidth}));
-assert.ok(size.document<=size.viewport+1&&size.main<=size.client+1,`${label}: overflow ${JSON.stringify(size)}`)};
+assert.ok(size.document<=size.viewport+1&&size.main<=size.client+1,`${label}: overflow ${JSON.stringify(size)}`);
+const controls=await page.locator(".workspace-account-controls").evaluateAll(elements=>elements.flatMap(element=>{
+const container=element.getBoundingClientRect();return Array.from(element.children).filter(child=>child.getClientRects().length).map(child=>{
+const rect=child.getBoundingClientRect();return {left:rect.left,right:rect.right,start:container.left,end:container.right}})}));
+assert.ok(controls.every(rect=>rect.left>=rect.start-1&&rect.right<=rect.end+1),`${label}: clipped account controls ${JSON.stringify(controls)}`)};
+const capture=async(page,file)=>{await page.locator("main.dashboard-main").evaluate(element=>element.scrollTop=0);await page.screenshot({path:path.join(out,file)})};
 let browser;
 try{
 if(process.argv.includes("--build-only"))console.log("PASS: shared operator components and styles compile.");
@@ -103,8 +108,9 @@ for(const width of [390,1440,...(brand==="Moxy"?[320]:[])]){
 const context=await browser.newContext({viewport:{width,height:900},colorScheme:"light",reducedMotion:"reduce"});
 await context.route("**/*",route=>{const url=new URL(route.request().url());if(url.origin!==origin){external.push(url.href);return route.abort()}return route.continue()});
 const page=await context.newPage(),errors=[];page.on("pageerror",e=>errors.push(String(e)));
-const query=new URLSearchParams({brand,tab:"identity"});if(width===320)query.set("paused","true");
+const query=new URLSearchParams({brand,tab:"identity"});if(width===320){query.set("paused","true");query.set("longname","true")}
 await page.goto(`${origin}/clones/${creatorId}?${query}`,{waitUntil:"networkidle"});
+await page.addStyleTag({content:"*,*::before,*::after{transition:none!important;animation:none!important}"});
 await page.locator('[data-creator-studio="identity"]').waitFor();
 assert.equal(await page.locator("[data-intelligence-workspace]").count(),0,"Demo policies do not enter partner or other-creator forms");
 assert.equal(await page.locator('[data-studio-workspace="true"]').count(),1);
@@ -115,7 +121,7 @@ if(brand==="LYNQ")assert.equal(color,"rgb(41, 59, 234)","LYNQ blue");
 if(brand==="Jess and Kate AI")assert.equal(color,"rgb(122, 23, 52)","Cherry branding");
 await noOverflow(page,`${brand} ${width} identity`);
 const slug=brand.toLowerCase().replaceAll(" ","-");
-await page.screenshot({path:path.join(out,`${slug}-${width}-identity.png`)});
+await capture(page,`${slug}-${width}-identity.png`);
 await page.getByRole("navigation",{name:"Identity sections",exact:true}).getByRole("button",{name:"Profile",exact:true}).click();
 const draft=page.locator('input[name="stage_name"]');await draft.fill("Unsaved creator draft");
 const submitted=await payload(page);assert.ok(submitted.length>150);await draft.evaluate(e=>window.__draftNode=e);
@@ -123,7 +129,7 @@ for(const label of domains){
 await nav.getByRole("button",{name:label,exact:true}).click();await noOverflow(page,`${brand} ${width} ${label}`);
 assert.deepEqual(await payload(page),submitted,`${brand} ${label}: complete payload and draft retained`);
 assert.equal(await draft.evaluate(e=>e===window.__draftNode),true);
-if(["Configuration","Monetization"].includes(label))await page.screenshot({path:path.join(out,`${slug}-${width}-${label.toLowerCase()}.png`)});
+if(["Configuration","Monetization"].includes(label))await capture(page,`${slug}-${width}-${label.toLowerCase()}.png`);
 }
 await nav.getByRole("button",{name:"Monetization",exact:true}).click();
 const preview=await page.locator("[data-studio-money=preview]").innerText();assert.match(preview,/Fixture Creator/);assert.doesNotMatch(preview,/Brianna|BR/);
