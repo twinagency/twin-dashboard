@@ -1,3 +1,5 @@
+import { getOverviewRankings } from "./overview-rankings";
+import type { OverviewRankings } from "./overview-rankings-model";
 import { supabaseAdmin } from "./supabase";
 import { selectAllRows } from "./select-all";
 import { chartColorForClone, profileImagePathForClone } from "./colors";
@@ -110,6 +112,8 @@ export type RecentTransaction = {
 };
 
 export type DashboardData = {
+  rankings?: OverviewRankings;
+  rankingsError?: string;
   period: Period;
   clones: CloneSummary[];
   bucketLabels: string[];
@@ -231,6 +235,8 @@ export async function getDashboard(period: Period, range?: DateRange, nowMs = Da
     kind: string | null;
     feature: string | null;
     invoice_payload: string | null;
+    media_id?: string | null;
+    media_type?: string | null;
   };
   // PAGED, and this is the revenue number itself. Unpaged, this read stopped at
   // the PostgREST cap and every total on the page was a fraction of the truth,
@@ -241,7 +247,7 @@ export async function getDashboard(period: Period, range?: DateRange, nowMs = Da
   // came back was arbitrary - which is how a WIDER window could show LESS money
   // than a narrower one, the symptom that gave it away.
   async function loadPurchases(): Promise<PurchaseRow[]> {
-    const COLS = "id,clone_id,amount_stars,paid_at,telegram_id,kind,feature,invoice_payload";
+    const COLS = "id,clone_id,amount_stars,paid_at,telegram_id,kind,feature,invoice_payload,media_id,media_type";
     const COLS_LEGACY = "id,clone_id,amount_stars,paid_at,telegram_id,kind,invoice_payload";
     // selectAllRows reports a failed read as an empty result, which here would
     // read as "no revenue" rather than "column not there yet". So the missing
@@ -688,7 +694,11 @@ export async function getDashboard(period: Period, range?: DateRange, nowMs = Da
   const totalBuyers = fleetTxPerFan.size;
   const fleetRepeatBuyers = repeatBuyerCount(fleetTxPerFan);
 
+  let rankings: OverviewRankings | undefined;
+  let rankingsError: string | undefined;
+  try { rankings = await getOverviewRankings(purchases, clones); } catch { rankingsError = "Rankings could not be refreshed. Please try again."; }
   return {
+    rankings, rankingsError,
     period,
     clones: summaries,
     bucketLabels: labels,

@@ -43,6 +43,11 @@ async function main() {
     const earnings = await dashboard(new NextRequest("https://dashboard.lynqai.co/api/dashboard?period=1M&fresh=1"));
     const snapshot = await earnings.json();
     assert.equal(earnings.status, 200, "Moxy overview earnings failed");
+    assert.ok(!snapshot.rankingsError, 'Live rankings query failed');
+    assert.ok(snapshot.rankings?.fans.length, 'Top fans missing from live ledger');
+    assert.ok(snapshot.rankings?.content.length, 'Best-selling content missing from live ledger');
+    assert.ok(snapshot.rankings.fans.every((f: {cloneId:string})=>moxy.cloneIds.includes(f.cloneId)), 'Fan ranking escaped agency scope');
+    assert.ok(snapshot.rankings.content.every((c: {cloneId:string;purchases:number})=>moxy.cloneIds.includes(c.cloneId)&&c.purchases>0), 'Content ranking escaped agency scope');
     assert.ok(snapshot.clones.every((c: {id:string}) => moxy.cloneIds.includes(c.id)), "Overview earnings escaped agency scope");
     const total = overview.reduce((sum, c) => sum + (snapshot.perClone[c.id]?.stars ?? 0), 0);
     assert.ok(Math.abs(total - snapshot.totals.stars) < 0.01, "Overview creator totals disagree with ledger");
