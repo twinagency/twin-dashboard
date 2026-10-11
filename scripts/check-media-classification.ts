@@ -66,6 +66,37 @@ assert.equal(tooMuch.status, "needs_review");
 assert.notEqual(tooMuch.fields.explicitness, "none", "unclear nipples must not read as explicitness none");
 assert.match(tooMuch.issues[0], /nipples/);
 
+// ---- worn garments are not bare buttocks (round 2) ----
+const thong = norm({ lingerie: "yes", suggestive_pose: "yes" }, { identifying: "A woman in a red thong is seen from behind on a bed.", details: "She wears a red thong, buttocks visible from behind.", short_label: "red thong rear", visible: ["red thong", "bed"], tags: ["ass", "lingerie", "bed"] });
+assert.equal(thong.fields.is_nude, false, "a worn thong is not nudity");
+assert.equal(thong.fields.nsfw, false);
+assert.equal(thong.fields.explicitness, "suggestive");
+assert.ok(!thong.fields.tags.includes("ass"), "no ass tag without bare_buttocks yes");
+assert.ok(thong.fields.tags.includes("lingerie"));
+assert.equal(thong.status, "analysed");
+// backstop: the model says bare_buttocks yes while the prose names a worn thong -> review, never a silent nude flag write
+const thongYes = norm({ lingerie: "yes", bare_buttocks: "yes" }, { identifying: "A woman in a pink thong kneels on a bed.", details: "She wears a pink thong.", short_label: "pink thong", visible: ["pink thong", "bed"], tags: [] });
+assert.equal(thongYes.status, "needs_review");
+assert.match(thongYes.issues.join(" "), /thong/);
+const pulled = norm({ lingerie: "yes", bare_buttocks: "yes" }, { identifying: "A woman bends over with her thong pulled down.", details: "The thong is pulled down to her thighs.", short_label: "thong pulled down", visible: ["thong pulled down"], tags: [] });
+assert.equal(pulled.status, "analysed", "a garment pulled down leaves the buttocks bare");
+assert.equal(pulled.fields.is_nude, true);
+
+// ---- anus yes contradicted by the prose -> review; male genitals never get the pussy tag ----
+const anusNo = norm({ anus: "yes", genitals: "yes", nipples: "no" }, { identifying: "A nude woman lies on a bed.", details: "Her anus is not visible.", short_label: "nude bed", visible: ["bed"], tags: [] });
+assert.equal(anusNo.status, "needs_review");
+assert.match(anusNo.issues.join(" "), /anus/);
+const maleGen = norm({ genitals: "yes", sexual_activity: "yes" }, { identifying: "A woman kneels in front of a tattooed man.", details: "A woman performs a sex act on the man.", short_label: "couple", visible: ["tattooed man", "kneeling woman"], tags: ["pussy"] });
+assert.ok(!maleGen.fields.tags.includes("pussy"), "no pussy tag when a man is the described subject");
+assert.equal(maleGen.fields.is_nude, true);
+const femGen = norm({ genitals: "yes" }, { identifying: "A nude woman lies on a bed.", details: "She lies on white sheets.", short_label: "nude bed", visible: ["bed"], tags: [] });
+assert.ok(femGen.fields.tags.includes("pussy"));
+
+// ---- prompt wording ----
+assert.match(MEDIA_CLASSIFICATION_PROMPT, /thong, G-string, bikini bottom/);
+assert.match(MEDIA_CLASSIFICATION_PROMPT, /photographing herself in a mirror/);
+assert.match(MEDIA_CLASSIFICATION_PROMPT, /nipple or areola can be seen around, between or under the fingers/);
+
 // ---- facts shape (the contract) ----
 const f = shirt.fields.visual_facts;
 assert.equal(f.v, 2);

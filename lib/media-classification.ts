@@ -18,9 +18,11 @@ evidence: an object with ALL these keys, each "yes", "no" or "unclear": ${FACT_K
 - "yes": clearly visible, uncovered, unmistakable.
 - "no": that part of the body, garment or object would be in frame and is plainly not there, or is plainly covered.
 - "unclear": cropped out, hidden, blurred, too small, ambiguous or only guessed. Never answer "no" for something you cannot actually see; never answer "yes" for something you infer.
-- nipples needs a visibly uncovered nipple or areola. Cleavage, underboob, a low neckline, an open shirt, a covered outline or a hand over the breasts is "no". genitals and anus need the actual uncovered anatomy, not its covered outline. bare_buttocks needs clearly uncovered buttocks, not a swimsuit edge or a clothed shape. Check every body part that is in frame before answering.
+- nipples needs a visibly uncovered nipple or areola. Cleavage, underboob, a low neckline, an open shirt or a covered outline is "no". A hand or arm over the breasts is "no" only when the hand or fabric really hides the nipple and areola; if any nipple or areola can be seen around, between or under the fingers, or the breast is lifted out of a cup with the nipple showing, it is "yes". Judge each breast separately.
+- genitals and anus need the actual uncovered anatomy, not its covered outline. anus is "yes" only when the anal opening itself can be seen; buttocks, a spread pose or a rear view alone are not enough. Never write that the anus is not visible while answering "yes".
+- bare_buttocks is "yes" only when NO garment covers the buttocks (nothing worn, or the garment is pulled down or aside). A thong, G-string, bikini bottom, briefs or other underwear that is worn counts as covering them even when the cheeks are mostly visible from behind: answer "no" and name the garment in visible. Check every body part that is in frame before answering.
 - full_nudity needs a clearly unclothed body. sexual_activity needs a visible sexual act or a toy in use, not a pose or an expression. sex_toy needs a visible sex toy.
-- swimwear and lingerie are different garments; use both only if two separate garments are visible. mirror_reflection needs an actual visible mirror or reflection; a handheld selfie is not one.
+- swimwear and lingerie are different garments; use both only if two separate garments are visible. mirror_reflection is "yes" when a mirror or reflective surface is visible and she or her phone is seen in it, including a person photographing herself in a mirror with the phone visible in the reflection. A selfie taken directly at arm's length with no mirror in frame is "no".
 - suggestive_pose: a provocative pose or clothing, with no uncovered anatomy required.
 
 identifying: ONE factual sentence, at most 140 characters, that identifies this exact item: the woman (hair, build), the main garment or its absence, and the pose or setting. It is used as the label for this item in later conversation, so it must be specific. Example: "A blonde woman in a grey sweatshirt and sweatpants takes a mirror selfie on a wooden floor."
@@ -137,6 +139,12 @@ const TAGS_FROM_YES: [FactKey, string[]][] = [
   ["swimwear", ["bikini"]], ["lingerie", ["lingerie"]], ["mirror_reflection", ["mirror_selfie"]],
 ];
 
+const ANUS_NOT_VISIBLE = /\b(?:anus|anal|asshole)\b[^.]*\b(?:not|isn'?t|no longer|barely)\b[^.]*\b(?:visible|seen|shown)\b|\b(?:not|no|nor)\b[^.]*\b(?:visible|seen)\b[^.]*\b(?:anus|asshole)\b|\bno (?:visible )?(?:anus|asshole)\b/i;
+const WORN_BOTTOM = /\b(?:thong|g-?string|bikini (?:bottoms?|briefs?)|bikini bottom|panties|underwear|briefs|knickers|lingerie bottoms?)\b/i;
+const PULLED_DOWN = /\b(?:pulled|pushed|moved|slid|tugged|yanked) (?:down|aside|off|to the side)|\b(?:down|aside|off) (?:around|at) (?:her )?(?:thighs|knees|ankles)\b|\bwithout (?:a )?(?:thong|underwear|panties)\b/i;
+// The tag vocabulary has no male-genital tag, and "pussy" on a man's genitals is wrong.
+const MALE_WORDS = /\b(?:man|men|male|guy|boy|penis|cock|dick|him|his)\b/i;
+
 export type NormalizeOptions = { frames?: number };
 export type NormalizedMedia = {
   fields: Omit<AnalysisFields, "caption">;
@@ -191,18 +199,31 @@ export function normalizeMediaClassification(value: unknown, opts: NormalizeOpti
     autoDesc = visible[0]?.slice(0, 60) || "needs review";
   }
 
+  // Backstops for known model slips. They never invent facts: they drop an unlicensed tag or send the row to review.
+  const issuesExtra: string[] = [];
+  const proseAll = `${identifying} ${details} ${visible.join(". ")}`;
+  const blocked = new Set<string>();
+  if (evidence.anus === "yes" && ANUS_NOT_VISIBLE.test(`${j.identifying} ${typeof j.details === "string" ? j.details : ""} ${(Array.isArray(j.visible) ? j.visible : []).join(". ")}`)) {
+    issuesExtra.push("anus is yes but the description says it is not visible");
+  }
+  if (evidence.bare_buttocks === "yes" && WORN_BOTTOM.test(proseAll) && !PULLED_DOWN.test(proseAll)) {
+    issuesExtra.push("bare_buttocks is yes but a worn thong/bottom/underwear is described");
+  }
+  if (evidence.genitals === "yes" && MALE_WORDS.test(`${identifying} ${visible.join(". ")}`)) blocked.add("pussy");
+
   const proposed = (Array.isArray(j.tags) ? j.tags : []).filter((t): t is string => typeof t === "string" && TAG_SET.has(t));
   const licensed = new Set<string>(TAGS_FROM_YES.filter(([k]) => evidence[k] === "yes").flatMap(([, t]) => t));
   const needsEvidence = new Set<string>(TAGS_FROM_YES.flatMap(([, t]) => t));
   if (evidence.full_nudity === "yes" && nude) licensed.add("full_nude");
   needsEvidence.add("full_nude");
+  for (const t of blocked) licensed.delete(t);
   const tags = [...new Set([...proposed.filter((t) => !needsEvidence.has(t)), ...licensed])];
 
   const tail = [video ? `Based on ${opts.frames} sampled frames.` : "", notVisibleLine(evidence)].filter(Boolean);
   const visual_description = [identifying, details, ...tail].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
 
   const facts: VisualFacts = { v: ANALYSIS_VERSION, evidence, visible, ...(video ? { frames: opts.frames } : {}) };
-  const issues = unclear.length ? [`unclear: ${unclear.join(", ")}`] : [];
+  const issues = [...(unclear.length ? [`unclear: ${unclear.join(", ")}`] : []), ...issuesExtra];
   return {
     fields: {
       auto_desc: autoDesc,
@@ -213,7 +234,7 @@ export function normalizeMediaClassification(value: unknown, opts: NormalizeOpti
       is_nude: nude,
       nsfw: explicit,
     },
-    status: contradicted || unclear.length ? "needs_review" : "analysed",
+    status: contradicted || unclear.length || issuesExtra.length ? "needs_review" : "analysed",
     contradictions,
     issues,
   };
