@@ -68,3 +68,14 @@
 @media(min-width:1650px){.creatorHero{min-height:290px}.heroPortrait{height:258px}}
 @media(max-width:1000px){.creatorHero{grid-template-columns:minmax(0,1fr) 40%;gap:15px}.creatorHero .heroCopy{padding:20px}.creatorHero .heroCopy h1{font-size:34px}.heroPortrait{height:224px}}
 @media(max-width:700px){.creatorHero{grid-template-columns:minmax(0,1fr) 40%;min-height:210px;gap:10px;padding:12px}.creatorHero .heroCopy{padding:12px 4px 12px 8px}.creatorHero .heroCopy h1{font-size:29px;line-height:1.08}.creatorHero .heroCopy>span{font-size:7px;letter-spacing:.13em}.creatorHero .heroCopy p{display:none}.creatorHero .heroButton{font-size:11px;padding:9px 13px;gap:10px;margin-top:20px}.heroPortrait{height:186px;border-radius:9px}.creatorHero .heroPortrait>.photoFallback{font-size:40px}.photoNote{font-size:8px;padding:0 10px}.libraryTile{height:197px}.libraryTile img,.libraryTile>.photoFallback{height:145px;min-height:145px}.libraryTile>span:not(.photoFallback){padding:8px}.libraryTile strong{font-size:10px}.libraryTile small{font-size:8px}}
+
+/* Assigned creator shortcuts replace the agency banner wordmark. */
+.agencyCreatorPortraits{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:18px 20px;width:100%;max-width:390px;justify-self:center;align-items:start}
+.agencyCreatorLink{display:flex;flex-direction:column;align-items:center;gap:7px;min-width:0;padding:0;border:0;background:transparent;color:#44303f;cursor:pointer;border-radius:12px}
+.agencyCreatorLink:focus-visible{outline:2px solid #d90b68;outline-offset:5px}
+.agencyCreatorLink:disabled{cursor:wait}
+.agencyCreatorAvatar,.portraitFrame.agencyCreatorAvatar{position:relative;display:flex;align-items:center;justify-content:center;flex-shrink:0;width:68px;height:68px;border-radius:50%;overflow:hidden;background:#f1d9e5;border:3px solid #fff;color:#b32162;font-size:21px;font-weight:650;box-shadow:0 3px 10px #542d4012}
+.agencyCreatorLink:hover .agencyCreatorAvatar{box-shadow:0 0 0 2px #e93f87,0 3px 10px #542d4012}
+.agencyCreatorName{font-size:11px;font-weight:550;line-height:1.3;text-align:center;overflow-wrap:anywhere}
+@media(max-width:950px){.agencyCreatorPortraits{gap:16px 10px}.agencyCreatorAvatar,.portraitFrame.agencyCreatorAvatar{width:60px;height:60px}.agencyCreatorName{font-size:10px}}
+@media(max-width:700px){.agencyHero{grid-template-columns:minmax(0,1fr);gap:22px;padding:24px}.agencyCreatorPortraits{max-width:360px;gap:16px 12px}.agencyCreatorAvatar,.portraitFrame.agencyCreatorAvatar{width:60px;height:60px}.agencyCreatorName{font-size:11px}}

@@ -1,5 +1,5 @@
 {
-  "reason": "Release saved AI visual descriptions with updated exact agency projection checks",
-  "source_commit": "a00f5cc5143f6471ff4419b0465bd0df25e15c36",
-  "requested_at": "2026-10-11T07:43:07.898Z"
+  "reason": "Replace the agency Overview logo with assigned creator portrait shortcuts",
+  "source_commit": "07c541fea82a3b8badc4123cf23e0c46a48b8df1",
+  "requested_at": "2026-10-11T08:40:26.787Z"
 }
