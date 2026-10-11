@@ -86,7 +86,7 @@ if(url.pathname.startsWith("/api/")){requests.push({method:req.method,path:url.p
 if(url.pathname==="/api/models")return res.end("[]");if(url.pathname==="/api/fx")return res.end(JSON.stringify({usd_to_aud:1.4}));
 res.statusCode=403;return res.end(JSON.stringify({error:"No live service in this fixture"}))}
 if(url.pathname.startsWith("/moxy/")&&url.pathname.endsWith(".svg")){res.setHeader("Content-Type","image/svg+xml");return res.end(readFileSync(path.join(root,"public",url.pathname)))}
-if(url.pathname.startsWith("/brand/")&&/\.(png|svg)$/.test(url.pathname)){res.setHeader("Content-Type",url.pathname.endsWith(".svg")?"image/svg+xml":"image/png");return res.end(readFileSync(path.join(root,"public",url.pathname)))}
+if(url.pathname.startsWith("/brand/")&&/\.(png|svg|webp)$/.test(url.pathname)){res.setHeader("Content-Type",url.pathname.endsWith(".svg")?"image/svg+xml":url.pathname.endsWith(".webp")?"image/webp":"image/png");return res.end(readFileSync(path.join(root,"public",url.pathname)))}
 if(url.pathname.startsWith("/dashboard/fans/")||url.pathname==="/favicon.ico"){res.statusCode=204;return res.end()}
 res.setHeader("Content-Type","text/html");res.end(html)});
 await new Promise(resolve=>server.listen(0,"127.0.0.1",resolve));
@@ -116,6 +116,7 @@ await page.addStyleTag({content:"*,*::before,*::after{transition:none!important;
 await page.locator('[data-creator-studio="identity"]').waitFor();
 assert.equal(await page.locator("[data-intelligence-workspace]").count(),0,"Demo policies do not enter partner or other-creator forms");
 assert.equal(await page.locator('[data-studio-workspace="true"]').count(),1);
+assert.ok(await page.locator('img[alt="FLIRT"]').first().evaluate(image=>image.complete&&image.naturalWidth>0),"Existing FLIRT wordmark loads");
 const nav=page.getByRole("navigation",{name:"Control Panel sections",exact:true});
 const color=await nav.getByRole("button",{name:"Identity",exact:true}).evaluate(e=>getComputedStyle(e).borderTopColor);
 if(brand==="Moxy")assert.equal(color,"rgb(117, 38, 56)","Moxy burgundy");
@@ -142,6 +143,7 @@ if(brand==="Moxy")assert.equal(await page.locator(".dashboard-mobile-header img"
 await page.getByRole("button",{name:"Open navigation",exact:true}).click();await page.locator("#mobile-sidebar").waitFor();
 assert.deepEqual(await page.locator("#mobile-sidebar nav a").allTextContents(),["Overview","Creators","Live Telegram","Content","Post Stories","Accounts","Invite Creator","Edit","Flows","Logs","Sequences","Info"]);
 assert.doesNotMatch(await page.locator("#mobile-sidebar nav").innerText(),/CRM|More/);
+assert.deepEqual(await page.locator('#mobile-sidebar nav a[aria-current="page"]').allTextContents(),["Edit"]);
 if(brand!=="Twin")assert.equal(await page.locator("#mobile-sidebar").getByRole("link",{name:"Earnings Split",exact:true}).count(),0);
 await page.locator("#mobile-sidebar").getByRole("button",{name:"Close navigation",exact:true}).click();
 }

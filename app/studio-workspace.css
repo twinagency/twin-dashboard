@@ -80,6 +80,9 @@ html {
 [data-studio-workspace="true"] .dashboard-topbar > .backdrop-blur-xl { background: white; border-color: var(--color-line); box-shadow: none; border-radius: 10px; }
 [data-studio-workspace="true"] .dashboard-topbar > .sm\:block:last-child { display: none; }
 [data-workspace-brand="twin"] .dashboard-mobile-header { background: #111f34; box-shadow: none; }
+[data-workspace-brand="flirt"] .dashboard-sidebar nav a { color: #c9bdcc; }
+[data-workspace-brand="flirt"] .dashboard-sidebar nav a svg { color: inherit; }
+[data-workspace-brand="flirt"] .dashboard-sidebar nav a[aria-current="page"] { color: white; background: linear-gradient(110deg,#ee217a,#cd075c); box-shadow: 0 5px 16px #e8136330; }
 .studio-sidebar-nav { scrollbar-width: thin; scrollbar-color: #ffffff35 transparent; }
 .studio-sidebar-nav [data-nav-group] > div:first-child > div > a { white-space: nowrap; }
 

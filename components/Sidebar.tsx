@@ -262,7 +262,7 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
   // /creator is the creator Earnings page, not a parent navigation section.
   // Exact matching prevents Earnings staying highlighted on all five child
   // routes at the same time as their own item.
-  const isGlobalActive = (href: string) => pathname === href || (!isCreator && href !== "/" && pathname.startsWith(href + "/"));
+  const isGlobalActive = (href: string) => (pathname === href || (!isCreator && href !== "/" && pathname.startsWith(href + "/"))) && !(href === "/clones" && isCreatorStudioRoute(pathname));
   const onConfigurePage = isCreatorStudioRoute(pathname);
   const pickClone = () => { onNavigate?.(); window.setTimeout(() => openCloneSwitcher(), 0); };
 
@@ -280,7 +280,7 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
       return <div aria-disabled="true" className={rowClass + " cursor-not-allowed text-white/45"}><Icon d={PATHS[link.icon]} className="h-[18px] w-[18px] text-white/35" /><span className="flex-1">{link.label}</span><span className="whitespace-nowrap rounded border border-white/15 px-1.5 py-0.5 text-[9px] font-medium text-white/60">Not available</span></div>;
     }
     if (link.kind === "tab") {
-      const active = onConfigurePage && activeTab === link.tab;
+      const active = onConfigurePage && (isFlirtOwner && link.tab === "identity" ? activeTab !== "ppvs" : activeTab === link.tab);
       if (!activeCloneId) return <button type="button" onClick={pickClone} title="Pick a creator first" className={rowClass + " " + colors.idle}>{navLabel(link, colors)}</button>;
       return <Link href={`/clones/${activeCloneId}?tab=${link.tab}`} onClick={onNavigate} aria-current={active ? "page" : undefined} className={rowClass + " " + (active ? colors.active : colors.idle)}>{navLabel(link, colors)}</Link>;
     }
