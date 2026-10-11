@@ -4,7 +4,7 @@ import { agencyDashboardPath, isPartnerPreview } from "@/lib/agency-policy";
 import { isMoxy } from "@/lib/agency-brand";
 import { JESS_KATE_PORTAL, TETHER_PORTAL } from "@/lib/partner-portals";
 import { CREATOR_DASHBOARD_NAV } from "@/lib/creator-dashboard-policy";
-import { dashboardCreatorHref, isBriannaStudioRoute, isBriannaWorkspaceRoute } from "@/lib/dashboard-creator-route";
+import { dashboardCreatorHref, isCreatorStudioRoute, isDashboardWorkspaceRoute } from "@/lib/dashboard-creator-route";
 
 // Left sidebar app shell (desktop). "Create new clone" is always the first
 // thing in it, followed by the operating views. Internal admin tools are
@@ -262,9 +262,6 @@ const STUDIO_SIDEBAR_THEME = `
 .studio-wordmark{display:flex;flex-direction:column;gap:3px;color:#fff;line-height:1}.studio-wordmark strong{font-family:var(--font-display),var(--font-sans),sans-serif;font-size:46px;letter-spacing:-.055em;font-weight:740}.studio-wordmark>span{font-size:10px;letter-spacing:.3em;font-weight:450;padding-left:3px}
 .studio-sidebar-nav{padding:0 12px 14px!important;min-height:0}.studio-sidebar-nav [data-admin-navigation]>[data-nav-group]{margin-top:4px}.studio-sidebar-nav [data-nav-group]>div:first-child{gap:0}.studio-sidebar-nav [data-nav-group]>div:first-child>a,.studio-sidebar-nav [data-nav-group]>div:first-child>div>a,.studio-sidebar-nav [data-nav-group]>div:first-child>button:first-child,.studio-sidebar-nav [data-nav-group="More"]>button{min-height:50px;padding:11px 12px;border-radius:11px;font-size:12px;font-weight:450;gap:12px;color:#e6ebf5;line-height:20px}
 .studio-sidebar-nav svg{color:currentColor!important;stroke-width:1.65;width:20px;height:20px}.studio-sidebar-nav [data-nav-group]>div:first-child>button[aria-controls]{width:25px;color:#acb9cd}.studio-sidebar-nav [data-nav-group]>div:first-child>button[aria-controls]>svg{width:13px;height:13px}.studio-sidebar-nav [data-nav-group]>div:first-child>button:first-child[aria-controls]{width:100%}.studio-sidebar-nav [data-nav-group]>div:first-child>button:first-child[aria-controls]>svg:first-child{width:20px;height:20px}.studio-sidebar-nav [data-admin-navigation] a[aria-current="page"]{color:#fff;background:linear-gradient(145deg,#2682ff,#0962ee);box-shadow:inset 0 1px #ffffff24,0 5px 16px #0068ff30;--tw-ring-shadow:0 0 #0000}.studio-sidebar-nav [data-nav-group="Fan Profiles"],.studio-sidebar-nav [data-nav-group="Automations"],.studio-sidebar-nav [data-nav-group="Agency Access"]{margin-top:17px!important}.studio-sidebar-nav [data-nav-group="More"]{border-top:0;padding-top:0;margin-top:4px!important}.studio-sidebar-nav [data-nav-group]>div[hidden]{display:none}.studio-sidebar-nav a:hover,.studio-sidebar-nav button:hover{color:#fff;background-color:#ffffff0b}.studio-account{flex-shrink:0;margin:0 16px 34px;padding:27px 3px 0;border-top:1px solid #ffffff22;display:flex;align-items:center;gap:10px;color:#eef3fa;font-size:11px}.studio-account>img{width:46px;height:46px;object-fit:cover;display:block;border-radius:50%;border:2px solid #ffffffbf}.studio-account>span{flex:1}.studio-account small{display:none}.studio-account>svg{color:#a7b8ce}
-.creator-studio-main{max-width:none;padding:10px 28px 32px 22px;background:linear-gradient(120deg,#fcfbf9,#fbfcfe 55%,#f9fbfd);scrollbar-gutter:stable}
-@media(max-width:1023px){.creator-studio-main{padding:16px 18px 35px}}
-@media(max-width:500px){.creator-studio-main{padding:12px 12px 28px}}
 @media(max-height:770px){.studio-brand-row{min-height:88px;padding-top:17px;padding-bottom:14px}.studio-wordmark strong{font-size:39px}.studio-sidebar-nav [data-nav-group]>div:first-child>div>a,.studio-sidebar-nav [data-nav-group]>div:first-child>button:first-child,.studio-sidebar-nav [data-nav-group="More"]>button{min-height:38px;padding-top:8px;padding-bottom:8px}.studio-sidebar-nav [data-nav-group="Fan Profiles"],.studio-sidebar-nav [data-nav-group="Automations"],.studio-sidebar-nav [data-nav-group="Agency Access"]{margin-top:10px!important}}
 `;
 
@@ -386,7 +383,7 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
   const configurationCloneId = pathname.match(/^\/clones\/([0-9a-f-]{36})(?:\/|$)/i)?.[1] ?? activeCloneId;
   const [moreOpen, setMoreOpen] = useState(false);
   const [fullNavigation, setFullNavigation] = useState(false);
-  const studioRoute = isBriannaWorkspaceRoute(pathname, searchParams.get("creator"), activeCloneId);
+  const studioRoute = isDashboardWorkspaceRoute(pathname);
   const studioNavigation = isAdmin && studioRoute && !fullNavigation;
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   useEffect(() => {
@@ -403,9 +400,9 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
   // Exact matching prevents Earnings staying highlighted on all five child
   // routes at the same time as their own item.
   const isGlobalActive = (href: string) => {
-    if (isAdmin && href === "/clones" && isBriannaStudioRoute(pathname, searchParams.get("tab"), searchParams.get("sub"))) return true;
+    if (isAdmin && href === "/clones" && isCreatorStudioRoute(pathname)) return false;
     if (isAdmin && ["/clones", "/agency-admin"].includes(href)) return pathname === href;
-    if (moxyNavigation && href === "/clones" && pathname.startsWith("/clones/") && ["ppvs", "identity"].includes(activeTab)) return false;
+    if (moxyNavigation && href === "/clones" && isCreatorStudioRoute(pathname)) return false;
     return pathname === href || (!isCreator && href !== "/" && pathname.startsWith(href + "/"));
   };
   const onConfigurePage = configurationCloneId ? pathname === `/clones/${configurationCloneId}` : false;
@@ -432,7 +429,7 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
       // The Dashboard owns its creator selection and has no global picker.
       // Use its selected creator, never a stale scope cookie or an unhandled event.
       if (isAdmin && pathname === "/dashboard") return <Link href={dashboardCreatorHref(searchParams.get("creator"), link.tab)} onClick={onNavigate} className={rowClass + " " + colors.idle}>{navLabel(link, colors)}</Link>;
-      const active = onConfigurePage && (isAdmin && link.tab === "identity" ? activeTab !== "ppvs" : activeTab === link.tab);
+      const active = onConfigurePage && ((isAdmin || moxyNavigation) && link.tab === "identity" ? activeTab !== "ppvs" : activeTab === link.tab);
       if (!configurationCloneId) return <button type="button" onClick={pickClone} title="Pick a creator first" className={rowClass + " " + colors.idle}>{navLabel(link, colors)}</button>;
       return <Link href={`/clones/${configurationCloneId}?tab=${link.tab}`} onClick={onNavigate} aria-current={active ? "page" : undefined} className={rowClass + " " + (active ? colors.active : colors.idle)}>{navLabel(link, colors)}</Link>;
     }
@@ -509,8 +506,8 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
 
 export default function Sidebar({ clones: _clones, activeCloneId }: { clones: CloneLite[]; activeCloneId: string | null }) {
   const pathname = usePathname();
-  const { isAgency, isCreator } = useDashboardAccess();
-  const searchParams = useSearchParams();
-  const studio = !isAgency && !isCreator && isBriannaWorkspaceRoute(pathname, searchParams.get("creator"), activeCloneId);
+  const { isCreator } = useDashboardAccess();
+  const studio = !isCreator && isDashboardWorkspaceRoute(pathname);
   return <aside data-studio-sidebar={studio || undefined} className="dashboard-sidebar sticky top-0 hidden h-screen w-72 shrink-0 flex-col lg:flex"><SidebarContent activeCloneId={activeCloneId} /></aside>;
 }
+

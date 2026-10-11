@@ -18,18 +18,33 @@ const WORKSPACE_PAGE_LABELS: Record<string, string> = {
   "/mtproto-campaign/connections": "Campaign Connections", "/mtproto-campaign/media": "Campaign Media",
   "/mtproto-campaign/settings": "Campaign Settings", "/tracker": "Tracker",
   "/info": "Connection Details", "/tsocial": "Telegram Social", "/admin/view-as": "View As",
+  "/analytics": "Analytics", "/media": "Media", "/drip": "Drip sequences",
+  "/messages": "Messages", "/crm": "CRM", "/ai": "AI Assistant",
+  "/agency/creator-split": "Creator earnings split",
 };
 
-export function briannaWorkspacePageLabel(pathname: string): string | null {
+export function dashboardWorkspacePageLabel(pathname: string): string | null {
   const exact = WORKSPACE_PAGE_LABELS[pathname];
   if (exact) return exact;
   const parent = Object.keys(WORKSPACE_PAGE_LABELS).sort((a, b) => b.length - a.length).find(path => pathname.startsWith(path + "/"));
   return parent ? WORKSPACE_PAGE_LABELS[parent] : null;
 }
 
-// The demo pages own their creator query. Operational pages use the real
-// selected-creator scope. Never carry Brianna's presentation into another
-// creator's profile or infer access from this presentation-only decision.
+export const briannaWorkspacePageLabel = dashboardWorkspacePageLabel;
+
+// Presentation only. The server and verified membership still decide which
+// destinations and records an operator can access. Demo controls have their
+// own audience/creator gate and do not participate in this layout decision.
+export function isDashboardWorkspaceRoute(pathname: string): boolean {
+  return dashboardWorkspacePageLabel(pathname) !== null;
+}
+
+export function isCreatorStudioRoute(pathname: string): boolean {
+  return /^\/clones\/[0-9a-f-]{36}\/?$/i.test(pathname);
+}
+
+// Retained only for demo-specific chrome. The shared operator layout uses
+// isDashboardWorkspaceRoute and never depends on this creator scope.
 export function isBriannaWorkspaceRoute(pathname: string, creatorId: string | null, activeCloneId: string | null): boolean {
   if (pathname === "/dashboard") return true; // Existing Dashboard presentation.
   const profile = pathname.match(/^\/clones\/([0-9a-f-]{36})(?:\/|$)/i)?.[1];
@@ -55,3 +70,4 @@ export function dashboardCreatorHref(creatorId: string | null, tab = "identity")
     ? `/clones/0328e7b3-a1e5-465a-9a30-c9cf6519cba1?tab=${tab}`
     : "/clones";
 }
+

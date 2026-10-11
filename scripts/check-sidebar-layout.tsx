@@ -77,9 +77,9 @@ for (const route of ["tab=advanced", "tab=identity&sub=advanced"]) {
  assert.doesNotMatch(render("Moxy",true), /studio-brand-row/, "Partner branding is unchanged");
 }
 pathname = `/clones/${clone}`; query = new URLSearchParams("tab=advanced");
-assert.doesNotMatch(render(), /studio-brand-row/, "Other creators keep their existing shell");
-// Brianna's scope now carries the design through every existing destination.
-// An explicit creator selection/profile always wins over the scope cookie.
+assert.match(render(), /studio-brand-row/, "All creators use the shared operator shell");
+// Layout no longer depends on a demo creator. Agency navigation and branding
+// stay separate from the admin destinations.
 for (const route of ["/clones", "/fans", "/inbox", "/content-library", "/campaigns", "/flows", "/sequences", "/revenue", "/sales-health", "/agency-admin", "/jarvis", "/settings", "/storage", "/logs", "/api-access"]) {
  pathname = route; query = new URLSearchParams();
  assert.match(render(undefined, false, dashboardCreatorRoute.BRIANNA_CLONE_ID), /studio-brand-row/, `Brianna shell on ${route}`);
@@ -87,10 +87,10 @@ for (const route of ["/clones", "/fans", "/inbox", "/content-library", "/campaig
 }
 for (const route of ["/fans", "/inbox", "/content-library", "/campaigns"]) {
  pathname = route; query = new URLSearchParams("creator=kyla");
- assert.doesNotMatch(render(undefined, false, dashboardCreatorRoute.BRIANNA_CLONE_ID), /studio-brand-row/, "An explicit other creator keeps their design");
+ assert.match(render(undefined, false, dashboardCreatorRoute.BRIANNA_CLONE_ID), /studio-brand-row/, "Creator selection retains the shared shell");
 }
 pathname = `/clones/${clone}`;
-assert.doesNotMatch(render(undefined, false, dashboardCreatorRoute.BRIANNA_CLONE_ID), /studio-brand-row/, "Another profile overrides Brianna's scope");
+assert.match(render(undefined, false, dashboardCreatorRoute.BRIANNA_CLONE_ID), /studio-brand-row/, "Every operational creator profile uses the shared shell");
 const mainShell = compile("components/MainShell.tsx", {
  "./DashboardAccessProvider": accessModule,
  "@/lib/dashboard-creator-route": dashboardCreatorRoute,
@@ -347,3 +347,4 @@ async function checkAdminInteractions() {
   console.log("Sidebar interactions: More and creator groups, full-layout restore and persistence, active configuration/invitation links passed");
 }
 checkAdminInteractions().catch(error => { console.error(error); process.exitCode = 1; });
+

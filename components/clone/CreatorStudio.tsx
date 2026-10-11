@@ -8,7 +8,7 @@ import styles from "./CreatorStudio.module.css";
 
 export const STUDIO_PAGES = {
   identity: { title: "Identity", subtitle: "The person behind every conversation.", panels: [["overview", "Overview"], ["profile", "Profile"], ["personality", "Personality"], ["life", "Life & routine"], ["socials", "Socials"], ["boundaries", "Boundaries"], ["words", "Her own words"]] },
-  config: { title: "Configuration", subtitle: "How Brianna responds, connects and delivers.", panels: [["overview", "Overview"], ["connection", "Connection"], ["capabilities", "Capabilities"], ["behaviour", "Behaviour"], ["delivery", "Delivery"], ["models", "Models"]] },
+  config: { title: "Configuration", subtitle: "How this creator responds, connects and delivers.", panels: [["overview", "Overview"], ["connection", "Connection"], ["capabilities", "Capabilities"], ["behaviour", "Behaviour"], ["delivery", "Delivery"], ["models", "Models"]] },
   money: { title: "Monetization", subtitle: "Shape the path from conversation to purchase.", panels: [["overview", "Overview"], ["messages", "Messages & paywall"], ["tips", "Tips"], ["after", "After purchase"]] },
 } as const;
 export type StudioTab = keyof typeof STUDIO_PAGES;
@@ -25,16 +25,16 @@ export function StudioHeading({ icon = "overview", title, description }: { icon?
   return <header className={styles.cardHeading}><span><Icon size={23} /></span><div><h3>{title}</h3>{description && <p>{description}</p>}</div></header>;
 }
 export function StudioLink({ panel, onChange, children }: { panel: string; onChange?: (panel: string) => void; children: ReactNode }) {
-  return <button type="button" className={styles.textLink} onClick={() => onChange?.(panel)}>{children}<ArrowRight size={14} /></button>;
+  return <button type="button" data-readonly-navigation className={styles.textLink} onClick={() => onChange?.(panel)}>{children}<ArrowRight size={14} /></button>;
 }
 export function IdentityLifeCard({ onChange }: { onChange?: (panel: string) => void }) {
-  return <section className={styles.summaryCard} data-studio-identity="life-summary"><StudioHeading icon="life" title="Life & routine" description="Her day-to-day life, interests and content approach." /><div className={styles.linkRows}>{[["Daily rhythm", "When she’s online and how she spends her time.", CalendarDays], ["Life & pets", "Her life outside of content, hobbies and interests.", Heart], ["Content canon", "The content she creates and how she describes it.", Camera]].map(([title, copy, Icon]) => { const RowIcon = Icon as typeof Heart; return <button type="button" key={String(title)} onClick={() => onChange?.("life")}><RowIcon size={20} /><span><b>{String(title)}</b><small>{String(copy)}</small></span><ChevronRight size={16} /></button>; })}</div></section>;
+  return <section className={styles.summaryCard} data-studio-identity="life-summary"><StudioHeading icon="life" title="Life & routine" description="Her day-to-day life, interests and content approach." /><div className={styles.linkRows}>{[["Daily rhythm", "When she’s online and how she spends her time.", CalendarDays], ["Life & pets", "Her life outside of content, hobbies and interests.", Heart], ["Content canon", "The content she creates and how she describes it.", Camera]].map(([title, copy, Icon]) => { const RowIcon = Icon as typeof Heart; return <button type="button" data-readonly-navigation key={String(title)} onClick={() => onChange?.("life")}><RowIcon size={20} /><span><b>{String(title)}</b><small>{String(copy)}</small></span><ChevronRight size={16} /></button>; })}</div></section>;
 }
 export function IdentityBoundaryLink({ onChange }: { onChange?: (panel: string) => void }) {
   return <div className={styles.boundaryStrip} data-studio-identity="boundary-summary"><LockKeyhole size={20} /><b>Boundaries & privacy</b><span>Name sharing, personal details and hard limits.</span><StudioLink panel="boundaries" onChange={onChange}>Review boundaries</StudioLink></div>;
 }
 export function ConfigurationMore({ onChange }: { onChange?: (panel: string) => void }) {
-  return <div className={styles.configLinks}><button type="button" onClick={() => onChange?.("delivery")}><Send size={21} /><span><b>Delivery & timing</b><small>Read receipts, pacing and response timing.</small></span><ChevronRight size={17} /></button><button type="button" onClick={() => onChange?.("models")}><Settings2 size={21} /><span><b>Models & routing</b><small>Model assignments and configuration.</small></span><ChevronRight size={17} /></button></div>;
+  return <div className={styles.configLinks}><button type="button" data-readonly-navigation onClick={() => onChange?.("delivery")}><Send size={21} /><span><b>Delivery & timing</b><small>Read receipts, pacing and response timing.</small></span><ChevronRight size={17} /></button><button type="button" data-readonly-navigation onClick={() => onChange?.("models")}><Settings2 size={21} /><span><b>Models & routing</b><small>Model assignments and configuration.</small></span><ChevronRight size={17} /></button></div>;
 }
 
 // This is a view of the mounted form, not a second set of submitted controls.
@@ -68,6 +68,8 @@ export function MoneyJourney({ clone, cfg }: { clone?: Partial<Clone>; cfg: Clon
 }
 export function PaywallPreview({ clone, cfg, onChange }: { clone?: Partial<Clone>; cfg: CloneConfigState; onChange?: (panel: string) => void }) {
   const preview = useMoneyPreview(clone);
-  const name = clone?.stage_name || clone?.name || "Brianna Redd";
-  return <section className={styles.previewCard} data-studio-money="preview"><StudioHeading icon="messages" title="Fan preview" description="Preview of the default out-of-messages screen." /><div className={styles.chat}><header><span className={styles.avatar}>BR</span><div><b className="creator-name">{name}</b><small>Message preview</small></div></header><div className={styles.chatBody}><span className={styles.previewLabel}>{cfg.charge ? "Out-of-messages preview" : "Charging is off"}</span><div className={styles.chatBubble}>{cfg.paywallDefault}</div><div className={styles.packPreview}><span><Coins size={15} />{preview.size} messages · {preview.price} Stars</span><span className={styles.previewButton}>{cfg.paywallButton || "Continue"}</span></div></div><StudioLink panel="messages" onChange={onChange}>Edit message</StudioLink></div></section>;
+  const name = clone?.stage_name || clone?.name || "Creator";
+  const initials = name.trim().split(/\s+/).slice(0, 2).map(part => part[0]?.toUpperCase()).join("") || "C";
+  return <section className={styles.previewCard} data-studio-money="preview"><StudioHeading icon="messages" title="Fan preview" description="Preview of the default out-of-messages screen." /><div className={styles.chat}><header><span className={styles.avatar}>{initials}</span><div><b className="creator-name">{name}</b><small>Message preview</small></div></header><div className={styles.chatBody}><span className={styles.previewLabel}>{cfg.charge ? "Out-of-messages preview" : "Charging is off"}</span><div className={styles.chatBubble}>{cfg.paywallDefault}</div><div className={styles.packPreview}><span><Coins size={15} />{preview.size} messages · {preview.price} Stars</span><span className={styles.previewButton}>{cfg.paywallButton || "Continue"}</span></div></div><StudioLink panel="messages" onChange={onChange}>Edit message</StudioLink></div></section>;
 }
+

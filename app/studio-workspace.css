@@ -1,20 +1,44 @@
-/* Brianna's internal demo workspace. This attribute is owned by the client
-   shell, so navigation and creator changes cannot leave a stale theme behind.
-   Agency and creator portals never receive it. */
+/* Shared operator workspace. Brand values resolve on html before the client
+   shell overrides component tokens, so Moxy and partner palettes are inherited
+   without coupling presentation to creator scope or demo permissions. */
+html {
+  --workspace-bg: var(--color-bg);
+  --workspace-elev: var(--color-elev);
+  --workspace-ink: var(--color-ink);
+  --workspace-muted: var(--color-muted);
+  --workspace-line: var(--color-line);
+  --workspace-accent: var(--color-accent);
+  --workspace-accent-deep: var(--color-accent-deep);
+  --workspace-accent-light: var(--color-accent-2);
+  --workspace-accent-tint: var(--color-accent-tint);
+  --workspace-accent-border: color-mix(in srgb, var(--color-accent) 22%, white);
+}
+[data-workspace-brand="twin"] {
+  --workspace-bg: #f9fbfd;
+  --workspace-elev: #f3f6fa;
+  --workspace-ink: #17263e;
+  --workspace-muted: #6b7890;
+  --workspace-line: #e6ebf2;
+  --workspace-accent: #0878ff;
+  --workspace-accent-deep: #0864db;
+  --workspace-accent-light: #2d8aff;
+  --workspace-accent-tint: #eaf3ff;
+  --workspace-accent-border: #d3e6ff;
+}
 [data-studio-workspace="true"] {
-  --color-bg: #f9fbfd;
+  --color-bg: var(--workspace-bg, #f9fbfd);
   --color-panel: #fff;
-  --color-elev: #f3f6fa;
-  --color-ink: #17263e;
-  --color-muted: #6b7890;
-  --color-line: #e6ebf2;
-  --color-accent: #0878ff;
-  --color-accent-2: #0878ff;
-  --color-accent-deep: #0864db;
+  --color-elev: var(--workspace-elev, #f3f6fa);
+  --color-ink: var(--workspace-ink, #17263e);
+  --color-muted: var(--workspace-muted, #6b7890);
+  --color-line: var(--workspace-line, #e6ebf2);
+  --color-accent: var(--workspace-accent, #0878ff);
+  --color-accent-2: var(--workspace-accent, #0878ff);
+  --color-accent-deep: var(--workspace-accent-deep, #0864db);
   --color-accent-soft: #8bbcff;
-  --color-accent-tint: #eaf3ff;
-  --color-brand: #0878ff;
-  --color-brand-light: #2d8aff;
+  --color-accent-tint: var(--workspace-accent-tint, #eaf3ff);
+  --color-brand: var(--workspace-accent, #0878ff);
+  --color-brand-light: var(--workspace-accent-light, #2d8aff);
   --background: var(--color-bg);
   --foreground: var(--color-ink);
   --card: #fff;
@@ -30,7 +54,7 @@
   --ring: var(--color-accent);
   --shadow-card: 0 2px 8px #14294404;
   --font-heading: var(--font-display), var(--font-sans), sans-serif;
-  background: linear-gradient(120deg,#fcfbf9,#fbfcfe 55%,#f9fbfd);
+  background: var(--workspace-bg, #f9fbfd);
   color: var(--color-ink);
 }
 
@@ -53,7 +77,7 @@
 [data-studio-workspace="true"] .dashboard-topbar > h1 { font-family: var(--font-sans); font-size: 12px; font-weight: 550; letter-spacing: 0; }
 [data-studio-workspace="true"] .dashboard-topbar > .backdrop-blur-xl { background: white; border-color: var(--color-line); box-shadow: none; border-radius: 10px; }
 [data-studio-workspace="true"] .dashboard-topbar > .sm\:block:last-child { display: none; }
-[data-studio-workspace="true"] .dashboard-mobile-header { background: #111f34; box-shadow: none; }
+[data-workspace-brand="twin"] .dashboard-mobile-header { background: #111f34; box-shadow: none; }
 .studio-sidebar-nav { scrollbar-width: thin; scrollbar-color: #ffffff35 transparent; }
 .studio-sidebar-nav [data-nav-group] > div:first-child > div > a { white-space: nowrap; }
 
@@ -73,8 +97,8 @@
 .studio-workspace-main [data-slot="card-header"] { border-color: var(--color-line); }
 .studio-workspace-main [data-slot="button"] { border-radius: 9px; font-size: 12px; }
 .studio-workspace-main [data-slot="button"].h-8 { height: 38px; padding-inline: 14px; }
-.studio-workspace-main [data-slot="button"].bg-primary { background: linear-gradient(135deg,#2489ff,#0872f5); box-shadow: 0 3px 8px #0878ff14; }
-.studio-workspace-main [data-slot="button"].bg-primary:hover { background: #086be8; }
+.studio-workspace-main [data-slot="button"].bg-primary { background: linear-gradient(135deg,var(--workspace-accent-light, #2489ff),var(--workspace-accent, #0872f5)); box-shadow: 0 3px 8px color-mix(in srgb, var(--workspace-accent, #0878ff) 8%, transparent); }
+.studio-workspace-main [data-slot="button"].bg-primary:hover { background: var(--workspace-accent-deep, #086be8); }
 .studio-workspace-main :is([data-slot="input"],[data-slot="select-trigger"]) { border-radius: 9px; border-color: var(--color-line); background: white; box-shadow: none; }
 .studio-workspace-main .dashboard-page table { font-size: 12px; }
 .studio-workspace-main .dashboard-page thead { background: #f7f9fc; color: var(--color-muted); }
@@ -85,18 +109,17 @@
 .studio-workspace-main .dashboard-page a.group[href^="/clones/"] { border-radius: 13px; box-shadow: var(--shadow-card); }
 .studio-workspace-main .dashboard-page a.group[href^="/clones/"]:hover { box-shadow: 0 6px 20px #1429440a; }
 
-/* The remaining PPV/prompt/flow tabs still use the original editor. Keep its
-   fields and actions intact while bringing its surfaces into the workspace. */
+/* Specialized editors share surfaces and spacing with the operational forms. */
 .studio-workspace-main .creator-control-plane {
-  --color-bg: #f9fbfd;
-  --color-elev: #f3f6fa;
-  --color-ink: #17263e;
-  --color-muted: #6b7890;
-  --color-line: #e6ebf2;
-  --color-accent: #0878ff;
-  --color-accent-2: #0878ff;
-  --color-accent-deep: #0864db;
-  --color-accent-tint: #eaf3ff;
+  --color-bg: var(--workspace-bg, #f9fbfd);
+  --color-elev: var(--workspace-elev, #f3f6fa);
+  --color-ink: var(--workspace-ink, #17263e);
+  --color-muted: var(--workspace-muted, #6b7890);
+  --color-line: var(--workspace-line, #e6ebf2);
+  --color-accent: var(--workspace-accent, #0878ff);
+  --color-accent-2: var(--workspace-accent, #0878ff);
+  --color-accent-deep: var(--workspace-accent-deep, #0864db);
+  --color-accent-tint: var(--workspace-accent-tint, #eaf3ff);
   background: transparent;
 }
 .studio-workspace-main .creator-control-plane :is(input,select,textarea) { border-radius: 9px; }
@@ -121,4 +144,23 @@
 }
 
 /* Hide the product wordmark in the Brianna demo mobile header. */
-[data-studio-workspace="true"] .dashboard-mobile-header > a:first-child { visibility: hidden; }
+[data-workspace-unbranded="true"] .dashboard-mobile-header > a:first-child { visibility: hidden; }
+
+
+/* Creator pages own their title and tab navigation at every brand. */
+.creator-studio-main { max-width: none; padding: 10px 28px 32px 22px; background: transparent; scrollbar-gutter: stable; }
+:is(.studio-workspace-main,.creator-studio-main) .creator-control-plane :is(input,select,textarea) { border-radius: 9px; }
+:is(.studio-workspace-main,.creator-studio-main) .creator-control-plane .rounded-\[3px\] { border-radius: 13px; }
+[data-studio-workspace="true"] .dashboard-sidebar[data-studio-sidebar="true"] { width: 232px; }
+[data-studio-workspace="true"] .dashboard-sidebar nav a { font-size: 12px; font-weight: 500; min-height: 40px; border-radius: 10px; }
+[data-studio-workspace="true"] .dashboard-sidebar:has(.studio-brand-row) { width: 212px; }
+@media(max-width:1023px) {
+  .creator-studio-main { padding: 16px 18px 35px; }
+  [data-studio-workspace="true"] .dashboard-mobile-header { min-height: 64px; padding-block: 6px; }
+  [data-studio-workspace="true"] .dashboard-mobile-header > a > img { width: 120px; }
+}
+@media(max-width:600px) {
+  .creator-studio-main { padding: 12px 12px 28px; }
+  [data-studio-workspace="true"] .dashboard-topbar:has(> h1) { height: 56px; min-height: 56px; }
+  [data-studio-workspace="true"] .dashboard-topbar > .backdrop-blur-xl { width: 100%; justify-content: center; border: 0; padding: 0; background: transparent; }
+}
