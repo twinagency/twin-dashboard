@@ -24,8 +24,11 @@
  *   it with the exact same captionPhoto/captionVideo() vision path the
  *   upload flow uses, so a backfilled row is indistinguishable from one
  *   written by a live upload.
- * - Writes ONLY the visual_description column. Nothing else on the row (nor
- *   the storage object) is touched.
+ * - Writes the same columns the upload writes (analysis facts, flags, tags,
+ *   descriptions, status/model/provider), only where visual_description is
+ *   still empty and the row was not hand-edited. A failed analysis writes
+ *   nothing. The storage object is never touched. Superseded by the repair
+ *   batch for existing rows; kept for the one-column-missing case.
  * - Resumable: re-running only ever selects rows that are still NULL, so a
  *   killed run picks back up where it left off, and a row is never
  *   double-priced or double-billed for the same call twice.
@@ -36,8 +39,8 @@
  *   selected set.
  */
 import { supabaseAdmin } from "@/lib/supabase";
-import { captionPhoto, captionVideo } from "@/lib/caption";
-import { stripBannedDashes } from "@/lib/media-classification";
+import { analysePhoto, analyseVideo } from "@/lib/caption";
+import { analysisRowFields, isMissingColumnError as isOptionalColumnMissing, withoutOptionalMediaColumns } from "@/lib/media-analysis-row";
 
 // ── args ─────────────────────────────────────────────────────────────────────
 function arg(flag: string): string | undefined {
@@ -152,11 +155,19 @@ async function describeOne(table: "photos" | "videos", row: MediaRow): Promise<{
   try {
     const bytes = await downloadBytes(row.storage_path);
     const model = await cachedVisionModelFor(row.clone_id);
-    const cap = table === "photos" ? await captionPhoto(bytes, model) : await captionVideo(bytes, model);
-    const description = stripBannedDashes(cap.visual_description || "");
-    if (!description) return { ok: false, error: "model returned an empty visual_description" };
-    // Write ONLY visual_description — nothing else on the row is touched.
-    const { error } = await supabaseAdmin.from(table).update({ visual_description: description }).eq("id", row.id);
+    const analysis = table === "photos" ? await analysePhoto(bytes, model) : await analyseVideo(bytes, model);
+    // A failed analysis writes nothing: the row keeps whatever tags it has rather than being blanked.
+    if (analysis.status === "failed" || !analysis.fields?.visual_description) return { ok: false, error: analysis.error ?? "model returned an empty visual_description" };
+    // Same columns the upload writes (facts, flags, tags, descriptions, status/model/provider). Guarded: only a row that
+    // still has no description and has not been hand-edited is touched.
+    const fields = analysisRowFields(analysis);
+    const run = (u: Record<string, unknown>, guardEdited: boolean) => {
+      let q = supabaseAdmin.from(table).update(u).eq("id", row.id).is("visual_description", null);
+      if (guardEdited) q = q.is("metadata_edited_at", null);
+      return q;
+    };
+    let { error } = await run(fields, true);
+    if (error && isOptionalColumnMissing(error.message)) ({ error } = await run(withoutOptionalMediaColumns(fields), false));
     if (error) return { ok: false, error: error.message };
     return { ok: true };
   } catch (e) {

@@ -20,7 +20,9 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
 import { supabaseAdmin } from "@/lib/supabase";
-import { captionPhoto, type Caption } from "@/lib/caption";
+import { analysePhoto } from "@/lib/caption";
+import type { AnalysisResult } from "@/lib/media-analysis-contract";
+import { analysisRowFields, insertMediaRowWithFallback, priceForAnalysis } from "@/lib/media-analysis-row";
 import {
   DEFAULT_PHOTO_BUNDLE_PRICE_STARS,
   normalizeSafeCategoryGuide,
@@ -71,10 +73,11 @@ function requireSafeGuide(raw: unknown): CategoryPricing | null {
   return guide;
 }
 
-function resolvePrice(cap: Caption, guide: CategoryPricing | null): number {
+function resolvePrice(analysis: AnalysisResult, guide: CategoryPricing | null): number {
   if (MANUAL_PRICE !== null) return MANUAL_PRICE;
   if (!guide) throw new Error("no pricing guide and no --price");
-  const price = priceFromGuide(guide, cap.tags, cap.nsfw);
+  // A failed or needs_review analysis prices at the guide's highest category, never from blank tags.
+  const price = priceForAnalysis(guide, analysis);
   if (price == null) throw new Error("could not derive a price from the creator pricing guide");
   return price;
 }
@@ -101,30 +104,13 @@ async function jpgsIn(dir: string): Promise<string[]> {
     .map((n) => path.join(dir, n));
 }
 
-// Caption with retries. NEVER returns a blank caption — the caller reports the
-// image as failed and skips it rather than inserting an uncaptioned row.
-async function captionWithRetry(jpeg: Buffer, model: string, label: string): Promise<Caption> {
-  let lastErr = "";
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    try {
-      const cap = await captionPhoto(jpeg, model);
-      if (cap.caption.trim() && cap.teaser_caption.trim()) return cap;
-      lastErr = "model returned an empty caption/teaser";
-    } catch (e) {
-      lastErr = e instanceof Error ? e.message : String(e);
-    }
-    console.log(`   caption attempt ${attempt} failed for ${label}: ${lastErr}`);
-    if (attempt < 3) await new Promise((r) => setTimeout(r, 2000 * attempt));
-  }
-  throw new Error(`captioning failed after 3 attempts: ${lastErr}`);
-}
-
 async function main() {
   const { model, guide: rawGuide } = await uploadConfig(CLONE_ID!);
   const guide = requireSafeGuide(rawGuide);
   console.log(`clone=${CLONE_ID} vision_model=${model} guide=${JSON.stringify(guide)}`);
 
   const failures: string[] = [];
+  const needsAnalysis: string[] = [];
   const imported: Record<string, unknown>[] = [];
 
   // ── singles: exact uploadPhoto() sequence ─────────────────────────────────
@@ -144,14 +130,18 @@ async function main() {
       // written, so a bulk import cannot seed the library with items that
       // sendPaidMedia will refuse.
       await assertPhotoSendable(jpeg);
-      const cap = await captionWithRetry(jpeg, model, label);
-      const starValue = resolvePrice(cap, guide);
-      const imageName = `${NAME_PREFIX} ${String(n).padStart(2, "0")}${cap.auto_desc ? ` (${cap.auto_desc})` : ""}`;
+      // The same analysis the dashboard upload runs (bounded retry inside). It never throws: a failure is saved as
+      // analysis_status "failed" with the error so it can be repaired later, never as "checked, clean".
+      const analysis = await analysePhoto(jpeg, model);
+      if (analysis.status !== "analysed") { console.log(`   ${label}: analysis ${analysis.status}: ${analysis.error ?? ""}`); needsAnalysis.push(label); }
+      const starValue = resolvePrice(analysis, guide);
+      const autoDesc = analysis.fields?.auto_desc;
+      const imageName = `${NAME_PREFIX} ${String(n).padStart(2, "0")}${autoDesc ? ` (${autoDesc})` : ""}`;
       const p = storagePath(CLONE_ID!, "photos", safeBase + ".jpg", jpeg);
 
       if (DRY) {
-        console.log(`  [dry] ${label} -> ${p} ⭐${starValue} "${cap.caption}"`);
-        imported.push({ label, starValue, cap });
+        console.log(`  [dry] ${label} -> ${p} ⭐${starValue} [${analysis.status}] "${analysis.fields?.auto_desc ?? ""}"`);
+        imported.push({ label, starValue, analysis });
         continue;
       }
 
@@ -160,24 +150,18 @@ async function main() {
         .upload(p, jpeg, { contentType: "image/jpeg", upsert: true });
       if (upErr) throw new Error(upErr.message);
 
-      const { error: dbErr } = await supabaseAdmin.from("photos").insert({
+      await insertMediaRowWithFallback(supabaseAdmin, "photos", {
         clone_id: CLONE_ID,
         storage_path: p,
-        caption: cap.caption || null,
-        teaser_caption: cap.teaser_caption || null,
-        is_nude: cap.is_nude,
-        explicitness: cap.explicitness,
-        nsfw: cap.nsfw,
-        tags: cap.tags,
-        auto_desc: cap.auto_desc || null,
+        teaser_caption: null,
+        ...analysisRowFields(analysis),
         star_value: starValue,
         is_free: starValue <= 0,
         image_name: imageName,
       });
-      if (dbErr) throw new Error(dbErr.message);
 
-      console.log(`  ok ${label} -> ${imageName} ⭐${starValue} [${cap.tags.join(",")}]`);
-      imported.push({ label, imageName, starValue, cap });
+      console.log(`  ok ${label} -> ${imageName} ⭐${starValue} [${analysis.fields?.tags.join(",") ?? analysis.status}]`);
+      imported.push({ label, imageName, starValue, analysis });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       console.log(`  FAILED ${label}: ${msg}`);
@@ -242,7 +226,8 @@ async function main() {
     }
   }
 
-  console.log(`\ndone. imported=${imported.length} failures=${failures.length}`);
+  console.log(`\ndone. imported=${imported.length} failures=${failures.length} not-analysed=${needsAnalysis.length}`);
+  for (const f of needsAnalysis) console.log(`  ? saved without a finished analysis (priced at the guide maximum, repair later): ${f}`);
   for (const f of failures) console.log(`  ! ${f}`);
 }
 
