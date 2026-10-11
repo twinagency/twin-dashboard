@@ -13,7 +13,8 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { supabaseAdmin } from "../lib/supabase";
 import { orChat } from "../lib/openrouter";
-import { cleanSendCaption } from "../lib/media-classification";
+import { withRetry } from "../lib/retry";
+import { RECAPTION_SYSTEM, SEND_CAPTION_MODEL, acceptCaption } from "../lib/send-caption";
 
 const args = process.argv.slice(2);
 const flag = (name: string) => args.includes(`--${name}`);
@@ -23,48 +24,17 @@ const FOLLOW = flag("follow");
 const LIMIT = Number(opt("limit") || 0);
 const CONCURRENCY = Number(opt("concurrency") || 30);
 const CLONE_SLUG = opt("clone");
-const MODEL = "deepseek/deepseek-v4-flash";
+const MODEL = SEND_CAPTION_MODEL;
 const STATE = opt("state-dir") || path.join(process.cwd(), ".recaption-state");
 const DONE_FILE = path.join(STATE, "recaption-done.jsonl");
 const BACKUP_FILE = path.join(STATE, "recaption-backup.jsonl");
 const FAIL_FILE = path.join(STATE, "recaption-failed.jsonl");
-
-export const RECAPTION_SYSTEM = `You write one caption for a photo or video that a woman is sending to a fan.
-Write in first person as her. It is standalone, not a reply to anyone.
-Use 1 to 2 GRAPHIC, specific details taken ONLY from the facts given: what she is wearing, which body parts are showing, what her hands or a toy are doing, the angle. Raunchy and explicit.
-You may end with a teasing question about a visible detail. Use 1 to 3 fitting emojis. 2 to 3 short sentences, at most 45 words.
-Style reference: "mmm right now i'm lying here in my new lingerie set, i may or may not have a finger up my ass 😈 can you see my pussy lips from this angle?"
-Never claim anything the facts do not state. If the facts say a body part is not visible, do not describe it as visible.
-Never mention OnlyFans, prices, Stars, tipping, tapping, unlocking or paying. Never use em dashes or en dashes.
-Reply with ONLY the caption text.`;
-
-const SALES = /\b(only ?fans|onlyfans|stars?|price|pay|paid|tip|unlock\w*)\b/i;
-/** Guard a model output: returns a clean caption or null (null = skip the row, keep the old caption). */
-export function acceptCaption(raw: string): string | null {
-  const text = cleanSendCaption(raw.replace(/^["'\s]+|["'\s]+$/g, ""));
-  if (!text || text.length < 12 || SALES.test(text)) return null;
-  if (/visual_description|as an ai|i can't|i cannot/i.test(text)) return null;
-  return text;
-}
 
 type Row = { table: "photos" | "videos"; id: string; clone_id: string; caption: string | null; visual_description: string };
 
 function loadDone(): Set<string> {
   if (!existsSync(DONE_FILE)) return new Set();
   return new Set(readFileSync(DONE_FILE, "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l).key as string));
-}
-
-async function withRetry<T>(fn: () => Promise<T>, tries = 3): Promise<T> {
-  let last: unknown;
-  for (let i = 0; i < tries; i++) {
-    try { return await fn(); } catch (e) {
-      last = e;
-      const msg = String((e as Error)?.message ?? e);
-      if (!/429|5\d\d|fetch failed|network|timeout|ECONN|EAI_AGAIN/i.test(msg)) break;
-      await new Promise((r) => setTimeout(r, 1500 * 2 ** i + Math.random() * 500));
-    }
-  }
-  throw last;
 }
 
 async function fetchRows(done: Set<string>, cloneId: string | null): Promise<Row[]> {

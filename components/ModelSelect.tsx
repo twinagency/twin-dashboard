@@ -2,7 +2,7 @@
 
 import { useMemo, useRef, useState } from "react";
 import type { OrModel } from "@/app/api/models/route";
-import { REC_TIER_BADGE, type Rec } from "./clone/fields";
+import { Info, REC_TIER_BADGE, type Rec } from "./clone/fields";
 
 // Small pill for a recommendation tier (⭐ Best / 💰 Value / 🪙 Cheapest).
 function TierBadge({ tier, className = "" }: { tier: Rec["tier"]; className?: string }) {
@@ -24,6 +24,7 @@ export default function ModelSelect({
   defaultValue,
   recommended,
   weak,
+  effectiveFor,
 }: {
   label: string;
   name: string;
@@ -31,6 +32,8 @@ export default function ModelSelect({
   defaultValue?: string;
   recommended?: Rec[];
   weak?: { id: string; why: string }[];
+  /** When the model that really runs can differ from the one picked (vision analysis swaps retired models), names it. */
+  effectiveFor?: (picked: string) => string;
 }) {
   const [value, setValue] = useState(defaultValue ?? "");
   const [query, setQuery] = useState("");
@@ -62,6 +65,12 @@ export default function ModelSelect({
   return (
     <div className="relative" ref={boxRef}>
       <span className="mb-1 block text-xs text-muted">{label}</span>
+      {effectiveFor && value && effectiveFor(value) !== value && (
+        <span className="mb-1 flex items-center gap-1 text-[11px] text-warn">
+          Runs as {effectiveFor(value)}
+          <Info text={`The saved model ${value} is not used for media analysis (retired or unsuitable). The analysis runs the model shown here instead. Pick a different model to change it.`} />
+        </span>
+      )}
       <input type="hidden" name={name} value={value} />
       <button
         type="button"

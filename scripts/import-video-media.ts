@@ -13,8 +13,10 @@
 import { readdir, readFile, stat } from "node:fs/promises";
 import path from "node:path";
 import { supabaseAdmin } from "@/lib/supabase";
-import { captionVideo, type Caption } from "@/lib/caption";
-import { normalizeSafeCategoryGuide, priceFromGuide, type CategoryPricing } from "@/lib/pricing";
+import { analyseVideo } from "@/lib/caption";
+import type { AnalysisResult } from "@/lib/media-analysis-contract";
+import { analysisRowFields, insertMediaRowWithFallback, priceForAnalysis } from "@/lib/media-analysis-row";
+import { normalizeSafeCategoryGuide, type CategoryPricing } from "@/lib/pricing";
 import { mediaStoragePath as storagePath } from "@/lib/media-storage-path";
 
 const VIDEO_MAX_BYTES = 49 * 1024 * 1024; // Telegram video limit is 50MB
@@ -27,7 +29,7 @@ async function uploadConfig(cloneId: string): Promise<{ model: string; guide: un
     .select("vision_model, category_pricing")
     .eq("id", cloneId)
     .maybeSingle();
-  return { model: data?.vision_model || "qwen/qwen2.5-vl-72b-instruct", guide: data?.category_pricing };
+  return { model: data?.vision_model || "qwen/qwen3-vl-235b-a22b-instruct", guide: data?.category_pricing };
 }
 
 function requireSafeGuide(raw: unknown): CategoryPricing {
@@ -36,8 +38,9 @@ function requireSafeGuide(raw: unknown): CategoryPricing {
   return guide;
 }
 
-function resolvePrice(cap: Caption, guide: CategoryPricing): number {
-  const price = priceFromGuide(guide, cap.tags, cap.nsfw);
+function resolvePrice(analysis: AnalysisResult, guide: CategoryPricing): number {
+  // A failed or needs_review analysis prices at the guide's highest category, never from blank tags.
+  const price = priceForAnalysis(guide, analysis);
   if (price == null) throw new Error("could not derive a price from the creator pricing guide");
   return price;
 }
@@ -60,22 +63,6 @@ async function videosIn(dir: string): Promise<string[]> {
     .map((n) => path.join(dir, n));
 }
 
-async function captionWithRetry(bytes: Buffer, model: string, label: string): Promise<Caption> {
-  let lastErr = "";
-  for (let attempt = 1; attempt <= 3; attempt++) {
-    try {
-      const cap = await captionVideo(bytes, model);
-      if (cap.caption.trim() && cap.teaser_caption.trim()) return cap;
-      lastErr = "model returned an empty caption/teaser";
-    } catch (e) {
-      lastErr = e instanceof Error ? e.message : String(e);
-    }
-    console.log(`   caption attempt ${attempt} failed for ${label}: ${lastErr}`);
-    if (attempt < 3) await new Promise((r) => setTimeout(r, 2000 * attempt));
-  }
-  throw new Error(`captioning failed after 3 attempts: ${lastErr}`);
-}
-
 async function main() {
   const { model, guide: rawGuide } = await uploadConfig(CLONE_ID!);
   const guide = requireSafeGuide(rawGuide);
@@ -96,16 +83,18 @@ async function main() {
         throw new Error(`too large (${(size / 1024 / 1024).toFixed(1)} MB), Telegram max is 50 MB`);
       }
       const bytes = await readFile(src);
-      const cap = await captionWithRetry(bytes, model, label);
-      const starValue = resolvePrice(cap, guide);
+      // Same analysis as the dashboard upload. Never throws: a failure is saved as analysis_status "failed" (repair later).
+      const analysis = await analyseVideo(bytes, model);
+      if (analysis.status !== "analysed") console.log(`   ${label}: analysis ${analysis.status}: ${analysis.error ?? ""}`);
+      const starValue = resolvePrice(analysis, guide);
       const ext = path.extname(src).toLowerCase();
       const contentType = ext === ".mov" ? "video/quicktime" : "video/mp4";
       const safeBase = `${NAME_PREFIX.toLowerCase().replace(/[^a-z0-9]+/g, "-")}-${String(n).padStart(2, "0")}${ext}`;
       const p = storagePath(CLONE_ID!, "videos", safeBase, bytes);
 
       if (DRY) {
-        console.log(`  [dry] ${label} -> ${p} ⭐${starValue} "${cap.caption}"`);
-        imported.push({ label, starValue, cap });
+        console.log(`  [dry] ${label} -> ${p} ⭐${starValue} [${analysis.status}] "${analysis.fields?.auto_desc ?? ""}"`);
+        imported.push({ label, starValue, analysis });
         continue;
       }
 
@@ -114,23 +103,17 @@ async function main() {
         .upload(p, bytes, { contentType, upsert: true });
       if (upErr) throw new Error(upErr.message);
 
-      const { error: dbErr } = await supabaseAdmin.from("videos").insert({
+      await insertMediaRowWithFallback(supabaseAdmin, "videos", {
         clone_id: CLONE_ID,
         storage_path: p,
-        caption: cap.caption || null,
-        teaser_caption: cap.teaser_caption || null,
-        is_nude: cap.is_nude,
-        explicitness: cap.explicitness,
-        nsfw: cap.nsfw,
-        tags: cap.tags,
-        auto_desc: cap.auto_desc || null,
+        teaser_caption: null,
+        ...analysisRowFields(analysis),
         star_value: starValue,
         is_free: starValue <= 0,
       });
-      if (dbErr) throw new Error(dbErr.message);
 
-      console.log(`  ok ${label} -> ${p} ⭐${starValue} [${cap.tags.join(",")}]`);
-      imported.push({ label, starValue, cap });
+      console.log(`  ok ${label} -> ${p} ⭐${starValue} [${analysis.fields?.tags.join(",") ?? analysis.status}]`);
+      imported.push({ label, starValue, analysis });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       console.log(`  FAILED ${label}: ${msg}`);

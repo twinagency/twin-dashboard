@@ -1294,7 +1294,7 @@ export const MODEL_FIELDS: { name: string; label: string; def: string }[] = [
   // Also fires when the fan sends a VIDEO (she reacts to a grabbed frame) —
   // there is no separate video model, this one covers both (see flows/vision.ts).
   { name: "photo_reply_model", label: "Photo & video reply", def: "qwen/qwen3-vl-32b-instruct" },
-  { name: "vision_model", label: "Vision (media library tagging)", def: "qwen/qwen3-vl-32b-instruct" },
+  { name: "vision_model", label: "Vision (media library tagging)", def: "qwen/qwen3-vl-235b-a22b-instruct" },
 ];
 
 // ── Recommended models per job ────────────────────────────────────────────────
@@ -1314,7 +1314,8 @@ export const RECOMMENDED: Record<string, Rec[]> = {
     { id: "google/gemini-2.5-flash-lite", tier: "cheap", note: "Cheapest solid decider" },
   ],
   vision_model: [
-    { id: "qwen/qwen3-vl-32b-instruct", tier: "best", note: "Uncensored, half the price of 235b" },
+    { id: "qwen/qwen3-vl-235b-a22b-instruct", tier: "best", note: "Default for media tagging (20-photo test 2026-10-11: 0 false nudity claims, Dan 3/3)" },
+    { id: "qwen/qwen2.5-vl-72b-instruct", tier: "value", note: "Tested: under-reports explicit content on analysed rows" },
     { id: "qwen/qwen3-vl-8b-instruct", tier: "value", note: "Cheaper, still uncensored" },
     { id: "mistralai/mistral-small-3.2-24b-instruct", tier: "cheap", note: "Cheapest that sees well" },
   ],
