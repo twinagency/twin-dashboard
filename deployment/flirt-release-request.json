@@ -1,5 +1,5 @@
 {
-  "reason": "Verify all six agency portrait shortcuts in place of the retired logo",
-  "source_commit": "0fd2b9dac081d083d5c89151ffc240b606aab8ae",
-  "requested_at": "2026-10-11T08:41:18.098Z"
+  "reason": "Use each creator's existing reviewed face crop in the agency shortcuts",
+  "source_commit": "3d482fdf24fe371536e03468cfd00859f112ad1b",
+  "requested_at": "2026-10-11T08:48:05.503Z"
 }
