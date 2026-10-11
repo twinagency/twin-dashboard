@@ -712,6 +712,11 @@ function PhotoCard({
           <TagEditor defaultTags={photo.tags} />
           <input name="auto_desc" defaultValue={photo.auto_desc ?? ""} placeholder="Short description (e.g. bikini pool)"
             className="w-full rounded border border-line bg-bg px-2 py-1.5 outline-none focus:border-accent" />
+          {photo.visual_description !== undefined && (
+            <textarea name="visual_description" defaultValue={photo.visual_description ?? ""} rows={5}
+              placeholder="AI visual description (the facts the bots read)" aria-label="AI visual description"
+              className="w-full rounded border border-line bg-bg px-2 py-1.5 outline-none focus:border-accent" />
+          )}
           <div className="flex gap-2">
             <button type="submit" disabled={pending}
               className="flex-1 rounded bg-accent py-1.5 text-xs font-medium text-accent-ink hover:bg-accent-deep disabled:opacity-50">
@@ -833,6 +838,11 @@ function VideoCard({
           <TagEditor defaultTags={video.tags} />
           <input name="auto_desc" defaultValue={video.auto_desc ?? ""} placeholder="Short description (e.g. dancing lingerie)"
             className="w-full rounded border border-line bg-bg px-2 py-1.5 outline-none focus:border-accent" />
+          {video.visual_description !== undefined && (
+            <textarea name="visual_description" defaultValue={video.visual_description ?? ""} rows={5}
+              placeholder="AI visual description (the facts the bots read)" aria-label="AI visual description"
+              className="w-full rounded border border-line bg-bg px-2 py-1.5 outline-none focus:border-accent" />
+          )}
           <div className="flex gap-2">
             <button type="submit" disabled={pending}
               className="flex-1 rounded bg-accent py-1.5 text-xs font-medium text-accent-ink hover:bg-accent-deep disabled:opacity-50">
