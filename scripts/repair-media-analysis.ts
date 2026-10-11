@@ -16,7 +16,7 @@
  * flags
  *   --clone SLUG   --table photos|videos   --scope all|problem (default all)   --status legacy,failed,pending   --limit N
  *   --spread (round-robin across clones, for samples)   --concurrency N (default 4, max 8)   --retries N (default 2)
- *   --run ID (state dir name; re-use it to RESUME)   --state-root DIR (default ./.media-repair-state)   --skip-failed
+ *   --model MODEL (force one vision model for every row)   --run ID (state dir name; re-use it to RESUME)   --state-root DIR (default ./.media-repair-state)   --skip-failed
  *   --cost-photo USD (default 0.0015)   --cost-video USD (default 0.003)   --analyser real|fake (fake: preview only)   --out FILE
  *
  * Targets only the approved Supabase project or a loopback rig (assertSafeSupabaseUrl). Never touches star_value, is_free,
@@ -41,7 +41,8 @@ async function realAnalyser(): Promise<Analyser> {
   if (typeof mod.analysePhoto !== "function" || typeof mod.analyseVideo !== "function") {
     throw new Error("lib/caption.ts has no analysePhoto/analyseVideo yet (media-analysis-fix branch). Merge it first, or use --analyser fake for a preview.");
   }
-  return (table, bytes, model) => (table === "photos" ? mod.analysePhoto(bytes, model) : mod.analyseVideo(bytes, model));
+  const forced = opt("model"); // --model forces one model for every row (eval / pilot), else the clone's configured vision_model
+  return (table, bytes, model) => (table === "photos" ? mod.analysePhoto(bytes, forced ?? model) : mod.analyseVideo(bytes, forced ?? model));
 }
 
 async function main() {
