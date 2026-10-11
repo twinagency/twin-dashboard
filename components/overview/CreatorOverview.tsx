@@ -39,7 +39,7 @@ function Photo({photo,alt,className}:{photo:OverviewPhoto;alt:string;className?:
 function AgencyPhoto({photo,name,className}:{photo:AgencyOverviewImage|null;name:string;className?:string}) {
   const [failed,setFailed] = useState(false);
   useEffect(()=>setFailed(false),[photo?.url]);
-  return photo&&!failed ? <img src={photo.url} alt={name} className={className} style={{objectPosition:photo.position}} data-photo-id={photo.id} onError={()=>setFailed(true)}/> : <span className={className} aria-label={name}>{initials(name)}</span>;
+  return photo&&!failed ? <span className={`${styles.portraitFrame} ${className||''}`}><img src={photo.url} alt={name} style={{objectPosition:photo.position,transform:`scale(${photo.zoom||1})`,transformOrigin:'50% 0%'}} data-photo-id={photo.id} onError={()=>setFailed(true)}/></span> : <span className={className} aria-label={name}>{initials(name)}</span>;
 }
 function Dialog({title,children,close}:{title:string;children:ReactNode;close:()=>void}) {
   const ref = useRef<HTMLDivElement>(null);
