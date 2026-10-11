@@ -38,6 +38,7 @@ function Photo({photo,alt,className}:{photo:OverviewPhoto;alt:string;className?:
 }
 function AgencyPhoto({photo,name,className}:{photo:AgencyOverviewImage|null;name:string;className?:string}) {
   const [failed,setFailed] = useState(false);
+  useEffect(()=>setFailed(false),[photo?.url]);
   return photo&&!failed ? <img src={photo.url} alt={name} className={className} style={{objectPosition:photo.position}} data-photo-id={photo.id} onError={()=>setFailed(true)}/> : <span className={className} aria-label={name}>{initials(name)}</span>;
 }
 function Dialog({title,children,close}:{title:string;children:ReactNode;close:()=>void}) {
@@ -78,7 +79,7 @@ export default function CreatorOverview({initialPresentation,initialAudience,cre
   const [revision,setRevision] = useState(0), [switching,setSwitching] = useState(false);
   const [hover,setHover] = useState<number|null>(null);
   const [detail,setDetail] = useState<{purchase:RecentTransaction}|{photo:OverviewPhoto}|null>(null);
-  const id = presentation?.id || ''; 
+  const id = presentation?.id || '';
   useEffect(() => {
     const abort = new AbortController();
     let first = true;
@@ -119,8 +120,9 @@ export default function CreatorOverview({initialPresentation,initialAudience,cre
   const money = (stars:number) => fmtMoney(starsToMoneyRate(stars,currency,rate),currency);
   const amount = stats ? money(stats.stars) : loading ? '…' : 'Unavailable';
   const comparisonValues = compare && isAgency ? data?.series.flatMap(row=>allowedIds.map(key=>Number(row[key])||0)) || [] : [];
-  const peak = Math.max(1,...comparisonValues.map(v=>starsToMoneyRate(v,currency,rate)),...values.map(v => starsToMoneyRate(v,currency,rate)));
-  const floor = Math.min(0,...comparisonValues.map(v=>starsToMoneyRate(v,currency,rate)),...values.map(v => starsToMoneyRate(v,currency,rate)));
+  const chartValues = compare&&isAgency ? comparisonValues : values;
+  const peak = Math.max(1,...chartValues.map(v=>starsToMoneyRate(v,currency,rate)));
+  const floor = Math.min(0,...chartValues.map(v=>starsToMoneyRate(v,currency,rate)));
   const chartPoints = values.map((v,i) => `${i / Math.max(1,values.length - 1) * 1000},${180 - (starsToMoneyRate(v,currency,rate)-floor)/(peak-floor)*170}`).join(' ');
   const chartZero = 180 - (0-floor)/(peak-floor)*170;
   const choosePeriod = (value:Period) => { setPeriod(value); setRange(null); setHover(null); setCustom(false); };
@@ -154,7 +156,7 @@ export default function CreatorOverview({initialPresentation,initialAudience,cre
     <div className={styles.spotlightGrid}>
       <Panel title="Earnings overview" className={styles.earningsPanel} action={<div className={styles.segmented}>{(['1W','1M','6M','ALL'] as Period[]).map((p,i)=><button key={p} aria-pressed={period===p&&!range} onClick={()=>choosePeriod(p)}>{['7 days','30 days','6 months','All time'][i]}</button>)}</div>}>
         {isAgency&&<div className={styles.chartComparison}><div className={styles.segmented}><button aria-pressed={!compare} onClick={()=>setCompare(false)}>Combined</button><button aria-pressed={compare} onClick={()=>setCompare(true)}>Compare creators</button></div>{compare&&<div className={styles.chartLegend}>{agency?.creators.map(c=><span key={c.id}><i style={{background:c.color}}/>{c.name}</span>)}</div>}</div>}
-        <div className={styles.chartMeta}><span><i/>{compare&&isAgency?'Creator comparison':'Telegram'}</span><strong>{hover===null?amount:money(values[hover]||0)}</strong><small>{hover===null?'':data?.bucketLabels[hover]}</small></div>
+        <div className={styles.chartMeta}><span><i/>{compare&&isAgency?'All creators total':'Telegram'}</span><strong>{hover===null?amount:money(values[hover]||0)}</strong><small>{hover===null?'':data?.bucketLabels[hover]}</small></div>
         <div className={styles.areaChart} aria-label="Telegram earnings by reporting interval"><div className={styles.axis}>{[1,.75,.5,.25,0].map(f=><span key={f}>{fmtMoney(floor+(peak-floor)*f,currency).replace(/\.00$/,'')}</span>)}</div><div className={styles.plot}>
           <svg viewBox="0 0 1000 195" preserveAspectRatio="none" role="img" aria-label={stats?'Recorded Telegram earnings':'Loading earnings chart'}><defs><linearGradient id="flirt-earnings-fill" x1="0" x2="0" y1="0" y2="1"><stop offset="0%" stopColor="#e51872" stopOpacity=".22"/><stop offset="100%" stopColor="#e51872" stopOpacity=".01"/></linearGradient></defs>{[10,52.5,95,137.5,180].map(y=><line key={y} x1="0" x2="1000" y1={y} y2={y} stroke="#edf0f5" strokeDasharray="3 5"/>)}{values.length>0&&!(compare&&isAgency)&&<><polygon points={`0,${chartZero} ${chartPoints} 1000,${chartZero}`} fill="url(#flirt-earnings-fill)"/><polyline points={chartPoints} fill="none" stroke="#df126b" strokeWidth="2.5" vectorEffect="non-scaling-stroke" strokeLinejoin="round"/></>}{compare&&isAgency&&agency?.creators.map(c=><polyline key={c.id} data-comparison-creator={c.id} points={(data?.series||[]).map((row,i)=>`${i/Math.max(1,values.length-1)*1000},${180-(starsToMoneyRate(Number(row[c.id])||0,currency,rate)-floor)/(peak-floor)*170}`).join(' ')} fill="none" stroke={c.color} strokeWidth="2.5" vectorEffect="non-scaling-stroke" strokeLinejoin="round"/>)}</svg>
           <div className={styles.chartTargets}>{values.map((v,i)=><button key={i} aria-label={`${data?.bucketLabels[i]}: ${money(v)}`} onMouseEnter={()=>setHover(i)} onMouseLeave={()=>setHover(null)} onFocus={()=>setHover(i)} onBlur={()=>setHover(null)} onClick={()=>setHover(i)}/>)}</div>
