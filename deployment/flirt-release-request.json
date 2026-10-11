@@ -1,5 +1,5 @@
 {
-  "reason": "Add the same green iMessage artwork as Moxy and Twin after OnlyFans on FLIRT, and remove the pale wash from creator banner photos.",
-  "source_commit": "f180c4e9aa5dd8f66dd46bd18a352e19aaa8a751",
-  "requested_at": "2026-10-11T02:20:11.692Z"
+  "reason": "Display the full-colour FLIRT logo in a clean agency hero panel and remove all fading from personalised creator Overview banners.",
+  "source_commit": "67b03034cdf4ea55de714bfbaebcb7492024be4a",
+  "requested_at": "2026-10-11T04:40:43.107Z"
 }
