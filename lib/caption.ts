@@ -22,7 +22,8 @@ export { VISION_ANALYSIS_DEFAULT_MODEL, resolveVisionAnalysisModel };
 // Timeouts. Each vision call gets its own deadline; the whole analysis (calls, retries, backoff) gets a hard ceiling. The
 // old code let one 12s timer cover the call AND its retry, so the retry never had time to run.
 export const VISION_CALL_TIMEOUT_MS = 40_000;
-// Budget: 2 first-pass attempts (40s each) + the video second look (40s) with a little backoff slack.
+// Budget: 2 first-pass attempts (40s each) + the second look (40s, photos and videos) with a little backoff slack. Unchanged
+// at 150s when photos gained the second look: the measured second look is ~3s, the worst case was already budgeted for video.
 export const SECOND_LOOK_TIMEOUT_MS = 40_000;
 export const ANALYSIS_TOTAL_BUDGET_MS = 150_000;
 const MAX_ATTEMPTS = 2; // one extra look for a malformed or self-contradictory answer
@@ -89,14 +90,18 @@ async function observe(
   }
   if (!normalized) return failed(model, lastError, latencyMs, costUsd, provider);
 
-  // Video only: one bounded second look at the high-stakes keys. Anything not re-confirmed becomes "unclear" (needs_review).
+  // Photos and videos: one bounded second look at the high-stakes keys. Anything not re-confirmed becomes "unclear" (needs_review);
+  // a second look that cannot run (budget spent, call failed) confirms nothing. Runs at upload/import/repair time only, never in a
+  // fan conversation. It filters over-claims on its trigger keys; it does NOT fix claims on other keys (bare_buttocks, mirror,
+  // lingerie), details missed as "no", and a repeated "yes" from the same model is not proof (see media-classification.ts).
   let secondLookNote: string | null = null;
-  const lookKeys = kind === "video" && frames !== undefined ? secondLookKeys(normalized.fields.visual_facts.evidence) : [];
-  if (lookKeys.length && !overall.aborted) {
+  const lookKeys = secondLookKeys(normalized.fields.visual_facts.evidence, kind === "photo");
+  if (lookKeys.length) {
     let answer: unknown = null, why = "second look did not run";
     try {
+      if (overall.aborted) throw new Error("analysis budget spent");
       const { content, meta } = await call({
-        model, dataUrl, prompt: secondLookPrompt(frames!, lookKeys),
+        model, dataUrl, prompt: secondLookPrompt(frames, lookKeys),
         signal: AbortSignal.any([overall, AbortSignal.timeout(SECOND_LOOK_TIMEOUT_MS)]),
       });
       latencyMs += meta.latencyMs;

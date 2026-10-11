@@ -29,10 +29,17 @@ const answer = (evidence: Record<string, unknown> = {}, over: Record<string, unk
   tags: ["solo"],
   ...over,
 });
+// Once the scripted answers run out, a second-look prompt ("ONLY these keys: a, b.") is CONFIRMED (every asked key "yes") by default,
+// so a test that scripts only the first pass sees a confirming second look. Scripted second answers still win.
 const replying = (...contents: string[]): { call: VisionCall; calls: { prompt: string; dataUrl: string; model: string }[] } => {
   const calls: { prompt: string; dataUrl: string; model: string }[] = [];
   let i = 0;
-  return { calls, call: async (a) => { calls.push({ prompt: a.prompt, dataUrl: a.dataUrl, model: a.model }); const c = contents[Math.min(i++, contents.length - 1)]; return { content: c, meta: meta() }; } };
+  return { calls, call: async (a) => {
+    calls.push({ prompt: a.prompt, dataUrl: a.dataUrl, model: a.model });
+    const look = a.prompt.match(/ONLY these keys: ([\w, ]+)\./);
+    if (look && i >= contents.length) { i++; return { content: JSON.stringify(Object.fromEntries(look[1].split(", ").map((k) => [k, "yes"]))), meta: meta() }; }
+    const c = contents[Math.min(i++, contents.length - 1)]; return { content: c, meta: meta() };
+  } };
 };
 const captionOk = async () => "mmm lounging in my sweatshirt, wanna see what's under it? 😈";
 async function main() {
@@ -370,13 +377,59 @@ const guide = Object.fromEntries(PRICING_CATEGORIES.map((c) => [c, c === "sfw" |
     const sl5 = replying(answer({ nipples: "yes" }, { ...bare, tags: [] }));
     await analyseVideo(readFileSync(clip), null, undefined, { call: sl5.call, writeCaption: captionOk });
     assert.equal(sl5.calls.length, 1, "nipples yes is not a trigger");
-    const sl6 = replying(answer({ genitals: "yes" }, bare));
-    const p6 = await analysePhoto(photo, null, undefined, { call: sl6.call, writeCaption: captionOk });
-    assert.equal(sl6.calls.length, 1, "photos have no second look");
-    assert.equal(p6.status, "analysed");
+    // photos: same machinery (round 5); see the dedicated block below
   } finally {
     rmSync(dir, { recursive: true, force: true });
   }
+}
+
+// ---- photo second look (round 5): one stricter extra call when genitals/anus/nipples/sexual_activity/sex_toy/full_nudity is yes ----
+{
+  const bare = { identifying: "A woman lies on a bed.", details: "She lies on a white sheet.", short_label: "woman on bed", visible: ["white sheet"], tags: ["pussy", "solo"] };
+  const go = (r: ReturnType<typeof replying>) => analysePhoto(photo, null, undefined, { call: r.call, writeCaption: captionOk });
+  // confirmed: analysed, exactly +1 call, photo wording, same image, cost and latency summed
+  const c1 = replying(answer({ genitals: "yes" }, bare), JSON.stringify({ genitals: "yes" }));
+  const p1 = await go(c1);
+  assert.equal(c1.calls.length, 2, "genitals yes on a photo makes exactly one second-look call");
+  assert.match(c1.calls[1].prompt, /ONLY these keys: genitals\./);
+  assert.match(c1.calls[1].prompt, /skin \/ nipple \/ opening \/ toy itself is plainly seen in the image/);
+  assert.doesNotMatch(c1.calls[1].prompt, /contact sheet/);
+  assert.equal(c1.calls[1].dataUrl, c1.calls[0].dataUrl);
+  assert.equal(p1.status, "analysed");
+  assert.equal(p1.fields?.visual_facts.evidence.genitals, "yes");
+  assert.ok(p1.fields?.tags.includes("pussy"));
+  assert.equal(p1.latencyMs, 2400, "latency of both calls is summed");
+  assert.equal(p1.costUsd, 0.0008, "cost of both calls is summed");
+  // not confirmed: key unclear, tag dropped, needs_review with the reason, no send caption
+  const c2 = replying(answer({ genitals: "yes", nipples: "yes" }, { ...bare, details: "She lies on a white sheet.", tags: ["pussy", "topless", "solo"] }), JSON.stringify({ genitals: "no", nipples: "yes" }));
+  const p2 = await go(c2);
+  assert.equal(p2.status, "needs_review");
+  assert.deepEqual([p2.fields?.visual_facts.evidence.genitals, p2.fields?.visual_facts.evidence.nipples], ["unclear", "yes"]);
+  assert.ok(!p2.fields?.tags.includes("pussy"), "the tag of an unconfirmed key is dropped");
+  assert.match(p2.error ?? "", /second look did not confirm genitals/);
+  assert.equal(p2.fields?.caption, null);
+  // an unparseable / missing key answer confirms nothing
+  const c3 = replying(answer({ nipples: "yes" }, { ...bare, tags: [] }), "{not json");
+  const p3 = await go(c3);
+  assert.equal(p3.status, "needs_review");
+  assert.equal(p3.fields?.visual_facts.evidence.nipples, "unclear");
+  // the second call failing confirms nothing
+  let n = 0;
+  const flaky: VisionCall = async () => { if (n++ === 0) return { content: answer({ sex_toy: "yes" }, { ...bare, tags: [] }), meta: meta() }; throw new Error("OpenRouter 500: boom"); };
+  const p4 = await analysePhoto(photo, null, undefined, { call: flaky, writeCaption: captionOk });
+  assert.equal(p4.status, "needs_review");
+  assert.equal(p4.fields?.visual_facts.evidence.sex_toy, "unclear");
+  assert.match(p4.error ?? "", /second look did not confirm sex_toy/);
+  // no trigger key yes: no extra call (bare_buttocks, lingerie, mirror_reflection, swimwear are not triggers)
+  for (const ev of [{}, { bare_buttocks: "yes" }, { lingerie: "yes" }, { swimwear: "yes", suggestive_pose: "yes" }]) {
+    const c = replying(answer(ev, { tags: [] }));
+    await go(c);
+    assert.equal(c.calls.length, 1, `no trigger for ${JSON.stringify(ev)}`);
+  }
+  // only the keys that were yes are re-asked
+  const c5 = replying(answer({ anus: "yes", full_nudity: "yes", nipples: "no" }, { ...bare, tags: [] }), JSON.stringify({ anus: "yes", full_nudity: "yes" }));
+  await go(c5);
+  assert.match(c5.calls[1].prompt, /ONLY these keys: anus, full_nudity\./);
 }
 
 // ---- wiring in the dashboard action (source-level: the action needs a live Supabase to run) ----

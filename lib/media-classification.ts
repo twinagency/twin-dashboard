@@ -42,19 +42,43 @@ export function videoClassificationPrompt(frames: number): string {
 The image is a contact sheet of ${frames} separate frames sampled at even intervals from ONE video clip, tiled left to right, top to bottom. You are NOT seeing the whole clip, only these still frames. Describe only what these frames show. A key is "yes" if any frame clearly shows it. genitals and anus are "yes" only if the skin or opening itself is plainly seen uncovered in at least one frame; a nude body seen from a distance, a blur, a hand over the area, or a garment that could be pulled aside is not enough. A garment in view forbids full_nudity "yes" and words like "unclothed". Answer "no" only if the frames show that part of the body or garment in frame and plainly absent or covered in every frame; otherwise "unclear". Make no claims about motion, actions between frames, what happens before, after or throughout the clip, or what the clip is "doing". Do not use words like "then", "later", "throughout", "continues" or "static", and do not describe what the camera does.`;
 }
 
-// ---- video second look -------------------------------------------------------------------------------------------------
+// ---- second look (video, and since round 5 photos) --------------------------------------------------------------------
 // A contact sheet makes any-frame-yes cheap, which over-claims the keys with the worst cost of being wrong. When one of the
 // TRIGGER keys is "yes", ONE more call re-asks only the keys that were yes; whatever is not re-confirmed becomes "unclear".
+// Photos (round 5): same machinery, plus nipples as a trigger/asked key, with a stricter "the skin / nipple / opening / toy itself
+// is plainly seen" wording. WHAT THIS DOES NOT FIX: (1) false claims on keys that are not triggers (bare_buttocks, mirror_reflection,
+// lingerie, swimwear); (2) details answered "no" that are really there (missed nipples/anus); (3) the second answer comes from the
+// SAME model, so a re-confirmed "yes" is not proof, only "the model said it twice". It is a filter for over-claims, not a verifier.
 export const SECOND_LOOK_TRIGGERS = ["genitals", "anus", "sexual_activity", "sex_toy"] as const satisfies readonly FactKey[];
 export const SECOND_LOOK_KEYS = [...SECOND_LOOK_TRIGGERS, "full_nudity"] as const satisfies readonly FactKey[];
+export const PHOTO_SECOND_LOOK_TRIGGERS = ["genitals", "anus", "nipples", "sexual_activity", "sex_toy", "full_nudity"] as const satisfies readonly FactKey[];
 
-/** The keys to re-ask for a first-pass evidence set, or [] when no trigger key is "yes". */
-export function secondLookKeys(ev: Record<FactKey, Tri>): FactKey[] {
+/** The keys to re-ask for a first-pass evidence set, or [] when no trigger key is "yes". Videos trigger on SECOND_LOOK_TRIGGERS
+ * and re-ask the yes keys among SECOND_LOOK_KEYS; photos trigger on and re-ask PHOTO_SECOND_LOOK_TRIGGERS. */
+export function secondLookKeys(ev: Record<FactKey, Tri>, photo = false): FactKey[] {
+  if (photo) return PHOTO_SECOND_LOOK_TRIGGERS.filter((k) => ev[k] === "yes");
   if (!SECOND_LOOK_TRIGGERS.some((k) => ev[k] === "yes")) return [];
   return SECOND_LOOK_KEYS.filter((k) => ev[k] === "yes");
 }
 
-export function secondLookPrompt(frames: number, keys: readonly FactKey[]): string {
+const PHOTO_KEY_DEFS: Partial<Record<FactKey, string>> = {
+  genitals: "genitals: the vulva/anatomy ITSELF is plainly seen uncovered. A worn thong/panel/sheer fabric/hat/hand/hair covering it, or it being cropped out, is NOT yes.",
+  anus: "anus: the anal opening ITSELF is plainly seen, or an object is plainly seen inserted. Buttocks, a spread pose or a rear view alone is NOT yes.",
+  nipples: "nipples: the nipple or areola ITSELF is plainly seen (bare, or clearly discernible through sheer fabric). Covered by opaque fabric, hand, arm, petals, hair, or only an outline = NOT yes.",
+  sexual_activity: "sexual_activity: a sexual act or a toy in use is plainly seen. A pose, an object nearby or a hand resting on the body is NOT yes.",
+  sex_toy: "sex_toy: a sex toy is plainly seen.",
+  full_nudity: "full_nudity: the whole body is plainly unclothed. ANY garment on torso or lower body, or the lower body hidden by a hat/object/crop, is NOT yes.",
+};
+
+/** `frames` undefined = a single photo; a number = a video contact sheet of that many frames. */
+export function secondLookPrompt(frames: number | undefined, keys: readonly FactKey[]): string {
+  if (frames === undefined) {
+    return `You are checking an adult creator's own catalogue photo for a content-labelling system. Be conservative: wrongly saying yes is worse than saying unclear.
+Answer ONLY these keys: ${keys.join(", ")}.
+Each value: "yes", "no" or "unclear". Say yes ONLY if the skin / nipple / opening / toy itself is plainly seen in the image; otherwise no or unclear.
+${keys.map((k) => PHOTO_KEY_DEFS[k] ?? k).join("\n")}
+Return JSON only: {${keys.map((k) => `"${k}":"..."`).join(",")}}`;
+  }
   return `The image is a contact sheet of ${frames} separate still frames from one video, tiled left to right, top to bottom. Look at each frame again, carefully, and answer ONLY these keys: ${keys.join(", ")}.
 Return JSON with exactly these keys, each "yes", "no" or "unclear". Answer "yes" only if the skin, opening or toy is plainly seen, uncovered, in at least one frame. A covered outline, a thong or bottom that is in place (even if it could be pulled aside), hands covering the area, a blur, a small or distant body, or a pose alone is "no" or "unclear". full_nudity is "yes" only if no garment is on the torso or lower body in any frame. sexual_activity is "yes" only if a sexual act or a toy in use is plainly visible. Do not infer; do not describe.`;
 }
