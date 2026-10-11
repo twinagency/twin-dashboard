@@ -66,6 +66,17 @@ jobs:
 
       - name: Moxy overview responsive and interaction checks
         run: node scripts/check-moxy-overview-ui.mjs
+        env:
+          MOXY_REVIEW_OUT: test-results/moxy-overview
+
+      - name: Moxy overview review screenshots
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: moxy-overview-preview
+          path: test-results/moxy-overview
+          if-no-files-found: ignore
+          retention-days: 3
 
       - name: Alana catalogue responsive and interaction checks
         run: node scripts/check-alana-catalogue-ui.mjs
