@@ -1,5 +1,6 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useContext, useEffect, useState } from "react";
+import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import { Upload, ImageIcon, Film, Check, RotateCcw } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -19,8 +20,24 @@ export default function CreatorContentIntake({ locked, loginPath, savedPhotos, s
   locked: boolean; loginPath: string; savedPhotos: number; savedVideos: number; initialFolders?: ContentFolder[];
 }) {
   const queue = useContentUploads();
+  const router = useContext(AppRouterContext);
   const [notice, setNotice] = useState("");
   const total = savedPhotos + savedVideos;
+  useEffect(() => {
+    const navigate = (event: Event) => {
+      const href = (event as CustomEvent<{ href: string }>).detail?.href;
+      if (!href || !queue?.folderPending) return;
+      event.preventDefault();
+      // Load the questionnaire only after its shared application revision is saved.
+      void queue.folder.save().then(saved => {
+        if (!saved) return;
+        if (router && href.startsWith("/creator/onboarding")) router.push(href);
+        else window.location.assign(href);
+      });
+    };
+    window.addEventListener("creator-setup:navigate", navigate);
+    return () => window.removeEventListener("creator-setup:navigate", navigate);
+  }, [queue, router]);
   if (!queue) return <p role="alert">The uploader could not start. Refresh this page to try again.</p>;
   const folder = queue.folder;
   const folders = folder.folders ?? initialFolders;
