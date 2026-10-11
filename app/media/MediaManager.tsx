@@ -5,6 +5,7 @@ import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Thumb from "@/components/SignedMediaPreview";
 import StarAmount from "@/components/StarAmount";
+import MediaVisualDescription from "@/components/MediaVisualDescription";
 import {
   MEDIA_TAGS,
   CATEGORY_LABELS,
@@ -58,6 +59,7 @@ type Photo = {
   nsfw: boolean | null;
   tags: string[] | null;
   auto_desc: string | null;
+  visual_description?: string | null;
   created_at: string;
 };
 
@@ -74,6 +76,7 @@ type Video = {
   nsfw: boolean | null;
   tags: string[] | null;
   auto_desc: string | null;
+  visual_description?: string | null;
   created_at: string;
 };
 
@@ -82,6 +85,7 @@ type BundleItem = {
   bundle_id: string;
   storage_path: string;
   sort_order: number;
+  visual_description?: string | null;
 };
 
 type Bundle = {
@@ -112,10 +116,10 @@ type CatalogueBundleRow = {
 // ── Helpers ───────────────────────────────────────────────────────────────────
 // Full-screen lightbox showing the media large + its full caption / teaser / badges.
 function Lightbox({
-  path, type, title, starValue, caption, teaserCaption, isNude, explicitness, onClose,
+  path, type, title, starValue, caption, teaserCaption, visualDescription, isNude, explicitness, onClose,
 }: {
   path: string; type: "photo" | "video"; title: string; starValue: number;
-  caption: string | null; teaserCaption: string | null;
+  caption: string | null; teaserCaption: string | null; visualDescription?: string | null;
   isNude: boolean | null; explicitness: string | null; onClose: () => void;
 }) {
   return (
@@ -140,6 +144,7 @@ function Lightbox({
             <div className="text-xs uppercase tracking-wide text-muted">Teaser (shown to fan)</div>
             <div className="text-ink whitespace-pre-wrap">{teaserCaption || <span className="text-muted">No teaser caption</span>}</div>
           </div>
+          <MediaVisualDescription value={visualDescription} />
         </div>
       </div>
     </div>
@@ -662,7 +667,7 @@ function PhotoCard({
       )}
       {viewing && (
         <Lightbox path={photo.storage_path} type="photo" title={photo.image_name ?? "Untitled"}
-          starValue={photo.is_free ? 0 : photo.star_value} caption={photo.caption} teaserCaption={photo.teaser_caption}
+          starValue={photo.is_free ? 0 : photo.star_value} caption={photo.caption} teaserCaption={photo.teaser_caption} visualDescription={photo.visual_description}
           isNude={photo.is_nude} explicitness={photo.explicitness} onClose={() => setViewing(false)} />
       )}
       <div className="mb-3">
@@ -681,6 +686,7 @@ function PhotoCard({
           <div className="mt-1 text-[11px] italic text-muted">{photo.auto_desc}</div>
         )}
         <TagChips tags={photo.tags} />
+        <MediaVisualDescription value={photo.visual_description} />
       </div>
       {editing ? (
         <form action={save} className="grid gap-2 text-xs">
@@ -784,7 +790,7 @@ function VideoCard({
       )}
       {viewing && (
         <Lightbox path={video.storage_path} type="video" title="Video"
-          starValue={video.is_free ? 0 : video.star_value} caption={video.caption} teaserCaption={video.teaser_caption}
+          starValue={video.is_free ? 0 : video.star_value} caption={video.caption} teaserCaption={video.teaser_caption} visualDescription={video.visual_description}
           isNude={video.is_nude} explicitness={video.explicitness} onClose={() => setViewing(false)} />
       )}
       <div className="mb-3">
@@ -803,6 +809,7 @@ function VideoCard({
           <div className="mt-1 text-[11px] italic text-muted">{video.auto_desc}</div>
         )}
         <TagChips tags={video.tags} />
+        <MediaVisualDescription value={video.visual_description} />
       </div>
       {editing ? (
         <form action={save} className="grid gap-2 text-xs">
@@ -953,7 +960,7 @@ function BundleCard({ bundle, cloneId }: { bundle: Bundle; cloneId: string }) {
         </div>
       )}
       <div className="mb-3 flex flex-wrap gap-2">
-        {bundle.photo_bundle_items
+        {[...bundle.photo_bundle_items]
           .sort((a, b) => a.sort_order - b.sort_order)
           .map((item) => (
             <div key={item.id} className="group relative">
@@ -984,6 +991,17 @@ function BundleCard({ bundle, cloneId }: { bundle: Bundle; cloneId: string }) {
           />
           +
         </label>
+      </div>
+      <div className="mb-3 grid gap-3 sm:grid-cols-2">
+        {[...bundle.photo_bundle_items]
+          .sort((a, b) => a.sort_order - b.sort_order)
+          .map((item, index) => (
+            <MediaVisualDescription
+              key={item.id}
+              label={`Photo ${index + 1}: AI visual description`}
+              value={item.visual_description}
+            />
+          ))}
       </div>
       <div className="text-xs text-muted">{bundle.photo_bundle_items.length} photo{bundle.photo_bundle_items.length !== 1 ? "s" : ""}</div>
     </div>

@@ -356,7 +356,8 @@ export const AGENCY_COLUMNS: Record<string, readonly string[]> = {
     "id",
     "bundle_id",
     "storage_path",
-    "sort_order"
+    "sort_order",
+    "visual_description"
   ],
   "photo_bundles": [
     "id",
@@ -382,7 +383,8 @@ export const AGENCY_COLUMNS: Record<string, readonly string[]> = {
     "is_free",
     "nsfw",
     "tags",
-    "auto_desc"
+    "auto_desc",
+    "visual_description"
   ],
   "star_transactions": [
     "id",
@@ -512,7 +514,8 @@ export const AGENCY_COLUMNS: Record<string, readonly string[]> = {
     "is_free",
     "nsfw",
     "tags",
-    "auto_desc"
+    "auto_desc",
+    "visual_description"
   ]
 };
 
