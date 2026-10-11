@@ -31,6 +31,14 @@ async function main() {
         const metadata = await sharp(Buffer.from(await image.arrayBuffer())).metadata();
         assert.ok(metadata.width && metadata.height, "Invalid creator portrait");
       }
+      for (const media of [creator.banner, ...(creator.library ?? [])].filter(Boolean)) {
+        const image = await fetch(media!.url, { signal: AbortSignal.timeout(15000) });
+        assert.ok(image.ok, 'Private creator dashboard photo unavailable');
+        const metadata = await sharp(Buffer.from(await image.arrayBuffer())).metadata();
+        assert.ok(metadata.width && metadata.height, 'Invalid dashboard photo');
+      }
+      const mediaIds = [creator.photoId, creator.banner?.id, ...(creator.library ?? []).map(p => p.id)].filter(Boolean);
+      assert.equal(new Set(mediaIds).size, mediaIds.length, 'Dashboard photos must be distinct');
     }
     const earnings = await dashboard(new NextRequest("https://dashboard.lynqai.co/api/dashboard?period=1M&fresh=1"));
     const snapshot = await earnings.json();
@@ -38,6 +46,18 @@ async function main() {
     assert.ok(snapshot.clones.every((c: {id:string}) => moxy.cloneIds.includes(c.id)), "Overview earnings escaped agency scope");
     const total = overview.reduce((sum, c) => sum + (snapshot.perClone[c.id]?.stars ?? 0), 0);
     assert.ok(Math.abs(total - snapshot.totals.stars) < 0.01, "Overview creator totals disagree with ledger");
+    for (const creator of overview) {
+      const scoped = await dashboard(new NextRequest(`https://dashboard.lynqai.co/api/dashboard?period=1M&clone=${creator.id}`));
+      const data = await scoped.json();
+      assert.equal(scoped.status, 200);
+      assert.ok(data.recent.every((row: {cloneId: string}) => row.cloneId === creator.id), 'Recent activity must match selected creator');
+      for (const row of data.recent.slice(0, 3)) {
+        const fan = await supabaseAdmin.from('users').select('name,stated_name,telegram_id').eq('clone_id', row.cloneId).eq('telegram_id', row.telegramId).limit(1).maybeSingle();
+        assert.ok(!fan.error, 'Fan identity lookup failed');
+        if (fan.data) assert.equal(row.buyerName, fan.data.stated_name || fan.data.name || `Fan ${row.telegramId}`, 'Recent buyer must match real fan profile');
+      }
+    }
+    console.log("Live Moxy creator-specific images, activity and fan identities passed");
     console.log("Live Moxy Overview roster, private portraits, audience counts and earnings reconciliation passed");
     for (const cloneId of moxy.cloneIds) {
       const sequences = await supabaseAdmin.from("video_sequences")

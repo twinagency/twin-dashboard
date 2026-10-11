@@ -8,3 +8,31 @@
 
 .disconnected img[src$="imessage.svg"],.muted img[src$="imessage.svg"]{filter:grayscale(1)}
 @media(max-width:600px){.metrics>.metric:first-child{grid-column:auto;min-height:134px}.metrics>.metric:first-child .spark{width:60px;height:22px;bottom:10px}.metric{padding:14px 10px;gap:6px}.metric strong{font-size:20px}.metricIcon{width:25px;height:30px}.metricIcon svg{width:23px}.telegramMetric>svg{width:27px;height:27px}}
+
+/* Individual creator composition follows the creator dashboard, with Moxy colours. */
+.creatorPage .hero{min-height:228px;padding:36px 54px;background:linear-gradient(110deg,#f1ede9,#e8e4df)}
+.creatorPage .hero h1{font-size:clamp(34px,3.5vw,54px);max-width:520px}
+.creatorPage .hero .heroPhoto{width:59%;mask-image:linear-gradient(90deg,transparent,#000 32%)}
+.creatorPage .hero>div{max-width:53%}
+.creatorPage .middle{grid-template-columns:minmax(0,2.025fr) minmax(290px,1fr);align-items:stretch}
+.creatorPage .activityText small[hidden]{display:none}
+.creatorPage .fanAvatar{width:43px;height:43px}
+.creatorPage .activityRow{padding:18px 0}
+.creatorPage .telegramMetric{padding-bottom:28px}
+.libraryGrid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px}
+.libraryTile{position:relative;display:block;min-width:0;height:196px;border-radius:9px;overflow:hidden;background:#eee}
+.libraryTile>.photo{width:100%;height:100%}
+.libraryTile>span:last-child{position:absolute;bottom:0;left:0;right:0;padding:30px 12px 12px;background:linear-gradient(transparent,#0009);color:#fff;display:flex;align-items:center;gap:7px;font-size:11px}
+.libraryTile>span:last-child>svg:last-child{margin-left:auto}
+.flowPanel{display:flex;flex-direction:column}
+.flowVisual{display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at 50% 100%,#d9eae7,#f1f3f2 75%);border:1px solid #e5ebe8;border-radius:9px;height:90px;flex-shrink:0}
+.flowVisual>span{display:grid;place-items:center;width:44px;height:44px;border:1px solid #e0e5e3;border-radius:13px;background:#fff;color:#496760;box-shadow:0 3px 10px #273d3310}
+.flowVisual>i{width:24px;height:1px;background:#b9cbc5}
+.flowHeading{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:13px}
+.flowHeading h3{font-size:14px;font-weight:650;margin:0}
+.flowStatus{display:flex;align-items:center;gap:5px;font-size:10px;color:#72757a}
+.flowSummary{margin:5px 0 12px;font-size:11px;color:#87838e}
+.flowPanel .primary{border-radius:8px;align-self:stretch;margin-top:auto;padding:9px 15px}
+@media(max-width:1100px){.creatorPage .middle{grid-template-columns:minmax(0,1.8fr) minmax(260px,1fr)}.creatorPage .hero{padding:32px}.libraryTile{height:175px}}
+@media(max-width:850px){.creatorPage .middle{grid-template-columns:1fr}.creatorPage .hero h1{font-size:36px}.creatorPage .hero{padding:28px}.flowVisual{height:110px}}
+@media(max-width:600px){.creatorPage .hero{min-height:215px;padding:24px}.creatorPage .hero h1{font-size:31px}.creatorPage .hero>div{max-width:58%}.creatorPage .hero .heroPhoto{width:65%}.libraryGrid{gap:8px}.libraryTile{height:155px}.libraryTile>span:last-child{padding:24px 8px 9px}.creatorPage .activityRow{padding:15px 0}}
