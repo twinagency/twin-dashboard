@@ -354,28 +354,47 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
     }
     return tonConnectRef.current;
   }
+  // Real wallet failure info for the funnel. A user rejection is kind 'user_rejected';
+  // everything else (no wallet app opened, bad manifest, timeout, ...) is 'error'.
+  function tonErrorDetail(e: unknown, ui: InstanceType<typeof TonConnectUI> | null, wasConnected: boolean, startedAt: number, step: string) {
+    const err = e as { name?: string; message?: string; constructor?: { name?: string } } | null;
+    const name = String(err?.constructor?.name || err?.name || typeof e);
+    const message = String(err?.message ?? e ?? '').slice(0, 300);
+    const wallet = ui?.wallet as { device?: { appName?: string }; appName?: string } | null | undefined;
+    const rejected = /UserRejects/i.test(name) || /user rejects|declined|rejected/i.test(message);
+    return {
+      kind: rejected ? 'user_rejected' : 'error', error_name: name, error_message: message, was_connected: wasConnected,
+      wallet_app: String(wallet?.device?.appName || wallet?.appName || ''),
+      platform: String((window as unknown as { Telegram?: { WebApp?: { platform?: string } } }).Telegram?.WebApp?.platform || ''),
+      elapsed_ms: Date.now() - startedAt, step,
+    };
+  }
   async function payWithTon(type: 'photo' | 'video' | 'bundle', id: string) {
     if (sending.current) return;
     if (data?.admin) { setNotice('Owner preview. Payments are disabled here.'); return; }
+    const tapAt = Date.now();
     logEvent('tap_pay_ton', { mediaType: type, mediaId: id, rail: 'ton' });
     sending.current = true; setBusy(true); setCommerceBusy(true); setTonPhase('opening'); setNotice('');
     try {
       const begin = await read('ton_checkout', { type, id });
       const payload = beginCell().storeUint(0, 32).storeStringTail(String(begin.comment)).endCell().toBoc().toString('base64');
+      let tui: InstanceType<typeof TonConnectUI> | null = null; let wasConnected = false; let step = 'init';
       try {
-        const ui = tonConnect();
+        const ui = tonConnect(); tui = ui;
         // sendTransaction throws if no wallet is connected; open the wallet picker first.
-        const alreadyConnected = ui.connected;
+        const alreadyConnected = ui.connected; wasConnected = alreadyConnected;
+        step = 'connect';
         if (!alreadyConnected) await ui.connectWallet();
         if (!alreadyConnected) logEvent('wallet_connected', { rail: 'ton' });
+        step = 'send';
         await ui.sendTransaction({
           validUntil: Math.floor(Date.now() / 1000) + 300,
           messages: [{ address: String(begin.toAddress), amount: String(begin.amountNanoton), payload }],
         });
-      } catch {
+      } catch (e) {
         // A wallet rejection or cancel never unlocks anything. The order stays
         // pending in the database until it expires; the fan can just retry.
-        logEvent('pay_cancel', { mediaType: type, mediaId: id, rail: 'ton' });
+        logEvent('pay_cancel', { mediaType: type, mediaId: id, rail: 'ton', detail: tonErrorDetail(e, tui, wasConnected, tapAt, step) });
         setNotice('Payment cancelled. You have not unlocked this item.'); return;
       }
       if (!mounted.current) return;
@@ -460,22 +479,26 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
   async function payTip(usd: number) {
     if (sending.current) return;
     if (data?.admin) return;
+    const tapAt = Date.now();
     logEvent('tap_tip', { rail: 'ton' });
     sending.current = true; setTipPhase('opening'); setTipNotice('');
     try {
       const begin = await read('ton_tip', { usd });
       const payload = beginCell().storeUint(0, 32).storeStringTail(String(begin.comment)).endCell().toBoc().toString('base64');
+      let tui: InstanceType<typeof TonConnectUI> | null = null; let wasConnected = false; let step = 'init';
       try {
-        const ui = tonConnect();
-        const alreadyConnected = ui.connected;
+        const ui = tonConnect(); tui = ui;
+        const alreadyConnected = ui.connected; wasConnected = alreadyConnected;
+        step = 'connect';
         if (!alreadyConnected) await ui.connectWallet();
         if (!alreadyConnected) logEvent('wallet_connected', { rail: 'ton' });
+        step = 'send';
         await ui.sendTransaction({
           validUntil: Math.floor(Date.now() / 1000) + 300,
           messages: [{ address: String(begin.toAddress), amount: String(begin.amountNanoton), payload }],
         });
-      } catch {
-        logEvent('pay_cancel', { rail: 'ton' });
+      } catch (e) {
+        logEvent('pay_cancel', { rail: 'ton', detail: tonErrorDetail(e, tui, wasConnected, tapAt, step) });
         setTipNotice('Payment cancelled.'); return;
       }
       if (!mounted.current) return;

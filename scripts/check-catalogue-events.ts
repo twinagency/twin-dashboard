@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import { createHmac } from 'node:crypto';
 import { NextRequest } from 'next/server';
 import { createCatalogueHandler } from '../lib/catalogue-api';
-import { isClientEventName, validEventUuid, validEventMediaType, validEventRail, CLIENT_EVENT_NAMES } from '../lib/catalogue-events';
+import { isClientEventName, sanitizeClientDetail, validEventUuid, validEventMediaType, validEventRail, CLIENT_EVENT_NAMES } from '../lib/catalogue-events';
 import { parseCatalogueStartParam } from '../lib/catalogue-start-param';
 
 const id = (n: number) => `00000000-0000-0000-0000-${String(n).padStart(12, '0')}`;
@@ -92,6 +92,9 @@ async function main() {
   for (const name of CLIENT_EVENT_NAMES) assert.equal(isClientEventName(name), true, `${name} is a client-loggable event`);
   for (const name of ['open', 'pay_success', 'pay_fail', 'unknown_event', '', 'view_item; drop table', 123])
     assert.equal(isClientEventName(name), false, `${JSON.stringify(name)} must never be accepted as a client event`);
+  assert.deepEqual(sanitizeClientDetail({ kind: 'error', error_message: 'x'.repeat(500), elapsed_ms: 12.4, evil: 'drop', was_connected: true }), { kind: 'error', error_message: 'x'.repeat(300), elapsed_ms: 12, was_connected: true });
+  assert.equal(sanitizeClientDetail('nope'), null);
+  assert.equal(sanitizeClientDetail({ evil: 1 }), null);
   assert.equal(validEventUuid(id(10)), true);
   for (const bad of ['not-a-uuid', '', id(10).slice(0, -1), `${id(10)}x`, null, 42])
     assert.equal(validEventUuid(bad), false, `${JSON.stringify(bad)} must be rejected as a uuid`);

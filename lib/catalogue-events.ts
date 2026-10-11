@@ -51,6 +51,22 @@ export function validEventRail(value: unknown): value is "stars" | "ton" {
   return value === "stars" || value === "ton";
 }
 
+// Client-reported diagnostics (wallet errors). Only these keys survive, each
+// capped, so a fan cannot stuff arbitrary data into catalogue_events.detail.
+const CLIENT_DETAIL_KEYS = ["kind", "error_name", "error_message", "was_connected", "wallet_app", "platform", "elapsed_ms", "step"] as const;
+export function sanitizeClientDetail(value: unknown): Record<string, unknown> | null {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const src = value as Record<string, unknown>;
+  const out: Record<string, unknown> = {};
+  for (const key of CLIENT_DETAIL_KEYS) {
+    const v = src[key];
+    if (typeof v === "string") out[key] = v.slice(0, 300);
+    else if (typeof v === "boolean") out[key] = v;
+    else if (typeof v === "number" && Number.isFinite(v)) out[key] = Math.round(v);
+  }
+  return Object.keys(out).length ? out : null;
+}
+
 export type LogEventInput = {
   cloneId: string;
   telegramId?: number | null;

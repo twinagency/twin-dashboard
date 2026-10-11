@@ -7,7 +7,7 @@ import { TRENDING_WINDOW_DAYS, tagEmojis, trendingRanks, type TrendingSale } fro
 import { cataloguePresentation } from './catalogue-presentation';
 import { beginCatalogueCheckout, catalogueContentPath, catalogueOrderStatus, checkoutMode, CheckoutError, nativeOwnedItems, paidCatalogueItems, type InvoiceTransport } from './catalogue-checkout';
 import { beginTonCheckout, beginTonTipCheckout, effectiveNanotonPerStar, reconcilePendingTonOrders, tonDiscountPercent, tonEnabled, tonOrderStatus } from './catalogue-ton';
-import { isClientEventName, logCatalogueEvent, validEventMediaType, validEventRail, validEventUuid } from './catalogue-events';
+import { isClientEventName, logCatalogueEvent, sanitizeClientDetail, validEventMediaType, validEventRail, validEventUuid } from './catalogue-events';
 import { beginCatalogueStarTip, catalogueStarTipStatus } from './catalogue-star-tip';
 import { TIP_PRESET_USD, tipStarsForUsd } from './catalogue-ton-price';
 export type CatalogueDependencies = {
@@ -189,6 +189,7 @@ return async function POST(request: NextRequest, context: { params: Promise<{ sl
       await logCatalogueEvent(db, {
         cloneId: clone.id, telegramId: fan.telegram_id, event: body.event, rail: rail as 'stars' | 'ton' | null,
         mediaType: mediaType as 'photo' | 'video' | 'bundle' | null, mediaId: mediaId as string | null, startParam,
+        detail: sanitizeClientDetail(body.detail),
       });
       return json({ logged: true });
     }
