@@ -38,6 +38,8 @@ jobs:
           node --check deployment/flirt-live-creators-check.cjs
       - run: npm ci
       - run: npx tsc --noEmit
+      - name: Personalised Overview photos and access boundaries
+        run: node scripts/check-flirt-creator-overview.cjs
       - name: Owner authentication and existing master access
         run: node --import tsx scripts/check-owner-auth.ts
       - name: Creator flow and recoverable form regressions
@@ -119,3 +121,4 @@ jobs:
 
       - name: Verify live Overview rankings and selected creator images
         run: python3 -c "import runpy; runpy.run_path('deployment/flirt-optional-live-check.py')['main']('flirt-overview-live-check.cjs')"
+

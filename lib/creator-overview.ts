@@ -1,25 +1,37 @@
 import { supabaseAdmin } from './supabase';
 import { requireCloneAccess } from './dashboard-access';
-import { overviewConfig, uniqueOverviewPaths, type CreatorOverviewPresentation, type OverviewPhotoConfig } from './creator-overview-model';
+import { profileImagePathForClone } from './colors';
+import { flirtOverviewPhotos } from './flirt-overview-photos';
+import type { CreatorOverviewPresentation, OverviewPhoto } from './creator-overview-model';
 
-// Presentation is configured on a creator row. No creator-specific route or demo ledger.
 export async function getCreatorOverview(id: string): Promise<CreatorOverviewPresentation | null> {
   await requireCloneAccess(id);
   const { data: clone, error } = await supabaseAdmin.from('clones').select('id,name,intake').eq('id', id).maybeSingle();
   if (error) throw error;
-  const config = overviewConfig(clone?.intake);
-  if (!clone || !config) return null;
-  const slots = [config.hero, config.avatar, ...config.library, config.campaign];
-  const { data: photos, error: photoError } = await supabaseAdmin.from('photos').select('id,storage_path,star_value').eq('clone_id', id).in('id', slots.map(p => p.id));
+  if (!clone) return null;
+  const config = flirtOverviewPhotos[id];
+  const slots = config ? [config.hero, config.avatar, ...config.library].filter((p): p is NonNullable<typeof p> => !!p) : [];
+  const { data: photos, error: photoError } = slots.length
+    ? await supabaseAdmin.from('photos').select('id,storage_path,star_value').eq('clone_id', id).in('id', slots.map(p => p.id))
+    : { data: [], error: null };
   if (photoError) throw photoError;
-  if (!photos || !uniqueOverviewPaths(photos, slots.map(p => p.id))) throw new Error('Overview photos need six different images belonging to this creator.');
-  const { data: signed, error: signingError } = await supabaseAdmin.storage.from('media').createSignedUrls(photos.map(p => p.storage_path), 3600);
-  if (signingError || !signed?.every(p => p.signedUrl)) throw new Error('Overview photos could not be loaded.');
-  const photo = (slot: OverviewPhotoConfig) => {
-    const index = photos.findIndex(p => p.id === slot.id);
-    return { id: slot.id, url: signed[index].signedUrl!, position: typeof slot.position === 'string' ? slot.position : '50% 30%', label: typeof slot.label === 'string' ? slot.label : 'From the vault', stars: Number(photos[index].star_value) || 0 };
+  const usedPaths = new Set<string>();
+  const photo = (slot: typeof slots[number] | undefined, key: string): OverviewPhoto | null => {
+    const row = slot && photos?.find((p: { id: string; storage_path: string; star_value: number | null }) => p.id === slot.id);
+    if (!slot || !row?.storage_path || usedPaths.has(row.storage_path)) return null;
+    usedPaths.add(row.storage_path);
+    return { id: slot.id, url: `/api/creator-overview/photo?clone=${id}&slot=${key}&v=2`, position: slot.position || '50% 40%', label: slot.label || 'From the vault', stars: Number(row.star_value) || 0 };
   };
-  return { id: clone.id, name: clone.name, hero: photo(config.hero), avatar: photo(config.avatar), library: config.library.map(photo), campaign: photo(config.campaign) };
+  const hero = photo(config?.hero, 'hero');
+  let avatar = photo(config?.avatar, 'avatar');
+  const library = (config?.library || []).map((slot, i) => photo(slot, `library-${i}`)).filter((p): p is OverviewPhoto => !!p);
+  const profilePath = profileImagePathForClone(clone.intake);
+  if (!avatar && profilePath && profilePath.startsWith(`${id}/`) && !usedPaths.has(profilePath) && !profilePath.split('/').includes('..')) {
+    const { data: signed } = await supabaseAdmin.storage.from('media').createSignedUrl(profilePath, 3600);
+    if (signed?.signedUrl) avatar = { id: `profile-${id}`, url: signed.signedUrl, position: '50% 30%', label: 'Profile portrait', stars: 0 };
+  }
+  // Every assigned creator gets the same Overview, even before photos are uploaded.
+  return { id: clone.id, name: clone.name, hero, avatar, library };
 }
 
 export async function getOverviewAudience(id: string): Promise<{ total: number }> {
@@ -29,3 +41,4 @@ export async function getOverviewAudience(id: string): Promise<{ total: number }
   if (error || count === null) throw new Error('The all-time fan total could not be loaded.');
   return { total: count };
 }
+

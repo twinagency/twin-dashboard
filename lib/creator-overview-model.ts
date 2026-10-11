@@ -10,10 +10,10 @@ export type OverviewPhoto = { id: string; url: string; position: string; label: 
 export type CreatorOverviewPresentation = {
   id: string;
   name: string;
-  hero: OverviewPhoto;
-  avatar: OverviewPhoto;
+  hero: OverviewPhoto | null;
+  avatar: OverviewPhoto | null;
   library: OverviewPhoto[];
-  campaign: OverviewPhoto;
+  campaign?: OverviewPhoto;
 };
 const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const photoConfig = (value: unknown): value is OverviewPhotoConfig => !!value && typeof value === 'object' && 'id' in value && typeof value.id === 'string' && uuid.test(value.id);
@@ -29,3 +29,4 @@ export function overviewConfig(intake: unknown): OverviewConfig | null {
 export function uniqueOverviewPaths(photos: { id: string; storage_path: string }[], ids: string[]): boolean {
   return ids.length === 6 && new Set(ids).size === 6 && photos.length === 6 && ids.every(id => photos.some(p => p.id === id)) && photos.every(p => !!p.storage_path) && new Set(photos.map(p => p.storage_path)).size === 6;
 }
+

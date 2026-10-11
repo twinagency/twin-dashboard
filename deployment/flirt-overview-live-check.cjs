@@ -15,9 +15,9 @@ async function request(path,options={}){return fetch(origin+path,{redirect:'manu
  assert(presentationResponse.ok,'Overview presentation failed');
  const overview=await presentationResponse.json();
  assert(overview.presentation.id===id&&overview.audience.total>0,'Creator and audience must resolve');
- const photos=[overview.presentation.hero,overview.presentation.avatar,...overview.presentation.library,overview.presentation.campaign];
- assert(photos.length===6&&new Set(photos.map(p=>p.id)).size===6,'Overview requires six different photos');
- checks.push('Selected creator and six different private photographs');
+ const photos=[overview.presentation.hero,overview.presentation.avatar,...overview.presentation.library];
+ assert(photos.length===5&&new Set(photos.map(p=>p.id)).size===5,'Overview requires five different photos');
+ checks.push('Selected creator and five different private photographs');
  const monthlyResponse=await read('/api/dashboard?clone='+id+'&period=1M&fresh=1');
  assert(monthlyResponse.ok,'Default 30-day earnings failed');
  const monthly=await monthlyResponse.json();
@@ -37,3 +37,4 @@ async function request(path,options={}){return fetch(origin+path,{redirect:'manu
  checks.push('Live Overview renders distinct photographs, live rankings and summary cards');
  console.log(JSON.stringify({passed:true,creator:overview.presentation.name,all_time_fans:overview.audience.total,period:'1M',net_stars:stats.stars,purchases:stats.sales,chart_matches_total:true,checks,credentials_logged:false}));
 })().catch(e=>{console.log(JSON.stringify({passed:false,error:e.message,checks,credentials_logged:false}));process.exitCode=1});
+

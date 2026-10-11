@@ -1,5 +1,5 @@
 {
-  "reason": "Remove the oversized white logo panel; use a compact integrated FLIRT wordmark and phone banner so earnings remain in view.",
-  "source_commit": "a589da641079c2acd5564cb38e78e30922035790",
-  "requested_at": "2026-10-11T05:51:25.240Z"
+  "reason": "Give every FLIRT creator the same personalised Overview with clear, hand-reviewed portrait crops and own live data",
+  "source_commit": "d6b8ef5cfee1ea6084d45d930f28f50a0676d32e",
+  "requested_at": "2026-10-11T06:38:11.978Z"
 }

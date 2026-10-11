@@ -36,16 +36,35 @@
 @media(max-width:1500px) and (min-width:701px){.summaryCards{grid-template-columns:repeat(3,minmax(0,1fr))}}
 @media(max-width:700px){.summaryCard{padding:13px;gap:5px}.summaryIcon{width:26px;height:32px}.summaryIcon>svg,.summaryIcon>img{width:23px;height:23px}.telegramHeading{gap:5px}}
 
-/* Keep creator imagery opaque and separate from the title, with no faded edge. */
-.hero:not(.agencyHero){display:grid;grid-template-columns:41% 59%;align-items:stretch}
-.hero:not(.agencyHero) .heroPhoto{position:absolute;right:0;top:0;width:59%;height:100%;z-index:0;mask-image:none}
-.hero:not(.agencyHero) .heroCopy{grid-column:1;grid-row:1;align-self:center;width:100%;padding:32px;min-width:0}
-.hero:not(.agencyHero) .heroCopy h1{font-size:clamp(28px,3vw,48px);white-space:normal;overflow-wrap:break-word}
 .agencyBrandPanel{display:flex;align-items:center;justify-content:center;min-width:0;padding:0;background:none;border:0;border-radius:0;box-shadow:none}
 .agencyHeroLogo{display:block;width:100%;max-width:260px;height:auto;object-fit:contain;opacity:1}
-@media(max-width:700px){.hero:not(.agencyHero){display:flex;flex-direction:column}.hero:not(.agencyHero) .heroPhoto{position:relative;width:100%;height:250px;object-fit:cover}.hero:not(.agencyHero) .heroCopy{padding:24px}}
+
 
 /* A compact agency header keeps the dashboard figures in view on phones. */
 .agencyHero{min-height:220px;background:linear-gradient(110deg,#f7edf0,#f8e8ef);padding:30px 38px}
 @media(max-width:700px){.agencyHero{display:grid;grid-template-columns:minmax(0,1fr) 112px;gap:14px;padding:24px;min-height:0}.agencyHero .heroCopy>span,.agencyHero .heroCopy p{display:none}.agencyHero .heroCopy h1{font-size:30px;line-height:1.08;white-space:normal;letter-spacing:-.045em}.agencyHero .heroButton{margin-top:17px;padding:9px 14px;font-size:11px;gap:12px}.agencyHero .heroAgencyMeta{font-size:9px;margin-top:12px;white-space:nowrap}.agencyBrandPanel{width:100%;margin:0;align-self:center}.agencyHeroLogo{width:100%;max-width:112px}}
 @media(max-width:370px){.agencyHero{grid-template-columns:minmax(0,1fr) 90px;padding:20px;gap:10px}.agencyHero .heroCopy h1{font-size:27px}}
+
+
+/* A consistent, clear portrait composition at every creator and viewport. */
+.creatorHero{display:grid;grid-template-columns:minmax(0,1fr) minmax(290px,32%);align-items:center;gap:28px;min-height:260px;padding:16px;background:linear-gradient(115deg,#f9f0f3,#f2e3e9);box-shadow:none}
+.creatorHero .heroCopy{width:auto;min-width:0;padding:24px 24px 24px 30px}
+.creatorHero .heroCopy h1{font-size:clamp(32px,3.2vw,50px);white-space:normal;overflow-wrap:break-word;max-width:600px}
+.creatorHero .heroCopy p{font-size:13px;color:#897582;margin-top:13px}
+.heroPortrait{height:236px;position:relative;overflow:hidden;border-radius:12px;background:#ead4dd;align-self:stretch}
+.creatorHero .heroPhoto{position:static;display:block;width:100%;height:100%;object-fit:cover;mask-image:none;opacity:1;z-index:auto}
+.photoFallback{display:flex;align-items:center;justify-content:center;background:linear-gradient(135deg,#f8e0eb,#ebc5d7);color:#b32b64;font-weight:650;letter-spacing:-.04em}
+.identity>.photoFallback{width:46px;height:46px;border-radius:50%;flex-shrink:0;font-size:17px}
+.creatorHero .heroPortrait>.photoFallback{display:flex;font-size:70px}
+.photoNote{position:absolute;bottom:22px;left:0;right:0;text-align:center;font-size:11px;color:#986a7e}
+.libraryTile{height:225px;background:#f5f1f3;display:flex;flex-direction:column;isolation:auto;border:1px solid var(--line)}
+.libraryTile img,.libraryTile>.photoFallback{width:100%;height:170px;min-height:170px;object-fit:cover}
+.libraryTile:after{display:none}
+.libraryTile>span:not(.photoFallback){position:static;display:grid;gap:2px;padding:10px 12px;color:#302332}
+.libraryTile small{color:#8b8190}.libraryTile strong{font-weight:600}
+.libraryTile>svg{display:none}.libraryTile:hover img{transform:none}
+.libraryEmpty{min-height:225px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px;border:1px dashed #e3d4dd;border-radius:10px;background:#fcf9fb;color:#9b7f90;text-align:center;padding:20px}
+.libraryEmpty strong{font-size:14px;color:#584252}.libraryEmpty p{font-size:12px}
+@media(min-width:1650px){.creatorHero{min-height:290px}.heroPortrait{height:258px}}
+@media(max-width:1000px){.creatorHero{grid-template-columns:minmax(0,1fr) 40%;gap:15px}.creatorHero .heroCopy{padding:20px}.creatorHero .heroCopy h1{font-size:34px}.heroPortrait{height:224px}}
+@media(max-width:700px){.creatorHero{grid-template-columns:minmax(0,1fr) 40%;min-height:210px;gap:10px;padding:12px}.creatorHero .heroCopy{padding:12px 4px 12px 8px}.creatorHero .heroCopy h1{font-size:29px;line-height:1.08}.creatorHero .heroCopy>span{font-size:7px;letter-spacing:.13em}.creatorHero .heroCopy p{display:none}.creatorHero .heroButton{font-size:11px;padding:9px 13px;gap:10px;margin-top:20px}.heroPortrait{height:186px;border-radius:9px}.creatorHero .heroPortrait>.photoFallback{font-size:40px}.photoNote{font-size:8px;padding:0 10px}.libraryTile{height:197px}.libraryTile img,.libraryTile>.photoFallback{height:145px;min-height:145px}.libraryTile>span:not(.photoFallback){padding:8px}.libraryTile strong{font-size:10px}.libraryTile small{font-size:8px}}
