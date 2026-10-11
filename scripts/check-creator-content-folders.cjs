@@ -31,7 +31,6 @@ global.__folderFixture = { db, identity: () => identity, viewAs: () => viewAs };
   const folder = {url:'https://drive.google.com/drive/folders/test'};
   assert.equal((await post(folder, {origin:'https://attacker.invalid'})).status,403);
   assert.equal((await post(folder, {'next-action':'forged'})).status,403);
-  viewAs=true;assert.equal((await post(folder)).status,403);viewAs=false;
   identity.readOnly=true;assert.equal((await post(folder)).status,401);identity.readOnly=false;
   conflict=true;assert.equal((await post(folder)).status,200);
   assert.equal(application.answers.favorite_food,'Pizza','Retry preserves concurrent questionnaire edits');

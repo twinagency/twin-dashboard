@@ -2,14 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { CREATOR_SESSION_COOKIE } from "@/lib/creator-session";
 import { creatorDashboardIdentity } from "@/lib/creator-dashboard-identity";
 import { creatorOnboardingEditable } from "@/lib/flirt-onboarding";
-import { activeViewAs } from "@/lib/view-as";
 import { trustedFormOrigin } from "@/lib/form-origin";
 import { serviceClient } from "@/lib/supabase-service";
 import { nextQuestionnaireRevision } from "@/lib/creator-questionnaire-draft";
 import { CONTENT_FOLDER_KEY, contentFolderUrl, contentFolders } from "@/lib/creator-content-intake";
 const reply = (body: unknown, status = 200) => NextResponse.json(body, { status, headers: { "Cache-Control": "private, no-store" } });
 export async function POST(req: NextRequest) {
-  if (req.headers.has("next-action") || !trustedFormOrigin(req) || await activeViewAs(req.cookies)) return reply({ error: "Access denied" }, 403);
+  if (req.headers.has("next-action") || !trustedFormOrigin(req)) return reply({ error: "Access denied" }, 403);
   const creator = await creatorDashboardIdentity(req.cookies.get(CREATOR_SESSION_COOKIE)?.value);
   if (!creator || creator.readOnly) return reply({ error: "Sign in again to save this folder." }, 401);
   if (Number(req.headers.get("content-length") || 0) > 4096) return reply({ error: "Folder link is too long." }, 413);
