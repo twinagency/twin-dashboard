@@ -29,3 +29,5 @@
 @media(prefers-reduced-motion:reduce){.creatorFaces>button,.heroPortraitCard{transition:none!important}}
 
 .portraitFrame{display:block;width:100%;height:100%;overflow:hidden;border-radius:inherit}.portraitFrame img{display:block;width:100%;height:100%;object-fit:cover}.portraitFrame.performancePortrait{width:58px;height:58px;border-radius:15px}@media(max-width:1260px){.portraitFrame.performancePortrait{width:47px;height:47px;border-radius:12px}}
+
+.spotlightGrid>[data-ranking-panel="content"]{grid-column:2;grid-row:2}@media(max-width:700px){.spotlightGrid>[data-ranking-panel="content"]{grid-column:auto;grid-row:auto}}

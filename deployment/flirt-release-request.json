@@ -1,5 +1,5 @@
 {
-  "reason": "Replace the FLIRT All creators banner watermark and circles with three distinct, privately signed portraits of Briana Redd, Mrs Callace and Toochi. Add precise face crops, readable names and creator shortcuts, with responsive desktop and mobile layouts. Keep earnings, audience totals, navigation and existing creator pages unchanged.",
-  "source_commit": "793996ca543ab2807e6b3fe749f5d4476a070218",
-  "requested_at": "2026-10-11T01:30:19.126Z"
+  "reason": "Replace Overview activity and sequence cards with live top-fan and best-selling-content rankings, scoped to the selected creator and date range.",
+  "source_commit": "3b067f914555fd7dd5c415819cbb66894fb48559",
+  "requested_at": "2026-10-11T02:04:58.482684+00:00"
 }

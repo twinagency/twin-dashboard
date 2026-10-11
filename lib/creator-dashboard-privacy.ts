@@ -20,6 +20,7 @@ export function withoutCreatorPurchaseHistory<T extends RevenuePayload>(payload:
   return {
     ...payload,
     recent: [],
+    rankings: undefined,
     analytics: {
       ...payload.analytics,
       whaleFans: [],
@@ -27,3 +28,4 @@ export function withoutCreatorPurchaseHistory<T extends RevenuePayload>(payload:
     },
   };
 }
+

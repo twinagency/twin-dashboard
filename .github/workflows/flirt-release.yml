@@ -116,3 +116,6 @@ jobs:
       - name: Verify all selected live creators, existing media and denied unassigned access
         run: python3 deployment/flirt-live-creators-check.py
 
+
+      - name: Verify live Overview rankings and selected creator images
+        run: python3 -c "import runpy; runpy.run_path('deployment/flirt-optional-live-check.py')['main']('flirt-overview-live-check.cjs')"
