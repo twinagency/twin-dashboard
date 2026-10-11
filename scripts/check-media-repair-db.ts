@@ -8,13 +8,14 @@
 import assert from "node:assert/strict";
 import { createHmac } from "node:crypto";
 import { execFileSync } from "node:child_process";
+import { createHash } from "node:crypto";
 import { mkdtempSync, readFileSync, writeFileSync, existsSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import { createClient } from "@supabase/supabase-js";
 import {
   runRepair, rollbackRun, buildInventory, formatInventory, fakeAnalyser, fakeFacts, assertWritable, assertSafeSupabaseUrl, readOnlyFetch,
-  classify, captionContradictsFacts, runPilot, loadPreview, type Analyser, type Ctx, type RunOpts, type RunSummary,
+  classify, captionContradictsFacts, runPilot, loadPreview, bindHoldList, planPilotFromPreview, type Analyser, type Ctx, type RunOpts, type RunSummary,
 } from "../lib/media-repair";
 import { ANALYSIS_VERSION, type AnalysisResult } from "../lib/media-analysis-contract";
 
@@ -552,6 +553,125 @@ async function main() {
   const prb = await rollbackRun(pa);
   eq([prb.restored, prb.errors], [14, []], "pilot: rollback restores the 14 photos");
   eq(allState(), pil0, "pilot: after rollback the database is exactly as before");
+
+  // ── 15. operator hold list: hold a known-incorrect proposal even though the model returned analysed ─────────
+  {
+    const sha = (f: string) => createHash("sha256").update(readFileSync(f)).digest("hex");
+    const ctxCount = { model: 0, download: 0 };
+    const countedNoModel: Partial<Ctx> = { analyse: async () => { ctxCount.model++; throw new Error("apply must not call the model"); }, download: async () => { ctxCount.download++; throw new Error("apply must not download"); } };
+    const prevCalls = { n: 0 };
+    const mkReviewed = async () => {
+      seedPilot(); await wait(100);
+      const orig = allState();
+      const pc = mkCtx({ concurrency: 2, analyse: async (t, b, m) => { prevCalls.n++; return fakeAnalyser(t, b, m); } });
+      await runRepair(pc, { mode: "preview", scope: "all", cloneSlug: "tammy", table: "photos" });
+      const pf = path.join(pc.stateDir, "preview.jsonl");
+      const review = [{ table: "photos", id: tid(3), reason: "says solo but two people", reviewer: "jesse" }, { table: "photos", id: tid(8), reason: "caption wrong: not topless" }];
+      const hlf = path.join(tmp, `hl${runN}.json`);
+      writeFileSync(hlf, JSON.stringify(bindHoldList(pf, review), null, 1));
+      return { orig, pc, pf, hlf };
+    };
+    const APPLY = (pf: string, hlf?: string): RunOpts => ({ mode: "apply", scope: "all", cloneSlug: "tammy", table: "photos", preview: pf, ...(hlf ? { holdList: hlf } : {}) });
+
+    // main path: apply writes 12, holds 2, zero model calls, preview file untouched
+    const R = await mkReviewed();
+    eq(prevCalls.n, 14, "hold list: the preview made the 14 model calls (the model returned analysed for all 14)");
+    const prevSha = sha(R.pf);
+    const preRows = rows(`select * from photos order by id`);
+    const ax = mkCtx({ ...countedNoModel });
+    const hs15 = await runRepair(ax, APPLY(R.pf, R.hlf));
+    eq([hs15.applied, hs15.holdsApplied, hs15.conflicts, hs15.operatorHolds], [12, 2, 0, 2], "hold list: apply writes 12 proposals and holds the 2 listed rows");
+    eq([ctxCount.model, ctxCount.download], [0, 0], "hold list: apply made zero model calls and zero downloads");
+    eq(sha(R.pf), prevSha, "hold list: the reviewed preview file is byte-identical after apply");
+    eq([hs15.previewSha256, hs15.holdListSha256], [prevSha, sha(R.hlf)], "hold list: summary records preview hash and hold-list hash");
+    ok(readFileSync(path.join(ax.stateDir, "report.txt"), "utf8").includes(`hold list sha256 ${sha(R.hlf)}`), "hold list: report.txt records both hashes");
+    const postRows = rows(`select * from photos order by id`);
+    for (const n of [3, 8]) {
+      const a: any = postRows.find((r: any) => r.id === tid(n)), b: any = preRows.find((r: any) => r.id === tid(n));
+      eq([a.analysis_status, a.analysis_error], ["needs_review", n === 3 ? "operator hold: says solo but two people" : "operator hold: caption wrong: not topless"], `hold list: p${n} is needs_review with the reviewer's reason`);
+      const { analysis_status: _s, analysis_error: _e, ...ra } = a; const { analysis_status: _s0, analysis_error: _e0, ...rb } = b; void _s; void _e; void _s0; void _e0;
+      eq(JSON.stringify(ra), JSON.stringify(rb), `hold list: p${n} every other column (metadata, stamp, prices, file id) is byte-for-byte as before`);
+    }
+    eq(postRows.filter((r: any) => r.analysis_status === "analysed").length, 12 + 1, "hold list: 12 tammy photos analysed (+ the fixture's p6)");
+    eq(JSON.stringify(rows(`select * from photos where clone_id <> '${T}' order by id`)), JSON.stringify(preRows.filter((r: any) => r.clone_id !== T)), "hold list: the rest of the catalogue (other clones) untouched");
+    eq(JSON.stringify(rows(`select * from videos order by id`)), JSON.stringify(R.orig.videos), "hold list: videos untouched");
+    ok(readFileSync(path.join(ax.stateDir, "backup.jsonl"), "utf8").split("\n").filter(Boolean).map((l) => JSON.parse(l)).filter((b) => b.hold).length === 2, "hold list: both holds are in the backup file with hold:true");
+    // repeat apply is a no-op
+    const again = await runRepair(mkCtx({ ...countedNoModel }), APPLY(R.pf, R.hlf));
+    eq([again.applied, again.holdsApplied, again.alreadyApplied, again.conflicts], [0, 0, 14, 0], "hold list: a second apply is a no-op (12 proposals + 2 holds already in place)");
+    // rollback restores exactly
+    const rb15 = await rollbackRun(ax);
+    eq([rb15.restored, rb15.errors, rb15.changedSince], [14, [], 0], "hold list: rollback restores 12 rows + 2 holds");
+    eq(allState(), R.orig, "hold list: after rollback the database is exactly as before");
+    // no list = the old behaviour (all 14 proposals applied), same preview
+    const nolist = await runRepair(mkCtx({ ...countedNoModel }), APPLY(R.pf));
+    eq([nolist.applied, nolist.holdsApplied, nolist.operatorHolds], [14, 0, 0], "hold list: without a list the same preview applies all 14");
+    await rollbackRun(mkCtx());
+
+    // wrong preview hash: refused, nothing written
+    const R2 = await mkReviewed();
+    const wrongPv = path.join(tmp, "other-preview.jsonl");
+    writeFileSync(wrongPv, readFileSync(R2.pf, "utf8").replace(/fake photos/g, "fake PHOTOS"));
+    const orig2 = allState();
+    await assert.rejects(() => runRepair(mkCtx({ ...countedNoModel }), APPLY(wrongPv, R2.hlf)), /hold list refused: .* reviewed against preview/); checks++;
+    eq(allState(), orig2, "hold list: bound to another preview's hash -> refused, nothing written");
+    const unbound = path.join(tmp, "unbound.json");
+    writeFileSync(unbound, JSON.stringify([{ table: "photos", id: tid(3), reason: "x" }]));
+    await assert.rejects(() => runRepair(mkCtx({ ...countedNoModel }), APPLY(R2.pf, unbound)), /not bound to a preview/); checks++;
+    await assert.rejects(() => runRepair(mkCtx({ ...countedNoModel }), APPLY(R2.pf, path.join(tmp, "missing.json"))), /hold list not found/); checks++;
+    eq(allState(), orig2, "hold list: an unbound / missing list is refused, nothing written");
+    await assert.rejects(() => planPilotFromPreview(mkCtx(), "tammy", wrongPv, R2.hlf), /hold list refused/); checks++;
+
+    // unknown id and a concurrent manual edit / a value changed since the preview: reported, never overwritten, never silently skipped
+    const bad = bindHoldList(R2.pf, [
+      { table: "photos", id: tid(3), reason: "manually edited meanwhile" }, { table: "photos", id: tid(8), reason: "tags changed meanwhile" },
+      { table: "photos", id: tid(10), reason: "fine" }, { table: "photos", id: id(999), reason: "no such row" }]);
+    const badf = path.join(tmp, "bad.json"); writeFileSync(badf, JSON.stringify(bad));
+    sql(`update photos set metadata_edited_at=now() where id='${tid(3)}'`);
+    sql(`update photos set tags='{changed}' where id='${tid(8)}'`);
+    const preBad = rows(`select * from photos order by id`);
+    const bs15 = await runRepair(mkCtx({ ...countedNoModel }), APPLY(R2.pf, badf));
+    eq([bs15.holdsApplied, bs15.operatorHolds], [1, 3], "hold list: only the untouched listed row is held");
+    ok(bs15.conflictReasons.some((r) => r.includes(`photos:${tid(3)}#hold`) && /manually edited/.test(r)), "hold list: manual edit reported as a conflict");
+    ok(bs15.conflictReasons.some((r) => r.includes(`photos:${tid(8)}#hold`) && /tags changed since the preview/.test(r)), "hold list: changed value reported as a conflict");
+    ok(bs15.conflictReasons.some((r) => r.includes(id(999)) && /unknown id/.test(r)), "hold list: unknown id reported clearly, not silently skipped");
+    eq(bs15.conflicts, 3, "hold list: 3 conflicts (edited, changed, unknown), each listed");
+    const postBad = rows(`select * from photos order by id`);
+    const changedIds = postBad.filter((r: any, i: number) => JSON.stringify(r) !== JSON.stringify(preBad[i])).map((r: any) => r.id);
+    ok(!changedIds.includes(tid(3)) && !changedIds.includes(tid(8)) && changedIds.includes(tid(10)), "hold list: conflicting rows were not written (neither hold nor proposal); the clean one was");
+    eq(sql(`select analysis_status from photos where id='${tid(10)}'`), "needs_review", "hold list: the clean listed row is held");
+    eq(sql(`select tags from photos where id='${tid(8)}'`), "{changed}", "hold list: the concurrent value change is kept");
+
+    // pilot plan with a hold list: exact plan, applied vs held, no write, no model
+    const R3 = await mkReviewed();
+    const orig3 = allState();
+    const pctx3 = mkCtx({ ...countedNoModel });
+    const pp = await planPilotFromPreview(pctx3, "tammy", R3.pf, R3.hlf);
+    eq(allState(), orig3, "hold list: pilot plan from a saved preview writes nothing");
+    ok(/12 proposals APPLIED/.test(pp.plan) && /2 proposals HELD/.test(pp.plan), "hold list: plan says 12 applied, 2 held");
+    ok(pp.plan.includes(`preview sha256 ${sha(R3.pf)}`) && pp.plan.includes(`hold list sha256 ${sha(R3.hlf)}`), "hold list: plan prints both hashes");
+    ok(pp.plan.includes("HELD BY OPERATOR") && pp.plan.includes("says solo but two people") && pp.plan.includes("caption wrong: not topless"), "hold list: plan lists the held rows with their reasons");
+    eq((pp.plan.match(/-> APPLIED/g) ?? []).length, 12, "hold list: plan marks exactly 12 proposals APPLIED");
+
+    // resume after an interruption in the middle of a hold (after backup / after write), then rollback restores
+    for (const point of ["after_backup", "after_write"] as const) {
+      const R4 = await mkReviewed();
+      let crashed = false;
+      const cc = mkCtx({ concurrency: 1, ...countedNoModel, step: (pt, key) => { if (pt === point && key === `photos:${tid(3)}#hold` && !crashed) { crashed = true; throw new Error(`CRASH@${pt}`); } } });
+      await assert.rejects(() => runRepair(cc, APPLY(R4.pf, R4.hlf)), new RegExp(`CRASH@${point}`)); checks++;
+      eq(sql(`select analysis_status from photos where id='${tid(3)}'`), point === "after_backup" ? "legacy" : "needs_review", `hold crash ${point}: hold ${point === "after_backup" ? "not yet" : "already"} written`);
+      const r1 = await runRepair({ ...cc, step: undefined }, APPLY(R4.pf, R4.hlf));
+      eq(r1.conflicts, 0, `hold crash ${point}: resume has no conflict`);
+      eq(sql(`select count(*) from photos where clone_id='${T}' and analysis_status='needs_review'`), "2", `hold crash ${point}: both holds in place after resume`);
+      eq(sql(`select count(*) from photos where clone_id='${T}' and analysis_status='analysed'`), "12", `hold crash ${point}: 12 proposals applied exactly once`);
+      if (point === "after_write") ok(r1.recovered >= 1, "hold crash after_write: the in-flight hold is recorded recovered");
+      const r2 = await runRepair({ ...cc, step: undefined }, APPLY(R4.pf, R4.hlf));
+      eq([r2.applied, r2.holdsApplied, r2.recovered, r2.selected], [0, 0, 0, 0], `hold crash ${point}: another resume is a no-op`);
+      const rr = await rollbackRun(cc);
+      eq(rr.errors, [], `hold crash ${point}: rollback no errors`);
+      eq(allState(), R4.orig, `hold crash ${point}: rollback restores the exact starting state`);
+    }
+  }
 
   rmSync(tmp, { recursive: true, force: true });
   console.log(`media repair db checks: ${checks} passed`);
