@@ -193,7 +193,7 @@ async function uploadConfig(cloneId: string): Promise<{ model: string; guide: un
     .maybeSingle();
   if (error) throw new Error(`Could not load creator pricing: ${error.message}`);
   if (!data) throw new Error("Creator not found");
-  return { model: data?.vision_model || "qwen/qwen2.5-vl-72b-instruct", guide: data?.category_pricing };
+  return { model: data?.vision_model || "qwen/qwen3-vl-235b-a22b-instruct", guide: data?.category_pricing };
 }
 
 // Resolve the item's price. If the uploader typed a price, use it verbatim (a

@@ -3,7 +3,7 @@
 //
 // qwen3-vl-32b was retired by OpenRouter (2026-10-09) and used to truncate the analysis JSON; Gemini sanitises explicit
 // output. Either configured model is replaced; anything else is used as configured.
-export const VISION_ANALYSIS_DEFAULT_MODEL = "qwen/qwen2.5-vl-72b-instruct";
+export const VISION_ANALYSIS_DEFAULT_MODEL = "qwen/qwen3-vl-235b-a22b-instruct";
 
 export function resolveVisionAnalysisModel(configuredModel: string | null | undefined): string {
   const m = (configuredModel || "").toLowerCase();

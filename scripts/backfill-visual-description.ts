@@ -54,7 +54,7 @@ const DRY = process.argv.includes("--dry-run");
 const BATCH_SIZE = 200; // rows fetched per round trip
 const CONCURRENCY = 6; // items described in flight at once
 
-// Rough OpenRouter pricing for qwen/qwen2.5-vl-72b-instruct at the time this
+// Rough OpenRouter pricing (qwen2.5-vl-72b at the time; the 235b default costs about the same per call) at the time this
 // was written (see https://openrouter.ai/qwen/qwen2.5-vl-72b-instruct):
 // ~$0.40/M input tokens, ~$0.40/M output tokens. An upload-analysis image at
 // 768px is roughly ~600 input (image) + ~250 prompt tokens, and the JSON
@@ -139,7 +139,7 @@ async function downloadBytes(storagePath: string): Promise<Buffer> {
 
 async function visionModelFor(cloneId: string): Promise<string> {
   const { data } = await supabaseAdmin.from("clones").select("vision_model").eq("id", cloneId).maybeSingle();
-  return data?.vision_model || "qwen/qwen2.5-vl-72b-instruct";
+  return data?.vision_model || "qwen/qwen3-vl-235b-a22b-instruct";
 }
 
 const modelCache = new Map<string, string>();

@@ -47,7 +47,7 @@ async function uploadConfig(cloneId: string): Promise<{ model: string; guide: un
     .select("vision_model, category_pricing")
     .eq("id", cloneId)
     .maybeSingle();
-  return { model: data?.vision_model || "qwen/qwen2.5-vl-72b-instruct", guide: data?.category_pricing };
+  return { model: data?.vision_model || "qwen/qwen3-vl-235b-a22b-instruct", guide: data?.category_pricing };
 }
 
 // --price <stars>, mirroring the manual branch of app/media/actions.ts's
