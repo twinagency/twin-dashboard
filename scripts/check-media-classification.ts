@@ -1,7 +1,7 @@
 import assert from "node:assert/strict";
 import {
   normalizeMediaClassification, stripBannedDashes, cleanSendCaption, descriptionProblems, notVisibleLine,
-  MEDIA_CLASSIFICATION_PROMPT, videoClassificationPrompt, sentencesUpTo,
+  MEDIA_CLASSIFICATION_PROMPT, videoClassificationPrompt, secondLookPrompt, sentencesUpTo,
 } from "../lib/media-classification";
 import { FACT_KEYS } from "../lib/media-analysis-contract";
 import { acceptCaption, inventedWords } from "../lib/send-caption";
@@ -173,6 +173,15 @@ assert.match(MEDIA_CLASSIFICATION_PROMPT, /Body paint is not a garment/);
 assert.match(MEDIA_CLASSIFICATION_PROMPT, /mirror in the background/);
 assert.match(MEDIA_CLASSIFICATION_PROMPT, /photographing herself in a mirror/);
 assert.match(MEDIA_CLASSIFICATION_PROMPT, /nipple or areola itself \(the darker disc\) can be seen/);
+
+// ---- facts shape (the contract) ----
+// Both calls must ask for the same visibility threshold; a second call cannot silently change the rubric.
+for (const prompt of [MEDIA_CLASSIFICATION_PROMPT, videoClassificationPrompt(5), secondLookPrompt(undefined, ["genitals", "anus", "nipples"]), secondLookPrompt(5, ["genitals", "anus"])]) {
+  assert.match(prompt, /anatomy itself.*clearly discernible/i, "discernible anatomy, not clothing presence, decides visibility");
+  assert.doesNotMatch(prompt, /sheer fabric\/hat\/hand/, "sheer fabric is not an unconditional prohibition");
+  assert.doesNotMatch(prompt, /or an object is plainly seen inserted/, "an inserted object is not independent proof that the opening is visible");
+  assert.doesNotMatch(prompt, /a hand or fabric over the nipple means no/, "transparent fabric cannot conflict with the sheer rule");
+}
 
 // ---- facts shape (the contract) ----
 const f = shirt.fields.visual_facts;
