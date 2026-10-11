@@ -1,6 +1,7 @@
 "use client";
 
 import { type FormEvent, type ReactNode, useEffect, useRef, useState } from "react";
+import { useContentUploads } from "./CreatorContentUploadProvider";
 import { safeCreatorNext } from "@/lib/creator-routing";
 
 const errors: Record<string, string> = {
@@ -20,6 +21,7 @@ export default function CreatorOnboardingActionForm({ children, className, pendi
   loginPath: string;
   consentBeforeSubmit?: boolean;
 }) {
+  const uploads = useContentUploads();
   const busy = useRef(false);
   const dirty = useRef(false);
   useEffect(() => {
@@ -38,6 +40,7 @@ export default function CreatorOnboardingActionForm({ children, className, pendi
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     if (busy.current) return;
+    if (uploads?.working || uploads?.items.some(item => item.state !== "saved") || uploads?.folderPending) { setError("Finish or remove the remaining uploads and save your folder link before submitting. Your saved files are safe."); return; }
     const form = event.currentTarget;
     if (!form.reportValidity()) return;
     const body = new FormData(form); // Capture before disabling the fields.
@@ -95,4 +98,5 @@ export default function CreatorOnboardingActionForm({ children, className, pendi
     {error && <p role="alert" className="mt-3 text-sm text-rose-700">{error}{pendingRemoval && <> <a href="/creator/onboarding?step=content" className="font-semibold underline">Open Saved content</a></>}{signIn && <> <a href={signIn} className="font-semibold underline">Sign in and return</a></>}</p>}
   </form>;
 }
+
 

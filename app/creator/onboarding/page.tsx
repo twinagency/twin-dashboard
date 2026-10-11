@@ -9,6 +9,8 @@ import CreatorOnboardingActionForm from "@/components/CreatorOnboardingActionFor
 import CreatorQuestionnaireWizard from "@/components/CreatorQuestionnaireWizard";
 import CreatorContentGallery from "@/components/CreatorContentGallery";
 import CreatorUploadForm from "@/components/CreatorUploadForm";
+import CreatorContentIntake from "@/components/CreatorContentIntake";
+import { contentFolders } from "@/lib/creator-content-intake";
 import CreatorSetupLayout from "@/components/CreatorSetupLayout";
 import { creatorUploadsEditable } from "@/lib/creator-upload-policy";
 import { creatorIntakeOptional } from "@/lib/creator-intake-policy";
@@ -300,22 +302,12 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
         />
       </section> : <section data-creator-setup-panel>
         <div data-creator-setup-panel-heading><h2>Your content</h2><span>{savedContentCount} saved file{savedContentCount === 1 ? "" : "s"}</span></div>
-        {status === "content_saved" && <div className="mb-5"><SavedConfirmation title="Content saved" detail="Your uploaded files were verified and the category totals have been updated." /></div>}
+        {status === "content_saved" && <div className="mb-5"><SavedConfirmation title="Content saved" detail="Your photos and videos have been saved to your account." /></div>}
         {status === "consent_saved" && <div className="mb-5"><SavedConfirmation title="Consent saved" detail="Your consent has been recorded." /></div>}
-        <p className="mb-5 text-sm text-muted">{optionalIntake ? "Add photos and videos now, or return later. Your content stays saved to your account." : "Add the photos and videos for your AI creator profile."}</p>
-        <div className="grid items-start gap-4 md:grid-cols-2">
-          {CREATOR_CONTENT_REQUIREMENTS.map((requirement, index) => <details key={requirement.kind} open={index === 0} className="group overflow-hidden rounded-xl border border-border bg-white" data-content-category={requirement.kind}>
-            <summary className="flex min-h-16 cursor-pointer list-none items-center justify-between gap-3 px-5 py-4">
-              <span className="font-semibold text-ink">{requirement.label}</span>
-              <span className="flex items-center gap-3 text-xs text-muted"><span>{optionalIntake ? `${contentCounts[requirement.kind]} saved` : `${contentCounts[requirement.kind]} of ${requirement.minimum}`}</span><ChevronRight className="size-4 transition-transform group-open:rotate-90" aria-hidden="true" /></span>
-            </summary>
-            <div className="border-t border-border px-5 pb-5">
-              <CreatorUploadForm accountId={session.accountId} loginPath={loginPath} kind={requirement.kind} label={requirement.label} accept={requirement.accept} formatHint={requirement.formatHint} locked={uploadsLocked} />
-              <CreatorContentGallery kind={requirement.kind} revision={String(contentCounts[requirement.kind])} loginPath={loginPath} />
-            </div>
-          </details>)}
-        </div>
-        {legacyContentFiles > 0 && <div className="mt-5"><CreatorContentGallery kind="content" revision={String(legacyContentFiles)} loginPath={loginPath} /><p className="mt-3 text-sm text-muted">{legacyContentFiles} earlier verified upload{legacyContentFiles === 1 ? " is" : "s are"} still safely stored.</p></div>}
+        <CreatorContentIntake locked={uploadsLocked} loginPath={loginPath}
+          savedPhotos={(files || []).filter(file => file.storage_transfer_status === "verified" && file.kind !== "voice" && file.mime_type?.startsWith("image/")).length}
+          savedVideos={(files || []).filter(file => file.storage_transfer_status === "verified" && file.kind !== "voice" && file.mime_type?.startsWith("video/")).length}
+          initialFolders={contentFolders(answers)} />
 
         <div data-creator-setup-submit>
           <CreatorOnboardingActionForm className="grid gap-4" pendingLabel={submitted ? "Saving consent…" : "Submitting your saved information…"} successStatuses={submitted ? ["consent_saved"] : ["submitted"]} loginPath={loginPath} consentBeforeSubmit={!consent && !submitted}>
@@ -390,7 +382,7 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
             {activeStep === "content" && <Card className="border border-border bg-white">
               <StepHeader number={2} title="Content" complete={complete.content} optional={optionalIntake} />
               <CardContent className="grid gap-6 pt-2">
-                {status === "content_saved" && <SavedConfirmation title="Content saved" detail="Your uploaded files were verified and the category totals have been updated." />}
+                {status === "content_saved" && <SavedConfirmation title="Content saved" detail="Your photos and videos have been saved to your account." />}
                 <div className="grid gap-3 rounded-2xl border border-border bg-muted/10 p-5 text-sm leading-6 text-ink">
                   {optionalIntake ? <p>This step is optional. Upload what you have now, or skip it and add content later, including after submitting onboarding.</p> : <>
                   <p>Upload minimum 20 SFW images and 30 NSFW images.</p>
@@ -456,6 +448,7 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
     </div>
   );
 }
+
 
 
 

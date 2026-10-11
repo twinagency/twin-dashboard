@@ -27,8 +27,9 @@ declare
   bucket_name text;
 begin
   if p_creator_id is null or p_upload_id is null or p_bytes is null or p_kind is null or p_mime is null or p_name is null or p_sha256 is null or p_bytes <= 0 or p_bytes > 536870912 or p_sha256 !~ '^[a-f0-9]{64}$'
-    or p_kind not in ('content_sfw_image','content_nsfw_image','content_sfw_video','content_nsfw_video','voice')
+    or p_kind not in ('content','content_sfw_image','content_nsfw_image','content_sfw_video','content_nsfw_video','voice')
     or (p_kind like '%_image' and p_bytes > 78643200) or (p_kind='voice' and p_bytes > 67108864)
+    or (p_kind='content' and (p_mime not in ('image/jpeg','image/png','image/webp','image/gif','video/mp4','video/quicktime','video/webm') or (p_mime like 'image/%' and p_bytes > 78643200)))
     then raise exception 'upload_invalid'; end if;
   perform pg_catalog.pg_advisory_xact_lock(pg_catalog.hashtextextended('creator_upload:'||p_creator_id::text,0));
   select * into receipt from public.creator_upload_receipts where id=p_upload_id for update;
@@ -121,4 +122,5 @@ revoke all on function public.begin_creator_upload_cleanup(uuid,uuid,timestamptz
 revoke all on function public.finish_creator_upload_cleanup(uuid,uuid) from public,anon,authenticated;
 grant execute on function public.begin_creator_upload_cleanup(uuid,uuid,timestamptz) to service_role;
 grant execute on function public.finish_creator_upload_cleanup(uuid,uuid) to service_role;
+
 

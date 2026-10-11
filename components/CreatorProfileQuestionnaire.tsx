@@ -1,6 +1,7 @@
 "use client";
+import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useContext, useEffect, useRef, useState } from "react";
 import { ArrowLeft, ArrowRight, Check, Eye, LoaderCircle, X } from "lucide-react";
 import { COMPACT_QUESTIONNAIRE_PAGES } from "@/lib/creator-questionnaire-compact";
 import { CREATOR_PROFILE_SECTIONS, CREATOR_PROFILE_QUESTIONNAIRE } from "@/lib/creator-questionnaire-profile";
@@ -27,6 +28,8 @@ const previewLabels: Record<string, string> = {
 };
 
 export default function CreatorProfileQuestionnaire({ page: initialPage, initialAnswers, initialRevision, locked = false, optional = false }: CreatorProfileQuestionnaireProps) {
+  const appRouter = useContext(AppRouterContext);
+  const navigateTo = (href: string) => { if (appRouter && href.startsWith("/creator/onboarding")) appRouter.push(href); else window.location.assign(href); };
   const [currentIndex, setCurrentIndex] = useState(() => Math.max(0, pages.findIndex(item => item.slug === initialPage.slug)));
   const [answers, setAnswers] = useState(initialAnswers);
   const [saveState, setSaveState] = useState<SaveState>("idle");
@@ -146,7 +149,7 @@ export default function CreatorProfileQuestionnaire({ page: initialPage, initial
           return;
         }
       }
-      window.location.assign(target === "dashboard" ? "/creator" : target === "hub" ? "/creator/onboarding" : "/creator/onboarding?step=content");
+      navigateTo(target === "dashboard" ? "/creator" : target === "hub" ? "/creator/onboarding" : "/creator/onboarding?step=content");
     } catch {
       setError("We could not finish that step. Your answers are still here. Please try again.");
     } finally {
@@ -226,3 +229,4 @@ export default function CreatorProfileQuestionnaire({ page: initialPage, initial
     </dialog>
   </div>;
 }
+

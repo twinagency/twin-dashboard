@@ -30,6 +30,7 @@ global.__setupDatabase = { from(table) {
         if (args.path === 'next/link') contents = 'import React from "react";export default ({children,...p})=>React.createElement("a",p,children);';
         else if (args.path.endsWith('/CreatorQuestionnaireWizard')) contents = 'import React from "react";export default ({page,initialAnswers,initialRevision,locked,optional})=>React.createElement("div",{"data-fixture-questionnaire":page.slug,"data-locked":locked,"data-optional":optional,"data-revision":initialRevision},Object.entries(initialAnswers).map(([name,value])=>React.createElement("input",{key:name,name,defaultValue:value,disabled:locked})));';
         else if (args.path.endsWith('/CreatorOnboardingActionForm')) contents = 'import React from "react";export default ({children,consentBeforeSubmit,successStatuses})=>React.createElement("form",{"data-fixture-consent-submit":!!consentBeforeSubmit,"data-success-statuses":successStatuses.join(",")},children);';
+        else if (args.path.endsWith('/CreatorContentIntake')) contents = 'import React from "react";export default ({locked})=>React.createElement("div",{"data-fixture-combined":true,"data-locked":locked});';
         else if (args.path.endsWith('/CreatorUploadForm')) contents = 'import React from "react";export default ({kind,locked})=>React.createElement("div",{"data-fixture-upload":kind,"data-locked":locked});';
         else if (args.path.endsWith('/CreatorContentGallery')) contents = 'import React from "react";export default ({kind})=>React.createElement("div",{"data-fixture-gallery":kind});';
         else if (args.path.endsWith('/TwinWordmark')) contents = 'import React from "react";export default ()=>React.createElement("span",null,"Twin");';
@@ -64,8 +65,9 @@ global.__setupDatabase = { from(table) {
       html = await render({ step });
       assert.match(html, /data-onboarding-active-step="content"/);
       assert.match(html, /2 saved files/);
-      assert.equal((html.match(/data-fixture-upload=/g) || []).length, 4);
-      assert.match(html, /data-fixture-gallery="content"/);
+      assert.equal((html.match(/data-fixture-combined=/g) || []).length, 1);
+      assert.equal((html.match(/data-fixture-upload=/g) || []).length, 0);
+
       assert.doesNotMatch(html, /data-fixture-upload="voice"|Voice|Minimum reached|Not complete/);
       assert.match(html, /data-fixture-consent-submit="true"/);
       assert.match(html, /name="legal_name"/);
@@ -93,7 +95,7 @@ global.__setupDatabase = { from(table) {
     assert.match(html, /data-onboarding-application-state="Approved"/);
     readOnly = true;
     html = await render({ step: 'content' });
-    assert.match(html, /data-fixture-upload="content_sfw_image" data-locked="true"/);
+    assert.match(html, /data-fixture-combined="true" data-locked="true"/);
     assert.match(html, /Application locked/);
 
     brand = 'Twin'; application = null; consent = null; readOnly = false;
@@ -114,4 +116,5 @@ global.__setupDatabase = { from(table) {
     console.log('Creator setup UI passed: Moxy has two free sections, legacy URLs map to content, inline consent preserves optional and post-submission behaviour, uploads and other-brand flows remain available.');
   } finally { rmSync(outfile, { force: true }); }
 })().catch(error => { console.error(error); process.exitCode = 1; });
+
 

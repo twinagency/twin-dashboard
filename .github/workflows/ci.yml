@@ -48,6 +48,9 @@ jobs:
       - name: Creator profile mobile and save navigation checks
         run: node scripts/check-creator-profile-ui.mjs
 
+      - name: Creator content mobile and background upload checks
+        run: node scripts/check-creator-content-browser.mjs
+
       - name: Creator profile review screenshots
         if: always()
         uses: actions/upload-artifact@v4
@@ -140,5 +143,6 @@ jobs:
           path: test-results/twin-public
           if-no-files-found: ignore
           retention-days: 3
+
 
 

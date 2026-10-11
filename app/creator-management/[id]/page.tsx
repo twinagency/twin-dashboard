@@ -1,3 +1,4 @@
+import { contentFolders, CONTENT_FOLDER_KEY } from "@/lib/creator-content-intake";
 import { hasInternalAdminAccess } from "@/lib/internal-admin";
 import Link from "next/link";
 import { notFound, redirect } from "next/navigation";
@@ -85,7 +86,8 @@ export default async function CreatorDetailPage({ params }: { params: Promise<{ 
     rows.forEach((row, i) => { const url = data?.[i]?.signedUrl; if (url) signed.set(row.id, url); });
   }));
 
-  const answers = application?.answers && typeof application.answers === "object" ? Object.entries(application.answers) : [];
+  const folders = contentFolders(application?.answers || {});
+  const answers = application?.answers && typeof application.answers === "object" ? Object.entries(application.answers).filter(([key]) => key !== CONTENT_FOLDER_KEY) : [];
   const onboardingComplete = [progress?.questionnaire_completed, progress?.content_completed, progress?.voice_completed].filter(Boolean).length;
 
   return (
@@ -118,6 +120,7 @@ export default async function CreatorDetailPage({ params }: { params: Promise<{ 
 
           <Card className="p-5">
             <div className="mb-4 flex items-center justify-between"><h2 className="text-lg font-semibold">Media</h2><Link href={`/storage?creator=${creator.id}`} className="text-sm font-medium text-accent hover:underline">Open full storage →</Link></div>
+            {folders.length > 0 && <div className="mb-5 rounded-xl border border-border p-4"><h3 className="font-semibold">Folders awaiting import</h3><p className="mt-1 text-sm text-muted">Review and import these into this creator’s private content. Folder links are not verified uploads.</p><ul className="mt-3 space-y-2">{folders.map(folder => <li key={folder.url}><a href={folder.url} target="_blank" rel="noopener noreferrer" className="break-all text-sm text-accent underline">{folder.provider}: {folder.url}</a></li>)}</ul></div>}
             <div className="grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-4">
               {contentFiles.slice(0, 12).map((file) => {
                 const url = signed.get(file.id);
@@ -178,3 +181,4 @@ export default async function CreatorDetailPage({ params }: { params: Promise<{ 
     </div>
   );
 }
+
