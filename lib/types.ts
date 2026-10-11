@@ -24,6 +24,8 @@ export type Clone = {
   slug: string;
   name: string;
   bot_token: string;
+  /** Per-clone engine ('live' = this twin-bot runtime, 'v2' = the V2 bot). Display only here: switched through the V2 monitor, never by the clone form. */
+  engine?: string | null;
   /** Migration 092, CORRECTED by 094 (renamed from bot_username). The connected
    *  Telegram BUSINESS ACCOUNT's @handle: the identity a fan actually messages.
    *  NOT the bot's own API handle (@catpayments_bot) - every real conversation
