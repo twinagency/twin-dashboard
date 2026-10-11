@@ -21,7 +21,6 @@ function compile(path: string): any {
     if (name.endsWith('DashboardAccessProvider')) return accessModule;
     if (name === '@/lib/agency-brand') return { isMoxy: (name?: string) => name?.toLowerCase() === 'moxy' };
     if (name.endsWith('ModelSelect')) return { __esModule: true, default: ({ name, value, defaultValue }: any) => <input name={name} defaultValue={value ?? defaultValue ?? ''} /> };
-    if (name === '@/lib/colors') return { initials: () => 'BR' };
     if (!name.startsWith('.') && !name.startsWith('@/')) return requireNative(name);
     const base = name.startsWith('@/') ? resolve(name.slice(2)) : resolve(dirname(path), name);
     const dependency = [base, base + '.tsx', base + '.ts'].find(existsSync);
@@ -88,6 +87,8 @@ async function main() {
     const partnerBaseline = payload();
     await render(true);
     assert.deepEqual(payload(), partnerBaseline, `${brand} retains its complete save payload`);
+    assert.equal(document.querySelector('[aria-label="Creator profile appearance"] img'), null, `${brand} never borrows the demo portrait`);
+    assert.equal(document.querySelector('.profilePhoto')?.textContent, 'FC', `${brand} uses this creator’s initials without a stored photo`);
     const draft = document.querySelector<HTMLInputElement>('[name=stage_name]')!;
     draft.value = 'Partner draft';
     for (const [tab, data] of Object.entries(STUDIO_PAGES) as any) {

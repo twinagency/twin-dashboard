@@ -11,6 +11,7 @@ html {
   --workspace-accent-deep: var(--color-accent-deep);
   --workspace-accent-light: var(--color-accent-2);
   --workspace-accent-tint: var(--color-accent-tint);
+  --workspace-accent-soft: var(--color-accent-soft);
   --workspace-accent-border: color-mix(in srgb, var(--color-accent) 22%, white);
 }
 [data-workspace-brand="twin"] {
@@ -23,6 +24,7 @@ html {
   --workspace-accent-deep: #0864db;
   --workspace-accent-light: #2d8aff;
   --workspace-accent-tint: #eaf3ff;
+  --workspace-accent-soft: #8bbcff;
   --workspace-accent-border: #d3e6ff;
 }
 [data-studio-workspace="true"] {
@@ -33,9 +35,9 @@ html {
   --color-muted: var(--workspace-muted, #6b7890);
   --color-line: var(--workspace-line, #e6ebf2);
   --color-accent: var(--workspace-accent, #0878ff);
-  --color-accent-2: var(--workspace-accent, #0878ff);
+  --color-accent-2: var(--workspace-accent-light, #0878ff);
   --color-accent-deep: var(--workspace-accent-deep, #0864db);
-  --color-accent-soft: #8bbcff;
+  --color-accent-soft: var(--workspace-accent-soft, #8bbcff);
   --color-accent-tint: var(--workspace-accent-tint, #eaf3ff);
   --color-brand: var(--workspace-accent, #0878ff);
   --color-brand-light: var(--workspace-accent-light, #2d8aff);
@@ -117,7 +119,7 @@ html {
   --color-muted: var(--workspace-muted, #6b7890);
   --color-line: var(--workspace-line, #e6ebf2);
   --color-accent: var(--workspace-accent, #0878ff);
-  --color-accent-2: var(--workspace-accent, #0878ff);
+  --color-accent-2: var(--workspace-accent-light, #0878ff);
   --color-accent-deep: var(--workspace-accent-deep, #0864db);
   --color-accent-tint: var(--workspace-accent-tint, #eaf3ff);
   background: transparent;

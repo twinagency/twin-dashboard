@@ -364,6 +364,7 @@ export default function CloneForm({
                     <>
                       <CloneAppearanceEditor
                         studio
+                        useStudioPortrait={canShowIntelligence(audience, clone.id)}
                         cloneName={clone.name}
                         initialColor={appearanceColor}
                         initialImagePath={clone.intake?.appearance?.profile_image_path ?? null}
