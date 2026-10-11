@@ -11,6 +11,7 @@ import CurrencyToggle from '@/components/CurrencyToggle';
 import { fmtMoney, starsToMoneyRate } from '@/lib/money';
 import PlatformMark from './PlatformMark';
 import styles from './AgencyOverview.module.css';
+import RankingPanel from '@/components/overview-rankings/RankingPanel';
 
 function Photo({ creator, className = '' }: { creator: OverviewCreator; className?: string }) {
   const [failed, setFailed] = useState(false);
@@ -127,20 +128,17 @@ export default function AgencyOverview({ cloneId, initialCreators }: { cloneId: 
     </section>
     <div className={styles.middle}>
       <section className={styles.panel}><div className={styles.panelHeading}><h2>Earnings overview</h2><div className={styles.tabs} aria-label="Chart period">{[['1W','7 days'],['1M','30 days'],['6M','6 months'],['ALL','All time']].map(([v,label]) => <button key={v} aria-pressed={period === v} onClick={() => setPeriod(v as Period)}>{label}</button>)}</div></div><div className={styles.chartLegend}><span>● Telegram</span><strong>{amount}</strong></div>{data ? <Series values={values} labels={data.bucketLabels} money={money} /> : <div className={styles.loading} role="status">Loading earnings…</div>}</section>
-      <section className={styles.panel}><div className={styles.panelHeading}><h2>Recent activity</h2><button className={styles.textButton} onClick={() => setExpanded(v => !v)}>{expanded ? 'Show less' : 'View all'}<ArrowRight size={14} /></button></div><div className={styles.activity}>
-        {recent.slice(0, expanded ? 12 : 3).map((row, i) => <button className={styles.activityRow} key={`${row.cloneId}:${row.telegramId}:${row.paidAt}:${i}`} onClick={() => setDetail(row)}><ActivityAvatar key={`${row.cloneId}:${row.telegramId}`} row={row} /><span className={styles.activityText}><strong>{row.buyerName}</strong><small><PlatformMark platform="telegram" size={13} />{row.kind === 'credits' ? 'Message credits' : row.kind === 'refund' ? 'Refund' : `${row.kind.charAt(0).toUpperCase()}${row.kind.slice(1)} purchase`} · {money(row.stars)}</small><small hidden={!!selected}>{creators.find(c => c.id === row.cloneId) && <Photo creator={creators.find(c => c.id === row.cloneId)!} />}{row.cloneName}</small></span><time dateTime={row.paidAt} title={new Date(row.paidAt).toLocaleString('en-AU', { timeZone: 'Australia/Brisbane' })}>{elapsed(row.paidAt)}</time></button>)}
-        {!recent.length && <p className={styles.empty}>{data ? 'No purchases in this period.' : 'Loading activity…'}</p>}
-      </div></section>
-    </div>
-    {selected ? <div className={styles.middle}>
-      <section className={styles.panel}><div className={styles.panelHeading}><h2>From your library</h2><Link className={styles.textButton} href="/content">View library<ArrowRight size={14} /></Link></div>
-        <div className={styles.libraryGrid}>{(selected.library ?? []).map((photo, index) => <Link href="/content" key={photo.id} className={styles.libraryTile} aria-label={`Open ${selected.name}'s content library, photo ${index + 1}`}><VaultPhoto image={photo} name={`${selected.name}, vault photo ${index + 1}`} /><span><ImageIcon size={14} />Photo<ArrowUpRight size={16} /></span></Link>)}</div>
+      <RankingPanel kind="fans" rankings={data?.rankings} cloneIds={[...ids]} agency={!selected} money={money} error={data?.rankingsError} loading={!data} />
+      {selected ? <>
+      <section className={styles.panel}><div className={styles.panelHeading}><h2>From your library</h2><Link className={styles.textButton} href={`/clones/${selected.id}?tab=ppvs`}>View library<ArrowRight size={14} /></Link></div>
+        <div className={styles.libraryGrid}>{(selected.library ?? []).map((photo, index) => <Link href={`/clones/${selected.id}?tab=ppvs`} key={photo.id} className={styles.libraryTile} aria-label={`Open ${selected.name}'s content library, photo ${index + 1}`}><VaultPhoto image={photo} name={`${selected.name}, vault photo ${index + 1}`} /><span><ImageIcon size={14} />Photo<ArrowUpRight size={16} /></span></Link>)}</div>
         {!selected.library?.length && <p className={styles.empty}>No preview photos selected.</p>}
       </section>
-      <section className={`${styles.panel} ${styles.flowPanel}`}><div className={styles.panelHeading}><h2>Automations</h2><Sparkles size={17} /></div><div className={styles.flowVisual}><span><PlatformMark platform="telegram" size={25} /></span><i /><span><MessageCircle size={23} /></span><i /><span><Sparkles size={23} /></span></div><div className={styles.flowHeading}><h3>Follow-up flow</h3><span className={styles.flowStatus}><i className={selected.automation?.enabled ? styles.dot : styles.offDot} />{selected.automation?.enabled ? 'Enabled' : 'Off'}</span></div><p className={styles.flowSummary}>{selected.automation?.steps ?? 0} configured steps</p><Link href="/flows" className={styles.primary}>Manage flows<ArrowRight size={17} /></Link></section>
-    </div> : <>
+      </> : <>
     <section className={styles.panel}><div className={styles.panelHeading}><h2>Creator performance</h2><Link className={styles.textButton} href="/clones">View creators<ArrowRight size={14} /></Link></div><div className={styles.creatorGrid}>{scoped.map(c => <article key={c.id} className={styles.creatorCard}><Photo creator={c} className={styles.creatorPortrait} /><div><h3>{c.name}</h3><span className={styles.creatorStatus}><PlatformMark platform="telegram" size={18} />Telegram · {c.telegramConnected ? 'Connected' : 'Not connected'}</span><dl><div><dt>Total earnings</dt><dd>{data ? money(data.perClone[c.id]?.stars ?? 0) : '…'}</dd></div><div><dt>Total fans</dt><dd>{c.fans.toLocaleString()}</dd></div></dl><button className={styles.primary} disabled={changing} onClick={() => selected ? router.push(`/clones/${c.id}?tab=identity`) : void choose(c.id)}>{selected ? 'View profile' : 'Open overview'}<ArrowRight size={17} /></button></div></article>)}</div></section>
-    </>}
+      </>}
+      <RankingPanel kind="content" rankings={data?.rankings} cloneIds={[...ids]} agency={!selected} money={money} error={data?.rankingsError} loading={!data} />
+    </div>
     <footer className={styles.footer}><CurrencyToggle /><span>Times shown in Brisbane time</span><button className={styles.textButton} onClick={() => setRefresh(n => n + 1)}><RefreshCw size={14} />Refresh</button></footer>
     <dialog ref={dialog} className={styles.dialog} onClose={() => setDetail(null)}>{detail && <><div className={styles.panelHeading}><h2>Purchase details</h2><button aria-label="Close details" onClick={() => setDetail(null)}><X size={20} /></button></div><dl>{[['Fan',detail.buyerName],['Creator',detail.cloneName],['Platform','Telegram'],['Type',detail.kind],['Amount',money(detail.stars)],['Purchased',new Date(detail.paidAt).toLocaleString('en-AU',{timeZone:'Australia/Brisbane'})]].map(([label,value]) => <div key={label}><dt>{label}</dt><dd>{value}</dd></div>)}</dl></>}</dialog>
   </div>;

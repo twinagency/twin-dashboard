@@ -6,7 +6,8 @@
 
 @media(min-width:1351px){.metric strong{font-size:clamp(20px,1.55vw,26px)}.metric{gap:8px;padding-left:12px;padding-right:12px}.metricIcon{width:31px;height:33px}.metric small{font-size:9px}.creatorStack>a{font-size:9px}}
 
-.disconnected img[src$="imessage.svg"],.muted img[src$="imessage.svg"]{filter:grayscale(1)}
+/* Keep the shared Messages artwork green; the card and label communicate connection status. */
+.disconnected img[src$="imessage.svg"],.muted img[src$="imessage.svg"]{filter:none;opacity:1}
 @media(max-width:600px){.metrics>.metric:first-child{grid-column:auto;min-height:134px}.metrics>.metric:first-child .spark{width:60px;height:22px;bottom:10px}.metric{padding:14px 10px;gap:6px}.metric strong{font-size:20px}.metricIcon{width:25px;height:30px}.metricIcon svg{width:23px}.telegramMetric>svg{width:27px;height:27px}}
 
 /* Individual creator composition follows the creator dashboard, with Moxy colours. */
@@ -36,3 +37,5 @@
 @media(max-width:1100px){.creatorPage .middle{grid-template-columns:minmax(0,1.8fr) minmax(260px,1fr)}.creatorPage .hero{padding:32px}.libraryTile{height:175px}}
 @media(max-width:850px){.creatorPage .middle{grid-template-columns:1fr}.creatorPage .hero h1{font-size:36px}.creatorPage .hero{padding:28px}.flowVisual{height:110px}}
 @media(max-width:600px){.creatorPage .hero{min-height:215px;padding:24px}.creatorPage .hero h1{font-size:31px}.creatorPage .hero>div{max-width:58%}.creatorPage .hero .heroPhoto{width:65%}.libraryGrid{gap:8px}.libraryTile{height:155px}.libraryTile>span:last-child{padding:24px 8px 9px}.creatorPage .activityRow{padding:15px 0}}
+
+.middle{align-items:start}.middle>section:nth-child(4){grid-column:2;grid-row:2}@media(max-width:1350px){.middle>section:nth-child(4){grid-column:auto;grid-row:auto}}@media(min-width:851px){.creatorPage .middle>section:nth-child(4){grid-column:2;grid-row:2}}@media(max-width:850px){.creatorPage .middle>section:nth-child(4){grid-column:auto;grid-row:auto}}
