@@ -1,3 +1,15 @@
 html[data-agency="moxy"]:has([data-moxy-overview]) .dashboard-topbar{display:none}
 html[data-agency="moxy"]:has([data-moxy-overview]) .dashboard-main{padding:0;max-width:none;width:100%;background:#fafafa}
 html[data-agency="moxy"]:has([data-moxy-overview]) .dashboard-main::before{display:none}
+
+/* The phone already has the overview's creator picker and a navigation header. */
+@media(max-width:600px){
+  html[data-agency="moxy"]:has([data-moxy-overview]) .dashboard-mobile-header{padding:8px 12px}
+  html[data-agency="moxy"]:has([data-moxy-overview]) .dashboard-mobile-header>a img{width:124px}
+  html[data-agency="moxy"]:has([data-moxy-overview]) .dashboard-topbar.moxy-overview-topbar{display:flex;min-height:58px;height:auto;padding:8px 12px;background:#fff}
+  html[data-agency="moxy"]:has([data-moxy-overview]) .moxy-overview-creator{display:none}
+  html[data-agency="moxy"]:has([data-moxy-overview]) .moxy-overview-account-controls{gap:10px;flex-wrap:nowrap}
+  html[data-agency="moxy"]:has([data-moxy-overview]) .moxy-overview-lifetime{order:0;margin-left:0;margin-right:auto}
+  html[data-agency="moxy"]:has([data-moxy-overview]) .moxy-overview-lifetime>span{font-size:10px}
+  html[data-agency="moxy"]:has([data-moxy-overview]) .moxy-overview-lifetime>strong{font-size:16px}
+}
