@@ -1,13 +1,16 @@
 import { getDashboardAccess } from "./dashboard-access";
 import { cache } from "react";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
 import { cloneExists } from "./query-cache";
+import { FLIRT_OVERVIEW_SCOPE_HEADER, isFlirtOverviewPath } from "./flirt-overview-routing";
 
 // Single global "which clone am I looking at" selector, shared by every data
 // page (Revenue/Fans/Info/Drip/Media/Logs). "All" = no cookie = null. Picking a
 // clone in the header switcher (components/CloneSwitcher.tsx, via
 // app/actions/clone-scope.ts) sets this cookie; pages read it here instead of
 // relying on a /clones/[id]/* route param.
+// FLIRT's operator Overview is the exception: home means All creators, and
+// an individual Overview is selected explicitly in its trusted URL header.
 export const CLONE_SCOPE_COOKIE = "clone_scope";
 
 // Returns the selected clone id, or null for "All clones". Validates the id
@@ -28,6 +31,13 @@ export const CLONE_SCOPE_COOKIE = "clone_scope";
 export const getCloneScope = cache(async (): Promise<string | null> => {
   const id = (await cookies()).get(CLONE_SCOPE_COOKIE)?.value || null;
   const agency = await getDashboardAccess();
+  if (agency?.name.trim().toLowerCase() === "flirt" && !agency.id.startsWith("creator:")) {
+    const requestHeaders = await headers();
+    if (isFlirtOverviewPath(requestHeaders.get("x-pathname"), agency.name)) {
+      const selected = requestHeaders.get(FLIRT_OVERVIEW_SCOPE_HEADER);
+      return selected && agency.cloneIds.includes(selected) ? selected : null;
+    }
+  }
   if (agency) return id && agency.cloneIds.includes(id) ? id : agency.cloneIds.length === 1 ? agency.cloneIds[0] : null;
   if (!id) return null;
   return (await cloneExists(id)) ? id : null;

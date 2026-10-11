@@ -37,6 +37,8 @@ jobs:
           node --check deployment/creator-flow-live-check.cjs
           node --check deployment/flirt-live-creators-check.cjs
       - run: npm ci
+      - name: Default agency homepage and creator navigation
+        run: node --import tsx scripts/check-flirt-overview-navigation.tsx
       - run: npx tsc --noEmit
       - name: Personalised Overview photos and access boundaries
         run: node scripts/check-flirt-creator-overview.cjs

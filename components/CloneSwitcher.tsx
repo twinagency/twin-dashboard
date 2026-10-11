@@ -5,6 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { setCloneScope } from "@/app/actions/clone-scope";
+import { flirtOverviewHref, isFlirtOverviewPath } from "@/lib/flirt-overview-routing";
 import { initials } from "@/lib/colors";
 import { onOpenCloneSwitcher } from "@/lib/clone-switcher-bus";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
@@ -27,6 +28,8 @@ function VerifiedBadge({ className = "h-3.5 w-3.5" }: { className?: string }) {
 // data page (Revenue/Fans/Info/Drip/Media/Logs) via a cookie (lib/clone-scope.ts)
 // instead of a /clones/[id]/* route — one page per page-type, scope switches the
 // data underneath it.
+// FLIRT's Overview carries its explicit creator in the URL so home always
+// returns to the agency instead of reopening the last selected profile.
 export default function CloneSwitcher({
   clones,
   activeCloneId,
@@ -41,7 +44,7 @@ export default function CloneSwitcher({
   fallbackName?: string;
 }) {
   const router = useRouter();
-  const {isAgency}=useDashboardAccess();
+  const {isAgency,agencyName}=useDashboardAccess();
   const pathname = usePathname();
   const searchParams = useSearchParams();
   const [open, setOpen] = useState(false);
@@ -86,7 +89,7 @@ export default function CloneSwitcher({
         const response = await fetch("/agency/clone-scope",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({clone:id})});
         if (!response.ok) throw new Error("Unable to switch creator");
       } else await setCloneScope(id);
-      const dest = cloneRouteFor(id);
+      const dest = isAgency && isFlirtOverviewPath(pathname, agencyName) ? flirtOverviewHref(id) : cloneRouteFor(id);
       if (dest) router.push(dest);
       router.refresh();
     });
@@ -152,6 +155,7 @@ export default function CloneSwitcher({
       <button
         type="button"
         onClick={() => setOpen(true)}
+        aria-label="Switch creator"
         disabled={pending}
         className="flex items-center gap-2 rounded-full px-3 py-1.5 text-sm font-semibold text-ink transition hover:bg-[#e5f0f8] disabled:opacity-60"
       >

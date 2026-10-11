@@ -6,6 +6,7 @@ import { supabaseAdmin } from '../lib/supabase';
 import { signSession, SESSION_COOKIE } from '../lib/session';
 import { middleware } from '../middleware';
 import { NextRequest } from 'next/server';
+import { FLIRT_OVERVIEW_SCOPE_HEADER } from '../lib/flirt-overview-routing';
 async function main() {
   configureFlirtOfflineEnv();
   Object.assign(process.env, { NODE_ENV: 'production', FLIRT_SUPABASE_PROJECT_REF: 'lkmfwpqegjluirfusnaw', SUPABASE_URL: 'https://lkmfwpqegjluirfusnaw.supabase.co', FLIRT_LIVE_TWIN_ENABLED: 'true', FLIRT_LIVE_TWIN_URL: `https://${PROJECT}.supabase.co`, FLIRT_LIVE_TWIN_SERVICE_KEY: 'sb_secret_' + 'x'.repeat(32) });
@@ -32,6 +33,15 @@ async function main() {
       assert.equal(calls.at(-1)?.searchParams.has('and'), false);
     });
     const cookie = `${SESSION_COOKIE}=${await signSession()}`;
+    const home = await middleware(new NextRequest('https://dashboard.flirt.example/revenue', { headers: { cookie, [FLIRT_OVERVIEW_SCOPE_HEADER]: CLONES[0] } }));
+    assert.equal(home.status, 200);
+    assert.equal(home.headers.get('x-middleware-request-' + FLIRT_OVERVIEW_SCOPE_HEADER), '', 'A forged scope header cannot replace the All creators homepage');
+    const overview = await middleware(new NextRequest('https://dashboard.flirt.example/revenue?clone=' + CLONES[0], { headers: { cookie, [FLIRT_OVERVIEW_SCOPE_HEADER]: CLONES[1] } }));
+    assert.equal(overview.status, 200);
+    assert.equal(overview.headers.get('x-middleware-request-' + FLIRT_OVERVIEW_SCOPE_HEADER), CLONES[0], 'Only the authorized Overview URL supplies its scope header');
+    const otherPage = await middleware(new NextRequest('https://dashboard.flirt.example/clones', { headers: { cookie, [FLIRT_OVERVIEW_SCOPE_HEADER]: CLONES[0] } }));
+    assert.equal(otherPage.headers.get('x-middleware-request-' + FLIRT_OVERVIEW_SCOPE_HEADER), null, 'Overview request headers cannot leak into other pages');
+    assert.equal((await middleware(new NextRequest('https://dashboard.flirt.example/revenue?clone=11111111-1111-1111-1111-111111111111', { headers: { cookie } }))).status, 403, 'An explicit Overview must deny unassigned creators');
     for (const path of ['/clones', `/clones/${CLONES[0]}`, '/api/dashboard']) assert.equal((await middleware(new NextRequest('https://dashboard.flirt.example' + path, { headers: { cookie } }))).status, 200);
     for (const path of ['/settings', '/clones/new', '/clones/11111111-1111-1111-1111-111111111111', '/api/dashboard?clone=11111111-1111-1111-1111-111111111111']) assert.equal((await middleware(new NextRequest('https://dashboard.flirt.example' + path, { headers: { cookie } }))).status, 403);
     assert.equal((await middleware(new NextRequest('https://dashboard.flirt.example/api/compile?cloneId=11111111-1111-1111-1111-111111111111', { method: 'POST', headers: { cookie, origin: 'https://dashboard.flirt.example' } }))).status, 403);
