@@ -79,11 +79,12 @@ async function main() {
   assert(agency.audience.total === agency.creators.reduce((sum,c)=>sum+c.totalFans,0), 'Agency fan total must equal per-creator all-time fans');
   const agencyCountResponse = await request(live.url+'/rest/v1/users?select=id&clone_id=in.('+CLONES.join(',')+')&or=(is_test.is.null,is_test.eq.false)',{method:'HEAD',headers:{apikey:live.key,Authorization:`Bearer ${live.key}`,Prefer:'count=exact'}});
   assert(agencyCountResponse.ok && Number(agencyCountResponse.headers.get('content-range')?.split('/')[1]) === agency.audience.total, 'Agency fan count must match the database including imports and excluding tests');
-  const agencyPhotos = agency.creators.flatMap(c=>[c.portrait,c.cardPhoto]).filter(Boolean);
+  assert(agency.creators.filter(c=>c.heroPhoto).length===3,'The agency banner must show three assigned creator portraits');
+  const agencyPhotos = agency.creators.flatMap(c=>[c.portrait,c.cardPhoto,c.heroPhoto]).filter(Boolean);
   assert(new Set(agencyPhotos.map(p=>p.id)).size===agencyPhotos.length,'Agency photos must all be different');
   for(const photo of agencyPhotos) assert(new URL(photo.url).hostname===`${PROJECT}.supabase.co` && (await request(photo.url,{method:'HEAD'})).ok,'Every agency portrait must load from its original private storage');
   const agencyPage = await page('/revenue'); const agencyHtml = await agencyPage.text();
-  assert(agencyPage.ok && agencyHtml.includes('data-agency-overview="flirt"') && agencyHtml.includes('Agency overview') && agencyHtml.includes('Compare creators') && expected.every(c=>agencyHtml.includes(c.name)), 'Live All creators Overview must render its agency layout');
+  assert(agencyPage.ok && agencyHtml.includes('data-agency-overview="flirt"') && agencyHtml.includes('Agency overview') && agencyHtml.includes('Compare creators') && (agencyHtml.match(/data-hero-creator=/g)||[]).length===3 && expected.every(c=>agencyHtml.includes(c.name)), 'Live All creators Overview must render its agency layout');
   const monthResponse=await page('/api/dashboard?period=1M&fresh=1');
   assert(monthResponse.ok,'Default 30-day agency earnings must load');
   const month=await monthResponse.json();

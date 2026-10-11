@@ -1,7 +1,7 @@
 name: FLIRT agency Overview review
 on:
   push:
-    branches: ["codex/flirt-agency-overview-20261011"]
+    branches: ["codex/flirt-agency-overview-20261011", "codex/flirt-portrait-banner-20261011"]
 permissions:
   contents: read
 jobs:

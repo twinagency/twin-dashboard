@@ -2,7 +2,7 @@ import { supabaseAdmin } from './supabase';
 import { getDashboardAccess } from './dashboard-access';
 import { chartColorForClone, profileImagePathForClone } from './colors';
 import { getOverviewAudience } from './creator-overview';
-import { agencyOverviewPhotos, type AgencyOverviewPresentation } from './agency-overview-model';
+import { agencyOverviewPhotos, type AgencyOverviewCrop, type AgencyOverviewPresentation } from './agency-overview-model';
 
 export async function getAgencyOverview(): Promise<AgencyOverviewPresentation> {
   const access = await getDashboardAccess();
@@ -13,7 +13,7 @@ export async function getAgencyOverview(): Promise<AgencyOverviewPresentation> {
   const { data: clones, error } = await supabaseAdmin.from('clones')
     .select('id,name,intake').in('id', access.cloneIds).order('created_at', { ascending: true });
   if (error || !clones) throw new Error('The agency creators could not be loaded.');
-  const photoIds = clones.flatMap(c => { const selected = agencyOverviewPhotos[c.id] || {}; return [selected.portrait, selected.card].filter((id): id is string => !!id); });
+  const photoIds = clones.flatMap(c => { const selected = agencyOverviewPhotos[c.id] || {}; return [selected.portrait, selected.card, selected.hero].filter((id): id is string => !!id); });
   const { data: photos, error: photoError } = photoIds.length
     ? await supabaseAdmin.from('photos').select('id,clone_id,storage_path').in('clone_id', access.cloneIds).in('id', photoIds)
     : { data: [], error: null };
@@ -28,20 +28,23 @@ export async function getAgencyOverview(): Promise<AgencyOverviewPresentation> {
     };
     const portraitPath = unique(pathFor(selected.portrait) || profileImagePathForClone(c.intake));
     const cardPath = unique(pathFor(selected.card));
+    const heroPath = unique(pathFor(selected.hero));
     const audience = await getOverviewAudience(c.id);
     return { id: c.id, name: c.name, color: chartColorForClone(c.intake, index), totalFans: audience.total,
-      portraitPath, cardPath, portraitId: selected.portrait || `profile-${c.id}`, cardId: selected.card, portraitZoom: selected.portraitZoom };
+      portraitPath, cardPath, heroPath, portraitId: selected.portrait || `profile-${c.id}`, cardId: selected.card, portraitZoom: selected.portraitZoom,
+      heroId: selected.hero, heroCrop: selected.heroCrop };
   }));
-  const paths = rows.flatMap(r => [r.portraitPath, r.cardPath]).filter((p): p is string => !!p);
+  const paths = rows.flatMap(r => [r.portraitPath, r.cardPath, r.heroPath]).filter((p): p is string => !!p);
   const { data: signed, error: signingError } = paths.length
     ? await supabaseAdmin.storage.from('media').createSignedUrls(paths, 3600)
     : { data: [], error: null };
   if (signingError) throw new Error('Creator portraits could not be refreshed.');
-  const image = (path?: string, id?: string, zoom = 1) => {
+  const image = (path?: string, id?: string, zoom = 1, crop?: AgencyOverviewCrop) => {
     const url = path ? signed?.[paths.indexOf(path)]?.signedUrl : undefined;
-    return url && id ? { id, url, position: '50% 0%', zoom } : null;
+    return url && id ? { id, url, position: '50% 0%', zoom, crop } : null;
   };
   const creators = rows.map(r => ({ id: r.id, name: r.name, color: r.color, totalFans: r.totalFans,
-    portrait: image(r.portraitPath, r.portraitId, r.portraitZoom), cardPhoto: image(r.cardPath, r.cardId) }));
+    portrait: image(r.portraitPath, r.portraitId, r.portraitZoom), cardPhoto: image(r.cardPath, r.cardId),
+    heroPhoto: image(r.heroPath, r.heroId, 1, r.heroCrop) }));
   return { creators, audience: { total: creators.reduce((sum, c) => sum + c.totalFans, 0) } };
 }
