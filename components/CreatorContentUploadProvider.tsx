@@ -10,7 +10,7 @@ import { navigateCreatorSetup } from "@/lib/creator-setup-navigation";
 
 type State = "queued" | "uploading" | "saving" | "saved" | "failed" | "reselect";
 export type ContentUploadItem = { id: string; name: string; size: number; lastModified: number; state: State; percent: number; file?: File; error?: string };
-type Queue = { items: ContentUploadItem[]; working: boolean; add: (files: File[]) => void; retry: (id: string) => void; remove: (id: string) => void; revision: number; folderPending: boolean; folder: ReturnType<typeof useCreatorContentFolders> };
+type Queue = { items: ContentUploadItem[]; working: boolean; add: (files: File[]) => void; retry: (id: string) => void; remove: (id: string) => boolean; revision: number; folderPending: boolean; folder: ReturnType<typeof useCreatorContentFolders> };
 const Context = createContext<Queue | null>(null);
 export const useContentUploads = () => useContext(Context);
 const delay = (ms: number) => new Promise<void>(resolve => setTimeout(resolve, ms));
@@ -98,7 +98,7 @@ export function CreatorContentUploadProvider({ accountId, children }: { accountI
         const item = ref.current.find(candidate => candidate.state === "queued" && candidate.file && !active.current.has(candidate.id));
         if (!item) { if (!active.current.size) break; await delay(30); continue; }
         active.current.add(item.id);
-        try { await inCreatorUploadSlot(() => upload(item)); update(item.id, { state: "saved", percent: 100, error: undefined }); }
+        try { await inCreatorUploadSlot(() => upload(item)); update(item.id, { state: "saved", percent: 100, error: undefined }); if (alive.current) setRevision(value => value + 1); }
         catch (reason) { update(item.id, { state: "failed", error: reason instanceof Error ? reason.message : "Retry this file." }); }
         finally { active.current.delete(item.id); }
       }
@@ -156,7 +156,7 @@ export function CreatorContentUploadProvider({ accountId, children }: { accountI
     const warn = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ""; };
     window.addEventListener("beforeunload", warn); return () => window.removeEventListener("beforeunload", warn);
   }, [working, folderPending]);
-  return <Context.Provider value={{ items, working, revision, folderPending, folder, add, retry: id => { update(id, { state: "queued", error: undefined }); void pump(); }, remove: id => { if (!active.current.has(id)) replace(ref.current.filter(item => item.id !== id)); } }}>{children}</Context.Provider>;
+  return <Context.Provider value={{ items, working, revision, folderPending, folder, add, retry: id => { update(id, { state: "queued", error: undefined }); void pump(); }, remove: id => { if (active.current.has(id)) return false; replace(ref.current.filter(item => item.id !== id)); setRevision(value => value + 1); router?.refresh(); return true; } }}>{children}</Context.Provider>;
 }
 export function CreatorUploadActivity() {
   const queue = useContentUploads();

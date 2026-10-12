@@ -1,0 +1,50 @@
+name: Creator content gallery verification
+on:
+  pull_request:
+    paths:
+      - 'components/CreatorContentIntake*'
+      - 'components/CreatorSavedContentPreview.tsx'
+      - 'components/CreatorContentUploadProvider.tsx'
+      - 'app/creator-auth/files/**'
+      - 'scripts/check-creator-content-gallery-browser.mjs'
+      - 'scripts/check-creator-gallery.ts'
+      - 'scripts/fixtures/creator-gallery-video-base64.txt'
+      - '.github/workflows/creator-content-gallery.yml'
+permissions:
+  contents: read
+jobs:
+  gallery:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - name: Install Chromium and WebKit
+        run: |
+          sudo mkdir -p /tmp/ci-unused-chrome-feed
+          while IFS= read -r source; do
+            sudo mv "$source" "/tmp/ci-unused-chrome-feed/${source##*/}"
+          done < <(sudo grep -rl 'dl.google.com/linux/chrome' /etc/apt/sources.list.d 2>/dev/null || true)
+          npx playwright install --with-deps chromium webkit
+      - name: Owned gallery counts and removal boundaries
+        run: node --import tsx scripts/check-creator-gallery.ts
+      - name: Mixed upload recovery and background queue
+        run: node scripts/check-creator-combined-content.cjs
+      - name: Real galleries, playback and removal in phone and desktop browsers
+        env: { CREATOR_GALLERY_ENGINES: 'chromium,webkit' }
+        run: |
+          if [ "${{ github.base_ref }}" = 'flirt/independent-backend-2026-09-19' ]; then
+            node scripts/check-creator-content-gallery-browser.mjs --flirt
+          else
+            node scripts/check-creator-content-gallery-browser.mjs
+          fi
+      - name: Type check
+        run: npx tsc --noEmit
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: creator-content-gallery-preview
+          path: test-results/creator-gallery/*.png
+          retention-days: 3

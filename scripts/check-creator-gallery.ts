@@ -13,8 +13,8 @@ let identity:any, file:any, storageFailure=false, deletionFailure=false, referen
 let events:string[]=[];
 let reservation: any = null, objectPresent = true;
 function query(table:string) {
-  queries++; let operation="read", filters:Record<string,unknown>={}, values:any, singleton=false;
-  const chain:any={select:()=>chain,eq:(key:string,value:any)=>{filters[key]=value;return chain;},neq:()=>chain,in:()=>chain,order:()=>chain,range:()=>chain,limit:()=>chain,
+  queries++; let operation="read", head=false, filters:Record<string,unknown>={}, values:any, singleton=false;
+  const chain:any={select:(_fields:string,options?:{head?:boolean})=>{head=!!options?.head;return chain;},eq:(key:string,value:any)=>{filters[key]=value;return chain;},neq:()=>chain,in:()=>chain,order:()=>chain,range:()=>chain,limit:()=>chain,
     maybeSingle:()=>{singleton=true;return chain;},delete:()=>{operation="delete";return chain;},update:(value:any)=>{operation="update";values=value;return chain;},upsert:()=>{operation="upsert";return chain;},
     then:(yes:any,no:any)=>Promise.resolve().then(()=>{
       if(["creator_files","creator_applications","creator_clone_links","creator_onboarding_progress","creator_upload_receipts","creator_file_removals"].includes(table) && operation!=="upsert") {
@@ -33,8 +33,8 @@ function query(table:string) {
       if(table==="creator_clone_links")return {data:[],error:null};
       if(table==="creator_files") {
         if("storage_path" in filters)return {data:[],error:null};
-        const matching=file && (!filters.id || filters.id===file.id) && (!filters.kind || filters.kind===file.kind) && file.creator_account_id===filters.creator_account_id;
-        return {data:singleton?(matching?file:null):(matching?[file]:[]),error:null};
+        const matching=file && (!filters.id || filters.id===file.id) && (!filters.kind || filters.kind===file.kind) && (!filters.storage_transfer_status || filters.storage_transfer_status===file.storage_transfer_status) && file.creator_account_id===filters.creator_account_id;
+        return {data:head?null:singleton?(matching?file:null):(matching?[file]:[]),count:matching?1:0,error:null};
       }
       return {data:reference?[{id:otherId}]:[],error:null};
     }).then(yes,no)};return chain;
@@ -79,7 +79,8 @@ async function main(){
  reset();identity.readOnly=true;assert.equal((await access.GET(request("/creator-auth/files/any/access"),context())).status,401);assert.equal(signed,0);
  reset();const listed=await (await list.GET(request("/creator-auth/files?kind=content_sfw_video"))).json();
  assert.equal(listed.files.length,1);assert.equal(listed.files[0].previewAvailable,true);assert.equal(listed.files[0].removalAvailable,true);assert.equal("storage_path" in listed.files[0],false);assert.equal("bucket" in listed.files[0],false);
- const combined=await (await list.GET(request("/creator-auth/files?kind=all_content"))).json();assert.equal(combined.files.length,1);
+ const combined=await (await list.GET(request("/creator-auth/files?kind=all_content"))).json();assert.equal(combined.files.length,1);assert.equal(combined.total,1);assert.equal(combined.savedCount,1);
+ file.storage_transfer_status="unverified";const unverified=await (await list.GET(request("/creator-auth/files?kind=all_content"))).json();assert.equal(unverified.total,1);assert.equal(unverified.savedCount,0,"Only verified owned files count as saved");file.storage_transfer_status="verified";
  const playback=await access.GET(request("/creator-auth/files/any/access"),context());assert.equal(playback.status,200);assert.equal(signed,1);assert.equal((await playback.json()).expiresIn,3600);
  assert.equal((await access.GET(request("/creator-auth/files/any/access"),context(otherId))).status,404);assert.equal(signed,1,"Foreign records cannot obtain playback URLs");
  const deletes=stored;await removal.DELETE(request("/creator-auth/files/any","DELETE"),context(otherId));assert.equal(stored,deletes,"Foreign records cannot reach Storage deletion");
