@@ -226,7 +226,7 @@ function ReadinessItem({ step, complete, title, detail, href, optional = false }
   );
 }
 
-export default async function CreatorOnboardingPage({ searchParams }: { searchParams: Promise<{ status?: string; step?: string; section?: string; review?: string }> }) {
+export default async function CreatorOnboardingPage({ searchParams }: { searchParams: Promise<{ status?: string; step?: string; section?: string; review?: string; complete?: string }> }) {
   const jar = await cookies();
   const creator = await creatorDashboardIdentity(jar.get(CREATOR_SESSION_COOKIE)?.value);
   if (!creator) redirect(creatorLoginPath(creator, jar.get(CREATOR_PORTAL_COOKIE)?.value));
@@ -239,7 +239,7 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
   const optionalIntake = creatorIntakeOptional(creator);
   const brandName = tether ? "Tether" : link ? "LYNQ" : moxy ? "Moxy" : "Twin";
   const loginPath = moxy ? "/creator/moxy/login" : creatorLoginPath(creator, jar.get(CREATOR_PORTAL_COOKIE)?.value);
-  const { status, step, section, review } = await searchParams;
+  const { status, step, section, review, complete: completedView } = await searchParams;
   const activeStep = optionalIntake
     ? step === "questionnaire" || (!step && (section || status?.startsWith("questionnaire_"))) ? "questionnaire" : "content"
     : isOnboardingStep(step) ? step : null;
@@ -284,12 +284,24 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
     (activeStep === "voice" && (status === "voice_saved" || status === "voice_skipped") && complete.voice) ||
     (activeStep === "consent" && status === "consent_saved" && complete.consent);
 
-  if (optionalIntake) return (
-    <CreatorSetupLayout brand={moxy ? "moxy" : "twin"} logoSrc="/moxy/logo.png" activeSection={activeStep === "content" ? "content" : "questionnaire"} applicationStatus={applicationState.label}>
-      {status && errorStatuses.has(status) && <div id="step-result" role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">{status === "upload_too_large" ? "Videos can be up to 512 MiB and images up to 75 MiB each." : status === "upload_wrong_type" ? "This file could not be verified. Use JPG, PNG, WebP or GIF images (up to 25 MP), or MP4, MOV or WebM video. Export HEIC photos as JPG first." : statusCopy[status]}{status === "file_removal_pending" && <> <Link href="/creator/onboarding?step=content" className="font-semibold underline">Open Saved content</Link></>}</div>}
+  const reviewView = review === "1" || step === "consent" || status === "consent_missing" || status === "consent_saved" || status === "not_ready";
+  const completionView = submitted && completedView === "1";
+  const answeredCount = CREATOR_PROFILE_QUESTIONNAIRE.filter(question => questionnaireAnswers[question.id]?.trim()).length;
 
-      {activeStep === "questionnaire" ? <section data-creator-setup-panel>
-        {status === "questionnaire_saved" && <div className="mb-5"><SavedConfirmation title="Questionnaire saved" detail="Your answers have been saved to your creator account." /></div>}
+  if (optionalIntake) return (
+    <CreatorSetupLayout brand={moxy ? "moxy" : "twin"} logoSrc="/moxy/logo.png" activeSection={activeStep === "questionnaire" && !completionView ? "questionnaire" : "content"} applicationStatus={applicationState.label}>
+      {status && errorStatuses.has(status) && <div id="step-result" role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">{status === "upload_too_large" ? "Videos can be up to 512 MiB and images up to 75 MiB each." : status === "upload_wrong_type" ? "This file could not be verified. Use JPG, PNG, WebP or GIF images (up to 25 MP), or MP4, MOV or WebM video. Export HEIC photos as JPG first." : statusCopy[status]}{status === "file_removal_pending" && <> <Link href="/creator/onboarding?step=content" className="font-semibold underline">Open Saved content</Link></>}</div>}
+      {completionView ? <section data-creator-setup-panel data-setup-complete>
+        <div data-complete-mark><Check size={38} strokeWidth={1.5} aria-hidden="true" /></div>
+        <h1 data-setup-heading>You’re all set.</h1>
+        <p data-complete-copy>Your onboarding has been submitted.</p>
+        <div data-complete-summary>
+          <p>{savedContentCount > 0 && <CheckCircle2 size={18} aria-hidden="true" />}{savedContentCount > 0 ? `${savedContentCount} files received` : contentFolders(answers).length ? "Folder link received — awaiting import" : "You can add content later"}</p>
+          <p>{answeredCount > 0 && <CheckCircle2 size={18} aria-hidden="true" />}{answeredCount > 0 ? "Answers saved" : "You can add answers later"}</p>
+        </div>
+        <Link href="/creator" className={buttonVariants({ size: "lg", className: "min-h-14 w-full" })}>Go to dashboard <ChevronRight size={18} /></Link>
+        <Link href="/creator/onboarding?step=questionnaire" data-review-entry>Edit my information</Link>
+      </section> : activeStep === "questionnaire" ? <section data-creator-setup-panel>
         <CreatorQuestionnaireWizard
           page={questionnairePage}
           initialAnswers={Object.fromEntries(CREATOR_PROFILE_QUESTIONNAIRE.map((question) => {
@@ -300,30 +312,30 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
           locked={applicationLocked}
           optional={optionalIntake}
         />
-      </section> : <section data-creator-setup-panel>
-        <div data-creator-setup-panel-heading><h2>Your content</h2><span>{savedContentCount} saved file{savedContentCount === 1 ? "" : "s"}</span></div>
-        {status === "content_saved" && <div className="mb-5"><SavedConfirmation title="Content saved" detail="Your photos and videos have been saved to your account." /></div>}
-        {status === "consent_saved" && <div className="mb-5"><SavedConfirmation title="Consent saved" detail="Your consent has been recorded." /></div>}
-        <CreatorContentIntake locked={uploadsLocked} loginPath={loginPath}
-          savedPhotos={(files || []).filter(file => file.storage_transfer_status === "verified" && file.kind !== "voice" && file.mime_type?.startsWith("image/")).length}
-          savedVideos={(files || []).filter(file => file.storage_transfer_status === "verified" && file.kind !== "voice" && file.mime_type?.startsWith("video/")).length}
-          initialFolders={contentFolders(answers)} />
-
-        <details data-creator-setup-submit open={review === "1" || submitted || Boolean(status && errorStatuses.has(status))}>
-          <summary id="creator-setup-submit" className="mb-4 min-h-11 cursor-pointer py-2 text-lg font-semibold">Review and finish</summary>
-          <CreatorOnboardingActionForm className="grid gap-4" pendingLabel={submitted ? "Saving consent…" : "Submitting your saved information…"} successStatuses={submitted ? ["consent_saved"] : ["submitted"]} loginPath={loginPath} consentBeforeSubmit={!consent && !submitted}>
+      </section> : reviewView ? <section data-creator-setup-panel data-setup-review data-creator-setup-submit>
+        <h1 data-setup-heading id="creator-setup-submit">Ready to send?</h1>
+        <div data-review-summary>
+          <div data-review-row><div>Your content<p>{savedContentCount ? `${savedContentCount} files uploaded` : contentFolders(answers).length ? "Folder link received — awaiting import" : "No content added yet"}</p></div><Link href="/creator/onboarding?step=content">Edit</Link></div>
+          <div data-review-row><div>Your answers<p>{answeredCount ? "Saved" : "No answers added yet"}</p></div><Link href="/creator/onboarding?step=questionnaire">Review</Link></div>
+        </div>
+          <CreatorOnboardingActionForm className="grid gap-4" pendingLabel={submitted ? "Saving consent…" : "Submitting your saved information…"} successStatuses={submitted ? ["consent_saved"] : ["submitted"]} loginPath={loginPath} consentBeforeSubmit={!consent && !submitted} completionHref="/creator/onboarding?complete=1">
             <input type="hidden" name="action" value={submitted && !consent ? "consent" : "submit"} />
             {!consent ? <>
               <label className="block max-w-md"><span className="mb-1.5 block text-sm font-medium text-ink">Legal name</span><Input name="legal_name" autoComplete="name" required={!optionalIntake || submitted} disabled={applicationLocked} /></label>
               <label className="flex items-start gap-3 text-sm leading-6 text-ink"><input name="agreed" type="checkbox" required={!optionalIntake || submitted} disabled={applicationLocked} className="mt-1.5 size-4 shrink-0 accent-[var(--color-accent)]" /><span>I confirm the information and media I submit are mine or I have permission to provide them, and I authorize {brandName} to use them to build and operate my AI creator profile under my agreement.</span></label>
             </> : <p className="flex items-center gap-2 text-sm text-emerald-700"><CheckCircle2 className="size-4 shrink-0" aria-hidden="true" /> Consent signed by {consent.legal_name}.</p>}
             <div className="flex flex-wrap items-center justify-between gap-4">
-              <span className="text-xs text-muted">{optionalIntake ? "You can submit now and add more later." : "Submit when your information and content are ready."}</span>
-              <Button type="submit" size="lg" disabled={(submitted && !!consent) || (!submitted && !readyToSubmit) || applicationLocked} className="min-h-11 w-full sm:w-auto">{applicationLocked ? "Application locked" : submitted ? consent ? "Application submitted" : "Save consent" : "Submit onboarding"}<ChevronRight className="size-4" aria-hidden="true" /></Button>
+              <span className="text-xs text-muted">{optionalIntake ? "You can add more later." : "Submit when your information and content are ready."}</span>
+              <Button type="submit" size="lg" disabled={(submitted && !!consent) || (!submitted && !readyToSubmit) || applicationLocked} className="min-h-14 w-full">{applicationLocked ? "Application locked" : submitted ? consent ? "Application submitted" : "Save consent" : "Submit onboarding"}<ChevronRight className="size-4" aria-hidden="true" /></Button>
             </div>
           </CreatorOnboardingActionForm>
           {!readyToSubmit && !applicationLocked && <p className="mt-3 text-sm text-muted">Complete the required information before submitting.</p>}
-        </details>
+      </section> : <section data-creator-setup-panel>
+        <CreatorContentIntake locked={uploadsLocked} loginPath={loginPath}
+          savedPhotos={(files || []).filter(file => file.storage_transfer_status === "verified" && file.kind !== "voice" && file.mime_type?.startsWith("image/")).length}
+          savedVideos={(files || []).filter(file => file.storage_transfer_status === "verified" && file.kind !== "voice" && file.mime_type?.startsWith("video/")).length}
+          initialFolders={contentFolders(answers)} />
+        {(savedContentCount > 0 || answeredCount > 0 || submitted) && <Link href="/creator/onboarding?step=content&review=1#creator-setup-submit" data-review-entry>Review and finish</Link>}
       </section>}
     </CreatorSetupLayout>
   );

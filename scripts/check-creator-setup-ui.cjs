@@ -56,26 +56,27 @@ global.__setupDatabase = { from(table) {
     assert.match(html, /data-fixture-questionnaire="quick-v2-introduction"/);
     assert.match(html, /Save &amp; exit/);
     assert.match(html, /href="\/creator"/);
-    assert.match(html, /Make it yours\./);
-    assert.match(html, /Your answers help us make your AI feel like you/);
+    assert.match(html, /aria-label="Setup menu"/);
+    assert.doesNotMatch(html, /Let’s set up your AI|Make it yours/);
 
     assert.doesNotMatch(html, /data-onboarding-step-card|Voice|Consent &amp; submit|Step 1/);
 
     html = await render({ step: 'content', review: '1' });
-    assert.match(html, /Let’s set up your AI/);
-    assert.match(html, /Add your photos and videos, then tell us about yourself while they upload/);
-    assert.match(html, /<details[^>]*data-creator-setup-submit[^>]*open/);
+    assert.match(html, /Ready to send\?/);
+    assert.match(html, /data-setup-review/);
+    assert.doesNotMatch(html, /data-fixture-combined/);
     html = await render({ section: 'quick-v2-personal' });
     assert.match(html, /data-fixture-questionnaire="quick-v2-personal"/);
     files = [{ kind: 'content_sfw_image', storage_transfer_status: 'verified' }, { kind: 'content_sfw_image', storage_transfer_status: 'pending' }, { kind: 'content', storage_transfer_status: 'verified' }];
     for (const step of ['content', 'voice', 'consent']) {
       html = await render({ step });
       assert.match(html, /data-onboarding-active-step="content"/);
-      assert.match(html, /2 saved files/);
-      assert.equal((html.match(/data-fixture-combined=/g) || []).length, 1);
+      assert.equal((html.match(/data-fixture-combined=/g) || []).length, step === 'consent' ? 0 : 1);
       assert.equal((html.match(/data-fixture-upload=/g) || []).length, 0);
 
       assert.doesNotMatch(html, /data-fixture-upload="voice"|Voice|Minimum reached|Not complete/);
+      html = await render({ step: 'content', review: '1' });
+      assert.match(html, /2 files uploaded/);
       assert.match(html, /data-fixture-consent-submit="true"/);
       assert.match(html, /name="legal_name"/);
       assert.match(html, /name="agreed"/);
@@ -86,16 +87,20 @@ global.__setupDatabase = { from(table) {
     }
 
     application = { id: 'fixture', status: 'submitted', submitted_at: '2026-10-10T01:00:00Z', updated_at: '2026-10-10T01:00:00Z', answers: {} };
-    html = await render({ step: 'content' });
+    html = await render({ step: 'content', review: '1' });
     assert.match(html, /data-onboarding-application-state="Submitted"/);
     assert.match(html, /name="action" value="consent"/);
     assert.match(html, />Save consent/);
     assert.doesNotMatch(html, /data-fixture-upload="[^"]+" data-locked="true"/);
     consent = { id: 'consent-fixture', legal_name: 'Synthetic Creator' };
-    html = await render({ step: 'content' });
+    html = await render({ step: 'content', review: '1' });
     assert.match(html, /Consent signed by Synthetic Creator/);
     assert.doesNotMatch(html, /name="legal_name"/);
     assert.match(html, /<button[^>]*disabled[^>]*>Application submitted/);
+    html = await render({ complete: '1' });
+    assert.match(html, /data-setup-complete/);
+    assert.match(html, /You’re all set/);
+    assert.doesNotMatch(html, /data-fixture-combined/);
     application.status = 'approved';
     html = await render({ step: 'questionnaire' });
     assert.match(html, /data-locked="false"/);
@@ -103,9 +108,12 @@ global.__setupDatabase = { from(table) {
     readOnly = true;
     html = await render({ step: 'content' });
     assert.match(html, /data-fixture-combined="true" data-locked="true"/);
+    html = await render({ step: 'content', review: '1' });
     assert.match(html, /Application locked/);
 
     brand = 'Twin'; application = null; consent = null; readOnly = false;
+    html = await render({ complete: '1' });
+    assert.doesNotMatch(html, /data-setup-complete/, 'URL alone never claims submission');
     html = await render();
     assert.match(html, /data-creator-setup-brand="twin"/);
     assert.equal((html.match(/data-creator-setup-tab=/g) || []).length, 2);

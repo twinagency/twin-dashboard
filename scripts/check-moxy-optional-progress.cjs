@@ -36,19 +36,19 @@ global.__optionalDatabase = { from(table) {
       for (let i=0;i<count;i++) files.push({ kind, storage_transfer_status: 'verified', mime_type: kind.endsWith('_image') ? 'image/jpeg' : 'video/mp4' });
     }
     let html = await render('consent');
-    assert.match(html, /26 saved files/);
-    assert.match(html, /You can submit now and add more later/);
+    assert.match(html, /26 files uploaded/);
+    assert.match(html, /You can add more later/);
     assert.doesNotMatch(html, /of 4 complete|Optional — not completed/);
     html = await render('content');
     assert.match(html, /data-combined-photos="18"/);assert.match(html, /data-combined-videos="8"/);
     assert.doesNotMatch(html, /Minimum reached|remaining<|of 20 verified|of 30 verified|of 15 verified/);
     files = [{ kind: 'content_sfw_video', storage_transfer_status: 'pending' }];
     html = await render('consent');
-    assert.match(html, /0 saved files/);
+    assert.match(html, /No content added yet/);
     files = [{ kind: 'content', storage_transfer_status: 'verified' }];
-    html = await render('consent'); assert.match(html, /1 saved file</);
+    html = await render('consent'); assert.match(html, /1 files uploaded</);
     name = 'Twin'; files = [{ kind: 'content_sfw_image', storage_transfer_status: 'verified' }];
-    html = await render('content'); assert.match(html, /1 saved/); assert.doesNotMatch(html, /of 20 verified/);
+    html = await render('consent'); assert.match(html, /1 files uploaded/); assert.doesNotMatch(html, /of 20 verified/);
     name = 'Tether';
     html = await render('content'); assert.match(html, /1 of 20 verified/); assert.match(html, /19(?:<!-- -->)? remaining/);
     console.log('Moxy optional progress: 26 saved files remain visible below legacy quotas; pending files excluded; legacy saved content included; direct Twin optional intake and other agency quotas preserved.');

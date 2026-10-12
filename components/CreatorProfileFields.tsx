@@ -68,7 +68,22 @@ export default function CreatorProfileField({ question, value, onChange, disable
   question: CreatorQuestion; value: string; onChange: (value: string) => void; disabled: boolean; required?: boolean;
 }) {
   const { id } = question;
-  const label = <span className={styles.label}>{question.label}{required ? " *" : ""}</span>;
+  const shortLabels: Record<string, string> = {
+    preferred_name: "What name should fans call you?", languages: "Languages", ethnicity: "Ethnicity or nationality",
+    social_style: "Your social style", pets: "Pets", relationship_status: "Relationship status",
+    home_background: "Where did you grow up and live now?", family_profile: "Family", appearance_profile: "Your appearance",
+    personal_highlights: "Three things fans should know", social_links: "Social profiles", fav_foods: "Favourite foods",
+    music_preferences: "Music & artists", fav_movie_genre: "Movie genre", sports_preferences: "Sports & teams",
+    travel_favourites: "Travel & favourite place", drink_of_choice: "Favourite drink", sexual_orientation: "Sexual orientation",
+    dom_sub: "Dominant or submissive?", turn_ons_including_kinks: "Turn-ons, including kinks", turn_offs: "Turn-offs",
+    boundaries: "Topics or content to avoid", full_name: "Full name", date_of_birth: "Date of birth", email_address: "Email address", phone_number: "Phone number",
+  };
+  const shortHelp: Record<string, string> = {
+    family_profile: "Siblings, children and what you’re happy to share.", appearance_profile: "Height, body type, hair, eyes, tattoos and piercings.",
+    personal_highlights: "Personality, hobbies, talents or something unexpected.", boundaries: "Your limits, or “None.”",
+  };
+  const help = shortHelp[id] || question.help;
+  const label = <span className={styles.label}>{shortLabels[id] || question.label}{required ? " *" : ""}</span>;
   const structured = ["social_style", "pets", "relationship_status", "dom_sub", "drink_of_choice"].includes(id);
   if (structured) {
     let control;
@@ -91,6 +106,6 @@ export default function CreatorProfileField({ question, value, onChange, disable
   return <label className={styles.field} data-profile-question={id}>{label}
     {question.type === "textarea" ? <textarea className={styles.input} name={id} rows={2} value={value} placeholder={question.placeholder} disabled={disabled} required={required} maxLength={5000} onChange={event => onChange(event.target.value)} />
       : <input className={styles.input} name={id} value={value} placeholder={question.placeholder} disabled={disabled} required={required} maxLength={5000} autoComplete={autoComplete[id]} inputMode={id === "email_address" ? "email" : id === "phone_number" ? "tel" : undefined} onChange={event => onChange(event.target.value)} />}
-    {question.help && <span className={styles.help}>{question.help}</span>}
+    {help && <span className={styles.help}>{help}</span>}
   </label>;
 }
