@@ -196,11 +196,11 @@ export default function CreatorProfileQuestionnaire({ page: initialPage, initial
     <form ref={formRef} onSubmit={event => event.preventDefault()} data-questionnaire-page={page.slug} data-onboarding-optional={optional ? "true" : "false"}>
       <div className={styles.topLine}>
         <span className={styles.milestone} role="status">{milestone && <><Check size={14} aria-hidden="true" />{milestone}</>}</span>
-        <span className={styles.saveStatus} data-save-state={saveState} role="status" aria-live="polite">{saveState === "saving" ? <LoaderCircle size={14} className={styles.spinner} aria-hidden="true" /> : saveState === "saved" || locked ? <Check size={14} aria-hidden="true" /> : null}{saveCopy}</span>
+
       </div>
       <div className={styles.progress} role="progressbar" aria-label="Questionnaire progress" aria-valuemin={0} aria-valuemax={100} aria-valuenow={progress} aria-valuetext={`${progress}% answered or reviewed`}><span style={{ width: `${progress}%` }} /></div>
       <div className={styles.page} key={page.slug}>
-        <header className={styles.pageHeading}><h2 ref={headingRef} tabIndex={-1}>{page.title}</h2><p>{page.description}</p></header>
+        <header className={styles.pageHeading}><h1 ref={headingRef} tabIndex={-1}>{page.title === "Your preferences and boundaries" ? "Preferences & boundaries" : page.title}</h1>{page.slug === "quick-v2-account" && <p>Account details stay separate from your public profile.</p>}</header>
         <div className={styles.fields}>{questions.map(question => <CreatorProfileField key={question.id} question={question} value={answers[question.id] || ""} onChange={value => change(question.id, value)} disabled={locked || navigating || conflictRef.current} required={!optional && CREATOR_QUESTIONNAIRE_REQUIRED_IDS.includes(question.id as (typeof CREATOR_QUESTIONNAIRE_REQUIRED_IDS)[number])} />)}</div>
       </div>
       {error && <div role="alert" className={styles.error}><p>{error}</p>{saveState === "error" && <button type="button" disabled={navigating} onClick={() => void flush()}>Try saving again</button>}</div>}
@@ -209,7 +209,8 @@ export default function CreatorProfileQuestionnaire({ page: initialPage, initial
           {optional && !locked && <button type="button" disabled={navigating} onClick={() => void goTo("review")}>Skip questions</button>}
         </div>
         <div className={styles.navigation}>
-          <button type="button" className={styles.back} disabled={navigating} onClick={() => void goTo(currentIndex > 0 ? currentIndex - 1 : "content")}><ArrowLeft size={17} aria-hidden="true" />Back</button>
+          <button type="button" className={styles.back} disabled={navigating} onClick={() => void goTo(currentIndex > 0 ? currentIndex - 1 : "content")}><ArrowLeft size={19} aria-hidden="true" /><span className={styles.srOnly}>Back</span></button>
+        <span className={styles.saveStatus} data-save-state={saveState} role="status" aria-live="polite">{saveState === "saving" ? <LoaderCircle size={14} className={styles.spinner} aria-hidden="true" /> : saveState === "saved" || locked ? <Check size={14} aria-hidden="true" /> : null}{saveCopy}</span>
           <button type="button" className={styles.continue} disabled={navigating || conflictRef.current} onClick={() => void goTo(currentIndex < pages.length - 1 ? currentIndex + 1 : locked ? "review" : "finish")}>{navigating ? "Saving…" : currentIndex < pages.length - 1 ? "Continue" : "Review and finish"}{navigating ? <LoaderCircle size={17} className={styles.spinner} aria-hidden="true" /> : <ArrowRight size={17} aria-hidden="true" />}</button>
         </div>
       </div>

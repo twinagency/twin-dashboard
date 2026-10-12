@@ -187,8 +187,8 @@ const navigationMock = `export function redirect(path){throw new Error('Unexpect
 const identityMock = `
 export async function creatorDashboardIdentity(){
   const brand=new URLSearchParams(location.search).get('fixture_brand');
-  const name=brand==='link'?'LYNQ':brand==='tether'?'Tether':'Twin';
-  const agencyId=brand==='link'?'74b03b70-397e-49ab-841f-8adb8241d87d':brand==='tether'?'fixture-tether':null;
+  const name=brand==='moxy'?'Moxy':brand==='link'?'LYNQ':brand==='tether'?'Tether':'Twin';
+  const agencyId=brand==='moxy'?'bc670215-110b-4ea0-8f5c-af3dfe21d253':brand==='link'?'74b03b70-397e-49ab-841f-8adb8241d87d':brand==='tether'?'fixture-tether':null;
   return {accountId:'11111111-1111-4111-8111-111111111111',userId:'22222222-2222-4222-8222-222222222222',name,creatorName:'Fixture Creator',cloneIds:[],onboarded:false,agencyId};
 }
 `;
@@ -219,7 +219,8 @@ function completeContentFiles(){
 function query(table){
   const result=()=>{
     const complete=new URLSearchParams(location.search).get('fixture_complete')==='1';
-    const data=complete&&table==='creator_onboarding_progress'
+    const submitted=new URLSearchParams(location.search).get('fixture_submitted')==='1';
+    const data=submitted&&table==='creator_applications' ? {...rows.creator_applications,status:'submitted',submitted_at:'2026-10-12T00:00:00Z'} : complete&&table==='creator_onboarding_progress'
       ? {questionnaire_completed:true,content_completed:true,voice_completed:true}
       : complete&&table==='creator_consents'
         ? {id:'consent-fixture',legal_name:'Fixture Creator',signed_at:'2026-09-12T00:00:00.000Z'}
@@ -310,7 +311,7 @@ const browser = await chromium.launch({ headless: true, ...(executablePath ? { e
 const expectations = {
   twin: {
     name: "Twin",
-    headings: { login: "Sign in", signup: "Create account", "forgot-password": "Reset password", "reset-password": "New password", onboarding: "Your content" },
+    headings: { login: "Sign in", signup: "Create account", "forgot-password": "Reset password", "reset-password": "New password", onboarding: "Add your content" },
     authBase: "/creator",
     signupAction: "/creator-auth/signup",
   },
@@ -409,6 +410,7 @@ try {
         } else if (brand === "twin") {
           assert.equal(await page.locator('[data-creator-setup-tab]').count(), 2, 'Twin uses Questionnaire and Content');
           assert.equal(await page.locator('[data-onboarding-hub]').count(), 0, 'the profile opens directly');
+          await page.getByLabel('Setup menu', { exact: true }).click();
           assert.equal(await page.getByRole('link', { name: 'Go to dashboard' }).getAttribute('href'), '/creator');
           await page.locator('[data-creator-setup-tab="questionnaire"]').click();
           const questionnaire = page.locator('[data-questionnaire-page="quick-v2-introduction"]');
@@ -427,9 +429,24 @@ try {
           }
           await page.goto(`${origin}/creator/onboarding?fixture_brand=twin&step=content`, { waitUntil: 'networkidle' });
           assert.equal(await page.locator('[data-combined-content-intake]').count(), 1);
-          await page.getByText('Review and finish', { exact: true }).click();
+          await page.locator('[data-review-entry]').click();
+          await page.getByRole('button', { name: 'Submit onboarding', exact: true }).waitFor();
           assert.equal(await page.getByRole('button', { name: 'Submit onboarding', exact: true }).isVisible(), true);
           assert.equal(await page.getByRole('button', { name: 'Submit onboarding', exact: true }).isEnabled(), true);
+          for (const designBrand of ['moxy', 'twin']) {
+            await page.goto(`${origin}/creator/onboarding?fixture_brand=${designBrand}&step=content&review=1`, { waitUntil: 'networkidle' });
+            await page.getByRole('heading', { name: 'Ready to send?', exact: true }).waitFor();
+            assert.equal(await page.locator('[name="agreed"]').isChecked(), false);
+            assert.equal(await page.locator('[name="legal_name"]').inputValue(), '', 'optional consent is not prefilled or fabricated');
+            assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+            await page.screenshot({path:path.join(out,`${designBrand}-${width}-review.png`),fullPage:true});
+            await page.goto(`${origin}/creator/onboarding?fixture_brand=${designBrand}&fixture_submitted=1&complete=1`, { waitUntil: 'networkidle' });
+            await page.getByRole('heading', { name: 'You’re all set.', exact: true }).waitFor();
+            assert.equal(await page.getByText('You can add content later', { exact: true }).isVisible(), true);
+            assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false);
+            await page.screenshot({path:path.join(out,`${designBrand}-${width}-complete.png`),fullPage:true});
+          }
+
         } else {
           assert.equal(await page.locator("[data-onboarding-hub]").count(), 1, `${brand} onboarding must open on the compact hub`);
           assert.equal(await page.locator("[data-onboarding-step-card]").count(), 4, `${brand} onboarding hub must show four step cards`);
