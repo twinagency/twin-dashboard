@@ -1,0 +1,23 @@
+[
+  {
+    "path": "src/config.ts",
+    "before_sha": "134408a1de701525099e23c53f4520b1548f54c2b9cf08978611a5094ab24932",
+    "after_sha": "56d687b74295081349521e793ec1c9649025dcebf74ab07bd99e82886714b319",
+    "old": "historyLimit: 30, // messages kept per fan (user + assistant)",
+    "new": "historyLimit: 30, // messages passed to the existing recent-chat reply path\n  dashboardHistoryLimit: 90, // saved messages shown in the monitor (user + assistant)"
+  },
+  {
+    "path": "src/memory.ts",
+    "before_sha": "a8d532bbbc425fc19871ed0b1145fd5d9028bef3df38d00b402ebb86fc4cfa4a",
+    "after_sha": "c9c633bbcf0ef593a4810d1b2e54acfe9432d73e752e94c777b161326aa12a2f",
+    "old": "chat.history.slice(-config.historyLimit)",
+    "new": "chat.history.slice(-config.dashboardHistoryLimit)"
+  },
+  {
+    "path": "src/turn.ts",
+    "before_sha": "794b4ce2bb4b001f53bca881f0b9f9d01e265df8ac6437ac9486f18690625713",
+    "after_sha": "db84605cdb0a547e52f5e39e44e8cad2d72abd0cc1ecc24d99ebabb42364d38e",
+    "old": "const cur = lastIndexOfUser(chat.history, fanText);\n    const plan = await ctx.memory({ epoch: ctx.epoch, fanText, localHistory: chat.history.filter((_, i) => i !== cur), system: system.content });",
+    "new": "const replyHistory = chat.history.slice(-config.historyLimit);\n    const cur = lastIndexOfUser(replyHistory, fanText);\n    const plan = await ctx.memory({ epoch: ctx.epoch, fanText, localHistory: replyHistory.filter((_, i) => i !== cur), system: system.content });"
+  }
+]
