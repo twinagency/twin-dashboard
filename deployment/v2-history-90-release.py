@@ -36,14 +36,6 @@ def python_script(code):
     b64=base64.b64encode(code.encode()).decode()
     return "python3 - <<'PY'\nimport base64\nexec(base64.b64decode("+repr(b64)+"))\nPY"
 
-try:
-    location=s3.get_bucket_location(Bucket=BUCKET)
-    print("Release bucket region:",location.get("LocationConstraint"),flush=True)
-except Exception as e:
-    print("Release bucket location check:",getattr(e,"response",{}).get("Error",{}).get("Code",type(e).__name__),flush=True)
-put=s3.generate_presigned_url("put_object",Params={"Bucket":BUCKET,"Key":KEY},ExpiresIn=1800)
-get=s3.generate_presigned_url("get_object",Params={"Bucket":BUCKET,"Key":KEY},ExpiresIn=1800)
-print("::add-mask::"+put,flush=True); print("::add-mask::"+get,flush=True)
 stage_code=r'''
 import hashlib,json,os,shutil,subprocess,tempfile,tarfile,urllib.request
 from pathlib import Path
@@ -67,21 +59,13 @@ with tarfile.open(archive,"w:gz") as tar:
         assert not any(part in ("data","logs","node_modules",".git") or part.startswith(".env") for part in relative.parts)
         if file.is_file(): tar.add(file,arcname=str(relative),recursive=False)
 digest=hashlib.sha256(archive.read_bytes()).hexdigest()
-request=urllib.request.Request(PUT_URL,data=archive.read_bytes(),method="PUT")
-try:
-    with urllib.request.urlopen(request,timeout=90) as response: assert response.status==200
-except urllib.error.HTTPError as e:
-    import xml.etree.ElementTree as ET
-    body=ET.fromstring(e.read())
-    print("Release upload HTTP:",e.code,"S3 error code:",body.findtext("Code"),"message:",body.findtext("Message"),flush=True)
-    raise RuntimeError("Release upload rejected; production unchanged") from None
 print("STAGED_RELEASE="+json.dumps({"sha256":digest,"archive":str(archive),"commit":COMMIT}))
-'''.replace("PATCHES",repr(patches)).replace("HELPER_SHA",repr(HELPER_SHA)).replace("PUT_URL",repr(put)).replace("COMMIT",repr(COMMIT))
-out=command(python_script(stage_code),"Stage and test V2 90-message history; upload release")
+'''.replace("PATCHES",repr(patches)).replace("HELPER_SHA",repr(HELPER_SHA)).replace("COMMIT",repr(COMMIT))
+out=command(python_script(stage_code),"Verify existing tested V2 local release archive")
 record=json.loads(re.search(r"STAGED_RELEASE=(\{[^\n]+\})",out).group(1))
 checks="\n".join("echo "+shlex.quote(p["before_sha"]+"  /home/ubuntu/twin-v2/"+p["path"])+" | sha256sum -c --quiet -" for p in patches)
 deploy="set -eu\n"+checks+"\n"+"echo "+shlex.quote(HELPER_SHA+"  /root/twin-v2-release.sh")+" | sha256sum -c --quiet -\n"
-deploy+="bash /root/twin-v2-release.sh deploy "+shlex.quote(get)+" "+shlex.quote(record["sha256"])+" "+COMMIT
+deploy+="bash /root/twin-v2-release.sh deploy "+shlex.quote(record["archive"])+" "+shlex.quote(record["sha256"])+" "+COMMIT
 command(deploy,"Deploy V2 history release through approved helper")
 verify_code=r'''
 import hashlib,json,subprocess,urllib.request
