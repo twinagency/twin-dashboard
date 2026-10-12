@@ -1,8 +1,8 @@
 import json,pathlib,subprocess,time
-commands=["sudo docker inspect -f '{{.Config.Image}} {{.Image}}' next-app","sudo docker exec next-app node -e 'console.log(JSON.stringify({git_sha:process.env.GIT_SHA,admin_api_configured:!!process.env.TWIN_ADMIN_API_KEY,dashboard_password_configured:!!process.env.DASHBOARD_PASSWORD,openrouter_configured:!!process.env.OPENROUTER_API_KEY}))'","sudo apachectl -S 2>&1","sudo grep -R -E '^[[:space:]]*(ServerName|ServerAlias|ProxyTimeout|ProxyPass|Timeout)[[:space:]]' /etc/apache2/sites-enabled /etc/apache2/apache2.conf 2>/dev/null"]
-instance='i-09a9dd3bd749643a5'
+commands=["sudo python3 - <<'PY'\nimport json,pathlib,subprocess,hashlib\np=pathlib.Path('/home/ubuntu/twin-v2')\nc=json.loads(subprocess.check_output(['docker','compose','-f',str(p/'docker-compose.yml'),'config','--format','json'],text=True))\nprint(json.dumps({'services':{k:{x:v.get(x) for x in ['image','build','command','volumes','ports','stop_grace_period']} for k,v in c['services'].items()}}))\nfor f in [p/'Dockerfile',p/'src/handover.ts',p/'src/fleet.ts']:\n print(str(f),hashlib.sha256(f.read_bytes()).hexdigest())\nprint('scripts', [str(f) for f in p.glob('scripts/*deploy*')])\nprint('host_scripts', [str(f) for f in p.glob('*.sh')])\nprint('compose_source', (p/'docker-compose.yml').read_text())\nPY"]
+instance='i-0584d283506f3f6be'
 path=pathlib.Path('/tmp/photo-launch-readonly-command.json');path.write_text(json.dumps({'commands':commands,'executionTimeout':['120']}))
-cmd_id=subprocess.check_output(['aws','ssm','send-command','--instance-ids',instance,'--document-name','AWS-RunShellScript','--parameters','file://'+str(path),'--comment','Read current V2 media source and rollback mounts only','--query','Command.CommandId','--output','text'],text=True).strip()
+cmd_id=subprocess.check_output(['aws','ssm','send-command','--instance-ids',instance,'--document-name','AWS-RunShellScript','--parameters','file://'+str(path),'--comment','Read V2 deployment configuration without credentials','--query','Command.CommandId','--output','text'],text=True).strip()
 for attempt in range(50):
  result=json.loads(subprocess.check_output(['aws','ssm','get-command-invocation','--command-id',cmd_id,'--instance-id',instance,'--output','json'],text=True))
  if result['Status'] in ['Success','Failed','Cancelled','TimedOut']:break
