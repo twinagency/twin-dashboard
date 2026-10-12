@@ -12,16 +12,5 @@ def ssm(command, timeout=120):
   time.sleep(3)
  if r['Status']!='Success':raise RuntimeError(json.dumps({k:r.get(k) for k in ['Status','StandardOutputContent','StandardErrorContent']}))
  return r['StandardOutputContent']
-root='/tmp/twin-v2-photo-ef040a7'
-ssm('mkdir -p '+root+' && chmod 700 '+root)
-b=pathlib.Path('deployment/photo-v2-source.b64').read_text().strip()
-chunks=[b[i:i+35000] for i in range(0,len(b),35000)]
-def transfer(pair):
- i,chunk=pair
- return ssm("printf '%s' '"+chunk+"' > "+root+'/'+str(i).zfill(3)+'.b64')
-with concurrent.futures.ThreadPoolExecutor(max_workers=3) as pool:list(pool.map(transfer,enumerate(chunks)))
-print('Transferred source chunks:',len(chunks),flush=True)
-manifest=base64.b64encode(pathlib.Path('deployment/photo-v2-manifest.json').read_bytes()).decode()
-host=base64.b64encode(pathlib.Path('deployment/photo-v2-prepare-host.py').read_bytes()).decode()
-command="set -eu\ncat "+root+"/*.b64 | base64 -d > /tmp/twin-v2-photo-ef040a7.tar.gz\nprintf '%s' '"+manifest+"' | base64 -d > /tmp/twin-v2-photo-manifest.json\nprintf '%s' '"+host+"' | base64 -d > /tmp/twin-v2-photo-prepare-host.py\npython3 /tmp/twin-v2-photo-prepare-host.py"
-print(ssm(command,900),flush=True)
+host=base64.b64encode(pathlib.Path('deployment/photo-v2-deploy-host.py').read_bytes()).decode()
+print(ssm("printf '%s' '"+host+"' | base64 -d | sudo python3 -",360),flush=True)
