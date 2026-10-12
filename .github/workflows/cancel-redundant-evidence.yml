@@ -1,7 +1,6 @@
 name: Cancel documentation-only duplicate deployment
 on:
-  push:
-    branches: [codex/media-launch-access-20261012]
+  workflow_dispatch:
 permissions:
   contents: read
   actions: write
