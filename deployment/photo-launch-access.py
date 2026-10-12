@@ -15,15 +15,8 @@ def ssm(command,timeout=120):
  print(r.get('StandardOutputContent',''),flush=True)
  if r['Status']!='Success': print(r.get('StandardErrorContent','')[-1800:],flush=True);raise RuntimeError('Candidate gate '+r['Status'])
  return cid
-encoded=pathlib.Path('deployment/v2-photo-recovery/payload.b64').read_text().strip()
-ssm('rm -f /tmp/photo-recovery-payload.b64',30)
-for n in range(0,len(encoded),10000):
- ssm("printf '%s' '"+encoded[n:n+10000]+"' >> /tmp/photo-recovery-payload.b64",30)
- if n%50000==0: print(json.dumps({'sourceTransferredBytes':min(n+10000,len(encoded)),'total':len(encoded)}),flush=True)
-unpack="""import pathlib,base64,zlib
-pathlib.Path('/tmp/photo-recovery-payload.json').write_bytes(zlib.decompress(base64.b64decode(pathlib.Path('/tmp/photo-recovery-payload.b64').read_bytes())))
-"""
-ssm('python3 -c '+shlex.quote(unpack),30)
+# Resume only the exact source already transferred by the stopped packaging attempt.
+ssm('python3 -c '+shlex.quote("import pathlib,hashlib;assert hashlib.sha256(pathlib.Path('/tmp/photo-recovery-payload.json').read_bytes()).hexdigest()=='eed97064423314be087d2637a235bd348e4a3ceda287d00b8ad40fe00b95f919'"),30)
 for dst,src in {'/tmp/photo-recovery-prepare.py':'deployment/v2-photo-recovery/prepare.py','/tmp/photo-recovery-snapshot.mjs':'deployment/v2-photo-recovery/snapshot.mjs'}.items():
  data=base64.b64encode(pathlib.Path(src).read_bytes()).decode()
  ssm("printf '%s' '"+data+"' | base64 -d > "+dst,30)

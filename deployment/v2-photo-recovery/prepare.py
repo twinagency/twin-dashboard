@@ -26,7 +26,7 @@ if not (BACKUP/'code.tgz').exists():
 for name in ['docker-compose.yml','photo-release.override.json']:
  if not (BACKUP/name).exists(): shutil.copy2(ROOT/name,BACKUP/name);(BACKUP/name).chmod(0o600)
 payload=json.loads(pathlib.Path('/tmp/photo-recovery-payload.json').read_text())
-manifest=payload['manifest']
+manifest=[x for x in payload['manifest'] if x['path'].startswith(('src/','dashboard/','scripts/','migrations/')) or x['path'] in ['package.json','package-lock.json','Dockerfile','docker-compose.yml','tsconfig.json','.dockerignore']]
 RELEASE.mkdir(parents=True,exist_ok=True)
 for item in manifest:
  p=item['path'];assert not p.startswith('/') and '..' not in pathlib.PurePosixPath(p).parts
