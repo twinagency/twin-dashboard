@@ -15,11 +15,12 @@ const MODEL='qwen/qwen3.8-27b';
 const OUT=process.env.PHOTO_LAUNCH_RESULTS || '/tmp/twin-photo-real-staging-20261012';
 const BASE=process.env.PHOTO_LAUNCH_RETAINED_ROOT || '/workspace/scratch/f388f4f2e89b';
 const CASES=[
+ {id:'dreka-production-control',group:'photo-control-staging-20261012',free:false},
  {id:'b44898f3-a6e7-465b-b994-4bb18a91f493',group:'qwen38-27b-five-20261012',free:false},
  {id:'448462a7-19f8-4916-a1ad-474f53c813c3',group:'qwen38-27b-five-20261012',free:true},
  {id:'kyla-1',group:'qwen38-27b-five-20261012',free:false},
  {id:'70509013-75d6-4d67-8b35-550cf5e129dd',group:'qwen38-27b-ten-more-20261012',free:false},
-].filter(item=>!process.env.PHOTO_LAUNCH_CASES || process.env.PHOTO_LAUNCH_CASES.split(',').includes(item.id));
+].filter(item=>process.env.PHOTO_LAUNCH_CASES ? process.env.PHOTO_LAUNCH_CASES.split(',').includes(item.id) : item.id!=='dreka-production-control');
 assert.ok(CASES.length,'At least one frozen retained case is required');
 const sha=bytes=>crypto.createHash('sha256').update(bytes).digest('hex');
 const input=readline.createInterface({input:process.stdin,output:process.stdout,terminal:false});
@@ -85,6 +86,7 @@ try {
    const evidence=row.visual_facts.evidence;const forbidden=[...reference.not_positive,...reference.uncertain];
    for(const key of forbidden)if(evidence[key]==='yes')report.material_errors.push({id:item.id,reason:`unsupported positive ${key}`});
    for(const key of reference.yes)if(evidence[key]!=='yes')report.material_errors.push({id:item.id,reason:`missed confirmed ${key}`});
+   if(item.id==='dreka-production-control'&&/\b(?:kneel(?:s|ing|ed)?|knelt|on (?:her |both )?knees)\b/i.test([row.visual_description,row.auto_desc,row.caption,...(row.visual_facts.visible||[])].join(' ')))report.material_errors.push({id:item.id,reason:'kneeling posture is unconfirmed: knees are outside the frozen source crop'});
    // The frozen reference names real held brushes; require that assertion to
    // remain present rather than enumerating just one wording of the known error.
    if(item.id==='448462a7-19f8-4916-a1ad-474f53c813c3'&&!/\b(?:holds?|holding|held|grips?|gripping|grasps?|grasping)\b[^.;]*\b(?:paint)?brush(?:es)?\b|\b(?:paint)?brush(?:es)?\b[^.;]*\b(?:in (?:her|the) hand|held)\b/i.test(row.visual_description||''))report.material_errors.push({id:item.id,reason:'real held paintbrush is absent or misdescribed as painted imagery'});

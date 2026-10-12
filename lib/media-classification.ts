@@ -35,6 +35,7 @@ Never claim a body part, act, garment, toy or mirror whose evidence key is not "
 
 export const MEDIA_CLASSIFICATION_PROMPT = `${OBSERVATION_TASK(true)}
 This is a single photo.
+Do not infer kneeling from a rear view or cropped legs. Call the posture kneeling only when the knees and their contact with a supporting surface are visible; record that concrete observation in visible. Otherwise describe the visible body angle without naming the unseen posture.
 uncertainty_reasons: an object explaining every "unclear" answer among nipples, genitals, anus and bare_buttocks. Use only those keys whose evidence is "unclear". Each reason is exactly "out_of_frame" or "ambiguous_visibility". "out_of_frame" means the relevant body region is entirely outside this photo's crop. If that region is in the photo but hidden by the pose, obstructed, blurred, too small, or visibility through fabric is uncertain, use "ambiguous_visibility". Clearly concealed anatomy remains "no" under the rules above. Do not label an in-frame ambiguity as a crop. Return {} when none of these four keys is unclear. Neither reason licenses a positive description or tag for that feature.`;
 
 /** Video variant: ONE contact sheet of N frames tiled in order, so the model sees separate frames and never the motion. */
@@ -187,6 +188,18 @@ export function paintedObjectReviewReason(prose: string): string | null {
   const depiction = affirmativeClauses(prose).some(c =>
     /\btrompe[- ]l['’]oeil\b|\bpaint\w*\b[^.;]*\b(?:design|image|picture|depiction|illustration|shaped? like|shape of|depicts?|represents?)\b|\bpainting of\b/i.test(c));
   return depiction ? "body-paint object depiction requires review; a real object may have been mistaken for painted imagery" : null;
+}
+/** A production rear-view crop acquired an unsupported kneeling label. The
+ * existing visible observations must describe the knees' support, rather than
+ * repeating a posture inferred from unseen legs. Older outputs remain readable
+ * but cannot automatically establish this specific posture without that basis. */
+export function kneelingVisibilityReviewReason(prose: string, visible: readonly string[]): string | null {
+  const claim = affirmativeClauses(prose).some(c => /\b(?:kneel(?:s|ing|ed)?|knelt|on (?:her |both |her two )?knees)\b/i.test(c));
+  if (!claim) return null;
+  const supported = visible.some(p => affirmativeClauses(p).some(c =>
+    /\bknees?\b[^.;]*\b(?:on|against|touching|contact(?:ing| with)?|resting on)\b[^.;]*\b(?:floor|ground|bed|mattress|mat|carpet|rug|cushion|sofa|couch|seat|bench|surface|sand|grass)\b/i.test(c)));
+  const denied = /\bknees?\b[^.;]*\b(?:not visible|not shown|cropped|out of frame|outside the (?:frame|crop))\b/i.test(prose);
+  return supported && !denied ? null : "kneeling posture requires review; no consistent visible observation of knees on a supporting surface, and cropped legs cannot establish posture";
 }
 const PAINT_GARMENT = /\b(?:bikini|swimsuit|swimwear|lingerie|bra|thong|g-?string|bodysuit|underwear|panties|top|bottoms?|outfit|dress|garment|clothing|clothes)\b/i;
 // A mirror that is only part of the scene ("mirror in the background") does not put her in it.
@@ -408,6 +421,8 @@ export function normalizeMediaClassification(value: unknown, opts: NormalizeOpti
   if (garmentReview) issuesExtra.push(garmentReview);
   const paintedObjectReview = !video && paintedObjectReviewReason(`${rawProse} ${j.short_label}`);
   if (paintedObjectReview) issuesExtra.push(paintedObjectReview);
+  const kneelingReview = !video && kneelingVisibilityReviewReason(`${rawProse} ${j.short_label}`, cleanList(j.visible, 10));
+  if (kneelingReview) issuesExtra.push(kneelingReview);
   // Round 5: yes is only ever as good as the prose backing it. An outline through fabric, paint read as a garment and a
   // background mirror are not evidence; each goes to review and drops the tag it would have licensed.
   const clauses = affirmativeClauses(proseAll);

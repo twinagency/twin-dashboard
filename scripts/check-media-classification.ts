@@ -434,4 +434,16 @@ for (const details of [
   assert.equal(norm({}, { identifying: "A woman poses against a white backdrop.", details, short_label: "portrait", visible: [], tags: [] }).status, "analysed", details);
 }
 
+// A rear-view production crop was labelled kneeling without observable knees.
+for (const identifying of ["A woman kneels in front of a white door.", "A woman is kneeling in pink underwear.", "A woman poses on her knees."]) {
+  const fields = { identifying, details: "Her legs are cropped.", short_label: "rear view", visible: ["pink thong", "rear view"], tags: [] };
+  const held = norm({ lingerie: "yes" }, fields);
+  assert.equal(held.status, "needs_review");
+  assert.match(held.issues.join(" "), /kneeling posture requires review/);
+  assert.equal(norm({ lingerie: "yes" }, { ...fields, details: "Her knees rest on a white mattress.", visible: ["pink thong", "knees resting on a white mattress"] }).status, "analysed", "concrete visible support can substantiate the posture");
+  assert.equal(norm({ lingerie: "yes" }, { ...fields, details: "Her knees are not visible.", visible: ["knees resting on a white mattress"] }).status, "needs_review", "contradictory knee visibility remains held");
+  assert.equal(norm({ lingerie: "yes" }, { ...fields, visible: ["knees not visible on the bed"] }).status, "needs_review", "negated support does not confirm posture");
+}
+assert.equal(norm({ lingerie: "yes" }, { identifying: "A woman poses with her back to the camera.", details: "", short_label: "rear view", visible: ["pink thong"], tags: [] }).status, "analysed", "cropped legs do not withhold confirmed content without a kneeling claim");
+
 console.log("Media classification checks passed: yes-only tags and flags, unclear never clean, contract facts, description rules, negation-aware validation, retryable malformed answers, factual-only prompts.");

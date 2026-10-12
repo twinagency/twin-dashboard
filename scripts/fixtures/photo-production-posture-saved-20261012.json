@@ -1,0 +1,53 @@
+{
+  "id": "00602d64-0ce5-4e9b-a61c-4495a97583b4",
+  "clone_id": "c92560e7-1dd9-4e62-b5c3-04a30fbe4925",
+  "storage_path": "c92560e7-1dd9-4e62-b5c3-04a30fbe4925/photos/0e860ce2297b4a312a50b20d2e485950-photo-launch-control-dreka-15-20261012.jpg",
+  "caption": "peeking back at you from over my shoulder, my pink thong barely covering me 😏 can you spot the light switch behind me?",
+  "teaser_caption": null,
+  "star_value": 1260,
+  "image_name": "photo-launch-control-dreka-15-20261012.jpg",
+  "created_at": "2026-10-12T07:30:48.711426+00:00",
+  "telegram_file_id": null,
+  "is_nude": false,
+  "explicitness": "suggestive",
+  "is_free": false,
+  "nsfw": false,
+  "tags": [
+    "solo",
+    "ass",
+    "lingerie"
+  ],
+  "auto_desc": "pink hair thong pose",
+  "visual_description": "A woman with long pink hair in a purple top and pink thong kneels with her back to the camera in front of a white door. She wears a light purple short-sleeved top and pink underwear. Her body is angled to show her bare buttocks while she looks back over her right shoulder. The background features a white paneled door and a wall with a light switch. Not visible: nipples, genitals, anus.",
+  "analysis_status": "analysed",
+  "analysis_version": 2,
+  "analysis_model": "qwen/qwen3.8-27b",
+  "analysis_provider": "DeepInfra",
+  "analysis_error": null,
+  "analysed_at": "2026-10-12T07:30:48.687+00:00",
+  "visual_facts": {
+    "v": 2,
+    "visible": [
+      "pink hair",
+      "purple top",
+      "pink thong",
+      "bare buttocks",
+      "white door",
+      "looking over shoulder"
+    ],
+    "evidence": {
+      "anus": "no",
+      "nipples": "no",
+      "sex_toy": "no",
+      "genitals": "no",
+      "lingerie": "yes",
+      "swimwear": "no",
+      "full_nudity": "no",
+      "bare_buttocks": "yes",
+      "sexual_activity": "no",
+      "suggestive_pose": "yes",
+      "mirror_reflection": "no"
+    }
+  },
+  "metadata_edited_at": null
+}

@@ -18,7 +18,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { ANALYSIS_COLUMNS, ANALYSIS_VERSION, FACT_KEYS, type AnalysisResult, type VisualFacts } from "./media-analysis-contract";
 import { withRetry, TRANSIENT_ERROR } from "./retry";
 import { analysisRowFields } from "./media-analysis-row";
-import { genitalVisibilityReviewReason, paintedObjectReviewReason } from "./media-classification";
+import { genitalVisibilityReviewReason, paintedObjectReviewReason, kneelingVisibilityReviewReason } from "./media-classification";
 
 export type MediaTable = "photos" | "videos";
 export const MEDIA_TABLES: MediaTable[] = ["photos", "videos"];
@@ -289,6 +289,8 @@ export function buildProposal(ctx: Pick<Ctx, "runId" | "now">, table: MediaTable
   if (visibilityReview) return { ...base, outcome: "needs_review", error: visibilityReview };
   const paintedObjectReview = table === "photos" && paintedObjectReviewReason(`${f.visual_description} ${f.auto_desc} ${f.visual_facts.visible.join(". ")}`);
   if (paintedObjectReview) return { ...base, outcome: "needs_review", error: paintedObjectReview };
+  const kneelingReview = table === "photos" && kneelingVisibilityReviewReason(`${f.visual_description} ${f.auto_desc}`, f.visual_facts.visible);
+  if (kneelingReview) return { ...base, outcome: "needs_review", error: kneelingReview };
   // The field set and the state stamp come from the SAME helper the dashboard upload/import path uses (lib/media-analysis-row.ts),
   // so a repaired row is indistinguishable from a freshly uploaded one. Caption is the one exception: the stored sales caption is
   // kept unless it contradicts the facts.
@@ -600,6 +602,8 @@ export function bindConflict(it: Item, row: Row | undefined, clone: CloneInfo | 
   if (visibilityReview) return `proposal requires fresh review: ${visibilityReview}`;
   const paintedObjectReview = it.table === "photos" && paintedObjectReviewReason(`${merged.visual_description} ${merged.auto_desc} ${merged.visual_facts.visible.join(". ")}`);
   if (paintedObjectReview) return `proposal requires fresh review: ${paintedObjectReview}`;
+  const kneelingReview = it.table === "photos" && kneelingVisibilityReviewReason(`${merged.visual_description} ${merged.auto_desc}`, merged.visual_facts.visible);
+  if (kneelingReview) return `proposal requires fresh review: ${kneelingReview}`;
   return null;
 }
 

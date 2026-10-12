@@ -282,6 +282,23 @@ const guide = Object.fromEntries(PRICING_CATEGORIES.map((c) => [c, c === "sfw" |
   delete paintedPreview.after.caption;
   assert.match(bindConflict(paintedPreview, legacy, {id:"clone",slug:"fixture",vision_model:null}) ?? "", /body-paint object depiction/);
   }
+  // Exact saved production result, before the test duplicate was held. The
+  // observation input below is reconstructed from its persisted factual fields;
+  // it is not labelled as the original raw model response.
+  const savedPosture = JSON.parse(readFileSync(new URL("./fixtures/photo-production-posture-saved-20261012.json", import.meta.url), "utf8"));
+  const posture = replying(JSON.stringify({ evidence: savedPosture.visual_facts.evidence, identifying: savedPosture.visual_description,
+    details: "", short_label: savedPosture.auto_desc, visible: savedPosture.visual_facts.visible, tags: savedPosture.tags }));
+  const postureResult = await analysePhoto(photo, "qwen/qwen3.8-27b", undefined, {
+    call: posture.call, writeCaption: async () => { heldCaptionCalls++; return "Neutral catalogue caption."; },
+  });
+  assert.equal(postureResult.status, "needs_review");
+  assert.match(postureResult.error ?? "", /kneeling posture requires review/);
+  assert.equal(posture.calls.length, 1, "posture guard adds no model call");
+  assert.equal(heldCaptionCalls, 0);assert.equal(postureResult.fields?.caption, null);
+  const oldPosture = { ...postureResult, status: "analysed" as const, error: undefined };
+  assert.equal(buildProposal({runId:"isolated"}, "photos", legacy, "fixture", oldPosture, true).outcome, "needs_review");
+  const posturePreview: Item = { ...oldPreview, after: analysisRowFields(oldPosture) };delete posturePreview.after.caption;
+  assert.match(bindConflict(posturePreview, legacy, {id:"clone",slug:"fixture",vision_model:null}) ?? "", /kneeling posture/);
   const failedRes = await analysePhoto(photo, null, undefined, { call: async () => { throw new Error("boom"); } });
   assert.equal(priceForAnalysis(guide, failedRes), 2000, "failed => the guide's highest category, not the SFW price");
   const review = await analysePhoto(photo, null, undefined, { call: replying(answer({ anus: "unclear" })).call });
