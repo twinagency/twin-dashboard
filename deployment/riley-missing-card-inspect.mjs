@@ -2,44 +2,77 @@ import fs from 'node:fs';
 import path from 'node:path';
 import crypto from 'node:crypto';
 import {config} from './src/config.ts';
-import {mapFromV1} from './src/girls/map-v1.ts';
-import {validateVars,render,renderParts} from './src/girls/template.ts';
-const id='2e5eb05f-cc88-4ba6-870a-924948d4b09a',slug='mrs-callace';
+import {activeRequest,requestHandover,readResult,clearHandover} from './src/handover.ts';
+import {validateVars} from './src/girls/template.ts';
+import {loadRawCatalogue,catalogueFromRaw} from './src/media.ts';
+import {testPhotoPrice} from './src/test-photo-pricing.ts';
 const stable=v=>v&&typeof v==='object'?(Array.isArray(v)?v.map(stable):Object.fromEntries(Object.keys(v).sort().map(k=>[k,stable(v[k])]))):v;
 const hash=v=>crypto.createHash('sha256').update(JSON.stringify(stable(v))).digest('hex');
-const sb=async(route)=>{const r=await fetch(config.supabaseUrl+'/rest/v1/'+route,{headers:{apikey:config.supabaseKey,Authorization:'Bearer '+config.supabaseKey},signal:AbortSignal.timeout(10000)});if(!r.ok)throw new Error('database read '+r.status);return r.json();};
-const mon=async(route,body)=>{const r=await fetch('http://127.0.0.1:4300'+route,{...(body?{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(15000)});if(!r.ok)throw new Error('monitor '+r.status);return r.json();};
-function prepareVars(c){
- const {vars}=mapFromV1(c);
- if(c.slug && c.slug!=='mrs-callace')throw new Error('wrong creator');
- const voice=String(c.persona?.VOICE_TRAITS??'').replace(/^How she sounds and types:\s*-\s*/,'').split('Real voice notes')[0].trim();
- if(!voice||!/once a fan engages/i.test(c.persona?.FLIRT_NSFW??'')||!String(c.career_history??'').includes("kids' names"))throw new Error('source profile changed; review required');
- vars.NAME=c.name;
- vars.LOOKS=vars.LOOKS||"No physical measurements or appearance details have been supplied; do not invent them.";
- vars.PERSONALITY=voice;
- vars.TEXT_EXAMPLES=[...String(c.persona?.PERSONA??'').matchAll(/^- Her: "([^"]+)"/gm)].map(x=>'"'+x[1].toLowerCase()+'"').join(' / ');
- vars.SIGNATURE_WORDS=(c.catchphrases??[]).join(', ');
- vars.SEX_ROLE='not described here by a fixed role; do not invent a fixed personal preference.';
- vars.SEX_PACE='Only move into sexual conversation once the fan engages. Keep any adult roleplay clearly imaginary and confined to this chat.';
- vars.SEX_EXTRAS='Do not invent additional personal preferences.';
- vars.WORK_ANSWER='im a content creator, i make comedy and lifestyle videos';
- vars.OFF_LIMITS="Keep your children's names and exact home address private. Never agree to in-person meetings or sex for money.";
- for(const k of Object.keys(vars))vars[k]=String(vars[k]).replace(/\s*[—–]\s*/g,', ');
- return vars;
+const id='2e5eb05f-cc88-4ba6-870a-924948d4b09a',slug='mrs-callace',dir=path.join(config.dataDir,'_operator_backups','mrs-callace-v2-20261012');
+const backup=JSON.parse(fs.readFileSync(path.join(dir,'settings.json'),'utf8'));
+const fleet=()=>JSON.parse(fs.readFileSync(path.join(config.dataDir,'_fleet.json'),'utf8'));
+const wait=ms=>new Promise(r=>setTimeout(r,ms));
+const sb=async(route,method='GET',body)=>{const r=await fetch(config.supabaseUrl+'/rest/v1/'+route,{method,headers:{apikey:config.supabaseKey,Authorization:'Bearer '+config.supabaseKey,'Content-Type':'application/json',Prefer:'return=representation'},...(body?{body:JSON.stringify(body)}:{}),signal:AbortSignal.timeout(12000)});if(!r.ok)throw new Error('database '+method+' '+r.status);return r.json();};
+const read=async()=>{const rows=await sb('clones?id=eq.'+id+'&select=id,slug,engine,status,v2_vars,tips_enabled,v2_credits_enabled,v2_memory_enabled,vision_model,photo_vision_model,sell_via_mini_app');if(rows.length!==1)throw new Error('creator row missing');return rows[0];};
+const mon=async(engine)=>{const r=await fetch('http://127.0.0.1:4300/api/girls/engine',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({id,engine}),signal:AbortSignal.timeout(85000)});if(!r.ok)throw new Error('monitor '+r.status);const p=await r.json();if(p.ok!==true)throw new Error('engine switch refused: '+String(p.error??'unknown').slice(0,300));return p;};
+const journal={at:new Date().toISOString(),creator:slug,runtime:process.env.GIT_SHA,status:'preparing',backup:path.join(dir,'settings.json')};
+const record=()=>{const p=path.join(dir,'activation.json'),tmp=p+'.tmp';fs.writeFileSync(tmp,JSON.stringify(journal,null,2),{mode:0o600});fs.renameSync(tmp,p);};
+const before=await read(),initial=fleet();
+if(process.env.GIT_SHA!=='45931b6f56db9f97cc8406154e35a0d216f5de65'||before.slug!==slug||before.engine!=='live'||before.status!=='active'||before.v2_credits_enabled!==false||before.v2_memory_enabled!==false||before.tips_enabled!==true||hash(before.v2_vars)!==backup.preparedProfileHash||validateVars(before.v2_vars).length)throw new Error('preconditions changed');
+if(activeRequest(config.dataDir,slug)||initial.girls?.[slug])throw new Error('existing runner or handover requires review');
+if(Date.now()-Date.parse(initial.at)>60000)throw new Error('fleet heartbeat stale');
+if(testPhotoPrice(id,6814483810,'photo')!==null)throw new Error('unexpected photo price override');
+const originalFleet=Object.keys(initial.girls);
+const raw=await loadRawCatalogue(id),items=catalogueFromRaw(raw);
+if(!items.length)throw new Error('empty usable catalogue');
+const req=requestHandover(config.dataDir,slug);journal.handoverRequest=req.id;record();
+let released=false,committed=false;
+try{
+ let response;
+ for(let i=0;i<15;i++){response=readResult(config.dataDir,slug,req.id);if(response)break;await wait(1000);}
+ if(!response?.ok||fleet().girls?.[slug])throw new Error('fleet did not confirm the creator start hold');
+ const flags=await sb('clones?id=eq.'+id+'&engine=eq.live&tips_enabled=eq.true&select=id,tips_enabled','PATCH',{tips_enabled:false});
+ if(flags.length!==1||flags[0].tips_enabled!==false)throw new Error('tip switch changed concurrently');
+ journal.engineRequestedAt=new Date().toISOString();record();
+ await mon('v2');committed=true;journal.status='waiting-for-v1-drain';record();
+ const message='clone "'+slug+'" switched to the external V2 engine; polling stopped';
+ const until=Date.now()+90000;let receipt;
+ while(Date.now()<until){
+  if(activeRequest(config.dataDir,slug)?.id!==req.id)throw new Error('creator start hold changed');
+  const rows=await sb('system_logs?clone_id=eq.'+id+'&source=eq.runtime&ts=gte.'+encodeURIComponent(journal.engineRequestedAt)+'&message=eq.'+encodeURIComponent(message)+'&select=id,ts&order=ts.desc&limit=1');
+  if(rows.length){receipt=rows[0];break;}await wait(2000);
+ }
+ if(!receipt)throw new Error('V1 drain acknowledgement not observed');
+ journal.v1Drained=receipt;record();
+ const current=await read();
+ if(current.engine!=='v2'||current.tips_enabled!==false||current.v2_credits_enabled!==false||current.v2_memory_enabled!==false||hash(current.v2_vars)!==backup.preparedProfileHash)throw new Error('settings changed during handover');
+ if(activeRequest(config.dataDir,slug)?.id!==req.id)throw new Error('handover start hold lost');
+ clearHandover(config.dataDir,slug);released=true;
+ const startDeadline=Date.now()+75000;let state;
+ while(Date.now()<startDeadline){
+  const f=fleet(),s=f.girls?.[slug];
+  if(s?.status==='error')throw new Error('V2 runner reported startup error');
+  if(Date.now()-Date.parse(f.at)<45000&&s?.status==='running'&&s.credits?.applied?.enabled===false&&s.tips?.offersEnabled===false&&s.memory?.serving===false&&originalFleet.every(k=>f.girls[k]?.status==='running')){state=s;break;}
+  await wait(2000);
+ }
+ if(!state)throw new Error('V2 running state and disabled features not confirmed');
+ const after=await read();
+ if(after.engine!=='v2'||hash(after.v2_vars)!==backup.preparedProfileHash)throw new Error('post-switch database mismatch');
+ journal.status='confirmed';journal.confirmedAt=new Date().toISOString();journal.v2StartedAt=state.startedAt;journal.botUsername=state.botUsername;journal.existingFleetPreserved=originalFleet;record();
+ console.log(JSON.stringify({...journal,engine:after.engine,conversationModel:config.model,visionModel:after.vision_model,photoVisionModel:after.photo_vision_model,credits:state.credits.applied.enabled,tips:state.tips.offersEnabled,memory:state.memory.serving,catalogue:{usable:items.length,photos:items.filter(x=>x.kind==='photo').length,videos:items.filter(x=>x.kind==='video').length},photoTestPriceOverride:testPhotoPrice(id,6814483810,'photo'),telegramSendsByScript:0,modelCallsByScript:0}));
+}catch(e){
+ journal.status='failed';journal.reason=String(e.message??e).slice(0,400);record();
+ try{
+  const current=await read();
+  if(current.engine==='v2'){await mon('live');committed=false;}
+  const restored=await read();
+  if(restored.engine==='live'&&restored.tips_enabled===false){
+   const payload={tips_enabled:backup.before.tips_enabled};
+   await sb('clones?id=eq.'+id+'&engine=eq.live&tips_enabled=eq.false&select=id,tips_enabled','PATCH',payload);
+  }
+  journal.rollbackEngine=(await read()).engine;record();
+ }catch(rollback){journal.rollbackError=String(rollback.message??rollback).slice(0,300);record();}
+ console.log(JSON.stringify(journal));process.exitCode=1;
+}finally{
+ if(activeRequest(config.dataDir,slug)?.id===req.id&&(!committed||released))clearHandover(config.dataDir,slug);
 }
-const [c]=await sb('clones?id=eq.'+id+'&select=*');
-if(!c||c.slug!==slug||c.engine!=='live'||c.status!=='active'||c.v2_vars!==null||c.v2_credits_enabled!==false||c.v2_memory_enabled!==false)throw new Error('creator configuration changed; stop for review');
-const selected=Object.fromEntries(["stage_name","name","name_shared_with_fans","real_name","hair_length","hair_color","height","body_type","eye_color","cup_size","measurements","socials","date_of_birth","occupation","known_for","career_history","career_start_year","platforms","hometown","current_city","living_situation","tattoo_details","piercing_details","enhancements","ethnicity","ethnicity_tags","ethnicity_other","languages","wake_time","sleep_time","daily_blocks","pet_details","hobbies","favorite_things","relationship_canon","sexuality","dislikes","reaction_to_rudeness","persona","vibe_preset","catchphrases","emojis_enabled","emoji_allowlist","emoji_amount","fan_nicknames","love_policy","turn_ons","timezone","meeting_policy","content_hard_nos"].filter(k=>Object.hasOwn(c,k)).map(k=>[k,c[k]]));
-if(hash(selected)!=="f68ef22d0087c93ec607ffac5d7001f99839d9e4da434ddb893e4412140ae075")throw new Error('source profile changed; stop for review');
-const v=prepareVars(c),errors=validateVars(v);if(errors.length)throw new Error(errors.join('; '));
-const now=new Date();if(renderParts(v,now).filter(x=>!x.optional).map(x=>x.text).join('')!==render(v,now))throw new Error('prompt display mismatch');
-const dir=path.join(config.dataDir,'_operator_backups','mrs-callace-v2-20261012');
-fs.mkdirSync(dir,{recursive:true,mode:0o700});
-const file=path.join(dir,'settings.json');
-fs.writeFileSync(file,JSON.stringify({at:now.toISOString(),id,slug,runtime:process.env.GIT_SHA,before:{engine:c.engine,v2_vars:c.v2_vars,tips_enabled:c.tips_enabled,v2_credits_enabled:c.v2_credits_enabled,v2_memory_enabled:c.v2_memory_enabled},sourceHash:hash(selected),preparedProfileHash:hash(v)},null,2),{flag:'wx',mode:0o600});
-const saved=await mon('/api/girls/details',{girl:slug,vars:v});if(saved.ok!==true)throw new Error('profile save refused: '+JSON.stringify(saved.errors??[]));
-const read=await mon('/api/girls/details?girl='+slug);
-if(hash(read.vars)!==hash(v)||read.errors?.length)throw new Error('saved profile did not verify');
-const [after]=await sb('clones?id=eq.'+id+'&select=engine,tips_enabled,v2_credits_enabled,v2_memory_enabled');
-if(after.engine!==c.engine||after.tips_enabled!==c.tips_enabled||after.v2_credits_enabled!==false||after.v2_memory_enabled!==false)throw new Error('unexpected settings change');
-console.log(JSON.stringify({checkedAt:new Date().toISOString(),creator:slug,runtime:process.env.GIT_SHA,savedProfile:true,variables:Object.keys(v).length,profileHash:hash(v),displayMatchesRuntime:true,usesSharedV2LowercaseStyle:true,engine:after.engine,tips:after.tips_enabled,credits:after.v2_credits_enabled,memory:after.v2_memory_enabled,rollbackSettings:file,modelCalls:0,telegramSends:0}));
