@@ -1,6 +1,6 @@
 # Twin photo launch recovery, 12 October 2026
 
-**Historical recovery snapshot.** Staging access and real uploads have since completed; see [the current staging checkpoint](photo-launch-staging-20261012.md) for subsequent fixes, failures, preserved main changes and remaining release gates. The fifteen-response replay below remains unchanged.
+**Historical recovery snapshot.** See [the final release report](photo-launch-release-20261012.md) for deployed commits, the controlled creator, production verification and current rollback references, and [the staging checkpoint](photo-launch-staging-20261012.md) for retained real-upload results and failures. The fifteen-response replay below remains unchanged.
 
 The interrupted session's source, local edits, retained photos and 15 accepted first-pass answers were recovered. This checkpoint continues that work. The controlled launch is authorised, but it has not happened. No creator has been switched to Qwen3.8, and no production schema, catalogue, price, financial record or Business connection was changed in this recovery session.
 

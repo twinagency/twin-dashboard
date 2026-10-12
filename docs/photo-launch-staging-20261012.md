@@ -1,6 +1,8 @@
 # Controlled photo launch: staging checkpoint, 12 October 2026
 
-The launch is authorised but not deployed at this checkpoint. Staging credentials now work. This supersedes the access and staging blockers in the earlier recovery note. No production creator setting, catalogue, schema, charging, tips, bundle or memory activation has changed.
+**Historical staging checkpoint.** See [the final release report](photo-launch-release-20261012.md) for deployed commits, the controlled creator, production verification and current rollback references. The results and earlier failures below are retained as recorded.
+
+The launch was authorised but not deployed at this checkpoint. Staging credentials worked. This superseded the access and staging blockers in the earlier recovery note. No production creator setting, catalogue, schema, charging, tips, bundle or memory activation had changed at this point.
 
 ## Real staging flow
 
