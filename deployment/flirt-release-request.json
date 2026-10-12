@@ -1,5 +1,5 @@
 {
-  "reason": "Release combined automatic creator content uploads, minimum-50 copy, persistent onboarding transfers and saved agency folder links.",
-  "source_commit": "9e984cbca8e148761b0e651e7edb4757e8d606a6",
-  "requested_at": "2026-10-11T23:54:21.887815+00:00"
+  "reason": "Retain the existing live upload-control marker on the new combined picker.",
+  "source_commit": "1b27694b8d701701bd8f9c1c3498c89703fb8079",
+  "requested_at": "2026-10-12T00:00:44.637Z"
 }
