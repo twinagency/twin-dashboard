@@ -1,6 +1,6 @@
 """Build and verify the pinned photo-recovery candidate; no live runtime replacement."""
 import hashlib,json,os,pathlib,shutil,subprocess,time
-SHA="38cc7119aacf19057db1bc0774185a593f5ae159"
+SHA="bcc68c7e801ad65310f43f4a4ce09f05d3e3b4f7"
 ROOT=pathlib.Path('/home/ubuntu/twin-v2')
 BASE=pathlib.Path('/home/ubuntu/twin-v2-test-price-releases/45931b6f56db9f97cc8406154e35a0d216f5de65')
 RELEASE=pathlib.Path('/home/ubuntu/twin-v2-photo-recovery-releases')/SHA

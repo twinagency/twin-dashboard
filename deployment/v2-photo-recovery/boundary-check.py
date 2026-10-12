@@ -1,5 +1,5 @@
 import json,pathlib,subprocess,os
-SHA='38cc7119aacf19057db1bc0774185a593f5ae159'
+SHA='bcc68c7e801ad65310f43f4a4ce09f05d3e3b4f7'
 BACKUP=pathlib.Path('/home/ubuntu/twin-v2-backups/photo-recovery-20261013')
 PRIVATE=pathlib.Path('/home/ubuntu/twin-v2/data/_operator_backups/photo-recovery-20261013')
 prep=json.loads((BACKUP/(SHA+'-prepared.json')).read_text())

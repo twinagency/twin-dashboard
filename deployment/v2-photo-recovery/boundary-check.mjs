@@ -25,4 +25,4 @@ for(const row of rows){
  }else assert.equal(priceFor(2700,{cloneId:row.id,telegramId:6814483810,kind:'photo'}),2700);
  results.push({creator:row.slug,photos:photos.length,freshTarget:true,creatorPathsValid:true,promptDisplayEqual:true,...(ownership?{ownership}:{})});
 }
-console.log(JSON.stringify({checkedAt:new Date().toISOString(),candidate:'38cc7119aacf19057db1bc0774185a593f5ae159',readOnlyProduction:true,localCache:'isolated temporary directory',results,modelCalls:0,telegramSends:0}));
+console.log(JSON.stringify({checkedAt:new Date().toISOString(),candidate:'bcc68c7e801ad65310f43f4a4ce09f05d3e3b4f7',readOnlyProduction:true,localCache:'isolated temporary directory',results,modelCalls:0,telegramSends:0}));
