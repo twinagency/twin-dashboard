@@ -1,11 +1,19 @@
-import json,pathlib,subprocess,time
-commands=["sudo python3 - <<'PY'\nimport json,pathlib,subprocess,hashlib\np=pathlib.Path('/home/ubuntu/twin-v2')\nc=json.loads(subprocess.check_output(['docker','compose','-f',str(p/'docker-compose.yml'),'config','--format','json'],text=True))\nprint(json.dumps({'services':{k:{x:v.get(x) for x in ['image','build','command','volumes','ports','stop_grace_period']} for k,v in c['services'].items()}}))\nfor f in [p/'Dockerfile',p/'src/handover.ts',p/'src/fleet.ts']:\n print(str(f),hashlib.sha256(f.read_bytes()).hexdigest())\nprint('scripts', [str(f) for f in p.glob('scripts/*deploy*')])\nprint('host_scripts', [str(f) for f in p.glob('*.sh')])\nPY"]
-instance='i-0584d283506f3f6be'
-path=pathlib.Path('/tmp/photo-launch-readonly-command.json');path.write_text(json.dumps({'commands':commands,'executionTimeout':['120']}))
-cmd_id=subprocess.check_output(['aws','ssm','send-command','--instance-ids',instance,'--document-name','AWS-RunShellScript','--parameters','file://'+str(path),'--comment','Read V2 deployment configuration without credentials','--query','Command.CommandId','--output','text'],text=True).strip()
-for attempt in range(50):
- result=json.loads(subprocess.check_output(['aws','ssm','get-command-invocation','--command-id',cmd_id,'--instance-id',instance,'--output','json'],text=True))
- if result['Status'] in ['Success','Failed','Cancelled','TimedOut']:break
- time.sleep(4)
-print(json.dumps({k:result.get(k) for k in ['Status','StandardOutputContent','StandardErrorContent']}))
-if result['Status']!='Success':raise SystemExit(1)
+"""Read one creator-owned source for the authorised controlled upload; never export credentials."""
+import json,pathlib,subprocess,time,urllib.request,base64
+instance='i-09a9dd3bd749643a5'
+source="const fs=require('fs');(async()=>{const base=process.env.SUPABASE_URL,key=process.env.SUPABASE_SERVICE_KEY;if(new URL(base).hostname!=='aouaenqayfltoqrmpitg.supabase.co')throw Error('Wrong project');const storagePath='c92560e7-1dd9-4e62-b5c3-04a30fbe4925/photos/1787735766490-dreka-cakez-06.jpg';const r=await fetch(base+'/storage/v1/object/sign/media/'+storagePath,{method:'POST',headers:{apikey:key,Authorization:'Bearer '+key,'Content-Type':'application/json'},body:JSON.stringify({expiresIn:300})});if(!r.ok)throw Error('Sign failed '+r.status);const d=await r.json();console.log(JSON.stringify({url:base+'/storage/v1'+(d.signedURL||d.signedUrl),storagePath}));})().catch(e=>{console.error(e.message);process.exit(1)});"
+command="printf '%s' '"+base64.b64encode(source.encode()).decode()+"' | base64 -d | sudo docker exec -i next-app node"
+p=pathlib.Path('/tmp/photo-source-command.json');p.write_text(json.dumps({'commands':[command],'executionTimeout':['60']}))
+cid=subprocess.check_output(['aws','ssm','send-command','--instance-ids',instance,'--document-name','AWS-RunShellScript','--parameters','file://'+str(p),'--query','Command.CommandId','--output','text'],text=True).strip()
+for _ in range(30):
+ try:r=json.loads(subprocess.check_output(['aws','ssm','get-command-invocation','--command-id',cid,'--instance-id',instance,'--output','json'],text=True,stderr=subprocess.DEVNULL))
+ except subprocess.CalledProcessError:time.sleep(2);continue
+ if r['Status'] in ['Success','Failed','Cancelled','TimedOut']:break
+ time.sleep(2)
+assert r['Status']=='Success','Source access failed'
+result=json.loads(r['StandardOutputContent'])
+assert result['url'].startswith('https://aouaenqayfltoqrmpitg.supabase.co/storage/v1/object/sign/media/')
+out=pathlib.Path('photo-source');out.mkdir()
+with urllib.request.urlopen(result['url'],timeout=30) as response:(out/'dreka-06.jpg').write_bytes(response.read())
+import hashlib
+print(json.dumps({'creator':'dreka-cakez','source_id':'78fa6c68-8dc9-4d8a-86b2-5e22f0b80f81','sha256':hashlib.sha256((out/'dreka-06.jpg').read_bytes()).hexdigest()}))
