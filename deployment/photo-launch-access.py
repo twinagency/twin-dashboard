@@ -15,9 +15,7 @@ def ssm(command,timeout=120):
  print(r.get('StandardOutputContent',''),flush=True)
  if r['Status']!='Success': print(r.get('StandardErrorContent','')[-1800:],flush=True);raise RuntimeError('Candidate gate '+r['Status'])
  return cid
-# Resume only the exact source already transferred by the stopped packaging attempt.
-ssm('python3 -c '+shlex.quote("import pathlib,hashlib;assert hashlib.sha256(pathlib.Path('/tmp/photo-recovery-payload.json').read_bytes()).hexdigest()=='eed97064423314be087d2637a235bd348e4a3ceda287d00b8ad40fe00b95f919'"),30)
-for dst,src in {'/tmp/photo-recovery-prepare.py':'deployment/v2-photo-recovery/prepare.py','/tmp/photo-recovery-snapshot.mjs':'deployment/v2-photo-recovery/snapshot.mjs'}.items():
- data=base64.b64encode(pathlib.Path(src).read_bytes()).decode()
- ssm("printf '%s' '"+data+"' | base64 -d > "+dst,30)
-ssm('python3 -u /tmp/photo-recovery-prepare.py',1440)
+
+source="import json,pathlib\nroot=pathlib.Path('/home/ubuntu/twin-v2/data/_operator_backups/photo-recovery-20261013/db238441e7b310af1e4b8b141a5d7cadf5e471f6/photo-real-model-Nrl9dj')\nfor p in sorted(root.glob('logs/*/requests.jsonl')):\n for line in p.read_text().splitlines():\n  x=json.loads(line)\n  print(json.dumps({'scenario':p.parent.name,'input':x.get('fanText'),'raw':x.get('raw'),'final':x.get('final'),'note':x.get('note'),'selected':x.get('selectedMedia'),'media':x.get('media'),'delivery':x.get('delivery'),'grounding':x.get('grounding'),'photoRequest':x.get('photoRequest'),'menu':[{k:y.get(k) for k in ['slot','key','desc']} for y in x.get('menu',[])]}))\n"
+encoded=base64.b64encode(source.encode()).decode()
+ssm("printf '%s' '"+encoded+"' | base64 -d > /tmp/photo-recovery-inspect.py\npython3 /tmp/photo-recovery-inspect.py",60)
