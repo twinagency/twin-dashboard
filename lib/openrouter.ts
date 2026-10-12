@@ -16,6 +16,9 @@ export type VisionOptions = {
   signal?: AbortSignal;
   maxTokens?: number;
   temperature?: number;     // defaults to 0: cataloguing must be repeatable
+  provider?: { only: string[]; allow_fallbacks: false };
+  reasoning?: { effort: "xhigh"; exclude: true };
+  textFirst?: boolean;      // preserve the evaluated multimodal message order when requested
 };
 
 export async function orVisionDetailed(opts: VisionOptions): Promise<{ content: string; meta: VisionCallMeta }> {
@@ -23,6 +26,8 @@ export async function orVisionDetailed(opts: VisionOptions): Promise<{ content: 
   if (!key) throw new Error("OPENROUTER_API_KEY missing");
   if (!opts.dataUrl) throw new Error("orVision: no image");
   const started = Date.now();
+  const imagePart = { type: "image_url", image_url: { url: opts.dataUrl } };
+  const textPart = { type: "text", text: opts.prompt };
 
   const res = await fetch(URL, {
     method: "POST",
@@ -32,10 +37,7 @@ export async function orVisionDetailed(opts: VisionOptions): Promise<{ content: 
       model: opts.model,
       messages: [{
         role: "user",
-        content: [
-          { type: "image_url", image_url: { url: opts.dataUrl } },
-          { type: "text", text: opts.prompt },
-        ],
+        content: opts.textFirst ? [textPart, imagePart] : [imagePart, textPart],
       }],
       // Some OpenRouter providers default to a low completion cap when this is
       // omitted, which silently truncates a longer JSON response mid-string.
@@ -44,13 +46,19 @@ export async function orVisionDetailed(opts: VisionOptions): Promise<{ content: 
       temperature: opts.temperature ?? 0,
       usage: { include: true },
       ...(opts.json ? { response_format: { type: "json_object" } } : {}),
+      ...(opts.provider ? { provider: opts.provider } : {}),
+      ...(opts.reasoning ? { reasoning: opts.reasoning } : {}),
     }),
   });
 
   if (!res.ok) throw new Error(`OpenRouter ${res.status}: ${await res.text()}`);
   const j = await res.json();
+  const finishReason = j.choices?.[0]?.finish_reason;
+  if (j.error || j.choices?.[0]?.message?.refusal || (finishReason && finishReason !== "stop")) {
+    throw new Error(`OpenRouter: vision response incomplete or refused (${finishReason ?? "error"})`);
+  }
   const content = j.choices?.[0]?.message?.content;
-  if (typeof content !== "string") throw new Error("OpenRouter: no content");
+  if (typeof content !== "string" || !content.trim()) throw new Error("OpenRouter: no content");
   return {
     content,
     meta: {
@@ -347,3 +355,4 @@ export async function orChat(opts: {
   if (typeof content !== "string") throw new Error("OpenRouter: no content");
   return content;
 }
+

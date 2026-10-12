@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import type { Clone } from "@/lib/types";
 import type { OrModel } from "@/app/api/models/route";
-import { resolveVisionAnalysisModel } from "@/lib/vision-model";
+import { describeVisionAnalysisModels } from "@/lib/vision-model";
 import ModelSelect from "./ModelSelect";
 import {
   Field,
@@ -381,7 +381,7 @@ export default function CloneDefaultsForm({ defaults }: { defaults: Partial<Clon
               name={m.name}
               models={models}
               defaultValue={(defaults[m.name as keyof Clone] as string) || m.def}
-              effectiveFor={m.name === "vision_model" ? resolveVisionAnalysisModel : undefined}
+              effectiveFor={m.name === "vision_model" ? describeVisionAnalysisModels : undefined}
             />
           ))}
         </div>
@@ -400,3 +400,4 @@ export default function CloneDefaultsForm({ defaults }: { defaults: Partial<Clon
     </form>
   );
 }
+

@@ -14,7 +14,7 @@
     "test:login-phone": "tsx lib/mtproto/tests/check-login-phone.ts",
     "test:public": "tsx scripts/check-public-api.ts",
     "test:paging": "tsx scripts/check-select-all.ts",
-    "test:media": "tsx scripts/check-media-limits.ts && tsx scripts/check-media-classification.ts && tsx scripts/check-media-correction.ts && tsx --tsconfig scripts/tsconfig.json scripts/check-media-analysis.ts",
+    "test:media": "tsx scripts/check-media-limits.ts && tsx scripts/check-media-classification.ts && tsx scripts/check-media-correction.ts && tsx --tsconfig scripts/tsconfig.json scripts/check-media-analysis.ts && tsx --tsconfig scripts/tsconfig.json scripts/check-vision-profile.ts",
     "test:media-repair-db": "tsx --tsconfig scripts/tsconfig.json scripts/check-media-repair-db.ts",
     "test:media-paths": "tsx scripts/check-media-storage-paths.ts",
     "test:media-upload-resilience": "tsx scripts/check-media-upload-resilience.ts",
@@ -119,3 +119,4 @@
     "typescript": "^5"
   }
 }
+

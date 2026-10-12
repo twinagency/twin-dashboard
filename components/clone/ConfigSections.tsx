@@ -5,7 +5,7 @@ import { useDashboardAccess } from "../DashboardAccessProvider";
 import { isMoxy } from "@/lib/agency-brand";
 import type { Clone } from "@/lib/types";
 import type { OrModel } from "@/app/api/models/route";
-import { resolveVisionAnalysisModel } from "@/lib/vision-model";
+import { describeVisionAnalysisModels } from "@/lib/vision-model";
 import ModelSelect from "../ModelSelect";
 import {
   Area,
@@ -1252,7 +1252,7 @@ export default function ConfigSections({
                 defaultValue={(clone?.[m.name as keyof Clone] as string) || m.def}
                 recommended={RECOMMENDED[m.name]}
                 weak={WEAK[m.name]}
-                effectiveFor={m.name === "vision_model" ? resolveVisionAnalysisModel : undefined}
+                effectiveFor={m.name === "vision_model" ? describeVisionAnalysisModels : undefined}
               />
             ))}
           </div>
@@ -2394,5 +2394,6 @@ export function MonetizationSections({
     </div>
   );
 }
+
 
 

@@ -21,8 +21,8 @@ async function main() {
   assert.match(actions, /safeAnalysis/, "server upload must tolerate vision failure");
   assert.match(actions, /preparePhotoForTelegram/, "photo uploads must be normalized before storage");
   assert.match(actions, /return uploadFailure\(error\)/, "server upload failures must be returned to the dashboard");
-  assert.match(caption, /AbortSignal\.timeout\(VISION_CALL_TIMEOUT_MS\)/, "every vision call must have its own deadline");
-  assert.match(caption, /AbortSignal\.timeout\(ANALYSIS_TOTAL_BUDGET_MS\)/, "vision analysis must have a bounded total budget");
+  assert.match(caption, /AbortSignal\.timeout\(profile\.callTimeoutMs\)/, "every vision call must have its own model-appropriate deadline");
+  assert.match(caption, /AbortSignal\.timeout\(profile\.totalBudgetMs\)/, "vision analysis must have a bounded total budget");
   assert.ok((actions.match(/teaser_caption: null/g) ?? []).length >= 2, "new photo and video uploads must not persist generic fan-facing captions");
   assert.match(caption, /signal\?: AbortSignal/, "caption processing must accept cancellation");
   assert.match(openrouter, /signal: opts\.signal/, "OpenRouter vision requests must receive the timeout signal");
@@ -34,3 +34,4 @@ main().catch((error) => {
   console.error(error);
   process.exitCode = 1;
 });
+

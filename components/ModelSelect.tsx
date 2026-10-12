@@ -68,7 +68,7 @@ export default function ModelSelect({
       {effectiveFor && value && effectiveFor(value) !== value && (
         <span className="mb-1 flex items-center gap-1 text-[11px] text-warn">
           Runs as {effectiveFor(value)}
-          <Info text={`The saved model ${value} is not used for media analysis (retired or unsuitable). The analysis runs the model shown here instead. Pick a different model to change it.`} />
+          <Info text={`Saved setting: ${value}. The effective photo and video analysis models are shown here; they may differ because a model was replaced or approved for photos only.`} />
         </span>
       )}
       <input type="hidden" name={name} value={value} />
@@ -165,3 +165,4 @@ export default function ModelSelect({
     </div>
   );
 }
+

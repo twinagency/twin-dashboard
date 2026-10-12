@@ -5,31 +5,23 @@ import { writeFile, readFile, unlink } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import path from "node:path";
 import sharp from "sharp";
-import { orVisionDetailed, type VisionCallMeta } from "./openrouter";
+import { orVisionDetailed, type VisionCallMeta, type VisionOptions } from "./openrouter";
 import { withRetry } from "./retry";
 import {
   MEDIA_CLASSIFICATION_PROMPT, normalizeMediaClassification, videoClassificationPrompt, secondLookKeys, secondLookPrompt,
   applySecondLook, videoReviewReason, type NormalizedMedia,
 } from "./media-classification";
-import { VISION_ANALYSIS_DEFAULT_MODEL, resolveVisionAnalysisModel } from "./vision-model";
+import { VISION_ANALYSIS_DEFAULT_MODEL, resolveVisionAnalysisModel, visionProfile } from "./vision-model";
 import { generateSendCaption } from "./send-caption";
 import { ANALYSIS_VERSION, type AnalysisResult } from "./media-analysis-contract";
 
 const execFileAsync = promisify(execFile);
 
 export { VISION_ANALYSIS_DEFAULT_MODEL, resolveVisionAnalysisModel };
-
-// Timeouts. Each vision call gets its own deadline; the whole analysis (calls, retries, backoff) gets a hard ceiling. The
-// old code let one 12s timer cover the call AND its retry, so the retry never had time to run.
-export const VISION_CALL_TIMEOUT_MS = 40_000;
-// Budget: 2 first-pass attempts (40s each) + the second look (40s, photos and videos) with a little backoff slack. Unchanged
-// at 150s when photos gained the second look: the measured second look is ~3s, the worst case was already budgeted for video.
-export const SECOND_LOOK_TIMEOUT_MS = 40_000;
-export const ANALYSIS_TOTAL_BUDGET_MS = 150_000;
+export { VISION_CALL_TIMEOUT_MS, SECOND_LOOK_TIMEOUT_MS, ANALYSIS_TOTAL_BUDGET_MS } from "./vision-model";
 const MAX_ATTEMPTS = 2; // one extra look for a malformed or self-contradictory answer
-const MAX_TOKENS = 1500;
 
-export type VisionCall = (a: { model: string; dataUrl: string; prompt: string; signal: AbortSignal }) => Promise<{ content: string; meta: VisionCallMeta }>;
+export type VisionCall = (a: VisionOptions & { dataUrl: string; signal: AbortSignal }) => Promise<{ content: string; meta: VisionCallMeta }>;
 /** Test seams only; production passes nothing. */
 export type AnalysisDeps = {
   call?: VisionCall;
@@ -37,7 +29,7 @@ export type AnalysisDeps = {
 };
 
 const realCall: VisionCall = (a) =>
-  orVisionDetailed({ model: a.model, dataUrl: a.dataUrl, prompt: a.prompt, json: true, signal: a.signal, maxTokens: MAX_TOKENS, temperature: 0 });
+  orVisionDetailed({ ...a, json: true, temperature: 0 });
 
 function parseJson(raw: string): unknown {
   return JSON.parse(raw.trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, ""));
@@ -56,9 +48,10 @@ async function observe(
   signal: AbortSignal | undefined,
   deps: AnalysisDeps,
 ): Promise<AnalysisResult> {
-  const model = resolveVisionAnalysisModel(configuredModel);
+  const model = resolveVisionAnalysisModel(configuredModel, kind);
+  const profile = visionProfile(model);
   const call = deps.call ?? realCall;
-  const total = AbortSignal.timeout(ANALYSIS_TOTAL_BUDGET_MS);
+  const total = AbortSignal.timeout(profile.totalBudgetMs);
   const overall = signal ? AbortSignal.any([signal, total]) : total;
 
   let latencyMs = 0, costUsd: number | null = null, provider: string | null = null;
@@ -71,7 +64,7 @@ async function observe(
       : `${basePrompt}\nYour previous answer was rejected: ${lastError}. Look again and answer every evidence key with "yes", "no" or "unclear", and make identifying, details, short_label, visible and tags agree with the evidence.`;
     try {
       const { content, meta } = await withRetry(
-        () => call({ model, dataUrl, prompt, signal: AbortSignal.any([overall, AbortSignal.timeout(VISION_CALL_TIMEOUT_MS)]) }),
+        () => call({ ...profile.request, model, dataUrl, prompt, signal: AbortSignal.any([overall, AbortSignal.timeout(profile.callTimeoutMs)]) }),
         2, { baseMs: 1000, signal: overall },
       );
       latencyMs += meta.latencyMs;
@@ -101,8 +94,8 @@ async function observe(
     try {
       if (overall.aborted) throw new Error("analysis budget spent");
       const { content, meta } = await call({
-        model, dataUrl, prompt: secondLookPrompt(frames, lookKeys),
-        signal: AbortSignal.any([overall, AbortSignal.timeout(SECOND_LOOK_TIMEOUT_MS)]),
+        ...profile.request, model, dataUrl, prompt: secondLookPrompt(frames, lookKeys),
+        signal: AbortSignal.any([overall, AbortSignal.timeout(profile.secondLookTimeoutMs)]),
       });
       latencyMs += meta.latencyMs;
       if (meta.costUsd !== null) costUsd = (costUsd ?? 0) + meta.costUsd;
@@ -131,7 +124,7 @@ async function observe(
   };
 }
 
-/** Analyse a photo: downscale to 768px, one vision call (plus at most one corrective retry).
+/** Analyse a photo: downscale to 768px, factual vision with bounded correction and the existing triggered second look.
  * To force a model (eval), pass it as `configuredModel`; resolveVisionAnalysisModel is the only place that may rewrite it. */
 export async function analysePhoto(bytes: Buffer, configuredModel: string | null | undefined, signal?: AbortSignal, deps: AnalysisDeps = {}): Promise<AnalysisResult> {
   const model = resolveVisionAnalysisModel(configuredModel);
@@ -173,7 +166,7 @@ async function probeDuration(inPath: string): Promise<number> {
 
 /** Analyse a video from 5 evenly spaced frames tiled in ONE contact sheet and ONE call. The facts are about those frames only. */
 export async function analyseVideo(bytes: Buffer, configuredModel: string | null | undefined, signal?: AbortSignal, deps: AnalysisDeps = {}): Promise<AnalysisResult> {
-  const model = resolveVisionAnalysisModel(configuredModel);
+  const model = resolveVisionAnalysisModel(configuredModel, "video");
   const stamp = `${Date.now()}-${Math.round(Math.random() * 1e9)}`;
   const inPath = path.join(tmpdir(), `cap-${stamp}.mp4`);
   const outs: string[] = [];
@@ -197,3 +190,4 @@ export async function analyseVideo(bytes: Buffer, configuredModel: string | null
   }
   return observe(`data:image/jpeg;base64,${sheet.toString("base64")}`, videoClassificationPrompt(count), "video", count, configuredModel, signal, deps);
 }
+
