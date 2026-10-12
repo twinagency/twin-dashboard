@@ -1,5 +1,11 @@
 # Controlled photo launch, 12 October 2026
 
+**Current activation, 19:37 AEST:** Jesse clarified “as well,” so both **Kyla Yesenosky and Dreka Cakez** now select `qwen/qwen3.8-27b` for photos, DeepInfra only, fallbacks disabled. Dreka's setting was re-enabled with an expected-value guard at 09:37:19 UTC; an independent database read confirmed exactly those two creators. Kyla's verified Telegram connection remains enabled; Dreka's recorded Telegram connections remain disabled. Photo-uploader activation does not reconnect a Telegram account. No messages, connection changes, catalogue reprocessing or video changes occurred.
+
+Immediate rollback for either creator: restore that creator's `vision_model` to `qwen/qwen3-vl-32b-instruct`, guarded by its ID and current selected value. Preserve the compatible schema and consumer guards.
+
+## Previous 19:35 AEST activation checkpoint (superseded above)
+
 The selected photo uploader is now enabled for **Kyla Yesenosky only**, at Jesse's explicit request at 19:32 Brisbane time. The guarded setting change completed at **2026-10-12 09:35:21 UTC / 19:35:21 AEST** and an independent database read confirmed it. Dreka's prior model setting was restored. The original uploader tests below remain valid as upload/storage/consumer checks, but the earlier statement that Dreka was a verified live-chat launch was too strong: her Telegram connection had not been established.
 
 ## Creator correction and current activation
@@ -10,7 +16,7 @@ Kyla: `d2678dce-6a4e-4f1c-b54a-86057bba427c`, engine `v2`, photo vision enabled,
 
 This activation uses the already deployed and tested uploader; no application code or prompt was changed. The current V2 branch and runtime identity remain `ef040a757627bb5813b4f19ac47af2c1f373506c`. The uploader reads the selected creator model for each upload. Kyla's retained grey-clothes source passed the earlier real staging flow; no new Kyla production photo was uploaded in this setting-change step, and no live fan send is claimed. Existing catalogue descriptions were not reprocessed. Videos retain their previous effective model.
 
-**Current immediate rollback:** restore only Kyla's `vision_model` to `qwen/qwen3-vl-32b-instruct`, guarded by her ID and current `qwen/qwen3.8-27b` value. Dreka is already restored. Keep the additive schema and compatible consumer guards. No financial records or activation flags are to be restored.
+**Rollback at the 19:35 checkpoint:** restore only Kyla's `vision_model` to `qwen/qwen3-vl-32b-instruct`, guarded by her ID and current `qwen/qwen3.8-27b` value. Dreka is already restored. Keep the additive schema and compatible consumer guards. No financial records or activation flags are to be restored.
 
 The remaining sections preserve the original upload verification, deployed image identities, failures and code rollback references. References there to Dreka's activation describe the earlier checkpoint, superseded above.
 
