@@ -1,0 +1,21 @@
+name: Cancel documentation-only duplicate deployment
+on:
+  push:
+    branches: [codex/media-launch-access-20261012]
+permissions:
+  contents: read
+  actions: write
+jobs:
+  cancel-own-duplicate:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Cancel only the documentation checkpoint runs
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          for ID in 38236732826 38236732819; do
+            SHA=$(gh api repos/jesse98/twin-dashboard/actions/runs/$ID --jq .head_sha)
+            [ "$SHA" = "954e3ce3ba8a9dd03ed8be4db20603bfd6f06c84" ]
+            gh api --method POST repos/jesse98/twin-dashboard/actions/runs/$ID/cancel || true
+          done
