@@ -38,7 +38,7 @@ export async function agencyData(requested?: string, days = 7, fan?: string) {
     if (owner.error || !owner.data) throw new Error("Fan access denied");
     const chat = await supabaseAdmin.from("chat_history").select("role,content,created_at")
       .eq("clone_id", requested).eq("telegram_id", owner.data.telegram_id)
-      .in("role", ["user", "assistant"]).order("created_at", { ascending: false }).limit(50);
+      .in("role", ["user", "assistant"]).order("created_at", { ascending: false }).limit(90);
     if (chat.error) throw new Error("Conversation temporarily unavailable");
     messages = (chat.data ?? []).reverse();
   }

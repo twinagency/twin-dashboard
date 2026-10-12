@@ -476,7 +476,7 @@ export default async function FansPage({
         .eq("clone_id", selected.clone_id)
         .eq("telegram_id", selected.telegram_id)
         .order("created_at", { ascending: false })
-        .limit(60),
+        .limit(90),
       supabaseAdmin
         .from("star_transactions")
         // select * (not named columns) for the same reason chat_history does it
