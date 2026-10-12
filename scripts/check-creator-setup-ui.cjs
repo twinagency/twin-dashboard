@@ -51,15 +51,22 @@ global.__setupDatabase = { from(table) {
     assert.match(html, /data-creator-setup-brand="moxy"/);
     assert.match(html, /src="\/moxy\/logo.png"/);
     assert.equal((html.match(/data-creator-setup-tab=/g) || []).length, 2);
-    assert.match(html, /data-onboarding-active-step="questionnaire"/);
+    assert.match(html, /data-onboarding-active-step="content"/);
+    html = await render({ step: "questionnaire" });
     assert.match(html, /data-fixture-questionnaire="quick-v2-introduction"/);
     assert.match(html, /Save &amp; exit/);
     assert.match(html, /href="\/creator"/);
     assert.match(html, /Make it yours\./);
-    assert.match(html, /Set up your AI, in your own time\./);
-    assert.match(html, /Choose either section to get started/);
+    assert.match(html, /Your answers help us make your AI feel like you/);
+
     assert.doesNotMatch(html, /data-onboarding-step-card|Voice|Consent &amp; submit|Step 1/);
 
+    html = await render({ step: 'content', review: '1' });
+    assert.match(html, /Let’s set up your AI/);
+    assert.match(html, /Add your photos and videos, then tell us about yourself while they upload/);
+    assert.match(html, /<details[^>]*data-creator-setup-submit[^>]*open/);
+    html = await render({ section: 'quick-v2-personal' });
+    assert.match(html, /data-fixture-questionnaire="quick-v2-personal"/);
     files = [{ kind: 'content_sfw_image', storage_transfer_status: 'verified' }, { kind: 'content_sfw_image', storage_transfer_status: 'pending' }, { kind: 'content', storage_transfer_status: 'verified' }];
     for (const step of ['content', 'voice', 'consent']) {
       html = await render({ step });

@@ -190,3 +190,11 @@
 }
 
 
+
+
+/* A short inline introduction keeps the first action close on phones. */
+.root[data-creator-setup-section="content"] .intro h1 { font-size: clamp(24px, 4vw, 28px); line-height: 1.2; }
+.root[data-creator-setup-section="content"] .subtitle { font-size: 14px; line-height: 1.5; margin-top: 8px; }
+.root[data-creator-setup-section="content"] .main { padding-top: 22px; }
+.root[data-creator-setup-section="content"] .headerInner { min-height: 76px; }
+.root[data-creator-setup-section="content"] .tabs { margin-bottom: 20px; }

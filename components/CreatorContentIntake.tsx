@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import CreatorContentGallery from "./CreatorContentGallery";
 import { useContentUploads, type ContentUploadItem } from "./CreatorContentUploadProvider";
 import { CREATOR_CONTENT_INSTRUCTION, CREATOR_CONTENT_TARGET, contentMediaKind, type ContentFolder } from "@/lib/creator-content-intake";
+import { navigateCreatorSetup } from "@/lib/creator-setup-navigation";
 
 function Thumbnail({ item }: { item: ContentUploadItem }) {
   const [url, setUrl] = useState("");
@@ -46,10 +47,17 @@ export default function CreatorContentIntake({ locked, loginPath, savedPhotos, s
     <p className="text-base leading-7 text-ink">{CREATOR_CONTENT_INSTRUCTION}</p>
     <div className="flex items-center justify-between gap-3 text-sm"><span>{total} of {CREATOR_CONTENT_TARGET} minimum saved</span>{total >= CREATOR_CONTENT_TARGET && <span className="font-semibold text-emerald-700">Minimum reached</span>}</div>
     <progress max={CREATOR_CONTENT_TARGET} value={Math.min(total, CREATOR_CONTENT_TARGET)} className="h-2 w-full accent-accent" aria-label="Saved content toward 50 files" />
-    <label data-upload-content className={`${buttonVariants({ size: "lg" })} relative min-h-14 w-full overflow-hidden ${locked ? "opacity-50" : "cursor-pointer"}`}>
+    <label data-upload-content className={`${buttonVariants({ size: "lg", variant: queue.items.length || total ? "outline" : "default" })} relative min-h-14 w-full overflow-hidden ${locked ? "opacity-50" : "cursor-pointer"}`}>
       <Upload className="size-5" aria-hidden="true" /> Add photos & videos
       <input type="file" accept="image/*,video/*" multiple disabled={locked} aria-label="Add photos and videos" className="absolute inset-0 size-full cursor-pointer opacity-0" onChange={event => { if (locked) return; const files = Array.from(event.target.files || []); setNotice(files.length ? "" : "No new files were received from your phone. Your saved content is safe."); queue.add(files); event.target.value = ""; }} />
     </label>
+    <div className="rounded-xl border border-border p-4" data-content-questionnaire-handoff>
+      {queue.items.length > 0 || total > 0 || folders.length > 0 ? <>
+        <p className="font-semibold">{queue.working ? "Your content is uploading" : queue.items.some(item => item.state === "failed" || item.state === "reselect") ? "Some files need attention" : total > 0 || saved > 0 ? "Your content is saved" : folders.length ? "Folder link received" : "Your content is selected"}</p>
+        <p className="mt-1 text-sm text-muted">{queue.working ? "Let’s get to know you while that finishes." : "Continue to your questions. You can come back to your content any time."}</p>
+        <Button type="button" className="mt-3 min-h-12 w-full" onClick={() => navigateCreatorSetup("/creator/onboarding?step=questionnaire", router?.push)}>Continue to questions →</Button>
+      </> : <button type="button" className="min-h-11 text-sm underline" onClick={() => navigateCreatorSetup("/creator/onboarding?step=questionnaire", router?.push)}>Add content later — continue to questions →</button>}
+    </div>
     <details className="text-sm"><summary className="min-h-11 cursor-pointer py-3">File limits or trouble selecting from Photos?</summary>
       <p className="mb-3">JPG, PNG, WebP or GIF up to 75 MiB; MP4, MOV or WebM up to 512 MiB, 30 minutes and 4K. Export HEIC as JPG. Account allowance: 100 GiB and 5,000 files.</p>
       <label className={`${buttonVariants({ variant: "outline" })} relative min-h-11 overflow-hidden`}>Choose from Files<input type="file" accept="application/octet-stream" multiple disabled={locked} aria-label="Choose photos and videos from Files" className="absolute inset-0 size-full opacity-0" onChange={event => { if (locked) return; queue.add(Array.from(event.target.files || [])); event.target.value = ""; }} /></label>
