@@ -1,0 +1,6 @@
+const assert=require('node:assert/strict'),fs=require('node:fs');
+const report=JSON.parse(fs.readFileSync('/tmp/photo-production-control.json','utf8'));
+assert.equal(report.status,'passed');
+assert.equal(report.stored_sha256,'0e860ce2297b4a312a50b20d2e48595019faecf82151015dcacbdfe4bec7c25b');
+assert.equal(process.env.GIT_SHA,'2c75cdaba1c1f6b64034a6205f35606f366ab2f9');
+(async()=>{const r=await fetch(process.env.SUPABASE_URL+'/rest/v1/clones?select=id,slug,vision_model,photo_vision_enabled&vision_model=eq.qwen/qwen3.8-27b',{headers:{apikey:process.env.SUPABASE_SERVICE_KEY,Authorization:'Bearer '+process.env.SUPABASE_SERVICE_KEY}});assert.ok(r.ok);const creators=await r.json();assert.equal(creators.length,1);assert.equal(creators[0].id,report.clone_id);const web=await fetch('https://dashboard.tgaiclone.xyz');assert.equal(web.status,200);console.log(JSON.stringify({dashboard:process.env.GIT_SHA,active_creators:creators,prepared_and_stored_bytes_match:true,public_home_status:web.status,control_id:report.saved_result.id,original_analysis_status:report.saved_result.analysis_status,final_control_status:report.final_control_row.analysis_status}));})().catch(e=>{console.error(e.message);process.exitCode=1;});

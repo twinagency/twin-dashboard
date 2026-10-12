@@ -1,0 +1,17 @@
+import assert from 'node:assert/strict';
+import {loadRawCatalogue,catalogueFromRaw,buildMenu} from './src/media.ts';
+import {resolveBundles} from './src/bundles.ts';
+assert.equal(process.env.GIT_SHA,'ef040a757627bb5813b4f19ac47af2c1f373506c');
+const clone='c92560e7-1dd9-4e62-b5c3-04a30fbe4925';
+const raw=await loadRawCatalogue(clone);const cat=catalogueFromRaw(raw);
+const row=raw.photos.find(p=>p.storage_path?.endsWith('/0e860ce2297b4a312a50b20d2e485950-photo-launch-control-dreka-15-20261012.jpg'));
+assert.ok(row,'Saved control must be read by actual V2 mapper');
+const item=cat.find(p=>p.key==='photo:'+row.id);assert.ok(item);
+assert.equal(item.analysis,'needs_review');assert.equal(item.words.size,0);
+const menu=buildMenu([item],new Set(),'send photo','photo');
+assert.equal(menu.photos.length,0);assert.equal(menu.free,null);assert.equal(menu.video,null);
+const original=raw.photos.find(p=>p.id==='31a95666-c518-4992-a4d1-4ab12f78b858');assert.ok(original);
+const rows=[{id:'read-only-control',clone_id:clone,name:'control',star_price:1260,campaign_only:false,photo_bundle_items:[row,original].map((p,i)=>({storage_path:p.storage_path,sort_order:i,caption:'full nude',visual_description:'full nude',tags:['full_nude']}))}];
+const checked=await resolveBundles(rows,raw,cat,clone,async()=>1000);
+assert.equal(checked.bundles.length,0);assert.match(checked.excluded[0].reason,/needs_review/);
+console.log(JSON.stringify({consumer:'V2',commit:process.env.GIT_SHA,control_id:row.id,individual_excluded:true,stale_bundle_facts_excluded:true,transport:'none',bundle:'synthetic in memory; real saved row',exclusion:checked.excluded[0].reason}));
