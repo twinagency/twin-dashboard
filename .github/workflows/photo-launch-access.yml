@@ -1,4 +1,4 @@
-name: Twin photo launch access check
+name: Twin photo release preparation
 on:
   push:
     branches: [codex/media-launch-access-20261012]
@@ -7,7 +7,7 @@ permissions:
 jobs:
   inspect:
     runs-on: ubuntu-latest
-    timeout-minutes: 8
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: aws-actions/configure-aws-credentials@v4
@@ -15,17 +15,6 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ap-southeast-2
-      - name: Read current runtime and upload access without exporting credentials
+      - name: Prepare checked V2 image and rollback without restarting production
         run: python3 deployment/photo-launch-access.py
 
-      - name: Retain exact source for interrupted-session recovery
-        run: |
-          set -euo pipefail
-          git fetch --depth=1 origin 24a07ae8b536c88ec9443d3cf35927b2ffa259b2
-          git archive FETCH_HEAD | gzip > photo-launch-source.tar.gz
-          python3 -c 'import tarfile; archive=tarfile.open("photo-launch-source.tar.gz"); assert len(archive.getmembers()) > 500; print("Verified source archive:", len(archive.getmembers()), "entries")'
-      - uses: actions/upload-artifact@v4
-        with:
-          name: photo-launch-source
-          path: photo-launch-source.tar.gz
-          retention-days: 3
