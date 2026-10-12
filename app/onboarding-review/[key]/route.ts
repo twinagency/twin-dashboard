@@ -16,6 +16,7 @@ export const runtime = "nodejs";
 // The raw key is handed only to the owner, never bundled into client code.
 // Archive the dedicated account to revoke access, including existing sessions.
 const KEY_SHA256 = "b13ccdb5fa8c64aa60ee87c582fde85f6db0ad985e9396c5336a89961c9180fd";
+const REISSUED_KEY_SHA256 = "ce626f32a030a37e114e593ce3718a24a328a4d4ce5a0b47a4412b51445fdc1d";
 const REVIEW_EMAIL = `onboarding-review-${ONBOARDING_REVIEW_ACCOUNT_ID}@example.invalid`;
 
 function privateResponse(response: NextResponse) {
@@ -30,8 +31,9 @@ function unavailable(status = 404) {
 
 export async function GET(req: NextRequest, context: { params: Promise<{ key: string }> }) {
   const { key } = await context.params;
-  if (req.headers.has("next-action") || !/^[a-f0-9]{64}$/.test(key)
-    || !timingSafeEqual(createHash("sha256").update(key).digest(), Buffer.from(KEY_SHA256, "hex"))) return unavailable();
+  if (req.headers.has("next-action") || !/^[a-f0-9]{64}$/.test(key)) return unavailable();
+  const digest = createHash("sha256").update(key).digest();
+  if (![KEY_SHA256, REISSUED_KEY_SHA256].some(expected => timingSafeEqual(digest, Buffer.from(expected, "hex")))) return unavailable();
   try {
     const db = serviceClient();
     const lookup = () => db.from("creator_accounts").select("id,auth_user_id,source,account_status")
