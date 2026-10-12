@@ -16,6 +16,19 @@ def ssm(command,timeout=120):
  if r['Status']!='Success': print(r.get('StandardErrorContent','')[-1800:],flush=True);raise RuntimeError('Candidate gate '+r['Status'])
  return cid
 
-source="import json,pathlib\nroot=pathlib.Path('/home/ubuntu/twin-v2/data/_operator_backups/photo-recovery-20261013/db238441e7b310af1e4b8b141a5d7cadf5e471f6/photo-real-model-Nrl9dj')\nfor p in sorted(root.glob('logs/*/requests.jsonl')):\n for line in p.read_text().splitlines():\n  x=json.loads(line)\n  print(json.dumps({'scenario':p.parent.name,'input':x.get('fanText'),'raw':x.get('raw'),'final':x.get('final'),'note':x.get('note'),'selected':x.get('selectedMedia'),'media':x.get('media'),'delivery':x.get('delivery'),'grounding':x.get('grounding'),'photoRequest':x.get('photoRequest'),'menu':[{k:y.get(k) for k in ['slot','key','desc']} for y in x.get('menu',[])]}))\n"
-encoded=base64.b64encode(source.encode()).decode()
-ssm("printf '%s' '"+encoded+"' | base64 -d > /tmp/photo-recovery-inspect.py\npython3 /tmp/photo-recovery-inspect.py",60)
+encoded=pathlib.Path('deployment/v2-photo-recovery/delta-v6.b64').read_text().strip()
+ssm('rm -f /tmp/photo-recovery-delta.b64',30)
+for n in range(0,len(encoded),10000):
+ ssm("printf '%s' '"+encoded[n:n+10000]+"' >> /tmp/photo-recovery-delta.b64",30)
+unpack="""import pathlib,base64,zlib,json,hashlib
+p=pathlib.Path('/tmp/photo-recovery-payload.json');raw=p.read_bytes()
+d=json.loads(zlib.decompress(base64.b64decode(pathlib.Path('/tmp/photo-recovery-delta.b64').read_bytes())))
+assert hashlib.sha256(raw).hexdigest()==d['expectedPayloadSha256']
+v=json.loads(raw);v['manifest']=d['manifest'];v['changed'].update(d['changed']);p.write_text(json.dumps(v))
+assert hashlib.sha256(p.read_bytes()).hexdigest()=='bac74b0e4838b86fc90224934866e66729d675ce8d6b9c3f35b21d3f2e3c860c'
+"""
+ssm('python3 -c '+shlex.quote(unpack),30)
+for dst,src in {'/tmp/photo-recovery-prepare.py':'deployment/v2-photo-recovery/prepare.py','/tmp/photo-recovery-snapshot.mjs':'deployment/v2-photo-recovery/snapshot.mjs'}.items():
+ data=base64.b64encode(pathlib.Path(src).read_bytes()).decode()
+ ssm("printf '%s' '"+data+"' | base64 -d > "+dst,30)
+ssm('python3 -u /tmp/photo-recovery-prepare.py',1440)
