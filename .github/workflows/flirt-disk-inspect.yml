@@ -14,14 +14,14 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ap-southeast-2
-      - name: Read deployment host capacity without changing files
+      - name: Reclaim unreferenced dashboard images while preserving all containers
         run: |
           python3 - <<'PY'
           import json, subprocess, time
           def aws(args):
               return json.loads(subprocess.check_output(["aws", "--region", "ap-southeast-2", *args, "--output", "json"]))
           assert aws(["sts","get-caller-identity"])["Account"] == "323149985112"
-          request={"InstanceIds":["i-09a9dd3bd749643a5"],"DocumentName":"AWS-RunShellScript","Parameters":{"commands":["df -B1 /","sudo docker system df","sudo docker ps -a --format '{{.Names}} | {{.Status}} | {{.Size}}'","sudo du -xhd1 /var/lib/docker /tmp /var/log 2>/dev/null"],"executionTimeout":["120"]}}
+          request={"InstanceIds":["i-09a9dd3bd749643a5"],"DocumentName":"AWS-RunShellScript","Parameters":{"commands":["sudo python3 -c 'import json, shutil, subprocess\ndef run(args):\n    return subprocess.check_output(args, text=True).strip()\nbefore=shutil.disk_usage(\"/\").free\ncontainers=run([\"docker\",\"ps\",\"-aq\"]).split()\nused=set(run([\"docker\",\"inspect\",\"--format\",\"{{.Image}}\",*containers]).split()) if containers else set()\nimages=set(run([\"docker\",\"image\",\"ls\",\"-q\",\"--no-trunc\"]).split())\nremoved=[]\nfor image in images-used:\n    if shutil.disk_usage(\"/\").free >= 6*1024**3: break\n    digests=json.loads(run([\"docker\",\"image\",\"inspect\",\"--format\",\"{{json .RepoDigests}}\",image])) or []\n    if not digests or not all(d.startswith(\"323149985112.dkr.ecr.ap-southeast-2.amazonaws.com/twin-dashboard@sha256:\") for d in digests): continue\n    # No force: Docker itself rejects any image now used by a container.\n    result=subprocess.run([\"docker\",\"image\",\"rm\",image],capture_output=True,text=True)\n    if result.returncode==0: removed.append(image)\nafter=shutil.disk_usage(\"/\").free\nprint(json.dumps({\"before_free_bytes\":before,\"after_free_bytes\":after,\"unreferenced_dashboard_images_removed\":removed,\"containers_removed\":0,\"volumes_removed\":0}))\n'"],"executionTimeout":["120"]}}
           command=aws(["ssm","send-command","--cli-input-json",json.dumps(request)])["Command"]["CommandId"]
           for attempt in range(40):
               time.sleep(3)
