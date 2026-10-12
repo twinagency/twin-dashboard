@@ -18,4 +18,9 @@ def node_check(container,path,timeout=120):
  host="import subprocess\nsource="+repr(source)+"\nr=subprocess.run(['docker','exec','-i',"+repr(container)+",'node','--import','tsx','--input-type=module'],input=source,text=True,capture_output=True,timeout=100)\nprint(r.stdout)\nprint(r.stderr[-4000:] if r.returncode else '')\nraise SystemExit(r.returncode)\n"
  encoded=base64.b64encode(host.encode()).decode()
  return ssm("printf '%s' '"+encoded+"' | base64 -d > /tmp/photo-final-consumer-check.py\npython3 /tmp/photo-final-consumer-check.py",timeout)
+
 print(node_check('twin-v2-bot-1','deployment/test-photo-price-v2-verify.mjs'),flush=True)
+print(node_check('next-app','deployment/test-photo-price-v1-verify.mjs'),flush=True)
+print(node_check('twin-v2-bot-1','deployment/photo-creator-connection.mjs'),flush=True)
+INSTANCE='i-09a9dd3bd749643a5'
+print(ssm("docker inspect -f '{{.State.Running}} {{.Image}} {{.State.StartedAt}}' next-app\ndocker exec next-app printenv GIT_SHA",30),flush=True)

@@ -1,0 +1,5 @@
+if(process.env.GIT_SHA==="caa2a94ee519eb84d25b6c77023f732e8fed7b36") {
+const {default:assert}=await import('node:assert/strict');const {quotePriceWithDiscount}=await import('./src/flows/discount.ts');
+const ids=['d2678dce-6a4e-4f1c-b54a-86057bba427c','20ef9407-83f2-4351-8d3c-48cc0ed54e0b','3484f7d9-0cda-4f52-84de-e104c238ce5e'];
+const results=ids.map(id=>{const clone={id,discountsEnabled:false},user={telegramId:6814483810};assert.equal(quotePriceWithDiscount(clone,user,1234,'photo'),5);assert.equal(quotePriceWithDiscount(clone,{telegramId:6814483811},1234,'photo'),1234);for(const kind of ['video','bundle','credits'])assert.equal(quotePriceWithDiscount(clone,user,1234,kind),1234);return{cloneId:id,tester_photo:5,other_fan_photo:1234}});console.log(JSON.stringify({commit:process.env.GIT_SHA,results,transport:'no Telegram send; deployed price resolver read-only check'}));
+}else{const fs=await import('node:fs');console.log(JSON.stringify({commit:process.env.GIT_SHA,pricing:'pending deployment',drain:JSON.parse(fs.readFileSync('/tmp/twin-runtime-drain.json','utf8'))}));}
