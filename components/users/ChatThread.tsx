@@ -97,8 +97,10 @@ export default function ChatThread({
   sourceMessageId,
   spentLabel,
   appearance,
+  historyNavigation,
 }: {
   fanId: string;
+  historyNavigation?: ReactNode;
   messages: ThreadMessage[];
   lastActiveLabel: string;
   spentStars: number;
@@ -143,6 +145,7 @@ export default function ChatThread({
 
   return (
     <>
+      {historyNavigation}
       <div ref={scrollRef} data-thread-appearance={appearance} className="tg-thread flex-1 overflow-y-auto px-3 py-3">
         {messages.length === 0 ? (
           <div className="flex h-full items-center justify-center">
