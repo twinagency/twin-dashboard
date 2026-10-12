@@ -1,0 +1,27 @@
+{
+  "creator_id": "c92560e7-1dd9-4e62-b5c3-04a30fbe4925",
+  "creator": "dreka-cakez",
+  "source_id": "31a95666-c518-4992-a4d1-4ab12f78b858",
+  "sha256": "37d13829fa072e03edd8ec8fb8f83c1e72da98eb4548c4f56fe977c0929f148b",
+  "yes": [
+    "bare_buttocks",
+    "lingerie",
+    "suggestive_pose"
+  ],
+  "not_positive": [
+    "nipples",
+    "genitals",
+    "anus",
+    "full_nudity",
+    "sexual_activity",
+    "sex_toy",
+    "swimwear"
+  ],
+  "required_description": [
+    "top or shirt",
+    "thong or g-string"
+  ],
+  "price": 1260,
+  "is_free": false,
+  "reviewed_before_model_execution": true
+}
