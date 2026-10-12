@@ -1252,9 +1252,14 @@ export default function ConfigSections({
                 defaultValue={(clone?.[m.name as keyof Clone] as string) || m.def}
                 recommended={RECOMMENDED[m.name]}
                 weak={WEAK[m.name]}
-                effectiveFor={m.name === "vision_model" ? describeVisionAnalysisModels : undefined}
+                effectiveFor={m.name === "vision_model" ? model => describeVisionAnalysisModels(model, clone?.photo_vision_model) : undefined}
               />
             ))}
+            {clone?.photo_vision_model && (
+              <p className="text-xs text-muted sm:col-span-2">
+                Photo-only model: {clone.photo_vision_model}. The Vision model above still controls videos.
+              </p>
+            )}
           </div>
         </Collapse>}
         {privateSettings && mode === "edit" && (

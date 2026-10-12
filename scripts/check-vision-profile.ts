@@ -3,7 +3,8 @@ import assert from "node:assert/strict";
 import sharp from "sharp";
 import { analysePhoto, analyseVideo } from "../lib/caption";
 import { orVisionDetailed } from "../lib/openrouter";
-import { PHOTO_ANALYSIS_SELECTED_MODEL as selected, VISION_ANALYSIS_DEFAULT_MODEL as previous, visionProfile, resolveVisionAnalysisModel, describeVisionAnalysisModels } from "../lib/vision-model";
+import { PHOTO_ANALYSIS_SELECTED_MODEL as selected, VISION_ANALYSIS_DEFAULT_MODEL as previous, visionProfile, configuredVisionModel, resolveVisionAnalysisModel, describeVisionAnalysisModels } from "../lib/vision-model";
+import { withPhotoVisionColumn } from "../lib/photo-vision-config";
 import { FACT_KEYS } from "../lib/media-analysis-contract";
 import { MEDIA_CLASSIFICATION_PROMPT } from "../lib/media-classification";
 import { analysisRowFields, priceForAnalysis, correctedFacts } from "../lib/media-analysis-row";
@@ -11,6 +12,21 @@ import { acceptCaption } from "../lib/send-caption";
 import { PRICING_CATEGORIES } from "../lib/pricing";
 
 async function main() {
+  const mixed = { vision_model: "mistralai/mistral-small-3.2-24b-instruct", photo_vision_model: selected };
+  assert.equal(configuredVisionModel(mixed, "photo"), selected);
+  assert.equal(configuredVisionModel(mixed, "video"), mixed.vision_model);
+  assert.equal(configuredVisionModel({ vision_model: mixed.vision_model }, "photo"), mixed.vision_model);
+  assert.equal(configuredVisionModel({ ...mixed, photo_vision_model: "" }, "photo"), mixed.vision_model);
+  assert.match(describeVisionAnalysisModels(mixed.vision_model, selected), /photos:.*DeepInfra.*videos:.*mistral-small/);
+  const projections: boolean[] = [];
+  const legacy = await withPhotoVisionColumn(async include => {
+    projections.push(include);
+    return include ? { data: null, error: { code: "42703", message: "column photo_vision_model does not exist" } } : { data: { vision_model: mixed.vision_model }, error: null };
+  });
+  assert.equal(legacy.error, null); assert.deepEqual(projections, [true, false]);
+  projections.length = 0;
+  const denied = await withPhotoVisionColumn(async include => { projections.push(include); return { error: { code: "42501", message: "permission denied" } }; });
+  assert.equal(denied.error?.code, "42501"); assert.deepEqual(projections, [true]);
   const photo = await sharp({ create: { width: 1000, height: 800, channels: 3, background: "#888" } }).jpeg().toBuffer();
   const facts = (evidence = {}, identifying = "A woman in a grey sweatshirt stands near a window.") => ({
     evidence: { ...Object.fromEntries(FACT_KEYS.map(k => [k, "no"])), ...evidence },
@@ -119,6 +135,10 @@ async function main() {
     assert.equal(requests[0].provider, undefined);
     assert.equal(requests[0].reasoning, undefined);
     assert.equal(requests[0].messages[0].content[0].type, "image_url");
+    reset(facts());
+    const isolated = await run(configuredVisionModel(mixed, "photo"));
+    assert.equal(isolated.model, selected); assert.deepEqual(requests[0].provider, req.provider);
+    assert.equal((await analyseVideo(Buffer.from("unreadable"), configuredVisionModel(mixed, "video"))).model, mixed.vision_model);
     assert.equal(resolveVisionAnalysisModel(selected, "video"), previous);
     assert.equal((await analyseVideo(Buffer.from("unreadable"), selected)).model, previous);
     assert.match(describeVisionAnalysisModels(selected), /photos:.*DeepInfra.*videos:.*235b/);

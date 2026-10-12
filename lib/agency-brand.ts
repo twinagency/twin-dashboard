@@ -9,5 +9,5 @@ export const agencyLoginPath = (name?: string) => PARTNER_PORTALS.find(p => p.na
 export const pathAgencyName = (path: string) => portalForPath(path)?.name ?? "LYNQ";
 export const MOXY_PRIVATE_MODEL_COLUMNS = new Set([
   "text_model", "voice_model", "media_model", "routing_model",
-  "voice_enhance_model", "photo_reply_model", "vision_model",
+  "voice_enhance_model", "photo_reply_model", "vision_model", "photo_vision_model",
 ]);

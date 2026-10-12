@@ -55,10 +55,15 @@ export function visionProfile(model: string): VisionProfile {
 }
 
 /** Used by both existing model controls so the photo-only override is visible before saving. */
-export function describeVisionAnalysisModels(configuredModel: string): string {
-  const photo = resolveVisionAnalysisModel(configuredModel, "photo");
+export function describeVisionAnalysisModels(configuredModel: string, photoOverride?: string | null): string {
+  const photo = resolveVisionAnalysisModel(configuredVisionModel({ vision_model: configuredModel, photo_vision_model: photoOverride }, "photo"), "photo");
   const video = resolveVisionAnalysisModel(configuredModel, "video");
   if (photo === PHOTO_ANALYSIS_SELECTED_MODEL) return `photos: ${photo} (DeepInfra); videos: ${video}`;
-  return photo;
+  return photoOverride?.trim() ? `photos: ${photo}; videos: ${video}` : photo;
 }
 
+
+/** A photo-only creator override leaves the configured video model unchanged. */
+export function configuredVisionModel(row: { vision_model?: string | null; photo_vision_model?: string | null } | null | undefined, kind: "photo" | "video"): string {
+  return (kind === "photo" ? row?.photo_vision_model?.trim() : null) || row?.vision_model || VISION_ANALYSIS_DEFAULT_MODEL;
+}

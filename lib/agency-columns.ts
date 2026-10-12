@@ -28,6 +28,7 @@ export const AGENCY_COLUMNS: Record<string, readonly string[]> = {
     "voice_enhance_model",
     "photo_reply_model",
     "vision_model",
+    "photo_vision_model",
     "voice_id",
     "eleven_model",
     "voice_stability",

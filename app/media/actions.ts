@@ -1,5 +1,7 @@
 "use server";
 
+import { configuredVisionModel } from "@/lib/vision-model";
+import { withPhotoVisionColumn } from "@/lib/photo-vision-config";
 import { guardDashboardAction } from "@/lib/agency-management";
 
 import { revalidatePath } from "next/cache";
@@ -188,15 +190,15 @@ const storagePath = mediaStoragePath;
 
 // Pull the clone's vision model + category-pricing guide in one read (both needed
 // on every upload: one to tag the item, the other to price it from those tags).
-async function uploadConfig(cloneId: string): Promise<{ model: string; guide: unknown }> {
-  const { data, error } = await supabaseAdmin
+async function uploadConfig(cloneId: string, kind: "photo" | "video"): Promise<{ model: string; guide: unknown }> {
+  const { data, error } = await withPhotoVisionColumn(include => supabaseAdmin
     .from("clones")
-    .select("vision_model, category_pricing")
+    .select(include ? "vision_model, photo_vision_model, category_pricing" : "vision_model, category_pricing")
     .eq("id", cloneId)
-    .maybeSingle();
+    .maybeSingle());
   if (error) throw new Error(`Could not load creator pricing: ${error.message}`);
   if (!data) throw new Error("Creator not found");
-  return { model: data?.vision_model || "qwen/qwen3-vl-235b-a22b-instruct", guide: data?.category_pricing };
+  return { model: configuredVisionModel(data, kind), guide: data.category_pricing };
 }
 
 // Resolve the item's price. If the uploader typed a price, use it verbatim (a
@@ -259,7 +261,7 @@ export async function uploadPhoto(cloneId: string, fd: FormData): Promise<MediaU
   // well inside Telegram's limits, so this second pass is a no-op re-encode.
   const compressed = await compressPhoto(raw);
   const jpeg = await preparePhotoForTelegram(compressed.bytes);
-  const { model, guide } = await uploadConfig(cloneId);
+  const { model, guide } = await uploadConfig(cloneId, "photo");
   assertUploadPricingReady(fd, guide);
 
   const baseName = file.name.replace(/\.[^.]+$/, "");
@@ -330,7 +332,7 @@ export async function uploadVideo(cloneId: string, fd: FormData): Promise<MediaU
   const compressedVideo = await compressVideo(raw);
   const bytes = compressedVideo.bytes;
   if (bytes.byteLength > VIDEO_MAX_BYTES) throw new Error(`Video too large (${(bytes.byteLength / 1024 / 1024).toFixed(1)} MB) even after compression. Telegram max is 50 MB.`);
-  const { model, guide } = await uploadConfig(cloneId);
+  const { model, guide } = await uploadConfig(cloneId, "video");
   assertUploadPricingReady(fd, guide);
 
   const path = storagePath(cloneId, "videos", file.name, bytes);

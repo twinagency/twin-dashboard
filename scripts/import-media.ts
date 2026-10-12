@@ -20,6 +20,8 @@ import { readFile } from "node:fs/promises";
 import path from "node:path";
 import sharp from "sharp";
 import { supabaseAdmin } from "@/lib/supabase";
+import { configuredVisionModel } from "@/lib/vision-model";
+import { withPhotoVisionColumn } from "@/lib/photo-vision-config";
 import { analysePhoto } from "@/lib/caption";
 import type { AnalysisResult } from "@/lib/media-analysis-contract";
 import { analysisRowFields, insertMediaRowWithFallback, priceForAnalysis } from "@/lib/media-analysis-row";
@@ -42,12 +44,14 @@ import { mediaStoragePath as storagePath } from "@/lib/media-storage-path";
 // already wrote, not new ones. See that file for the fleet-wide numbers.
 
 async function uploadConfig(cloneId: string): Promise<{ model: string; guide: unknown }> {
-  const { data } = await supabaseAdmin
+  const { data, error } = await withPhotoVisionColumn(include => supabaseAdmin
     .from("clones")
-    .select("vision_model, category_pricing")
+    .select(include ? "vision_model, photo_vision_model, category_pricing" : "vision_model, category_pricing")
     .eq("id", cloneId)
-    .maybeSingle();
-  return { model: data?.vision_model || "qwen/qwen3-vl-235b-a22b-instruct", guide: data?.category_pricing };
+    .maybeSingle());
+  if (error) throw new Error(`Could not load creator model: ${error.message}`);
+  if (!data) throw new Error("Creator not found");
+  return { model: configuredVisionModel(data, "photo"), guide: data.category_pricing };
 }
 
 // --price <stars>, mirroring the manual branch of app/media/actions.ts's

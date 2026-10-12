@@ -5,7 +5,7 @@ import { assignedClone, assignedStoragePath, ownedResource } from "./agency-mana
 import { serviceClient } from "./supabase-service";
 import type { AgencyIdentity } from "./agency-identity";
 
-export const AGENCY_PROTECTED_CLONE_FIELDS = ["id","slug","bot_token","created_at","deployed_at","uses_default_config","strict_minor_gate"] as const;
+export const AGENCY_PROTECTED_CLONE_FIELDS = ["id","slug","bot_token","created_at","deployed_at","uses_default_config","strict_minor_gate","photo_vision_model"] as const;
 const WRITABLE: Record<string, {methods:string[];fields:readonly string[]}> = {
   clones: {methods:["PATCH"],fields:AGENCY_COLUMNS.clones.filter(c => !(AGENCY_PROTECTED_CLONE_FIELDS as readonly string[]).includes(c))},
   users: {methods:["PATCH"],fields:["message_credits","total_messages_sent","total_messages_purchased","is_active","blocked","paused"]},

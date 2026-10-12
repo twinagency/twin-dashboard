@@ -16,6 +16,8 @@ import { createHash } from "node:crypto";
 import path from "node:path";
 import type { SupabaseClient } from "@supabase/supabase-js";
 import { ANALYSIS_COLUMNS, ANALYSIS_VERSION, FACT_KEYS, type AnalysisResult, type VisualFacts } from "./media-analysis-contract";
+import { configuredVisionModel } from "./vision-model";
+import { withPhotoVisionColumn } from "./photo-vision-config";
 import { withRetry, TRANSIENT_ERROR } from "./retry";
 import { analysisRowFields } from "./media-analysis-row";
 import { genitalVisibilityReviewReason, paintedObjectReviewReason, kneelingVisibilityReviewReason } from "./media-classification";
@@ -110,9 +112,9 @@ export async function fetchRows(ctx: Pick<Ctx, "db" | "retries" | "retryBaseMs">
   }
 }
 
-export type CloneInfo = { id: string; slug: string; vision_model: string | null };
+export type CloneInfo = { id: string; slug: string; vision_model: string | null; photo_vision_model?: string | null };
 export async function fetchClones(db: SupabaseClient): Promise<CloneInfo[]> {
-  const { data, error } = await db.from("clones").select("id, slug, vision_model").order("slug");
+  const { data, error } = await withPhotoVisionColumn(include => db.from("clones").select(include ? "id, slug, vision_model, photo_vision_model" : "id, slug, vision_model").order("slug"));
   if (error) throw new Error(`read clones: ${error.message}`);
   return (data ?? []) as CloneInfo[];
 }
@@ -654,7 +656,7 @@ export async function runRepair(ctx: Ctx, opts: RunOpts): Promise<RunSummary> {
   let n = 0;
   await pool(picked, ctx.concurrency, async ({ table, row, slug }) => {
     const key = `${table}:${row.id}`;
-    const model = byId.get(row.clone_id)?.vision_model ?? null;
+    const model = configuredVisionModel(byId.get(row.clone_id), table === "photos" ? "photo" : "video");
     const res = await analyseRow(ctx, table, row, model);
     const p = buildProposal(ctx, table, row, slug, res, migrated);
     sum.costUsd += p.costUsd ?? 0;
