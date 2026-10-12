@@ -19,7 +19,11 @@ jobs:
         run: python3 deployment/photo-launch-access.py
 
       - name: Retain exact source for interrupted-session recovery
-        run: git archive 24a07ae8b536c88ec9443d3cf35927b2ffa259b2 | gzip > photo-launch-source.tar.gz
+        run: |
+          set -euo pipefail
+          git fetch --depth=1 origin 24a07ae8b536c88ec9443d3cf35927b2ffa259b2
+          git archive FETCH_HEAD | gzip > photo-launch-source.tar.gz
+          python3 -c 'import tarfile; archive=tarfile.open("photo-launch-source.tar.gz"); assert len(archive.getmembers()) > 500; print("Verified source archive:", len(archive.getmembers()), "entries")'
       - uses: actions/upload-artifact@v4
         with:
           name: photo-launch-source
