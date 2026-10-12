@@ -62,7 +62,7 @@ export default async function FanDetailPage({
       .eq("clone_id", id)
       .eq("telegram_id", u.telegram_id)
       .order("created_at", { ascending: false })
-      .limit(60),
+      .limit(90),
     supabaseAdmin.from("fan_profiles").select("*").eq("user_id", userId).maybeSingle(),
   ]);
 
