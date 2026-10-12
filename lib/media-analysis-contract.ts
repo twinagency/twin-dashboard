@@ -9,12 +9,16 @@ export const FACT_KEYS = [
 ] as const;
 export type FactKey = (typeof FACT_KEYS)[number];
 export type Tri = "yes" | "no" | "unclear";
+export type UncertaintyReason = "out_of_frame" | "ambiguous_visibility";
 
 /** Stored in photos/videos.visual_facts. Only "yes" is evidence; "no" and "unclear" never make a tag, flag or match. */
 export type VisualFacts = {
   v: typeof ANALYSIS_VERSION;
   evidence: Record<FactKey, Tri>;
   visible: string[]; // short confirmed phrases: garments with colours, setting, objects, pose
+  // Additive photo coverage metadata. Unknown stays unknown; only an explicit crop may avoid a whole-item hold.
+  // Old observations without this field retain the conservative review behaviour.
+  uncertainty_reasons?: Partial<Record<FactKey, UncertaintyReason>>;
   frames?: number; // videos: how many sampled frames the facts come from
   // Written ONLY by the dashboard when a person acts on the row (additive; V2 ignores unknown keys):
   edited?: boolean; // an operator changed a fact field after the analysis; `evidence` was brought in line with the correction
@@ -59,3 +63,4 @@ export const FACT_FIELDS = ["caption", "tags", "auto_desc", "visual_description"
 // Entry points (implemented in lib/caption.ts):
 //   analysePhoto(bytes: Buffer, configuredModel: string | null, signal?: AbortSignal): Promise<AnalysisResult>
 //   analyseVideo(bytes: Buffer, configuredModel: string | null, signal?: AbortSignal): Promise<AnalysisResult>
+

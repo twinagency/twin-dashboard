@@ -91,6 +91,50 @@ assert.equal(tooMuch.status, "needs_review");
 assert.notEqual(tooMuch.fields.explicitness, "none", "unclear nipples must not read as explicitness none");
 assert.match(tooMuch.issues[0], /nipples/);
 
+// Explicit crop coverage can make a photo usable for its confirmed facts, without asserting absent anatomy.
+for (const key of ["nipples", "genitals", "anus", "bare_buttocks"]) {
+  const cropped = norm({ [key]: "unclear" }, {
+    identifying: "A woman in a grey sweatshirt takes a close-up portrait.", details: "The photo is cropped at her shoulders.",
+    short_label: "grey sweatshirt portrait", visible: ["grey sweatshirt"], tags: ["solo", "topless", "pussy", "anal", "ass"],
+    uncertainty_reasons: { [key]: "out_of_frame" },
+  });
+  assert.equal(cropped.status, "analysed", key);
+  assert.equal(cropped.fields.visual_facts.evidence[key as keyof typeof cropped.fields.visual_facts.evidence], "unclear");
+  assert.equal(cropped.fields.visual_facts.uncertainty_reasons?.[key as keyof typeof cropped.fields.visual_facts.evidence], "out_of_frame");
+  assert.deepEqual(cropped.fields.tags, ["solo"]);
+  assert.equal(cropped.fields.explicitness, "none", "a crop alone does not establish a suggestive or explicit category");
+  assert.equal(cropped.fields.is_nude, false);
+  assert.equal(cropped.fields.nsfw, false);
+  assert.ok(!cropped.fields.visual_description.includes(`Not visible: ${key}`));
+  assert.ok(descriptionProblems(`Her ${key.replace("bare_buttocks", "buttocks")} are visible.`, cropped.fields.visual_facts.evidence).length);
+  const ambiguous = norm({ [key]: "unclear" }, { tags: ["solo"], uncertainty_reasons: { [key]: "ambiguous_visibility" } });
+  assert.equal(ambiguous.status, "needs_review", "in-frame ambiguity stays held");
+}
+assert.equal(norm({ nipples: "unclear", genitals: "unclear" }, {
+  tags: ["solo"], uncertainty_reasons: { nipples: "out_of_frame" },
+}).status, "needs_review", "an unexplained second uncertainty is not waived");
+assert.equal(norm({ nipples: "unclear" }, {
+  identifying: "A topless woman stands.", details: "Her nipples are visible.", short_label: "topless pose",
+  visible: ["topless"], uncertainty_reasons: { nipples: "out_of_frame" },
+}).status, "needs_review", "a crop explanation cannot license contradictory prose");
+for (const reasons of [{ nipples: "guess" }, { invented: "out_of_frame" }, [], null]) {
+  assert.throws(() => norm({ nipples: "unclear" }, { uncertainty_reasons: reasons }), /uncertainty reason|uncertainty_reasons/);
+}
+assert.throws(() => norm({ nipples: "yes" }, { uncertainty_reasons: { nipples: "out_of_frame" } }), /uncertainty reason/);
+const videoCrop = normalizeMediaClassification(obs({ nipples: "unclear" }, {
+  tags: ["solo"], uncertainty_reasons: { nipples: "out_of_frame" },
+}), { frames: 5 });
+assert.equal(videoCrop.status, "needs_review", "photo coverage does not weaken the video gate");
+assert.ok(!videoClassificationPrompt(5).includes("uncertainty_reasons"), "video analysis instructions remain unchanged");
+const croppedFullNude = norm({ full_nudity: "yes", genitals: "unclear" }, {
+  identifying: "A nude woman stands near a wall.", details: "The lower body is outside the crop.",
+  short_label: "portrait by a wall", visible: ["wall"], tags: ["full_nude"],
+  uncertainty_reasons: { genitals: "out_of_frame" },
+});
+assert.equal(croppedFullNude.status, "needs_review", "an out-of-frame region cannot establish whole-body nudity");
+assert.ok(!croppedFullNude.fields.tags.includes("full_nude"));
+assert.equal(croppedFullNude.fields.visual_facts.evidence.genitals, "unclear");
+
 // ---- round 5, decision 1: visible cheeks with a worn thong are bare_buttocks yes, but a worn thong alone is not nudity ----
 const thongBack = norm({ bare_buttocks: "yes", lingerie: "yes", suggestive_pose: "yes" }, { identifying: "A woman in a red thong is seen from behind on a bed.", details: "She wears a red thong, her bare buttocks visible from behind.", short_label: "red thong rear", visible: ["red thong", "bed"], tags: ["ass", "lingerie", "bed"] });
 assert.equal(thongBack.fields.is_nude, false, "a worn thong alone is not nudity");
@@ -370,4 +414,3 @@ for (const garment of ["sheer thong", "lace underwear", "mesh bikini bottom"]) {
 }
 
 console.log("Media classification checks passed: yes-only tags and flags, unclear never clean, contract facts, description rules, negation-aware validation, retryable malformed answers, factual-only prompts.");
-

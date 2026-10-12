@@ -95,7 +95,10 @@ export function correctedFacts(stored: Record<string, unknown>, update: Record<s
     for (const k of deniedFactKeys(String(update[col] ?? ""))) if (ev[k] === "yes") ev[k] = "no";
   }
   const visible = (facts.visible ?? []).filter((p) => descriptionProblems(p, ev, facts.frames !== undefined).length === 0);
-  return { ...facts, evidence: ev, visible, edited: true, edited_at: now };
+  const uncertainty_reasons = facts.uncertainty_reasons
+    ? Object.fromEntries(Object.entries(facts.uncertainty_reasons).filter(([k]) => ev[k as FactKey] === "unclear"))
+    : undefined;
+  return { ...facts, evidence: ev, visible, ...(uncertainty_reasons ? { uncertainty_reasons } : {}), edited: true, edited_at: now };
 }
 
 /** The ONE place a manual edit becomes row state. `stored` is the row before the edit, `update` the columns about to be written
@@ -130,3 +133,4 @@ export async function insertMediaRowWithFallback(client: InsertClient, table: "p
   if (error && isMissingColumnError(error.message)) ({ error } = await client.from(table).insert(withoutOptionalMediaColumns(row)));
   if (error) throw new Error(error.message);
 }
+

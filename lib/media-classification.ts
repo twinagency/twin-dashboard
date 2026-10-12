@@ -1,5 +1,5 @@
 import { MEDIA_TAGS } from "./pricing";
-import { ANALYSIS_VERSION, FACT_KEYS, type AnalysisFields, type FactKey, type Tri, type VisualFacts } from "./media-analysis-contract";
+import { ANALYSIS_VERSION, FACT_KEYS, type AnalysisFields, type FactKey, type Tri, type VisualFacts, type UncertaintyReason } from "./media-analysis-contract";
 
 // ONE observation set per item: a tri-state answer for every FACT_KEY plus a list of short `visible` phrases. Every stored
 // field is derived or validated against that observation set. Internal agreement does not prove the observation is true;
@@ -8,11 +8,11 @@ import { ANALYSIS_VERSION, FACT_KEYS, type AnalysisFields, type FactKey, type Tr
 
 export { ANALYSIS_VERSION, FACT_KEYS };
 
-/** The anatomy keys whose "unclear" answer must never read as "clean". */
+/** Uncertain anatomy requires review unless a photo explicitly records the feature as outside its frame. */
 export const NUDITY_KEYS: readonly FactKey[] = ["nipples", "genitals", "anus", "bare_buttocks"];
 
-const OBSERVATION_TASK = `You are cataloguing media for an internal database. Report only what is visibly present. This is an observation task: do not write marketing copy, captions, flirting or opinions.
-Return JSON with exactly these keys: evidence, identifying, details, short_label, visible, tags.
+const OBSERVATION_TASK = (photo = false) => `You are cataloguing media for an internal database. Report only what is visibly present. This is an observation task: do not write marketing copy, captions, flirting or opinions.
+Return JSON with exactly these keys: evidence, identifying, details, short_label, visible, tags${photo ? ", uncertainty_reasons" : ""}.
 
 evidence: an object with ALL these keys, each "yes", "no" or "unclear": ${FACT_KEYS.join(", ")}.
 - "yes": the feature itself is clearly discernible and unmistakable, following the feature-specific rules below.
@@ -33,12 +33,13 @@ visible: array of up to 10 short phrases (garment with colour, setting, objects,
 tags: array that is a subset of: ${MEDIA_TAGS.join(", ")}. Use topless/tits only when nipples is yes under the visibility rules above, pussy only when genitals is yes, anal only when anus is yes, ass only when bare_buttocks is yes (a worn thong with the cheeks visible is yes), full_nude only when full_nudity is yes, bikini only when swimwear is yes, lingerie only when lingerie is yes, mirror_selfie only when mirror_reflection is yes. bed, pool, shower and outdoor only when she is on, in or at that place, not when it is only in the background.
 Never claim a body part, act, garment, toy or mirror whose evidence key is not "yes".`;
 
-export const MEDIA_CLASSIFICATION_PROMPT = `${OBSERVATION_TASK}
-This is a single photo.`;
+export const MEDIA_CLASSIFICATION_PROMPT = `${OBSERVATION_TASK(true)}
+This is a single photo.
+uncertainty_reasons: an object explaining every "unclear" answer among nipples, genitals, anus and bare_buttocks. Use only those keys whose evidence is "unclear". Each reason is exactly "out_of_frame" or "ambiguous_visibility". "out_of_frame" means the relevant body region is entirely outside this photo's crop. If that region is in the photo but hidden by the pose, obstructed, blurred, too small, or visibility through fabric is uncertain, use "ambiguous_visibility". Clearly concealed anatomy remains "no" under the rules above. Do not label an in-frame ambiguity as a crop. Return {} when none of these four keys is unclear. Neither reason licenses a positive description or tag for that feature.`;
 
 /** Video variant: ONE contact sheet of N frames tiled in order, so the model sees separate frames and never the motion. */
 export function videoClassificationPrompt(frames: number): string {
-  return `${OBSERVATION_TASK}
+  return `${OBSERVATION_TASK()}
 The image is a contact sheet of ${frames} separate frames sampled at even intervals from ONE video clip, tiled left to right, top to bottom. You are NOT seeing the whole clip, only these still frames. Describe only what these frames show. A key is "yes" if any frame clearly shows it under the same visibility rules above; a nude body seen from a distance, a blur, a hand hiding the area, or a garment that could be pulled aside is not enough. A garment in view forbids full_nudity "yes" and words like "unclothed". Answer "no" only if the frames show that part of the body or garment in frame and plainly absent or concealed in every frame; otherwise "unclear". Make no claims about motion, actions between frames, what happens before, after or throughout the clip, or what the clip is "doing". Do not use words like "then", "later", "throughout", "continues" or "static", and do not describe what the camera does.`;
 }
 
@@ -197,7 +198,7 @@ export function descriptionProblems(text: string, ev: Record<FactKey, Tri>, vide
     [ev.nipples !== "yes", /\b(topless|tits|exposed (?:breasts?|chest)|bare (?:breasts?|chest)|uncovered (?:breasts?|chest)|nipples?|areolas?)\b/i, "breasts/nipples"],
     [ev.genitals !== "yes", /\b(genitals?|genitalia|vulva|vagina|pussy|penis|labia)\b/i, "genitals"],
     [ev.anus !== "yes", /\b(anus|anal|asshole)\b/i, "anus"],
-    [ev.bare_buttocks !== "yes" && ev.genitals !== "yes" && ev.anus !== "yes", /\b(bare|naked|uncovered|exposed) (?:buttocks?|ass|bum|butt)\b/i, "bare buttocks"],
+    [ev.bare_buttocks !== "yes", /\b(?:(?:bare|naked|uncovered|exposed|visible) (?:buttocks?|cheeks|ass|bum|butt)|(?:buttocks?|cheeks|ass|bum|butt) (?:is |are )?(?:clearly )?(?:visible|bare|uncovered|exposed))\b/i, "bare buttocks"],
     [!nude, /\b(nude|naked|nudity|unclothed|undressed)\b/i, "nudity"],
     [ev.full_nudity !== "yes", /\b(?:(?:fully|completely|totally|entirely) (?:nude|naked|unclothed|undressed)|unclothed)\b/i, "full nudity"],
     // A mirror OBJECT in the scene is a plain fact; the claim that needs mirror_reflection=yes is her (or her phone) being in it.
@@ -326,6 +327,21 @@ export function normalizeMediaClassification(value: unknown, opts: NormalizeOpti
     if (!t) throw new Error("Visual metadata must include an evidence value for every key");
     evidence[key] = t;
   }
+  // A missing coverage explanation is compatible with old outputs and still requires review.
+  // Reject invalid explanations rather than letting arbitrary metadata waive a hold.
+  const uncertaintyReasons: Partial<Record<FactKey, UncertaintyReason>> = {};
+  if (j.uncertainty_reasons !== undefined) {
+    if (!j.uncertainty_reasons || typeof j.uncertainty_reasons !== "object" || Array.isArray(j.uncertainty_reasons)) {
+      throw new Error("uncertainty_reasons must be an object");
+    }
+    for (const [key, reason] of Object.entries(j.uncertainty_reasons)) {
+      if (!NUDITY_KEYS.includes(key as FactKey) || evidence[key as FactKey] !== "unclear" ||
+          (reason !== "out_of_frame" && reason !== "ambiguous_visibility")) {
+        throw new Error("Invalid uncertainty reason for an unclear anatomy feature");
+      }
+      uncertaintyReasons[key as FactKey] = reason;
+    }
+  }
   if (typeof j.identifying !== "string" || !j.identifying.trim() || typeof j.short_label !== "string" || !j.short_label.trim()) {
     throw new Error("Visual metadata needs factual descriptions");
   }
@@ -336,8 +352,9 @@ export function normalizeMediaClassification(value: unknown, opts: NormalizeOpti
   const nude = isNude(evidence, wornBottom);
   const explicit = nude || evidence.sexual_activity === "yes";
   const unclear = NUDITY_KEYS.filter((k) => evidence[k] === "unclear");
+  const unresolved = unclear.filter((k) => video || uncertaintyReasons[k] !== "out_of_frame");
   const suggestive = evidence.suggestive_pose === "yes" || evidence.swimwear === "yes" || evidence.lingerie === "yes" ||
-    evidence.sex_toy === "yes" || evidence.bare_buttocks === "yes" || unclear.length > 0; // unclear nudity must never read as "none"
+    evidence.sex_toy === "yes" || evidence.bare_buttocks === "yes" || unresolved.length > 0;
 
   let identifying = sentencesUpTo(stripBannedDashes(j.identifying.trim()), 140);
   let details = sentencesUpTo(stripBannedDashes(typeof j.details === "string" ? j.details.trim() : ""), 420);
@@ -401,6 +418,10 @@ export function normalizeMediaClassification(value: unknown, opts: NormalizeOpti
   }
   let fullNudeBlocked = false;
   if (evidence.full_nudity === "yes") {
+    if (Object.values(uncertaintyReasons).includes("out_of_frame")) {
+      issuesExtra.push("full_nudity is yes but an anatomy region is outside the photo crop; review required");
+      fullNudeBlocked = true;
+    }
     const worn = affirmativeClauses(proseAll).find((c) => WORN_GARMENT.test(c) && !GARMENT_REMOVED.test(c));
     if (worn) { issuesExtra.push(`full_nudity is yes but a worn garment is described: "${worn.slice(0, 60)}"`); fullNudeBlocked = true; }
   }
@@ -419,8 +440,9 @@ export function normalizeMediaClassification(value: unknown, opts: NormalizeOpti
   const headline = identifying && !/[.!?]$/.test(identifying) ? `${identifying}.` : identifying;
   const visual_description = [headline, details, ...tail].filter(Boolean).join(" ").replace(/\s+/g, " ").trim();
 
-  const facts: VisualFacts = { v: ANALYSIS_VERSION, evidence, visible, ...(video ? { frames: opts.frames } : {}) };
-  const issues = [...(unclear.length ? [`unclear: ${unclear.join(", ")}`] : []), ...issuesExtra];
+  const facts: VisualFacts = { v: ANALYSIS_VERSION, evidence, visible, ...(video ? { frames: opts.frames } : {}),
+    ...(Object.keys(uncertaintyReasons).length ? { uncertainty_reasons: uncertaintyReasons } : {}) };
+  const issues = [...(unresolved.length ? [`unclear: ${unresolved.join(", ")}`] : []), ...issuesExtra];
   return {
     fields: {
       auto_desc: autoDesc,
@@ -431,9 +453,8 @@ export function normalizeMediaClassification(value: unknown, opts: NormalizeOpti
       is_nude: nude,
       nsfw: explicit,
     },
-    status: contradicted || unclear.length || issuesExtra.length ? "needs_review" : "analysed",
+    status: contradicted || unresolved.length || issuesExtra.length ? "needs_review" : "analysed",
     contradictions,
     issues,
   };
 }
-

@@ -6,7 +6,9 @@ import { orVisionDetailed } from "../lib/openrouter";
 import { PHOTO_ANALYSIS_SELECTED_MODEL as selected, VISION_ANALYSIS_DEFAULT_MODEL as previous, visionProfile, resolveVisionAnalysisModel, describeVisionAnalysisModels } from "../lib/vision-model";
 import { FACT_KEYS } from "../lib/media-analysis-contract";
 import { MEDIA_CLASSIFICATION_PROMPT } from "../lib/media-classification";
-import { analysisRowFields } from "../lib/media-analysis-row";
+import { analysisRowFields, priceForAnalysis, correctedFacts } from "../lib/media-analysis-row";
+import { acceptCaption } from "../lib/send-caption";
+import { PRICING_CATEGORIES } from "../lib/pricing";
 
 async function main() {
   const photo = await sharp({ create: { width: 1000, height: 800, channels: 3, background: "#888" } }).jpeg().toBuffer();
@@ -55,12 +57,31 @@ async function main() {
     assert.equal(requests.length, 2);
     for (const request of requests) { assert.deepEqual(request.provider, req.provider); assert.deepEqual(request.reasoning, req.reasoning); assert.equal(request.max_tokens, 16384); }
 
-    // Existing review rules stay authoritative, including uncertainty for an out-of-frame feature.
+    // Old/unexplained uncertainty retains its hold; only explicit crop coverage permits confirmed content.
     reset(facts({ bare_buttocks: "unclear" }));
     const held = await run();
     assert.equal(held.status, "needs_review");
     assert.equal(held.fields?.caption, null);
     assert.equal(held.fields?.visual_facts.evidence.bare_buttocks, "unclear");
+
+    const cropFacts = { ...facts({ bare_buttocks: "unclear" }), uncertainty_reasons: { bare_buttocks: "out_of_frame" } };
+    reset(cropFacts);
+    const cropped = await run();
+    assert.equal(cropped.status, "analysed");
+    assert.equal(requests.length, 1, "coverage adds no AI call");
+    assert.equal(cropped.fields?.visual_facts.evidence.bare_buttocks, "unclear");
+    const saved = analysisRowFields(cropped);
+    assert.equal((saved.visual_facts as any).uncertainty_reasons.bare_buttocks, "out_of_frame");
+    assert.deepEqual(saved.tags, ["solo"]);
+    assert.equal(saved.analysis_status, "analysed");
+    assert.equal(priceForAnalysis({ ...Object.fromEntries(PRICING_CATEGORIES.map(k => [k, 600])), ass: 1400 }, cropped), 600);
+    assert.equal(acceptCaption("My bare buttocks are visible.", cropped.fields!.visual_facts), null);
+    const corrected = correctedFacts(saved, { tags: ["solo", "ass"] }, "2026-10-12T00:00:00Z");
+    assert.equal(corrected?.evidence.bare_buttocks, "yes");
+    assert.equal(corrected?.uncertainty_reasons?.bare_buttocks, undefined, "an operator correction clears obsolete coverage");
+
+    reset({ ...cropFacts, uncertainty_reasons: { bare_buttocks: "ambiguous_visibility" } });
+    assert.equal((await run()).status, "needs_review");
 
     const positive = facts({ nipples: "yes" }, "A woman with a clearly visible nipple stands near a window.");
     reset(positive, { nipples: "no" });

@@ -1,6 +1,6 @@
 # Accepted photo model: integration, 12 October 2026
 
-Jesse accepted the practical quality of Qwen3.8-27B on DeepInfra after the five-photo and ten-more-photo reports. Model selection is settled. This change integrates that exact profile into the existing uploader; it does not activate it, deploy, rewrite creator settings, or repair catalogue rows. Stages 1–5 are unchanged.
+Jesse accepted the practical quality of Qwen3.8-27B on DeepInfra after the five-photo and ten-more-photo reports. Model selection is settled. This change integrates that exact profile into the existing uploader. The later controlled launch is authorised after verification; this checkpoint has not activated it, deployed it, rewritten creator settings or repaired catalogue rows. Stages 1–5 are unchanged.
 
 ## Change
 
@@ -23,7 +23,7 @@ The accepted reports contain 15 distinct retained photos, not a random sample of
 
 Passing those first-pass responses directly through the current normalizer gives **3 analysed and 12 needs_review**. This replay makes no new vision/correction/second-look calls, so it is not a prediction of every final uploader status. All 12 have at least one uncertain anatomy field; two also have prose/fact contradictions. Cropped or out-of-frame features often cause the uncertainty. It does not mean 12 photos were incorrectly described.
 
-The existing rule says uncertain anatomy holds the entire item. Silently deleting that rule would contradict the accepted development requirements. This integration therefore preserves it and does not recommend immediate activation for automatic uploads. The remaining decision is how cropped-out/unknown attributes should affect whole-item eligibility while still never supporting an exact claim. That needs an explicit rule change and affected-flow verification, not another round of model shopping. Existing garment/visibility exceptions and known false claims must not be bypassed.
+The recovered follow-up adds optional photo coverage reasons: an explicitly out-of-frame unknown no longer holds unrelated confirmed content, while in-frame ambiguity and unexplained uncertainty still hold. Unknowns remain unknown and cannot license tags or claims. Contradictions, second-look failures and existing visibility exceptions remain held. A cropped region cannot establish full nudity. The original recorded answers lack this coverage field, so their unchanged offline replay still gives 3 analysed / 12 needs_review. See photo-launch-recovery-20261012.md for each disposition, current verification and the remaining staging gate.
 
 Recorded response SHA-256 values:
 
@@ -32,6 +32,6 @@ Recorded response SHA-256 values:
 
 ## Activation and rollback
 
-Keep deployment and catalogue writes paused. After the eligibility rule is settled, check the deployed dashboard/proxy upload timeout against the longer profile: the repository uses a standalone Node server, but the live proxy timeout was not inspected. Exercise an actual staging upload through the server action with the selected model, including the existing second look/status flow. These are remaining integration checks, not completed ones.
+The controlled launch is authorised after the remaining gates pass. The Twin Apache proxy currently inherits Timeout 300, shorter than the shared 750-second vision budget. Correct the scoped release deadline and verify the complete action. The existing staging project is available to SQL, but its uploader server credential has not been recovered. An actual staging upload through the server action, save and refresh is still required; offline helpers do not satisfy it. No production change has been made at this checkpoint.
 
 Then use the existing release procedure and explicitly set the chosen creator's `vision_model` to `qwen/qwen3.8-27b`; do not bulk recaption as part of the model switch. Existing content changes only through a separately reviewed, hash-bound repair preview. Rollback is the prior code image plus the prior creator model setting; this change has no migration or data rollback. Do not restore old financial records.
