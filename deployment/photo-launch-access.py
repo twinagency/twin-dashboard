@@ -21,6 +21,9 @@ def node_check(container,path,timeout=120):
 
 print(node_check('twin-v2-bot-1','deployment/test-photo-price-v2-verify.mjs'),flush=True)
 print(node_check('next-app','deployment/test-photo-price-v1-verify.mjs'),flush=True)
-print(node_check('twin-v2-bot-1','deployment/photo-creator-connection.mjs'),flush=True)
+
 INSTANCE='i-09a9dd3bd749643a5'
 print(ssm("docker inspect -f '{{.State.Running}} {{.Image}} {{.State.StartedAt}}' next-app\ndocker exec next-app printenv GIT_SHA",30),flush=True)
+
+INSTANCE='i-0584d283506f3f6be'
+print(ssm("docker logs --since 2026-10-12T10:21:00Z next-app 2>&1 | grep 'release drain:' | tail -10",30),flush=True)
