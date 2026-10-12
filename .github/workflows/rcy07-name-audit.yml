@@ -1,0 +1,39 @@
+name: Read-only RCY07 name provenance
+on:
+  push:
+    branches: [codex/rcy07-name-audit-20261012]
+    paths: [.github/workflows/rcy07-name-audit.yml]
+permissions:
+  contents: read
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-southeast-2
+      - name: Read retained conversations for requested account
+        run: |
+          python3 - <<'RUNNER_PY'
+          import json,subprocess,time
+          host="import json,pathlib,re\nroot=pathlib.Path('/home/ubuntu/twin-v2')\nfan='6814483810'\npat=re.compile(r'\\b(?:danny|daniel)\\b',re.I)\nreport={'root_exists':root.exists(),'creators':[]}\nfor f in sorted((root/'logs').glob('*/requests.jsonl')):\n    rows=[]; bad=0\n    with f.open(errors='replace') as stream:\n        for line in stream:\n            try: r=json.loads(line)\n            except Exception: bad+=1;continue\n            if str(r.get('chatId'))==fan and r.get('mode')!='simulated': rows.append(r)\n    if not rows: continue\n    rows.sort(key=lambda r:r.get('ts',''))\n    o={'creator':f.parent.name,'turns':len(rows),'first':rows[0].get('ts'),'last':rows[-1].get('ts'),'fan_name_mentions':[],'bot_name_mentions':[]}\n    for r in rows:\n        if pat.search(str(r.get('fanText',''))):\n            o['fan_name_mentions'].append({'ts':r.get('ts'),'text':r.get('fanText')})\n        finals=r.get('final',[])\n        if pat.search(json.dumps(finals)):\n            o['bot_name_mentions'].append({'ts':r.get('ts'),'final':finals})\n    if 'kyla' in f.parent.name:\n        o['fan_name_mentions']=o['fan_name_mentions'][:20]\n        o['bot_name_mentions']=o['bot_name_mentions'][:12]+o['bot_name_mentions'][-4:]\n        targets=[r for r in rows if any('omg danny' in str(x).lower() for x in r.get('final',[]))]\n        def matches(v,p=''):\n            out=[]\n            if isinstance(v,dict):\n                for k,x in v.items():\n                    if not re.search('token|secret|key',k,re.I):out+=matches(x,p+'.'+k)\n            elif isinstance(v,list):\n                for i,x in enumerate(v):out+=matches(x,p+'['+str(i)+']')\n            elif isinstance(v,str) and pat.search(v):\n                out.append({'path':p,'text':v[:1600]})\n            return out\n        o['screenshot_turns']=[{'ts':r.get('ts'),'keys':list(r),'matches':matches(r)[:18],'delivery':r.get('delivery')} for r in targets]\n        p=root/'data'/f.parent.name/(fan+'.json')\n        if p.exists():\n            state=json.loads(p.read_text())\n            o['state']={'keys':list(state),'who':state.get('who'),'name_matches':matches(state)[:12]}\n    else:\n        o['fan_name_mentions']=o['fan_name_mentions'][:3]\n        o['bot_name_mentions']=o['bot_name_mentions'][:2]\n    report['creators'].append(o)\nprint(json.dumps(report,ensure_ascii=False))\n"
+          command="python3 - <<'AUDIT_PY'\n"+host+"\nAUDIT_PY"
+          def aws(args):
+              r=subprocess.run(['aws','--region','ap-southeast-2',*args,'--output','json'],capture_output=True,text=True,timeout=50)
+              if r.returncode:
+                  if 'InvocationDoesNotExist' in r.stderr:return {'Status':'Pending'}
+                  raise RuntimeError('AWS operation failed')
+              return json.loads(r.stdout)
+          if aws(['sts','get-caller-identity'])['Account']!='323149985112':raise RuntimeError('Wrong account')
+          job=aws(['ssm','send-command','--cli-input-json',json.dumps({'InstanceIds':['i-09a9dd3bd749643a5'],'DocumentName':'AWS-RunShellScript','Comment':'Read-only account name provenance audit','Parameters':{'commands':[command],'executionTimeout':['90']}})])['Command']['CommandId']
+          for i in range(36):
+              r=aws(['ssm','get-command-invocation','--command-id',job,'--instance-id','i-09a9dd3bd749643a5'])
+              if r.get('Status') in ['Success','Failed','Cancelled','TimedOut']:break
+              time.sleep(3)
+          print(r.get('StandardOutputContent',''))
+          if r.get('Status')!='Success':raise RuntimeError('Read-only audit failed: '+r.get('Status','unknown'))
+          
+          RUNNER_PY
