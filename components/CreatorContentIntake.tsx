@@ -4,8 +4,7 @@ import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared
 import { Upload, ImageIcon, Film, Check, RotateCcw, Plus, Link2, CircleHelp } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import CreatorSavedContentPreview from "./CreatorSavedContentPreview";
-import CreatorContentGallery from "./CreatorContentGallery";
+import CreatorSavedContentPreview, { type ContentCounts } from "./CreatorSavedContentPreview";
 import { useContentUploads, type ContentUploadItem } from "./CreatorContentUploadProvider";
 import { CREATOR_CONTENT_TARGET, contentMediaKind, type ContentFolder } from "@/lib/creator-content-intake";
 import styles from "./CreatorContentIntake.module.css";
@@ -25,7 +24,8 @@ export default function CreatorContentIntake({ locked, loginPath, savedPhotos, s
   const queue = useContentUploads();
   const router = useContext(AppRouterContext);
   const [notice, setNotice] = useState("");
-  const total = savedPhotos + savedVideos;
+  const [liveCounts, setLiveCounts] = useState<ContentCounts | null>(null);
+  const total = liveCounts?.saved ?? (savedPhotos + savedVideos);
   useEffect(() => {
     const navigate = (event: Event) => {
       const href = (event as CustomEvent<{ href: string }>).detail?.href;
@@ -67,10 +67,7 @@ export default function CreatorContentIntake({ locked, loginPath, savedPhotos, s
       {!selected ? <>
         <label htmlFor="creator-content-files" className={styles.emptyArt} aria-hidden="true"><div className={styles.artCard}><ImageIcon size={38} strokeWidth={1} /></div><div className={styles.artCard}><Film size={42} strokeWidth={1} /></div><div className={styles.artCard}><ImageIcon size={38} strokeWidth={1} /></div></label>
         {picker}
-      </> : total > 0 && !queue.working ? <CreatorSavedContentPreview revision={`${total}:${queue.revision}`}>{picker}</CreatorSavedContentPreview> : <div className={styles.previewGrid} aria-label="Selected content previews">
-        {queue.items.slice(0, 5).map(item => <div key={item.id} className={styles.previewTile}><Thumbnail item={item} /><span className={styles.tileState}>{item.state === "saved" ? <><Check size={14} /> Saved</> : item.state === "failed" || item.state === "reselect" ? "Needs attention" : item.state === "uploading" ? `${item.percent}%` : "Saving…"}</span></div>)}
-        {picker}
-      </div>}
+      </> : <CreatorSavedContentPreview revision={`${savedPhotos + savedVideos}:${queue.revision}`} items={queue.items} total={savedPhotos + savedVideos} loginPath={loginPath} onCounts={setLiveCounts} onRemoved={queue.remove}>{picker}</CreatorSavedContentPreview>}
       {folders.length > 0 && <p className={styles.hint}>Folder link received. Awaiting import.</p>}
     </section>
     {notice && <p role="status">{notice}</p>}
@@ -83,7 +80,7 @@ export default function CreatorContentIntake({ locked, loginPath, savedPhotos, s
     {selected && <div className={styles.handoff} data-content-questionnaire-handoff>
       <p>Next, tell us about yourself.</p>
       {queue.working && <p className={styles.hint}>Keep this browser open. Your uploads continue while you answer.</p>}
-      {attention && <p className={styles.hint}>Some files need attention. Review Upload details below.</p>}
+      {attention && <p className={styles.hint}>Some files need attention. Open Upload details below to retry.</p>}
       <Button type="button" className={styles.primary} onClick={() => navigateCreatorSetup("/creator/onboarding?step=questionnaire", router?.push)}>Continue to questions →</Button>
     </div>}
     {queue.items.length > 0 && <details className={styles.queueDetails} open={attention || undefined} aria-label="Upload queue"><summary>Upload details{attention ? ", action needed" : ""}</summary>
@@ -99,9 +96,15 @@ export default function CreatorContentIntake({ locked, loginPath, savedPhotos, s
     </details>}
     {!selected && <button type="button" className={styles.later} onClick={() => navigateCreatorSetup("/creator/onboarding?step=questionnaire", router?.push)}>Do this later →</button>}
     <details className={styles.help}><summary className="min-h-11 cursor-pointer py-3"><CircleHelp size={16} aria-hidden="true" /> Need help?</summary>
-      <p className="mb-3">JPG, PNG, WebP or GIF up to 75 MiB; MP4, MOV or WebM up to 512 MiB, 30 minutes and 4K. Export HEIC as JPG. Account allowance: 100 GiB and 5,000 files.</p>
+      <ol className={styles.helpSteps}>
+        <li>Choose your photos and videos. You can select several at once.</li>
+        <li>Continue to the questions while your content uploads.</li>
+        <li>Keep this browser tab open until uploading finishes.</li>
+      </ol>
+      <p className="mb-3">Added the wrong file? Tap its picture, then Remove file.</p>
+      <p className="mb-2">Can’t find your photos? Try choosing from Files.</p>
       <label className={`${buttonVariants({ variant: "outline" })} relative min-h-11 overflow-hidden`}>Choose from Files<input type="file" accept="application/octet-stream" multiple disabled={locked} aria-label="Choose photos and videos from Files" className="absolute inset-0 size-full opacity-0" onChange={event => { if (locked) return; queue.add(Array.from(event.target.files || [])); event.target.value = ""; }} /></label>
+      <details className={styles.formatHelp}><summary>File types and sizes</summary><p>Photos: JPG, PNG, WebP or GIF, up to 75 MiB. Videos: MP4, MOV or WebM, up to 512 MiB, 30 minutes and 4K. If an iPhone photo won’t upload, save a JPG copy and try again.</p></details>
     </details>
-    {total > 0 && <details className={styles.gallery}><summary>Manage saved files</summary><CreatorContentGallery kind="all_content" revision={`${total}:${queue.revision}`} loginPath={loginPath} /></details>}
   </div>;
 }

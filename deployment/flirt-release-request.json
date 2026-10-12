@@ -1,5 +1,5 @@
 {
-  "reason": "Prevent the onboarding review menu from leaving before answers save; verified creator walkthrough.",
-  "source_commit": "3f15d5d854aadbb15f60eeacdf5f4b580b12d569",
-  "requested_at": "2026-10-12T06:17:54.550Z"
+  "reason": "Creator onboarding: useful help, six tappable previews, all-content gallery, confirmed removal and live saved counts.",
+  "source_commit": "78c609f6761f962a624716a5269cca5c0a2ededb",
+  "requested_at": "2026-10-12T10:19:14.318Z"
 }
