@@ -16,19 +16,7 @@ def ssm(command,timeout=120):
  if r['Status']!='Success': print(r.get('StandardErrorContent','')[-1800:],flush=True);raise RuntimeError('Candidate gate '+r['Status'])
  return cid
 
-encoded=pathlib.Path('deployment/v2-photo-recovery/delta-v6.b64').read_text().strip()
-ssm('rm -f /tmp/photo-recovery-delta.b64',30)
-for n in range(0,len(encoded),10000):
- ssm("printf '%s' '"+encoded[n:n+10000]+"' >> /tmp/photo-recovery-delta.b64",30)
-unpack="""import pathlib,base64,zlib,json,hashlib
-p=pathlib.Path('/tmp/photo-recovery-payload.json');raw=p.read_bytes()
-d=json.loads(zlib.decompress(base64.b64decode(pathlib.Path('/tmp/photo-recovery-delta.b64').read_bytes())))
-assert hashlib.sha256(raw).hexdigest()==d['expectedPayloadSha256']
-v=json.loads(raw);v['manifest']=d['manifest'];v['changed'].update(d['changed']);p.write_text(json.dumps(v))
-assert hashlib.sha256(p.read_bytes()).hexdigest()=='bac74b0e4838b86fc90224934866e66729d675ce8d6b9c3f35b21d3f2e3c860c'
-"""
-ssm('python3 -c '+shlex.quote(unpack),30)
-for dst,src in {'/tmp/photo-recovery-prepare.py':'deployment/v2-photo-recovery/prepare.py','/tmp/photo-recovery-snapshot.mjs':'deployment/v2-photo-recovery/snapshot.mjs'}.items():
- data=base64.b64encode(pathlib.Path(src).read_bytes()).decode()
- ssm("printf '%s' '"+data+"' | base64 -d > "+dst,30)
-ssm('python3 -u /tmp/photo-recovery-prepare.py',1440)
+for dst,src in {'/tmp/photo-boundary-check.mjs':'deployment/v2-photo-recovery/boundary-check.mjs','/tmp/photo-boundary-check.py':'deployment/v2-photo-recovery/boundary-check.py'}.items():
+ encoded=base64.b64encode(pathlib.Path(src).read_bytes()).decode()
+ ssm("printf '%s' '"+encoded+"' | base64 -d > "+dst,30)
+ssm('python3 -u /tmp/photo-boundary-check.py',150)
