@@ -1294,7 +1294,7 @@ export const MODEL_FIELDS: { name: string; label: string; def: string }[] = [
   // Also fires when the fan sends a VIDEO (she reacts to a grabbed frame) —
   // there is no separate video model, this one covers both (see flows/vision.ts).
   { name: "photo_reply_model", label: "Photo & video reply", def: "qwen/qwen3-vl-32b-instruct" },
-  { name: "vision_model", label: "Vision (media library tagging)", def: "qwen/qwen3-vl-32b-instruct" },
+  { name: "vision_model", label: "Vision (media library tagging)", def: "qwen/qwen3-vl-235b-a22b-instruct" },
 ];
 
 // ── Recommended models per job ────────────────────────────────────────────────
@@ -1314,7 +1314,9 @@ export const RECOMMENDED: Record<string, Rec[]> = {
     { id: "google/gemini-2.5-flash-lite", tier: "cheap", note: "Cheapest solid decider" },
   ],
   vision_model: [
-    { id: "qwen/qwen3-vl-32b-instruct", tier: "best", note: "Uncensored, half the price of 235b" },
+    { id: "qwen/qwen3.8-27b", tier: "best", note: "Selected for photos after a 15-photo comparison; DeepInfra, slower analysis; videos stay on 235B" },
+    { id: "qwen/qwen3-vl-235b-a22b-instruct", tier: "value", note: "Previous photo baseline and current video analysis model" },
+    { id: "qwen/qwen2.5-vl-72b-instruct", tier: "value", note: "Tested: under-reports explicit content on analysed rows" },
     { id: "qwen/qwen3-vl-8b-instruct", tier: "value", note: "Cheaper, still uncensored" },
     { id: "mistralai/mistral-small-3.2-24b-instruct", tier: "cheap", note: "Cheapest that sees well" },
   ],
@@ -1360,5 +1362,3 @@ export const REC_TIER_BADGE: Record<RecTier, { label: string; cls: string }> = {
     cls: "bg-accent/15 text-accent",
   },
 };
-
-

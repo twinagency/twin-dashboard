@@ -508,7 +508,7 @@ function rowFromForm(fd: FormData) {
     routing_model: str(fd, "routing_model") ?? "qwen/qwen3-30b-a3b-instruct-2507",
     voice_enhance_model: str(fd, "voice_enhance_model") ?? "google/gemini-2.5-flash-lite",
     photo_reply_model: str(fd, "photo_reply_model") ?? "qwen/qwen3-vl-32b-instruct",
-    vision_model: str(fd, "vision_model") ?? "qwen/qwen3-vl-32b-instruct",
+    vision_model: str(fd, "vision_model") ?? "qwen/qwen3-vl-235b-a22b-instruct",
 
     voice_id: str(fd, "voice_id"),
     elevenlabs_api_key: str(fd, "elevenlabs_api_key"),

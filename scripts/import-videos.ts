@@ -30,7 +30,8 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import path from "node:path";
 import { supabaseAdmin } from "@/lib/supabase";
-import { captionVideo } from "@/lib/caption";
+import { analyseVideo } from "@/lib/caption";
+import { analysisRowFields, insertMediaRowWithFallback, priceForAnalysis } from "@/lib/media-analysis-row";
 import { MIN_PAID_MEDIA_PRICE_STARS } from "@/lib/pricing";
 import { mediaStoragePath } from "@/lib/media-storage-path";
 import {
@@ -70,7 +71,7 @@ async function uploadConfig(cloneId: string): Promise<{ model: string; guide: un
     .select("vision_model, category_pricing")
     .eq("id", cloneId)
     .maybeSingle();
-  return { model: data?.vision_model || "qwen/qwen2.5-vl-72b-instruct", guide: data?.category_pricing };
+  return { model: data?.vision_model || "qwen/qwen3-vl-235b-a22b-instruct", guide: data?.category_pricing };
 }
 
 /** Clip length in seconds, from the ORIGINAL file so compression cannot move a
@@ -203,15 +204,20 @@ async function main(): Promise<void> {
         continue;
       }
 
-      const cap = await captionVideo(fitted.bytes, model);
+      // Same analysis as the dashboard upload. Never throws: a failure is saved as analysis_status "failed" (repair later).
+      const analysis = await analyseVideo(fitted.bytes, model);
+      if (analysis.status !== "analysed") console.log(`   ${name}: analysis ${analysis.status}: ${analysis.error ?? ""}`);
       const seconds = band ? await probeDuration(srcPath) : 0;
+      // Not fully analysed => the guide's highest category (never blank tags priced as SFW). A manual price always wins.
       const starValue = band
         ? priceForDuration(seconds, band.min, band.max, anchorShort, anchorLong)
-        : resolveVideoPrice(manualPrice, cap, guide);
+        : analysis.status === "analysed" && analysis.fields
+          ? resolveVideoPrice(manualPrice, analysis.fields, guide)
+          : (manualPrice ?? priceForAnalysis(guide, analysis) ?? resolveVideoPrice(manualPrice, { tags: [], nsfw: false }, guide));
 
       if (dryRun) {
         console.log(`WOULD IMPORT ${name} — ${starValue} Stars — ${fitted.note}`);
-        console.log(`   tags=[${cap.tags.join(", ")}] nsfw=${cap.nsfw} desc="${cap.auto_desc}"`);
+        console.log(`   [${analysis.status}] tags=[${analysis.fields?.tags.join(", ") ?? ""}] nsfw=${analysis.fields?.nsfw ?? "?"} desc="${analysis.fields?.auto_desc ?? ""}"`);
         imported++;
         continue;
       }
@@ -222,23 +228,19 @@ async function main(): Promise<void> {
         .upload(storedAt, fitted.bytes, { contentType: "video/mp4", upsert: true });
       if (upErr) throw new Error(upErr.message);
 
-      const { error: dbErr } = await supabaseAdmin.from("videos").insert({
-        clone_id: cloneId,
-        storage_path: storedAt,
-        caption: cap.caption || null,
-        teaser_caption: cap.teaser_caption || null,
-        is_nude: cap.is_nude,
-        explicitness: cap.explicitness,
-        nsfw: cap.nsfw,
-        tags: cap.tags,
-        auto_desc: cap.auto_desc || null,
-        star_value: starValue,
-        is_free: starValue <= 0,
-      });
-      if (dbErr) {
+      try {
+        await insertMediaRowWithFallback(supabaseAdmin, "videos", {
+          clone_id: cloneId,
+          storage_path: storedAt,
+          teaser_caption: null,
+          ...analysisRowFields(analysis),
+          star_value: starValue,
+          is_free: starValue <= 0,
+        });
+      } catch (dbErr) {
         // The object is already up; leaving it would orphan a file nothing points at.
         await supabaseAdmin.storage.from("media").remove([storedAt]);
-        throw new Error(dbErr.message);
+        throw dbErr;
       }
 
       console.log(`imported ${name} — ${starValue} Stars — ${fitted.note}`);

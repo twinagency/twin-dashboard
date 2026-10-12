@@ -9,3 +9,4 @@ test-results/
 # local-only docs, kept on disk, out of GitHub (2026-08-18)
 archive/
 DOCKER.md
+.media-repair-state/

@@ -18,10 +18,11 @@ async function main() {
   assert.ok(!photoQueue.includes('/api/caption'), "selecting a photo must not trigger a duplicate vision request");
   assert.ok(!photoQueue.includes('fd.append("caption"'), "photo upload must not submit a fixed caption");
   assert.ok(!photoQueue.includes('fd.append("teaser_caption"'), "photo upload must not submit a fixed fan teaser");
-  assert.match(actions, /bestEffortUploadAnalysis/, "server upload must tolerate vision failure");
+  assert.match(actions, /safeAnalysis/, "server upload must tolerate vision failure");
   assert.match(actions, /preparePhotoForTelegram/, "photo uploads must be normalized before storage");
   assert.match(actions, /return uploadFailure\(error\)/, "server upload failures must be returned to the dashboard");
-  assert.match(actions, /controller\.abort\(\)/, "vision analysis must have a hard timeout");
+  assert.match(caption, /AbortSignal\.timeout\(profile\.callTimeoutMs\)/, "every vision call must have its own model-appropriate deadline");
+  assert.match(caption, /AbortSignal\.timeout\(profile\.totalBudgetMs\)/, "vision analysis must have a bounded total budget");
   assert.ok((actions.match(/teaser_caption: null/g) ?? []).length >= 2, "new photo and video uploads must not persist generic fan-facing captions");
   assert.match(caption, /signal\?: AbortSignal/, "caption processing must accept cancellation");
   assert.match(openrouter, /signal: opts\.signal/, "OpenRouter vision requests must receive the timeout signal");
