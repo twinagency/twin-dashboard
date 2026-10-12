@@ -47,7 +47,7 @@ global.XMLHttpRequest = XHR;
   const select = files => act(async () => { const input = document.querySelector('[aria-label="Add photos and videos"]'); Object.defineProperty(input, 'files', { value: files, configurable: true }); input.dispatchEvent(new Event('change', { bubbles: true })); });
   await render();
   assert.match(document.body.textContent, /Continue to questions/);
-  assert.match(document.body.textContent, /10 files uploaded/);
+  assert.match(document.body.textContent, /10 of 50 uploaded/);
   const files = [new File(['photo'], 'photo.jpg', { type: 'image/jpeg' }), new File(['video'], 'good.mp4', { type: 'video/mp4' }), new File(['video'], 'bad.mp4', { type: 'video/mp4' })];
   await select(files); await render(false); // The queue stays alive with the questionnaire open.
   assert.equal(global.__contentQueue.working, true);
