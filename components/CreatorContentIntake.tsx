@@ -48,8 +48,8 @@ export default function CreatorContentIntake({ locked, loginPath, savedPhotos, s
   const attention = queue.items.some(item => item.state === "failed" || item.state === "reselect");
   return <div className={styles.root} data-combined-content-intake>
     <header className={styles.heading}>
-      <h1 data-setup-heading>{queue.working ? "Your content is uploading" : attention ? "Some files need attention" : selected ? "Your content" : "Add your content"}</h1>
-      {!selected && <><p>Choose at least {CREATOR_CONTENT_TARGET} photos and videos.</p><p className={styles.hint}>Everyday content, plus explicit content if applicable.</p></>}
+      <h1 data-setup-heading>{queue.working ? "Your content is uploading" : attention ? "Some files need attention" : selected ? "Your content" : "Let’s set up your AI."}</h1>
+      {!selected && <><p>Choose at least {CREATOR_CONTENT_TARGET} photos and videos.</p><p className={styles.hint}>Everyday content plus explicit content if applicable.</p></>}
     </header>
     {!selected && <label htmlFor="creator-content-files" className={styles.emptyArt} aria-hidden="true"><div className={styles.artCard}><ImageIcon size={38} strokeWidth={1} /></div><div className={styles.artCard}><Film size={42} strokeWidth={1} /></div><div className={styles.artCard}><ImageIcon size={38} strokeWidth={1} /></div><span className={styles.artPlus}><Plus size={24} /></span></label>}
     {queue.items.length > 0 && <div className={styles.previewGrid} aria-label="Selected content previews">{queue.items.slice(0, 6).map((item, index) => <div key={item.id} className={styles.previewTile}><Thumbnail item={item} /><span className={styles.tileState}>{index === 5 && queue.items.length > 6 ? `+${queue.items.length - 6}` : item.state === "saved" ? <Check size={16} aria-label="Saved" /> : item.state === "failed" || item.state === "reselect" ? "!" : item.state === "uploading" ? `${item.percent}%` : "…"}</span></div>)}</div>}
