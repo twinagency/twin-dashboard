@@ -1,0 +1,27 @@
+name: V2 90-day chat history release
+on:
+  push:
+    branches: [codex/v2-chat-history-90-days-release]
+    paths:
+      - .github/workflows/v2-chat-history-90-days.yml
+      - deployment/v2-history-90-days-release.py
+      - deployment/v2-history-90-days-patch.json
+permissions:
+  contents: read
+concurrency:
+  group: v2-chat-history-release
+  cancel-in-progress: false
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-southeast-2
+      - run: python3 -m pip install boto3
+      - name: Release verified 90-day history
+        run: python3 deployment/v2-history-90-days-release.py
