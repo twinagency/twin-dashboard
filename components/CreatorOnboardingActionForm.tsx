@@ -13,13 +13,14 @@ const errors: Record<string, string> = {
 };
 
 /** Keep entries visible when a native onboarding action cannot be confirmed. */
-export default function CreatorOnboardingActionForm({ children, className, pendingLabel, successStatuses, loginPath, consentBeforeSubmit = false }: {
+export default function CreatorOnboardingActionForm({ children, className, pendingLabel, successStatuses, loginPath, consentBeforeSubmit = false, completionHref }: {
   children: ReactNode;
   className?: string;
   pendingLabel: string;
   successStatuses: string[];
   loginPath: string;
   consentBeforeSubmit?: boolean;
+  completionHref?: "/creator/onboarding?complete=1";
 }) {
   const uploads = useContentUploads();
   const busy = useRef(false);
@@ -80,7 +81,7 @@ export default function CreatorOnboardingActionForm({ children, className, pendi
       if (destination) {
         dirty.current = false;
         busy.current = false;
-        window.location.assign(destination.href);
+        window.location.assign(completionHref && successStatuses.includes("submitted") ? completionHref : destination.href);
         return;
       }
     } catch {

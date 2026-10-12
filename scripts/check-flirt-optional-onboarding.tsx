@@ -1,5 +1,7 @@
 import assert from "node:assert/strict";
 import React from "react";
+import { createRequire } from "node:module";
+createRequire(process.cwd() + "/package.json").extensions[".css"] = module => { module.exports = {}; };
 import { renderToStaticMarkup } from "react-dom/server";
 import { NextRequest } from "next/server";
 import { configureFlirtOfflineEnv } from "./flirt-offline-env";
@@ -38,7 +40,7 @@ async function main() {
     const html = renderToStaticMarkup(<Wizard page={page} initialAnswers={{}} initialRevision="" optional />);
     assert.doesNotMatch(html, /\srequired(?:=|\s|>)/, `${page.slug} must remain optional`);
     assert.match(html, /data-onboarding-optional="true"/);
-    assert.match(html, /All answers are optional/);
+    assert.match(html, /aria-label="Questionnaire progress"/, "Compact questionnaire retains progress without repeated optional copy");
   }
   assert.match(strictHtml, /\srequired(?:=|\s|>)/, "Default questionnaire validation must remain unchanged");
 

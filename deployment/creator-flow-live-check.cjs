@@ -28,6 +28,13 @@ const FIXTURE_FILES = Object.freeze({
 class CheckError extends Error {}
 class BlockedError extends CheckError {}
 function assert(ok, label) { if (!ok) throw new CheckError(label); }
+function contentNavigationAvailable(html, hasSavedContent) {
+  if (!html.includes('data-upload-content')) return false;
+  // Empty accounts intentionally hide the saved gallery in the guided design.
+  // Once content exists, its gallery must still be reachable on this page.
+  return html.includes('Saved content') || (!hasSavedContent &&
+    html.includes('data-combined-content-intake') && html.includes('creator-content-files'));
+}
 function parseArgs(argv) {
   const config = {};
   for (const arg of argv) {
@@ -336,7 +343,9 @@ async function run(config, env = process.env) {
       assert(!html.includes('Your onboarding is complete.'), 'Optional onboarding wrongly marked complete');
     }
     const content = await page200('/creator/onboarding?step=content', fixture);
-    assert(content.includes('Saved content') && content.includes('data-upload-content'), 'Saved gallery or additional upload controls missing');
+    const saved = await ownRows('creator_files', fixture, 'kind,storage_transfer_status');
+    const hasSavedContent = saved.some(file => file.kind !== 'voice' && file.storage_transfer_status === 'verified');
+    assert(contentNavigationAvailable(content, hasSavedContent), 'Saved gallery or additional upload controls missing');
   }
   async function draftState(fixture) {
     const applications = await ownRows('creator_applications', fixture, 'status,submitted_at');
@@ -680,7 +689,7 @@ async function run(config, env = process.env) {
     browser_journey_verified: false, physical_iphone_verified: false, speed_claim: 'Runtime/server connection only; not representative of creator phones', credentials_logged: false };
   console.log(JSON.stringify(result)); return result;
 }
-module.exports = { parseArgs, runtimeGuard, readCleanupManifest, runnerFixtureObjectAllowed, enumerateFixtureStorage, optionForMoxy, padMp4, paddedPhoto, safeUploadResult, run, BRANDS, LIMIT, PHOTO_LIMIT };
+module.exports = { contentNavigationAvailable, parseArgs, runtimeGuard, readCleanupManifest, runnerFixtureObjectAllowed, enumerateFixtureStorage, optionForMoxy, padMp4, paddedPhoto, safeUploadResult, run, BRANDS, LIMIT, PHOTO_LIMIT };
 // `node -` intentionally has no require.main. The SSM wrapper pipes this file
 // through stdin, while require() by the offline tests must stay side-effect free.
 if (require.main === module || (process.argv[1] === '-' && module.id === '[stdin]')) {

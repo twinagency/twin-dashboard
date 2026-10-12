@@ -1,4 +1,9 @@
 "use client";
+import CreatorProfileQuestionnaire, { type CreatorProfileQuestionnaireProps } from "./CreatorProfileQuestionnaire";
+export default function CreatorQuestionnaireWizard(props: CreatorProfileQuestionnaireProps) {
+  return props.page.slug.startsWith("quick-v2-") ? <CreatorProfileQuestionnaire {...props} /> : <LegacyCreatorQuestionnaireWizard {...props} />;
+}
+
 
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import { useContext, useCallback, useEffect, useMemo, useRef, useState } from "react";
@@ -51,7 +56,7 @@ function saveLabel(state: SaveState) {
   return { icon: Cloud, text: "Changes save automatically", className: "text-muted" };
 }
 
-export default function CreatorQuestionnaireWizard({
+function LegacyCreatorQuestionnaireWizard({
   page,
   initialAnswers,
   initialRevision,

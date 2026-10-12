@@ -17,6 +17,16 @@ global.__presentationDatabase={from(table){const q={select(){return q;},eq(){ret
  for(const [status,label] of [[null,'Draft / unfinished'],['draft','Draft / unfinished'],['submitted','Submitted'],['reviewing','Under review'],['approved','Approved'],['rejected','Changes required'],['withdrawn','Withdrawn']]){
   applicationStatus=status;const html=renderToStaticMarkup(await Page({searchParams:Promise.resolve({})}));assert.ok(html.includes('data-onboarding-application-state="'+label+'"'),status);if(status&&status!=='draft')assert.ok(html.includes('aria-label="Onboarding status: '+label+'"'),status);
  }
+ applicationStatus='draft';
+ let html=renderToStaticMarkup(await Page({searchParams:Promise.resolve({step:'content',complete:'1'})}));
+ assert.ok(!html.includes('data-setup-complete'), 'a query parameter cannot fabricate submission');
+ html=renderToStaticMarkup(await Page({searchParams:Promise.resolve({step:'content',review:'1'})}));
+ assert.ok(html.includes('data-setup-review') && html.includes('Submit onboarding'), 'review is a separate submit screen');
+ assert.ok(!/name="agreed"[^>]*checked/.test(html), 'consent starts unticked');
+ applicationStatus='submitted';
+ html=renderToStaticMarkup(await Page({searchParams:Promise.resolve({complete:'1'})}));
+ assert.ok(html.includes('data-setup-complete') && html.includes('Your onboarding has been submitted.'), 'confirmed submission has its own screen');
+ assert.ok(!html.includes('Your AI is live'), 'submission does not promise activation');
  if(moxy){
   const login=require(outdir+'/MoxyLogin.js');assert.equal((await login.default({searchParams:Promise.resolve({error:'1'})})).props.agencyBrand.slug,'moxy');assert.equal((await login.generateMetadata()).title,'Sign in · Moxy');
   for(const name of ['Forgot','Reset']){const recovery=require(outdir+'/'+name+'.js').default;global.__presentationMoxyHost=true;assert.equal((await recovery()).props.agencyBrand.slug,'moxy');global.__presentationMoxyHost=false;assert.equal((await recovery()).props.agencyBrand,null,'other hosts do not inherit Moxy presentation');}

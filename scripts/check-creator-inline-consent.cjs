@@ -32,12 +32,12 @@ const { JSDOM } = require('jsdom');
     if (next instanceof Error) throw next;
     return typeof next === 'function' ? next() : next;
   };
-  const render = async ({ name = '', agreed = false, inline = true, action = 'submit' } = {}) => {
+  const render = async ({ name = '', agreed = false, inline = true, action = 'submit', completionHref } = {}) => {
     await act(async () => root.unmount());
     root = createRoot(document.getElementById('root'));
     requests.length = 0; navigations.length = 0;
     await act(async () => root.render(React.createElement(Form, {
-      consentBeforeSubmit: inline, pendingLabel: 'Submitting', loginPath: '/creator/moxy/login',
+      completionHref, consentBeforeSubmit: inline, pendingLabel: 'Submitting', loginPath: '/creator/moxy/login',
       successStatuses: action === 'consent' ? ['consent_saved'] : ['submitted'],
     },
     React.createElement('input', { type: 'hidden', name: 'action', value: action }),
@@ -63,6 +63,14 @@ const { JSDOM } = require('jsdom');
   assert.deepEqual(actions(), ['consent', 'submit']);
   assert.ok(requests.every(request => request.name === 'Creator Name' && request.agreed), 'both requests retain entered values');
   assert.deepEqual(navigations, ['https://creator.example/creator'], 'only the final submission navigates');
+
+  await render({ completionHref: '/creator/onboarding?complete=1' });
+  responses = [response('not_ready')];
+  await submit();
+  assert.equal(navigations.length, 0, 'completion is never shown after an unconfirmed submission');
+  responses = [response('', '/creator')];
+  await submit();
+  assert.deepEqual(navigations, ['/creator/onboarding?complete=1'], 'confirmed submission opens the new completion screen');
 
   await render({ name: '   ' });
   responses = [response('', '/creator')];
