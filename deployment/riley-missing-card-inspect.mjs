@@ -1,2 +1,2 @@
-import {runAs} from './src/context.ts';import {loadChat} from './src/memory.ts';import {ownedKeys} from './src/payments.ts';
-const result=runAs('riley-mae-lewis',()=>{const chat=loadChat(6814483810),key='photo:53e2786f-c6e6-4c84-b4ff-c089457b1933';return{runtime:process.env.GIT_SHA,alreadyShown:chat.sent.includes(key),currentlyOwned:ownedKeys(6814483810).has(key),epoch:chat.epoch};});console.log(JSON.stringify(result));
+import {runAs} from './src/context.ts';import {loadChat} from './src/memory.ts';import {ownedKeys} from './src/payments.ts';import {config} from './src/config.ts';
+const result=runAs('riley-mae-lewis',()=>{const chat=loadChat(6814483810),key='photo:53e2786f-c6e6-4c84-b4ff-c089457b1933';return{checkedAt:new Date().toISOString(),runtime:process.env.GIT_SHA,conversationModel:config.model,alreadyShown:chat.sent.includes(key),locallyResolvedOwned:ownedKeys(6814483810).has(key),epoch:chat.epoch};});console.log(JSON.stringify(result));
