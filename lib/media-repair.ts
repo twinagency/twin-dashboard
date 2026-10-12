@@ -114,7 +114,11 @@ export async function fetchRows(ctx: Pick<Ctx, "db" | "retries" | "retryBaseMs">
 
 export type CloneInfo = { id: string; slug: string; vision_model: string | null; photo_vision_model?: string | null };
 export async function fetchClones(db: SupabaseClient): Promise<CloneInfo[]> {
-  const { data, error } = await withPhotoVisionColumn(include => db.from("clones").select(include ? "id, slug, vision_model, photo_vision_model" : "id, slug, vision_model").order("slug"));
+  const { data, error } = await withPhotoVisionColumn(include => {
+    const table = db.from("clones");
+    const query = include ? table.select("id, slug, vision_model, photo_vision_model") : table.select("id, slug, vision_model");
+    return query.order("slug");
+  });
   if (error) throw new Error(`read clones: ${error.message}`);
   return (data ?? []) as CloneInfo[];
 }
