@@ -32,6 +32,13 @@ async function main() {
       assert.equal(calls.at(-1)?.hostname, 'lkmfwpqegjluirfusnaw.supabase.co');
       assert.equal(calls.at(-1)?.searchParams.has('and'), false);
     });
+    const reviewPath = '/onboarding-review/' + 'a'.repeat(64);
+    const reviewEntry = await middleware(new NextRequest('https://dashboard.flirt.example' + reviewPath));
+    assert.equal(reviewEntry.status, 200, 'Exact review route must reach its independent key gate without login');
+    assert.equal(reviewEntry.headers.get('cache-control'), 'private, no-store');
+    assert.equal((await middleware(new NextRequest('https://dashboard.flirt.example' + reviewPath, { method: 'POST' }))).status, 403);
+    assert.equal((await middleware(new NextRequest('https://dashboard.flirt.example' + reviewPath, { headers: { 'next-action': 'forged' } }))).status, 403);
+    assert.notEqual((await middleware(new NextRequest('https://dashboard.flirt.example/creator/onboarding'))).status, 200, 'Ordinary onboarding still requires a creator session');
     const cookie = `${SESSION_COOKIE}=${await signSession()}`;
     const home = await middleware(new NextRequest('https://dashboard.flirt.example/revenue', { headers: { cookie, [FLIRT_OVERVIEW_SCOPE_HEADER]: CLONES[0] } }));
     assert.equal(home.status, 200);

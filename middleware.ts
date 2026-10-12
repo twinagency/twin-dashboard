@@ -49,6 +49,12 @@ export async function middleware(req: NextRequest) {
   const foreignBrand = flirtForeignBrandDecision(pathname, req.method);
   if (foreignBrand?.action === "notfound") return privateResponse(new NextResponse("Not found", { status: 404 }));
   if (foreignBrand?.action === "redirect") return privateResponse(NextResponse.redirect(new URL(foreignBrand.path + req.nextUrl.search, dashboardOrigin(req)), 308));
+  // This exact owner review route authenticates its unguessable key itself.
+  // It can issue a session for only the dedicated, unlinked preview account.
+  if (/^\/onboarding-review\/[a-f0-9]{64}$/.test(pathname)) {
+    if (!["GET", "HEAD"].includes(req.method) || req.headers.has("next-action")) return new NextResponse("Forbidden", { status: 403 });
+    return privateResponse(withPathname(req));
+  }
   if (isMarketingPath(pathname)) {
     if (!["GET", "HEAD"].includes(req.method) || req.headers.has("next-action")) return new NextResponse("Forbidden", { status: 403 });
     const response = privateResponse(withPathname(req));

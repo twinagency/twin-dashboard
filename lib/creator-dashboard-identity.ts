@@ -23,6 +23,10 @@ export type CreatorDashboardIdentity = AgencyIdentity & {
   agencyId: string | null;
 };
 
+// Dedicated onboarding preview, never a live creator or live-data account.
+export const ONBOARDING_REVIEW_ACCOUNT_ID = "0e8b6d0e-3cdf-4701-af94-674f00b097d8";
+export const ONBOARDING_REVIEW_AGENCY_ID = FLIRT_AGENCY_ID;
+
 const CREATOR_ACCESS_STATUSES = new Set(["applicant", "approved", "active"]);
 
 export function creatorAccountStatusAllowsAccess(status: unknown): boolean {
@@ -48,6 +52,10 @@ export async function creatorDashboardIdentity(token: string | null | undefined)
     // Direct agency applicants must retain a current server-owned assignment.
     // A partial provisioning failure must never fall back to Twin access.
     if (account.data.source === "agency_invite" && !assignment.data?.agency_id) return null;
+    // Revocation and isolation apply to every request, including older sessions.
+    if (session.accountId === ONBOARDING_REVIEW_ACCOUNT_ID && (
+      account.data.source !== "admin" || assignment.data?.agency_id !== ONBOARDING_REVIEW_AGENCY_ID || link.data?.clone_id
+    )) return null;
     let clone = link.data?.clones as unknown as { id: string; name: string } | null;
     if (link.data?.clone_id && (!clone || clone.id !== link.data.clone_id)) return null;
     const briLiveDemo = isBriLiveDemoAccount(session.accountId);
