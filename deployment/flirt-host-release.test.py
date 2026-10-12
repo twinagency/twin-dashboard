@@ -9,6 +9,23 @@ release = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(release)
 
 class ReleaseBoundaryTests(unittest.TestCase):
+    def test_retention_keeps_live_rollback_recent_mounted_and_foreign_containers(self):
+        from datetime import datetime, timezone
+        now = 1800000000
+        def archive(index, age, **extra):
+            sha = format(index, '040x')
+            return {"Id":str(index),"Name":"/flirt-dashboard-archive-"+sha[:12]+"-"+format(index,'016x'),"Created":datetime.fromtimestamp(now-age,timezone.utc).isoformat(),"Config":{"Labels":{"io.flirt.project":release.PROJECT,"io.flirt.commit":sha}},"State":{"Running":False,"Status":"exited"},"Mounts":[], **extra}
+        items = [archive(i, i*86400) for i in range(1,8)]
+        items += [archive(20, 20*86400, State={"Running":True,"Status":"running"}), archive(21,21*86400,Mounts=[{"Type":"volume"}]), archive(22,22*86400,Name="/flirt-dashboard-rollback"), archive(23,23*86400,Config={"Labels":{"io.flirt.project":"other"}})]
+        self.assertEqual([x['Id'] for x in release.archive_candidates(items, now)], ['7','6','5','4'])
+        recent = [archive(i, i*60) for i in range(1,8)]
+        self.assertEqual(release.archive_candidates(recent,now), [])
+
+    def test_retention_never_touches_docker_when_capacity_is_healthy(self):
+        with patch.object(release.shutil, "disk_usage", return_value=SimpleNamespace(free=8*1024**3)), patch.object(release,"command") as commands:
+            release.reclaim_dashboard_archives()
+        commands.assert_not_called()
+
     def test_archive_name_retains_prior_archives_and_retries_collisions(self):
         sha = "a" * 40
         first = "flirt-dashboard-archive-" + sha[:12] + "-" + "1" * 16
