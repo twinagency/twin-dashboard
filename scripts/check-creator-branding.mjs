@@ -429,7 +429,8 @@ try {
           }
           await page.goto(`${origin}/creator/onboarding?fixture_brand=twin&step=content`, { waitUntil: 'networkidle' });
           assert.equal(await page.locator('[data-combined-content-intake]').count(), 1);
-          await page.locator('[data-review-entry]').click();
+          await page.getByLabel('Setup menu', { exact: true }).click();
+          await page.getByRole('link', { name: 'Review and finish', exact: true }).click();
           await page.getByRole('button', { name: 'Submit onboarding', exact: true }).waitFor();
           assert.equal(await page.getByRole('button', { name: 'Submit onboarding', exact: true }).isVisible(), true);
           assert.equal(await page.getByRole('button', { name: 'Submit onboarding', exact: true }).isEnabled(), true);
