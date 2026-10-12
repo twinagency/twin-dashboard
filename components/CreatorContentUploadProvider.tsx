@@ -6,6 +6,7 @@ import { inCreatorUploadSlot } from "@/lib/creator-upload-queue";
 import { creatorUploadMaxBytes, creatorUploadSizeError } from "@/lib/creator-upload-limits";
 import { useCreatorContentFolders } from "./useCreatorContentFolders";
 import { contentMediaKind } from "@/lib/creator-content-intake";
+import { navigateCreatorSetup } from "@/lib/creator-setup-navigation";
 
 type State = "queued" | "uploading" | "saving" | "saved" | "failed" | "reselect";
 export type ContentUploadItem = { id: string; name: string; size: number; lastModified: number; state: State; percent: number; file?: File; error?: string };
@@ -159,6 +160,7 @@ export function CreatorContentUploadProvider({ accountId, children }: { accountI
 }
 export function CreatorUploadActivity() {
   const queue = useContentUploads();
-  if (!queue?.working) return null;
-  return <div role="status" className="mb-4 rounded-xl border border-border bg-white p-3 text-sm" data-content-upload-activity>{queue.items.filter(item => item.state === "saved").length} of {queue.items.length} files saved. You can answer your questionnaire while uploads continue.</div>;
+  const router = useContext(AppRouterContext);
+  if (!queue?.items.length) return null;
+  return <div className="mb-4 flex flex-wrap items-center justify-between gap-2 rounded-xl border border-border bg-white p-3 text-sm" data-content-upload-activity><span role="status">{queue.items.filter(item => item.state === "saved").length} of {queue.items.length} files saved</span><button type="button" className="min-h-11 font-medium underline" onClick={() => navigateCreatorSetup("/creator/onboarding?step=content", router?.push)}>View uploads</button></div>;
 }

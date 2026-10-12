@@ -307,7 +307,7 @@ const browser = await chromium.launch({ headless: true, ...(executablePath ? { e
 const expectations = {
   twin: {
     name: "Twin",
-    headings: { login: "Sign in", signup: "Create account", "forgot-password": "Reset password", "reset-password": "New password", onboarding: "A quick introduction" },
+    headings: { login: "Sign in", signup: "Create account", "forgot-password": "Reset password", "reset-password": "New password", onboarding: "Your content" },
     authBase: "/creator",
     signupAction: "/creator-auth/signup",
   },
@@ -406,7 +406,8 @@ try {
         } else if (brand === "twin") {
           assert.equal(await page.locator('[data-creator-setup-tab]').count(), 2, 'Twin uses Questionnaire and Content');
           assert.equal(await page.locator('[data-onboarding-hub]').count(), 0, 'the profile opens directly');
-          assert.equal(await page.getByRole('link', { name: 'Save & exit' }).getAttribute('href'), '/creator');
+          assert.equal(await page.getByRole('link', { name: 'Go to dashboard' }).getAttribute('href'), '/creator');
+          await page.locator('[data-creator-setup-tab="questionnaire"]').click();
           const questionnaire = page.locator('[data-questionnaire-page="quick-v2-introduction"]');
           await questionnaire.waitFor();
           assert.doesNotMatch(await questionnaire.innerText(), /Section \d of/);
@@ -422,7 +423,7 @@ try {
             assert.equal(await page.locator(`[data-questionnaire-page='${targetSection}']`).count(), 1);
           }
           await page.goto(`${origin}/creator/onboarding?fixture_brand=twin&step=content`, { waitUntil: 'networkidle' });
-          assert.equal(await page.locator('[data-content-category]').count(), 4);
+          assert.equal(await page.locator('[data-combined-content-intake]').count(), 1);
           assert.equal(await page.getByRole('button', { name: 'Submit onboarding', exact: true }).isEnabled(), true);
         } else {
           assert.equal(await page.locator("[data-onboarding-hub]").count(), 1, `${brand} onboarding must open on the compact hub`);

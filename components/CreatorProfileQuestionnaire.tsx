@@ -17,7 +17,7 @@ export type CreatorProfileQuestionnaireProps = {
   optional?: boolean;
 };
 type SaveState = "idle" | "dirty" | "saving" | "saved" | "error" | "conflict";
-type Destination = number | "content" | "dashboard" | "hub" | "finish";
+type Destination = number | "content" | "dashboard" | "hub" | "finish" | "review";
 
 const pages = COMPACT_QUESTIONNAIRE_PAGES;
 const previewLabels: Record<string, string> = {
@@ -149,7 +149,7 @@ export default function CreatorProfileQuestionnaire({ page: initialPage, initial
           return;
         }
       }
-      navigateTo(target === "dashboard" ? "/creator" : target === "hub" ? "/creator/onboarding" : "/creator/onboarding?step=content");
+      navigateTo(target === "dashboard" ? "/creator" : target === "hub" ? "/creator/onboarding" : target === "finish" || target === "review" ? "/creator/onboarding?step=content&review=1#creator-setup-submit" : "/creator/onboarding?step=content");
     } catch {
       setError("We could not finish that step. Your answers are still here. Please try again.");
     } finally {
@@ -206,11 +206,11 @@ export default function CreatorProfileQuestionnaire({ page: initialPage, initial
       {error && <div role="alert" className={styles.error}><p>{error}</p>{saveState === "error" && <button type="button" disabled={navigating} onClick={() => void flush()}>Try saving again</button>}</div>}
       <div className={styles.footer} data-questionnaire-navigation>
         <div className={styles.footerLinks}><button type="button" ref={previewButtonRef} onClick={() => setPreviewOpen(true)}><Eye size={16} aria-hidden="true" />Preview profile</button>
-          {optional && !locked && <button type="button" disabled={navigating} onClick={() => void goTo("content")}>Skip questions</button>}
+          {optional && !locked && <button type="button" disabled={navigating} onClick={() => void goTo("review")}>Skip questions</button>}
         </div>
         <div className={styles.navigation}>
-          <button type="button" className={styles.back} disabled={navigating} onClick={() => void goTo(currentIndex > 0 ? currentIndex - 1 : "dashboard")}><ArrowLeft size={17} aria-hidden="true" />Back</button>
-          <button type="button" className={styles.continue} disabled={navigating || conflictRef.current} onClick={() => void goTo(currentIndex < pages.length - 1 ? currentIndex + 1 : locked ? "content" : "finish")}>{navigating ? "Saving…" : currentIndex < pages.length - 1 ? "Continue" : "Continue to content"}{navigating ? <LoaderCircle size={17} className={styles.spinner} aria-hidden="true" /> : <ArrowRight size={17} aria-hidden="true" />}</button>
+          <button type="button" className={styles.back} disabled={navigating} onClick={() => void goTo(currentIndex > 0 ? currentIndex - 1 : "content")}><ArrowLeft size={17} aria-hidden="true" />Back</button>
+          <button type="button" className={styles.continue} disabled={navigating || conflictRef.current} onClick={() => void goTo(currentIndex < pages.length - 1 ? currentIndex + 1 : locked ? "review" : "finish")}>{navigating ? "Saving…" : currentIndex < pages.length - 1 ? "Continue" : "Review and finish"}{navigating ? <LoaderCircle size={17} className={styles.spinner} aria-hidden="true" /> : <ArrowRight size={17} aria-hidden="true" />}</button>
         </div>
       </div>
     </form>

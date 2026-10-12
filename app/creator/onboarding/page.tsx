@@ -226,7 +226,7 @@ function ReadinessItem({ step, complete, title, detail, href, optional = false }
   );
 }
 
-export default async function CreatorOnboardingPage({ searchParams }: { searchParams: Promise<{ status?: string; step?: string; section?: string }> }) {
+export default async function CreatorOnboardingPage({ searchParams }: { searchParams: Promise<{ status?: string; step?: string; section?: string; review?: string }> }) {
   const jar = await cookies();
   const creator = await creatorDashboardIdentity(jar.get(CREATOR_SESSION_COOKIE)?.value);
   if (!creator) redirect(creatorLoginPath(creator, jar.get(CREATOR_PORTAL_COOKIE)?.value));
@@ -239,9 +239,9 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
   const optionalIntake = creatorIntakeOptional(creator);
   const brandName = tether ? "Tether" : link ? "LYNQ" : moxy ? "Moxy" : "Twin";
   const loginPath = moxy ? "/creator/moxy/login" : creatorLoginPath(creator, jar.get(CREATOR_PORTAL_COOKIE)?.value);
-  const { status, step, section } = await searchParams;
+  const { status, step, section, review } = await searchParams;
   const activeStep = optionalIntake
-    ? step === "content" || step === "voice" || step === "consent" ? "content" : "questionnaire"
+    ? step === "questionnaire" || (!step && (section || status?.startsWith("questionnaire_"))) ? "questionnaire" : "content"
     : isOnboardingStep(step) ? step : null;
   const compactQuestionnaire = optionalIntake && activeStep === "questionnaire";
   const questionnairePage = creatorQuestionnairePage(section, optionalIntake);
@@ -309,7 +309,8 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
           savedVideos={(files || []).filter(file => file.storage_transfer_status === "verified" && file.kind !== "voice" && file.mime_type?.startsWith("video/")).length}
           initialFolders={contentFolders(answers)} />
 
-        <div data-creator-setup-submit>
+        <details data-creator-setup-submit open={review === "1" || submitted || Boolean(status && errorStatuses.has(status))}>
+          <summary id="creator-setup-submit" className="mb-4 min-h-11 cursor-pointer py-2 text-lg font-semibold">Review and finish</summary>
           <CreatorOnboardingActionForm className="grid gap-4" pendingLabel={submitted ? "Saving consent…" : "Submitting your saved information…"} successStatuses={submitted ? ["consent_saved"] : ["submitted"]} loginPath={loginPath} consentBeforeSubmit={!consent && !submitted}>
             <input type="hidden" name="action" value={submitted && !consent ? "consent" : "submit"} />
             {!consent ? <>
@@ -322,7 +323,7 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
             </div>
           </CreatorOnboardingActionForm>
           {!readyToSubmit && !applicationLocked && <p className="mt-3 text-sm text-muted">Complete the required information before submitting.</p>}
-        </div>
+        </details>
       </section>}
     </CreatorSetupLayout>
   );

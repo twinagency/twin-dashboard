@@ -3,6 +3,7 @@
 import { useContext, type MouseEvent, type ReactNode } from "react";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import { CreatorUploadActivity } from "./CreatorContentUploadProvider";
+import { navigateCreatorSetup } from "@/lib/creator-setup-navigation";
 import { ArrowUpRight, FileText, Images } from "lucide-react";
 import styles from "./CreatorSetupLayout.module.css";
 
@@ -21,11 +22,7 @@ function navigate(event: MouseEvent<HTMLAnchorElement>, href: string, current = 
   if (event.button !== 0 || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
   event.preventDefault();
   if (current) return;
-  const request = new CustomEvent(CREATOR_SETUP_NAVIGATE_EVENT, {
-    cancelable: true,
-    detail: { href },
-  });
-  if (window.dispatchEvent(request)) { if (push && href.startsWith("/creator/onboarding")) push(href); else window.location.assign(href); }
+  navigateCreatorSetup(href, push);
 }
 
 export default function CreatorSetupLayout({ brand, logoSrc, activeSection, applicationStatus, children }: CreatorSetupLayoutProps) {
@@ -49,27 +46,26 @@ export default function CreatorSetupLayout({ brand, logoSrc, activeSection, appl
         <div className={styles.intro}>
           <div>
             {brand !== "moxy" && <p className={styles.eyebrow}>Creator setup</p>}
-            <h1>{brand === "moxy" ? "Make it yours." : "Make your AI feel like you."}</h1>
-            <p className={styles.subtitle}>{brand === "moxy" ? "Set up your AI, in your own time." : "Complete these sections in any order. You can come back whenever you like."}</p>
+            <h1>{activeSection === "content" ? "Let’s set up your AI." : brand === "moxy" ? "Make it yours." : "Make your AI feel like you."}</h1>
+            <p className={styles.subtitle}>{activeSection === "content" ? "Add your photos and videos, then tell us about yourself while they upload." : "Your answers help us make your AI feel like you."}</p>
           </div>
           {applicationStatus && <span className={styles.applicationStatus} data-onboarding-application-state={applicationStatus} aria-label={`Onboarding status: ${applicationStatus}`}>{applicationStatus}</span>}
         </div>
 
         <nav className={styles.tabs} aria-label="Creator setup sections">
-          <a href="/creator/onboarding?step=questionnaire" className={`${styles.tab} ${activeSection === "questionnaire" ? styles.activeTab : ""}`}
-            aria-current={activeSection === "questionnaire" ? "page" : undefined} data-creator-setup-tab="questionnaire"
-            onClick={(event) => navigate(event, "/creator/onboarding?step=questionnaire", activeSection === "questionnaire", router?.push)}>
-            {brand !== "moxy" && <FileText size={18} aria-hidden="true" />} Questionnaire
-          </a>
           <a href="/creator/onboarding?step=content" className={`${styles.tab} ${activeSection === "content" ? styles.activeTab : ""}`}
             aria-current={activeSection === "content" ? "page" : undefined} data-creator-setup-tab="content"
             onClick={(event) => navigate(event, "/creator/onboarding?step=content", activeSection === "content", router?.push)}>
             {brand !== "moxy" && <Images size={18} aria-hidden="true" />} {brand === "moxy" ? "Content" : "Your content"}
           </a>
+          <a href="/creator/onboarding?step=questionnaire" className={`${styles.tab} ${activeSection === "questionnaire" ? styles.activeTab : ""}`}
+            aria-current={activeSection === "questionnaire" ? "page" : undefined} data-creator-setup-tab="questionnaire"
+            onClick={(event) => navigate(event, "/creator/onboarding?step=questionnaire", activeSection === "questionnaire", router?.push)}>
+            {brand !== "moxy" && <FileText size={18} aria-hidden="true" />} Questionnaire
+          </a>
         </nav>
-        {brand === "moxy" && <p className={styles.sectionHint}>Choose either section to get started.</p>}
 
-        <div className={styles.content} data-onboarding-active-step={activeSection}><CreatorUploadActivity />{children}</div>
+        <div className={styles.content} data-onboarding-active-step={activeSection}>{activeSection === "questionnaire" && <CreatorUploadActivity />}{children}</div>
         <footer className={styles.footer}>Your profile, your pace.</footer>
       </main>
     </div>
