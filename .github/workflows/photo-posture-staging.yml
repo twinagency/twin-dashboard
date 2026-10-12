@@ -1,0 +1,51 @@
+name: Real staging separate photo and video models
+on:
+  push:
+    branches: [codex/photo-model-split-staging-20261012]
+permissions:
+  contents: read
+  actions: read
+jobs:
+  staging:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - name: Existing media regression dependencies
+        run: bash scripts/install-ci-video-tools.sh
+        timeout-minutes: 7
+      - name: Affected classifier, analysis, correction and profile regressions
+        run: |
+          set -euo pipefail
+          node --import tsx scripts/check-media-classification.ts
+          TSX_TSCONFIG_PATH=scripts/tsconfig.json node --import tsx scripts/check-media-analysis.ts
+          TSX_TSCONFIG_PATH=scripts/tsconfig.json node --import tsx scripts/check-vision-profile.ts
+          node --import tsx scripts/check-media-correction.ts
+      - run: npm run build
+      - run: npx tsc --noEmit
+      - name: Retrieve original frozen creator-owned source
+        run: python3 deployment/photo-posture-source.py
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - name: Real HTTP uploader, model, private save and catalogue refresh
+        run: |
+          set -euo pipefail
+          python3 -c 'import os,json;print(json.dumps({"supabase":os.environ["STAGING_SERVICE_KEY"],"openrouter":os.environ["STAGING_MODEL_KEY"]}))' | node scripts/check-photo-launch-staging.mjs
+        env:
+          STAGING_SERVICE_KEY: ${{ secrets.TWIN_STAGING_SUPABASE_SERVICE_KEY }}
+          STAGING_MODEL_KEY: ${{ secrets.TWIN_STAGING_OPENROUTER_API_KEY }}
+          PHOTO_LAUNCH_RETAINED_ROOT: /tmp/photo-source-retained
+          PHOTO_LAUNCH_RESULTS: /tmp/photo-posture-staging
+          PHOTO_LAUNCH_CASES: dreka-production-control
+          PHOTO_LAUNCH_BASE_VISION_MODEL: mistralai/mistral-small-3.2-24b-instruct
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: photo-posture-staging-evidence
+          path: /tmp/photo-posture-staging/
+          retention-days: 3

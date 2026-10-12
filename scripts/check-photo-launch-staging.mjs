@@ -12,6 +12,7 @@ const API=`https://${PROJECT}.supabase.co`, ORIGIN='http://127.0.0.1:3211';
 // Direct backend requests, as behind the production TLS proxy. The public origin remains HTTPS.
 const PUBLIC_ORIGIN='https://photo-staging.invalid';
 const MODEL='qwen/qwen3.8-27b';
+const BASE_MODEL=process.env.PHOTO_LAUNCH_BASE_VISION_MODEL || MODEL;
 const OUT=process.env.PHOTO_LAUNCH_RESULTS || '/tmp/twin-photo-real-staging-20261012';
 const BASE=process.env.PHOTO_LAUNCH_RETAINED_ROOT || '/workspace/scratch/f388f4f2e89b';
 const CASES=[
@@ -49,12 +50,12 @@ async function upload(bytes,name,{free=false}={}) {
  assert.equal(r.status,200,'HTTP upload route failed');return r.json();
 }
 try {
- const clones=await api(`/rest/v1/clones?select=id,slug,vision_model,category_pricing&id=eq.${CLONE}`);
+ const clones=await api(`/rest/v1/clones?select=id,slug,vision_model,photo_vision_model,category_pricing&id=eq.${CLONE}`);
  assert.equal(clones.length,1);original=clones[0];assert.equal(original.slug,'photoflow-editor-test');
  const bucket=await api('/storage/v1/bucket/media');assert.equal(bucket.public,false);
  const beforeOther=await api(`/rest/v1/photos?select=id,clone_id&clone_id=neq.${CLONE}`);report.other_clone_rows_before=beforeOther;
  console.log('Staging database and private media storage authenticated.');
- await api(`/rest/v1/clones?id=eq.${CLONE}&slug=eq.photoflow-editor-test`,{method:'PATCH',body:JSON.stringify({vision_model:MODEL})});
+ await api(`/rest/v1/clones?id=eq.${CLONE}&slug=eq.photoflow-editor-test`,{method:'PATCH',body:JSON.stringify({vision_model:BASE_MODEL,photo_vision_model:BASE_MODEL===MODEL?null:MODEL})});
  server=spawn(process.execPath,['node_modules/next/dist/bin/next','start','--hostname','127.0.0.1','--port','3211'],{
   env:{...process.env,NODE_ENV:'production',SUPABASE_URL:API,SUPABASE_SERVICE_KEY:secret.supabase,OPENROUTER_API_KEY:secret.openrouter,
    TWIN_ADMIN_API_KEY:adminKey,TWIN_ADMIN_ALLOW_PUBLIC:'false',DASHBOARD_PASSWORD:password,DASHBOARD_PUBLIC_ORIGIN:PUBLIC_ORIGIN,
@@ -106,6 +107,7 @@ try {
  const calls=fs.readFileSync(path.join(OUT,'transport.jsonl'),'utf8').trim().split('\n').map(JSON.parse);
  for(const call of calls.filter(c=>c.has_image)){assert.equal(call.model,MODEL);assert.deepEqual(call.provider,{only:['deepinfra'],allow_fallbacks:false});assert.match(call.effective_provider||'',/^deepinfra$/i);}
  for(const call of calls.filter(c=>c.model===MODEL)){assert.deepEqual(call.provider,{only:['deepinfra'],allow_fallbacks:false});assert.deepEqual(call.reasoning,{effort:'xhigh',exclude:true});assert.equal(call.max_tokens,16384);assert.equal(call.temperature,0);assert.equal(call.text_first,true);assert.deepEqual(call.response_format,{type:'json_object'});}
+ const [configured]=await api(`/rest/v1/clones?select=vision_model,photo_vision_model&id=eq.${CLONE}`);assert.equal(configured.vision_model,BASE_MODEL);assert.equal(configured.photo_vision_model,BASE_MODEL===MODEL?null:MODEL);report.configured_models=configured;
  report.call_count=calls.length;report.vision_call_count=calls.filter(c=>c.model===MODEL).length;
  report.status=report.material_errors.length?'material_failure':'transport_pass';persist();
  console.log('Real staging flow completed:',report.status,'vision calls:',report.vision_call_count);
@@ -113,6 +115,6 @@ try {
 }catch(error){report.status='failed';report.failure=redact(error.message);persist();console.error('Staging check failed:',redact(error.message));process.exitCode=1;}
 finally{
  if(server)server.kill('SIGTERM');
- if(original){try{await api(`/rest/v1/clones?id=eq.${CLONE}&vision_model=eq.${MODEL}`,{method:'PATCH',body:JSON.stringify({vision_model:original.vision_model})});report.setting_restored=true;}catch{report.setting_restored=false;process.exitCode=1;}}
+ if(original){try{await api(`/rest/v1/clones?id=eq.${CLONE}&vision_model=eq.${BASE_MODEL}`,{method:'PATCH',body:JSON.stringify({vision_model:original.vision_model,photo_vision_model:original.photo_vision_model??null})});report.setting_restored=true;}catch{report.setting_restored=false;process.exitCode=1;}}
  persist();
 }
