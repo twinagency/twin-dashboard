@@ -133,6 +133,7 @@ import Signup from './components/CreatorSignupScreen';
 import Forgot from './components/CreatorForgotPasswordScreen';
 import Reset from './components/CreatorResetPasswordScreen';
 import Onboarding from './app/creator/onboarding/page';
+import {CreatorContentUploadProvider} from './components/CreatorContentUploadProvider';
 
 const kind = location.pathname.split('/').filter(Boolean).at(-1) || 'login';
 const brand = location.pathname.includes('/creator/link/')
@@ -150,6 +151,8 @@ globalThis.fetch=async(input,init)=>{
     globalThis.__creatorDraftRequests.push(payload);
     return new Response(JSON.stringify({ok:true,revision:'fixture-revision-'+globalThis.__creatorDraftRequests.length}),{status:200,headers:{'content-type':'application/json'}});
   }
+  if(requestUrl.pathname==='/creator-auth/files')return new Response(JSON.stringify({files:[],hasMore:false}),{status:200,headers:{'content-type':'application/json'}});
+  if(requestUrl.pathname==='/creator-auth/uploads')return new Response(JSON.stringify({uploads:[]}),{status:200,headers:{'content-type':'application/json'}});
   return nativeFetch(input,init);
 };
 function App(){
@@ -170,7 +173,7 @@ function App(){
   },[]);
   if(kind==='forgot-password')return <Forgot brand={brand}/>;
   if(kind==='reset-password')return <Reset brand={brand}/>;
-  return node;
+  return kind==='onboarding' ? <CreatorContentUploadProvider accountId="11111111-1111-4111-8111-111111111111">{node}</CreatorContentUploadProvider> : node;
 }
 createRoot(document.getElementById('root')).render(<App/>);
 `;
@@ -282,12 +285,12 @@ const globalCss = await postcss([tailwind()]).process('@import "./app/globals.cs
   from: path.join(root, "creator-branding-verification.css"),
 });
 const styles = `${globalCss.css}\n${moduleCss}`;
-const html = '<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/styles.css"><style>body{margin:0;font-family:Arial,sans-serif}html{--font-sans:Arial;--font-display:Arial;--font-heading:Arial}</style></head><body><div id="root"></div><script src="/bundle.js"></script></body></html>';
+const html = '<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/styles.css"><style>body{margin:0;font-family:Arial,sans-serif}html{--font-sans:Arial;--font-display:Arial;--font-heading:Arial}</style></head><body><div id="root"></div><script src="/bundle.js"></script></body></html>';
 const server = createServer((req, res) => {
   const url = new URL(req.url, "http://localhost");
   if (url.pathname === "/styles.css") { res.setHeader("content-type", "text/css"); return res.end(styles); }
-  if (url.pathname === "/bundle.js") { res.setHeader("content-type", "application/javascript"); return res.end(javascript); }
-  res.setHeader("content-type", "text/html");
+  if (url.pathname === "/bundle.js") { res.setHeader("content-type", "application/javascript; charset=utf-8"); return res.end(javascript); }
+  res.setHeader("content-type", "text/html; charset=utf-8");
   return res.end(html);
 });
 
@@ -424,6 +427,8 @@ try {
           }
           await page.goto(`${origin}/creator/onboarding?fixture_brand=twin&step=content`, { waitUntil: 'networkidle' });
           assert.equal(await page.locator('[data-combined-content-intake]').count(), 1);
+          await page.getByText('Review and finish', { exact: true }).click();
+          assert.equal(await page.getByRole('button', { name: 'Submit onboarding', exact: true }).isVisible(), true);
           assert.equal(await page.getByRole('button', { name: 'Submit onboarding', exact: true }).isEnabled(), true);
         } else {
           assert.equal(await page.locator("[data-onboarding-hub]").count(), 1, `${brand} onboarding must open on the compact hub`);
