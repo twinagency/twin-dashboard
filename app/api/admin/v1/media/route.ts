@@ -5,7 +5,7 @@ import { resolveClone } from "@/lib/api-read";
 export const dynamic = "force-dynamic";
 // Uploads are big and slow (format conversion, then an AI captioning call per
 // item), so the default serverless-ish budget is not enough for a real set.
-export const maxDuration = 300;
+export const maxDuration = 900;
 
 // Upload photos or videos to a clone's library, over the admin API.
 //
@@ -66,8 +66,8 @@ export const POST = withAdmin(async (req) => {
     if (form.get("is_free") != null) fd.set("is_free", String(form.get("is_free")));
     if (form.get("star_value") != null) fd.set("star_value", String(form.get("star_value")));
     try {
-      if (type === "photo") await uploadPhoto(clone.id, fd);
-      else await uploadVideo(clone.id, fd);
+      const result = type === "photo" ? await uploadPhoto(clone.id, fd) : await uploadVideo(clone.id, fd);
+      if (!result.ok) throw new Error(result.error);
       uploaded.push(file.name);
     } catch (e) {
       // One bad file must not lose the whole set — and it must be NAMED, so the
@@ -85,7 +85,7 @@ export const POST = withAdmin(async (req) => {
     failed,
     note:
       failed.length > 0
-        ? `${uploaded.length} uploaded, ${failed.length} failed. Failed files were NOT stored; retry just those.`
-        : `${uploaded.length} ${type}(s) uploaded, captioned and priced from her guide.`,
+        ? `${uploaded.length} uploaded. Could not confirm saving ${failed.length} file(s); review the failed items before retrying.`
+        : `${uploaded.length} ${type}(s) saved. Check their analysis status in the media library before use.`,
   });
 });

@@ -1,0 +1,32 @@
+{
+  "evidence": {
+    "nipples": "no",
+    "genitals": "unclear",
+    "anus": "unclear",
+    "bare_buttocks": "unclear",
+    "full_nudity": "unclear",
+    "sexual_activity": "no",
+    "sex_toy": "no",
+    "swimwear": "no",
+    "lingerie": "no",
+    "mirror_reflection": "no",
+    "suggestive_pose": "no"
+  },
+  "identifying": "A blonde woman with a ponytail wears blue body paint shaped like a paintbrush on her torso and arm.",
+  "details": "The paint forms an image of a paintbrush across her chest and right arm. Her left hand is placed over her chest. She wears a thin gold necklace with a small pendant. The background features white fabric and dark green leaves.",
+  "short_label": "blonde woman blue body paint",
+  "visible": [
+    "blonde ponytail",
+    "blue body paint",
+    "paintbrush image",
+    "gold necklace",
+    "white fabric background",
+    "green leaves"
+  ],
+  "tags": [],
+  "uncertainty_reasons": {
+    "genitals": "out_of_frame",
+    "anus": "out_of_frame",
+    "bare_buttocks": "out_of_frame"
+  }
+}

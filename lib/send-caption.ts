@@ -7,6 +7,7 @@ import type { AnalysisFields } from "./media-analysis-contract";
 // already-validated facts, never from the image and never inside the vision call, and it is checked against those same
 // facts. It is never evidence for matching. On any failure the caption is null and V1 falls back to auto_desc.
 export const SEND_CAPTION_MODEL = "deepseek/deepseek-v4-flash";
+export const SEND_CAPTION_BUDGET_MS = 60_000;
 
 export const RECAPTION_SYSTEM = `You write one caption for a photo or video that a woman is sending to a fan.
 Write in first person as her. It is standalone, not a reply to anyone.
@@ -55,8 +56,10 @@ export function acceptCaption(raw: string, facts?: Pick<AnalysisFields["visual_f
 export async function generateSendCaption(
   fields: Pick<AnalysisFields, "visual_description" | "visual_facts">,
   kind: "photo" | "video",
-  write: (user: string) => Promise<string> = (user) =>
-    withRetry(() => orChat({ model: SEND_CAPTION_MODEL, system: RECAPTION_SYSTEM, user, temperature: 0.9 }), 2),
+  write: (user: string) => Promise<string> = (user) => {
+    const signal = AbortSignal.timeout(SEND_CAPTION_BUDGET_MS);
+    return withRetry(() => orChat({ model: SEND_CAPTION_MODEL, system: RECAPTION_SYSTEM, user, temperature: 0.9, signal }), 2, { signal });
+  },
 ): Promise<string | null> {
   try {
     return acceptCaption(await write(`Facts about this ${kind}: ${fields.visual_description}`), fields.visual_facts, `${fields.visual_description} ${fields.visual_facts.visible.join(" ")}`);

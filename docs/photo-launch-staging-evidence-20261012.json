@@ -1,0 +1,824 @@
+{
+  "scope": "Actual local Next production HTTP/server action with remote staging Supabase/storage/OpenRouter. Production proxy and Telegram are not exercised here.",
+  "runs": [
+    {
+      "run": "photo-launch-1791786749904",
+      "status": "interrupted",
+      "project": "zqotxvrxuaocsonpizuw",
+      "clone_id": "7e57f10f-0000-4000-8000-00000000f001",
+      "checks": [
+        "Real dashboard login and authenticated media page"
+      ],
+      "material_errors": [
+        {
+          "id": "448462a7-19f8-4916-a1ad-474f53c813c3",
+          "reason": "real held paintbrush misdescribed as painted imagery"
+        }
+      ],
+      "setting_restored": "manually restored after interruption",
+      "cases": [
+        {
+          "reference": {
+            "id": "b44898f3-a6e7-465b-b994-4bb18a91f493",
+            "imageSha256": "709ed8818f3512d688e4e7c5c1e149436dd09c8cbdaafb7ade2a71e272d28bbb",
+            "reference_description": "Rear/side outdoor view, white lace bra and white G-string, buttock cheeks exposed.",
+            "yes": [
+              "bare_buttocks",
+              "lingerie"
+            ],
+            "not_positive": [
+              "nipples",
+              "genitals",
+              "anus",
+              "full_nudity",
+              "swimwear",
+              "sex_toy",
+              "sexual_activity",
+              "mirror_reflection"
+            ],
+            "uncertain": [],
+            "notes": "Thong cheeks count; thong alone is not fully nude or explicit.",
+            "file": "/tmp/twin-media-fix-review4/pilot/images/b44898f3-a6e7-465b-b994-4bb18a91f493.jpg"
+          },
+          "source_sha256": "709ed8818f3512d688e4e7c5c1e149436dd09c8cbdaafb7ade2a71e272d28bbb",
+          "stored_sha256": "8ba996e482d9470378d5939d295b99ebd596e1feac759a6fb6bc5e7ab5afdc8d",
+          "elapsed_ms": 95496,
+          "saved": {
+            "id": "413df9dd-4ed8-4ad9-844d-f78e2a1eff5b",
+            "clone_id": "7e57f10f-0000-4000-8000-00000000f001",
+            "storage_path": "7e57f10f-0000-4000-8000-00000000f001/photos/8ba996e482d9470378d5939d295b99eb-photo-launch-1791786749904-b44898f3-a6e7-465b-b994-4bb18a91f493.jpg",
+            "image_name": "photo-launch-1791786749904-b44898f3-a6e7-465b-b994-4bb18a91f493.jpg",
+            "analysis_status": "needs_review",
+            "analysis_error": "unclear: genitals",
+            "analysis_model": "qwen/qwen3.8-27b",
+            "analysis_provider": "DeepInfra",
+            "visual_description": "A long blonde woman in a white lace bra and thong poses in profile among dark green foliage. The woman stands in left profile with her back angled toward the camera, one hand resting on her upper thigh. She wears a white lace bra and a matching white strappy thong. Her long wavy blonde hair falls down her back. The background is dense dark green foliage in soft focus under natural light. Not visible: nipples, anus.",
+            "visual_facts": {
+              "v": 2,
+              "visible": [
+                "white lace bra",
+                "white strappy thong",
+                "long wavy blonde hair",
+                "dark green foliage",
+                "outdoor setting",
+                "profile pose",
+                "hand on thigh",
+                "exposed buttocks"
+              ],
+              "evidence": {
+                "anus": "no",
+                "nipples": "no",
+                "sex_toy": "no",
+                "genitals": "unclear",
+                "lingerie": "yes",
+                "swimwear": "no",
+                "full_nudity": "no",
+                "bare_buttocks": "yes",
+                "sexual_activity": "no",
+                "suggestive_pose": "yes",
+                "mirror_reflection": "no"
+              },
+              "uncertainty_reasons": {
+                "genitals": "ambiguous_visibility"
+              }
+            },
+            "tags": [
+              "outdoor",
+              "solo",
+              "ass",
+              "lingerie"
+            ],
+            "explicitness": "suggestive",
+            "is_nude": false,
+            "nsfw": false,
+            "star_value": 350,
+            "is_free": false
+          }
+        },
+        {
+          "reference": {
+            "id": "448462a7-19f8-4916-a1ad-474f53c813c3",
+            "imageSha256": "1f1f20ae8984fa213dddc791599f4a026394d8ba0ae0f1f767133af1b2077afe",
+            "reference_description": "Close upper-body view with blue and white body paint, hand concealing one breast and paintbrush in the other hand. No garment established.",
+            "yes": [],
+            "not_positive": [
+              "nipples",
+              "genitals",
+              "anus",
+              "bare_buttocks",
+              "swimwear",
+              "lingerie",
+              "sex_toy",
+              "sexual_activity",
+              "mirror_reflection"
+            ],
+            "uncertain": [
+              "full_nudity"
+            ],
+            "notes": "Lower body cropped. Painted skin is not a blue top; nipple not discernible.",
+            "file": "/tmp/twin-media-fix-review4/pilot/images/448462a7-19f8-4916-a1ad-474f53c813c3.jpg"
+          },
+          "source_sha256": "1f1f20ae8984fa213dddc791599f4a026394d8ba0ae0f1f767133af1b2077afe",
+          "stored_sha256": "222f4d72a9bca8f4dc5cf6be675a7f987f51b559f8d13604e56dab3e5e584397",
+          "elapsed_ms": 151287,
+          "saved": {
+            "id": "ea44ac86-dd09-4805-a894-3a4c2555cd58",
+            "clone_id": "7e57f10f-0000-4000-8000-00000000f001",
+            "storage_path": "7e57f10f-0000-4000-8000-00000000f001/photos/222f4d72a9bca8f4dc5cf6be675a7f98-photo-launch-1791786749904-448462a7-19f8-4916-a1ad-474f53c813c3.jpg",
+            "image_name": "photo-launch-1791786749904-448462a7-19f8-4916-a1ad-474f53c813c3.jpg",
+            "analysis_status": "analysed",
+            "analysis_error": null,
+            "analysis_model": "qwen/qwen3.8-27b",
+            "analysis_provider": "DeepInfra",
+            "visual_description": "A blonde woman with blue body paint and a painted paintbrush design on her torso, hand on chest, against a white backdrop. A blonde woman with a thin gold necklace and a ring on one finger is shown from the nose down to the mid-torso. Blue body paint covers one arm, shoulder and part of the torso, with a trompe-l'oeil design of orange and grey paintbrushes across the chest. The opposite side of the upper torso is bare skin with a hand resting over it. Not visible: nipples.",
+            "visual_facts": {
+              "v": 2,
+              "visible": [
+                "blue body paint on arm and torso",
+                "painted paintbrush design on chest",
+                "gold chain necklace",
+                "ring on finger",
+                "blonde hair",
+                "bare upper torso skin",
+                "hand placed over chest",
+                "white backdrop",
+                "dark foliage background"
+              ],
+              "evidence": {
+                "anus": "unclear",
+                "nipples": "no",
+                "sex_toy": "no",
+                "genitals": "unclear",
+                "lingerie": "no",
+                "swimwear": "no",
+                "full_nudity": "unclear",
+                "bare_buttocks": "unclear",
+                "sexual_activity": "no",
+                "suggestive_pose": "yes",
+                "mirror_reflection": "no"
+              },
+              "uncertainty_reasons": {
+                "anus": "out_of_frame",
+                "genitals": "out_of_frame",
+                "bare_buttocks": "out_of_frame"
+              }
+            },
+            "tags": [
+              "solo"
+            ],
+            "explicitness": "suggestive",
+            "is_nude": false,
+            "nsfw": false,
+            "star_value": 0,
+            "is_free": true
+          }
+        }
+      ],
+      "transport": [
+        {
+          "model": "qwen/qwen3.8-27b",
+          "provider": {
+            "only": [
+              "deepinfra"
+            ],
+            "allow_fallbacks": false
+          },
+          "reasoning": {
+            "effort": "xhigh",
+            "exclude": true
+          },
+          "max_tokens": 16384,
+          "temperature": 0,
+          "response_format": {
+            "type": "json_object"
+          },
+          "text_first": true,
+          "prompt_sha256": "7d472e0ca0f4a77671db0a24a149bfa93d0c7e8a93e84184adf56fcc2fc5c647",
+          "stage": "first_or_caption",
+          "http_status": 200,
+          "latency_ms": 69813,
+          "effective_model": "qwen/qwen3.8-27b",
+          "effective_provider": "DeepInfra",
+          "finish_reason": "stop",
+          "cost_usd": 0.008713425
+        },
+        {
+          "model": "qwen/qwen3.8-27b",
+          "provider": {
+            "only": [
+              "deepinfra"
+            ],
+            "allow_fallbacks": false
+          },
+          "reasoning": {
+            "effort": "xhigh",
+            "exclude": true
+          },
+          "max_tokens": 16384,
+          "temperature": 0,
+          "response_format": {
+            "type": "json_object"
+          },
+          "text_first": true,
+          "prompt_sha256": "7d472e0ca0f4a77671db0a24a149bfa93d0c7e8a93e84184adf56fcc2fc5c647",
+          "stage": "first_or_caption",
+          "http_status": 200,
+          "latency_ms": 52822,
+          "effective_model": "qwen/qwen3.8-27b",
+          "effective_provider": "DeepInfra",
+          "finish_reason": "stop",
+          "cost_usd": 0.008688975
+        },
+        {
+          "model": "qwen/qwen3.8-27b",
+          "provider": {
+            "only": [
+              "deepinfra"
+            ],
+            "allow_fallbacks": false
+          },
+          "reasoning": {
+            "effort": "xhigh",
+            "exclude": true
+          },
+          "max_tokens": 16384,
+          "temperature": 0,
+          "response_format": {
+            "type": "json_object"
+          },
+          "text_first": true,
+          "prompt_sha256": "fb44166e5b5442c522ecdb81a39bc07ec2966bfc24feaa148cb8ecf054ba4cfa",
+          "stage": "correction",
+          "http_status": 200,
+          "latency_ms": 47909,
+          "effective_model": "qwen/qwen3.8-27b",
+          "effective_provider": "DeepInfra",
+          "finish_reason": "stop",
+          "cost_usd": 0.008916675
+        },
+        {
+          "model": "deepseek/deepseek-v4-flash",
+          "temperature": 0.9,
+          "text_first": false,
+          "prompt_sha256": null,
+          "stage": "first_or_caption",
+          "http_status": 200,
+          "latency_ms": 25811,
+          "effective_model": "deepseek/deepseek-v4-flash",
+          "effective_provider": "SiliconFlow",
+          "finish_reason": "stop",
+          "cost_usd": 0.00063475
+        }
+      ]
+    },
+    {
+      "run": "photo-launch-1791787450877",
+      "status": "material_failure",
+      "project": "zqotxvrxuaocsonpizuw",
+      "clone_id": "7e57f10f-0000-4000-8000-00000000f001",
+      "checks": [
+        "Real dashboard login and authenticated media page",
+        "3 actual uploads, original identity, private storage JPEG, saved facts/provider/status/prices and refreshed catalogue",
+        "Paid/free values preserved",
+        "Duplicate upload saves once and makes no duplicate model call",
+        "Invalid image reports failure and creates no photo row",
+        "Other creator photo ownership unchanged"
+      ],
+      "material_errors": [
+        {
+          "id": "448462a7-19f8-4916-a1ad-474f53c813c3",
+          "reason": "real held paintbrushes misdescribed as body paint shaped like a brush; confirmed against the unchanged original and frozen reference",
+          "detected_by": "post-run factual review; initial wording-specific assertion missed this variant"
+        }
+      ],
+      "setting_restored": true,
+      "cases": [
+        {
+          "reference": {
+            "id": "448462a7-19f8-4916-a1ad-474f53c813c3",
+            "imageSha256": "1f1f20ae8984fa213dddc791599f4a026394d8ba0ae0f1f767133af1b2077afe",
+            "reference_description": "Close upper-body view with blue and white body paint, hand concealing one breast and paintbrush in the other hand. No garment established.",
+            "yes": [],
+            "not_positive": [
+              "nipples",
+              "genitals",
+              "anus",
+              "bare_buttocks",
+              "swimwear",
+              "lingerie",
+              "sex_toy",
+              "sexual_activity",
+              "mirror_reflection"
+            ],
+            "uncertain": [
+              "full_nudity"
+            ],
+            "notes": "Lower body cropped. Painted skin is not a blue top; nipple not discernible.",
+            "file": "/tmp/twin-media-fix-review4/pilot/images/448462a7-19f8-4916-a1ad-474f53c813c3.jpg"
+          },
+          "source_sha256": "1f1f20ae8984fa213dddc791599f4a026394d8ba0ae0f1f767133af1b2077afe",
+          "stored_sha256": "222f4d72a9bca8f4dc5cf6be675a7f987f51b559f8d13604e56dab3e5e584397",
+          "elapsed_ms": 60727,
+          "saved": {
+            "id": "c82cf31a-2b37-4f06-b1f3-abe961364441",
+            "clone_id": "7e57f10f-0000-4000-8000-00000000f001",
+            "storage_path": "7e57f10f-0000-4000-8000-00000000f001/photos/222f4d72a9bca8f4dc5cf6be675a7f98-photo-launch-1791787450877-448462a7-19f8-4916-a1ad-474f53c813c3.jpg",
+            "image_name": "photo-launch-1791787450877-448462a7-19f8-4916-a1ad-474f53c813c3.jpg",
+            "analysis_status": "analysed",
+            "analysis_error": null,
+            "analysis_model": "qwen/qwen3.8-27b",
+            "analysis_provider": "DeepInfra",
+            "visual_description": "A blonde woman with a ponytail wears blue body paint shaped like a paintbrush on her torso and arm. The paint forms an image of a paintbrush across her chest and right arm. Her left hand is placed over her chest. She wears a thin gold necklace with a small pendant. The background features white fabric and dark green leaves. Not visible: nipples.",
+            "visual_facts": {
+              "v": 2,
+              "visible": [
+                "blonde ponytail",
+                "blue body paint",
+                "paintbrush image",
+                "gold necklace",
+                "white fabric background",
+                "green leaves"
+              ],
+              "evidence": {
+                "anus": "unclear",
+                "nipples": "no",
+                "sex_toy": "no",
+                "genitals": "unclear",
+                "lingerie": "no",
+                "swimwear": "no",
+                "full_nudity": "unclear",
+                "bare_buttocks": "unclear",
+                "sexual_activity": "no",
+                "suggestive_pose": "no",
+                "mirror_reflection": "no"
+              },
+              "uncertainty_reasons": {
+                "anus": "out_of_frame",
+                "genitals": "out_of_frame",
+                "bare_buttocks": "out_of_frame"
+              }
+            },
+            "tags": [],
+            "explicitness": "none",
+            "is_nude": false,
+            "nsfw": false,
+            "star_value": 0,
+            "is_free": true
+          }
+        },
+        {
+          "reference": {
+            "id": "kyla-1",
+            "file": "/workspace/scratch/f388f4f2e89b/original-two-retained/IMG_3758.jpeg",
+            "imageSha256": "73661c5daa274fed7a7c89e1a2ceba90933623898ce03eaf2ad2fdee98f66c0b",
+            "yes": [
+              "mirror_reflection"
+            ],
+            "not_positive": [
+              "nipples",
+              "genitals",
+              "anus",
+              "bare_buttocks",
+              "full_nudity",
+              "swimwear",
+              "lingerie",
+              "sex_toy",
+              "sexual_activity"
+            ],
+            "uncertain": [],
+            "reference_description": "Mirror selfie, grey sweatshirt lifted, hand conceals nipples, grey sweatpants worn. Phone obscures face. Seated on wooden floor in a bedroom."
+          },
+          "source_sha256": "73661c5daa274fed7a7c89e1a2ceba90933623898ce03eaf2ad2fdee98f66c0b",
+          "stored_sha256": "686c4d4a796734ea50c87ac293036705cac6901b27f3c84e05b6624db1d31aaa",
+          "elapsed_ms": 71512,
+          "saved": {
+            "id": "deabc88b-fca1-4291-af83-9b80dc3923cc",
+            "clone_id": "7e57f10f-0000-4000-8000-00000000f001",
+            "storage_path": "7e57f10f-0000-4000-8000-00000000f001/photos/686c4d4a796734ea50c87ac293036705-photo-launch-1791787450877-kyla-1.jpg",
+            "image_name": "photo-launch-1791787450877-kyla-1.jpg",
+            "analysis_status": "analysed",
+            "analysis_error": null,
+            "analysis_model": "qwen/qwen3.8-27b",
+            "analysis_provider": "DeepInfra",
+            "visual_description": "A blonde woman in a grey sweatshirt and sweatpants takes a mirror selfie on a bedroom floor with the top bunched up. Light grey crewneck sweatshirt bunched above the waist, exposing the midriff and lower breast curves, with one hand pressed across the chest and a ring visible. Matching grey sweatpants sit low on the hips. A beige-cased phone with a triple camera covers the face. Background: bedroom with a bed, pillows, window with blinds, and a framed landscape painting. Not visible: nipples, genitals, anus, bare buttocks.",
+            "visual_facts": {
+              "v": 2,
+              "visible": [
+                "grey sweatshirt",
+                "grey sweatpants",
+                "beige phone case",
+                "ring on finger",
+                "exposed midriff",
+                "bunched top",
+                "bedroom setting",
+                "bed with pillows",
+                "framed painting",
+                "wooden floor"
+              ],
+              "evidence": {
+                "anus": "no",
+                "nipples": "no",
+                "sex_toy": "no",
+                "genitals": "no",
+                "lingerie": "no",
+                "swimwear": "no",
+                "full_nudity": "no",
+                "bare_buttocks": "no",
+                "sexual_activity": "no",
+                "suggestive_pose": "yes",
+                "mirror_reflection": "yes"
+              }
+            },
+            "tags": [
+              "solo",
+              "mirror_selfie"
+            ],
+            "explicitness": "suggestive",
+            "is_nude": false,
+            "nsfw": false,
+            "star_value": 350,
+            "is_free": false
+          }
+        },
+        {
+          "reference": {
+            "id": "70509013-75d6-4d67-8b35-550cf5e129dd",
+            "imageSha256": "ec5d28062f1676f5d9f90851034dc876744b69246d17f9c719f334095999de6c",
+            "reference_description": "Kneeling front view on a blue couch, black dotted sheer cropped top, matching thong and lace stockings. Nipples/areolae discernible through mesh. Genital detail not clearly discernible.",
+            "yes": [
+              "nipples",
+              "lingerie"
+            ],
+            "not_positive": [
+              "bare_buttocks",
+              "full_nudity",
+              "swimwear",
+              "anus",
+              "sex_toy",
+              "sexual_activity",
+              "mirror_reflection"
+            ],
+            "uncertain": [
+              "genitals"
+            ],
+            "notes": "A transparent garment is not sufficient proof of genital visibility.",
+            "file": "/tmp/twin-media-fix-review4/pilot/images/70509013-75d6-4d67-8b35-550cf5e129dd.jpg"
+          },
+          "source_sha256": "ec5d28062f1676f5d9f90851034dc876744b69246d17f9c719f334095999de6c",
+          "stored_sha256": "5be1108be753dda1d953f972f3d26a5f4028aff4a3390222fb16c7aae3d67e43",
+          "elapsed_ms": 55496,
+          "saved": {
+            "id": "d0643189-28f6-4d01-852f-7b92eed338dd",
+            "clone_id": "7e57f10f-0000-4000-8000-00000000f001",
+            "storage_path": "7e57f10f-0000-4000-8000-00000000f001/photos/5be1108be753dda1d953f972f3d26a5f-photo-launch-1791787450877-70509013-75d6-4d67-8b35-550cf5e129dd.jpg",
+            "image_name": "photo-launch-1791787450877-70509013-75d6-4d67-8b35-550cf5e129dd.jpg",
+            "analysis_status": "needs_review",
+            "analysis_error": "unclear: genitals",
+            "analysis_model": "qwen/qwen3.8-27b",
+            "analysis_provider": "DeepInfra",
+            "visual_description": "A blonde woman in a sheer black mesh top and lace thong sits on a blue couch pulling the side straps. She wears an off-shoulder black sheer mesh top with white polka dots and a front tie, a black lace thong, and black lace-top thigh-high stockings. An areola is discernible through the sheer mesh. She kneels on a dark blue couch against a white vertical-paneled wall, holding the thong's side straps; a navel piercing and rings show, lips parted, at eye level.",
+            "visual_facts": {
+              "v": 2,
+              "visible": [
+                "blonde long straight hair",
+                "black sheer mesh polka-dot off-shoulder top",
+                "front tie strings on top",
+                "black lace thong",
+                "black lace-top thigh-high stockings",
+                "navel piercing",
+                "rings on fingers",
+                "hands holding thong straps",
+                "kneeling on dark blue couch",
+                "white vertical-paneled wall"
+              ],
+              "evidence": {
+                "anus": "unclear",
+                "nipples": "yes",
+                "sex_toy": "no",
+                "genitals": "unclear",
+                "lingerie": "yes",
+                "swimwear": "no",
+                "full_nudity": "no",
+                "bare_buttocks": "unclear",
+                "sexual_activity": "no",
+                "suggestive_pose": "yes",
+                "mirror_reflection": "no"
+              },
+              "uncertainty_reasons": {
+                "anus": "out_of_frame",
+                "genitals": "ambiguous_visibility",
+                "bare_buttocks": "out_of_frame"
+              }
+            },
+            "tags": [
+              "solo",
+              "topless",
+              "tits",
+              "lingerie"
+            ],
+            "explicitness": "explicit",
+            "is_nude": true,
+            "nsfw": true,
+            "star_value": 350,
+            "is_free": false
+          }
+        }
+      ],
+      "transport": [
+        {
+          "model": "qwen/qwen3.8-27b",
+          "provider": {
+            "only": [
+              "deepinfra"
+            ],
+            "allow_fallbacks": false
+          },
+          "reasoning": {
+            "effort": "xhigh",
+            "exclude": true
+          },
+          "max_tokens": 16384,
+          "temperature": 0,
+          "response_format": {
+            "type": "json_object"
+          },
+          "text_first": true,
+          "has_image": true,
+          "prompt_sha256": "7d472e0ca0f4a77671db0a24a149bfa93d0c7e8a93e84184adf56fcc2fc5c647",
+          "stage": "first_or_caption",
+          "http_status": 200,
+          "latency_ms": 20566,
+          "effective_model": "qwen/qwen3.8-27b",
+          "effective_provider": "DeepInfra",
+          "finish_reason": "stop",
+          "cost_usd": 0.00319695
+        },
+        {
+          "model": "deepseek/deepseek-v4-flash",
+          "temperature": 0.9,
+          "text_first": false,
+          "has_image": false,
+          "prompt_sha256": null,
+          "stage": "first_or_caption",
+          "http_status": 200,
+          "latency_ms": 15019,
+          "effective_model": "deepseek/deepseek-v4-flash",
+          "effective_provider": "GMICloud",
+          "finish_reason": "stop",
+          "cost_usd": 0.000332878
+        },
+        {
+          "model": "qwen/qwen3.8-27b",
+          "provider": {
+            "only": [
+              "deepinfra"
+            ],
+            "allow_fallbacks": false
+          },
+          "reasoning": {
+            "effort": "xhigh",
+            "exclude": true
+          },
+          "max_tokens": 16384,
+          "temperature": 0,
+          "response_format": {
+            "type": "json_object"
+          },
+          "text_first": true,
+          "has_image": true,
+          "prompt_sha256": "7d472e0ca0f4a77671db0a24a149bfa93d0c7e8a93e84184adf56fcc2fc5c647",
+          "stage": "first_or_caption",
+          "http_status": 200,
+          "latency_ms": 45081,
+          "effective_model": "qwen/qwen3.8-27b",
+          "effective_provider": "DeepInfra",
+          "finish_reason": "stop",
+          "cost_usd": 0.007932375
+        },
+        {
+          "model": "deepseek/deepseek-v4-flash",
+          "temperature": 0.9,
+          "text_first": false,
+          "has_image": false,
+          "prompt_sha256": null,
+          "stage": "first_or_caption",
+          "http_status": 200,
+          "latency_ms": 5454,
+          "effective_model": "deepseek/deepseek-v4-flash",
+          "effective_provider": "GMICloud",
+          "finish_reason": "stop",
+          "cost_usd": 8.5904e-05
+        },
+        {
+          "model": "qwen/qwen3.8-27b",
+          "provider": {
+            "only": [
+              "deepinfra"
+            ],
+            "allow_fallbacks": false
+          },
+          "reasoning": {
+            "effort": "xhigh",
+            "exclude": true
+          },
+          "max_tokens": 16384,
+          "temperature": 0,
+          "response_format": {
+            "type": "json_object"
+          },
+          "text_first": true,
+          "has_image": true,
+          "prompt_sha256": "7d472e0ca0f4a77671db0a24a149bfa93d0c7e8a93e84184adf56fcc2fc5c647",
+          "stage": "first_or_caption",
+          "http_status": 200,
+          "latency_ms": 31134,
+          "effective_model": "qwen/qwen3.8-27b",
+          "effective_provider": "DeepInfra",
+          "finish_reason": "stop",
+          "cost_usd": 0.005563425
+        },
+        {
+          "model": "qwen/qwen3.8-27b",
+          "provider": {
+            "only": [
+              "deepinfra"
+            ],
+            "allow_fallbacks": false
+          },
+          "reasoning": {
+            "effort": "xhigh",
+            "exclude": true
+          },
+          "max_tokens": 16384,
+          "temperature": 0,
+          "response_format": {
+            "type": "json_object"
+          },
+          "text_first": true,
+          "has_image": true,
+          "prompt_sha256": "3163bd4ebacc939fec9398154ce4005a1d6cd015342375e4b0b2e21fa370b1b7",
+          "stage": "second_look",
+          "http_status": 200,
+          "latency_ms": 4438,
+          "effective_model": "qwen/qwen3.8-27b",
+          "effective_provider": "DeepInfra",
+          "finish_reason": "stop",
+          "cost_usd": 0.00067545
+        }
+      ]
+    },
+    {
+      "run": "photo-launch-1791787892304",
+      "status": "transport_pass",
+      "project": "zqotxvrxuaocsonpizuw",
+      "clone_id": "7e57f10f-0000-4000-8000-00000000f001",
+      "checks": [
+        "Real dashboard login and authenticated media page",
+        "1 actual uploads, original identity, private storage JPEG, saved facts/provider/status/prices and refreshed catalogue",
+        "Paid/free values preserved",
+        "Duplicate upload saves once and makes no duplicate model call",
+        "Invalid image reports failure and creates no photo row",
+        "Other creator photo ownership unchanged"
+      ],
+      "material_errors": [],
+      "setting_restored": true,
+      "cases": [
+        {
+          "reference": {
+            "id": "448462a7-19f8-4916-a1ad-474f53c813c3",
+            "imageSha256": "1f1f20ae8984fa213dddc791599f4a026394d8ba0ae0f1f767133af1b2077afe",
+            "reference_description": "Close upper-body view with blue and white body paint, hand concealing one breast and paintbrush in the other hand. No garment established.",
+            "yes": [],
+            "not_positive": [
+              "nipples",
+              "genitals",
+              "anus",
+              "bare_buttocks",
+              "swimwear",
+              "lingerie",
+              "sex_toy",
+              "sexual_activity",
+              "mirror_reflection"
+            ],
+            "uncertain": [
+              "full_nudity"
+            ],
+            "notes": "Lower body cropped. Painted skin is not a blue top; nipple not discernible.",
+            "file": "/tmp/twin-media-fix-review4/pilot/images/448462a7-19f8-4916-a1ad-474f53c813c3.jpg"
+          },
+          "source_sha256": "1f1f20ae8984fa213dddc791599f4a026394d8ba0ae0f1f767133af1b2077afe",
+          "stored_sha256": "222f4d72a9bca8f4dc5cf6be675a7f987f51b559f8d13604e56dab3e5e584397",
+          "elapsed_ms": 93955,
+          "saved": {
+            "id": "5831b79c-e746-4817-b5a3-d2ef65c63910",
+            "clone_id": "7e57f10f-0000-4000-8000-00000000f001",
+            "storage_path": "7e57f10f-0000-4000-8000-00000000f001/photos/222f4d72a9bca8f4dc5cf6be675a7f98-photo-launch-1791787892304-448462a7-19f8-4916-a1ad-474f53c813c3.jpg",
+            "image_name": "photo-launch-1791787892304-448462a7-19f8-4916-a1ad-474f53c813c3.jpg",
+            "analysis_status": "needs_review",
+            "analysis_error": "body-paint object depiction requires review; a real object may have been mistaken for painted imagery",
+            "analysis_model": "qwen/qwen3.8-27b",
+            "analysis_provider": "DeepInfra",
+            "visual_description": "A blonde woman with blue body paint and a painted paintbrush design poses with a hand over her chest against a white backdrop. Blue paint covers her left arm, shoulder, and side of the torso, with a painted design of orange and white paintbrushes across the chest. A thin gold necklace with a small pendant rests on her neck. Her hand, with grey-painted nails and a ring, rests against her chest. The background is a white draped fabric with dark greenery at the top edge. Not visible: nipples.",
+            "visual_facts": {
+              "v": 2,
+              "visible": [
+                "blue body paint",
+                "painted paintbrush design",
+                "gold necklace",
+                "hand with ring",
+                "grey nail polish",
+                "white draped backdrop",
+                "dark greenery background",
+                "bare shoulder"
+              ],
+              "evidence": {
+                "anus": "unclear",
+                "nipples": "no",
+                "sex_toy": "no",
+                "genitals": "unclear",
+                "lingerie": "no",
+                "swimwear": "no",
+                "full_nudity": "unclear",
+                "bare_buttocks": "unclear",
+                "sexual_activity": "no",
+                "suggestive_pose": "yes",
+                "mirror_reflection": "no"
+              },
+              "uncertainty_reasons": {
+                "anus": "out_of_frame",
+                "genitals": "out_of_frame",
+                "bare_buttocks": "out_of_frame"
+              }
+            },
+            "tags": [
+              "solo"
+            ],
+            "explicitness": "suggestive",
+            "is_nude": false,
+            "nsfw": false,
+            "star_value": 0,
+            "is_free": true
+          }
+        }
+      ],
+      "transport": [
+        {
+          "model": "qwen/qwen3.8-27b",
+          "provider": {
+            "only": [
+              "deepinfra"
+            ],
+            "allow_fallbacks": false
+          },
+          "reasoning": {
+            "effort": "xhigh",
+            "exclude": true
+          },
+          "max_tokens": 16384,
+          "temperature": 0,
+          "response_format": {
+            "type": "json_object"
+          },
+          "text_first": true,
+          "has_image": true,
+          "prompt_sha256": "7d472e0ca0f4a77671db0a24a149bfa93d0c7e8a93e84184adf56fcc2fc5c647",
+          "stage": "first_or_caption",
+          "http_status": 200,
+          "latency_ms": 37586,
+          "effective_model": "qwen/qwen3.8-27b",
+          "effective_provider": "DeepInfra",
+          "finish_reason": "stop",
+          "cost_usd": 0.00562335
+        },
+        {
+          "model": "qwen/qwen3.8-27b",
+          "provider": {
+            "only": [
+              "deepinfra"
+            ],
+            "allow_fallbacks": false
+          },
+          "reasoning": {
+            "effort": "xhigh",
+            "exclude": true
+          },
+          "max_tokens": 16384,
+          "temperature": 0,
+          "response_format": {
+            "type": "json_object"
+          },
+          "text_first": true,
+          "has_image": true,
+          "prompt_sha256": "01a871989f6eb52a72975fc349f0662b448898446a4fe1470e334677334b990f",
+          "stage": "correction",
+          "http_status": 200,
+          "latency_ms": 25759,
+          "effective_model": "qwen/qwen3.8-27b",
+          "effective_provider": "DeepInfra",
+          "finish_reason": "stop",
+          "cost_usd": 0.004773375
+        }
+      ]
+    }
+  ]
+}

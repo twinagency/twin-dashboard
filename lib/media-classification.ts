@@ -179,6 +179,15 @@ function isNude(ev: Record<FactKey, Tri>, wornBottom: boolean): boolean {
 const NAILS = /\b(?:painted|polished) (?:finger|toe)?nails?\b|\bnail (?:paint|polish)\b|\bpainted (?:lips|toenails|fingernails)\b/gi;
 const PAINT = /\b(?:body ?paint\w*|(?:face|skin) ?paint\w*|airbrush\w*|paint(?:ed|ing)?|painted[- ]on)\b/i;
 function isPaint(clause: string): boolean { return PAINT.test(clause.replace(NAILS, "")); }
+/** The checked photo flow confused held objects with imagery painted on skin.
+ * Neither a correction nor repeated model agreement resolves that distinction.
+ * Preserve the observation for review; ordinary body paint is still eligible. */
+export function paintedObjectReviewReason(prose: string): string | null {
+  if (!/\b(?:body ?paint\w*|paint(?:ed)?[^.;]{0,50}\b(?:skin|torso|chest))\b/i.test(prose)) return null;
+  const depiction = affirmativeClauses(prose).some(c =>
+    /\btrompe[- ]l['’]oeil\b|\bpaint\w*\b[^.;]*\b(?:design|image|picture|depiction|illustration|shaped? like|shape of|depicts?|represents?)\b|\bpainting of\b/i.test(c));
+  return depiction ? "body-paint object depiction requires review; a real object may have been mistaken for painted imagery" : null;
+}
 const PAINT_GARMENT = /\b(?:bikini|swimsuit|swimwear|lingerie|bra|thong|g-?string|bodysuit|underwear|panties|top|bottoms?|outfit|dress|garment|clothing|clothes)\b/i;
 // A mirror that is only part of the scene ("mirror in the background") does not put her in it.
 const BACKGROUND_MIRROR = /\bmirrors?\b[^.;]*\b(?:background|behind|on the wall|wall[- ]mounted|nearby|beside|next to|leaning|hang(?:s|ing)?)\b|\b(?:background|behind|nearby|beside)\b[^.;]*\bmirrors?\b/i;
@@ -397,6 +406,8 @@ export function normalizeMediaClassification(value: unknown, opts: NormalizeOpti
   // anatomy, so this is a visibility hold, not a rule that the anatomy is absent.
   const garmentReview = genitalVisibilityReviewReason(evidence, rawProse);
   if (garmentReview) issuesExtra.push(garmentReview);
+  const paintedObjectReview = !video && paintedObjectReviewReason(`${rawProse} ${j.short_label}`);
+  if (paintedObjectReview) issuesExtra.push(paintedObjectReview);
   // Round 5: yes is only ever as good as the prose backing it. An outline through fabric, paint read as a garment and a
   // background mirror are not evidence; each goes to review and drops the tag it would have licensed.
   const clauses = affirmativeClauses(proseAll);

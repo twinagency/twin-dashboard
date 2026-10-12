@@ -413,4 +413,25 @@ for (const garment of ["sheer thong", "lace underwear", "mesh bikini bottom"]) {
   assert.equal(concealed.status, "analysed", "a worn garment alone does not require review");
 }
 
+// A real staging correction changed held paintbrushes into painted imagery.
+// Hold that unresolved distinction without holding ordinary painted skin.
+for (const details of [
+  "Blue body paint covers her arm, with a painted paintbrush design on her torso.",
+  "Blue body paint has a trompe-l'oeil design of paintbrushes across the chest.",
+  "Blue body paint includes a painted image of a brush on her torso.",
+  "Blue body paint is shaped like a paintbrush on her torso and arm.",
+  "The paint forms an image of a paintbrush across her chest and right arm.",
+]) {
+  const r = norm({}, { identifying: "A woman with body paint poses against a white backdrop.", details, short_label: "painted torso", visible: [], tags: [] });
+  assert.equal(r.status, "needs_review");
+  assert.match(r.issues.join(" "), /body-paint object depiction requires review/);
+}
+for (const details of [
+  "Blue body paint covers her arm. She holds two paintbrushes in one hand.",
+  "Blue body paint covers her arm. The brushes are real, not a painted brush design.",
+  "Her nails have a painted flower design.",
+]) {
+  assert.equal(norm({}, { identifying: "A woman poses against a white backdrop.", details, short_label: "portrait", visible: [], tags: [] }).status, "analysed", details);
+}
+
 console.log("Media classification checks passed: yes-only tags and flags, unclear never clean, contract facts, description rules, negation-aware validation, retryable malformed answers, factual-only prompts.");

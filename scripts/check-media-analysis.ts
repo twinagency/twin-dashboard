@@ -16,6 +16,7 @@ import {
   withoutOptionalMediaColumns, OPTIONAL_MEDIA_COLUMNS,
 } from "../lib/media-analysis-row";
 import { withRetry } from "../lib/retry";
+import { generateSendCaption, SEND_CAPTION_BUDGET_MS } from "../lib/send-caption";
 import { PRICING_CATEGORIES, priceFromGuide } from "../lib/pricing";
 import { bindConflict, buildProposal, type Row, type Item } from "../lib/media-repair";
 
@@ -84,6 +85,28 @@ assert.equal(resolveVisionAnalysisModel("mistralai/mistral-small-3.2-24b-instruc
 }
 
 // ---- failure: the call errors, the upload is still representable, nothing reads as analysed ----
+{
+  const fetchBefore = globalThis.fetch, timeoutBefore = AbortSignal.timeout;
+  const keyBefore = process.env.OPENROUTER_API_KEY;
+  const keepAlive = setTimeout(() => {}, 1000);
+  let calls = 0;
+  try {
+    process.env.OPENROUTER_API_KEY = "offline-caption-timeout-fixture";
+    AbortSignal.timeout = (ms: number) => { assert.equal(ms, SEND_CAPTION_BUDGET_MS); return timeoutBefore(10); };
+    globalThis.fetch = (async (_url: unknown, options?: RequestInit) => {
+      calls++;
+      assert.ok(options?.signal, "legacy caption transport must receive the shared deadline");
+      return await new Promise<Response>((_resolve, reject) => options!.signal!.addEventListener("abort", () => reject(options!.signal!.reason), { once: true }));
+    }) as typeof fetch;
+    const result = await generateSendCaption({ visual_description: "A woman wears a grey sweatshirt.", visual_facts: { v: 2, evidence: allNo, visible: [] } as any }, "photo");
+    assert.equal(result, null, "a hanging caption must finish without blocking a saved analysed photo");
+    assert.equal(calls, 1, "the spent caption budget must prevent another provider attempt");
+  } finally {
+    clearTimeout(keepAlive);globalThis.fetch = fetchBefore;AbortSignal.timeout = timeoutBefore;
+    if (keyBefore === undefined) delete process.env.OPENROUTER_API_KEY; else process.env.OPENROUTER_API_KEY = keyBefore;
+  }
+}
+
 {
   const err: VisionCall = async () => { throw new Error("OpenRouter 402: insufficient credits"); };
   const res = await analysePhoto(photo, null, undefined, { call: err });
@@ -241,6 +264,24 @@ const guide = Object.fromEntries(PRICING_CATEGORIES.map((c) => [c, c === "sfw" |
     "an already-saved analysed proposal is refused before any write");
   const hold: Item={...oldPreview,kind:"hold",after:{analysis_status:"needs_review",analysis_error:"Visibility exception"}};
   assert.equal(bindConflict(hold,legacy,{id:"clone",slug:"fixture",vision_model:null}),null,"guarded status-only hold remains valid");
+  // Exact recorded staging correction; frozen before the rule change, no model call.
+  for (const fixture of ["photo-body-paint-correction-20261012.json", "photo-body-paint-first-pass-20261012.json"]) {
+  const paintedResponse = readFileSync(new URL(`./fixtures/${fixture}`, import.meta.url), "utf8");
+  const painted = replying(paintedResponse);
+  const paintedResult = await analysePhoto(photo, "qwen/qwen3.8-27b", undefined, {
+    call: painted.call, writeCaption: async () => { heldCaptionCalls++; return "Neutral catalogue caption."; },
+  });
+  assert.equal(paintedResult.status, "needs_review", "recorded material object error must be held");
+  assert.match(paintedResult.error ?? "", /body-paint object depiction requires review/);
+  assert.equal(painted.calls.length, 1, "the hold adds no model call");
+  assert.equal(heldCaptionCalls, 0, "the bad description never reaches send-caption generation");
+  assert.equal(paintedResult.fields?.caption, null);
+  const oldPainted = { ...paintedResult, status: "analysed" as const, error: undefined };
+  assert.equal(buildProposal({runId:"isolated"}, "photos", legacy, "fixture", oldPainted, true).outcome, "needs_review");
+  const paintedPreview: Item = { ...oldPreview, after: analysisRowFields(oldPainted) };
+  delete paintedPreview.after.caption;
+  assert.match(bindConflict(paintedPreview, legacy, {id:"clone",slug:"fixture",vision_model:null}) ?? "", /body-paint object depiction/);
+  }
   const failedRes = await analysePhoto(photo, null, undefined, { call: async () => { throw new Error("boom"); } });
   assert.equal(priceForAnalysis(guide, failedRes), 2000, "failed => the guide's highest category, not the SFW price");
   const review = await analysePhoto(photo, null, undefined, { call: replying(answer({ anus: "unclear" })).call });
