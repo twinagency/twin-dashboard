@@ -1,0 +1,37 @@
+name: Owner shortcut access checks
+on:
+  pull_request:
+    branches: [main, "flirt/independent-backend-2026-09-19"]
+    paths:
+      - app/admin-access/**
+      - lib/owner-shortcut.ts
+      - lib/owner-auth.ts
+      - middleware.ts
+      - scripts/check-owner-shortcut.ts
+      - .github/workflows/owner-shortcut.yml
+  push:
+    branches: [main, "flirt/independent-backend-2026-09-19"]
+    paths:
+      - app/admin-access/**
+      - lib/owner-shortcut.ts
+      - lib/owner-auth.ts
+      - middleware.ts
+      - scripts/check-owner-shortcut.ts
+      - .github/workflows/owner-shortcut.yml
+permissions:
+  contents: read
+jobs:
+  owner-shortcut:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - run: npx playwright install --with-deps chromium webkit
+      - run: node --import tsx scripts/check-owner-auth.ts
+      - run: node --import tsx scripts/check-owner-shortcut.ts
+        env:
+          OWNER_SHORTCUT_BROWSERS: chromium,webkit
+

@@ -60,6 +60,13 @@ export async function middleware(req: NextRequest) {
       return privateResponse(NextResponse.redirect(url));
     }
   }
+  // Only this exact credential-handoff route is public. Its POST verifies an
+  // existing, revocable owner session; GET/HEAD never create authenticated access.
+  if (pathname === "/admin-access") {
+    if (!["GET", "HEAD", "POST"].includes(req.method) || req.headers.has("next-action")
+      || (req.method === "POST" && !trustedFormOrigin(req))) return new NextResponse("Forbidden", { status: 403 });
+    return privateResponse(withPathname(req));
+  }
   // ── Read-only while viewing as someone ──────────────────────────────────
   // ONE choke point for every mutation while a view-as cookie is live: every
   // server action (the next-action header) and every non-GET/HEAD API or form
@@ -217,3 +224,4 @@ export async function middleware(req: NextRequest) {
 // Only the exact upload route bypasses body buffering; it enforces origin, creator auth and view-as itself.
 // tonconnect-manifest.json is fetched unauthenticated by fans' TON wallets; it must never redirect to login.
 export const config = { matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.png|tonconnect-manifest.json|creator-auth/upload/?$|creator-auth/ppv-upload/?$).*)"] };
+

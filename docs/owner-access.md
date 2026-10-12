@@ -32,3 +32,32 @@ Validation: `node --import tsx scripts/check-owner-auth.ts` checks token boundar
 failure behavior and legacy authentication. `scripts/check-owner-auth.sql` checks
 database permissions, credentials, revocation, lockout and expiry inside a rolled
 back transaction. Neither test requires real owner credentials.
+
+## Private owner shortcuts
+
+An explicitly issued owner session can be handed off at `/admin-access#owner_<token>`.
+This is a full-owner credential, not a public preview link. Issue only for an
+authorized, active owner, using 32 cryptographically random bytes and a new row
+in `dashboard_owner_sessions`. Persist only the SHA-256 hash of the entire
+`owner_`-prefixed token, the existing account ID and current credential version.
+Keep the default 30-day expiry. Do not commit or log the raw link.
+
+The fragment is removed from browser history before a same-origin POST. It is
+never included in the HTTP URL, Referer, page HTML or an analytics request.
+The standalone entry page has no third-party assets and a nonce-based CSP.
+GET and HEAD never issue authentication. POST accepts only an existing owner
+session verified by `dashboard_owner_session_verify`; there is no key-to-admin
+bypass, new owner provisioning, or extension of the stored expiry. Normal
+password sign-in is unchanged. Creator, agency, view-as and clone-filter
+cookies are cleared on successful handoff.
+
+Issue a distinct session in each independent database. A Moxy/Twin session
+cannot authenticate against the Flirt database. Deleting the exact issued
+session hash revokes its shortcut and browser access. Disabling the owner or
+changing the owner's password retains the existing revocation behavior.
+Never revoke unrelated sessions when replacing an individual shortcut.
+
+`node --import tsx scripts/check-owner-shortcut.ts` exercises the real route,
+origin/credential rejection, role-cookie cleanup and browser handoff. Set
+`OWNER_SHORTCUT_BROWSERS=chromium,webkit` for both supported test browsers.
+
