@@ -23,6 +23,8 @@ unpack="""import pathlib,base64,zlib,json
 p=pathlib.Path('/tmp/test-photo-price-payload.json')
 p.write_bytes(zlib.decompress(base64.b64decode(pathlib.Path('/tmp/test-photo-price-payload.b64').read_bytes())))
 v=json.loads(p.read_text())
+v['manifest']=[x for x in v['manifest'] if x['path'].startswith(('src/','dashboard/','scripts/','migrations/')) or x['path'] in ['package.json','package-lock.json','Dockerfile','docker-compose.yml','tsconfig.json','.dockerignore']]
+p.write_text(json.dumps(v))
 for kind in ['prepare','deploy']:
  pathlib.Path('/tmp/test-photo-price-'+kind+'.py').write_text(v[kind])
 """
