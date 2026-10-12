@@ -339,5 +339,35 @@ assert.equal(sentencesUpTo("Short one.", 140), "Short one.");
   assert.equal(acceptCaption("mmm my tits are out for you 😈 like it?", undefined, "A woman lies on a bed in a thong."), null, "a body part the facts do not name");
 }
 
+// A coherent positive claim through a lower garment is still an unresolved
+// visibility exception. This does not relabel transparent anatomy as absent.
+for (const garment of ["sheer thong", "lace underwear", "mesh bikini bottom"]) {
+  const r = norm({ genitals: "yes", lingerie: "yes", swimwear: "yes" }, {
+    identifying: `A woman wears a ${garment}.`,
+    details: "Her external genital anatomy is described as visible through the fabric.",
+    short_label: "garment front view", visible: [garment], tags: [],
+  });
+  assert.equal(r.status, "needs_review", `coherent through-garment claim held: ${garment}`);
+  assert.equal(r.fields.visual_facts.evidence.genitals, "yes", "preserve the observation for review, do not invent no");
+  assert.match(r.issues.join(" "), /genital visibility.*garment.*review/i);
+}
+{
+  const r = norm({ genitals: "yes", lingerie: "yes" }, {
+    identifying: "A woman wears a transparent robe.", details: "Her vulva is visible through the fabric.",
+    short_label: "transparent robe", visible: ["transparent robe"], tags: [],
+  });
+  assert.equal(r.status, "needs_review", "through-fabric claim does not depend on a particular garment tag");
+  const bare = norm({ genitals: "yes" }, {
+    identifying: "A woman sits on a sheet.", details: "Her external genital anatomy is clearly visible.",
+    short_label: "seated on sheet", visible: ["white sheet"], tags: [],
+  });
+  assert.equal(bare.status, "analysed", "no blanket hold of every positive anatomy observation");
+  const concealed = norm({ lingerie: "yes" }, {
+    identifying: "A woman wears a black thong.", details: "Black fabric covers the lower front.",
+    short_label: "black thong", visible: ["black thong"], tags: [],
+  });
+  assert.equal(concealed.status, "analysed", "a worn garment alone does not require review");
+}
+
 console.log("Media classification checks passed: yes-only tags and flags, unclear never clean, contract facts, description rules, negation-aware validation, retryable malformed answers, factual-only prompts.");
 

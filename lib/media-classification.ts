@@ -2,8 +2,8 @@ import { MEDIA_TAGS } from "./pricing";
 import { ANALYSIS_VERSION, FACT_KEYS, type AnalysisFields, type FactKey, type Tri, type VisualFacts } from "./media-analysis-contract";
 
 // ONE observation set per item: a tri-state answer for every FACT_KEY plus a list of short `visible` phrases. Every stored
-// field (tags, is_nude/nsfw/explicitness, auto_desc, visual_description) is DERIVED from it by code, so the model can never
-// produce a description, tags and flags that disagree. Only "yes" is ever a fact about the item: "no" and "unclear" never
+// field is derived or validated against that observation set. Internal agreement does not prove the observation is true;
+// targeted contradictions and unresolved visibility cases are held for review. Only "yes" can support a positive claim: "no" and "unclear" never
 // make a tag or a flag. The promotional send caption is NOT written here (see lib/send-caption.ts).
 
 export { ANALYSIS_VERSION, FACT_KEYS };
@@ -158,6 +158,16 @@ const PULLED_DOWN_RE = /\b(?:pulled|pushed|moved|slid|tugged|yanked) (?:down|asi
 /** True when the prose names a bottom garment that is worn (in place), as opposed to pulled down, aside or absent. Pure. */
 export function wornBottomIn(prose: string): boolean {
   return WORN_BOTTOM_RE.test(prose) && !PULLED_DOWN_RE.test(prose);
+}
+/** A review exception, not a claim that fabric makes anatomy invisible. Shared
+ * with repair validation so an older saved proposal cannot bypass the hold. */
+export function genitalVisibilityReviewReason(evidence: Pick<Record<FactKey, Tri>, "genitals">, prose: string): string | null {
+  if (evidence.genitals !== "yes") return null;
+  const throughFabric = prose.split(/[.;]/).some(c => GENITALS_MENTIONED.test(c) &&
+    /\bthrough\b[^.;]*\b(?:fabric|mesh|lace|clothing|garment|thong|underwear|robe|dress|bodysuit)\b/i.test(c));
+  return wornBottomIn(prose) || throughFabric
+    ? "genital visibility with a worn garment requires review; repeated model agreement is insufficient"
+    : null;
 }
 /** The ONE nude derivation: any nudity key yes, except bare_buttocks alone does not count while a bottom garment is worn. */
 function isNude(ev: Record<FactKey, Tri>, wornBottom: boolean): boolean {
@@ -364,6 +374,12 @@ export function normalizeMediaClassification(value: unknown, opts: NormalizeOpti
   if (evidence.genitals === "yes" && !affirmativeClauses(rawProse).some(c => GENITALS_MENTIONED.test(c))) {
     issuesExtra.push("genitals is yes but the factual description never affirms it; review required");
   }
+  // The evaluated model can repeat a coherent but unsupported genital claim through
+  // a worn garment. Neither prose agreement nor its second look clears this case.
+  // Keep the observation intact for explicit review: transparent fabric can reveal
+  // anatomy, so this is a visibility hold, not a rule that the anatomy is absent.
+  const garmentReview = genitalVisibilityReviewReason(evidence, rawProse);
+  if (garmentReview) issuesExtra.push(garmentReview);
   // Round 5: yes is only ever as good as the prose backing it. An outline through fabric, paint read as a garment and a
   // background mirror are not evidence; each goes to review and drops the tag it would have licensed.
   const clauses = affirmativeClauses(proseAll);

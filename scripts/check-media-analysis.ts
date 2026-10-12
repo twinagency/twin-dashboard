@@ -17,6 +17,7 @@ import {
 } from "../lib/media-analysis-row";
 import { withRetry } from "../lib/retry";
 import { PRICING_CATEGORIES, priceFromGuide } from "../lib/pricing";
+import { bindConflict, buildProposal, type Row, type Item } from "../lib/media-repair";
 
 const meta = (over: Record<string, unknown> = {}) => ({ model: "qwen/qwen2.5-vl-72b-instruct", provider: "DeepInfra", latencyMs: 1200, costUsd: 0.0004, finishReason: "stop", ...over });
 const allNo = Object.fromEntries(FACT_KEYS.map((k) => [k, "no"]));
@@ -211,6 +212,35 @@ const guide = Object.fromEntries(PRICING_CATEGORIES.map((c) => [c, c === "sfw" |
   assert.equal(unsupported.status, "needs_review", "a confirming second look does not override missing factual support");
   assert.equal(heldCaptionCalls, 0, "held observation never reaches caption generation");
   assert.equal(analysisRowFields(unsupported).analysis_status, "needs_review", "stored status preserves the hold");
+  const coherent = replying(answer({ genitals: "yes", lingerie: "yes" }, {
+    identifying: "A woman wears a sheer black thong.",
+    details: "Her external genital anatomy is described as visible through the fabric.",
+    short_label: "sheer black thong", visible: ["sheer black thong"], tags: [],
+  }), JSON.stringify({genitals: "yes"}));
+  const garment = await analysePhoto(photo, null, undefined, {
+    call: coherent.call, writeCaption: async () => { heldCaptionCalls++; return "Neutral catalogue caption."; },
+  });
+  assert.equal(garment.status, "needs_review", "a repeated yes and coherent prose cannot approve a through-garment claim");
+  assert.equal(garment.fields?.visual_facts.evidence.genitals, "yes", "review retains the disputed evidence");
+  assert.equal(heldCaptionCalls, 0, "visibility exception never reaches caption generation");
+  assert.equal(coherent.calls.length, 2, "no additional checking call was introduced");
+  assert.equal(analysisRowFields(garment).analysis_status, "needs_review", "stored status holds the coherent but unresolved claim");
+  assert.match(garment.error ?? "", /genital visibility.*garment.*review/i);
+  // An old reviewed preview must not bypass a newer visibility hold. Pure repair
+  // guards: no database, model or write is involved in either validation step.
+  const legacy: Row = {id:"row",clone_id:"clone",storage_path:"clone/photo.jpg",caption:"Stored caption",tags:[],auto_desc:null,
+    visual_description:null,explicitness:"none",is_nude:false,nsfw:false,analysis_status:"legacy",analysis_version:null,
+    analysis_model:null,analysis_provider:null,analysis_error:null,analysed_at:null,visual_facts:null,metadata_edited_at:null};
+  const oldAccepted = {...garment,status:"analysed" as const,error:undefined};
+  const proposal=buildProposal({runId:"isolated"},"photos",legacy,"fixture",oldAccepted,true);
+  assert.equal(proposal.outcome,"needs_review","a legacy analyser result cannot create an applicable proposal");
+  const oldPreview: Item={kind:"proposal",table:"photos",id:legacy.id,clone_id:legacy.clone_id,clone_slug:"fixture",
+    storage_path:legacy.storage_path,before:{analysis_status:"legacy"},after:analysisRowFields(oldAccepted),code_version:ANALYSIS_VERSION};
+  delete oldPreview.after.caption;
+  assert.match(bindConflict(oldPreview,legacy,{id:"clone",slug:"fixture",vision_model:null})??"",/fresh review/,
+    "an already-saved analysed proposal is refused before any write");
+  const hold: Item={...oldPreview,kind:"hold",after:{analysis_status:"needs_review",analysis_error:"Visibility exception"}};
+  assert.equal(bindConflict(hold,legacy,{id:"clone",slug:"fixture",vision_model:null}),null,"guarded status-only hold remains valid");
   const failedRes = await analysePhoto(photo, null, undefined, { call: async () => { throw new Error("boom"); } });
   assert.equal(priceForAnalysis(guide, failedRes), 2000, "failed => the guide's highest category, not the SFW price");
   const review = await analysePhoto(photo, null, undefined, { call: replying(answer({ anus: "unclear" })).call });

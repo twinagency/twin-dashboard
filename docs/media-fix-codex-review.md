@@ -12,6 +12,23 @@ Status: focused code corrections verified locally; automatic catalogue-wide accu
 
 These are later than the emailed 746350e / 59e71c3 / 7ee8a3c package. Work already present in these parents includes the preview-bound operator hold list, targeted photo second look, toy alternatives in the V2 menu, video bundle-member facts and the V2 reply grounding guard. This continuation preserves those implementations.
 
+## Follow-up: why coherent wrong claims still passed (12 October)
+
+The validator checks structure, known contradictions and selected visibility flags. It cannot establish that mutually consistent prose and flags match image pixels. The narrow same-model second look also misses descriptive errors and may repeat a false positive. This is an analyser limitation, not a missing-file problem.
+
+Two isolated alternatives were evaluated on the same 14 images and the frozen AI reference (no new model or images):
+
+- A broader factual audit of the existing records against 1536px images made 14 real requests, US$0.01304490 reported cost. It marked every description supported, including known wrong details, and disputed some derived labels using a different rubric. Rejected; no audit call or prompt was added to the uploader.
+- A concise-description first-pass prompt through the real uploader made 19 real requests, US$0.01416978. It shortened the text but still accepted the disputed through-garment genital claim on 70509013, now with affirmative prose and a confirming second look. Rejected; the primary prompt and image preparation remain unchanged. One run per image is not proof of comparative accuracy; providers were not pinned.
+
+The focused correction is a shared visibility exception: a positive genital claim with a worn lower garment, or a claim of visibility through fabric, requires review even when the prose and second answer agree. Original observations remain intact for review. The rule does not assert that all fabric conceals anatomy, does not hold every nude/lingerie photo, and adds no AI call. It can also hold a genuinely visible through-fabric feature; that is an explicit trade-off for this unresolved class, not evidence of a corrected vision model.
+
+The same check runs when building repair proposals and when binding an already-saved proposal before a write. An old accepted preview cannot bypass this new exception. Status-only holds remain valid; prices, file identities, ownership, existing legacy records and rollback writing logic are unchanged. Old previews remain unapproved.
+
+Verification: new classification assertion failed with analysed before the guard. Five affected dashboard suites pass, including uploader tests with coherent prose plus a repeated yes, no caption call on held items, a saved legacy proposal refused before writing, and an allowed status-only hold. Changed-module TypeScript passes. Both recorded 14-photo runs were replayed through the final validator, actual row mapper and V2 menu with identical prepared bytes/prompts for their respective experiments: 200 assertions, zero network calls. Each ends 10 analysed / 4 needs_review. The concise prompt remains rejected despite this recorded-response regression test.
+
+**Release decision: automatic description accuracy remains unresolved.** Ten analysed rows do not mean ten fully correct descriptions. Previously recorded object, pose/action, colour and location errors are not fixed by the new visibility exception. No blanket manual-review replacement is proposed, no perfect-accuracy claim is made, and no production deployment or catalogue write was performed. Videos remain outside the first repair batch. The PostgreSQL repair crash/rollback rig was not rerun here; its writing code is unchanged, and only the new pure validation gates were exercised. This is a focused review-branch correction, not approval to roll out bulk repair.
+
 ## Corrections
 
 1. Dashboard: made first-pass, tag and second-look visibility instructions agree. Actual anatomy discernible through transparent fabric follows the same rule in each instruction. An inserted object alone is not proof that an opening is visible. This removes contradictory instructions; it does not prove improved model accuracy. Existing call limits, model choice, analysis schema/version and price logic are unchanged.
@@ -38,7 +55,7 @@ The V1 full repository suite and the dashboard full release build were not run l
 ## Accuracy and release limits
 
 - OpenRouter access was subsequently supplied and verified. The factual vision path has now run once on all 14 saved Tammy originals at 817e01fed7b3866f0409924e6bbfe1877f5e58e6: 19 HTTP requests, US$0.01036036 reported cost, 11 analysed / 3 needs_review. The reference rubric and image hashes were frozen before outputs. References are AI-reviewed, not independently person-verified. Providers actually reported were DeepInfra, Parasail and Venice; this used the existing uploader transport without introducing provider pinning.
-- The agreed original 20-photo evaluation inputs and numbered reference list are still missing here. The older evidence package contains their outputs, not the original image bytes. They have been requested. Do not substitute different images, expand the dataset or relabel old outputs as new.
+- The original 20-photo inputs are unavailable. On 12 October the owner authorised continuing with the 14 retained Tammy originals, without waiting for those files. The attached 40-item PDF is the older report with small thumbnails, not equivalent original evaluation inputs. No claim is made that the original 20-photo test was repeated.
 - Do not apply the old Tammy preview. A fresh preview must be generated from the exact candidate, reviewed against the images and bound by its hash. Apply must use that saved preview and make zero model calls.
 - Same-model second-look agreement is not independent evidence. It can still confirm a wrong first answer. False negative facts and non-triggered attributes remain possible. These code checks do not guarantee perfect descriptions.
 - Reply grounding covers a defined vocabulary and nearby colour/garment phrases. It does not prove every natural-language claim, pose, action, absence claim or underlying image observation.

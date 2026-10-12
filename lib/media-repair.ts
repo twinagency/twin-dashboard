@@ -18,6 +18,7 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { ANALYSIS_COLUMNS, ANALYSIS_VERSION, FACT_KEYS, type AnalysisResult, type VisualFacts } from "./media-analysis-contract";
 import { withRetry, TRANSIENT_ERROR } from "./retry";
 import { analysisRowFields } from "./media-analysis-row";
+import { genitalVisibilityReviewReason } from "./media-classification";
 
 export type MediaTable = "photos" | "videos";
 export const MEDIA_TABLES: MediaTable[] = ["photos", "videos"];
@@ -284,6 +285,8 @@ export function buildProposal(ctx: Pick<Ctx, "runId" | "now">, table: MediaTable
   if (res.status === "needs_review") return { ...base, outcome: "needs_review", error: res.error ?? "analysis contradicts itself" };
 
   const f = res.fields;
+  const visibilityReview = genitalVisibilityReviewReason(f.visual_facts.evidence, `${f.visual_description} ${f.visual_facts.visible.join(". ")}`);
+  if (visibilityReview) return { ...base, outcome: "needs_review", error: visibilityReview };
   // The field set and the state stamp come from the SAME helper the dashboard upload/import path uses (lib/media-analysis-row.ts),
   // so a repaired row is indistinguishable from a freshly uploaded one. Caption is the one exception: the stored sales caption is
   // kept unless it contradicts the facts.
@@ -591,6 +594,8 @@ export function bindConflict(it: Item, row: Row | undefined, clone: CloneInfo | 
   const merged: any = { ...row, ...it.after };
   const bad = validateFields({ ...merged, auto_desc: merged.auto_desc ?? "" });
   if (bad) return `invalid proposal: ${bad}`;
+  const visibilityReview = genitalVisibilityReviewReason(merged.visual_facts.evidence, `${merged.visual_description} ${merged.visual_facts.visible.join(". ")}`);
+  if (visibilityReview) return `proposal requires fresh review: ${visibilityReview}`;
   return null;
 }
 
@@ -948,3 +953,4 @@ export function readOnlyFetch(base: typeof fetch = fetch): typeof fetch {
     return base(input, init);
   }) as typeof fetch;
 }
+
