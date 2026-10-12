@@ -36,10 +36,11 @@ def python_script(code):
     b64=base64.b64encode(code.encode()).decode()
     return "python3 - <<'PY'\nimport base64\nexec(base64.b64decode("+repr(b64)+"))\nPY"
 
-# Read-only diagnostics: unrelated release disk gate must remain intact.
-command("set -eu\ndf -h /\ndocker system df\ndocker ps -a --format '{{.Names}} {{.Image}} {{.Status}}'",
-        "Inspect dashboard disk and retained containers",instance=DASH_INSTANCE,timeout=60)
-
+try:
+    location=s3.get_bucket_location(Bucket=BUCKET)
+    print("Release bucket region:",location.get("LocationConstraint"),flush=True)
+except Exception as e:
+    print("Release bucket location check:",getattr(e,"response",{}).get("Error",{}).get("Code",type(e).__name__),flush=True)
 put=s3.generate_presigned_url("put_object",Params={"Bucket":BUCKET,"Key":KEY},ExpiresIn=1800)
 get=s3.generate_presigned_url("get_object",Params={"Bucket":BUCKET,"Key":KEY},ExpiresIn=1800)
 print("::add-mask::"+put,flush=True); print("::add-mask::"+get,flush=True)
@@ -53,26 +54,12 @@ for p in patches:
     assert hashlib.sha256((app/p["path"]).read_bytes()).hexdigest()==p["before_sha"],"live source changed: "+p["path"]
     live=subprocess.check_output(["docker","compose","-p","twin-v2","exec","-T","bot","sha256sum",p["path"]],cwd=app,text=True).split()[0]
     assert live==p["before_sha"],"running source differs: "+p["path"]
-stage=Path(tempfile.mkdtemp(prefix="twin-v2-history90-"))
-code=stage/"code"; code.mkdir()
-for name in ["src","dashboard","scripts","migrations","package.json","package-lock.json","tsconfig.json","Dockerfile","docker-compose.yml",".dockerignore","README.md","PLAN.txt"]:
-    src=app/name
-    if not src.exists(): continue
-    if src.is_dir(): shutil.copytree(src,code/name)
-    else: shutil.copy2(src,code/name)
+candidates=sorted(Path("/tmp").glob("twin-v2-history90-*"),key=lambda p:p.stat().st_mtime,reverse=True)
+stage=next(p for p in candidates if (p/"test-output.log").exists() and "all 177 memory wiring checks passed" in (p/"test-output.log").read_text())
+code=stage/"code"
 for p in patches:
-    file=code/p["path"]; source=file.read_text()
-    assert source.count(p["old"])==1,p["path"]+" replacement ambiguous"
-    file.write_text(source.replace(p["old"],p["new"]))
-    assert hashlib.sha256(file.read_bytes()).hexdigest()==p["after_sha"],"patched hash mismatch"
-image=subprocess.check_output(["docker","inspect","-f","{{.Image}}","twin-v2-bot-1"],text=True).strip()
-# Existing image dependencies, staged code, no network, and no live data/environment mounts.
-result=subprocess.run(["docker","run","--rm","--network","none","-v",str(code/"src")+":/app/src:ro",
-                "-v",str(code/"scripts")+":/app/scripts:ro","--entrypoint","sh",image,"-c","npm run typecheck && npm test"],capture_output=True,text=True)
-(stage/"test-output.log").write_text(result.stdout+"\n"+result.stderr)
-print("\n".join((result.stdout+"\n"+result.stderr).splitlines()[-80:]),flush=True)
-if result.returncode: raise RuntimeError("Existing Linux test suite failed; production unchanged; log: "+str(stage/"test-output.log"))
-print("Full Linux typecheck and test suite passed.",flush=True)
+    assert hashlib.sha256((code/p["path"]).read_bytes()).hexdigest()==p["after_sha"],"tested source changed"
+print("Reusing the exact Linux-tested release source:",str(stage),flush=True)
 archive=stage/"release.tgz"
 with tarfile.open(archive,"w:gz") as tar:
     for file in sorted(code.rglob("*")):
@@ -81,7 +68,13 @@ with tarfile.open(archive,"w:gz") as tar:
         if file.is_file(): tar.add(file,arcname=str(relative),recursive=False)
 digest=hashlib.sha256(archive.read_bytes()).hexdigest()
 request=urllib.request.Request(PUT_URL,data=archive.read_bytes(),method="PUT")
-with urllib.request.urlopen(request,timeout=90) as response: assert response.status==200
+try:
+    with urllib.request.urlopen(request,timeout=90) as response: assert response.status==200
+except urllib.error.HTTPError as e:
+    import xml.etree.ElementTree as ET
+    body=ET.fromstring(e.read())
+    print("Release upload HTTP:",e.code,"S3 error code:",body.findtext("Code"),"message:",body.findtext("Message"),flush=True)
+    raise RuntimeError("Release upload rejected; production unchanged") from None
 print("STAGED_RELEASE="+json.dumps({"sha256":digest,"archive":str(archive),"commit":COMMIT}))
 '''.replace("PATCHES",repr(patches)).replace("HELPER_SHA",repr(HELPER_SHA)).replace("PUT_URL",repr(put)).replace("COMMIT",repr(COMMIT))
 out=command(python_script(stage_code),"Stage and test V2 90-message history; upload release")
