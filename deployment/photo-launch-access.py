@@ -18,10 +18,4 @@ def node_check(container,path,timeout=120):
  host="import subprocess\nsource="+repr(source)+"\nr=subprocess.run(['docker','exec','-i',"+repr(container)+",'node','--import','tsx','--input-type=module'],input=source,text=True,capture_output=True,timeout=100)\nprint(r.stdout)\nprint(r.stderr[-4000:] if r.returncode else '')\nraise SystemExit(r.returncode)\n"
  encoded=base64.b64encode(host.encode()).decode()
  return ssm("printf '%s' '"+encoded+"' | base64 -d > /tmp/photo-final-consumer-check.py\npython3 /tmp/photo-final-consumer-check.py",timeout)
-print(node_check('next-app','deployment/photo-final-v1.mjs'),flush=True)
-print(node_check('twin-v2-bot-1','deployment/photo-final-v2.mjs'),flush=True)
-INSTANCE='i-09a9dd3bd749643a5'
-source=pathlib.Path('deployment/photo-final-dashboard.cjs').read_text()
-host="import subprocess,json\nsource="+repr(source)+"\nr=subprocess.run(['docker','exec','-i','next-app','node'],input=source,text=True,capture_output=True,timeout=100)\nprint(r.stdout)\nprint(r.stderr[-4000:] if r.returncode else '')\nprint(subprocess.check_output(['docker','inspect','-f','{{json .Config.Image}}','next-app'],text=True))\nraise SystemExit(r.returncode)\n"
-encoded=base64.b64encode(host.encode()).decode()
-print(ssm("printf '%s' '"+encoded+"' | base64 -d > /tmp/photo-final-dashboard-check.py\npython3 /tmp/photo-final-dashboard-check.py",120),flush=True)
+print(node_check('twin-v2-bot-1','deployment/photo-creator-connection.mjs'),flush=True)
