@@ -27,6 +27,7 @@ import FanDossier from "@/components/users/FanDossier";
 import { toRows, parseEvents, sentenceCase } from "@/lib/fan-dossier";
 import ChatThread, { type ThreadMessage } from "@/components/users/ChatThread";
 import { flowLabelOf } from "@/lib/flow-labels";
+import { CHAT_HISTORY_PAGE, historyWindowQuery, historyCursor, parseHistoryCursor } from "@/lib/chat-history-window";
 
 export const dynamic = "force-dynamic";
 
@@ -226,7 +227,7 @@ const REACHABLE_MS = 24 * 3600 * 1000;
 export default async function FansPage({
   searchParams,
 }: {
-  searchParams: Promise<{ fan?: string; q?: string; status?: string; sort?: string; dir?: string; show?: string; relationship?: string; creator?: string; platform?: string; source?: string }>;
+  searchParams: Promise<{ fan?: string; q?: string; status?: string; sort?: string; dir?: string; show?: string; relationship?: string; creator?: string; platform?: string; source?: string; before?: string; after?: string }>;
 }) {
   const params = await searchParams;
   // Illustrated relationships stay in the existing inbox route without ever
@@ -459,6 +460,9 @@ export default async function FansPage({
   if (!selected) selected = filtered[0] || null;
 
   let history: any[] = [];
+  let historyHasMore = false;
+  const historyBefore = parseHistoryCursor(params.before);
+  const historyAfter = historyBefore ? null : parseHistoryCursor(params.after);
   let purchases: any[] = [];
   let profile: any = null;
   // Manual takeover (migration 096) photo picker: restricted to this fan's
@@ -468,15 +472,11 @@ export default async function FansPage({
   let freePhotos: { id: string; storage_path: string; caption: string | null; image_name: string | null }[] = [];
   if (selected) {
     const [historyRes, purchasesRes, profileRes, freePhotosRes] = await Promise.all([
-      supabaseAdmin
+      historyWindowQuery(supabaseAdmin
         .from("chat_history")
-        // select * (not named columns) so the additive `meta` column (migration
-        // 030, rich bubbles) comes along when applied and nothing breaks before.
         .select("*")
         .eq("clone_id", selected.clone_id)
-        .eq("telegram_id", selected.telegram_id)
-        .order("created_at", { ascending: false })
-        .limit(90),
+        .eq("telegram_id", selected.telegram_id), { before: params.before, after: params.after }),
       supabaseAdmin
         .from("star_transactions")
         // select * (not named columns) for the same reason chat_history does it
@@ -496,7 +496,10 @@ export default async function FansPage({
             .order("created_at", { ascending: false })
         : Promise.resolve({ data: [] as any[] }),
     ]);
-    history = ((historyRes.data ?? []) as any[]).slice().reverse();
+    if (historyRes.error) throw new Error("Could not load conversation history. Please retry.");
+    historyHasMore = (historyRes.data ?? []).length > CHAT_HISTORY_PAGE;
+    history = ((historyRes.data ?? []) as any[]).slice(0, CHAT_HISTORY_PAGE);
+    if (!historyAfter) history.reverse();
     // See lib/star-dedupe.ts: collapse double-recorded payments before showing this fan's total.
     purchases = dedupeStarRows((purchasesRes.data ?? []) as any[]);
     profile = (profileRes.data ?? null) as any;
@@ -1275,6 +1278,20 @@ export default async function FansPage({
               </div>
 
               <ChatThread
+                key={`${selected.id}:${params.before ?? ""}:${params.after ?? ""}`}
+                historyNavigation={
+                  <nav aria-label="Conversation history" className="flex flex-wrap items-center justify-center gap-3 border-b border-line px-3 py-2 text-xs">
+                    <span className="text-muted">Last 90 days</span>
+                    {history.length > 0 && (historyAfter || historyHasMore && !historyAfter) && (
+                      <Link scroll={false} className="text-blue-600 hover:underline" href={baseQs({ fan: selected.id, before: historyCursor(history[0]) })}>Older messages</Link>
+                    )}
+                    {history.length > 0 && (historyBefore || historyAfter && historyHasMore) && (
+                      <Link scroll={false} className="text-blue-600 hover:underline" href={baseQs({ fan: selected.id, after: historyCursor(history[history.length - 1]) })}>Newer messages</Link>
+                    )}
+                    {(historyBefore || historyAfter) && <Link scroll={false} className="text-blue-600 hover:underline" href={qs(selected.id)}>Latest messages</Link>}
+                    <span className="text-muted">{history.length} messages on this page</span>
+                  </nav>
+                }
                 fanId={selected.id}
                 messages={threadMessages}
                 lastActiveLabel={ago(selected.last_message_received)}
@@ -1728,5 +1745,6 @@ export default async function FansPage({
     </div>
   );
 }
+
 
 

@@ -311,7 +311,7 @@ const browser = await chromium.launch({ headless: true, ...(executablePath ? { e
 const expectations = {
   twin: {
     name: "Twin",
-    headings: { login: "Sign in", signup: "Create account", "forgot-password": "Reset password", "reset-password": "New password", onboarding: "Add your content" },
+    headings: { login: "Sign in", signup: "Create account", "forgot-password": "Reset password", "reset-password": "New password", onboarding: "Let’s set up your AI." },
     authBase: "/creator",
     signupAction: "/creator-auth/signup",
   },
