@@ -80,6 +80,15 @@ export async function middleware(req: NextRequest) {
     if (req.method !== "POST" || req.headers.has("next-action")) return new NextResponse("Forbidden", { status: 403 });
     return privateResponse(withPathname(req));
   }
+  // Only this exact entry route is public. Its handler verifies the private
+  // review key before issuing an ordinary, isolated creator session.
+  if (/^\/onboarding-review\/[a-f0-9]{64}$/.test(pathname)) {
+    if (req.method !== "GET" || req.headers.has("next-action")) return new NextResponse("Forbidden", { status: 403 });
+    const response = privateResponse(withPathname(req));
+    response.headers.set("X-Robots-Tag", "noindex, nofollow");
+    response.headers.set("Referrer-Policy", "no-referrer");
+    return response;
+  }
   // Fan catalogue endpoints perform their own Telegram/admin authentication.
   // This branch precedes agency/creator cookies and never accepts server actions.
   if (/^\/catalogue\/[a-z0-9-]{1,80}$/.test(pathname) || /^\/api\/catalogue\/[a-z0-9-]{1,80}$/.test(pathname)) {

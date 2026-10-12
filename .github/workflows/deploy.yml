@@ -68,6 +68,8 @@ jobs:
           else
             command -v ffmpeg && command -v ffprobe || (sudo timeout --kill-after=10s 150s apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 -o DPkg::Lock::Timeout=30 update && sudo timeout --kill-after=10s 210s apt-get -o Acquire::Retries=1 -o Acquire::http::Timeout=20 -o Acquire::https::Timeout=20 -o DPkg::Lock::Timeout=30 install -y --no-install-recommends ffmpeg)
           fi
+      - name: Permanent onboarding review access and isolation
+        run: node scripts/check-onboarding-review.cjs
       - name: Creator upload, picker and access regressions
         run: npm run test:creator-upload
       - name: Normal signup runner safety and cleanup regressions

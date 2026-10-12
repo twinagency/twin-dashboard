@@ -27,6 +27,10 @@ export type CreatorDashboardIdentity = AgencyIdentity & {
 
 const CREATOR_ACCESS_STATUSES = new Set(["applicant", "approved", "active"]);
 
+// Dedicated owner review account. This account may never inherit a live clone.
+export const ONBOARDING_REVIEW_ACCOUNT_ID = "4c1d6df9-4a40-453c-850a-dc838f6dea13";
+export const ONBOARDING_REVIEW_AGENCY_ID = "bc670215-110b-4ea0-8f5c-af3dfe21d253";
+
 export function creatorAccountStatusAllowsAccess(status: unknown): boolean {
   return typeof status === "string" && CREATOR_ACCESS_STATUSES.has(status);
 }
@@ -45,6 +49,9 @@ export async function creatorDashboardIdentity(token: string | null | undefined)
       db.from("creator_clone_links").select("clone_id,clones(id,name)").eq("creator_account_id", session.accountId).maybeSingle(),
     ]);
     if (application.error || assignment.error || link.error) return null;
+    if (session.accountId === ONBOARDING_REVIEW_ACCOUNT_ID && (
+      account.data.source !== "admin" || assignment.data?.agency_id !== ONBOARDING_REVIEW_AGENCY_ID || link.data?.clone_id
+    )) return null;
     const relatedAgency = assignment.data?.partner_agencies as unknown as { name: string; active: boolean } | null;
     if (assignment.data?.agency_id && (!relatedAgency || !relatedAgency.active)) return null;
     // Direct agency applicants must retain a current server-owned assignment.
