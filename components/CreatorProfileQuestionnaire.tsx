@@ -170,7 +170,7 @@ export default function CreatorProfileQuestionnaire({ page: initialPage, initial
   useEffect(() => {
     const navigate = (event: Event) => {
       const href = (event as CustomEvent<{ href: string }>).detail?.href;
-      const target = href === "/creator" ? "dashboard" : href === "/creator/onboarding?step=content" ? "content" : null;
+      const target = href === "/creator" ? "dashboard" : href === "/creator/onboarding?step=content" ? "content" : href === "/creator/onboarding?step=content&review=1#creator-setup-submit" ? "review" : null;
       if (target) { event.preventDefault(); void goTo(target); }
     };
     window.addEventListener("creator-setup:navigate", navigate);

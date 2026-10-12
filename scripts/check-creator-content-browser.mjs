@@ -18,11 +18,11 @@ const router={push(href){history.pushState({},'',href);setSection(new URL(href,l
 return <AppRouterContext.Provider value={router}><CreatorContentUploadProvider accountId={brand}><Layout brand={brand} logoSrc="/fixture-logo.svg" activeSection={section}><section data-creator-setup-panel>{section==='content'?<Intake locked={false} loginPath="/login" savedPhotos={total} savedVideos={0}/>:<Wizard page={pages[0]} initialAnswers={{}} initialRevision="" optional/>}</section></Layout></CreatorContentUploadProvider></AppRouterContext.Provider>};createRoot(document.getElementById('root')).render(<Fixture/>);`;
 await build({stdin:{contents:fixture,resolveDir:process.cwd(),loader:'tsx'},outfile:path.join(out,'bundle.js'),bundle:true,platform:'browser',jsx:'automatic',plugins:[{name:'router',setup(b){b.onResolve({filter:/^next\/navigation$/},()=>({path:'router',namespace:'fixture'}));b.onLoad({filter:/.*/,namespace:'fixture'},()=>({contents:'export const useRouter=()=>globalThis.__contentRouter;'}));}}]});
 const css=await postcss([tailwind()]).process('@import "./app/globals.css";',{from:path.resolve('creator-content-check.css')});writeFileSync(path.join(out,'globals.css'),css.css);
-const saved=new Set();let posts=0,folderSaved=false,draftSaved=false;
+const saved=new Set();let posts=0,folderSaved=false,draftSaved=false,draftFails=false;
 const server=createServer(async(req,res)=>{
  const url=new URL(req.url,'http://localhost');const json=body=>{res.writeHead(200,{'content-type':'application/json'});res.end(JSON.stringify(body));};
  if(url.pathname==='/creator-auth/uploads')return json({uploads:url.searchParams.get('ids').split(',').map(id=>({id,state:saved.has(id)?'saved':'needs_file'}))});
- if(url.pathname==='/creator-auth/onboarding/draft'){for await(const chunk of req){}draftSaved=true;return json({revision:'saved-revision'});}
+ if(url.pathname==='/creator-auth/onboarding/draft'){for await(const chunk of req){}await new Promise(r=>setTimeout(r,150));if(draftFails){res.writeHead(503,{'content-type':'application/json'});res.end(JSON.stringify({error:'unavailable'}));return;}draftSaved=true;return json({revision:'saved-revision'});}
  if(url.pathname==='/creator-auth/onboarding'){for await(const chunk of req){}res.writeHead(303,{location:'/creator/onboarding?step=content&status=questionnaire_saved'});res.end();return;}
  if(url.pathname==='/creator-auth/upload'){for await(const chunk of req){}posts++;await new Promise(r=>setTimeout(r,1800));saved.add(req.headers['x-creator-upload-id']);return json({status:'content_saved'});}
  if(url.pathname==='/creator-auth/content-folders'){let data='';for await(const chunk of req)data+=chunk;await new Promise(r=>setTimeout(r,150));folderSaved=true;return json({folders:[{...JSON.parse(data),provider:'Google Drive',submittedAt:new Date().toISOString()}]});}
@@ -58,14 +58,30 @@ try{
   await page.locator('[data-content-upload-activity]').waitFor();
   await page.getByLabel('What name should fans call you?').fill('Synthetic Creator');
   await page.getByRole('button',{name:'View uploads',exact:true}).click();
-  assert.equal(draftSaved,true,'View uploads saves questionnaire edits before switching');
   await page.getByText('2 of 50 uploaded',{exact:true}).waitFor();assert.equal(posts,2);
+  assert.equal(draftSaved,true,'View uploads saves questionnaire edits before switching');
   await page.getByRole('heading',{name:'Let’s set up your AI.',exact:true}).waitFor();
   await page.getByText('Everyday content plus explicit content if applicable.',{exact:true}).waitFor();
   await page.getByText('Use a folder link',{exact:true}).click();
   await page.getByLabel('Google Drive or Dropbox folder').fill('https://drive.google.com/drive/folders/synthetic');
   await page.getByLabel('Setup menu',{exact:true}).click();
   await page.locator('[data-creator-setup-tab="questionnaire"]').click();await page.getByRole('heading',{name:'A quick introduction',exact:true}).waitFor();assert.equal(folderSaved,true,'Folder revision saves before questionnaire navigation');
+  // The header review shortcut must flush the latest edit, even before autosave.
+  draftSaved=false;draftFails=true;
+  await page.getByLabel('Setup menu',{exact:true}).click();
+  await page.getByLabel('What name should fans call you?').fill('Unsaved review edit');
+  await page.getByRole('link',{name:'Review and finish',exact:true}).click();
+  await page.getByRole('alert').filter({hasText:'Your latest changes have not saved'}).waitFor({timeout:5000});
+  assert.equal(new URL(page.url()).searchParams.get('step'),'questionnaire','Failed save keeps the creator on their answers');
+  assert.equal(await page.getByLabel('What name should fans call you?').inputValue(),'Unsaved review edit');
+  draftFails=false;
+  await page.getByLabel('Setup menu',{exact:true}).click();
+  await page.getByRole('link',{name:'Review and finish',exact:true}).click();
+  await page.getByRole('heading',{name:'Let’s set up your AI.',exact:true}).waitFor();
+  assert.equal(draftSaved,true,'Review shortcut waits for confirmed draft save');
+  assert.equal(new URL(page.url()).searchParams.get('review'),'1');
+  await page.getByRole('button',{name:'Continue to questions →',exact:true}).click();
+  await page.getByRole('heading',{name:'A quick introduction',exact:true}).waitFor();
   for(let part=0;part<4;part++){await page.screenshot({path:path.join(out,`${brand}-${width}-questions-${part}.png`),fullPage:true});await page.getByRole('button',{name:'Continue',exact:true}).click();}
   await page.screenshot({path:path.join(out,`${brand}-${width}-account.png`),fullPage:true});
   await page.getByRole('button',{name:'Review and finish',exact:true}).click();

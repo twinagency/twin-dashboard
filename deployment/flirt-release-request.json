@@ -1,5 +1,5 @@
 {
-  "reason": "Publish approved Flirt onboarding with white backgrounds, black actions, original coloured logo and restrained pink accents.",
-  "source_commit": "50a7f4a78e38afd0058bcc630bb3d169bf16574f",
-  "requested_at": "2026-10-12T05:35:14Z"
+  "reason": "Prevent the onboarding review menu from leaving before answers save; verified creator walkthrough.",
+  "source_commit": "3f15d5d854aadbb15f60eeacdf5f4b580b12d569",
+  "requested_at": "2026-10-12T06:17:54.550Z"
 }
