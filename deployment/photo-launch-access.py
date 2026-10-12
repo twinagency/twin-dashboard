@@ -19,4 +19,4 @@ def node_check(container,path,timeout=120):
  encoded=base64.b64encode(host.encode()).decode()
  return ssm("printf '%s' '"+encoded+"' | base64 -d > /tmp/photo-final-consumer-check.py\npython3 /tmp/photo-final-consumer-check.py",timeout)
 
-print(node_check('twin-v2-bot-1','deployment/riley-missing-card-inspect.mjs'),flush=True)
+print(node_check('twin-v2-dash-1','deployment/riley-missing-card-inspect.mjs'),flush=True)
