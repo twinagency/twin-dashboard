@@ -29,3 +29,21 @@ for attempt in range(70):
  time.sleep(4)
 print(json.dumps({k:result.get(k) for k in ['Status','StandardOutputContent','StandardErrorContent']}))
 if result['Status']!='Success':raise SystemExit(1)
+
+# Read the existing bot release identities and staging credential availability.
+# Values of credentials are never returned; no process is restarted.
+commands=[
+ "sudo docker ps --format '{{.Names}} {{.Image}}'",
+ "for name in $(sudo docker ps --format '{{.Names}}'); do echo container:$name; sudo docker exec \"$name\" printenv GIT_SHA 2>/dev/null || true; done",
+ "ls -d /home/ubuntu/* /opt/twin* /opt/bot* 2>/dev/null || true",
+ "ls /usr/local/bin/twin* 2>/dev/null || true"
+]
+instance='i-0584d283506f3f6be'
+path.write_text(json.dumps({'commands':commands,'executionTimeout':['120']}))
+cmd_id=subprocess.check_output(['aws','ssm','send-command','--instance-ids',instance,'--document-name','AWS-RunShellScript','--parameters','file://'+str(path),'--comment','Twin photo launch read-only bot runtime preflight','--query','Command.CommandId','--output','text'],text=True).strip()
+for attempt in range(50):
+ result=json.loads(subprocess.check_output(['aws','ssm','get-command-invocation','--command-id',cmd_id,'--instance-id',instance,'--output','json'],text=True))
+ if result['Status'] in ['Success','Failed','Cancelled','TimedOut']:break
+ time.sleep(4)
+print(json.dumps({'bot_runtime':{k:result.get(k) for k in ['Status','StandardOutputContent','StandardErrorContent']}}))
+if result['Status']!='Success':raise SystemExit(1)
