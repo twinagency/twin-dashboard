@@ -16,6 +16,9 @@ jobs:
           node-version: 22
           cache: npm
       - run: npm ci
+      - name: Existing media regression dependencies
+        run: bash scripts/install-ci-video-tools.sh
+        timeout-minutes: 7
       - name: Affected classifier, analysis, correction and profile regressions
         run: |
           set -euo pipefail
