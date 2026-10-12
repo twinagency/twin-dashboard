@@ -1,0 +1,27 @@
+name: Restore T Social Games navigation
+on:
+  pull_request:
+    types: [opened, synchronize, reopened]
+    paths:
+      - .github/workflows/restore-tsocial-games.yml
+      - deployment/restore-tsocial-games.py
+permissions:
+  contents: read
+jobs:
+  inspect:
+    if: github.head_ref == 'codex/restore-tsocial-games-20261012' && github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-southeast-2
+      - name: Inspect T Social hosting
+        run: |
+          set -euo pipefail
+          test "$(aws sts get-caller-identity --query Account --output text)" = "323149985112"
+          aws cloudfront get-distribution-config --id E2GRELVDRQUHWO --query 'DistributionConfig.{Origins:Origins.Items,DefaultRootObject:DefaultRootObject}' --output json
+          aws lambda get-function-configuration --function-name twin-tsocial-api --query '{LastModified:LastModified,S3Bucket:Environment.Variables.S3_BUCKET}' --output json
