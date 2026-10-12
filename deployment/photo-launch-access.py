@@ -11,6 +11,25 @@ node=r"""
   report.video_columns=await read('videos?select=id,analysis_status,analysis_version&limit=0');
   report.creator_models=await read('clones?select=id,slug,engine,vision_model&limit=200');
  }
+
+ if(key) {
+  const staging='https://zqotxvrxuaocsonpizuw.supabase.co';
+  const headers={apikey:key};
+  if(!key.startsWith('sb_secret_')) headers.Authorization='Bearer '+key;
+  const probe=async(path)=>{
+   try {
+    const response=await fetch(staging+path,{headers,signal:AbortSignal.timeout(20000)});
+    await response.arrayBuffer();
+    return {http_status:response.status,accepted:response.ok};
+   } catch(error) { return {accepted:false,error_type:error.name}; }
+  };
+  report.existing_key_against_staging={
+   project_ref:'zqotxvrxuaocsonpizuw',
+   database:await probe('/rest/v1/photos?select=id,analysis_status&limit=0'),
+   storage:await probe('/storage/v1/bucket')
+  };
+ }
+
  console.log(JSON.stringify(report));
 })().catch(e=>{console.error('access check failed: '+e.name);process.exitCode=1});
 """
