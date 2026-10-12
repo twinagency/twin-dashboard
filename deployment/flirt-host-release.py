@@ -166,13 +166,81 @@ def validate_release(kind, image, sha):
 
 
 def rollback_archive_name(name, old_sha):
-    # The same commit can be deployed more than once. Keep every previous
-    # archive and give this stopped rollback its own available name.
+    # The same commit can be deployed more than once. Give this stopped
+    # rollback a distinct name; bounded retention runs only under disk pressure.
     for _ in range(10):
         candidate = name + "-archive-" + old_sha[:12] + "-" + secrets.token_hex(8)
         if not inspect(candidate):
             return candidate
     raise RuntimeError("Could not reserve a distinct FLIRT rollback archive name")
+
+
+def archive_candidates(containers, now):
+    """Only labelled, stopped, unmounted dashboard archives older than a day.
+    The current rollback and newest three archives are always retained.
+    """
+    from datetime import datetime
+    archives = []
+    for item in containers:
+        labels = item.get("Config", {}).get("Labels") or {}
+        name = item.get("Name", "").lstrip("/")
+        match = re.fullmatch(r"flirt-dashboard-archive-([a-f0-9]{12})(?:-[a-f0-9]{16})?", name)
+        sha = labels.get("io.flirt.commit", "")
+        if not match or labels.get("io.flirt.project") != PROJECT or not re.fullmatch(r"[a-f0-9]{40}", sha) or not sha.startswith(match[1]):
+            continue
+        if item.get("State", {}).get("Status") != "exited" or item["State"].get("Running") or item.get("Mounts"):
+            continue
+        try: created = datetime.fromisoformat(item["Created"].replace("Z", "+00:00")).timestamp()
+        except (KeyError, ValueError): continue
+        archives.append((created, item))
+    archives.sort(key=lambda pair: pair[0], reverse=True)
+    return [item for created, item in reversed(archives[3:]) if now - created > 86400]
+
+
+def docker_inventory():
+    ids = command(["docker", "ps", "-aq"]).decode().split()
+    return json.loads(command(["docker", "inspect", *ids])) if ids else []
+
+
+def reclaim_dashboard_archives():
+    """Free deployment capacity without restarting containers or pruning volumes."""
+    if shutil.disk_usage("/").free >= 8 * 1024**3: return
+    secured_directory()
+    before = docker_inventory()
+    running = {c["Id"]: c["State"]["StartedAt"] for c in before if c["State"]["Running"]}
+    protected = {c["Name"]: c["Id"] for c in before if not c["Name"].startswith("/flirt-dashboard-archive-")}
+    if not {"/next-app", "/flirt-dashboard", "/flirt-dashboard-rollback"}.issubset(protected):
+        raise RuntimeError("Current dashboard and rollback must exist before retention")
+    removed = []
+    free_before = shutil.disk_usage("/").free
+    for candidate in archive_candidates(before, time.time()):
+        if shutil.disk_usage("/").free >= 12 * 1024**3: break
+        current = docker_inventory()
+        eligible = {c["Id"]: c for c in archive_candidates(current, time.time())}
+        if candidate["Id"] not in eligible: continue
+        item = eligible[candidate["Id"]]
+        if item["Name"] != candidate["Name"] or item["Image"] != candidate["Image"]: continue
+        # No mutable application state is discarded. Only expected Next cache
+        # and temporary files may exist in the stopped container's write layer.
+        changes = command(["docker", "diff", item["Id"]]).decode().splitlines()
+        roots = ("/tmp", "/app/.next/cache", "/root/.cache", "/var/log")
+        if any(not any(line[2:] == root or line[2:].startswith(root + "/") or root.startswith(line[2:] + "/") for root in roots) for line in changes):
+            continue
+        record = {"name": item["Name"], "id": item["Id"], "image": item["Image"], "created": item["Created"]}
+        # Audit the exact scope before each removal. No environment values.
+        private_write(ROOT / "archive-retention-last.json", json.dumps({"free_before":free_before,"removed":removed,"next":record}))
+        command(["docker", "rm", item["Id"]])  # no force, no volumes
+        if not any(c["Image"] == item["Image"] for c in docker_inventory()):
+            # Refuse conflicts rather than force removal of an image in use.
+            result = subprocess.run(["docker", "image", "rm", item["Image"]], capture_output=True, timeout=90)
+            record["image_removed"] = result.returncode == 0
+        removed.append(record)
+    after = docker_inventory()
+    if {c["Id"]:c["State"]["StartedAt"] for c in after if c["State"]["Running"]} != running or any(not any(c["Name"] == name and c["Id"] == identifier for c in after) for name, identifier in protected.items()):
+        raise RuntimeError("Dashboard state changed during archive retention")
+    report = {"free_before":free_before,"free_after":shutil.disk_usage("/").free,"removed":removed,"running_unchanged":True,"rollback_retained":True}
+    private_write(ROOT / "archive-retention-last.json", json.dumps(report))
+    print(json.dumps({"archive_retention":report}), flush=True)
 
 
 def deploy(kind, image, sha):
@@ -182,8 +250,9 @@ def deploy(kind, image, sha):
     env = read_env(env_file)
     if env.get("FLIRT_SUPABASE_PROJECT_REF") != PROJECT or env.get("FLIRT_BACKEND_ENABLED") != "true":
         raise RuntimeError("Approved FLIRT runtime configuration is missing")
+    if kind == "dashboard": reclaim_dashboard_archives()
     if shutil.disk_usage("/").free < 5 * 1024**3:
-        raise RuntimeError("Host has insufficient free disk; no images were removed")
+        raise RuntimeError("Host has insufficient free disk after bounded archive retention")
     memory = dict(line.split(":", 1) for line in Path("/proc/meminfo").read_text().splitlines())
     if int(memory["MemAvailable"].split()[0]) < 512 * 1024:
         raise RuntimeError("Host has insufficient available memory")
