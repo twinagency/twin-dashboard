@@ -1,5 +1,5 @@
 {
-  "reason": "Creator onboarding: useful help, six tappable previews, all-content gallery, confirmed removal and live saved counts.",
-  "source_commit": "78c609f6761f962a624716a5269cca5c0a2ededb",
-  "requested_at": "2026-10-12T10:19:14.318Z"
+  "reason": "Private 30-day owner shortcuts using existing revocable sessions, with credential-free URLs on the server and creator-role cleanup.",
+  "source_commit": "fc1fae2e367f485c890134c5e5d76552c5d3ad37",
+  "requested_at": "2026-10-12T12:59:32.053Z"
 }

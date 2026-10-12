@@ -49,6 +49,13 @@ export async function middleware(req: NextRequest) {
   const foreignBrand = flirtForeignBrandDecision(pathname, req.method);
   if (foreignBrand?.action === "notfound") return privateResponse(new NextResponse("Not found", { status: 404 }));
   if (foreignBrand?.action === "redirect") return privateResponse(NextResponse.redirect(new URL(foreignBrand.path + req.nextUrl.search, dashboardOrigin(req)), 308));
+  // Only this exact credential-handoff route is public. Its POST verifies an
+  // existing, revocable owner session; GET/HEAD never create authenticated access.
+  if (pathname === "/admin-access") {
+    if (!["GET", "HEAD", "POST"].includes(req.method) || req.headers.has("next-action")
+      || (req.method === "POST" && !trustedFormOrigin(req))) return new NextResponse("Forbidden", { status: 403 });
+    return privateResponse(withPathname(req));
+  }
   // This exact owner review route authenticates its unguessable key itself.
   // It can issue a session for only the dedicated, unlinked preview account.
   if (/^\/onboarding-review\/[a-f0-9]{64}$/.test(pathname)) {
@@ -190,6 +197,7 @@ export async function middleware(req: NextRequest) {
   return withPathname(req);
 }
 export const config = { matcher: ["/((?!_next/static|_next/image|favicon.ico|icon.png|creator-auth/upload/?$).*)"] };
+
 
 
 
