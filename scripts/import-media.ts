@@ -44,11 +44,13 @@ import { mediaStoragePath as storagePath } from "@/lib/media-storage-path";
 // already wrote, not new ones. See that file for the fleet-wide numbers.
 
 async function uploadConfig(cloneId: string): Promise<{ model: string; guide: unknown }> {
-  const { data, error } = await withPhotoVisionColumn(include => supabaseAdmin
-    .from("clones")
-    .select(include ? "vision_model, photo_vision_model, category_pricing" : "vision_model, category_pricing")
-    .eq("id", cloneId)
-    .maybeSingle());
+  const { data, error } = await withPhotoVisionColumn(include => {
+    const table = supabaseAdmin.from("clones");
+    const query = include
+      ? table.select("vision_model, photo_vision_model, category_pricing")
+      : table.select("vision_model, category_pricing");
+    return query.eq("id", cloneId).maybeSingle();
+  });
   if (error) throw new Error(`Could not load creator model: ${error.message}`);
   if (!data) throw new Error("Creator not found");
   return { model: configuredVisionModel(data, "photo"), guide: data.category_pricing };

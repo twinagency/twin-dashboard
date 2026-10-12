@@ -191,11 +191,13 @@ const storagePath = mediaStoragePath;
 // Pull the clone's vision model + category-pricing guide in one read (both needed
 // on every upload: one to tag the item, the other to price it from those tags).
 async function uploadConfig(cloneId: string, kind: "photo" | "video"): Promise<{ model: string; guide: unknown }> {
-  const { data, error } = await withPhotoVisionColumn(include => supabaseAdmin
-    .from("clones")
-    .select(include ? "vision_model, photo_vision_model, category_pricing" : "vision_model, category_pricing")
-    .eq("id", cloneId)
-    .maybeSingle());
+  const { data, error } = await withPhotoVisionColumn(include => {
+    const table = supabaseAdmin.from("clones");
+    const query = include
+      ? table.select("vision_model, photo_vision_model, category_pricing")
+      : table.select("vision_model, category_pricing");
+    return query.eq("id", cloneId).maybeSingle();
+  });
   if (error) throw new Error(`Could not load creator pricing: ${error.message}`);
   if (!data) throw new Error("Creator not found");
   return { model: configuredVisionModel(data, kind), guide: data.category_pricing };
