@@ -335,7 +335,6 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
           savedPhotos={(files || []).filter(file => file.storage_transfer_status === "verified" && file.kind !== "voice" && file.mime_type?.startsWith("image/")).length}
           savedVideos={(files || []).filter(file => file.storage_transfer_status === "verified" && file.kind !== "voice" && file.mime_type?.startsWith("video/")).length}
           initialFolders={contentFolders(answers)} />
-        {(savedContentCount > 0 || answeredCount > 0 || submitted) && <Link href="/creator/onboarding?step=content&review=1#creator-setup-submit" data-review-entry>Review and finish</Link>}
       </section>}
     </CreatorSetupLayout>
   );
