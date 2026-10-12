@@ -1,6 +1,18 @@
 # Controlled photo launch, 12 October 2026
 
-The controlled photo launch is live for Dreka Cakez only. The final production upload passed on the deployed posture guard. The earlier unsupported kneeling result remains recorded as a failure, with its duplicate held. This report supersedes the recovery and staging snapshots; final live consumer verification is recorded below.
+The selected photo uploader is now enabled for **Kyla Yesenosky only**, at Jesse's explicit request at 19:32 Brisbane time. The guarded setting change completed at **2026-10-12 09:35:21 UTC / 19:35:21 AEST** and an independent database read confirmed it. Dreka's prior model setting was restored. The original uploader tests below remain valid as upload/storage/consumer checks, but the earlier statement that Dreka was a verified live-chat launch was too strong: her Telegram connection had not been established.
+
+## Creator correction and current activation
+
+Read-only Telegram API checks from the deployed V2 container confirmed Kyla's Business connection is enabled and has reply permission (`KylaYesenoskyyx`). Both recorded Dreka connections returned disabled with reply permission false. Receipt: [run 38230758808](https://github.com/jesse98/twin-dashboard/actions/runs/38230758808), job `114749363339`, checked at 09:34:43 UTC. No message was sent and no connection was switched. The separate paused MTProto campaign record was not changed; it is not the V2 Business reply connection.
+
+Kyla: `d2678dce-6a4e-4f1c-b54a-86057bba427c`, engine `v2`, photo vision enabled, configured/effective photo model `qwen/qwen3.8-27b`, DeepInfra only with provider fallbacks disabled. Previous configured setting: `qwen/qwen3-vl-32b-instruct`. The database update required the expected old model, creator ID, slug, active status, V2 engine and photo-vision flag. Dreka's restoration occurred in the same statement, conditional on Kyla's successful change. Independent verification found only Kyla selecting Qwen3.8-27B.
+
+This activation uses the already deployed and tested uploader; no application code or prompt was changed. The current V2 branch and runtime identity remain `ef040a757627bb5813b4f19ac47af2c1f373506c`. The uploader reads the selected creator model for each upload. Kyla's retained grey-clothes source passed the earlier real staging flow; no new Kyla production photo was uploaded in this setting-change step, and no live fan send is claimed. Existing catalogue descriptions were not reprocessed. Videos retain their previous effective model.
+
+**Current immediate rollback:** restore only Kyla's `vision_model` to `qwen/qwen3-vl-32b-instruct`, guarded by her ID and current `qwen/qwen3.8-27b` value. Dreka is already restored. Keep the additive schema and compatible consumer guards. No financial records or activation flags are to be restored.
+
+The remaining sections preserve the original upload verification, deployed image identities, failures and code rollback references. References there to Dreka's activation describe the earlier checkpoint, superseded above.
 
 ## Release scope and identities
 
@@ -57,7 +69,7 @@ The prepared JPEG and downloaded saved object both have SHA-256 `0e860ce2297b4a3
 
 The final production control passed in [run 38226222075](https://github.com/jesse98/twin-dashboard/actions/runs/38226222075). Activation was at 08:52:11 UTC; the actual upload took 107.117 seconds and saved `92524d33-684d-46db-99d7-71e8c74f4600` as `analysed` at 08:53:58 UTC. Stored model/provider are `qwen/qwen3.8-27b` / `DeepInfra`; paid status and 1,260 Stars were preserved. Tags: `solo`, `ass`, `lingerie`; short identifier: `pink hair thong rear pose`. The saved factual description uses a rear pose without kneeling or unsupported explicit claims. It calls the top light pink, versus lavender in staging; this minor colour variation is preserved in the evidence. Creator, source/stored hashes, authenticated public-TLS refresh, one-row retry, unchanged original row and unchanged other-creator settings all passed. The successful test duplicate was then intentionally held with its sales caption cleared; its held status is test cleanup, not an analysis failure. No new offer or fan message was sent. Host receipt: `/home/ubuntu/photo-launch-backups/20261012/production-control-posture.json`.
 
-Only Dreka has the new selected photo model. Configured/effective photo model: `qwen/qwen3.8-27b`, provider `DeepInfra` through OpenRouter, provider fallbacks disabled. Videos retain their previous effective `qwen/qwen3-vl-235b-a22b-instruct`; the previous configured 32B alias already resolved to this baseline. No other creator was activated.
+At the original 08:54 UTC checkpoint, only Dreka had the new selected photo model. This was superseded by the Kyla activation above. Configured/effective photo model: `qwen/qwen3.8-27b`, provider `DeepInfra` through OpenRouter, provider fallbacks disabled. Videos retain their previous effective `qwen/qwen3-vl-235b-a22b-instruct`; the previous configured 32B alias already resolved to this baseline. No other creator was activated.
 
 Final read-only verification [38226462519](https://github.com/jesse98/twin-dashboard/actions/runs/38226462519) passed at 08:54:45 UTC. The actual live V1 and V2 database readers both excluded the held control individually and through synthetic in-memory bundles containing stale positive claims. No real bundle or Telegram transport was created. The dashboard independently confirmed the exact deployed commit, source/storage match, Dreka as the only creator selecting Qwen3.8-27B, and public homepage HTTP 200.
 
@@ -65,7 +77,7 @@ Full preserved failed and passing reports, including actual staging transport se
 
 ## Rollback
 
-Disable the selected photo setting first by restoring only Dreka's prior `vision_model`, guarded by creator ID and current value. Do not reset main branches or restore old financial records.
+Disable the current selected photo setting first by restoring Kyla's prior `vision_model`, guarded by creator ID and current value. Dreka has already been restored. Do not reset main branches or restore old financial records.
 
 - Dashboard previous commit: `fb8948acd951e9a678791d13aa4e9ae85681c454`; immutable image `323149985112.dkr.ecr.ap-southeast-2.amazonaws.com/twin-dashboard@sha256:cc48e7801747afb98ef6b2b8b6405f610c70d51a814298aa5c1c0cd67d1da3ec`. Use the established upload-idle check and pull helper with the existing port-3001 arguments.
 - Intermediate photo release before the posture guard: `2c75cdaba1c1f6b64034a6205f35606f366ab2f9`, image `323149985112.dkr.ecr.ap-southeast-2.amazonaws.com/twin-dashboard@sha256:28447085bdd5db64698b66ecb2898a4ef6137225758d6fda42d29e76890312cd`. Restore Dreka's previous model before selecting this image; it lacks the new posture hold.
