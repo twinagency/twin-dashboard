@@ -6,7 +6,7 @@ assert.equal(process.env.GIT_SHA,'278e3c3d639ae6384882735a42975718d93dbb32');
 const clone='c92560e7-1dd9-4e62-b5c3-04a30fbe4925';
 const store=new SupabaseStore(process.env.SUPABASE_URL,process.env.SUPABASE_SERVICE_KEY);
 const photos=await store.listPhotos(clone);
-const control=photos.find(p=>p.storagePath?.endsWith('/0e860ce2297b4a312a50b20d2e485950-photo-launch-control-dreka-15-20261012.jpg'));
+const control=photos.find(p=>p.storagePath?.endsWith('/0e860ce2297b4a312a50b20d2e485950-photo-launch-control-dreka-15-posture-20261012.jpg'));
 assert.ok(control,'Saved control must be read by the actual V1 mapper');
 assert.equal(control.analysisStatus,'needs_review');assert.equal(mediaFacts(control),'');assert.equal(hasTrustedAnalysis(control),false);
 const bundle={id:'read-only-control',name:'read-only-control',starPrice:1260,items:[{storagePath:control.storagePath,caption:'full nude',visualDescription:'full nude',tags:['full_nude']}]};

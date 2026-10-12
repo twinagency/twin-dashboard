@@ -4,7 +4,7 @@ import {resolveBundles} from './src/bundles.ts';
 assert.equal(process.env.GIT_SHA,'ef040a757627bb5813b4f19ac47af2c1f373506c');
 const clone='c92560e7-1dd9-4e62-b5c3-04a30fbe4925';
 const raw=await loadRawCatalogue(clone);const cat=catalogueFromRaw(raw);
-const row=raw.photos.find(p=>p.storage_path?.endsWith('/0e860ce2297b4a312a50b20d2e485950-photo-launch-control-dreka-15-20261012.jpg'));
+const row=raw.photos.find(p=>p.storage_path?.endsWith('/0e860ce2297b4a312a50b20d2e485950-photo-launch-control-dreka-15-posture-20261012.jpg'));
 assert.ok(row,'Saved control must be read by actual V2 mapper');
 const item=cat.find(p=>p.key==='photo:'+row.id);assert.ok(item);
 assert.equal(item.analysis,'needs_review');assert.equal(item.words.size,0);
