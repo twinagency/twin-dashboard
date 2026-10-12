@@ -2,7 +2,7 @@ import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
 import {config} from './src/config.ts';
-const ids=['d2678dce-6a4e-4f1c-b54a-86057bba427c','c92560e7-1dd9-4e62-b5c3-04a30fbe4925'];
+const ids=['20ef9407-83f2-4351-8d3c-48cc0ed54e0b','3484f7d9-0cda-4f52-84de-e104c238ce5e'];
 const headers={apikey:config.supabaseKey,Authorization:'Bearer '+config.supabaseKey};
 async function db(p){const r=await fetch(config.supabaseUrl+'/rest/v1/'+p,{headers,signal:AbortSignal.timeout(20000)});assert.ok(r.ok,'DB status '+r.status);return r.json();}
 for(const id of ids){
