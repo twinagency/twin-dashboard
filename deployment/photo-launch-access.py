@@ -47,3 +47,25 @@ for attempt in range(50):
  time.sleep(4)
 print(json.dumps({'bot_runtime':{k:result.get(k) for k in ['Status','StandardOutputContent','StandardErrorContent']}}))
 if result['Status']!='Success':raise SystemExit(1)
+
+# Existing staging paths and current source identity, names/booleans only.
+for instance,commands in [
+ ('i-0584d283506f3f6be',[
+  "sudo git -C /home/ubuntu/twin-v2 rev-parse HEAD; sudo git -C /home/ubuntu/twin-v2 status --short",
+  "sudo find /home/ubuntu/twin-v2 /home/ubuntu/twin-v2-backups -maxdepth 3 -type f \\( -name '*.sh' -o -name '.env*' -o -name '*release*' \\) -printf '%p\\n' 2>/dev/null | head -65",
+  "sudo docker exec twin-v2-bot-1 node -e 'console.log(JSON.stringify({staging_env_names:Object.keys(process.env).filter(k=>/TEST|STAG/.test(k))}))'"
+ ]),
+ ('i-09a9dd3bd749643a5',[
+  "sudo find /home/ubuntu/allieai2-dashboard -maxdepth 3 -type f \\( -name '.env*' -o -name '*staging*' \\) -printf '%p\\n' 2>/dev/null | head -40",
+  "sudo docker exec next-app node -e 'console.log(JSON.stringify({staging_env_names:Object.keys(process.env).filter(k=>/TEST|STAG/.test(k))}))'",
+  "sudo grep -R -E '^[[:space:]]*(Timeout|ProxyTimeout|ProxyPass|RequestReadTimeout)[[:space:]]' /etc/apache2/apache2.conf /etc/apache2/conf-enabled /etc/apache2/sites-enabled 2>/dev/null | head -50"
+ ])
+]:
+ path.write_text(json.dumps({'commands':commands,'executionTimeout':['120']}))
+ cmd_id=subprocess.check_output(['aws','ssm','send-command','--instance-ids',instance,'--document-name','AWS-RunShellScript','--parameters','file://'+str(path),'--comment','Twin photo staging read-only prerequisite check','--query','Command.CommandId','--output','text'],text=True).strip()
+ for attempt in range(50):
+  result=json.loads(subprocess.check_output(['aws','ssm','get-command-invocation','--command-id',cmd_id,'--instance-id',instance,'--output','json'],text=True))
+  if result['Status'] in ['Success','Failed','Cancelled','TimedOut']:break
+  time.sleep(4)
+ print(json.dumps({'instance':instance,'staging_preflight':{k:result.get(k) for k in ['Status','StandardOutputContent','StandardErrorContent']}}))
+ if result['Status']!='Success':raise SystemExit(1)
