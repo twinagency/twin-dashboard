@@ -6,7 +6,7 @@ from botocore.config import Config
 
 INSTANCE = "i-0584d283506f3f6be"
 DASH_INSTANCE = "i-09a9dd3bd749643a5"
-COMMIT = "719441aeb2fb914b5549c67d95afb7d7efab6296"
+COMMIT = "84d59e2cfa220d46c083a7c2d4a9891b61de43a8"
 HELPER_SHA = "ff85364625964c6ce91541b6c0d367c62cb9017593c5a3195f23996069c5ff75"
 BUCKET = "allieai2-backups-323149985112"
 KEY = "deploy/twin-v2/dashboard-history-90-" + COMMIT + ".tgz"
@@ -67,8 +67,12 @@ for p in patches:
     assert hashlib.sha256(file.read_bytes()).hexdigest()==p["after_sha"],"patched hash mismatch"
 image=subprocess.check_output(["docker","inspect","-f","{{.Image}}","twin-v2-bot-1"],text=True).strip()
 # Existing image dependencies, staged code, no network, and no live data/environment mounts.
-subprocess.run(["docker","run","--rm","--network","none","-v",str(code/"src")+":/app/src:ro",
-                "--entrypoint","sh",image,"-c","npm run typecheck && npm test"],check=True)
+result=subprocess.run(["docker","run","--rm","--network","none","-v",str(code/"src")+":/app/src:ro",
+                "-v",str(code/"scripts")+":/app/scripts:ro","--entrypoint","sh",image,"-c","npm run typecheck && npm test"],capture_output=True,text=True)
+(stage/"test-output.log").write_text(result.stdout+"\n"+result.stderr)
+print("\n".join((result.stdout+"\n"+result.stderr).splitlines()[-80:]),flush=True)
+if result.returncode: raise RuntimeError("Existing Linux test suite failed; production unchanged; log: "+str(stage/"test-output.log"))
+print("Full Linux typecheck and test suite passed.",flush=True)
 archive=stage/"release.tgz"
 with tarfile.open(archive,"w:gz") as tar:
     for file in sorted(code.rglob("*")):

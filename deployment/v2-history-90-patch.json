@@ -19,5 +19,12 @@
     "after_sha": "db84605cdb0a547e52f5e39e44e8cad2d72abd0cc1ecc24d99ebabb42364d38e",
     "old": "const cur = lastIndexOfUser(chat.history, fanText);\n    const plan = await ctx.memory({ epoch: ctx.epoch, fanText, localHistory: chat.history.filter((_, i) => i !== cur), system: system.content });",
     "new": "const replyHistory = chat.history.slice(-config.historyLimit);\n    const cur = lastIndexOfUser(replyHistory, fanText);\n    const plan = await ctx.memory({ epoch: ctx.epoch, fanText, localHistory: replyHistory.filter((_, i) => i !== cur), system: system.content });"
+  },
+  {
+    "path": "scripts/check-memory-wiring.ts",
+    "before_sha": "996beac18c172bee8608d8c4827d45ff709a4bc1050e0135c3b468a54f893e56",
+    "after_sha": "4cc99b21d39f1f4c9a5f933476581bea7cab9ac4e7d78c49cd63c20f7aa592d6",
+    "old": "  ok(\"MW04\", archived === 233 && r.db.rowsOf(r.cloneId, fan).length >= 460, `[${route}] 233 fan lines and 233 replies are archived, far beyond the 30-message file (${r.db.rowsOf(r.cloneId, fan).length} rows)`);\n  ok(\"MW04\", r.chat(fan).history.length <= config.historyLimit, `[${route}] the local chat file still holds only its last ${config.historyLimit}`);",
+    "new": "  ok(\"MW04\", archived === 233 && r.db.rowsOf(r.cloneId, fan).length >= 460, `[${route}] 233 fan lines and 233 replies are archived, far beyond the ${config.dashboardHistoryLimit}-message file (${r.db.rowsOf(r.cloneId, fan).length} rows)`);\n  ok(\"MW04\", r.chat(fan).history.length === config.dashboardHistoryLimit, `[${route}] the local chat file holds its newest ${config.dashboardHistoryLimit} messages for the dashboard`);"
   }
 ]

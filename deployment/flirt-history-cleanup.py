@@ -3,16 +3,8 @@ from pathlib import Path
 def aws(*args):
     r=subprocess.run(["aws",*args,"--output","json"],capture_output=True,text=True,check=True)
     return json.loads(r.stdout)
-code="""set -eu
-df -h /
-docker system df
-docker builder prune -af
-docker image prune -f
-df -h /
-docker system df
-docker ps -a --format '{{.Names}} {{.Image}} {{.Status}}'
-"""
-r=aws("ssm","send-command","--instance-ids","i-09a9dd3bd749643a5","--document-name","AWS-RunShellScript","--comment","Clear reproducible unused build cache for authorised FLIRT history release","--parameters",json.dumps({"commands":[code],"executionTimeout":["180"]}))
+code="python3 - <<'PY'\nimport json,subprocess\nids=subprocess.check_output([\"docker\",\"ps\",\"-aq\",\"--filter\",\"name=flirt-dashboard-archive-\"],text=True).split()\nrows=json.loads(subprocess.check_output([\"docker\",\"inspect\",*ids],text=True))\nfor row in sorted(rows,key=lambda r:r[\"Created\"])[:5]:\n image=json.loads(subprocess.check_output([\"docker\",\"image\",\"inspect\",row[\"Image\"]],text=True))[0]\n diff=subprocess.check_output([\"docker\",\"diff\",row[\"Id\"]],text=True)\n print(json.dumps({\"id\":row[\"Id\"],\"name\":row[\"Name\"],\"created\":row[\"Created\"],\"running\":row[\"State\"][\"Running\"],\"labels\":row[\"Config\"].get(\"Labels\"),\"mounts\":row[\"Mounts\"],\"image\":row[\"Image\"],\"digests\":image.get(\"RepoDigests\"),\"diff\":diff}))\nPY"
+r=aws("ssm","send-command","--instance-ids","i-09a9dd3bd749643a5","--document-name","AWS-RunShellScript","--comment","Inspect oldest FLIRT deployment archives for history release","--parameters",json.dumps({"commands":[code],"executionTimeout":["180"]}))
 cid=r["Command"]["CommandId"]; print("command:",cid,flush=True)
 for _ in range(48):
     time.sleep(5)
