@@ -91,12 +91,7 @@ for instance,commands in [
 
 # Capture exact rollback images and hashes of the running V2 application sources.
 instance='i-0584d283506f3f6be'
-commands=[
- "sudo docker inspect -f '{{.Name}} image={{.Image}} workdir={{.Config.WorkingDir}}' next-app twin-v2-bot-1 twin-v2-dash-1",
- "for name in twin-v2-bot-1 twin-v2-dash-1; do image=$(sudo docker inspect -f '{{.Image}}' $name); sudo docker image inspect -f '{{.Id}} {{json .RepoDigests}}' $image; done",
- "sudo docker exec twin-v2-bot-1 sh -c 'pwd; ls -d src dist app scripts 2>/dev/null; find src -type f -not -name \\"*.map\\" -exec sha256sum {} \\; 2>/dev/null' | head -180",
- "sudo find /home/ubuntu/twin-v2 -maxdepth 2 -type f -name '*compose*' -o -name '*Dockerfile*'"
-]
+commands=["sudo docker inspect -f '{{.Name}} image={{.Image}} workdir={{.Config.WorkingDir}}' next-app twin-v2-bot-1 twin-v2-dash-1","for name in twin-v2-bot-1 twin-v2-dash-1; do image=$(sudo docker inspect -f '{{.Image}}' $name); sudo docker image inspect -f '{{.Id}} {{json .RepoDigests}}' $image; done","sudo docker exec twin-v2-bot-1 sh -c 'pwd; ls -d src dist app scripts 2>/dev/null; find src -type f -exec sha256sum {} + 2>/dev/null' | head -180","sudo find /home/ubuntu/twin-v2 -maxdepth 2 -type f \\( -name '*compose*' -o -name '*Dockerfile*' \\)"]
 path.write_text(json.dumps({'commands':commands,'executionTimeout':['120']}))
 cmd_id=subprocess.check_output(['aws','ssm','send-command','--instance-ids',instance,'--document-name','AWS-RunShellScript','--parameters','file://'+str(path),'--comment','Photo launch rollback image and V2 source hash audit','--query','Command.CommandId','--output','text'],text=True).strip()
 for attempt in range(50):
