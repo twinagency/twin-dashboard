@@ -28,9 +28,9 @@ jobs:
                   raise RuntimeError('AWS operation failed')
               return json.loads(r.stdout)
           if aws(['sts','get-caller-identity'])['Account']!='323149985112':raise RuntimeError('Wrong account')
-          job=aws(['ssm','send-command','--cli-input-json',json.dumps({'InstanceIds':['i-09a9dd3bd749643a5'],'DocumentName':'AWS-RunShellScript','Comment':'Read-only account name provenance audit','Parameters':{'commands':[command],'executionTimeout':['90']}})])['Command']['CommandId']
+          job=aws(['ssm','send-command','--cli-input-json',json.dumps({'InstanceIds':['i-0584d283506f3f6be'],'DocumentName':'AWS-RunShellScript','Comment':'Read-only account name provenance audit','Parameters':{'commands':[command],'executionTimeout':['90']}})])['Command']['CommandId']
           for i in range(36):
-              r=aws(['ssm','get-command-invocation','--command-id',job,'--instance-id','i-09a9dd3bd749643a5'])
+              r=aws(['ssm','get-command-invocation','--command-id',job,'--instance-id','i-0584d283506f3f6be'])
               if r.get('Status') in ['Success','Failed','Cancelled','TimedOut']:break
               time.sleep(3)
           print(r.get('StandardOutputContent',''))
