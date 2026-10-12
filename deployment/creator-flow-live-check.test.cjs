@@ -5,7 +5,13 @@ const os = require('node:os');
 const path = require('node:path');
 const { randomUUID, createHash } = require('node:crypto');
 const { spawnSync } = require('node:child_process');
-const { parseArgs, runtimeGuard, readCleanupManifest, optionForMoxy, padMp4, safeUploadResult, run, BRANDS } = require('./creator-flow-live-check.cjs');
+const { contentNavigationAvailable, parseArgs, runtimeGuard, readCleanupManifest, optionForMoxy, padMp4, safeUploadResult, run, BRANDS } = require('./creator-flow-live-check.cjs');
+const emptyGuided = '<div data-combined-content-intake><input id="creator-content-files" data-upload-content /></div>';
+assert.equal(contentNavigationAvailable(emptyGuided, false), true, 'empty accounts can start with just the guided picker');
+assert.equal(contentNavigationAvailable(emptyGuided, true), false, 'saved files still require a reachable gallery');
+assert.equal(contentNavigationAvailable('<div>Saved content</div><input data-upload-content />', true), true, 'existing gallery and additional uploads remain available');
+assert.equal(contentNavigationAvailable('<div>Saved content</div>', true), false, 'gallery alone cannot replace the upload control');
+assert.equal(contentNavigationAvailable('<input data-upload-content />', false), false, 'an incomplete empty screen is not accepted');
 const SHA = 'a'.repeat(40);
 const args = ['--run', '--brand=flirt', `--expected-sha=${SHA}`, '--flow-only'];
 const stdinInvocation = spawnSync(process.execPath, ['-', ...args], { input: fs.readFileSync(path.join(__dirname, 'creator-flow-live-check.cjs')), env: {}, encoding: 'utf8', timeout: 10000 });
@@ -263,3 +269,4 @@ async function mockedFlow(brand, uploadMode = false, missingGallery = false, wro
   assert.ok(!rendered.includes(env.SUPABASE_SERVICE_KEY) && !rendered.includes(env.DASHBOARD_PASSWORD) && !rendered.includes('normal-auth-token') && !rendered.includes('private-do-not-log'));
 }
 (async () => { await mockedFlow('flirt'); await mockedFlow('moxy'); await mockedFlow('flirt', true); await mockedFlow('moxy', true, true); await mockedFlow('moxy', true, true, true); await mockedFlow('flirt', false, false, false, true); for (const block of ['unknown','downstream','foreign']) await mockedFlow('flirt', false, false, false, false, block); console.log('Creator live runner: stdin invocation, runtime isolation, normal signup/invites, correct-query unsent recovery, upload persistence/private ranges, removal guards, explicit missing-gallery/logout-regression scope, interrupted/orphan manifest cleanup, unknown/reference guards, Storage-first cleanup and redacted output tests pass; no live requests made.'); })().catch(error => { console.error(error); process.exitCode = 1; });
+
