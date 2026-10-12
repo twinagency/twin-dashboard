@@ -64,3 +64,41 @@
 .help { margin-top: 0; border: 0; padding-top: 0; }
 .later { margin-top: 4px; text-decoration: none; }
 @media (min-width: 600px) { .previewGrid { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+
+/* Compact, tappable content and a native modal that retains each brand's theme. */
+.previewGrid, .allFilesGrid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 8px; }
+.previewTile { display: block; width: 100%; padding: 0; aspect-ratio: 1; cursor: pointer; text-align: left; }
+.previewTile:focus-visible, .viewAll:focus-visible, .fileDialog button:focus-visible { outline: 2px solid var(--ring); outline-offset: 3px; }
+.previewTile > img, .previewTile > video { width: 100%; height: 100%; object-fit: cover; }
+.tileState { left: 5px; bottom: 5px; font-size: 10px; padding: 3px 5px; }
+.videoMark { position: absolute; display: grid; place-items: center; top: 7px; right: 7px; width: 26px; height: 26px; border-radius: 50%; background: #0009; color: white; }
+.addTile { flex-direction: row; aspect-ratio: auto; min-height: 46px; margin-top: 10px; border-style: solid; }
+.viewAll { display: flex; align-items: center; justify-content: center; gap: 8px; width: 100%; min-height: 46px; margin-top: 10px; border: 1px solid var(--color-line); border-radius: 10px; color: var(--color-ink); font-size: 14px; font-weight: 600; cursor: pointer; }
+.fileDialog { position: fixed; inset: 0; width: min(760px, calc(100% - 24px)); max-width: none; max-height: calc(100dvh - 24px); margin: auto; padding: 0; overflow: auto; overscroll-behavior: contain; border: 1px solid var(--color-line); border-radius: 18px; background: var(--color-panel); color: var(--color-ink); box-shadow: 0 24px 80px #0006; }
+.fileDialog::backdrop { background: #0009; backdrop-filter: blur(5px); }
+.dialogBody { padding: 0 16px 18px; }
+.dialogHeader { position: sticky; top: 0; z-index: 2; display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 14px; padding: 15px 0; background: var(--color-panel); border-bottom: 1px solid var(--color-line); }
+.dialogHeader > div { min-width: 0; }
+.dialogHeader h2 { font-family: var(--setup-heading-font); font-size: 24px; }
+.dialogHeader p { overflow-wrap: anywhere; margin-top: 4px; font-size: 12px; line-height: 1.5; color: var(--color-muted); }
+.closeDialog { display: grid; place-items: center; flex: 0 0 44px; width: 44px; height: 44px; border: 1px solid var(--color-line); border-radius: 50%; cursor: pointer; }
+.backToFiles { display: flex; align-items: center; min-height: 44px; gap: 5px; font-size: 15px; font-weight: 600; cursor: pointer; }
+.largePreview { display: grid; place-items: center; min-height: 160px; border-radius: 12px; background: var(--color-elev); overflow: hidden; }
+.largePreview img, .largePreview video { width: 100%; max-height: 52dvh; object-fit: contain; }
+.largePreview p { padding: 18px; font-size: 13px; }
+.previewNav { display: flex; align-items: center; justify-content: space-between; gap: 4px; padding: 12px 0; font-size: 12px; }
+.previewNav button { display: flex; align-items: center; gap: 3px; min-height: 44px; padding: 6px; cursor: pointer; }
+.fileDialog button:disabled { opacity: .4; cursor: default; }
+.removeFile { display: flex; align-items: center; justify-content: center; gap: 8px; min-height: 46px; width: 100%; border: 1px solid var(--color-line); border-radius: 10px; cursor: pointer; }
+.removeConfirm { padding: 14px; border: 1px solid var(--color-line); border-radius: 12px; font-size: 14px; }
+.removeConfirm > div { display: flex; gap: 10px; margin-top: 10px; }
+.removeConfirm button { flex: 1; min-height: 46px; border: 1px solid var(--color-line); border-radius: 8px; cursor: pointer; }
+.removeConfirm button:first-child { background: #b42335; border-color: #b42335; color: white; }
+.galleryError { margin: 12px 0; padding: 12px; border: 1px solid var(--color-line); border-radius: 10px; font-size: 13px; line-height: 1.6; }
+.galleryError button, .galleryError a { display: inline-flex; align-items: center; min-height: 44px; margin-left: 8px; text-decoration: underline; }
+.helpSteps { display: grid; gap: 10px; padding: 12px 0; counter-reset: help-step; }
+.helpSteps li { display: flex; align-items: flex-start; gap: 10px; }
+.helpSteps li::before { counter-increment: help-step; content: counter(help-step); display: grid; place-items: center; width: 22px; height: 22px; flex-shrink: 0; border-radius: 50%; background: var(--color-elev); color: var(--color-ink); }
+.formatHelp { margin-top: 12px; font-size: 12px; }
+.formatHelp summary { min-height: 44px; cursor: pointer; }
+@media (min-width: 600px) { .allFilesGrid { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
