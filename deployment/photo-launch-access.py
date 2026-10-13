@@ -1,6 +1,6 @@
 """Read the saved completed candidate; no model calls or production changes."""
 import base64,gzip,json,pathlib,shlex,subprocess,time
-source=pathlib.Path('deployment/v2-photo-recovery/inspect-v8-preflight.py').read_text()
+source=pathlib.Path('deployment/v2-photo-recovery/inspect-dashboard-source.py').read_text()
 packed=base64.b64encode(gzip.compress(source.encode())).decode()
 host="import base64,gzip;exec(compile(gzip.decompress(base64.b64decode("+repr(packed)+")),'saved-replay-review','exec'))"
 params={'commands':['python3 -c '+shlex.quote(host)],'executionTimeout':['90']}
