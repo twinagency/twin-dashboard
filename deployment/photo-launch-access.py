@@ -4,10 +4,10 @@ INSTANCE='i-0584d283506f3f6be'
 BRANCH='codex/v2-reply-release-prep-20261013'
 host=r'''
 import base64,gzip,json,pathlib
-work=pathlib.Path('/home/ubuntu/twin-v2-validation/reply-outcomes-candidate-1791891121056617829')
-turns=json.loads((work/'riley-mae-lewis/turns.private.json').read_text());exchanges=json.loads((work/'riley-mae-lewis/exchanges.private.json').read_text())
-t=next(x for x in turns if x['case']=='edge-rejected-new');x=next(x for x in exchanges if x['case']=='edge-rejected-new');r=t['row']
-result={'candidate':'d16b275bae2ff4201259b3e90bb0fbf322f8906f','case':t['case'],'row':{k:r.get(k) for k in ['fanText','raw','selection','selectionError','final','note','provider','tokensOut','menu','generated','grounding','delivery']},'response':x['response'],'status':x['status'],'allowedSelections':x['request']['response_format']['json_schema']['schema']['properties']['selection']['enum'],'fanMessages':0,'modelCalls':0,'productionWrites':0}
+work=pathlib.Path('/home/ubuntu/twin-v2-validation/reply-outcomes-candidate-1791892632127052684')
+turns=json.loads((work/'cat-chase/turns.private.json').read_text());exchanges=json.loads((work/'cat-chase/exchanges.private.json').read_text())
+t=next(x for x in turns if x['case']=='business-new-after-refusal');x=next(x for x in exchanges if x['case']=='business-new-after-refusal');r=t['row']
+result={'candidate':'d6058dcd05dc1cb2646a516fcb1aabf152a280be','case':t['case'],'row':{k:r.get(k) for k in ['fanText','raw','selection','selectionError','final','note','provider','tokensOut','menu','generated','grounding','delivery']},'response':x['response'],'status':x['status'],'allowedSelections':x['request']['response_format']['json_schema']['schema']['properties']['selection']['enum'],'fanMessages':0,'modelCalls':0,'productionWrites':0}
 print('REPLY_BASE64 '+base64.b64encode(gzip.compress(json.dumps(result).encode(),mtime=0)).decode())
 '''
 payload=base64.b64encode(gzip.compress(host.encode(),mtime=0)).decode()
@@ -24,7 +24,7 @@ else:raise RuntimeError('Read incomplete')
 if r['Status']!='Success':raise RuntimeError('Read '+r['Status']+': '+r.get('StandardErrorContent','')[-600:])
 line=next(x for x in r['StandardOutputContent'].splitlines() if x.startswith('REPLY_BASE64 '))
 result=json.loads(gzip.decompress(base64.b64decode(line.split(' ',1)[1])))
-url='https://api.github.com/repos/jesse98/twin-dashboard/contents/docs/reply-replay-failure-detail.json'
+url='https://api.github.com/repos/jesse98/twin-dashboard/contents/docs/reply-replay-v4-failure-detail.json'
 body=json.dumps({'message':'Record bounded failed model selection evidence [skip ci]','branch':BRANCH,'content':base64.b64encode((json.dumps(result,indent=2)+'\n').encode()).decode()}).encode()
 req=urllib.request.Request(url,data=body,method='PUT',headers={'Authorization':'Bearer '+os.environ['GITHUB_TOKEN'],'Accept':'application/vnd.github+json','Content-Type':'application/json'})
 with urllib.request.urlopen(req,timeout=20) as response:assert response.status==201
