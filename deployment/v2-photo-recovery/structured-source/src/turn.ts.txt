@@ -1,0 +1,372 @@
+import fs from "node:fs";
+import path from "node:path";
+import { config } from "./config.js";
+import { girlLogDir } from "./context.js";
+import type { Girl } from "./girls/index.js";
+import { complete, type ChatMsg } from "./llm.js";
+import { loadChat, saveChat, appendIfCurrent, type Msg } from "./memory.js";
+import { ownedKeys } from "./payments.js";
+import { applyEmojiPolicy } from "./girls/template.js";
+import { checkText, cleanReply, logBlocked } from "./safety.js";
+import { extractTag, buildMenu, menuText, fromMenu, requestedAttrs, UNAVAILABLE_FREE_TEXT, UNAVAILABLE_TEXT, type Item, type Menu } from "./media.js";
+import { bundleFromMenu, chooseBundle, EMPTY_BOOK, fileKeys, menuBundle, type Bundle, type BundleBook } from "./bundles.js";
+import { evidenceText, groundReply } from "./grounding.js";
+import { extractTipTag } from "./tips/policy.js";
+import type { MemoryPlan, MemoryRecord } from "./memory/runtime.js";
+
+/** No emojis ever (Ronan's rule). Prompt says so too; this is the backstop. */
+export const stripEmoji = (t: string) =>
+  t.replace(/[\p{Extended_Pictographic}\u{1F3FB}-\u{1F3FF}\u200D\uFE0F]/gu, "").replace(/(^|\s)(?::\)|:\(|;\)|:D|:P|<3|xD)(?=\s|$)/gi, "$1").replace(/[ \t]{2,}/g, " ").replace(/ +([.,!?])/g, "$1").trim();
+
+/** She must lead, not hand it back. Drops a trailing "what would u do to me" style question when there's other text. */
+const THROW_BACK = /(?<=^|[.!?,]\s*|\s)(?:now\s+|so\s+|ok\s+)?(?:tell me[, ]+)?(?:what|how)\s+(?:would|will|wud|wld|do)\s+(?:u|you)(?:\s+wanna|\s+want to)?\s+(?:do|have done)\b[^.!?]*[.!?]?\s*$|(?<=^|[.!?,]\s*|\s)tell me (?:what|how) (?:u|you)(?:'?d| would| wanna| want to)[^.!?]*[.!?]?\s*$|(?<=^|[.!?,]\s*|\s)(?:ur|your) turn[^.!?]*[.!?]?\s*$/i;
+export function dropThrowBack(t: string): string {
+  const cut = t.replace(THROW_BACK, "").trim().replace(/,$/, "");
+  return cut.length >= 15 ? cut : t;
+}
+
+const pickOne = <T>(a: T[]) => a[Math.floor(Math.random() * a.length)];
+const bundleOwned = (b: Bundle, owned: Set<string>) => owned.has(`bundle:${b.id}`) || b.files.some((f) => fileKeys(f).some((k) => owned.has(k)));
+
+/** Where a fan message came from. Captured when it is queued and used for every call of that turn. */
+export type Route = { bcid?: string }; // no bcid = ordinary bot chat, bcid = Telegram Business connection
+
+export type TurnResult = {
+  bubbles: string[]; // the CANDIDATE text for this turn (not yet said: it counts once Telegram acknowledges it)
+  media: Item | null;
+  bundle?: Bundle | null; // Stage 3: the listed bundle she tagged [bundle 1] (one locked card with several files); never together with `media`
+  free: boolean; // true = real file goes straight out; false = locked card with an Unlock button
+  note: string; // short status for the log: ok / ok+tag / blocked-in / blocked-out / ai-failed / invalid-selection / reset-during-turn / history-write-failed
+  provider: string;
+  tokensIn: number;
+  tokensOut: number;
+  cost: number;
+  ms: number;
+  fallback?: "deflection" | "brb" | "invalid-selection" | "too-long"; // the text is one of the fixed lines, not model text
+  invalid?: { kind: "free" | "other"; reason: string }; // the media tag could not be honoured: fixed line, no file
+  error?: string; // preparation failure (the fan message could not be saved)
+  /** Stage 4: her reply carried a valid [tip] that code may honour (the invitation was allowed this turn and no content was chosen). Never an amount. */
+  tipInvite?: true;
+  /** Stage 4: what became of a tip marker / media tag on this turn, for the request row. */
+  tipNote?: { tagged?: boolean; invalid?: string; ignored?: string; ignoredMediaTag?: string };
+};
+
+// ---------- request record (logs/requests.jsonl): one final row per turn that began processing ----------
+export type SendStatus = "acknowledged" | "rejected" | "unknown" | "prepare-failed" | "cancelled" | "not-attempted";
+/** One Telegram call. acknowledged = Telegram accepted it; rejected = explicit Bot API error (nothing delivered);
+ *  unknown = dispatched but no answer (timeout/connection loss): neither confirmed nor failed; prepare-failed = nothing was dispatched. */
+export type Attempt = { status: SendStatus; messageId?: number; code?: number; description?: string; error?: string; retryAfter?: number };
+export type WriteResult = { ok: true } | { ok: false; error?: string; skipped?: string };
+export type Delivery = {
+  text?: Attempt; // a plain text message: her reply, or the fixed line for an invalid selection / deflection / brb
+  media?: Attempt & { cachedRef?: boolean; retried?: boolean; firstAttempt?: Attempt }; // the locked card or free file
+  recovery?: Attempt & { text?: string; suppressed?: string }; // the one neutral text after a failed / unconfirmed media send
+  cancelled?: { reason: "reset" | "stopped"; stage: string };
+  historyWrite?: { reply?: WriteResult; recovery?: WriteResult };
+  cacheWrite?: WriteResult;
+  /** Stage 3: the bundle card of this turn: its immutable offer id, what was quoted, and where its offer record and outcome were saved. */
+  bundle?: { offerId: string; bundleId: string; files: number; storedStars: number; quotedStars: number; persisted?: boolean; outcomeWrite?: { local?: WriteResult; shared?: WriteResult } };
+  invalidSelection?: { kind: "free" | "other"; reason: string };
+  fixedLine?: "deflection" | "brb" | "invalid-selection" | "too-long";
+  captionTrimmed?: { from: number; to: number };
+  error?: string; // unexpected local error in the pipeline (nothing was sent again because of it)
+};
+/** Stage 4: how a turn touched the tip product. Present only on a turn where tips were involved; never read by the credit outcome. */
+export type TipTurnRow = {
+  /** after-reply = her normal reply, then ONE tip message; fixed-line = the tip message replaced the credit wall / unavailable line (no model call); invitation = her reply carried a [tip] */
+  path: "after-reply" | "fixed-line" | "invitation" | "none";
+  action?: "invoice" | "choices" | "clarify"; why?: string; context?: string; amounts?: number[]; quoteIds?: string[];
+  text?: string; sent?: Attempt; unavailable?: boolean; skipped?: string; gate?: "wall" | "unavailable";
+  invite?: { allowed: boolean; reason?: string; tagged?: boolean; honoured?: boolean; ignored?: string; invalid?: string };
+  mediaSuppressed?: boolean; ignoredMediaTag?: string;
+  historyWrite?: WriteResult;
+};
+export type MediaInfo = { key: string; kind: string; free: boolean; stars: number; label: string;
+  bundle?: { offerId?: string; bundleId: string; files: number; storedStars: number }; // Stage 3: a bundle card (key "bundle:<id>", kind "bundle")
+};
+
+/**
+ * Full record of one turn for the monitor dashboard (logs/requests.jsonl): exactly what the AI saw and said, and what
+ * Telegram actually accepted. New fields are all optional, so older readers (and older rows) keep working.
+ * - `raw` = the model output as received; `generated` = the candidate text after cleaning/validation;
+ *   `final` = ONLY text Telegram acknowledged (the reply/caption and/or the neutral recovery text).
+ * - `media` = media Telegram acknowledged (stars = the Stars amount actually passed to Telegram, 0 for a free file);
+ *   `selectedMedia` = what was intended (stars = catalogue price).
+ * - Rows without `delivery` are from before Stage 1.1: their delivery was never verified.
+ */
+export type RequestRecord = {
+  ts: string; chatId: number | string; fanText: string; note?: string; ms?: number;
+  system?: string; history?: ChatMsg[]; menu?: { slot: string; key: string; stars: number; desc: string }[];
+  raw?: string; final?: string[]; media?: MediaInfo | null;
+  /** Validated machine choice from the same model request; raw retains its exact JSON response. */
+  selection?: string; selectionError?: string;
+  provider?: string; tokensIn?: number; tokensOut?: number; cost?: number; attempts?: number;
+  turnId?: string; mode?: "real" | "simulated"; route?: "ordinary" | "business"; bcid?: string; epoch?: number;
+  modelRequest?: boolean; generated?: string[];
+  /** Round 5: sentences removed from her reply because they described the offered file with garment / colour / anatomy words it does not show. */
+  grounding?: { sentence: string; claims: string[] }[];
+ selectedMedia?: MediaInfo | null; delivery?: Delivery;
+  /** Stage 4: present on a tip turn (tip buttons / fixed tip line after or instead of the reply) or a reply that invited a tip. */
+  tip?: TipTurnRow;
+  /** Stage 5: present only when the memory-aware context built this request: the WHOLE selection (history chosen, memory block, token counts, trace), the read source and why the local path was used. */
+  memory?: MemoryRecord;
+  /** Stage 5: the settings APPLIED when the turn began (revisions), so a stored request is never read against today's settings. Present only when the archive/memory runtime is wired. */
+  settings?: { credit: { enabled: boolean; revision: number; packQuantity: number; packStars: number } | null; tips: { enabled: boolean; maxStars: number } | null; memory: { enabled: boolean; appliedAt?: string }; bundles: number | null };
+};
+export function logRequest(rec: RequestRecord) {
+  try {
+    fs.mkdirSync(girlLogDir(), { recursive: true });
+    fs.appendFileSync(path.join(girlLogDir(), "requests.jsonl"), JSON.stringify(rec) + "\n");
+  } catch (e: any) { console.error(`[error] request row not written (turn ${rec.turnId ?? "?"}): ${String(e?.message ?? e).slice(0, 160)}`); }
+}
+
+/** What runTurn needs from the caller: the epoch and route captured when the fan's message was queued, and the record to fill. */
+export type TurnCtx = { epoch: number; route: Route; rec?: RequestRecord;
+  /** Stage 3: her bundle inventory right now (absent = bundles are not sold: exactly the single-item menu). Read ONCE per turn. */
+  bundles?: () => BundleBook;
+  /**
+   * Stage 4 (absent = exactly the Stage 3 turn). `fanTip`: this turn is a fan-initiated tip turn, so the tip message is the turn's one commercial
+   * action: her content list is empty (she cannot tag anything) and any media tag she writes anyway is dropped. `invite`: code has checked that she
+   * may invite a tip this turn, so the one small tip instruction is part of her prompt and a valid [tip] is honoured (unless content was chosen).
+   */
+  tips?: { fanTip: boolean; invite: boolean };
+  /**
+   * Stage 5 (absent = exactly the Stage 4 request: system prompt + the last 30 saved messages). Builds the memory-aware context for this call from
+   * the archive + saved facts (bounded, with the recent-chat fallback). `localHistory` = the saved chat WITHOUT the line just appended for this turn.
+   * Resolves null when the feature was switched off meanwhile: the Stage 4 request is used.
+   */
+  memory?: (a: { epoch: number; fanText: string; localHistory: Msg[]; system: string }) => Promise<MemoryPlan | null>;
+};
+
+const NO_CONTENT: Menu = { free: null, photos: [], video: null };
+
+/** Index of the line just appended for this turn (the newest user message with exactly this text), or -1. */
+const lastIndexOfUser = (h: { role: string; content: string }[], text: string) => { for (let i = h.length - 1; i >= 0; i--) if (h[i].role === "user" && h[i].content === text) return i; return -1; };
+
+/**
+ * One fan turn, PREPARE ONLY: filter, save his message once, ONE AI call, clean, validate the media tag. It does not save
+ * her text and does not send anything: what she "said" is recorded by the delivery step once Telegram acknowledges it.
+ */
+export async function runTurn(girl: Girl, catalogue: Item[], chatId: number | string, fanText: string, ctx: TurnCtx): Promise<TurnResult> {
+  return runTurnInner(girl, catalogue, chatId, fanText, ctx, ctx.rec ?? ({} as RequestRecord));
+}
+
+/** Fixed line when his message alone is too large for the model allowance (never billable; no model call was made). */
+export const TOO_LONG_TEXT = "omg thats a lot to read babe, can u send it to me in smaller bits";
+
+async function runTurnInner(girl: Girl, catalogue: Item[], chatId: number | string, fanText: string, ctx: TurnCtx, rec: RequestRecord): Promise<TurnResult> {
+  const t0 = Date.now();
+  const base = { media: null, free: false, provider: "none", tokensIn: 0, tokensOut: 0, cost: 0 };
+
+  // Blocked input never enters the conversation history and never reaches the model (it is logged in blocked.jsonl).
+  const inHit = checkText(fanText);
+  if (inHit) {
+    logBlocked({ stage: "input", chatId, category: inHit.category, text: fanText });
+    return { ...base, bubbles: [pickOne(girl.deflections)], fallback: "deflection", note: `blocked-in:${inHit.category}`, ms: Date.now() - t0 };
+  }
+
+  // /start or /reset since this message was queued (or during this turn): nothing is saved and nothing is sent (Jesse's review #2).
+  const stale = (): TurnResult => ({ ...base, bubbles: [], note: "reset-during-turn", ms: Date.now() - t0 });
+  // His message goes into the saved history ONCE, now, under the epoch captured when it was queued, before the model request.
+  try {
+    if (!appendIfCurrent(chatId, ctx.epoch, [{ role: "user", content: fanText }])) return stale();
+  } catch (e: any) {
+    return { ...base, bubbles: [], note: "history-write-failed", error: String(e?.message ?? e).slice(0, 200), ms: Date.now() - t0 };
+  }
+  const chat = loadChat(chatId); // now contains his message exactly once (and anything written meanwhile, e.g. a sale note)
+  // The model sees only her prompt and the conversation. Nothing is ever added after the fan's message.
+  // Her sendable items are picked BEFORE the call and described in the system prompt (still before the chat,
+  // never after his message), so she knows exactly what she's teasing.
+  // His newest message counts three times as much as the rest of the recent chat, so a specific ask lands.
+  const recent = chat.history.slice(-6).map((m) => m.content).join(" ");
+  // Never offer what he was already shown here or has bought (here or on live Twin).
+  const owned = ownedKeys(chatId);
+  // Stage 3: at most one relevant bundle stands in the menu (in place of the third photo). Owned bundles, bundles holding a file he owns and
+  // a bundle already shown in this chat are never listed. The book is read once, so the tag below resolves against exactly what she was shown.
+  const fanTip = !!ctx.tips?.fanTip;
+  const book = fanTip ? EMPTY_BOOK : ctx.bundles?.() ?? EMPTY_BOOK; // a fan-initiated tip turn lists no content: the tip message is its one commercial action
+  const chosen = book.bundles.length ? chooseBundle(book, { sent: new Set(chat.sent), owned, context: recent, focus: fanText }) : null;
+  const listed = chosen ? menuBundle(chosen.bundle, requestedAttrs(catalogue.filter((it) => !it.isFree), fanText)) : null;
+  // A file he owns through a bundle is hidden as a single item too when it is the same stored file (exact creator-scoped path).
+  const ownedByPath = catalogue.filter((it) => owned.has(`file:${it.storagePath}`)).map((it) => it.key);
+  const menu = fanTip ? NO_CONTENT : buildMenu(catalogue, new Set([...chat.sent, ...owned, ...ownedByPath]), recent, fanText, listed);
+  // The age line follows the route captured when he wrote: ordinary chats passed the 18+ button, Business chats have no
+  // button, so her prompt must not claim he confirmed his age there (whatever the saved file says about an old connection).
+  const system: ChatMsg = { role: "system", content: `${girl.promptFor({ ageVerified: !ctx.route.bcid, ...(ctx.tips?.fanTip ? { tipOffer: true } : ctx.tips?.invite ? { tipInvite: true } : {}) })}\n\n${menuText(menu)}` };
+  let messages: ChatMsg[] = [system, ...chat.history.slice(-config.historyLimit)];
+  if (ctx.memory) {
+    // Stage 5: request = system, [memory block as DATA in a user message, only on a hit], the selected history, then his merged input untouched.
+    const replyHistory = chat.history.slice(-config.historyLimit);
+    const cur = lastIndexOfUser(replyHistory, fanText);
+    const plan = await ctx.memory({ epoch: ctx.epoch, fanText, localHistory: replyHistory.filter((_, i) => i !== cur), system: system.content });
+    if (plan) {
+      if (loadChat(chatId).epoch !== ctx.epoch) return stale(); // reset while the context was being read: no request for a chat that was wiped
+      if (!plan.selection.fits) {
+        // His message plus the fixed prompt cannot fit the model's allowance (hard byte bound): NO model call. His message is never cut; a fixed
+        // line (never billable, Stage 2 rule) asks for it in smaller pieces. rec.modelRequest stays unset: no request was made.
+        rec.memory = { selection: plan.selection, source: plan.source, notes: plan.notes, ms: plan.ms };
+        return { ...base, bubbles: [TOO_LONG_TEXT], fallback: "too-long", note: `input-over-allowance:${plan.selection.over}`, ms: Date.now() - t0 };
+      }
+      messages = [system, ...(plan.memoryBlock ? [{ role: "user" as const, content: plan.memoryBlock }] : []), ...plan.history, { role: "user", content: fanText }];
+      rec.memory = { selection: plan.selection, source: plan.source, notes: plan.notes, ms: plan.ms };
+    }
+  }
+  rec.modelRequest = true;
+  rec.system = messages[0].content;
+  rec.history = messages.slice(1);
+  rec.menu = [
+    ...menu.photos.map((it, i) => ({ slot: `photo ${i + 1}`, key: it.key, stars: it.stars, desc: it.desc })),
+    ...(menu.video ? [{ slot: "video 1", key: menu.video.key, stars: menu.video.stars, desc: menu.video.desc }] : []),
+    ...(menu.bundle && chosen ? [{ slot: "bundle 1", key: `bundle:${chosen.bundle.id}`, stars: chosen.bundle.stars, desc: menu.bundle.desc }] : []),
+    ...(menu.free ? [{ slot: `free ${menu.free.kind}`, key: menu.free.key, stars: 0, desc: menu.free.desc }] : []),
+  ];
+  const selections = ["none", ...rec.menu.map(it => it.slot), ...(ctx.tips?.invite && !fanTip ? ["tip"] : [])];
+  const r = await complete(messages, selections);
+  rec.raw = r.raw ?? r.text;
+  rec.selection = r.selection;
+  rec.selectionError = r.contractError;
+  rec.attempts = r.attempts;
+  const meta = { provider: r.provider, tokensIn: r.tokensIn, tokensOut: r.tokensOut, cost: r.cost };
+  if (loadChat(chatId).epoch !== ctx.epoch) return stale(); // reset while she was thinking: drop the reply
+
+  if (!r.ok) return { ...base, ...meta, bubbles: [pickOne(girl.brb)], fallback: "brb", note: "ai-failed", ms: Date.now() - t0 };
+
+  const outHit = checkText(r.text);
+  if (outHit) {
+    logBlocked({ stage: "output", chatId, category: outHit.category, text: r.text });
+    // the blocked reply is never saved (not even by the delivery step), so it can't be copied later
+    return { ...base, ...meta, bubbles: [pickOne(girl.deflections)], fallback: "deflection", note: `blocked-out:${outHit.category}`, ms: Date.now() - t0 };
+  }
+
+  // The explicit choice is the only selection authority. Stray tip markers are still stripped
+  // without activating tips. A fan-initiated tip turn retains its no-content priority.
+  const embeddedTip = extractTipTag(r.text);
+  let replyText = embeddedTip.clean;
+  const embeddedMedia = extractTag(replyText);
+  if (fanTip) replyText = embeddedMedia.clean;
+  if ((!fanTip && (embeddedMedia.want || embeddedMedia.invalid)) || /\[\s*tip\b[^\]]*$/i.test(replyText)) {
+    const kind = !fanTip && embeddedMedia.want?.free ? "free" as const : "other" as const;
+    const invalid = { kind, reason: "selection marker embedded in structured reply" };
+    return { ...base, ...meta, bubbles: [kind === "free" ? UNAVAILABLE_FREE_TEXT : UNAVAILABLE_TEXT], fallback: "invalid-selection", invalid,
+      note: `invalid-selection:${kind}`, ms: Date.now() - t0 };
+  }
+  // Strip leaked prompt lines from reply text before adapting the separate validated choice.
+  // Cleanup must never erase that choice or cause code to infer one from prose.
+  const cleanText = replyText.split("\n").filter((l) => !/YOUR CONTENT READY|\((?:locked|free)\)\s*:|written by someone looking at the file|WHAT YOU KNOW ABOUT HIM/i.test(l)).join("\n");
+  const scrubbed = cleanText + (r.selection && r.selection !== "none" ? ` [${r.selection}]` : "");
+  const tipTag = ctx.tips ? extractTipTag(scrubbed) : null;
+  const sel0 = extractTag(tipTag ? tipTag.clean : scrubbed);
+  const tipNote: NonNullable<TurnResult["tipNote"]> = {};
+  if (tipTag?.invite || embeddedTip.invite) tipNote.tagged = true;
+  if (embeddedTip.invite && !tipTag?.invite) tipNote.ignored = r.selection && r.selection !== "none"
+    ? "content was chosen on this turn (a content card beats her own tip invitation)" : "an embedded reply marker cannot invite a tip";
+  if (tipTag?.invalid || embeddedTip.invalid) tipNote.invalid = tipTag?.invalid ?? embeddedTip.invalid;
+  if (fanTip && (embeddedMedia.want || embeddedMedia.invalid)) tipNote.ignoredMediaTag = embeddedMedia.want ? `${embeddedMedia.want.free ? "free " : ""}${embeddedMedia.want.kind}` : embeddedMedia.invalid!.reason;
+  // A fan-initiated tip turn has no content list; a media tag written anyway is dropped (never an invalid-selection line), the text stays.
+  let sel = sel0;
+  if (fanTip && (sel0.want || sel0.invalid)) {
+    tipNote.ignoredMediaTag = sel0.want ? `${sel0.want.free ? "free " : ""}${sel0.want.kind}` : sel0.invalid!.reason;
+    sel = { clean: sel0.clean, want: null };
+  }
+  // ONLY the explicit current-menu selection goes out. `none` = no media,
+  // and code never swaps the kind, the slot or the item, so the file always matches what she just said.
+  // A tag that cannot be honoured (unlisted slot, wrong free kind, malformed, repeated) sends NO file and replaces her text.
+  let media: Item | null = null, bundle: Bundle | null = null, free = false, invalid: TurnResult["invalid"];
+  if (sel.invalid) invalid = { kind: "other", reason: sel.invalid.reason };
+  else if (sel.want?.kind === "bundle") {
+    bundle = bundleFromMenu(menu.bundle, book, sel.want);
+    if (!bundle) invalid = { kind: "other", reason: sel.want.byDesc ? "the copied note matches no listed bundle" : "that slot is not listed" };
+    else {
+      // He may have bought something since the list was made (a payment lands while she is thinking): never sell a bundle he now owns or one holding a file he owns.
+      const now = ownedKeys(chatId);
+      if (bundleOwned(bundle, now)) { invalid = { kind: "other", reason: "he owns this bundle or a file in it" }; bundle = null; }
+    }
+  } else if (sel.want) {
+    const chosen = fromMenu(menu, sel.want);
+    if (chosen) { media = chosen.item; free = chosen.free; }
+    else invalid = sel.want.free ? { kind: "free", reason: "no free item of that kind is listed" } : { kind: "other", reason: sel.want.byDesc ? "the copied note matches no listed item" : "that slot is not listed" };
+  }
+  if (invalid) {
+    return { ...base, ...meta, bubbles: [invalid.kind === "free" ? UNAVAILABLE_FREE_TEXT : UNAVAILABLE_TEXT], fallback: "invalid-selection", invalid,
+      note: `invalid-selection:${invalid.kind}`, ms: Date.now() - t0 };
+  }
+  // lowercase only, like a real girl texting (Ronan's rule). Prompt says so too; this is the backstop.
+  const text = applyEmojiPolicy(cleanReply(sel.clean), girl.vars.EMOJIS).replace(new RegExp(`^\\s*${girl.name}\\s*:\\s*`, "gim"), "").toLowerCase();
+  let textFinal = dropThrowBack(text);
+  // Grounding (code only, same single model call): what the reply says she is wearing / showing must be supported by the ONE file it offers.
+  // An unsupported sentence is removed; the file, its price and the billing outcome are untouched (a file with an empty caption still goes out).
+  if (media || bundle) {
+    const g = groundReply(textFinal, media ? evidenceText(media.desc, media.words) : evidenceText(bundle!.files.map((f) => f.desc).join(" "), bundle!.words));
+    if (g.dropped.length) { textFinal = g.text; rec.grounding = g.dropped; }
+  }
+  const lines = textFinal.split("\n").map((l) => l.trim()).filter(Boolean);
+  // ONE message per reply, never a burst: her lines are joined into a single text.
+  const bubbles = lines.length ? [lines.join(" ")] : [];
+  let fallback: TurnResult["fallback"];
+  if (!bubbles.length && !media && !bundle) { bubbles.push(pickOne(girl.brb)); fallback = "brb"; }
+  // Stage 4: a [tip] is honoured only if code allowed an invitation this turn, she chose no content (a content card beats her own tip invitation: at most
+  // one commercial action), and the text is her own reply (not a fixed line).
+  let tipInvite = false;
+  if (tipTag?.invite) {
+    if (!ctx.tips?.invite) tipNote.ignored = "an invitation was not allowed on this turn";
+    else if (fanTip) tipNote.ignored = "this is already a tip turn";
+    else if (media || bundle) tipNote.ignored = "content was chosen on this turn (a content card beats her own tip invitation)";
+    else if (fallback) tipNote.ignored = "the reply is a fixed line";
+    else tipInvite = true;
+  }
+  return { ...meta, bubbles, media, ...(bundle ? { bundle } : {}), free, ...(fallback ? { fallback } : {}), note: sel.want ? "ok+tag" : "ok", ms: Date.now() - t0,
+    ...(tipInvite ? { tipInvite: true as const } : {}), ...(Object.keys(tipNote).length ? { tipNote } : {}) };
+}
+
+/**
+ * After a send succeeded: remember the item for this fan (never offered twice) and tell her what happened,
+ * so she can talk about it. "free" = he got the file, "locked" = he got the locked card, "unlocked" = he tapped Unlock.
+ */
+export function noteMediaSent(chatId: number | string, it: Item, how: "free" | "locked" | "unlocked"): string {
+  const chat = loadChat(chatId);
+  if (!chat.sent.includes(it.key)) chat.sent.push(it.key);
+  const tag =
+    how === "free" ? `[sent him free ${it.kind}: ${it.label}]`
+    : how === "locked" ? `[locked ${it.kind} waiting for him to unlock: ${it.label}]`
+    : `[he unlocked the ${it.kind}: ${it.label}]`;
+  appendNote(chatId, chat, tag);
+  return tag; // Stage 5: the archive stores the same note
+}
+/** Stage 3: a note about something that happened (a bundle unlock) in the same place and form as the media notes. */
+export function noteHistory(chatId: number | string, tag: string): string {
+  appendNote(chatId, loadChat(chatId), tag);
+  return tag;
+}
+function appendNote(chatId: number | string, chat: ReturnType<typeof loadChat>, tag: string) {
+  const last = chat.history[chat.history.length - 1];
+  if (last?.role === "assistant") last.content += `\n${tag}`;
+  else chat.history.push({ role: "assistant", content: tag });
+  saveChat(chatId, chat);
+}
+
+/** Short plain-words outcome of one Telegram call for turns.log / the console. */
+const said = (a?: Attempt) => (a ? `${a.status}${a.messageId ? ` msg=${a.messageId}` : ""}${a.code ? ` ${a.code}` : ""}${a.description ? ` ${a.description}` : a.error ? ` ${a.error}` : ""}` : "-");
+
+/** One block per processed turn in turns.log (and the console), written when delivery processing finishes. */
+export function logTurn(entry: { fan: string; rec: RequestRecord }) {
+  const { rec } = entry;
+  const d = rec.delivery;
+  const one = (s: string) => s.replace(/\s+/g, " ").slice(0, 300);
+  const delivered = (rec.final ?? []).join(" / ");
+  const generated = (rec.generated ?? []).join(" / ");
+  const sel = rec.selectedMedia;
+  const line =
+    `${new Date().toISOString()} | ${entry.fan} | ${rec.note ?? "?"} | ${rec.ms ?? 0}ms | ${rec.provider ?? "none"} | in=${rec.tokensIn ?? 0} out=${rec.tokensOut ?? 0} $${(rec.cost ?? 0).toFixed(5)}\n` +
+    `  FAN: ${one(rec.fanText)}\n` +
+    `  HER: ${one(delivered) || (d?.text?.status === "unknown" ? "(nothing acknowledged; delivery not confirmed)" : "(nothing acknowledged)")}\n` +
+    (generated && generated !== delivered ? `  GENERATED (not all acknowledged): ${one(generated)}\n` : "") +
+    (sel ? `  MEDIA: ${sel.free ? "FREE" : "LOCKED"} ${sel.key} ${sel.stars}* ${rec.media ? "ACKNOWLEDGED" : said(d?.media)} (${one(sel.label)})\n` : "") +
+    (d ? `  DELIVERY: mode=${rec.mode ?? "real"} turn=${rec.turnId ?? "?"} text=${said(d.text)} media=${said(d.media)}${d.recovery ? ` recovery=${said(d.recovery)}${d.recovery.suppressed ? ` (${d.recovery.suppressed})` : ""}` : ""}${d.cancelled ? ` cancelled=${d.cancelled.reason}@${d.cancelled.stage}` : ""}${d.historyWrite ? ` historyWrite=${JSON.stringify(d.historyWrite)}` : ""}${d.cacheWrite && !d.cacheWrite.ok ? ` cacheWrite=${JSON.stringify(d.cacheWrite)}` : ""}\n` : "");
+  process.stdout.write(line);
+  try {
+    fs.mkdirSync(girlLogDir(), { recursive: true });
+    fs.appendFileSync(path.join(girlLogDir(), "turns.log"), line);
+  } catch (e: any) { console.error(`[error] turns.log not written: ${String(e?.message ?? e).slice(0, 160)}`); }
+}
+
+

@@ -1,13 +1,16 @@
-name: Check bounded V2 selection contract without sends
+name: Validate integrated V2 selection without sends
 on:
   push:
     branches: [codex/media-launch-access-20261012]
 permissions:
   contents: read
+concurrency:
+  group: v2-photo-incident-isolated-validation
+  cancel-in-progress: false
 jobs:
   inspect:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 25
     steps:
       - uses: actions/checkout@v4
       - uses: aws-actions/configure-aws-credentials@v4
@@ -15,5 +18,5 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ap-southeast-2
-      - name: Run four real-model probes over fake Telegram and isolated data
+      - name: Replay frozen conversation with actual candidate and simulated Telegram
         run: python3 deployment/photo-launch-access.py

@@ -1,0 +1,116 @@
+import { config } from "./config.js";
+
+export type ChatMsg = { role: "system" | "user" | "assistant"; content: string };
+export type LlmResult = { text: string; ok: boolean; provider: string; tokensIn: number; tokensOut: number; cost: number; attempts: number;
+  /** Structured reply output: raw stays in diagnostics; only the decoded reply may reach the fan. */
+  raw?: string; selection?: string; contractError?: string };
+
+const URL = "https://openrouter.ai/api/v1/chat/completions";
+
+/** Structured selection is opt-in for the reply call. Background memory keeps its existing request. */
+type CallOpts = { maxTokens?: number; temperature?: number; trim?: boolean; selections?: readonly string[] };
+
+async function callOnce(messages: ChatMsg[], o: CallOpts = {}) {
+  const res = await fetch(URL, {
+    method: "POST",
+    headers: { Authorization: `Bearer ${config.openrouterKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: config.model,
+      messages,
+      provider: { order: config.providerOrder, allow_fallbacks: false, ...(o.selections ? { require_parameters: true } : {}) },
+      ...(o.selections ? { response_format: {
+        type: "json_schema",
+        json_schema: { name: "twin_reply", strict: true, schema: {
+          type: "object",
+          properties: { selection: { type: "string", enum: [...o.selections] }, reply: { type: "string" } },
+          required: ["selection", "reply"], additionalProperties: false,
+        } },
+      } } : {}),
+      reasoning: { enabled: false },
+      temperature: o.temperature ?? config.temperature,
+      top_p: config.topP,
+      frequency_penalty: config.frequencyPenalty,
+      presence_penalty: config.presencePenalty,
+      max_tokens: o.maxTokens ?? config.maxTokens,
+      usage: { include: true },
+    }),
+    signal: AbortSignal.timeout(45_000),
+  });
+  const j: any = await res.json().catch(() => ({}));
+  if (!res.ok || j.error) throw new Error(`openrouter ${res.status}: ${JSON.stringify(j.error ?? j).slice(0, 300)}`);
+  const choice = j.choices?.[0];
+  const content = choice?.message?.content;
+  const nonText = !!o.selections && content !== undefined && typeof content !== "string";
+  const raw: string = nonText ? JSON.stringify(content) ?? "" : content ?? "";
+  let text = raw;
+  if (choice?.finish_reason === "length" && o.trim !== false) text = trimToSentence(text);
+  return { text: text.trim(), raw, nonText, finishReason: choice?.finish_reason, provider: j.provider ?? "?", usage: j.usage ?? {} };
+}
+
+/** If the model hit max_tokens, cut back to the last full sentence so nothing ends mid-word. */
+export function trimToSentence(t: string): string {
+  const m = t.match(/^[\s\S]*[.!?…)](?:["'”]|\s*\p{Extended_Pictographic})*/u);
+  return m && m[0].length > t.length * 0.4 ? m[0] : t;
+}
+
+/**
+ * The one AI call per fan turn. On an error or empty reply it resamples ONCE with the exact same
+ * messages (nothing appended, so nothing to leak). A malformed structured result is not resampled.
+ * `selections`, when supplied, is the complete allowed set for this turn, including "none". Never throws.
+ */
+export async function complete(messages: ChatMsg[], selections?: readonly string[]): Promise<LlmResult> {
+  let tokensIn = 0, tokensOut = 0, cost = 0, provider = "none", lastErr = "";
+  for (let attempt = 1; attempt <= 2; attempt++) {
+    try {
+      const r = await callOnce(messages, selections ? { selections, trim: false } : {});
+      provider = r.provider;
+      tokensIn += r.usage.prompt_tokens ?? 0;
+      tokensOut += r.usage.completion_tokens ?? 0;
+      cost += r.usage.cost ?? 0;
+      const meta = { provider, tokensIn, tokensOut, cost, attempts: attempt };
+      if (selections && r.finishReason === "length") return { ...meta, text: "", raw: r.raw, ok: false, contractError: "truncated structured reply" };
+      if (selections && r.nonText) return { ...meta, text: "", raw: r.raw, ok: false, contractError: "structured response content must be a string" };
+      if (r.text) {
+        if (!selections) return { text: r.text, ok: true, ...meta };
+        if (r.finishReason !== "stop") return { ...meta, text: "", raw: r.raw, ok: false, contractError: "structured reply did not finish normally" };
+        // Do not recover JSON from prose, infer a slot, or fall back to the old tag parser.
+        let value: unknown;
+        try { value = JSON.parse(r.text); }
+        catch { return { ...meta, text: "", raw: r.raw, ok: false, contractError: "invalid structured JSON" }; }
+        // JSON.parse collapses repeated names. Tokenize complete JSON strings, then count members:
+        // colons inside a reply stay inside its string token, while escaped or repeated keys still count.
+        const memberCount = [...r.text.matchAll(/"(?:\\.|[^"\\])*"/g)]
+          .filter(m => /^\s*:/.test(r.text.slice(m.index! + m[0].length))).length;
+        if (!value || typeof value !== "object" || Array.isArray(value)
+          || Object.keys(value).length !== 2 || memberCount !== 2
+          || typeof (value as any).selection !== "string" || typeof (value as any).reply !== "string") {
+          return { ...meta, text: "", raw: r.raw, ok: false, contractError: "structured reply must contain only selection and reply strings" };
+        }
+        const decoded = value as { selection: string; reply: string };
+        if (!selections.includes(decoded.selection)) return { ...meta, text: "", raw: r.raw, ok: false, contractError: "selection is not allowed for this turn" };
+        return { ...meta, text: decoded.reply, raw: r.raw, selection: decoded.selection, ok: true };
+      }
+      lastErr = "empty reply";
+    } catch (e: any) {
+      lastErr = String(e?.message ?? e);
+    }
+    console.warn(`[llm] attempt ${attempt} failed: ${lastErr.slice(0, 200)}`);
+  }
+  return { text: "", ok: false, provider, tokensIn, tokensOut, cost, attempts: 2 };
+}
+
+/**
+ * Stage 5: the ONE background memory call. The same pinned model, provider list and request shape as complete(), but exactly ONE attempt (no
+ * resample), a smaller output allowance, a low temperature (it extracts, it does not chat) and no sentence trimming (the answer is JSON). It never
+ * runs on the reply path. Never throws; the real usage and cost come back so the caller can record them.
+ */
+export async function completeOnce(messages: ChatMsg[], o: { maxTokens?: number; temperature?: number } = {}): Promise<LlmResult> {
+  try {
+    const r = await callOnce(messages, { maxTokens: o.maxTokens ?? config.memoryMaxTokens, temperature: o.temperature ?? 0.2, trim: false });
+    return { text: r.text, ok: !!r.text, provider: r.provider, tokensIn: r.usage.prompt_tokens ?? 0, tokensOut: r.usage.completion_tokens ?? 0, cost: r.usage.cost ?? 0, attempts: 1 };
+  } catch (e: any) {
+    console.warn(`[llm] memory call failed: ${String(e?.message ?? e).slice(0, 200)}`);
+    return { text: "", ok: false, provider: "none", tokensIn: 0, tokensOut: 0, cost: 0, attempts: 1 };
+  }
+}
+
