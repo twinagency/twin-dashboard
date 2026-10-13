@@ -1,0 +1,211 @@
+diff --git a/src/girls/template.ts b/src/girls/template.ts
+index 545ba5e..bfc04b6 100644
+--- a/src/girls/template.ts
++++ b/src/girls/template.ts
+@@ -69,13 +69,13 @@ If he asks what you do, say something like "{{WORK_ANSWER}}". {{OFF_LIMITS}} If
+ 
+ PHOTOS AND VIDEOS
+ Your photos, videos and sometimes one bundle are listed at the end under YOUR CONTENT READY TO SEND. When a listed item fits the moment, offer it even if he has not asked or used an exact word; if he asks for something listed, offer it. If he wants a set, a collection or several things, a listed [bundle 1] can fit (he need not say bundle). A greeting or ordinary talk needs no offer, but not every message needs one. Respect refusals. Follow a later request without refusal jokes, at your own pace.
+-Select at most one item. Whenever you describe a listed item or invite him to unlock it, choose its exact tag without brackets in the selection field. Numbered selections send a locked card; a bundle holds all its listed files. In that message describe only what that item actually shows. Do not claim this turn’s attachment has already been delivered.
++Select at most one item. Whenever you describe a listed item or invite him to unlock it, choose its exact tag without brackets in the selection field. Numbered selections send a locked card; a bundle holds all its listed files. Describe only what that item actually shows; use a brief introduction when no visual detail is recorded. Do not claim this turn’s attachment has already been delivered.
+ A free preview requires [free photo] or [free video] marked free; send it only when he asks. A previous photo marked already owned uses [free photo] to resend his unlocked file. If no free preview is listed, say none is available. Other items stay locked.
+ If nothing matches, say so or offer a listed alternative. Photo captions introduce alternatives automatically; explain video or bundle alternatives yourself. Never present an alternative as an exact match. Use remaining totals for availability, not the shortlist. Do not invent a file, selection, action or description. A selection of none means no attachment.
+-Never state the item’s price or write internal history notes. A previous offer does not prevent a relevant new one. For his resend or missing-photo request, select the exact previous photo listed now; never substitute another or repeat it unasked. If no previous photo is verified, say so briefly and ask one specific question if needed. Refer to past sends or unlocks only when recorded. Earlier accepted means Telegram accepted it, not that he can see it; unconfirmed does not mean failed.
++Never state the item’s price or write internal history notes. A previous offer does not prevent a relevant new one; acceptance or questions about that card alone select none. For his resend or missing-photo request, select the exact previous photo listed now; never substitute another or repeat it unasked. If its verification fails, say you can't send that one right now without guessing why. If no prior card is recorded, ask which one. Refer to past sends or unlocks only when recorded. Earlier accepted means Telegram accepted it, not that he can see it; unconfirmed does not mean failed.
+ 
+ TELEGRAM STARS (only explain if he asks or seems confused)
+-Locked pics and videos are paid in Telegram Stars, Telegram's own in-app coins. When he taps the locked card Telegram shows the price and lets him buy Stars right there with Apple Pay, Google Pay or a card, it takes a few seconds. He can also buy them in Telegram's settings. Roughly 2 dollars per 100 Stars (50 Stars is about $1, 500 about $10, 1,000 about $20, 2,500 about $50), a little cheaper in big packs. It unlocks the second he pays and stays in your chat forever. Telegram handles all payments, so there is no PayPal, CashApp, crypto or bank option, only Stars. If he paid and it won't open, suggest reopening or updating Telegram as something to try; never guarantee it works or assume he can see the card. Explain it simply in your own texting voice in one or two texts, never as a list. Never promise refunds or discounts.
++Locked pics and videos are paid in Telegram Stars, Telegram's own in-app coins. When he taps the locked card Telegram shows the price and lets him buy Stars right there with Apple Pay, Google Pay or a card. He can also buy them in Telegram's settings. Roughly 2 dollars per 100 Stars (50 Stars is about $1, 500 about $10, 1,000 about $20, 2,500 about $50), a little cheaper in big packs. A confirmed payment unlocks the card in the chat; do not infer that he paid or can see it. Telegram handles all payments, so there is no PayPal, CashApp, crypto or bank option, only Stars. If he paid and it won't open, suggest reopening or updating Telegram as something to try; never guarantee it works or assume he can see the card. Explain it simply in your own texting voice in one or two texts, never as a list. Never promise refunds or discounts.
+ 
+ HARD LIMITS, NEVER CROSSED
+ Nothing involving minors, anyone under 18, or anything school or age coded. No incest or family roleplay, no non-consent, no animals. If he pushes for any of these, turn it down in one short sweet line in character and move on. You don't lecture.
+diff --git a/src/grounding.ts b/src/grounding.ts
+index f24b40d..cbb1004 100644
+--- a/src/grounding.ts
++++ b/src/grounding.ts
+@@ -91,7 +91,7 @@ function coloursBefore(t: string[], i: number): string[] {
+   for (let j = i - 1; j >= Math.max(0, i - 3); j--) {
+     if (FAMILIES[t[j]] && t[j] !== "lace") break;
+     if (COLOURS.has(t[j])) found.push(COLOUR_FAM(t[j]));
+-    else if (!["lace", "sheer", "little", "tiny", "floral", "mesh", "sex", "tapered", "pleated", "and"].includes(t[j])) break;
++    else if (!["lace", "sheer", "little", "tiny", "floral", "mesh", "sex", "tapered", "pleated", "plaid", "and"].includes(t[j])) break;
+   }
+   return found;
+ }
+@@ -146,25 +146,40 @@ export function unsupported(sentence: string, ev: Set<string>): string[] {
+ }
+ 
+ /** Drops every sentence that attributes something to the file that it does not show. Text with no such word is returned unchanged. */
+-export function groundReply(text: string, descAndWords: string | null, context: { availability?: Availability; prior?: string } = {}): { text: string; dropped: { sentence: string; claims: string[] }[] } {
++export function groundReply(text: string, descAndWords: string | null, context: { availability?: Availability; prior?: string; priorDiscussion?: boolean; reference?: boolean; owned?: boolean } = {}): { text: string; dropped: { sentence: string; claims: string[] }[] } {
+   const ev = evidenceFamilies(descAndWords ?? "");
+   const parts = text.split(/(?<=[.!?])\s+|\n+/);
+   const keep: string[] = [], dropped: { sentence: string; claims: string[] }[] = [];
+   for (const s of parts) {
+     const t = s.toLowerCase().replace(/[’]/g, "'");
+     const claims: string[] = [];
++    const contentTurn = descAndWords !== null || context.priorDiscussion || context.reference;
++    // The card is the price authority. Keep general Stars conversion guidance and
++    // ordinary spending/tipping conversation; reject a bounded item-price assertion.
++    const amount = "(?:\\$\\s*\\d[\\d,.]*|(?:\\d[\\d,.]*|(?:(?:a|one|two|three|four|five|six|seven|eight|nine|ten|twenty|fifty|hundred|thousand|few|couple)\\s+)+)(?:\\s*)(?:stars?|dollars?|bucks?))";
++    const itemPrice = new RegExp(`\\b(?:it'?s|it is|(?:this|that)(?: one)?(?:'?s| is)?|(?:this|that|the) (?:photo|pic|picture|video|clip|card|bundle)(?: is| costs?| is worth)?)\\s+(?:(?:only|just|about|around|roughly)\\s+)?${amount}`).test(t);
++    const standalonePrice = contentTurn && new RegExp(`^\\s*(?:(?:only|just|about|around|roughly)\\s+)?${amount}`).test(t)
++      && !/\bper\b|\bstars?\s+(?:is|are|costs?|equals?)\b/.test(t);
++    if (((contentTurn || /\b(?:photo|pic|picture|video|clip|bundle)\b/.test(t)) && itemPrice) || standalonePrice) claims.push("item price must come from Telegram's card");
+     // Bounded checks for broad stock denials only. A specific absence ("no blue bikini
+     // photo"), a relative/friend count or a hypothetical is not a catalogue-wide denial.
+     const a = context.availability;
+     if (a) {
+       const kind = /\b(?:videos?|vids?|clips?)\b/.test(t) ? "video" : "photo";
+       const count = kind === "video" ? a.videos : a.photos;
+-      const noMore = /\b(?:no|dont have|don't have|do not have|havent got|haven't got)\s+(?:(?:any|more|other)\s+)*(?:photos?|pics?|pictures?|videos?|vids?|clips?)\b(?!\s+(?:in|with|of|wearing|showing)\b)|\b(?:out of|ran out of)\s+(?:photos?|pics?|videos?|clips?)\b/i.test(t);
++      const noMore = /\b(?:i\s+(?:have no|have not got|dont have|don't have|do not have|havent got|haven't got)|there (?:are|is) no)\s+(?:(?:any|more|other)\s+)*(?:photos?|pics?|pictures?|videos?|vids?|clips?)\b(?!\s+(?:in|with|of|wearing|showing)\b)|\b(?:out of|ran out of)\s+(?:photos?|pics?|videos?|clips?)\b|^(?:no\s+(?:more\s+)?(?:photos?|pics?|videos?|clips?)\s+(?:left|available))\b/i.test(t);
+       const onlyOne = /\bi(?:'ve|ve)?\s+(?:(?:only|just)\s+(?:got|have)|(?:have|got)\s+(?:only|just))\s+(?:(?:that|this|the|a)\s+)?(?:one|1)(?:\s+(?:photo|pic|picture|video|clip))?(?=\s*(?:[.,!?]|$|\b(?:babe|baby|sorry)\b))/i.test(t);
+       if ((count > 0 && noMore) || (count > 1 && onlyOne)) claims.push("stock claim contradicts remaining availability");
+     }
+     // Delivery receipts cannot establish visibility, and a restart cannot guarantee a fix.
+-    if (/\b(?:it|(?:the|that|this) (?:photo|pic|card))\s+(?:is|should be|must be|will be)\s+(?:right\s+)?(?:there|in)\b.{0,45}\b(?:chat|visible|see|tap)\b/.test(t)) claims.push("unverified card visibility");
++    const explicitVisibility = t.match(/\b(?:it|(?:the|that|this) (?:photo|pic|card))\s+(?:is|should be|must be|will be)\s+(?:right\s+)?(?:there|in)\b.{0,45}\b(?:chat|visible|see|tap)\b/);
++    const contextualVisibility = contentTurn ? t.match(/\b(?:(?:it|that|this)(?:'?s)|(?:it|(?:that|this|the|same) (?:one|card|photo|pic))\s+(?:is|(?:should|must|will)\s+(?:still\s+)?be))\s+(?:(?:still|already|just|sitting|waiting|the|same|locked|card)\s+)*(?:right\s+)?(?:there|in (?:our|the|this) chat)\b|\b(?:same|that|this|the) (?:one|card|photo|pic)\s+(?:(?:is|still|already|just)\s+)*(?:sitting|waiting)\s+(?:right\s+)?(?:there|in (?:our|the|this) chat)\b/) : null;
++    const visible = explicitVisibility ?? contextualVisibility;
++    if (visible && !/\b(?:if|whether)\b/.test(t.slice(0, visible.index))) claims.push("unverified card visibility");
++    if (contentTurn) {
++      if (context.owned !== true && !/\b(?:if|unless|whether)\b/.test(t)
++        && /\b(?:already|still)\s+unlocked\b|\b(?:you|u)\s+(?:already\s+)?own\s+(?:it|that|this|the)\b/.test(t)) claims.push("unverified photo ownership");
++    }
+     if (/\b(?:telegram|app|restart|reopen|reopening)\b/.test(t)
+       && /\b(?:always|every time|definitely|guaranteed)\b|\bwill\s+fix\b/.test(t)
+       && /\b(?:fix|fixes|work|works)\b/.test(t)) claims.push("unsupported recovery guarantee");
+@@ -175,7 +190,7 @@ export function groundReply(text: string, descAndWords: string | null, context:
+       const past = /\b(?:sent|showed|shared|earlier|previous|last time)\b/.test(t);
+       const details = unsupported(s, new Set()).length > 0 || /\b(?:photo|pic|picture|one) of me\b/.test(t);
+       if (fileClaim && (details || past) && !hypothetical && !/\b(?:dont|don't|do not|no|not|cant|can't|cannot)\b/.test(t)) {
+-        if (past && context.prior) claims.push(...unsupported(s, evidenceFamilies(context.prior)));
++        if ((past || context.priorDiscussion) && context.prior) claims.push(...unsupported(s, evidenceFamilies(context.prior)));
+         else claims.push(past ? "no recorded photo supports the past-send claim" : "file description without a selected attachment");
+       }
+     }
+diff --git a/src/media.ts b/src/media.ts
+index 16f5272..29eb5fd 100644
+--- a/src/media.ts
++++ b/src/media.ts
+@@ -390,6 +390,7 @@ export type Menu = {
+   requiresPhoto?: true; // a clear generic photo request has only current photo choices
+   /** Exact prior-photo menu, only after a fan asks for resend/recovery. Fresh ownership decides unlocked delivery. */
+   reference?: { state: "acknowledged" | "unconfirmed" | "not-sent" | "unavailable"; owned?: boolean };
++  discussion?: { prior?: Item }; // an existing-card question has no new send slot; this is receipt-backed context only
+   bundle?: MenuBundle | null; // Stage 3: at most one, and it takes the place of the last locked photo
+   missing?: Map<string, string[]>; // for each alt key: the requested attributes that file does not show (named to her)
+   alt?: Set<string>; // Stage 3: keys of listed locked items that do NOT literally show what he asked for (his newest message named something the catalogue can describe)
+@@ -446,6 +447,9 @@ export function menuText(m: Menu): string {
+   const lines: string[] = [];
+   const a = m.availability;
+   const available = a ? ` Remaining unsent/unowned content: ${a.photos - a.freePhotos} locked photos, ${a.videos - a.freeVideos} locked videos, ${a.freePhotos} free photos, ${a.freeVideos} free videos. The list below is a shortlist; these totals describe availability, not an exact match or a purchase.` : "";
++  if (m.discussion) return `YOUR CONTENT READY TO SEND${a ? ` Remaining unsent/unowned content: ${a.photos - a.freePhotos} locked photos, ${a.videos - a.freeVideos} locked videos, ${a.freePhotos} free photos, ${a.freeVideos} free videos. These totals are not an offer or proof of purchase.` : ""}\n(no new item is listed for this existing-card question; choose none)\n${m.discussion.prior
++    ? `Previous photo Telegram accepted in this chat: ${describe(m.discussion.prior)} (acceptance does not prove purchase or visibility)`
++    : "No verified previous photo in this chat and route. Do not guess a file or claim one was sent."}`;
+   const required = m.requiresPhoto ? " He clearly asked for a new photo; choose one of the current photo selections." : "";
+   const prior = m.reference ? m.reference.state === "acknowledged" ? " This is the previous photo; Telegram accepted its earlier send, but that does not prove he can see it."
+     : m.reference.state === "unconfirmed" ? " This is the exact previous photo attempt; its earlier delivery was not confirmed."
+diff --git a/src/turn.ts b/src/turn.ts
+index c27ce7c..2dbbd5c 100644
+--- a/src/turn.ts
++++ b/src/turn.ts
+@@ -172,15 +172,26 @@ export function photoRequest(text: string, recentPhoto = false): "new" | "resend
+     || new RegExp(`\\b(?:send|show|give|share)\\b.{0,25}\\b(?:same|last|previous)\\b.{0,15}\\b${photo}\\b`).test(t)
+     || new RegExp(`\\b(?:send|show|share)\\b.{0,25}\\b(?:${photo}|it|that|one)\\b.{0,15}\\bagain\\b`).test(t)
+     || new RegExp(`\\bsame\\s+${photo}\\s*(?:again|please|pls|[?!.]|$)`).test(t)) return "resend";
++  if (new RegExp(`\\b(?:send|show|share|give)\\b.{0,30}\\b(?:that|this)\\s+${photo}\\b`).test(t)) return "resend";
+   if (/^(?:there(?:'s| is)\s+)?nothing\s+(?:(?:was|has been)\s+)?sent[.!?]*$/.test(t)
+     || new RegExp(`\\b(?:can't|cant|cannot|don't|dont|do not)\\s+(?:see|find|open)\\b.{0,30}\\b${photo}\\b`).test(t)
+     || new RegExp(`\\b(?:didn't|didnt|haven't|havent|never)\\s+(?:get|receive|received)\\b.{0,30}\\b${photo}\\b`).test(t)
+     || new RegExp(`\\b${photo}\\b.{0,20}\\b(?:didn't|didnt|hasn't|hasnt|isn't|isnt|wasn't|wasnt|never|not|won't|wont)\\b.{0,20}\\b(?:come|came|arriv(?:e|ed|ing)|show(?:ed|ing)?|load(?:ed|ing)?|open(?:ed|ing)?|send|sent|appear(?:ed|ing)?|there|through)\\b`).test(t)
+     || new RegExp(`\\bwhere(?:'s| is)\\s+(?:(?:the|that|my)\\s+)?${photo}\\b`).test(t)) return "missing";
++  // "that photo" refers to an existing card, never an arbitrary next file.
++  if (new RegExp(`\\b(?:that|this|previous|last)\\s+${photo}\\b`).test(wanted)) return null;
+   if (/\b(?:send|show|share|give|gimme|want|wanna|can i (?:get|have)|could i (?:get|have))\b.{0,40}\b(?:photos?|pics?|pictures?|selfies?)\b|^\s*(?:photos?|pics?|pictures?|selfies?)\s*(?:please|pls|plz)?[?!.]*\s*$/i.test(wanted)) return "new";
+   return null;
+ }
+ 
++/** Questions/acceptance about an existing card have no new selection; explicit new and resend requests win above. */
++function existingPhotoDiscussion(text: string, recentPhoto: boolean): boolean {
++  const t = text.toLowerCase().replace(/[’‘]/g, "'");
++  if (/\b(?:that|this|last|previous|same)\s+(?:photo|pic|picture|selfie|image|card)\b|\b(?:photo|pic|picture|selfie|card)\s+(?:you|u)\s+(?:just\s+)?(?:sent|showed|offered)\b/.test(t)) return true;
++  return recentPhoto && !/\b(?:movie|film|song|book|game|tone|voice|topic|story|reply|message)\b/.test(t)
++    && /\b(?:want|wanna|like)(?:\s+to)?\s+(?:see|open|unlock|tap)\s+(?:(?:that|this)\s+)?(?:one|it|that|this)\b|\b(?:see|open|unlock|tap|want)\s+(?:that|this)\s+one\b|\b(?:how much|price|cost|stars?|unlock)\b.{0,25}\b(?:that|this|it|one)\b|\b(?:that|this|it|one)\b.{0,25}\b(?:cost|price|stars?|unlock)\b/.test(t);
++}
++
+ /** Index of the line just appended for this turn (the newest user message with exactly this text), or -1. */
+ const lastIndexOfUser = (h: { role: string; content: string }[], text: string) => { for (let i = h.length - 1; i >= 0; i--) if (h[i].role === "user" && h[i].content === text) return i; return -1; };
+ 
+@@ -262,7 +273,7 @@ async function runTurnInner(girl: Girl, catalogue: Item[], chatId: number | stri
+         else {
+           const it = checked.photo.item;
+           const matches = it.kind === "photo" && it.key === prior.key && it.storagePath === prior.storagePath
+-            && !["pending", "failed", "needs_review"].includes(it.analysis ?? "") && !!it.desc.trim()
++            && !["pending", "failed", "needs_review"].includes(it.analysis ?? "")
+             && !missingAttrs(it, requestedAttrs([it], fanText)).length;
+           if (!matches) trace.reason = "the referenced photo is unavailable or does not match this request";
+           else {
+@@ -277,6 +288,9 @@ async function runTurnInner(girl: Girl, catalogue: Item[], chatId: number | stri
+       } catch { trace.reason = "fresh photo or ownership verification failed"; }
+     }
+   }
++  const discussingCard = !fanTip && !referenceRequest && existingPhotoDiscussion(fanText, recentPhoto);
++  if (discussingCard) menu = { ...NO_CONTENT, availability: menu.availability, discussion: { prior: acknowledgedPrior } };
++  const failedReference = !!referenceRequest && referenceRequest !== "new" && !photoReference;
+   // Restrict the SAME model selection only for a clear generic new-photo request.
+   // Specific unavailable requests, ordinary chat, ambiguous wording and empty pools keep none.
+   const attrs = requestedAttrs(catalogue, fanText);
+@@ -286,7 +300,7 @@ async function runTurnInner(girl: Girl, catalogue: Item[], chatId: number | stri
+   if (newPhotoSelections.length) menu.requiresPhoto = true;
+   // The age line follows the route captured when he wrote: ordinary chats passed the 18+ button, Business chats have no
+   // button, so her prompt must not claim he confirmed his age there (whatever the saved file says about an old connection).
+-  const system: ChatMsg = { role: "system", content: `${girl.promptFor({ ageVerified: !ctx.route.bcid, ...(ctx.tips?.fanTip ? { tipOffer: true } : ctx.tips?.invite && !photoReference ? { tipInvite: true } : {}) })}\n\n${menuText(menu)}` };
++  const system: ChatMsg = { role: "system", content: `${girl.promptFor({ ageVerified: !ctx.route.bcid, ...(ctx.tips?.fanTip ? { tipOffer: true } : ctx.tips?.invite && !photoReference && !discussingCard && !failedReference ? { tipInvite: true } : {}) })}\n\n${menuText(menu)}` };
+   let messages: ChatMsg[] = [system, ...chat.history.slice(-config.historyLimit)];
+   if (ctx.memory) {
+     // Stage 5: request = system, [memory block as DATA in a user message, only on a hit], the selected history, then his merged input untouched.
+@@ -315,7 +329,7 @@ async function runTurnInner(girl: Girl, catalogue: Item[], chatId: number | stri
+     ...(menu.free ? [{ slot: `free ${menu.free.kind}`, key: menu.free.key, stars: 0, desc: menu.free.desc }] : []),
+   ];
+   // An explicit, freshly verified resend requires its sole current photo. Invalid output still fails closed.
+-  const selections = photoReference ? rec.menu.map(it => it.slot) : newPhotoSelections.length ? newPhotoSelections
++  const selections = discussingCard || failedReference ? ["none"] : photoReference ? rec.menu.map(it => it.slot) : newPhotoSelections.length ? newPhotoSelections
+     : ["none", ...rec.menu.map(it => it.slot), ...(ctx.tips?.invite && !fanTip ? ["tip"] : [])];
+   const r = await complete(messages, selections);
+   rec.raw = r.raw ?? r.text;
+@@ -390,10 +404,17 @@ async function runTurnInner(girl: Girl, catalogue: Item[], chatId: number | stri
+   const text = applyEmojiPolicy(cleanReply(sel.clean), girl.vars.EMOJIS).replace(new RegExp(`^\\s*${girl.name}\\s*:\\s*`, "gim"), "").toLowerCase();
+   let textFinal = dropThrowBack(text);
+   // Grounding (code only, same single model call): what the reply says she is wearing / showing must be supported by the ONE file it offers.
+-  // An unsupported sentence is removed; the file, its price and the billing outcome are untouched (a file with an empty caption still goes out).
++  // An unsupported sentence is removed; the file and its price remain the explicit selection.
+   const g = groundReply(textFinal, media ? evidenceText(media.desc, media.words) : bundle ? evidenceText(bundle.files.map(f => f.desc).join(" "), bundle.words) : null,
+-    { availability: menu.availability, prior: acknowledgedPrior ? evidenceText(acknowledgedPrior.desc, acknowledgedPrior.words) : undefined });
++    { availability: menu.availability, prior: acknowledgedPrior ? evidenceText(acknowledgedPrior.desc, acknowledgedPrior.words) : undefined,
++      priorDiscussion: discussingCard, reference: !!referenceRequest && referenceRequest !== "new", owned: photoReference?.owned });
+   if (g.dropped.length) { textFinal = g.text; rec.grounding = g.dropped; }
++  // A failed exact-reference check proves only that this turn cannot send it. The
++  // model must not invent ownership, availability or visibility as the reason.
++  if (failedReference && scopedPrior) {
++    if (textFinal !== UNAVAILABLE_TEXT) rec.grounding = [...(rec.grounding ?? []), { sentence: textFinal, claims: ["exact photo could not be verified for this turn"] }];
++    textFinal = UNAVAILABLE_TEXT;
++  }
+   // Reuse the menu's existing match decision. Grounding must not erase an alternative's label.
+   if (media?.kind === "photo" && menu.alt?.has(media.key)) {
+     rec.photoAlternative = true;
+@@ -403,7 +424,12 @@ async function runTurnInner(girl: Girl, catalogue: Item[], chatId: number | stri
+   // ONE message per reply, never a burst: her lines are joined into a single text.
+   const bubbles = lines.length ? [lines.join(" ")] : [];
+   let fallback: TurnResult["fallback"];
+-  if (!bubbles.length && !media && !bundle) { bubbles.push(pickOne(girl.brb)); fallback = "brb"; }
++  if (!bubbles.length) {
++    if (media || bundle) bubbles.push("here's this one for u");
++    else if (g.dropped.some(x => x.claims.some(c => c.startsWith("item price")))) bubbles.push("telegram shows the price when u tap the card");
++    else if (discussingCard) bubbles.push("i can't tell if the card is showing for u");
++    else { bubbles.push(pickOne(girl.brb)); fallback = "brb"; }
++  }
+   // Stage 4: a [tip] is honoured only if code allowed an invitation this turn, she chose no content (a content card beats her own tip invitation: at most
+   // one commercial action), and the text is her own reply (not a fixed line).
+   let tipInvite = false;
