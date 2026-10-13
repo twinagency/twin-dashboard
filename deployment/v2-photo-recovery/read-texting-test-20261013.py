@@ -1,7 +1,7 @@
 """Bounded read-only correlation of Jesse's uploaded 16:36-16:45 texting test.
 
 No model calls, Telegram calls, application writes, restarts, or database writes.
-Only tester 6814483810 records in the named time window are returned. The prompt
+Only tester 6814483810 records in the named test and later release window are returned. The prompt
 fingerprint distinguishes old/new wording; it is not a per-request commit receipt.
 """
 import base64, datetime, gzip, json, pathlib, subprocess
@@ -58,10 +58,11 @@ for slug in SLUGS:
                 ts = str(row.get('ts', ''))
                 if ts and (earliest is None or ts < earliest):
                     earliest = ts
-                if str(row.get('chatId')) == TESTER and START <= ts < END:
+                if str(row.get('chatId')) == TESTER and START <= ts:
                     rows.append(row)
     turns = []
-    for row in rows[:24]:
+    test_rows = [row for row in rows if str(row.get('ts', '')) < END]
+    for row in test_rows[:24]:
         system = row.get('system', '')
         media = row.get('media') or {}
         delivery = row.get('delivery') or {}
@@ -78,16 +79,36 @@ for slug in SLUGS:
                       'legacyPrefix': 'alternative photo, not an exact match.' in ' '.join(row.get('final') or []),
                       'priorLockedNotes': sum('[locked photo waiting for him to unlock:' in str(m.get('content', '')) for m in history),
                       'priorUnlockNotes': sum('[he unlocked' in str(m.get('content', '')) for m in history)})
+    later = []
+    after = [r for r in rows if str(r.get('ts', '')) >= '2026-10-13T06:43:20']
+    for row in after[-12:]:
+        media = row.get('media') or {}
+        delivery = row.get('delivery') or {}
+        history = row.get('history') or []
+        previous = next((m for m in reversed(history[:-1]) if m.get('role') == 'assistant'), {})
+        later.append({'at': row.get('ts'), 'id': str(row.get('turnId', ''))[:8],
+                      'newPrompt': 'Use remaining totals for availability, not the shortlist.' in row.get('system', ''),
+                      'fan': compact(row.get('fanText'), 100), 'reply': compact(' '.join(row.get('final') or []), 160),
+                      'key': media.get('key'), 'free': media.get('free'),
+                      'mediaStatus': (delivery.get('media') or {}).get('status'),
+                      'reference': row.get('photoReference'), 'note': row.get('note'),
+                      'previousAssistant': compact(previous.get('content'), 250) if media else None,
+                      'priorLockedNotes': sum('[locked photo waiting for him to unlock:' in str(m.get('content', '')) for m in history)})
     chat = read_json(ROOT/'data'/slug/(TESTER+'.json'))
     connection = read_json(ROOT/'data'/slug/'_business.json')
     rows_out.append({'slug': slug, 'fileExists': path.is_file(), 'boundedTail': offset > 0,
-                     'earliestRead': earliest, 'malformedLines': malformed, 'testTurns': len(rows), 'turns': turns,
+                     'earliestRead': earliest, 'malformedLines': malformed, 'testTurns': len(test_rows), 'turns': turns,
+                     'afterFinalTurns': len(after), 'afterFinalLast12': later,
                      'fleetStatus': (fleet.get('girls', {}).get(slug) or {}).get('status'),
                      'cachedBusinessConnections': len(connection) if isinstance(connection, dict) else None,
                      'chat': {'exists': chat is not None, 'history': len((chat or {}).get('history', [])),
                               'epoch': (chat or {}).get('epoch'), 'hasBusinessRoute': bool((chat or {}).get('bcid'))}})
+backups = ROOT/'data/_operator_backups'
+backup_names = sorted(p.name for p in backups.iterdir() if 'reset' in p.name.lower() or 'rcy07' in p.name.lower())[:40] if backups.is_dir() else []
 result = {'checkedAt': datetime.datetime.now(datetime.timezone.utc).isoformat(),
-    'runtime': runtime, 'fleetAt': fleet.get('at'), 'settings': settings, 'creators': rows_out,
+    'runtime': runtime, 'fleetAt': fleet.get('at'),
+    'running': sorted(k for k, v in fleet.get('girls', {}).items() if v.get('status') == 'running'),
+    'settings': settings, 'creators': rows_out, 'resetEvidenceDirectoryNames': backup_names,
     'productionWrites': 0, 'modelCalls': 0, 'telegramCalls': 0}
 # SSM caps stdout; compress the scoped result so evidence is not silently truncated.
 print('TEXTING_TEST_READONLY_GZIP '+base64.b64encode(gzip.compress(json.dumps(result, separators=(',', ':')).encode())).decode(), flush=True)
