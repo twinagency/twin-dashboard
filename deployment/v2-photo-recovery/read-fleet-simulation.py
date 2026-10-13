@@ -41,6 +41,16 @@ if r.returncode==0:
  fresh=json.loads(next(l[len('POST_PROFILES_JSON '):] for l in r.stdout.splitlines() if l.startswith('POST_PROFILES_JSON ')));old=json.loads((ROOT/'evidence.json').read_text())['profiles'];oldmap={p['slug']:p for p in old};newmap={p['slug']:p for p in fresh}
  result['postSettings']={'at':datetime.datetime.now(datetime.timezone.utc).isoformat(),'changed':[s for s in sorted(set(oldmap)|set(newmap)) if oldmap.get(s)!=newmap.get(s)],'profiles':[{'slug':p['slug'],'engine':p['engine'],'status':p['status']} for p in fresh]}
 else:result['postSettings']={'error':'Read failed; not proven unchanged'}
+runtime=[]
+for name in ['twin-v2-bot-1','twin-v2-dash-1','next-app']:
+ info=json.loads(subprocess.check_output(['docker','inspect',name],text=True))[0];env=dict(e.split('=',1) for e in info['Config']['Env'])
+ runtime.append({'name':name,'image':info['Image'],'revision':env.get('GIT_SHA'),'running':info['State']['Running'],'bundlesSetting':env.get('V2_BUNDLES') if name=='twin-v2-bot-1' else None})
+result['runtimeAtRead']=runtime
+result['legacyPartialHttp']=[]
+for slug in ['autumn-renae','dan-dangler','hazey-haley']:
+ p=ROOT/slug/'exchanges.private.json'
+ if p.exists():
+  es=json.loads(p.read_text());result['legacyPartialHttp'].append({'slug':slug,'count':len(es),'lastCase':es[-1]['case'] if es else None,'attempts':[{'case':e['case'],'status':e.get('status'),'model':e['request'].get('model')} for e in es]})
 packed=gzip.compress(json.dumps(result).encode(),mtime=0)
 p=ROOT/('readback-'+str(time.time_ns())+'.json.gz');p.write_bytes(packed);p.chmod(0o600)
 print('SIM_RESULT_MANIFEST '+json.dumps({'path':str(p),'bytes':len(packed),'base64Chunks':(len(base64.b64encode(packed))+19999)//20000,'sha256':hashlib.sha256(packed).hexdigest(),'complete':bool(aggregate),'creators':[{k:r.get(k) for k in ['slug','cases','requests','failedCases','flaggedCases','fatal']} for r in rows],'progress':[{k:r.get(k) for k in ['slug','completed','requests']} for r in progress]}),flush=True)

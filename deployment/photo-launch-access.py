@@ -17,15 +17,12 @@ def ssm(command,timeout=300):
   print(r.get('StandardErrorContent','')[-600:],flush=True)
   raise RuntimeError('Read '+r['Status'])
  return r.get('StandardOutputContent','')
-program="""
-import json,pathlib,collections
-root=pathlib.Path('/home/ubuntu/twin-v2-validation/fleet-simulation-20261013-1791877888400228253')
-for slug in ['autumn-renae','dan-dangler','hazey-haley']:
- d=root/slug
- if (d/'summary.json').exists():
-  r=json.loads((d/'summary.json').read_text());print('LEGACY_PROGRESS_JSON '+json.dumps({k:r.get(k) for k in ['slug','cases','requests','failedCases','fatal']}))
- elif (d/'progress.json').exists():print('LEGACY_PROGRESS_JSON '+(d/'progress.json').read_text())
- if (d/'exchanges.private.json').exists():
-  es=json.loads((d/'exchanges.private.json').read_text());print('LEGACY_HTTP_JSON '+json.dumps({'slug':slug,'statuses':dict(collections.Counter(e.get('status') for e in es)),'models':dict(collections.Counter(e['request'].get('model') for e in es)),'callsByCase':dict(collections.Counter(e['case'] for e in es)),'errors':[{'status':e.get('status'),'error':e.get('response',{}).get('error')} for e in es if e.get('status')!=200][:2]}))
-"""
-ssm('python3 -c '+shlex.quote(program),45)
+stage=pathlib.Path('deployment/v2-photo-recovery')
+raw=(stage/'read-fleet-simulation.py').read_bytes();packed=base64.b64encode(gzip.compress(raw)).decode()
+program="import gzip,base64;exec(compile(gzip.decompress(base64.b64decode("+repr(packed)+")),'<fleet-results-readonly>','exec'))"
+output=ssm('python3 -c '+shlex.quote(program),180)
+line=next(l for l in output.splitlines() if l.startswith('SIM_RESULT_MANIFEST '))
+manifest=json.loads(line[len('SIM_RESULT_MANIFEST '):])
+for index in range(manifest['base64Chunks']):
+ program="import pathlib,base64;raw=base64.b64encode(pathlib.Path("+repr(manifest['path'])+").read_bytes()).decode();print('SIM_RESULT_CHUNK "+str(index)+" '+raw["+str(index*20000)+":"+str((index+1)*20000)+"])"
+ ssm('python3 -c '+shlex.quote(program),30)
