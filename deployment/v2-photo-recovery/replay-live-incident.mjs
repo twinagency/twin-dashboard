@@ -8,6 +8,7 @@ import assert from 'node:assert/strict';
 import {config} from './src/config.ts';
 import {loadRawCatalogue, catalogueFromRaw, buildMenu, requestedAttrs} from './src/media.ts';
 import {girlFromRow} from './src/girls/index.ts';
+import {riley as rigDefaultGirl} from './src/girls/riley.ts';
 import {runAs} from './src/context.ts';
 import {saveChat, loadChat} from './src/memory.ts';
 import {M, turnRig, installModelStub, restoreFetch} from './scripts/lib/turn-rig.ts';
@@ -23,6 +24,10 @@ assert.equal(records.length, 7);
 const chat = JSON.parse(fs.readFileSync(path.join(sourceDir, 'current-riley-chat.json'), 'utf8'));
 const profile = JSON.parse(fs.readFileSync(path.join(sourceDir, 'current-settings.json'), 'utf8')).find(x => x.slug === 'riley-mae-lewis');
 assert(profile?.v2_vars);
+// The shared rig spreads the standalone Riley object before replacing it. In fleet production
+// that optional standalone vars file is incomplete. Supply the retained fleet profile in THIS
+// diagnostic process only, using the same production fleet renderer; no vars file is written.
+Object.defineProperties(rigDefaultGirl, Object.getOwnPropertyDescriptors(girlFromRow(profile, () => profile.v2_vars)));
 assert.equal(chat.sent.length, 6);
 const snapshotPath = path.join(sourceDir, 'catalogue-at-diagnosis.json');
 let snapshot;
