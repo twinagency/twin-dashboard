@@ -41,7 +41,9 @@ try:
     else:
         script=pathlib.Path('deployment/deploy-card-reference.py').read_text()
         compile(script,'deploy-card-reference.py','exec')
-        output=ssm('python3 -c '+shlex.quote(script),600)
+        backup='/home/ubuntu/twin-v2-backups/card-baseline-8f43a1d-1791924689160743490'
+        code='import pathlib,sys;p=pathlib.Path('+repr(backup) + ')/"deploy-card-reference.py";p.write_text('+repr(script)+');p.chmod(0o600);sys.argv=[str(p)];exec(compile('+repr(script)+',str(p),"exec"))'
+        output=ssm('python3 -c '+shlex.quote(code),600)
         prefix='REPLY_RELEASE_DEPLOYED_JSON '
         values=[json.loads(x[len(prefix):]) for x in output.splitlines() if x.startswith(prefix)]
         assert len(values)==1
