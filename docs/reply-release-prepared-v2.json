@@ -1,0 +1,229 @@
+{
+  "status": "prepared",
+  "candidate": "8d7425373564a23e68bd947b940098f3b1cf1d50",
+  "workflowRun": "38392974564",
+  "liveRuntimeReplaced": false,
+  "modelCalls": 0,
+  "fanMessages": 0,
+  "purchases": 0,
+  "sha": "8d7425373564a23e68bd947b940098f3b1cf1d50",
+  "testedSource": "8d7425373564a23e68bd947b940098f3b1cf1d50",
+  "image": "sha256:278502ef701456c1acde93ef2b664f7c8fe63fceebfaf210ece7e26e29e84adc",
+  "oldSha": "2f24f023c0cf46bea1c3b3b334458cf1a5df265e",
+  "oldImage": "sha256:dff48242b35b94e7b0e757ee4b7778a11958ef85b231b5fdb369542902e325f9",
+  "release": "/home/ubuntu/twin-v2-reply-releases/8d7425373564a23e68bd947b940098f3b1cf1d50",
+  "backup": "/home/ubuntu/twin-v2-backups/reply-baseline-8d74253-1791892427728926312",
+  "offline": [
+    {
+      "suite": "scripts/check-safety.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-media.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-photo-flow.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-media-facts.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-media-correction.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-media-toy-menu.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-reply-grounding.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-turn.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-structured-reply.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-structured-turn.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-shared-photo-repair.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-existing-card-discussion.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-reply-outcomes.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-payments.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-bundles.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-delivery.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-photo-reference.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-photo-reference-data.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-credits.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-tips.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-tips-wiring.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-archive.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-memory.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-memory-wiring.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-dashboard-history.ts",
+      "exit": 0
+    }
+  ],
+  "typecheck": true,
+  "sourceManifestFiles": 283,
+  "hostChanges": [
+    {
+      "path": "package.json",
+      "existed": true,
+      "oldSha256": "0d0693ebd38c112334800221e03f33e93c9ab101fd46b7258f06bee90a937a63",
+      "newSha256": "ff30df67a47c77b58ae03a51d48dfcde09614f1f6a7495fb8e682e4d6303f270"
+    },
+    {
+      "path": "scripts/check-existing-card-discussion.ts",
+      "existed": false,
+      "oldSha256": null,
+      "newSha256": "c53e890178598ecda33547df03f38a02fd74f6aaa823b8fdf692fcc470426972"
+    },
+    {
+      "path": "scripts/check-media.ts",
+      "existed": true,
+      "oldSha256": "1c31c25f27a03f0f6efd8ea1637923c6f0cb4b557320912e2f29348f0fdf6300",
+      "newSha256": "64cdd7f0181073015ce337f35d14191eddab20298bd687d154d5de7c49e7b230"
+    },
+    {
+      "path": "scripts/check-reply-grounding.ts",
+      "existed": true,
+      "oldSha256": "ffcbea8d64dc0c140ba2e076aa8153b2e2de20fb3227ba014ce67df4780a5380",
+      "newSha256": "0782640a614d8c06801d9ea656109a86f327815edb789403f809737377ed9400"
+    },
+    {
+      "path": "scripts/check-reply-outcomes.ts",
+      "existed": false,
+      "oldSha256": null,
+      "newSha256": "d92197a142b5e10bf9e68dad8d339170ec8375c9defe422057dece5c6489341c"
+    },
+    {
+      "path": "scripts/fixtures/reply-outcomes-20261013.json",
+      "existed": false,
+      "oldSha256": null,
+      "newSha256": "fb0d6dbf332e0085fcf11e0e52a4f9c266c761f3c0265a8056918c7188c7dcd3"
+    },
+    {
+      "path": "scripts/fixtures/reply-outcomes-model-variants.json",
+      "existed": false,
+      "oldSha256": null,
+      "newSha256": "68cb89f4d63dd51bbca59a358cffe686b4697472260d7c9e17ab9c99a55fa111"
+    },
+    {
+      "path": "scripts/fixtures/riley-prompt-v11.txt",
+      "existed": false,
+      "oldSha256": null,
+      "newSha256": "69653c19e06fd668bf0e2ffaaba11bf5a74e17be9e8e4dbd03f8dc9ce18138e5"
+    },
+    {
+      "path": "scripts/fixtures/riley-prompt-v12.txt",
+      "existed": false,
+      "oldSha256": null,
+      "newSha256": "74a9c5894c7dd2bd826188b6d343f8b1ab442b6566270b4387111bf1d268ef65"
+    },
+    {
+      "path": "scripts/fixtures/riley-prompt-v13.txt",
+      "existed": false,
+      "oldSha256": null,
+      "newSha256": "43282c75e4c718ad364dbd7f4e9ad3eaf30a692fbcadfc98fa1b354cd516d47c"
+    },
+    {
+      "path": "src/girls/template.ts",
+      "existed": true,
+      "oldSha256": "cb4c6c215f9ed1de03b0f2a078a34723560e0e219539ffb8e1e26a3006846c8e",
+      "newSha256": "8f90b14f3f199741eda4c713d9c99de1039ddd759c921e8b073cdced614571c8"
+    },
+    {
+      "path": "src/grounding.ts",
+      "existed": true,
+      "oldSha256": "9417b6ca1a400e1de6e171ea9750955eda0148170dfba2e590686a09ee38cf54",
+      "newSha256": "f6740c931e4ab4507d37d47b9851837c911529a173852d857b6a564bf3a61b53"
+    },
+    {
+      "path": "src/media.ts",
+      "existed": true,
+      "oldSha256": "f6c0da74d4c97f39a1d1694137afa8d11fe36bcc53c954f0b9c22ad65cfde52f",
+      "newSha256": "526d5de0b1c556d37e3d0a0e94b4572bb937385276c79b6ae3be52629cfb4e89"
+    },
+    {
+      "path": "src/turn.ts",
+      "existed": true,
+      "oldSha256": "a8a24648db16f069db8a19e0afe8f79ef6c048c12a56c444c3045570a1a8daca",
+      "newSha256": "630d167e0876b90caf10eeba72982a854eb8e69e2b028178a8e29e3fd6b42cec"
+    }
+  ],
+  "settingsHash": "e6fd1b358016fe045bf24e48cb6e9b59a485b3b9d3d0dc7b3ce44dcaf96fd6d3",
+  "expectedSlugs": [
+    "alanna-pow",
+    "allison-parker",
+    "bethany-marquez",
+    "briana-redd",
+    "cat-chase",
+    "dakota-lyn",
+    "dreka-cakez",
+    "fit-sid",
+    "kyla-yesenosky",
+    "mrs-callace",
+    "olivia-jade",
+    "riley-mae-lewis",
+    "sania-mallory",
+    "tammy",
+    "toochi",
+    "trashy",
+    "tru-kait"
+  ],
+  "preparedAt": "2026-10-13T11:56:32.371919+00:00",
+  "realModelCases": 464,
+  "modelEvidencePath": "/home/ubuntu/twin-v2-validation/reply-outcomes-candidate-1791892151751015736"
+}
