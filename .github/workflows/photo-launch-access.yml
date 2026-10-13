@@ -1,9 +1,9 @@
 name: Prepare isolated Twin V2 reply release
 on:
   push:
-    branches: [codex/v2-reply-release-prep-v3-20261013]
+    branches: [codex/v2-reply-release-prep-v4-20261013]
     paths-ignore:
-      - docs/reply-release-prepared-v3.json
+      - docs/reply-release-prepared-v4.json
 permissions:
   contents: write
 concurrency:

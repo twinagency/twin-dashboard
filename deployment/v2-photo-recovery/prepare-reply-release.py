@@ -1,6 +1,6 @@
 """Build and verify the full remote candidate; preserve live runtime and create code-only rollback evidence."""
 import datetime,hashlib,json,pathlib,shutil,subprocess,sys,tarfile,time
-SHA='d6058dcd05dc1cb2646a516fcb1aabf152a280be'
+SHA='9138db6f956ed383d18fe33bce6577b2f5d74d4a'
 OLD_SHA='2f24f023c0cf46bea1c3b3b334458cf1a5df265e'
 # Explicit existing-image pin, never a moving tag.
 OLD_IMAGE='sha256:dff48242b35b94e7b0e757ee4b7778a11958ef85b231b5fdb369542902e325f9'
