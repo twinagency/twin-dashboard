@@ -1,4 +1,3 @@
-export const CHAT_HISTORY_DAYS = 90;
 export const CHAT_HISTORY_PAGE = 100;
 export type HistoryCursor = { at: string; id: string };
 
@@ -16,8 +15,8 @@ export function historyWindowQuery(query: any, options: { before?: string; after
   const now = options.now ?? Date.now();
   const before = parseHistoryCursor(options.before);
   const after = before ? null : parseHistoryCursor(options.after);
-  let q = query.gte("created_at", new Date(now - CHAT_HISTORY_DAYS * 86400_000).toISOString())
-    .lte("created_at", new Date(now).toISOString());
+  // Page size bounds each read, not the age or total number of saved messages.
+  let q = query.lte("created_at", new Date(now).toISOString());
   const c = before ?? after;
   if (c) {
     const op = before ? "lt" : "gt";

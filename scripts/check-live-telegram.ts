@@ -45,6 +45,7 @@ assert(model.compareMessages({ ...v1[0], created_at: "2026-10-12T00:00:00.123456
 // replaced. Scope checks happen before network access and before cache reuse.
 let access: { cloneIds: string[] } | null = { cloneIds: [clone.id] };
 let dbRows: any[] = [old], dbHistory: any[] = [], failHistory = false;
+let monitorHistory = [{ id: "turn:0", at: at(500), role: "user", content: "hello", delivery: "received" }, { id: "turn:1", at: at(501), role: "assistant", content: "recorded reply", delivery: "unverified" }];
 const calls: { url: URL; params: URLSearchParams }[] = [];
 const dbCalls: any[][] = [];
 const db = { from(table: string) {
@@ -58,7 +59,7 @@ globalThis.fetch = async (input: any) => {
   const url = new URL(String(input)); calls.push({ url, params: url.searchParams });
   if (url.pathname.endsWith("/fans")) return Response.json([raw]);
   if (failHistory) return new Response("unavailable", { status: 502 });
-  return Response.json({ history: [{ id: "turn:0", at: at(500), role: "user", content: "hello", delivery: "received" }, { id: "turn:1", at: at(501), role: "assistant", content: "recorded reply", delivery: "unverified" }], hasMore: false });
+  return Response.json({ history: monitorHistory, hasMore: false });
 };
 const source = readFileSync("lib/live-telegram.ts", "utf8");
 const js = ts.transpileModule(source, { compilerOptions: { module: ts.ModuleKind.CommonJS, target: ts.ScriptTarget.ES2022, esModuleInterop: true } }).outputText;
@@ -88,6 +89,13 @@ async function main() {
     await bridge.loadTelegramHistory(clone, 123, { before: model.inboxCursor(boundary) });
     const passed = JSON.parse(Buffer.from(calls.at(-1)!.params.get("before")!, "base64url").toString());
     assert.deepEqual(passed, { at: "2026-10-12T00:00:00.123Z", id: "\uffff" });
+    monitorHistory = [{ ...monitorHistory[0], id: "old-turn:0", at: "2025-01-01T00:00:00.000Z" },
+      { ...monitorHistory[0], id: "invalid", at: "not-a-date" },
+      { ...monitorHistory[0], id: "future", at: "2999-01-01T00:00:00.000Z" }];
+    const oldHistory = await bridge.loadTelegramHistory(clone, 123);
+    assert(oldHistory.rows.some((row: any) => row.id === "old-turn:0"), "V2 history older than 90 days remains visible");
+    assert(!oldHistory.rows.some((row: any) => ["invalid", "future"].includes(row.id)));
+    assert(!dbCalls.at(-1)!.some(([key]) => key === "gte"), "Legacy source has no age cutoff");
     failHistory = true;
     const partial = await bridge.loadTelegramHistory(clone, 123);
     assert.equal(partial.unavailable, true); assert.equal(partial.rows.length, 1);
