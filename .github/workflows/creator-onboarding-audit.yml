@@ -1,0 +1,108 @@
+name: Fresh creator onboarding audit
+on:
+  push:
+    branches: [codex/fresh-creator-audit-20261013]
+permissions:
+  contents: read
+jobs:
+  browser-and-regressions:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - brand: moxy
+            source: cd319547897cfa13b16d896a8eddbf8640d4ccc6
+          - brand: flirt
+            source: dd2384bb23a401c16908786b68430d4941c4f043
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: '${{ matrix.source }}' }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - name: Creator authentication, registration, draft and upload regressions
+        run: |
+          npm run test:creator-registration
+          npm run test:creator-login
+          npm run test:creator-routing
+          npm run test:creator-flow
+          npm run test:creator-upload-receipts
+          npm run test:creator-gallery
+          node --import tsx scripts/check-creator-upload-stream.ts
+          node scripts/check-onboarding-review.cjs
+          if [ '${{ matrix.brand }}' = 'flirt' ]; then
+            node --import tsx scripts/check-flirt-optional-onboarding.tsx
+            npm run test:flirt-direct-signup
+          else
+            node scripts/check-moxy-post-submit-edit.cjs
+          fi
+      - name: Install Chromium and WebKit
+        run: |
+          sudo mkdir -p /tmp/ci-unused-chrome-feed
+          while IFS= read -r source; do
+            sudo mv "$source" "/tmp/ci-unused-chrome-feed/${source##*/}"
+          done < <(sudo grep -rl 'dl.google.com/linux/chrome' /etc/apt/sources.list.d 2>/dev/null || true)
+          npx playwright install --with-deps chromium webkit
+      - name: Phone and desktop intake, background uploads, preview, removal and final form
+        env: { CREATOR_GALLERY_ENGINES: 'chromium,webkit' }
+        run: |
+          if [ '${{ matrix.brand }}' = 'flirt' ]; then
+            node scripts/check-creator-content-browser.mjs --flirt
+            node scripts/check-creator-content-gallery-browser.mjs --flirt
+          else
+            node scripts/check-creator-content-browser.mjs
+            node scripts/check-creator-content-gallery-browser.mjs
+          fi
+          node scripts/check-creator-action-browser.cjs
+      - name: Type check
+        run: npx tsc --noEmit
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: onboarding-audit-${{ matrix.brand }}
+          path: test-results/
+          retention-days: 7
+  live:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      max-parallel: 1
+      matrix:
+        include:
+          - brand: moxy
+            source: cd319547897cfa13b16d896a8eddbf8640d4ccc6
+            release_lock: deploy-dashboard
+          - brand: flirt
+            source: dd2384bb23a401c16908786b68430d4941c4f043
+            release_lock: flirt-release-dashboard
+    concurrency:
+      group: ${{ matrix.release_lock }}
+      cancel-in-progress: false
+    steps:
+      - uses: actions/checkout@v4
+        with: { ref: '${{ matrix.source }}' }
+      - uses: actions/checkout@v4
+        with: { path: audit-harness }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22 }
+      - name: Check fixture guardrails and prepare additional journey coverage
+        run: |
+          node deployment/creator-flow-live-check.test.cjs
+          node deployment/creator-flow-cleanup.test.cjs
+          python3 audit-harness/scripts/prepare-onboarding-audit.py
+          node --check deployment/creator-flow-live-check.cjs
+          python3 -m py_compile deployment/creator-flow-live-check.py
+      - name: Existing authorised AWS connection
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-southeast-2
+      - name: Fresh signup, questionnaire, session, photo and video boundaries, submission and exact cleanup
+        env:
+          EXPECTED_SHA: ${{ matrix.source }}
+          AUDIT_BRAND: ${{ matrix.brand }}
+        run: python3 deployment/creator-flow-live-check.py --brand="$AUDIT_BRAND" --expected-sha="$EXPECTED_SHA" --mode=large --removal-guards
