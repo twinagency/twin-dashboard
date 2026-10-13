@@ -84,12 +84,13 @@ try {
   }
 } catch { result.errors.push('current-settings-check-unreadable'); }
 try {
-  // Narrow name/slug lookup; report V1 only when one identifiable current record actually says v1.
+  // Database enum is live|v2: twin-bot db/migrations/20261008130000_clone_engine_v2.sql.
+  // 'live' assigns the legacy V1 runtime; this checks assignment, not that separate runtime's health.
   const matches=await getRows('or=(slug.ilike.*trashy*,name.ilike.*trashy*)&select=id,slug,name,engine,status&limit=10');
   const exact=matches.filter(row=>row.slug==='trashy' || String(row.name).trim().toLowerCase()==='trashy');
   const row=exact.length===1 ? exact[0] : exact.length===0 && matches.length===1 ? matches[0] : null;
-  result.trashy={checked:!!row,matchCount:matches.length,...(row?{slug:row.slug,engine:row.engine,status:row.status,onV1:row.engine==='v1'}:{reason:matches.length?'ambiguous-match':'no-match'})};
-  if(row && row.engine!=='v1') result.errors.push('trashy-not-on-v1');
+  result.trashy={checked:!!row,matchCount:matches.length,...(row?{slug:row.slug,engine:row.engine,status:row.status,assignedToV1:row.engine==='live',separateRuntimeHealthChecked:false}:{reason:matches.length?'ambiguous-match':'no-match'})};
+  if(!row || row.engine!=='live') result.errors.push('trashy-legacy-assignment-not-confirmed');
 } catch { result.trashy={checked:false,reason:'lookup-unavailable'}; result.errors.push('trashy-current-record-unreadable'); }
 console.log('FINAL_READONLY_JSON ' + JSON.stringify(result));
 """
