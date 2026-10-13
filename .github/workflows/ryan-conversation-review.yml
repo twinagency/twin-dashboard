@@ -1,0 +1,33 @@
+name: Read-only Ryan conversation review
+on:
+  push:
+    branches: [codex/v2-ryan-review-20261014]
+    paths:
+      - '.github/workflows/ryan-conversation-review.yml'
+      - 'deployment/read-ryan-conversations.py'
+      - 'deployment/v2-photo-recovery/read-ryan-conversations-remote.py'
+permissions:
+  contents: read
+concurrency:
+  group: v2-ryan-read-only-review
+  cancel-in-progress: false
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-southeast-2
+      - name: Read scoped existing conversation records
+        run: python3 deployment/read-ryan-conversations.py
+      - name: Retain private review evidence for one day
+        uses: actions/upload-artifact@v4
+        with:
+          name: ryan-conversation-review
+          path: ${{ runner.temp }}/ryan-review/conversations.json
+          retention-days: 1
+          if-no-files-found: error
