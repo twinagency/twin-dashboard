@@ -33,10 +33,35 @@ async function main() {
       const html = await view.text();
       assert(!html.includes('could not refresh'), `${creator.name} history refresh`);
       assert(!/href="\/bot-v2"/.test(html), 'Separate V2 navigation removed');
-      if (page?.history.length) assert(html.includes('data-message-id="v2:'), `${creator.name} V2 message rendered`);
+      if (page?.history.length) assert(html.includes('data-message-id="v2:' + page.history.at(-1).id + '"'), `${creator.name} selected fan's latest V2 message rendered`);
+      const older = html.match(/href="(\/users\?[^"<>]*before=[^"<>]+)"/);
+      if (older) {
+        const olderView = await fetch('http://127.0.0.1:3001' + older[1].replaceAll('&amp;', '&'), { headers: { cookie }, signal: AbortSignal.timeout(60000) });
+        assert.equal(olderView.status, 200);
+        const olderHtml = await olderView.text();
+        const ids = new Set([...html.matchAll(/data-message-id="([^"]+)"/g)].map(m => m[1]));
+        const previous = [...olderHtml.matchAll(/data-message-id="([^"]+)"/g)].map(m => m[1]);
+        assert(previous.length, 'Older conversation page has messages');
+        assert(previous.every(id => !ids.has(id)), 'Older page does not repeat messages');
+        report[report.length - 1].olderPage = 'passed';
+      }
       const old = await fetch('http://127.0.0.1:3001/bot-v2', { headers: { cookie }, redirect: 'manual' });
       assert.equal(old.status, 307); assert(old.headers.get('location')?.endsWith('/users'));
       report[report.length - 1].unifiedPage = 'passed';
+    }
+  }
+  if (process.env.VERIFY_UNIFIED === '1') {
+    const legacyClones = await read('clones?select=id&engine=eq.live&status=eq.active&limit=1');
+    if (legacyClones.length) {
+      const legacyFans = await read(`users?select=id&clone_id=eq.${legacyClones[0].id}&order=last_message_received.desc.nullslast&limit=1`);
+      if (legacyFans.length) {
+        const payload = String(Date.now() + 60000);
+        const sig = crypto.createHmac('sha256', process.env.DASHBOARD_SESSION_SECRET || process.env.DASHBOARD_PASSWORD).update(payload).digest('base64url');
+        const r = await fetch(`http://127.0.0.1:3001/users?fan=${legacyFans[0].id}`, { headers: { cookie: `allie_admin_session=${payload}.${sig}; clone_scope=${legacyClones[0].id}` }, signal: AbortSignal.timeout(60000) });
+        assert.equal(r.status, 200); const html = await r.text();
+        assert(html.includes('data-message-id="v1:'), 'Existing live conversation still renders');
+        report.push({ creator: 'Existing live engine', unifiedPage: 'passed' });
+      }
     }
   }
   console.log(JSON.stringify({ runningCommit: process.env.GIT_SHA, mode: process.env.VERIFY_UNIFIED === '1' ? 'unified' : 'source', creators: report }));

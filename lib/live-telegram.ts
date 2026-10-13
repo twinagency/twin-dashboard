@@ -43,7 +43,7 @@ export async function loadV2Fans(clones: InboxClone[], selectedCloneId: string |
       const ids = [...new Set(raw.map(row => Number(row.chatId)))];
       const existing = new Map<string, InboxFan>();
       for (let start = 0; start < ids.length; start += 150) {
-        const res = await supabaseAdmin.from("users").select("*").eq("clone_id", clone.id).in("telegram_id", ids.slice(start, start + 150));
+        const res = await supabaseAdmin.from("users").select("*").eq("clone_id", clone.id).in("telegram_id", ids.slice(start, start + 150)).limit(150);
         if (res.error) throw new Error("Could not match Telegram fans");
         for (const row of res.data ?? []) existing.set(String(row.telegram_id), row as InboxFan);
       }
@@ -70,7 +70,7 @@ export async function loadTelegramHistory(clone: InboxClone, telegramId: number,
   const hasSubmillisecond = cursor?.source === "v1" && /\.\d{3}\d*[1-9]\d*Z$/.test(cursor.at);
   const v1Query = historyWindowQuery(supabaseAdmin.from("chat_history").select("*").eq("clone_id", clone.id).eq("telegram_id", telegramId), {
     before, after: combined ? undefined : options.after,
-  });
+  }).limit(CHAT_HISTORY_PAGE + 1);
   const v2Query = combined ? monitor(clone, "chat-history", {
     chatId: String(telegramId),
     ...(cursor ? { before: Buffer.from(JSON.stringify({ at: monitorAt, id: cursor.source === "v2" ? cursor.id : hasSubmillisecond ? "\uffff" : "" })).toString("base64url") } : {}),
