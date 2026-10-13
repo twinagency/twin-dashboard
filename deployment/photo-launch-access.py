@@ -1,102 +1,93 @@
-"""Transfer and deploy the approved reply release, then retain its sanitized receipt."""
-import base64,gzip,hashlib,json,os,pathlib,shlex,subprocess,sys,time,urllib.error,urllib.parse,urllib.request
+"""Read-only post-deployment verification for the live Twin V2 reply release."""
+import base64,gzip,json,os,pathlib,shlex,subprocess,sys,time,urllib.error,urllib.parse,urllib.request
 
 INSTANCE='i-0584d283506f3f6be'
-BRANCH='codex/v2-price-guard-deploy-20261014'
+BRANCH='codex/v2-price-guard-postdeploy-20261014'
 BACKUP='/home/ubuntu/twin-v2-backups/reply-baseline-771f713-1791916541369657274'
-SOURCE=pathlib.Path('deployment/v2-photo-recovery/deploy-reply-release.py')
-PREP_RECEIPT=pathlib.Path('docs/price-guard-release-prepared-20261014.json')
+SHA='771f713b58c11d1b0fcf094595dc8f67ac898eb3'
+IMAGE='sha256:ac361b6304d4fa20ee251177b01277e37c826173f1ecd2d2afc2f8cb04f7ca9c'
+DEPLOY_RECEIPT=pathlib.Path('docs/price-guard-deployed-20261014.json')
 
-def ssm(command,timeout=120):
-  params=pathlib.Path('/tmp')/('reply-deploy-'+str(time.time_ns())+'.json')
+def ssm(command,timeout=420):
+  params=pathlib.Path('/tmp')/('reply-postdeploy-'+str(time.time_ns())+'.json')
   params.write_text(json.dumps({'commands':[command],'executionTimeout':[str(timeout)]}))
   cid=subprocess.check_output(['aws','ssm','send-command','--instance-ids',INSTANCE,'--document-name','AWS-RunShellScript',
-    '--parameters','file://'+str(params),'--comment','Deploy approved V2 reply release with fleet drain and rollback',
+    '--parameters','file://'+str(params),'--comment','Read-only verification of deployed V2 reply release',
     '--query','Command.CommandId','--output','text'],text=True).strip()
-  if timeout>120:print(json.dumps({'commandId':cid,'phase':'authorised reply release deployment'}),flush=True)
+  print(json.dumps({'commandId':cid,'phase':'read-only post-deployment verification'}),flush=True)
   for _ in range(timeout//3+20):
     try:r=json.loads(subprocess.check_output(['aws','ssm','get-command-invocation','--command-id',cid,'--instance-id',INSTANCE,'--output','json'],text=True,stderr=subprocess.DEVNULL))
     except subprocess.CalledProcessError:time.sleep(3);continue
     if r['Status'] in ['Success','Failed','Cancelled','TimedOut']:break
     time.sleep(3)
-  else:raise RuntimeError('Deployment SSM command incomplete')
+  else:raise RuntimeError('Post-deployment verification incomplete')
   print(r.get('StandardOutputContent',''),flush=True)
-  if r['Status']!='Success':raise RuntimeError('Deployment '+r['Status']+': '+r.get('StandardErrorContent','')[-700:])
+  if r['Status']!='Success':raise RuntimeError('Post-deployment verification '+r['Status']+': '+r.get('StandardErrorContent','')[-700:])
   return r.get('StandardOutputContent','')
 
-def validate(deployed,prepared):
-  assert deployed.get('deployed')=='771f713b58c11d1b0fcf094595dc8f67ac898eb3' and deployed.get('testedSource')=='771f713b58c11d1b0fcf094595dc8f67ac898eb3' and deployed.get('image')=='sha256:ac361b6304d4fa20ee251177b01277e37c826173f1ecd2d2afc2f8cb04f7ca9c','Deployment receipt pins changed'
-  gate=deployed.get('financialGate',{});assert gate.get('creators')==gate.get('drained')==17 and gate.get('rpcChecks')==34 and gate.get('owed')==gate.get('reservedTurns')==gate.get('openExceptions')==gate.get('awaitingReceiptRefunds')==0,'Deployment financial gate incomplete'
-  cutover=deployed.get('cutover',{});assert cutover.get('baselineRevision')=='9138db6f956ed383d18fe33bce6577b2f5d74d4a' and cutover.get('holdsMaintainedUntilVerification') is True and cutover.get('holdsReleased') is True,'Deployment cutover receipt incomplete'
-  prompts=deployed.get('promptVerification',{});assert len(prompts.get('checks',[]))==17 and all(x.get('displayMatches') and x.get('previewMatches') for x in prompts['checks']) and len(prompts.get('health',[]))==2 and all(x.get('status')==200 for x in prompts['health']),'Prompt/dashboard gate incomplete'
-  fleet=deployed.get('fleet',{}).get('girls',{});assert len(fleet)==17 and all(x.get('status')=='running' for x in fleet.values()) and deployed.get('verifiedSourceFilesPerContainer')==285,'Fleet/source verification incomplete'
-  assert deployed.get('settings',{}).get('settingsHash')==prepared.get('settingsHash') and deployed.get('rollbackTriggered') is False,'Settings changed or rollback triggered'
-  return deployed
+remote="""import base64,datetime,gzip,importlib.util,json,pathlib,subprocess,time
+p=pathlib.Path(%r)/'deploy-reply-release.py';spec=importlib.util.spec_from_file_location('reply_deploy',p);m=importlib.util.module_from_spec(spec);spec.loader.exec_module(m)
+assert m.SHA==%r and m.TESTED==%r and m.EXPECTED_IMAGE==%r and m.IMAGE==%r
+deployed=json.loads((pathlib.Path(%r)/'reply-deployed.json').read_text());assert deployed['deployed']==deployed['testedSource']==m.SHA and deployed['image']==m.IMAGE and deployed['rollbackTriggered'] is False
+def readonly_node(source,label,container='twin-v2-bot-1',timeout=210):
+ r=subprocess.run(['docker','exec','-i',container,'node','--import','tsx','--input-type=module'],input=source,text=True,capture_output=True,timeout=timeout)
+ assert r.returncode==0,label+' failed'
+ lines=[x[len('RELEASE_JSON '):] for x in r.stdout.splitlines() if x.startswith('RELEASE_JSON ')]
+ assert len(lines)==1,label+' missing result'
+ return json.loads(lines[0])
+m.node=readonly_node
+m.runtime(m.EXPECTED_IMAGE,m.SHA)
+runtime=[]
+for name in m.CONTAINERS:
+ info=json.loads(m.out('docker','inspect',name))[0];runtime.append({'name':name,'image':info['Image'],'running':info['State']['Running'],'restarting':info['State'].get('Restarting',False),'revision':next((x.split('=',1)[1] for x in info['Config']['Env'] if x.startswith('GIT_SHA=')),None)})
+assert all(x['running'] and not x['restarting'] and x['image']==m.IMAGE and x['revision']==m.SHA for x in runtime)
+state=json.loads((m.ROOT/'data/_fleet.json').read_text());age=time.time()-datetime.datetime.fromisoformat(state['at'].replace('Z','+00:00')).timestamp();girls=state.get('girls',{})
+assert age<90 and sorted(girls)==m.EXPECTED and all(girls[s].get('status')=='running' for s in m.EXPECTED),'Live fleet is not fresh and fully running'
+settings=m.settings();assert settings['settingsHash']==m.PREP['settingsHash']
+prompts=m.prompt_check();assert prompts['modelCalls']==prompts['messagesSent']==prompts['databaseWrites']==0
+prior={x['slug']:x for x in deployed['promptVerification']['checks']};assert len(prompts['checks'])==len(prior)==17 and len(prompts['health'])==2 and all(x['status']==200 for x in prompts['health'])
+for x in prompts['checks']:
+ assert x['displayMatches'] and x['previewMatches']
+ for key in ['settingsHash','emojiPolicy','testerPrice','normalPrice']:assert x[key]==prior[x['slug']][key],x['slug']+'/'+key
+holds_source="import {config} from './src/config.ts';import {activeRequest} from './src/handover.ts';const expected=__EXPECTED__,active=expected.filter(s=>activeRequest(config.dataDir,s));console.log('RELEASE_JSON '+JSON.stringify({active,checked:expected.length}));"
+holds=readonly_node(holds_source.replace('__EXPECTED__',json.dumps(m.EXPECTED)),'released-holds')
+assert holds['checked']==17 and holds['active']==[],'Deployment holds remain active'
+items=[x for x in m.MANIFEST if not x['path'].startswith('archive/')]
+assert len(m.MANIFEST)==289 and len(items)==285
+check="import fs from 'node:fs';import crypto from 'node:crypto';const items="+json.dumps(items)+";for(const x of items){const b=fs.readFileSync(x.path);if(crypto.createHash('sha1').update('blob '+b.length).update(Buffer.from([0])).update(b).digest('hex')!==x.sha)throw Error(x.path)}console.log('RELEASE_JSON '+JSON.stringify({verified:items.length}));"
+bot=m.node(check,'postdeploy-bot-source',timeout=90);dash=m.node(check,'postdeploy-dash-source','twin-v2-dash-1',90);assert bot==dash and bot['verified']==285
+value={'status':'complete','deployed':m.SHA,'testedSource':m.TESTED,'image':m.IMAGE,'verifiedAt':m.stamp(),'runtime':runtime,'fleetAt':state['at'],'fleetAgeSeconds':age,'creators':len(girls),'allRunning':True,'holdsReleased':True,'settings':settings,'promptVerification':prompts,'manifestFiles':len(m.MANIFEST),'verifiedSourceFilesPerContainer':bot['verified'],'modelCalls':0,'fanMessages':0,'databaseWrites':0,'productionWrites':0,'runtimeMutations':0,'containerRestarts':0}
+print('REPLY_POSTDEPLOY_BASE64 '+base64.b64encode(gzip.compress(json.dumps(value).encode(),mtime=0)).decode())
+""" % (BACKUP,SHA,SHA,IMAGE,IMAGE,BACKUP)
 
-attempt_started=time.time()
-result={'status':'not-started','candidate':'771f713b58c11d1b0fcf094595dc8f67ac898eb3','workflowRun':os.environ.get('GITHUB_RUN_ID')}
+result={'status':'not-started','candidate':SHA,'image':IMAGE,'workflowRun':os.environ.get('GITHUB_RUN_ID')}
 try:
-  prepared=json.loads(PREP_RECEIPT.read_text())
-  assert prepared.get('status')=='prepared' and prepared.get('workflowRun')=='38447992657','Approved preparation receipt changed'
-  assert prepared.get('sha')==prepared.get('testedSource')==result['candidate'] and prepared.get('image')=='sha256:ac361b6304d4fa20ee251177b01277e37c826173f1ecd2d2afc2f8cb04f7ca9c','Prepared candidate/image changed'
-  assert prepared.get('release')=='/home/ubuntu/twin-v2-reply-releases/771f713b58c11d1b0fcf094595dc8f67ac898eb3' and prepared.get('backup')==BACKUP,'Prepared release/backup path changed'
-  stage='/tmp/twin-reply-deploy-771f713-'+str(time.time_ns())
-  raw=SOURCE.read_bytes();packed=base64.b64encode(gzip.compress(raw,mtime=0)).decode();digest=hashlib.sha256(raw).hexdigest()
-  ssm('mkdir -p '+shlex.quote(stage)+' && chmod 700 '+shlex.quote(stage),30)
-  for n in range(0,len(packed),10000):ssm("printf '%s' '"+packed[n:n+10000]+"' >> "+shlex.quote(stage+'/script.b64'),30)
-  unpack="import pathlib,base64,gzip,hashlib;root=pathlib.Path("+repr(stage)+");raw=gzip.decompress(base64.b64decode((root/'script.b64').read_bytes()));assert hashlib.sha256(raw).hexdigest()=="+repr(digest)+";p=root/'deploy-reply-release.py';p.write_bytes(raw);p.chmod(0o600)"
-  ssm('python3 -c '+shlex.quote(unpack),30)
-  install="import pathlib;src=pathlib.Path("+repr(stage+'/deploy-reply-release.py')+");dst=pathlib.Path("+repr(BACKUP+'/deploy-reply-release.py')+");assert not dst.exists() or dst.read_bytes()==src.read_bytes(),'Reviewed deployment script changed';dst.write_bytes(src.read_bytes());dst.chmod(0o600)"
-  ssm('python3 -c '+shlex.quote(install),30)
-  ssm('python3 -u '+shlex.quote(BACKUP+'/deploy-reply-release.py'),850)
-  read="import base64,gzip,pathlib;p=pathlib.Path("+repr(BACKUP+'/reply-deployed.json')+");assert p.is_file();print('REPLY_DEPLOY_BASE64 '+base64.b64encode(gzip.compress(p.read_bytes(),mtime=0)).decode())"
-  output=ssm('python3 -c '+shlex.quote(read),60)
-  line=next(x for x in output.splitlines() if x.startswith('REPLY_DEPLOY_BASE64 '))
-  deployed=json.loads(gzip.decompress(base64.b64decode(line.split(' ',1)[1])))
-  result.update(validate(deployed,prepared));result['status']='complete'
-except Exception as exc:
-  result.update(status='deployment-failed',error=str(exc)[-1000:])
-  try:
-    recover="""import base64,gzip,json,pathlib,subprocess
-p=pathlib.Path(%r);value=json.loads((p/'reply-deployed.json').read_text())
-assert value.get('deployed')==%r and value.get('testedSource')==%r and value.get('image')==%r
-for name in ['twin-v2-bot-1','twin-v2-dash-1']:
- info=json.loads(subprocess.check_output(['docker','inspect',name],text=True))[0]
- assert info['State']['Running'] and not info['State'].get('Restarting') and info['Image']==value['image'] and 'GIT_SHA='+value['deployed'] in info['Config']['Env']
-print('REPLY_RECOVERED_BASE64 '+base64.b64encode(gzip.compress(json.dumps(value).encode(),mtime=0)).decode())
-""" % (BACKUP,'771f713b58c11d1b0fcf094595dc8f67ac898eb3','771f713b58c11d1b0fcf094595dc8f67ac898eb3','sha256:ac361b6304d4fa20ee251177b01277e37c826173f1ecd2d2afc2f8cb04f7ca9c')
-    recovered_output=ssm('python3 -c '+shlex.quote(recover),60)
-    recovered_line=next(x for x in recovered_output.splitlines() if x.startswith('REPLY_RECOVERED_BASE64 '))
-    recovered=json.loads(gzip.decompress(base64.b64decode(recovered_line.split(' ',1)[1])))
-    result.update(validate(recovered,prepared));result.pop('error',None);result['status']='complete';result['receiptRecoveredAfterTransportError']=True
-  except Exception:
-    pass
-  try:
-    if result['status']=='complete':raise StopIteration
-    read_failure="""import base64,gzip,json,pathlib
-p=pathlib.Path(%r)
-started=%r
-failed=sorted((x for x in p.glob('reply-deploy-failed-*.json') if x.stat().st_mtime>=started-5),key=lambda x:x.stat().st_mtime)
-rb=p/'reply-rollback-result.json';value={'failure':json.loads(failed[-1].read_text()) if failed else None,'rollback':json.loads(rb.read_text()) if rb.is_file() and rb.stat().st_mtime>=started-5 else None}
-print('REPLY_FAILURE_BASE64 '+base64.b64encode(gzip.compress(json.dumps(value).encode(),mtime=0)).decode())
-""" % (BACKUP,attempt_started)
-    failure_output=ssm('python3 -c '+shlex.quote(read_failure),60)
-    failure_line=next(x for x in failure_output.splitlines() if x.startswith('REPLY_FAILURE_BASE64 '))
-    result.update(json.loads(gzip.decompress(base64.b64decode(failure_line.split(' ',1)[1]))))
-  except StopIteration:pass
-  except Exception as receipt_exc:result['failureReceiptError']=str(receipt_exc)[-500:]
+  deployed_receipt=json.loads(DEPLOY_RECEIPT.read_text())
+  assert deployed_receipt.get('status')=='complete' and deployed_receipt.get('workflowRun')=='38449206004','Approved deploy receipt changed'
+  assert deployed_receipt.get('deployed')==deployed_receipt.get('testedSource')==SHA and deployed_receipt.get('image')==IMAGE and deployed_receipt.get('rollbackTriggered') is False,'Approved deployment pins changed'
+  output=ssm('python3 -c '+shlex.quote(remote))
+  line=next(x for x in output.splitlines() if x.startswith('REPLY_POSTDEPLOY_BASE64 '))
+  verified=json.loads(gzip.decompress(base64.b64decode(line.split(' ',1)[1])))
+  assert verified['status']=='complete' and verified['deployed']==verified['testedSource']==SHA and verified['image']==IMAGE
+  assert len(verified.get('runtime',[]))==2 and all(x.get('running') and not x.get('restarting') and x.get('image')==IMAGE and x.get('revision')==SHA for x in verified['runtime'])
+  assert verified.get('creators')==17 and verified.get('allRunning') is True and verified.get('fleetAgeSeconds',999)>=0 and verified['fleetAgeSeconds']<90 and verified.get('holdsReleased') is True and verified.get('manifestFiles')==289 and verified.get('verifiedSourceFilesPerContainer')==285
+  assert verified.get('settings')==deployed_receipt.get('settings')
+  prompts=verified.get('promptVerification',{});assert len(prompts.get('checks',[]))==17 and all(x.get('displayMatches') and x.get('previewMatches') for x in prompts['checks']) and len(prompts.get('health',[]))==2 and all(x.get('status')==200 for x in prompts['health'])
+  prior={x['slug']:x for x in deployed_receipt['promptVerification']['checks']}
+  assert all(all(x.get(k)==prior[x['slug']].get(k) for k in ['settingsHash','emojiPolicy','testerPrice','normalPrice']) for x in prompts['checks'])
+  assert verified.get('modelCalls')==verified.get('fanMessages')==verified.get('databaseWrites')==verified.get('productionWrites')==verified.get('runtimeMutations')==verified.get('containerRestarts')==0
+  result.update(verified)
+except Exception as exc:result.update(status='verification-failed',error=str(exc)[-1000:])
 
-url='https://api.github.com/repos/jesse98/twin-dashboard/contents/docs/price-guard-deployed-20261014.json'
-payload={'message':'Record guarded V2 reply deployment [skip ci]','branch':BRANCH,
+url='https://api.github.com/repos/jesse98/twin-dashboard/contents/docs/price-guard-postdeploy-20261014.json'
+payload={'message':'Record read-only V2 reply post-deployment verification [skip ci]','branch':BRANCH,
   'content':base64.b64encode((json.dumps(result,indent=2)+'\n').encode()).decode()}
 try:
-  current_url=url+'?ref='+urllib.parse.quote(BRANCH,safe='')
-  current_req=urllib.request.Request(current_url,headers={'Authorization':'Bearer '+os.environ['GITHUB_TOKEN'],'Accept':'application/vnd.github+json'})
-  with urllib.request.urlopen(current_req,timeout=30) as response:payload['sha']=json.load(response)['sha']
+  current=urllib.request.Request(url+'?ref='+urllib.parse.quote(BRANCH,safe=''),headers={'Authorization':'Bearer '+os.environ['GITHUB_TOKEN'],'Accept':'application/vnd.github+json'})
+  with urllib.request.urlopen(current,timeout=30) as response:payload['sha']=json.load(response)['sha']
 except urllib.error.HTTPError as existing:
   if existing.code!=404:raise
-body=json.dumps(payload).encode()
-req=urllib.request.Request(url,data=body,method='PUT',headers={'Authorization':'Bearer '+os.environ['GITHUB_TOKEN'],'Accept':'application/vnd.github+json','Content-Type':'application/json'})
-with urllib.request.urlopen(req,timeout=30) as response:assert response.status in [200,201]
-print('REPLY_DEPLOY_STATUS '+json.dumps({k:result.get(k) for k in ['status','deployed','image','backup','error']}),flush=True)
+request=urllib.request.Request(url,data=json.dumps(payload).encode(),method='PUT',headers={'Authorization':'Bearer '+os.environ['GITHUB_TOKEN'],'Accept':'application/vnd.github+json','Content-Type':'application/json'})
+with urllib.request.urlopen(request,timeout=30) as response:assert response.status in [200,201]
+print('REPLY_POSTDEPLOY_STATUS '+json.dumps({k:result.get(k) for k in ['status','deployed','image','creators','allRunning','error']}),flush=True)
 if result['status']!='complete':sys.exit(1)
