@@ -70,21 +70,25 @@ try {
   if(!result.mrsCallaceOnV2) result.errors.push('mrs-callace-assignment-drift');
   if(!result.saniaPaused) result.errors.push('sania-assignment-drift');
   for(const row of rows.filter(row=>row.engine==='v2' && row.status==='active')){
+    const testerPrice=priceFor(2700,{cloneId:row.id,telegramId:6814483810,kind:'photo'});
+    const normalPrice=priceFor(2700,{cloneId:row.id,telegramId:6814483811,kind:'photo'});
+    const priceScopeMatches=testerPrice===(['riley-mae-lewis','kyla-yesenosky'].includes(row.slug)?5:2700) && normalPrice===2700;
+    const checked={slug:row.slug,testerPrice,normalPrice,priceScopeMatches};
+    result.results.push(checked);
+    if(!priceScopeMatches) result.errors.push('tester-price-drift:'+row.slug);
     try {
-      const response=await fetch('http://127.0.0.1:4300/api/girls/details?girl='+encodeURIComponent(row.slug),{signal:AbortSignal.timeout(15000)});
+      const response=await fetch('http://127.0.0.1:'+Number(process.env.DASH_PORT??4300)+'/api/girls/details?girl='+encodeURIComponent(row.slug),{signal:AbortSignal.timeout(8000)});
+      checked.httpStatus=response.status;
       if(!response.ok) throw new Error('display-unreadable');
       const display=await response.json();
+      checked.hasParts=Array.isArray(display.parts);
       const displayed=display.parts.filter(part=>!part.optional).map(part=>part.text).join('');
       const actual=render(row.v2_vars);
       const section=text=>{const start=text.indexOf('PHOTOS AND VIDEOS'),end=text.indexOf('HARD LIMITS, NEVER CROSSED');return start>=0 && end>start ? text.slice(start,end):'';};
       const promptDisplayMatches=Array.isArray(display.errors) && display.errors.length===0 && section(actual).length>100 && section(displayed)===section(actual);
-      const testerPrice=priceFor(2700,{cloneId:row.id,telegramId:6814483810,kind:'photo'});
-      const normalPrice=priceFor(2700,{cloneId:row.id,telegramId:6814483811,kind:'photo'});
-      const priceScopeMatches=testerPrice===(['riley-mae-lewis','kyla-yesenosky'].includes(row.slug)?5:2700) && normalPrice===2700;
-      result.results.push({slug:row.slug,promptDisplayMatches,testerPrice,normalPrice,priceScopeMatches});
+      checked.promptDisplayMatches=promptDisplayMatches;
       if(!promptDisplayMatches) result.errors.push('prompt-display-drift:'+row.slug);
-      if(!priceScopeMatches) result.errors.push('tester-price-drift:'+row.slug);
-    } catch { result.errors.push('prompt-or-price-check-unreadable:'+row.slug); }
+    } catch(error) { checked.errorClass=error?.name??'Error'; checked.errorCode=error?.cause?.code??null; result.errors.push('prompt-check-unreadable:'+row.slug); }
   }
 } catch { result.errors.push('current-settings-check-unreadable'); }
 try {
