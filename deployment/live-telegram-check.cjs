@@ -19,7 +19,7 @@ async function main() {
       const h = await fetch(`${upstream}/api/chat-history?${new URLSearchParams({ girl: creator.slug, chatId: String(fan.chatId) })}`, { signal: AbortSignal.timeout(15000) });
       assert(h.ok, `${creator.name} history ${h.status}`);
       page = await h.json(); assert(Array.isArray(page.history));
-      assert.equal(page.days, 90); assert(page.history.length <= 100);
+      assert.equal(page.days, null); assert.equal(page.scope, 'all-stored'); assert(page.history.length <= 100);
     }
     report.push({ creator: creator.name, fans: fans.length, sampleMessages: page?.history.length ?? 0, days: page?.days ?? null, more: page?.hasMore ?? false });
     if (process.env.VERIFY_UNIFIED === '1' && fan) {
@@ -32,6 +32,7 @@ async function main() {
       assert.equal(view.status, 200, `${creator.name} unified page`);
       const html = await view.text();
       assert(!html.includes('could not refresh'), `${creator.name} history refresh`);
+      assert(html.includes('All stored history'), 'All-history navigation rendered');
       assert(!/href="\/bot-v2"/.test(html), 'Separate V2 navigation removed');
       if (page?.history.length) assert(html.includes('data-message-id="v2:' + page.history.at(-1).id + '"'), `${creator.name} selected fan's latest V2 message rendered`);
       const older = html.match(/href="(\/users\?[^"<>]*before=[^"<>]+)"/);
@@ -48,6 +49,26 @@ async function main() {
       const old = await fetch('http://127.0.0.1:3001/bot-v2', { headers: { cookie }, redirect: 'manual' });
       assert.equal(old.status, 307); assert(old.headers.get('location')?.endsWith('/users'));
       report[report.length - 1].unifiedPage = 'passed';
+    }
+    if (process.env.VERIFY_UNIFIED === '1') {
+      const earliest = await read(`chat_history?select=id,telegram_id,created_at&clone_id=eq.${creator.id}&order=created_at.asc,id.asc&limit=1`);
+      if (earliest.length) {
+        const first = earliest[0];
+        const users = await read(`users?select=id&clone_id=eq.${creator.id}&telegram_id=eq.${first.telegram_id}&limit=1`);
+        if (users.length) {
+          const payload = String(Date.now() + 60000);
+          const sig = crypto.createHmac('sha256', process.env.DASHBOARD_SESSION_SECRET || process.env.DASHBOARD_PASSWORD).update(payload).digest('base64url');
+          const before = new Date(Date.parse(first.created_at) + 1).toISOString() + '|9223372036854775807';
+          const url = 'http://127.0.0.1:3001/users?' + new URLSearchParams({ fan: users[0].id, before });
+          const r = await fetch(url, { headers: { cookie: `allie_admin_session=${payload}.${sig}; clone_scope=${creator.id}` }, signal: AbortSignal.timeout(60000) });
+          assert.equal(r.status, 200);
+          const html = await r.text();
+          assert(html.includes('data-message-id="v1:' + first.id + '"'), creator.name + ' earliest stored legacy message rendered');
+          assert(html.includes('Start of stored conversation'), creator.name + ' history completion marker');
+          report[report.length - 1].earliestStored = first.created_at;
+          report[report.length - 1].earliestStoredRendered = true;
+        }
+      }
     }
   }
   if (process.env.VERIFY_UNIFIED === '1') {

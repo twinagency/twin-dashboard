@@ -17,3 +17,7 @@ jobs:
           aws-region: ap-southeast-2
       - name: Read stored and visible message coverage
         run: python3 deployment/full-history-audit.py
+      - name: Release tested history reader without restarting bots
+        run: python3 deployment/v2-history-release.py
+      - name: Verify message coverage after monitor update
+        run: python3 deployment/full-history-audit.py
