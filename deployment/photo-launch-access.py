@@ -18,21 +18,11 @@ def ssm(command,timeout=300):
   raise RuntimeError('Read '+r['Status'])
  return r.get('StandardOutputContent','')
 stage=pathlib.Path('deployment/v2-photo-recovery')
-bundle={name:(stage/name).read_text() for name in ['run-legacy-simulation-v2.py','simulate-live-legacy.mjs']}
-program="""
-import json,pathlib,subprocess
-root=pathlib.Path('/home/ubuntu/twin-v2-validation/fleet-simulation-20261013-1791877888400228253')
-assert not (root/'legacy-launched-v2.json').exists(),'No repeat model run'
-assert not any((root/s/'summary.json').exists() for s in ['autumn-renae','dan-dangler','hazey-haley']),'Legacy model results already exist'
-for name,body in BUNDLE.items():
- assert name in ['run-legacy-simulation-v2.py','simulate-live-legacy.mjs']
- if name=='simulate-live-legacy.mjs':assert (root/name).read_text()==body
- else:(root/name).write_text(body)
-with (root/'legacy-orchestrator-v2.private.log').open('x') as log:
- p=subprocess.Popen(['python3',str(root/'run-legacy-simulation-v2.py')],stdin=subprocess.DEVNULL,stdout=log,stderr=log,start_new_session=True,cwd=root)
-receipt={'pid':p.pid,'scope':'3 V1 creators; preserve original no-model dry failure; fix isolated fixture ownership only'}
-(root/'legacy-launched-v2.json').write_text(json.dumps(receipt));print('LEGACY_LAUNCHED_V2_JSON '+json.dumps(receipt),flush=True)
-"""
-raw=('BUNDLE='+repr(bundle)+'\n'+program).encode();packed=base64.b64encode(gzip.compress(raw)).decode()
-program="import gzip,base64;exec(compile(gzip.decompress(base64.b64decode("+repr(packed)+")),'<legacy-isolated-launch-v2>','exec'))"
-ssm('python3 -c '+shlex.quote(program),60)
+raw=(stage/'read-fleet-simulation.py').read_bytes();packed=base64.b64encode(gzip.compress(raw)).decode()
+program="import gzip,base64;exec(compile(gzip.decompress(base64.b64decode("+repr(packed)+")),'<fleet-results-readonly>','exec'))"
+output=ssm('python3 -c '+shlex.quote(program),180)
+line=next(l for l in output.splitlines() if l.startswith('SIM_RESULT_MANIFEST '))
+manifest=json.loads(line[len('SIM_RESULT_MANIFEST '):])
+for index in range(manifest['base64Chunks']):
+ program="import pathlib,base64;raw=base64.b64encode(pathlib.Path("+repr(manifest['path'])+").read_bytes()).decode();print('SIM_RESULT_CHUNK "+str(index)+" '+raw["+str(index*20000)+":"+str((index+1)*20000)+"])"
+ ssm('python3 -c '+shlex.quote(program),30)
