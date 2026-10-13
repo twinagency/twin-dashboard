@@ -4,20 +4,11 @@ ROOT = pathlib.Path('/home/ubuntu/twin-v2')
 INCIDENT = ROOT / 'data/_operator_backups/photo-incident-20261013-morning'
 REVISION = '45931b6f56db9f97cc8406154e35a0d216f5de65'
 IMAGE = 'sha256:2f076bf6fbc17b4de58a31887e9328a56e0275d90edda39ea789efbd13517d2e'
-CANDIDATE = '340dd39736799f147cf1ad139de0bbb61628ee62'
+# Only three reviewed all-time dashboard history files differ from the rollback image.
+DASHBOARD_IMAGE = 'sha256:051ec69b650fc06025d19c8d92e790dfc11185bdf435906840a13d6df823bb61'
+CANDIDATE = '2d2ecc27d0b1d3c148c54e26e2261d95b338f475'
 # Frozen from the reviewed structured-source/manifest.json for this exact candidate.
-SOURCE_HASHES = {
-    'src/llm.ts': 'd856dcaa623e9c36977b2a56345b8b35fd9f6ae6a737c40fbd01a0808b689ac4',
-    'src/turn.ts': '3d4a788ee0297f9a39c639e09ddfa98664b067d46fa781d194dfe4969b128f6f',
-    'src/media.ts': '66e408b4058fb486efc9ef596c2497d3cd86d9e5fdc3c028d9eb6148c22cee76',
-    'src/girls/template.ts': 'f20a3438927e92a03b9c6363fdb567dd3d67de7943ae7d1d7cdf971a8114575d',
-    'src/memory.ts': '261d1af5ce647e93b58572f353086b553191ed74acef81b59edfb2e084b40e98',
-    'src/deliver.ts': '355b87bbbfe4b034b511a5574334bfe49cd587deeec258deeebc64cea12770ff',
-    'src/payments.ts': '26261db531ef0293c82fcebbb394f64aec46ba597fbd0d57974585c9c3d4421d',
-    'src/runner.ts': '8ac43eb24c092fa235ba0dd26465ade9e24f26f2a02070ad25be11d636afd454',
-    'src/bundle-offers.ts': 'f16cb2a67bb55ddac9498ab4568548682fe2fa953134397f1d94b5cf96387e99',
-    'src/grounding.ts': '865ea9fc668535da4427b5a76e428e020a0c36ff8c187b9aa1d2b5d1877de64f',
-}
+SOURCE_HASHES = {'src/llm.ts': 'd735ae7df3a36944ce6f43bd55b88f0baea55465eeae5f8aebfdc26abce56193', 'src/turn.ts': 'bc3b960eeb89cf5b54bf43cbad52670666a7f3e787a9537f3ab7684a2de58972', 'src/media.ts': '0465e0e986fce439b4ffc2bfb77991d938c98365be0d990568527f9c67ec0c78', 'src/girls/template.ts': 'b29a51d2d17799e6a054f0df2d0d0ed4f42a6c8a0c4c688599ce53de7386bc4d', 'src/memory.ts': '261d1af5ce647e93b58572f353086b553191ed74acef81b59edfb2e084b40e98', 'src/deliver.ts': '355b87bbbfe4b034b511a5574334bfe49cd587deeec258deeebc64cea12770ff', 'src/payments.ts': '26261db531ef0293c82fcebbb394f64aec46ba597fbd0d57974585c9c3d4421d', 'src/runner.ts': '8ac43eb24c092fa235ba0dd26465ade9e24f26f2a02070ad25be11d636afd454', 'src/bundle-offers.ts': 'f16cb2a67bb55ddac9498ab4568548682fe2fa953134397f1d94b5cf96387e99', 'src/grounding.ts': '865ea9fc668535da4427b5a76e428e020a0c36ff8c187b9aa1d2b5d1877de64f'}
 FIXTURE_HASH = '43e21019a2c33d1e840c81ec6d683cf7bb6546f68e1de4106db9218b6d3bd253'
 errors = []
 runtime = []
@@ -27,8 +18,8 @@ for name in ['twin-v2-bot-1', 'twin-v2-dash-1']:
     try:
         info = json.loads(subprocess.check_output(['docker', 'inspect', name], text=True, stderr=subprocess.DEVNULL, timeout=15))[0]
         revision = next((entry.split('=', 1)[1] for entry in info['Config']['Env'] if entry.startswith('GIT_SHA=')), None)
-        checked = bool(info['State']['Running']) and revision == REVISION and info['Image'] == IMAGE
-        runtime.append({'container': name, 'running': bool(info['State']['Running']), 'revision': revision, 'image': info['Image'], 'matchesRollback': checked})
+        checked = bool(info['State']['Running']) and revision == REVISION and info['Image'] == (DASHBOARD_IMAGE if name == 'twin-v2-dash-1' else IMAGE)
+        runtime.append({'container': name, 'running': bool(info['State']['Running']), 'revision': revision, 'image': info['Image'], 'matchesReviewedBaseline': checked})
         if not checked:
             errors.append('rollback-runtime-drift:' + name)
     except Exception:
@@ -109,7 +100,7 @@ console.log('FINAL_READONLY_JSON ' + JSON.stringify(result));
 """
 live = {}
 # Do not load candidate code or run follow-up checks inside a changed runtime.
-if len(runtime) == 2 and all(row['matchesRollback'] for row in runtime):
+if len(runtime) == 2 and all(row['matchesReviewedBaseline'] for row in runtime):
     try:
         process = subprocess.run(['docker','exec','-i','twin-v2-dash-1','node','--import','tsx','--input-type=module'],input=js,text=True,capture_output=True,timeout=180)
         records=[line[len('FINAL_READONLY_JSON '):] for line in process.stdout.splitlines() if line.startswith('FINAL_READONLY_JSON ')]

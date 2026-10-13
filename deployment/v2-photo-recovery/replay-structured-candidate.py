@@ -13,6 +13,8 @@ args = p.parse_args()
 assert re.fullmatch(r'[0-9a-f]{40}', args.candidate_sha), 'Exact candidate commit required'
 revision = '45931b6f56db9f97cc8406154e35a0d216f5de65'
 image = 'sha256:2f076bf6fbc17b4de58a31887e9328a56e0275d90edda39ea789efbd13517d2e'
+# Dashboard history-only rebuild independently verified against 111 source files.
+dashboard_image = 'sha256:051ec69b650fc06025d19c8d92e790dfc11185bdf435906840a13d6df823bb61'
 fixture = pathlib.Path('/home/ubuntu/twin-v2/data/_operator_backups/photo-incident-20261013-morning').resolve()
 fixture_file = fixture / 'riley-morning-requests.json'
 fixture_hash = '43e21019a2c33d1e840c81ec6d683cf7bb6546f68e1de4106db9218b6d3bd253'
@@ -35,7 +37,7 @@ for relative, digest in manifest.items():
 runtime = None
 for name in ['twin-v2-bot-1', 'twin-v2-dash-1']:
     current = json.loads(subprocess.check_output(['docker', 'inspect', name], text=True))[0]
-    assert current['State']['Running'] and current['Image'] == image
+    assert current['State']['Running'] and current['Image'] == (dashboard_image if name == 'twin-v2-dash-1' else image)
     assert 'GIT_SHA=' + revision in current['Config']['Env'], 'Stop if the live rollback revision changed'
     if name == 'twin-v2-bot-1':
         runtime = current

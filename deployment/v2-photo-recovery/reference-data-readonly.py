@@ -17,6 +17,8 @@ import tempfile
 
 REVISION = '45931b6f56db9f97cc8406154e35a0d216f5de65'
 IMAGE = 'sha256:2f076bf6fbc17b4de58a31887e9328a56e0275d90edda39ea789efbd13517d2e'
+# Separate dashboard image: 111 source files compared; only the three reviewed all-time history files differ.
+DASHBOARD_IMAGE = 'sha256:051ec69b650fc06025d19c8d92e790dfc11185bdf435906840a13d6df823bb61'
 FIXTURE = pathlib.Path('/home/ubuntu/twin-v2/data/_operator_backups/photo-incident-20261013-morning')
 GIRL_DATA = pathlib.Path('/home/ubuntu/twin-v2/data/riley-mae-lewis')
 FIXTURE_HASH = '43e21019a2c33d1e840c81ec6d683cf7bb6546f68e1de4106db9218b6d3bd253'
@@ -60,7 +62,7 @@ def main():
     require(re.fullmatch(r'[0-9a-f]{40}', args.candidate_sha), 'exact-candidate-commit-required')
 
     # First operational check: no source reads, credential files, output writes or
-    # probe execution until BOTH running containers match the approved rollback.
+    # probe execution until BOTH running containers match the reviewed bot/dashboard baseline.
     runtime = None
     for name in ['twin-v2-bot-1', 'twin-v2-dash-1']:
         inspected = subprocess.run(['docker', 'inspect', name], text=True, capture_output=True, timeout=30)
@@ -68,7 +70,7 @@ def main():
         rows = json.loads(inspected.stdout)
         require(isinstance(rows, list) and len(rows) == 1, 'live-container-inspection-invalid')
         current = rows[0]
-        require(current['State']['Running'] and current['Image'] == IMAGE, 'live-rollback-image-mismatch')
+        require(current['State']['Running'] and current['Image'] == (DASHBOARD_IMAGE if name == 'twin-v2-dash-1' else IMAGE), 'live-reviewed-image-mismatch')
         require('GIT_SHA=' + REVISION in current['Config']['Env'], 'live-rollback-revision-mismatch')
         if name == 'twin-v2-bot-1':
             runtime = current
