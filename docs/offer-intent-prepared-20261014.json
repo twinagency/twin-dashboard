@@ -1,0 +1,246 @@
+{
+  "status": "complete",
+  "phase": "prepare",
+  "workflowRun": "38472516447",
+  "sha": "e668afb2936f25106b5ba0772096f7dfac029224",
+  "testedSource": "e668afb2936f25106b5ba0772096f7dfac029224",
+  "image": "sha256:7924fdc85e91ca2c3d4b4cf9363cf71ba99a6d1a163fd5b6834d4aad37e8f084",
+  "oldSha": "8f43a1d58b0ecbf8c22b06c38c18d972f43c5e04",
+  "oldImage": "sha256:4d6b46a736ef0d172781f5166756508f41309d1d5b3f31bc6ca3ad57c4862cc4",
+  "release": "/home/ubuntu/twin-v2-offer-releases/e668afb2936f25106b5ba0772096f7dfac029224",
+  "backup": "/home/ubuntu/twin-v2-backups/offer-baseline-e668afb-1791927714416647068",
+  "offline": [
+    {
+      "suite": "scripts/check-safety.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-media.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-photo-flow.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-media-facts.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-media-correction.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-media-toy-menu.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-reply-grounding.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-turn.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-structured-reply.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-structured-turn.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-shared-photo-repair.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-existing-card-discussion.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-reply-outcomes.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-payments.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-bundles.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-delivery.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-photo-reference.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-photo-reference-data.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-credits.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-tips.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-tips-wiring.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-archive.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-memory.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-memory-wiring.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-dashboard-history.ts",
+      "exit": 0
+    }
+  ],
+  "typecheck": true,
+  "sourceManifestFiles": 291,
+  "providedSourceFiles": 10,
+  "promptChanges": 1,
+  "hostChanges": [
+    {
+      "path": "scripts/check-bundles.ts",
+      "existed": true,
+      "oldSha256": "bf478c0e1251e47a8c2b7c5571cab0372411fe9b089e24f5c99739ce66a38632",
+      "newSha256": "73f77afc3981190f871be8f1e892f2792bcc4e41d099fcb6f19f98e4fe524183"
+    },
+    {
+      "path": "scripts/check-existing-card-discussion.ts",
+      "existed": true,
+      "oldSha256": "9a617b67b8ea345263717c52fd6d5c232cb9e2da62c5930c3096abc368f26862",
+      "newSha256": "cb3be89d04e16d2300c4a853e3a70eeeb7ceef7124d190574febe8323064f28a"
+    },
+    {
+      "path": "scripts/check-media.ts",
+      "existed": true,
+      "oldSha256": "64cdd7f0181073015ce337f35d14191eddab20298bd687d154d5de7c49e7b230",
+      "newSha256": "b79290804b64cb7501cccdfdf5f2b171832950d410e32ac47f75ac03dd06522c"
+    },
+    {
+      "path": "scripts/check-tips-wiring.ts",
+      "existed": true,
+      "oldSha256": "6ee589461fc78c9b879e99fd13b0b477fd84c1cf4c25424facc3ef09ea75ef79",
+      "newSha256": "f321e35a1df80bfa3aa597b3d15eb4d33f71c3cf4154d4c060d08f1ba354ce12"
+    },
+    {
+      "path": "scripts/check-turn.ts",
+      "existed": true,
+      "oldSha256": "9005ef310aa8de3e4f02814eed4888ab16693620b2f26d8f163f3a028f90014a",
+      "newSha256": "4993a15f06b827bddd75c80ac1a02d2a177c69d017832c1f7b915ef80f295e02"
+    },
+    {
+      "path": "scripts/fixtures/riley-prompt-v14.txt",
+      "existed": false,
+      "oldSha256": null,
+      "newSha256": "1d49fb9d35e1350c5d40aa1e854afcdf91bacf2f4fb28c5a22a020a97ecbbdfe"
+    },
+    {
+      "path": "src/girls/template.ts",
+      "existed": true,
+      "oldSha256": "8f90b14f3f199741eda4c713d9c99de1039ddd759c921e8b073cdced614571c8",
+      "newSha256": "0f0691a319acc57affad4329bf8b1e71701a666bbacfc02dc3d98a28304b814c"
+    },
+    {
+      "path": "src/media.ts",
+      "existed": true,
+      "oldSha256": "b0d8d1702aa17919ad996b72f7ce10f3584442c3e2fca2bef9f2af2c64a9b29d",
+      "newSha256": "cbcf642217498b4d52a56eeed2cc1798dd1a1768853bf2ea27b028e4af097bc8"
+    },
+    {
+      "path": "src/tips/policy.ts",
+      "existed": true,
+      "oldSha256": "4baa8f48f0fe91e694fe5f4342cf527485fce80e24e6be91452d3ccf01aa3430",
+      "newSha256": "952889290b54e19e8be857962b9a12d03ad91dff7514e3ae2390455e74cf2ab2"
+    },
+    {
+      "path": "src/turn.ts",
+      "existed": true,
+      "oldSha256": "953552b87cbef9aa6ecede270139a6db839bf5e654727cc7d4159726a4bca761",
+      "newSha256": "c0547c0763f481425289c2f5b0af8ec3b59dde82031dd8771a4bd677db848148"
+    }
+  ],
+  "settingsHash": "54c1467b5192f705e8314504703323dc73d3d598659f2cbe73655ac7e8cdcc7f",
+  "expectedSlugs": [
+    "alanna-pow",
+    "allison-parker",
+    "bethany-marquez",
+    "briana-redd",
+    "cat-chase",
+    "dakota-lyn",
+    "dreka-cakez",
+    "fit-sid",
+    "kyla-yesenosky",
+    "mrs-callace",
+    "olivia-jade",
+    "riley-mae-lewis",
+    "sania-mallory",
+    "tammy",
+    "toochi",
+    "trashy",
+    "tru-kait"
+  ],
+  "runtimeBefore": [
+    {
+      "name": "twin-v2-bot-1",
+      "image": "sha256:4d6b46a736ef0d172781f5166756508f41309d1d5b3f31bc6ca3ad57c4862cc4",
+      "running": true,
+      "revision": "8f43a1d58b0ecbf8c22b06c38c18d972f43c5e04"
+    },
+    {
+      "name": "twin-v2-dash-1",
+      "image": "sha256:4d6b46a736ef0d172781f5166756508f41309d1d5b3f31bc6ca3ad57c4862cc4",
+      "running": true,
+      "revision": "8f43a1d58b0ecbf8c22b06c38c18d972f43c5e04"
+    }
+  ],
+  "runtimeAfter": [
+    {
+      "name": "twin-v2-bot-1",
+      "image": "sha256:4d6b46a736ef0d172781f5166756508f41309d1d5b3f31bc6ca3ad57c4862cc4",
+      "running": true,
+      "revision": "8f43a1d58b0ecbf8c22b06c38c18d972f43c5e04"
+    },
+    {
+      "name": "twin-v2-dash-1",
+      "image": "sha256:4d6b46a736ef0d172781f5166756508f41309d1d5b3f31bc6ca3ad57c4862cc4",
+      "running": true,
+      "revision": "8f43a1d58b0ecbf8c22b06c38c18d972f43c5e04"
+    }
+  ],
+  "preparedAt": "2026-10-13T21:44:27.116873+00:00",
+  "rollbackReady": true,
+  "rollback": {
+    "baselineRevision": "8f43a1d58b0ecbf8c22b06c38c18d972f43c5e04",
+    "image": "sha256:4d6b46a736ef0d172781f5166756508f41309d1d5b3f31bc6ca3ad57c4862cc4",
+    "codeArchiveSha": "4a92221ee416bcac98a58241d9be5591a06e20a771d1d9dcde101d814b2e1e77",
+    "imageArchiveBytes": 103003136,
+    "dataIncluded": false,
+    "runtimeReplaced": false
+  },
+  "liveRuntimeReplaced": false,
+  "modelCalls": 0,
+  "fanMessages": 0,
+  "purchases": 0,
+  "productionWrites": 0,
+  "realModelCases": 0,
+  "focusedAssertions": 1253,
+  "modelTransport": "mocked"
+}
