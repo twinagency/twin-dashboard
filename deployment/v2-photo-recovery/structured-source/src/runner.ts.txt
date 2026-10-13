@@ -1,0 +1,562 @@
+import fs from "node:fs";
+import path from "node:path";
+import { Bot, InlineKeyboard } from "grammy";
+import { config } from "./config.js";
+import type { Girl } from "./girls/index.js";
+import { runAs, girlDataDir } from "./context.js";
+import { loadRawCatalogue, catalogueFromRaw, download, currentPhoto, type Item, type RawCatalogue } from "./media.js";
+import { EMPTY_BOOK, fetchBundleRows, resolveBundles, storageSize, type BundleBook } from "./bundles.js";
+import { offerTableReady, readOffer, supabaseOfferStore } from "./bundle-offers.js";
+import { loadChat, resetChat, setConfirmed, touchChat } from "./memory.js";
+import { priceMode, purchases, pollStarsOnce, loadLiveOwnership, loadOwnershipRead, type LedgerEntry } from "./payments.js";
+import { noteHistory, noteMediaSent, type Route } from "./turn.js";
+import { processTurn, sendFreeItem, type Deps, type Job } from "./deliver.js";
+import { CreditRuntime, validSettings } from "./credits/runtime.js";
+import { CreditClient } from "./credits/client.js";
+import { createReceiptInbox } from "./credits/inbox.js";
+import { createTurnJournal } from "./credits/journal.js";
+import { CreditAdapter } from "./credits/adapter.js";
+import { supabaseRpc } from "./credits/transport.js";
+import { girlLogDir } from "./context.js";
+import { TipRuntime, createTipClient, createTipState, composeScanHooks, createPaymentDispatcher, TIP_SETTING_COLUMNS } from "./tips/index.js";
+import { planTipTurn, runFixedTipTurn } from "./tips/turn.js";
+import { ArchiveQueue } from "./archive/queue.js";
+import { ArchiveDb } from "./archive/db.js";
+import { importChatFilesChunked } from "./archive/import.js";
+import { MemoryDb } from "./memory/db.js";
+import { MemoryWorker } from "./memory/worker.js";
+import { MemoryRuntime } from "./memory/runtime.js";
+import { completeOnce } from "./llm.js";
+import { randomUUID } from "node:crypto";
+
+export type GirlRunner = {
+  // "stopping" = intake is stopped but the drain is NOT verified yet (a send may still be in flight): the slot stays taken, no replacement
+  state: { status: "starting" | "running" | "stopping" | "stopped" | "error"; error?: string; botUsername?: string; startedAt?: string; credits?: unknown; tips?: unknown; memory?: unknown };
+  stop: () => Promise<void>;
+  /** Stage 2B: the creator's saved credit settings as the fleet refresh read them (null/undefined = not installed or unreadable: off). */
+  applyCreditSettings?: (s: unknown) => void;
+  /** Stage 4: the creator's tip settings from the clones row the fleet already reads (null/undefined = not readable: offers stay off). */
+  applyTipSettings?: (row: Record<string, unknown> | null | undefined) => void;
+  /** Stage 5: the creator's archive/memory switch from the same clones row (a row without the column = off). */
+  applyMemorySettings?: (row: Record<string, unknown> | null | undefined) => void;
+  /**
+   * Stage 2B verified hand-over (contract 9): stop intake, let every in-flight turn finish with its real outcome, resolve every hold and
+   * report whether that was VERIFIED. Idempotent (stop() runs the same sequence). ok:false = the engine must not be switched.
+   */
+  handover?: (budgetMs?: number) => Promise<{ ok: boolean; drained: boolean; reservedTurns?: number; owed: number; reason?: string }>;
+};
+
+export type TurnQueue = {
+  /** A fan line arrived. The chat epoch and the route are captured NOW and stay with the turn. `messageId` (Stage 2B) is the Telegram message id(s). */
+  queue(chatId: number, who: string, text: string, route: Route, messageId?: number | number[], opts?: { resume?: boolean; seq?: number }): void;
+  /** /start or /reset: drop the lines still waiting for the double-text timer. */
+  clear(chatId: number): void;
+  /** The runner is stopping or being replaced: clear every timer and drop everything that has not started. */
+  stop(): void;
+  /** Resolves when nothing is waiting or running (tests). */
+  idle(): Promise<void>;
+};
+
+/**
+ * Per fan: lines arriving within mergeMs become one turn; turns for one fan never overlap and are answered in the order the
+ * lines arrived. A turn only ever contains lines from ONE route (ordinary or one Business connection) and ONE chat epoch: when
+ * either changes, a new batch starts behind the earlier one. A batch that is ready but still waiting behind a running turn stays
+ * open for more lines of its own route and epoch, as before. Each turn runs through processTurn (deliver.ts).
+ */
+export function createTurnQueue(d: Deps, mergeMs = config.mergeMs): TurnQueue {
+  type Batch = { lines: string[]; ids: number[]; seq?: number; who: string; epoch: number; route: Route; timer?: NodeJS.Timeout; dropped: boolean; fire: () => void; ready: Promise<void> };
+  const lineup = new Map<number, Batch[]>(); // per fan: batches that have not started, oldest first; the LAST one is open for more lines
+  const running = new Map<number, Promise<void>>(); // per fan: the tail of the serialized chain
+  const sameRoute = (a: Route, b: Route) => (a.bcid ?? "") === (b.bcid ?? "");
+
+  /** One chain link per batch, created in arrival order: it waits for its own double-text window, then runs ITS batch. */
+  function schedule(chatId: number, b: Batch) {
+    const prev = running.get(chatId) ?? Promise.resolve();
+    const next = prev.then(async () => {
+      await b.ready; // its timer fired (or it was dropped)
+      clearTimeout(b.timer);
+      const list = lineup.get(chatId), i = list ? list.indexOf(b) : -1;
+      if (list && i >= 0) { list.splice(i, 1); if (!list.length) lineup.delete(chatId); } // from now on it takes no more lines
+      if (b.dropped || !b.lines.length || !d.isActive()) return;
+      const job: Job = { chatId, who: b.who, text: b.lines.join("\n"), epoch: b.epoch, route: b.route, ...(b.ids.length ? { messageIds: [...b.ids] } : {}), ...(b.seq !== undefined ? { inputSeq: b.seq } : {}) };
+      // Stage 4: does this line start the tip flow (his own offer, his yes to a recent invitation, an amount)? Decided once, here, before the credit gate.
+      const tip = planTipTurn(d, job);
+      const tj: Job = tip ? { ...job, tip } : job;
+      // Stage 2B: with the credit runtime present the turn goes through its gate (which calls processTurn); without it, exactly Stage 1.1.
+      // At the credit wall a fan's own tip offer gets the tip message instead of the wall (see credits/runtime.ts RunHooks).
+      const rec = await (d.credit ? d.credit.run(tj, (j) => processTurn(d, j), tip ? { gated: (j, why) => runFixedTipTurn(d, j, tip, why) } : undefined) : processTurn(d, tj))
+        .catch((e) => { console.error(`[error] chat=${chatId}`, e?.message ?? e); return undefined; });
+      d.memory?.afterRow(job, rec); // Stage 5: credit-wall / unavailable / tip fixed-line rows (deliver.ts archives its own)
+      // The credit wall went out on this turn: an open tip context no longer matches.
+      if (d.tips && rec?.note === "credit-wall" && rec.delivery?.text?.status === "acknowledged") d.tips.noteOtherCommercial(chatId, b.epoch);
+    });
+    running.set(chatId, next);
+    next.finally(() => { if (running.get(chatId) === next) running.delete(chatId); });
+  }
+  const drop = (list: Batch[] | undefined) => { for (const b of list ?? []) { b.dropped = true; clearTimeout(b.timer); b.fire(); } };
+
+  return {
+    queue(chatId, who, text, route, messageId, opts) {
+      if (!d.isActive()) return;
+      // Stage 2B: a fan line is noted the moment it ARRIVES (before the merge timer), so any older held turn is invalidated at once.
+      // A line the credit runtime itself re-queues (a held turn being resumed) is not new input.
+      const seq = opts?.resume ? opts.seq : d.credit?.noteInput(chatId);
+      const epoch = runAs(d.girl.slug, () => loadChat(chatId).epoch); // this creator's chat file, whatever the caller's context
+      // Stage 5: the individual line is archived the moment it arrives (before merging); a held turn being resumed is not new input.
+      if (!opts?.resume) d.memory?.incoming({ chatId, epoch, bcid: route.bcid, messageIds: (Array.isArray(messageId) ? messageId : messageId === undefined ? [] : [messageId]).filter((m) => Number.isInteger(m)), text });
+      let b = lineup.get(chatId)?.at(-1);
+      if (b && (b.epoch !== epoch || !sameRoute(b.route, route))) b = undefined; // never merge across a reset or a route change
+      if (!b) {
+        let fire!: () => void;
+        const ready = new Promise<void>((r) => (fire = r));
+        b = { lines: [], ids: [], who, epoch, route, dropped: false, fire, ready };
+        lineup.set(chatId, [...(lineup.get(chatId) ?? []), b]);
+        schedule(chatId, b);
+      }
+      b.lines.push(text);
+      if (seq !== undefined) b.seq = seq;
+      for (const id of Array.isArray(messageId) ? messageId : messageId === undefined ? [] : [messageId]) if (Number.isInteger(id) && !b.ids.includes(id)) b.ids.push(id);
+      clearTimeout(b.timer);
+      b.timer = setTimeout(b.fire, mergeMs);
+    },
+    clear(chatId) {
+      drop(lineup.get(chatId));
+      lineup.delete(chatId);
+    },
+    stop() {
+      for (const list of lineup.values()) drop(list);
+      lineup.clear();
+    },
+    async idle() {
+      while (running.size) await Promise.all([...running.values()]);
+    },
+  };
+}
+
+/** Operator info shown on /start (test build only): memory cleared, how it works, then the prompt TEMPLATE preview. */
+export function startInfoParts(girl: Girl, catalogueSize: number, credits?: { enabled: boolean; packQuantity: number; packStars: number }, memoryOn = false): string[] {
+  const how = [
+    "[TEST BUILD INFO]",
+    "Memory cleared: her chat history with you and your sent-media list are wiped. Fresh chat.",
+    "",
+    "HOW IT WORKS",
+    `- Each message gets one normal generation call, with the existing single retry on failure/empty output (${config.model}, pinned to ${config.providerOrder.join(" then ")}, reasoning off). No routing, no sub-AIs, no tool calls.`,
+    `- Double-text wait: she replies after you've been quiet ${config.mergeMs / 1000}s, so quick texts get one answer.`,
+    memoryOn
+      ? "- What the AI sees: her prompt template (preview below) + a list of up to five available items she can send + the recent chat chosen from the saved archive (up to 99 earlier messages inside about 2,000 tokens; short answers stay with the question they answer; older filler is left out) + only when relevant, a short block (about 300 tokens at most) of things you told her earlier, marked as untrusted notes + your message, last and whole. Nothing is ever added after your message."
+      : "- What the AI sees: her prompt template (preview below) + a list of up to five available items she can send + the last 30 messages. Nothing is ever added after your message.",
+    "- Bundles: when one of her creator-made bundles fits what you asked (or you asked for a set), it takes the place of the third photo as [bundle 1]: one locked card holding exactly that bundle's 2 to 10 files at its stored price. A bundle is never cut down; one with a missing description, an oversized or unsupported file, or fewer than 2 files is left out and the reason is saved in data/<girl>/_bundle_exclusions.json.",
+    `- Media, no tool: before each reply, code shortlists up to 3 locked photos matched to the chat, 1 locked video and 1 free teaser you haven't had (from ${catalogueSize} items in Supabase, read-only, dupes removed). Their real descriptions go in her prompt. She ends her text with [photo 2] / [video 1] / [free photo] / [free video] and code sends that exact file. A tag that can't be honoured (not listed, wrong free kind, malformed, more than one) sends no file and one fixed line instead of her text.`,
+    `- Locked = a real Telegram Stars paid post (blurred, Unlock button). Price mode: ${priceMode()}. Sales are logged from Telegram's Stars transactions.`,
+    "- Sent means Telegram accepted it, and her text is saved to the chat only after that. If a send is rejected or can't be confirmed, nothing is saved as said and at most one short note goes out (\"that didn't send, sorry\" or \"i couldn't confirm that went through\"). A send that may have gone through is never resent; the only automatic repeat is one re-upload when Telegram explicitly rejects a remembered file reference.",
+    "- Code checks on every reply: 18+ filters in and out (minors, incest, non-consent, animals), lowercase forced, emojis and dashes stripped, cut-off replies trimmed to the last full sentence, a trailing 'what would u do to me' cut, empty reply resampled once then one in-character brb line.",
+    "- A file Telegram accepted is not offered to you again; one whose send failed or couldn't be confirmed can come up again. Logs: logs/turns.log and logs/requests.jsonl (every turn: what was generated, what Telegram accepted, provider, cost, ms).",
+    ...(credits?.enabled
+      ? [
+        `- Chat replies (code, not the AI): charging is ON for this creator. A model text reply that Telegram accepted costs 1 reply; media, captions, fixed lines, commands and every failed or unconfirmed send cost nothing. At zero replies the turn is held (no model request, so no AI call) and one offer is shown: ${credits.packQuantity} replies for ${credits.packStars} Stars. /credits shows the balance and the offer, /paysupport shows recent purchases. After a verified payment the held message is answered once.`,
+      ]
+      : ["- Chat replies: charging is OFF for this creator, so every reply is free and the credit code makes no database call."]),
+    "",
+    "The prompt below is the TEMPLATE PREVIEW, not a complete request: every real request also adds her content list and the recent chat. The dashboard Chats page shows the exact request for each reply. Chat starts after you tap I'm 18+.",
+  ].join("\n");
+  const parts = [how];
+  const p = `[PROMPT TEMPLATE PREVIEW, not a complete request]\n\n${girl.prompt}`;
+  for (let i = 0; i < p.length; i += 3900) parts.push(p.slice(i, i + 3900));
+  return parts;
+}
+
+/**
+ * Every Telegram handler for one girl. Kept apart from startGirl (which also starts polling and the Stars poller) so the
+ * checks can feed it real update objects over a fake transport. Which route a fan line came through is decided here, once,
+ * from the update itself: an ordinary message is `{}`, a Business message carries its connection id.
+ */
+export function registerHandlers(bot: Bot, girl: Girl, catalogue: Item[], deps: Deps, q: TurnQueue) {
+  // Every update for this girl runs in her context, so her chats/ledger/logs land in her own folders.
+  bot.use((_ctx, next) => runAs(girl.slug, next));
+  const credit = deps.credit;
+  const tips = deps.tips;
+
+  // ---------- Stage 2B / 4: payment updates first. They bypass the queue, the double-text merge, the age gate, ownership loading and the AI. ----------
+  // ONE dispatcher routes every checkout and every successful / refunded payment to exactly one product (v2tip -> tips, everything else -> credits),
+  // so there are no competing handlers and a malformed v2tip payload can never reach a credit grant.
+  if (credit || tips) {
+    const dispatcher = createPaymentDispatcher({ tip: tips, credit });
+    bot.on("pre_checkout_query", async (ctx) => {
+      const p = ctx.preCheckoutQuery;
+      const r = await dispatcher.preCheckout({ id: p.id, fromId: p.from.id, payload: p.invoice_payload, amount: p.total_amount, currency: p.currency });
+      await ctx.answerPreCheckoutQuery(r.ok, r.ok ? undefined : { error_message: r.message }).catch((e) => console.warn(`[payments] pre-checkout answer failed: ${String(e?.message ?? e).slice(0, 100)}`));
+    });
+    bot.use(async (ctx, next) => {
+      const m: any = ctx.message ?? ctx.businessMessage;
+      if (m?.successful_payment || m?.refunded_payment) { const r = await dispatcher.payment(m, ctx.update.update_id); if (r.handled) return; } // never a fan turn
+      return next();
+    });
+  }
+  bot.command("start", async (ctx) => {
+    // Every /start is a fresh chat: memory and sent media wiped, 18+ asked again.
+    q.clear(ctx.chat.id); // drop texts still waiting for the double-text timer: old input never joins the new chat
+    credit?.clearPending(ctx.chat.id); // a blocked turn from the old chat is never resumed into the new one
+    resetChat(ctx.chat.id);
+    deps.memory?.reset({ chatId: ctx.chat.id, epoch: loadChat(ctx.chat.id).epoch }); // Stage 5: a fresh epoch, the old facts/summary are retired
+    setConfirmed(ctx.chat.id, false);
+    console.log(`[start] chat=${ctx.chat.id} memory + sent media cleared`);
+    // Test-build info for Ronan and Jesse, shown before the 18+ gate on every /start.
+    for (const part of startInfoParts(girl, catalogue.length, credit?.settings ? { enabled: credit.enabled(), packQuantity: credit.settings.packQuantity, packStars: credit.settings.packStars } : undefined, !!deps.memory?.enabled())) await ctx.reply(part);
+    const kb = new InlineKeyboard().text("I'm 18+", "age:yes").text("No", "age:no");
+    await ctx.reply("This chat has sexually explicit adult content. You must be 18 or older to continue. Are you 18+?", { reply_markup: kb });
+  });
+
+  bot.callbackQuery("age:yes", async (ctx) => {
+    const id = ctx.chat?.id ?? ctx.from.id;
+    setConfirmed(id, true);
+    await ctx.answerCallbackQuery();
+    await ctx.editMessageReplyMarkup({ reply_markup: undefined }).catch(() => {});
+    await ctx.reply(girl.greeting);
+    console.log(`[gate] chat=${id} confirmed 18+`);
+  });
+
+  bot.callbackQuery("age:no", async (ctx) => {
+    const id = ctx.chat?.id ?? ctx.from.id;
+    setConfirmed(id, false);
+    await ctx.answerCallbackQuery();
+    await ctx.editMessageReplyMarkup({ reply_markup: undefined }).catch(() => {});
+    await ctx.reply("No worries. This chat is for adults only. Bye!");
+  });
+
+  bot.callbackQuery(/^u:(.+)$/, async (ctx) => {
+    const chatId = ctx.chat?.id ?? ctx.from.id;
+    const key = ctx.match[1];
+    const it = catalogue.find((x) => x.key === key);
+    await ctx.answerCallbackQuery(it ? "Unlocking..." : "That one is gone, sorry").catch(() => {});
+    if (!it) return;
+    await ctx.editMessageReplyMarkup({ reply_markup: undefined }).catch(() => {});
+    const route: Route = { bcid: (ctx.callbackQuery.message as any)?.business_connection_id || undefined }; // the route this tap came through
+    const a = await sendFreeItem(deps, chatId, route, it);
+    let status = a.status === "acknowledged" ? "sent" : `${a.status.toUpperCase()}: ${String(a.description ?? a.error ?? "").slice(0, 150)}`;
+    if (a.status === "acknowledged") {
+      try {
+        const tag = noteMediaSent(chatId, it, "unlocked");
+        const c = loadChat(chatId); deps.memory?.note({ chatId, epoch: c.epoch, bcid: route.bcid, stableId: `unlock:${ctx.callbackQuery.id}`, text: tag });
+      } catch (e: any) { status += ` (history note failed: ${String(e?.message ?? e).slice(0, 80)})`; } // never a reason to send again
+    }
+    console.log(`${new Date().toISOString()} | chat=${chatId} | UNLOCK ${key} ${it.stars}* | ${status}`);
+  });
+
+  bot.command("reset", async (ctx) => {
+    q.clear(ctx.chat.id);
+    credit?.clearPending(ctx.chat.id);
+    resetChat(ctx.chat.id);
+    deps.memory?.reset({ chatId: ctx.chat.id, epoch: loadChat(ctx.chat.id).epoch });
+    await ctx.reply("(chat history and sent media cleared)");
+    console.log(`[reset] chat=${ctx.chat.id}`);
+  });
+
+  // /credits and /paysupport (deterministic, no AI). With charging off they are not handled here and fall through to Stage 1.1 exactly as before.
+  bot.command(["credits", "paysupport"], async (ctx, next) => {
+    const cmd = CreditRuntime.command(ctx.message?.text);
+    if (!credit || !cmd || ctx.chat.type !== "private" || !loadChat(ctx.chat.id).ageConfirmed) return next();
+    const who = ctx.from?.username ? `@${ctx.from.username}` : String(ctx.from?.id ?? ctx.chat.id);
+    if (!(await credit.command(cmd, ctx.chat.id, {}, who))) return next();
+  });
+
+  bot.on("message", async (ctx) => {
+    if (ctx.chat.type !== "private") return; // groups would share one memory and one 18+ answer
+    const chatId = ctx.chat.id;
+    const who = ctx.from?.username ? `@${ctx.from.username}` : String(ctx.from?.id ?? chatId);
+    if (!loadChat(chatId).ageConfirmed) {
+      await ctx.reply("Please send /start and confirm you're 18+ first.");
+      return;
+    }
+    const text = ctx.message.text ?? ctx.message.caption ?? (ctx.message.photo ? "(sent you a photo)" : ctx.message.voice ? "(sent you a voice note)" : ctx.message.sticker ? `(sent a sticker ${ctx.message.sticker.emoji ?? ""})` : "");
+    if (!text || text.startsWith("/")) return;
+    touchChat(chatId, { who });
+    q.queue(chatId, who, text, {}, ctx.message.message_id); // ordinary bot chat
+  });
+
+  // ---------- business connection: fans write to the creator's own account ----------
+  const BIZ_FILE = path.join(girlDataDir(girl.slug), "_business.json");
+  const bizOwners = (): Record<string, number> => { try { return JSON.parse(fs.readFileSync(BIZ_FILE, "utf8")); } catch { return {}; } };
+  bot.on("business_connection", (ctx) => {
+    const c = ctx.businessConnection;
+    const owners = bizOwners();
+    if (c.is_enabled) owners[c.id] = c.user.id; else delete owners[c.id];
+    fs.mkdirSync(path.dirname(BIZ_FILE), { recursive: true });
+    fs.writeFileSync(BIZ_FILE, JSON.stringify(owners, null, 2));
+    console.log(`[business] connection ${c.id} ${c.is_enabled ? "enabled" : "disabled"} by user ${c.user.id} (can reply: ${(c as any).rights?.can_reply ?? (c as any).can_reply})`);
+  });
+  /** Who owns a business connection. A connection made before this app took the token sends no
+   *  business_connection update here, so ask Telegram once and remember it. */
+  async function ownerOf(bcid: string): Promise<number | undefined> {
+    const known = bizOwners()[bcid];
+    if (known) return known;
+    try {
+      const c: any = await bot.api.getBusinessConnection(bcid);
+      const owners = bizOwners();
+      owners[bcid] = c.user.id;
+      fs.mkdirSync(path.dirname(BIZ_FILE), { recursive: true });
+      fs.writeFileSync(BIZ_FILE, JSON.stringify(owners, null, 2));
+      console.log(`[business] ${girl.slug}: connection ${bcid} belongs to user ${c.user.id}`);
+      return c.user.id;
+    } catch (e: any) {
+      console.warn(`[business] ${girl.slug}: getBusinessConnection failed: ${String(e?.message ?? e).slice(0, 120)}`);
+      return undefined;
+    }
+  }
+  bot.on("business_message", async (ctx) => {
+    const m = ctx.businessMessage;
+    const bcid = m.business_connection_id;
+    if (!bcid) return;
+    const owner = await ownerOf(bcid);
+    if (owner === undefined || m.from?.id === owner) return; // the creator's own messages (or unknown owner): never reply
+    if (m.chat.type !== "private") return;
+    const chatId = m.chat.id;
+    const who = m.from?.username ? `@${m.from.username}` : String(m.from?.id ?? chatId);
+    touchChat(chatId, { bcid, who });
+    const text = m.text ?? m.caption ?? (m.photo ? "(sent you a photo)" : m.voice ? "(sent you a voice note)" : m.sticker ? `(sent a sticker ${m.sticker.emoji ?? ""})` : "");
+    if (!text) return;
+    const cmd = CreditRuntime.command(text);
+    if (cmd && credit && (await credit.command(cmd, chatId, { bcid }, who))) return; // Stage 2B: answered by the credit commands (only while charging is on)
+    q.queue(chatId, who, text, { bcid }, m.message_id); // no 18+ button here: fans write to her account, like live Twin
+  });
+
+  // ---------- test-only: give an admin's Stars back ----------
+  const ADMINS = new Set((process.env.ADMIN_IDS ?? "6814483810").split(",").map((x) => Number(x.trim())).filter(Boolean));
+  bot.command("refund", async (ctx) => {
+    if (!ADMINS.has(ctx.from?.id ?? 0)) return;
+    const mine = purchases().filter((p) => p.chatId === ctx.from!.id).at(-1);
+    if (!mine) return void ctx.reply("(no purchase of yours to refund)");
+    try {
+      await bot.api.refundStarPayment(ctx.from!.id, mine.chargeId);
+      await ctx.reply(`(refunded ${mine.stars} Stars for ${mine.itemKey})`);
+      console.log(`[refund] ${mine.chargeId} ${mine.stars}*`);
+    } catch (e: any) { await ctx.reply(`(refund failed: ${String(e?.message ?? e).slice(0, 120)})`); }
+  });
+}
+
+/**
+ * A sale landed: tell her in the chat file ("[he unlocked the photo: ...]", unchanged) and, Stage 5, archive the same note under the charge id (so a
+ * re-scan of the same charge adds nothing). Returns the note, if one was written.
+ */
+export function recordSale(memory: Pick<MemoryRuntime, "note"> | undefined, catalogue: Item[], e: LedgerEntry): string | undefined {
+  const it = catalogue.find((x) => x.key === e.itemKey);
+  let tag: string | undefined;
+  if (it) tag = noteMediaSent(e.chatId, it, "unlocked");
+  else if (e.kind === "bundle") tag = noteHistory(e.chatId, `[he unlocked the bundle of ${(e.offerId ? readOffer(e.offerId)?.files.length : undefined) ?? "several"} items: ${(e.offerId ? readOffer(e.offerId)?.files.map((f) => f.label).filter(Boolean).join("; ") : "")?.slice(0, 240) || "a set of files"}]`);
+  if (tag) { const c = loadChat(e.chatId); memory?.note({ chatId: e.chatId, epoch: c.epoch, bcid: c.bcid, stableId: e.chargeId, text: tag }); }
+  return tag;
+}
+
+/** The tip settings columns of one creator's clones row (read only; the local single-girl refresh). undefined = not readable (keep what was applied). */
+async function readTipRow(cloneId: string): Promise<Record<string, unknown> | null | undefined> {
+  try {
+    const res = await fetch(`${config.supabaseUrl}/rest/v1/clones?id=eq.${encodeURIComponent(cloneId)}&select=${TIP_SETTING_COLUMNS}`, { headers: { apikey: config.supabaseKey, Authorization: `Bearer ${config.supabaseKey}` }, signal: AbortSignal.timeout(10_000) });
+    if (!res.ok) return undefined;
+    const rows = await res.json();
+    return Array.isArray(rows) && rows.length === 1 ? rows[0] : null;
+  } catch { return undefined; }
+}
+
+/** The archive/memory switch of one creator's clones row (the local single-girl refresh). undefined = not readable (keep what was applied); null = the column does not exist yet (off). */
+async function readMemoryFlag(cloneId: string): Promise<boolean | null | undefined> {
+  try {
+    const res = await fetch(`${config.supabaseUrl}/rest/v1/clones?id=eq.${encodeURIComponent(cloneId)}&select=v2_memory_enabled`, { headers: { apikey: config.supabaseKey, Authorization: `Bearer ${config.supabaseKey}` }, signal: AbortSignal.timeout(10_000) });
+    if (res.status === 400) return null;
+    if (!res.ok) return undefined;
+    const rows = await res.json();
+    return Array.isArray(rows) && rows.length === 1 ? rows[0].v2_memory_enabled === true : null;
+  } catch { return undefined; }
+}
+
+/** Runs one girl on one bot token: Telegram handlers, Stars poller, catalogue reload. Many can run in one process. */
+export async function startGirl(girl: Girl, token: string, opts: { selfRefreshCreditSettings?: boolean; bot?: Bot } = {}): Promise<GirlRunner> {
+  return runAs(girl.slug, async () => {
+    const rawCat = await loadRawCatalogue(girl.cloneId);
+    const catalogue = catalogueFromRaw(rawCat);
+    // ---------- Stage 3: her creator-approved bundles (read only). Listed only while the offer table exists (the migration is what turns this on). ----------
+    // The book is replaced as a whole on every refresh; a turn reads it once, and a card quotes its own frozen copy of the files and price.
+    let book: BundleBook = EMPTY_BOOK;
+    const bundlesOff = /^(0|off|false)$/i.test(process.env.V2_BUNDLES ?? "");
+    async function refreshBundles(raw: RawCatalogue) {
+      if (bundlesOff) return;
+      try {
+        if (!(await offerTableReady())) { if (book.at === 0 || book.ok) console.log(`[bundles] ${girl.slug}: v2_bundle_offers is not available, bundles stay off`); book = { ...EMPTY_BOOK, at: Date.now() }; return; }
+        const res = await resolveBundles(await fetchBundleRows(girl.cloneId), raw, catalogue, girl.cloneId, storageSize);
+        book = { ...res, at: Date.now(), ok: true };
+        fs.mkdirSync(girlDataDir(girl.slug), { recursive: true });
+        fs.writeFileSync(path.join(girlDataDir(girl.slug), "_bundle_exclusions.json"), JSON.stringify({ at: new Date().toISOString(), listed: res.bundles.map((b) => ({ id: b.id, name: b.name, files: b.files.length, stars: b.stars })), excluded: res.excluded }, null, 2));
+        console.log(`[bundles] ${girl.slug}: ${res.bundles.length} sellable, ${res.excluded.length} excluded${res.excluded.length ? ` (${res.excluded.slice(0, 5).map((x) => x.reason).join(", ")})` : ""}`);
+      } catch (e: any) { console.warn(`[bundles] ${girl.slug}: refresh failed (${String(e?.message ?? e).slice(0, 120)}), keeping ${book.bundles.length} known`); }
+    }
+    // New uploads show up without a restart: reload her catalogue every 10 minutes (kept as-is if a reload fails).
+    const reloadTimer = setInterval(async () => {
+      try {
+        const raw = await loadRawCatalogue(girl.cloneId);
+        const fresh = catalogueFromRaw(raw);
+        if (fresh.length) catalogue.splice(0, catalogue.length, ...fresh);
+        await refreshBundles(raw);
+      } catch (e: any) { console.warn(`[media] reload failed: ${String(e?.message ?? e).slice(0, 120)}`); }
+    }, 10 * 60_000);
+    void refreshBundles(rawCat); // not awaited: a slow storage check never delays the girl coming online
+    const bot = opts.bot ?? new Bot(token); // tests pass a Bot over a fake transport; production always builds its own
+    const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+
+    // ---------- Stage 2B: the message-credit runtime (the accepted 2A library, wired in). Off until the creator's V2 switch says otherwise. ----------
+    const botId = Number(token.split(":")[0]);
+    const owner = `${girl.slug}:${process.pid}:${randomUUID().slice(0, 8)}`; // unique per start: leases and restart recovery
+    const creditClient = new CreditClient({
+      transport: supabaseRpc({ url: config.supabaseUrl, key: config.supabaseKey }), creatorId: girl.cloneId, botId, owner, leaseSeconds: 180,
+      log: (m) => console.log(m),
+    });
+    // ---------- Stage 5: the durable archive + memory. ALWAYS constructed (a queue that holds writes keeps flushing); the creator's switch gates
+    // capture, the reply context and the worker. Same database transport; the queue is a local file under data/<slug>/ (inside the box's existing backup). ----------
+    const archiveFile = () => path.join(girlDataDir(girl.slug), "_archive_queue.jsonl");
+    const rpcTransport = supabaseRpc({ url: config.supabaseUrl, key: config.supabaseKey });
+    const archiveQueue = new ArchiveQueue({ file: archiveFile, deadFile: () => path.join(girlDataDir(girl.slug), "_archive_dead.jsonl"), sink: new ArchiveDb({ transport: rpcTransport }), log: (m) => console.log(m) });
+    const memoryDb = new MemoryDb({ transport: rpcTransport });
+    const memoryWorker = new MemoryWorker({ creatorId: girl.cloneId, store: memoryDb, call: (m) => completeOnce(m), owner, log: (m) => console.log(m) });
+    const memory = new MemoryRuntime({ creatorId: girl.cloneId, botId, queue: archiveQueue, db: memoryDb, worker: memoryWorker, isActive: () => active, used: () => fs.existsSync(archiveFile()), log: (m) => console.log(m),
+      // the first time the switch is turned on: queue the chat files that still exist (at most the last 30 messages each; idempotent; marker = done)
+      onEnabled: async () => {
+        const marker = path.join(girlDataDir(girl.slug), "_archive_imported.json");
+        if (fs.existsSync(marker)) return;
+        const rep = await importChatFilesChunked({ dir: girlDataDir(girl.slug), creator: girl.cloneId, queue: archiveQueue, stop: () => !active });
+        console.log(`[archive] ${girl.slug}: import of existing chat files: ${rep.chatsImported} chats, ${rep.messages} messages queued${rep.complete ? "" : " (INCOMPLETE, will repeat on the next start)"}; ${rep.note}`);
+        if (rep.complete) fs.writeFileSync(marker, JSON.stringify({ at: new Date().toISOString(), ...rep }, null, 2));
+      } });
+
+    const inbox = createReceiptInbox({ file: () => path.join(girlDataDir(girl.slug), "_credit_receipts.jsonl"), log: (m) => console.log(m) });
+    const journal = createTurnJournal({ file: () => path.join(girlDataDir(girl.slug), "_credit_turns.jsonl"), log: (m) => console.log(m) });
+    let credit!: CreditRuntime;
+    const creditAdapter = new CreditAdapter({ client: creditClient, inbox, journal, enabled: () => credit.enabled(), log: (m) => console.log(m) });
+    credit = new CreditRuntime({ girl: { slug: girl.slug, name: girl.name, cloneId: girl.cloneId }, botId, api: bot.api, client: creditClient, adapter: creditAdapter, mode: "real", isActive: () => active, onHeldDropped: (p) => memory.heldDropped(p), log: (m) => console.log(m) });
+
+    // Everything a fan turn needs, in one place. `active` flips to false on stop(): turns already running then stop before their next send.
+    let active = true;
+
+    // ---------- Stage 4: the tip product. ALWAYS constructed (the creator's switch only gates NEW offers), so an invoice issued before tips were
+    // disabled still settles and a refund still reconciles. Own receipt inbox + own conversation state; the same database transport and identity. ----------
+    const tipClient = createTipClient({ transport: supabaseRpc({ url: config.supabaseUrl, key: config.supabaseKey }), creatorId: girl.cloneId, botId, owner, log: (m) => console.log(m) });
+    const tips = new TipRuntime({
+      client: tipClient,
+      inbox: createReceiptInbox({ file: () => path.join(girlDataDir(girl.slug), "_tip_receipts.jsonl"), log: (m) => console.log(m) }),
+      state: createTipState({ file: () => path.join(girlDataDir(girl.slug), "_tip_state.jsonl"), log: (m) => console.log(m) }),
+      api: bot.api, isActive: () => active,
+      current: (chat, epoch) => { try { return runAs(girl.slug, () => loadChat(chat).epoch === epoch); } catch { return false; } },
+      log: (m) => console.log(m),
+    });
+    const deps: Deps = {
+      girl, catalogue, api: bot.api, wait: sleep, now: Date.now, download,
+      // What he owns, from Supabase star_transactions (every chat, re-read at most once a minute), so she never re-offers it.
+      loadOwnership: (cloneId, chatId) => loadLiveOwnership(cloneId, chatId),
+      verifyPhoto: async (key, storagePath, chatId) => {
+        const [photo, ownership] = await Promise.all([currentPhoto(girl.cloneId, key, storagePath), loadOwnershipRead(girl.cloneId, chatId)]);
+        return { photo, ownership };
+      },
+      isActive: () => active, mode: "real", credit, tips, memory,
+      bundles: () => book, bundleOffers: supabaseOfferStore,
+    };
+    const q = createTurnQueue(deps);
+    credit.o.requeue = (chatId, who, text, route, ids, seq) => q.queue(chatId, who, text, route, ids, { resume: true, seq });
+    registerHandlers(bot, girl, catalogue, deps, q);
+
+    /** A ledger entry landed. A sale: she sees "[he unlocked the photo: ...]". Ownership itself is read from the ledger. */
+    async function onEntry(e: LedgerEntry) {
+      if (e.type === "refund") return void console.log(`${e.ts} | chat=${e.chatId} | REFUND ${e.itemKey} ${e.stars}* charge=${e.chargeId}`);
+      recordSale(memory, catalogue, e);
+      console.log(`${e.ts} | chat=${e.chatId} | SALE ${e.itemKey} ${e.stars}* charge=${e.chargeId}`);
+    }
+
+    bot.catch((e) => console.error(`[bot error] ${girl.slug}:`, e.message));
+    // The existing durable Stars scan (one poller, one cursor) now also hands credit receipts to the credit runtime; upkeep runs after it,
+    // whether or not the scan succeeded (receipts, owed finalisations, lease sweep, restart recovery).
+    let pollBusy = false;
+    const pollTick = async () => {
+      if (pollBusy) return;
+      pollBusy = true;
+      // ONE scan, ONE cursor: the tip and credit products read the same transactions through one composed hook (each is claimed by exactly one owner).
+      try { await pollStarsOnce(bot.api, onEntry, composeScanHooks(tips.scanHook(), credit.scanHook())); }
+      catch (e: any) { console.warn(`[stars] poll failed: ${String(e?.message ?? e).slice(0, 160)}`); }
+      try { await credit.tick(); } catch (e: any) { console.warn(`[credits] upkeep failed: ${String(e?.message ?? e).slice(0, 160)}`); }
+      try { await tips.tick(); } catch (e: any) { console.warn(`[tips] upkeep failed: ${String(e?.message ?? e).slice(0, 160)}`); }
+      state.credits = credit.state();
+      state.tips = tips.stateSummary();
+      state.memory = memory.state();
+      pollBusy = false;
+    };
+    const state: GirlRunner["state"] = { status: "starting" };
+    await credit.start(); // restart recovery before any metered turn (no call at all for a creator that never used the feature)
+    memory.start(); // Stage 5: background archive flush + the memory worker; both do nothing (no database call) while there is nothing queued / the switch is off
+    void pollTick();
+    const starTimer = setInterval(pollTick, 30_000);
+    // Local single-girl runs read their own settings; the fleet instead hands over the row it already reads every 30 s.
+    const settingsTimer = opts.selfRefreshCreditSettings
+      ? setInterval(async () => {
+        const r = await creditClient.getSettings(); credit.applySettings(r.ok ? r.settings : null, "database"); state.credits = credit.state();
+        const row = await readTipRow(girl.cloneId); if (row !== undefined) tips.applySettings(row); // unreadable: the previous settings stay
+        state.tips = tips.stateSummary();
+        const mflag = await readMemoryFlag(girl.cloneId); if (mflag !== undefined) memory.applySettings(mflag === true); // same timer, no new poller
+        state.memory = memory.state();
+      }, 30_000)
+      : undefined;
+
+    console.log(`[startup] ${girl.name} | model ${config.model} via ${config.providerOrder.join(" > ")} | ${catalogue.length} media items`);
+    const polling = bot.start({
+      allowed_updates: ["message", "callback_query", "business_connection", "business_message", "purchased_paid_media", "pre_checkout_query"],
+      drop_pending_updates: false,
+      onStart: (me) => { state.status = "running"; state.botUsername = me.username; state.startedAt = new Date().toISOString(); console.log(`[startup] ${girl.slug} online as @${me.username} (long polling)`); },
+    }).catch((e) => { state.status = "error"; state.error = String(e?.message ?? e).slice(0, 200); console.error(`[startup] ${girl.slug} polling stopped:`, state.error); });
+
+    // stop() and the hand-over are ONE sequence: stop intake (once), drain (verified), resolve, report.
+    //  - intake is stopped exactly once; the VERIFICATION can be repeated on the same runner until it succeeds (nothing is ever resent:
+    //    a retry only waits for the same in-flight work and re-reads the database);
+    //  - only a verified drain marks the runner "stopped"; until then it is "stopping" and keeps its slot (no replacement, no engine switch);
+    //  - a failed result is never cached: the next call verifies again, so it succeeds once the outstanding send has returned.
+    type Drain = Awaited<ReturnType<CreditRuntime["quiesce"]>> & { tips?: Awaited<ReturnType<TipRuntime["quiesce"]>> };
+    let intakeStopped: Promise<void> | undefined;
+    let verifying: Promise<Drain> | undefined;
+    let verified: Drain | undefined;
+    const stopIntake = () => (intakeStopped ??= (async () => {
+      active = false; // turns already running stop before their next send; nothing new is metered
+      q.stop(); // and nothing still waiting for its timer will start
+      clearInterval(reloadTimer);
+      clearInterval(starTimer);
+      if (settingsTimer) clearInterval(settingsTimer);
+      state.status = "stopping";
+      memory.stopWork(); // no new reply context, no new worker batch; the queue keeps flushing until the drain
+      await bot.stop().catch(() => {});
+      await polling;
+    })());
+    const shutdown = (budgetMs?: number): Promise<Drain> => {
+      if (verified) return Promise.resolve(verified);
+      return (verifying ??= (async () => {
+        try {
+          await stopIntake();
+          // In-flight turns finish and report their real outcome; the drain is only complete if it really finished inside the budget. A
+          // request already dispatched to Telegram cannot be recalled: an unconfirmed send is never repeated.
+          const hc: Drain = await credit.quiesce(() => q.idle(), budgetMs).catch((e: any) => ({ ok: false, drained: false, owed: -1, reason: String(e?.message ?? e).slice(0, 100) }));
+          // Tips drain the same way: running tip work and the queue finished, every receipt settled, open work readable. BOTH must be verified.
+          const ht = await tips.quiesce(() => q.idle(), budgetMs);
+          const h: Drain = { ...hc, ok: hc.ok && ht.ok, tips: ht, ...(hc.ok && !ht.ok ? { reason: `tips: ${ht.reason ?? "not verified"}` } : {}) };
+          // Stage 5: the in-flight turns have archived their records; flush what can be flushed. INFORMATIONAL: unsent archive writes are a durable file and
+          // continue after the next start, so they are not part of the verified financial drain (h.ok is unchanged).
+          const hm = await memory.drain(Math.min(3_000, budgetMs ?? 3_000)).catch((e: any) => ({ pending: -1, flushed: false, workerSettled: false, error: String(e?.message ?? e).slice(0, 100) }));
+          state.memory = { ...memory.state(), handover: hm };
+          state.credits = { ...credit.state(), handover: h };
+          state.tips = { ...tips.stateSummary(), handover: ht };
+          if (h.ok) { verified = h; state.status = "stopped"; }
+          else { state.status = "stopping"; console.warn(`[credits] ${girl.slug}: drain not verified yet, will retry (${JSON.stringify(h)})`); }
+          return h;
+        } finally { verifying = undefined; }
+      })());
+    };
+    return {
+      state,
+      applyCreditSettings(s) { credit.applySettings(s); state.credits = credit.state(); },
+      applyTipSettings(row) { tips.applySettings(row); state.tips = tips.stateSummary(); },
+      applyMemorySettings(row) { memory.applySettings(row?.v2_memory_enabled); state.memory = memory.state(); },
+      async stop() { await shutdown(); },
+      handover: (budgetMs) => shutdown(budgetMs),
+    };
+  });
+}
+

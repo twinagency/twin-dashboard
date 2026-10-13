@@ -1,0 +1,168 @@
+import fs from "node:fs";
+import path from "node:path";
+import { config } from "./config.js";
+import { girlDataDir } from "./context.js";
+
+export type Msg = { role: "user" | "assistant"; content: string };
+/** One code-originated photo attempt, never evidence of purchase or current visibility. */
+export type PhotoContext = {
+  v: 1; cloneId: string; key: string; storagePath: string; epoch: number; turnId: string; at: number;
+  bcid?: string; mode: "real" | "simulated";
+  status: "prepared" | "acknowledged" | "rejected" | "unknown" | "prepare-failed" | "cancelled";
+  messageId?: number;
+};
+function photoContext(v: any, epoch: number): PhotoContext | undefined {
+  if (!v || v.v !== 1 || v.epoch !== epoch || !Number.isFinite(v.at) || v.at < 0
+    || typeof v.cloneId !== "string" || !v.cloneId || typeof v.key !== "string" || !/^photo:[a-z0-9_-]+$/i.test(v.key)
+    || typeof v.storagePath !== "string" || !v.storagePath || typeof v.turnId !== "string" || !v.turnId
+    || !["real", "simulated"].includes(v.mode)
+    || !["prepared", "acknowledged", "rejected", "unknown", "prepare-failed", "cancelled"].includes(v.status)
+    || (v.bcid !== undefined && typeof v.bcid !== "string")) return undefined;
+  return { v: 1, cloneId: v.cloneId, key: v.key, storagePath: v.storagePath, epoch, turnId: v.turnId, at: v.at,
+    mode: v.mode, status: v.status, ...(v.bcid ? { bcid: v.bcid } : {}),
+    ...(v.status === "acknowledged" && Number.isSafeInteger(v.messageId) && v.messageId > 0 ? { messageId: v.messageId } : {}) };
+}
+/** epoch goes up on every /start or /reset, so a reply that was already running can tell its chat was wiped. */
+export type Chat = { ageConfirmed: boolean; history: Msg[]; sent: string[]; epoch: number;
+  bcid?: string; // business connection this fan writes through (unset = plain bot chat)
+  who?: string; // @username or id, for the monitor
+  photo?: PhotoContext; // optional; old readers and chats need no migration
+}; // sent = media keys already sent to this fan
+
+const dir = () => girlDataDir();
+const file = (id: number | string) => path.join(dir(), `${id}.json`);
+
+export function loadChat(id: number | string): Chat {
+  try {
+    const c = JSON.parse(fs.readFileSync(file(id), "utf8"));
+    const photo = photoContext(c.photo, Number(c.epoch) || 0);
+    return {
+      ageConfirmed: !!c.ageConfirmed,
+      history: Array.isArray(c.history) ? c.history : [],
+      sent: Array.isArray(c.sent) ? c.sent : [],
+      epoch: Number(c.epoch) || 0,
+      bcid: c.bcid || undefined,
+      who: c.who || undefined,
+      ...(photo ? { photo } : {}),
+    };
+  } catch {
+    return { ageConfirmed: false, history: [], sent: [], epoch: 0 };
+  }
+}
+
+export function saveChat(id: number | string, chat: Chat) {
+  fs.mkdirSync(dir(), { recursive: true });
+  chat.history = chat.history.slice(-config.dashboardHistoryLimit);
+  fs.writeFileSync(file(id), JSON.stringify(chat, null, 2));
+}
+
+/** /reset: wipe history and sent list, keep the 18+ confirmation. */
+export function resetChat(id: number | string) {
+  const c = loadChat(id);
+  // Fresh chat: history and the offered list go. What he paid for lives in the Stars ledger
+  // (payments.ts), not here, so a reset can never erase it.
+  saveChat(id, { ageConfirmed: c.ageConfirmed, history: [], sent: [], epoch: c.epoch + 1, bcid: c.bcid, who: c.who });
+}
+
+/**
+ * Append this turn's messages to the CURRENT file (re-read now), so anything written while the AI was
+ * thinking (a sale's "[he unlocked ...]" note, a send note) is kept. False = the chat was reset: drop the turn.
+ */
+export function appendIfCurrent(id: number | string, epoch: number, msgs: Msg[]): boolean {
+  const now = loadChat(id);
+  if (now.epoch !== epoch) return false;
+  now.history.push(...msgs);
+  saveChat(id, now);
+  return true;
+}
+
+/**
+ * Stage 1.1: the ONE write that records what Telegram acknowledged. Synchronous (no await between the read and the write),
+ * so a sale note the poller wrote in the meantime is already in the file we reload and stays. Adds her acknowledged text
+ * (+ the media note, in the same message as before) and the sent key together. False = the chat was reset since `epoch`:
+ * nothing is written. Throws if the disk write fails (the caller records that; it never sends again because of it).
+ */
+export type DeliveryCommit = { text?: string; note?: string; sentKey?: string;
+  /** No text/sent key is added for a prepared or failed attempt. null invalidates the previous reference. */
+  photo?: PhotoContext | null;
+  /** A late outcome may record acknowledged history, but cannot replace a newer photo reference. */
+  photoExpectedTurnId?: string;
+};
+export function commitDelivery(id: number | string, epoch: number, d: DeliveryCommit): boolean {
+  const now = loadChat(id);
+  if (now.epoch !== epoch) return false;
+  const photo = d.photo == null ? d.photo : photoContext(d.photo, epoch);
+  if (d.photo != null && !photo) throw new Error("invalid photo context");
+  const photoCurrent = d.photoExpectedTurnId === undefined || now.photo?.turnId === d.photoExpectedTurnId;
+  // A preparation/outcome-only write must report a lost compare-and-set to its caller.
+  if (d.photo !== undefined && !photoCurrent && !d.text && !d.note && !d.sentKey) return false;
+  const content = [d.text, d.note].filter(Boolean).join("\n");
+  if (content) now.history.push({ role: "assistant", content });
+  if (d.sentKey && !now.sent.includes(d.sentKey)) now.sent.push(d.sentKey);
+  if (photoCurrent && d.photo !== undefined) {
+    if (photo === null) delete now.photo;
+    else if (photo) now.photo = photo;
+  }
+  saveChat(id, now);
+  return true;
+}
+
+/** Stage 4: add a bracketed note about something that happened to the LAST assistant message (or as its own message), only if the chat was not reset since `epoch`. Same shape as the media notes. */
+export function appendNoteIfCurrent(id: number | string, epoch: number, tag: string): boolean {
+  const now = loadChat(id);
+  if (now.epoch !== epoch) return false;
+  const last = now.history[now.history.length - 1];
+  if (last?.role === "assistant") last.content += `\n${tag}`;
+  else now.history.push({ role: "assistant", content: tag });
+  saveChat(id, now);
+  return true;
+}
+
+/** Save only if nobody reset this chat since `epoch` was read. False = the turn is stale, drop it. */
+export function saveIfCurrent(id: number | string, chat: Chat): boolean {
+  if (loadChat(id).epoch !== chat.epoch) return false;
+  saveChat(id, chat);
+  return true;
+}
+
+/** Remember how to reach this fan (business connection) and what to call him in the monitor. */
+export function touchChat(id: number | string, info: { bcid?: string; who?: string }) {
+  const c = loadChat(id);
+  if ((info.bcid ?? c.bcid) === c.bcid && (info.who ?? c.who) === c.who) return;
+  c.bcid = info.bcid ?? c.bcid;
+  c.who = info.who ?? c.who;
+  saveChat(id, c);
+}
+
+export function setConfirmed(id: number | string, v: boolean) {
+  const c = loadChat(id);
+  c.ageConfirmed = v;
+  saveChat(id, c);
+}
+
+// This bot's own Telegram file ids (the live bots' ids belong to their tokens and can't be reused).
+// Stage 1.1: the in-memory copy is kept per resolved cache-file path, so creator B can never read creator A's ids.
+// The file on disk stays a string map. Existing bundle `file:<storagePath>` keys also prove a single photo's path;
+// a legacy asset-key entry alone cannot prove that the catalogue row still points to the file originally cached.
+const fidFile = () => path.join(dir(), "_file_ids.json");
+const fidCaches = new Map<string, Record<string, string>>();
+function fidCache(): { file: string; fids: Record<string, string> } {
+  const file = path.resolve(fidFile());
+  let fids = fidCaches.get(file);
+  if (!fids) {
+    try { const j = JSON.parse(fs.readFileSync(file, "utf8")); fids = j && typeof j === "object" && !Array.isArray(j) ? j : {}; } catch { fids = {}; }
+    fidCaches.set(file, fids!);
+  }
+  return { file, fids: fids! };
+}
+export function getFileId(key: string, storagePath?: string): string | undefined {
+  return fidCache().fids[storagePath === undefined ? key : `file:${storagePath}`];
+}
+export function setFileId(key: string, fid: string, storagePath?: string) {
+  const { file, fids } = fidCache();
+  fids[key] = fid; // kept in memory even if the write below fails: it is a valid id
+  if (storagePath !== undefined) fids[`file:${storagePath}`] = fid;
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, JSON.stringify(fids, null, 2));
+}
+

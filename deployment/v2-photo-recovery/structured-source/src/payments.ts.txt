@@ -1,0 +1,364 @@
+// Telegram Stars: the price of a locked item, the sales ledger, and who owns what.
+//
+// A locked item goes out as a Telegram paid post (sendPaidMedia) whose payload is "<kind>_<id>".
+// Business-connection sends fire no purchase update, so (like live Twin's star reconciler) the
+// source of truth is a poller on getStarTransactions.
+//  - Telegram returns transactions oldest first; a persisted cursor (how many we have read) means
+//    we page through ALL of them and catch up after any downtime, never only "the last 100".
+//  - A refund carries the SAME id as the purchase it reverses, so ledger entries are keyed by
+//    type + id ("purchase:<id>" / "refund:<id>"); a refunded item is no longer owned.
+// Ownership never lives in the chat file: /start, /reset and restarts cannot erase it.
+import fs from "node:fs";
+import { testPhotoPrice } from "./test-photo-pricing.js";
+import path from "node:path";
+import type { Api } from "grammy";
+import { config } from "./config.js";
+import { girlDataDir } from "./context.js";
+import { bundleFromPayload } from "./bundles.js";
+import { fetchOffers, offerContentKeys, readOffers, type OfferFile } from "./bundle-offers.js";
+
+export type LedgerEntry = {
+  type: "purchase" | "refund";
+  ts: string; // when Telegram recorded it
+  chatId: number; // the fan (his Telegram user id)
+  itemKey: string; // "photo:<id>" / "video:<id>" / "bundle:<original bundle id>" ("" for a refund we can't tie to an item)
+  kind: "photo" | "video" | "bundle" | "";
+  stars: number;
+  chargeId: string; // Telegram transaction id (shared by a purchase and its refund)
+  offerId?: string; // Stage 3: a bundle's immutable offer id (its manifest is in _bundle_offers.jsonl / v2_bundle_offers)
+};
+/** Kept for callers that only care about sales. */
+export type Purchase = LedgerEntry & { type: "purchase" };
+
+/** STAR_PRICE in .env: a number (test price for every item, default 1) or "real" (each item's live star_value). */
+export function priceFor(itemStars: number, scope?: { cloneId: string; telegramId: number; kind: string }): number {
+  const testPrice = scope ? testPhotoPrice(scope.cloneId, scope.telegramId, scope.kind) : null;
+  if (testPrice !== null) return testPrice;
+  const mode = (process.env.STAR_PRICE ?? "1").trim();
+  if (mode === "real") return Math.max(1, Math.round(itemStars) || 1);
+  return Math.max(1, Math.round(Number(mode)) || 1);
+}
+export const priceMode = () => ((process.env.STAR_PRICE ?? "1").trim() === "real" ? "real" : `test (${priceFor(0)} Star each)`);
+
+export const payloadFor = (key: string) => key.replace(":", "_"); // "photo:<id>" -> "photo_<id>"
+export function keyFromPayload(p: string | undefined): { key: string; kind: "photo" | "video" } | null {
+  const m = p?.match(/^(photo|video)_([0-9a-f-]{36})$/i);
+  return m ? { key: `${m[1].toLowerCase()}:${m[2]}`, kind: m[1].toLowerCase() as "photo" | "video" } : null;
+}
+
+const dir = () => girlDataDir();
+const ledgerFile = () => path.join(dir(), "purchases.jsonl");
+const cursorFile = () => path.join(dir(), "_stars_cursor.json");
+const liveOwnedFile = () => path.join(dir(), "_live_owned.json");
+const entryKey = (e: { type: string; chargeId: string }) => `${e.type}:${e.chargeId}`;
+let seen: Set<string> | null = null;
+
+function readLedger(strict = false): LedgerEntry[] {
+  try {
+    // Lines written before refunds existed have no type: they are purchases.
+    const rows: LedgerEntry[] = fs.readFileSync(ledgerFile(), "utf8").split("\n").filter(Boolean).map((l) => ({ type: "purchase", ...JSON.parse(l) }));
+    if (strict && rows.some(e => !["purchase", "refund"].includes(e.type) || !Number.isSafeInteger(e.chatId) || e.chatId <= 0
+      || typeof e.chargeId !== "string" || !e.chargeId || typeof e.itemKey !== "string" || (e.type === "purchase" && !/^(photo|video|bundle):.+/.test(e.itemKey)))) throw new Error("malformed local ownership entry");
+    return rows;
+  } catch (e: any) { if (strict && e?.code !== "ENOENT") throw new Error("local ownership ledger is unreadable"); return []; }
+}
+export const ledger = () => readLedger();
+/** Sales that were not refunded. */
+export function purchases(): Purchase[] {
+  const all = ledger();
+  const refunded = new Set(all.filter((e) => e.type === "refund").map((e) => e.chargeId));
+  return all.filter((e): e is Purchase => e.type === "purchase" && !refunded.has(e.chargeId));
+}
+export const refunds = () => ledger().filter((e) => e.type === "refund");
+
+/** Adds the entry once (by type + charge id). True when it was new. */
+export function recordEntry(e: LedgerEntry): boolean {
+  if (!seen) seen = new Set(ledger().map(entryKey));
+  if (seen.has(entryKey(e))) return false;
+  seen.add(entryKey(e));
+  fs.mkdirSync(dir(), { recursive: true });
+  fs.appendFileSync(ledgerFile(), JSON.stringify(e) + "\n");
+  return true;
+}
+/** Back-compat name used by older call sites and checks. */
+export const recordPurchase = (p: Omit<LedgerEntry, "type"> & { type?: LedgerEntry["type"] }) => recordEntry({ type: "purchase", ...p } as LedgerEntry);
+
+/** One getStarTransactions entry -> a purchase, a refund, or null (anything else). */
+export function entryFromTransaction(t: any, byCharge?: (id: string) => LedgerEntry | undefined): LedgerEntry | null {
+  const ts = new Date((t?.date ?? 0) * 1000).toISOString();
+  const src = t?.source, rcv = t?.receiver;
+  if (src?.type === "user" && src.user?.id) {
+    const bundle = bundleFromPayload(src.paid_media_payload);
+    if (bundle) return { type: "purchase", ts, chatId: src.user.id, itemKey: `bundle:${bundle.bundleId}`, kind: "bundle", stars: Number(t.amount) || 0, chargeId: String(t.id), offerId: bundle.offerId };
+    const item = keyFromPayload(src.paid_media_payload);
+    if (!item) return null; // tips, invoices for other things: not ours
+    return { type: "purchase", ts, chatId: src.user.id, itemKey: item.key, kind: item.kind, stars: Number(t.amount) || 0, chargeId: String(t.id) };
+  }
+  if (rcv?.type === "user" && rcv.user?.id) {
+    // A refund back to a fan. Same id as the purchase it reverses.
+    const orig = byCharge?.(String(t.id));
+    const bundle = bundleFromPayload(rcv.paid_media_payload);
+    const item = keyFromPayload(rcv.paid_media_payload);
+    if (!orig && !item && !bundle) return null;
+    return {
+      type: "refund", ts, chatId: rcv.user.id, itemKey: orig?.itemKey ?? (bundle ? `bundle:${bundle.bundleId}` : item?.key ?? ""), kind: orig?.kind ?? (bundle ? "bundle" : item?.kind ?? ""),
+      stars: Number(t.amount) || 0, chargeId: String(t.id), ...((orig?.offerId ?? bundle?.offerId) ? { offerId: orig?.offerId ?? bundle!.offerId } : {}),
+    };
+  }
+  return null;
+}
+/** Back-compat: purchase-only parse. */
+export const purchaseFromTransaction = (t: any) => {
+  const e = entryFromTransaction(t);
+  return e?.type === "purchase" ? (e as Purchase) : null;
+};
+
+/**
+ * What this fan owns. Refunds are reconciled by charge id BEFORE purchases are reduced to item keys:
+ * a purchase is dropped if its charge was refunded (V2 ledger refund, or a "refund:<charge id>" row in Supabase),
+ * and an item stays owned only while at least one un-refunded purchase of it exists.
+ * Stage 3: a bundle purchase owns the bundle ("bundle:<id>") AND everything in the manifest that was quoted for that card. Each
+ * remaining purchase contributes its own keys, so refunding one purchase never removes ownership another valid purchase established.
+ * A bundle purchase whose manifest cannot be found (an old purchase, a lost file) owns the bundle only: its contents are not guessed.
+ */
+export function ownedKeys(fanId: number | string, resolvedOffers?: ReadonlyMap<string, OfferFile[]>): Set<string> {
+  const id = Number(fanId);
+  const live = readLiveOwned()[String(id)];
+  const mine = ledger().filter((e) => e.chatId === id);
+  const refunded = new Set([...mine.filter((e) => e.type === "refund").map((e) => e.chargeId), ...(live?.refunds ?? [])]);
+  const bought: BoughtRow[] = [...mine.filter((e) => e.type === "purchase").map((e) => ({ id: e.chargeId, key: e.itemKey, offerId: e.offerId })), ...(live?.purchases ?? [])];
+  const valid = bought.filter((b) => b.key && !refunded.has(b.id));
+  const out = new Set<string>([...valid.map((b) => b.key), ...(live?.legacy ?? [])]);
+  const offers = valid.some((b) => b.offerId) ? readOffers().offers : undefined;
+  for (const b of valid) {
+    if (!b.offerId) continue;
+    const local = offers?.get(b.offerId);
+    const resolved = resolvedOffers?.get(b.offerId);
+    for (const k of local ? offerContentKeys(local) : resolved ? offerContentKeys({ files: resolved }) : b.contents ?? []) out.add(k);
+  }
+  return out;
+}
+/** The bundle ids this fan owns through a valid purchase (for the monitor and the checks). */
+export const ownedBundleIds = (fanId: number | string) => [...ownedKeys(fanId)].filter((k) => k.startsWith("bundle:")).map((k) => k.slice("bundle:".length));
+
+// ---------- what he owns per Supabase star_transactions (read only, refreshed every LIVE_TTL_MS) ----------
+/** How long a fan's Supabase ownership is trusted before it is read again (so a later buy is seen within a minute). */
+export const LIVE_TTL_MS = 60_000;
+/** After a FAILED read, wait this long before trying Supabase again for that fan (the last good list is used meanwhile). */
+export const LIVE_RETRY_MS = 30_000;
+/** One fan's Supabase purchases, kept with their charge ids so refunds can be reconciled. */
+type BoughtRow = { id: string; key: string; offerId?: string; contents?: string[] };
+export type LiveOwned = {
+  purchases: BoughtRow[]; // positive photo/video/bundle rows: star_transactions.id (= Telegram charge id) + item key (+ a bundle's offer id and, once read, its quoted contents)
+  refunds: string[]; // charge ids refunded per Supabase ("refund:<charge id>" rows)
+  at: number; // last SUCCESSFUL read (ms); 0 = never / stale
+  legacy?: string[]; // keys carried from the pre-Stage-1 array format (no charge ids) until the next successful read
+};
+function normalizeLive(v: any): LiveOwned {
+  if (Array.isArray(v)) return { purchases: [], refunds: [], at: 0, legacy: v.map(String) }; // base 36d3b20 format
+  if (v && Array.isArray(v.keys) && !Array.isArray(v.purchases)) return { purchases: [], refunds: [], at: 0, legacy: v.keys.map(String) }; // a77f9a8 format
+  return { purchases: Array.isArray(v?.purchases) ? v.purchases : [], refunds: Array.isArray(v?.refunds) ? v.refunds : [], at: Number(v?.at) || 0,
+    ...(Array.isArray(v?.legacy) && v.legacy.length ? { legacy: v.legacy } : {}) };
+}
+function readLiveOwned(strict = false): Record<string, LiveOwned> {
+  try {
+    const raw = JSON.parse(fs.readFileSync(liveOwnedFile(), "utf8"));
+    if (strict && (!raw || typeof raw !== "object" || Array.isArray(raw))) throw new Error("malformed local ownership cache");
+    return Object.fromEntries(Object.entries(raw).map(([k, v]) => [k, normalizeLive(v)]));
+  } catch (e: any) { if (strict && e?.code !== "ENOENT") throw new Error("local ownership cache is unreadable"); return {}; }
+}
+/** Failed-read times, kept apart from successful freshness (in memory: a restart simply allows one new try). */
+const failedAt = new Map<string, number>();
+
+/**
+ * Reads what this fan bought (photos/videos) and what was refunded from Supabase star_transactions, the same table every
+ * payment is already saved to, so V2 never re-offers it. Read only. Cached per fan in data/<girl>/_live_owned.json and
+ * re-read once the last successful read is older than LIVE_TTL_MS. After a failed read, no new attempt for LIVE_RETRY_MS;
+ * the last good list stays in use.
+ */
+export type OwnershipRead = { ok: true; keys: Set<string>; at: number } | { ok: false; reason: string };
+
+/** Fresh authorization evidence for a referenced photo; cached/partial/disabled reads never authorize delivery. */
+export async function loadOwnershipRead(cloneId: string, fanId: number, now = Date.now()): Promise<OwnershipRead> {
+  return (await loadOwnership(cloneId, fanId, now, true)).read;
+}
+
+/** Existing ordinary-turn loader keeps its cache/backoff behavior and string diagnostics. */
+export async function loadLiveOwnership(cloneId: string, fanId: number, now = Date.now()): Promise<string> {
+  return (await loadOwnership(cloneId, fanId, now, false)).note;
+}
+
+async function loadOwnership(cloneId: string, fanId: number, now: number, strict: boolean): Promise<{ note: string; read: OwnershipRead }> {
+  const unavailable = (note: string) => ({ note, read: { ok: false as const, reason: note } });
+  const cached = readLiveOwned()[String(fanId)];
+  if (!config.supabaseUrl || process.env.IMPORT_OWNERSHIP === "0") return unavailable(strict ? "fresh ownership lookup is disabled or unavailable" : "cached");
+  if (!strict && cached && now - cached.at < LIVE_TTL_MS) return unavailable("cached");
+  // A strict-only rejection (for example an incomplete manifest) must not change the ordinary importer's backoff.
+  const failKey = `${dir()}|${fanId}${strict ? "|strict" : ""}`;
+  const lastFail = failedAt.get(failKey);
+  if (lastFail !== undefined && now - lastFail < LIVE_RETRY_MS) return unavailable("backoff");
+  try {
+    // v2_offer_id exists after the Stage 3 migration; before it, the same read without that column (bundle rows then own the bundle only).
+    const get = (cols: string) => fetch(`${config.supabaseUrl}/rest/v1/star_transactions?select=${cols}&clone_id=eq.${encodeURIComponent(cloneId)}&telegram_id=eq.${fanId}&limit=1000`, {
+      headers: { apikey: config.supabaseKey, Authorization: `Bearer ${config.supabaseKey}`, ...(strict ? { Prefer: "count=exact" } : {}) },
+      signal: AbortSignal.timeout(3_000), // never hold a reply up for long; the old list is used meanwhile
+    });
+    let res = await get("id,media_type,media_id,amount_stars,v2_offer_id");
+    if (res.status === 400) {
+      if (!strict) res = await get("id,media_type,media_id,amount_stars");
+      else {
+        const error: any = await res.json().catch(() => ({}));
+        if (["42703", "PGRST204"].includes(error?.code) && /\bv2_offer_id\b/i.test(`${error.message ?? ""} ${error.details ?? ""}`)) res = await get("id,media_type,media_id,amount_stars");
+        else throw new Error("ownership query failed; not a missing optional column");
+      }
+    }
+    if (!res.ok) throw new Error(`supabase ${res.status}`);
+    const rows: any[] = await res.json();
+    if (strict) {
+      if (!Array.isArray(rows) || rows.some(r => !r || typeof r.id !== "string" || !r.id || r.amount_stars === null || r.amount_stars === "" || !Number.isFinite(Number(r.amount_stars))
+        || (Number(r.amount_stars) > 0 && ["photo", "video", "bundle"].includes(r.media_type) && (typeof r.media_id !== "string" || !r.media_id)))) throw new Error("ownership response is malformed");
+      // A truncated list cannot prove a purchase has not been refunded. Do not overwrite a complete cache with one.
+      const range = res.headers.get("content-range") ?? "";
+      const match = /^(?:(\d+)-(\d+)|\*)\/(\d+)$/.exec(range);
+      if (!match || Number(match[3]) !== rows.length || (rows.length > 0 && (Number(match[1]) !== 0 || Number(match[2]) !== rows.length - 1))
+        || new Set(rows.map(r => r.id)).size !== rows.length) throw new Error("ownership response is incomplete");
+    }
+    const purchases: BoughtRow[] = rows
+      .filter((r) => Number(r.amount_stars) > 0 && r.media_id && (r.media_type === "photo" || r.media_type === "video" || r.media_type === "bundle") && !String(r.id).startsWith("refund:"))
+      .map((r) => ({ id: String(r.id), key: `${r.media_type}:${r.media_id}`, ...(r.media_type === "bundle" && typeof r.v2_offer_id === "string" ? { offerId: r.v2_offer_id.toLowerCase() } : {}) }));
+    // Stage 3: the quoted contents of every V2 bundle purchase, from its offer record (the local file is read at use time; this covers a box without it).
+    const refunds = rows.filter((r) => String(r.id).startsWith("refund:")).map((r) => String(r.id).slice("refund:".length));
+    const localLedger = strict ? readLedger(true).filter(e => e.chatId === fanId) : [];
+    const refunded = new Set([...refunds, ...localLedger.filter(e => e.type === "refund").map(e => e.chargeId)]);
+    const required = strict ? [...purchases, ...localLedger.filter(e => e.type === "purchase").map(e => ({ id: e.chargeId, key: e.itemKey, offerId: e.offerId }))]
+      .filter(p => !refunded.has(p.id) && p.key.startsWith("bundle:")) : purchases;
+    if (strict && required.some(p => !p.offerId)) throw new Error("an owned bundle has no immutable manifest reference");
+    const wanted = [...new Set(required.filter((p) => p.offerId).map((p) => p.offerId!))];
+    const resolved = new Map<string, OfferFile[]>();
+    if (wanted.length) {
+      const local = readOffers().offers;
+      const remote = await fetchOffers(wanted.filter((o) => !local.has(o)), strict ? { cloneId, fanId } : undefined);
+      if (strict) for (const id of wanted) {
+        const localOffer = local.get(id);
+        if (localOffer && (localOffer.cloneId !== cloneId || localOffer.chatId !== fanId)) throw new Error("bundle manifest ownership scope does not match");
+        const files = localOffer?.files ?? remote.get(id);
+        if (!files?.length || files.some(f => !["photo", "video"].includes(f.kind) || !f.storagePath || f.storagePath === "undefined"
+          || (f.assetKey !== null && (typeof f.assetKey !== "string" || !/^(photo|video):.+/.test(f.assetKey))))) throw new Error("an owned bundle manifest is missing or unreadable");
+        resolved.set(id, files);
+      }
+      for (const p of purchases) if (p.offerId && remote.has(p.offerId)) p.contents = offerContentKeys({ files: remote.get(p.offerId)! });
+    }
+    const fresh = readLiveOwned(strict);
+    fresh[String(fanId)] = { purchases, refunds, at: now };
+    fs.mkdirSync(dir(), { recursive: true });
+    fs.writeFileSync(liveOwnedFile(), JSON.stringify(fresh, null, 2));
+    failedAt.delete(failKey);
+    return { note: `${purchases.length} purchases, ${refunds.length} refunds from Supabase`, read: { ok: true, keys: ownedKeys(fanId, resolved), at: now } };
+  } catch (e: any) {
+    failedAt.set(failKey, now);
+    return unavailable(`ownership lookup failed (${String(e?.message ?? e).slice(0, 80)}), using last known list`);
+  }
+}
+
+/**
+ * ROLLBACK to base 36d3b20: rewrites every girl's _live_owned.json under `dataDir` back to the old shape (fan -> array of
+ * item keys), with refunds already reconciled, so the old ownedKeys can spread it. Keeps a copy as _live_owned.json.stage1.bak.
+ * Returns per-girl fan counts. Pure file work, no network.
+ */
+export function rollbackLiveOwnedFiles(dataDir: string): Record<string, number> {
+  const out: Record<string, number> = {};
+  for (const girl of fs.existsSync(dataDir) ? fs.readdirSync(dataDir) : []) {
+    const f = path.join(dataDir, girl, "_live_owned.json");
+    if (!fs.existsSync(f)) continue;
+    const raw = JSON.parse(fs.readFileSync(f, "utf8"));
+    let ledgerRefunds = new Set<string>();
+    try {
+      ledgerRefunds = new Set(fs.readFileSync(path.join(dataDir, girl, "purchases.jsonl"), "utf8").split("\n").filter(Boolean)
+        .map((l) => JSON.parse(l)).filter((e) => e.type === "refund").map((e) => e.chargeId));
+    } catch {}
+    const old: Record<string, string[]> = {};
+    for (const [fan, v] of Object.entries(raw)) {
+      const e = normalizeLive(v);
+      const refunded = new Set([...e.refunds, ...ledgerRefunds]);
+      old[fan] = [...new Set([...e.purchases.filter((p) => !refunded.has(p.id)).flatMap((p) => [p.key, ...(p.contents ?? [])]), ...(e.legacy ?? [])])];
+    }
+    fs.copyFileSync(f, f + ".stage1.bak");
+    fs.writeFileSync(f, JSON.stringify(old, null, 2));
+    out[girl] = Object.keys(old).length;
+  }
+  return out;
+}
+
+// ---------- the poller ----------
+function readCursor(): number {
+  try { return Number(JSON.parse(fs.readFileSync(cursorFile(), "utf8")).offset) || 0; } catch { return 0; }
+}
+function writeCursor(offset: number) {
+  fs.mkdirSync(dir(), { recursive: true });
+  fs.writeFileSync(cursorFile(), JSON.stringify({ offset, at: new Date().toISOString() }));
+}
+
+/**
+ * Stage 2A: an OPTIONAL second reader of the same scan, for a product that is not media (the message-credit packs). It is
+ * passed in by the caller; nothing here knows what a credit is, and with no hook the scan below behaves exactly as before.
+ *  - classify(t): pure and total. Non-null = this transaction belongs to that product; the media ledger never sees it.
+ *  - record(x): durably records it. If it THROWS, the scan does not advance its cursor past that transaction.
+ */
+export type StarScanHook = {
+  classify(t: any): unknown | null;
+  record(item: unknown, at: { offset: number; backfill: boolean }): void;
+};
+
+/**
+ * Reads every Stars transaction since the last one we processed (paging 100 at a time) and calls
+ * onEntry for each new purchase or refund. Exported for tests; `api` only needs getStarTransactions.
+ */
+export async function pollStarsOnce(api: Pick<Api, "raw"> | any, onEntry: (e: LedgerEntry) => void | Promise<void>, hook?: StarScanHook): Promise<number> {
+  // First poll for a girl (no cursor yet): her whole Stars history is BACKFILLED into the ledger so
+  // ownership is right, but it is old news, so no "[he unlocked ...]" notes for it.
+  const backfill = !fs.existsSync(cursorFile());
+  let offset = readCursor(), found = 0;
+  for (let page = 0; page < 50; page++) {
+    const res: any = await api.raw.getStarTransactions({ offset, limit: 100 });
+    const txs: any[] = res?.transactions ?? [];
+    const byCharge = (id: string) => ledger().find((e) => e.type === "purchase" && e.chargeId === id);
+    let held: { at: number; why: string } | undefined; // first transaction of this page whose hook record could not be written
+    for (let i = 0; i < txs.length; i++) {
+      const t = txs[i];
+      if (hook) {
+        const other = hook.classify(t);
+        if (other != null) { // not media: recorded by the hook (never in purchases.jsonl, never a sale note); media below carries on regardless
+          try { hook.record(other, { offset: offset + i, backfill }); }
+          catch (e: any) {
+            held ??= { at: i, why: String(e?.message ?? e).slice(0, 160) };
+            console.error(`[stars] payment receipt at transaction #${offset + i} was NOT recorded (${String(e?.message ?? e).slice(0, 160)}); the scan will not advance past it`);
+          }
+          continue;
+        }
+      }
+      const e = entryFromTransaction(t, byCharge);
+      if (e && recordEntry(e)) { found++; if (!backfill) await onEntry(e); }
+    }
+    offset += held ? held.at : txs.length; // never past an unrecorded receipt; the media on this page is already recorded and is not repeated
+    writeCursor(offset);
+    if (held) throw new Error(`payment receipt at transaction #${offset} could not be recorded (${held.why}); cursor held there`);
+    if (txs.length < 100) break;
+  }
+  return found;
+}
+
+/** Polls every `everyMs`; one poll at a time. */
+export function startStarPoller(api: Api, onEntry: (e: LedgerEntry) => void | Promise<void>, everyMs = 30_000) {
+  let busy = false;
+  const tick = async () => {
+    if (busy) return;
+    busy = true;
+    try { await pollStarsOnce(api, onEntry); }
+    catch (e: any) { console.warn(`[stars] poll failed: ${String(e?.message ?? e).slice(0, 160)}`); }
+    finally { busy = false; }
+  };
+  void tick();
+  return setInterval(tick, everyMs);
+}
+
+

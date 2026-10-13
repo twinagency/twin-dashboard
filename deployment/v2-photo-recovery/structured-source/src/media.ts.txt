@@ -177,6 +177,38 @@ export async function rest(table: string, cloneId: string): Promise<any[]> {
   return res.json();
 }
 
+export type CurrentPhotoRead = { ok: true; item: Item } | { ok: false; reason: string };
+
+/** Fresh exact-row lookup for an explicit photo reference. Never falls back to the cached catalogue. */
+export async function currentPhoto(cloneId: string, key: string, expectedStoragePath: string): Promise<CurrentPhotoRead> {
+  const id = /^photo:([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$/i.exec(key)?.[1];
+  if (!id || !cloneId || !expectedStoragePath || !config.supabaseUrl) return { ok: false, reason: "photo identity or lookup configuration is unavailable" };
+  try {
+    const get = (cols: string) => fetch(`${config.supabaseUrl}/rest/v1/photos?select=clone_id,${cols}&clone_id=eq.${encodeURIComponent(cloneId)}&id=eq.${encodeURIComponent(id)}&limit=2`, {
+      headers: { apikey: config.supabaseKey, Authorization: `Bearer ${config.supabaseKey}` }, signal: AbortSignal.timeout(3_000),
+    });
+    let res = await get(`${BASE_COLS},${FACT_COLS}`);
+    if (!res.ok) {
+      const error: any = await res.json().catch(() => ({}));
+      // Only the optional analysis migration may be absent. Auth, query, table and base-column errors are not compatibility cases.
+      if (["42703", "PGRST204"].includes(error?.code) && /\b(?:analysis_status|visual_facts)\b/i.test(`${error.message ?? ""} ${error.details ?? ""}`)) res = await get(BASE_COLS);
+      else return { ok: false, reason: `photo lookup failed (${res.status})` };
+    }
+    if (!res.ok) return { ok: false, reason: `photo lookup failed (${res.status})` };
+    const rows: unknown = await res.json();
+    if (!Array.isArray(rows) || rows.length !== 1) return { ok: false, reason: "referenced photo is missing or ambiguous" };
+    const row = rows[0];
+    if (row?.id !== id || row?.clone_id !== cloneId || row?.storage_path !== expectedStoragePath) return { ok: false, reason: "referenced photo identity or storage path changed" };
+    if (typeof row.visual_description !== "string" || !row.visual_description.trim()) return { ok: false, reason: "referenced photo has no verified description" };
+    const item = toItem("photo", row);
+    if (!["legacy", "analysed"].includes(item.analysis ?? "legacy")) return { ok: false, reason: "referenced photo analysis is not eligible" };
+    if (!item.isFree && (!Number.isInteger(item.stars) || item.stars <= 0)) return { ok: false, reason: "referenced photo has no valid paid price" };
+    return { ok: true, item };
+  } catch {
+    return { ok: false, reason: "photo lookup could not be completed" };
+  }
+}
+
 /** The stored description in whole sentences, at most `max` characters: a long one loses its last sentences, never half a word or half a fact. */
 export function wholeSentences(s: string, max: number): string {
   const t = (s ?? "").replace(/\s+/g, " ").trim();
@@ -350,6 +382,8 @@ export function pick(cat: Item[], sent: Set<string>, kind: "photo" | "video", hi
 export type MenuBundle = { id: string; desc: string };
 export type Menu = {
   free: Item | null; photos: Item[]; video: Item | null;
+  /** Exact prior-photo menu, only after a fan asks for resend/recovery. Fresh ownership decides unlocked delivery. */
+  reference?: { state: "acknowledged" | "unconfirmed" | "not-sent" | "unavailable"; owned?: boolean };
   bundle?: MenuBundle | null; // Stage 3: at most one, and it takes the place of the last locked photo
   missing?: Map<string, string[]>; // for each alt key: the requested attributes that file does not show (named to her)
   alt?: Set<string>; // Stage 3: keys of listed locked items that do NOT literally show what he asked for (his newest message named something the catalogue can describe)
@@ -396,6 +430,10 @@ export const ALT_NOTE = "closest available, not an exact match for what he asked
 
 export function menuText(m: Menu): string {
   const lines: string[] = [];
+  const prior = m.reference ? m.reference.state === "acknowledged" ? " This is the previous photo; Telegram accepted its earlier send, but that does not prove he can see it."
+    : m.reference.state === "unconfirmed" ? " This is the exact previous photo attempt; its earlier delivery was not confirmed."
+    : m.reference.state === "not-sent" ? " This is the exact previous photo attempt; it was not sent successfully."
+    : " No exact previous photo can be verified for this request. Do not guess another file or claim a send happened." : "";
   const alt = (it: Item) => {
     if (!m.alt?.has(it.key)) return "";
     const miss = m.missing?.get(it.key) ?? [];
@@ -404,10 +442,11 @@ export function menuText(m: Menu): string {
   m.photos.forEach((it, i) => lines.push(`[photo ${i + 1}] (locked): ${alt(it)}${describe(it)}`));
   if (m.video) lines.push(`[video 1] (locked): ${alt(m.video)}${describe(m.video)}`);
   if (m.bundle) lines.push(`[bundle 1] (locked): ${m.bundle.desc}`);
-  if (m.free) lines.push(`[free ${m.free.kind}] (free): ${alt(m.free)}${describe(m.free)}`);
-  if (!lines.length) return "YOUR CONTENT READY TO SEND\n(none left for him right now, so don't offer any)";
+  if (m.free) lines.push(`[free ${m.free.kind}] (${m.reference?.owned ? "already owned, resend unlocked" : "free"}): ${alt(m.free)}${describe(m.free)}`);
+  if (!lines.length) return m.reference ? `YOUR CONTENT READY TO SEND${prior}\n(none available for this request, so don't offer any)`
+    : "YOUR CONTENT READY TO SEND\n(none left for him right now, so don't offer any)";
   const altHint = m.alt?.size ? ` (A line marked "${ALT_NOTE.split(",")[0]}" is not what he asked for: if you offer it, say so in your own words and never write the marker words or "does not show" to him.)` : "";
-  return `YOUR CONTENT READY TO SEND (descriptions of you, written by someone looking at the file)${altHint}\n${lines.join("\n")}`;
+  return `YOUR CONTENT READY TO SEND (descriptions of you, written by someone looking at the file)${prior}${altHint}\n${lines.join("\n")}`;
 }
 
 /** Fixed fan-facing lines for an invalid media selection (Stage 1.1). No file goes out with either of them. */
@@ -450,3 +489,4 @@ export async function download(it: Item): Promise<Buffer> {
   if (!res.ok) throw new Error(`download failed ${res.status}`);
   return Buffer.from(await res.arrayBuffer());
 }
+

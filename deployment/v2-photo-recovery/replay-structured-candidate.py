@@ -5,7 +5,7 @@ No deployment, fan sends, production data restore or fixture overwrite.
 import argparse, datetime, hashlib, json, os, pathlib, re, subprocess, tempfile
 p = argparse.ArgumentParser()
 p.add_argument('--source-dir', required=True)
-p.add_argument('--manifest', required=True, help='JSON object mapping the four candidate source paths to SHA256')
+p.add_argument('--manifest', required=True, help='JSON object mapping the nine reviewed candidate source paths to SHA256')
 p.add_argument('--candidate-sha', required=True)
 p.add_argument('--script', required=True)
 p.add_argument('--output-dir', required=True)
@@ -22,8 +22,9 @@ output_dir = pathlib.Path(args.output_dir).resolve()
 assert output_dir != fixture and fixture not in output_dir.parents, 'Use a separate artifact directory, not the frozen fixture directory'
 assert not output_dir.exists(), 'Use a fresh result directory; previous acceptance must remain immutable'
 manifest = json.loads(pathlib.Path(args.manifest).read_text())
-required = {'src/llm.ts', 'src/turn.ts', 'src/media.ts', 'src/girls/template.ts'}
-assert set(manifest) == required, 'Mount only the four reviewed product files'
+required = {'src/llm.ts', 'src/turn.ts', 'src/media.ts', 'src/girls/template.ts',
+            'src/memory.ts', 'src/deliver.ts', 'src/payments.ts', 'src/runner.ts', 'src/bundle-offers.ts'}
+assert set(manifest) == required, 'Mount only the nine reviewed product files'
 hashes = {}
 for relative, digest in manifest.items():
     candidate = (source_dir / relative).resolve()
@@ -46,11 +47,12 @@ output_dir.mkdir(parents=True, mode=0o700)
 os.chmod(output_dir, 0o700)
 script = pathlib.Path(args.script).read_text()
 fd, envfile = tempfile.mkstemp(prefix='v2-structured-candidate-', suffix='.env')
+cidfile = pathlib.Path(envfile + '.cid')
 try:
     with os.fdopen(fd, 'w') as file:
         file.write(secret[0] + '\n')
     os.chmod(envfile, 0o600)
-    command = ['docker', 'run', '--rm', '-i', '--read-only',
+    command = ['docker', 'run', '--rm', '-i', '--read-only', '--cidfile', str(cidfile),
         '--tmpfs', '/tmp:rw,size=64m', '--memory', '512m', '--cpus', '1',
         '--env-file', envfile, '-e', 'GIT_SHA=' + revision,
         '-e', 'CANDIDATE_SHA=' + args.candidate_sha, '-e', 'CANDIDATE_HASHES=' + json.dumps(hashes),
@@ -68,12 +70,27 @@ try:
     (output_dir / 'runner.stdout.private.txt').chmod(0o600)
     summary_file = output_dir / 'structured-candidate.summary.json'
     if summary_file.is_file():
-        print(summary_file.read_text(), flush=True)
+        summary = json.loads(summary_file.read_text())
+        compact = {key: value for key, value in summary.items() if key != 'results'}
+        compact['results'] = [{key: row.get(key) for key in ['case', 'passed', 'behaviorAcceptance', 'selected', 'selection', 'provider', 'parserClassification', 'referenceAvailable', 'unresolvedOriginalRecovery']}
+            | {'failedChecks': [key for key, passed in row.get('checks', {}).items() if not passed]} for row in summary.get('results', [])]
+        (output_dir / 'structured-candidate.compact.json').write_text(json.dumps(compact))
+        (output_dir / 'structured-candidate.compact.json').chmod(0o600)
+        print('PHOTO_REFERENCE_REPLAY_JSON ' + json.dumps(compact), flush=True)
     else:
         print(json.dumps({'status': 'FAILED BEFORE SUMMARY', 'privateArtifactDirectory': str(output_dir), 'messagesSent': 0}), flush=True)
     assert hashlib.sha256(fixture_file.read_bytes()).hexdigest() == fixture_hash, 'Frozen evidence changed'
     if result.returncode:
         raise RuntimeError('Integrated candidate validation failed; private diagnostics retained; no deployment occurred')
 finally:
-    pathlib.Path(envfile).unlink(missing_ok=True)
+    # A subprocess timeout can kill only the Docker client. Stop this exact probe
+    # container too, so it cannot keep calling the model after the wrapper exits.
+    try:
+        if cidfile.is_file():
+            container_id = cidfile.read_text().strip()
+            if re.fullmatch(r'[0-9a-f]{64}', container_id):
+                subprocess.run(['docker', 'rm', '-f', container_id], capture_output=True, timeout=30)
+    finally:
+        cidfile.unlink(missing_ok=True)
+        pathlib.Path(envfile).unlink(missing_ok=True)
 

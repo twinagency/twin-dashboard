@@ -1,0 +1,117 @@
+// STAGE 3: the immutable record of every bundle card, written BEFORE the card is dispatched.
+//   data/<girl>/_bundle_offers.jsonl   local, append-only, fsynced: { type: "offer", ... } once, then { type: "outcome", ... } lines
+//   public.v2_bundle_offers            the same offer in the shared database (additive table, migration 20261011000000), so live Twin's
+//                                      revenue reader and the dashboard can name exactly what a payment bought
+// What a fan bought is the manifest stored here, never today's bundle definition: the creator can edit or delete the bundle afterwards and
+// nothing in this file changes. A failure to WRITE the offer stops the card before anything is dispatched (nothing was sent, so nothing
+// is owed); a failure to record the OUTCOME afterwards is only reported, it never causes another send.
+import fs from "node:fs";
+import path from "node:path";
+import { config } from "./config.js";
+import { girlDataDir } from "./context.js";
+import { fileKeys, type BundleOffer } from "./bundles.js";
+
+export type OfferFile = { n: number; kind: "photo" | "video"; storagePath: string; assetKey: string | null; label: string };
+export type OfferRecord = {
+  type: "offer"; v: 1;
+  offerId: string; cloneId: string; chatId: number;
+  route: "ordinary" | "business"; bundleId: string; name: string;
+  storedStars: number; stars: number; files: OfferFile[]; manifestSha256: string; quotedAt: string; payload: string;
+};
+export type OfferStatus = "acknowledged" | "rejected" | "unknown" | "not_sent";
+export type OfferOutcome = { type: "outcome"; offerId: string; status: OfferStatus; messageId?: number; at: string; detail?: string };
+
+export function offerRecord(o: BundleOffer, x: { cloneId: string; chatId: number; route: "ordinary" | "business"; payload: string }): OfferRecord {
+  return {
+    type: "offer", v: 1, offerId: o.offerId, cloneId: x.cloneId, chatId: x.chatId, route: x.route, bundleId: o.bundleId, name: o.name,
+    storedStars: o.storedStars, stars: o.stars,
+    files: o.files.map((f) => ({ n: f.n, kind: f.kind, storagePath: f.storagePath, assetKey: f.assetKey, label: f.label })),
+    manifestSha256: o.manifestSha256, quotedAt: o.quotedAt, payload: x.payload,
+  };
+}
+
+const file = () => path.join(girlDataDir(), "_bundle_offers.jsonl");
+function appendDurable(line: object) {
+  fs.mkdirSync(path.dirname(file()), { recursive: true });
+  const fd = fs.openSync(file(), "a");
+  try { fs.writeSync(fd, JSON.stringify(line) + "\n"); fs.fsyncSync(fd); } finally { fs.closeSync(fd); }
+}
+/** Throws when the offer cannot be made durable: the caller must then NOT dispatch. */
+export const writeOfferLocal = (r: OfferRecord) => appendDurable(r);
+export const writeOutcomeLocal = (o: OfferOutcome) => appendDurable(o);
+
+/** Every local offer by id, and its latest outcome. A torn last line (crash mid-write) is skipped. */
+export function readOffers(): { offers: Map<string, OfferRecord>; outcomes: Map<string, OfferOutcome> } {
+  const offers = new Map<string, OfferRecord>(), outcomes = new Map<string, OfferOutcome>();
+  let text = "";
+  try { text = fs.readFileSync(file(), "utf8"); } catch { return { offers, outcomes }; }
+  for (const l of text.split("\n")) {
+    if (!l) continue;
+    try {
+      const r = JSON.parse(l);
+      if (r?.type === "offer" && typeof r.offerId === "string" && Array.isArray(r.files) && !offers.has(r.offerId)) offers.set(r.offerId, r); // the first line is the offer; it is never replaced
+      else if (r?.type === "outcome" && typeof r.offerId === "string") outcomes.set(r.offerId, r);
+    } catch { /* torn line */ }
+  }
+  return { offers, outcomes };
+}
+export const readOffer = (offerId: string): OfferRecord | undefined => readOffers().offers.get(offerId);
+/** Ownership keys of everything in a quoted manifest: her catalogue key where the path matched her own row exactly, plus the creator-scoped storage path. */
+export const offerContentKeys = (r: { files: { assetKey: string | null; storagePath: string }[] }): string[] => r.files.flatMap((f) => fileKeys(f));
+
+// ---------- the shared database (PostgREST, service role) ----------
+export type OfferStore = {
+  /** Insert the offer (idempotent on its id). Throws when it was not stored. */
+  persist(r: OfferRecord): Promise<void>;
+  /** Record what Telegram answered. Best effort: the caller reports a failure and never sends again because of it. */
+  outcome(o: OfferOutcome): Promise<void>;
+};
+const hdr = () => ({ apikey: config.supabaseKey, Authorization: `Bearer ${config.supabaseKey}`, "Content-Type": "application/json" });
+const base = () => `${config.supabaseUrl}/rest/v1/v2_bundle_offers`;
+
+export const supabaseOfferStore: OfferStore = {
+  async persist(r) {
+    const row = {
+      id: r.offerId, clone_id: r.cloneId, telegram_id: r.chatId, route: r.route, bundle_id: r.bundleId, bundle_name: r.name,
+      stored_stars: r.storedStars, quoted_stars: r.stars, manifest_sha256: r.manifestSha256, quoted_at: r.quotedAt,
+      manifest: r.files.map((f) => ({ n: f.n, kind: f.kind, storage_path: f.storagePath, asset_key: f.assetKey, label: f.label })),
+    };
+    const res = await fetch(base(), { method: "POST", headers: { ...hdr(), Prefer: "resolution=ignore-duplicates,return=minimal" }, body: JSON.stringify(row), signal: AbortSignal.timeout(5_000) });
+    if (!res.ok) throw new Error(`v2_bundle_offers insert ${res.status}: ${(await res.text()).slice(0, 160)}`);
+  },
+  async outcome(o) {
+    const status = o.status;
+    const res = await fetch(`${base()}?id=eq.${o.offerId}&delivery_status=in.(prepared,unknown)`, {
+      method: "PATCH", headers: { ...hdr(), Prefer: "return=minimal" }, signal: AbortSignal.timeout(5_000),
+      body: JSON.stringify({ delivery_status: status, telegram_message_id: o.messageId ?? null, delivery_updated_at: o.at }),
+    });
+    if (!res.ok) throw new Error(`v2_bundle_offers outcome ${res.status}: ${(await res.text()).slice(0, 160)}`);
+  },
+};
+
+/** True when the shared table exists and is readable with this key. Bundles are only ever listed while this holds (a missing migration = feature off). */
+export async function offerTableReady(): Promise<boolean> {
+  try {
+    const res = await fetch(`${base()}?select=id&limit=1`, { headers: hdr(), signal: AbortSignal.timeout(5_000) });
+    return res.ok;
+  } catch { return false; }
+}
+
+/** Offers by id from the shared database (ownership on a box that does not hold the local file). Never throws; unknown ids are simply absent. */
+export async function fetchOffers(ids: string[], scope?: { cloneId: string; fanId: number }): Promise<Map<string, OfferFile[]>> {
+  const out = new Map<string, OfferFile[]>();
+  const uuid = ids.filter((i) => /^[0-9a-f-]{36}$/i.test(i));
+  if (!uuid.length || !config.supabaseUrl) return out;
+  try {
+    const scopeQuery = scope ? `&clone_id=eq.${encodeURIComponent(scope.cloneId)}&telegram_id=eq.${scope.fanId}` : "";
+    const res = await fetch(`${base()}?select=id,manifest${scope ? ",clone_id,telegram_id" : ""}&id=in.(${uuid.join(",")})${scopeQuery}`, { headers: hdr(), signal: AbortSignal.timeout(3_000) });
+    if (!res.ok) return out;
+    for (const r of (await res.json()) as any[]) {
+      if (scope && (r.clone_id !== scope.cloneId || Number(r.telegram_id) !== scope.fanId || !uuid.includes(String(r.id)))) continue;
+      if (!Array.isArray(r.manifest)) continue;
+      out.set(String(r.id), r.manifest.map((f: any): OfferFile => ({ n: Number(f.n), kind: f.kind, storagePath: String(f.storage_path), assetKey: f.asset_key ?? null, label: String(f.label ?? "") })));
+    }
+  } catch { /* the local manifest (or none) is used */ }
+  return out;
+}
+

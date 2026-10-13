@@ -1,0 +1,591 @@
+// Stage 1.1: the ONE send path. A fan turn is prepared by runTurn (turn.ts), then delivered here:
+//   1 prepare / download   2 dispatch to Telegram   3 record what Telegram acknowledged   4 update cache, history, logs.
+// "Sent" means Telegram acknowledged the API request (not that he read it or paid). Nothing is ever said twice to
+// "make up" for a local problem: once Telegram has answered, only local bookkeeping can fail, and that is recorded.
+//
+// Telegram answers, in the grammY error types that are installed:
+//   (returns)       acknowledged: the message exists, we have its message id
+//   GrammyError     an explicit Bot API rejection: nothing was delivered
+//   HttpError/other the request was dispatched but we never got an answer (timeout, connection loss): UNKNOWN,
+//                   neither confirmed nor failed, so the media is never resent automatically
+//   (download etc.) a preparation error happens BEFORE dispatch: definitely not delivered
+import { randomUUID } from "node:crypto";
+import { GrammyError, InputFile, type Api } from "grammy";
+import { runAs } from "./context.js";
+import type { Girl } from "./girls/index.js";
+import type { Item } from "./media.js";
+import { appendNoteIfCurrent, commitDelivery, getFileId, loadChat, setFileId, type DeliveryCommit, type PhotoContext } from "./memory.js";
+import { tipHistoryNote } from "./tips/offer.js";
+import { payloadFor, priceFor } from "./payments.js";
+import { bundlePayload, countsText, MAX_PHOTO_BYTES, MAX_VIDEO_BYTES, snapshotOffer, type Bundle, type BundleBook, type BundleFile, type BundleOffer } from "./bundles.js";
+import { offerRecord, writeOfferLocal, writeOutcomeLocal, type OfferOutcome, type OfferStatus, type OfferStore } from "./bundle-offers.js";
+import { logRequest, logTurn, runTurn, type Attempt, type Delivery, type PhotoVerification, type RequestRecord, type Route, type TurnResult, type WriteResult } from "./turn.js";
+
+/** The only Telegram calls the delivery path makes. A real grammY Api satisfies this; tests inject one with a fake transport. */
+export type SendApi = Pick<Api, "sendMessage" | "sendPhoto" | "sendVideo" | "sendPaidMedia" | "sendChatAction">;
+export type Deps = {
+  girl: Girl;
+  catalogue: Item[];
+  api: SendApi;
+  wait: (ms: number) => Promise<void>; // the typing delay
+  now: () => number;
+  download: (it: Item) => Promise<Buffer>; // the real file from private storage
+  loadOwnership: (cloneId: string, chatId: number) => Promise<string>;
+  /** Fresh exact-photo eligibility and ownership, used only for an explicit reference to the previous photo. */
+  verifyPhoto?: (key: string, path: string, chatId: number) => Promise<PhotoVerification>;
+  isActive: () => boolean; // false once this runner was stopped / replaced
+  mode: "real" | "simulated"; // simulated = nothing reaches Telegram; its rows never count as live deliveries
+  /** Stage 2B: the message-credit gate. Absent (tests, feature code not wired) = exactly Stage 1.1. */
+  credit?: import("./credits/runtime.js").CreditRuntime;
+  /** Stage 3: her bundle inventory and the store that makes an offer durable BEFORE its card is dispatched. Either absent = no bundle is ever listed or sent. */
+  bundles?: () => BundleBook;
+  bundleOffers?: OfferStore;
+  /** Stage 4: the tip product. Absent = exactly Stage 3 (no tip instruction in her prompt, no tip message, no [tip] parsing). */
+  tips?: import("./tips/adapter.js").TipRuntime;
+  /** Stage 5: the durable archive + memory. Absent, or switched off = exactly Stage 4 (same request, nothing archived, no database call). */
+  memory?: import("./memory/runtime.js").MemoryRuntime;
+};
+/** One fan turn: his merged lines plus the chat epoch and the route captured when the first line was queued. */
+export type Job = {
+  chatId: number; who: string; text: string; epoch: number; route: Route;
+  /** Stage 2B: Telegram message ids of every line merged into this turn (the credit gate's durable input identity). */
+  messageIds?: number[];
+  /** Stage 2B: the newest-input sequence number the credit runtime gave the last line of this turn when it arrived (see CreditRuntime.noteInput). */
+  inputSeq?: number;
+  /** Stage 2B: called the moment Telegram acknowledges a plain billable model TEXT (never a fixed line, never media). */
+  onTextAcknowledged?: (messageId?: number) => void;
+  /** Stage 4: the tip flow decided (before the credit gate) that this fan line is his own tip offer / acceptance / amount. Carried, never decided here. */
+  tip?: import("./tips/adapter.js").TipPlan;
+};
+
+// ---------- fixed neutral lines (no model call, never retried) ----------
+export const RECOVERY_FAILED = "that didn’t send, sorry"; // media definitely not delivered
+export const RECOVERY_UNKNOWN = "i couldn’t confirm that went through"; // media dispatched, outcome unknown
+
+// ---------- captions ----------
+/** Telegram allows 1,024 characters after entity parsing; Stage 1.1 uses a conservative 1,000 UTF-16 code units. */
+export const CAPTION_MAX = 1000;
+/**
+ * Deterministic bound for a media caption: at most `max` UTF-16 code units, never splitting a surrogate pair, preferring
+ * the end of a complete sentence (if that keeps at least half the allowance), else a word boundary, else a plain cut.
+ */
+export function trimCaption(text: string, max = CAPTION_MAX): string {
+  if (text.length <= max) return text;
+  let head = text.slice(0, max);
+  const lastUnit = head.charCodeAt(head.length - 1);
+  if (lastUnit >= 0xd800 && lastUnit <= 0xdbff) head = head.slice(0, -1); // the pair would be cut in half
+  const next = text[head.length] ?? " "; // the code unit right after what we keep
+  const floor = Math.floor(max / 2);
+  for (let i = head.length - 1; i >= floor; i--) { // 1. a complete sentence
+    if (/[.!?…]/.test(head[i]) && /\s/.test(i === head.length - 1 ? next : head[i + 1])) return head.slice(0, i + 1);
+  }
+  if (/\s/.test(next)) return head.trimEnd(); // 2. what we keep already ends on a whole word
+  const space = Math.max(head.lastIndexOf(" "), head.lastIndexOf("\n"), head.lastIndexOf("\t"));
+  if (space >= floor) return head.slice(0, space).trimEnd(); // 2. the last whole word
+  return head; // 3. no usable boundary (one very long word): plain cut
+}
+
+// ---------- error semantics ----------
+const msg = (e: unknown) => String((e as any)?.message ?? e).slice(0, 200);
+/**
+ * Descriptions Telegram gives when a cached file reference is no longer valid (lower case). The cached-send retry is allowed
+ * ONLY for a GrammyError with code 400 whose description starts with one of these, and only for a request that used a cached id.
+ * Anything else (other 400s, 401, 403, 429, timeouts, a generic Error that merely contains these words) is never retried.
+ */
+export const STALE_FILE_REF_DESCRIPTIONS = [
+  "bad request: wrong file identifier/http url specified",
+  "bad request: wrong remote file identifier specified", // Telegram appends ": Wrong string length" etc.
+];
+export function isStaleFileRef(a: Attempt): boolean {
+  return a.status === "rejected" && a.code === 400 && typeof a.description === "string"
+    && STALE_FILE_REF_DESCRIPTIONS.some((d) => a.description!.toLowerCase().startsWith(d));
+}
+const NO_RIGHTS_400 = /not enough rights|have no rights|rights to send|write_forbidden|send_\w+_forbidden|business[_ ](?:connection|peer)/i;
+/** Why replying on this route is pointless (no recovery text is attempted): missing permission, invalid credentials, rate limit. */
+export function replyBlockedBy(a: Attempt): string | undefined {
+  if (a.status !== "rejected") return undefined;
+  if (a.code === 401) return "invalid credentials (401)";
+  if (a.code === 403) return `no permission (403${a.description ? `: ${a.description}` : ""})`;
+  if (a.code === 429) return "rate limit (429)";
+  if (a.code === 400 && a.description && NO_RIGHTS_400.test(a.description)) return `no permission (400: ${a.description})`;
+  return undefined;
+}
+/** A thrown Telegram call -> its outcome. GrammyError = explicit rejection; anything else after dispatch = unknown. */
+export function attemptFromError(e: unknown): Attempt {
+  if (e instanceof GrammyError) {
+    const retryAfter = (e.parameters as any)?.retry_after;
+    return { status: "rejected", code: e.error_code, description: e.description, ...(typeof retryAfter === "number" ? { retryAfter } : {}) };
+  }
+  return { status: "unknown", error: msg(e) };
+}
+function recoveryFor(a: Attempt): { text: string } | { suppressed: string } {
+  if (a.status === "cancelled") return { suppressed: "turn stale or runner stopped" };
+  const blocked = replyBlockedBy(a);
+  if (blocked) return { suppressed: blocked };
+  return { text: a.status === "unknown" ? RECOVERY_UNKNOWN : RECOVERY_FAILED }; // rejected / prepare-failed = definite, unknown = unconfirmed
+}
+
+// ---------- the pieces of one send ----------
+type Ropt = { business_connection_id?: string };
+const routeOpt = (route: Route): Ropt => (route.bcid ? { business_connection_id: route.bcid } : {});
+/** What a send needs: where, which route, and whether the turn is still allowed to speak. */
+type Pipe = { d: Deps; chatId: number; ropt: Ropt; current: () => boolean;
+  beforePhotoDispatch?: () => Promise<string | undefined>;
+  bypassPhotoCache?: boolean;
+};
+type MediaAttempt = Attempt & { fileId?: string; uploaded: boolean };
+
+/** One media request: prepare (download unless a cached id is used), re-check the turn, dispatch, read the answer. */
+async function mediaAttempt(p: Pipe, it: Item, free: boolean, caption: string | undefined, stars: number, cachedId: string | undefined): Promise<MediaAttempt> {
+  if (!p.current()) return { status: "cancelled", uploaded: !cachedId }; // e.g. the chat was reset while a cached-id request was in flight: no retry download either
+  let media: string | InputFile;
+  if (cachedId) media = cachedId;
+  else {
+    if (free && p.current()) await p.d.api.sendChatAction(p.chatId, it.kind === "video" ? "upload_video" : "upload_photo", p.ropt).catch(() => {});
+    try { media = new InputFile(await p.d.download(it), it.storagePath.replace(/^.*\//, "")); }
+    catch (e) { return { status: "prepare-failed", error: msg(e), uploaded: true }; } // nothing was dispatched
+  }
+  if (!p.current()) return { status: "cancelled", uploaded: !cachedId }; // after waits and downloads, immediately before the send
+  if (p.beforePhotoDispatch) {
+    try {
+      const reason = await p.beforePhotoDispatch();
+      if (reason) return { status: "prepare-failed", error: reason, uploaded: !cachedId };
+    } catch (e) { return { status: "prepare-failed", error: `photo verification failed: ${msg(e)}`, uploaded: !cachedId }; }
+    if (!p.current()) return { status: "cancelled", uploaded: !cachedId };
+  }
+  let sent: any;
+  try {
+    if (!free) {
+      // Locked item = a real Telegram Stars paid post: blurred, "Unlock for N Stars", her text as the caption.
+      sent = await p.d.api.sendPaidMedia(p.chatId, stars, [{ type: it.kind, media } as any], { ...(caption ? { caption } : {}), payload: payloadFor(it.key), ...p.ropt } as any);
+    } else {
+      const opt = { ...(caption ? { caption } : {}), ...p.ropt };
+      sent = it.kind === "video"
+        ? await p.d.api.sendVideo(p.chatId, media, cachedId ? opt : { supports_streaming: true, ...opt })
+        : await p.d.api.sendPhoto(p.chatId, media, opt);
+    }
+  } catch (e) { return { ...attemptFromError(e), uploaded: !cachedId }; }
+  // From here on Telegram HAS accepted it: reading the answer can never turn this into a failure.
+  let fileId: string | undefined;
+  try {
+    if (!free) { const pm = sent?.paid_media?.paid_media?.[0]; fileId = it.kind === "video" ? pm?.video?.file_id : pm?.photo?.at?.(-1)?.file_id; }
+    else fileId = it.kind === "video" ? sent?.video?.file_id : sent?.photo?.at?.(-1)?.file_id;
+  } catch { /* no file id to remember; the send stands */ }
+  return { status: "acknowledged", messageId: typeof sent?.message_id === "number" ? sent.message_id : undefined, fileId, uploaded: !cachedId };
+}
+
+/**
+ * Send one media item: with the cached file id if there is one; if (and only if) Telegram explicitly rejects that cached
+ * reference as invalid, ONE upload retry of the same file, caption, route, price and payload (re-checking the turn first).
+ * Afterwards an uploaded file's new id is remembered (a failure to save it is reported, never a reason to send again).
+ */
+async function sendMediaItem(p: Pipe, it: Item, free: boolean, caption: string | undefined, stars: number) {
+  const photoPath = it.kind === "photo" ? it.storagePath : undefined;
+  const cachedId = p.bypassPhotoCache ? undefined : getFileId(it.key, photoPath);
+  let att = await mediaAttempt(p, it, free, caption, stars, cachedId);
+  let first: Attempt | undefined;
+  if (cachedId && isStaleFileRef(att)) {
+    first = { status: att.status, code: att.code, description: att.description };
+    att = await mediaAttempt(p, it, free, caption, stars, undefined);
+  }
+  let cacheWrite: WriteResult | undefined;
+  if (att.status === "acknowledged" && att.fileId && att.uploaded) {
+    try { setFileId(it.key, att.fileId, photoPath); cacheWrite = { ok: true }; }
+    catch (e) { cacheWrite = { ok: false, error: msg(e) }; console.error(`[error] chat=${p.chatId} file id for ${it.key} not saved: ${msg(e)}`); }
+  }
+  const { fileId: _f, uploaded: _u, ...outcome } = att;
+  return { att: outcome as Attempt, cachedRef: !!cachedId, retried: !!first, first, cacheWrite };
+}
+
+/** The unlock button path (u:): send the full file to the chat it was tapped in, same rules, no history or recovery text. */
+export async function sendFreeItem(d: Deps, chatId: number, route: Route, it: Item): Promise<Attempt> {
+  return runAs(d.girl.slug, async () => {
+    const epoch = loadChat(chatId).epoch;
+    const current = () => d.isActive() && loadChat(chatId).epoch === epoch;
+    if (!current()) return { status: "cancelled" };
+    // A legacy unlock-button attempt is newer media, but has no queued-turn reference record. Never leave an older photo reusable.
+    try { if (!commitDelivery(chatId, epoch, { photo: null })) return { status: "cancelled" }; }
+    catch (e) { return { status: "prepare-failed", error: `previous photo context could not be cleared: ${msg(e)}` }; }
+    return (await sendMediaItem({ d, chatId, ropt: routeOpt(route), current }, it, true, undefined, 0)).att;
+  });
+}
+
+// ---------- one turn ----------
+type Ctx = Pipe & { job: Job; rec: RequestRecord; delivery: Delivery; delivered: string[]; finalized: boolean };
+
+const cancelled = (c: Ctx, stage: string) => { c.delivery.cancelled ??= { reason: c.d.isActive() ? "reset" : "stopped", stage }; };
+
+/** The request was already dispatched when the chat was reset / the runner stopped: it cannot be recalled, so only note it. */
+const afterDispatch = (c: Ctx) => { if (!c.current()) cancelled(c, "after the request was dispatched"); };
+
+/** The ONE history commit for what Telegram acknowledged (synchronous, epoch-checked; see memory.commitDelivery). */
+function commit(c: Ctx, which: "reply" | "recovery", data: DeliveryCommit) {
+  const slot = (c.delivery.historyWrite ??= {});
+  try {
+    slot[which] = commitDelivery(c.chatId, c.job.epoch, data) ? { ok: true } : { ok: false, skipped: "the chat was reset after the send, so it was not written back" };
+  } catch (e) {
+    slot[which] = { ok: false, error: msg(e) };
+    console.error(`[error] chat=${c.chatId} sent but not saved to history (${which}): ${msg(e)}`);
+  }
+}
+
+/** Plain text: dispatch once. A failure is recorded and never retried. */
+async function sendText(c: Ctx, text: string): Promise<Attempt> {
+  if (!c.current()) return { status: "cancelled" };
+  try {
+    const sent = await c.d.api.sendMessage(c.chatId, text, c.ropt);
+    return { status: "acknowledged", messageId: typeof sent?.message_id === "number" ? sent.message_id : undefined };
+  } catch (e) { return attemptFromError(e); }
+}
+
+async function sendTextTurn(c: Ctx, text: string) {
+  const a = await sendText(c, text);
+  c.delivery.text = a;
+  if (a.status === "cancelled") return cancelled(c, "before the text send");
+  afterDispatch(c);
+  if (a.status !== "acknowledged") return; // not saved as spoken; no second try
+  // Stage 2B: durable delivery evidence for the credit turn, before any history write. Only a plain model text is billable.
+  if (c.job.onTextAcknowledged && !c.delivery.fixedLine && !c.delivery.invalidSelection) {
+    try { c.job.onTextAcknowledged(a.messageId); } catch (e) { console.error(`[error] chat=${c.chatId} credit evidence not recorded: ${msg(e)}`); }
+  }
+  c.delivered.push(text);
+  commit(c, "reply", { text });
+}
+
+/** After media that was not delivered or not confirmed: at most ONE neutral text, never the original caption, never retried. */
+async function recover(c: Ctx, att: Attempt) {
+  const plan = recoveryFor(att);
+  if ("suppressed" in plan) { c.delivery.recovery = { status: "not-attempted", suppressed: plan.suppressed }; return; }
+  const a = await sendText(c, plan.text);
+  if (a.status === "cancelled") { c.delivery.recovery = { status: "not-attempted", suppressed: "turn stale or runner stopped", text: plan.text }; return; }
+  c.delivery.recovery = { ...a, text: plan.text };
+  afterDispatch(c);
+  if (a.status !== "acknowledged") return; // recorded apart from the media outcome; no second try
+  c.delivered.push(plan.text);
+  commit(c, "recovery", { text: plan.text });
+}
+
+/** The reference is evidence from this exact creator, route, epoch and delivery mode, never from conversational prose. */
+function samePhoto(c: Ctx, photo: PhotoContext | undefined, turnId: string, it: Item): boolean {
+  return !!photo && photo.turnId === turnId && photo.cloneId === c.d.girl.cloneId && photo.epoch === c.job.epoch
+    && photo.mode === c.d.mode && photo.bcid === c.job.route.bcid && photo.key === it.key && photo.storagePath === it.storagePath;
+}
+
+/** A preparation must be durable before dispatch; a failed outcome write is diagnostic and never triggers another media send. */
+function writePhoto(c: Ctx, data: DeliveryCommit, stage: string): boolean {
+  try {
+    if (commitDelivery(c.chatId, c.job.epoch, data)) return true;
+    throw new Error("photo context or chat epoch is no longer current");
+  } catch (e) {
+    const detail = `${stage}: ${msg(e)}`;
+    c.delivery.error = c.delivery.error ? `${c.delivery.error}; ${detail}` : detail;
+    console.error(`[error] chat=${c.chatId} turn=${c.rec.turnId} ${detail}`);
+    return false;
+  }
+}
+
+async function stopMediaPreparation(c: Ctx, error: string) {
+  const att: Attempt = c.current() ? { status: "prepare-failed", error } : { status: "cancelled" };
+  c.delivery.media = { ...att, cachedRef: false, retried: false };
+  if (att.status === "cancelled") return cancelled(c, "before the media send");
+  await recover(c, att);
+}
+
+async function sendMediaTurn(c: Ctx, it: Item, free: boolean, text: string, reference?: TurnResult["photoReference"]) {
+  const { rec, delivery } = c;
+  let photo: PhotoContext | undefined;
+  let pipe: Pipe = c;
+  if (it.kind === "photo") {
+    if (reference && !samePhoto(c, loadChat(c.chatId).photo, reference.turnId, it)) {
+      await stopMediaPreparation(c, "the referenced photo context changed before preparation"); return;
+    }
+    photo = { v: 1, cloneId: c.d.girl.cloneId, key: it.key, storagePath: it.storagePath, epoch: c.job.epoch,
+      turnId: rec.turnId!, at: c.d.now(), mode: c.d.mode, status: "prepared", ...(c.job.route.bcid ? { bcid: c.job.route.bcid } : {}) };
+    if (!writePhoto(c, { photo, ...(reference ? { photoExpectedTurnId: reference.turnId } : {}) }, "photo preparation not stored")) {
+      await stopMediaPreparation(c, "photo preparation could not be stored"); return;
+    }
+    const prepared = photo;
+    pipe = { ...c, bypassPhotoCache: !!reference, beforePhotoDispatch: async () => {
+      const current = () => {
+        const latest = loadChat(c.chatId).photo;
+        return samePhoto(c, latest, prepared.turnId, it) && latest?.status === "prepared";
+      };
+      if (!current()) return "the prepared photo context is no longer current";
+      if (reference) {
+        if (!c.d.verifyPhoto) return "fresh photo verification is unavailable";
+        const read = await c.d.verifyPhoto(it.key, it.storagePath, c.chatId);
+        if (!read.photo.ok) return `referenced photo unavailable: ${read.photo.reason}`;
+        if (!read.ownership.ok) return `photo ownership unavailable: ${read.ownership.reason}`;
+        const item = read.photo.item;
+        if (item.kind !== "photo" || item.key !== it.key || item.storagePath !== it.storagePath
+          || (item.analysis !== undefined && item.analysis !== "legacy" && item.analysis !== "analysed")) return "referenced photo identity or eligibility changed";
+        if (item.stars !== it.stars || !!item.isFree !== !!it.isFree) return "referenced photo price or free status changed";
+        const owned = read.ownership.keys.has(item.key) || read.ownership.keys.has(`file:${item.storagePath}`);
+        if ((!!item.isFree || owned) !== free) return "referenced photo ownership changed the required delivery";
+      }
+      // Verification and download can both yield; reset or a newer media attempt must win before dispatch.
+      if (!current()) return "the prepared photo context changed during verification";
+      return undefined;
+    } };
+  } else if (!writePhoto(c, { photo: null }, "previous photo context not cleared for video")) {
+    await stopMediaPreparation(c, "previous photo context could not be cleared"); return;
+  }
+  const stars = free ? 0 : priceFor(it.stars, { cloneId: c.d.girl.cloneId, telegramId: c.chatId, kind: it.kind }); // the amount actually passed to Telegram (a free file costs nothing)
+  const caption = text ? trimCaption(text) : undefined;
+  if (caption !== undefined && caption.length !== text.length) delivery.captionTrimmed = { from: text.length, to: caption.length };
+  const out = await sendMediaItem(pipe, it, free, caption, stars);
+  delivery.media = { ...out.att, cachedRef: out.cachedRef, retried: out.retried, ...(out.first ? { firstAttempt: out.first } : {}) };
+  if (out.cacheWrite) delivery.cacheWrite = out.cacheWrite;
+  if (out.att.status !== "cancelled") afterDispatch(c);
+  if (out.att.status === "acknowledged") {
+    rec.media = { key: it.key, kind: it.kind, free, stars, label: it.label };
+    if (caption) c.delivered.push(caption);
+    const note = free ? `[sent him free ${it.kind}: ${it.label}]` : `[locked ${it.kind} waiting for him to unlock: ${it.label}]`; // same notes as before
+    commit(c, "reply", { text: caption, note, sentKey: it.key,
+      ...(photo ? { photo: { ...photo, status: "acknowledged", messageId: out.att.messageId }, photoExpectedTurnId: photo.turnId } : {}) });
+    return;
+  }
+  if (photo) writePhoto(c, { photo: { ...photo, status: out.att.status === "not-attempted" ? "prepare-failed" : out.att.status }, photoExpectedTurnId: photo.turnId }, "photo outcome not stored");
+  if (out.att.status === "cancelled") return cancelled(c, "before the media send");
+  await recover(c, out.att);
+}
+
+// ---------- Stage 3: one bundle = one paid-media card with the exact files ----------
+const bundleLabel = (b: Bundle) => `${b.files.length} files (${countsText(b.files)}): ${b.files.map((f) => f.label).filter(Boolean).join("; ")}`.slice(0, 300);
+/** The key under which a file's Telegram reference is remembered: her catalogue key when the path matched her own row, else the creator-scoped path. */
+const cacheKeyOf = (f: BundleFile) => f.assetKey ?? `file:${f.storagePath}`;
+type BundleAttempt = Attempt & { fileIds?: (string | undefined)[]; uploaded: boolean[] };
+
+/** One bundle request: prepare every file (download unless a cached reference is used), re-check the turn, dispatch ONE sendPaidMedia, read the answer. */
+async function bundleAttempt(p: Pipe, offer: BundleOffer, caption: string | undefined, payload: string, useCache: boolean): Promise<BundleAttempt> {
+  const cached = offer.files.map((f) => (useCache ? getFileId(cacheKeyOf(f)) : undefined));
+  const uploaded = cached.map((id) => !id);
+  if (!p.current()) return { status: "cancelled", uploaded };
+  const media: any[] = [];
+  for (const [i, f] of offer.files.entries()) {
+    if (cached[i]) { media.push({ type: f.kind, media: cached[i] }); continue; }
+    try {
+      const bytes = await p.d.download({ key: cacheKeyOf(f), kind: f.kind, storagePath: f.storagePath } as Item);
+      if (bytes.length > (f.kind === "photo" ? MAX_PHOTO_BYTES : MAX_VIDEO_BYTES)) throw new Error(`file ${f.n} is over Telegram's upload limit`);
+      media.push({ type: f.kind, media: new InputFile(bytes, f.storagePath.replace(/^.*\//, "")) });
+    } catch (e) { return { status: "prepare-failed", error: msg(e), uploaded }; } // nothing was dispatched
+  }
+  if (!p.current()) return { status: "cancelled", uploaded };
+  let sent: any;
+  try { sent = await p.d.api.sendPaidMedia(p.chatId, offer.stars, media, { ...(caption ? { caption } : {}), payload, ...p.ropt } as any); }
+  catch (e) { return { ...attemptFromError(e), uploaded }; }
+  // From here on Telegram HAS accepted it: reading the answer can never turn this into a failure.
+  const fileIds: (string | undefined)[] = [];
+  try {
+    const pm: any[] = sent?.paid_media?.paid_media ?? [];
+    offer.files.forEach((f, i) => fileIds.push(f.kind === "video" ? pm[i]?.video?.file_id : pm[i]?.photo?.at?.(-1)?.file_id));
+  } catch { /* no file ids to remember; the send stands */ }
+  return { status: "acknowledged", messageId: typeof sent?.message_id === "number" ? sent.message_id : undefined, fileIds, uploaded };
+}
+
+/** Record the answer for the shared offer row too. Best effort and ONLY reporting: it can never cause another send. */
+async function noteOutcome(c: Ctx, offer: BundleOffer, status: OfferStatus, a?: Attempt) {
+  const o: OfferOutcome = { type: "outcome", offerId: offer.offerId, status, ...(a?.messageId !== undefined ? { messageId: a.messageId } : {}), at: new Date(c.d.now()).toISOString(), ...(a?.description || a?.error ? { detail: String(a.description ?? a.error).slice(0, 160) } : {}) };
+  const w: NonNullable<Delivery["bundle"]>["outcomeWrite"] = {};
+  try { writeOutcomeLocal(o); w.local = { ok: true }; } catch (e) { w.local = { ok: false, error: msg(e) }; console.error(`[error] chat=${c.chatId} bundle offer ${offer.offerId} outcome not saved locally: ${msg(e)}`); }
+  try { await c.d.bundleOffers?.outcome(o); w.shared = { ok: true }; } catch (e) { w.shared = { ok: false, error: msg(e) }; console.error(`[error] chat=${c.chatId} bundle offer ${offer.offerId} outcome not saved in the database: ${msg(e)}`); }
+  if (c.delivery.bundle) c.delivery.bundle.outcomeWrite = w;
+}
+
+async function sendBundleTurn(c: Ctx, bundle: Bundle, text: string) {
+  const { rec, delivery } = c;
+  if (!writePhoto(c, { photo: null }, "previous photo context not cleared for bundle")) {
+    await stopMediaPreparation(c, "previous photo context could not be cleared"); return;
+  }
+  const offerId = randomUUID();
+  const offer = snapshotOffer(bundle, offerId, priceFor(bundle.stars)); // the exact files, order and price quoted for THIS card; a later edit of the bundle changes none of it
+  const payload = bundlePayload(bundle.id, offerId);
+  const caption = text ? trimCaption(text) : undefined;
+  if (caption !== undefined && caption.length !== text.length) delivery.captionTrimmed = { from: text.length, to: caption.length };
+  delivery.bundle = { offerId, bundleId: bundle.id, files: offer.files.length, storedStars: offer.storedStars, quotedStars: offer.stars };
+  rec.selectedMedia = { key: `bundle:${bundle.id}`, kind: "bundle", free: false, stars: offer.stars, label: bundleLabel(bundle), bundle: { offerId, bundleId: bundle.id, files: offer.files.length, storedStars: offer.storedStars } };
+
+  // 1. The offer is made durable BEFORE the card is dispatched. If that fails nothing has been sent, so nothing can be owed.
+  const record = offerRecord(offer, { cloneId: c.d.girl.cloneId, chatId: c.chatId, route: c.job.route.bcid ? "business" : "ordinary", payload });
+  let att: Attempt = { status: "not-attempted" };
+  let first: Attempt | undefined, cachedRef = false, retried = false, cacheNotes: WriteResult | undefined;
+  let stored = false;
+  try {
+    writeOfferLocal(record);
+    await c.d.bundleOffers!.persist(record);
+    stored = true;
+    delivery.bundle.persisted = true;
+  } catch (e) {
+    att = { status: "prepare-failed", error: `offer not stored: ${msg(e)}` }; // nothing was dispatched
+    console.error(`[error] chat=${c.chatId} bundle offer ${offerId} not stored, card NOT sent: ${msg(e)}`);
+  }
+  if (stored) {
+    // 2. Dispatch once; the only automatic repeat is ONE re-upload of the SAME card when Telegram explicitly rejects a cached file reference.
+    let r = await bundleAttempt(c, offer, caption, payload, true);
+    cachedRef = r.uploaded.some((u) => !u);
+    if (cachedRef && isStaleFileRef(r)) {
+      first = { status: r.status, code: r.code, description: r.description };
+      r = await bundleAttempt(c, offer, caption, payload, false);
+      retried = true;
+    }
+    const { fileIds, uploaded, ...outcome } = r;
+    att = outcome as Attempt;
+    if (r.status === "acknowledged") { // Telegram has the card: whatever fails below is only reported
+      for (const [i, f] of offer.files.entries()) {
+        const id = fileIds?.[i];
+        if (!id || !uploaded[i]) continue;
+        try { setFileId(cacheKeyOf(f), id); } catch (e) { cacheNotes = { ok: false, error: msg(e) }; console.error(`[error] chat=${c.chatId} file id for ${cacheKeyOf(f)} not saved: ${msg(e)}`); }
+      }
+      cacheNotes ??= { ok: true };
+    }
+  }
+  delivery.media = { ...att, cachedRef, retried, ...(first ? { firstAttempt: first } : {}) };
+  if (cacheNotes) delivery.cacheWrite = cacheNotes;
+  if (att.status !== "cancelled" && att.status !== "prepare-failed") afterDispatch(c);
+  await noteOutcome(c, offer, att.status === "acknowledged" ? "acknowledged" : att.status === "rejected" ? "rejected" : att.status === "unknown" ? "unknown" : "not_sent", att);
+  if (att.status === "acknowledged") {
+    rec.media = { key: `bundle:${bundle.id}`, kind: "bundle", free: false, stars: offer.stars, label: bundleLabel(bundle), bundle: { offerId, bundleId: bundle.id, files: offer.files.length, storedStars: offer.storedStars } };
+    if (caption) c.delivered.push(caption);
+    const note = `[locked bundle of ${offer.files.length} items waiting for him to unlock: ${offer.files.map((f) => f.label).filter(Boolean).join("; ").slice(0, 240)}]`;
+    commit(c, "reply", { text: caption, note, sentKey: `bundle:${bundle.id}` });
+    return;
+  }
+  if (att.status === "cancelled") return cancelled(c, "before the media send");
+  await recover(c, att);
+}
+
+/** Everything between "his lines are ready" and "the row is written". Returns what runTurn prepared (if it got that far). */
+async function prepareAndSend(c: Ctx): Promise<TurnResult | undefined> {
+  const { d, job, rec, delivery } = c;
+  await d.api.sendChatAction(c.chatId, "typing", c.ropt).catch(() => {});
+  { const note = await d.loadOwnership(d.girl.cloneId, c.chatId); if (note !== "cached" && note !== "refreshed") console.log(`[owned] chat=${c.chatId} ${note}`); }
+  if (!c.current()) { cancelled(c, "while loading what he owns"); return undefined; }
+  // Stage 4: a fan-initiated tip turn lists no content; otherwise she may be allowed ONE natural invitation (decided by code, from the tip state).
+  const tipPlan = d.tips ? job.tip : undefined;
+  const verdict = d.tips && !tipPlan ? d.tips.inviteVerdict(c.chatId, job.epoch) : undefined;
+  if (d.tips && tipPlan) rec.tip = { path: "none", mediaSuppressed: true };
+  const mem = d.memory;
+  const r = await runTurn(d.girl, d.catalogue, c.chatId, job.text, { epoch: job.epoch, route: job.route, rec, ...(d.bundles && d.bundleOffers ? { bundles: d.bundles } : {}),
+    ...(d.verifyPhoto ? { photo: { mode: d.mode, verify: (key: string, path: string) => d.verifyPhoto!(key, path, c.chatId) } } : {}),
+    ...(d.tips ? { tips: { fanTip: !!tipPlan, invite: verdict?.ok === true } } : {}),
+    ...(mem?.enabled() ? { memory: (a) => mem.plan({ ...a, chatId: c.chatId, bcid: job.route.bcid, messageIds: job.messageIds ?? [] }) } : {}) });
+  if (r.note === "reset-during-turn") { cancelled(c, "during the model request"); return r; }
+  if (r.note === "history-write-failed") { // his message could not be saved: do not carry on into a conversational send
+    delivery.historyWrite = { reply: { ok: false, error: r.error } };
+    delivery.error = "his message could not be saved to history; nothing was generated or sent";
+    return r;
+  }
+  if (r.fallback) delivery.fixedLine = r.fallback;
+  if (r.invalid) delivery.invalidSelection = r.invalid;
+  // what she meant to send is kept for diagnosis even if the turn is cancelled before anything is dispatched (stars = catalogue price)
+  if (r.media) rec.selectedMedia = { key: r.media.key, kind: r.media.kind, free: r.free, stars: r.media.stars, label: r.media.label };
+  else if (r.bundle) rec.selectedMedia = { key: `bundle:${r.bundle.id}`, kind: "bundle", free: false, stars: r.bundle.stars, label: bundleLabel(r.bundle), bundle: { bundleId: r.bundle.id, files: r.bundle.files.length, storedStars: r.bundle.stars } };
+  const text = r.bubbles.join(" ");
+  if (!c.current()) { cancelled(c, "after the reply was prepared"); return r; }
+  await d.wait(Math.min(4000, 600 + text.length * 20)); // typing time
+  if (!c.current()) { cancelled(c, "during the typing delay"); return r; }
+  if (r.media) await sendMediaTurn(c, r.media, r.free, text, r.photoReference);
+  else if (r.bundle) await sendBundleTurn(c, r.bundle, text);
+  else if (text) await sendTextTurn(c, text);
+  if (d.tips) await afterTips(c, r, tipPlan, verdict?.ok === true);
+  return r;
+}
+
+/**
+ * Stage 4: what the tip product does once the normal turn's own send is over. Nothing here changes how the turn is billed or recorded in
+ * `delivery`: the tip message is a separate deterministic message (no model, not a credit), its facts live only in `rec.tip`.
+ *   fan tip turn   her acknowledged reply, THEN one tip message (buttons / the single invoice button / a fixed clarification)
+ *   [tip] reply    an acknowledged reply that carried a valid [tip]: the invitation is now open (his later "yes" can match it); NO buttons
+ *   locked card    an acknowledged locked content card ends any open tip context
+ */
+async function afterTips(c: Ctx, r: TurnResult, plan: import("./tips/adapter.js").TipPlan | undefined, inviteAllowed: boolean) {
+  const { d, rec, delivery } = c;
+  const tips = d.tips!;
+  const textAck = delivery.text?.status === "acknowledged";
+  const row = (rec.tip ??= { path: "none" });
+  if (r.tipNote?.ignoredMediaTag) row.ignoredMediaTag = r.tipNote.ignoredMediaTag;
+  if (r.tipNote && (r.tipNote.tagged || r.tipNote.invalid || r.tipNote.ignored)) row.invite = { ...(row.invite ?? { allowed: inviteAllowed }), tagged: !!r.tipNote.tagged, ...(r.tipNote.invalid ? { invalid: r.tipNote.invalid } : {}), ...(r.tipNote.ignored ? { ignored: r.tipNote.ignored } : {}) };
+  try {
+    if (plan) {
+      row.path = "after-reply"; row.action = plan.decision.action;
+      if (plan.decision.action === "clarify") row.why = plan.decision.why; else row.context = plan.decision.contextKind;
+      if (!textAck) { row.skipped = `her reply was not acknowledged (${delivery.text?.status ?? "no text"}), so no tip message followed`; return; }
+      if (!c.current()) { row.skipped = "the chat was reset or the runner stopped"; return; }
+      const prep = await tips.prepare(plan, true);
+      if (!prep.ok) { row.skipped = prep.reason; return; }
+      const sent = await tips.send(prep.prepared);
+      if (!sent) { row.skipped = "the chat moved on before the tip message was sent"; return; }
+      Object.assign(row, { amounts: sent.amounts, quoteIds: sent.quoteIds, text: sent.text, sent: sent.sent, ...(sent.unavailable ? { unavailable: true } : {}) });
+      if (sent.sent.status === "acknowledged") {
+        try { row.historyWrite = appendNoteIfCurrent(c.chatId, c.job.epoch, tipHistoryNote(sent)) ? { ok: true } : { ok: false, skipped: "the chat was reset after the send, so it was not written back" }; }
+        catch (e) { row.historyWrite = { ok: false, error: msg(e) }; console.error(`[error] chat=${c.chatId} tip message sent but not saved to history: ${msg(e)}`); }
+      }
+      return;
+    }
+    if (r.tipInvite) {
+      if (textAck && delivery.text && !delivery.fixedLine) { tips.noteInvitation(c.chatId, c.job.epoch); row.path = "invitation"; row.invite = { ...(row.invite ?? { allowed: true }), tagged: true, honoured: true }; }
+      else row.invite = { ...(row.invite ?? { allowed: true }), tagged: true, honoured: false, ignored: "her reply was not acknowledged" };
+      return;
+    }
+    if (rec.media && !rec.media.free) tips.noteOtherCommercial(c.chatId, c.job.epoch);
+  } catch (e) {
+    row.skipped = `tip step failed: ${msg(e)}`; // never a reason to send anything again
+    console.error(`[error] chat=${c.chatId} tip step: ${msg(e)}`);
+  }
+  if (row.path === "none" && !row.invite && !row.skipped && !row.ignoredMediaTag) delete rec.tip;
+}
+
+/** The one finalizer: exactly one row (and one turns.log block) per turn that began processing. */
+function finalize(c: Ctx, r: TurnResult | undefined, t0: number) {
+  if (c.finalized) return;
+  c.finalized = true;
+  const { rec, delivery } = c;
+  rec.ms = c.d.now() - t0;
+  rec.note = r?.note ?? (delivery.cancelled ? `cancelled:${delivery.cancelled.reason}` : "error");
+  if (r) { rec.provider = r.provider; rec.tokensIn = r.tokensIn; rec.tokensOut = r.tokensOut; rec.cost = r.cost; rec.generated = r.bubbles; }
+  rec.final = c.delivered;
+  rec.media ??= null;
+  rec.selectedMedia ??= null;
+  logRequest(rec);
+  logTurn({ fan: c.job.who, rec });
+  c.d.memory?.afterTurn(c.job, rec); // Stage 5: queue the delivery records + settle the input lines (local append only; never throws, never blocks)
+}
+
+/** Stage 5: which settings were APPLIED when this turn began, stored with the row so the monitor never infers them from today's. Only when the archive/memory runtime is wired. */
+function settingsSnapshot(d: Deps): NonNullable<RequestRecord["settings"]> {
+  const cs = d.credit?.settings;
+  const ts = d.tips?.settings;
+  return {
+    credit: cs ? { enabled: d.credit!.enabled(), revision: cs.revision, packQuantity: cs.packQuantity, packStars: cs.packStars } : null,
+    tips: ts ? { enabled: d.tips!.enabled(), maxStars: ts.maxStars } : null,
+    memory: d.memory!.snapshot(),
+    bundles: d.bundles ? d.bundles().bundles.length : null,
+  };
+}
+
+/**
+ * Process one queued fan turn end to end. Returns its final request row, or undefined when the input was discarded
+ * before processing began (reset / stop while it was queued): that creates no row. Never throws.
+ */
+export function processTurn(d: Deps, job: Job): Promise<RequestRecord | undefined> {
+  return runAs(d.girl.slug, async () => {
+    const chatId = job.chatId;
+    const current = () => d.isActive() && loadChat(chatId).epoch === job.epoch; // same epoch AND this runner still running
+    if (!current()) { console.log(`[stale] chat=${chatId} queued input dropped before processing (${d.isActive() ? "reset" : "runner stopped"})`); return undefined; }
+    const t0 = d.now();
+    const delivery: Delivery = {};
+    const rec: RequestRecord = {
+      ts: new Date(t0).toISOString(), chatId, fanText: job.text, turnId: randomUUID(), mode: d.mode,
+      route: job.route.bcid ? "business" : "ordinary", ...(job.route.bcid ? { bcid: job.route.bcid } : {}), epoch: job.epoch, modelRequest: false, delivery,
+      ...(d.memory ? { settings: settingsSnapshot(d) } : {}),
+    };
+    const c: Ctx = { d, chatId, ropt: routeOpt(job.route), current, job, rec, delivery, delivered: [], finalized: false };
+    let r: TurnResult | undefined;
+    try { r = await prepareAndSend(c); }
+    catch (e) { delivery.error = msg(e); console.error(`[error] chat=${chatId} turn=${rec.turnId}`, msg(e)); }
+    finally { finalize(c, r, t0); }
+    return rec;
+  });
+}
+
+

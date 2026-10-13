@@ -5,10 +5,10 @@ import { girlLogDir } from "./context.js";
 import type { Girl } from "./girls/index.js";
 import { complete, type ChatMsg } from "./llm.js";
 import { loadChat, saveChat, appendIfCurrent, type Msg } from "./memory.js";
-import { ownedKeys } from "./payments.js";
+import { ownedKeys, type OwnershipRead } from "./payments.js";
 import { applyEmojiPolicy } from "./girls/template.js";
 import { checkText, cleanReply, logBlocked } from "./safety.js";
-import { extractTag, buildMenu, menuText, fromMenu, requestedAttrs, UNAVAILABLE_FREE_TEXT, UNAVAILABLE_TEXT, type Item, type Menu } from "./media.js";
+import { extractTag, buildMenu, menuText, fromMenu, requestedAttrs, missingAttrs, UNAVAILABLE_FREE_TEXT, UNAVAILABLE_TEXT, type Item, type Menu, type CurrentPhotoRead } from "./media.js";
 import { bundleFromMenu, chooseBundle, EMPTY_BOOK, fileKeys, menuBundle, type Bundle, type BundleBook } from "./bundles.js";
 import { evidenceText, groundReply } from "./grounding.js";
 import { extractTipTag } from "./tips/policy.js";
@@ -49,7 +49,11 @@ export type TurnResult = {
   tipInvite?: true;
   /** Stage 4: what became of a tip marker / media tag on this turn, for the request row. */
   tipNote?: { tagged?: boolean; invalid?: string; ignored?: string; ignoredMediaTag?: string };
+  /** An explicitly requested prior photo, verified before this model call. Delivery checks it again before sending. */
+  photoReference?: { turnId: string; owned: boolean };
 };
+
+export type PhotoVerification = { photo: CurrentPhotoRead; ownership: OwnershipRead };
 
 // ---------- request record (logs/requests.jsonl): one final row per turn that began processing ----------
 export type SendStatus = "acknowledged" | "rejected" | "unknown" | "prepare-failed" | "cancelled" | "not-attempted";
@@ -100,6 +104,7 @@ export type RequestRecord = {
   raw?: string; final?: string[]; media?: MediaInfo | null;
   /** Validated machine choice from the same model request; raw retains its exact JSON response. */
   selection?: string; selectionError?: string;
+  photoReference?: { kind: "resend" | "missing"; sourceTurnId?: string; status?: string; available: boolean; reason?: string; owned?: boolean };
   provider?: string; tokensIn?: number; tokensOut?: number; cost?: number; attempts?: number;
   turnId?: string; mode?: "real" | "simulated"; route?: "ordinary" | "business"; bcid?: string; epoch?: number;
   modelRequest?: boolean; generated?: string[];
@@ -122,6 +127,8 @@ export function logRequest(rec: RequestRecord) {
 
 /** What runTurn needs from the caller: the epoch and route captured when the fan's message was queued, and the record to fill. */
 export type TurnCtx = { epoch: number; route: Route; rec?: RequestRecord;
+  /** The existing delivery path supplies fresh creator-scoped asset and ownership reads for requested prior photos. */
+  photo?: { mode: "real" | "simulated"; verify: (key: string, storagePath: string) => Promise<PhotoVerification> };
   /** Stage 3: her bundle inventory right now (absent = bundles are not sold: exactly the single-item menu). Read ONCE per turn. */
   bundles?: () => BundleBook;
   /**
@@ -139,6 +146,24 @@ export type TurnCtx = { epoch: number; route: Route; rec?: RequestRecord;
 };
 
 const NO_CONTENT: Menu = { free: null, photos: [], video: null };
+
+/** Only opens the exact-reference menu. It never selects a file, changes her reply, or retries a send. */
+export function photoRequest(text: string): "resend" | "missing" | null {
+  const t = text.toLowerCase().replace(/[’‘]/g, "'");
+  if (/\b(?:don't|dont|do not|never|stop)\b.{0,24}\b(?:send|resend|show|give|share)\b|\bno\s+(?:more\s+)?(?:photos?|pics?|pictures?)\b/.test(t)) return null;
+  const wanted = t.replace(/\b(?:not|no)\s+(?:a\s+)?(?:videos?|vids?|clips?|bundles?)\b/g, "");
+  if (/\b(?:new|another|different|next)\s+(?:one|photos?|pics?|pictures?|selfies?)\b|\b(?:videos?|vids?|clips?|bundles?)\b/.test(wanted)) return null;
+  const photo = "(?:photo|pic|picture|selfie|image|card)s?";
+  if (new RegExp(`\\bresend\\s+(?:(?:me|the|that|this|same|last|previous)\\s+)*(?:${photo}|it|one)\\b|\\bresend\\s*(?:please|pls)?[.!?]*$`).test(t)
+    || new RegExp(`\\b(?:send|show|give|share)\\b.{0,25}\\b(?:same|last|previous)\\b.{0,15}\\b${photo}\\b`).test(t)
+    || new RegExp(`\\b(?:send|show|share)\\b.{0,25}\\b(?:${photo}|it|that|one)\\b.{0,15}\\bagain\\b`).test(t)
+    || new RegExp(`\\bsame\\s+${photo}\\s*(?:again|please|pls|[?!.]|$)`).test(t)) return "resend";
+  if (new RegExp(`\\b(?:can't|cant|cannot|don't|dont|do not)\\s+(?:see|find|open)\\b.{0,30}\\b${photo}\\b`).test(t)
+    || new RegExp(`\\b(?:didn't|didnt|haven't|havent|never)\\s+(?:get|receive|received)\\b.{0,30}\\b${photo}\\b`).test(t)
+    || new RegExp(`\\b${photo}\\b.{0,20}\\b(?:didn't|didnt|hasn't|hasnt|isn't|isnt|wasn't|wasnt|never|not|won't|wont)\\b.{0,20}\\b(?:come|came|arriv(?:e|ed|ing)|show(?:ed|ing)?|load(?:ed|ing)?|open(?:ed|ing)?|send|sent|appear(?:ed|ing)?|there|through)\\b`).test(t)
+    || new RegExp(`\\bwhere(?:'s| is)\\s+(?:(?:the|that|my)\\s+)?${photo}\\b`).test(t)) return "missing";
+  return null;
+}
 
 /** Index of the line just appended for this turn (the newest user message with exactly this text), or -1. */
 const lastIndexOfUser = (h: { role: string; content: string }[], text: string) => { for (let i = h.length - 1; i >= 0; i--) if (h[i].role === "user" && h[i].content === text) return i; return -1; };
@@ -179,7 +204,10 @@ async function runTurnInner(girl: Girl, catalogue: Item[], chatId: number | stri
   // never after his message), so she knows exactly what she's teasing.
   // His newest message counts three times as much as the rest of the recent chat, so a specific ask lands.
   const recent = chat.history.slice(-6).map((m) => m.content).join(" ");
-  // Never offer what he was already shown here or has bought (here or on live Twin).
+  const prior = chat.photo;
+  const scopedPrior = prior && ctx.photo && prior.cloneId === girl.cloneId && prior.epoch === ctx.epoch
+    && prior.mode === ctx.photo.mode && (prior.bcid ?? "") === (ctx.route.bcid ?? "") && prior.status !== "cancelled" ? prior : undefined;
+  // Normal offers exclude prior/owned items. Only a requested, verified exact reference below may repeat one.
   const owned = ownedKeys(chatId);
   // Stage 3: at most one relevant bundle stands in the menu (in place of the third photo). Owned bundles, bundles holding a file he owns and
   // a bundle already shown in this chat are never listed. The book is read once, so the tag below resolves against exactly what she was shown.
@@ -189,7 +217,44 @@ async function runTurnInner(girl: Girl, catalogue: Item[], chatId: number | stri
   const listed = chosen ? menuBundle(chosen.bundle, requestedAttrs(catalogue.filter((it) => !it.isFree), fanText)) : null;
   // A file he owns through a bundle is hidden as a single item too when it is the same stored file (exact creator-scoped path).
   const ownedByPath = catalogue.filter((it) => owned.has(`file:${it.storagePath}`)).map((it) => it.key);
-  const menu = fanTip ? NO_CONTENT : buildMenu(catalogue, new Set([...chat.sent, ...owned, ...ownedByPath]), recent, fanText, listed);
+  // An unconfirmed attempt may already be visible. A new-photo request must not silently repeat that file either.
+  let menu = fanTip ? NO_CONTENT : buildMenu(catalogue, new Set([...chat.sent, ...owned, ...ownedByPath, ...(scopedPrior ? [scopedPrior.key] : [])]), recent, fanText, listed);
+  let photoReference: TurnResult["photoReference"];
+  const referenceRequest = fanTip ? null : photoRequest(fanText);
+  if (referenceRequest) {
+    // Do not silently turn "that same photo" into a new offer. No reconstruction from prose, sent-key order or file-id cache.
+    menu = { ...NO_CONTENT, reference: { state: "unavailable" } };
+    const trace: NonNullable<RequestRecord["photoReference"]> = { kind: referenceRequest, available: false };
+    rec.photoReference = trace;
+    if (!scopedPrior || !ctx.photo) {
+      trace.reason = "no verified photo in this chat, route and mode";
+    } else {
+      const prior = scopedPrior;
+      trace.sourceTurnId = prior.turnId; trace.status = prior.status;
+      try {
+        const checked = await ctx.photo.verify(prior.key, prior.storagePath);
+        if (loadChat(chatId).epoch !== ctx.epoch) return stale();
+        const current = loadChat(chatId).photo;
+        if (current?.turnId !== prior.turnId || current.key !== prior.key || current.storagePath !== prior.storagePath) trace.reason = "photo reference changed during verification";
+        else if (!checked.photo.ok || !checked.ownership.ok) trace.reason = !checked.photo.ok ? checked.photo.reason : !checked.ownership.ok ? checked.ownership.reason : "unverified";
+        else {
+          const it = checked.photo.item;
+          const matches = it.kind === "photo" && it.key === prior.key && it.storagePath === prior.storagePath
+            && !["pending", "failed", "needs_review"].includes(it.analysis ?? "") && !!it.desc.trim()
+            && !missingAttrs(it, requestedAttrs([it], fanText)).length;
+          if (!matches) trace.reason = "the referenced photo is unavailable or does not match this request";
+          else {
+            const isOwned = checked.ownership.keys.has(it.key) || checked.ownership.keys.has(`file:${it.storagePath}`);
+            const free = it.isFree || isOwned;
+            menu = { free: free ? it : null, photos: free ? [] : [it], video: null,
+              reference: { state: prior.status === "acknowledged" ? "acknowledged" : prior.status === "prepared" || prior.status === "unknown" ? "unconfirmed" : "not-sent", owned: isOwned } };
+            photoReference = { turnId: prior.turnId, owned: isOwned };
+            trace.available = true; trace.owned = isOwned;
+          }
+        }
+      } catch { trace.reason = "fresh photo or ownership verification failed"; }
+    }
+  }
   // The age line follows the route captured when he wrote: ordinary chats passed the 18+ button, Business chats have no
   // button, so her prompt must not claim he confirmed his age there (whatever the saved file says about an old connection).
   const system: ChatMsg = { role: "system", content: `${girl.promptFor({ ageVerified: !ctx.route.bcid, ...(ctx.tips?.fanTip ? { tipOffer: true } : ctx.tips?.invite ? { tipInvite: true } : {}) })}\n\n${menuText(menu)}` };
@@ -315,6 +380,7 @@ async function runTurnInner(girl: Girl, catalogue: Item[], chatId: number | stri
     else tipInvite = true;
   }
   return { ...meta, bubbles, media, ...(bundle ? { bundle } : {}), free, ...(fallback ? { fallback } : {}), note: sel.want ? "ok+tag" : "ok", ms: Date.now() - t0,
+    ...(media && photoReference ? { photoReference } : {}),
     ...(tipInvite ? { tipInvite: true as const } : {}), ...(Object.keys(tipNote).length ? { tipNote } : {}) };
 }
 
