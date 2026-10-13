@@ -2,79 +2,15 @@
 No model calls, messages, restarts, database writes, or production file changes.
 """
 import json,pathlib,shlex,subprocess,time
-REMOTE=r'''
-import collections,datetime,json,pathlib,re,subprocess
-ROOT=pathlib.Path('/home/ubuntu/twin-v2')
-FAN='6814483810'
-SLUGS=['alanna-pow','sania-mallory','tammy','tru-kait','bethany-marquez']
-SINCE='2026-10-13T06:20:00'
-def readjson(p):
- try:return json.loads(p.read_text())
- except (OSError,ValueError):return None
-def tail(p,cap):
- try:
-  with p.open('rb') as f:
-   size=p.stat().st_size;start=max(0,size-cap);f.seek(start)
-   if start:f.readline()
-   raw=f.read(cap)
-  return raw.decode('utf8','replace').splitlines(),size,start>0
- except OSError:return [],0,False
-def safe(s,n=350):
- return re.sub(r'\b\d{7,}:[A-Za-z0-9_-]{20,}\b','[redacted]',str(s))[:n]
-out={'checked_at':datetime.datetime.now(datetime.timezone.utc).isoformat(),'read_only':True,'creators':[]}
-fleet=readjson(ROOT/'data/_fleet.json') or {}
-out['fleet_at']=fleet.get('at')
-out['pending_handover_files']=[p.name for p in (ROOT/'data/_handover').glob('*.request.json')]
-out['containers']=[]
-for name in ['twin-v2-bot-1','twin-v2-dash-1']:
- try:
-  d=json.loads(subprocess.check_output(['docker','inspect',name],text=True,timeout=10))[0]
-  out['containers'].append({'name':name,'running':d['State']['Running'],'oom':d['State'].get('OOMKilled'),'restart_count':d.get('RestartCount'),'started':d['State'].get('StartedAt'),'revision':next((x.split('=',1)[1] for x in d['Config']['Env'] if x.startswith('GIT_SHA=')),None)})
- except Exception as e:out['containers'].append({'name':name,'error':type(e).__name__})
-for slug in SLUGS:
- c={'slug':slug,'runtime':{k:v for k,v in fleet.get('girls',{}).get(slug,{}).items() if k in ['status','startedAt','botUsername','error']}}
- p=ROOT/'data'/slug/(FAN+'.json')
- chat=readjson(p)
- if chat is None:c['personal_chat']={'exists':False}
- else:
-  owners=readjson(ROOT/'data'/slug/'_business.json') or {}
-  c['personal_chat']={'exists':True,'updated':datetime.datetime.fromtimestamp(p.stat().st_mtime,datetime.timezone.utc).isoformat(),'who':chat.get('who'),'bcid':chat.get('bcid'),'epoch':chat.get('epoch'),'ageConfirmed':chat.get('ageConfirmed'),'history_count':len(chat.get('history',[])),'history_roles':[m.get('role') for m in chat.get('history',[])[-6:]],'last_fan_inputs':[safe(m.get('content'),120) for m in chat.get('history',[]) if m.get('role')=='user'][-3:],'owner_is_personal_account':str(owners.get(chat.get('bcid'))) == FAN}
- rows,size,bounded=tail(ROOT/'logs'/slug/'requests.jsonl',20*1024*1024)
- valid=[]
- for line in rows:
-  try:
-   r=json.loads(line)
-   if r.get('mode')!='simulated':valid.append(r)
-  except ValueError:pass
- recent=[r for r in valid if str(r.get('ts',''))>=SINCE]
- mine=[r for r in valid if str(r.get('chatId'))==FAN]
- c['turn_scan']={'file_bytes':size,'bounded_tail':bounded,'first_scanned_at':valid[0].get('ts') if valid else None,'last_scanned_at':valid[-1].get('ts') if valid else None,'turns_since_1620':len(recent),'reply_outcomes':dict(collections.Counter(str((r.get('delivery') or {}).get('text',{}).get('status')) for r in recent)),'personal_count_in_scan':len(mine)}
- c['personal_turns']=[]
- for r in mine[-12:]:
-  d=r.get('delivery') or {}
-  c['personal_turns'].append({'ts':r.get('ts'),'fan':safe(r.get('fanText'),140),'note':safe(r.get('note'),180),'bcid':r.get('bcid') or (r.get('route') or {}).get('bcid'),'error':safe(d.get('error'),180) if d.get('error') else None,'outcomes':{k:{a:safe(v.get(a),180) for a in ['status','description','error','messageId'] if v.get(a) is not None} for k,v in d.items() if k in ['text','media','recovery'] and isinstance(v,dict)}})
- blocks,_,_=tail(ROOT/'logs'/slug/'blocked.jsonl',2*1024*1024)
- c['personal_blocks']=[]
- for line in blocks:
-  try:
-   r=json.loads(line)
-   if str(r.get('chatId'))==FAN:c['personal_blocks'].append({k:safe(v,180) for k,v in r.items() if k in ['ts','chatId','reason','rule','category','text','fanText']})
-  except ValueError:pass
- c['personal_blocks']=c['personal_blocks'][-8:]
- out['creators'].append(c)
-try:
- logs=subprocess.check_output(['docker','logs','--since','2026-10-13T06:20:00Z','--tail','2500','twin-v2-bot-1'],stderr=subprocess.STDOUT,text=True,timeout=15).splitlines()
- out['scoped_runtime_errors']=[safe(x,280) for x in logs if ((FAN in x and re.search(r'error|fail|blocked|denied|start|reset',x,re.I)) or ('getBusinessConnection failed' in x and any(slug in x for slug in SLUGS)))][-15:]
-except Exception as e:out['scoped_runtime_errors']=[type(e).__name__]
-print('CLONE_REPLY_DIAGNOSIS '+json.dumps(out,separators=(',',':')))
-'''
-INSTANCE='i-0584d283506f3f6be'
+REMOTE="import json,subprocess\ncode=\"\\nimport {buildClient,classifyTelegramError} from '/app/src/telegram.ts';\\nimport {restoreSession,sessionFilePath} from '/app/src/session.ts';\\nimport {withTimeout} from '/app/src/timeout.ts';\\nconst FAN='6814483810';\\nconst targets=[\\n ['sania-mallory','dd1869c2-d1e2-490f-9fae-45200232cc30','8823793351'],\\n ['tammy','7eae9772-eb7c-4a24-a54f-51cbb28f1def','8516527133'],\\n ['bethany-marquez','4fff7866-c7e9-4af2-926a-36e727c0a77f','8944056173']\\n];\\nconst output=[];\\nfor(const [slug,id,expectedOwner] of targets){\\n const row={slug}; output.push(row);\\n const client=await buildClient({apiId:Number(process.env.TG_API_ID),apiHash:process.env.TG_API_HASH});\\n const rpc=async q=>withTimeout(client.call(q),15000,'read_only_chat_diagnosis');\\n try{\\n  if(!await restoreSession(client,sessionFilePath(process.env.SESSION_DIR??'sessions',id),process.env.SESSION_ENCRYPTION_KEY??'')){row.session='missing';continue;}\\n  await withTimeout(client.connect(),15000,'read_only_connect');\\n  const me=await withTimeout(client.getMe(),15000,'read_only_identity');\\n  row.ownerMatch=String(me.id)===expectedOwner;\\n  if(!row.ownerMatch)continue;\\n  row.accountRestricted=(me.raw.restrictionReason??[]).length>0;\\n  const connected=await rpc({_:'account.getConnectedBots'});\\n  row.connectedBots=connected.connectedBots.map(b=>{\\n   const r=b.recipients??{};\\n   return {botId:String(b.botId),canReply:b.canReply??b.rights?.reply,\\n     recipients:{existingChats:!!r.existingChats,newChats:!!r.newChats,contacts:!!r.contacts,nonContacts:!!r.nonContacts,\\n     excludeSelected:!!r.excludeSelected,selectedCount:(r.users??[]).length,personalSelected:(r.users??[]).some(x=>String(x)===FAN),\\n     explicitExcludedCount:(r.excludeUsers??[]).length,personalExplicitlyExcluded:(r.excludeUsers??[]).some(x=>String(x)===FAN)}};\\n  });\\n  const peer=await withTimeout(client.resolvePeer('rcy07'),15000,'read_only_peer');\\n  row.personalPeerMatch=peer._==='inputPeerUser'&&String(peer.userId)===FAN;\\n  if(!row.personalPeerMatch)continue;\\n  const settings=await rpc({_:'messages.getPeerSettings',peer});\\n  row.chatSettings={businessBotPaused:!!settings.settings.businessBotPaused,\\n    businessBotCanReply:!!settings.settings.businessBotCanReply,\\n    businessBotId:settings.settings.businessBotId?String(settings.settings.businessBotId):null};\\n  const full=await rpc({_:'users.getFullUser',id:{_:'inputUser',userId:peer.userId,accessHash:peer.accessHash}});\\n  const user=(full.users??[]).find(u=>String(u.id)===FAN);\\n  row.personalBlocked=!!full.fullUser.blocked;\\n  row.personalIsContact=!!user?.contact;\\n  const history=await rpc({_:'messages.getHistory',peer,offsetId:0,offsetDate:0,addOffset:0,limit:10,maxId:0,minId:0,hash:0});\\n  row.personalRecentMessages=(history.messages??[]).map(m=>({id:m.id,at:m.date?new Date(m.date*1000).toISOString():null,\\n    outgoing:!!m.out,viaBusinessBotId:m.viaBusinessBotId?String(m.viaBusinessBotId):null,\\n    text:m.out?undefined:(m.message??'').slice(0,180)}));\\n }catch(e){row.error=classifyTelegramError(e).code; row.errorType=e?.constructor?.name;}\\n finally{await withTimeout(client.destroy(),5000,'read_only_destroy').catch(()=>{});}\\n}\\nconsole.log('PERSONAL_CHAT_SETTINGS '+JSON.stringify({checkedAt:new Date().toISOString(),readOnly:true,creators:output}));\\n\"\nr=subprocess.run(['docker','exec','-w','/app','twin-userbot','node','--import','tsx','--input-type=module','--eval',code],capture_output=True,text=True,timeout=210)\nlines=[x for x in r.stdout.splitlines() if x.startswith('PERSONAL_CHAT_SETTINGS ')]\nif lines:print(lines[-1])\nelse:print(json.dumps({'probe_exit_code':r.returncode,'probe_marker_found':False,'error_types':[x[:220] for x in r.stderr.splitlines() if any(w in x for w in ['Error:','ERR_','SyntaxError','TypeError','ReferenceError'])][-3:]}))\n"
+
+INSTANCE='i-098f911dbeafb491e'
 command='python3 -c '+shlex.quote(REMOTE)
 params=pathlib.Path('/tmp/rcy07-clone-reply-check.json')
-params.write_text(json.dumps({'commands':[command],'executionTimeout':['120']}))
+params.write_text(json.dumps({'commands':[command],'executionTimeout':['240']}))
 cid=subprocess.check_output(['aws','ssm','send-command','--instance-ids',INSTANCE,'--document-name','AWS-RunShellScript','--parameters','file://'+str(params),'--comment','Read-only named clone and personal-account reply diagnosis','--query','Command.CommandId','--output','text'],text=True).strip()
 print(json.dumps({'command_id':cid}),flush=True)
-for attempt in range(50):
+for attempt in range(88):
  try:r=json.loads(subprocess.check_output(['aws','ssm','get-command-invocation','--command-id',cid,'--instance-id',INSTANCE,'--output','json'],text=True,stderr=subprocess.DEVNULL))
  except subprocess.CalledProcessError:time.sleep(3);continue
  if r['Status'] in ['Success','Failed','Cancelled','TimedOut']:
