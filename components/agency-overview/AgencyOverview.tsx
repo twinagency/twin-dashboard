@@ -128,9 +128,17 @@ export default function AgencyOverview({ cloneId, initialCreators }: { cloneId: 
         <label className={styles.period}><CalendarDays size={15} /><select aria-label="Reporting period" value={period} onChange={e => setPeriod(e.target.value as Period)}>{[['1W','Last 7 days'],['1M','Last 30 days'],['3M','Last 3 months'],['6M','Last 6 months'],['1Y','Last year'],['ALL','All time']].map(([v,label]) => <option key={v} value={v}>{label}</option>)}</select></label>
       </div>
     </header>
-    <section className={styles.hero}>
+    <section className={`${styles.hero} ${!selected ? styles.agencyHero : ''}`}>
       <div><p>{selected ? 'CREATOR OVERVIEW' : 'AGENCY OVERVIEW'}</p><h1>{selected?.name ?? 'Your agency, at a glance.'}</h1><Link className={styles.primary} href={selected ? `/clones/${selected.id}?tab=identity` : '/clones'}>{selected ? 'View profile' : 'View creators'}<ArrowRight size={17} /></Link></div>
-      {selected ? selected.banner ? <VaultPhoto image={selected.banner} name={selected.name} className={styles.heroPhoto} /> : <Photo creator={selected} className={styles.heroPhoto} /> : <img className={styles.heroLogo} src="/moxy/moxy-ai-dark.svg" alt="Moxy AI, Los Angeles and Miami" />}
+      {selected ? selected.banner ? <VaultPhoto image={selected.banner} name={selected.name} className={styles.heroPhoto} /> : <Photo creator={selected} className={styles.heroPhoto} /> : <div className={styles.heroShortcuts}>
+        <nav className={styles.shortcutRow} aria-label="Creator dashboards">
+          {creators.map(creator => <button key={creator.id} type="button" className={`${styles.creatorShortcut} creator-name`} disabled={changing} onClick={() => void choose(creator.id)} aria-label={`Open ${creator.name} dashboard`} title={creator.name}>
+            <Photo creator={creator} className={styles.shortcutPhoto} />
+            <span className={styles.shortcutName}>{creator.name}</span>
+          </button>)}
+        </nav>
+        <span className={styles.creatorCount}><Users size={16} />{creators.length.toLocaleString()} creators</span>
+      </div>}
     </section>
     {error && <div role="alert" className={styles.error}>{error}<button onClick={() => setRefresh(n => n + 1)}>Retry</button></div>}
     <section className={styles.metrics} aria-label="Overview statistics">
