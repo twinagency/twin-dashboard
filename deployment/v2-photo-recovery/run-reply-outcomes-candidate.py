@@ -14,6 +14,9 @@ OLD = dict(zip(['src/turn.ts','src/grounding.ts'],[
 NEW = dict(zip(OLD,[
   '50ec3688f69bfc3b490d2a50621338407c3c220808f78e540b8e52d4f28898a3',
   'e5f0bfd10d1f9737d8cc22386b7447358c41a809dc966c97928a65668ca567d0']))
+SOURCE_HASHES={**NEW,
+  'src/media.ts':'526d5de0b1c556d37e3d0a0e94b4572bb937385276c79b6ae3be52629cfb4e89',
+  'src/girls/template.ts':'8f90b14f3f199741eda4c713d9c99de1039ddd759c921e8b073cdced614571c8'}
 sha = lambda p: hashlib.sha256(p.read_bytes()).hexdigest()
 def runtime():
   out=[]
@@ -51,7 +54,7 @@ for relative,expected in OLD.items():
 subprocess.run(['git','apply',str(PATCH)],cwd=overlay,check=True,capture_output=True,text=True,timeout=30)
 for relative,expected in NEW.items(): assert sha(overlay/relative)==expected, 'Patched source mismatch: '+relative
 fixture=work/'fixture';fixture.mkdir()
-for relative,expected in NEW.items():evidence['sourceHashes'][relative]=expected
+for relative,expected in SOURCE_HASHES.items():evidence['sourceHashes'][relative]=expected
 (fixture/'evidence.json').write_text(json.dumps(evidence));(fixture/'evidence.json').chmod(0o600)
 live=json.loads(subprocess.check_output(['docker','inspect','twin-v2-bot-1'],text=True))[0]
 key=[e for e in live['Config']['Env'] if e.startswith('OPENROUTER_API_KEY=')]
@@ -73,7 +76,7 @@ def worker(profile):
   except subprocess.TimeoutExpired:result={'slug':slug,'fatal':'Isolated container timed out'}
   finally:
     if cid.is_file():subprocess.run(['docker','stop','-t','1',cid.read_text().strip()],capture_output=True,timeout=10)
-  completed.append({k:result.get(k) for k in ['slug','cases','requests','failedCases','flaggedCases','fatal']})
+  completed.append({k:result.get(k) for k in ['slug','cases','requests','failedCases','flaggedCases','fatal','exit','errorTail']})
   (work/'progress.json').write_text(json.dumps(completed))
   return result
 def stop(*_):raise TimeoutError('Global 20-minute model budget reached')
