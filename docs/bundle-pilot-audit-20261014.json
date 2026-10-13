@@ -1,0 +1,553 @@
+{
+  "status": "complete",
+  "revision": "771f713b58c11d1b0fcf094595dc8f67ac898eb3",
+  "image": "sha256:ac361b6304d4fa20ee251177b01277e37c826173f1ecd2d2afc2f8cb04f7ca9c",
+  "workflowRun": "38451964507",
+  "at": "2026-10-13T19:05:16.704355+00:00",
+  "runtime": [
+    {
+      "name": "twin-v2-bot-1",
+      "running": true,
+      "restarting": false,
+      "image": "sha256:ac361b6304d4fa20ee251177b01277e37c826173f1ecd2d2afc2f8cb04f7ca9c",
+      "revision": "771f713b58c11d1b0fcf094595dc8f67ac898eb3"
+    },
+    {
+      "name": "twin-v2-dash-1",
+      "running": true,
+      "restarting": false,
+      "image": "sha256:ac361b6304d4fa20ee251177b01277e37c826173f1ecd2d2afc2f8cb04f7ca9c",
+      "revision": "771f713b58c11d1b0fcf094595dc8f67ac898eb3"
+    }
+  ],
+  "fleetAt": "2026-10-13T19:04:37.457Z",
+  "fleetAgeSeconds": 21.622255563735962,
+  "flag": "off",
+  "offerTableReady": true,
+  "checks": [
+    {
+      "slug": "alanna-pow",
+      "rawBundles": 7,
+      "eligible": [
+        {
+          "id": "6daea89f-1b5e-450e-8dbf-6bb66e1a5c2a",
+          "name": "Anal Photos",
+          "stars": 2200,
+          "files": 2,
+          "kinds": {
+            "photos": 2,
+            "videos": 0
+          }
+        },
+        {
+          "id": "6fc7654d-08b2-480e-9976-2ea88aa7da78",
+          "name": "Titty Photos",
+          "stars": 1050,
+          "files": 10,
+          "kinds": {
+            "photos": 10,
+            "videos": 0
+          }
+        },
+        {
+          "id": "4de95e31-e624-4e21-87cc-0c33436f8d52",
+          "name": "BG Photos",
+          "stars": 1250,
+          "files": 10,
+          "kinds": {
+            "photos": 10,
+            "videos": 0
+          }
+        },
+        {
+          "id": "4f6f68f0-644c-4f2d-88a0-7f93764a750f",
+          "name": "Solo Photos",
+          "stars": 1100,
+          "files": 10,
+          "kinds": {
+            "photos": 10,
+            "videos": 0
+          }
+        },
+        {
+          "id": "dd55dacc-c3e8-4156-81e9-33d5437c0b11",
+          "name": "Crazy Set (Oct)",
+          "stars": 999,
+          "files": 10,
+          "kinds": {
+            "photos": 10,
+            "videos": 0
+          }
+        }
+      ],
+      "excluded": [
+        {
+          "id": "d8f89bab-ea7d-49df-90a0-b4a492db814d",
+          "name": "alanna-pow bundle",
+          "reason": "file_without_description:1"
+        },
+        {
+          "id": "4eb44703-10ea-4ac7-bf8b-92fa9f0e1609",
+          "name": "GG Photos",
+          "reason": "file_without_description:9"
+        }
+      ]
+    },
+    {
+      "slug": "allison-parker",
+      "rawBundles": 0,
+      "eligible": [],
+      "excluded": []
+    },
+    {
+      "slug": "bethany-marquez",
+      "rawBundles": 1,
+      "eligible": [
+        {
+          "id": "1d6f535f-23de-4f05-999d-9241f87f7b88",
+          "name": "Welcome Pack",
+          "stars": 900,
+          "files": 5,
+          "kinds": {
+            "photos": 5,
+            "videos": 0
+          }
+        }
+      ],
+      "excluded": []
+    },
+    {
+      "slug": "briana-redd",
+      "rawBundles": 3,
+      "eligible": [
+        {
+          "id": "619de97d-af41-4d0d-a9dc-a4a9421db5cb",
+          "name": "For You",
+          "stars": 250,
+          "files": 9,
+          "kinds": {
+            "photos": 9,
+            "videos": 0
+          }
+        },
+        {
+          "id": "56553ab3-3763-4f23-b051-b8d02b926189",
+          "name": "Booty",
+          "stars": 1200,
+          "files": 6,
+          "kinds": {
+            "photos": 6,
+            "videos": 0
+          }
+        },
+        {
+          "id": "8f6829f1-e852-4699-a9bb-07d0b743f92e",
+          "name": "Tits",
+          "stars": 1200,
+          "files": 6,
+          "kinds": {
+            "photos": 6,
+            "videos": 0
+          }
+        }
+      ],
+      "excluded": []
+    },
+    {
+      "slug": "cat-chase",
+      "rawBundles": 1,
+      "eligible": [],
+      "excluded": [
+        {
+          "id": "d23a6e7d-b535-4bdc-b284-8cbe65c8f9a7",
+          "name": "Lingerie and bath set",
+          "reason": "file_without_description:1"
+        }
+      ]
+    },
+    {
+      "slug": "dakota-lyn",
+      "rawBundles": 0,
+      "eligible": [],
+      "excluded": []
+    },
+    {
+      "slug": "dreka-cakez",
+      "rawBundles": 1,
+      "eligible": [
+        {
+          "id": "cf7035e3-316c-4339-bb8a-a9fc7573a7ec",
+          "name": "Welcome Pack",
+          "stars": 900,
+          "files": 5,
+          "kinds": {
+            "photos": 5,
+            "videos": 0
+          }
+        }
+      ],
+      "excluded": []
+    },
+    {
+      "slug": "fit-sid",
+      "rawBundles": 4,
+      "eligible": [
+        {
+          "id": "66f1b09d-64c3-4faf-987d-916eaede1152",
+          "name": "Titty Photos",
+          "stars": 1150,
+          "files": 10,
+          "kinds": {
+            "photos": 10,
+            "videos": 0
+          }
+        },
+        {
+          "id": "63551d72-80fb-4404-8a1b-ac35f5d880cc",
+          "name": "Solo Photos",
+          "stars": 1150,
+          "files": 10,
+          "kinds": {
+            "photos": 10,
+            "videos": 0
+          }
+        }
+      ],
+      "excluded": [
+        {
+          "id": "dc187d1e-b9c9-4cbd-b33f-8e8dba030fe3",
+          "name": "Anal Photos",
+          "reason": "fewer_than_2_files:1"
+        },
+        {
+          "id": "97ebfac7-72f0-4cbb-92b6-a24bf43b4ddf",
+          "name": "GG Photos",
+          "reason": "fewer_than_2_files:1"
+        }
+      ]
+    },
+    {
+      "slug": "kyla-yesenosky",
+      "rawBundles": 4,
+      "eligible": [
+        {
+          "id": "55b19541-03de-485f-8718-8dc729d28975",
+          "name": "Booty",
+          "stars": 4400,
+          "files": 6,
+          "kinds": {
+            "photos": 6,
+            "videos": 0
+          }
+        },
+        {
+          "id": "f14facd0-ab7d-4d16-9915-11717d295450",
+          "name": "Tits",
+          "stars": 4400,
+          "files": 6,
+          "kinds": {
+            "photos": 6,
+            "videos": 0
+          }
+        }
+      ],
+      "excluded": [
+        {
+          "id": "8e94df38-d1b1-4229-b4dc-0e14019ae171",
+          "name": "Welcome Pack",
+          "reason": "free_item_in_bundle:5"
+        },
+        {
+          "id": "80c84f0e-0eab-449c-a32a-796469e4d8c2",
+          "name": "Lingerie",
+          "reason": "free_item_in_bundle:2"
+        }
+      ]
+    },
+    {
+      "slug": "mrs-callace",
+      "rawBundles": 5,
+      "eligible": [
+        {
+          "id": "0525fb0d-10b7-45f5-8175-31469b2e0e3c",
+          "name": "Naughty Extras",
+          "stars": 250,
+          "files": 10,
+          "kinds": {
+            "photos": 5,
+            "videos": 5
+          }
+        },
+        {
+          "id": "73a0d819-71e9-4d2a-bb8d-d4ec9eaefdc3",
+          "name": "Booty",
+          "stars": 2000,
+          "files": 6,
+          "kinds": {
+            "photos": 6,
+            "videos": 0
+          }
+        },
+        {
+          "id": "1e4c8c02-7c10-41eb-bc89-1f3b2acf525f",
+          "name": "Lingerie",
+          "stars": 2000,
+          "files": 6,
+          "kinds": {
+            "photos": 6,
+            "videos": 0
+          }
+        },
+        {
+          "id": "bed1f9ce-e5a1-4c5a-8807-dabb3489f635",
+          "name": "Tits",
+          "stars": 2000,
+          "files": 6,
+          "kinds": {
+            "photos": 6,
+            "videos": 0
+          }
+        }
+      ],
+      "excluded": [
+        {
+          "id": "6073754d-9818-40d9-a567-84b41543a5df",
+          "name": "mrs-callace bundle",
+          "reason": "file_without_description:1"
+        }
+      ]
+    },
+    {
+      "slug": "olivia-jade",
+      "rawBundles": 0,
+      "eligible": [],
+      "excluded": []
+    },
+    {
+      "slug": "riley-mae-lewis",
+      "rawBundles": 6,
+      "eligible": [
+        {
+          "id": "c90bb7d1-5db2-4888-a084-21238cdf3da5",
+          "name": "Welcome Pack",
+          "stars": 4400,
+          "files": 5,
+          "kinds": {
+            "photos": 5,
+            "videos": 0
+          }
+        },
+        {
+          "id": "7c685e29-8d2f-4cfc-853c-d7bbef7d6a41",
+          "name": "Booty",
+          "stars": 4400,
+          "files": 6,
+          "kinds": {
+            "photos": 6,
+            "videos": 0
+          }
+        },
+        {
+          "id": "72e4ba66-4b3b-4866-9de9-1eadfb62d11b",
+          "name": "Lingerie",
+          "stars": 4400,
+          "files": 6,
+          "kinds": {
+            "photos": 6,
+            "videos": 0
+          }
+        },
+        {
+          "id": "99c5b1a2-a40c-498a-9033-38f754f6ac8f",
+          "name": "Mirror Selfies",
+          "stars": 4400,
+          "files": 6,
+          "kinds": {
+            "photos": 6,
+            "videos": 0
+          }
+        },
+        {
+          "id": "cf567e1f-cdc8-4078-bf3f-6dd775e83832",
+          "name": "Shower",
+          "stars": 4400,
+          "files": 6,
+          "kinds": {
+            "photos": 6,
+            "videos": 0
+          }
+        },
+        {
+          "id": "aa4c39df-15eb-46f7-8174-214b91339ab0",
+          "name": "Tits",
+          "stars": 4400,
+          "files": 5,
+          "kinds": {
+            "photos": 5,
+            "videos": 0
+          }
+        }
+      ],
+      "excluded": []
+    },
+    {
+      "slug": "sania-mallory",
+      "rawBundles": 1,
+      "eligible": [
+        {
+          "id": "96ca4d50-05c8-4068-b62a-bbfeb12a1600",
+          "name": "Welcome Pack",
+          "stars": 900,
+          "files": 5,
+          "kinds": {
+            "photos": 5,
+            "videos": 0
+          }
+        }
+      ],
+      "excluded": []
+    },
+    {
+      "slug": "tammy",
+      "rawBundles": 1,
+      "eligible": [],
+      "excluded": [
+        {
+          "id": "965d3101-eb88-488d-9b95-bd226e650cea",
+          "name": "BBYTAM VIP Bundle",
+          "reason": "file_without_description:1"
+        }
+      ]
+    },
+    {
+      "slug": "toochi",
+      "rawBundles": 1,
+      "eligible": [
+        {
+          "id": "37a16ef7-84b9-4cca-9dab-8eb4fe5f9ba3",
+          "name": "Toochi's private set",
+          "stars": 900,
+          "files": 5,
+          "kinds": {
+            "photos": 5,
+            "videos": 0
+          }
+        }
+      ],
+      "excluded": []
+    },
+    {
+      "slug": "trashy",
+      "rawBundles": 8,
+      "eligible": [
+        {
+          "id": "2fae7da2-1506-4bfe-a396-0739d882f289",
+          "name": "Spicy",
+          "stars": 8399,
+          "files": 5,
+          "kinds": {
+            "photos": 5,
+            "videos": 0
+          }
+        },
+        {
+          "id": "17daf227-d572-4e22-9397-ae524e1edaa7",
+          "name": "Booty",
+          "stars": 8199,
+          "files": 6,
+          "kinds": {
+            "photos": 6,
+            "videos": 0
+          }
+        },
+        {
+          "id": "ef9e13a8-b52e-4f01-b355-256efa4ffa02",
+          "name": "Topless",
+          "stars": 7999,
+          "files": 6,
+          "kinds": {
+            "photos": 6,
+            "videos": 0
+          }
+        },
+        {
+          "id": "454b7c59-c414-4c7a-99e6-5390b05865af",
+          "name": "Boobs",
+          "stars": 7799,
+          "files": 6,
+          "kinds": {
+            "photos": 6,
+            "videos": 0
+          }
+        },
+        {
+          "id": "f3864a37-b24d-4c88-8f31-c5e61a871d86",
+          "name": "Lingerie",
+          "stars": 7699,
+          "files": 6,
+          "kinds": {
+            "photos": 6,
+            "videos": 0
+          }
+        },
+        {
+          "id": "76ae2fdd-d40c-4c1e-8a20-c6a4e090226a",
+          "name": "Bed",
+          "stars": 7499,
+          "files": 6,
+          "kinds": {
+            "photos": 6,
+            "videos": 0
+          }
+        },
+        {
+          "id": "042a2436-2ba0-4d58-bda3-625e08d8d351",
+          "name": "Mirror Selfies",
+          "stars": 7449,
+          "files": 6,
+          "kinds": {
+            "photos": 6,
+            "videos": 0
+          }
+        },
+        {
+          "id": "9a4fb2eb-2176-440c-8cf7-1259ab1542ac",
+          "name": "Welcome Pack",
+          "stars": 7349,
+          "files": 4,
+          "kinds": {
+            "photos": 4,
+            "videos": 0
+          }
+        }
+      ],
+      "excluded": []
+    },
+    {
+      "slug": "tru-kait",
+      "rawBundles": 0,
+      "eligible": [],
+      "excluded": []
+    }
+  ],
+  "eligibleCreators": [
+    "alanna-pow",
+    "bethany-marquez",
+    "briana-redd",
+    "dreka-cakez",
+    "fit-sid",
+    "kyla-yesenosky",
+    "mrs-callace",
+    "riley-mae-lewis",
+    "sania-mallory",
+    "toochi",
+    "trashy"
+  ],
+  "recommended": "riley-mae-lewis",
+  "modelCalls": 0,
+  "fanMessages": 0,
+  "databaseWrites": 0,
+  "productionWrites": 0,
+  "runtimeMutations": 0,
+  "containerRestarts": 0
+}
