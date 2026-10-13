@@ -1,0 +1,266 @@
+{
+  "reviewedAt": "2026-10-13T07:32:15.338763+00:00",
+  "productRuntime": [
+    {
+      "name": "twin-v2-bot-1",
+      "running": true,
+      "image": "sha256:dff48242b35b94e7b0e757ee4b7778a11958ef85b231b5fdb369542902e325f9",
+      "revision": "2f24f023c0cf46bea1c3b3b334458cf1a5df265e"
+    },
+    {
+      "name": "twin-v2-dash-1",
+      "running": true,
+      "image": "sha256:dff48242b35b94e7b0e757ee4b7778a11958ef85b231b5fdb369542902e325f9",
+      "revision": "2f24f023c0cf46bea1c3b3b334458cf1a5df265e"
+    }
+  ],
+  "productRemoteHead": "2b59d900bd61fbcd335228f2032c6548b37535a1",
+  "activeRunning": [
+    "alanna-pow",
+    "allison-parker",
+    "bethany-marquez",
+    "briana-redd",
+    "cat-chase",
+    "dakota-lyn",
+    "dreka-cakez",
+    "fit-sid",
+    "kyla-yesenosky",
+    "mrs-callace",
+    "olivia-jade",
+    "riley-mae-lewis",
+    "sania-mallory",
+    "tammy",
+    "toochi",
+    "trashy",
+    "tru-kait"
+  ],
+  "pdf": {
+    "file": "TEXTING-TEST-2026-10-13.pdf",
+    "testRun": "20261013-163634-s909359292",
+    "startBrisbane": "16:36:34",
+    "endBrisbane": "16:45",
+    "matchedV2Turns": 48,
+    "oldPromptTurns": 42,
+    "newPromptTurns": 6
+  },
+  "readOnlyRuns": [
+    {
+      "run": 38362581913,
+      "job": 115180040595,
+      "result": "complete PDF-window correlation"
+    },
+    {
+      "run": 38362881534,
+      "job": 115181020860,
+      "result": "SSM stdout truncated; 12 complete creator objects recovered; preserved partial observation"
+    },
+    {
+      "run": 38363250663,
+      "job": 115182209680,
+      "result": "complete narrower follow-up; four recent relevant examples per creator"
+    }
+  ],
+  "findings": [
+    {
+      "kind": "existing-card-question-selects-new-file",
+      "creator": "riley-mae-lewis",
+      "turns": [
+        {
+          "at": "2026-10-13T07:18:46.248Z",
+          "id": "d0f79491",
+          "newPrompt": true,
+          "fan": "hey you, are you real?",
+          "reply": "aww i already told u babe, im rileys ai clone, she made me so i can talk to all her fans. still me tho, same girl. now stop worrying about that and come watch t",
+          "key": "photo:5c228d7e-524f-4a6b-87e6-9c46af049153",
+          "free": true,
+          "mediaStatus": "acknowledged",
+          "reference": null,
+          "note": "ok+tag",
+          "previousAssistant": "so whats the plan after the movie, u gonna be good or do u need some company [sent him free photo: The person is wearing beige lingerie with lace detailing.]",
+          "priorLockedNotes": 0
+        },
+        {
+          "at": "2026-10-13T07:21:40.066Z",
+          "id": "0d48905b",
+          "newPrompt": true,
+          "fan": "haha damn that locked card looks tempting, what's under that tiny skirt? or is that gonna cost me my",
+          "reply": "here's a different option. hahaha worth every penny of that beer money babe. its me at my vanity, back to the camera in my pink skirt and white top, and the mir",
+          "key": "photo:4906159b-53a4-411f-8066-9db582b389c3",
+          "free": false,
+          "mediaStatus": "acknowledged",
+          "reference": null,
+          "note": "ok+tag",
+          "previousAssistant": "omggg jesse u cant just ask me that while im in my tiny skirt lol. i love being told what to do and pinned down, but only when he's sweet about it after. u seem like the type that'd be sweet after [locked photo waiting for him to unlock: A person wea",
+          "priorLockedNotes": 1
+        },
+        {
+          "at": "2026-10-13T07:26:19.262Z",
+          "id": "f7f2ac42",
+          "newPrompt": true,
+          "fan": "nah i don't get shy, i'll walk right over and start chatting. just gotta time it right before her ma",
+          "reply": "here's a different option. mmm i like that, a guy who just walks over. i'd be the girl at the bar hoping u come talk to me, then i'd take u home and let u stare",
+          "key": "photo:03adb7d3-7796-4406-8905-184e1678a20a",
+          "free": false,
+          "mediaStatus": "acknowledged",
+          "reference": null,
+          "note": "ok+tag",
+          "previousAssistant": "ugh thats the worst, so close. so u got moves like that or do u get shy when a girl looks at u like that",
+          "priorLockedNotes": 2
+        },
+        {
+          "at": "2026-10-13T07:27:20.343Z",
+          "id": "eb6eb704",
+          "newPrompt": true,
+          "fan": "fuck that sounds dangerous, what's in that locked pic? or should i just imagine walking in on you in",
+          "reply": "dangerous is my middle name babe lol. its me in the bathroom mirror, grey crop top and red pants, phone in one hand. unlock it and u dont have to imagine anymor",
+          "key": "photo:a1a97114-e3a8-4d04-be48-403eef0f42a9",
+          "free": false,
+          "mediaStatus": "acknowledged",
+          "reference": null,
+          "note": "ok+tag",
+          "previousAssistant": "here's a different option. mmm i like that, a guy who just walks over. i'd be the girl at the bar hoping u come talk to me, then i'd take u home and let u stare at me all u want. i just took this in the bathroom mirror, crop top and red pants, wonder",
+          "priorLockedNotes": 3
+        }
+      ]
+    },
+    {
+      "kind": "price-question-selects-new-file-and-quotes-price",
+      "creator": "kyla-yesenosky",
+      "turns": [
+        {
+          "at": "2026-10-13T07:21:22.772Z",
+          "id": "0322cba1",
+          "newPrompt": true,
+          "fan": "haha damn that locked card looks tempting but i'm skint till friday. best scene was definitely the o",
+          "reply": "no worries babe, friday will come fast lol. its me on the floor in my grey sweatshirt pulled up a lil, no bra, just a tease. and the belt scene, of course u not",
+          "key": "photo:04038d40-6a43-441b-b61c-bcdef6af1691",
+          "free": false,
+          "selectedLabel": "A person is taking a selfie with a phone, holding it up to cover their face.",
+          "mediaStatus": "acknowledged",
+          "reference": null,
+          "note": "ok+tag",
+          "previousAssistant": "guilty lol, i cant sleep and im kinda wired now after hearing about those hot scenes. so what did the best one look like? and this is me rn, wide awake too 😏 [locked phot",
+          "priorLockedNotes": 2
+        },
+        {
+          "at": "2026-10-13T07:22:23.780Z",
+          "id": "4bf682d3",
+          "newPrompt": true,
+          "fan": "fuck grey sweatshirt season is my weakness, how much is that one? and yeah the belt scene got me rew",
+          "reply": "here's a different option. of course u rewound it lol. that one is 150 stars, telegram handles it right there if u tap the card 😏",
+          "key": "photo:b4551b1e-b206-4595-8382-ad559afba108",
+          "free": false,
+          "selectedLabel": "A person is kneeling on a wooden floor, taking a mirror selfie with a phone.",
+          "mediaStatus": "acknowledged",
+          "reference": null,
+          "note": "ok+tag",
+          "previousAssistant": "no worries babe, friday will come fast lol. its me on the floor in my grey sweatshirt pulled up a lil, no bra, just a tease. and the belt scene, of course u noticed that ",
+          "priorLockedNotes": 3
+        }
+      ]
+    },
+    {
+      "kind": "price-question-selects-new-file",
+      "creator": "tammy",
+      "turns": [
+        {
+          "at": "2026-10-13T07:21:05.282Z",
+          "id": "7240cbd4",
+          "newPrompt": true,
+          "fan": "hell yeah show me what she got today, golden hour pics always hit different",
+          "reply": "ok this ones from a shoot, blue bikini, sandy spot with rocks behind me. its locked so u just tap the card and telegram sorts the stars for it babe",
+          "key": "photo:5313cd84-dc44-42be-aa1d-cf3723e8dcf8",
+          "free": false,
+          "selectedLabel": "A woman in a blue bikini crouches on sandy ground against a rocky backdrop.",
+          "mediaStatus": "acknowledged",
+          "reference": null,
+          "note": "ok+tag",
+          "previousAssistant": "haha 50 shades, classic. she shot a couple today but theyre for later, i can show u one now if u want tho",
+          "priorLockedNotes": 0
+        },
+        {
+          "at": "2026-10-13T07:22:06.379Z",
+          "id": "8a2ff1b8",
+          "newPrompt": true,
+          "fan": "damn blue bikini sounds fire, how many stars we talking? might have to wait till friday when the pay",
+          "reply": "that ones 150 stars babe, bout 3 bucks. no rush tho, it stays in our chat forever so its still there when ur paid 😏",
+          "key": "photo:d51523d2-b0eb-4d1c-8a53-faad4a9abb26",
+          "free": false,
+          "selectedLabel": "A person stands outdoors against rocky terrain, wearing blue bikini bottoms.",
+          "mediaStatus": "acknowledged",
+          "reference": null,
+          "note": "ok+tag",
+          "previousAssistant": "ok this ones from a shoot, blue bikini, sandy spot with rocks behind me. its locked so u just tap the card and telegram sorts the stars for it babe [locked photo waiting ",
+          "priorLockedNotes": 1
+        }
+      ]
+    },
+    {
+      "kind": "different-catalogue-key-described-as-same",
+      "creator": "fit-sid",
+      "turns": [
+        {
+          "at": "2026-10-13T07:25:53.120Z",
+          "id": "e6e46594",
+          "newPrompt": true,
+          "fan": "knocking off around 4, gonna be counting down the hours now sid. you better be ready to make good on",
+          "reply": "here's a different option. good, 4 oclock it is. ill be right here waiting for you handsome, that pool pic is still sitting there with your name on it",
+          "key": "photo:e59206b6-a027-44a9-9659-a5d2b2c886ed",
+          "free": false,
+          "selectedLabel": "A woman stands outdoors near a pool, wearing a green sheer top and black leggings.",
+          "mediaStatus": "acknowledged",
+          "reference": null,
+          "note": "ok+tag",
+          "previousAssistant": "mmm you know it. but friday me is gonna be way worse than teasing, you'll see. what time you off work that day jesse",
+          "priorLockedNotes": 3
+        },
+        {
+          "at": "2026-10-13T07:26:49.815Z",
+          "id": "d90d311d",
+          "newPrompt": true,
+          "fan": "haha another locked one? you're ruthless sid. what's this new one gonna cost me? or is it part of th",
+          "reply": "its the same pool one babe, just wanted it right there waiting for you. tap it friday and you'll see me through that sheer top, glasses on, hair down 😇",
+          "key": null,
+          "free": null,
+          "selectedLabel": "",
+          "mediaStatus": null,
+          "reference": null,
+          "note": "ok",
+          "previousAssistant": null,
+          "priorLockedNotes": 4
+        }
+      ]
+    },
+    {
+      "kind": "alternative-caption-on-conversational-followup",
+      "creator": "cat-chase",
+      "turns": [
+        {
+          "at": "2026-10-13T07:26:28.066Z",
+          "id": "655648ab",
+          "newPrompt": true,
+          "fan": "fuck i'd love to help, tell me what you're imagining right now while your hand's drifting",
+          "reply": "here's a different option. imagining ur hands on my tits instead of mine, pinning me down... i took this one for u love, look how hard my nipples are. unlock it",
+          "key": "photo:30d22784-8496-4733-b77a-d26b74265a64",
+          "free": false,
+          "selectedLabel": "A woman stands topless with her hands behind her head.",
+          "mediaStatus": "acknowledged",
+          "reference": null,
+          "note": "ok+tag",
+          "previousAssistant": "dangerous is my middle name lol. now im the one lying here thinking about it, my hand drifting down... u gonna help me out or just tease me back",
+          "priorLockedNotes": 3
+        }
+      ]
+    }
+  ],
+  "limitations": [
+    "Turn ids in this diagnostic are eight-character prefixes; full source records remain in requests.jsonl.",
+    "Example reply/input strings are bounded excerpts, not complete transcripts.",
+    "All observations are existing tester traffic; this review made no model calls or Telegram calls.",
+    "A running process and a cached Business connection do not prove the missing incoming messages were handled.",
+    "No application code, prompts, settings, history, purchases, ownership or financial records changed."
+  ],
+  "productionWrites": 0,
+  "additionalModelCalls": 0,
+  "telegramCalls": 0
+}
