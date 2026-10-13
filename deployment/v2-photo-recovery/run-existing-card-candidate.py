@@ -7,7 +7,7 @@ IMAGE = 'sha256:dff48242b35b94e7b0e757ee4b7778a11958ef85b231b5fdb369542902e325f9
 REV = '2f24f023c0cf46bea1c3b3b334458cf1a5df265e'
 ROOT = pathlib.Path('/home/ubuntu/twin-v2-validation/fleet-simulation-20261013-1791877888400228253')
 SOURCE = ROOT / 'simulation-fixture' / 'evidence.json'
-EXPECTED_FIXTURE = 'b90b9a4b0f5d37b4c9e858ea4be478152653609ecc04366a777d89c3707f02'
+EXPECTED_FIXTURE = 'b90b9a4b0f5d37b4c9e858ea4be478152653609eccff04366a777d89c3707f02'
 OLD = dict(zip(['src/turn.ts','src/media.ts','src/grounding.ts','src/girls/template.ts'],[
   'a8a24648db16f069db8a19e0afe8f79ef6c048c12a56c444c3045570a1a8daca',
   'f6c0da74d4c97f39a1d1694137afa8d11fe36bcc53c954f0b9c22ad65cfde52f',
