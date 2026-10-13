@@ -11,6 +11,12 @@ const UPSTREAM = process.env.BOT_V2_URL ?? "http://172.31.6.134:4300";
 async function proxy(req: Request, ctx: { params: Promise<{ path?: string[] }> }) {
   const { path = [] } = await ctx.params;
   const url = new URL(req.url);
+  // Old messaging bookmarks now open the shared Live Telegram Chat. Keep the
+  // private API and explicit configuration path for existing operational tools.
+  if (req.method === "GET" && (!path.length || ["twin", "chat"].includes(path.join("/")))) {
+    return Response.redirect(new URL("/users", req.url), 307);
+  }
+  if (path.length === 1 && path[0] === "settings") path[0] = "twin";
   const target = `${UPSTREAM}/${path.length ? path.map(encodeURIComponent).join("/") : "twin"}${url.search}`;
   const body = req.method === "POST" ? await req.text() : undefined;
   // Engine switches (live <-> v2) are refused while V2 message credits are on or metered work is open.

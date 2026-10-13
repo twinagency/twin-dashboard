@@ -2,6 +2,7 @@
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
 async function main() {
+  if (process.env.VERIFY_UNIFIED === '1' && process.env.EXPECTED_DASHBOARD_SHA) assert.equal(process.env.GIT_SHA, process.env.EXPECTED_DASHBOARD_SHA, 'Running dashboard commit');
   const api = process.env.SUPABASE_URL + '/rest/v1/';
   const headers = { apikey: process.env.SUPABASE_SERVICE_KEY, Authorization: `Bearer ${process.env.SUPABASE_SERVICE_KEY}` };
   const read = async path => { const r = await fetch(api + path, { headers, signal: AbortSignal.timeout(15000) }); assert(r.ok, `Database read ${r.status}`); return r.json(); };

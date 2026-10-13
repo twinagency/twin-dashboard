@@ -33,6 +33,7 @@ export type ThreadMessage = {
   /** true = the fan wrote it (left, white). false = she sent it (right, green). */
   fan: boolean;
   content: string;
+  deliveryUnverified?: boolean;
   /** Optional content cards supplied by the unified inbox; ordinary Telegram rows are unchanged. */
   customContent?: ReactNode;
   /** Formatted on the SERVER. See the hydration note in the header. */
@@ -121,7 +122,7 @@ export default function ChatThread({
   useEffect(() => {
     const el = scrollRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [fanId, messages.length]);
+  }, [fanId, messages.length, messages.at(-1)?.id]);
 
   // A relationship-memory link deliberately opens at its source, after the
   // normal newest-message positioning above. Leaving context returns below.
@@ -298,7 +299,7 @@ export default function ChatThread({
 
                       <span className="tg-meta">
                         {m.timeLabel}
-                        {!m.fan && <Tick double={!live && !!appearance} />}
+                        {!m.fan && (m.deliveryUnverified ? <span title="This older message has no recorded delivery confirmation">?</span> : <Tick double={!live && !!appearance} />)}
                       </span>
                       {/* Clears the floated meta so a one-line message still
                           reserves height for its own clock. */}

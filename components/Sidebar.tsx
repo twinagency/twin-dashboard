@@ -110,7 +110,6 @@ const NAV_LINKS: NavLink[] = [
   { kind: "tab", label: "PPVs", tab: "ppvs", icon: "Media", color: "red" },
   { kind: "route", label: "Storage", href: "/storage", icon: "Database", color: "blue" },
   { kind: "route", label: "Business", href: "/business", icon: "Bot", color: "purple", gateOnClone: true },
-  { kind: "route", label: "Bot V2", href: "/bot-v2", icon: "Bot", color: "blue" },
 ];
 
 const CREATOR_LINKS: NavLink[] = CREATOR_DASHBOARD_NAV.map((item) => ({
@@ -238,7 +237,7 @@ const TWIN_ADMIN_GROUPS: AdminGroup[] = [
   { label: "Core Intelligence", icon: "Sparkle", href: "/jarvis", children: ["/ai-models"] },
   { label: "Settings", icon: "Settings", href: "/settings", children: ["/admin/earnings-split"] },
 ];
-const TWIN_ADMIN_MORE = ["/storage", "/logs", "/api-access", "/sim", "/bot-v2", "/miniapp-rollout", "/mtproto-campaign", "/tracker", "/info", "/tsocial", "/admin/view-as"];
+const TWIN_ADMIN_MORE = ["/storage", "/logs", "/api-access", "/sim", "/miniapp-rollout", "/mtproto-campaign", "/tracker", "/info", "/tsocial", "/admin/view-as"];
 const presentationLink = (key: string): NavLink => key === "/clones/new"
   ? { kind: "route", href: key, label: "Create new creator", icon: "Plus", color: "neutral" }
   : TWIN_ADMIN_LINKS.find(link => adminLinkKey(link) === key)!;
