@@ -17,6 +17,7 @@ def ssm(command,timeout=120):
  return cid
 
 source=pathlib.Path('deployment/v2-photo-recovery/replay-live-incident.mjs').read_bytes()
-host=pathlib.Path('deployment/v2-photo-recovery/replay-live-incident.py').read_text()
-payload="import base64,pathlib;pathlib.Path('/tmp/v2-live-incident-replay.mjs').write_bytes(base64.b64decode("+repr(base64.b64encode(source).decode())+"))\n"+host
+host=pathlib.Path('deployment/v2-photo-recovery/replay-ranking-candidate.py').read_text()
+media=pathlib.Path('deployment/v2-photo-recovery/candidate-media.ts').read_bytes()
+payload="import base64,pathlib;pathlib.Path('/tmp/v2-live-incident-replay.mjs').write_bytes(base64.b64decode("+repr(base64.b64encode(source).decode())+"));pathlib.Path('/tmp/v2-ranking-candidate-media.ts').write_bytes(base64.b64decode("+repr(base64.b64encode(media).decode())+"))\n"+host
 ssm('python3 -c '+shlex.quote(payload),240)

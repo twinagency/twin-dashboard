@@ -15,6 +15,7 @@ import {M, turnRig, installModelStub, restoreFetch} from './scripts/lib/turn-rig
 
 const revision = '45931b6f56db9f97cc8406154e35a0d216f5de65';
 assert.equal(process.env.GIT_SHA, revision, 'stop if runtime has changed');
+const candidate = process.env.PROBE_COMMIT || null;
 const sourceDir = path.join(config.dataDir, '_operator_backups/photo-incident-20261013-morning');
 const hash = x => crypto.createHash('sha256').update(x).digest('hex');
 const bytes = fs.readFileSync(path.join(sourceDir, 'riley-morning-requests.json'));
@@ -43,7 +44,7 @@ const catalogue = catalogueFromRaw(snapshot.raw);
 const catalogueByKey = new Map(catalogue.map(x => [x.key, x]));
 const oldMenuComparisons = records.map((r, i) => ({turn: i + 1, items: r.menu.map(m => ({key: m.key,
   exists: catalogueByKey.has(m.key), sameDescription: catalogueByKey.get(m.key)?.desc === m.desc,
-  samePrice: catalogueByKey.get(m.key)?.stars === m.stars}))}));
+  samePrice: (m.slot.startsWith('free ') && catalogueByKey.get(m.key)?.isFree ? 0 : catalogueByKey.get(m.key)?.stars) === m.stars}))}));
 const allDescriptionsMatch = oldMenuComparisons.every(r => r.items.every(x => x.exists && x.sameDescription && x.samePrice));
 const originalDirs = {data: config.dataDir, logs: config.logDir};
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'v2-private-replay-'));
@@ -125,16 +126,27 @@ try {
     const req = requestedAttrs(catalogue.filter(it => !it.isFree), record.fanText);
     return {turn: i + 1, requestedExact: [...req.exact], originalContext: examine(recent), focusOnly: examine(record.fanText)};
   });
-  const summary = {status: 'KNOWN DEFECT REPRODUCED; NOT A RELEASE PASS', checkedAt: new Date().toISOString(), revision,
+  if (candidate) {
+    const exactKeys = ['photo:ceb606ce-4110-42b8-9c53-5507a8a787fc', 'photo:a5414325-ef14-49ee-9f30-f9487739fbde'].sort();
+    for (const i of [0, 1, 3]) {
+      assert.deepEqual(ranking[i].originalContext.slice(0, 2).map(x => x.key).sort(), exactKeys,
+        'all three retained specific requests must list the two existing confirmed matches first');
+      assert(ranking[i].originalContext.slice(0, 2).every(x => x.confirmedChestWord && !x.missing.length));
+    }
+  }
+  const summary = {status: 'KNOWN MISSING-SELECTION DEFECT REMAINS; NOT A RELEASE PASS', checkedAt: new Date().toISOString(), revision, candidate,
     originalRecordsHash: hash(bytes), catalogueHash: hash(fs.readFileSync(snapshotPath)), catalogueAt: snapshot.at,
     catalogueCounts: {photos: snapshot.raw.photos.length, videos: snapshot.raw.videos.length},
     allOriginalMenuDescriptionsAndPricesStillMatch: allDescriptionsMatch, oldMenuComparisons, result, ranking,
     realModelCalls: 0, realTelegramSends: 0, realFileDownloads: 0,
     limitation: 'Original history and frozen model outputs; rollback prompt/current frozen catalogue; synthetic Telegram, ownership and downloads.'};
-  fs.writeFileSync(path.join(sourceDir, 'rollback-seven-turn-replay.private.json'), JSON.stringify(saved), {mode: 0o600});
-  fs.writeFileSync(path.join(sourceDir, 'rollback-seven-turn-replay.summary.json'), JSON.stringify(summary), {mode: 0o600});
+  const artifact = candidate ? 'ranking-candidate-replay' : 'rollback-seven-turn-replay';
+  fs.writeFileSync(path.join(sourceDir, artifact + '.private.json'), JSON.stringify(saved), {mode: 0o600});
+  fs.writeFileSync(path.join(sourceDir, artifact + '.summary.json'), JSON.stringify(summary), {mode: 0o600});
   console.log = originalLog;
-  console.log(JSON.stringify(summary));
+  console.log(JSON.stringify({...summary, oldMenuComparisons: undefined,
+    result: result.map(({menuKeys, originalMenuKeys, ...rest}) => rest),
+    ranking: ranking.map(({focusOnly, ...rest}) => rest)}));
 } finally {
   restoreFetch(); Math.random = random; console.log = originalLog;
   config.dataDir = originalDirs.data; config.logDir = originalDirs.logs;
