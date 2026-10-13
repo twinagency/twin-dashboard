@@ -1,0 +1,126 @@
+{
+  "candidate": "d16b275bae2ff4201259b3e90bb0fbf322f8906f",
+  "case": "edge-rejected-new",
+  "row": {
+    "fanText": "Can you send me a photo?",
+    "raw": "{",
+    "selection": null,
+    "selectionError": "structured reply did not finish normally",
+    "final": [
+      "sorry my phone is being so weird rn one sec"
+    ],
+    "note": "ai-failed",
+    "provider": "DeepInfra",
+    "tokensOut": 1,
+    "menu": [
+      {
+        "slot": "photo 1",
+        "key": "photo:82bbdf62-18b5-409d-b6b0-d8ac8f4690e3",
+        "stars": 1950,
+        "desc": "A person in a grey long-sleeve top and grey pants is posing indoors. They are holding one foot with their hand, and the setting includes a bed and some household items. The person's nipples, genitals, and anus are not visible. The scene is casual and there is no nudity or sexual activity. The camera angle is a close-up selfie, capturing the upper body and part of the room. (tags: mirror_selfie, bed, solo)"
+      },
+      {
+        "slot": "photo 2",
+        "key": "photo:c7db79d3-bfb3-46a3-93a7-99afcbccd534",
+        "stars": 2700,
+        "desc": "A person is posing against a blue backdrop. They are wearing a yellow shirt with text on the back and white lace shorts. The person's back is turned to the camera, and they have long blonde hair. The nipples, vagina, and anus are not visible. The buttocks are partially covered by the shorts. The person is standing with one hand touching their head. (tags: lingerie, solo)"
+      },
+      {
+        "slot": "photo 3",
+        "key": "photo:7b5ec201-eb6a-4669-8953-116ac054a5dd",
+        "stars": 2700,
+        "desc": "A person poses indoors wearing a leopard print swimwear. The nipples, genitals, and anus are not visible. The person leans against a yellow towel on a surface. Large windows show palm trees outside. The camera angle is slightly tilted, capturing the person's upper body and part of the legs. The setting appears relaxed and casual. (tags: bikini, feet, solo)"
+      },
+      {
+        "slot": "video 1",
+        "key": "video:99e1d1e5-aaf3-47cf-80b5-eede8c8ca64a",
+        "stars": 2700,
+        "desc": "A gymnast performs a lunge stretch on a blue mat, wearing a purple leotard. The nipples, genitals, and anus are not visible. The setting is a gym with others resting in the background. The camera angle is from the side, capturing the gymnast's profile. (tags: bikini, feet)"
+      },
+      {
+        "slot": "free photo",
+        "key": "photo:f56fee14-af8f-4002-9bfa-3dd1ec1145be",
+        "stars": 0,
+        "desc": "A person is taking a mirror selfie in a gym. They are wearing a black top and red shorts. The nipples, genitals, and anus are not visible. The person's bare buttocks are also not visible. The mirror reflection is visible, showing the gym equipment and windows in the background. The person is holding a phone with their right hand. (tags: mirror_selfie, feet)"
+      }
+    ],
+    "generated": [
+      "sorry my phone is being so weird rn one sec"
+    ],
+    "grounding": null,
+    "delivery": {
+      "fixedLine": "brb",
+      "text": {
+        "status": "acknowledged",
+        "messageId": 5068
+      },
+      "historyWrite": {
+        "reply": {
+          "ok": true
+        }
+      }
+    }
+  },
+  "response": {
+    "id": "gen-1791891282-WEKSmJPqEIJiBSZsn4r3",
+    "object": "chat.completion",
+    "created": 1791891282,
+    "model": "deepseek/deepseek-v4.1-flash",
+    "provider": "DeepInfra",
+    "system_fingerprint": null,
+    "service_tier": "default",
+    "choices": [
+      {
+        "index": 0,
+        "logprobs": null,
+        "finish_reason": "error",
+        "native_finish_reason": null,
+        "error": {
+          "code": 502,
+          "message": "Upstream error from DeepInfra: Internal server error",
+          "metadata": {
+            "error_type": "provider_unavailable"
+          }
+        },
+        "message": {
+          "role": "assistant",
+          "content": "{",
+          "refusal": null,
+          "reasoning": null
+        }
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 3197,
+      "completion_tokens": 1,
+      "total_tokens": 3198,
+      "cost": 0,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 0,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.000448,
+        "upstream_inference_prompt_cost": 0.00044758,
+        "upstream_inference_completions_cost": 4.2e-07
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    }
+  },
+  "status": 200,
+  "allowedSelections": [
+    "photo 1",
+    "photo 2",
+    "photo 3"
+  ],
+  "fanMessages": 0,
+  "modelCalls": 0,
+  "productionWrites": 0
+}
