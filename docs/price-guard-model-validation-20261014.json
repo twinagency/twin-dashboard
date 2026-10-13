@@ -1,0 +1,189 @@
+{
+  "candidate": "771f713b58c11d1b0fcf094595dc8f67ac898eb3",
+  "patchSha": "23c12f7b9d985c23cf7296af25374f9aba5bf885f7ce8f8380f70c5e44464780",
+  "fixtureSha": "b90b9a4b0f5d37b4c9e858ea4be478152653609eccff04366a777d89c3707f02",
+  "at": "2026-10-13T18:18:26.143733+00:00",
+  "runtimeBefore": [
+    {
+      "name": "twin-v2-bot-1",
+      "image": "sha256:5e9cc935054f8040da95d1437cea69b4e1244810eb7a99f971d926e022d27283",
+      "revision": "9138db6f956ed383d18fe33bce6577b2f5d74d4a",
+      "running": true
+    },
+    {
+      "name": "twin-v2-dash-1",
+      "image": "sha256:5e9cc935054f8040da95d1437cea69b4e1244810eb7a99f971d926e022d27283",
+      "revision": "9138db6f956ed383d18fe33bce6577b2f5d74d4a",
+      "running": true
+    }
+  ],
+  "runtimeAfter": [
+    {
+      "name": "twin-v2-bot-1",
+      "image": "sha256:5e9cc935054f8040da95d1437cea69b4e1244810eb7a99f971d926e022d27283",
+      "revision": "9138db6f956ed383d18fe33bce6577b2f5d74d4a",
+      "running": true
+    },
+    {
+      "name": "twin-v2-dash-1",
+      "image": "sha256:5e9cc935054f8040da95d1437cea69b4e1244810eb7a99f971d926e022d27283",
+      "revision": "9138db6f956ed383d18fe33bce6577b2f5d74d4a",
+      "running": true
+    }
+  ],
+  "settingsUnchanged": true,
+  "settingsHash": "c4a2a47a0191a1a53929ca2bcf7810711cbdf77789b70c973d2a639f130e1ebc",
+  "cases": 0,
+  "requests": 0,
+  "failed": 0,
+  "modelCost": 0,
+  "creators": [
+    {
+      "slug": "bethany-marquez",
+      "cases": null,
+      "requests": null,
+      "failedCases": null,
+      "flaggedCases": null,
+      "fatal": "No summary"
+    },
+    {
+      "slug": "briana-redd",
+      "cases": null,
+      "requests": null,
+      "failedCases": null,
+      "flaggedCases": null,
+      "fatal": "No summary"
+    },
+    {
+      "slug": "alanna-pow",
+      "cases": null,
+      "requests": null,
+      "failedCases": null,
+      "flaggedCases": null,
+      "fatal": "No summary"
+    },
+    {
+      "slug": "allison-parker",
+      "cases": null,
+      "requests": null,
+      "failedCases": null,
+      "flaggedCases": null,
+      "fatal": "No summary"
+    },
+    {
+      "slug": "dakota-lyn",
+      "cases": null,
+      "requests": null,
+      "failedCases": null,
+      "flaggedCases": null,
+      "fatal": "No summary"
+    },
+    {
+      "slug": "cat-chase",
+      "cases": null,
+      "requests": null,
+      "failedCases": null,
+      "flaggedCases": null,
+      "fatal": "No summary"
+    },
+    {
+      "slug": "dreka-cakez",
+      "cases": null,
+      "requests": null,
+      "failedCases": null,
+      "flaggedCases": null,
+      "fatal": "No summary"
+    },
+    {
+      "slug": "fit-sid",
+      "cases": null,
+      "requests": null,
+      "failedCases": null,
+      "flaggedCases": null,
+      "fatal": "No summary"
+    },
+    {
+      "slug": "kyla-yesenosky",
+      "cases": null,
+      "requests": null,
+      "failedCases": null,
+      "flaggedCases": null,
+      "fatal": "No summary"
+    },
+    {
+      "slug": "mrs-callace",
+      "cases": null,
+      "requests": null,
+      "failedCases": null,
+      "flaggedCases": null,
+      "fatal": "No summary"
+    },
+    {
+      "slug": "olivia-jade",
+      "cases": null,
+      "requests": null,
+      "failedCases": null,
+      "flaggedCases": null,
+      "fatal": "No summary"
+    },
+    {
+      "slug": "riley-mae-lewis",
+      "cases": null,
+      "requests": null,
+      "failedCases": null,
+      "flaggedCases": null,
+      "fatal": "No summary"
+    },
+    {
+      "slug": "tammy",
+      "cases": null,
+      "requests": null,
+      "failedCases": null,
+      "flaggedCases": null,
+      "fatal": "No summary"
+    },
+    {
+      "slug": "sania-mallory",
+      "cases": null,
+      "requests": null,
+      "failedCases": null,
+      "flaggedCases": null,
+      "fatal": "No summary"
+    },
+    {
+      "slug": "toochi",
+      "cases": null,
+      "requests": null,
+      "failedCases": null,
+      "flaggedCases": null,
+      "fatal": "No summary"
+    },
+    {
+      "slug": "trashy",
+      "cases": null,
+      "requests": null,
+      "failedCases": null,
+      "flaggedCases": null,
+      "fatal": "No summary"
+    },
+    {
+      "slug": "tru-kait",
+      "cases": null,
+      "requests": null,
+      "failedCases": null,
+      "flaggedCases": null,
+      "fatal": "No summary"
+    }
+  ],
+  "failedTurns": [],
+  "flaggedTurns": [],
+  "promptDisplayConsistent": false,
+  "replyReview": [],
+  "fanMessages": 0,
+  "purchases": 0,
+  "productionWrites": 0,
+  "syntheticTelegram": true,
+  "evidencePath": "/home/ubuntu/twin-v2-validation/reply-outcomes-candidate-1791915472824110127",
+  "status": "validation-failed",
+  "error": "Candidate or replay count changed"
+}
