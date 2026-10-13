@@ -1,5 +1,5 @@
 {
-  "reason": "Approved creator profile photos across FLIRT: switcher cards, selected creator chip, directory and earnings rows, preserving creator navigation and existing onboarding.",
-  "source_commit": "dd2384bb23a401c16908786b68430d4941c4f043",
-  "requested_at": "2026-10-13T09:20:00Z"
+  "reason": "Fix confirmed Safari onboarding thumbnail taps and verify the image-replacement race plus persisted gallery refresh. Creator switchers, directory and earnings rows now use real profile photos.",
+  "source_commit": "bdaa666732b2f66083347823dae84267fc37e1ce",
+  "requested_at": "2026-10-13T09:26:04.785Z"
 }
