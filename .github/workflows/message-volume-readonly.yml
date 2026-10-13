@@ -1,0 +1,43 @@
+name: Read-only fleet message volume
+on:
+  push:
+    branches: [codex/message-volume-readonly-20261013]
+    paths: [.github/workflows/message-volume-readonly.yml]
+permissions:
+  contents: read
+jobs:
+  volume:
+    runs-on: ubuntu-latest
+    timeout-minutes: 6
+    steps:
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-southeast-2
+      - name: Count retained real V2 messages without writes or sends
+        run: |
+          python3 - <<'PY'
+          import json, subprocess, time
+          instance='i-0584d283506f3f6be'
+          source="import fs from 'node:fs';\nimport path from 'node:path';\nimport readline from 'node:readline';\nimport crypto from 'node:crypto';\nimport { config } from './src/config.ts';\nimport { messagesForTurn } from './dashboard/history.ts';\nconst from=Date.parse('2026-09-13T00:00:00+10:00'), until=Date.parse('2026-10-13T00:00:00+10:00');\nconst r=await fetch(config.supabaseUrl+'/rest/v1/clones?select=id,slug,name', {headers:{apikey:config.supabaseKey,Authorization:'Bearer '+config.supabaseKey},signal:AbortSignal.timeout(15000)});\nif(!r.ok)throw Error('Creator lookup failed '+r.status);\nconst creators=await r.json(), all=[], days={};\nconst blank=()=>({received:0,sent:0,acknowledged:0,unverified:0});\nfor(const c of creators){\n const file=path.join(config.logDir,c.slug,'requests.jsonl');\n if(!fs.existsSync(file))continue;\n const result={creator:c.slug,...blank(),first:null,last:null,malformed:0,simulated:0,duplicateRecords:0,rowsWithMessageIds:0,mergedInputNewlines:0,ownerTestReceived:0,ownerTestSent:0};\n const seen=new Set();\n const stat=fs.statSync(file);\n for await(const line of readline.createInterface({input:fs.createReadStream(file,{end:Math.max(0,stat.size-1)}),crlfDelay:Infinity})){\n  if(!line)continue;\n  let row;try{row=JSON.parse(line)}catch{result.malformed++;continue}\n  const ts=Date.parse(row.ts);if(!Number.isFinite(ts)||ts<from||ts>=until)continue;\n  if(row.mode==='simulated'){result.simulated++;continue}\n  if(Array.isArray(row.messageIds))result.rowsWithMessageIds++;\n  const identity=crypto.createHash('sha256').update(line).digest('hex');\n  const messages=messagesForTurn(row,identity);\n  for(const m of messages){\n   const key=String(row.chatId)+':'+m.id;if(seen.has(key)){result.duplicateRecords++;continue}seen.add(key);\n   const day=new Date(ts+36000000).toISOString().slice(0,10);\n   const d=days[day]??=blank();const dir=m.role==='user'?'received':'sent';result[dir]++;d[dir]++;\n   if(m.role==='assistant'){result[m.delivery]++;d[m.delivery]++}\n   if(m.role==='user')result.mergedInputNewlines+=(m.content.match(/\\n/g)||[]).length;\n   if(String(row.chatId)==='6814483810')result[m.role==='user'?'ownerTestReceived':'ownerTestSent']++;\n   if(!result.first||m.at<result.first)result.first=m.at;if(!result.last||m.at>result.last)result.last=m.at;\n  }\n }\n all.push(result);\n}\nconst totals=blank();for(const c of all)for(const k of Object.keys(totals))totals[k]+=c[k];\nconsole.log(JSON.stringify({checkedAt:new Date().toISOString(),from:new Date(from).toISOString(),until:new Date(until).toISOString(),revision:process.env.GIT_SHA,totals,creators:all,days:Object.entries(days).sort().map(([day,x])=>({day,...x}))}));\n"
+          command="sudo docker exec -i twin-v2-dash-1 node --import tsx --input-type=module <<'TWIN_VOLUME_JS'\n"+source+"\nTWIN_VOLUME_JS"
+          params=json.dumps({'commands':[command],'executionTimeout':['180']})
+          cid=subprocess.check_output(['aws','ssm','send-command','--instance-ids',instance,'--document-name','AWS-RunShellScript','--parameters',params,'--comment','Read-only fleet message volume requested by owner','--query','Command.CommandId','--output','text'],text=True).strip()
+          for i in range(90):
+              r=subprocess.run(['aws','ssm','get-command-invocation','--command-id',cid,'--instance-id',instance,'--output','json'],capture_output=True,text=True)
+              if r.returncode:
+                  time.sleep(2)
+                  continue
+              v=json.loads(r.stdout)
+              if v['Status'] in ['Success','Failed','Cancelled','TimedOut']:
+                  print(v.get('StandardOutputContent',''))
+                  if v['Status']!='Success':
+                      print(v.get('StandardErrorContent','')[-1600:])
+                      raise RuntimeError('Read-only volume check '+v['Status'])
+                  break
+              time.sleep(2)
+          else:
+              raise RuntimeError('Volume check timed out')
+          
+          PY
