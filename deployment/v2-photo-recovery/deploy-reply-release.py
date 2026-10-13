@@ -1,18 +1,20 @@
 """Deploy the approved, packaged reply repair; preserve current fleet, data and prices."""
 import datetime,hashlib,json,pathlib,subprocess,sys,time,urllib.request,uuid
-SHA='9138db6f956ed383d18fe33bce6577b2f5d74d4a'
-TESTED='9138db6f956ed383d18fe33bce6577b2f5d74d4a'
-OLD_SHA='2f24f023c0cf46bea1c3b3b334458cf1a5df265e'
-OLD_IMAGE='sha256:dff48242b35b94e7b0e757ee4b7778a11958ef85b231b5fdb369542902e325f9'
-EXPECTED_IMAGE='sha256:5e9cc935054f8040da95d1437cea69b4e1244810eb7a99f971d926e022d27283'
+SHA='771f713b58c11d1b0fcf094595dc8f67ac898eb3'
+TESTED='771f713b58c11d1b0fcf094595dc8f67ac898eb3'
+OLD_SHA='9138db6f956ed383d18fe33bce6577b2f5d74d4a'
+OLD_IMAGE='sha256:5e9cc935054f8040da95d1437cea69b4e1244810eb7a99f971d926e022d27283'
+EXPECTED_IMAGE='sha256:ac361b6304d4fa20ee251177b01277e37c826173f1ecd2d2afc2f8cb04f7ca9c'
+EXPECTED_RELEASE='/home/ubuntu/twin-v2-reply-releases/771f713b58c11d1b0fcf094595dc8f67ac898eb3'
 ROOT=pathlib.Path('/home/ubuntu/twin-v2')
-BACKUP=pathlib.Path('/home/ubuntu/twin-v2-backups/reply-baseline-9138db6-1791897287594888697')
+BACKUP=pathlib.Path('/home/ubuntu/twin-v2-backups/reply-baseline-771f713-1791916541369657274')
 PREP=json.loads((BACKUP/'reply-prepared.json').read_text())
 BASE=json.loads((BACKUP/'release-preflight.json').read_text())
-IMAGE=PREP['image'];assert IMAGE==EXPECTED_IMAGE,'Prepared image changed';RELEASE=pathlib.Path(PREP['release'])
+IMAGE=PREP['image'];assert IMAGE==EXPECTED_IMAGE,'Prepared image changed';RELEASE=pathlib.Path(PREP['release']);assert str(RELEASE)==EXPECTED_RELEASE,'Prepared release path changed'
 MANIFEST=json.loads((BACKUP/'release-manifest.json').read_text())
 CHANGES=json.loads((BACKUP/'host-changes.json').read_text())
 EXPECTED=PREP['expectedSlugs'];OVERRIDE=ROOT/'photo-release.override.json'
+EXPECTED_CHANGES=['scripts/check-existing-card-discussion.ts','scripts/check-reply-grounding.ts','src/grounding.ts','src/turn.ts']
 CONTAINERS=['twin-v2-bot-1','twin-v2-dash-1']
 def stamp():return datetime.datetime.now(datetime.timezone.utc).isoformat()
 def digest(b):return hashlib.sha256(b).hexdigest()
@@ -95,7 +97,6 @@ for(const x of results){const req=activeRequest(config.dataDir,x.slug),res=readR
 const open=[];
 try{if(ok)for(const row of rows)for(const fn of ['v2credit_open_work','v2tip_open_work']){
  const res=await fetch(config.supabaseUrl+'/rest/v1/rpc/'+fn,{method:'POST',headers:{apikey:config.supabaseKey,Authorization:'Bearer '+config.supabaseKey,'Content-Type':'application/json'},body:JSON.stringify({p_clone_id:row.id}),signal:AbortSignal.timeout(8000)});
- if(fn==='v2tip_open_work'&&res.status===404){open.push({slug:row.slug,kind:fn,notInstalled:true});continue;}
  const w=await res.json();open.push({slug:row.slug,kind:fn,...w});
  if(!res.ok||w.ok!==true||(fn==='v2credit_open_work'&&w.reserved_turns!==0)||Number(w.open_exceptions??0)!==0||Number(w.awaiting_receipt_refunds??0)!==0)ok=false;
 }}catch(e){ok=false;open.push({error:String(e?.message??e).slice(0,160)});}
@@ -112,6 +113,16 @@ console.log('RELEASE_JSON '+JSON.stringify({ok,at:new Date().toISOString(),resul
   raise
  print('REPLY_RELEASE_PHASE '+json.dumps({'phase':'drained','creators':len(EXPECTED),'at':stamp()}),flush=True)
  return receipt
+def financial_gate(receipt):
+ assert len(receipt['results'])==len(EXPECTED) and len(receipt['open'])==len(EXPECTED)*2,'Incomplete drain/financial scope'
+ owed=sum(int((x.get('detail') or {}).get('owed',-1)) for x in receipt['results'])
+ credits=[x for x in receipt['open'] if x.get('kind')=='v2credit_open_work'];tips=[x for x in receipt['open'] if x.get('kind')=='v2tip_open_work']
+ assert len(credits)==len(tips)==len(EXPECTED),'Incomplete financial RPC scope'
+ reserved=sum(int(x.get('reserved_turns',-1)) for x in credits)
+ exceptions=sum(int(x.get('open_exceptions',-1)) for x in receipt['open'])
+ refunds=sum(int(x.get('awaiting_receipt_refunds',-1)) for x in receipt['open'])
+ assert owed==reserved==exceptions==refunds==0,'Financial gate changed after drain'
+ return {'creators':len(EXPECTED),'drained':len(receipt['results']),'owed':owed,'reservedTurns':reserved,'openExceptions':exceptions,'awaitingReceiptRefunds':refunds,'rpcChecks':len(receipt['open'])}
 def observe(since):
  deadline=time.monotonic()+100
  while time.monotonic()<deadline:
@@ -167,11 +178,11 @@ def prompt_check():
 import fs from 'node:fs';import {createHash} from 'node:crypto';import {config} from './src/config.ts';import {render,renderParts,previewParts} from './src/girls/template.ts';import {priceFor} from './src/payments.ts';
 const r=await fetch(config.supabaseUrl+'/rest/v1/clones?select=id,slug,name,engine,status,v2_vars,v2_credits_enabled,tips_enabled,v2_memory_enabled&order=slug',{headers:{apikey:config.supabaseKey,Authorization:'Bearer '+config.supabaseKey},signal:AbortSignal.timeout(15000)});
 if(!r.ok)throw Error('Prompt settings unreadable');const rows=await r.json(),checks=[],health=[];
-const sha=b=>createHash('sha256').update(b).digest('hex'),now=new Date(),sec=t=>t.slice(t.indexOf('PHOTOS AND VIDEOS'),t.indexOf('HARD LIMITS, NEVER CROSSED'));
+const sha=b=>createHash('sha256').update(b).digest('hex'),now=new Date();
 for(const endpoint of ['/','/api/girls/details?girl=riley-mae-lewis']){const begun=Date.now(),r=await fetch('http://127.0.0.1:'+Number(process.env.DASH_PORT??4300)+endpoint,{signal:AbortSignal.timeout(10000)});await r.text();if(!r.ok)throw Error('Dashboard not healthy');health.push({endpoint,status:r.status,ms:Date.now()-begun});}
 for(const row of rows.filter(r=>r.engine==='v2'&&r.status==='active')){
  const r=await fetch('http://127.0.0.1:'+Number(process.env.DASH_PORT??4300)+'/api/girls/details?girl='+encodeURIComponent(row.slug),{signal:AbortSignal.timeout(8000)});if(!r.ok)throw Error('Displayed prompt unreadable');const d=await r.json();
- checks.push({slug:row.slug,settingsHash:sha(JSON.stringify(row)),emojiPolicy:sha(row.v2_vars.EMOJIS??''),displayMatches:Array.isArray(d.parts)&&Array.isArray(d.errors)&&!d.errors.length&&sec(d.parts.filter(p=>!p.optional).map(p=>p.text).join(''))===sec(render(row.v2_vars,now)),previewMatches:JSON.stringify(previewParts(row.v2_vars,now))===JSON.stringify(renderParts(row.v2_vars,now)),testerPrice:priceFor(2700,{cloneId:row.id,telegramId:6814483810,kind:'photo'}),normalPrice:priceFor(2700,{cloneId:row.id,telegramId:6814483811,kind:'photo'})});
+ checks.push({slug:row.slug,settingsHash:sha(JSON.stringify(row)),emojiPolicy:sha(row.v2_vars.EMOJIS??''),displayMatches:Array.isArray(d.parts)&&Array.isArray(d.errors)&&!d.errors.length&&d.parts.filter(p=>!p.optional).map(p=>p.text).join('')===render(row.v2_vars,now),previewMatches:JSON.stringify(previewParts(row.v2_vars,now))===JSON.stringify(renderParts(row.v2_vars,now)),testerPrice:priceFor(2700,{cloneId:row.id,telegramId:6814483810,kind:'photo'}),normalPrice:priceFor(2700,{cloneId:row.id,telegramId:6814483811,kind:'photo'})});
 }
 console.log('RELEASE_JSON '+JSON.stringify({at:new Date().toISOString(),health,settingsHash:sha(JSON.stringify(rows)),checks,modelCalls:0,messagesSent:0,databaseWrites:0}));
 """,'deployed-prompts','twin-v2-dash-1',170)
@@ -203,11 +214,13 @@ def deploy():
   runtime(IMAGE,SHA);current=settings();assert current['settingsHash']==prior['settings']['settingsHash'],'Deployed settings changed'
   print('REPLY_RELEASE_ALREADY_DEPLOYED '+json.dumps({'deployed':SHA,'image':IMAGE,'at':stamp()}),flush=True);return prior
  assert PREP['sha']==SHA and PREP['testedSource']==TESTED and PREP['oldSha']==OLD_SHA and PREP['oldImage']==OLD_IMAGE
+ assert PREP.get('rollbackReady') is True and PREP['rollback']['baselineRevision']==OLD_SHA and PREP['rollback']['image']==OLD_IMAGE
  assert len(PREP['offline'])==25 and all(x['exit']==0 for x in PREP['offline']) and PREP['typecheck'] is True and PREP['realModelCases']==464
  assert len(MANIFEST)==289 and out('docker','image','inspect','-f','{{.Id}}','twin-v2-reply:'+SHA)==IMAGE
+ assert sorted(x['path'] for x in CHANGES)==EXPECTED_CHANGES and len(CHANGES)==4,'Prepared host change scope changed'
  assert (BACKUP/'images.tar').stat().st_size>0 and (BACKUP/'runtime-code.tgz').stat().st_size>0
  runtime(OLD_IMAGE,OLD_SHA);settings();host_before()
- receipt=drain();released=False;switched=False;touched=False;phase='drained'
+ receipt=drain();financial=financial_gate(receipt);released=False;switched=False;touched=False;phase='drained'
  try:
   phase='final-preflight'
   check_holds(receipt);settings();host_before()
@@ -230,7 +243,7 @@ def deploy():
   phase='handover-release'
   clear_requests(receipt);released=True
   phase='fleet-restart';fleet=observe(since);current=settings();runtime(IMAGE,SHA)
-  result={'deployed':SHA,'testedSource':TESTED,'image':IMAGE,'at':stamp(),'fleet':fleet,'verifiedSourceFilesPerContainer':verified['verified'],'settings':current,'promptVerification':prompts,'dashboardReadiness':readiness,'offlineSuites':25,'typecheck':True,'realModelCases':464,'backup':str(BACKUP),'rollbackCommand':'python3 '+str(BACKUP/'deploy-reply-release.py')+' --rollback','newStateOrSchema':False,'proactiveFanMessages':0,'purchasesMade':0,'financialDataRestored':False,'actualTelegramVisibilityVerified':False}
+  result={'deployed':SHA,'testedSource':TESTED,'image':IMAGE,'at':stamp(),'cutover':{'baselineRevision':OLD_SHA,'baselineImage':OLD_IMAGE,'candidateRevision':SHA,'candidateImage':IMAGE,'release':str(RELEASE),'hostChanges':EXPECTED_CHANGES,'holdsMaintainedUntilVerification':True,'holdsReleased':True},'financialGate':financial,'fleet':fleet,'verifiedSourceFilesPerContainer':verified['verified'],'settings':current,'promptVerification':prompts,'dashboardReadiness':readiness,'offlineSuites':25,'typecheck':True,'realModelCases':464,'backup':str(BACKUP),'rollbackCommand':'python3 '+str(BACKUP/'deploy-reply-release.py')+' --rollback','rollbackTriggered':False,'newStateOrSchema':False,'proactiveFanMessages':0,'purchasesMade':0,'financialDataRestored':False,'actualTelegramVisibilityVerified':False}
   save('reply-deployed.json',result);print('REPLY_RELEASE_DEPLOYED_JSON '+json.dumps(result),flush=True)
  except Exception as e:
   failure={'at':stamp(),'phase':phase,'error':str(e),'switched':switched,'released':released,'rollback':'not-started'}
