@@ -3,7 +3,7 @@ import base64,datetime,gzip,hashlib,json,pathlib,subprocess,time
 ROOT=pathlib.Path('/home/ubuntu/twin-v2-validation/fleet-simulation-20261013-1791877888400228253')
 rows=[];progress=[]
 for d in ROOT.iterdir():
- if not d.is_dir():continue
+ if not d.is_dir() or d.name=='legacy-harness-dry':continue
  for name,dest in [('summary.json',rows),('progress.json',progress)]:
   p=d/name
   if p.is_file():
@@ -12,6 +12,18 @@ for d in ROOT.iterdir():
 aggregate=json.loads((ROOT/'fleet-summary.json').read_text()) if (ROOT/'fleet-summary.json').is_file() else None
 result=aggregate or {'complete':False,'creators':rows,'progress':progress}
 if not aggregate:result['orchestratorTail']=(ROOT/'orchestrator.private.log').read_text()[-1200:]
+result['legacy']=json.loads((ROOT/'legacy-summary.json').read_text()) if (ROOT/'legacy-summary.json').is_file() else {'complete':False,'creators':[r for r in rows if r.get('engine')=='live'],'progress':[r for r in progress if r['slug'] in ['autumn-renae','dan-dangler','hazey-haley']],'orchestratorTail':(ROOT/'legacy-orchestrator.private.log').read_text()[-1600:] if (ROOT/'legacy-orchestrator.private.log').exists() else None}
+details=[]
+for c in result['creators']:
+ if c.get('engine')!='v2':continue
+ wanted={r['case'] for r in c.get('results',[]) if r.get('failed') or r.get('flags')}
+ f=ROOT/c['slug']/'turns.private.json'
+ if not f.exists():continue
+ for t in json.loads(f.read_text()):
+  if t['case'] not in wanted:continue
+  r=t['row'];selected=r.get('selectedMedia') or {};prior=t['before'].get('photo') or {}
+  details.append({'slug':c['slug'],'case':t['case'],'raw':r.get('raw'),'generated':r.get('generated'),'grounding':r.get('grounding'),'reference':r.get('photoReference'),'delivery':r.get('delivery'),'selectedDescription':next((m['desc'] for m in r.get('menu',[]) if m['key']==selected.get('key')),None),'priorKey':prior.get('key'),'historyTail':t['before'].get('history',[])[-2:]})
+result['failureDetails']=details
 packed=gzip.compress(json.dumps(result).encode(),mtime=0)
 p=ROOT/('readback-'+str(time.time_ns())+'.json.gz');p.write_bytes(packed);p.chmod(0o600)
 print('SIM_RESULT_MANIFEST '+json.dumps({'path':str(p),'bytes':len(packed),'base64Chunks':(len(base64.b64encode(packed))+19999)//20000,'sha256':hashlib.sha256(packed).hexdigest(),'complete':bool(aggregate),'creators':[{k:r.get(k) for k in ['slug','cases','requests','failedCases','flaggedCases','fatal']} for r in rows],'progress':[{k:r.get(k) for k in ['slug','completed','requests']} for r in progress]}),flush=True)
