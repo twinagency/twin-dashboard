@@ -1,9 +1,9 @@
-name: Validate isolated Twin V2 card candidate
+name: Prepare isolated Twin V2 reply release
 on:
   push:
-    branches: [codex/v2-card-model-validation-v2-20261013]
+    branches: [codex/v2-reply-release-prep-20261013]
     paths-ignore:
-      - docs/existing-card-candidate-v2-results.json
+      - docs/reply-release-prepared.json
 permissions:
   contents: write
 concurrency:
@@ -20,7 +20,7 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ap-southeast-2
-      - name: Replay frozen V2 fleet with candidate source and record evidence
+      - name: Build pinned full remote source, verify packaged gates, prepare rollback
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: python3 deployment/photo-launch-access.py
