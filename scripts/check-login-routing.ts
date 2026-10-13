@@ -50,7 +50,7 @@ async function main() {
     assert.equal(protectedPage.headers.get("location"),null,"Do not force authenticated backend pages into /twin/*");
     assert.equal((await middleware(new NextRequest(origin + "/brand/twin-blue-texture.png"))).status,200);
     assert.equal((await middleware(new NextRequest(origin + "/brand/twin-blue-texture.png", {method:"POST",headers:{"next-action":"known-action"}}))).status,403);
-    for (const value of [undefined,"/","/twin","/login","//evil.example","/\\evil.example","/\t/evil.example","https://evil.example"]) assert.equal(safeAdminNext(value),"/revenue");
+    for (const value of [undefined,"/","/twin","/login","//evil.example","/\\evil.example","/\t/evil.example","https://evil.example"]) assert.equal(safeAdminNext(value),"/dashboard");
     assert.equal(safeAdminNext("/clones?tab=settings"),"/clones?tab=settings");
     assert.equal(isTwinLoginPath("/twins"),false);
     for (const path of ["/creator-management", "/creator-management/fixture", "/creator-other"]) {
@@ -67,7 +67,7 @@ async function main() {
     for (const next of ["/", "/twin", "//evil.example"]) {
       const response = await adminLogin(request("offline-routing-password",next));
       assert.equal(response.status,303);
-      assert.equal(response.headers.get("location"),origin + "/revenue");
+      assert.equal(response.headers.get("location"),origin + "/dashboard");
       assert.equal(await verifySessionToken(response.cookies.get(SESSION_COOKIE)?.value),true);
       for (const key of [AGENCY_COOKIE,AGENCY_PORTAL_COOKIE,"clone_scope"]) assert.equal(response.cookies.get(key)?.value,"");
     }

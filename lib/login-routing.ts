@@ -7,7 +7,7 @@ export function isTwinLoginPath(path: string | null | undefined): boolean {
 }
 
 export function safeAdminNext(value: string | null | undefined): string {
-  const fallback = "/revenue";
+  const fallback = "/dashboard";
   if (!value || !value.startsWith("/") || value.startsWith("//") || /[\\\u0000-\u0020\u007f]/.test(value)) return fallback;
   try {
     const origin = "https://dashboard.invalid";

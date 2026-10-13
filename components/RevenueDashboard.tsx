@@ -1,7 +1,7 @@
 "use client";
 
 import Link from "next/link";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import {
   Bar,
   BarChart,
@@ -40,7 +40,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 // read by app/revenue/page.tsx) — when set, every number here scopes to that one
 // clone; when absent ("All clones"), everything aggregates across the fleet.
 
-type FullData = DashboardData & {
+export type FullData = DashboardData & {
   analytics: AnalyticsData | null;
   analyticsError?: string | null;
   balance: StarBalance | null;
@@ -206,8 +206,16 @@ function snapshotAgeLabel(ageSeconds: number) {
   return `Updated ${minutes}m ago`;
 }
 
-export default function RevenueDashboard({ cloneId, initialData = null }: { cloneId?: string | null; initialData?: FullData | null }) {
+type OverviewPresentation = {
+  className: string;
+  header: (windowLabel: string) => ReactNode;
+  activity: (data: FullData | null, money: (stars: number) => string) => ReactNode;
+  rankings: (data: FullData | null, money: (stars: number) => string, loading: boolean) => ReactNode;
+};
+
+export default function RevenueDashboard({ cloneId, initialData = null, overviewPresentation }: { cloneId?: string | null; initialData?: FullData | null; overviewPresentation?: OverviewPresentation }) {
   const { isCreator, isAgency, agencyName } = useDashboardAccess();
+  const overview = Boolean(overviewPresentation) && !isCreator && !isAgency;
   const moxyOverview = isAgency && agencyName?.trim().toLowerCase() === "moxy";
   const scoped = Boolean(cloneId);
   // AI cost/contribution/margin are OUR figures, not the agency's or creator's.
@@ -227,7 +235,7 @@ export default function RevenueDashboard({ cloneId, initialData = null }: { clon
   const [draftEnd, setDraftEnd] = useState("");
   const draftStartRef = useRef<HTMLInputElement>(null);
   const draftEndRef = useRef<HTMLInputElement>(null);
-  const [chartType, setChartType] = useState<"bar" | "line">("bar");
+  const [chartType, setChartType] = useState<"bar" | "line">(overview ? "line" : "bar");
   const [chartMode, setChartMode] = useState<"total" | "creator">("total");
   const [analysisView, setAnalysisView] = useState<"customers" | "journey">("customers");
   const { currency, rate, usdPerStar } = useCurrency();
@@ -483,6 +491,12 @@ export default function RevenueDashboard({ cloneId, initialData = null }: { clon
           meta: summaryAverageOrder === null ? "No paid orders" : `${money(summaryAverageOrder)} average`,
           hint: "Positive Star payments in the selected period. Refunds and adjustments are not counted as orders.",
         },
+        ...(overview ? [{
+          label: "Total fans",
+          value: fmtNum(summaryStats.totalFans),
+          meta: `${fmtNum(summaryStats.activeUsers)} messaged this period`,
+          hint: "All-time creator–fan relationships in this scope. A fan following two creators counts once for each creator. The activity count below follows the selected reporting period.",
+        }] : []),
       ]
     : [];
   const creatorCount = data?.clones.length ?? 0;
@@ -568,7 +582,8 @@ export default function RevenueDashboard({ cloneId, initialData = null }: { clon
   );
 
   return (
-    <div className={`revenue-dashboard pb-6${moxyOverview ? " revenue-dashboard--moxy" : ""}`}>
+    <div className={`revenue-dashboard pb-6${moxyOverview ? " revenue-dashboard--moxy" : ""}${overview ? ` ${overviewPresentation!.className}` : ""}`} data-live-overview={overview ? "true" : undefined}>
+      {overview && overviewPresentation!.header(windowLabel)}
       {/* Named on screen, not just in the console. The operator is the person
           who has to decide whether to pick a shorter window or call someone. */}
       {loadError && (
@@ -593,9 +608,9 @@ export default function RevenueDashboard({ cloneId, initialData = null }: { clon
       <div className="revenue-command mb-3 overflow-hidden rounded-lg border border-line bg-panel">
         <div className="revenue-page-heading flex flex-col justify-between gap-3 border-b border-line px-3 py-3 sm:flex-row sm:items-center sm:px-4">
           <div className="min-w-0">
-            {!moxyOverview && <div className="mb-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">Finance operations</div>}
+            {!moxyOverview && !overview && <div className="mb-0.5 text-[10px] font-semibold uppercase tracking-[0.14em] text-muted">Finance operations</div>}
             <h2 className="flex items-center gap-1.5 font-heading text-xl font-semibold tracking-[-0.025em] text-ink sm:text-2xl">
-              Earnings overview
+              {overview ? "Reporting period" : "Earnings overview"}
               <Info text={isCreator ? "Revenue, buyer activity and conversion performance for your creator account." : "Revenue, buyer activity and conversion performance across your active creators. In All creators, buyers are unique people across creators; audience and message totals count each creator-fan relationship."} />
             </h2>
             {moxyOverview && <p className="moxy-reporting-caption">{windowLabel} · {currency} · {reportTzLabel()}</p>}
@@ -745,7 +760,7 @@ export default function RevenueDashboard({ cloneId, initialData = null }: { clon
               </div>
             ))
           ) : (
-            Array.from({ length: 5 }).map((_, index) => (
+            Array.from({ length: overview ? 6 : 5 }).map((_, index) => (
               <div key={index} className={`h-[70px] ${loading ? "animate-pulse" : ""} bg-elev ${index === 0 ? "col-span-2 sm:col-span-1" : ""}`} />
             ))
           )}
@@ -1057,7 +1072,8 @@ export default function RevenueDashboard({ cloneId, initialData = null }: { clon
           did one unusually large payment move the entire day? It deliberately
           stays above the broad report so it is not buried behind a toggle. */}
       <div className="space-y-3">
-        {!moxyOverview && <RevenueDayDrivers cloneId={cloneId} />}
+        {overview && overviewPresentation!.activity(data, money)}
+        {!moxyOverview && !overview && <RevenueDayDrivers cloneId={cloneId} />}
         {data?.analytics && (
           <CreatorPerformanceRail
             creators={data.analytics.clones}
@@ -1068,6 +1084,8 @@ export default function RevenueDashboard({ cloneId, initialData = null }: { clon
         )}
       </div>
       </div>
+
+      {overview && <>{overviewPresentation!.rankings(data, money, loading)}<div className="mt-4"><RevenueDayDrivers cloneId={cloneId} /></div></>}
 
       {/* ── Secondary operating metrics: one structured matrix, not a wall of
           detached dashboard cards. Every measure still follows its original
@@ -1313,7 +1331,7 @@ export default function RevenueDashboard({ cloneId, initialData = null }: { clon
           Server sends up to 300 (fleet-wide, most recent first); scoping to
           one clone filters client-side. Shows 10, "Show more" → 50 → 100. ── */}
       {data && (
-        <Card size="sm" className="revenue-ledger mt-3 gap-0 overflow-hidden rounded-lg border border-line bg-panel py-0 shadow-none">
+        <Card id={overview ? "overview-transactions" : undefined} size="sm" className="revenue-ledger mt-3 gap-0 overflow-hidden rounded-lg border border-line bg-panel py-0 shadow-none">
           <CardHeader className="flex-row items-center justify-between gap-3 space-y-0 border-b border-line px-3 py-2.5 sm:px-4">
             <div>
               <CardTitle className="flex items-center gap-1.5 text-xs font-semibold uppercase tracking-[0.1em] text-ink">

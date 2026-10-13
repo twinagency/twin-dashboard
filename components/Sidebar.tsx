@@ -4,7 +4,7 @@ import { agencyDashboardPath, isPartnerPreview } from "@/lib/agency-policy";
 import { isMoxy } from "@/lib/agency-brand";
 import { JESS_KATE_PORTAL, TETHER_PORTAL } from "@/lib/partner-portals";
 import { CREATOR_DASHBOARD_NAV } from "@/lib/creator-dashboard-policy";
-import { dashboardCreatorHref, isCreatorStudioRoute, isDashboardWorkspaceRoute } from "@/lib/dashboard-creator-route";
+import { isCreatorStudioRoute, isDashboardWorkspaceRoute } from "@/lib/dashboard-creator-route";
 
 // Left sidebar app shell (desktop). "Create new clone" is always the first
 // thing in it, followed by the operating views. Internal admin tools are
@@ -206,13 +206,13 @@ const ADMIN_LINKS: NavLink[] = [
 ];
 
 // Internal Twin ordering is shared by the desktop sidebar and mobile menu.
-const TWIN_ADMIN_ORDER = ["/dashboard", "/revenue", "/clones", "/fans", "/inbox", "/users", "/business", "ppvs", "/content-library", "/campaigns", "identity", "/agency-admin", "/admin/earnings-split", "/catalogue-funnel", "/agency/creators", "/agency/creator-invites"];
+const TWIN_ADMIN_ORDER = ["/dashboard", "/clones", "/fans", "/inbox", "/users", "/business", "ppvs", "/content-library", "/campaigns", "identity", "/agency-admin", "/admin/earnings-split", "/catalogue-funnel", "/agency/creators", "/agency/creator-invites"];
 const TWIN_ADMIN_LINKS: NavLink[] = [
   { kind: "route", label: "Campaigns", href: "/campaigns", icon: "Bell", color: "blue" },
   { kind: "route", label: "Inbox", href: "/inbox", icon: "Inbox", color: "blue" },
   { kind: "route", label: "Content Library", href: "/content-library", icon: "Media", color: "blue" },
   { kind: "route", label: "Dashboard", href: "/dashboard", icon: "Clones", color: "blue" },
-  ...NAV_LINKS,
+  ...NAV_LINKS.filter(link => link.kind !== "route" || link.href !== "/revenue"),
   { kind: "route", label: "Fan profiles", href: "/fans", icon: "Users", color: "blue" },
   ...MORE_LINKS,
   ...ADMIN_LINKS,
@@ -232,7 +232,7 @@ const TWIN_ADMIN_GROUPS: AdminGroup[] = [
   { label: "Content Library", icon: "Media", href: "/content-library", children: ["ppvs", "/business"] },
   { label: "Campaigns", icon: "Bell", href: "/campaigns" },
   { label: "Automations", icon: "Flows", children: ["/flows", "/sequences"] },
-  { label: "Performance", icon: "Revenue", children: ["/revenue", "/sales-health", "/catalogue-funnel"] },
+  { label: "Performance", icon: "Revenue", children: ["/sales-health", "/catalogue-funnel"] },
   { label: "Agency Access", icon: "Users", href: "/agency-admin", children: ["/agency/creators"] },
   { label: "Core Intelligence", icon: "Sparkle", href: "/jarvis", children: ["/ai-models"] },
   { label: "Settings", icon: "Settings", href: "/settings", children: ["/admin/earnings-split"] },
@@ -425,9 +425,6 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
     if (isAgency && link.kind === "route" && !agencyDashboardPath(link.href, agencyName, canManage)) return null;
     if (link.kind === "tab") {
       if (isPreview && link.tab !== "identity") return null;
-      // The Dashboard owns its creator selection and has no global picker.
-      // Use its selected creator, never a stale scope cookie or an unhandled event.
-      if (isAdmin && pathname === "/dashboard") return <Link href={dashboardCreatorHref(searchParams.get("creator"), link.tab)} onClick={onNavigate} className={rowClass + " " + colors.idle}>{navLabel(link, colors)}</Link>;
       const active = onConfigurePage && ((isAdmin || moxyNavigation) && link.tab === "identity" ? activeTab !== "ppvs" : activeTab === link.tab);
       if (!configurationCloneId) return <button type="button" onClick={pickClone} title="Pick a creator first" className={rowClass + " " + colors.idle}>{navLabel(link, colors)}</button>;
       return <Link href={`/clones/${configurationCloneId}?tab=${link.tab}`} onClick={onNavigate} aria-current={active ? "page" : undefined} className={rowClass + " " + (active ? colors.active : colors.idle)}>{navLabel(link, colors)}</Link>;

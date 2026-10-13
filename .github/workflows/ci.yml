@@ -42,6 +42,9 @@ jobs:
           done < <(sudo grep -rl 'dl.google.com/linux/chrome' /etc/apt/sources.list.d 2>/dev/null || true)
           npx playwright install --with-deps chromium webkit
 
+      - name: Live dashboard overview data and interaction checks
+        run: node --import tsx scripts/check-live-overview-ui.mjs
+
       - name: Shared operator workspace desktop and mobile checks
         run: node scripts/check-operator-workspace-ui.mjs
 

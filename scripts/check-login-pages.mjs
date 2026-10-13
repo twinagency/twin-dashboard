@@ -70,7 +70,7 @@ try {
   assert.equal(new URL(denied.headers.get('location')).pathname, '/twin');
   const login = await request('/admin-auth', {method:'POST', headers:{origin:publicOrigin, cookie:'twin_agency_access=stale; twin_agency_portal=moxy'}, body:new URLSearchParams({password:'offline-login-smoke',next:'/twin'})});
   assert.equal(login.status,303);
-  assert.equal(login.headers.get('location'),publicOrigin + '/revenue');
+  assert.equal(login.headers.get('location'),publicOrigin + '/dashboard');
   assert.match(login.headers.get('set-cookie'), /allie_admin_session=/);
   assert.match(login.headers.get('set-cookie'), /twin_agency_access=;/);
   assert.match(login.headers.get('set-cookie'), /twin_agency_portal=;/);

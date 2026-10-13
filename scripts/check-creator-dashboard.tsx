@@ -143,18 +143,38 @@ async function main() {
     "next/navigation": { redirect: (path: string) => { throw new Error(`redirect:${path}`); } },
     "@/lib/internal-admin": { hasInternalAdminAccess: async () => admin },
     "@/lib/view-as": { activeViewAs: async () => viewAs },
-    "@/components/dashboard/CreatorDashboard": { __esModule: true, default: () => null },
-    "@/components/dashboard/model": dashboardModel,
-    "@/components/fans/data": { creators, fans, authoredFans: fans },
+    "@/components/dashboard/LiveDashboardOverview": { __esModule: true, default: () => null },
+    "@/components/RevenueTooltipFix": { __esModule: true, default: () => null },
+    "@/lib/clone-scope": { getCloneScope: async () => "live-clone-id" },
+    "@/lib/query-cache": { getFleetClones: async () => [{ id: "live-clone-id", name: "Live creator", color: "#123456" }] },
   }).default;
   const route = (search: Record<string, string | string[]> = {}) => Page({ searchParams: Promise.resolve(search) });
   await assert.rejects(route(), /redirect:\/twin/);
   admin = true;
   for (const targetType of ["agency", "creator"]) { viewAs = { targetType }; await assert.rejects(route(), /redirect:\/revenue/); }
   viewAs = null;
-  assert.equal((await route()).props.initialFilters.creatorId, "briana");
-  assert.equal((await route({ platform: "telegram", window: "all" })).props.initialFilters.platform, "telegram");
-  assert.equal((await route({ creator: ["kyla", "briana"] })).props.initialFilters.creatorId, "briana");
+  const live = (await route()).props.children[1];
+  assert.equal(live.props.cloneId, "live-clone-id");
+  assert.deepEqual(live.props.clones, [{ id: "live-clone-id", name: "Live creator", color: "#123456" }]);
+  assert.equal(live.props.fans, undefined, "Dashboard must not receive demo fans");
+
+  let reportingAccess: { name: string } | null = null;
+  const Earnings = compile("app/revenue/page.tsx", {
+    "next/navigation": { redirect: (path: string) => { throw new Error(`redirect:${path}`); } },
+    "@/lib/clone-scope": { getCloneScope: async () => "live-clone-id" },
+    "@/lib/dashboard-access": { getDashboardAccess: async () => reportingAccess },
+    "@/lib/agency-brand": { isMoxy: (name: string) => name === "Moxy" },
+    "@/lib/agency-overview": { getAgencyOverview: async () => [] },
+    "@/components/agency-overview/AgencyOverview": { __esModule: true, default: () => null },
+    "@/components/RevenueDashboard": { __esModule: true, default: () => null },
+    "@/components/RevenueTooltipFix": { __esModule: true, default: () => null },
+  }).default;
+  await assert.rejects(Earnings({}), /redirect:\/dashboard$/);
+  for (const name of ["Moxy", "Flirt", "Creator account"]) {
+    reportingAccess = { name };
+    const page = await Earnings({});
+    assert.ok(page, `${name} keeps existing earnings reporting`);
+  }
 
   let headerPath = "/users", headerParams = new URLSearchParams("relationship=briana-ledger-1");
   const headerAudience = { isAgency: false, isCreator: false, agencyName: "" };
