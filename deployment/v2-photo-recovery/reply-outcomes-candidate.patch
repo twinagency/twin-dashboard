@@ -1,0 +1,95 @@
+diff --git a/src/grounding.ts b/src/grounding.ts
+index c942716..ddd53ff 100644
+--- a/src/grounding.ts
++++ b/src/grounding.ts
+@@ -146,7 +146,7 @@ export function unsupported(sentence: string, ev: Set<string>): string[] {
+ }
+ 
+ /** Drops every sentence that attributes something to the file that it does not show. Text with no such word is returned unchanged. */
+-export function groundReply(text: string, descAndWords: string | null, context: { availability?: Availability; prior?: string; priorDiscussion?: boolean; reference?: boolean; owned?: boolean } = {}): { text: string; dropped: { sentence: string; claims: string[] }[] } {
++export function groundReply(text: string, descAndWords: string | null, context: { availability?: Availability; prior?: string; priorDiscussion?: boolean; reference?: boolean; owned?: boolean; itemPriceQuestion?: boolean; tipAmountQuestion?: boolean } = {}): { text: string; dropped: { sentence: string; claims: string[] }[] } {
+   const ev = evidenceFamilies(descAndWords ?? "");
+   const parts = text.split(/(?<=[.!?])\s+|\n+/);
+   const keep: string[] = [], dropped: { sentence: string; claims: string[] }[] = [];
+@@ -154,13 +154,15 @@ export function groundReply(text: string, descAndWords: string | null, context:
+     const t = s.toLowerCase().replace(/[’]/g, "'");
+     const claims: string[] = [];
+     const contentTurn = descAndWords !== null || context.priorDiscussion || context.reference;
++    const priceContext = contentTurn || context.itemPriceQuestion;
+     // The card is the price authority. Keep general Stars conversion guidance and
+     // ordinary spending/tipping conversation; reject a bounded item-price assertion.
+     const amount = "(?:\\$\\s*\\d[\\d,.]*|(?:\\d[\\d,.]*|(?:(?:a|one|two|three|four|five|six|seven|eight|nine|ten|twenty|fifty|hundred|thousand|few|couple)\\s+)+)(?:\\s*)(?:stars?|dollars?|bucks?))";
+     const itemPrice = new RegExp(`\\b(?:it'?s|it is|(?:this|that)(?: one)?(?:'?s| is)?|(?:this|that|the) (?:photo|pic|picture|video|clip|card|bundle)(?: is| costs?| is worth)?)\\s+(?:(?:only|just|about|around|roughly)\\s+)?${amount}|${amount}\\s+(?:for|to (?:open|unlock))\\s+(?:that|this|the)\\s+(?:one|photo|pic|picture|video|clip|card|bundle)\\b`).test(t);
+-    const standalonePrice = contentTurn && new RegExp(`^\\s*(?:(?:only|just|about|around|roughly)\\s+)?${amount}`).test(t)
+-      && !/\bper\b|\bstars?\s+(?:is|are|costs?|equals?)\b/.test(t);
+-    if (((contentTurn || /\b(?:photo|pic|picture|video|clip|bundle)\b/.test(t)) && itemPrice) || standalonePrice) claims.push("item price must come from Telegram's card");
++    const tipAmount = new RegExp(`${amount}\\s+(?:(?:as|for)\\s+)?(?:a\\s+)?(?:good\\s+)?(?:tips?|tipping)\\b`).test(t);
++    const standalonePrice = priceContext && new RegExp(`^\\s*(?:(?:only|just|about|around|roughly)\\s+)?${amount}`).test(t)
++      && !/\bper\b|\bstars?\s+(?:is|are|costs?|equals?)\b/.test(t) && !tipAmount && !context.tipAmountQuestion;
++    if (((priceContext || /\b(?:photo|pic|picture|video|clip|bundle)\b/.test(t)) && itemPrice) || standalonePrice) claims.push("item price must come from Telegram's card");
+     // Bounded checks for broad stock denials only. A specific absence ("no blue bikini
+     // photo"), a relative/friend count or a hypothetical is not a catalogue-wide denial.
+     const a = context.availability;
+diff --git a/src/turn.ts b/src/turn.ts
+index 9291ff7..dddc4ca 100644
+--- a/src/turn.ts
++++ b/src/turn.ts
+@@ -193,6 +193,19 @@ function existingPhotoDiscussion(text: string, recentPhoto: boolean): false | "p
+   return discussion ? /\b(?:prices?|costs?|how much (?:is|for|does)|how many (?:telegram )?stars?)\b/.test(t) ? "price" : "other" : false;
+ }
+ const CARD_PRICE_TEXT = "telegram shows the price when u tap the card";
++const NO_CARD_PRICE_TEXT = "i havent sent a card for that yet";
++
++/** Classifies a stated amount for a named item without treating tips or "how much do you like it" as an item-price question. */
++function itemPriceContext(text: string): { price: boolean; tipAmount: boolean } {
++  const t = text.toLowerCase().replace(/[’‘]/g, "'");
++  const item = /\b(?:photos?|pics?|pictures?|selfies?|images?|cards?|videos?|vids?|clips?|bundles?)\b/.test(t);
++  const amount = "(?:\\$\\s*\\d[\\d,.]*|\\b(?:\\d[\\d,.]*|one|two|three|four|five|six|seven|eight|nine|ten|twenty|fifty|hundred|thousand)\\s+(?:stars?|dollars?|bucks?))";
++  const statedAmount = new RegExp(`${amount}\\b`).test(t)
++    && /\b(?:is|are|for|costs?|worth)\b/.test(t);
++  const tipAmount = new RegExp(`${amount}\\s+(?:(?:as|for)\\s+)?(?:a\\s+)?(?:good\\s+)?(?:tips?|tipping)\\b`).test(t);
++  const price = /\b(?:prices?|costs?|worth|how many (?:telegram )?stars?|how much (?:is|for|does|would|will|to (?:open|unlock)))\b/.test(t) || statedAmount;
++  return { price: item && price && !tipAmount, tipAmount: item && tipAmount };
++}
+ 
+ /** Index of the line just appended for this turn (the newest user message with exactly this text), or -1. */
+ const lastIndexOfUser = (h: { role: string; content: string }[], text: string) => { for (let i = h.length - 1; i >= 0; i--) if (h[i].role === "user" && h[i].content === text) return i; return -1; };
+@@ -427,18 +440,26 @@ async function runTurnInner(girl: Girl, catalogue: Item[], chatId: number | stri
+   // lowercase only, like a real girl texting (Ronan's rule). Prompt says so too; this is the backstop.
+   const text = applyEmojiPolicy(cleanReply(sel.clean), girl.vars.EMOJIS).replace(new RegExp(`^\\s*${girl.name}\\s*:\\s*`, "gim"), "").toLowerCase();
+   let textFinal = dropThrowBack(text);
++  const priceContext = itemPriceContext(fanText);
++  const askedItemPrice = priceContext.price;
+   // Grounding (code only, same single model call): what the reply says she is wearing / showing must be supported by the ONE file it offers.
+   // An unsupported sentence is removed; the file and its price remain the explicit selection.
+   const g = groundReply(textFinal, media ? evidenceText(media.desc, media.words) : bundle ? evidenceText(bundle.files.map(f => f.desc).join(" "), bundle.words) : null,
+     { availability: menu.availability, prior: acknowledgedPrior ? evidenceText(acknowledgedPrior.desc, acknowledgedPrior.words) : undefined,
+-      priorDiscussion: !!discussingCard, reference: !!referenceRequest && referenceRequest !== "new", owned: photoReference?.owned });
++      priorDiscussion: !!discussingCard, reference: !!referenceRequest && referenceRequest !== "new", owned: photoReference?.owned,
++      itemPriceQuestion: askedItemPrice, tipAmountQuestion: priceContext.tipAmount });
+   if (g.dropped.length) { textFinal = g.text; rec.grounding = g.dropped; }
++  const priceDropped = g.dropped.some(x => x.claims.some(c => c.startsWith("item price")));
++  const noCardPrice = priceDropped && askedItemPrice && !media && !bundle && !acknowledgedPrior;
++  if (noCardPrice) rec.grounding = (rec.grounding ?? []).map(x => x.claims.some(c => c.startsWith("item price"))
++    ? { ...x, claims: [...x.claims, "item price answer has no verified card"] } : x);
+   // These factual answers have one authority: a fresh reference check or Telegram's
+   // price card. A card-price question cannot turn into a model estimate, even a vague one.
+   const factualReply = failedReference && scopedPrior ? UNAVAILABLE_TEXT
+-    : discussingCard === "price" ? acknowledgedPrior ? CARD_PRICE_TEXT : "which card do u mean?" : null;
++    : discussingCard === "price" ? acknowledgedPrior ? CARD_PRICE_TEXT : "which card do u mean?"
++    : noCardPrice ? NO_CARD_PRICE_TEXT : null;
+   if (factualReply !== null) {
+-    if (textFinal !== factualReply) rec.grounding = [...(rec.grounding ?? []), { sentence: textFinal, claims: [discussingCard === "price" ? "card price answer uses the verified card authority" : "exact photo could not be verified for this turn"] }];
++    if (textFinal !== factualReply && !noCardPrice) rec.grounding = [...(rec.grounding ?? []), { sentence: textFinal, claims: [discussingCard === "price" ? "card price answer uses the verified card authority" : "exact photo could not be verified for this turn"] }];
+     textFinal = factualReply;
+   }
+   // Reuse the menu's existing match decision. Grounding must not erase an alternative's label.
+@@ -452,7 +473,7 @@ async function runTurnInner(girl: Girl, catalogue: Item[], chatId: number | stri
+   let fallback: TurnResult["fallback"];
+   if (!bubbles.length) {
+     if (media || bundle) bubbles.push("here's this one for u");
+-    else if (g.dropped.some(x => x.claims.some(c => c.startsWith("item price")))) bubbles.push(CARD_PRICE_TEXT);
++    else if (priceDropped) bubbles.push(acknowledgedPrior ? CARD_PRICE_TEXT : NO_CARD_PRICE_TEXT);
+     else if (discussingCard) bubbles.push("i can't tell if the card is showing for u");
+     else { bubbles.push(pickOne(girl.brb)); fallback = "brb"; }
+   }
