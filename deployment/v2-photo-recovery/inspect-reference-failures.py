@@ -184,11 +184,44 @@ for index in [0, 1, 3, 6]:
     assert isinstance(text, str) and len(text) <= 250, 'Unexpectedly long original input; no conversation dump permitted'
     inputs.append({'sourceTurn': index + 1, 'fanText': text})
 
+
+# Verify the hardcoded expected keys against the exact product matcher, without credentials or networking.
+import subprocess
+source_root = pathlib.Path('/tmp/v2-structured-c457f1767377-1791857424236297637')
+manifest = read_json(source_root / 'manifest.json')
+assert hashlib.sha256((source_root/'src/media.ts').read_bytes()).hexdigest() == manifest['src/media.ts']
+node = r"""
+import fs from 'node:fs';
+globalThis.fetch = async () => { throw Error('network forbidden'); };
+const {catalogueFromRaw,requestedAttrs,isAlternative} = await import('./src/media.ts');
+const snapshot=JSON.parse(fs.readFileSync('/probe/catalogue-at-diagnosis.json','utf8'));
+const records=JSON.parse(fs.readFileSync('/probe/riley-morning-requests.json','utf8'));
+const catalogue=catalogueFromRaw(snapshot.raw);
+const keys=['photo:ceb606ce-4110-42b8-9c53-5507a8a787fc','photo:a5414325-ef14-49ee-9f30-f9487739fbde'];
+const result=[0,1,3].map(source=>{
+ const req=requestedAttrs(catalogue.filter(x=>!x.isFree),records[source].fanText);
+ return {sourceTurn:source+1,requestedExact:[...req.exact],requestedNear:[...req.near],
+ allExactLockedPhotoKeys:catalogue.filter(x=>x.kind==='photo'&&!x.isFree&&!isAlternative(x,req)).map(x=>x.key),
+ expectedKeyFacts:keys.map(key=>{const item=catalogue.find(x=>x.key===key);return {key,exactMatch:!!item&&!isAlternative(item,req),searchWords:item?[...item.words]:[]};})};
+});
+console.log('MATCHER_FACTS '+JSON.stringify(result));
+"""
+command=['docker','run','--rm','-i','--read-only','--network','none','--tmpfs','/tmp:rw,size=64m','--memory','256m','--cpus','1','-w','/app',
+ '--mount','type=bind,source=/dev/null,target=/app/.env,readonly',
+ '--mount','type=bind,source='+str(FIXTURE)+',target=/probe,readonly',
+ '--mount','type=bind,source='+str(source_root/'src/media.ts')+',target=/app/src/media.ts,readonly',
+ 'sha256:2f076bf6fbc17b4de58a31887e9328a56e0275d90edda39ea789efbd13517d2e','node','--import','tsx','--input-type=module']
+ran=subprocess.run(command,input=node,text=True,capture_output=True,timeout=30)
+assert ran.returncode==0, 'Network-isolated matcher inspection failed'
+matcher_lines=[line[len('MATCHER_FACTS '):] for line in ran.stdout.splitlines() if line.startswith('MATCHER_FACTS ')]
+assert len(matcher_lines)==1
+matcher_facts=json.loads(matcher_lines[0])
+
 print(json.dumps({
     'status': 'READ ONLY REFERENCE FAILURE FACTS', 'verifiedAt': datetime.datetime.now(datetime.timezone.utc).isoformat(),
     'candidate': summary['candidate'], 'fixtureHash': FIXTURE_HASH,
     'totalCases': len(summary['results']), 'failedCases': len(failures),
-    'originalInputsRequiredForDiagnosis': inputs, 'failures': failures,
+    'originalInputsRequiredForDiagnosis': inputs, 'failures': failures, 'actualProductMatcherFacts': matcher_facts,
     'originalFinalTurn': [{key: result.get(key) for key in ['case', 'parserClassification', 'priorPhotoPresent', 'priorPhotoStatus',
                              'priorPhotoScoped', 'referenceAvailable', 'menuKeys', 'unresolvedOriginalRecovery']}
                           for result in summary['results'] if '/sequential-original/original-turn-7' in result['case']],
