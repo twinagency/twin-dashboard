@@ -149,7 +149,7 @@ const NO_CONTENT: Menu = { free: null, photos: [], video: null };
 
 /** Only opens the exact-reference menu. It never selects a file, changes her reply, or retries a send. */
 export function photoRequest(text: string): "resend" | "missing" | null {
-  const t = text.toLowerCase().replace(/[’‘]/g, "'");
+  const t = text.toLowerCase().replace(/[’‘]/g, "'").trim();
   if (/\b(?:don't|dont|do not|never|stop)\b.{0,24}\b(?:send|resend|show|give|share)\b|\bno\s+(?:more\s+)?(?:photos?|pics?|pictures?)\b/.test(t)) return null;
   const wanted = t.replace(/\b(?:not|no)\s+(?:a\s+)?(?:videos?|vids?|clips?|bundles?)\b/g, "");
   if (/\b(?:new|another|different|next)\s+(?:one|photos?|pics?|pictures?|selfies?)\b|\b(?:videos?|vids?|clips?|bundles?)\b/.test(wanted)) return null;
@@ -158,7 +158,8 @@ export function photoRequest(text: string): "resend" | "missing" | null {
     || new RegExp(`\\b(?:send|show|give|share)\\b.{0,25}\\b(?:same|last|previous)\\b.{0,15}\\b${photo}\\b`).test(t)
     || new RegExp(`\\b(?:send|show|share)\\b.{0,25}\\b(?:${photo}|it|that|one)\\b.{0,15}\\bagain\\b`).test(t)
     || new RegExp(`\\bsame\\s+${photo}\\s*(?:again|please|pls|[?!.]|$)`).test(t)) return "resend";
-  if (new RegExp(`\\b(?:can't|cant|cannot|don't|dont|do not)\\s+(?:see|find|open)\\b.{0,30}\\b${photo}\\b`).test(t)
+  if (/^(?:there(?:'s| is)\s+)?nothing\s+(?:(?:was|has been)\s+)?sent[.!?]*$/.test(t)
+    || new RegExp(`\\b(?:can't|cant|cannot|don't|dont|do not)\\s+(?:see|find|open)\\b.{0,30}\\b${photo}\\b`).test(t)
     || new RegExp(`\\b(?:didn't|didnt|haven't|havent|never)\\s+(?:get|receive|received)\\b.{0,30}\\b${photo}\\b`).test(t)
     || new RegExp(`\\b${photo}\\b.{0,20}\\b(?:didn't|didnt|hasn't|hasnt|isn't|isnt|wasn't|wasnt|never|not|won't|wont)\\b.{0,20}\\b(?:come|came|arriv(?:e|ed|ing)|show(?:ed|ing)?|load(?:ed|ing)?|open(?:ed|ing)?|send|sent|appear(?:ed|ing)?|there|through)\\b`).test(t)
     || new RegExp(`\\bwhere(?:'s| is)\\s+(?:(?:the|that|my)\\s+)?${photo}\\b`).test(t)) return "missing";

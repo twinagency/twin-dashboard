@@ -58,7 +58,9 @@ const RELATED: Record<string, string> = Object.fromEntries(Object.entries({
   horse: "riding",
   boobs: "chest cleavage",
 }).flatMap(([canon, list]) => list.split(" ").map((w) => [w, canon])));
-const tokens = (s: string) => s.toLowerCase().replace(/[^a-z0-9 ]+/g, " ").split(/\s+/).filter((w) => w.length > 2 && !STOP.has(w));
+/** A named equipment/storage rack is not body slang. Only matching/grounding tokens change; displayed descriptions stay intact. */
+export const withoutObjectRackTerms = (s: string) => s.replace(/\b((?:weights?|dumbbells?|barbells?|clothes|clothing|coats?|shoes?|towels?|squat|power|storage)[\s_-]+)racks?\b/gi, "$1");
+const tokens = (s: string) => withoutObjectRackTerms(s).toLowerCase().replace(/[^a-z0-9 ]+/g, " ").split(/\s+/).filter((w) => w.length > 2 && !STOP.has(w));
 export const words = (s: string) => new Set(tokens(s).map((w) => SAME[w] ?? w));
 /** Words in `s` that are only NEARBY to an attribute (see RELATED), as that attribute. */
 export const relatedWords = (s: string) => new Set(tokens(s).filter((w) => !(w in SAME) && w in RELATED).map((w) => RELATED[w]));
@@ -100,7 +102,7 @@ export function affirmed(desc: string): { text: string; denied: Set<string> } {
   for (const c of clauses(desc)) {
     if (!NEG.test(c)) { keep.push(c); continue; }
     const cw = words(c);
-    for (const w of c.toLowerCase().replace(/[^a-z0-9_ ]+/g, " ").split(/\s+/)) { const k = tagKey(w); if (k) denied.add(k); }
+    for (const w of withoutObjectRackTerms(c).toLowerCase().replace(/[^a-z0-9_ ]+/g, " ").split(/\s+/)) { const k = tagKey(w); if (k) denied.add(k); }
     for (const [k, v] of Object.entries(FACT_WORDS)) if (v.split(" ").some((x) => cw.has(SAME[x] ?? x))) denied.add(k);
   }
   return { text: keep.join(". "), denied };

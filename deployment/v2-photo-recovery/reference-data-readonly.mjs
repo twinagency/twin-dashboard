@@ -10,7 +10,7 @@ const EXPECTED_REVISION = '45931b6f56db9f97cc8406154e35a0d216f5de65';
 const EXPECTED_FIXTURE_HASH = '43e21019a2c33d1e840c81ec6d683cf7bb6546f68e1de4106db9218b6d3bd253';
 const FAN = 6814483810;
 const PHOTO_ID = 'ceb606ce-4110-42b8-9c53-5507a8a787fc';
-const SOURCE_PATHS = ['src/llm.ts', 'src/turn.ts', 'src/media.ts', 'src/girls/template.ts',
+const SOURCE_PATHS = ['src/llm.ts', 'src/turn.ts', 'src/media.ts', 'src/grounding.ts', 'src/girls/template.ts',
   'src/memory.ts', 'src/deliver.ts', 'src/payments.ts', 'src/runner.ts', 'src/bundle-offers.ts'];
 const sha256 = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
 const stdout = process.stdout.write.bind(process.stdout);

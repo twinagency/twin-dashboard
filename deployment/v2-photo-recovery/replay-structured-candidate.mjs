@@ -13,6 +13,7 @@ import {runAs} from './src/context.ts';
 import {saveChat, loadChat} from './src/memory.ts';
 import {priceFor, payloadFor} from './src/payments.ts';
 import {photoRequest} from './src/turn.ts';
+import {trimCaption} from './src/deliver.ts';
 import {groundReply, evidenceText} from './src/grounding.ts';
 import {turnRig, installModelStub, restoreFetch} from './scripts/lib/turn-rig.ts';
 
@@ -41,16 +42,25 @@ for (const record of records) {
 }
 Object.defineProperties(rigDefaultGirl, Object.getOwnPropertyDescriptors(girlFromRow(profile, () => profile.v2_vars)));
 const catalogue = catalogueFromRaw(snapshot.raw), byKey = new Map(catalogue.map(x => [x.key, x]));
-const exactChest = ['photo:ceb606ce-4110-42b8-9c53-5507a8a787fc', 'photo:a5414325-ef14-49ee-9f30-f9487739fbde'];
+// Prospective correction from independent frozen-description inspection. The old
+// c457 replay remains failed: gym equipment "rack" was not affirmative anatomy evidence.
+const exactChest = ['photo:ceb606ce-4110-42b8-9c53-5507a8a787fc'];
+const exactEvidence = {approvedKeys: exactChest, excludedMisfoldedKey: 'photo:a5414325-ef14-49ee-9f30-f9487739fbde',
+  basis: 'frozen affirmative visual evidence; gym equipment rack must not establish an anatomy match',
+  priorRunPreserved: 'c457f1767377:43-of-50; prospective plan correction does not reclassify that run'};
 assert(exactChest.every(key => byKey.has(key)));
 assert(exactChest.every(key => !byKey.get(key).isFree && byKey.get(key).stars > 0), 'exact reference controls require paid seed photos');
+assert(exactChest.every(key => byKey.get(key).words.has('boobs')), 'verified affirmative fixture must retain the requested attribute');
+assert(byKey.has(exactEvidence.excludedMisfoldedKey) && !byKey.get(exactEvidence.excludedMisfoldedKey).words.has('boobs'),
+  'fixture gym equipment rack must not create a false anatomy match');
 // Freeze behavioral gates before the first request. Original ambiguity is not a success claim.
 const originalCases = records.map((_, source) => ({
   name: 'original-turn-' + (source + 1), source,
-  behaviorAcceptance: [0, 1, 3, 5].includes(source),
+  behaviorAcceptance: [0, 1, 3, 5, 6].includes(source),
   expectedKeys: [0, 1, 3].includes(source) ? exactChest : undefined,
   requirePhoto: source === 5,
-  observationReason: source === 2 ? 'elliptical body-part request' : source === 4 ? 'potentially ambiguous mirror reference' : source === 6 ? 'original missing-card wording has no established photo receipt in this independent history' : undefined,
+  noMedia: source === 6, noContext: source === 6,
+  observationReason: source === 2 ? 'elliptical body-part request' : source === 4 ? 'potentially ambiguous mirror reference' : undefined,
 }));
 const cases = [...originalCases,
   {name: 'greeting-with-retained-history', source: 0, input: 'hey how are you today', noMedia: true, behaviorAcceptance: true},
@@ -70,12 +80,15 @@ const referenceCases = [
 const sequentialRules = {
   seed: 'only original turn 1 pre-input history and frozen sent keys; keep actual candidate replies, sent keys and Chat.photo thereafter',
   exactSources: [0, 1, 3], exactKeys: exactChest,
-  exactPolicy: 'require a remaining exact matching photo if one remains unsent; if exhausted, expose outcome as observational, never call it exact-match acceptance',
+  exactPolicy: 'require independently verified ceb while unsent; after it is sent, require truthful unavailability or explicit alternative wording with grounded output and no exact-key repeat',
+  exhaustedPolicy: 'a listed alternative requires an explicit limitation/alternative acknowledgement in its actual dispatched caption; none requires that acknowledgement in actual sent text; unrecognized wording fails review rather than being silently accepted',
   chooseAnySource: 5, chooseAnyPolicy: 'require a current photo if an unsent photo remains',
   ambiguousSources: [2, 4], finalSource: 6,
-  finalPolicy: 'record classifier, pre-turn scoped receipt and available menu; recognized final report with a reliable receipt must select that exact photo; unrecognized wording remains unresolved, not recovery acceptance',
+  finalPolicy: 'original final missing-card wording must classify as missing and select the exact scoped previous photo; missing context or unrecognized wording fails this sequential recovery gate',
 };
-const plan = {independent: cases, sequentialRules, referenceCases, routes: ['business', 'ordinary']};
+const plan = {version: 'prospective-reference-v2', exactEvidence, independent: cases, sequentialRules, referenceCases,
+  groundingPolicy: 'raw draft claims are diagnostic; actual prepared and dispatched captions must be grounded, with dispatched caption equal to the product trimmed prepared output even when transport times out',
+  routes: ['business', 'ordinary']};
 const frozenPlan = JSON.stringify(plan);
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'structured-candidate-replay-'));
 const oldDirs = {data: config.dataDir, logs: config.logDir};
@@ -117,6 +130,9 @@ globalThis.fetch = async (url, init) => {
 };
 const chatId = 6814483810;
 const mediaMethods = new Set(['sendPaidMedia', 'sendPhoto', 'sendVideo']);
+// This is a predeclared replay review gate, not a product reply rule or semantic proof.
+// It recognizes limitation/alternative wording; unfamiliar wording requires review.
+const alternativeAcknowledgement = text => /\b(?:instead|alternative|something (?:else|different)|(?:another|different) (?:one|photo|pic|picture)|closest|not (?:an? )?(?:exact|quite|what)|(?:don['’]?t|do not|haven['’]?t|have not|can['’]?t|cannot|no|not|nothing|out of)\b[^.!?]{0,65}\b(?:more|another|one|ones|photo|photos|pic|pics|picture|pictures|shot|shots|like that|exact|left|available)|(?:already|just)\b[^.!?]{0,35}\b(?:sent|showed|shown))\b/i.test(text);
 const downloadBytes = new WeakMap(); // keep nonserializable attachment objects out of private JSON
 let rigNumber = 0;
 const primitiveCalls = calls => calls.map(({method, payload}) => ({
@@ -183,10 +199,19 @@ async function execute(state, test, group) {
     const turnCalls = rig.tg.calls.slice(before.calls), mediaCalls = turnCalls.filter(call => mediaMethods.has(call.method));
     const downloads = state.downloads.slice(before.downloads), verifications = state.verifications.slice(before.verifications);
     const deliveredText = (row?.final ?? []).join(' ');
+    const preparedText = (row?.generated ?? []).join(' ');
+    const dispatchedCaption = mediaCalls[0]?.payload.caption;
     const enumValues = last?.request?.response_format?.json_schema?.schema?.properties?.selection?.enum ?? [];
     const allPayloadText = turnCalls.flatMap(call => [call.payload.text, call.payload.caption]).filter(Boolean).join(' ');
     const selectedCaptionClaims = item ? groundReply(deliveredText, evidenceText(item.desc, item.words)).dropped : [];
     const rawSelectedClaims = item && decoded?.reply ? groundReply(decoded.reply, evidenceText(item.desc, item.words)).dropped : [];
+    const preparedClaims = item ? groundReply(preparedText, evidenceText(item.desc, item.words)).dropped : [];
+    const dispatchedClaims = item ? groundReply(dispatchedCaption ?? '', evidenceText(item.desc, item.words)).dropped : [];
+    const groundingRemoved = row?.grounding ?? [];
+    const groundingTraceValid = !item || groundingRemoved.every(drop => typeof drop.sentence === 'string' && drop.sentence.trim()
+      && Array.isArray(drop.claims) && drop.claims.length > 0
+      && JSON.stringify(groundReply(drop.sentence, evidenceText(item.desc, item.words)).dropped.flatMap(value => value.claims)) === JSON.stringify(drop.claims)
+      && !preparedText.toLowerCase().includes(drop.sentence.trim().toLowerCase()));
     const expectedPrice = item ? (row.selectedMedia.free ? 0 : priceFor(item.stars, {cloneId: profile.id, telegramId: chatId, kind: item.kind})) : null;
     const isReference = !!row?.photoReference?.available;
     const expectedStatus = test.timeout ? 'unknown' : 'acknowledged';
@@ -204,9 +229,12 @@ async function execute(state, test, group) {
       selectionMapsExactFile: decoded?.selection === 'none' ? selected === null : !!selectedSlot && selected === selectedSlot.key,
       expectedBehavior: test.noMedia ? selected === null && decoded?.selection === 'none' : test.expectedKeys ? test.expectedKeys.includes(selected) : test.requirePhoto ? item?.kind === 'photo' : true,
       actualModelHistoryRetained: JSON.stringify(row?.history) === JSON.stringify(expectedHistory),
-      noUnsupportedKnownPose: !/face[- ]down|(?:ass|buttocks|booty)[^.!?]{0,12}(?:up|raised)|doggy|bent over/i.test(deliveredText),
+      noUnsupportedKnownPose: !/face[- ]down|(?:ass|buttocks|booty)[^.!?]{0,12}(?:up|raised)|doggy|bent over/i.test([deliveredText, dispatchedCaption ?? ''].join(' ')),
       noUnsupportedSelectedVocabularyDelivered: selectedCaptionClaims.length === 0,
-      noUnsupportedSelectedVocabularyGenerated: rawSelectedClaims.length === 0,
+      actualPreparedOutputGrounded: preparedClaims.length === 0,
+      actualDispatchedCaptionGrounded: dispatchedClaims.length === 0,
+      actualDispatchedCaptionMatchesPrepared: !selected || dispatchedCaption === (preparedText ? trimCaption(preparedText) : undefined),
+      groundingRemovalTraceValid: groundingTraceValid,
       noPromptOrJSONLeak: !/YOUR CONTENT READY|response_format|"(?:selection|reply)"\s*:|\[(?:free )?(?:photo|video|bundle|tip)(?: \d+)?\]/i.test(allPayloadText),
       noExplicitFalseSendClaimWithoutSelection: !!selected || !/\b(?:i(?:'ve| have)?\s+(?:just\s+)?(?:sent|resent|attached|shared|uploaded)|(?:here(?:'s| is)|sent)\s+(?:the|your|that)\s+(?:photo|pic|picture|selfie|image|card))\b/i.test([decoded?.reply ?? '', deliveredText].join(' ')),
       exactDownloadedFile: exactDownload,
@@ -233,7 +261,7 @@ async function execute(state, test, group) {
       Object.assign(checks, {
         referencePrerequisite: scopedReceipt(state, beforeChat) && (!test.priorStatus || prior.status === test.priorStatus),
         exactReferenceSelected: !!prior && item?.kind === 'photo' && selected === prior.key && item.storagePath === prior.storagePath,
-        referenceRecognized: classified === (test.priorStatus === 'unknown' ? 'missing' : 'resend') || test.originalFinal && !!classified,
+        referenceRecognized: classified === (test.priorStatus === 'unknown' || test.originalFinal ? 'missing' : 'resend'),
         exactReferenceMenu: menu.length === 1 && menu[0].key === prior?.key && row?.photoReference?.available === true && row.photoReference.sourceTurnId === prior?.turnId,
         referenceOwnership: row?.photoReference?.owned === !!test.owned && row?.selectedMedia?.free === (!!test.owned || !!item?.isFree),
         referenceDownloadedAgain: downloads.length === 1 && verifications.length >= 2,
@@ -243,19 +271,29 @@ async function execute(state, test, group) {
     if (test.requirePaid) checks.paidReferenceSeed = !!selected && row?.selectedMedia?.free === false && expectedPrice > 0;
     if (test.noVerification) checks.normalOfferHasNoReferenceReads = classified === null && verifications.length === 0 && !row?.photoReference;
     if (test.different) checks.newPhotoIsDifferent = !!prior && selected !== prior.key;
+    if (test.exhaustedExact) Object.assign(checks, {
+      exhaustedExactPoolConfirmed: exactChest.every(key => beforeChat.sent.includes(key)),
+      noFalseExactRepeat: !selected || !exactChest.includes(selected),
+      truthfulAlternativeOrUnavailabilityAcknowledged: alternativeAcknowledgement(selected ? dispatchedCaption ?? '' : deliveredText),
+    });
     if (test.timeout) Object.assign(checks, {
       oneTimeoutNoAutomaticRepeat: state.timeouts - before.timeouts === 1 && !state.timeoutNext && mediaCalls.length === 1 && !row?.delivery?.media?.retried,
       unknownDoesNotBecomeSent: !!selected && !afterChat.sent.includes(selected),
     });
     const passed = Object.values(checks).every(Boolean);
     exchanges.push({case: id, pipelineRecord: row, fakeCalls: primitiveCalls(turnCalls), downloads, verifications,
-      beforeChat, afterChat, rawSelectedClaims, selectedCaptionClaims});
+      beforeChat, afterChat, rawSelectedClaims, selectedCaptionClaims, preparedClaims, dispatchedClaims});
     const result = {case: id, sourceTurn: test.source === undefined ? undefined : test.source + 1,
       behaviorAcceptance: test.behaviorAcceptance !== false, observationReason: test.observationReason,
       requests: requests - before.requests, selected, selection: decoded?.selection ?? null, provider: last?.response?.provider,
       expectedPrice, parserClassification: classified, priorPhotoPresent: !!prior, priorPhotoStatus: prior?.status ?? null,
       priorPhotoScoped: scopedReceipt(state, beforeChat), referenceAvailable: row?.photoReference?.available ?? null,
       referenceReason: row?.photoReference?.reason ?? null, menuKeys: menu.map(value => value.key),
+      rawDraftUnsupportedClaims: rawSelectedClaims.flatMap(value => value.claims),
+      recordedGroundingRemovedClaims: groundingRemoved.flatMap(value => value.claims),
+      rawDraftClean: rawSelectedClaims.length === 0,
+      exhaustedExact: !!test.exhaustedExact,
+      alternativeAcknowledgementRecognized: test.exhaustedExact ? alternativeAcknowledgement(selected ? dispatchedCaption ?? '' : deliveredText) : null,
       unresolvedOriginalRecovery: !!test.originalFinal && !(classified && scopedReceipt(state, beforeChat) && test.reference && checks.exactReferenceSelected),
       checks, passed};
     results.push(result);
@@ -281,20 +319,15 @@ try {
         if (sequentialRules.exactSources.includes(source)) {
           const remaining = exactChest.filter(key => !beforeChat.sent.includes(key));
           test.expectedKeys = remaining.length ? remaining : undefined;
-          test.behaviorAcceptance = remaining.length > 0;
-          if (!remaining.length) test.observationReason = 'predeclared exact matching keys exhausted by earlier actual replies; alternatives observed only';
+          test.behaviorAcceptance = true;
+          test.exhaustedExact = remaining.length === 0;
         }
         if (source === 5 && !catalogue.some(item => item.kind === 'photo' && !beforeChat.sent.includes(item.key))) {
           test.requirePhoto = false; test.behaviorAcceptance = false; test.observationReason = 'all current photos already sent in this sequence';
         }
         if (source === 6) {
-          test.originalFinal = true;
-          if (photoRequest(records[source].fanText) && scopedReceipt(sequence, beforeChat)) {
-            test.reference = true; test.behaviorAcceptance = true; test.observationReason = undefined;
-          } else {
-            test.behaviorAcceptance = false;
-            test.observationReason = 'original missing-card wording remains unresolved: classifier or scoped photo receipt unavailable';
-          }
+          test.originalFinal = true; test.reference = true; test.behaviorAcceptance = true;
+          test.noMedia = false; test.noContext = false; test.observationReason = undefined;
         }
         await execute(sequence, test, 'sequential-original');
       }
@@ -331,8 +364,15 @@ const summary = {
   acceptedBehaviorCases: results.filter(result => result.behaviorAcceptance && result.passed).length,
   observationalResults: results.filter(result => !result.behaviorAcceptance).map(result => ({case: result.case, reason: result.observationReason, contractPassed: result.passed})),
   originalRecoveryUnresolved: results.filter(result => result.unresolvedOriginalRecovery).map(result => result.case),
+  rawDraftGroundingDiagnostics: results.filter(result => result.rawDraftUnsupportedClaims?.length).map(result => ({case: result.case,
+    rawClaims: result.rawDraftUnsupportedClaims, removedClaims: result.recordedGroundingRemovedClaims,
+    actualPreparedPassed: result.checks.actualPreparedOutputGrounded, actualDispatchPassed: result.checks.actualDispatchedCaptionGrounded})),
   observationalCases: originalCases.filter(test => !test.behaviorAcceptance).map(test => ({sourceTurn: test.source + 1, reason: test.observationReason})),
-  limitations: ['Telegram transport, file download and ownership simulated', 'independent source turns 3, 5 and 7 remain behaviorally observational; sequential ambiguity and exact-match exhaustion are exposed', 'unrecognized original missing-card wording is unresolved even if separate explicit recovery controls pass', 'not live delivery or production deployment acceptance', 'does not replace offline failure, ownership or displayed-prompt tests'],
+  limitations: ['Telegram transport, file download and ownership simulated', 'original source turns 3 and 5 remain behaviorally observational',
+    'raw unsupported draft terms are diagnostic; protection is tested on actual prepared and dispatched output',
+    'closed grounding vocabulary and bounded alternative-language recognition are not a complete semantic truth check; unrecognized alternative wording fails review',
+    'the previous c457 43-of-50 result remains failed under its original plan',
+    'not live delivery or production deployment acceptance', 'does not replace offline failure, ownership or displayed-prompt tests'],
   fatal: fatal ? 'Private diagnostic contains fatal error' : null,
 };
 try {

@@ -5,7 +5,7 @@ No deployment, fan sends, production data restore or fixture overwrite.
 import argparse, datetime, hashlib, json, os, pathlib, re, subprocess, tempfile
 p = argparse.ArgumentParser()
 p.add_argument('--source-dir', required=True)
-p.add_argument('--manifest', required=True, help='JSON object mapping the nine reviewed candidate source paths to SHA256')
+p.add_argument('--manifest', required=True, help='JSON object mapping the ten reviewed candidate source paths to SHA256')
 p.add_argument('--candidate-sha', required=True)
 p.add_argument('--script', required=True)
 p.add_argument('--output-dir', required=True)
@@ -22,9 +22,9 @@ output_dir = pathlib.Path(args.output_dir).resolve()
 assert output_dir != fixture and fixture not in output_dir.parents, 'Use a separate artifact directory, not the frozen fixture directory'
 assert not output_dir.exists(), 'Use a fresh result directory; previous acceptance must remain immutable'
 manifest = json.loads(pathlib.Path(args.manifest).read_text())
-required = {'src/llm.ts', 'src/turn.ts', 'src/media.ts', 'src/girls/template.ts',
+required = {'src/llm.ts', 'src/turn.ts', 'src/media.ts', 'src/grounding.ts', 'src/girls/template.ts',
             'src/memory.ts', 'src/deliver.ts', 'src/payments.ts', 'src/runner.ts', 'src/bundle-offers.ts'}
-assert set(manifest) == required, 'Mount only the nine reviewed product files'
+assert set(manifest) == required, 'Mount only the ten reviewed product files'
 hashes = {}
 for relative, digest in manifest.items():
     candidate = (source_dir / relative).resolve()

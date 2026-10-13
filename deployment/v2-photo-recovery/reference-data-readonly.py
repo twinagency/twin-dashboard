@@ -20,7 +20,7 @@ IMAGE = 'sha256:2f076bf6fbc17b4de58a31887e9328a56e0275d90edda39ea789efbd13517d2e
 FIXTURE = pathlib.Path('/home/ubuntu/twin-v2/data/_operator_backups/photo-incident-20261013-morning')
 GIRL_DATA = pathlib.Path('/home/ubuntu/twin-v2/data/riley-mae-lewis')
 FIXTURE_HASH = '43e21019a2c33d1e840c81ec6d683cf7bb6546f68e1de4106db9218b6d3bd253'
-REQUIRED = {'src/llm.ts', 'src/turn.ts', 'src/media.ts', 'src/girls/template.ts',
+REQUIRED = {'src/llm.ts', 'src/turn.ts', 'src/media.ts', 'src/grounding.ts', 'src/girls/template.ts',
             'src/memory.ts', 'src/deliver.ts', 'src/payments.ts', 'src/runner.ts', 'src/bundle-offers.ts'}
 TAG = 'REFERENCE_DATA_READONLY_JSON '
 SUMMARY_FIELDS = {
@@ -84,7 +84,7 @@ def main():
     fixture_file = fixture / 'riley-morning-requests.json'
     require(hashlib.sha256(fixture_file.read_bytes()).hexdigest() == FIXTURE_HASH, 'frozen-incident-hash-mismatch')
     manifest = json.loads(pathlib.Path(args.manifest).read_text())
-    require(isinstance(manifest, dict) and set(manifest) == REQUIRED, 'exact-nine-source-files-required')
+    require(isinstance(manifest, dict) and set(manifest) == REQUIRED, 'exact-ten-source-files-required')
     hashes = {}
     for relative in sorted(REQUIRED):
         digest = manifest[relative]

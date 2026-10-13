@@ -1,0 +1,143 @@
+// Reply grounding (round 5). When her reply offers ONE file (a tagged photo/video/bundle), the garment, colour and anatomy words the reply
+// attributes to herself must be supported by that file's own verified description / visible facts. A sentence that names a garment, an anatomy
+// word or a toy the file does not show is removed (code only: no second model call, the file selection and billing outcome are untouched).
+// What this CANNOT catch: poses, actions, places, hair, body parts and clothes outside the closed word list below, paraphrases, counts,
+// "no bra" style absence claims (a negated word is exempt, so honest "i dont have a bikini one" survives), colours not next to a garment
+// word, and anything the vision description itself got wrong. It checks vocabulary support, not truth.
+import { affirmed, withoutObjectRackTerms } from "./media.js";
+
+const FAMILIES: Record<string, string> = {};
+const fam = (key: string, list: string) => { for (const w of list.split(" ")) FAMILIES[w] = key; };
+fam("sweatshirt", "sweatshirt sweatshirts");
+fam("sweatpants", "sweatpants");
+fam("sweats", "sweats");
+fam("sweater", "sweater jumper");
+fam("hoodie", "hoodie hoodies");
+fam("tank", "tank");
+fam("camisole", "camisole cami");
+fam("shirt", "shirt shirts");
+fam("tshirt", "tshirt tee");
+fam("blouse", "blouse");
+fam("crop", "crop");
+fam("lingerie", "lingerie");
+fam("underwear", "underwear");
+fam("panties", "panties panty knickers");
+fam("bra", "bra bras");
+fam("thong", "thong thongs");
+fam("bodysuit", "bodysuit");
+fam("corset", "corset");
+fam("garter", "garter garters");
+fam("bralette", "bralette");
+fam("fishnet", "fishnet fishnets");
+fam("stockings", "stockings stocking");
+fam("tights", "tights");
+fam("lace", "lace");
+fam("dress", "dress dresses");
+fam("gown", "gown");
+fam("skirt", "skirt skirts");
+fam("miniskirt", "miniskirt");
+fam("shorts", "shorts");
+fam("jeans", "jeans denim");
+fam("pants", "pants trousers");
+fam("leggings", "leggings");
+fam("joggers", "joggers");
+fam("bikini", "bikini bikinis");
+fam("swimsuit", "swimsuit");
+fam("swimwear", "swimwear");
+fam("heels", "heels heel");
+fam("boots", "boots boot");
+fam("sneakers", "sneakers");
+fam("robe", "robe");
+fam("towel", "towel");
+fam("pajamas", "pajamas pjs");
+fam("nude", "nude naked nudes undressed");
+fam("topless", "topless");
+fam("nipples", "nipple nipples areola areolas");
+fam("boobs", "tits tit titties boobs boob breasts breast rack chest cleavage");
+fam("ass", "ass butt booty buttocks bum buns backside");
+fam("pussy", "pussy vulva vagina genitals genitalia cunt");
+fam("anus", "anus asshole anal");
+fam("toy", "toy toys");
+fam("plug", "plug plugs");
+fam("dildo", "dildo dildos");
+fam("vibrator", "vibrator vibrators vibe");
+fam("wand", "wand");
+const COLOURS = new Set("black white pink red blue green grey gray teal purple yellow orange brown gold silver beige cream navy".split(" "));
+const COLOUR_FAM = (c: string) => (c === "gray" ? "grey" : c);
+// Specific evidence may support a broad description, never the reverse: a bra is lingerie, lingerie does not prove a bra.
+const BROADER: Record<string, readonly string[]> = {
+  bra: ["lingerie", "underwear"], bralette: ["lingerie", "underwear"], panties: ["lingerie", "underwear"],
+  thong: ["underwear"], corset: ["lingerie"], garter: ["lingerie"],
+  bikini: ["swimwear", "swimsuit"], swimsuit: ["swimwear"],
+  sweatshirt: ["sweats"], sweatpants: ["sweats", "pants"], jeans: ["pants"], joggers: ["pants"],
+  tshirt: ["shirt"], blouse: ["shirt"], gown: ["dress"], miniskirt: ["skirt"],
+};
+const supportedFamilies = (f: string) => [f, ...(BROADER[f] ?? [])];
+
+const toks = (s: string) => withoutObjectRackTerms(s).toLowerCase().replace(/[^a-z0-9' ]+/g, " ").split(/\s+/).filter(Boolean);
+const NEG = /\b(?:dont|don't|do not|didnt|didn't|doesnt|doesn't|cant|can't|cannot|never|no|not|nothing|without|isnt|isn't|aint|wont|won't)\b/;
+
+/** Colours belong to the following garment/object phrase, not an unrelated pillow, wall or other garment. */
+function coloursBefore(t: string[], i: number): string[] {
+  const found: string[] = [];
+  for (let j = i - 1; j >= Math.max(0, i - 3); j--) {
+    if (FAMILIES[t[j]] && t[j] !== "lace") break;
+    if (COLOURS.has(t[j])) found.push(COLOUR_FAM(t[j]));
+    else if (!["lace", "sheer", "little", "tiny", "floral", "mesh", "sex", "tapered", "and"].includes(t[j])) break;
+  }
+  return found;
+}
+
+/** The vocabulary a file supports, including colour+garment pairs. No broad family invents a specific garment. */
+export function evidenceFamilies(descAndWords: string): Set<string> {
+  const out = new Set<string>();
+  for (const clause of descAndWords.split(/[.!?;,\n]/)) {
+    const t = toks(clause);
+    t.forEach((w, i) => {
+      const f = FAMILIES[w];
+      if (!f) return;
+      for (const supported of supportedFamilies(f)) {
+        out.add(supported);
+        for (const c of coloursBefore(t, i)) out.add(`${c}:${supported}`);
+      }
+    });
+  }
+  return out;
+}
+// Search aliases collapse swimwear to "bikini" and underwear to "lingerie". They must not manufacture an exact garment in a reply.
+// Keep direct observation words for body/toy facts only; garment names and colours come from the description, without the appended tags.
+const FACT_WORDS = new Set("nipples topless boobs genitals anus anal ass buttocks nude toy".split(" "));
+export const evidenceText = (desc: string, words: Iterable<string> = []) => `${affirmed(desc.replace(/\s*\(tags:[^)]*\)/gi, "")).text}\n${[...words].filter((w) => FACT_WORDS.has(w)).join(" ")}`;
+
+/** The unsupported claims in ONE sentence (empty = fine). A negated clause ("i dont have a bikini one") makes no claim about the file. */
+export function unsupported(sentence: string, ev: Set<string>): string[] {
+  const bad: string[] = [];
+  const clauses = sentence.toLowerCase().replace(/[’]/g, "'").split(/[,;:]|\bbut\b|\band\b(?=\s+(?:i|my|im|i'm|her|the|this|these)\b)/);
+  for (const c of clauses) {
+    const t = toks(c);
+    t.forEach((w, i) => {
+      const f = FAMILIES[w];
+      if (!f) return;
+      if (NEG.test(t.slice(0, i).join(" "))) return; // "no bra", "dont have a tank top one": an absence / denial
+      if (!ev.has(f)) bad.push(w);
+      else {
+        for (const colour of coloursBefore(t, i)) if (!ev.has(`${colour}:${f}`)) bad.push(`${colour} ${w}`);
+      }
+    });
+    // a colour before an unsupported word was already reported through that word
+  }
+  return [...new Set(bad)];
+}
+
+/** Drops every sentence that attributes something to the file that it does not show. Text with no such word is returned unchanged. */
+export function groundReply(text: string, descAndWords: string): { text: string; dropped: { sentence: string; claims: string[] }[] } {
+  const ev = evidenceFamilies(descAndWords);
+  const parts = text.split(/(?<=[.!?])\s+|\n+/);
+  const keep: string[] = [], dropped: { sentence: string; claims: string[] }[] = [];
+  for (const s of parts) {
+    const claims = unsupported(s, ev);
+    if (claims.length) dropped.push({ sentence: s, claims }); else keep.push(s);
+  }
+  return dropped.length ? { text: keep.join(" ").trim(), dropped } : { text, dropped };
+}
+
