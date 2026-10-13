@@ -20,13 +20,13 @@ const outsider="cccccccc-cccc-cccc-cccc-cccccccccccc";
 async function main() {
   Object.assign(process.env,{NODE_ENV:"production",SUPABASE_URL:"https://moxy-test.supabase.co",SUPABASE_SERVICE_KEY:"test-key",DASHBOARD_PASSWORD:"offline-admin-password"});
   const previous=globalThis.fetch;
-  let active=true, memberActive=true, signedInAgency=moxyId, authCalls=0, signoutScope="";
+  let active=true, memberActive=true, signedInAgency=moxyId, authCalls=0, signoutScope="", expectedEmail="moxy@example.test";
   globalThis.fetch=async(input,init)=>{
     const url=new URL(String(input)); let body:unknown;
     if(url.pathname==="/auth/v1/token") {
       authCalls++;
       const credentials=JSON.parse(String(init?.body));
-      assert.equal(credentials.email,"moxy@example.test");
+      assert.equal(credentials.email,expectedEmail);
       if(credentials.password!=="offline-moxy-password") return new Response(JSON.stringify({message:"Invalid login credentials"}),{status:400,headers:{"content-type":"application/json"}});
       body={access_token:"moxy-session",refresh_token:"test-refresh",expires_in:3600,token_type:"bearer",user:{id:"verified-moxy-user"}};
     } else if(url.pathname==="/auth/v1/user") body={id:"verified-moxy-user"};
@@ -55,6 +55,16 @@ async function main() {
   try {
     assert.equal((await login(request(undefined,"https://evil.example"))).status,403);
     assert.equal(authCalls,0);
+    const callsBeforeInvalid=authCalls;
+    assert.equal((await login(request(undefined,origin,{email:"bad login"}))).status,401);
+    assert.equal(authCalls,callsBeforeInvalid,"Invalid usernames never reach Auth");
+    expectedEmail="ronan@dashboard.lynqai.co";
+    assert.deepEqual(await (await login(request(undefined,origin,{email:" Ronan "}))).json(),{ok:true},"Username normalizes to the internal Moxy account");
+    memberActive=false;
+    assert.equal((await login(request(undefined,origin,{email:"ronan"}))).status,401,"Username cannot bypass revoked membership");
+    memberActive=true;signedInAgency=lynqId;
+    assert.equal((await login(request(undefined,origin,{email:"ronan"}))).status,401,"Username cannot bypass Moxy tenant restriction");
+    signedInAgency=moxyId;expectedEmail="moxy@example.test";
     assert.equal((await login(request("wrong-password"))).status,401);
     const ok=await login(request(undefined,origin,{agency:lynqId,next:"/agency-admin",clone:outsider}));
     assert.deepEqual(await ok.json(),{ok:true});
@@ -129,3 +139,4 @@ async function main() {
   console.log("Moxy: tenant-bound login, revocation, read-only methods, disabled routes, two-creator scoping, private settings, branding and admin isolation passed");
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});
+

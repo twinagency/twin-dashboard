@@ -19,7 +19,11 @@ export async function POST(req: NextRequest) {
   if (!trustedFormOrigin(req) || req.headers.has("next-action")) return NextResponse.json({ok:false,error:"origin"},{status:403});
   try {
     const fd = await req.formData();
-    const email = String(fd.get("email") ?? "").trim().toLowerCase();
+    const login = String(fd.get("email") ?? "").trim().toLowerCase();
+    // Named operator accounts use the existing internal Moxy email namespace.
+    // Auth and the active Moxy membership still independently gate access below.
+    const email = login.includes("@") ? login
+      : /^[a-z0-9][a-z0-9._-]{2,63}$/.test(login) ? `${login}@dashboard.lynqai.co` : "";
     const password = String(fd.get("password") ?? "");
     if (!email || email.length > 254 || !password || password.length > 256) return failed();
     // The portal target is fixed server-side. A LYNQ login cannot become Moxy
