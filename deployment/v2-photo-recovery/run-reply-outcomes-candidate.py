@@ -2,7 +2,7 @@
 import concurrent.futures, datetime, hashlib, json, os, pathlib, signal, subprocess, sys, time
 
 PATCH = pathlib.Path(sys.argv[1]); RUN = sys.argv[2]
-EXPECTED_PATCH = '6c81cc1b2918f29356e959fadbda856c01aa787f444a905ccde56db37ae8bf1e'
+EXPECTED_PATCH = 'b3a5a3691ff3d4392441fd32d180c6c7e4eb5c4ea2d4182c0bdb616cbf2ff842'
 IMAGE = 'sha256:dff48242b35b94e7b0e757ee4b7778a11958ef85b231b5fdb369542902e325f9'
 REV = '2f24f023c0cf46bea1c3b3b334458cf1a5df265e'
 ROOT = pathlib.Path('/home/ubuntu/twin-v2-validation/fleet-simulation-20261013-1791877888400228253')
@@ -13,7 +13,7 @@ OLD = dict(zip(['src/turn.ts','src/media.ts','src/grounding.ts','src/girls/templ
   'f6c0da74d4c97f39a1d1694137afa8d11fe36bcc53c954f0b9c22ad65cfde52f',
   '9417b6ca1a400e1de6e171ea9750955eda0148170dfba2e590686a09ee38cf54',
   'cb4c6c215f9ed1de03b0f2a078a34723560e0e219539ffb8e1e26a3006846c8e']))
-NEW = dict(zip(OLD,['630d167e0876b90caf10eeba72982a854eb8e69e2b028178a8e29e3fd6b42cec', '526d5de0b1c556d37e3d0a0e94b4572bb937385276c79b6ae3be52629cfb4e89', '222ee347f7e8492eb3acb6bdaaf6d70398000ae5b41d95b1b88b0811856db144', '8f90b14f3f199741eda4c713d9c99de1039ddd759c921e8b073cdced614571c8']))
+NEW = dict(zip(OLD,['b9c82ffbde0332e496a11ed8afb41fe4abb3e74cb6116dc4234f761d29b76c4a', '526d5de0b1c556d37e3d0a0e94b4572bb937385276c79b6ae3be52629cfb4e89', '222ee347f7e8492eb3acb6bdaaf6d70398000ae5b41d95b1b88b0811856db144', '8f90b14f3f199741eda4c713d9c99de1039ddd759c921e8b073cdced614571c8']))
 sha = lambda p: hashlib.sha256(p.read_bytes()).hexdigest()
 def runtime():
   out=[]
@@ -79,7 +79,7 @@ def stop(*_):raise TimeoutError('Global 20-minute model budget reached')
 signal.signal(signal.SIGALRM,stop);signal.alarm(1200)
 try:
   with concurrent.futures.ThreadPoolExecutor(max_workers=4) as pool:results=list(pool.map(worker,v2))
-  summary={'candidate':'d6058dcd05dc1cb2646a516fcb1aabf152a280be','patchSha':EXPECTED_PATCH,'fixtureSha':EXPECTED_FIXTURE,'at':datetime.datetime.now(datetime.timezone.utc).isoformat(),
+  summary={'candidate':'9138db6f956ed383d18fe33bce6577b2f5d74d4a','patchSha':EXPECTED_PATCH,'fixtureSha':EXPECTED_FIXTURE,'at':datetime.datetime.now(datetime.timezone.utc).isoformat(),
            'runtimeBefore':before,'runtimeAfter':runtime(),'settingsUnchanged':True,'cases':sum(r.get('cases',0) for r in results),'requests':sum(r.get('requests',0) for r in results),
            'failed':sum(r.get('failedCases',0) for r in results),'modelCost':sum(r.get('cost',0) for r in results),'creators':completed,'failedTurns':[{'slug':r['slug'],'case':x['case'],'checks':x['failed']} for r in results for x in r.get('results',[]) if x.get('failed')],
            'flaggedTurns':[{'slug':r['slug'],'case':x['case'],'flags':x['flags']} for r in results for x in r.get('results',[]) if x.get('flags')],

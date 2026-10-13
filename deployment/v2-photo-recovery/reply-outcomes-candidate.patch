@@ -109,7 +109,7 @@ index 16f5272..29eb5fd 100644
    const prior = m.reference ? m.reference.state === "acknowledged" ? " This is the previous photo; Telegram accepted its earlier send, but that does not prove he can see it."
      : m.reference.state === "unconfirmed" ? " This is the exact previous photo attempt; its earlier delivery was not confirmed."
 diff --git a/src/turn.ts b/src/turn.ts
-index c27ce7c..abc2e57 100644
+index c27ce7c..9291ff7 100644
 --- a/src/turn.ts
 +++ b/src/turn.ts
 @@ -172,15 +172,28 @@ export function photoRequest(text: string, recentPhoto = false): "new" | "resend
@@ -178,7 +178,40 @@ index c27ce7c..abc2e57 100644
      : ["none", ...rec.menu.map(it => it.slot), ...(ctx.tips?.invite && !fanTip ? ["tip"] : [])];
    const r = await complete(messages, selections);
    rec.raw = r.raw ?? r.text;
-@@ -390,10 +406,19 @@ async function runTurnInner(girl: Girl, catalogue: Item[], chatId: number | stri
+@@ -339,8 +355,30 @@ async function runTurnInner(girl: Girl, catalogue: Item[], chatId: number | stri
+   const embeddedTip = extractTipTag(r.text);
+   let replyText = embeddedTip.clean;
+   const embeddedMedia = extractTag(replyText);
+-  if (fanTip) replyText = embeddedMedia.clean;
+-  if ((!fanTip && (embeddedMedia.want || embeddedMedia.invalid)) || /\[\s*tip\b[^\]]*$/i.test(replyText)) {
++  // Structured `selection` is the authority. If the model also copies one legacy
++  // delivery note into `reply`, keep the choice only when both independently
++  // resolve to the same immutable current-menu item. Every conflicting,
++  // malformed, repeated or unlisted marker still fails closed below.
++  let redundantEmbeddedMedia = false;
++  if (!fanTip && embeddedMedia.want && !embeddedMedia.invalid && r.selection && r.selection !== "none") {
++    const declared = extractTag(`[${r.selection}]`);
++    if (declared.want && !declared.invalid) {
++      if (declared.want.kind === "bundle" || embeddedMedia.want.kind === "bundle") {
++        if (declared.want.kind === "bundle" && embeddedMedia.want.kind === "bundle") {
++          const selectedBundle = bundleFromMenu(menu.bundle, book, declared.want);
++          const notedBundle = bundleFromMenu(menu.bundle, book, embeddedMedia.want);
++          redundantEmbeddedMedia = !!selectedBundle && !!notedBundle && selectedBundle.id === notedBundle.id;
++        }
++      } else {
++        const selectedItem = fromMenu(menu, declared.want);
++        const notedItem = fromMenu(menu, embeddedMedia.want);
++        redundantEmbeddedMedia = !!selectedItem && !!notedItem
++          && selectedItem.item.key === notedItem.item.key && selectedItem.free === notedItem.free;
++      }
++    }
++  }
++  if (fanTip || redundantEmbeddedMedia) replyText = embeddedMedia.clean;
++  if ((!fanTip && (embeddedMedia.invalid || embeddedMedia.want && !redundantEmbeddedMedia)) || /\[\s*tip\b[^\]]*$/i.test(replyText)) {
+     const kind = !fanTip && embeddedMedia.want?.free ? "free" as const : "other" as const;
+     const invalid = { kind, reason: "selection marker embedded in structured reply" };
+     return { ...base, ...meta, bubbles: [kind === "free" ? UNAVAILABLE_FREE_TEXT : UNAVAILABLE_TEXT], fallback: "invalid-selection", invalid,
+@@ -390,10 +428,19 @@ async function runTurnInner(girl: Girl, catalogue: Item[], chatId: number | stri
    const text = applyEmojiPolicy(cleanReply(sel.clean), girl.vars.EMOJIS).replace(new RegExp(`^\\s*${girl.name}\\s*:\\s*`, "gim"), "").toLowerCase();
    let textFinal = dropThrowBack(text);
    // Grounding (code only, same single model call): what the reply says she is wearing / showing must be supported by the ONE file it offers.
@@ -200,7 +233,7 @@ index c27ce7c..abc2e57 100644
    // Reuse the menu's existing match decision. Grounding must not erase an alternative's label.
    if (media?.kind === "photo" && menu.alt?.has(media.key)) {
      rec.photoAlternative = true;
-@@ -403,7 +428,12 @@ async function runTurnInner(girl: Girl, catalogue: Item[], chatId: number | stri
+@@ -403,7 +450,12 @@ async function runTurnInner(girl: Girl, catalogue: Item[], chatId: number | stri
    // ONE message per reply, never a burst: her lines are joined into a single text.
    const bubbles = lines.length ? [lines.join(" ")] : [];
    let fallback: TurnResult["fallback"];

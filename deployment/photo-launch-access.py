@@ -2,7 +2,7 @@
 import base64,gzip,hashlib,json,os,pathlib,shlex,subprocess,sys,time,urllib.request
 
 INSTANCE='i-0584d283506f3f6be'
-BRANCH='codex/v2-reply-model-validation-v4-20261013'
+BRANCH='codex/v2-reply-model-validation-v5-20261013'
 ROOT=pathlib.Path('deployment/v2-photo-recovery')
 nonce=str(time.time_ns())
 
@@ -22,7 +22,7 @@ def ssm(command,timeout):
   if r['Status']!='Success':raise RuntimeError('SSM '+r['Status']+': '+r.get('StandardErrorContent','')[-700:])
   return r.get('StandardOutputContent','')
 
-result={'status':'not-started','candidate':'d6058dcd05dc1cb2646a516fcb1aabf152a280be','workflowRun':os.environ.get('GITHUB_RUN_ID'),'fanMessages':0,'purchases':0,'productionWrites':0}
+result={'status':'not-started','candidate':'9138db6f956ed383d18fe33bce6577b2f5d74d4a','workflowRun':os.environ.get('GITHUB_RUN_ID'),'fanMessages':0,'purchases':0,'productionWrites':0}
 try:
   paths=[]
   for filename in ['reply-outcomes-candidate.patch','run-reply-outcomes-candidate.py','simulate-reply-outcomes.mjs']:
@@ -41,7 +41,7 @@ except Exception as exc:
   result.update(status='validation-failed',error=str(exc)[-1000:])
 
 token=os.environ['GITHUB_TOKEN']
-url='https://api.github.com/repos/jesse98/twin-dashboard/contents/docs/reply-outcomes-candidate-v4-results.json'
+url='https://api.github.com/repos/jesse98/twin-dashboard/contents/docs/reply-outcomes-candidate-v5-results.json'
 body=json.dumps({'message':'Record isolated V2 card candidate result [skip ci]','branch':BRANCH,
   'content':base64.b64encode((json.dumps(result,indent=2)+'\n').encode()).decode()}).encode()
 req=urllib.request.Request(url,data=body,method='PUT',headers={'Authorization':'Bearer '+token,'Accept':'application/vnd.github+json','Content-Type':'application/json'})

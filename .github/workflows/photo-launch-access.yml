@@ -1,9 +1,9 @@
 name: Validate isolated Twin V2 reply candidate
 on:
   push:
-    branches: [codex/v2-reply-model-validation-v4-20261013]
+    branches: [codex/v2-reply-model-validation-v5-20261013]
     paths-ignore:
-      - docs/reply-outcomes-candidate-v4-results.json
+      - docs/reply-outcomes-candidate-v5-results.json
 permissions:
   contents: write
 concurrency:
