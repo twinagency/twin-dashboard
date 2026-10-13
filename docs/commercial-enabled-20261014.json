@@ -1,0 +1,589 @@
+{
+  "status": "complete",
+  "workflowRun": "38454797831",
+  "commandId": "4018bfd9-d6a8-4b29-9e52-5f9f165291c9",
+  "revision": "771f713b58c11d1b0fcf094595dc8f67ac898eb3",
+  "image": "sha256:ac361b6304d4fa20ee251177b01277e37c826173f1ecd2d2afc2f8cb04f7ca9c",
+  "backup": "/home/ubuntu/twin-v2-backups/commercial-enable-1791919580287135690",
+  "at": "2026-10-13T19:27:21.662009+00:00",
+  "runtime": [
+    {
+      "name": "twin-v2-bot-1",
+      "revision": "771f713b58c11d1b0fcf094595dc8f67ac898eb3",
+      "image": "sha256:ac361b6304d4fa20ee251177b01277e37c826173f1ecd2d2afc2f8cb04f7ca9c",
+      "bundles": "on"
+    },
+    {
+      "name": "twin-v2-dash-1",
+      "revision": "771f713b58c11d1b0fcf094595dc8f67ac898eb3",
+      "image": "sha256:ac361b6304d4fa20ee251177b01277e37c826173f1ecd2d2afc2f8cb04f7ca9c",
+      "bundles": "on"
+    }
+  ],
+  "fleet": {
+    "at": "2026-10-13T19:27:18.050Z",
+    "girls": {
+      "alanna-pow": {
+        "status": "running",
+        "botUsername": "alannapow_bot",
+        "startedAt": "2026-10-13T19:26:47.974Z"
+      },
+      "allison-parker": {
+        "status": "running",
+        "botUsername": "aliparkerbot999_bot",
+        "startedAt": "2026-10-13T19:26:47.754Z"
+      },
+      "bethany-marquez": {
+        "status": "running",
+        "botUsername": "zoeyfoxxbotpay_bot",
+        "startedAt": "2026-10-13T19:26:48.262Z"
+      },
+      "briana-redd": {
+        "status": "running",
+        "botUsername": "cartercampayments_bot",
+        "startedAt": "2026-10-13T19:26:48.196Z"
+      },
+      "cat-chase": {
+        "status": "running",
+        "botUsername": "catpayments_bot",
+        "startedAt": "2026-10-13T19:26:47.759Z"
+      },
+      "dakota-lyn": {
+        "status": "running",
+        "botUsername": "dakotapayments_bot",
+        "startedAt": "2026-10-13T19:26:47.992Z"
+      },
+      "dreka-cakez": {
+        "status": "running",
+        "botUsername": "DrekapaymentsBot",
+        "startedAt": "2026-10-13T19:26:47.127Z"
+      },
+      "fit-sid": {
+        "status": "running",
+        "botUsername": "fidsidpayments_bot",
+        "startedAt": "2026-10-13T19:26:48.169Z"
+      },
+      "kyla-yesenosky": {
+        "status": "running",
+        "botUsername": "kybotpayments_bot",
+        "startedAt": "2026-10-13T19:26:47.877Z"
+      },
+      "mrs-callace": {
+        "status": "running",
+        "botUsername": "mrscallacepayments_bot",
+        "startedAt": "2026-10-13T19:26:47.407Z"
+      },
+      "olivia-jade": {
+        "status": "running",
+        "botUsername": "OliviaJade00Bot",
+        "startedAt": "2026-10-13T19:26:47.722Z"
+      },
+      "riley-mae-lewis": {
+        "status": "running",
+        "botUsername": "rileymaypayments_bot",
+        "startedAt": "2026-10-13T19:26:48.097Z"
+      },
+      "sania-mallory": {
+        "status": "running",
+        "botUsername": "Saniapayments_bot",
+        "startedAt": "2026-10-13T19:26:47.702Z"
+      },
+      "tammy": {
+        "status": "running",
+        "botUsername": "tamarapayments10_bot",
+        "startedAt": "2026-10-13T19:26:48.282Z"
+      },
+      "toochi": {
+        "status": "running",
+        "botUsername": "paymentstoochi_bot",
+        "startedAt": "2026-10-13T19:26:47.430Z"
+      },
+      "trashy": {
+        "status": "running",
+        "botUsername": "trashybagqueennBot",
+        "startedAt": "2026-10-13T19:26:47.590Z"
+      },
+      "tru-kait": {
+        "status": "running",
+        "botUsername": "truekaitpayments_bot",
+        "startedAt": "2026-10-13T19:26:47.193Z"
+      }
+    }
+  },
+  "tips": [
+    {
+      "slug": "alanna-pow",
+      "enabled": true,
+      "inSync": true,
+      "settings": {
+        "enabled": true,
+        "minStars": 1,
+        "maxStars": 100000,
+        "choices": [
+          1000,
+          2500,
+          5000,
+          10000
+        ],
+        "cooldownMs": 180000,
+        "lookbackMessages": 6,
+        "pushLevel": "medium",
+        "reaskAfterPaid": true
+      },
+      "pendingReceipts": 0
+    },
+    {
+      "slug": "allison-parker",
+      "enabled": true,
+      "inSync": true,
+      "settings": {
+        "enabled": true,
+        "minStars": 1,
+        "maxStars": 100000,
+        "choices": [],
+        "cooldownMs": 180000,
+        "lookbackMessages": 6,
+        "pushLevel": "medium",
+        "reaskAfterPaid": false
+      },
+      "pendingReceipts": 0
+    },
+    {
+      "slug": "bethany-marquez",
+      "enabled": true,
+      "inSync": true,
+      "settings": {
+        "enabled": true,
+        "minStars": 1,
+        "maxStars": 100000,
+        "choices": [],
+        "cooldownMs": 180000,
+        "lookbackMessages": 6,
+        "pushLevel": "medium",
+        "reaskAfterPaid": false
+      },
+      "pendingReceipts": 0
+    },
+    {
+      "slug": "briana-redd",
+      "enabled": true,
+      "inSync": true,
+      "settings": {
+        "enabled": true,
+        "minStars": 1,
+        "maxStars": 100000,
+        "choices": [
+          1000,
+          2500,
+          5000,
+          10000
+        ],
+        "cooldownMs": 180000,
+        "lookbackMessages": 6,
+        "pushLevel": "medium",
+        "reaskAfterPaid": true
+      },
+      "pendingReceipts": 0
+    },
+    {
+      "slug": "cat-chase",
+      "enabled": true,
+      "inSync": true,
+      "settings": {
+        "enabled": true,
+        "minStars": 1,
+        "maxStars": 100000,
+        "choices": [
+          1000,
+          2500,
+          5000,
+          10000
+        ],
+        "cooldownMs": 180000,
+        "lookbackMessages": 6,
+        "pushLevel": "high",
+        "reaskAfterPaid": true
+      },
+      "pendingReceipts": 0
+    },
+    {
+      "slug": "dakota-lyn",
+      "enabled": true,
+      "inSync": true,
+      "settings": {
+        "enabled": true,
+        "minStars": 1,
+        "maxStars": 100000,
+        "choices": [],
+        "cooldownMs": 180000,
+        "lookbackMessages": 6,
+        "pushLevel": "medium",
+        "reaskAfterPaid": false
+      },
+      "pendingReceipts": 0
+    },
+    {
+      "slug": "dreka-cakez",
+      "enabled": true,
+      "inSync": true,
+      "settings": {
+        "enabled": true,
+        "minStars": 1,
+        "maxStars": 100000,
+        "choices": [
+          1000,
+          2500,
+          5000,
+          10000
+        ],
+        "cooldownMs": 180000,
+        "lookbackMessages": 6,
+        "pushLevel": "high",
+        "reaskAfterPaid": true
+      },
+      "pendingReceipts": 0
+    },
+    {
+      "slug": "fit-sid",
+      "enabled": true,
+      "inSync": true,
+      "settings": {
+        "enabled": true,
+        "minStars": 1,
+        "maxStars": 100000,
+        "choices": [
+          1000,
+          2500,
+          5000,
+          10000
+        ],
+        "cooldownMs": 180000,
+        "lookbackMessages": 6,
+        "pushLevel": "medium",
+        "reaskAfterPaid": true
+      },
+      "pendingReceipts": 0
+    },
+    {
+      "slug": "kyla-yesenosky",
+      "enabled": true,
+      "inSync": true,
+      "settings": {
+        "enabled": true,
+        "minStars": 1,
+        "maxStars": 100000,
+        "choices": [
+          1000,
+          2500,
+          5000,
+          10000,
+          25000,
+          50000,
+          100000
+        ],
+        "cooldownMs": 180000,
+        "lookbackMessages": 6,
+        "pushLevel": "medium",
+        "reaskAfterPaid": false
+      },
+      "pendingReceipts": 0
+    },
+    {
+      "slug": "mrs-callace",
+      "enabled": true,
+      "inSync": true,
+      "settings": {
+        "enabled": true,
+        "minStars": 1,
+        "maxStars": 100000,
+        "choices": [
+          1000,
+          2500,
+          5000,
+          10000
+        ],
+        "cooldownMs": 180000,
+        "lookbackMessages": 6,
+        "pushLevel": "medium",
+        "reaskAfterPaid": true
+      },
+      "pendingReceipts": 0
+    },
+    {
+      "slug": "olivia-jade",
+      "enabled": true,
+      "inSync": true,
+      "settings": {
+        "enabled": true,
+        "minStars": 1,
+        "maxStars": 100000,
+        "choices": [],
+        "cooldownMs": 180000,
+        "lookbackMessages": 6,
+        "pushLevel": "medium",
+        "reaskAfterPaid": false
+      },
+      "pendingReceipts": 0
+    },
+    {
+      "slug": "riley-mae-lewis",
+      "enabled": true,
+      "inSync": true,
+      "settings": {
+        "enabled": true,
+        "minStars": 1,
+        "maxStars": 100000,
+        "choices": [
+          1000,
+          2500,
+          5000,
+          10000,
+          25000,
+          50000,
+          100000
+        ],
+        "cooldownMs": 180000,
+        "lookbackMessages": 6,
+        "pushLevel": "medium",
+        "reaskAfterPaid": false
+      },
+      "pendingReceipts": 0
+    },
+    {
+      "slug": "sania-mallory",
+      "enabled": true,
+      "inSync": true,
+      "settings": {
+        "enabled": true,
+        "minStars": 1,
+        "maxStars": 100000,
+        "choices": [
+          1000,
+          2500,
+          5000,
+          10000
+        ],
+        "cooldownMs": 180000,
+        "lookbackMessages": 6,
+        "pushLevel": "high",
+        "reaskAfterPaid": true
+      },
+      "pendingReceipts": 0
+    },
+    {
+      "slug": "tammy",
+      "enabled": true,
+      "inSync": true,
+      "settings": {
+        "enabled": true,
+        "minStars": 1,
+        "maxStars": 100000,
+        "choices": [],
+        "cooldownMs": 180000,
+        "lookbackMessages": 6,
+        "pushLevel": "medium",
+        "reaskAfterPaid": false
+      },
+      "pendingReceipts": 0
+    },
+    {
+      "slug": "toochi",
+      "enabled": true,
+      "inSync": true,
+      "settings": {
+        "enabled": true,
+        "minStars": 1,
+        "maxStars": 100000,
+        "choices": [
+          1000,
+          2500,
+          5000,
+          10000
+        ],
+        "cooldownMs": 180000,
+        "lookbackMessages": 6,
+        "pushLevel": "medium",
+        "reaskAfterPaid": true
+      },
+      "pendingReceipts": 0
+    },
+    {
+      "slug": "trashy",
+      "enabled": true,
+      "inSync": true,
+      "settings": {
+        "enabled": true,
+        "minStars": 1,
+        "maxStars": 100000,
+        "choices": [
+          1000,
+          2500,
+          5000,
+          10000,
+          25000,
+          50000,
+          100000
+        ],
+        "cooldownMs": 180000,
+        "lookbackMessages": 6,
+        "pushLevel": "medium",
+        "reaskAfterPaid": false
+      },
+      "pendingReceipts": 0
+    },
+    {
+      "slug": "tru-kait",
+      "enabled": true,
+      "inSync": true,
+      "settings": {
+        "enabled": true,
+        "minStars": 1,
+        "maxStars": 100000,
+        "choices": [
+          1000,
+          2500,
+          5000,
+          10000
+        ],
+        "cooldownMs": 180000,
+        "lookbackMessages": 6,
+        "pushLevel": "medium",
+        "reaskAfterPaid": true
+      },
+      "pendingReceipts": 0
+    }
+  ],
+  "bundles": [
+    {
+      "slug": "alanna-pow",
+      "listed": 5,
+      "excluded": 2,
+      "at": "2026-10-13T19:26:49.656Z"
+    },
+    {
+      "slug": "allison-parker",
+      "listed": 0,
+      "excluded": 0,
+      "at": "2026-10-13T19:26:46.985Z"
+    },
+    {
+      "slug": "bethany-marquez",
+      "listed": 1,
+      "excluded": 0,
+      "at": "2026-10-13T19:26:47.750Z"
+    },
+    {
+      "slug": "briana-redd",
+      "listed": 3,
+      "excluded": 0,
+      "at": "2026-10-13T19:26:48.524Z"
+    },
+    {
+      "slug": "cat-chase",
+      "listed": 0,
+      "excluded": 1,
+      "at": "2026-10-13T19:26:47.592Z"
+    },
+    {
+      "slug": "dakota-lyn",
+      "listed": 0,
+      "excluded": 0,
+      "at": "2026-10-13T19:26:47.199Z"
+    },
+    {
+      "slug": "dreka-cakez",
+      "listed": 1,
+      "excluded": 0,
+      "at": "2026-10-13T19:26:46.521Z"
+    },
+    {
+      "slug": "fit-sid",
+      "listed": 2,
+      "excluded": 2,
+      "at": "2026-10-13T19:26:48.501Z"
+    },
+    {
+      "slug": "kyla-yesenosky",
+      "listed": 2,
+      "excluded": 2,
+      "at": "2026-10-13T19:26:47.806Z"
+    },
+    {
+      "slug": "mrs-callace",
+      "listed": 4,
+      "excluded": 1,
+      "at": "2026-10-13T19:26:48.285Z"
+    },
+    {
+      "slug": "olivia-jade",
+      "listed": 0,
+      "excluded": 0,
+      "at": "2026-10-13T19:26:46.956Z"
+    },
+    {
+      "slug": "riley-mae-lewis",
+      "listed": 6,
+      "excluded": 0,
+      "at": "2026-10-13T19:26:48.969Z"
+    },
+    {
+      "slug": "sania-mallory",
+      "listed": 1,
+      "excluded": 0,
+      "at": "2026-10-13T19:26:47.897Z"
+    },
+    {
+      "slug": "tammy",
+      "listed": 0,
+      "excluded": 1,
+      "at": "2026-10-13T19:26:48.126Z"
+    },
+    {
+      "slug": "toochi",
+      "listed": 1,
+      "excluded": 0,
+      "at": "2026-10-13T19:26:46.938Z"
+    },
+    {
+      "slug": "trashy",
+      "listed": 8,
+      "excluded": 0,
+      "at": "2026-10-13T19:26:49.628Z"
+    },
+    {
+      "slug": "tru-kait",
+      "listed": 0,
+      "excluded": 0,
+      "at": "2026-10-13T19:26:46.411Z"
+    }
+  ],
+  "bundleCount": 34,
+  "eligibleCreators": [
+    "alanna-pow",
+    "bethany-marquez",
+    "briana-redd",
+    "dreka-cakez",
+    "fit-sid",
+    "kyla-yesenosky",
+    "mrs-callace",
+    "riley-mae-lewis",
+    "sania-mallory",
+    "toochi",
+    "trashy"
+  ],
+  "financialGate": {
+    "creators": 17,
+    "drained": 17,
+    "owed": 0,
+    "reservedTurns": 0,
+    "openExceptions": 0,
+    "awaitingReceiptRefunds": 0,
+    "rpcChecks": 34
+  },
+  "holdsReleased": true,
+  "applicationCodeChanged": false,
+  "imageChanged": false,
+  "pricesChanged": false,
+  "purchasesMade": 0,
+  "testFanMessages": 0
+}
