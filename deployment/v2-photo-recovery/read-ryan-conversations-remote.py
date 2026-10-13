@@ -5,6 +5,7 @@ ROOT = pathlib.Path('/home/ubuntu/twin-v2')
 FAN = '6814483810'
 START = '2026-10-13T13:30:00'
 EXPECTED = ['alanna-pow','allison-parker','bethany-marquez','briana-redd','cat-chase','dakota-lyn','dreka-cakez','fit-sid','kyla-yesenosky','mrs-callace','olivia-jade','riley-mae-lewis','sania-mallory','tammy','toochi','trashy','tru-kait']
+SCOPED = EXPECTED
 fleet = json.loads((ROOT/'data/_fleet.json').read_text())
 runtime = []
 for name in ['twin-v2-bot-1','twin-v2-dash-1']:
@@ -20,10 +21,10 @@ for address in ['127.0.0.1','172.31.6.134']:
     except Exception as e:health[address]=type(e).__name__+': '+str(e)[:160]
 
 def selected(row):
-    return {key:row.get(key) for key in ['ts','turnId','chatId','fanText','final','selection','selectedMedia','media','delivery','photoReference','grounding','note','epoch','route'] if key in row}
+    return {key:row.get(key) for key in ['ts','turnId','chatId','fanText','final','selection','selectionError','selectedMedia','media','delivery','photoReference','grounding','note','epoch','route','mode','photoAlternative'] if key in row}
 
 creators = []
-for slug in EXPECTED:
+for slug in SCOPED:
     path = ROOT/'logs'/slug/'requests.jsonl'
     latest = None
     rows = []
