@@ -17,12 +17,17 @@ def ssm(command,timeout=300):
   print(r.get('StandardErrorContent','')[-600:],flush=True)
   raise RuntimeError('Read '+r['Status'])
  return r.get('StandardOutputContent','')
-stage=pathlib.Path('deployment/v2-photo-recovery')
-raw=(stage/'read-fleet-simulation.py').read_bytes();packed=base64.b64encode(gzip.compress(raw)).decode()
-program="import gzip,base64;exec(compile(gzip.decompress(base64.b64decode("+repr(packed)+")),'<fleet-results-readonly>','exec'))"
-output=ssm('python3 -c '+shlex.quote(program),180)
-line=next(l for l in output.splitlines() if l.startswith('SIM_RESULT_MANIFEST '))
-manifest=json.loads(line[len('SIM_RESULT_MANIFEST '):])
-for index in range(manifest['base64Chunks']):
- program="import pathlib,base64;raw=base64.b64encode(pathlib.Path("+repr(manifest['path'])+").read_bytes()).decode();print('SIM_RESULT_CHUNK "+str(index)+" '+raw["+str(index*20000)+":"+str((index+1)*20000)+"])"
- ssm('python3 -c '+shlex.quote(program),30)
+program="""
+import pathlib,json,subprocess
+root=pathlib.Path('/home/ubuntu/twin-v2-validation/fleet-simulation-20261013-1791877888400228253')
+d=root/'legacy-harness-dry'
+for name in ['summary.json','runner.stderr.private.log']:
+ p=d/name
+ if p.exists():
+  if name=='summary.json':
+   r=json.loads(p.read_text());print('LEGACY_DRY_JSON '+json.dumps({'cases':r.get('cases'),'requests':r.get('requests'),'fatal':r.get('fatal'),'errors':[(x['case'],x['error']) for x in r.get('results',[]) if x.get('error')]}))
+  else:print('LEGACY_DRY_STDERR '+p.read_text()[-1600:])
+i=json.loads(subprocess.check_output(['docker','image','inspect','sha256:f9618c70eb79abd38cce8991f47b4a6b11f19b7d28eb7d3886baa0a4e5b368ab'],text=True))[0]
+print('LEGACY_IMAGE_ENV_NAMES '+json.dumps([x.split('=',1)[0] for x in i['Config'].get('Env',[])]))
+"""
+ssm('python3 -c '+shlex.quote(program),45)
