@@ -14,14 +14,14 @@ await build({stdin:{contents:fixture,resolveDir:process.cwd(),loader:'tsx'},outf
 const css=await postcss([tailwind()]).process('@import "./app/globals.css";',{from:path.resolve('creator-gallery-check.css')});writeFileSync(path.join(out,'globals.css'),css.css);
 const png=Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mP8/x8AAwMCAO+aHfsAAAAASUVORK5CYII=','base64');
 const video=Buffer.from(readFileSync('scripts/fixtures/creator-gallery-video-base64.txt','utf8').trim(),'base64');
-let files=[],removed=new Set(),failRemove=false,posts=0;
+let files=[],removed=new Set(),failRemove=false,posts=0,holdLastAccess=false,lastAccessRequests=[],lastAccessObserved;
 function reset(){files=Array.from({length:63},(_,i)=>({id:`file-${i}`,name:i===0?'Video.mp4':`Photo ${i+1}.png`,mime:i===0?'video/mp4':'image/png',status:'verified',previewAvailable:true,removalAvailable:i!==1}));removed=new Set();failRemove=false;posts=0;}
 const server=createServer(async(req,res)=>{
  const url=new URL(req.url,'http://localhost');const json=(body,status=200)=>{res.writeHead(status,{'content-type':'application/json'});res.end(JSON.stringify(body));};
  if(url.pathname==='/creator-auth/uploads')return json({uploads:url.searchParams.get('ids').split(',').map(id=>({id,state:removed.has(id)?'removed':files.some(f=>f.id===id)?'saved':'needs_file'}))});
  if(url.pathname==='/creator-auth/upload'){let data='';for await(const chunk of req)data+=chunk;posts++;await new Promise(r=>setTimeout(r,850));const id=req.headers['x-creator-upload-id'];files.unshift({id,name:/filename="([^"]+)"/.exec(data)?.[1]||'New photo.png',mime:'image/png',status:'verified',previewAvailable:true,removalAvailable:true});return json({status:'content_saved'});}
  if(url.pathname==='/creator-auth/files'){const page=Number(url.searchParams.get('page')||0);return json({files:files.slice(page*50,page*50+50),hasMore:files.length>(page+1)*50,total:files.length,savedCount:files.length});}
- if(url.pathname.endsWith('/access')){const id=url.pathname.split('/')[3];const file=files.find(f=>f.id===id);return file?json({url:file.mime.startsWith('video/')?'/video.mp4':'/photo.png'}):json({error:'missing'},404);}
+ if(url.pathname.endsWith('/access')){const id=url.pathname.split('/')[3];const file=files.find(f=>f.id===id);if(file&&id==='file-62'&&holdLastAccess){lastAccessRequests.push(()=>json({url:'/photo.png'}));lastAccessObserved?.();return;}return file?json({url:file.mime.startsWith('video/')?'/video.mp4':'/photo.png'}):json({error:'missing'},404);}
  if(req.method==='DELETE'&&url.pathname.startsWith('/creator-auth/files/')){const id=url.pathname.split('/')[3];if(failRemove){failRemove=false;return json({error:'storage_removal_failed'},503);}const file=files.find(f=>f.id===id);if(file&&!file.removalAvailable)return json({error:'content_in_use'},409);removed.add(id);files=files.filter(f=>f.id!==id);return json({removed:true,progressSaved:true});}
  if(url.pathname==='/photo.png'){res.writeHead(200,{'content-type':'image/png'});res.end(png);return;}
  if(url.pathname==='/video.mp4'){const range=req.headers.range;if(range){const match=/bytes=(\d+)-(\d*)/.exec(range);const start=Number(match?.[1]||0),end=Math.min(Number(match?.[2]||video.length-1),video.length-1);res.writeHead(206,{'content-type':'video/mp4','content-range':`bytes ${start}-${end}/${video.length}`,'accept-ranges':'bytes','content-length':end-start+1});res.end(video.subarray(start,end+1));}else{res.writeHead(200,{'content-type':'video/mp4','content-length':video.length,'accept-ranges':'bytes'});res.end(video);}return;}
@@ -33,7 +33,7 @@ const server=createServer(async(req,res)=>{
 await new Promise(r=>server.listen(0,'127.0.0.1',r));
 try{for(const engine of (process.env.CREATOR_GALLERY_ENGINES||'chromium').split(',')){
  const browser=await ({chromium,webkit}[engine]).launch({...(engine==='chromium'?{executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH||undefined,args:['--no-sandbox','--disable-dev-shm-usage']}:{} )});
- try{for(const brand of process.argv.includes('--flirt')?['flirt']:['moxy','twin'])for(const width of [390,1280]){
+ try{for(let repeat=0;repeat<Number(process.env.CREATOR_GALLERY_REPEATS||1);repeat++)for(const brand of process.env.CREATOR_GALLERY_BRANDS?.split(',')||(process.argv.includes('--flirt')?['flirt']:['moxy','twin']))for(const width of [390,1280]){
   reset();const context=await browser.newContext({viewport:{width,height:844}});const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto(`http://127.0.0.1:${server.address().port}/creator/onboarding?brand=${brand}`);
   await page.getByRole('button',{name:'View all (63)',exact:true}).waitFor();
@@ -53,9 +53,27 @@ try{for(const engine of (process.env.CREATOR_GALLERY_ENGINES||'chromium').split(
   await page.keyboard.press('Escape');await dialog.waitFor({state:'hidden'});
   await page.getByRole('button',{name:'View all (63)',exact:true}).click();
   assert.equal(await page.locator('[aria-label="All uploaded files"] button').count(),50);
+  holdLastAccess=true;
+  const lastAccessRequested=new Promise(resolve=>{lastAccessObserved=resolve;});
   await dialog.getByRole('button',{name:'Load more',exact:true}).click();await page.locator('[aria-label="All uploaded files"] button').nth(62).waitFor();
   assert.equal(await page.locator('[aria-label="All uploaded files"] button').count(),63);
-  await dialog.getByRole('button',{name:'View Photo 63.png',exact:true}).click();await page.getByRole('dialog',{name:'View file',exact:true}).waitFor();await dialog.getByRole('img',{name:'Photo 63.png',exact:true}).waitFor();
+  await page.evaluate(()=>{window.__galleryPointerEvents=[];for(const type of ['pointerdown','pointerup','click'])document.addEventListener(type,event=>{const target=event.target;window.__galleryPointerEvents.push({type,tag:target.tagName,label:target.getAttribute?.('aria-label'),button:target.closest?.('button')?.getAttribute('aria-label'),x:event.clientX,y:event.clientY});},true);});
+  try {
+    const lastTile=dialog.getByRole('button',{name:'View Photo 63.png',exact:true});
+    await lastTile.scrollIntoViewIfNeeded();await lastAccessRequested;
+    assert.equal(await lastTile.locator('img').count(),0,'The last thumbnail starts with its placeholder');
+    const box=await lastTile.boundingBox();assert.ok(box);
+    await page.mouse.move(box.x+box.width/2,box.y+box.height/2);await page.mouse.down();
+    // Complete the actual lazy image request between pointer down and up.
+    holdLastAccess=false;for(const release of lastAccessRequests.splice(0))release();
+    await lastTile.getByRole('img',{name:'Photo 63.png',exact:true}).waitFor();
+    await page.mouse.up();
+    await page.getByRole('dialog',{name:'View file',exact:true}).waitFor({timeout:5000});await dialog.getByRole('img',{name:'Photo 63.png',exact:true}).waitFor();
+  } catch(error) {
+    await page.screenshot({path:path.join(out,`${engine}-${brand}-${width}-failure-${repeat}.png`),fullPage:true});
+    console.log('GALLERY_SELECTION_DIAGNOSTIC',JSON.stringify({engine,brand,width,repeat,state:await page.evaluate(()=>{const d=document.querySelector('dialog');return {open:d?.open,label:d?.getAttribute('aria-label'),scroll:d?.scrollTop,height:d?.getBoundingClientRect().height,text:d?.innerText.slice(0,900),buttons:d?.querySelectorAll('[aria-label="All uploaded files"] button').length,events:window.__galleryPointerEvents,errors:[...document.querySelectorAll('[role="alert"]')].map(n=>n.textContent)};})}));
+    throw error;
+  }
   await page.screenshot({path:path.join(out,`${engine}-${brand}-${width}-preview.png`)});
   await dialog.getByRole('button',{name:'Remove file',exact:true}).click();await dialog.getByRole('button',{name:'Keep file',exact:true}).click();assert.equal(files.length,63);
   failRemove=true;await dialog.getByRole('button',{name:'Remove file',exact:true}).click();await dialog.getByRole('button',{name:'Yes, remove',exact:true}).click();await dialog.getByRole('alert').waitFor();assert.equal(files.length,63);
