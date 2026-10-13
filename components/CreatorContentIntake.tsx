@@ -1,7 +1,7 @@
 "use client";
 import { useContext, useEffect, useState } from "react";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
-import { Upload, ImageIcon, Film, Check, RotateCcw, Plus, Link2, CircleHelp } from "lucide-react";
+import { Upload, ImageIcon, ImagePlus, Film, Check, RotateCcw, Plus, Link2, CircleHelp, ChevronRight } from "lucide-react";
 import { Button, buttonVariants } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import CreatorSavedContentPreview, { type ContentCounts } from "./CreatorSavedContentPreview";
@@ -48,16 +48,16 @@ export default function CreatorContentIntake({ locked, loginPath, savedPhotos, s
   const selected = queue.items.length > 0 || total > 0 || folders.length > 0;
   const attention = queue.items.some(item => item.state === "failed" || item.state === "reselect");
   const picker = (<label data-upload-content className={`${selected ? styles.addTile : buttonVariants({ size: "lg" })} ${styles.picker} ${locked ? "opacity-50" : "cursor-pointer"}`}>
-      {selected ? <Plus size={20} aria-hidden="true" /> : <Upload size={20} aria-hidden="true" />}{selected ? "Add more" : "Choose photos & videos"}
+      {selected ? <Plus size={20} aria-hidden="true" /> : <Upload size={20} aria-hidden="true" />}{selected ? "Add more" : "Upload photos & videos"}
       <input id="creator-content-files" type="file" accept="image/*,video/*" multiple disabled={locked} aria-label="Add photos and videos" className="absolute inset-0 size-full cursor-pointer opacity-0" onChange={event => { if (locked) return; const files = Array.from(event.target.files || []); setNotice(files.length ? "" : "No new files were received from your phone. Your saved content is safe."); queue.add(files); event.target.value = ""; }} />
     </label>);
   return <div className={styles.root} data-combined-content-intake>
     <header className={styles.heading}>
-      <h1 data-setup-heading>Let’s set up your AI.</h1>
-      <p>Choose at least {CREATOR_CONTENT_TARGET} photos and videos.</p>
-      <p className={styles.hint}>Everyday content plus explicit content if applicable.</p>
+      <h1 data-setup-heading>Follow these two simple steps to create your AI clone.</h1>
+      <p>Upload at least {CREATOR_CONTENT_TARGET} photos and videos combined.</p>
+      <p className={styles.hint}>Include everyday content, plus explicit content if applicable.</p>
     </header>
-    <section className={styles.contentCard} aria-label="Your content">
+    <section className={`${styles.contentCard} ${!selected ? styles.emptyCard : ""}`} aria-label="Your content">
       {selected && <div className={styles.uploadStatus} role="status">
         <h2>Your content</h2>
         <span>{total} of {CREATOR_CONTENT_TARGET} uploaded</span>
@@ -65,24 +65,30 @@ export default function CreatorContentIntake({ locked, loginPath, savedPhotos, s
         {queue.working && <p className={styles.hint}>{saved} of {queue.items.length} files saved in this selection</p>}
       </div>}
       {!selected ? <>
-        <label htmlFor="creator-content-files" className={styles.emptyArt} aria-hidden="true"><div className={styles.artCard}><ImageIcon size={38} strokeWidth={1} /></div><div className={styles.artCard}><Film size={42} strokeWidth={1} /></div><div className={styles.artCard}><ImageIcon size={38} strokeWidth={1} /></div></label>
+        <ImagePlus className={styles.emptyIcon} size={52} strokeWidth={1.5} aria-hidden="true" />
         {picker}
+        <p className={styles.pickerHint}>Choose multiple files from your phone.</p>
+        <p className={styles.fileLimits}>Photos up to 75 MiB · Videos up to 512 MiB</p>
       </> : <CreatorSavedContentPreview revision={`${savedPhotos + savedVideos}:${queue.revision}`} items={queue.items} total={savedPhotos + savedVideos} loginPath={loginPath} onCounts={setLiveCounts} onRemoved={queue.remove}>{picker}</CreatorSavedContentPreview>}
       {folders.length > 0 && <p className={styles.hint}>Folder link received. Awaiting import.</p>}
     </section>
+    {!selected && <div className={`${styles.uploadStatus} ${styles.emptyStatus}`} role="status">
+      <div className={styles.statusLine}><strong>0 of {CREATOR_CONTENT_TARGET} uploaded</strong><span>No content added yet</span></div>
+      <progress max={CREATOR_CONTENT_TARGET} value={0} aria-label="Saved content toward 50 files" />
+    </div>}
     {notice && <p role="status">{notice}</p>}
-    <details className={styles.folder}><summary><Link2 size={18} aria-hidden="true" /> Use a folder link</summary>
+    <details className={styles.folder}><summary><Link2 size={20} aria-hidden="true" /> Use a folder link<ChevronRight className={styles.folderChevron} size={18} aria-hidden="true" /></summary>
       <label className="mt-3 block text-sm font-medium">Google Drive or Dropbox folder<Input type="url" value={folder.draft} disabled={locked} placeholder="https://drive.google.com/drive/folders/…" onChange={event => folder.setDraft(event.target.value)} onBlur={() => { void folder.save(); }} /></label>
       <p className="mt-2 text-xs text-muted">Share a folder your agency can open. Your agency will import the files; a link does not count as saved content yet.</p>
       {folder.status && <p role={folder.error ? "alert" : "status"} className="mt-3 text-sm">{folder.status}{folder.error && <button type="button" className="ml-2 min-h-11 underline" onClick={() => { void folder.save(); }}>Retry</button>}</p>}
       {folders.length > 0 && <ul className="mt-3 space-y-2 text-sm">{folders.map(folder => <li key={folder.url}><a className="break-all underline" href={folder.url} target="_blank" rel="noopener noreferrer">{folder.provider} folder</a><span className="ml-2">Awaiting import</span></li>)}</ul>}
     </details>
-    {selected && <div className={styles.handoff} data-content-questionnaire-handoff>
-      <p>Next, tell us about yourself.</p>
+    <div className={styles.handoff} data-content-questionnaire-handoff>
+      <p>You can answer the questions while your files upload.</p>
       {queue.working && <p className={styles.hint}>Keep this browser open. Your uploads continue while you answer.</p>}
       {attention && <p className={styles.hint}>Some files need attention. Open Upload details below to retry.</p>}
-      <Button type="button" className={styles.primary} onClick={() => navigateCreatorSetup("/creator/onboarding?step=questionnaire", router?.push)}>Continue to questions →</Button>
-    </div>}
+      <Button type="button" variant={selected ? "default" : "outline"} className={`${styles.primary} ${!selected ? styles.secondary : ""}`} onClick={() => navigateCreatorSetup("/creator/onboarding?step=questionnaire", router?.push)}>Continue to questions →</Button>
+    </div>
     {queue.items.length > 0 && <details className={styles.queueDetails} open={attention || undefined} aria-label="Upload queue"><summary>Upload details{attention ? ", action needed" : ""}</summary>
       <ul className="max-h-96 space-y-3 overflow-y-auto">
         {queue.items.map(item => <li key={item.id} className="flex items-start gap-3 rounded-xl border border-border p-3"><Thumbnail item={item} /><div className="min-w-0 flex-1"><p className="truncate text-sm font-medium" title={item.name}>{item.name}</p>
@@ -94,7 +100,6 @@ export default function CreatorContentIntake({ locked, loginPath, savedPhotos, s
         </div>{item.state === "saved" && <Check className="size-5 shrink-0 text-emerald-700" aria-label="Saved" />}</li>)}
       </ul>
     </details>}
-    {!selected && <button type="button" className={styles.later} onClick={() => navigateCreatorSetup("/creator/onboarding?step=questionnaire", router?.push)}>Do this later →</button>}
     <details className={styles.help}><summary className="min-h-11 cursor-pointer py-3"><CircleHelp size={16} aria-hidden="true" /> Need help?</summary>
       <ol className={styles.helpSteps}>
         <li>Choose your photos and videos. You can select several at once.</li>
