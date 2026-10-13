@@ -1,4 +1,4 @@
-name: Validate isolated exact-photo reference candidate
+name: Deploy approved shared Twin V2 repair
 on:
   push:
     branches: [codex/media-launch-access-20261012]
@@ -10,7 +10,7 @@ concurrency:
 jobs:
   inspect:
     runs-on: ubuntu-latest
-    timeout-minutes: 27
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v4
       - uses: aws-actions/configure-aws-credentials@v4
@@ -18,5 +18,5 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ap-southeast-2
-      - name: Read-only ownership and isolated real-model replay
+      - name: Deploy tested release with guarded fleet drain and rollback
         run: python3 deployment/photo-launch-access.py
