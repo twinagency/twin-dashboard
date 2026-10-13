@@ -1,20 +1,20 @@
 """Deploy the approved, packaged reply repair; preserve current fleet, data and prices."""
 import datetime,hashlib,json,pathlib,subprocess,sys,time,urllib.request,uuid
-SHA='e668afb2936f25106b5ba0772096f7dfac029224'
-TESTED='e668afb2936f25106b5ba0772096f7dfac029224'
-OLD_SHA='8f43a1d58b0ecbf8c22b06c38c18d972f43c5e04'
-OLD_IMAGE='sha256:4d6b46a736ef0d172781f5166756508f41309d1d5b3f31bc6ca3ad57c4862cc4'
-EXPECTED_IMAGE='sha256:7924fdc85e91ca2c3d4b4cf9363cf71ba99a6d1a163fd5b6834d4aad37e8f084'
-EXPECTED_RELEASE='/home/ubuntu/twin-v2-offer-releases/e668afb2936f25106b5ba0772096f7dfac029224'
+SHA='e8eed505d5a1c5ef53938b2dee90a09bce26ea38'
+TESTED='e8eed505d5a1c5ef53938b2dee90a09bce26ea38'
+OLD_SHA='e668afb2936f25106b5ba0772096f7dfac029224'
+OLD_IMAGE='sha256:7924fdc85e91ca2c3d4b4cf9363cf71ba99a6d1a163fd5b6834d4aad37e8f084'
+EXPECTED_IMAGE='sha256:93045f957470052893cc1a8e0ecd2819b9b8069397c4b84b55f34e8de9aac879'
+EXPECTED_RELEASE='/home/ubuntu/twin-v2-offer-releases/e8eed505d5a1c5ef53938b2dee90a09bce26ea38'
 ROOT=pathlib.Path('/home/ubuntu/twin-v2')
-BACKUP=pathlib.Path('/home/ubuntu/twin-v2-backups/offer-baseline-e668afb-1791927714416647068')
+BACKUP=pathlib.Path('/home/ubuntu/twin-v2-backups/offer-baseline-e8eed50-1791928294895468670')
 PREP=json.loads((BACKUP/'reply-prepared.json').read_text())
 BASE=json.loads((BACKUP/'release-preflight.json').read_text())
 IMAGE=PREP['image'];assert IMAGE==EXPECTED_IMAGE,'Prepared image changed';RELEASE=pathlib.Path(PREP['release']);assert str(RELEASE)==EXPECTED_RELEASE,'Prepared release path changed'
 MANIFEST=json.loads((BACKUP/'release-manifest.json').read_text())
 CHANGES=json.loads((BACKUP/'host-changes.json').read_text())
 EXPECTED=PREP['expectedSlugs'];OVERRIDE=ROOT/'photo-release.override.json'
-EXPECTED_CHANGES=['scripts/check-bundles.ts', 'scripts/check-existing-card-discussion.ts', 'scripts/check-media.ts', 'scripts/check-tips-wiring.ts', 'scripts/check-turn.ts', 'scripts/fixtures/riley-prompt-v14.txt', 'src/girls/template.ts', 'src/media.ts', 'src/tips/policy.ts', 'src/turn.ts']
+EXPECTED_CHANGES=['scripts/check-existing-card-discussion.ts', 'src/tips/policy.ts']
 CONTAINERS=['twin-v2-bot-1','twin-v2-dash-1']
 def stamp():return datetime.datetime.now(datetime.timezone.utc).isoformat()
 def digest(b):return hashlib.sha256(b).hexdigest()
@@ -215,9 +215,9 @@ def deploy():
   print('REPLY_RELEASE_ALREADY_DEPLOYED '+json.dumps({'deployed':SHA,'image':IMAGE,'at':stamp()}),flush=True);return prior
  assert PREP['sha']==SHA and PREP['testedSource']==TESTED and PREP['oldSha']==OLD_SHA and PREP['oldImage']==OLD_IMAGE
  assert PREP.get('rollbackReady') is True and PREP['rollback']['baselineRevision']==OLD_SHA and PREP['rollback']['image']==OLD_IMAGE
- assert len(PREP['offline'])==25 and all(x['exit']==0 for x in PREP['offline']) and PREP['typecheck'] is True and PREP['focusedAssertions']==1253
+ assert len(PREP['offline'])==25 and all(x['exit']==0 for x in PREP['offline']) and PREP['typecheck'] is True and PREP['focusedAssertions']==1260
  assert len(MANIFEST)==291 and out('docker','image','inspect','-f','{{.Id}}','twin-v2-offer:'+SHA)==IMAGE
- assert sorted(x['path'] for x in CHANGES)==EXPECTED_CHANGES and len(CHANGES)==10,'Prepared host change scope changed'
+ assert sorted(x['path'] for x in CHANGES)==EXPECTED_CHANGES and len(CHANGES)==2,'Prepared host change scope changed'
  assert (BACKUP/'images.tar').stat().st_size>0 and (BACKUP/'runtime-code.tgz').stat().st_size>0
  runtime(OLD_IMAGE,OLD_SHA);settings();host_before()
  receipt=drain();financial=financial_gate(receipt);released=False;switched=False;touched=False;phase='drained'
@@ -243,7 +243,7 @@ def deploy():
   phase='handover-release'
   clear_requests(receipt);released=True
   phase='fleet-restart';fleet=observe(since);current=settings();runtime(IMAGE,SHA)
-  result={'deployed':SHA,'testedSource':TESTED,'image':IMAGE,'at':stamp(),'cutover':{'baselineRevision':OLD_SHA,'baselineImage':OLD_IMAGE,'candidateRevision':SHA,'candidateImage':IMAGE,'release':str(RELEASE),'hostChanges':EXPECTED_CHANGES,'holdsMaintainedUntilVerification':True,'holdsReleased':True},'financialGate':financial,'fleet':fleet,'verifiedSourceFilesPerContainer':verified['verified'],'settings':current,'promptVerification':prompts,'dashboardReadiness':readiness,'offlineSuites':25,'typecheck':True,'realModelCases':0,'focusedAssertions':1253,'modelTransport':'mocked','backup':str(BACKUP),'rollbackCommand':'python3 '+str(BACKUP/'deploy-offer-intent.py')+' --rollback','rollbackTriggered':False,'newDatabaseSchema':False,'newOptionalChatField':None,'proactiveFanMessages':0,'purchasesMade':0,'financialDataRestored':False,'actualTelegramVisibilityVerified':False}
+  result={'deployed':SHA,'testedSource':TESTED,'image':IMAGE,'at':stamp(),'cutover':{'baselineRevision':OLD_SHA,'baselineImage':OLD_IMAGE,'candidateRevision':SHA,'candidateImage':IMAGE,'release':str(RELEASE),'hostChanges':EXPECTED_CHANGES,'holdsMaintainedUntilVerification':True,'holdsReleased':True},'financialGate':financial,'fleet':fleet,'verifiedSourceFilesPerContainer':verified['verified'],'settings':current,'promptVerification':prompts,'dashboardReadiness':readiness,'offlineSuites':25,'typecheck':True,'realModelCases':0,'focusedAssertions':1260,'modelTransport':'mocked','backup':str(BACKUP),'rollbackCommand':'python3 '+str(BACKUP/'deploy-offer-intent.py')+' --rollback','rollbackTriggered':False,'newDatabaseSchema':False,'newOptionalChatField':None,'proactiveFanMessages':0,'purchasesMade':0,'financialDataRestored':False,'actualTelegramVisibilityVerified':False}
   save('reply-deployed.json',result);print('REPLY_RELEASE_DEPLOYED_JSON '+json.dumps(result),flush=True)
  except Exception as e:
   failure={'at':stamp(),'phase':phase,'error':str(e),'switched':switched,'released':released,'rollback':'not-started'}
