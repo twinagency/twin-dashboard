@@ -7,5 +7,5 @@ export function isZaneDemo(access: Access | null | undefined): boolean {
   return access?.id === `creator:${ZANE_DEMO_ACCOUNT_ID}` && access.kind === "creator" && access.onboarded === true && access.cloneIds.length === 0;
 }
 export function creatorDemoQueryIds(path: string, access: Access): readonly string[] {
-  return path === "/api/dashboard" && isZaneDemo(access) ? [DEMO_CLONE_ID] : access.cloneIds;
+  return access.cloneIds;
 }

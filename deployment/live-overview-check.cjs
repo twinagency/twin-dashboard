@@ -11,6 +11,12 @@ const crypto = require('node:crypto');
   const html = await page.text(); assert(html.includes('data-live-overview="true"'), 'Live reporting component mounted');
   assert(!html.includes('href="/revenue"'), 'No duplicate internal Earnings destination');
   assert(!html.includes('briana-ledger-'), 'No demo ledger in overview');
+  for (const route of ['/inbox', '/fans', '/campaigns', '/content-library']) assert(!html.includes(`href="${route}"`), `No retired ${route} navigation`);
+  assert(html.includes('href="/users"') && html.includes('Live Telegram'), 'Live Telegram is directly accessible');
+  for (const [path, destination] of [['/inbox', '/users'], ['/inbox?presentation=movie-night', '/users'], ['/fans', '/users'], ['/campaigns', '/dashboard'], ['/content-library', '/media'], ['/users?relationship=briana-ben', '/users']]) {
+    const retired = await read(path); assert.equal(retired.status, 307, path); assert(retired.headers.get('location').endsWith(destination), path);
+  }
+  for (const path of ['/api/dashboard/demo-photo', '/api/dashboard/demo-fan-photo']) assert.equal((await read(path)).status, 410, path);
   const old = await read('/revenue'); assert.equal(old.status, 307); assert(old.headers.get('location').endsWith('/dashboard'));
   const response = await read('/api/dashboard?period=1D&fresh=1'); assert.equal(response.status, 200);
   const data = await response.json(); assert(data.totals && data.clones.length > 0); assert(!data.demo);
@@ -21,5 +27,5 @@ const crypto = require('node:crypto');
   assert(Number.isFinite(selected.perClone[creator.id].stars), 'Selected creator revenue');
   const selectedPage = await read('/dashboard', creator.id); assert.equal(selectedPage.status, 200);
   assert((await selectedPage.text()).includes('data-live-overview="true"'));
-  console.log(JSON.stringify({ release: process.env.GIT_SHA, overview: 'live', earningsRedirect: 'passed', fleetCreators: data.clones.length, liveData: 'passed', creatorScope: 'passed' }));
+  console.log(JSON.stringify({ release: process.env.GIT_SHA, overview: 'live', demoCleanup: 'passed', earningsRedirect: 'passed', fleetCreators: data.clones.length, liveData: 'passed', creatorScope: 'passed' }));
 })().catch(e => { console.error(e.message); process.exitCode = 1; });

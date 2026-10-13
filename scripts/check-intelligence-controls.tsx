@@ -87,7 +87,7 @@ async function main(){
  await click(button("Save controls"));
  await render("agency");await render();assert.equal(document.querySelector<HTMLInputElement>("input[aria-label='Relationship memory']")!.value,"60","Saved policies survive remount");
  assert.deepEqual(Array.from(new win.FormData(live).entries()),before);assert.equal(networkCalls,0,"No send, payment, model, or configuration APIs called");
- const source=readFileSync("components/CloneForm.tsx","utf8");assert.ok(source.indexOf("<IntelligenceControls")>source.indexOf("</form>"),"New controls live outside the active creator form");
+ const source=readFileSync("components/CloneForm.tsx","utf8");assert.doesNotMatch(source, /<IntelligenceControls/, "Retired controls are not mounted in the creator editor");
  await act(async()=>root.unmount());dom.window.close();
  console.log("PASS: 56 controls, Advanced-only placement, creator/admin isolation, seven sections, switches, rules, ordering, allocation, persistence, and zero production writes.");
 }

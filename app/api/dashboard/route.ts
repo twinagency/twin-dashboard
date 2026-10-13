@@ -6,9 +6,7 @@ import { getRevenueRollup } from "@/lib/revenue-cache";
 import { getStarBalance, type StarBalance } from "@/lib/star-balance";
 import { reportDayStartMs, shiftReportDay } from "@/lib/revenue-why-changed";
 import { getDashboardAccess } from "@/lib/dashboard-access";
-import { isZaneDemo, DEMO_CLONE_ID, creatorDemoQueryIds } from "@/lib/creator-demo-policy";
-import { assertCreatorQuery } from "@/lib/creator-dashboard-policy";
-import { creatorDemoData } from "@/lib/creator-demo-data";
+import { isZaneDemo, DEMO_CLONE_ID } from "@/lib/creator-demo-policy";
 import { resolveCloneCuts, redactCostFields } from "@/lib/revenue-projection";
 import type { DashboardData } from "@/lib/dashboard-data";
 import type { AnalyticsData } from "@/lib/analytics-data";
@@ -39,11 +37,7 @@ async function read(req: NextRequest) {
   const period: Period = range ? "CUSTOM" : VALID.includes(p as Period) ? (p as Period) : "1M";
   try {
     const access = await getDashboardAccess();
-    if (isZaneDemo(access)) {
-      assertCreatorQuery(req.nextUrl.searchParams, creatorDemoQueryIds("/api/dashboard", access!));
-      // Return before live rollups, Telegram reads or shared financial caches.
-      return NextResponse.json(creatorDemoData(period, range), { headers: { "Cache-Control": "private, no-store", "X-Data-Mode": "synthetic-demo" } });
-    }
+    if (isZaneDemo(access)) return NextResponse.json({ error: "Creator profile is not connected" }, { status: 403 });
     if (clone === DEMO_CLONE_ID) return NextResponse.json({ error: "Demo data is unavailable for this account" }, { status: 403 });
     const [rollup, balance] = await Promise.all([getRevenueRollup(period, clone, range, { awaitFresh: freshness === "1" || freshness === "force", force: freshness === "force" }), getScopedBalance(clone)]);
     // Non-admin data arrives NET already: lib/agency-fetch.ts scales every

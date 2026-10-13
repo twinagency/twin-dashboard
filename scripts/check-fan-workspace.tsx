@@ -39,7 +39,7 @@ async function main() {
   await assert.rejects(page(), /redirect:\/twin/);
   admin = true;
   for (const targetType of ["creator", "agency"]) { viewAs = { targetType }; await assert.rejects(page(), /redirect:\/revenue/); }
-  viewAs = null; assert.ok(await page());
+  viewAs = null; await assert.rejects(page(), /redirect:\/users/);
 
   // Exercise the actual /users server branch. Fixture links must exit before
   // clone scope/database queries, and cannot expose histories to other audiences.
@@ -61,14 +61,9 @@ async function main() {
   });
   const inboxPage = compile("app/users/page.tsx",inboxImports).default;
   const inbox = (params:Record<string,string | undefined> = {}) => inboxPage({searchParams:Promise.resolve(params)});
-  admin=false;await assert.rejects(inbox({relationship:"briana-ben"}),/redirect:\/twin/);
-  admin=true;
-  for (const targetType of ["agency","creator"]) {viewAs={targetType};await assert.rejects(inbox({relationship:"briana-ben"}),/redirect:\/revenue/);}
-  viewAs=null;
-  for (const params of [{relationship:"unknown"},{relationship:""},{relationship:"briana-ben",creator:"kyla"}]) await assert.rejects(inbox(params),/redirect:\/fans/);
-  const inboxElement=await inbox({relationship:"briana-ben",creator:"briana",platform:"telegram",source:"ben-print-2"});
-  assert.equal(inboxElement.props.initialFanId,"briana-ben");
-  assert.equal(inboxElement.props.initialSourceId,"ben-print-2");
+  for (const params of [{relationship:"unknown"},{relationship:""},{relationship:"briana-ben",creator:"briana",platform:"telegram"}]) {
+    await assert.rejects(inbox(params), /redirect:\/users/);
+  }
   await assert.rejects(inbox(),/existing-live-route/,"The ordinary inbox still follows its original real-user path");
 
   const mark = fans.find(f => f.id === "kyla-mark")!;

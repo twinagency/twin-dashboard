@@ -85,8 +85,8 @@ async function main() {
 
   let admin = false, viewAs: unknown = null, mediaLoads = 0;
   const Page = compile('app/campaigns/page.tsx', { 'next/headers': { cookies: async () => ({}) }, 'next/navigation': { redirect: (p: string) => { throw Error(`redirect:${p}`); } }, '@/lib/internal-admin': { hasInternalAdminAccess: async () => admin }, '@/lib/view-as': { activeViewAs: async () => viewAs }, '@/lib/content-library-media': { loadBriannaLibraryMedia: async () => { mediaLoads++; return []; } }, '@/components/fans/data': { creators, authoredFans }, '@/components/dashboard/model': dashboard, '@/components/campaigns/Campaigns': { __esModule: true, default: () => null } }).default;
-  await assert.rejects(Page({ searchParams: Promise.resolve({}) }), /redirect:\/twin/); admin = true; viewAs = { targetType: 'agency' }; await assert.rejects(Page({ searchParams: Promise.resolve({}) }), /redirect:\/revenue/); assert.equal(mediaLoads, 0); viewAs = null; assert.equal((await Page({ searchParams: Promise.resolve({}) })).props.fans, authoredFans);
-  const sidebar = readFileSync('components/Sidebar.tsx', 'utf8'); assert.ok(sidebar.indexOf('"/content-library", "/campaigns"') >= 0, 'Campaigns follows Content Library');
+  await assert.rejects(Page({ searchParams: Promise.resolve({}) }), /redirect:\/twin/); admin = true; viewAs = { targetType: 'agency' }; await assert.rejects(Page({ searchParams: Promise.resolve({}) }), /redirect:\/revenue/); assert.equal(mediaLoads, 0); viewAs = null; await assert.rejects(Page({ searchParams: Promise.resolve({}) }), /redirect:\/dashboard/); assert.equal(mediaLoads, 0);
+  const sidebar = readFileSync('components/Sidebar.tsx', 'utf8'); assert.doesNotMatch(sidebar, /href: "\/campaigns"/, 'Retired campaigns has no navigation entry');
 
   const { JSDOM } = nativeRequire('jsdom');
   const dom = new JSDOM('<!doctype html><html><body><div id="root"></div></body></html>', { url: 'https://dashboard.test/campaigns' });

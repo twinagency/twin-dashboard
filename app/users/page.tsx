@@ -1,9 +1,6 @@
 import { MutationForm } from "@/components/DashboardAccessProvider";
 import Link from "next/link";
-import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
-import { hasInternalAdminAccess } from "@/lib/internal-admin";
-import { activeViewAs } from "@/lib/view-as";
 import { supabaseAdmin } from "@/lib/supabase";
 import { fmtNum } from "@/lib/money";
 import { getCloneScope } from "@/lib/clone-scope";
@@ -234,18 +231,8 @@ export default async function FansPage({
   searchParams: Promise<{ fan?: string; q?: string; status?: string; sort?: string; dir?: string; show?: string; relationship?: string; creator?: string; platform?: string; source?: string; before?: string; after?: string }>;
 }) {
   const params = await searchParams;
-  // Illustrated relationships stay in the existing inbox route without ever
-  // entering a real-user query, action or live feed. Partner sessions cannot
-  // load this data even when they supply the URL themselves.
-  if (params.relationship !== undefined) {
-    if (!await hasInternalAdminAccess()) redirect("/twin");
-    if (await activeViewAs(await cookies())) redirect("/revenue");
-    const { creators, fans, authoredFans } = await import("@/components/fans/data");
-    const fan = fans.find(item => item.id === params.relationship);
-    if (!fan || (params.creator && params.creator !== fan.creatorId)) redirect("/fans");
-    const { default: FanConversationWindow } = await import("@/components/users/FanConversationWindow");
-    return <FanConversationWindow creators={creators} fans={authoredFans} includeBriannaLedger initialFanId={fan.id} initialPlatform={params.platform} initialSourceId={params.source} />;
-  }
+  // Old presentation links must never render invented conversations.
+  if (params.relationship !== undefined) redirect("/users");
   const cloneId = await getCloneScope();
   const {
     fan: fanParam,

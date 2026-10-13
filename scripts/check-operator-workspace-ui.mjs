@@ -102,7 +102,7 @@ let browser;
 try{
 if(process.argv.includes("--build-only"))console.log("PASS: shared operator components and styles compile.");
 else{
-browser=await chromium.launch({headless:true});
+browser=await chromium.launch({headless:true,executablePath:process.env.CHROMIUM_PATH || undefined});
 for(const brand of ["Twin","Moxy","FLIRT","LYNQ","Tether","Jess and Kate AI"]){
 for(const width of [390,1440,...(brand==="Moxy"?[320]:[])]){
 const context=await browser.newContext({viewport:{width,height:900},colorScheme:"light",reducedMotion:"reduce"});

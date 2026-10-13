@@ -8,7 +8,6 @@ import "./globals.css";
 import "./jess-kate-theme.css";
 import "./creator-workspace.css";
 import "./studio-workspace.css";
-import "./demo-channels.css";
 import { JESS_KATE_PORTAL, TETHER_PORTAL } from "@/lib/partner-portals";
 import type { Metadata } from "next";
 import Link from "next/link";

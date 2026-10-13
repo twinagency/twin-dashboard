@@ -16,9 +16,6 @@ import MediaManager from "@/app/media/MediaManager";
 import FlowGraph from "./flow/FlowGraph";
 import type { CloneCfg } from "./flow/graph";
 import ConfigSections from "./clone/ConfigSections";
-import IntelligenceControls from "./clone/intelligence/IntelligenceControls";
-import { canShowIntelligence } from "./clone/intelligence/model";
-import { resolveAdvancedView, type AdvancedView } from "./clone/intelligence/sections";
 import advancedStyles from "./clone/intelligence/IntelligenceControls.module.css";
 import { STUDIO_PAGES, StudioNavigation, isStudioTab, resolveStudioPanel } from "./clone/CreatorStudio";
 import studioStyles from "./clone/CreatorStudio.module.css";
@@ -162,7 +159,7 @@ export default function CloneForm({
 }) {
   const router = useRouter();
   const pathname = usePathname();
-  const {agencyName, readOnly, audience} = useDashboardAccess();
+  const {agencyName, readOnly} = useDashboardAccess();
   const searchParams = useSearchParams();
   const formRef = useRef<HTMLFormElement>(null);
   const baselineRef = useRef<FormSnapshot>({});
@@ -170,10 +167,6 @@ export default function CloneForm({
   const tabParam = searchParams.get("tab");
   const subParam = searchParams.get("sub");
   const tab = resolveTab(tabParam, subParam);
-  const briannaAdvanced = canShowIntelligence(audience, clone.id) && tab === "advanced";
-  // The operational editor is shared by every creator and operator. Only
-  // the extended, local demo controls keep the separate intelligence gate.
-  const studioForms = isStudioTab(tab);
   const studioPanel = resolveStudioPanel(tab, searchParams.get("panel"));
   const changeStudioPanel = (panel: string) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -182,16 +175,6 @@ export default function CloneForm({
     params.delete("section");
     if (panel === "overview") params.delete("panel"); else params.set("panel", panel);
     window.history.pushState(null, "", `${pathname}?${params.toString()}`);
-  };
-  const advancedView = resolveAdvancedView(searchParams.get("section"));
-  const changeAdvancedSection = (section: AdvancedView) => {
-    const params = new URLSearchParams(searchParams.toString());
-    params.set("tab", "advanced");
-    params.delete("sub");
-    if (section === "overview") params.delete("section");
-    else params.set("section", section);
-    const href = `${pathname}?${params.toString()}`;
-    if (href !== `${pathname}?${searchParams.toString()}`) window.history.pushState(null, "", href);
   };
   const changeTab = (nextTab: Tab) => {
     const params = new URLSearchParams(searchParams.toString());
@@ -317,14 +300,14 @@ export default function CloneForm({
   const formId = "creator-control-plane-form";
 
   return (
-    <div data-creator-studio={tab} data-brianna-advanced={briannaAdvanced || undefined} data-brianna-studio={canShowIntelligence(audience, clone.id) && studioForms ? tab : undefined} className={`creator-control-plane grid min-w-0 gap-4 font-sans ${advancedStyles.page} ${studioStyles.page}`}>
-      <header className={advancedStyles.pageHeader}><div><p><span className="creator-name">{clone.stage_name || clone.name}</span> / Creator configuration</p><h1>{isStudioTab(tab) ? STUDIO_PAGES[tab].title : tab === "ppvs" ? "PPV library" : tab === "view" ? "System view" : "Advanced"}</h1><small>{isStudioTab(tab) ? STUDIO_PAGES[tab].subtitle : tab === "ppvs" ? "Manage this creator’s photos, videos and bundles." : tab === "view" ? "Flow map and compiled prompts for this creator." : briannaAdvanced ? "56 extended controls · 7 sections" : "Runtime, delivery and advanced creator settings."}</small></div><BlurToggle /></header>
+    <div data-creator-studio={tab} className={`creator-control-plane grid min-w-0 gap-4 font-sans ${advancedStyles.page} ${studioStyles.page}`}>
+      <header className={advancedStyles.pageHeader}><div><p><span className="creator-name">{clone.stage_name || clone.name}</span> / Creator configuration</p><h1>{isStudioTab(tab) ? STUDIO_PAGES[tab].title : tab === "ppvs" ? "PPV library" : tab === "view" ? "System view" : "Advanced"}</h1><small>{isStudioTab(tab) ? STUDIO_PAGES[tab].subtitle : tab === "ppvs" ? "Manage this creator’s photos, videos and bundles." : tab === "view" ? "Flow map and compiled prompts for this creator." : "Runtime, delivery and advanced creator settings."}</small></div><BlurToggle /></header>
       <CreatorStudioStatus clone={clone} cfg={cfg} />
 
       <ControlPlaneNavigation tab={tab} onTabChange={changeTab} />
 
       <div className="min-w-0">
-        <main className={briannaAdvanced ? advancedStyles.pageMain : "min-w-0"}>
+        <main className="min-w-0">
           {isStudioTab(tab) && <StudioNavigation tab={tab} panel={studioPanel} onChange={changeStudioPanel} />}
 
           {/* Identity, Configuration, Monetization and Advanced remain one
@@ -333,7 +316,6 @@ export default function CloneForm({
           <form
             id={formId}
             ref={formRef}
-            hidden={briannaAdvanced && advancedView !== "live"}
             onSubmit={(event) => {
               event.preventDefault();
               save(false);
@@ -341,7 +323,7 @@ export default function CloneForm({
             onInputCapture={scheduleDirtyCheck}
             onChangeCapture={scheduleDirtyCheck}
             onClickCapture={scheduleDirtyCheck}
-            className={`grid min-w-0 gap-4 [&_.clone-editor-tabs]:hidden ${briannaAdvanced ? advancedStyles.liveForm : ""}`}
+            className="grid min-w-0 gap-4 [&_.clone-editor-tabs]:hidden"
           >
             <div className={tab === "ppvs" ? "hidden" : "grid min-w-0 gap-4"}>
               <ReadOnlyEditor>
@@ -364,7 +346,6 @@ export default function CloneForm({
                     <>
                       <CloneAppearanceEditor
                         studio
-                        useStudioPortrait={canShowIntelligence(audience, clone.id)}
                         cloneName={clone.name}
                         initialColor={appearanceColor}
                         initialImagePath={clone.intake?.appearance?.profile_image_path ?? null}
@@ -416,28 +397,8 @@ export default function CloneForm({
             </div>
           </form>
 
-          {/* Browser-local presentation policies are outside the operational
-              form: they cannot enter FormData or update the live creator. */}
-          <IntelligenceControls
-            tab={tab}
-            cloneId={clone.id}
-            creatorName={clone.name}
-            audience={audience}
-            onTabChange={changeTab}
-            section={advancedView}
-            onSectionChange={changeAdvancedSection}
-            readOnly={readOnly}
-            liveActions={<ManagerOnly><div className={advancedStyles.liveActions}>
-              <span role="status">{step === "saving" ? "Saving…" : step === "done" ? "Saved" : step === "save-error" ? errorMsg : changedFields.length ? `${changedFields.length} fields changed` : ""}</span>
-              {changedFields.length > 0 && <Button type="button" variant="outline" onClick={openReview} disabled={busy}>Review</Button>}
-              <Button type="button" variant="outline" onClick={() => save(false)} disabled={busy} className={advancedStyles.secondary}>{isPaused ? "Save paused" : "Save live settings"}</Button>
-              {isPaused && advancedView === "live" && <Button type="button" onClick={() => save(true)} disabled={busy}>Finalise and go live</Button>}
-            </div></ManagerOnly>}
-          />
-
-
           <AdminOnly>
-            <section className={tab === "advanced" && (!briannaAdvanced || advancedView === "live") ? `${advancedStyles.danger} mt-4 flex flex-col gap-4 rounded-[3px] border border-crit/30 bg-panel p-4 sm:flex-row sm:items-center sm:justify-between` : "hidden"}>
+            <section className={tab === "advanced" ? `${advancedStyles.danger} mt-4 flex flex-col gap-4 rounded-[3px] border border-crit/30 bg-panel p-4 sm:flex-row sm:items-center sm:justify-between` : "hidden"}>
               <div>
                 <p className="text-xs font-semibold text-ink">Danger zone</p>
                 <p className="mt-1 text-[11px] leading-5 text-muted">Permanently removes this creator and leaves the normal configuration workflow.</p>
@@ -465,7 +426,7 @@ export default function CloneForm({
       <ManagerOnly>
         <div
           data-control-plane-save-bar
-          className={editableTab && !briannaAdvanced ? `pointer-events-none mt-4 lg:sticky lg:bottom-4 lg:z-40 ${studioStyles.saveDock}` : "hidden"}
+          className={editableTab ? `pointer-events-none mt-4 lg:sticky lg:bottom-4 lg:z-40 ${studioStyles.saveDock}` : "hidden"}
         >
           <div className="pointer-events-auto grid gap-2 rounded-[3px] border border-ink/25 bg-panel px-3 py-3 sm:px-4 lg:flex lg:items-center lg:justify-between lg:bg-panel/95 lg:py-2.5 lg:shadow-[0_8px_24px_rgb(21_32_51/0.1)] lg:backdrop-blur-xl">
             <div className="hidden min-w-0 items-center gap-3 lg:flex">

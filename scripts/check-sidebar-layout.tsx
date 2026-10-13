@@ -199,7 +199,7 @@ for (const mobile of [false, true]) {
 pathname = "/revenue"; query = new URLSearchParams();
 const lynqNavigation = render("LYNQ", true);
 assert.match(lynqNavigation, /href="\/sales-health"/);
-assert.match(lynqNavigation, />CRM</);
+assert.doesNotMatch(lynqNavigation, />CRM<|href="\/crm\//);
 assert.match(lynqNavigation, /aria-expanded="false"/);
 assert.doesNotMatch(lynqNavigation, /AI Intelligence Core|href="\/info"/);
 for (const mobile of [false, true]) {
@@ -216,18 +216,18 @@ for (const mobile of [false, true]) {
   }
   for (const tab of ["ppvs", "identity"]) assert.ok(admin.includes(`href="/clones/${clone}?tab=${tab}"`));
   assert.doesNotMatch(admin, /AI Intelligence Core/);
-  assert.ok(admin.includes('href="/fans"'), "Admin fan workspace is reachable on desktop and mobile");
-  assert.match(admin, /Fan Profiles/);
+  assert.ok(admin.includes('href="/users"'), "Live Telegram is reachable on desktop and mobile");
+  assert.doesNotMatch(admin, /href="\/(?:fans|inbox|campaigns|content-library)"|Fan Profiles/);
   const nav = admin.slice(admin.indexOf('<nav aria-label="Main navigation"'));
-  const orderedLabels = ["Dashboard", "Creators", "Fan Profiles", "Inbox", "Content Library", "Campaigns", "Automations", "Performance", "Agency Access", "Core Intelligence", "Settings", "More"];
+  const orderedLabels = ["Dashboard", "Creators", "Live Telegram", "Content", "Automations", "Performance", "Agency Access", "Core Intelligence", "Settings", "More"];
   assert.deepEqual(Array.from(nav.matchAll(/data-nav-group="([^"]+)"/g), match => match[1]), orderedLabels);
   const { JSDOM } = nativeRequire("jsdom");
   const document = new JSDOM(admin).window.document;
   const group = (name: string) => document.querySelector(`[data-nav-group="${name}"]`)!;
   for (const [name, hrefs] of Object.entries({
     Creators: [`/clones/${clone}?tab=identity`, "/agency-admin/creator-codes", "/agency/creator-invites", "/clones/new"],
-    "Inbox": ["/inbox", "/users"],
-    "Content Library": ["/content-library", `/clones/${clone}?tab=ppvs`, "/business"],
+    "Live Telegram": ["/users"],
+    "Content": ["/media", `/clones/${clone}?tab=ppvs`, "/business"],
     Automations: ["/flows", "/sequences"],
     Performance: ["/sales-health", "/catalogue-funnel"],
     "Agency Access": ["/agency-admin", "/agency/creators"],

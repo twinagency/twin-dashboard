@@ -124,7 +124,8 @@ async function main(){
   assert.match(readFileSync('components/MainShell.tsx','utf8'),/!isAgency/);
   assert.match(readFileSync('components/clone/ConfigSections.tsx','utf8'),/isAgency \? <div>/);
   assert.match(readFileSync('components/CompileButton.tsx','utf8'),/method: "POST"/);
-  for(const page of ['fans','inbox','campaigns','platforms'])assert.match(readFileSync(`app/crm/${page}/page.tsx`,'utf8'),/agencyCanManage\(await getDashboardAccess\(\)\)/);
+  for(const page of ['campaigns','platforms'])assert.match(readFileSync(`app/crm/${page}/page.tsx`,'utf8'),/agencyCanManage\(await getDashboardAccess\(\)\)/);
+  for(const page of ['fans','inbox'])assert.match(readFileSync(`app/crm/${page}/page.tsx`,'utf8'),/redirect\("\/users"\)/);
   console.log(`Lynq management: live controls, ${guarded} guarded actions, clone/fan/media isolation, immutable ledger/credentials, CSRF, revocation, storage, business routes and read-only-agency regression checks passed`);
 }
 main().catch(error=>{console.error(error);process.exitCode=1;});
