@@ -49,6 +49,16 @@ const {chromium,webkit}=require('playwright');
      const box=await uploads.boundingBox();assert.ok(box.height>=44&&box.x>=0&&box.x+box.width<=width,'Visible mobile content button');
      assert.equal(await page.evaluate(()=>document.documentElement.scrollWidth>innerWidth),false,'No horizontal overflow');
      assert.doesNotMatch(await page.locator('body').innerText(),/Your onboarding is complete\./);
+     const setupBanner=page.getByRole('status',{name:'AI clone setup status'});
+     const expectsSetup=!!submitted&&!connected;
+     assert.equal(await setupBanner.count(),expectsSetup?1:0,'Setup banner only appears for a submitted, unconnected creator');
+     if(expectsSetup){
+       await setupBanner.getByRole('heading',{name:'Your AI clone is being created.',exact:true}).waitFor();
+       const bannerBox=await setupBanner.boundingBox(), contentBox=await section.boundingBox();
+       assert.ok(bannerBox.y>=0&&bannerBox.y+bannerBox.height<=844,'Entire setup message is visible above the fold');
+       assert.ok(bannerBox.y+bannerBox.height<=contentBox.y,'Setup message appears before dashboard content');
+       assert.ok(bannerBox.x>=0&&bannerBox.x+bannerBox.width<=width,'Setup message fits mobile width');
+     }
      await uploads.click();await page.getByRole('heading',{name:'Saved uploads destination'}).waitFor();
      assert.equal(new URL(page.url()).pathname+new URL(page.url()).search,'/creator/onboarding?step=content');
      await page.goto(url);

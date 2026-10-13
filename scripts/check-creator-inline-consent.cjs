@@ -64,13 +64,15 @@ const { JSDOM } = require('jsdom');
   assert.ok(requests.every(request => request.name === 'Creator Name' && request.agreed), 'both requests retain entered values');
   assert.deepEqual(navigations, ['https://creator.example/creator'], 'only the final submission navigates');
 
-  await render({ completionHref: '/creator/onboarding?complete=1' });
-  responses = [response('not_ready')];
-  await submit();
-  assert.equal(navigations.length, 0, 'completion is never shown after an unconfirmed submission');
-  responses = [response('', '/creator')];
-  await submit();
-  assert.deepEqual(navigations, ['/creator/onboarding?complete=1'], 'confirmed submission opens the new completion screen');
+  for (const completionHref of ['/creator', '/creator/onboarding?complete=1']) {
+    await render({ completionHref });
+    responses = [response('not_ready')];
+    await submit();
+    assert.equal(navigations.length, 0, 'unconfirmed submission never navigates');
+    responses = [response('', '/creator')];
+    await submit();
+    assert.deepEqual(navigations, [completionHref], 'confirmed submission reaches the intended destination');
+  }
 
   await render({ name: '   ' });
   responses = [response('', '/creator')];

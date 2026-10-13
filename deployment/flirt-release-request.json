@@ -1,5 +1,5 @@
 {
-  "reason": "Fix confirmed Safari onboarding thumbnail taps and verify the image-replacement race plus persisted gallery refresh. Creator switchers, directory and earnings rows now use real profile photos.",
-  "source_commit": "bdaa666732b2f66083347823dae84267fc37e1ce",
-  "requested_at": "2026-10-13T09:26:04.785Z"
+  "reason": "Show a prominent clone-creation status at the top of the creator dashboard after confirmed onboarding submission; keep drafts and connected creators accurate.",
+  "source_commit": "bbb0a8b63e597632e8b99e6a3c0a3ad76ab8c5ac",
+  "requested_at": "2026-10-13T09:56:22.689Z"
 }
