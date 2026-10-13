@@ -4,7 +4,20 @@ ROOT = pathlib.Path('/home/ubuntu/twin-v2')
 INCIDENT = ROOT / 'data/_operator_backups/photo-incident-20261013-morning'
 REVISION = '45931b6f56db9f97cc8406154e35a0d216f5de65'
 IMAGE = 'sha256:2f076bf6fbc17b4de58a31887e9328a56e0275d90edda39ea789efbd13517d2e'
-CANDIDATE = '76c5e0038eb2c4bf4c4fa23d3ea0cce91be249a8'
+CANDIDATE = '340dd39736799f147cf1ad139de0bbb61628ee62'
+# Frozen from the reviewed structured-source/manifest.json for this exact candidate.
+SOURCE_HASHES = {
+    'src/llm.ts': 'd856dcaa623e9c36977b2a56345b8b35fd9f6ae6a737c40fbd01a0808b689ac4',
+    'src/turn.ts': '3d4a788ee0297f9a39c639e09ddfa98664b067d46fa781d194dfe4969b128f6f',
+    'src/media.ts': '66e408b4058fb486efc9ef596c2497d3cd86d9e5fdc3c028d9eb6148c22cee76',
+    'src/girls/template.ts': 'f20a3438927e92a03b9c6363fdb567dd3d67de7943ae7d1d7cdf971a8114575d',
+    'src/memory.ts': '261d1af5ce647e93b58572f353086b553191ed74acef81b59edfb2e084b40e98',
+    'src/deliver.ts': '355b87bbbfe4b034b511a5574334bfe49cd587deeec258deeebc64cea12770ff',
+    'src/payments.ts': '26261db531ef0293c82fcebbb394f64aec46ba597fbd0d57974585c9c3d4421d',
+    'src/runner.ts': '8ac43eb24c092fa235ba0dd26465ade9e24f26f2a02070ad25be11d636afd454',
+    'src/bundle-offers.ts': 'f16cb2a67bb55ddac9498ab4568548682fe2fa953134397f1d94b5cf96387e99',
+    'src/grounding.ts': '865ea9fc668535da4427b5a76e428e020a0c36ff8c187b9aa1d2b5d1877de64f',
+}
 FIXTURE_HASH = '43e21019a2c33d1e840c81ec6d683cf7bb6546f68e1de4106db9218b6d3bd253'
 errors = []
 runtime = []
@@ -124,9 +137,30 @@ except Exception:
     errors.append('fleet-state-unreadable')
 
 # Read the newest attempt, never silently fall back to an older passing attempt.
-candidate = {'candidate': CANDIDATE, 'summaryAvailable': False}
+candidate = {'candidate': CANDIDATE, 'summaryAvailable': False, 'dataCompatibility': {'summaryAvailable': False}}
 base=pathlib.Path('/home/ubuntu/twin-v2-validation')
-pattern=re.compile(r'^selection-' + re.escape(CANDIDATE[:12]) + r'-([0-9]+)$')
+pattern=re.compile(r'^reference-' + re.escape(CANDIDATE[:12]) + r'-([0-9]+)$')
+routes=('business','ordinary')
+original_names=['original-turn-' + str(number) for number in range(1,8)]
+reference_names=['reference-seed','explicit-exact-resend','already-owned-exact-resend','new-photo-after-reference',
+    'timeout-seed','missing-card-after-timeout','missing-card-without-context']
+expected_cases={route+'/'+group+'/'+name for route in routes for group,names in [
+    ('independent',original_names+['greeting-with-retained-history','empty-catalogue-unavailable','explicit-no-offer','new-photo-request']),
+    ('sequential-original',original_names),('reference-controls',reference_names)] for name in names}
+case_pattern=re.compile(r'(business|ordinary)/(independent|sequential-original|reference-controls)/[a-z][a-z0-9-]{0,79}')
+grounding_checks={'noUnsupportedKnownPose','noUnsupportedSelectedVocabularyDelivered','actualPreparedOutputGrounded',
+    'actualDispatchedCaptionGrounded','actualDispatchedCaptionMatchesPrepared','groundingRemovalTraceValid'}
+reference_checks={'referencePrerequisite','exactReferenceSelected','referenceRecognized','exactReferenceMenu',
+    'referenceOwnership','referenceDownloadedAgain'}
+def read_summary(file):
+    if not file.is_file() or file.is_symlink() or file.stat().st_size>2_000_000:
+        raise ValueError('summary-missing-or-invalid')
+    value=json.loads(file.read_text())
+    if not isinstance(value,dict):
+        raise ValueError('summary-not-an-object')
+    return value
+def case_passed(row):
+    return isinstance(row,dict) and row.get('passed') is True and isinstance(row.get('checks'),dict) and grounding_checks<=set(row['checks']) and all(value is True for value in row['checks'].values())
 try:
     choices=[]
     for directory in base.iterdir():
@@ -142,29 +176,109 @@ try:
         if not summary_file.is_file() or summary_file.is_symlink() or summary_file.stat().st_size>2_000_000:
             errors.append('newest-candidate-summary-missing-or-invalid')
         else:
-            summary=json.loads(summary_file.read_text())
+            summary=read_summary(summary_file)
             if summary.get('candidate')!=CANDIDATE or summary.get('fixtureHash')!=FIXTURE_HASH or summary.get('rollbackRevision')!=REVISION:
                 errors.append('candidate-summary-identity-mismatch')
             else:
                 outcomes=summary.get('results',[])
-                accepted=bool(outcomes) and len(outcomes)==22 and all(row.get('passed') is True for row in outcomes)
+                if not isinstance(outcomes,list) or not all(isinstance(row,dict) for row in outcomes):
+                    raise ValueError('invalid-case-results')
+                source_matches=summary.get('sourceHashes')==SOURCE_HASHES and len(SOURCE_HASHES)==10
+                names=[row.get('case') for row in outcomes]
+                cases_complete=len(outcomes)==50 and len(set(names))==50 and set(names)==expected_cases
+                accepted=cases_complete and source_matches and summary.get('normalCallsPlanned')==50 and all(case_passed(row) for row in outcomes) and summary.get('fatal') is None and summary.get('status')=='DECLARED PHOTO REFERENCE GATES PASSED; ORIGINAL AMBIGUITIES REPORTED SEPARATELY; TELEGRAM SIMULATED'
+                if not source_matches:
+                    errors.append('candidate-reviewed-source-hashes-mismatch')
+                if not cases_complete:
+                    errors.append('candidate-fifty-case-set-mismatch')
                 false_checks=[]
                 for row in outcomes:
                     case=row.get('case','unknown')
-                    if not re.fullmatch(r'(business|ordinary)/(original-turn-[1-7]|greeting-with-retained-history|empty-catalogue-unavailable|explicit-no-offer|new-photo-request)',str(case)):
+                    if not case_pattern.fullmatch(str(case)) or case not in expected_cases:
                         case='invalid-case-name'
                     failed=[name for name,value in row.get('checks',{}).items() if value is not True and re.fullmatch(r'[A-Za-z][A-Za-z0-9]{0,79}',str(name))]
-                    if failed or row.get('passed') is not True:
+                    if failed or not case_passed(row):
                         false_checks.append({'case':case,'failedChecks':failed or ['execution-failed']})
+                by_case={row.get('case'):row for row in outcomes}
+                def both_routes(name):
+                    needed={'noInventedReference'} if name=='missing-card-without-context' else reference_checks
+                    return accepted and all(case_passed(by_case.get(route+'/reference-controls/'+name))
+                        and all(by_case[route+'/reference-controls/'+name]['checks'].get(check) is True for check in needed) for route in routes)
+                def original_final_passed(route):
+                    row=by_case.get(route+'/sequential-original/original-turn-7',{})
+                    return case_passed(row) and row.get('behaviorAcceptance') is True and row.get('parserClassification')=='missing' and row.get('priorPhotoScoped') is True and row.get('referenceAvailable') is True and all(row['checks'].get(name) is True for name in reference_checks)
+                original_final=all(original_final_passed(route) for route in routes)
+                independent_final=all(case_passed(by_case.get(route+'/independent/original-turn-7'))
+                    and by_case[route+'/independent/original-turn-7'].get('behaviorAcceptance') is True
+                    and by_case[route+'/independent/original-turn-7']['checks'].get('noInventedReference') is True for route in routes)
+                if not original_final or not independent_final:
+                    errors.append('original-turn-seven-recovery-or-no-context-gate-failed')
+                    accepted=False
+                unresolved=summary.get('originalRecoveryUnresolved')
+                derived_unresolved=[row['case'] for row in outcomes if row.get('unresolvedOriginalRecovery') is True]
+                if not isinstance(unresolved,list) or unresolved!=derived_unresolved or any(case not in {route+'/sequential-original/original-turn-7' for route in routes} for case in unresolved):
+                    errors.append('original-recovery-evidence-inconsistent')
+                    unresolved=derived_unresolved
+                    accepted=False
+                if unresolved:
+                    errors.append('original-turn-seven-recovery-unresolved')
+                    accepted=False
+                observations=[row['case'] for row in outcomes if row.get('behaviorAcceptance') is False]
+                raw_draft_cases=[row['case'] for row in outcomes if row.get('rawDraftUnsupportedClaims') and row.get('case') in expected_cases]
+                historical_rows=[row for row in outcomes if isinstance(row.get('historicalSendClaimExemption'),dict) and row['historicalSendClaimExemption'].get('used') is True]
+                historical_proof=summary.get('historicalClaimGateChecks')==20 and all(
+                    row.get('case') in expected_cases and row.get('selection')=='none' and row.get('selected') is None
+                    and row.get('priorPhotoScoped') is True and row.get('priorPhotoStatus')=='acknowledged'
+                    and row['checks'].get('noExplicitFalseSendClaimWithoutSelection') is True
+                    and row['historicalSendClaimExemption'].get('scopedAcknowledgedReceipt') is True
+                    and row['historicalSendClaimExemption'].get('matchingLastAssistantDeliveryNote') is True
+                    and type(row['historicalSendClaimExemption'].get('priorMessageId')) is int and row['historicalSendClaimExemption']['priorMessageId']>0
+                    and isinstance(row['historicalSendClaimExemption'].get('priorTurnId'),str) and bool(row['historicalSendClaimExemption']['priorTurnId'])
+                    for row in historical_rows)
+                if not historical_proof:
+                    errors.append('historical-send-claim-exemption-evidence-invalid')
+                    accepted=False
                 candidate.update({'summaryAvailable':True,'checkedAt':summary.get('checkedAt'),'normalCallsPlanned':summary.get('normalCallsPlanned'),'requests':summary.get('requests'),
-                    'passedCases':sum(row.get('passed') is True for row in outcomes),'totalCases':len(outcomes),'accepted':accepted,
+                    'passedCases':sum(case_passed(row) for row in outcomes),'totalCases':len(outcomes),'accepted':accepted,
+                    'sourceHashesMatchReviewedManifest':source_matches,'reviewedSourceFiles':len(SOURCE_HASHES),'exactDeclaredCaseSet':cases_complete,
                     'realTelegramSends':summary.get('realTelegramSends'),'realDownloads':summary.get('realDownloads'),
                     'actualProductContract':summary.get('actualProductContract'),'noRequestOrResponseAdapter':summary.get('noRequestOrResponseAdapter'),
-                    'failures':false_checks,'resendAcceptance':False,'transportAndOwnership':'simulated'})
-                if summary.get('realTelegramSends')!=0 or summary.get('realDownloads')!=0:
+                    'failures':false_checks,'resendAcceptance':both_routes('explicit-exact-resend'),
+                    'ownedResendAcceptance':both_routes('already-owned-exact-resend'),'unconfirmedRecoveryAcceptance':both_routes('missing-card-after-timeout'),
+                    'missingContextNoGuessAcceptance':both_routes('missing-card-without-context'),
+                    'originalTurnSevenScopedRecoveryAcceptance':accepted and original_final,
+                    'originalTurnSevenNoContextAcceptance':accepted and independent_final,
+                    'transportedCaptionGroundingAcceptance':accepted and all(all(row['checks'].get(name) is True for name in grounding_checks) for row in outcomes),
+                    'rawDraftQualityIsDiagnostic':True,'rawDraftCasesWithUnsupportedClaims':raw_draft_cases,
+                    'historicalClaimGateChecks':summary.get('historicalClaimGateChecks'),'historicalClaimEvidenceVerified':historical_proof,
+                    'historicalClaimExemptionCases':[row['case'] for row in historical_rows if row.get('case') in expected_cases],
+                    'acceptedBehaviorCases':sum(row.get('behaviorAcceptance') is True and case_passed(row) for row in outcomes),
+                    'observationalCaseNames':observations,'originalRecoveryUnresolved':unresolved,'fullOriginalConversationAcceptance':False,
+                    'transportAndOwnership':'simulated'})
+                if any(summary.get(field)!=0 for field in ['realTelegramSends','realDownloads','realDatabaseCalls']):
                     errors.append('candidate-isolation-count-mismatch')
+                if any(summary.get(field) is not True for field in ['actualProductContract','noRequestOrResponseAdapter','assertionsFrozen','syntheticOwnership']) or summary.get('sequentialOriginalTurns')!=14:
+                    errors.append('candidate-replay-contract-mismatch')
                 if not accepted:
                     errors.append('candidate-model-replay-not-accepted')
+        # Data checks must be from this exact paired attempt, never a previous passing run.
+        data_file=directory.with_name(directory.name+'-data')/'data/summary.json'
+        data_summary=read_summary(data_file)
+        zero_fields=['modelCalls','telegramCalls','remoteWrites','realDownloads','productionFilesWritten','networkPolicyViolations']
+        no_side_effects=all(data_summary.get(field)==0 for field in zero_fields)
+        required_true=['sourceHashesVerified','frozenInputsPreserved','noOtherCredentials','ephemeralOwnershipCache',
+            'exactPhotoAvailable','mismatchedPathRejected','strictOwnershipAvailable','secondStrictReadAvailable',
+            'strictReadBypassedCache','exactCountHeadersCompatible']
+        data_passed=data_summary.get('candidate')==CANDIDATE and data_summary.get('status')=='READ-ONLY DATA CHECK PASSED' and no_side_effects and all(data_summary.get(field) is True for field in required_true) and data_summary.get('errors')==[]
+        scoped=data_summary.get('scopedManifest',{})
+        scoped_valid=(scoped.get('exercised') is False and scoped.get('status')=='not_exercised') or (scoped.get('exercised') is True and scoped.get('status')=='passed' and scoped.get('matchesLocalImmutableManifest') is True)
+        candidate['dataCompatibility']={'summaryAvailable':True,'candidateMatches':data_summary.get('candidate')==CANDIDATE,
+            'status':data_summary.get('status'),'passed':data_passed and scoped_valid,'sourceHashesVerified':data_summary.get('sourceHashesVerified'),
+            'noWritesMessagesModelCalls':no_side_effects,'exactCountHeadersCompatible':data_summary.get('exactCountHeadersCompatible'),
+            'strictReadBypassedCache':data_summary.get('strictReadBypassedCache'),
+            'scopedRemoteManifestExercised':scoped.get('exercised') is True,'scopedRemoteManifestStatus':scoped.get('status')}
+        if not data_passed or not scoped_valid:
+            errors.append('paired-readonly-data-check-not-accepted')
 except Exception:
     errors.append('candidate-summary-unreadable')
 result={'checkedAt':utcnow().isoformat(),'status':'READ-ONLY FINAL CHECK PASSED' if not errors else 'READ-ONLY FINAL CHECK FAILED',
