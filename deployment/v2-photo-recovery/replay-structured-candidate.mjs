@@ -155,7 +155,14 @@ try {
           noRepeatedSentKey: !selected || !chat.sent.includes(selected),
         };
         const passed = Object.values(checks).every(Boolean);
-        exchanges.push({case: id, pipelineRecord: row, fakeCalls: rig.tg.calls, downloads, rawSelectedClaims, selectedCaptionClaims});
+        // grammY InputFile.toJSON deliberately throws. Persist only transport metadata;
+        // downloaded item keys already record the exact synthetic file identity.
+        const fakeCalls = rig.tg.calls.map(({method, payload}) => ({
+          method, chat_id: payload.chat_id, business_connection_id: payload.business_connection_id,
+          star_count: payload.star_count, payload: typeof payload.payload === 'string' ? payload.payload : undefined,
+          text: payload.text, caption: payload.caption, action: payload.action,
+        }));
+        exchanges.push({case: id, pipelineRecord: row, fakeCalls, downloads, rawSelectedClaims, selectedCaptionClaims});
         results.push({case: id, sourceTurn: test.source + 1, behaviorAcceptance: test.behaviorAcceptance, observationReason: test.observationReason, requests: requests - before, selected, selection: decoded?.selection ?? null, provider: last?.response?.provider, expectedPrice, checks, passed});
       } catch (error) {
         exchanges.push({case: id, error: String(error?.stack ?? error)});
@@ -182,8 +189,8 @@ const summary = {
 try {
   const outputDir = process.env.PROBE_OUTPUT_DIR ?? '/out';
   fs.mkdirSync(outputDir, {recursive: true, mode: 0o700});
-  fs.writeFileSync(path.join(outputDir, 'structured-candidate.private.json'), JSON.stringify({plan, exchanges, privateOutput, fatal}), {mode: 0o600});
   fs.writeFileSync(path.join(outputDir, 'structured-candidate.summary.json'), JSON.stringify(summary), {mode: 0o600});
+  fs.writeFileSync(path.join(outputDir, 'structured-candidate.private.json'), JSON.stringify({plan, exchanges, privateOutput, fatal}), {mode: 0o600});
   writeOut(JSON.stringify(summary) + '\n');
   if (fatal || results.length !== normalCalls || results.some(result => !result.passed)) process.exitCode = 1;
 } finally { fs.rmSync(temp, {recursive: true, force: true}); }
