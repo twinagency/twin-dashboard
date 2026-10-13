@@ -81,7 +81,11 @@ for slug in SLUGS:
                       'priorUnlockNotes': sum('[he unlocked' in str(m.get('content', '')) for m in history)})
     later = []
     after = [r for r in rows if str(r.get('ts', '')) >= '2026-10-13T06:43:20']
-    for row in after[-12:]:
+    # Keep only the four most recent attachment/price/reference examples per creator.
+    # Full PDF-window rows above are preserved; this separate sample is not exhaustive.
+    followups = [r for r in after if r.get('media') or r.get('photoReference') or
+                 any(w in (' '.join(r.get('final') or [])).lower() for w in ['same pool', ' stars', 'free ones'])]
+    for row in followups[-4:]:
         media = row.get('media') or {}
         delivery = row.get('delivery') or {}
         history = row.get('history') or []
@@ -90,15 +94,16 @@ for slug in SLUGS:
                       'newPrompt': 'Use remaining totals for availability, not the shortlist.' in row.get('system', ''),
                       'fan': compact(row.get('fanText'), 100), 'reply': compact(' '.join(row.get('final') or []), 160),
                       'key': media.get('key'), 'free': media.get('free'),
+                      'selectedLabel': compact(media.get('label'), 240),
                       'mediaStatus': (delivery.get('media') or {}).get('status'),
                       'reference': row.get('photoReference'), 'note': row.get('note'),
-                      'previousAssistant': compact(previous.get('content'), 250) if media else None,
+                      'previousAssistant': compact(previous.get('content'), 170) if media else None,
                       'priorLockedNotes': sum('[locked photo waiting for him to unlock:' in str(m.get('content', '')) for m in history)})
     chat = read_json(ROOT/'data'/slug/(TESTER+'.json'))
     connection = read_json(ROOT/'data'/slug/'_business.json')
     rows_out.append({'slug': slug, 'fileExists': path.is_file(), 'boundedTail': offset > 0,
                      'earliestRead': earliest, 'malformedLines': malformed, 'testTurns': len(test_rows), 'turns': turns,
-                     'afterFinalTurns': len(after), 'afterFinalLast12': later,
+                     'afterFinalTurns': len(after), 'afterFinalExampleLimit': 4, 'afterFinalExamples': later,
                      'fleetStatus': (fleet.get('girls', {}).get(slug) or {}).get('status'),
                      'cachedBusinessConnections': len(connection) if isinstance(connection, dict) else None,
                      'chat': {'exists': chat is not None, 'history': len((chat or {}).get('history', [])),
@@ -111,4 +116,12 @@ result = {'checkedAt': datetime.datetime.now(datetime.timezone.utc).isoformat(),
     'settings': settings, 'creators': rows_out, 'resetEvidenceDirectoryNames': backup_names,
     'productionWrites': 0, 'modelCalls': 0, 'telegramCalls': 0}
 # SSM caps stdout; compress the scoped result so evidence is not silently truncated.
-print('TEXTING_TEST_READONLY_GZIP '+base64.b64encode(gzip.compress(json.dumps(result, separators=(',', ':')).encode())).decode(), flush=True)
+packed = base64.b64encode(gzip.compress(json.dumps(result, separators=(',', ':')).encode())).decode()
+if len(packed) > 21_000:
+    result['postReleaseExamplesTrimmedForTransport'] = True
+    for creator in result['creators']:
+        creator['afterFinalExamples'] = creator['afterFinalExamples'][-2:]
+        creator['afterFinalExampleLimit'] = 2
+    packed = base64.b64encode(gzip.compress(json.dumps(result, separators=(',', ':')).encode())).decode()
+assert len(packed) <= 23_000, 'Bounded output exceeds SSM stdout; no partial result emitted'
+print('TEXTING_TEST_READONLY_GZIP '+packed, flush=True)
