@@ -56,7 +56,7 @@ export function trimToSentence(t: string): string {
 /**
  * The one AI call per fan turn. On an error or empty reply it resamples ONCE with the exact same
  * messages (nothing appended, so nothing to leak). A malformed structured result is not resampled.
- * `selections`, when supplied, is the complete allowed set for this turn, including "none". Never throws.
+ * `selections`, when supplied, is the complete allowed set for this turn; a verified requested resend omits "none". Never throws.
  */
 export async function complete(messages: ChatMsg[], selections?: readonly string[]): Promise<LlmResult> {
   let tokensIn = 0, tokensOut = 0, cost = 0, provider = "none", lastErr = "";

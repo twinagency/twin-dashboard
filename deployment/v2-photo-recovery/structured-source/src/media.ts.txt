@@ -429,6 +429,7 @@ function pickKind(cat: Item[], taken: Set<string>, kind: "photo" | "video", cont
 /** Full description for her: the stored visual description, trimmed. */
 export const describe = (it: Item) => it.desc;
 export const ALT_NOTE = "closest available, not an exact match for what he asked";
+export const ALTERNATIVE_PHOTO_CAPTION = "alternative photo, not an exact match.";
 
 export function menuText(m: Menu): string {
   const lines: string[] = [];
@@ -447,7 +448,7 @@ export function menuText(m: Menu): string {
   if (m.free) lines.push(`[free ${m.free.kind}] (${m.reference?.owned ? "already owned, resend unlocked" : "free"}): ${alt(m.free)}${describe(m.free)}`);
   if (!lines.length) return m.reference ? `YOUR CONTENT READY TO SEND${prior}\n(none available for this request, so don't offer any)`
     : "YOUR CONTENT READY TO SEND\n(none left for him right now, so don't offer any)";
-  const altHint = m.alt?.size ? ` (A line marked "${ALT_NOTE.split(",")[0]}" is not what he asked for: if you offer it, say so in your own words and never write the marker words or "does not show" to him.)` : "";
+  const altHint = m.alt?.size ? ` (A line marked "${ALT_NOTE.split(",")[0]}" is not an exact match. Photo captions are labelled as alternatives automatically; explain video or bundle alternatives in your own words; never write the marker words or "does not show" to him.)` : "";
   return `YOUR CONTENT READY TO SEND (descriptions of you, written by someone looking at the file)${prior}${altHint}\n${lines.join("\n")}`;
 }
 

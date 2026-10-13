@@ -8,7 +8,7 @@ import { loadChat, saveChat, appendIfCurrent, type Msg } from "./memory.js";
 import { ownedKeys, type OwnershipRead } from "./payments.js";
 import { applyEmojiPolicy } from "./girls/template.js";
 import { checkText, cleanReply, logBlocked } from "./safety.js";
-import { extractTag, buildMenu, menuText, fromMenu, requestedAttrs, missingAttrs, UNAVAILABLE_FREE_TEXT, UNAVAILABLE_TEXT, type Item, type Menu, type CurrentPhotoRead } from "./media.js";
+import { extractTag, buildMenu, menuText, fromMenu, requestedAttrs, missingAttrs, ALTERNATIVE_PHOTO_CAPTION, UNAVAILABLE_FREE_TEXT, UNAVAILABLE_TEXT, type Item, type Menu, type CurrentPhotoRead } from "./media.js";
 import { bundleFromMenu, chooseBundle, EMPTY_BOOK, fileKeys, menuBundle, type Bundle, type BundleBook } from "./bundles.js";
 import { evidenceText, groundReply } from "./grounding.js";
 import { extractTipTag } from "./tips/policy.js";
@@ -105,6 +105,7 @@ export type RequestRecord = {
   /** Validated machine choice from the same model request; raw retains its exact JSON response. */
   selection?: string; selectionError?: string;
   photoReference?: { kind: "resend" | "missing"; sourceTurnId?: string; status?: string; available: boolean; reason?: string; owned?: boolean };
+  photoAlternative?: boolean;
   provider?: string; tokensIn?: number; tokensOut?: number; cost?: number; attempts?: number;
   turnId?: string; mode?: "real" | "simulated"; route?: "ordinary" | "business"; bcid?: string; epoch?: number;
   modelRequest?: boolean; generated?: string[];
@@ -258,7 +259,7 @@ async function runTurnInner(girl: Girl, catalogue: Item[], chatId: number | stri
   }
   // The age line follows the route captured when he wrote: ordinary chats passed the 18+ button, Business chats have no
   // button, so her prompt must not claim he confirmed his age there (whatever the saved file says about an old connection).
-  const system: ChatMsg = { role: "system", content: `${girl.promptFor({ ageVerified: !ctx.route.bcid, ...(ctx.tips?.fanTip ? { tipOffer: true } : ctx.tips?.invite ? { tipInvite: true } : {}) })}\n\n${menuText(menu)}` };
+  const system: ChatMsg = { role: "system", content: `${girl.promptFor({ ageVerified: !ctx.route.bcid, ...(ctx.tips?.fanTip ? { tipOffer: true } : ctx.tips?.invite && !photoReference ? { tipInvite: true } : {}) })}\n\n${menuText(menu)}` };
   let messages: ChatMsg[] = [system, ...chat.history.slice(-config.historyLimit)];
   if (ctx.memory) {
     // Stage 5: request = system, [memory block as DATA in a user message, only on a hit], the selected history, then his merged input untouched.
@@ -286,7 +287,9 @@ async function runTurnInner(girl: Girl, catalogue: Item[], chatId: number | stri
     ...(menu.bundle && chosen ? [{ slot: "bundle 1", key: `bundle:${chosen.bundle.id}`, stars: chosen.bundle.stars, desc: menu.bundle.desc }] : []),
     ...(menu.free ? [{ slot: `free ${menu.free.kind}`, key: menu.free.key, stars: 0, desc: menu.free.desc }] : []),
   ];
-  const selections = ["none", ...rec.menu.map(it => it.slot), ...(ctx.tips?.invite && !fanTip ? ["tip"] : [])];
+  // An explicit, freshly verified resend requires its sole current photo. Invalid output still fails closed.
+  const selections = photoReference ? rec.menu.map(it => it.slot)
+    : ["none", ...rec.menu.map(it => it.slot), ...(ctx.tips?.invite && !fanTip ? ["tip"] : [])];
   const r = await complete(messages, selections);
   rec.raw = r.raw ?? r.text;
   rec.selection = r.selection;
@@ -364,6 +367,11 @@ async function runTurnInner(girl: Girl, catalogue: Item[], chatId: number | stri
   if (media || bundle) {
     const g = groundReply(textFinal, media ? evidenceText(media.desc, media.words) : evidenceText(bundle!.files.map((f) => f.desc).join(" "), bundle!.words));
     if (g.dropped.length) { textFinal = g.text; rec.grounding = g.dropped; }
+  }
+  // Reuse the menu's existing match decision. Grounding must not erase an alternative's label.
+  if (media?.kind === "photo" && menu.alt?.has(media.key)) {
+    rec.photoAlternative = true;
+    textFinal = `${ALTERNATIVE_PHOTO_CAPTION} ${textFinal}`.trim();
   }
   const lines = textFinal.split("\n").map((l) => l.trim()).filter(Boolean);
   // ONE message per reply, never a burst: her lines are joined into a single text.

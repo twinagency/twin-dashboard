@@ -6,7 +6,7 @@ import path from 'node:path';
 import crypto from 'node:crypto';
 import assert from 'node:assert/strict';
 import {config} from './src/config.ts';
-import {catalogueFromRaw} from './src/media.ts';
+import {catalogueFromRaw, requestedAttrs, isAlternative, ALTERNATIVE_PHOTO_CAPTION} from './src/media.ts';
 import {girlFromRow} from './src/girls/index.ts';
 import {riley as rigDefaultGirl} from './src/girls/riley.ts';
 import {runAs} from './src/context.ts';
@@ -86,7 +86,7 @@ const sequentialRules = {
   ambiguousSources: [2, 4], finalSource: 6,
   finalPolicy: 'original final missing-card wording must classify as missing and select the exact scoped previous photo; missing context or unrecognized wording fails this sequential recovery gate',
 };
-const plan = {version: 'prospective-reference-v3', exactEvidence, independent: cases, sequentialRules, referenceCases,
+const plan = {version: 'prospective-reference-v4', exactEvidence, independent: cases, sequentialRules, referenceCases,
   groundingPolicy: 'raw draft claims are diagnostic; actual prepared and dispatched captions must be grounded, with dispatched caption equal to the product trimmed prepared output even when transport times out',
   noAttachmentClaimPolicy: 'only a bounded past-deictic reference may cite a scoped acknowledged photo with message id, sent key and matching last-assistant delivery note; remaining new-send claims fail; prior f1d50 48-of-50 result stays unchanged',
   routes: ['business', 'ordinary']};
@@ -120,7 +120,9 @@ globalThis.fetch = async (url, init) => {
   assert.equal(schema.name, 'twin_reply'); assert.equal(schema.strict, true);
   assert.deepEqual(schema.schema.required, ['selection', 'reply']);
   assert.equal(schema.schema.additionalProperties, false);
-  assert(schema.schema.properties.selection.enum.includes('none'));
+  const choices = schema.schema.properties.selection.enum;
+  assert(Array.isArray(choices) && choices.length > 0);
+  assert(choices.includes('none') || (choices.length === 1 && /^photo 1$|^free photo$/.test(choices[0])), 'only a verified exact photo may have a required singleton contract');
   assert.deepEqual(body.messages.slice(1), current.expectedHistory, 'original complete history retained in actual request');
   const exchange = {case: current.id, request: body}; exchanges.push(exchange);
   // Deliberately pass the exact request and untouched response through; no output adapter.
@@ -286,7 +288,7 @@ async function execute(state, test, group) {
       onePipelineRow: rows.length - before.rows === 1,
       validStructuredReply: !!decoded && Object.keys(decoded).sort().join(',') === 'reply,selection' && typeof decoded.reply === 'string' && typeof decoded.selection === 'string',
       completeResponse: last?.response?.choices?.[0]?.finish_reason === 'stop',
-      exactCurrentEnum: JSON.stringify(enumValues) === JSON.stringify(['none', ...menu.map(value => value.slot)]),
+      exactCurrentEnum: JSON.stringify(enumValues) === JSON.stringify([...(isReference ? [] : ['none']), ...menu.map(value => value.slot)]),
       selectionInEnum: enumValues.includes(decoded?.selection),
       actualParserRecordedRawAndSelection: row?.raw === raw && row?.selection === decoded?.selection && !row?.selectionError,
       selectionMapsExactFile: decoded?.selection === 'none' ? selected === null : !!selectedSlot && selected === selectedSlot.key,
@@ -296,6 +298,7 @@ async function execute(state, test, group) {
       noUnsupportedSelectedVocabularyDelivered: selectedCaptionClaims.length === 0,
       actualPreparedOutputGrounded: preparedClaims.length === 0,
       actualDispatchedCaptionGrounded: dispatchedClaims.length === 0,
+      alternativePhotoLabelMatchesMenuFacts: !item || item.kind !== 'photo' || isReference ? row.photoAlternative !== true : (isAlternative(item, requestedAttrs(catalogue.filter(value => !value.isFree), input)) ? row.photoAlternative === true && preparedText.startsWith(ALTERNATIVE_PHOTO_CAPTION) && dispatchedCaption?.startsWith(ALTERNATIVE_PHOTO_CAPTION) : row.photoAlternative !== true),
       actualDispatchedCaptionMatchesPrepared: !selected || dispatchedCaption === (preparedText ? trimCaption(preparedText) : undefined),
       groundingRemovalTraceValid: groundingTraceValid,
       noPromptOrJSONLeak: !/YOUR CONTENT READY|response_format|"(?:selection|reply)"\s*:|\[(?:free )?(?:photo|video|bundle|tip)(?: \d+)?\]/i.test(allPayloadText),
