@@ -1,0 +1,34 @@
+name: Creator gallery Safari investigation
+on:
+  push:
+    branches: [codex/creator-gallery-investigation-20261013]
+permissions:
+  contents: read
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - name: Install Safari engine
+        run: |
+          sudo mkdir -p /tmp/ci-unused-chrome-feed
+          while IFS= read -r source; do
+            sudo mv "$source" "/tmp/ci-unused-chrome-feed/${source##*/}"
+          done < <(sudo grep -rl 'dl.google.com/linux/chrome' /etc/apt/sources.list.d 2>/dev/null || true)
+          npx playwright install --with-deps webkit
+      - name: Reproduce paginated gallery selection with event diagnostics
+        env:
+          CREATOR_GALLERY_ENGINES: webkit
+          CREATOR_GALLERY_BRANDS: moxy
+          CREATOR_GALLERY_REPEATS: '3'
+        run: node scripts/check-creator-content-gallery-browser.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: gallery-investigation
+          path: test-results/creator-gallery/
+          retention-days: 7

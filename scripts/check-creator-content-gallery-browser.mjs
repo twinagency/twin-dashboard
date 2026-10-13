@@ -33,7 +33,7 @@ const server=createServer(async(req,res)=>{
 await new Promise(r=>server.listen(0,'127.0.0.1',r));
 try{for(const engine of (process.env.CREATOR_GALLERY_ENGINES||'chromium').split(',')){
  const browser=await ({chromium,webkit}[engine]).launch({...(engine==='chromium'?{executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH||undefined,args:['--no-sandbox','--disable-dev-shm-usage']}:{} )});
- try{for(const brand of process.argv.includes('--flirt')?['flirt']:['moxy','twin'])for(const width of [390,1280]){
+ try{for(let repeat=0;repeat<Number(process.env.CREATOR_GALLERY_REPEATS||1);repeat++)for(const brand of process.env.CREATOR_GALLERY_BRANDS?.split(',')||(process.argv.includes('--flirt')?['flirt']:['moxy','twin']))for(const width of [390,1280]){
   reset();const context=await browser.newContext({viewport:{width,height:844}});const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
   await page.goto(`http://127.0.0.1:${server.address().port}/creator/onboarding?brand=${brand}`);
   await page.getByRole('button',{name:'View all (63)',exact:true}).waitFor();
@@ -55,7 +55,14 @@ try{for(const engine of (process.env.CREATOR_GALLERY_ENGINES||'chromium').split(
   assert.equal(await page.locator('[aria-label="All uploaded files"] button').count(),50);
   await dialog.getByRole('button',{name:'Load more',exact:true}).click();await page.locator('[aria-label="All uploaded files"] button').nth(62).waitFor();
   assert.equal(await page.locator('[aria-label="All uploaded files"] button').count(),63);
-  await dialog.getByRole('button',{name:'View Photo 63.png',exact:true}).click();await page.getByRole('dialog',{name:'View file',exact:true}).waitFor();await dialog.getByRole('img',{name:'Photo 63.png',exact:true}).waitFor();
+  await page.evaluate(()=>{window.__galleryPointerEvents=[];for(const type of ['pointerdown','pointerup','click'])document.addEventListener(type,event=>{const target=event.target;window.__galleryPointerEvents.push({type,tag:target.tagName,label:target.getAttribute?.('aria-label'),button:target.closest?.('button')?.getAttribute('aria-label'),x:event.clientX,y:event.clientY});},true);});
+  try {
+    await dialog.getByRole('button',{name:'View Photo 63.png',exact:true}).click();await page.getByRole('dialog',{name:'View file',exact:true}).waitFor({timeout:5000});await dialog.getByRole('img',{name:'Photo 63.png',exact:true}).waitFor();
+  } catch(error) {
+    await page.screenshot({path:path.join(out,`${engine}-${brand}-${width}-failure-${repeat}.png`),fullPage:true});
+    console.log('GALLERY_SELECTION_DIAGNOSTIC',JSON.stringify({engine,brand,width,repeat,state:await page.evaluate(()=>{const d=document.querySelector('dialog');return {open:d?.open,label:d?.getAttribute('aria-label'),scroll:d?.scrollTop,height:d?.getBoundingClientRect().height,text:d?.innerText.slice(0,900),buttons:d?.querySelectorAll('[aria-label="All uploaded files"] button').length,events:window.__galleryPointerEvents,errors:[...document.querySelectorAll('[role="alert"]')].map(n=>n.textContent)};})}));
+    throw error;
+  }
   await page.screenshot({path:path.join(out,`${engine}-${brand}-${width}-preview.png`)});
   await dialog.getByRole('button',{name:'Remove file',exact:true}).click();await dialog.getByRole('button',{name:'Keep file',exact:true}).click();assert.equal(files.length,63);
   failRemove=true;await dialog.getByRole('button',{name:'Remove file',exact:true}).click();await dialog.getByRole('button',{name:'Yes, remove',exact:true}).click();await dialog.getByRole('alert').waitFor();assert.equal(files.length,63);
