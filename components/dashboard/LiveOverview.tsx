@@ -1,8 +1,11 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
-import { ArrowRight, Coins, MessageCircle, UserRound, Users } from "lucide-react";
+import Image from "next/image";
+import { useRouter } from "next/navigation";
+import { useState, useTransition } from "react";
+import { ArrowRight, Coins, MessageCircle, Plus, UserRound, Users } from "lucide-react";
+import { setCloneScope } from "@/app/actions/clone-scope";
 import CloneSwitcher from "@/components/CloneSwitcher";
 import CurrencyToggle from "@/components/CurrencyToggle";
 import BlurToggle from "@/components/BlurToggle";
@@ -21,6 +24,50 @@ function CreatorPhoto({ creator }: { creator: OverviewClone }) {
     : <span className={styles.initials} aria-label={creator.name}><UserRound /></span>;
 }
 
+function CreatorShortcuts({ clones }: { clones: OverviewClone[] }) {
+  const router = useRouter();
+  const [pending, startTransition] = useTransition();
+  const [error, setError] = useState<string | null>(null);
+
+  function openCreator(id: string) {
+    setError(null);
+    startTransition(async () => {
+      try {
+        await setCloneScope(id);
+        router.refresh();
+      } catch {
+        setError("Could not open this creator. Please try again.");
+      }
+    });
+  }
+
+  return <div className={styles.fleetArt}>
+    <nav className={styles.portraits} aria-label="Creator dashboards" aria-busy={pending}>
+      {clones.slice(0, 5).map(c => <button
+        key={c.id}
+        type="button"
+        className={`${styles.creatorShortcut} creator-name`}
+        onClick={() => openCreator(c.id)}
+        disabled={pending}
+        aria-label={`Open ${c.name} dashboard`}
+        title={c.name}
+      >
+        <span className={styles.shortcutPhoto}><CreatorPhoto creator={c} /></span>
+        <span className={styles.shortcutName}>{c.name}</span>
+      </button>)}
+      <Link className={`${styles.creatorShortcut} ${styles.viewMore}`} href="/clones">
+        <span className={styles.morePhoto}>
+          <Image src="/brand/creator-more-collage.png" alt="" width={76} height={76} sizes="76px" priority aria-hidden="true" />
+          <span className={styles.moreBadge} aria-hidden="true"><Plus size={14} /></span>
+        </span>
+        <span className={styles.shortcutName}>View More</span>
+      </Link>
+    </nav>
+    <span><Users size={16} />{clones.length.toLocaleString()} creators</span>
+    {error && <p className={styles.shortcutError} role="alert">{error}</p>}
+  </div>;
+}
+
 export function LiveOverviewHero({ clones, cloneId, windowLabel }: {
   clones: OverviewClone[]; cloneId?: string | null; windowLabel: string;
 }) {
@@ -37,7 +84,7 @@ export function LiveOverviewHero({ clones, cloneId, windowLabel }: {
         <span>{windowLabel} · Earnings, fans and activity in one place.</span>
         <div className={styles.heroLinks}><Link href={creator ? `/clones/${creator.id}?tab=identity` : "/clones"}>{creator ? "View creator" : "View creators"}<ArrowRight size={16} /></Link><Link className={styles.secondaryLink} href="/users">Live Telegram Chat<MessageCircle size={16} /></Link></div>
       </div>
-      {creator ? <div className={styles.heroPortrait}><CreatorPhoto key={creator.id} creator={creator} /></div> : <div className={styles.fleetArt} aria-label={`${clones.length} creators`}><div className={styles.portraits}>{clones.slice(0, 4).map(c => <div key={c.id}><CreatorPhoto creator={c} /></div>)}</div><span><Users size={16} />{clones.length.toLocaleString()} creators</span></div>}
+      {creator ? <div className={styles.heroPortrait}><CreatorPhoto key={creator.id} creator={creator} /></div> : <CreatorShortcuts clones={clones} />}
     </section>
   </>;
 }
