@@ -1,6 +1,6 @@
 """Read saved observation and failure cases; no model calls, requests or file writes."""
 import json,pathlib
-candidate='2d2ecc27d0b1d3c148c54e26e2261d95b338f475'
+candidate='5228ff383628382ee1366d319c39e3f27b052c02'
 dirs=[p for p in pathlib.Path('/home/ubuntu/twin-v2-validation').glob('reference-'+candidate[:12]+'-*') if (p/'structured-candidate.summary.json').is_file()]
 root=max(dirs,key=lambda p:p.stat().st_mtime)
 summary=json.loads((root/'structured-candidate.summary.json').read_text())
