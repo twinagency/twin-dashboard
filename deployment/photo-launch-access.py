@@ -4,7 +4,7 @@ INSTANCE='i-0584d283506f3f6be'
 def ssm(command,timeout=120):
  p=pathlib.Path('/tmp')/('shared-repair-'+str(time.time_ns())+'.json')
  p.write_text(json.dumps({'commands':[command],'executionTimeout':[str(timeout)]}))
- cid=subprocess.check_output(['aws','ssm','send-command','--instance-ids',INSTANCE,'--document-name','AWS-RunShellScript','--parameters','file://'+str(p),'--comment','Read-only deployed shared V2 verification; no model calls or messages','--query','Command.CommandId','--output','text'],text=True).strip()
+ cid=subprocess.check_output(['aws','ssm','send-command','--instance-ids',INSTANCE,'--document-name','AWS-RunShellScript','--parameters','file://'+str(p),'--comment','Read-only correlate uploaded texting test; no model calls or messages','--query','Command.CommandId','--output','text'],text=True).strip()
  if timeout>120:print(json.dumps({'commandId':cid,'phase':'read-only shared release observation'}),flush=True)
  for _ in range(timeout//3+20):
   try:r=json.loads(subprocess.check_output(['aws','ssm','get-command-invocation','--command-id',cid,'--instance-id',INSTANCE,'--output','json'],text=True,stderr=subprocess.DEVNULL))
@@ -18,7 +18,7 @@ def ssm(command,timeout=120):
   raise RuntimeError('Isolated verification '+r['Status'])
  return cid
 
-raw=pathlib.Path('deployment/v2-photo-recovery/verify-shared-release.py').read_bytes()
+raw=pathlib.Path('deployment/v2-photo-recovery/read-texting-test-20261013.py').read_bytes()
 packed=base64.b64encode(gzip.compress(raw)).decode()
 program="import gzip,base64;exec(compile(gzip.decompress(base64.b64decode("+repr(packed)+")),'<shared-release-readonly>','exec'))"
 ssm('python3 -c '+shlex.quote(program),100)
