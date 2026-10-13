@@ -1,50 +1,69 @@
-"""One isolated real-model fleet replay, with result committed to this diagnostic branch."""
-import base64,gzip,hashlib,json,os,pathlib,shlex,subprocess,sys,time,urllib.request
+"""Read one retained isolated-replay turn through SSM; no model or production writes."""
+import base64, json, os, pathlib, shlex, subprocess, time, urllib.request
 
-INSTANCE='i-0584d283506f3f6be'
-BRANCH='codex/v2-reply-model-validation-v4-20261013'
-ROOT=pathlib.Path('deployment/v2-photo-recovery')
-nonce=str(time.time_ns())
+INSTANCE = "i-0584d283506f3f6be"
+BRANCH = "codex/v2-reply-diagnostic-20261013"
+SOURCE = "/home/ubuntu/twin-v2-validation/reply-outcomes-candidate-1791892632127052684/cat-chase/turns.private.json"
 
-def ssm(command,timeout):
-  params=pathlib.Path('/tmp')/('card-probe-'+str(time.time_ns())+'.json')
-  params.write_text(json.dumps({'commands':[command],'executionTimeout':[str(timeout)]}))
-  cid=subprocess.check_output(['aws','ssm','send-command','--instance-ids',INSTANCE,'--document-name','AWS-RunShellScript',
-    '--parameters','file://'+str(params),'--comment','Isolated V2 card model replay; no fan or production writes',
-    '--query','Command.CommandId','--output','text'],text=True).strip()
-  print(json.dumps({'commandId':cid}),flush=True)
-  for _ in range(timeout//5+25):
-    try:r=json.loads(subprocess.check_output(['aws','ssm','get-command-invocation','--command-id',cid,'--instance-id',INSTANCE,'--output','json'],text=True,stderr=subprocess.DEVNULL))
-    except subprocess.CalledProcessError:time.sleep(5);continue
-    if r['Status'] in ['Success','Failed','Cancelled','TimedOut']:break
-    time.sleep(5)
-  else:raise RuntimeError('SSM command incomplete')
-  if r['Status']!='Success':raise RuntimeError('SSM '+r['Status']+': '+r.get('StandardErrorContent','')[-700:])
-  return r.get('StandardOutputContent','')
 
-result={'status':'not-started','candidate':'d6058dcd05dc1cb2646a516fcb1aabf152a280be','workflowRun':os.environ.get('GITHUB_RUN_ID'),'fanMessages':0,'purchases':0,'productionWrites':0}
-try:
-  paths=[]
-  for filename in ['reply-outcomes-candidate.patch','run-reply-outcomes-candidate.py','simulate-reply-outcomes.mjs']:
-    raw=(ROOT/filename).read_bytes();remote='/tmp/twin-card-'+nonce+'-'+filename
-    encoded=base64.b64encode(gzip.compress(raw,mtime=0)).decode()
-    program="import base64,gzip,hashlib,pathlib;raw=gzip.decompress(base64.b64decode("+repr(encoded)+"));assert hashlib.sha256(raw).hexdigest()=="+repr(hashlib.sha256(raw).hexdigest())+";pathlib.Path("+repr(remote)+").write_bytes(raw)"
-    ssm('python3 -c '+shlex.quote(program),90)
-    paths.append(remote)
-  ssm('python3 '+shlex.quote(paths[1])+' '+shlex.quote(paths[0])+' '+shlex.quote(nonce)+' '+shlex.quote(paths[2]),1400)
-  host="import base64,gzip,json,pathlib;p=pathlib.Path('/home/ubuntu/twin-v2-validation/reply-outcomes-candidate-"+nonce+"/summary.json');assert p.is_file(),'candidate summary missing';print('CARD_RESULT_BASE64 '+base64.b64encode(gzip.compress(p.read_bytes(),mtime=0)).decode())"
-  output=ssm('python3 -c '+shlex.quote(host),60)
-  line=next(x for x in output.splitlines() if x.startswith('CARD_RESULT_BASE64 '))
-  result=json.loads(gzip.decompress(base64.b64decode(line.split(' ',1)[1])))
-  result['status']='complete';result['workflowRun']=os.environ.get('GITHUB_RUN_ID')
-except Exception as exc:
-  result.update(status='validation-failed',error=str(exc)[-1000:])
+def ssm(command: str, timeout: int = 90) -> str:
+    params = pathlib.Path("/tmp") / f"reply-detail-{time.time_ns()}.json"
+    params.write_text(json.dumps({"commands": [command], "executionTimeout": [str(timeout)]}))
+    command_id = subprocess.check_output([
+        "aws", "ssm", "send-command", "--instance-ids", INSTANCE,
+        "--document-name", "AWS-RunShellScript", "--parameters", f"file://{params}",
+        "--comment", "Read retained isolated V2 failed turn; no production writes",
+        "--query", "Command.CommandId", "--output", "text",
+    ], text=True).strip()
+    print(json.dumps({"commandId": command_id}), flush=True)
+    for _ in range(timeout // 3 + 20):
+        try:
+            result = json.loads(subprocess.check_output([
+                "aws", "ssm", "get-command-invocation", "--command-id", command_id,
+                "--instance-id", INSTANCE, "--output", "json",
+            ], text=True, stderr=subprocess.DEVNULL))
+        except subprocess.CalledProcessError:
+            time.sleep(3)
+            continue
+        if result["Status"] in {"Success", "Failed", "Cancelled", "TimedOut"}:
+            break
+        time.sleep(3)
+    else:
+        raise RuntimeError("SSM command incomplete")
+    if result["Status"] != "Success":
+        raise RuntimeError(f"SSM {result['Status']}: {result.get('StandardErrorContent', '')[-700:]}")
+    return result.get("StandardOutputContent", "")
 
-token=os.environ['GITHUB_TOKEN']
-url='https://api.github.com/repos/jesse98/twin-dashboard/contents/docs/reply-outcomes-candidate-v4-results.json'
-body=json.dumps({'message':'Record isolated V2 card candidate result [skip ci]','branch':BRANCH,
-  'content':base64.b64encode((json.dumps(result,indent=2)+'\n').encode()).decode()}).encode()
-req=urllib.request.Request(url,data=body,method='PUT',headers={'Authorization':'Bearer '+token,'Accept':'application/vnd.github+json','Content-Type':'application/json'})
-with urllib.request.urlopen(req,timeout=30) as response:assert response.status==201,'Evidence commit failed'
-print('CARD_RESULT_STATUS '+json.dumps({k:result.get(k) for k in ['status','cases','requests','failed','modelCost','error','productionWrites']}),flush=True)
-if result['status']!='complete' or result.get('failed') or not result.get('promptDisplayConsistent') or any(x.get('fatal') for x in result.get('creators',[])):sys.exit(1)
+
+remote = r'''import base64,json,pathlib
+p=pathlib.Path(%r)
+turns=json.loads(p.read_text())
+t=next(x for x in turns if x.get("case")=="business-new-after-refusal")
+r=t.get("row",{})
+detail={
+ "case":t.get("case"),
+ "before":{"photo":t.get("before",{}).get("photo"),"sent":t.get("before",{}).get("sent")},
+ "row":{k:r.get(k) for k in ["fanText","raw","selection","selectionError","menu","note","generated","grounding","selectedMedia","media","final","delivery","photoAlternative"]},
+ "after":{"photo":t.get("after",{}).get("photo"),"sent":t.get("after",{}).get("sent")},
+ "calls":t.get("calls",[]),
+}
+print("DETAIL_BASE64 "+base64.b64encode((json.dumps(detail,indent=2)+"\n").encode()).decode())''' % SOURCE
+output = ssm("python3 -c " + shlex.quote(remote))
+line = next(x for x in output.splitlines() if x.startswith("DETAIL_BASE64 "))
+detail_bytes = base64.b64decode(line.split(" ", 1)[1])
+
+token = os.environ["GITHUB_TOKEN"]
+url = "https://api.github.com/repos/jesse98/twin-dashboard/contents/docs/reply-outcomes-candidate-v4-failure-detail.json"
+body = json.dumps({
+    "message": "Record retained Cat Chase replay failure detail [skip ci]",
+    "branch": BRANCH,
+    "content": base64.b64encode(detail_bytes).decode(),
+}).encode()
+request = urllib.request.Request(url, data=body, method="PUT", headers={
+    "Authorization": f"Bearer {token}",
+    "Accept": "application/vnd.github+json",
+    "Content-Type": "application/json",
+})
+with urllib.request.urlopen(request, timeout=30) as response:
+    assert response.status == 201, "Evidence commit failed"
+print("DETAIL_RECORDED", flush=True)
