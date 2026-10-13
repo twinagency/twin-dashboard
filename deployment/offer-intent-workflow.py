@@ -3,7 +3,7 @@ import base64,gzip,json,os,pathlib,shlex,subprocess,sys,time,urllib.error,urllib
 INSTANCE='i-0584d283506f3f6be'
 BRANCH=os.environ['GITHUB_REF_NAME']
 PHASE=os.environ.get('OFFER_PHASE','prepare')
-RECEIPT='docs/offer-intent-'+('prepared' if PHASE=='prepare' else 'deployed')+'-20261014.json'
+RECEIPT='docs/gift-currency-'+('prepared' if PHASE=='prepare' else 'deployed')+'-20261014.json'
 def ssm(command,timeout=120):
     p=pathlib.Path('/tmp')/('card-ref-'+str(time.time_ns())+'.json')
     p.write_text(json.dumps({'commands':[command],'executionTimeout':[str(timeout)]}))
@@ -41,7 +41,7 @@ try:
     else:
         script=pathlib.Path('deployment/deploy-offer-intent.py').read_text()
         compile(script,'deploy-offer-intent.py','exec')
-        backup='/home/ubuntu/twin-v2-backups/offer-baseline-e668afb-1791927714416647068'
+        backup='__PREPARED_BACKUP__'
         code='import pathlib,sys;p=pathlib.Path('+repr(backup) + ')/"deploy-offer-intent.py";p.write_text('+repr(script)+');p.chmod(0o600);sys.argv=[str(p)];exec(compile('+repr(script)+',str(p),"exec"))'
         output=ssm('python3 -c '+shlex.quote(code),600)
         prefix='REPLY_RELEASE_DEPLOYED_JSON '
