@@ -203,6 +203,7 @@ assert.match(lynqNavigation, />CRM</);
 assert.match(lynqNavigation, /aria-expanded="false"/);
 assert.doesNotMatch(lynqNavigation, /AI Intelligence Core|href="\/info"/);
 for (const mobile of [false, true]) {
+  pathname = "/dashboard";
   const admin = render(undefined, false, clone, mobile);
   assert.doesNotMatch(admin, />CRM<|href="\/crm\//, "Internal admin navigation has no CRM group");
   assert.match(admin, /data-admin-navigation="grouped"/);
@@ -228,7 +229,7 @@ for (const mobile of [false, true]) {
     "Inbox": ["/inbox", "/users"],
     "Content Library": ["/content-library", `/clones/${clone}?tab=ppvs`, "/business"],
     Automations: ["/flows", "/sequences"],
-    Performance: ["/revenue", "/sales-health", "/catalogue-funnel"],
+    Performance: ["/sales-health", "/catalogue-funnel"],
     "Agency Access": ["/agency-admin", "/agency/creators"],
     "Core Intelligence": ["/jarvis", "/ai-models"],
     Settings: ["/settings", "/admin/earnings-split"],
@@ -236,8 +237,9 @@ for (const mobile of [false, true]) {
   })) for (const href of hrefs) assert.ok(Array.from(group(name).querySelectorAll("a")).some((a: any) => a.getAttribute("href") === href), `${href} belongs to ${name}`);
   const hrefs = Array.from(document.querySelectorAll('nav[aria-label="Main navigation"] a')).map((a: any) => a.getAttribute("href"));
   assert.equal(new Set(hrefs).size, hrefs.length, "Each destination appears once");
-  assert.deepEqual(renderedLinks(admin).filter(link => /aria-current="page"/.test(link.attributes)).map(link => link.label), ["Earnings"]);
-  assert.ok(admin.includes('href="/dashboard"'), "Dashboard stays separate from the existing earnings page");
+  assert.deepEqual(renderedLinks(admin).filter(link => /aria-current="page"/.test(link.attributes)).map(link => link.label), ["Dashboard"]);
+  assert.ok(admin.includes('href="/dashboard"'));
+  assert.ok(!admin.includes('href="/revenue"'), "Internal earnings is consolidated in Dashboard");
 
 }
 for (const agencyName of ["Moxy", "LYNQ", portals.JESS_KATE_PORTAL.name, portals.TETHER_PORTAL.name]) {
@@ -250,8 +252,8 @@ for (const mobile of [false, true]) {
     for (const selected of [null, "briana", "riley", "kyla"]) {
       query = new URLSearchParams(selected ? `creator=${selected}` : "");
       const configuration = renderedLinks(render(undefined, false, scope, mobile)).find(link => link.label === "Creator Configuration");
-      assert.ok(configuration, "Configuration is a working link even without the unmounted global creator picker");
-      assert.equal(configuration.href, selected === "riley" || selected === "kyla" ? "/clones" : "/clones/0328e7b3-a1e5-465a-9a30-c9cf6519cba1?tab=identity", "Dashboard selection wins over empty or unrelated live scope");
+      if (scope) assert.equal(configuration?.href, `/clones/${scope}?tab=identity`, "Live scope determines configuration, ignoring old demo query parameters");
+      else assert.equal(configuration, undefined, "All creators uses the mounted live creator picker");
     }
   }
 }

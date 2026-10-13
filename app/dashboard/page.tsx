@@ -2,20 +2,16 @@ import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
 import { hasInternalAdminAccess } from "@/lib/internal-admin";
 import { activeViewAs } from "@/lib/view-as";
-import CreatorDashboard from "@/components/dashboard/CreatorDashboard";
-import { parseFilters } from "@/components/dashboard/model";
-import { creators, authoredFans } from "@/components/fans/data";
+import { getCloneScope } from "@/lib/clone-scope";
+import { getFleetClones } from "@/lib/query-cache";
+import LiveDashboardOverview from "@/components/dashboard/LiveDashboardOverview";
+import RevenueTooltipFix from "@/components/RevenueTooltipFix";
 
 export const dynamic = "force-dynamic";
 
-export default async function DashboardPage({ searchParams }: {
-  searchParams: Promise<Record<string, string | string[] | undefined>>;
-}) {
+export default async function DashboardPage() {
   if (!await hasInternalAdminAccess()) redirect("/twin");
   if (await activeViewAs(await cookies())) redirect("/revenue");
-  const query = new URLSearchParams();
-  for (const [key, value] of Object.entries(await searchParams)) {
-    if (typeof value === "string") query.set(key, value);
-  }
-  return <CreatorDashboard creators={creators} fans={authoredFans} includeBriannaLedger initialFilters={parseFilters(query, creators)} />;
+  const [cloneId, clones] = await Promise.all([getCloneScope(), getFleetClones()]);
+  return <><RevenueTooltipFix /><LiveDashboardOverview key={cloneId ?? "all"} cloneId={cloneId} clones={clones} /></>;
 }
