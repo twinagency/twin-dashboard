@@ -1,50 +1,46 @@
-"""One isolated real-model fleet replay, with result committed to this diagnostic branch."""
-import base64,gzip,hashlib,json,os,pathlib,shlex,subprocess,sys,time,urllib.request
+"""Read saved synthetic model flags from the completed candidate replay; no model or production writes."""
+import base64,gzip,json,os,pathlib,shlex,subprocess,time,urllib.request
 
 INSTANCE='i-0584d283506f3f6be'
 BRANCH='codex/v2-card-model-validation-v2-20261013'
-ROOT=pathlib.Path('deployment/v2-photo-recovery')
-nonce=str(time.time_ns())
-
-def ssm(command,timeout):
-  params=pathlib.Path('/tmp')/('card-probe-'+str(time.time_ns())+'.json')
-  params.write_text(json.dumps({'commands':[command],'executionTimeout':[str(timeout)]}))
-  cid=subprocess.check_output(['aws','ssm','send-command','--instance-ids',INSTANCE,'--document-name','AWS-RunShellScript',
-    '--parameters','file://'+str(params),'--comment','Isolated V2 card model replay; no fan or production writes',
-    '--query','Command.CommandId','--output','text'],text=True).strip()
-  print(json.dumps({'commandId':cid}),flush=True)
-  for _ in range(timeout//5+25):
-    try:r=json.loads(subprocess.check_output(['aws','ssm','get-command-invocation','--command-id',cid,'--instance-id',INSTANCE,'--output','json'],text=True,stderr=subprocess.DEVNULL))
-    except subprocess.CalledProcessError:time.sleep(5);continue
-    if r['Status'] in ['Success','Failed','Cancelled','TimedOut']:break
-    time.sleep(5)
-  else:raise RuntimeError('SSM command incomplete')
-  if r['Status']!='Success':raise RuntimeError('SSM '+r['Status']+': '+r.get('StandardErrorContent','')[-700:])
-  return r.get('StandardOutputContent','')
-
-result={'status':'not-started','candidate':'cae54ad62434d6f804ddb9d81b5da51e89fde506','workflowRun':os.environ.get('GITHUB_RUN_ID'),'fanMessages':0,'purchases':0,'productionWrites':0}
-try:
-  paths=[]
-  for filename in ['existing-card-candidate-v2.patch','run-existing-card-candidate-v2.py']:
-    raw=(ROOT/filename).read_bytes();remote='/tmp/twin-card-'+nonce+'-'+filename
-    encoded=base64.b64encode(gzip.compress(raw,mtime=0)).decode()
-    program="import base64,gzip,hashlib,pathlib;raw=gzip.decompress(base64.b64decode("+repr(encoded)+"));assert hashlib.sha256(raw).hexdigest()=="+repr(hashlib.sha256(raw).hexdigest())+";pathlib.Path("+repr(remote)+").write_bytes(raw)"
-    ssm('python3 -c '+shlex.quote(program),90)
-    paths.append(remote)
-  ssm('python3 '+shlex.quote(paths[1])+' '+shlex.quote(paths[0])+' '+shlex.quote(nonce),1400)
-  host="import base64,gzip,json,pathlib;p=pathlib.Path('/home/ubuntu/twin-v2-validation/existing-card-candidate-"+nonce+"/summary.json');assert p.is_file(),'candidate summary missing';print('CARD_RESULT_BASE64 '+base64.b64encode(gzip.compress(p.read_bytes(),mtime=0)).decode())"
-  output=ssm('python3 -c '+shlex.quote(host),60)
-  line=next(x for x in output.splitlines() if x.startswith('CARD_RESULT_BASE64 '))
-  result=json.loads(gzip.decompress(base64.b64decode(line.split(' ',1)[1])))
-  result['status']='complete';result['workflowRun']=os.environ.get('GITHUB_RUN_ID')
-except Exception as exc:
-  result.update(status='validation-failed',error=str(exc)[-1000:])
-
-token=os.environ['GITHUB_TOKEN']
-url='https://api.github.com/repos/jesse98/twin-dashboard/contents/docs/existing-card-candidate-v2-results.json'
-body=json.dumps({'message':'Record isolated V2 card candidate result [skip ci]','branch':BRANCH,
+host=r'''
+import base64,gzip,json,pathlib
+work=pathlib.Path('/home/ubuntu/twin-v2-validation/existing-card-candidate-1791886409126200455')
+summary=json.loads((work/'summary.json').read_text())
+assert summary['candidate']=='cae54ad62434d6f804ddb9d81b5da51e89fde506'
+rows={}
+for flag in summary['flaggedTurns']:
+ slug,case=flag['slug'],flag['case']
+ if slug not in rows:rows[slug]={t['case']:t['row'] for t in json.loads((work/slug/'turns.private.json').read_text())}
+assert all(f['case'] in rows[f['slug']] for f in summary['flaggedTurns'])
+result=[{'slug':f['slug'],'case':f['case'],'flags':f['flags'],
+         'input':rows[f['slug']][f['case']].get('fanText'),
+         'raw':rows[f['slug']][f['case']].get('raw'),
+         'final':rows[f['slug']][f['case']].get('final'),
+         'note':rows[f['slug']][f['case']].get('note'),
+         'delivery':rows[f['slug']][f['case']].get('delivery')}
+        for f in summary['flaggedTurns']]
+print('CARD_FLAGS_BASE64 '+base64.b64encode(gzip.compress(json.dumps({'candidate':summary['candidate'],'cases':result}).encode(),mtime=0)).decode(),flush=True)
+'''
+payload=base64.b64encode(gzip.compress(host.encode(),mtime=0)).decode()
+program="import base64,gzip;exec(compile(gzip.decompress(base64.b64decode("+repr(payload)+")),'<card-flags-readonly>','exec'))"
+params=pathlib.Path('/tmp')/('card-flags-'+str(time.time_ns())+'.json')
+params.write_text(json.dumps({'commands':['python3 -c '+shlex.quote(program)],'executionTimeout':['90']}))
+cid=subprocess.check_output(['aws','ssm','send-command','--instance-ids',INSTANCE,'--document-name','AWS-RunShellScript',
+  '--parameters','file://'+str(params),'--comment','Read synthetic V2 card flags; no model call or production write',
+  '--query','Command.CommandId','--output','text'],text=True).strip()
+for _ in range(36):
+ try:r=json.loads(subprocess.check_output(['aws','ssm','get-command-invocation','--command-id',cid,'--instance-id',INSTANCE,'--output','json'],text=True,stderr=subprocess.DEVNULL))
+ except subprocess.CalledProcessError:time.sleep(3);continue
+ if r['Status'] in ['Success','Failed','Cancelled','TimedOut']:break
+ time.sleep(3)
+else:raise RuntimeError('Flag read incomplete')
+if r['Status']!='Success':raise RuntimeError('Flag read '+r['Status']+': '+r.get('StandardErrorContent','')[-600:])
+line=next(x for x in r['StandardOutputContent'].splitlines() if x.startswith('CARD_FLAGS_BASE64 '))
+result=json.loads(gzip.decompress(base64.b64decode(line.split(' ',1)[1])))
+url='https://api.github.com/repos/jesse98/twin-dashboard/contents/docs/existing-card-candidate-v2-flags.json'
+body=json.dumps({'message':'Record bounded synthetic model flag evidence [skip ci]','branch':BRANCH,
   'content':base64.b64encode((json.dumps(result,indent=2)+'\n').encode()).decode()}).encode()
-req=urllib.request.Request(url,data=body,method='PUT',headers={'Authorization':'Bearer '+token,'Accept':'application/vnd.github+json','Content-Type':'application/json'})
-with urllib.request.urlopen(req,timeout=30) as response:assert response.status==201,'Evidence commit failed'
-print('CARD_RESULT_STATUS '+json.dumps({k:result.get(k) for k in ['status','cases','requests','failed','modelCost','error','productionWrites']}),flush=True)
-if result['status']!='complete' or result.get('failed') or any(x.get('fatal') for x in result.get('creators',[])):sys.exit(1)
+req=urllib.request.Request(url,data=body,method='PUT',headers={'Authorization':'Bearer '+os.environ['GITHUB_TOKEN'],'Accept':'application/vnd.github+json','Content-Type':'application/json'})
+with urllib.request.urlopen(req,timeout=20) as response:assert response.status==201
+print('CARD_FLAGS_SAVED '+json.dumps({'cases':len(result['cases'])}),flush=True)
