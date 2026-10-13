@@ -1,6 +1,6 @@
 """Isolated shared repair verification. Never replaces a live container or writes production data."""
 import base64,datetime,hashlib,json,os,pathlib,subprocess,tempfile,time
-SHA="261425d4992fe821ca5b7e9b1657db879bad4700"
+SHA="5e789f1d23bf63f91643760537600c077b646356"
 IMAGE='sha256:9649329a00bd20fe06499f8238e1e51713381521af00d4cdc67505e1064f724a'
 REVISION='86b0ad199ea33fd7855f1c0dd54cc355f706e7f5'
 stage=pathlib.Path(__file__).parent
@@ -22,11 +22,11 @@ for row in payload['entries']:
  p=pathlib.PurePosixPath(row['path']);assert not p.is_absolute() and '..' not in p.parts
  target=source/str(p);target.parent.mkdir(parents=True,exist_ok=True);target.write_text(row['content'])
  assert hashlib.sha256(target.read_bytes()).hexdigest()==manifest[str(p)],'Candidate byte mismatch'
-r=subprocess.run(['docker','exec','-i','twin-v2-bot-1','node','--import','tsx','--input-type=module'],input=EXTRACT,text=True,capture_output=True,timeout=150)
-(root/'fixture-extractor.stderr.private.txt').write_text(r.stderr)
-assert r.returncode==0,'Evidence extraction failed; private diagnostics retained'
-fixture=root/'fixture';fixture.mkdir();evidence=json.loads(next(x for x in r.stdout.splitlines() if x.startswith('{"preparedAt"')))
-(fixture/'evidence.json').write_text(json.dumps(evidence));(fixture/'evidence.json').chmod(0o600)
+saved=pathlib.Path('/home/ubuntu/twin-v2-validation/shared-261425d4992f-1791870512342035655/fixture/evidence.json')
+raw=saved.read_bytes()
+assert hashlib.sha256(raw).hexdigest()=='8cdfa9759e9643a0668d9f289579b8158948bf0bae988e0b2d2939fe47064361','Frozen evidence changed'
+fixture=root/'fixture';fixture.mkdir();evidence=json.loads(raw)
+(fixture/'evidence.json').write_bytes(raw);(fixture/'evidence.json').chmod(0o600)
 output=root/'output';output.mkdir(mode=0o700)
 mounts=[]
 for row in payload['entries']:

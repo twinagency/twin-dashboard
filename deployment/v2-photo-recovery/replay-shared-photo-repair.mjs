@@ -52,10 +52,10 @@ async function say(s,name,input,rules={}){
   noVisibilityPromise:!/should be right there|must be.*chat/.test(text),
   completeCleanup:!/rather u just$/.test(text),oneMediaAction:media.length<=1,
   noJSONLeak:!/"selection"|"reply"/.test(text)};
- if(rules.photo)checks.requiredPhoto=!!row.media&&row.media.kind==='photo';
+ if(rules.photo)checks.requiredPhoto=rules.timeout?row.selectedMedia?.kind==='photo'&&media.length===1:!!row.media&&row.media.kind==='photo';
  if(rules.noMedia)checks.noMedia=media.length===0&&!row.selectedMedia;
  if(rules.ackKey)checks.exactReference=row.selectedMedia?.key===rules.ackKey&&row.media?.key===rules.ackKey;
- if(rules.different)checks.differentFile=!!row.media&&row.media.key!==rules.different;
+ if(rules.different)checks.differentFile=rules.timeout?!!row.selectedMedia&&row.selectedMedia.key!==rules.different:!!row.media&&row.media.key!==rules.different;
  if(rules.requiredChoices)checks.requiredPhotoChoices=Array.isArray(choices)&&choices.length>0&&choices.every(x=>/^photo [1-9]|^free photo$/.test(x));
  if(rules.generic)checks.genericNotAlternative=!row.photoAlternative;
  if(row.selectedMedia){
@@ -64,7 +64,7 @@ async function say(s,name,input,rules={}){
   checks.slotIdentity=!!slot&&slot.key===item?.key;
   checks.freshDownload=s.downloads.slice(dl).some(x=>x.key===item?.key&&x.path===item?.storagePath);
   checks.correctPrice=row.selectedMedia.free?row.media?.stars===0:media[0]?.payload.star_count===priceFor(item?.stars,{cloneId:s.profile.id,telegramId:ID,kind:item?.kind});
-  checks.captionMatches=media[0]?.payload.caption===trimCaption(prepared);
+  checks.captionMatches=(media[0]?.payload.caption??'')===trimCaption(prepared);
   checks.receiptMatches=rules.timeout?row.delivery.media.status==='unknown'&&actual.photo.status==='unknown':row.delivery.media.status==='acknowledged'&&actual.photo?.key===item?.key;
   if(row.photoAlternative)checks.truthfulAlternative=prepared.startsWith(ALTERNATIVE_PHOTO_CAPTION);
   if(rules.owned)checks.ownedUnlocked=row.media?.free===true&&media[0]?.method==='sendPhoto';
