@@ -1,0 +1,23 @@
+name: RCY07 authorized conversation reset
+on:
+  push:
+    branches: [codex/rcy07-first-chat-reset-20261013]
+    paths: ['deployment/rcy07-reset-access.py', '.github/workflows/rcy07-reset.yml']
+permissions:
+  contents: read
+concurrency:
+  group: rcy07-authorized-reset
+  cancel-in-progress: false
+jobs:
+  inspect:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-southeast-2
+      - name: Scoped RCY07 account operation
+        run: python3 deployment/rcy07-reset-access.py
