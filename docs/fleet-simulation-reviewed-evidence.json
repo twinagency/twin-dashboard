@@ -1,0 +1,2140 @@
+{
+  "scope": "One bounded isolated pass across all 20 active clones; no production repair or deployment",
+  "snapshotAt": "2026-10-13T07:51:31.135Z",
+  "postSettings": {
+    "at": "2026-10-13T08:12:31.764029+00:00",
+    "changed": [],
+    "profiles": [
+      {
+        "slug": "alanna-pow",
+        "engine": "v2",
+        "status": "active"
+      },
+      {
+        "slug": "allison-parker",
+        "engine": "v2",
+        "status": "active"
+      },
+      {
+        "slug": "autumn-renae",
+        "engine": "live",
+        "status": "active"
+      },
+      {
+        "slug": "bethany-marquez",
+        "engine": "v2",
+        "status": "active"
+      },
+      {
+        "slug": "briana-redd",
+        "engine": "v2",
+        "status": "active"
+      },
+      {
+        "slug": "cat-chase",
+        "engine": "v2",
+        "status": "active"
+      },
+      {
+        "slug": "dakota-lyn",
+        "engine": "v2",
+        "status": "active"
+      },
+      {
+        "slug": "dan-dangler",
+        "engine": "live",
+        "status": "active"
+      },
+      {
+        "slug": "dreka-cakez",
+        "engine": "v2",
+        "status": "active"
+      },
+      {
+        "slug": "fit-sid",
+        "engine": "v2",
+        "status": "active"
+      },
+      {
+        "slug": "hazey-haley",
+        "engine": "live",
+        "status": "active"
+      },
+      {
+        "slug": "kyla-yesenosky",
+        "engine": "v2",
+        "status": "active"
+      },
+      {
+        "slug": "mrs-callace",
+        "engine": "v2",
+        "status": "active"
+      },
+      {
+        "slug": "olivia-jade",
+        "engine": "v2",
+        "status": "active"
+      },
+      {
+        "slug": "riley-mae-lewis",
+        "engine": "v2",
+        "status": "active"
+      },
+      {
+        "slug": "sania-mallory",
+        "engine": "v2",
+        "status": "active"
+      },
+      {
+        "slug": "tammy",
+        "engine": "v2",
+        "status": "active"
+      },
+      {
+        "slug": "toochi",
+        "engine": "v2",
+        "status": "active"
+      },
+      {
+        "slug": "trashy",
+        "engine": "v2",
+        "status": "active"
+      },
+      {
+        "slug": "tru-kait",
+        "engine": "v2",
+        "status": "active"
+      }
+    ]
+  },
+  "runtime": [
+    {
+      "name": "twin-v2-bot-1",
+      "image": "sha256:dff48242b35b94e7b0e757ee4b7778a11958ef85b231b5fdb369542902e325f9",
+      "revision": "2f24f023c0cf46bea1c3b3b334458cf1a5df265e",
+      "running": true,
+      "bundlesSetting": "off"
+    },
+    {
+      "name": "twin-v2-dash-1",
+      "image": "sha256:dff48242b35b94e7b0e757ee4b7778a11958ef85b231b5fdb369542902e325f9",
+      "revision": "2f24f023c0cf46bea1c3b3b334458cf1a5df265e",
+      "running": true,
+      "bundlesSetting": null
+    },
+    {
+      "name": "next-app",
+      "image": "sha256:f9618c70eb79abd38cce8991f47b4a6b11f19b7d28eb7d3886baa0a4e5b368ab",
+      "revision": "caa2a94ee519eb84d25b6c77023f732e8fed7b36",
+      "running": true,
+      "bundlesSetting": null
+    }
+  ],
+  "testCommits": {
+    "V2": "c350ee50992178a21f9610a8ea0062e94c7e9901",
+    "V1": "8d1bb69945021c63d5b44190315c3c774ed48d8c",
+    "V1FixturePermissionCorrection": "8cabab442210698f54058d13889edefa72903f79",
+    "evidenceReader": "d06e0783532a26948fa597f3ef916cbbd270f369"
+  },
+  "V2": {
+    "cases": 464,
+    "modelCalls": 464,
+    "automatedPassCases": 413,
+    "automatedFailedCases": 51,
+    "rawFlaggedCases": 34,
+    "failuresByScenario": {
+      "business-card-acceptance": 16,
+      "business-card-description": 14,
+      "business-card-price": 7,
+      "ordinary-card-price": 14
+    },
+    "rawFlags": {
+      "possible_visibility_claim": 22,
+      "model_quoted_item_price": 15,
+      "alternative_in_nonvisual_context": 2,
+      "empty_final_reply": 4
+    },
+    "creators": [
+      {
+        "slug": "alanna-pow",
+        "cases": 27,
+        "requests": 27,
+        "failedCases": 4,
+        "flaggedCases": 1,
+        "fatal": null,
+        "promptDisplayConsistent": true
+      },
+      {
+        "slug": "allison-parker",
+        "cases": 27,
+        "requests": 27,
+        "failedCases": 0,
+        "flaggedCases": 0,
+        "fatal": null,
+        "promptDisplayConsistent": true
+      },
+      {
+        "slug": "bethany-marquez",
+        "cases": 27,
+        "requests": 27,
+        "failedCases": 3,
+        "flaggedCases": 2,
+        "fatal": null,
+        "promptDisplayConsistent": true
+      },
+      {
+        "slug": "briana-redd",
+        "cases": 27,
+        "requests": 27,
+        "failedCases": 3,
+        "flaggedCases": 2,
+        "fatal": null,
+        "promptDisplayConsistent": true
+      },
+      {
+        "slug": "cat-chase",
+        "cases": 27,
+        "requests": 27,
+        "failedCases": 2,
+        "flaggedCases": 0,
+        "fatal": null,
+        "promptDisplayConsistent": true
+      },
+      {
+        "slug": "dakota-lyn",
+        "cases": 27,
+        "requests": 27,
+        "failedCases": 4,
+        "flaggedCases": 4,
+        "fatal": null,
+        "promptDisplayConsistent": true
+      },
+      {
+        "slug": "dreka-cakez",
+        "cases": 27,
+        "requests": 27,
+        "failedCases": 2,
+        "flaggedCases": 4,
+        "fatal": null,
+        "promptDisplayConsistent": true
+      },
+      {
+        "slug": "fit-sid",
+        "cases": 27,
+        "requests": 27,
+        "failedCases": 3,
+        "flaggedCases": 5,
+        "fatal": null,
+        "promptDisplayConsistent": true
+      },
+      {
+        "slug": "kyla-yesenosky",
+        "cases": 27,
+        "requests": 27,
+        "failedCases": 3,
+        "flaggedCases": 3,
+        "fatal": null,
+        "promptDisplayConsistent": true
+      },
+      {
+        "slug": "mrs-callace",
+        "cases": 27,
+        "requests": 27,
+        "failedCases": 3,
+        "flaggedCases": 1,
+        "fatal": null,
+        "promptDisplayConsistent": true
+      },
+      {
+        "slug": "olivia-jade",
+        "cases": 27,
+        "requests": 27,
+        "failedCases": 3,
+        "flaggedCases": 0,
+        "fatal": null,
+        "promptDisplayConsistent": true
+      },
+      {
+        "slug": "riley-mae-lewis",
+        "cases": 32,
+        "requests": 32,
+        "failedCases": 3,
+        "flaggedCases": 4,
+        "fatal": null,
+        "promptDisplayConsistent": true
+      },
+      {
+        "slug": "sania-mallory",
+        "cases": 27,
+        "requests": 27,
+        "failedCases": 4,
+        "flaggedCases": 2,
+        "fatal": null,
+        "promptDisplayConsistent": true
+      },
+      {
+        "slug": "tammy",
+        "cases": 27,
+        "requests": 27,
+        "failedCases": 4,
+        "flaggedCases": 1,
+        "fatal": null,
+        "promptDisplayConsistent": true
+      },
+      {
+        "slug": "toochi",
+        "cases": 27,
+        "requests": 27,
+        "failedCases": 3,
+        "flaggedCases": 2,
+        "fatal": null,
+        "promptDisplayConsistent": true
+      },
+      {
+        "slug": "trashy",
+        "cases": 27,
+        "requests": 27,
+        "failedCases": 4,
+        "flaggedCases": 1,
+        "fatal": null,
+        "promptDisplayConsistent": true
+      },
+      {
+        "slug": "tru-kait",
+        "cases": 27,
+        "requests": 27,
+        "failedCases": 3,
+        "flaggedCases": 2,
+        "fatal": null,
+        "promptDisplayConsistent": true
+      }
+    ],
+    "originalFlaggedOrFailedCases": [
+      {
+        "slug": "alanna-pow",
+        "case": "business-card-acceptance",
+        "input": "Yes, I want to see that one",
+        "failed": [
+          "no_unrequested_media"
+        ],
+        "flags": [],
+        "selection": "photo 2",
+        "key": "photo:900ef624-7d68-42bd-b80c-fbd745c8b1de",
+        "priorKey": "photo:86c8d0f7-4c95-47df-9ea1-cb73e8c7b2ed",
+        "free": false,
+        "stars": 800,
+        "modelCalls": 1
+      },
+      {
+        "slug": "alanna-pow",
+        "case": "business-card-description",
+        "input": "What is in the photo you just sent?",
+        "failed": [
+          "no_unrequested_media"
+        ],
+        "flags": [],
+        "selection": "photo 1",
+        "key": "photo:4e584b97-f9d9-4d22-aad1-90df0b8eccd3",
+        "priorKey": "photo:900ef624-7d68-42bd-b80c-fbd745c8b1de",
+        "free": false,
+        "stars": 900,
+        "modelCalls": 1
+      },
+      {
+        "slug": "alanna-pow",
+        "case": "business-card-price",
+        "input": "How many Stars is that photo?",
+        "failed": [
+          "no_unrequested_media"
+        ],
+        "flags": [],
+        "selection": "photo 1",
+        "key": "photo:3e06918e-ff3b-4812-8651-dd645f3a427b",
+        "priorKey": "photo:4e584b97-f9d9-4d22-aad1-90df0b8eccd3",
+        "free": false,
+        "stars": 700,
+        "modelCalls": 1
+      },
+      {
+        "slug": "alanna-pow",
+        "case": "ordinary-card-price",
+        "input": "What does that photo cost?",
+        "failed": [
+          "no_unrequested_media"
+        ],
+        "flags": [],
+        "selection": "photo 2",
+        "key": "photo:4982b78b-809b-4724-ad3b-2b08ceb948ef",
+        "priorKey": "photo:974ac0ff-b5d4-4e5c-bfd0-e11a2a707541",
+        "free": false,
+        "stars": 800,
+        "modelCalls": 1
+      },
+      {
+        "slug": "alanna-pow",
+        "case": "ordinary-ownership-failure",
+        "input": "Send that same photo again",
+        "failed": [],
+        "flags": [
+          "possible_visibility_claim"
+        ],
+        "selection": "none",
+        "key": null,
+        "priorKey": "photo:4982b78b-809b-4724-ad3b-2b08ceb948ef",
+        "free": null,
+        "stars": null,
+        "modelCalls": 1
+      },
+      {
+        "slug": "bethany-marquez",
+        "case": "business-card-acceptance",
+        "input": "Yes, I want to see that one",
+        "failed": [
+          "no_unrequested_media"
+        ],
+        "flags": [],
+        "selection": "photo 1",
+        "key": "photo:5ce89c9b-9fa3-47f2-88da-c3ec3af1c130",
+        "priorKey": "photo:f43a3a69-0770-461a-a60b-5f62e7a86b7f",
+        "free": false,
+        "stars": 600,
+        "modelCalls": 1
+      },
+      {
+        "slug": "bethany-marquez",
+        "case": "business-card-description",
+        "input": "What is in the photo you just sent?",
+        "failed": [
+          "no_unrequested_media"
+        ],
+        "flags": [],
+        "selection": "photo 3",
+        "key": "photo:d6ebadc4-230b-473b-9ea5-406fd30495f5",
+        "priorKey": "photo:5ce89c9b-9fa3-47f2-88da-c3ec3af1c130",
+        "free": false,
+        "stars": 840,
+        "modelCalls": 1
+      },
+      {
+        "slug": "bethany-marquez",
+        "case": "business-card-price",
+        "input": "How many Stars is that photo?",
+        "failed": [],
+        "flags": [
+          "model_quoted_item_price"
+        ],
+        "selection": "none",
+        "key": null,
+        "priorKey": "photo:d6ebadc4-230b-473b-9ea5-406fd30495f5",
+        "free": null,
+        "stars": null,
+        "modelCalls": 1
+      },
+      {
+        "slug": "bethany-marquez",
+        "case": "ordinary-card-price",
+        "input": "What does that photo cost?",
+        "failed": [
+          "no_unrequested_media"
+        ],
+        "flags": [
+          "possible_visibility_claim"
+        ],
+        "selection": "photo 1",
+        "key": "photo:5ce89c9b-9fa3-47f2-88da-c3ec3af1c130",
+        "priorKey": "photo:f43a3a69-0770-461a-a60b-5f62e7a86b7f",
+        "free": false,
+        "stars": 600,
+        "modelCalls": 1
+      },
+      {
+        "slug": "briana-redd",
+        "case": "business-card-acceptance",
+        "input": "Yes, I want to see that one",
+        "failed": [
+          "no_unrequested_media"
+        ],
+        "flags": [],
+        "selection": "photo 1",
+        "key": "photo:61510a96-88ec-4d8e-b3a1-b5147ec93133",
+        "priorKey": "photo:123dbd67-951f-4dde-be6b-62059d413061",
+        "free": false,
+        "stars": 700,
+        "modelCalls": 1
+      },
+      {
+        "slug": "briana-redd",
+        "case": "business-card-description",
+        "input": "What is in the photo you just sent?",
+        "failed": [
+          "no_unrequested_media"
+        ],
+        "flags": [],
+        "selection": "photo 1",
+        "key": "photo:5ff4de25-edde-41a2-a768-fde134a049e3",
+        "priorKey": "photo:61510a96-88ec-4d8e-b3a1-b5147ec93133",
+        "free": false,
+        "stars": 800,
+        "modelCalls": 1
+      },
+      {
+        "slug": "briana-redd",
+        "case": "ordinary-card-price",
+        "input": "What does that photo cost?",
+        "failed": [
+          "no_unrequested_media"
+        ],
+        "flags": [
+          "model_quoted_item_price",
+          "possible_visibility_claim"
+        ],
+        "selection": "photo 1",
+        "key": "photo:da63a22e-7cb8-4a62-8ff8-87b6740f6555",
+        "priorKey": "photo:dcf7b2d4-8d01-4358-9592-9b04feea3489",
+        "free": false,
+        "stars": 700,
+        "modelCalls": 1
+      },
+      {
+        "slug": "briana-redd",
+        "case": "ordinary-ownership-failure",
+        "input": "Send that same photo again",
+        "failed": [],
+        "flags": [
+          "model_quoted_item_price",
+          "possible_visibility_claim"
+        ],
+        "selection": "none",
+        "key": null,
+        "priorKey": "photo:da63a22e-7cb8-4a62-8ff8-87b6740f6555",
+        "free": null,
+        "stars": null,
+        "modelCalls": 1
+      },
+      {
+        "slug": "cat-chase",
+        "case": "business-card-acceptance",
+        "input": "Yes, I want to see that one",
+        "failed": [
+          "no_unrequested_media"
+        ],
+        "flags": [],
+        "selection": "photo 1",
+        "key": "photo:04ccf03e-f3bc-4abf-aca5-8b68ddc34931",
+        "priorKey": "photo:22d1bfc3-fc4d-4d3f-b63a-a7e1dcd99102",
+        "free": false,
+        "stars": 800,
+        "modelCalls": 1
+      },
+      {
+        "slug": "cat-chase",
+        "case": "business-card-description",
+        "input": "What is in the photo you just sent?",
+        "failed": [
+          "no_unrequested_media"
+        ],
+        "flags": [],
+        "selection": "photo 1",
+        "key": "photo:d78ef74f-d610-45fd-aed7-a193b494c160",
+        "priorKey": "photo:04ccf03e-f3bc-4abf-aca5-8b68ddc34931",
+        "free": false,
+        "stars": 800,
+        "modelCalls": 1
+      },
+      {
+        "slug": "dakota-lyn",
+        "case": "business-card-acceptance",
+        "input": "Yes, I want to see that one",
+        "failed": [
+          "no_unrequested_media"
+        ],
+        "flags": [
+          "possible_visibility_claim"
+        ],
+        "selection": "photo 3",
+        "key": "photo:440bb3dd-ad6e-499c-96b0-250a393950a1",
+        "priorKey": "photo:8bc4d0e5-72ff-4802-b9c0-f3ccad76a0ef",
+        "free": false,
+        "stars": 800,
+        "modelCalls": 1
+      },
+      {
+        "slug": "dakota-lyn",
+        "case": "business-card-description",
+        "input": "What is in the photo you just sent?",
+        "failed": [
+          "no_unrequested_media"
+        ],
+        "flags": [],
+        "selection": "photo 2",
+        "key": "photo:7e69cb77-2944-4794-81fe-75bf2c628697",
+        "priorKey": "photo:440bb3dd-ad6e-499c-96b0-250a393950a1",
+        "free": false,
+        "stars": 700,
+        "modelCalls": 1
+      },
+      {
+        "slug": "dakota-lyn",
+        "case": "business-card-price",
+        "input": "How many Stars is that photo?",
+        "failed": [
+          "no_unrequested_media"
+        ],
+        "flags": [
+          "alternative_in_nonvisual_context"
+        ],
+        "selection": "photo 3",
+        "key": "photo:a52841ae-eb2a-4e66-867d-8b73484c52fa",
+        "priorKey": "photo:7e69cb77-2944-4794-81fe-75bf2c628697",
+        "free": false,
+        "stars": 800,
+        "modelCalls": 1
+      },
+      {
+        "slug": "dakota-lyn",
+        "case": "ordinary-card-price",
+        "input": "What does that photo cost?",
+        "failed": [
+          "no_unrequested_media"
+        ],
+        "flags": [
+          "model_quoted_item_price"
+        ],
+        "selection": "photo 1",
+        "key": "photo:685e54d7-a5e3-4cfb-b591-3d0c8be3e48e",
+        "priorKey": "photo:03c733b7-8dc3-42f3-8174-e7f984a95000",
+        "free": false,
+        "stars": 800,
+        "modelCalls": 1
+      },
+      {
+        "slug": "dakota-lyn",
+        "case": "ordinary-missing-after-timeout",
+        "input": "I cannot see it. Can you send it again?",
+        "failed": [],
+        "flags": [
+          "possible_visibility_claim"
+        ],
+        "selection": "photo 1",
+        "key": "photo:467a15db-25c6-4fe0-a9eb-eee048674985",
+        "priorKey": "photo:467a15db-25c6-4fe0-a9eb-eee048674985",
+        "free": false,
+        "stars": 800,
+        "modelCalls": 1
+      },
+      {
+        "slug": "dreka-cakez",
+        "case": "business-card-acceptance",
+        "input": "Yes, I want to see that one",
+        "failed": [
+          "no_unrequested_media"
+        ],
+        "flags": [],
+        "selection": "photo 1",
+        "key": "photo:0eea9b7e-6a55-4ebc-99d9-13e4ca577265",
+        "priorKey": "photo:d827cd42-1204-474c-9d90-00805d20e3ec",
+        "free": false,
+        "stars": 1560,
+        "modelCalls": 1
+      },
+      {
+        "slug": "dreka-cakez",
+        "case": "business-new-after-refusal",
+        "input": "Actually, can you send me a new photo now?",
+        "failed": [],
+        "flags": [
+          "empty_final_reply"
+        ],
+        "selection": "photo 1",
+        "key": "photo:78fa6c68-8dc9-4d8a-86b2-5e22f0b80f81",
+        "priorKey": "photo:0eea9b7e-6a55-4ebc-99d9-13e4ca577265",
+        "free": false,
+        "stars": 950,
+        "modelCalls": 1
+      },
+      {
+        "slug": "dreka-cakez",
+        "case": "business-different-one",
+        "input": "Can I have a different one?",
+        "failed": [],
+        "flags": [
+          "empty_final_reply"
+        ],
+        "selection": "photo 2",
+        "key": "photo:04a317fc-c9a1-4058-bf27-ff3f86f52260",
+        "priorKey": "photo:78fa6c68-8dc9-4d8a-86b2-5e22f0b80f81",
+        "free": false,
+        "stars": 2230,
+        "modelCalls": 1
+      },
+      {
+        "slug": "dreka-cakez",
+        "case": "ordinary-card-price",
+        "input": "What does that photo cost?",
+        "failed": [
+          "no_unrequested_media"
+        ],
+        "flags": [
+          "possible_visibility_claim"
+        ],
+        "selection": "photo 1",
+        "key": "photo:0be1effd-6fb3-4f1c-9593-80915ff63a0e",
+        "priorKey": "photo:31a95666-c518-4992-a4d1-4ab12f78b858",
+        "free": false,
+        "stars": 2140,
+        "modelCalls": 1
+      },
+      {
+        "slug": "dreka-cakez",
+        "case": "ordinary-ownership-failure",
+        "input": "Send that same photo again",
+        "failed": [],
+        "flags": [
+          "possible_visibility_claim"
+        ],
+        "selection": "none",
+        "key": null,
+        "priorKey": "photo:0be1effd-6fb3-4f1c-9593-80915ff63a0e",
+        "free": null,
+        "stars": null,
+        "modelCalls": 1
+      },
+      {
+        "slug": "fit-sid",
+        "case": "business-card-acceptance",
+        "input": "Yes, I want to see that one",
+        "failed": [
+          "no_unrequested_media"
+        ],
+        "flags": [
+          "possible_visibility_claim"
+        ],
+        "selection": "photo 3",
+        "key": "photo:7546e2cf-3452-4c25-9da7-a66a25ab8b9d",
+        "priorKey": "photo:3fa4ad13-1bf4-4619-8058-0f6ad0fd450f",
+        "free": false,
+        "stars": 700,
+        "modelCalls": 1
+      },
+      {
+        "slug": "fit-sid",
+        "case": "business-card-description",
+        "input": "What is in the photo you just sent?",
+        "failed": [
+          "no_unrequested_media"
+        ],
+        "flags": [],
+        "selection": "photo 1",
+        "key": "photo:86278d22-c4d8-48d0-b58d-104fb489e060",
+        "priorKey": "photo:7546e2cf-3452-4c25-9da7-a66a25ab8b9d",
+        "free": false,
+        "stars": 800,
+        "modelCalls": 1
+      },
+      {
+        "slug": "fit-sid",
+        "case": "business-card-price",
+        "input": "How many Stars is that photo?",
+        "failed": [
+          "no_unrequested_media"
+        ],
+        "flags": [
+          "model_quoted_item_price",
+          "possible_visibility_claim"
+        ],
+        "selection": "photo 1",
+        "key": "photo:5811e795-8058-402d-b849-94cce9accdd7",
+        "priorKey": "photo:86278d22-c4d8-48d0-b58d-104fb489e060",
+        "free": false,
+        "stars": 900,
+        "modelCalls": 1
+      },
+      {
+        "slug": "fit-sid",
+        "case": "business-free-preview",
+        "input": "Can you send me a free preview photo?",
+        "failed": [],
+        "flags": [
+          "possible_visibility_claim"
+        ],
+        "selection": "none",
+        "key": null,
+        "priorKey": "photo:9c6713fb-3c1b-4890-896b-d1b3eb7d83e5",
+        "free": null,
+        "stars": null,
+        "modelCalls": 1
+      },
+      {
+        "slug": "fit-sid",
+        "case": "ordinary-card-price",
+        "input": "What does that photo cost?",
+        "failed": [],
+        "flags": [
+          "possible_visibility_claim"
+        ],
+        "selection": "none",
+        "key": null,
+        "priorKey": "photo:8d6b63db-44ef-44b1-9ced-428daccd4408",
+        "free": null,
+        "stars": null,
+        "modelCalls": 1
+      },
+      {
+        "slug": "fit-sid",
+        "case": "ordinary-ownership-failure",
+        "input": "Send that same photo again",
+        "failed": [],
+        "flags": [
+          "possible_visibility_claim"
+        ],
+        "selection": "none",
+        "key": null,
+        "priorKey": "photo:8d6b63db-44ef-44b1-9ced-428daccd4408",
+        "free": null,
+        "stars": null,
+        "modelCalls": 1
+      },
+      {
+        "slug": "kyla-yesenosky",
+        "case": "business-card-acceptance",
+        "input": "Yes, I want to see that one",
+        "failed": [
+          "no_unrequested_media"
+        ],
+        "flags": [],
+        "selection": "photo 1",
+        "key": "photo:b4551b1e-b206-4595-8382-ad559afba108",
+        "priorKey": "photo:04038d40-6a43-441b-b61c-bcdef6af1691",
+        "free": false,
+        "stars": 5,
+        "modelCalls": 1
+      },
+      {
+        "slug": "kyla-yesenosky",
+        "case": "business-card-price",
+        "input": "How many Stars is that photo?",
+        "failed": [
+          "no_unrequested_media"
+        ],
+        "flags": [],
+        "selection": "photo 1",
+        "key": "photo:804e7e57-21ee-45e6-a713-8986114502b9",
+        "priorKey": "photo:b4551b1e-b206-4595-8382-ad559afba108",
+        "free": false,
+        "stars": 5,
+        "modelCalls": 1
+      },
+      {
+        "slug": "kyla-yesenosky",
+        "case": "business-different-one",
+        "input": "Can I have a different one?",
+        "failed": [],
+        "flags": [
+          "empty_final_reply"
+        ],
+        "selection": "photo 1",
+        "key": "photo:0b420141-c1e5-4ea1-a69c-31998c8c10ca",
+        "priorKey": "photo:23358f36-1101-4735-8fe3-51141c68fb27",
+        "free": false,
+        "stars": 5,
+        "modelCalls": 1
+      },
+      {
+        "slug": "kyla-yesenosky",
+        "case": "ordinary-card-price",
+        "input": "What does that photo cost?",
+        "failed": [
+          "no_unrequested_media"
+        ],
+        "flags": [
+          "model_quoted_item_price",
+          "possible_visibility_claim"
+        ],
+        "selection": "photo 1",
+        "key": "photo:804e7e57-21ee-45e6-a713-8986114502b9",
+        "priorKey": "photo:432b677f-1b2b-4733-9dd2-9d9280b71f7b",
+        "free": false,
+        "stars": 5,
+        "modelCalls": 1
+      },
+      {
+        "slug": "kyla-yesenosky",
+        "case": "ordinary-ownership-failure",
+        "input": "Send that same photo again",
+        "failed": [],
+        "flags": [
+          "possible_visibility_claim"
+        ],
+        "selection": "none",
+        "key": null,
+        "priorKey": "photo:804e7e57-21ee-45e6-a713-8986114502b9",
+        "free": null,
+        "stars": null,
+        "modelCalls": 1
+      },
+      {
+        "slug": "mrs-callace",
+        "case": "business-card-acceptance",
+        "input": "Yes, I want to see that one",
+        "failed": [
+          "no_unrequested_media"
+        ],
+        "flags": [],
+        "selection": "photo 1",
+        "key": "photo:4869f08b-ff78-4b95-9d2b-63f376067b7e",
+        "priorKey": "photo:b96782be-148b-46a8-a0f2-409c6e83c03b",
+        "free": false,
+        "stars": 999,
+        "modelCalls": 1
+      },
+      {
+        "slug": "mrs-callace",
+        "case": "business-card-description",
+        "input": "What is in the photo you just sent?",
+        "failed": [
+          "no_unrequested_media"
+        ],
+        "flags": [],
+        "selection": "photo 1",
+        "key": "photo:d76f9a1d-93db-433e-81a7-5406039b785b",
+        "priorKey": "photo:4869f08b-ff78-4b95-9d2b-63f376067b7e",
+        "free": false,
+        "stars": 999,
+        "modelCalls": 1
+      },
+      {
+        "slug": "mrs-callace",
+        "case": "ordinary-card-price",
+        "input": "What does that photo cost?",
+        "failed": [
+          "no_unrequested_media"
+        ],
+        "flags": [
+          "model_quoted_item_price",
+          "possible_visibility_claim"
+        ],
+        "selection": "photo 1",
+        "key": "photo:b8c7fbd3-0969-4ba6-bf87-0d0634eb449f",
+        "priorKey": "photo:08dc8e09-c30c-4198-a803-79679a026dfe",
+        "free": false,
+        "stars": 999,
+        "modelCalls": 1
+      },
+      {
+        "slug": "olivia-jade",
+        "case": "business-card-acceptance",
+        "input": "Yes, I want to see that one",
+        "failed": [
+          "no_unrequested_media"
+        ],
+        "flags": [],
+        "selection": "photo 1",
+        "key": "photo:d0acee91-5ac3-4c0f-aac4-93be610ae6a5",
+        "priorKey": "photo:e048936f-9d1f-404c-8885-d22cdf84916c",
+        "free": false,
+        "stars": 1000,
+        "modelCalls": 1
+      },
+      {
+        "slug": "olivia-jade",
+        "case": "business-card-description",
+        "input": "What is in the photo you just sent?",
+        "failed": [
+          "no_unrequested_media"
+        ],
+        "flags": [],
+        "selection": "photo 1",
+        "key": "photo:1c2319e0-a0e0-4212-8dad-ab85b4395b06",
+        "priorKey": "photo:d0acee91-5ac3-4c0f-aac4-93be610ae6a5",
+        "free": false,
+        "stars": 1000,
+        "modelCalls": 1
+      },
+      {
+        "slug": "olivia-jade",
+        "case": "ordinary-card-price",
+        "input": "What does that photo cost?",
+        "failed": [
+          "no_unrequested_media"
+        ],
+        "flags": [],
+        "selection": "photo 3",
+        "key": "photo:6b28342b-5047-43f9-a431-5c3f073516be",
+        "priorKey": "photo:13ae1b08-7928-4f7d-95d9-1f044b8d4164",
+        "free": false,
+        "stars": 1400,
+        "modelCalls": 1
+      },
+      {
+        "slug": "riley-mae-lewis",
+        "case": "business-card-acceptance",
+        "input": "Yes, I want to see that one",
+        "failed": [
+          "no_unrequested_media"
+        ],
+        "flags": [],
+        "selection": "photo 1",
+        "key": "photo:e20900e2-8cd7-4354-8fa9-812ae3458fff",
+        "priorKey": "photo:282c48cc-26d2-4e94-a145-01de03e46807",
+        "free": false,
+        "stars": 5,
+        "modelCalls": 1
+      },
+      {
+        "slug": "riley-mae-lewis",
+        "case": "business-card-description",
+        "input": "What is in the photo you just sent?",
+        "failed": [
+          "no_unrequested_media"
+        ],
+        "flags": [],
+        "selection": "photo 1",
+        "key": "photo:967d0ed0-d88b-43b4-b2c0-ef4cb1873242",
+        "priorKey": "photo:e20900e2-8cd7-4354-8fa9-812ae3458fff",
+        "free": false,
+        "stars": 5,
+        "modelCalls": 1
+      },
+      {
+        "slug": "riley-mae-lewis",
+        "case": "business-card-price",
+        "input": "How many Stars is that photo?",
+        "failed": [],
+        "flags": [
+          "model_quoted_item_price",
+          "possible_visibility_claim"
+        ],
+        "selection": "none",
+        "key": null,
+        "priorKey": "photo:967d0ed0-d88b-43b4-b2c0-ef4cb1873242",
+        "free": null,
+        "stars": null,
+        "modelCalls": 1
+      },
+      {
+        "slug": "riley-mae-lewis",
+        "case": "ordinary-card-price",
+        "input": "What does that photo cost?",
+        "failed": [
+          "no_unrequested_media"
+        ],
+        "flags": [
+          "model_quoted_item_price",
+          "possible_visibility_claim"
+        ],
+        "selection": "photo 1",
+        "key": "photo:e5e94e25-ddf4-4472-8bdd-42e62809faee",
+        "priorKey": "photo:ba243bbb-6186-4efd-93b8-e024061eb931",
+        "free": false,
+        "stars": 5,
+        "modelCalls": 1
+      },
+      {
+        "slug": "riley-mae-lewis",
+        "case": "ordinary-ownership-failure",
+        "input": "Send that same photo again",
+        "failed": [],
+        "flags": [
+          "possible_visibility_claim"
+        ],
+        "selection": "none",
+        "key": null,
+        "priorKey": "photo:e5e94e25-ddf4-4472-8bdd-42e62809faee",
+        "free": null,
+        "stars": null,
+        "modelCalls": 1
+      },
+      {
+        "slug": "riley-mae-lewis",
+        "case": "edge-rejected-new",
+        "input": "Can you send me a photo?",
+        "failed": [],
+        "flags": [
+          "empty_final_reply"
+        ],
+        "selection": "photo 1",
+        "key": "photo:7c6936ce-acd6-42df-802f-f91f5ce4e9de",
+        "priorKey": null,
+        "free": null,
+        "stars": null,
+        "modelCalls": 1
+      },
+      {
+        "slug": "sania-mallory",
+        "case": "business-card-acceptance",
+        "input": "Yes, I want to see that one",
+        "failed": [
+          "no_unrequested_media"
+        ],
+        "flags": [],
+        "selection": "photo 2",
+        "key": "photo:fa9ac3aa-a992-4714-9f0c-0818afc413d4",
+        "priorKey": "photo:09a64895-69bf-485f-9bb8-d278b39c4120",
+        "free": false,
+        "stars": 2060,
+        "modelCalls": 1
+      },
+      {
+        "slug": "sania-mallory",
+        "case": "business-card-description",
+        "input": "What is in the photo you just sent?",
+        "failed": [
+          "no_unrequested_media"
+        ],
+        "flags": [],
+        "selection": "photo 1",
+        "key": "photo:4a8cf29e-d6e0-4d9c-ad09-b34b9e4ad28c",
+        "priorKey": "photo:fa9ac3aa-a992-4714-9f0c-0818afc413d4",
+        "free": false,
+        "stars": 2050,
+        "modelCalls": 1
+      },
+      {
+        "slug": "sania-mallory",
+        "case": "business-card-price",
+        "input": "How many Stars is that photo?",
+        "failed": [
+          "no_unrequested_media"
+        ],
+        "flags": [],
+        "selection": "photo 1",
+        "key": "photo:e4dcc7c5-3ca8-4866-a3bf-7d14ea644e45",
+        "priorKey": "photo:4a8cf29e-d6e0-4d9c-ad09-b34b9e4ad28c",
+        "free": false,
+        "stars": 2130,
+        "modelCalls": 1
+      },
+      {
+        "slug": "sania-mallory",
+        "case": "ordinary-card-price",
+        "input": "What does that photo cost?",
+        "failed": [
+          "no_unrequested_media"
+        ],
+        "flags": [
+          "model_quoted_item_price"
+        ],
+        "selection": "photo 1",
+        "key": "photo:e4dcc7c5-3ca8-4866-a3bf-7d14ea644e45",
+        "priorKey": "photo:b9496f78-2c22-43ec-a0a6-b1174a5e8256",
+        "free": false,
+        "stars": 2130,
+        "modelCalls": 1
+      },
+      {
+        "slug": "sania-mallory",
+        "case": "ordinary-ownership-failure",
+        "input": "Send that same photo again",
+        "failed": [],
+        "flags": [
+          "possible_visibility_claim"
+        ],
+        "selection": "none",
+        "key": null,
+        "priorKey": "photo:e4dcc7c5-3ca8-4866-a3bf-7d14ea644e45",
+        "free": null,
+        "stars": null,
+        "modelCalls": 1
+      },
+      {
+        "slug": "tammy",
+        "case": "business-card-acceptance",
+        "input": "Yes, I want to see that one",
+        "failed": [
+          "no_unrequested_media"
+        ],
+        "flags": [],
+        "selection": "photo 1",
+        "key": "photo:a3809576-b6c7-4fcc-9e6f-387f04c00086",
+        "priorKey": "photo:b44898f3-a6e7-465b-b994-4bb18a91f493",
+        "free": false,
+        "stars": 590,
+        "modelCalls": 1
+      },
+      {
+        "slug": "tammy",
+        "case": "business-card-description",
+        "input": "What is in the photo you just sent?",
+        "failed": [
+          "no_unrequested_media"
+        ],
+        "flags": [],
+        "selection": "photo 1",
+        "key": "photo:70509013-75d6-4d67-8b35-550cf5e129dd",
+        "priorKey": "photo:a3809576-b6c7-4fcc-9e6f-387f04c00086",
+        "free": false,
+        "stars": 477,
+        "modelCalls": 1
+      },
+      {
+        "slug": "tammy",
+        "case": "business-card-price",
+        "input": "How many Stars is that photo?",
+        "failed": [
+          "no_unrequested_media"
+        ],
+        "flags": [
+          "model_quoted_item_price"
+        ],
+        "selection": "photo 1",
+        "key": "photo:e8ad7706-f3d7-4eb1-a523-21374f804eaf",
+        "priorKey": "photo:70509013-75d6-4d67-8b35-550cf5e129dd",
+        "free": false,
+        "stars": 820,
+        "modelCalls": 1
+      },
+      {
+        "slug": "tammy",
+        "case": "ordinary-card-price",
+        "input": "What does that photo cost?",
+        "failed": [
+          "no_unrequested_media"
+        ],
+        "flags": [],
+        "selection": "photo 2",
+        "key": "photo:e8ad7706-f3d7-4eb1-a523-21374f804eaf",
+        "priorKey": "photo:b44898f3-a6e7-465b-b994-4bb18a91f493",
+        "free": false,
+        "stars": 820,
+        "modelCalls": 1
+      },
+      {
+        "slug": "toochi",
+        "case": "business-card-acceptance",
+        "input": "Yes, I want to see that one",
+        "failed": [
+          "no_unrequested_media"
+        ],
+        "flags": [],
+        "selection": "photo 2",
+        "key": "photo:9aafc0ea-d7b5-4b7e-bdff-5b0c0f0e989e",
+        "priorKey": "photo:b8258ae3-6d91-4ecf-8a4a-a53c7803a72b",
+        "free": false,
+        "stars": 900,
+        "modelCalls": 1
+      },
+      {
+        "slug": "toochi",
+        "case": "business-card-description",
+        "input": "What is in the photo you just sent?",
+        "failed": [
+          "no_unrequested_media"
+        ],
+        "flags": [],
+        "selection": "photo 1",
+        "key": "photo:cb4c6fe1-5abf-4698-8cbc-426d20de83d0",
+        "priorKey": "photo:9aafc0ea-d7b5-4b7e-bdff-5b0c0f0e989e",
+        "free": false,
+        "stars": 800,
+        "modelCalls": 1
+      },
+      {
+        "slug": "toochi",
+        "case": "ordinary-card-price",
+        "input": "What does that photo cost?",
+        "failed": [
+          "no_unrequested_media"
+        ],
+        "flags": [
+          "model_quoted_item_price"
+        ],
+        "selection": "photo 2",
+        "key": "photo:9aafc0ea-d7b5-4b7e-bdff-5b0c0f0e989e",
+        "priorKey": "photo:b8258ae3-6d91-4ecf-8a4a-a53c7803a72b",
+        "free": false,
+        "stars": 900,
+        "modelCalls": 1
+      },
+      {
+        "slug": "toochi",
+        "case": "ordinary-ownership-failure",
+        "input": "Send that same photo again",
+        "failed": [],
+        "flags": [
+          "possible_visibility_claim"
+        ],
+        "selection": "none",
+        "key": null,
+        "priorKey": "photo:9aafc0ea-d7b5-4b7e-bdff-5b0c0f0e989e",
+        "free": null,
+        "stars": null,
+        "modelCalls": 1
+      },
+      {
+        "slug": "trashy",
+        "case": "business-card-acceptance",
+        "input": "Yes, I want to see that one",
+        "failed": [
+          "no_unrequested_media"
+        ],
+        "flags": [],
+        "selection": "photo 1",
+        "key": "photo:db1ed7fb-19bc-49e6-8612-bc8752287a65",
+        "priorKey": "photo:b3dd0afe-8e0a-49f0-b5a9-e9c023257187",
+        "free": false,
+        "stars": 5,
+        "modelCalls": 1
+      },
+      {
+        "slug": "trashy",
+        "case": "business-card-description",
+        "input": "What is in the photo you just sent?",
+        "failed": [
+          "no_unrequested_media"
+        ],
+        "flags": [],
+        "selection": "photo 1",
+        "key": "photo:798a8da9-f98d-4b98-8d28-8e4fa1fd6846",
+        "priorKey": "photo:db1ed7fb-19bc-49e6-8612-bc8752287a65",
+        "free": false,
+        "stars": 5,
+        "modelCalls": 1
+      },
+      {
+        "slug": "trashy",
+        "case": "business-card-price",
+        "input": "How many Stars is that photo?",
+        "failed": [
+          "no_unrequested_media"
+        ],
+        "flags": [
+          "model_quoted_item_price",
+          "alternative_in_nonvisual_context"
+        ],
+        "selection": "photo 3",
+        "key": "photo:fe7dc9e1-c729-4d2e-9040-35e9f91f45dc",
+        "priorKey": "photo:798a8da9-f98d-4b98-8d28-8e4fa1fd6846",
+        "free": false,
+        "stars": 5,
+        "modelCalls": 1
+      },
+      {
+        "slug": "trashy",
+        "case": "ordinary-card-price",
+        "input": "What does that photo cost?",
+        "failed": [
+          "no_unrequested_media"
+        ],
+        "flags": [],
+        "selection": "photo 1",
+        "key": "photo:7431ff44-58ce-445e-87dc-a7fb51af58a2",
+        "priorKey": "photo:6c72ed09-f219-48b3-9ffe-feb78b2c35bb",
+        "free": false,
+        "stars": 5,
+        "modelCalls": 1
+      },
+      {
+        "slug": "tru-kait",
+        "case": "business-card-acceptance",
+        "input": "Yes, I want to see that one",
+        "failed": [
+          "no_unrequested_media"
+        ],
+        "flags": [],
+        "selection": "photo 1",
+        "key": "photo:7355c223-8188-4f6d-a2c0-a5ebd3960ea0",
+        "priorKey": "photo:5c72910a-5c32-4189-8519-c438a47267f6",
+        "free": false,
+        "stars": 900,
+        "modelCalls": 1
+      },
+      {
+        "slug": "tru-kait",
+        "case": "business-card-description",
+        "input": "What is in the photo you just sent?",
+        "failed": [
+          "no_unrequested_media"
+        ],
+        "flags": [],
+        "selection": "photo 1",
+        "key": "photo:e9b00ba7-64b1-4c7b-8284-1424c6dc92dc",
+        "priorKey": "photo:7355c223-8188-4f6d-a2c0-a5ebd3960ea0",
+        "free": false,
+        "stars": 400,
+        "modelCalls": 1
+      },
+      {
+        "slug": "tru-kait",
+        "case": "business-card-price",
+        "input": "How many Stars is that photo?",
+        "failed": [],
+        "flags": [
+          "model_quoted_item_price",
+          "possible_visibility_claim"
+        ],
+        "selection": "none",
+        "key": null,
+        "priorKey": "photo:e9b00ba7-64b1-4c7b-8284-1424c6dc92dc",
+        "free": null,
+        "stars": null,
+        "modelCalls": 1
+      },
+      {
+        "slug": "tru-kait",
+        "case": "ordinary-card-price",
+        "input": "What does that photo cost?",
+        "failed": [
+          "no_unrequested_media"
+        ],
+        "flags": [
+          "model_quoted_item_price"
+        ],
+        "selection": "photo 3",
+        "key": "photo:5a0d5ea1-42c0-45d2-8301-6bb7e8a1006f",
+        "priorKey": "photo:e0e0930a-8426-47f8-8029-ac23ed3b48d8",
+        "free": false,
+        "stars": 1000,
+        "modelCalls": 1
+      }
+    ]
+  },
+  "V1": {
+    "rawCases": 60,
+    "modelCalls": 300,
+    "reviewableCases": 52,
+    "budgetBoundaryOrAfterCases": 8,
+    "creators": [
+      {
+        "slug": "autumn-renae",
+        "rawCases": 20,
+        "calls": 100,
+        "rawFailedCases": 6,
+        "reviewableCases": 16,
+        "results": [
+          {
+            "case": "business-greeting",
+            "input": "Hello, how are you?",
+            "failed": [],
+            "flags": [],
+            "modelCalls": 3,
+            "error": null,
+            "cumulativeCalls": 3,
+            "eligibleForConclusion": true,
+            "exclusion": null
+          },
+          {
+            "case": "business-self-intro",
+            "input": "My name is Alex. I live in Brisbane and enjoy hiking. Just chatting.",
+            "failed": [],
+            "flags": [],
+            "modelCalls": 18,
+            "error": null,
+            "cumulativeCalls": 21,
+            "eligibleForConclusion": true,
+            "exclusion": null
+          },
+          {
+            "case": "business-recall",
+            "input": "What is my name and where do I live?",
+            "failed": [
+              "recent_fact_recall"
+            ],
+            "flags": [],
+            "modelCalls": 6,
+            "error": null,
+            "cumulativeCalls": 27,
+            "eligibleForConclusion": true,
+            "exclusion": null
+          },
+          {
+            "case": "business-photo",
+            "input": "Can you send me a photo?",
+            "failed": [],
+            "flags": [],
+            "modelCalls": 3,
+            "error": null,
+            "cumulativeCalls": 30,
+            "eligibleForConclusion": true,
+            "exclusion": null
+          },
+          {
+            "case": "business-card-description",
+            "input": "What is in the photo you just sent?",
+            "failed": [],
+            "flags": [],
+            "modelCalls": 11,
+            "error": null,
+            "cumulativeCalls": 41,
+            "eligibleForConclusion": true,
+            "exclusion": null
+          },
+          {
+            "case": "business-card-price",
+            "input": "What does that photo cost?",
+            "failed": [],
+            "flags": [],
+            "modelCalls": 2,
+            "error": null,
+            "cumulativeCalls": 43,
+            "eligibleForConclusion": true,
+            "exclusion": null
+          },
+          {
+            "case": "business-cannot-afford",
+            "input": "I cannot afford it today. No more offers please.",
+            "failed": [],
+            "flags": [],
+            "modelCalls": 3,
+            "error": null,
+            "cumulativeCalls": 46,
+            "eligibleForConclusion": true,
+            "exclusion": null
+          },
+          {
+            "case": "business-different",
+            "input": "Can you send me a different photo now?",
+            "failed": [
+              "requested_photo_not_sent"
+            ],
+            "flags": [],
+            "modelCalls": 2,
+            "error": null,
+            "cumulativeCalls": 48,
+            "eligibleForConclusion": true,
+            "exclusion": null
+          },
+          {
+            "case": "business-same",
+            "input": "Send that same photo again",
+            "failed": [],
+            "flags": [],
+            "modelCalls": 3,
+            "error": null,
+            "cumulativeCalls": 51,
+            "eligibleForConclusion": true,
+            "exclusion": null
+          },
+          {
+            "case": "business-subject-change",
+            "input": "No more photos. How was your day?",
+            "failed": [],
+            "flags": [],
+            "modelCalls": 5,
+            "error": null,
+            "cumulativeCalls": 56,
+            "eligibleForConclusion": true,
+            "exclusion": null
+          },
+          {
+            "case": "ordinary-greeting",
+            "input": "Hello, how are you?",
+            "failed": [],
+            "flags": [],
+            "modelCalls": 3,
+            "error": null,
+            "cumulativeCalls": 59,
+            "eligibleForConclusion": true,
+            "exclusion": null
+          },
+          {
+            "case": "ordinary-self-intro",
+            "input": "My name is Alex. I live in Brisbane and enjoy hiking. Just chatting.",
+            "failed": [],
+            "flags": [],
+            "modelCalls": 18,
+            "error": null,
+            "cumulativeCalls": 77,
+            "eligibleForConclusion": true,
+            "exclusion": null
+          },
+          {
+            "case": "ordinary-recall",
+            "input": "What is my name and where do I live?",
+            "failed": [
+              "recent_fact_recall"
+            ],
+            "flags": [],
+            "modelCalls": 6,
+            "error": null,
+            "cumulativeCalls": 83,
+            "eligibleForConclusion": true,
+            "exclusion": null
+          },
+          {
+            "case": "ordinary-photo",
+            "input": "Can you send me a photo?",
+            "failed": [],
+            "flags": [],
+            "modelCalls": 3,
+            "error": null,
+            "cumulativeCalls": 86,
+            "eligibleForConclusion": true,
+            "exclusion": null
+          },
+          {
+            "case": "ordinary-card-description",
+            "input": "What is in the photo you just sent?",
+            "failed": [],
+            "flags": [],
+            "modelCalls": 7,
+            "error": null,
+            "cumulativeCalls": 93,
+            "eligibleForConclusion": true,
+            "exclusion": null
+          },
+          {
+            "case": "ordinary-card-price",
+            "input": "What does that photo cost?",
+            "failed": [],
+            "flags": [],
+            "modelCalls": 4,
+            "error": null,
+            "cumulativeCalls": 97,
+            "eligibleForConclusion": true,
+            "exclusion": null
+          },
+          {
+            "case": "ordinary-cannot-afford",
+            "input": "I cannot afford it today. No more offers please.",
+            "failed": [],
+            "flags": [],
+            "modelCalls": 3,
+            "error": null,
+            "cumulativeCalls": 100,
+            "eligibleForConclusion": false,
+            "exclusion": "At or after 100-call budget boundary; do not interpret as product pass/failure"
+          },
+          {
+            "case": "ordinary-different",
+            "input": "Can you send me a different photo now?",
+            "failed": [
+              "requested_photo_not_sent"
+            ],
+            "flags": [],
+            "modelCalls": 0,
+            "error": null,
+            "cumulativeCalls": 100,
+            "eligibleForConclusion": false,
+            "exclusion": "At or after 100-call budget boundary; do not interpret as product pass/failure"
+          },
+          {
+            "case": "ordinary-same",
+            "input": "Send that same photo again",
+            "failed": [
+              "no_response"
+            ],
+            "flags": [],
+            "modelCalls": 0,
+            "error": null,
+            "cumulativeCalls": 100,
+            "eligibleForConclusion": false,
+            "exclusion": "At or after 100-call budget boundary; do not interpret as product pass/failure"
+          },
+          {
+            "case": "ordinary-subject-change",
+            "input": "No more photos. How was your day?",
+            "failed": [
+              "no_response"
+            ],
+            "flags": [],
+            "modelCalls": 0,
+            "error": null,
+            "cumulativeCalls": 100,
+            "eligibleForConclusion": false,
+            "exclusion": "At or after 100-call budget boundary; do not interpret as product pass/failure"
+          }
+        ]
+      },
+      {
+        "slug": "dan-dangler",
+        "rawCases": 20,
+        "calls": 100,
+        "rawFailedCases": 5,
+        "reviewableCases": 17,
+        "results": [
+          {
+            "case": "business-greeting",
+            "input": "Hello, how are you?",
+            "failed": [],
+            "flags": [],
+            "modelCalls": 3,
+            "error": null,
+            "cumulativeCalls": 3,
+            "eligibleForConclusion": true,
+            "exclusion": null
+          },
+          {
+            "case": "business-self-intro",
+            "input": "My name is Alex. I live in Brisbane and enjoy hiking. Just chatting.",
+            "failed": [],
+            "flags": [],
+            "modelCalls": 18,
+            "error": null,
+            "cumulativeCalls": 21,
+            "eligibleForConclusion": true,
+            "exclusion": null
+          },
+          {
+            "case": "business-recall",
+            "input": "What is my name and where do I live?",
+            "failed": [
+              "recent_fact_recall"
+            ],
+            "flags": [],
+            "modelCalls": 6,
+            "error": null,
+            "cumulativeCalls": 27,
+            "eligibleForConclusion": true,
+            "exclusion": null
+          },
+          {
+            "case": "business-photo",
+            "input": "Can you send me a photo?",
+            "failed": [],
+            "flags": [],
+            "modelCalls": 3,
+            "error": null,
+            "cumulativeCalls": 30,
+            "eligibleForConclusion": true,
+            "exclusion": null
+          },
+          {
+            "case": "business-card-description",
+            "input": "What is in the photo you just sent?",
+            "failed": [],
+            "flags": [],
+            "modelCalls": 12,
+            "error": null,
+            "cumulativeCalls": 42,
+            "eligibleForConclusion": true,
+            "exclusion": null
+          },
+          {
+            "case": "business-card-price",
+            "input": "What does that photo cost?",
+            "failed": [],
+            "flags": [],
+            "modelCalls": 10,
+            "error": null,
+            "cumulativeCalls": 52,
+            "eligibleForConclusion": true,
+            "exclusion": null
+          },
+          {
+            "case": "business-cannot-afford",
+            "input": "I cannot afford it today. No more offers please.",
+            "failed": [],
+            "flags": [],
+            "modelCalls": 3,
+            "error": null,
+            "cumulativeCalls": 55,
+            "eligibleForConclusion": true,
+            "exclusion": null
+          },
+          {
+            "case": "business-different",
+            "input": "Can you send me a different photo now?",
+            "failed": [
+              "requested_photo_not_sent"
+            ],
+            "flags": [],
+            "modelCalls": 4,
+            "error": null,
+            "cumulativeCalls": 59,
+            "eligibleForConclusion": true,
+            "exclusion": null
+          },
+          {
+            "case": "business-same",
+            "input": "Send that same photo again",
+            "failed": [],
+            "flags": [],
+            "modelCalls": 4,
+            "error": null,
+            "cumulativeCalls": 63,
+            "eligibleForConclusion": true,
+            "exclusion": null
+          },
+          {
+            "case": "business-subject-change",
+            "input": "No more photos. How was your day?",
+            "failed": [],
+            "flags": [],
+            "modelCalls": 5,
+            "error": null,
+            "cumulativeCalls": 68,
+            "eligibleForConclusion": true,
+            "exclusion": null
+          },
+          {
+            "case": "ordinary-greeting",
+            "input": "Hello, how are you?",
+            "failed": [],
+            "flags": [],
+            "modelCalls": 3,
+            "error": null,
+            "cumulativeCalls": 71,
+            "eligibleForConclusion": true,
+            "exclusion": null
+          },
+          {
+            "case": "ordinary-self-intro",
+            "input": "My name is Alex. I live in Brisbane and enjoy hiking. Just chatting.",
+            "failed": [],
+            "flags": [],
+            "modelCalls": 5,
+            "error": null,
+            "cumulativeCalls": 76,
+            "eligibleForConclusion": true,
+            "exclusion": null
+          },
+          {
+            "case": "ordinary-recall",
+            "input": "What is my name and where do I live?",
+            "failed": [
+              "recent_fact_recall"
+            ],
+            "flags": [],
+            "modelCalls": 6,
+            "error": null,
+            "cumulativeCalls": 82,
+            "eligibleForConclusion": true,
+            "exclusion": null
+          },
+          {
+            "case": "ordinary-photo",
+            "input": "Can you send me a photo?",
+            "failed": [],
+            "flags": [],
+            "modelCalls": 3,
+            "error": null,
+            "cumulativeCalls": 85,
+            "eligibleForConclusion": true,
+            "exclusion": null
+          },
+          {
+            "case": "ordinary-card-description",
+            "input": "What is in the photo you just sent?",
+            "failed": [],
+            "flags": [],
+            "modelCalls": 6,
+            "error": null,
+            "cumulativeCalls": 91,
+            "eligibleForConclusion": true,
+            "exclusion": null
+          },
+          {
+            "case": "ordinary-card-price",
+            "input": "What does that photo cost?",
+            "failed": [],
+            "flags": [],
+            "modelCalls": 4,
+            "error": null,
+            "cumulativeCalls": 95,
+            "eligibleForConclusion": true,
+            "exclusion": null
+          },
+          {
+            "case": "ordinary-cannot-afford",
+            "input": "I cannot afford it today. No more offers please.",
+            "failed": [],
+            "flags": [],
+            "modelCalls": 2,
+            "error": null,
+            "cumulativeCalls": 97,
+            "eligibleForConclusion": true,
+            "exclusion": null
+          },
+          {
+            "case": "ordinary-different",
+            "input": "Can you send me a different photo now?",
+            "failed": [
+              "requested_photo_not_sent"
+            ],
+            "flags": [],
+            "modelCalls": 3,
+            "error": null,
+            "cumulativeCalls": 100,
+            "eligibleForConclusion": false,
+            "exclusion": "At or after 100-call budget boundary; do not interpret as product pass/failure"
+          },
+          {
+            "case": "ordinary-same",
+            "input": "Send that same photo again",
+            "failed": [],
+            "flags": [],
+            "modelCalls": 0,
+            "error": null,
+            "cumulativeCalls": 100,
+            "eligibleForConclusion": false,
+            "exclusion": "At or after 100-call budget boundary; do not interpret as product pass/failure"
+          },
+          {
+            "case": "ordinary-subject-change",
+            "input": "No more photos. How was your day?",
+            "failed": [
+              "no_response"
+            ],
+            "flags": [],
+            "modelCalls": 0,
+            "error": null,
+            "cumulativeCalls": 100,
+            "eligibleForConclusion": false,
+            "exclusion": "At or after 100-call budget boundary; do not interpret as product pass/failure"
+          }
+        ]
+      },
+      {
+        "slug": "hazey-haley",
+        "rawCases": 20,
+        "calls": 100,
+        "rawFailedCases": 3,
+        "reviewableCases": 19,
+        "results": [
+          {
+            "case": "business-greeting",
+            "input": "Hello, how are you?",
+            "failed": [],
+            "flags": [],
+            "modelCalls": 3,
+            "error": null,
+            "cumulativeCalls": 3,
+            "eligibleForConclusion": true,
+            "exclusion": null
+          },
+          {
+            "case": "business-self-intro",
+            "input": "My name is Alex. I live in Brisbane and enjoy hiking. Just chatting.",
+            "failed": [],
+            "flags": [],
+            "modelCalls": 5,
+            "error": null,
+            "cumulativeCalls": 8,
+            "eligibleForConclusion": true,
+            "exclusion": null
+          },
+          {
+            "case": "business-recall",
+            "input": "What is my name and where do I live?",
+            "failed": [
+              "recent_fact_recall"
+            ],
+            "flags": [],
+            "modelCalls": 7,
+            "error": null,
+            "cumulativeCalls": 15,
+            "eligibleForConclusion": true,
+            "exclusion": null
+          },
+          {
+            "case": "business-photo",
+            "input": "Can you send me a photo?",
+            "failed": [],
+            "flags": [],
+            "modelCalls": 5,
+            "error": null,
+            "cumulativeCalls": 20,
+            "eligibleForConclusion": true,
+            "exclusion": null
+          },
+          {
+            "case": "business-card-description",
+            "input": "What is in the photo you just sent?",
+            "failed": [],
+            "flags": [],
+            "modelCalls": 13,
+            "error": null,
+            "cumulativeCalls": 33,
+            "eligibleForConclusion": true,
+            "exclusion": null
+          },
+          {
+            "case": "business-card-price",
+            "input": "What does that photo cost?",
+            "failed": [],
+            "flags": [],
+            "modelCalls": 3,
+            "error": null,
+            "cumulativeCalls": 36,
+            "eligibleForConclusion": true,
+            "exclusion": null
+          },
+          {
+            "case": "business-cannot-afford",
+            "input": "I cannot afford it today. No more offers please.",
+            "failed": [],
+            "flags": [],
+            "modelCalls": 3,
+            "error": null,
+            "cumulativeCalls": 39,
+            "eligibleForConclusion": true,
+            "exclusion": null
+          },
+          {
+            "case": "business-different",
+            "input": "Can you send me a different photo now?",
+            "failed": [
+              "requested_photo_not_sent"
+            ],
+            "flags": [],
+            "modelCalls": 5,
+            "error": null,
+            "cumulativeCalls": 44,
+            "eligibleForConclusion": true,
+            "exclusion": null
+          },
+          {
+            "case": "business-same",
+            "input": "Send that same photo again",
+            "failed": [],
+            "flags": [],
+            "modelCalls": 3,
+            "error": null,
+            "cumulativeCalls": 47,
+            "eligibleForConclusion": true,
+            "exclusion": null
+          },
+          {
+            "case": "business-subject-change",
+            "input": "No more photos. How was your day?",
+            "failed": [],
+            "flags": [],
+            "modelCalls": 6,
+            "error": null,
+            "cumulativeCalls": 53,
+            "eligibleForConclusion": true,
+            "exclusion": null
+          },
+          {
+            "case": "ordinary-greeting",
+            "input": "Hello, how are you?",
+            "failed": [],
+            "flags": [],
+            "modelCalls": 4,
+            "error": null,
+            "cumulativeCalls": 57,
+            "eligibleForConclusion": true,
+            "exclusion": null
+          },
+          {
+            "case": "ordinary-self-intro",
+            "input": "My name is Alex. I live in Brisbane and enjoy hiking. Just chatting.",
+            "failed": [],
+            "flags": [],
+            "modelCalls": 18,
+            "error": null,
+            "cumulativeCalls": 75,
+            "eligibleForConclusion": true,
+            "exclusion": null
+          },
+          {
+            "case": "ordinary-recall",
+            "input": "What is my name and where do I live?",
+            "failed": [],
+            "flags": [],
+            "modelCalls": 4,
+            "error": null,
+            "cumulativeCalls": 79,
+            "eligibleForConclusion": true,
+            "exclusion": null
+          },
+          {
+            "case": "ordinary-photo",
+            "input": "Can you send me a photo?",
+            "failed": [],
+            "flags": [],
+            "modelCalls": 3,
+            "error": null,
+            "cumulativeCalls": 82,
+            "eligibleForConclusion": true,
+            "exclusion": null
+          },
+          {
+            "case": "ordinary-card-description",
+            "input": "What is in the photo you just sent?",
+            "failed": [],
+            "flags": [],
+            "modelCalls": 4,
+            "error": null,
+            "cumulativeCalls": 86,
+            "eligibleForConclusion": true,
+            "exclusion": null
+          },
+          {
+            "case": "ordinary-card-price",
+            "input": "What does that photo cost?",
+            "failed": [],
+            "flags": [],
+            "modelCalls": 2,
+            "error": null,
+            "cumulativeCalls": 88,
+            "eligibleForConclusion": true,
+            "exclusion": null
+          },
+          {
+            "case": "ordinary-cannot-afford",
+            "input": "I cannot afford it today. No more offers please.",
+            "failed": [],
+            "flags": [],
+            "modelCalls": 2,
+            "error": null,
+            "cumulativeCalls": 90,
+            "eligibleForConclusion": true,
+            "exclusion": null
+          },
+          {
+            "case": "ordinary-different",
+            "input": "Can you send me a different photo now?",
+            "failed": [
+              "requested_photo_not_sent"
+            ],
+            "flags": [],
+            "modelCalls": 3,
+            "error": null,
+            "cumulativeCalls": 93,
+            "eligibleForConclusion": true,
+            "exclusion": null
+          },
+          {
+            "case": "ordinary-same",
+            "input": "Send that same photo again",
+            "failed": [],
+            "flags": [],
+            "modelCalls": 2,
+            "error": null,
+            "cumulativeCalls": 95,
+            "eligibleForConclusion": true,
+            "exclusion": null
+          },
+          {
+            "case": "ordinary-subject-change",
+            "input": "No more photos. How was your day?",
+            "failed": [],
+            "flags": [],
+            "modelCalls": 5,
+            "error": null,
+            "cumulativeCalls": 100,
+            "eligibleForConclusion": false,
+            "exclusion": "At or after 100-call budget boundary; do not interpret as product pass/failure"
+          }
+        ]
+      }
+    ]
+  },
+  "reviewDispositions": {
+    "numericStarFlags": "15 raw flags: 10 actual item-price claims; 5 currency-conversion explanations are allowed by the current shared prompt and not classified as item-price bugs. Non-numeric unsupported estimates are additional observations, not included in the 10.",
+    "emptyReplyFlags": "4 raw flags: 3 acknowledged photo cards with captions removed; 1 deliberately rejected 403 send with recovery suppressed because permission was denied. The latter is expected, not a bot bug.",
+    "visibilityFlags": "22 broad heuristic flags; many are ordinary Telegram payment instructions. Do not count all 22 as bugs. Specific unverified visibility and invented resend restrictions remain documented observations.",
+    "V1RawFailures": "14 raw failed turns are not 14 confirmed bugs. Exclude 8 budget-boundary/later turns; investigate legacy offer-policy/transport fidelity before classifying missed-photo or offer-lookup outcomes. Five name-recall failures before the budget boundary produced missing-name or malformed text."
+  },
+  "newDeterministicFindings": [
+    "Supported blue crop top caption rejected against blue ribbed crop top catalogue evidence",
+    "Reported fan refusal incorrectly classified as current stock denial"
+  ],
+  "transport": "V2 fake Telegram under grammY; V1 captured Messenger with synthetic acceptance receipts. No real media bytes or fan sends.",
+  "messagesToTelegram": 0,
+  "purchases": 0,
+  "productionWrites": 0,
+  "modelReportedCostUsd": 0.19176265,
+  "privateEvidenceDirectory": "/home/ubuntu/twin-v2-validation/fleet-simulation-20261013-1791877888400228253",
+  "sourceReport": "https://github.com/jesse98/twin-dashboard/actions/runs/38367670326",
+  "limits": [
+    "One stochastic sample per scenario; no unchanged reruns to obtain green results",
+    "Simulation is not proof of actual Telegram card visibility or live ingress health",
+    "Fresh isolated conversation histories; historical incident/PDF conversations were not replayed in this new pass",
+    "V2 memory and credits off; bundles explicitly off; tips use actual switches with in-memory backend",
+    "No deliberate video, voice, purchase/refund, dashboard HTTP or migration acceptance run",
+    "Creator prompt shared-renderer comparison passed; no fresh browser/dashboard request in this pass",
+    "V1 late turns constrained by test budget; existing engine makes multiple model calls"
+  ]
+}

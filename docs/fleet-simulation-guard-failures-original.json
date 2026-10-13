@@ -1,0 +1,50 @@
+{
+  "kind": "deterministic, no model calls",
+  "results": [
+    {
+      "id": "G1-supported-colour",
+      "reply": "this ones cute, blue crop top and white undies with my hands on my hips",
+      "evidence": "A blonde woman is wearing a blue ribbed crop top with a deep neckline and white underwear.",
+      "context": {},
+      "expected": "this ones cute, blue crop top and white undies with my hands on my hips",
+      "actual": {
+        "text": "",
+        "dropped": [
+          {
+            "sentence": "this ones cute, blue crop top and white undies with my hands on my hips",
+            "claims": [
+              "blue crop"
+            ]
+          }
+        ]
+      },
+      "passes": false
+    },
+    {
+      "id": "G2-attributed-refusal",
+      "reply": "thought u said no pics lol, u so greedy.",
+      "evidence": null,
+      "context": {
+        "availability": {
+          "photos": 10,
+          "videos": 0,
+          "freePhotos": 1,
+          "freeVideos": 0
+        }
+      },
+      "expected": "thought u said no pics lol, u so greedy.",
+      "actual": {
+        "text": "",
+        "dropped": [
+          {
+            "sentence": "thought u said no pics lol, u so greedy.",
+            "claims": [
+              "stock claim contradicts remaining availability"
+            ]
+          }
+        ]
+      },
+      "passes": false
+    }
+  ]
+}

@@ -1,0 +1,16 @@
+{
+  "case": "G2-neutral-reported-refusal",
+  "expected": "you said no photos earlier.",
+  "actual": {
+    "text": "",
+    "dropped": [
+      {
+        "sentence": "you said no photos earlier.",
+        "claims": [
+          "stock claim contradicts remaining availability"
+        ]
+      }
+    ]
+  },
+  "passes": false
+}
