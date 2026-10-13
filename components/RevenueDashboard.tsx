@@ -23,7 +23,8 @@ import { fmtMoney, fmtNum, starsToMoneyRate, usdToMoneyRate } from "@/lib/money"
 import { intraPeriodTrendPct } from "@/lib/revenue-trend";
 import { useCurrency } from "@/components/CurrencyProvider";
 import { useDashboardAccess } from "@/components/DashboardAccessProvider";
-import { initials } from "@/lib/colors";
+import CreatorAvatar from "@/components/CreatorAvatar";
+
 import FanAvatar from "@/components/FanAvatar";
 import RevenueDayDrivers from "@/components/RevenueDayDrivers";
 import { Info } from "@/components/clone/fields";
@@ -1035,16 +1036,7 @@ export default function RevenueDashboard({ cloneId, initialData = null, overview
                             onClick={() => setSelected(selected === c.id ? null : c.id)}
                             className="flex min-w-0 flex-1 items-center gap-2 text-left"
                           >
-                            {c.photoUrl ? (
-                              <img src={c.photoUrl} alt={c.name} className="h-6 w-6 shrink-0 rounded-full object-cover" />
-                            ) : (
-                              <span
-                                className="creator-name flex h-6 w-6 shrink-0 items-center justify-center rounded-full text-[10px] font-semibold text-white"
-                                style={{ background: c.color }}
-                              >
-                                {initials(c.name)}
-                              </span>
-                            )}
+                            <CreatorAvatar name={c.name} photoUrl={c.photoUrl} className="h-6 w-6" />
                             <span className="min-w-0 flex-1">
                               <span className="creator-name block truncate text-xs">{c.name}</span>
                               <span className="money-value block font-mono text-[11px] tabular-nums">{money(c.stars)}</span>

@@ -5,7 +5,7 @@ import Link from "next/link";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { setCloneScope } from "@/app/actions/clone-scope";
-import { initials } from "@/lib/colors";
+import CreatorAvatar from "@/components/CreatorAvatar";
 import { onOpenCloneSwitcher } from "@/lib/clone-switcher-bus";
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
@@ -106,12 +106,7 @@ export default function CloneSwitcher({
         }
       >
         {selected && <VerifiedBadge className="absolute right-1.5 top-1.5 h-4 w-4" />}
-        <span
-          className="creator-name flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-xs font-bold text-white"
-          style={{ background: creator.color }}
-        >
-          {initials(creator.name)}
-        </span>
+        <CreatorAvatar name={creator.name} photoUrl={creator.photoUrl} />
         <span className="creator-name w-full truncate" style={selected ? { color: creator.color } : undefined}>
           {creator.name}
         </span>
@@ -126,15 +121,7 @@ export default function CloneSwitcher({
         aria-label={`Creator account: ${name}`}
         className="flex min-w-0 items-center gap-2 rounded-full px-3 py-1.5 text-sm font-semibold text-ink"
       >
-        <span
-          className={
-            "creator-name flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white " +
-            (active ? "" : "bg-accent")
-          }
-          style={active ? { background: active.color, boxShadow: `0 0 0 2px ${active.color}55` } : undefined}
-        >
-          {initials(name)}
-        </span>
+        <CreatorAvatar name={name} photoUrl={active?.photoUrl} className="h-5 w-5" />
         <span className="creator-name max-w-[10rem] truncate">{name}</span>
         <VerifiedBadge />
       </div>
@@ -157,14 +144,7 @@ export default function CloneSwitcher({
       >
         {active ? (
           <>
-            {/* Initials leak the name just as plainly as the name does, so the
-                avatar chip carries .creator-name too. */}
-            <span
-              className="creator-name flex h-5 w-5 shrink-0 items-center justify-center rounded-full text-[9px] font-bold text-white"
-              style={{ background: active.color, boxShadow: `0 0 0 2px ${active.color}55` }}
-            >
-              {initials(active.name)}
-            </span>
+            <CreatorAvatar name={active.name} photoUrl={active.photoUrl} className="h-5 w-5" />
             <span className="creator-name max-w-[10rem] truncate">{active.name}</span>
             <VerifiedBadge />
           </>

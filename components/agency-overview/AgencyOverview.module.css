@@ -10,6 +10,17 @@
 .disconnected img[src$="imessage.svg"],.muted img[src$="imessage.svg"]{filter:none;opacity:1}
 @media(max-width:600px){.metrics>.metric:first-child{grid-column:auto;min-height:134px}.metrics>.metric:first-child .spark{width:60px;height:22px;bottom:10px}.metric{padding:14px 10px;gap:6px}.metric strong{font-size:20px}.metricIcon{width:25px;height:30px}.metricIcon svg{width:23px}.telegramMetric>svg{width:27px;height:27px}}
 
+/* Portrait shortcuts use the same single-row structure as the Twin overview. */
+.agencyHero>div:first-child{flex:1;max-width:55%}
+.agencyHero .heroShortcuts{display:flex;flex-direction:column;align-items:center;gap:14px;min-width:0;max-width:48%;flex-shrink:0}
+.shortcutRow{display:flex;justify-content:center;gap:14px;max-width:100%;overflow-x:auto;padding:5px 4px;scrollbar-width:thin}
+.creatorShortcut{display:flex;flex:0 0 108px;flex-direction:column;align-items:center;gap:10px;min-width:0;padding:0;border:0;border-radius:10px;background:transparent;text-align:center;color:#252028}
+.creatorShortcut .shortcutPhoto{width:76px;height:76px;border:3px solid #fff;border-radius:50%;box-shadow:0 4px 12px #251c2512;transition:transform .15s,box-shadow .15s}
+.creatorShortcut:hover:not(:disabled) .shortcutPhoto{transform:translateY(-2px);box-shadow:0 0 0 2px var(--moxy-overview-accent-tint,#F4E9EC),0 5px 14px #251c2518}
+.shortcutName{display:block;width:100%;font-size:12px;font-weight:600;line-height:1.4;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.creatorCount{display:flex;align-items:center;gap:8px;font-size:12px;color:#78646c}
+@media(max-width:600px){.hero.agencyHero{flex-direction:column;align-items:flex-start;gap:20px}.hero.agencyHero>div:first-child{width:100%;max-width:none}.hero.agencyHero h1{max-width:100%}.hero.agencyHero .heroShortcuts{width:100%;max-width:none}.agencyHero .shortcutRow{justify-content:flex-start;align-self:center}.agencyHero .creatorShortcut{flex-basis:114px}}
+
 /* Individual creator composition follows the creator dashboard, with Moxy colours. */
 .creatorPage .hero{min-height:228px;padding:36px 54px;background:linear-gradient(110deg,#f1ede9,#e8e4df)}
 .creatorPage .hero h1{font-size:clamp(34px,3.5vw,54px);max-width:520px}

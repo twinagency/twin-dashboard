@@ -5,7 +5,7 @@ import { isPartnerPreview } from "@/lib/agency-policy";
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
-import { initials } from "@/lib/colors";
+import CreatorAvatar from "@/components/CreatorAvatar";
 import { toggleClonePause } from "@/app/clones/actions";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -116,16 +116,7 @@ export default function ClonesGrid({ clones }: { clones: CloneCard[] }) {
               <div className="flex items-start gap-3">
                 <div className="shrink-0 rounded-full p-[2px]" style={{ backgroundColor: c.color }}>
                   <div className="rounded-full bg-panel p-[2px]">
-                    {c.photoUrl ? (
-                      <img src={c.photoUrl} alt={c.name} className="block h-11 w-11 rounded-full object-cover" />
-                    ) : (
-                      <div
-                        className="creator-name flex h-11 w-11 items-center justify-center rounded-full text-sm font-bold text-white"
-                        style={{ backgroundColor: c.color }}
-                      >
-                        {initials(c.name)}
-                      </div>
-                    )}
+                    <CreatorAvatar name={c.name} photoUrl={c.photoUrl} className="h-11 w-11" />
                   </div>
                 </div>
                 <div className="min-w-0 flex-1">
