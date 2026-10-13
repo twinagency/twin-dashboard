@@ -1,0 +1,343 @@
+{
+  "status": "complete",
+  "candidate": "771f713b58c11d1b0fcf094595dc8f67ac898eb3",
+  "workflowRun": "38449206004",
+  "deployed": "771f713b58c11d1b0fcf094595dc8f67ac898eb3",
+  "testedSource": "771f713b58c11d1b0fcf094595dc8f67ac898eb3",
+  "image": "sha256:ac361b6304d4fa20ee251177b01277e37c826173f1ecd2d2afc2f8cb04f7ca9c",
+  "at": "2026-10-13T18:46:09.409443+00:00",
+  "cutover": {
+    "baselineRevision": "9138db6f956ed383d18fe33bce6577b2f5d74d4a",
+    "baselineImage": "sha256:5e9cc935054f8040da95d1437cea69b4e1244810eb7a99f971d926e022d27283",
+    "candidateRevision": "771f713b58c11d1b0fcf094595dc8f67ac898eb3",
+    "candidateImage": "sha256:ac361b6304d4fa20ee251177b01277e37c826173f1ecd2d2afc2f8cb04f7ca9c",
+    "release": "/home/ubuntu/twin-v2-reply-releases/771f713b58c11d1b0fcf094595dc8f67ac898eb3",
+    "hostChanges": [
+      "scripts/check-existing-card-discussion.ts",
+      "scripts/check-reply-grounding.ts",
+      "src/grounding.ts",
+      "src/turn.ts"
+    ],
+    "holdsMaintainedUntilVerification": true,
+    "holdsReleased": true
+  },
+  "financialGate": {
+    "creators": 17,
+    "drained": 17,
+    "owed": 0,
+    "reservedTurns": 0,
+    "openExceptions": 0,
+    "awaitingReceiptRefunds": 0,
+    "rpcChecks": 34
+  },
+  "fleet": {
+    "at": "2026-10-13T18:46:07.437Z",
+    "girls": {
+      "alanna-pow": {
+        "status": "running",
+        "botUsername": "alannapow_bot",
+        "startedAt": "2026-10-13T18:45:39.209Z"
+      },
+      "allison-parker": {
+        "status": "running",
+        "botUsername": "aliparkerbot999_bot",
+        "startedAt": "2026-10-13T18:45:38.537Z"
+      },
+      "bethany-marquez": {
+        "status": "running",
+        "botUsername": "zoeyfoxxbotpay_bot",
+        "startedAt": "2026-10-13T18:45:39.052Z"
+      },
+      "briana-redd": {
+        "status": "running",
+        "botUsername": "cartercampayments_bot",
+        "startedAt": "2026-10-13T18:45:39.025Z"
+      },
+      "cat-chase": {
+        "status": "running",
+        "botUsername": "catpayments_bot",
+        "startedAt": "2026-10-13T18:45:39.798Z"
+      },
+      "dakota-lyn": {
+        "status": "running",
+        "botUsername": "dakotapayments_bot",
+        "startedAt": "2026-10-13T18:45:38.949Z"
+      },
+      "dreka-cakez": {
+        "status": "running",
+        "botUsername": "DrekapaymentsBot",
+        "startedAt": "2026-10-13T18:45:38.387Z"
+      },
+      "fit-sid": {
+        "status": "running",
+        "botUsername": "fidsidpayments_bot",
+        "startedAt": "2026-10-13T18:45:39.291Z"
+      },
+      "kyla-yesenosky": {
+        "status": "running",
+        "botUsername": "kybotpayments_bot",
+        "startedAt": "2026-10-13T18:45:38.846Z"
+      },
+      "mrs-callace": {
+        "status": "running",
+        "botUsername": "mrscallacepayments_bot",
+        "startedAt": "2026-10-13T18:45:38.521Z"
+      },
+      "olivia-jade": {
+        "status": "running",
+        "botUsername": "OliviaJade00Bot",
+        "startedAt": "2026-10-13T18:45:38.748Z"
+      },
+      "riley-mae-lewis": {
+        "status": "running",
+        "botUsername": "rileymaypayments_bot",
+        "startedAt": "2026-10-13T18:45:38.962Z"
+      },
+      "sania-mallory": {
+        "status": "running",
+        "botUsername": "Saniapayments_bot",
+        "startedAt": "2026-10-13T18:45:38.667Z"
+      },
+      "tammy": {
+        "status": "running",
+        "botUsername": "tamarapayments10_bot",
+        "startedAt": "2026-10-13T18:45:39.335Z"
+      },
+      "toochi": {
+        "status": "running",
+        "botUsername": "paymentstoochi_bot",
+        "startedAt": "2026-10-13T18:45:38.658Z"
+      },
+      "trashy": {
+        "status": "running",
+        "botUsername": "trashybagqueennBot",
+        "startedAt": "2026-10-13T18:45:38.745Z"
+      },
+      "tru-kait": {
+        "status": "running",
+        "botUsername": "truekaitpayments_bot",
+        "startedAt": "2026-10-13T18:45:38.401Z"
+      }
+    }
+  },
+  "verifiedSourceFilesPerContainer": 285,
+  "settings": {
+    "settingsHash": "e6fd1b358016fe045bf24e48cb6e9b59a485b3b9d3d0dc7b3ce44dcaf96fd6d3",
+    "active": [
+      "alanna-pow",
+      "allison-parker",
+      "bethany-marquez",
+      "briana-redd",
+      "cat-chase",
+      "dakota-lyn",
+      "dreka-cakez",
+      "fit-sid",
+      "kyla-yesenosky",
+      "mrs-callace",
+      "olivia-jade",
+      "riley-mae-lewis",
+      "sania-mallory",
+      "tammy",
+      "toochi",
+      "trashy",
+      "tru-kait"
+    ],
+    "model": "deepseek/deepseek-v4.1-flash",
+    "providerOrder": [
+      "deepinfra/fp8",
+      "together"
+    ],
+    "bundles": "off"
+  },
+  "promptVerification": {
+    "at": "2026-10-13T18:45:10.478Z",
+    "health": [
+      {
+        "endpoint": "/",
+        "status": 200,
+        "ms": 6
+      },
+      {
+        "endpoint": "/api/girls/details?girl=riley-mae-lewis",
+        "status": 200,
+        "ms": 134
+      }
+    ],
+    "settingsHash": "e6fd1b358016fe045bf24e48cb6e9b59a485b3b9d3d0dc7b3ce44dcaf96fd6d3",
+    "checks": [
+      {
+        "slug": "alanna-pow",
+        "settingsHash": "37fbdeb462400033c7d0bc5b781bf6598f33ec9ab5406c1862c77eaa1af0f85a",
+        "emojiPolicy": "98a6172647eae7c39aa3ee8bd3f3bce57f1745bfe4271f11caded9005aa6cb0b",
+        "displayMatches": true,
+        "previewMatches": true,
+        "testerPrice": 2700,
+        "normalPrice": 2700
+      },
+      {
+        "slug": "allison-parker",
+        "settingsHash": "7d56e4a51db9eee4778d18b87a0f3c29fcd4055daa2b533714c79110575931eb",
+        "emojiPolicy": "98a6172647eae7c39aa3ee8bd3f3bce57f1745bfe4271f11caded9005aa6cb0b",
+        "displayMatches": true,
+        "previewMatches": true,
+        "testerPrice": 2700,
+        "normalPrice": 2700
+      },
+      {
+        "slug": "bethany-marquez",
+        "settingsHash": "37465730801c197dcb6b44c0133e524511901439778ffc936734545dce2c548c",
+        "emojiPolicy": "98a6172647eae7c39aa3ee8bd3f3bce57f1745bfe4271f11caded9005aa6cb0b",
+        "displayMatches": true,
+        "previewMatches": true,
+        "testerPrice": 2700,
+        "normalPrice": 2700
+      },
+      {
+        "slug": "briana-redd",
+        "settingsHash": "55db87ff29193e56ee382e15db7f059c2def1ff5ad0a6c925d5e3b2ac15c34e9",
+        "emojiPolicy": "98a6172647eae7c39aa3ee8bd3f3bce57f1745bfe4271f11caded9005aa6cb0b",
+        "displayMatches": true,
+        "previewMatches": true,
+        "testerPrice": 2700,
+        "normalPrice": 2700
+      },
+      {
+        "slug": "cat-chase",
+        "settingsHash": "d01a8a7ccf531bc98f49670954f4bb5eab3f42b434cd0b070744a2181469d6f8",
+        "emojiPolicy": "98a6172647eae7c39aa3ee8bd3f3bce57f1745bfe4271f11caded9005aa6cb0b",
+        "displayMatches": true,
+        "previewMatches": true,
+        "testerPrice": 2700,
+        "normalPrice": 2700
+      },
+      {
+        "slug": "dakota-lyn",
+        "settingsHash": "e854c09d624a2065c487590a4c0864868bea9c0fdd92726dd6a503b9313efd8c",
+        "emojiPolicy": "98a6172647eae7c39aa3ee8bd3f3bce57f1745bfe4271f11caded9005aa6cb0b",
+        "displayMatches": true,
+        "previewMatches": true,
+        "testerPrice": 2700,
+        "normalPrice": 2700
+      },
+      {
+        "slug": "dreka-cakez",
+        "settingsHash": "6155a35e3f65d4f707560079fbff08a10de6ff0c20681487ecf806110ceb7512",
+        "emojiPolicy": "98a6172647eae7c39aa3ee8bd3f3bce57f1745bfe4271f11caded9005aa6cb0b",
+        "displayMatches": true,
+        "previewMatches": true,
+        "testerPrice": 2700,
+        "normalPrice": 2700
+      },
+      {
+        "slug": "fit-sid",
+        "settingsHash": "384cf5a76fafd6a2559a7ddfa1e7fbaa0410deec21465797f89170406b14c1a8",
+        "emojiPolicy": "98a6172647eae7c39aa3ee8bd3f3bce57f1745bfe4271f11caded9005aa6cb0b",
+        "displayMatches": true,
+        "previewMatches": true,
+        "testerPrice": 2700,
+        "normalPrice": 2700
+      },
+      {
+        "slug": "kyla-yesenosky",
+        "settingsHash": "632ee269ee23f9da28c519f1823b73e2ff18f84368260ed501cd9a7c2f39fda2",
+        "emojiPolicy": "667c25baed4dd5c1409893ead8f73f157c5b3ba2b359873d0679371cc46bd7ff",
+        "displayMatches": true,
+        "previewMatches": true,
+        "testerPrice": 5,
+        "normalPrice": 2700
+      },
+      {
+        "slug": "mrs-callace",
+        "settingsHash": "53ea704401cb3bbba582b9194725f5df3ed27d1242b9e4da9ed8b398e2b8ab3c",
+        "emojiPolicy": "98a6172647eae7c39aa3ee8bd3f3bce57f1745bfe4271f11caded9005aa6cb0b",
+        "displayMatches": true,
+        "previewMatches": true,
+        "testerPrice": 2700,
+        "normalPrice": 2700
+      },
+      {
+        "slug": "olivia-jade",
+        "settingsHash": "b95cec3dd95a4d99864b007be6f32254877e0f0a976dbe0d261f40f336abe31c",
+        "emojiPolicy": "140bedbf9c3f6d56a9846d2ba7088798683f4da0c248231336e6a05679e4fdfe",
+        "displayMatches": true,
+        "previewMatches": true,
+        "testerPrice": 2700,
+        "normalPrice": 2700
+      },
+      {
+        "slug": "riley-mae-lewis",
+        "settingsHash": "81bed8a04bab96daf9dea6b3b708f823fc4c07e80e0db193178e132604b34e38",
+        "emojiPolicy": "140bedbf9c3f6d56a9846d2ba7088798683f4da0c248231336e6a05679e4fdfe",
+        "displayMatches": true,
+        "previewMatches": true,
+        "testerPrice": 5,
+        "normalPrice": 2700
+      },
+      {
+        "slug": "sania-mallory",
+        "settingsHash": "8186c382b85078693d56659ecfaf15687e4ed76f0716e93fe7204f64fd1c9cd5",
+        "emojiPolicy": "ae5a4a511826281bbb1c3611565c9209c8463c3738ce083ce44f1866d279625e",
+        "displayMatches": true,
+        "previewMatches": true,
+        "testerPrice": 2700,
+        "normalPrice": 2700
+      },
+      {
+        "slug": "tammy",
+        "settingsHash": "1aa3c805d920b31b302023ec3948ebf09002a26ec8d862c641383f6465acec54",
+        "emojiPolicy": "98a6172647eae7c39aa3ee8bd3f3bce57f1745bfe4271f11caded9005aa6cb0b",
+        "displayMatches": true,
+        "previewMatches": true,
+        "testerPrice": 2700,
+        "normalPrice": 2700
+      },
+      {
+        "slug": "toochi",
+        "settingsHash": "6f12fe8cfefaa89844f4548b71466748a5a6171019d67ba58d89036eee9ccfcb",
+        "emojiPolicy": "98a6172647eae7c39aa3ee8bd3f3bce57f1745bfe4271f11caded9005aa6cb0b",
+        "displayMatches": true,
+        "previewMatches": true,
+        "testerPrice": 2700,
+        "normalPrice": 2700
+      },
+      {
+        "slug": "trashy",
+        "settingsHash": "36dbe2f96f1558e952c48a1b932bd5d37430e31e9de45641a5b0d3eef42a0279",
+        "emojiPolicy": "26875d75be84fa970492fbbc104edb8064171cf9022d5810fccf4ef2ac8641e7",
+        "displayMatches": true,
+        "previewMatches": true,
+        "testerPrice": 5,
+        "normalPrice": 2700
+      },
+      {
+        "slug": "tru-kait",
+        "settingsHash": "492ada3fb2b636272f3fbdd551a9db5bc839b01e5dd7b91f2e6ab1dc64cffb36",
+        "emojiPolicy": "98a6172647eae7c39aa3ee8bd3f3bce57f1745bfe4271f11caded9005aa6cb0b",
+        "displayMatches": true,
+        "previewMatches": true,
+        "testerPrice": 2700,
+        "normalPrice": 2700
+      }
+    ],
+    "modelCalls": 0,
+    "messagesSent": 0,
+    "databaseWrites": 0
+  },
+  "dashboardReadiness": {
+    "beforeHealthy": false,
+    "sameCandidateImageRestarted": true,
+    "afterHealthy": true,
+    "at": "2026-10-13T18:45:09.187061+00:00"
+  },
+  "offlineSuites": 25,
+  "typecheck": true,
+  "realModelCases": 464,
+  "backup": "/home/ubuntu/twin-v2-backups/reply-baseline-771f713-1791916541369657274",
+  "rollbackCommand": "python3 /home/ubuntu/twin-v2-backups/reply-baseline-771f713-1791916541369657274/deploy-reply-release.py --rollback",
+  "rollbackTriggered": false,
+  "newStateOrSchema": false,
+  "proactiveFanMessages": 0,
+  "purchasesMade": 0,
+  "financialDataRestored": false,
+  "actualTelegramVisibilityVerified": false
+}
