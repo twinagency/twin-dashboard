@@ -1,5 +1,5 @@
 {
-  "reason": "Fix a confirmed Safari onboarding gallery race: thumbnails loading during a tap must not swallow preview activation. Includes a deterministic regression covering the image swap between pointer down and up.",
-  "source_commit": "7ba6aab5b1cde90fc69bf1a12ebe2fdec92b4b3d",
-  "requested_at": "2026-10-13T09:07:39.997Z"
+  "reason": "Fix confirmed Safari onboarding thumbnail taps and verify the image-replacement race plus persisted gallery refresh.",
+  "source_commit": "0eca15370b239a2106fa26b086c7aca205e89eff",
+  "requested_at": "2026-10-13T09:13:06.586Z"
 }
