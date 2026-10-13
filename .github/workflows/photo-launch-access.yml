@@ -1,9 +1,9 @@
 name: Validate isolated Twin V2 card candidate
 on:
   push:
-    branches: [codex/v2-card-model-validation-20261013]
+    branches: [codex/v2-card-model-validation-v2-20261013]
     paths-ignore:
-      - docs/existing-card-candidate-results.json
+      - docs/existing-card-candidate-v2-results.json
 permissions:
   contents: write
 concurrency:
