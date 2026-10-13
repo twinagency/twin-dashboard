@@ -75,7 +75,7 @@ for(const creator of creators){
 const eligible=checks.filter(x=>x.eligible.length).map(x=>x.slug),riley=checks.find(x=>x.slug==='riley-mae-lewis'),alanna=checks.find(x=>x.slug==='alanna-pow');
 const recommended=riley?.eligible.length?'riley-mae-lewis':alanna?.eligible.length?'alanna-pow':eligible[0]??null;
 console.log('BUNDLE_AUDIT_JSON '+JSON.stringify({flag:process.env.V2_BUNDLES,offerTableReady:true,checks,eligibleCreators:eligible,recommended}));
-'''.replace("__EXPECTED__", JSON.stringify(EXPECTED))
+'''.replace("__EXPECTED__", json.dumps(EXPECTED))
 
 remote = r'''import base64,datetime,gzip,json,pathlib,subprocess,time
 REVISION=__REVISION__
