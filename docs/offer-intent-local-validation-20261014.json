@@ -1,0 +1,187 @@
+{
+  "sourceCandidate": "c9582579a7cf35ab0763b0e19323b52756ac94d7",
+  "sourceRelease": "e668afb2936f25106b5ba0772096f7dfac029224",
+  "focusedAssertions": 1253,
+  "offlineSuites": 25,
+  "typecheck": true,
+  "modelTransport": "mocked",
+  "telegramTransport": "mocked",
+  "payments": "mocked external/database edges; no real Stars purchase/refund",
+  "suiteResults": [
+    {
+      "suite": "scripts/check-safety.ts",
+      "exit": 0,
+      "last": [
+        "all 91 safety checks passed"
+      ]
+    },
+    {
+      "suite": "scripts/check-media.ts",
+      "exit": 0,
+      "last": [
+        "all 138 media/reply checks passed"
+      ]
+    },
+    {
+      "suite": "scripts/check-photo-flow.ts",
+      "exit": 0,
+      "last": [
+        "all 24 photo-flow checks passed"
+      ]
+    },
+    {
+      "suite": "scripts/check-media-facts.ts",
+      "exit": 0,
+      "last": [
+        "all 99 media-facts checks passed"
+      ]
+    },
+    {
+      "suite": "scripts/check-media-correction.ts",
+      "exit": 0,
+      "last": [
+        "all 209 correction checks passed"
+      ]
+    },
+    {
+      "suite": "scripts/check-media-toy-menu.ts",
+      "exit": 0,
+      "last": [
+        "all 324 toy-menu checks passed"
+      ]
+    },
+    {
+      "suite": "scripts/check-reply-grounding.ts",
+      "exit": 0,
+      "last": [
+        "all 124 grounding checks passed"
+      ]
+    },
+    {
+      "suite": "scripts/check-turn.ts",
+      "exit": 0,
+      "last": [
+        "all 25 turn checks passed"
+      ]
+    },
+    {
+      "suite": "scripts/check-structured-reply.ts",
+      "exit": 0,
+      "last": [
+        "[llm] memory call failed: fixture transport error"
+      ]
+    },
+    {
+      "suite": "scripts/check-structured-turn.ts",
+      "exit": 0,
+      "last": [
+        "PASS 31 structured pipeline cases; both routes, raw responses, exact files, no sends on invalid output"
+      ]
+    },
+    {
+      "suite": "scripts/check-shared-photo-repair.ts",
+      "exit": 0,
+      "last": [
+        "{\"stage\":\"candidate\",\"checks\":64,\"failures\":[]}"
+      ]
+    },
+    {
+      "suite": "scripts/check-existing-card-discussion.ts",
+      "exit": 0,
+      "last": [
+        "{\"stage\":\"candidate\",\"checks\":1253,\"failures\":[]}"
+      ]
+    },
+    {
+      "suite": "scripts/check-reply-outcomes.ts",
+      "exit": 0,
+      "last": [
+        "{\"stage\":\"candidate\",\"checks\":260,\"failures\":[]}"
+      ]
+    },
+    {
+      "suite": "scripts/check-payments.ts",
+      "exit": 0,
+      "last": [
+        "all 61 payment checks passed"
+      ]
+    },
+    {
+      "suite": "scripts/check-bundles.ts",
+      "exit": 0,
+      "last": [
+        "all 150 Stage 3 bundle/offer checks passed"
+      ]
+    },
+    {
+      "suite": "scripts/check-delivery.ts",
+      "exit": 0,
+      "last": [
+        "all 451 delivery checks passed"
+      ]
+    },
+    {
+      "suite": "scripts/check-photo-reference.ts",
+      "exit": 0,
+      "last": [
+        "PASS 130 sequential photo-reference scenarios; 3010 assertions; ordinary and Business; zero network calls"
+      ]
+    },
+    {
+      "suite": "scripts/check-photo-reference-data.ts",
+      "exit": 0,
+      "last": [
+        "all 53 photo-reference data checks passed"
+      ]
+    },
+    {
+      "suite": "scripts/check-credits.ts",
+      "exit": 0,
+      "last": [
+        "all 291 credit adapter checks passed"
+      ]
+    },
+    {
+      "suite": "scripts/check-tips.ts",
+      "exit": 0,
+      "last": [
+        "all 190 tip checks passed"
+      ]
+    },
+    {
+      "suite": "scripts/check-tips-wiring.ts",
+      "exit": 0,
+      "last": [
+        "all 93 tip wiring checks passed"
+      ]
+    },
+    {
+      "suite": "scripts/check-archive.ts",
+      "exit": 0,
+      "last": [
+        "56/56 archive checks passed"
+      ]
+    },
+    {
+      "suite": "scripts/check-memory.ts",
+      "exit": 0,
+      "last": [
+        "77/77 memory checks passed"
+      ]
+    },
+    {
+      "suite": "scripts/check-memory-wiring.ts",
+      "exit": 0,
+      "last": [
+        "all 177 memory wiring checks passed"
+      ]
+    },
+    {
+      "suite": "scripts/check-dashboard-history.ts",
+      "exit": 0,
+      "last": [
+        "All stored V2 history: no age cutoff or expiry, paging, Unicode/partial appends, delivery evidence, creator/fan isolation, cursor validation and stale UI responses passed."
+      ]
+    }
+  ]
+}
