@@ -1,0 +1,209 @@
+{
+  "status": "prepared",
+  "candidate": "771f713b58c11d1b0fcf094595dc8f67ac898eb3",
+  "workflowRun": "38447992657",
+  "liveRuntimeReplaced": false,
+  "modelCalls": 0,
+  "fanMessages": 0,
+  "purchases": 0,
+  "productionWrites": 0,
+  "sha": "771f713b58c11d1b0fcf094595dc8f67ac898eb3",
+  "testedSource": "771f713b58c11d1b0fcf094595dc8f67ac898eb3",
+  "image": "sha256:ac361b6304d4fa20ee251177b01277e37c826173f1ecd2d2afc2f8cb04f7ca9c",
+  "oldSha": "9138db6f956ed383d18fe33bce6577b2f5d74d4a",
+  "oldImage": "sha256:5e9cc935054f8040da95d1437cea69b4e1244810eb7a99f971d926e022d27283",
+  "release": "/home/ubuntu/twin-v2-reply-releases/771f713b58c11d1b0fcf094595dc8f67ac898eb3",
+  "backup": "/home/ubuntu/twin-v2-backups/reply-baseline-771f713-1791916541369657274",
+  "offline": [
+    {
+      "suite": "scripts/check-safety.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-media.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-photo-flow.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-media-facts.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-media-correction.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-media-toy-menu.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-reply-grounding.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-turn.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-structured-reply.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-structured-turn.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-shared-photo-repair.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-existing-card-discussion.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-reply-outcomes.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-payments.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-bundles.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-delivery.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-photo-reference.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-photo-reference-data.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-credits.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-tips.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-tips-wiring.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-archive.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-memory.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-memory-wiring.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-dashboard-history.ts",
+      "exit": 0
+    }
+  ],
+  "typecheck": true,
+  "sourceManifestFiles": 289,
+  "providedSourceFiles": 4,
+  "promptChanges": 0,
+  "hostChanges": [
+    {
+      "path": "scripts/check-existing-card-discussion.ts",
+      "existed": true,
+      "oldSha256": "c53e890178598ecda33547df03f38a02fd74f6aaa823b8fdf692fcc470426972",
+      "newSha256": "c02f1ee9801d55005d0996d9510637fa5b5bf1452f49d9c7be56a91a3ea3d9a1"
+    },
+    {
+      "path": "scripts/check-reply-grounding.ts",
+      "existed": true,
+      "oldSha256": "0782640a614d8c06801d9ea656109a86f327815edb789403f809737377ed9400",
+      "newSha256": "ec76025a9e838221719ad86392de905a8664da6c53df4158e384f82d2bc81c2a"
+    },
+    {
+      "path": "src/grounding.ts",
+      "existed": true,
+      "oldSha256": "222ee347f7e8492eb3acb6bdaaf6d70398000ae5b41d95b1b88b0811856db144",
+      "newSha256": "e5f0bfd10d1f9737d8cc22386b7447358c41a809dc966c97928a65668ca567d0"
+    },
+    {
+      "path": "src/turn.ts",
+      "existed": true,
+      "oldSha256": "b9c82ffbde0332e496a11ed8afb41fe4abb3e74cb6116dc4234f761d29b76c4a",
+      "newSha256": "50ec3688f69bfc3b490d2a50621338407c3c220808f78e540b8e52d4f28898a3"
+    }
+  ],
+  "settingsHash": "e6fd1b358016fe045bf24e48cb6e9b59a485b3b9d3d0dc7b3ce44dcaf96fd6d3",
+  "expectedSlugs": [
+    "alanna-pow",
+    "allison-parker",
+    "bethany-marquez",
+    "briana-redd",
+    "cat-chase",
+    "dakota-lyn",
+    "dreka-cakez",
+    "fit-sid",
+    "kyla-yesenosky",
+    "mrs-callace",
+    "olivia-jade",
+    "riley-mae-lewis",
+    "sania-mallory",
+    "tammy",
+    "toochi",
+    "trashy",
+    "tru-kait"
+  ],
+  "runtimeBefore": [
+    {
+      "name": "twin-v2-bot-1",
+      "image": "sha256:5e9cc935054f8040da95d1437cea69b4e1244810eb7a99f971d926e022d27283",
+      "running": true,
+      "revision": "9138db6f956ed383d18fe33bce6577b2f5d74d4a"
+    },
+    {
+      "name": "twin-v2-dash-1",
+      "image": "sha256:5e9cc935054f8040da95d1437cea69b4e1244810eb7a99f971d926e022d27283",
+      "running": true,
+      "revision": "9138db6f956ed383d18fe33bce6577b2f5d74d4a"
+    }
+  ],
+  "runtimeAfter": [
+    {
+      "name": "twin-v2-bot-1",
+      "image": "sha256:5e9cc935054f8040da95d1437cea69b4e1244810eb7a99f971d926e022d27283",
+      "running": true,
+      "revision": "9138db6f956ed383d18fe33bce6577b2f5d74d4a"
+    },
+    {
+      "name": "twin-v2-dash-1",
+      "image": "sha256:5e9cc935054f8040da95d1437cea69b4e1244810eb7a99f971d926e022d27283",
+      "running": true,
+      "revision": "9138db6f956ed383d18fe33bce6577b2f5d74d4a"
+    }
+  ],
+  "preparedAt": "2026-10-13T18:38:09.813980+00:00",
+  "rollbackReady": true,
+  "rollback": {
+    "baselineRevision": "9138db6f956ed383d18fe33bce6577b2f5d74d4a",
+    "image": "sha256:5e9cc935054f8040da95d1437cea69b4e1244810eb7a99f971d926e022d27283",
+    "codeArchiveSha": "b0795a76a2ba7f72d1802d681c99525c14059f75dc743bb466ea60d70c91332e",
+    "imageArchiveBytes": 102997504,
+    "dataIncluded": false,
+    "runtimeReplaced": false
+  },
+  "realModelCases": 464,
+  "modelEvidencePath": "/home/ubuntu/twin-v2-validation/reply-outcomes-candidate-1791915740126508300"
+}
