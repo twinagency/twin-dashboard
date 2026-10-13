@@ -1,0 +1,222 @@
+{
+  "status": "complete",
+  "phase": "prepare",
+  "workflowRun": "38466106141",
+  "sha": "8f43a1d58b0ecbf8c22b06c38c18d972f43c5e04",
+  "testedSource": "8f43a1d58b0ecbf8c22b06c38c18d972f43c5e04",
+  "image": "sha256:4d6b46a736ef0d172781f5166756508f41309d1d5b3f31bc6ca3ad57c4862cc4",
+  "oldSha": "771f713b58c11d1b0fcf094595dc8f67ac898eb3",
+  "oldImage": "sha256:ac361b6304d4fa20ee251177b01277e37c826173f1ecd2d2afc2f8cb04f7ca9c",
+  "release": "/home/ubuntu/twin-v2-card-releases/8f43a1d58b0ecbf8c22b06c38c18d972f43c5e04",
+  "backup": "/home/ubuntu/twin-v2-backups/card-baseline-8f43a1d-1791924689160743490",
+  "offline": [
+    {
+      "suite": "scripts/check-safety.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-media.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-photo-flow.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-media-facts.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-media-correction.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-media-toy-menu.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-reply-grounding.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-turn.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-structured-reply.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-structured-turn.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-shared-photo-repair.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-existing-card-discussion.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-reply-outcomes.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-payments.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-bundles.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-delivery.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-photo-reference.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-photo-reference-data.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-credits.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-tips.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-tips-wiring.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-archive.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-memory.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-memory-wiring.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-dashboard-history.ts",
+      "exit": 0
+    }
+  ],
+  "typecheck": true,
+  "sourceManifestFiles": 290,
+  "providedSourceFiles": 7,
+  "promptChanges": 0,
+  "hostChanges": [
+    {
+      "path": "scripts/check-existing-card-discussion.ts",
+      "existed": true,
+      "oldSha256": "c02f1ee9801d55005d0996d9510637fa5b5bf1452f49d9c7be56a91a3ea3d9a1",
+      "newSha256": "9a617b67b8ea345263717c52fd6d5c232cb9e2da62c5930c3096abc368f26862"
+    },
+    {
+      "path": "src/deliver.ts",
+      "existed": true,
+      "oldSha256": "355b87bbbfe4b034b511a5574334bfe49cd587deeec258deeebc64cea12770ff",
+      "newSha256": "19fe2884dc0facb973a49dc440726886908aa3d5509dbec01adb69056c6fc2ef"
+    },
+    {
+      "path": "src/grounding.ts",
+      "existed": true,
+      "oldSha256": "e5f0bfd10d1f9737d8cc22386b7447358c41a809dc966c97928a65668ca567d0",
+      "newSha256": "d844714785789b3e66d2b696177ecc797555ae0394efef7d735dc870353d3e6e"
+    },
+    {
+      "path": "src/media.ts",
+      "existed": true,
+      "oldSha256": "526d5de0b1c556d37e3d0a0e94b4572bb937385276c79b6ae3be52629cfb4e89",
+      "newSha256": "b0d8d1702aa17919ad996b72f7ce10f3584442c3e2fca2bef9f2af2c64a9b29d"
+    },
+    {
+      "path": "src/memory.ts",
+      "existed": true,
+      "oldSha256": "261d1af5ce647e93b58572f353086b553191ed74acef81b59edfb2e084b40e98",
+      "newSha256": "97e57ac97746cd3d5c7f359ae06f0971b7ba057ae01905be0ef2a7316acc0e0c"
+    },
+    {
+      "path": "src/turn.ts",
+      "existed": true,
+      "oldSha256": "50ec3688f69bfc3b490d2a50621338407c3c220808f78e540b8e52d4f28898a3",
+      "newSha256": "953552b87cbef9aa6ecede270139a6db839bf5e654727cc7d4159726a4bca761"
+    }
+  ],
+  "settingsHash": "54c1467b5192f705e8314504703323dc73d3d598659f2cbe73655ac7e8cdcc7f",
+  "expectedSlugs": [
+    "alanna-pow",
+    "allison-parker",
+    "bethany-marquez",
+    "briana-redd",
+    "cat-chase",
+    "dakota-lyn",
+    "dreka-cakez",
+    "fit-sid",
+    "kyla-yesenosky",
+    "mrs-callace",
+    "olivia-jade",
+    "riley-mae-lewis",
+    "sania-mallory",
+    "tammy",
+    "toochi",
+    "trashy",
+    "tru-kait"
+  ],
+  "runtimeBefore": [
+    {
+      "name": "twin-v2-bot-1",
+      "image": "sha256:ac361b6304d4fa20ee251177b01277e37c826173f1ecd2d2afc2f8cb04f7ca9c",
+      "running": true,
+      "revision": "771f713b58c11d1b0fcf094595dc8f67ac898eb3"
+    },
+    {
+      "name": "twin-v2-dash-1",
+      "image": "sha256:ac361b6304d4fa20ee251177b01277e37c826173f1ecd2d2afc2f8cb04f7ca9c",
+      "running": true,
+      "revision": "771f713b58c11d1b0fcf094595dc8f67ac898eb3"
+    }
+  ],
+  "runtimeAfter": [
+    {
+      "name": "twin-v2-bot-1",
+      "image": "sha256:ac361b6304d4fa20ee251177b01277e37c826173f1ecd2d2afc2f8cb04f7ca9c",
+      "running": true,
+      "revision": "771f713b58c11d1b0fcf094595dc8f67ac898eb3"
+    },
+    {
+      "name": "twin-v2-dash-1",
+      "image": "sha256:ac361b6304d4fa20ee251177b01277e37c826173f1ecd2d2afc2f8cb04f7ca9c",
+      "running": true,
+      "revision": "771f713b58c11d1b0fcf094595dc8f67ac898eb3"
+    }
+  ],
+  "preparedAt": "2026-10-13T20:53:54.059521+00:00",
+  "rollbackReady": true,
+  "rollback": {
+    "baselineRevision": "771f713b58c11d1b0fcf094595dc8f67ac898eb3",
+    "image": "sha256:ac361b6304d4fa20ee251177b01277e37c826173f1ecd2d2afc2f8cb04f7ca9c",
+    "codeArchiveSha": "1a60f6326eab555cacec5275aa7ad97e24f654df2a6ec40f51300cc6a9733574",
+    "imageArchiveBytes": 102992896,
+    "dataIncluded": false,
+    "runtimeReplaced": false
+  },
+  "liveRuntimeReplaced": false,
+  "modelCalls": 0,
+  "fanMessages": 0,
+  "purchases": 0,
+  "productionWrites": 0,
+  "realModelCases": 0,
+  "focusedAssertions": 565,
+  "modelTransport": "mocked"
+}
