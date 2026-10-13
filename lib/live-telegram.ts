@@ -1,6 +1,6 @@
 import { supabaseAdmin } from "./supabase";
 import { getDashboardAccess, requireCloneAccess } from "./dashboard-access";
-import { CHAT_HISTORY_DAYS, CHAT_HISTORY_PAGE, historyWindowQuery } from "./chat-history-window";
+import { CHAT_HISTORY_PAGE, historyWindowQuery } from "./chat-history-window";
 import { fanKey, overlayV2Fan, parseInboxCursor, mergeHistory, type InboxClone, type InboxFan, type InboxMessage } from "./live-telegram-model";
 
 const UPSTREAM = process.env.BOT_V2_URL ?? "http://172.31.6.134:4300";
@@ -85,11 +85,10 @@ export async function loadTelegramHistory(clone: InboxClone, telegramId: number,
   }
   const value = current.status === "fulfilled" ? current.value : null;
   const unavailable = !value || !Array.isArray(value.history);
-  const cutoff = Date.now() - CHAT_HISTORY_DAYS * 86400_000;
   const v2: InboxMessage[] = (unavailable ? [] : value.history).filter((row: any) =>
     typeof row.id === "string" && typeof row.content === "string" && ["user", "assistant"].includes(row.role)
     && ["received", "acknowledged", "unverified"].includes(row.delivery)
-    && Date.parse(row.at) >= cutoff && Date.parse(row.at) <= Date.now()
+    && Number.isFinite(Date.parse(row.at)) && Date.parse(row.at) <= Date.now()
   ).map((row: any) => ({ id: row.id, created_at: row.at, role: row.role === "user" ? "human" : "ai", content: row.content, source: "v2", delivery: row.delivery }));
   return { ...mergeHistory(v1, v2, cursor, value?.hasMore === true || v1.length > CHAT_HISTORY_PAGE), combined: true, unavailable };
 }

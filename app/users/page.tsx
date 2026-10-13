@@ -1307,11 +1307,12 @@ export default async function FansPage({
                 key={`${selected.id}:${params.before ?? ""}:${params.after ?? ""}`}
                 historyNavigation={
                   <nav aria-label="Conversation history" className="flex flex-wrap items-center justify-center gap-3 border-b border-line px-3 py-2 text-xs">
-                    <span className="text-muted">Last 90 days</span>
+                    <span className="text-muted">All stored history</span>
                     {historyUnavailable && <span role="status" className="text-warn">Latest messages could not refresh. Retrying automatically.</span>}
                     {history.length > 0 && (historyHasMore || !combinedHistory && historyAfter) && (
-                      <Link scroll={false} className="text-blue-600 hover:underline" href={baseQs({ fan: selected.id, before: combinedHistory ? inboxCursor(history[0]) : historyCursor(history[0]) })}>Older messages</Link>
+                      <Link scroll={false} className="rounded-md border border-blue-600 px-3 py-1 font-medium text-blue-600 hover:underline" href={baseQs({ fan: selected.id, before: combinedHistory ? inboxCursor(history[0]) : historyCursor(history[0]) })}>Load older messages</Link>
                     )}
+                    {!historyUnavailable && !historyHasMore && !historyAfter && history.length > 0 && <span className="text-muted">Start of stored conversation</span>}
                     {!combinedHistory && history.length > 0 && (historyBefore || historyAfter && historyHasMore) && (
                       <Link scroll={false} className="text-blue-600 hover:underline" href={baseQs({ fan: selected.id, after: historyCursor(history[history.length - 1]) })}>Newer messages</Link>
                     )}
