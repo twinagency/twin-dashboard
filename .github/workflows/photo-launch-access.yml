@@ -1,4 +1,4 @@
-name: Validate integrated V2 selection without sends
+name: Verify V2 rollback and completed isolated selection stage
 on:
   push:
     branches: [codex/media-launch-access-20261012]
@@ -10,7 +10,7 @@ concurrency:
 jobs:
   inspect:
     runs-on: ubuntu-latest
-    timeout-minutes: 25
+    timeout-minutes: 5
     steps:
       - uses: actions/checkout@v4
       - uses: aws-actions/configure-aws-credentials@v4
@@ -18,5 +18,5 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ap-southeast-2
-      - name: Replay frozen conversation with actual candidate and simulated Telegram
+      - name: Read-only rollback and saved replay verification
         run: python3 deployment/photo-launch-access.py
