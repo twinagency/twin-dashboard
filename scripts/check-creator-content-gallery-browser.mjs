@@ -34,7 +34,7 @@ await new Promise(r=>server.listen(0,'127.0.0.1',r));
 try{for(const engine of (process.env.CREATOR_GALLERY_ENGINES||'chromium').split(',')){
  const browser=await ({chromium,webkit}[engine]).launch({...(engine==='chromium'?{executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH||undefined,args:['--no-sandbox','--disable-dev-shm-usage']}:{} )});
  try{for(let repeat=0;repeat<Number(process.env.CREATOR_GALLERY_REPEATS||1);repeat++)for(const brand of process.env.CREATOR_GALLERY_BRANDS?.split(',')||(process.argv.includes('--flirt')?['flirt']:['moxy','twin']))for(const width of [390,1280]){
-  reset();const context=await browser.newContext({viewport:{width,height:844}});const page=await context.newPage();const errors=[];page.on('pageerror',e=>errors.push(e.message));
+  reset();const context=await browser.newContext({viewport:{width,height:844}});const page=await context.newPage();const errors=[];let phase='initial gallery';page.on('pageerror',e=>{errors.push(e.message);console.log('GALLERY_PAGE_ERROR',JSON.stringify({engine,brand,width,repeat,phase,message:e.message,stack:e.stack}));});
   await page.goto(`http://127.0.0.1:${server.address().port}/creator/onboarding?brand=${brand}`);
   await page.getByRole('button',{name:'View all (63)',exact:true}).waitFor();
   assert.equal(await page.locator('[aria-label="Saved content previews"] button').count(),6);
@@ -84,15 +84,19 @@ try{for(const engine of (process.env.CREATOR_GALLERY_ENGINES||'chromium').split(
   const uploads=Array.from({length:7},(_,i)=>({name:`new-${i}.png`,mimeType:'image/png',buffer:png}));
   await page.getByLabel('Add photos and videos',{exact:true}).setInputFiles(uploads);
   await page.getByText('64 of 50 uploaded',{exact:true}).waitFor();assert.ok(files.length<69,'Saved count updates before the whole selection finishes');
-  await page.getByRole('button',{name:'Continue to questions →',exact:true}).click();await page.getByRole('heading',{name:'Questions',exact:true}).waitFor();
+  phase='background questionnaire';await page.getByRole('button',{name:'Continue to questions →',exact:true}).click();await page.getByRole('heading',{name:'Questions',exact:true}).waitFor();
   await page.getByText('7 of 7 files saved',{exact:true}).waitFor();assert.equal(posts,7);
-  await page.getByRole('button',{name:'Back to content',exact:true}).click();await page.getByText('69 of 50 uploaded',{exact:true}).waitFor();
+  phase='background return';await page.getByRole('button',{name:'Back to content',exact:true}).click();await page.getByText('69 of 50 uploaded',{exact:true}).waitFor();
   await page.getByRole('button',{name:'View all (69)',exact:true}).click();
+  phase='removal refresh';
+  const removalRefreshed=page.waitForResponse(async response=>new URL(response.url()).pathname==='/creator-auth/files'&&new URL(response.url()).searchParams.get('page')==='0'&&response.ok()&&(await response.json()).total===68);
   await dialog.getByRole('button',{name:'View new-0.png',exact:true}).click();await dialog.getByRole('button',{name:'Remove file',exact:true}).click();await dialog.getByRole('button',{name:'Yes, remove',exact:true}).click();await dialog.getByText('68 files · Tap to view or remove',{exact:true}).waitFor();
+  await removalRefreshed;
   await dialog.getByRole('button',{name:'Close gallery',exact:true}).click();
-  // Finish fixture thumbnail requests before an intentional document teardown.
-  // WebKit reports interrupted access fetches as page errors during reload.
-  await page.waitForLoadState('networkidle');await page.reload();await page.getByText('68 of 50 uploaded',{exact:true}).waitFor();
+  // Wait for the actual post-removal refresh above before networkidle. Its
+  // earlier load-state event can already be satisfied while that refresh is
+  // still on the component's debounce timer, causing a teardown-only failure.
+  await page.waitForLoadState('networkidle');phase='reload';await page.reload();phase='after reload';await page.getByText('68 of 50 uploaded',{exact:true}).waitFor();
   await page.getByRole('button',{name:'View all (68)',exact:true}).click();await dialog.getByRole('button',{name:'Load more',exact:true}).click();await page.locator('[aria-label="All uploaded files"] button').nth(67).waitFor();
   assert.equal(await dialog.getByRole('button',{name:'View new-0.png',exact:true}).count(),0,'Removed upload cannot reappear from local queue recovery');
   assert.equal(await page.locator('[aria-label="All uploaded files"] button').count(),68);
