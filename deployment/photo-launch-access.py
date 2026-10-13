@@ -16,5 +16,5 @@ def ssm(command,timeout=120):
  if r['Status']!='Success': print(r.get('StandardErrorContent','')[-1800:],flush=True);raise RuntimeError('Candidate gate '+r['Status'])
  return cid
 
-host=pathlib.Path('deployment/v2-photo-recovery/post-release.py').read_text()
+host=pathlib.Path('deployment/v2-photo-recovery/morning-incident-read.py').read_text()
 ssm('python3 -c '+shlex.quote(host),300)
