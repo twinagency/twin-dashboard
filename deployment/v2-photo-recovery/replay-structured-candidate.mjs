@@ -86,8 +86,9 @@ const sequentialRules = {
   ambiguousSources: [2, 4], finalSource: 6,
   finalPolicy: 'original final missing-card wording must classify as missing and select the exact scoped previous photo; missing context or unrecognized wording fails this sequential recovery gate',
 };
-const plan = {version: 'prospective-reference-v2', exactEvidence, independent: cases, sequentialRules, referenceCases,
+const plan = {version: 'prospective-reference-v3', exactEvidence, independent: cases, sequentialRules, referenceCases,
   groundingPolicy: 'raw draft claims are diagnostic; actual prepared and dispatched captions must be grounded, with dispatched caption equal to the product trimmed prepared output even when transport times out',
+  noAttachmentClaimPolicy: 'only a bounded past-deictic reference may cite a scoped acknowledged photo with message id, sent key and matching last-assistant delivery note; remaining new-send claims fail; prior f1d50 48-of-50 result stays unchanged',
   routes: ['business', 'ordinary']};
 const frozenPlan = JSON.stringify(plan);
 const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'structured-candidate-replay-'));
@@ -176,6 +177,67 @@ function scopedReceipt(state, c) {
   return !!p && p.cloneId === profile.id && p.epoch === c.epoch && p.mode === 'simulated'
     && (p.bcid ?? '') === (state.route.bcid ?? '') && p.status !== 'cancelled';
 }
+const explicitSendClaim = text => /\b(?:i(?:'ve| have)?\s+(?:just\s+)?(?:sent|resent|attached|shared|uploaded)|(?:here(?:'s| is)|sent)\s+(?:the|your|that)\s+(?:photo|pic|picture|selfie|image|card))\b/i.test(text);
+function noAttachmentClaim(state, c, texts) {
+  const p = c.photo, priorItem = p ? byKey.get(p.key) : undefined;
+  const scopedAcknowledgedReceipt = scopedReceipt(state, c) && p.status === 'acknowledged'
+    && Number.isSafeInteger(p.messageId) && p.messageId > 0 && c.sent.includes(p.key)
+    && priorItem?.kind === 'photo' && priorItem.storagePath === p.storagePath;
+  const lastAssistant = c.history.filter(value => value.role === 'assistant').at(-1)?.content ?? '';
+  const matchingHistoryNote = !!priorItem && [
+    `[locked photo waiting for him to unlock: ${priorItem.label}]`,
+    `[sent him free photo: ${priorItem.label}]`,
+  ].some(note => lastAssistant.split('\n').includes(note));
+  let used = false, deicticClaims = 0;
+  const okay = texts.every(value => {
+    const text = String(value ?? '').replace(/[’‘]/g, "'");
+    if (!explicitSendClaim(text)) return true;
+    // Remove only this proved historical clause, never a whole sentence or reply.
+    const past = /^\s*that(?:'s|s| is)\s+the\s+one\s+i\s+just\s+sent(?:\s+you)?(?=\s*(?:[,!.?]|(?:babe|baby|hun|love)\b|$))/i.exec(text);
+    if (!past || !scopedAcknowledgedReceipt || !matchingHistoryNote) return false;
+    const rest = text.slice(past[0].length);
+    const newSendPromise = /\b(?:i(?:'m| am|m|'ll| will))\s+(?:just\s+)?(?:send(?:ing)?|resend(?:ing)?|attach(?:ing)?|upload(?:ing)?)\b/i.test(rest);
+    if (explicitSendClaim(rest) || newSendPromise) return false;
+    used = true; deicticClaims++; return true;
+  });
+  return {okay, exemption: {used: okay && used, deicticClaims, scopedAcknowledgedReceipt: !!scopedAcknowledgedReceipt,
+    matchingLastAssistantDeliveryNote: matchingHistoryNote, priorKey: used ? p?.key : undefined,
+    priorTurnId: used ? p?.turnId : undefined, priorMessageId: used ? p?.messageId : undefined}};
+}
+
+// Offline assertions for the narrow diagnostic exemption, before any model request.
+function checkHistoricalClaimGate() {
+  const item = byKey.get(exactChest[0]), state = {route: {bcid: 'claim-gate-test'}};
+  const note = `[locked photo waiting for him to unlock: ${item.label}]`;
+  const base = {epoch: 0, sent: [item.key], history: [{role: 'assistant', content: `a prior caption\n${note}`}],
+    photo: {v: 1, cloneId: profile.id, key: item.key, storagePath: item.storagePath, epoch: 0,
+      turnId: 'claim-gate-proof', at: 1, bcid: state.route.bcid, mode: 'simulated', status: 'acknowledged', messageId: 5025}};
+  const text = 'thats the one i just sent babe, tap the lock on that one';
+  let checks = 0;
+  const check = (chat, reply, expected) => { assert.equal(noAttachmentClaim(state, chat, [reply, reply]).okay, expected); checks++; };
+  check(base, text, true);
+  assert.equal(noAttachmentClaim(state, base, [text]).exemption.used, true); checks++;
+  check({...base, history: [{role: 'assistant', content: `[sent him free photo: ${item.label}]`}]}, text, true);
+  check({...base, photo: {...base.photo, status: 'unknown'}}, text, false);
+  check({...base, photo: {...base.photo, status: 'prepared'}}, text, false);
+  check({...base, photo: {...base.photo, bcid: 'other-route'}}, text, false);
+  check({...base, photo: {...base.photo, epoch: 1}}, text, false);
+  check({...base, photo: {...base.photo, mode: 'real'}}, text, false);
+  check({...base, photo: {...base.photo, messageId: undefined}}, text, false);
+  check({...base, photo: {...base.photo, storagePath: 'unproved-file.jpg'}}, text, false);
+  check({...base, photo: undefined}, text, false);
+  check({...base, sent: []}, text, false);
+  check({...base, history: []}, text, false);
+  check({...base, history: [{role: 'assistant', content: '[locked photo waiting for him to unlock: another file]'}]}, text, false);
+  check(base, 'i just sent you a new photo', false);
+  check(base, 'thats the one i just sent you a new photo', false);
+  check(base, text + '. i just sent another photo', false);
+  check(base, text + '. here is your photo', false);
+  check(base, text + ". i'm sending another photo", false);
+  check(base, 'i can chat with you', true);
+  return checks;
+}
+const historicalClaimGateChecks = checkHistoricalClaimGate();
 async function execute(state, test, group) {
   assert.equal(JSON.stringify(plan), frozenPlan, 'acceptance plan must remain frozen');
   const {rig, route, business} = state, beforeChat = storedChat(state);
@@ -201,6 +263,7 @@ async function execute(state, test, group) {
     const deliveredText = (row?.final ?? []).join(' ');
     const preparedText = (row?.generated ?? []).join(' ');
     const dispatchedCaption = mediaCalls[0]?.payload.caption;
+    const noAttachment = noAttachmentClaim(state, beforeChat, [decoded?.reply ?? '', deliveredText]);
     const enumValues = last?.request?.response_format?.json_schema?.schema?.properties?.selection?.enum ?? [];
     const allPayloadText = turnCalls.flatMap(call => [call.payload.text, call.payload.caption]).filter(Boolean).join(' ');
     const selectedCaptionClaims = item ? groundReply(deliveredText, evidenceText(item.desc, item.words)).dropped : [];
@@ -236,7 +299,7 @@ async function execute(state, test, group) {
       actualDispatchedCaptionMatchesPrepared: !selected || dispatchedCaption === (preparedText ? trimCaption(preparedText) : undefined),
       groundingRemovalTraceValid: groundingTraceValid,
       noPromptOrJSONLeak: !/YOUR CONTENT READY|response_format|"(?:selection|reply)"\s*:|\[(?:free )?(?:photo|video|bundle|tip)(?: \d+)?\]/i.test(allPayloadText),
-      noExplicitFalseSendClaimWithoutSelection: !!selected || !/\b(?:i(?:'ve| have)?\s+(?:just\s+)?(?:sent|resent|attached|shared|uploaded)|(?:here(?:'s| is)|sent)\s+(?:the|your|that)\s+(?:photo|pic|picture|selfie|image|card))\b/i.test([decoded?.reply ?? '', deliveredText].join(' ')),
+      noExplicitFalseSendClaimWithoutSelection: !!selected || noAttachment.okay,
       exactDownloadedFile: exactDownload,
       exactDispatchedAttachment: !selected || (downloads.length === 1 && attachment?.fileData === downloadBytes.get(downloads[0])
         && attachment?.filename === item?.storagePath.split('/').at(-1)
@@ -292,6 +355,7 @@ async function execute(state, test, group) {
       rawDraftUnsupportedClaims: rawSelectedClaims.flatMap(value => value.claims),
       recordedGroundingRemovedClaims: groundingRemoved.flatMap(value => value.claims),
       rawDraftClean: rawSelectedClaims.length === 0,
+      historicalSendClaimExemption: selected ? {used: false} : noAttachment.exemption,
       exhaustedExact: !!test.exhaustedExact,
       alternativeAcknowledgementRecognized: test.exhaustedExact ? alternativeAcknowledgement(selected ? dispatchedCaption ?? '' : deliveredText) : null,
       unresolvedOriginalRecovery: !!test.originalFinal && !(classified && scopedReceipt(state, beforeChat) && test.reference && checks.exactReferenceSelected),
@@ -361,6 +425,7 @@ const summary = {
   model: config.model, providers: config.providerOrder, normalCallsPlanned: normalCalls, requests, results,
   realTelegramSends: 0, realDownloads: 0, assertionsFrozen: true, actualProductContract: true, noRequestOrResponseAdapter: true,
   realDatabaseCalls: 0, syntheticOwnership: true, sequentialOriginalTurns: records.length * 2,
+  historicalClaimGateChecks,
   acceptedBehaviorCases: results.filter(result => result.behaviorAcceptance && result.passed).length,
   observationalResults: results.filter(result => !result.behaviorAcceptance).map(result => ({case: result.case, reason: result.observationReason, contractPassed: result.passed})),
   originalRecoveryUnresolved: results.filter(result => result.unresolvedOriginalRecovery).map(result => result.case),
@@ -371,7 +436,7 @@ const summary = {
   limitations: ['Telegram transport, file download and ownership simulated', 'original source turns 3 and 5 remain behaviorally observational',
     'raw unsupported draft terms are diagnostic; protection is tested on actual prepared and dispatched output',
     'closed grounding vocabulary and bounded alternative-language recognition are not a complete semantic truth check; unrecognized alternative wording fails review',
-    'the previous c457 43-of-50 result remains failed under its original plan',
+    'the previous c457 43-of-50 and f1d50 48-of-50 results remain unchanged under their original plans',
     'not live delivery or production deployment acceptance', 'does not replace offline failure, ownership or displayed-prompt tests'],
   fatal: fatal ? 'Private diagnostic contains fatal error' : null,
 };
