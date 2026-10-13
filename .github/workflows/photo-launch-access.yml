@@ -1,9 +1,9 @@
-name: Validate isolated Twin V2 price guard candidate
+name: Prepare isolated Twin V2 price guard release
 on:
   push:
-    branches: [codex/v2-price-guard-model-validation-20261014]
+    branches: [codex/v2-price-guard-release-prep-20261014]
     paths-ignore:
-      - docs/price-guard-model-validation-20261014.json
+      - docs/price-guard-release-prepared-20261014.json
 permissions:
   contents: write
 concurrency:
@@ -20,7 +20,7 @@ jobs:
           aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
           aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
           aws-region: ap-southeast-2
-      - name: Replay frozen V2 fleet with candidate source and record evidence
+      - name: Build pinned full remote source, verify packaged gates, prepare rollback
         env:
           GITHUB_TOKEN: ${{ github.token }}
         run: python3 deployment/photo-launch-access.py

@@ -1,13 +1,16 @@
 """Build and verify the full remote candidate; preserve live runtime and create code-only rollback evidence."""
 import datetime,hashlib,json,pathlib,shutil,subprocess,sys,tarfile,time
-SHA='9138db6f956ed383d18fe33bce6577b2f5d74d4a'
-OLD_SHA='2f24f023c0cf46bea1c3b3b334458cf1a5df265e'
+SHA='771f713b58c11d1b0fcf094595dc8f67ac898eb3'
+OLD_SHA='9138db6f956ed383d18fe33bce6577b2f5d74d4a'
 # Explicit existing-image pin, never a moving tag.
-OLD_IMAGE='sha256:dff48242b35b94e7b0e757ee4b7778a11958ef85b231b5fdb369542902e325f9'
+OLD_IMAGE='sha256:5e9cc935054f8040da95d1437cea69b4e1244810eb7a99f971d926e022d27283'
 ROOT=pathlib.Path('/home/ubuntu/twin-v2')
 RELEASE=pathlib.Path('/home/ubuntu/twin-v2-reply-releases')/SHA
 BACKUP=pathlib.Path('/home/ubuntu/twin-v2-backups')/('reply-baseline-'+SHA[:7]+'-'+sys.argv[2])
 payload=json.loads(pathlib.Path(sys.argv[1]).read_text());assert payload['candidate']==SHA
+PROVIDED=['scripts/check-existing-card-discussion.ts','scripts/check-reply-grounding.ts','src/grounding.ts','src/turn.ts']
+RUNTIME=['src/turn.ts','src/media.ts','src/grounding.ts','src/girls/template.ts']
+assert list(payload['provided'])==PROVIDED and payload['runtimeFiles']==RUNTIME,'Candidate payload scope changed'
 sha=lambda b:hashlib.sha256(b).hexdigest()
 blob=lambda b:hashlib.sha1(b'blob '+str(len(b)).encode()+b'\0'+b).hexdigest()
 def cmd(*args):return subprocess.check_output(args,text=True).strip()
@@ -18,14 +21,15 @@ def runtime():
   rows.append({'name':name,'image':info['Image'],'running':info['State']['Running'],'revision':next((e.split('=',1)[1] for e in info['Config']['Env'] if e.startswith('GIT_SHA=')),None)})
  return rows
 models=[json.loads(p.read_text()) for p in pathlib.Path('/home/ubuntu/twin-v2-validation').glob('reply-outcomes-candidate-*/summary.json')]
-model=next((x for x in models if x.get('candidate')==SHA),None)
-assert model and model['cases']==model['requests']==464 and model['failed']==0 and model['promptDisplayConsistent'] and not any(x.get('fatal') for x in model['creators']),'Current isolated model gate is not complete/passing'
+passing=[x for x in models if x.get('candidate')==SHA and x.get('cases')==x.get('requests')==464 and x.get('failed')==0 and x.get('promptDisplayConsistent') is True and x.get('settingsUnchanged') is True and len(x.get('creators',[]))==17 and not any(c.get('fatal') for c in x['creators']) and x.get('fanMessages')==x.get('purchases')==x.get('productionWrites')==0]
+assert passing,'Current isolated model gate is not complete/passing'
+model=max(passing,key=lambda x:x.get('at',''))
 before=runtime();assert all(r['running'] and r['image']==OLD_IMAGE and r['revision']==OLD_SHA for r in before),'Live runtime changed'
 assert shutil.disk_usage(ROOT).free>2*1024**3,'Insufficient free space'
 assert not BACKUP.exists() and not RELEASE.exists(),'Preparation already exists; inspect it instead of overwriting'
 BACKUP.mkdir(parents=True,mode=0o700);RELEASE.mkdir(parents=True,mode=0o755)
 manifest=payload['manifest'];assert len(manifest)==289
-bases=[pathlib.Path('/home/ubuntu/twin-v2-shared-releases')/OLD_SHA,ROOT]
+bases=[pathlib.Path('/home/ubuntu/twin-v2-reply-releases')/OLD_SHA,ROOT]
 for item in manifest:
  p=item['path'];assert not p.startswith('/') and '..' not in pathlib.PurePosixPath(p).parts
  if p in payload['provided']:b=payload['provided'][p].encode()
@@ -46,14 +50,8 @@ const changes=__CHANGES__;
 const checks=rows.filter(p=>p.engine==='v2'&&p.status==='active').map(p=>({slug:p.slug,settingsHash:hash(JSON.stringify(p)),emojiPolicy:hash(p.v2_vars.EMOJIS??''),testerPrice:priceFor(2700,{cloneId:p.id,telegramId:6814483810,kind:'photo'}),normalPrice:priceFor(2700,{cloneId:p.id,telegramId:6814483811,kind:'photo'}),candidateDisplayMatches:JSON.stringify(next.previewParts(p.v2_vars,now))===JSON.stringify(next.renderParts(p.v2_vars,now)),candidateChangesOnlyReviewedParagraphs:next.render(p.v2_vars,now)===changes.reduce((s,[a,b])=>s.replace(a,b),render(p.v2_vars,now))}));
 console.log('PREP_JSON '+JSON.stringify({checkedAt:new Date().toISOString(),settingsHash:hash(JSON.stringify(rows)),checks,model:config.model,providerOrder:config.providerOrder,bundles:process.env.V2_BUNDLES,sourceHashes:Object.fromEntries(__FILES__.map(p=>[p,hash(fs.readFileSync(p))]))}));
 """
-changes=[
- ['Never state the item’s price','Never quote or estimate the item’s price'],
- ['A previous offer does not prevent a relevant new one.','A previous offer does not prevent a relevant new one; acceptance or questions about that card alone select none.'],
- ['In that message describe only what that item actually shows.','Describe only what that item actually shows; use a brief introduction when no visual detail is recorded.'],
- ['If no previous photo is verified, say so briefly and ask one specific question if needed.',"If its verification fails, say you can't send that one right now without guessing why. If no prior card is recorded, ask which one."],
- ['right there with Apple Pay, Google Pay or a card, it takes a few seconds.','right there with Apple Pay, Google Pay or a card.'],
- ['It unlocks the second he pays and stays in your chat forever.','A confirmed payment unlocks the card in the chat; do not infer that he paid or can see it.']]
-probe=probe.replace('__SOURCE__',json.dumps(new_template)).replace('__CHANGES__',json.dumps(changes)).replace('__FILES__',json.dumps(payload['runtimeFiles']))
+prompt_changes=[]
+probe=probe.replace('__SOURCE__',json.dumps(new_template)).replace('__CHANGES__',json.dumps(prompt_changes)).replace('__FILES__',json.dumps(payload['runtimeFiles']))
 def settings():
  r=subprocess.run(['docker','exec','-i','twin-v2-bot-1','node','--import','tsx','--input-type=module'],input=probe,text=True,capture_output=True,timeout=45)
  assert r.returncode==0,'Settings/render check failed'
@@ -80,6 +78,7 @@ for item in manifest:
  changes.append({'path':p,'existed':old is not None,'oldSha256':sha(old) if old is not None else None,'newSha256':sha(new)})
  if old is not None:
   target=BACKUP/'host-before'/p;target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(old)
+assert sorted(c['path'] for c in changes)==PROVIDED,'Prepared host changes differ from the reviewed four-file scope'
 tag='twin-v2-reply:'+SHA
 r=subprocess.run(['docker','build','--label','org.opencontainers.image.revision='+SHA,'-t',tag,str(RELEASE)],capture_output=True,text=True,timeout=600);(BACKUP/'build.log').write_text(r.stdout+r.stderr);assert r.returncode==0,'Build failed'
 image=cmd('docker','image','inspect','-f','{{.Id}}',tag)
@@ -90,10 +89,11 @@ for script in suites:
  (BACKUP/('gate-'+pathlib.Path(script).stem+'.log')).write_text(r.stdout+r.stderr);results.append({'suite':script,'exit':r.returncode})
  assert r.returncode==0,'Packaged gate failed: '+script
 r=subprocess.run(['docker','run','--rm','--network','none','--memory','768m','--cpus','1',image,'node','node_modules/typescript/bin/tsc','--noEmit'],capture_output=True,text=True,timeout=180);(BACKUP/'typecheck.log').write_text(r.stdout+r.stderr);assert r.returncode==0,'Packaged typecheck failed'
-assert runtime()==before and settings()['settingsHash']==preflight['settingsHash'],'Live baseline changed while preparing'
+after=runtime();assert after==before and settings()['settingsHash']==preflight['settingsHash'],'Live baseline changed while preparing'
 for p,h in hashes.items():assert sha((ROOT/p).read_bytes())==h,'Host source changed while preparing: '+p
-prepared={'sha':SHA,'testedSource':SHA,'image':image,'oldSha':OLD_SHA,'oldImage':OLD_IMAGE,'release':str(RELEASE),'backup':str(BACKUP),'offline':results,'typecheck':True,'sourceManifestFiles':len(manifest),'hostChanges':changes,'settingsHash':preflight['settingsHash'],'expectedSlugs':sorted(x['slug'] for x in preflight['checks']),'preparedAt':datetime.datetime.now(datetime.timezone.utc).isoformat(),'liveRuntimeReplaced':False,'modelCalls':0,'realModelCases':model['cases'],'modelEvidencePath':model['evidencePath']}
-records={'reply-prepared.json':prepared,'release-preflight.json':preflight,'runtime-source-hashes.json':hashes,'release-manifest.json':manifest,'host-changes.json':changes,'rollback-plan.json':{'baselineRevision':OLD_SHA,'image':OLD_IMAGE,'codeArchiveSha':sha((BACKUP/'runtime-code.tgz').read_bytes()),'imageArchiveBytes':(BACKUP/'images.tar').stat().st_size,'dataIncluded':False,'runtimeReplaced':False}}
+rollback={'baselineRevision':OLD_SHA,'image':OLD_IMAGE,'codeArchiveSha':sha((BACKUP/'runtime-code.tgz').read_bytes()),'imageArchiveBytes':(BACKUP/'images.tar').stat().st_size,'dataIncluded':False,'runtimeReplaced':False}
+prepared={'sha':SHA,'testedSource':SHA,'image':image,'oldSha':OLD_SHA,'oldImage':OLD_IMAGE,'release':str(RELEASE),'backup':str(BACKUP),'offline':results,'typecheck':True,'sourceManifestFiles':len(manifest),'providedSourceFiles':len(payload['provided']),'promptChanges':len(prompt_changes),'hostChanges':changes,'settingsHash':preflight['settingsHash'],'expectedSlugs':sorted(x['slug'] for x in preflight['checks']),'runtimeBefore':before,'runtimeAfter':after,'preparedAt':datetime.datetime.now(datetime.timezone.utc).isoformat(),'rollbackReady':True,'rollback':rollback,'liveRuntimeReplaced':False,'modelCalls':0,'fanMessages':0,'purchases':0,'productionWrites':0,'realModelCases':model['cases'],'modelEvidencePath':model['evidencePath']}
+records={'reply-prepared.json':prepared,'release-preflight.json':preflight,'runtime-source-hashes.json':hashes,'release-manifest.json':manifest,'host-changes.json':changes,'rollback-plan.json':rollback}
 for name,data in records.items():(BACKUP/name).write_text(json.dumps(data,indent=2))
 for p in BACKUP.rglob('*'):
  if p.is_file():p.chmod(0o600)
