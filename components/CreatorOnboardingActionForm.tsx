@@ -20,7 +20,7 @@ export default function CreatorOnboardingActionForm({ children, className, pendi
   successStatuses: string[];
   loginPath: string;
   consentBeforeSubmit?: boolean;
-  completionHref?: "/creator/onboarding?complete=1";
+  completionHref?: "/creator" | "/creator/onboarding?complete=1";
 }) {
   const uploads = useContentUploads();
   const busy = useRef(false);

@@ -11,6 +11,8 @@ import Sidebar from "./Sidebar";
 import TopBar from "./TopBar";
 import TwinWordmark from "./TwinWordmark";
 import CreatorContentAccess from "./CreatorContentAccess";
+import CreatorCloneSetupBanner from "./CreatorCloneSetupBanner";
+import { isMoxy } from "@/lib/agency-brand";
 
 type CreatorClone = { id: string; name: string; color: string; photoUrl?: string };
 
@@ -44,6 +46,7 @@ export default function CreatorWorkspaceShell({
   usdPerStar?: number;
   children: ReactNode;
 }) {
+  const cloneBeingCreated = !connected && onboardingFinished && isMoxy(agencyName);
   const wordmarkAgency = agencyName === "Twin" ? undefined : agencyName;
   return (
     <DashboardAccessProvider agencyName={agencyName} audience="creator">
@@ -72,8 +75,9 @@ export default function CreatorWorkspaceShell({
                 creatorName={creatorName}
               />
               <MainShell>
+                {cloneBeingCreated && <CreatorCloneSetupBanner brand="moxy" />}
                 <CreatorContentAccess />
-                {!connected && (
+                {!connected && !cloneBeingCreated && (
                   <div role="status" className="mb-5 rounded-xl border border-line bg-panel px-4 py-3 text-sm text-muted">
                     {onboardingFinished
                       ? "Your onboarding has been submitted. Live earnings and your Pay Per View catalogue will become available when your AI creator profile is connected."
