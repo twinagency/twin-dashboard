@@ -49,7 +49,7 @@ global.__setupDatabase = { from(table) {
     const render = async params => renderToStaticMarkup(await Page({ searchParams: Promise.resolve(params || {}) }));
     let html = await render();
     assert.match(html, /data-creator-setup-brand="moxy"/);
-    assert.match(html, /src="\/moxy\/logo.png"/);
+    assert.match(html, /src="\/moxy\/moxy-ai-light.svg"/);
     assert.equal((html.match(/data-creator-setup-tab=/g) || []).length, 2);
     assert.match(html, /data-onboarding-active-step="content"/);
     html = await render({ step: "questionnaire" });

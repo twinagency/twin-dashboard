@@ -289,7 +289,7 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
   const answeredCount = CREATOR_PROFILE_QUESTIONNAIRE.filter(question => questionnaireAnswers[question.id]?.trim()).length;
 
   if (optionalIntake) return (
-    <CreatorSetupLayout brand={moxy ? "moxy" : "twin"} logoSrc="/moxy/logo.png" activeSection={activeStep === "questionnaire" && !completionView ? "questionnaire" : "content"} applicationStatus={applicationState.label}>
+    <CreatorSetupLayout brand={moxy ? "moxy" : "twin"} logoSrc="/moxy/moxy-ai-light.svg" activeSection={activeStep === "questionnaire" && !completionView ? "questionnaire" : "content"} applicationStatus={applicationState.label}>
       {status && errorStatuses.has(status) && <div id="step-result" role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">{status === "upload_too_large" ? "Videos can be up to 512 MiB and images up to 75 MiB each." : status === "upload_wrong_type" ? "This file could not be verified. Use JPG, PNG, WebP or GIF images (up to 25 MP), or MP4, MOV or WebM video. Export HEIC photos as JPG first." : statusCopy[status]}{status === "file_removal_pending" && <> <Link href="/creator/onboarding?step=content" className="font-semibold underline">Open Saved content</Link></>}</div>}
       {completionView ? <section data-creator-setup-panel data-setup-complete>
         <div data-complete-mark><Check size={38} strokeWidth={1.5} aria-hidden="true" /></div>

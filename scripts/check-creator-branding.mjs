@@ -311,7 +311,7 @@ const browser = await chromium.launch({ headless: true, ...(executablePath ? { e
 const expectations = {
   twin: {
     name: "Twin",
-    headings: { login: "Sign in", signup: "Create account", "forgot-password": "Reset password", "reset-password": "New password", onboarding: "Let’s set up your AI." },
+    headings: { login: "Sign in", signup: "Create account", "forgot-password": "Reset password", "reset-password": "New password", onboarding: "Follow these two simple steps to create your AI clone." },
     authBase: "/creator",
     signupAction: "/creator-auth/signup",
   },
@@ -412,6 +412,7 @@ try {
           assert.equal(await page.locator('[data-onboarding-hub]').count(), 0, 'the profile opens directly');
           await page.getByLabel('Setup menu', { exact: true }).click();
           assert.equal(await page.getByRole('link', { name: 'Go to dashboard' }).getAttribute('href'), '/creator');
+          await page.getByLabel('Setup menu', { exact: true }).click();
           await page.locator('[data-creator-setup-tab="questionnaire"]').click();
           const questionnaire = page.locator('[data-questionnaire-page="quick-v2-introduction"]');
           await questionnaire.waitFor();
@@ -429,7 +430,8 @@ try {
           }
           await page.goto(`${origin}/creator/onboarding?fixture_brand=twin&step=content`, { waitUntil: 'networkidle' });
           assert.equal(await page.locator('[data-combined-content-intake]').count(), 1);
-          await page.locator('[data-review-entry]').click();
+          await page.getByLabel('Setup menu', { exact: true }).click();
+          await page.getByRole('link', { name: 'Review and finish', exact: true }).click();
           await page.getByRole('button', { name: 'Submit onboarding', exact: true }).waitFor();
           assert.equal(await page.getByRole('button', { name: 'Submit onboarding', exact: true }).isVisible(), true);
           assert.equal(await page.getByRole('button', { name: 'Submit onboarding', exact: true }).isEnabled(), true);
