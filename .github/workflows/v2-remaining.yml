@@ -1,0 +1,22 @@
+name: Remaining creator V2 migration
+on:
+  push:
+    branches: [codex/remaining-creators-v2-20261013]
+    paths: [deployment/v2-remaining.py, .github/workflows/v2-remaining.yml]
+permissions:
+  contents: read
+concurrency:
+  group: remaining-creator-v2-migration
+  cancel-in-progress: false
+jobs:
+  operation:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-southeast-2
+      - run: python3 deployment/v2-remaining.py
