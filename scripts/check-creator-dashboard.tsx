@@ -193,8 +193,8 @@ async function main() {
   }).default;
   const { renderToStaticMarkup } = nativeRequire("react-dom/server");
   const header = () => renderToStaticMarkup(<Header clones={[]} activeCloneId={null} allTimeStars={100} />);
-  assert.match(header(), /Live Telegram Window/);
-  assert.doesNotMatch(header(), /LIVE_BALANCE|Live creator selector|Live currency selector/);
+  assert.match(header(), /Live Telegram/);
+  assert.match(header(), /LIVE_BALANCE/, "Retired relationship links no longer use demonstration chrome");
   headerParams = new URLSearchParams(); assert.match(header(), /LIVE_BALANCE/);
   headerPath = "/revenue"; assert.match(header(), /LIVE_BALANCE/);
   headerPath = "/users"; headerParams = new URLSearchParams("relationship=briana-ledger-1");

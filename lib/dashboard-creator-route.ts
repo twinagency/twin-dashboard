@@ -5,7 +5,7 @@ export const BRIANNA_CLONE_ID = "0328e7b3-a1e5-465a-9a30-c9cf6519cba1";
 const WORKSPACE_PAGE_LABELS: Record<string, string> = {
   "/dashboard": "Dashboard", "/clones": "Creators", "/fans": "Fan Profiles",
   "/inbox": "Inbox", "/content-library": "Content Library", "/campaigns": "Campaigns",
-  "/users": "Live Telegram Window", "/business": "Telegram Stories",
+  "/users": "Live Telegram", "/business": "Telegram Stories",
   "/flows": "Flows", "/sequences": "Sequences", "/revenue": "Earnings",
   "/sales-health": "Sales Health", "/catalogue-funnel": "Catalogue Funnel",
   "/agency-admin": "Agency Access", "/agency-admin/creator-codes": "Invitations",
@@ -18,7 +18,7 @@ const WORKSPACE_PAGE_LABELS: Record<string, string> = {
   "/mtproto-campaign/connections": "Campaign Connections", "/mtproto-campaign/media": "Campaign Media",
   "/mtproto-campaign/settings": "Campaign Settings", "/tracker": "Tracker",
   "/info": "Connection Details", "/tsocial": "Telegram Social", "/admin/view-as": "View As",
-  "/analytics": "Analytics", "/media": "Media", "/drip": "Drip sequences",
+  "/analytics": "Analytics", "/media": "Content", "/drip": "Drip sequences",
   "/messages": "Messages", "/crm": "CRM", "/ai": "AI Assistant",
   "/agency/creator-split": "Creator earnings split",
 };

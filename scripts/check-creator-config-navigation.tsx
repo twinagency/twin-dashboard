@@ -152,7 +152,8 @@ async function main() {
   const visibleAdvancedIds = () => Array.from(document.querySelectorAll<HTMLElement>("[data-intelligence-control]")).map(card => Number(card.dataset.intelligenceControl));
   const assertExtendedAdvanced = () => {
     assert.equal(navButton("Advanced").getAttribute("aria-current"), "page");
-    assert.deepEqual(visibleAdvancedIds(), intelligenceModel.CONTROLS.map(control => control.id));
+    assert.deepEqual(visibleAdvancedIds(), [], "No browser-only demonstration controls");
+    assert.equal((document.getElementById("creator-control-plane-form") as HTMLFormElement).hidden, false);
     assert.equal(document.querySelector("[data-operational-advanced]")?.className, "");
   };
   const traverseHistory = async (direction: "back" | "forward") => {
@@ -178,7 +179,7 @@ async function main() {
     assertExtendedAdvanced();
     snapshots.push(visibleAdvancedIds());
   }
-  assert.deepEqual(snapshots[0], snapshots[1], "Both dashboard entry routes expose exactly the same extended Advanced controls");
+  assert.deepEqual(snapshots[0], snapshots[1], "Both dashboard entry routes expose the same real Advanced form");
 
   await follow(`${dashboardCreatorHref("briana")}&sub=persona&filter=retained`);
   assert.equal(navButton("Identity").getAttribute("aria-current"), "page");
@@ -198,24 +199,14 @@ async function main() {
   assert.equal(canonical.get("filter"), "retained", "Unrelated query state survives");
   assert.equal(document.querySelector("input[name='fixture_note']"), draft, "Section navigation does not remount uncontrolled creator fields");
   assert.deepEqual(Array.from(new win.FormData(document.getElementById("creator-control-plane-form") as HTMLFormElement).entries()), payload);
-  const sectionButton = (label:string) => Array.from(document.querySelectorAll<HTMLButtonElement>("nav[aria-label='Advanced sections'] button")).find(b=>b.textContent?.startsWith(label))!;
   const liveForm = document.getElementById("creator-control-plane-form") as HTMLFormElement;
-  assert.equal(liveForm.hidden, true, "Operational fields stay mounted behind Live settings");
-  await act(async()=>sectionButton("Memory").click());
-  assert.equal(new URLSearchParams(win.location.search).get("section"), "memory");
-  await act(async()=>sectionButton("Rules").click());
-  assert.equal(new URLSearchParams(win.location.search).get("section"), "rules");
-  await traverseHistory("back");
-  assert.equal(document.querySelector("[data-intelligence-workspace]")?.getAttribute("data-advanced-view"), "memory");
-  await traverseHistory("forward");
-  assert.equal(document.querySelector("[data-intelligence-workspace]")?.getAttribute("data-advanced-view"), "rules");
-  const liveButton = Array.from(document.querySelectorAll<HTMLButtonElement>("button")).find(b=>b.textContent==="Open creator configuration")!;
-  await act(async()=>liveButton.click());
-  assert.equal(liveForm.hidden, false);
-  assert.equal(liveForm.querySelector("input[name='fixture_note']"), draft);
-  assert.deepEqual(Array.from(new win.FormData(liveForm).entries()), payload, "All seven pages and Live settings preserve the full native form payload");
-  await act(async()=>sectionButton("Creator").click());
-  assert.equal(liveForm.hidden, true);
+  assert.equal(liveForm.hidden, false, "Operational Advanced is visible without opening a demo section");
+  for (const section of ["memory", "rules", "creator", "live"]) {
+    await follow(`/clones/${clone.id}?tab=advanced&section=${section}`);
+    assertExtendedAdvanced();
+    assert.equal(liveForm.querySelector("input[name='fixture_note']"), draft);
+    assert.deepEqual(Array.from(new win.FormData(liveForm).entries()), payload, "Retired demo bookmarks preserve the full live form payload");
+  }
   await clickTab("Configuration");
   assert.equal(visibleAdvancedIds().length, 0);
   await traverseHistory("back");
@@ -249,7 +240,7 @@ async function main() {
   assert.equal(unexpectedRequests, 0, "No production configuration, message, payment, or model requests occur");
   await act(async () => root.unmount());
   dom.window.close();
-  console.log("PASS: shared extended Advanced, canonical tab URLs, retired sub cleanup, Back/Forward, reentry, preserved drafts, audience/creator isolation, and zero creator writes.");
+  console.log("PASS: real Advanced, removed demo controls, canonical tab URLs, retired sub cleanup, Back/Forward, reentry, preserved drafts, audience/creator isolation, and zero creator writes.");
 }
 
 main().catch(error => { console.error(error); process.exitCode = 1; });

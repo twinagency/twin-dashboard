@@ -53,21 +53,21 @@ try{
  const identity=await creatorDashboardIdentity(token);assert.ok(identity);assert.equal(identity.name,'LYNQ');assert.deepEqual(identity.cloneIds,[]);assert.ok(isZaneDemo(identity));
  const origin='https://dashboard.tgaiclone.xyz';
  const req=(path,method='GET',cookie=`${CREATOR_SESSION_COOKIE}=${token}`)=>new NextRequest(origin+path,{method,headers:{cookie,referer:origin+'/creator',origin}});
- for(const path of ['/creator','/api/dashboard?clone='+DEMO_CLONE_ID,'/api/dashboard/day-insight?date=2026-09-10'])assert.equal((await middleware(req(path))).status,200,path);
- for(const path of ['/api/dashboard?clone='+real,'/api/dashboard?clone='+DEMO_CLONE_ID+'&clone='+real,'/api/avatar?clone='+DEMO_CLONE_ID+'&tg=-1','/api/media-sign?clone='+DEMO_CLONE_ID,'/api/models','/settings','/clones/'+real,'/api/dashboard/day-insight?clone='+DEMO_CLONE_ID])assert.equal((await middleware(req(path))).status,403,path);
+ for(const path of ['/creator','/api/dashboard/day-insight?date=2026-09-10'])assert.equal((await middleware(req(path))).status,200,path);
+ for(const path of ['/api/dashboard?clone='+DEMO_CLONE_ID,'/api/dashboard?clone='+real,'/api/dashboard?clone='+DEMO_CLONE_ID+'&clone='+real,'/api/avatar?clone='+DEMO_CLONE_ID+'&tg=-1','/api/media-sign?clone='+DEMO_CLONE_ID,'/api/models','/settings','/clones/'+real,'/api/dashboard/day-insight?clone='+DEMO_CLONE_ID])assert.equal((await middleware(req(path))).status,403,path);
  assert.equal((await middleware(req('/api/dashboard?clone='+DEMO_CLONE_ID,'POST'))).status,403);
  assert.equal((await middleware(req('/api/dashboard?clone='+DEMO_CLONE_ID,'GET',`${CREATOR_SESSION_COOKIE}=${otherToken}`))).status,403,'A different account also named ZANE gets no demo access');
  assert.equal((await middleware(req('/api/dashboard?clone='+DEMO_CLONE_ID,'GET',''))).status,403,'Unauthenticated access denied');
  const before=calls;
  await withDashboardAccess(identity,async()=>{
-  const r=await revenueGET(req('/api/dashboard?period=1W&clone='+DEMO_CLONE_ID));assert.equal(r.status,200);assert.equal(r.headers.get('x-data-mode'),'synthetic-demo');assert.equal((await r.json()).demo,true);
-  const d=await insightGET(req('/api/dashboard/day-insight?date=2026-09-10'));assert.equal(d.status,200);assert.match((await d.json()).summary.detail,/not real earnings/);
+  const r=await revenueGET(req('/api/dashboard?period=1W&clone='+DEMO_CLONE_ID));assert.equal(r.status,403);assert.equal(r.headers.get('x-data-mode'),null);assert.match((await r.json()).error,/not connected/);
+  const d=await insightGET(req('/api/dashboard/day-insight?date=2026-09-10'));assert.equal(d.status,403);assert.match((await d.json()).error,/not connected/);
  });
  assert.equal(calls,before,'Synthetic endpoints do not read or write live financial tables, cache or Telegram');
  linked=true;const live=await creatorDashboardIdentity(token);assert.ok(live);assert.equal(isZaneDemo(live),false);assert.deepEqual(live.cloneIds,[real]);assert.equal(live.name,'Twin');
  assert.equal((await middleware(req('/api/dashboard?clone='+DEMO_CLONE_ID))).status,403,'Demo turns off after a real profile is connected');
- linked=false;onboarded=false;assert.equal(isZaneDemo(await creatorDashboardIdentity(token)),false);
+ linked=false;onboarded=false;assert.equal((await creatorDashboardIdentity(token)).applicationSubmitted,false);
  onboarded=true;archived=true;assert.equal(await creatorDashboardIdentity(token),null);
  assert.equal(isZaneDemo(null),false);assert.equal(isZaneDemo({id:'creator:'+ZANE_DEMO_ACCOUNT_ID,kind:'agency',onboarded:true,cloneIds:[]}),false);
- console.log('ZANE DEMO PASSED: consistent generated ledger, date changes, custom dates, full report inputs, daily comparisons, exact-account-only access, no real clone permission, no financial writes, revocation and real-profile auto-disable.');
+ console.log('PASS: archived test fixtures remain isolated; disconnected creator cannot receive synthetic earnings or query live financial records.');
 }finally{globalThis.fetch=original;}

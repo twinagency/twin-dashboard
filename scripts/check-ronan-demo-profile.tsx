@@ -121,8 +121,7 @@ export async function checkRonanDemoProfile() {
   admin=true;viewAs={targetType:'agency'};
   await assert.rejects(route(request),/redirect:\/revenue/);
   viewAs=null;
-  const result=await route(request);
-  assert.equal(result.type,Profile);assert.equal(result.props.step,String(demo.DEMO_EVENT_COUNT));
-  assert.equal((await route()).type,Workspace,'Normal fan page is unchanged');
+  await assert.rejects(route(request),/redirect:\/users/, 'Movie-night profile bookmarks open real Telegram');
+  await assert.rejects(route(),/redirect:\/users/);
   console.log('Ronan profile: all checkpoints, sourced memory, purchase parity, tabs, receipts, return link, storage isolation and route access passed');
 }

@@ -1,9 +1,2 @@
-import { getDashboardAccess } from "@/lib/dashboard-access";
-import { agencyCanManage } from "@/lib/agency-management-policy";
 import { redirect } from "next/navigation";
-import CrmPreview from "@/components/crm/CrmPreview";
-
-export default async function CrmInboxPage() {
-  if (agencyCanManage(await getDashboardAccess())) redirect("/users");
-  return <CrmPreview view="inbox" />;
-}
+export default function RetiredCrmPage() { redirect("/users"); }

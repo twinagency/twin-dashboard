@@ -1,5 +1,5 @@
-import CrmPreview from "@/components/crm/CrmPreview";
-
-export default function CrmTeamPage() {
-  return <CrmPreview view="team" />;
+import { getDashboardAccess } from "@/lib/dashboard-access";
+import { redirect } from "next/navigation";
+export default async function RetiredCrmTeamPage() {
+  redirect(await getDashboardAccess() ? "/revenue" : "/agency-admin");
 }
