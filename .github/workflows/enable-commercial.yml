@@ -1,0 +1,28 @@
+name: Enable approved Twin V2 bundles and verify tips
+on:
+  push:
+    branches: [codex/v2-enable-bundles-tips-20261014]
+    paths:
+      - deployment/enable-commercial-host.py
+      - deployment/enable-commercial-workflow.py
+      - .github/workflows/enable-commercial.yml
+permissions:
+  contents: write
+concurrency:
+  group: twin-v2-production-operations
+  cancel-in-progress: false
+jobs:
+  enable:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-southeast-2
+      - name: Enable existing features with unchanged image and verified drain
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+        run: python3 deployment/enable-commercial-workflow.py
