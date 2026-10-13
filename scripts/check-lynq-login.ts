@@ -134,7 +134,7 @@ async function main() {
     const setup=await middleware(new NextRequest(`${origin}/login?next=/agency-admin/lynq-password`,{headers:{cookie:`${SESSION_COOKIE}=${signedAdmin}`}}));
     assert.equal(setup.headers.get("location"),`${origin}/agency-admin/lynq-password`);
     const unsafeNext=await middleware(new NextRequest(`${origin}/login?next=//evil.example`,{headers:{cookie:`${SESSION_COOKIE}=${signedAdmin}`}}));
-    assert.equal(unsafeNext.headers.get("location"),`${origin}/revenue`);
+    assert.equal(unsafeNext.headers.get("location"),`${origin}/dashboard`);
     assert.equal((await middleware(new NextRequest(`${origin}/login`,{headers:{cookie:`${cookie}; ${SESSION_COOKIE}=${signedAdmin}`}}))).status,200,"Admin sign-in remains reachable when switching accounts");
     const exited=await logout(new NextRequest(`${origin}/agency/logout`,{method:"POST",headers:{origin,cookie}}));
     assert.equal(exited.headers.get("location"),`${origin}/link`);
