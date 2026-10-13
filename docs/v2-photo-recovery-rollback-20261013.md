@@ -25,6 +25,8 @@ Rollback completed through fresh matching handover receipts, drain and financial
 
 This rollback removes the new repeated-clarification behaviour; it does **not** fix the pre-existing missing-selection or historical-description problem. No current claim of completed photo recovery is warranted.
 
+Independent read-only verification at **10:25:26 AEST** confirmed both prior images/revisions, all five active runners, unchanged creator settings, matching runtime/monitor prompt policy and the existing Riley/Kyla tester-price scope. [Verification run](https://github.com/jesse98/twin-dashboard/actions/runs/38327143996), job 115068334104, passed. No model call or Telegram send was made.
+
 Evidence:
 - [Exact live incident read](https://github.com/jesse98/twin-dashboard/actions/runs/38326741245), job 115067047921.
 - [Fresh fleet/settings and rollback compatibility read](https://github.com/jesse98/twin-dashboard/actions/runs/38326836902), job 115067354812.

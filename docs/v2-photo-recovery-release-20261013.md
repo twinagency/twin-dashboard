@@ -1,3 +1,5 @@
+> **Superseded: this release failed live acceptance and was rolled back at approximately 10:24 AEST on 13 October 2026.** The original missing-photo issue is still open. See the [incident and rollback record](./v2-photo-recovery-rollback-20261013.md). The report below is historical evidence, not current readiness status.
+
 # V2 photo recovery — deployed 13 October 2026
 
 Release recorded for Jesse in Australia/Brisbane time. The shared fix was deployed successfully at approximately **01:02 AEST on 13 October 2026** (15:02 UTC on 12 October). Independent read-only verification completed at **01:07:49 AEST**. This supersedes the earlier candidate document's access-blocked/not-deployed status; that document remains a historical record.
