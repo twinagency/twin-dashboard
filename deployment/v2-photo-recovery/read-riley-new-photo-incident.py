@@ -16,18 +16,18 @@ const file=path.join(config.logDir,slug,'requests.jsonl');
 const fd=fs.openSync(file,'r'),size=fs.fstatSync(fd).size,offset=Math.max(0,size-8000000),buffer=Buffer.alloc(size-offset);
 fs.readSync(fd,buffer,0,buffer.length,offset);fs.closeSync(fd);
 let lines=buffer.toString().split('\n');if(offset)lines.shift();
-const rows=lines.flatMap(line=>{try{return [JSON.parse(line)]}catch{return []}}).filter(r=>String(r.chatId)===String(id)&&r.ts>='2026-10-13T04:25:00'&&r.ts<='2026-10-13T05:00:00').slice(-18);
+const rows=lines.flatMap(line=>{try{return [JSON.parse(line)]}catch{return []}}).filter(r=>String(r.chatId)===String(id)&&r.ts>='2026-10-13T04:25:00'&&r.ts<='2026-10-13T05:00:00').filter(r=>/^i want another diff|^can i have a different one/i.test(r.fanText)||r.ts<'2026-10-13T04:32:00').slice(-3);
 const turns=rows.map(r=>{
  const req=requestedAttrs(cat.filter(x=>!x.isFree),r.fanText);
  return {ts:r.ts,turnId:r.turnId,input:r.fanText,selection:r.selection,photoReference:r.photoReference,photoAlternative:r.photoAlternative??false,generated:r.generated,delivered:r.final,raw:r.raw,grounding:r.grounding,
- menu:r.menu?.map(m=>({slot:m.slot,key:m.key,description:m.desc,missingNewestAttributes:byKey.has(m.key)?missingAttrs(byKey.get(m.key),req):null})),
+ menu:r.menu?.map(m=>({slot:m.slot,key:m.key,description:m.desc?.slice(0,350),missingNewestAttributes:byKey.has(m.key)?missingAttrs(byKey.get(m.key),req):null})),
  requestedNewestAttributes:{exact:[...req.exact],near:[...req.near]},
- menuText:r.system?.slice(r.system.lastIndexOf('YOUR CONTENT READY TO SEND')),
+ menuText:r.system?.slice(r.system.lastIndexOf('YOUR CONTENT READY TO SEND')).slice(0,2200),
  selected:r.selectedMedia,delivery:r.delivery};
 });
 const excluded=new Set([...chat.sent,...owned,...cat.filter(x=>owned.has('file:'+x.storagePath)).map(x=>x.key),...(chat.photo?[chat.photo.key]:[])]);
 const summaries=['photo','video'].map(kind=>{const items=cat.filter(x=>x.kind===kind),eligible=items.filter(x=>!['pending','failed','needs_review'].includes(x.analysis));return {kind,items:items.length,sent:items.filter(x=>chat.sent.includes(x.key)).length,owned:items.filter(x=>owned.has(x.key)||owned.has('file:'+x.storagePath)).length,availablePaid:eligible.filter(x=>!x.isFree&&!excluded.has(x.key)).length,availableFree:eligible.filter(x=>x.isFree&&!excluded.has(x.key)).length}});
-console.log('RILEY_INCIDENT_JSON '+JSON.stringify({checkedAt:new Date().toISOString(),runtimeRevision:process.env.GIT_SHA,clone,chatId:id,catalogue:summaries,turns,history:chat.history.slice(-12),currentPhoto:chat.photo,modelCalls:0,messagesSent:0,productionWrites:0}));
+console.log('RILEY_INCIDENT_JSON '+JSON.stringify({checkedAt:new Date().toISOString(),runtimeRevision:process.env.GIT_SHA,clone,chatId:id,catalogue:summaries,turns,history:chat.history.slice(-6).map(m=>({role:m.role,content:m.content.slice(0,500)})),currentPhoto:chat.photo,modelCalls:0,messagesSent:0,productionWrites:0}));
 """;
 p=subprocess.run(['docker','exec','-i','twin-v2-bot-1','node','--import','tsx','--input-type=module'],input=js,text=True,capture_output=True,timeout=60)
 if p.returncode:raise RuntimeError(p.stderr[-800:])
