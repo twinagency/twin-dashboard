@@ -17,5 +17,5 @@ for name in sorted(names):
       'priorReceipt':{k:before.get('photo',{}).get(k) for k in ['key','status','turnId','messageId']},
       'priorLastAssistant':[m['content'] for m in before['history'] if m['role']=='assistant'][-1:],
       'menuAlternatives':[{'key':m.get('key'),'slot':m.get('slot'),'alt':m.get('alt'),'missing':m.get('missing')} for m in row.get('menu',[])],
-      'actualDispatchedCaptions':[c['payload'].get('caption') for c in rec.get('fakeCalls',[]) if c.get('method') in ['sendPaidMedia','sendPhoto','sendVideo']]})
+      'actualDispatchedCaptions':[c.get('caption') for c in rec.get('fakeCalls',[]) if c.get('method') in ['sendPaidMedia','sendPhoto','sendVideo']]})
 print(json.dumps({'status':'READ ONLY TWO-CASE REVIEW','candidate':summary['candidate'],'cases':out,'modelCalls':0,'messagesSent':0,'productionWrites':0}))
