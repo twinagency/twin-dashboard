@@ -337,9 +337,9 @@ export function pick(cat: Item[], sent: Set<string>, kind: "photo" | "video", hi
   };
   for (const k of [kind, kind === "photo" ? "video" : "photo"] as const) {
     const pool = cat.filter((it) => it.kind === k && !sent.has(it.key) && (free || !it.isFree));
-    // A full factual match to the newest request outranks historical context. Keep the existing
-    // score within each tier, including when there is no specific request or no exact match.
-    if (pool.length) return pool.map((it) => ({ it, exact: !isAlternative(it, request), score: score(it) }))
+    // A photo that factually matches the newest request outranks historical context. Keep the
+    // existing score within each tier; video ranking stays on its existing path.
+    if (pool.length) return pool.map((it) => ({ it, exact: k === "photo" && !isAlternative(it, request), score: score(it) }))
       .sort((a, b) => Number(b.exact) - Number(a.exact) || b.score - a.score)[0].it;
   }
   return null;
