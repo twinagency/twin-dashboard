@@ -71,5 +71,13 @@ replace_once("    const source = config.mode === 'flow-only' ? null : await uplo
 replace_once("    if (config.mode === 'photo-boundaries') await photoBoundaryChecks(a, b);", "    if (config.mode === 'photo-boundaries' || config.mode === 'large') await photoBoundaryChecks(a, b);")
 replace_once("    const response = await post('/creator-auth/signup', null, { email: fixture.email, password: fixture.password, display_name: fixture.name, ...(invitation ? { agency_code: invitation.code } : {}) });", "    const fields = { email: fixture.email, password: fixture.password, display_name: fixture.name, ...(invitation ? { agency_code: invitation.code } : {}) };\n    const enhanced = suffix === 'complete';\n    const body = enhanced ? new FormData() : new URLSearchParams();\n    for (const [key, value] of Object.entries(fields)) body.set(key, value);\n    const response = await app('/creator-auth/signup', null, { method: 'POST', body, headers: enhanced ? { Accept: 'application/json' } : {} });")
 replace_once("    assert(response.status === 303 && fixture.id && fixture.auth_user_id && location(response).pathname === '/creator/onboarding', 'Normal signup did not create account and reach onboarding');", "    const signupReachedOnboarding = enhanced ? response.status === 200 && (await response.json()).next === '/creator/onboarding' : response.status === 303 && location(response).pathname === '/creator/onboarding';\n    assert(signupReachedOnboarding && fixture.id && fixture.auth_user_id, 'Normal signup did not create account and reach onboarding');\n    passed(enhanced ? 'Enhanced multipart JSON signup returns onboarding and a secure session' : 'Fallback HTML form signup redirects to onboarding with a secure session');")
+replace_once("    fixture.cookie = cookieFrom(response, 'twin_creator_session'); await response.body?.cancel();", "    fixture.cookie = cookieFrom(response, 'twin_creator_session'); if (!response.bodyUsed) await response.body?.cancel();")
+# Exercise the combined picker path used by the new UI. Keep the exact fixture
+# filenames, byte bounds, ownership proofs and cleanup manifest scope intact.
+for category in ['content_sfw_image', 'content_nsfw_image', 'content_sfw_video', 'content_nsfw_video']:
+    source = source.replace("'" + category + "'", "'content'")
+source = source.replace('/creator-auth/files?kind=content_sfw_video', '/creator-auth/files?kind=content')
+source = source.replace('across categories', 'through the combined picker endpoint')
+source = source.replace('in both image categories', 'through the combined picker endpoint')
 target.write_text(source)
 print('Extended audit prepared; production app source unchanged')
