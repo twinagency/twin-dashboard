@@ -1,0 +1,117 @@
+{
+  "candidate": "d6058dcd05dc1cb2646a516fcb1aabf152a280be",
+  "case": "business-new-after-refusal",
+  "row": {
+    "fanText": "Actually, can you send me a new photo now?",
+    "raw": "{\"selection\": \"photo 3\", \"reply\": \"ok here u go, me chilling on the bed in my fave sweater\\n[locked photo waiting for him to unlock: A person sits on a bed with orange bedding, wearing a multicolored sweater.]\"}",
+    "selection": "photo 3",
+    "selectionError": null,
+    "final": [
+      "i can\u2019t send that one right now"
+    ],
+    "note": "invalid-selection:other",
+    "provider": "DeepInfra",
+    "tokensOut": 56,
+    "menu": [
+      {
+        "slot": "photo 1",
+        "key": "photo:5967de66-54bb-4cff-8b2b-bfcf1b9e0af9",
+        "stars": 700,
+        "desc": "A person is taking a mirror selfie in a bedroom. They are wearing a floral-patterned top and denim shorts, with bare buttocks visible. The nipples and genitals are not visible. The person has tattoos on their arm and back. The room includes a bed with patterned bedding, a door, and some wall decorations. The mirror reflection is clear, and the person's face is partially visible. (tags: ass, mirror_selfie, bed, solo)"
+      },
+      {
+        "slot": "photo 2",
+        "key": "photo:d78ef74f-d610-45fd-aed7-a193b494c160",
+        "stars": 800,
+        "desc": "A person poses in front of a mirror wearing black lingerie. Tattoos are visible on the arms. The setting is indoors, with a door and wall decorations visible. The person's nipples, genitals, and anus are not visible. The buttocks are partially covered by the lingerie. The pose is suggestive, with one arm raised. The mirror reflection is visible, showing the back of the person. (tags: bed, solo)"
+      },
+      {
+        "slot": "photo 3",
+        "key": "photo:dc4444c4-7c7a-4e21-adf4-adf7f78bee4e",
+        "stars": 700,
+        "desc": "A person sits on a bed with orange bedding in a room with wooden beams and windows letting in natural light. They wear a multicolored sweater. The nipples, genitals, and anus are not visible. The person's legs are partially visible, and they appear relaxed. The setting is indoors, likely a bedroom. (tags: bed, solo)"
+      },
+      {
+        "slot": "video 1",
+        "key": "video:6a5db109-e916-45b8-b597-96880e50be30",
+        "stars": 900,
+        "desc": "A woman stands in a kitchen, wearing a blue dress with thin straps. She is adjusting the neckline of her dress with both hands. The setting includes a microwave, toaster, and cabinets. Her nipples are not visible, nor are her genitals or anus. The image shows cleavage but no nudity. (tags: solo)"
+      }
+    ],
+    "generated": [
+      "i can\u2019t send that one right now"
+    ],
+    "grounding": null,
+    "delivery": {
+      "fixedLine": "invalid-selection",
+      "invalidSelection": {
+        "kind": "other",
+        "reason": "selection marker embedded in structured reply"
+      },
+      "text": {
+        "status": "acknowledged",
+        "messageId": 5022
+      },
+      "historyWrite": {
+        "reply": {
+          "ok": true
+        }
+      }
+    }
+  },
+  "response": {
+    "id": "gen-1791892718-G6RvQG45byueAw9Z5rGd",
+    "object": "chat.completion",
+    "created": 1791892718,
+    "model": "deepseek/deepseek-v4.1-flash",
+    "provider": "DeepInfra",
+    "system_fingerprint": null,
+    "service_tier": "default",
+    "choices": [
+      {
+        "index": 0,
+        "logprobs": null,
+        "finish_reason": "stop",
+        "native_finish_reason": "stop",
+        "message": {
+          "role": "assistant",
+          "content": "{\"selection\": \"photo 3\", \"reply\": \"ok here u go, me chilling on the bed in my fave sweater\\n[locked photo waiting for him to unlock: A person sits on a bed with orange bedding, wearing a multicolored sweater.]\"}",
+          "refusal": null,
+          "reasoning": null
+        }
+      }
+    ],
+    "usage": {
+      "prompt_tokens": 3175,
+      "completion_tokens": 56,
+      "total_tokens": 3231,
+      "cost": 0.0001377544,
+      "is_byok": false,
+      "prompt_tokens_details": {
+        "cached_tokens": 2432,
+        "cache_write_tokens": 0,
+        "audio_tokens": 0,
+        "video_tokens": 0
+      },
+      "cost_details": {
+        "upstream_inference_cost": 0.0001377544,
+        "upstream_inference_prompt_cost": 0.0001142344,
+        "upstream_inference_completions_cost": 2.352e-05
+      },
+      "completion_tokens_details": {
+        "reasoning_tokens": 0,
+        "image_tokens": 0,
+        "audio_tokens": 0
+      }
+    }
+  },
+  "status": 200,
+  "allowedSelections": [
+    "photo 1",
+    "photo 2",
+    "photo 3"
+  ],
+  "fanMessages": 0,
+  "modelCalls": 0,
+  "productionWrites": 0
+}
