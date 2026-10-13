@@ -18,7 +18,7 @@ def ssm(command,timeout=120):
   raise RuntimeError('Isolated verification '+r['Status'])
  return cid
 
-raw=pathlib.Path('deployment/v2-photo-recovery/verify-shared-release.py').read_bytes()
+raw=pathlib.Path('deployment/v2-photo-recovery/inspect-shared-release-failure.py').read_bytes()
 packed=base64.b64encode(gzip.compress(raw)).decode()
 program="import gzip,base64;exec(compile(gzip.decompress(base64.b64decode("+repr(packed)+")),'<shared-release-readonly>','exec'))"
 ssm('python3 -c '+shlex.quote(program),100)
