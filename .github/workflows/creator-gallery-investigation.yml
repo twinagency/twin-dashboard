@@ -20,7 +20,32 @@ jobs:
             sudo mv "$source" "/tmp/ci-unused-chrome-feed/${source##*/}"
           done < <(sudo grep -rl 'dl.google.com/linux/chrome' /etc/apt/sources.list.d 2>/dev/null || true)
           npx playwright install --with-deps webkit
-      - name: Reproduce paginated gallery selection with event diagnostics
+      - name: Prove the regression reproduces without the fix
+        env:
+          CREATOR_GALLERY_ENGINES: webkit
+          CREATOR_GALLERY_BRANDS: moxy
+          CREATOR_GALLERY_REPEATS: '1'
+        run: |
+          python3 - <<'PY'
+          import json, pathlib, subprocess
+          css=pathlib.Path('components/CreatorContentIntake.module.css')
+          fixed=css.read_text()
+          rule='.previewTile * { pointer-events: none; }'
+          assert fixed.count(rule)==1
+          try:
+              css.write_text(fixed.replace(rule,''))
+              result=subprocess.run(['node','scripts/check-creator-content-gallery-browser.mjs'],capture_output=True,text=True,timeout=180)
+              pathlib.Path('test-results/creator-gallery/before-fix.log').write_text(result.stdout+result.stderr)
+              diagnostic=next(line.split('GALLERY_SELECTION_DIAGNOSTIC ',1)[1] for line in result.stdout.splitlines() if line.startswith('GALLERY_SELECTION_DIAGNOSTIC '))
+              state=json.loads(diagnostic)['state']
+              assert result.returncode!=0 and state['open'] and state['label']=='All your content' and state['buttons']==63
+              assert [event['type'] for event in state['events']]==['pointerdown','pointerup']
+              assert state['events'][0]['tag']!=state['events'][1]['tag']
+              print('CONFIRMED BEFORE FIX: thumbnail replacement cancels the Safari click and leaves the gallery open.')
+          finally:
+              css.write_text(fixed)
+          PY
+      - name: Verify stable thumbnail taps and full gallery behaviour
         env:
           CREATOR_GALLERY_ENGINES: webkit
           CREATOR_GALLERY_BRANDS: moxy
