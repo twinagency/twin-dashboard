@@ -17,3 +17,5 @@ print(r.get('StandardOutputContent',''),flush=True)
 if r['Status']!='Success':
  print(r.get('StandardErrorContent','')[-1200:],flush=True)
  raise RuntimeError('Readiness check failed')
+
+# Refresh read-only fleet status for user follow-up on 2026-10-13.
