@@ -29,16 +29,15 @@ def ssm(command,timeout):
 result={'status':'not-started','candidate':CANDIDATE,'workflowRun':os.environ.get('GITHUB_RUN_ID'),'fanMessages':0,'purchases':0,'productionWrites':0}
 try:
   diagnostic="""import base64,json,pathlib,re
-root=pathlib.Path(%r);items=[]
-for p in sorted(root.glob('*/stderr.private.log')):
- text=p.read_text(errors='replace')[-1600:]
- text=re.sub(r'sk-[A-Za-z0-9_-]+','[redacted]',text)
- items.append({'creator':p.parent.name,'tail':text})
-print('PRIOR_FAILURE_B64 '+base64.b64encode(json.dumps(items).encode()).decode())
+root=pathlib.Path(%r);p=next(iter(sorted(root.glob('*/stderr.private.log'))))
+text=p.read_text(errors='replace')[-2400:]
+text=re.sub(r'sk-[A-Za-z0-9_-]+','[redacted]',text)
+item={'creator':p.parent.name,'tail':text}
+print('PRIOR_FAILURE_B64 '+base64.b64encode(json.dumps(item).encode()).decode())
 """ % PRIOR_FAILURE
   diagnostic_output=ssm('python3 -c '+shlex.quote(diagnostic),60)
   diagnostic_line=next(x for x in diagnostic_output.splitlines() if x.startswith('PRIOR_FAILURE_B64 '))
-  prior=json.loads(base64.b64decode(diagnostic_line.split(' ',1)[1]));print('PRIOR_FAILURE '+json.dumps(prior[:2]),flush=True)
+  prior=json.loads(base64.b64decode(diagnostic_line.split(' ',1)[1]));print('PRIOR_FAILURE '+json.dumps(prior),flush=True)
   paths=[]
   for filename in ['reply-outcomes-candidate.patch','run-reply-outcomes-candidate.py','simulate-reply-outcomes.mjs']:
     raw=(ROOT/filename).read_bytes();remote='/tmp/twin-card-'+nonce+'-'+filename
