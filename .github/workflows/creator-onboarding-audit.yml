@@ -88,6 +88,14 @@ jobs:
         with: { path: audit-harness }
       - uses: actions/setup-node@v4
         with: { node-version: 22 }
+      - name: Video tools used by the fixture guardrail tests
+        run: |
+          if [ -f scripts/install-ci-video-tools.sh ]; then
+            bash scripts/install-ci-video-tools.sh
+          else
+            sudo apt-get update
+            sudo apt-get install -y --no-install-recommends ffmpeg
+          fi
       - name: Check fixture guardrails and prepare additional journey coverage
         run: |
           node deployment/creator-flow-live-check.test.cjs
