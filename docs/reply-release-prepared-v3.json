@@ -1,0 +1,10 @@
+{
+  "status": "preparation-failed",
+  "candidate": "d6058dcd05dc1cb2646a516fcb1aabf152a280be",
+  "workflowRun": "38393836698",
+  "liveRuntimeReplaced": false,
+  "modelCalls": 0,
+  "fanMessages": 0,
+  "purchases": 0,
+  "error": "SSM Failed: Traceback (most recent call last):\n  File \"/tmp/twin-reply-prep-1791893003042552151-prepare-reply-release.py\", line 22, in <module>\n    assert model and model['cases']==model['requests']==464 and model['failed']==0 and model['promptDisplayConsistent'] and not any(x.get('fatal') for x in model['creators']),'Current isolated model gate is not complete/passing'\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\nAssertionError: Current isolated model gate is not complete/passing\nfailed to run commands: exit status 1"
+}
