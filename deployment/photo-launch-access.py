@@ -17,17 +17,22 @@ def ssm(command,timeout=300):
   print(r.get('StandardErrorContent','')[-600:],flush=True)
   raise RuntimeError('Read '+r['Status'])
  return r.get('StandardOutputContent','')
+stage=pathlib.Path('deployment/v2-photo-recovery')
+bundle={name:(stage/name).read_text() for name in ['run-legacy-simulation-v2.py','simulate-live-legacy.mjs']}
 program="""
-import pathlib,json,subprocess
+import json,pathlib,subprocess
 root=pathlib.Path('/home/ubuntu/twin-v2-validation/fleet-simulation-20261013-1791877888400228253')
-d=root/'legacy-harness-dry'
-for name in ['summary.json','runner.stderr.private.log']:
- p=d/name
- if p.exists():
-  if name=='summary.json':
-   r=json.loads(p.read_text());print('LEGACY_DRY_JSON '+json.dumps({'cases':r.get('cases'),'requests':r.get('requests'),'fatal':r.get('fatal'),'errors':[(x['case'],x['error']) for x in r.get('results',[]) if x.get('error')]}))
-  else:print('LEGACY_DRY_STDERR '+p.read_text()[-1600:])
-i=json.loads(subprocess.check_output(['docker','image','inspect','sha256:f9618c70eb79abd38cce8991f47b4a6b11f19b7d28eb7d3886baa0a4e5b368ab'],text=True))[0]
-print('LEGACY_IMAGE_ENV_NAMES '+json.dumps([x.split('=',1)[0] for x in i['Config'].get('Env',[])]))
+assert not (root/'legacy-launched-v2.json').exists(),'No repeat model run'
+assert not any((root/s/'summary.json').exists() for s in ['autumn-renae','dan-dangler','hazey-haley']),'Legacy model results already exist'
+for name,body in BUNDLE.items():
+ assert name in ['run-legacy-simulation-v2.py','simulate-live-legacy.mjs']
+ if name=='simulate-live-legacy.mjs':assert (root/name).read_text()==body
+ else:(root/name).write_text(body)
+with (root/'legacy-orchestrator-v2.private.log').open('x') as log:
+ p=subprocess.Popen(['python3',str(root/'run-legacy-simulation-v2.py')],stdin=subprocess.DEVNULL,stdout=log,stderr=log,start_new_session=True,cwd=root)
+receipt={'pid':p.pid,'scope':'3 V1 creators; preserve original no-model dry failure; fix isolated fixture ownership only'}
+(root/'legacy-launched-v2.json').write_text(json.dumps(receipt));print('LEGACY_LAUNCHED_V2_JSON '+json.dumps(receipt),flush=True)
 """
-ssm('python3 -c '+shlex.quote(program),45)
+raw=('BUNDLE='+repr(bundle)+'\n'+program).encode();packed=base64.b64encode(gzip.compress(raw)).decode()
+program="import gzip,base64;exec(compile(gzip.decompress(base64.b64decode("+repr(packed)+")),'<legacy-isolated-launch-v2>','exec'))"
+ssm('python3 -c '+shlex.quote(program),60)
