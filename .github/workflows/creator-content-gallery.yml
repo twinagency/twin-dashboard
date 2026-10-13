@@ -36,8 +36,10 @@ jobs:
         env: { CREATOR_GALLERY_ENGINES: 'chromium,webkit' }
         run: |
           if [ "${{ github.base_ref }}" = 'flirt/independent-backend-2026-09-19' ]; then
+            node scripts/check-creator-content-browser.mjs --flirt
             node scripts/check-creator-content-gallery-browser.mjs --flirt
           else
+            node scripts/check-creator-content-browser.mjs
             node scripts/check-creator-content-gallery-browser.mjs
           fi
       - name: Type check
@@ -46,5 +48,7 @@ jobs:
         if: always()
         with:
           name: creator-content-gallery-preview
-          path: test-results/creator-gallery/*.png
+          path: |
+            test-results/creator-gallery/*.png
+            test-results/creator-content/*.png
           retention-days: 3
