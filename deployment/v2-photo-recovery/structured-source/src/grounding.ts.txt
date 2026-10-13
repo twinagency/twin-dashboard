@@ -1,7 +1,7 @@
 // Reply grounding (round 5). When her reply offers ONE file (a tagged photo/video/bundle), the garment, colour and anatomy words the reply
 // attributes to herself must be supported by that file's own verified description / visible facts. A sentence that names a garment, an anatomy
 // word or a toy the file does not show is removed (code only: no second model call, the file selection and billing outcome are untouched).
-// What this CANNOT catch: poses, actions, places, hair, body parts and clothes outside the closed word list below, paraphrases, counts,
+// What this CANNOT catch: poses outside the bounded phrases below, actions, places, hair, body parts and clothes outside the closed word list below, paraphrases, counts,
 // "no bra" style absence claims (a negated word is exempt, so honest "i dont have a bikini one" survives), colours not next to a garment
 // word, and anything the vision description itself got wrong. It checks vocabulary support, not truth.
 import { affirmed, withoutObjectRackTerms } from "./media.js";
@@ -76,6 +76,13 @@ const supportedFamilies = (f: string) => [f, ...(BROADER[f] ?? [])];
 
 const toks = (s: string) => withoutObjectRackTerms(s).toLowerCase().replace(/[^a-z0-9' ]+/g, " ").split(/\s+/).filter(Boolean);
 const NEG = /\b(?:dont|don't|do not|didnt|didn't|doesnt|doesn't|cant|can't|cannot|never|no|not|nothing|without|isnt|isn't|aint|wont|won't)\b/;
+// The incident's pose claims need direct description evidence, never a body-part tag or search synonym.
+const POSES: [string, RegExp][] = [
+  ["pose:face-down", /\b(?:face[- ]down|prone)\b/gi],
+  ["pose:raised-buttocks", /\b(?:ass|buttocks|booty|butt)\s+(?:(?:is|are|held|lifted|lift|raised|raise)\s+)?(?:up|raised)\b/gi],
+  ["pose:bent-over", /\b(?:bent|bending)\s+over\b/gi],
+  ["pose:all-fours", /\b(?:all\s+fours|hands\s+and\s+knees|dogg(?:y|ie)(?:[- ]?style)?)\b/gi],
+];
 
 /** Colours belong to the following garment/object phrase, not an unrelated pillow, wall or other garment. */
 function coloursBefore(t: string[], i: number): string[] {
@@ -92,6 +99,9 @@ function coloursBefore(t: string[], i: number): string[] {
 export function evidenceFamilies(descAndWords: string): Set<string> {
   const out = new Set<string>();
   for (const clause of descAndWords.split(/[.!?;,\n]/)) {
+    for (const [pose, pattern] of POSES) {
+      if ([...clause.matchAll(pattern)].some(match => !NEG.test(clause.slice(0, match.index).toLowerCase()))) out.add(pose);
+    }
     const t = toks(clause);
     t.forEach((w, i) => {
       const f = FAMILIES[w];
@@ -114,6 +124,11 @@ export function unsupported(sentence: string, ev: Set<string>): string[] {
   const bad: string[] = [];
   const clauses = sentence.toLowerCase().replace(/[’]/g, "'").split(/[,;:]|\bbut\b|\band\b(?=\s+(?:i|my|im|i'm|her|the|this|these)\b)/);
   for (const c of clauses) {
+    for (const [pose, pattern] of POSES) {
+      for (const match of c.matchAll(pattern)) {
+        if (!ev.has(pose) && !NEG.test(c.slice(0, match.index))) bad.push(match[0]);
+      }
+    }
     const t = toks(c);
     t.forEach((w, i) => {
       const f = FAMILIES[w];
