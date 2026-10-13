@@ -27,7 +27,9 @@ import FanDossier from "@/components/users/FanDossier";
 import { toRows, parseEvents, sentenceCase } from "@/lib/fan-dossier";
 import ChatThread, { type ThreadMessage } from "@/components/users/ChatThread";
 import { flowLabelOf } from "@/lib/flow-labels";
-import { CHAT_HISTORY_PAGE, historyWindowQuery, historyCursor, parseHistoryCursor } from "@/lib/chat-history-window";
+import { historyCursor, parseHistoryCursor } from "@/lib/chat-history-window";
+import { loadV2Fans, loadTelegramHistory } from "@/lib/live-telegram";
+import { fanKey, fanMatches, sortFans, inboxCursor, parseInboxCursor, isStoredFan, virtualFanId } from "@/lib/live-telegram-model";
 
 export const dynamic = "force-dynamic";
 
@@ -78,6 +80,8 @@ type OnboardingStepRow = {
 type CloneRow = {
   id: string;
   name: string;
+  slug: string;
+  engine?: string | null;
   onboarding_steps: OnboardingStepRow[] | null;
   onboarding_free_preview_enabled: boolean | null;
   photos_enabled: boolean | null;
@@ -316,7 +320,7 @@ export default async function FansPage({
     // once here and joined to each fan row, never queried per fan.
     supabaseAdmin
       .from("clones")
-      .select("id,name,onboarding_steps,onboarding_free_preview_enabled,photos_enabled,drip_steps,drip_enabled"),
+      .select("id,name,slug,engine,onboarding_steps,onboarding_free_preview_enabled,photos_enabled,drip_steps,drip_enabled"),
     // The visible slice, ordered and ranged in the database. `id` is the tie
     // breaker: paging an unstable order can show the same fan twice and skip
     // another, and every sort key here has ties (a whole clone can share a null
@@ -337,10 +341,27 @@ export default async function FansPage({
     countOf((q: any) => q.eq("blocked", true)),
   ]);
 
+  if (clonesRes.error || usersRes.error) throw new Error("Could not load Telegram conversations. Please retry.");
   const clones = (clonesRes.data ?? []) as CloneRow[];
   const cloneById = new Map(clones.map((c) => [c.id, c]));
+  const v2 = await loadV2Fans(clones, cloneId);
   const fetchedFans = (usersRes.data ?? []) as any[];
-  const filtered = fetchedFans.slice(0, showCount);
+  const mergedFans = new Map(fetchedFans.map(fan => [fanKey(fan), fan]));
+  for (const fan of v2.fans) mergedFans.set(fanKey(fan), fan);
+  let matchingFans = sortFans([...mergedFans.values()].filter(fan => fanMatches(fan, status, q, cutoffIso)), sortKey, asc);
+  // A now-active V2 fan can leave the legacy 'unreachable' result. Refill the
+  // slice rather than hiding the remaining matching legacy conversations.
+  let legacyHasMore = fetchedFans.length > showCount;
+  let offset = fetchedFans.length;
+  while (matchingFans.length <= showCount && legacyHasMore) {
+    const next = await applyFilters(supabaseAdmin.from("users").select("*")).order(sortKey, { ascending: asc, nullsFirst: asc }).order("id", { ascending: true }).range(offset, offset + FAN_PAGE - 1);
+    if (next.error) throw new Error("Could not load Telegram fans. Please retry.");
+    const rows = next.data ?? [];
+    offset += rows.length; legacyHasMore = rows.length === FAN_PAGE;
+    for (const fan of rows) if (!mergedFans.has(fanKey(fan))) mergedFans.set(fanKey(fan), fan);
+    matchingFans = sortFans([...mergedFans.values()].filter(fan => fanMatches(fan, status, q, cutoffIso)), sortKey, asc);
+  }
+  const filtered = matchingFans.slice(0, showCount);
 
   // Last route per fan, for the chips on each row. Scoped to the fans actually
   // on screen (`.in`) rather than "the last 1000 routing rows fleet-wide" as
@@ -380,7 +401,7 @@ export default async function FansPage({
   // place: fan 301 would show no unlock chip and nothing would say why. So the
   // ids are chunked and every visible fan is covered.
   const ID_CHUNK = 150;
-  const pageUserIds = filtered.map((u) => u.id);
+  const pageUserIds = filtered.map((u) => u.id).filter(isStoredFan);
   const idChunks: string[][] = [];
   for (let i = 0; i < pageUserIds.length; i += ID_CHUNK) idChunks.push(pageUserIds.slice(i, i + ID_CHUNK));
   const mediaBuyRows = (
@@ -441,19 +462,22 @@ export default async function FansPage({
   }
 
   // "Active" = messaged in the last 24h (the Telegram messaging window), NOT the manual is_active flag.
-  const totalFans = totalRes.count ?? 0;
-  const activeFans = activeRes.count ?? 0;
+  const totalFans = (totalRes.count ?? 0) + v2.fans.filter(fan => fan._virtual).length;
+  const activeFans = (activeRes.count ?? 0) + v2.fans.reduce((delta, fan) => {
+    const original = v2.originals.get(fanKey(fan));
+    return delta + Number(fanMatches(fan, "active", "", cutoffIso)) - Number(!!original && fanMatches(original, "active", "", cutoffIso));
+  }, 0);
   const payingFans = payingRes.count ?? 0;
   const flaggedFans = flaggedRes.count ?? 0;
 
-  const hasMore = fetchedFans.length > showCount && showCount < FAN_MAX;
+  const hasMore = (matchingFans.length > showCount || legacyHasMore) && showCount < FAN_MAX;
 
   // The fan in ?fan= is normally on the current slice. When he is not (a deep
   // link, or he sorted off the end of it) he is fetched on his own rather than
   // silently swapped for whoever is at the top, which is what falling back to
   // filtered[0] alone would do.
-  let selected = (fanParam && filtered.find((u) => u.id === fanParam)) || null;
-  if (!selected && fanParam) {
+  let selected = (fanParam && [...mergedFans.values()].find((u) => u.id === fanParam || u._v2 && virtualFanId(u.clone_id, u.telegram_id) === fanParam)) || null;
+  if (!selected && fanParam && isStoredFan(fanParam)) {
     const { data } = await supabaseAdmin.from("users").select("*").eq("id", fanParam).maybeSingle();
     selected = (data as any) ?? null;
   }
@@ -461,8 +485,11 @@ export default async function FansPage({
 
   let history: any[] = [];
   let historyHasMore = false;
-  const historyBefore = parseHistoryCursor(params.before);
+  const historyBefore = parseInboxCursor(params.before);
   const historyAfter = historyBefore ? null : parseHistoryCursor(params.after);
+  let combinedHistory = false;
+  let historyUnavailable = false;
+  const selectedV2 = !!selected && cloneById.get(selected.clone_id)?.engine === "v2";
   let purchases: any[] = [];
   let profile: any = null;
   // Manual takeover (migration 096) photo picker: restricted to this fan's
@@ -472,11 +499,7 @@ export default async function FansPage({
   let freePhotos: { id: string; storage_path: string; caption: string | null; image_name: string | null }[] = [];
   if (selected) {
     const [historyRes, purchasesRes, profileRes, freePhotosRes] = await Promise.all([
-      historyWindowQuery(supabaseAdmin
-        .from("chat_history")
-        .select("*")
-        .eq("clone_id", selected.clone_id)
-        .eq("telegram_id", selected.telegram_id), { before: params.before, after: params.after }),
+      loadTelegramHistory(cloneById.get(selected.clone_id)!, selected.telegram_id, { before: params.before, after: params.after }),
       supabaseAdmin
         .from("star_transactions")
         // select * (not named columns) for the same reason chat_history does it
@@ -484,10 +507,11 @@ export default async function FansPage({
         // actually unlocked) come along the moment that migration is applied,
         // and nothing breaks in the window before it is.
         .select("*")
-        .eq("user_id", selected.id)
+        .eq("clone_id", selected.clone_id)
+        .or(isStoredFan(selected.id) ? `user_id.eq.${selected.id},telegram_id.eq.${selected.telegram_id}` : `telegram_id.eq.${selected.telegram_id}`)
         .order("paid_at", { ascending: false }),
-      supabaseAdmin.from("fan_profiles").select("*").eq("user_id", selected.id).maybeSingle(),
-      selected.paused
+      isStoredFan(selected.id) ? supabaseAdmin.from("fan_profiles").select("*").eq("user_id", selected.id).maybeSingle() : Promise.resolve({ data: null }),
+      selected.paused && !selectedV2
         ? supabaseAdmin
             .from("photos")
             .select("id,storage_path,caption,image_name")
@@ -496,10 +520,10 @@ export default async function FansPage({
             .order("created_at", { ascending: false })
         : Promise.resolve({ data: [] as any[] }),
     ]);
-    if (historyRes.error) throw new Error("Could not load conversation history. Please retry.");
-    historyHasMore = (historyRes.data ?? []).length > CHAT_HISTORY_PAGE;
-    history = ((historyRes.data ?? []) as any[]).slice(0, CHAT_HISTORY_PAGE);
-    if (!historyAfter) history.reverse();
+    historyHasMore = historyRes.hasMore;
+    history = historyRes.rows;
+    combinedHistory = historyRes.combined;
+    historyUnavailable = historyRes.unavailable;
     // See lib/star-dedupe.ts: collapse double-recorded payments before showing this fan's total.
     purchases = dedupeStarRows((purchasesRes.data ?? []) as any[]);
     profile = (profileRes.data ?? null) as any;
@@ -777,9 +801,10 @@ export default async function FansPage({
           : "";
 
     return {
-      id: String(m.id ?? `${m.created_at}-${i}`),
+      id: `${m.source ?? "v1"}:${m.id ?? `${m.created_at}-${i}`}`,
       fan,
       content: m.content,
+      deliveryUnverified: m.delivery === "unverified",
       timeLabel: timeLabelOf(m.created_at),
       dayLabel: newDay ? dayLabelOf(m.created_at) : null,
       startsRun,
@@ -955,7 +980,7 @@ export default async function FansPage({
           Both mounted here rather than in the layout: they are the Fans
           inbox's, and a stream open on every page in the app would be a poll
           loop per tab for a screen nobody is looking at. */}
-      <LiveFeed />
+      <LiveFeed scopeKey={cloneId ?? "all"} />
       <PurchaseToasts />
       {/* Middle column capped narrow (~400px, iPhone-width) instead of 1fr - 
           reads like a phone thread, not a stretched-out desktop panel. Left
@@ -963,6 +988,7 @@ export default async function FansPage({
       <div className="grid gap-3 lg:h-full lg:grid-cols-3">
         {/* ── Left: fan list (data above, bigger search, filters) ───────── */}
         <Card size="sm" className={`users-panel users-panel-list flex h-[34rem] ${colHeight} flex-col overflow-hidden p-0`}>
+          {v2.unavailable.length > 0 && <p role="status" className="border-b border-line px-3 py-2 text-xs text-warn">Could not refresh {v2.unavailable.join(", ")}. Retrying automatically.</p>}
           <div className="border-b border-line p-3">
             {/* Data above the list */}
             <div className="mb-3 grid grid-cols-3 gap-2">
@@ -1282,10 +1308,11 @@ export default async function FansPage({
                 historyNavigation={
                   <nav aria-label="Conversation history" className="flex flex-wrap items-center justify-center gap-3 border-b border-line px-3 py-2 text-xs">
                     <span className="text-muted">Last 90 days</span>
-                    {history.length > 0 && (historyAfter || historyHasMore && !historyAfter) && (
-                      <Link scroll={false} className="text-blue-600 hover:underline" href={baseQs({ fan: selected.id, before: historyCursor(history[0]) })}>Older messages</Link>
+                    {historyUnavailable && <span role="status" className="text-warn">Latest messages could not refresh. Retrying automatically.</span>}
+                    {history.length > 0 && (historyHasMore || !combinedHistory && historyAfter) && (
+                      <Link scroll={false} className="text-blue-600 hover:underline" href={baseQs({ fan: selected.id, before: combinedHistory ? inboxCursor(history[0]) : historyCursor(history[0]) })}>Older messages</Link>
                     )}
-                    {history.length > 0 && (historyBefore || historyAfter && historyHasMore) && (
+                    {!combinedHistory && history.length > 0 && (historyBefore || historyAfter && historyHasMore) && (
                       <Link scroll={false} className="text-blue-600 hover:underline" href={baseQs({ fan: selected.id, after: historyCursor(history[history.length - 1]) })}>Newer messages</Link>
                     )}
                     {(historyBefore || historyAfter) && <Link scroll={false} className="text-blue-600 hover:underline" href={qs(selected.id)}>Latest messages</Link>}
@@ -1399,13 +1426,13 @@ export default async function FansPage({
                           selected.message_credits <= 0 ? "text-crit" : selected.message_credits <= 5 ? "text-warn" : ""
                         }
                       >
-                        {fmtNum(selected.message_credits)}
+                        {selected.message_credits == null ? "—" : fmtNum(selected.message_credits)}
                       </span>
                     ),
                   },
                   { label: "Total spent", value: totalSpent > 0 ? <StarAmount stars={totalSpent} /> : "-" },
                   { label: "Purchases", value: fmtNum(purchases.length) },
-                  { label: "Msgs sent", value: fmtNum(selected.total_messages_sent ?? 0) },
+                  { label: "Msgs sent", value: selected.total_messages_sent == null ? "—" : fmtNum(selected.total_messages_sent) },
                   { label: "Msgs bought", value: fmtNum(selected.total_messages_purchased ?? 0) },
                   { label: "First seen", value: <span title={dateTime(selected.first_seen_at)}>{ago(selected.first_seen_at)}</span> },
                   { label: "Last active", value: <span title={dateTime(selected.last_message_received)}>{ago(selected.last_message_received)}</span> },
@@ -1538,7 +1565,7 @@ export default async function FansPage({
               </div>
 
               {/* Credits - live adjust */}
-              <div>
+              {!selectedV2 && isStoredFan(selected.id) && <div>
                 <div className="mb-2 text-[11px] font-semibold uppercase tracking-wide text-muted">Credits</div>
                 <MutationForm action={setCredits} className="flex items-center gap-2">
                   <input type="hidden" name="userId" value={selected.id} />
@@ -1556,7 +1583,7 @@ export default async function FansPage({
                     Save
                   </button>
                 </MutationForm>
-              </div>
+              </div>}
 
               {/* Knowledge / profile dossier - what the bot has learned. Built by
                   services/profile-extractor.ts from the fan's own messages;
@@ -1616,12 +1643,12 @@ export default async function FansPage({
                   compose a text, a generated voice note, or an existing FREE
                   photo and send it as her. See ManualTakeover.tsx +
                   bot/src/manual-send.ts for the full mechanism. */}
-              {selected.paused && (
+              {selected.paused && !selectedV2 && isStoredFan(selected.id) && (
                 <ManualTakeover userId={selected.id} freePhotos={freePhotos} />
               )}
 
               {/* Controls - the destructive/rare ops, tucked away but all here */}
-              <details className="mt-auto rounded-md border border-line bg-bg">
+              {!selectedV2 && isStoredFan(selected.id) && <details className="mt-auto rounded-md border border-line bg-bg">
                 <summary className="cursor-pointer select-none px-3 py-2 text-[11px] font-semibold uppercase tracking-wide text-muted hover:text-ink">
                   Controls
                 </summary>
@@ -1737,7 +1764,7 @@ export default async function FansPage({
                     </ConfirmSubmit>
                   </MutationForm>
                 </div>
-              </details>
+              </details>}
             </div>
           )}
         </Card>

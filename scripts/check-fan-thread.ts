@@ -133,7 +133,7 @@ check("C6 the thread opens on the newest message", () => {
     /scrollTop\s*=\s*el\.scrollHeight/.test(thread),
     "the scroll-to-bottom effect is gone, so picking a fan lands on the OLDEST of his last 60 messages again",
   );
-  assert(/\[fanId, messages\.length\]/.test(thread), "the scroll effect no longer re-runs when the selected fan changes");
+  assert(/\[fanId, messages\.length, messages\.at\(-1\)\?\.id\]/.test(thread), "the scroll effect must follow the selected fan and the newest message even on a full page");
 });
 
 check("C7 the newest message is marked", () => {
@@ -181,7 +181,7 @@ check("C12 a padlock is only drawn when 'not bought' is a fact", () => {
 check("C13 the unlock counts cover every fan on screen", () => {
   // "Load more" takes this list to 1000 rows. A fixed .slice() on the id list
   // is the same silent undercount the paging fixed, moved somewhere else.
-  assert(/const pageUserIds = filtered\.map\(\(u\) => u\.id\);/.test(page), "the unlock-count query no longer covers every visible fan");
+  assert(/const pageUserIds = filtered\.map\(\(u\) => u\.id\)\.filter\(isStoredFan\);/.test(page), "unlock-count lookup must cover all stored fans and exclude synthetic IDs from UUID queries");
   assert(/idChunks/.test(page), "the id list is no longer chunked, so a long list overflows the query string");
 });
 

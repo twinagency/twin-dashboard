@@ -11,6 +11,7 @@ export const AGENCY_COLUMNS: Record<string, readonly string[]> = {
   ],
   "clones": [
     "id",
+    "engine",
     "slug",
     "name",
     "status",
@@ -519,4 +520,5 @@ export const AGENCY_COLUMNS: Record<string, readonly string[]> = {
     "visual_description"
   ]
 };
+
 
