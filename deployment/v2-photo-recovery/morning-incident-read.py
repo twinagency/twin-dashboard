@@ -1,21 +1,12 @@
-import datetime,hashlib,json,pathlib,subprocess
-root=pathlib.Path('/home/ubuntu/twin-v2')
-backup=pathlib.Path('/home/ubuntu/twin-v2/data/_operator_backups/photo-incident-20261013-morning');backup.mkdir(mode=0o700,parents=True,exist_ok=True)
-runtime=[]
-for name in ['twin-v2-bot-1','twin-v2-dash-1']:
- p=json.loads(subprocess.check_output(['docker','inspect',name],text=True))[0]
- runtime.append({'container':name,'running':p['State']['Running'],'image':p['Image'],'revision':next((x.split('=',1)[1] for x in p['Config']['Env'] if x.startswith('GIT_SHA=')),None),'startedAt':p['State']['StartedAt']})
-print(json.dumps({'checkedAt':datetime.datetime.now(datetime.timezone.utc).isoformat(),'runtime':runtime}),flush=True)
-p=root/'logs/riley-mae-lewis/requests.jsonl'
-rows=[]
-with p.open() as f:
- for line in f:
-  try:r=json.loads(line)
-  except:continue
-  if str(r.get('chatId'))=='6814483810' and r.get('ts','')>='2026-10-13T00:10:00':rows.append(r)
-out=backup/'riley-morning-requests.json';out.write_text(json.dumps(rows));out.chmod(0o600)
-print(json.dumps({'retainedRecords':len(rows),'privateEvidence':str(out),'sha256':hashlib.sha256(out.read_bytes()).hexdigest()}),flush=True)
-for r in rows[-12:]:
- print(json.dumps({k:r.get(k) for k in ['ts','turnId','fanText','raw','generated','final','photoRequest','selectedMedia','media','grounding','note','route','modelRequest','attempts']}|{'menu':[{'key':m.get('key'),'slot':m.get('slot'),'desc':m.get('desc','')[:650]} for m in r.get('menu',[])],'delivery':r.get('delivery')}),flush=True)
-fleet=json.loads((root/'data/_fleet.json').read_text())
-print(json.dumps({'fleetAt':fleet.get('at'),'fleet':{k:{'status':v.get('status'),'startedAt':v.get('startedAt')} for k,v in fleet.get('girls',{}).items()}}),flush=True)
+import hashlib,json,pathlib,subprocess,tarfile
+root=pathlib.Path('/home/ubuntu/twin-v2');backup=pathlib.Path('/home/ubuntu/twin-v2-backups/photo-recovery-20261013')
+script="import fs from 'node:fs';import path from 'node:path';import crypto from 'node:crypto';import {config} from './src/config.ts';\nconst fields='id,slug,name,engine,status,v2_credits_enabled,tips_enabled,v2_memory_enabled,vision_model,photo_vision_model,sell_via_mini_app,v2_vars';\nconst r=await fetch(config.supabaseUrl+'/rest/v1/clones?or=(engine.eq.v2,slug.eq.sania-mallory)&select='+fields,{headers:{apikey:config.supabaseKey,Authorization:'Bearer '+config.supabaseKey},signal:AbortSignal.timeout(15000)});if(!r.ok)throw Error('settings read '+r.status);const rows=await r.json();\nconst dir=path.join(config.dataDir,'_operator_backups/photo-incident-20261013-morning');fs.mkdirSync(dir,{recursive:true,mode:0o700});fs.writeFileSync(path.join(dir,'current-settings.json'),JSON.stringify(rows),{mode:0o600});\nconst c=JSON.parse(fs.readFileSync(path.join(config.dataDir,'riley-mae-lewis/6814483810.json'),'utf8'));fs.writeFileSync(path.join(dir,'current-riley-chat.json'),JSON.stringify(c),{mode:0o600});\nconsole.log(JSON.stringify({settings:rows.map(({v2_vars,...x})=>({...x,profileHash:crypto.createHash('sha256').update(JSON.stringify(v2_vars)).digest('hex')})),bundles:process.env.V2_BUNDLES,chat:{epoch:c.epoch,sent:c.sent,photo:c.photo?{key:c.photo.key,status:c.photo.status,at:c.photo.at,mode:c.photo.mode}:null,historyCount:c.history.length}}));"
+r=subprocess.run(['docker','exec','-i','twin-v2-bot-1','node','--import','tsx','--input-type=module'],input=script,text=True,capture_output=True,timeout=40)
+print(r.stdout,flush=True)
+if r.returncode:print(r.stderr[-1200:]);raise RuntimeError('settings read failed')
+m=json.loads((backup/'bcc68c7e801ad65310f43f4a4ce09f05d3e3b4f7-source-manifest.json').read_text())
+changed=[]
+for x in m:
+ p=root/x['path'];b=p.read_bytes() if p.exists() else b''
+ if hashlib.sha1(b'blob '+str(len(b)).encode()+bytes([0])+b).hexdigest()!=x['sha']:changed.append(x['path'])
+print(json.dumps({'runtimeSourceFiles':len(m),'changedHostFiles':changed,'composeChanged':(root/'docker-compose.yml').read_bytes()!=(backup/'docker-compose.yml').read_bytes(),'rollbackImagePresent':subprocess.run(['docker','image','inspect','sha256:2f076bf6fbc17b4de58a31887e9328a56e0275d90edda39ea789efbd13517d2e'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL).returncode==0,'rollbackCodeMembers':len(tarfile.open(backup/'code.tgz').getnames()),'override':json.loads((root/'photo-release.override.json').read_text())}),flush=True)
