@@ -4,6 +4,7 @@ runtime=[]
 for name in ['twin-v2-bot-1','twin-v2-dash-1']:
  info=json.loads(subprocess.check_output(['docker','inspect',name],text=True))[0]
  runtime.append({'container':name,'running':info['State']['Running'],'image':info['Image'],'revision':next((x.split('=',1)[1] for x in info['Config']['Env'] if x.startswith('GIT_SHA=')),None)})
+print('SHARED_REPAIR_HEALTH_JSON '+subprocess.check_output(['docker','stats','--no-stream','--format','{{json .}}','twin-v2-dash-1','twin-v2-bot-1'],text=True).replace('\n',' '),flush=True)
 js=r"""
 import fs from 'node:fs';import {createHash} from 'node:crypto';
 import {config} from './src/config.ts';import {render} from './src/girls/template.ts';import {priceFor} from './src/payments.ts';
@@ -16,22 +17,31 @@ const sha=s=>createHash('sha256').update(s).digest('hex');
 const rsp=await fetch(config.supabaseUrl+'/rest/v1/clones?select=id,slug,name,engine,status,v2_vars,v2_credits_enabled,tips_enabled,v2_memory_enabled&order=slug',{headers:{apikey:config.supabaseKey,Authorization:'Bearer '+config.supabaseKey},signal:AbortSignal.timeout(15000)});
 if(!rsp.ok)throw Error('clones-read-'+rsp.status);
 const rows=await rsp.json(), results=[];
+const renderAt=new Date('2026-10-13T06:00:00.000Z');
+let displayReadable=true;
+const health=[];
+for(const endpoint of ['/','/api/girls/details?girl=riley-mae-lewis']){
+ const begun=Date.now();
+ try{const r=await fetch('http://127.0.0.1:'+Number(process.env.DASH_PORT??4300)+endpoint,{signal:AbortSignal.timeout(10000)});health.push({endpoint,status:r.status,ms:Date.now()-begun});await r.text();if(!r.ok)displayReadable=false;}
+ catch(e){health.push({endpoint,error:e?.name??'Error',ms:Date.now()-begun});displayReadable=false;}
+}
 const sec=t=>t.slice(t.indexOf('PHOTOS AND VIDEOS'),t.indexOf('HARD LIMITS, NEVER CROSSED'));
 for(const row of rows.filter(r=>r.engine==='v2'&&r.status==='active')){
  const check={id:row.id,slug:row.slug,settingsHash:sha(JSON.stringify(row)),testerPrice:priceFor(2700,{cloneId:row.id,telegramId:6814483810,kind:'photo'}),normalPrice:priceFor(2700,{cloneId:row.id,telegramId:6814483811,kind:'photo'})};
- const oldPrompt=render(row.v2_vars);
+ const oldPrompt=render(row.v2_vars,renderAt);
  const reviewed=changes.reduce((text,[oldText,newText])=>text.replace(oldText,newText),oldPrompt);
- check.candidateDisplayMatches=JSON.stringify(candidate.previewParts(row.v2_vars))===JSON.stringify(candidate.renderParts(row.v2_vars));
- check.candidateChangesOnlyReviewedParagraphs=candidate.render(row.v2_vars)===reviewed;
+ check.candidateDisplayMatches=JSON.stringify(candidate.previewParts(row.v2_vars,renderAt))===JSON.stringify(candidate.renderParts(row.v2_vars,renderAt));
+ check.candidateChangesOnlyReviewedParagraphs=candidate.render(row.v2_vars,renderAt)===reviewed;
  check.emojiPolicy=sha(row.v2_vars.EMOJIS??'');
  try{
+  if(!displayReadable){check.error='skipped-after-endpoint-health-failure';results.push(check);continue;}
   const response=await fetch('http://127.0.0.1:'+Number(process.env.DASH_PORT??4300)+'/api/girls/details?girl='+encodeURIComponent(row.slug),{signal:AbortSignal.timeout(8000)});
   check.displayHttp=response.status;
-  if(response.ok){const d=await response.json();check.displayMatches=Array.isArray(d.parts)&&Array.isArray(d.errors)&&!d.errors.length&&sec(d.parts.filter(p=>!p.optional).map(p=>p.text).join(''))===sec(render(row.v2_vars));}
+  if(response.ok){const d=await response.json();check.displayMatches=Array.isArray(d.parts)&&Array.isArray(d.errors)&&!d.errors.length&&sec(d.parts.filter(p=>!p.optional).map(p=>p.text).join(''))===sec(render(row.v2_vars,renderAt));}
  }catch(e){check.error=e?.name??'Error';}
  results.push(check);
 }
-console.log('SHARED_REPAIR_BASELINE_JSON '+JSON.stringify({checkedAt:new Date().toISOString(),model:config.model,providerOrder:config.providerOrder,bundles:process.env.V2_BUNDLES,sourceHashes:Object.fromEntries(['src/media.ts','src/turn.ts','src/grounding.ts','src/girls/template.ts','src/llm.ts'].map(p=>[p,sha(fs.readFileSync(p))])),creators:rows.map(r=>({id:r.id,slug:r.slug,engine:r.engine,status:r.status})),checks:results,settingsHash:sha(JSON.stringify(rows)),modelCalls:0,messagesSent:0,productionWrites:0}));
+console.log('SHARED_REPAIR_BASELINE_JSON '+JSON.stringify({checkedAt:new Date().toISOString(),health,model:config.model,providerOrder:config.providerOrder,bundles:process.env.V2_BUNDLES,sourceHashes:Object.fromEntries(['src/media.ts','src/turn.ts','src/grounding.ts','src/girls/template.ts','src/llm.ts'].map(p=>[p,sha(fs.readFileSync(p))])),creators:rows.map(r=>({id:r.id,slug:r.slug,engine:r.engine,status:r.status})),checks:results,settingsHash:sha(JSON.stringify(rows)),modelCalls:0,messagesSent:0,productionWrites:0}));
 """;
 p=subprocess.run(['docker','exec','-i','twin-v2-dash-1','node','--import','tsx','--input-type=module'],input=js,text=True,capture_output=True,timeout=150)
 if p.returncode:raise RuntimeError(p.stderr[-500:])
@@ -40,7 +50,7 @@ data=json.loads(line.split(' ',1)[1]);data['runtime']=runtime
 print('SHARED_REPAIR_BASELINE_JSON '+json.dumps(data),flush=True)
 
 assert all(x['running'] and x['revision']=='86b0ad199ea33fd7855f1c0dd54cc355f706e7f5' and x['image']=='sha256:9649329a00bd20fe06499f8238e1e51713381521af00d4cdc67505e1064f724a' for x in runtime),'Live runtime changed'
-assert all(x.get('displayMatches') and x['candidateDisplayMatches'] and x['candidateChangesOnlyReviewedParagraphs'] for x in data['checks']),'Prompt consistency failed'
+assert all(x['candidateDisplayMatches'] and x['candidateChangesOnlyReviewedParagraphs'] for x in data['checks']),'Candidate prompt consistency failed'
 root=pathlib.Path('/home/ubuntu/twin-v2')
 archive=pathlib.Path('/home/ubuntu/twin-v2-backups')/('shared-photo-baseline-5e789f1-'+str(time.time_ns()))
 assert shutil.disk_usage(root).free>2*1024**3,'Insufficient space for code/image rollback archive'
@@ -67,3 +77,5 @@ for x in runtime:
  current=json.loads(subprocess.check_output(['docker','inspect',x['container']],text=True))[0]
  assert current['State']['Running'] and current['Image']==x['image'] and 'GIT_SHA='+x['revision'] in current['Config']['Env'],'Runtime changed during preparation'
 print('SHARED_REPAIR_ROLLBACK_JSON '+json.dumps(plan),flush=True)
+
+assert all(x.get('displayMatches') for x in data['checks']),'Current dashboard display check remains unverified'
