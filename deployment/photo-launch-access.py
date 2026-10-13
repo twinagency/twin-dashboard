@@ -1,43 +1,31 @@
-"""Prepare pinned release and rollback; no live runtime replacement, fan sends or model calls."""
-import base64,gzip,hashlib,json,os,pathlib,shlex,subprocess,sys,time,urllib.request
+"""Read current runtime/settings and saved synthetic reply failures; zero model, Telegram or production writes."""
+import base64,gzip,json,os,pathlib,shlex,subprocess,time,urllib.request
 INSTANCE='i-0584d283506f3f6be'
 BRANCH='codex/v2-reply-release-prep-20261013'
-ROOT=pathlib.Path('deployment/v2-photo-recovery')
-nonce=str(time.time_ns())
-def ssm(command,timeout):
-  params=pathlib.Path('/tmp')/('card-probe-'+str(time.time_ns())+'.json')
-  params.write_text(json.dumps({'commands':[command],'executionTimeout':[str(timeout)]}))
-  cid=subprocess.check_output(['aws','ssm','send-command','--instance-ids',INSTANCE,'--document-name','AWS-RunShellScript',
-    '--parameters','file://'+str(params),'--comment','Isolated V2 card model replay; no fan or production writes',
-    '--query','Command.CommandId','--output','text'],text=True).strip()
-  print(json.dumps({'commandId':cid}),flush=True)
-  for _ in range(timeout//5+25):
-    try:r=json.loads(subprocess.check_output(['aws','ssm','get-command-invocation','--command-id',cid,'--instance-id',INSTANCE,'--output','json'],text=True,stderr=subprocess.DEVNULL))
-    except subprocess.CalledProcessError:time.sleep(5);continue
-    if r['Status'] in ['Success','Failed','Cancelled','TimedOut']:break
-    time.sleep(5)
-  else:raise RuntimeError('SSM command incomplete')
-  if r['Status']!='Success':raise RuntimeError('SSM '+r['Status']+': '+r.get('StandardErrorContent','')[-700:])
-  return r.get('StandardOutputContent','')
-
-
-result={'status':'not-started','candidate':'d16b275bae2ff4201259b3e90bb0fbf322f8906f','workflowRun':os.environ.get('GITHUB_RUN_ID'),'liveRuntimeReplaced':False,'modelCalls':0,'fanMessages':0,'purchases':0}
-try:
- paths=[]
- for filename in ['reply-release-source.json','prepare-reply-release.py']:
-  raw=(ROOT/filename).read_bytes();remote='/tmp/twin-reply-prep-'+nonce+'-'+filename;encoded=base64.b64encode(gzip.compress(raw,mtime=0)).decode();chunks=[encoded[i:i+24000] for i in range(0,len(encoded),24000)]
-  for i,chunk in enumerate(chunks):
-   program="import pathlib;p=pathlib.Path("+repr(remote+'.b64')+");p.open("+repr('w' if i==0 else 'a')+").write("+repr(chunk)+");p.chmod(0o600)"
-   ssm('python3 -c '+shlex.quote(program),90)
-  program="import base64,gzip,hashlib,pathlib;p=pathlib.Path("+repr(remote+'.b64')+");raw=gzip.decompress(base64.b64decode(p.read_text()));assert hashlib.sha256(raw).hexdigest()=="+repr(hashlib.sha256(raw).hexdigest())+";target=pathlib.Path("+repr(remote)+");target.write_bytes(raw);target.chmod(0o600);p.unlink()"
-  ssm('python3 -c '+shlex.quote(program),90);paths.append(remote)
- ssm('python3 '+shlex.quote(paths[1])+' '+shlex.quote(paths[0])+' '+shlex.quote(nonce),1400)
- host="import base64,gzip,pathlib;p=pathlib.Path('/home/ubuntu/twin-v2-backups/reply-baseline-d16b275-"+nonce+"/reply-prepared.json');assert p.is_file();print('PREP_BASE64 '+base64.b64encode(gzip.compress(p.read_bytes(),mtime=0)).decode())"
- output=ssm('python3 -c '+shlex.quote(host),60);line=next(x for x in output.splitlines() if x.startswith('PREP_BASE64 '));result.update(json.loads(gzip.decompress(base64.b64decode(line.split(' ',1)[1]))));result['status']='prepared'
-except Exception as exc:result.update(status='preparation-failed',error=str(exc)[-1000:])
-url='https://api.github.com/repos/jesse98/twin-dashboard/contents/docs/reply-release-prepared.json'
-body=json.dumps({'message':'Record pinned reply release preparation [skip ci]','branch':BRANCH,'content':base64.b64encode((json.dumps(result,indent=2)+'\n').encode()).decode()}).encode()
+host=r'''
+import base64,gzip,json,pathlib
+work=pathlib.Path('/home/ubuntu/twin-v2-validation/reply-outcomes-candidate-1791891121056617829')
+turns=json.loads((work/'riley-mae-lewis/turns.private.json').read_text());exchanges=json.loads((work/'riley-mae-lewis/exchanges.private.json').read_text())
+t=next(x for x in turns if x['case']=='edge-rejected-new');x=next(x for x in exchanges if x['case']=='edge-rejected-new');r=t['row']
+result={'candidate':'d16b275bae2ff4201259b3e90bb0fbf322f8906f','case':t['case'],'row':{k:r.get(k) for k in ['fanText','raw','selection','selectionError','final','note','provider','tokensOut','menu','generated','grounding','delivery']},'response':x['response'],'status':x['status'],'allowedSelections':x['request']['response_format']['json_schema']['schema']['properties']['selection']['enum'],'fanMessages':0,'modelCalls':0,'productionWrites':0}
+print('REPLY_BASE64 '+base64.b64encode(gzip.compress(json.dumps(result).encode(),mtime=0)).decode())
+'''
+payload=base64.b64encode(gzip.compress(host.encode(),mtime=0)).decode()
+program="import base64,gzip;exec(compile(gzip.decompress(base64.b64decode("+repr(payload)+")),'<reply-readonly>','exec'))"
+params=pathlib.Path('/tmp')/('reply-read-'+str(time.time_ns())+'.json')
+params.write_text(json.dumps({'commands':['python3 -c '+shlex.quote(program)],'executionTimeout':['90']}))
+cid=subprocess.check_output(['aws','ssm','send-command','--instance-ids',INSTANCE,'--document-name','AWS-RunShellScript','--parameters','file://'+str(params),'--comment','Read V2 reply repair baseline; no model or production writes','--query','Command.CommandId','--output','text'],text=True).strip()
+for _ in range(36):
+ try:r=json.loads(subprocess.check_output(['aws','ssm','get-command-invocation','--command-id',cid,'--instance-id',INSTANCE,'--output','json'],text=True,stderr=subprocess.DEVNULL))
+ except subprocess.CalledProcessError:time.sleep(3);continue
+ if r['Status'] in ['Success','Failed','Cancelled','TimedOut']:break
+ time.sleep(3)
+else:raise RuntimeError('Read incomplete')
+if r['Status']!='Success':raise RuntimeError('Read '+r['Status']+': '+r.get('StandardErrorContent','')[-600:])
+line=next(x for x in r['StandardOutputContent'].splitlines() if x.startswith('REPLY_BASE64 '))
+result=json.loads(gzip.decompress(base64.b64decode(line.split(' ',1)[1])))
+url='https://api.github.com/repos/jesse98/twin-dashboard/contents/docs/reply-replay-failure-detail.json'
+body=json.dumps({'message':'Record bounded failed model selection evidence [skip ci]','branch':BRANCH,'content':base64.b64encode((json.dumps(result,indent=2)+'\n').encode()).decode()}).encode()
 req=urllib.request.Request(url,data=body,method='PUT',headers={'Authorization':'Bearer '+os.environ['GITHUB_TOKEN'],'Accept':'application/vnd.github+json','Content-Type':'application/json'})
-with urllib.request.urlopen(req,timeout=30) as response:assert response.status==201
-print('PREP_RESULT '+json.dumps({k:result.get(k) for k in ['status','sha','image','backup','error','liveRuntimeReplaced']}),flush=True)
-if result['status']!='prepared':sys.exit(1)
+with urllib.request.urlopen(req,timeout=20) as response:assert response.status==201
+print('REPLY_READ_SAVED '+json.dumps({'case':result['case'],'modelCalls':0,'productionWrites':0}),flush=True)
