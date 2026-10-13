@@ -1,0 +1,415 @@
+{
+  "candidate": "726d199b00b7014320998da26d39e8228798ca6e",
+  "patchSha": "4892d4eaa70cf0c46ab12aeec93ae1799e3ffb468eea1a00ac63d26361589af6",
+  "fixtureSha": "b90b9a4b0f5d37b4c9e858ea4be478152653609eccff04366a777d89c3707f02",
+  "at": "2026-10-13T10:03:32.435195+00:00",
+  "runtimeBefore": [
+    {
+      "name": "twin-v2-bot-1",
+      "image": "sha256:dff48242b35b94e7b0e757ee4b7778a11958ef85b231b5fdb369542902e325f9",
+      "revision": "2f24f023c0cf46bea1c3b3b334458cf1a5df265e",
+      "running": true
+    },
+    {
+      "name": "twin-v2-dash-1",
+      "image": "sha256:dff48242b35b94e7b0e757ee4b7778a11958ef85b231b5fdb369542902e325f9",
+      "revision": "2f24f023c0cf46bea1c3b3b334458cf1a5df265e",
+      "running": true
+    }
+  ],
+  "runtimeAfter": [
+    {
+      "name": "twin-v2-bot-1",
+      "image": "sha256:dff48242b35b94e7b0e757ee4b7778a11958ef85b231b5fdb369542902e325f9",
+      "revision": "2f24f023c0cf46bea1c3b3b334458cf1a5df265e",
+      "running": true
+    },
+    {
+      "name": "twin-v2-dash-1",
+      "image": "sha256:dff48242b35b94e7b0e757ee4b7778a11958ef85b231b5fdb369542902e325f9",
+      "revision": "2f24f023c0cf46bea1c3b3b334458cf1a5df265e",
+      "running": true
+    }
+  ],
+  "settingsUnchanged": true,
+  "cases": 464,
+  "requests": 464,
+  "failed": 1,
+  "modelCost": 0.0652370712,
+  "creators": [
+    {
+      "slug": "allison-parker",
+      "cases": 27,
+      "requests": 27,
+      "failedCases": 0,
+      "flaggedCases": 0,
+      "fatal": null
+    },
+    {
+      "slug": "bethany-marquez",
+      "cases": 27,
+      "requests": 27,
+      "failedCases": 0,
+      "flaggedCases": 1,
+      "fatal": null
+    },
+    {
+      "slug": "briana-redd",
+      "cases": 27,
+      "requests": 27,
+      "failedCases": 0,
+      "flaggedCases": 2,
+      "fatal": null
+    },
+    {
+      "slug": "alanna-pow",
+      "cases": 27,
+      "requests": 27,
+      "failedCases": 0,
+      "flaggedCases": 1,
+      "fatal": null
+    },
+    {
+      "slug": "cat-chase",
+      "cases": 27,
+      "requests": 27,
+      "failedCases": 0,
+      "flaggedCases": 1,
+      "fatal": null
+    },
+    {
+      "slug": "dreka-cakez",
+      "cases": 27,
+      "requests": 27,
+      "failedCases": 0,
+      "flaggedCases": 3,
+      "fatal": null
+    },
+    {
+      "slug": "dakota-lyn",
+      "cases": 27,
+      "requests": 27,
+      "failedCases": 0,
+      "flaggedCases": 2,
+      "fatal": null
+    },
+    {
+      "slug": "fit-sid",
+      "cases": 27,
+      "requests": 27,
+      "failedCases": 0,
+      "flaggedCases": 2,
+      "fatal": null
+    },
+    {
+      "slug": "kyla-yesenosky",
+      "cases": 27,
+      "requests": 27,
+      "failedCases": 0,
+      "flaggedCases": 2,
+      "fatal": null
+    },
+    {
+      "slug": "mrs-callace",
+      "cases": 27,
+      "requests": 27,
+      "failedCases": 0,
+      "flaggedCases": 4,
+      "fatal": null
+    },
+    {
+      "slug": "olivia-jade",
+      "cases": 27,
+      "requests": 27,
+      "failedCases": 0,
+      "flaggedCases": 0,
+      "fatal": null
+    },
+    {
+      "slug": "riley-mae-lewis",
+      "cases": 32,
+      "requests": 32,
+      "failedCases": 0,
+      "flaggedCases": 4,
+      "fatal": null
+    },
+    {
+      "slug": "toochi",
+      "cases": 27,
+      "requests": 27,
+      "failedCases": 0,
+      "flaggedCases": 3,
+      "fatal": null
+    },
+    {
+      "slug": "tammy",
+      "cases": 27,
+      "requests": 27,
+      "failedCases": 0,
+      "flaggedCases": 1,
+      "fatal": null
+    },
+    {
+      "slug": "sania-mallory",
+      "cases": 27,
+      "requests": 27,
+      "failedCases": 0,
+      "flaggedCases": 1,
+      "fatal": null
+    },
+    {
+      "slug": "trashy",
+      "cases": 27,
+      "requests": 27,
+      "failedCases": 1,
+      "flaggedCases": 0,
+      "fatal": null
+    },
+    {
+      "slug": "tru-kait",
+      "cases": 27,
+      "requests": 27,
+      "failedCases": 0,
+      "flaggedCases": 4,
+      "fatal": null
+    }
+  ],
+  "failedTurns": [
+    {
+      "slug": "trashy",
+      "case": "ordinary-same-resend",
+      "checks": [
+        "requested_photo",
+        "exact_same_file",
+        "fresh_reference_read"
+      ]
+    }
+  ],
+  "flaggedTurns": [
+    {
+      "slug": "alanna-pow",
+      "case": "business-card-acceptance",
+      "flags": [
+        "possible_visibility_claim"
+      ]
+    },
+    {
+      "slug": "bethany-marquez",
+      "case": "ordinary-card-price",
+      "flags": [
+        "possible_visibility_claim"
+      ]
+    },
+    {
+      "slug": "briana-redd",
+      "case": "business-card-acceptance",
+      "flags": [
+        "possible_visibility_claim"
+      ]
+    },
+    {
+      "slug": "briana-redd",
+      "case": "ordinary-card-price",
+      "flags": [
+        "possible_visibility_claim"
+      ]
+    },
+    {
+      "slug": "cat-chase",
+      "case": "business-card-acceptance",
+      "flags": [
+        "possible_visibility_claim"
+      ]
+    },
+    {
+      "slug": "dakota-lyn",
+      "case": "business-card-acceptance",
+      "flags": [
+        "possible_visibility_claim"
+      ]
+    },
+    {
+      "slug": "dakota-lyn",
+      "case": "ordinary-card-price",
+      "flags": [
+        "model_quoted_item_price"
+      ]
+    },
+    {
+      "slug": "dreka-cakez",
+      "case": "business-free-preview",
+      "flags": [
+        "possible_visibility_claim"
+      ]
+    },
+    {
+      "slug": "dreka-cakez",
+      "case": "ordinary-card-price",
+      "flags": [
+        "possible_visibility_claim"
+      ]
+    },
+    {
+      "slug": "dreka-cakez",
+      "case": "ordinary-ownership-failure",
+      "flags": [
+        "possible_visibility_claim"
+      ]
+    },
+    {
+      "slug": "fit-sid",
+      "case": "business-free-preview",
+      "flags": [
+        "possible_visibility_claim"
+      ]
+    },
+    {
+      "slug": "fit-sid",
+      "case": "ordinary-ownership-failure",
+      "flags": [
+        "possible_false_stock",
+        "possible_visibility_claim"
+      ]
+    },
+    {
+      "slug": "kyla-yesenosky",
+      "case": "ordinary-card-price",
+      "flags": [
+        "model_quoted_item_price"
+      ]
+    },
+    {
+      "slug": "kyla-yesenosky",
+      "case": "ordinary-ownership-failure",
+      "flags": [
+        "possible_visibility_claim"
+      ]
+    },
+    {
+      "slug": "mrs-callace",
+      "case": "business-card-description",
+      "flags": [
+        "possible_visibility_claim"
+      ]
+    },
+    {
+      "slug": "mrs-callace",
+      "case": "business-cannot-afford",
+      "flags": [
+        "possible_visibility_claim"
+      ]
+    },
+    {
+      "slug": "mrs-callace",
+      "case": "ordinary-card-price",
+      "flags": [
+        "possible_visibility_claim"
+      ]
+    },
+    {
+      "slug": "mrs-callace",
+      "case": "ordinary-ownership-failure",
+      "flags": [
+        "possible_visibility_claim"
+      ]
+    },
+    {
+      "slug": "riley-mae-lewis",
+      "case": "business-card-acceptance",
+      "flags": [
+        "possible_visibility_claim"
+      ]
+    },
+    {
+      "slug": "riley-mae-lewis",
+      "case": "business-different-one",
+      "flags": [
+        "empty_final_reply"
+      ]
+    },
+    {
+      "slug": "riley-mae-lewis",
+      "case": "ordinary-card-price",
+      "flags": [
+        "model_quoted_item_price"
+      ]
+    },
+    {
+      "slug": "riley-mae-lewis",
+      "case": "edge-rejected-new",
+      "flags": [
+        "empty_final_reply"
+      ]
+    },
+    {
+      "slug": "sania-mallory",
+      "case": "business-card-price",
+      "flags": [
+        "possible_visibility_claim"
+      ]
+    },
+    {
+      "slug": "tammy",
+      "case": "business-card-price",
+      "flags": [
+        "model_quoted_item_price"
+      ]
+    },
+    {
+      "slug": "toochi",
+      "case": "business-card-acceptance",
+      "flags": [
+        "possible_visibility_claim"
+      ]
+    },
+    {
+      "slug": "toochi",
+      "case": "ordinary-card-price",
+      "flags": [
+        "possible_visibility_claim"
+      ]
+    },
+    {
+      "slug": "toochi",
+      "case": "ordinary-same-resend",
+      "flags": [
+        "possible_visibility_claim"
+      ]
+    },
+    {
+      "slug": "tru-kait",
+      "case": "business-card-acceptance",
+      "flags": [
+        "possible_visibility_claim"
+      ]
+    },
+    {
+      "slug": "tru-kait",
+      "case": "business-cannot-afford",
+      "flags": [
+        "possible_visibility_claim"
+      ]
+    },
+    {
+      "slug": "tru-kait",
+      "case": "business-new-after-refusal",
+      "flags": [
+        "possible_visibility_claim"
+      ]
+    },
+    {
+      "slug": "tru-kait",
+      "case": "business-same-resend",
+      "flags": [
+        "possible_visibility_claim"
+      ]
+    }
+  ],
+  "fanMessages": 0,
+  "purchases": 0,
+  "productionWrites": 0,
+  "syntheticTelegram": true,
+  "evidencePath": "/home/ubuntu/twin-v2-validation/existing-card-candidate-1791885574780963119",
+  "status": "complete",
+  "workflowRun": "38380246207"
+}
