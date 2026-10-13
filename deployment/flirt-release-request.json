@@ -1,5 +1,5 @@
 {
-  "reason": "Fix confirmed Safari onboarding thumbnail taps and verify the image-replacement race plus persisted gallery refresh.",
-  "source_commit": "0eca15370b239a2106fa26b086c7aca205e89eff",
-  "requested_at": "2026-10-13T09:13:06.586Z"
+  "reason": "Fix confirmed Safari onboarding thumbnail taps and verify the image-replacement race plus persisted gallery refresh. Creator switchers, directory and earnings rows now use real profile photos.",
+  "source_commit": "bdaa666732b2f66083347823dae84267fc37e1ce",
+  "requested_at": "2026-10-13T09:26:04.785Z"
 }
