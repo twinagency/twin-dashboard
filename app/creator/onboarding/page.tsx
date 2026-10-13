@@ -335,7 +335,7 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
           <div data-review-row><div>Your content<p>{savedContentCount ? `${savedContentCount} files uploaded` : contentFolders(answers).length ? "Folder link received, awaiting import" : "No content added yet"}</p></div><Link href="/creator/onboarding?step=content">Edit</Link></div>
           <div data-review-row><div>Your answers<p>{answeredCount ? "Saved" : "No answers added yet"}</p></div><Link href="/creator/onboarding?step=questionnaire">Review</Link></div>
         </div>
-          <CreatorOnboardingActionForm className="grid gap-4" pendingLabel={submitted ? "Saving consent…" : "Submitting your saved information…"} successStatuses={submitted ? ["consent_saved"] : ["submitted"]} loginPath={loginPath} consentBeforeSubmit={!consent && !submitted} completionHref="/creator/onboarding?complete=1">
+          <CreatorOnboardingActionForm className="grid gap-4" pendingLabel={submitted ? "Saving consent…" : "Submitting your saved information…"} successStatuses={submitted ? ["consent_saved"] : ["submitted"]} loginPath={loginPath} consentBeforeSubmit={!consent && !submitted} completionHref="/creator">
             <input type="hidden" name="action" value={submitted && !consent ? "consent" : "submit"} />
             {!consent ? <>
               <label className="block max-w-md"><span className="mb-1.5 block text-sm font-medium text-ink">Legal name</span><Input name="legal_name" autoComplete="name" required={!optional || submitted} disabled={applicationLocked} /></label>
