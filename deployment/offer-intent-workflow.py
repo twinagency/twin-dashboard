@@ -41,7 +41,7 @@ try:
     else:
         script=pathlib.Path('deployment/deploy-offer-intent.py').read_text()
         compile(script,'deploy-offer-intent.py','exec')
-        backup='/home/ubuntu/twin-v2-backups/offer-baseline-e8eed50-1791928294895468670'
+        backup='/home/ubuntu/twin-v2-backups/offer-baseline-1294e73-1791959980757691910'
         code='import pathlib,sys;p=pathlib.Path('+repr(backup) + ')/"deploy-offer-intent.py";p.write_text('+repr(script)+');p.chmod(0o600);sys.argv=[str(p)];exec(compile('+repr(script)+',str(p),"exec"))'
         output=ssm('python3 -c '+shlex.quote(code),600)
         prefix='REPLY_RELEASE_DEPLOYED_JSON '
