@@ -2,6 +2,7 @@ import type { SupabaseClient } from '@supabase/supabase-js';
 import { catalogueItemVisible, projectItem } from './catalogue-core';
 import { projectBundle } from './catalogue-commerce';
 import { catalogueEventLoggedForOrder, logCatalogueEvent } from './catalogue-events';
+import { hasIndividualReceiptSchema, receiptMayGrantMedia, receiptMayRevokeMedia, withReceiptColumns } from './star-receipts';
 
 export const checkoutUuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 export type CheckoutMediaType = 'photo' | 'video' | 'bundle';
@@ -17,15 +18,16 @@ export function checkoutType(value:unknown): value is CheckoutMediaType { return
 
 // Positive receipts are not sufficient after a refund. Never derive paid access
 // from a browser callback or from the historical delivery-only table.
-export async function paidCatalogueItems(db:SupabaseClient, cloneId:string, userId:string) {
-  const receipts:any[] = checked(await db.from('star_transactions').select('id,media_type,media_id,invoice_payload')
+export async function paidCatalogueItems(db:SupabaseClient, cloneId:string, userId:string, knownReceiptSchema?:boolean) {
+  const receiptSchema = knownReceiptSchema ?? await hasIndividualReceiptSchema(db);
+  const receipts:any[] = checked(await db.from('star_transactions').select(withReceiptColumns('id,media_type,media_id,invoice_payload',receiptSchema,true))
     .eq('clone_id',cloneId).eq('user_id',userId).eq('kind','media').gt('amount_stars',0)
     .not('media_id','is',null).order('paid_at',{ascending:false}).limit(1000)) ?? [];
   if (!receipts.length) return [];
-  const refunds:any[] = checked(await db.from('star_transactions').select('id').eq('clone_id',cloneId)
+  const refunds:any[] = checked(await db.from('star_transactions').select(withReceiptColumns('id',receiptSchema,true)).eq('clone_id',cloneId)
     .in('id',receipts.map(row=>`refund:${row.id}`))) ?? [];
-  const refunded = new Set(refunds.map(row=>row.id));
-  return receipts.filter(row=>!refunded.has(`refund:${row.id}`));
+  const refunded = new Set(refunds.filter(receiptMayRevokeMedia).map(row=>row.id));
+  return receipts.filter(row=>receiptMayGrantMedia(row)&&!refunded.has(`refund:${row.id}`));
 }
 
 export async function nativeOwnedItems(db:SupabaseClient, userId:string, type:CheckoutMediaType):Promise<string[]> {

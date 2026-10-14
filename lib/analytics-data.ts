@@ -16,6 +16,7 @@ import type { DateRange, Period } from "./dashboard-data";
 import { resolveRevenueWindow } from "./revenue-window";
 import { classifyRevenueLedgerRow } from "./revenue-ledger";
 import { dedupeStarRows } from "./star-dedupe";
+import { hasIndividualReceiptSchema, withReceiptColumns } from "./star-receipts";
 
 // Deep money analytics — WHERE the money comes from. This is the aggregation layer
 // for /analytics. It mirrors the query style in dashboard-data.ts (fetch scoped
@@ -502,6 +503,7 @@ export async function getAnalytics(
     feature: string | null;
     telegram_id: number | null;
     invoice_payload: string | null;
+    receipt_namespace?: string | null;
   };
   async function loadTxs(): Promise<TxRow[]> {
     // PAGED, and this is the revenue number on every analytics chart. Unpaged it
@@ -515,8 +517,9 @@ export async function getAnalytics(
     // because selectAllRows reports a failure as an empty result — which here
     // would render as "no revenue" instead of "column not there yet".
     // `id` is required: the legacy-media inference below keys its map on it.
-    const COLS = "id,clone_id,amount_stars,paid_at,kind,feature,telegram_id,invoice_payload,imported_from";
-    const COLS_LEGACY = "id,clone_id,amount_stars,paid_at,kind,telegram_id,invoice_payload,imported_from";
+    const receiptSchema = await hasIndividualReceiptSchema(supabaseAdmin);
+    const COLS = withReceiptColumns("id,clone_id,amount_stars,paid_at,kind,feature,telegram_id,invoice_payload,imported_from", receiptSchema);
+    const COLS_LEGACY = withReceiptColumns("id,clone_id,amount_stars,paid_at,kind,telegram_id,invoice_payload,imported_from", receiptSchema);
     const probe = await supabaseAdmin.from("star_transactions").select(COLS).limit(1);
     const hasFeature = !probe.error;
     // A FACTORY, not a built query: selectAllRowsParallel fetches several ranges
@@ -849,9 +852,10 @@ export async function getAnalytics(
 
   // Rolling seven-day spender leaderboard, independent of the selected chart
   // preset so "weekly" always means the latest seven complete days in scope.
+  const weeklyReceiptSchema = await hasIndividualReceiptSchema(supabaseAdmin);
   let weeklyQ = supabaseAdmin
     .from("star_transactions")
-    .select("id,clone_id,telegram_id,kind,amount_stars,paid_at,invoice_payload")
+    .select(withReceiptColumns("id,clone_id,telegram_id,kind,amount_stars,paid_at,invoice_payload", weeklyReceiptSchema))
     .gte("paid_at", iso(windowEnd - 7 * MS_DAY))
     .lte("paid_at", iso(windowEnd));
   if (cloneId) weeklyQ = weeklyQ.eq("clone_id", cloneId);
@@ -868,6 +872,7 @@ export async function getAnalytics(
       amount_stars: number | null;
       paid_at: string | null;
       invoice_payload: string | null;
+      receipt_namespace?: string | null;
     }[],
   );
   const weeklyByBuyer = new Map<

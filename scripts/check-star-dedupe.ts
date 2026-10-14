@@ -12,6 +12,9 @@
 // Run: npm run test:star-dedupe
 
 import { dedupeStarRows, type StarDedupeKeyFields } from "../lib/star-dedupe";
+import { hasIndividualReceiptSchema, receiptMayGrantMedia, receiptMayRevokeMedia, withReceiptColumns } from "../lib/star-receipts";
+import { readFileSync } from "node:fs";
+import { resolve } from "node:path";
 
 let passed = 0;
 const failures: string[] = [];
@@ -42,7 +45,8 @@ const row = (
   amount_stars: number,
   paid_at: string,
   invoice_payload: string | null = null,
-): Row => ({ id, clone_id, telegram_id, kind, amount_stars, paid_at, invoice_payload });
+  receipt_namespace: string | null = null,
+): Row => ({ id, clone_id, telegram_id, kind, amount_stars, paid_at, invoice_payload, receipt_namespace });
 
 check("an exact duplicate pair collapses to one row, keeping the lowest id", () => {
   const rows = [
@@ -62,6 +66,113 @@ check("two real payments, same fan and amount, different second, both counted", 
   const out = dedupeStarRows(rows);
   equal(out.length, 2, "row count");
 });
+
+check("two verified v2i1 charges at the same fan, price and second both survive", () => {
+  const rows = [
+    row("v2i1:42:charge-a", "clone-1", 111, "media", 500, "2026-09-01T00:00:00Z", "v2i1:offer-a", "v2i1"),
+    row("v2i1:42:charge-b", "clone-1", 111, "media", 500, "2026-09-01T00:00:00Z", "v2i1:offer-b", "v2i1"),
+  ];
+  const out = dedupeStarRows(rows);
+  equal(out.length, 2, "row count");
+  equal(out.reduce((sum, item) => sum + Number(item.amount_stars), 0), 1000, "summed Stars");
+});
+
+check("the same scoped v2i1 charge id is emitted once", () => {
+  const receipt = row("v2i1:42:charge-a", "clone-1", 111, "media", 500, "2026-09-01T00:00:00Z", "v2i1:offer-a", "v2i1");
+  const out = dedupeStarRows([receipt, { ...receipt }]);
+  equal(out.length, 1, "row count");
+});
+
+check("a quarantined v2i1 receipt is retained independently for money reporting", () => {
+  const rows = [
+    row("v2i1:42:good", "clone-1", 111, "media", 500, "2026-09-01T00:00:00Z", "v2i1:good", "v2i1"),
+    row("v2i1:42:mismatch", "clone-1", 111, "other", 500, "2026-09-01T00:00:00Z", "v2i1:bad", "v2i1"),
+  ];
+  equal(dedupeStarRows(rows).length, 2, "row count");
+});
+
+check("distinct v2i1 refunds survive even when amount and time match", () => {
+  const rows = [
+    row("refund:v2i1:42:charge-a", "clone-1", 111, "other", -500, "2026-09-01T00:05:00Z", "refund", "v2i1"),
+    row("refund:v2i1:42:charge-b", "clone-1", 111, "other", -500, "2026-09-01T00:05:00Z", "refund", "v2i1"),
+  ];
+  const out = dedupeStarRows(rows);
+  equal(out.length, 2, "row count");
+  equal(out.reduce((sum, item) => sum + Number(item.amount_stars), 0), -1000, "summed Stars");
+});
+
+check("an invoice prefix without the persisted namespace keeps legacy dedupe", () => {
+  const rows = [
+    row("b", "clone-1", 111, "media", 500, "2026-09-01T00:00:00Z", "v2i1:malformed"),
+    row("a", "clone-1", 111, "media", 500, "2026-09-01T00:00:00Z", "v2i1:malformed"),
+  ];
+  const out = dedupeStarRows(rows);
+  equal(out.length, 1, "row count");
+  equal(out[0].id, "a", "legacy winner");
+});
+
+check("only verified v2i1 receipts may grant media while legacy ownership remains unchanged", () => {
+  equal(receiptMayGrantMedia({ receipt_namespace: "v2i1", receipt_status: "verified" }), true, "verified receipt");
+  equal(receiptMayGrantMedia({ receipt_namespace: "v2i1", receipt_status: "quarantined" }), false, "quarantined receipt");
+  equal(receiptMayGrantMedia({ receipt_namespace: "v2i1", receipt_status: "refunded" }), false, "refunded receipt");
+  equal(receiptMayGrantMedia({ receipt_namespace: "v2i1", receipt_status: null }), false, "missing status");
+  equal(receiptMayGrantMedia({ receipt_namespace: null, receipt_status: null }), true, "legacy receipt");
+});
+
+check("only a settled v2i1 refund revokes media while quarantined refund money remains non-entitling", () => {
+  equal(receiptMayRevokeMedia({ receipt_namespace: "v2i1", receipt_status: "refunded" }), true, "settled refund");
+  equal(receiptMayRevokeMedia({ receipt_namespace: "v2i1", receipt_status: "quarantined" }), false, "quarantined refund");
+  equal(receiptMayRevokeMedia({ receipt_namespace: "v2i1", receipt_status: null }), false, "missing status");
+  equal(receiptMayRevokeMedia({ receipt_namespace: null, receipt_status: null }), true, "legacy refund");
+});
+
+check("every named star_transactions reader that deduplicates money fetches receipt_namespace", () => {
+  const files = [
+    "lib/agency-access.ts", "lib/analytics-data.ts", "lib/api-public-v2.ts", "lib/dashboard-data.ts",
+    "lib/mtproto/attribution.ts", "lib/revenue-why-changed.ts", "lib/star-balance.ts",
+    "app/info/page.tsx", "app/users/page.tsx",
+  ];
+  for (const file of files) {
+    const source = readFileSync(resolve(process.cwd(), file), "utf8");
+    for (const helper of ["hasIndividualReceiptSchema", "withReceiptColumns"]) {
+      if (!source.includes(helper)) throw new Error(`${file} is missing ${helper}`);
+    }
+  }
+});
+
+check("catalogue ownership and rankings read receipt_status before accepting v2i1 media", () => {
+  for (const file of ["lib/catalogue-checkout.ts", "lib/catalogue-api.ts"]) {
+    const source = readFileSync(resolve(process.cwd(), file), "utf8");
+    if (!source.includes("withReceiptColumns") || !source.includes("receiptMayGrantMedia") || !source.includes("receiptMayRevokeMedia")) {
+      throw new Error(`${file} does not gate v2i1 media receipts`);
+    }
+  }
+});
+
+check("old-schema column fallback leaves legacy selects unchanged", () => {
+  equal(withReceiptColumns("id,amount_stars", false), "id,amount_stars", "legacy columns");
+  equal(withReceiptColumns("id,amount_stars", true), "id,amount_stars,receipt_namespace", "aggregate columns");
+  equal(withReceiptColumns("id,amount_stars", true, true), "id,amount_stars,receipt_namespace,receipt_status", "ownership columns");
+});
+
+const schemaProbeCheck = (async () => {
+  try {
+    const missingDb = { from: () => ({ select: () => ({ limit: async () => ({ error: { code: "42703", message: "column receipt_namespace does not exist" } }) }) }) };
+    equal(await hasIndividualReceiptSchema(missingDb), false, "confirmed old schema");
+    const outageDb = { from: () => ({ select: () => ({ limit: async () => ({ error: { code: "08006", message: "connection lost" } }) }) }) };
+    let threw = false;
+    try { await hasIndividualReceiptSchema(outageDb); } catch { threw = true; }
+    equal(threw, true, "outage must not downgrade to legacy mode");
+    const unrelatedColumnDb = { from: () => ({ select: () => ({ limit: async () => ({ error: { code: "42703", message: "column unrelated_field does not exist" } }) }) }) };
+    threw = false;
+    try { await hasIndividualReceiptSchema(unrelatedColumnDb); } catch { threw = true; }
+    equal(threw, true, "an unrelated schema error must not downgrade to legacy mode");
+    passed += 1;
+    console.log("  ✓ schema probing falls back only for confirmed missing columns");
+  } catch (error) {
+    failures.push(`schema probing falls back only for confirmed missing columns\n      ${error instanceof Error ? error.message : String(error)}`);
+  }
+})();
 
 check("three-way duplicate (bug fired twice) still collapses to one", () => {
   const rows = [
@@ -170,9 +281,11 @@ check("PLANTED BUG CHECK: this suite fails if dedupe is a no-op (guards against 
   }
 });
 
-console.log(`\n${passed} passed, ${failures.length} failed`);
-if (failures.length) {
-  console.error("\nFAILURES:");
-  for (const f of failures) console.error(`  ✗ ${f}`);
-  process.exit(1);
-}
+void schemaProbeCheck.then(() => {
+  console.log(`\n${passed} passed, ${failures.length} failed`);
+  if (failures.length) {
+    console.error("\nFAILURES:");
+    for (const f of failures) console.error(`  ✗ ${f}`);
+    process.exit(1);
+  }
+});

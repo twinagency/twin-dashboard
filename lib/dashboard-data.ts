@@ -9,6 +9,7 @@ import { reportDayStartMs, shiftReportDay } from "./revenue-why-changed";
 import { resolveRevenueWindow } from "./revenue-window";
 import { repeatBuyerCount, rollupRevenueLedger } from "./revenue-ledger";
 import { dedupeStarRows } from "./star-dedupe";
+import { hasIndividualReceiptSchema, withReceiptColumns } from "./star-receipts";
 
 export type Period = "ALL" | "1Y" | "6M" | "3M" | "1M" | "2W" | "1W" | "1D" | "CUSTOM";
 type Gran = "hour" | "day" | "week" | "month";
@@ -239,6 +240,7 @@ export async function getDashboard(period: Period, range?: DateRange, nowMs = Da
     kind: string | null;
     feature: string | null;
     invoice_payload: string | null;
+    receipt_namespace?: string | null;
     media_id?: string | null;
     media_type?: string | null;
   };
@@ -251,8 +253,9 @@ export async function getDashboard(period: Period, range?: DateRange, nowMs = Da
   // came back was arbitrary - which is how a WIDER window could show LESS money
   // than a narrower one, the symptom that gave it away.
   async function loadPurchases(): Promise<PurchaseRow[]> {
-    const COLS = "id,clone_id,amount_stars,paid_at,telegram_id,kind,feature,invoice_payload,media_id,media_type";
-    const COLS_LEGACY = "id,clone_id,amount_stars,paid_at,telegram_id,kind,invoice_payload";
+    const receiptSchema = await hasIndividualReceiptSchema(supabaseAdmin);
+    const COLS = withReceiptColumns("id,clone_id,amount_stars,paid_at,telegram_id,kind,feature,invoice_payload,media_id,media_type", receiptSchema);
+    const COLS_LEGACY = withReceiptColumns("id,clone_id,amount_stars,paid_at,telegram_id,kind,invoice_payload", receiptSchema);
     // selectAllRows reports a failed read as an empty result, which here would
     // read as "no revenue" rather than "column not there yet". So the missing
     // column is probed for with one row BEFORE paging, and the paged read then
