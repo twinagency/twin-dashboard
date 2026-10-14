@@ -11,7 +11,7 @@ The settlement writer owns the additive `star_transactions` fields:
 - `provider_charge_id` retains the provider identity separately from the scoped row id.
 - `receipt_status` is `verified`, `quarantined` or `refunded`.
 
-Incoming row ids are `v2i1:<bot id>:<provider charge id>`. Refund row ids are `refund:v2i1:<bot id>:<provider charge id>`.
+Incoming row ids are `v2i1:<bot id>:<provider charge id>`. Verified refund row ids are `refund:v2i1:<bot id>:<provider charge id>`. Quarantined refunds use `quarantine-refund:v2i1:<bot id>:<provider charge id>` until their binding is verified, so legacy refund-prefix readers cannot revoke an unrelated entitlement.
 
 Dashboard money readers use `receipt_namespace` to deduplicate `v2i1` rows by their scoped row id. Distinct provider charges therefore remain distinct even when creator, fan, amount, kind and timestamp are identical. Rows outside this namespace retain the historical business-key collapse used for the September duplicate-import incident.
 
