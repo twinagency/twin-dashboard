@@ -1,5 +1,5 @@
 """Build and verify the full remote candidate; preserve live runtime and create code-only rollback evidence."""
-import datetime,hashlib,json,pathlib,shutil,subprocess,sys,tarfile,time
+import base64,datetime,hashlib,json,pathlib,shutil,subprocess,sys,tarfile,time
 SHA='1294e734580ed620369a8c16e3cb88a6da6261a8'
 OLD_SHA='b68c8d43d1b476afc034969fcc2015e1e2c33d3d'
 # Explicit existing-image pin, never a moving tag.
@@ -87,10 +87,16 @@ assert new_package==old_package,'Changes beyond the reviewed test script require
 baseline_tag='twin-v2-olivia-baseline:'+OLD_SHA
 subprocess.run(['docker','tag',OLD_IMAGE,baseline_tag],check=True,capture_output=True)
 recipe=BACKUP/'pinned-dependencies.Dockerfile'
-recipe.write_text('FROM '+baseline_tag+'\nWORKDIR /app\nCOPY . .\n')
+metadata=base64.b64encode((RELEASE/'.dockerignore').read_bytes()).decode()
+recipe.write_text('FROM '+baseline_tag+'\nWORKDIR /app\nCOPY . .\nRUN '+json.dumps(['node','-e',"require('node:fs').writeFileSync('.dockerignore',Buffer.from('"+metadata+"','base64'))"])+ '\n')
 tag='twin-v2-offer:'+SHA
 r=subprocess.run(['docker','build','--network','none','--pull=false','--file',str(recipe),'--label','org.opencontainers.image.revision='+SHA,'-t',tag,str(RELEASE)],capture_output=True,text=True,timeout=600);(BACKUP/'build.log').write_text(r.stdout+r.stderr);assert r.returncode==0,'Build failed'
 image=cmd('docker','image','inspect','-f','{{.Id}}',tag)
+# Docker treats its ignore file as build metadata, so verify it explicitly along with every packaged source blob.
+packaged=[x for x in manifest if not x['path'].startswith('archive/')]
+verify="import fs from 'node:fs';import crypto from 'node:crypto';const bad=[];for(const x of "+json.dumps(packaged)+"){try{const b=fs.readFileSync(x.path);if(crypto.createHash('sha1').update('blob '+b.length).update(Buffer.from([0])).update(b).digest('hex')!==x.sha)bad.push(x.path);}catch{bad.push(x.path);}}console.log(JSON.stringify(bad));if(bad.length)process.exit(1);"
+v=subprocess.run(['docker','run','--rm','--network','none',image,'node','--input-type=module','-e',verify],capture_output=True,text=True,timeout=60)
+assert v.returncode==0,'Packaged source mismatch: '+v.stdout[-1500:]
 commands=json.loads((RELEASE/'package.json').read_text())['scripts']['test'].split(' && ')
 suites=[c.split()[1] for c in commands]+['scripts/check-dashboard-history.ts','scripts/check-flirt-claim.ts'];results=[]
 for script in suites:
