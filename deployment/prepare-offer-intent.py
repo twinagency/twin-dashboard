@@ -5,10 +5,11 @@ OLD_SHA='b68c8d43d1b476afc034969fcc2015e1e2c33d3d'
 # Explicit existing-image pin, never a moving tag.
 OLD_IMAGE='sha256:f4ac46651a767de65504783f9e4f1f1a0ecedec96529ebb1fda61f6050cad84d'
 ROOT=pathlib.Path('/home/ubuntu/twin-v2')
-RELEASE=pathlib.Path('/home/ubuntu/twin-v2-offer-releases')/SHA
+RELEASE=pathlib.Path('/home/ubuntu/twin-v2-offer-releases')/(SHA+'-'+sys.argv[2])
 BACKUP=pathlib.Path('/home/ubuntu/twin-v2-backups')/('offer-baseline-'+SHA[:7]+'-'+sys.argv[2])
 payload=json.loads(pathlib.Path(sys.argv[1]).read_text());assert payload['candidate']==SHA
-PROVIDED=['src/girls/template.ts', 'src/body-facts.ts', 'src/turn.ts', 'scripts/check-body-facts.ts', 'scripts/check-media.ts', 'package.json']
+HOST_PATCH=['src/girls/template.ts', 'src/body-facts.ts', 'src/turn.ts', 'scripts/check-body-facts.ts', 'scripts/check-media.ts', 'package.json']
+PROVIDED=HOST_PATCH+['src/runner.ts', 'src/flirt-claim.ts', 'scripts/check-flirt-claim.ts']
 RUNTIME=['src/turn.ts', 'src/media.ts', 'src/girls/template.ts', 'src/tips/policy.ts', 'src/grounding.ts', 'src/memory.ts', 'src/deliver.ts', 'src/runner.ts', 'src/flirt-claim.ts']
 assert list(payload['provided'])==PROVIDED and payload['runtimeFiles']==RUNTIME,'Candidate payload scope changed'
 sha=lambda b:hashlib.sha256(b).hexdigest()
@@ -66,7 +67,7 @@ subprocess.run(['docker','image','save','-o',str(BACKUP/'images.tar'),OLD_IMAGE,
 changes=[]
 for item in manifest:
  p=item['path']
- if not (p.startswith(('src/','scripts/')) or p=='package.json'):continue
+ if p not in HOST_PATCH:continue # Other host source stays as found; the image preserves all pinned Git blobs.
  old=(ROOT/p).read_bytes() if (ROOT/p).is_file() else None;new=(RELEASE/p).read_bytes()
  if old==new:continue
  # Only intentional changes from the candidate may alter host source.
@@ -74,7 +75,7 @@ for item in manifest:
  changes.append({'path':p,'existed':old is not None,'oldSha256':sha(old) if old is not None else None,'newSha256':sha(new)})
  if old is not None:
   target=BACKUP/'host-before'/p;target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(old)
-assert sorted(c['path'] for c in changes)==sorted(PROVIDED),'Prepared host changes differ from reviewed scope'
+assert sorted(c['path'] for c in changes)==sorted(HOST_PATCH),'Prepared host changes differ from reviewed scope'
 tag='twin-v2-offer:'+SHA
 r=subprocess.run(['docker','build','--network','none','--pull=false','--label','org.opencontainers.image.revision='+SHA,'-t',tag,str(RELEASE)],capture_output=True,text=True,timeout=600);(BACKUP/'build.log').write_text(r.stdout+r.stderr);assert r.returncode==0,'Build failed'
 image=cmd('docker','image','inspect','-f','{{.Id}}',tag)
