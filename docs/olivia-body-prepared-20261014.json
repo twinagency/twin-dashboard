@@ -1,6 +1,230 @@
 {
-  "status": "failed",
+  "status": "complete",
   "phase": "prepare",
-  "workflowRun": "38523271054",
-  "error": "Remote prepare failed:  Traceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n  File \"prepare-offer-intent.py\", line 37, in <module>\nAssertionError: Remote blob mismatch: scripts/check-flirt-claim.ts\nError in sys.excepthook:\nTraceback (most recent call last):\n  File \"/usr/lib/python3/dist-packages/apport_python_hook.py\", line 228, in partial_apport_excepthook\n    return apport_excepthook(binary, exc_type, exc_obj, exc_tb)\n           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^\n  File \"/usr/lib/python3/dist-packages/apport_python_hook.py\", line 114, in apport_excepthook\n    report[\"ExecutableTimestamp\"] = str(int(os.stat(binary).st_mtime))\n                                            ^^^^^^^^^^^^^^^\nFileNotFoundError: [Errno 2] No such file or directory: '/var/snap/amazon-ssm-agent/13349/-c'\n\nOriginal exception was:\nTraceback (most recent call last):\n  File \"<string>\", line 1, in <module>\n  File \"prepare-offer-intent.py\", line 37, in <module>\nAssertionError: Remote blob mismatch: scripts/check-flirt-claim.ts\nfailed to run commands: exit status 1"
+  "workflowRun": "38523500601",
+  "sha": "1294e734580ed620369a8c16e3cb88a6da6261a8",
+  "testedSource": "1294e734580ed620369a8c16e3cb88a6da6261a8",
+  "image": "sha256:f419d53810105c84cddcddc577d3321206d1e94abd2eaffb38018274718945ca",
+  "oldSha": "b68c8d43d1b476afc034969fcc2015e1e2c33d3d",
+  "oldImage": "sha256:f4ac46651a767de65504783f9e4f1f1a0ecedec96529ebb1fda61f6050cad84d",
+  "release": "/home/ubuntu/twin-v2-offer-releases/1294e734580ed620369a8c16e3cb88a6da6261a8-1791959980757691910",
+  "backup": "/home/ubuntu/twin-v2-backups/offer-baseline-1294e73-1791959980757691910",
+  "offline": [
+    {
+      "suite": "scripts/check-safety.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-media.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-photo-flow.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-media-facts.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-media-correction.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-media-toy-menu.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-reply-grounding.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-turn.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-structured-reply.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-structured-turn.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-shared-photo-repair.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-existing-card-discussion.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-reply-outcomes.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-payments.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-bundles.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-delivery.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-photo-reference.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-photo-reference-data.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-credits.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-tips.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-tips-wiring.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-archive.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-memory.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-memory-wiring.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-body-facts.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-dashboard-history.ts",
+      "exit": 0
+    },
+    {
+      "suite": "scripts/check-flirt-claim.ts",
+      "exit": 0
+    }
+  ],
+  "typecheck": true,
+  "sourceManifestFiles": 295,
+  "providedSourceFiles": 9,
+  "promptChanges": 0,
+  "hostChanges": [
+    {
+      "path": "package.json",
+      "existed": true,
+      "oldSha256": "ff30df67a47c77b58ae03a51d48dfcde09614f1f6a7495fb8e682e4d6303f270",
+      "newSha256": "389c70f3ee1bd88d9e8998f064b9049dcbfd8aa2601f3efa1e097873d37e46ab"
+    },
+    {
+      "path": "scripts/check-body-facts.ts",
+      "existed": false,
+      "oldSha256": null,
+      "newSha256": "54f7b1a1fb4b88fafcfbf7433f2df8662d39cdbca1032afc8df241bff2168ae6"
+    },
+    {
+      "path": "scripts/check-media.ts",
+      "existed": true,
+      "oldSha256": "b79290804b64cb7501cccdfdf5f2b171832950d410e32ac47f75ac03dd06522c",
+      "newSha256": "64c3d10d21cb210203d0c051cd27770df0c94023513592e622021f8e4f30df39"
+    },
+    {
+      "path": "src/body-facts.ts",
+      "existed": false,
+      "oldSha256": null,
+      "newSha256": "48cfb5c86cc7060521a78489fcaa60ebdddb503d71990849f9e092bec76b4b9e"
+    },
+    {
+      "path": "src/girls/template.ts",
+      "existed": true,
+      "oldSha256": "0f0691a319acc57affad4329bf8b1e71701a666bbacfc02dc3d98a28304b814c",
+      "newSha256": "5d53fc9889c99f8242e5a481923de5d2f36903b40faf8ddc07f8caab178dcff8"
+    },
+    {
+      "path": "src/turn.ts",
+      "existed": true,
+      "oldSha256": "c0547c0763f481425289c2f5b0af8ec3b59dde82031dd8771a4bd677db848148",
+      "newSha256": "60c979f09f3e9a1d140d903e6a98410b4fc88031114d4fe494e4bfb4d388ca15"
+    }
+  ],
+  "settingsHash": "9fdfa55541f0ad026851df0835c4dc40792d53c146f2908bfb0367e22f924812",
+  "expectedSlugs": [
+    "alanna-pow",
+    "allison-parker",
+    "bethany-marquez",
+    "briana-redd",
+    "cat-chase",
+    "dakota-lyn",
+    "dreka-cakez",
+    "fit-sid",
+    "kyla-yesenosky",
+    "mrs-callace",
+    "olivia-jade",
+    "riley-mae-lewis",
+    "sania-mallory",
+    "tammy",
+    "toochi",
+    "trashy",
+    "tru-kait"
+  ],
+  "runtimeBefore": [
+    {
+      "name": "twin-v2-bot-1",
+      "image": "sha256:f4ac46651a767de65504783f9e4f1f1a0ecedec96529ebb1fda61f6050cad84d",
+      "running": true,
+      "revision": "b68c8d43d1b476afc034969fcc2015e1e2c33d3d"
+    },
+    {
+      "name": "twin-v2-dash-1",
+      "image": "sha256:93045f957470052893cc1a8e0ecd2819b9b8069397c4b84b55f34e8de9aac879",
+      "running": true,
+      "revision": "e8eed505d5a1c5ef53938b2dee90a09bce26ea38"
+    }
+  ],
+  "runtimeAfter": [
+    {
+      "name": "twin-v2-bot-1",
+      "image": "sha256:f4ac46651a767de65504783f9e4f1f1a0ecedec96529ebb1fda61f6050cad84d",
+      "running": true,
+      "revision": "b68c8d43d1b476afc034969fcc2015e1e2c33d3d"
+    },
+    {
+      "name": "twin-v2-dash-1",
+      "image": "sha256:93045f957470052893cc1a8e0ecd2819b9b8069397c4b84b55f34e8de9aac879",
+      "running": true,
+      "revision": "e8eed505d5a1c5ef53938b2dee90a09bce26ea38"
+    }
+  ],
+  "preparedAt": "2026-10-14T06:42:14.952697+00:00",
+  "rollbackReady": true,
+  "rollback": {
+    "baselineRevision": "b68c8d43d1b476afc034969fcc2015e1e2c33d3d",
+    "image": "sha256:f4ac46651a767de65504783f9e4f1f1a0ecedec96529ebb1fda61f6050cad84d",
+    "codeArchiveSha": "be96785db16b0f14c088a6bab1502411893e8f7eb0d90711c72a038678a31946",
+    "imageArchiveBytes": 103042048,
+    "dataIncluded": false,
+    "runtimeReplaced": false
+  },
+  "liveRuntimeReplaced": false,
+  "modelCalls": 0,
+  "fanMessages": 0,
+  "purchases": 0,
+  "productionWrites": 0,
+  "realModelCases": 0,
+  "modelTransport": "mocked",
+  "dependencyLockUnchanged": true
 }
