@@ -4,10 +4,10 @@ SHA='1294e734580ed620369a8c16e3cb88a6da6261a8'
 TESTED='1294e734580ed620369a8c16e3cb88a6da6261a8'
 OLD_SHA='b68c8d43d1b476afc034969fcc2015e1e2c33d3d'
 OLD_IMAGE='sha256:f4ac46651a767de65504783f9e4f1f1a0ecedec96529ebb1fda61f6050cad84d'
-EXPECTED_IMAGE='sha256:f419d53810105c84cddcddc577d3321206d1e94abd2eaffb38018274718945ca'
-EXPECTED_RELEASE='/home/ubuntu/twin-v2-offer-releases/1294e734580ed620369a8c16e3cb88a6da6261a8-1791959980757691910'
+EXPECTED_IMAGE='sha256:881d7cb22598f733ee8196aed0aa9f770265ecf852965798269de78b8863c1b8'
+EXPECTED_RELEASE='/home/ubuntu/twin-v2-offer-releases/1294e734580ed620369a8c16e3cb88a6da6261a8-1791960417938487452'
 ROOT=pathlib.Path('/home/ubuntu/twin-v2')
-BACKUP=pathlib.Path('/home/ubuntu/twin-v2-backups/offer-baseline-1294e73-1791959980757691910')
+BACKUP=pathlib.Path('/home/ubuntu/twin-v2-backups/offer-baseline-1294e73-1791960417938487452')
 PREP=json.loads((BACKUP/'reply-prepared.json').read_text())
 BASE=json.loads((BACKUP/'release-preflight.json').read_text())
 IMAGE=PREP['image'];assert IMAGE==EXPECTED_IMAGE,'Prepared image changed';RELEASE=pathlib.Path(PREP['release']);assert str(RELEASE)==EXPECTED_RELEASE,'Prepared release path changed'
