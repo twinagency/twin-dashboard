@@ -24,7 +24,7 @@ def save(name,value):
 def node(source,label,container='twin-v2-bot-1',timeout=210):
  r=subprocess.run(['docker','exec','-i',container,'node','--import','tsx','--input-type=module'],input=source,text=True,capture_output=True,timeout=timeout)
  p=BACKUP/('reply-'+label+'.log');p.write_text(r.stdout+r.stderr);p.chmod(0o600)
- if r.returncode:raise RuntimeError(label+' failed; private log retained')
+ if r.returncode:raise RuntimeError(label+' failed: '+r.stderr[-700:])
  lines=[x[len('RELEASE_JSON '):] for x in r.stdout.splitlines() if x.startswith('RELEASE_JSON ')]
  assert len(lines)==1,label+' missing result'
  return json.loads(lines[0])
@@ -221,6 +221,11 @@ def deploy():
  assert sorted(x['path'] for x in CHANGES)==EXPECTED_CHANGES and len(CHANGES)==6,'Prepared host change scope changed'
  assert (BACKUP/'images.tar').stat().st_size>0 and (BACKUP/'runtime-code.tgz').stat().st_size>0
  runtime(OLD_IMAGE,OLD_SHA);settings();host_before()
+ # Verify the packaged files before touching live containers, as well as after cutover.
+ packaged=[x for x in MANIFEST if not x['path'].startswith('archive/')]
+ probe="import fs from 'node:fs';import crypto from 'node:crypto';const items="+json.dumps(packaged)+";const bad=[];for(const x of items){try{const b=fs.readFileSync(x.path);if(crypto.createHash('sha1').update('blob '+b.length).update(Buffer.from([0])).update(b).digest('hex')!==x.sha)bad.push({path:x.path,reason:'mismatch'});}catch(e){bad.push({path:x.path,reason:e.code});}}console.log(JSON.stringify(bad));if(bad.length)process.exit(1);"
+ check=subprocess.run(['docker','run','--rm','--network','none',IMAGE,'node','--input-type=module','-e',probe],capture_output=True,text=True,timeout=90)
+ assert check.returncode==0,'Packaged source mismatch before cutover: '+check.stdout[-2000:]+' '+check.stderr[-500:]
  receipt=drain();financial=financial_gate(receipt);released=False;switched=False;touched=False;phase='drained'
  try:
   phase='final-preflight'
