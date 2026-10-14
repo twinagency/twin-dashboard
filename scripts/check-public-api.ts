@@ -404,7 +404,8 @@ check("F3 the exemption is checked BEFORE the NODE_ENV bypass", () => {
   // survived.
   const src = sourceCode(new URL("../middleware.ts", import.meta.url));
   const exemption = src.indexOf("SELF_AUTHENTICATED_PREFIXES.some");
-  const bypass = src.indexOf("NODE_ENV");
+  // Earlier production-only host redirects also read NODE_ENV; locate the bypass itself.
+  const bypass = src.indexOf('if (process.env.NODE_ENV !== "production")');
   assert(exemption > 0, "the exemption must exist");
   assert(bypass > 0, "the dev bypass is expected to still be there");
   assert(exemption < bypass, "the API exemption must run before the dev bypass, so it behaves the same everywhere");
