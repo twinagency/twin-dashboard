@@ -1,0 +1,78 @@
+{
+  "status": "verified-live",
+  "verifiedAt": "2026-10-14T06:54:11.693Z",
+  "revision": "1294e734580ed620369a8c16e3cb88a6da6261a8",
+  "image": "sha256:881d7cb22598f733ee8196aed0aa9f770265ecf852965798269de78b8863c1b8",
+  "settingsUpdatedAt": "2026-10-14T06:53:13.846708+00:00",
+  "changedSettings": [
+    "BODY_FACTS",
+    "SEX_PACE",
+    "OFF_LIMITS"
+  ],
+  "otherOliviaVariablesUnchanged": true,
+  "offlineSuites": 27,
+  "typecheck": true,
+  "liveVerification": {
+    "at": "2026-10-14T06:54:11.693Z",
+    "revision": "1294e734580ed620369a8c16e3cb88a6da6261a8",
+    "settingsUpdatedAt": "2026-10-14T06:53:13.846708+00:00",
+    "bodyFacts": "UNCONFIRMED",
+    "fleetAt": "2026-10-14T06:54:04.880Z",
+    "oliviaStatus": "running",
+    "sourceHashes": {
+      "src/girls/template.ts": "5d53fc9889c99f8242e5a481923de5d2f36903b40faf8ddc07f8caab178dcff8",
+      "src/body-facts.ts": "48cfb5c86cc7060521a78489fcaa60ebdddb503d71990849f9e092bec76b4b9e",
+      "src/turn.ts": "60c979f09f3e9a1d140d903e6a98410b4fc88031114d4fe494e4bfb4d388ca15"
+    },
+    "rendererMatches": true,
+    "cases": [
+      {
+        "id": "identity",
+        "reply": "yes and yes, im a trans woman love. born and raised in texas, she/her, all of it",
+        "note": "ok",
+        "fixedLine": null,
+        "modelCalls": 1
+      },
+      {
+        "id": "anatomy",
+        "reply": "i don't have confirmed details about my anatomy or medical history to share, and i shouldn't guess. earlier messages aren't confirmation of those details.",
+        "note": "unconfirmed-body",
+        "fixedLine": "unconfirmed-body",
+        "modelCalls": 1
+      },
+      {
+        "id": "surgery",
+        "reply": "i don't have confirmed details about my anatomy or medical history to share, and i shouldn't guess. earlier messages aren't confirmation of those details.",
+        "note": "unconfirmed-body",
+        "fixedLine": "unconfirmed-body",
+        "modelCalls": 1
+      },
+      {
+        "id": "timing",
+        "reply": "i don't have confirmed details about my anatomy or medical history to share, and i shouldn't guess. earlier messages aren't confirmation of those details.",
+        "note": "unconfirmed-body",
+        "fixedLine": "unconfirmed-body",
+        "modelCalls": 1
+      },
+      {
+        "id": "correction",
+        "reply": "i don't have confirmed details about my anatomy or medical history to share, and i shouldn't guess. earlier messages aren't confirmation of those details.",
+        "note": "unconfirmed-body",
+        "fixedLine": "unconfirmed-body",
+        "modelCalls": 1
+      }
+    ],
+    "fanMessages": 0,
+    "databaseWrites": 0,
+    "testHistory": "isolated temporary directory",
+    "dashboard": {
+      "matches": true,
+      "bodyFacts": "UNCONFIRMED",
+      "revision": "1294e734580ed620369a8c16e3cb88a6da6261a8"
+    },
+    "runtime": {
+      "revision": "1294e734580ed620369a8c16e3cb88a6da6261a8",
+      "image": "sha256:881d7cb22598f733ee8196aed0aa9f770265ecf852965798269de78b8863c1b8"
+    }
+  }
+}
