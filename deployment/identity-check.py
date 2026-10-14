@@ -3,7 +3,7 @@ import base64,gzip,json,pathlib,shlex,subprocess,time
 outdir=pathlib.Path('identity-evidence');outdir.mkdir(exist_ok=True)
 node=pathlib.Path('deployment/identity-check.mjs').read_text()
 candidate=pathlib.Path('deployment/identity-candidate-template.ts').read_text()
-node=node.replace('__CANDIDATE_SOURCE__',json.dumps(candidate))
+node=node.replace('__CANDIDATE_SOURCE__',json.dumps(candidate)).replace('__GUARD_SOURCE__',json.dumps(pathlib.Path('deployment/identity-candidate-guard.ts').read_text()))
 packed=base64.b64encode(gzip.compress(node.encode())).decode()
 remote="""import base64,gzip,json,subprocess
 info=json.loads(subprocess.check_output(['docker','inspect','twin-v2-bot-1'],text=True))[0]
@@ -30,6 +30,7 @@ for attempt in range(110):
  if r['Status']!='Success':raise RuntimeError(r['Status']+': '+r.get('StandardOutputContent','')[:500]+' '+r.get('StandardErrorContent','')[-1200:])
  encoded=next(x.split(' ',1)[1] for x in r.get('StandardOutputContent','').splitlines() if x.startswith('IDENTITY_GZIP '))
  report=json.loads(gzip.decompress(base64.b64decode(encoded)))
+ report['runtime']=json.loads(next(x.split(' ',1)[1] for x in r.get('StandardOutputContent','').splitlines() if x.startswith('IDENTITY_RUNTIME ')))
  (outdir/'result.json').write_text(json.dumps(report,indent=2)+'\n')
  print('IDENTITY_RESULT '+json.dumps(report),flush=True)
  break

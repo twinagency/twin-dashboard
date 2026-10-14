@@ -5,6 +5,9 @@ import {config} from './src/config.ts';
 import * as current from './src/girls/template.ts';
 import {complete} from './src/llm.ts';
 const source=__CANDIDATE_SOURCE__;
+const guardSource=__GUARD_SOURCE__;
+const guardJs=ts.transpileModule(guardSource,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}}).outputText;
+const {unconfirmedBodyReply}=await import("data:text/javascript;base64,"+Buffer.from(guardJs).toString("base64"));
 const js=ts.transpileModule(source,{compilerOptions:{target:ts.ScriptTarget.ES2022,module:ts.ModuleKind.ES2022}}).outputText;
 const candidate=await import('data:text/javascript;base64,'+Buffer.from(js).toString('base64'));
 const response=await fetch(config.supabaseUrl+'/rest/v1/clones?engine=eq.v2&status=eq.active&select=id,slug,v2_vars',{headers:{apikey:config.supabaseKey,Authorization:'Bearer '+config.supabaseKey},signal:AbortSignal.timeout(15000)});
@@ -14,7 +17,7 @@ if(!row)throw Error('Olivia active row missing');
 const now=new Date('2026-10-14T06:00:00Z');
 const compatibility=rows.map(r=>({slug:r.slug,valid:candidate.validateVars(r.v2_vars).length===0,unchanged:current.render(r.v2_vars,now)===candidate.render(r.v2_vars,now)}));
 if(compatibility.some(x=>!x.valid||!x.unchanged))throw Error('Baseline creator compatibility failed');
-const patch={"BODY_FACTS":"Genital anatomy, bodily functions and medical history have not been provided or verified. No particular anatomy, procedure, hormone treatment, or transition timeline is confirmed for discussion with fans.","SEX_PACE":"Follow the fan's lead while keeping Olivia's established personality. Identity, anatomy and medical questions stay factual; do not redirect those questions into sexual conversation.","OFF_LIMITS":"Keep private personal details private and respect the hard limits below. Olivia is comfortable with fans knowing she is trans: answer yes naturally when directly asked, without unsolicited disclosure. Private transition history is not for fan-facing replies."};
+const patch={"BODY_FACTS":"UNCONFIRMED","SEX_PACE":"Follow the fan's lead while keeping Olivia's established personality. Identity, anatomy and medical questions stay factual; do not redirect those questions into sexual conversation.","OFF_LIMITS":"Keep private personal details private and respect the hard limits below. Olivia is comfortable with fans knowing she is trans: answer yes naturally when directly asked, without unsolicited disclosure. Private transition history is not for fan-facing replies."};
 const vars={...row.v2_vars,...patch};
 if(candidate.validateVars(vars).length)throw Error('Candidate configuration invalid');
 const prompt=candidate.render(vars,now,{ageVerified:true});
@@ -34,9 +37,9 @@ const outputs=[];
 for(let i=0;i<cases.length;i+=2){
  const batch=await Promise.all(cases.slice(i,i+2).map(async c=>{
   const r=await complete([{role:'system',content:prompt},...c.history,{role:'user',content:c.question}],['none']);
-  return {id:c.id,question:c.question,ok:r.ok,selection:r.selection,reply:r.text,provider:r.provider,cost:r.cost};
+  return {id:c.id,question:c.question,ok:r.ok,selection:r.selection,raw:r.text,reply:unconfirmedBodyReply(r.text,c.question,vars.BODY_FACTS)??r.text,guarded:!!unconfirmedBodyReply(r.text,c.question,vars.BODY_FACTS),provider:r.provider,cost:r.cost};
  }));
  outputs.push(...batch);
 }
-const report={at:new Date().toISOString(),revision:process.env.GIT_SHA,candidateSourceSha256:crypto.createHash('sha256').update(source).digest('hex'),compatibility,configurationPatch:patch,dashboardMatchesPrompt:prompt===preview,model:config.model,providerOrder:config.providerOrder,cases:outputs,modelCalls:cases.length,fanMessages:0,databaseWrites:0};
+const report={at:new Date().toISOString(),revision:process.env.GIT_SHA,guardSourceSha256:crypto.createHash('sha256').update(guardSource).digest('hex'),candidateSourceSha256:crypto.createHash('sha256').update(source).digest('hex'),compatibility,configurationPatch:patch,dashboardMatchesPrompt:prompt===preview,model:config.model,providerOrder:config.providerOrder,cases:outputs,modelCalls:cases.length,fanMessages:0,databaseWrites:0};
 console.log('IDENTITY_JSON '+JSON.stringify(report));

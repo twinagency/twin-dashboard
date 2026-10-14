@@ -232,7 +232,7 @@ export const VAR_HELP: Record<string, string> = {
   "CAREER": "sport, school, job, creator history",
   "HOME": "where she grew up, where she lives, car, old jobs",
   "LOOKS": "height, body, hair, eyes, sizes, tattoos",
-  "BODY_FACTS": "Optional: confirmed body/medical facts, or explicitly unknown. Blank preserves the current template. Never infer these from gender.",
+  "BODY_FACTS": "Optional creator-approved body/medical facts. Set exactly UNCONFIRMED when none are verified; this also blocks unsupported personal claims in replies. Blank preserves the current template. Never infer these from gender.",
   "HERITAGE": "background, languages, travel",
   "DAILY_LIFE": "routine, food, drink, allergies, pets",
   "LIKES": "hobbies, games, sport teams, music, films, colours",
