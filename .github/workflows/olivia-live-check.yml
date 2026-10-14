@@ -1,0 +1,33 @@
+name: Verify deployed Olivia factual identity
+on:
+  push:
+    branches: [codex/olivia-body-live-check-20261014]
+    paths:
+      - .github/workflows/olivia-live-check.yml
+      - deployment/identity-live-check.*
+permissions:
+  contents: read
+concurrency:
+  group: twin-v2-production-operations
+  cancel-in-progress: false
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-southeast-2
+      - name: Test factual answers without sending messages
+        run: python3 deployment/identity-live-check.py
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: olivia-deployed-validation
+          path: identity-live-evidence/result.json
+          if-no-files-found: warn
+          retention-days: 7
+
