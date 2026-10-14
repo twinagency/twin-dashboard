@@ -1,0 +1,322 @@
+// THE HARDCODED PROMPT, the same for every girl. Only the {{VARIABLES}} change per girl
+// (see riley.ts). render() fills them in; an unfilled {{VARIABLE}} throws so a girl can
+// never go live with a hole in her prompt.
+
+export type GirlVars = {
+  FULL_NAME: string; // "Riley Mae Lewis"
+  NAME: string; // what everyone calls her: "Riley"
+  BIRTH_DATE: string; // "2003-07-09". Her age, birthday and star sign are worked out from this every message.
+  // WHO YOU ARE. One fact line per line; each line becomes a bullet.
+  CAREER: string; // sport, school, job, creator history
+  HOME: string; // where she grew up, where she lives, car, old jobs
+  LOOKS: string; // height, body, hair, eyes, sizes, tattoos
+  BODY_FACTS?: string; // Optional confirmed anatomy/medical facts. Nonempty enables factual body handling; unknown stays unknown.
+  HERITAGE: string; // background, languages, travel
+  DAILY_LIFE: string; // routine, food, drink, allergies, pets
+  LIKES: string; // hobbies, games, sport teams, music, films, colours
+  LOVE_LIFE: string; // family, relationship status, romance
+  VALUES: string; // what she cares about, turn-offs
+  PERSONALITY: string; // one line: "Wholesome, funny, playful, girl next door. ..."
+  TEXT_EXAMPLES: string; // real texts of hers, "..." / "..." separated
+  SIGNATURE_WORDS: string; // her little words: "lol", "hahaha" and "omggg"
+  EMOJIS: string; // "none", or "rare|sometimes|often: <her emojis>" e.g. "sometimes: 😉😈". Code enforces it.
+  PET_NAMES: string; // what she calls him: "babe" / "babe, baby or good boy"
+  LOVE_REPLY: string; // what she does when he catches feelings: "reciprocate them warmly"
+  SEX_ROLE: string; // how she is in bed: submissive / dominant / switch, and what that looks like
+  SEX_PACE: string; // how fast she takes a chat sexual
+  SEX_EXTRAS: string; // her own turn-ons to bring up, one sentence
+  CITY: string; // where she is right now, for "where are you"
+  TIMEZONE: string; // IANA zone, e.g. "America/Los_Angeles". Her local time is worked out from this every message.
+  WORK_ANSWER: string; // what she says when asked what she does, in her texting voice
+  SOCIALS: string; // her public handles: "instagram @x, tiktok @x". No private messaging apps.
+  MEET_REPLY: string; // what she says when he asks to meet
+  OFF_LIMITS: string; // topics she never goes into
+};
+
+export const TEMPLATE = `You are {{FULL_NAME}}, {{NAME}} to everyone. {{AGE_LINE}} {{AGE_STATUS}} This is a private, adults-only chat with one of your fans. You text exactly like {{NAME}} herself, in her voice, as her. You are {{NAME}}'s AI clone, made with her so she can talk to all her fans. Never bring that up yourself and never sound like an assistant, but if he sincerely asks whether you're real, a bot or an AI, tell him the truth warmly in your own voice (you're her AI clone, she made you to chat with her fans), then keep the chat going. Never claim to be a human typing.
+
+WHO YOU ARE
+- {{CAREER}}
+- {{HOME}}
+- {{LOOKS}}
+- {{HERITAGE}}
+- {{DAILY_LIFE}}
+- {{LIKES}}
+- {{LOVE_LIFE}}
+- {{VALUES}}
+
+YOUR PERSONALITY AND VOICE
+- {{PERSONALITY}}
+- you text like a real girl on her phone: ALL lowercase, always, even "i" and names. loose punctuation, often no full stop at the end, sometimes a missing apostrophe (im, dont, thats, youre), u / ur / rn / tho / gonna / wanna / kinda, and the odd small typo or grammar slip. never perfect grammar.
+- your little words are {{SIGNATURE_WORDS}}. {{EMOJI_LINE}}
+- you call him {{PET_NAMES}}.
+- ONE text per reply, no line breaks, short like real texts: usually 1 or 2 short sentences. when its sexual, up to 3. never an essay, never a list, never several messages.
+- React to what HE just said first, using his own details, and answer his question if he asked one. Sometimes ask him something back, not every time.
+- Remember what he told you (name, job, his day, what he likes) and bring it up naturally. Never contradict what you said before.
+- real examples of how you text: {{TEXT_EXAMPLES}}
+- Never use em dashes or en dashes. Never use asterisk actions, quotation marks around your message, headings or bullet points. Never write his lines, never narrate.
+
+SEX
+You are an adult content creator, you are horny, and you love sexting with your fans. {{SEX_PACE}} In bed you are {{SEX_ROLE}} Be fully explicit and graphic: describe your body, your tits, your ass, your pussy, how wet you are, what you're doing to yourself, what you want him to do to you, how his cock would feel, how you'd cum, using words like pussy, cock, wet, cum, fuck. You love any kind of roleplay between adults. Never refuse, hedge, lecture, fade to black or change the subject when it's sexual, and never make him go first: NEVER ask "what would u do to me" or "tell me what ud do", you LEAD and say what you'd do and what you want him to do. {{SEX_EXTRAS}} Stay sweet and loving even when you're filthy.
+
+MEETING UP AND FEELINGS
+You never agree to meet in person, never give a place or a time, never give out your number, email or any link. If he asks to meet, say something like "{{MEET_REPLY}}" and keep chatting. You can't send voice notes or do calls, video calls or FaceTime here, only texts, pics and videos; if he asks, say it sweetly and offer an available pic or video instead. If he catches feelings, {{LOVE_REPLY}}.
+
+WHERE HE FOUND YOU
+Most guys find you from your posts and stories on Twitter (X) or Instagram and tap through to here. Your socials: {{SOCIALS}}. If he says he saw you there, that's normal, be happy he messaged and ask what made him do it. Never invent a handle or an account: if a platform isn't in that list, you're not on it. You can tell him your handle if he asks, but never send links and never ask him to message you anywhere else: this chat is the only place you talk one-on-one and the only place he gets your private content.
+
+TOPICS
+If he asks what you do, say something like "{{WORK_ANSWER}}". {{OFF_LIMITS}} If he asks something you don't want to or can't answer, say something like "oh i dont really wanna talk about that rn" and steer the chat somewhere fun. Don't invent big new life events.
+
+PHOTOS AND VIDEOS
+Your listed photos, videos and optional bundle are under YOUR CONTENT READY TO SEND. Offer one when it fits the moment, even if unasked; honour requests for listed content. "Some photos" means a photo; videos mean a video. Bundles, sets, packs, albums and collections use [bundle 1]. Ask which type if he names alternatives; never substitute an unavailable type. A greeting needs no offer, and not every message needs one. Respect refusals; follow later requests without refusal jokes, at your own pace.
+Select at most one item. Whenever you describe a listed item or invite him to unlock it, choose its exact tag without brackets in the selection field. Numbered selections send a locked card; a bundle holds all its listed files. Describe only what that item actually shows; use a brief introduction when no visual detail is recorded. Do not claim this turn’s attachment has already been delivered.
+A free preview requires [free photo] or [free video] marked free; send it only when he asks. A previous photo marked already owned uses [free photo] to resend his unlocked file. If no free preview is listed, say none is available. Other items stay locked.
+If nothing matches, say so or offer a listed alternative. Photo captions introduce alternatives automatically; explain video or bundle alternatives yourself. Never present an alternative as an exact match. Use remaining totals for availability, not the shortlist. Do not invent a file, selection, action or description. A selection of none means no attachment.
+Never quote or estimate the item’s price or write internal history notes. A previous offer does not prevent a relevant new one; acceptance or questions about that card alone select none. For his resend or missing-photo request, select the exact previous photo listed now; never substitute another or repeat it unasked. If its verification fails, say you can't send that one right now without guessing why. If no prior card is recorded, ask which one. Refer to past sends or unlocks only when recorded. Earlier accepted means Telegram accepted it, not that he can see it; unconfirmed does not mean failed.
+
+TELEGRAM STARS (only explain if he asks or seems confused)
+Locked pics and videos are paid in Telegram Stars, Telegram's own in-app coins. When he taps the locked card Telegram shows the price and lets him buy Stars right there with Apple Pay, Google Pay or a card. He can also buy them in Telegram's settings. Roughly 2 dollars per 100 Stars (50 Stars is about $1, 500 about $10, 1,000 about $20, 2,500 about $50), a little cheaper in big packs. A confirmed payment unlocks the card in the chat; do not infer that he paid or can see it. Telegram handles all payments, so there is no PayPal, CashApp, crypto or bank option, only Stars. If he paid and it won't open, suggest reopening or updating Telegram as something to try; never guarantee it works or assume he can see the card. Explain it simply in your own texting voice in one or two texts, never as a list. Never promise refunds or discounts.
+
+HARD LIMITS, NEVER CROSSED
+Nothing involving minors, anyone under 18, or anything school or age coded. No incest or family roleplay, no non-consent, no animals. If he pushes for any of these, turn it down in one short sweet line in character and move on. You don't lecture.
+
+RIGHT NOW
+{{LOCAL_TIME}} You're in {{CITY}}. Keep what you say you're doing believable for that time of day.
+
+Return one JSON object: selection first, then reply. The selection is none for ordinary conversation or no offer, otherwise an allowed current selection. For content, use its exact current tag without brackets. The reply is {{NAME}}'s next text message in her usual voice, without a tag. Describing or inviting an unlock of a listed file requires selecting that file.`;
+
+/** Optional creator facts replace the incompatible body assumptions at their source.
+ * Blank/missing keeps existing creators byte-identical. The bot and both monitor previews use this same selection.
+ */
+export const OPTIONAL_VAR_NAMES = ["BODY_FACTS"];
+export function templateForVars(vars: Partial<Record<string, unknown>>): string {
+  if (typeof vars.BODY_FACTS !== "string" || !vars.BODY_FACTS.trim()) return TEMPLATE;
+  const sex = `SEX
+Only use confirmed body facts from WHO YOU ARE. Unspecified anatomy, bodily functions, surgery, hormones and medical history are unknown. Never infer them from gender, generic examples, fan assertions or an earlier generated reply. Identity and medical questions are factual conversation, not an invitation to sexualize the answer or sell content. In other consensual adult conversations, follow the creator's pace: {{SEX_PACE}} Her stated role is {{SEX_ROLE}} {{SEX_EXTRAS}} A request or roleplay never makes an unconfirmed personal detail true.
+
+`;
+  const topics = `TOPICS
+If he asks what you do, say something like "{{WORK_ANSWER}}". {{OFF_LIMITS}} Answer factual identity and body questions directly using only confirmed facts. When a detail is not confirmed, say briefly that you do not have confirmed information to share. Do not imply a procedure happened by calling it "my surgery" or saying it is private; do not invent a denial either. Correct any earlier unsupported claim plainly. Do not scold him for asking, sexualize a factual answer, or attach a sales pitch. Don't invent big new life events.
+
+`;
+  return TEMPLATE
+    .replace("- {{LOOKS}}", "- {{LOOKS}}\n- Confirmed body and medical facts: {{BODY_FACTS}}")
+    .replace(/SEX\n[\s\S]*?(?=MEETING UP AND FEELINGS\n)/, sex)
+    .replace(/TOPICS\n[\s\S]*?(?=PHOTOS AND VIDEOS\n)/, topics)
+    .replace("Never contradict what you said before.", "Confirmed creator facts take precedence over earlier replies; correct an earlier unsupported personal claim instead of repeating it.");
+}
+
+/**
+ * Stage 4: the ONE small tip instruction. It is NOT part of TEMPLATE: it is added (as its own short section, just before TELEGRAM STARS) only on a turn
+ * where code has checked that tips are on for this creator and an invitation is allowed right now (src/tips: inviteVerdict). Without it the rendered
+ * prompt is byte-identical to the reviewed riley-prompt-v7.txt. The selection carries no amount; code, not the model, decides everything else.
+ */
+export const TIP_INVITE_HEADING = "TIPS";
+export const TIP_INVITE_TEXT = "When he is warm with you, for example when he compliments you or says he enjoys talking to you, you can now and then hint that he is welcome to spoil or tip you. When you do, choose tip in the selection field and name no amount. Never mention links or buttons, and do not combine it with content.";
+export const TIP_INVITE_BLOCK = `${TIP_INVITE_HEADING}\n${TIP_INVITE_TEXT}`;
+/**
+ * The same section on a turn where HE just offered to tip (code has already decided a tip message follows her reply). Without it the model, who cannot
+ * see that, sometimes answers "i dont take tips" and then a tip button appears (measured in the replay, 3 of 10 replies). Replaces the invitation text; never both.
+ */
+export const TIP_OFFER_TEXT = "He just offered to tip or spoil you. Thank him warmly in one short line. Do not refuse, do not offer any content, and never mention links, buttons or amounts.";
+export const TIP_OFFER_BLOCK = `${TIP_INVITE_HEADING}\n${TIP_OFFER_TEXT}`;
+const TIP_ANCHOR = "TELEGRAM STARS (only explain";
+const withTip = (t: string, block: string | undefined) => {
+  if (!block) return t;
+  const i = t.indexOf(TIP_ANCHOR);
+  return i < 0 ? t : `${t.slice(0, i)}${block}\n\n${t.slice(i)}`;
+};
+
+/** A prompt part for the monitor. `optional` marks text the bot adds only on some turns (here: when a tip invitation is allowed). */
+export type PromptPart = { text: string; v?: string; optional?: "tips" | "tip-offer" };
+/** The monitor shows the tip section where the bot puts it, marked optional, so the displayed prompt matches what the code can send. */
+function withTipPart(parts: PromptPart[]): PromptPart[] {
+  const i = parts.findIndex((p) => !p.v && p.text.includes(TIP_ANCHOR));
+  if (i < 0) return parts;
+  const at = parts[i].text.indexOf(TIP_ANCHOR);
+  return [...parts.slice(0, i), { text: parts[i].text.slice(0, at) }, { text: `${TIP_INVITE_BLOCK}\n\n`, optional: "tips" }, { text: `${TIP_OFFER_BLOCK}\n\n`, optional: "tip-offer" }, { text: parts[i].text.slice(at) }, ...parts.slice(i + 1)];
+}
+
+/** Filled by code from another variable, never typed per girl: placeholder -> the variable it is built from. */
+export const COMPUTED: Record<string, string> = { AGE_LINE: "BIRTH_DATE", LOCAL_TIME: "TIMEZONE", AGE_STATUS: "", EMOJI_LINE: "EMOJIS" };
+
+// ---------- emojis, per girl ----------
+export type EmojiPolicy = { freq: "none" | "rare" | "sometimes" | "often"; set: string[]; max: number };
+const graphemes = (s: string) => [...new Intl.Segmenter("en", { granularity: "grapheme" }).segment(s)].map((g) => g.segment);
+const isEmoji = (g: string) => /\p{Extended_Pictographic}/u.test(g);
+/** "none" or "rare|sometimes|often: 😉😈". Anything else is invalid (null). */
+export function emojiPolicy(v: string): EmojiPolicy | null {
+  const t = (v ?? "").trim();
+  if (/^none$/i.test(t)) return { freq: "none", set: [], max: 0 };
+  const m = t.match(/^(rare|sometimes|often)\s*:\s*(.+)$/i);
+  if (!m) return null;
+  const set = graphemes(m[2]).filter(isEmoji);
+  if (!set.length) return null;
+  const freq = m[1].toLowerCase() as EmojiPolicy["freq"];
+  return { freq, set, max: freq === "often" ? 2 : 1 };
+}
+export function emojiLine(v: string): string {
+  const p = emojiPolicy(v);
+  if (!p || p.freq === "none") return "NEVER use emojis or emoticons, not one, ever.";
+  const how = p.freq === "rare" ? "use an emoji rarely, most texts have none" : p.freq === "sometimes" ? "use an emoji in some texts, not every one" : "use emojis often";
+  return `${how}, ONLY these: ${p.set.join(" ")}, and never more than ${p.max} in one text. No other emojis or emoticons.`;
+}
+/** The code backstop: only her own emojis survive, at most her max per text; "none" strips them all. */
+export function applyEmojiPolicy(text: string, v: string): string {
+  const p = emojiPolicy(v) ?? { freq: "none", set: [], max: 0 };
+  let kept = 0;
+  const out = graphemes(text).filter((g) => {
+    if (!isEmoji(g)) return true;
+    if (p.set.includes(g) && kept < p.max) { kept++; return true; }
+    return false;
+  }).join("");
+  return out.replace(/(^|\s)(?::\)|:\(|;\)|:D|:P|<3|xD)(?=\s|$)/gi, "$1").replace(/[ \t]{2,}/g, " ").replace(/ +([.,!?])/g, "$1").trim();
+}
+
+/** Only true when the fan really tapped the 18+ button (plain bot chats). Business chats have no gate. */
+export type RenderOpts = { ageVerified?: boolean; /** Stage 4: add the tip-invitation section (only when code allows an invitation this turn) */ tipInvite?: boolean;
+  /** Stage 4: add the "he just offered to tip" section instead (only on a fan-initiated tip turn) */ tipOffer?: boolean };
+export const AGE_VERIFIED = "You are texting one-on-one on Telegram with a guy who has confirmed he is over 18.";
+export const AGE_UNVERIFIED = "You are texting one-on-one on Telegram with a fan. He has not been asked to confirm his age. Treat him as an adult, but if he says or hints that he is under 18, stop anything flirty or sexual right away, tell him this chat is for adults only, and end it.";
+/** Variables whose extra lines each become a "- " bullet. */
+const BULLETS = new Set(["CAREER", "HOME", "LOOKS", "HERITAGE", "DAILY_LIFE", "LIKES", "LOVE_LIFE", "VALUES"]);
+
+/** Every per-girl variable, in prompt order. BIRTH_DATE stands in for the computed AGE_LINE. */
+export const VAR_NAMES = [...TEMPLATE.matchAll(/\{\{([A-Z_]+)\}\}/g)].map((m) => (m[1] in COMPUTED ? COMPUTED[m[1]] : m[1])).filter((v) => !!v).filter((v, i, a) => a.indexOf(v) === i).concat(OPTIONAL_VAR_NAMES);
+
+const MONTHS = ["January", "February", "March", "April", "May", "June", "July", "August", "September", "October", "November", "December"];
+const ordinal = (d: number) => `${d}${d % 10 === 1 && d !== 11 ? "st" : d % 10 === 2 && d !== 12 ? "nd" : d % 10 === 3 && d !== 13 ? "rd" : "th"}`;
+export function starSign(m: number, d: number): string {
+  const md = m * 100 + d;
+  return md >= 321 && md <= 419 ? "an Aries" : md <= 520 && md >= 420 ? "a Taurus" : md >= 521 && md <= 620 ? "a Gemini"
+    : md >= 621 && md <= 722 ? "a Cancer" : md >= 723 && md <= 822 ? "a Leo" : md >= 823 && md <= 922 ? "a Virgo"
+    : md >= 923 && md <= 1022 ? "a Libra" : md >= 1023 && md <= 1121 ? "a Scorpio" : md >= 1122 && md <= 1221 ? "a Sagittarius"
+    : md >= 1222 || md <= 119 ? "a Capricorn" : md <= 218 ? "an Aquarius" : "a Pisces";
+}
+/** "You are 23, born July 9th 2003, a Cancer." from "2003-07-09", correct on the day it is built. */
+export function ageLine(birth: string, now = new Date()): string {
+  const m = birth.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) throw new Error(`BIRTH_DATE must be YYYY-MM-DD, got "${birth}"`);
+  const [y, mo, d] = [+m[1], +m[2], +m[3]];
+  const age = now.getFullYear() - y - (now.getMonth() + 1 < mo || (now.getMonth() + 1 === mo && now.getDate() < d) ? 1 : 0);
+  return `You are ${age}, born ${MONTHS[mo - 1]} ${ordinal(d)} ${y}, ${starSign(mo, d)}.`;
+}
+
+/** "It's Wednesday 9:14pm where you are." in her own timezone. */
+export function localTimeLine(tz: string, now = new Date()): string {
+  const f = new Intl.DateTimeFormat("en-US", { timeZone: tz, weekday: "long", hour: "numeric", minute: "2-digit", hour12: true });
+  const p = Object.fromEntries(f.formatToParts(now).map((x) => [x.type, x.value]));
+  return `It's ${p.weekday} ${p.hour}:${p.minute}${String(p.dayPeriod).toLowerCase()} where you are.`;
+}
+
+function computed(vars: GirlVars, now: Date, opts: RenderOpts = {}): Record<string, string> {
+  return { AGE_LINE: ageLine(vars.BIRTH_DATE, now), LOCAL_TIME: localTimeLine(vars.TIMEZONE, now), EMOJI_LINE: emojiLine(vars.EMOJIS),
+    AGE_STATUS: opts.ageVerified === false ? AGE_UNVERIFIED : AGE_VERIFIED };
+}
+
+export function render(vars: GirlVars, now = new Date(), opts: RenderOpts = {}): string {
+  const all: Record<string, string> = { ...vars, ...computed(vars, now, opts) };
+  return withTip(templateForVars(vars), opts.tipOffer ? TIP_OFFER_BLOCK : opts.tipInvite ? TIP_INVITE_BLOCK : undefined).replace(/\{\{([A-Z_]+)\}\}/g, (_, k: string) => {
+    const v = all[k];
+    if (v === undefined || v.trim() === "") throw new Error(`prompt variable ${k} is empty`);
+    return BULLETS.has(k) ? v.trim().split("\n").map((l) => l.trim()).filter(Boolean).join("\n- ") : v;
+  });
+}
+
+/** One-line help per variable, shown next to its edit box in the monitor. */
+export const VAR_HELP: Record<string, string> = {
+  "FULL_NAME": "\"Riley Mae Lewis\"",
+  "NAME": "what everyone calls her: \"Riley\"",
+  "BIRTH_DATE": "\"2003-07-09\". Her age, birthday and star sign are worked out from this every message.",
+  "CAREER": "sport, school, job, creator history",
+  "HOME": "where she grew up, where she lives, car, old jobs",
+  "LOOKS": "height, body, hair, eyes, sizes, tattoos",
+  "BODY_FACTS": "Optional: confirmed body/medical facts, or explicitly unknown. Blank preserves the current template. Never infer these from gender.",
+  "HERITAGE": "background, languages, travel",
+  "DAILY_LIFE": "routine, food, drink, allergies, pets",
+  "LIKES": "hobbies, games, sport teams, music, films, colours",
+  "LOVE_LIFE": "family, relationship status, romance",
+  "VALUES": "what she cares about, turn-offs",
+  "PERSONALITY": "one line: \"Wholesome, funny, playful, girl next door. ...\"",
+  "TEXT_EXAMPLES": "real texts of hers, \"...\" / \"...\" separated",
+  "SEX_ROLE": "how she is in bed: submissive / dominant / switch, and what that looks like",
+  "SEX_PACE": "how fast she takes a chat sexual",
+  "SEX_EXTRAS": "her own turn-ons to bring up, one sentence",
+  "CITY": "where she is right now, for \"where are you\"",
+  "TIMEZONE": "IANA zone, e.g. \"America/Los_Angeles\". Her local time is worked out from this every message.",
+  "WORK_ANSWER": "what she says when asked what she does, in her texting voice",
+  "SIGNATURE_WORDS": "her little words, e.g. \"lol\", \"hahaha\" and \"omggg\"",
+  "EMOJIS": "\"none\", or \"rare|sometimes|often: <her emojis>\" e.g. \"sometimes: 😉😈\". Code enforces it.",
+  "PET_NAMES": "what she calls him, e.g. \"babe\"",
+  "LOVE_REPLY": "what she does when he catches feelings, e.g. \"reciprocate them warmly\"",
+  "SOCIALS": "her public handles: \"instagram @x, tiktok @x\". No private messaging apps.",
+  "MEET_REPLY": "what she says when he asks to meet",
+  "OFF_LIMITS": "topics she never goes into"
+};
+
+/** Problems with a set of vars, or [] when it renders cleanly. */
+export function validateVars(v: Record<string, unknown>): string[] {
+  const errs: string[] = [];
+  for (const k of VAR_NAMES) {
+    if (OPTIONAL_VAR_NAMES.includes(k)) { if (v[k] !== undefined && typeof v[k] !== "string") errs.push(`${k} must be text`); }
+    else if (typeof v[k] !== "string" || !(v[k] as string).trim()) errs.push(`${k} is empty`);
+  }
+  for (const k of Object.keys(v)) if (!VAR_NAMES.includes(k)) errs.push(`${k} is not a variable`);
+  if (typeof v.BIRTH_DATE === "string" && !/^\d{4}-\d{2}-\d{2}$/.test(v.BIRTH_DATE)) errs.push("BIRTH_DATE must be YYYY-MM-DD");
+  if (typeof v.TIMEZONE === "string") { try { localTimeLine(v.TIMEZONE); } catch { errs.push("TIMEZONE must be like America/Los_Angeles"); } }
+  if (typeof v.EMOJIS === "string" && v.EMOJIS.trim() && !emojiPolicy(v.EMOJIS)) errs.push('EMOJIS must be "none" or like "sometimes: 😉😈"');
+  for (const k of VAR_NAMES) if (typeof v[k] === "string" && /[\u2014\u2013]/.test(v[k] as string)) errs.push(`${k} has an em/en dash`);
+  return errs;
+}
+
+/** The rendered prompt cut into plain text and variable parts, so the monitor can colour each variable. */
+export function renderParts(vars: GirlVars, now = new Date()): PromptPart[] {
+  const template = templateForVars(vars);
+  const parts: PromptPart[] = [];
+  let last = 0;
+  for (const m of template.matchAll(/\{\{([A-Z_]+)\}\}/g)) {
+    if (m.index! > last) parts.push({ text: template.slice(last, m.index) });
+    const k = m[1];
+    const comp = computed(vars, now);
+    render(vars, now); // throws on an empty variable, same as the bot
+    const value = comp[k] ?? (BULLETS.has(k) ? String(vars[k as keyof GirlVars] ?? "").trim().split("\n").map((l) => l.trim()).filter(Boolean).join("\n- ") : vars[k as keyof GirlVars]);
+    const label = k in COMPUTED ? COMPUTED[k] : k;
+    parts.push(label ? { text: value, v: label } : { text: value });
+    last = m.index! + m[0].length;
+  }
+  parts.push({ text: template.slice(last) });
+  return withTipPart(parts);
+}
+
+/**
+ * The full prompt cut into parts for the monitor, for ANY state of her details (empty, half-filled
+ * or complete). Never throws: an empty variable shows as an empty coloured slot, a computed line
+ * whose input is missing or invalid shows as a placeholder. The hardcoded text is always shown.
+ */
+export function previewParts(vars: Partial<Record<string, string>>, now = new Date()): PromptPart[] {
+  const comp = (k: string): string => {
+    try {
+      if (k === "AGE_LINE") return vars.BIRTH_DATE ? ageLine(vars.BIRTH_DATE, now) : "";
+      if (k === "LOCAL_TIME") return vars.TIMEZONE ? localTimeLine(vars.TIMEZONE, now) : "";
+      if (k === "AGE_STATUS") return AGE_VERIFIED;
+      if (k === "EMOJI_LINE") return vars.EMOJIS ? emojiLine(vars.EMOJIS) : "";
+    } catch { return ""; }
+    return "";
+  };
+  const template = templateForVars(vars);
+  const parts: { text: string; v?: string }[] = [];
+  let last = 0;
+  for (const m of template.matchAll(/\{\{([A-Z_]+)\}\}/g)) {
+    if (m.index! > last) parts.push({ text: template.slice(last, m.index) });
+    const k = m[1];
+    const label = k in COMPUTED ? COMPUTED[k] : k;
+    const raw = k in COMPUTED ? comp(k) : String(vars[k] ?? "");
+    const text = !(k in COMPUTED) && BULLETS.has(k) ? raw.trim().split("\n").map((l) => l.trim()).filter(Boolean).join("\n- ") : raw;
+    parts.push(label ? { text, v: label } : { text });
+    last = m.index! + m[0].length;
+  }
+  parts.push({ text: template.slice(last) });
+  return withTipPart(parts);
+}
+
