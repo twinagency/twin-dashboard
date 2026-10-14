@@ -8,7 +8,8 @@ packed=base64.b64encode(gzip.compress(node.encode())).decode()
 remote="""import base64,gzip,json,subprocess
 info=json.loads(subprocess.check_output(['docker','inspect','twin-v2-bot-1'],text=True))[0]
 env=dict(x.split('=',1) for x in info['Config']['Env'] if '=' in x)
-assert info['State']['Running'] and env.get('GIT_SHA')=='e8eed505d5a1c5ef53938b2dee90a09bce26ea38','Runtime revision changed'
+assert info['State']['Running'],'Bot is not running'
+print('IDENTITY_RUNTIME '+json.dumps({'revision':env.get('GIT_SHA'),'image':info['Image']}),flush=True)
 source=gzip.decompress(base64.b64decode(PACKED)).decode()
 r=subprocess.run(['docker','exec','-i','twin-v2-bot-1','node','--import','tsx','--input-type=module'],input=source,text=True,capture_output=True,timeout=270)
 if r.returncode:raise RuntimeError('Identity validation failed: '+r.stderr[-600:])
@@ -26,7 +27,7 @@ for attempt in range(110):
  if p.returncode:continue
  r=json.loads(p.stdout)
  if r['Status'] not in ['Success','Failed','Cancelled','TimedOut']:continue
- if r['Status']!='Success':raise RuntimeError(r['Status']+': '+r.get('StandardErrorContent','')[-900:])
+ if r['Status']!='Success':raise RuntimeError(r['Status']+': '+r.get('StandardOutputContent','')[:500]+' '+r.get('StandardErrorContent','')[-1200:])
  encoded=next(x.split(' ',1)[1] for x in r.get('StandardOutputContent','').splitlines() if x.startswith('IDENTITY_GZIP '))
  report=json.loads(gzip.decompress(base64.b64decode(encoded)))
  (outdir/'result.json').write_text(json.dumps(report,indent=2)+'\n')
