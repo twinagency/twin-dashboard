@@ -20,7 +20,7 @@ def runtime():
   info=json.loads(cmd('docker','inspect',name))[0]
   rows.append({'name':name,'image':info['Image'],'running':info['State']['Running'],'revision':next((e.split('=',1)[1] for e in info['Config']['Env'] if e.startswith('GIT_SHA=')),None)})
  return rows
-before=runtime();assert all(r['running'] and r['image']==OLD_IMAGE and r['revision']==OLD_SHA for r in before),'Live runtime changed'
+before=runtime();assert all(r['running'] and r['image']==OLD_IMAGE and r['revision']==OLD_SHA for r in before),'Live runtime changed: '+json.dumps(before)
 assert shutil.disk_usage(ROOT).free>2*1024**3,'Insufficient free space'
 assert not BACKUP.exists() and not RELEASE.exists(),'Preparation already exists; inspect it instead of overwriting'
 BACKUP.mkdir(parents=True,mode=0o700);RELEASE.mkdir(parents=True,mode=0o755)
