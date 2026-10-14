@@ -48,39 +48,45 @@ def update_live_photo(source_path, digest):
     # remain on the approved server; only a result summary leaves it.
     node = r'''
 const crypto = require('node:crypto');
-const { createClient } = require('@supabase/supabase-js');
 const C = __CONFIG__;
 function ok(value, message) { if (!value) throw new Error(message); }
+async function request(url,key,path,options={}) {
+  return fetch(url+path,{...options,headers:{apikey:key,Authorization:'Bearer '+key,...options.headers},signal:AbortSignal.timeout(45000)});
+}
+async function jsonRequest(url,key,path,options={}) {
+  const r=await request(url,key,path,options);
+  ok(r.ok,'Profile API returned '+r.status);
+  return r.json();
+}
 async function main() {
   ok(process.env.SUPABASE_URL === 'https://lkmfwpqegjluirfusnaw.supabase.co' && process.env.FLIRT_BACKEND_ENABLED === 'true', 'Wrong FLIRT runtime');
   ok(process.env.FLIRT_LIVE_TWIN_ENABLED === 'true' && process.env.FLIRT_LIVE_TWIN_URL === 'https://aouaenqayfltoqrmpitg.supabase.co', 'Wrong live backend');
-  const opts = {auth:{persistSession:false,autoRefreshToken:false}};
-  const local = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_KEY, opts);
-  const live = createClient(process.env.FLIRT_LIVE_TWIN_URL, process.env.FLIRT_LIVE_TWIN_SERVICE_KEY, opts);
-  const before = await live.from('clones').select('id,slug,name,status,intake,updated_at').eq('id',C.clone).single();
-  ok(!before.error && before.data.slug === 'olivia-jade' && before.data.name === 'Olivia Jade' && before.data.status === 'active', 'Olivia live clone validation failed');
-  const source = await local.storage.from('onboarding-content').download(C.source);
-  ok(!source.error && source.data, 'Profile source unavailable');
-  const bytes = Buffer.from(await source.data.arrayBuffer());
+  const liveUrl=process.env.FLIRT_LIVE_TWIN_URL,liveKey=process.env.FLIRT_LIVE_TWIN_SERVICE_KEY;
+  const rows=await jsonRequest(liveUrl,liveKey,'/rest/v1/clones?id=eq.'+C.clone+'&select=id,slug,name,status,intake,updated_at');
+  const before=rows[0];
+  ok(rows.length===1 && before.slug === 'olivia-jade' && before.name === 'Olivia Jade' && before.status === 'active', 'Olivia live clone validation failed');
+  const source=await request(process.env.SUPABASE_URL,process.env.SUPABASE_SERVICE_KEY,'/storage/v1/object/authenticated/onboarding-content/'+C.source);
+  ok(source.ok, 'Profile source unavailable');
+  const bytes = Buffer.from(await source.arrayBuffer());
   ok(crypto.createHash('sha256').update(bytes).digest('hex') === C.digest && bytes[0] === 255 && bytes[1] === 216, 'Profile source validation failed');
   const target = C.clone+'/profile/olivia-jade-20261014-'+C.digest.slice(0,12)+'.jpeg';
-  const existing = await live.storage.from('media').download(target);
-  if (!existing.error && existing.data) {
-    ok(crypto.createHash('sha256').update(Buffer.from(await existing.data.arrayBuffer())).digest('hex') === C.digest, 'Existing profile object differs');
+  const existing=await request(liveUrl,liveKey,'/storage/v1/object/authenticated/media/'+target);
+  if (existing.ok) {
+    ok(crypto.createHash('sha256').update(Buffer.from(await existing.arrayBuffer())).digest('hex') === C.digest, 'Existing profile object differs');
   } else {
-    const up = await live.storage.from('media').upload(target, bytes, {contentType:'image/jpeg',upsert:false});
-    ok(!up.error, 'Profile storage upload failed');
+    const up=await request(liveUrl,liveKey,'/storage/v1/object/media/'+target,{method:'POST',body:bytes,headers:{'Content-Type':'image/jpeg','x-upsert':'false'}});
+    ok(up.ok, 'Profile storage upload failed');
   }
-  const priorIntake = before.data.intake || {};
+  const priorIntake = before.intake || {};
   const intake = {...priorIntake,appearance:{...(priorIntake.appearance||{}),profile_image_path:target}};
-  const change = await live.from('clones').update({intake,updated_at:new Date().toISOString()}).eq('id',C.clone).eq('updated_at',before.data.updated_at).select('id');
-  ok(!change.error && change.data?.length === 1, 'Concurrent clone update; profile was not changed');
-  const after = await live.from('clones').select('id,intake,status').eq('id',C.clone).single();
-  ok(!after.error && after.data.intake?.appearance?.profile_image_path === target && after.data.status === 'active', 'Profile readback failed');
+  const change=await jsonRequest(liveUrl,liveKey,'/rest/v1/clones?id=eq.'+C.clone+'&updated_at=eq.'+encodeURIComponent(before.updated_at)+'&select=id',{method:'PATCH',body:JSON.stringify({intake,updated_at:new Date().toISOString()}),headers:{'Content-Type':'application/json',Prefer:'return=representation'}});
+  ok(change.length === 1, 'Concurrent clone update; profile was not changed');
+  const after=(await jsonRequest(liveUrl,liveKey,'/rest/v1/clones?id=eq.'+C.clone+'&select=id,intake,status'))[0];
+  ok(after.intake?.appearance?.profile_image_path === target && after.status === 'active', 'Profile readback failed');
   const withoutPhoto = value => {const v=structuredClone(value);delete v.appearance?.profile_image_path;if(v.appearance && !Object.keys(v.appearance).length) delete v.appearance;return JSON.stringify(v);};
-  ok(withoutPhoto(priorIntake) === withoutPhoto(after.data.intake), 'Unrelated intake changed');
-  const downloaded = await live.storage.from('media').download(target);
-  ok(!downloaded.error && crypto.createHash('sha256').update(Buffer.from(await downloaded.data.arrayBuffer())).digest('hex')===C.digest,'Saved profile photo hash failed');
+  ok(withoutPhoto(priorIntake) === withoutPhoto(after.intake), 'Unrelated intake changed');
+  const downloaded=await request(liveUrl,liveKey,'/storage/v1/object/authenticated/media/'+target);
+  ok(downloaded.ok && crypto.createHash('sha256').update(Buffer.from(await downloaded.arrayBuffer())).digest('hex')===C.digest,'Saved profile photo hash failed');
   console.log(JSON.stringify({ok:true,profile_path:target,original_photo_verified:true,bot_status:'active'}));
 }
 main().catch(e=>{console.log(JSON.stringify({ok:false,error:e.message}));process.exitCode=1});
@@ -99,9 +105,8 @@ raise SystemExit(0 if p.returncode==0 and report.get('ok') else 1)
         time.sleep(3)
         state=aws(['ssm','get-command-invocation','--command-id',cid,'--instance-id',INSTANCE])
         if state['Status'] in ['Pending','InProgress','Delayed']: continue
-        require(state['Status']=='Success','Photo host operation failed')
         report=json.loads(state['StandardOutputContent'])
-        require(report.get('ok'),'Photo verification failed')
+        require(state['Status']=='Success' and report.get('ok'),'Photo host operation failed: '+str(report.get('error','unverified')))
         return report
     raise RuntimeError('Photo host operation timed out')
 
