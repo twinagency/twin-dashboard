@@ -76,8 +76,20 @@ for item in manifest:
  if old is not None:
   target=BACKUP/'host-before'/p;target.parent.mkdir(parents=True,exist_ok=True);target.write_bytes(old)
 assert sorted(c['path'] for c in changes)==sorted(HOST_PATCH),'Prepared host changes differ from reviewed scope'
+# Dependencies are byte-identical; reuse the installed dependencies from the pinned current image.
+# Only the test script in package.json changed, so an offline build must not fetch npm again.
+old_lock=subprocess.check_output(['docker','exec','twin-v2-bot-1','cat','package-lock.json'])
+assert old_lock==(RELEASE/'package-lock.json').read_bytes(),'Dependency lock changed'
+old_package=json.loads(subprocess.check_output(['docker','exec','twin-v2-bot-1','cat','package.json']))
+new_package=json.loads((RELEASE/'package.json').read_text())
+new_package['scripts']['test']=old_package['scripts']['test']
+assert new_package==old_package,'Changes beyond the reviewed test script require a fresh dependency build'
+baseline_tag='twin-v2-olivia-baseline:'+OLD_SHA
+subprocess.run(['docker','tag',OLD_IMAGE,baseline_tag],check=True,capture_output=True)
+recipe=BACKUP/'pinned-dependencies.Dockerfile'
+recipe.write_text('FROM '+baseline_tag+'\nWORKDIR /app\nCOPY . .\n')
 tag='twin-v2-offer:'+SHA
-r=subprocess.run(['docker','build','--network','none','--pull=false','--label','org.opencontainers.image.revision='+SHA,'-t',tag,str(RELEASE)],capture_output=True,text=True,timeout=600);(BACKUP/'build.log').write_text(r.stdout+r.stderr);assert r.returncode==0,'Build failed'
+r=subprocess.run(['docker','build','--network','none','--pull=false','--file',str(recipe),'--label','org.opencontainers.image.revision='+SHA,'-t',tag,str(RELEASE)],capture_output=True,text=True,timeout=600);(BACKUP/'build.log').write_text(r.stdout+r.stderr);assert r.returncode==0,'Build failed'
 image=cmd('docker','image','inspect','-f','{{.Id}}',tag)
 commands=json.loads((RELEASE/'package.json').read_text())['scripts']['test'].split(' && ')
 suites=[c.split()[1] for c in commands]+['scripts/check-dashboard-history.ts','scripts/check-flirt-claim.ts'];results=[]
@@ -89,7 +101,7 @@ r=subprocess.run(['docker','run','--rm','--network','none','--memory','768m','--
 after=runtime();assert after==before and settings()['settingsHash']==preflight['settingsHash'],'Live baseline changed while preparing'
 for p,h in hashes.items():assert sha((ROOT/p).read_bytes())==h,'Host source changed while preparing: '+p
 rollback={'baselineRevision':OLD_SHA,'image':OLD_IMAGE,'codeArchiveSha':sha((BACKUP/'runtime-code.tgz').read_bytes()),'imageArchiveBytes':(BACKUP/'images.tar').stat().st_size,'dataIncluded':False,'runtimeReplaced':False}
-prepared={'sha':SHA,'testedSource':SHA,'image':image,'oldSha':OLD_SHA,'oldImage':OLD_IMAGE,'release':str(RELEASE),'backup':str(BACKUP),'offline':results,'typecheck':True,'sourceManifestFiles':len(manifest),'providedSourceFiles':len(payload['provided']),'promptChanges':len(prompt_changes),'hostChanges':changes,'settingsHash':preflight['settingsHash'],'expectedSlugs':sorted(x['slug'] for x in preflight['checks']),'runtimeBefore':before,'runtimeAfter':after,'preparedAt':datetime.datetime.now(datetime.timezone.utc).isoformat(),'rollbackReady':True,'rollback':rollback,'liveRuntimeReplaced':False,'modelCalls':0,'fanMessages':0,'purchases':0,'productionWrites':0,'realModelCases':0,'modelTransport':'mocked'}
+prepared={'sha':SHA,'testedSource':SHA,'image':image,'oldSha':OLD_SHA,'oldImage':OLD_IMAGE,'release':str(RELEASE),'backup':str(BACKUP),'offline':results,'typecheck':True,'sourceManifestFiles':len(manifest),'providedSourceFiles':len(payload['provided']),'promptChanges':len(prompt_changes),'hostChanges':changes,'settingsHash':preflight['settingsHash'],'expectedSlugs':sorted(x['slug'] for x in preflight['checks']),'runtimeBefore':before,'runtimeAfter':after,'preparedAt':datetime.datetime.now(datetime.timezone.utc).isoformat(),'rollbackReady':True,'rollback':rollback,'liveRuntimeReplaced':False,'modelCalls':0,'fanMessages':0,'purchases':0,'productionWrites':0,'realModelCases':0,'modelTransport':'mocked','dependencyLockUnchanged':True}
 records={'reply-prepared.json':prepared,'release-preflight.json':preflight,'runtime-source-hashes.json':hashes,'release-manifest.json':manifest,'host-changes.json':changes,'rollback-plan.json':rollback}
 for name,data in records.items():(BACKUP/name).write_text(json.dumps(data,indent=2))
 for p in BACKUP.rglob('*'):
