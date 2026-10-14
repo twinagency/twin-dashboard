@@ -38,3 +38,22 @@ test('deferred SDK chains resolve the client within each request and preserve me
   const broken = deferredClient(async () => { throw new Error('unavailable'); });
   assert.equal(await broken.from('clones').select('*').catch(error => error.message), 'unavailable');
 });
+
+test('Olivia existing login is scoped to her live clone without changing agency access', () => {
+  const accountId = '22952fd9-0a82-4da2-a172-f1a0d1aa2c6d';
+  const cloneId = '7c2e9452-1d4e-475c-86ef-07a797f52ce5';
+  const access = { id: `creator:${accountId}`, kind: 'creator', accountId, dataSource: 'twin-live', cloneIds: [cloneId] };
+  assert.deepEqual(live.scopedCreator(accountId), { cloneId, name: 'Olivia Jade', source: 'twin' });
+  assert.equal(live.isScopedLiveCreator(access), true);
+  assert.equal(live.isLiveData(access), true);
+  assert.equal(live.identity().cloneIds.includes(cloneId), false);
+  for (const invalid of [
+    { ...access, accountId: 'unassigned' },
+    { ...access, id: 'creator:unassigned' },
+    { ...access, kind: 'agency' },
+    { ...access, dataSource: undefined },
+    { ...access, cloneIds: [live.CLONES[0]] },
+    { ...access, cloneIds: [cloneId, live.CLONES[0]] },
+  ]) assert.equal(live.isScopedLiveCreator(invalid), false);
+});
+
