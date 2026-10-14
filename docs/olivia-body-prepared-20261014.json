@@ -1,14 +1,14 @@
 {
   "status": "complete",
   "phase": "prepare",
-  "workflowRun": "38523500601",
+  "workflowRun": "38524219668",
   "sha": "1294e734580ed620369a8c16e3cb88a6da6261a8",
   "testedSource": "1294e734580ed620369a8c16e3cb88a6da6261a8",
-  "image": "sha256:f419d53810105c84cddcddc577d3321206d1e94abd2eaffb38018274718945ca",
+  "image": "sha256:881d7cb22598f733ee8196aed0aa9f770265ecf852965798269de78b8863c1b8",
   "oldSha": "b68c8d43d1b476afc034969fcc2015e1e2c33d3d",
   "oldImage": "sha256:f4ac46651a767de65504783f9e4f1f1a0ecedec96529ebb1fda61f6050cad84d",
-  "release": "/home/ubuntu/twin-v2-offer-releases/1294e734580ed620369a8c16e3cb88a6da6261a8-1791959980757691910",
-  "backup": "/home/ubuntu/twin-v2-backups/offer-baseline-1294e73-1791959980757691910",
+  "release": "/home/ubuntu/twin-v2-offer-releases/1294e734580ed620369a8c16e3cb88a6da6261a8-1791960417938487452",
+  "backup": "/home/ubuntu/twin-v2-backups/offer-baseline-1294e73-1791960417938487452",
   "offline": [
     {
       "suite": "scripts/check-safety.ts",
@@ -209,12 +209,12 @@
       "revision": "e8eed505d5a1c5ef53938b2dee90a09bce26ea38"
     }
   ],
-  "preparedAt": "2026-10-14T06:42:14.952697+00:00",
+  "preparedAt": "2026-10-14T06:49:24.445655+00:00",
   "rollbackReady": true,
   "rollback": {
     "baselineRevision": "b68c8d43d1b476afc034969fcc2015e1e2c33d3d",
     "image": "sha256:f4ac46651a767de65504783f9e4f1f1a0ecedec96529ebb1fda61f6050cad84d",
-    "codeArchiveSha": "be96785db16b0f14c088a6bab1502411893e8f7eb0d90711c72a038678a31946",
+    "codeArchiveSha": "f89e12138ec5ab50b8d6b7f9b33b64d2220b97123b686e56eeaba325bbf0ee66",
     "imageArchiveBytes": 103042048,
     "dataIncluded": false,
     "runtimeReplaced": false
