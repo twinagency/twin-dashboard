@@ -15,7 +15,7 @@ run=subprocess.run(['docker','exec','-i','twin-v2-bot-1','node','--import','tsx'
 if run.returncode: raise RuntimeError('read-only container audit failed: '+run.stderr[-500:])
 line=next(x[len('SALES_STAGE0 '):] for x in run.stdout.splitlines() if x.startswith('SALES_STAGE0 '))
 result['snapshot']=json.loads(line)
-check="""const port=Number(process.env.DASH_PORT??4300);const r=await fetch('http://127.0.0.1:'+port+'/api/girls/details?girl=riley-mae-lewis',{signal:AbortSignal.timeout(15000)});if(!r.ok)throw Error('dashboard status '+r.status);const j=await r.json();const p=(j.parts??[]).map(x=>x.text??'').join('');console.log(JSON.stringify({status:r.status,errors:j.errors??[],commercialPrompt:p.slice(p.indexOf('PHOTOS AND VIDEOS'),p.indexOf('HARD LIMITS'))}));"""
+check="""const port=Number(process.env.DASH_PORT??4300);const r=await fetch('http://127.0.0.1:'+port+'/api/girls/details?girl=riley-mae-lewis',{signal:AbortSignal.timeout(15000)});if(!r.ok)throw Error('dashboard status '+r.status);const j=await r.json();const p=(j.parts??[]).filter(x=>!x.optional).map(x=>x.text??'').join('');console.log(JSON.stringify({status:r.status,errors:j.errors??[],optionalSections:(j.parts??[]).filter(x=>x.optional).map(x=>({condition:x.optional,text:x.text})),commercialPrompt:p.slice(p.indexOf('PHOTOS AND VIDEOS'),p.indexOf('HARD LIMITS'))}));"""
 ui=subprocess.run(['docker','exec','-i','twin-v2-dash-1','node','--input-type=module'],input=check,text=True,capture_output=True,timeout=30)
 result['dashboardPrompt']=json.loads(ui.stdout) if ui.returncode==0 else {'error':'read failed'}
 import gzip
