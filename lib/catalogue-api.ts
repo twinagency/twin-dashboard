@@ -10,6 +10,7 @@ import { beginTonCheckout, beginTonTipCheckout, effectiveNanotonPerStar, reconci
 import { isClientEventName, logCatalogueEvent, validEventMediaType, validEventRail, validEventUuid } from './catalogue-events';
 import { beginCatalogueStarTip, catalogueStarTipStatus } from './catalogue-star-tip';
 import { TIP_PRESET_USD, tipStarsForUsd } from './catalogue-ton-price';
+import { hasIndividualReceiptSchema, receiptMayGrantMedia, receiptMayRevokeMedia, withReceiptColumns } from './star-receipts';
 export type CatalogueDependencies = {
   db(): SupabaseClient;
   invoice?: InvoiceTransport;
@@ -193,6 +194,7 @@ return async function POST(request: NextRequest, context: { params: Promise<{ sl
       return json({ logged: true });
     }
     if (action === "catalogue") {
+      const receiptSchema = await hasIndividualReceiptSchema(db);
       if (fan && !admin) await logCatalogueEvent(db, { cloneId: clone.id, telegramId: fan.telegram_id, event: 'open', startParam });
       const bundleRows = checked(await db.from('catalogue_bundles').select('id,title,caption,photo_ids,video_ids,media_kind,price_stars,regular_stars').eq('clone_id',clone.id).eq('enabled',true).order('sort_order')) ?? [];
       const program = checked(await db.from('catalogue_loyalty_programs').select('points_cost,starts_at,reward_photo_ids,reward_video_ids,welcome_bonus_points').eq('clone_id',clone.id).eq('enabled',true).maybeSingle());
@@ -201,15 +203,16 @@ return async function POST(request: NextRequest, context: { params: Promise<{ sl
         clone.photos_enabled ? db.from("photos").select(columns).eq("clone_id", clone.id).order("created_at", { ascending: false }).limit(1000) : Promise.resolve({ data: [], error: null }),
         clone.videos_enabled ? db.from("videos").select(columns).eq("clone_id", clone.id).order("created_at", { ascending: false }).limit(1000) : Promise.resolve({ data: [], error: null }),
         fan ? db.from("user_received_media").select("media_type,media_id").eq("clone_id", clone.id).eq("user_id", fan.id).limit(1000) : Promise.resolve({ data: [], error: null }),
-        fan ? (invoiceCheckout ? paidCatalogueItems(db,clone.id,fan.id).then(data=>({data,error:null})) : db.from("star_transactions").select("media_type,media_id").eq("clone_id", clone.id).eq("user_id", fan.id).eq("kind", "media").gt("amount_stars", 0).not("media_id", "is", null).order("paid_at", { ascending: false }).limit(1000)) : Promise.resolve({ data: [], error: null }),
+        fan ? (invoiceCheckout ? paidCatalogueItems(db,clone.id,fan.id,receiptSchema).then(data=>({data,error:null})) : db.from("star_transactions").select(withReceiptColumns("media_type,media_id,invoice_payload",receiptSchema,true)).eq("clone_id", clone.id).eq("user_id", fan.id).eq("kind", "media").gt("amount_stars", 0).not("media_id", "is", null).order("paid_at", { ascending: false }).limit(1000)) : Promise.resolve({ data: [], error: null }),
         fan && invoiceCheckout ? nativeOwnedItems(db,fan.id,'photo') : Promise.resolve([]),
         fan && invoiceCheckout ? nativeOwnedItems(db,fan.id,'video') : Promise.resolve([]),
       ]);
       const owned = new Set((checked(received) ?? []).map((r: any) => `${r.media_type}:${r.media_id}`));
-      const bought = new Set((checked(purchases) ?? []).map((r: any) => `${r.media_type}:${r.media_id}`));
+      const purchaseRows = (checked(purchases) ?? []).filter((r: any) => receiptMayGrantMedia(r));
+      const bought = new Set(purchaseRows.map((r: any) => `${r.media_type}:${r.media_id}`));
       for(const id of nativePhotos)bought.add(`photo:${id}`);
       for(const id of nativeVideos)bought.add(`video:${id}`);
-      const legacyBundleIds = new Set((checked(purchases) ?? []).filter((r:any)=>!String(r.invoice_payload??'').startsWith('catalogue_order_')).map((r:any)=>r.media_id));
+      const legacyBundleIds = new Set(purchaseRows.filter((r:any)=>!String(r.invoice_payload??'').startsWith('catalogue_order_')).map((r:any)=>r.media_id));
       for (const b of bundleRows) if (bought.has(`bundle:${b.id}`) && legacyBundleIds.has(b.id)) for (const id of (b.media_kind==='video'?b.video_ids:b.photo_ids)) bought.add(`${b.media_kind==='video'?'video':'photo'}:${id}`);
       const tagsByKey = new Map<string, unknown>();
       for (const r of (checked(photos) ?? []) as any[]) tagsByKey.set(`photo:${r.id}`, r.tags);
@@ -219,11 +222,12 @@ return async function POST(request: NextRequest, context: { params: Promise<{ sl
       // Trending: rank by confirmed paid sales in the last 30 days. Only the rank leaves the server.
       try {
         const since = new Date(Date.now() - TRENDING_WINDOW_DAYS * 86_400_000).toISOString();
-        const sales = checked(await db.from('star_transactions').select('id,media_type,media_id,telegram_id')
-          .eq('clone_id', clone.id).eq('kind', 'media').gt('amount_stars', 0).gte('paid_at', since).limit(5000)) ?? [];
+        const sales = ((checked(await db.from('star_transactions').select(withReceiptColumns('id,media_type,media_id,telegram_id',receiptSchema,true))
+          .eq('clone_id', clone.id).eq('kind', 'media').gt('amount_stars', 0).gte('paid_at', since).limit(5000)) ?? []) as unknown as any[])
+          .filter((row: any) => receiptMayGrantMedia(row));
         // Refund rows are few; fetch them by prefix instead of an IN list of every sale id (too long a URL).
-        const refunds = sales.length ? (checked(await db.from('star_transactions').select('id').eq('clone_id', clone.id)
-          .like('id', 'refund:%').limit(5000)) ?? []).map((row: any) => row.id) : [];
+        const refunds = sales.length ? (checked(await db.from('star_transactions').select(withReceiptColumns('id',receiptSchema,true)).eq('clone_id', clone.id)
+          .like('id', 'refund:%').limit(5000)) ?? []).filter((row: any) => receiptMayRevokeMedia(row)).map((row: any) => row.id) : [];
         const ranks = trendingRanks(items, sales as TrendingSale[], refunds, bundleRows as any[]);
         for (const item of items) {
           const rank = ranks.get(`${item.type}:${item.id}`);
@@ -325,7 +329,8 @@ return async function POST(request: NextRequest, context: { params: Promise<{ sl
         const p=checked(await db.from(bundleKind==='video'?'videos':'photos').select('id,caption,star_value,is_free').eq('clone_id',clone.id).in('id',bundleIds));
         if(!projectBundle(b,(p??[]).filter((r:any)=>catalogueItemVisible(r,slug)).map((r:any)=>projectItem(r,bundleKind)))) return json({error:'Bundle price or contents changed. Please refresh.'},409);
         const owned=checked(await db.from('user_received_media').select('media_id').eq('clone_id',clone.id).eq('user_id',fan.id).eq('media_type',bundleKind).in('media_id',bundleIds));
-        const paid=checked(await db.from('star_transactions').select('media_id').eq('clone_id',clone.id).eq('telegram_id',fan.telegram_id).gt('amount_stars',0).in('media_id',[...bundleIds,b.id]));
+        const receiptSchema = await hasIndividualReceiptSchema(db);
+        const paid=(checked(await db.from('star_transactions').select(withReceiptColumns('media_id',receiptSchema,true)).eq('clone_id',clone.id).eq('telegram_id',fan.telegram_id).gt('amount_stars',0).in('media_id',[...bundleIds,b.id]))??[]).filter((row:any)=>receiptMayGrantMedia(row));
         if(owned?.length||paid?.length) return json({error:'You already own content in this bundle. Choose individual items to avoid duplicates.'},409);
       } else {
       if (body.type === 'photo' ? !clone.photos_enabled : !clone.videos_enabled) return json({ error: "Item unavailable." }, 404);

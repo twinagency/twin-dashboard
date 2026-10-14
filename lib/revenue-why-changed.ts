@@ -5,6 +5,7 @@ import { REPORT_TZ } from "./report-time";
 import { selectAllRows } from "./select-all";
 import { supabaseAdmin } from "./supabase";
 import { dedupeStarRows } from "./star-dedupe";
+import { hasIndividualReceiptSchema, withReceiptColumns } from "./star-receipts";
 
 // ── Why it changed ──────────────────────────────────────────────────────────
 //
@@ -51,6 +52,7 @@ type PurchaseRow = {
   kind: string | null;
   feature: string | null;
   invoice_payload: string | null;
+  receipt_namespace?: string | null;
 };
 
 type CloneRow = { id: string; name: string | null };
@@ -599,9 +601,10 @@ async function loadPurchases(windows: DayWindow[], cloneId: string | null, hasFe
   if (!windows.length) return [];
   const startMs = Math.min(...windows.map((window) => window.startMs));
   const endMs = Math.max(...windows.map((window) => window.endMs));
+  const receiptSchema = await hasIndividualReceiptSchema(supabaseAdmin);
   let query = supabaseAdmin
     .from("star_transactions")
-    .select(hasFeature ? PURCHASE_COLUMNS : PURCHASE_COLUMNS_LEGACY)
+    .select(withReceiptColumns(hasFeature ? PURCHASE_COLUMNS : PURCHASE_COLUMNS_LEGACY, receiptSchema))
     .gte("paid_at", new Date(startMs).toISOString())
     .lt("paid_at", new Date(endMs).toISOString())
     .order("id", { ascending: true });

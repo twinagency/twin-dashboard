@@ -2,6 +2,7 @@ import { supabaseAdmin } from "./supabase";
 import { selectAllRows } from "./select-all";
 import { dedupeStarRows } from "./star-dedupe";
 import { getViewerTerms } from "./platform-cut";
+import { hasIndividualReceiptSchema, withReceiptColumns } from "./star-receipts";
 
 // The two Star figures Telegram's Bot API actually gives us, and what each
 // genuinely means. Don't add a matured/pending "21-day hold" split back in -
@@ -39,6 +40,7 @@ export async function getStarBalance(cloneId: string, botToken: string): Promise
   // is exactly the shape that outruns the PostgREST cap. alanna-pow crossed it on
   // 2026-08-09 with 5,010 transactions, at which point an unpaged read reported
   // the first thousand of them as her lifetime earnings.
+  const receiptSchema = await hasIndividualReceiptSchema(supabaseAdmin);
   const [{ rows }, balance] = await Promise.all([
     selectAllRows<{
       id: string;
@@ -48,10 +50,11 @@ export async function getStarBalance(cloneId: string, botToken: string): Promise
       amount_stars: number | null;
       paid_at: string;
       invoice_payload: string | null;
+      receipt_namespace?: string | null;
     }>(
       supabaseAdmin
         .from("star_transactions")
-        .select("id,clone_id,telegram_id,kind,amount_stars,paid_at,invoice_payload")
+        .select(withReceiptColumns("id,clone_id,telegram_id,kind,amount_stars,paid_at,invoice_payload", receiptSchema))
         .eq("clone_id", cloneId),
       { label: "clone lifetime star total" },
     ),

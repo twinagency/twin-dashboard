@@ -9,6 +9,7 @@ import { setCloneScope } from "@/app/actions/clone-scope";
 import { getStarBalance } from "@/lib/star-balance";
 import { selectAllRows } from "@/lib/select-all";
 import { dedupeStarRows } from "@/lib/star-dedupe";
+import { hasIndividualReceiptSchema, withReceiptColumns } from "@/lib/star-receipts";
 import BusinessConnectionCard from "./BusinessConnectionCard";
 import { Info } from "@/components/clone/fields";
 import { Card } from "@/components/ui/card";
@@ -52,6 +53,7 @@ async function FleetInfo() {
   // .select() silently truncates at PostgREST's 1000 row cap with no error, so
   // this page's totals were wrong. selectAllRows pages past that cap, see its
   // header for the full failure mode.
+  const receiptSchema = await hasIndividualReceiptSchema(supabaseAdmin);
   const [{ data: clones }, { rows: userList }, { rows: txListRaw }] = await Promise.all([
     supabaseAdmin.from("clones").select("id,name,slug,status").order("created_at", { ascending: true }),
     selectAllRows<{ clone_id: string; total_messages_purchased: number | null }>(
@@ -66,8 +68,9 @@ async function FleetInfo() {
       amount_stars: number | null;
       paid_at: string;
       invoice_payload: string | null;
+      receipt_namespace?: string | null;
     }>(
-      supabaseAdmin.from("star_transactions").select("id,clone_id,telegram_id,kind,amount_stars,paid_at,invoice_payload"),
+      supabaseAdmin.from("star_transactions").select(withReceiptColumns("id,clone_id,telegram_id,kind,amount_stars,paid_at,invoice_payload", receiptSchema)),
       { label: "fleet info star_transactions" },
     ),
   ]);
