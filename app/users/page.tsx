@@ -20,6 +20,7 @@ import PurchaseToasts from "@/components/users/PurchaseToasts";
 import FanLive from "@/components/users/FanLive";
 import DripStrip from "@/components/users/DripStrip";
 import { dedupeStarRows } from "@/lib/star-dedupe";
+import { hasIndividualReceiptSchema, withReceiptColumns } from "@/lib/star-receipts";
 import FanDossier from "@/components/users/FanDossier";
 import { toRows, parseEvents, sentenceCase } from "@/lib/fan-dossier";
 import ChatThread, { type ThreadMessage } from "@/components/users/ChatThread";
@@ -391,6 +392,7 @@ export default async function FansPage({
   const pageUserIds = filtered.map((u) => u.id).filter(isStoredFan);
   const idChunks: string[][] = [];
   for (let i = 0; i < pageUserIds.length; i += ID_CHUNK) idChunks.push(pageUserIds.slice(i, i + ID_CHUNK));
+  const receiptSchema = idChunks.length ? await hasIndividualReceiptSchema(supabaseAdmin) : false;
   const mediaBuyRows = (
     await Promise.all(
       idChunks.map((chunk) =>
@@ -403,10 +405,11 @@ export default async function FansPage({
           amount_stars: number | null;
           paid_at: string;
           invoice_payload: string | null;
+          receipt_namespace?: string | null;
         }>(
           supabaseAdmin
             .from("star_transactions")
-            .select("id,user_id,clone_id,telegram_id,kind,amount_stars,paid_at,invoice_payload")
+            .select(withReceiptColumns("id,user_id,clone_id,telegram_id,kind,amount_stars,paid_at,invoice_payload", receiptSchema))
             .eq("kind", "media")
             .in("user_id", chunk)
             .order("id", { ascending: true }),

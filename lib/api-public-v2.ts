@@ -29,6 +29,7 @@ import { resolveCloneCuts } from "./revenue-projection";
 import { applyCut, applyStackedCut } from "./platform-cut";
 import { cloneUserStats, cloneUserStatsWindow } from "./rollup";
 import { encodeCursor, type PaymentQuery } from "./api-public-query";
+import { hasIndividualReceiptSchema, withReceiptColumns } from "./star-receipts";
 
 type Cuts = { platformPct: number; agencyCreatorPct: number };
 type Mode = "clone" | "fleet";
@@ -77,12 +78,14 @@ type RawPayment = {
   amount_stars: number | string | null;
   paid_at: string;
   invoice_payload: string | null;
+  receipt_namespace?: string | null;
 };
 
 async function readPayments(cloneId: string | null, q: PaymentQuery, mode: Mode): Promise<PublicPayments> {
+  const receiptSchema = await hasIndividualReceiptSchema(supabaseAdmin);
   let query = supabaseAdmin
     .from("star_transactions")
-    .select(PAYMENT_COLUMNS)
+    .select(withReceiptColumns(PAYMENT_COLUMNS, receiptSchema))
     .gte("paid_at", q.since)
     .lte("paid_at", q.until)
     // one extra row tells us whether another page exists
@@ -216,6 +219,7 @@ type Tx = {
   amount_stars: number | string | null;
   paid_at: string;
   invoice_payload: string | null;
+  receipt_namespace?: string | null;
 };
 
 function windowOf(rows: { stars: number; paidOrder: boolean; adjustment: boolean; telegram_id: number | null }[]): StatsWindow {
@@ -232,9 +236,10 @@ function windowOf(rows: { stars: number; paidOrder: boolean; adjustment: boolean
 
 async function computeStats(cloneId: string | null, mode: Mode, now: number): Promise<PublicStats> {
   const since30 = new Date(now - 30 * D).toISOString();
+  const receiptSchema = await hasIndividualReceiptSchema(supabaseAdmin);
   let tq = supabaseAdmin
     .from("star_transactions")
-    .select("id,clone_id,telegram_id,kind,feature,amount_stars,paid_at,invoice_payload")
+    .select(withReceiptColumns("id,clone_id,telegram_id,kind,feature,amount_stars,paid_at,invoice_payload", receiptSchema))
     .gte("paid_at", since30)
     .lte("paid_at", new Date(now).toISOString());
   if (cloneId !== null) tq = tq.eq("clone_id", cloneId);

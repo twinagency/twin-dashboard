@@ -24,6 +24,14 @@
 // normal purchase for this purpose. Only rows sharing the exact business key
 // are collapsed, and the LOWEST id in each group is kept (arbitrary but
 // deterministic, so repeated calls on the same data agree).
+//
+// Stage 3 individual-offer receipts are different. The settlement writer marks
+// every claimed `v2i1` receipt, including quarantined mismatches, with
+// `receipt_namespace = 'v2i1'` and gives each provider charge a stable scoped
+// row id. Those rows are deduplicated by that id only. Two genuine provider
+// charges can have the same fan, price and second and must both survive. This
+// exception is intentionally based on the persisted receipt discriminator,
+// not on an invoice-payload prefix that may be malformed or unverified.
 
 export type StarDedupeKeyFields = {
   id: string;
@@ -32,6 +40,7 @@ export type StarDedupeKeyFields = {
   kind: string | null;
   amount_stars: number | string | null;
   paid_at: string | null;
+  receipt_namespace?: string | null;
 };
 
 function isAdjustmentRow<T extends StarDedupeKeyFields & { invoice_payload?: string | null }>(row: T): boolean {
@@ -44,6 +53,10 @@ function businessKey(row: StarDedupeKeyFields): string {
   return [row.clone_id ?? "", row.telegram_id ?? "", row.kind ?? "", row.amount_stars ?? "", row.paid_at ?? ""].join(
     "\u0000",
   );
+}
+
+function dedupeKey(row: StarDedupeKeyFields): string {
+  return row.receipt_namespace === "v2i1" ? `v2i1\u0000${String(row.id)}` : `legacy\u0000${businessKey(row)}`;
 }
 
 /**
@@ -59,8 +72,8 @@ export function dedupeStarRows<T extends StarDedupeKeyFields & { invoice_payload
   const bestByKey = new Map<string, T>();
 
   for (const row of rows) {
-    if (isAdjustmentRow(row)) continue;
-    const key = businessKey(row);
+    if (row.receipt_namespace !== "v2i1" && isAdjustmentRow(row)) continue;
+    const key = dedupeKey(row);
     const existing = bestByKey.get(key);
     if (!existing || String(row.id) < String(existing.id)) {
       bestByKey.set(key, row);
@@ -73,11 +86,11 @@ export function dedupeStarRows<T extends StarDedupeKeyFields & { invoice_payload
   const out: T[] = [];
   const emitted = new Set<string>();
   for (const row of rows) {
-    if (isAdjustmentRow(row)) {
+    if (row.receipt_namespace !== "v2i1" && isAdjustmentRow(row)) {
       out.push(row);
       continue;
     }
-    const key = businessKey(row);
+    const key = dedupeKey(row);
     const winner = bestByKey.get(key)!;
     if (String(row.id) === String(winner.id) && !emitted.has(key)) {
       out.push(winner);

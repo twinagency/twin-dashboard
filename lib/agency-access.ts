@@ -5,6 +5,7 @@ import { AGENCY_COOKIE, scopeAgencyClones } from "./agency-policy";
 import { selectAllRowsParallel } from "./select-all";
 import { rollupRevenueLedger, type RevenueLedgerRow } from "./revenue-ledger";
 import { dedupeStarRows } from "./star-dedupe";
+import { hasIndividualReceiptSchema, withReceiptColumns } from "./star-receipts";
 
 export { agencyIdentity } from "./agency-identity";
 import { agencyIdentity } from "./agency-identity";
@@ -16,11 +17,12 @@ export async function agencyData(requested?: string, days = 7, fan?: string) {
   if (!ids.length) return { identity, creators: [], revenue: null, fans: [], messages: [], media: [], events: [], start: "", end: "" };
   const end = new Date().toISOString();
   const start = new Date(Date.now() - days * 86400000).toISOString();
+  const receiptSchema = await hasIndividualReceiptSchema(supabaseAdmin);
   const [creators, ledger, fans, photos, videos, events] = await Promise.all([
     supabaseAdmin.from("clones").select("id,name,status,photos_enabled,videos_enabled,voice_enabled,intent_classic_promotions_enabled,intent_classic_promotion_version")
       .in("id", ids).order("name"),
-    selectAllRowsParallel<RevenueLedgerRow & { id: string; kind: string | null; paid_at: string }>(() => supabaseAdmin.from("star_transactions")
-      .select("id,clone_id,telegram_id,kind,amount_stars,paid_at,invoice_payload")
+    selectAllRowsParallel<RevenueLedgerRow & { id: string; kind: string | null; paid_at: string; receipt_namespace?: string | null }>(() => supabaseAdmin.from("star_transactions")
+      .select(withReceiptColumns("id,clone_id,telegram_id,kind,amount_stars,paid_at,invoice_payload", receiptSchema))
       .in("clone_id", ids).gte("paid_at", start).lte("paid_at", end).order("id"), { label: "agency revenue" }),
     requested ? supabaseAdmin.from("users").select("id,telegram_id,name")
       .eq("clone_id", requested).order("id").limit(100) : Promise.resolve({ data: [], error: null }),
