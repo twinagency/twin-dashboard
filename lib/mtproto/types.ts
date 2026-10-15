@@ -228,6 +228,8 @@ export interface ReengageRun {
   finishedAt: string | null;
   stopRequested: boolean;
   note: string | null;
+  /** Follow-up flow attached to this run (mtproto_flows.id), null when none. */
+  flowId?: string | null;
 }
 
 export interface ReengageEpisode {

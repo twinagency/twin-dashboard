@@ -13,6 +13,7 @@ import { parseMediaBundleCampaign, mediaCampaignReviewKey, type MediaBundleCampa
 import { mtDb } from "./db";
 import { insertEvent } from "./events";
 import { getGlobalStop } from "./global-stop";
+import { getFlow } from "./flows";
 import { REVIEW_KIND, checkReviewGate, computeDryRunSummary, currentAudienceSize, type DryRunSummary } from "./review";
 import { RunValidationError, isMissingTable, isUuid, requireUuid, sanitizeFilters, sanitizeMessageVariants, validateCaps } from "./validate";
 import {
@@ -43,6 +44,7 @@ type RunRow = {
   finished_at: string | null;
   stop_requested: boolean;
   note: string | null;
+  flow_id?: string | null;
 };
 
 function fromRow(r: RunRow): ReengageRun {
@@ -65,6 +67,7 @@ function fromRow(r: RunRow): ReengageRun {
     finishedAt: r.finished_at,
     stopRequested: r.stop_requested,
     note: r.note,
+    flowId: r.flow_id ?? null,
   };
 }
 
@@ -80,6 +83,9 @@ export type CreateRunInput = {
   holdoutPct: number;
   messageVariants?: string[];
   note?: string | null;
+  /** Optional follow-up flow (mtproto_flows.id). Stored in reengage_runs.flow_id;
+   *  if that column does not exist yet the run is created without it. */
+  flowId?: string | null;
 };
 
 // Re-exported so existing callers/tests keep importing it from here.
@@ -102,6 +108,30 @@ export function validateCreateRunInput(input: CreateRunInput): void {
   sanitizeMessageVariants(input.messageVariants);
   if (!input.createdBy.trim() || input.createdBy.length > 200) throw new RunValidationError("createdBy is required (max 200 chars)");
   if (input.note != null && input.note.length > 500) throw new RunValidationError("note is too long (max 500 chars)");
+  if (input.flowId != null && input.flowId !== "") requireUuid(input.flowId, "flow");
+}
+
+/** True only for "reengage_runs.flow_id does not exist" (migration for flows not applied). */
+export function isMissingFlowIdColumn(e: unknown): boolean {
+  const err = e as { code?: string; message?: string } | null;
+  const msg = String(err?.message ?? e ?? "");
+  if (!/flow_id/.test(msg)) return false;
+  return err?.code === "42703" || err?.code === "PGRST204" || /does not exist|could not find/i.test(msg);
+}
+
+/** A chosen flow must exist, not be archived, and fit the run's creators: a
+ *  flow tied to one girl only goes on a run for exactly that girl. A disabled
+ *  flow is allowed (it stays inert until both switches are on). */
+async function assertUsableFlow(flowId: string, cloneIds: string[]): Promise<void> {
+  const r = await getFlow(flowId);
+  if (!r.installed) throw new RunValidationError("flows are not installed yet, so a follow-up flow cannot be attached");
+  if (r.error) throw new Error(`could not verify the flow: ${r.error}`);
+  const flow = r.data;
+  if (!flow) throw new RunValidationError("that follow-up flow does not exist");
+  if (flow.archived) throw new RunValidationError("that follow-up flow is archived");
+  if (flow.cloneId && (cloneIds.length !== 1 || cloneIds[0] !== flow.cloneId)) {
+    throw new RunValidationError("that follow-up flow belongs to one girl and can only be used on a run for her alone");
+  }
 }
 
 /** Every creator must be a real, active clone. A run for a paused clone is
@@ -128,25 +158,32 @@ export async function createDryRun(input: CreateRunInput): Promise<ReengageRun> 
   const filters = sanitizeFilters(input.filters, cloneIds);
   const messageVariants = sanitizeMessageVariants(input.messageVariants);
   await assertUsableCreators(cloneIds);
-  const { data, error } = await mtDb()
-    .from("reengage_runs")
-    .insert({
-      ...(input.id ? { id: input.id } : {}),
-      ...(input.photoCampaign ? { photo_campaign: parseMediaBundleCampaign(input.photoCampaign, cloneIds[0]) } : {}),
-      allow_recontact: input.allowRecontact === true,
-      created_by: input.createdBy,
-      status: "draft",
-      dry_run: true,
-      clone_ids: cloneIds,
-      filters,
-      daily_cap: input.dailyCap,
-      run_cap: input.runCap,
-      holdout_pct: input.holdoutPct,
-      message_variants: messageVariants,
-      note: input.note ?? null,
-    })
-    .select()
-    .single();
+  const flowId = input.flowId ? input.flowId.toLowerCase() : null;
+  if (flowId) await assertUsableFlow(flowId, cloneIds);
+  const baseRow = {
+    ...(input.id ? { id: input.id } : {}),
+    ...(input.photoCampaign ? { photo_campaign: parseMediaBundleCampaign(input.photoCampaign, cloneIds[0]) } : {}),
+    allow_recontact: input.allowRecontact === true,
+    created_by: input.createdBy,
+    status: "draft",
+    dry_run: true,
+    clone_ids: cloneIds,
+    filters,
+    daily_cap: input.dailyCap,
+    run_cap: input.runCap,
+    holdout_pct: input.holdoutPct,
+    message_variants: messageVariants,
+    note: input.note ?? null,
+  };
+  let flowSkipped = false;
+  let res = await mtDb().from("reengage_runs").insert((flowId ? { ...baseRow, flow_id: flowId } : baseRow) as typeof baseRow).select().single();
+  if (res.error && flowId && isMissingFlowIdColumn(res.error)) {
+    // The flows migration is not applied yet: create the run without the flow
+    // rather than breaking run creation (same idea as OPTIONAL_COLUMNS).
+    flowSkipped = true;
+    res = await mtDb().from("reengage_runs").insert(baseRow).select().single();
+  }
+  const { data, error } = res;
   if (error) throw new Error(error.message);
   const run = fromRow(data as RunRow);
   await insertEvent({
@@ -156,7 +193,7 @@ export async function createDryRun(input: CreateRunInput): Promise<ReengageRun> 
     episodeId: null,
     eventType: "config_change",
     actor: input.createdBy,
-    detail: { action: "run_created", dryRun: true, allowRecontact: input.allowRecontact === true, cloneIds, filters, dailyCap: input.dailyCap, runCap: input.runCap, holdoutPct: input.holdoutPct, messageVariants },
+    detail: { action: "run_created", dryRun: true, allowRecontact: input.allowRecontact === true, cloneIds, filters, dailyCap: input.dailyCap, runCap: input.runCap, holdoutPct: input.holdoutPct, messageVariants, ...(flowId ? { flowId, flowSkipped } : {}) },
   });
   return run;
 }

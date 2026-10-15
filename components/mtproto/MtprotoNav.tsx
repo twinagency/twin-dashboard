@@ -7,6 +7,7 @@ const TABS = [
   { href: "/mtproto-campaign", label: "Activity", match: (p: string) => p === "/mtproto-campaign" },
   { href: "/mtproto-campaign/new", label: "New run", match: (p: string) => p.startsWith("/mtproto-campaign/new") || p.startsWith("/mtproto-campaign/runs") },
   { href: "/mtproto-campaign/media", label: "Media campaign", match: (p: string) => p.startsWith("/mtproto-campaign/media") },
+  { href: "/mtproto-campaign/flows", label: "Flows", match: (p: string) => p.startsWith("/mtproto-campaign/flows") },
   { href: "/mtproto-campaign/connections", label: "Connections", match: (p: string) => p.startsWith("/mtproto-campaign/connections") },
   { href: "/mtproto-campaign/settings", label: "Settings", match: (p: string) => p.startsWith("/mtproto-campaign/settings") },
 ];

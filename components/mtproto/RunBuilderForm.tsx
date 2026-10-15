@@ -68,7 +68,9 @@ function AudienceTile({ active, title, hint, onClick }: { active: boolean; title
 // and create. Preview is read-only. Creating always starts as a DRY RUN:
 // nothing is sent, and going live is a separate, later step with its own
 // typed confirmation on the run's own page.
-export default function RunBuilderForm({ creators }: { creators: CreatorLite[] }) {
+export type FlowOption = { id: string; name: string; cloneId: string | null; steps: number };
+
+export default function RunBuilderForm({ creators, flows = [] }: { creators: CreatorLite[]; flows?: FlowOption[] }) {
   const router = useRouter();
   const formRef = useRef<HTMLFormElement>(null);
   const [pending, startTransition] = useTransition();
@@ -81,9 +83,16 @@ export default function RunBuilderForm({ creators }: { creators: CreatorLite[] }
   const [audienceChoice, setAudienceChoice] = useState<AudienceChoice>("silent");
   const [advancedSegment, setAdvancedSegment] = useState<RunSegment>("top_spenders");
   const [includeLegacy, setIncludeLegacy] = useState(false);
+  const [flowId, setFlowId] = useState("");
   // Start with every approved default opener so a campaign varies its text
   // unless the operator clears lines on purpose.
   const [variantCount, setVariantCount] = useState<number>(DEFAULT_REENGAGEMENT_VARIANTS.length);
+
+  // A flow tied to one girl fits a run for exactly that girl; a template for
+  // any girl fits every run.
+  const onlyCreator = selected.size === 1 ? [...selected][0] : null;
+  const flowChoices = flows.filter((f) => f.cloneId === null || f.cloneId === onlyCreator);
+  const flowValue = flowChoices.some((f) => f.id === flowId) ? flowId : "";
 
   const segment: RunSegment = audienceChoice === "advanced" ? advancedSegment : "all_silent";
 
@@ -280,6 +289,20 @@ export default function RunBuilderForm({ creators }: { creators: CreatorLite[] }
             <div className="mt-2 text-xs text-muted">Maximum {MAX_MESSAGE_VARIANTS} variants.</div>
           )}
         </div>
+
+        {flows.length > 0 && (
+          <label className="block max-w-md border-t border-line pt-4">
+            <FieldLabel label="Follow-up flow" hint="Optional. What the normal bot does after a fan replies to the opener: more messages, free media, offers. A flow tied to one girl only shows when that girl is the only creator picked. It does nothing until the global flows switch and the flow's own switch are both on." />
+            <select name="flowId" value={flowValue} onChange={(e) => setFlowId(e.target.value)} className={selectCls}>
+              <option value="">No follow-up flow</option>
+              {flowChoices.map((f) => (
+                <option key={f.id} value={f.id}>
+                  {f.name} ({f.steps} {f.steps === 1 ? "step" : "steps"})
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
 
         <div className="grid grid-cols-1 gap-3 border-t border-line pt-4 sm:grid-cols-3">
           <label className="block">

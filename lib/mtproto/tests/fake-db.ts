@@ -11,6 +11,10 @@ export class FakeDb {
   tables: Record<string, Row[]> = {};
   /** table -> op ("select"|"insert"|"update"|"upsert") -> error to return */
   failures: Record<string, Partial<Record<string, { message: string; code?: string; ifSelectIncludes?: string }>>> = {};
+  /** tables that "do not exist": every operation fails like Postgres 42P01 */
+  missingTables = new Set<string>();
+  /** table -> columns that "do not exist": an insert/update naming one fails like PostgREST PGRST204 */
+  missingColumns: Record<string, string[]> = {};
   private seq = 0;
 
   seed(table: string, rows: Row[]): void {
@@ -123,6 +127,9 @@ class FakeQuery implements PromiseLike<Result> {
     if (this.table === "reengage_runs") {
       return { id: `00000000-0000-4000-8000-${String(this.db.nextId()).padStart(12, "0")}`, created_at: now, status: "draft", dry_run: true, confirm_live_at: null, stop_requested: false, started_at: null, finished_at: null, note: null, ...row };
     }
+    if (this.table === "mtproto_flows") {
+      return { id: `00000000-0000-4000-a000-${String(this.db.nextId()).padStart(12, "0")}`, created_at: now, updated_at: now, enabled: false, archived: false, created_by: "dashboard", ...row };
+    }
     if (this.table === "reengage_events") return { id: this.db.nextId(), ts: now, detail: {}, actor: "system", ...row };
     if (this.table === "userbot_login_requests") {
       return {
@@ -145,6 +152,13 @@ class FakeQuery implements PromiseLike<Result> {
   }
 
   private run(): Result {
+    if (this.db.missingTables.has(this.table)) return { data: null, error: { message: `relation "public.${this.table}" does not exist`, code: "42P01" } };
+    if (this.op !== "select") {
+      const missing = this.db.missingColumns[this.table] ?? [];
+      const items = Array.isArray(this.payload) ? this.payload : [this.payload];
+      const bad = missing.find((c) => items.some((p: Row) => p && c in p));
+      if (bad) return { data: null, error: { message: `Could not find the '${bad}' column of '${this.table}' in the schema cache`, code: "PGRST204" } };
+    }
     const fail = this.db.failures[this.table]?.[this.op];
     if (fail && !(fail.ifSelectIncludes && !this.selectCols.includes(fail.ifSelectIncludes))) return { data: null, error: { message: fail.message, code: fail.code } };
     const rows = this.db.rows(this.table);

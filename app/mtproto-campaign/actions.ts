@@ -102,7 +102,7 @@ export async function previewAudienceAction(fd: FormData): Promise<ActionResult<
 /** Creates the run as DRY RUN (always) then queues it so the worker can claim
  *  and simulate it. dry_run stays true throughout: this action has no way to
  *  ask for a live run, and lib/mtproto/runs.ts createDryRun hardcodes it. */
-export async function createRunAction(fd: FormData): Promise<ActionResult<{ id: string }>> {
+export async function createRunAction(fd: FormData): Promise<ActionResult<{ id: string; flowAttached: boolean }>> {
   await guardDashboardAction("app/mtproto-campaign/actions.ts#createRunAction", [fd]);
   try {
     const { cloneIds, filters } = filtersFromForm(fd);
@@ -113,12 +113,13 @@ export async function createRunAction(fd: FormData): Promise<ActionResult<{ id: 
       filters,
       messageVariants: sanitizeMessageVariants(fd.getAll("messageVariants").map(String)),
       note: note || null,
+      flowId: String(fd.get("flowId") ?? "").trim() || null,
       ...capsFromForm(fd),
     };
     const run = await createDryRun(input);
     await queueRun(run.id, ACTOR);
     revalidatePath("/mtproto-campaign");
-    return { ok: true, id: run.id };
+    return { ok: true, id: run.id, flowAttached: !!run.flowId };
   } catch (e) {
     return fail(e);
   }
