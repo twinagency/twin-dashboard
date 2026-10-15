@@ -1,129 +1,131 @@
 import assert from "node:assert/strict";
-import { normalizeMediaClassification, stripBannedDashes, cleanSendCaption, MEDIA_CLASSIFICATION_PROMPT, VISUAL_EVIDENCE_KEYS } from "../lib/media-classification";
+import {
+  normalizeMediaClassification, stripBannedDashes, cleanSendCaption, descriptionProblems, anatomyStatus,
+  MEDIA_CLASSIFICATION_PROMPT, VIDEO_CLASSIFICATION_PROMPT, VISUAL_EVIDENCE_KEYS, ANALYSIS_VERSION,
+} from "../lib/media-classification";
 
-const clearEvidence = Object.fromEntries(VISUAL_EVIDENCE_KEYS.map((key) => [key, false]));
-function metadata(evidence: Record<string, unknown> = {}, changes: Record<string, unknown> = {}) {
+const no = Object.fromEntries(VISUAL_EVIDENCE_KEYS.map((key) => [key, "no"]));
+function obs(features: Record<string, unknown> = {}, changes: Record<string, unknown> = {}) {
   return {
-    caption: "woman in open white shirt outdoors, cleavage visible, looking at camera",
-    auto_desc: "open shirt outdoor",
+    features: { ...no, suggestive_pose_or_clothing: "yes", ...features },
+    summary: "A woman in an open white shirt stands outdoors and looks at the camera.",
+    details: "The shirt is open at the front and her cleavage is visible. She stands on a path with trees behind her.",
+    short_label: "open shirt outdoor",
+    clothing: ["open white shirt"], objects: [], setting: "outdoor path",
     tags: ["topless", "tits", "outdoor", "solo"],
-    // Deliberately contradictory legacy/model flags must not override evidence.
-    is_nude: true, nsfw: false, explicitness: "suggestive",
-    visual_evidence: { ...clearEvidence, suggestive_pose_or_clothing: true, ...evidence },
     ...changes,
   };
 }
 
-const beach = normalizeMediaClassification(metadata());
+// ---- the prompt is an observation task, not a writing task --------------------------------------------------------------
+assert.doesNotMatch(MEDIA_CLASSIFICATION_PROMPT, /SEND CAPTION|first person|horny|tease|Never mention OnlyFans/i,
+  "the analysis prompt carries no promotional-writing instructions");
+assert.match(MEDIA_CLASSIFICATION_PROMPT, /"yes", "no" or "unsure"/);
+assert.match(VIDEO_CLASSIFICATION_PROMPT, /sampled/i);
+assert.equal(typeof ANALYSIS_VERSION, "number");
+
+// ---- cleavage / open shirt is not nudity; tags are gated by confirmed observations -----------------------------------------
+const beach = normalizeMediaClassification(obs());
 assert.equal(beach.is_nude, false, "open shirt and cleavage are not visible nudity");
 assert.equal(beach.nsfw, false);
 assert.equal(beach.explicitness, "suggestive");
-assert.deepEqual(beach.tags, ["outdoor", "solo"]);
+assert.deepEqual(beach.tags, ["outdoor", "solo"], "topless/tits dropped: nipples_visible is not yes");
+assert.equal(beach.status, "ok");
 assert.equal(beach.auto_desc, "open shirt outdoor");
+assert.equal(beach.caption, "", "the vision step never writes the send caption");
+assert.match(beach.visual_description, /^A woman in an open white shirt/);
+assert.match(beach.visual_description, /Not visible: nipples, genitals, anus, bare buttocks\.$/);
 
-const car = normalizeMediaClassification(metadata({ swimwear_visible: true }, {
-  caption: "woman in white bikini top and crocheted shorts sitting in car, seatbelt across chest",
-  auto_desc: "bikini car", tags: ["bikini", "lingerie", "mirror_selfie", "solo", "solo", "invented"],
+// one authoritative set: description, tags and flags all follow the same features
+const nude = normalizeMediaClassification(obs({ nipples_visible: "yes" }, {
+  summary: "A woman sits topless on a sofa.", details: "She wears grey shorts.", short_label: "topless on sofa",
+  tags: ["solo"], clothing: ["grey shorts"],
 }));
-assert.equal(car.is_nude, false);
-assert.equal(car.nsfw, false);
-assert.equal(car.explicitness, "suggestive");
-assert.deepEqual(car.tags, ["bikini", "solo"], "a bikini car selfie is neither lingerie nor a mirror selfie");
-
-const nude = normalizeMediaClassification(metadata({ nipples_visible: true }, {
-  caption: "topless adult sitting indoors", auto_desc: "topless indoors", tags: ["topless", "tits", "solo"],
-  is_nude: false, nsfw: false, explicitness: "none",
-}));
-assert.equal(nude.is_nude, true, "genuine observed nudity must not be downgraded");
+assert.equal(nude.is_nude, true);
 assert.equal(nude.nsfw, true);
 assert.equal(nude.explicitness, "explicit");
-assert.deepEqual(nude.tags, ["topless", "tits", "solo"]);
+assert.ok(nude.tags.includes("topless"), "a confirmed observation derives its tag even when the model omitted it");
+assert.match(nude.visual_description, /Visible: nipples\./);
 
-for (const feature of ["genitals_visible", "anus_visible", "bare_buttocks_visible"]) {
-  const result = normalizeMediaClassification(metadata({ [feature]: true }));
-  assert.equal(result.is_nude, true);
-  assert.equal(result.nsfw, true);
-  assert.equal(result.explicitness, "explicit");
-}
-const activity = normalizeMediaClassification(metadata({ sexual_activity_visible: true }));
-assert.equal(activity.is_nude, false, "sexual activity and visible nudity are separate observations");
-assert.equal(activity.nsfw, true);
-assert.equal(activity.explicitness, "explicit");
-
-const ordinary = normalizeMediaClassification(metadata({ suggestive_pose_or_clothing: false }, {
-  caption: "person in a T-shirt sitting at a desk", auto_desc: "desk portrait", tags: ["solo"],
+// the two reference failures, expressed as observations
+const kyla = normalizeMediaClassification(obs({ mirror_reflection_visible: "yes", suggestive_pose_or_clothing: "yes" }, {
+  summary: "A blonde woman in a grey sweatshirt and sweatpants takes a mirror selfie on a wooden floor.",
+  details: "The sweatshirt is pulled up over the lower part of her breasts and one hand covers them, so her nipples are not visible. A bed and a grey rug are behind her.",
+  short_label: "sweatshirt mirror selfie", tags: ["mirror_selfie", "topless", "bed", "solo"],
 }));
-assert.equal(ordinary.explicitness, "none");
-assert.equal(ordinary.is_nude, false);
-assert.equal(ordinary.nsfw, false);
-
-const mirror = normalizeMediaClassification(metadata({ lingerie_visible: true, mirror_reflection_visible: true }, {
-  caption: "adult in lingerie posing in a mirror", auto_desc: "lingerie mirror", tags: ["lingerie", "mirror_selfie"],
+assert.deepEqual(kyla.tags.filter((t) => t === "topless" || t === "tits"), [], "Kyla: covered nipples never become a topless tag");
+assert.equal(kyla.is_nude, false);
+assert.ok(kyla.tags.includes("mirror_selfie"));
+const dan = normalizeMediaClassification(obs({ genitals_visible: "yes", anus_visible: "yes", full_nudity_visible: "yes", bare_buttocks_visible: "yes" }, {
+  summary: "A nude platinum blonde woman kneels bent forward on a bed with a pink plug in her anus.",
+  details: "Her vulva is visible below the plug and her head is down on a grey blanket.", short_label: "nude kneeling plug", tags: ["ass", "anal", "bed", "solo"],
 }));
-assert.deepEqual(mirror.tags, ["lingerie", "mirror_selfie"]);
-assert.equal(mirror.explicitness, "suggestive");
+assert.ok(["pussy", "anal", "full_nude"].every((t) => dan.tags.includes(t)), "Dan: confirmed anatomy derives pussy, anal and full_nude");
+assert.equal(dan.explicitness, "explicit");
 
-for (const claim of ["topless outdoor", "nude outdoors", "exposed breasts", "lingerie outdoors", "bikini outdoors", "mirror selfie"]) {
-  assert.throws(() => normalizeMediaClassification(metadata({}, { auto_desc: claim })), /without visible evidence/);
+// ---- tri-state: unsure is neither a fact nor an absence ---------------------------------------------------------------------
+const unsure = normalizeMediaClassification(obs({ nipples_visible: "unsure" }));
+assert.equal(unsure.status, "review", "an unresolved anatomy answer is held for review, never silently SFW");
+assert.equal(unsure.is_nude, false);
+assert.equal(unsure.explicitness, "suggestive", "unresolved is never classified as plainly safe");
+assert.match(unsure.visual_description, /Unclear: nipples\./);
+assert.ok(!unsure.tags.includes("topless"));
+
+// legacy boolean evidence is still understood
+const legacy = normalizeMediaClassification({
+  caption: "woman in a T-shirt at a desk", auto_desc: "desk portrait", tags: ["solo"],
+  visual_evidence: Object.fromEntries(VISUAL_EVIDENCE_KEYS.map((k) => [k, false])),
+});
+assert.equal(legacy.explicitness, "none");
+assert.equal(legacy.status, "ok");
+
+// ---- self-contradiction is rejected (the caller retries once) -------------------------------------------------------------------
+for (const claim of [
+  "A topless woman stands outdoors.", "She is nude outdoors.", "Her exposed breasts are visible.", "She wears lingerie outdoors.",
+  "She wears a bikini outdoors.", "She takes a mirror selfie.",
+]) {
+  assert.throws(() => normalizeMediaClassification(obs({}, { summary: claim })), /without visible evidence/, claim);
 }
-assert.throws(() => normalizeMediaClassification(metadata({ nipples_visible: "false" })), /boolean evidence/,
-  "the string false must never be coerced to true");
-assert.throws(() => normalizeMediaClassification(metadata({}, { visual_evidence: {} })), /boolean evidence/);
-assert.throws(() => normalizeMediaClassification(metadata({ full_nudity_visible: true })), /uncovered anatomy/);
-assert.throws(() => normalizeMediaClassification(metadata({}, { caption: "" })), /factual descriptions/);
+assert.throws(() => normalizeMediaClassification(obs({}, { short_label: "nude outdoor" })), /without visible evidence/);
+assert.throws(() => normalizeMediaClassification(obs({}, { details: "She is sliding her hand down." })), /motion or intent/);
+assert.throws(() => normalizeMediaClassification(obs({ full_nudity_visible: "yes" })), /uncovered anatomy/);
+assert.throws(() => normalizeMediaClassification(obs({ nipples_visible: "maybe" })), /boolean evidence/);
+assert.throws(() => normalizeMediaClassification(obs({}, { features: {} })), /boolean evidence/);
+assert.throws(() => normalizeMediaClassification(obs({}, { summary: "" })), /factual descriptions/);
 assert.throws(() => normalizeMediaClassification(null), /Invalid visual metadata/);
 
-// visual_description: parsed and saved onto the Caption, independent of caption/auto_desc.
-const withDescription = normalizeMediaClassification(metadata({}, {
-  visual_description: "She is standing facing the camera. No nipples, anus or vagina are visible. She wears a white shirt.",
-}));
-assert.equal(
-  withDescription.visual_description,
-  "She is standing facing the camera. No nipples, anus or vagina are visible. She wears a white shirt.",
-  "visual_description must be parsed and saved onto the Caption",
-);
-// Explicitly stating absence ("no nipples ... visible") must not trip the
-// caption/auto_desc unsupported-claim check: visual_description is validated
-// separately from that negation-blind regex.
-assert.equal(withDescription.caption, "woman in open white shirt outdoors, cleavage visible, looking at camera");
+// negation is not a claim: absent / covered / hidden clauses never trip the check
+assert.deepEqual(descriptionProblems("Her nipples are not visible. One hand covers her breasts, so no anatomy shows.", (obs().features as never)), []);
+assert.deepEqual(descriptionProblems("There is a mirror behind her.", obs({ mirror_reflection_visible: "yes" }).features as never), []);
 
-// Missing visual_description degrades to "" rather than throwing (analysis here is best-effort).
-const withoutDescription = normalizeMediaClassification(metadata());
-assert.equal(withoutDescription.visual_description, "");
+// ---- clip scope: absence can never be established from sampled frames ------------------------------------------------------------
+const clip = normalizeMediaClassification(obs({ nipples_visible: "no", genitals_visible: "no", anus_visible: "no" }, {
+  summary: "A woman in a red dress dances in a living room.", details: "In the sampled frames she wears a red dress.", short_label: "red dress living room",
+  tags: ["solo"], clothing: ["red dress"],
+}), { scope: "sampled_frames", frames: 5 });
+assert.equal(clip.facts.scope, "sampled_frames");
+assert.equal(clip.facts.frames, 5);
+assert.equal(clip.facts.features.nipples_visible, "unsure", "a clip is never recorded as 'no': frames cannot show what happens between them");
+assert.match(clip.visual_description, /^In the sampled frames:/);
+assert.match(clip.visual_description, /Unclear: nipples, genitals, anus, bare buttocks\.$/);
+assert.equal(clip.status, "ok", "an unresolved clip is expected, not an exception");
+assert.throws(() => normalizeMediaClassification(obs({}, { details: "Then she leaves the room later." }), { scope: "sampled_frames" }), /beyond the sampled frames/);
 
-// Owner hard rule: no em dash / en dash ever survives into a stored visual_description.
-const emDashed = normalizeMediaClassification(metadata({}, {
-  visual_description: "She is on the bed — legs together. No nipples, anus or vagina are visible.",
-}));
-assert.ok(!/[—–]/.test(emDashed.visual_description), `em dash must never survive into visual_description: ${JSON.stringify(emDashed.visual_description)}`);
-
-const enDashed = normalizeMediaClassification(metadata({}, {
-  visual_description: "She is on the bed – legs together – smiling. No nipples, anus or vagina are visible.",
-}));
-assert.ok(!/[—–]/.test(enDashed.visual_description), `en dash must never survive into visual_description: ${JSON.stringify(enDashed.visual_description)}`);
-
+// ---- owner style rules still hold -----------------------------------------------------------------------------------------------
+const emDashed = normalizeMediaClassification(obs({}, { details: "She is on the bed — legs together – smiling." }));
+assert.ok(!/[—–]/.test(emDashed.visual_description), emDashed.visual_description);
 for (const [input, expected] of [
   ["I'm on the bed — legs spread for you", "I'm on the bed, legs spread for you"],
   ["one – two – three", "one, two, three"],
-] as const) {
-  assert.equal(stripBannedDashes(input), expected, `stripBannedDashes(${JSON.stringify(input)})`);
-}
-
-// caption, auto_desc and tags are unaffected by adding visual_description:
-// same factual field, same meaning, same values as before this change.
-const unaffected = normalizeMediaClassification(metadata({}, { visual_description: "Nothing sexual is visible. No nipples, anus or vagina are visible." }));
-assert.equal(unaffected.caption, "woman in open white shirt outdoors, cleavage visible, looking at camera");
-assert.equal(unaffected.auto_desc, "open shirt outdoor");
-assert.deepEqual(unaffected.tags, ["outdoor", "solo"]);
-
-// Send-caption style (2026-09-27): the stored caption is an explicit first-person
-// send line, so the prompt must carry its rules and code must strip dashes and sales talk.
-assert.match(MEDIA_CLASSIFICATION_PROMPT, /SEND CAPTION/);
-assert.match(MEDIA_CLASSIFICATION_PROMPT, /first person/i);
-assert.match(MEDIA_CLASSIFICATION_PROMPT, /Never mention OnlyFans, prices, Stars/);
-assert.equal(cleanSendCaption("mmm just for you \u2014 look at my ass 😈"), "mmm just for you, look at my ass 😈");
+] as const) assert.equal(stripBannedDashes(input), expected);
+assert.equal(cleanSendCaption("mmm just for you — look at my ass 😈"), "mmm just for you, look at my ass 😈");
 assert.equal(cleanSendCaption("look at me bent over 😈 tap to unlock it baby. can you see everything?"), "look at me bent over 😈 can you see everything?");
-assert.equal(normalizeMediaClassification(metadata({}, { caption: "just for you \u2013 bent over, tap to unlock 😈" })).caption.includes("\u2013"), false);
 assert.doesNotMatch(cleanSendCaption("only 200 stars to see it. mmm look"), /stars/i);
 
-console.log("Media classification regression checks passed: cleavage, swimwear, true nudity, tags, contradictions, malformed evidence, visual_description parsing/dashes and caption stability.");
+// ---- status sentence is built by code in a fixed shape -----------------------------------------------------------------------------
+assert.equal(
+  anatomyStatus({ ...no, genitals_visible: "yes", anus_visible: "unsure" } as never),
+  "Visible: genitals. Not visible: nipples, bare buttocks. Unclear: anus.",
+);
+
+console.log("Media classification checks passed: tri-state observations, derived tags/flags, Kyla and Dan references, unresolved review, clip scope, contradiction rejection, negation safety, style rules.");

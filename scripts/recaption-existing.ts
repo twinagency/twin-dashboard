@@ -13,7 +13,6 @@ import { appendFileSync, existsSync, mkdirSync, readFileSync } from "node:fs";
 import path from "node:path";
 import { supabaseAdmin } from "../lib/supabase";
 import { orChat } from "../lib/openrouter";
-import { cleanSendCaption } from "../lib/media-classification";
 
 const args = process.argv.slice(2);
 const flag = (name: string) => args.includes(`--${name}`);
@@ -29,23 +28,10 @@ const DONE_FILE = path.join(STATE, "recaption-done.jsonl");
 const BACKUP_FILE = path.join(STATE, "recaption-backup.jsonl");
 const FAIL_FILE = path.join(STATE, "recaption-failed.jsonl");
 
-export const RECAPTION_SYSTEM = `You write one caption for a photo or video that a woman is sending to a fan.
-Write in first person as her. It is standalone, not a reply to anyone.
-Use 1 to 2 GRAPHIC, specific details taken ONLY from the facts given: what she is wearing, which body parts are showing, what her hands or a toy are doing, the angle. Raunchy and explicit.
-You may end with a teasing question about a visible detail. Use 1 to 3 fitting emojis. 2 to 3 short sentences, at most 45 words.
-Style reference: "mmm right now i'm lying here in my new lingerie set, i may or may not have a finger up my ass 😈 can you see my pussy lips from this angle?"
-Never claim anything the facts do not state. If the facts say a body part is not visible, do not describe it as visible.
-Never mention OnlyFans, prices, Stars, tipping, tapping, unlocking or paying. Never use em dashes or en dashes.
-Reply with ONLY the caption text.`;
-
-const SALES = /\b(only ?fans|onlyfans|stars?|price|pay|paid|tip|unlock\w*)\b/i;
+export { SEND_CAPTION_SYSTEM as RECAPTION_SYSTEM } from "../lib/send-caption";
+import { SEND_CAPTION_SYSTEM, acceptCaption as acceptSendCaption } from "../lib/send-caption";
 /** Guard a model output: returns a clean caption or null (null = skip the row, keep the old caption). */
-export function acceptCaption(raw: string): string | null {
-  const text = cleanSendCaption(raw.replace(/^["'\s]+|["'\s]+$/g, ""));
-  if (!text || text.length < 12 || SALES.test(text)) return null;
-  if (/visual_description|as an ai|i can't|i cannot/i.test(text)) return null;
-  return text;
-}
+export function acceptCaption(raw: string): string | null { return acceptSendCaption(raw); }
 
 type Row = { table: "photos" | "videos"; id: string; clone_id: string; caption: string | null; visual_description: string };
 
@@ -87,7 +73,7 @@ async function fetchRows(done: Set<string>, cloneId: string | null): Promise<Row
 async function processRow(row: Row, stats: Record<string, number>) {
   const key = `${row.table}:${row.id}`;
   try {
-    const raw = await withRetry(() => orChat({ model: MODEL, system: RECAPTION_SYSTEM, user: `Facts about this ${row.table === "videos" ? "video" : "photo"}: ${row.visual_description}`, temperature: 0.9 }));
+    const raw = await withRetry(() => orChat({ model: MODEL, system: SEND_CAPTION_SYSTEM, user: `Facts about this ${row.table === "videos" ? "video" : "photo"}: ${row.visual_description}`, temperature: 0.9 }));
     const caption = acceptCaption(raw);
     if (!caption) { stats.rejected++; appendFileSync(FAIL_FILE, JSON.stringify({ key, reason: "guard", raw }) + "\n"); return; }
     if (DRY) { stats.ok++; console.log(`  [dry] ${key}\n    facts: ${row.visual_description.slice(0, 160)}\n    new:   ${caption}`); return; }
