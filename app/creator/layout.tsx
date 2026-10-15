@@ -1,3 +1,4 @@
+import { getCreatorStudioStatus } from "@/lib/creator-studio";
 import { headers } from "next/headers";
 import CreatorWorkspaceShell from "@/components/CreatorWorkspaceShell";
 import CreatorDemoBanner from "@/components/CreatorDemoBanner";
@@ -22,8 +23,13 @@ export default async function CreatorLayout({ children }: { children: React.Reac
         getFleetClones(),
         cloneId ? getHeaderAllTimeStars(cloneId) : Promise.resolve(0),
       ]));
+  const studioBrand = flirtOnboardingOptional() && !demo ? "flirt" : null;
+  const studioStatus = studioBrand ? await withDashboardAccess(creator, () => getCreatorStudioStatus(cloneId, creator.applicationState?.label || "Draft / unfinished")) : null;
   return (
     <CreatorWorkspaceShell
+      studioBrand={studioBrand}
+      studioStatus={studioStatus}
+      contentHref={"/creator/onboarding?step=content"}
       agencyName={creator.name}
       creatorName={creator.creatorName}
       clones={clones}
@@ -38,4 +44,5 @@ export default async function CreatorLayout({ children }: { children: React.Reac
     </CreatorWorkspaceShell>
   );
 }
+
 

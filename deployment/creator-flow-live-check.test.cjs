@@ -114,7 +114,7 @@ async function mockedFlow(brand, uploadMode = false, missingGallery = false, wro
       }
       if (url.pathname === '/creator/info') return new Response(applications.get(owner.id).status === 'draft' ? 'Draft / unfinished' : 'Submitted');
       if (url.pathname === '/creator/ppvs' && brand === 'flirt') return new Response(null, { status: 307, headers: { Location: BRANDS.flirt.origin + '/creator' } });
-      if (['/creator', '/creator/ppvs', '/creator/edit'].includes(url.pathname)) return new Response('<a data-return-to-onboarding>Return to onboarding</a><a data-creator-content-access href="/creator/onboarding?step=content">My uploaded content</a><a data-creator-onboarding-access href="/creator/onboarding">Onboarding details</a>');
+      if (['/creator', '/creator/ppvs', '/creator/edit', '/creator/earnings', '/creator/help'].includes(url.pathname)) return new Response('<div data-creator-studio="' + brand + '"></div><a data-return-to-onboarding>Return to onboarding</a><a data-creator-content-access href="/creator/onboarding?step=content">My uploaded content</a><a data-creator-onboarding-access href="/creator/onboarding">Onboarding details</a>');
       if (url.pathname === '/creator/onboarding') return new Response('<a data-return-to-onboarding>Return to onboarding</a><section>Saved content</section><button data-upload-content>Upload content</button>');
       throw new Error('Unexpected application request');
     }
@@ -264,3 +264,4 @@ assert.equal(contentNavigationAvailable('data-upload-content data-combined-conte
 assert.equal(contentNavigationAvailable('data-upload-content data-combined-content-intake creator-content-files', true), false);
 assert.equal(contentNavigationAvailable('Saved content data-upload-content', true), true);
 assert.equal(contentNavigationAvailable('data-upload-content data-combined-content-intake', false), false);
+

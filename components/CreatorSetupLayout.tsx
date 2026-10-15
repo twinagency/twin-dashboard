@@ -4,7 +4,7 @@ import { useContext, type MouseEvent, type ReactNode } from "react";
 import { AppRouterContext } from "next/dist/shared/lib/app-router-context.shared-runtime";
 import { CreatorUploadActivity } from "./CreatorContentUploadProvider";
 import { navigateCreatorSetup } from "@/lib/creator-setup-navigation";
-import { ArrowUpRight, MoreHorizontal } from "lucide-react";
+import { ArrowUpRight, MoreHorizontal, Images, Heart, UserRound, LockKeyhole } from "lucide-react";
 import styles from "./CreatorSetupLayout.module.css";
 
 export const CREATOR_SETUP_NAVIGATE_EVENT = "creator-setup:navigate";
@@ -24,11 +24,17 @@ function navigate(event: MouseEvent<HTMLAnchorElement>, href: string, current = 
 export default function CreatorSetupLayout({ brand, logoSrc, activeSection, applicationStatus, children }: CreatorSetupLayoutProps) {
   const router = useContext(AppRouterContext);
   const brandName = brand === "moxy" ? "Moxy AI" : brand === "twin" ? "Twin" : "FLIRT";
-  return <div className={styles.root} data-creator-setup-brand={brand} data-creator-onboarding-brand={brand} data-creator-setup-section={activeSection}>
+  return <div className={styles.root} data-creator-setup-brand={brand} data-creator-onboarding-brand={brand} data-creator-setup-section={activeSection} data-studio-setup={brand !== "twin" ? "true" : undefined}>
+    {brand !== "twin" && <aside className={styles.editorial}>
+      <a href="/creator" onClick={event => navigate(event, "/creator", false, router?.push)} aria-label={`${brandName} creator home`}><img src={logoSrc} alt={brandName} /></a>
+      <div className={styles.editorialBody}><p className={styles.editorialEyebrow}>YOUR CREATOR ERA</p><h1>More connection.<br />More possibility.<br /><em>More you.</em></h1><p>Bring your content and personality together in a space that’s entirely yours.</p><ul><li><UserRound size={18} />An AI with your personality</li><li><Images size={18} />Your content, all in one place</li><li><Heart size={18} />A team here to help you grow</li></ul></div>
+      <p className={styles.editorialFooter}><LockKeyhole size={14} />Your content stays yours.</p>
+    </aside>}
     <header className={styles.header}>
       <div className={styles.headerInner}>
         {brand === "twin" ? <span className={styles.twinWordmark} aria-label="Twin Technologies"><strong>Twin</strong><span>TECHNOLOGIES</span></span> : <img src={logoSrc} alt={brandName} className={styles.logo} />}
-        <span className={styles.headerTitle}>Creator setup</span>
+        <span className={styles.headerTitle}>{brand === "twin" ? "Creator setup" : "Your creator studio"}</span>
+        {brand !== "twin" && <a className={styles.saveExit} href="/creator" onClick={event => navigate(event, "/creator", false, router?.push)}>Save &amp; exit <ArrowUpRight size={15} /></a>}
         <details className={styles.menu} onKeyDown={event => { if (event.key === "Escape") { event.currentTarget.removeAttribute("open"); event.currentTarget.querySelector("summary")?.focus(); } }}>
           <summary aria-label="Setup menu"><MoreHorizontal size={24} /></summary>
           <div className={styles.menuPanel}>
@@ -51,3 +57,4 @@ export default function CreatorSetupLayout({ brand, logoSrc, activeSection, appl
     </main>
   </div>;
 }
+
