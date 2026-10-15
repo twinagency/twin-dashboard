@@ -28,11 +28,12 @@ export default function CreatorStudioShell({ brand, creatorName, photoUrl, statu
   ];
   // A creator who leaves Home open sees server-side linking and review updates automatically.
   useEffect(() => {
+    if (pathname !== "/creator") return;
     const refresh = () => { if (document.visibilityState === "visible") router.refresh(); };
     const timer = window.setInterval(refresh, 60_000);
     window.addEventListener("focus", refresh);
     return () => { window.clearInterval(timer); window.removeEventListener("focus", refresh); };
-  }, [router]);
+  }, [router, pathname]);
   const label = items.find(item => item.href.split("?")[0] === pathname)?.label || "My studio";
   const navigation = (mobile = false) => items.map(({ href, label, icon: Icon }) => <Link key={label} href={href} aria-current={pathname === href.split("?")[0] ? "page" : undefined} className={styles.navLink} data-creator-content-access={label === "My Content" ? "true" : undefined} data-creator-onboarding-access={label === "My AI" ? "true" : undefined}><Icon size={19} aria-hidden="true" /><span>{mobile && label === "My Content" ? "Content" : label}</span></Link>);
   return <div className={styles.root} data-creator-studio={brand} data-creator-workspace-shell="true">
