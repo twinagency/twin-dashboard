@@ -1,6 +1,8 @@
 "use client";
 
 import Link from "next/link";
+import CreatorStudioShell from "./CreatorStudioShell";
+import type { CreatorStudioBrand, CreatorStudioStatus } from "@/lib/creator-studio-model";
 import type { ReactNode } from "react";
 import BlurProvider from "./BlurProvider";
 import CurrencyProvider from "./CurrencyProvider";
@@ -16,16 +18,12 @@ import { isMoxy } from "@/lib/agency-brand";
 
 type CreatorClone = { id: string; name: string; color: string; photoUrl?: string };
 
-/**
- * Permission adapter for the shared dashboard shell.
- *
- * All visible structure below is the same Sidebar/MobileMenu/TopBar/MainShell
- * composition used by Tether operators in app/layout.tsx. Creator-specific
- * behaviour is supplied by the explicit provider audience: six direct routes,
- * a locked identity chip, creator logout, read-only operational controls and no
- * internal assistant. There is deliberately no second navigation or top bar.
- */
+/** Brand-specific presentation inside the existing verified creator permission boundary.
+ * Other agency workspaces retain their shared operator shell. */
 export default function CreatorWorkspaceShell({
+  studioBrand,
+  studioStatus,
+  contentHref = "/creator/onboarding?step=content",
   agencyName,
   creatorName,
   clones,
@@ -36,6 +34,9 @@ export default function CreatorWorkspaceShell({
   usdPerStar,
   children,
 }: {
+  studioBrand?: CreatorStudioBrand | null;
+  studioStatus?: CreatorStudioStatus | null;
+  contentHref?: string;
   agencyName: string;
   creatorName: string;
   clones: CreatorClone[];
@@ -46,6 +47,13 @@ export default function CreatorWorkspaceShell({
   usdPerStar?: number;
   children: ReactNode;
 }) {
+  if (studioBrand && studioStatus) return (
+    <DashboardAccessProvider agencyName={agencyName} audience="creator">
+      <CurrencyProvider usdPerStar={usdPerStar}><BlurProvider>
+        <CreatorStudioShell brand={studioBrand} creatorName={creatorName} photoUrl={clones.find(clone => clone.id === activeCloneId)?.photoUrl} status={studioStatus} contentHref={contentHref}>{children}</CreatorStudioShell>
+      </BlurProvider></CurrencyProvider>
+    </DashboardAccessProvider>
+  );
   const cloneBeingCreated = !connected && onboardingFinished && isMoxy(agencyName);
   const wordmarkAgency = agencyName === "Twin" ? undefined : agencyName;
   return (
@@ -93,3 +101,4 @@ export default function CreatorWorkspaceShell({
     </DashboardAccessProvider>
   );
 }
+

@@ -125,7 +125,7 @@ async function mockedFlow(brand, uploadMode = false, missingGallery = false, wro
         return json({ url: env.SUPABASE_URL + '/storage/v1/object/sign/' + file.storage_path + '?token=private-do-not-log' });
       }
       if (url.pathname === '/creator/info') return new Response(applications.get(owner.id).status === 'draft' ? 'Draft / unfinished' : 'Submitted');
-      if (['/creator', '/creator/ppvs', '/creator/edit'].includes(url.pathname)) return new Response('<a data-return-to-onboarding>Return to onboarding</a><a data-creator-content-access href="/creator/onboarding?step=content">My uploaded content</a><a data-creator-onboarding-access href="/creator/onboarding">Onboarding details</a>');
+      if (['/creator', '/creator/ppvs', '/creator/edit', '/creator/earnings', '/creator/help'].includes(url.pathname)) return new Response('<div data-creator-studio="' + brand + '"></div><a data-return-to-onboarding>Return to onboarding</a><a data-creator-content-access href="/creator/onboarding?step=content">My uploaded content</a><a data-creator-onboarding-access href="/creator/onboarding">Onboarding details</a>');
       if (url.pathname === '/creator/onboarding') return new Response('<a data-return-to-onboarding>Return to onboarding</a><section>Saved content</section><button data-upload-content>Upload content</button>');
       throw new Error('Unexpected application request');
     }
@@ -269,4 +269,5 @@ async function mockedFlow(brand, uploadMode = false, missingGallery = false, wro
   assert.ok(!rendered.includes(env.SUPABASE_SERVICE_KEY) && !rendered.includes(env.DASHBOARD_PASSWORD) && !rendered.includes('normal-auth-token') && !rendered.includes('private-do-not-log'));
 }
 (async () => { await mockedFlow('flirt'); await mockedFlow('moxy'); await mockedFlow('flirt', true); await mockedFlow('moxy', true, true); await mockedFlow('moxy', true, true, true); await mockedFlow('flirt', false, false, false, true); for (const block of ['unknown','downstream','foreign']) await mockedFlow('flirt', false, false, false, false, block); console.log('Creator live runner: stdin invocation, runtime isolation, normal signup/invites, correct-query unsent recovery, upload persistence/private ranges, removal guards, explicit missing-gallery/logout-regression scope, interrupted/orphan manifest cleanup, unknown/reference guards, Storage-first cleanup and redacted output tests pass; no live requests made.'); })().catch(error => { console.error(error); process.exitCode = 1; });
+
 

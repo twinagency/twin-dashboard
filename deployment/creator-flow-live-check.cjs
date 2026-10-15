@@ -329,8 +329,9 @@ async function run(config, env = process.env) {
     const response = await app(resource, fixture); assert(response.status === 200, `Creator page failed: ${resource}`); return response.text();
   }
   async function savedContentNavigation(fixture) {
-    for (const route of ['/creator', '/creator/ppvs', '/creator/edit']) {
+    for (const route of ['/creator', '/creator/ppvs', '/creator/edit', '/creator/earnings', '/creator/help']) {
       const html = await page200(route, fixture);
+      assert(html.includes(`data-creator-studio="${config.brand}"`), 'Branded creator studio missing on ' + route);
       assert(html.includes('data-creator-content-access') && html.includes('href="/creator/onboarding?step=content"'), 'Saved-content navigation missing on ' + route);
       assert(html.includes('data-creator-onboarding-access'), 'Onboarding details navigation missing on ' + route);
       assert(!html.includes('Your onboarding is complete.'), 'Optional onboarding wrongly marked complete');
@@ -701,6 +702,7 @@ if (require.main === module || (process.argv[1] === '-' && module.id === '[stdin
   catch (error) { console.log(JSON.stringify({ passed: false, error: error instanceof CheckError ? error.message : 'Runner configuration invalid', credentials_logged: false })); process.exitCode = 1; }
   if (config && !process.exitCode) run(config).then(result => { if (!result.passed) process.exitCode = 1; }).catch(() => { console.log(JSON.stringify({ passed: false, error: 'Runner initialization failed; raw details suppressed', credentials_logged: false })); process.exitCode = 1; });
 }
+
 
 
 

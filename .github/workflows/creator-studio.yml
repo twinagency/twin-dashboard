@@ -1,0 +1,70 @@
+name: Creator studio verification
+on:
+  push:
+    branches: [main, flirt/independent-backend-2026-09-19, codex/creator-studio-moxy-20261015, codex/creator-studio-flirt-20261015]
+    paths:
+      - 'components/CreatorStudio*'
+      - 'components/CreatorWorkspaceShell.tsx'
+      - 'components/CreatorSetupLayout*'
+      - 'app/creator/**'
+      - 'lib/creator-studio*'
+      - 'lib/creator-dashboard-policy.ts'
+      - 'scripts/check-creator-studio-*'
+      - '.github/workflows/creator-studio.yml'
+permissions:
+  contents: read
+concurrency:
+  group: creator-studio-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: npm }
+      - run: npm ci
+      - name: Type check
+        run: npx tsc --noEmit
+      - name: Creator studio states and scoped metrics
+        run: node scripts/check-creator-studio-home.cjs
+      - name: Existing onboarding and permission checks
+        run: |
+          npm run test:creator-flow
+          if [ -f lib/flirt-onboarding.ts ]; then
+            node --import tsx scripts/check-creator-dashboard-privacy.ts
+            node --import tsx scripts/check-flirt-optional-onboarding.tsx
+          else
+            node --import tsx scripts/check-creator-workspace.ts
+          fi
+      - name: Install desktop and Safari browsers
+        run: |
+          sudo mkdir -p /tmp/ci-unused-chrome-feed
+          while IFS= read -r source; do
+            sudo mv "$source" "/tmp/ci-unused-chrome-feed/${source##*/}"
+          done < <(sudo grep -rl 'dl.google.com/linux/chrome' /etc/apt/sources.list.d 2>/dev/null || true)
+          npx playwright install --with-deps chromium webkit
+      - name: Onboarding buttons, uploads, folder links and saved galleries
+        env: { CREATOR_GALLERY_ENGINES: "chromium,webkit" }
+        run: |
+          node scripts/check-creator-action-browser.cjs
+          if [ -f lib/flirt-onboarding.ts ]; then
+            node scripts/check-creator-content-browser.mjs --flirt
+            node scripts/check-creator-content-gallery-browser.mjs --flirt
+          else
+            node scripts/check-creator-content-browser.mjs
+            node scripts/check-creator-content-gallery-browser.mjs
+          fi
+      - name: Desktop and mobile studio
+        run: node scripts/check-creator-studio-browser.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: creator-studio-verification
+          path: |
+            test-results/creator-studio
+            test-results/creator-content/*.png
+            test-results/creator-gallery/*.png
+          retention-days: 3
+          if-no-files-found: ignore

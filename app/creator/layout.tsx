@@ -1,3 +1,5 @@
+import { getCreatorStudioStatus } from "@/lib/creator-studio";
+import { isMoxy } from "@/lib/agency-brand";
 import { headers } from "next/headers";
 import CreatorWorkspaceShell from "@/components/CreatorWorkspaceShell";
 import { requireCreatorWorkspace } from "@/lib/creator-dashboard";
@@ -19,8 +21,13 @@ export default async function CreatorLayout({ children }: { children: React.Reac
         cloneId ? getHeaderAllTimeStars(cloneId) : Promise.resolve(0),
       ]));
   const { usdPerStar } = await withDashboardAccess(creator, () => getViewerTerms());
+  const studioBrand = isMoxy(creator.name) ? "moxy" : null;
+  const studioStatus = studioBrand ? await withDashboardAccess(creator, () => getCreatorStudioStatus(cloneId, creator.applicationState?.label || "Draft / unfinished")) : null;
   return (
     <CreatorWorkspaceShell
+      studioBrand={studioBrand}
+      studioStatus={studioStatus}
+      contentHref={cloneId ? "/creator/ppvs" : "/creator/onboarding?step=content"}
       agencyName={creator.name}
       creatorName={creator.creatorName}
       clones={clones}
@@ -35,3 +42,4 @@ export default async function CreatorLayout({ children }: { children: React.Reac
     </CreatorWorkspaceShell>
   );
 }
+
