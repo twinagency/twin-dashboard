@@ -14,6 +14,9 @@ async function main(){
     if(table==="clones")assert.ok(!url.searchParams.get("select")!.split(",").includes("bot_token"));
   }
   assert.match(scopeReadUrl(new URL(base+"users"),{...a,cloneIds:[]}).url.searchParams.get("and")!,/00000000-0000-0000-0000-000000000000/);
+  const receiptRead=scopeReadUrl(new URL(base+"star_transactions?select=id,receipt_namespace,receipt_status"),a).url;
+  assert.equal(receiptRead.searchParams.get("select"),"id,receipt_namespace,receipt_status");
+  assert.match(receiptRead.searchParams.get("and")!,new RegExp(a.cloneIds[0]));
   assert.match(scopedSelection("photo_bundles","*, photo_bundle_items(*)"),/photo_bundle_items\(id,bundle_id,storage_path,sort_order,visual_description\)/);
   for(const table of ["photos","videos","photo_bundle_items"]){assert.ok(scopedSelection(table,"*").split(",").includes("visual_description"), `${table} exposes the saved AI description`);}
   for(const select of ["*,clones(*)","secret:bot_token","unknown_column","*,users(*)"]){assert.throws(()=>scopedSelection("clones",select));}
@@ -26,6 +29,11 @@ async function main(){
   try{
     await withDashboardAccess(a,async()=>{
       const result=await dashboardFetch(base+"clones?select=*");assert.equal((await result.json())[0].bot_token,null);assert.ok(decodeURIComponent(seen[0].url).includes(a.cloneIds[0]));
+      const receiptResult=await dashboardFetch(base+"star_transactions?select=id,receipt_namespace,receipt_status");
+      assert.equal(receiptResult.status,200,"Receipt schema probe must remain readable for an agency");
+      const receiptRequest=new URL(seen.at(-1)!.url);
+      assert.equal(receiptRequest.searchParams.get("select"),"id,receipt_namespace,receipt_status");
+      assert.match(receiptRequest.searchParams.get("and")!,new RegExp(a.cloneIds[0]));
       for(const method of ["POST","PATCH","PUT","DELETE"]){const n=seen.length;assert.equal((await dashboardFetch(base+"users",{method})).status,403);assert.equal(seen.length,n);}
       for(const fn of AGENCY_ROLLUPS){await dashboardFetch(base+"rpc/"+fn,{method:"POST",body:JSON.stringify({p_clone:null,p_clones:b.cloneIds})});const req=seen.at(-1)!;assert.ok(req.url.endsWith("agency_"+fn));assert.deepEqual(JSON.parse(String(req.init?.body)).p_clones,a.cloneIds);}
       assert.equal((await dashboardFetch(base+"rpc/revenue_all_time_stars",{method:"POST",body:JSON.stringify({p_clone:b.cloneIds[0]})})).status,403);

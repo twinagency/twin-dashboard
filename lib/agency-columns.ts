@@ -402,7 +402,9 @@ export const AGENCY_COLUMNS: Record<string, readonly string[]> = {
     "feature",
     "media_type",
     "media_id",
-    "intent_attempt_id"
+    "intent_attempt_id",
+    "receipt_namespace",
+    "receipt_status"
   ],
   "system_logs": [
     "id",
