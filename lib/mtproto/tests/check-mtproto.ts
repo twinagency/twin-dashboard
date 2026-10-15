@@ -33,7 +33,8 @@ import { computeSafetySnapshots } from "../safety";
 import { AUTO_HALT_PREFIX } from "../types";
 import { liftFromData } from "../attribution";
 import { scrubDetail } from "../events";
-import { sanitizeFilters } from "../validate";
+import { sanitizeFilters, sanitizeMessageVariants } from "../validate";
+import { DEFAULT_REENGAGEMENT_VARIANTS as OPENERS, MAX_MESSAGE_VARIANTS as MAX_OPENERS } from "../types";
 import { __setMtDbForTest } from "../db";
 import { FakeDb } from "./fake-db";
 import { agencyDashboardPath } from "../../agency-policy";
@@ -1771,6 +1772,18 @@ check("N5 the live switch is wired end to end (source): lib gate, server action,
   for (const f of ["../../../components/mtproto/SettingsConnectionsTable.tsx", "../../../components/mtproto/ConnectionsTable.tsx", "../../../app/mtproto-campaign/connections/page.tsx"]) {
     assert(!sourceCode(f).includes("\u2014"), `${f} contains an em dash in UI copy`);
   }
+});
+
+// ── Safe-send openers (2026-10-15) ─────────────────────────────────────────
+check("all 30 default openers pass as one campaign", () => {
+  assert(OPENERS.length === 30 && MAX_OPENERS === 30, `openers ${OPENERS.length}, max ${MAX_OPENERS}`);
+  assert(sanitizeMessageVariants([...OPENERS]).length === 30, "30 openers should be accepted");
+  assert(OPENERS.every((t) => !/[\u2013\u2014]/.test(t)), "no dashes in fan-facing openers");
+});
+check("31 openers are refused", () => {
+  let threw = false;
+  try { sanitizeMessageVariants([...OPENERS, "Hey there, how are you ?"]); } catch { threw = true; }
+  assert(threw, "31 should be refused");
 });
 
 // ─────────────────────────────────────────────────────────────────────────────

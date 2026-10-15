@@ -128,8 +128,10 @@ export const DEFAULT_HOLDOUT_PCT = 0;
 export const DEFAULT_DAILY_CAP = 30;
 export const HARD_MAX_DAILY_CAP = 2400;
 
-export const MAX_MESSAGE_VARIANTS = 10;
+/** Mirrors the reengage_runs_message_variants_count CHECK (migration 20261015120000). */
+export const MAX_MESSAGE_VARIANTS = 30;
 export const MAX_REENGAGEMENT_MESSAGE_CHARS = 280;
+/** Mirrors twin-userbot/src/compose.ts DEFAULT_REENGAGEMENT_VARIANTS. */
 export const DEFAULT_REENGAGEMENT_VARIANTS = [
   "Hey how are you sweetie ?",
   "Hey sweetie how have you been ?",
@@ -141,6 +143,26 @@ export const DEFAULT_REENGAGEMENT_VARIANTS = [
   "Heyy, how have you been lately ?",
   "Hi babe, how are things with you ?",
   "Hey you, how's your day going ?",
+  "Hey stranger, how are you doing ?",
+  "Hii how's your week been ?",
+  "Hey babe, been a while, how are you ?",
+  "Heyy what are you up to ?",
+  "Hey you, how's life treating you ?",
+  "Hi sweetie, how's your week going ?",
+  "Hey hun, how have things been ?",
+  "Heyy how's everything with you ?",
+  "Hey babe, what's new with you ?",
+  "Hi you, how are you doing lately ?",
+  "Hey sweetie, hope you're doing good, how are you ?",
+  "Hey hun, how's your day been ?",
+  "Hi babe, what have you been up to lately ?",
+  "Hey how's it going sweetie ?",
+  "Heyy how are things babe ?",
+  "Hey you, what's been happening ?",
+  "Hi hun, how have you been doing ?",
+  "Hey sweetie, how's everything going with you ?",
+  "Hey babe, how are you feeling today ?",
+  "Hii how have you been babe ?",
 ] as const;
 
 // Dashboard-side bounds: allow 0% to disable hold-out entirely.

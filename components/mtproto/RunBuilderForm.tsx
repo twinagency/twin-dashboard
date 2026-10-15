@@ -81,7 +81,9 @@ export default function RunBuilderForm({ creators }: { creators: CreatorLite[] }
   const [audienceChoice, setAudienceChoice] = useState<AudienceChoice>("silent");
   const [advancedSegment, setAdvancedSegment] = useState<RunSegment>("top_spenders");
   const [includeLegacy, setIncludeLegacy] = useState(false);
-  const [variantCount, setVariantCount] = useState(1);
+  // Start with every approved default opener so a campaign varies its text
+  // unless the operator clears lines on purpose.
+  const [variantCount, setVariantCount] = useState<number>(DEFAULT_REENGAGEMENT_VARIANTS.length);
 
   const segment: RunSegment = audienceChoice === "advanced" ? advancedSegment : "all_silent";
 
