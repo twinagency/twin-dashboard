@@ -10,6 +10,7 @@ on:
       - 'lib/creator-studio*'
       - 'lib/creator-dashboard-policy.ts'
       - 'scripts/check-creator-studio-*'
+      - 'scripts/check-creator-ui.mjs'
       - '.github/workflows/creator-studio.yml'
 permissions:
   contents: read
@@ -56,6 +57,10 @@ jobs:
             node scripts/check-creator-content-browser.mjs
             node scripts/check-creator-content-gallery-browser.mjs
           fi
+      - name: Retained creator workspace and branding
+        run: |
+          node scripts/check-creator-ui.mjs
+          node scripts/check-creator-branding.mjs
       - name: Desktop and mobile studio
         run: node scripts/check-creator-studio-browser.mjs
       - uses: actions/upload-artifact@v4

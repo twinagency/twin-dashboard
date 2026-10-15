@@ -118,6 +118,7 @@ const bundle = await build({
   stdin: { contents: fixture, resolveDir: root, sourcefile: 'creator-ui-fixture.tsx', loader: 'tsx' },
   bundle: true,
   write: false,
+  outfile: path.join(out, 'bundle.js'),
   format: 'iife',
   platform: 'browser',
   jsx: 'automatic',
@@ -141,12 +142,16 @@ const bundle = await build({
   }],
 });
 const css = await postcss([tailwind()]).process('@import "./app/globals.css";\n@import "./app/jess-kate-theme.css";\n@import "./app/creator-workspace.css";', { from: path.join(root, 'creator-verification.css') });
+const javascript = bundle.outputFiles.find(file => file.path.endsWith('.js'))?.text;
+assert.ok(javascript, 'Creator workspace JavaScript was not built');
+const moduleCss = bundle.outputFiles.find(file => file.path.endsWith('.css'))?.text ?? '';
+const styles = `${css.css}\n${moduleCss}`;
 const html = '<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/styles.css"><style>body{margin:0;font-family:Arial,sans-serif}html{--font-sans:Arial;--font-display:Arial}</style></head><body><div id="root"></div><script src="/bundle.js"></script></body></html>';
 const requests = [];
 const server = createServer((req, res) => {
   const url = new URL(req.url, 'http://localhost');
-  if (url.pathname === '/styles.css') { res.setHeader('Content-Type', 'text/css'); return res.end(css.css); }
-  if (url.pathname === '/bundle.js') { res.setHeader('Content-Type', 'application/javascript'); return res.end(bundle.outputFiles[0].text); }
+  if (url.pathname === '/styles.css') { res.setHeader('Content-Type', 'text/css'); return res.end(styles); }
+  if (url.pathname === '/bundle.js') { res.setHeader('Content-Type', 'application/javascript'); return res.end(javascript); }
   if (url.pathname.startsWith('/api/') || url.pathname === '/creator-auth/identity') {
     res.setHeader('Content-Type', 'application/json');
     requests.push({ path: url.pathname, search: url.search, method: req.method });
@@ -382,3 +387,4 @@ try {
   await browser.close();
   await new Promise(resolve => server.close(resolve));
 }
+
