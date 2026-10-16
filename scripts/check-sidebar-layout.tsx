@@ -233,7 +233,7 @@ for (const mobile of [false, true]) {
     "Agency Access": ["/agency-admin", "/agency/creators"],
     "Core Intelligence": ["/jarvis", "/ai-models"],
     Settings: ["/settings", "/admin/earnings-split"],
-    More: ["/storage", "/logs", "/api-access", "/sim", "/miniapp-rollout", "/mtproto-campaign", "/tracker", "/info", "/tsocial", "/admin/view-as"],
+    More: ["/storage", "/logs", "/api-access", "/sim", "/bot-v2/settings", "/miniapp-rollout", "/mtproto-campaign", "/tracker", "/info", "/tsocial", "/admin/view-as"],
   })) for (const href of hrefs) assert.ok(Array.from(group(name).querySelectorAll("a")).some((a: any) => a.getAttribute("href") === href), `${href} belongs to ${name}`);
   const hrefs = Array.from(document.querySelectorAll('nav[aria-label="Main navigation"] a')).map((a: any) => a.getAttribute("href"));
   assert.equal(new Set(hrefs).size, hrefs.length, "Each destination appears once");

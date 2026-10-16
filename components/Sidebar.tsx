@@ -195,6 +195,8 @@ const ADMIN_LINKS: NavLink[] = [
   { kind: "route", label: "AI Models", href: "/ai-models", icon: "Sparkle", color: "pink" },
   { kind: "route", label: "Earnings split", href: "/admin/earnings-split", icon: "Dollar", color: "orange" },
   { kind: "route", label: "View as", href: "/admin/view-as", icon: "Users", color: "gray" },
+  // V2 prompt viewer: each girl's rendered prompt with injected variables tagged, via the /bot-v2 proxy.
+  { kind: "route", label: "Prompt Viewer", href: "/bot-v2/settings", icon: "Code", color: "blue" },
 ];
 
 // Internal Twin ordering is shared by the desktop sidebar and mobile menu.
@@ -224,7 +226,7 @@ const TWIN_ADMIN_GROUPS: AdminGroup[] = [
   { label: "Core Intelligence", icon: "Sparkle", href: "/jarvis", children: ["/ai-models"] },
   { label: "Settings", icon: "Settings", href: "/settings", children: ["/admin/earnings-split"] },
 ];
-const TWIN_ADMIN_MORE = ["/storage", "/logs", "/api-access", "/sim", "/miniapp-rollout", "/mtproto-campaign", "/tracker", "/info", "/tsocial", "/admin/view-as"];
+const TWIN_ADMIN_MORE = ["/storage", "/logs", "/api-access", "/sim", "/bot-v2/settings", "/miniapp-rollout", "/mtproto-campaign", "/tracker", "/info", "/tsocial", "/admin/view-as"];
 const presentationLink = (key: string): NavLink => key === "/clones/new"
   ? { kind: "route", href: key, label: "Create new creator", icon: "Plus", color: "neutral" }
   : TWIN_ADMIN_LINKS.find(link => adminLinkKey(link) === key)!;
