@@ -137,6 +137,35 @@ check("P12 the bot token never leaves lib/posting.ts in a response or log", () =
   assert(!w.includes("token"), "write route must not touch a token");
 });
 
+check("P14 catalogue posts can only use the same girl's files, media route is read only", () => {
+  const s = src("../lib/posting.ts");
+  const fn = s.slice(s.indexOf("export async function mediaFromCatalogue"));
+  assert(fn.includes("row.clone_id !== cloneId"), "mediaFromCatalogue must refuse another girl's row");
+  const m = src("../app/api/admin/v1/posting/media/route.ts");
+  assert(m.includes("withAdmin") && m.includes("export const GET") && !m.includes("export const POST"), "media GET only");
+});
+
+check("P15 the Posting page is operator only: every action guarded, route not open to agencies", () => {
+  const a = src("../app/posting/actions.ts");
+  const exported = [...a.matchAll(/export async function (\w+)/g)].map((m) => m[1]);
+  assert(exported.length >= 5, "expected the posting actions");
+  for (const name of exported) {
+    const body = a.slice(a.indexOf(`export async function ${name}`));
+    assert(body.slice(0, 400).includes(`guarded("${name}"`), `${name} must go through guarded(), which calls guardDashboardAction`);
+  }
+  assert(a.includes("guardDashboardAction(`app/posting/actions.ts#${name}`"), "guard must name this file");
+  const policy = src("../lib/agency-policy.ts");
+  assert(!policy.includes('"/posting"'), "agencyDashboardPath must not list /posting");
+  const mgmt = src("../lib/agency-management.ts");
+  assert(!mgmt.includes("app/posting/actions.ts"), "the agency action guard must not allow posting actions");
+});
+
+check("P16 brand channel bots come from app_settings or env, never from a request", () => {
+  const s = src("../lib/posting.ts");
+  const fn = s.slice(s.indexOf("async function brandBot"), s.indexOf("async function probeBrand"));
+  assert(fn.includes("BRAND_CHANNELS.find") && fn.includes('from("app_settings")'), "brandBot must resolve from the fixed list");
+});
+
 check("P13 the recent-posts route is read only and gated", () => {
   const r = src("../app/api/admin/v1/posting/recent/route.ts");
   assert(r.includes("withAdmin") && r.includes("export const GET") && !r.includes("export const POST"), "recent GET only");

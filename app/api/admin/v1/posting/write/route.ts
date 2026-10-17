@@ -6,6 +6,7 @@ import {
   postToChannel,
   deleteChannelPost,
   mediaFromUrl,
+  mediaFromCatalogue,
   PostingUnavailableError,
   TelegramApiError,
   type MediaInput,
@@ -34,6 +35,9 @@ export const maxDuration = 300;
 // Body: multipart/form-data (to upload files as `file`, repeatable) or JSON
 // (media by `mediaUrl` / `mediaUrls`, https only).
 //
+//   Any action that takes media also takes photoId / videoId (and photoIds /
+//   videoIds) from her own content bucket, see GET /posting/media.
+//
 //   action=story          clone, file|mediaUrl, [mediaType photo|video],
 //                         [caption], [activePeriod 6h|12h|24h|48h, default 24h],
 //                         [linkUrl] (tappable pill near the bottom),
@@ -45,6 +49,8 @@ export const maxDuration = 300;
 //                         [buttons JSON [{text,url}] or rows], [pin],
 //                         [starPrice 1-10000 → paid media], [silent],
 //                         [protectContent], [dryRun]
+//                         brand=tsocial posts to @tsocialchannel with
+//                         @TSocialAppBot instead (any girl's photoId works)
 //   action=delete_channel_post  clone and/or channel, messageIds (JSON array or comma list)
 //
 // 400 bad input, 404 unknown clone, 409 target not available right now (the
@@ -67,12 +73,19 @@ async function readBody(req: Request): Promise<Body> {
   };
 }
 
-async function readMedia(b: Body): Promise<MediaInput[]> {
+async function readMedia(b: Body, cloneId: string | null): Promise<MediaInput[]> {
   const files = b.getAll("file").filter((f): f is File => f instanceof File && f.size > 0);
   const out: MediaInput[] = [];
   for (const f of files) out.push({ bytes: Buffer.from(await f.arrayBuffer()), mime: f.type, filename: f.name });
   const urls = [...b.getAll("mediaUrl"), ...b.getAll("mediaUrls").flat()].map(String).filter(Boolean);
   for (const u of urls) out.push(await mediaFromUrl(u));
+  // From her own content bucket (GET /posting/media lists the ids).
+  const ids = [
+    ...[...b.getAll("photoId"), ...b.getAll("photoIds").flat()].map((id) => ["photo", String(id)] as const),
+    ...[...b.getAll("videoId"), ...b.getAll("videoIds").flat()].map((id) => ["video", String(id)] as const),
+  ].filter(([, id]) => id);
+  if (ids.length && !cloneId) throw new PostingInputError("photoId / videoId need clone");
+  for (const [kind, id] of ids) out.push(await mediaFromCatalogue(cloneId as string, kind, id));
   return out;
 }
 
@@ -111,7 +124,7 @@ export const POST = withAdmin(async (req) => {
     switch (action) {
       case "story": {
         const cloneId = (await cloneIdOf(b, true)) as string;
-        const media = await readMedia(b);
+        const media = await readMedia(b, cloneId);
         if (media.length !== 1) return jsonError("a story takes exactly one file or mediaUrl", 400);
         const linkRaw = b.get("linkUrl");
         const result = await postStory({
@@ -144,8 +157,9 @@ export const POST = withAdmin(async (req) => {
         const result = await postToChannel({
           cloneId,
           channel: normalizeChannelRef(b.get("channel")),
+          brand: b.get("brand") ? String(b.get("brand")) : null,
           text: String(b.get("text") ?? b.get("caption") ?? ""),
-          media: await readMedia(b),
+          media: await readMedia(b, cloneId),
           mediaType: b.get("mediaType"),
           buttons: parseButtons(b.get("buttons")),
           pin: parseBool(b.get("pin")),
@@ -160,7 +174,12 @@ export const POST = withAdmin(async (req) => {
 
       case "delete_channel_post": {
         const cloneId = await cloneIdOf(b, false);
-        const result = await deleteChannelPost(cloneId, normalizeChannelRef(b.get("channel")), numberList(b.get("messageIds"), "messageIds"));
+        const result = await deleteChannelPost(
+          cloneId,
+          normalizeChannelRef(b.get("channel")),
+          numberList(b.get("messageIds"), "messageIds"),
+          b.get("brand") ? String(b.get("brand")) : null,
+        );
         logAdminWrite("posting:delete_channel_post", cloneId, result);
         return ok({ action, ...result });
       }

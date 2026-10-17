@@ -133,6 +133,10 @@ const MORE_LINKS: NavLink[] = [
   // Deliberately absent from lib/agency-policy.ts agencyDashboardPath(), so
   // this row and the route itself stay invisible/403 to every agency session.
   { kind: "route", label: "MTProto Campaign", href: "/mtproto-campaign", icon: "Bell", color: "pink" },
+  // Posting (2026-10-17): stories + channel posts from her content bucket.
+  // Fleet picker of its own, so not gated on a clone. Operator only: absent
+  // from agencyDashboardPath(), and app/posting/actions.ts guards every action.
+  { kind: "route", label: "Posting", href: "/posting", icon: "Media", color: "pink" },
   { kind: "tab", label: "Edit", tab: "identity", icon: "Dials", color: "blue" },
   { kind: "route", label: "Tracker", href: "/tracker", icon: "ListChecks", color: "orange" },
   { kind: "route", label: "Info", href: "/info", icon: "Info", color: "neutral" },
@@ -220,7 +224,7 @@ const TWIN_ADMIN_GROUPS: AdminGroup[] = [
   { label: "Creators", icon: "Clones", href: "/clones", children: ["identity", "/agency-admin/creator-codes", "/agency/creator-invites", "/clones/new"] },
   { label: "Live Telegram", icon: "Inbox", href: "/users" },
   { label: "Content", icon: "Media", href: "/media", children: ["ppvs", "/business"] },
-  { label: "Automations", icon: "Flows", children: ["/flows", "/sequences"] },
+  { label: "Automations", icon: "Flows", children: ["/posting", "/flows", "/sequences"] },
   { label: "Performance", icon: "Revenue", children: ["/sales-health", "/catalogue-funnel"] },
   { label: "Agency Access", icon: "Users", href: "/agency-admin", children: ["/agency/creators"] },
   { label: "Core Intelligence", icon: "Sparkle", href: "/jarvis", children: ["/ai-models"] },

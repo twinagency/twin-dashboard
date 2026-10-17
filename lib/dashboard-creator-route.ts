@@ -16,7 +16,7 @@ const WORKSPACE_PAGE_LABELS: Record<string, string> = {
   "/sim": "Simulator", "/bot-v2": "Bot V2", "/miniapp-rollout": "Mini App Rollout",
   "/mtproto-campaign": "MTProto Campaigns", "/mtproto-campaign/new": "New Campaign",
   "/mtproto-campaign/connections": "Campaign Connections", "/mtproto-campaign/media": "Campaign Media",
-  "/mtproto-campaign/settings": "Campaign Settings", "/tracker": "Tracker",
+  "/mtproto-campaign/settings": "Campaign Settings", "/tracker": "Tracker", "/posting": "Posting",
   "/info": "Connection Details", "/tsocial": "Telegram Social", "/admin/view-as": "View As",
   "/analytics": "Analytics", "/media": "Content", "/drip": "Drip sequences",
   "/messages": "Messages", "/crm": "CRM", "/ai": "AI Assistant",

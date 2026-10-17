@@ -175,11 +175,54 @@ export type ChannelTarget = {
   canPin: boolean;
   reason: string | null;
 };
+export type BrandTarget = {
+  key: string;
+  label: string;
+  channel: string;
+  available: boolean;
+  canPin: boolean;
+  reason: string | null;
+};
 export type Targets = {
   checkedAt: string;
   stories: { available: StoryTarget[]; unavailable: StoryTarget[] };
   channels: { available: ChannelTarget[]; unavailable: ChannelTarget[] };
+  brands: BrandTarget[];
 };
+
+// ── brand channels ───────────────────────────────────────────────────────────
+// Fleet channels that are not any one girl's, posted by their own bot. The
+// token lives in app_settings (like the other service keys, excluded from
+// every allowlist) so no server env change is needed; the env var is a
+// fallback. Any girl's content can be posted here.
+export const BRAND_CHANNELS = [
+  { key: "tsocial", label: "T-Social channel", channel: "@tsocialchannel", setting: "tsocial_bot_token", env: "TSOCIAL_BOT_TOKEN" },
+] as const;
+
+async function brandBot(key: string): Promise<{ bot: CloneBot; channel: string; label: string }> {
+  const def = BRAND_CHANNELS.find((b) => b.key === key);
+  if (!def) throw new PostingInputError(`unknown brand channel "${key}"`);
+  const { data } = await supabaseAdmin.from("app_settings").select("value").eq("key", def.setting).maybeSingle();
+  const raw = (data as { value: unknown } | null)?.value;
+  const token = (typeof raw === "string" && raw.trim()) || process.env[def.env] || "";
+  if (!token) throw new PostingUnavailableError(`${def.label}: bot token is not set (app_settings.${def.setting})`);
+  return {
+    bot: { id: "", slug: def.key, name: def.label, status: "active", token, botId: botIdFromToken(token) },
+    channel: def.channel,
+    label: def.label,
+  };
+}
+
+async function probeBrand(def: (typeof BRAND_CHANNELS)[number]): Promise<BrandTarget> {
+  const base = { key: def.key, label: def.label, channel: def.channel };
+  try {
+    const { bot } = await brandBot(def.key);
+    const rights = await channelRights(bot, def.channel);
+    return { ...base, available: rights.canPost, canPin: rights.canPin, reason: rights.reason };
+  } catch (e) {
+    return { ...base, available: false, canPin: false, reason: e instanceof Error ? e.message : String(e) };
+  }
+}
 
 async function probeClone(c: CloneBot): Promise<{ story: StoryTarget; channel: ChannelTarget }> {
   const base = { clone: c.slug, name: c.name };
@@ -233,7 +276,7 @@ const CACHE_MS = 60_000;
 export async function listTargets(opts: { fresh?: boolean } = {}): Promise<Targets> {
   if (!opts.fresh && cache && Date.now() - cache.at < CACHE_MS) return cache.value;
   const bots = await cloneBots();
-  const probes = await mapLimit(bots, 6, probeClone);
+  const [probes, brands] = await Promise.all([mapLimit(bots, 6, probeClone), Promise.all(BRAND_CHANNELS.map(probeBrand))]);
   const value: Targets = {
     checkedAt: new Date().toISOString(),
     stories: {
@@ -244,6 +287,7 @@ export async function listTargets(opts: { fresh?: boolean } = {}): Promise<Targe
       available: probes.map((p) => p.channel).filter((s) => s.available),
       unavailable: probes.map((p) => p.channel).filter((s) => !s.available),
     },
+    brands,
   };
   cache = { at: Date.now(), value };
   return value;
@@ -330,7 +374,15 @@ export async function deleteStory(cloneId: string, storyId: number) {
 // Which bot posts and where: her own bot, into her profile channel unless a
 // channel is named. A channel named without a clone is matched against the
 // fleet's discovered channels, so "@mrscallace" alone is enough.
-async function channelTarget(cloneId: string | null, channel: string | number | null): Promise<{ c: CloneBot; ch: ChannelInfo }> {
+async function channelTarget(
+  cloneId: string | null,
+  channel: string | number | null,
+  brand: string | null = null,
+): Promise<{ c: CloneBot; ch: ChannelInfo }> {
+  if (brand) {
+    const b = await brandBot(brand);
+    return { c: b.bot, ch: await resolveChat(b.bot, b.channel) };
+  }
   if (cloneId) {
     const c = await cloneBot(cloneId);
     if (channel !== null) return { c, ch: await resolveChat(c, channel) };
@@ -355,6 +407,8 @@ async function channelTarget(cloneId: string | null, channel: string | number | 
 export type ChannelRequest = {
   cloneId: string | null;
   channel: string | number | null;
+  // A BRAND_CHANNELS key: post there with that bot instead of a girl's own.
+  brand?: string | null;
   text: string;
   media: MediaInput[];
   mediaType?: unknown;
@@ -371,7 +425,7 @@ function postLink(ch: ChannelInfo, messageId: number): string | null {
 }
 
 export async function postToChannel(r: ChannelRequest) {
-  const { c, ch } = await channelTarget(r.cloneId, r.channel);
+  const { c, ch } = await channelTarget(r.cloneId, r.channel, r.brand ?? null);
   const rights = await channelRights(c, ch.chatId);
   if (!rights.canPost) throw new PostingUnavailableError(`${ch.username ? "@" + ch.username : ch.chatId}: ${rights.reason}`);
 
@@ -386,6 +440,7 @@ export async function postToChannel(r: ChannelRequest) {
 
   const summary = {
     clone: c.slug,
+    brand: r.brand ?? null,
     channel: ch.username ? `@${ch.username}` : null,
     chatId: ch.chatId,
     method: plan.method,
@@ -449,10 +504,10 @@ export async function postToChannel(r: ChannelRequest) {
   return { dryRun: false, posted: { ...summary, messageIds, pinned, link: postLink(ch, messageIds[0]) }, warnings };
 }
 
-export async function deleteChannelPost(cloneId: string | null, channel: string | number | null, messageIds: number[]) {
-  const { c, ch } = await channelTarget(cloneId, channel);
+export async function deleteChannelPost(cloneId: string | null, channel: string | number | null, messageIds: number[], brand: string | null = null) {
+  const { c, ch } = await channelTarget(cloneId, channel, brand);
   await tg(c.token, "deleteMessages", { chat_id: ch.chatId, message_ids: messageIds });
-  return { clone: c.slug, channel: ch.username ? `@${ch.username}` : ch.chatId, deletedMessageIds: messageIds };
+  return { clone: c.slug, brand, channel: ch.username ? `@${ch.username}` : ch.chatId, deletedMessageIds: messageIds };
 }
 
 // ── what was posted recently ─────────────────────────────────────────────────
@@ -467,6 +522,7 @@ export type RecentPost = {
   kind: "story" | "channel_post";
   via: "api" | "dashboard";
   clone: string | null;
+  brand: string | null;
   channel: string | null;
   storyId: number | null;
   messageIds: number[] | null;
@@ -514,15 +570,17 @@ export async function listRecentPosts(opts: { cloneId?: string | null; days: num
       const clone = slugOf.get(r.clone_id ?? "") ?? null;
       const storyId = Number(d.result?.id) || null;
       out.push({
-        at: r.ts, kind: "story", via: "dashboard", clone, channel: null, storyId, messageIds: null, link: null,
-        mediaType: null, files: null, text: null, starPrice: null, expiresAt: null, live: null,
+        at: r.ts, kind: "story", via: "dashboard", clone, brand: null, channel: null, storyId, messageIds: null, link: null,
+        // The dashboard button logs no lifetime; 48h is the longest Telegram allows.
+        mediaType: null, files: null, text: null, starPrice: null, expiresAt: null,
+        live: now - Date.parse(r.ts) > 172800_000 ? false : null,
         deleted: deletedStories.has(`${clone}:${storyId}`),
       });
     } else if (r.message.endsWith("posting:story")) {
       const exp = d.activePeriod ? new Date(Date.parse(r.ts) + d.activePeriod * 1000) : null;
       const deleted = deletedStories.has(`${d.clone}:${d.storyId}`);
       out.push({
-        at: r.ts, kind: "story", via: "api", clone: d.clone ?? null, channel: null, storyId: d.storyId ?? null,
+        at: r.ts, kind: "story", via: d.via === "dashboard" ? "dashboard" : "api", clone: d.clone ?? null, brand: null, channel: null, storyId: d.storyId ?? null,
         messageIds: null, link: d.linkUrl ?? null, mediaType: d.mediaType ?? null, files: d.file ? [d.file] : null,
         text: d.caption || null, starPrice: null, expiresAt: exp?.toISOString() ?? null,
         live: exp ? !deleted && exp.getTime() > now : null, deleted,
@@ -530,7 +588,7 @@ export async function listRecentPosts(opts: { cloneId?: string | null; days: num
     } else if (r.message.endsWith("posting:channel_post")) {
       const ids: number[] = d.messageIds ?? [];
       out.push({
-        at: r.ts, kind: "channel_post", via: "api", clone: d.clone ?? null, channel: d.channel ?? null, storyId: null,
+        at: r.ts, kind: "channel_post", via: d.via === "dashboard" ? "dashboard" : "api", clone: d.clone ?? null, brand: d.brand ?? null, channel: d.channel ?? null, storyId: null,
         messageIds: ids, link: d.link ?? null, mediaType: (d.media ?? []).join(",") || "text", files: d.files ?? null,
         text: d.text || null, starPrice: d.starPrice ?? null, expiresAt: null, live: null,
         deleted: ids.length > 0 && ids.every((id) => deletedMsgs.has(`${d.channel}:${id}`)),
@@ -539,4 +597,70 @@ export async function listRecentPosts(opts: { cloneId?: string | null; days: num
     if (out.length >= opts.limit) break;
   }
   return out;
+}
+
+// ── her content bucket ───────────────────────────────────────────────────────
+// Browse a girl's catalogue (photos / videos rows + the `media` storage
+// bucket) and post straight from it, so nobody has to download and re-upload.
+// The nudity flags on these rows are unreliable (many "none" rows are nude):
+// they are shown for reference only, a human must look before posting public.
+export type CatalogueItem = {
+  id: string;
+  kind: MediaKind;
+  caption: string | null;
+  name: string | null;
+  tags: string[];
+  explicitness: string | null;
+  isFree: boolean;
+  starValue: number | null;
+  createdAt: string;
+  url: string | null;
+};
+
+export async function listCatalogue(opts: { cloneId: string; kind: MediaKind; q?: string; offset: number; limit: number }): Promise<{ items: CatalogueItem[]; total: number }> {
+  const table = opts.kind === "photo" ? "photos" : "videos";
+  const cols = opts.kind === "photo"
+    ? "id,storage_path,caption,image_name,auto_desc,tags,explicitness,is_free,star_value,created_at"
+    : "id,storage_path,caption,auto_desc,tags,explicitness,is_free,star_value,created_at";
+  let q = supabaseAdmin.from(table).select(cols, { count: "exact" }).eq("clone_id", opts.cloneId).not("storage_path", "is", null);
+  const term = (opts.q ?? "").trim().replace(/[%,()]/g, " ");
+  if (term) q = q.or(`caption.ilike.%${term}%,auto_desc.ilike.%${term}%`);
+  const { data, error, count } = await q.order("created_at", { ascending: false }).range(opts.offset, opts.offset + opts.limit - 1);
+  if (error) throw new Error(`could not read ${table}: ${error.message}`);
+  const rows = (data ?? []) as any[];
+  const signed = rows.length
+    ? await supabaseAdmin.storage.from("media").createSignedUrls(rows.map((r) => r.storage_path), 3600)
+    : { data: [] as { path: string | null; signedUrl: string }[] };
+  const urlFor = new Map((signed.data ?? []).map((s) => [s.path, s.signedUrl]));
+  return {
+    total: count ?? rows.length,
+    items: rows.map((r) => ({
+      id: r.id,
+      kind: opts.kind,
+      caption: r.caption ?? null,
+      name: r.image_name ?? r.auto_desc ?? null,
+      tags: Array.isArray(r.tags) ? r.tags : [],
+      explicitness: r.explicitness ?? null,
+      isFree: Boolean(r.is_free),
+      starValue: r.star_value === null || r.star_value === undefined ? null : Number(r.star_value),
+      createdAt: r.created_at,
+      url: urlFor.get(r.storage_path) ?? null,
+    })),
+  };
+}
+
+// One catalogue item as upload bytes. The row must belong to this clone, so
+// one girl's post can never carry another girl's file.
+export async function mediaFromCatalogue(cloneId: string, kind: MediaKind, id: string): Promise<MediaInput> {
+  const table = kind === "photo" ? "photos" : "videos";
+  const { data } = await supabaseAdmin.from(table).select("id,clone_id,storage_path").eq("id", id).maybeSingle();
+  const row = data as { id: string; clone_id: string; storage_path: string | null } | null;
+  if (!row) throw new PostingInputError(`no ${kind} with id ${id}`);
+  if (row.clone_id !== cloneId) throw new PostingInputError(`that ${kind} belongs to a different girl`);
+  if (!row.storage_path) throw new PostingInputError(`that ${kind} has no stored file`);
+  const dl = await supabaseAdmin.storage.from("media").download(row.storage_path);
+  if (dl.error || !dl.data) throw new PostingInputError(`could not load the ${kind} from storage: ${dl.error?.message ?? "empty"}`);
+  const bytes = Buffer.from(await dl.data.arrayBuffer());
+  const mime = dl.data.type && dl.data.type !== "application/octet-stream" ? dl.data.type : kind === "photo" ? "image/jpeg" : "video/mp4";
+  return { bytes, mime, filename: `${kind}-${id}${kind === "photo" ? ".jpg" : ".mp4"}`, kind };
 }
