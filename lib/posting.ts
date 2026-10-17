@@ -123,7 +123,18 @@ async function liveConnection(c: CloneBot): Promise<LiveConnection | null> {
     .not("business_connection_id", "is", null)
     .order("last_message_received", { ascending: false, nullsFirst: false })
     .limit(300);
-  const ids = [...new Set(((data ?? []) as { business_connection_id: string }[]).map((r) => r.business_connection_id))].slice(0, 15);
+  // A girl who started on V2 has no fan rows in `users`; V2 archives every
+  // business chat with the connection id as `route`, so fall back to those.
+  const { data: v2 } = await supabaseAdmin
+    .from("v2arch_messages")
+    .select("route")
+    .eq("creator_id", c.id)
+    .order("occurred_at", { ascending: false })
+    .limit(300);
+  const ids = [...new Set([
+    ...((data ?? []) as { business_connection_id: string }[]).map((r) => r.business_connection_id),
+    ...((v2 ?? []) as { route: string | null }[]).map((r) => r.route).filter((r): r is string => !!r),
+  ])].slice(0, 15);
   for (const bcid of ids) {
     const r = await tgSoft(c.token, "getBusinessConnection", { business_connection_id: bcid });
     if (r.ok && r.result?.is_enabled) {

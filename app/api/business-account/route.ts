@@ -63,7 +63,19 @@ async function resolveConnection(cloneId: string): Promise<
     .order("last_message_received", { ascending: false, nullsFirst: false })
     .limit(1)
     .maybeSingle();
-  const bcid = (userRow as any)?.business_connection_id as string | undefined;
+  // A girl who started on V2 has no fan rows in `users`; V2 archives every
+  // business chat with the connection id as `route`.
+  const { data: v2Row } = userRow
+    ? { data: null }
+    : await supabaseAdmin
+        .from("v2arch_messages")
+        .select("route")
+        .eq("creator_id", cloneId)
+        .not("route", "is", null)
+        .order("occurred_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+  const bcid = ((userRow as any)?.business_connection_id ?? (v2Row as any)?.route) as string | undefined;
   if (!bcid) {
     return {
       ok: false,
