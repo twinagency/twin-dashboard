@@ -151,9 +151,11 @@ check("P15 the Posting page is operator only: every action guarded, route not op
   assert(exported.length >= 5, "expected the posting actions");
   for (const name of exported) {
     const body = a.slice(a.indexOf(`export async function ${name}`));
-    assert(body.slice(0, 400).includes(`guarded("${name}"`), `${name} must go through guarded(), which calls guardDashboardAction`);
+    const g = body.indexOf(`await guardDashboardAction("app/posting/actions.ts#${name}"`);
+    const r = body.indexOf("return");
+    assert(g > 0 && (r === -1 || g < r), `${name} must call its guardDashboardAction before anything else`);
+    // (scripts/check-lynq-management.tsx asserts it is the literal first statement, via the TS AST)
   }
-  assert(a.includes("guardDashboardAction(`app/posting/actions.ts#${name}`"), "guard must name this file");
   const policy = src("../lib/agency-policy.ts");
   assert(!policy.includes('"/posting"'), "agencyDashboardPath must not list /posting");
   const mgmt = src("../lib/agency-management.ts");

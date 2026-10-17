@@ -14,7 +14,9 @@
 // allowlist, so an agency session gets "Administrator access required".
 //
 // Errors are RETURNED as { ok: false, error } because Next hides the message
-// of a thrown server-action error in production.
+// of a thrown server-action error in production. The guard itself throws,
+// and is the literal first statement of every action
+// (scripts/check-lynq-management.tsx asserts that repo-wide).
 
 import { guardDashboardAction } from "@/lib/agency-management";
 import { logAdminWrite } from "@/lib/api-route";
@@ -38,9 +40,8 @@ type Result<T> = { ok: true; data: T } | { ok: false; error: string };
 
 const msg = (e: unknown) => (e instanceof Error ? e.message : String(e));
 
-async function guarded<T>(name: string, args: unknown[], fn: () => Promise<T>): Promise<Result<T>> {
+async function attempt<T>(fn: () => Promise<T>): Promise<Result<T>> {
   try {
-    await guardDashboardAction(`app/posting/actions.ts#${name}`, args);
     return { ok: true, data: await fn() };
   } catch (e) {
     return { ok: false, error: msg(e) };
@@ -48,7 +49,8 @@ async function guarded<T>(name: string, args: unknown[], fn: () => Promise<T>): 
 }
 
 export async function loadTargets(fresh: boolean): Promise<Result<Targets>> {
-  return guarded("loadTargets", [fresh], () => listTargets({ fresh }));
+  await guardDashboardAction("app/posting/actions.ts#loadTargets", [fresh]);
+  return attempt(() => listTargets({ fresh }));
 }
 
 export async function loadCatalogue(
@@ -57,13 +59,15 @@ export async function loadCatalogue(
   q: string,
   offset: number,
 ): Promise<Result<{ items: CatalogueItem[]; total: number }>> {
-  return guarded("loadCatalogue", [cloneId, kind, q, offset], () =>
+  await guardDashboardAction("app/posting/actions.ts#loadCatalogue", [cloneId, kind, q, offset]);
+  return attempt(() =>
     listCatalogue({ cloneId, kind: kind === "video" ? "video" : "photo", q, offset: Math.max(0, offset), limit: 48 }),
   );
 }
 
 export async function loadRecent(cloneId: string | null): Promise<Result<RecentPost[]>> {
-  return guarded("loadRecent", [cloneId], () => listRecentPosts({ cloneId, days: 30, limit: 100 }));
+  await guardDashboardAction("app/posting/actions.ts#loadRecent", [cloneId]);
+  return attempt(() => listRecentPosts({ cloneId, days: 30, limit: 100 }));
 }
 
 export type DestinationResult = {
@@ -79,7 +83,8 @@ export type DestinationResult = {
 // a story that fails (right switched off a minute ago) never blocks the
 // channel post, and the page shows both outcomes.
 export async function publish(fd: FormData): Promise<Result<DestinationResult[]>> {
-  return guarded("publish", [fd], async () => {
+  await guardDashboardAction("app/posting/actions.ts#publish", [fd]);
+  return attempt(async () => {
     const cloneId = String(fd.get("cloneId") ?? "");
     if (!cloneId) throw new Error("pick a girl first");
     const toStory = parseBool(fd.get("toStory"));
@@ -164,7 +169,8 @@ export async function removePost(p: {
   channel?: string | null;
   messageIds?: number[] | null;
 }): Promise<Result<unknown>> {
-  return guarded("removePost", [p], async () => {
+  await guardDashboardAction("app/posting/actions.ts#removePost", [p]);
+  return attempt(async () => {
     if (p.kind === "story") {
       if (!p.storyId || !p.cloneId) throw new Error("no story id");
       const r = await deleteStory(p.cloneId, p.storyId);
