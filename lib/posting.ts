@@ -309,7 +309,7 @@ export async function postStory(r: StoryRequest) {
     post_to_chat_page: r.postToChatPage,
     protect_content: r.protectContent,
   };
-  const summary = { clone: c.slug, mediaType: kind, bytes: bytes.length, caption, activePeriod: r.activePeriod, linkUrl: r.linkUrl };
+  const summary = { clone: c.slug, mediaType: kind, file: r.media.filename || null, bytes: bytes.length, caption, activePeriod: r.activePeriod, linkUrl: r.linkUrl };
   if (r.dryRun) return { dryRun: true, wouldPost: summary };
 
   const story = await tg(c.token, "postStory", fields, [
@@ -390,6 +390,7 @@ export async function postToChannel(r: ChannelRequest) {
     chatId: ch.chatId,
     method: plan.method,
     media: kinds,
+    files: r.media.map((m) => m.filename || null),
     text,
     buttons: r.buttons,
     starPrice: r.starPrice,
@@ -452,4 +453,90 @@ export async function deleteChannelPost(cloneId: string | null, channel: string 
   const { c, ch } = await channelTarget(cloneId, channel);
   await tg(c.token, "deleteMessages", { chat_id: ch.chatId, message_ids: messageIds });
   return { clone: c.slug, channel: ch.username ? `@${ch.username}` : ch.chatId, deletedMessageIds: messageIds };
+}
+
+// ── what was posted recently ─────────────────────────────────────────────────
+// Telegram gives a bot no way to list a girl's stories or read a channel's
+// history, so "recent" is our own audit trail: every real send through this
+// API (logAdminWrite, source admin-api) plus stories from the dashboard's own
+// story button (source business-account). system_logs keeps 30 days.
+// A later delete marks the matching post deleted instead of hiding it.
+// Posts made by the old one-off stories-* scripts are not in here.
+export type RecentPost = {
+  at: string;
+  kind: "story" | "channel_post";
+  via: "api" | "dashboard";
+  clone: string | null;
+  channel: string | null;
+  storyId: number | null;
+  messageIds: number[] | null;
+  link: string | null;
+  mediaType: string | null;
+  files: (string | null)[] | null;
+  text: string | null;
+  starPrice: number | null;
+  expiresAt: string | null;
+  live: boolean | null;
+  deleted: boolean;
+};
+
+export async function listRecentPosts(opts: { cloneId?: string | null; days: number; limit: number }): Promise<RecentPost[]> {
+  const since = new Date(Date.now() - opts.days * 86400_000).toISOString();
+  const bots = await cloneBots().catch(() => [] as CloneBot[]);
+  const slugOf = new Map(bots.map((b) => [b.id, b.slug]));
+
+  let q = supabaseAdmin
+    .from("system_logs")
+    .select("ts,source,clone_id,message,detail")
+    .gte("ts", since)
+    .or("and(source.eq.admin-api,message.like.admin API write: posting:*),and(source.eq.business-account,detail->>action.eq.story)")
+    .order("ts", { ascending: false })
+    .limit(2000);
+  if (opts.cloneId) q = q.eq("clone_id", opts.cloneId);
+  const { data, error } = await q;
+  if (error) throw new Error(`could not read posting log: ${error.message}`);
+  type Row = { ts: string; source: string; clone_id: string | null; message: string; detail: any };
+  const rows = (data ?? []) as Row[];
+
+  const deletedStories = new Set<string>();
+  const deletedMsgs = new Set<string>();
+  for (const r of rows) {
+    const d = r.detail ?? {};
+    if (r.message.endsWith("posting:delete_story")) deletedStories.add(`${d.clone}:${d.deletedStoryId}`);
+    if (r.message.endsWith("posting:delete_channel_post")) for (const id of d.deletedMessageIds ?? []) deletedMsgs.add(`${d.channel}:${id}`);
+  }
+
+  const now = Date.now();
+  const out: RecentPost[] = [];
+  for (const r of rows) {
+    const d = r.detail ?? {};
+    if (r.source === "business-account") {
+      const clone = slugOf.get(r.clone_id ?? "") ?? null;
+      const storyId = Number(d.result?.id) || null;
+      out.push({
+        at: r.ts, kind: "story", via: "dashboard", clone, channel: null, storyId, messageIds: null, link: null,
+        mediaType: null, files: null, text: null, starPrice: null, expiresAt: null, live: null,
+        deleted: deletedStories.has(`${clone}:${storyId}`),
+      });
+    } else if (r.message.endsWith("posting:story")) {
+      const exp = d.activePeriod ? new Date(Date.parse(r.ts) + d.activePeriod * 1000) : null;
+      const deleted = deletedStories.has(`${d.clone}:${d.storyId}`);
+      out.push({
+        at: r.ts, kind: "story", via: "api", clone: d.clone ?? null, channel: null, storyId: d.storyId ?? null,
+        messageIds: null, link: d.linkUrl ?? null, mediaType: d.mediaType ?? null, files: d.file ? [d.file] : null,
+        text: d.caption || null, starPrice: null, expiresAt: exp?.toISOString() ?? null,
+        live: exp ? !deleted && exp.getTime() > now : null, deleted,
+      });
+    } else if (r.message.endsWith("posting:channel_post")) {
+      const ids: number[] = d.messageIds ?? [];
+      out.push({
+        at: r.ts, kind: "channel_post", via: "api", clone: d.clone ?? null, channel: d.channel ?? null, storyId: null,
+        messageIds: ids, link: d.link ?? null, mediaType: (d.media ?? []).join(",") || "text", files: d.files ?? null,
+        text: d.text || null, starPrice: d.starPrice ?? null, expiresAt: null, live: null,
+        deleted: ids.length > 0 && ids.every((id) => deletedMsgs.has(`${d.channel}:${id}`)),
+      });
+    }
+    if (out.length >= opts.limit) break;
+  }
+  return out;
 }

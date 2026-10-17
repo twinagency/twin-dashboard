@@ -137,6 +137,14 @@ check("P12 the bot token never leaves lib/posting.ts in a response or log", () =
   assert(!w.includes("token"), "write route must not touch a token");
 });
 
+check("P13 the recent-posts route is read only and gated", () => {
+  const r = src("../app/api/admin/v1/posting/recent/route.ts");
+  assert(r.includes("withAdmin") && r.includes("export const GET") && !r.includes("export const POST"), "recent GET only");
+  const s = src("../lib/posting.ts");
+  const fn = s.slice(s.indexOf("export async function listRecentPosts"));
+  for (const w of [".insert(", ".update(", ".upsert(", ".delete("]) assert(!fn.includes(w), `listRecentPosts must not call ${w}`);
+});
+
 const total = passed + failures.length;
 if (failures.length) {
   console.error(`\n  ${failures.length} of ${total} POSTING CHECKS FAILED\n`);
