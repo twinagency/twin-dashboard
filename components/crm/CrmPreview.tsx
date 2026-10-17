@@ -28,9 +28,13 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 
 export type CrmPreviewView = "inbox" | "fans" | "campaigns" | "team" | "platforms";
 
-type Tone = "navy" | "blue" | "green" | "pink" | "slate" | "gold";
+// These six presentation helpers are shared with the OnlyFans preview
+// (components/onlyfans-preview/*), which is why they are exported. Nothing else
+// in this file is: the page itself, its tabs and its routes stay private to the
+// CRM pages so one definition of the visual language serves both surfaces.
+export type Tone = "navy" | "blue" | "green" | "pink" | "slate" | "gold";
 
-const TONE: Record<Tone, string> = {
+export const TONE: Record<Tone, string> = {
   navy: "bg-[#0b2b4b] text-white",
   blue: "bg-[#edf3fc] text-[#2f6fed]",
   green: "bg-[#e8f5f0] text-[#138a63]",
@@ -47,12 +51,12 @@ const tabs: { view: CrmPreviewView; href: string; label: string }[] = [
   { view: "platforms", href: "/crm/platforms", label: "Platforms" },
 ];
 
-function Dot({ tone = "green" }: { tone?: "green" | "blue" | "pink" | "gold" }) {
+export function Dot({ tone = "green" }: { tone?: "green" | "blue" | "pink" | "gold" }) {
   const colour = { green: "bg-good", blue: "bg-info", pink: "bg-love", gold: "bg-warn" }[tone];
   return <span className={`inline-block size-2 rounded-full ${colour}`} />;
 }
 
-function Avatar({ name, tone = "navy", size = "md" }: { name: string; tone?: Tone; size?: "sm" | "md" | "lg" }) {
+export function Avatar({ name, tone = "navy", size = "md" }: { name: string; tone?: Tone; size?: "sm" | "md" | "lg" }) {
   const dimension = { sm: "size-7 text-[10px]", md: "size-9 text-xs", lg: "size-11 text-sm" }[size];
   const initials = name
     .split(" ")
@@ -63,7 +67,7 @@ function Avatar({ name, tone = "navy", size = "md" }: { name: string; tone?: Ton
   return <span className={`grid shrink-0 place-items-center rounded-full font-semibold ${dimension} ${TONE[tone]}`}>{initials}</span>;
 }
 
-function Metric({ label, value, note, tone = "navy", icon: Icon }: { label: string; value: string; note: string; tone?: Tone; icon: LucideIcon }) {
+export function Metric({ label, value, note, tone = "navy", icon: Icon }: { label: string; value: string; note: string; tone?: Tone; icon: LucideIcon }) {
   return (
     <Card className="min-w-0 gap-0 rounded-xl py-4">
       <CardContent className="flex items-start justify-between gap-3 px-4">
@@ -113,7 +117,7 @@ function QuickSearch({ text = "Search fans, conversations, tags…" }: { text?: 
   return <div className="flex h-10 items-center gap-2 rounded-xl border border-line bg-white px-3 text-sm text-muted shadow-[0_6px_16px_rgb(6_23_47/0.04)]"><Search className="size-4" />{text}</div>;
 }
 
-function QuietLabel({ children, tone = "slate" }: { children: React.ReactNode; tone?: Tone }) {
+export function QuietLabel({ children, tone = "slate" }: { children: React.ReactNode; tone?: Tone }) {
   return <span className={`inline-flex h-6 items-center gap-1 rounded-full px-2 text-[11px] font-semibold ${TONE[tone]}`}>{children}</span>;
 }
 

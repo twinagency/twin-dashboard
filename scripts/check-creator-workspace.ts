@@ -369,7 +369,11 @@ async function main() {
     assert.match(sidebarSource, /showAssistant && !isAgency && !isCreator/);
 
     const topBarSource = readFileSync("components/TopBar.tsx", "utf8");
-    assert.match(topBarSource, /locked=\{isCreator\}/);
+    // The creator's chip must be locked. It may also be locked for another
+    // reason (the isolated OnlyFans preview pins the creator scope because it
+    // has no cookie to write), so the assertion pins the guarantee — the creator
+    // case is locked — rather than the exact expression that satisfied it.
+    assert.match(topBarSource, /locked=\{isCreator\b/);
     assert.match(topBarSource, /fallbackName=\{creatorName\}/);
     const switcherSource = readFileSync("components/CloneSwitcher.tsx", "utf8");
     assert.match(switcherSource, /if \(locked\)[\s\S]*?aria-label=\{`Creator account: \$\{name\}`\}/);

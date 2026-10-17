@@ -30,6 +30,8 @@ import { isCreatorDashboardPath } from "@/lib/creator-dashboard-policy";
 import { getCreatorWorkspace } from "@/lib/creator-dashboard";
 import { getViewAsBannerInfo } from "@/lib/view-as-banner";
 import ViewAsBanner from "@/components/ViewAsBanner";
+import { logout } from "@/app/login/actions";
+import { channelAccess, resolveChannelScope } from "@/lib/channel-scope";
 
 const inter = Inter({subsets:['latin'],variable:'--font-sans'});
 const plexMono = Inter({subsets:['latin'],variable:'--font-mono'});
@@ -93,6 +95,13 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     agency ? Promise.resolve(null) : getCachedTwinVersion(), getFleetClones(), getCloneScope(), getViewAsBannerInfo(),
   ]);
   const allTimeStars = await getHeaderAllTimeStars(activeCloneId);
+  // The server's channel scope: which channel workspaces this session may open.
+  // The layout already holds both facts it needs, so resolving it here costs no
+  // extra identity lookup, and the shell below can only offer channels that
+  // will actually render.
+  const channelScope = await resolveChannelScope(
+    channelAccess({ hasAgency: !!agency, hasViewAs: !!viewAsInfo }),
+  );
   // Viewing as an agency is ALWAYS read-only, regardless of that agency's own
   // canManage grant: this admin is looking, not administering as them.
   const canManage = viewAsInfo ? false : agencyCanManage(agency);
@@ -107,9 +116,9 @@ export default async function RootLayout({ children }: { children: React.ReactNo
           <div className="flex h-screen min-w-0 flex-1 flex-col overflow-hidden">
             <header className="dashboard-mobile-header flex shrink-0 items-center justify-between border-b border-white/12 px-4 py-3 lg:hidden">
               <Link href="/revenue" aria-label={agency?.name || "Twin Technologies"}><TwinWordmark inverse agencyName={agency?.name} /></Link>
-              <div className="flex items-center gap-1">{agency && <form action="/agency/logout" method="post"><button type="submit" className="rounded-lg px-3 py-2 text-sm font-medium text-white/80 hover:bg-white/10">Sign out</button></form>}<MobileMenu activeCloneId={activeCloneId} /></div>
+              <div className="flex items-center gap-1">{agency && <form action="/agency/logout" method="post"><button type="submit" className="rounded-lg px-3 py-2 text-sm font-medium text-white/80 hover:bg-white/10">Sign out</button></form>}<MobileMenu activeCloneId={activeCloneId} channels={channelScope.allowed} /></div>
             </header>
-            <TopBar clones={clones} activeCloneId={activeCloneId} allTimeStars={allTimeStars} /><MainShell>{children}</MainShell>
+            <TopBar clones={clones} activeCloneId={activeCloneId} allTimeStars={allTimeStars} channels={channelScope.allowed} signOutAction={logout} /><MainShell>{children}</MainShell>
           </div>
         </div>
         {!agency && <TwinUpdatePopup version={twinVersion?.version ?? null} name={twinVersion?.name ?? ""} summary={twinVersion?.summary ?? ""} changes={twinVersion?.changes ?? []} />}

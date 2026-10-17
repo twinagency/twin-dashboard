@@ -9,6 +9,7 @@ import * as agencyPolicy from "../lib/agency-policy";
 import * as agencyBrand from "../lib/agency-brand";
 import * as portals from "../lib/partner-portals";
 import * as creatorPolicy from "../lib/creator-dashboard-policy";
+import * as channelNav from "../lib/channel-nav";
 
 // Render the actual shared desktop/mobile content with isolated navigation.
 // No credentials, database calls or messages are used by these fixtures.
@@ -43,6 +44,7 @@ const components = compile("components/Sidebar.tsx", {
   "@/lib/agency-brand": agencyBrand,
   "@/lib/partner-portals": portals,
   "@/lib/creator-dashboard-policy": creatorPolicy,
+  "@/lib/channel-nav": channelNav,
   "next/link": { __esModule: true, default: ({ children, ...props }: React.ComponentProps<"a">) => React.createElement("a", props, children) },
   "next/navigation": { usePathname: () => pathname, useSearchParams: () => query },
   "@/lib/clone-switcher-bus": { openCloneSwitcher: () => undefined },

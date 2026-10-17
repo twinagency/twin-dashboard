@@ -12,10 +12,23 @@ import { useDashboardAccess } from "./DashboardAccessProvider";
 // mode on whatever page you first loaded, so switching Revenue→Fans kept the
 // narrow column (squashed inbox) and Fans→Revenue leaked full-bleed. This is
 // the bug behind "pages break when switching between them".
-export default function MainShell({ children }: { children: React.ReactNode }) {
+export default function MainShell({
+  children,
+  showAssistant = true,
+}: {
+  children: React.ReactNode;
+  /**
+   * The isolated OnlyFans preview passes false: the assistant dock talks to
+   * model endpoints, and the preview must reach nothing. True in the dashboard,
+   * where the dock renders exactly as before.
+   */
+  showAssistant?: boolean;
+}) {
   const pathname = usePathname();
   const {isAgency, isCreator} = useDashboardAccess();
-  const fullBleed = pathname === "/users" || pathname === "/jarvis";
+  // The OnlyFans inbox is the same shape as Telegram's Fans screen — a list, a
+  // thread and a details column — so it runs edge-to-edge for the same reason.
+  const fullBleed = pathname === "/users" || pathname === "/jarvis" || pathname === "/onlyfans/inbox";
   return (
     <main
       className={
@@ -25,7 +38,7 @@ export default function MainShell({ children }: { children: React.ReactNode }) {
       }
     >
       {children}
-      {!isAgency && !isCreator && pathname !== "/jarvis" ? <TwinAssistant variant="mobile-dock" /> : null}
+      {showAssistant && !isAgency && !isCreator && pathname !== "/jarvis" ? <TwinAssistant variant="mobile-dock" /> : null}
     </main>
   );
 }
