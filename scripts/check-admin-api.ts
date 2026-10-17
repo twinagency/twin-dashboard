@@ -209,7 +209,16 @@ check("B4 no admin route reaches Supabase directly, bypassing the allowlist chok
 //     unconditionally (see createDryRun) and going live requires the run to
 //     already be a reviewed, finished dry run (see confirmLive) — this route
 //     cannot skip either check, they live in lib/mtproto/runs.ts, not here.
-const WRITE_ROUTES = ["/clones/write/route.ts", "/clones/create/route.ts", "/media/route.ts", "/mtproto/write/route.ts"];
+//
+//   /posting/write/route.ts  admitted 2026-10-17 (posting API). It writes NO
+//     database row at all: each action is one Telegram call (postStory,
+//     sendMessage/sendPhoto/sendVideo/sendMediaGroup/sendPaidMedia, the two
+//     deletes) through the girl's own clone bot, via lib/posting.ts, the same
+//     postStory call app/api/business-account/route.ts makes for the
+//     dashboard's own story button. Every target is re-checked live (enabled
+//     business connection + story right, or bot admin with Post Messages)
+//     before sending, and every send is audited with logAdminWrite.
+const WRITE_ROUTES = ["/clones/write/route.ts", "/clones/create/route.ts", "/media/route.ts", "/mtproto/write/route.ts", "/posting/write/route.ts"];
 
 check("B5 only the named write routes accept writes; the rest are read-only", () => {
   for (const p of adminRouteFiles()) {
