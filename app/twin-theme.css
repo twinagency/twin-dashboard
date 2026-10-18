@@ -75,26 +75,28 @@ html[data-brand-theme="twin-light"] .dashboard-sidebar .studio-account {
 
 html[data-brand-theme="twin-light"] .dashboard-sidebar nav :is(a, button),
 html[data-brand-theme="twin-light"] .dashboard-sidebar nav svg {
-  color: var(--sidebar-foreground);
+  /* Studio rows include high-specificity legacy colours in their inline
+     stylesheet. The selected Twin palette owns navigation text in this scope. */
+  color: var(--sidebar-foreground) !important;
 }
 
 html[data-brand-theme="twin-light"] .dashboard-sidebar nav :is(a, button):hover,
 html[data-brand-theme="twin-light"] .dashboard-mobile-header button:hover {
   background-color: var(--sidebar-accent);
-  color: var(--sidebar-accent-foreground);
+  color: var(--sidebar-accent-foreground) !important;
 }
 
 html[data-brand-theme="twin-light"] .dashboard-sidebar nav [aria-current="page"],
 html[data-brand-theme="twin-light"] .dashboard-sidebar nav :is(a, button)[class~="bg-white/12"] {
   background: var(--sidebar-primary);
-  color: var(--sidebar-primary-foreground);
+  color: var(--sidebar-primary-foreground) !important;
   box-shadow: 0 2px 5px rgb(14 107 146 / 0.09);
   --tw-ring-shadow: 0 0 #0000;
 }
 
 html[data-brand-theme="twin-light"] .dashboard-sidebar nav [aria-current="page"] svg,
 html[data-brand-theme="twin-light"] .dashboard-sidebar nav [class~="bg-white/12"] svg {
-  color: inherit;
+  color: inherit !important;
 }
 
 html[data-brand-theme="twin-light"] .dashboard-sidebar .sidebar-create-button {
