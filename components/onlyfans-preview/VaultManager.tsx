@@ -1,5 +1,7 @@
 "use client";
 
+import { inputCls } from "@/components/clone/fields";
+
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
@@ -8,8 +10,9 @@ import { parseContentPrice } from "@/lib/onlyfans/content";
 import { parseVault, parseVaultCreateAck, parseVaultSyncAck, validVaultProduct,
   type VaultRead, type VaultItem, type VaultCreateRequest, type VaultSyncRequest } from "@/lib/onlyfans/vault";
 import ContentEditor from "./ContentEditor";
+import { MediaLibraryFilters } from "@/components/CreatorMediaLibrary";
 
-const inputClass = "mt-1 w-full min-w-0 rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink disabled:opacity-50";
+const inputClass = `${inputCls} mt-1 disabled:opacity-50`;
 const buttonClass = "rounded-lg border border-line px-3 py-2 text-sm font-semibold text-accent disabled:opacity-50";
 const SYNC_STATUS = { pending: "Queued", running: "Syncing", complete: "Complete", failed: "Failed", superseded: "Replaced by a newer request" } as const;
 type Pending = { kind: "sync"; body: VaultSyncRequest } | { kind: "create"; body: VaultCreateRequest };
@@ -22,23 +25,31 @@ export default function VaultManager({ accountId }: { accountId: string }) {
   const [label, setLabel] = useState(""), [description, setDescription] = useState(""), [price, setPrice] = useState(""), [enabled, setEnabled] = useState(false);
   const [retry, setRetry] = useState<Pending | null>(null), [created, setCreated] = useState<string | null>(null);
   const active = useRef(false), submitting = useRef(false), sessionDenied = useRef(false);
+  const [search, setSearch] = useState(""), [mediaKind, setMediaKind] = useState("all");
+  const appliedFilters = useRef({ query: "", kind: "all" });
+  const readGeneration = useRef(0);
   const base = `/api/onlyfans-content/accounts/${encodeURIComponent(accountId)}`;
   const clearSelection = useCallback(() => { setSelected(new Map()); setPreviews(new Set()); }, []);
-  const read = useCallback(async (after: string | null) => {
+  const read = useCallback(async (after: string | null, filters = appliedFilters.current) => {
+    const generation = ++readGeneration.current;
     try {
-      const response = await fetch(base + "/vault" + (after ? "?afterMediaId=" + encodeURIComponent(after) : ""), { credentials: "same-origin", cache: "no-store", redirect: "error" });
-      if (!active.current) return false;
+      const parameters = new URLSearchParams();
+      if (after) parameters.set("afterMediaId", after);
+      if (filters.query) parameters.set("q", filters.query);
+      if (filters.kind !== "all") parameters.set("kind", filters.kind);
+      const response = await fetch(base + "/vault" + (parameters.size ? "?" + parameters : ""), { credentials: "same-origin", cache: "no-store", redirect: "error" });
+      if (!active.current || generation !== readGeneration.current) return false;
       if ([401, 403].includes(response.status)) {
         sessionDenied.current = true; setData(null); clearSelection(); setCreated(null); setLabel(""); setDescription(""); setPrice(""); setRetry(null); setDenied(true);
         setNotice("Your session cannot manage this vault. Sign in again."); router.refresh(); return false;
       }
       const next = response.ok ? parseVault(await response.json(), accountId) : null;
-      if (!active.current) return false;
+      if (!active.current || generation !== readGeneration.current) return false;
       if (!next) { setData(null); setNotice("The recorded vault could not be refreshed. Try again."); return false; }
-      setData(next); setCursor(after); return true;
-    } catch { if (active.current) { setData(null); setNotice("The recorded vault could not be refreshed. Try again."); } return false; }
+      appliedFilters.current = filters; setData(next); setCursor(after); return true;
+    } catch { if (active.current && generation === readGeneration.current) { setData(null); setNotice("The recorded vault could not be refreshed. Try again."); } return false; }
   }, [accountId, base, clearSelection, router]);
-  useEffect(() => { active.current = true; void read(null).then(ok => { if (active.current) { setBusy(false); if (ok) setNotice(""); } }); return () => { active.current = false; }; }, [read]);
+  useEffect(() => { active.current = true; void read(null).then(ok => { if (active.current) { setBusy(false); if (ok) setNotice(""); } }); return () => { active.current = false; readGeneration.current++; }; }, [read]);
   async function refresh(after: string | null, reset = false) {
     setBusy(true); if (reset) clearSelection(); const ok = await read(after);
     if (active.current) { setBusy(false); if (ok) setNotice(""); }
@@ -105,6 +116,16 @@ export default function VaultManager({ accountId }: { accountId: string }) {
       <div className="mt-4 rounded-lg border border-line p-3 text-xs" data-of-vault-sync-status>
         {data.sync ? <><p>Last sync: <strong>{SYNC_STATUS[data.sync.status]}</strong> · {data.sync.pagesRead} pages · {data.sync.itemsSeen} assets observed</p><p className="mt-1 text-muted">Updated {new Date(data.sync.updatedAt).toLocaleString()}{data.sync.completedAt ? ` · Completed ${new Date(data.sync.completedAt).toLocaleString()}` : ""}</p>{data.sync.lastError ? <p className="mt-1 text-muted">Sync needs review. Check the account connection and request a new sync when ready.</p> : null}</> : <p>No vault synchronization has been recorded.</p>}
       </div>
+      <form className="mt-4 space-y-3" onSubmit={event => {
+        event.preventDefault(); if (busy || retry) return;
+        setBusy(true); void read(null, { query: search.trim(), kind: mediaKind }).then(ok => {
+          if (active.current) { setBusy(false); if (ok) setNotice(""); }
+        });
+      }}>
+        <MediaLibraryFilters tabs={[{ key: "all", label: "All" }, { key: "photo", label: "Photos" }, { key: "video", label: "Videos" }]}
+          activeTab={mediaKind} onTabChange={setMediaKind} search={search} onSearchChange={setSearch} disabled={busy || !!retry} searchLimit={120} />
+        <button type="submit" data-of-vault-search className={buttonClass} disabled={busy || !!retry}>Search vault</button>
+      </form>
       <fieldset disabled={busy || !!retry} className="mt-4 min-w-0">
         <legend className="text-sm font-semibold">Choose assets</legend>
         <div className="mt-2 min-w-0 overflow-x-auto"><table className="w-full min-w-[34rem] text-left text-xs"><thead><tr className="border-b border-line text-muted"><th className="p-2">Select</th><th className="p-2">Asset</th><th className="p-2">Description</th><th className="p-2">Details</th><th className="p-2">Availability</th></tr></thead><tbody>

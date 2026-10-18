@@ -7,7 +7,7 @@ export const OPERATION_REASONS = {
   history_not_current: "History synchronization is incomplete or out of date.",
   history_sync_time_invalid: "The synchronization timestamp needs investigation.",
   history_quarantined: "Conflicting history needs review.",
-  commerce_evidence_conflict: "Conflicting purchase evidence needs review. Media sales are held.",
+  commerce_evidence_conflict: "Purchase evidence needs review or synchronization. Media sales are held.",
   delivery_unresolved: "An earlier delivery outcome needs evidence review.",
   delivery_in_progress: "A delivery attempt is in progress.",
   receipt_projection_pending: "A saved receipt is waiting to appear in history.",

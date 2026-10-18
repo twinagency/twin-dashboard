@@ -1,11 +1,13 @@
 "use client";
 
+import { inputCls } from "@/components/clone/fields";
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { displayContentPrice, parseContentPrice, parseContentItem, parseContentAck, validContentRequest,
   type ContentItem, type ContentPatch, type ContentRequest } from "@/lib/onlyfans/content";
 
-const inputClass = "mt-1 w-full min-w-0 rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink focus:outline-2 focus:outline-accent disabled:opacity-60";
+const inputClass = `${inputCls} mt-1 disabled:opacity-50`;
 const buttonClass = "rounded-lg border border-line px-3 py-2 text-sm font-semibold text-accent disabled:opacity-50";
 
 export default function ContentEditor({ accountId, itemId }: { accountId: string; itemId: string }) {

@@ -1,12 +1,14 @@
 "use client";
 
+import { inputCls } from "@/components/clone/fields";
+
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
 import { FACT_KEYS, parseConfiguration, parseConfigurationAck, validConfigurationRequest,
   type Configuration, type ConfigurationPatch, type ConfigurationRequest, type FactKey } from "@/lib/onlyfans/configuration";
 
-const inputClass = "mt-1 w-full min-w-0 rounded-lg border border-line bg-card px-3 py-2 text-sm text-ink focus:outline-2 focus:outline-accent disabled:opacity-60";
+const inputClass = `${inputCls} mt-1 disabled:opacity-50`;
 const buttonClass = "rounded-lg border border-line px-4 py-2 text-sm font-semibold text-accent disabled:opacity-50";
 const overrideValue = (data: Configuration) => !data.modelsValid || (data.replyOverridePresent && data.replyModelOverride === null)
   ? "__review" : data.replyModelOverride ?? "";

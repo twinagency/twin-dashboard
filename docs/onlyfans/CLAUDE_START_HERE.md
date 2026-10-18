@@ -4,6 +4,12 @@ The owner requested publication of the OnlyFans implementation and complete Clau
 
 ## Start Here
 
+Current continuation: backend schema `0084_native_ledger`. Read the backend
+`docs/onlyfans/DELIVERY-PLAN-2026-10-19.md` and integration release runbook first.
+The dated checkpoint descriptions below are historical. They do not supersede
+the current source, release state or the owner’s revised integration scope.
+
+
 The latest offline checkpoint is
 [NATIVE-CONNECTOR-PROTOCOL-2026-10-18.md](NATIVE-CONNECTOR-PROTOCOL-2026-10-18.md).
 An explicitly owned local connector now supplies native-shaped discovery/history

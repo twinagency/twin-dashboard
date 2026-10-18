@@ -1,3 +1,4 @@
+import { createBackendTransport, configuredBackendPurpose } from "./backend-transport";
 /** Server-owned write credential, separate from the read-only backend port. */
 import { CONTROL_HEADER, CONTROL_SCHEMA, parseControlAck, type ControlAction, type ControlReply } from "./controls";
 
@@ -9,13 +10,12 @@ export type ControlSubmission = {
 };
 
 export function createControlBackend(options: { baseUrl: string; token: string; fetchImpl?: typeof fetch }) {
-  const call = options.fetchImpl ?? fetch;
+  const call = createBackendTransport(options.fetchImpl);
   return async (command: ControlSubmission): Promise<ControlReply> => {
     try {
       const result = await call(options.baseUrl.replace(/\/+$/, "") +
         `/onlyfans/control/v1/accounts/${encodeURIComponent(command.accountId)}/conversations/${encodeURIComponent(command.conversationId)}`, {
-        method: "POST", credentials: "omit", redirect: "error", cache: "no-store",
-        signal: AbortSignal.timeout(8_000), headers: { "Content-Type": "application/json",
+        method: "POST", headers: { "Content-Type": "application/json",
           Authorization: `Bearer ${options.token}`, [CONTROL_HEADER]: CONTROL_SCHEMA },
         body: JSON.stringify({ action: command.action, expectedRevision: command.expectedRevision,
           commandKey: command.commandKey, actor: command.actor,
@@ -38,13 +38,6 @@ export function createControlBackend(options: { baseUrl: string; token: string; 
 }
 
 export function configuredControlBackend() {
-  const baseUrl = (process.env.ONLYFANS_API_BASE_URL ?? "").trim();
-  const token = (process.env.ONLYFANS_CONTROL_TOKEN ?? "").trim();
-  const readToken = (process.env.ONLYFANS_API_TOKEN ?? "").trim();
-  if (!baseUrl || !token || token === readToken) return null;
-  try {
-    const url = new URL(baseUrl);
-    if (!["http:", "https:"].includes(url.protocol) || url.username || url.password || url.search || url.hash) return null;
-  } catch { return null; }
-  return createControlBackend({ baseUrl, token });
+  const options = configuredBackendPurpose("CONTROL");
+  return options ? createControlBackend(options) : null;
 }

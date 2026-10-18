@@ -43,6 +43,11 @@ async function main() {
     return Response.json(String(url).endsWith("/vault/sync") ? syncAck : createAck);
   } });
   assert((await backend.get("acc-a")).ok);
+  const filtered = createVaultBackend({ baseUrl: "http://127.0.0.1:1", token: "synthetic", fetchImpl: async (url, init) => {
+    assert.equal(String(url), "http://127.0.0.1:1/onlyfans/content/v1/accounts/acc-a/vault?limit=24&afterMediaId=12&q=100%25%20coast&kind=photo");
+    assert.equal(init?.method, "GET"); return Response.json(read);
+  } });
+  assert((await filtered.get("acc-a", "12", { query: "100% coast", kind: "photo" })).ok);
   const lost = await backend.create("acc-a", { product, ...identity }); assert(!lost.ok && lost.outcome === "unconfirmed"); assert.equal(posted.length, 1);
   assert((await backend.create("acc-a", { product, ...identity })).ok); assert.equal(posted[0], posted[1]);
   assert((await backend.sync("acc-a", { expectedConnectionRevision: 3, ...identity })).ok);

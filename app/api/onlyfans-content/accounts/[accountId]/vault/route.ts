@@ -9,9 +9,10 @@ export const runtime = "nodejs";
 export async function GET(request: NextRequest, context: { params: Promise<{ accountId: string }> }) {
   const ctx = await requireOnlyFansRead(); if (ctx instanceof NextResponse) return ctx;
   const accountId = requestId((await context.params).accountId), cursor = request.nextUrl.searchParams.get("afterMediaId");
-  if (!accountId || (cursor !== null && !vaultMediaId(cursor)) || request.nextUrl.searchParams.getAll("afterMediaId").length > 1 ||
-    [...request.nextUrl.searchParams.keys()].some(key => key !== "afterMediaId")) return vaultRefusal(400, "That vault page reference is invalid.");
+  const query = request.nextUrl.searchParams.get("q") ?? "", kind = request.nextUrl.searchParams.get("kind") ?? "all";
+  if (!accountId || (cursor !== null && !vaultMediaId(cursor)) || query.length > 120 || /[\u0000-\u001f]/.test(query) || !["all", "photo", "video"].includes(kind) ||
+    [...request.nextUrl.searchParams.keys()].some(key => !["afterMediaId", "q", "kind"].includes(key) || request.nextUrl.searchParams.getAll(key).length !== 1)) return vaultRefusal(400, "That vault page or search is invalid.");
   const backend = configuredVaultBackend(); if (!backend) return vaultRefusal(503, "Vault management is not configured.");
-  const result = await backend.get(accountId, cursor);
+  const result = await backend.get(accountId, cursor, { query, kind });
   return result.ok ? vaultAnswer({ schemaVersion: CONTENT_SCHEMA, ok: true, accountId, vault: result.data }) : vaultRefusal(result.status, result.error);
 }
