@@ -18,6 +18,7 @@ import * as libraryModel from "../components/content-library/model";
 import * as inboxModel from "../components/inbox/model";
 import * as fanAvatars from "../components/dashboard/fan-avatars";
 import * as dashboardCreatorRoute from "../lib/dashboard-creator-route";
+import * as channelNav from "../lib/channel-nav";
 
 const nativeRequire = createRequire(import.meta.url);
 function compile(path: string, imports: Record<string, unknown>) {
@@ -186,7 +187,13 @@ async function main() {
     "@/components/CurrencyToggle": { __esModule: true, default: () => <span>Live currency selector</span> },
     "@/components/CurrencyProvider": { useCurrency: () => ({ currency: "USD", rate: 1.4, usdPerStar: .013 }) },
     "@/components/BlurToggle": { __esModule: true, default: () => <span>Blur media</span> },
-    "@/app/login/actions": { logout: async () => {} },
+    "@/components/SignOutButton": compile("components/SignOutButton.tsx", {}),
+    "@/components/ChannelSwitch": compile("components/ChannelSwitch.tsx", {
+      "@/lib/channel-nav": channelNav,
+      "next/navigation": { usePathname: () => headerPath },
+      "next/link": { __esModule: true, default: ({ children, ...props }: React.ComponentProps<"a">) => <a {...props}>{children}</a> },
+    }),
+    "@/lib/channel-nav": channelNav,
     "@/lib/money": { fmtMoney: () => "LIVE_BALANCE", starsToMoneyRate: () => 1 },
     "@/lib/page-meta": { getPageMeta: () => ({ scopeLabel: "Brianna Redd", pageLabel: "Earnings", scopeIsCreator: true }) },
     "@/lib/creator-dashboard-policy": { CREATOR_DASHBOARD_NAV: [] },
@@ -200,6 +207,12 @@ async function main() {
   headerPath = "/users"; headerParams = new URLSearchParams("relationship=briana-ledger-1");
   headerAudience.isAgency = true; assert.match(header(), /LIVE_BALANCE/);
   headerAudience.isAgency = false; headerAudience.isCreator = true; assert.match(header(), /LIVE_BALANCE/);
+  headerAudience.isCreator = false; headerPath = "/onlyfans/inbox";
+  const nativeHeader = renderToStaticMarkup(<Header clones={[]} activeCloneId={null} allTimeStars={100} channels={["all", "telegram", "onlyfans"]} />);
+  assert.doesNotMatch(nativeHeader, /LIVE_BALANCE/, "OnlyFans navigation must not present Telegram Stars as account earnings");
+  assert.match(nativeHeader, /aria-label="Channel workspace"/, "The real shared channel control remains available");
+  assert.match(nativeHeader, /href="\/onlyfans\/inbox"/);
+  headerPath = "/users";
 
   // Execute the real component with the existing shell's currency context
   // isolated. Any new network request or global currency mutation is a failure.
