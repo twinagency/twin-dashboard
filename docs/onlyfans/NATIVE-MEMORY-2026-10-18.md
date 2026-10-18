@@ -11,7 +11,7 @@ Profile changes also invalidate drafts at final dispatch. No outbound bubble,
 sale or purchase is inferred from learning a fact.
 
 The public read contract is unchanged: outer `of-preview.v2`, Operations
-`of-operations.v2`. No memory write controls, new data source, prompt layer,
+`of-operations.v3`. No memory write controls, new data source, prompt layer,
 Telegram change or UI redesign was introduced. Read the paired backend document
 and checkpoint validation report for exact constraints and remaining gates.
 

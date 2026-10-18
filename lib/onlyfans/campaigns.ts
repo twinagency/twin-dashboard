@@ -1,5 +1,5 @@
 /** Scoped campaign contract. Delivery counts describe individual recorded attempts. */
-export const CAMPAIGN_SCHEMA = "of-campaigns.v1";
+export const CAMPAIGN_SCHEMA = "of-campaigns.v2";
 export const CAMPAIGN_HEADER = "X-OnlyFans-Campaign-Version";
 export const CAMPAIGN_STATUSES = ["scheduled", "running", "paused", "cancelled", "completed"] as const;
 export const RECIPIENT_STATUSES = ["pending", "queued", "dispatching", "accepted", "notAccepted", "unknown", "cancelled", "refused", "skipped"] as const;
@@ -8,6 +8,10 @@ export type CampaignAction = typeof CAMPAIGN_ACTIONS[number];
 export type RecipientStatus = typeof RECIPIENT_STATUSES[number];
 export type CampaignOffer = { catalogItemId: number; label: string; priceCents: number; currency: "USD";
   mediaIds: string[]; previewIds: string[]; snapshotHash: string };
+export const REVENUE_STATUSES = ["available", "detail_required", "ledger_unavailable", "ledger_held", "outside_coverage", "purchase_link_unverified"] as const;
+export type CampaignReporting = { replies: number | null; replyWindowHours: 24; purchases: number | null;
+  refundedPurchases: number | null; revenueCents: number | null; currency: "USD" | null;
+  ledgerAsOf: string | null; revenueStatus: typeof REVENUE_STATUSES[number] };
 export type Campaign = {
   campaignId: string; accountId: string; name: string; body: string;
   audience: { kind: "explicit" | "all_known"; count: number; snapshotHash: string };
@@ -15,7 +19,7 @@ export type Campaign = {
   status: typeof CAMPAIGN_STATUSES[number]; revision: number;
   counts: Record<RecipientStatus, number>; recipientCount: number;
   deliveryMode: "individual_messages";
-  reporting: { replies: null; revenueCents: null; currency: null };
+  reporting: CampaignReporting;
   offer: CampaignOffer | null;
 };
 export type CampaignRecipient = { conversationId: string; status: RecipientStatus; reason: string | null;
@@ -56,8 +60,8 @@ export function parseCampaign(value: unknown, accountId: string): Campaign | nul
       !(CAMPAIGN_STATUSES as readonly unknown[]).includes(value.status) || !integer(value.revision) || !integer(value.recipientCount) || value.recipientCount > 1000 ||
       !campaignObject(value.audience) || !exact(value.audience, ["kind", "count", "snapshotHash"]) ||
       !["explicit", "all_known"].includes(value.audience.kind as string) || value.audience.count !== value.recipientCount || !hash(value.audience.snapshotHash) ||
-      value.deliveryMode !== "individual_messages" || !campaignObject(value.reporting) || !exact(value.reporting, ["replies", "revenueCents", "currency"]) ||
-      Object.values(value.reporting).some(item => item !== null) || !campaignObject(value.counts) || !exact(value.counts, [...RECIPIENT_STATUSES]) ||
+      value.deliveryMode !== "individual_messages" || !campaignObject(value.reporting) || !validReporting(value.reporting, value.recipientCount as number) ||
+      !campaignObject(value.counts) || !exact(value.counts, [...RECIPIENT_STATUSES]) ||
       Object.values(value.counts).some(item => !integer(item)) || Object.values(value.counts).reduce<number>((sum, item) => sum + (item as number), 0) !== value.recipientCount) return null;
   if (value.offer !== null) {
     const offer = value.offer, mediaId = (item: unknown): item is string => typeof item === "string" && /^[1-9][0-9]{0,18}$/.test(item);
@@ -70,6 +74,15 @@ export function parseCampaign(value: unknown, accountId: string): Campaign | nul
     if (offer.previewIds.some(id => !media.includes(id))) return null;
   }
   return value as Campaign;
+}
+
+function validReporting(value: Record<string, unknown>, recipients: number): boolean {
+  if (!exact(value, ["replies", "replyWindowHours", "purchases", "refundedPurchases", "revenueCents", "currency", "ledgerAsOf", "revenueStatus"]) ||
+      value.replyWindowHours !== 24 || !(REVENUE_STATUSES as readonly unknown[]).includes(value.revenueStatus) ||
+      !(value.replies === null || integer(value.replies) && value.replies <= recipients)) return false;
+  if (value.revenueStatus !== "available") return [value.purchases, value.refundedPurchases, value.revenueCents, value.currency, value.ledgerAsOf].every(item => item === null);
+  return integer(value.purchases) && integer(value.refundedPurchases) && value.purchases + value.refundedPurchases <= recipients &&
+    integer(value.revenueCents) && value.currency === "USD" && timestamp(value.ledgerAsOf);
 }
 export function parseCampaignList(value: unknown, accountId: string): { campaigns: Campaign[]; truncated: boolean } | null {
   if (!campaignObject(value) || !exact(value, ["schemaVersion", "ok", "accountId", "campaigns", "truncated"]) ||

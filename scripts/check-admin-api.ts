@@ -530,6 +530,16 @@ check("D12 the allowlist is shared with the AI assistant, not duplicated", () =>
   );
 });
 
+check("D13 shared creator facts use the existing scoped admin reader", () => {
+  const select = "id,updated_at,date_of_birth,hometown,current_city,cover_story,occupation,relationship_canon,tattoos,tattoo_details,turn_ons,hard_limits,hard_limits_extra";
+  const spec = parseQuery(new URLSearchParams({ table: "clones", select, filter: "id:eq:synthetic-creator", limit: "2" }));
+  assert(!isQueryError(spec), "the existing allowlist refused typed facts");
+  assert(JSON.stringify(spec.select) === JSON.stringify(select.split(",")), "typed fields were lost");
+  assert(JSON.stringify(spec.filters) === JSON.stringify([{ column: "id", op: "eq", value: "synthetic-creator" }]), "creator scope was lost");
+  assert(spec.limit === 2, "the unique row needs an untruncated result");
+  assert(!adminColumns("clones")?.includes("bot_token"), "the credential must remain excluded");
+});
+
 // ─────────────────────────────────────────────────────────────────────────────
 
 const total = passed + failures.length;

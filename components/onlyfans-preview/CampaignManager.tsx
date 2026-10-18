@@ -2,13 +2,14 @@
 import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card } from "@/components/ui/card";
+import { Info, inputCls } from "@/components/clone/fields";
 import { CAMPAIGN_ACTIONS, RECIPIENT_STATUSES, parseCampaignAck, parseCampaignDetail, parseCampaignList,
   validCampaignCreate, type Campaign, type CampaignAction, type CampaignChange, type CampaignCreate, type CampaignRecipient } from "@/lib/onlyfans/campaigns";
 import type { ConversationSummary } from "@/lib/onlyfans-preview/types";
 import { parseWorkspace, formatRecordedMoney, type CatalogRead } from "@/lib/onlyfans/workspace";
 
 type Write = { kind: "create"; body: CampaignCreate } | { kind: "change"; campaignId: string; body: CampaignChange };
-const inputClass = "w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink disabled:bg-elev disabled:text-muted";
+const inputClass = `${inputCls} disabled:opacity-50`;
 const buttonClass = "rounded-lg border border-line px-3 py-2 text-sm font-semibold text-ink transition hover:bg-elev disabled:cursor-not-allowed disabled:opacity-50";
 const LABELS = { pending: "Waiting", queued: "Queued", dispatching: "Sending", accepted: "Accepted", notAccepted: "Not accepted", unknown: "Uncertain", cancelled: "Cancelled", refused: "Refused", skipped: "Skipped" };
 const REASONS: Record<string, string> = {
@@ -149,7 +150,13 @@ export default function CampaignManager({ accountId, readOnly = false }: { accou
       <p className="mt-4 whitespace-pre-wrap break-words rounded-lg bg-elev p-3 text-sm">{campaign.body}</p>
       {campaign.offer ? <div className="mt-3 rounded-lg border border-line p-3 text-sm"><div className="font-semibold">{campaign.offer.label} · {formatRecordedMoney(campaign.offer.priceCents, campaign.offer.currency)}</div><p className="mt-1 text-xs text-muted">{campaign.offer.mediaIds.length} saved media · {campaign.offer.previewIds.length} free previews · Frozen catalogue terms</p></div> : null}
       <div className="mt-4 grid grid-cols-3 gap-2 lg:grid-cols-5">{RECIPIENT_STATUSES.map(status => <div key={status} className="rounded-lg border border-line p-3"><div className="text-xs text-muted">{LABELS[status]}</div><div className="mt-1 text-lg font-semibold">{campaign.counts[status]}</div></div>)}</div>
-      <p className="mt-3 text-xs leading-5 text-muted">Accepted means provider acceptance. Opens, campaign replies and attributed revenue are not available. Uncertain attempts remain held for reconciliation.</p>
+      <div className="mt-4 grid gap-3 sm:grid-cols-2 lg:grid-cols-4" data-of-campaign-reporting>
+        <div className="rounded-lg border border-line p-3"><div className="flex items-center gap-1 text-xs text-muted">Fans replied within 24h<Info text="Distinct recipients with an incoming message within 24 hours after their accepted campaign send. This measures responses after sending; it does not prove the campaign caused them. Unavailable until conversation history is current." /></div><div className="mt-1 text-lg font-semibold">{campaign.reporting.replies ?? "Unavailable"}</div></div>
+        <div className="rounded-lg border border-line p-3"><div className="flex items-center gap-1 text-xs text-muted">Linked purchases<Info text="Purchases linked by exact provider message evidence to this campaign’s paid sends. Includes pending payouts. Other spending by these fans is excluded." /></div><div className="mt-1 text-lg font-semibold">{campaign.reporting.purchases ?? "Unavailable"}</div></div>
+        <div className="rounded-lg border border-line p-3"><div className="flex items-center gap-1 text-xs text-muted">Cleared gross revenue<Info text="USD gross amount of exact linked purchases with cleared payout status. Refunded, charged-back and pending transactions are excluded. Platform fees are not deducted." /></div><div className="mt-1 text-lg font-semibold">{campaign.reporting.revenueCents === null ? "Unavailable" : formatRecordedMoney(campaign.reporting.revenueCents, "USD")}</div></div>
+        <div className="rounded-lg border border-line p-3"><div className="flex items-center gap-1 text-xs text-muted">Refunded purchases<Info text="Exact linked purchases currently recorded as refunded or charged back." /></div><div className="mt-1 text-lg font-semibold">{campaign.reporting.refundedPurchases ?? "Unavailable"}</div></div>
+      </div>
+      <div className="mt-3 flex items-center gap-1 text-xs text-muted">{campaign.reporting.ledgerAsOf ? `Payment data checked ${when(campaign.reporting.ledgerAsOf)}` : "Payment reporting needs current, verified purchase evidence."}<Info text="Accepted delivery is not an open or purchase. Missing, stale or ambiguous purchase data remains unavailable. Open tracking is not exposed." /></div>
       <div className="mt-4 max-h-96 overflow-auto"><table className="w-full text-left text-xs"><thead><tr className="border-b border-line text-muted"><th className="p-2">Conversation</th><th className="p-2">Delivery</th><th className="p-2">Detail</th></tr></thead><tbody>{detail.recipients.map(recipient => <tr key={recipient.conversationId} className="border-b border-line"><td className="break-all p-2">{recipient.conversationId}</td><td className="p-2">{LABELS[recipient.status]}</td><td className="max-w-xs break-words p-2 text-muted">{reasonText(recipient.reason, recipient.providerMessageId)}</td></tr>)}</tbody></table></div>
     </Card> : null}
   </div>;

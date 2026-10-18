@@ -2,7 +2,7 @@
 export type NativeSection = "content" | "sales" | "settings";
 export const NATIVE_SECTIONS: NativeSection[] = ["content", "sales", "settings"];
 export type WorkspaceBase = {
-  schemaVersion: "of-workspace.v1"; section: NativeSection; accountId: string; asOf: string;
+  schemaVersion: "of-workspace.v2"; section: NativeSection; accountId: string; asOf: string;
   lastCompleteSyncAt: string | null; historyRecoveryRequired: boolean; providerConnectionVerified: boolean;
 };
 export type CatalogRead = WorkspaceBase & { section: "content"; nextCursor: string | null; items: {
@@ -44,7 +44,7 @@ const cursor = (v: unknown) => nullable(v, x => typeof x === "string" && /^[A-Za
 const BASE = ["schemaVersion", "section", "accountId", "asOf", "lastCompleteSyncAt", "historyRecoveryRequired", "providerConnectionVerified"];
 
 export function parseWorkspace(value: unknown, accountId: string, section: NativeSection): WorkspaceRead | null {
-  if (!record(value) || value.schemaVersion !== "of-workspace.v1" || value.section !== section || value.accountId !== accountId ||
+  if (!record(value) || value.schemaVersion !== "of-workspace.v2" || value.section !== section || value.accountId !== accountId ||
     !stamp(value.asOf) || !nullable(value.lastCompleteSyncAt, stamp) || typeof value.historyRecoveryRequired !== "boolean" || typeof value.providerConnectionVerified !== "boolean") return null;
   if (section === "content") {
     if (!keys(value, [...BASE, "items", "nextCursor"]) || !cursor(value.nextCursor) || !Array.isArray(value.items) || value.items.length > 100) return null;
@@ -83,7 +83,7 @@ export function parseWorkspace(value: unknown, accountId: string, section: Nativ
       if (!record(cfg) || !keys(cfg, ["personaExcerpt", "personaTruncated", "creatorFacts", "language", "savedDefaultModel", "savedReplyModelOverride", "dailyModelCapCents", "salesPermissions", "issues"]) ||
         !text(cfg.personaExcerpt, 4096) || typeof cfg.personaTruncated !== "boolean" || !nullable(cfg.language, v => text(v, 32)) ||
         !nullable(cfg.savedDefaultModel, v => text(v, 160)) || !nullable(cfg.savedReplyModelOverride, v => text(v, 160)) || !integer(cfg.dailyModelCapCents) ||
-        !Array.isArray(cfg.creatorFacts) || cfg.creatorFacts.length > 64 || !cfg.creatorFacts.every(x => record(x) && keys(x, ["label", "value"]) && text(x.label, 160) && text(x.value, 1000)) ||
+        !Array.isArray(cfg.creatorFacts) || cfg.creatorFacts.length > 64 || !cfg.creatorFacts.every(x => record(x) && keys(x, ["label", "value"]) && text(x.label, 160) && text(x.value, 16000)) ||
         !keys(cfg.salesPermissions, ["pack_send_enabled", "pack_on_ask_enabled", "qualification_gate_enabled"]) || !record(cfg.salesPermissions) ||
         !Object.values(cfg.salesPermissions).every(x => x === null || typeof x === "boolean") || !Array.isArray(cfg.issues) || cfg.issues.length > 4 ||
         !cfg.issues.every(x => typeof x === "string" && Object.hasOwn(CONFIG_ISSUES, x)) ||

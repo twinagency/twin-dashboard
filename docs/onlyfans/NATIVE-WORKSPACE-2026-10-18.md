@@ -1,7 +1,7 @@
 # Native Content, Sales and Settings — 18 October 2026
 
 This offline checkpoint follows operator controls. Database schema remains
-`0078_operator_controls`; native reads use nested `of-workspace.v1` under the
+`0078_operator_controls`; native reads use nested `of-workspace.v2` under the
 existing `of-preview.v2` service envelope. The backend document of the same name
 defines the complete projection and snapshot contract.
 

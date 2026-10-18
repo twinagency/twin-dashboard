@@ -4,10 +4,16 @@ The owner requested publication of the OnlyFans implementation and complete Clau
 
 ## Start Here
 
-Current continuation: backend schema `0084_native_ledger`. Read the backend
+Current continuation: backend schema `0085_shared_creator_facts`. Read the backend
 `docs/onlyfans/DELIVERY-PLAN-2026-10-19.md` and integration release runbook first.
 The dated checkpoint descriptions below are historical. They do not supersede
 the current source, release state or the owner’s revised integration scope.
+Shared typed Twin facts now feed the native fact composer with explicit OF
+overrides and freshness checks. Campaign details expose observed 24-hour replies
+and exact-message native purchase/refund reporting with coverage reasons. Paired
+contracts are configuration v2, campaigns v2, workspace v2 and operations v3.
+Uploads/previews/metadata/folders, full audience import, broader native selling,
+combined earnings and selected-account live acceptance remain open.
 
 
 The latest offline checkpoint is
@@ -47,7 +53,7 @@ retirement, real provider/model validation and live release remain unapproved.
 The preceding offline checkpoint is
 [NATIVE-WORKSPACE-2026-10-18.md](NATIVE-WORKSPACE-2026-10-18.md). Content, Sales
 and Settings now read existing canonical records through authenticated native
-pages and `of-workspace.v1` projections. Database head remains 0078. These read
+pages and `of-workspace.v2` projections. Database head remains 0078. These read
 surfaces do not expose uploads, configuration edits or financial reconciliation
 commands, or complete all of Milestone 5/live acceptance.
 

@@ -5,7 +5,7 @@ import { parseOperations, formatModelUsd } from "../lib/onlyfans/operations";
 import { createHttpOnlyFansBackend, ONLYFANS_SCHEMA_VERSION_HEADER } from "../lib/onlyfans/backend";
 
 const snapshot = {
-  schemaVersion: "of-operations.v2", accountId: "acc-a", asOf: "2026-10-18T00:00:00Z",
+  schemaVersion: "of-operations.v3", accountId: "acc-a", asOf: "2026-10-18T00:00:00Z",
   modelCosts: {day: "2026-10-18", unit: "usd_millicents", spentMillicents: 7, capPerProviderMillicents: 10000, calls: 1, unresolvedCalls: 1, providers: 1},
   providerConnectionVerified: false, reasons: ["delivery_unresolved"],
   intake: { pending: 3, quarantined: 0 },
@@ -25,7 +25,7 @@ function rejected(name: string, change: (value: any) => void) {
 assert.deepEqual(parseOperations(snapshot, "acc-a"), snapshot); checks++;
 assert.ok(parseOperations({...snapshot, reasons: ["commerce_evidence_conflict"]}, "acc-a")); checks++;
 assert.equal(parseOperations(snapshot, "acc-b"), null); checks++;
-rejected("future contract", v => { v.schemaVersion = "of-operations.v3"; });
+rejected("future contract", v => { v.schemaVersion = "of-operations.v4"; });
 rejected("old contract", v => { v.schemaVersion = "of-operations.v1"; });
 rejected("wrong money unit", v => { v.modelCosts.unit = "usd_cents"; });
 rejected("negative model cost", v => { v.modelCosts.spentMillicents = -1; });

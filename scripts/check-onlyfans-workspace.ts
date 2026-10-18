@@ -4,7 +4,7 @@ import { parseWorkspace, formatRecordedMoney } from "../lib/onlyfans/workspace";
 import { createHttpOnlyFansBackend } from "../lib/onlyfans/backend";
 
 async function main() {
-  const base = { schemaVersion: "of-workspace.v1", accountId: "acc-a", asOf: "2026-10-18T01:00:00Z",
+  const base = { schemaVersion: "of-workspace.v2", accountId: "acc-a", asOf: "2026-10-18T01:00:00Z",
     lastCompleteSyncAt: null, historyRecoveryRequired: true, providerConnectionVerified: false };
   const item = { itemId: "1", label: "Neutral collection", kind: "video", description: "A scenic video.",
     descriptionTruncated: false, mediaCount: 3, previewCount: 1, priceCents: 1000, currency: "USD",

@@ -322,7 +322,7 @@ service or implement command families 3–7.
 
 `GET /api/onlyfans/accounts/{accountId}/operations` and the paired backend
 `GET /onlyfans/api/v1/accounts/{accountId}/operations` retain outer
-`of-preview.v2` and now require nested `of-operations.v2`. Earlier Operations
+`of-preview.v2` and now require nested `of-operations.v3`. Earlier Operations
 v1 examples below describe the historical checkpoint.
 
 `modelCosts` has exactly `day` (valid UTC YYYY-MM-DD), `unit` (literal

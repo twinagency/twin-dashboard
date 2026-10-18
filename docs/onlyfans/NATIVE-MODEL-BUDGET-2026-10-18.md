@@ -4,7 +4,7 @@ Historical 0075 checkpoint. Continue with
 [NATIVE-MEMORY-2026-10-18.md](NATIVE-MEMORY-2026-10-18.md), schema 0076.
 
 The paired backend schema is `0075_native_model_budget`. The private Operations
-read uses outer `of-preview.v2` and nested `of-operations.v2`.
+read uses outer `of-preview.v2` and nested `of-operations.v3`.
 
 The existing Twin page now shows today's recorded model cost and reservations,
 per-provider daily allowance, provider and call counts, and unresolved costs.

@@ -21,6 +21,9 @@ if (process.env.ONLYFANS_TEST_CHROMIUM_MODULE) {
 } else if (process.env.PREVIEW_CHROME) {
   options.executablePath = process.env.PREVIEW_CHROME;
 }
+if (process.env.ONLYFANS_TEST_CHROMIUM_LIB_DIR) {
+  options.env = { ...process.env, LD_LIBRARY_PATH: process.env.ONLYFANS_TEST_CHROMIUM_LIB_DIR + ":" + (process.env.LD_LIBRARY_PATH ?? "") };
+}
 const browser = await chromium.launch(options);
 try {
   const context = await browser.newContext({ viewport: { width: 1440, height: 1000 } });

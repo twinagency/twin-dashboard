@@ -52,7 +52,9 @@ export async function checkOperator(page, context, origin) {
   assert.equal(accepted, true, "Owned native HTTP acceptance must become one canonical sent bubble");
   await page.reload({ waitUntil: "networkidle" });
   await page.locator(`[data-of-conversation-id="${CONVERSATION}"]`).click();
-  assert.equal(await page.locator('[data-of-thread] [data-of-message-delivery="sent"]').filter({ hasText: MANUAL }).count(), 1);
+  const sent = page.locator('[data-of-thread] [data-of-message-delivery="sent"]').filter({ hasText: MANUAL });
+  await sent.waitFor({ state: "visible", timeout: 15000 });
+  assert.equal(await sent.count(), 1);
   assert.equal(await composer.inputValue(), "");
   if (process.env.ONLYFANS_TEST_EVIDENCE) await page.screenshot({ path: path.join(process.env.ONLYFANS_TEST_EVIDENCE, "operator-manual-confirmed.png"), fullPage: true });
 
@@ -91,7 +93,13 @@ export async function checkOperator(page, context, origin) {
     assert.equal((await responsePromise).status(), 200);
     await page.waitForFunction(expected => document.querySelector("[data-of-campaign-status]")?.textContent === expected, status);
   }
-  assert.match(await campaignDetail.innerText(), /Opens, campaign replies and attributed revenue are not available/);
+  const reporting = campaignDetail.locator("[data-of-campaign-reporting]");
+  assert.match(await reporting.innerText(), /Fans replied within 24h/);
+  assert.match(await reporting.innerText(), /Linked purchases/);
+  assert.match(await reporting.innerText(), /Cleared gross revenue/);
+  assert.equal(await reporting.getByText("Unavailable", { exact: true }).count(), 3,
+    "missing native ledger coverage must not render zero purchases, refunds or revenue");
+  assert.match(await campaignDetail.innerText(), /Payment reporting needs current, verified purchase evidence/);
   await page.reload({ waitUntil: "networkidle" });
   await page.locator(`[data-of-campaign="${campaignAck.campaignId}"]`).click();
   await page.waitForFunction(() => document.querySelector("[data-of-campaign-status]")?.textContent === "cancelled");

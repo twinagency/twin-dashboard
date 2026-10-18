@@ -15,7 +15,9 @@ async function main() {
   const counts = Object.fromEntries(RECIPIENT_STATUSES.map(status => [status, status === "pending" ? 1 : 0]));
   const campaign = { campaignId: id, accountId, name: create.name, body: create.body,
     audience: { kind: "explicit", count: 1, snapshotHash: "a".repeat(64) }, scheduledAt: at, createdAt: at, updatedAt: at,
-    status: "scheduled", revision: 0, counts, recipientCount: 1, deliveryMode: "individual_messages", offer: null, reporting: { replies: null, revenueCents: null, currency: null } };
+    status: "scheduled", revision: 0, counts, recipientCount: 1, deliveryMode: "individual_messages", offer: null,
+    reporting: { replies: null, replyWindowHours: 24, purchases: null, refundedPurchases: null,
+      revenueCents: null, currency: null, ledgerAsOf: null, revenueStatus: "ledger_unavailable" } };
   assert(parseCampaign(campaign, accountId));
   const offer = { catalogItemId: 1, label: "Saved collection", priceCents: 1000, currency: "USD", mediaIds: ["11", "12"], previewIds: ["11"], snapshotHash: "c".repeat(64) };
   assert(parseCampaign({ ...campaign, offer }, accountId)); assert(validCampaignCreate({ ...create, catalogItemId: 1 }));
@@ -23,6 +25,12 @@ async function main() {
   assert.equal(parseCampaign({ ...campaign, offer: { ...offer, priceCents: 1000.5 } }, accountId), null);
   assert.equal(parseCampaign({ ...campaign, counts: { ...counts, accepted: 1 } }, accountId), null);
   assert.equal(parseCampaign({ ...campaign, reporting: { replies: 0, revenueCents: 0, currency: "USD" } }, accountId), null, "Unavailable attribution cannot be invented as zero");
+  const available = { replies: 1, replyWindowHours: 24, purchases: 1, refundedPurchases: 0, revenueCents: 1000,
+    currency: "USD", ledgerAsOf: "2026-10-18T12:00:00Z", revenueStatus: "available" };
+  assert(parseCampaign({ ...campaign, reporting: available }, accountId));
+  for (const changed of [{ ledgerAsOf: null }, { replies: 2 }, { revenueStatus: "ledger_held" },
+    { revenueCents: -1 }, { refundedPurchases: 1 }, { currency: "AUD" }])
+    assert.equal(parseCampaign({ ...campaign, reporting: { ...available, ...changed } }, accountId), null);
   assert.equal(parseCampaign(campaign, "other"), null);
   const list = { schemaVersion: CAMPAIGN_SCHEMA, ok: true, accountId, campaigns: [campaign], truncated: false };
   assert(parseCampaignList(list, accountId)); assert.equal(parseCampaignList({ ...list, campaigns: [campaign, campaign] }, accountId), null);

@@ -8,6 +8,10 @@ export async function checkConfiguration(page, context, origin) {
   const save = editor.locator("[data-of-save-configuration]");
   const notice = editor.locator("[data-of-configuration-notice]");
   await persona.waitFor(); assert.equal(await city.inputValue(), "Synthetic Harbor");
+  await editor.locator('[data-of-inherit-fact="home_city"]').click();
+  await notice.filter({ hasText: "Save recorded." }).waitFor();
+  assert.equal(await city.inputValue(), "Current city: Shared Twin city");
+  await page.locator("[data-of-settings]").getByText("Current city: Shared Twin city", { exact: true }).waitFor();
   await persona.fill("Updated approved synthetic creator persona."); await city.fill("Updated Synthetic Harbor");
   await save.click(); await notice.filter({ hasText: "Save recorded." }).waitFor();
   await page.locator("[data-of-settings]").getByText("Updated Synthetic Harbor", { exact: true }).waitFor();
@@ -56,5 +60,5 @@ export async function checkConfiguration(page, context, origin) {
   await context.addCookies([{ name: "allie_admin_session", value: process.env.ONLYFANS_TEST_COOKIE, url: origin }]);
   await page.goto(origin + "/onlyfans/settings?account=acc-a", { waitUntil: "networkidle" });
   await page.locator("[data-of-settings]").waitFor();
-  console.log("Configuration browser PASS: partial persona/facts, saved model, one-event lost-ack retry, concurrent conflict refresh, session-loss clearing and mobile layout");
+  console.log("Configuration browser PASS: shared Twin inheritance, partial persona/facts, saved model, one-event lost-ack retry, concurrent conflict refresh, session-loss clearing and mobile layout");
 }

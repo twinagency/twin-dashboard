@@ -1,5 +1,5 @@
 /** Creator editor contract. No service credential enters browser code. */
-export const CONFIGURATION_SCHEMA = "of-configuration.v1";
+export const CONFIGURATION_SCHEMA = "of-configuration.v2";
 export const CONFIGURATION_HEADER = "X-OnlyFans-Configuration-Version";
 export const FACT_KEYS = ["age", "job", "home_city", "relationship", "kids", "family", "tattoos", "kinks", "limits"] as const;
 export type FactKey = typeof FACT_KEYS[number];
@@ -7,10 +7,12 @@ export type Configuration = {
   configurationRevision: number; fingerprint: string; persona: string | null; personaTruncated: boolean;
   creatorFacts: Record<FactKey, string | null>; factFields: { key: FactKey; label: string }[];
   factsValid: boolean; readOnlyFacts: FactKey[]; modelsValid: boolean;
+  sharedFacts: { state: "unconfigured" | "unavailable" | "current" | "stale";
+    checkedAt: string | null; sourceUpdatedAt: string | null; overrideKeys: FactKey[] };
   defaultModel: string | null; replyModelOverride: string | null; replyOverridePresent: boolean;
   resolvedReplyModel: string | null; modelOptions: string[];
 };
-export type ConfigurationPatch = { persona?: string; creatorFacts?: Partial<Record<FactKey, string | null>>;
+export type ConfigurationPatch = { persona?: string; creatorFacts?: Partial<Record<FactKey, string | null>>; inheritCreatorFacts?: FactKey[];
   defaultModel?: string; replyModelOverride?: string | null };
 export type ConfigurationRequest = { patch: ConfigurationPatch; expectedRevision: number; expectedFingerprint: string };
 export type ConfigurationAck = { schemaVersion: typeof CONFIGURATION_SCHEMA; ok: true; applied: true;
@@ -26,7 +28,10 @@ export function validConfigurationRequest(value: unknown): value is Configuratio
   if (!object(value) || !exact(value, ["patch", "expectedRevision", "expectedFingerprint"]) ||
       !revision(value.expectedRevision) || !configurationHash(value.expectedFingerprint) || !object(value.patch)) return false;
   const patch = value.patch;
-  if (!Object.keys(patch).length || Object.keys(patch).some(key => !["persona", "creatorFacts", "defaultModel", "replyModelOverride"].includes(key))) return false;
+  if (!Object.keys(patch).length || Object.keys(patch).some(key => !["persona", "creatorFacts", "inheritCreatorFacts", "defaultModel", "replyModelOverride"].includes(key))) return false;
+  if ("inheritCreatorFacts" in patch && (!Array.isArray(patch.inheritCreatorFacts) || !patch.inheritCreatorFacts.length ||
+    new Set(patch.inheritCreatorFacts).size !== patch.inheritCreatorFacts.length || patch.inheritCreatorFacts.some(key =>
+      !(FACT_KEYS as readonly unknown[]).includes(key) || object(patch.creatorFacts) && Object.hasOwn(patch.creatorFacts, String(key))))) return false;
   if ("persona" in patch && (!text(patch.persona, 4096) || !patch.persona.trim())) return false;
   if ("creatorFacts" in patch && (!object(patch.creatorFacts) || !Object.keys(patch.creatorFacts).length ||
     Object.entries(patch.creatorFacts).some(([key, value]) => !(FACT_KEYS as readonly string[]).includes(key) ||
@@ -38,10 +43,10 @@ export function parseConfiguration(value: unknown, accountId: string): Configura
   if (!object(value) || !exact(value, ["schemaVersion", "ok", "accountId", "configuration"]) ||
     value.schemaVersion !== CONFIGURATION_SCHEMA || value.ok !== true || value.accountId !== accountId || !object(value.configuration)) return null;
   const c = value.configuration;
-  if (!exact(c, ["configurationRevision", "fingerprint", "persona", "personaTruncated", "creatorFacts", "factFields", "factsValid", "readOnlyFacts", "modelsValid", "defaultModel", "replyModelOverride", "replyOverridePresent", "resolvedReplyModel", "modelOptions"]) ||
+  if (!exact(c, ["configurationRevision", "fingerprint", "persona", "personaTruncated", "creatorFacts", "factFields", "factsValid", "readOnlyFacts", "modelsValid", "defaultModel", "replyModelOverride", "replyOverridePresent", "resolvedReplyModel", "modelOptions", "sharedFacts"]) ||
     !revision(c.configurationRevision) || !configurationHash(c.fingerprint) || !optionalText(c.persona, 4096) ||
     typeof c.personaTruncated !== "boolean" || (c.personaTruncated ? c.persona !== null : typeof c.persona !== "string") ||
-    !object(c.creatorFacts) || !exact(c.creatorFacts, [...FACT_KEYS]) || Object.values(c.creatorFacts).some(value => !optionalText(value, 1000)) ||
+    !object(c.creatorFacts) || !exact(c.creatorFacts, [...FACT_KEYS]) || Object.values(c.creatorFacts).some(value => !optionalText(value, 16000)) ||
     !Array.isArray(c.factFields) || c.factFields.length !== FACT_KEYS.length ||
     !c.factFields.every((field, index) => object(field) && exact(field, ["key", "label"]) && field.key === FACT_KEYS[index] && text(field.label, 160) && !!field.label) ||
     !Array.isArray(c.readOnlyFacts) || new Set(c.readOnlyFacts).size !== c.readOnlyFacts.length || c.readOnlyFacts.some(key => !(FACT_KEYS as readonly unknown[]).includes(key)) ||
@@ -50,6 +55,12 @@ export function parseConfiguration(value: unknown, accountId: string): Configura
     !Array.isArray(c.modelOptions) || !c.modelOptions.length || c.modelOptions.length > 500 ||
     new Set(c.modelOptions).size !== c.modelOptions.length || c.modelOptions.some(model => !text(model, 160) || !model) ||
     (c.resolvedReplyModel !== null && !c.modelOptions.includes(c.resolvedReplyModel))) return null;
+  const source = c.sharedFacts;
+  const stamp = (value: unknown) => value === null || typeof value === "string" && /Z$/.test(value) && Number.isFinite(Date.parse(value));
+  if (!object(source) || !exact(source, ["state", "checkedAt", "sourceUpdatedAt", "overrideKeys"]) ||
+    !["unconfigured", "unavailable", "current", "stale"].includes(source.state as string) || !stamp(source.checkedAt) || !stamp(source.sourceUpdatedAt) ||
+    !Array.isArray(source.overrideKeys) || new Set(source.overrideKeys).size !== source.overrideKeys.length || source.overrideKeys.some(key => !(FACT_KEYS as readonly unknown[]).includes(key)) ||
+    source.state === "current" && (source.checkedAt === null || source.sourceUpdatedAt === null)) return null;
   return c as Configuration;
 }
 export function parseConfigurationAck(value: unknown, expected: ConfigurationRequest & { accountId: string; commandKey?: string }): ConfigurationAck | null {

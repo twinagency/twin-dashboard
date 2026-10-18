@@ -4,7 +4,7 @@ This paired offline checkpoint adds the Settings editor to the existing native
 workspace. It updates the existing `AccountAiConfig` owner for a bound account;
 it does not introduce another persona, model selector, prompt or fact store.
 Database head is `0079_native_configuration`. Read projections remain
-`of-workspace.v1` under `of-preview.v2`; edits use `of-configuration.v1`.
+`of-workspace.v2` under `of-preview.v2`; edits use `of-configuration.v2`.
 
 ## Operator behavior
 
@@ -44,7 +44,7 @@ token server-side with its existing `ONLYFANS_API_BASE_URL`. An absent purpose
 token leaves the existing read-only Settings surface intact.
 
 Native routes are GET/POST `/onlyfans/configuration/v1/accounts/{account}` with
-`X-OnlyFans-Configuration-Version: of-configuration.v1`. Dashboard routes are
+`X-OnlyFans-Configuration-Version: of-configuration.v2`. Dashboard routes are
 GET/POST `/api/onlyfans-configuration/accounts/{account}`. Every request verifies
 the internal operator session and rejects agency/view-as access. POST additionally
 checks exact dashboard Origin/HTTP Host, Fetch Metadata and JSON content type;

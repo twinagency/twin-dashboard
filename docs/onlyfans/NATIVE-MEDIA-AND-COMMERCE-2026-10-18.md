@@ -14,7 +14,7 @@ occurred. The curated vault pack resolver and full native policy remain open.
 The private Operations read now exposes `commerce_evidence_conflict` as:
 “Conflicting purchase evidence needs review. Media sales are held.” No payment
 payload, transaction ID or extra credential crosses this read. Both sides retain
-`of-operations.v2` and its exact field/units contract; the reason vocabulary is
+`of-operations.v3` and its exact field/units contract; the reason vocabulary is
 extended together. Provider connection remains explicitly unverified.
 
 The authenticated browser rehearsal now includes actual accepted media and a

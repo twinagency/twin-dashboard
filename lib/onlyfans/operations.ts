@@ -7,6 +7,7 @@ export const OPERATION_REASONS = {
   history_not_current: "History synchronization is incomplete or out of date.",
   history_sync_time_invalid: "The synchronization timestamp needs investigation.",
   history_quarantined: "Conflicting history needs review.",
+  creator_facts_not_current: "Twin creator facts need synchronization. AI replies are held.",
   commerce_evidence_conflict: "Purchase evidence needs review or synchronization. Media sales are held.",
   delivery_unresolved: "An earlier delivery outcome needs evidence review.",
   delivery_in_progress: "A delivery attempt is in progress.",
@@ -21,7 +22,7 @@ export const OPERATION_REASONS = {
 } as const;
 
 export type OperationsSnapshot = {
-  schemaVersion: "of-operations.v2";
+  schemaVersion: "of-operations.v3";
   accountId: string;
   asOf: string;
   providerConnectionVerified: boolean;
@@ -61,7 +62,7 @@ function keys(value: unknown, names: string[]): boolean {
 
 export function parseOperations(value: unknown, accountId: string): OperationsSnapshot | null {
   if (!keys(value, ["schemaVersion", "accountId", "asOf", "providerConnectionVerified", "reasons", "intake", "planning", "work", "delivery", "runtime", "policy", "modelCosts"])) return null;
-  if (!record(value) || value.schemaVersion !== "of-operations.v2" || value.accountId !== accountId
+  if (!record(value) || value.schemaVersion !== "of-operations.v3" || value.accountId !== accountId
       || !stamp(value.asOf) || typeof value.providerConnectionVerified !== "boolean"
       || !Array.isArray(value.reasons) || value.reasons.length > Object.keys(OPERATION_REASONS).length
       || new Set(value.reasons).size !== value.reasons.length

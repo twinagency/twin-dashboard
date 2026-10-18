@@ -119,13 +119,31 @@ export default function ConfigurationEditor({ accountId }: { accountId: string }
           {data.personaTruncated ? <span className="mt-1 block text-xs text-muted">The full saved persona exceeds this editor’s limit. Enter a complete replacement only if you want to replace it.</span> : null}
         </label>
         <div><h3 className="text-sm font-semibold">Approved creator facts</h3>
+          <p className="mt-1 text-xs text-muted" data-of-shared-facts-state>
+            {data.sharedFacts.state === "unconfigured" ? "Twin fact synchronization has not been connected for this account."
+              : data.sharedFacts.state === "current" ? "Twin facts are synchronized. Editing a fact creates an OnlyFans override."
+              : "Twin facts are unavailable or out of date. AI replies wait for synchronization."}
+          </p>
           {!data.factsValid ? <p className="mt-1 text-xs text-muted">Saved facts need review before they can be edited.</p> : null}
-          <div className="mt-2 grid min-w-0 gap-3 sm:grid-cols-2">{data.factFields.map(field => <label key={field.key} className="min-w-0 text-sm">{field.label}
-            <input data-of-edit-fact={field.key} className={inputClass} maxLength={240} value={facts[field.key] ?? ""}
-              disabled={!data.factsValid || data.readOnlyFacts.includes(field.key)} onChange={event => setFacts(previous => ({ ...previous, [field.key]: event.target.value }))} />
-            {data.readOnlyFacts.includes(field.key) ? <span className="text-xs text-muted">Saved value needs review.</span> : null}
-          </label>)}</div>
-          <p className="mt-2 text-xs text-muted">Leave a fact blank to clear it. Save only facts approved by the creator.</p>
+          <div className="mt-2 grid min-w-0 gap-3 sm:grid-cols-2">{data.factFields.map(field => <div key={field.key} className="min-w-0 text-sm">
+            <label>{field.label}
+              {data.readOnlyFacts.includes(field.key)
+                ? <textarea data-of-edit-fact={field.key} className={`${inputClass} min-h-24`} readOnly value={facts[field.key] ?? ""} />
+                : <input data-of-edit-fact={field.key} className={inputClass} maxLength={240} value={facts[field.key] ?? ""}
+                    disabled={!data.factsValid} onChange={event => setFacts(previous => ({ ...previous, [field.key]: event.target.value }))} />}
+            </label>
+            {data.sharedFacts.state !== "unconfigured" ? <span className="mt-1 block text-xs text-muted">
+              {data.sharedFacts.overrideKeys.includes(field.key) ? "OnlyFans override" : "Inherited from Twin when supplied"}
+            </span> : null}
+            {data.readOnlyFacts.includes(field.key) ? <span className="block text-xs text-muted">Long saved facts are shown in full and cannot be edited here.</span> : null}
+            {data.sharedFacts.state === "current" && data.sharedFacts.overrideKeys.includes(field.key) ? <button
+              type="button" data-of-inherit-fact={field.key} disabled={!!command || !data.factsValid}
+              className="mt-1 text-xs font-semibold text-accent disabled:opacity-50"
+              onClick={() => void save({ patch: { inheritCreatorFacts: [field.key] }, expectedRevision: data.configurationRevision, expectedFingerprint: data.fingerprint })}>
+              Use Twin value
+            </button> : null}
+          </div>)}</div>
+          <p className="mt-2 text-xs text-muted">Leave a fact blank to clear it for OnlyFans. Save only facts approved by the creator. Save or discard other edits before choosing Use Twin value.</p>
         </div>
         <div className="grid min-w-0 gap-3 sm:grid-cols-2">
           <label className="min-w-0 text-sm">Default model<select data-of-edit-model className={inputClass} disabled={!data.modelsValid} value={defaultModel} onChange={event => setDefaultModel(event.target.value)}>
