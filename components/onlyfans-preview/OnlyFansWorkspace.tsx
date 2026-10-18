@@ -310,18 +310,21 @@ export default function OnlyFansWorkspace({
   // would be a navigation nobody requested, which is also how a correction can
   // race a click and pull the operator back to the page they just left.
   useEffect(() => {
-    if (state.accounts.status !== "ready" && state.accounts.status !== "stale") return;
-    const authorized = state.accounts.data.map((account) => account.accountId);
+    // The preceding accounts effect has already marked a new read loading in
+    // the ref. A render's old list cannot reject a newly requested account.
+    const current=ref.current;
+    if (current.accounts.status !== "ready" && current.accounts.status !== "stale") return;
+    const authorized = current.accounts.data.map((account) => account.accountId);
     const requestedId = requestedScope.accountId;
     const chosen =
       requestedId && authorized.includes(requestedId)
         ? requestedId
-        : state.selectedAccountId && authorized.includes(state.selectedAccountId)
-          ? state.selectedAccountId
+        : current.selectedAccountId && authorized.includes(current.selectedAccountId)
+          ? current.selectedAccountId
           : (authorized[0] ?? null);
 
-    if (chosen && chosen !== state.selectedAccountId) {
-      commit(selectAccount(ref.current, chosen));
+    if (chosen && chosen !== current.selectedAccountId) {
+      commit(selectAccount(current, chosen));
     }
     if (requestedId && chosen !== requestedId) {
       router.replace(

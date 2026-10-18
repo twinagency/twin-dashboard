@@ -16,9 +16,18 @@ export async function checkConnections(page, context, origin) {
   await registration.locator("[data-of-register-creator]").selectOption(option);
   await registration.locator("[data-of-register-owner]").fill(owner);
   await registration.locator("[data-of-register-handle]").fill("synthetic-owner");
+  const delayedAccounts=async route=>{
+    if(new URL(route.request().url()).searchParams.get("account")!==accountId)return route.continue();
+    const response=await route.fetch();
+    await new Promise(resolve=>setTimeout(resolve,500));
+    await route.fulfill({response});
+  };
+  await page.route("**/api/onlyfans/accounts?*",delayedAccounts);
   await registration.locator("[data-of-register-submit]").click();
   const card = page.locator(`[data-of-account-id="${accountId}"]`);
   await card.waitFor({ timeout: 15000 });
+  assert.equal(new URL(page.url()).searchParams.get("account"),accountId,"an older accounts list replaced the newly registered selection");
+  await page.unroute("**/api/onlyfans/accounts?*",delayedAccounts);
   const editor = card.locator(`[data-of-connection-editor="${accountId}"]`);
   await editor.locator("[data-of-connection-open]").click();
   await editor.locator("[data-of-connection-status]").getByText("Credentials not saved", { exact: true }).waitFor();

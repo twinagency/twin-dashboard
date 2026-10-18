@@ -14,9 +14,20 @@ and exact-message native purchase/refund reporting with coverage reasons. Paired
 contracts are configuration v2, campaigns v2, workspace v2 and operations v3.
 Metadata edits and internal-folder operations now use existing Fastt owners and
 shared override/lock projection. Account onboarding remains accessible while
-history is stale. The full local browser/API/worker flow and production build
-passed. Uploads/previews, full audience import, broader native selling,
-combined earnings and selected-account live acceptance remain open.
+history is stale. Combined earnings now reuses Twin's revenue cache and the
+verified native ledger for an identical reporting window, with explicit Stars,
+USD conversion basis, gross/net distinctions and unavailable coverage reasons.
+It does not add together incompatible financial bases. The full local
+browser/API/worker flow passed, including a delayed-response account-selection
+regression. Uploads/previews, full audience import, broader native selling and
+selected-account live acceptance remain open.
+
+Before release, merge/rebase this branch onto current main. Preserve main's
+newer viewer-specific revenue cache keys and platform-cut terms together with
+the new `reportWindow` metadata. A clean three-way merge was rehearsed for the
+cache file; do not overwrite main with this older checkout. Rerun the relevant
+checks after integration. Both saved deployment connections are currently
+offline; no provider/model/production acceptance is implied by the local tests.
 
 
 The latest offline checkpoint is

@@ -39,6 +39,8 @@ import { resolveRevenueWindow } from "./revenue-window";
 export type RevenueRollup = RevenueSections;
 
 export type CachedRevenue = RevenueRollup & {
+  /** Exact shared window used by the cached dashboard and analytics reads. */
+  reportWindow: DateRange;
   /** Epoch ms the underlying queries actually ran. */
   cachedAt: number;
   /** Seconds since then. 0 on a cold read. */
@@ -59,7 +61,7 @@ const TTL_MS = 60 * 1000;
 // tracking.
 const MAX_ENTRIES = 48;
 
-type Entry = { fetchedAt: number; value: RevenueRollup };
+type Entry = { fetchedAt: number; value: RevenueRollup; reportWindow: DateRange };
 
 const cache = new Map<string, Entry>();
 const inflight = new Map<string, Promise<Entry>>();
@@ -101,7 +103,7 @@ function refresh(key: string, period: Period, cloneId: string | null, range?: Da
       getDashboard(period, sharedRange, nowMs, dashboardCloneIds),
       getAnalytics(period, cloneId, sharedRange, undefined, nowMs, dashboardCloneIds),
     );
-    const entry: Entry = { fetchedAt: Date.now(), value };
+    const entry: Entry = { fetchedAt: Date.now(), value, reportWindow: sharedRange };
     if (!cache.has(key)) evictIfFull();
     cache.set(key, entry);
     return entry;
@@ -156,7 +158,7 @@ export async function getRevenueRollup(
     const stale = ageMs > TTL_MS;
     if (options?.force) {
       const entry = await withDashboardAccess(access, () => refresh(key, period, cloneId, range, dashboardCloneIds));
-      return { ...entry.value, cachedAt: entry.fetchedAt, ageSeconds: 0, stale: false };
+      return { ...entry.value, reportWindow: entry.reportWindow, cachedAt: entry.fetchedAt, ageSeconds: 0, stale: false };
     }
     if (stale) {
       // Ordinary callers receive the last good snapshot while one refresh is
@@ -165,19 +167,19 @@ export async function getRevenueRollup(
       const updating = withDashboardAccess(access, () => refresh(key, period, cloneId, range, dashboardCloneIds));
       if (options?.awaitFresh) {
         const entry = await updating;
-        return { ...entry.value, cachedAt: entry.fetchedAt, ageSeconds: 0, stale: false };
+        return { ...entry.value, reportWindow: entry.reportWindow, cachedAt: entry.fetchedAt, ageSeconds: 0, stale: false };
       }
       updating.catch((e) => {
         console.error(`[revenue-cache] background refresh of ${key} failed:`, e);
       });
     }
-    return { ...cached.value, cachedAt: cached.fetchedAt, ageSeconds: Math.round(ageMs / 1000), stale };
+    return { ...cached.value, reportWindow: cached.reportWindow, cachedAt: cached.fetchedAt, ageSeconds: Math.round(ageMs / 1000), stale };
   }
 
   // Cold. Nothing to serve, so this one waits. Errors propagate so the route can
   // return a 500 rather than an empty dashboard that reads as "you earned zero".
   const entry = await withDashboardAccess(access, () => refresh(key, period, cloneId, range, dashboardCloneIds));
-  return { ...entry.value, cachedAt: entry.fetchedAt, ageSeconds: 0, stale: false };
+  return { ...entry.value, reportWindow: entry.reportWindow, cachedAt: entry.fetchedAt, ageSeconds: 0, stale: false };
 }
 
 /**

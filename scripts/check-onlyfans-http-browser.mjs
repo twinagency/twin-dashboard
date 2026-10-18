@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import path from "node:path";
+import { checkCombinedEarnings } from "./check-combined-earnings-browser.mjs";
 import { checkConfiguration } from "./check-onlyfans-configuration-browser.mjs";
 import { checkVaultOrganization } from "./check-onlyfans-vault-organization-browser.mjs";
 import { checkContent } from "./check-onlyfans-content-browser.mjs";
@@ -40,6 +41,7 @@ try {
   });
   await context.addCookies([{ name: "allie_admin_session", value: process.env.ONLYFANS_TEST_COOKIE, url: origin }]);
   const page = await context.newPage();
+  await checkCombinedEarnings(page,context,origin);
   await page.goto(origin + "/onlyfans/inbox?creator=creator-acc-a&account=acc-a", { waitUntil: "networkidle", timeout: 45000 });
   // Selecting the real conversation causes the detail handler to run.
   await page.locator('[data-of-conversation-id="acc-a:101"]').click();

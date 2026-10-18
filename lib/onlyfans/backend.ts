@@ -29,6 +29,7 @@ import type {
   OfAccount,
 } from "../onlyfans-preview/types";
 import { ONLYFANS_PREVIEW_SCHEMA_VERSION } from "../onlyfans-preview/types";
+import { parseNativeEarnings, validEarningsWindow, type NativeEarnings, type EarningsWindow } from "./earnings";
 import { parseOperations, type OperationsSnapshot } from "./operations";
 import { parseWorkspace, NATIVE_SECTIONS, type NativeSection, type WorkspaceRead } from "./workspace";
 
@@ -77,6 +78,7 @@ export type OnlyFansBackend = {
     accountId: string,
     conversationId: string,
   ): Promise<BackendResult<ConversationDetail>>;
+  getEarnings?(window:EarningsWindow):Promise<BackendResult<NativeEarnings>>;
   getOperations?(accountId: string): Promise<BackendResult<OperationsSnapshot>>;
   getWorkspace?(accountId: string, section: NativeSection, cursor?: string | null): Promise<BackendResult<WorkspaceRead>>;
 };
@@ -218,6 +220,10 @@ export function createHttpOnlyFansBackend(options: {
       return read(`${ONLYFANS_API_PATH}/accounts/${accountId}/workspace/${section}${query}`, body => isRecord(body) ? parseWorkspace(body.workspace, accountId, section) : null);
     },
 
+    getEarnings(window) {
+      if(!validEarningsWindow(window))return Promise.resolve({ok:false,status:400,code:"invalid_earnings_window",error:"That reporting window is not supported."});
+      return read(`${ONLYFANS_API_PATH}/earnings?start=${encodeURIComponent(window.start)}&end=${encodeURIComponent(window.end)}`,body=>isRecord(body)?parseNativeEarnings(body.earnings,window):null);
+    },
     getOperations(accountId) {
       if (!ID_PATTERN.test(accountId)) {
         return Promise.resolve({ ok: false, status: 400, code: "invalid_account_id", error: "That account reference is not a valid identifier." });
