@@ -60,8 +60,29 @@ async function main() {
   assert.equal(retry.outcome, "recorded"); assert.equal(retry.recordedRevision, 8);
   assert.equal(posted[0], posted[1]);
   assert.deepEqual(JSON.parse(posted[0]), { action: command.action, expectedRevision: 7 });
-  const unsupported = await transport.submitControl!({ ...request, command: "send_manual_message", payload: { kind: "manual_message", body: "hello" } });
+  const unsupported = await transport.submitControl!({ ...request, command: "resolve_delivery_evidence", payload: { kind: "delivery_resolution", attemptId: "example", decision: "delivered" } });
   assert.equal(unsupported.outcome, "refused"); assert.equal(posted.length, 2);
+  const manualRequest = { ...request, command: "send_manual_message" as const,
+    idempotencyKey: "00000000-0000-4000-8000-000000000001", payload: { kind: "manual_message" as const, body: "  A deliberate reply\n" } };
+  const manualAck = { ...ack, action: "manual_message", recordedRevision: 7, intentId: "cccccccc-cccc-4ccc-8ccc-cccccccccccc", outcome: "queued" };
+  assert(parseControlAck(manualAck, { ...command, action: "manual_message" }));
+  for (const changed of [{ outcome: "sent" }, { recordedRevision: 8 }, { intentId: "" }, { providerMessageId: "fake" }])
+    assert.equal(parseControlAck({ ...manualAck, ...changed }, { ...command, action: "manual_message" }), null);
+  const manualPosts: string[] = [];
+  const manualTransport = createFetchOnlyFansTransport(async (_url, init) => {
+    manualPosts.push(String(init?.body));
+    if (manualPosts.length === 1) throw new Error("synthetic lost queued acknowledgement");
+    return Response.json(manualAck);
+  });
+  const manualLost = await manualTransport.submitControl!(manualRequest);
+  assert.equal(manualLost.outcome, "unconfirmed");
+  const manualRetry = await manualTransport.submitControl!(manualLost.request);
+  assert.equal(manualRetry.outcome, "recorded"); assert.equal(manualRetry.intentId, manualAck.intentId);
+  assert.match(manualRetry.note, /queued/); assert.equal(manualPosts[0], manualPosts[1]);
+  assert.deepEqual(JSON.parse(manualPosts[0]), { action: "manual_message", expectedRevision: 7,
+    body: manualRequest.payload.body, requestKey: manualRequest.idempotencyKey });
+  assert.equal((await manualTransport.submitControl!({ ...manualRequest, payload: { kind: "manual_message", body: "🙂".repeat(1001) } })).outcome, "refused");
+  assert.equal(manualPosts.length, 2, "Oversized UTF-8 messages never reach transport");
   const detail = Object.values(conversationDetails)[0];
   const account = { ...accounts[0], health: "disconnected" as const, capabilities: { ...accounts[0].capabilities,
     pauseAutomation: "available" as const, requestTakeover: "available" as const } };
@@ -74,6 +95,11 @@ async function main() {
   assert(!allowed("human_controlled", "effective", "unknown").includes("release_takeover"));
   assert(!allowed("paused", "requested", "sent").includes("resume_automation"));
   assert.equal(allowed("no_contact", "none", "sent").length, 0);
+  const manualAccount = { ...account, health: "connected" as const, capabilities: { ...account.capabilities, sendManualMessage: "available" as const } };
+  const manualAllowed = (mode: typeof detail.summary.automationMode, takeover: typeof detail.summary.takeoverState) =>
+    availableActions({ account: manualAccount, viewer: operatorViewer(), summary: { ...detail.summary, automationMode: mode, takeoverState: takeover, delivery: "sent" } }).available.some(entry => entry.action === "send_manual_message");
+  assert.equal(manualAllowed("automated", "none"), false); assert.equal(manualAllowed("paused", "none"), false);
+  assert.equal(manualAllowed("human_controlled", "requested"), false); assert.equal(manualAllowed("human_controlled", "effective"), true);
   console.log("PASS controls: exact acknowledgement, separate credential, no redirect/cookie forwarding, refusals versus uncertainty, identical retry, disconnected stop controls, unresolved hand-back hold, no-contact exclusion");
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });

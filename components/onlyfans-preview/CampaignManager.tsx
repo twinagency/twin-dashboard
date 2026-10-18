@@ -1,0 +1,156 @@
+"use client";
+import { FormEvent, useCallback, useEffect, useRef, useState } from "react";
+import { useRouter } from "next/navigation";
+import { Card } from "@/components/ui/card";
+import { CAMPAIGN_ACTIONS, RECIPIENT_STATUSES, parseCampaignAck, parseCampaignDetail, parseCampaignList,
+  validCampaignCreate, type Campaign, type CampaignAction, type CampaignChange, type CampaignCreate, type CampaignRecipient } from "@/lib/onlyfans/campaigns";
+import type { ConversationSummary } from "@/lib/onlyfans-preview/types";
+import { parseWorkspace, formatRecordedMoney, type CatalogRead } from "@/lib/onlyfans/workspace";
+
+type Write = { kind: "create"; body: CampaignCreate } | { kind: "change"; campaignId: string; body: CampaignChange };
+const inputClass = "w-full rounded-lg border border-line bg-white px-3 py-2 text-sm text-ink disabled:bg-elev disabled:text-muted";
+const buttonClass = "rounded-lg border border-line px-3 py-2 text-sm font-semibold text-ink transition hover:bg-elev disabled:cursor-not-allowed disabled:opacity-50";
+const LABELS = { pending: "Waiting", queued: "Queued", dispatching: "Sending", accepted: "Accepted", notAccepted: "Not accepted", unknown: "Uncertain", cancelled: "Cancelled", refused: "Refused", skipped: "Skipped" };
+const REASONS: Record<string, string> = {
+  campaign_cancelled: "Cancelled by an operator.",
+  contact_or_owner_unavailable: "Contact permissions or reply ownership exclude this recipient.",
+  catalogue_snapshot_changed: "The selected content changed. Review it and create a new campaign.",
+  catalogue_media_already_owned: "Skipped: already purchased.",
+  ownership_evidence_unavailable: "Purchase ownership needs review before sending.",
+  unresolved_delivery: "An earlier delivery is uncertain and needs review.",
+  history_not_current: "Conversation synchronization must complete before sending.",
+  account_disabled: "Account processing is paused.",
+  contact_blocked: "Contact is paused or excluded.",
+  owner_changed: "Reply ownership changed before delivery.",
+  control_revision_changed: "Conversation controls changed before delivery.",
+  policy_changed: "Delivery permissions changed before sending.",
+  expired: "The delivery request expired before sending.",
+};
+const reasonText = (reason: string | null, providerId: string | null) => reason ? REASONS[reason] ?? "Delivery requires review in Operations." : providerId ? "Provider reference recorded" : "—";
+const when = (value: string) => new Date(value).toLocaleString();
+
+export default function CampaignManager({ accountId, readOnly = false }: { accountId: string; readOnly?: boolean }) {
+  const router = useRouter();
+  const endpoint = `/api/onlyfans-campaigns/accounts/${encodeURIComponent(accountId)}/campaigns`;
+  const [campaigns, setCampaigns] = useState<Campaign[]>([]), [truncated, setTruncated] = useState(false);
+  const [selected, setSelected] = useState<string | null>(null);
+  const [detail, setDetail] = useState<{ campaign: Campaign; recipients: CampaignRecipient[] } | null>(null);
+  const [loading, setLoading] = useState(true), [busy, setBusy] = useState(false), [denied, setDenied] = useState(false);
+  const [listReady, setListReady] = useState(false);
+  const [notice, setNotice] = useState(""), [retry, setRetry] = useState<Write | null>(null);
+  const [name, setName] = useState(""), [body, setBody] = useState(""), [scheduled, setScheduled] = useState("");
+  const [audienceKind, setAudienceKind] = useState<"explicit" | "all_known">("explicit");
+  const [fans, setFans] = useState<ConversationSummary[]>([]), [fanIds, setFanIds] = useState<Set<string>>(() => new Set());
+  const [fanCursor, setFanCursor] = useState<string | null>(null), [fansBusy, setFansBusy] = useState(false), [fanError, setFanError] = useState("");
+  const [catalogue, setCatalogue] = useState<CatalogRead["items"]>([]), [catalogueCursor, setCatalogueCursor] = useState<string | null>(null);
+  const [catalogueBusy, setCatalogueBusy] = useState(false), [catalogueError, setCatalogueError] = useState(""), [catalogItemId, setCatalogItemId] = useState("");
+  const catalogueRequest = useRef(false);
+  const active = useRef(true), sending = useRef(false), fanRequest = useRef(false), selection = useRef<string | null>(null), sessionDenied = useRef(false);
+  useEffect(() => { active.current = true; return () => { active.current = false; }; }, []);
+  const sessionLost = useCallback(() => {
+    if (!active.current) return;
+    sessionDenied.current = true;
+    setDenied(true); setListReady(false); setBusy(false); setCampaigns([]); setDetail(null); setFans([]); setFanIds(new Set()); setCatalogue([]); setCatalogItemId(""); setName(""); setBody(""); setRetry(null);
+    setNotice("This session cannot manage campaigns. Sign in again."); router.refresh();
+  }, [router]);
+  const read = useCallback(async (id?: string | null) => {
+    try {
+      const response = await fetch(id ? `${endpoint}/${encodeURIComponent(id)}` : endpoint, { credentials: "same-origin", cache: "no-store", redirect: "error", signal: AbortSignal.timeout(10_000) });
+      if ([401, 403].includes(response.status)) { sessionLost(); return false; }
+      if (!response.ok) throw new Error("Campaigns could not be refreshed. Check the account connection and try again.");
+      const value: unknown = await response.json();
+      if (!active.current || sessionDenied.current) return false;
+      if (id) { const parsed = parseCampaignDetail(value, accountId, id); if (!parsed) throw new Error("The campaign response was invalid."); if (selection.current === id) setDetail(parsed); }
+      else { const parsed = parseCampaignList(value, accountId); if (!parsed) throw new Error("The campaign response was invalid."); setCampaigns(parsed.campaigns); setTruncated(parsed.truncated); setListReady(true); }
+      return true;
+    } catch (error) { if (active.current) setNotice(error instanceof Error ? error.message : "Campaigns could not be refreshed."); return false; }
+  }, [endpoint, accountId, sessionLost]);
+  const loadFans = useCallback(async (cursor: string | null = null) => {
+    if (fanRequest.current) return; fanRequest.current = true; setFansBusy(true); setFanError("");
+    try {
+      const response = await fetch(`/api/onlyfans/accounts/${encodeURIComponent(accountId)}/conversations${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`, { credentials: "same-origin", cache: "no-store", redirect: "error", signal: AbortSignal.timeout(10_000) });
+      if ([401, 403].includes(response.status)) { sessionLost(); return; }
+      if (!response.ok) throw new Error("Saved conversations could not be loaded.");
+      const value = await response.json();
+      if (!Array.isArray(value.page?.items) || value.page.items.some((item: ConversationSummary) => item.accountId !== accountId || typeof item.conversationId !== "string" || !item.fan || typeof item.fan.displayName !== "string")) throw new Error("The audience response was invalid.");
+      if (active.current && !sessionDenied.current) { setFans(previous => cursor ? [...new Map([...previous, ...value.page.items].map(item => [item.conversationId, item])).values()] : value.page.items); setFanCursor(typeof value.page.nextCursor === "string" ? value.page.nextCursor : null); }
+    } catch (error) { if (active.current) setFanError(error instanceof Error ? error.message : "Saved conversations could not be loaded."); }
+    finally { fanRequest.current = false; if (active.current) setFansBusy(false); }
+  }, [accountId, sessionLost]);
+  const loadCatalogue = useCallback(async (cursor: string | null = null) => {
+    if (catalogueRequest.current) return; catalogueRequest.current = true; setCatalogueBusy(true); setCatalogueError("");
+    try {
+      const response = await fetch(`/api/onlyfans/accounts/${encodeURIComponent(accountId)}/workspace/content${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`, { credentials: "same-origin", cache: "no-store", redirect: "error", signal: AbortSignal.timeout(10_000) });
+      if ([401, 403].includes(response.status)) { sessionLost(); return; }
+      if (!response.ok) throw new Error("The saved content catalogue could not be loaded.");
+      const value = await response.json(), parsed = parseWorkspace(value.workspace, accountId, "content");
+      if (!parsed || parsed.section !== "content") throw new Error("The catalogue response was invalid.");
+      if (active.current && !sessionDenied.current) { setCatalogue(previous => cursor ? [...new Map([...previous, ...parsed.items].map(item => [item.itemId, item])).values()] : parsed.items); setCatalogueCursor(parsed.nextCursor); }
+    } catch (error) { if (active.current) setCatalogueError(error instanceof Error ? error.message : "The content catalogue could not be loaded."); }
+    finally { catalogueRequest.current = false; if (active.current) setCatalogueBusy(false); }
+  }, [accountId, sessionLost]);
+  useEffect(() => { void read().finally(() => { if (active.current) setLoading(false); }); void loadFans(); void loadCatalogue(); }, [read, loadFans, loadCatalogue]);
+  useEffect(() => { selection.current = selected; setDetail(null); if (selected) void read(selected); }, [selected, read]);
+  useEffect(() => { const timer = window.setInterval(() => { if (!document.hidden && !sending.current && !denied) { void read(); if (selection.current) void read(selection.current); } }, 5000); return () => window.clearInterval(timer); }, [read, denied]);
+  async function write(request: Write) {
+    if (sending.current || denied || readOnly) return; sending.current = true; setBusy(true); setNotice("");
+    let uncertain = true;
+    try {
+      const response = await fetch(request.kind === "create" ? endpoint : `${endpoint}/${encodeURIComponent(request.campaignId)}`, { method: "POST", credentials: "same-origin", cache: "no-store", redirect: "error", signal: AbortSignal.timeout(15_000), headers: { "Content-Type": "application/json" }, body: JSON.stringify(request.body) });
+      if ([401, 403].includes(response.status)) { uncertain = false; sessionLost(); return; }
+      if ([400, 404, 409, 413, 503].includes(response.status)) { uncertain = false; if (active.current) setNotice(response.status === 409 ? "The campaign changed or an account hold prevents this action. Review the refreshed details." : "The request was not accepted. Review the audience, schedule and account."); }
+      else if (response.ok) {
+        const ack = parseCampaignAck(await response.json(), { accountId, ...(request.kind === "change" ? { campaignId: request.campaignId, action: request.body.action, expectedRevision: request.body.expectedRevision } : {}) });
+        if (ack && active.current) { uncertain = false; setSelected(ack.campaignId); selection.current = ack.campaignId;
+          if (request.kind === "create") { setName(""); setBody(""); setScheduled(""); setFanIds(new Set()); setCatalogItemId(""); }
+          setNotice(request.kind === "create" ? "Campaign saved. Recipient delivery is tracked below." : "Campaign change saved. Current delivery is being refreshed."); }
+      }
+    } catch { /* Keep exact original write identity for an explicit retry. */ }
+    finally {
+      if (active.current && !sessionDenied.current) { setRetry(uncertain ? request : null); if (uncertain) setNotice("The outcome is not confirmed. Retry this same request before making another change."); await read(); if (selection.current) await read(selection.current); setBusy(false); }
+      sending.current = false;
+    }
+  }
+  function submit(event: FormEvent) {
+    event.preventDefault(); if (busy || retry || denied || readOnly) return;
+    let scheduledAt: string | null = null;
+    try { scheduledAt = scheduled ? new Date(scheduled).toISOString() : null; } catch { setNotice("Choose a valid schedule."); return; }
+    const request: CampaignCreate = { requestKey: crypto.randomUUID(), name, body, audience: audienceKind === "all_known" ? { kind: "all_known" } : { kind: "explicit", conversationIds: [...fanIds].sort() }, scheduledAt,
+      ...(catalogItemId ? { catalogItemId: Number(catalogItemId) } : {}) };
+    if (!validCampaignCreate(request)) { setNotice("Enter a name, message and at least one saved conversation. Messages may contain up to 20,000 UTF-8 bytes."); return; }
+    void write({ kind: "create", body: request });
+  }
+  const locked = busy || !!retry || denied || readOnly;
+  const campaign = detail?.campaign;
+  const actionAllowed = (action: CampaignAction) => !!campaign && (action === "pause" ? ["scheduled", "running"].includes(campaign.status) : action === "resume" ? campaign.status === "paused" : !["cancelled", "completed"].includes(campaign.status));
+  return <div className="space-y-5" data-of-campaign-manager>
+    <Card className="p-4"><h2 className="font-semibold">New campaign</h2>
+      <p className="mt-1 text-xs leading-5 text-muted">Each recipient receives an individual message through the shared delivery queue. Pausing stops further recipients; an attempt already in progress may finish.</p>
+      <form className="mt-4 space-y-4" onSubmit={submit}><fieldset disabled={locked} className="space-y-4">
+        <label className="block text-sm font-medium">Campaign name<input className={`${inputClass} mt-1`} value={name} maxLength={128} onChange={event => setName(event.target.value)} required /></label>
+        <label className="block text-sm font-medium">Message<textarea data-of-campaign-body className={`${inputClass} mt-1 min-h-28`} value={body} onChange={event => setBody(event.target.value)} required /><span className="mt-1 block text-xs font-normal text-muted">{new TextEncoder().encode(body).length.toLocaleString()} / 20,000 bytes</span></label>
+        <div><label className="block text-sm font-medium">Attach saved paid content<select data-of-campaign-offer className={`${inputClass} mt-1`} value={catalogItemId} onChange={event => setCatalogItemId(event.target.value)}><option value="">Text only</option>{catalogue.filter(item => item.readiness === "terms_checked" && item.priceCents !== null && item.priceCents >= 300 && item.priceCents <= 20000).map(item => <option key={item.itemId} value={item.itemId}>{item.label} · {formatRecordedMoney(item.priceCents!, item.currency)}</option>)}</select></label><p className="mt-1 text-xs leading-5 text-muted">The saved item’s price, media and free previews are frozen when the campaign is created and checked again before delivery. Change saved prices from Content.</p>{catalogueError ? <p className="mt-2 text-xs text-muted" role="status">{catalogueError} Text campaigns remain available.</p> : null}{catalogueCursor || catalogueError ? <button type="button" className={`${buttonClass} mt-2`} disabled={locked || catalogueBusy} onClick={() => void loadCatalogue(catalogueCursor)}>{catalogueBusy ? "Loading…" : catalogueCursor ? "Load more content" : "Retry catalogue"}</button> : null}</div>
+        <label className="block text-sm font-medium">Send time<input type="datetime-local" className={`${inputClass} mt-1 max-w-sm`} value={scheduled} onChange={event => setScheduled(event.target.value)} /><span className="mt-1 block text-xs font-normal text-muted">Leave empty to queue now. Scheduled times use your device timezone.</span></label>
+        <div><h3 className="text-sm font-medium">Audience</h3><div className="mt-2 flex flex-wrap gap-4 text-sm">
+          <label className="flex items-center gap-2"><input type="radio" name={`audience-${accountId}`} checked={audienceKind === "explicit"} onChange={() => setAudienceKind("explicit")} />Choose conversations</label>
+          <label className="flex items-center gap-2"><input type="radio" name={`audience-${accountId}`} checked={audienceKind === "all_known"} onChange={() => setAudienceKind("all_known")} />All saved conversations</label></div>
+          <p className="mt-2 text-xs leading-5 text-muted">The audience is a snapshot of locally synchronized conversations, up to 1,000 recipients. It may not include every OnlyFans subscriber. No-contact exclusions and delivery holds are checked again before sending.</p>
+          {audienceKind === "explicit" ? <div className="mt-3"><p className="mb-2 text-xs text-muted">{fanIds.size} selected</p><div className="max-h-56 overflow-y-auto rounded-lg border border-line">{fans.map(fan => <label key={fan.conversationId} className="flex items-center gap-3 border-b border-line px-3 py-2 text-sm last:border-b-0"><input type="checkbox" data-of-campaign-recipient={fan.conversationId} checked={fanIds.has(fan.conversationId)} disabled={locked || (fanIds.size >= 1000 && !fanIds.has(fan.conversationId))} onChange={event => setFanIds(previous => { const next = new Set(previous); event.target.checked ? next.add(fan.conversationId) : next.delete(fan.conversationId); return next; })} /><span className="min-w-0 flex-1 truncate">{fan.fan.displayName}</span><span className="text-xs text-muted">{fan.automationMode === "no_contact" ? "No contact" : fan.fan.shortRef}</span></label>)}{!fans.length ? <p className="p-3 text-xs text-muted">{fansBusy ? "Loading saved conversations…" : "No saved conversations loaded."}</p> : null}</div>{fanError ? <p role="alert" className="mt-2 text-xs text-muted">{fanError}</p> : null}{fanCursor || fanError ? <button type="button" className={`${buttonClass} mt-2`} disabled={fansBusy || locked} onClick={() => void loadFans(fanCursor)}>{fansBusy ? "Loading…" : fanCursor ? "Load more conversations" : "Retry audience"}</button> : null}</div> : null}
+        </div>
+        <button data-of-create-campaign type="submit" className="rounded-lg bg-accent px-4 py-2 text-sm font-semibold text-white disabled:opacity-50" disabled={locked || !name.trim() || !body.trim() || (audienceKind === "explicit" && !fanIds.size)}>{busy ? "Saving…" : scheduled ? "Schedule campaign" : "Queue campaign"}</button>
+      </fieldset></form>
+    </Card>
+    {notice ? <div role="status" className="rounded-xl border border-line bg-elev p-4 text-sm" data-of-campaign-notice>{notice}{retry ? <button type="button" className={`${buttonClass} ml-3 bg-white`} disabled={busy} onClick={() => void write(retry)}>Retry same request</button> : null}</div> : null}
+    <div className="flex items-center justify-between gap-3"><h2 className="font-semibold">Saved campaigns</h2><button className={buttonClass} disabled={busy || denied || loading} onClick={() => { void read(); if (selected) void read(selected); }}>Refresh</button></div>
+    {loading ? <p role="status" className="text-sm text-muted">Loading campaigns…</p> : !listReady ? <p className="text-sm text-muted">Campaign history is unavailable.</p> : !campaigns.length ? <p className="text-sm text-muted">No campaigns are recorded for this account.</p> : <div className="grid gap-3 md:grid-cols-2">{campaigns.map(item => <button type="button" key={item.campaignId} onClick={() => setSelected(item.campaignId)} className={`min-w-0 rounded-xl border p-4 text-left ${selected === item.campaignId ? "border-accent bg-accent/5" : "border-line bg-white"}`} data-of-campaign={item.campaignId}><div className="flex flex-wrap justify-between gap-2"><span className="font-semibold">{item.name}</span><span className="rounded-full bg-elev px-2 py-1 text-xs capitalize text-muted">{item.status}</span></div><p className="mt-2 line-clamp-2 text-sm text-muted">{item.body}</p><p className="mt-3 text-xs text-muted">{item.recipientCount} recipients · {item.counts.accepted} accepted · {item.counts.unknown} uncertain</p><p className="mt-1 text-xs text-muted">Scheduled {when(item.scheduledAt)}</p></button>)}</div>}
+    {truncated ? <p className="text-xs text-muted">Showing the latest 100 campaigns.</p> : null}
+    {selected && !detail ? <p role="status" className="text-sm text-muted">Loading campaign detail…</p> : null}
+    {campaign && detail ? <Card className="min-w-0 p-4" data-of-campaign-detail={campaign.campaignId}><div className="flex flex-wrap items-start justify-between gap-3"><div><h2 className="font-semibold">{campaign.name}</h2><p className="mt-1 text-xs text-muted"><span data-of-campaign-status>{campaign.status}</span> · {campaign.recipientCount} saved recipients · Scheduled {when(campaign.scheduledAt)}</p></div><div className="flex flex-wrap gap-2">{CAMPAIGN_ACTIONS.filter(actionAllowed).map(action => <button type="button" key={action} className={buttonClass} disabled={locked} onClick={() => void write({ kind: "change", campaignId: campaign.campaignId, body: { action, expectedRevision: campaign.revision } })}>{action === "pause" ? "Pause" : action === "resume" ? "Resume" : "Cancel remaining"}</button>)}</div></div>
+      <p className="mt-4 whitespace-pre-wrap break-words rounded-lg bg-elev p-3 text-sm">{campaign.body}</p>
+      {campaign.offer ? <div className="mt-3 rounded-lg border border-line p-3 text-sm"><div className="font-semibold">{campaign.offer.label} · {formatRecordedMoney(campaign.offer.priceCents, campaign.offer.currency)}</div><p className="mt-1 text-xs text-muted">{campaign.offer.mediaIds.length} saved media · {campaign.offer.previewIds.length} free previews · Frozen catalogue terms</p></div> : null}
+      <div className="mt-4 grid grid-cols-3 gap-2 lg:grid-cols-5">{RECIPIENT_STATUSES.map(status => <div key={status} className="rounded-lg border border-line p-3"><div className="text-xs text-muted">{LABELS[status]}</div><div className="mt-1 text-lg font-semibold">{campaign.counts[status]}</div></div>)}</div>
+      <p className="mt-3 text-xs leading-5 text-muted">Accepted means provider acceptance. Opens, campaign replies and attributed revenue are not available. Uncertain attempts remain held for reconciliation.</p>
+      <div className="mt-4 max-h-96 overflow-auto"><table className="w-full text-left text-xs"><thead><tr className="border-b border-line text-muted"><th className="p-2">Conversation</th><th className="p-2">Delivery</th><th className="p-2">Detail</th></tr></thead><tbody>{detail.recipients.map(recipient => <tr key={recipient.conversationId} className="border-b border-line"><td className="break-all p-2">{recipient.conversationId}</td><td className="p-2">{LABELS[recipient.status]}</td><td className="max-w-xs break-words p-2 text-muted">{reasonText(recipient.reason, recipient.providerMessageId)}</td></tr>)}</tbody></table></div>
+    </Card> : null}
+  </div>;
+}

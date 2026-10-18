@@ -258,7 +258,7 @@ export type DeliveryResolutionDecision = "delivered" | "not_delivered";
  * different messages sent against the same revision are two different commands.
  */
 export type CommandPayload =
-  | { kind: "manual_message"; body: string }
+  | { kind: "manual_message"; body: string; catalogItemId?: number | null }
   | { kind: "delivery_resolution"; attemptId: string; decision: DeliveryResolutionDecision }
   | { kind: "none" };
 

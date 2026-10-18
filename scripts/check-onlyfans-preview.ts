@@ -495,11 +495,11 @@ async function main() {
     check("a settled outcome clears the attempt", settled.deliveryIncident === null);
     const settledSet = availableActions({
       account,
-      summary: settled.summary,
+      summary: { ...settled.summary, automationMode: "human_controlled", takeoverState: "effective" },
       viewer: operator,
       deliveryIncident: settled.deliveryIncident,
     });
-    check("a settled outcome allows sending again", canSubmitCommand(operator, settledSet, "send_manual_message"));
+    check("a settled outcome allows a human with effective takeover to send again", canSubmitCommand(operator, settledSet, "send_manual_message"));
     check(
       "a settled outcome no longer offers evidence resolution",
       !canSubmitCommand(operator, settledSet, "resolve_delivery_evidence"),
@@ -629,7 +629,7 @@ async function main() {
     check("an empty message is refused", blank.accepted === false);
     check("and the refusal says why", /needs some text/i.test(blank.refusalReason ?? ""));
 
-    const tooLong = await source.submitCommand(message("x".repeat(2001)));
+    const tooLong = await source.submitCommand(message("🙂".repeat(1001)));
     check("an over-long message is refused", tooLong.accepted === false);
     check("the payload rule is shared with the UI", commandPayloadProblem("send_manual_message", { kind: "manual_message", body: "  " }) !== null);
 
@@ -700,7 +700,7 @@ async function main() {
   group("9. A read-only viewer cannot invoke a mutation");
   {
     const account = readyAccount(AVA_SECOND);
-    const conversation = summary(AVA_SECOND, "of-conv-ava2-1101");
+    const conversation = { ...summary(AVA_SECOND, "of-conv-ava2-1101"), automationMode: "human_controlled" as const, takeoverState: "effective" as const };
     const operator = operatorViewer();
     const viewAs = readOnlyView([AVA_SECOND]);
     const operatorSet = availableActions({ account, summary: conversation, viewer: operator });

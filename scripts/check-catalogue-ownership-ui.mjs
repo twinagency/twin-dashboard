@@ -5,6 +5,8 @@ import { setTimeout as delay } from 'node:timers/promises';
 import { chromium, webkit } from 'playwright';
 
 const port=3137,origin=`http://127.0.0.1:${port}`,output='test-results/catalogue-ownership';
+const engines=[['chromium',chromium],['webkit',webkit]].filter(([name])=>!process.env.CATALOGUE_TEST_BROWSER||process.env.CATALOGUE_TEST_BROWSER===name);
+assert.ok(engines.length,'CATALOGUE_TEST_BROWSER must be chromium or webkit');
 const svg=(colour)=>`<svg xmlns="http://www.w3.org/2000/svg" width="480" height="640"><rect width="480" height="640" fill="${colour}"/><circle cx="240" cy="230" r="95" fill="#ded2bd"/></svg>`;
 const item={id:'photo-a',type:'photo',description:'A portrait with its complete saved description.',stars:1,free:false,purchased:false,received:false,createdAt:'2026-09-27'};
 await mkdir(output,{recursive:true});
@@ -15,14 +17,14 @@ try {
   let ready=false;
   for(let n=0;n<80;n++){try{if((await fetch(`${origin}/catalogue/alanna-pow`,{signal:AbortSignal.timeout(1000)})).status<500){ready=true;break}}catch{}await delay(250)}
   assert.ok(ready,logs);
-  for(const [name,engine] of [['chromium',chromium],['webkit',webkit]]){
-    const browser=await engine.launch();
+  for(const [name,engine] of engines){
+    const browser=await engine.launch(name==='chromium'&&process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH?{executablePath:process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH}:{});
     try {
       const page=await browser.newPage({viewport:{width:390,height:850}});
       let paid=false,checkoutCalls=0,invoiceOpens=0,originalReads=0,originalDownloads=0,failImage=false;
       const keys=[];let releaseImage;let imageGate=Promise.resolve();
       const errors=[];page.on('pageerror',e=>errors.push(e.message));
-      await page.route('https://telegram.org/js/telegram-web-app.js',route=>route.fulfill({contentType:'application/javascript',body:`window.Telegram={WebApp:{initData:'offline',ready(){},expand(){},setHeaderColor(){},setBackgroundColor(){},setBottomBarColor(){},openInvoice(url,cb){window.invoiceOpened=true;setTimeout(()=>cb('paid'),10)}}};`}));
+      await page.route('https://telegram.org/js/telegram-web-app.js',route=>route.fulfill({contentType:'application/javascript',body:`window.chatOpens=0;window.catalogueCloses=0;window.Telegram={WebApp:{initData:'offline',ready(){},expand(){},setHeaderColor(){},setBackgroundColor(){},setBottomBarColor(){},openTelegramLink(){window.chatOpens++},close(){window.catalogueCloses++},openInvoice(url,cb){window.invoiceOpened=true;setTimeout(()=>cb('paid'),10)}}};`}));
       await page.route('**/owned-photo.svg*',async route=>{
         originalDownloads++;await imageGate;
         return route.fulfill({status:failImage?503:200,contentType:failImage?'text/plain':'image/svg+xml',body:failImage?'unavailable':svg('#166a8f')});
@@ -61,6 +63,8 @@ try {
       assert.equal(await image().count(),0,'Do not replace the preview with an empty original before loading finishes');
       assert.equal(await page.getByText('Unlocked',{exact:true}).count(),0,'Do not claim the image is displayed before it loads');
       releaseImage();await decoded();
+      assert.equal(await page.evaluate(()=>window.chatOpens),0,'Settled native checkout stays in the Mini App');
+      assert.equal(await page.evaluate(()=>window.catalogueCloses),0,'Settled native checkout never closes the Mini App');
       const reads=originalReads,downloads=originalDownloads;
       for(let n=0;n<3;n++){
         await page.getByRole('button',{name:'Close item'}).click();await open();await decoded();
@@ -85,5 +89,5 @@ try {
     }finally{await browser.close();}
   }
   await writeFile(`${output}/checks.json`,JSON.stringify(results,null,2));
-  console.log('Chromium and WebKit: expired checkout recovers on one click; owned image loads, reopens three times, survives reload and recovers an actual image failure without another payment. Fixtures only.');
+  console.log(`${results.map(result=>result.browser).join(' and ')}: expired checkout recovers on one click; owned image loads, reopens three times, survives reload and recovers an actual image failure without another payment. Fixtures only.`);
 }finally{server.kill('SIGTERM');setTimeout(()=>server.kill('SIGKILL'),5000).unref();}

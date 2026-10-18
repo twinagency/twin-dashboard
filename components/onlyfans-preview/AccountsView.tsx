@@ -18,6 +18,8 @@ import { HealthPill, ModePill, SimulatedTag } from "./labels";
 import { FreshnessLine } from "./PreviewChrome";
 import PreviewNotice from "./PreviewNotice";
 import { RequestStateBlock } from "./RequestStateBlock";
+import ConnectionEditor, { RegisterConnection } from "./ConnectionEditor";
+import type { ConnectionCreator } from "@/lib/onlyfans-connections/contract";
 
 function Stat({ label, value }: { label: string; value: string }) {
   return (
@@ -28,7 +30,7 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
-function AccountCard({ account, readOnly }: { account: OfAccount; readOnly: boolean }) {
+function AccountCard({ account, readOnly, connectionEditable, showPreviewChrome }: { account: OfAccount; readOnly: boolean; connectionEditable: boolean; showPreviewChrome: boolean }) {
   return (
     <Card className="flex h-full flex-col p-4" data-of-account-id={account.accountId}>
       <div className="flex items-start justify-between gap-3">
@@ -89,22 +91,23 @@ function AccountCard({ account, readOnly }: { account: OfAccount; readOnly: bool
         >
           Open inbox →
         </Link>
-        {account.health !== "connected" ? (
+        {account.health !== "connected" && !connectionEditable ? (
           <>
             <button
               type="button"
               disabled
-              title="Reconnecting is done by the backend, which this preview does not reach."
+              title={showPreviewChrome ? "Reconnecting is done by the backend, which this preview does not reach." : "Account connection management is not configured."}
               className="inline-flex items-center gap-1 rounded-lg border border-line px-2.5 py-1 text-xs font-semibold text-muted disabled:cursor-not-allowed"
             >
               Reconnect
               <ArrowUpRight className="size-3.5 opacity-60" />
             </button>
-            <SimulatedTag />
+            {showPreviewChrome ? <SimulatedTag /> : null}
           </>
         ) : null}
         {readOnly ? <span className="text-[11px] text-muted">Read only</span> : null}
       </div>
+      {connectionEditable ? <ConnectionEditor accountId={account.accountId} /> : null}
     </Card>
   );
 }
@@ -118,6 +121,8 @@ export default function AccountsView({
   creatorName,
   sourceLabel,
   showPreviewChrome = true,
+  connectionsConfigured = false,
+  connectionCreators = [],
 }: {
   controls?: ReactNode;
   accountsState: RequestState<OfAccount[]>;
@@ -132,6 +137,9 @@ export default function AccountsView({
    * describe fixture data and must not appear over real reads.
    */
   showPreviewChrome?: boolean;
+  /** Positive server configuration only; fixtures and read-only sessions still hide writes. */
+  connectionsConfigured?: boolean;
+  connectionCreators?: ConnectionCreator[];
 }) {
   const accounts =
     accountsState.status === "ready" || accountsState.status === "stale" ? accountsState.data : [];
@@ -166,6 +174,8 @@ export default function AccountsView({
         </div>
       ) : null}
 
+      {connectionsConfigured && !showPreviewChrome && !readOnly && ["ready", "empty"].includes(accountsState.status) ? <RegisterConnection creators={connectionCreators} /> : null}
+
       <RequestStateBlock
         state={accountsState}
         label="accounts"
@@ -182,13 +192,14 @@ export default function AccountsView({
                 {creatorName
                   ? `No OnlyFans account is bound to ${creatorName}.`
                   : "No OnlyFans account is in scope for this session."}{" "}
-                An account binding is created by the backend, not from here.
+                {connectionsConfigured && !showPreviewChrome && !readOnly ? "Use Add OnlyFans account to register an existing Twin creator’s account." : "An account binding is created by the backend."}
               </Card>
             ) : (
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
                 {list.map((account) => (
                   <div key={account.accountId} onClick={() => onSelectAccount(account.accountId)}>
-                    <AccountCard account={account} readOnly={readOnly} />
+                    <AccountCard account={account} readOnly={readOnly} showPreviewChrome={showPreviewChrome}
+                      connectionEditable={connectionsConfigured && !showPreviewChrome && !readOnly && accountsState.status === "ready"} />
                   </div>
                 ))}
               </div>

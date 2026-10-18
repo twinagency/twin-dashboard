@@ -39,6 +39,7 @@ const PAGE_LABELS: Record<string, string> = {
   "/overview": "Overview",
   "/telegram": "Fans and Messages",
   "/onlyfans/inbox": "Inbox",
+  "/onlyfans/campaigns": "Campaigns",
   "/onlyfans/accounts": "Accounts",
   "/onlyfans/content": "Content",
   "/onlyfans/sales": "Sales",

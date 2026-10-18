@@ -135,17 +135,23 @@ export function createFetchOnlyFansTransport(
 
     async submitControl(command) {
       const result = (outcome: RecordedControlResult["outcome"], note: string,
-        recordedRevision?: number): RecordedControlResult => ({ simulated: false,
+        recordedRevision?: number, intentId?: string): RecordedControlResult => ({ simulated: false,
         applied: outcome === "recorded", accepted: outcome === "recorded", outcome,
-        request: command, note, recordedRevision });
-      if (!isControlAction(command.command) || command.payload.kind !== "none") {
+        request: command, note, recordedRevision, intentId });
+      const manualBody = command.command === "send_manual_message" && command.payload.kind === "manual_message" ? command.payload.body : null;
+      const manual = manualBody !== null;
+      const action = manual ? "manual_message" : command.command;
+      if ((!manual && (!isControlAction(action) || command.payload.kind !== "none")) ||
+          (manualBody !== null && (!manualBody.trim() || new TextEncoder().encode(manualBody).length > 4000))) {
         return result("refused", "That action is not configured for this account.");
       }
       try {
         const response = await call(`/api/onlyfans-controls/accounts/${encodeURIComponent(command.accountId)}/conversations/${encodeURIComponent(command.conversationId)}`, {
           method: "POST", credentials: "same-origin", redirect: "error", cache: "no-store",
           signal: AbortSignal.timeout(12_000), headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ action: command.command, expectedRevision: command.expectedRevision }),
+          body: JSON.stringify({ action, expectedRevision: command.expectedRevision,
+            ...(manual && command.payload.kind === "manual_message" ? { body: command.payload.body, requestKey: command.idempotencyKey,
+              ...(command.payload.catalogItemId !== undefined ? { catalogItemId: command.payload.catalogItemId } : {}) } : {}) }),
         });
         if ([400, 401, 403, 404, 409, 413, 503].includes(response.status)) {
           return result("refused", response.status === 409
@@ -153,8 +159,10 @@ export function createFetchOnlyFansTransport(
             : "The change was not accepted. Check your session and refresh the conversation.");
         }
         if (response.ok) {
-          const ack = parseControlAck(await response.json(), { ...command, action: command.command });
-          if (ack) return result("recorded", "The change was saved. The conversation is being refreshed.", ack.recordedRevision);
+          const ack = parseControlAck(await response.json(), { ...command, action });
+          if (ack) return result("recorded", manual
+            ? "Your message was queued. Delivery will appear in the conversation after provider confirmation."
+            : "The change was saved. The conversation is being refreshed.", ack.recordedRevision, ack.intentId);
         }
       } catch { /* Keep the original command for an explicit idempotent retry. */ }
       return result("unconfirmed", "The outcome is not confirmed. Refresh the conversation or retry this same request.");

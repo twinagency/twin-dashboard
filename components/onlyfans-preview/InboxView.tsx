@@ -20,7 +20,7 @@
 //     says why each unavailable one is unavailable. An unresolved send offers an
 //     evidence path and never a resend.
 
-import { FormEvent, useEffect, useRef, useState, type ReactNode } from "react";
+import { FormEvent, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { AlertTriangle, ArrowUpRight, CheckCircle2, MessageCircle, Send, Sparkles } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import FanAvatar from "@/components/FanAvatar";
@@ -53,6 +53,7 @@ import {
 import { FreshnessLine } from "./PreviewChrome";
 import PreviewNotice from "./PreviewNotice";
 import { RequestStateBlock } from "./RequestStateBlock";
+import { parseWorkspace, formatRecordedMoney, type CatalogRead } from "@/lib/onlyfans/workspace";
 
 const PRIORITY_LABEL: Record<ConversationSummary["priority"], { label: string; tone: "pink" | "gold" | "slate" }> = {
   priority: { label: "Priority", tone: "pink" },
@@ -265,7 +266,7 @@ function Thread({ detail }: { detail: ConversationDetail }) {
                     <div className="flex flex-wrap items-center justify-end gap-1.5">
                       <DeliveryPill outcome={message.delivery} />
                       {message.evidenceRef ? (
-                        <span className="text-[10px] text-white/90">{message.evidenceRef}</span>
+                        <span title={`Delivery receipt: ${message.evidenceRef}`} className="text-[10px] text-white/90">Receipt recorded</span>
                       ) : null}
                       <span className="text-[10px] text-white/90">from {ORIGIN_LABEL[message.origin]}</span>
                     </div>
@@ -294,32 +295,70 @@ function Composer({
   account,
   onSubmit,
   disabledReason,
+  simulated,
+  pending,
+  result,
 }: {
   actionSet: ActionSet;
   viewer: PreviewViewer;
   account: OfAccount;
-  onSubmit: (body: string) => void;
+  onSubmit: (body: string, catalogItemId?: number) => void;
   disabledReason: string | null;
+  simulated: boolean;
+  pending: boolean;
+  result: CommandResult | null;
 }) {
   const [text, setText] = useState("");
-  const canSend = canSubmitCommand(viewer, actionSet, "send_manual_message") && !disabledReason;
+  const [catalogue, setCatalogue] = useState<CatalogRead["items"]>([]), [catalogItemId, setCatalogItemId] = useState("");
+  const [catalogueCursor, setCatalogueCursor] = useState<string | null>(null), [catalogueBusy, setCatalogueBusy] = useState(false), [catalogueError, setCatalogueError] = useState("");
+  const catalogueActive = useRef(true), catalogueRequest = useRef(false);
+  const loadCatalogue = useCallback(async (cursor: string | null = null) => {
+    if (simulated || account.capabilities.sendManualMessage !== "available" || catalogueRequest.current) return;
+    catalogueRequest.current = true; setCatalogueBusy(true); setCatalogueError("");
+    try {
+      const response = await fetch(`/api/onlyfans/accounts/${encodeURIComponent(account.accountId)}/workspace/content${cursor ? `?cursor=${encodeURIComponent(cursor)}` : ""}`, { credentials: "same-origin", cache: "no-store", redirect: "error", signal: AbortSignal.timeout(8000) });
+      if (!response.ok) throw new Error("Saved paid content is unavailable. Text replies remain available.");
+      const value = await response.json(), parsed = parseWorkspace(value.workspace, account.accountId, "content");
+      if (!parsed || parsed.section !== "content") throw new Error("Saved paid content could not be read.");
+      if (catalogueActive.current) { setCatalogue(previous => cursor ? [...new Map([...previous, ...parsed.items].map(item => [item.itemId, item])).values()] : parsed.items); setCatalogueCursor(parsed.nextCursor); }
+    } catch (error) { if (catalogueActive.current) setCatalogueError(error instanceof Error ? error.message : "Saved paid content could not be read."); }
+    finally { catalogueRequest.current = false; if (catalogueActive.current) setCatalogueBusy(false); }
+  }, [account.accountId, account.capabilities.sendManualMessage, simulated]);
+  useEffect(() => { catalogueActive.current = true; void loadCatalogue(); return () => { catalogueActive.current = false; }; }, [loadCatalogue]);
+  const canSend = canSubmitCommand(viewer, actionSet, "send_manual_message") && !disabledReason && !pending;
+  useEffect(() => {
+    if (result && !result.simulated && result.outcome === "recorded" && result.intentId &&
+        result.request.payload.kind === "manual_message") { setText(""); setCatalogItemId(""); }
+  }, [result]);
   const bodyProblem =
     text.trim().length === 0
       ? null
-      : text.length > MAX_MANUAL_MESSAGE_LENGTH
-        ? `Longer than the ${MAX_MANUAL_MESSAGE_LENGTH} character limit this contract models.`
+      : new TextEncoder().encode(text).length > MAX_MANUAL_MESSAGE_LENGTH
+        ? `Longer than the ${MAX_MANUAL_MESSAGE_LENGTH} byte limit.`
         : null;
-  const submittable = canSend && bodyProblem === null;
+  const submittable = canSend && bodyProblem === null && !!text.trim();
 
   function handleSubmit(event: FormEvent) {
     event.preventDefault();
     if (!submittable) return;
-    onSubmit(text);
+    onSubmit(text, catalogItemId ? Number(catalogItemId) : undefined);
   }
 
   return (
     <div className="border-t border-line p-3">
       <form onSubmit={handleSubmit} className="space-y-2">
+        {!simulated && account.capabilities.sendManualMessage === "available" ? <div className="space-y-1">
+          <label className="block text-[11px] font-medium text-muted">Paid content
+            <select data-of-manual-offer value={catalogItemId} onChange={event => setCatalogItemId(event.target.value)} disabled={!canSend}
+              className="mt-1 w-full rounded-lg border border-line bg-white px-2 py-1.5 text-xs text-ink disabled:bg-elev disabled:text-muted">
+              <option value="">Text reply only</option>
+              {catalogue.filter(item => item.readiness === "terms_checked" && item.priceCents !== null && item.priceCents >= 300 && item.priceCents <= 20000 && /^[1-9][0-9]*$/.test(item.itemId) && Number(item.itemId) < 2 ** 31).map(item => <option key={item.itemId} value={item.itemId}>{item.label} · {formatRecordedMoney(item.priceCents!, item.currency)}</option>)}
+            </select>
+          </label>
+          {catalogueError ? <p className="text-[11px] text-muted" role="status">{catalogueError}</p> : null}
+          {catalogueCursor || catalogueError ? <button type="button" className="text-[11px] font-semibold text-accent disabled:text-muted" disabled={!canSend || catalogueBusy} onClick={() => void loadCatalogue(catalogueCursor)}>{catalogueBusy ? "Loading…" : catalogueCursor ? "Load more saved content" : "Retry saved content"}</button> : null}
+          {catalogItemId ? <p className="text-[11px] text-muted">This reply will include the saved item at its catalogue price and previews.</p> : null}
+        </div> : null}
         <div className="flex items-start gap-3 rounded-xl border border-line bg-white px-3 py-2.5">
           <Sparkles className="mt-1 size-4 shrink-0 text-love" />
           <label className="min-w-0 flex-1">
@@ -345,11 +384,13 @@ function Composer({
           </button>
         </div>
         <div className="flex flex-wrap items-center gap-2 text-[11px] text-muted">
-          <SimulatedTag />
+          {simulated ? <SimulatedTag /> : null}
           <span>
             {disabledReason ??
               bodyProblem ??
-              `Nothing is sent. @${account.binding.handle} is a fixture, and this preview has no delivery authority.`}
+              (simulated ? `Nothing is sent. @${account.binding.handle} is a fixture, and this preview has no delivery authority.`
+                : actionSet.blocked.find(entry => entry.action === "send_manual_message")?.reason ??
+                  "Replies enter the delivery queue. Provider acceptance appears in the thread.")}
           </span>
         </div>
       </form>
@@ -428,8 +469,8 @@ function ActionColumn({
         <div className="text-xs font-semibold uppercase tracking-[0.12em] text-muted">Actions</div>
         <div className="mt-2 space-y-2" data-of-actions>
           {actionSet.available.map((entry) => {
-            const primary =
-              entry.action === "send_manual_message" || entry.action === "resolve_delivery_evidence";
+            if (entry.action === "send_manual_message") return null;
+            const primary = entry.action === "resolve_delivery_evidence";
             const needsDecision = entry.action === "resolve_delivery_evidence" && decision === null;
             return (
               <div key={entry.action}>
@@ -496,9 +537,11 @@ function ActionColumn({
         >
           <div className="font-semibold">
             {result.simulated ? (result.accepted ? "Modelled, not performed" : "Refused before submission")
-              : result.outcome === "recorded" ? "Change saved" : result.outcome === "unconfirmed" ? "Outcome not confirmed" : "Change not accepted"}
+              : result.outcome === "recorded" ? result.intentId ? "Message queued" : "Change saved" : result.outcome === "unconfirmed" ? "Outcome not confirmed" : "Change not accepted"}
           </div>
           <p className="mt-1">{result.note}</p>
+          {!result.simulated && result.intentId && result.request.payload.kind === "manual_message" ?
+            <p className="mt-2 whitespace-pre-wrap break-words rounded-lg bg-white/70 p-2 text-ink">{result.request.payload.body}</p> : null}
           {result.simulated ? <p className="mt-1">
             <code className="font-mono">{result.request.command}</code> on account{" "}
             <code className="font-mono">{result.request.accountId}</code> against revision{" "}
@@ -610,8 +653,8 @@ function DeliveryLedger({ messages }: { messages: ConversationMessage[] }) {
                 <DeliveryPill outcome={message.delivery} />
               </div>
               <div className="mt-0.5 truncate text-xs text-ink">{message.body}</div>
-              <div className="mt-0.5 text-[10px] text-muted">
-                {message.evidenceRef ?? "no provider reference"}
+              <div className="mt-0.5 text-[10px] text-muted" title={message.evidenceRef ?? undefined}>
+                {message.evidenceRef ? "Receipt recorded" : "No provider reference"}
               </div>
             </li>
           ))}
@@ -764,8 +807,13 @@ export default function InboxView({
                   actionSet={actionSet}
                   viewer={viewer}
                   account={activeAccount}
-                  onSubmit={(body) => onCommand("send_manual_message", { kind: "manual_message", body })}
-                  disabledReason={connectionReason}
+                  onSubmit={(body, catalogItemId) => onCommand("send_manual_message", { kind: "manual_message", body,
+                    ...(catalogItemId === undefined ? {} : { catalogItemId }) })}
+                  disabledReason={connectionReason ?? (!commandResult?.simulated && commandResult?.outcome === "unconfirmed"
+                    ? "Resolve the previous request outcome or retry that same request before composing another." : null)}
+                  simulated={showPreviewChrome}
+                  pending={commandPending}
+                  result={commandResult}
                 />
               ) : null}
             </>

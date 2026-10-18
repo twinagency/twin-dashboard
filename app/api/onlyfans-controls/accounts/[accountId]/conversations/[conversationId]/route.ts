@@ -5,6 +5,7 @@ import { SESSION_COOKIE, verifySessionToken } from "@/lib/session";
 import { requireOnlyFansRead, requestId, PRIVATE_HEADERS } from "@/lib/onlyfans/route";
 import { configuredControlBackend } from "@/lib/onlyfans/controls-backend";
 import { CONTROL_SCHEMA, isControlAction } from "@/lib/onlyfans/controls";
+import { readCommandJson, CommandBodyTooLarge } from "@/lib/onlyfans/command-json";
 
 export const dynamic = "force-dynamic";
 export const runtime = "nodejs";
@@ -33,24 +34,18 @@ export async function POST(request: NextRequest, context: {
   if (!accountId || !conversationId) return refuse(400, "That conversation reference is invalid.");
   let body: Record<string, unknown>;
   try {
-    const reader = request.body?.getReader();
-    if (!reader) return refuse(400, "The control request is missing.");
-    const chunks: Uint8Array[] = []; let size = 0;
-    try {
-      while (true) {
-        const part = await reader.read(); if (part.done) break;
-        size += part.value.length;
-        if (size > 4096) { await reader.cancel(); return refuse(413, "The control request is too large."); }
-        chunks.push(part.value);
-      }
-    } finally { reader.releaseLock(); }
-    const raw = new Uint8Array(size); let offset = 0;
-    for (const chunk of chunks) { raw.set(chunk, offset); offset += chunk.length; }
-    body = JSON.parse(new TextDecoder("utf-8", { fatal: true }).decode(raw));
-    if (!body || Array.isArray(body) || Object.keys(body).sort().join(",") !== "action,expectedRevision" ||
+    body = await readCommandJson(request) as Record<string, unknown>;
+    if (!body || typeof body !== "object" || Array.isArray(body) ||
         !isControlAction(body.action) || !Number.isInteger(body.expectedRevision) ||
         (body.expectedRevision as number) < 0 || (body.expectedRevision as number) >= 2 ** 31 - 1) throw new Error();
-  } catch { return refuse(400, "That conversation control request is invalid."); }
+    const manual = body.action === "manual_message";
+    const manualKeys = ["action", "body", "expectedRevision", "requestKey", ...(Object.hasOwn(body, "catalogItemId") ? ["catalogItemId"] : [])].sort().join(",");
+    if (Object.keys(body).sort().join(",") !== (manual ? manualKeys : "action,expectedRevision")) throw new Error();
+    if (manual && (typeof body.body !== "string" || !body.body.trim() || new TextEncoder().encode(body.body).length > 4000 ||
+        typeof body.requestKey !== "string" || !/^[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/.test(body.requestKey))) throw new Error();
+    if (manual && Object.hasOwn(body, "catalogItemId") && body.catalogItemId !== null &&
+        (!Number.isInteger(body.catalogItemId) || (body.catalogItemId as number) <= 0 || (body.catalogItemId as number) >= 2 ** 31)) throw new Error();
+  } catch (error) { return refuse(error instanceof CommandBodyTooLarge ? 413 : 400, "That conversation control request is invalid."); }
   const backend = configuredControlBackend();
   if (!backend) return refuse(503, "Conversation controls are not configured.");
   const action = body.action;
@@ -59,8 +54,11 @@ export async function POST(request: NextRequest, context: {
   // This shared-password dashboard has sessions, not individually named staff.
   // Audit the verified session without storing its reusable credential.
   const actor = `op-session:${digest(session!)}`;
-  const commandKey = digest(JSON.stringify([actor, accountId, conversationId, action, expectedRevision]));
-  const result = await backend({ accountId, conversationId, action, expectedRevision, actor, commandKey });
+  const commandKey = digest(JSON.stringify([actor, accountId, conversationId, action, expectedRevision,
+    ...(action === "manual_message" ? [body.body, body.requestKey, ...(Object.hasOwn(body, "catalogItemId") ? [body.catalogItemId] : [])] : [])]));
+  const result = await backend({ accountId, conversationId, action, expectedRevision, actor, commandKey,
+    ...(action === "manual_message" ? { body: body.body as string,
+      ...(Object.hasOwn(body, "catalogItemId") ? { catalogItemId: body.catalogItemId as number | null } : {}) } : {}) });
   return result.ok ? answer(result.ack) : answer({ schemaVersion: CONTROL_SCHEMA,
     ok: false, outcome: result.outcome, error: result.error }, result.status);
 }

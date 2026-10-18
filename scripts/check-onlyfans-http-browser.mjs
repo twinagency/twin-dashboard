@@ -2,6 +2,9 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { checkConfiguration } from "./check-onlyfans-configuration-browser.mjs";
+import { checkContent } from "./check-onlyfans-content-browser.mjs";
+import { checkOperator } from "./check-onlyfans-operator-browser.mjs";
+import { checkConnections } from "./check-onlyfans-connections-browser.mjs";
 
 const require = createRequire(process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES
   ? path.join(process.env.CODEX_PRIMARY_RUNTIME_NODE_MODULES, "package.json") : new URL("../preview/onlyfans-integration/package.json", import.meta.url));
@@ -24,7 +27,7 @@ try {
   const external = [];
   await context.route("**/*", async route => {
     const url = route.request().url();
-    if ((url.includes("/api/onlyfans-controls/") || url.includes("/api/onlyfans-configuration/")) && route.request().method() === "POST") {
+    if ((url.includes("/api/onlyfans-controls/") || url.includes("/api/onlyfans-configuration/") || url.includes("/api/onlyfans-content/") || url.includes("/api/onlyfans-campaigns/") || url.includes("/api/onlyfans-connections/")) && route.request().method() === "POST") {
       const headers = await route.request().allHeaders();
       assert.equal(headers.origin, origin, "test browser did not supply the normal POST Origin");
     }
@@ -108,6 +111,7 @@ try {
       assert.equal(await page.locator("[data-of-catalog-item]").count(), 25);
       await page.getByText("Scenic test collection", { exact: true }).waitFor();
       await page.getByText("Terms checked", { exact: true }).waitFor();
+      if (process.env.ONLYFANS_TEST_CONTENT === "1") await checkContent(page, context, origin);
       await page.locator("[data-of-next-page]").click();
       await page.waitForURL(url => url.searchParams.has("cursor"));
       await page.waitForFunction(() => document.querySelectorAll("[data-of-catalog-item]").length === 7, undefined, { timeout: 15000 });
@@ -138,6 +142,7 @@ try {
   assert.equal(await page.locator("[data-of-native-section]").count(), 0);
   assert.equal(await page.getByText("Synthetic Harbor", { exact: true }).count(), 0);
   await context.addCookies([{ name: "allie_admin_session", value: process.env.ONLYFANS_TEST_COOKIE, url: origin }]);
+  if (process.env.ONLYFANS_TEST_OPERATOR === "1") await checkOperator(page, context, origin);
   if (process.env.ONLYFANS_TEST_WORKER === "1") {
     await page.goto(origin + "/onlyfans/inbox?account=acc-worker", { waitUntil: "networkidle" });
     await page.locator('[data-of-conversation-id="acc-worker:101"]').click();
@@ -170,5 +175,10 @@ try {
   assert.equal(await page.getByText("Retracted synthetic message", { exact: false }).count(), 0);
   assert.equal(await page.getByText("Synthetic manual reply through the shared authority", { exact: false }).count(), 0);
   assert.equal(external.length, 0, "UI attempted an external request");
+  if (process.env.ONLYFANS_TEST_CONNECTIONS === "1") {
+    await context.addCookies([{ name: "allie_admin_session", value: process.env.ONLYFANS_TEST_COOKIE, url: origin }]);
+    await checkConnections(page, context, origin);
+    assert.equal(external.length, 0, "Connection UI attempted an external request");
+  }
   console.log("Browser PASS: all scoped controls and identical lost-ack retry; canonical refresh and session loss; native catalogue paging, original-currency sales and saved settings; mobile no overflow; accepted media and payment conflict; private operations; external requests=0");
 } finally { await browser.close(); }

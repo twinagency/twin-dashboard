@@ -105,6 +105,7 @@ export const ONLYFANS_CHANNEL: ChannelDefinition = {
   summary: "OnlyFans accounts and conversations, account by account.",
   nav: [
     { key: "of-inbox", label: "Inbox", href: "/onlyfans/inbox", icon: "Inbox", availability: "built" },
+    { key: "of-campaigns", label: "Campaigns", href: "/onlyfans/campaigns", icon: "Flows", availability: "built", note: "Saved message campaigns and recipient delivery." },
     { key: "of-accounts", label: "Accounts", href: "/onlyfans/accounts", icon: "Users", availability: "built" },
     { key: "of-operations", label: "Operations", href: "/onlyfans/operations", icon: "Settings", availability: "built" },
     {

@@ -83,6 +83,7 @@ import PreviewControlsPanel from "./PreviewControlsPanel";
 import type { PreviewPreset } from "./PreviewControlsPanel";
 import AccountsView from "./AccountsView";
 import InboxView from "./InboxView";
+import type { ConnectionCreator } from "@/lib/onlyfans-connections/contract";
 
 export type OnlyFansView = "inbox" | "accounts";
 
@@ -184,6 +185,8 @@ function useSelectionStore() {
 export default function OnlyFansWorkspace({
   view,
   source: sourceMode,
+  connectionsConfigured = false,
+  connectionCreators = [],
 }: {
   view: OnlyFansView;
   /**
@@ -191,6 +194,8 @@ export default function OnlyFansWorkspace({
    * typecheck, not quietly render sample data on a live route.
    */
   source: OnlyFansSourceMode;
+  connectionsConfigured?: boolean;
+  connectionCreators?: ConnectionCreator[];
 }) {
   const searchParams = useSearchParams();
   const pathname = usePathname();
@@ -523,6 +528,9 @@ export default function OnlyFansWorkspace({
         expectedRevision: detail.summary.revision,
         payload,
       });
+      // One explicit click has one identity. An uncertain retry keeps this
+      // request; a later intentional repeat of the same text gets a new one.
+      if (action === "send_manual_message") request.idempotencyKey = crypto.randomUUID();
       if (!canSubmitCommand(viewer, actionSet, action)) {
         setCommandResult({
           simulated: true,
@@ -587,6 +595,8 @@ export default function OnlyFansWorkspace({
         readOnly={viewer.kind === "view_as"}
         creatorName={creatorName}
         sourceLabel={source.label}
+        connectionsConfigured={sourceMode === "server" && connectionsConfigured}
+        connectionCreators={connectionCreators}
       />
     );
   }

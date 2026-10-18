@@ -188,6 +188,23 @@ export default function Catalogue({ slug, preview }: { slug: string; preview: bo
     } finally { if (mounted.current && attempt === contentRequest.current) setContentBusy(false); }
   }
   async function finishCheckout(type: 'photo' | 'video' | 'bundle', id: string) {
+    if (data?.checkoutMode === 'invoice') {
+      // A settled order is not a reason to leave the Mini App. Refresh the
+      // server-owned collection before displaying any protected original.
+      const value = await load();
+      if (!mounted.current) return;
+      const item = type === 'bundle' ? undefined : value?.items.find(item => item.type === type && item.id === id);
+      const unlocked = type === 'bundle' ? value?.bundles.find(bundle => bundle.id === id)?.owned : item?.purchased || item?.free;
+      if (!unlocked) {
+        setPaymentWaiting(previous => new Set(previous).add(`${type}:${id}`));
+        setNotice('Payment confirmed. Your collection is still updating. Tap Check payment to refresh.');
+        return;
+      }
+      setPaymentWaiting(previous => { const next = new Set(previous); next.delete(`${type}:${id}`); return next; });
+      setNotice('');
+      if (item) await loadContent(item);
+      return;
+    }
     setPaymentWaiting(previous => { const next = new Set(previous); next.delete(`${type}:${id}`); return next; });
     // Delivery goes to the chat, so leave the app first; a failed catalogue refresh must not block it.
     // If Telegram keeps the app open, offer the chat link.

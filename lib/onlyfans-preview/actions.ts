@@ -147,7 +147,8 @@ export function availableActions(input: {
 
     switch (action) {
       case "send_manual_message":
-        return null;
+        return summary.automationMode === "human_controlled" && summary.takeoverState === "effective"
+          ? null : "Take over this conversation before sending a manual reply.";
       case "request_takeover":
         return summary.takeoverState === "none"
           ? null
@@ -195,7 +196,7 @@ export function canSubmitCommand(
 export function canonicalPayload(payload: CommandPayload): string {
   switch (payload.kind) {
     case "manual_message":
-      return `message:${payload.body}`;
+      return payload.catalogItemId == null ? `message:${payload.body}` : `message:item-${payload.catalogItemId}:${payload.body}`;
     case "delivery_resolution":
       return `resolution:${payload.attemptId}:${payload.decision}`;
     case "none":
@@ -214,7 +215,7 @@ export function payloadDigest(payload: CommandPayload): string {
 }
 
 /** The longest modelled manual message. A contract limit, not a provider rule. */
-export const MAX_MANUAL_MESSAGE_LENGTH = 2000;
+export const MAX_MANUAL_MESSAGE_LENGTH = 4000;
 
 /**
  * Whether a payload is the right shape for a command, and says why not when it
@@ -232,8 +233,11 @@ export function commandPayloadProblem(
     if (payload.body.trim().length === 0) {
       return "A manual message needs some text before it can be modelled.";
     }
-    if (payload.body.length > MAX_MANUAL_MESSAGE_LENGTH) {
-      return `That message is longer than the ${MAX_MANUAL_MESSAGE_LENGTH} character limit this contract models.`;
+    if (new TextEncoder().encode(payload.body).length > MAX_MANUAL_MESSAGE_LENGTH) {
+      return `That message is longer than the ${MAX_MANUAL_MESSAGE_LENGTH} byte limit.`;
+    }
+    if (payload.catalogItemId != null && (!Number.isInteger(payload.catalogItemId) || payload.catalogItemId <= 0 || payload.catalogItemId >= 2 ** 31)) {
+      return "Select a saved content item from this account.";
     }
     return null;
   }

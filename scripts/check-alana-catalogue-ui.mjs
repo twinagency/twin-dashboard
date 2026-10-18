@@ -15,7 +15,7 @@ const teaser='<svg xmlns="http://www.w3.org/2000/svg" width="320" height="400"><
 const svgUrl='data:image/svg+xml,'+encodeURIComponent(teaser);
 const videoBytes=Buffer.from('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','base64');
 const orders=new Map(), purchased=new Set(), requests=[];
-let settle='pending', contentFails=false, delaySettlement=0, originalBeforePaid=false, transientPhoto=true, fixtureMode='chat', receivedOnly=false;
+let settle='pending', contentFails=false, delaySettlement=0, originalBeforePaid=false, transientPhoto=true, fixtureMode='chat', receivedOnly=false, ownershipUpdating=false;
 
 async function main(){
   await mkdir(output,{recursive:true});
@@ -34,7 +34,7 @@ async function main(){
     await page.route('**/api/catalogue/*',async route=>{
       const body=route.request().postDataJSON();requests.push(body);
       const json=(value,status=200)=>route.fulfill({status,contentType:'application/json',body:JSON.stringify(value)});
-      if(body.action==='catalogue')return json(route.request().url().includes('briana-redd')?{...response,name:'Briana Redd',presentation:'standard',checkoutMode:'chat',verified:false,featuredBundleId:null}:{...response,checkoutMode:fixtureMode,items:items.map(item=>({...item,purchased:purchased.has(item.id),received:receivedOnly&&item.id==='photo-0'})),bundles:[{...featured,owned:ids.every(id=>purchased.has(id)),partial:ids.some(id=>purchased.has(id))&&!ids.every(id=>purchased.has(id))}]});
+      if(body.action==='catalogue')return json(route.request().url().includes('briana-redd')?{...response,name:'Briana Redd',presentation:'standard',checkoutMode:'chat',verified:false,featuredBundleId:null}:{...response,checkoutMode:fixtureMode,items:items.map(item=>({...item,purchased:!ownershipUpdating&&purchased.has(item.id),received:receivedOnly&&item.id==='photo-0'})),bundles:[{...featured,owned:!ownershipUpdating&&ids.every(id=>purchased.has(id)),partial:!ownershipUpdating&&ids.some(id=>purchased.has(id))&&!ids.every(id=>purchased.has(id))}]});
       if(body.action==='preview'){
         if(body.type==='photo'&&body.id==='photo-0'&&transientPhoto){transientPhoto=false;return json({error:'Preview is busy, try again.'},503)}
         return body.type==='video'?json({url:'https://catalogue-fixture.test/preview.mp4',posterUrl:svgUrl,durationSeconds:62}):route.fulfill({contentType:'image/svg+xml',body:teaser});
@@ -162,9 +162,17 @@ async function main(){
     assert.equal(requests.filter(r=>r.action==='checkout').length,1,'Cancelled retry does not create another invoice');
     // An invoice callback alone is insufficient. Server must first confirm payment.
     await page.evaluate(()=>window.catalogueInvoiceStatus='paid');
-    settle='paid';delaySettlement=3;contentFails=true;
+    settle='paid';delaySettlement=3;contentFails=true;ownershipUpdating=true;
+    const contentBeforeSettlement=requests.filter(r=>r.action==='content').length;
+    const invoiceOpensBeforeSettlement=await page.evaluate(()=>window.catalogueInvoiceOpens);
     await unlock().click();
+    await page.getByText('Payment confirmed. Your collection is still updating. Tap Check payment to refresh.',{exact:true}).waitFor();
+    assert.equal(requests.filter(r=>r.action==='content').length,contentBeforeSettlement,'A paid order without refreshed ownership does not request the original');
+    assert.equal(await page.getByRole('dialog',{name:'Item details'}).count(),1,'Confirmed payment retains item details');
+    ownershipUpdating=false;
+    await page.getByRole('dialog',{name:'Item details'}).getByRole('button',{name:'Check payment',exact:true}).click();
     await page.getByRole('button',{name:'Retry loading item',exact:true}).waitFor();
+    assert.equal(await page.evaluate(()=>window.catalogueInvoiceOpens),invoiceOpensBeforeSettlement+1,'Checking a settled order never reopens the payable invoice');
     assert.equal(orders.size,1);
     assert.equal(originalBeforePaid,false,'Telegram paid callback does not grant original access before server settlement');
     assert.equal(await page.locator('.cat-owned-media').count(),0);
@@ -228,7 +236,7 @@ async function main(){
     assert.equal(legacyRequests,nativeRequestBaseline+1);
     assert.deepEqual(errors,[],'No client errors');
     await writeFile(`${output}/checks.json`,JSON.stringify(results,null,2));
-    console.log('Alana UI passed: five widths, Trending label with unchanged mixed gallery, small Message pill, overlaid captions, full bundle under Bundles, scoped style, cancelled retry, confirmed native checkout, owned-media retry, retained captions, no unpaid chat offers and creator isolation. Fixtures only.');
+    console.log('Alana UI passed: five widths, Trending label with unchanged mixed gallery, small Message pill, overlaid captions, full bundle under Bundles, scoped style, cancelled retry, confirmed native checkout, delayed ownership refresh without another invoice, owned-media retry, retained captions, no unpaid chat offers and creator isolation. Fixtures only.');
   }finally{await browser?.close();server?.kill('SIGTERM');if(server)setTimeout(()=>server.kill('SIGKILL'),5000).unref()}
 }
 main().catch(e=>{console.error(e);process.exitCode=1});

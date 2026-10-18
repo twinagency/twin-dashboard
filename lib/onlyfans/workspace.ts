@@ -3,7 +3,7 @@ export type NativeSection = "content" | "sales" | "settings";
 export const NATIVE_SECTIONS: NativeSection[] = ["content", "sales", "settings"];
 export type WorkspaceBase = {
   schemaVersion: "of-workspace.v1"; section: NativeSection; accountId: string; asOf: string;
-  lastCompleteSyncAt: string | null; historyRecoveryRequired: boolean; providerConnectionVerified: false;
+  lastCompleteSyncAt: string | null; historyRecoveryRequired: boolean; providerConnectionVerified: boolean;
 };
 export type CatalogRead = WorkspaceBase & { section: "content"; nextCursor: string | null; items: {
   itemId: string; label: string; kind: string; description: string; descriptionTruncated: boolean;
@@ -45,7 +45,7 @@ const BASE = ["schemaVersion", "section", "accountId", "asOf", "lastCompleteSync
 
 export function parseWorkspace(value: unknown, accountId: string, section: NativeSection): WorkspaceRead | null {
   if (!record(value) || value.schemaVersion !== "of-workspace.v1" || value.section !== section || value.accountId !== accountId ||
-    !stamp(value.asOf) || !nullable(value.lastCompleteSyncAt, stamp) || typeof value.historyRecoveryRequired !== "boolean" || value.providerConnectionVerified !== false) return null;
+    !stamp(value.asOf) || !nullable(value.lastCompleteSyncAt, stamp) || typeof value.historyRecoveryRequired !== "boolean" || typeof value.providerConnectionVerified !== "boolean") return null;
   if (section === "content") {
     if (!keys(value, [...BASE, "items", "nextCursor"]) || !cursor(value.nextCursor) || !Array.isArray(value.items) || value.items.length > 100) return null;
     for (const row of value.items) {

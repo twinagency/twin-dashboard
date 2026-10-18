@@ -6,6 +6,9 @@ import { workspaceHref } from "@/lib/onlyfans-preview/scope";
 import { CONFIG_ISSUES, formatRecordedMoney, type NativeSection, type WorkspaceRead } from "@/lib/onlyfans/workspace";
 import { configuredConfigurationBackend } from "@/lib/onlyfans/configuration-backend";
 import ConfigurationEditor from "./ConfigurationEditor";
+import { configuredContentBackend } from "@/lib/onlyfans/content-backend";
+import ContentEditor from "./ContentEditor";
+import VaultManager from "./VaultManager";
 
 export type NativeSearch = { account?: string | string[]; creator?: string | string[]; cursor?: string | string[] };
 const TITLES = { content: "Content", sales: "Sales", settings: "Settings" } as const;
@@ -46,9 +49,10 @@ export default async function NativeWorkspace({ section, searchParams }: { secti
     </nav>
     <div className="mb-5 rounded-xl border border-line p-4 text-sm" role="status" data-of-native-freshness>
       <p>{data.historyRecoveryRequired ? "History synchronization is incomplete." : "Recorded history synchronization completed."}</p>
-      <p className="mt-1 text-xs text-muted">Last complete synchronization: {data.lastCompleteSyncAt ?? "Not recorded"}. Provider connection has not been verified.</p>
+      <p className="mt-1 text-xs text-muted">Last complete synchronization: {data.lastCompleteSyncAt ?? "Not recorded"}. {data.providerConnectionVerified ? "Provider connection is verified." : "Provider connection has not been verified."}</p>
     </div>
-    <WorkspaceBody data={data} />
+    {section === "content" && configuredContentBackend() ? <VaultManager key={account.accountId} accountId={account.accountId} /> : null}
+    <WorkspaceBody data={data} contentEditable={section === "content" && !!configuredContentBackend()} />
     {section === "settings" && configuredConfigurationBackend() ? <ConfigurationEditor key={account.accountId} accountId={account.accountId} /> : null}
     {next ? <Link data-of-next-page className="mt-5 inline-block rounded-lg border border-line px-4 py-2 text-sm font-semibold text-accent"
       href={`${href}${href.includes("?") ? "&" : "?"}cursor=${encodeURIComponent(next)}`}>Next page →</Link> : null}
@@ -57,7 +61,7 @@ export default async function NativeWorkspace({ section, searchParams }: { secti
   </div>;
 }
 
-function WorkspaceBody({ data }: { data: WorkspaceRead }) {
+function WorkspaceBody({ data, contentEditable = false }: { data: WorkspaceRead; contentEditable?: boolean }) {
   if (data.section === "content") return <div className="grid min-w-0 gap-4 md:grid-cols-2 xl:grid-cols-3" data-of-catalogue>
     {data.items.map(item => <Card key={item.itemId} className="min-w-0 p-4" data-of-catalog-item={item.itemId}>
       <div className="flex flex-wrap items-start justify-between gap-2"><h2 className="break-words font-semibold">{item.label}</h2><span className="rounded-full bg-elev px-2 py-1 text-xs text-muted">{READY[item.readiness]}</span></div>
@@ -65,6 +69,7 @@ function WorkspaceBody({ data }: { data: WorkspaceRead }) {
       {item.descriptionTruncated ? <p className="mt-1 text-xs text-muted">Description excerpt.</p> : null}
       <dl className="mt-4 grid grid-cols-2 gap-2 text-sm"><dt className="text-muted">Media</dt><dd>{item.mediaCount ?? "Needs review"}</dd><dt className="text-muted">Free previews</dt><dd>{item.previewCount ?? "Needs review"}</dd><dt className="text-muted">Saved price</dt><dd className="font-semibold">{item.priceCents === null ? "Needs review" : formatRecordedMoney(item.priceCents, item.currency)}</dd></dl>
       <p className="mt-3 text-xs text-muted">{item.kind}. {item.readiness === "terms_checked" ? "Catalogue terms passed the current media checks. Sale permission also depends on the conversation and account." : "Saved catalogue metadata."}</p>
+      {contentEditable ? <ContentEditor key={`${data.accountId}:${item.itemId}`} accountId={data.accountId} itemId={item.itemId} /> : null}
     </Card>)}
     {!data.items.length ? <p className="text-sm text-muted">No catalogue items are recorded on this page.</p> : null}
   </div>;

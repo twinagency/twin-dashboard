@@ -24,7 +24,7 @@ export type OperationsSnapshot = {
   schemaVersion: "of-operations.v2";
   accountId: string;
   asOf: string;
-  providerConnectionVerified: false;
+  providerConnectionVerified: boolean;
   reasons: (keyof typeof OPERATION_REASONS)[];
   intake: { pending: number; quarantined: number };
   planning: { generating: number; ready: number; unknown: number; refused: number; stale: number };
@@ -62,7 +62,7 @@ function keys(value: unknown, names: string[]): boolean {
 export function parseOperations(value: unknown, accountId: string): OperationsSnapshot | null {
   if (!keys(value, ["schemaVersion", "accountId", "asOf", "providerConnectionVerified", "reasons", "intake", "planning", "work", "delivery", "runtime", "policy", "modelCosts"])) return null;
   if (!record(value) || value.schemaVersion !== "of-operations.v2" || value.accountId !== accountId
-      || !stamp(value.asOf) || value.providerConnectionVerified !== false
+      || !stamp(value.asOf) || typeof value.providerConnectionVerified !== "boolean"
       || !Array.isArray(value.reasons) || value.reasons.length > Object.keys(OPERATION_REASONS).length
       || new Set(value.reasons).size !== value.reasons.length
       || !value.reasons.every((reason) => typeof reason === "string" && Object.hasOwn(OPERATION_REASONS, reason))) return null;

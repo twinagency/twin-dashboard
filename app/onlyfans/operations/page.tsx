@@ -40,13 +40,13 @@ export default async function OperationsPage({ searchParams }: { searchParams: P
         href={workspaceHref("/onlyfans/operations", { creatorId, accountId: item.accountId })}>{item.binding.creatorName} · @{item.binding.handle}</Link>)}
     </nav>
     <div className="mb-5 rounded-xl border border-line p-4" role="status">
-      <p className="font-semibold">Provider connection has not been verified.</p>
-      <p className="mt-1 text-sm text-muted">These counters show recorded processing state. Live sending remains disabled.</p>
+      <p className="font-semibold">{data.providerConnectionVerified ? "Provider connection is verified." : "Provider connection has not been verified."}</p>
+      <p className="mt-1 text-sm text-muted">These counters show recorded processing state. Account permissions and delivery holds are checked before every send.</p>
     </div>
     <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">{metrics.map(([label, value]) => <Card key={label} className="p-4"><div className="text-xs text-muted">{label}</div><div className="mt-1 font-mono text-2xl font-semibold" data-of-metric={label}>{value}</div></Card>)}</div>
     <Card className="mt-5 p-4">
       <h2 className="font-semibold">Current holds</h2>
-      {data.reasons.length ? <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">{data.reasons.map((reason) => <li key={reason}>{OPERATION_REASONS[reason]}</li>)}</ul> : <p className="mt-2 text-sm text-muted">No processing hold is recorded. This does not verify the provider connection.</p>}
+      {data.reasons.length ? <ul className="mt-2 list-disc space-y-1 pl-5 text-sm">{data.reasons.map((reason) => <li key={reason}>{OPERATION_REASONS[reason]}</li>)}</ul> : <p className="mt-2 text-sm text-muted">No processing hold is recorded. {data.providerConnectionVerified ? "A verified connection does not confirm an individual delivery." : "This does not verify the provider connection."}</p>}
       <p className="mt-4 text-sm">Recorded allowance: <strong data-of-cap>{data.policy ? `${data.policy.usedUnits} / ${data.policy.limitUnits}` : "Not configured"}</strong></p>
       <p className="mt-4 text-sm">Model cost and reservations today: <strong className="whitespace-nowrap" data-of-model-cost>{formatModelUsd(data.modelCosts.spentMillicents)}</strong></p>
       <p className="mt-1 text-xs text-muted">Per-provider daily model cap: {data.modelCosts.capPerProviderMillicents === null ? "Not configured" : formatModelUsd(data.modelCosts.capPerProviderMillicents)}. Calls today: {data.modelCosts.calls}. Providers: {data.modelCosts.providers}. Calls with uncertain cost across all days: {data.modelCosts.unresolvedCalls}. Day: {data.modelCosts.day} UTC.</p>
