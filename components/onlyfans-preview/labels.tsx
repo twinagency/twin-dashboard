@@ -42,6 +42,7 @@ export const DELIVERY_LABEL: Record<DeliveryOutcome, Pill> = {
   generating: { label: "Preparing", tone: "blue" },
   queued: { label: "Queued", tone: "blue" },
   dispatching: { label: "Sending", tone: "blue" },
+  retracted: { label: "Retracted", tone: "slate" },
   sent: { label: "Sent", tone: "green" },
   partial: { label: "Partly sent", tone: "gold" },
   unknown: { label: "Outcome unknown", tone: "gold" },

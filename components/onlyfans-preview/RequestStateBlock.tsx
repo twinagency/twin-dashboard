@@ -101,8 +101,8 @@ export function RequestStateBlock<T>({
         <div className="space-y-3">
           <StateCard
             tone="warn"
-            title="Showing a cached value"
-            detail={`The last successful read was ${formatAge(state.freshness.asOf)}. Newer activity may not appear here.`}
+            title="Data may be outdated"
+            detail={state.freshness.asOf ? `The last complete sync was ${formatAge(state.freshness.asOf)}. Newer activity may not appear here.` : "Synchronization is incomplete or has not been verified. Newer activity may be missing."}
           />
           <div className="opacity-90">{render(state.data, state.freshness)}</div>
         </div>

@@ -24,9 +24,8 @@
 // Sidebar/TopBar/MobileMenu/MainShell. That is the point of the repair — the
 // OnlyFans channel is an extension of the product, not a second product.
 //
-// Everything below is synthetic. It talks to exactly one data source, which is
-// the fixture implementation, and it never imports the live root layout, a
-// production data provider or the OnlyFans server.
+// The explicit source selects synthetic preview data or authenticated dashboard
+// handlers. Neither browser path imports database or provider code.
 
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { usePathname, useRouter, useSearchParams } from "next/navigation";
@@ -77,7 +76,8 @@ import type {
   CommandPayload,
   PreviewViewer,
   RequestState,
-  SimulatedCommandResult,
+  CommandResult,
+  CommandRequest,
 } from "@/lib/onlyfans-preview/types";
 import PreviewControlsPanel from "./PreviewControlsPanel";
 import type { PreviewPreset } from "./PreviewControlsPanel";
@@ -204,7 +204,9 @@ export default function OnlyFansWorkspace({
   );
 
   const [controls, setControls] = useState<PreviewControls>(DEFAULT_CONTROLS);
-  const [commandResult, setCommandResult] = useState<SimulatedCommandResult | null>(null);
+  const [commandResult, setCommandResult] = useState<CommandResult | null>(null);
+  const [commandPending, setCommandPending] = useState(false);
+  const commandBusy = useRef(false);
 
   const { state, ref, commit } = useSelectionStore();
   const requested = useRef<{ conversations: Set<string>; details: Set<string> }>({
@@ -452,11 +454,54 @@ export default function OnlyFansWorkspace({
    * The single command gate.
    *
    * The UI already hides and disables what a viewer may not do, and this is the
-   * second check that actually refuses: a read-only session, a disconnected
-   * account or an unresolved send cannot be talked past by calling the handler
-   * directly. Nothing here reaches a provider in any case, which is the third
-   * reason the control is not a send.
+   * second check before submission. The backend separately verifies permission,
+   * scope, revision and delivery holds in its canonical transaction.
    */
+  const executeCommand = useCallback(async (request: CommandRequest) => {
+    if (commandBusy.current) return;
+    commandBusy.current = true;
+    setCommandPending(true);
+    setCommandResult(null);
+    const generation = ref.current.scopeGeneration;
+    try {
+      let result: CommandResult;
+      try { result = await source.submitCommand(request); }
+      catch { result = { simulated: false, applied: false, accepted: false, outcome: "unconfirmed", request,
+        note: "The outcome is not confirmed. Refresh the conversation or retry this same request." }; }
+      if (generation !== ref.current.scopeGeneration) return;
+      const selected = () => ref.current.selectedAccountId === request.accountId &&
+        ref.current.byAccount[request.accountId]?.selectedConversationId === request.conversationId;
+      if (selected()) setCommandResult(result);
+      if (!result.simulated) {
+        const accounts = await source.listAccounts({ creatorId: requestedScope.creatorId, accountId: requestedScope.accountId });
+        commit(applyAccounts(ref.current, generation, accounts));
+        if (generation !== ref.current.scopeGeneration) return;
+        requested.current.details.delete(`${request.accountId}:${request.conversationId}`);
+        requested.current.conversations.delete(request.accountId);
+        if (selected()) {
+          // Refresh from the canonical store; the acknowledgement is historical.
+          requested.current.conversations.add(request.accountId);
+          requested.current.details.add(`${request.accountId}:${request.conversationId}`);
+          const list = requestConversations(ref.current, request.accountId);
+          commit(list.state);
+          const listRead = await source.listConversations(request.accountId);
+          commit(applyConversations(ref.current, request.accountId, list.generation, list.seq, listRead).state);
+          if (generation === ref.current.scopeGeneration && selected()) {
+            requested.current.details.add(`${request.accountId}:${request.conversationId}`);
+            const detail = requestConversation(ref.current, request.accountId, request.conversationId);
+            commit(detail.state);
+            const read = await source.getConversation(request.accountId, request.conversationId);
+            commit(applyConversation(ref.current, request.accountId, request.conversationId,
+              detail.generation, detail.seq, read).state);
+          }
+        } else { commit({ ...ref.current }); }
+      }
+    } catch {
+      commit(applyAccounts(ref.current, generation, { status: "unavailable",
+        message: "The conversation could not be refreshed. Reload the dashboard to read its current state." }));
+    } finally { commandBusy.current = false; setCommandPending(false); }
+  }, [commit, ref, source, requestedScope.creatorId, requestedScope.accountId]);
+
   const submitAction = useCallback(
     async (action: AvailableAction, payload: CommandPayload) => {
       const snapshot = ref.current;
@@ -489,10 +534,9 @@ export default function OnlyFansWorkspace({
         });
         return;
       }
-      const result = await source.submitCommand(request);
-      setCommandResult(result);
+      await executeCommand(request);
     },
-    [ref, viewer, source],
+    [ref, viewer, executeCommand],
   );
 
   const handleCommand = useCallback(
@@ -570,6 +614,12 @@ export default function OnlyFansWorkspace({
       viewer={viewer}
       onCommand={handleCommand}
       commandResult={commandResult}
+      commandPending={commandPending}
+      onRetryCommand={() => {
+        if (commandResult && !commandResult.simulated && commandResult.outcome === "unconfirmed") {
+          void executeCommand(commandResult.request);
+        }
+      }}
       nextCursor={
         state.selectedAccountId ? nextConversationCursor(state, state.selectedAccountId) : null
       }

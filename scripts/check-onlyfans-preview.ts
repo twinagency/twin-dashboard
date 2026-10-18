@@ -420,17 +420,18 @@ async function main() {
     check("excluding contact is still offered", canSubmitCommand(operator, automatedSet, "mark_no_contact"));
     // The documented rule (consolidation plan section 4; ARCHITECTURE.md
     // "unresolved send") is that an unresolved send blocks *conflicting sends*,
-    // not every control. Exactly the two actions that could dispatch carry the
+    // not every control. The three actions that could dispatch carry the
     // unresolved reason, and they do so in every mode.
     const withheldByUnresolved = automatedSet.blocked
       .filter((entry) => /unresolved/i.test(entry.reason ?? ""))
       .map((entry) => entry.action)
       .sort();
     check(
-      "exactly sending and resuming are withheld by the unresolved send",
-      withheldByUnresolved.length === 2 &&
-        withheldByUnresolved[0] === "resume_automation" &&
-        withheldByUnresolved[1] === "send_manual_message",
+      "sending, resuming and handing back are withheld by the unresolved send",
+      withheldByUnresolved.length === 3 &&
+        withheldByUnresolved[0] === "release_takeover" &&
+        withheldByUnresolved[1] === "resume_automation" &&
+        withheldByUnresolved[2] === "send_manual_message",
       withheldByUnresolved.join(","),
     );
   }

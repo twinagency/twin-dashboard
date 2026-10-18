@@ -110,9 +110,13 @@ function parseCursor(cursor?: string | null): number {
   return Number.isFinite(parsed) && parsed >= 0 ? parsed : 0;
 }
 
+export type FixtureOnlyFansDataSource = Omit<OnlyFansDataSource, "submitCommand"> & {
+  submitCommand(request: CommandRequest): Promise<SimulatedCommandResult>;
+};
+
 export function createFixtureOnlyFansDataSource(
   options: FixtureDataSourceOptions,
-): OnlyFansDataSource {
+): FixtureOnlyFansDataSource {
   const { viewer, scenarios = {}, label = "Sample data", latencyMs = 0 } = options;
 
   return {

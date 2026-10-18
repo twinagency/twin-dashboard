@@ -763,8 +763,9 @@ export function formatPreviewTime(value: IsoTimestamp): string {
   return `${iso.slice(11, 16)} UTC`;
 }
 
-export function formatAge(value: IsoTimestamp): string {
-  const ms = Date.parse(PREVIEW_NOW) - Date.parse(value);
+export function formatAge(value: IsoTimestamp | null): string {
+  if (!value) return "not yet verified";
+  const ms = Date.now() - Date.parse(value);
   if (ms < MINUTE) return "just now";
   if (ms < HOUR) return `${Math.round(ms / MINUTE)}m ago`;
   if (ms < DAY) return `${Math.round(ms / HOUR)}h ago`;

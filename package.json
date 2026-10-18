@@ -58,6 +58,7 @@
     "test:onlyfans-preview": "tsx scripts/check-onlyfans-preview.ts",
     "test:channel-integration": "tsx scripts/check-channel-integration.ts",
     "test:onlyfans-read": "tsx scripts/check-onlyfans-read.ts",
+    "test:onlyfans-operations": "node --import tsx scripts/check-onlyfans-operations.ts",
     "test:onlyfans-unconfigured": "tsx scripts/check-onlyfans-unconfigured.tsx"
   },
   "dependencies": {

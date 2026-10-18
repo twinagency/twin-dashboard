@@ -15,7 +15,7 @@
 // below is a projection or a request, never a second writable ledger.
 
 /** Bumped whenever a read model changes shape. Carried on every read model. */
-export const ONLYFANS_PREVIEW_SCHEMA_VERSION = "of-preview.v1" as const;
+export const ONLYFANS_PREVIEW_SCHEMA_VERSION = "of-preview.v2" as const;
 export type OnlyFansPreviewSchemaVersion = typeof ONLYFANS_PREVIEW_SCHEMA_VERSION;
 
 export type IsoTimestamp = string;
@@ -54,6 +54,7 @@ export type DeliveryOutcome =
   | "queued"
   | "dispatching"
   | "sent"
+  | "retracted"
   | "partial"
   | "unknown"
   | "refused"
@@ -61,7 +62,7 @@ export type DeliveryOutcome =
 
 /** Freshness is always explicit so a cached value cannot read as current. */
 export type Freshness = {
-  asOf: IsoTimestamp;
+  asOf: IsoTimestamp | null;
   /** How old this projection may be before it must render as stale. */
   maxAgeSeconds: number;
   stale: boolean;
@@ -234,7 +235,7 @@ export type PreviewViewer = {
   scopedAccountIds: string[];
 };
 
-/** Commands the dashboard may request. None of them are implemented in OF-D0. */
+/** Preview vocabulary; the live source implements only scoped local controls. */
 export type PreviewCommand =
   | "pause_automation"
   | "resume_automation"
@@ -298,6 +299,8 @@ export type SimulatedCommandResult = {
   request: CommandRequest;
   note: string;
 };
+
+export type CommandResult = SimulatedCommandResult | import("../onlyfans/controls").RecordedControlResult;
 
 /** Why an action is offered or withheld. Reasons are shown, never hidden. */
 export type ActionAvailability = {

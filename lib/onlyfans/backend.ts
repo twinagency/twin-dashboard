@@ -29,10 +29,13 @@ import type {
   OfAccount,
 } from "../onlyfans-preview/types";
 import { ONLYFANS_PREVIEW_SCHEMA_VERSION } from "../onlyfans-preview/types";
+import { parseOperations, type OperationsSnapshot } from "./operations";
+import { parseWorkspace, NATIVE_SECTIONS, type NativeSection, type WorkspaceRead } from "./workspace";
 
-/** Set both to enable the live read path. Absent or malformed means unconfigured. */
+/** Base URL is the backend origin (or proxy mount), without the API namespace. */
 export const ONLYFANS_API_BASE_ENV = "ONLYFANS_API_BASE_URL";
 export const ONLYFANS_API_TOKEN_ENV = "ONLYFANS_API_TOKEN";
+export const ONLYFANS_API_PATH = "/onlyfans/api/v1";
 
 /**
  * The header the scoped service requires on every request.
@@ -74,6 +77,8 @@ export type OnlyFansBackend = {
     accountId: string,
     conversationId: string,
   ): Promise<BackendResult<ConversationDetail>>;
+  getOperations?(accountId: string): Promise<BackendResult<OperationsSnapshot>>;
+  getWorkspace?(accountId: string, section: NativeSection, cursor?: string | null): Promise<BackendResult<WorkspaceRead>>;
 };
 
 const ID_PATTERN = /^[A-Za-z0-9._:-]{1,64}$/;
@@ -205,6 +210,23 @@ export function createHttpOnlyFansBackend(options: {
   return {
     label: "OnlyFans backend",
 
+    getWorkspace(accountId, section, cursor = null) {
+      if (!ID_PATTERN.test(accountId) || !NATIVE_SECTIONS.includes(section) || (cursor !== null && !/^[A-Za-z0-9_-]{1,256}$/.test(cursor))) {
+        return Promise.resolve({ ok: false, status: 400, code: "invalid_workspace_request", error: "That account or page reference is not valid." });
+      }
+      const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
+      return read(`${ONLYFANS_API_PATH}/accounts/${accountId}/workspace/${section}${query}`, body => isRecord(body) ? parseWorkspace(body.workspace, accountId, section) : null);
+    },
+
+    getOperations(accountId) {
+      if (!ID_PATTERN.test(accountId)) {
+        return Promise.resolve({ ok: false, status: 400, code: "invalid_account_id", error: "That account reference is not a valid identifier." });
+      }
+      return read(`${ONLYFANS_API_PATH}/accounts/${accountId}/operations`, (body) => {
+        return isRecord(body) ? parseOperations(body.operations, accountId) : null;
+      });
+    },
+
     listAccounts({ creatorId }) {
       // Validated before it reaches the wire, so a browser id cannot become a
       // path segment or a query the backend has to defend against.
@@ -217,7 +239,7 @@ export function createHttpOnlyFansBackend(options: {
         } satisfies BackendFailure);
       }
       const query = creatorId ? `?creator=${encodeURIComponent(creatorId)}` : "";
-      return read(`/onlyfans/accounts${query}`, (body) => {
+      return read(`${ONLYFANS_API_PATH}/accounts${query}`, (body) => {
         if (!isRecord(body) || !Array.isArray(body.accounts)) return null;
         return body.accounts as OfAccount[];
       });
@@ -233,7 +255,7 @@ export function createHttpOnlyFansBackend(options: {
         } satisfies BackendFailure);
       }
       const query = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
-      return read(`/onlyfans/accounts/${accountId}/conversations${query}`, (body) => {
+      return read(`${ONLYFANS_API_PATH}/accounts/${accountId}/conversations${query}`, (body) => {
         if (!isRecord(body) || !isRecord(body.page)) return null;
         const page = body.page;
         if (!Array.isArray(page.items)) return null;
@@ -253,7 +275,7 @@ export function createHttpOnlyFansBackend(options: {
           error: "That conversation reference is not a valid identifier.",
         } satisfies BackendFailure);
       }
-      return read(`/onlyfans/accounts/${accountId}/conversations/${conversationId}`, (body) => {
+      return read(`${ONLYFANS_API_PATH}/accounts/${accountId}/conversations/${conversationId}`, (body) => {
         if (!isRecord(body) || !isRecord(body.conversation)) return null;
         return body.conversation as ConversationDetail;
       });

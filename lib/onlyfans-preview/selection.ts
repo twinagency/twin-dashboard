@@ -322,7 +322,7 @@ function mergeFreshness(
       status: "stale",
       data,
       freshness:
-        Date.parse(currentFreshness.asOf) <= Date.parse(incomingFreshness.asOf)
+        (currentFreshness.asOf ? Date.parse(currentFreshness.asOf) : -Infinity) <= (incomingFreshness.asOf ? Date.parse(incomingFreshness.asOf) : -Infinity)
           ? currentFreshness
           : incomingFreshness,
     };

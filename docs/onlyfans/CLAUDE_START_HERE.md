@@ -4,6 +4,95 @@ The owner requested publication of the OnlyFans implementation and complete Clau
 
 ## Start Here
 
+The latest offline checkpoint is
+[NATIVE-CONNECTOR-PROTOCOL-2026-10-18.md](NATIVE-CONNECTOR-PROTOCOL-2026-10-18.md).
+An explicitly owned local connector now supplies native-shaped discovery/history
+and one-attempt sends to the same bounded worker and common authority. It reuses
+the existing native formatter/signer; strict receipts preserve unknown holds.
+The actual demo/browser includes native-shaped incoming and outgoing HTTP.
+Database head stays 0079. Real session/provider/model and live-release work
+remain open; fixture protocol verification does not establish the real API.
+
+The preceding offline checkpoint is
+[NATIVE-WORKER-2026-10-18.md](NATIVE-WORKER-2026-10-18.md). The bounded worker
+coordinates recorded intake, native one-call planning, common delivery and
+receipt repair. It resumes only still-valid prepared plans and preserves
+unknown/expired evidence without regeneration. The runnable demo and actual
+browser now include a worker-produced reply. Database head remains 0079; real
+provider/model integration and live release gates remain open.
+
+The preceding offline checkpoint is
+[NATIVE-CONFIGURATION-2026-10-18.md](NATIVE-CONFIGURATION-2026-10-18.md), paired
+with backend schema 0079. Settings now edits the existing creator persona,
+approved facts and explicit model choices through a separately authenticated,
+audited partial-patch boundary. Stale edits, lost acknowledgements and old native
+plans retain their existing conflict, retry and one-use delivery checks. This
+closes the current offline package; live integration and the remaining full
+consolidation gates are still open.
+
+The preceding offline checkpoint is
+[OFFLINE-RELEASE-REHEARSAL-2026-10-18.md](OFFLINE-RELEASE-REHEARSAL-2026-10-18.md).
+It adds a one-command current demo/browser smoke, historical-input and full
+evidence-restore rehearsal, data/ownership map and explicit writer-exclusion
+register. Bounded synthetic load now covers the native preparation/cost/delivery
+path as well as intake/outage recovery. Production import, external writer
+retirement, real provider/model validation and live release remain unapproved.
+
+The preceding offline checkpoint is
+[NATIVE-WORKSPACE-2026-10-18.md](NATIVE-WORKSPACE-2026-10-18.md). Content, Sales
+and Settings now read existing canonical records through authenticated native
+pages and `of-workspace.v1` projections. Database head remains 0078. These read
+surfaces do not expose uploads, configuration edits or financial reconciliation
+commands, or complete all of Milestone 5/live acceptance.
+
+The preceding offline checkpoint is
+[OPERATOR-CONTROLS-2026-10-18.md](OPERATOR-CONTROLS-2026-10-18.md), paired with
+backend schema 0078. Pause/resume, takeover/hand-back and no-contact now use a
+separate authenticated command credential and the existing state/audit owner.
+The UI refreshes canonical reads and preserves unconfirmed outcomes. This does
+not connect a provider, expose manual sends or authorize live activation.
+
+The preceding offline checkpoint is
+[NATIVE-MEDIA-AND-COMMERCE-2026-10-18.md](NATIVE-MEDIA-AND-COMMERCE-2026-10-18.md),
+paired with backend schema 0077. The same native response may select an existing
+catalogue single through the common one-use authority. Source-backed synthetic
+purchase/reversal intake updates existing commerce owners; payment conflicts
+hold media sales and appear on Operations. Full native policy, curated vault
+packs, authenticated commands and live integration remain open. No live
+activation, Git push or allowance reset is implied.
+
+The preceding offline checkpoint is
+[NATIVE-MEMORY-2026-10-18.md](NATIVE-MEMORY-2026-10-18.md), paired with backend
+schema 0076 and source-backed corrections in the existing fan/profile owners.
+The same native model response provides the reply and bounded memory proposal.
+Full native policy, paid-model integration, commerce and live connection remain
+open gates. No live activation is implied.
+
+The preceding offline checkpoint is
+[NATIVE-MODEL-BUDGET-2026-10-18.md](NATIVE-MODEL-BUDGET-2026-10-18.md),
+paired with backend schema 0075, retained model-cost reservations and the
+authenticated Operations cost display. Full native context/fact persistence,
+paid model integration, commerce and live connection remain open gates.
+
+The preceding offline checkpoint is
+[NATIVE-TEXT-AND-OPERATIONS-2026-10-18.md](NATIVE-TEXT-AND-OPERATIONS-2026-10-18.md),
+paired with the backend's 0074 migration, bounded synthetic native text
+preparation, authenticated operations page and quarantined recovery tools.
+Full native planning, commerce and live connection remain open gates.
+
+The preceding transport checkpoint is
+[ONE-USE-TRANSPORT-2026-10-18.md](ONE-USE-TRANSPORT-2026-10-18.md), paired with
+the backend's 0073 migration and one-use network boundary.
+
+Continue with [TEXT-AUTHORITY-2026-10-18.md](TEXT-AUTHORITY-2026-10-18.md)
+for the preceding text-delivery authority and paired backend release gates.
+
+The earlier foundation checkpoint is documented in
+[FOUNDATION-2026-10-18.md](FOUNDATION-2026-10-18.md). Read it alongside the
+original handover: it fixes the URL mismatch and adds durable PostgreSQL
+foundation work and real synthetic HTTP/browser acceptance. Its changes are
+not committed, deployed or approved for live activation.
+
 1. Read [the complete handover](handover/CLAUDE_HANDOVER.md) and follow its reading order.
 2. Use [the runbook](handover/RUNBOOK.md) for the isolated preview and verification commands.
 3. The [complete handover archive](../archive/onlyfans-claude-handover-2026-10-18.zip) contains 89 source-file snapshots, 23 reference documents, 14 existing synthetic screenshots, source inventories and checksum manifests. This is the original pre-publication checkpoint, not a second implementation.

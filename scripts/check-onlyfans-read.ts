@@ -472,7 +472,34 @@ group("4. Paging keeps its cursor, its rows and its scope");
 
 // ── 5. Stale and out-of-order responses ───────────────────────────────────
 
-group("5. A late response cannot overwrite a newer selection");
+group("5. Incomplete synchronization stays stale, and late responses cannot overwrite newer selections");
+{
+  const unverified = { asOf: null, maxAgeSeconds: 60, stale: true };
+  const older = { asOf: "2026-10-17T09:00:00.000Z", maxAgeSeconds: 60, stale: true };
+  const current = { asOf: "2026-10-18T09:00:00.000Z", maxAgeSeconds: 60, stale: false };
+  const detail = conversationDetails["of-conv-ava-1001"];
+  const source = createServerOnlyFansDataSource({
+    transport: serviceTransport(OPERATOR, fakeBackend({
+      accounts: async () => ({ ok: true, data: [
+        { ...account(AVA), syncFreshness: unverified },
+        { ...account(NOVA), syncFreshness: current },
+      ] }),
+      conversations: async () => ({ ok: true, data: { items: [
+        { ...detail.summary, freshness: older },
+        { ...detail.summary, conversationId: "of-conv-ava-1004", freshness: unverified },
+      ], nextCursor: null } }),
+      conversation: async () => ({ ok: true, data: { ...detail, freshness: unverified } }),
+    })),
+  });
+  const accounts = await source.listAccounts({});
+  check("successful account reads preserve unknown synchronization", accounts.status === "stale" && accounts.freshness.asOf === null);
+  const selected = await source.getAccount(AVA, {});
+  check("selecting an unverified account keeps it stale", selected.status === "stale");
+  check("a current account is not made stale by another account", (await source.getAccount(NOVA, {})).status === "ready");
+  const page = await source.listConversations(AVA);
+  check("unknown synchronization wins over an older known timestamp", page.status === "stale" && page.freshness.asOf === null && page.data.items.length === 2);
+  check("a successful detail read preserves its incomplete synchronization", (await source.getConversation(AVA, detail.summary.conversationId)).status === "stale");
+}
 {
   // The slow backend answers after a delay, so the newer read of the same list
   // can be applied first and the late one has something to lose to.
@@ -719,7 +746,7 @@ group("7. The backend client maps every answer honestly");
   check("a valid answer is returned", ok.ok && ok.data.length === 1);
   check(
     "the request is built from the documented path",
-    calls[0].url === "https://onlyfans.internal/onlyfans/accounts?creator=" + CREATOR_AVA,
+    calls[0].url === "https://onlyfans.internal/onlyfans/api/v1/accounts?creator=" + CREATOR_AVA,
     calls[0].url,
   );
   const headers = new Headers(calls[0].init?.headers);
@@ -824,7 +851,7 @@ group("7. The backend client maps every answer honestly");
     baseUrl: "https://onlyfans.internal",
     token: "t",
     fetchImpl: (async () =>
-      respond({ schemaVersion: "of-preview.v2", accounts: [account(AVA)] })) as unknown as typeof fetch,
+      respond({ schemaVersion: "of-preview.v99", accounts: [account(AVA)] })) as unknown as typeof fetch,
   });
   const futureResult = await futureVersion.listAccounts({ creatorId: null });
   check(
@@ -834,7 +861,7 @@ group("7. The backend client maps every answer honestly");
   check(
     "and the operator is told which two versions disagreed",
     !futureResult.ok &&
-      futureResult.error.includes("of-preview.v2") &&
+      futureResult.error.includes("of-preview.v99") &&
       futureResult.error.includes(ONLYFANS_PREVIEW_SCHEMA_VERSION),
     !futureResult.ok ? futureResult.error : "",
   );

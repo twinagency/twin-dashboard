@@ -15,7 +15,7 @@ import type {
   CursorPage,
   OfAccount,
   RequestState,
-  SimulatedCommandResult,
+  CommandResult,
 } from "./types";
 
 export interface OnlyFansDataSource {
@@ -42,10 +42,9 @@ export interface OnlyFansDataSource {
   ): Promise<RequestState<ConversationDetail>>;
 
   /**
-   * Submit a command. OF-D0 has no delivery authority, so every implementation
-   * shipped here returns a simulation marker instead of claiming an effect.
+   * Fixtures simulate; the live adapter can submit scoped conversation controls.
    */
-  submitCommand(request: CommandRequest): Promise<SimulatedCommandResult>;
+  submitCommand(request: CommandRequest): Promise<CommandResult>;
 }
 
 /** Raised when live OnlyFans data is requested without a configured adapter. */

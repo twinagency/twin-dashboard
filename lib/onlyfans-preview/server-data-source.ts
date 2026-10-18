@@ -1,7 +1,7 @@
 // The live frontend read adapter.
 //
-// It speaks to the dashboard's own narrow read handlers (/api/onlyfans/*) and
-// to nothing else. Each handler has already verified the internal operator
+// It speaks to the dashboard's read and scoped control handlers. Each handler
+// verifies the internal operator
 // session and asked the OnlyFans backend what this operator may read, so this
 // module's job is only to map a transport outcome onto the one request-state
 // vocabulary the components render.
@@ -20,13 +20,16 @@
 // cannot reach its backend.
 
 import type { OnlyFansDataSource } from "./data-source";
+import { isControlAction, parseControlAck, type RecordedControlResult } from "../onlyfans/controls";
 import type {
   AccountScopeRequest,
   ConversationDetail,
   ConversationSummary,
   CursorPage,
+  Freshness,
   OfAccount,
   RequestState,
+  CommandRequest,
 } from "./types";
 
 export type TransportReply<T> =
@@ -49,6 +52,7 @@ export type OnlyFansTransport = {
     accountId: string,
     conversationId: string,
   ): Promise<TransportReply<ConversationDetail>>;
+  submitControl?(request: CommandRequest): Promise<RecordedControlResult>;
 };
 
 const UNAVAILABLE_COPY =
@@ -129,6 +133,33 @@ export function createFetchOnlyFansTransport(
   return {
     kind: "fetch",
 
+    async submitControl(command) {
+      const result = (outcome: RecordedControlResult["outcome"], note: string,
+        recordedRevision?: number): RecordedControlResult => ({ simulated: false,
+        applied: outcome === "recorded", accepted: outcome === "recorded", outcome,
+        request: command, note, recordedRevision });
+      if (!isControlAction(command.command) || command.payload.kind !== "none") {
+        return result("refused", "That action is not configured for this account.");
+      }
+      try {
+        const response = await call(`/api/onlyfans-controls/accounts/${encodeURIComponent(command.accountId)}/conversations/${encodeURIComponent(command.conversationId)}`, {
+          method: "POST", credentials: "same-origin", redirect: "error", cache: "no-store",
+          signal: AbortSignal.timeout(12_000), headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action: command.command, expectedRevision: command.expectedRevision }),
+        });
+        if ([400, 401, 403, 404, 409, 413, 503].includes(response.status)) {
+          return result("refused", response.status === 409
+            ? "The conversation changed or has an active hold. Refresh before trying again."
+            : "The change was not accepted. Check your session and refresh the conversation.");
+        }
+        if (response.ok) {
+          const ack = parseControlAck(await response.json(), { ...command, action: command.command });
+          if (ack) return result("recorded", "The change was saved. The conversation is being refreshed.", ack.recordedRevision);
+        }
+      } catch { /* Keep the original command for an explicit idempotent retry. */ }
+      return result("unconfirmed", "The outcome is not confirmed. Refresh the conversation or retry this same request.");
+    },
+
     readAccounts(scope) {
       const params = new URLSearchParams();
       if (scope.creatorId) params.set("creator", scope.creatorId);
@@ -172,10 +203,26 @@ export function createFetchOnlyFansTransport(
   };
 }
 
-function toState<T>(reply: TransportReply<T>, isEmpty: (data: T) => boolean): RequestState<T> {
+function oldestStale(values: Freshness[]): Freshness | null {
+  return values.filter((value) => value.stale).reduce<Freshness | null>((oldest, value) => {
+    const age = (item: Freshness) => item.asOf ? Date.parse(item.asOf) : -Infinity;
+    return !oldest || age(value) < age(oldest) ? value : oldest;
+  }, null);
+}
+
+function toState<T>(
+  reply: TransportReply<T>,
+  isEmpty: (data: T) => boolean,
+  freshnessOf: (data: T) => Freshness | null,
+): RequestState<T> {
   switch (reply.outcome) {
-    case "ok":
-      return isEmpty(reply.data) ? { status: "empty" } : { status: "ready", data: reply.data };
+    case "ok": {
+      if (isEmpty(reply.data)) return { status: "empty" };
+      const freshness = freshnessOf(reply.data);
+      return freshness?.stale
+        ? { status: "stale", data: reply.data, freshness }
+        : { status: "ready", data: reply.data };
+    }
     case "unavailable":
       return { status: "unavailable", message: reply.message };
     case "denied":
@@ -199,7 +246,11 @@ export function createServerOnlyFansDataSource(options: {
     label: "Live",
 
     async listAccounts(scope) {
-      return toState(await transport.readAccounts(scope ?? {}), (accounts) => accounts.length === 0);
+      return toState(
+        await transport.readAccounts(scope ?? {}),
+        (accounts) => accounts.length === 0,
+        (accounts) => oldestStale(accounts.map((account) => account.syncFreshness)),
+      );
     },
 
     async getAccount(accountId, scope) {
@@ -208,29 +259,29 @@ export function createServerOnlyFansDataSource(options: {
         return state as RequestState<OfAccount>;
       }
       const found = state.data.find((account) => account.accountId === accountId);
-      return found
-        ? { status: "ready", data: found }
-        : { status: "error", message: "This account is not available in the current view." };
+      if (!found) return { status: "error", message: "This account is not available in the current view." };
+      return toState({ outcome: "ok", data: found }, () => false, (account) => account.syncFreshness);
     },
 
     async listConversations(accountId, cursor) {
       return toState(
         await transport.readConversations(accountId, cursor ?? null),
         (page) => page.items.length === 0,
+        (page) => oldestStale(page.items.map((conversation) => conversation.freshness)),
       );
     },
 
     async getConversation(accountId, conversationId) {
-      return toState(await transport.readConversation(accountId, conversationId), () => false);
+      return toState(
+        await transport.readConversation(accountId, conversationId),
+        () => false,
+        (conversation) => conversation.freshness,
+      );
     },
 
-    async submitCommand() {
-      // There is no delivery authority in this package. A live route must not
-      // pretend otherwise, so the refusal says exactly that.
-      throw new Error(
-        "No OnlyFans delivery authority is wired up: sending, takeover, reconnect and every " +
-          "other mutation remain unavailable outside the isolated preview.",
-      );
+    async submitCommand(request) {
+      if (!transport.submitControl) throw new Error("OnlyFans conversation controls are unavailable.");
+      return transport.submitControl(request);
     },
   };
 }

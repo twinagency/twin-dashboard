@@ -34,7 +34,7 @@ Every read model and every paginated page carries this envelope.
 | `channel` | `"onlyfans"` | Never inferred from a route |
 | `accountScope` | string[] | The account ids this response was authorised for |
 | `sourceRevision` | number | The backend revision the projection was built from |
-| `asOf` | ISO timestamp | When the projection was computed |
+| `asOf` | ISO timestamp or null | Last complete durable sync; null means missing or incomplete sync |
 | `maxAgeSeconds` | number | After this, the client renders it as stale |
 | `stale` | boolean | Computed server-side too, so client and server cannot disagree |
 | `capabilities` | family 1 | What the caller may do with this data |
@@ -58,7 +58,7 @@ only when the end has genuinely been reached.
 | `healthReason` | string or null | Plain language, never a raw provider error |
 | `automationMode` | `automated` / `human_controlled` / `paused` / `no_contact` | Display of the account default |
 | `capabilities.*` | `available` / `unavailable` / `not_configured` | Per operation, per account |
-| `syncFreshness` | freshness | How current the health reading is |
+| `syncFreshness` | freshness | How current the synchronized history is; separate from connection health |
 
 Capability keys the dashboard reads: `viewConversations`, `sendManualMessage`,
 `pauseAutomation`, `requestTakeover`, `manageContent`, `managePrices`,
@@ -228,7 +228,7 @@ production build. `npm run test:onlyfans-preview` asserts the second,
 | Families 3-7 (incidents, configuration, catalogue, purchases, commands) | **Not implemented.** No route exists |
 
 Each handler answers with the envelope in section 1, stamped
-`of-preview.v1`, and adds one field the proposal did not have: `scope`, carrying
+`of-preview.v2`, and adds one field the proposal did not have: `scope`, carrying
 the creator and account that were requested, so a client can tell what answer it
 is holding.
 
@@ -274,7 +274,7 @@ pausing and every other mutation in family 7 remain unimplemented.
 
 | Check | What it proves |
 |---|---|
-| `npm run test:onlyfans-read` | 111 checks: authorization, cross-account refusal, scope in the URL, paging, late responses, failure mapping, transport mapping, schema-version negotiation in both directions, and the absence of any fixture fallback |
+| `npm run test:onlyfans-read` | 116 checks: authorization, cross-account refusal, scope in the URL, paging, late responses, incomplete-sync propagation, failure/transport mapping, schema-version negotiation and absence of fixture fallback |
 | `npm run test:onlyfans-unconfigured` | 39 checks: the same chain rendered to markup — an unconfigured surface shows `unavailable` instead of throwing, and invents no card, no zero and no sample-data badge |
 | `npm run test:onlyfans-preview` | 101 checks on the fixture contracts, including that fixture data is refused in a production build |
 | `preview/onlyfans/scripts/check-isolation.mjs` | 70 browser checks against the running preview |
@@ -303,8 +303,34 @@ What that changes for this document, and what it does not:
 
 The version is now negotiated in both directions, which closes the gap this
 document recorded in §4.1: the dashboard sends
-`X-OnlyFans-Schema-Version: of-preview.v1` and the service requires it; the
+`X-OnlyFans-Schema-Version: of-preview.v2` and the service requires it; the
 service stamps `schemaVersion` on every envelope and the dashboard refuses an
 answer whose version is absent or different — as an **error**, not as
 `unavailable`, because a backend that answers in the wrong contract is present
 and needs a code change rather than a connection.
+
+### 4.7 Offline foundation continuation
+
+See [FOUNDATION-2026-10-18.md](FOUNDATION-2026-10-18.md). The service URL path is
+still `/onlyfans/api/v1`; the v2 payload adds nullable sync timestamps and the
+`retracted` delivery outcome. A successful read preserves stale sync state;
+recent activity cannot establish synchronization or a healthy connection.
+The actual Next handlers and pages have been exercised against the real backend
+and disposable PostgreSQL using synthetic data. This does not deploy either
+service or implement command families 3–7.
+# Current Operations extension — 18 October 2026
+
+`GET /api/onlyfans/accounts/{accountId}/operations` and the paired backend
+`GET /onlyfans/api/v1/accounts/{accountId}/operations` retain outer
+`of-preview.v2` and now require nested `of-operations.v2`. Earlier Operations
+v1 examples below describe the historical checkpoint.
+
+`modelCosts` has exactly `day` (valid UTC YYYY-MM-DD), `unit` (literal
+`usd_millicents`), `spentMillicents`, `capPerProviderMillicents` (nullable),
+`calls`, `unresolvedCalls` and `providers`. Numeric values are nonnegative safe
+integers. 10,000 millicents equal USD 1.0000. Recorded spend includes retained
+reservations; unresolved counts cover all-time pending/unknown calls, while
+spend/calls/providers cover today's account-scoped daily rollups. The cap is
+per provider, not a cross-provider total. No prompt or call identity crosses
+this read. Controlled new reasons are `model_cost_unresolved` and
+`model_budget_exhausted`. Older/future contracts and extra keys are refused.

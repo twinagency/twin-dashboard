@@ -39,7 +39,7 @@ import type {
   OfAccount,
   PreviewViewer,
   RequestState,
-  SimulatedCommandResult,
+  CommandResult,
 } from "@/lib/onlyfans-preview/types";
 import { NO_PAYLOAD } from "@/lib/onlyfans-preview/types";
 import {
@@ -369,10 +369,14 @@ function ActionColumn({
   incident,
   onCommand,
   onResolve,
+  pending,
+  onRetry,
 }: {
   actionSet: ActionSet;
   viewer: PreviewViewer;
-  result: SimulatedCommandResult | null;
+  result: CommandResult | null;
+  pending: boolean;
+  onRetry: () => void;
   incident: ConversationDetail["deliveryIncident"];
   onCommand: (action: AvailableAction, payload: CommandPayload) => void;
   onResolve: (attemptId: string, decision: DeliveryResolutionDecision) => void;
@@ -432,7 +436,7 @@ function ActionColumn({
                 <button
                   type="button"
                   data-of-action={entry.action}
-                  disabled={needsDecision}
+                  disabled={needsDecision || pending}
                   title={needsDecision ? "Choose what the evidence shows first." : undefined}
                   onClick={() =>
                     entry.action === "resolve_delivery_evidence"
@@ -491,15 +495,20 @@ function ActionColumn({
           }`}
         >
           <div className="font-semibold">
-            {result.accepted ? "Modelled, not performed" : "Refused before submission"}
+            {result.simulated ? (result.accepted ? "Modelled, not performed" : "Refused before submission")
+              : result.outcome === "recorded" ? "Change saved" : result.outcome === "unconfirmed" ? "Outcome not confirmed" : "Change not accepted"}
           </div>
           <p className="mt-1">{result.note}</p>
-          <p className="mt-1">
+          {result.simulated ? <p className="mt-1">
             <code className="font-mono">{result.request.command}</code> on account{" "}
             <code className="font-mono">{result.request.accountId}</code> against revision{" "}
             <code className="font-mono">{result.request.expectedRevision}</code>, idempotency key{" "}
             <code className="font-mono">{result.request.idempotencyKey}</code>.
-          </p>
+          </p> : null}
+          {!result.simulated && result.outcome === "unconfirmed" ? (
+            <button type="button" data-of-retry-control disabled={pending} onClick={onRetry}
+              className="mt-2 rounded-lg border border-current px-2 py-1 disabled:opacity-50">Retry same request</button>
+          ) : null}
         </div>
       ) : null}
 
@@ -625,6 +634,8 @@ export default function InboxView({
   viewer,
   onCommand,
   commandResult,
+  commandPending = false,
+  onRetryCommand = () => {},
   nextCursor,
   loadingMore,
   onLoadMore,
@@ -646,7 +657,9 @@ export default function InboxView({
   detailState: RequestState<ConversationDetail> | null;
   viewer: PreviewViewer;
   onCommand: (action: AvailableAction, payload: CommandPayload) => void;
-  commandResult: SimulatedCommandResult | null;
+  commandResult: CommandResult | null;
+  commandPending?: boolean;
+  onRetryCommand?: () => void;
   nextCursor: string | null;
   loadingMore: boolean;
   onLoadMore: () => void;
@@ -787,6 +800,8 @@ export default function InboxView({
                 actionSet={actionSet}
                 viewer={viewer}
                 result={commandResult}
+                pending={commandPending}
+                onRetry={onRetryCommand}
                 incident={detail.deliveryIncident}
                 onCommand={onCommand}
                 onResolve={(attemptId, decision) =>

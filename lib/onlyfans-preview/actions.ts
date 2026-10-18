@@ -64,7 +64,7 @@ export function isDeliveryUnresolved(outcome: DeliveryOutcome): boolean {
  * rule, expressed in the one place the controls are decided, so the interface
  * and the documented policy cannot drift apart again.
  */
-export const UNRESOLVED_HOLDS: AvailableAction[] = ["send_manual_message", "resume_automation"];
+export const UNRESOLVED_HOLDS: AvailableAction[] = ["send_manual_message", "resume_automation", "release_takeover"];
 
 export function isHeldByUnresolvedDelivery(action: AvailableAction): boolean {
   return UNRESOLVED_HOLDS.includes(action);
@@ -115,9 +115,7 @@ export function availableActions(input: {
         : "Your role cannot change conversations for this account.";
     }
 
-    if (account.health !== "connected") {
-      // A reconnecting account can still be read, so reads are unaffected, but
-      // no write is offered while the session is not usable.
+    if (account.health !== "connected" && action === "send_manual_message") {
       return account.healthReason ?? "This account cannot send until the connection is restored.";
     }
 
@@ -161,7 +159,8 @@ export function availableActions(input: {
       case "pause_automation":
         return summary.automationMode === "automated" ? null : "Replies are not currently automated.";
       case "resume_automation":
-        return summary.automationMode === "paused" ? null : "Replies are not currently paused.";
+        return summary.automationMode === "paused" && summary.takeoverState === "none"
+          ? null : "Replies are not paused for a simple resume. Complete the handover first.";
       case "mark_no_contact":
         return null;
       default:
