@@ -145,8 +145,6 @@ html {
   .studio-workspace-main .dashboard-page > div:first-child h1 { font-size: 26px; }
 }
 
-/* Hide the product wordmark in the Brianna demo mobile header. */
-[data-workspace-unbranded="true"] .dashboard-mobile-header > a:first-child { visibility: hidden; }
 
 
 /* Creator pages own their title and tab navigation at every brand. */

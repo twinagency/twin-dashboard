@@ -1,48 +1,49 @@
 /* Twin's light blue workspace. The server selects this theme from the verified
    dashboard audience, so partner portals keep their own brand palettes. */
 html[data-brand-theme="twin-light"] {
-  --color-bg: #f7fcff;
+  --color-bg: #fcfdff;
   --color-panel: #ffffff;
   --color-elev: #edf7fc;
   --color-ink: #112f46;
   --color-muted: #607a8c;
   --color-line: #e0edf4;
-  --color-accent: #087da9;
-  --color-accent-2: #3fa7cf;
-  --color-accent-deep: #09658a;
+  --color-accent: #4fa7d9;
+  --color-accent-2: #4fa7d9;
+  --color-accent-deep: #3b93c3;
   --color-accent-soft: #7fc9e7;
   --color-accent-tint: #e2f5fd;
   --color-brand: var(--color-accent);
   --color-brand-light: var(--color-accent-2);
   --color-info: var(--color-accent);
-  --sidebar: #cdeefb;
+  --twin-action: #37a7f4;
+  --sidebar: #caebfc;
   --sidebar-foreground: #214b62;
-  --sidebar-primary: #147ca6;
+  --sidebar-primary: #4fa7d9;
   --sidebar-primary-foreground: #ffffff;
   --sidebar-accent: #b9e5f7;
   --sidebar-accent-foreground: #123c54;
   --sidebar-border: #abd8ea;
-  --sidebar-ring: #087da9;
+  --sidebar-ring: #4fa7d9;
   --shadow-card: 0 1px 3px rgb(23 89 120 / 0.035), 0 6px 20px rgb(23 89 120 / 0.025);
   --twin-chat-incoming: #f0f3f6;
   --twin-chat-outgoing: #dff4fe;
   --twin-chat-meta: #627f91;
   /* RevenueDashboard's existing cross-brand chart token retains its legacy name. */
-  --moxy-revenue-total: #3fa7cf;
-  --moxy-revenue-blue: #3fa7cf;
+  --moxy-revenue-total: #4fa7d9;
+  --moxy-revenue-blue: #4fa7d9;
 }
 
 /* WorkspaceShell supplies local tokens, including on the creator profile and
    chat routes. Override that existing token boundary rather than every control. */
 html[data-brand-theme="twin-light"] [data-workspace-brand="twin"] {
-  --workspace-bg: #f7fcff;
+  --workspace-bg: #fcfdff;
   --workspace-elev: #edf7fc;
   --workspace-ink: #112f46;
   --workspace-muted: #607a8c;
   --workspace-line: #e0edf4;
-  --workspace-accent: #087da9;
-  --workspace-accent-deep: #09658a;
-  --workspace-accent-light: #3fa7cf;
+  --workspace-accent: #4fa7d9;
+  --workspace-accent-deep: #3b93c3;
+  --workspace-accent-light: #4fa7d9;
   --workspace-accent-tint: #e2f5fd;
   --workspace-accent-soft: #7fc9e7;
   --workspace-accent-border: #c0e6f6;
@@ -51,7 +52,7 @@ html[data-brand-theme="twin-light"] [data-workspace-brand="twin"] {
 html[data-brand-theme="twin-light"] .dashboard-sidebar,
 html[data-brand-theme="twin-light"] .dashboard-sidebar[data-studio-sidebar="true"],
 html[data-brand-theme="twin-light"] .dashboard-mobile-header {
-  background: linear-gradient(165deg, #d6f2fd 0%, #c9ecfb 58%, #c3e9f8 100%);
+  background: var(--sidebar);
   border-color: var(--sidebar-border);
   color: var(--sidebar-foreground);
   box-shadow: 5px 0 24px rgb(37 123 160 / 0.04);
@@ -66,6 +67,10 @@ html[data-brand-theme="twin-light"] .dashboard-sidebar .studio-wordmark,
 html[data-brand-theme="twin-light"] .dashboard-sidebar .studio-account,
 html[data-brand-theme="twin-light"] .dashboard-sidebar .studio-account > svg {
   color: var(--sidebar-foreground);
+}
+
+html[data-brand-theme="twin-light"] .dashboard-sidebar .studio-wordmark {
+  color: var(--color-ink);
 }
 
 html[data-brand-theme="twin-light"] .dashboard-sidebar [class*="border-white"],
@@ -100,7 +105,7 @@ html[data-brand-theme="twin-light"] .dashboard-sidebar nav [class~="bg-white/12"
 }
 
 html[data-brand-theme="twin-light"] .dashboard-sidebar .sidebar-create-button {
-  background: var(--color-accent);
+  background: var(--twin-action);
   color: #ffffff;
   box-shadow: 0 3px 8px rgb(14 107 146 / 0.1);
 }
@@ -128,9 +133,9 @@ html[data-brand-theme="twin-light"] .canvas-glow {
 }
 
 html[data-brand-theme="twin-light"] .creator-control-plane {
-  --color-accent: var(--workspace-accent, #087da9);
-  --color-accent-2: var(--workspace-accent-light, #3fa7cf);
-  --color-accent-deep: var(--workspace-accent-deep, #09658a);
+  --color-accent: var(--workspace-accent, #4fa7d9);
+  --color-accent-2: var(--workspace-accent-light, #4fa7d9);
+  --color-accent-deep: var(--workspace-accent-deep, #3b93c3);
   --color-accent-tint: var(--workspace-accent-tint, #e2f5fd);
 }
 
