@@ -52,17 +52,17 @@ const COPY: Record<"empty" | "error" | "unavailable", Copy> = {
   empty: {
     title: "Nothing here yet",
     detail:
-      "This account has no conversations in scope. That is different from a failed read, which is reported separately.",
+      "Your accounts and conversations will appear here when they are available.",
   },
   unavailable: {
     title: "No OnlyFans backend is connected",
     detail:
-      "This environment has no scoped OnlyFans backend, so there is nothing to read. Nothing is shown rather than a guess, and this is not the same as an account that has no conversations.",
+      "OnlyFans is not available in this workspace yet. Ask your account administrator to finish setup.",
   },
   error: {
     title: "This view could not be loaded",
     detail:
-      "No value is shown rather than a guess. Retrying asks the same question again; it does not change any state.",
+      "We couldn’t refresh this view. Please try again in a moment.",
   },
 };
 

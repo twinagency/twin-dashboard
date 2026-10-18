@@ -277,8 +277,8 @@ function ChannelNav({ channel, onNavigate }: { channel: ChannelDefinition; onNav
   const rowClass = "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold transition";
   return (
     <>
-      <h2 className="mb-1 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">{channel.label}</h2>
-      <p className="mb-2 px-3 text-[11px] leading-4 text-white/50">{channel.summary}</p>
+      <h2 className="mb-1 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">{channel.channel === "onlyfans" ? "YOUR WORKSPACE" : channel.label}</h2>
+      {channel.channel !== "onlyfans" ? <p className="mb-2 px-3 text-[11px] leading-4 text-white/50">{channel.summary}</p> : null}
       <div className="space-y-1" data-channel-nav={channel.channel}>
         {channel.nav.map((item) => {
           const icon = PATHS[item.icon] ?? PATHS.Dials;
@@ -436,7 +436,7 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
   const [moreOpen, setMoreOpen] = useState(false);
   const [fullNavigation, setFullNavigation] = useState(false);
   const studioRoute = isDashboardWorkspaceRoute(pathname);
-  const studioNavigation = isAdmin && studioRoute && !fullNavigation;
+  const studioNavigation = (isAdmin && studioRoute && !fullNavigation) || channel.channel === "onlyfans";
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   useEffect(() => {
     if (!isAdmin) return;
@@ -516,7 +516,7 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
     </div>
   </div>;
 
-  if (moxyNavigation) return <>
+  if (moxyNavigation && !channelScoped) return <>
     <style dangerouslySetInnerHTML={{ __html: MOXY_SIDEBAR_THEME }} />
     <div className="moxy-sidebar-brand">
       <div className="min-w-0">
@@ -560,4 +560,3 @@ export default function Sidebar({ clones: _clones, activeCloneId, channels }: { 
   const studio = !isCreator && isDashboardWorkspaceRoute(pathname);
   return <aside data-studio-sidebar={studio || undefined} className="dashboard-sidebar sticky top-0 hidden h-screen w-72 shrink-0 flex-col lg:flex"><SidebarContent activeCloneId={activeCloneId} channelSwitch={<ChannelSwitch channels={channels} className="flex-wrap" />} /></aside>;
 }
-

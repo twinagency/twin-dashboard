@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CreatorPlatformHeading, CreatorPlatformEmpty } from "./CreatorPlatformPage";
 import { NextResponse } from "next/server";
 import { Card } from "@/components/ui/card";
 import { requireOnlyFansRead, requestId } from "@/lib/onlyfans/route";
@@ -19,7 +20,8 @@ const yesNo = (value: boolean | null) => value === null ? "Not explicitly saved"
 
 export default async function NativeWorkspace({ section, searchParams }: { section: NativeSection; searchParams: Promise<NativeSearch> }) {
   const title = TITLES[section];
-  const unavailable = (message: string) => <div className="dashboard-page"><h1 className="text-2xl font-semibold">{title}</h1><p role="status" className="mt-3 text-sm text-muted">{message}</p></div>;
+  const description = section === "content" ? "Your content, organised and ready to share." : section === "sales" ? "See your purchases, payments and refunds." : "Your personality, preferences and AI reply settings.";
+  const unavailable = (message: string, connect = false) => <div className="dashboard-page"><CreatorPlatformHeading title={title} description={description} /><CreatorPlatformEmpty title={connect ? "Bring your account into your studio." : "Let’s get this ready."} description={message} actionHref={connect ? "/onlyfans/accounts" : undefined} /></div>;
   const ctx = await requireOnlyFansRead();
   if (ctx instanceof NextResponse) return unavailable("Your session cannot read this section. Sign in again.");
   if (!ctx.backend?.getWorkspace) return unavailable("This section is not configured.");
@@ -32,7 +34,7 @@ export default async function NativeWorkspace({ section, searchParams }: { secti
   const accounts = await ctx.backend.listAccounts({ creatorId });
   if (!accounts.ok) return unavailable(accounts.error);
   const account = accountId ? accounts.data.find(item => item.accountId === accountId) : accounts.data[0];
-  if (!account) return unavailable(accountId ? "That account is not available to this session." : "There are no accounts available to this session.");
+  if (!account) return unavailable(accountId ? "That account is not available to this session." : "Connect an OnlyFans account to see your content, earnings and settings here.", !accountId);
   const result = await ctx.backend.getWorkspace(account.accountId, section, cursor);
   if (!result.ok) return unavailable(result.error);
   const data = result.data;
@@ -40,20 +42,20 @@ export default async function NativeWorkspace({ section, searchParams }: { secti
   const next = "nextCursor" in data ? data.nextCursor : null;
   const href = workspaceHref(path, { creatorId, accountId: account.accountId });
   return <div className="dashboard-page min-w-0 text-ink" data-of-native-section={section}>
-    <h1 className="text-2xl font-semibold">{title}</h1>
-    <p className="mt-1 text-sm text-muted">{section === "content" ? "Saved catalogue descriptions, media counts and prices." : section === "sales" ? "Recorded purchases and payment reversals, grouped by their original currency." : "Saved creator configuration and recorded runtime permissions."}</p>
+    <CreatorPlatformHeading title={title} description={description} />
     <nav aria-label={`${title} account`} className="my-5 flex flex-wrap gap-2">
       {accounts.data.map(item => <Link key={item.accountId} aria-current={item.accountId === account.accountId ? "page" : undefined}
         className={`rounded-lg border px-3 py-2 text-sm ${item.accountId === account.accountId ? "border-accent text-accent" : "border-line text-muted"}`}
         href={workspaceHref(path, { creatorId, accountId: item.accountId })}>{item.binding.creatorName} · @{item.binding.handle}</Link>)}
     </nav>
     <div className="mb-5 rounded-xl border border-line p-4 text-sm" role="status" data-of-native-freshness>
-      <p>{data.historyRecoveryRequired ? "History synchronization is incomplete." : "Recorded history synchronization completed."}</p>
-      <p className="mt-1 text-xs text-muted">Last complete synchronization: {data.lastCompleteSyncAt ?? "Not recorded"}. {data.providerConnectionVerified ? "Provider connection is verified." : "Provider connection has not been verified."}</p>
+      <p>{data.historyRecoveryRequired ? "Your account history is still syncing." : "Your account history is synced."}</p>
+      <p className="mt-1 text-xs text-muted">Last synced: {data.lastCompleteSyncAt ?? "Not recorded"}. {data.providerConnectionVerified ? "Provider connection is verified." : "Provider connection has not been verified."}</p>
     </div>
     {section === "content" && configuredContentBackend() ? <VaultManager key={account.accountId} accountId={account.accountId} /> : null}
-    <WorkspaceBody data={data} contentEditable={section === "content" && !!configuredContentBackend()} />
+    {section !== "settings" ? <WorkspaceBody data={data} contentEditable={section === "content" && !!configuredContentBackend()} /> : null}
     {section === "settings" && configuredConfigurationBackend() ? <ConfigurationEditor key={account.accountId} accountId={account.accountId} /> : null}
+    {section === "settings" ? <details className="mt-6 rounded-xl border border-line bg-panel p-5"><summary>Advanced account details</summary><div className="mt-4"><WorkspaceBody data={data} /></div></details> : null}
     {next ? <Link data-of-next-page className="mt-5 inline-block rounded-lg border border-line px-4 py-2 text-sm font-semibold text-accent"
       href={`${href}${href.includes("?") ? "&" : "?"}cursor=${encodeURIComponent(next)}`}>Next page →</Link> : null}
     {cursor ? <Link className="ml-4 mt-5 inline-block text-sm text-accent" href={href}>Back to first page</Link> : null}

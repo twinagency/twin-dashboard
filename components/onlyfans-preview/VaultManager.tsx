@@ -141,15 +141,13 @@ export default function VaultManager({ accountId }: { accountId: string }) {
         onFolderChange={changeFolder} onChanged={organizationChanged} onBusy={setOrganizationBusy}/>
       <fieldset disabled={busy || !!retry || organizationBusy} className="mt-4 min-w-0">
         <legend className="text-sm font-semibold">Choose assets</legend>
-        <div className="mt-2 min-w-0 overflow-x-auto"><table className="w-full min-w-[34rem] text-left text-xs"><thead><tr className="border-b border-line text-muted"><th className="p-2">Select</th><th className="p-2">Asset</th><th className="p-2">Description</th><th className="p-2">Details</th><th className="p-2">Availability</th></tr></thead><tbody>
-          {data.items.map(row => <tr key={row.mediaId} className="border-b border-line align-top" data-of-vault-item={row.mediaId}>
-            <td className="p-2"><input data-of-vault-select={row.mediaId} type="checkbox" aria-label={`Select asset ${row.mediaId}`} checked={selected.has(row.mediaId)} onChange={() => toggle(row)} /></td>
-            <td className="p-2"><VaultAssetPreview key={`${row.mediaId}:${data.sync?.updatedAt}`} accountId={accountId} mediaId={row.mediaId} kind={row.kind}/><span className="block font-semibold capitalize">{row.kind}</span><span className="font-mono">#{row.mediaId}</span></td>
-            <td className="max-w-56 break-words p-2">{row.description || "No saved description"}<button type="button" data-of-vault-edit={row.mediaId} className="mt-1 block text-xs font-semibold text-accent" onClick={()=>setAssetId(row.mediaId)}>Edit metadata</button></td>
-            <td className="p-2">{row.durationSeconds === null ? "" : `${row.durationSeconds}s`}{row.width && row.height ? ` ${row.width} × ${row.height}` : ""}</td>
-            <td className="p-2">{row.ready ? "Available" : row.reason === "removed" ? "Removed" : row.reason === "unsupported_kind" ? "Unsupported format" : "Needs review"}</td>
-          </tr>)}
-        </tbody></table></div>
+        <div className="mt-4 grid min-w-0 gap-4 sm:grid-cols-2 xl:grid-cols-3" data-of-vault-grid>
+          {data.items.map(row => <article key={row.mediaId} className="min-w-0 overflow-hidden rounded-2xl border border-line bg-panel" data-of-vault-item={row.mediaId}>
+            <div className="flex items-center justify-between gap-3 px-4 py-3"><label className="flex items-center gap-2 text-xs"><input data-of-vault-select={row.mediaId} type="checkbox" aria-label={`Select asset ${row.mediaId}`} checked={selected.has(row.mediaId)} onChange={() => toggle(row)} /><span className="capitalize">{row.kind}</span></label><span className="text-xs text-muted">{row.ready ? "Available" : row.reason === "removed" ? "Removed" : row.reason === "unsupported_kind" ? "Unsupported format" : "Needs review"}</span></div>
+            <VaultAssetPreview key={`${row.mediaId}:${data.sync?.updatedAt}`} accountId={accountId} mediaId={row.mediaId} kind={row.kind}/>
+            <div className="p-4"><p className="line-clamp-3 break-words text-sm">{row.description || "No saved description"}</p><p className="mt-2 text-xs text-muted">{row.durationSeconds === null ? "" : `${row.durationSeconds}s`}{row.width && row.height ? ` ${row.width} × ${row.height}` : ""}</p><button type="button" data-of-vault-edit={row.mediaId} className="mt-3 text-xs font-semibold text-accent" onClick={()=>setAssetId(row.mediaId)}>Edit metadata →</button><details className="mt-2"><summary>Asset details</summary><p className="break-all text-xs text-muted">Asset #{row.mediaId}</p></details></div>
+          </article>)}
+        </div>
         {!data.items.length ? <p className="mt-3 text-sm text-muted">No vault assets are recorded on this page.</p> : null}
         <div className="mt-3 flex flex-wrap gap-2">{data.nextCursor ? <button type="button" data-of-vault-next className={buttonClass} onClick={() => void refresh(data.nextCursor)}>Next vault page →</button> : null}{cursor ? <button type="button" className={buttonClass} onClick={() => void refresh(null)}>First vault page</button> : null}</div>
       </fieldset>

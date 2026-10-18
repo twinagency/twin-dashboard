@@ -8,6 +8,7 @@
 // its creator grid. Nothing here invents a second visual language.
 
 import Link from "next/link";
+import { CreatorPlatformHeading } from "./CreatorPlatformPage";
 import type { ReactNode } from "react";
 import { ArrowUpRight } from "lucide-react";
 import { Card } from "@/components/ui/card";
@@ -67,10 +68,10 @@ function AccountCard({ account, readOnly, connectionEditable, showPreviewChrome 
         </div>
       </dl>
 
-      <div className="mt-4 flex items-center justify-between gap-2 border-t border-line pt-3 text-xs text-muted">
-        <span className="truncate">Binding {account.binding.bindingId}</span>
-        <span className="shrink-0">synced {formatAge(account.syncFreshness.asOf)}</span>
-      </div>
+      <details className="mt-4 border-t border-line pt-2 text-xs text-muted" onClick={event => event.stopPropagation()}>
+        <summary>Account details</summary><p className="break-all">Binding {account.binding.bindingId}</p>
+        <p className="mt-1">Synced {formatAge(account.syncFreshness.asOf)}</p>
+      </details>
 
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <Link
@@ -148,19 +149,10 @@ export default function AccountsView({
 
   return (
     <div className="dashboard-page text-ink" data-of-surface="onlyfans-accounts">
-      <div className="mb-5">
-        <div className="flex flex-wrap items-center gap-2">
-          <h1 className="text-2xl font-semibold">Accounts</h1>
-          <span className="text-[11px] text-muted">{sourceLabel}</span>
-        </div>
-        <p className="mt-1 text-sm text-muted">
-          {creatorName
-            ? `Every OnlyFans account bound to ${creatorName}, each with its own connection health, reply mode and capabilities.`
-            : "Every OnlyFans account this session may read, each with its own connection health, reply mode and capabilities."}
-          {" "}One creator can run more than one account, and each keeps its own conversations, fans
-          and money.
-        </p>
-      </div>
+      <CreatorPlatformHeading title="Accounts" description={creatorName
+        ? `Manage ${creatorName}’s OnlyFans accounts and choose how you want to reply.`
+        : "Your creator accounts, connections and reply settings, together."} />
+      {showPreviewChrome ? <span data-of-source-note>{sourceLabel}</span> : null}
 
       {showPreviewChrome ? <PreviewNotice controls={controls} /> : null}
 
@@ -169,8 +161,7 @@ export default function AccountsView({
           data-of-readonly
           className="mb-5 rounded-xl border border-[#dce8fb] bg-[#edf3fc] p-3 text-xs leading-5 text-[#2f6fed]"
         >
-          Read only. You are viewing as the creator. Every write action is refused, including from
-          this session.
+          Read only. You are viewing as the creator. You can explore this account’s activity and settings here.
         </div>
       ) : null}
 
@@ -190,9 +181,9 @@ export default function AccountsView({
             {list.length === 0 ? (
               <Card className="p-4 text-sm text-muted">
                 {creatorName
-                  ? `No OnlyFans account is bound to ${creatorName}.`
-                  : "No OnlyFans account is in scope for this session."}{" "}
-                {connectionsConfigured && !showPreviewChrome && !readOnly ? "Use Add OnlyFans account to register an existing Twin creator’s account." : "An account binding is created by the backend."}
+                  ? `No OnlyFans account is connected to ${creatorName} yet.`
+                  : "Your OnlyFans accounts will appear here once connected."}{" "}
+                {connectionsConfigured && !showPreviewChrome && !readOnly ? "Choose Add OnlyFans account to start setup for an existing creator." : "Ask your account administrator to connect an OnlyFans account."}
               </Card>
             ) : (
               <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">

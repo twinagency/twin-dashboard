@@ -2,6 +2,7 @@
 
 import { usePathname } from "next/navigation";
 import { isCreatorStudioRoute, isDashboardWorkspaceRoute } from "@/lib/dashboard-creator-route";
+import { channelForPath } from "@/lib/channel-nav";
 import TwinAssistant from "@/components/TwinAssistant";
 import { useDashboardAccess } from "./DashboardAccessProvider";
 
@@ -18,7 +19,7 @@ export default function MainShell({ children, showAssistant = true }: { children
   const {isAgency, isCreator} = useDashboardAccess();
   const studioDashboard = !isCreator && ((!isAgency && pathname === "/dashboard") || isCreatorStudioRoute(pathname));
   const fullBleed = pathname === "/users" || pathname === "/inbox" || pathname === "/jarvis" || pathname === "/fans" || pathname === "/onlyfans/inbox";
-  const studioWorkspace = !isCreator && isDashboardWorkspaceRoute(pathname);
+  const studioWorkspace = !isCreator && (isDashboardWorkspaceRoute(pathname) || channelForPath(pathname) === "onlyfans");
   const ownsPageSpacing = ["/content-library", "/campaigns"].includes(pathname);
   return (
     <main
@@ -34,6 +35,3 @@ export default function MainShell({ children, showAssistant = true }: { children
     </main>
   );
 }
-
-
-

@@ -95,6 +95,7 @@ for (const route of ["/fans", "/inbox", "/content-library", "/campaigns"]) {
 pathname = `/clones/${clone}`;
 assert.match(render(undefined, false, dashboardCreatorRoute.BRIANNA_CLONE_ID), /studio-brand-row/, "Every operational creator profile uses the shared shell");
 const mainShell = compile("components/MainShell.tsx", {
+ "@/lib/channel-nav": channelNav,
  "./DashboardAccessProvider": accessModule,
  "@/lib/dashboard-creator-route": dashboardCreatorRoute,
  "next/navigation": { usePathname: () => pathname, useSearchParams: () => query },

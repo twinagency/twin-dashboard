@@ -8,6 +8,8 @@ import { SidebarContent } from "@/components/Sidebar";
 import { useDashboardAccess } from "./DashboardAccessProvider";
 import { isDashboardWorkspaceRoute } from "@/lib/dashboard-creator-route";
 import ChannelSwitch from "@/components/ChannelSwitch";
+import creatorPlatformStyles from "./onlyfans-preview/OnlyFansStudio.module.css";
+import { channelForPath } from "@/lib/channel-nav";
 import type { DashboardChannel } from "@/lib/channel-nav";
 
 // The phone menu is the desktop sidebar's real content in a touch-friendly
@@ -26,8 +28,10 @@ export default function MobileMenu({
   channels?: DashboardChannel[];
 }) {
   const pathname = usePathname();
-  const { audience } = useDashboardAccess();
+  const { audience, agencyName } = useDashboardAccess();
   const studio = audience !== "creator" && isDashboardWorkspaceRoute(pathname);
+  const creatorPlatform = audience !== "creator" && channelForPath(pathname) === "onlyfans";
+  const creatorBrand = agencyName?.trim().toLowerCase() === "moxy" ? "moxy" : agencyName?.trim().toLowerCase() === "flirt" ? "flirt" : "twin";
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -77,11 +81,13 @@ export default function MobileMenu({
           />
           <aside
             id="mobile-sidebar"
+            data-creator-platform={creatorPlatform || undefined}
+            data-creator-studio={creatorPlatform ? creatorBrand : undefined}
             data-studio-sidebar={studio || undefined}
             role="dialog"
             aria-modal="true"
             aria-label="Main navigation"
-            className="dashboard-sidebar absolute inset-y-0 left-0 flex h-dvh w-[min(88vw,20rem)] max-w-full flex-col overflow-hidden animate-in slide-in-from-left duration-200"
+            className={`dashboard-sidebar absolute inset-y-0 left-0 flex h-dvh w-[min(88vw,20rem)] max-w-full flex-col overflow-hidden animate-in slide-in-from-left duration-200${creatorPlatform ? ` ${creatorPlatformStyles.drawer}` : ""}`}
           >
             <SidebarContent
               activeCloneId={activeCloneId}
@@ -109,5 +115,3 @@ export default function MobileMenu({
     </div>
   );
 }
-
-

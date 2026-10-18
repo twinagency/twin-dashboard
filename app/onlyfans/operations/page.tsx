@@ -1,4 +1,5 @@
 import Link from "next/link";
+import { CreatorPlatformHeading, CreatorPlatformEmpty } from "@/components/onlyfans-preview/CreatorPlatformPage";
 import { NextResponse } from "next/server";
 import { Card } from "@/components/ui/card";
 import { requireOnlyFansRead, requestId } from "@/lib/onlyfans/route";
@@ -9,7 +10,8 @@ export const dynamic = "force-dynamic";
 
 export default async function OperationsPage({ searchParams }: { searchParams: Promise<{ account?: string | string[]; creator?: string | string[] }> }) {
   const ctx = await requireOnlyFansRead();
-  const unavailable = (message: string) => <div className="dashboard-page"><h1 className="text-2xl font-semibold">Operations</h1><p role="status" className="mt-3 text-sm text-muted">{message}</p></div>;
+  const description = "Check your connection, message activity and anything that needs attention.";
+  const unavailable = (message: string, connect = false) => <div className="dashboard-page"><CreatorPlatformHeading title="Operations" description={description} /><CreatorPlatformEmpty title={connect ? "Your account activity starts here." : "Let’s get this ready."} description={message} actionHref={connect ? "/onlyfans/accounts" : undefined} /></div>;
   if (ctx instanceof NextResponse) return unavailable("Your session cannot read operational status. Sign in again.");
   if (!ctx.backend?.getOperations) return unavailable("Operational status is not configured.");
   const requested = await searchParams;
@@ -20,7 +22,7 @@ export default async function OperationsPage({ searchParams }: { searchParams: P
   const accounts = await ctx.backend.listAccounts({ creatorId });
   if (!accounts.ok) return unavailable(accounts.error);
   const account = accountId ? accounts.data.find((item) => item.accountId === accountId) : accounts.data[0];
-  if (!account) return unavailable(accountId ? "That account is not available to this session." : "There are no accounts available to this session.");
+  if (!account) return unavailable(accountId ? "That account is not available to this session." : "Connect an OnlyFans account to see its activity and connection status.", !accountId);
   const result = await ctx.backend.getOperations(account.accountId);
   if (!result.ok) return unavailable(result.error);
   const data = result.data;
@@ -32,8 +34,7 @@ export default async function OperationsPage({ searchParams }: { searchParams: P
     ["Reply drafts ready", data.planning.ready], ["Generation needs review", data.planning.unknown],
   ] as const;
   return <div className="dashboard-page text-ink" data-of-surface="onlyfans-operations">
-    <h1 className="text-2xl font-semibold">Operations</h1>
-    <p className="mt-1 text-sm text-muted">Account processing, delivery holds and recorded allowance.</p>
+    <CreatorPlatformHeading title="Operations" description={description} />
     <nav aria-label="OnlyFans operational account" className="my-5 flex flex-wrap gap-2">
       {accounts.data.map((item) => <Link key={item.accountId} aria-current={item.accountId === account.accountId ? "page" : undefined}
         className={`rounded-lg border px-3 py-2 text-sm ${item.accountId === account.accountId ? "border-accent text-accent" : "border-line text-muted"}`}

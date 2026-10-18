@@ -22,6 +22,7 @@
 
 import { FormEvent, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
 import { AlertTriangle, ArrowUpRight, CheckCircle2, MessageCircle, Send, Sparkles } from "lucide-react";
+import { CreatorPlatformHeading } from "./CreatorPlatformPage";
 import { Card } from "@/components/ui/card";
 import FanAvatar from "@/components/FanAvatar";
 import { MAX_MANUAL_MESSAGE_LENGTH, availableActions, canSubmitCommand } from "@/lib/onlyfans-preview/actions";
@@ -730,6 +731,7 @@ export default function InboxView({
 
   return (
     <div className="users-workspace lg:h-full" data-of-surface="onlyfans-inbox">
+      <CreatorPlatformHeading title="Inbox" description="A little closer to your fans. Your conversations and their details, together." />
       {viewer.kind === "view_as" ? (
         <div
           data-of-readonly
@@ -742,13 +744,7 @@ export default function InboxView({
 
       {showPreviewChrome ? <PreviewNotice controls={controls} /> : null}
 
-      <p className="mb-3 text-xs leading-5 text-muted">
-        One account at a time: switching accounts changes the conversation list, the thread and every
-        cached read, and nothing carries across. Every outbound bubble carries its own receipt,
-        because one action in a turn can land while the next one does not.
-      </p>
-
-      <div className="grid min-h-0 gap-3 lg:h-full lg:grid-cols-3">
+      <div className="grid min-h-0 gap-3 lg:h-full lg:grid-cols-3" data-of-inbox-layout>
         <Card size="sm" className="users-panel users-panel-list flex h-[34rem] flex-col overflow-hidden p-0 lg:h-full">
           <RequestStateBlock
             state={accountsState}
@@ -789,8 +785,7 @@ export default function InboxView({
                     {detail.summary.fan.displayName}
                   </div>
                   <div className="truncate text-[11px] text-muted">
-                    Ref {detail.summary.fan.shortRef} · revision {detail.summary.revision} ·{" "}
-                    <span className="creator-name">{detail.summary.accountId}</span>
+                    <span className="creator-name">{activeAccount.binding.creatorName}</span> · @{activeAccount.binding.handle}
                   </div>
                 </div>
                 <ModePill mode={detail.summary.automationMode} />

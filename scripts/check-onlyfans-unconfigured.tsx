@@ -18,6 +18,7 @@
 // demonstrably capable of showing it.
 
 import React from "react";
+import { createRequire } from "node:module";
 import { renderToStaticMarkup } from "react-dom/server";
 import { createServerOnlyFansDataSource } from "../lib/onlyfans-preview/server-data-source";
 import type { OnlyFansTransport } from "../lib/onlyfans-preview/server-data-source";
@@ -148,6 +149,10 @@ function renderInbox(options: {
 
 async function main() {
   (globalThis as unknown as { React: typeof React }).React = React;
+  // Next handles CSS modules in production. This markup-only Node check
+  // leaves styling to the production build, just like the other UI fixtures.
+  const requireNative = createRequire(import.meta.url);
+  requireNative.extensions[".css"] = (module) => { module.exports = {}; };
   ({ default: AccountsView } = await import("../components/onlyfans-preview/AccountsView"));
   ({ default: InboxView } = await import("../components/onlyfans-preview/InboxView"));
 
