@@ -1,3 +1,4 @@
+import { execFileSync as runSidebarRegression } from "node:child_process";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
 import { NextRequest } from "next/server";
@@ -121,7 +122,12 @@ async function main() {
   assert.notEqual(accessCacheKey(moxy),accessCacheKey({...moxy,id:lynqId}));
   assert.equal(pathAgencyName("/moxy/auth"),"Moxy");assert.equal(isMoxy("Moxy"),true);assert.equal(isMoxy("LYNQ"),false);assert.equal(portalLoginPath("https://evil.example"),"/link");
   const sidebar=readFileSync("components/Sidebar.tsx","utf8");
-  assert.doesNotMatch(sidebar,/Not available|aria-disabled="true"/, "Unavailable navigation entries are hidden");
+  // Operator-only planned entries may be disabled. Reuse the rendered Moxy
+  // owner/reader checks rather than banning that markup from every sidebar.
+  // Keep the production auth checks and isolated React renderer in separate processes.
+  runSidebarRegression(process.execPath, ["--import", "tsx", "scripts/check-sidebar-layout.tsx"], {
+    env: { ...process.env, NODE_ENV: "development" }, stdio: "pipe",
+  });
   assert.match(sidebar,/primaryLinks\.filter\(availableLink\)/);
   assert.match(sidebar,/AI Intelligence Core/);
   assert.match(sidebar,/<IntelligenceCoreIcon size=\{64\} \/>/);

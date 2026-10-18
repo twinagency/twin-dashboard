@@ -86,6 +86,7 @@ function eq(actual: unknown, expected: unknown, what: string): void {
 }
 function sourceCode(relPath: string): string {
   return readFileSync(fileURLToPath(new URL(relPath, import.meta.url)), "utf8")
+    .replace(/\r\n/g, "\n")
     .replace(/\/\/.*$/gm, "")
     .replace(/\/\*[\s\S]*?\*\//g, "");
 }
