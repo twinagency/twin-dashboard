@@ -4,7 +4,7 @@ The owner requested publication of the OnlyFans implementation and complete Clau
 
 ## Start Here
 
-Current continuation: backend schema `0085_shared_creator_facts`. Read the backend
+Current continuation: backend schema `0086_vault_edits`. Read the backend
 `docs/onlyfans/DELIVERY-PLAN-2026-10-19.md` and integration release runbook first.
 The dated checkpoint descriptions below are historical. They do not supersede
 the current source, release state or the owner’s revised integration scope.
@@ -12,7 +12,10 @@ Shared typed Twin facts now feed the native fact composer with explicit OF
 overrides and freshness checks. Campaign details expose observed 24-hour replies
 and exact-message native purchase/refund reporting with coverage reasons. Paired
 contracts are configuration v2, campaigns v2, workspace v2 and operations v3.
-Uploads/previews/metadata/folders, full audience import, broader native selling,
+Metadata edits and internal-folder operations now use existing Fastt owners and
+shared override/lock projection. Account onboarding remains accessible while
+history is stale. The full local browser/API/worker flow and production build
+passed. Uploads/previews, full audience import, broader native selling,
 combined earnings and selected-account live acceptance remain open.
 
 

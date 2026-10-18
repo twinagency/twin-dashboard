@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import path from "node:path";
 import { checkConfiguration } from "./check-onlyfans-configuration-browser.mjs";
+import { checkVaultOrganization } from "./check-onlyfans-vault-organization-browser.mjs";
 import { checkContent } from "./check-onlyfans-content-browser.mjs";
 import { checkOperator } from "./check-onlyfans-operator-browser.mjs";
 import { checkConnections } from "./check-onlyfans-connections-browser.mjs";
@@ -105,7 +106,7 @@ try {
   assert.equal(await page.locator("[data-of-incident]").count(), 0, "session loss left private conversation evidence visible");
   assert.equal(await page.locator("[data-of-actions] button").count(), 0);
   await context.addCookies([{ name: "allie_admin_session", value: process.env.ONLYFANS_TEST_COOKIE, url: origin }]);
-  for (const section of ["content", "sales", "settings"]) {
+  for (const section of ["settings", "content", "sales"]) {
     await page.goto(origin + `/onlyfans/${section}?account=acc-a`, { waitUntil: "networkidle" });
     await page.locator(`[data-of-native-section="${section}"]`).waitFor();
     assert.equal(await page.getByText("private transaction source", { exact: false }).count(), 0);
@@ -114,7 +115,7 @@ try {
       assert.equal(await page.locator("[data-of-catalog-item]").count(), 25);
       await page.getByText("Scenic test collection", { exact: true }).waitFor();
       await page.getByText("Terms checked", { exact: true }).waitFor();
-      if (process.env.ONLYFANS_TEST_CONTENT === "1") await checkContent(page, context, origin);
+      if (process.env.ONLYFANS_TEST_CONTENT === "1") { await checkContent(page, context, origin); await checkVaultOrganization(page, context, origin); }
       await page.locator("[data-of-next-page]").click();
       await page.waitForURL(url => url.searchParams.has("cursor"));
       await page.waitForFunction(() => document.querySelectorAll("[data-of-catalog-item]").length === 7, undefined, { timeout: 15000 });
@@ -165,7 +166,7 @@ try {
   assert.equal(await page.locator('[data-of-model-cost]').innerText(), "USD 0.0007");
   assert(await page.getByText(/Per-provider daily model cap: USD 1.0000/).count());
   assert(await page.getByText("An earlier delivery outcome needs evidence review.", { exact: true }).count());
-  assert(await page.getByText("Conflicting purchase evidence needs review. Media sales are held.", { exact: true }).count());
+  assert(await page.getByText("Purchase evidence needs review or synchronization. Media sales are held.", { exact: true }).count());
   assert(await page.getByText("Provider connection has not been verified.", { exact: true }).count());
   await page.setViewportSize({ width: 390, height: 844 });
   await page.locator('[data-of-model-cost]').scrollIntoViewIfNeeded();

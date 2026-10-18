@@ -174,7 +174,7 @@ export default function AccountsView({
         </div>
       ) : null}
 
-      {connectionsConfigured && !showPreviewChrome && !readOnly && ["ready", "empty"].includes(accountsState.status) ? <RegisterConnection creators={connectionCreators} /> : null}
+      {connectionsConfigured && !showPreviewChrome && !readOnly && ["ready", "stale", "empty"].includes(accountsState.status) ? <RegisterConnection creators={connectionCreators} /> : null}
 
       <RequestStateBlock
         state={accountsState}
@@ -199,7 +199,7 @@ export default function AccountsView({
                 {list.map((account) => (
                   <div key={account.accountId} onClick={() => onSelectAccount(account.accountId)}>
                     <AccountCard account={account} readOnly={readOnly} showPreviewChrome={showPreviewChrome}
-                      connectionEditable={connectionsConfigured && !showPreviewChrome && !readOnly && accountsState.status === "ready"} />
+                      connectionEditable={connectionsConfigured && !showPreviewChrome && !readOnly && ["ready", "stale"].includes(accountsState.status)} />
                   </div>
                 ))}
               </div>
