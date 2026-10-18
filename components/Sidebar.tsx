@@ -1,4 +1,6 @@
 "use client";
+import ChannelSwitch from "@/components/ChannelSwitch";
+import type { DashboardChannel } from "@/lib/channel-nav";
 import { useDashboardAccess } from "./DashboardAccessProvider";
 import { agencyDashboardPath, isPartnerPreview } from "@/lib/agency-policy";
 import { isMoxy } from "@/lib/agency-brand";
@@ -26,6 +28,7 @@ import { openCloneSwitcher } from "@/lib/clone-switcher-bus";
 import TwinAssistant from "@/components/TwinAssistant";
 import TwinWordmark from "@/components/TwinWordmark";
 import IntelligenceCoreIcon from "@/components/IntelligenceCoreIcon";
+import { channelDefinition, channelForPath, type ChannelDefinition } from "@/lib/channel-nav";
 
 type CloneLite = { id: string; name: string; color: string; photoUrl?: string };
 
@@ -256,6 +259,61 @@ const STUDIO_SIDEBAR_THEME = `
 .studio-sidebar-nav svg{color:currentColor!important;stroke-width:1.65;width:20px;height:20px}.studio-sidebar-nav [data-nav-group]>div:first-child>button[aria-controls]{width:25px;color:#acb9cd}.studio-sidebar-nav [data-nav-group]>div:first-child>button[aria-controls]>svg{width:13px;height:13px}.studio-sidebar-nav [data-nav-group]>div:first-child>button:first-child[aria-controls]{width:100%}.studio-sidebar-nav [data-nav-group]>div:first-child>button:first-child[aria-controls]>svg:first-child{width:20px;height:20px}.studio-sidebar-nav [data-admin-navigation] a[aria-current="page"]{color:#fff;background:linear-gradient(145deg,#2682ff,#0962ee);box-shadow:inset 0 1px #ffffff24,0 5px 16px #0068ff30;--tw-ring-shadow:0 0 #0000}.studio-sidebar-nav [data-nav-group="Live Telegram"],.studio-sidebar-nav [data-nav-group="Automations"],.studio-sidebar-nav [data-nav-group="Agency Access"]{margin-top:17px!important}.studio-sidebar-nav [data-nav-group="More"]{border-top:0;padding-top:0;margin-top:4px!important}.studio-sidebar-nav [data-nav-group]>div[hidden]{display:none}.studio-sidebar-nav a:hover,.studio-sidebar-nav button:hover{color:#fff;background-color:#ffffff0b}.studio-account{flex-shrink:0;margin:0 16px 34px;padding:27px 3px 0;border-top:1px solid #ffffff22;display:flex;align-items:center;gap:10px;color:#eef3fa;font-size:11px}.studio-account>img{width:46px;height:46px;object-fit:cover;display:block;border-radius:50%;border:2px solid #ffffffbf}.studio-account>span{flex:1}.studio-account small{display:none}.studio-account>svg{color:#a7b8ce}
 @media(max-height:770px){.studio-brand-row{min-height:88px;padding-top:17px;padding-bottom:14px}.studio-wordmark strong{font-size:39px}.studio-sidebar-nav [data-nav-group]>div:first-child>div>a,.studio-sidebar-nav [data-nav-group]>div:first-child>button:first-child,.studio-sidebar-nav [data-nav-group="More"]>button{min-height:38px;padding-top:8px;padding-bottom:8px}.studio-sidebar-nav [data-nav-group="Live Telegram"],.studio-sidebar-nav [data-nav-group="Automations"],.studio-sidebar-nav [data-nav-group="Agency Access"]{margin-top:10px!important}}
 `;
+/**
+ * A channel's own navigation, in the sidebar's existing row style.
+ *
+ * One Twin CRM with three transports: picking a channel in the top bar scopes
+ * this sidebar to that channel's own pages, which is what "each channel has its
+ * own appropriate sidebar and actions" means in practice. The operator nav
+ * (Earnings/Creators/Fans/CRM/More) is what All channels shows, and it is
+ * unchanged.
+ *
+ * A `planned` entry stays inert text with a tag. Rendering it as a control that
+ * navigates nowhere would be a configured-but-inert nav item, which is the same
+ * defect class as a setting that does nothing.
+ */
+function ChannelNav({ channel, onNavigate }: { channel: ChannelDefinition; onNavigate?: () => void }) {
+  const pathname = usePathname();
+  const rowClass = "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold transition";
+  return (
+    <>
+      <h2 className="mb-1 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">{channel.label}</h2>
+      <p className="mb-2 px-3 text-[11px] leading-4 text-white/50">{channel.summary}</p>
+      <div className="space-y-1" data-channel-nav={channel.channel}>
+        {channel.nav.map((item) => {
+          const icon = PATHS[item.icon] ?? PATHS.Dials;
+          if (item.availability === "planned") {
+            return (
+              <div key={item.key} title={item.note} aria-disabled="true" className={rowClass + " cursor-default text-white/45"}>
+                <Icon d={icon} className="h-[18px] w-[18px] text-white/35" />
+                <span className="flex-1">{item.label}</span>
+                <span className="whitespace-nowrap rounded border border-white/15 px-1.5 py-0.5 text-[9px] font-medium text-white/60">Planned</span>
+              </div>
+            );
+          }
+          const active = pathname === item.href || pathname.startsWith(item.href + "/");
+          return (
+            <Link
+              key={item.key}
+              href={item.href}
+              onClick={onNavigate}
+              title={item.note}
+              data-channel-link={item.key}
+              aria-current={active ? "page" : undefined}
+              className={rowClass + " " + (active ? "bg-white/12 text-white ring-1 ring-white/12" : "text-white/68 hover:bg-white/[0.07] hover:text-white")}
+            >
+              <Icon d={icon} className={"h-[18px] w-[18px] " + (active ? "text-white" : "text-[#9cbad3]")} />
+              <span className="flex-1">{item.label}</span>
+              {item.availability === "existing" ? (
+                <span className="whitespace-nowrap rounded border border-white/15 px-1.5 py-0.5 text-[9px] font-medium text-white/60">Existing</span>
+              ) : null}
+            </Link>
+          );
+        })}
+      </div>
+    </>
+  );
+}
 
 const TETHER_SIDEBAR_THEME = `
 .dashboard-sidebar,
@@ -348,7 +406,7 @@ const TETHER_SIDEBAR_THEME = `
 }
 `;
 
-export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAssistant = false }: { activeCloneId: string | null; onNavigate?: () => void; headerAction?: ReactNode; showAssistant?: boolean }) {
+export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAssistant = false, channelSwitch }: { activeCloneId: string | null; onNavigate?: () => void; headerAction?: ReactNode; showAssistant?: boolean; channelSwitch?: ReactNode }) {
   const {readOnly,isAgency,isCreator,canManage,agencyName,audience}=useDashboardAccess();
   const isAdmin = audience === "admin";
   const moxyNavigation = isAgency && isMoxy(agencyName);
@@ -373,6 +431,8 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
   // A profile opened from Dashboard may differ from the global scope cookie.
   // Keep its configuration links on the creator actually displayed.
   const configurationCloneId = pathname.match(/^\/clones\/([0-9a-f-]{36})(?:\/|$)/i)?.[1] ?? activeCloneId;
+  const channel = channelDefinition(channelForPath(pathname));
+  const channelScoped = channel.channel !== "all";
   const [moreOpen, setMoreOpen] = useState(false);
   const [fullNavigation, setFullNavigation] = useState(false);
   const studioRoute = isDashboardWorkspaceRoute(pathname);
@@ -487,16 +547,17 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
     {isAdmin && studioRoute && <style dangerouslySetInnerHTML={{__html:STUDIO_SIDEBAR_THEME}} />}
     {isTether ? <style dangerouslySetInnerHTML={{__html:TETHER_SIDEBAR_THEME}} /> : null}
     <div className={studioNavigation ? "studio-brand-row" : "flex h-20 shrink-0 items-center justify-between border-b border-white/14 px-5"}><Link href={isCreator ? "/creator" : isAdmin && !fullNavigation ? "/dashboard" : "/revenue"} className="min-w-0" aria-label={agencyName || "Twin Technologies"} onClick={onNavigate}><TwinWordmark inverse studio={studioNavigation} agencyName={agencyName === "Twin" ? undefined : agencyName} /></Link>{headerAction}</div>
+    {channelSwitch ? <div className="shrink-0 px-4 pt-3">{channelSwitch}</div> : null}
     {usesBrandedCore ? <div className="shrink-0 px-4 pb-2 pt-4" data-creator-core={isCreator ? "hero" : undefined}><div className="flex items-center gap-3 rounded-xl border border-sky-400/20 bg-sky-400/[0.05] px-3 py-3"><IntelligenceCoreIcon size={64} /><div className="min-w-0 flex-1"><span className="block text-sm font-semibold leading-5 text-[#38bdf8]">AI Intelligence Core</span></div></div></div> : isAgency ? <div className="px-7 py-4 text-sm text-white/75">{agencyName} · {readOnly ? "Read only" : isMoxy(agencyName) && canManage ? "Owner" : "Creator management"}</div> : isAdmin && !fullNavigation ? null : <div className="shrink-0 px-4 pb-3 pt-4"><Link href="/clones/new" onClick={onNavigate} className="sidebar-create-button flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition"><Icon d={PATHS.Plus} className="h-4 w-4" />Create new creator</Link></div>}
-    <nav aria-label={isCreator ? "Creator navigation" : "Main navigation"} className={(studioNavigation ? "studio-sidebar-nav " : "") + "flex flex-1 flex-col overflow-y-auto px-4 py-2"}>{isAdmin && !fullNavigation ? adminNavigation : <div className="space-y-1">{primaryLinks.filter(availableLink).map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}{isCreator || isPreview ? null : isAdmin ? <div className="mt-3 space-y-1 border-t border-white/14 pt-2">{TWIN_ADMIN_REMAINDER.map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}</div> : moxyNavigation ? null : expandedMoxyNavigation ? <div className="mt-3 space-y-1 border-t border-white/14 pt-2">{MORE_LINKS.filter(link => link.kind !== "route" || !["/jarvis", "/agency-admin", "/agency-admin/creator-codes"].includes(link.href)).filter(link => link.kind !== "tab" || link.tab !== "identity").filter(availableLink).map(link => <div key={linkKey(link)}>{renderLink(link)}</div>)}</div> : usesBrandedCore ? <div className="mt-3 border-t border-white/14 pt-3"><h2 className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">More</h2><div className="space-y-1">{MORE_LINKS.filter(link => link.kind === "tab" || agencyDashboardPath(link.href, agencyName, canManage)).map(link => <div key={linkKey(link)}>{renderLink(link)}</div>)}</div></div> : <div className="mt-3 border-t border-white/14 pt-2"><button type="button" onClick={() => setMoreOpen((open) => !open)} aria-expanded={moreOpen} className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold text-white/62 transition hover:bg-white/10 hover:text-white"><Icon d={PATHS.More} className="h-[18px] w-[18px] text-white/50" /><span className="flex-1">More</span><svg className={(moreOpen ? "rotate-180 " : "") + "h-4 w-4 transition-transform"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg></button>{moreOpen ? <div className="mt-1 space-y-1">{MORE_LINKS.filter(link => !isAgency || link.kind === "tab" || agencyDashboardPath(link.href, agencyName, canManage)).map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}</div> : null}</div>}</div>}{isAdmin && fullNavigation ? <button type="button" onClick={() => setNavigationLayout(false)} className="mt-3 border-t border-white/14 px-3 py-3 text-left text-xs text-white/60 hover:text-white">Use grouped navigation</button> : null}{showAssistant && !isAgency && !isCreator && !studioRoute ? <div className="mt-auto pt-4 [@media(max-height:850px)]:pt-2"><TwinAssistant /></div> : null}</nav>
+    <nav aria-label={isCreator ? "Creator navigation" : "Main navigation"} className={(studioNavigation ? "studio-sidebar-nav " : "") + "flex flex-1 flex-col overflow-y-auto px-4 py-2"}>{channelScoped ? <ChannelNav channel={channel} onNavigate={onNavigate} /> : isAdmin && !fullNavigation ? adminNavigation : <div className="space-y-1">{primaryLinks.filter(availableLink).map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}{isCreator || isPreview ? null : isAdmin ? <div className="mt-3 space-y-1 border-t border-white/14 pt-2">{TWIN_ADMIN_REMAINDER.map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}</div> : moxyNavigation ? null : expandedMoxyNavigation ? <div className="mt-3 space-y-1 border-t border-white/14 pt-2">{MORE_LINKS.filter(link => link.kind !== "route" || !["/jarvis", "/agency-admin", "/agency-admin/creator-codes"].includes(link.href)).filter(link => link.kind !== "tab" || link.tab !== "identity").filter(availableLink).map(link => <div key={linkKey(link)}>{renderLink(link)}</div>)}</div> : usesBrandedCore ? <div className="mt-3 border-t border-white/14 pt-3"><h2 className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">More</h2><div className="space-y-1">{MORE_LINKS.filter(link => link.kind === "tab" || agencyDashboardPath(link.href, agencyName, canManage)).map(link => <div key={linkKey(link)}>{renderLink(link)}</div>)}</div></div> : <div className="mt-3 border-t border-white/14 pt-2"><button type="button" onClick={() => setMoreOpen((open) => !open)} aria-expanded={moreOpen} className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold text-white/62 transition hover:bg-white/10 hover:text-white"><Icon d={PATHS.More} className="h-[18px] w-[18px] text-white/50" /><span className="flex-1">More</span><svg className={(moreOpen ? "rotate-180 " : "") + "h-4 w-4 transition-transform"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg></button>{moreOpen ? <div className="mt-1 space-y-1">{MORE_LINKS.filter(link => !isAgency || link.kind === "tab" || agencyDashboardPath(link.href, agencyName, canManage)).map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}</div> : null}</div>}</div>}{!channelScoped && isAdmin && fullNavigation ? <button type="button" onClick={() => setNavigationLayout(false)} className="mt-3 border-t border-white/14 px-3 py-3 text-left text-xs text-white/60 hover:text-white">Use grouped navigation</button> : null}{showAssistant && !isAgency && !isCreator && !studioRoute ? <div className="mt-auto pt-4 [@media(max-height:850px)]:pt-2"><TwinAssistant /></div> : null}</nav>
     {studioNavigation && <Link href="/settings" onClick={onNavigate} className="studio-account"><Icon d={PATHS.Settings} className="h-8 w-8" /><span>Settings<small>Workspace settings</small></span><Icon d='<path d="m9 5 7 7-7 7"/>' className="h-4 w-4" /></Link>}
   </>;
 }
 
-export default function Sidebar({ clones: _clones, activeCloneId }: { clones: CloneLite[]; activeCloneId: string | null }) {
+export default function Sidebar({ clones: _clones, activeCloneId, channels }: { clones: CloneLite[]; activeCloneId: string | null; channels?: DashboardChannel[] }) {
   const pathname = usePathname();
   const { isCreator } = useDashboardAccess();
   const studio = !isCreator && isDashboardWorkspaceRoute(pathname);
-  return <aside data-studio-sidebar={studio || undefined} className="dashboard-sidebar sticky top-0 hidden h-screen w-72 shrink-0 flex-col lg:flex"><SidebarContent activeCloneId={activeCloneId} /></aside>;
+  return <aside data-studio-sidebar={studio || undefined} className="dashboard-sidebar sticky top-0 hidden h-screen w-72 shrink-0 flex-col lg:flex"><SidebarContent activeCloneId={activeCloneId} channelSwitch={<ChannelSwitch channels={channels} className="flex-wrap" />} /></aside>;
 }
 

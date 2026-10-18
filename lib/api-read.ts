@@ -34,6 +34,10 @@ export const ADMIN_EXTRA: Record<string, string[]> = {
     "photo_reply_prompt",
     "routing_prompt",
     "business_username",
+    // Typed shared creator facts consumed by the OF projection through this
+    // existing authenticated allowlisted reader. No prompt/compiler or key.
+    "date_of_birth", "cover_story", "relationship_canon", "tattoos",
+    "tattoo_details", "turn_ons", "hard_limits", "hard_limits_extra",
   ],
 };
 

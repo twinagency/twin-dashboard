@@ -1,0 +1,12 @@
+/* The OF-D0 preview renders with the Twin dashboard's own stylesheet.
+   Importing it, rather than copying it, is the point: the preview has to be
+   judged against the real product's fonts, colours and component radii, and a
+   local copy would drift from them on the first dashboard change. */
+@import "../../../app/globals.css";
+
+/* Tailwind v4 scans outward from the file that imports it. These sources add
+   the shared Twin surface the preview reuses, so every utility class the real
+   components apply is generated here too. Nothing outside them is scanned. */
+@source "../../../components";
+@source "../../../lib/onlyfans-preview";
+@source "../";

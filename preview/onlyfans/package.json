@@ -1,0 +1,11 @@
+{
+  "name": "twin-onlyfans-preview",
+  "private": true,
+  "version": "0.0.0",
+  "description": "Isolated OF-D0 preview harness. It declares no dependencies of its own: it runs on the twin-dashboard toolchain and imports the shared presentational components and stylesheet directly, so the preview cannot drift from the real product's look.",
+  "scripts": {
+    "dev": "next dev -p 3017",
+    "build": "next build",
+    "typecheck": "tsc --noEmit"
+  }
+}

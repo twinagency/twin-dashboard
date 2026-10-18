@@ -7,11 +7,24 @@ import { X } from "lucide-react";
 import { SidebarContent } from "@/components/Sidebar";
 import { useDashboardAccess } from "./DashboardAccessProvider";
 import { isDashboardWorkspaceRoute } from "@/lib/dashboard-creator-route";
+import ChannelSwitch from "@/components/ChannelSwitch";
+import type { DashboardChannel } from "@/lib/channel-nav";
 
 // The phone menu is the desktop sidebar's real content in a touch-friendly
 // drawer. Sharing SidebarContent keeps the links, icons, active states and
 // clone-gated behavior identical at every breakpoint.
-export default function MobileMenu({ activeCloneId }: { activeCloneId: string | null }) {
+export default function MobileMenu({
+  activeCloneId,
+  channels = ["all"],
+}: {
+  activeCloneId: string | null;
+  /**
+   * The server's channel scope, forwarded to the drawer's channel switch.
+   * Defaults to "no channel switch" for the same reason the switch itself does:
+   * a caller that has not been told the scope gets today's drawer.
+   */
+  channels?: DashboardChannel[];
+}) {
   const pathname = usePathname();
   const { audience } = useDashboardAccess();
   const studio = audience !== "creator" && isDashboardWorkspaceRoute(pathname);
@@ -74,6 +87,10 @@ export default function MobileMenu({ activeCloneId }: { activeCloneId: string | 
               activeCloneId={activeCloneId}
               onNavigate={() => setOpen(false)}
               showAssistant={false}
+              // The top bar's channel switch is hidden below sm, so the drawer
+              // carries the same control. One switch per breakpoint, always the
+              // same component reading the same route.
+              channelSwitch={<ChannelSwitch channels={channels} />}
               headerAction={
                 <button
                   type="button"

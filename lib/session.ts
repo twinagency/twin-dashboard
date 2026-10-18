@@ -46,6 +46,7 @@ export async function signSession(): Promise<string> {
 export async function verifySessionToken(token: string | undefined | null): Promise<boolean> {
   if (!token) return false;
   if (token.startsWith("owner_")) return verifyOwnerSession(token);
+  if (!/^[0-9]{1,16}\.[A-Za-z0-9_-]{43}$/.test(token)) return false;
   const [payload, sig] = token.split(".");
   if (!payload || !sig) return false;
   const exp = Number(payload);

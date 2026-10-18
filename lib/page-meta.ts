@@ -34,6 +34,17 @@ const PAGE_LABELS: Record<string, string> = {
   "/campaigns": "Campaigns",
   "/crm/team": "Team",
   "/crm/platforms": "Platforms",
+  // Channel workspaces (lib/channel-nav.ts). The sidebar, the channel switch and
+  // this breadcrumb all read the same definition, so a channel page cannot be
+  // labelled differently in two places.
+  "/overview": "Overview",
+  "/telegram": "Fans and Messages",
+  "/onlyfans/inbox": "Inbox",
+  "/onlyfans/campaigns": "Campaigns",
+  "/onlyfans/accounts": "Accounts",
+  "/onlyfans/content": "Content",
+  "/onlyfans/sales": "Sales",
+  "/onlyfans/settings": "Settings",
   "/admin/submissions": "New Form Submissions",
   "/admin/clients": "Client Database",
   "/admin/todo": "Team To Do",

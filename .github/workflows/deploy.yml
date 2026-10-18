@@ -49,7 +49,7 @@ env:
   # Dashboard binds 3001 internally; Apache proxies to 127.0.0.1:3001 on the
   # host, so the port MUST be published or every request 503s while docker
   # inspect still says Running: true. The bot needs no such flags.
-  EXTRA_RUN_ARGS: "-p 127.0.0.1:3001:3001 -e PORT=3001"
+  EXTRA_RUN_ARGS: "-p 127.0.0.1:3001:3001 -e PORT=3001 --network twin-onlyfans_default"
 
 jobs:
   creator-uploads:

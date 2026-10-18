@@ -86,7 +86,12 @@
     "test:content-library": "tsx scripts/check-content-library.tsx",
     "test:inbox": "tsx scripts/check-unified-inbox.tsx",
     "test:campaigns": "tsx scripts/check-campaigns.tsx",
-    "test:intelligence-controls": "node --import tsx scripts/check-intelligence-controls.tsx && node --import tsx scripts/check-creator-config-navigation.tsx && node --import tsx scripts/check-creator-studio.tsx"
+    "test:intelligence-controls": "node --import tsx scripts/check-intelligence-controls.tsx && node --import tsx scripts/check-creator-config-navigation.tsx && node --import tsx scripts/check-creator-studio.tsx",
+    "test:onlyfans-preview": "tsx scripts/check-onlyfans-preview.ts",
+    "test:channel-integration": "tsx scripts/check-channel-integration.ts",
+    "test:onlyfans-read": "tsx scripts/check-onlyfans-read.ts",
+    "test:onlyfans-operations": "node --import tsx scripts/check-onlyfans-operations.ts",
+    "test:onlyfans-unconfigured": "tsx scripts/check-onlyfans-unconfigured.tsx"
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",

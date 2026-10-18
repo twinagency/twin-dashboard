@@ -13,11 +13,11 @@ import { useDashboardAccess } from "./DashboardAccessProvider";
 // mode on whatever page you first loaded, so switching Revenue→Fans kept the
 // narrow column (squashed inbox) and Fans→Revenue leaked full-bleed. This is
 // the bug behind "pages break when switching between them".
-export default function MainShell({ children }: { children: React.ReactNode; activeCloneId?: string | null }) {
+export default function MainShell({ children, showAssistant = true }: { children: React.ReactNode; activeCloneId?: string | null; showAssistant?: boolean }) {
   const pathname = usePathname();
   const {isAgency, isCreator} = useDashboardAccess();
   const studioDashboard = !isCreator && ((!isAgency && pathname === "/dashboard") || isCreatorStudioRoute(pathname));
-  const fullBleed = pathname === "/users" || pathname === "/inbox" || pathname === "/jarvis" || pathname === "/fans";
+  const fullBleed = pathname === "/users" || pathname === "/inbox" || pathname === "/jarvis" || pathname === "/fans" || pathname === "/onlyfans/inbox";
   const studioWorkspace = !isCreator && isDashboardWorkspaceRoute(pathname);
   const ownsPageSpacing = ["/content-library", "/campaigns"].includes(pathname);
   return (
@@ -30,7 +30,7 @@ export default function MainShell({ children }: { children: React.ReactNode; act
       }
     >
       {children}
-      {!isAgency && !isCreator && pathname !== "/jarvis" && pathname !== "/fans" && !studioWorkspace ? <TwinAssistant variant="mobile-dock" /> : null}
+      {showAssistant && !isAgency && !isCreator && pathname !== "/jarvis" && pathname !== "/fans" && !studioWorkspace ? <TwinAssistant variant="mobile-dock" /> : null}
     </main>
   );
 }

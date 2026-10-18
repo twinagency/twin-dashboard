@@ -6,11 +6,14 @@ import CloneSwitcher from "@/components/CloneSwitcher";
 import CurrencyToggle from "@/components/CurrencyToggle";
 import { useCurrency } from "@/components/CurrencyProvider";
 import BlurToggle from "@/components/BlurToggle";
-import { logout } from "@/app/login/actions";
+import SignOutButton from "@/components/SignOutButton";
 import { fmtMoney, starsToMoneyRate } from "@/lib/money";
 import { getPageMeta } from "@/lib/page-meta";
 import { isCreatorStudioRoute, isDashboardWorkspaceRoute, dashboardWorkspacePageLabel } from "@/lib/dashboard-creator-route";
 import { CREATOR_DASHBOARD_NAV } from "@/lib/creator-dashboard-policy";
+import ChannelSwitch from "@/components/ChannelSwitch";
+import type { DashboardChannel } from "@/lib/channel-nav";
+import { channelForPath } from "@/lib/channel-nav";
 
 // Straight, full-width top bar — replaces the old floating/overlay pill.
 // One row: breadcrumb on the left, account controls in the middle. Always in
@@ -27,17 +30,48 @@ export default function TopBar({
   activeCloneId,
   allTimeStars,
   creatorName,
+  lockCreatorScope = false,
+  channels,
+  signOut = "live",
+  signOutAction,
 }: {
   clones: { id: string; name: string; color: string; photoUrl?: string }[];
   activeCloneId: string | null;
   allTimeStars: number;
   /** Verified creator identity. Supplying it locks the shared clone chip. */
   creatorName?: string;
+  /**
+   * Pin the creator scope. Used by the isolated OnlyFans preview, where the
+   * creator is a fixture and there is no scope cookie to write. False in the
+   * dashboard, so nothing about the live switcher changes.
+   */
+  lockCreatorScope?: boolean;
+  /**
+   * Which channels this session may switch to, from the server's channel scope.
+   * Omitted means every channel, which is only correct for the isolated
+   * preview: the dashboard always passes the server's answer, so a channel the
+   * operator cannot open is never offered as a control.
+   */
+  channels?: DashboardChannel[];
+  /**
+   * `simulated` renders an inert, labelled sign-out instead of the live one.
+   * Only the isolated preview passes it — a preview must not be able to clear a
+   * real session.
+   */
+  signOut?: "live" | "simulated";
+  /**
+   * The signed-in sign-out action, supplied by the server layout rather than
+   * imported here. Importing it would put the login server action in the module
+   * graph of every surface that mounts this bar, including the isolated
+   * preview's; the preview's import audit asserts that it is not.
+   */
+  signOutAction?: (formData: FormData) => void | Promise<void>;
 }) {
   const {isAgency,isCreator,agencyName}=useDashboardAccess();
   const { currency, rate, usdPerStar } = useCurrency();
   const pathname = usePathname();
   const searchParams = useSearchParams();
+  const channel = channelForPath(pathname);
   const pageMeta = getPageMeta(pathname, clones, activeCloneId);
   const workspaceLabel = !isCreator && isDashboardWorkspaceRoute(pathname) ? dashboardWorkspacePageLabel(pathname) : null;
   const pageLabel = isCreator
@@ -76,50 +110,54 @@ export default function TopBar({
     // has nothing to mis-place. Everything here is breakpoint-scoped, so sm+
     // (and lg+) renders exactly as before.
     <div className="dashboard-topbar sticky top-0 z-40 flex h-20 shrink-0 justify-center items-center gap-3 border-b border-line px-5 sm:grid sm:grid-cols-[1fr_auto_1fr] lg:px-8">
-      <h1 className="hidden min-w-0 truncate font-heading text-sm font-semibold tracking-[-0.02em] text-ink sm:block">
-        <span className={scopeIsCreator ? "creator-name" : undefined}>{workspaceLabel && /twin/i.test(scopeLabel) ? "Workspace" : scopeLabel}</span>
-        {pageLabel != null && <span className="text-muted"> / {pageLabel}</span>}
-      </h1>
+      {/* The channel switch sits above the breadcrumb in the same grid column,
+          so the channel and the page it is showing read as one line and the
+          centre control pill stays dead-centre. Below sm this column is
+          display:none; the mobile drawer carries the same switch. */}
+      <div className="hidden min-w-0 flex-col items-start gap-1.5 sm:flex">
+        <ChannelSwitch channels={channels} />
+        <h1 className="min-w-0 truncate font-heading text-sm font-semibold tracking-[-0.02em] text-ink">
+          <span className={scopeIsCreator ? "creator-name" : undefined}>{workspaceLabel && /twin/i.test(scopeLabel) ? "Workspace" : scopeLabel}</span>
+          {pageLabel != null && <span className="text-muted"> / {pageLabel}</span>}
+        </h1>
+      </div>
 
       <div className="workspace-account-controls flex shrink-0 items-center gap-1.5 rounded-xl border border-line/80 bg-white/82 px-2 py-1.5 shadow-[0_8px_26px_rgb(6_23_47/0.06)] backdrop-blur-xl">
-        <CloneSwitcher clones={clones} activeCloneId={activeCloneId} locked={isCreator} fallbackName={creatorName} />
+        <CloneSwitcher clones={clones} activeCloneId={activeCloneId} locked={isCreator || lockCreatorScope} fallbackName={creatorName} />
         <div className="h-5 w-px shrink-0 bg-line" />
         {/* All-time cash made, scoped to the clone switcher above - not
-            time-windowed like the Revenue page's period toggle. */}
-        <span className="hidden items-baseline gap-1 px-1.5 sm:flex">
-          <span className="text-xs">💵</span>
-          <span className="font-mono text-xs font-semibold tabular-nums text-ink">
-            {fmtMoney(starsToMoneyRate(allTimeStars, currency, rate, usdPerStar), currency)}
-          </span>
-        </span>
-        <div className="hidden h-5 w-px shrink-0 bg-line sm:block" />
+            time-windowed like the Revenue page's period toggle.
+            Telegram Stars are Telegram money. On the OnlyFans channel this pill
+            is withheld rather than shown at zero: a Stars figure on an OF
+            account would read as that account's earnings, and the two must
+            never be silently aggregated. */}
+        {channel !== "onlyfans" ? (
+          <>
+            <span className="hidden items-baseline gap-1 px-1.5 sm:flex">
+              <span className="text-xs">💵</span>
+              <span className="font-mono text-xs font-semibold tabular-nums text-ink">
+                {fmtMoney(starsToMoneyRate(allTimeStars, currency, rate, usdPerStar), currency)}
+              </span>
+            </span>
+            <div className="hidden h-5 w-px shrink-0 bg-line sm:block" />
+          </>
+        ) : null}
         <CurrencyToggle compact />
         <BlurToggle />
         <div className="hidden h-5 w-px shrink-0 bg-line sm:block" />
-        <form action={isCreator ? "/creator-auth/logout" : isAgency ? "/agency/logout" : logout} method={isCreator || isAgency ? "post" : undefined}>
-          <button
-            type="submit"
-            title="Sign out"
-            aria-label="Sign out"
-            className="flex items-center justify-center gap-1.5 rounded-full p-2 text-muted transition hover:bg-muted/10 hover:text-ink"
+        {/* Agency and creator portals sign out through their own route so the
+            portal's scope is cleared with the session; the internal operator
+            signs out through the login action the layout supplies. */}
+        {signOut === "simulated" ? (
+          <SignOutButton mode="simulated" />
+        ) : (
+          <form
+            action={isCreator ? "/creator-auth/logout" : isAgency ? "/agency/logout" : signOutAction}
+            method={isCreator || isAgency ? "post" : undefined}
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth={1.9}
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              className="h-5 w-5"
-            >
-              <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" />
-              <polyline points="16 17 21 12 16 7" />
-              <line x1="21" y1="12" x2="9" y2="12" />
-            </svg>
-            {(isAgency || isCreator) && <span className="hidden text-xs font-medium sm:inline">Sign out</span>}
-          </button>
-        </form>
+            <SignOutButton showLabel={isAgency || isCreator} />
+          </form>
+        )}
       </div>
       {/* Empty right column - balances the breadcrumb so the controls stay
           truly centered. Mirrors the breadcrumb's own visibility: below sm
