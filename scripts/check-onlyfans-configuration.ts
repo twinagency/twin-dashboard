@@ -6,7 +6,7 @@ import { CONFIGURATION_SCHEMA, FACT_KEYS, canonicalConfiguration, parseConfigura
 async function main() {
   const configuration = { configurationRevision: 7, fingerprint: "a".repeat(64), persona: "Approved synthetic persona.", personaTruncated: false,
     creatorFacts: Object.fromEntries(FACT_KEYS.map(key => [key, null])), factFields: FACT_KEYS.map(key => ({ key, label: key })),
-    factsValid: true, readOnlyFacts: [], modelsValid: true,
+    factsValid: true, readOnlyFacts: [], modelsValid: true, salesConfigurationValid: true, onRequestSalesEnabled: false,
     sharedFacts: { state: "unconfigured", checkedAt: null, sourceUpdatedAt: null, overrideKeys: [] },
     defaultModel: "synthetic/model", replyModelOverride: null,
     replyOverridePresent: true, resolvedReplyModel: null, modelOptions: ["synthetic/model"] };
@@ -14,7 +14,9 @@ async function main() {
   assert(parseConfiguration(read, "acc-a"));
   for (const changed of [{ fingerprint: "bad" }, { persona: null }, { personaTruncated: true }, { defaultModel: false },
     { creatorFacts: { unknown: "private" } }, { factFields: [] }, { readOnlyFacts: ["unknown"] }, { modelOptions: ["a", "a"] }, { sharedFacts: { ...configuration.sharedFacts, state: "current" } },
-    { sharedFacts: { ...configuration.sharedFacts, overrideKeys: ["unknown"] } }, { unexpected: true }]) {
+    { sharedFacts: { ...configuration.sharedFacts, overrideKeys: ["unknown"] } }, { unexpected: true },
+    { salesConfigurationValid: "true" }, { onRequestSalesEnabled: 1 },
+    { salesConfigurationValid: false, onRequestSalesEnabled: true }]) {
     assert.equal(parseConfiguration({ ...read, configuration: { ...configuration, ...changed } }, "acc-a"), null);
   }
   assert.equal(parseConfiguration(read, "acc-b"), null);
@@ -25,9 +27,15 @@ async function main() {
   assert.equal(validConfigurationRequest(command), false);
   for (const patch of [{ dailyCostCap: 0 }, {}, { creatorFacts: { unknown: "x" } }, { creatorFacts: { age: 28 } }, { persona: "" },
     { inheritCreatorFacts: [] }, { inheritCreatorFacts: ["job", "job"] }, { inheritCreatorFacts: ["unknown"] },
-    { creatorFacts: { job: null }, inheritCreatorFacts: ["job"] }])
+    { creatorFacts: { job: null }, inheritCreatorFacts: ["job"] }, { onRequestSalesEnabled: "true" },
+    { onRequestSalesEnabled: 1 }, { onRequestSalesEnabled: null }, { pack_send_enabled: true }])
     assert.equal(validConfigurationRequest({ ...browserCommand, patch }), false);
   assert(validConfigurationRequest({ ...browserCommand, patch: { inheritCreatorFacts: ["job"] } }));
+  for (const onRequestSalesEnabled of [true, false]) {
+    assert(validConfigurationRequest({ ...browserCommand, patch: { onRequestSalesEnabled } }));
+    assert(parseConfiguration({ ...read, configuration: { ...configuration, onRequestSalesEnabled } }, "acc-a"));
+  }
+  assert(parseConfiguration({ ...read, configuration: { ...configuration, salesConfigurationValid: false } }, "acc-a"));
   assert(parseConfiguration({ ...read, configuration: { ...configuration,
     creatorFacts: { ...configuration.creatorFacts, limits: "x".repeat(14000) }, readOnlyFacts: ["limits"] } }, "acc-a"));
   const ack = { schemaVersion: CONFIGURATION_SCHEMA, ok: true, applied: true, accountId: "acc-a", commandKey: command.commandKey,

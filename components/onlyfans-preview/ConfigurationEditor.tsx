@@ -20,6 +20,7 @@ export default function ConfigurationEditor({ accountId }: { accountId: string }
   const [facts, setFacts] = useState<Partial<Record<FactKey, string>>>({});
   const [defaultModel, setDefaultModel] = useState("");
   const [override, setOverride] = useState("");
+  const [onRequestSales, setOnRequestSales] = useState(false);
   const [busy, setBusy] = useState(true);
   const [denied, setDenied] = useState(false);
   const [notice, setNotice] = useState("Loading editable configuration…");
@@ -35,7 +36,7 @@ export default function ConfigurationEditor({ accountId }: { accountId: string }
       if ([401, 403].includes(response.status)) {
         sessionDenied.current = true;
         setData(null); setPersona(""); setFacts({}); setRetry(null); setDenied(true);
-        setDefaultModel(""); setOverride("");
+        setDefaultModel(""); setOverride(""); setOnRequestSales(false);
         setNotice("Your session cannot edit this creator. Sign in again."); router.refresh(); return false;
       }
       const next = response.ok ? parseConfiguration(await response.json(), accountId) : null;
@@ -44,6 +45,7 @@ export default function ConfigurationEditor({ accountId }: { accountId: string }
       setData(next); setPersona(next.persona ?? "");
       setFacts(Object.fromEntries(FACT_KEYS.map(key => [key, next.creatorFacts[key] ?? ""])));
       setDefaultModel(next.defaultModel ?? ""); setOverride(overrideValue(next));
+      setOnRequestSales(next.onRequestSalesEnabled);
       return true;
     } catch { if (active.current) { setData(null); setNotice("Configuration could not be refreshed. Try again."); } return false; }
   }, [accountId, endpoint, router]);
@@ -64,6 +66,7 @@ export default function ConfigurationEditor({ accountId }: { accountId: string }
     if (Object.keys(changed).length) patch.creatorFacts = changed;
     if (data.modelsValid && defaultModel !== (data.defaultModel ?? "") && defaultModel) patch.defaultModel = defaultModel;
     if (data.modelsValid && override !== overrideValue(data) && override !== "__review") patch.replyModelOverride = override || null;
+    if (data.salesConfigurationValid && onRequestSales !== data.onRequestSalesEnabled) patch.onRequestSalesEnabled = onRequestSales;
   }
   const command: ConfigurationRequest | null = data && Object.keys(patch).length ? {
     patch, expectedRevision: data.configurationRevision, expectedFingerprint: data.fingerprint,
@@ -83,7 +86,7 @@ export default function ConfigurationEditor({ accountId }: { accountId: string }
         sessionLost = true;
         sessionDenied.current = true;
         setData(null); setPersona(""); setFacts({}); setRetry(null); setDenied(true);
-        setDefaultModel(""); setOverride("");
+        setDefaultModel(""); setOverride(""); setOnRequestSales(false);
         setNotice("Your session cannot edit this creator. Sign in again."); router.refresh(); return;
       }
       if (response.ok && parseConfigurationAck(await response.json(), { ...request, accountId })) {
@@ -157,6 +160,15 @@ export default function ConfigurationEditor({ accountId }: { accountId: string }
           </select></label>
         </div>
         <p className="text-xs text-muted">Resolved reply model: {data.resolvedReplyModel ?? "No supported explicit model saved"}.{!data.modelsValid ? " Saved model configuration needs review." : ""}</p>
+        <div className="rounded-lg border border-line p-3">
+          <label className="flex items-start gap-2 text-sm font-medium">
+            <input type="checkbox" data-of-edit-request-sales checked={onRequestSales}
+              disabled={!data.salesConfigurationValid} onChange={event => setOnRequestSales(event.target.checked)} />
+            Offer saved content when a fan asks
+          </label>
+          <p className="mt-2 text-xs text-muted">Use eligible saved catalogue items for direct content requests. Existing pricing, spending limits and qualification checks apply. Sending also requires a verified active account, paid-media permission and current purchase reconciliation.</p>
+          {!data.salesConfigurationValid ? <p className="mt-2 text-xs text-muted">Saved sales settings need review before this option can be changed.</p> : null}
+        </div>
         <button type="submit" data-of-save-configuration disabled={!command || !validConfigurationRequest(command)} className={buttonClass}>Save creator settings</button>
       </fieldset>
     </form> : null}

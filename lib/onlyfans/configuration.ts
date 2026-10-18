@@ -1,5 +1,5 @@
 /** Creator editor contract. No service credential enters browser code. */
-export const CONFIGURATION_SCHEMA = "of-configuration.v2";
+export const CONFIGURATION_SCHEMA = "of-configuration.v3";
 export const CONFIGURATION_HEADER = "X-OnlyFans-Configuration-Version";
 export const FACT_KEYS = ["age", "job", "home_city", "relationship", "kids", "family", "tattoos", "kinks", "limits"] as const;
 export type FactKey = typeof FACT_KEYS[number];
@@ -11,9 +11,10 @@ export type Configuration = {
     checkedAt: string | null; sourceUpdatedAt: string | null; overrideKeys: FactKey[] };
   defaultModel: string | null; replyModelOverride: string | null; replyOverridePresent: boolean;
   resolvedReplyModel: string | null; modelOptions: string[];
+  salesConfigurationValid: boolean; onRequestSalesEnabled: boolean;
 };
 export type ConfigurationPatch = { persona?: string; creatorFacts?: Partial<Record<FactKey, string | null>>; inheritCreatorFacts?: FactKey[];
-  defaultModel?: string; replyModelOverride?: string | null };
+  defaultModel?: string; replyModelOverride?: string | null; onRequestSalesEnabled?: boolean };
 export type ConfigurationRequest = { patch: ConfigurationPatch; expectedRevision: number; expectedFingerprint: string };
 export type ConfigurationAck = { schemaVersion: typeof CONFIGURATION_SCHEMA; ok: true; applied: true;
   accountId: string; commandKey: string; recordedRevision: number; recordedFingerprint: string };
@@ -28,7 +29,8 @@ export function validConfigurationRequest(value: unknown): value is Configuratio
   if (!object(value) || !exact(value, ["patch", "expectedRevision", "expectedFingerprint"]) ||
       !revision(value.expectedRevision) || !configurationHash(value.expectedFingerprint) || !object(value.patch)) return false;
   const patch = value.patch;
-  if (!Object.keys(patch).length || Object.keys(patch).some(key => !["persona", "creatorFacts", "inheritCreatorFacts", "defaultModel", "replyModelOverride"].includes(key))) return false;
+  if (!Object.keys(patch).length || Object.keys(patch).some(key => !["persona", "creatorFacts", "inheritCreatorFacts", "defaultModel", "replyModelOverride", "onRequestSalesEnabled"].includes(key))) return false;
+  if ("onRequestSalesEnabled" in patch && typeof patch.onRequestSalesEnabled !== "boolean") return false;
   if ("inheritCreatorFacts" in patch && (!Array.isArray(patch.inheritCreatorFacts) || !patch.inheritCreatorFacts.length ||
     new Set(patch.inheritCreatorFacts).size !== patch.inheritCreatorFacts.length || patch.inheritCreatorFacts.some(key =>
       !(FACT_KEYS as readonly unknown[]).includes(key) || object(patch.creatorFacts) && Object.hasOwn(patch.creatorFacts, String(key))))) return false;
@@ -43,7 +45,7 @@ export function parseConfiguration(value: unknown, accountId: string): Configura
   if (!object(value) || !exact(value, ["schemaVersion", "ok", "accountId", "configuration"]) ||
     value.schemaVersion !== CONFIGURATION_SCHEMA || value.ok !== true || value.accountId !== accountId || !object(value.configuration)) return null;
   const c = value.configuration;
-  if (!exact(c, ["configurationRevision", "fingerprint", "persona", "personaTruncated", "creatorFacts", "factFields", "factsValid", "readOnlyFacts", "modelsValid", "defaultModel", "replyModelOverride", "replyOverridePresent", "resolvedReplyModel", "modelOptions", "sharedFacts"]) ||
+  if (!exact(c, ["configurationRevision", "fingerprint", "persona", "personaTruncated", "creatorFacts", "factFields", "factsValid", "readOnlyFacts", "modelsValid", "defaultModel", "replyModelOverride", "replyOverridePresent", "resolvedReplyModel", "modelOptions", "sharedFacts", "salesConfigurationValid", "onRequestSalesEnabled"]) ||
     !revision(c.configurationRevision) || !configurationHash(c.fingerprint) || !optionalText(c.persona, 4096) ||
     typeof c.personaTruncated !== "boolean" || (c.personaTruncated ? c.persona !== null : typeof c.persona !== "string") ||
     !object(c.creatorFacts) || !exact(c.creatorFacts, [...FACT_KEYS]) || Object.values(c.creatorFacts).some(value => !optionalText(value, 16000)) ||
@@ -51,6 +53,8 @@ export function parseConfiguration(value: unknown, accountId: string): Configura
     !c.factFields.every((field, index) => object(field) && exact(field, ["key", "label"]) && field.key === FACT_KEYS[index] && text(field.label, 160) && !!field.label) ||
     !Array.isArray(c.readOnlyFacts) || new Set(c.readOnlyFacts).size !== c.readOnlyFacts.length || c.readOnlyFacts.some(key => !(FACT_KEYS as readonly unknown[]).includes(key)) ||
     typeof c.factsValid !== "boolean" || typeof c.modelsValid !== "boolean" || typeof c.replyOverridePresent !== "boolean" ||
+    typeof c.salesConfigurationValid !== "boolean" || typeof c.onRequestSalesEnabled !== "boolean" ||
+    (!c.salesConfigurationValid && c.onRequestSalesEnabled) ||
     !optionalText(c.defaultModel, 160) || !optionalText(c.replyModelOverride, 160) || !optionalText(c.resolvedReplyModel, 160) ||
     !Array.isArray(c.modelOptions) || !c.modelOptions.length || c.modelOptions.length > 500 ||
     new Set(c.modelOptions).size !== c.modelOptions.length || c.modelOptions.some(model => !text(model, 160) || !model) ||
