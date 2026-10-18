@@ -9,9 +9,10 @@
 # instead of a broken spawn. See dashboard/DOCKER.md, "Test page limitation",
 # for what it would take to support it in a container deployment.
 
-# Official Docker Node image, distributed by Docker through Amazon ECR Public.
+# Official Docker Node image. ECR Public can reject anonymous base-image pulls
+# with its shared data quota; use the upstream registry for the same Node tag.
 # Override NODE_IMAGE at build time if a different approved registry is needed.
-ARG NODE_IMAGE=public.ecr.aws/docker/library/node:22-alpine
+ARG NODE_IMAGE=docker.io/library/node:22-alpine
 
 # ── 1. deps: install dependencies with a cached layer ────────────────────────
 FROM ${NODE_IMAGE} AS deps
