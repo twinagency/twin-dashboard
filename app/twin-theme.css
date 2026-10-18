@@ -27,6 +27,9 @@ html[data-brand-theme="twin-light"] {
   --twin-chat-incoming: #f0f3f6;
   --twin-chat-outgoing: #dff4fe;
   --twin-chat-meta: #627f91;
+  /* RevenueDashboard's existing cross-brand chart token retains its legacy name. */
+  --moxy-revenue-total: #3fa7cf;
+  --moxy-revenue-blue: #3fa7cf;
 }
 
 /* WorkspaceShell supplies local tokens, including on the creator profile and
