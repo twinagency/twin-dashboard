@@ -1,0 +1,171 @@
+/* Twin's light blue workspace. The server selects this theme from the verified
+   dashboard audience, so partner portals keep their own brand palettes. */
+html[data-brand-theme="twin-light"] {
+  --color-bg: #f7fcff;
+  --color-panel: #ffffff;
+  --color-elev: #edf7fc;
+  --color-ink: #112f46;
+  --color-muted: #607a8c;
+  --color-line: #e0edf4;
+  --color-accent: #087da9;
+  --color-accent-2: #3fa7cf;
+  --color-accent-deep: #09658a;
+  --color-accent-soft: #7fc9e7;
+  --color-accent-tint: #e2f5fd;
+  --color-brand: var(--color-accent);
+  --color-brand-light: var(--color-accent-2);
+  --color-info: var(--color-accent);
+  --sidebar: #cdeefb;
+  --sidebar-foreground: #214b62;
+  --sidebar-primary: #147ca6;
+  --sidebar-primary-foreground: #ffffff;
+  --sidebar-accent: #b9e5f7;
+  --sidebar-accent-foreground: #123c54;
+  --sidebar-border: #abd8ea;
+  --sidebar-ring: #087da9;
+  --shadow-card: 0 1px 3px rgb(23 89 120 / 0.035), 0 6px 20px rgb(23 89 120 / 0.025);
+  --twin-chat-incoming: #f0f3f6;
+  --twin-chat-outgoing: #dff4fe;
+  --twin-chat-meta: #627f91;
+}
+
+/* WorkspaceShell supplies local tokens, including on the creator profile and
+   chat routes. Override that existing token boundary rather than every control. */
+html[data-brand-theme="twin-light"] [data-workspace-brand="twin"] {
+  --workspace-bg: #f7fcff;
+  --workspace-elev: #edf7fc;
+  --workspace-ink: #112f46;
+  --workspace-muted: #607a8c;
+  --workspace-line: #e0edf4;
+  --workspace-accent: #087da9;
+  --workspace-accent-deep: #09658a;
+  --workspace-accent-light: #3fa7cf;
+  --workspace-accent-tint: #e2f5fd;
+  --workspace-accent-soft: #7fc9e7;
+  --workspace-accent-border: #c0e6f6;
+}
+
+html[data-brand-theme="twin-light"] .dashboard-sidebar,
+html[data-brand-theme="twin-light"] .dashboard-sidebar[data-studio-sidebar="true"],
+html[data-brand-theme="twin-light"] .dashboard-mobile-header {
+  background: linear-gradient(165deg, #d6f2fd 0%, #c9ecfb 58%, #c3e9f8 100%);
+  border-color: var(--sidebar-border);
+  color: var(--sidebar-foreground);
+  box-shadow: 5px 0 24px rgb(37 123 160 / 0.04);
+}
+
+html[data-brand-theme="twin-light"] .dashboard-sidebar::before {
+  display: none;
+}
+
+html[data-brand-theme="twin-light"] :is(.dashboard-sidebar, .dashboard-mobile-header) [class*="text-white"],
+html[data-brand-theme="twin-light"] .dashboard-sidebar .studio-wordmark,
+html[data-brand-theme="twin-light"] .dashboard-sidebar .studio-account,
+html[data-brand-theme="twin-light"] .dashboard-sidebar .studio-account > svg {
+  color: var(--sidebar-foreground);
+}
+
+html[data-brand-theme="twin-light"] .dashboard-sidebar [class*="border-white"],
+html[data-brand-theme="twin-light"] .dashboard-sidebar .studio-account {
+  border-color: var(--sidebar-border);
+}
+
+html[data-brand-theme="twin-light"] .dashboard-sidebar nav :is(a, button),
+html[data-brand-theme="twin-light"] .dashboard-sidebar nav svg {
+  color: var(--sidebar-foreground);
+}
+
+html[data-brand-theme="twin-light"] .dashboard-sidebar nav :is(a, button):hover,
+html[data-brand-theme="twin-light"] .dashboard-mobile-header button:hover {
+  background-color: var(--sidebar-accent);
+  color: var(--sidebar-accent-foreground);
+}
+
+html[data-brand-theme="twin-light"] .dashboard-sidebar nav [aria-current="page"],
+html[data-brand-theme="twin-light"] .dashboard-sidebar nav :is(a, button)[class~="bg-white/12"] {
+  background: var(--sidebar-primary);
+  color: var(--sidebar-primary-foreground);
+  box-shadow: 0 2px 5px rgb(14 107 146 / 0.09);
+  --tw-ring-shadow: 0 0 #0000;
+}
+
+html[data-brand-theme="twin-light"] .dashboard-sidebar nav [aria-current="page"] svg,
+html[data-brand-theme="twin-light"] .dashboard-sidebar nav [class~="bg-white/12"] svg {
+  color: inherit;
+}
+
+html[data-brand-theme="twin-light"] .dashboard-sidebar .sidebar-create-button {
+  background: var(--color-accent);
+  color: #ffffff;
+  box-shadow: 0 3px 8px rgb(14 107 146 / 0.1);
+}
+
+html[data-brand-theme="twin-light"] .dashboard-sidebar .sidebar-create-button:hover {
+  background: var(--color-accent-deep);
+}
+
+html[data-brand-theme="twin-light"] .dashboard-sidebar nav :is(a, button):focus-visible,
+html[data-brand-theme="twin-light"] .dashboard-mobile-header button:focus-visible {
+  outline: 2px solid var(--sidebar-ring);
+  outline-offset: 3px;
+}
+
+html[data-brand-theme="twin-light"] .studio-sidebar-nav {
+  scrollbar-color: #8fc8e1 transparent;
+}
+
+html[data-brand-theme="twin-light"] .dashboard-topbar {
+  background: rgb(255 255 255 / 0.97);
+}
+
+html[data-brand-theme="twin-light"] .canvas-glow {
+  background-image: linear-gradient(180deg, rgb(128 211 243 / 0.06), transparent 14rem);
+}
+
+html[data-brand-theme="twin-light"] .creator-control-plane {
+  --color-accent: var(--workspace-accent, #087da9);
+  --color-accent-2: var(--workspace-accent-light, #3fa7cf);
+  --color-accent-deep: var(--workspace-accent-deep, #09658a);
+  --color-accent-tint: var(--workspace-accent-tint, #e2f5fd);
+}
+
+/* The real Telegram thread shares the reference's white canvas and blue
+   outgoing messages. Only presentation changes; message roles stay intact. */
+html[data-brand-theme="twin-light"] .tg-thread {
+  background: #ffffff;
+}
+
+html[data-brand-theme="twin-light"] .tg-bubble {
+  color: var(--color-ink);
+  box-shadow: none;
+}
+
+html[data-brand-theme="twin-light"] .tg-bubble-in {
+  background: var(--twin-chat-incoming);
+}
+
+html[data-brand-theme="twin-light"] .tg-bubble-out {
+  background: var(--twin-chat-outgoing);
+}
+
+html[data-brand-theme="twin-light"] .tg-tail-in::before,
+html[data-brand-theme="twin-light"] .tg-tail-out::before {
+  background-image: none;
+  background-color: var(--twin-chat-incoming);
+  clip-path: polygon(100% 0, 100% 100%, 0 90%, 55% 70%);
+}
+
+html[data-brand-theme="twin-light"] .tg-tail-out::before {
+  background-color: var(--twin-chat-outgoing);
+  clip-path: polygon(0 0, 0 100%, 100% 90%, 45% 70%);
+}
+
+html[data-brand-theme="twin-light"] .tg-meta,
+html[data-brand-theme="twin-light"] .tg-bubble-out .tg-meta {
+  color: var(--twin-chat-meta);
+}
+
+html[data-brand-theme="twin-light"] :is(.tg-daypill, .tg-newline, .tg-prov) {
+  background: #eef6fa;
+  color: #526e80;
+}

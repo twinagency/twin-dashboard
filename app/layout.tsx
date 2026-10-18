@@ -8,6 +8,7 @@ import "./globals.css";
 import "./jess-kate-theme.css";
 import "./creator-workspace.css";
 import "./studio-workspace.css";
+import "./twin-theme.css";
 import { JESS_KATE_PORTAL, TETHER_PORTAL } from "@/lib/partner-portals";
 import type { Metadata } from "next";
 import Link from "next/link";
@@ -79,7 +80,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     const creator = !isCreatorPublicPath(pathname) ? await getCreatorWorkspace() : null;
     const publicPortal = creatorPublicPortal(pathname);
     const link = publicPortal === "link" || isLynq(creator?.name);
-    const theme = link ? "lynq-light" : creator?.name === JESS_KATE_PORTAL.name ? "ivory-cherry" : undefined;
+    const theme = link ? "lynq-light" : creator?.name === JESS_KATE_PORTAL.name ? "ivory-cherry" : creator?.name === "Twin" ? "twin-light" : undefined;
     return <html lang="en" data-creator-workspace={isCreatorDashboardPath(pathname) ? "true" : undefined} data-brand-theme={theme} data-agency={link ? "lynq" : isMoxy(creator?.name) ? "moxy" : undefined} className={fontClass} style={{colorScheme:"light"}} suppressHydrationWarning><body className="min-h-screen bg-bg"><script dangerouslySetInnerHTML={{__html:'try{if(localStorage.getItem("blurMedia")==="true")document.documentElement.classList.add("blur-media")}catch(e){}'}} />{children}</body></html>;
   }
   if (isMarketingPath(pathname)) return <html lang="en" className={fontClass}><body>{children}</body></html>;
@@ -104,7 +105,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
   // canManage grant: this admin is looking, not administering as them.
   const canManage = viewAsInfo ? false : agencyCanManage(agency);
   // Path-dependent navigation stays in client components, not frozen here.
-  return <html lang="en" data-agency={isMoxy(agency?.name) ? "moxy" : isLynq(agency?.name) ? "lynq" : undefined} data-brand-theme={isLynq(agency?.name) ? "lynq-light" : agency?.name === JESS_KATE_PORTAL.name ? "ivory-cherry" : undefined} className={fontClass} style={{ colorScheme: "light" }} suppressHydrationWarning>
+  return <html lang="en" data-agency={isMoxy(agency?.name) ? "moxy" : isLynq(agency?.name) ? "lynq" : undefined} data-brand-theme={isLynq(agency?.name) ? "lynq-light" : agency?.name === JESS_KATE_PORTAL.name ? "ivory-cherry" : !agency || agency.name === "Twin" ? "twin-light" : undefined} className={fontClass} style={{ colorScheme: "light" }} suppressHydrationWarning>
     <body className="min-h-screen bg-bg">
       <script dangerouslySetInnerHTML={{__html:'try{if(localStorage.getItem("blurMedia")==="true")document.documentElement.classList.add("blur-media")}catch(e){}'}} />
       {viewAsInfo && <ViewAsBanner info={viewAsInfo} />}

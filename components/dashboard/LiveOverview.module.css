@@ -15,3 +15,39 @@
 @media(min-width:1500px){.page :global(.revenue-kpi-grid){grid-template-columns:repeat(6,minmax(0,1fr))}.page :global(.revenue-kpi){padding:17px 15px}.page :global(.revenue-kpi-value){font-size:27px}}
 @media(max-width:1050px){.page{padding:20px}.hero:not(.creatorHero){flex-direction:column;align-items:stretch}.fleetArt{width:100%;max-width:none;padding:12px 0 0}.portraits{justify-content:flex-start}.page :global(.revenue-main-grid){grid-template-columns:1fr}.page :global(.revenue-main-grid)>div:last-child{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));align-items:start;gap:14px}.page :global(.revenue-main-grid)>div:last-child>section{margin-top:0}}
 @media(max-width:650px){.page{padding:14px 12px 40px}.toolbar{gap:8px;flex-wrap:wrap;margin-bottom:14px}.tools{gap:9px}.source{font-size:10px}.hero{min-height:208px;padding:23px 20px;gap:12px;border-radius:14px;margin-bottom:14px}.heroCopy h1{font-size:29px}.heroCopy>span{font-size:11px;line-height:1.6;display:block}.heroLinks{gap:8px;margin-top:18px}.heroLinks a{font-size:10px;padding:9px 12px;gap:8px}.fleetArt{gap:12px}.heroPortrait{position:absolute;right:-24px;top:20px;width:145px;height:165px;opacity:.23;z-index:0;transform:rotate(8deg)}.creatorHero .heroCopy{max-width:85%}.page :global(.revenue-kpi-grid){grid-template-columns:repeat(2,minmax(0,1fr));gap:9px}.page :global(.revenue-kpi){padding:14px 12px;min-height:100px}.page :global(.revenue-kpi-value){font-size:23px}.page :global(.revenue-kpi-meta){font-size:9px;white-space:normal}.page :global(.revenue-main-grid)>div:last-child{display:flex;flex-direction:column;gap:12px}.page :global(.revenue-main-grid)>div:last-child>section{width:100%}.rankings{grid-template-columns:1fr}.page :global(.revenue-toolbar){padding:10px;gap:7px}.page :global(.revenue-window-options button){padding:5px 8px}.page :global(.revenue-chart-heading){padding:14px 12px}.page :global(.revenue-refresh){font-size:10px}}
+
+/* The real overview uses the same server-selected Twin palette as its shell. */
+:global(html[data-brand-theme="twin-light"]) .page {
+  --overview-blue: var(--color-accent-2);
+  background: var(--color-bg);
+  color: var(--color-ink);
+}
+:global(html[data-brand-theme="twin-light"]) .hero {
+  background: linear-gradient(110deg, #edf9ff, #ffffff 55%, #e4f6fe);
+  border-color: var(--color-line);
+}
+:global(html[data-brand-theme="twin-light"]) .heroLinks a:not(.secondaryLink) {
+  background: var(--color-accent);
+  box-shadow: 0 3px 10px rgb(29 137 181 / 0.1);
+}
+:global(html[data-brand-theme="twin-light"]) .heroLinks .secondaryLink {
+  border-color: var(--color-line);
+  color: var(--color-accent);
+}
+:global(html[data-brand-theme="twin-light"]) .page :global(.revenue-kpi-primary) {
+  background: #ffffff;
+  border-color: #c5e7f5;
+}
+:global(html[data-brand-theme="twin-light"]) .page :global(.revenue-kpi-primary .money-value-primary) {
+  color: var(--color-ink);
+}
+:global(html[data-brand-theme="twin-light"]) .page :global(.revenue-window-options button[aria-pressed="true"]) {
+  background: var(--color-accent-tint);
+  color: var(--color-accent);
+}
+:global(html[data-brand-theme="twin-light"]) :is(.viewMore, .activity header a, .activityLink) {
+  color: var(--color-accent);
+}
+:global(html[data-brand-theme="twin-light"]) .moreBadge {
+  background: var(--color-accent);
+}
