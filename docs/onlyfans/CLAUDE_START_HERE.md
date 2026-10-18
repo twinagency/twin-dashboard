@@ -19,7 +19,10 @@ verified native ledger for an identical reporting window, with explicit Stars,
 USD conversion basis, gross/net distinctions and unavailable coverage reasons.
 It does not add together incompatible financial bases. The full local
 browser/API/worker flow passed, including a delayed-response account-selection
-regression. Uploads/previews, full audience import, broader native selling and
+regression. Native photo/video-poster previews now reuse the permanent Fastt
+image store and shared Twin media renderer. They use an authenticated binary
+route and do not expose CDN URLs/cookies. Uploads, full video preview playback,
+full audience import, broader native selling and
 selected-account live acceptance remain open.
 
 Before release, merge/rebase this branch onto current main. Preserve main's

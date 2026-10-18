@@ -2,6 +2,7 @@ import { createBackendTransport, configuredBackendPurpose } from "./backend-tran
 import { CONTENT_HEADER, CONTENT_SCHEMA, type ContentFailure } from "./content";
 import { parseVault, parseVaultSyncAck, parseVaultCreateAck, type VaultProduct } from "./vault";
 import { validVaultResource, parseVaultResource, parseVaultEditAck, type AssetPatch, type FolderPatch } from "./vault-editing";
+import { readVaultPreview } from "./vault-preview";
 type Identity = { actor: string; commandKey: string };
 export function createVaultBackend(options: { baseUrl: string; token: string; fetchImpl?: typeof fetch }) {
   const call = createBackendTransport(options.fetchImpl);
@@ -16,6 +17,14 @@ export function createVaultBackend(options: { baseUrl: string; token: string; fe
     return { ok: false, status: 502, outcome: "unconfirmed", error: "The vault command outcome is not confirmed. Refresh or retry the same request." } as ContentFailure;
   }
   return {
+    async preview(accountId:string,mediaId:string) {
+      try {
+        const response=await call(base(accountId)+"/vault/previews/"+mediaId,{method:"GET",headers});
+        if(response.status===404){await response.body?.cancel();return {ok:false as const,status:404,error:"That preview is unavailable. Sync the vault to refresh it."};}
+        const data=await readVaultPreview(response,accountId,mediaId);
+        return {ok:true as const,...data};
+      }catch{return {ok:false as const,status:503,error:"The vault preview could not be read."};}
+    },
     async readResource(accountId: string, resource: string) {
       if (!validVaultResource(resource)) return { ok: false as const, status: 400, error: "Invalid vault resource." };
       try {

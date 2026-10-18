@@ -10,6 +10,7 @@ import { parseContentPrice } from "@/lib/onlyfans/content";
 import { parseVault, parseVaultCreateAck, parseVaultSyncAck, validVaultProduct,
   type VaultRead, type VaultItem, type VaultCreateRequest, type VaultSyncRequest } from "@/lib/onlyfans/vault";
 import VaultOrganization from "./VaultOrganization";
+import VaultAssetPreview from "./VaultAssetPreview";
 import ContentEditor from "./ContentEditor";
 import { MediaLibraryFilters } from "@/components/CreatorMediaLibrary";
 
@@ -143,7 +144,7 @@ export default function VaultManager({ accountId }: { accountId: string }) {
         <div className="mt-2 min-w-0 overflow-x-auto"><table className="w-full min-w-[34rem] text-left text-xs"><thead><tr className="border-b border-line text-muted"><th className="p-2">Select</th><th className="p-2">Asset</th><th className="p-2">Description</th><th className="p-2">Details</th><th className="p-2">Availability</th></tr></thead><tbody>
           {data.items.map(row => <tr key={row.mediaId} className="border-b border-line align-top" data-of-vault-item={row.mediaId}>
             <td className="p-2"><input data-of-vault-select={row.mediaId} type="checkbox" aria-label={`Select asset ${row.mediaId}`} checked={selected.has(row.mediaId)} onChange={() => toggle(row)} /></td>
-            <td className="p-2"><span className="block font-semibold capitalize">{row.kind}</span><span className="font-mono">#{row.mediaId}</span></td>
+            <td className="p-2"><VaultAssetPreview key={`${row.mediaId}:${data.sync?.updatedAt}`} accountId={accountId} mediaId={row.mediaId} kind={row.kind}/><span className="block font-semibold capitalize">{row.kind}</span><span className="font-mono">#{row.mediaId}</span></td>
             <td className="max-w-56 break-words p-2">{row.description || "No saved description"}<button type="button" data-of-vault-edit={row.mediaId} className="mt-1 block text-xs font-semibold text-accent" onClick={()=>setAssetId(row.mediaId)}>Edit metadata</button></td>
             <td className="p-2">{row.durationSeconds === null ? "" : `${row.durationSeconds}s`}{row.width && row.height ? ` ${row.width} × ${row.height}` : ""}</td>
             <td className="p-2">{row.ready ? "Available" : row.reason === "removed" ? "Removed" : row.reason === "unsupported_kind" ? "Unsupported format" : "Needs review"}</td>

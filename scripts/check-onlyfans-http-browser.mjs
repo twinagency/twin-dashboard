@@ -4,6 +4,7 @@ import path from "node:path";
 import { checkCombinedEarnings } from "./check-combined-earnings-browser.mjs";
 import { checkConfiguration } from "./check-onlyfans-configuration-browser.mjs";
 import { checkVaultOrganization } from "./check-onlyfans-vault-organization-browser.mjs";
+import { checkVaultPreviews } from "./check-onlyfans-vault-previews-browser.mjs";
 import { checkContent } from "./check-onlyfans-content-browser.mjs";
 import { checkOperator } from "./check-onlyfans-operator-browser.mjs";
 import { checkConnections } from "./check-onlyfans-connections-browser.mjs";
@@ -117,7 +118,7 @@ try {
       assert.equal(await page.locator("[data-of-catalog-item]").count(), 25);
       await page.getByText("Scenic test collection", { exact: true }).waitFor();
       await page.getByText("Terms checked", { exact: true }).waitFor();
-      if (process.env.ONLYFANS_TEST_CONTENT === "1") { await checkContent(page, context, origin); await checkVaultOrganization(page, context, origin); }
+      if (process.env.ONLYFANS_TEST_CONTENT === "1") { await checkContent(page, context, origin); await checkVaultPreviews(page, context, origin); await checkVaultOrganization(page, context, origin); }
       await page.locator("[data-of-next-page]").click();
       await page.waitForURL(url => url.searchParams.has("cursor"));
       await page.waitForFunction(() => document.querySelectorAll("[data-of-catalog-item]").length === 7, undefined, { timeout: 15000 });
