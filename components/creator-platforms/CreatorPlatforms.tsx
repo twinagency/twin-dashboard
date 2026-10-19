@@ -2,7 +2,7 @@
 import Link from "next/link";
 import styles from "./CreatorPlatforms.module.css";
 import { useEffect, useRef, useState } from "react";
-import { ArrowRight, CheckCircle2, RefreshCw } from "lucide-react";
+import { ArrowRight, CheckCircle2, RefreshCw, Send, LockKeyhole } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { PLATFORM_SCHEMA, type CreatorPlatforms as Snapshot, type PlatformChannel } from "@/lib/creator-platforms/model";
 import { connectionCapture, connectionOwner, object, parseEnrollment, type ConnectionEnrollmentRequest } from "@/lib/onlyfans-connections/contract";
@@ -22,7 +22,7 @@ export default function CreatorPlatforms({initial}:{initial:Snapshot}){
     <div className="flex flex-wrap items-start justify-between gap-4"><div><h1 className="font-heading text-3xl font-semibold tracking-tight">Your platforms</h1><p className="mt-2 text-sm text-muted">One creator profile. Choose where you want to connect with fans.</p></div><button className={button} disabled={busy} onClick={()=>void refresh()}><RefreshCw size={16}/>Refresh status</button></div>
     {data.readOnly?<p role="status" className="text-sm text-muted">This is a read-only view of your platform setup.</p>:null}
     <Card className="space-y-5 p-5 sm:p-6"><div><h2 className="text-lg font-semibold">Where would you like to connect?</h2><p className="mt-1 text-sm text-muted">Your saved profile, content and agency stay with this account.</p></div>
-      <fieldset disabled={busy||data.readOnly} className="grid gap-3 sm:grid-cols-2"><legend className="sr-only">Choose your platforms</legend>{(["telegram","onlyfans"] as const).map(channel=><label key={channel} className="flex min-h-20 cursor-pointer items-center gap-4 rounded-xl border border-line bg-panel p-4"><input type="checkbox" className="size-5 accent-[var(--color-accent)]" checked={channels.includes(channel)} onChange={event=>setChannels(current=>event.target.checked?[...current,channel]:current.filter(value=>value!==channel))}/><img src={`/brand/platforms/${channel}.svg`} alt="" className="h-8 w-8"/><span className="font-semibold">{channel==="telegram"?"Telegram":"OnlyFans"}</span></label>)}</fieldset>
+      <fieldset disabled={busy||data.readOnly} className="grid gap-3 sm:grid-cols-2"><legend className="sr-only">Choose your platforms</legend>{(["telegram","onlyfans"] as const).map(channel=><label key={channel} className="flex min-h-20 cursor-pointer items-center gap-4 rounded-xl border border-line bg-panel p-4"><input type="checkbox" className="size-5 accent-[var(--color-accent)]" checked={channels.includes(channel)} onChange={event=>setChannels(current=>event.target.checked?[...current,channel]:current.filter(value=>value!==channel))}/>{channel==="telegram"?<Send size={24} aria-hidden="true"/>:<LockKeyhole size={24} aria-hidden="true"/>}<span className="font-semibold">{channel==="telegram"?"Telegram":"OnlyFans"}</span></label>)}</fieldset>
       <button className={`${button} bg-accent text-white`} disabled={busy||data.readOnly||!channels.length} onClick={()=>void save()}>{busy?"Saving…":"Save platforms"}<ArrowRight size={16}/></button>
       {notice?<p role="status" className="text-sm">{notice}</p>:null}
     </Card>
