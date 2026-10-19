@@ -22,6 +22,8 @@ export function creatorPlatformApiAllowed(path: string, method: string, serverAc
   if (serverAction) return false;
   if (path === "/creator-auth/platforms" || /^\/creator-auth\/platforms\/onlyfans\/of-[1-9][0-9]{0,15}$/.test(path)) return ["GET", "HEAD", "POST"].includes(method);
   if (path === "/creator-auth/platforms/onlyfans") return method === "POST";
+  if (path === "/creator-auth/platforms/onlyfans/browser") return method === "POST";
+  if (path === "/creator-auth/platforms/onlyfans/connector") return ["GET","HEAD"].includes(method);
   return /^\/creator-auth\/onlyfans\/accounts(?:\/[A-Za-z0-9._:-]{1,64}(?:\/conversations(?:\/[A-Za-z0-9._:-]{1,64})?)?)?$/.test(path) && ["GET", "HEAD"].includes(method);
 }
 export function isCreatorDashboardPath(path: string | null | undefined): boolean {

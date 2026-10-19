@@ -1,5 +1,6 @@
 "use client";
 import Link from "next/link";
+import BrowserConnect from "./BrowserConnect";
 import styles from "./CreatorPlatforms.module.css";
 import { useEffect, useRef, useState } from "react";
 import { ArrowRight, CheckCircle2, RefreshCw } from "lucide-react";
@@ -32,13 +33,14 @@ export default function CreatorPlatforms({initial}:{initial:Snapshot}){
     </Card>:null}
     {(data.requested.includes("onlyfans")||data.onlyfans.accounts.length>0)?<Card className="space-y-5 p-5 sm:p-6" data-platform-onlyfans><div><h2 className="text-xl font-semibold">OnlyFans</h2><p className="mt-2 text-sm text-muted">Connect an account to this creator profile. Your agency’s existing account settings are preserved when you refresh its connection.</p></div>
       {data.onlyfans.status==="unavailable"?<p role="status" className="text-sm">{data.onlyfans.error}</p>:<>
-        {data.onlyfans.enrollments.filter(row=>row.status!=="accepted").map(row=><p key={row.id} role="status" className="rounded-xl border border-line p-4 text-sm" data-connection-request={row.status}>{["pending","checking"].includes(row.status)?"Checking your OnlyFans session. Your account appears below after its identity is verified.":row.status==="expired"?"Your connection request expired. Use a current connection file to try again.":"Your session could not be verified. Ask your agency for a current connection file, then retry."}</p>)}
+        {data.onlyfans.enrollments.filter(row=>row.status!=="accepted").map(row=><p key={row.id} role="status" className="rounded-xl border border-line p-4 text-sm" data-connection-request={row.status}>{["pending","checking"].includes(row.status)?"Checking your OnlyFans session. Your account appears below after its identity is verified.":row.status==="expired"?"Your connection request expired. Reconnect with Twin Connect to try again.":"Your session could not be verified. Reconnect with Twin Connect, then retry."}</p>)}
         {data.onlyfans.accounts.map(account=><div key={account.id} className="space-y-3 rounded-xl border border-line p-4" data-platform-account={account.id}><div className="flex flex-wrap justify-between gap-3"><strong>@{account.handle.replace(/^@/,"")}</strong><span className="text-sm text-muted">{account.connection?labels[account.connection.status]:"Status unavailable"}</span></div>
           {account.connection?.status==="verified"?<p className="flex items-center gap-2 text-sm"><CheckCircle2 size={16}/>Account identity checked. Conversation history appears as it syncs.</p>:null}
           <p className="text-xs text-muted">{account.connection?.outgoingEnabled?"Outgoing messages enabled":"Outgoing messages disabled"}{account.connection?.expiresAt?` · Connection expires ${new Date(account.connection.expiresAt).toLocaleString()}`:""}</p>
           <Link className={button} href={`/creator/onlyfans/inbox?account=${encodeURIComponent(account.id)}`}>View conversations<ArrowRight size={15}/></Link>
         </div>)}
-        <SessionConnect key={data.profileId||"none"} disabled={busy||data.readOnly||!data.profileId} onChanged={refresh}/>
+        <BrowserConnect key={data.profileId||"none"} profileId={data.profileId||""} disabled={busy||data.readOnly||!data.profileId} onChanged={refresh}/>
+        <details><summary className="cursor-pointer text-sm text-muted">Agency-assisted connection</summary><SessionConnect disabled={busy||data.readOnly||!data.profileId} onChanged={refresh}/></details>
       </>}
     </Card>:null}
   </div>;
