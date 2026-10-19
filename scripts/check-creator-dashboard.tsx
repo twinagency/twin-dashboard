@@ -19,6 +19,7 @@ import * as inboxModel from "../components/inbox/model";
 import * as fanAvatars from "../components/dashboard/fan-avatars";
 import * as dashboardCreatorRoute from "../lib/dashboard-creator-route";
 import * as channelNav from "../lib/channel-nav";
+import * as channelWorkspaceModel from "../lib/channel-workspace/model";
 
 const nativeRequire = createRequire(import.meta.url);
 function compile(path: string, imports: Record<string, unknown>) {
@@ -139,12 +140,14 @@ async function main() {
   for (const creatorId of ["kyla", "riley"]) assert.ok(dashboardModel.buildDashboard(fans, { ...filters, creatorId }).entries.every(p => p.fan.creatorId === creatorId));
 
   let admin = false, viewAs: unknown = null;
+  const CombinedDashboard = () => null;
   const Page = compile("app/dashboard/page.tsx", {
     "next/headers": { cookies: async () => ({}) },
     "next/navigation": { redirect: (path: string) => { throw new Error(`redirect:${path}`); } },
     "@/lib/internal-admin": { hasInternalAdminAccess: async () => admin },
     "@/lib/view-as": { activeViewAs: async () => viewAs },
     "@/components/dashboard/LiveDashboardOverview": { __esModule: true, default: () => null },
+    "@/components/AllChannelsDashboard": { __esModule: true, default: CombinedDashboard },
     "@/components/RevenueTooltipFix": { __esModule: true, default: () => null },
     "@/lib/clone-scope": { getCloneScope: async () => "live-clone-id" },
     "@/lib/query-cache": { getFleetClones: async () => [{ id: "live-clone-id", name: "Live creator", color: "#123456" }] },
@@ -154,7 +157,8 @@ async function main() {
   admin = true;
   for (const targetType of ["agency", "creator"]) { viewAs = { targetType }; await assert.rejects(route(), /redirect:\/revenue/); }
   viewAs = null;
-  const live = (await route()).props.children[1];
+  assert.equal((await route()).type, CombinedDashboard, "Default dashboard uses the combined channel owner");
+  const live = (await route({ workspace: "telegram" })).props.children[1];
   assert.equal(live.props.cloneId, "live-clone-id");
   assert.deepEqual(live.props.clones, [{ id: "live-clone-id", name: "Live creator", color: "#123456" }]);
   assert.equal(live.props.fans, undefined, "Dashboard must not receive demo fans");
@@ -180,6 +184,7 @@ async function main() {
   let headerPath = "/users", headerParams = new URLSearchParams("relationship=briana-ledger-1");
   const headerAudience = { isAgency: false, isCreator: false, agencyName: "" };
   const Header = compile("components/TopBar.tsx", {
+    "@/lib/channel-workspace/model": channelWorkspaceModel,
     "@/lib/dashboard-creator-route": dashboardCreatorRoute,
     "./DashboardAccessProvider": { useDashboardAccess: () => headerAudience },
     "next/navigation": { usePathname: () => headerPath, useSearchParams: () => headerParams },
@@ -189,8 +194,9 @@ async function main() {
     "@/components/BlurToggle": { __esModule: true, default: () => <span>Blur media</span> },
     "@/components/SignOutButton": compile("components/SignOutButton.tsx", {}),
     "@/components/ChannelSwitch": compile("components/ChannelSwitch.tsx", {
+      "./DashboardAccessProvider": { useDashboardAccess: () => headerAudience },
       "@/lib/channel-nav": channelNav,
-      "next/navigation": { usePathname: () => headerPath },
+      "next/navigation": { usePathname: () => headerPath, useSearchParams: () => headerParams },
       "next/link": { __esModule: true, default: ({ children, ...props }: React.ComponentProps<"a">) => <a {...props}>{children}</a> },
     }),
     "@/lib/channel-nav": channelNav,
@@ -211,7 +217,7 @@ async function main() {
   const nativeHeader = renderToStaticMarkup(<Header clones={[]} activeCloneId={null} allTimeStars={100} channels={["all", "telegram", "onlyfans"]} />);
   assert.doesNotMatch(nativeHeader, /LIVE_BALANCE/, "OnlyFans navigation must not present Telegram Stars as account earnings");
   assert.match(nativeHeader, /aria-label="Channel workspace"/, "The real shared channel control remains available");
-  assert.match(nativeHeader, /href="\/onlyfans\/inbox"/);
+  assert.match(nativeHeader, /href="\/onlyfans\/accounts"/);
   headerPath = "/users";
 
   // Execute the real component with the existing shell's currency context
@@ -392,4 +398,3 @@ async function main() {
   console.log("Creator Dashboard passed: isolated admin route; Brianna default; Brisbane date boundaries; deduplicated fans; reconciled charts, platforms and content; independent currency; period/platform/creator/search filters; chart-day inspection; purchase ownership and source links; dialogs; returning filter state; no production calls or changes to profile data.");
 }
 main().catch(error => { console.error(error); process.exitCode = 1; });
-

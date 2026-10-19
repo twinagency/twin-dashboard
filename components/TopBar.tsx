@@ -145,7 +145,7 @@ export default function TopBar({
       </div>
 
       <div className="workspace-account-controls flex shrink-0 items-center gap-1.5 rounded-xl border border-line/80 bg-white/82 px-2 py-1.5 shadow-[0_8px_26px_rgb(6_23_47/0.06)] backdrop-blur-xl">
-        <CloneSwitcher clones={scopedClones} activeCloneId={scopeId} locked={scopeLocked} fallbackName={fallbackScope} allowNewCreator={channel !== "onlyfans"} />
+        {isCreator ? <CloneSwitcher clones={clones} activeCloneId={activeCloneId} locked={isCreator} fallbackName={creatorName} /> : <CloneSwitcher clones={scopedClones} activeCloneId={scopeId} locked={scopeLocked} fallbackName={fallbackScope} allowNewCreator={channel !== "onlyfans"} />}
         <div className="h-5 w-px shrink-0 bg-line" />
         {/* All-time cash made, scoped to the clone switcher above - not
             time-windowed like the Revenue page's period toggle.
