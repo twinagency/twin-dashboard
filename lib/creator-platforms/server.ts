@@ -1,4 +1,5 @@
 import "server-only";
+import { hostedConfigured } from "./hosted-config";
 import { createHash } from "node:crypto";
 import { trustedFormOrigin } from "@/lib/form-origin";
 import { cookies } from "next/headers";
@@ -67,5 +68,5 @@ export async function platformSnapshot(creator:Awaited<ReturnType<typeof platfor
     if(!enrollments.ok)throw new Error("OnlyFans connection setup is temporarily unavailable.");
     onlyfans={status:"ready",error:null,enrollments:enrollments.data,accounts:await Promise.all(accounts.map(async account=>{const connection=await connections.get(account.accountId);return{id:account.accountId,handle:account.binding.handle,health:account.health,connection:connection.ok?connection.data:null};}))};
   }catch(error){onlyfans={status:"unavailable",accounts:[],enrollments:[],error:error instanceof Error?error.message:"OnlyFans connection status is unavailable."};}
-  return{schemaVersion:PLATFORM_SCHEMA,creatorName:creator.creatorName,profileId:profile.id,requested:profile.requested||[],readOnly:creator.readOnly,telegram,onlyfans};
+  return{schemaVersion:PLATFORM_SCHEMA,creatorName:creator.creatorName,profileId:profile.id,requested:profile.requested||[],readOnly:creator.readOnly,telegram,onlyfans:{...onlyfans,hostedConnect:hostedConfigured()}};
 }

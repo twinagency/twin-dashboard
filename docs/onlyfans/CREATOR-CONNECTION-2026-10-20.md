@@ -1,58 +1,64 @@
-# Creator connection page — 20 October 2026
+# Creator connection candidate — 20 October 2026
 
-Status: UI implementation for review. Installation-free OnlyFans authentication is not implemented or released.
+Dashboard base: be0f97d3ca06e85789357fe9e7515a303480e0a7.
+Backend base: 995d031b326df68f39d488b5bc487549d0626307.
+Neither candidate is deployed. Hosted connection defaults off.
 
-Base dashboard commit: be0f97d3ca06e85789357fe9e7515a303480e0a7.
-Existing native backend remains at 995d031b326df68f39d488b5bc487549d0626307.
+## Creator experience
 
-## Implemented
+The existing creator page keeps its brand palette, shell, profile, content and agency. Direct OnlyFans and Telegram actions replace checkbox selection and Save platforms. The protected setup RPC adds a selected channel to the same canonical profile and retains the other channel. Existing invitations and onboarding are reused.
 
-- Direct OnlyFans and Telegram actions replace checkbox selection plus Save platforms.
-- Actions reuse the current protected setup route and canonical creator-profile RPC, preserving the other selected platform.
-- Existing agency invitations, profile/content storage, onboarding routes and permission checks are reused.
-- The connection route suppresses redundant content/onboarding banners. Other creator pages keep the existing shell behaviour.
-- The page inherits each existing creator brand palette.
-- An installed desktop Twin Connect starts from the primary action. Opening the dialog again resumes an existing connection attempt.
-- The connection dialog returns to the page only after a new enrollment is accepted and its account has a verified, unexpired connection.
-- Pending verification never appears as Connected. Expired connections show Reconnect.
-- Agency-assisted file input was moved intact into its own component and remains in a collapsed section.
-- The mobile fallback explicitly describes the existing desktop requirement.
+With hosted connection configured, Connect OnlyFans creates one server-owned client session and opens the pinned @onlyfansapi/auth 2.1.0 embedded sign-in. It runs outside the native desktop dialog so the provider overlay remains visible. Password/initial verification entry belongs to the provider. Reconnecting an existing hosted account resumes that provider account, with a verification-code or supported identity-check screen when needed. It does not create a second Twin profile.
 
-## Unresolved hosted authentication dependency
+The browser's success callback only changes the progress message. A correctly signed accounts.connected webhook, current creator/profile/agency checks, durable native enrollment, and worker-side /me owner verification must all succeed before Connected is shown. The worker can sync initial history with delivery disabled. The existing agency/operator activation controls continue to govern outgoing messages.
 
-OnlyFansAPI documents an embedded modal through @onlyfansapi/auth and short-lived client sessions:
-https://docs.onlyfansapi.com/auth/quickstart
-https://docs.onlyfansapi.com/api-reference/client-sessions/create-client-session
+When hosted connection is off, the existing desktop extension and collapsed agency-assisted capture form remain available. An installed extension starts once and resumes an existing attempt. Unsupported mobile setup is described honestly.
 
-That establishes sign-in UI availability; it does not establish compatibility with Twin's native transport.
-The provider's March 2026 changelog links a Get Session Data endpoint, but on this investigation the link returned 404 and neither its current OpenAPI schema nor llms.txt included that endpoint. Export support must be confirmed and tested rather than assumed.
+## Integration and reuse
 
-Twin's current enrollment requires native cookies, signing headers/rules and an owner-bound verification step. An account ID returned by a hosted login is insufficient. Accepting a browser success callback as a Twin connection would be incorrect.
+OnlyFansAPI does not currently document a supported export of all native session/signing material. The candidate therefore adds an account-bound wire adapter to the existing native connector, rather than assuming hosted account IDs are native cookies. The existing intake, message parsing, model, media catalogue, one-use dispatch authority, encrypted credentials and creator bindings remain their owners. No new creator/vault store or database schema is introduced.
 
-No provider-specific OFAPI key was found among the live dashboard/API configuration names checked. Existing ONLYFANS_* tokens are Twin's internal service credentials and must not be repurposed as third-party keys.
+Canonical IDs remain of-{numeric OnlyFans owner}; provider acct_ IDs are encrypted transport references. Descending message pagination maps to first_id and requires explicit provider pagination evidence. Every send still consumes the existing one-use authority and uses the durable intent as the provider Idempotency-Key. Unknown POST outcomes are not retried.
 
-The candidate provider also documents an Auth+ iPhone-app requirement for v2 Face Authentication:
-https://docs.onlyfansapi.com/introduction/guides/connect-onlyfans-account
+Hosted connections use a renewable 23-hour health lease with identity probes. Lease renewal does not alter credential revision, delivery allowance or independently stopped runtime state. Paused connections remain paused. Only transient identity GET failures receive bounded enrollment retries (15 seconds, at most 60 attempts / 15 minutes).
 
-## Gate before installation-free release
+## Configuration before a real-account pilot
 
-1. Obtain access to the chosen provider account without embedding keys in browser code.
-2. Confirm its supported session-export handoff, proxy compatibility and renewal semantics. If it requires a transport adapter instead, define that explicitly before changing the architecture.
-3. Bind sign-in attempts to the authenticated canonical creator and validate completion server-side.
-4. Prove verification, initial sync, expiry/reconnection and wrong-account refusal with one explicitly authorised real account.
-5. Keep outgoing-message activation under the existing agency/operator controls.
+Set these only on the candidate services after provider access is selected:
 
-No new creator/vault store, messaging engine, database schema or paid provider subscription was introduced. No real OnlyFans login or message send was attempted.
+- ONLYFANS_HOSTED_CONNECT_ENABLED=1 on dashboard, native API and worker.
+- OFAPI_API_KEY on dashboard and worker; server-only, distinct from Twin's internal ONLYFANS_* purpose tokens.
+- OFAPI_WEBHOOK_SECRET on dashboard, at least 32 random characters; register the same signing secret at the provider.
+- Optional OFAPI_PROXY_COUNTRY: us (default), uk or gb.
+- Keep the existing ONLYFANS_CONNECTION_TOKEN / encryption key and scoped backend configuration.
+- Register signed accounts.connected events at https://dashboard.tgaiclone.xyz/creator-auth/platforms/onlyfans/events.
 
-## Validation
+No provider key was present in the live service configuration names checked. No subscription, real account connection, provider write or deployment was made during implementation.
 
-The UI harness uses synthetic connector messages and HTTP fixtures. It proves UI behaviour and ownership-route integration in isolation; it does not prove a live OnlyFans connection.
+## Remaining release gates and explicit limits
 
-Run:
+Provider access and one explicitly authorised real OnlyFans account are required to verify the actual embedded UI, signed event delivery, initial history/vault shapes, reconnection and expiry. Automated checks use simulated provider responses, not live provider compatibility. Do not merge or enable this candidate as a completed live integration until those checks pass.
+
+OnlyFansAPI documents an Auth+ iPhone app requirement for v2 Face Authentication; universal installation-free or two-second completion cannot be promised. Unsupported reconnection verification directs the creator to agency help. Existing native captures with a private proxy cannot silently switch to provider-managed networking.
+
+Hosted earnings import is explicitly held as unsupported: provider marker/startDate pagination differs from the existing native ledger's offset/window protocol. It needs a separately verified adapter. Existing native earnings import remains unchanged. Hosted CDN previews, vault writes, special message types and provider response sizes beyond the bounded native dialect also require pilot verification; no feature-parity claim is made.
+
+## Verification
 
 - node scripts/check-creator-platforms.cjs
-- node scripts/check-creator-platforms-ui.mjs (CHROMIUM_PATH set on the Windows workstation)
+- node scripts/check-hosted-connect.cjs
+- node scripts/check-creator-platforms-ui.mjs
+- node scripts/check-hosted-connect-ui.mjs
 - node --import tsx scripts/check-creator-workspace.ts
 - npm run build
+- Backend Creator platform acceptance workflow includes hosted wire/ownership/lease/intake/one-use-send tests alongside native connection, enrollment, recovery, ledger, planning and worker regression tests on isolated PostgreSQL.
 
-The first production build passed with the existing Supabase Edge Runtime warning and a Windows standalone-output symlink warning. Those warnings are not a claim that the Windows standalone package is deployable.
+The browser harness proves mobile/desktop layout and progress behavior with an SDK simulation. Screenshots contain synthetic creators. Build warnings inherited from Supabase Edge Runtime and Windows standalone symlink handling are recorded separately from release verification.
+
+Primary integration references:
+https://docs.onlyfansapi.com/auth/quickstart
+https://docs.onlyfansapi.com/api-reference/client-sessions/create-client-session
+https://docs.onlyfansapi.com/webhooks/available-events
+https://docs.onlyfansapi.com/webhooks/protecting-your-webhooks
+https://docs.onlyfansapi.com/api-reference/connect-onlyfans-account/re-authenticate-account
+https://docs.onlyfansapi.com/introduction/essentials/idempotency
