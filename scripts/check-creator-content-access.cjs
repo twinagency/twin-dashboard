@@ -22,6 +22,7 @@ const {chromium,webkit}=require('playwright');
    b.onLoad({filter:/.*/,namespace:'fixture'},a=>({loader:'jsx',resolveDir:root,contents:a.path==='next/link'
     ?'import React from "react";export default function Link({children,href,...p}){return <a href={href} {...p}>{children}</a>;}'
     :a.path==='./MainShell'?'import React from "react";export default function Main({children}){return <main className="overflow-y-auto p-4">{children}</main>;}'
+    :a.path==='./CurrencyProvider'?'export const useCurrency=()=>({currency:"AUD",setCurrency(){}});export default function Provider({children}){return children;}'
     :/Provider/.test(a.path)?'export default function Provider({children}){return children;}'
     :'export default function Widget(){return null;}'}));
   }}]});
@@ -41,7 +42,8 @@ const {chromium,webkit}=require('playwright');
  await new Promise(r=>server.listen(0,'127.0.0.1',r));const origin='http://127.0.0.1:'+server.address().port;
  try{
   for(const[name,engine]of [['chromium',chromium],['webkit',webkit]]){
-   const browser=await engine.launch({headless:true});
+   const executablePath=name==='chromium'?process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH:undefined;
+   const browser=await engine.launch({headless:true,...(executablePath?{executablePath}:{})});
    try{
     for(const brand of ['Moxy','FLIRT'])for(const width of [390,1280])for(const connected of [0,1])for(const submitted of [0,1]){
      const page=await browser.newPage({viewport:{width,height:844}}),errors=[];page.on('pageerror',e=>errors.push(e.message));
