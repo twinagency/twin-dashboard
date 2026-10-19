@@ -71,8 +71,3 @@
   .footer { margin-top:24px; padding:19px 0; }.footer>div { width:100%; justify-content:space-between; }.dialogBody { padding:22px 18px; }.dialogHeader { gap:7px; }.dialogHeader h2 { font-size:17px; }.dialogHeader .cardBrand { flex-wrap:nowrap; }.dialogHeader img { width:30px; height:30px; }
 }
 @media(prefers-reduced-motion:reduce) { .spinner { animation:none; } }
-
-.hostedSetup { margin-top: 1rem; padding: 1rem; border: 1px solid var(--border); border-radius: 1rem; background: var(--card); }
-.hostedSetup p { margin: .75rem 0; }
-.hostedSetup form { display: grid; gap: .75rem; }
-.hostedSetup input { width: 100%; min-height: 2.75rem; border: 1px solid var(--border); border-radius: .75rem; padding: .75rem; color: inherit; background: transparent; }

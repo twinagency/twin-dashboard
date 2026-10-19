@@ -16,7 +16,7 @@ export type ConnectionRequest = { expectedRevision: number } & (
 );
 export type ConnectionRegistration = { creatorId: string; ownerId: number; handle: string };
 export type ConnectionEnrollment = { id: string; status: "pending" | "checking" | "accepted" | "failed" | "expired"; accountId: string | null; error: string | null; expiresAt: string };
-export type ConnectionEnrollmentRequest = { creatorId: string; creatorName: string; handle: string; session: {ownerId:number;hosted:{schemaVersion:"ofapi.v1";accountId:string};expiresAt:string} | Pick<ConnectionSave,"ownerId"|"capture"|"xHash"|"expiresAt"> | import("@/lib/creator-platforms/browser-connection").BrowserSession };
+export type ConnectionEnrollmentRequest = { creatorId: string; creatorName: string; handle: string; session: Pick<ConnectionSave,"ownerId"|"capture"|"xHash"|"expiresAt"> | import("@/lib/creator-platforms/browser-connection").BrowserSession };
 export type ConnectionAck = { schemaVersion: typeof CONNECTION_SCHEMA; ok: true; applied: true; accountId: string;
   commandKey: string; recordedRevision: number; action: ConnectionRequest["action"] };
 export type RegistrationAck = { schemaVersion: typeof CONNECTION_SCHEMA; ok: true; applied: true; accountId: string; commandKey: string; status: "unconfigured" };

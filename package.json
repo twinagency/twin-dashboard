@@ -95,7 +95,6 @@
   },
   "dependencies": {
     "@base-ui/react": "^1.6.0",
-    "@onlyfansapi/auth": "2.1.0",
     "@supabase/supabase-js": "^2.45.0",
     "@ton/core": "^0.63.1",
     "@tonconnect/ui-react": "^3.0.2",

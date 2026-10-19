@@ -54,8 +54,6 @@ jobs:
         run: |
           node scripts/check-creator-platforms.cjs
           node scripts/check-creator-platforms-ui.mjs
-          node scripts/check-hosted-connect.cjs
-          node scripts/check-hosted-connect-ui.mjs
 
       - name: Creator profile mobile and save navigation checks
         run: node scripts/check-creator-profile-ui.mjs

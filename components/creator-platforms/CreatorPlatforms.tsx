@@ -2,7 +2,6 @@
 import Link from "next/link";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { ArrowRight, Check, ChevronRight, LoaderCircle, RefreshCw, Sparkles, X } from "lucide-react";
-import HostedConnect from "./HostedConnect";
 import BrowserConnect from "./BrowserConnect";
 import SessionConnect from "./SessionConnect";
 import styles from "./CreatorPlatforms.module.css";
@@ -11,7 +10,6 @@ import { PLATFORM_SCHEMA, type CreatorPlatforms as Snapshot, type PlatformChanne
 export default function CreatorPlatforms({initial}:{initial:Snapshot}) {
   const [data,setData]=useState(initial),[busy,setBusy]=useState<PlatformChannel|null>(null);
   const [notice,setNotice]=useState(""),[connecting,setConnecting]=useState(false);
-  const [reconnectId,setReconnectId]=useState<string|null>(null);
   const active=useRef(true),generation=useRef(0),submitting=useRef(false);
   const dialog=useRef<HTMLDialogElement>(null),opener=useRef<HTMLElement|null>(null);
   const existingAttempts=useRef(new Set<string>());
@@ -49,9 +47,9 @@ export default function CreatorPlatforms({initial}:{initial:Snapshot}) {
   },[refresh]);
   useEffect(()=>{
     const element=dialog.current;
-    if(connecting&&!data.onlyfans.hostedConnect&&element&&!element.open){opener.current=document.activeElement instanceof HTMLElement?document.activeElement:null;element.showModal();}
+    if(connecting&&element&&!element.open){opener.current=document.activeElement instanceof HTMLElement?document.activeElement:null;element.showModal();}
     else if(!connecting&&element?.open)element.close();
-  },[connecting,data.onlyfans.hostedConnect]);
+  },[connecting]);
 
   async function choose(channel:PlatformChannel){
     if(submitting.current||data.readOnly)return;
@@ -73,7 +71,7 @@ export default function CreatorPlatforms({initial}:{initial:Snapshot}) {
         current=next;
       }
       if(!active.current)return;
-      if(channel==="onlyfans"){existingAttempts.current=new Set(current.onlyfans.enrollments.map(row=>row.id));opener.current=document.activeElement instanceof HTMLElement?document.activeElement:null;setReconnectId(current.onlyfans.accounts.find(account=>account.connection?.status!=="verified"||!account.connection.expiresAt||Date.parse(account.connection.expiresAt)<=Date.now())?.id||null);setConnecting(true);}
+      if(channel==="onlyfans"){existingAttempts.current=new Set(current.onlyfans.enrollments.map(row=>row.id));setConnecting(true);}
       else setNotice("Your Telegram setup is saved. Continue with your existing profile and content below.");
     } catch(error){if(active.current)setNotice(error instanceof Error?error.message:"Setup could not be confirmed. Please refresh.");}
     finally{submitting.current=false;if(active.current)setBusy(null);}
@@ -103,10 +101,9 @@ export default function CreatorPlatforms({initial}:{initial:Snapshot}) {
         {data.onlyfans.enrollments.slice(0,1).filter(row=>row.status!=="accepted").map(row=><p key={row.id} role="status" className={styles.inlineNotice} data-connection-request={row.status}>
           {["pending","checking"].includes(row.status)?<><LoaderCircle size={16} className={styles.spinner}/>Checking your account…</>:row.status==="expired"?"Your connection attempt expired. Try connecting again.":"We couldn’t verify your account. Please try again."}
         </p>)}
-        <button className={styles.primaryButton} disabled={!!busy||connecting||data.readOnly||pending||data.onlyfans.status==="unavailable"} onClick={()=>void choose("onlyfans")}>
+        <button className={styles.primaryButton} disabled={!!busy||data.readOnly||pending||data.onlyfans.status==="unavailable"} onClick={()=>void choose("onlyfans")}>
           {busy==="onlyfans"?<><LoaderCircle size={17} className={styles.spinner}/>Getting ready…</>:pending?"Checking your account…":needsReconnect?<>Reconnect OnlyFans<ArrowRight size={17}/></>:verified.length?<>Connect another account<ArrowRight size={17}/></>:<>Connect OnlyFans<ArrowRight size={17}/></>}
         </button>
-        {connecting&&data.onlyfans.hostedConnect&&<HostedConnect accountId={reconnectId} onChanged={refresh} onClose={closeConnection}/>}
         <p className={styles.helper}>{verified.length?"Your saved profile and content stay with you.":"Sign in to continue."}</p>
         {data.onlyfans.accounts.map(account=>{
           const connected=isConnected(account);
@@ -131,7 +128,7 @@ export default function CreatorPlatforms({initial}:{initial:Snapshot}) {
     </div>
     <footer className={styles.footer}><p><Sparkles size={19} aria-hidden="true"/>Your profile, content and agency stay together.</p><div><button className={styles.textLink} disabled={!!busy} onClick={()=>void refresh()}><RefreshCw size={14}/>Refresh status</button><Link className={styles.textLink} href="/creator">Back to my space<ArrowRight size={14}/></Link></div></footer>
     <dialog ref={dialog} className={styles.dialog} aria-labelledby="connect-heading" onCancel={closeConnection} onClose={()=>{if(connecting)closeConnection();}}>
-      {connecting&&!data.onlyfans.hostedConnect&&<div className={styles.dialogBody}><div className={styles.dialogHeader}><div className={styles.cardBrand}><img src="/brand/platforms/onlyfans.svg" width={40} height={40} alt="" aria-hidden="true"/><h2 id="connect-heading">Connect your OnlyFans</h2></div><button className={styles.closeButton} aria-label="Close connection setup" onClick={closeConnection}><X size={21}/></button></div>
+      {connecting&&<div className={styles.dialogBody}><div className={styles.dialogHeader}><div className={styles.cardBrand}><img src="/brand/platforms/onlyfans.svg" width={40} height={40} alt="" aria-hidden="true"/><h2 id="connect-heading">Connect your OnlyFans</h2></div><button className={styles.closeButton} aria-label="Close connection setup" onClick={closeConnection}><X size={21}/></button></div>
         <BrowserConnect key={data.profileId||"none"} profileId={data.profileId||""} disabled={data.readOnly||!data.profileId} onChanged={refresh} autoStart/>
         <details className={styles.assisted}><summary>Agency-assisted connection</summary><SessionConnect disabled={data.readOnly||!data.profileId} onChanged={refresh}/></details>
       </div>}
