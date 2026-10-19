@@ -1,6 +1,6 @@
 # Twin creator sign-in — 20 October 2026
 
-Implemented candidate: dashboard PR #197, paired with native PR #3. The new path is not enabled in production until its private browser service, native API/worker and dashboard configuration are deployed together. Fixture tests do not establish a successful live OnlyFans login.
+Deployed candidate: dashboard PR #197, paired with native PR #3. The private browser, native API/worker and dashboard configuration are now enabled together on the existing Sydney server. See [deployment evidence](./SELF-HOSTED-SIGN-IN-DEPLOYMENT-2026-10-20.md). Fixture tests do not establish a successful live OnlyFans login.
 
 ## Creator experience
 
