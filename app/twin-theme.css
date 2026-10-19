@@ -49,8 +49,8 @@ html[data-brand-theme="twin-light"] [data-workspace-brand="twin"] {
   --workspace-accent-border: #c0e6f6;
 }
 
-html[data-brand-theme="twin-light"] .dashboard-sidebar,
-html[data-brand-theme="twin-light"] .dashboard-sidebar[data-studio-sidebar="true"],
+html[data-brand-theme="twin-light"] .dashboard-sidebar:not([data-workspace-theme="dark"]),
+html[data-brand-theme="twin-light"] .dashboard-sidebar:not([data-workspace-theme="dark"])[data-studio-sidebar="true"],
 html[data-brand-theme="twin-light"] .dashboard-mobile-header {
   background: var(--sidebar);
   border-color: var(--sidebar-border);
@@ -58,63 +58,63 @@ html[data-brand-theme="twin-light"] .dashboard-mobile-header {
   box-shadow: 5px 0 24px rgb(37 123 160 / 0.04);
 }
 
-html[data-brand-theme="twin-light"] .dashboard-sidebar::before {
+html[data-brand-theme="twin-light"] .dashboard-sidebar:not([data-workspace-theme="dark"])::before {
   display: none;
 }
 
-html[data-brand-theme="twin-light"] :is(.dashboard-sidebar, .dashboard-mobile-header) [class*="text-white"],
-html[data-brand-theme="twin-light"] .dashboard-sidebar .studio-wordmark,
-html[data-brand-theme="twin-light"] .dashboard-sidebar .studio-account,
-html[data-brand-theme="twin-light"] .dashboard-sidebar .studio-account > svg {
+html[data-brand-theme="twin-light"] :is(.dashboard-sidebar:not([data-workspace-theme="dark"]), .dashboard-mobile-header) [class*="text-white"],
+html[data-brand-theme="twin-light"] .dashboard-sidebar:not([data-workspace-theme="dark"]) .studio-wordmark,
+html[data-brand-theme="twin-light"] .dashboard-sidebar:not([data-workspace-theme="dark"]) .studio-account,
+html[data-brand-theme="twin-light"] .dashboard-sidebar:not([data-workspace-theme="dark"]) .studio-account > svg {
   color: var(--sidebar-foreground);
 }
 
-html[data-brand-theme="twin-light"] .dashboard-sidebar .studio-wordmark {
+html[data-brand-theme="twin-light"] .dashboard-sidebar:not([data-workspace-theme="dark"]) .studio-wordmark {
   color: var(--color-ink);
 }
 
-html[data-brand-theme="twin-light"] .dashboard-sidebar [class*="border-white"],
-html[data-brand-theme="twin-light"] .dashboard-sidebar .studio-account {
+html[data-brand-theme="twin-light"] .dashboard-sidebar:not([data-workspace-theme="dark"]) [class*="border-white"],
+html[data-brand-theme="twin-light"] .dashboard-sidebar:not([data-workspace-theme="dark"]) .studio-account {
   border-color: var(--sidebar-border);
 }
 
-html[data-brand-theme="twin-light"] .dashboard-sidebar nav :is(a, button),
-html[data-brand-theme="twin-light"] .dashboard-sidebar nav svg {
+html[data-brand-theme="twin-light"] .dashboard-sidebar:not([data-workspace-theme="dark"]) nav :is(a, button),
+html[data-brand-theme="twin-light"] .dashboard-sidebar:not([data-workspace-theme="dark"]) nav svg {
   /* Studio rows include high-specificity legacy colours in their inline
      stylesheet. The selected Twin palette owns navigation text in this scope. */
   color: var(--sidebar-foreground) !important;
 }
 
-html[data-brand-theme="twin-light"] .dashboard-sidebar nav :is(a, button):hover,
+html[data-brand-theme="twin-light"] .dashboard-sidebar:not([data-workspace-theme="dark"]) nav :is(a, button):hover,
 html[data-brand-theme="twin-light"] .dashboard-mobile-header button:hover {
   background-color: var(--sidebar-accent);
   color: var(--sidebar-accent-foreground) !important;
 }
 
-html[data-brand-theme="twin-light"] .dashboard-sidebar nav [aria-current="page"],
-html[data-brand-theme="twin-light"] .dashboard-sidebar nav :is(a, button)[class~="bg-white/12"] {
+html[data-brand-theme="twin-light"] .dashboard-sidebar:not([data-workspace-theme="dark"]) nav [aria-current="page"],
+html[data-brand-theme="twin-light"] .dashboard-sidebar:not([data-workspace-theme="dark"]) nav :is(a, button)[class~="bg-white/12"] {
   background: var(--sidebar-primary);
   color: var(--sidebar-primary-foreground) !important;
   box-shadow: 0 2px 5px rgb(14 107 146 / 0.09);
   --tw-ring-shadow: 0 0 #0000;
 }
 
-html[data-brand-theme="twin-light"] .dashboard-sidebar nav [aria-current="page"] svg,
-html[data-brand-theme="twin-light"] .dashboard-sidebar nav [class~="bg-white/12"] svg {
+html[data-brand-theme="twin-light"] .dashboard-sidebar:not([data-workspace-theme="dark"]) nav [aria-current="page"] svg,
+html[data-brand-theme="twin-light"] .dashboard-sidebar:not([data-workspace-theme="dark"]) nav [class~="bg-white/12"] svg {
   color: inherit !important;
 }
 
-html[data-brand-theme="twin-light"] .dashboard-sidebar .sidebar-create-button {
+html[data-brand-theme="twin-light"] .dashboard-sidebar:not([data-workspace-theme="dark"]) .sidebar-create-button {
   background: var(--twin-action);
   color: #ffffff;
   box-shadow: 0 3px 8px rgb(14 107 146 / 0.1);
 }
 
-html[data-brand-theme="twin-light"] .dashboard-sidebar .sidebar-create-button:hover {
+html[data-brand-theme="twin-light"] .dashboard-sidebar:not([data-workspace-theme="dark"]) .sidebar-create-button:hover {
   background: var(--color-accent-deep);
 }
 
-html[data-brand-theme="twin-light"] .dashboard-sidebar nav :is(a, button):focus-visible,
+html[data-brand-theme="twin-light"] .dashboard-sidebar:not([data-workspace-theme="dark"]) nav :is(a, button):focus-visible,
 html[data-brand-theme="twin-light"] .dashboard-mobile-header button:focus-visible {
   outline: 2px solid var(--sidebar-ring);
   outline-offset: 3px;

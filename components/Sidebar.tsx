@@ -250,15 +250,6 @@ const STUDIO_PATHS: Record<string, string> = {
   "/agency-admin": '<path d="M12 2 3 6v6c0 5 9 10 9 10s9-5 9-10V6z"/><circle cx="12" cy="9" r="2"/><path d="M8 16a4 4 0 0 1 8 0"/>',
   "/jarvis": '<path d="M12 18V5a3 3 0 0 0-5.8-1A4 4 0 0 0 3 10a4 4 0 0 0 1 7 4 4 0 0 0 8 1ZM12 5a3 3 0 0 1 5.8-1A4 4 0 0 1 21 10a4 4 0 0 1-1 7 4 4 0 0 1-8 1M8 8v5M16 8v5M4 11h3M17 11h3"/>',
 };
-const STUDIO_SIDEBAR_THEME = `
-.dashboard-sidebar[data-studio-sidebar="true"]{width:212px;background:radial-gradient(ellipse at 90% 0%,#20334a50,transparent 45%),linear-gradient(165deg,#111f34,#0c1b2e 65%,#102238);border-right:1px solid #ffffff08;box-shadow:5px 0 22px #0a1b2e08;z-index:20}
-.dashboard-sidebar[data-studio-sidebar="true"]::before{display:none}
-.studio-brand-row{display:flex;align-items:center;justify-content:space-between;flex-shrink:0;padding:22px 28px 20px;min-height:108px}
-.studio-wordmark{display:flex;flex-direction:column;gap:3px;color:#fff;line-height:1}.studio-wordmark strong{font-family:var(--font-display),var(--font-sans),sans-serif;font-size:46px;letter-spacing:-.055em;font-weight:740}.studio-wordmark>span{font-size:10px;letter-spacing:.3em;font-weight:450;padding-left:3px}
-.studio-sidebar-nav{padding:0 12px 14px!important;min-height:0}.studio-sidebar-nav [data-admin-navigation]>[data-nav-group]{margin-top:4px}.studio-sidebar-nav [data-nav-group]>div:first-child{gap:0}.studio-sidebar-nav [data-nav-group]>div:first-child>a,.studio-sidebar-nav [data-nav-group]>div:first-child>div>a,.studio-sidebar-nav [data-nav-group]>div:first-child>button:first-child,.studio-sidebar-nav [data-nav-group="More"]>button{min-height:50px;padding:11px 12px;border-radius:11px;font-size:12px;font-weight:450;gap:12px;color:#e6ebf5;line-height:20px}
-.studio-sidebar-nav svg{color:currentColor!important;stroke-width:1.65;width:20px;height:20px}.studio-sidebar-nav [data-nav-group]>div:first-child>button[aria-controls]{width:25px;color:#acb9cd}.studio-sidebar-nav [data-nav-group]>div:first-child>button[aria-controls]>svg{width:13px;height:13px}.studio-sidebar-nav [data-nav-group]>div:first-child>button:first-child[aria-controls]{width:100%}.studio-sidebar-nav [data-nav-group]>div:first-child>button:first-child[aria-controls]>svg:first-child{width:20px;height:20px}.studio-sidebar-nav [data-admin-navigation] a[aria-current="page"]{color:#fff;background:linear-gradient(145deg,#2682ff,#0962ee);box-shadow:inset 0 1px #ffffff24,0 5px 16px #0068ff30;--tw-ring-shadow:0 0 #0000}.studio-sidebar-nav [data-nav-group="Live Telegram"],.studio-sidebar-nav [data-nav-group="Automations"],.studio-sidebar-nav [data-nav-group="Agency Access"]{margin-top:17px!important}.studio-sidebar-nav [data-nav-group="More"]{border-top:0;padding-top:0;margin-top:4px!important}.studio-sidebar-nav [data-nav-group]>div[hidden]{display:none}.studio-sidebar-nav a:hover,.studio-sidebar-nav button:hover{color:#fff;background-color:#ffffff0b}.studio-account{flex-shrink:0;margin:0 16px 34px;padding:27px 3px 0;border-top:1px solid #ffffff22;display:flex;align-items:center;gap:10px;color:#eef3fa;font-size:11px}.studio-account>img{width:46px;height:46px;object-fit:cover;display:block;border-radius:50%;border:2px solid #ffffffbf}.studio-account>span{flex:1}.studio-account small{display:none}.studio-account>svg{color:#a7b8ce}
-@media(max-height:770px){.studio-brand-row{min-height:88px;padding-top:17px;padding-bottom:14px}.studio-wordmark strong{font-size:39px}.studio-sidebar-nav [data-nav-group]>div:first-child>div>a,.studio-sidebar-nav [data-nav-group]>div:first-child>button:first-child,.studio-sidebar-nav [data-nav-group="More"]>button{min-height:38px;padding-top:8px;padding-bottom:8px}.studio-sidebar-nav [data-nav-group="Live Telegram"],.studio-sidebar-nav [data-nav-group="Automations"],.studio-sidebar-nav [data-nav-group="Agency Access"]{margin-top:10px!important}}
-`;
 /**
  * A channel's own navigation, in the sidebar's existing row style.
  *
@@ -274,11 +265,10 @@ const STUDIO_SIDEBAR_THEME = `
  */
 function ChannelNav({ channel, onNavigate }: { channel: ChannelDefinition; onNavigate?: () => void }) {
   const pathname = usePathname();
-  const rowClass = "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold transition";
+  const rowClass = "workspace-nav-row flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold transition";
   return (
     <>
-      <h2 className="mb-1 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">{channel.channel === "onlyfans" ? "YOUR WORKSPACE" : channel.label}</h2>
-      {channel.channel !== "onlyfans" ? <p className="mb-2 px-3 text-[11px] leading-4 text-white/50">{channel.summary}</p> : null}
+      <h2 className="mb-1 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">Your workspace</h2>
       <div className="space-y-1" data-channel-nav={channel.channel}>
         {channel.nav.map((item) => {
           const icon = PATHS[item.icon] ?? PATHS.Dials;
@@ -304,9 +294,6 @@ function ChannelNav({ channel, onNavigate }: { channel: ChannelDefinition; onNav
             >
               <Icon d={icon} className={"h-[18px] w-[18px] " + (active ? "text-white" : "text-[#9cbad3]")} />
               <span className="flex-1">{item.label}</span>
-              {item.availability === "existing" ? (
-                <span className="whitespace-nowrap rounded border border-white/15 px-1.5 py-0.5 text-[9px] font-medium text-white/60">Existing</span>
-              ) : null}
             </Link>
           );
         })}
@@ -436,7 +423,7 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
   const [moreOpen, setMoreOpen] = useState(false);
   const [fullNavigation, setFullNavigation] = useState(false);
   const studioRoute = isDashboardWorkspaceRoute(pathname);
-  const studioNavigation = (isAdmin && studioRoute && !fullNavigation) || channel.channel === "onlyfans";
+  const studioNavigation = isAdmin;
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({});
   useEffect(() => {
     if (!isAdmin) return;
@@ -474,7 +461,7 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
     const colors = moxyNavigation
       ? { icon: "text-current", active: "moxy-sidebar-row--active", idle: "moxy-sidebar-row--idle" }
       : LINK_COLOR_CLASSES[link.color];
-    const rowClass = moxyNavigation ? "moxy-sidebar-row" : "flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold transition";
+    const rowClass = moxyNavigation ? "moxy-sidebar-row" : "workspace-nav-row flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold transition";
     if (isAgency && link.kind === "route" && !agencyDashboardPath(link.href, agencyName, canManage)) return null;
     if (link.kind === "tab") {
       if (isPreview && link.tab !== "identity") return null;
@@ -501,14 +488,14 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
       const toggle = () => setOpenGroups(current => ({ ...current, [group.label]: !expanded }));
       return <div key={group.label} data-nav-group={group.label}>
         <div className="flex items-center gap-1">
-          {group.href ? <div className="min-w-0 flex-1">{renderLink(presentationLink(group.href))}</div> : <button type="button" onClick={toggle} aria-expanded={expanded} aria-controls={id} className={"flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold transition " + (selected ? LINK_COLOR_CLASSES.neutral.active : LINK_COLOR_CLASSES.neutral.idle)}><Icon d={studioNavigation ? STUDIO_PATHS[group.label] || PATHS[group.icon] : PATHS[group.icon]} className="h-[18px] w-[18px] text-[#9cbad3]"/><span className="flex-1">{group.label}</span>{chevron(expanded)}</button>}
+          {group.href ? <div className="min-w-0 flex-1">{renderLink(presentationLink(group.href))}</div> : <button type="button" onClick={toggle} aria-expanded={expanded} aria-controls={id} className={"workspace-nav-row flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold transition " + (selected ? LINK_COLOR_CLASSES.neutral.active : LINK_COLOR_CLASSES.neutral.idle)}><Icon d={studioNavigation ? STUDIO_PATHS[group.label] || PATHS[group.icon] : PATHS[group.icon]} className="h-[18px] w-[18px] text-[#9cbad3]"/><span className="flex-1">{group.label}</span>{chevron(expanded)}</button>}
           {group.href && group.children ? <button type="button" onClick={toggle} aria-label={`${expanded ? "Collapse" : "Expand"} ${group.label}`} aria-expanded={expanded} aria-controls={id} className="flex h-9 w-8 shrink-0 items-center justify-center rounded-lg text-white/60 transition hover:bg-white/10 hover:text-white">{chevron(expanded)}</button> : null}
         </div>
         {group.children ? <div id={id} hidden={!expanded} className="ml-5 mt-1 space-y-1 border-l border-white/14 pl-2 [&_a]:text-xs [&_button]:text-xs">{group.children.map(key => <div key={key}>{renderLink(presentationLink(key))}</div>)}</div> : null}
       </div>;
     })}
     <div className="mt-3 border-t border-white/14 pt-2" data-nav-group="More">
-      <button type="button" onClick={() => setMoreOpen(open => !open)} aria-expanded={moreOpen} aria-controls={headerAction ? "admin-more-mobile" : "admin-more-desktop"} className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold text-white/62 transition hover:bg-white/10 hover:text-white"><Icon d={PATHS.More} className="h-[18px] w-[18px] text-white/50"/><span className="flex-1">More</span>{chevron(moreOpen)}</button>
+      <button type="button" onClick={() => setMoreOpen(open => !open)} aria-expanded={moreOpen} aria-controls={headerAction ? "admin-more-mobile" : "admin-more-desktop"} className="workspace-nav-row flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold text-white/62 transition hover:bg-white/10 hover:text-white"><Icon d={PATHS.More} className="h-[18px] w-[18px] text-white/50"/><span className="flex-1">More</span>{chevron(moreOpen)}</button>
       <div id={headerAction ? "admin-more-mobile" : "admin-more-desktop"} hidden={!moreOpen} className="ml-5 mt-1 space-y-1 border-l border-white/14 pl-2 [&_a]:text-xs">
         {TWIN_ADMIN_MORE.map(key => <div key={key}>{renderLink(presentationLink(key))}</div>)}
         <button type="button" onClick={() => setNavigationLayout(true)} className="mt-2 w-full border-t border-white/14 px-3 py-3 text-left text-xs text-white/60 hover:text-white">Show full navigation</button>
@@ -544,19 +531,18 @@ export function SidebarContent({ activeCloneId, onNavigate, headerAction, showAs
   </>;
 
   return <>
-    {isAdmin && studioRoute && <style dangerouslySetInnerHTML={{__html:STUDIO_SIDEBAR_THEME}} />}
     {isTether ? <style dangerouslySetInnerHTML={{__html:TETHER_SIDEBAR_THEME}} /> : null}
     <div className={studioNavigation ? "studio-brand-row" : "flex h-20 shrink-0 items-center justify-between border-b border-white/14 px-5"}><Link href={isCreator ? "/creator" : isAdmin && !fullNavigation ? "/dashboard" : "/revenue"} className="min-w-0" aria-label={agencyName || "Twin Technologies"} onClick={onNavigate}><TwinWordmark inverse studio={studioNavigation} agencyName={agencyName === "Twin" ? undefined : agencyName} /></Link>{headerAction}</div>
-    {channelSwitch ? <div className="shrink-0 px-4 pt-3">{channelSwitch}</div> : null}
+    {channelSwitch ? <div className="workspace-channel-selector shrink-0 px-4 pt-3">{channelSwitch}</div> : null}
     {usesBrandedCore ? <div className="shrink-0 px-4 pb-2 pt-4" data-creator-core={isCreator ? "hero" : undefined}><div className="flex items-center gap-3 rounded-xl border border-sky-400/20 bg-sky-400/[0.05] px-3 py-3"><IntelligenceCoreIcon size={64} /><div className="min-w-0 flex-1"><span className="block text-sm font-semibold leading-5 text-[#38bdf8]">AI Intelligence Core</span></div></div></div> : isAgency ? <div className="px-7 py-4 text-sm text-white/75">{agencyName} · {readOnly ? "Read only" : isMoxy(agencyName) && canManage ? "Owner" : "Creator management"}</div> : isAdmin && !fullNavigation ? null : <div className="shrink-0 px-4 pb-3 pt-4"><Link href="/clones/new" onClick={onNavigate} className="sidebar-create-button flex items-center justify-center gap-2 rounded-xl px-4 py-2.5 text-sm font-semibold transition"><Icon d={PATHS.Plus} className="h-4 w-4" />Create new creator</Link></div>}
-    <nav aria-label={isCreator ? "Creator navigation" : "Main navigation"} className={(studioNavigation ? "studio-sidebar-nav " : "") + "flex flex-1 flex-col overflow-y-auto px-4 py-2"}>{channelScoped ? <ChannelNav channel={channel} onNavigate={onNavigate} /> : isAdmin && !fullNavigation ? adminNavigation : <div className="space-y-1">{primaryLinks.filter(availableLink).map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}{isCreator || isPreview ? null : isAdmin ? <div className="mt-3 space-y-1 border-t border-white/14 pt-2">{TWIN_ADMIN_REMAINDER.map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}</div> : moxyNavigation ? null : expandedMoxyNavigation ? <div className="mt-3 space-y-1 border-t border-white/14 pt-2">{MORE_LINKS.filter(link => link.kind !== "route" || !["/jarvis", "/agency-admin", "/agency-admin/creator-codes"].includes(link.href)).filter(link => link.kind !== "tab" || link.tab !== "identity").filter(availableLink).map(link => <div key={linkKey(link)}>{renderLink(link)}</div>)}</div> : usesBrandedCore ? <div className="mt-3 border-t border-white/14 pt-3"><h2 className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">More</h2><div className="space-y-1">{MORE_LINKS.filter(link => link.kind === "tab" || agencyDashboardPath(link.href, agencyName, canManage)).map(link => <div key={linkKey(link)}>{renderLink(link)}</div>)}</div></div> : <div className="mt-3 border-t border-white/14 pt-2"><button type="button" onClick={() => setMoreOpen((open) => !open)} aria-expanded={moreOpen} className="flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold text-white/62 transition hover:bg-white/10 hover:text-white"><Icon d={PATHS.More} className="h-[18px] w-[18px] text-white/50" /><span className="flex-1">More</span><svg className={(moreOpen ? "rotate-180 " : "") + "h-4 w-4 transition-transform"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg></button>{moreOpen ? <div className="mt-1 space-y-1">{MORE_LINKS.filter(link => !isAgency || link.kind === "tab" || agencyDashboardPath(link.href, agencyName, canManage)).map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}</div> : null}</div>}</div>}{!channelScoped && isAdmin && fullNavigation ? <button type="button" onClick={() => setNavigationLayout(false)} className="mt-3 border-t border-white/14 px-3 py-3 text-left text-xs text-white/60 hover:text-white">Use grouped navigation</button> : null}{showAssistant && !isAgency && !isCreator && !studioRoute ? <div className="mt-auto pt-4 [@media(max-height:850px)]:pt-2"><TwinAssistant /></div> : null}</nav>
+    <nav aria-label={isCreator ? "Creator navigation" : "Main navigation"} className={(studioNavigation ? "studio-sidebar-nav " : "") + "flex flex-1 flex-col overflow-y-auto px-4 py-2"}>{isAdmin && !channelScoped ? <h2 className="workspace-nav-heading">Your workspace</h2> : null}{channelScoped ? <ChannelNav channel={channel} onNavigate={onNavigate} /> : isAdmin && !fullNavigation ? adminNavigation : <div className="space-y-1">{primaryLinks.filter(availableLink).map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}{isCreator || isPreview ? null : isAdmin ? <div className="mt-3 space-y-1 border-t border-white/14 pt-2">{TWIN_ADMIN_REMAINDER.map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}</div> : moxyNavigation ? null : expandedMoxyNavigation ? <div className="mt-3 space-y-1 border-t border-white/14 pt-2">{MORE_LINKS.filter(link => link.kind !== "route" || !["/jarvis", "/agency-admin", "/agency-admin/creator-codes"].includes(link.href)).filter(link => link.kind !== "tab" || link.tab !== "identity").filter(availableLink).map(link => <div key={linkKey(link)}>{renderLink(link)}</div>)}</div> : usesBrandedCore ? <div className="mt-3 border-t border-white/14 pt-3"><h2 className="mb-2 px-3 text-[10px] font-bold uppercase tracking-[0.16em] text-white/45">More</h2><div className="space-y-1">{MORE_LINKS.filter(link => link.kind === "tab" || agencyDashboardPath(link.href, agencyName, canManage)).map(link => <div key={linkKey(link)}>{renderLink(link)}</div>)}</div></div> : <div className="mt-3 border-t border-white/14 pt-2"><button type="button" onClick={() => setMoreOpen((open) => !open)} aria-expanded={moreOpen} className="workspace-nav-row flex w-full items-center gap-3 rounded-lg px-3 py-2 text-left text-sm font-semibold text-white/62 transition hover:bg-white/10 hover:text-white"><Icon d={PATHS.More} className="h-[18px] w-[18px] text-white/50" /><span className="flex-1">More</span><svg className={(moreOpen ? "rotate-180 " : "") + "h-4 w-4 transition-transform"} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="m6 9 6 6 6-6" /></svg></button>{moreOpen ? <div className="mt-1 space-y-1">{MORE_LINKS.filter(link => !isAgency || link.kind === "tab" || agencyDashboardPath(link.href, agencyName, canManage)).map((link) => <div key={linkKey(link)}>{renderLink(link)}</div>)}</div> : null}</div>}</div>}{!channelScoped && isAdmin && fullNavigation ? <button type="button" onClick={() => setNavigationLayout(false)} className="mt-3 border-t border-white/14 px-3 py-3 text-left text-xs text-white/60 hover:text-white">Use grouped navigation</button> : null}{showAssistant && !isAgency && !isCreator && !studioRoute ? <div className="mt-auto pt-4 [@media(max-height:850px)]:pt-2"><TwinAssistant /></div> : null}</nav>
     {studioNavigation && <Link href="/settings" onClick={onNavigate} className="studio-account"><Icon d={PATHS.Settings} className="h-8 w-8" /><span>Settings<small>Workspace settings</small></span><Icon d='<path d="m9 5 7 7-7 7"/>' className="h-4 w-4" /></Link>}
   </>;
 }
 
 export default function Sidebar({ clones: _clones, activeCloneId, channels }: { clones: CloneLite[]; activeCloneId: string | null; channels?: DashboardChannel[] }) {
   const pathname = usePathname();
-  const { isCreator } = useDashboardAccess();
-  const studio = !isCreator && isDashboardWorkspaceRoute(pathname);
-  return <aside data-studio-sidebar={studio || undefined} className="dashboard-sidebar sticky top-0 hidden h-screen w-72 shrink-0 flex-col lg:flex"><SidebarContent activeCloneId={activeCloneId} channelSwitch={<ChannelSwitch channels={channels} className="flex-wrap" />} /></aside>;
+  const { isCreator, audience } = useDashboardAccess();
+  const studio = audience === "admin" || !isCreator && isDashboardWorkspaceRoute(pathname);
+  return <aside data-workspace-theme={audience === "admin" ? "dark" : undefined} data-studio-sidebar={studio || undefined} className="dashboard-sidebar sticky top-0 hidden h-screen w-72 shrink-0 flex-col lg:flex"><SidebarContent activeCloneId={activeCloneId} channelSwitch={<ChannelSwitch channels={channels} className="flex-wrap" />} /></aside>;
 }

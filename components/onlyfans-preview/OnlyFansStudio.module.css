@@ -1,114 +1,16 @@
 /* Extend the current creator homepage; keep its original components intact. */
 .platform {
-  composes: root from "../CreatorStudio.module.css";
   display: flex;
   height: 100dvh;
   min-height: 0;
   overflow: hidden;
 }
-.drawer {
-  composes: root from "../CreatorStudio.module.css";
-  display: flex;
-  flex-direction: column;
-  min-height: 0;
-  color: #f4edf3;
-  background: var(--studio-dark);
-}
-.platform.platform[data-creator-platform], .drawer.drawer[data-creator-platform] {
-  --color-bg: var(--studio-bg);
-  --color-panel: #fff;
-  --color-elev: #f2f2f2;
-  --color-ink: var(--studio-ink);
-  --color-muted: var(--studio-muted);
-  --color-line: var(--studio-line);
-  --color-accent: var(--studio-accent);
-  --color-accent-2: var(--studio-accent);
-  --color-accent-deep: var(--studio-accent-deep);
-  --color-accent-tint: var(--studio-tint);
-  --background: var(--studio-bg);
-  --foreground: var(--studio-ink);
-  --card: #fff;
-  --card-foreground: var(--studio-ink);
-  --primary: var(--studio-accent);
-  --primary-foreground: var(--studio-button-ink, #fff);
-  --muted-foreground: var(--studio-muted);
-  --border: var(--studio-line);
-  --input: var(--studio-line);
-  --ring: var(--studio-accent);
-  --shadow-card: 0 7px 30px #30213203;
-  font-family: var(--font-sans), sans-serif;
-}
-.platform[data-creator-studio="twin"], .drawer[data-creator-studio="twin"] {
-  --studio-bg: #f6f6f6;
-  --studio-ink: #181818;
-  --studio-muted: #686868;
-  --studio-line: #e4e4e4;
-  --studio-dark: #080808;
-  --studio-accent: #4fa7d9;
-  --studio-accent-deep: #3b93c3;
-  --studio-tint: #eaf6fc;
-  --studio-button-ink: #12364a;
-}
-.platform.platform :global(.dashboard-sidebar) {
-  width: 236px;
-  background: var(--studio-dark) !important;
-  border-right: 0;
-  box-shadow: none;
-  color: #f4edf3;
-}
-.platform.platform :global(.dashboard-sidebar)::before { display: none; }
-.platform.platform :global(.dashboard-main) {
-  width: 100%; max-width: none; padding: 40px 40px 28px;
-  background: var(--studio-bg); scrollbar-gutter: stable;
-}
+.platform :global(a) { text-decoration: none; }
+.platform :global(button), .platform :global(select) { font: inherit; }
+.platform :global(:is(h1, h2, h3, p)) { margin: 0; }
 .platform :global(.dashboard-page) { max-width: 1270px; margin-inline: auto; padding-top: 0; }
 .platform :global(.dashboard-main)::before, .platform :global(.dashboard-main)::after,
 .platform :global(.dashboard-page)::before { display: none; }
-.platform.platform :global(.dashboard-topbar) {
-  height: auto; min-height: 82px; display: flex; justify-content: space-between;
-  gap: 18px; padding: 16px 40px; background: #ffffffb8;
-  border-bottom: 1px solid var(--studio-line); box-shadow: none;
-}
-.platform :global(.workspace-account-controls) {
-  border: 0; background: transparent; box-shadow: none; padding: 0; border-radius: 0;
-}
-.platform :global(.dashboard-topbar) > :last-child { display: none; }
-.platform :global(.dashboard-topbar h1) { font-size: 12px; font-weight: 500; letter-spacing: 0; }
-.platform :global(.studio-brand-row), .drawer :global(.studio-brand-row) {
-  min-height: 108px; padding: 30px 30px 24px;
-}
-.platform :global(.studio-wordmark), .drawer :global(.studio-wordmark) { color: #fff !important; }
-.platform :global(.studio-wordmark strong), .drawer :global(.studio-wordmark strong) {
-  font-size: 36px; font-weight: 600; letter-spacing: -.055em;
-}
-.platform :global(.studio-wordmark > span), .drawer :global(.studio-wordmark > span) { font-size: 9px; letter-spacing: .25em; }
-.platform :global(.dashboard-sidebar nav), .drawer :global(nav) { padding: 0 20px 22px; }
-.platform :global(.dashboard-sidebar nav > h2), .drawer :global(nav > h2) {
-  margin: 22px 0 14px; color: #ac9ca6; font-size: 10px; letter-spacing: 1.7px; font-weight: 600;
-}
-.platform.platform[data-creator-platform] :global(.dashboard-sidebar nav [data-channel-link]),
-.drawer.drawer[data-creator-platform] :global(nav [data-channel-link]) {
-  min-height: 46px; margin: 6px 0; padding: 12px 14px; border-radius: 10px;
-  font-size: 13px; font-weight: 500; color: #cfc1cb !important; gap: 12px;
-  box-shadow: none; background: transparent;
-}
-.platform.platform[data-creator-platform] :global(.dashboard-sidebar nav [data-channel-link] svg),
-.drawer.drawer[data-creator-platform] :global(nav [data-channel-link] svg) {
-  width: 19px; height: 19px; stroke-width: 1.7; color: inherit !important;
-}
-.platform.platform[data-creator-platform] :global(.dashboard-sidebar nav [data-channel-link]:hover),
-.drawer.drawer[data-creator-platform] :global(nav [data-channel-link]:hover) { background: #ffffff0b; color: #fff !important; }
-.platform.platform[data-creator-platform] :global(.dashboard-sidebar nav [aria-current="page"]),
-.drawer.drawer[data-creator-platform] :global(nav [aria-current="page"]) {
-  background: var(--studio-accent); color: var(--studio-button-ink, #fff) !important;
-  box-shadow: none; --tw-ring-shadow: 0 0 #0000;
-}
-.platform :global(.studio-account), .drawer :global(.studio-account) {
-  margin: 0 30px 24px; padding-top: 20px; color: #cfc1cb !important;
-  border-color: #ffffff12 !important;
-}
-.platform :global(.dashboard-sidebar [class*="text-white"]), .drawer :global([class*="text-white"]) { color: #cfc1cb; }
-.platform :global(.dashboard-sidebar [data-channel-switch]) { margin: 0; }
 .platform :global(.dashboard-page > h1), .platform :global(.dashboard-page > div:first-child h1) {
   font-family: inherit; font-size: clamp(28px, 2.6vw, 36px); font-weight: 550;
   letter-spacing: -1.25px; line-height: 1.2;
@@ -132,8 +34,7 @@
   background: var(--studio-accent); border: 1px solid var(--studio-accent); color: var(--studio-button-ink, #fff);
 }
 .platform :global(button[type="submit"]:disabled) { cursor: not-allowed; opacity: .5; }
-.platform :global(:is(a, button, input, textarea, select, summary):focus-visible),
-.drawer :global(:is(a, button):focus-visible) { outline: 3px solid var(--studio-accent); outline-offset: 3px; }
+.platform :global(:is(a, button, input, textarea, select, summary):focus-visible) { outline: 3px solid var(--studio-accent); outline-offset: 3px; }
 .platform :global(details) { min-width: 0; }
 .platform :global(summary) { cursor: pointer; min-height: 40px; align-content: center; font-size: 12px; color: var(--studio-muted); }
 .platform :global([data-of-native-freshness]) { background: #fff; border-radius: 14px; padding: 18px 22px; }
@@ -150,7 +51,6 @@
 .platform :global([data-of-vault-grid] [data-of-vault-image]) { width: 100%; padding: 0; margin: 0; border: 0; border-radius: 0; }
 .platform :global([data-of-vault-grid] [data-of-vault-image] > *) { aspect-ratio: 4 / 3; }
 .platform :global([data-of-vault-grid] [data-of-vault-image] img) { width: 100%; height: 100%; object-fit: cover; }
-.platform :global(.dashboard-mobile-header) { background: var(--studio-dark) !important; color: #fff; }
 .platform.platform :global(.users-workspace) { max-width: none; padding: 0; height: auto; }
 .platform :global([data-of-inbox-layout]) { min-height: 560px; height: calc(100dvh - 260px); grid-template-columns: minmax(230px, .9fr) minmax(310px, 1.4fr) minmax(245px, 1fr); }
 .platform :global([data-of-thread]) { background: var(--studio-bg); }
@@ -165,22 +65,17 @@
 .platform :global(p.mt-3) { margin-top: 12px; }
 .platform :global(p.mt-4) { margin-top: 16px; }
 @media (max-width: 1200px) {
-  .platform.platform :global(.dashboard-main) { padding: 28px; }
   .platform :global([data-of-inbox-layout]) { height: auto; grid-template-columns: minmax(210px, 1fr) minmax(280px, 1.3fr); }
   .platform :global(.users-panel-list), .platform :global(.users-panel-chat) { height: 36rem; }
   .platform :global(.users-panel-profile) { grid-column: 1 / -1; height: auto; }
 }
 @media (max-width: 1023px) {
-  .platform.platform :global(.dashboard-main) { padding: 26px 22px 48px; }
-  .platform.platform :global(.dashboard-topbar) { padding: 14px 22px; min-height: 68px; flex-wrap: wrap; }
   .platform :global([data-of-inbox-layout]) { display: grid; grid-template-columns: 1fr; height: auto; min-height: 0; }
   .platform :global(.users-panel-profile) { grid-column: auto; }
   .platform :global(.users-panel-list) { height: 28rem; }
   .platform :global(.users-panel-chat) { height: 38rem; }
 }
 @media (max-width: 600px) {
-  .platform.platform :global(.dashboard-main) { padding: 24px 16px 40px; }
-  .platform.platform :global(.dashboard-topbar) { min-height: 64px; padding: 12px 16px; justify-content: flex-start; }
   .platform :global(.workspace-account-controls) { max-width: 100%; flex-wrap: wrap; }
   .platform :global([data-slot="card"].p-4) { padding: 20px; }
   .platform :global([data-of-native-freshness]) { padding: 16px; }

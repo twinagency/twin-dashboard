@@ -9,7 +9,7 @@ import BlurToggle from "@/components/BlurToggle";
 import SignOutButton from "@/components/SignOutButton";
 import { fmtMoney, starsToMoneyRate } from "@/lib/money";
 import { getPageMeta } from "@/lib/page-meta";
-import { isCreatorStudioRoute, isDashboardWorkspaceRoute, dashboardWorkspacePageLabel } from "@/lib/dashboard-creator-route";
+import { isDashboardWorkspaceRoute, dashboardWorkspacePageLabel } from "@/lib/dashboard-creator-route";
 import { CREATOR_DASHBOARD_NAV } from "@/lib/creator-dashboard-policy";
 import ChannelSwitch from "@/components/ChannelSwitch";
 import type { DashboardChannel } from "@/lib/channel-nav";
@@ -67,7 +67,7 @@ export default function TopBar({
    */
   signOutAction?: (formData: FormData) => void | Promise<void>;
 }) {
-  const {isAgency,isCreator,agencyName}=useDashboardAccess();
+  const {isAgency,isCreator,agencyName,audience}=useDashboardAccess();
   const { currency, rate, usdPerStar } = useCurrency();
   const pathname = usePathname();
   const searchParams = useSearchParams();
@@ -79,7 +79,6 @@ export default function TopBar({
     : pathname?.startsWith("/clones/") && searchParams.get("tab") === "ppvs" ? "PPVs" : workspaceLabel ?? pageMeta.pageLabel;
   const scopeLabel = isCreator ? creatorName || clones.find((clone) => clone.id === activeCloneId)?.name || "Creator" : pageMeta.scopeLabel;
   const scopeIsCreator = isCreator || pageMeta.scopeIsCreator;
-  if (!isAgency && !isCreator && (pathname === "/dashboard" || isCreatorStudioRoute(pathname))) return null;
   if (isAgency && agencyName?.trim().toLowerCase() === "moxy" && pathname === "/revenue") {
     return <div className="dashboard-topbar moxy-overview-topbar">
       <div className="moxy-overview-breadcrumb"><span>Moxy</span> / Earnings</div>
@@ -115,7 +114,7 @@ export default function TopBar({
           centre control pill stays dead-centre. Below sm this column is
           display:none; the mobile drawer carries the same switch. */}
       <div className="hidden min-w-0 flex-col items-start gap-1.5 sm:flex">
-        <ChannelSwitch channels={channels} />
+        {audience !== "admin" ? <ChannelSwitch channels={channels} /> : null}
         <h1 className="min-w-0 truncate font-heading text-sm font-semibold tracking-[-0.02em] text-ink">
           <span className={scopeIsCreator ? "creator-name" : undefined}>{workspaceLabel && /twin/i.test(scopeLabel) ? "Workspace" : scopeLabel}</span>
           {pageLabel != null && <span className="text-muted"> / {pageLabel}</span>}
@@ -167,6 +166,3 @@ export default function TopBar({
     </div>
   );
 }
-
-
-

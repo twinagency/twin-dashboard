@@ -6,9 +6,6 @@ import { useRouter } from "next/navigation";
 import { useState, useTransition } from "react";
 import { ArrowRight, Coins, MessageCircle, Plus, UserRound, Users } from "lucide-react";
 import { setCloneScope } from "@/app/actions/clone-scope";
-import CloneSwitcher from "@/components/CloneSwitcher";
-import CurrencyToggle from "@/components/CurrencyToggle";
-import BlurToggle from "@/components/BlurToggle";
 import FanAvatar from "@/components/FanAvatar";
 import RankingPanel from "@/components/overview-rankings/RankingPanel";
 import type { DashboardData } from "@/lib/dashboard-data";
@@ -73,15 +70,11 @@ export function LiveOverviewHero({ clones, cloneId, windowLabel }: {
 }) {
   const creator = clones.find(c => c.id === cloneId);
   return <>
-    <header className={styles.toolbar}>
-      <div className={styles.selector}><CloneSwitcher clones={clones} activeCloneId={cloneId ?? null} /></div>
-      <div className={styles.tools}><span className={styles.source}><i />Live Telegram data</span><CurrencyToggle /><BlurToggle /></div>
-    </header>
     <section className={`${styles.hero} ${creator ? styles.creatorHero : ""}`} aria-label="Dashboard overview">
       <div className={styles.heroCopy}>
         <p>{creator ? "CREATOR OVERVIEW" : "DASHBOARD OVERVIEW"}</p>
         <h1 className={creator ? "creator-name" : ""}>{creator?.name ?? "Your creators, at a glance."}</h1>
-        <span>{windowLabel} · Earnings, fans and activity in one place.</span>
+        <span>{windowLabel} · Live Telegram earnings, fans and activity.</span>
         <div className={styles.heroLinks}><Link href={creator ? `/clones/${creator.id}?tab=identity` : "/clones"}>{creator ? "View creator" : "View creators"}<ArrowRight size={16} /></Link><Link className={styles.secondaryLink} href="/users">Live Telegram Chat<MessageCircle size={16} /></Link></div>
       </div>
       {creator ? <div className={styles.heroPortrait}><CreatorPhoto key={creator.id} creator={creator} /></div> : <CreatorShortcuts clones={clones} />}

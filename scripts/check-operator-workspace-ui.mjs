@@ -27,7 +27,9 @@ import CloneForm from "./components/CloneForm";
 import {Card,CardHeader,CardTitle,CardContent} from "./components/ui/card";
 const params=new URLSearchParams(location.search),brand=params.get("brand")||"Twin";
 const agencyName=brand==="Twin"?undefined:brand,canManage=params.get("readonly")!=="true";
+if(brand==="Twin")document.documentElement.dataset.brandTheme="twin-light";
 if(brand==="Moxy")document.documentElement.dataset.agency="moxy";
+const channels=brand==="Twin"?["all","telegram","onlyfans"]:["all"];
 if(brand==="Jess and Kate AI")document.documentElement.dataset.brandTheme="ivory-cherry";
 const clone={id:"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",name:"Fixture Creator",stage_name:"Fixture Creator",slug:"fixture-creator",
 status:params.has("paused")?"paused":"active",updated_at:"2026-10-11T00:00:00Z",uses_default_config:false,
@@ -36,11 +38,11 @@ credit_pack_price_stars:299,paywall_prime_enabled:true,paywall_prime_before:3,in
 photos_enabled:true,videos_enabled:true,bundles_enabled:true,voice_enabled:false};
 const clones=[{id:clone.id,name:params.get("longname")==="true"?"Fixture Creator With A Very Long Display Name":clone.name,color:"#768296"}];
 function App(){const pathname=usePathname();return <Access agencyName={agencyName} canManage={canManage}><Currency usdPerStar={.02}><Blur>
-<Workspace activeCloneId={clone.id}><Sidebar clones={clones} activeCloneId={clone.id}/><div className="flex h-screen min-w-0 flex-1 flex-col overflow-hidden">
+<Workspace activeCloneId={clone.id}><Sidebar clones={clones} activeCloneId={clone.id} channels={channels}/><div className="flex h-screen min-w-0 flex-1 flex-col overflow-hidden">
 <header className="dashboard-mobile-header flex shrink-0 items-center justify-between border-b border-white/12 px-4 py-3 lg:hidden">
 <a href="/revenue" aria-label={brand}><Wordmark inverse agencyName={agencyName}/></a><div className="flex items-center gap-1">
-<span className="px-3 py-2 text-sm text-white/80">Sign out</span><MobileMenu activeCloneId={clone.id}/></div></header>
-<TopBar clones={clones} activeCloneId={clone.id} allTimeStars={0}/><Main activeCloneId={clone.id}>
+<span className="px-3 py-2 text-sm text-white/80">Sign out</span><MobileMenu activeCloneId={clone.id} channels={channels}/></div></header>
+<TopBar clones={clones} activeCloneId={clone.id} allTimeStars={0} channels={channels}/><Main activeCloneId={clone.id}>
 <p className="mb-3 text-[10px] text-muted">Interface verification · synthetic test data</p>
 {pathname.startsWith("/clones/")?<CloneForm clone={clone} promptPreview={{mode:"classic",blocks:[]}} photos={[]} videos={[]} bundles={[]} catalogueBundles={[]} appearanceColor="#768296"/>:
 <div className="dashboard-page"><h1>{pathname==="/flows"?"Flows":pathname==="/logs"?"Activity Logs":"Creators"}</h1>
@@ -74,7 +76,7 @@ args.path.includes("FlowGraph")?'import React from "react";export default functi
 }}]});
 const js=bundle.outputFiles.find(f=>f.path.endsWith(".js")).text;
 const moduleCSS=bundle.outputFiles.filter(f=>f.path.endsWith(".css")).map(f=>f.text).join("\n");
-const css=await postcss([tailwind()]).process('@import "./app/globals.css";\n@import "./app/jess-kate-theme.css";\n@import "./app/studio-workspace.css";',{from:path.join(root,"operator-ui.css")});
+const css=await postcss([tailwind()]).process('@import "./app/globals.css";\n@import "./app/jess-kate-theme.css";\n@import "./app/creator-workspace.css";\n@import "./app/studio-workspace.css";\n@import "./app/twin-theme.css";',{from:path.join(root,"operator-ui.css")});
 const html='<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/styles.css"><style>html{--font-sans:Arial,sans-serif;--font-display:Arial,sans-serif;--font-heading:Arial,sans-serif}body{margin:0}</style></head><body><div id="root"></div><script src="/bundle.js"></script></body></html>';
 const requests=[];
 const server=createServer((req,res)=>{
@@ -103,6 +105,49 @@ try{
 if(process.argv.includes("--build-only"))console.log("PASS: shared operator components and styles compile.");
 else{
 browser=await chromium.launch({headless:true,executablePath:process.env.CHROMIUM_PATH || undefined});
+// Exercise the real shared chrome across client-side channel switches, with
+// the production Twin theme loaded. Geometry changes here are the reported bug.
+for (const width of [390, 900, 1440]) {
+  const context = await browser.newContext({viewport:{width,height:900},reducedMotion:"reduce"});
+  const page = await context.newPage(), errors=[];
+  page.on("pageerror",e=>errors.push(String(e)));
+  await context.route("**/*", route=>new URL(route.request().url()).origin===origin?route.continue():route.abort());
+  await page.goto(`${origin}/dashboard?brand=Twin`,{waitUntil:"networkidle"});
+  await page.addStyleTag({content:"*,*::before,*::after{transition:none!important;animation:none!important}"});
+  let baseline;
+  for (const route of ["/dashboard","/overview","/telegram","/users","/onlyfans/accounts","/onlyfans/inbox","/revenue"]) {
+    await page.evaluate(route=>history.pushState({},"",route+"?brand=Twin"),route);
+    await page.locator('[data-workspace-theme="dark"]').first().waitFor();
+    if(width<1024) await page.getByRole("button",{name:"Open navigation",exact:true}).click();
+    const sidebar=width<1024?page.locator("#mobile-sidebar"):page.locator("aside.dashboard-sidebar").first();
+    await sidebar.waitFor({state:"visible"});
+    const metrics=await sidebar.evaluate(element=>{
+      const rect=element.getBoundingClientRect(), brand=element.querySelector(".studio-brand-row").getBoundingClientRect(),
+      switcher=element.querySelector("[data-channel-switch]").getBoundingClientRect(), nav=element.querySelector("nav").getBoundingClientRect(),
+      footer=element.querySelector(".studio-account").getBoundingClientRect();
+      const topbar=document.querySelector(".dashboard-topbar").getBoundingClientRect();
+      return {width:rect.width,left:rect.left,background:getComputedStyle(element).backgroundColor,
+      brandTop:brand.top,brandHeight:brand.height,switchTop:switcher.top,switchHeight:switcher.height,
+      navTop:nav.top,footerTop:footer.top,headerTop:topbar.top,headerHeight:topbar.height};
+    });
+    assert.equal(metrics.background,"rgb(8, 8, 8)",`${width} ${route}: shared dark sidebar`);
+    if(!baseline)baseline=metrics;
+    assert.deepEqual(metrics,baseline,`${width} ${route}: sidebar and header must stay in place`);
+    assert.equal(await sidebar.locator('[data-channel-switch] a').count(),3);
+    assert.equal(await sidebar.locator('.workspace-nav-row').first().evaluate(e=>e.getBoundingClientRect().height),46);
+    if(width<1024)await sidebar.getByRole("button",{name:"Close navigation",exact:true}).click();
+    await noOverflow(page,`shared shell ${width} ${route}`);
+  }
+  // Use the actual channel control, and ensure both the route and frame update.
+  if(width<1024)await page.getByRole("button",{name:"Open navigation",exact:true}).click();
+  const switcher=width<1024?page.locator("#mobile-sidebar [data-channel-switch]"):page.locator("aside.dashboard-sidebar [data-channel-switch]").first();
+  await switcher.getByRole("link",{name:"OnlyFans",exact:true}).click();
+  await page.waitForURL("**/onlyfans/inbox");
+  if(width<1024)assert.equal(await page.locator("#mobile-sidebar").count(),0,"Channel selection closes the drawer");
+  await capture(page,`shared-dark-${width}.png`);
+  assert.deepEqual(errors,[]);await context.close();
+}
+console.log("PASS: Main, Telegram and OnlyFans retain identical dark sidebar and header geometry at 390, 900 and 1440px; channel links and mobile drawer work.");
 for(const brand of ["Twin","Moxy","FLIRT","LYNQ","Tether","Jess and Kate AI"]){
 for(const width of [390,1440,...(brand==="Moxy"?[320]:[])]){
 const context=await browser.newContext({viewport:{width,height:900},colorScheme:"light",reducedMotion:"reduce"});
@@ -161,4 +206,3 @@ console.log("PASS: six brands; desktop and phone; all configuration tabs; payloa
 console.log(JSON.stringify(snapshots));
 }
 }finally{if(browser)await browser.close();await new Promise(resolve=>server.close(resolve))}
-

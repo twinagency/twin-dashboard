@@ -16,10 +16,10 @@ import { useDashboardAccess } from "./DashboardAccessProvider";
 // the bug behind "pages break when switching between them".
 export default function MainShell({ children, showAssistant = true }: { children: React.ReactNode; activeCloneId?: string | null; showAssistant?: boolean }) {
   const pathname = usePathname();
-  const {isAgency, isCreator} = useDashboardAccess();
+  const {isAgency, isCreator, audience} = useDashboardAccess();
   const studioDashboard = !isCreator && ((!isAgency && pathname === "/dashboard") || isCreatorStudioRoute(pathname));
-  const fullBleed = pathname === "/users" || pathname === "/inbox" || pathname === "/jarvis" || pathname === "/fans" || pathname === "/onlyfans/inbox";
-  const studioWorkspace = !isCreator && (isDashboardWorkspaceRoute(pathname) || channelForPath(pathname) === "onlyfans");
+  const fullBleed = pathname === "/users" || pathname === "/inbox" || pathname === "/jarvis" || pathname === "/fans";
+  const studioWorkspace = audience === "admin" || !isCreator && (isDashboardWorkspaceRoute(pathname) || channelForPath(pathname) === "onlyfans");
   const ownsPageSpacing = ["/content-library", "/campaigns"].includes(pathname);
   return (
     <main
