@@ -31,7 +31,7 @@ createRoot(document.getElementById('root')).render(<App/>);
 writeFileSync(path.join(out,'fixture.tsx'),fixture);
 const bundle=await build({
   stdin:{contents:fixture,resolveDir:root,sourcefile:'lynq-theme-fixture.tsx',loader:'tsx'},
-  bundle:true,write:false,format:'iife',platform:'browser',jsx:'automatic',
+  bundle:true,write:false,outfile:path.join(out,'fixture.js'),format:'iife',platform:'browser',jsx:'automatic',
   alias:{'@':root},define:{'process.env.NODE_ENV':'"production"'},
   plugins:[{name:'isolated-navigation',setup(b){
     b.onResolve({filter:/^(next\/link|next\/navigation)$|(?:^|\/)TwinAssistant(?:\.tsx)?$/},args=>({path:args.path,namespace:'ui-fixture'}));
@@ -43,18 +43,20 @@ const bundle=await build({
   }}],
 });
 const css=await postcss([tailwind()]).process('@import "./app/globals.css";\n@import "./app/jess-kate-theme.css";\n@import "./app/studio-workspace.css";',{from:path.join(root,'lynq-verification.css')});
-writeFileSync(path.join(out,'bundle.js'),bundle.outputFiles[0].text);
-writeFileSync(path.join(out,'styles.css'),css.css);
+const js=bundle.outputFiles.find(file=>file.path.endsWith('.js')).text;
+const stylesheet=css.css+'\n'+bundle.outputFiles.filter(file=>file.path.endsWith('.css')).map(file=>file.text).join('\n');
+writeFileSync(path.join(out,'bundle.js'),js);
+writeFileSync(path.join(out,'styles.css'),stylesheet);
 const html='<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/styles.css"><style>body{margin:0;font-family:Arial,sans-serif}html{--font-sans:Arial;--font-display:Arial}</style></head><body><div id="root"></div><script src="/bundle.js"></script></body></html>';
 const server=createServer((req,res)=>{
   const u=new URL(req.url,'http://localhost');
-  if(u.pathname==='/styles.css'){res.setHeader('Content-Type','text/css');res.end(css.css);}
-  else if(u.pathname==='/bundle.js'){res.setHeader('Content-Type','application/javascript');res.end(bundle.outputFiles[0].text);}
+  if(u.pathname==='/styles.css'){res.setHeader('Content-Type','text/css');res.end(stylesheet);}
+  else if(u.pathname==='/bundle.js'){res.setHeader('Content-Type','application/javascript');res.end(js);}
   else {res.setHeader('Content-Type','text/html');res.end(html);}
 });
 await new Promise(resolve=>server.listen(0,'127.0.0.1',resolve));
 const origin='http://127.0.0.1:'+server.address().port;
-const browser=await chromium.launch({headless:true});
+const browser=await chromium.launch({headless:true,executablePath:process.env.CHROMIUM_PATH||undefined});
 const evidence=[];
 try {
   for(const width of [390,1440]){
