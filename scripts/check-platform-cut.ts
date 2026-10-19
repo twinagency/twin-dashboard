@@ -13,11 +13,13 @@ import {
   applyCut,
   applyStackedCut,
   resolveClonePlatformPct,
+  normalizeCloneRates,
   setCut,
   setAgencyCreatorCut,
 } from "../lib/platform-cut";
 import { scaleDashboardData, scaleAnalyticsData, redactCostFields, type CloneCuts } from "../lib/revenue-projection";
 import { resolveDashboardCloneScope } from "../lib/revenue-cache";
+import { blendUsd } from "../lib/money";
 import type { DashboardData, CloneStats } from "../lib/dashboard-data";
 import type { AnalyticsData } from "../lib/analytics-data";
 
@@ -351,6 +353,25 @@ async function main() {
     const scaled = scaleAnalyticsData(analyticsFixture(), cuts, "agency");
     const visibleAfterScoping = scaled.clones.filter((c) => scope!.includes(c.id));
     equal(visibleAfterScoping.length, 1, "only the agency's own clone would remain once getAnalytics applies scopeCloneIds");
+  });
+
+  check("per-girl star rates: only valid overrides survive, girls without one keep the login rate", () => {
+    const rates = normalizeCloneRates([
+      { clone_id: "olivia", usd_per_star: "0.0980" },
+      { clone_id: "amber", usd_per_star: 0.098 },
+      { clone_id: "junk", usd_per_star: "abc" },
+      { clone_id: "huge", usd_per_star: 5 },
+      { clone_id: "unset", usd_per_star: null },
+    ]);
+    equal(JSON.stringify(rates), JSON.stringify({ olivia: 0.098, amber: 0.098 }), "only the two valid rates are kept");
+  });
+
+  check("per-girl star rates: blended total equals the per-girl sum exactly", () => {
+    const rates = { olivia: 0.098 };
+    // 1000 stars total, 400 of them Olivia's: 600 at 0.065 + 400 at 0.098.
+    const usd = blendUsd(1000, 0.065, rates, { olivia: 400, other: 600 });
+    equal(usd.toFixed(4), (600 * 0.065 + 400 * 0.098).toFixed(4), "blend matches the sum");
+    equal(blendUsd(1000, 0.065, {}, {}).toFixed(4), (65).toFixed(4), "no overrides is the plain login rate");
   });
 
   console.log(`\n${passed} passed, ${failures.length} failed`);

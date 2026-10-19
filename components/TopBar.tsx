@@ -31,6 +31,7 @@ export default function TopBar({
   clones,
   activeCloneId,
   allTimeStars,
+  allTimeUsdPerStar,
   creatorName,
   lockCreatorScope = false,
   channels,
@@ -40,6 +41,8 @@ export default function TopBar({
   clones: { id: string; name: string; color: string; photoUrl?: string }[];
   activeCloneId: string | null;
   allTimeStars: number;
+  /** Rate for the all-time figure (blends per-girl rates). Falls back to the viewer's rate. */
+  allTimeUsdPerStar?: number;
   /** Verified creator identity. Supplying it locks the shared clone chip. */
   creatorName?: string;
   /**
@@ -109,7 +112,7 @@ export default function TopBar({
         <div className="moxy-overview-creator"><CloneSwitcher clones={clones} activeCloneId={activeCloneId} /></div>
         <div className="moxy-overview-lifetime">
           <span>All-time revenue</span>
-          <strong className="tabular-nums">{fmtMoney(starsToMoneyRate(allTimeStars, currency, rate, usdPerStar), currency)}</strong>
+          <strong className="tabular-nums">{fmtMoney(starsToMoneyRate(allTimeStars, currency, rate, allTimeUsdPerStar ?? usdPerStar), currency)}</strong>
         </div>
         <div className="moxy-overview-currency"><CurrencyToggle compact /></div>
         <div className="moxy-overview-blur"><BlurToggle /></div>
@@ -158,7 +161,7 @@ export default function TopBar({
             <span className="hidden items-baseline gap-1 px-1.5 sm:flex">
               <span className="text-xs">💵</span>
               <span className="font-mono text-xs font-semibold tabular-nums text-ink">
-                {fmtMoney(starsToMoneyRate(allTimeStars, currency, rate, usdPerStar), currency)}
+                {fmtMoney(starsToMoneyRate(allTimeStars, currency, rate, allTimeUsdPerStar ?? usdPerStar), currency)}
               </span>
             </span>
             <div className="hidden h-5 w-px shrink-0 bg-line sm:block" />

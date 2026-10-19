@@ -724,7 +724,7 @@ function PhotoCard({
       <div className="mb-3">
         <div className="font-medium text-sm truncate">{photo.image_name ?? "Untitled"}</div>
         <div className="mt-0.5 flex items-center gap-2 text-xs text-muted">
-          <StarAmount stars={photo.is_free ? 0 : photo.star_value} />
+          <StarAmount stars={photo.is_free ? 0 : photo.star_value} cloneId={photo.clone_id} />
           <ExplicitBadge isNude={photo.is_nude} explicitness={photo.explicitness} />
         </div>
         <div className="mt-1">
@@ -856,7 +856,7 @@ function VideoCard({
       <div className="mb-3">
         <div className="font-medium text-sm">Video</div>
         <div className="mt-0.5 flex items-center gap-2 text-xs text-muted">
-          <StarAmount stars={video.is_free ? 0 : video.star_value} />
+          <StarAmount stars={video.is_free ? 0 : video.star_value} cloneId={video.clone_id} />
           <ExplicitBadge isNude={video.is_nude} explicitness={video.explicitness} />
         </div>
         <div className="mt-1">
@@ -1005,7 +1005,7 @@ function BundleCard({ bundle, cloneId }: { bundle: Bundle; cloneId: string }) {
                 </span>
               )}
             </div>
-            <div className="mt-0.5 text-xs text-muted"><StarAmount stars={bundle.star_price} /></div>
+            <div className="mt-0.5 text-xs text-muted"><StarAmount stars={bundle.star_price} cloneId={bundle.clone_id} /></div>
             {bundle.caption && <div className="mt-1 text-xs text-muted">"{bundle.caption}"</div>}
           </div>
           <div className="flex gap-2">

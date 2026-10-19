@@ -7,14 +7,18 @@ import { fmtMoney, starsToMoneyRate } from "@/lib/money";
 // Reacts to the global USD/AUD toggle.
 export default function StarAmount({
   stars,
+  cloneId,
   className,
   moneyClassName,
 }: {
   stars: number;
+  /** The girl these stars belong to, so a per-girl rate applies. */
+  cloneId?: string | null;
   className?: string;
   moneyClassName?: string;
 }) {
-  const { currency, rate, usdPerStar } = useCurrency();
+  const { currency, rate, rateFor } = useCurrency();
+  const usdPerStar = rateFor(cloneId);
   // 0 stars is always free, everywhere this renders. Matches the bot runtime,
   // which only ever sends a media item unlocked at a price of 0 (flows/media.ts).
   if (stars <= 0) {

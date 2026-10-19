@@ -1420,7 +1420,7 @@ export default async function FansPage({
                       </span>
                     ),
                   },
-                  { label: "Total spent", value: totalSpent > 0 ? <StarAmount stars={totalSpent} /> : "-" },
+                  { label: "Total spent", value: totalSpent > 0 ? <StarAmount stars={totalSpent} cloneId={selected.clone_id} /> : "-" },
                   { label: "Purchases", value: fmtNum(purchases.length) },
                   { label: "Msgs sent", value: selected.total_messages_sent == null ? "—" : fmtNum(selected.total_messages_sent) },
                   { label: "Msgs bought", value: fmtNum(selected.total_messages_purchased ?? 0) },
@@ -1620,7 +1620,7 @@ export default async function FansPage({
                           {p.kind === "credits" ? "messages" : p.kind} · {dateTime(p.paid_at)}
                         </span>
                         <span className="font-mono text-ink">
-                          <StarAmount stars={p.amount_stars} />
+                          <StarAmount stars={p.amount_stars} cloneId={selected.clone_id} />
                         </span>
                       </div>
                     ))}

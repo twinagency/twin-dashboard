@@ -27,6 +27,17 @@ export function usdToMoneyRate(usd: number, c: Currency, audPerUsd: number): num
   return c === "AUD" ? usd * audPerUsd : usd;
 }
 
+/**
+ * Exact USD for a star total when some girls have their own rate:
+ * every star at the base rate, plus each overridden girl's stars at the
+ * difference. Needs only the overridden girls' star counts.
+ */
+export function blendUsd(totalStars: number, baseRate: number, rates: Record<string, number>, starsByClone: Record<string, number>): number {
+  let usd = totalStars * baseRate;
+  for (const [id, r] of Object.entries(rates)) usd += (starsByClone[id] ?? 0) * (r - baseRate);
+  return usd;
+}
+
 export function fmtMoney(amount: number, c: Currency): string {
   const sym = c === "AUD" ? "A$" : "$";
   return (

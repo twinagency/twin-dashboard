@@ -19,7 +19,7 @@ import type { AnalyticsData } from "@/lib/analytics-data";
 import type { StarBalance } from "@/lib/star-balance";
 import { reportFeatureRows, topFeatureRow } from "@/lib/report-features";
 import { reportTzLabel } from "@/lib/report-time";
-import { fmtMoney, fmtNum, starsToMoneyRate, usdToMoneyRate } from "@/lib/money";
+import { blendUsd, fmtMoney, fmtNum, starsToMoneyRate, usdToMoneyRate } from "@/lib/money";
 import { intraPeriodTrendPct } from "@/lib/revenue-trend";
 import { useCurrency } from "@/components/CurrencyProvider";
 import { useDashboardAccess } from "@/components/DashboardAccessProvider";
@@ -239,7 +239,7 @@ export default function RevenueDashboard({ cloneId, initialData = null, overview
   const [chartType, setChartType] = useState<"bar" | "line">(overview ? "line" : "bar");
   const [chartMode, setChartMode] = useState<"total" | "creator">("total");
   const [analysisView, setAnalysisView] = useState<"customers" | "journey">("customers");
-  const { currency, rate, usdPerStar } = useCurrency();
+  const { currency, rate, usdPerStar, cloneRates, rateFor } = useCurrency();
   const [data, setData] = useState<FullData | null>(initialData);
   // WHY THIS EXISTS. /api/dashboard answers a failure with 500 + {error}, and
   // fetchData used to setData(that object). `data` was then truthy with no
@@ -381,7 +381,17 @@ export default function RevenueDashboard({ cloneId, initialData = null, overview
     setTxSort({ key, direction: key === "amount" || key === "date" ? "desc" : "asc" });
   }
 
-  const money = (stars: number) => fmtMoney(starsToMoneyRate(stars, currency, rate, usdPerStar), currency);
+  // Some girls on an agency login can have their own star rate. A girl's own
+  // figures use her rate; a total uses the exact blend for this window's mix.
+  const overrideIds = Object.keys(cloneRates);
+  const windowStars = data?.totals?.stars ?? 0;
+  const scopeRate = cloneId
+    ? rateFor(cloneId)
+    : overrideIds.length && data?.perClone && windowStars > 0
+      ? blendUsd(windowStars, usdPerStar, cloneRates, Object.fromEntries(overrideIds.map((id) => [id, data.perClone[id]?.stars ?? 0]))) / windowStars
+      : usdPerStar;
+  const money = (stars: number, ofClone?: string | null) =>
+    fmtMoney(starsToMoneyRate(stars, currency, rate, ofClone ? rateFor(ofClone) : scopeRate), currency);
   // AI contribution/cost arrive in USD; revenue arrives in Stars. Both are rendered in
   // the operator's selected currency so a table never puts "A$8,295 revenue"
   // beside "$4,102 AI contribution" and invites the wrong ratio. Was a bare "$" + toLocaleString.
@@ -1039,7 +1049,7 @@ export default function RevenueDashboard({ cloneId, initialData = null, overview
                             <CreatorAvatar name={c.name} photoUrl={c.photoUrl} className="h-6 w-6" />
                             <span className="min-w-0 flex-1">
                               <span className="creator-name block truncate text-xs">{c.name}</span>
-                              <span className="money-value block font-mono text-[11px] tabular-nums">{money(c.stars)}</span>
+                              <span className="money-value block font-mono text-[11px] tabular-nums">{money(c.stars, c.id)}</span>
                             </span>
                           </button>
                         </div>
@@ -1453,7 +1463,7 @@ export default function RevenueDashboard({ cloneId, initialData = null, overview
                         </div>
                       </div>
                       <div className="shrink-0 text-right">
-                        <div className="money-value font-mono text-sm font-semibold tabular-nums">{money(t.stars)}</div>
+                        <div className="money-value font-mono text-sm font-semibold tabular-nums">{money(t.stars, t.cloneId)}</div>
                         <div className="text-[11px] text-muted">⭐ {fmtNum(t.stars)}</div>
                         <div className="mt-0.5 text-[10px] text-muted/80">
                           {new Date(t.paidAt).toLocaleString("en-US", {
@@ -1511,7 +1521,7 @@ export default function RevenueDashboard({ cloneId, initialData = null, overview
                           )}
                         </TableCell>
                         <TableCell className="py-1.5 text-right">
-                          <span className="money-value block font-mono tabular-nums">{money(t.stars)}</span>
+                          <span className="money-value block font-mono tabular-nums">{money(t.stars, t.cloneId)}</span>
                           <span className="block text-[11px] text-muted">⭐ {fmtNum(t.stars)}</span>
                         </TableCell>
                         <TableCell className="py-1.5 pr-3 text-right text-[11px] text-muted">
@@ -1565,7 +1575,7 @@ function CreatorPerformanceRail({
 }: {
   creators: AnalyticsData["clones"];
   totalStars: number;
-  money: (stars: number) => string;
+  money: (stars: number, cloneId?: string | null) => string;
   pct: (value: number) => string;
 }) {
   const ranked = creators.filter((creator) => creator.revenueStars !== 0 || creator.sales > 0);
@@ -1597,7 +1607,7 @@ function CreatorPerformanceRail({
                     {totalStars > 0 ? pct(creator.revenueStars / totalStars) : "-"} share
                   </span>
                 </span>
-                <span className="revenue-creator-amount font-mono font-semibold tabular-nums text-ink">{money(creator.revenueStars)}</span>
+                <span className="revenue-creator-amount font-mono font-semibold tabular-nums text-ink">{money(creator.revenueStars, creator.id)}</span>
                 <span className="text-right font-mono tabular-nums text-muted">{fmtNum(creator.sales)}</span>
               </li>
             ))}
@@ -1665,7 +1675,7 @@ function ChartTooltip({
   payload?: { dataKey: string; value: number }[];
   label?: string;
   clones: { id: string; name: string; color: string }[];
-  money: (stars: number) => string;
+  money: (stars: number, cloneId?: string | null) => string;
   totalOnly?: boolean;
   totalLabel?: string;
 }) {
@@ -1691,7 +1701,7 @@ function ChartTooltip({
               <span className={totalOnly ? "" : "creator-name"}>{totalOnly ? totalLabel : c?.name ?? p.dataKey}</span>
             </span>
             <span className={`font-mono font-semibold tabular-nums ${p.value > 0 ? "text-good" : p.value < 0 ? "text-[#b4432f]" : "text-ink"}`}>
-              {money(p.value)}
+              {money(p.value, totalOnly ? null : String(p.dataKey))}
             </span>
           </div>
         );
@@ -1728,7 +1738,7 @@ function RevenueReport({
   scoped: boolean;
   cloneName: string;
   transactions: DashboardData["recent"];
-  money: (stars: number) => string;
+  money: (stars: number, cloneId?: string | null) => string;
   usd: (n: number) => string;
   pct: (n: number) => string;
   axisColor: string;
@@ -1794,7 +1804,7 @@ function RevenueReport({
   if (topFeature && topFeature.stars > 0)
     facts.push({ label: "Top earner", value: `${topFeature.label} · ${pct(topFeature.share)}` });
   if (!scoped && topClone && topClone.revenueStars > 0)
-    facts.push({ label: "Top creator", value: topClone.name, moneyValue: money(topClone.revenueStars), isName: true });
+    facts.push({ label: "Top creator", value: topClone.name, moneyValue: money(topClone.revenueStars, topClone.id), isName: true });
   if (whale && whale.stars > 0) facts.push({ label: "Whale share", value: `${pct(whale.share)} of lifetime spend` });
   // The zone is printed, not assumed. These were computed on the container's
   // UTC clock and labelled nothing at all, so "Peak hour 3 AM" was really 1 PM
@@ -1933,7 +1943,7 @@ function RevenueReport({
                           </span>
                         </span>
                         <span className="shrink-0 text-right">
-                          <span className="money-value block font-mono text-xs font-semibold tabular-nums">{money(spender.stars)}</span>
+                          <span className="money-value block font-mono text-xs font-semibold tabular-nums">{money(spender.stars, spender.cloneId)}</span>
                           {/* Two lines on a phone, one from sm up: as a single line
                               this was the widest fixed thing in the row. */}
                           <span className="block text-[10px] leading-tight text-muted">
@@ -2058,7 +2068,7 @@ function RevenueReport({
                           <span className="creator-name truncate text-xs font-semibold text-ink">{c.name}</span>
                         </span>
                         <span className="money-value shrink-0 font-mono text-sm font-semibold tabular-nums">
-                          {money(c.revenueStars)}
+                          {money(c.revenueStars, c.id)}
                         </span>
                       </div>
                       <div className={`mt-2 grid gap-2 text-[10px] ${showCost ? "grid-cols-3" : "grid-cols-2"}`}>
@@ -2109,7 +2119,7 @@ function RevenueReport({
                             <span className="creator-name truncate text-ink">{c.name}</span>
                           </span>
                         </TableCell>
-                        <TableCell className="money-value text-right font-mono tabular-nums">{money(c.revenueStars)}</TableCell>
+                        <TableCell className="money-value text-right font-mono tabular-nums">{money(c.revenueStars, c.id)}</TableCell>
                         <TableCell className="text-right font-mono tabular-nums text-muted">
                           {totalStars > 0 ? pct(c.revenueStars / totalStars) : "-"}
                         </TableCell>
@@ -2305,7 +2315,7 @@ function RevenueReport({
                         name={purchase.mediaName}
                       />
                       <span className="min-w-0 flex-1 text-right">
-                        <span className="money-value block font-mono text-sm font-semibold tabular-nums">{money(purchase.stars)}</span>
+                        <span className="money-value block font-mono text-sm font-semibold tabular-nums">{money(purchase.stars, purchase.cloneId)}</span>
                         <span className="block truncate text-[11px] text-muted">{purchase.buyerName}</span>
                         <span className="block text-[10px] text-muted/75">
                           {new Date(purchase.paidAt).toLocaleString("en-US", {

@@ -114,7 +114,9 @@ function SmallSignal({ label, value, detail, positive }: { label: string; value:
 }
 
 export default function RevenueDayDrivers({ cloneId }: { cloneId?: string | null }) {
-  const { currency, rate, usdPerStar } = useCurrency();
+  const { currency, rate, rateFor, fleetUsdPerStar } = useCurrency();
+  // One girl: her own rate. All girls: the login's all-time blend (no per-girl split on this panel).
+  const usdPerStar = cloneId ? rateFor(cloneId) : fleetUsdPerStar;
   const today = useMemo(() => reportDayKey(), []);
   const yesterday = useMemo(() => shiftDay(today, -1), [today]);
   // Start on today so both quick actions have an observable outcome: tapping

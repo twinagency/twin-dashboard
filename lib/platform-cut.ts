@@ -278,6 +278,56 @@ export async function getViewerTerms(): Promise<ViewerTerms> {
   return getViewerTermsFor(await getDashboardAccess());
 }
 
+// ── per-girl star rates on an agency login ───────────────────────────────
+//
+// agency_creators.usd_per_star (twin-bot migration 20261020120000) lets one
+// agency login show a different star rate for some of its girls. A girl with
+// no rate keeps the login's own usdPerStar. Rates only change the money a star
+// converts to, never the star counts or the cut. Creator and admin views get
+// none.
+
+export const CLONE_RATE_MIN = 0.001;
+export const CLONE_RATE_MAX = 0.2;
+
+export type CloneRates = Record<string, number>;
+
+/** Overrides only: junk or out-of-range rows are dropped, so that girl keeps the login rate. */
+export function normalizeCloneRates(rows: { clone_id: unknown; usd_per_star: unknown }[]): CloneRates {
+  const out: CloneRates = {};
+  for (const r of rows) {
+    const n = typeof r.usd_per_star === "string" ? Number(r.usd_per_star) : (r.usd_per_star as number);
+    if (r.clone_id == null || r.usd_per_star == null || !Number.isFinite(n) || n < CLONE_RATE_MIN || n > CLONE_RATE_MAX) continue;
+    out[String(r.clone_id)] = n;
+  }
+  return out;
+}
+
+const cloneRatesMemo = cache(async (agencyId: string): Promise<CloneRates> => {
+  const { data, error } = await serviceClient()
+    .from("agency_creators")
+    .select("clone_id,usd_per_star")
+    .eq("agency_id", agencyId)
+    .not("usd_per_star", "is", null);
+  // Before the migration is applied the column is missing: everyone keeps the login rate.
+  if (error) {
+    if (error.code === "42703" || /usd_per_star/.test(error.message)) return {};
+    throw new Error(`Could not read creator star rates: ${error.message}`);
+  }
+  return normalizeCloneRates(data ?? []);
+});
+
+/** Per-girl star rates for an agency login (empty for admin and creator views). */
+export async function getCloneRatesFor(access: DashboardAccess): Promise<CloneRates> {
+  if (!access || (access as { kind?: string }).kind === "creator") return {};
+  const rates = await cloneRatesMemo(access.id);
+  const allowed = new Set(access.cloneIds);
+  return Object.fromEntries(Object.entries(rates).filter(([id]) => allowed.has(id)));
+}
+
+export async function getCloneRates(): Promise<CloneRates> {
+  return getCloneRatesFor(await getDashboardAccess());
+}
+
 /** accessCacheKey + the viewer's terms, so a cached NET value can never outlive a cut change. */
 export async function viewerCacheKey(access: DashboardAccess): Promise<string> {
   const base = accessCacheKey(access);

@@ -85,7 +85,7 @@ export default async function FanDetailPage({
         </span>
       ),
     },
-    { label: "Total spent", value: totalStars > 0 ? <StarAmount stars={totalStars} /> : "-" },
+    { label: "Total spent", value: totalStars > 0 ? <StarAmount stars={totalStars} cloneId={id} /> : "-" },
     { label: "Purchases", value: fmtNum(purchases.length) },
     { label: "Messages sent", value: fmtNum(u.total_messages_sent ?? 0) },
     { label: "Messages bought", value: fmtNum(u.total_messages_purchased ?? 0) },
@@ -355,7 +355,7 @@ export default async function FanDetailPage({
               {purchases.map((p) => (
                 <div key={p.id} className="flex items-center justify-between gap-3 py-2.5 text-sm">
                   <div>
-                    <div className="font-medium"><StarAmount stars={p.amount_stars} /></div>
+                    <div className="font-medium"><StarAmount stars={p.amount_stars} cloneId={id} /></div>
                     <div className="text-xs text-muted">{dateTime(p.paid_at)}</div>
                   </div>
                   <span

@@ -23,7 +23,8 @@ import WorkspaceShell from "@/components/WorkspaceShell";
 import TwinWordmark from "@/components/TwinWordmark";
 import TwinUpdatePopup from "@/components/TwinVersionBadge";
 import { getCachedTwinVersion, getFleetClones, getHeaderAllTimeStars } from "@/lib/query-cache";
-import { getViewerTerms } from "@/lib/platform-cut";
+import { getCloneRates, getViewerTerms } from "@/lib/platform-cut";
+import { blendUsd } from "@/lib/money";
 import { isAuthed } from "@/lib/auth";
 import { isAgencyPath } from "@/lib/agency-policy";
 import { isLynq, isMoxy, isTopOnlyfansAgency, pathAgencyName } from "@/lib/agency-brand";
@@ -102,7 +103,15 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     agency ? Promise.resolve(null) : getCachedTwinVersion(), getFleetClones(), getCloneScope(), getViewAsBannerInfo(),
   ]);
   const allTimeStars = await getHeaderAllTimeStars(activeCloneId);
-  const { usdPerStar } = await getViewerTerms();
+  const [{ usdPerStar }, cloneRates] = await Promise.all([getViewerTerms(), getCloneRates().catch(() => ({} as Record<string, number>))]);
+  // Header rate: a picked girl's own rate, else the exact all-time blend of the
+  // login rate and any girls with their own rate.
+  const overrideIds = Object.keys(cloneRates);
+  const headerUsdPerStar = activeCloneId
+    ? cloneRates[activeCloneId] ?? usdPerStar
+    : overrideIds.length && allTimeStars > 0
+      ? blendUsd(allTimeStars, usdPerStar, cloneRates, Object.fromEntries(await Promise.all(overrideIds.map(async (id) => [id, await getHeaderAllTimeStars(id)] as const)))) / allTimeStars
+      : usdPerStar;
   // The server's channel scope: which channel workspaces this session may open.
   // The layout already holds both facts it needs, so resolving it here costs no
   // extra identity lookup, and the shell below can only offer channels that
@@ -118,7 +127,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
     <body className="min-h-screen bg-bg">
       <script dangerouslySetInnerHTML={{__html:'try{if(localStorage.getItem("blurMedia")==="true")document.documentElement.classList.add("blur-media")}catch(e){}'}} />
       {viewAsInfo && <ViewAsBanner info={viewAsInfo} />}
-      <DashboardAccessProvider agencyName={agency?.name} canManage={canManage}><CurrencyProvider usdPerStar={usdPerStar}><BlurProvider>
+      <DashboardAccessProvider agencyName={agency?.name} canManage={canManage}><CurrencyProvider usdPerStar={usdPerStar} cloneRates={cloneRates} fleetUsdPerStar={headerUsdPerStar}><BlurProvider>
         <WorkspaceShell activeCloneId={activeCloneId}>
           <Sidebar clones={clones} activeCloneId={activeCloneId} channels={channelScope.allowed} />
           <div className="flex h-screen min-w-0 flex-1 flex-col overflow-hidden">
@@ -126,7 +135,7 @@ export default async function RootLayout({ children }: { children: React.ReactNo
               <Link href={agency ? "/revenue" : "/dashboard"} aria-label={agency?.name || "Twin Technologies"}><TwinWordmark inverse agencyName={isTopOnlyfansAgency(agency?.name) ? undefined : agency?.name} /></Link>
               <div className="flex items-center gap-1">{agency && <form action="/agency/logout" method="post"><button type="submit" className="rounded-lg px-3 py-2 text-sm font-medium text-white/80 hover:bg-white/10">Sign out</button></form>}<MobileMenu activeCloneId={activeCloneId} channels={channelScope.allowed} /></div>
             </header>
-            <TopBar clones={clones} activeCloneId={activeCloneId} allTimeStars={allTimeStars} channels={channelScope.allowed} signOutAction={logout} /><MainShell activeCloneId={activeCloneId}>{children}</MainShell>
+            <TopBar clones={clones} activeCloneId={activeCloneId} allTimeStars={allTimeStars} allTimeUsdPerStar={headerUsdPerStar} channels={channelScope.allowed} signOutAction={logout} /><MainShell activeCloneId={activeCloneId}>{children}</MainShell>
           </div>
         </WorkspaceShell>
         {!agency && <TwinUpdatePopup activeCloneId={activeCloneId} version={twinVersion?.version ?? null} name={twinVersion?.name ?? ""} summary={twinVersion?.summary ?? ""} changes={twinVersion?.changes ?? []} />}
