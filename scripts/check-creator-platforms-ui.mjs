@@ -67,7 +67,7 @@ try {
  snapshot.onlyfans.accounts=[{id:'of-123',handle:'synthetic',health:'paused',connection:{status:'verified',outgoingEnabled:false,expiresAt:new Date(Date.now()+3600000).toISOString()}}];
  await page.evaluate(()=>window.dispatchEvent(new Event('focus')));
  await page.getByRole('dialog').waitFor({state:'hidden'});
- await page.getByText('Your OnlyFans is connected. Your account will continue syncing in the background.').waitFor();
+ await page.getByRole('status').filter({hasText:/^Your OnlyFans is connected\.$/}).waitFor();
  await page.locator('[data-platform-account=of-123]').waitFor();
  assert.equal(await page.locator('[data-connection-request]').count(),0,'A completed connection hides older failure notices');
  assert.equal(await page.locator('[data-connection-state=connected]').count(),1);

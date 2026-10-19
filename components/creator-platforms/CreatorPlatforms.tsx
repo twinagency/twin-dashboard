@@ -34,7 +34,7 @@ export default function CreatorPlatforms({initial}:{initial:Snapshot}) {
   useEffect(()=>{
     if(!connecting)return;
     const completed=data.onlyfans.enrollments.some(row=>row.status==="accepted"&&!existingAttempts.current.has(row.id)&&data.onlyfans.accounts.some(account=>account.id===row.accountId&&account.connection?.status==="verified"&&!!account.connection.expiresAt&&Date.parse(account.connection.expiresAt)>Date.now()));
-    if(completed){setConnecting(false);setNotice("Your OnlyFans is connected. Your account will continue syncing in the background.");opener.current?.focus();}
+    if(completed){setConnecting(false);setNotice("Your OnlyFans is connected.");opener.current?.focus();}
   },[connecting,data.onlyfans.enrollments,data.onlyfans.accounts]);
   useEffect(()=>{
     if(!pending&&!connecting)return;
