@@ -143,7 +143,7 @@ for (const width of [390, 900, 1440]) {
   const switcher=width<1024?page.locator("#mobile-sidebar [data-channel-switch]"):page.locator("aside.dashboard-sidebar [data-channel-switch]").first();
   await switcher.getByRole("link",{name:"OnlyFans",exact:true}).click();
   await page.waitForURL("**/onlyfans/inbox");
-  if(width<1024)assert.equal(await page.locator("#mobile-sidebar").count(),0,"Channel selection closes the drawer");
+  if(width<1024)await page.locator("#mobile-sidebar").waitFor({state:"detached"});
   await capture(page,`shared-dark-${width}.png`);
   assert.deepEqual(errors,[]);await context.close();
 }
