@@ -10,8 +10,8 @@ import postcss from 'postcss';
 import tailwind from '@tailwindcss/postcss';
 const root=process.cwd(),out=resolve('test-results/creator-sign-in');mkdirSync(out,{recursive:true});
 const initial={schemaVersion:'creator-platforms.v1',creatorName:'Fixture creator',profileId:'canonical-creator',requested:['onlyfans'],readOnly:false,telegram:{configured:false,status:null,handle:null},onlyfans:{status:'ready',signIn:'hosted',error:null,accounts:[],enrollments:[]}};
-let snapshot,attempt,posted,expired,denied,lostConfirm;
-const reset=()=>{snapshot=structuredClone(initial);attempt={id:'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa',phase:'waiting',handle:null,expiresAt:new Date(Date.now()+900000).toISOString(),enrollmentId:null,width:432,height:720,keyboard:null};posted=[];expired=false;denied=false;lostConfirm=false;};reset();
+let snapshot,attempt,posted,expired,denied,lostConfirm,unavailableFrame;
+const reset=()=>{snapshot=structuredClone(initial);attempt={id:'aaaaaaaa-aaaa-4aaa-aaaa-aaaaaaaaaaaa',phase:'waiting',handle:null,expiresAt:new Date(Date.now()+900000).toISOString(),enrollmentId:null,width:432,height:720,keyboard:null};posted=[];expired=false;denied=false;lostConfirm=false;unavailableFrame=false;};reset();
 async function until(check){for(let n=0;n<100;n++){if(check())return;await new Promise(r=>setTimeout(r,50));}assert(check(),'Expected fixture request was not received');}
 const entry=`import React from 'react';import{createRoot}from'react-dom/client';import Platforms from './components/creator-platforms/CreatorPlatforms';import Shell from './components/CreatorStudioShell';import {creatorStudioStatus} from './lib/creator-studio-model';createRoot(document.getElementById('root')).render(<React.StrictMode><Shell brand="moxy" creatorName="Fixture creator" status={creatorStudioStatus(false,"Draft / unfinished",null)} contentHref="/creator/onboarding?step=content"><Platforms initial={${JSON.stringify(initial)}}/></Shell></React.StrictMode>);`;
 const bundle=await build({stdin:{contents:entry,loader:'tsx',resolveDir:root},bundle:true,write:false,outdir:out,format:'iife',platform:'browser',jsx:'automatic',alias:{'@':root},define:{'process.env.NODE_ENV':'"development"'},plugins:[{name:'links',setup(b){b.onResolve({filter:/^next\/(link|navigation)$|\/CurrencyProvider$/},a=>({path:a.path,namespace:'stub'}));b.onLoad({filter:/.*/,namespace:'stub'},a=>({resolveDir:root,loader:'jsx',contents:a.path==='next/link'?`import React from 'react';export default function Link({href,children,...props}){return <a href={href} {...props}>{children}</a>}`:a.path==='next/navigation'?`export const usePathname=()=>'/creator/platforms';export const useRouter=()=>({refresh(){}});`:`export const useCurrency=()=>({currency:'AUD',setCurrency(){}});`}))}}]});
@@ -30,7 +30,7 @@ const server=createServer(async(req,res)=>{try{
   if(denied){res.statusCode=401;return res.end(JSON.stringify({error:'Sign in to your creator account again.'}))}
   if(path==='/creator-auth/platforms')return res.end(JSON.stringify(snapshot));
   if(expired&&req.method==='GET'){res.statusCode=410;return res.end(JSON.stringify({error:'Your sign-in expired. Start again.'}))}
-  if(req.method==='GET'&&url.searchParams.get('frame')==='1'){res.setHeader('Content-Type','image/jpeg');return res.end(jpeg)}
+  if(req.method==='GET'&&url.searchParams.get('frame')==='1'){if(unavailableFrame){res.statusCode=503;return res.end('{}')}res.setHeader('Content-Type','image/jpeg');return res.end(jpeg)}
   if(req.method==='POST'){
    let raw='';for await(const b of req)raw+=b;const body=JSON.parse(raw);posted.push(body);
    if(body.action==='cancel'&&expired){res.statusCode=410;return res.end(JSON.stringify({error:'Your sign-in expired. Start again.'}))}
@@ -92,8 +92,9 @@ try{
  }
  // Expiry removes the attempt server-side; restarting must still reach start.
  reset();const page=await chrome.newPage({viewport:{width:390,height:844}});await page.goto(url);await page.getByRole('button',{name:'Connect OnlyFans',exact:true}).click();await page.getByLabel('OnlyFans sign-in screen').waitFor();
+ unavailableFrame=true;const frameNotice=page.getByText('Your sign-in screen could not be loaded. Restart sign-in to continue.',{exact:true});await frameNotice.waitFor();unavailableFrame=false;await frameNotice.waitFor({state:'hidden'});
  const firstStart=posted.find(b=>b.action==='start');expired=true;await page.getByText('Your sign-in expired. Start again.').waitFor();await page.getByRole('button',{name:'Restart sign-in'}).click();await until(()=>posted.filter(b=>b.action==='start').length===2);await page.getByLabel('OnlyFans sign-in screen').waitFor();
  assert.equal(posted.filter(b=>b.action==='start').length,2);assert.notEqual(posted.filter(b=>b.action==='start')[1].startKey,firstStart.startKey);
  denied=true;await page.getByRole('button',{name:'Close connection setup'}).click();await page.getByRole('dialog').waitFor({state:'hidden'});await page.getByText('Sign in to your creator account again.',{exact:true}).first().waitFor();assert(await page.getByRole('button',{name:'Connect OnlyFans',exact:true}).isDisabled());await page.close();
- console.log('PASS creator sign-in UI: Chromium and mobile WebKit, one start in StrictMode, serialized input, explicit account confirmation, exact retry, pending/verified states, expired restart and authentication loss. Physical phone keyboard and live provider pilot remain release checks.');
+ console.log('PASS creator sign-in UI: Chromium and mobile WebKit, one start in StrictMode, serialized input, explicit account confirmation, exact retry, pending/verified states, frame failure/recovery, expired restart and authentication loss. Physical phone keyboard and live provider pilot remain release checks.');
 }finally{await Promise.allSettled([chrome.close(),safari.close()]);await new Promise(r=>server.close(r));}

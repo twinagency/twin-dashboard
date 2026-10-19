@@ -36,11 +36,13 @@ export default function HostedConnect({profileId,accountId,disabled,onChanged}:{
   },[attempt?.id,attempt?.phase,disabled,save]);
   useEffect(()=>{
     if(!attempt||attempt.phase!=='waiting'||disabled)return;
-    let active=true;const controller=new AbortController();let timer:number;
+    let active=true,badFrames=0;const controller=new AbortController();let timer:number;
+    const screenError='Your sign-in screen could not be loaded. Restart sign-in to continue.';
     const draw=async()=>{try{
       const r=await fetch(route+'?attempt='+attempt.id+'&frame=1',{cache:'no-store',credentials:'same-origin',redirect:'error',signal:controller.signal});
-      if(r.ok&&r.headers.get('content-type')?.startsWith('image/jpeg')){const blob=await r.blob();const image=await createImageBitmap(blob);if(active&&canvas.current)canvas.current.getContext('2d')?.drawImage(image,0,0,432,720);image.close();}
-    }catch{/* Status polling owns the recoverable error message. */}finally{if(active)timer=window.setTimeout(()=>void draw(),800);}};
+      if(!r.ok||!r.headers.get('content-type')?.startsWith('image/jpeg'))throw new Error('frame_unavailable');
+      const blob=await r.blob(),image=await createImageBitmap(blob);if(active&&canvas.current){canvas.current.getContext('2d')?.drawImage(image,0,0,432,720);badFrames=0;setNotice(value=>value===screenError?'':value);}image.close();
+    }catch{if(active&&++badFrames>=3)setNotice(screenError);}finally{if(active)timer=window.setTimeout(()=>void draw(),800);}};
     void draw();return()=>{active=false;controller.abort();clearTimeout(timer);};
   },[attempt?.id,attempt?.phase,disabled]);
   function send(input:Record<string,unknown>){
