@@ -38,6 +38,26 @@ async function main(){
   await m.server.platformProfile(creator);
   assert.deepEqual(f.queries.at(-2).filters,[['id',creator.accountId],['auth_user_id',creator.userId]]);
   f.linked='different-creator';await assert.rejects(()=>m.server.platformProfile(creator));f.linked=null;
+  // Exercise the real HTTP adapter with the native empty-binding refusal.
+  await build({entryPoints:[join(root,'lib/onlyfans/backend.ts')],outfile:join(dir,'backend.cjs'),bundle:true,platform:'node',format:'cjs',plugins:[{name:'server-marker',setup(b){b.onResolve({filter:/^server-only$/},()=>({path:'marker',namespace:'empty'}));b.onLoad({filter:/.*/,namespace:'empty'},()=>({contents:''}))}}]});
+  const {createHttpOnlyFansBackend}=require(join(dir,'backend.cjs'));
+  const savedRead=f.read.listAccounts;
+  for(const [status,body,empty] of [
+    [404,{ok:false,state:'denied',code:'unknown_creator'},true],
+    [404,{ok:false,state:'denied',code:'unknown_account'},false],
+    [404,{ok:false,code:'unknown_creator'},false],
+    [404,'not-json',false],[401,{ok:false},false],[403,{ok:false},false],[503,{ok:false},false],
+  ]){
+    const backend=createHttpOnlyFansBackend({baseUrl:'https://native.example',token:'synthetic',fetchImpl:async()=>new Response(typeof body==='string'?body:JSON.stringify(body),{status})});
+    f.read.listAccounts=scope=>backend.listAccounts(scope);
+    if(empty){
+      assert.deepEqual(await m.server.ownedPlatformAccounts(f.profile),[]);
+      const snapshot=await m.server.platformSnapshot(creator);
+      assert.equal(snapshot.onlyfans.status,'ready');assert.deepEqual(snapshot.onlyfans.accounts,[]);
+      assert.equal((await backend.listAccounts({creatorId:null})).code,'backend_404','Operator refusals remain refusals');
+    }else await assert.rejects(()=>m.server.ownedPlatformAccounts(f.profile));
+  }
+  f.read.listAccounts=savedRead;
   f.accounts=[{accountId:'of-123',binding:{creatorId:'foreign',channel:'onlyfans'}}];await assert.rejects(()=>m.server.ownedPlatformAccounts(f.profile));
   const own={accountId:'of-123',binding:{creatorId:f.profile,channel:'onlyfans',handle:'synthetic'},capabilities:{}};f.accounts=[own,own];await assert.rejects(()=>m.server.ownedPlatformAccounts(f.profile));f.accounts=[own];
   assert.equal((await m.setup.POST(request('/creator-auth/platforms',{channels:['onlyfans'],creatorId:'foreign'}))).status,400);

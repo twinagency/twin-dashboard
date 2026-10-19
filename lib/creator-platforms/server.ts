@@ -43,6 +43,9 @@ export async function ownedPlatformAccounts(profileId:string|null) {
   if(!profileId)return [];
   const backend=configuredOnlyFansBackend();if(!backend)throw new Error("OnlyFans connection status is temporarily unavailable.");
   const result=await backend.listAccounts({creatorId:profileId});
+  // profileId comes only from the signed-in creator's current database identity.
+  // No native binding is the normal first-connection state, not an outage.
+  if(!result.ok && result.status===404 && result.code==="backend_unknown_creator")return [];
   if(!result.ok || !Array.isArray(result.data) || result.data.some(account=>account?.binding?.creatorId!==profileId || account.binding.channel!=="onlyfans"))throw new Error("Your OnlyFans accounts could not be verified. Please refresh.");
   if(new Set(result.data.map(account=>account.accountId)).size!==result.data.length)throw new Error("Your OnlyFans accounts could not be verified. Please refresh.");
   return result.data;

@@ -144,7 +144,7 @@ export function createHttpOnlyFansBackend(options: {
   const call = options.fetchImpl ?? fetch;
   const timeoutMs = options.timeoutMs ?? ONLYFANS_READ_TIMEOUT_MS;
 
-  async function read<T>(path: string, shape: (body: unknown) => T | null): Promise<BackendResult<T>> {
+  async function read<T>(path: string, shape: (body: unknown) => T | null, creatorLookup = false): Promise<BackendResult<T>> {
     let response: Response;
     try {
       response = await call(base + path, {
@@ -168,6 +168,16 @@ export function createHttpOnlyFansBackend(options: {
 
     if (!response.ok) {
       const status = response.status;
+      // A verified creator may not have any native binding yet. Preserve this
+      // exact refusal code without echoing backend text or accepting other 404s.
+      if (creatorLookup && status === 404) {
+        try {
+          const body: unknown = await response.json();
+          if (isRecord(body) && body.ok === false && body.state === "denied" && body.code === "unknown_creator") {
+            return { ok: false, status: 404, code: "backend_unknown_creator", error: "That record is not available." };
+          }
+        } catch { /* A malformed refusal remains an ordinary backend error. */ }
+      }
       if (status === 401 || status === 403 || status === 404 || status === 400) {
         return {
           ok: false,
@@ -248,7 +258,7 @@ export function createHttpOnlyFansBackend(options: {
       return read(`${ONLYFANS_API_PATH}/accounts${query}`, (body) => {
         if (!isRecord(body) || !Array.isArray(body.accounts)) return null;
         return body.accounts as OfAccount[];
-      });
+      }, creatorId !== null);
     },
 
     listConversations(accountId, cursor) {
