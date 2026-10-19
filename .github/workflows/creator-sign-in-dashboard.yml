@@ -1,0 +1,34 @@
+name: Build creator sign-in dashboard image
+on:
+  push:
+    branches: [codex/creator-seamless-connect-20261020]
+    paths: ['.github/workflows/creator-sign-in-dashboard.yml']
+permissions:
+  contents: write
+env:
+  ECR_REPO: 323149985112.dkr.ecr.ap-southeast-2.amazonaws.com/twin-dashboard
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build the standard dashboard image and embedded runtime checks
+        run: docker build --build-arg GIT_SHA="$GITHUB_SHA" -t "$ECR_REPO:$GITHUB_SHA" .
+      - name: Existing scoped deployment credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ap-southeast-2
+      - uses: aws-actions/amazon-ecr-login@v2
+      - name: Push and record the exact dashboard digest
+        run: |
+          docker push "$ECR_REPO:$GITHUB_SHA"
+          IMAGE=$(docker inspect --format='{{index .RepoDigests 0}}' "$ECR_REPO:$GITHUB_SHA")
+          jq -n --arg commit "$GITHUB_SHA" --arg image "$IMAGE" '{dashboardCommit:$commit,dashboardImage:$image}' > creator-sign-in-dashboard-image.json
+          cat creator-sign-in-dashboard-image.json
+      - name: Retain the immutable image manifest on the private draft release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload creator-sign-in-0525e51-20261020 creator-sign-in-dashboard-image.json --repo "$GITHUB_REPOSITORY" --clobber
