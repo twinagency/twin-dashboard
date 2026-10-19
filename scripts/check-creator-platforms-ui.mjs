@@ -17,14 +17,14 @@ const server=createServer(async(req,res)=>{try{
   }
   return res.end(JSON.stringify(snapshot));
  }
- if(/^\/(brand|moxy)\/[^.\/]+\.(svg|png|webp)$/.test(path)){try{res.setHeader('Content-Type',path.endsWith('.svg')?'image/svg+xml':path.endsWith('.png')?'image/png':'image/webp');return res.end(readFileSync(resolve(root,'public',path.slice(1))))}catch{res.statusCode=404;return res.end()}}
+ if(/^\/(?:brand\/(?:platforms\/)?|moxy\/)[^.\/]+\.(svg|png|webp)$/.test(path)){try{res.setHeader('Content-Type',path.endsWith('.svg')?'image/svg+xml':path.endsWith('.png')?'image/png':'image/webp');return res.end(readFileSync(resolve(root,'public',path.slice(1))))}catch{res.statusCode=404;return res.end()}}
  if(path.startsWith('/brand/')){res.setHeader('Content-Type','image/svg+xml');return res.end('<svg xmlns="http://www.w3.org/2000/svg"/>')}
  res.setHeader('Content-Type','text/html');res.end('<!doctype html><html><meta name="viewport" content="width=device-width,initial-scale=1"><link rel="stylesheet" href="/style.css"><main id="root"></main><script src="/bundle.js"></script></html>');
 }catch{res.statusCode=500;res.end('{}')}});
 await new Promise(r=>server.listen(0,'127.0.0.1',r));const browser=await chromium.launch({headless:true,executablePath:process.env.CHROMIUM_PATH,args:['--no-sandbox']});
 try{
  const page=await browser.newPage({viewport:{width:1440,height:1000}}),errors=[];page.on('pageerror',e=>errors.push(e.message));await page.goto('http://127.0.0.1:'+server.address().port);
- await page.getByRole('heading',{name:'Your platforms',exact:true}).waitFor();await page.locator('img').first().evaluate(img=>img.decode());assert(await page.locator('img').evaluateAll(images=>images.every(img=>img.complete&&img.naturalWidth>0)),'Creator brand asset failed to load');assert(await page.getByRole('button',{name:'Save platforms'}).isDisabled());
+ await page.getByRole('heading',{name:'Your platforms',exact:true}).waitFor();await page.locator('img').evaluateAll(images=>Promise.all(images.map(img=>img.decode())));assert(await page.locator('img').evaluateAll(images=>images.every(img=>img.complete&&img.naturalWidth>0)),'Creator brand asset failed to load');assert(await page.getByRole('button',{name:'Save platforms'}).isDisabled());
  await page.getByRole('checkbox',{name:'Telegram',exact:true}).check();await page.getByRole('checkbox',{name:'OnlyFans',exact:true}).check();await page.getByRole('button',{name:'Save platforms'}).click();await page.locator('[data-platform-onlyfans]').waitFor();await page.locator('[data-platform-telegram]').waitFor();assert.deepEqual(posted[0].body.channels,['telegram','onlyfans']);
  assert.equal(await page.locator('[data-platform-account]').count(),0);assert.match(await page.locator('[data-platform-telegram]').innerText(),/Setup requested/);
  const capture={headers:{user_id:'123',user_agent:'Synthetic agent',x_bc:'synthetic-bc',x_of_rev:'synthetic-rev'},signing:{rules:{static_param:'synthetic-static',start:'synthetic-start',end:'synthetic-end',checksum_indexes:Array(32).fill(1),checksum_constant:1}},cookies:[{name:'sess',value:'synthetic-session',domain:'.onlyfans.com',path:'/'}]};
