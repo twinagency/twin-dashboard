@@ -30,22 +30,7 @@ export async function POST(req: NextRequest) {
     .maybeSingle();
   if (assignment.error || !assignment.data) return back();
 
-  if (!cloneId) {
-    await serviceClient().from("creator_clone_links").delete().eq("creator_account_id", creatorAccountId);
-    return back();
-  }
-  if (!isUuid(cloneId) || !access.cloneIds.includes(cloneId)) return back();
-
-  const clone = await serviceClient().from("clones").select("id,slug").eq("id", cloneId).maybeSingle();
-  if (clone.error || !clone.data) return back();
-
-  await serviceClient().from("creator_clone_links").delete().eq("clone_id", cloneId).neq("creator_account_id", creatorAccountId);
-  await serviceClient().from("creator_clone_links").upsert({
-    creator_account_id: creatorAccountId,
-    clone_id: clone.data.id,
-    twin_slug: clone.data.slug,
-    linked_at: new Date().toISOString(),
-  }, { onConflict: "creator_account_id" });
-
+  if (cloneId && (!isUuid(cloneId) || !access.cloneIds.includes(cloneId))) return back();
+  await serviceClient().rpc("link_creator_platform_profile",{p_account_id:creatorAccountId,p_clone_id:cloneId||null});
   return back();
 }

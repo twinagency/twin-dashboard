@@ -12,8 +12,20 @@ export const CREATOR_DASHBOARD_NAV = [
   { href: "/creator/edit", label: "Edit", icon: "Dials" },
 ] as const;
 export const CREATOR_AUDIENCE_HEADER = "x-dashboard-audience";
+export function isCreatorPlatformPage(path: string | null | undefined): boolean {
+  return path === "/creator/platforms" || path === "/creator/onlyfans/inbox";
+}
+export function isCreatorPlatformApiPath(path: string): boolean {
+  return path === "/creator-auth/platforms" || path.startsWith("/creator-auth/platforms/") || path === "/creator-auth/onlyfans" || path.startsWith("/creator-auth/onlyfans/");
+}
+export function creatorPlatformApiAllowed(path: string, method: string, serverAction: boolean): boolean {
+  if (serverAction) return false;
+  if (path === "/creator-auth/platforms" || /^\/creator-auth\/platforms\/onlyfans\/of-[1-9][0-9]{0,15}$/.test(path)) return ["GET", "HEAD", "POST"].includes(method);
+  if (path === "/creator-auth/platforms/onlyfans") return method === "POST";
+  return /^\/creator-auth\/onlyfans\/accounts(?:\/[A-Za-z0-9._:-]{1,64}(?:\/conversations(?:\/[A-Za-z0-9._:-]{1,64})?)?)?$/.test(path) && ["GET", "HEAD"].includes(method);
+}
 export function isCreatorDashboardPath(path: string | null | undefined): boolean {
-  return CREATOR_DASHBOARD_NAV.some(item => item.href === path) || path === "/creator/earnings" || path === "/creator/help";
+  return CREATOR_DASHBOARD_NAV.some(item => item.href === path) || path === "/creator/earnings" || path === "/creator/help" || isCreatorPlatformPage(path);
 }
 export function creatorApiAllowed(path: string, method: string, serverAction: boolean): boolean {
   if (serverAction || !["GET", "HEAD"].includes(method)) return false;
@@ -33,4 +45,3 @@ export function creatorDashboardAlias(path: string, params: URLSearchParams, clo
   if (clone && cloneIds.includes(clone)) return params.get("tab") === "ppvs" ? "/creator/ppvs" : "/creator/edit";
   return null;
 }
-

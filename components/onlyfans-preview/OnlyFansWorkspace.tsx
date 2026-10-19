@@ -42,6 +42,7 @@ import {
   workspaceHref,
   type WorkspaceScope,
 } from "@/lib/onlyfans-preview/scope";
+import { createFetchOnlyFansTransport } from "@/lib/onlyfans-preview/server-data-source";
 import { createOnlyFansDataSource } from "@/lib/onlyfans-preview/sources";
 import {
   applyAccounts,
@@ -88,7 +89,7 @@ import type { ConnectionCreator } from "@/lib/onlyfans-connections/contract";
 export type OnlyFansView = "inbox" | "accounts";
 
 /** Which data source the surface reads. There is no default: it is declared. */
-export type OnlyFansSourceMode = "fixture" | "server";
+export type OnlyFansSourceMode = "fixture" | "server" | "creator";
 
 const PRESETS: PreviewPreset[] = [
   { key: "healthy", label: "Healthy account", controls: { ...DEFAULT_CONTROLS } },
@@ -223,26 +224,27 @@ export default function OnlyFansWorkspace({
   // page: a view-as session is always narrower and always read only. Its
   // account scope follows the requested creator, so the preview's read-only mode
   // narrows the same way the real one would rather than pinning a fixture.
-  const viewerKey = controls.viewAs ? "view_as" : "operator";
+  const viewerKey = sourceMode === "creator" ? "creator" : controls.viewAs ? "view_as" : "operator";
   const viewer = useMemo<PreviewViewer>(
     () =>
-      controls.viewAs
+      sourceMode === "creator" ? { kind: "view_as", label: "Your OnlyFans account", canManage: false, scopedAccountIds: [] } : controls.viewAs
         ? readOnlyView(fixtureAccountIdsForCreator(requestedScope.creatorId))
         : operatorViewer(),
-    [controls.viewAs, requestedScope.creatorId],
+    [controls.viewAs, requestedScope.creatorId, sourceMode],
   );
 
   const scenarios = useMemo(() => buildScenarios(controls, viewer), [controls, viewer]);
 
   const source = useMemo<OnlyFansDataSource>(() => {
     const base = createOnlyFansDataSource({
-      mode: sourceMode === "server" ? "live" : "fixture",
+      mode: sourceMode === "fixture" ? "fixture" : "live",
+      ...(sourceMode === "creator" ? { transport: createFetchOnlyFansTransport(undefined, "/creator-auth/onlyfans") } : {}),
       viewer,
       scenarios,
     });
     // The developer overrides only exist for fixture reads. Wrapping a live
     // source in them would put controls on a live surface that change nothing.
-    if (sourceMode === "server") return base;
+    if (sourceMode !== "fixture") return base;
     return {
       kind: base.kind,
       label: base.label,

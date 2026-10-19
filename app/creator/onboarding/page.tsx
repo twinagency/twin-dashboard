@@ -290,6 +290,7 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
 
   if (optionalIntake) return (
     <CreatorSetupLayout brand={moxy ? "moxy" : "twin"} logoSrc="/moxy/moxy-ai-light.svg" activeSection={activeStep === "questionnaire" && !completionView ? "questionnaire" : "content"} applicationStatus={applicationState.label}>
+      <div className="mb-4 flex justify-end"><Link href="/creator/platforms" className="text-sm font-semibold text-ink underline underline-offset-4">My platforms</Link></div>
       {status && errorStatuses.has(status) && <div id="step-result" role="alert" className="rounded-xl border border-rose-200 bg-rose-50 px-4 py-3 text-sm text-rose-900">{status === "upload_too_large" ? "Videos can be up to 512 MiB and images up to 75 MiB each." : status === "upload_wrong_type" ? "This file could not be verified. Use JPG, PNG, WebP or GIF images (up to 25 MP), or MP4, MOV or WebM video. Export HEIC photos as JPG first." : statusCopy[status]}{status === "file_removal_pending" && <> <Link href="/creator/onboarding?step=content" className="font-semibold underline">Open Saved content</Link></>}</div>}
       {completionView ? <section data-creator-setup-panel data-setup-complete>
         <div data-complete-mark><Check size={38} strokeWidth={1.5} aria-hidden="true" /></div>
@@ -344,7 +345,7 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
       <header className={tether ? "border-b border-white/10 bg-[#06080c] text-white shadow-[0_8px_30px_rgba(0,0,0,0.16)]" : "border-b border-border bg-white/90 backdrop-blur"}>
         <div className="mx-auto flex max-w-5xl items-center justify-between px-5 py-4">
           <div className="flex min-w-0 items-center gap-3">{tether && <IntelligenceCoreIcon size={34} />}<TwinWordmark inverse={tether} agencyName={brandName === "Twin" ? undefined : brandName} />{tether && <span className="hidden text-xs font-bold uppercase tracking-[0.18em] text-sky-300 sm:inline">Creator</span>}</div>
-          <div className="flex items-center gap-4"><a href="/creator" className={tether ? "text-sm font-medium text-white/65 hover:text-white" : "text-sm font-medium text-muted hover:text-ink"}>Dashboard</a><form action="/creator-auth/logout" method="post"><button className={tether ? "text-sm font-medium text-white/65 hover:text-white" : "text-sm font-medium text-muted hover:text-ink"}>Sign out</button></form></div>
+          <div className="flex flex-wrap items-center justify-end gap-4"><Link href="/creator/platforms" className={tether ? "text-sm font-medium text-white/65 hover:text-white" : "text-sm font-medium text-muted hover:text-ink"}>My platforms</Link><a href="/creator" className={tether ? "text-sm font-medium text-white/65 hover:text-white" : "text-sm font-medium text-muted hover:text-ink"}>Dashboard</a><form action="/creator-auth/logout" method="post"><button className={tether ? "text-sm font-medium text-white/65 hover:text-white" : "text-sm font-medium text-muted hover:text-ink"}>Sign out</button></form></div>
         </div>
       </header>
 
@@ -460,7 +461,3 @@ export default async function CreatorOnboardingPage({ searchParams }: { searchPa
     </div>
   );
 }
-
-
-
-

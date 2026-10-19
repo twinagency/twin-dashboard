@@ -12,7 +12,7 @@ import { CREATOR_SESSION_COOKIE } from "@/lib/creator-session";
 import { CREATOR_PORTAL_COOKIE, creatorLoginPath, creatorPortalCookieOptions, creatorPortalForIdentity, creatorPublicPortal, isCreatorAuthPath, isCreatorPath, isCreatorPublicPath, safeCreatorNext, shouldRedirectAuthenticatedCreatorEntry } from "@/lib/creator-routing";
 import { isAgencyPath, agencyRequestAllowed, agencyDashboardPath, AGENCY_COOKIE } from "@/lib/agency-policy";
 import { creatorDashboardIdentity, creatorDashboardIdentityById } from "@/lib/creator-dashboard-identity";
-import { CREATOR_AUDIENCE_HEADER, isCreatorDashboardPath, creatorApiAllowed, assertCreatorQuery, creatorDashboardAlias } from "@/lib/creator-dashboard-policy";
+import { CREATOR_AUDIENCE_HEADER, isCreatorDashboardPath, isCreatorPlatformPage, creatorPlatformApiAllowed, isCreatorPlatformApiPath, creatorApiAllowed, assertCreatorQuery, creatorDashboardAlias } from "@/lib/creator-dashboard-policy";
 import { creatorDemoQueryIds } from "@/lib/creator-demo-policy";
 import { activeViewAs, VIEW_AS_EXIT_PATH } from "@/lib/view-as";
 
@@ -113,6 +113,13 @@ export async function middleware(req: NextRequest) {
     return privateResponse(withPathname(req));
   }
   if (pathname === "/creator-auth/logout" && ["GET", "HEAD"].includes(req.method) && !req.headers.has("next-action")) return privateResponse(withPathname(req));
+  if (isCreatorPlatformApiPath(pathname)) {
+    if (!creatorPlatformApiAllowed(pathname, req.method, req.headers.has("next-action"))) return new NextResponse("Forbidden", { status: 403 });
+    // Each route verifies the real creator cookie and derives its account scope.
+    // Reads are available before Telegram intake is submitted; writes also
+    // enforce a strict same-origin JSON boundary in platformCommand.
+    return privateResponse(withPathname(req));
+  }
   if (isCreatorAuthPath(pathname)) {
     if (req.method !== "POST" || req.headers.has("next-action") || !trustedFormOrigin(req)) return new NextResponse("Forbidden", { status: 403 });
     return privateResponse(withPathname(req));
@@ -151,7 +158,7 @@ export async function middleware(req: NextRequest) {
       return response;
     }
     try { assertCreatorQuery(req.nextUrl.searchParams, creator.cloneIds); } catch { return new NextResponse("Creator access denied", { status: 403 }); }
-    if (isCreatorDashboardPath(pathname) && !creator.onboarded) return privateResponse(NextResponse.redirect(new URL("/creator/onboarding", dashboardOrigin(req))));
+    if (isCreatorDashboardPath(pathname) && !isCreatorPlatformPage(pathname) && !creator.onboarded) return privateResponse(NextResponse.redirect(new URL("/creator/onboarding", dashboardOrigin(req))));
     return privateResponse(withPathname(req, isCreatorDashboardPath(pathname)));
   }
   if (pathname === "/admin-auth") {

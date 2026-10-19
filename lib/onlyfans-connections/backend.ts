@@ -1,10 +1,11 @@
 import { createBackendTransport, configuredBackendPurpose } from "@/lib/onlyfans/backend-transport";
 import { CONNECTION_HEADER, CONNECTION_SCHEMA, parseConnection, parseConnectionAck, parseRegistrationAck,
-  type ConnectionRequest, type ConnectionRegistration, type ConnectionFailure } from "./contract";
+  parseEnrollment, type ConnectionEnrollmentRequest, type ConnectionRequest, type ConnectionRegistration, type ConnectionFailure } from "./contract";
 type Identity = { actor: string; commandKey: string };
 export function createConnectionBackend(options: { baseUrl: string; token: string; fetchImpl?: typeof fetch }) {
   const call = createBackendTransport(options.fetchImpl);
-  const base = options.baseUrl.replace(/\/+$/, "") + "/onlyfans/connection/v1/accounts";
+  const root = options.baseUrl.replace(/\/+$/, "") + "/onlyfans/connection/v1";
+  const base = root + "/accounts";
   const headers = { Authorization: `Bearer ${options.token}`, [CONNECTION_HEADER]: CONNECTION_SCHEMA };
   async function post(path: string, body: unknown) {
     try {
@@ -16,6 +17,20 @@ export function createConnectionBackend(options: { baseUrl: string; token: strin
     return { ok: false, status: 502, outcome: "unconfirmed", error: "The connection outcome is not confirmed. Refresh or retry the same request." } as ConnectionFailure;
   }
   return {
+    async enroll(command: ConnectionEnrollmentRequest & Identity) {
+      const result=await post(root+"/enrollments",command);if(!result.ok)return result;
+      const body=result.body as {ok?:boolean;enrollment?:unknown},data=body?.ok===true?parseEnrollment(body.enrollment):null;
+      return data?{ok:true as const,data}:{ok:false as const,status:502,error:"Your connection request could not be confirmed. Refresh before retrying."};
+    },
+    async enrollments(creatorId:string) {
+      try {
+        const response=await call(root+"/enrollments?creator="+encodeURIComponent(creatorId),{method:"GET",headers});
+        const body=response.ok?await response.json() as {ok?:boolean;enrollments?:unknown[]}:null;
+        const rows=body?.ok===true&&Array.isArray(body.enrollments)?body.enrollments.map(parseEnrollment):null;
+        if(rows&&rows.length<=5&&rows.every(row=>row!==null))return {ok:true as const,data:rows};
+      }catch{}
+      return {ok:false as const,status:503,error:"Connection requests could not be loaded."};
+    },
     async get(accountId: string) {
       try {
         const response = await call(base + "/" + encodeURIComponent(accountId), { method: "GET", headers });

@@ -53,23 +53,8 @@ export async function linkCreatorClone(fd: FormData) {
   const cloneId = value(fd, "clone_id");
   if (!creatorAccountId) throw new Error("Creator account is required.");
 
-  if (!cloneId) {
-    const { error } = await supabaseAdmin.from("creator_clone_links").delete().eq("creator_account_id", creatorAccountId);
-    if (error) throw new Error(error.message);
-  } else {
-    const { data: clone, error: cloneError } = await supabaseAdmin.from("clones").select("id,slug").eq("id", cloneId).maybeSingle();
-    if (cloneError) throw new Error(cloneError.message);
-    if (!clone) throw new Error("Clone not found.");
-    const { error: detachError } = await supabaseAdmin.from("creator_clone_links").delete().eq("clone_id", cloneId).neq("creator_account_id", creatorAccountId);
-    if (detachError) throw new Error(detachError.message);
-    const { error } = await supabaseAdmin.from("creator_clone_links").upsert({
-      creator_account_id: creatorAccountId,
-      clone_id: clone.id,
-      twin_slug: clone.slug,
-      linked_at: new Date().toISOString(),
-    }, { onConflict: "creator_account_id" });
-    if (error) throw new Error(error.message);
-  }
+  const {error}=await supabaseAdmin.rpc("link_creator_platform_profile",{p_account_id:creatorAccountId,p_clone_id:cloneId||null});
+  if(error)throw new Error(error.message);
 
   revalidatePath("/creator-management");
   revalidatePath(`/creator-management/${creatorAccountId}`);

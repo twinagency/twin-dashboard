@@ -50,6 +50,11 @@ jobs:
           node --import tsx scripts/check-channel-roster.ts
           node scripts/check-operator-workspace-ui.mjs
 
+      - name: Creator platform ownership and connection journey
+        run: |
+          node scripts/check-creator-platforms.cjs
+          node scripts/check-creator-platforms-ui.mjs
+
       - name: Creator profile mobile and save navigation checks
         run: node scripts/check-creator-profile-ui.mjs
 
@@ -148,3 +153,25 @@ jobs:
           path: test-results/twin-public
           if-no-files-found: ignore
           retention-days: 3
+
+  creator-platform-database:
+    name: Creator platform identity and ownership
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: synthetic-platform-test
+          POSTGRES_DB: creator_platforms_test
+        ports: [5432:5432]
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    steps:
+      - uses: actions/checkout@v4
+      - name: Exercise real PostgreSQL functions on isolated fixtures
+        env:
+          PGPASSWORD: synthetic-platform-test
+        run: psql -h 127.0.0.1 -U postgres -d creator_platforms_test -f scripts/check-creator-platforms.sql

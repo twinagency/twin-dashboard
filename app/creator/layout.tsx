@@ -1,9 +1,10 @@
+import Link from "next/link";
 import { getCreatorStudioStatus } from "@/lib/creator-studio";
 import { isMoxy } from "@/lib/agency-brand";
 import { headers } from "next/headers";
 import CreatorWorkspaceShell from "@/components/CreatorWorkspaceShell";
 import { requireCreatorWorkspace } from "@/lib/creator-dashboard";
-import { isCreatorDashboardPath } from "@/lib/creator-dashboard-policy";
+import { isCreatorDashboardPath, isCreatorPlatformPage } from "@/lib/creator-dashboard-policy";
 import { withDashboardAccess } from "@/lib/dashboard-access";
 import { getViewerTerms } from "@/lib/platform-cut";
 import { getFleetClones, getHeaderAllTimeStars } from "@/lib/query-cache";
@@ -13,7 +14,7 @@ export const dynamic = "force-dynamic";
 export default async function CreatorLayout({ children }: { children: React.ReactNode }) {
   const pathname = (await headers()).get("x-pathname");
   if (!isCreatorDashboardPath(pathname)) return <>{children}</>;
-  const creator = await requireCreatorWorkspace();
+  const creator = await requireCreatorWorkspace({ allowPlatformSetup: isCreatorPlatformPage(pathname) });
   const cloneId = creator.cloneIds[0] ?? null;
   const viewAsInfo = await getViewAsBannerInfo();
   const [clones, allTimeStars] = await withDashboardAccess(creator, () => Promise.all([
@@ -38,8 +39,8 @@ export default async function CreatorLayout({ children }: { children: React.Reac
       usdPerStar={usdPerStar}
     >
       {viewAsInfo && <ViewAsBanner info={viewAsInfo} />}
+      <div className="mb-4 flex justify-end"><Link href="/creator/platforms" className="rounded-xl border border-line px-4 py-2 text-sm font-semibold text-ink" data-creator-platform-access>My platforms</Link></div>
       {children}
     </CreatorWorkspaceShell>
   );
 }
-

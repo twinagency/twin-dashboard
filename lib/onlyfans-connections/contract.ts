@@ -10,10 +10,13 @@ export type ConnectionSave = { ownerId: number; capture: Record<string, unknown>
   expiresAt: string; model: { modelId: string; apiKey: string } | null };
 export type ConnectionRequest = { expectedRevision: number } & (
   { action: "save"; payload: ConnectionSave } |
+  { action: "session"; payload: Pick<ConnectionSave,"ownerId"|"capture"|"xHash"|"expiresAt"> } |
   { action: "activate"; payload: { limitUnits: number; throttleSeconds: number; mediaEnabled: boolean; automateNewConversations?: boolean } } |
   { action: "verify" | "pause"; payload: Record<string, never> }
 );
 export type ConnectionRegistration = { creatorId: string; ownerId: number; handle: string };
+export type ConnectionEnrollment = { id: string; status: "pending" | "checking" | "accepted" | "failed" | "expired"; accountId: string | null; error: string | null; expiresAt: string };
+export type ConnectionEnrollmentRequest = { creatorId: string; creatorName: string; handle: string; session: Pick<ConnectionSave,"ownerId"|"capture"|"xHash"|"expiresAt"> };
 export type ConnectionAck = { schemaVersion: typeof CONNECTION_SCHEMA; ok: true; applied: true; accountId: string;
   commandKey: string; recordedRevision: number; action: ConnectionRequest["action"] };
 export type RegistrationAck = { schemaVersion: typeof CONNECTION_SCHEMA; ok: true; applied: true; accountId: string; commandKey: string; status: "unconfigured" };
@@ -54,8 +57,10 @@ export function validConnectionRequest(value: unknown): value is ConnectionReque
   if (value.action === "activate") return (exact(p, ["limitUnits", "throttleSeconds", "mediaEnabled"]) || exact(p, ["limitUnits", "throttleSeconds", "mediaEnabled", "automateNewConversations"])) &&
     integer(p.limitUnits, 1, 10_000) && integer(p.throttleSeconds, 1, 86_400) && typeof p.mediaEnabled === "boolean" &&
     (!("automateNewConversations" in p) || typeof p.automateNewConversations === "boolean");
-  if (value.action !== "save" || !exact(p, ["ownerId", "capture", "xHash", "proxyUrl", "expiresAt", "model"]) || !integer(p.ownerId, 1) ||
+  const sessionOnly = value.action === "session";
+  if (!["save", "session"].includes(value.action as string) || !exact(p, sessionOnly ? ["ownerId", "capture", "xHash", "expiresAt"] : ["ownerId", "capture", "xHash", "proxyUrl", "expiresAt", "model"]) || !integer(p.ownerId, 1) ||
     !connectionCapture(p.capture, p.ownerId) || !header(p.xHash) || !stamp(p.expiresAt)) return false;
+  if (sessionOnly) return true;
   if (p.proxyUrl !== null) {
     if (!header(p.proxyUrl)) return false;
     try { const proxy = new URL(p.proxyUrl); const port = /:([0-9]+)\/?$/.exec(p.proxyUrl)?.[1];
@@ -93,4 +98,11 @@ export function parseRegistrationAck(value: unknown, expected: ConnectionRegistr
 }
 export function canonicalConnection(value: unknown): string {
   return JSON.stringify(value, (_key, item) => object(item) ? Object.fromEntries(Object.entries(item).sort(([a], [b]) => a.localeCompare(b))) : item);
+}
+export function parseEnrollment(value:unknown):ConnectionEnrollment|null {
+  if(!object(value)||!exact(value,["id","status","accountId","error","expiresAt"])||!id(value.id)
+    ||!["pending","checking","accepted","failed","expired"].includes(String(value.status))
+    ||!(value.accountId===null||id(value.accountId))||!(value.error===null||["session_unavailable","verification_unavailable"].includes(String(value.error)))
+    ||!stamp(value.expiresAt)||(value.status==="accepted"&&!value.accountId)||(value.status!=="accepted"&&value.accountId!==null))return null;
+  return value as ConnectionEnrollment;
 }

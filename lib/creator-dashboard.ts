@@ -13,9 +13,9 @@ export const getCreatorWorkspace = cache(async () => {
   const viewAs = await activeViewAs(jar);
   return viewAs?.targetType === "creator" ? creatorDashboardIdentityById(viewAs.targetId) : null;
 });
-export async function requireCreatorWorkspace() {
+export async function requireCreatorWorkspace(options?: { allowPlatformSetup?: boolean }) {
   const identity = await getCreatorWorkspace();
   if (!identity) redirect(creatorLoginPath(identity, (await cookies()).get(CREATOR_PORTAL_COOKIE)?.value));
-  if (!identity.onboarded) redirect("/creator/onboarding");
+  if (!identity.onboarded && !options?.allowPlatformSetup) redirect("/creator/onboarding");
   return identity;
 }
