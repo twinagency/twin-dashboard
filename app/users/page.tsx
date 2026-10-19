@@ -228,9 +228,10 @@ const REACHABLE_MS = 24 * 3600 * 1000;
 export default async function FansPage({
   searchParams,
 }: {
-  searchParams: Promise<{ fan?: string; q?: string; status?: string; sort?: string; dir?: string; show?: string; relationship?: string; creator?: string; platform?: string; source?: string; before?: string; after?: string }>;
+  searchParams: Promise<{ fan?: string; q?: string; status?: string; sort?: string; dir?: string; show?: string; relationship?: string; creator?: string; platform?: string; source?: string; workspace?: string; before?: string; after?: string }>;
 }) {
   const params = await searchParams;
+  const awaitedWorkspace = params.workspace;
   // Old presentation links must never render invented conversations.
   if (params.relationship !== undefined) redirect("/users");
   const cloneId = await getCloneScope();
@@ -820,6 +821,7 @@ export default async function FansPage({
   });
   const baseQs = (extra: Record<string, string>) => {
     const params = new URLSearchParams();
+    if (awaitedWorkspace === "telegram") params.set("workspace", "telegram");
     if (q) params.set("q", q);
     if (status !== "all") params.set("status", status);
     if (sortKey !== "last_message_received") params.set("sort", sortKey);

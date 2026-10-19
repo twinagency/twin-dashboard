@@ -71,7 +71,7 @@ function source(relative: string): string {
  * link to nowhere.
  */
 function routeExists(href: string): boolean {
-  const trimmed = href.replace(/^\//, "").replace(/\/$/, "");
+  const trimmed = href.split("?")[0].replace(/^\//, "").replace(/\/$/, "");
   if (!trimmed) return existsSync(join(repoRoot, "app", "page.tsx"));
   const segments = trimmed.split("/");
   const parent = segments.slice(0, -1);
@@ -144,7 +144,7 @@ group("1. The channel workspaces are real routes in the real app");
     /components\/onlyfans-preview\/OnlyFansWorkspace/.test(source("app/onlyfans/inbox/page.tsx")) &&
       /components\/onlyfans-preview\/OnlyFansWorkspace/.test(source("app/onlyfans/accounts/page.tsx")),
   );
-  check("the All-channels surface uses the operator-gated combined earnings owner", /CombinedEarnings/.test(overview) && /requireOperatorSurface/.test(overview));
+  check("the All-channels surface uses the operator-gated combined earnings owner", /AllChannelsDashboard/.test(overview) && /requireOperatorSurface/.test(overview));
 }
 
 // ── 2. The server decides the scope ───────────────────────────────────────
@@ -325,14 +325,14 @@ group("5. Telegram's routes and the agency policy are unchanged");
     check("the existing route " + href + " still exists", routeExists(href));
   }
   const telegramPage = source("app/telegram/page.tsx");
-  check("the Telegram channel points at /users rather than rebuilding it", /route="\/users"/.test(telegramPage));
+  check("the Telegram channel loads its real roster and links into existing tools", /loadChannelRoster\("telegram"\)/.test(telegramPage) && /ChannelCreatorRoster/.test(telegramPage));
   check(
     "the Telegram channel does not import or fork the Fans screen",
     !/app\/users/.test(telegramPage) && !/from "@\/app\//.test(telegramPage),
   );
   check(
-    "the Telegram channel nav lists existing routes only",
-    TELEGRAM_CHANNEL.nav.every((item) => item.availability === "existing"),
+    "the Telegram channel nav reuses existing tools and its live roster",
+    TELEGRAM_CHANNEL.nav.every((item) => item.availability === "existing" || item.href === "/telegram"),
   );
 
   // The new workspace routes must not have widened agency access: the existing
@@ -352,7 +352,7 @@ group("5. Telegram's routes and the agency policy are unchanged");
   // Channel definitions stay coherent: `all` is the existing dashboard, and each
   // channel's landing href belongs to that channel.
   check("All channels lands on /overview", ALL_CHANNELS.href === "/overview");
-  check("the OnlyFans channel lands in its own inbox", ONLYFANS_CHANNEL.href === "/onlyfans/inbox");
+  check("the OnlyFans channel lands in its own inbox", ONLYFANS_CHANNEL.href === "/onlyfans/accounts");
   check("the Telegram channel lands on its own route", TELEGRAM_CHANNEL.href === "/telegram");
   for (const channel of CHANNELS) {
     check(

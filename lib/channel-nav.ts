@@ -79,29 +79,22 @@ export const ALL_CHANNELS: ChannelDefinition = {
 };
 
 export const TELEGRAM_CHANNEL: ChannelDefinition = {
-  channel: "telegram",
-  label: "Telegram",
-  href: "/telegram",
-  summary: "The Telegram fleet: one combined Fans and Messages screen per creator scope.",
+  channel: "telegram", label: "Telegram", href: "/telegram",
+  summary: "Your Telegram creators, conversations, content and earnings.",
   nav: [
-    {
-      key: "fans",
-      label: "Fans and Messages",
-      href: "/users",
-      icon: "FansCombo",
-      availability: "existing",
-      note: "Telegram keeps its existing combined list-and-thread screen.",
-    },
-    { key: "flows", label: "Flows", href: "/flows", icon: "Flows", availability: "existing" },
-    { key: "media", label: "Media", href: "/media", icon: "Media", availability: "existing" },
-    { key: "business", label: "Business", href: "/business", icon: "Bot", availability: "existing" },
+    { key: "telegram-creators", label: "Creators", href: "/telegram", icon: "Clones", availability: "built" },
+    { key: "fans", label: "Fans and Messages", href: "/users?workspace=telegram", icon: "FansCombo", availability: "existing" },
+    { key: "media", label: "Content", href: "/media?workspace=telegram", icon: "Media", availability: "existing" },
+    { key: "flows", label: "Flows", href: "/flows?workspace=telegram", icon: "Flows", availability: "existing" },
+    { key: "business", label: "Telegram Stories", href: "/business?workspace=telegram", icon: "Bot", availability: "existing" },
+    { key: "telegram-earnings", label: "Earnings", href: "/dashboard?workspace=telegram", icon: "Dollar", availability: "existing" },
   ],
 };
 
 export const ONLYFANS_CHANNEL: ChannelDefinition = {
   channel: "onlyfans",
   label: "OnlyFans",
-  href: "/onlyfans/inbox",
+  href: "/onlyfans/accounts",
   summary: "OnlyFans accounts and conversations, account by account.",
   nav: [
     { key: "of-inbox", label: "Inbox", href: "/onlyfans/inbox", icon: "Inbox", availability: "built" },
@@ -183,4 +176,20 @@ export function offeredChannels(allowed: readonly DashboardChannel[]): ChannelDe
  */
 export function shouldShowChannelSwitch(allowed: readonly DashboardChannel[]): boolean {
   return offeredChannels(allowed).length >= 2;
+}
+
+/** Presentation context for existing Telegram screens. Never grants access;
+ * server channel authorization continues to use the route and verified identity. */
+export function workspaceChannel(pathname: string | null | undefined, workspace: string | null | undefined, operator: boolean): DashboardChannel {
+  const channel = channelForPath(pathname);
+  if (channel !== "all" || !operator) return channel;
+  const path = pathname ?? "";
+  if (["/users", "/media", "/flows", "/business"].includes(path)) return "telegram";
+  if (workspace !== "telegram") return "all";
+  return ["/users", "/media", "/flows", "/business", "/dashboard", "/clones", "/clones/new"].includes(path) || /^\/clones\/[0-9a-f-]{36}\/?$/i.test(path) ? "telegram" : "all";
+}
+export function telegramWorkspaceHref(path: string): string {
+  const [pathname, query = ""] = path.split("?");
+  const params = new URLSearchParams(query); params.set("workspace", "telegram");
+  return `${pathname}?${params}`;
 }

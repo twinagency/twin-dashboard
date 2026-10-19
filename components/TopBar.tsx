@@ -1,4 +1,6 @@
 "use client";
+import { useEffect, useState } from "react";
+import { mergeChannelCreators, type ChannelRoster } from "@/lib/channel-workspace/model";
 import { useDashboardAccess } from "./DashboardAccessProvider";
 
 import { usePathname, useSearchParams } from "next/navigation";
@@ -13,7 +15,7 @@ import { isDashboardWorkspaceRoute, dashboardWorkspacePageLabel } from "@/lib/da
 import { CREATOR_DASHBOARD_NAV } from "@/lib/creator-dashboard-policy";
 import ChannelSwitch from "@/components/ChannelSwitch";
 import type { DashboardChannel } from "@/lib/channel-nav";
-import { channelForPath } from "@/lib/channel-nav";
+import { workspaceChannel } from "@/lib/channel-nav";
 
 // Straight, full-width top bar — replaces the old floating/overlay pill.
 // One row: breadcrumb on the left, account controls in the middle. Always in
@@ -71,14 +73,35 @@ export default function TopBar({
   const { currency, rate, usdPerStar } = useCurrency();
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  const channel = channelForPath(pathname);
-  const pageMeta = getPageMeta(pathname, clones, activeCloneId);
+  const channel = workspaceChannel(pathname, searchParams.get("workspace"), audience === "admin");
+  const combined = audience === "admin" && channel === "all" && ["/dashboard", "/overview"].includes(pathname);
+  const [rosterRead, setRosterRead] = useState<{channel: string; status: "ready" | "unavailable"; creators: typeof clones} | null>(null);
+  useEffect(() => {
+    if (audience !== "admin" || channel === "all" || lockCreatorScope) return;
+    const controller = new AbortController();
+    void (async () => {
+      try {
+        const response = await fetch(`/api/channel-roster?channel=${channel}`, { cache: "no-store", signal: controller.signal });
+        const data = response.ok ? await response.json() as ChannelRoster : null;
+        const source = data?.schemaVersion === "channel-roster.v1" ? data[channel] : null;
+        if (!controller.signal.aborted) setRosterRead({ channel, status: source?.status === "ready" ? "ready" : "unavailable", creators: source?.status === "ready" ? mergeChannelCreators(data!).map(creator => ({id: creator.id, name: creator.name, color: creator.color, photoUrl: creator.photoUrl})) : [] });
+      } catch { if (!controller.signal.aborted) setRosterRead({channel, status:"unavailable", creators:[]}); }
+    })();
+    return () => controller.abort();
+  }, [audience, channel, lockCreatorScope]);
+  const channelScoped = audience === "admin" && channel !== "all" && !lockCreatorScope;
+  const channelReady = rosterRead?.channel === channel && rosterRead.status === "ready";
+  const scopedClones = channelScoped ? channelReady ? rosterRead?.creators ?? [] : [] : clones;
+  const scopeId = combined ? null : channel === "onlyfans" ? searchParams.get("creator") : activeCloneId;
+  const scopeLocked = isCreator || lockCreatorScope || combined || channelScoped && (!channelReady || scopedClones.length === 0);
+  const fallbackScope = combined ? "All creators" : channelScoped && !channelReady ? rosterRead?.channel === channel ? "Creators unavailable" : "Loading creators…" : channelScoped && scopedClones.length === 0 ? `No ${channel === "onlyfans" ? "OnlyFans" : "Telegram"} creators` : creatorName;
+  const pageMeta = getPageMeta(pathname, scopedClones, scopeId);
   const workspaceLabel = !isCreator && isDashboardWorkspaceRoute(pathname) ? dashboardWorkspacePageLabel(pathname) : null;
   const pageLabel = isCreator
     ? CREATOR_DASHBOARD_NAV.find((item) => item.href === pathname)?.label ?? "Earnings"
     : pathname?.startsWith("/clones/") && searchParams.get("tab") === "ppvs" ? "PPVs" : workspaceLabel ?? pageMeta.pageLabel;
-  const scopeLabel = isCreator ? creatorName || clones.find((clone) => clone.id === activeCloneId)?.name || "Creator" : pageMeta.scopeLabel;
-  const scopeIsCreator = isCreator || pageMeta.scopeIsCreator;
+  const scopeLabel = combined ? "All creators" : isCreator ? creatorName || clones.find((clone) => clone.id === activeCloneId)?.name || "Creator" : pageMeta.scopeLabel;
+  const scopeIsCreator = !combined && (isCreator || pageMeta.scopeIsCreator);
   if (isAgency && agencyName?.trim().toLowerCase() === "moxy" && pathname === "/revenue") {
     return <div className="dashboard-topbar moxy-overview-topbar">
       <div className="moxy-overview-breadcrumb"><span>Moxy</span> / Earnings</div>
@@ -122,7 +145,7 @@ export default function TopBar({
       </div>
 
       <div className="workspace-account-controls flex shrink-0 items-center gap-1.5 rounded-xl border border-line/80 bg-white/82 px-2 py-1.5 shadow-[0_8px_26px_rgb(6_23_47/0.06)] backdrop-blur-xl">
-        <CloneSwitcher clones={clones} activeCloneId={activeCloneId} locked={isCreator || lockCreatorScope} fallbackName={creatorName} />
+        <CloneSwitcher clones={scopedClones} activeCloneId={scopeId} locked={scopeLocked} fallbackName={fallbackScope} allowNewCreator={channel !== "onlyfans"} />
         <div className="h-5 w-px shrink-0 bg-line" />
         {/* All-time cash made, scoped to the clone switcher above - not
             time-windowed like the Revenue page's period toggle.
@@ -130,7 +153,7 @@ export default function TopBar({
             is withheld rather than shown at zero: a Stars figure on an OF
             account would read as that account's earnings, and the two must
             never be silently aggregated. */}
-        {channel !== "onlyfans" ? (
+        {channel !== "onlyfans" && !combined ? (
           <>
             <span className="hidden items-baseline gap-1 px-1.5 sm:flex">
               <span className="text-xs">💵</span>

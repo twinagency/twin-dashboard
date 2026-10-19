@@ -38,7 +38,7 @@ const PAGE_LABELS: Record<string, string> = {
   // this breadcrumb all read the same definition, so a channel page cannot be
   // labelled differently in two places.
   "/overview": "Overview",
-  "/telegram": "Fans and Messages",
+  "/telegram": "Telegram creators",
   "/onlyfans/inbox": "Inbox",
   "/onlyfans/campaigns": "Campaigns",
   "/onlyfans/accounts": "Accounts",
@@ -83,5 +83,3 @@ export function getPageMeta(
     scopeIsCreator: globalScope != null,
   };
 }
-
-

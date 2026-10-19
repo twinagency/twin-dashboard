@@ -23,6 +23,7 @@ import Sidebar from "./components/Sidebar";
 import TopBar from "./components/TopBar";
 import MobileMenu from "./components/MobileMenu";
 import Wordmark from "./components/TwinWordmark";
+import ChannelCreatorRoster from "./components/ChannelCreatorRoster";
 import CloneForm from "./components/CloneForm";
 import {Card,CardHeader,CardTitle,CardContent} from "./components/ui/card";
 const params=new URLSearchParams(location.search),brand=params.get("brand")||"Twin";
@@ -37,6 +38,8 @@ business_username:"fixture_creator",ai_mode:"classic",charge_messages:true,start
 credit_pack_price_stars:299,paywall_prime_enabled:true,paywall_prime_before:3,intake:{fields:{},answers:""},
 photos_enabled:true,videos_enabled:true,bundles_enabled:true,voice_enabled:false};
 const clones=[{id:clone.id,name:params.get("longname")==="true"?"Fixture Creator With A Very Long Display Name":clone.name,color:"#768296"}];
+const roster={schemaVersion:"channel-roster.v1",telegram:{status:"ready",error:null,items:[{id:clone.id,name:clone.name,status:"active",handle:"fixture_tg",color:clones[0].color},{id:"bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",name:"Telegram Only",status:"active",handle:null,color:"#4fa7d9"}]},onlyfans:{status:"ready",error:null,items:[{id:"of-a",creatorId:clone.id,creatorName:clone.name,handle:"fixture_of",health:"connected"},{id:"of-a2",creatorId:clone.id,creatorName:clone.name,handle:"fixture_of_two",health:"connected"},{id:"of-c",creatorId:"cccccccc-cccc-4ccc-8ccc-cccccccccccc",creatorName:"OnlyFans Only",handle:"onlyfans_only",health:"connected"}]}};
+window.__roster=roster;
 function App(){const pathname=usePathname();return <Access agencyName={agencyName} canManage={canManage}><Currency usdPerStar={.02}><Blur>
 <Workspace activeCloneId={clone.id}><Sidebar clones={clones} activeCloneId={clone.id} channels={channels}/><div className="flex h-screen min-w-0 flex-1 flex-col overflow-hidden">
 <header className="dashboard-mobile-header flex shrink-0 items-center justify-between border-b border-white/12 px-4 py-3 lg:hidden">
@@ -44,7 +47,7 @@ function App(){const pathname=usePathname();return <Access agencyName={agencyNam
 <span className="px-3 py-2 text-sm text-white/80">Sign out</span><MobileMenu activeCloneId={clone.id} channels={channels}/></div></header>
 <TopBar clones={clones} activeCloneId={clone.id} allTimeStars={0} channels={channels}/><Main activeCloneId={clone.id}>
 <p className="mb-3 text-[10px] text-muted">Interface verification · synthetic test data</p>
-{pathname.startsWith("/clones/")?<CloneForm clone={clone} promptPreview={{mode:"classic",blocks:[]}} photos={[]} videos={[]} bundles={[]} catalogueBundles={[]} appearanceColor="#768296"/>:
+{["/telegram","/overview","/dashboard"].includes(pathname)?<div className="dashboard-page"><ChannelCreatorRoster channel={pathname==="/telegram"?"telegram":"all"} roster={{...roster,onlyfans:pathname==="/telegram"?{status:"not_requested",items:[],error:null}:params.has("of_unavailable")?{status:"unavailable",items:[],error:"OnlyFans accounts could not be loaded."}:roster.onlyfans}}/></div>:pathname.startsWith("/clones/")?<CloneForm clone={clone} promptPreview={{mode:"classic",blocks:[]}} photos={[]} videos={[]} bundles={[]} catalogueBundles={[]} appearanceColor="#768296"/>:
 <div className="dashboard-page"><h1>{pathname==="/flows"?"Flows":pathname==="/logs"?"Activity Logs":"Creators"}</h1>
 <Card><CardHeader><CardTitle>Fixture workspace</CardTitle></CardHeader><CardContent>Shared navigation and page surfaces</CardContent></Card></div>}
 </Main></div></Workspace></Blur></Currency></Access>}
@@ -61,7 +64,7 @@ export const useSearchParams=()=>new URLSearchParams(useLocation().split("?")[1]
 export const useRouter=()=>({refresh(){},push(p){history.pushState({},"",p)},replace(p){history.replaceState({},"",p);dispatchEvent(new PopStateEvent("popstate"))}});
 `;
 const link=`import React from "react";export default function Link({href,children,onClick,...props}){return <a {...props} href={href} onClick={e=>{onClick?.(e);if(!e.defaultPrevented){e.preventDefault();history.pushState({},"",href)}}}>{children}</a>}`;
-const actions=`export async function updateClone(){throw Error("Unexpected save")}export async function deleteClone(){throw Error("Unexpected delete")}export async function logout(){throw Error("Unexpected logout")}export async function setCloneScope(){throw Error("Unexpected scope mutation")}`;
+const actions=`export async function updateClone(){throw Error("Unexpected save")}export async function deleteClone(){throw Error("Unexpected delete")}export async function logout(){throw Error("Unexpected logout")}export async function setCloneScope(id){window.__pickedClone=id}`;
 const modules=new Map([["next/navigation",navigation],["next/link",link],["@/app/clones/actions",actions],["@/app/login/actions",actions],["@/app/actions/clone-scope",actions]]);
 const bundle=await build({
 stdin:{contents:fixture,resolveDir:root,sourcefile:"operator-ui-fixture.tsx",loader:"tsx"},
@@ -84,6 +87,7 @@ const url=new URL(req.url,"http://localhost");res.setHeader("Cache-Control","no-
 if(url.pathname==="/styles.css"){res.setHeader("Content-Type","text/css");return res.end(css.css+"\n"+moduleCSS)}
 if(url.pathname==="/bundle.js"){res.setHeader("Content-Type","application/javascript");return res.end(js)}
 if(url.pathname.startsWith("/api/")){requests.push({method:req.method,path:url.pathname});res.setHeader("Content-Type","application/json");
+if(url.pathname==="/api/channel-roster")return res.end(JSON.stringify({schemaVersion:"channel-roster.v1",telegram:{status:url.searchParams.get("channel")==="onlyfans"?"not_requested":"ready",error:null,items:url.searchParams.get("channel")==="onlyfans"?[]:[{id:"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",name:"Fixture Creator",status:"active",handle:"fixture_tg",color:"#4fa7d9"}]},onlyfans:{status:url.searchParams.get("channel")==="telegram"?"not_requested":"ready",error:null,items:url.searchParams.get("channel")==="telegram"?[]:[{id:"of-a",creatorId:"aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",creatorName:"Fixture Creator",handle:"fixture_of",health:"connected"},{id:"of-c",creatorId:"cccccccc-cccc-4ccc-8ccc-cccccccccccc",creatorName:"OnlyFans Only",handle:"onlyfans_only",health:"connected"}]}}));
 if(url.pathname==="/api/models")return res.end("[]");if(url.pathname==="/api/fx")return res.end(JSON.stringify({usd_to_aud:1.4}));
 res.statusCode=403;return res.end(JSON.stringify({error:"No live service in this fixture"}))}
 if(url.pathname.startsWith("/moxy/")&&url.pathname.endsWith(".svg")){res.setHeader("Content-Type","image/svg+xml");return res.end(readFileSync(path.join(root,"public",url.pathname)))}
@@ -142,12 +146,45 @@ for (const width of [390, 900, 1440]) {
   if(width<1024)await page.getByRole("button",{name:"Open navigation",exact:true}).click();
   const switcher=width<1024?page.locator("#mobile-sidebar [data-channel-switch]"):page.locator("aside.dashboard-sidebar [data-channel-switch]").first();
   await switcher.getByRole("link",{name:"OnlyFans",exact:true}).click();
-  await page.waitForURL("**/onlyfans/inbox");
+  await page.waitForURL("**/onlyfans/accounts");
   if(width<1024)await page.locator("#mobile-sidebar").waitFor({state:"detached"});
   await capture(page,`shared-dark-${width}.png`);
   assert.deepEqual(errors,[]);await context.close();
 }
 console.log("PASS: Main, Telegram and OnlyFans retain identical dark sidebar and header geometry at 390, 900 and 1440px; channel links and mobile drawer work.");
+// Real roster UI: channel membership, canonical joins and scoped navigation.
+for(const width of [390,1440]){
+ const context=await browser.newContext({viewport:{width,height:900}}),page=await context.newPage();
+ await page.goto(`${origin}/telegram?brand=Twin`,{waitUntil:"networkidle"});
+ assert.equal(await page.locator("[data-roster-creator]").count(),2);
+ assert.equal(await page.getByRole("heading",{name:"OnlyFans Only",exact:true}).count(),0);
+ await page.locator(`[data-roster-creator="${creatorId}"]`).getByRole("button",{name:"Messages",exact:true}).click();
+ await page.waitForURL("**/users?workspace=telegram");
+ assert.equal(await page.evaluate(()=>window.__pickedClone),creatorId);
+ if(width<1024)await page.getByRole("button",{name:"Open navigation",exact:true}).click();
+ assert.equal(await page.locator('[data-channel-switch="telegram"]:visible').count(),1);
+ await page.goto(`${origin}/overview?brand=Twin`,{waitUntil:"networkidle"});
+ assert.equal(await page.locator("[data-roster-creator]").count(),3,"One card per identity across both channels");
+ assert.equal(await page.locator(`[data-roster-creator="${creatorId}"] [data-creator-channel]`).count(),2);
+ assert.equal(await page.locator("[data-roster-telegram-count]").innerText(),"2");
+ assert.equal(await page.locator("[data-roster-onlyfans-count]").innerText(),"3");
+ await page.getByRole("combobox",{name:"Filter creator channel"}).selectOption("onlyfans");
+ assert.equal(await page.locator("[data-roster-creator]").count(),2);
+ assert.equal(await page.getByRole("heading",{name:"Telegram Only",exact:true}).count(),0);
+ await page.goto(`${origin}/onlyfans/accounts?brand=Twin&account=old&conversation=old`,{waitUntil:"networkidle"});
+ await page.locator(".workspace-account-controls").getByRole("button",{name:"All creators",exact:false}).click();
+ const dialog=page.getByRole("dialog");
+ assert.equal(await dialog.getByRole("button",{name:/Telegram Only/}).count(),0);
+ await dialog.getByRole("button",{name:/OnlyFans Only/}).click();
+ await page.waitForURL(url=>url.searchParams.get("creator")==="cccccccc-cccc-4ccc-8ccc-cccccccccccc");
+ assert.equal(new URL(page.url()).searchParams.has("account"),false);
+ assert.equal(new URL(page.url()).searchParams.has("conversation"),false);
+ await page.goto(`${origin}/overview?brand=Twin&of_unavailable=true`,{waitUntil:"networkidle"});
+ assert.equal(await page.locator("[data-roster-onlyfans-count]").innerText(),"Unavailable");
+ assert.equal(await page.locator("[data-roster-creator]").count(),2,"Telegram stays available when OnlyFans cannot be read");
+ await noOverflow(page,`channel roster ${width}`);await capture(page,`channel-roster-${width}.png`);await context.close();
+}
+console.log("PASS: populated Telegram and combined rosters; shared identity dedupe; OnlyFans-only selector; creator-scoped actions; unavailable source states.");
 for(const brand of ["Twin","Moxy","FLIRT","LYNQ","Tether","Jess and Kate AI"]){
 for(const width of [390,1440,...(brand==="Moxy"?[320]:[])]){
 const context=await browser.newContext({viewport:{width,height:900},colorScheme:"light",reducedMotion:"reduce"});
@@ -201,7 +238,7 @@ assert.equal(await page.locator('[data-studio-workspace="true"]').count(),1);awa
 assert.deepEqual(errors,[],`${brand} ${width}: runtime errors`);
 snapshots.push({brand,width,fields:submitted.length,accent:color});await context.close();
 }}
-assert.deepEqual(external,[]);assert.deepEqual(requests.filter(r=>r.method!=="GET"||!["/api/models","/api/fx"].includes(r.path)),[]);
+assert.deepEqual(external,[]);assert.deepEqual(requests.filter(r=>r.method!=="GET"||!["/api/models","/api/fx","/api/channel-roster"].includes(r.path)),[]);
 console.log("PASS: six brands; desktop and phone; all configuration tabs; payload, draft/history and read-only checks; no overflow or writes.");
 console.log(JSON.stringify(snapshots));
 }

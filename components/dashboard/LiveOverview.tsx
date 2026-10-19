@@ -2,7 +2,8 @@
 
 import Link from "next/link";
 import Image from "next/image";
-import { useRouter } from "next/navigation";
+import { telegramWorkspaceHref } from "@/lib/channel-nav";
+import { useRouter, useSearchParams } from "next/navigation";
 import { useState, useTransition } from "react";
 import { ArrowRight, Coins, MessageCircle, Plus, UserRound, Users } from "lucide-react";
 import { setCloneScope } from "@/app/actions/clone-scope";
@@ -68,6 +69,8 @@ function CreatorShortcuts({ clones }: { clones: OverviewClone[] }) {
 export function LiveOverviewHero({ clones, cloneId, windowLabel }: {
   clones: OverviewClone[]; cloneId?: string | null; windowLabel: string;
 }) {
+  const telegram = useSearchParams().get("workspace") === "telegram";
+  const destination = (path: string) => telegram ? telegramWorkspaceHref(path) : path;
   const creator = clones.find(c => c.id === cloneId);
   return <>
     <section className={`${styles.hero} ${creator ? styles.creatorHero : ""}`} aria-label="Dashboard overview">
@@ -75,7 +78,7 @@ export function LiveOverviewHero({ clones, cloneId, windowLabel }: {
         <p>{creator ? "CREATOR OVERVIEW" : "DASHBOARD OVERVIEW"}</p>
         <h1 className={creator ? "creator-name" : ""}>{creator?.name ?? "Your creators, at a glance."}</h1>
         <span>{windowLabel} · Live Telegram earnings, fans and activity.</span>
-        <div className={styles.heroLinks}><Link href={creator ? `/clones/${creator.id}?tab=identity` : "/clones"}>{creator ? "View creator" : "View creators"}<ArrowRight size={16} /></Link><Link className={styles.secondaryLink} href="/users">Live Telegram Chat<MessageCircle size={16} /></Link></div>
+        <div className={styles.heroLinks}><Link href={destination(creator ? `/clones/${creator.id}?tab=identity` : "/telegram")}>{creator ? "View creator" : "View creators"}<ArrowRight size={16} /></Link><Link className={styles.secondaryLink} href={destination("/users")}>Live Telegram Chat<MessageCircle size={16} /></Link></div>
       </div>
       {creator ? <div className={styles.heroPortrait}><CreatorPhoto key={creator.id} creator={creator} /></div> : <CreatorShortcuts clones={clones} />}
     </section>

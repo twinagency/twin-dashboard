@@ -32,6 +32,7 @@ export default function CloneSwitcher({
   activeCloneId,
   locked = false,
   fallbackName,
+  allowNewCreator = true,
 }: {
   clones: CloneLite[];
   activeCloneId: string | null;
@@ -39,6 +40,7 @@ export default function CloneSwitcher({
   locked?: boolean;
   /** Account display name used while a creator is waiting for clone linking. */
   fallbackName?: string;
+  allowNewCreator?: boolean;
 }) {
   const router = useRouter();
   const {isAgency}=useDashboardAccess();
@@ -82,6 +84,13 @@ export default function CloneSwitcher({
   function pick(id: string | null) {
     setOpen(false);
     startTransition(async () => {
+      if (pathname?.startsWith("/onlyfans")) {
+        const params = new URLSearchParams(searchParams.toString());
+        if (id) params.set("creator", id); else params.delete("creator");
+        params.delete("account"); params.delete("conversation");
+        router.push(`${pathname}${params.size ? `?${params}` : ""}`);
+        return;
+      }
       if (isAgency) {
         const response = await fetch("/agency/clone-scope",{method:"POST",headers:{"content-type":"application/json"},body:JSON.stringify({clone:id})});
         if (!response.ok) throw new Error("Unable to switch creator");
@@ -123,7 +132,7 @@ export default function CloneSwitcher({
       >
         <CreatorAvatar name={name} photoUrl={active?.photoUrl} className="h-5 w-5" />
         <span className="creator-name max-w-[10rem] truncate">{name}</span>
-        <VerifiedBadge />
+        {active ? <VerifiedBadge /> : null}
       </div>
     );
   }
@@ -203,7 +212,7 @@ export default function CloneSwitcher({
             {filteredCreators.map((creator) => <CreatorCard key={creator.id} creator={creator} />)}
           </div>
 
-          {!isAgency && <Link
+          {!isAgency && allowNewCreator && <Link
             href="/clones/new"
             className="mt-3 flex items-center justify-center gap-2 rounded-md border border-dashed border-line px-3 py-2.5 text-sm text-muted transition hover:border-accent hover:text-accent"
           >

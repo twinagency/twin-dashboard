@@ -1,6 +1,6 @@
 "use client";
 
-import { usePathname } from "next/navigation";
+import { usePathname, useSearchParams } from "next/navigation";
 import { isCreatorStudioRoute, isDashboardWorkspaceRoute } from "@/lib/dashboard-creator-route";
 import { channelForPath } from "@/lib/channel-nav";
 import TwinAssistant from "@/components/TwinAssistant";
@@ -16,8 +16,9 @@ import { useDashboardAccess } from "./DashboardAccessProvider";
 // the bug behind "pages break when switching between them".
 export default function MainShell({ children, showAssistant = true }: { children: React.ReactNode; activeCloneId?: string | null; showAssistant?: boolean }) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
   const {isAgency, isCreator, audience} = useDashboardAccess();
-  const studioDashboard = !isCreator && ((!isAgency && pathname === "/dashboard") || isCreatorStudioRoute(pathname));
+  const studioDashboard = !isCreator && ((!isAgency && pathname === "/dashboard" && searchParams.get("workspace") === "telegram") || isCreatorStudioRoute(pathname));
   const fullBleed = pathname === "/users" || pathname === "/inbox" || pathname === "/jarvis" || pathname === "/fans";
   const studioWorkspace = audience === "admin" || !isCreator && (isDashboardWorkspaceRoute(pathname) || channelForPath(pathname) === "onlyfans");
   const ownsPageSpacing = ["/content-library", "/campaigns"].includes(pathname);

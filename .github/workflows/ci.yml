@@ -46,7 +46,9 @@ jobs:
         run: node --import tsx scripts/check-live-overview-ui.mjs
 
       - name: Shared operator workspace desktop and mobile checks
-        run: node scripts/check-operator-workspace-ui.mjs
+        run: |
+          node --import tsx scripts/check-channel-roster.ts
+          node scripts/check-operator-workspace-ui.mjs
 
       - name: Creator profile mobile and save navigation checks
         run: node scripts/check-creator-profile-ui.mjs
@@ -146,6 +148,3 @@ jobs:
           path: test-results/twin-public
           if-no-files-found: ignore
           retention-days: 3
-
-
-

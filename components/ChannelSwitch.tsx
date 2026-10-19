@@ -1,9 +1,10 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
+import { useDashboardAccess } from "./DashboardAccessProvider";
+import { usePathname, useSearchParams } from "next/navigation";
 import {
-  channelForPath,
+  workspaceChannel,
   offeredChannels,
   shouldShowChannelSwitch,
   type DashboardChannel,
@@ -39,7 +40,9 @@ export default function ChannelSwitch({
   channels?: DashboardChannel[];
 }) {
   const pathname = usePathname();
-  const active = channelForPath(pathname);
+  const { audience } = useDashboardAccess();
+  const searchParams = useSearchParams();
+  const active = workspaceChannel(pathname, searchParams.get("workspace"), audience === "admin");
   const allowed = channels ?? ["all"];
   const offered = offeredChannels(allowed);
 
