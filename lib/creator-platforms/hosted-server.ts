@@ -12,11 +12,17 @@ export const HOSTED_RESUME_COOKIE="twin_onlyfans_resume";
 export const PROVIDER_ORIGIN="https://app.onlyfansapi.com";
 import { hostedConfigured } from "./hosted-config";
 export { hostedConfigured } from "./hosted-config";
+export class ProviderAlreadyAuthenticated extends Error { constructor(){super("The provider account is already signed in");} }
 export async function providerRequest(path:string,method:"GET"|"POST"|"PUT",body?:unknown){
   if(!hostedConfigured()||!/^\/api\/(client-sessions|authenticate\/acct_[A-Za-z0-9]{1,80}\/reauthenticate|authenticate\/auth_[A-Za-z0-9_-]{1,100})$/.test(path))throw new Error("Connection service unavailable");
   const response=await fetch(PROVIDER_ORIGIN+path,{method,headers:{Authorization:`Bearer ${process.env.OFAPI_API_KEY}`,"Content-Type":"application/json",Accept:"application/json"},body:body===undefined?undefined:JSON.stringify(body),credentials:"omit",redirect:"error",cache:"no-store",signal:AbortSignal.timeout(15000)});
-  const raw=await limitedBytes(response.body,131072);if(!response.ok)throw new Error("Connection service unavailable");
-  const parsed=parseCommandJson(new TextDecoder("utf-8",{fatal:true}).decode(raw));if(!object(parsed))throw new Error("Connection service unavailable");return parsed;
+  const raw=await limitedBytes(response.body,131072);
+  const parsed=parseCommandJson(new TextDecoder("utf-8",{fatal:true}).decode(raw));if(!object(parsed))throw new Error("Connection service unavailable");
+  if(!response.ok){
+    if(response.status===400&&method==="POST"&&/^\/api\/authenticate\/acct_[A-Za-z0-9]{1,80}\/reauthenticate$/.test(path)&&parsed.reason==="Account is already successfully authenticated"&&parsed.message==="Can't re-authenticate account at this time.")throw new ProviderAlreadyAuthenticated();
+    throw new Error("Connection service unavailable");
+  }
+  return parsed;
 }
 export async function limitedBytes(stream:ReadableStream<Uint8Array>|null,maximum:number){
   if(!stream)throw new Error("Empty connection response");const reader=stream.getReader(),parts:Uint8Array[]=[];let size=0;

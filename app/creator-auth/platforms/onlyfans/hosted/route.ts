@@ -2,7 +2,7 @@ import { NextRequest,NextResponse } from "next/server";
 import { platformCommand,platformProfile,platformFailure,platformResponse,ownedPlatformAccounts } from "@/lib/creator-platforms/server";
 import { object } from "@/lib/onlyfans-connections/contract";
 import { issueHostedReference,verifyHostedReference,sealHostedResume,openHostedResume } from "@/lib/creator-platforms/hosted-reference";
-import { hostedConfigured,hostedAccount,providerRequest,submitHostedConnection,HOSTED_RESUME_COOKIE,PROVIDER_ORIGIN } from "@/lib/creator-platforms/hosted-server";
+import { hostedConfigured,hostedAccount,providerRequest,submitHostedConnection,HOSTED_RESUME_COOKIE,PROVIDER_ORIGIN,ProviderAlreadyAuthenticated } from "@/lib/creator-platforms/hosted-server";
 export const dynamic="force-dynamic";
 export const runtime="nodejs";
 const cookieOptions={httpOnly:true,secure:process.env.NODE_ENV==="production",sameSite:"strict" as const,path:"/creator-auth/platforms/onlyfans/hosted",maxAge:3600};
@@ -28,7 +28,16 @@ export async function POST(request:NextRequest){
     if(body.action==="reconnect"&&keys(body,["action","accountId"])&&typeof body.accountId==="string"){
       const accounts=await ownedPlatformAccounts(profile.id),selected=accounts.find(account=>account.accountId===body.accountId);if(!selected)return platformFailure(404,"That account is unavailable.");
       const account=await hostedAccount(selected.accountId),reference=issueHostedReference(ctx.creator,profile.id);
-      const result=await providerRequest(`/api/authenticate/${account.providerAccountId}/reauthenticate`,"POST");
+      let result:Record<string,unknown>;
+      try{result=await providerRequest(`/api/authenticate/${account.providerAccountId}/reauthenticate`,"POST");}
+      catch(error){
+        if(!(error instanceof ProviderAlreadyAuthenticated))throw error;
+        // A healthy provider session needs a new native verification lease, not
+        // another login. Its saved owner is still independently checked by /me.
+        const submitted=await submitHostedConnection(reference,account.providerAccountId,account.ownerId,selected.binding.handle);
+        if(!submitted.ok)throw new Error();
+        return platformResponse({ok:true,kind:"reconnect",phase:"checking"});
+      }
       const id=attemptId(result.polling_url);if(!id)throw new Error();
       const resume={reference,attemptId:id,accountId:account.accountId,providerAccountId:account.providerAccountId,ownerId:account.ownerId,handle:selected.binding.handle};
       const response=platformResponse({ok:true,kind:"reconnect",phase:"waiting"});response.cookies.set(HOSTED_RESUME_COOKIE,sealHostedResume(resume),cookieOptions);return response;
@@ -52,7 +61,7 @@ export async function POST(request:NextRequest){
         const response=platformResponse({ok:true,kind:"reconnect",phase:"checking"});response.cookies.delete({name:HOSTED_RESUME_COOKIE,path:cookieOptions.path});return response;
       }
       if(last?.needs_face_otp===true){const url=faceUrl(last.face_otp_verification_url||result.face_otp_verification_url);if(!url)return platformFailure(409,"This account needs additional verification. Your agency can help complete it.");return platformResponse({ok:true,kind:"reconnect",phase:"face",url});}
-      if(last?.needs_otp===true||["needs-otp","needs-app-otp"].includes(String(result.state)))return platformResponse({ok:true,kind:"reconnect",phase:"code"});
+      if(result.twoFactorPending===true||last?.needs_otp===true||["needs-otp","needs-app-otp"].includes(String(result.state)))return platformResponse({ok:true,kind:"reconnect",phase:"code"});
       if(last?.completed_at&&last?.success!==true)return platformFailure(409,"Sign-in could not be completed. Start again or ask your agency for help.");
       return platformResponse({ok:true,kind:"reconnect",phase:"waiting"});
     }
